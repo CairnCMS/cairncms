@@ -298,6 +298,11 @@ export class PayloadService {
 				if (!value) continue;
 
 				if (action === 'read') {
+					if (dateColumn.type === 'date' && typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+						payload[name] = value;
+						continue;
+					}
+
 					if (typeof value === 'number' || typeof value === 'string') {
 						value = new Date(value);
 					}
