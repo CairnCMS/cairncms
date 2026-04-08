@@ -183,8 +183,6 @@ const allowedEnvironmentVars = [
 	// admin account
 	'ADMIN_EMAIL',
 	'ADMIN_PASSWORD',
-	// telemetry
-	'TELEMETRY',
 	// limits & optimization
 	'RELATIONAL_BATCH_SIZE',
 	'EXPORT_BATCH_SIZE',
@@ -264,8 +262,6 @@ const defaults: Record<string, any> = {
 	EMAIL_TRANSPORT: 'sendmail',
 	EMAIL_SENDMAIL_NEW_LINE: 'unix',
 	EMAIL_SENDMAIL_PATH: '/usr/sbin/sendmail',
-
-	TELEMETRY: true,
 
 	ASSETS_CACHE_TTL: '30d',
 	ASSETS_TRANSFORM_MAX_CONCURRENT: 25,

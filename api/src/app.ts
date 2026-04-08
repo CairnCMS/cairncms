@@ -60,7 +60,6 @@ import rateLimiter from './middleware/rate-limiter-ip.js';
 import sanitizeQuery from './middleware/sanitize-query.js';
 import schema from './middleware/schema.js';
 import { getConfigFromEnv } from './utils/get-config-from-env.js';
-import { collectTelemetry } from './utils/telemetry.js';
 import { Url } from './utils/url.js';
 import { validateEnv } from './utils/validate-env.js';
 import { validateStorage } from './utils/validate-storage.js';
@@ -83,7 +82,7 @@ export default async function createApp(): Promise<express.Application> {
 	await validateDatabaseExtensions();
 
 	if ((await isInstalled()) === false) {
-		logger.error(`Database doesn't have Directus tables installed.`);
+		logger.error(`Database doesn't have system tables installed.`);
 		process.exit(1);
 	}
 
@@ -120,11 +119,10 @@ export default async function createApp(): Promise<express.Application> {
 						upgradeInsecureRequests: null,
 
 						// These are required for MapLibre
-						// https://cdn.directus.io is required for images/videos in the official docs
-						workerSrc: ["'self'", 'blob:'],
+									workerSrc: ["'self'", 'blob:'],
 						childSrc: ["'self'", 'blob:'],
-						imgSrc: ["'self'", 'data:', 'blob:', 'https://cdn.directus.io'],
-						mediaSrc: ["'self'", 'https://cdn.directus.io'],
+						imgSrc: ["'self'", 'data:', 'blob:'],
+						mediaSrc: ["'self'"],
 						connectSrc: ["'self'", 'https://*'],
 					},
 				},
@@ -144,7 +142,7 @@ export default async function createApp(): Promise<express.Application> {
 	app.use(expressLogger);
 
 	app.use((_req, res, next) => {
-		res.setHeader('X-Powered-By', 'Directus');
+		res.setHeader('X-Powered-By', 'CairnCMS');
 		next();
 	});
 
@@ -283,8 +281,6 @@ export default async function createApp(): Promise<express.Application> {
 
 	// Register all webhooks
 	await initWebhooks();
-
-	collectTelemetry();
 
 	await emitter.emitInit('app.after', { app });
 
