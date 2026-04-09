@@ -68,7 +68,6 @@ const directusConfig = {
 	ADMIN_PASSWORD: 'password',
 	KEY: 'directus-test',
 	SECRET: 'directus-test',
-	TELEMETRY: 'false',
 	CACHE_SCHEMA: 'true',
 	CACHE_ENABLED: 'false',
 	RATE_LIMITER_ENABLED: 'false',

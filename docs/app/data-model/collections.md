@@ -343,11 +343,9 @@ tracked.
   - **Only Track Activity**
   - **Do Not Track Anything**
 
-:::tip Accountability vs. Telemetry
+:::tip Accountability
 
-Accountability is a log of _who does what_ in your project. It is for your team's own use. This is different from
-[telemetry](/self-hosted/config-options#telemetry), which is configured under
-[environment variables](/self-hosted/config-options#telemetry).
+Accountability is a log of _who does what_ in your project. It is for your team's own use.
 
 :::
 

@@ -995,16 +995,6 @@ variables to automatically configure the first user:
 | `ADMIN_EMAIL`    | The email address of the first user that's automatically created when using `directus bootstrap`. | --            |
 | `ADMIN_PASSWORD` | The password of the first user that's automatically created when using `directus bootstrap`.      | --            |
 
-## Telemetry
-
-To more accurately gauge the frequency of installation, version fragmentation, and general size of the userbase,
-Directus collects little and anonymized data about your environment. You can easily opt-out with the following
-environment variable:
-
-| Variable    | Description                                                       | Default Value |
-| ----------- | ----------------------------------------------------------------- | ------------- |
-| `TELEMETRY` | Allow Directus to collect anonymized data about your environment. | `true`        |
-
 ## Limits & Optimizations
 
 Allows you to configure hard technical limits, to prevent abuse and optimize for your particular server environment.
