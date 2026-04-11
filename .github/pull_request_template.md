@@ -1,11 +1,21 @@
-<!--
+## Summary
 
-Heya! Thanks for opening a Pull Request! Please make sure your PR adheres to the following requirements:
+<!-- What does this PR do and why? -->
 
-- The PR closes an Issue (not Discussion)
-- Tests are added/updated and are passing locally if applicable
-- Documentation was added/updated if applicable
+## Type of change
 
-Please make sure to "Link" the issue you're closing. Without a Linked issue, this PR won't be accepted. See https://docs.github.com/en/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue for more information.
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Documentation
+- [ ] Refactor / maintenance
 
--->
+## Checklist
+
+- [ ] Tests pass locally (`pnpm test`)
+- [ ] Lint passes (`pnpm lint`)
+- [ ] I understand the code I'm submitting and can explain it on request
+- [ ] If AI tools assisted with this PR, I have reviewed the output and any documentation/comments are human-authored
+
+## Related issues
+
+<!-- Closes #123 -->

@@ -54,9 +54,9 @@ const directusAuthConfig = {
 const directusStorageConfig = {
 	STORAGE_LOCATIONS: 'local,minio',
 	STORAGE_MINIO_DRIVER: 's3',
-	STORAGE_MINIO_KEY: 'directus',
+	STORAGE_MINIO_KEY: 'cairncms',
 	STORAGE_MINIO_SECRET: 'miniosecret',
-	STORAGE_MINIO_BUCKET: 'directus-blackbox-test',
+	STORAGE_MINIO_BUCKET: 'cairncms-blackbox-test',
 	STORAGE_MINIO_REGION: 'us-east-1',
 	STORAGE_MINIO_ENDPOINT: 'http://localhost:8881',
 	STORAGE_MINIO_FORCE_PATH_STYLE: 'true',
@@ -109,7 +109,7 @@ const config: Config = {
 			...knexConfig,
 		},
 		mysql: {
-			client: 'mysql',
+			client: 'mysql2',
 			connection: {
 				database: 'directus',
 				user: 'root',
@@ -120,7 +120,7 @@ const config: Config = {
 			...knexConfig,
 		},
 		mysql5: {
-			client: 'mysql',
+			client: 'mysql2',
 			connection: {
 				database: 'directus',
 				user: 'root',
@@ -131,7 +131,7 @@ const config: Config = {
 			...knexConfig,
 		},
 		maria: {
-			client: 'mysql',
+			client: 'mysql2',
 			connection: {
 				database: 'directus',
 				user: 'root',

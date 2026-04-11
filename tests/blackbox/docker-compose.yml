@@ -28,10 +28,9 @@
 #   CockroachDB:
 #     User:          root
 
-version: '3.1'
 services:
   postgres:
-    image: postgis/postgis:13-3.1-alpine
+    image: postgis/postgis:13-3.4-alpine
     environment:
       POSTGRES_PASSWORD: secret
       POSTGRES_DB: directus
@@ -39,7 +38,7 @@ services:
       - 6100:5432
 
   postgres10:
-    image: postgis/postgis:10-3.1-alpine
+    image: postgis/postgis:10-3.2-alpine
     environment:
       POSTGRES_PASSWORD: secret
       POSTGRES_DB: directus
@@ -48,14 +47,12 @@ services:
 
   mysql:
     image: mysql:8
-    command: --default-authentication-plugin=mysql_native_password
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     environment:
       MYSQL_ROOT_PASSWORD: secret
       MYSQL_DATABASE: directus
     ports:
       - 6102:3306
-    cap_add:
-      - SYS_NICE
 
   mysql5:
     image: mysql:5
@@ -66,7 +63,8 @@ services:
       - 6103:3306
 
   maria:
-    image: mariadb:10.7
+    image: mariadb:11.4
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     environment:
       MYSQL_ROOT_PASSWORD: secret
       MYSQL_DATABASE: directus
@@ -74,10 +72,11 @@ services:
       - 6104:3306
 
   mssql:
-    image: mcr.microsoft.com/mssql/server:2019-latest
+    image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
       - ACCEPT_EULA=Y
-      - SA_PASSWORD=Test@123
+      - MSSQL_SA_PASSWORD=Test@123
+      - MSSQL_PID=Express
     ports:
       - 6105:1433
 
@@ -88,11 +87,11 @@ services:
     environment:
       - OPATCH_JRE_MEMORY_OPTIONS=-Xms128m -Xmx256m -XX:PermSize=16m -XX:MaxPermSize=32m -Xss1m
       - ORACLE_ALLOW_REMOTE=true
-    shm_size: '1gb' # more like smh-size ammirite 🥁
+    shm_size: '1gb'
 
   cockroachdb:
-    image: cockroachdb/cockroach:latest-v21.1
-    command: start-single-node --cluster-name=example-single-node --insecure
+    image: cockroachdb/cockroach:latest-v24.3
+    command: start-single-node --cluster-name=example-single-node --insecure --store=type=mem,size=4GB
     ports:
       - 6107:26257
 
@@ -118,7 +117,7 @@ services:
       - 8881:9000
       - 8882:9001
     environment:
-      MINIO_ROOT_USER: directus
+      MINIO_ROOT_USER: cairncms
       MINIO_ROOT_PASSWORD: miniosecret
 
   minio-mc:
@@ -126,7 +125,10 @@ services:
     depends_on:
       - minio
     entrypoint: >
-      /bin/sh -c " /usr/bin/mc alias set directusminio http://minio:9000 directus miniosecret; /usr/bin/mc mb
-      directusminio/directus-blackbox-test; while true; do
+      /bin/sh -c " until (/usr/bin/mc alias set cairnminio http://minio:9000 cairncms miniosecret &&
+             /usr/bin/mc admin info cairnminio > /dev/null 2>&1); do
+          echo 'Waiting for MinIO to be ready...';
+          sleep 1;
+      done; /usr/bin/mc mb cairnminio/cairncms-blackbox-test; while true; do
           sleep 3600;
-      done "
+      done;"

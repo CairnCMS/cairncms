@@ -119,7 +119,7 @@ export default async function createApp(): Promise<express.Application> {
 						upgradeInsecureRequests: null,
 
 						// These are required for MapLibre
-									workerSrc: ["'self'", 'blob:'],
+						workerSrc: ["'self'", 'blob:'],
 						childSrc: ["'self'", 'blob:'],
 						imgSrc: ["'self'", 'data:', 'blob:'],
 						mediaSrc: ["'self'"],

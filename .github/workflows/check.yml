@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Prepare
         uses: ./.github/actions/prepare
@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Prepare
         uses: ./.github/actions/prepare
@@ -47,3 +47,7 @@ jobs:
   analyze:
     name: CodeQL Analysis
     uses: ./.github/workflows/codeql-analysis.yml
+    permissions:
+      actions: read
+      contents: read
+      security-events: write

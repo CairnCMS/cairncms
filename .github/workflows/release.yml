@@ -1,3 +1,9 @@
+# TODO: This release pipeline is inactive until the following decisions are made
+# and credentials are configured:
+#   - Docker Hub vs GHCR-only publishing
+#   - NPM publishing strategy
+#   - Release approval gate
+
 name: Release
 
 on:
@@ -15,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Create release
         env:
@@ -27,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Prepare
         uses: ./.github/actions/prepare
@@ -44,7 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup QEMU
         uses: docker/setup-qemu-action@v2

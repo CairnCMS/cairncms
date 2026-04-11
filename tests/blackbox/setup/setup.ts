@@ -44,8 +44,10 @@ export default async (): Promise<void> => {
 									env: config.envs[vendor],
 								});
 
-								if (bootstrap.stderr.length > 0) {
-									throw new Error(`Directus-${vendor} bootstrap failed: \n ${bootstrap.stderr.toString()}`);
+								if (bootstrap.status !== null && bootstrap.status !== 0) {
+									throw new Error(
+										`Directus-${vendor} bootstrap failed (${bootstrap.status}): \n ${bootstrap.stderr.toString()}`
+									);
 								}
 
 								await database.migrate.latest();

@@ -1,3 +1,6 @@
+# Local dev notes, plans, scratch files
+.local/
+
 # User preferences
 .DS_Store
 

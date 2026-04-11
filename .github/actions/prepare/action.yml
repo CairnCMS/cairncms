@@ -13,30 +13,28 @@ runs:
   using: 'composite'
   steps:
     - name: Install Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
-        node-version: 18
+        node-version: 22
         registry-url: ${{ inputs.registry }}
 
-    - uses: pnpm/action-setup@v2
-      name: Install pnpm
-      id: pnpm-install
-      with:
-        run_install: false
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
 
-    - name: Get pnpm store directory
-      id: pnpm-cache
+    - name: Get cache info
+      id: cache-info
       shell: bash
       run: |
-        echo "pnpm_cache_dir=$(pnpm store path)" >> $GITHUB_OUTPUT
+        echo "os-release=$(node --eval 'console.log(os.release())')" >> $GITHUB_OUTPUT
+        echo "pnpm-cache-dir=$(pnpm store path)" >> $GITHUB_OUTPUT
 
-    - uses: actions/cache@v3
-      name: Setup pnpm cache
+    - name: Setup pnpm cache
+      uses: actions/cache@v4
       with:
-        path: ${{ steps.pnpm-cache.outputs.pnpm_cache_dir }}
-        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+        path: ${{ steps.cache-info.outputs.pnpm-cache-dir }}
+        key: ${{ runner.os }}-${{ steps.cache-info.outputs.os-release }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
         restore-keys: |
-          ${{ runner.os }}-pnpm-store-
+          ${{ runner.os }}-${{ steps.cache-info.outputs.os-release }}-pnpm-store-
 
     - name: Install dependencies
       shell: bash
@@ -45,7 +43,7 @@ runs:
     - name: Build
       if: inputs.build == 'true'
       shell: bash
-      run: pnpm run build
       env:
-        npm_config_workspace_concurrency: '1'
+        npm_config_workspace_concurrency: 1
         NODE_OPTIONS: --max_old_space_size=6144
+      run: pnpm run build
