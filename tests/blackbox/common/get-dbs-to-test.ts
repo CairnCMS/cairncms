@@ -20,7 +20,7 @@ if (vendors.length > 1 && process.env.TEST_LOCAL) {
 
 for (const vendor of vendors) {
 	if (allVendors.includes(vendor) === false) {
-		throw new Error(`No e2e testing capabilities for vendor "${vendor}".`);
+		throw new Error(`No e2e testing capabilities for vendor "${vendor}". Valid vendors: ${allVendors.join(', ')}`);
 	}
 }
 
