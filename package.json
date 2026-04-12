@@ -22,5 +22,11 @@
 	"engines": {
 		"node": ">=18.0.0",
 		"pnpm": ">=8.1.0"
+	},
+	"pnpm": {
+		"overrides": {
+			"form-data@<2.5.4": "2.5.4",
+			"@babel/traverse@<7.23.2": "7.23.2"
+		}
 	}
 }
