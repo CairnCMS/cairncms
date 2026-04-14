@@ -5,6 +5,11 @@ import vendors from '@common/get-dbs-to-test';
 describe('/auth/login/saml', () => {
 	const authCookies: Record<string, string> = {};
 
+	const getCookies = (setCookie: string | string[] | undefined): string =>
+		(Array.isArray(setCookie) ? setCookie : setCookie ? [setCookie] : [])
+			.map((cookie) => cookie.split(';')[0])
+			.join(';');
+
 	describe('GET /', () => {
 		describe('when incorrect credential is provided', () => {
 			describe('returns no authenticated cookie', () => {
@@ -14,7 +19,7 @@ describe('/auth/login/saml', () => {
 						.get(`/simplesaml/module.php/core/authenticate.php?as=example-userpass`)
 						.expect(302);
 
-					const cookies = loginPage.headers['set-cookie'].map((cookie: string) => cookie.split(';')[0]).join(';');
+					const cookies = getCookies(loginPage.headers['set-cookie']);
 
 					const AuthState = decodeURIComponent(String(loginPage.headers.location)).split('AuthState=')[1];
 
@@ -29,7 +34,7 @@ describe('/auth/login/saml', () => {
 						})
 						.expect(200);
 
-					authCookies[vendor] = response.headers['set-cookie'].map((cookie: string) => cookie.split(';')[0]).join(';');
+					authCookies[vendor] = getCookies(response.headers['set-cookie']);
 
 					// Assert
 					expect(authCookies[vendor]).toMatch(/PHPSESSIDIDP/);
@@ -46,7 +51,7 @@ describe('/auth/login/saml', () => {
 						.get(`/simplesaml/module.php/core/authenticate.php?as=example-userpass`)
 						.expect(302);
 
-					const cookies = loginPage.headers['set-cookie'].map((cookie: string) => cookie.split(';')[0]).join(';');
+					const cookies = getCookies(loginPage.headers['set-cookie']);
 
 					const AuthState = decodeURIComponent(String(loginPage.headers.location)).split('AuthState=')[1];
 
@@ -61,7 +66,7 @@ describe('/auth/login/saml', () => {
 						})
 						.expect(303);
 
-					authCookies[vendor] = response.headers['set-cookie'].map((cookie: string) => cookie.split(';')[0]).join(';');
+					authCookies[vendor] = getCookies(response.headers['set-cookie']);
 
 					// Assert
 					expect(authCookies[vendor]).toMatch(/PHPSESSIDIDP/);
@@ -140,7 +145,7 @@ describe('/auth/login/saml', () => {
 						})
 						.expect(302);
 
-					const cookies = acsResponse.headers['set-cookie'].map((cookie: string) => cookie.split(';')[0]).join(';');
+					const cookies = getCookies(acsResponse.headers['set-cookie']);
 
 					// Assert
 					expect(cookies).toMatch(/directus_refresh_token/);

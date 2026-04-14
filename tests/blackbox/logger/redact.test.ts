@@ -36,7 +36,7 @@ describe('Logger Redact Tests', () => {
 
 		// Give the server some time to start
 		await Promise.all(promises);
-	}, 180000);
+	}, 300000);
 
 	afterAll(async () => {
 		for (const [vendor, connection] of databases) {

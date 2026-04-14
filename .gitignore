@@ -9,7 +9,6 @@ node_modules
 
 # Builds / Caches
 dist
-storybook-static
 coverage
 *.tsbuildinfo
 **/.vitepress/cache

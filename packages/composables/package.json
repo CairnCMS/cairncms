@@ -41,7 +41,7 @@
 	"dependencies": {
 		"@directus/constants": "workspace:*",
 		"@directus/utils": "workspace:*",
-		"lodash-es": "4.17.21",
+		"lodash-es": "4.18.1",
 		"nanoid": "4.0.2",
 		"vue": "3.2.47"
 	}

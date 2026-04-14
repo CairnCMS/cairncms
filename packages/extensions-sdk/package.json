@@ -52,7 +52,7 @@
 		"fs-extra": "11.1.1",
 		"inquirer": "9.1.5",
 		"ora": "6.3.0",
-		"rollup": "4.17.2",
+		"rollup": "4.60.1",
 		"rollup-plugin-esbuild": "5.0.0",
 		"rollup-plugin-styles": "4.0.0",
 		"rollup-plugin-vue": "6.0.0"

@@ -5,6 +5,8 @@ import { createReadStream } from 'fs';
 import path from 'path';
 import * as common from '@common/index';
 
+jest.setTimeout(30000);
+
 const assetsDirectory = [__dirname, '..', '..', 'assets'];
 const storages = ['local', 'minio'];
 

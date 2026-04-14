@@ -27,6 +27,7 @@ type SchemaTimezoneTypesResponse = SchemaTimezoneTypesObject & {
 describe('schema', () => {
 	const databases = new Map<string, Knex>();
 	const tzDirectus = {} as { [vendor: string]: ChildProcess };
+	const tzEnvs = {} as Record<string, Record<string, string>>;
 	const currentTzOffset = new Date().getTimezoneOffset();
 	const isWindows = ['win32', 'win64'].includes(process.platform);
 
@@ -66,13 +67,15 @@ describe('schema', () => {
 		const promises = [];
 
 		for (const vendor of vendors) {
-			const newServerPort = Number(config.envs[vendor]!.PORT) + 100;
+			const newServerPort = Number(config.envs[vendor]!.PORT) + 200;
 			databases.set(vendor, knex(config.knexConfig[vendor]!));
 
-			config.envs[vendor]!.TZ = newTz;
-			config.envs[vendor]!.PORT = String(newServerPort);
+			const env = cloneDeep(config.envs[vendor]!);
+			env.TZ = newTz;
+			env.PORT = String(newServerPort);
+			tzEnvs[vendor] = env;
 
-			const server = spawn('node', [paths.cli, 'start'], { cwd: paths.cwd, env: config.envs[vendor] });
+			const server = spawn('node', [paths.cli, 'start'], { cwd: paths.cwd, env });
 			tzDirectus[vendor] = server;
 
 			let serverOutput = '';
@@ -92,10 +95,6 @@ describe('schema', () => {
 	afterAll(async () => {
 		for (const [vendor, connection] of databases) {
 			tzDirectus[vendor]!.kill();
-
-			config.envs[vendor]!.PORT = String(Number(config.envs[vendor]!.PORT) - 100);
-			delete config.envs[vendor]!.TZ;
-
 			await connection.destroy();
 		}
 	});
@@ -105,7 +104,7 @@ describe('schema', () => {
 			it.each(vendors)('%s', async (vendor) => {
 				const currentTimestamp = new Date();
 
-				const response = await request(getUrl(vendor))
+				const response = await request(getUrl(vendor, tzEnvs as any))
 					.get(`/items/${collectionName}?fields=*&limit=${sampleDates.length}`)
 					.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`)
 					.expect('Content-Type', /application\/json/)
@@ -175,7 +174,7 @@ describe('schema', () => {
 
 				const americanTzOffset = currentTzOffset !== 180 ? 180 : 360;
 
-				const response2 = await request(getUrl(vendor))
+				const response2 = await request(getUrl(vendor, tzEnvs as any))
 					.get(`/items/${collectionName}?fields=*&offset=${sampleDates.length}`)
 					.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`)
 					.expect('Content-Type', /application\/json/)
@@ -260,7 +259,7 @@ describe('schema', () => {
 
 					const insertionStartTimestamp = new Date();
 
-					await request(getUrl(vendor))
+					await request(getUrl(vendor, tzEnvs as any))
 						.post(`/items/${collectionName}`)
 						.send(dates)
 						.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`)
@@ -269,7 +268,7 @@ describe('schema', () => {
 
 					const insertionEndTimestamp = new Date();
 
-					const response = await request(getUrl(vendor))
+					const response = await request(getUrl(vendor, tzEnvs as any))
 						.get(`/items/${collectionName}?fields=*&offset=${sampleDates.length * 2}`)
 						.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`)
 						.expect('Content-Type', /application\/json/)
@@ -335,7 +334,7 @@ describe('schema', () => {
 					date: sampleDates[0]!.date,
 				};
 
-				const existingDataResponse = await request(getUrl(vendor))
+				const existingDataResponse = await request(getUrl(vendor, tzEnvs as any))
 					.get(`/items/${collectionName}?fields=*&limit=1&offset=${sampleDates.length * 2}`)
 					.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`)
 					.expect('Content-Type', /application\/json/)
@@ -343,7 +342,7 @@ describe('schema', () => {
 
 				const updateStartTimestamp = new Date();
 
-				await request(getUrl(vendor))
+				await request(getUrl(vendor, tzEnvs as any))
 					.patch(`/items/${collectionName}/${existingDataResponse.body.data[0].id}`)
 					.send(payload)
 					.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`)
@@ -352,7 +351,7 @@ describe('schema', () => {
 
 				const updateEndTimestamp = new Date();
 
-				const response = await request(getUrl(vendor))
+				const response = await request(getUrl(vendor, tzEnvs as any))
 					.get(`/items/${collectionName}/${existingDataResponse.body.data[0].id}?fields=*`)
 					.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`)
 					.expect('Content-Type', /application\/json/)

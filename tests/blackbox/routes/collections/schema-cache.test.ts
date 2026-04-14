@@ -8,7 +8,13 @@ import knex from 'knex';
 import { cloneDeep } from 'lodash';
 import request from 'supertest';
 
-describe('Schema Caching Tests', () => {
+// SQLite cannot safely share a single file across multiple Directus instances.
+// This test exercises multi-node schema cache propagation, which requires a server database.
+const supportedVendors = vendors.filter((v) => v !== 'sqlite3');
+
+const describeFn = supportedVendors.length > 0 ? describe : describe.skip;
+
+describeFn('Schema Caching Tests', () => {
 	const databases = new Map<string, Knex>();
 	const tzDirectus = {} as { [vendor: string]: ChildProcess[] };
 	const envs = {} as { [vendor: string]: Env[] };
@@ -17,7 +23,7 @@ describe('Schema Caching Tests', () => {
 	beforeAll(async () => {
 		const promises = [];
 
-		for (const vendor of vendors) {
+		for (const vendor of supportedVendors) {
 			databases.set(vendor, knex(config.knexConfig[vendor]!));
 
 			const env1 = cloneDeep(config.envs);
@@ -68,7 +74,7 @@ describe('Schema Caching Tests', () => {
 
 		// Give the server some time to start
 		await Promise.all(promises);
-	}, 180000);
+	}, 300000);
 
 	afterAll(async () => {
 		for (const [vendor, connection] of databases) {
@@ -82,7 +88,7 @@ describe('Schema Caching Tests', () => {
 
 	describe('GET /collections/:collection', () => {
 		describe('schema change propagates across nodes using messenger', () => {
-			it.each(vendors)('%s', async (vendor) => {
+			it.each(supportedVendors)('%s', async (vendor) => {
 				// Setup
 				const env1 = envs[vendor][0];
 				const env2 = envs[vendor][1];
@@ -131,7 +137,7 @@ describe('Schema Caching Tests', () => {
 		});
 
 		describe('schema change does not propagate across nodes without messenger', () => {
-			it.each(vendors)('%s', async (vendor) => {
+			it.each(supportedVendors)('%s', async (vendor) => {
 				// Setup
 				const env3 = envs[vendor][2];
 				const env4 = envs[vendor][3];

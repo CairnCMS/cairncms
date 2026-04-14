@@ -4,6 +4,8 @@ import request from 'supertest';
 import vendors from '@common/get-dbs-to-test';
 import { requestGraphQL } from '@common/index';
 
+jest.setTimeout(30000);
+
 describe('/auth', () => {
 	describe('POST /login', () => {
 		describe('when correct credentials are provided', () => {
