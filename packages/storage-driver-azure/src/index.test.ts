@@ -135,7 +135,7 @@ describe('#constructor', () => {
 		expect(driver['containerClient']).toBe(mockContainerClient);
 	});
 
-	test('Allows overriding endpoint with optional setting', () => {
+	describe('Allows overriding endpoint with optional setting', () => {
 		test('Creates blob service client and sets containerClient', () => {
 			const mockSignedCredentials = {} as StorageSharedKeyCredential;
 			vi.mocked(StorageSharedKeyCredential).mockReturnValueOnce(mockSignedCredentials);

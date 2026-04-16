@@ -32,17 +32,17 @@
 		"@directus/tsconfig": "0.0.7",
 		"@directus/types": "workspace:*",
 		"@types/lodash-es": "4.17.7",
-		"@vitest/coverage-c8": "0.30.1",
+		"@vitest/coverage-v8": "1.6.1",
 		"@vue/test-utils": "2.3.2",
 		"axios": "1.15.0",
 		"typescript": "5.0.4",
-		"vitest": "0.30.1"
+		"vitest": "1.6.1"
 	},
 	"dependencies": {
 		"@directus/constants": "workspace:*",
 		"@directus/utils": "workspace:*",
 		"lodash-es": "4.18.1",
-		"nanoid": "4.0.2",
+		"nanoid": "5.0.9",
 		"vue": "3.2.47"
 	}
 }
