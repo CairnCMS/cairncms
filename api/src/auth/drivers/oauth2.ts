@@ -285,6 +285,7 @@ export function createOAuth2AuthRouter(providerName: string): Router {
 			res.cookie(`oauth2.${providerName}`, token, {
 				httpOnly: true,
 				sameSite: 'lax',
+				secure: env['REFRESH_TOKEN_COOKIE_SECURE'] ?? false,
 			});
 
 			return res.redirect(provider.generateAuthUrl(codeVerifier, prompt));

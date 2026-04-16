@@ -314,6 +314,7 @@ export function createOpenIDAuthRouter(providerName: string): Router {
 			res.cookie(`openid.${providerName}`, token, {
 				httpOnly: true,
 				sameSite: 'lax',
+				secure: env['REFRESH_TOKEN_COOKIE_SECURE'] ?? false,
 			});
 
 			return res.redirect(await provider.generateAuthUrl(codeVerifier, prompt));
