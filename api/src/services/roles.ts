@@ -1,5 +1,6 @@
 import type { Query } from '@directus/types';
-import { ForbiddenException, UnprocessableEntityException } from '../exceptions/index.js';
+import { normalizeRoleKey } from '@directus/utils';
+import { ForbiddenException, InvalidPayloadException, UnprocessableEntityException } from '../exceptions/index.js';
 import type { AbstractServiceOptions, Alterations, Item, MutationOptions, PrimaryKey } from '../types/index.js';
 import { ItemsService } from './items.js';
 import { PermissionsService } from './permissions.js';
@@ -9,6 +10,71 @@ import { UsersService } from './users.js';
 export class RolesService extends ItemsService {
 	constructor(options: AbstractServiceOptions) {
 		super('directus_roles', options);
+	}
+
+	private resolveKey(name: string, usedKeys: Set<string>): string {
+		let candidate = normalizeRoleKey(name);
+		if (candidate === '') candidate = 'role';
+
+		let key = candidate;
+		let suffix = 2;
+
+		while (usedKeys.has(key)) {
+			key = `${candidate}_${suffix}`;
+			suffix++;
+		}
+
+		usedKeys.add(key);
+		return key;
+	}
+
+	private validateKey(key: string): void {
+		if (!key || normalizeRoleKey(key) !== key) {
+			throw new InvalidPayloadException(
+				`Invalid role key "${key}". Keys must be lowercase alphanumeric with underscores, and cannot start with a digit.`
+			);
+		}
+	}
+
+	override async createOne(data: Partial<Item>, opts?: MutationOptions): Promise<PrimaryKey> {
+		if (data['key']) {
+			this.validateKey(data['key']);
+		} else {
+			if (!data['name']) {
+				throw new InvalidPayloadException('Role must have a name or a key.');
+			}
+
+			const existing = await this.knex('directus_roles').select('key');
+			const usedKeys = new Set(existing.map((r: any) => r.key as string));
+			data['key'] = this.resolveKey(data['name'], usedKeys);
+		}
+
+		return super.createOne(data, opts);
+	}
+
+	override async createMany(data: Partial<Item>[], opts?: MutationOptions): Promise<PrimaryKey[]> {
+		const existing = await this.knex('directus_roles').select('key');
+		const usedKeys = new Set(existing.map((r: any) => r.key as string));
+
+		for (const item of data) {
+			if (item['key']) {
+				this.validateKey(item['key']);
+
+				if (usedKeys.has(item['key'])) {
+					throw new InvalidPayloadException(`Duplicate role key "${item['key']}".`);
+				}
+
+				usedKeys.add(item['key']);
+			} else {
+				if (!item['name']) {
+					throw new InvalidPayloadException('Role must have a name or a key.');
+				}
+
+				item['key'] = this.resolveKey(item['name'], usedKeys);
+			}
+		}
+
+		return super.createMany(data, opts);
 	}
 
 	private async checkForOtherAdminRoles(excludeKeys: PrimaryKey[]): Promise<void> {

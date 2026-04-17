@@ -4,7 +4,7 @@ import knex from 'knex';
 import { createTracker, MockClient, Tracker } from 'knex-mock-client';
 import type { MockedFunction, SpyInstance } from 'vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ForbiddenException, UnprocessableEntityException } from '../exceptions/index.js';
+import { ForbiddenException, InvalidPayloadException, UnprocessableEntityException } from '../exceptions/index.js';
 import { ItemsService, PermissionsService, PresetsService, RolesService, UsersService } from './index.js';
 
 vi.mock('../../src/database/index', () => {
@@ -842,15 +842,68 @@ describe('Integration Tests', () => {
 
 		describe('createOne', () => {
 			it('should not checkForOtherAdminRoles', async () => {
-				await service.createOne({});
+				await service.createOne({ name: 'Test', key: 'test' });
 				expect(checkForOtherAdminRolesSpy).not.toBeCalled();
+			});
+
+			it('should auto-generate key from name', async () => {
+				tracker.on.select('select "key" from "directus_roles"').responseOnce([]);
+
+				const createOneSpy = vi.spyOn(ItemsService.prototype, 'createOne').mockResolvedValueOnce('uuid');
+				await service.createOne({ name: 'Supreme Editor' });
+
+				expect(createOneSpy).toHaveBeenCalledWith(
+					expect.objectContaining({ name: 'Supreme Editor', key: 'supreme_editor' }),
+					undefined
+				);
+
+				createOneSpy.mockRestore();
+			});
+
+			it('should reject when neither name nor key is provided', async () => {
+				await expect(service.createOne({})).rejects.toBeInstanceOf(InvalidPayloadException);
+			});
+
+			it('should reject invalid caller-supplied key', async () => {
+				await expect(service.createOne({ key: 'Bad Key', name: 'Test' })).rejects.toBeInstanceOf(
+					InvalidPayloadException
+				);
 			});
 		});
 
 		describe('createMany', () => {
 			it('should not checkForOtherAdminRoles', async () => {
-				await service.createMany([{}]);
+				tracker.on.select('select "key" from "directus_roles"').responseOnce([]);
+				await service.createMany([{ name: 'Test', key: 'test' }]);
 				expect(checkForOtherAdminRolesSpy).not.toBeCalled();
+			});
+
+			it('should generate unique keys for duplicate names in batch', async () => {
+				tracker.on.select('select "key" from "directus_roles"').responseOnce([]);
+
+				const createManySpy = vi.spyOn(ItemsService.prototype, 'createMany').mockResolvedValueOnce(['uuid1', 'uuid2']);
+				await service.createMany([{ name: 'Editor' }, { name: 'Editor' }]);
+
+				expect(createManySpy).toHaveBeenCalledWith(
+					expect.arrayContaining([
+						expect.objectContaining({ name: 'Editor', key: 'editor' }),
+						expect.objectContaining({ name: 'Editor', key: 'editor_2' }),
+					]),
+					undefined
+				);
+
+				createManySpy.mockRestore();
+			});
+
+			it('should reject duplicate caller-supplied keys in batch', async () => {
+				tracker.on.select('select "key" from "directus_roles"').responseOnce([]);
+
+				await expect(
+					service.createMany([
+						{ key: 'editor', name: 'A' },
+						{ key: 'editor', name: 'B' },
+					])
+				).rejects.toBeInstanceOf(InvalidPayloadException);
 			});
 		});
 
