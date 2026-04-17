@@ -24,13 +24,25 @@ function parseJSON(field: string, permId: unknown, value: unknown): Record<strin
 
 function parseCSV(value: unknown): string[] | null {
 	if (value === null || value === undefined) return null;
-	if (Array.isArray(value)) return value;
-	if (typeof value === 'string') {
+
+	let arr: string[];
+
+	if (Array.isArray(value)) {
+		arr = value;
+	} else if (typeof value === 'string') {
 		const trimmed = value.trim();
 		if (trimmed === '') return null;
-		return trimmed.split(',').map((s) => s.trim());
+		arr = trimmed.split(',').map((s) => s.trim());
+	} else {
+		return null;
 	}
 
+	return [...arr].sort();
+}
+
+function sortStringArray(value: unknown): string[] | null {
+	if (value === null || value === undefined) return null;
+	if (Array.isArray(value)) return [...value].sort();
 	return null;
 }
 
@@ -62,7 +74,7 @@ export async function getConfigSnapshot(options?: {
 		if (role['icon'] != null) configRole.icon = role['icon'];
 		if (role['description'] != null) configRole.description = role['description'];
 		if (role['enforce_tfa'] != null) configRole.enforce_tfa = role['enforce_tfa'];
-		if (role['ip_access'] != null) configRole.ip_access = role['ip_access'];
+		if (role['ip_access'] != null) configRole.ip_access = sortStringArray(role['ip_access']);
 
 		roles.push(configRole);
 	}

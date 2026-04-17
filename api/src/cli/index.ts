@@ -3,6 +3,8 @@ import emitter from '../emitter.js';
 import { getExtensionManager } from '../extensions.js';
 import { startServer } from '../server.js';
 import bootstrap from './commands/bootstrap/index.js';
+import { configApply } from './commands/config/apply.js';
+import { configSnapshot } from './commands/config/snapshot.js';
 import count from './commands/count/index.js';
 import dbInstall from './commands/database/install.js';
 import dbMigrate from './commands/database/migrate.js';
@@ -105,6 +107,25 @@ export async function createCli(): Promise<Command> {
 		.option('-d, --dry-run', 'Plan and log changes to be applied', false)
 		.argument('<path>', 'Path to snapshot file')
 		.action(apply);
+
+	const configCommand = program.command('config');
+
+	configCommand
+		.command('snapshot')
+		.description('Snapshot current roles and permissions to a config directory')
+		.argument('<path>', 'Target directory path')
+		.option('-y, --yes', 'Skip confirmation on overwriting non-empty directory', false)
+		.action(configSnapshot);
+
+	configCommand
+		.command('apply')
+		.description('Apply a config directory to this Directus instance')
+		.argument('<path>', 'Config directory path')
+		.option('-y, --yes', 'Skip confirmation prompt')
+		.option('--dry-run', 'Print planned changes without applying', false)
+		.option('--destructive', 'Delete roles/permissions in DB but not in config', false)
+		.option('--format <format>', 'Output format: human or json', 'human')
+		.action(configApply);
 
 	await emitter.emitInit('cli.after', { program });
 
