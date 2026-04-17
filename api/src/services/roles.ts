@@ -19,7 +19,7 @@ export class RolesService extends ItemsService {
 		let key = candidate;
 		let suffix = 2;
 
-		while (usedKeys.has(key)) {
+		while (usedKeys.has(key) || RolesService.RESERVED_KEYS.has(key)) {
 			key = `${candidate}_${suffix}`;
 			suffix++;
 		}
@@ -28,10 +28,18 @@ export class RolesService extends ItemsService {
 		return key;
 	}
 
+	private static readonly RESERVED_KEYS = new Set(['public']);
+
 	private validateKey(key: string): void {
 		if (!key || normalizeRoleKey(key) !== key) {
 			throw new InvalidPayloadException(
 				`Invalid role key "${key}". Keys must be lowercase alphanumeric with underscores, and cannot start with a digit.`
+			);
+		}
+
+		if (RolesService.RESERVED_KEYS.has(key)) {
+			throw new InvalidPayloadException(
+				`Role key "${key}" is reserved for config-as-code. Choose a different name.`
 			);
 		}
 	}
@@ -137,6 +145,10 @@ export class RolesService extends ItemsService {
 	}
 
 	override async updateOne(key: PrimaryKey, data: Record<string, any>, opts?: MutationOptions): Promise<PrimaryKey> {
+		if ('key' in data && data['key'] != null) {
+			this.validateKey(data['key']);
+		}
+
 		try {
 			if ('users' in data) {
 				await this.checkForOtherAdminUsers(key, data['users']);
@@ -149,6 +161,12 @@ export class RolesService extends ItemsService {
 	}
 
 	override async updateBatch(data: Record<string, any>[], opts?: MutationOptions): Promise<PrimaryKey[]> {
+		for (const item of data) {
+			if ('key' in item && item['key'] != null) {
+				this.validateKey(item['key']);
+			}
+		}
+
 		const primaryKeyField = this.schema.collections[this.collection]!.primary;
 
 		const keys = data.map((item) => item[primaryKeyField]);
@@ -170,6 +188,10 @@ export class RolesService extends ItemsService {
 		data: Record<string, any>,
 		opts?: MutationOptions
 	): Promise<PrimaryKey[]> {
+		if ('key' in data && data['key'] != null) {
+			this.validateKey(data['key']);
+		}
+
 		try {
 			if ('admin_access' in data && data['admin_access'] === false) {
 				await this.checkForOtherAdminRoles(keys);

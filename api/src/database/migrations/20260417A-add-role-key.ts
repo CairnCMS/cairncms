@@ -1,6 +1,8 @@
 import { normalizeRoleKey } from '@directus/utils';
 import type { Knex } from 'knex';
 
+const RESERVED_KEYS = new Set(['public']);
+
 export async function up(knex: Knex): Promise<void> {
 	await knex.schema.alterTable('directus_roles', (table) => {
 		table.string('key', 255).nullable();
@@ -16,7 +18,7 @@ export async function up(knex: Knex): Promise<void> {
 		let key = candidate;
 		let suffix = 2;
 
-		while (usedKeys.has(key)) {
+		while (usedKeys.has(key) || RESERVED_KEYS.has(key)) {
 			key = `${candidate}_${suffix}`;
 			suffix++;
 		}
