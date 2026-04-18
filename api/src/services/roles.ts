@@ -1,5 +1,6 @@
 import type { Query } from '@directus/types';
-import { ForbiddenException, UnprocessableEntityException } from '../exceptions/index.js';
+import { normalizeRoleKey } from '@directus/utils';
+import { ForbiddenException, InvalidPayloadException, UnprocessableEntityException } from '../exceptions/index.js';
 import type { AbstractServiceOptions, Alterations, Item, MutationOptions, PrimaryKey } from '../types/index.js';
 import { ItemsService } from './items.js';
 import { PermissionsService } from './permissions.js';
@@ -9,6 +10,91 @@ import { UsersService } from './users.js';
 export class RolesService extends ItemsService {
 	constructor(options: AbstractServiceOptions) {
 		super('directus_roles', options);
+	}
+
+	private resolveKey(name: string, usedKeys: Set<string>): string {
+		let candidate = normalizeRoleKey(name);
+		if (candidate === '') candidate = 'role';
+
+		let key = candidate;
+		let suffix = 2;
+
+		while (usedKeys.has(key) || RolesService.RESERVED_KEYS.has(key)) {
+			key = `${candidate}_${suffix}`;
+			suffix++;
+		}
+
+		usedKeys.add(key);
+		return key;
+	}
+
+	private static readonly RESERVED_KEYS = new Set(['public']);
+
+	private validateKey(key: string): void {
+		if (!key || normalizeRoleKey(key) !== key) {
+			throw new InvalidPayloadException(
+				`Invalid role key "${key}". Keys must be lowercase alphanumeric with underscores, and cannot start with a digit.`
+			);
+		}
+
+		if (RolesService.RESERVED_KEYS.has(key)) {
+			throw new InvalidPayloadException(
+				`Role key "${key}" is reserved for config-as-code. Choose a different name.`
+			);
+		}
+	}
+
+	private async assertKeyUnchanged(id: PrimaryKey, newKey: unknown): Promise<void> {
+		if (newKey === undefined) return;
+
+		const row = await this.knex('directus_roles').select('key').where({ id }).first();
+
+		if (row && row.key !== newKey) {
+			throw new InvalidPayloadException(
+				`Role key cannot be changed after creation. Delete and recreate the role instead.`
+			);
+		}
+	}
+
+	override async createOne(data: Partial<Item>, opts?: MutationOptions): Promise<PrimaryKey> {
+		if (data['key']) {
+			this.validateKey(data['key']);
+		} else {
+			if (!data['name']) {
+				throw new InvalidPayloadException('Role must have a name or a key.');
+			}
+
+			const existing = await this.knex('directus_roles').select('key');
+			const usedKeys = new Set(existing.map((r: any) => r.key as string));
+			data['key'] = this.resolveKey(data['name'], usedKeys);
+		}
+
+		return super.createOne(data, opts);
+	}
+
+	override async createMany(data: Partial<Item>[], opts?: MutationOptions): Promise<PrimaryKey[]> {
+		const existing = await this.knex('directus_roles').select('key');
+		const usedKeys = new Set(existing.map((r: any) => r.key as string));
+
+		for (const item of data) {
+			if (item['key']) {
+				this.validateKey(item['key']);
+
+				if (usedKeys.has(item['key'])) {
+					throw new InvalidPayloadException(`Duplicate role key "${item['key']}".`);
+				}
+
+				usedKeys.add(item['key']);
+			} else {
+				if (!item['name']) {
+					throw new InvalidPayloadException('Role must have a name or a key.');
+				}
+
+				item['key'] = this.resolveKey(item['name'], usedKeys);
+			}
+		}
+
+		return super.createMany(data, opts);
 	}
 
 	private async checkForOtherAdminRoles(excludeKeys: PrimaryKey[]): Promise<void> {
@@ -71,6 +157,10 @@ export class RolesService extends ItemsService {
 	}
 
 	override async updateOne(key: PrimaryKey, data: Record<string, any>, opts?: MutationOptions): Promise<PrimaryKey> {
+		if ('key' in data && data['key'] != null) {
+			this.validateKey(data['key']);
+		}
+
 		try {
 			if ('users' in data) {
 				await this.checkForOtherAdminUsers(key, data['users']);
@@ -84,6 +174,13 @@ export class RolesService extends ItemsService {
 
 	override async updateBatch(data: Record<string, any>[], opts?: MutationOptions): Promise<PrimaryKey[]> {
 		const primaryKeyField = this.schema.collections[this.collection]!.primary;
+
+		for (const item of data) {
+			if ('key' in item && item['key'] != null) {
+				this.validateKey(item['key']);
+				await this.assertKeyUnchanged(item[primaryKeyField], item['key']);
+			}
+		}
 
 		const keys = data.map((item) => item[primaryKeyField]);
 		const setsToNoAdmin = data.some((item) => item['admin_access'] === false);
@@ -104,6 +201,14 @@ export class RolesService extends ItemsService {
 		data: Record<string, any>,
 		opts?: MutationOptions
 	): Promise<PrimaryKey[]> {
+		if ('key' in data && data['key'] != null) {
+			this.validateKey(data['key']);
+
+			for (const id of keys) {
+				await this.assertKeyUnchanged(id, data['key']);
+			}
+		}
+
 		try {
 			if ('admin_access' in data && data['admin_access'] === false) {
 				await this.checkForOtherAdminRoles(keys);

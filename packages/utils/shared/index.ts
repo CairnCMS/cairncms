@@ -23,6 +23,7 @@ export * from './is-valid-json.js';
 export * from './merge-filters.js';
 export * from './move-in-array.js';
 export * from './normalize-path.js';
+export * from './normalize-role-key.js';
 export * from './parse-filter-function-path.js';
 export * from './parse-filter.js';
 export * from './parse-json.js';
