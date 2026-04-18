@@ -12,7 +12,7 @@
 		</template>
 
 		<div class="roles">
-			<permissions-overview :role="null" :permission="permissionKey" />
+			<permissions-overview role="public" :permission="permissionKey" />
 		</div>
 
 		<template #sidebar>

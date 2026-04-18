@@ -67,6 +67,7 @@
 import { useI18n } from 'vue-i18n';
 import { defineComponent, PropType, computed, inject, ref, toRefs } from 'vue';
 import { Permission, Collection } from '@directus/types';
+import { PUBLIC_ROLE_ID } from '@directus/constants';
 import api from '@/api';
 import { useRouter } from 'vue-router';
 import useUpdatePermissions from '../composables/use-update-permissions';
@@ -104,6 +105,7 @@ export default defineComponent({
 		const router = useRouter();
 
 		const { collection, role, permissions } = toRefs(props);
+		const resolvedRoleId = computed(() => (props.role === 'public' ? PUBLIC_ROLE_ID : props.role));
 		const { setFullAccess, setNoAccess, getPermission } = useUpdatePermissions(collection, permissions, role);
 
 		const permission = computed(() => getPermission(props.action));
@@ -147,7 +149,7 @@ export default defineComponent({
 				saving.value = true;
 
 				const permResponse = await api.post('/permissions', {
-					role: props.role,
+					role: resolvedRoleId.value,
 					collection: props.collection.collection,
 					action: props.action,
 				});

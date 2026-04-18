@@ -1,7 +1,8 @@
 import api from '@/api';
 import { Permission, Collection } from '@directus/types';
+import { PUBLIC_ROLE_ID } from '@directus/constants';
 import { unexpectedError } from '@/utils/unexpected-error';
-import { inject, ref, Ref } from 'vue';
+import { computed, inject, ref, Ref } from 'vue';
 
 const ACTIONS = ['create', 'read', 'update', 'delete', 'share'] as const;
 type Action = (typeof ACTIONS)[number];
@@ -21,6 +22,8 @@ export default function useUpdatePermissions(
 ): UsableUpdatePermissions {
 	const saving = ref(false);
 	const refresh = inject<() => Promise<void>>('refresh-permissions');
+
+	const resolvedRoleId = computed(() => (role.value === 'public' ? PUBLIC_ROLE_ID : role.value));
 
 	return { getPermission, setFullAccess, setNoAccess, setFullAccessAll, setNoAccessAll };
 
@@ -59,7 +62,7 @@ export default function useUpdatePermissions(
 		} else {
 			try {
 				await api.post('/permissions/', {
-					role: role.value,
+					role: resolvedRoleId.value,
 					collection: collection.value.collection,
 					action: action,
 					fields: '*',
@@ -124,7 +127,7 @@ export default function useUpdatePermissions(
 				} else {
 					try {
 						await api.post('/permissions/', {
-							role: role.value,
+							role: resolvedRoleId.value,
 							collection: collection.value.collection,
 							action: action,
 							fields: '*',

@@ -69,6 +69,7 @@ import { useCollectionsStore } from '@/stores/collections';
 import PermissionsOverviewHeader from './permissions-overview-header.vue';
 import PermissionsOverviewRow from './permissions-overview-row.vue';
 import { Permission } from '@directus/types';
+import { PUBLIC_ROLE_ID } from '@directus/constants';
 import api from '@/api';
 import { appRecommendedPermissions, appMinimalPermissions } from '../../app-permissions';
 import { unexpectedError } from '@/utils/unexpected-error';
@@ -106,6 +107,8 @@ export default defineComponent({
 		);
 
 		const systemVisible = ref(false);
+
+		const resolvedRoleId = computed(() => (props.role === 'public' ? PUBLIC_ROLE_ID : props.role));
 
 		const { permissions, loading, fetchPermissions, refreshPermission, refreshing } = usePermissions();
 
@@ -145,13 +148,10 @@ export default defineComponent({
 				loading.value = true;
 
 				try {
-					const params: any = { filter: { role: {} }, limit: -1 };
-
-					if (props.role === null) {
-						params.filter.role = { _null: true };
-					} else {
-						params.filter.role = { _eq: props.role };
-					}
+					const params: any = {
+						filter: { role: { _eq: resolvedRoleId.value } },
+						limit: -1,
+					};
 
 					const response = await api.get('/permissions', { params });
 
@@ -207,7 +207,7 @@ export default defineComponent({
 							'/permissions',
 							appRecommendedPermissions.map((permission) => ({
 								...permission,
-								role: props.role,
+								role: resolvedRoleId.value,
 							}))
 						);
 					}
