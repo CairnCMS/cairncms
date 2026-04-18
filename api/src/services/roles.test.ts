@@ -924,6 +924,20 @@ describe('Integration Tests', () => {
 				expect(checkForOtherAdminRolesSpy).toBeCalledTimes(1);
 				expect(checkForOtherAdminUsersSpy).toBeCalledTimes(1);
 			});
+
+			it('should reject changing key to a different value', async () => {
+				tracker.on.select('select "key" from "directus_roles" where "id" = ?').responseOnce({ key: 'editor' });
+
+				await expect(service.updateOne(1, { key: 'different_key' })).rejects.toBeInstanceOf(
+					InvalidPayloadException
+				);
+			});
+
+			it('should allow updates with the same key (idempotent save)', async () => {
+				tracker.on.select('select "key" from "directus_roles" where "id" = ?').responseOnce({ key: 'editor' });
+
+				await expect(service.updateOne(1, { key: 'editor', name: 'New Name' })).resolves.not.toThrow();
+			});
 		});
 
 		describe('updateMany', () => {

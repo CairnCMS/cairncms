@@ -44,6 +44,18 @@ export class RolesService extends ItemsService {
 		}
 	}
 
+	private async assertKeyUnchanged(id: PrimaryKey, newKey: unknown): Promise<void> {
+		if (newKey === undefined) return;
+
+		const row = await this.knex('directus_roles').select('key').where({ id }).first();
+
+		if (row && row.key !== newKey) {
+			throw new InvalidPayloadException(
+				`Role key cannot be changed after creation. Delete and recreate the role instead.`
+			);
+		}
+	}
+
 	override async createOne(data: Partial<Item>, opts?: MutationOptions): Promise<PrimaryKey> {
 		if (data['key']) {
 			this.validateKey(data['key']);
@@ -161,13 +173,14 @@ export class RolesService extends ItemsService {
 	}
 
 	override async updateBatch(data: Record<string, any>[], opts?: MutationOptions): Promise<PrimaryKey[]> {
+		const primaryKeyField = this.schema.collections[this.collection]!.primary;
+
 		for (const item of data) {
 			if ('key' in item && item['key'] != null) {
 				this.validateKey(item['key']);
+				await this.assertKeyUnchanged(item[primaryKeyField], item['key']);
 			}
 		}
-
-		const primaryKeyField = this.schema.collections[this.collection]!.primary;
 
 		const keys = data.map((item) => item[primaryKeyField]);
 		const setsToNoAdmin = data.some((item) => item['admin_access'] === false);
@@ -190,6 +203,10 @@ export class RolesService extends ItemsService {
 	): Promise<PrimaryKey[]> {
 		if ('key' in data && data['key'] != null) {
 			this.validateKey(data['key']);
+
+			for (const id of keys) {
+				await this.assertKeyUnchanged(id, data['key']);
+			}
 		}
 
 		try {
