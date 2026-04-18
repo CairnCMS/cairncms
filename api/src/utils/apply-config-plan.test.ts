@@ -47,12 +47,26 @@ describe('applyConfigPlan — dryRun', () => {
 
 		plan.permissions.create.push({
 			roleKey: 'editor',
-			permission: { collection: 'articles', action: 'read', permissions: null, validation: null, presets: null, fields: null },
+			permission: {
+				collection: 'articles',
+				action: 'read',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: null,
+			},
 		});
 
 		plan.permissions.update.push({
 			roleKey: 'editor',
-			permission: { collection: 'articles', action: 'update', permissions: null, validation: null, presets: null, fields: ['title'] },
+			permission: {
+				collection: 'articles',
+				action: 'update',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: ['title'],
+			},
 		});
 
 		const result = await applyConfigPlan(plan, { dryRun: true });
@@ -78,10 +92,11 @@ describe('applyConfigPlan — dryRun', () => {
 	it('does not count permission deletes for roles being deleted', async () => {
 		const plan = emptyPlan();
 		plan.roles.delete.push('editor');
+
 		plan.permissions.delete.push(
 			{ roleKey: 'editor', collection: 'articles', action: 'read' },
 			{ roleKey: 'editor', collection: 'articles', action: 'update' },
-			{ roleKey: 'viewer', collection: 'pages', action: 'read' },
+			{ roleKey: 'viewer', collection: 'pages', action: 'read' }
 		);
 
 		const result = await applyConfigPlan(plan, { dryRun: true, destructive: true });
@@ -95,7 +110,14 @@ describe('applyConfigPlan — dryRun', () => {
 
 		plan.permissions.create.push({
 			roleKey: 'public',
-			permission: { collection: 'articles', action: 'read', permissions: null, validation: null, presets: null, fields: null },
+			permission: {
+				collection: 'articles',
+				action: 'read',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: null,
+			},
 		});
 
 		const result = await applyConfigPlan(plan, { dryRun: true });

@@ -38,9 +38,8 @@ export async function applyConfigPlan(
 		if (opts.destructive) {
 			result.roles.deleted = [...plan.roles.delete];
 			const deletedRoleKeys = new Set(plan.roles.delete);
-			result.permissions.deleted = plan.permissions.delete.filter(
-				(d) => !deletedRoleKeys.has(d.roleKey)
-			).length;
+
+			result.permissions.deleted = plan.permissions.delete.filter((d) => !deletedRoleKeys.has(d.roleKey)).length;
 		}
 
 		result.permissions.created = plan.permissions.create.length;
@@ -97,15 +96,18 @@ export async function applyConfigPlan(
 				throw new Error(`Cannot create permission: role "${roleKey}" not found.`);
 			}
 
-			await permissionsService.createOne({
-				role: roleId,
-				collection: permission.collection,
-				action: permission.action,
-				permissions: permission.permissions,
-				validation: permission.validation,
-				presets: permission.presets,
-				fields: permission.fields,
-			}, skipCache);
+			await permissionsService.createOne(
+				{
+					role: roleId,
+					collection: permission.collection,
+					action: permission.action,
+					permissions: permission.permissions,
+					validation: permission.validation,
+					presets: permission.presets,
+					fields: permission.fields,
+				},
+				skipCache
+			);
 
 			result.permissions.created++;
 		}
@@ -139,12 +141,16 @@ export async function applyConfigPlan(
 				);
 			}
 
-			await permissionsService.updateOne(existing[0]!['id'], {
-				permissions: permission.permissions,
-				validation: permission.validation,
-				presets: permission.presets,
-				fields: permission.fields,
-			}, skipCache);
+			await permissionsService.updateOne(
+				existing[0]!['id'],
+				{
+					permissions: permission.permissions,
+					validation: permission.validation,
+					presets: permission.presets,
+					fields: permission.fields,
+				},
+				skipCache
+			);
 
 			result.permissions.updated++;
 		}

@@ -1,5 +1,6 @@
 import { normalizeRoleKey } from '@directus/utils';
 import type { Knex } from 'knex';
+import logger from '../../logger.js';
 
 const RESERVED_KEYS = new Set(['public']);
 
@@ -42,14 +43,11 @@ export async function up(knex: Knex): Promise<void> {
 		.having(knex.raw('count(*) > 1'));
 
 	if (duplicates.length > 0) {
-		console.warn(
+		logger.warn(
 			`[migration 20260417A] Found ${duplicates.length} duplicate (role, collection, action) tuples in directus_permissions.\n` +
 				`These are tolerated at runtime but will block 'config snapshot' until resolved.\n` +
 				duplicates
-					.map(
-						(d: any) =>
-							`  - role=${d.role ?? 'NULL'} collection=${d.collection} action=${d.action} (×${d.count})`
-					)
+					.map((d: any) => `  - role=${d.role ?? 'NULL'} collection=${d.collection} action=${d.action} (×${d.count})`)
 					.join('\n')
 		);
 	}

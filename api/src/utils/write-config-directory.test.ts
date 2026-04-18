@@ -38,7 +38,14 @@ describe('writeConfigDirectory', () => {
 				{
 					role: 'editor',
 					permissions: [
-						{ collection: 'articles', action: 'read', permissions: null, validation: null, presets: null, fields: null },
+						{
+							collection: 'articles',
+							action: 'read',
+							permissions: null,
+							validation: null,
+							presets: null,
+							fields: null,
+						},
 					],
 				},
 			],
@@ -92,8 +99,22 @@ describe('writeConfigDirectory', () => {
 					role: 'editor',
 					permissions: [
 						{ collection: 'posts', action: 'read', permissions: null, validation: null, presets: null, fields: null },
-						{ collection: 'articles', action: 'update', permissions: null, validation: null, presets: null, fields: null },
-						{ collection: 'articles', action: 'read', permissions: null, validation: null, presets: null, fields: null },
+						{
+							collection: 'articles',
+							action: 'update',
+							permissions: null,
+							validation: null,
+							presets: null,
+							fields: null,
+						},
+						{
+							collection: 'articles',
+							action: 'read',
+							permissions: null,
+							validation: null,
+							presets: null,
+							fields: null,
+						},
 					],
 				},
 			],
@@ -102,6 +123,7 @@ describe('writeConfigDirectory', () => {
 		await writeConfigDirectory(config, tmpDir);
 
 		const perms = await readYaml(path.join(tmpDir, 'permissions', 'editor.yaml'));
+
 		expect(perms.permissions.map((p: any) => `${p.collection}:${p.action}`)).toEqual([
 			'articles:read',
 			'articles:update',

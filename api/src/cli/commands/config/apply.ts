@@ -39,6 +39,7 @@ function formatPlanHuman(plan: ConfigPlan, destructive: boolean): string {
 
 	const permCreates = plan.permissions.create.length;
 	const permUpdates = plan.permissions.update.length;
+
 	const permDeletes = destructive
 		? plan.permissions.delete.filter((d) => !plan.roles.delete.includes(d.roleKey)).length
 		: 0;
@@ -64,9 +65,7 @@ function isPlanEmpty(plan: ConfigPlan, destructive: boolean): boolean {
 	if (destructive) {
 		if (plan.roles.delete.length > 0) return false;
 
-		const keptRoleDeletes = plan.permissions.delete.filter(
-			(d) => !plan.roles.delete.includes(d.roleKey)
-		).length;
+		const keptRoleDeletes = plan.permissions.delete.filter((d) => !plan.roles.delete.includes(d.roleKey)).length;
 
 		if (keptRoleDeletes > 0) return false;
 	}
@@ -98,9 +97,7 @@ export async function configApply(
 		const current = await getConfigSnapshot({ database });
 		const plan = computeConfigPlan(current, desired);
 
-		const currentRoles = new Map(
-			current.roles.map((r) => [r.key, { admin_access: r.admin_access }])
-		);
+		const currentRoles = new Map(current.roles.map((r) => [r.key, { admin_access: r.admin_access }]));
 
 		const validation = validateConfigPlan(plan, desired, { currentRoles });
 

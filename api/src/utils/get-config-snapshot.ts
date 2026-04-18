@@ -10,6 +10,7 @@ import { getSchema } from './get-schema.js';
 function parseJSON(field: string, permId: unknown, value: unknown): Record<string, any> | null {
 	if (value === null || value === undefined) return null;
 	if (typeof value === 'object') return value as Record<string, any>;
+
 	if (typeof value === 'string') {
 		try {
 			return JSON.parse(value);

@@ -72,6 +72,7 @@ describe('computeConfigPlan', () => {
 
 	it('detects new permissions to create', () => {
 		const current = makeConfig({ roles: [makeRole('editor')] });
+
 		const desired = makeConfig({
 			roles: [makeRole('editor')],
 			permissions: [{ role: 'editor', permissions: [makePerm('articles', 'read')] }],
@@ -98,16 +99,12 @@ describe('computeConfigPlan', () => {
 	it('detects permission updates', () => {
 		const current = makeConfig({
 			roles: [makeRole('editor')],
-			permissions: [
-				{ role: 'editor', permissions: [{ ...makePerm('articles', 'read'), fields: ['title'] }] },
-			],
+			permissions: [{ role: 'editor', permissions: [{ ...makePerm('articles', 'read'), fields: ['title'] }] }],
 		});
 
 		const desired = makeConfig({
 			roles: [makeRole('editor')],
-			permissions: [
-				{ role: 'editor', permissions: [{ ...makePerm('articles', 'read'), fields: ['title', 'body'] }] },
-			],
+			permissions: [{ role: 'editor', permissions: [{ ...makePerm('articles', 'read'), fields: ['title', 'body'] }] }],
 		});
 
 		const plan = computeConfigPlan(current, desired);
@@ -134,6 +131,7 @@ describe('computeConfigPlan', () => {
 
 	it('handles public permissions', () => {
 		const current = makeConfig();
+
 		const desired = makeConfig({
 			permissions: [{ role: 'public', permissions: [makePerm('articles', 'read')] }],
 		});
@@ -210,6 +208,7 @@ describe('validateConfigPlan', () => {
 		const desired = makeConfig();
 
 		const plan = computeConfigPlan(current, desired);
+
 		const result = validateConfigPlan(plan, desired, {
 			currentRoles: new Map([['administrator', { admin_access: true }]]),
 		});
@@ -220,10 +219,7 @@ describe('validateConfigPlan', () => {
 
 	it('allows deleting an admin role when another admin remains', () => {
 		const current = makeConfig({
-			roles: [
-				makeRole('administrator', { admin_access: true }),
-				makeRole('super_admin', { admin_access: true }),
-			],
+			roles: [makeRole('administrator', { admin_access: true }), makeRole('super_admin', { admin_access: true })],
 		});
 
 		const desired = makeConfig({
@@ -231,6 +227,7 @@ describe('validateConfigPlan', () => {
 		});
 
 		const plan = computeConfigPlan(current, desired);
+
 		const result = validateConfigPlan(plan, desired, {
 			currentRoles: new Map([
 				['administrator', { admin_access: true }],
@@ -243,10 +240,7 @@ describe('validateConfigPlan', () => {
 
 	it('errors when deleting admin role and only non-admin roles remain', () => {
 		const current = makeConfig({
-			roles: [
-				makeRole('administrator', { admin_access: true }),
-				makeRole('editor', { admin_access: false }),
-			],
+			roles: [makeRole('administrator', { admin_access: true }), makeRole('editor', { admin_access: false })],
 		});
 
 		const desired = makeConfig({
@@ -254,6 +248,7 @@ describe('validateConfigPlan', () => {
 		});
 
 		const plan = computeConfigPlan(current, desired);
+
 		const result = validateConfigPlan(plan, desired, {
 			currentRoles: new Map([
 				['administrator', { admin_access: true }],

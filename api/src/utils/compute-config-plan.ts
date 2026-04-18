@@ -1,11 +1,5 @@
 import { isEqual } from 'lodash-es';
-import type {
-	ConfigPlan,
-	ConfigPlanErrors,
-	ConfigPermission,
-	ConfigRole,
-	DirectusConfig,
-} from '../types/config.js';
+import type { ConfigPlan, ConfigPlanErrors, ConfigPermission, ConfigRole, DirectusConfig } from '../types/config.js';
 
 function permKey(roleKey: string, perm: ConfigPermission): string {
 	return `${roleKey}::${perm.collection}::${perm.action}`;
@@ -136,9 +130,7 @@ export function validateConfigPlan(
 		if (permSet.role === 'public') continue;
 
 		if (!desiredRoleKeys.has(permSet.role) && !context.currentRoles.has(permSet.role)) {
-			errors.push(
-				`Permission set references role "${permSet.role}" which does not exist in config or database.`
-			);
+			errors.push(`Permission set references role "${permSet.role}" which does not exist in config or database.`);
 		}
 	}
 

@@ -10,6 +10,7 @@ exports.seed = async function (knex) {
 		{
 			id: 'd70c0943-5b55-4c5d-a613-f539a27a57f5',
 			name: 'Tests Flow Role',
+			key: 'tests_flow_role',
 			admin_access: true,
 			app_access: true,
 		},

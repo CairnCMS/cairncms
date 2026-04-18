@@ -38,9 +38,7 @@ export class RolesService extends ItemsService {
 		}
 
 		if (RolesService.RESERVED_KEYS.has(key)) {
-			throw new InvalidPayloadException(
-				`Role key "${key}" is reserved for config-as-code. Choose a different name.`
-			);
+			throw new InvalidPayloadException(`Role key "${key}" is reserved for config-as-code. Choose a different name.`);
 		}
 	}
 

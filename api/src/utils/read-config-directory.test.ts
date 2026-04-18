@@ -26,6 +26,7 @@ async function writeManifest(resources: string[] = ['roles', 'permissions']): Pr
 async function writeRole(key: string, data?: Record<string, any>): Promise<void> {
 	const rolesDir = path.join(tmpDir, 'roles');
 	await fs.mkdir(rolesDir, { recursive: true });
+
 	await fs.writeFile(
 		path.join(rolesDir, `${key}.yaml`),
 		toYaml({ key, name: key.charAt(0).toUpperCase() + key.slice(1), admin_access: false, app_access: true, ...data })
@@ -42,6 +43,7 @@ describe('readConfigDirectory', () => {
 	it('reads a valid config directory', async () => {
 		await writeManifest();
 		await writeRole('editor');
+
 		await writePermissions('editor', [
 			{ collection: 'articles', action: 'read', permissions: null, validation: null, presets: null, fields: null },
 		]);
@@ -73,7 +75,11 @@ describe('readConfigDirectory', () => {
 		await writeManifest();
 		const rolesDir = path.join(tmpDir, 'roles');
 		await fs.mkdir(rolesDir, { recursive: true });
-		await fs.writeFile(path.join(rolesDir, 'wrong.yaml'), toYaml({ key: 'editor', name: 'Editor', admin_access: false, app_access: true }));
+
+		await fs.writeFile(
+			path.join(rolesDir, 'wrong.yaml'),
+			toYaml({ key: 'editor', name: 'Editor', admin_access: false, app_access: true })
+		);
 
 		await expect(readConfigDirectory(tmpDir)).rejects.toThrow('filename must match key');
 	});
@@ -96,6 +102,7 @@ describe('readConfigDirectory', () => {
 
 	it('allows permissions/public.yaml without a matching role file', async () => {
 		await writeManifest();
+
 		await writePermissions('public', [
 			{ collection: 'articles', action: 'read', permissions: null, validation: null, presets: null, fields: null },
 		]);

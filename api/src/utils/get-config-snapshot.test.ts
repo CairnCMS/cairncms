@@ -59,6 +59,7 @@ describe('getConfigSnapshot', () => {
 		const config = await getConfigSnapshot({ database: db });
 
 		expect(config.roles).toHaveLength(1);
+
 		expect(config.roles[0]).toEqual({
 			key: 'editor',
 			name: 'Editor',
@@ -120,6 +121,7 @@ describe('getConfigSnapshot', () => {
 
 	it('groups public (role=NULL) permissions under "public" key', async () => {
 		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([]);
+
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
 			{
 				id: 1,
@@ -373,6 +375,7 @@ describe('getConfigSnapshot', () => {
 		const config = await getConfigSnapshot({ database: db });
 
 		expect(config.roles.map((r) => r.key)).toEqual(['alpha', 'zebra']);
+
 		expect(config.permissions[0]!.permissions.map((p) => `${p.collection}:${p.action}`)).toEqual([
 			'articles:read',
 			'articles:update',
