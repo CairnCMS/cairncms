@@ -66,6 +66,7 @@ import { useRouter } from 'vue-router';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { translate } from '@/utils/translate-object-values';
 import { Role } from '@directus/types';
+import { PUBLIC_ROLE_ID } from '@directus/constants';
 
 type RoleItem = Partial<Role> & {
 	count?: number;
@@ -151,21 +152,18 @@ export default defineComponent({
 					},
 				});
 
-				roles.value = [
-					{
-						public: true,
-						name: t('public_label'),
-						icon: 'public',
-						description: t('public_description'),
-						id: 'public',
-					},
-					...response.data.data.map((role: any) => {
-						return {
-							...translate(role),
-							count: role.users[0]?.count.id || 0,
-						};
-					}),
-				];
+				roles.value = response.data.data.map((role: any) => {
+					const isSentinel = role.id === PUBLIC_ROLE_ID;
+
+					return {
+						...translate(role),
+						// Route clicks on the sentinel to the existing /settings/roles/public
+						// URL, which resolves to the permissions-only public-item.vue view.
+						id: isSentinel ? 'public' : role.id,
+						public: isSentinel,
+						count: isSentinel ? null : role.users[0]?.count.id || 0,
+					};
+				});
 			} catch (err: any) {
 				unexpectedError(err);
 			} finally {

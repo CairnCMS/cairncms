@@ -95,10 +95,12 @@ export default defineComponent({
 				?.name;
 		});
 
+		const isSentinel = computed(() => props.roleKey === 'public');
+
 		const modalTitle = computed(() => {
 			if (loading.value || !permission.value) return t('loading');
 
-			if (props.roleKey) {
+			if (props.roleKey && !isSentinel.value) {
 				return role.value!.name + ' -> ' + collectionName.value + ' -> ' + t(permission.value.action);
 			}
 
@@ -189,7 +191,7 @@ export default defineComponent({
 			loading.value = true;
 
 			try {
-				if (props.roleKey) {
+				if (props.roleKey && !isSentinel.value) {
 					const response = await api.get(`/roles/${props.roleKey}`, {
 						params: {
 							deep: { users: { _limit: 0 } },

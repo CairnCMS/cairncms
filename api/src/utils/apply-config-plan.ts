@@ -89,8 +89,10 @@ export async function applyConfigPlan(
 		}
 
 		// Step 3: create and update permissions
+		// `roleIdByKey` includes the sentinel row (key='public' → PUBLIC_ROLE_ID),
+		// so 'public' resolves naturally with no special case.
 		for (const { roleKey, permission } of plan.permissions.create) {
-			const roleId = roleKey === 'public' ? null : roleIdByKey.get(roleKey);
+			const roleId = roleIdByKey.get(roleKey);
 
 			if (roleId === undefined) {
 				throw new Error(`Cannot create permission: role "${roleKey}" not found.`);
@@ -113,7 +115,7 @@ export async function applyConfigPlan(
 		}
 
 		for (const { roleKey, permission } of plan.permissions.update) {
-			const roleId = roleKey === 'public' ? null : roleIdByKey.get(roleKey);
+			const roleId = roleIdByKey.get(roleKey);
 
 			if (roleId === undefined) {
 				throw new Error(`Cannot update permission: role "${roleKey}" not found.`);
@@ -122,13 +124,8 @@ export async function applyConfigPlan(
 			const filter: Record<string, any> = {
 				collection: { _eq: permission.collection },
 				action: { _eq: permission.action },
+				role: { _eq: roleId },
 			};
-
-			if (roleId === null) {
-				filter['role'] = { _null: true };
-			} else {
-				filter['role'] = { _eq: roleId };
-			}
 
 			const existing = await permissionsService.readByQuery({
 				filter,
@@ -172,20 +169,15 @@ export async function applyConfigPlan(
 			for (const { roleKey, collection, action } of plan.permissions.delete) {
 				if (plan.roles.delete.includes(roleKey)) continue;
 
-				const roleId = roleKey === 'public' ? null : roleIdByKey.get(roleKey);
+				const roleId = roleIdByKey.get(roleKey);
 
 				if (roleId === undefined) continue;
 
 				const filter: Record<string, any> = {
 					collection: { _eq: collection },
 					action: { _eq: action },
+					role: { _eq: roleId },
 				};
-
-				if (roleId === null) {
-					filter['role'] = { _null: true };
-				} else {
-					filter['role'] = { _eq: roleId };
-				}
 
 				const existing = await permissionsService.readByQuery({
 					filter,

@@ -938,6 +938,129 @@ describe('Integration Tests', () => {
 			});
 		});
 
+		describe('sentinel role guards', () => {
+			// Real directus_roles.id is a UUID; the shared service above uses an integer
+			// schema for test-simplicity. These tests need UUID-typed keys so that
+			// validateKeys() doesn't reject the sentinel UUID before our guards can fire.
+			let uuidService: RolesService;
+
+			beforeEach(() => {
+				uuidService = new RolesService({
+					knex: db,
+					schema: {
+						collections: {
+							directus_roles: {
+								collection: 'directus_roles',
+								primary: 'id',
+								singleton: false,
+								sortField: null,
+								note: null,
+								accountability: null,
+								fields: {
+									id: {
+										field: 'id',
+										defaultValue: null,
+										nullable: false,
+										generated: true,
+										type: 'uuid',
+										dbType: 'uuid',
+										precision: null,
+										scale: null,
+										special: [],
+										note: null,
+										validation: null,
+										alias: false,
+									},
+								},
+							},
+						},
+						relations: [],
+					},
+				});
+			});
+
+			it('should reject deletion of the sentinel role via deleteOne', async () => {
+				await expect(uuidService.deleteOne('00000000-0000-0000-0000-000000000000')).rejects.toBeInstanceOf(
+					InvalidPayloadException
+				);
+			});
+
+			it('should reject batches that include the sentinel role via deleteMany', async () => {
+				const uuid1 = '11111111-1111-1111-1111-111111111111';
+				const uuid2 = '22222222-2222-2222-2222-222222222222';
+
+				await expect(
+					uuidService.deleteMany([uuid1, '00000000-0000-0000-0000-000000000000', uuid2])
+				).rejects.toBeInstanceOf(InvalidPayloadException);
+			});
+
+			it('should reject deleteByQuery resolving to sentinel', async () => {
+				vi.spyOn(ItemsService.prototype, 'getKeysByQuery').mockResolvedValueOnce([
+					'00000000-0000-0000-0000-000000000000',
+				]);
+
+				await expect(uuidService.deleteByQuery({})).rejects.toBeInstanceOf(InvalidPayloadException);
+			});
+
+			it('should reject forbidden field changes on the sentinel role', async () => {
+				for (const field of ['admin_access', 'app_access', 'enforce_tfa', 'ip_access', 'users']) {
+					await expect(
+						uuidService.updateOne('00000000-0000-0000-0000-000000000000', { [field]: true })
+					).rejects.toBeInstanceOf(InvalidPayloadException);
+				}
+			});
+
+			it('should allow display-only field changes on the sentinel role', async () => {
+				for (const field of ['name', 'icon', 'description']) {
+					await expect(
+						uuidService.updateOne('00000000-0000-0000-0000-000000000000', { [field]: 'x' })
+					).resolves.not.toThrow();
+				}
+			});
+
+			it('should allow idempotent key save on the sentinel role', async () => {
+				tracker.on.select('select "key" from "directus_roles" where "id" = ?').responseOnce({ key: 'public' });
+
+				await expect(
+					uuidService.updateOne('00000000-0000-0000-0000-000000000000', {
+						key: 'public',
+						name: 'Public',
+					})
+				).resolves.not.toThrow();
+			});
+
+			it('should allow idempotent key save via updateMany on sentinel', async () => {
+				tracker.on.select('select "key" from "directus_roles" where "id" = ?').responseOnce({ key: 'public' });
+
+				await expect(
+					uuidService.updateMany(['00000000-0000-0000-0000-000000000000'], {
+						key: 'public',
+						name: 'Public',
+					})
+				).resolves.not.toThrow();
+			});
+
+			it('should reject forbidden field on sentinel via updateMany', async () => {
+				await expect(
+					uuidService.updateMany(['00000000-0000-0000-0000-000000000000'], { admin_access: false })
+				).rejects.toBeInstanceOf(InvalidPayloadException);
+			});
+
+			it('should allow idempotent key save via updateBatch on sentinel', async () => {
+				tracker.on.select('select "key" from "directus_roles" where "id" = ?').responseOnce({ key: 'public' });
+
+				await expect(
+					uuidService.updateBatch([{ id: '00000000-0000-0000-0000-000000000000', key: 'public', name: 'Public' }])
+				).resolves.not.toThrow();
+			});
+
+			it('should reject forbidden field on sentinel via updateBatch', async () => {
+				await expect(
+					uuidService.updateBatch([{ id: '00000000-0000-0000-0000-000000000000', users: [1] }])
+				).rejects.toBeInstanceOf(InvalidPayloadException);
+			});
+		});
+
 		describe('updateMany', () => {
 			it('should not checkForOtherAdminRoles', async () => {
 				await service.updateMany([1], {});

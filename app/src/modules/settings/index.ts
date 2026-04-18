@@ -1,5 +1,6 @@
 import api from '@/api';
 import { defineModule } from '@directus/utils';
+import { PUBLIC_ROLE_ID } from '@directus/constants';
 import { useCollectionsStore } from '@/stores/collections';
 import { useFieldsStore } from '@/stores/fields';
 import { useFlowsStore } from '@/stores/flows';
@@ -137,6 +138,17 @@ export default defineModule({
 					path: ':primaryKey',
 					component: RolesItem,
 					props: true,
+					beforeEnter(to) {
+						if (to.params.primaryKey !== PUBLIC_ROLE_ID) return;
+
+						const permissionKey = to.params.permissionKey as string | undefined;
+
+						return {
+							path: permissionKey ? `/settings/roles/public/${permissionKey}` : `/settings/roles/public`,
+							query: to.query,
+							hash: to.hash,
+						};
+					},
 					children: [
 						{
 							path: ':permissionKey',

@@ -1,3 +1,4 @@
+import { PUBLIC_ROLE_ID } from '@directus/constants';
 import { FailedValidationException } from '@directus/exceptions';
 import type { Query } from '@directus/types';
 import { getSimpleHash, toArray } from '@directus/utils';
@@ -160,6 +161,23 @@ export class UsersService extends ItemsService {
 	}
 
 	/**
+	 * Resolves a role payload value (either UUID string or `{ id: UUID }` object from GraphQL)
+	 * to its underlying UUID string, or null if missing.
+	 */
+	private resolveRoleId(role: unknown): string | null {
+		if (!role) return null;
+		if (typeof role === 'string') return role;
+		if (typeof role === 'object' && 'id' in (role as any)) return (role as any).id;
+		return null;
+	}
+
+	private assertNotSentinelRole(role: unknown): void {
+		if (this.resolveRoleId(role) === PUBLIC_ROLE_ID) {
+			throw new InvalidPayloadException('Users cannot be assigned to the public role.');
+		}
+	}
+
+	/**
 	 * Create a new user
 	 */
 	override async createOne(data: Partial<Item>, opts?: MutationOptions): Promise<PrimaryKey> {
@@ -171,6 +189,10 @@ export class UsersService extends ItemsService {
 	 * Create multiple new users
 	 */
 	override async createMany(data: Partial<Item>[], opts?: MutationOptions): Promise<PrimaryKey[]> {
+		for (const payload of data) {
+			this.assertNotSentinelRole(payload['role']);
+		}
+
 		const emails = data['map']((payload) => payload['email']).filter((email) => email);
 		const passwords = data['map']((payload) => payload['password']).filter((password) => password);
 
@@ -232,6 +254,8 @@ export class UsersService extends ItemsService {
 	 * Update many users by primary key
 	 */
 	override async updateMany(keys: PrimaryKey[], data: Partial<Item>, opts?: MutationOptions): Promise<PrimaryKey[]> {
+		this.assertNotSentinelRole(data['role']);
+
 		try {
 			if (data['role']) {
 				// data['role'] will be an object with id with GraphQL mutations
