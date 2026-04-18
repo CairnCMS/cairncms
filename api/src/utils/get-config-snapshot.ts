@@ -1,3 +1,4 @@
+import { PUBLIC_ROLE_ID } from '@directus/constants';
 import type { SchemaOverview } from '@directus/types';
 import type { Knex } from 'knex';
 import getDatabase from '../database/index.js';
@@ -65,6 +66,12 @@ export async function getConfigSnapshot(options?: {
 	for (const role of rolesRaw) {
 		roleKeyById.set(role['id'], role['key']);
 
+		// Sentinel is a system-managed row representing unauthenticated access;
+		// its UUID→key mapping stays in roleKeyById so permissions on it group
+		// under the "public" key, but the role itself has no configurable
+		// surface and doesn't belong in config.roles.
+		if (role['id'] === PUBLIC_ROLE_ID) continue;
+
 		const configRole: ConfigRole = {
 			key: role['key'],
 			name: role['name'],
@@ -90,20 +97,15 @@ export async function getConfigSnapshot(options?: {
 		if (perm['system'] === true) continue;
 
 		const roleId = perm['role'];
-		let roleKey: string;
+		const roleKey = roleKeyById.get(roleId);
 
-		if (roleId === null) {
-			roleKey = 'public';
-		} else {
-			const resolved = roleKeyById.get(roleId);
-
-			if (!resolved) {
-				orphanedCount++;
-				logger.warn(`Permission id=${perm['id']} references non-existent role ${roleId} — skipped in snapshot.`);
-				continue;
-			}
-
-			roleKey = resolved;
+		if (!roleKey) {
+			// role column is NOT NULL post-sentinel-refactor. If a permission
+			// row doesn't resolve to a known role (including the sentinel),
+			// treat it as orphaned and warn the operator.
+			orphanedCount++;
+			logger.warn(`Permission id=${perm['id']} references non-existent role ${roleId} — skipped in snapshot.`);
+			continue;
 		}
 
 		const tupleKey = `${roleKey}::${perm['collection']}::${perm['action']}`;

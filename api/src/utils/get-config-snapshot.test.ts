@@ -119,13 +119,88 @@ describe('getConfigSnapshot', () => {
 		expect(config.roles[0]!.ip_access).toEqual(['10.0.0.1', '10.0.0.2', '192.168.1.1']);
 	});
 
-	it('groups public (role=NULL) permissions under "public" key', async () => {
-		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([]);
+	it('excludes sentinel but includes normal roles and groups public permissions correctly', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
+			{
+				id: '00000000-0000-0000-0000-000000000000',
+				key: 'public',
+				name: '$t:public_label',
+				admin_access: false,
+				app_access: false,
+			},
+			{
+				id: 'admin-uuid',
+				key: 'administrator',
+				name: 'Administrator',
+				admin_access: true,
+				app_access: true,
+			},
+			{
+				id: 'editor-uuid',
+				key: 'editor',
+				name: 'Editor',
+				admin_access: false,
+				app_access: true,
+			},
+		]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
 			{
 				id: 1,
-				role: null,
+				role: '00000000-0000-0000-0000-000000000000',
+				collection: 'articles',
+				action: 'read',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: null,
+			},
+			{
+				id: 2,
+				role: 'editor-uuid',
+				collection: 'articles',
+				action: 'update',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: null,
+			},
+		]);
+
+		const config = await getConfigSnapshot({ database: db });
+
+		// Sentinel excluded, other two roles present
+		expect(config.roles.map((r) => r.key).sort()).toEqual(['administrator', 'editor']);
+
+		// Permissions grouped by their role's key (public for sentinel, editor for editor-uuid)
+		expect(config.permissions.map((p) => p.role).sort()).toEqual(['editor', 'public']);
+
+		const publicSet = config.permissions.find((p) => p.role === 'public');
+		expect(publicSet!.permissions).toHaveLength(1);
+		expect(publicSet!.permissions[0]!.collection).toBe('articles');
+
+		const editorSet = config.permissions.find((p) => p.role === 'editor');
+		expect(editorSet!.permissions).toHaveLength(1);
+		expect(editorSet!.permissions[0]!.action).toBe('update');
+	});
+
+	it('groups permissions on the sentinel role under the "public" key', async () => {
+		// The sentinel row lives in directus_roles; snapshot excludes it from
+		// config.roles but still uses its UUID→key mapping to resolve public permissions.
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
+			{
+				id: '00000000-0000-0000-0000-000000000000',
+				key: 'public',
+				name: '$t:public_label',
+				admin_access: false,
+				app_access: false,
+			},
+		]);
+
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
+			{
+				id: 1,
+				role: '00000000-0000-0000-0000-000000000000',
 				collection: 'articles',
 				action: 'read',
 				permissions: null,
@@ -137,6 +212,7 @@ describe('getConfigSnapshot', () => {
 
 		const config = await getConfigSnapshot({ database: db });
 
+		expect(config.roles).toEqual([]);
 		expect(config.permissions).toHaveLength(1);
 		expect(config.permissions[0]!.role).toBe('public');
 		expect(config.permissions[0]!.permissions).toHaveLength(1);
