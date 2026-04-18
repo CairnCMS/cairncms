@@ -133,6 +133,9 @@ fields:
     interface: select-dropdown-m2o
     options:
       template: '{{ name }}'
+      filter:
+        id:
+          _neq: 00000000-0000-0000-0000-000000000000
     special:
       - m2o
     width: half

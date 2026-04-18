@@ -1,5 +1,6 @@
 import api from '@/api';
 import { unexpectedError } from '@/utils/unexpected-error';
+import { PUBLIC_ROLE_ID } from '@directus/constants';
 import { Role } from '@directus/types';
 import { ref, Ref } from 'vue';
 
@@ -35,7 +36,7 @@ export default function useNavigation(): { roles: Ref<BasicRole[] | null>; loadi
 				},
 			});
 
-			roles.value = rolesResponse.data.data;
+			roles.value = rolesResponse.data.data.filter((role: BasicRole) => role.id !== PUBLIC_ROLE_ID);
 		} catch (error: any) {
 			unexpectedError(error);
 		} finally {

@@ -6,6 +6,7 @@
 			v-if="collection !== null"
 			:active="collection !== null"
 			:collection="collection"
+			:filter="collectionFilter"
 			@update:active="collection = null"
 			@input="onSelectItem"
 		/>
@@ -17,6 +18,7 @@ import { useI18n } from 'vue-i18n';
 import { computed, defineComponent, ref, watch } from 'vue';
 import DrawerCollection from '@/views/private/components/drawer-collection.vue';
 import api from '@/api';
+import { PUBLIC_ROLE_ID } from '@directus/constants';
 import { userName } from '@/utils/user-name';
 import { unexpectedError } from '@/utils/unexpected-error';
 
@@ -78,7 +80,11 @@ export default defineComponent({
 			return options;
 		});
 
-		return { options, collection, onSelect, onSelectItem, loading };
+		const collectionFilter = computed(() =>
+			collection.value === 'directus_roles' ? { id: { _neq: PUBLIC_ROLE_ID } } : null
+		);
+
+		return { options, collection, collectionFilter, onSelect, onSelectItem, loading };
 
 		function onSelect(value: string) {
 			if (value === 'all') {

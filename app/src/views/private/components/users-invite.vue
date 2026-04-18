@@ -44,6 +44,7 @@
 import { useI18n } from 'vue-i18n';
 import { defineComponent, ref, watch } from 'vue';
 import api from '@/api';
+import { PUBLIC_ROLE_ID } from '@directus/constants';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { APIError } from '@/types/error';
 
@@ -119,10 +120,12 @@ export default defineComponent({
 				},
 			});
 
-			roles.value = response.data.data.map((role: Record<string, any>) => ({
-				text: role.name,
-				value: role.id,
-			}));
+			roles.value = response.data.data
+				.filter((role: Record<string, any>) => role.id !== PUBLIC_ROLE_ID)
+				.map((role: Record<string, any>) => ({
+					text: role.name,
+					value: role.id,
+				}));
 
 			if (roles.value.length > 0 && roleSelected.value === null) {
 				roleSelected.value = roles.value[0].value;
