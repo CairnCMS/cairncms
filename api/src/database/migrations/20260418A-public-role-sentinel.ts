@@ -1,7 +1,6 @@
 import { PUBLIC_ROLE_ID } from '@directus/constants';
 import type { Knex } from 'knex';
 import { getHelpers } from '../helpers/index.js';
-import logger from '../../logger.js';
 
 export async function up(knex: Knex): Promise<void> {
 	const duplicates = await knex('directus_permissions')
@@ -58,11 +57,6 @@ export async function up(knex: Knex): Promise<void> {
 	await knex.schema.alterTable('directus_permissions', (table) => {
 		table.unique(['role', 'collection', 'action'], { indexName: 'directus_permissions_identity_unique' });
 	});
-
-	logger.info(
-		`[migration 20260418A] Public role sentinel (${PUBLIC_ROLE_ID}) installed. ` +
-			`Permissions uniqueness constraint active on (role, collection, action).`
-	);
 }
 
 export async function down(knex: Knex): Promise<void> {

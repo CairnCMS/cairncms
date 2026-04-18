@@ -1050,9 +1050,7 @@ describe('Integration Tests', () => {
 				tracker.on.select('select "key" from "directus_roles" where "id" = ?').responseOnce({ key: 'public' });
 
 				await expect(
-					uuidService.updateBatch([
-						{ id: '00000000-0000-0000-0000-000000000000', key: 'public', name: 'Public' },
-					])
+					uuidService.updateBatch([{ id: '00000000-0000-0000-0000-000000000000', key: 'public', name: 'Public' }])
 				).resolves.not.toThrow();
 			});
 
