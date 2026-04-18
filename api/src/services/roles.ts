@@ -1,3 +1,4 @@
+import { PUBLIC_ROLE_ID } from '@directus/constants';
 import type { Query } from '@directus/types';
 import { normalizeRoleKey } from '@directus/utils';
 import { ForbiddenException, InvalidPayloadException, UnprocessableEntityException } from '../exceptions/index.js';
@@ -29,6 +30,36 @@ export class RolesService extends ItemsService {
 	}
 
 	private static readonly RESERVED_KEYS = new Set(['public']);
+
+	private static readonly SENTINEL_IMMUTABLE_FIELDS = new Set([
+		'admin_access',
+		'app_access',
+		'enforce_tfa',
+		'ip_access',
+		'users',
+	]);
+
+	private isSentinel(id: PrimaryKey): boolean {
+		return id === PUBLIC_ROLE_ID;
+	}
+
+	private assertSentinelNotDeleted(keys: PrimaryKey[]): void {
+		if (keys.some((k) => this.isSentinel(k))) {
+			throw new InvalidPayloadException('The public role is a system-reserved entity and cannot be deleted.');
+		}
+	}
+
+	private assertSentinelUpdateAllowed(keys: PrimaryKey[], data: Record<string, any>): void {
+		if (!keys.some((k) => this.isSentinel(k))) return;
+
+		for (const field of Object.keys(data)) {
+			if (RolesService.SENTINEL_IMMUTABLE_FIELDS.has(field)) {
+				throw new InvalidPayloadException(
+					`Cannot change "${field}" on the public role. Only display-only fields (name, icon, description) can be modified.`
+				);
+			}
+		}
+	}
 
 	private validateKey(key: string): void {
 		if (!key || normalizeRoleKey(key) !== key) {
@@ -155,7 +186,13 @@ export class RolesService extends ItemsService {
 	}
 
 	override async updateOne(key: PrimaryKey, data: Record<string, any>, opts?: MutationOptions): Promise<PrimaryKey> {
-		if ('key' in data && data['key'] != null) {
+		this.assertSentinelUpdateAllowed([key], data);
+
+		// Skip reserved-key validation on sentinel: its actual key is 'public',
+		// so a read-modify-write payload that includes { key: 'public' } is
+		// legitimate. Any attempt to change it to a different value is caught
+		// later by assertKeyUnchanged in updateMany.
+		if ('key' in data && data['key'] != null && !this.isSentinel(key)) {
 			this.validateKey(data['key']);
 		}
 
@@ -174,8 +211,13 @@ export class RolesService extends ItemsService {
 		const primaryKeyField = this.schema.collections[this.collection]!.primary;
 
 		for (const item of data) {
+			this.assertSentinelUpdateAllowed([item[primaryKeyField]], item);
+
 			if ('key' in item && item['key'] != null) {
-				this.validateKey(item['key']);
+				if (!this.isSentinel(item[primaryKeyField])) {
+					this.validateKey(item['key']);
+				}
+
 				await this.assertKeyUnchanged(item[primaryKeyField], item['key']);
 			}
 		}
@@ -199,8 +241,15 @@ export class RolesService extends ItemsService {
 		data: Record<string, any>,
 		opts?: MutationOptions
 	): Promise<PrimaryKey[]> {
+		this.assertSentinelUpdateAllowed(keys, data);
+
 		if ('key' in data && data['key'] != null) {
-			this.validateKey(data['key']);
+			// Skip reserved-key check when the operation targets the sentinel —
+			// the sentinel legitimately has key='public'. Any actual key-change
+			// attempt is caught by assertKeyUnchanged below.
+			if (!keys.some((k) => this.isSentinel(k))) {
+				this.validateKey(data['key']);
+			}
 
 			for (const id of keys) {
 				await this.assertKeyUnchanged(id, data['key']);
@@ -224,6 +273,8 @@ export class RolesService extends ItemsService {
 	}
 
 	override async deleteMany(keys: PrimaryKey[]): Promise<PrimaryKey[]> {
+		this.assertSentinelNotDeleted(keys);
+
 		const opts: MutationOptions = {};
 
 		try {

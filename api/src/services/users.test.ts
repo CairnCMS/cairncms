@@ -167,6 +167,21 @@ describe('Integration Tests', () => {
 				await service.createOne({ password: 'testpassword' });
 				expect(checkPasswordPolicySpy).toBeCalledTimes(1);
 			});
+
+			it('should reject users with the public role sentinel as string', async () => {
+				await expect(
+					service.createOne({ email: 'bot@example.com', role: '00000000-0000-0000-0000-000000000000' })
+				).rejects.toBeInstanceOf(InvalidPayloadException);
+			});
+
+			it('should reject users with the public role sentinel as object (GraphQL shape)', async () => {
+				await expect(
+					service.createOne({
+						email: 'bot@example.com',
+						role: { id: '00000000-0000-0000-0000-000000000000' } as any,
+					})
+				).rejects.toBeInstanceOf(InvalidPayloadException);
+			});
 		});
 
 		describe('createMany', () => {
@@ -188,6 +203,15 @@ describe('Integration Tests', () => {
 			it('should checkPasswordPolicy once', async () => {
 				await service.createMany([{ password: 'testpassword' }]);
 				expect(checkPasswordPolicySpy).toBeCalledTimes(1);
+			});
+
+			it('should reject batches containing public role sentinel assignment', async () => {
+				await expect(
+					service.createMany([
+						{ email: 'ok@example.com', role: testRoleId },
+						{ email: 'bot@example.com', role: '00000000-0000-0000-0000-000000000000' },
+					])
+				).rejects.toBeInstanceOf(InvalidPayloadException);
 			});
 		});
 
@@ -304,6 +328,12 @@ describe('Integration Tests', () => {
 
 				await service.updateMany([1], { role: testRoleId });
 				expect(checkRemainingAdminExistenceSpy).not.toBeCalled();
+			});
+
+			it('should reject assigning public role sentinel', async () => {
+				await expect(service.updateMany([1], { role: '00000000-0000-0000-0000-000000000000' })).rejects.toBeInstanceOf(
+					InvalidPayloadException
+				);
 			});
 
 			it('should checkRemainingAdminExistence once', async () => {
