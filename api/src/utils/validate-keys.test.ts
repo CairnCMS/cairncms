@@ -105,5 +105,9 @@ describe('validate keys', () => {
 		it('Does not throw an error when provided with an array of valid uuid keys', () => {
 			expect(() => validateKeys(schema, 'pk_uuid', 'id', [uuid(), uuid(), uuid()])).not.toThrowError();
 		});
+
+		it('Does not throw an error when provided with the nil UUID', () => {
+			expect(() => validateKeys(schema, 'pk_uuid', 'id', '00000000-0000-0000-0000-000000000000')).not.toThrowError();
+		});
 	});
 });
