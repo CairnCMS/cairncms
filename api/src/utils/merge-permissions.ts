@@ -6,7 +6,7 @@ export function mergePermissions(strategy: 'and' | 'or', ...permissions: Permiss
 
 	const mergedPermissions = allPermissions
 		.reduce((acc, val) => {
-			const key = `${val.collection}__${val.action}__${val.role || '$PUBLIC'}`;
+			const key = `${val.collection}__${val.action}__${val.role}`;
 			const current = acc.get(key);
 			acc.set(key, current ? mergePermission(strategy, current, val) : val);
 			return acc;

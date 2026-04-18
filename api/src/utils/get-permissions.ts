@@ -1,3 +1,4 @@
+import { PUBLIC_ROLE_ID } from '@directus/constants';
 import type { Accountability, Permission, SchemaOverview } from '@directus/types';
 import { deepMap, parseFilter, parseJSON, parsePreset } from '@directus/utils';
 import { cloneDeep } from 'lodash-es';
@@ -67,11 +68,7 @@ export async function getPermissions(accountability: Accountability, schema: Sch
 	if (accountability.admin !== true) {
 		const query = database.select('*').from('directus_permissions');
 
-		if (accountability.role) {
-			query.where({ role: accountability.role });
-		} else {
-			query.whereNull('role');
-		}
+		query.where({ role: accountability.role ?? PUBLIC_ROLE_ID });
 
 		const permissionsForRole = await query;
 
