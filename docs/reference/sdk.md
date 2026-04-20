@@ -1,1181 +1,431 @@
 ---
-description:
-  The JS SDK provides an intuitive interface for the Directus API from within a JavaScript-powered project (browsers and
-  Node.js). The default implementation uses [Axios](https://npmjs.com/axios) for transport and `localStorage` for
-  storing state.
-readTime: 14 min read
+description: The CairnCMS JavaScript SDK provides a typed, composable client for the CairnCMS REST and GraphQL APIs.
+readTime: 12 min read
 ---
 
 # JavaScript SDK
 
-> The JS SDK provides an intuitive interface for the Directus API from within a JavaScript-powered project (browsers and
-> Node.js). The default implementation uses [Axios](https://npmjs.com/axios) for transport and `localStorage` for
-> storing state. Advanced customizations are available.
+> `@cairncms/sdk` is a typed, composable JavaScript client for talking to a CairnCMS instance from browsers and Node.js. It uses the built-in `fetch` API (no bundled HTTP library) and supports REST, GraphQL, and authentication flows.
+
+[[toc]]
 
 ## Installation
 
 ```bash
-npm install @directus/sdk
+npm install @cairncms/sdk
 ```
 
-## Basic Usage
+The SDK has zero runtime dependencies and works in any environment with a global `fetch` and `URL` (modern browsers, Node.js 18+, Deno, Bun, Cloudflare Workers, etc.).
 
-This is the starting point to use the JS SDK. After you've created the `Directus` instance, you can start invoking
-methods from it to access your project and data.
-
-```js
-import { Directus } from '@directus/sdk';
-
-const directus = new Directus('http://directus.example.com');
-```
-
-You can always access data available to the [public role](/configuration/users-roles-permissions.html#directus-roles).
-
-```js
-async function publicData() {
-	// GET DATA
-
-	// We don't need to authenticate if the public role has access to some_public_collection.
-	const publicData = await directus.items('some_public_collection').readByQuery({ sort: ['id'] });
-
-	console.log(publicData.data);
-}
-```
-
-### Basic Authentication
-
-To access anything that is not available to the
-[public role](/configuration/users-roles-permissions.html#directus-roles), you must be
-[authenticated](/reference/authentication.md).
-
-```js
-async function start() {
-	// AUTHENTICATION
-
-	let authenticated = false;
-
-	// Try to authenticate with token if exists
-	await directus.auth
-		.refresh()
-		.then(() => {
-			authenticated = true;
-		})
-		.catch(() => {});
-
-	// Let's login in case we don't have token or it is invalid / expired
-	while (!authenticated) {
-		const email = window.prompt('Email:');
-		const password = window.prompt('Password:');
-
-		await directus.auth
-			.login({ email, password })
-			.then(() => {
-				authenticated = true;
-			})
-			.catch(() => {
-				window.alert('Invalid credentials');
-			});
-	}
-
-	// GET DATA
-
-	// After authentication, we can fetch data from any collections that the user has permissions to.
-	const privateData = await directus.items('some_private_collection').readByQuery({ sort: ['id'] });
-
-	console.log(privateData.data);
-}
-
-start();
-```
-
-## Custom Configuration
-
-The previous section covered basic installation and usage of the JS SDK with default configurations for `init`. But
-sometimes you may need to customize these defaults.
-
-### Constructor
-
-```js
-import { Directus } from '@directus/sdk';
-
-const directus = new Directus(url, init);
-```
-
-### Parameters
-
-<br />
-
-#### `url` _required_
-
-- **Type** — `String`
-- **Description** — A string that points to your Directus instance. E.g., `https://example.directus.io`
-- **Default** — N/A
-
-<br />
-
-#### `init` _optional_
-
-- **Type** — `Object`
-- **Description** — Defines authentication, storage and transport settings.
-- **Default** — The following shows the default values for `init`.
-
-```js
-// This is the default init object
-const config = {
-	auth: {
-		mode: 'cookie', // 'json' in Node.js
-		autoRefresh: true,
-		msRefreshBeforeExpires: 30000,
-		staticToken: '',
-	},
-	storage: {
-		prefix: '',
-		mode: 'LocalStorage', // 'MemoryStorage' in Node.js
-	},
-	transport: {
-		params: {},
-		headers: {},
-		onUploadProgress: (ProgressEvent) => {},
-		maxBodyLength: null,
-		maxContentLength: null,
-	},
-};
-```
-
-## Customize `auth`
-
-Defines how authentication is handled by the SDK. By default, Directus creates an instance of `auth` which handles
-refresh tokens automatically.
-
-```js
-const auth = {
-	mode: 'cookie', // 'json' in Node.js
-	autoRefresh: true,
-	msRefreshBeforeExpires: 30000,
-	staticToken: '',
-};
-```
-
-### Options
-
-<br />
-
-#### `mode`
-
-- **Type** — `String`
-- **Description** — Defines the mode you want to use for authentication. It can be `'cookie'` for cookies or `'json'`
-  for JWT.
-- **Default** — Defaults to `'cookie'` on browsers and `'json'` otherwise.
-
-:::tip
-
-We recommend using cookies when possible to prevent any kind of attacks, mostly XSS.
-
-:::
-
-#### `autoRefresh`
-
-- **Type** — `Boolean`
-- **Description** — Determines whether SDK handles refresh tokens automatically.
-- **Default** — Defaults to `true`.
-
-<br />
-
-#### `msRefreshBeforeExpires`
-
-- **Type** — `Number`
-- **Description** — When `autoRefresh` is enabled, this tells how many milliseconds before the refresh token expires and
-  needs to be refreshed.
-- **Default** — Defaults to `30000`.
-
-<br />
-
-#### `staticToken`
-
-- **Type** — `String`
-- **Description** - Defines the static token to use. It is not compatible with the options above since it does not
-  refresh.
-- **Default** — Defaults to `''` (no static token).
-
-### Extend `auth`
-
-It is possible to provide a custom implementation by extending `IAuth`. While this could be useful in certain advanced
-situations, it is not needed for most use-cases.
-
-```js
-import { IAuth, Directus } from '@directus/sdk';
-
-class MyAuth extends IAuth {
-	async login() {
-		return { access_token: '', expires: 0 };
-	}
-	async logout() {}
-	async refresh() {
-		return { access_token: '', expires: 0 };
-	}
-	async static() {
-		return true;
-	}
-}
-
-const directus = new Directus('https://example.directus.app', {
-	auth: new MyAuth(),
-});
-```
-
-## Customize `storage`
-
-The storage is used to load and save token information. By default, Directus creates an instance of `storage` which
-handles store information automatically.
-
-```js
-const storage = {
-	prefix: '',
-	mode: 'LocalStorage', // 'MemoryStorage' in Node.js
-};
-```
-
-:::tip Multiple Instances
-
-If you want to use multiple instances of the SDK you should set a different [`prefix`](#prefix) for each one.
-
-:::
-
-::: tip
-
-The axios instance can be used for custom requests by calling:
+## Quick start
 
 ```ts
-await directus.transport.<method>('/path/to/endpoint', {
-	/* body, params, ... */
-});
+import { createDirectus, rest, readItems } from '@cairncms/sdk';
+
+const client = createDirectus('http://localhost:8055').with(rest());
+
+const articles = await client.request(readItems('articles'));
 ```
 
-:::
+The SDK uses a composable pattern: `createDirectus(url)` returns a minimal client, and `.with(...)` attaches capabilities (REST, GraphQL, authentication). Calls are made via `client.request(command)` where `command` is a helper like `readItems`, `createItem`, etc.
 
-### Options
-
-<br />
-
-#### `prefix`
-
-- **Type** — `String`
-- **Description** — Defines the tokens prefix tokens that are saved. This should be fulfilled with different values when
-  using multiple instances of SDK.
-- **Default** — Defaults to `''` (no prefix).
-
-<br />
-
-#### `mode`
-
-- **Type** — `String`
-- **Description** — Defines the storage location to be used to save tokens. Allowed values are `LocalStorage` and
-  `MemoryStorage`. The mode `LocalStorage` is not compatible with Node.js. `MemoryStorage` is not persistent, so once
-  you leave the tab or quit the process, you will need to authenticate again.
-- **Default** — Defaults to `LocalStorage` on browsers and `MemoryStorage` on Node.js.
-
-### Extend `storage`
-
-It is possible to provide a custom implementation by extending `BaseStorage`. While this could be useful in certain
-advanced situations, it is not needed for most use-cases.
-
-```js
-import { BaseStorage, Directus } from '@directus/sdk';
-
-class SessionStorage extends BaseStorage {
-	get(key) {
-		return sessionStorage.getItem(key);
-	}
-	set(key, value) {
-		return sessionStorage.setItem(key, value);
-	}
-	delete(key) {
-		return sessionStorage.removeItem(key);
-	}
-}
-
-const directus = new Directus('https://example.directus.app', {
-	storage: new SessionStorage(),
-});
-```
-
-## Customize `transport`
-
-Defines settings you want to customize regarding [Transport](#extend-transport).
-
-By default, Directus creates an instance of `Transport` which handles requests automatically. It uses
-[`axios`](https://axios-http.com/) so it is compatible in both browsers and Node.js. With axios, it is also possible to
-handle upload progress (a downside of `fetch`).
-
-The configurations within `init.transport` are passed to `axios`. For more details, see
-[Request Config](https://axios-http.com/docs/req_config) in the axios documentation.
-
-```js
-export default {
-	params: {},
-	headers: {},
-	onUploadProgress: (ProgressEvent) => {},
-	maxBodyLength: null,
-	maxContentLength: null,
-};
-```
-
-### Options
-
-<br />
-
-#### `params`
-
-- **Type** — `Object`
-- **Description** — Defines an object with keys and values to be passed as additional query string.
-- **Default** — N/A
-
-<br />
-
-#### `headers`
-
-- **Type** — `Object`
-- **Description** - Defines an object with keys and values to be passed as additional headers.
-- **Default** — N/A
-
-<br />
-
-#### `onUploadProgress`
-
-- **Type** — `Function`
-- **Description** — Defines a callback function to indicate the upload progress.
-- **Default** — N/A
-
-:::tip ProgressEvent Please see the MDN documentation to learn more about the
-[ProgressEvent](https://developer.mozilla.org/en-US/docs/Web/API/ProgressEvent).
-
-:::
-
-<br />
-
-#### `maxBodyLength`
-
-- **Type** — `Number`
-- **Description** — The maximum body length in bytes. Set `Infinity` for no limit.
-- **Default** — N/A
-
-<br />
-
-#### `maxContentLength`
-
-- **Type** — `Number`
-- **Description** — The maximum content length in bytes. Set `Infinity` for no limit.
-- **Default** — N/A
-
-### Extend `Transport`
-
-It is possible to provide a custom implementation by extending `ITransport`. For example, you can customize it to use
-different HTTP libraries. While this could be useful in certain advanced situations, it is not needed for most
-use-cases.
-
-```js
-import { ITransport, Directus } from '@directus/sdk';
-
-class MyTransport extends ITransport {
-	buildResponse() {
-		return {
-			raw: '',
-			data: {},
-			status: 0,
-			headers: {},
-		};
-	}
-
-	async get(path, options) {
-		return this.buildResponse();
-	}
-	async head(path, options) {
-		return this.buildResponse();
-	}
-	async options(path, options) {
-		return this.buildResponse();
-	}
-	async delete(path, data, options) {
-		return this.buildResponse();
-	}
-	async post(path, data, options) {
-		return this.buildResponse();
-	}
-	async put(path, data, options) {
-		return this.buildResponse();
-	}
-	async patch(path, data, options) {
-		return this.buildResponse();
-	}
-}
-
-const directus = new Directus('https://example.directus.app', {
-	transport: new MyTransport(),
-});
-```
-
-## TypeScript
-
-Version >= 4.1
-
-Although it's not required, it is recommended to use TypeScript to have an easy development experience. This allows more
-detailed IDE suggestions for return types, sorting, filtering, etc.
-
-To feed the SDK with your current schema, you need to pass it on the constructor.
+## Creating a client
 
 ```ts
-type BlogPost = {
-	id: ID;
-	title: string;
-};
+import { createDirectus } from '@cairncms/sdk';
 
-type BlogSettings = {
-	display_promotions: boolean;
-};
-
-type MyCollections = {
-	posts: BlogPost;
-	settings: BlogSettings;
-};
-
-// This is how you feed custom type information to Directus.
-const directus = new Directus<MyCollections>('https://example.directus.app');
-
-// ...
-
-const post = await directus.items('posts').readOne(1);
-// typeof(post) is a partial BlogPost object
-
-const settings = await posts.singleton('settings').read();
-// typeof(settings) is a partial BlogSettings object
+const client = createDirectus('http://example.com');
 ```
 
-You can also extend the Directus system type information by providing type information for system collections as well.
+By default, the client carries only the URL. It has no REST, GraphQL, or auth capabilities until you compose them in. This keeps the bundle size minimal for consumers who only need a subset.
+
+### Client options
 
 ```ts
-import { Directus } from '@directus/sdk';
-
-// Custom fields added to Directus user collection.
-type UserType = {
-	level: number;
-	experience: number;
-};
-
-type CustomTypes = {
-	/*
-	This type will be merged with Directus user type.
-	It's important that the naming matches a directus
-	collection name exactly. Typos won't get caught here
-	since SDK will assume it's a custom user collection.
-	*/
-	directus_users: UserType;
-};
-
-const directus = new Directus<CustomTypes>('https://example.directus.app');
-
-await directus.auth.login({
-	email: 'admin@example.com',
-	password: 'password',
+const client = createDirectus('http://example.com', {
+  globals: {
+    fetch: customFetch,
+    logger: customLogger,
+  },
 });
-
-const me = await directus.users.me.read();
-// typeof me = partial DirectusUser & UserType;
-
-// OK
-me.level = 42;
-
-// Error TS2322: Type "string" is not assignable to type "number".
-me.experience = 'high';
 ```
+
+- `globals.fetch` — override the fetch implementation (default: `globalThis.fetch`)
+- `globals.URL` — override URL constructor (default: `globalThis.URL`)
+- `globals.logger` — override console (default: `globalThis.console`)
+
+Useful for: server-side rendering with a fetch polyfill, custom logging, instrumenting requests.
 
 ## Authentication
 
-### Get current token
+Two authentication modes are available.
+
+### Session-based authentication (login/refresh)
 
 ```ts
-await directus.auth.token;
+import { createDirectus, authentication, rest } from '@cairncms/sdk';
+
+const client = createDirectus('http://example.com')
+  .with(authentication('json'))
+  .with(rest());
+
+await client.login('admin@example.com', 'password');
 ```
 
-::: warning Async
+`authentication(mode)` accepts one of:
 
-Reading the token is an asynchronous getter. This makes sure that any currently active `refresh` calls are being awaited
-before the current token is returned.
+- `'json'` — tokens are passed in the request body. Works everywhere. Default.
+- `'cookie'` — tokens are set as HTTP-only cookies by the server. Requires same-origin or configured CORS.
+- `'session'` — session cookie-based, server-managed.
 
-:::
+Choose `'json'` for cross-origin frontends (SvelteKit, Next.js on a different domain). Choose `'cookie'` or `'session'` for same-origin deployments where cookie security is preferred.
 
-### Login
-
-#### With credentials
-
-```js
-await directus.auth.login({
-	email: 'admin@example.com',
-	password: 'd1r3ctu5',
-});
-```
-
-#### With static tokens
-
-```js
-await directus.auth.static('static_token');
-```
-
-### Refresh Auth Token
-
-By default, Directus will handle token refreshes. Although, you can handle this behavior manually by setting
-[`autoRefresh`](#options.auth.autoRefresh) to `false`.
-
-```js
-await directus.auth.refresh();
-```
-
-::: tip Developing Locally
-
-If you're developing locally, you might not be able to refresh your auth token automatically in all browsers. This is
-because the default auth configuration requires secure cookies to be set, and not all browsers allow this for localhost.
-You can use a browser which does support this such as Firefox, or
-[disable secure cookies](/self-hosted/config-options#security).
-
-:::
-
-### Logout
-
-```js
-await directus.auth.logout();
-```
-
-### Request a Password Reset
-
-By default, the address defined in `PUBLIC_URL` on `.env` file is used for the link to the reset password page sent in
-the email:
-
-```js
-await directus.auth.password.request('admin@example.com');
-```
-
-But a custom address can be passed as second argument:
-
-```js
-await directus.auth.password.request(
-	'admin@example.com',
-	'https://myapp.com' // In this case, the link will be https://myapp.com?token=FEE0A...
-);
-```
-
-**Note**: To use a custom address you need to configure the
-[`PASSWORD_RESET_URL_ALLOW_LIST` environment variable](/self-hosted/config-options#security) to enable this feature.
-
-### Reset a Password
-
-```js
-await directus.auth.password.reset('abc.def.ghi', 'n3w-p455w0rd');
-```
-
-Note: The token passed in the first parameter is sent in an email to the user when using `request()`
-
-## Items
-
-You can get an instance of the item handler by providing the collection (and type, in the case of TypeScript) to the
-`items` function. The following examples will use the `Article` type.
-
-> JavaScript
-
-```js
-// import { Directus, ID } from '@directus/sdk';
-const { Directus } = require('@directus/sdk');
-
-const directus = new Directus('https://example.directus.app');
-
-const articles = directus.items('articles');
-```
-
-> TypeScript
+#### Login, refresh, logout
 
 ```ts
-import { Directus, ID } from '@directus/sdk';
+// Login returns tokens; the client automatically stores them.
+const result = await client.login('email', 'password');
+console.log(result.access_token, result.refresh_token);
 
-// Map your collection structure based on its fields.
-type Article = {
-	id: ID;
-	title: string;
-	body: string;
-	published: boolean;
-};
+// Refresh extends the session.
+await client.refresh();
 
-// Map your collections to its respective types. The SDK will
-// infer its types based on usage later.
-type MyBlog = {
-	// [collection_name]: typescript_type
-	articles: Article;
+// Logout revokes the session.
+await client.logout();
 
-	// You can also extend Directus collection. The naming has
-	// to match a Directus system collection and it will be merged
-	// into the system spec.
-	directus_users: {
-		bio: string;
-	};
-};
-
-// Let the SDK know about your collection types.
-const directus = new Directus<MyBlog>('https://example.directus.app');
-
-// typeof(article) is a partial "Article"
-await directus.items('articles').readOne(10);
-
-// Error TS2322: "hello" is not assignable to type "boolean".
-// post.published = 'hello';
+// Get the currently authenticated user.
+import { readMe } from '@cairncms/sdk';
+const me = await client.request(readMe());
 ```
 
-### Create Single Item
+### Static token (pre-issued)
 
-```js
-await articles.createOne({
-	title: 'My New Article',
-});
+For server-to-server calls, CI jobs, or any context where you have a long-lived token already:
+
+```ts
+import { createDirectus, staticToken, rest } from '@cairncms/sdk';
+
+const client = createDirectus('http://example.com')
+  .with(staticToken('your-token'))
+  .with(rest());
+
+const articles = await client.request(readItems('articles'));
 ```
 
-### Create Multiple Items
+Create static tokens in the admin UI (user detail page → Token field) or via the API.
 
-```js
-await articles.createMany([
-	{
-		title: 'My First Article',
-	},
-	{
-		title: 'My Second Article',
-	},
-]);
+## REST
+
+```ts
+import { createDirectus, rest, readItems } from '@cairncms/sdk';
+
+const client = createDirectus('http://example.com').with(rest());
 ```
 
-### Read By Query
+### Reading data
 
-```js
-await articles.readByQuery({
-	search: 'Directus',
-	filter: {
-		date_published: {
-			_gte: '$NOW',
-		},
-	},
-});
-```
+```ts
+import { readItems, readItem, readSingleton, aggregate } from '@cairncms/sdk';
 
-### Read All
+// List items
+const articles = await client.request(
+  readItems('articles', {
+    fields: ['id', 'title', 'slug'],
+    filter: { status: { _eq: 'published' } },
+    sort: ['-date_created'],
+    limit: 10,
+  })
+);
 
-```js
-await articles.readByQuery({
-	// By default API limits results to 100.
-	// With -1, it will return all results, but it may lead to performance degradation
-	// for large result sets.
-	limit: -1,
-});
-```
+// Read a single item by primary key
+const article = await client.request(readItem('articles', 'abc-123'));
 
-### Read Single Item
+// Read a singleton collection
+const settings = await client.request(readSingleton('site_config'));
 
-```js
-await articles.readOne(15);
-```
-
-Supports optional query:
-
-```js
-await articles.readOne(15, {
-	fields: ['title'],
-});
-```
-
-### Read Multiple Items
-
-```js
-await articles.readMany([15, 16, 17]);
-```
-
-Supports optional query:
-
-```js
-await articles.readMany([15, 16, 17], {
-	fields: ['title'],
-});
-```
-
-### Update Single Item
-
-```js
-await articles.updateOne(15, {
-	title: 'This articles now has a different title',
-});
-```
-
-Supports optional query:
-
-```js
-await articles.updateOne(
-	42,
-	{
-		title: 'This articles now has a similar title',
-	},
-	{
-		fields: ['title'],
-	}
+// Aggregate (count, sum, avg, min, max)
+const result = await client.request(
+  aggregate('articles', {
+    aggregate: { count: '*' },
+    groupBy: ['status'],
+  })
 );
 ```
 
-### Update Multiple Items
+### Writing data
 
-```js
-await articles.updateMany([15, 42], {
-	title: 'Both articles now have the same title',
-});
+```ts
+import { createItem, createItems, updateItem, deleteItem } from '@cairncms/sdk';
+
+// Create
+const created = await client.request(
+  createItem('articles', { title: 'Hello', status: 'draft' })
+);
+
+// Create multiple
+await client.request(
+  createItems('articles', [
+    { title: 'One' },
+    { title: 'Two' },
+  ])
+);
+
+// Update
+await client.request(
+  updateItem('articles', created.id, { status: 'published' })
+);
+
+// Delete
+await client.request(deleteItem('articles', created.id));
 ```
 
-Supports optional query:
+There are parallel helpers for each system collection (`createRole`, `updateUser`, `deleteFile`, etc.). See the full export list in the package, or rely on your editor's autocomplete.
 
-```js
-await articles.updateMany(
-	[15, 42],
-	{
-		title: 'Both articles now have the same title',
-	},
-	{
-		fields: ['title'],
-	}
+### Filter DSL
+
+Filters use the `_operator` suffix convention:
+
+```ts
+await client.request(
+  readItems('articles', {
+    filter: {
+      _and: [
+        { status: { _eq: 'published' } },
+        {
+          _or: [
+            { date_published: { _gte: '2026-01-01' } },
+            { featured: { _eq: true } },
+          ],
+        },
+        { author: { role: { admin_access: { _eq: true } } } },
+      ],
+    },
+  })
 );
 ```
 
-### Delete
+Scalar operators: `_eq`, `_neq`, `_gt`, `_gte`, `_lt`, `_lte`, `_in`, `_nin`, `_between`, `_nbetween`, `_null`, `_nnull`, `_empty`, `_nempty`, `_contains`, `_ncontains`, `_icontains`, `_starts_with`, `_istarts_with`, `_ends_with`, `_iends_with`.
 
-```js
-// One
-await articles.deleteOne(15);
+Logical operators: `_and`, `_or` (accept arrays of filter objects).
 
-// Multiple
-await articles.deleteMany([15, 42]);
+Relational filters: traverse m2o/o2m/m2m relationships using nested object syntax (`author.role.admin_access._eq`).
+
+### Fields syntax
+
+The `fields` option accepts string arrays with dot notation for nested fields:
+
+```ts
+fields: [
+  'id',
+  'title',
+  'author.first_name',
+  'author.last_name',
+  'tags.*',               // all fields of related tags
+  'tags.*.name',          // only name on each tag
+  '*',                    // all top-level scalar fields
+  '*.*',                  // also one level of relations
+]
 ```
 
-### Request Parameter Overrides
+### Pagination
 
-To override any of the axios request parameters, provide an additional parameter with a `requestOptions` object:
-
-```js
-await articles.createOne(
-	{ title: 'example' },
-	{ fields: ['id'] },
-	{
-		requestOptions: {
-			headers: {
-				'X-My-Custom-Header': 'example',
-			},
-		},
-	}
+```ts
+await client.request(
+  readItems('articles', {
+    limit: 20,
+    page: 3,
+    // or
+    offset: 40,
+  })
 );
 ```
 
-## Activity
+`limit: -1` returns all rows (no limit). Use with care.
 
-```js
-directus.activity;
-```
+### Custom endpoints
 
-The activity property has all the methods of directus.items('directus_activity') with the addition of an alias to the
-activity comments (below).
+For extension-provided routes:
 
-```js
-directus.activity.comments;
-```
+```ts
+import { customEndpoint } from '@cairncms/sdk';
 
-## Comments
-
-```js
-directus.comments;
-```
-
-### Create a comment
-
-```js
-await directus.comments.create({...});
-```
-
-### Update a comment
-
-```js
-await directus.comments.update(/* comment activity id */ 15, 'Yo, dawg!');
-```
-
-### Delete a comment
-
-````js
-await directus.comments.delete(/* comment activity id */ 15);
-
-## Collections
-
-```js
-directus.collections;
-````
-
-### Read a single collection
-
-```js
-await directus.collections.readOne(/* collection name */ 'articles');
-```
-
-### Read all collections
-
-```js
-await directus.collections.readAll(); //does not currently support query or searching
-```
-
-### Create a collection
-
-```js
-await directus.collections.createOne({collection: 'articles', ...});
-```
-
-### Create multiple collections
-
-```js
-await directus.collections.createMany([{collection: 'articles', ...},...]);
-```
-
-### Update a collection
-
-```js
-await directus.collections.updateOne(/* collection name */ 'articles', /* patch */ { note: 'All the articles' }, query);
-```
-
-### Delete a collection
-
-```js
-await directus.collections.deleteOne(/* collection name */ 'articles');
-```
-
-## Fields
-
-```js
-directus.fields;
-```
-
-### Read a single field
-
-```js
-await directus.fields.readOne(/* collection name */ 'articles', /* id of the field */ 15);
-```
-
-### Read multiple fields
-
-```js
-await directus.fields.readMany(/* collection name */ 'articles'); //doesn't currently support query parameter
-```
-
-### Read all fields
-
-```js
-await directus.fields.readAll(); //does not currently support query or searching
-```
-
-### Create a field
-
-```js
-await directus.fields.createOne(/* collection name */ 'articles', {field: 'alt_title', ...});
-```
-
-### Update a field
-
-```js
-await directus.fields.updateOne(
-	/* collection name */ 'articles',
-	/* field_name */ 'alt_title',
-	/* patch */ { hidden: true }
+const result = await client.request(
+  customEndpoint<{ hello: string }>({
+    method: 'GET',
+    path: '/my-extension/hello',
+  })
 );
 ```
 
-### Delete a field
+## GraphQL
 
-```js
-await directus.fields.deleteOne(/* collection name */ 'articles', /* field_name */ 'alt_title');
-```
+```ts
+import { createDirectus, graphql, authentication } from '@cairncms/sdk';
 
-## Files
+const client = createDirectus('http://example.com')
+  .with(authentication('json'))
+  .with(graphql());
 
-```js
-directus.files;
-```
+await client.login('email', 'password');
 
-The files property support all of the functions common to all items - directus.items('directus_files') with one
-addition: import.
-
-### Import
-
-In addition to the items common methods, the files property adds the import method for importing files.
-
-```js
-directus.files.import(...);
-```
-
-See [API File Import](https://docs.directus.io/reference/files/#import-a-file)
-
-### Uploading a file
-
-To upload a file you will need to send a `multipart/form-data` as body. On browser side you do so:
-
-```js
-/* index.js */
-import { Directus } from 'https://unpkg.com/@directus/sdk@latest/dist/sdk.esm.min.js';
-
-const directus = new Directus('https://example.directus.app', {
-	auth: {
-		staticToken: 'STATIC_TOKEN', // If you want to use a static token, otherwise check below how you can use email and password.
-	},
-});
-
-// await directus.auth.login({ email, password })
-// If you want to use email and password, remove the staticToken above.
-
-const form = document.querySelector('#upload-file');
-
-if (form && form instanceof HTMLFormElement) {
-	form.addEventListener('submit', async (event) => {
-		event.preventDefault();
-
-		const form = new FormData(event.target);
-		await directus.files.createOne(form);
-	});
-}
-```
-
-```html
-<!-- index.html -->
-<head></head>
-<body>
-	<form id="upload-file">
-		<input type="text" name="title" />
-		<input type="file" name="file" />
-    	<button>Send</button>
-	</form>
-	<script src="/index.js" type="module"></script>
-</body>
-</html>
-```
-
-#### NodeJS usage
-
-When uploading a file from a NodeJS environment, you'll have to override the headers to ensure the correct boundary is
-set:
-
-```js
-import { Directus } from 'https://unpkg.com/@directus/sdk@latest/dist/sdk.esm.min.js';
-
-const directus = new Directus('https://example.directus.app', {
-	auth: {
-		staticToken: 'STATIC_TOKEN', // If you want to use a static token, otherwise check below how you can use email and password.
-	},
-});
-
-const form = new FormData();
-form.append("file", fs.createReadStream("./to_upload.jpeg"));
-
-await directus.files.createOne(form, {}, {
-  requestOptions: {
-    headers: {
-      ...form.getHeaders()
+const result = await client.query<{
+  articles: Array<{ id: string; title: string }>;
+}>(
+  `query {
+    articles(filter: { status: { _eq: "published" } }) {
+      id
+      title
     }
-  }
+  }`
 );
 ```
 
-### Importing a file
+The GraphQL client is a thin wrapper around `POST /graphql`. The schema is auto-generated from your CairnCMS data model; retrieve it at runtime via `readGraphqlSdl()` or explore the underlying OpenAPI spec via `readOpenApiSpec()`.
 
-Example of [importing a file from a URL](/reference/files#import-a-file):
+### System collections via GraphQL
 
-```js
-await directus.files.import({
-	url: 'http://www.example.com/example-image.jpg',
-});
+The `/graphql/system` endpoint exposes system collections (roles, users, permissions, etc.). Select it by passing `'system'` as the third argument to `client.query`:
+
+```ts
+const result = await client.query<{
+  users: Array<{ id: string; email: string }>;
+}>(
+  `query { users { id email } }`,
+  undefined,
+  'system'
+);
 ```
 
-Example of importing file with custom data:
+The default scope is `'items'` (the `/graphql` endpoint, which exposes user-defined collections).
 
-```js
-await directus.files.import({
-	url: 'http://www.example.com/example-image.jpg',
-	data: {
-		title: 'My Custom File',
-	},
-});
+## TypeScript: defining a Schema
+
+Passing a schema type to `createDirectus<Schema>()` lets the SDK infer return types, validate `fields` paths, and check filter DSL correctness.
+
+```ts
+import type { DirectusUser } from '@cairncms/sdk';
+
+type Article = {
+  id: string;
+  title: string;
+  slug: string;
+  status: 'draft' | 'published' | 'archived';
+  author: DirectusUser<Schema> | string;  // allow both the expanded object and the FK
+  date_created: string;
+};
+
+type Schema = {
+  articles: Article[];
+};
+
+const client = createDirectus<Schema>('http://example.com').with(rest());
+
+// Now the return type is known
+const articles = await client.request(
+  readItems('articles', { fields: ['id', 'title', 'author.first_name'] })
+);
+// articles is typed as Array<{ id: string; title: string; author: { first_name: string } }>
 ```
 
-## Folders
+Relational fields should be typed as `RelatedType | string` (or `RelatedType | string | null` if nullable) so both the foreign-key string and the expanded object pass type-checking, depending on whether the field was requested in the query.
 
-```js
-directus.folders;
+## System collection helpers
+
+The SDK includes typed helpers for every CairnCMS system collection:
+
+- `readUsers` / `readUser` / `createUser` / `updateUser` / `deleteUser`
+- `readRoles` / `readRole` / `createRole` / `updateRole` / `deleteRole`
+- `readPermissions` / `createPermission` / `updatePermission` / `deletePermission`
+- `readFiles` / `importFile` / `uploadFiles` / `updateFile` / `deleteFile`
+- `readFolders`, `readCollections`, `readFields`, `readRelations`, `readPresets`
+- `readActivity`, `readRevisions`, `readNotifications`
+- `readSettings`, `updateSettings`
+- `readFlows`, `readOperations`, `readDashboards`, `readPanels`, `readShares`, `readWebhooks`
+- `readFieldsByCollection`, `readRelationByCollection`, `readItemPermissions`
+
+Plus server-level: `serverInfo`, `serverHealth`, `serverPing`, `readOpenApiSpec`, `readGraphqlSdl`.
+
+Plus utilities: `generateHash`, `verifyHash`, `randomString`, `utilitySort`, `utilsImport`, `utilsExport`, `clearCache`, `triggerFlow`, `triggerOperation`.
+
+## Helpers
+
+### withToken — one-off requests with a different token
+
+```ts
+import { withToken, readItems } from '@cairncms/sdk';
+
+const publicData = await client.request(
+  withToken('different-token', readItems('articles'))
+);
 ```
 
-Same methods as `directus.items("directus_folders")`.
+### withOptions — override fetch options per request
 
-## Permissions
+Wraps a request with additional `fetch` options (cache policy, credentials, abort signal, etc.):
 
-```js
-directus.permissions;
+```ts
+import { withOptions, readItems } from '@cairncms/sdk';
+
+await client.request(
+  withOptions(readItems('articles'), { cache: 'no-store' })
+);
 ```
 
-Same methods as `directus.items("directus_permissions")`.
+The first argument is the command; the second is either a `Partial<RequestInit>` or a request-transformer function `(options) => options`.
 
-## Presets
+### withSearch — move a GET request into a SEARCH body
 
-```js
-directus.presets;
+When a `readItems` call has too many parameters to fit in a URL query string (large filter, long field list, etc.), `withSearch` converts the request from `GET` to `SEARCH` so the query travels in the request body instead:
+
+```ts
+import { withSearch, readItems } from '@cairncms/sdk';
+
+await client.request(
+  withSearch(
+    readItems('articles', {
+      fields: ['id', 'title', 'body', 'author.*'],
+      filter: { /* large/complex filter */ },
+      limit: 100,
+    })
+  )
+);
 ```
 
-Same methods as `directus.items("directus_presets")`.
+This has nothing to do with full-text search — it's a mechanism for sending oversized query payloads.
 
-## Relations
+## Compatibility
 
-```js
-directus.relations;
+`@cairncms/sdk` is a fork of `@directus/sdk` v16.1.2 (MIT-licensed), adapted to the CairnCMS feature set and diverging from here onward.
+
+### Not supported in v1
+
+- **Realtime / WebSocket subscriptions** — CairnCMS v1 has no WebSocket server. The `realtime()` composable is not exported; importing it produces a type error. Revisit in a future version.
+- **Translation strings CRUD** (`readTranslations`, `createTranslation`, etc.) — CairnCMS stores translation strings as a JSON blob on `directus_settings`. Read via `readSettings()` and access the `translation_strings` field. See the project roadmap for a future migration to a CRUD table.
+- **Content versioning** (`readContentVersions`, `saveToContentVersion`, `promoteContentVersion`, etc.) — CairnCMS does not implement named content versions. Use the standard `status` field (`published`/`draft`/`archived`) for single-track editorial workflows.
+- **Extensions CRUD** (`readExtensions`, `updateExtension`) — CairnCMS uses file-system-based extensions (`extensions/` folder, loaded at boot). There is no CRUD table. The endpoint `GET /extensions/:type` returns the list of loaded extensions for introspection; access via `customEndpoint`.
+
+### Migrating from `@directus/sdk`
+
+If your consumer code already uses the composable SDK API (`createDirectus(url).with(rest())`, `client.request(readItems(...))`), migration is an import rename:
+
+```diff
+- import { createDirectus, rest, readItems } from '@directus/sdk';
++ import { createDirectus, rest, readItems } from '@cairncms/sdk';
 ```
 
-Same methods as `directus.items("directus_relations")`.
+No other code changes are required, provided you don't depend on the unsupported surfaces above.
 
-## Revisions
+If your consumer code uses the older class-based Directus SDK API (`new Directus(url)`, `directus.items('foo').readByQuery(...)`), you need to migrate to the composable API first. That API style was removed from `@directus/sdk` during its 10.x modernization; `@cairncms/sdk` v1 forked from that modernized version and does not include the class-based client.
 
-```js
-directus.revisions;
-```
+### Runtime requirements
 
-Same methods as `directus.items("directus_revisions")`.
+- Node.js 18.0.0 or newer
+- Browsers with native `fetch` and `URL` (all modern evergreen browsers)
+- The `@cairncms/sdk` package itself has zero runtime dependencies
 
-## Roles
+## See also
 
-```js
-directus.roles;
-```
-
-Same methods as `directus.items("directus_roles")`.
-
-## Settings
-
-```js
-directus.settings;
-```
-
-Same methods as `directus.items("directus_settings")`.
-
-## Server
-
-### Ping the Server
-
-```js
-await directus.server.ping();
-```
-
-### Get Server/Project Info
-
-```js
-await directus.server.info();
-```
-
-## Users
-
-```js
-directus.users;
-```
-
-Same methods as `directus.items("directus_users")`, and:
-
-### Invite a New User
-
-```js
-await directus.users.invites.send('admin@example.com', 'fe38136e-52f7-4622-8498-112b8a32a1e2');
-```
-
-The second parameter is the role of the user
-
-### Accept a User Invite
-
-```js
-await directus.users.invites.accept('<accept-token>', 'n3w-p455w0rd');
-```
-
-The provided token is sent to the user's email
-
-### Enable Two-Factor Authentication
-
-```js
-await directus.users.tfa.enable('my-password');
-```
-
-### Disable Two-Factor Authentication
-
-```js
-await directus.users.tfa.disable('691402');
-```
-
-### Get the Current User
-
-```js
-await directus.users.me.read();
-```
-
-Supports optional query:
-
-```js
-await directus.users.me.read({
-	fields: ['last_access'],
-});
-```
-
-### Update the Current Users
-
-```js
-await directus.users.me.update({ first_name: 'Admin' });
-```
-
-Supports optional query:
-
-```js
-await directus.users.me.update({ first_name: 'Admin' }, { fields: ['last_access'] });
-```
-
-## Utils
-
-### Get a Random String
-
-```js
-await directus.utils.random.string();
-```
-
-Supports an optional `length` (defaults to 32):
-
-```js
-await directus.utils.random.string(50);
-```
-
-### Generate a Hash for a Given Value
-
-```js
-await directus.utils.hash.generate('My String');
-```
-
-### Verify if a Hash is Valid
-
-```js
-await directus.utils.hash.verify('My String', '$argon2i$v=19$m=4096,t=3,p=1$A5uogJh');
-```
-
-### Sort Items in a Collection
-
-```js
-await directus.utils.sort('articles', 15, 42);
-```
-
-This will move item `15` to the position of item `42`, and move everything in between one "slot" up.
-
-### Revert to a Previous Revision
-
-```js
-await directus.utils.revert(451);
-```
-
-Note: The key passed is the primary key of the revision you'd like to apply.
-
----
+- [Authentication reference](/reference/authentication.md) — token flows, session cookies, OAuth providers
+- [Filter rules reference](/reference/filter-rules.md) — complete filter operator list
+- [Query parameters reference](/reference/query.md) — `fields`, `sort`, `limit`, `meta`, `deep`
+- [Items API](/reference/items.md) — the underlying REST endpoints
