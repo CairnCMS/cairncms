@@ -25,12 +25,15 @@
 	"scripts": {
 		"build": "NODE_ENV=production tsup",
 		"dev": "NODE_ENV=development tsup",
-		"test": "vitest --typecheck --watch=false"
+		"test": "vitest --typecheck --watch=false",
+		"test:integration": "vitest --config vitest.integration.config.ts --run"
 	},
 	"devDependencies": {
 		"@types/node-fetch": "2.6.11",
-		"tsup": "8.2.2",
 		"esbuild-plugin-replace": "1.4.0",
+		"knex": "2.4.2",
+		"sqlite3": "5.1.6",
+		"tsup": "8.2.2",
 		"typescript": "5.4.5",
 		"vitest": "1.5.3"
 	},
