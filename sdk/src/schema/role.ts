@@ -5,6 +5,7 @@ export type DirectusRole<Schema = any> = MergeCoreCollection<
 	'directus_roles',
 	{
 		id: string;
+		key: string;
 		name: string;
 		icon: string;
 		description: string | null;

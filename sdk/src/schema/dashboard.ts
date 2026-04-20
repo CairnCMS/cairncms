@@ -1,4 +1,5 @@
 import type { MergeCoreCollection } from '../index.js';
+import type { DirectusPanel } from './panel.js';
 import type { DirectusUser } from './user.js';
 
 export type DirectusDashboard<Schema = any> = MergeCoreCollection<
@@ -12,5 +13,6 @@ export type DirectusDashboard<Schema = any> = MergeCoreCollection<
 		date_created: 'datetime' | null;
 		user_created: DirectusUser<Schema> | string | null;
 		color: string | null;
+		panels: DirectusPanel<Schema>[] | string[];
 	}
 >;

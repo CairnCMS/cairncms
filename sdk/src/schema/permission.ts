@@ -6,7 +6,7 @@ export type DirectusPermission<Schema = any> = MergeCoreCollection<
 	'directus_permissions',
 	{
 		id: number;
-		role: DirectusRole<Schema> | string | null;
+		role: DirectusRole<Schema> | string;
 		collection: string; // TODO keyof complete schema
 		action: string;
 		permissions: Record<string, any> | null;
