@@ -1,0 +1,15 @@
+CairnCMS JavaScript SDK
+
+This package (`@cairncms/sdk`) is derived from the Directus JavaScript SDK
+(https://github.com/directus/directus/tree/main/sdk), originally published as
+`@directus/sdk` under the MIT License.
+
+The original SDK source was imported from Directus v10.13.3 (the `sdk/` directory
+at that tag, which shipped as `@directus/sdk@16.1.2`). Subsequent modifications,
+CairnCMS-specific changes, and ongoing maintenance are attributed to the CairnCMS
+project and listed in the project's git history.
+
+Copyright 2024 Monospace, Inc. (original Directus SDK authors)
+Copyright 2026 CairnCMS contributors (modifications)
+
+Licensed under the MIT License — see LICENSE for full text.

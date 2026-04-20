@@ -1,0 +1,40 @@
+{
+	"name": "@cairncms/sdk",
+	"version": "1.0.0",
+	"description": "CairnCMS JavaScript SDK",
+	"homepage": "https://github.com/CairnCMS/cairncms",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/CairnCMS/cairncms.git",
+		"directory": "sdk"
+	},
+	"license": "MIT",
+	"type": "module",
+	"exports": {
+		".": {
+			"import": "./dist/index.js",
+			"require": "./dist/index.cjs"
+		},
+		"./package.json": "./package.json"
+	},
+	"main": "./dist/index.js",
+	"files": [
+		"dist",
+		"NOTICE"
+	],
+	"scripts": {
+		"build": "NODE_ENV=production tsup",
+		"dev": "NODE_ENV=development tsup",
+		"test": "vitest --typecheck --watch=false"
+	},
+	"devDependencies": {
+		"@types/node-fetch": "2.6.11",
+		"tsup": "8.2.2",
+		"esbuild-plugin-replace": "1.4.0",
+		"typescript": "5.4.5",
+		"vitest": "1.5.3"
+	},
+	"engines": {
+		"node": ">=18.0.0"
+	}
+}
