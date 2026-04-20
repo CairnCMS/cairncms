@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authentication, createDirectus, readMe, rest } from '../../src/index.js';
+import { authentication, createDirectus, readMe, rest, staticToken, updateMe } from '../../src/index.js';
 import { ENV_KEYS } from './helpers/constants.js';
 
 const URL = process.env[ENV_KEYS.url]!;
@@ -23,7 +23,7 @@ describe('auth flow', () => {
 
 		const me = await client.request(readMe());
 
-		expect(me.email).toBe(EMAIL);
+		expect(me['email']).toBe(EMAIL);
 	});
 
 	it('refresh flow extends the session', async () => {
@@ -43,5 +43,27 @@ describe('auth flow', () => {
 
 		// After logout, an authenticated call should fail
 		await expect(client.request(readMe())).rejects.toThrow();
+	});
+
+	it('static token auth: authenticates requests with a pre-issued token', async () => {
+		// Obtain a token via one client, then hand it to a staticToken-authenticated
+		// client to verify the alternate auth flow.
+		const seed = createDirectus(URL).with(authentication('json')).with(rest());
+		const { access_token } = await seed.login(EMAIL, PASSWORD);
+
+		const client = createDirectus(URL).with(staticToken(access_token!)).with(rest());
+		const me = await client.request(readMe());
+
+		expect(me['email']).toBe(EMAIL);
+	});
+
+	it('updateMe: updates the current user profile', async () => {
+		const client = createDirectus(URL).with(authentication('json')).with(rest());
+		await client.login(EMAIL, PASSWORD);
+
+		const updated = await client.request(updateMe({ first_name: 'Admin', last_name: 'User' }));
+
+		expect(updated['first_name']).toBe('Admin');
+		expect(updated['last_name']).toBe('User');
 	});
 });

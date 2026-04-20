@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+	aggregate,
 	authentication,
 	createDirectus,
 	createItem,
@@ -17,10 +18,14 @@ const URL = process.env[ENV_KEYS.url]!;
 const EMAIL = process.env[ENV_KEYS.adminEmail]!;
 const PASSWORD = process.env[ENV_KEYS.adminPassword]!;
 
+type Category = { id: string; name: string };
+type Item = { id: string; name: string; value: number; category: Category | string };
+type PublicItem = { id: string; name: string };
+
 type Schema = {
-	[COLLECTIONS.categories]: Array<{ id: string; name: string }>;
-	[COLLECTIONS.items]: Array<{ id: string; name: string; value: number; category: string }>;
-	[COLLECTIONS.publicItems]: Array<{ id: string; name: string }>;
+	[COLLECTIONS.categories]: Category[];
+	[COLLECTIONS.items]: Item[];
+	[COLLECTIONS.publicItems]: PublicItem[];
 };
 
 let admin: DirectusClient<Schema> & AuthenticationClient<Schema> & RestClient<Schema>;
@@ -101,6 +106,24 @@ describe('REST write round-trip', () => {
 			readItems(COLLECTIONS.items, { filter: { id: { _eq: created.id } } })
 		);
 		expect(afterDelete).toHaveLength(0);
+	});
+});
+
+describe('REST aggregate', () => {
+	it('counts items grouped by category', async () => {
+		const result = await admin.request(
+			aggregate(COLLECTIONS.items, {
+				aggregate: { count: '*' },
+				groupBy: ['category'],
+			})
+		);
+
+		// 10 seeded items across 3 categories: electronics (3), books (3), garden (4)
+		expect(result).toHaveLength(3);
+		const byCategory = new Map(result.map((r: any) => [r.category, Number(r.count)]));
+		expect(byCategory.get(CATEGORY_IDS.electronics)).toBe(3);
+		expect(byCategory.get(CATEGORY_IDS.books)).toBe(3);
+		expect(byCategory.get(CATEGORY_IDS.garden)).toBe(4);
 	});
 });
 
