@@ -41,7 +41,7 @@ export class MessengerRedis implements Messenger {
 
 		this.pub = new Redis(env['MESSENGER_REDIS'] ?? config);
 		this.sub = new Redis(env['MESSENGER_REDIS'] ?? config);
-		this.namespace = env['MESSENGER_NAMESPACE'] ?? 'directus';
+		this.namespace = env['MESSENGER_NAMESPACE'] ?? 'cairncms';
 	}
 
 	publish(channel: string, payload: Record<string, any>) {

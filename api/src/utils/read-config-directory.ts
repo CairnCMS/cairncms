@@ -2,7 +2,7 @@ import { load as loadYaml } from 'js-yaml';
 import { promises as fs } from 'fs';
 import path from 'path';
 import logger from '../logger.js';
-import type { ConfigManifest, ConfigPermissionSet, ConfigRole, DirectusConfig } from '../types/config.js';
+import type { ConfigManifest, ConfigPermissionSet, ConfigRole, CairnConfig } from '../types/config.js';
 
 const ENV_VAR_PATTERN = /^\{\{([A-Z_][A-Z0-9_]*)\}\}$/;
 
@@ -35,7 +35,7 @@ function interpolateRole(role: ConfigRole): ConfigRole {
 	return result;
 }
 
-export async function readConfigDirectory(configPath: string): Promise<DirectusConfig> {
+export async function readConfigDirectory(configPath: string): Promise<CairnConfig> {
 	const manifestPath = path.join(configPath, 'cairncms-config.yaml');
 
 	let manifestRaw: string;

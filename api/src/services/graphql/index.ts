@@ -1909,9 +1909,9 @@ export class GraphQLService {
 
 		if (this.accountability?.admin === true) {
 			ServerInfo.addFields({
-				directus: {
+				cairncms: {
 					type: new GraphQLObjectType({
-						name: 'server_info_directus',
+						name: 'server_info_cairncms',
 						fields: {
 							version: {
 								type: GraphQLString,

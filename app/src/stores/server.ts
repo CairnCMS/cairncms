@@ -26,7 +26,7 @@ export type Info = {
 		public_note: string | null;
 		custom_css: string | null;
 	};
-	directus?: {
+	cairncms?: {
 		version: string;
 	};
 	node?: {
@@ -58,7 +58,7 @@ export type Auth = {
 export const useServerStore = defineStore('serverStore', () => {
 	const info = reactive<Info>({
 		project: null,
-		directus: undefined,
+		cairncms: undefined,
 		node: undefined,
 		os: undefined,
 		rateLimit: undefined,
@@ -93,7 +93,7 @@ export const useServerStore = defineStore('serverStore', () => {
 		]);
 
 		info.project = serverInfoResponse.data.data?.project;
-		info.directus = serverInfoResponse.data.data?.directus;
+		info.cairncms = serverInfoResponse.data.data?.cairncms;
 		info.node = serverInfoResponse.data.data?.node;
 		info.os = serverInfoResponse.data.data?.os;
 		info.flows = serverInfoResponse.data.data?.flows;
@@ -121,7 +121,7 @@ export const useServerStore = defineStore('serverStore', () => {
 
 	const dehydrate = () => {
 		info.project = null;
-		info.directus = undefined;
+		info.cairncms = undefined;
 		info.node = undefined;
 		info.os = undefined;
 

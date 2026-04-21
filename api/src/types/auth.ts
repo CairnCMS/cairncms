@@ -29,7 +29,7 @@ export interface Session {
 	share: string;
 }
 
-export type DirectusTokenPayload = {
+export type CairnTokenPayload = {
 	id?: string;
 	role: string | null;
 	app_access: boolean | number;

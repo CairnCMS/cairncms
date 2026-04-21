@@ -2,8 +2,9 @@
 	<sidebar-detail icon="info" :title="t('information')" close>
 		<dl v-if="parsedInfo">
 			<div>
+				<!-- TODO: rename the `directus_version` i18n key to something neutral (`app_version` or `product_version`) in a later localization sweep. -->
 				<dt>{{ t('directus_version') }}</dt>
-				<dd>{{ parsedInfo.directus.version }}</dd>
+				<dd>{{ parsedInfo.cairncms.version }}</dd>
 			</div>
 			<div>
 				<dt>{{ t('node_version') }}</dt>

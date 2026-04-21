@@ -5,7 +5,7 @@ import getDatabase from '../database/index.js';
 import logger from '../logger.js';
 import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
-import type { ConfigPermission, ConfigPermissionSet, ConfigRole, DirectusConfig } from '../types/config.js';
+import type { ConfigPermission, ConfigPermissionSet, ConfigRole, CairnConfig } from '../types/config.js';
 import { getSchema } from './get-schema.js';
 
 function parseJSON(field: string, permId: unknown, value: unknown): Record<string, any> | null {
@@ -48,10 +48,7 @@ function sortStringArray(value: unknown): string[] | null {
 	return null;
 }
 
-export async function getConfigSnapshot(options?: {
-	database?: Knex;
-	schema?: SchemaOverview;
-}): Promise<DirectusConfig> {
+export async function getConfigSnapshot(options?: { database?: Knex; schema?: SchemaOverview }): Promise<CairnConfig> {
 	const database = options?.database ?? getDatabase();
 	const schema = options?.schema ?? (await getSchema({ database, bypassCache: true }));
 

@@ -1,7 +1,7 @@
 import { dump as toYaml } from 'js-yaml';
 import { promises as fs } from 'fs';
 import path from 'path';
-import type { ConfigPermission, ConfigPermissionSet, DirectusConfig } from '../types/config.js';
+import type { ConfigPermission, ConfigPermissionSet, CairnConfig } from '../types/config.js';
 
 function sortStringArray(arr: string[] | null | undefined): string[] | null {
 	if (!arr) return null;
@@ -38,7 +38,7 @@ async function cleanDirectory(dir: string, keepFiles: Set<string>): Promise<void
 	}
 }
 
-export async function writeConfigDirectory(config: DirectusConfig, targetPath: string): Promise<void> {
+export async function writeConfigDirectory(config: CairnConfig, targetPath: string): Promise<void> {
 	const rolesDir = path.join(targetPath, 'roles');
 	const permissionsDir = path.join(targetPath, 'permissions');
 

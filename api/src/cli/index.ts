@@ -27,11 +27,11 @@ export async function createCli(): Promise<Command> {
 
 	await emitter.emitInit('cli.before', { program });
 
-	program.name('directus').usage('[command] [options]');
+	program.name('cairncms').usage('[command] [options]');
 	program.version(pkg.version, '-v, --version');
 
-	program.command('start').description('Start the Directus API').action(startServer);
-	program.command('init').description('Create a new Directus Project').action(init);
+	program.command('start').description('Start the API server').action(startServer);
+	program.command('init').description('Create a new project').action(init);
 
 	// Security
 	const securityCommand = program.command('security');
@@ -119,7 +119,7 @@ export async function createCli(): Promise<Command> {
 
 	configCommand
 		.command('apply')
-		.description('Apply a config directory to this Directus instance')
+		.description('Apply a config directory to this CairnCMS instance')
 		.argument('<path>', 'Config directory path')
 		.option('-y, --yes', 'Skip confirmation prompt')
 		.option('--dry-run', 'Print planned changes without applying', false)

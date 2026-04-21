@@ -4,7 +4,7 @@ import env from '../env.js';
 import { ForbiddenException, InvalidCredentialsException } from '../exceptions/index.js';
 import type {
 	AbstractServiceOptions,
-	DirectusTokenPayload,
+	CairnTokenPayload,
 	Item,
 	LoginResult,
 	MutationOptions,
@@ -78,7 +78,7 @@ export class SharesService extends ItemsService {
 			.update({ times_used: record.share_times_used + 1 })
 			.where('id', record.share_id);
 
-		const tokenPayload: DirectusTokenPayload = {
+		const tokenPayload: CairnTokenPayload = {
 			app_access: false,
 			admin_access: false,
 			role: record.share_role,
@@ -91,7 +91,7 @@ export class SharesService extends ItemsService {
 
 		const accessToken = jwt.sign(tokenPayload, env['SECRET'] as string, {
 			expiresIn: env['ACCESS_TOKEN_TTL'],
-			issuer: 'directus',
+			issuer: 'cairncms',
 		});
 
 		const refreshToken = nanoid(64);

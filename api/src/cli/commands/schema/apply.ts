@@ -21,7 +21,7 @@ export async function apply(snapshotPath: string, options?: { yes: boolean; dryR
 	await validateDatabaseConnection(database);
 
 	if ((await isInstalled()) === false) {
-		logger.error(`Directus isn't installed on this database. Please run "directus bootstrap" first.`);
+		logger.error(`System tables are not installed on this database. Please run "cairncms bootstrap" first.`);
 		database.destroy();
 		process.exit(0);
 	}

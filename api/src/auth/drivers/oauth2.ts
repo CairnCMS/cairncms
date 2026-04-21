@@ -278,7 +278,7 @@ export function createOAuth2AuthRouter(providerName: string): Router {
 				env['SECRET'] as string,
 				{
 					expiresIn: '5m',
-					issuer: 'directus',
+					issuer: 'cairncms',
 				}
 			);
 
@@ -309,7 +309,7 @@ export function createOAuth2AuthRouter(providerName: string): Router {
 
 			try {
 				tokenData = jwt.verify(req.cookies[`oauth2.${providerName}`], env['SECRET'] as string, {
-					issuer: 'directus',
+					issuer: 'cairncms',
 				}) as {
 					verifier: string;
 					redirect?: string;

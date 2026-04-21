@@ -4,7 +4,7 @@ import path from 'path';
 import os from 'os';
 import { load as loadYaml } from 'js-yaml';
 import { writeConfigDirectory } from './write-config-directory.js';
-import type { DirectusConfig } from '../types/config.js';
+import type { CairnConfig } from '../types/config.js';
 
 let tmpDir: string;
 
@@ -16,7 +16,7 @@ afterEach(async () => {
 	await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
-function makeConfig(overrides?: Partial<DirectusConfig>): DirectusConfig {
+function makeConfig(overrides?: Partial<CairnConfig>): CairnConfig {
 	return {
 		manifest: { version: 1, resources: ['roles', 'permissions'] },
 		roles: [],

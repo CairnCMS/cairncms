@@ -30,7 +30,7 @@ export interface ConfigManifest {
 	resources: Array<'roles' | 'permissions'>;
 }
 
-export interface DirectusConfig {
+export interface CairnConfig {
 	manifest: ConfigManifest;
 	roles: ConfigRole[];
 	permissions: ConfigPermissionSet[];

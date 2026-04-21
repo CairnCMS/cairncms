@@ -7,7 +7,7 @@ import env from '../env.js';
 import { InvalidCredentialsException } from '../exceptions/index.js';
 import asyncHandler from '../utils/async-handler.js';
 import { getIPFromReq } from '../utils/get-ip-from-req.js';
-import isDirectusJWT from '../utils/is-directus-jwt.js';
+import isCairnJWT from '../utils/is-cairncms-jwt.js';
 import { verifyAccessJWT } from '../utils/jwt.js';
 
 /**
@@ -51,7 +51,7 @@ export const handler = async (req: Request, _res: Response, next: NextFunction) 
 	req.accountability = defaultAccountability;
 
 	if (req.token) {
-		if (isDirectusJWT(req.token)) {
+		if (isCairnJWT(req.token)) {
 			const payload = verifyAccessJWT(req.token, env['SECRET']);
 
 			req.accountability.role = payload.role;

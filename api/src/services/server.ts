@@ -78,7 +78,7 @@ export class ServerService {
 		if (this.accountability?.admin === true) {
 			const { osType, osVersion } = getOSInfo();
 
-			info['directus'] = {
+			info['cairncms'] = {
 				version,
 			};
 

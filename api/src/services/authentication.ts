@@ -16,7 +16,7 @@ import {
 	UserSuspendedException,
 } from '../exceptions/index.js';
 import { createRateLimiter } from '../rate-limiter.js';
-import type { AbstractServiceOptions, DirectusTokenPayload, LoginResult, Session, User } from '../types/index.js';
+import type { AbstractServiceOptions, CairnTokenPayload, LoginResult, Session, User } from '../types/index.js';
 import { getMilliseconds } from '../utils/get-milliseconds.js';
 import { stall } from '../utils/stall.js';
 import { ActivityService } from './activity.js';
@@ -206,7 +206,7 @@ export class AuthenticationService {
 
 		const accessToken = jwt.sign(customClaims, env['SECRET'] as string, {
 			expiresIn: env['ACCESS_TOKEN_TTL'],
-			issuer: 'directus',
+			issuer: 'cairncms',
 		});
 
 		const refreshToken = nanoid(64);
@@ -337,7 +337,7 @@ export class AuthenticationService {
 			});
 		}
 
-		const tokenPayload: DirectusTokenPayload = {
+		const tokenPayload: CairnTokenPayload = {
 			id: record.user_id,
 			role: record.role_id,
 			app_access: record.role_app_access,
@@ -377,7 +377,7 @@ export class AuthenticationService {
 
 		const accessToken = jwt.sign(customClaims, env['SECRET'] as string, {
 			expiresIn: env['ACCESS_TOKEN_TTL'],
-			issuer: 'directus',
+			issuer: 'cairncms',
 		});
 
 		const newRefreshToken = nanoid(64);

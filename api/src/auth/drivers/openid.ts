@@ -307,7 +307,7 @@ export function createOpenIDAuthRouter(providerName: string): Router {
 				env['SECRET'] as string,
 				{
 					expiresIn: '5m',
-					issuer: 'directus',
+					issuer: 'cairncms',
 				}
 			);
 
@@ -338,7 +338,7 @@ export function createOpenIDAuthRouter(providerName: string): Router {
 
 			try {
 				tokenData = jwt.verify(req.cookies[`openid.${providerName}`], env['SECRET'] as string, {
-					issuer: 'directus',
+					issuer: 'cairncms',
 				}) as {
 					verifier: string;
 					redirect?: string;

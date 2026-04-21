@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { computeConfigPlan, validateConfigPlan } from './compute-config-plan.js';
-import type { DirectusConfig } from '../types/config.js';
+import type { CairnConfig } from '../types/config.js';
 
 const emptyManifest = { version: 1 as const, resources: ['roles' as const, 'permissions' as const] };
 
-function makeConfig(overrides?: Partial<DirectusConfig>): DirectusConfig {
+function makeConfig(overrides?: Partial<CairnConfig>): CairnConfig {
 	return {
 		manifest: emptyManifest,
 		roles: [],

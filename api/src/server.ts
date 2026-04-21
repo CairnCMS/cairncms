@@ -126,7 +126,7 @@ export async function createServer(): Promise<http.Server> {
 		);
 
 		if (env['NODE_ENV'] !== 'development') {
-			logger.info('Directus shut down OK. Bye bye!');
+			logger.info('CairnCMS shut down OK. Bye bye!');
 		}
 	}
 }

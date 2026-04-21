@@ -1,5 +1,5 @@
 import { isEqual } from 'lodash-es';
-import type { ConfigPlan, ConfigPlanErrors, ConfigPermission, ConfigRole, DirectusConfig } from '../types/config.js';
+import type { ConfigPlan, ConfigPlanErrors, ConfigPermission, ConfigRole, CairnConfig } from '../types/config.js';
 
 function permKey(roleKey: string, perm: ConfigPermission): string {
 	return `${roleKey}::${perm.collection}::${perm.action}`;
@@ -33,7 +33,7 @@ function permChanged(current: ConfigPermission, desired: ConfigPermission): bool
 	);
 }
 
-export function computeConfigPlan(current: DirectusConfig, desired: DirectusConfig): ConfigPlan {
+export function computeConfigPlan(current: CairnConfig, desired: CairnConfig): ConfigPlan {
 	const plan: ConfigPlan = {
 		roles: { create: [], update: [], delete: [] },
 		permissions: { create: [], update: [], delete: [] },
@@ -109,7 +109,7 @@ export function computeConfigPlan(current: DirectusConfig, desired: DirectusConf
 
 export function validateConfigPlan(
 	plan: ConfigPlan,
-	desired: DirectusConfig,
+	desired: CairnConfig,
 	context: { currentRoles: Map<string, { admin_access: boolean }> }
 ): ConfigPlanErrors {
 	const errors: string[] = [];
