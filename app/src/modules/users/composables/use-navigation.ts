@@ -1,7 +1,7 @@
 import api from '@/api';
 import { unexpectedError } from '@/utils/unexpected-error';
-import { PUBLIC_ROLE_ID } from '@directus/constants';
-import { Role } from '@directus/types';
+import { PUBLIC_ROLE_ID } from '@cairncms/constants';
+import { Role } from '@cairncms/types';
 import { ref, Ref } from 'vue';
 
 let roles: Ref<BasicRole[] | null> | null = null;

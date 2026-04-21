@@ -1,4 +1,4 @@
-import type { Field, Type } from '@directus/types';
+import type { Field, Type } from '@cairncms/types';
 import fse from 'fs-extra';
 import yaml from 'js-yaml';
 import type { Knex } from 'knex';

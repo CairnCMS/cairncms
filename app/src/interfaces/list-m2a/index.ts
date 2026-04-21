@@ -1,4 +1,4 @@
-import { defineInterface } from '@directus/utils';
+import { defineInterface } from '@cairncms/utils';
 import InterfaceListM2A from './list-m2a.vue';
 import PreviewSVG from './preview.svg?raw';
 

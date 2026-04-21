@@ -4,7 +4,7 @@
  * TODO: link to canonical CairnCMS docs once the docs site is live.
  */
 
-import { parseJSON, toArray } from '@directus/utils';
+import { parseJSON, toArray } from '@cairncms/utils';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import { clone, toNumber, toString } from 'lodash-es';

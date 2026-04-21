@@ -1,4 +1,4 @@
-import type { ForeignKey } from '@directus/schema';
+import type { ForeignKey } from '@cairncms/schema';
 
 export type RelationMeta = {
 	id: number;

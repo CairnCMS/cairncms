@@ -1,4 +1,4 @@
-import { defineOperationApp } from '@directus/utils';
+import { defineOperationApp } from '@cairncms/utils';
 
 export default defineOperationApp({
 	id: 'condition',

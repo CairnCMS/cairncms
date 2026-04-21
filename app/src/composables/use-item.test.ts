@@ -1,6 +1,6 @@
 import api from '@/api';
-import { useCollection } from '@directus/composables';
-import { AppCollection, Field } from '@directus/types';
+import { useCollection } from '@cairncms/composables';
+import { AppCollection, Field } from '@cairncms/types';
 import { createTestingPinia } from '@pinia/testing';
 import { setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -21,7 +21,7 @@ vi.mock('@/api', () => {
 	};
 });
 
-vi.mock('@directus/composables');
+vi.mock('@cairncms/composables');
 
 beforeEach(() => {
 	setActivePinia(

@@ -1,4 +1,4 @@
-import { parseJSON } from '@directus/utils';
+import { parseJSON } from '@cairncms/utils';
 import type { Knex } from 'knex';
 import logger from '../../logger.js';
 

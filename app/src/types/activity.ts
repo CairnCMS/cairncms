@@ -1,4 +1,4 @@
-import { User } from '@directus/types';
+import { User } from '@cairncms/types';
 
 export type Activity = {
 	id: number;

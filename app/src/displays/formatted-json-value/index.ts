@@ -1,7 +1,7 @@
-import { defineDisplay } from '@directus/utils';
+import { defineDisplay } from '@cairncms/utils';
 import DisplayJsonValue from './formatted-json-value.vue';
 import { render } from 'micromustache';
-import { toArray } from '@directus/utils';
+import { toArray } from '@cairncms/utils';
 
 export default defineDisplay({
 	id: 'formatted-json-value',

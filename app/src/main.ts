@@ -16,7 +16,7 @@ import { loadExtensions, registerExtensions } from './extensions';
 init();
 
 async function init() {
-	const version = __DIRECTUS_VERSION__;
+	const version = __CAIRNCMS_VERSION__;
 
 	console.log(CAIRNCMS_LOGO);
 

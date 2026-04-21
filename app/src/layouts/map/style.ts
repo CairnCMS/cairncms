@@ -1,4 +1,4 @@
-import { cssVar } from '@directus/utils/browser';
+import { cssVar } from '@cairncms/utils/browser';
 
 export function getMapStyle() {
 	return [

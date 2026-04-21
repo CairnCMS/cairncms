@@ -1,4 +1,4 @@
-import type { PermissionsAction } from '@directus/types';
+import type { PermissionsAction } from '@cairncms/types';
 
 export interface ConfigRole {
 	key: string;

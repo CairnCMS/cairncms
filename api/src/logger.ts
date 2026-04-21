@@ -1,4 +1,4 @@
-import { toArray } from '@directus/utils';
+import { toArray } from '@cairncms/utils';
 import { merge } from 'lodash-es';
 import { pino } from 'pino';
 import type { LoggerOptions } from 'pino';

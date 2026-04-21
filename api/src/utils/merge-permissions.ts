@@ -1,4 +1,4 @@
-import type { LogicalFilterAND, LogicalFilterOR, Permission } from '@directus/types';
+import type { LogicalFilterAND, LogicalFilterOR, Permission } from '@cairncms/types';
 import { flatten, intersection, isEqual, merge, omit } from 'lodash-es';
 
 export function mergePermissions(strategy: 'and' | 'or', ...permissions: Permission[][]): Permission[] {

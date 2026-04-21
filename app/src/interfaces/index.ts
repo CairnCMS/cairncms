@@ -1,5 +1,5 @@
 import { App } from 'vue';
-import { InterfaceConfig } from '@directus/types';
+import { InterfaceConfig } from '@cairncms/types';
 import { sortBy } from 'lodash';
 
 export function getInternalInterfaces(): InterfaceConfig[] {

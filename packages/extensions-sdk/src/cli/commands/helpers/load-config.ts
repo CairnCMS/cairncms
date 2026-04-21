@@ -1,4 +1,4 @@
-import { pathToRelativeUrl } from '@directus/utils/node';
+import { pathToRelativeUrl } from '@cairncms/utils/node';
 import fse from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';

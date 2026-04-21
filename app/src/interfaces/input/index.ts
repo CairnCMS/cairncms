@@ -1,5 +1,5 @@
-import { DeepPartial, Field } from '@directus/types';
-import { defineInterface } from '@directus/utils';
+import { DeepPartial, Field } from '@cairncms/types';
+import { defineInterface } from '@cairncms/utils';
 import InterfaceInput from './input.vue';
 import PreviewSVG from './preview.svg?raw';
 

@@ -1,4 +1,4 @@
-import { Collection as CollectionRaw, CollectionType } from '@directus/types';
+import { Collection as CollectionRaw, CollectionType } from '@cairncms/types';
 import { TranslateResult } from 'vue-i18n';
 
 export interface Collection extends CollectionRaw {

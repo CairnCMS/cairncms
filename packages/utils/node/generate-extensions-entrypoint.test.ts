@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Extension } from '@directus/types';
+import type { Extension } from '@cairncms/types';
 import { generateExtensionsEntrypoint } from './generate-extensions-entrypoint.js';
 
 describe('generateExtensionsEntrypoint', () => {

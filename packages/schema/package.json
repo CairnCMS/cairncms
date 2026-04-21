@@ -1,5 +1,5 @@
 {
-	"name": "@directus/schema",
+	"name": "@cairncms/schema",
 	"version": "10.0.0",
 	"description": "Utility for extracting information about existing DB schema",
 	"type": "module",
@@ -13,16 +13,15 @@
 		"sqlite3",
 		"javascript"
 	],
-	"homepage": "https://directus.io",
+	"homepage": "https://cairncms.dev",
 	"bugs": {
-		"url": "https://github.com/directus/directus/issues"
+		"url": "https://github.com/CairnCMS/cairncms/issues"
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/directus/directus.git",
+		"url": "https://github.com/CairnCMS/cairncms.git",
 		"directory": "packages/schema"
 	},
-	"funding": "https://github.com/directus/directus?sponsor=1",
 	"license": "BUSL-1.1",
 	"author": "Rijk van Zanten <rijkvanzanten@me.com>",
 	"exports": {

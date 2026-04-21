@@ -1,4 +1,4 @@
-import { defineModule } from '@directus/utils';
+import { defineModule } from '@cairncms/utils';
 import ActivityCollection from './routes/collection.vue';
 import ActivityItem from './routes/item.vue';
 

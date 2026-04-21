@@ -1,4 +1,4 @@
-import { defineInterface } from '@directus/utils';
+import { defineInterface } from '@cairncms/utils';
 import InterfaceSystemFields from './system-fields.vue';
 
 export default defineInterface({

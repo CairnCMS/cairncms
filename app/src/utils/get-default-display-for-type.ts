@@ -1,4 +1,4 @@
-import { Type } from '@directus/types';
+import { Type } from '@cairncms/types';
 
 const defaultDisplayMap: Record<Type, string> = {
 	alias: 'raw',

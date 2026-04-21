@@ -5,7 +5,7 @@ import {
 	EXTENSION_PKG_KEY,
 	EXTENSION_TYPES,
 	HYBRID_EXTENSION_TYPES,
-} from '@directus/constants';
+} from '@cairncms/constants';
 import type {
 	ApiExtensionType,
 	AppExtensionType,
@@ -13,8 +13,8 @@ import type {
 	ExtensionOptions,
 	ExtensionType,
 	HybridExtensionType,
-} from '@directus/types';
-import { isIn } from '@directus/utils';
+} from '@cairncms/types';
+import { isIn } from '@cairncms/utils';
 import chalk from 'chalk';
 import { execa } from 'execa';
 import fse from 'fs-extra';

@@ -1,5 +1,5 @@
 {
-	"name": "@directus/storage-driver-gcs",
+	"name": "@cairncms/storage-driver-gcs",
 	"version": "10.0.0",
 	"type": "module",
 	"scripts": {
@@ -7,13 +7,12 @@
 		"dev": "tsc --watch",
 		"test": "vitest --watch=false"
 	},
-	"description": "GCS file storage abstraction for `@directus/storage`",
+	"description": "GCS file storage abstraction for `@cairncms/storage`",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/directus/directus.git",
+		"url": "https://github.com/CairnCMS/cairncms.git",
 		"directory": "packages/storage-driver-gcs"
 	},
-	"funding": "https://github.com/directus/directus?sponsor=1",
 	"license": "BUSL-1.1",
 	"author": "Rijk van Zanten <rijkvanzanten@me.com>",
 	"exports": {
@@ -29,8 +28,8 @@
 		"access": "public"
 	},
 	"dependencies": {
-		"@directus/storage": "workspace:*",
-		"@directus/utils": "workspace:*",
+		"@cairncms/storage": "workspace:*",
+		"@cairncms/utils": "workspace:*",
 		"@google-cloud/storage": "6.9.5"
 	},
 	"devDependencies": {

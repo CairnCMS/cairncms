@@ -1,7 +1,7 @@
-import type { SchemaInspector } from '@directus/schema';
-import { createInspector } from '@directus/schema';
-import type { Filter, SchemaOverview } from '@directus/types';
-import { parseJSON, toArray } from '@directus/utils';
+import type { SchemaInspector } from '@cairncms/schema';
+import { createInspector } from '@cairncms/schema';
+import type { Filter, SchemaOverview } from '@cairncms/types';
+import { parseJSON, toArray } from '@cairncms/utils';
 import type { Knex } from 'knex';
 import { mapValues } from 'lodash-es';
 import { getSchemaCache, setSchemaCache } from '../cache.js';

@@ -1,4 +1,4 @@
-import { BaseException } from '@directus/exceptions';
+import { BaseException } from '@cairncms/exceptions';
 
 export class UnprocessableEntityException extends BaseException {
 	constructor(message: string) {

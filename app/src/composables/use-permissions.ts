@@ -1,10 +1,10 @@
 import { usePermissionsStore } from '@/stores/permissions';
 import { useUserStore } from '@/stores/user';
-import { Field } from '@directus/types';
+import { Field } from '@cairncms/types';
 import { computed, ComputedRef, Ref } from 'vue';
 import { cloneDeep } from 'lodash';
 import { isAllowed } from '../utils/is-allowed';
-import { useCollection } from '@directus/composables';
+import { useCollection } from '@cairncms/composables';
 
 type UsablePermissions = {
 	createAllowed: ComputedRef<boolean>;

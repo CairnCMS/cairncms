@@ -27,12 +27,12 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
 import { ref, computed, inject, toRefs } from 'vue';
-import { getFieldsFromTemplate } from '@directus/utils';
+import { getFieldsFromTemplate } from '@cairncms/utils';
 import NestedDraggable from './nested-draggable.vue';
-import { Filter } from '@directus/types';
+import { Filter } from '@cairncms/types';
 import { parseFilter } from '@/utils/parse-filter';
 import { render } from 'micromustache';
-import { deepMap } from '@directus/utils';
+import { deepMap } from '@cairncms/utils';
 import { useRelationO2M } from '@/composables/use-relation-o2m';
 import { ChangesItem } from '@/composables/use-relation-multiple';
 import { addRelatedPrimaryKeyToFields } from '@/utils/add-related-primary-key-to-fields';

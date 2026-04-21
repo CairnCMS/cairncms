@@ -8,8 +8,8 @@ import {
 	S3Client,
 } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
-import { normalizePath } from '@directus/utils';
-import { isReadableStream } from '@directus/utils/node';
+import { normalizePath } from '@cairncms/utils';
+import { isReadableStream } from '@cairncms/utils/node';
 import {
 	randAlphaNumeric,
 	randBoolean,
@@ -30,8 +30,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { DriverS3Config } from './index.js';
 import { DriverS3 } from './index.js';
 
-vi.mock('@directus/utils/node');
-vi.mock('@directus/utils');
+vi.mock('@cairncms/utils/node');
+vi.mock('@cairncms/utils');
 vi.mock('@aws-sdk/client-s3');
 vi.mock('@aws-sdk/lib-storage');
 vi.mock('node:path');

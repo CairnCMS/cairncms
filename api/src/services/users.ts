@@ -1,7 +1,7 @@
-import { PUBLIC_ROLE_ID } from '@directus/constants';
-import { FailedValidationException } from '@directus/exceptions';
-import type { Query } from '@directus/types';
-import { getSimpleHash, toArray } from '@directus/utils';
+import { PUBLIC_ROLE_ID } from '@cairncms/constants';
+import { FailedValidationException } from '@cairncms/exceptions';
+import type { Query } from '@cairncms/types';
+import { getSimpleHash, toArray } from '@cairncms/utils';
 import jwt from 'jsonwebtoken';
 import { cloneDeep, isEmpty } from 'lodash-es';
 import { performance } from 'perf_hooks';

@@ -1,6 +1,6 @@
-import type { SchemaOverview } from '@directus/schema/types/overview';
-import { parseJSON } from '@directus/utils';
-import type { Column } from '@directus/schema';
+import type { SchemaOverview } from '@cairncms/schema/types/overview';
+import { parseJSON } from '@cairncms/utils';
+import type { Column } from '@cairncms/schema';
 import env from '../env.js';
 import logger from '../logger.js';
 import getLocalType from './get-local-type.js';

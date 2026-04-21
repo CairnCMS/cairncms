@@ -1,4 +1,4 @@
-import { defineInterface } from '@directus/utils';
+import { defineInterface } from '@cairncms/utils';
 import InterfaceSystemMFASetup from './system-mfa-setup.vue';
 
 export default defineInterface({

@@ -1,4 +1,4 @@
-import type { FieldMeta } from '@directus/types';
+import type { FieldMeta } from '@cairncms/types';
 import fse from 'fs-extra';
 import { merge } from 'lodash-es';
 import path from 'path';

@@ -1,6 +1,6 @@
 import api from '@/api';
-import { Permission } from '@directus/types';
-import { deepMap } from '@directus/utils';
+import { Permission } from '@cairncms/types';
+import { deepMap } from '@cairncms/utils';
 import { parseFilter } from '@/utils/parse-filter';
 import { parsePreset } from '@/utils/parse-preset';
 import { defineStore } from 'pinia';

@@ -1,4 +1,4 @@
-import type { SchemaOverview } from '@directus/types';
+import type { SchemaOverview } from '@cairncms/types';
 import { ForbiddenException } from '../exceptions/forbidden.js';
 import type { PrimaryKey } from '../types/index.js';
 import { isValidUuid } from './is-valid-uuid.js';

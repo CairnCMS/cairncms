@@ -1,4 +1,4 @@
-import { normalizePath } from '@directus/utils';
+import { normalizePath } from '@cairncms/utils';
 import {
 	rand,
 	randAlphaNumeric,
@@ -28,8 +28,8 @@ import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from './constants.js';
 import type { DriverCloudinaryConfig } from './index.js';
 import { DriverCloudinary } from './index.js';
 
-vi.mock('@directus/utils/node');
-vi.mock('@directus/utils');
+vi.mock('@cairncms/utils/node');
+vi.mock('@cairncms/utils');
 vi.mock('node:path');
 vi.mock('node:crypto');
 vi.mock('undici');

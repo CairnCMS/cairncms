@@ -1,4 +1,4 @@
-import { BaseException } from '@directus/exceptions';
+import { BaseException } from '@cairncms/exceptions';
 
 export class InvalidCredentialsException extends BaseException {
 	constructor(message = 'Invalid user credentials.') {

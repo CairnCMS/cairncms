@@ -18,7 +18,7 @@ import { useI18n } from 'vue-i18n';
 import { computed, defineComponent, ref, watch } from 'vue';
 import DrawerCollection from '@/views/private/components/drawer-collection.vue';
 import api from '@/api';
-import { PUBLIC_ROLE_ID } from '@directus/constants';
+import { PUBLIC_ROLE_ID } from '@cairncms/constants';
 import { userName } from '@/utils/user-name';
 import { unexpectedError } from '@/utils/unexpected-error';
 

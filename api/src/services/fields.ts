@@ -1,8 +1,8 @@
-import { KNEX_TYPES, REGEX_BETWEEN_PARENS } from '@directus/constants';
-import type { Column, SchemaInspector } from '@directus/schema';
-import { createInspector } from '@directus/schema';
-import type { Accountability, Field, FieldMeta, RawField, SchemaOverview, Type } from '@directus/types';
-import { addFieldFlag, toArray } from '@directus/utils';
+import { KNEX_TYPES, REGEX_BETWEEN_PARENS } from '@cairncms/constants';
+import type { Column, SchemaInspector } from '@cairncms/schema';
+import { createInspector } from '@cairncms/schema';
+import type { Accountability, Field, FieldMeta, RawField, SchemaOverview, Type } from '@cairncms/types';
+import { addFieldFlag, toArray } from '@cairncms/utils';
 import type Keyv from 'keyv';
 import type { Knex } from 'knex';
 import { isEqual, isNil } from 'lodash-es';

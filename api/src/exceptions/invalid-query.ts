@@ -1,4 +1,4 @@
-import { BaseException } from '@directus/exceptions';
+import { BaseException } from '@cairncms/exceptions';
 
 export class InvalidQueryException extends BaseException {
 	constructor(message: string) {

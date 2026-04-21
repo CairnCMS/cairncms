@@ -1,4 +1,4 @@
-import type { Accountability } from '@directus/types';
+import type { Accountability } from '@cairncms/types';
 import { Router } from 'express';
 import {
 	createLDAPAuthRouter,

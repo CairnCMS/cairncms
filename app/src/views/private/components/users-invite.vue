@@ -44,7 +44,7 @@
 import { useI18n } from 'vue-i18n';
 import { defineComponent, ref, watch } from 'vue';
 import api from '@/api';
-import { PUBLIC_ROLE_ID } from '@directus/constants';
+import { PUBLIC_ROLE_ID } from '@cairncms/constants';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { APIError } from '@/types/error';
 

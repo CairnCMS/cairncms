@@ -1,6 +1,6 @@
-import { PUBLIC_ROLE_ID } from '@directus/constants';
-import type { Query } from '@directus/types';
-import { normalizeRoleKey } from '@directus/utils';
+import { PUBLIC_ROLE_ID } from '@cairncms/constants';
+import type { Query } from '@cairncms/types';
+import { normalizeRoleKey } from '@cairncms/utils';
 import { ForbiddenException, InvalidPayloadException, UnprocessableEntityException } from '../exceptions/index.js';
 import type { AbstractServiceOptions, Alterations, Item, MutationOptions, PrimaryKey } from '../types/index.js';
 import { ItemsService } from './items.js';

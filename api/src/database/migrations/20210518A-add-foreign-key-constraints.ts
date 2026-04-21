@@ -1,6 +1,6 @@
-import type { RelationMeta } from '@directus/types';
+import type { RelationMeta } from '@cairncms/types';
 import type { Knex } from 'knex';
-import { createInspector } from '@directus/schema';
+import { createInspector } from '@cairncms/schema';
 import logger from '../../logger.js';
 import { getDefaultIndexName } from '../../utils/get-default-index-name.js';
 

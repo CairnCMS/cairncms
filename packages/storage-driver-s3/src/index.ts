@@ -14,9 +14,9 @@ import {
 	S3Client,
 } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
-import type { Driver, Range } from '@directus/storage';
-import { normalizePath } from '@directus/utils';
-import { isReadableStream } from '@directus/utils/node';
+import type { Driver, Range } from '@cairncms/storage';
+import { normalizePath } from '@cairncms/utils';
+import { isReadableStream } from '@cairncms/utils/node';
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 

@@ -1,5 +1,5 @@
-import type { Range, Stat } from '@directus/storage';
-import type { Accountability } from '@directus/types';
+import type { Range, Stat } from '@cairncms/storage';
+import type { Accountability } from '@cairncms/types';
 import type { Knex } from 'knex';
 import { clamp } from 'lodash-es';
 import { contentType } from 'mime-types';

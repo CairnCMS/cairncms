@@ -1,5 +1,5 @@
-import type { Item, Query } from '@directus/types';
-import { getEndpoint, moveInArray } from '@directus/utils';
+import type { Item, Query } from '@cairncms/types';
+import { getEndpoint, moveInArray } from '@cairncms/utils';
 import axios from 'axios';
 import { isEqual, throttle } from 'lodash-es';
 import type { ComputedRef, Ref, WritableComputedRef } from 'vue';

@@ -1,5 +1,5 @@
-import { createInspector } from '@directus/schema';
-import type { SchemaInspector } from '@directus/schema';
+import { createInspector } from '@cairncms/schema';
+import type { SchemaInspector } from '@cairncms/schema';
 import fse from 'fs-extra';
 import type { Knex } from 'knex';
 import knex from 'knex';

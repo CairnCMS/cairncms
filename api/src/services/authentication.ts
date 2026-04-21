@@ -1,5 +1,5 @@
-import type { Accountability, SchemaOverview } from '@directus/types';
-import { Action } from '@directus/constants';
+import type { Accountability, SchemaOverview } from '@cairncms/types';
+import { Action } from '@cairncms/constants';
 import jwt from 'jsonwebtoken';
 import type { Knex } from 'knex';
 import { clone, cloneDeep } from 'lodash-es';

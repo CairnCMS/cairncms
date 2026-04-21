@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { has, isEmpty, orderBy, cloneDeep } from 'lodash';
-import { InterfaceConfig, DisplayConfig, DeepPartial, Field, Relation, Collection, LocalType } from '@directus/types';
-import { LOCAL_TYPES } from '@directus/constants';
+import { InterfaceConfig, DisplayConfig, DeepPartial, Field, Relation, Collection, LocalType } from '@cairncms/types';
+import { LOCAL_TYPES } from '@cairncms/constants';
 import { computed } from 'vue';
 import { get, set } from 'lodash';
 import { unexpectedError } from '@/utils/unexpected-error';

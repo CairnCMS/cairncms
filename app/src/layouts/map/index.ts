@@ -1,8 +1,8 @@
 import { getGeometryFormatForType, toGeoJSON } from '@/utils/geometry';
 import { syncRefProperty } from '@/utils/sync-ref-property';
-import { useCollection, useItems, useSync } from '@directus/composables';
-import { Field, Filter, GeometryOptions, Item } from '@directus/types';
-import { defineLayout, getFieldsFromTemplate } from '@directus/utils';
+import { useCollection, useItems, useSync } from '@cairncms/composables';
+import { Field, Filter, GeometryOptions, Item } from '@cairncms/types';
+import { defineLayout, getFieldsFromTemplate } from '@cairncms/utils';
 import { cloneDeep, merge } from 'lodash';
 import { computed, ref, toRefs, watch } from 'vue';
 import { useRouter } from 'vue-router';

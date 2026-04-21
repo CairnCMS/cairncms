@@ -1,5 +1,5 @@
-import { PUBLIC_ROLE_ID } from '@directus/constants';
-import type { SchemaOverview } from '@directus/types';
+import { PUBLIC_ROLE_ID } from '@cairncms/constants';
+import type { SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import getDatabase from '../database/index.js';
 import logger from '../logger.js';

@@ -1,4 +1,4 @@
-import { toArray } from '@directus/utils';
+import { toArray } from '@cairncms/utils';
 import env from '../env.js';
 
 interface AuthProvider {

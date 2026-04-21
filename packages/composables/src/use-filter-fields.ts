@@ -1,4 +1,4 @@
-import type { Field } from '@directus/types';
+import type { Field } from '@cairncms/types';
 import type { ComputedRef, Ref } from 'vue';
 import { computed } from 'vue';
 

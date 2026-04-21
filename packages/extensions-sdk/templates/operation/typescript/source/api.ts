@@ -1,4 +1,4 @@
-import { defineOperationApi } from '@directus/extensions-sdk';
+import { defineOperationApi } from '@cairncms/extensions-sdk';
 
 type Options = {
 	text: string;

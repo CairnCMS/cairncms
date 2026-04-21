@@ -1,15 +1,14 @@
 {
-	"name": "@directus/app",
+	"name": "@cairncms/app",
 	"version": "10.0.0",
-	"description": "App dashboard for Directus",
-	"homepage": "https://directus.io",
+	"description": "App dashboard for CairnCMS",
+	"homepage": "https://cairncms.dev",
 	"type": "module",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/directus/directus.git",
+		"url": "https://github.com/CairnCMS/cairncms.git",
 		"directory": "app"
 	},
-	"funding": "https://github.com/directus/directus?sponsor=1",
 	"license": "BUSL-1.1",
 	"author": "Rijk van Zanten <rijkvanzanten@me.com>",
 	"exports": {
@@ -26,12 +25,12 @@
 		"test": "vitest --watch=false"
 	},
 	"devDependencies": {
-		"@directus/constants": "workspace:*",
-		"@directus/exceptions": "workspace:*",
-		"@directus/extensions-sdk": "workspace:*",
+		"@cairncms/constants": "workspace:*",
+		"@cairncms/exceptions": "workspace:*",
+		"@cairncms/extensions-sdk": "workspace:*",
 		"@directus/format-title": "10.0.0",
-		"@directus/types": "workspace:*",
-		"@directus/utils": "workspace:*",
+		"@cairncms/types": "workspace:*",
+		"@cairncms/utils": "workspace:*",
 		"@fortawesome/fontawesome-svg-core": "6.4.0",
 		"@fortawesome/free-brands-svg-icons": "6.4.0",
 		"@fullcalendar/core": "6.1.5",
@@ -119,6 +118,6 @@
 		"access": "public"
 	},
 	"dependencies": {
-		"@directus/composables": "workspace:*"
+		"@cairncms/composables": "workspace:*"
 	}
 }

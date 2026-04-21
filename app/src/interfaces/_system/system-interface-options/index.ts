@@ -1,4 +1,4 @@
-import { defineInterface } from '@directus/utils';
+import { defineInterface } from '@cairncms/utils';
 import InterfaceSystemInterfaceOptions from './system-interface-options.vue';
 
 export default defineInterface({

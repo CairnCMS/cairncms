@@ -24,7 +24,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useSizeClass } from '@directus/composables';
+import { useSizeClass } from '@cairncms/composables';
 
 interface Props {
 	/** If set to true displays no value but spins indefinitely */

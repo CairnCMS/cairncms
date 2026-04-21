@@ -1,5 +1,5 @@
-import { REGEX_BETWEEN_PARENS } from '@directus/constants';
-import { FieldFunction } from '@directus/types';
+import { REGEX_BETWEEN_PARENS } from '@cairncms/constants';
+import { FieldFunction } from '@cairncms/types';
 
 /**
  * Extracts the function and field name of a field wrapped in a function

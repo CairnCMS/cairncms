@@ -1,4 +1,4 @@
-import { defineInterface } from '@directus/utils';
+import { defineInterface } from '@cairncms/utils';
 import InterfacePresentationDivider from './presentation-divider.vue';
 import PreviewSVG from './preview.svg?raw';
 

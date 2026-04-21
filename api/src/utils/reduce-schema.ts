@@ -1,4 +1,4 @@
-import type { Permission, PermissionsAction, SchemaOverview } from '@directus/types';
+import type { Permission, PermissionsAction, SchemaOverview } from '@cairncms/types';
 import { uniq } from 'lodash-es';
 
 /**

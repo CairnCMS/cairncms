@@ -1,4 +1,4 @@
-import type { Flow, FlowRaw, Operation, OperationRaw } from '@directus/types';
+import type { Flow, FlowRaw, Operation, OperationRaw } from '@cairncms/types';
 import { omit } from 'lodash-es';
 
 export function constructFlowTree(flow: FlowRaw): Flow {

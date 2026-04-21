@@ -7,14 +7,14 @@ import {
 	ExtensionManifest,
 	ExtensionOptionsBundleEntries,
 	HYBRID_EXTENSION_TYPES,
-} from '@directus/constants';
+} from '@cairncms/constants';
 import type {
 	ApiExtensionType,
 	AppExtensionType,
 	ExtensionOptionsBundleEntry,
 	ExtensionManifest as TExtensionManifest,
-} from '@directus/types';
-import { isIn, isTypeIn } from '@directus/utils';
+} from '@cairncms/types';
+import { isIn, isTypeIn } from '@cairncms/utils';
 import commonjsDefault from '@rollup/plugin-commonjs';
 import jsonDefault from '@rollup/plugin-json';
 import { nodeResolve } from '@rollup/plugin-node-resolve';

@@ -66,8 +66,8 @@
 <script lang="ts">
 import { useI18n } from 'vue-i18n';
 import { defineComponent, PropType, computed, inject, ref, toRefs } from 'vue';
-import { Permission, Collection } from '@directus/types';
-import { PUBLIC_ROLE_ID } from '@directus/constants';
+import { Permission, Collection } from '@cairncms/types';
+import { PUBLIC_ROLE_ID } from '@cairncms/constants';
 import api from '@/api';
 import { useRouter } from 'vue-router';
 import useUpdatePermissions from '../composables/use-update-permissions';

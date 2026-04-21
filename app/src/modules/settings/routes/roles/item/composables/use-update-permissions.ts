@@ -1,6 +1,6 @@
 import api from '@/api';
-import { Permission, Collection } from '@directus/types';
-import { PUBLIC_ROLE_ID } from '@directus/constants';
+import { Permission, Collection } from '@cairncms/types';
+import { PUBLIC_ROLE_ID } from '@cairncms/constants';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { computed, inject, ref, Ref } from 'vue';
 

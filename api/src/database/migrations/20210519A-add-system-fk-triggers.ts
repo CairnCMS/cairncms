@@ -1,5 +1,5 @@
 import type { Knex } from 'knex';
-import { createInspector } from '@directus/schema';
+import { createInspector } from '@cairncms/schema';
 import logger from '../../logger.js';
 
 /**

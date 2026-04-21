@@ -1,5 +1,5 @@
-import type { Accountability } from '@directus/types';
-import { Action } from '@directus/constants';
+import type { Accountability } from '@cairncms/types';
+import { Action } from '@cairncms/constants';
 import { uniq } from 'lodash-es';
 import validateUUID from 'uuid-validate';
 import env from '../env.js';

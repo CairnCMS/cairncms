@@ -1,4 +1,4 @@
-import { defineOperationApi, optionToString } from '@directus/utils';
+import { defineOperationApi, optionToString } from '@cairncms/utils';
 import logger from '../../logger.js';
 
 type Options = {

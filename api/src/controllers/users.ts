@@ -1,4 +1,4 @@
-import type { Role } from '@directus/types';
+import type { Role } from '@cairncms/types';
 import express from 'express';
 import Joi from 'joi';
 import { ForbiddenException, InvalidCredentialsException, InvalidPayloadException } from '../exceptions/index.js';

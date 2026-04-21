@@ -1,4 +1,4 @@
-import { PUBLIC_ROLE_ID } from '@directus/constants';
+import { PUBLIC_ROLE_ID } from '@cairncms/constants';
 import type { Knex } from 'knex';
 import { getHelpers } from '../helpers/index.js';
 

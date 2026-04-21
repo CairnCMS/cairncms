@@ -1,4 +1,4 @@
-import type { CollectionsOverview, NestedDeepQuery } from '@directus/types';
+import type { CollectionsOverview, NestedDeepQuery } from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';
 import { MockClient, Tracker, createTracker } from 'knex-mock-client';

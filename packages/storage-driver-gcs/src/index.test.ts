@@ -1,4 +1,4 @@
-import { normalizePath } from '@directus/utils';
+import { normalizePath } from '@cairncms/utils';
 import { Bucket, Storage } from '@google-cloud/storage';
 import {
 	randDirectoryPath,
@@ -19,8 +19,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { DriverGCSConfig } from './index.js';
 import { DriverGCS } from './index.js';
 
-vi.mock('@directus/utils/node');
-vi.mock('@directus/utils');
+vi.mock('@cairncms/utils/node');
+vi.mock('@cairncms/utils');
 vi.mock('@google-cloud/storage');
 vi.mock('node:path');
 vi.mock('node:stream/promises');

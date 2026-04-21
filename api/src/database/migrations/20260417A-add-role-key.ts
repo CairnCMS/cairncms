@@ -1,4 +1,4 @@
-import { normalizeRoleKey } from '@directus/utils';
+import { normalizeRoleKey } from '@cairncms/utils';
 import type { Knex } from 'knex';
 import logger from '../../logger.js';
 

@@ -20,7 +20,7 @@
 import { useI18n } from 'vue-i18n';
 import { defineComponent, computed, inject, ref, PropType, watch } from 'vue';
 import { useFieldsStore } from '@/stores/fields';
-import { Field } from '@directus/types';
+import { Field } from '@cairncms/types';
 
 export default defineComponent({
 	props: {

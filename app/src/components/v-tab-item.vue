@@ -5,7 +5,7 @@
 </template>
 
 <script setup lang="ts">
-import { useGroupable } from '@directus/composables';
+import { useGroupable } from '@cairncms/composables';
 
 interface Props {
 	/** Custom value to use for selection state */

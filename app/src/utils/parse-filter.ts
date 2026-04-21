@@ -1,7 +1,7 @@
 import { useUserStore } from '@/stores/user';
-import { Accountability } from '@directus/types';
-import { parseFilter as parseFilterShared } from '@directus/utils';
-import { Filter } from '@directus/types';
+import { Accountability } from '@cairncms/types';
+import { parseFilter as parseFilterShared } from '@cairncms/utils';
+import { Filter } from '@cairncms/types';
 
 export function parseFilter(filter: Filter | null): Filter {
 	const userStore = useUserStore();

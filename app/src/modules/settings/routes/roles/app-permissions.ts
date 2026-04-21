@@ -1,4 +1,4 @@
-import { Permission } from '@directus/types';
+import { Permission } from '@cairncms/types';
 
 export const appRecommendedPermissions: Partial<Permission>[] = [
 	{

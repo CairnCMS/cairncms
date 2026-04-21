@@ -1,4 +1,4 @@
-import { defineOperationApp, toArray } from '@directus/utils';
+import { defineOperationApp, toArray } from '@cairncms/utils';
 
 export default defineOperationApp({
 	id: 'item-update',

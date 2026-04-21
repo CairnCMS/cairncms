@@ -1,5 +1,5 @@
-import { API_INJECT, EXTENSIONS_INJECT, STORES_INJECT } from '@directus/constants';
-import type { AppExtensionConfigs, RefRecord } from '@directus/types';
+import { API_INJECT, EXTENSIONS_INJECT, STORES_INJECT } from '@cairncms/constants';
+import type { AppExtensionConfigs, RefRecord } from '@cairncms/types';
 import type { AxiosInstance } from 'axios';
 import { inject } from 'vue';
 

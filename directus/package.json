@@ -1,10 +1,10 @@
 {
-	"name": "directus",
+	"name": "cairncms",
 	"version": "10.0.0",
-	"description": "Directus is a real-time API and App dashboard for managing SQL database content",
+	"description": "CairnCMS is a real-time API and App dashboard for managing SQL database content",
 	"type": "module",
 	"keywords": [
-		"directus",
+		"cairncms",
 		"realtime",
 		"database",
 		"content",
@@ -22,15 +22,14 @@
 		"framework",
 		"vue"
 	],
-	"homepage": "https://directus.io",
+	"homepage": "https://cairncms.dev",
 	"bugs": {
-		"url": "https://github.com/directus/directus/issues"
+		"url": "https://github.com/CairnCMS/cairncms/issues"
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/directus/directus.git"
+		"url": "https://github.com/CairnCMS/cairncms.git"
 	},
-	"funding": "https://github.com/directus/directus?sponsor=1",
 	"license": "BUSL-1.1",
 	"author": {
 		"name": "Monospace Inc",
@@ -53,10 +52,10 @@
 		"./package.json": "./package.json"
 	},
 	"bin": {
-		"directus": "cli.js"
+		"cairncms": "cli.js"
 	},
 	"dependencies": {
-		"@directus/api": "workspace:*"
+		"@cairncms/api": "workspace:*"
 	},
 	"engines": {
 		"node": ">=18.0.0"

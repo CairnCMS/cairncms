@@ -15,10 +15,10 @@ beforeEach(() => {
 import { useUserStore } from '@/stores/user';
 import { usePermissionsStore } from '@/stores/permissions';
 import { usePermissions } from './use-permissions';
-import { useCollection } from '@directus/composables';
-import { Field } from '@directus/types';
+import { useCollection } from '@cairncms/composables';
+import { Field } from '@cairncms/types';
 
-vi.mock('@directus/composables');
+vi.mock('@cairncms/composables');
 
 const mockUser = {
 	id: '00000000-0000-0000-0000-000000000000',

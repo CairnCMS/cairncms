@@ -1,4 +1,4 @@
-import { defineOperationApi, optionToObject } from '@directus/utils';
+import { defineOperationApi, optionToObject } from '@cairncms/utils';
 
 type Options = {
 	json: string | Record<string, any>;

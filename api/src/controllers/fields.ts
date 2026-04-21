@@ -1,5 +1,5 @@
-import { TYPES } from '@directus/constants';
-import type { Field, Type } from '@directus/types';
+import { TYPES } from '@cairncms/constants';
+import type { Field, Type } from '@cairncms/types';
 import { Router } from 'express';
 import Joi from 'joi';
 import { ALIAS_TYPES } from '../constants.js';

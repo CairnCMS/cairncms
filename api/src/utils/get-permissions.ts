@@ -1,6 +1,6 @@
-import { PUBLIC_ROLE_ID } from '@directus/constants';
-import type { Accountability, Permission, SchemaOverview } from '@directus/types';
-import { deepMap, parseFilter, parseJSON, parsePreset } from '@directus/utils';
+import { PUBLIC_ROLE_ID } from '@cairncms/constants';
+import type { Accountability, Permission, SchemaOverview } from '@cairncms/types';
+import { deepMap, parseFilter, parseJSON, parsePreset } from '@cairncms/utils';
 import { cloneDeep } from 'lodash-es';
 import hash from 'object-hash';
 import { getCache, getCacheValue, getSystemCache, setCacheValue, setSystemCache } from '../cache.js';

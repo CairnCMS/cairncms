@@ -1,4 +1,4 @@
-import { defineInterface } from '@directus/utils';
+import { defineInterface } from '@cairncms/utils';
 import InterfaceInputMultiline from './input-multiline.vue';
 import Preview from './preview.svg?raw';
 

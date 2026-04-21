@@ -1,6 +1,6 @@
-import { EXTENSION_TYPES } from '@directus/constants';
-import type { Plural } from '@directus/types';
-import { depluralize, isIn } from '@directus/utils';
+import { EXTENSION_TYPES } from '@cairncms/constants';
+import type { Plural } from '@cairncms/types';
+import { depluralize, isIn } from '@cairncms/utils';
 import { Router } from 'express';
 import env from '../env.js';
 import { RouteNotFoundException } from '../exceptions/index.js';

@@ -1,7 +1,7 @@
-import type { ForeignKey, SchemaInspector } from '@directus/schema';
-import { createInspector } from '@directus/schema';
-import type { Accountability, Query, Relation, RelationMeta, SchemaOverview } from '@directus/types';
-import { toArray } from '@directus/utils';
+import type { ForeignKey, SchemaInspector } from '@cairncms/schema';
+import { createInspector } from '@cairncms/schema';
+import type { Accountability, Query, Relation, RelationMeta, SchemaOverview } from '@cairncms/types';
+import { toArray } from '@cairncms/utils';
 import type Keyv from 'keyv';
 import type { Knex } from 'knex';
 import { clearSystemCache, getCache } from '../cache.js';

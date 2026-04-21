@@ -35,7 +35,7 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { Field } from '@directus/types';
+import { Field } from '@cairncms/types';
 
 interface Props {
 	field: Field;

@@ -1,4 +1,4 @@
-import { BaseException } from '@directus/exceptions';
+import { BaseException } from '@cairncms/exceptions';
 
 export class InvalidIPException extends BaseException {
 	constructor(message = 'Invalid IP address.') {

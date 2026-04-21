@@ -1,4 +1,4 @@
-import { defineInterface } from '@directus/utils';
+import { defineInterface } from '@cairncms/utils';
 import RepeaterOptions from './options.vue';
 import InterfaceList from './list.vue';
 import PreviewSVG from './preview.svg?raw';

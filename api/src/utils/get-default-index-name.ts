@@ -1,4 +1,4 @@
-import { getSimpleHash } from '@directus/utils';
+import { getSimpleHash } from '@cairncms/utils';
 /**
  * Generate an index name for a given collection + fields combination.
  *

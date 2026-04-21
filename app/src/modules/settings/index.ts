@@ -1,6 +1,6 @@
 import api from '@/api';
-import { defineModule } from '@directus/utils';
-import { PUBLIC_ROLE_ID } from '@directus/constants';
+import { defineModule } from '@cairncms/utils';
+import { PUBLIC_ROLE_ID } from '@cairncms/constants';
 import { useCollectionsStore } from '@/stores/collections';
 import { useFieldsStore } from '@/stores/fields';
 import { useFlowsStore } from '@/stores/flows';

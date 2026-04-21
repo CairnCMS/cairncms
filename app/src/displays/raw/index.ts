@@ -1,5 +1,5 @@
-import { defineDisplay } from '@directus/utils';
-import { TYPES, LOCAL_TYPES } from '@directus/constants';
+import { defineDisplay } from '@cairncms/utils';
+import { TYPES, LOCAL_TYPES } from '@cairncms/constants';
 
 export default defineDisplay({
 	id: 'raw',

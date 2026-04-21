@@ -1,4 +1,4 @@
-import { definePanel } from '@directus/utils';
+import { definePanel } from '@cairncms/utils';
 import PanelVariable from './panel-variable.vue';
 import { useI18n } from 'vue-i18n';
 import { FIELD_TYPES_SELECT } from '@/constants';

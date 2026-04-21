@@ -1,4 +1,4 @@
-import type { User } from '@directus/types';
+import type { User } from '@cairncms/types';
 
 export function userName(user: Partial<User>): string {
 	if (!user) {

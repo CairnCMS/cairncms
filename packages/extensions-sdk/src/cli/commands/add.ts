@@ -5,15 +5,15 @@ import {
 	EXTENSION_TYPES,
 	ExtensionManifest,
 	HYBRID_EXTENSION_TYPES,
-} from '@directus/constants';
+} from '@cairncms/constants';
 import type {
 	ExtensionOptions,
 	ExtensionOptionsBundleEntry,
 	NestedExtensionType,
 	ExtensionManifest as TExtensionManifest,
-} from '@directus/types';
-import { isIn, isTypeIn } from '@directus/utils';
-import { pathToRelativeUrl } from '@directus/utils/node';
+} from '@cairncms/types';
+import { isIn, isTypeIn } from '@cairncms/utils';
+import { pathToRelativeUrl } from '@cairncms/utils/node';
 import chalk from 'chalk';
 import { execa } from 'execa';
 import fse from 'fs-extra';

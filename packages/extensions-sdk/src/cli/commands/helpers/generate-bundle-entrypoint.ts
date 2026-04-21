@@ -1,7 +1,7 @@
-import { API_EXTENSION_TYPES, APP_EXTENSION_TYPES, HYBRID_EXTENSION_TYPES } from '@directus/constants';
-import type { ExtensionOptionsBundleEntry } from '@directus/types';
-import { isIn, isTypeIn, pluralize } from '@directus/utils';
-import { pathToRelativeUrl } from '@directus/utils/node';
+import { API_EXTENSION_TYPES, APP_EXTENSION_TYPES, HYBRID_EXTENSION_TYPES } from '@cairncms/constants';
+import type { ExtensionOptionsBundleEntry } from '@cairncms/types';
+import { isIn, isTypeIn, pluralize } from '@cairncms/utils';
+import { pathToRelativeUrl } from '@cairncms/utils/node';
 import path from 'path';
 
 export default function generateBundleEntrypoint(mode: 'app' | 'api', entries: ExtensionOptionsBundleEntry[]): string {

@@ -32,7 +32,7 @@ import { useI18n } from 'vue-i18n';
 
 export default defineComponent({
 	setup() {
-		const version = __DIRECTUS_VERSION__;
+		const version = __CAIRNCMS_VERSION__;
 
 		const { t } = useI18n();
 

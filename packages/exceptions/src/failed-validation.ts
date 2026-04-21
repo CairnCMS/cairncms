@@ -1,4 +1,4 @@
-import type { FilterOperator } from '@directus/types';
+import type { FilterOperator } from '@cairncms/types';
 import type { ValidationErrorItem } from 'joi';
 import { BaseException } from './base.js';
 

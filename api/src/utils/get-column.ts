@@ -1,6 +1,6 @@
-import { REGEX_BETWEEN_PARENS } from '@directus/constants';
-import type { FieldFunction, Query, SchemaOverview } from '@directus/types';
-import { getFunctionsForType } from '@directus/utils';
+import { REGEX_BETWEEN_PARENS } from '@cairncms/constants';
+import type { FieldFunction, Query, SchemaOverview } from '@cairncms/types';
+import { getFunctionsForType } from '@cairncms/utils';
 import type { Knex } from 'knex';
 import { getFunctions } from '../database/helpers/index.js';
 import { InvalidQueryException } from '../exceptions/index.js';

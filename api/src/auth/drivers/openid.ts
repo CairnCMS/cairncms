@@ -1,6 +1,6 @@
-import { BaseException } from '@directus/exceptions';
-import type { Accountability } from '@directus/types';
-import { parseJSON } from '@directus/utils';
+import { BaseException } from '@cairncms/exceptions';
+import type { Accountability } from '@cairncms/types';
+import { parseJSON } from '@cairncms/utils';
 import express, { Router } from 'express';
 import flatten from 'flat';
 import jwt from 'jsonwebtoken';

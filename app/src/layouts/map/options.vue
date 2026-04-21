@@ -43,8 +43,8 @@ import { defineComponent, PropType, toRefs } from 'vue';
 
 import { useAppStore } from '@/stores/app';
 import { getBasemapSources } from '@/utils/geometry/basemap';
-import { GeometryOptions, Item } from '@directus/types';
-import { useSync } from '@directus/composables';
+import { GeometryOptions, Item } from '@cairncms/types';
+import { useSync } from '@cairncms/composables';
 
 export default defineComponent({
 	inheritAttrs: false,

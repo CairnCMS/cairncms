@@ -58,51 +58,51 @@ importers:
       '@aws-sdk/client-sesv2':
         specifier: 3.316.0
         version: 3.316.0
-      '@directus/app':
+      '@cairncms/app':
         specifier: workspace:*
         version: link:../app
-      '@directus/constants':
+      '@cairncms/constants':
         specifier: workspace:*
         version: link:../packages/constants
-      '@directus/exceptions':
+      '@cairncms/exceptions':
         specifier: workspace:*
         version: link:../packages/exceptions
-      '@directus/extensions-sdk':
+      '@cairncms/extensions-sdk':
         specifier: workspace:*
         version: link:../packages/extensions-sdk
+      '@cairncms/schema':
+        specifier: workspace:*
+        version: link:../packages/schema
+      '@cairncms/specs':
+        specifier: workspace:*
+        version: link:../packages/specs
+      '@cairncms/storage':
+        specifier: workspace:*
+        version: link:../packages/storage
+      '@cairncms/storage-driver-azure':
+        specifier: workspace:*
+        version: link:../packages/storage-driver-azure
+      '@cairncms/storage-driver-cloudinary':
+        specifier: workspace:*
+        version: link:../packages/storage-driver-cloudinary
+      '@cairncms/storage-driver-gcs':
+        specifier: workspace:*
+        version: link:../packages/storage-driver-gcs
+      '@cairncms/storage-driver-local':
+        specifier: workspace:*
+        version: link:../packages/storage-driver-local
+      '@cairncms/storage-driver-s3':
+        specifier: workspace:*
+        version: link:../packages/storage-driver-s3
+      '@cairncms/update-check':
+        specifier: workspace:*
+        version: link:../packages/update-check
+      '@cairncms/utils':
+        specifier: workspace:*
+        version: link:../packages/utils
       '@directus/format-title':
         specifier: 10.0.0
         version: 10.0.0
-      '@directus/schema':
-        specifier: workspace:*
-        version: link:../packages/schema
-      '@directus/specs':
-        specifier: workspace:*
-        version: link:../packages/specs
-      '@directus/storage':
-        specifier: workspace:*
-        version: link:../packages/storage
-      '@directus/storage-driver-azure':
-        specifier: workspace:*
-        version: link:../packages/storage-driver-azure
-      '@directus/storage-driver-cloudinary':
-        specifier: workspace:*
-        version: link:../packages/storage-driver-cloudinary
-      '@directus/storage-driver-gcs':
-        specifier: workspace:*
-        version: link:../packages/storage-driver-gcs
-      '@directus/storage-driver-local':
-        specifier: workspace:*
-        version: link:../packages/storage-driver-local
-      '@directus/storage-driver-s3':
-        specifier: workspace:*
-        version: link:../packages/storage-driver-s3
-      '@directus/update-check':
-        specifier: workspace:*
-        version: link:../packages/update-check
-      '@directus/utils':
-        specifier: workspace:*
-        version: link:../packages/utils
       '@godaddy/terminus':
         specifier: 4.12.0
         version: 4.12.0
@@ -360,12 +360,12 @@ importers:
         specifier: 16.0.0
         version: 16.0.0(@azure/core-client@1.10.1)
     devDependencies:
+      '@cairncms/types':
+        specifier: workspace:*
+        version: link:../packages/types
       '@directus/tsconfig':
         specifier: 0.0.7
         version: 0.0.7
-      '@directus/types':
-        specifier: workspace:*
-        version: link:../packages/types
       '@ngneat/falso':
         specifier: 6.4.0
         version: 6.4.0
@@ -501,28 +501,28 @@ importers:
 
   app:
     dependencies:
-      '@directus/composables':
+      '@cairncms/composables':
         specifier: workspace:*
         version: link:../packages/composables
     devDependencies:
-      '@directus/constants':
+      '@cairncms/constants':
         specifier: workspace:*
         version: link:../packages/constants
-      '@directus/exceptions':
+      '@cairncms/exceptions':
         specifier: workspace:*
         version: link:../packages/exceptions
-      '@directus/extensions-sdk':
+      '@cairncms/extensions-sdk':
         specifier: workspace:*
         version: link:../packages/extensions-sdk
+      '@cairncms/types':
+        specifier: workspace:*
+        version: link:../packages/types
+      '@cairncms/utils':
+        specifier: workspace:*
+        version: link:../packages/utils
       '@directus/format-title':
         specifier: 10.0.0
         version: 10.0.0
-      '@directus/types':
-        specifier: workspace:*
-        version: link:../packages/types
-      '@directus/utils':
-        specifier: workspace:*
-        version: link:../packages/utils
       '@fortawesome/fontawesome-svg-core':
         specifier: 6.4.0
         version: 6.4.0
@@ -772,16 +772,16 @@ importers:
 
   directus:
     dependencies:
-      '@directus/api':
+      '@cairncms/api':
         specifier: workspace:*
         version: link:../api
 
   packages/composables:
     dependencies:
-      '@directus/constants':
+      '@cairncms/constants':
         specifier: workspace:*
         version: link:../constants
-      '@directus/utils':
+      '@cairncms/utils':
         specifier: workspace:*
         version: link:../utils
       lodash-es:
@@ -794,12 +794,12 @@ importers:
         specifier: 3.2.47
         version: 3.2.47
     devDependencies:
+      '@cairncms/types':
+        specifier: workspace:*
+        version: link:../types
       '@directus/tsconfig':
         specifier: 0.0.7
         version: 0.0.7
-      '@directus/types':
-        specifier: workspace:*
-        version: link:../types
       '@types/lodash-es':
         specifier: 4.17.7
         version: 4.17.7
@@ -834,10 +834,10 @@ importers:
 
   packages/create-directus-extension:
     dependencies:
-      '@directus/constants':
+      '@cairncms/constants':
         specifier: workspace:*
         version: link:../constants
-      '@directus/extensions-sdk':
+      '@cairncms/extensions-sdk':
         specifier: workspace:*
         version: link:../extensions-sdk
       inquirer:
@@ -846,12 +846,12 @@ importers:
 
   packages/exceptions:
     devDependencies:
+      '@cairncms/types':
+        specifier: workspace:*
+        version: link:../types
       '@directus/tsconfig':
         specifier: 0.0.7
         version: 0.0.7
-      '@directus/types':
-        specifier: workspace:*
-        version: link:../types
       '@ngneat/falso':
         specifier: 6.4.0
         version: 6.4.0
@@ -870,16 +870,16 @@ importers:
 
   packages/extensions-sdk:
     dependencies:
-      '@directus/composables':
+      '@cairncms/composables':
         specifier: workspace:*
         version: link:../composables
-      '@directus/constants':
+      '@cairncms/constants':
         specifier: workspace:*
         version: link:../constants
-      '@directus/types':
+      '@cairncms/types':
         specifier: workspace:*
         version: link:../types
-      '@directus/utils':
+      '@cairncms/utils':
         specifier: workspace:*
         version: link:../utils
       '@rollup/plugin-commonjs':
@@ -1008,10 +1008,10 @@ importers:
       '@azure/storage-blob':
         specifier: 12.14.0
         version: 12.14.0
-      '@directus/storage':
+      '@cairncms/storage':
         specifier: workspace:*
         version: link:../storage
-      '@directus/utils':
+      '@cairncms/utils':
         specifier: workspace:*
         version: link:../utils
     devDependencies:
@@ -1033,10 +1033,10 @@ importers:
 
   packages/storage-driver-cloudinary:
     dependencies:
-      '@directus/storage':
+      '@cairncms/storage':
         specifier: workspace:*
         version: link:../storage
-      '@directus/utils':
+      '@cairncms/utils':
         specifier: workspace:*
         version: link:../utils
       p-queue:
@@ -1064,10 +1064,10 @@ importers:
 
   packages/storage-driver-gcs:
     dependencies:
-      '@directus/storage':
+      '@cairncms/storage':
         specifier: workspace:*
         version: link:../storage
-      '@directus/utils':
+      '@cairncms/utils':
         specifier: workspace:*
         version: link:../utils
       '@google-cloud/storage':
@@ -1092,10 +1092,10 @@ importers:
 
   packages/storage-driver-local:
     dependencies:
-      '@directus/storage':
+      '@cairncms/storage':
         specifier: workspace:*
         version: link:../storage
-      '@directus/utils':
+      '@cairncms/utils':
         specifier: workspace:*
         version: link:../utils
     devDependencies:
@@ -1126,10 +1126,10 @@ importers:
       '@aws-sdk/lib-storage':
         specifier: 3.317.0
         version: 3.317.0(@aws-sdk/abort-controller@3.310.0)(@aws-sdk/client-s3@3.317.0)
-      '@directus/storage':
+      '@cairncms/storage':
         specifier: workspace:*
         version: link:../storage
-      '@directus/utils':
+      '@cairncms/utils':
         specifier: workspace:*
         version: link:../utils
     devDependencies:
@@ -1151,10 +1151,10 @@ importers:
 
   packages/types:
     devDependencies:
-      '@directus/constants':
+      '@cairncms/constants':
         specifier: workspace:*
         version: link:../constants
-      '@directus/schema':
+      '@cairncms/schema':
         specifier: workspace:*
         version: link:../schema
       '@directus/tsconfig':
@@ -1221,10 +1221,10 @@ importers:
 
   packages/utils:
     dependencies:
-      '@directus/constants':
+      '@cairncms/constants':
         specifier: workspace:*
         version: link:../constants
-      '@directus/storage':
+      '@cairncms/storage':
         specifier: workspace:*
         version: link:../storage
       date-fns:
@@ -1249,12 +1249,12 @@ importers:
         specifier: 3.2.47
         version: 3.2.47
     devDependencies:
+      '@cairncms/types':
+        specifier: workspace:*
+        version: link:../types
       '@directus/tsconfig':
         specifier: 0.0.7
         version: 0.0.7
-      '@directus/types':
-        specifier: workspace:*
-        version: link:../types
       '@ngneat/falso':
         specifier: 6.4.0
         version: 6.4.0
@@ -1285,7 +1285,7 @@ importers:
 
   tests/blackbox:
     devDependencies:
-      '@directus/types':
+      '@cairncms/types':
         specifier: workspace:*
         version: link:../../packages/types
       '@types/jest':

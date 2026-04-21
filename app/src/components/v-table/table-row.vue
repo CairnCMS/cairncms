@@ -40,7 +40,7 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue';
-import { ShowSelect } from '@directus/types';
+import { ShowSelect } from '@cairncms/types';
 import { Header, Item } from './types';
 
 interface Props {

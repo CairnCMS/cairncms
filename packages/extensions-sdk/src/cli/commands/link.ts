@@ -1,4 +1,4 @@
-import { ExtensionManifest } from '@directus/constants';
+import { ExtensionManifest } from '@cairncms/constants';
 import fs from 'fs-extra';
 import path from 'path';
 import { log } from '../utils/logger.js';

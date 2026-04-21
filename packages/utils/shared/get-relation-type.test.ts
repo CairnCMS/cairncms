@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Relation } from '@directus/types';
+import type { Relation } from '@cairncms/types';
 import { getRelationType } from './get-relation-type.js';
 
 describe('getRelationType', () => {

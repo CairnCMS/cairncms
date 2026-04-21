@@ -1,7 +1,7 @@
 import { usePermissionsStore } from '@/stores/permissions';
 import { useUserStore } from '@/stores/user';
-import { FieldFilter, Permission } from '@directus/types';
-import { generateJoi } from '@directus/utils';
+import { FieldFilter, Permission } from '@cairncms/types';
+import { generateJoi } from '@cairncms/utils';
 
 export function isAllowed(
 	collection: string,

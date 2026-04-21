@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export const APP_SHARED_DEPS = ['@directus/extensions-sdk', 'vue', 'vue-router', 'vue-i18n', 'pinia'];
-export const API_SHARED_DEPS = ['directus'];
+export const APP_SHARED_DEPS = ['@cairncms/extensions-sdk', 'vue', 'vue-router', 'vue-i18n', 'pinia'];
+export const API_SHARED_DEPS = ['cairncms'];
 
 export const APP_EXTENSION_TYPES = ['interface', 'display', 'layout', 'module', 'panel'] as const;
 export const API_EXTENSION_TYPES = ['hook', 'endpoint'] as const;

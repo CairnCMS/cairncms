@@ -97,8 +97,8 @@ import { useI18n } from 'vue-i18n';
 import { defineComponent, PropType } from 'vue';
 
 import MapComponent from './components/map.vue';
-import { useSync } from '@directus/composables';
-import { GeometryOptions, Item } from '@directus/types';
+import { useSync } from '@cairncms/composables';
+import { GeometryOptions, Item } from '@cairncms/types';
 
 export default defineComponent({
 	components: { MapComponent },

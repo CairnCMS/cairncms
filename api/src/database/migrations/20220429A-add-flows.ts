@@ -1,4 +1,4 @@
-import { parseJSON, toArray } from '@directus/utils';
+import { parseJSON, toArray } from '@cairncms/utils';
 import type { Knex } from 'knex';
 import { v4 as uuid } from 'uuid';
 

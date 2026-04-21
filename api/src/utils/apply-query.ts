@@ -8,8 +8,8 @@ import type {
 	Relation,
 	SchemaOverview,
 	Type,
-} from '@directus/types';
-import { getFilterOperatorsForType, getOutputTypeForFunction } from '@directus/utils';
+} from '@cairncms/types';
+import { getFilterOperatorsForType, getOutputTypeForFunction } from '@cairncms/utils';
 import type { Knex } from 'knex';
 import { clone, isPlainObject } from 'lodash-es';
 import validate from 'uuid-validate';

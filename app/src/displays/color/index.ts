@@ -1,4 +1,4 @@
-import { defineDisplay } from '@directus/utils';
+import { defineDisplay } from '@cairncms/utils';
 import DisplayColor from './color.vue';
 
 export default defineDisplay({

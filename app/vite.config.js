@@ -3,14 +3,14 @@ import {
 	APP_OR_HYBRID_EXTENSION_TYPES,
 	APP_SHARED_DEPS,
 	NESTED_EXTENSION_TYPES,
-} from '@directus/constants';
+} from '@cairncms/constants';
 import {
 	ensureExtensionDirs,
 	generateExtensionsEntrypoint,
 	getLocalExtensions,
 	getPackageExtensions,
 	resolvePackageExtensions,
-} from '@directus/utils/node';
+} from '@cairncms/utils/node';
 import yaml from '@rollup/plugin-yaml';
 import vue from '@vitejs/plugin-vue';
 import fs from 'node:fs';
@@ -24,10 +24,10 @@ const EXTENSIONS_PATH = path.join(API_PATH, 'extensions');
 
 export default defineConfig({
 	define: {
-		__DIRECTUS_VERSION__: JSON.stringify(version),
+		__CAIRNCMS_VERSION__: JSON.stringify(version),
 	},
 	plugins: [
-		directusExtensions(),
+		cairncmsExtensions(),
 		vue(),
 		yaml({
 			transform(data) {
@@ -73,14 +73,14 @@ function getExtensionsRealPaths() {
 		: [];
 }
 
-function directusExtensions() {
-	const virtualExtensionsId = '@directus-extensions';
+function cairncmsExtensions() {
+	const virtualExtensionsId = '@cairncms-extensions';
 
 	let extensionsEntrypoint = null;
 
 	return [
 		{
-			name: 'directus-extensions-serve',
+			name: 'cairncms-extensions-serve',
 			apply: 'serve',
 			config: () => ({
 				optimizeDeps: {
@@ -102,7 +102,7 @@ function directusExtensions() {
 			},
 		},
 		{
-			name: 'directus-extensions-build',
+			name: 'cairncms-extensions-build',
 			apply: 'build',
 			config: () => ({
 				build: {

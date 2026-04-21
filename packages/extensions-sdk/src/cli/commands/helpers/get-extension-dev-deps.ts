@@ -1,6 +1,6 @@
-import { API_EXTENSION_TYPES, APP_EXTENSION_TYPES, HYBRID_EXTENSION_TYPES } from '@directus/constants';
-import type { ExtensionType } from '@directus/types';
-import { isIn } from '@directus/utils';
+import { API_EXTENSION_TYPES, APP_EXTENSION_TYPES, HYBRID_EXTENSION_TYPES } from '@cairncms/constants';
+import type { ExtensionType } from '@cairncms/types';
+import { isIn } from '@cairncms/utils';
 import type { Language } from '../../types.js';
 import getPackageVersion from '../../utils/get-package-version.js';
 import getSdkVersion from '../../utils/get-sdk-version.js';
@@ -13,7 +13,7 @@ export default async function getExtensionDevDeps(
 	const languages = Array.isArray(language) ? language : [language];
 
 	const deps: Record<string, string> = {
-		'@directus/extensions-sdk': getSdkVersion(),
+		'@cairncms/extensions-sdk': getSdkVersion(),
 	};
 
 	if (languages.includes('typescript')) {

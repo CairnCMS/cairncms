@@ -1,4 +1,4 @@
-import type { Notification } from '@directus/types';
+import type { Notification } from '@cairncms/types';
 import env from '../env.js';
 import logger from '../logger.js';
 import type { AbstractServiceOptions, MutationOptions, PrimaryKey } from '../types/index.js';

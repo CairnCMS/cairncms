@@ -1,4 +1,4 @@
-import { defineInterface } from '@directus/utils';
+import { defineInterface } from '@cairncms/utils';
 import InterfaceFile from './file.vue';
 import PreviewSVG from './preview.svg?raw';
 

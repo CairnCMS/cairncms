@@ -1,7 +1,7 @@
-import type { SchemaInspector, Table } from '@directus/schema';
-import { createInspector } from '@directus/schema';
-import type { Accountability, FieldMeta, RawField, SchemaOverview } from '@directus/types';
-import { addFieldFlag } from '@directus/utils';
+import type { SchemaInspector, Table } from '@cairncms/schema';
+import { createInspector } from '@cairncms/schema';
+import type { Accountability, FieldMeta, RawField, SchemaOverview } from '@cairncms/types';
+import { addFieldFlag } from '@cairncms/utils';
 import type Keyv from 'keyv';
 import type { Knex } from 'knex';
 import { chunk, omit } from 'lodash-es';

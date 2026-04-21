@@ -1,5 +1,5 @@
-import type { StorageManager } from '@directus/storage';
-import { toArray } from '@directus/utils';
+import type { StorageManager } from '@cairncms/storage';
+import { toArray } from '@cairncms/utils';
 import { getEnv } from '../env.js';
 import { getConfigFromEnv } from '../utils/get-config-from-env.js';
 

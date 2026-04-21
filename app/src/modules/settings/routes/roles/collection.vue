@@ -65,8 +65,8 @@ import { Header as TableHeader } from '@/components/v-table/types';
 import { useRouter } from 'vue-router';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { translate } from '@/utils/translate-object-values';
-import { Role } from '@directus/types';
-import { PUBLIC_ROLE_ID } from '@directus/constants';
+import { Role } from '@cairncms/types';
+import { PUBLIC_ROLE_ID } from '@cairncms/constants';
 
 type RoleItem = Partial<Role> & {
 	count?: number;

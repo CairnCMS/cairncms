@@ -45,9 +45,9 @@
 <script lang="ts">
 import { useI18n } from 'vue-i18n';
 import { defineComponent, ref, watch, PropType, computed, inject, Ref } from 'vue';
-import { Filter } from '@directus/types';
+import { Filter } from '@cairncms/types';
 import { isObject } from 'lodash';
-import { useElementSize } from '@directus/composables';
+import { useElementSize } from '@cairncms/composables';
 
 export default defineComponent({
 	props: {

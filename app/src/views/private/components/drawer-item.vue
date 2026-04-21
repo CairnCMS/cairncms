@@ -90,12 +90,12 @@ import { useFieldsStore } from '@/stores/fields';
 import { useRelationsStore } from '@/stores/relations';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { validateItem } from '@/utils/validate-item';
-import { useCollection } from '@directus/composables';
-import { Field, Relation } from '@directus/types';
+import { useCollection } from '@cairncms/composables';
+import { Field, Relation } from '@cairncms/types';
 import { getDefaultValuesFromFields } from '@/utils/get-default-values-from-fields';
 import { useEditsGuard } from '@/composables/use-edits-guard';
 import { useRouter } from 'vue-router';
-import { getEndpoint } from '@directus/utils';
+import { getEndpoint } from '@cairncms/utils';
 
 interface Props {
 	collection: string;

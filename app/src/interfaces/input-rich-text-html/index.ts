@@ -1,4 +1,4 @@
-import { defineInterface } from '@directus/utils';
+import { defineInterface } from '@cairncms/utils';
 import { defineAsyncComponent } from 'vue';
 import PreviewSVG from './preview.svg?raw';
 

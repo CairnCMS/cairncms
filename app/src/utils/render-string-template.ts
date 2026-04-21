@@ -1,7 +1,7 @@
 import { useAliasFields } from '@/composables/use-alias-fields';
 import { useFieldsStore } from '@/stores/fields';
-import { Field } from '@directus/types';
-import { get, getFieldsFromTemplate } from '@directus/utils';
+import { Field } from '@cairncms/types';
+import { get, getFieldsFromTemplate } from '@cairncms/utils';
 import { render, renderFn } from 'micromustache';
 import { computed, ComputedRef, Ref, ref, unref } from 'vue';
 import { set } from 'lodash';
