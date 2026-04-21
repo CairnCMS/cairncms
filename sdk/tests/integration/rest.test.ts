@@ -92,19 +92,18 @@ describe('REST write round-trip', () => {
 				category: CATEGORY_IDS.electronics,
 			})
 		);
+
 		expect(created.name).toBe('test-widget');
 		expect(created.id).toBeTypeOf('string');
 
-		const updated = await admin.request(
-			updateItem(COLLECTIONS.items, created.id, { value: 99 })
-		);
+		const updated = await admin.request(updateItem(COLLECTIONS.items, created.id, { value: 99 }));
+
 		expect(updated.value).toBe(99);
 
 		await admin.request(deleteItem(COLLECTIONS.items, created.id));
 
-		const afterDelete = await admin.request(
-			readItems(COLLECTIONS.items, { filter: { id: { _eq: created.id } } })
-		);
+		const afterDelete = await admin.request(readItems(COLLECTIONS.items, { filter: { id: { _eq: created.id } } }));
+
 		expect(afterDelete).toHaveLength(0);
 	});
 });
@@ -131,9 +130,7 @@ describe('REST public-role path', () => {
 	it('reads public items without authentication', async () => {
 		const anonymous = createDirectus<Schema>(URL).with(rest());
 
-		const items = await anonymous.request(
-			readItems(COLLECTIONS.publicItems, { limit: -1 })
-		);
+		const items = await anonymous.request(readItems(COLLECTIONS.publicItems, { limit: -1 }));
 
 		expect(items).toHaveLength(2);
 		const ids = items.map((i) => i.id).sort();
@@ -143,8 +140,6 @@ describe('REST public-role path', () => {
 	it('rejects unauthenticated reads on admin-only collections', async () => {
 		const anonymous = createDirectus<Schema>(URL).with(rest());
 
-		await expect(
-			anonymous.request(readItems(COLLECTIONS.items, { limit: -1 }))
-		).rejects.toThrow();
+		await expect(anonymous.request(readItems(COLLECTIONS.items, { limit: -1 }))).rejects.toThrow();
 	});
 });

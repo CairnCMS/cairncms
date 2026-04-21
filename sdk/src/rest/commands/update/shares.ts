@@ -6,7 +6,7 @@ import type { RestCommand } from '../../types.js';
 export type UpdateShareOutput<
 	Schema,
 	TQuery extends Query<Schema, Item>,
-	Item extends object = DirectusShare<Schema>,
+	Item extends object = DirectusShare<Schema>
 > = ApplyQueryFields<Schema, Item, TQuery['fields']>;
 
 /**
@@ -21,7 +21,7 @@ export const updateShares =
 	<Schema, const TQuery extends Query<Schema, DirectusShare<Schema>>>(
 		keys: DirectusShare<Schema>['id'][],
 		item: Partial<DirectusShare<Schema>>,
-		query?: TQuery,
+		query?: TQuery
 	): RestCommand<UpdateShareOutput<Schema, TQuery>[], Schema> =>
 	() => {
 		throwIfEmpty(keys, 'Keys cannot be empty');
@@ -43,7 +43,7 @@ export const updateShares =
 export const updateSharesBatch =
 	<Schema, const TQuery extends Query<Schema, DirectusShare<Schema>>>(
 		items: NestedPartial<DirectusShare<Schema>>[],
-		query?: TQuery,
+		query?: TQuery
 	): RestCommand<UpdateShareOutput<Schema, TQuery>[], Schema> =>
 	() => ({
 		path: `/shares`,
@@ -64,7 +64,7 @@ export const updateShare =
 	<Schema, const TQuery extends Query<Schema, DirectusShare<Schema>>>(
 		key: DirectusShare<Schema>['id'],
 		item: Partial<DirectusShare<Schema>>,
-		query?: TQuery,
+		query?: TQuery
 	): RestCommand<UpdateShareOutput<Schema, TQuery>, Schema> =>
 	() => {
 		throwIfEmpty(key, 'Key cannot be empty');

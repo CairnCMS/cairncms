@@ -46,7 +46,7 @@ export type NestedRelationalFilter<Schema, Item, Field extends keyof Item> =
  */
 export type FilterOperators<
 	FieldType,
-	T = FieldType extends keyof FieldOutputMap ? FieldOutputMap[FieldType] : FieldType,
+	T = FieldType extends keyof FieldOutputMap ? FieldOutputMap[FieldType] : FieldType
 > = MapFilterOperators<{
 	_eq: T;
 	_neq: T;

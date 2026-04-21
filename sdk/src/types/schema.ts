@@ -79,8 +79,8 @@ export type CompleteSchema<Schema> = CoreSchema<Schema> extends infer Core
 			[Collection in keyof Schema | keyof Core]: Collection extends keyof Core
 				? Core[Collection]
 				: Collection extends keyof Schema
-				  ? Schema[Collection]
-				  : never;
+				? Schema[Collection]
+				: never;
 	  }
 	: never;
 
@@ -94,12 +94,12 @@ export type AllCollections<Schema> = RegularCollections<Schema> | RegularCollect
  */
 export type GetCollection<
 	Schema,
-	CollectionName extends AllCollections<Schema>,
+	CollectionName extends AllCollections<Schema>
 > = CollectionName extends keyof CoreSchema<Schema>
 	? CoreSchema<Schema>[CollectionName]
 	: CollectionName extends keyof Schema
-	  ? Schema[CollectionName]
-	  : never;
+	? Schema[CollectionName]
+	: never;
 
 /**
  * Helper to extract a collection name

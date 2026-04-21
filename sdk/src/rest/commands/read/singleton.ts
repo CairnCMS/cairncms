@@ -5,7 +5,7 @@ import type { RestCommand } from '../../types.js';
 export type ReadSingletonOutput<
 	Schema,
 	Collection extends SingletonCollections<Schema>,
-	TQuery extends Query<Schema, Schema[Collection]>,
+	TQuery extends Query<Schema, Schema[Collection]>
 > = ApplyQueryFields<Schema, CollectionType<Schema, Collection>, TQuery['fields']>;
 
 /**
@@ -21,7 +21,7 @@ export type ReadSingletonOutput<
 export const readSingleton =
 	<Schema, Collection extends SingletonCollections<Schema>, const TQuery extends QueryItem<Schema, Schema[Collection]>>(
 		collection: Collection,
-		query?: TQuery,
+		query?: TQuery
 	): RestCommand<ReadSingletonOutput<Schema, Collection, TQuery>, Schema> =>
 	() => {
 		throwIfEmpty(String(collection), 'Collection cannot be empty');

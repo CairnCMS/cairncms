@@ -45,7 +45,7 @@ export const readRelationByCollection =
 export const readRelation =
 	<Schema, const TQuery extends Query<Schema, DirectusRelation<Schema>>>(
 		collection: DirectusRelation<Schema>['collection'],
-		field: DirectusRelation<Schema>['field'],
+		field: DirectusRelation<Schema>['field']
 	): RestCommand<ReadRelationOutput<Schema, TQuery>, Schema> =>
 	() => {
 		throwIfEmpty(collection, 'Collection cannot be empty');

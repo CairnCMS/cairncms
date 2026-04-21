@@ -19,7 +19,7 @@ describe('Test QueryFilters', () => {
 					filter: {
 						_and: [{ id: { _eq: 1 } }],
 					},
-				}),
+				})
 			);
 
 		const withoutConditional = () =>
@@ -33,7 +33,7 @@ describe('Test QueryFilters', () => {
 						},
 					],
 					filter: { id: { _eq: 1 } },
-				}),
+				})
 			);
 
 		type TypeWithConditional = Awaited<ReturnType<typeof withConditional>>;

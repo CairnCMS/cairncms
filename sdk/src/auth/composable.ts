@@ -110,7 +110,7 @@ export const authentication = (mode: AuthenticationMode = 'cookie', config: Part
 				const requestUrl = getRequestUrl(client.url, '/auth/refresh');
 
 				return request<AuthenticationData>(requestUrl.toString(), fetchOptions, client.globals.fetch).then((data) =>
-					setCredentials(data).then(() => data),
+					setCredentials(data).then(() => data)
 				);
 			};
 

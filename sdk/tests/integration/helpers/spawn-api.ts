@@ -6,8 +6,10 @@ export async function pickUnusedPort(): Promise<number> {
 	return new Promise((resolve, reject) => {
 		const server = createServer();
 		server.once('error', reject);
+
 		server.listen(0, () => {
 			const address = server.address();
+
 			if (typeof address === 'object' && address !== null) {
 				const port = address.port;
 				server.close(() => resolve(port));
@@ -32,11 +34,13 @@ export async function runBootstrap(env: NodeJS.ProcessEnv, repoRoot: string): Pr
 		});
 
 		let stderr = '';
+
 		proc.stderr?.on('data', (chunk) => {
 			stderr += chunk.toString();
 		});
 
 		proc.on('error', reject);
+
 		proc.on('exit', (code) => {
 			if (code === 0) {
 				resolve();
@@ -71,7 +75,7 @@ export function spawnApi(env: NodeJS.ProcessEnv, repoRoot: string): ApiHandle {
 	proc.on('exit', (code, signal) => {
 		if (code !== null && code !== 0 && signal === null) {
 			// Process crashed during test run — surface the exit code
-			console.error(`[api] subprocess exited unexpectedly with code ${code}`);
+			process.stderr.write(`[api] subprocess exited unexpectedly with code ${code}\n`);
 		}
 	});
 
@@ -83,6 +87,7 @@ export function spawnApi(env: NodeJS.ProcessEnv, repoRoot: string): ApiHandle {
 			// Wait up to 5s for clean exit, then SIGKILL
 			const exited = await new Promise<boolean>((resolve) => {
 				const timeout = setTimeout(() => resolve(false), 5000);
+
 				proc.once('exit', () => {
 					clearTimeout(timeout);
 					resolve(true);
@@ -107,6 +112,7 @@ export async function waitForReady(url: string, timeoutMs = 60_000): Promise<voi
 		} catch (err) {
 			lastError = err;
 		}
+
 		await new Promise((r) => setTimeout(r, 500));
 	}
 

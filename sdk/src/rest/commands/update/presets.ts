@@ -6,7 +6,7 @@ import type { RestCommand } from '../../types.js';
 export type UpdatePresetOutput<
 	Schema,
 	TQuery extends Query<Schema, Item>,
-	Item extends object = DirectusPreset<Schema>,
+	Item extends object = DirectusPreset<Schema>
 > = ApplyQueryFields<Schema, Item, TQuery['fields']>;
 
 /**
@@ -21,7 +21,7 @@ export const updatePresets =
 	<Schema, const TQuery extends Query<Schema, DirectusPreset<Schema>>>(
 		keys: DirectusPreset<Schema>['id'][],
 		item: Partial<DirectusPreset<Schema>>,
-		query?: TQuery,
+		query?: TQuery
 	): RestCommand<UpdatePresetOutput<Schema, TQuery>[], Schema> =>
 	() => {
 		throwIfEmpty(keys, 'Keys cannot be empty');
@@ -43,7 +43,7 @@ export const updatePresets =
 export const updatePresetsBatch =
 	<Schema, const TQuery extends Query<Schema, DirectusPreset<Schema>>>(
 		items: NestedPartial<DirectusPreset<Schema>>[],
-		query?: TQuery,
+		query?: TQuery
 	): RestCommand<UpdatePresetOutput<Schema, TQuery>[], Schema> =>
 	() => ({
 		path: `/presets`,
@@ -64,7 +64,7 @@ export const updatePreset =
 	<Schema, const TQuery extends Query<Schema, DirectusPreset<Schema>>>(
 		key: DirectusPreset<Schema>['id'],
 		item: Partial<DirectusPreset<Schema>>,
-		query?: TQuery,
+		query?: TQuery
 	): RestCommand<UpdatePresetOutput<Schema, TQuery>, Schema> =>
 	() => {
 		throwIfEmpty(String(key), 'Key cannot be empty');

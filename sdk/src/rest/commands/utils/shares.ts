@@ -14,7 +14,7 @@ export const authenticateShare =
 	<Schema>(
 		share: string,
 		password?: string,
-		mode: AuthenticationMode = 'cookie',
+		mode: AuthenticationMode = 'cookie'
 	): RestCommand<AuthenticationData, Schema> =>
 	() => {
 		const data = { share, password, mode };
@@ -46,7 +46,7 @@ export const inviteShare =
  */
 export const readShareInfo =
 	<Schema>(
-		id: string,
+		id: string
 	): RestCommand<
 		{
 			id: string;

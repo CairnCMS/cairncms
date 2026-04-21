@@ -59,6 +59,7 @@ export async function teardown(): Promise<void> {
 		await apiHandle.kill();
 		apiHandle = null;
 	}
+
 	if (tempDir) {
 		await cleanupTempDir(tempDir);
 		tempDir = null;

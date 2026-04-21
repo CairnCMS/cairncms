@@ -6,7 +6,7 @@ import type { RestCommand } from '../../types.js';
 export type UpdatePermissionOutput<
 	Schema,
 	TQuery extends Query<Schema, Item>,
-	Item extends object = DirectusPermission<Schema>,
+	Item extends object = DirectusPermission<Schema>
 > = ApplyQueryFields<Schema, Item, TQuery['fields']>;
 
 /**
@@ -21,7 +21,7 @@ export const updatePermissions =
 	<Schema, const TQuery extends Query<Schema, DirectusPermission<Schema>>>(
 		keys: DirectusPermission<Schema>['id'][],
 		item: Partial<DirectusPermission<Schema>>,
-		query?: TQuery,
+		query?: TQuery
 	): RestCommand<UpdatePermissionOutput<Schema, TQuery>[], Schema> =>
 	() => {
 		throwIfEmpty(keys, 'Keys cannot be empty');
@@ -43,7 +43,7 @@ export const updatePermissions =
 export const updatePermissionsBatch =
 	<Schema, const TQuery extends Query<Schema, DirectusPermission<Schema>>>(
 		items: NestedPartial<DirectusPermission<Schema>>[],
-		query?: TQuery,
+		query?: TQuery
 	): RestCommand<UpdatePermissionOutput<Schema, TQuery>[], Schema> =>
 	() => ({
 		path: `/permissions`,
@@ -64,7 +64,7 @@ export const updatePermission =
 	<Schema, const TQuery extends Query<Schema, DirectusPermission<Schema>>>(
 		key: DirectusPermission<Schema>['id'],
 		item: Partial<DirectusPermission<Schema>>,
-		query?: TQuery,
+		query?: TQuery
 	): RestCommand<UpdatePermissionOutput<Schema, TQuery>, Schema> =>
 	() => {
 		throwIfEmpty(String(key), 'Key cannot be empty');

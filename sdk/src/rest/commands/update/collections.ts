@@ -6,7 +6,7 @@ import type { RestCommand } from '../../types.js';
 export type UpdateCollectionOutput<
 	Schema,
 	TQuery extends Query<Schema, Item>,
-	Item extends object = DirectusCollection<Schema>,
+	Item extends object = DirectusCollection<Schema>
 > = ApplyQueryFields<Schema, Item, TQuery['fields']>;
 
 /**
@@ -21,7 +21,7 @@ export const updateCollection =
 	<Schema, const TQuery extends Query<Schema, DirectusCollection<Schema>>>(
 		collection: DirectusCollection<Schema>['collection'],
 		item: NestedPartial<DirectusCollection<Schema>>,
-		query?: TQuery,
+		query?: TQuery
 	): RestCommand<UpdateCollectionOutput<Schema, TQuery>, Schema> =>
 	() => {
 		throwIfEmpty(collection, 'Collection cannot be empty');
@@ -43,7 +43,7 @@ export const updateCollection =
 export const updateCollectionsBatch =
 	<Schema, const TQuery extends Query<Schema, DirectusCollection<Schema>>>(
 		items: NestedPartial<DirectusCollection<Schema>>[],
-		query?: TQuery,
+		query?: TQuery
 	): RestCommand<UpdateCollectionOutput<Schema, TQuery>, Schema> =>
 	() => ({
 		path: `/collections`,

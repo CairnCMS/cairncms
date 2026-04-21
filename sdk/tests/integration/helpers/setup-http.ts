@@ -12,9 +12,11 @@ export async function login(url: string, email: string, password: string): Promi
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ email, password }),
 	});
+
 	if (!response.ok) {
 		throw new Error(`Login failed: HTTP ${response.status} ${await response.text()}`);
 	}
+
 	const body: any = await response.json();
 	return body.data.access_token;
 }
@@ -28,6 +30,7 @@ async function post(url: string, token: string, path: string, payload: unknown):
 		},
 		body: JSON.stringify(payload),
 	});
+
 	if (!response.ok) {
 		throw new Error(`POST ${path} failed: HTTP ${response.status} ${await response.text()}`);
 	}
@@ -89,6 +92,7 @@ export async function createRelation(
 /** Grant the public role (sentinel) read access to a single fixture collection. */
 export async function grantPublicRead(url: string, token: string, collection: string): Promise<void> {
 	const PUBLIC_ROLE_ID = '00000000-0000-0000-0000-000000000000';
+
 	await post(url, token, '/permissions', {
 		role: PUBLIC_ROLE_ID,
 		collection,
@@ -101,6 +105,7 @@ export async function grantPublicRead(url: string, token: string, collection: st
 export async function applySchemaFixture(url: string, token: string): Promise<void> {
 	// Categories
 	await createCollection(url, token, COLLECTIONS.categories);
+
 	await createField(url, token, COLLECTIONS.categories, {
 		field: 'name',
 		type: 'string',
@@ -109,6 +114,7 @@ export async function applySchemaFixture(url: string, token: string): Promise<vo
 
 	// Public items (public-readable)
 	await createCollection(url, token, COLLECTIONS.publicItems);
+
 	await createField(url, token, COLLECTIONS.publicItems, {
 		field: 'name',
 		type: 'string',
@@ -117,22 +123,26 @@ export async function applySchemaFixture(url: string, token: string): Promise<vo
 
 	// Items (with m2o to categories + scalar fields)
 	await createCollection(url, token, COLLECTIONS.items);
+
 	await createField(url, token, COLLECTIONS.items, {
 		field: 'name',
 		type: 'string',
 		schema: { is_nullable: false },
 	});
+
 	await createField(url, token, COLLECTIONS.items, {
 		field: 'value',
 		type: 'integer',
 		schema: { is_nullable: false, default_value: 0 },
 	});
+
 	await createField(url, token, COLLECTIONS.items, {
 		field: 'category',
 		type: 'uuid',
 		schema: {},
 		meta: { interface: 'select-dropdown-m2o', special: ['m2o'] },
 	});
+
 	await createRelation(url, token, {
 		collection: COLLECTIONS.items,
 		field: 'category',

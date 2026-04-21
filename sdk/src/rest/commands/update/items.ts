@@ -5,7 +5,7 @@ import { throwIfCoreCollection, throwIfEmpty } from '../../utils/index.js';
 export type UpdateItemOutput<
 	Schema,
 	Collection extends keyof Schema,
-	TQuery extends Query<Schema, Schema[Collection]>,
+	TQuery extends Query<Schema, Schema[Collection]>
 > = ApplyQueryFields<Schema, CollectionType<Schema, Collection>, TQuery['fields']>;
 
 /**
@@ -26,7 +26,7 @@ export const updateItems =
 		collection: Collection,
 		keysOrQuery: string[] | number[] | Query<Schema, Schema[Collection]>,
 		item: Partial<UnpackList<Schema[Collection]>>,
-		query?: TQuery,
+		query?: TQuery
 	): RestCommand<UpdateItemOutput<Schema, Collection, TQuery>[], Schema> =>
 	() => {
 		let payload: Record<string, any> = {};
@@ -66,7 +66,7 @@ export const updateItemsBatch =
 	<Schema, Collection extends keyof Schema, const TQuery extends Query<Schema, Schema[Collection]>>(
 		collection: Collection,
 		items: Partial<UnpackList<Schema[Collection]>>[],
-		query?: TQuery,
+		query?: TQuery
 	): RestCommand<UpdateItemOutput<Schema, Collection, TQuery>[], Schema> =>
 	() => {
 		throwIfEmpty(String(collection), 'Collection cannot be empty');
@@ -98,12 +98,12 @@ export const updateItem =
 		Schema,
 		Collection extends keyof Schema,
 		const TQuery extends Query<Schema, Schema[Collection]>,
-		Item = UnpackList<Schema[Collection]>,
+		Item = UnpackList<Schema[Collection]>
 	>(
 		collection: Collection,
 		key: string | number,
 		item: Partial<Item>,
-		query?: TQuery,
+		query?: TQuery
 	): RestCommand<UpdateItemOutput<Schema, Collection, TQuery>, Schema> =>
 	() => {
 		throwIfEmpty(String(key), 'Key cannot be empty');

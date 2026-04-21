@@ -16,7 +16,7 @@ import type { RestCommand } from '../../types.js';
 export const deleteItems =
 	<Schema, Collection extends keyof Schema, const TQuery extends Query<Schema, Schema[Collection]>>(
 		collection: Collection,
-		keysOrQuery: string[] | number[] | TQuery,
+		keysOrQuery: string[] | number[] | TQuery
 	): RestCommand<void, Schema> =>
 	() => {
 		let payload: Record<string, any> = {};

@@ -14,7 +14,7 @@ import { isSystemCollection } from '../../utils/is-system-collection.js';
 export const aggregate =
 	<Schema, Collection extends AllCollections<Schema>, Options extends AggregationOptions<Schema, Collection>>(
 		collection: Collection,
-		options: Options,
+		options: Options
 	): RestCommand<AggregationOutput<Schema, Collection, Options>, Schema> =>
 	() => {
 		const collectionName = String(collection);

@@ -6,7 +6,7 @@ import { throwIfEmpty } from '../../utils/index.js';
 export type ReadPermissionOutput<
 	Schema,
 	TQuery extends Query<Schema, Item>,
-	Item extends object = DirectusPermission<Schema>,
+	Item extends object = DirectusPermission<Schema>
 > = ApplyQueryFields<Schema, Item, TQuery['fields']>;
 
 export type ReadItemPermissionsOutput = {
@@ -22,7 +22,7 @@ export type ReadItemPermissionsOutput = {
  */
 export const readPermissions =
 	<Schema, const TQuery extends Query<Schema, DirectusPermission<Schema>>>(
-		query?: TQuery,
+		query?: TQuery
 	): RestCommand<ReadPermissionOutput<Schema, TQuery>[], Schema> =>
 	() => ({
 		path: `/permissions`,
@@ -40,7 +40,7 @@ export const readPermissions =
 export const readPermission =
 	<Schema, const TQuery extends Query<Schema, DirectusPermission<Schema>>>(
 		key: DirectusPermission<Schema>['id'],
-		query?: TQuery,
+		query?: TQuery
 	): RestCommand<ReadPermissionOutput<Schema, TQuery>, Schema> =>
 	() => {
 		throwIfEmpty(String(key), 'Key cannot be empty');
@@ -61,7 +61,7 @@ export const readPermission =
 export const readItemPermissions =
 	<Schema, Collection extends AllCollections<Schema>>(
 		collection: Collection,
-		key?: string | number,
+		key?: string | number
 	): RestCommand<ReadItemPermissionsOutput, Schema> =>
 	() => {
 		throwIfEmpty(String(collection), 'Collection cannot be empty');
