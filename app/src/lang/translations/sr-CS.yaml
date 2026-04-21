@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -117,7 +114,7 @@ logoutReason:
 public_label: Javno
 public_description: Kontroliše koji podaci sa API su dostupni bez potrebe za provjerom autentičnosti korisnika.
 not_allowed: Nije dozvoljeno
-directus_version: Directus verzija
+directus_version: CairnCMS verzija
 node_version: Node Verzija
 node_uptime: Node Aktivno vrijeme rada
 os_type: OS tip
@@ -1137,7 +1134,7 @@ interfaces:
     recursive_only: Interfejs u prikazu stabla radi samo u slučajevima rekurzivnih relacija.
   user:
     user: Korisnik
-    description: Odaberi postojećeg directus korisnika
+    description: Odaberi postojećeg CairnCMS korisnika
     select_mode: Način Odabira
     modes:
       auto: Automatski
@@ -1251,7 +1248,7 @@ displays:
     description: Prikaži povezane vrijednosti
   user:
     user: Korisnik
-    description: Prikaži directus korisnika
+    description: Prikaži CairnCMS korisnika
     avatar: Avatar
     name: Ime
     both: Oba

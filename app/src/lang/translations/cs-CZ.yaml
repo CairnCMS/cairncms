@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -1666,7 +1663,7 @@ interfaces:
     recursive_only: Rozhraní stromového pohledu funguje pouze pro rekurentní vztahy.
   user:
     user: Uživatel
-    description: Vyberte existujícího uživatele directus
+    description: Vyberte existujícího uživatele CairnCMS
     select_mode: Režim výběru
     modes:
       auto: Automatický
@@ -1824,7 +1821,7 @@ displays:
     display_template_configure_notice: Po vytvoření tohoto pole můžete nakonfigurovat šablonu zobrazení.
   user:
     user: Uživatel
-    description: Zobrazit uživatele directus
+    description: Zobrazit uživatele CairnCMS
     avatar: Avatar
     name: Jméno
     both: Vše

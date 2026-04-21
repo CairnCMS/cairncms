@@ -22,7 +22,6 @@ import { version } from '../directus/package.json';
 const API_PATH = path.join('..', 'api');
 const EXTENSIONS_PATH = path.join(API_PATH, 'extensions');
 
-// https://vitejs.dev/config/
 export default defineConfig({
 	define: {
 		__DIRECTUS_VERSION__: JSON.stringify(version),

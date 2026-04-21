@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -118,7 +115,7 @@ public_label: Публичен
 public_description: Контрол на позволенията към API-то, без нужда от оторизиране.
 admin_description: Първоначална администраторска роля с неограничен достъп до API и приложението.
 not_allowed: Не е позволено
-directus_version: Версия на Directus
+directus_version: Версия на CairnCMS
 node_version: Версия на Node
 node_uptime: Време от старт на Node
 os_type: Тип на ОС
@@ -1865,7 +1862,7 @@ displays:
     display_template_configure_notice: Шаблонът за показване може да бъде настроен и след създаването на полето.
   user:
     user: Потребител
-    description: Показване на потребител от Directus
+    description: Показване на потребител от CairnCMS
     avatar: Аватар
     name: Име
     both: Всички

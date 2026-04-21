@@ -3,7 +3,6 @@ import { ComponentPublicInstance } from 'vue';
 
 /**
  * Returns the name of a Vue component instance, if applicable.
- * @see https://github.com/vuejs/vue/blob/0e8511a8becf627e00443bd799dd99e5fd1b8a35/src/core/util/debug.ts
  */
 export function getVueComponentName(vm: ComponentPublicInstance | null): string {
 	if (!vm) return `unknown`;

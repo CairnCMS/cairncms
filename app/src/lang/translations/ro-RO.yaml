@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -118,7 +115,7 @@ public_label: Public
 public_description: Controlează ce date API sunt disponibile fără autentificare.
 admin_description: Rol administrativ inițial cu acces fără restricții la aplicație/API.
 not_allowed: Nu este permis
-directus_version: Versiune Directus
+directus_version: Versiune CairnCMS
 node_version: Versiune Node
 node_uptime: Durată execuție Node
 os_type: Tip SO
@@ -1576,7 +1573,7 @@ interfaces:
     recursive_only: Interfața de vizualizare ramificată funcționează numai pentru relații recursive.
   user:
     user: Utilizator
-    description: Selectați un utilizator directus existent
+    description: Selectați un utilizator CairnCMS existent
     select_mode: Selectați modul
     modes:
       auto: Automat
@@ -1720,7 +1717,7 @@ displays:
     display_template_configure_notice: Puteți configura șablonul de afișare după crearea acestui câmp.
   user:
     user: Utilizator
-    description: Afișează un utilizator directus
+    description: Afișează un utilizator CairnCMS
     avatar: Avatar
     name: Nume
     both: Ambele

@@ -1315,7 +1315,7 @@ export class GraphQLService {
 
 	/**
 	 * Generic resolver that's used for every "regular" items/system query. Converts the incoming GraphQL AST / fragments into
-	 * Directus' query structure which is then executed by the services.
+	 * CairnCMS' query structure which is then executed by the services.
 	 */
 	async resolveQuery(info: GraphQLResolveInfo): Promise<Partial<Item> | null> {
 		let collection = info.fieldName;
@@ -1498,8 +1498,8 @@ export class GraphQLService {
 
 	/**
 	 * GraphQL's regular resolver `args` variable only contains the "top-level" arguments. Seeing that we convert the
-	 * whole nested tree into one big query using Directus' own query resolver, we want to have a nested structure of
-	 * arguments for the whole resolving tree, which can later be transformed into Directus' AST using `deep`.
+	 * whole nested tree into one big query using CairnCMS' own query resolver, we want to have a nested structure of
+	 * arguments for the whole resolving tree, which can later be transformed into CairnCMS' AST using `deep`.
 	 * In order to do that, we'll parse over all ArgumentNodes and ObjectFieldNodes to manually recreate an object structure
 	 * of arguments
 	 */
@@ -1535,8 +1535,8 @@ export class GraphQLService {
 	}
 
 	/**
-	 * Get a Directus Query object from the parsed arguments (rawQuery) and GraphQL AST selectionSet. Converts SelectionSet into
-	 * Directus' `fields` query for use in the resolver. Also applies variables where appropriate.
+	 * Get a CairnCMS Query object from the parsed arguments (rawQuery) and GraphQL AST selectionSet. Converts SelectionSet into
+	 * CairnCMS' `fields` query for use in the resolver. Also applies variables where appropriate.
 	 */
 	getQuery(
 		rawQuery: Query,
@@ -1699,7 +1699,7 @@ export class GraphQLService {
 	}
 
 	/**
-	 * Replace functions from GraphQL format to Directus-Filter format
+	 * Replace functions from GraphQL format to CairnCMS-Filter format
 	 */
 	replaceFuncs(filter: Filter): Filter {
 		return replaceFuncDeep(filter);
@@ -1722,7 +1722,7 @@ export class GraphQLService {
 	}
 
 	/**
-	 * Convert Directus-Exception into a GraphQL format, so it can be returned by GraphQL properly.
+	 * Convert CairnCMS-Exception into a GraphQL format, so it can be returned by GraphQL properly.
 	 */
 	formatError(error: BaseException | BaseException[]): GraphQLError {
 		if (Array.isArray(error)) {

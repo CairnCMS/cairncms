@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -118,7 +115,7 @@ public_label: 公開
 public_description: 在沒有身分驗證的情況下，控制這些可用的API數據。
 admin_description: 預設管理者角色，擁有完整的管理介面以及API存取權限
 not_allowed: 不允许
-directus_version: Directus 版本
+directus_version: CairnCMS 版本
 node_version: 節點的版本
 node_uptime: 節點正常運行時間
 os_type: 操作系統類型

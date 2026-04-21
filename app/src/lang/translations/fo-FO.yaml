@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -93,7 +90,7 @@ logoutReason:
 public_label: Alment
 public_description: Stýrir hvat API dáta til taks uttan samgildi.
 not_allowed: Ikki loyvt
-directus_version: Directus Útgáva
+directus_version: CairnCMS Útgáva
 node_version: Node Útgáva
 node_uptime: Node Nýtslutíð
 os_type: OS Slag

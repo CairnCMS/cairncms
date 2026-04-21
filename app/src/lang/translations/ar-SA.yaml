@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -118,7 +115,7 @@ public_label: عام
 public_description: التحكم بتوفر البيانات على واجهة الربط البرمجي بدون تسجيل دخول.
 admin_description: الدور الأساسي للمدير مع وصول غير مقيّد للتطبيق والـ API.
 not_allowed: غير مسموح
-directus_version: إصدار Directus
+directus_version: إصدار CairnCMS
 node_version: رقم نسخة الوحدة
 node_uptime: مدة الاستيقاظ الوحدة
 os_type: نوع نظام التشغيل
@@ -1514,7 +1511,7 @@ interfaces:
     enable: تفعيل
   user:
     user: مستخدم
-    description: حدد مستخدم directus موجود
+    description: حدد مستخدم CairnCMS موجود
     select_mode: تحديد الوضع
     modes:
       auto: تلقائي
@@ -1601,7 +1598,7 @@ displays:
     description: اعرض القيم ذات الصلة
   user:
     user: مستخدم
-    description: عرض مستخدم directus
+    description: عرض مستخدم CairnCMS
     avatar: الصورةالرمزية
     name: الاسم
     both: كل منهما

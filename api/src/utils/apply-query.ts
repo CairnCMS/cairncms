@@ -550,8 +550,8 @@ export function applyFilter(
 			// Is processed through Knex.Raw, so should be safe to string-inject into these where queries
 			const selectionRaw = getColumn(knex, table!, column!, false, schema, { originalCollectionName }) as any;
 
-			// Knex supports "raw" in the columnName parameter, but isn't typed as such. Too bad..
-			// See https://github.com/knex/knex/issues/4518 @TODO remove as any once knex is updated
+			// Knex supports "raw" in the columnName parameter but doesn't type it as such;
+			// the `as any` cast above is required until upstream knex types are fixed.
 
 			// These operators don't rely on a value, and can thus be used without one (eg `?filter[field][_null]`)
 			if (operator === '_null' || (operator === '_nnull' && compareValue === false)) {

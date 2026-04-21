@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -118,7 +115,7 @@ public_label: Публичный
 public_description: Контролирует, какие данные API доступны без входа в личный кабинет.
 admin_description: Начальная административная роль с неограниченным доступом к приложениям/API.
 not_allowed: Не разрешено
-directus_version: Версия Directus
+directus_version: Версия CairnCMS
 node_version: Версия Node
 node_uptime: Время работы Node
 os_type: Тип ОС
@@ -1674,7 +1671,7 @@ interfaces:
     recursive_only: Интерфейс просмотра дерева работает только для рекурсивных отношений.
   user:
     user: Пользователь
-    description: Выберите существующего пользователя directus
+    description: Выберите существующего пользователя CairnCMS
     select_mode: Режим Выбора
     modes:
       auto: Авто
@@ -1815,7 +1812,7 @@ displays:
     description: Показать относительные значения
   user:
     user: Пользователь
-    description: Показать пользователя directus
+    description: Показать пользователя CairnCMS
     avatar: Аватар
     name: Название
     both: Оба

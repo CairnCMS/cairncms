@@ -18,7 +18,7 @@ import { useUserStore } from './user';
 
 const mockServerInfo: Info = {
 	project: {
-		project_name: 'Directus',
+		project_name: 'CairnCMS',
 		project_descriptor: null,
 		project_logo: null,
 		project_color: null,
@@ -28,7 +28,7 @@ const mockServerInfo: Info = {
 		public_note: null,
 		custom_css: null,
 	},
-	directus: {
+	cairncms: {
 		version: '10.10.10',
 	},
 	node: {

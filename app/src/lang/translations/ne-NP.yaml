@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -118,7 +115,7 @@ public_label: सार्वजनिक
 public_description: प्रमाणीकरण नगरीकन कुन एपीआई डेटा उपलब्ध छ भनेर नियन्त्रण गर्छ।
 admin_description: अप्रतिबंधित एप/एपीआई पहुँचको साथ प्रारम्भिक प्रशासनिक भूमिका।
 not_allowed: अनुमति छैन
-directus_version: Directus संस्करण
+directus_version: CairnCMS संस्करण
 node_version: नोड संस्करण
 node_uptime: नोड अपटाइम
 os_type: ओएस प्रकार
@@ -1513,7 +1510,7 @@ interfaces:
     default_language: पूर्वनिर्धारित भाषा
   user:
     user: प्रयोगकर्ता
-    description: पहिले नै अवस्थित directus प्रयोगकर्ता चयन गर्नुहोस्
+    description: पहिले नै अवस्थित CairnCMS प्रयोगकर्ता चयन गर्नुहोस्
     select_mode: मोड चयन गर्नुहोस्
     modes:
       auto: स्वतः

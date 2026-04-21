@@ -31,7 +31,7 @@ const mockTranslationStrings: Settings['translation_strings'] = [
 
 const mockSettings: Settings = {
 	id: 1,
-	project_name: 'Directus',
+	project_name: 'CairnCMS',
 	project_url: null,
 	project_color: null,
 	project_logo: null,

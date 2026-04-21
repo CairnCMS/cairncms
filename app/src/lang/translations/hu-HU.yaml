@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -118,7 +115,7 @@ public_label: Nyilvános
 public_description: API adatok hozzáférése bejelentkezés nélkül.
 admin_description: Alapértelmezett adminisztrátori szerepkör korlátlan alkalmazás és API hozzáféréssel.
 not_allowed: Nem engedélyezett
-directus_version: Directus verzió
+directus_version: CairnCMS verzió
 node_version: Node verzió
 node_uptime: Node futásidő
 os_type: Operációs rendszer típusa
@@ -1706,7 +1703,7 @@ interfaces:
     recursive_only: A fa nézet felület csak rekurzív kapcsolatok esetén működik.
   user:
     user: Felhasználó
-    description: Válasszon ki egy létező directus felhasználót!
+    description: Válasszon ki egy létező CairnCMS felhasználót!
     select_mode: Kiválasztott mód
     modes:
       auto: Automatikus
@@ -1870,7 +1867,7 @@ displays:
     display_template_configure_notice: A mező létrehozása után konfigurálhatod a megjelenő sablont.
   user:
     user: Felhasználó
-    description: Egy directus felhasználó megjelenítése
+    description: Egy CairnCMS felhasználó megjelenítése
     avatar: Profilkép
     name: Név
     both: Mindkettő

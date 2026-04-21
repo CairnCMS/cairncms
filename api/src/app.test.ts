@@ -20,7 +20,7 @@ vi.mock('./env', async () => {
 		KEY: 'xxxxxxx-xxxxxx-xxxxxxxx-xxxxxxxxxx',
 		SECRET: 'abcdef',
 		SERVE_APP: true,
-		PUBLIC_URL: 'http://localhost:8055/directus',
+		PUBLIC_URL: 'http://localhost:8055/example',
 		LOG_STYLE: 'raw',
 	};
 
@@ -104,7 +104,7 @@ describe('createApp', async () => {
 			const app = await createApp();
 			const response = await request(app).get('/admin');
 
-			expect(response.text).toEqual(expect.stringContaining(`<base href="/directus/admin/" />`));
+			expect(response.text).toEqual(expect.stringContaining(`<base href="/example/admin/" />`));
 		});
 
 		test('Should remove <embed-head /> and <embed-body /> tags when there are no custom embeds', async () => {

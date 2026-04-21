@@ -107,7 +107,7 @@ test('Allows built-in modules that are whitelisted', () => {
 
 		module.exports = async function (data) {
 			return {
-				result: crypto.createHash('sha256').update('directus').digest('hex'),
+				result: crypto.createHash('sha256').update('example').digest('hex'),
 			};
 		};
 	`;
@@ -119,7 +119,7 @@ test('Allows built-in modules that are whitelisted', () => {
 				FLOWS_EXEC_ALLOWED_MODULES: 'crypto',
 			},
 		} as any)
-	).resolves.toEqual({ result: '943e891bf6042f2db8926493c0f94e45b72cb58a21145fdfa3c23b5c057e4b2d' });
+	).resolves.toEqual({ result: '50d858e0985ecc7f60418aaf0cc5ab587f42c2570a884095a9e8ccacd0f6545c' });
 });
 
 test('Allows external modules that are whitelisted', () => {

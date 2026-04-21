@@ -108,7 +108,7 @@ class OASSpecsService implements SpecificationSubService {
 			servers: [
 				{
 					url: env['PUBLIC_URL'],
-					description: 'Your current Directus instance.',
+					description: 'Your current CairnCMS instance.',
 				},
 			],
 			paths,

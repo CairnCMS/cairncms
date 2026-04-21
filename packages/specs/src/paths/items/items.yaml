@@ -43,7 +43,7 @@ post:
   requestBody:
     content:
       application/json:
-        # Intentionally empty, see https://github.com/directus/directus/pull/16294
+        # Schema intentionally empty — createItem accepts arbitrary item shapes determined by the collection's field definitions at runtime.
         schema:
   responses:
     '200':

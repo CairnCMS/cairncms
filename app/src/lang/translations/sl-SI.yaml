@@ -60,7 +60,7 @@ logoutReason:
 public_label: Javno
 public_description: Nadzoruje, kateri podatki API so na voljo brez avtentikacije.
 not_allowed: Ni dovoljeno
-directus_version: Directus verzija
+directus_version: CairnCMS verzija
 node_version: Node verzija
 node_uptime: Node deluje
 os_type: OS vrsta

@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -115,7 +112,7 @@ logoutReason:
 public_label: Público
 public_description: Controla quais dados da API estão disponíveis sem autenticação.
 not_allowed: Não permitido
-directus_version: Versão do Directus
+directus_version: Versão do CairnCMS
 node_version: Versão do Node.js
 node_uptime: Tempo de atividade do Node.js
 os_type: Tipo do Sistema Operativo

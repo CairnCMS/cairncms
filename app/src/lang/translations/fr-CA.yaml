@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -118,7 +115,7 @@ public_label: Public
 public_description: Contrôle quelles sont les données API disponibles sans authentification.
 admin_description: Rôle administratif initial avec accès illimité à l'application/à l'API.
 not_allowed: Non autorisé
-directus_version: Version de Directus
+directus_version: Version de CairnCMS
 node_version: Version de Node
 node_uptime: Temps de disponibilité du nœud
 os_type: Type d'OS
@@ -1720,7 +1717,7 @@ interfaces:
     recursive_only: La vue en arborescence ne fonctionne que pour les relations récursives.
   user:
     user: Utilisateur
-    description: Sélectionner un utilisateur directus existant
+    description: Sélectionner un utilisateur CairnCMS existant
     select_mode: Sélectionner un mode
     modes:
       auto: Auto
@@ -1884,7 +1881,7 @@ displays:
     display_template_configure_notice: Vous pourrez configurer le modèle d'affichage après avoir créé ce champ.
   user:
     user: Utilisateur
-    description: Afficher un utilisateur directus
+    description: Afficher un utilisateur CairnCMS
     avatar: Avatar
     name: Nom
     both: Tous

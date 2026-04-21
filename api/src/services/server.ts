@@ -103,7 +103,7 @@ export class ServerService {
 
 		const checkID = nanoid(5);
 
-		// Based on https://tools.ietf.org/id/draft-inadarei-api-health-check-05.html#name-componenttype
+		// Shape follows the IETF draft for API health-check responses (draft-inadarei-api-health-check-05).
 		type HealthData = {
 			status: 'ok' | 'warn' | 'error';
 			releaseId: string;

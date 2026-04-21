@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -118,7 +115,7 @@ public_label: Verejné
 public_description: Určuje, ktoré údaje z API sú dostupné bez overovania.
 admin_description: Počiatočná administratívna rola s neobmedzeným prístupom k Appke/API.
 not_allowed: Nepovolené
-directus_version: Verzia Directus
+directus_version: Verzia CairnCMS
 node_version: Verzia Node
 node_uptime: Doba prevádzky nodu
 os_type: Typ OS
@@ -1697,7 +1694,7 @@ interfaces:
     recursive_only: Rozhranie stromového zobrazenia funguje len na rekurzívne relácie.
   user:
     user: Používateľ
-    description: Vyberte existujúceho directus používateľa
+    description: Vyberte existujúceho CairnCMS používateľa
     select_mode: Vybrať režim
     modes:
       auto: Auto
@@ -1859,7 +1856,7 @@ displays:
     display_template_configure_notice: Šablónu zobrazenia môžete nastaviť po vytvorení tohoto poľa.
   user:
     user: Používateľ
-    description: Zobrazí directus používateľa
+    description: Zobrazí CairnCMS používateľa
     avatar: Avatar
     name: Meno
     both: Oboje

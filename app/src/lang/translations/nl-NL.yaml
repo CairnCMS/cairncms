@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -118,7 +115,7 @@ public_label: Openbaar
 public_description: Bepaalt welke data beschikbaar is in de API zonder in te loggen.
 admin_description: Initiële administratieve rol met onbeperkte App/API toegang.
 not_allowed: Niet toegestaan
-directus_version: Directus Versie
+directus_version: CairnCMS Versie
 node_version: Node Versie
 node_uptime: Node Uptime
 os_type: OS Type
@@ -1529,7 +1526,7 @@ interfaces:
     default_language: Standaardtaal
   user:
     user: Gebruiker
-    description: Selecteer een bestaande Directus gebruiker
+    description: Selecteer een bestaande CairnCMS gebruiker
     select_mode: Selecteer modus
     modes:
       auto: Automatisch
@@ -1641,7 +1638,7 @@ displays:
     description: Relatieve waarden weergeven
   user:
     user: Gebruiker
-    description: Toon een directus gebruiker
+    description: Toon een CairnCMS gebruiker
     avatar: Profielafbeelding
     name: Naam
     both: Beiden

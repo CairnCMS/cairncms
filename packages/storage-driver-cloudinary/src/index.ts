@@ -47,8 +47,7 @@ export class DriverCloudinary implements Driver {
 	}
 
 	/**
-	 * Generate the Cloudinary sha256 signature for the given payload
-	 * @see https://cloudinary.com/documentation/signatures
+	 * Generate the Cloudinary sha256 signature for the given payload.
 	 */
 	private getFullSignature(payload: Record<string, string>) {
 		const denylist = ['file', 'cloud_name', 'resource_type', 'api_key'];
@@ -65,8 +64,7 @@ export class DriverCloudinary implements Driver {
 	}
 
 	/**
-	 * Creates inline URL signature for use with the image reading API
-	 * @see https://cloudinary.com/documentation/advanced_url_delivery_options#generating_delivery_url_signatures
+	 * Creates inline URL signature for use with the image reading API.
 	 */
 	private getParameterSignature(filepath: string) {
 		return `s--${createHash('sha256')
@@ -80,8 +78,7 @@ export class DriverCloudinary implements Driver {
 	}
 
 	/**
-	 * Used to guess what resource type is appropriate for a given filepath
-	 * @see https://cloudinary.com/documentation/image_transformations#image_upload_note
+	 * Used to guess what resource type is appropriate for a given filepath.
 	 */
 	private getResourceType(filepath: string) {
 		const fileExtension = extname(filepath);
@@ -325,7 +322,7 @@ export class DriverCloudinary implements Driver {
 			method: 'POST',
 			body: formData,
 			headers: {
-				/** @see https://support.cloudinary.com/hc/en-us/articles/208263735-Guidelines-for-self-implementing-chunked-upload-to-Cloudinary */
+				// X-Unique-Upload-Id and Content-Range are required by Cloudinary's chunked upload protocol.
 				'X-Unique-Upload-Id': parameters.timestamp,
 				'Content-Range': `bytes ${bytesOffset}-${bytesOffset + blob.size - 1}/${bytesTotal}`,
 			},

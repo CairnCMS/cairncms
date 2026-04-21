@@ -58,7 +58,8 @@ import { getSchema } from './utils/get-schema.js';
 import { JobQueue } from './utils/job-queue.js';
 import { Url } from './utils/url.js';
 
-// Workaround for https://github.com/rollup/plugins/issues/1329
+// Rollup plugins ship with CJS-style `default` exports but are typed as the module itself;
+// these casts unwrap to the real functions.
 const virtual = virtualDefault as unknown as typeof virtualDefault.default;
 const alias = aliasDefault as unknown as typeof aliasDefault.default;
 const nodeResolve = nodeResolveDefault as unknown as typeof nodeResolveDefault.default;

@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -118,7 +115,7 @@ public_label: Público
 public_description: Control de datos disponibles por API sin autentificación.
 admin_description: Descripción_administrador.
 not_allowed: No permitido
-directus_version: Versión de Directus
+directus_version: Versión de CairnCMS
 node_version: Versión Node
 node_uptime: Tiempo de actividad de Node
 os_type: Tipo de SO
@@ -1701,7 +1698,7 @@ interfaces:
     recursive_only: La interfaz de vista en árbol sólo funciona para relaciones recursivas.
   user:
     user: Usuario
-    description: Seleccionar un usuario existente de Directus
+    description: Seleccionar un usuario existente de CairnCMS
     select_mode: Seleccionar Modo
     modes:
       auto: Automático
@@ -1865,7 +1862,7 @@ displays:
     display_template_configure_notice: Puede configurar la plantilla de pantalla después de crear este campo.
   user:
     user: Usuario
-    description: Presentar un usuario de Directus
+    description: Presentar un usuario de CairnCMS
     avatar: Avatar
     name: Nombre
     both: Ambos

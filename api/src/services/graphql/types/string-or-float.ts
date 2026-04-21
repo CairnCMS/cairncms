@@ -1,7 +1,7 @@
 import { GraphQLScalarType, Kind } from 'graphql';
 
 /**
- * Adopted from https://kamranicus.com/handling-multiple-scalar-types-in-graphql/
+ * Adopted from Kamran Ayub (@kamranayub)
  */
 
 export const GraphQLStringOrFloat = new GraphQLScalarType({

@@ -38,7 +38,8 @@ import generateBundleEntrypoint from './helpers/generate-bundle-entrypoint.js';
 import loadConfig from './helpers/load-config.js';
 import { validateSplitEntrypointOption } from './helpers/validate-cli-options.js';
 
-// Workaround for https://github.com/rollup/plugins/issues/1329
+// Rollup plugins ship with CJS-style `default` exports but are typed as the module itself;
+// these casts unwrap to the real functions.
 const virtual = virtualDefault as unknown as typeof virtualDefault.default;
 const vue = vueDefault as unknown as typeof vueDefault.default;
 const esbuild = esbuildDefault as unknown as typeof esbuildDefault.default;

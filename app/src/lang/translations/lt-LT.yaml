@@ -49,7 +49,7 @@ logoutReason:
   SESSION_EXPIRED: Sesijos laikas baigėsi
 public_description: Nustato kokie API duomenys yra prieinami neprisijungus.
 not_allowed: Neleidžiama
-directus_version: Directus versija
+directus_version: CairnCMS versija
 node_version: Serverio versija
 node_uptime: Serverio veikimo laikas
 os_type: OS tipas
@@ -885,7 +885,7 @@ interfaces:
     no_collection: Nėra kolekcijos
   user:
     user: Vartotojas
-    description: Pasirinkti egzistuojantį Directus vartotoją
+    description: Pasirinkti egzistuojantį CairnCMS vartotoją
     select_mode: Pasirinkti režimą
     modes:
       auto: Automatiškai

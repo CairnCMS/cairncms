@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -118,7 +115,7 @@ public_label: Publiczny
 public_description: Kontroluje dostępność danych API bez uwierzytelniania.
 admin_description: Początkowa rola administracyjna z nieograniczonym dostępem App/API.
 not_allowed: Niedozwolone
-directus_version: Wersja aplikacji Directus
+directus_version: Wersja aplikacji CairnCMS
 node_version: Wersja Node
 node_uptime: Czas aktywności Node
 os_type: Typ Systemu

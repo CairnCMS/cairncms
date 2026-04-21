@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -106,7 +103,7 @@ logoutReason:
 public_label: สาธารณะ
 public_description: สามารถเข้าถึง API เหล่านี้ได้โดยไม่ต้องยืนยันตัวตน
 not_allowed: ไม่อนุญาต
-directus_version: เวอร์ชั่น Directus
+directus_version: เวอร์ชั่น CairnCMS
 node_version: เวอร์ชั่น Node
 node_uptime: เวลาออนไลน์ Node
 os_type: ประเภท OS
@@ -1293,7 +1290,7 @@ interfaces:
     recursive_only: อินเทอร์เฟซมุมมองแผนภูมิใช้งานได้กับความสัมพันธ์แบบซ้ำซ้อนเท่านั้น
   user:
     user: ผู้ใช้
-    description: เลือกผู้ใช้ของ directus ที่มีอยู่แล้ว
+    description: เลือกผู้ใช้ของ CairnCMS ที่มีอยู่แล้ว
     select_mode: เลือกโหมด
     modes:
       auto: อัตโนมัติ
@@ -1410,7 +1407,7 @@ displays:
     description: แสดงค่าที่เกี่ยวข้อง
   user:
     user: ผู้ใช้
-    description: แสดงผู้ใช้ของ directus
+    description: แสดงผู้ใช้ของ CairnCMS
     avatar: ภาพประจำตัว
     name: ชื่อ
     both: ทั้งคู่

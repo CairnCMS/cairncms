@@ -85,7 +85,7 @@ export class CollectionsService {
 			// transactions.
 			await this.knex.transaction(async (trx) => {
 				if (payload.schema) {
-					// Directus heavily relies on the primary key of a collection, so we have to make sure that
+					// CairnCMS heavily relies on the primary key of a collection, so we have to make sure that
 					// every collection that is created has a primary key. If no primary key field is created
 					// while making the collection, we default to an auto incremented id named `id`
 					if (!payload.fields)

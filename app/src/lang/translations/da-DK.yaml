@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -118,7 +115,7 @@ public_label: Offentlig
 public_description: Styrer, hvilke API-data der er tilgængelige uden godkendelse.
 admin_description: Oprindelig administrativ rolle med ubegrænset App/API-adgang.
 not_allowed: Ikke tilladt
-directus_version: Directus version
+directus_version: CairnCMS version
 node_version: Node version
 node_uptime: Node oppetid
 os_type: OS type
@@ -1685,7 +1682,7 @@ interfaces:
     recursive_only: Trævisningsgrænsefladen virker kun for rekursive relationer.
   user:
     user: Bruger
-    description: Vælg en eksisterende directus bruger
+    description: Vælg en eksisterende CairnCMS bruger
     select_mode: Vælg tilstand
     modes:
       auto: Automatisk
@@ -1847,7 +1844,7 @@ displays:
     display_template_configure_notice: Du kan konfigurere skærmskabelonen efter oprettelse af dette felt.
   user:
     user: Bruger
-    description: Vis en directus bruger
+    description: Vis en CairnCMS bruger
     avatar: Profilbillede
     name: Navn
     both: Begge

@@ -1,10 +1,7 @@
 ---
 ## Be aware:
 #Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out. See
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/pluginutils/src/makeLegalIdentifier.ts#L4
-#and
-#https://github.com/rollup/plugins/blob/8748b8cd3bbab3c5ac6190556930219f19060e63/packages/yaml/src/index.js#L45
+#"void", etc are stripped out.
 #Illegal words:
 #'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
 #'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
@@ -118,7 +115,7 @@ public_label: Publik
 public_description: Kontrollerar vilken data som är tillgängliga via APIet utan autentisering.
 admin_description: Initial administrativ roll med obegränsad app/API-åtkomst.
 not_allowed: Inte tillåtet
-directus_version: Directus Version
+directus_version: CairnCMS Version
 node_version: Node version
 node_uptime: Node upptid
 os_type: Operativsystem
@@ -1556,7 +1553,7 @@ interfaces:
     default_language: Förvalt språk
   user:
     user: Användare
-    description: Välj en befintlig Directus användare
+    description: Välj en befintlig CairnCMS användare
     select_mode: Välj läge
     modes:
       auto: Automatisk
@@ -1685,7 +1682,7 @@ displays:
     description: Visa relativa värden
   user:
     user: Användare
-    description: Visa en Directus användare
+    description: Visa en CairnCMS användare
     avatar: Profilbild
     name: Namn
     both: Båda

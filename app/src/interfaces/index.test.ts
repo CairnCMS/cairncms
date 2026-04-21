@@ -2,10 +2,8 @@ import { expect, test, describe } from 'vitest';
 import { getInternalInterfaces } from './index';
 
 /**
- * Vite v3 reworked the glob import with it's own internal sorting,
- * so this is to ensure any changes to vite's internal sorting to not affect the expected sort outcome.
- *
- *  @see {@link https://github.com/directus/directus/pull/15672#issuecomment-1289975933}
+ * Vite v3 reworked the glob import with its own internal sorting. This test pins the
+ * expected interface sort order against future changes in vite's internal sort behavior.
  */
 
 const expectedInterfacesSortOrder = [

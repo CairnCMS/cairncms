@@ -50,7 +50,7 @@ logoutReason:
   SESSION_EXPIRED: N'eo ket mat ho sezenn ken
 public_description: Kontroll peseurt roadennoù API a zo hegerz hep dilesa.
 not_allowed: N'eo ket aotreet
-directus_version: Doare Directus
+directus_version: Doare CairnCMS
 node_version: Doare Node
 node_uptime: Amzer hegerzded an Node
 os_type: Seurt OS
@@ -1061,7 +1061,7 @@ interfaces:
     recursive_only: Gwel gwezheñvel evit an darempredoù rekursivel hepken.
   user:
     user: Implijer
-    description: Dibab un implijer directus a zo dija
+    description: Dibab un implijer CairnCMS a zo dija
     select_mode: Dibab ur mod
     modes:
       auto: Emgefreek
@@ -1174,7 +1174,7 @@ displays:
     description: Diskwel an talvoudoù deuet eus un darempred
   user:
     user: Implijer
-    description: Diskwel un implijer directus
+    description: Diskwel un implijer CairnCMS
     name: Anv
     both: Holl
     circle_label: Diskwel an implijer en ur c'helc'h
