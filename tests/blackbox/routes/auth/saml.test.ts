@@ -1,4 +1,5 @@
 import { getUrl } from '@common/config';
+import * as common from '@common/index';
 import request from 'supertest';
 import vendors from '@common/get-dbs-to-test';
 
@@ -148,7 +149,7 @@ describe('/auth/login/saml', () => {
 					const cookies = getCookies(acsResponse.headers['set-cookie']);
 
 					// Assert
-					expect(cookies).toMatch(/directus_refresh_token/);
+					expect(cookies).toContain(common.REFRESH_TOKEN_COOKIE_NAME);
 				});
 			});
 		});

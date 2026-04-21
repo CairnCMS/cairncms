@@ -96,3 +96,5 @@ export const USER: UserType = {
 export const TEST_USERS = ['ADMIN', 'APP_ACCESS', 'API_ONLY', 'NO_ROLE']; // TESTS_FLOW is exluded
 
 export const PRIMARY_KEY_TYPES: PrimaryKeyType[] = ['integer', 'uuid', 'string'];
+
+export const REFRESH_TOKEN_COOKIE_NAME = process.env['REFRESH_TOKEN_COOKIE_NAME'] ?? 'cairncms_refresh_token';

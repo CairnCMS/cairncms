@@ -157,7 +157,7 @@ describe('Logger Redact Tests', () => {
 					describe(common.USER[userKey].NAME, () => {
 						it.each(vendors)('%s', async (vendor) => {
 							// Setup
-							const cookieName = 'directus_refresh_token';
+							const cookieName = common.REFRESH_TOKEN_COOKIE_NAME;
 
 							const refreshToken = (
 								await request(getUrl(vendor, env))
