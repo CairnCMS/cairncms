@@ -100,6 +100,9 @@ export default defineComponent({
 		object-fit: contain;
 	}
 
+	/* TODO: replace `sprite.svg` (600×32, 14-frame animated Directus logo) with
+	   a CairnCMS-branded animated sprite of the same dimensions/frame-count, or
+	   update the `background-size` / step count below to match a redesigned sprite. */
 	.logo {
 		position: absolute;
 		top: 18px;

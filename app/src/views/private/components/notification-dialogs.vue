@@ -10,7 +10,8 @@
 				</v-card-text>
 				<v-card-actions>
 					<v-button v-if="notification.type === 'error' && admin && notification.code === 'UNKNOWN'" secondary>
-						<a target="_blank" href="https://github.com/directus/directus/issues/new?template=bug_report.yml">
+						<!-- TODO: update URL to canonical CairnCMS public repo once it's live -->
+						<a target="_blank" href="https://github.com/CairnCMS/cairncms/issues/new?template=bug_report.yml">
 							{{ t('report_error') }}
 						</a>
 					</v-button>

@@ -1,5 +1,5 @@
 <template>
-	<div id="directus" :style="brandStyle">
+	<div id="cairncms" :style="brandStyle">
 		<transition name="fade">
 			<div v-if="hydrating" class="hydrating">
 				<v-progress-circular indeterminate />
@@ -81,7 +81,7 @@ watch(
 watch(
 	() => serverStore.info?.project?.project_name,
 	(projectName) => {
-		document.title = projectName || 'Directus';
+		document.title = projectName || 'CairnCMS';
 	},
 	{ immediate: true }
 );
@@ -100,7 +100,7 @@ useSystem();
 	height: 100%;
 }
 
-#directus {
+#cairncms {
 	height: 100%;
 }
 

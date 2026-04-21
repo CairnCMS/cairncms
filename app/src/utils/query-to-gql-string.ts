@@ -73,7 +73,7 @@ export function formatQuery({ collection, query }: QueryInfo): Record<string, an
 }
 
 /**
- * Replace functions from Directus-Filter format to GraphQL format
+ * Replace functions from CairnCMS-Filter format to GraphQL format
  */
 function replaceFuncs(filter?: Filter | null): null | undefined | Filter {
 	if (!filter) return filter;
