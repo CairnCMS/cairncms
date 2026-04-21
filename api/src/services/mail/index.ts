@@ -103,7 +103,7 @@ export class MailService {
 			.first();
 
 		return {
-			projectName: projectInfo?.project_name || 'Directus',
+			projectName: projectInfo?.project_name || 'CairnCMS',
 			projectColor: projectInfo?.project_color || '#546e7a',
 			projectLogo: getProjectLogoURL(projectInfo?.project_logo),
 			projectUrl: projectInfo?.project_url || '',
@@ -115,7 +115,8 @@ export class MailService {
 			if (logoID) {
 				projectLogoUrl.addPath('assets', logoID);
 			} else {
-				projectLogoUrl.addPath('admin', 'img', 'directus-white.png');
+				// TODO: replace the contents of `cairncms-white.png` with the final designed CairnCMS logo (Phase 1B).
+				projectLogoUrl.addPath('admin', 'img', 'cairncms-white.png');
 			}
 
 			return projectLogoUrl.toString();
