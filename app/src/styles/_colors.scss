@@ -8,6 +8,9 @@ $green: #2ecda7;
 $yellow: #fbc54f;
 $orange: #ffa439;
 $red: #e35169;
+$ember: #c8552e;
+$lichen: #6fc9a8;
+$ochre: #ddb562;
 
 // Mixing colors
 $light-theme-tint: #fff;
@@ -24,11 +27,11 @@ $color-mapping: (
 	'yellow': $yellow,
 	'orange': $orange,
 	'red': $red,
-	'primary': $purple,
-	'secondary': $pink,
-	'success': $green,
-	'warning': $orange,
-	'danger': $red,
+	'primary': $ember,
+	'secondary': $lichen,
+	'success': $lichen,
+	'warning': $ochre,
+	'danger': $ember,
 );
 
 // Suffix -> Percentage mapping (Percentage of main color)

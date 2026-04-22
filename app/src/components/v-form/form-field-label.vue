@@ -155,7 +155,7 @@ const { t } = useI18n();
 			width: 4px;
 			height: 4px;
 			background-color: var(--foreground-subdued);
-			border-radius: 4px;
+			border-radius: 2px;
 			content: '';
 		}
 

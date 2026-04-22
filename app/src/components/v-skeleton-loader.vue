@@ -99,7 +99,7 @@ body {
 .text {
 	flex-grow: 1;
 	height: 12px;
-	border-radius: 6px;
+	border-radius: 2px;
 
 	@include loader;
 }
@@ -123,7 +123,7 @@ body {
 	.text {
 		flex-grow: 1;
 		height: 12px;
-		border-radius: 6px;
+		border-radius: 2px;
 
 		@include loader;
 	}

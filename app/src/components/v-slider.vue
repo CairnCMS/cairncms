@@ -131,7 +131,7 @@ body {
 				height: 4px;
 				background: var(--v-slider-color);
 				border: none;
-				border-radius: 4px;
+				border-radius: 2px;
 				box-shadow: none;
 			}
 
@@ -139,7 +139,7 @@ body {
 				height: 4px;
 				background: var(--v-slider-color);
 				border: none;
-				border-radius: 4px;
+				border-radius: 2px;
 				box-shadow: none;
 			}
 
@@ -183,7 +183,7 @@ body {
 			width: 100%;
 			height: 4px;
 			background-color: var(--v-slider-fill-color);
-			border-radius: 4px;
+			border-radius: 2px;
 			transform: translateY(-5px) scaleX(calc(var(--_v-slider-percentage) / 100));
 			transform-origin: left;
 			pointer-events: none;

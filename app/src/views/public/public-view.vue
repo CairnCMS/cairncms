@@ -164,7 +164,7 @@ const logoURL = computed<string | null>(() => {
 	}
 
 	.container {
-		--border-radius: 6px;
+		--border-radius: 2px;
 		--input-height: 60px;
 		--input-padding: 16px; /* (60 - 4 - 24) / 2 */
 
@@ -253,7 +253,7 @@ const logoURL = computed<string | null>(() => {
 				font-size: 15px;
 				line-height: 24px;
 				background-color: rgb(38 50 56 / 0.2);
-				border-radius: 6px;
+				border-radius: 2px;
 				backdrop-filter: blur(2px);
 			}
 		}

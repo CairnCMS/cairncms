@@ -123,7 +123,7 @@ const displayedTranslation = computed(() => {
 		flex: 1;
 		width: unset;
 		max-width: 100px;
-		border-radius: 4px;
+		border-radius: 2px;
 	}
 }
 

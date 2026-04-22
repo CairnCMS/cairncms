@@ -100,9 +100,6 @@ export default defineComponent({
 		object-fit: contain;
 	}
 
-	/* TODO: replace `sprite.svg` (600×32, 14-frame animated Directus logo) with
-	   a CairnCMS-branded animated sprite of the same dimensions/frame-count, or
-	   update the `background-size` / step count below to match a redesigned sprite. */
 	.logo {
 		position: absolute;
 		top: 18px;
@@ -110,13 +107,22 @@ export default defineComponent({
 		width: 40px;
 		height: 32px;
 		margin: 0 auto;
-		background-image: url('../../../assets/sprite.svg');
-		background-position: 0% 0%;
-		background-size: 600px 32px;
+		overflow: hidden;
 	}
 
-	.running {
-		animation: 560ms run steps(14) infinite;
+	.logo::before {
+		content: '';
+		display: block;
+		width: 600px;
+		height: 32px;
+		background-image: url('../../../assets/sprite.svg');
+		background-repeat: no-repeat;
+		background-size: 600px 32px;
+		background-position: 0 0;
+	}
+
+	.logo.running::before {
+		animation: 600ms run steps(15, jump-none) infinite;
 	}
 }
 
@@ -135,7 +141,7 @@ export default defineComponent({
 
 @keyframes run {
 	100% {
-		background-position: 100%;
+		transform: translate3d(-560px, 0, 0);
 	}
 }
 </style>

@@ -201,7 +201,7 @@ export default defineComponent({
 	width: 4px;
 	height: 4px;
 	background-color: var(--foreground-subdued);
-	border-radius: 4px;
+	border-radius: 2px;
 	content: '';
 }
 

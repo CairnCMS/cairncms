@@ -1,11 +1,11 @@
 // Dark Mode
 @mixin dark {
-	$purple: #8866ff;
+	$ember: #e06a42;
 	$color-mapping: map-merge(
 		$color-mapping,
 		(
-			'primary': $purple,
-			'secondary': $pink,
+			'primary': $ember,
+			'danger': $ember,
 		)
 	);
 
@@ -50,9 +50,9 @@
 	--red-alt: var(--red-10);
 	--primary-alt: var(--primary-10);
 	--secondary-alt: var(--secondary-10);
-	--success-alt: var(--green-10);
-	--warning-alt: var(--yellow-10);
-	--danger-alt: var(--red-10);
+	--success-alt: var(--success-10);
+	--warning-alt: var(--warning-10);
+	--danger-alt: var(--danger-10);
 
 	.alt-colors {
 		--background-subdued: var(--background-page);

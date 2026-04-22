@@ -75,7 +75,7 @@ export default defineComponent({
 
 <style scoped lang="scss">
 .shared {
-	--border-radius: 6px;
+	--border-radius: 2px;
 	--input-height: 60px;
 	--input-padding: 16px;
 

@@ -76,7 +76,7 @@ export default defineComponent({
 		width: auto;
 		height: 100%;
 		vertical-align: -30%;
-		border-radius: 4px;
+		border-radius: 2px;
 
 		&.circle {
 			border-radius: 100%;

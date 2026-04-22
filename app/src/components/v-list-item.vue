@@ -293,7 +293,7 @@ body {
 		.v-list.nav {
 			#{$this}:not(.dense) {
 				--v-list-item-min-height: var(--v-list-item-min-height-nav);
-				--v-list-item-border-radius: 4px;
+				--v-list-item-border-radius: 2px;
 
 				margin: var(--v-list-item-margin-nav);
 				padding: var(--v-list-item-padding-nav);
