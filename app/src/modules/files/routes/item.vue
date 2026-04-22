@@ -44,7 +44,7 @@
 			<v-dialog v-if="isNew === false" v-model="moveToDialogActive" @esc="moveToDialogActive = false">
 				<template #activator="{ on }">
 					<v-button v-tooltip.bottom="t('move_to_folder')" rounded icon :disabled="item === null" secondary @click="on">
-						<v-icon name="folder_move" />
+						<v-icon name="drive_file_move" />
 					</v-button>
 				</template>
 
@@ -404,7 +404,7 @@ function useMovetoFolder() {
 
 			notify({
 				title: t('file_moved', { folder }),
-				icon: 'folder_move',
+				icon: 'drive_file_move',
 			});
 		} catch (err: any) {
 			unexpectedError(err);

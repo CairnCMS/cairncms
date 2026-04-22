@@ -61,13 +61,13 @@ export default defineComponent({
 		const icon = computed(() => {
 			switch (connectionStrength.value) {
 				case 4:
-					return 'signal_wifi_4_bar';
+					return 'network_wifi';
 				case 3:
-					return 'signal_wifi_3_bar';
+					return 'network_wifi_3_bar';
 				case 2:
-					return 'signal_wifi_2_bar';
+					return 'network_wifi_2_bar';
 				case 1:
-					return 'signal_wifi_1_bar';
+					return 'network_wifi_1_bar';
 				default:
 					return null;
 			}

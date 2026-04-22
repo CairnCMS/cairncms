@@ -79,7 +79,7 @@ const getArchiveValue = (query: LocationQuery) => {
 export default defineModule({
 	id: 'content',
 	name: '$t:content',
-	icon: 'box',
+	icon: 'deployed_code',
 	routes: [
 		{
 			name: 'no-collections',

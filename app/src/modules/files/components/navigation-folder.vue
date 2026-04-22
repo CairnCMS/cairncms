@@ -51,7 +51,7 @@
 				</v-list-item>
 				<v-list-item clickable @click="moveActive = true">
 					<v-list-item-icon>
-						<v-icon name="folder_move" />
+						<v-icon name="drive_file_move" />
 					</v-list-item-icon>
 					<v-list-item-content>
 						<v-text-overflow :text="t('move_to_folder')" />

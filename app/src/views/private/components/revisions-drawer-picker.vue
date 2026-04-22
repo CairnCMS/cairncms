@@ -15,7 +15,7 @@
 				:active="internalCurrent === option.value"
 				@click="internalCurrent = option.value"
 			>
-				<v-icon name="commit_node" />
+				<v-icon name="commit" />
 				<v-list-item-content>{{ option.text }}</v-list-item-content>
 			</v-list-item>
 		</v-list>

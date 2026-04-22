@@ -53,7 +53,7 @@
 							v-tooltip.bottom="t('update_bookmark')"
 							class="save"
 							clickable
-							name="bookmark_save"
+							name="bookmark_add"
 							@click="savePreset()"
 						/>
 					</template>

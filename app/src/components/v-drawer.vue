@@ -88,7 +88,7 @@ const props = withDefaults(defineProps<Props>(), {
 	subtitle: null,
 	modelValue: undefined,
 	persistent: false,
-	icon: 'box',
+	icon: 'deployed_code',
 	sidebarLabel: i18n.global.t('sidebar'),
 	cancelable: true,
 	headerShadow: true,

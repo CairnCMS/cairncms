@@ -41,7 +41,7 @@
 				<v-dialog v-if="selection.length > 0" v-model="moveToDialogActive" @esc="moveToDialogActive = false">
 					<template #activator="{ on }">
 						<v-button v-tooltip.bottom="t('move_to_folder')" rounded icon class="folder" secondary @click="on">
-							<v-icon name="folder_move" />
+							<v-icon name="drive_file_move" />
 						</v-button>
 					</template>
 

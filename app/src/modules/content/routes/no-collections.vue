@@ -2,7 +2,7 @@
 	<private-view class="content-overview" :title="t('content')">
 		<template #title-outer:prepend>
 			<v-button class="header-icon" rounded disabled icon secondary>
-				<v-icon name="box" />
+				<v-icon name="deployed_code" />
 			</v-button>
 		</template>
 

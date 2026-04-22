@@ -107,7 +107,7 @@ body {
 	i {
 		display: block;
 		font-family: 'Material Symbols';
-		font-weight: normal;
+		font-weight: 300;
 		font-size: var(--v-icon-size);
 		font-style: normal;
 		line-height: 1;
@@ -120,14 +120,9 @@ body {
 		-moz-osx-font-smoothing: grayscale;
 		text-rendering: optimizeLegibility;
 		font-feature-settings: 'liga';
-		font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 
 		&::after {
 			content: attr(data-icon);
-		}
-
-		&.filled {
-			font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 		}
 	}
 

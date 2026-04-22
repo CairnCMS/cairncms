@@ -34,7 +34,7 @@ test('style props', () => {
 test('custom icon', () => {
 	const wrapper = mount(VIcon, {
 		props: {
-			name: 'signal_wifi_3_bar',
+			name: 'cairncms',
 		},
 	});
 

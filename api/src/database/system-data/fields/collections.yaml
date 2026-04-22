@@ -7,7 +7,7 @@ fields:
       - no-data
     interface: presentation-divider
     options:
-      icon: box
+      icon: deployed_code
       title: $t:field_options.directus_collections.collection_setup
     width: full
 
