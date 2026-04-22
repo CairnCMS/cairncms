@@ -36,7 +36,7 @@ export default defineComponent({
 	padding-left: 20px;
 	color: var(--foreground-normal-alt);
 	text-align: left;
-	background-color: var(--background-normal-alt);
+	background-color: var(--background-page);
 
 	.name-container {
 		flex-grow: 1;

@@ -11,31 +11,31 @@
 
 	color-scheme: dark;
 
-	--border-normal: #30363d;
+	--border-normal: #33383f;
 	--border-normal-alt: #484f58;
-	--border-subdued: #21262d;
+	--border-subdued: #2a2e34;
 
-	--foreground-normal: #c9d1d9;
-	--foreground-normal-alt: #f0f6fc;
-	--foreground-subdued: #666672;
-	--foreground-inverted: #0d1117;
+	--foreground-normal: #e8e6de;
+	--foreground-normal-alt: #faf8f3;
+	--foreground-subdued: #9ca2ac;
+	--foreground-inverted: #383e47;
 
-	--background-normal: #21262e;
-	--background-normal-alt: #30363d;
-	--background-subdued: #161b22;
-	--background-highlight: #1d1d21;
-	--background-page: #0d1117;
-	--background-input: #0d1117;
-	--background-page-rgb: 13, 17, 23;
-	--background-inverted: #fff;
+	--background-normal: #2a2e34;
+	--background-normal-alt: #2e3238;
+	--background-subdued: #1a1d22;
+	--background-highlight: #262a30;
+	--background-page: #23272e;
+	--background-input: #23272e;
+	--background-page-rgb: 35, 39, 46;
+	--background-inverted: #faf8f3;
 
-	--card-face-color: var(--background-subdued);
+	--card-face-color: var(--background-page);
 	--card-shadow-color: 0, 0, 0;
-	--card-shadow: 0px 0px 6px 0px rgba(var(--card-shadow-color), 0.2);
+	--card-shadow: 0px 0px 6px 0px rgba(var(--card-shadow-color), 0.08);
 	--overlay-color: rgba(0, 0, 0, 0.9);
 
-	--module-background: var(--background-page);
-	--module-background-alt: var(--background-normal);
+	--module-background: #14171b;
+	--module-background-alt: #0e1014;
 	--module-icon: var(--foreground-subdued);
 	--module-icon-alt: var(--foreground-normal-alt);
 

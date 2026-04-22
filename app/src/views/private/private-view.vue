@@ -296,7 +296,8 @@ function openSidebar(event: PointerEvent) {
 			width: 220px;
 			height: 100%;
 			font-size: 1rem;
-			background-color: var(--background-normal);
+			background-color: var(--background-page);
+			border-right: 1px solid var(--border-normal);
 
 			&-content {
 				--v-list-item-background-color-hover: var(--background-normal-alt);

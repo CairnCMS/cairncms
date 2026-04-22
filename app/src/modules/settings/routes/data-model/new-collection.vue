@@ -367,8 +367,8 @@ export default defineComponent({
 								{
 									text: '$t:draft',
 									value: 'draft',
-									foreground: '#18222F',
-									background: '#D3DAE4',
+									foreground: '#383E47',
+									background: '#E4E0D6',
 								},
 								{
 									text: '$t:archived',

@@ -2,33 +2,33 @@
 @mixin light {
 	color-scheme: light;
 
-	--border-normal: #d3dae4;
-	--border-normal-alt: #a2b5cd;
-	--border-subdued: #f0f4f9;
+	--border-normal: #e4e0d6;
+	--border-normal-alt: #d5cfbf;
+	--border-subdued: #ededed;
 
-	--foreground-normal: #4f5464; // Less contrast for improved hierarchy
-	--foreground-normal-alt: #172940; // More contrast for titles and labels
-	--foreground-subdued: #a2b5cd;
-	--foreground-inverted: #fff;
+	--foreground-normal: #383e47;
+	--foreground-normal-alt: #383e47;
+	--foreground-subdued: #6c727c;
+	--foreground-inverted: #faf8f3;
 
-	--background-normal: #f0f4f9;
-	--background-normal-alt: #e4eaf1;
-	--background-subdued: #f7fafc;
-	--background-highlight: #f7f9fd;
+	--background-normal: #f7f5ef;
+	--background-normal-alt: #f2efe7;
+	--background-subdued: #ffffff;
+	--background-highlight: #faf8f3;
 	--background-page: #ffffff;
 	--background-input: #ffffff;
 	--background-page-rgb: 255, 255, 255;
-	--background-inverted: #263238;
+	--background-inverted: #383e47;
 
-	--card-face-color: #fafcfd;
-	--card-shadow-color: 23, 41, 64;
-	--card-shadow: 0px 0px 6px 0px rgba(var(--card-shadow-color), 0.2);
-	--overlay-color: rgba(38, 50, 56, 0.8);
+	--card-face-color: #ffffff;
+	--card-shadow-color: 56, 62, 71;
+	--card-shadow: 0px 0px 6px 0px rgba(var(--card-shadow-color), 0.08);
+	--overlay-color: rgba(56, 62, 71, 0.8);
 
-	--module-background: #18222f;
-	--module-background-alt: var(--background-normal);
-	--module-icon: #8196b1;
-	--module-icon-alt: var(--foreground-normal-alt);
+	--module-background: #383e47;
+	--module-background-alt: #2d323a;
+	--module-icon: rgba(250, 248, 243, 0.5);
+	--module-icon-alt: var(--foreground-inverted);
 
 	// Generate color variations
 	@include generate-colors($color-mapping, $light-theme-tint, $light-theme-shade);

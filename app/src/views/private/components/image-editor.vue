@@ -545,7 +545,7 @@ export default defineComponent({
 	height: 60px;
 	padding: 0 24px;
 	color: var(--white);
-	background-color: #263238;
+	background-color: var(--module-background);
 
 	.v-icon {
 		display: inline-block;

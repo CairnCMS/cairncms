@@ -207,11 +207,11 @@ const props = withDefaults(defineProps<Props>(), {
 		},
 		{
 			name: i18n.global.t('colors.black'),
-			color: '#18222F',
+			color: '#383E47',
 		},
 		{
 			name: i18n.global.t('colors.gray'),
-			color: '#A2B5CD',
+			color: '#6C727C',
 		},
 		{
 			name: i18n.global.t('colors.white'),
