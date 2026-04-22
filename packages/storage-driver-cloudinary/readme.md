@@ -1,3 +1,3 @@
-# `@directus/storage-driver-cloudinary`
+# `@cairncms/storage-driver-cloudinary`
 
-Cloudinary file storage driver for `@directus/storage`
+Cloudinary file storage driver for `@cairncms/storage`

@@ -1,7 +1,7 @@
 {
 	"name": "@cairncms/specs",
 	"version": "10.0.0",
-	"description": "OpenAPI Specification of the Directus API",
+	"description": "OpenAPI Specification of the CairnCMS API",
 	"homepage": "https://cairncms.dev",
 	"type": "module",
 	"bugs": {

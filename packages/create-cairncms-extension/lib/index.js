@@ -9,7 +9,7 @@ run();
 
 async function run() {
 	// eslint-disable-next-line no-console
-	console.log('This utility will walk you through creating a Directus extension.\n');
+	console.log('This utility will walk you through creating a CairnCMS extension.\n');
 
 	const { type, name, language } = await inquirer.prompt([
 		{

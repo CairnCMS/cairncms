@@ -76,7 +76,7 @@ export default async function build(options: BuildOptions): Promise<void> {
 		try {
 			extensionManifest = ExtensionManifest.parse(await fse.readJSON(packagePath));
 		} catch (err) {
-			log(`Current directory is not a valid Directus extension.`, 'error');
+			log(`Current directory is not a valid CairnCMS extension.`, 'error');
 			process.exit(1);
 		}
 
@@ -484,7 +484,7 @@ async function buildBundleExtension({
 async function buildExtension(config: RollupConfig | RollupConfig[]) {
 	const configs = Array.isArray(config) ? config : [config];
 
-	const spinner = ora(chalk.bold('Building Directus extension...')).start();
+	const spinner = ora(chalk.bold('Building CairnCMS extension...')).start();
 
 	const result = await Promise.all(
 		configs.map(async (c) => {
@@ -517,7 +517,7 @@ async function buildExtension(config: RollupConfig | RollupConfig[]) {
 async function watchExtension(config: RollupConfig | RollupConfig[]) {
 	const configs = Array.isArray(config) ? config : [config];
 
-	const spinner = ora(chalk.bold('Building Directus extension...'));
+	const spinner = ora(chalk.bold('Building CairnCMS extension...'));
 
 	let buildCount = 0;
 

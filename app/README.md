@@ -1,3 +1,3 @@
-# @directus/app
+# @cairncms/app
 
-The Directus Admin App. Included with `directus` itself. You wouldn't install this package separately.
+The CairnCMS Admin App. Included with `cairncms` itself. You wouldn't install this package separately.

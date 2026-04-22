@@ -6,7 +6,7 @@
 		"build": "tsc --build",
 		"dev": "tsc --watch"
 	},
-	"description": "Shared constants for Directus",
+	"description": "Shared constants for CairnCMS",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/CairnCMS/cairncms.git",

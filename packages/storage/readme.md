@@ -1,3 +1,3 @@
-# `@directus/storage`
+# `@cairncms/storage`
 
-Storage abstraction for Directus
+Storage abstraction for CairnCMS

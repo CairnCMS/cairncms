@@ -7,7 +7,7 @@
 		"dev": "tsc --watch",
 		"test": "vitest --watch=false"
 	},
-	"description": "Shared exceptions in Directus",
+	"description": "Shared exceptions in CairnCMS",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/CairnCMS/cairncms.git",

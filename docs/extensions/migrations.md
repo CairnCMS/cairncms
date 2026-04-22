@@ -1,11 +1,11 @@
 ---
-description: A guide on how to setup your owns custom Migrations in Directus.
+description: A guide on how to setup your owns custom Migrations in CairnCMS.
 readTime: 2 min read
 ---
 
 # Custom Migrations
 
-> Directus allows adding custom migration files that run whenever the `directus database migrate:*` commands are
+> CairnCMS allows adding custom migration files that run whenever the `CairnCMS database migrate:*` commands are
 > executed. All migrations must reside in the `extensions/migrations` folder.
 
 ## File Name
@@ -49,24 +49,24 @@ what you're doing and backup your database before adding these migrations.
 
 :::
 
-## Migrations and Directus schema
+## Migrations and CairnCMS schema
 
-Migrations can be used to manage the contents of Directus collections (e.g. initial hydration). In order to do it, you
+Migrations can be used to manage the contents of CairnCMS collections (e.g. initial hydration). In order to do it, you
 must ensure that the schema is up to date before running your migrations.
 
-`directus database migrate:latest` runs the required Directus internal migrations and the migrations from `migrations`
+`CairnCMS database migrate:latest` runs the required CairnCMS internal migrations and the migrations from `migrations`
 directory. In general, you need the following flow:
 
 ```sh
 # Option 1
-npx directus bootstrap
-npx directus schema apply ./path/to/snapshot.yaml
+npx CairnCMS bootstrap
+npx CairnCMS schema apply ./path/to/snapshot.yaml
 
 # Option 2 - without bootstrap, you must ensure that you run all required `bootstrap` tasks
-npx directus database install
-npx directus database migrate:latest
-npx directus schema apply ./path/to/snapshot.yaml
+npx CairnCMS database install
+npx CairnCMS database migrate:latest
+npx CairnCMS schema apply ./path/to/snapshot.yaml
 ```
 
 Take notice here - to comply with this flow, `migrations` directory **must not contain** tasks that modify the contents
-of your Directus, because schema is not yet created when you run `migrate:latest`.
+of your CairnCMS, because schema is not yet created when you run `migrate:latest`.

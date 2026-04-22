@@ -51,7 +51,7 @@ properties:
       - $ref: '../openapi.yaml#/components/schemas/Files'
     nullable: true
   language:
-    description: The user's language used in Directus.
+    description: The user's language used in CairnCMS.
     example: en-US
     type: string
   theme:

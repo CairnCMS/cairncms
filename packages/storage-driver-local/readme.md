@@ -1,3 +1,3 @@
-# `@directus/storage-driver-local`
+# `@cairncms/storage-driver-local`
 
-Local file storage driver for `@directus/storage`
+Local file storage driver for `@cairncms/storage`

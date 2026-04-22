@@ -7,7 +7,7 @@
 		"dev": "tsc --watch",
 		"test": "vitest --watch=false"
 	},
-	"description": "Shared Vue composables for Directus use",
+	"description": "Shared Vue composables for CairnCMS use",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/CairnCMS/cairncms.git",

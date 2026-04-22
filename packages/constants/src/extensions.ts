@@ -26,9 +26,9 @@ export const APP_OR_HYBRID_EXTENSION_PACKAGE_TYPES = [
 
 export const EXTENSION_LANGUAGES = ['javascript', 'typescript'] as const;
 
-export const EXTENSION_NAME_REGEX = /^(?:(?:@[^/]+\/)?directus-extension-|@directus\/extension-)(.+)$/;
+export const EXTENSION_NAME_REGEX = /^(?:(?:@[^/]+\/)?cairncms-extension-|@cairncms\/extension-)(.+)$/;
 
-export const EXTENSION_PKG_KEY = 'directus:extension';
+export const EXTENSION_PKG_KEY = 'cairncms:extension';
 
 export const SplitEntrypoint = z.object({
 	app: z.string(),

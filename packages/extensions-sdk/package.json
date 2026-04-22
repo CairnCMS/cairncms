@@ -1,7 +1,7 @@
 {
 	"name": "@cairncms/extensions-sdk",
 	"version": "10.0.0",
-	"description": "A toolkit to develop extensions to extend Directus",
+	"description": "A toolkit to develop extensions to extend CairnCMS",
 	"homepage": "https://cairncms.dev",
 	"type": "module",
 	"bugs": {
@@ -20,7 +20,7 @@
 	},
 	"main": "dist/index.js",
 	"bin": {
-		"directus-extension": "cli.js"
+		"cairncms-extension": "cli.js"
 	},
 	"files": [
 		"dist",

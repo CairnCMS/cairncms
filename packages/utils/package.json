@@ -7,7 +7,7 @@
 		"dev": "concurrently \"tsc --watch --project browser/tsconfig.json\" \"tsc --watch --project node/tsconfig.json\" \"tsc --watch --project shared/tsconfig.json\"",
 		"test": "vitest --watch=false"
 	},
-	"description": "Utilities shared between the Directus packages",
+	"description": "Utilities shared between the CairnCMS packages",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/CairnCMS/cairncms.git",

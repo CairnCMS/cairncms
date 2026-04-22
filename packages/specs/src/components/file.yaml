@@ -12,7 +12,7 @@ properties:
     example: local
     type: string
   filename_disk:
-    description: Name of the file on disk. By default, Directus uses a random hash for the filename.
+    description: Name of the file on disk. By default, CairnCMS uses a random hash for the filename.
     example: a88c3b72-ac58-5436-a4ec-b2858531333a.jpg
     type: string
   filename_download:

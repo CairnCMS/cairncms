@@ -10,7 +10,7 @@ properties:
     example: id
     type: string
   type:
-    description: Directus specific data type. Used to cast values in the API.
+    description: CairnCMS specific data type. Used to cast values in the API.
     example: integer
     type: string
   schema:
@@ -121,7 +121,7 @@ properties:
         nullable: true
       locked:
         description:
-          If the field can be altered by the end user. Most Directus system fields have this value set to `true`.
+          If the field can be altered by the end user. Most CairnCMS system fields have this value set to `true`.
         example: true
         type: boolean
       readonly:

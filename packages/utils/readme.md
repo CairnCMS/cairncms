@@ -1,3 +1,3 @@
-# `@directus/utils`
+# `@cairncms/utils`
 
-Utilities shared between the Directus packages
+Utilities shared between the CairnCMS packages

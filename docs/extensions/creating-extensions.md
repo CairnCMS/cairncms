@@ -1,16 +1,16 @@
 ---
-description: A guide on how to scaffold your Directus Extension.
+description: A guide on how to scaffold your CairnCMS Extension.
 readTime: 5 min read
 ---
 
 # Creating Extensions
 
-## Scaffolding your Directus Extension
+## Scaffolding your CairnCMS Extension
 
-The easiest way to start developing extensions is to use the `create-directus-extension` utility:
+The easiest way to start developing extensions is to use the `create-cairncms-extension` utility:
 
 ```bash
-npm init directus-extension
+npm init cairncms-extension
 ```
 
 After specifying the name of the extension, the type of the extension and the programming language you want to use, the
@@ -22,7 +22,7 @@ If you want to combine and share dependencies between one or more extensions, us
 ### Extension Folder Structure
 
 The folder created by the utility is in fact an npm package. It comes with a few pre-installed packages depending on the
-extension type and the language you chose. The most important one is `@directus/extensions-sdk`. This package includes a
+extension type and the language you chose. The most important one is `@cairncms/extensions-sdk`. This package includes a
 CLI, which allows you to build your extension and to scaffold additional extensions, and it provides Typescript helpers
 and other utilities.
 
@@ -35,37 +35,37 @@ The entrypoint is either called `index.js` or `index.ts`, depending on which pro
 
 :::
 
-The generated `package.json` file contains an additional `directus:extension` field with the following sub-fields:
+The generated `package.json` file contains an additional `cairncms:extension` field with the following sub-fields:
 
 - `type` — The type of the extension
 - `path` — The path to the built extension
 - `source` — The path to the source entrypoint
-- `host` — A semver string that indicates with which versions of the Directus host, the extension is compatible with
+- `host` — A semver string that indicates with which versions of the CairnCMS host, the extension is compatible with
 
 The CLI will use those fields by default to determine the input and output file paths and how the extension should be
 built.
 
 ## Building your Extension
 
-Before your extension can be used by Directus, it has to be built. If you used the `create-directus-extension` utility
+Before your extension can be used by CairnCMS, it has to be built. If you used the `create-cairncms-extension` utility
 to scaffold your extension, building your extension is as easy as running:
 
 ```bash
 npm run build
 ```
 
-The generated `package.json` contains a script that calls the `directus-extension` CLI which is part of
-`@directus/extensions-sdk`:
+The generated `package.json` contains a script that calls the `cairncms-extension` CLI which is part of
+`@cairncms/extensions-sdk`:
 
 ```json
 {
 	"scripts": {
-		"build": "directus-extension build"
+		"build": "cairncms-extension build"
 	}
 }
 ```
 
-If you prefer to scaffold your extension manually, you can use the `directus-extension` CLI binary directly. The
+If you prefer to scaffold your extension manually, you can use the `cairncms-extension` CLI binary directly. The
 `--help` flag provides useful information regarding the available options and flags.
 
 Internally, the CLI uses Rollup to bundle your extension to a single entrypoint.
@@ -131,9 +131,9 @@ on changes automatically.
 
 ## Publishing your Extension
 
-To make an extension available to all Directus users, you can publish the npm package created by
-`@directus/extensions-sdk` to the npm registry. Make sure the name of the package follows the naming convention for
-package extensions: `directus-extension-<extension-name>` or `@<scope>/directus-extension-<extension-name>`.
+To make an extension available to all CairnCMS users, you can publish the npm package created by
+`@cairncms/extensions-sdk` to the npm registry. Make sure the name of the package follows the naming convention for
+package extensions: `cairncms-extension-<extension-name>` or `@<scope>/cairncms-extension-<extension-name>`.
 `<extension-name>` has to be replaced with the name of your extension.
 
 ## Installing an Extension
@@ -143,22 +143,22 @@ There are two ways to install an extension.
 ### Package Extension
 
 Package extensions are essentially npm packages. They can be installed from the npm registry, from a tarball, from a git
-repository or any other means supported by npm. On startup, Directus will automatically load any package extension
-installed into your Directus project folder.
+repository or any other means supported by npm. On startup, CairnCMS will automatically load any package extension
+installed into your CairnCMS project folder.
 
 To install an extension from the npm registry, simply use the npm CLI:
 
 ```bash
-cd <directus-project-folder>
+cd <CairnCMS-project-folder>
 npm install <full-package-extension-name>
 ```
 
-`<project-folder>` has to be replaced by the Directus project folder. `<full-package-extension-name>` should be replaced
-with the full name of the package extension (e.g. `directus-extension-custom`).
+`<project-folder>` has to be replaced by the CairnCMS project folder. `<full-package-extension-name>` should be replaced
+with the full name of the package extension (e.g. `cairncms-extension-custom`).
 
 ### Local Extension
 
-Local extensions are essentially the files generated by the `directus-extension build` command. They can be installed by
+Local extensions are essentially the files generated by the `cairncms-extension build` command. They can be installed by
 copying those files into a specific extensions folder.
 
 To install an extension locally, you have to move the output from the `dist/` folder into your project's

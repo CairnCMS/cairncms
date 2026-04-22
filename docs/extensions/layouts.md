@@ -1,5 +1,5 @@
 ---
-description: A guide on how to build custom Layouts in Directus.
+description: A guide on how to build custom Layouts in CairnCMS.
 readTime: 4 min read
 ---
 
@@ -12,7 +12,7 @@ readTime: 4 min read
 
 The entrypoint of your layout is the `index` file inside the `src/` folder of your extension package. It exports a
 configuration object with options to configure the behavior of your layout. When loading your layout, this object is
-imported by the Directus host.
+imported by the CairnCMS host.
 
 Example of an entrypoint:
 
@@ -43,7 +43,7 @@ export default {
 - `id` — The unique key for this layout. It is good practice to scope proprietary layouts with an author prefix.
 - `name` — The human-readable name for this layout.
 - `icon` — An icon name from the [material icon set](/getting-started/glossary#material-icons), or the extended list of
-  Directus custom icons.
+  CairnCMS custom icons.
 - `component` — A reference to your layout component.
 - `slots` — Additional components to be added by your layout.
   - `options` — A reference to an options component.
@@ -55,7 +55,7 @@ export default {
 
 ## Layout Component
 
-The layout component is the part of your extension that will be rendered by the Directus App whenever your layout should
+The layout component is the part of your extension that will be rendered by the CairnCMS App whenever your layout should
 be used to show the items of a collection. This layout component has to be Vue component. The most straightforward way
 to write a Vue component is to use the Vue Single File Component syntax.
 
@@ -112,10 +112,10 @@ These props and emits are available in all components associated with your layou
 - `update:layoutOptions` — Update the user's currently saved layout options.
 - `update:layoutQuery` — Update the user's layout query parameters.
 
-Other than this simple API to communicate with the Directus App and the system to share state between components, the
+Other than this simple API to communicate with the CairnCMS App and the system to share state between components, the
 layout component is a blank canvas, allowing you to create anything you need.
 
-The `@directus/extensions-sdk` package provides some useful composables to help with creating layouts:
+The `@cairncms/extensions-sdk` package provides some useful composables to help with creating layouts:
 
 - `useSync()` — This function can be used to synchronize a writable ref with a prop and a corresponding emit.
 - `useCollection()` — This function can be used to receive information about a collection.
@@ -123,17 +123,17 @@ The `@directus/extensions-sdk` package provides some useful composables to help 
 
 ::: warning Vue Version
 
-The Directus App uses Vue 3. There might be 3rd party libraries that aren't yet compatible with Vue 3.
+The CairnCMS App uses Vue 3. There might be 3rd party libraries that aren't yet compatible with Vue 3.
 
 :::
 
 ## Accessing Internal Systems
 
 To access internal systems like the API or the stores, you can use the `useApi()` and `useStores()` composables exported
-by the `@directus/extensions-sdk` package. They can be used inside a `setup()` function like this:
+by the `@cairncms/extensions-sdk` package. They can be used inside a `setup()` function like this:
 
 ```js
-import { useApi, useStores } from '@directus/extensions-sdk';
+import { useApi, useStores } from '@cairncms/extensions-sdk';
 
 export default {
 	setup() {
