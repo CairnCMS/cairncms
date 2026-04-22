@@ -1,8 +1,8 @@
 {
 	"name": "CairnCMS",
 	"short_name": "CairnCMS",
-	"theme_color": "#263238",
-	"background_color": "#263238",
+	"theme_color": "#383E47",
+	"background_color": "#383E47",
 	"display": "standalone",
 	"start_url": "./",
 	"scope": "."
