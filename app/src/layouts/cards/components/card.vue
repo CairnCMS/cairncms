@@ -46,7 +46,7 @@ export default defineComponent({
 	props: {
 		icon: {
 			type: String,
-			default: 'box',
+			default: 'deployed_code',
 		},
 		file: {
 			type: Object as PropType<File>,

@@ -13,7 +13,9 @@
 			</v-list-item-icon>
 			<div class="collection-item-detail">
 				<v-icon
-					:color="collection.meta?.hidden ? 'var(--foreground-subdued)' : collection.color ?? 'var(--primary)'"
+					:color="
+						collection.meta?.hidden ? 'var(--foreground-subdued)' : collection.color ?? 'var(--foreground-subdued)'
+					"
 					class="collection-icon"
 					:name="collection.meta?.hidden ? 'visibility_off' : collection.icon"
 				/>

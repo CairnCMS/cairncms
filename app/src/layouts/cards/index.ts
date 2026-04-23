@@ -130,7 +130,7 @@ export default defineLayout<LayoutOptions, LayoutQuery>({
 
 		function useLayoutOptions() {
 			const size = createViewOption<number>('size', 4);
-			const icon = createViewOption<string>('icon', 'box');
+			const icon = createViewOption<string>('icon', 'deployed_code');
 			const title = createViewOption<string | null>('title', null);
 			const subtitle = createViewOption<string | null>('subtitle', null);
 			const imageSource = createViewOption<string | null>('imageSource', fileFields.value[0]?.field ?? null);

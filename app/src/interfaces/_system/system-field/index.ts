@@ -4,7 +4,7 @@ import InterfaceSystemField from './system-field.vue';
 export default defineInterface({
 	id: 'system-field',
 	name: '$t:field',
-	icon: 'box',
+	icon: 'deployed_code',
 	component: InterfaceSystemField,
 	types: ['string'],
 	options: [],

@@ -631,10 +631,11 @@ const createAllowed = computed<boolean>(() => hasPermission(collection.value, 'c
 	--v-icon-color: var(--foreground-subdued);
 
 	display: flex;
+	flex-shrink: 0;
 	align-items: center;
 	justify-content: center;
-	width: 40px;
-	height: 40px;
+	width: calc(var(--input-height) - 2 * var(--border-width));
+	height: calc(var(--input-height) - 2 * var(--border-width));
 	margin-left: -8px;
 	overflow: hidden;
 	background-color: var(--background-normal);

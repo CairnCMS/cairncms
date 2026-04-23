@@ -5,7 +5,7 @@ export default defineInterface({
 	id: 'system-interface-options',
 	name: '$t:interfaces.system-interface-options.interface-options',
 	description: '$t:interfaces.system-interface-options.description',
-	icon: 'box',
+	icon: 'deployed_code',
 	component: InterfaceSystemInterfaceOptions,
 	types: ['string'],
 	options: [],

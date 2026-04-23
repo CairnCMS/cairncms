@@ -151,9 +151,9 @@ body {
 
 	.content {
 		--border-radius: 2px;
-		--input-height: 60px;
-		--input-padding: 16px; /* (60 - 4 - 24) / 2 */
-		--form-vertical-gap: 52px;
+		--input-height: 54px;
+		--input-padding: 14px;
+		--form-vertical-gap: 24px;
 
 		position: relative;
 		display: flex;

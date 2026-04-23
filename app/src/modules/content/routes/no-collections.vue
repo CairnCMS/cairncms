@@ -10,7 +10,7 @@
 			<content-navigation />
 		</template>
 
-		<v-info icon="box" :title="t('no_collections')" center>
+		<v-info icon="deployed_code" :title="t('no_collections')" center>
 			<template v-if="isAdmin">
 				{{ t('no_collections_copy_admin') }}
 			</template>

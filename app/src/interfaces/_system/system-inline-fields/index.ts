@@ -5,7 +5,7 @@ export default defineInterface({
 	id: 'system-inline-fields',
 	name: 'Inline Fields',
 	description: 'Inline Fields',
-	icon: 'box',
+	icon: 'deployed_code',
 	component: InterfaceInlineFields,
 	system: true,
 	types: ['json'],
