@@ -3,7 +3,6 @@ import { getBasemapSources } from '@/utils/geometry/basemap';
 import { useAppStore } from '@/stores/app';
 import { useCollectionsStore } from '@/stores/collections';
 import { useFieldsStore } from '@/stores/fields';
-import { useLatencyStore } from '@/stores/latency';
 import { useInsightsStore } from '@/stores/insights';
 import { useFlowsStore } from '@/stores/flows';
 import { usePermissionsStore } from '@/stores/permissions';
@@ -34,7 +33,6 @@ export function useStores(
 		usePresetsStore,
 		useSettingsStore,
 		useServerStore,
-		useLatencyStore,
 		useRelationsStore,
 		usePermissionsStore,
 		useInsightsStore,

@@ -1,6 +1,5 @@
 <template>
 	<div class="project-info">
-		<latency-indicator />
 		<div class="name-container">
 			<v-text-overflow placement="right" class="name" :text="name" />
 			<v-text-overflow v-if="descriptor" placement="right" class="descriptor" :text="descriptor" />
@@ -10,11 +9,9 @@
 
 <script lang="ts">
 import { defineComponent, computed } from 'vue';
-import LatencyIndicator from './latency-indicator.vue';
 import { useServerStore } from '@/stores/server';
 
 export default defineComponent({
-	components: { LatencyIndicator },
 	setup() {
 		const serverStore = useServerStore();
 
@@ -37,16 +34,17 @@ export default defineComponent({
 	color: var(--foreground-normal-alt);
 	text-align: left;
 	background-color: var(--background-page);
+	border-bottom: 1px solid var(--border-normal);
 
 	.name-container {
 		flex-grow: 1;
 		width: 100px;
-		margin-left: 12px;
 		line-height: 1.3;
 	}
 
 	.name {
 		margin-right: 8px;
+		font-size: 18px;
 	}
 
 	.descriptor {

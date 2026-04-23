@@ -1,5 +1,4 @@
 import api from '@/api';
-import { useLatencyStore } from '@/stores/latency';
 import { User } from '@cairncms/types';
 import { userName } from '@/utils/user-name';
 import { merge } from 'lodash';
@@ -73,19 +72,8 @@ export const useUserStore = defineStore({
 			}
 		},
 		async trackPage(page: string) {
-			const latencyStore = useLatencyStore();
-
-			const start = performance.now();
-
 			await api.patch(`/users/me/track/page`, {
 				last_page: page,
-			});
-
-			const end = performance.now();
-
-			latencyStore.save({
-				timestamp: new Date(),
-				latency: end - start,
 			});
 
 			if (this.currentUser && !('share' in this.currentUser)) {

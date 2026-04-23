@@ -14,7 +14,6 @@ beforeEach(() => {
 
 import { User } from '@cairncms/types';
 import { pick } from 'lodash';
-import { useLatencyStore } from './latency';
 import { useUserStore } from './user';
 
 const mockAdminUser = {
@@ -145,9 +144,6 @@ describe('actions', () => {
 		const page = '/test';
 
 		test('should not set last_page if there is no current user', async () => {
-			const latencyStore = useLatencyStore();
-			vi.spyOn(latencyStore, 'save').mockReturnValue();
-
 			const userStore = useUserStore();
 			await userStore.trackPage(page);
 
@@ -155,9 +151,6 @@ describe('actions', () => {
 		});
 
 		test('should set last_page if there is current user', async () => {
-			const latencyStore = useLatencyStore();
-			vi.spyOn(latencyStore, 'save').mockReturnValue();
-
 			const userStore = useUserStore();
 			await userStore.hydrate();
 			await userStore.trackPage(page);
