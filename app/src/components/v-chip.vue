@@ -101,6 +101,7 @@ body {
 	font-weight: var(--weight-normal);
 	line-height: 22px;
 	background-color: var(--v-chip-background-color);
+	background-clip: padding-box;
 	border: var(--border-width) solid var(--v-chip-background-color);
 	border-radius: 16px;
 
@@ -135,10 +136,10 @@ body {
 	}
 
 	&.small {
-		height: 24px;
-		padding: 0 4px;
+		height: var(--v-chip-height-small, 24px);
+		padding: var(--v-chip-padding-small, 0 4px);
 		font-size: 14px;
-		border-radius: 12px;
+		border-radius: var(--v-chip-border-radius-small, 12px);
 	}
 
 	&.large {

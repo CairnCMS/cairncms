@@ -356,25 +356,25 @@ export default defineComponent({
 						interface: 'select-dropdown',
 						display: 'labels',
 						display_options: {
-							showAsDot: true,
+							showAsDot: false,
 							choices: [
 								{
 									text: '$t:published',
 									value: 'published',
-									foreground: '#FFFFFF',
-									background: 'var(--primary)',
+									foreground: 'var(--status-published-fg)',
+									background: 'var(--status-published-bg)',
 								},
 								{
 									text: '$t:draft',
 									value: 'draft',
-									foreground: '#383E47',
-									background: '#E4E0D6',
+									foreground: 'var(--status-draft-fg)',
+									background: 'var(--status-draft-bg)',
 								},
 								{
 									text: '$t:archived',
 									value: 'archived',
-									foreground: '#FFFFFF',
-									background: 'var(--warning)',
+									foreground: 'var(--status-archived-fg)',
+									background: 'var(--status-archived-bg)',
 								},
 							],
 						},

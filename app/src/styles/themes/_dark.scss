@@ -54,6 +54,15 @@
 	--warning-alt: var(--warning-10);
 	--danger-alt: var(--danger-10);
 
+	--status-published-fg: #8ddcbd;
+	--status-published-bg: rgba(111, 201, 168, 0.16);
+	--status-draft-fg: #e7c979;
+	--status-draft-bg: rgba(221, 181, 98, 0.16);
+	--status-archived-fg: #9ca2ac;
+	--status-archived-bg: #2a2e34;
+
+	--table-row-hover: var(--background-subdued);
+
 	.alt-colors {
 		--background-subdued: var(--background-page);
 	}

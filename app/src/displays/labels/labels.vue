@@ -10,7 +10,7 @@
 				}"
 				small
 				disabled
-				label
+				:label="false"
 			>
 				{{ item.text }}
 			</v-chip>
@@ -106,6 +106,12 @@ export default defineComponent({
 <style lang="scss" scoped>
 .display-labels {
 	display: inline-flex;
+}
+
+:deep(.v-chip.small) {
+	--v-chip-height-small: 28px;
+	--v-chip-padding-small: 0 10px;
+	--v-chip-border-radius-small: 24px;
 }
 
 .v-chip + .v-chip {
