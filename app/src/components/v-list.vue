@@ -85,8 +85,8 @@ useGroupableParent(
 }
 
 .nav {
-	--v-list-padding: 12px;
-	--v-list-item-icon-color: var(--primary);
+	--v-list-padding: 12px 0;
+	--v-list-item-icon-color: var(--foreground-subdued);
 }
 
 :slotted(.v-divider) {

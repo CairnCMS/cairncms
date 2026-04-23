@@ -6,10 +6,12 @@
 		clickable
 		@contextmenu.stop=""
 	>
-		<v-list-item-icon><v-icon :name="bookmark.icon" :color="bookmark.color" /></v-list-item-icon>
-		<v-list-item-content>
-			<v-text-overflow :text="name" />
-		</v-list-item-content>
+		<div class="content-inner" :style="{ paddingLeft: `${depth * 18}px` }">
+			<v-list-item-icon><v-icon :name="bookmark.icon" :color="bookmark.color" /></v-list-item-icon>
+			<v-list-item-content>
+				<v-text-overflow :text="name" />
+			</v-list-item-content>
+		</div>
 
 		<v-menu placement="bottom-start" show-arrow>
 			<template #activator="{ toggle }">
@@ -97,9 +99,12 @@ import { useRoute, useRouter } from 'vue-router';
 
 interface Props {
 	bookmark: Preset;
+	depth?: number;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+	depth: 0,
+});
 
 const { t } = useI18n();
 
@@ -196,6 +201,12 @@ function useDeleteBookmark() {
 </script>
 
 <style lang="scss" scoped>
+.content-inner {
+	display: flex;
+	align-items: center;
+	width: 100%;
+}
+
 .danger {
 	--v-list-item-color: var(--danger);
 	--v-list-item-icon-color: var(--danger);

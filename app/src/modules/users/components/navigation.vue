@@ -1,7 +1,7 @@
 <template>
-	<v-list nav>
+	<v-list nav class="users-navigation">
 		<v-list-item to="/users" exact :active="currentRole === null">
-			<v-list-item-icon><v-icon name="folder_shared" /></v-list-item-icon>
+			<v-list-item-icon><v-icon small name="folder_shared" /></v-list-item-icon>
 			<v-list-item-content>{{ t('all_users') }}</v-list-item-content>
 		</v-list-item>
 
@@ -55,6 +55,16 @@ export default defineComponent({
 </script>
 
 <style lang="scss" scoped>
+.users-navigation {
+	--v-list-item-active-rule-width: 2px;
+	--v-list-item-active-rule-color: var(--primary);
+	--v-list-item-border-radius-nav: 0;
+
+	:deep(.v-list-item.active) {
+		--v-list-item-icon-color: var(--primary);
+	}
+}
+
 .v-skeleton-loader {
 	--v-skeleton-loader-background-color: var(--background-normal-alt);
 }

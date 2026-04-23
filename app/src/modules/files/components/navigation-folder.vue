@@ -6,10 +6,12 @@
 			:to="`/files/folders/${folder.id}`"
 			:active="currentFolder === folder.id"
 		>
-			<v-list-item-icon><v-icon name="folder" /></v-list-item-icon>
-			<v-list-item-content>
-				<v-text-overflow :text="folder.name" />
-			</v-list-item-content>
+			<div class="content-inner" :style="{ paddingLeft: `${depth * 18}px` }">
+				<v-list-item-icon><v-icon small name="folder" /></v-list-item-icon>
+				<v-list-item-content>
+					<v-text-overflow :text="folder.name" />
+				</v-list-item-content>
+			</div>
 		</v-list-item>
 
 		<v-list-group
@@ -22,12 +24,14 @@
 			disable-groupable-parent
 		>
 			<template #activator>
-				<v-list-item-icon>
-					<v-icon name="folder" />
-				</v-list-item-icon>
-				<v-list-item-content>
-					<v-text-overflow :text="folder.name" />
-				</v-list-item-content>
+				<div class="content-inner" :style="{ paddingLeft: `${depth * 18}px` }">
+					<v-list-item-icon>
+						<v-icon small name="folder" />
+					</v-list-item-icon>
+					<v-list-item-content>
+						<v-text-overflow :text="folder.name" />
+					</v-list-item-content>
+				</div>
 			</template>
 
 			<navigation-folder
@@ -36,6 +40,7 @@
 				:folder="childFolder"
 				:current-folder="currentFolder"
 				:click-handler="clickHandler"
+				:depth="depth + 1"
 			/>
 		</v-list-group>
 
@@ -137,6 +142,10 @@ export default defineComponent({
 		clickHandler: {
 			type: Function,
 			default: () => undefined,
+		},
+		depth: {
+			type: Number,
+			default: 0,
 		},
 	},
 	setup(props) {
@@ -290,6 +299,12 @@ export default defineComponent({
 </script>
 
 <style scoped>
+.content-inner {
+	display: flex;
+	align-items: center;
+	width: 100%;
+}
+
 .v-list-item.danger {
 	--v-list-item-color: var(--danger);
 	--v-list-item-color-hover: var(--danger);

@@ -114,8 +114,16 @@ export default defineComponent({
 
 .content-navigation {
 	--v-list-min-height: calc(100% - 64px);
+	--v-list-item-active-rule-width: 2px;
+	--v-list-item-active-rule-color: var(--primary);
+	--v-list-item-border-radius-nav: 0;
+	--v-list-group-items-padding-left: 0;
 
 	flex-grow: 1;
+
+	:deep(.v-list-item.active) {
+		--v-list-item-icon-color: var(--primary);
+	}
 
 	.v-detail {
 		:deep(.v-divider) {

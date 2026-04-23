@@ -1,11 +1,11 @@
 <template>
-	<v-list nav>
+	<v-list nav class="insights-navigation">
 		<v-button v-if="navItems.length === 0" full-width outlined dashed @click="$emit('create')">
 			{{ t('create_dashboard') }}
 		</v-button>
 
 		<v-list-item v-for="navItem in navItems" v-else :key="navItem.to" :to="navItem.to">
-			<v-list-item-icon><v-icon :name="navItem.icon" :color="navItem.color" /></v-list-item-icon>
+			<v-list-item-icon><v-icon small :name="navItem.icon" /></v-list-item-icon>
 			<v-list-item-content>
 				<v-text-overflow :text="navItem.name" />
 			</v-list-item-content>
@@ -41,3 +41,15 @@ export default defineComponent({
 	},
 });
 </script>
+
+<style lang="scss" scoped>
+.insights-navigation {
+	--v-list-item-active-rule-width: 2px;
+	--v-list-item-active-rule-color: var(--primary);
+	--v-list-item-border-radius-nav: 0;
+
+	:deep(.v-list-item.active) {
+		--v-list-item-icon-color: var(--primary);
+	}
+}
+</style>

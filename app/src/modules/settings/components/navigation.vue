@@ -1,7 +1,7 @@
 <template>
-	<v-list nav>
+	<v-list nav class="settings-navigation">
 		<v-list-item v-for="item in navItems" :key="item.to" :to="item.to">
-			<v-list-item-icon><v-icon :name="item.icon" /></v-list-item-icon>
+			<v-list-item-icon><v-icon small :name="item.icon" /></v-list-item-icon>
 			<v-list-item-content>
 				<v-text-overflow :text="item.name" />
 			</v-list-item-content>
@@ -10,7 +10,7 @@
 		<v-divider />
 
 		<v-list-item v-for="item in externalItems" :key="item.href" :href="item.href">
-			<v-list-item-icon><v-icon :name="item.icon" /></v-list-item-icon>
+			<v-list-item-icon><v-icon small :name="item.icon" /></v-list-item-icon>
 			<v-list-item-content>
 				<v-text-overflow :text="item.name" />
 			</v-list-item-content>
@@ -18,7 +18,7 @@
 
 		<!-- TODO: update URL to canonical CairnCMS public repo once it's live -->
 		<v-list-item href="https://github.com/CairnCMS/cairncms/releases" class="version">
-			<v-list-item-icon><v-icon name="cairncms" /></v-list-item-icon>
+			<v-list-item-icon><v-icon small name="cairncms" /></v-list-item-icon>
 			<v-list-item-content>
 				<v-text-overflow class="version" :text="`CairnCMS ${version}`" />
 			</v-list-item-content>
@@ -96,8 +96,19 @@ export default defineComponent({
 </script>
 
 <style scoped>
+.settings-navigation {
+	--v-list-item-active-rule-width: 2px;
+	--v-list-item-active-rule-color: var(--primary);
+	--v-list-item-border-radius-nav: 0;
+
+	:deep(.v-list-item.active) {
+		--v-list-item-icon-color: var(--primary);
+	}
+}
+
 .version .v-icon {
 	color: var(--foreground-subdued);
+	transform: translateY(2px);
 	transition: color var(--fast) var(--transition);
 }
 

@@ -10,12 +10,7 @@
 		:arrow-placement="collection.meta?.collapse === 'locked' ? false : 'after'"
 	>
 		<template #activator>
-			<navigation-item-content
-				:search="search"
-				:name="collection.name"
-				:icon="collection.meta?.icon"
-				:color="collection.meta?.color"
-			/>
+			<navigation-item-content :search="search" :name="collection.name" :icon="collection.meta?.icon" :depth="depth" />
 		</template>
 		<navigation-item
 			v-for="childCollection in childCollections"
@@ -23,8 +18,14 @@
 			:show-hidden="showHidden"
 			:collection="childCollection"
 			:search="search"
+			:depth="depth + 1"
 		/>
-		<navigation-bookmark v-for="bookmark in childBookmarks" :key="bookmark.id" :bookmark="bookmark" />
+		<navigation-bookmark
+			v-for="bookmark in childBookmarks"
+			:key="bookmark.id"
+			:bookmark="bookmark"
+			:depth="depth + 1"
+		/>
 	</v-list-group>
 
 	<v-list-item
@@ -35,12 +36,7 @@
 		:class="{ hidden: collection.meta?.hidden }"
 		query
 	>
-		<navigation-item-content
-			:search="search"
-			:name="collection.name"
-			:icon="collection.meta?.icon"
-			:color="collection.meta?.color"
-		/>
+		<navigation-item-content :search="search" :name="collection.name" :icon="collection.meta?.icon" :depth="depth" />
 	</v-list-item>
 
 	<v-menu v-if="hasContextMenu" ref="contextMenu" show-arrow placement="bottom-start">
@@ -84,6 +80,10 @@ export default defineComponent({
 		search: {
 			type: String,
 			default: null,
+		},
+		depth: {
+			type: Number,
+			default: 0,
 		},
 	},
 	setup(props) {

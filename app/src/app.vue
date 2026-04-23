@@ -41,7 +41,7 @@ const { hydrating } = toRefs(appStore);
 
 const brandStyle = computed(() => {
 	return {
-		'--brand': serverStore.info?.project?.project_color || 'var(--primary)',
+		'--brand': serverStore.info?.project?.project_color || 'var(--module-background)',
 	} as StyleValue;
 });
 

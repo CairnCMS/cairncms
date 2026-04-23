@@ -134,9 +134,9 @@ function onClick(event: PointerEvent) {
 
 <style>
 body {
-	--v-list-item-padding-nav: 0 var(--input-padding);
+	--v-list-item-padding-nav: 2px var(--input-padding);
 	--v-list-item-padding: 0 var(--input-padding) 0 calc(var(--input-padding) + var(--v-list-item-indent, 0px));
-	--v-list-item-margin-nav: 2px 0;
+	--v-list-item-margin-nav: 0;
 	--v-list-item-margin: 2px 0;
 	--v-list-item-min-width: none;
 	--v-list-item-max-width: none;
@@ -151,6 +151,8 @@ body {
 	--v-list-item-color-active: var(--v-list-color-active, var(--foreground-normal));
 	--v-list-item-background-color-hover: var(--v-list-background-color-hover, var(--background-normal));
 	--v-list-item-background-color-active: var(--v-list-background-color-active, var(--background-normal));
+	--v-list-item-active-rule-width: 0px;
+	--v-list-item-active-rule-color: transparent;
 }
 </style>
 
@@ -209,6 +211,17 @@ body {
 	&:not(.dense).active {
 		color: var(--v-list-item-color-active);
 		background-color: var(--v-list-item-background-color-active);
+
+		&::before {
+			position: absolute;
+			top: 0;
+			bottom: 0;
+			left: 0;
+			width: var(--v-list-item-active-rule-width);
+			background-color: var(--v-list-item-active-rule-color);
+			content: '';
+			pointer-events: none;
+		}
 	}
 
 	&.disabled {
@@ -293,7 +306,7 @@ body {
 		.v-list.nav {
 			#{$this}:not(.dense) {
 				--v-list-item-min-height: var(--v-list-item-min-height-nav);
-				--v-list-item-border-radius: 2px;
+				--v-list-item-border-radius: var(--v-list-item-border-radius-nav, var(--border-radius));
 
 				margin: var(--v-list-item-margin-nav);
 				padding: var(--v-list-item-padding-nav);

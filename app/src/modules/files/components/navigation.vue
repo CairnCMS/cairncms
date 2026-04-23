@@ -1,5 +1,5 @@
 <template>
-	<v-list nav>
+	<v-list nav class="files-navigation">
 		<template v-if="loading && (nestedFolders === null || nestedFolders.length === 0)">
 			<v-list-item v-for="n in 4" :key="n">
 				<v-skeleton-loader type="list-item-icon" />
@@ -19,7 +19,7 @@
 				>
 					<template #activator>
 						<v-list-item-icon>
-							<v-icon name="folder_special" outline />
+							<v-icon small name="folder_special" outline />
 						</v-list-item-icon>
 						<v-list-item-content>
 							<v-text-overflow :text="t('file_library')" />
@@ -31,6 +31,7 @@
 						:key="folder.id"
 						:folder="folder"
 						:current-folder="currentFolder"
+						:depth="1"
 					/>
 				</v-list-group>
 			</v-item-group>
@@ -39,21 +40,21 @@
 		<v-divider />
 
 		<v-list-item to="/files/all">
-			<v-list-item-icon><v-icon name="file_copy" outline /></v-list-item-icon>
+			<v-list-item-icon><v-icon small name="file_copy" outline /></v-list-item-icon>
 			<v-list-item-content>
 				<v-text-overflow :text="t('all_files')" />
 			</v-list-item-content>
 		</v-list-item>
 
 		<v-list-item to="/files/mine">
-			<v-list-item-icon><v-icon name="folder_shared" /></v-list-item-icon>
+			<v-list-item-icon><v-icon small name="folder_shared" /></v-list-item-icon>
 			<v-list-item-content>
 				<v-text-overflow :text="t('my_files')" />
 			</v-list-item-content>
 		</v-list-item>
 
 		<v-list-item to="/files/recent">
-			<v-list-item-icon><v-icon name="history" /></v-list-item-icon>
+			<v-list-item-icon><v-icon small name="history" /></v-list-item-icon>
 			<v-list-item-content>
 				<v-text-overflow :text="t('recent_files')" />
 			</v-list-item-content>
@@ -124,6 +125,17 @@ export default defineComponent({
 </script>
 
 <style lang="scss" scoped>
+.files-navigation {
+	--v-list-item-active-rule-width: 2px;
+	--v-list-item-active-rule-color: var(--primary);
+	--v-list-item-border-radius-nav: 0;
+	--v-list-group-items-padding-left: 0;
+
+	:deep(.v-list-item.active) {
+		--v-list-item-icon-color: var(--primary);
+	}
+}
+
 .v-skeleton-loader {
 	--v-skeleton-loader-background-color: var(--background-normal-alt);
 }

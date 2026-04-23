@@ -301,7 +301,7 @@ function openSidebar(event: PointerEvent) {
 
 			&-content {
 				--v-list-item-background-color-hover: var(--background-normal-alt);
-				--v-list-item-background-color-active: var(--background-normal-alt);
+				--v-list-item-background-color-active: var(--background-normal);
 
 				height: calc(100% - 64px);
 				overflow-x: hidden;
@@ -348,8 +348,8 @@ function openSidebar(event: PointerEvent) {
 
 	#main-content {
 		--border-radius: 2px;
-		--input-height: 60px;
-		--input-padding: 16px; /* (60 - 4 - 24) / 2 */
+		--input-height: 54px;
+		--input-padding: 14px;
 
 		position: relative;
 		flex-grow: 1;

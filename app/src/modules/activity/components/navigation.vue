@@ -1,8 +1,8 @@
 <template>
-	<v-list nav>
+	<v-list nav class="activity-navigation">
 		<v-list-item clickable :active="!filterField" @click="clearNavFilter">
 			<v-list-item-icon>
-				<v-icon name="access_time" />
+				<v-icon small name="access_time" />
 			</v-list-item-icon>
 			<v-list-item-content>
 				<v-text-overflow :text="t('all_activity')" />
@@ -15,7 +15,7 @@
 			@click="setNavFilter('user', currentUserID)"
 		>
 			<v-list-item-icon>
-				<v-icon name="face" />
+				<v-icon small name="face" />
 			</v-list-item-icon>
 			<v-list-item-content>
 				<v-text-overflow :text="t('my_activity')" />
@@ -30,7 +30,7 @@
 			@click="setNavFilter('action', 'create')"
 		>
 			<v-list-item-icon>
-				<v-icon name="add" />
+				<v-icon small name="add" />
 			</v-list-item-icon>
 			<v-list-item-content>
 				<v-text-overflow :text="t('create')" />
@@ -43,7 +43,7 @@
 			@click="setNavFilter('action', 'update')"
 		>
 			<v-list-item-icon>
-				<v-icon name="check" />
+				<v-icon small name="check" />
 			</v-list-item-icon>
 			<v-list-item-content>
 				<v-text-overflow :text="t('update')" />
@@ -56,7 +56,7 @@
 			@click="setNavFilter('action', 'delete')"
 		>
 			<v-list-item-icon>
-				<v-icon name="clear" />
+				<v-icon small name="clear" />
 			</v-list-item-icon>
 			<v-list-item-content>
 				<v-text-overflow :text="t('delete_label')" />
@@ -69,7 +69,7 @@
 			@click="setNavFilter('action', 'comment')"
 		>
 			<v-list-item-icon>
-				<v-icon name="chat_bubble_outline" />
+				<v-icon small name="chat_bubble_outline" />
 			</v-list-item-icon>
 			<v-list-item-content>
 				<v-text-overflow :text="t('comment')" />
@@ -82,7 +82,7 @@
 			@click="setNavFilter('action', 'login')"
 		>
 			<v-list-item-icon>
-				<v-icon name="login" />
+				<v-icon small name="login" />
 			</v-list-item-icon>
 			<v-list-item-content>
 				<v-text-overflow :text="t('login')" />
@@ -130,3 +130,15 @@ export default defineComponent({
 	},
 });
 </script>
+
+<style lang="scss" scoped>
+.activity-navigation {
+	--v-list-item-active-rule-width: 2px;
+	--v-list-item-active-rule-color: var(--primary);
+	--v-list-item-border-radius-nav: 0;
+
+	:deep(.v-list-item.active) {
+		--v-list-item-icon-color: var(--primary);
+	}
+}
+</style>

@@ -1,8 +1,10 @@
 <template>
-	<v-list-item-icon>
-		<v-icon :name="icon ?? 'label'" :color="color" />
-	</v-list-item-icon>
-	<v-list-item-content><v-text-overflow :text="name" :highlight="search" /></v-list-item-content>
+	<div class="content-inner" :style="{ paddingLeft: `${depth * 18}px` }">
+		<v-list-item-icon>
+			<v-icon small :name="icon ?? 'label'" />
+		</v-list-item-icon>
+		<v-list-item-content><v-text-overflow :text="name" :highlight="search" /></v-list-item-content>
+	</div>
 </template>
 
 <script lang="ts">
@@ -12,11 +14,7 @@ export default defineComponent({
 	props: {
 		icon: {
 			type: String,
-			default: 'label',
-		},
-		color: {
-			type: String,
-			default: 'var(--foreground-normal)',
+			default: null,
 		},
 		name: {
 			type: String,
@@ -26,6 +24,18 @@ export default defineComponent({
 			type: String,
 			default: null,
 		},
+		depth: {
+			type: Number,
+			default: 0,
+		},
 	},
 });
 </script>
+
+<style scoped>
+.content-inner {
+	display: flex;
+	align-items: center;
+	width: 100%;
+}
+</style>

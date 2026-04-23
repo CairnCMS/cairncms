@@ -26,7 +26,7 @@ export default defineComponent({
 		},
 		icon: {
 			type: String,
-			default: 'box',
+			default: 'deployed_code',
 		},
 		active: {
 			type: Boolean,

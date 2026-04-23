@@ -102,11 +102,7 @@ function onClick(event: MouseEvent) {
 
 <style lang="scss" scoped>
 .v-list-group {
-	margin-bottom: 4px;
-
-	&:last-child {
-		margin-bottom: 0;
-	}
+	margin-bottom: 0;
 
 	.activator-icon {
 		margin-right: 0 !important;
@@ -124,7 +120,7 @@ function onClick(event: MouseEvent) {
 	}
 
 	.items {
-		padding-left: 18px;
+		padding-left: var(--v-list-group-items-padding-left, 18px);
 		list-style: none;
 	}
 }

@@ -102,7 +102,7 @@ export default defineComponent({
 	.v-button {
 		--v-button-color: var(--module-icon);
 		--v-button-color-hover: var(--white);
-		--v-button-color-active: var(--module-icon-alt);
+		--v-button-color-active: var(--primary);
 		--v-button-background-color: var(--module-background);
 		--v-button-background-color-hover: var(--module-background);
 		--v-button-background-color-active: var(--module-background-alt);
