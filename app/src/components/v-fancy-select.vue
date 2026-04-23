@@ -99,8 +99,8 @@ function toggle(item: Record<string, any>) {
 	margin-bottom: 8px;
 	padding: 12px;
 	background-color: var(--background-normal);
-	border: 2px solid var(--background-normal);
-	border-radius: 2px;
+	border: var(--border-width) solid var(--background-normal);
+	border-radius: var(--border-radius);
 	backface-visibility: hidden;
 	cursor: pointer;
 	transition-timing-function: var(--transition);
@@ -136,16 +136,14 @@ function toggle(item: Record<string, any>) {
 
 	&.active {
 		z-index: 2;
-		color: var(--primary);
 		background-color: var(--primary-alt);
-		border-color: var(--primary);
 
-		.v-icon {
-			--v-icon-color: var(--primary);
-		}
+		.icon {
+			background-color: var(--primary);
 
-		&:hover {
-			border-color: var(--primary);
+			.v-icon {
+				--v-icon-color: var(--white);
+			}
 		}
 	}
 }

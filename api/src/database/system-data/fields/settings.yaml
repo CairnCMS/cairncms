@@ -75,24 +75,29 @@ fields:
       lineNumber: true
       template: |
         #app, #main-content, body {
-          --primary-alt: #F0ECFF !important;
-          --primary-10: #F0ECFF !important;
-          --primary-25: #D9D0FF !important;
-          --primary-50: #B3A1FF !important;
-          --primary-75: #8C73FF !important;
-          --primary-90: #7557FF !important;
+          --primary-alt: #F1FAF6 !important;
+          --primary-10: #F1FAF6 !important;
+          --primary-25: #DBF2E9 !important;
+          --primary-50: #B7E4D4 !important;
+          --primary-75: #93D7BE !important;
+          --primary-90: #7DCEB1 !important;
 
-          --primary: #6644FF !important;
+          --primary: #6FC9A8 !important;
 
-          --primary-110: #5E41EC !important;
-          --primary-125: #523DCF !important;
-          --primary-150: #3E369F !important;
-          --primary-175: #2B3070 !important;
-          --primary-190: #1F2C53 !important;
+          --primary-110: #69BB9E !important;
+          --primary-125: #5FA68F !important;
+          --primary-150: #4F8376 !important;
+          --primary-175: #3E5F5C !important;
+          --primary-190: #354A4D !important;
 
-          --v-button-background-color: #6644FF !important;
-          --v-button-background-color-hover: #5E41EC !important;
-          --sidebar-detail-color-active: #5E41EC !important;
+          --v-button-background-color: #DDB562 !important;
+          --v-button-background-color-hover: #C09A4C !important;
+          --sidebar-detail-color-active: #5FA68F !important;
+
+          --module-background: #355F55 !important;
+          --module-background-alt: #284941 !important;
+          --module-icon: rgba(222, 229, 176, 0.5) !important;
+          --module-icon-alt: #DEE5B0 !important;
         }
     width: full
 

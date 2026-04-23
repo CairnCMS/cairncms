@@ -290,10 +290,8 @@ export default defineComponent({
 
 .v-list-item.enabled {
 	--v-list-item-border-color: var(--primary);
-	--v-list-item-color: var(--primary-125);
 	--v-list-item-background-color: var(--primary-10);
 	--v-list-item-border-color-hover: var(--primary-150);
-	--v-list-item-color-hover: var(--primary-125);
 	--v-list-item-background-color-hover: var(--primary-10);
 	--v-icon-color: var(--primary);
 	--v-icon-color-hover: var(--foreground-normal);
@@ -302,10 +300,6 @@ export default defineComponent({
 .to {
 	color: var(--foreground-subdued);
 	font-family: var(--family-monospace);
-}
-
-.enabled .to {
-	color: var(--primary-50);
 }
 
 .drawer-content {
