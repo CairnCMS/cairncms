@@ -22,30 +22,93 @@
 			</div>
 		</div>
 		<div class="art" :style="artStyles">
-			<svg v-if="!hasCustomBackground" viewBox="0 0 1152 1152" preserveAspectRatio="none" fill="none" class="fallback">
-				<rect width="1152" height="1152" :fill="colors.primary" />
-				<path
-					d="M1152 409.138C1148.61 406.92 1146.7 405.765 1146.7 405.765L6.87761e-07 958.424L-7.3277e-07 1152L506.681 1152C558.985 1126.93 614.88 1101.25 672.113 1074.95C839.401 998.085 1018.12 915.967 1152 828.591L1152 409.138Z"
-					:fill="colors.shades[0]"
-				/>
-				<path
-					d="M1152 159.866C1130.19 146.319 1114.45 138.98 1114.45 138.98L-6.09246e-07 759.421L-3.66364e-07 1152L88.7501 1152C131.867 1108.8 194.289 1054.33 281.936 993.927C371.847 931.97 507.23 864.306 651.138 792.382C828.097 703.939 1017.95 609.052 1152 510.407L1152 159.866Z"
-					:fill="colors.shades[1]"
-				/>
-				<path
-					d="M772.894 -0.000472457L-4.49523e-07 457.782L-5.22658e-07 953.071C22.142 919.082 94.6279 821.1 262.854 696.786C351.427 631.334 485.624 558.338 628.272 480.744C816.642 378.28 1019.75 267.8 1152 156.087L1152 -0.000477328L772.894 -0.000472457Z"
-					:fill="colors.shades[2]"
-				/>
-				<path
-					d="M286.365 -0.000483108L-1.73191e-07 176.373L2.43255e-06 662.21C33.488 615.87 106.028 529.959 243.326 424.909C331.205 357.671 464.771 281.956 606.749 201.473C720.914 136.756 840.519 68.9554 946.182 -0.000479285L286.365 -0.000483108Z"
-					:fill="colors.shades[3]"
-				/>
-				<path
-					d="M0.00195277 363.139C37.1564 313.499 107.096 233.66 228.181 137.623C281.94 94.9838 353.09 48.7594 432.872 9.43526e-06L0.00195595 0L0.00195277 363.139Z"
-					:fill="colors.shades[4]"
-				/>
+			<svg
+				v-if="!hasCustomBackground"
+				class="fallback"
+				viewBox="0 0 1152 1152"
+				preserveAspectRatio="xMidYMid slice"
+				role="presentation"
+			>
+				<defs>
+					<radialGradient id="cx-base" cx="0.5" cy="0.42" r="0.75">
+						<stop offset="0" :stop-color="colors.baseTop" />
+						<stop offset="0.55" :stop-color="colors.baseMid" />
+						<stop offset="1" :stop-color="colors.baseEdge" />
+					</radialGradient>
+					<radialGradient id="cx-bloom" cx="0.5" cy="0.38" r="0.45">
+						<stop offset="0" :stop-color="colors.bloomCore" stop-opacity="0.85" />
+						<stop offset="0.18" :stop-color="colors.bloomInner" stop-opacity="0.55" />
+						<stop offset="0.45" :stop-color="colors.bloomOuter" stop-opacity="0.18" />
+						<stop offset="1" :stop-color="colors.ember" stop-opacity="0" />
+					</radialGradient>
+				</defs>
+				<rect width="1152" height="1152" fill="url(#cx-base)" />
+				<g :fill="colors.emberLight" fill-opacity="0.08">
+					<polygon points="0,0 420,0 180,360" />
+					<polygon points="420,0 900,0 640,300" />
+					<polygon points="900,0 1152,0 1152,280" />
+					<polygon points="1152,280 1152,640 880,440" />
+					<polygon points="0,360 300,540 0,700" />
+					<polygon points="0,700 360,820 0,1000" />
+					<polygon points="0,1000 420,1152 0,1152" />
+					<polygon points="420,1152 820,1152 580,900" />
+					<polygon points="820,1152 1152,1152 1152,800" />
+					<polygon points="1152,800 1152,640 880,440 640,720" />
+				</g>
+				<g :fill="colors.ember" fill-opacity="0.12">
+					<polygon points="180,360 420,0 640,300" />
+					<polygon points="640,300 900,0 880,440" />
+					<polygon points="180,360 640,300 420,540" />
+					<polygon points="640,300 880,440 620,560" />
+					<polygon points="420,540 620,560 480,780" />
+					<polygon points="880,440 1152,640 760,720" />
+					<polygon points="620,560 880,440 760,720" />
+					<polygon points="480,780 760,720 580,900" />
+					<polygon points="300,540 420,540 180,700" />
+					<polygon points="180,700 420,540 420,820" />
+					<polygon points="420,820 480,780 360,960" />
+					<polygon points="360,960 580,900 420,1060" />
+					<polygon points="760,720 1152,800 820,960" />
+					<polygon points="580,900 820,960 680,1100" />
+				</g>
+				<g class="cx-cream" :fill="colors.cream" fill-opacity="0.22">
+					<polygon points="480,220 620,140 560,340" />
+					<polygon points="560,340 700,280 620,460" />
+					<polygon points="620,460 760,400 680,560" />
+					<polygon points="400,280 520,340 420,460" />
+					<polygon points="700,180 800,140 740,280" />
+					<polygon points="820,340 900,280 880,440" />
+					<polygon points="540,480 660,540 580,640" />
+				</g>
+				<g :fill="colors.dark" fill-opacity="0.35">
+					<polygon points="0,0 120,0 0,180" />
+					<polygon points="1032,0 1152,0 1152,140" />
+					<polygon points="0,960 120,1100 0,1152" />
+					<polygon points="1040,1020 1152,1000 1152,1152 1000,1152" />
+					<polygon points="1152,420 1000,520 1152,620" />
+					<polygon points="0,280 120,420 0,520" />
+				</g>
+				<g fill="none" :stroke="colors.edgePaper" stroke-opacity="0.08" stroke-width="0.8">
+					<polyline points="0,360 180,360 420,0" />
+					<polyline points="420,0 640,300 900,0" />
+					<polyline points="900,0 880,440 1152,640" />
+					<polyline points="880,440 760,720 1152,800" />
+					<polyline points="640,300 620,560 480,780" />
+					<polyline points="420,540 620,560" />
+					<polyline points="300,540 420,540 180,700" />
+					<polyline points="180,700 420,820 360,960" />
+					<polyline points="360,960 580,900 680,1100" />
+					<polyline points="820,960 580,900" />
+					<polyline points="420,1060 680,1100" />
+					<polyline points="1152,800 820,960" />
+				</g>
+				<g fill="none" :stroke="colors.edgeBright" stroke-opacity="0.18" stroke-width="1">
+					<polyline points="420,0 640,300 900,0" />
+					<polyline points="480,220 620,140 700,180 800,140" />
+					<polyline points="560,340 700,280 820,340 900,280" />
+				</g>
+				<rect width="1152" height="1152" fill="url(#cx-bloom)" />
 			</svg>
-
 			<transition name="scale">
 				<v-image v-if="foregroundURL" class="foreground" :src="foregroundURL" :alt="info?.project?.project_name" />
 			</transition>
@@ -64,7 +127,6 @@ import { getRootPath } from '@/utils/get-root-path';
 import { useI18n } from 'vue-i18n';
 import { cssVar } from '@cairncms/utils/browser';
 import Color from 'color';
-import { getTheme } from '@/utils/get-theme';
 
 interface Props {
 	wide?: boolean;
@@ -78,47 +140,6 @@ const { t } = useI18n();
 const serverStore = useServerStore();
 
 const { info } = storeToRefs(serverStore);
-
-const colors = computed(() => {
-	const primary = info.value?.project?.project_color || 'var(--primary)';
-	const primaryHex = primary.startsWith('var(--') ? cssVar(primary.substring(4, primary.length - 1)) : primary;
-	const isDark = getTheme() === 'dark';
-	const primaryColor = Color(primaryHex);
-
-	const primaryColorHSL = primaryColor.hsl() as unknown as {
-		model: 'hsl';
-		color: [number, number, number];
-		valpha: number;
-	};
-
-	/**
-	 * The default light mode secondary color is based on the standard difference between Directus purple and pink, which is:
-	 * primary = 250.9, 100, 63.3
-	 * secondary = 320, 100, 80
-	 * diff = +69.1, 0, +16.7
-	 *
-	 * For dark mode, we greatly reduce the lightness value to -50
-	 */
-
-	const secondaryColor = Color({
-		h: primaryColorHSL.color[0] + (isDark ? -69.1 : 69.1),
-		s: primaryColorHSL.color[1] + 0,
-		l: primaryColorHSL.color[2] + (isDark ? -50 : 16.7),
-	});
-
-	const shades = [];
-
-	for (let i = 1; i < 6; i++) {
-		const color = Color(primaryColor).mix(secondaryColor, i / 10);
-		shades.push(color.hex().toString());
-	}
-
-	return {
-		primary: primaryColor.hex().toString(),
-		secondary: secondaryColor.hex().toString(),
-		shades: shades,
-	};
-});
 
 const isBranded = computed(() => {
 	return info.value?.project?.project_color ? true : false;
@@ -137,6 +158,27 @@ const artStyles = computed(() => {
 		background: `url(${url})`,
 		backgroundSize: 'cover',
 		backgroundPosition: 'center center',
+	};
+});
+
+const colors = computed(() => {
+	const primary = info.value?.project?.project_color || 'var(--primary)';
+	const primaryHex = primary.startsWith('var(--') ? cssVar(primary.substring(4, primary.length - 1)) : primary;
+	const p = Color(primaryHex);
+
+	return {
+		baseTop: p.darken(0.4).hex(),
+		baseMid: p.darken(0.55).hex(),
+		baseEdge: p.darken(0.7).hex(),
+		bloomCore: p.lighten(0.3).hex(),
+		bloomInner: p.lighten(0.2).hex(),
+		bloomOuter: p.lighten(0.1).hex(),
+		emberLight: p.lighten(0.2).hex(),
+		ember: p.hex(),
+		cream: p.lighten(0.65).hex(),
+		dark: p.darken(0.92).hex(),
+		edgePaper: p.lighten(0.85).hex(),
+		edgeBright: p.lighten(0.75).hex(),
 	};
 });
 
@@ -222,12 +264,38 @@ const logoURL = computed<string | null>(() => {
 		background-size: cover;
 
 		.fallback {
+			position: absolute;
+			inset: 0;
 			width: 100%;
 			height: 100%;
-			position: absolute;
-			left: 0;
-			top: 0;
 			z-index: -1;
+
+			.cx-bloom {
+				animation: cx-bloom-pulse 12s ease-in-out infinite;
+			}
+
+			.cx-cream polygon {
+				animation: cx-cream-shimmer 8s ease-in-out infinite;
+			}
+
+			.cx-cream polygon:nth-child(2) {
+				animation-delay: -1.1s;
+			}
+			.cx-cream polygon:nth-child(3) {
+				animation-delay: -2.3s;
+			}
+			.cx-cream polygon:nth-child(4) {
+				animation-delay: -3.5s;
+			}
+			.cx-cream polygon:nth-child(5) {
+				animation-delay: -4.7s;
+			}
+			.cx-cream polygon:nth-child(6) {
+				animation-delay: -5.9s;
+			}
+			.cx-cream polygon:nth-child(7) {
+				animation-delay: -6.4s;
+			}
 		}
 
 		.foreground {
@@ -336,5 +404,32 @@ const logoURL = computed<string | null>(() => {
 	position: absolute;
 	transform: scale(0.95);
 	opacity: 0;
+}
+
+@keyframes cx-bloom-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.75;
+	}
+}
+
+@keyframes cx-cream-shimmer {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.3;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.fallback .cx-bloom,
+	.fallback .cx-cream polygon {
+		animation: none;
+	}
 }
 </style>
