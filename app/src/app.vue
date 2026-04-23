@@ -69,7 +69,7 @@ watch(
 
 			document
 				.querySelector('head meta[name="theme-color"]')
-				?.setAttribute('content', theme === 'light' ? '#ffffff' : '#263238');
+				?.setAttribute('content', theme === 'light' ? '#ffffff' : '#14171b');
 		} else {
 			// Default to auto mode
 			document.body.classList.add('auto');
