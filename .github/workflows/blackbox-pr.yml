@@ -8,6 +8,7 @@ on:
       - api/**
       - tests/blackbox/**
       - packages/**
+      - sdk/**
       - package.json
       - pnpm-lock.yaml
       - .github/workflows/blackbox-pr.yml
