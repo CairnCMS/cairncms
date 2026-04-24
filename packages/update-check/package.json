@@ -32,7 +32,6 @@
 		"undici": "6.24.0"
 	},
 	"devDependencies": {
-		"@directus/tsconfig": "0.0.7",
 		"@ngneat/falso": "6.4.0",
 		"@types/semver": "7.3.13",
 		"@vitest/coverage-v8": "1.6.1",

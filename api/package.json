@@ -163,7 +163,6 @@
 		"wellknown": "0.5.0"
 	},
 	"devDependencies": {
-		"@directus/tsconfig": "0.0.7",
 		"@cairncms/types": "workspace:*",
 		"@ngneat/falso": "6.4.0",
 		"@types/async": "3.2.19",
@@ -222,6 +221,6 @@
 		"tedious": "16.0.0"
 	},
 	"engines": {
-		"node": ">=18.0.0"
+		"node": ">=20.0.0"
 	}
 }

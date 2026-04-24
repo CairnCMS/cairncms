@@ -28,7 +28,6 @@
 		"access": "public"
 	},
 	"devDependencies": {
-		"@directus/tsconfig": "0.0.7",
 		"@cairncms/types": "workspace:*",
 		"@ngneat/falso": "6.4.0",
 		"@vitest/coverage-v8": "1.6.1",

@@ -363,9 +363,6 @@ importers:
       '@cairncms/types':
         specifier: workspace:*
         version: link:../packages/types
-      '@directus/tsconfig':
-        specifier: 0.0.7
-        version: 0.0.7
       '@ngneat/falso':
         specifier: 6.4.0
         version: 6.4.0
@@ -797,9 +794,6 @@ importers:
       '@cairncms/types':
         specifier: workspace:*
         version: link:../types
-      '@directus/tsconfig':
-        specifier: 0.0.7
-        version: 0.0.7
       '@types/lodash-es':
         specifier: 4.17.7
         version: 4.17.7
@@ -825,9 +819,6 @@ importers:
         specifier: 3.23.8
         version: 3.23.8
     devDependencies:
-      '@directus/tsconfig':
-        specifier: 0.0.7
-        version: 0.0.7
       typescript:
         specifier: 5.0.4
         version: 5.0.4
@@ -849,9 +840,6 @@ importers:
       '@cairncms/types':
         specifier: workspace:*
         version: link:../types
-      '@directus/tsconfig':
-        specifier: 0.0.7
-        version: 0.0.7
       '@ngneat/falso':
         specifier: 6.4.0
         version: 6.4.0
@@ -937,9 +925,6 @@ importers:
         specifier: 6.0.0
         version: 6.0.0(@vue/compiler-sfc@3.2.47)
     devDependencies:
-      '@directus/tsconfig':
-        specifier: 0.0.7
-        version: 0.0.7
       '@types/fs-extra':
         specifier: 11.0.1
         version: 11.0.1
@@ -962,9 +947,6 @@ importers:
         specifier: 2.4.2
         version: 2.4.2(mysql2@3.10.0)(pg@8.10.0)(sqlite3@5.1.6)(tedious@16.0.0)
     devDependencies:
-      '@directus/tsconfig':
-        specifier: 0.0.7
-        version: 0.0.7
       typescript:
         specifier: 5.0.4
         version: 5.0.4
@@ -990,9 +972,6 @@ importers:
 
   packages/storage:
     devDependencies:
-      '@directus/tsconfig':
-        specifier: 0.0.7
-        version: 0.0.7
       '@vitest/coverage-v8':
         specifier: 1.6.1
         version: 1.6.1(vitest@1.6.1)
@@ -1015,9 +994,6 @@ importers:
         specifier: workspace:*
         version: link:../utils
     devDependencies:
-      '@directus/tsconfig':
-        specifier: 0.0.7
-        version: 0.0.7
       '@ngneat/falso':
         specifier: 6.4.0
         version: 6.4.0
@@ -1046,9 +1022,6 @@ importers:
         specifier: 6.24.0
         version: 6.24.0
     devDependencies:
-      '@directus/tsconfig':
-        specifier: 0.0.7
-        version: 0.0.7
       '@ngneat/falso':
         specifier: 6.4.0
         version: 6.4.0
@@ -1074,9 +1047,6 @@ importers:
         specifier: 6.9.5
         version: 6.9.5
     devDependencies:
-      '@directus/tsconfig':
-        specifier: 0.0.7
-        version: 0.0.7
       '@ngneat/falso':
         specifier: 6.4.0
         version: 6.4.0
@@ -1099,9 +1069,6 @@ importers:
         specifier: workspace:*
         version: link:../utils
     devDependencies:
-      '@directus/tsconfig':
-        specifier: 0.0.7
-        version: 0.0.7
       '@ngneat/falso':
         specifier: 6.4.0
         version: 6.4.0
@@ -1133,9 +1100,6 @@ importers:
         specifier: workspace:*
         version: link:../utils
     devDependencies:
-      '@directus/tsconfig':
-        specifier: 0.0.7
-        version: 0.0.7
       '@ngneat/falso':
         specifier: 6.4.0
         version: 6.4.0
@@ -1157,9 +1121,6 @@ importers:
       '@cairncms/schema':
         specifier: workspace:*
         version: link:../schema
-      '@directus/tsconfig':
-        specifier: 0.0.7
-        version: 0.0.7
       '@types/express':
         specifier: 4.17.17
         version: 4.17.17
@@ -1200,9 +1161,6 @@ importers:
         specifier: 6.24.0
         version: 6.24.0
     devDependencies:
-      '@directus/tsconfig':
-        specifier: 0.0.7
-        version: 0.0.7
       '@ngneat/falso':
         specifier: 6.4.0
         version: 6.4.0
@@ -1252,9 +1210,6 @@ importers:
       '@cairncms/types':
         specifier: workspace:*
         version: link:../types
-      '@directus/tsconfig':
-        specifier: 0.0.7
-        version: 0.0.7
       '@ngneat/falso':
         specifier: 6.4.0
         version: 6.4.0
@@ -3014,10 +2969,6 @@ packages:
   /@directus/format-title@10.0.0:
     resolution: {integrity: sha512-iMXP8yQb0UKAMGRHAY7IkNXEGdUqQDvlu1aAkPARYah4lMhEU8E5KgkXdOCPQaxt6Wy0gXb7DPMjeSlKyBKCxg==}
     engines: {node: '>=6.0.0'}
-
-  /@directus/tsconfig@0.0.7:
-    resolution: {integrity: sha512-0h9GOyLFl1ylcZYLi3zNik+/DorFTtywsJl7RIVsy9pdL1cL/jewKT9L0yShDvbmN/kenPSlXC8qmqmz1NPhHA==}
-    dev: true
 
   /@emnapi/runtime@1.9.2:
     resolution: {integrity: sha512-3U4+MIWHImeyu1wnmVygh5WlgfYDtyf0k8AbLhMFxOipihf6nrWC4syIm/SwEeec0mNSafiiNnMJwbza/Is6Lw==}
