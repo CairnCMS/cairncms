@@ -74,7 +74,7 @@
 		"@cairncms/constants": "workspace:*",
 		"@cairncms/exceptions": "workspace:*",
 		"@cairncms/extensions-sdk": "workspace:*",
-		"@directus/format-title": "10.0.0",
+		"@cairncms/format-title": "workspace:*",
 		"@cairncms/schema": "workspace:*",
 		"@cairncms/specs": "workspace:*",
 		"@cairncms/storage": "workspace:*",

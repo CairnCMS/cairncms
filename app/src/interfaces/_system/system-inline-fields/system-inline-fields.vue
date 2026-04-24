@@ -10,7 +10,7 @@
 <script lang="ts" setup>
 import { FIELD_TYPES_SELECT } from '@/constants';
 import { translate } from '@/utils/translate-object-values';
-import formatTitle from '@directus/format-title';
+import formatTitle from '@cairncms/format-title';
 import { Field } from '@cairncms/types';
 import { set } from 'lodash';
 import { computed } from 'vue';

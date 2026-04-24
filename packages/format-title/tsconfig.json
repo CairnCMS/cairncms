@@ -1,0 +1,7 @@
+{
+	"extends": "../../tsconfig.node20-esm.json",
+	"compilerOptions": {
+		"outDir": "dist"
+	},
+	"include": ["src"]
+}

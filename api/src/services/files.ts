@@ -1,4 +1,4 @@
-import formatTitle from '@directus/format-title';
+import formatTitle from '@cairncms/format-title';
 import { toArray } from '@cairncms/utils';
 import encodeURL from 'encodeurl';
 import exif from 'exif-reader';

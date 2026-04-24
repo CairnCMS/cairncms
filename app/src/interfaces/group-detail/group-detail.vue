@@ -50,7 +50,7 @@ import { Field } from '@cairncms/types';
 import { computed, defineComponent, PropType, ref, watch } from 'vue';
 import { ValidationError } from '@cairncms/types';
 import { useI18n } from 'vue-i18n';
-import formatTitle from '@directus/format-title';
+import formatTitle from '@cairncms/format-title';
 import { isEqual } from 'lodash';
 
 export default defineComponent({

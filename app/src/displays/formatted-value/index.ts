@@ -1,7 +1,7 @@
 import { defineDisplay } from '@cairncms/utils';
 import { DisplayConfig } from '@cairncms/types';
 import DisplayFormattedValue from './formatted-value.vue';
-import formatTitle from '@directus/format-title';
+import formatTitle from '@cairncms/format-title';
 import { decode } from 'html-entities';
 import dompurify from 'dompurify';
 

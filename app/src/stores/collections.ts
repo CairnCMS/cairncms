@@ -6,7 +6,7 @@ import { getCollectionType } from '@cairncms/utils';
 import { notify } from '@/utils/notify';
 import { getLiteralInterpolatedTranslation } from '@/utils/get-literal-interpolated-translation';
 import { unexpectedError } from '@/utils/unexpected-error';
-import formatTitle from '@directus/format-title';
+import formatTitle from '@cairncms/format-title';
 import { defineStore } from 'pinia';
 import { COLLECTIONS_DENY_LIST } from '@/constants';
 import { isEqual, orderBy, omit, isNil } from 'lodash';

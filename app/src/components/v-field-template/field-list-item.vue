@@ -21,7 +21,7 @@
 
 <script setup lang="ts">
 import { FieldTree } from './types';
-import formatTitle from '@directus/format-title';
+import formatTitle from '@cairncms/format-title';
 
 interface Props {
 	field: FieldTree;

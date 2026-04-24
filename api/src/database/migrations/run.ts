@@ -1,4 +1,4 @@
-import formatTitle from '@directus/format-title';
+import formatTitle from '@cairncms/format-title';
 import fse from 'fs-extra';
 import type { Knex } from 'knex';
 import { orderBy } from 'lodash-es';

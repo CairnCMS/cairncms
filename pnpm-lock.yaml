@@ -70,6 +70,9 @@ importers:
       '@cairncms/extensions-sdk':
         specifier: workspace:*
         version: link:../packages/extensions-sdk
+      '@cairncms/format-title':
+        specifier: workspace:*
+        version: link:../packages/format-title
       '@cairncms/schema':
         specifier: workspace:*
         version: link:../packages/schema
@@ -100,9 +103,6 @@ importers:
       '@cairncms/utils':
         specifier: workspace:*
         version: link:../packages/utils
-      '@directus/format-title':
-        specifier: 10.0.0
-        version: 10.0.0
       '@godaddy/terminus':
         specifier: 4.12.0
         version: 4.12.0
@@ -511,15 +511,15 @@ importers:
       '@cairncms/extensions-sdk':
         specifier: workspace:*
         version: link:../packages/extensions-sdk
+      '@cairncms/format-title':
+        specifier: workspace:*
+        version: link:../packages/format-title
       '@cairncms/types':
         specifier: workspace:*
         version: link:../packages/types
       '@cairncms/utils':
         specifier: workspace:*
         version: link:../packages/utils
-      '@directus/format-title':
-        specifier: 10.0.0
-        version: 10.0.0
       '@fortawesome/fontawesome-svg-core':
         specifier: 6.4.0
         version: 6.4.0
@@ -931,6 +931,18 @@ importers:
       '@types/inquirer':
         specifier: 9.0.3
         version: 9.0.3
+      '@vitest/coverage-v8':
+        specifier: 1.6.1
+        version: 1.6.1(vitest@1.6.1)
+      typescript:
+        specifier: 5.0.4
+        version: 5.0.4
+      vitest:
+        specifier: 1.6.1
+        version: 1.6.1(happy-dom@14.12.3)(sass@1.62.0)
+
+  packages/format-title:
+    devDependencies:
       '@vitest/coverage-v8':
         specifier: 1.6.1
         version: 1.6.1(vitest@1.6.1)
@@ -2965,10 +2977,6 @@ packages:
     requiresBuild: true
     dev: true
     optional: true
-
-  /@directus/format-title@10.0.0:
-    resolution: {integrity: sha512-iMXP8yQb0UKAMGRHAY7IkNXEGdUqQDvlu1aAkPARYah4lMhEU8E5KgkXdOCPQaxt6Wy0gXb7DPMjeSlKyBKCxg==}
-    engines: {node: '>=6.0.0'}
 
   /@emnapi/runtime@1.9.2:
     resolution: {integrity: sha512-3U4+MIWHImeyu1wnmVygh5WlgfYDtyf0k8AbLhMFxOipihf6nrWC4syIm/SwEeec0mNSafiiNnMJwbza/Is6Lw==}
