@@ -1,0 +1,42 @@
+name: SDK Integration Tests
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - sdk/**
+      - api/**
+      - package.json
+      - pnpm-lock.yaml
+      - .github/workflows/sdk-integration.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - sdk/**
+      - api/**
+      - package.json
+      - pnpm-lock.yaml
+      - .github/workflows/sdk-integration.yml
+
+concurrency:
+  group: sdk-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_OPTIONS: --max_old_space_size=6144
+
+jobs:
+  test:
+    name: SDK Integration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare
+        uses: ./.github/actions/prepare
+
+      - name: Run SDK integration tests
+        run: pnpm --filter @cairncms/sdk test:integration
