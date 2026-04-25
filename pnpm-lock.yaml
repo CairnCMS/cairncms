@@ -767,7 +767,7 @@ importers:
         specifier: 0.5.0
         version: 0.5.0
 
-  directus:
+  cairncms:
     dependencies:
       '@cairncms/api':
         specifier: workspace:*
