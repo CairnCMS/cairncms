@@ -13,8 +13,8 @@
 		"url": "https://github.com/CairnCMS/cairncms.git",
 		"directory": "packages/storage"
 	},
-	"license": "BUSL-1.1",
-	"author": "Rijk van Zanten <rijkvanzanten@me.com>",
+	"license": "GPL-3.0-only",
+	"author": "The CairnCMS Authors",
 	"exports": {
 		".": "./dist/index.js",
 		"./package.json": "./package.json"

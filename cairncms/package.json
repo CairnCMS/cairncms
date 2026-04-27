@@ -30,24 +30,8 @@
 		"type": "git",
 		"url": "https://github.com/CairnCMS/cairncms.git"
 	},
-	"license": "BUSL-1.1",
-	"author": {
-		"name": "Monospace Inc",
-		"email": "info@monospace.io",
-		"url": "https://monospace.io"
-	},
-	"maintainers": [
-		{
-			"name": "Rijk van Zanten",
-			"email": "rijkvanzanten@me.com",
-			"url": "https://github.com/rijkvanzanten"
-		},
-		{
-			"name": "Ben Haynes",
-			"email": "ben@rngr.org",
-			"url": "https://github.com/benhaynes"
-		}
-	],
+	"license": "GPL-3.0-only",
+	"author": "The CairnCMS Authors",
 	"exports": {
 		"./package.json": "./package.json"
 	},

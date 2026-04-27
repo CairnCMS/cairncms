@@ -14,7 +14,7 @@
 		"directory": "packages/update-check"
 	},
 	"license": "MIT",
-	"author": "Rijk van Zanten <rijkvanzanten@me.com>",
+	"author": "The CairnCMS Authors",
 	"exports": {
 		".": "./dist/index.js",
 		"./package.json": "./package.json"

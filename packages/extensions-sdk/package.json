@@ -12,7 +12,7 @@
 		"url": "https://github.com/CairnCMS/cairncms.git",
 		"directory": "packages/extensions-sdk"
 	},
-	"author": "Nicola Krumschmidt",
+	"author": "The CairnCMS Authors",
 	"exports": {
 		".": "./dist/index.js",
 		"./cli": "./dist/cli/index.js",

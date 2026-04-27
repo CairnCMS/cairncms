@@ -13,7 +13,7 @@
 		"directory": "packages/types"
 	},
 	"license": "MIT",
-	"author": "Rijk van Zanten <rijkvanzanten@me.com>",
+	"author": "The CairnCMS Authors",
 	"exports": {
 		".": "./dist/index.js",
 		"./package.json": "./package.json"

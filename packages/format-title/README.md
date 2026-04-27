@@ -34,4 +34,4 @@ characters. By default, this regex is set to `/\s|-|_/g`.
 
 ## License
 
-This package is licensed under the MIT License. See the [license](./license) file for more information.
+This package is licensed under the MIT License. See the [LICENSE](./LICENSE) file for more information.

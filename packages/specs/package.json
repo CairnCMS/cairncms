@@ -12,8 +12,8 @@
 		"url": "https://github.com/CairnCMS/cairncms.git",
 		"directory": "packages/specs"
 	},
-	"license": "BUSL-1.1",
-	"author": "Nils Twelker",
+	"license": "GPL-3.0-only",
+	"author": "The CairnCMS Authors",
 	"exports": {
 		".": "./index.js",
 		"./package.json": "./package.json"

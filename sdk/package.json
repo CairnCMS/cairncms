@@ -9,6 +9,7 @@
 		"directory": "sdk"
 	},
 	"license": "MIT",
+	"author": "The CairnCMS Authors",
 	"type": "module",
 	"exports": {
 		".": {
