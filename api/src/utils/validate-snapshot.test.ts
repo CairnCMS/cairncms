@@ -3,7 +3,7 @@ import type { Snapshot } from '../types/snapshot.js';
 import { validateSnapshot } from './validate-snapshot.js';
 
 vi.mock('./package.js', () => ({
-	version: '10.0.0',
+	version: '1.0.0',
 }));
 
 vi.mock('../database/index.js', () => ({
@@ -24,7 +24,7 @@ describe('should fail on invalid snapshot schema', () => {
 	});
 
 	test('invalid schema', () => {
-		const snapshot = { version: 1, directus: '10.0.0', collections: {} } as Snapshot;
+		const snapshot = { version: 1, directus: '1.0.0', collections: {} } as Snapshot;
 
 		expect(() => validateSnapshot(snapshot)).toThrowError('"collections" must be an array');
 	});
@@ -35,12 +35,12 @@ describe('should require force option on version / vendor mismatch', () => {
 		const snapshot = { version: 1, directus: '9.26.0' } as Snapshot;
 
 		expect(() => validateSnapshot(snapshot)).toThrowError(
-			"Provided snapshot's directus version 9.26.0 does not match the current instance's version 10.0.0"
+			"Provided snapshot's directus version 9.26.0 does not match the current instance's version 1.0.0"
 		);
 	});
 
 	test('db vendor mismatch', () => {
-		const snapshot = { version: 1, directus: '10.0.0', vendor: 'postgres' } as Snapshot;
+		const snapshot = { version: 1, directus: '1.0.0', vendor: 'postgres' } as Snapshot;
 
 		expect(() => validateSnapshot(snapshot)).toThrowError(
 			"Provided snapshot's vendor postgres does not match the current instance's vendor sqlite."

@@ -1,6 +1,6 @@
 {
 	"name": "@cairncms/app",
-	"version": "10.0.0",
+	"version": "1.0.0",
 	"description": "App dashboard for CairnCMS",
 	"homepage": "https://cairncms.dev",
 	"type": "module",

@@ -14,9 +14,9 @@ import * as sdk from '../src/index.js';
  */
 
 const UNSUPPORTED_EXPORTS = [
-	// realtime: WebSocket client (no /websocket endpoint in CairnCMS v10.0.0)
+	// realtime: WebSocket client (no /websocket endpoint in CairnCMS)
 	'realtime',
-	// directus_translations: not a CRUD table in v10.0.0 (JSON-blob-on-settings)
+	// directus_translations: not a CRUD table (JSON-blob-on-settings)
 	'readTranslations',
 	'readTranslation',
 	'createTranslation',
