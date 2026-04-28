@@ -1,6 +1,5 @@
 # CairnCMS
-***
-CairnCMS is a headless CMS, real-time API, and app dashboard for managing SQL database content.
+CairnCMS is a self-hosted headless CMS that serves a REST and GraphQL API with a no-code admin app on top of an SQL database.
 
 ### Key Features:
 - Instantly layers a Node.js API on top of any new or existing SQL database
@@ -10,7 +9,6 @@ CairnCMS is a headless CMS, real-time API, and app dashboard for managing SQL da
 - Self-hosted and GPLv3
 
 ## Getting Help and Contributing
-***
 - Have a question?
   - Read the [docs](https://cairncms.dev/docs)
   - Post in [GitHub Discussions](https://github.com/CairnCMS/cairncms/discussions)
@@ -20,13 +18,10 @@ CairnCMS is a headless CMS, real-time API, and app dashboard for managing SQL da
   - Read [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 
 ## Reporting Security Vulnerabilities
-***
 If you discover a security vulnerability within CairnCMS, please report it privately through [GitHub Security Advisories](https://github.com/CairnCMS/cairncms/security) or by email to [security@cairncms.dev](mailto:security@cairncms.dev).
 
 ## License
-***
 [GPLv3](./LICENSE)
 
 ## Acknowledgements
-***
 The codebase originated in Directus v10. Thanks to the Directus team and contributors whose work made this project's starting point possible.

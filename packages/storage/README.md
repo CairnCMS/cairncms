@@ -1,6 +1,6 @@
-# @cairncms/app
+# @cairncms/storage
 
-Internal package. The CairnCMS admin app.
+Internal package. Storage adapter interface used by the API and storage drivers.
 
 This package is published to npm so the public CairnCMS packages can resolve their transitive dependencies. **It is not a publicly supported package.** Its API may change at any time without notice. Do not install or import it directly.
 

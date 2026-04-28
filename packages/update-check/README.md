@@ -1,6 +1,6 @@
-# @cairncms/app
+# @cairncms/update-check
 
-Internal package. The CairnCMS admin app.
+Internal package. npm registry update-check utility used by the CLI.
 
 This package is published to npm so the public CairnCMS packages can resolve their transitive dependencies. **It is not a publicly supported package.** Its API may change at any time without notice. Do not install or import it directly.
 

@@ -13,3 +13,5 @@ npm init cairncms-extension
 ```
 yarn create cairncms-extension
 ```
+
+For more on CairnCMS extensions, see the [documentation](https://cairncms.dev/docs).
