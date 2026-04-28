@@ -1,21 +1,27 @@
-## Summary
+## Related Issue or Discussion
 
-<!-- What does this PR do and why? -->
+- Closes #123...
 
-## Type of change
+## Scope
 
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Documentation
-- [ ] Refactor / maintenance
+- What problem does this PR solve?
 
 ## Checklist
 
-- [ ] Tests pass locally (`pnpm test`)
-- [ ] Lint passes (`pnpm lint`)
-- [ ] I understand the code I'm submitting and can explain it on request
-- [ ] If AI tools assisted with this PR, I have reviewed the output and any documentation/comments are human-authored
+Before submitting a PR, please complete the following checklist.
 
-## Related issues
+- [ ] I have read the [contribution guide](https://github.com/CairnCMS/cairncms/blob/main/CONTRIBUTING.md)
+- [ ] I have run tests with `pnpm test` and lint with `pnpm lint`
+- [ ] I have added test cases as necessary
 
-<!-- Closes #123 -->
+## AI Policy
+
+Complete the following checklist if AI assistance was used for this PR.
+
+- [ ] I have read the [AI Policy](https://github.com/CairnCMS/cairncms/blob/main/AI_POLICY.md)
+- [ ] All submitted code is human-reviewed
+- [ ] All submitted documentation/comments are human-reviewed and human-edited
+
+***
+
+✒️ I contribute this code under the Developer Certificate of Origin.

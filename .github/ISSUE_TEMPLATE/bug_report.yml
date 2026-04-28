@@ -1,16 +1,13 @@
-name: Report a bug
-description: Create a report to help us improve
+name: Bug Report
+description: Create a bug report for CairnCMS.
 body:
   - type: markdown
     attributes:
       value: |
-        Hi, thank you for taking the time to create an issue! Before you get started, please ensure the following are correct:
+        # Thanks for filing a bug report 🐛
 
-        - I'm using the [latest version of Directus](https://github.com/directus/directus/releases)
-        - I've completed all [Troubleshooting Steps](https://docs.directus.io/getting-started/support/#troubleshooting-steps).
-        - There's [no other issue](https://github.com/directus/directus/issues?q=is%3Aissue) that already describes the problem.
+        Before starting, make sure that you're using the latest versions of all packages.
 
-        _For issues specific to Directus Cloud projects, please reach out through the Live Chat in our Cloud Dashboard._
   - type: textarea
     attributes:
       label: Describe the Bug
@@ -27,7 +24,7 @@ body:
       required: true
   - type: input
     attributes:
-      label: Directus Version
+      label: CairnCMS Version
       placeholder: v1.x.x
     validations:
       required: true
@@ -38,6 +35,5 @@ body:
       options:
         - Self-Hosted (Docker Image)
         - Self-Hosted (Custom)
-        - Directus Cloud
     validations:
       required: true

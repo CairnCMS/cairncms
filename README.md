@@ -29,4 +29,4 @@ If you discover a security vulnerability within CairnCMS, please report it priva
 
 ## Acknowledgements
 ***
-The codebase originated in [Directus](https://directus.io) v10. Thanks to the Directus team and contributors whose work made this project's starting point possible.
+The codebase originated in Directus v10. Thanks to the Directus team and contributors whose work made this project's starting point possible.

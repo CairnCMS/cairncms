@@ -1,11 +1,11 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Request a new feature
-    url: https://github.com/directus/directus/discussions/new?category=feature-requests
-    about: Share your ideas on how to make Directus better.
-  - name: Suggest improvements for the docs
-    url: https://github.com/directus/directus/discussions/new?category=docs-suggestions
-    about: Share your ideas on how to improve the documentation of Directus.
-  - name: Ask a question
-    url: https://directus.chat/
+  - name: Feature Request
+    url: https://github.com/CairnCMS/cairncms/discussions
+    about: Share your ideas on how to make CairnCMS better.
+  - name: Question
+    url: https://github.com/CairnCMS/cairncms/discussions
     about: Please ask and answer questions here.
+  - name: Security Vulnerability
+    url: https://github.com/CairnCMS/cairncms/security/policy
+    about: Review our security policy for more details.

@@ -1,11 +1,14 @@
-name: Report a docs inaccuracy
-description: When something is wrong or incorrect in the docs
+name: Documentation Problem
+description: Report an issue with documentation content.
 labels: Documentation
 body:
   - type: markdown
     attributes:
       value: |
-        Hi, thank you for taking the time to create an issue! If you're asking for _new_ docs, or have a suggestion on how to enhance existing docs, please open [a docs suggestion](https://github.com/directus/directus/discussions/new?category=docs-suggestions) instead!
+          # Thanks for reporting an issue with our docs 📚
+
+          Documentation problems might be grammatical issues, typos, unclear wording, or outdated/irrelevant information.
+          Please provide details regarding the documentation, including where it is located.
   - type: input
     attributes:
       label: Page

@@ -3,94 +3,64 @@ body:
   - type: markdown
     attributes:
       value: |
-        Hi, thank you for taking the time to create a feature request!
+        # Thank you for sharing your idea about a new feature. 🌟
 
-        In order to make sure this feature request has the biggest chance of being implemented, please fill out the following sections in as much detail as you can.
+        Be sure to search existing discussions first.
 
-  - type: textarea
+        A few tips to help us understand your idea:
+        1. Describe what you're trying to achieve, not necessarily how CairnCMS should change to get there.
+        2. Be specific. Real-world examples and use cases from your own projects go a long way.
+        3. If you've found a workaround, share it. It helps us understand where gaps exist.
+
+  - type: input
+    id: version
     attributes:
-      label: Summary
-      description: Brief explanation of the feature
+      label: CairnCMS Version
+      description: Include the version you are using, if relevant.
+      placeholder: v1.x.x
     validations:
       required: true
 
   - type: textarea
+    id: problem
     attributes:
-      label: Basic Example
-      description: If the proposal involves a new or changed API, include a basic code example.
-
-  - type: textarea
-    attributes:
-      label: Motivation
-      description: |
-        Why are we doing this? What use cases does it support? What is the expected outcome?
-
-        Please focus on explaining the motivation so that if this RFC is not accepted, the motivation could be used to develop alternative solutions. In other words, enumerate the constraints you are trying to solve without coupling them too closely to the solution you have in mind.
+      label: What problem are you trying to solve?
+      description: Describe the problem in your project or workflow. Focus on what is difficult today.
+      placeholder: |
+        I am trying to...
+        The current limitation is...
     validations:
       required: true
 
   - type: textarea
+    id: attempted_solutions
     attributes:
-      label: Detailed Design
-      description: |
-        This is the bulk of the RFC. Explain the design in enough detail for somebody familiar with Directus to understand, and for somebody familiar with the implementation to implement. This should get into specifics and corner-cases, and include examples of how the feature is used. Any new terminology should be defined here.
+      label: What have you tried already?
+      description: If you tried existing CairnCMS features, extensions, or workarounds, describe them here.
+      placeholder: |
+        I tried...
+        This did not work because...
     validations:
-      required: true
+      required: false
 
   - type: textarea
+    id: proposal
     attributes:
-      label: Requirements List
-      value: |
-        ### Must Have:
-        - A
-        - B
-
-        ### Should Have:
-        - C
-
-        ### Could Have:
-        - D
-
-        ### Won't Have:
-        - E
-      description: |
-        What is required to make this feature a success? Please use [the MoSCoW method](https://en.wikipedia.org/wiki/MoSCoW_method) to describe the requirements.
+      label: What would you like to see?
+      description: If you have an idea for how CairnCMS could address the problem, describe it here. Rough ideas are fine.
+      placeholder: |
+        It would help if CairnCMS could...
+        A possible approach would be...
     validations:
-      required: true
+      required: false
 
   - type: textarea
+    id: references
     attributes:
-      label: Drawbacks
-      description: |
-        Why should we **not** do this? Please consider:
-          - implementation cost, both in term of code size and complexity
-          - whether the proposed feature can be implemented in user space
-          - the impact on teaching people Directus
-          - integration of this feature with other existing and planned features
-          - cost of migrating existing Directus applications (is it a breaking change?)
-
-          There are tradeoffs to choosing any path. Attempt to identify them here.
+      label: Related issues, discussions, or examples
+      description: Link any related GitHub issues, discussions, docs, or external examples.
+      placeholder: |
+        - #123
+        - https://example.com
     validations:
-      required: true
-
-  - type: textarea
-    attributes:
-      label: Alternatives
-      description: |
-        What other designs have been considered? What is the impact of not doing this?
-    validations:
-      required: true
-
-  - type: textarea
-    attributes:
-      label: Adoption Strategy
-      description: |
-        If we implement this proposal, how will existing Directus developers adopt it? Is this a breaking change? Can we write a migration? How will this affect other projects in the Directus ecosystem?
-    validations:
-      required: true
-
-  - type: textarea
-    attributes:
-      label: Unresolved Questions
-      description: |
-        What parts of this request are still unknown?
+      required: false
