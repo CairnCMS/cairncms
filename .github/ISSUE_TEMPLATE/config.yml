@@ -1,11 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Feature Request
+  - name: Request a Feature
     url: https://github.com/CairnCMS/cairncms/discussions
     about: Share your ideas on how to make CairnCMS better.
-  - name: Question
+  - name: Ask a Question
     url: https://github.com/CairnCMS/cairncms/discussions
     about: Please ask and answer questions here.
-  - name: Security Vulnerability
-    url: https://github.com/CairnCMS/cairncms/security/policy
-    about: Review our security policy for more details.
