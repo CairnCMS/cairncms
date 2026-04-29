@@ -44,7 +44,7 @@ describe('public export surface', () => {
 		// A single spot-check that the core composable factories exist with
 		// callable signatures. If any of these are deleted accidentally, this
 		// file fails to type-check.
-		assertType<typeof sdk.createDirectus>(sdk.createDirectus);
+		assertType<typeof sdk.createCairnCMS>(sdk.createCairnCMS);
 		assertType<typeof sdk.rest>(sdk.rest);
 		assertType<typeof sdk.graphql>(sdk.graphql);
 		assertType<typeof sdk.authentication>(sdk.authentication);

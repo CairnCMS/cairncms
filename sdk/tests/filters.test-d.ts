@@ -1,10 +1,10 @@
 import { describe, expectTypeOf, test } from 'vitest';
-import { createDirectus, readItems, rest } from '../src/index.js';
+import { createCairnCMS, readItems, rest } from '../src/index.js';
 import type { TestSchema } from './schema.js';
 
 describe('Test QueryFilters', () => {
 	test('resolving _and/_or filters (issue #20633)', () => {
-		const client = createDirectus<TestSchema>('https://directus.example.com').with(rest());
+		const client = createCairnCMS<TestSchema>('https://directus.example.com').with(rest());
 
 		const withConditional = () =>
 			client.request(

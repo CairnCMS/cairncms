@@ -10,7 +10,7 @@ export type ReadRelationOutput<Schema, Item extends object = DirectusRelation<Sc
 >;
 
 /**
- * List all Relations that exist in Directus.
+ * List all Relations that exist in CairnCMS.
  * @param query The query parameters
  * @returns An array of up to limit Relation objects. If no items are available, data will be an empty array.
  */

@@ -10,7 +10,7 @@ export type ReadRoleOutput<
 > = ApplyQueryFields<Schema, Item, TQuery['fields']>;
 
 /**
- * List all Roles that exist in Directus.
+ * List all Roles that exist in CairnCMS.
  * @param query The query parameters
  * @returns An array of up to limit Role objects. If no items are available, data will be an empty array.
  */

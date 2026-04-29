@@ -2,13 +2,13 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
 	aggregate,
 	authentication,
-	createDirectus,
+	createCairnCMS,
 	createItem,
 	deleteItem,
 	readItems,
 	rest,
 	updateItem,
-	type DirectusClient,
+	type CairnCMSClient,
 	type RestClient,
 	type AuthenticationClient,
 } from '../../src/index.js';
@@ -28,10 +28,10 @@ type Schema = {
 	[COLLECTIONS.publicItems]: PublicItem[];
 };
 
-let admin: DirectusClient<Schema> & AuthenticationClient<Schema> & RestClient<Schema>;
+let admin: CairnCMSClient<Schema> & AuthenticationClient<Schema> & RestClient<Schema>;
 
 beforeAll(async () => {
-	admin = createDirectus<Schema>(URL).with(authentication('json')).with(rest());
+	admin = createCairnCMS<Schema>(URL).with(authentication('json')).with(rest());
 	await admin.login(EMAIL, PASSWORD);
 });
 
@@ -128,7 +128,7 @@ describe('REST aggregate', () => {
 
 describe('REST public-role path', () => {
 	it('reads public items without authentication', async () => {
-		const anonymous = createDirectus<Schema>(URL).with(rest());
+		const anonymous = createCairnCMS<Schema>(URL).with(rest());
 
 		const items = await anonymous.request(readItems(COLLECTIONS.publicItems, { limit: -1 }));
 
@@ -138,7 +138,7 @@ describe('REST public-role path', () => {
 	});
 
 	it('rejects unauthenticated reads on admin-only collections', async () => {
-		const anonymous = createDirectus<Schema>(URL).with(rest());
+		const anonymous = createCairnCMS<Schema>(URL).with(rest());
 
 		await expect(anonymous.request(readItems(COLLECTIONS.items, { limit: -1 }))).rejects.toThrow();
 	});

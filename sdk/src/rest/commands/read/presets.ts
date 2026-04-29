@@ -10,7 +10,7 @@ export type ReadPresetOutput<
 > = ApplyQueryFields<Schema, Item, TQuery['fields']>;
 
 /**
- * List all Presets that exist in Directus.
+ * List all Presets that exist in CairnCMS.
  * @param query The query parameters
  * @returns An array of up to limit Preset objects. If no items are available, data will be an empty array.
  */

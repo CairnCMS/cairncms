@@ -10,7 +10,7 @@ export type ReadRevisionOutput<
 > = ApplyQueryFields<Schema, Item, TQuery['fields']>;
 
 /**
- * List all Revisions that exist in Directus.
+ * List all Revisions that exist in CairnCMS.
  * @param query The query parameters
  * @returns An array of up to limit Revision objects. If no items are available, data will be an empty array.
  */

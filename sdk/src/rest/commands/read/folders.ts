@@ -10,7 +10,7 @@ export type ReadFolderOutput<
 > = ApplyQueryFields<Schema, Item, TQuery['fields']>;
 
 /**
- * List all folders that exist in Directus.
+ * List all folders that exist in CairnCMS.
  * @param query The query parameters
  * @returns An array of up to limit folder objects. If no items are available, data will be an empty array.
  */

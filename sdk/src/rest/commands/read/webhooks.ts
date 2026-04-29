@@ -10,7 +10,7 @@ export type ReadWebhookOutput<
 > = ApplyQueryFields<Schema, Item, TQuery['fields']>;
 
 /**
- * List all Webhooks that exist in Directus.
+ * List all Webhooks that exist in CairnCMS.
  * @param query The query parameters
  * @returns An array of up to limit Webhook objects. If no items are available, data will be an empty array.
  */

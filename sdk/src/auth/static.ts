@@ -1,15 +1,15 @@
-import type { DirectusClient } from '../types/client.js';
+import type { CairnCMSClient } from '../types/client.js';
 import type { StaticTokenClient } from './types.js';
 
 /**
- * Creates a client to authenticate with Directus using a static token.
+ * Creates a client to authenticate with CairnCMS using a static token.
  *
  * @param token static token.
  *
- * @returns A Directus static token client.
+ * @returns A CairnCMS static token client.
  */
 export const staticToken = (access_token: string) => {
-	return <Schema>(_client: DirectusClient<Schema>): StaticTokenClient<Schema> => {
+	return <Schema>(_client: CairnCMSClient<Schema>): StaticTokenClient<Schema> => {
 		let token: string | null = access_token ?? null;
 		return {
 			async getToken() {

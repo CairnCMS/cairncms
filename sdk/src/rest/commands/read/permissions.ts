@@ -16,7 +16,7 @@ export type ReadItemPermissionsOutput = {
 };
 
 /**
- * List all Permissions that exist in Directus.
+ * List all Permissions that exist in CairnCMS.
  * @param query The query parameters
  * @returns An array of up to limit Permission objects. If no items are available, data will be an empty array.
  */
@@ -31,7 +31,7 @@ export const readPermissions =
 	});
 
 /**
- * List all Permissions that exist in Directus.
+ * List all Permissions that exist in CairnCMS.
  * @param key The primary key of the permission
  * @param query The query parameters
  * @returns Returns a Permission object if a valid primary key was provided.

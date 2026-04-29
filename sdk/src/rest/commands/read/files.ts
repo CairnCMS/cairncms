@@ -10,7 +10,7 @@ export type ReadFileOutput<
 > = ApplyQueryFields<Schema, Item, TQuery['fields']>;
 
 /**
- * List all files that exist in Directus.
+ * List all files that exist in CairnCMS.
  * @param query The query parameters
  * @returns An array of up to limit file objects. If no items are available, data will be an empty array.
  */

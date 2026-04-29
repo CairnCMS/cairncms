@@ -15,26 +15,26 @@ readTime: 12 min read
 npm install @cairncms/sdk
 ```
 
-The SDK has zero runtime dependencies and works in any environment with a global `fetch` and `URL` (modern browsers, Node.js 18+, Deno, Bun, Cloudflare Workers, etc.).
+The SDK has zero runtime dependencies and works in any environment with a global `fetch` and `URL` (modern browsers, Node.js 20+, Deno, Bun, Cloudflare Workers, etc.).
 
 ## Quick start
 
 ```ts
-import { createDirectus, rest, readItems } from '@cairncms/sdk';
+import { createCairnCMS, rest, readItems } from '@cairncms/sdk';
 
-const client = createDirectus('http://localhost:8055').with(rest());
+const client = createCairnCMS('http://localhost:8055').with(rest());
 
 const articles = await client.request(readItems('articles'));
 ```
 
-The SDK uses a composable pattern: `createDirectus(url)` returns a minimal client, and `.with(...)` attaches capabilities (REST, GraphQL, authentication). Calls are made via `client.request(command)` where `command` is a helper like `readItems`, `createItem`, etc.
+The SDK uses a composable pattern: `createCairnCMS(url)` returns a minimal client, and `.with(...)` attaches capabilities (REST, GraphQL, authentication). Calls are made via `client.request(command)` where `command` is a helper like `readItems`, `createItem`, etc.
 
 ## Creating a client
 
 ```ts
-import { createDirectus } from '@cairncms/sdk';
+import { createCairnCMS } from '@cairncms/sdk';
 
-const client = createDirectus('http://example.com');
+const client = createCairnCMS('http://example.com');
 ```
 
 By default, the client carries only the URL. It has no REST, GraphQL, or auth capabilities until you compose them in. This keeps the bundle size minimal for consumers who only need a subset.
@@ -42,7 +42,7 @@ By default, the client carries only the URL. It has no REST, GraphQL, or auth ca
 ### Client options
 
 ```ts
-const client = createDirectus('http://example.com', {
+const client = createCairnCMS('http://example.com', {
   globals: {
     fetch: customFetch,
     logger: customLogger,
@@ -63,9 +63,9 @@ Two authentication modes are available.
 ### Session-based authentication (login/refresh)
 
 ```ts
-import { createDirectus, authentication, rest } from '@cairncms/sdk';
+import { createCairnCMS, authentication, rest } from '@cairncms/sdk';
 
-const client = createDirectus('http://example.com')
+const client = createCairnCMS('http://example.com')
   .with(authentication('json'))
   .with(rest());
 
@@ -103,9 +103,9 @@ const me = await client.request(readMe());
 For server-to-server calls, CI jobs, or any context where you have a long-lived token already:
 
 ```ts
-import { createDirectus, staticToken, rest } from '@cairncms/sdk';
+import { createCairnCMS, staticToken, rest } from '@cairncms/sdk';
 
-const client = createDirectus('http://example.com')
+const client = createCairnCMS('http://example.com')
   .with(staticToken('your-token'))
   .with(rest());
 
@@ -117,9 +117,9 @@ Create static tokens in the admin UI (user detail page → Token field) or via t
 ## REST
 
 ```ts
-import { createDirectus, rest, readItems } from '@cairncms/sdk';
+import { createCairnCMS, rest, readItems } from '@cairncms/sdk';
 
-const client = createDirectus('http://example.com').with(rest());
+const client = createCairnCMS('http://example.com').with(rest());
 ```
 
 ### Reading data
@@ -260,9 +260,9 @@ const result = await client.request(
 ## GraphQL
 
 ```ts
-import { createDirectus, graphql, authentication } from '@cairncms/sdk';
+import { createCairnCMS, graphql, authentication } from '@cairncms/sdk';
 
-const client = createDirectus('http://example.com')
+const client = createCairnCMS('http://example.com')
   .with(authentication('json'))
   .with(graphql());
 
@@ -300,7 +300,7 @@ The default scope is `'items'` (the `/graphql` endpoint, which exposes user-defi
 
 ## TypeScript: defining a Schema
 
-Passing a schema type to `createDirectus<Schema>()` lets the SDK infer return types, validate `fields` paths, and check filter DSL correctness.
+Passing a schema type to `createCairnCMS<Schema>()` lets the SDK infer return types, validate `fields` paths, and check filter DSL correctness.
 
 ```ts
 import type { DirectusUser } from '@cairncms/sdk';
@@ -318,7 +318,7 @@ type Schema = {
   articles: Article[];
 };
 
-const client = createDirectus<Schema>('http://example.com').with(rest());
+const client = createCairnCMS<Schema>('http://example.com').with(rest());
 
 // Now the return type is known
 const articles = await client.request(
@@ -406,11 +406,13 @@ This has nothing to do with full-text search — it's a mechanism for sending ov
 
 ### Migrating from `@directus/sdk`
 
-If your consumer code already uses the composable SDK API (`createDirectus(url).with(rest())`, `client.request(readItems(...))`), migration is an import rename:
+If your consumer code already uses the composable SDK API (`createDirectus(url).with(rest())`, `client.request(readItems(...))`), migration is an import rename plus a function name update. The CairnCMS SDK exposes the factory as `createCairnCMS` (and its return type as `CairnCMSClient`). Schema and command names (`readItems`, `readMe`, etc.) are unchanged.
 
 ```diff
 - import { createDirectus, rest, readItems } from '@directus/sdk';
-+ import { createDirectus, rest, readItems } from '@cairncms/sdk';
+- const client = createDirectus(url).with(rest());
++ import { createCairnCMS, rest, readItems } from '@cairncms/sdk';
++ const client = createCairnCMS(url).with(rest());
 ```
 
 No other code changes are required, provided you don't depend on the unsupported surfaces above.
@@ -419,7 +421,7 @@ If your consumer code uses the older class-based Directus SDK API (`new Directus
 
 ### Runtime requirements
 
-- Node.js 18.0.0 or newer
+- Node.js 20.0.0 or newer
 - Browsers with native `fetch` and `URL` (all modern evergreen browsers)
 - The `@cairncms/sdk` package itself has zero runtime dependencies
 

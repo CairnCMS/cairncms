@@ -1,4 +1,4 @@
-import type { DirectusClient } from '../types/client.js';
+import type { CairnCMSClient } from '../types/client.js';
 import type { GraphqlClient, GraphqlConfig } from './types.js';
 import { request } from '../utils/request.js';
 import { getRequestUrl } from '../utils/get-request-url.js';
@@ -7,12 +7,12 @@ import type { AuthenticationClient } from '../auth/types.js';
 const defaultConfigValues: GraphqlConfig = {};
 
 /**
- * Creates a client to communicate with Directus GraphQL.
+ * Creates a client to communicate with CairnCMS GraphQL.
  *
- * @returns A Directus GraphQL client.
+ * @returns A CairnCMS GraphQL client.
  */
 export const graphql = (config: Partial<GraphqlConfig> = {}) => {
-	return <Schema>(client: DirectusClient<Schema>): GraphqlClient<Schema> => {
+	return <Schema>(client: CairnCMSClient<Schema>): GraphqlClient<Schema> => {
 		const gqlConfig = { ...defaultConfigValues, ...config };
 		return {
 			async query<Output extends object = Record<string, any>>(

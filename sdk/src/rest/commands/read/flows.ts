@@ -10,7 +10,7 @@ export type ReadFlowOutput<
 > = ApplyQueryFields<Schema, Item, TQuery['fields']>;
 
 /**
- * List all flows that exist in Directus.
+ * List all flows that exist in CairnCMS.
  * @param query The query parameters
  * @returns An array of up to limit flow objects. If no items are available, data will be an empty array.
  */

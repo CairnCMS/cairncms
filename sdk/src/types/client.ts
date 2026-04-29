@@ -3,10 +3,10 @@ import type { ConsoleInterface, FetchInterface, UrlInterface } from './globals.j
 /**
  * empty directus client
  */
-export interface DirectusClient<Schema> {
+export interface CairnCMSClient<Schema> {
 	url: URL;
 	globals: ClientGlobals;
-	with: <Extension extends object>(createExtension: (client: DirectusClient<Schema>) => Extension) => this & Extension;
+	with: <Extension extends object>(createExtension: (client: CairnCMSClient<Schema>) => Extension) => this & Extension;
 }
 
 /**

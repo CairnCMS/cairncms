@@ -10,7 +10,7 @@ export type ReadShareOutput<
 > = ApplyQueryFields<Schema, Item, TQuery['fields']>;
 
 /**
- * List all Shares that exist in Directus.
+ * List all Shares that exist in CairnCMS.
  * @param query The query parameters
  * @returns An array of up to limit Share objects. If no items are available, data will be an empty array.
  */

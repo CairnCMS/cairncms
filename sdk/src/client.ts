@@ -1,4 +1,4 @@
-import type { ClientGlobals, ClientOptions, DirectusClient } from './types/client.js';
+import type { ClientGlobals, ClientOptions, CairnCMSClient } from './types/client.js';
 
 /**
  * The default globals supplied to the client
@@ -10,14 +10,14 @@ const defaultGlobals: ClientGlobals = {
 };
 
 /**
- * Creates a client to communicate with a Directus app.
+ * Creates a client to communicate with a CairnCMS app.
  *
- * @param url The URL to the Directus app.
+ * @param url The URL to the CairnCMS app.
  * @param config The optional configuration.
  *
- * @returns A Directus client.
+ * @returns A CairnCMS client.
  */
-export const createDirectus = <Schema = any>(url: string, options: ClientOptions = {}): DirectusClient<Schema> => {
+export const createCairnCMS = <Schema = any>(url: string, options: ClientOptions = {}): CairnCMSClient<Schema> => {
 	const globals = options.globals ? { ...defaultGlobals, ...options.globals } : defaultGlobals;
 	return {
 		globals,

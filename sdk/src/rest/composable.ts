@@ -1,5 +1,5 @@
 import type { StaticTokenClient } from '../auth/types.js';
-import type { DirectusClient } from '../types/client.js';
+import type { CairnCMSClient } from '../types/client.js';
 import { getRequestUrl } from '../utils/get-request-url.js';
 import { request } from '../utils/request.js';
 import type { RestClient, RestCommand, RestConfig } from './types.js';
@@ -7,12 +7,12 @@ import type { RestClient, RestCommand, RestConfig } from './types.js';
 const defaultConfigValues: RestConfig = {};
 
 /**
- * Creates a client to communicate with the Directus REST API.
+ * Creates a client to communicate with the CairnCMS REST API.
  *
- * @returns A Directus REST client.
+ * @returns A CairnCMS REST client.
  */
 export const rest = (config: Partial<RestConfig> = {}) => {
-	return <Schema>(client: DirectusClient<Schema>): RestClient<Schema> => {
+	return <Schema>(client: CairnCMSClient<Schema>): RestClient<Schema> => {
 		const restConfig = { ...defaultConfigValues, ...config };
 		return {
 			async request<Output = any>(getOptions: RestCommand<Output, Schema>): Promise<Output> {

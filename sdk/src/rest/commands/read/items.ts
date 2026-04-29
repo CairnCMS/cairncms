@@ -9,7 +9,7 @@ export type ReadItemOutput<
 > = ApplyQueryFields<Schema, CollectionType<Schema, Collection>, TQuery['fields']>;
 
 /**
- * List all items that exist in Directus.
+ * List all items that exist in CairnCMS.
  *
  * @param collection The collection of the items
  * @param query The query parameters
@@ -39,7 +39,7 @@ export const readItems =
 	};
 
 /**
- * Get an item that exists in Directus.
+ * Get an item that exists in CairnCMS.
  *
  * @param collection The collection of the item
  * @param key The primary key of the item

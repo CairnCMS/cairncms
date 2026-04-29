@@ -9,7 +9,7 @@ export type ReadSingletonOutput<
 > = ApplyQueryFields<Schema, CollectionType<Schema, Collection>, TQuery['fields']>;
 
 /**
- * List the singleton item in Directus.
+ * List the singleton item in CairnCMS.
  *
  * @param collection The collection of the items
  * @param query The query parameters

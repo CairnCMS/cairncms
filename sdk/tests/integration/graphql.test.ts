@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authentication, createDirectus, graphql } from '../../src/index.js';
+import { authentication, createCairnCMS, graphql } from '../../src/index.js';
 import { COLLECTIONS, ENV_KEYS, ITEM_IDS } from './helpers/constants.js';
 
 const URL = process.env[ENV_KEYS.url]!;
@@ -8,7 +8,7 @@ const PASSWORD = process.env[ENV_KEYS.adminPassword]!;
 
 describe('GraphQL', () => {
 	it('executes an authenticated query against /graphql', async () => {
-		const client = createDirectus(URL).with(authentication('json')).with(graphql());
+		const client = createCairnCMS(URL).with(authentication('json')).with(graphql());
 		await client.login(EMAIL, PASSWORD);
 
 		const result: any = await client.query<{ [k: string]: Array<{ id: string; name: string; value: number }> }>(

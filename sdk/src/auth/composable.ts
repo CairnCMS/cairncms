@@ -1,5 +1,5 @@
 import { getAuthEndpoint } from '../rest/utils/get-auth-endpoint.js';
-import type { DirectusClient } from '../types/client.js';
+import type { CairnCMSClient } from '../types/client.js';
 import { getRequestUrl } from '../utils/get-request-url.js';
 import { request } from '../utils/request.js';
 import type {
@@ -24,15 +24,15 @@ const defaultConfigValues: AuthenticationConfig = {
 const MAX_INT32 = 2 ** 31 - 1;
 
 /**
- * Creates a client to authenticate with Directus.
+ * Creates a client to authenticate with CairnCMS.
  *
  * @param mode AuthenticationMode
  * @param config The optional configuration.
  *
- * @returns A Directus authentication client.
+ * @returns A CairnCMS authentication client.
  */
 export const authentication = (mode: AuthenticationMode = 'cookie', config: Partial<AuthenticationConfig> = {}) => {
-	return <Schema>(client: DirectusClient<Schema>): AuthenticationClient<Schema> => {
+	return <Schema>(client: CairnCMSClient<Schema>): AuthenticationClient<Schema> => {
 		const authConfig = { ...defaultConfigValues, ...config };
 		let refreshPromise: Promise<AuthenticationData> | null = null;
 		let refreshTimeout: ReturnType<typeof setTimeout> | null = null;

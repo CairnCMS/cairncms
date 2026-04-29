@@ -10,7 +10,7 @@ export type ReadUserOutput<
 > = ApplyQueryFields<Schema, Item, TQuery['fields']>;
 
 /**
- * List all users that exist in Directus.
+ * List all users that exist in CairnCMS.
  *
  * @param query The query parameters
  *

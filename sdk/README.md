@@ -9,9 +9,9 @@ npm install @cairncms/sdk
 ## Quick start
 
 ```ts
-import { createDirectus, rest, readItems } from '@cairncms/sdk';
+import { createCairnCMS, rest, readItems } from '@cairncms/sdk';
 
-const client = createDirectus('http://localhost:8055').with(rest());
+const client = createCairnCMS('http://localhost:8055').with(rest());
 
 const articles = await client.request(readItems('articles'));
 ```
@@ -19,9 +19,9 @@ const articles = await client.request(readItems('articles'));
 Compose the features you need: `rest()` for REST, `graphql()` for GraphQL, `authentication()` for login/refresh flows, `staticToken()` for pre-issued tokens.
 
 ```ts
-import { createDirectus, rest, authentication, readMe } from '@cairncms/sdk';
+import { createCairnCMS, rest, authentication, readMe } from '@cairncms/sdk';
 
-const client = createDirectus('http://localhost:8055')
+const client = createCairnCMS('http://localhost:8055')
   .with(authentication('json'))
   .with(rest());
 
@@ -36,11 +36,13 @@ Full reference: [`docs/reference/sdk.md`](https://github.com/CairnCMS/cairncms/b
 
 ## Compatibility
 
-`@cairncms/sdk` is a fork of `@directus/sdk` v16.1.2 (MIT-licensed), adapted to the CairnCMS feature set. If you already use the composable Directus SDK API (`createDirectus(url).with(rest())`, `client.request(readItems(...))`), migration is an import rename:
+`@cairncms/sdk` is a fork of `@directus/sdk` v16.1.2 (MIT-licensed), adapted to the CairnCMS feature set. If you already use the composable Directus SDK API, migration is an import rename plus a function name update. The CairnCMS SDK exposes the factory as `createCairnCMS` (and its return type as `CairnCMSClient`). Schema and command names (`readItems`, `readMe`, etc.) are unchanged.
 
 ```diff
 - import { createDirectus, rest, readItems } from '@directus/sdk';
-+ import { createDirectus, rest, readItems } from '@cairncms/sdk';
+- const client = createDirectus(url).with(rest());
++ import { createCairnCMS, rest, readItems } from '@cairncms/sdk';
++ const client = createCairnCMS(url).with(rest());
 ```
 
 **Not supported in v1** (see [SDK reference](https://github.com/CairnCMS/cairncms/blob/main/docs/reference/sdk.md#compatibility) for details):
