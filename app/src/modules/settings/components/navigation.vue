@@ -16,7 +16,6 @@
 			</v-list-item-content>
 		</v-list-item>
 
-		<!-- TODO: update URL to canonical CairnCMS public repo once it's live -->
 		<v-list-item href="https://github.com/CairnCMS/cairncms/releases" class="version">
 			<v-list-item-icon><v-icon small name="cairncms" /></v-list-item-icon>
 			<v-list-item-content>
@@ -75,7 +74,6 @@ export default defineComponent({
 		];
 
 		const externalItems = computed(() => {
-			// TODO: update URLs to canonical CairnCMS public repo once it's live.
 			return [
 				{
 					icon: 'bug_report',

@@ -115,7 +115,6 @@ export class MailService {
 			if (logoID) {
 				projectLogoUrl.addPath('assets', logoID);
 			} else {
-				// TODO: replace the contents of `cairncms-white.png` with the final designed CairnCMS logo (Phase 1B).
 				projectLogoUrl.addPath('admin', 'img', 'cairncms-white.png');
 			}
 

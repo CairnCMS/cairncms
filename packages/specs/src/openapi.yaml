@@ -3,17 +3,14 @@ info:
   title: CairnCMS
   description: A real-time API and App dashboard for managing SQL database content.
   contact:
-    # TODO: replace with final CairnCMS contact email when domain is set up
     email: hello@cairncms.dev
   license:
-    # TODO: flip to GPLv3 and update URL on 2026-04-26
-    name: BUSL-1.1
-    url: 'https://directus.io/bsl'
+    name: GPL-3.0-only
+    url: 'https://www.gnu.org/licenses/gpl-3.0.html'
   version: '10'
 externalDocs:
   description: CairnCMS Docs
-  # TODO: replace with final CairnCMS docs URL when the docs site is stood up
-  url: 'https://docs.cairncms.dev'
+  url: 'https://cairncms.dev/docs'
 tags:
   - name: Activity
     description:

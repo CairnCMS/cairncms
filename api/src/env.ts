@@ -1,7 +1,6 @@
 /**
  * @NOTE
  * For all possible keys, see the CairnCMS self-hosting config-options reference.
- * TODO: link to canonical CairnCMS docs once the docs site is live.
  */
 
 import { parseJSON, toArray } from '@cairncms/utils';
@@ -458,7 +457,6 @@ function processValues(env: Record<string, any>) {
 		}
 
 		// Convert values with a type prefix.
-		// TODO: link to canonical CairnCMS environment-variables docs once the docs site is live.
 		if (typeof value === 'string' && isEnvSyntaxPrefixPresent(value)) {
 			env[key] = getEnvironmentValueByType(value);
 			continue;

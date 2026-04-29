@@ -60,7 +60,6 @@ export const MODULE_BAR_DEFAULT = [
 		enabled: true,
 		name: '$t:documentation',
 		icon: 'help',
-		// TODO: replace with the canonical CairnCMS docs URL once the docs site is live.
 		url: 'https://cairncms.dev/docs',
 	},
 	{
