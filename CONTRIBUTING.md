@@ -52,4 +52,4 @@ Please review our [code of conduct](https://github.com/CairnCMS/cairncms/blob/ma
 
 ## Discussions
 
-For questions, ideas, or general conversation, visit [GitHub Discussions](https://github.com/CairnCMS/discussions).
+For questions, ideas, or general conversation, visit [GitHub Discussions](https://github.com/CairnCMS/cairncms/discussions).
