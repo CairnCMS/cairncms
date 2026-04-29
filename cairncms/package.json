@@ -28,7 +28,8 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/CairnCMS/cairncms.git"
+		"url": "https://github.com/CairnCMS/cairncms.git",
+		"directory": "cairncms"
 	},
 	"license": "GPL-3.0-only",
 	"author": "The CairnCMS Authors",
