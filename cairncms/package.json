@@ -1,6 +1,6 @@
 {
 	"name": "cairncms",
-	"version": "1.0.0-beta.1",
+	"version": "1.0.0-beta.2",
 	"description": "CairnCMS is a real-time API and App dashboard for managing SQL database content",
 	"type": "module",
 	"keywords": [

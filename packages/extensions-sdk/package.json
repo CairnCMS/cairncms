@@ -1,6 +1,6 @@
 {
 	"name": "@cairncms/extensions-sdk",
-	"version": "1.0.0-beta.1",
+	"version": "1.0.0-beta.2",
 	"description": "A toolkit to develop extensions to extend CairnCMS",
 	"homepage": "https://cairncms.dev",
 	"type": "module",
