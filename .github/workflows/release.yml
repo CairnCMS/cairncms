@@ -9,16 +9,10 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
+    if: ${{ !contains(github.ref_name, '-') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Reject prerelease tags
-        run: |
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
-            echo "::error::Prerelease tags are not yet supported by this workflow. Tag: $GITHUB_REF_NAME"
-            exit 1
-          fi
 
       - name: Extract release notes
         run: |
