@@ -1,9 +1,55 @@
+# Repo metadata
 **/.editorconfig
 **/.dockerignore
 **/.git
-**/.DS_Store
+
+# Editor / IDE
 **/.vscode
+**/.idea
+**/.history
+**/*.code-workspace
+**/*.sublime-settings
+**/.*.swp
+
+# OS
+**/.DS_Store
+
+# Maintainer workspace
+**/.local
+**/.claude
+**/.codex
+**/CLAUDE.md
+**/.gitpod.yml
+**/.netlify
+
+# Dependencies / builds / caches
 **/node_modules
 **/dist
-**/.env
+**/coverage
 **/.cache
+**/*.tsbuildinfo
+**/.vitepress/cache
+**/.vitepress/.temp
+**/.thumbsmith
+
+# Logs / debugging
+**/npm-debug.log
+**/.clinic
+**/debug
+
+# Secrets and local data
+**/.env
+**/.env.*
+**/*.db
+
+# Repo-specific local artifacts
+/schema.yaml
+/schema.json
+/api/uploads
+/api/extensions
+/tests/blackbox/uploads
+/tests/blackbox/server-log-*
+/packages/extensions-sdk/temp-extension-*
+
+# Misc
+**/TODO
