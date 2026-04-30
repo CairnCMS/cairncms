@@ -1,9 +1,6 @@
 name: Docker
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       version:
@@ -33,15 +30,9 @@ jobs:
         id: meta
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            VERSION="${{ inputs.version }}"
-            REF="refs/tags/v$VERSION"
-          else
-            VERSION="${GITHUB_REF_NAME#v}"
-            REF="$GITHUB_REF"
-          fi
+          VERSION="${{ inputs.version }}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "ref=refs/tags/v$VERSION" >> "$GITHUB_OUTPUT"
           if [[ "$VERSION" == *-* ]]; then
             echo "channel=beta" >> "$GITHUB_OUTPUT"
           else
@@ -81,13 +72,13 @@ jobs:
             ghcr.io/cairncms/cairncms
           tags: |
             type=raw,value=${{ steps.meta.outputs.version }}
-            type=raw,value=${{ steps.meta.outputs.channel }},enable=${{ github.event_name == 'push' || inputs.update_channel_alias }}
+            type=raw,value=${{ steps.meta.outputs.channel }},enable=${{ inputs.update_channel_alias }}
 
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+          push: ${{ !inputs.dry_run }}
           tags: ${{ steps.tags.outputs.tags }}
           labels: ${{ steps.tags.outputs.labels }}
