@@ -34,11 +34,9 @@ export async function createCli(): Promise<Command> {
 
 	program
 		.command('init')
-		.description('Create a new project')
+		.description('Create a new CairnCMS Docker stack')
 		.argument('[project-name]', 'Directory name for the new project')
-		.addOption(
-			new Option('--db <client>', 'Database client').choices(['sqlite', 'postgres', 'postgresql', 'mysql', 'mariadb'])
-		)
+		.option('--no-start', 'Scaffold the project but do not run `docker compose up`')
 		.action(init);
 
 	// Security
