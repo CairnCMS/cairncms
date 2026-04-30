@@ -31,7 +31,15 @@ export async function createCli(): Promise<Command> {
 	program.version(pkg.version, '-v, --version');
 
 	program.command('start').description('Start the API server').action(startServer);
-	program.command('init').description('Create a new project').action(init);
+
+	program
+		.command('init')
+		.description('Create a new project')
+		.argument('[project-name]', 'Directory name for the new project')
+		.addOption(
+			new Option('--db <client>', 'Database client').choices(['sqlite', 'postgres', 'postgresql', 'mysql', 'mariadb'])
+		)
+		.action(init);
 
 	// Security
 	const securityCommand = program.command('security');

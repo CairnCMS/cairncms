@@ -3,75 +3,179 @@ import { execa } from 'execa';
 import inquirer from 'inquirer';
 import Joi from 'joi';
 import type { Knex } from 'knex';
+import path from 'node:path';
 import ora from 'ora';
 import { v4 as uuid } from 'uuid';
 import runMigrations from '../../../database/migrations/run.js';
 import runSeed from '../../../database/seeds/run.js';
 import { generateHash } from '../../../utils/generate-hash.js';
+import * as pkg from '../../../utils/package.js';
 import type { Credentials } from '../../utils/create-db-connection.js';
 import createDBConnection from '../../utils/create-db-connection.js';
 import createEnv from '../../utils/create-env/index.js';
+import createProjectFiles from '../../utils/create-project-files/index.js';
 import { defaultAdminRole, defaultAdminUser } from '../../utils/defaults.js';
-import { drivers, getDriverForClient } from '../../utils/drivers.js';
+import { drivers } from '../../utils/drivers.js';
+import resolveProjectPath from '../../utils/resolve-project-path.js';
 import { databaseQuestions } from './questions.js';
 
-export default async function init(): Promise<void> {
-	const rootPath = process.cwd();
+type SupportedDriver = 'sqlite3' | 'pg' | 'mysql';
 
+const SUPPORTED_INIT_DRIVERS: Record<SupportedDriver, string> = {
+	sqlite3: drivers.sqlite3,
+	pg: drivers.pg,
+	mysql: drivers.mysql,
+};
+
+const DB_ALIAS_MAP: Record<string, SupportedDriver> = {
+	sqlite: 'sqlite3',
+	postgres: 'pg',
+	postgresql: 'pg',
+	mysql: 'mysql',
+	mariadb: 'mysql',
+};
+
+interface InitOptions {
+	db?: string;
+}
+
+export default async function init(projectName: string | undefined, options: InitOptions = {}): Promise<void> {
+	const target = await resolveProjectPath(projectName);
+
+	process.chdir(target.absolutePath);
+
+	await createProjectFiles(target.absolutePath, target.name);
+
+	const cairncmsVersion = resolveCairncmsVersion();
+
+	const spinnerCairncms = ora('Installing CairnCMS...').start();
+	await execa('npm', ['install', '--save-exact', `cairncms@${cairncmsVersion}`]);
+	spinnerCairncms.stop();
+
+	const dbClient = options.db ? resolveDriverAlias(options.db) : await promptDriver();
+
+	const driverPackage = driverPackageFor(dbClient);
+
+	const spinnerDriver = ora('Installing database driver...').start();
+	await execa('npm', ['install', driverPackage]);
+	spinnerDriver.stop();
+
+	const { credentials, db } = await trySeed(dbClient, target.absolutePath);
+
+	await createEnv(dbClient, credentials, target.absolutePath);
+
+	process.stdout.write('\nCreate your first admin user:\n\n');
+	const firstUser = await promptAdmin();
+	await insertAdminUser(db, firstUser);
+	await db.destroy();
+
+	process.stdout.write(`\nYour project has been created at ${chalk.green(target.absolutePath)}.\n`);
+	process.stdout.write(`\nThe configuration can be found in ${chalk.green(path.join(target.absolutePath, '.env'))}\n`);
+	process.stdout.write(`\nStart the server by running:\n`);
+
+	if (!target.isCurrentDir) {
+		process.stdout.write(`  ${chalk.blue('cd')} ${target.name}\n`);
+	}
+
+	process.stdout.write(`  ${chalk.blue('npm run start')}\n`);
+
+	process.exit(0);
+}
+
+function driverPackageFor(dbClient: SupportedDriver): string {
+	if (dbClient === 'mysql') return 'mysql2';
+	return dbClient;
+}
+
+function resolveCairncmsVersion(): string {
+	const envVersion = process.env['CAIRNCMS_PACKAGE_VERSION'];
+
+	if (envVersion) {
+		return envVersion;
+	}
+
+	process.stdout.write(
+		`${chalk.yellow('Warning:')} CAIRNCMS_PACKAGE_VERSION is not set. Falling back to @cairncms/api version (${
+			pkg.version
+		}). This usually means init was invoked directly via @cairncms/api rather than the cairncms binary.\n`
+	);
+
+	return pkg.version;
+}
+
+function resolveDriverAlias(alias: string): SupportedDriver {
+	const lowered = alias.toLowerCase();
+	const resolved = DB_ALIAS_MAP[lowered];
+
+	if (!resolved) {
+		const validAliases = Object.keys(DB_ALIAS_MAP).join(', ');
+
+		process.stdout.write(
+			`\n${chalk.red('Error:')} Unknown database alias "${alias}". Valid aliases: ${validAliases}.\n`
+		);
+
+		process.stdout.write('mssql, oracle, and cockroachdb are not supported targets for new CairnCMS installs.\n');
+
+		process.exit(1);
+	}
+
+	return resolved;
+}
+
+async function promptDriver(): Promise<SupportedDriver> {
 	const { client } = await inquirer.prompt([
 		{
 			type: 'list',
 			name: 'client',
 			message: 'Choose your database client',
-			choices: Object.values(drivers),
+			choices: Object.values(SUPPORTED_INIT_DRIVERS),
 		},
 	]);
 
-	const dbClient = getDriverForClient(client)!;
+	for (const [key, value] of Object.entries(SUPPORTED_INIT_DRIVERS)) {
+		if (value === client) return key as SupportedDriver;
+	}
 
-	const spinnerDriver = ora('Installing Database Driver...').start();
-	await execa('npm', ['install', dbClient, '--production']);
-	spinnerDriver.stop();
+	throw new Error('Failed to resolve database driver from selection');
+}
 
+async function trySeed(dbClient: SupportedDriver, rootPath: string): Promise<{ credentials: Credentials; db: Knex }> {
 	let attemptsRemaining = 5;
 
-	const { credentials, db } = await trySeed();
-
-	async function trySeed(): Promise<{ credentials: Credentials; db: Knex }> {
+	while (attemptsRemaining > 0) {
 		const credentials: Credentials = await inquirer.prompt(
 			(databaseQuestions[dbClient] as any[]).map((question: ({ client, filepath }: any) => any) =>
 				question({ client: dbClient, filepath: rootPath })
 			)
 		);
 
-		const db = createDBConnection(dbClient, credentials!);
+		const db = createDBConnection(dbClient, credentials);
 
 		try {
 			await runSeed(db);
 			await runMigrations(db, 'latest', false);
+			return { credentials, db };
 		} catch (err: any) {
 			process.stdout.write('\nSomething went wrong while seeding the database:\n');
 			process.stdout.write(`\n${chalk.red(`[${err.code || 'Error'}]`)} ${err.message}\n`);
 			process.stdout.write('\nPlease try again\n\n');
 
-			attemptsRemaining--;
-
-			if (attemptsRemaining > 0) {
-				return await trySeed();
-			} else {
-				process.stdout.write("Couldn't seed the database. Exiting.\n");
-				process.exit(1);
+			try {
+				await db.destroy();
+			} catch {
+				// best-effort cleanup; the connection may already be torn down
 			}
-		}
 
-		return { credentials, db };
+			attemptsRemaining--;
+		}
 	}
 
-	await createEnv(dbClient, credentials!, rootPath);
+	process.stdout.write("Couldn't seed the database. Exiting.\n");
+	process.exit(1);
+}
 
-	process.stdout.write('\nCreate your first admin user:\n\n');
-
-	const firstUser = await inquirer.prompt([
+async function promptAdmin(): Promise<{ email: string; password: string }> {
+	const result = await inquirer.prompt([
 		{
 			type: 'input',
 			name: 'email',
@@ -96,15 +200,15 @@ export default async function init(): Promise<void> {
 		},
 	]);
 
-	firstUser.password = await generateHash(firstUser.password);
+	result.password = await generateHash(result.password);
+	return result;
+}
 
+async function insertAdminUser(db: Knex, firstUser: { email: string; password: string }): Promise<void> {
 	const userID = uuid();
 	const roleID = uuid();
 
-	await db('directus_roles').insert({
-		id: roleID,
-		...defaultAdminRole,
-	});
+	await db('directus_roles').insert({ id: roleID, ...defaultAdminRole });
 
 	await db('directus_users').insert({
 		id: userID,
@@ -113,14 +217,4 @@ export default async function init(): Promise<void> {
 		role: roleID,
 		...defaultAdminUser,
 	});
-
-	await db.destroy();
-
-	process.stdout.write(`\nYour project has been created at ${chalk.green(rootPath)}.\n`);
-	process.stdout.write(`\nThe configuration can be found in ${chalk.green(rootPath + '/.env')}\n`);
-	process.stdout.write(`\nStart the server by running:\n`);
-	process.stdout.write(`  ${chalk.blue('cd')} ${rootPath}\n`);
-	process.stdout.write(`  ${chalk.blue('npx cairncms')} start\n`);
-
-	process.exit(0);
 }
