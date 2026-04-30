@@ -1,0 +1,39 @@
+services:
+  cairncms:
+    image: cairncms/cairncms:${CAIRNCMS_IMAGE_TAG:-latest}
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      - "8055:8055"
+    env_file:
+      - .env
+    volumes:
+      - ./extensions:/cairncms/extensions
+      - ./uploads:/cairncms/uploads
+    healthcheck:
+      # 127.0.0.1 not localhost: alpine resolves localhost to IPv6 first
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8055/server/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    restart: unless-stopped
+
+  database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_DATABASE}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
