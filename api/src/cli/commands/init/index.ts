@@ -38,7 +38,13 @@ export default async function init(projectName: string | undefined, options: Ini
 	let healthy = false;
 
 	if (start) {
-		await startStack(target.absolutePath);
+		try {
+			await startStack(target.absolutePath);
+		} catch (err) {
+			printStartFailureGuidance(target);
+			throw err;
+		}
+
 		healthy = await waitForHealthy(target.absolutePath);
 	}
 
@@ -67,6 +73,19 @@ async function copyComposeTemplate(targetDir: string): Promise<void> {
 	const dest = path.join(targetDir, 'docker-compose.yml');
 	const content = await fs.readFile(COMPOSE_TEMPLATE_PATH, 'utf8');
 	await fs.writeFile(dest, content);
+}
+
+function printStartFailureGuidance(target: ResolvedProjectPath): void {
+	process.stdout.write(
+		`\n${chalk.yellow(
+			'Note:'
+		)} If postgres started before this failure, retrying with the same name will hit a credentials mismatch (the volume keeps the original password; a re-init generates a new one).\n`
+	);
+
+	process.stdout.write(`To reset cleanly:\n`);
+	process.stdout.write(`  ${chalk.blue('cd')} ${target.name}\n`);
+	process.stdout.write(`  ${chalk.blue('docker compose down -v')}\n`);
+	process.stdout.write(`Then remove ${chalk.green(target.absolutePath)} before re-running init.\n\n`);
 }
 
 async function startStack(cwd: string): Promise<void> {
