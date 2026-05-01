@@ -1,6 +1,6 @@
 {
 	"name": "@cairncms/utils",
-	"version": "1.0.0-beta.2",
+	"version": "1.0.0-beta.3",
 	"type": "module",
 	"scripts": {
 		"build": "tsc --project browser/tsconfig.json && tsc --project node/tsconfig.json && tsc --project shared/tsconfig.json",
