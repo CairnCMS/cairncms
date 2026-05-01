@@ -73,7 +73,7 @@ async function startStack(cwd: string): Promise<void> {
 	const spinner = ora('Pulling images and starting containers...').start();
 
 	try {
-		await execa('docker', ['compose', 'up', '-d'], { cwd });
+		await execa('docker', ['compose', '--project-directory', cwd, 'up', '-d'], { cwd });
 		spinner.succeed('Containers started');
 	} catch (err) {
 		spinner.fail('Failed to start containers');
@@ -103,7 +103,7 @@ async function waitForHealthy(cwd: string): Promise<boolean> {
 
 async function isCairncmsHealthy(cwd: string): Promise<boolean> {
 	try {
-		const result = await execa('docker', ['compose', 'ps', '--format', 'json'], { cwd });
+		const result = await execa('docker', ['compose', '--project-directory', cwd, 'ps', '--format', 'json'], { cwd });
 		const services = parseComposePs(result.stdout);
 		const cairncms = services.find((entry) => entry.Service === 'cairncms');
 		return cairncms?.Health === 'healthy';
