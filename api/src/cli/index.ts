@@ -21,9 +21,12 @@ import * as pkg from '../utils/package.js';
 export async function createCli(): Promise<Command> {
 	const program = new Command();
 
-	const extensionManager = getExtensionManager();
+	const requestedCommand = process.argv.slice(2).find((arg) => !arg.startsWith('-'));
 
-	await extensionManager.initialize({ schedule: false, watch: false });
+	if (requestedCommand !== 'init') {
+		const extensionManager = getExtensionManager();
+		await extensionManager.initialize({ schedule: false, watch: false });
+	}
 
 	await emitter.emitInit('cli.before', { program });
 
