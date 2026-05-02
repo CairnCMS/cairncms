@@ -10,13 +10,15 @@ function roleChanged(current: ConfigRole, desired: ConfigRole): Partial<ConfigRo
 	let hasChanges = false;
 
 	for (const field of ['name', 'icon', 'description', 'admin_access', 'app_access', 'enforce_tfa'] as const) {
+		if (!Object.hasOwn(desired, field)) continue;
+
 		if (!isEqual(current[field], desired[field])) {
 			(diff as any)[field] = desired[field];
 			hasChanges = true;
 		}
 	}
 
-	if (!isEqual(current.ip_access ?? null, desired.ip_access ?? null)) {
+	if (Object.hasOwn(desired, 'ip_access') && !isEqual(current.ip_access ?? null, desired.ip_access ?? null)) {
 		diff.ip_access = desired.ip_access ?? null;
 		hasChanges = true;
 	}

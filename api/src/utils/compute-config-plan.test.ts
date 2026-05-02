@@ -70,6 +70,71 @@ describe('computeConfigPlan', () => {
 		expect(plan.roles.update).toEqual([]);
 	});
 
+	describe('omit-preserve role diff semantics', () => {
+		it('does not emit a role update when desired omits optional fields that exist in current', () => {
+			const current = makeConfig({
+				roles: [makeRole('editor', { icon: 'edit', enforce_tfa: true })],
+			});
+
+			const desired = makeConfig({ roles: [makeRole('editor')] });
+			const plan = computeConfigPlan(current, desired);
+
+			expect(plan.roles.update).toEqual([]);
+		});
+
+		it('does not clear description when desired omits it', () => {
+			const current = makeConfig({
+				roles: [makeRole('editor', { description: 'old description' })],
+			});
+
+			const desired = makeConfig({ roles: [makeRole('editor')] });
+			const plan = computeConfigPlan(current, desired);
+
+			expect(plan.roles.update).toEqual([]);
+		});
+
+		it('does not clear ip_access when desired omits it', () => {
+			const current = makeConfig({
+				roles: [makeRole('editor', { ip_access: ['10.0.0.0/8'] })],
+			});
+
+			const desired = makeConfig({ roles: [makeRole('editor')] });
+			const plan = computeConfigPlan(current, desired);
+
+			expect(plan.roles.update).toEqual([]);
+		});
+
+		it('clears nullable description when desired sets it explicitly to null', () => {
+			const current = makeConfig({
+				roles: [makeRole('editor', { description: 'old description' })],
+			});
+
+			const desired = makeConfig({
+				roles: [makeRole('editor', { description: null })],
+			});
+
+			const plan = computeConfigPlan(current, desired);
+
+			expect(plan.roles.update).toHaveLength(1);
+			expect(plan.roles.update[0]!.diff).toEqual({ description: null });
+		});
+
+		it('emits an ip_access change when desired sets a new value', () => {
+			const current = makeConfig({
+				roles: [makeRole('editor', { ip_access: null })],
+			});
+
+			const desired = makeConfig({
+				roles: [makeRole('editor', { ip_access: ['10.0.0.0/8'] })],
+			});
+
+			const plan = computeConfigPlan(current, desired);
+
+			expect(plan.roles.update).toHaveLength(1);
+			expect(plan.roles.update[0]!.diff).toEqual({ ip_access: ['10.0.0.0/8'] });
+		});
+	});
+
 	it('detects new permissions to create', () => {
 		const current = makeConfig({ roles: [makeRole('editor')] });
 
