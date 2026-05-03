@@ -1,39 +1,87 @@
-services:
-  cairncms:
-    image: cairncms/cairncms:${CAIRNCMS_IMAGE_TAG:-latest}
-    depends_on:
-      database:
-        condition: service_healthy
-    ports:
-      - "8055:8055"
-    env_file:
-      - .env
-    volumes:
-      - ./extensions:/cairncms/extensions
-      - ./uploads:/cairncms/uploads
-    healthcheck:
-      # 127.0.0.1 not localhost: alpine resolves localhost to IPv6 first
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8055/server/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 60s
-    restart: unless-stopped
+name: __PROJECT_NAME__
 
+services:
   database:
-    image: postgres:16-alpine
+    image: postgis/postgis:16-3.4-alpine
+    platform: linux/amd64
+    volumes:
+      - ./data/database:/var/lib/postgresql/data
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_DATABASE}
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_DATABASE}"]
-      interval: 5s
+      test: ['CMD', 'pg_isready', '-U', '${DB_USER}', '-d', '${DB_DATABASE}', '-h', 'localhost']
+      interval: 10s
       timeout: 5s
-      retries: 10
-    restart: unless-stopped
+      retries: 5
+      start_interval: 5s
+      start_period: 30s
 
-volumes:
-  postgres-data:
+  cache:
+    image: redis:7-alpine
+    healthcheck:
+      test: ['CMD-SHELL', "[ $$(redis-cli ping) = 'PONG' ]"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_interval: 5s
+      start_period: 30s
+
+  cairncms:
+    image: cairncms/cairncms:__CAIRNCMS_VERSION__
+    ports:
+      - ${CAIRNCMS_PORT}:8055
+    volumes:
+      - ./uploads:/cairncms/uploads
+      - ./extensions:/cairncms/extensions
+      - ./snapshots:/cairncms/snapshots
+      - ./config:/cairncms/config
+    depends_on:
+      database:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    environment:
+      KEY: ${KEY}
+      SECRET: ${SECRET}
+
+      DB_CLIENT: 'pg'
+      DB_HOST: 'database'
+      DB_PORT: '5432'
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+
+      CACHE_ENABLED: ${CACHE_ENABLED}
+      CACHE_AUTO_PURGE: ${CACHE_AUTO_PURGE}
+      CACHE_STORE: 'redis'
+      CACHE_REDIS: 'redis://cache:6379'
+
+      WEBSOCKETS_ENABLED: ${WEBSOCKETS_ENABLED}
+
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:${CAIRNCMS_PORT}}
+
+      CORS_ENABLED: ${CORS_ENABLED}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+
+      REFRESH_TOKEN_COOKIE_SECURE: ${REFRESH_TOKEN_COOKIE_SECURE}
+      REFRESH_TOKEN_COOKIE_SAME_SITE: ${REFRESH_TOKEN_COOKIE_SAME_SITE}
+      REFRESH_TOKEN_COOKIE_DOMAIN: ${REFRESH_TOKEN_COOKIE_DOMAIN}
+
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE}
+      SESSION_COOKIE_SAME_SITE: ${SESSION_COOKIE_SAME_SITE}
+      SESSION_COOKIE_DOMAIN: ${SESSION_COOKIE_DOMAIN}
+
+      EXTENSIONS_PATH: ${EXTENSIONS_PATH}
+      EXTENSIONS_AUTO_RELOAD: ${EXTENSIONS_AUTO_RELOAD}
+
+      EMAIL_TRANSPORT: ${EMAIL_TRANSPORT}
+      EMAIL_FROM: ${EMAIL_FROM}
+      EMAIL_SMTP_HOST: ${EMAIL_SMTP_HOST}
+      EMAIL_SMTP_PORT: ${EMAIL_SMTP_PORT}
+      EMAIL_SMTP_USER: ${EMAIL_SMTP_USER}
+      EMAIL_SMTP_PASSWORD: ${EMAIL_SMTP_PASSWORD}

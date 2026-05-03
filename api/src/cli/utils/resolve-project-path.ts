@@ -6,6 +6,7 @@ import inquirer from 'inquirer';
 export interface ResolvedProjectPath {
 	absolutePath: string;
 	name: string;
+	appliancePath: string;
 	isCurrentDir: boolean;
 }
 
@@ -42,7 +43,9 @@ export default async function resolveProjectPath(positional: string | undefined)
 
 	mkdirSync(absolutePath, { recursive: true });
 
-	return { absolutePath, name, isCurrentDir };
+	const appliancePath = path.join(absolutePath, 'cairncms');
+
+	return { absolutePath, name, appliancePath, isCurrentDir };
 }
 
 async function promptForName(): Promise<string> {

@@ -6,15 +6,18 @@ import { fileURLToPath } from 'node:url';
 import ora from 'ora';
 import * as pkg from '../../../utils/package.js';
 import checkDocker from '../../utils/check-docker.js';
+import checkPorts from '../../utils/check-ports.js';
+import createApplianceFiles from '../../utils/create-appliance-files.js';
 import createProjectFiles from '../../utils/create-project-files/index.js';
 import generateSecrets, { type GeneratedSecrets } from '../../utils/generate-secrets.js';
 import resolveProjectPath, { type ResolvedProjectPath } from '../../utils/resolve-project-path.js';
-import writeDockerEnv from '../../utils/write-docker-env.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const COMPOSE_TEMPLATE_PATH = path.resolve(__dirname, '../../templates/docker-compose.yaml');
+const INTRO_ASCII_PATH = path.resolve(__dirname, '../../templates/intro-ascii.txt');
 const HEALTH_TIMEOUT_MS = 120_000;
 const HEALTH_POLL_INTERVAL_MS = 2_000;
+const DEFAULT_PORT = 8055;
+const BANNER_COLOR = '#c8552e';
 
 interface InitOptions {
 	start?: boolean;
@@ -22,35 +25,63 @@ interface InitOptions {
 
 export default async function init(projectName: string | undefined, options: InitOptions = {}): Promise<void> {
 	const start = options.start !== false;
+	const cairncmsPort = DEFAULT_PORT;
+
+	await printIntro();
 
 	await checkDocker();
 
 	const target = await resolveProjectPath(projectName);
 	process.chdir(target.absolutePath);
 
-	const cairncmsImageTag = resolveCairncmsVersion();
+	const cairncmsVersion = resolveCairncmsVersion();
 	const secrets = await generateSecrets();
 
-	await copyComposeTemplate(target.absolutePath);
-	await writeDockerEnv({ secrets, cairncmsImageTag, targetDir: target.absolutePath });
-	await createProjectFiles(target.absolutePath);
+	await createProjectFiles({
+		absolutePath: target.absolutePath,
+		projectName: target.name,
+		cairncmsPort,
+	});
+
+	await createApplianceFiles({
+		appliancePath: target.appliancePath,
+		projectName: target.name,
+		cairncmsVersion,
+		cairncmsPort,
+		secrets,
+	});
+
+	process.stdout.write('\n');
 
 	let healthy = false;
 
 	if (start) {
+		await checkPorts({ port: cairncmsPort });
+
 		try {
-			await startStack(target.absolutePath);
+			await startStack(target);
 		} catch (err) {
 			printStartFailureGuidance(target);
 			throw err;
 		}
 
-		healthy = await waitForHealthy(target.absolutePath);
+		healthy = await waitForHealthy(cairncmsPort);
 	}
 
-	printSuccess({ target, secrets, started: start, healthy });
+	printSuccess({ target, secrets, started: start, healthy, cairncmsPort });
 
 	process.exit(0);
+}
+
+async function printIntro(): Promise<void> {
+	try {
+		const banner = await fs.readFile(INTRO_ASCII_PATH, 'utf8');
+		process.stdout.write('\n');
+		process.stdout.write(chalk.hex(BANNER_COLOR)(banner));
+		process.stdout.write(chalk.dim(`  v${pkg.version}\n\n`));
+	} catch {
+		/* skip */
+	}
 }
 
 function resolveCairncmsVersion(): string {
@@ -69,44 +100,39 @@ function resolveCairncmsVersion(): string {
 	return pkg.version;
 }
 
-async function copyComposeTemplate(targetDir: string): Promise<void> {
-	const dest = path.join(targetDir, 'docker-compose.yml');
-	const content = await fs.readFile(COMPOSE_TEMPLATE_PATH, 'utf8');
-	await fs.writeFile(dest, content);
-}
-
 function printStartFailureGuidance(target: ResolvedProjectPath): void {
-	process.stdout.write(
-		`\n${chalk.yellow(
-			'Note:'
-		)} If postgres started before this failure, retrying with the same name will hit a credentials mismatch (the volume keeps the original password; a re-init generates a new one).\n`
-	);
-
+	process.stdout.write(`\n${chalk.yellow('⚠ Warning: docker compose up did not complete cleanly.')}\n\n`);
 	process.stdout.write(`To reset cleanly:\n`);
-	process.stdout.write(`  ${chalk.blue('cd')} ${target.name}\n`);
-	process.stdout.write(`  ${chalk.blue('docker compose down -v')}\n`);
+	process.stdout.write(`  ${chalk.cyan('cd')} ${target.name}\n`);
+	process.stdout.write(`  ${chalk.cyan('docker compose --project-directory cairncms down -v')}\n\n`);
 	process.stdout.write(`Then remove ${chalk.green(target.absolutePath)} before re-running init.\n\n`);
 }
 
-async function startStack(cwd: string): Promise<void> {
+async function startStack(target: ResolvedProjectPath): Promise<void> {
 	const spinner = ora('Pulling images and starting containers...').start();
 
 	try {
-		await execa('docker', ['compose', '--project-directory', cwd, 'up', '-d'], { cwd });
-		spinner.succeed('Containers started');
+		await execa(
+			'docker',
+			['compose', '--project-directory', target.appliancePath, '-f', composeFile(target), 'up', '-d'],
+			{ cwd: target.absolutePath, env: { PUBLIC_URL: '' } }
+		);
+
+		spinner.succeed('Stack started.');
 	} catch (err) {
 		spinner.fail('Failed to start containers');
 		throw err;
 	}
 }
 
-async function waitForHealthy(cwd: string): Promise<boolean> {
+async function waitForHealthy(cairncmsPort: number): Promise<boolean> {
 	const spinner = ora('Waiting for CairnCMS to report healthy...').start();
 	const deadline = Date.now() + HEALTH_TIMEOUT_MS;
+	const url = `http://localhost:${cairncmsPort}/server/health`;
 
 	while (Date.now() < deadline) {
-		if (await isCairncmsHealthy(cwd)) {
-			spinner.succeed('CairnCMS is healthy');
+		if (await isCairncmsHealthy(url)) {
+			spinner.succeed('CairnCMS is healthy.');
 			return true;
 		}
 
@@ -120,46 +146,13 @@ async function waitForHealthy(cwd: string): Promise<boolean> {
 	return false;
 }
 
-async function isCairncmsHealthy(cwd: string): Promise<boolean> {
+async function isCairncmsHealthy(url: string): Promise<boolean> {
 	try {
-		const result = await execa('docker', ['compose', '--project-directory', cwd, 'ps', '--format', 'json'], { cwd });
-		const services = parseComposePs(result.stdout);
-		const cairncms = services.find((entry) => entry.Service === 'cairncms');
-		return cairncms?.Health === 'healthy';
+		const response = await fetch(url, { signal: AbortSignal.timeout(2000) });
+		return response.ok;
 	} catch {
 		return false;
 	}
-}
-
-interface ComposeService {
-	Service?: string;
-	Health?: string;
-}
-
-function parseComposePs(stdout: string): ComposeService[] {
-	const trimmed = stdout.trim();
-	if (!trimmed) return [];
-
-	if (trimmed.startsWith('[')) {
-		try {
-			return JSON.parse(trimmed) as ComposeService[];
-		} catch {
-			return [];
-		}
-	}
-
-	return trimmed
-		.split('\n')
-		.map((line) => line.trim())
-		.filter(Boolean)
-		.map((line) => {
-			try {
-				return JSON.parse(line) as ComposeService;
-			} catch {
-				return null;
-			}
-		})
-		.filter((entry): entry is ComposeService => entry !== null);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -168,40 +161,37 @@ function sleep(ms: number): Promise<void> {
 	});
 }
 
+function composeFile(target: ResolvedProjectPath): string {
+	return path.join(target.appliancePath, 'docker-compose.yml');
+}
+
 interface PrintSuccessParams {
 	target: ResolvedProjectPath;
 	secrets: GeneratedSecrets;
 	started: boolean;
 	healthy: boolean;
+	cairncmsPort: number;
 }
 
-function printSuccess({ target, secrets, started, healthy }: PrintSuccessParams): void {
+function printSuccess({ target, secrets, started, healthy, cairncmsPort }: PrintSuccessParams): void {
 	process.stdout.write(`\n${chalk.green('CairnCMS project created at')} ${target.absolutePath}\n`);
 
-	if (!started) {
-		process.stdout.write(`\nTo start your stack:\n`);
-		process.stdout.write(`  ${chalk.blue('cd')} ${target.name}\n`);
-		process.stdout.write(`  ${chalk.blue('docker compose up -d')}\n`);
-	} else if (healthy) {
-		process.stdout.write(`\nYour CairnCMS instance is running at ${chalk.blue('http://localhost:8055')}\n`);
-	} else {
+	if (started && healthy) {
+		process.stdout.write(`\nYour CairnCMS instance is running at ${chalk.green(`http://localhost:${cairncmsPort}`)}\n`);
+	} else if (started) {
 		process.stdout.write(
-			`\nContainers are starting. Once CairnCMS is ready, open ${chalk.blue('http://localhost:8055')}\n`
+			`\nContainers are starting. Once CairnCMS is ready, open ${chalk.green(`http://localhost:${cairncmsPort}`)}\n`
 		);
-
-		process.stdout.write(`Check status: ${chalk.blue('docker compose ps')}\n`);
-		process.stdout.write(`Tail logs:    ${chalk.blue('docker compose logs cairncms')}\n`);
+	} else {
+		process.stdout.write(`\nYour stack is configured but not running. To start it:\n`);
+		process.stdout.write(`  ${chalk.cyan('cd')} ${target.name}\n`);
+		process.stdout.write(`  ${chalk.cyan('npm start')}\n`);
 	}
 
-	process.stdout.write(`\nAdmin login:\n`);
-	process.stdout.write(`  Email:    ${chalk.blue('admin@example.com')}\n`);
-	process.stdout.write(`  Password: ${chalk.blue(secrets.ADMIN_PASSWORD)}\n`);
+	process.stdout.write(`\n${chalk.bold('Admin login:')}\n`);
+	process.stdout.write(`  Email:    admin@example.com\n`);
+	process.stdout.write(`  Password: ${chalk.yellow(secrets.ADMIN_PASSWORD)}\n`);
+	process.stdout.write(chalk.dim(`  (stored in cairncms/.env)\n`));
 
-	process.stdout.write(
-		`\nDB credentials and other configuration are in ${chalk.green(path.join(target.absolutePath, '.env'))}\n`
-	);
-
-	process.stdout.write(`\nTo stop the stack:\n`);
-	process.stdout.write(`  ${chalk.blue('cd')} ${target.name}\n`);
-	process.stdout.write(`  ${chalk.blue('docker compose down')}\n`);
+	process.stdout.write(`\nCairnCMS is free for personal and commercial use under GPLv3.\n`);
 }
