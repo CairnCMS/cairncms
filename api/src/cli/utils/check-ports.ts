@@ -25,6 +25,7 @@ function isPortAvailable(port: number): Promise<boolean> {
 		const server = createServer();
 
 		server.once('error', () => resolve(false));
+
 		server.once('listening', () => {
 			server.close(() => resolve(true));
 		});
