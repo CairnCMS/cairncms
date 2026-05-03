@@ -115,7 +115,7 @@ async function startStack(target: ResolvedProjectPath): Promise<void> {
 		await execa(
 			'docker',
 			['compose', '--project-directory', target.appliancePath, '-f', composeFile(target), 'up', '-d'],
-			{ cwd: target.absolutePath, env: { PUBLIC_URL: '' } }
+			{ cwd: target.absolutePath, extendEnv: false, env: dockerComposeEnv() }
 		);
 
 		spinner.succeed('Stack started.');
@@ -123,6 +123,47 @@ async function startStack(target: ResolvedProjectPath): Promise<void> {
 		spinner.fail('Failed to start containers');
 		throw err;
 	}
+}
+
+function dockerComposeEnv(): NodeJS.ProcessEnv {
+	const env = { ...process.env };
+
+	for (const key of [
+		'KEY',
+		'SECRET',
+		'DB_USER',
+		'DB_PASSWORD',
+		'DB_DATABASE',
+		'ADMIN_EMAIL',
+		'ADMIN_PASSWORD',
+		'CAIRNCMS_PORT',
+		'CACHE_ENABLED',
+		'CACHE_AUTO_PURGE',
+		'CACHE_STORE',
+		'CACHE_REDIS',
+		'WEBSOCKETS_ENABLED',
+		'PUBLIC_URL',
+		'CORS_ENABLED',
+		'CORS_ORIGIN',
+		'REFRESH_TOKEN_COOKIE_SECURE',
+		'REFRESH_TOKEN_COOKIE_SAME_SITE',
+		'REFRESH_TOKEN_COOKIE_DOMAIN',
+		'SESSION_COOKIE_SECURE',
+		'SESSION_COOKIE_SAME_SITE',
+		'SESSION_COOKIE_DOMAIN',
+		'EXTENSIONS_PATH',
+		'EXTENSIONS_AUTO_RELOAD',
+		'EMAIL_TRANSPORT',
+		'EMAIL_FROM',
+		'EMAIL_SMTP_HOST',
+		'EMAIL_SMTP_PORT',
+		'EMAIL_SMTP_USER',
+		'EMAIL_SMTP_PASSWORD',
+	]) {
+		delete env[key];
+	}
+
+	return env;
 }
 
 async function waitForHealthy(cairncmsPort: number): Promise<boolean> {
