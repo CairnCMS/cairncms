@@ -1,6 +1,6 @@
 {
 	"name": "@cairncms/sdk",
-	"version": "1.0.0-beta.3",
+	"version": "1.0.0-beta.4",
 	"description": "CairnCMS JavaScript SDK",
 	"homepage": "https://github.com/CairnCMS/cairncms",
 	"repository": {
