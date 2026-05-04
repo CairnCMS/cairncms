@@ -60,7 +60,6 @@
 		"@cairncms/app": "workspace:*",
 		"@cairncms/constants": "workspace:*",
 		"@cairncms/exceptions": "workspace:*",
-		"@cairncms/extensions-sdk": "workspace:*",
 		"@cairncms/format-title": "workspace:*",
 		"@cairncms/schema": "workspace:*",
 		"@cairncms/specs": "workspace:*",
