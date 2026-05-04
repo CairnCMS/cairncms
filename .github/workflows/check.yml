@@ -17,6 +17,9 @@ concurrency:
 env:
   NODE_OPTIONS: --max_old_space_size=6144
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Lint
@@ -43,11 +46,3 @@ jobs:
 
       - name: Run Tests
         run: pnpm test
-
-  analyze:
-    name: CodeQL Analysis
-    uses: ./.github/workflows/codeql-analysis.yml
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
