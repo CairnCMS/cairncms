@@ -67,9 +67,6 @@ importers:
       '@cairncms/exceptions':
         specifier: workspace:*
         version: link:../packages/exceptions
-      '@cairncms/extensions-sdk':
-        specifier: workspace:*
-        version: link:../packages/extensions-sdk
       '@cairncms/format-title':
         specifier: workspace:*
         version: link:../packages/format-title
