@@ -1,6 +1,8 @@
 ---
 title: Creating extensions
 description: Scaffolding, building, installing, and publishing a CairnCMS extension.
+sidebar:
+  order: 1
 ---
 
 CairnCMS ships a small toolchain for creating extensions:

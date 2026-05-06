@@ -1,6 +1,8 @@
 ---
 title: Clients
 description: How to consume the CairnCMS API from another application — authentication, querying, mutations, file uploads, and the official SDK.
+sidebar:
+  order: 1
 ---
 
 CairnCMS is API-first. Once a collection is in place, every record is reachable through REST and GraphQL endpoints generated from the current schema and permission model. This page covers the durable patterns for consuming those APIs from another application such as a frontend, a backend service, a script, a mobile app, or anything else that speaks HTTP.

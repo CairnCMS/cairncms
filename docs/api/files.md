@@ -1,6 +1,8 @@
 ---
 title: Files
 description: Upload, manage, and serve assets — file metadata via /files and the actual bytes (with on-the-fly image transforms) via /assets.
+sidebar:
+  order: 4
 ---
 
 CairnCMS exposes files through two parallel surfaces:

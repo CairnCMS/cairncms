@@ -1,6 +1,8 @@
 ---
 title: Users
 description: The User directory, user profiles, statuses, and how users relate to roles and permissions.
+sidebar:
+  order: 4
 ---
 
 The User directory is the built-in module for managing user accounts. It is reached from the people icon in the module bar.

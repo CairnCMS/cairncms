@@ -1,6 +1,8 @@
 ---
 title: Triggers
 description: How flows start, including events, schedules, manual button clicks, and incoming webhooks.
+sidebar:
+  order: 1
 ---
 
 A trigger defines when a flow runs. CairnCMS supports five trigger types: Event hook, Webhook, Schedule, Another flow, and Manual. Each has different semantics around when it fires, what payload it provides, and whether it can modify the original event.

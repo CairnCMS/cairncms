@@ -1,6 +1,8 @@
 ---
 title: Layout extensions
 description: Custom collection page layouts for the admin app.
+sidebar:
+  order: 4
 ---
 
 A layout controls how items in a collection are browsed in the app. CairnCMS ships built-in layouts (Tabular, Cards, Calendar, Map); a layout extension adds a new one.

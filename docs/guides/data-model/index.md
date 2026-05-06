@@ -1,6 +1,8 @@
 ---
 title: Data model
 description: How CairnCMS organizes collections, fields, and relationships.
+sidebar:
+  order: 2
 ---
 
 The data model is the structure of your data: the collections you store, the fields inside them, and the relationships between them. In CairnCMS, the data model is your SQL schema, plus the metadata CairnCMS uses to present and manage it.

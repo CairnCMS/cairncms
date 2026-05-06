@@ -1,6 +1,8 @@
 ---
 title: SDK
 description: Reference for `@cairncms/sdk`, the official JavaScript and TypeScript client.
+sidebar:
+  order: 7
 ---
 
 `@cairncms/sdk` is the official JavaScript client for the CairnCMS API. It works in browsers, Node, Bun, Deno, and any other runtime with a `fetch` implementation. The package is plain TypeScript and the build ships ESM and CommonJS bundles, so it imports cleanly in modern projects without configuration.

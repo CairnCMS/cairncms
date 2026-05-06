@@ -1,6 +1,8 @@
 ---
 title: Operations
 description: The built-in actions available inside flows, including data CRUD, conditions, scripts, emails, and HTTP requests.
+sidebar:
+  order: 2
 ---
 
 Operations are the individual steps inside a flow. CairnCMS ships with a built-in set of operations covering data work, branching, communication, scripting, and HTTP. Custom operations can be added through the extension system.

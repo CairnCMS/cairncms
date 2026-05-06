@@ -1,6 +1,8 @@
 ---
 title: Layouts
 description: Browse collection items as tables, cards, calendars, or maps.
+sidebar:
+  order: 1
 ---
 
 Layouts control how a collection page presents its items. They do not change the underlying data. They change how people browse, sort, scan, and work with that data in the app.

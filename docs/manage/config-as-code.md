@@ -1,6 +1,8 @@
 ---
 title: Config as code
 description: Capture roles and permissions to versioned files, review them as a diff, and apply them across environments — through the CLI or the HTTP API.
+sidebar:
+  order: 8
 ---
 
 CairnCMS treats roles and permissions as state that lives next to your data model that can be captured to a file, reviewed as a diff, and applied to other environments. The same machinery powers two surfaces: a `cairncms config` CLI that operates on a directory tree, and a `/config/*` HTTP API that operates on a single JSON or YAML payload. Both flow through the same plan/apply engine, with one structural difference at the input layer — see [Two surfaces, one engine](#two-surfaces-one-engine) below.

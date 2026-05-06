@@ -1,6 +1,8 @@
 ---
 title: Fields
 description: How fields are configured in CairnCMS, including types, interfaces, and validation.
+sidebar:
+  order: 1
 ---
 
 A field is what you add to a collection. Each field stores a value (or, in some cases, acts as presentation or as an alias for related data) and shows up as an element on the item form in the app.

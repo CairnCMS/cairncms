@@ -1,6 +1,8 @@
 ---
 title: Backups
 description: What state a CairnCMS deployment needs you to back up, how to capture each piece, and how to test that a restore actually works.
+sidebar:
+  order: 4
 ---
 
 CairnCMS does not ship a single "backup" command, because there is no single backup surface. A running deployment has state in several places, and a recoverable backup means capturing each one with the right consistency guarantees and exercising the restore path before you need it.

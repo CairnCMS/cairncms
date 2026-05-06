@@ -1,6 +1,8 @@
 ---
 title: Auth
 description: How CairnCMS authenticates users, including passwords, SSO, two-factor, sessions, and tokens.
+sidebar:
+  order: 3
 ---
 
 CairnCMS handles authentication directly. It supports password login, single sign-on through OpenID Connect, OAuth 2.0, LDAP, and SAML, two-factor authentication, and long-lived static tokens for service accounts. This page covers how those pieces fit together and how to configure them.

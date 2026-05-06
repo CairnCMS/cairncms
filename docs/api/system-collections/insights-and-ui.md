@@ -1,6 +1,8 @@
 ---
 title: Insights and UI
 description: REST and GraphQL surfaces for dashboards, panels, and notifications. The dashboard composition surface plus the user-facing notification feed.
+sidebar:
+  order: 4
 ---
 
 Three system collections handle user-facing UI state in CairnCMS: **dashboards** are the top-level Insights views, **panels** are the visualizations placed on a dashboard, and **notifications** are the messages that show up in the user's notification feed (and trigger emails). All three follow the standard CRUD shape with no bespoke endpoints.

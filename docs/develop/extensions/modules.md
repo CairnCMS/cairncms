@@ -1,6 +1,8 @@
 ---
 title: Module extensions
 description: Custom top-level modules for the module bar.
+sidebar:
+  order: 5
 ---
 
 A module is a top-level area of the admin app. CairnCMS ships six built-in modules: Content, User Directory, File Library, Insights, Settings, and Activity (the last is registered with `hidden: true` and reached via the Activity Log link in the sidebar rather than the module bar). A module extension adds a new one.

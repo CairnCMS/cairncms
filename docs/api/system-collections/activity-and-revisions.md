@@ -1,6 +1,8 @@
 ---
 title: Activity and revisions
 description: REST and GraphQL surfaces for the activity log (the per-action audit trail with comment management) and the revision history (per-row state at every change, with a revert endpoint).
+sidebar:
+  order: 6
 ---
 
 Two system collections record what happened in a CairnCMS deployment. **Activity** is the per-action audit trail: who did what to which item, when, from which IP, with what comment. **Revisions** is the per-row history: the full state of each item after every change, suitable for reverting. Activity rows are not generally editable (the only write surface is the comment management endpoints), and revisions are read-only.

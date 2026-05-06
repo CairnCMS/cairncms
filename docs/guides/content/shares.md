@@ -1,6 +1,8 @@
 ---
 title: Shares
 description: Generate links that grant scoped access to single records.
+sidebar:
+  order: 4
 ---
 
 Shares let you grant access to one record without making the whole collection public and without creating a full user account for the recipient.

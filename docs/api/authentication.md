@@ -1,6 +1,8 @@
 ---
 title: Authentication
 description: Token types, login and refresh flows, SSO providers, two-factor authentication, and how to attach credentials to requests.
+sidebar:
+  order: 2
 ---
 
 Most CairnCMS requests need an access token for anything that maps onto a non-Public role's permissions. Endpoints covered by the Public role's permissions are reachable without one. The platform issues two kinds of tokens: short-lived JSON Web Tokens for interactive sessions, and long-lived static tokens for service accounts. This page covers both, the login and refresh flow that produces JWTs, and the SSO and two-factor surfaces that sit on top.

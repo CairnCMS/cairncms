@@ -1,6 +1,8 @@
 ---
 title: Schema and modeling
 description: REST and GraphQL surfaces for collections, fields, and relations, plus the `/schema/*` endpoints that snapshot, diff, and apply the schema between deployments.
+sidebar:
+  order: 5
 ---
 
 This page covers the system collections that describe the data model itself (collections, fields, relations) and the operator endpoints that move that model between deployments (`/schema/snapshot`, `/schema/diff`, `/schema/apply`).

@@ -1,6 +1,8 @@
 ---
 title: Glossary
 description: Definitions for terms used throughout the CairnCMS docs.
+sidebar:
+  order: 5
 ---
 
 This page defines CairnCMS terms that appear throughout the docs. Most of them are ordinary database or application concepts with CairnCMS-specific names layered on top.

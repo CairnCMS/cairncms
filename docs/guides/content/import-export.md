@@ -1,6 +1,8 @@
 ---
 title: Import and export
 description: Move data into and out of CairnCMS in bulk.
+sidebar:
+  order: 3
 ---
 
 Use import and export when you need to move item data in or out of CairnCMS in bulk. This is useful for initial data loads, bulk edits outside the app, reporting workflows, and handoffs to other systems.

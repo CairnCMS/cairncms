@@ -1,6 +1,8 @@
 ---
 title: Running locally
-description: Set up a development environment for CairnCMS itself: clone, install, configure a database, bootstrap, and run the API and admin app against the local source.
+description: "Set up a development environment for CairnCMS itself: clone, install, configure a database, bootstrap, and run the API and admin app against the local source."
+sidebar:
+  order: 2
 ---
 
 This page is for contributors who want to run CairnCMS from the source tree, modify the code, and see their changes apply immediately. For running CairnCMS to use as a CMS, see [Quickstart](/docs/getting-started/quickstart/) instead.

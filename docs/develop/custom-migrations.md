@@ -1,6 +1,8 @@
 ---
 title: Custom migrations
 description: Add custom database migrations to a CairnCMS instance through the migrations folder convention.
+sidebar:
+  order: 3
 ---
 
 CairnCMS uses [Knex](https://knexjs.org/) migrations to manage its schema. Custom migrations let you add your own for schema changes that should travel with the deployment, run once per environment, and be tracked the same way the built-in migrations are.

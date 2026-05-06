@@ -1,6 +1,8 @@
 ---
 title: Migration between instances
 description: Move a CairnCMS deployment from one place to another — full clones, structure-only promotions, content moves, and cross-vendor migrations.
+sidebar:
+  order: 7
 ---
 
 "Migration" can mean several different things for a CairnCMS deployment, and the right procedure depends on which one you mean. Cloning a production instance to a development environment is a different operation from promoting a development schema to staging, and both are different from changing database vendors.

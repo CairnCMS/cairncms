@@ -1,6 +1,8 @@
 ---
 title: System collections
 description: The platform-owned tables and the operator endpoints that sit alongside them. What "system collection" means, how they are exposed through REST and GraphQL, and where to find each one.
+sidebar:
+  order: 8
 ---
 
 CairnCMS ships with a fixed set of tables that the platform manages directly. They hold users, roles, permissions, files, dashboards, flows, and other state the platform itself reads and writes. The reference pages in this section cover the grouped system-collection surfaces plus the operator endpoints that pair with them. A few of those tables are documented elsewhere or have no general-purpose API surface at all (see [What is a system collection](#what-is-a-system-collection) below).

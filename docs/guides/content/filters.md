@@ -1,6 +1,8 @@
 ---
 title: Filters
 description: Build queries to narrow what you see in collection views.
+sidebar:
+  order: 2
 ---
 
 Filters let you narrow a collection to only the records that match specific conditions. They are used throughout CairnCMS: on collection pages, in permissions, in dashboards, and in automation. This guide focuses on the visual filter builder in the app.

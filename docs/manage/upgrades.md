@@ -1,6 +1,8 @@
 ---
 title: Upgrades
 description: How CairnCMS versions are released, the standard upgrade procedure, and how to roll back when something goes wrong.
+sidebar:
+  order: 5
 ---
 
 CairnCMS follows semantic versioning. Most upgrades are routine: pull the new image, restart the container, and the database catches up automatically on startup. The work that does need attention is the small amount of structural and operational care around an upgrade, including taking a backup, reading the changelog, choosing the right window, and rebuilding extensions when a major version moves the host range.

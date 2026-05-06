@@ -1,6 +1,8 @@
 ---
 title: Files
 description: Upload, organize, and manage files through the File library and use them in collections.
+sidebar:
+  order: 7
 ---
 
 The File library is the built-in module for working with file assets: images, videos, PDFs, documents, anything you upload. It is reached from the file icon in the module bar.

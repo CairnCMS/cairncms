@@ -1,6 +1,8 @@
 ---
 title: Deployment
 description: Run CairnCMS in production using the official Docker image, Compose, and other container platforms.
+sidebar:
+  order: 2
 ---
 
 CairnCMS is a Node.js application packaged as a Docker image. The recommended deployment shape is to run the official image alongside your database and (optionally) Redis, with the platform you already use for everything else: Docker Compose on a single host, Kubernetes, ECS, Fly, Railway, Render, or any other container runtime.

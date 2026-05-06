@@ -1,6 +1,8 @@
 ---
 title: Relationships
 description: Connect records across collections.
+sidebar:
+  order: 2
 ---
 
 Relationships are how a relational database avoids duplication while keeping related records connected. CairnCMS supports the standard relational types and adds a few compound types for common patterns. This page covers each type and how it shapes the underlying schema.

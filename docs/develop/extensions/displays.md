@@ -1,6 +1,8 @@
 ---
 title: Display extensions
 description: Custom read-only field renderers for the admin app.
+sidebar:
+  order: 3
 ---
 
 A display is the read-only counterpart to an interface. Where an interface is the editing widget, a display is what the value looks like when it is shown in collection rows, in item summaries, in display templates, and anywhere else a field's value appears outside the item form.

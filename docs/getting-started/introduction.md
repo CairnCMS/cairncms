@@ -1,6 +1,8 @@
 ---
 title: Introduction
 description: What CairnCMS is, who it is for, and when it fits.
+sidebar:
+  order: 1
 ---
 
 CairnCMS is open content and data infrastructure for self-hosted teams. Use it to model data, manage content, expose APIs, and automate workflows from one workspace built on SQL tables you control. Your SQL schema defines the model; CairnCMS adds the governed workspace around it (a no-code admin app, generated REST and GraphQL APIs, role-based access control, file management, dashboards, and automation) for managing the structured content and operational data your systems depend on.

@@ -1,6 +1,8 @@
 ---
 title: Operation extensions
 description: Custom flow operations for the automation system.
+sidebar:
+  order: 9
 ---
 
 An operation extension adds a new step type to the [Automate](/docs/guides/automate/) system. Built-in operations cover CRUD, conditions, scripts, sleeps, email, notifications, and HTTP requests; an operation extension lets you add a step that does something specific to your project.

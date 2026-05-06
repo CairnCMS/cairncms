@@ -1,6 +1,8 @@
 ---
 title: Filters and queries
 description: The query parameters shared by REST and GraphQL. Field selection, filtering, sorting, pagination, aggregation, deep queries, and the filter operator reference.
+sidebar:
+  order: 5
 ---
 
 Most CairnCMS read endpoints accept a common set of query options. They control which rows match, how the result is sorted and paginated, what fields come back, and what statistics the response carries alongside the data. The same options work in REST as query parameters and in `SEARCH` request bodies. GraphQL exposes a subset of them as arguments and handles the rest through native language features (selections, aliases, nested arguments). The full mapping is in [GraphQL](#graphql) below.

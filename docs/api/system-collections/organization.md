@@ -1,6 +1,8 @@
 ---
 title: Organization
 description: REST and GraphQL surfaces for folders (the file library's tree structure) and presets (per-user layout configurations and collection bookmarks).
+sidebar:
+  order: 2
 ---
 
 Two system collections handle non-content organizational state in CairnCMS: **folders** structure the file library into a tree, and **presets** store the per-user, per-role, or global layout configurations that the admin app uses for collection views and saved bookmarks. Both follow the standard CRUD shape with no bespoke endpoints.

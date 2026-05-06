@@ -1,6 +1,8 @@
 ---
 title: Panel extensions
 description: Custom dashboard panels for Insights.
+sidebar:
+  order: 6
 ---
 
 A panel is a unit of analytics or interaction inside an Insights dashboard. CairnCMS ships six built-in panel types (Label, List, Metric, Time Series, Global Variable, Global Relational Variable); a panel extension adds a new one.

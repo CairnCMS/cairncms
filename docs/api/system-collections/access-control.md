@@ -1,6 +1,8 @@
 ---
 title: Access control
 description: REST and GraphQL surfaces for users, roles, permissions, and shares, plus the `/config/*` endpoints that snapshot and apply role and permission state.
+sidebar:
+  order: 1
 ---
 
 This page covers the four system collections that together make up CairnCMS's access-control layer (users, roles, permissions, shares) and the `/config/*` endpoints that move role and permission state between deployments. Each collection follows the standard CRUD shape documented in [Items](/docs/api/items/), so this page focuses on the per-collection field shapes, the bespoke endpoints that sit alongside the standard CRUD, and the cross-cutting semantics of the access-control surface.

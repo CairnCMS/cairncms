@@ -1,6 +1,8 @@
 ---
 title: Platform and utilities
 description: The mixed bag at the edge of the API. The settings singleton, the server info / health / specs endpoints, the extensions discovery endpoint, and the `/utils/*` operator routes.
+sidebar:
+  order: 7
 ---
 
 This page covers the surfaces that are adjacent to the system-collection model but do not fit neatly into the row-backed CRUD pattern most of the system collections follow. Some of these are technically system collections (`directus_settings` is one row in `directus_settings`), but most are operational endpoints that expose platform state or perform one-shot operator actions.

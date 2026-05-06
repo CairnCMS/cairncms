@@ -1,6 +1,8 @@
 ---
 title: Community and support
 description: Where to ask questions, report bugs, follow the project, and find paid support for CairnCMS.
+sidebar:
+  order: 6
 ---
 
 CairnCMS is an open-source project. Most help comes from the community and from the issue tracker. This page covers where to ask, how to report problems, how to stay in touch, and where paid help is available for teams that need it.

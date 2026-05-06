@@ -1,6 +1,8 @@
 ---
 title: Email templates
 description: Customize transactional emails by adding Liquid templates to the templates folder convention.
+sidebar:
+  order: 4
 ---
 
 CairnCMS sends transactional emails like password resets, user invitations, and any email a flow's Send Email operation puts through the template path by rendering [Liquid](https://liquidjs.com/) templates. You can override the built-in templates and add new ones by dropping `.liquid` files into the configured extensions folder.

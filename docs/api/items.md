@@ -1,6 +1,8 @@
 ---
 title: Items
 description: Read, create, update, and delete items in user-defined collections — single, batch, query-based, and relational writes through one consistent API.
+sidebar:
+  order: 3
 ---
 
 Items are the rows in your user-defined collections. The platform exposes them through a single REST endpoint family at `/items/<collection>` and a corresponding set of GraphQL operations on `/graphql`. The same query DSL works across both. See [Filters and queries](/docs/api/filters-and-queries/) for the full reference on query parameters.

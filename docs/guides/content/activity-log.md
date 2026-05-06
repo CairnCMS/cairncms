@@ -1,6 +1,8 @@
 ---
 title: Activity log
 description: Audit actions that pass through CairnCMS across the system.
+sidebar:
+  order: 5
 ---
 
 The activity log is the system-wide feed of data-changing actions that passed through CairnCMS. Use it when you need to answer questions like:

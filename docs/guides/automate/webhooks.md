@@ -1,6 +1,8 @@
 ---
 title: Webhooks
 description: Trigger outgoing HTTP requests on data events and receive incoming HTTP requests through flows.
+sidebar:
+  order: 3
 ---
 
 CairnCMS supports webhooks in both directions:

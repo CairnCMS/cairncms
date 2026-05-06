@@ -1,6 +1,8 @@
 ---
 title: Quickstart
 description: Create a local CairnCMS project, sign in, model a collection, and make your first API request.
+sidebar:
+  order: 2
 ---
 
 Use this guide to run CairnCMS locally, create a simple collection, add one record, and fetch it through the API.

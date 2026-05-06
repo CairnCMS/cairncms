@@ -1,6 +1,8 @@
 ---
 title: GraphQL
 description: The two GraphQL endpoints, what they expose, the request format, schema introspection, and the surfaces that are intentionally REST-only.
+sidebar:
+  order: 6
 ---
 
 CairnCMS exposes a GraphQL API alongside REST. The two share the same underlying services, so most of the same data and operations are reachable through either. GraphQL adds the things GraphQL is good at (selections, native aliases, nested arguments, typed schemas for code generation) and leaves a small set of operator-side surfaces on REST only.

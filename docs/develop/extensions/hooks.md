@@ -1,6 +1,8 @@
 ---
 title: Hook extensions
 description: Filter, action, init, schedule, and embed hooks for extending the API event lifecycle.
+sidebar:
+  order: 7
 ---
 
 A hook extension lets server-side code react to events in the platform, such as items being created, users logging in, the server starting up, scheduled times being reached, and so on. Hooks are the primary way to add logic that runs alongside CairnCMS's built-in operations rather than replacing them.

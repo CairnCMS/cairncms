@@ -1,6 +1,8 @@
 ---
 title: Repository layout
-description: A map of the CairnCMS monorepo: which package holds the API, which holds the admin app, where the shared utilities live, and how the workspace fits together.
+description: "A map of the CairnCMS monorepo: which package holds the API, which holds the admin app, where the shared utilities live, and how the workspace fits together."
+sidebar:
+  order: 1
 ---
 
 CairnCMS is a pnpm-managed monorepo. The published platform is composed of multiple packages that depend on each other internally, plus a few support packages (the SDK, the extension scaffolder, the storage drivers) that ship to npm independently. This page walks the top-level structure so new contributors know where to look.

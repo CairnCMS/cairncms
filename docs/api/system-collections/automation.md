@@ -1,6 +1,8 @@
 ---
 title: Automation
 description: REST and GraphQL surfaces for flows, operations, and webhooks. The endpoints, record shapes, and the bespoke `/flows/trigger/<id>` route that turns a flow into an HTTP-callable handler.
+sidebar:
+  order: 3
 ---
 
 CairnCMS's automation surface comes in three system collections: **flows** define automated processes, **operations** are the steps inside a flow, and **webhooks** call external HTTP endpoints when items change. The data model and the operator UX are documented in [Automate](/docs/guides/automate/); this page covers the API surface.

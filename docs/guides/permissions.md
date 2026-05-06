@@ -1,6 +1,8 @@
 ---
 title: Permissions
 description: Roles, role configuration, CRUDS permissions, custom rules, and the built-in administrator and public roles.
+sidebar:
+  order: 5
 ---
 
 CairnCMS controls access through roles and permissions. A **role** is a named bundle of access rules. Each user is assigned one role. **Permissions** define what that role can do on each collection for each of create, read, update, delete, and share.

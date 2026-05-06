@@ -1,6 +1,8 @@
 ---
 title: App overview
 description: A tour of the CairnCMS admin app and how its layout is organized.
+sidebar:
+  order: 4
 ---
 
 The admin app is the browser-based interface for working with your data, files, users, dashboards, and platform settings. It is organized left-to-right around modules, navigation, and the current page, with a contextual sidebar on the right.

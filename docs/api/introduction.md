@@ -1,6 +1,8 @@
 ---
 title: Introduction
 description: How the CairnCMS API is shaped — REST, GraphQL, request and response envelopes, authentication, errors, and how to choose the surface that fits your client.
+sidebar:
+  order: 1
 ---
 
 CairnCMS exposes the platform through two parallel APIs: a REST API and a GraphQL API. They overlap heavily and most everyday CRUD work the same way through either surface. They are not strictly equivalent, though: a small number of operator-side surfaces (the `/schema/*` and `/config/*` endpoints, and a handful of utility routes) are REST-only.

@@ -1,6 +1,8 @@
 ---
 title: Security hardening
 description: Production-safety configuration for CairnCMS — TLS, secrets, authentication policy, rate limiting, and the Public role.
+sidebar:
+  order: 3
 ---
 
 CairnCMS provides primitives like auth, permissions, rate limiting, IP allowlists, and hashed passwords, but the policy decisions belong to the operator. This page covers the production-safety choices that are not on by default and the configurations that are easy to overlook.

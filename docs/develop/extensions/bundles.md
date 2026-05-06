@@ -1,6 +1,8 @@
 ---
 title: Bundle extensions
 description: Combine several extensions into a single distributable package.
+sidebar:
+  order: 10
 ---
 
 A bundle is the wrapper extension type for distributing several extensions as a single npm package. The bundle itself is registered with `type: 'bundle'`, and inside it sits an `entries` array describing the nested extensions: interfaces, displays, hooks, operations, and so on. Bundles let entries share dependencies, share a build, and ship under one name.

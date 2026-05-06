@@ -1,6 +1,8 @@
 ---
 title: Interface extensions
 description: Custom field editing widgets for the admin app.
+sidebar:
+  order: 2
 ---
 
 An interface is the editing widget for a field — what users see and interact with when entering or modifying a value on the item form. CairnCMS ships a long list of built-in interfaces (input, dropdown, datetime, tags, color, and so on); a custom interface adds a new one.

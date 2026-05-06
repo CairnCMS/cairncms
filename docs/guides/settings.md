@@ -1,6 +1,8 @@
 ---
 title: Settings
 description: Project settings, translation strings, and the rest of the Settings module.
+sidebar:
+  order: 6
 ---
 
 The Settings module is where the project itself is configured, including branding, the module bar, password policy, file transformation rules, the Mapbox integration, image editor presets, and translation strings. It also hosts the data model, roles and permissions, presets and bookmarks, webhooks, and flows configuration screens, which are covered on their own guides.

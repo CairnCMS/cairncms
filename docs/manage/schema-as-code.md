@@ -1,6 +1,8 @@
 ---
 title: Schema as code
 description: Capture a CairnCMS data model to a versioned file, review changes as a diff, and apply them across environments.
+sidebar:
+  order: 6
 ---
 
 CairnCMS treats your data model as state that can be captured to a file, reviewed as a diff, and applied to another environment. The same file format works for environment promotion (dev to staging to production), peer review in pull requests, and a structural baseline you can replay against an empty database.

@@ -1,6 +1,8 @@
 ---
 title: Insights
 description: Build no-code dashboards from your live data using panels and global variables.
+sidebar:
+  order: 8
 ---
 
 Insights is the built-in module for building analytics dashboards from data already in CairnCMS. It is reached from the chart icon in the module bar.

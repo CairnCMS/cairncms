@@ -1,6 +1,8 @@
 ---
 title: Architecture
 description: How CairnCMS is structured and how requests flow through the system.
+sidebar:
+  order: 3
 ---
 
 CairnCMS is an application layer on top of a SQL database and a file storage backend. It adds an admin app, generated APIs, permissions, file management, dashboards, automation, and extension points without taking ownership of your application data.

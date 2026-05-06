@@ -1,6 +1,8 @@
 ---
 title: Endpoint extensions
 description: Custom HTTP endpoints registered with the API.
+sidebar:
+  order: 8
 ---
 
 An endpoint extension adds custom HTTP routes to the CairnCMS API. Reach for one when you need behavior that does not map to a collection's CRUD endpoints, for example, a complex aggregation, a third-party integration, a webhook receiver that doesn't fit the flow trigger model, or a custom business operation that should be exposed as a single REST call.

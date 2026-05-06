@@ -1,6 +1,8 @@
 ---
 title: Configuration
 description: How CairnCMS reads its configuration, which environment variables it uses, and how to manage admin tasks like password resets.
+sidebar:
+  order: 1
 ---
 
 CairnCMS is configured primarily through environment variables. The same variables work whether you set them in a `.env` file, in your shell, in a Docker Compose file, or in a deployment platform's environment-config UI.
