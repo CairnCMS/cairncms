@@ -2,43 +2,61 @@
 
 All notable changes to CairnCMS are documented in this file. Releases are listed in reverse chronological order. Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2026-04-29
+## [1.0.0] - 2026-05-06
 
-First public release of CairnCMS, a community-maintained fork of Directus v10.
+First public release of CairnCMS.
 
-### Major changes from upstream Directus
+### Highlights
 
-- **License.** GPLv3, replacing the original BUSL-1.1.
-- **Telemetry removed.** CairnCMS does not phone home.
-- **Package scope.** First-party packages publish under `@cairncms/*`. CLI binary: `cairncms`. Extension CLI: `cairncms-extension`.
-- **Node 20 baseline.** Minimum Node 20.0.0. Node 18 dropped.
-- **Supported database vendors.** SQLite, PostgreSQL (current and 10.x LTS), MySQL (8 and 5.7), and MariaDB exercised in CI. Oracle, MS SQL Server, and CockroachDB still supported in code but no longer covered by CI.
-- **Vendored dependencies.** `@directus/format-title` → `@cairncms/format-title`. `@directus/tsconfig` replaced with a local shared TypeScript config.
-- **JavaScript SDK.** `@cairncms/sdk` — composable REST and GraphQL client, vendored from `@directus/sdk`. Factory: `createCairnCMS`. Client type: `CairnCMSClient`.
-- **First-party Mapbox styles.** Default basemaps now use Mapbox stock styles rather than Directus-owned UUIDs.
+CairnCMS 1.0.0 is a fork of Directus v10 relicensed under GPLv3 with telemetry removed and a small set of new operator workflows added on top. The data model, REST and GraphQL APIs, auth flow, permissions, and admin app are derived from Directus v10 and are broadly compatible with it; existing Directus v10 frontends and integrations should require little or no change. This release focuses on relicensing, repackaging under the `@cairncms/*` scope, the operator-facing additions documented below, and a full documentation rewrite.
 
-### New features
+### Project changes
 
-- **Config-as-code (v1).** Roles and permissions exportable to / applicable from a versioned YAML directory. New CLI: `cairncms config snapshot`, `cairncms config apply`.
-- **Public-role sentinel.** The "public" (unauthenticated) role is a reserved-UUID row instead of NULL. Adds a uniqueness constraint on `(role, collection, action)` eliminating duplicate-permission `_or` merging.
-- **Rebranded admin theme.**
+- **License.** GPLv3, replacing BUSL-1.1.
+- **Telemetry removed.** No phone-home and no opt-out flag is needed.
+- **Package scope.** First-party packages publish under `@cairncms/*`.
+- **CLI binaries.** `cairncms` (was `directus`). Extension CLI: `cairncms-extension`.
+- **Vendored format-title.** `@cairncms/format-title` replaces `@directus/format-title`.
+- **Local TypeScript config.** Replaces the previous `@directus/tsconfig` shared package.
+- **First-party Mapbox styles.** Default basemaps now use Mapbox stock styles. Removes the dependency on Directus-owned Mapbox style UUIDs.
+- **Rebranded admin theme.** New brand identity throughout the admin app.
 
-### Security and reliability
+### Platform changes
 
-- Removed CORS origin fallback to a permissive wildcard. `CORS_ENABLED=true` now requires explicit `CORS_ORIGIN`.
+- **Node 20 baseline.** Minimum Node 20.0.0; Node 18 is dropped. Node 20 is in maintenance LTS as of April 2026; the next minor will move the baseline to Node 22 LTS.
+- **Supported database vendors in CI.** SQLite, PostgreSQL (current and 10.x LTS), MySQL (8 and 5.7), and MariaDB.
+- **Vendors dropped from CI.** Oracle, Microsoft SQL Server, and CockroachDB still work in code but are no longer covered by automated tests.
+
+### What's new
+
+- **Config-as-code.** Roles and permissions exportable to and applicable from a versioned YAML directory.
+  - CLI: `cairncms config snapshot`, `cairncms config apply`.
+  - HTTP API: `GET /config/snapshot`, `POST /config/apply` with `dry_run` and `destructive` query flags.
+  - Omitted optional fields are preserved (not cleared); set fields explicitly to `null` to clear them.
+- **`cairncms init` scaffold.** `npx cairncms init <project>` generates a self-contained Docker Compose project with admin credentials, `.env`, and a starter README. The `cairncms/` subdirectory bind-mounts snapshots, config, extensions, and uploads into the container.
+- **Public-role sentinel.** The unauthenticated "public" role is a reserved-UUID row instead of `NULL`. The change adds a uniqueness constraint on `(role, collection, action)` and removes the duplicate-permission `_or` merging path.
+- **First-party JavaScript SDK.** `@cairncms/sdk` is a composable REST and GraphQL client vendored from `@directus/sdk`. Factory: `createCairnCMS`. Client type: `CairnCMSClient`.
+- **Official Docker images.** Multi-arch (`linux/amd64`, `linux/arm64`) on Docker Hub at `cairncms/cairncms` and GHCR at `ghcr.io/cairncms/cairncms`. Channel tags: `:beta`, `:latest`.
+- **Documentation overhaul.** Documentation rewritten end-to-end into six sections (Getting started, Guides, Develop, Manage, API reference, Contributing). 71 pages with consistent structure, code-verified facts, and review applied throughout. The legacy upstream docs at `docs-legacy/` are preserved as an internal reference and not published.
+
+### Migration from Directus 10
+
+These are the changes operators coming from Directus 10 will need to account for. Anything not listed here is preserved as-is.
+
+- **Refresh-token cookie name.** `cairncms_refresh_token` (was `directus_refresh_token`). Override with `REFRESH_TOKEN_COOKIE_NAME=directus_refresh_token` to preserve existing sessions across the migration.
+- **Messenger namespace.** `cairncms` (was `directus`). Override with `MESSENGER_NAMESPACE=directus` for drop-in compatibility.
+- **`/server/info` payload.** Top-level `directus` key is now `cairncms`. Update consumers of `response.data.directus.version`.
+- **SDK factory and client type.** `createCairnCMS` (was `createDirectus`); `CairnCMSClient` (was `DirectusClient`). Schema-mirror types (`DirectusUser`, `DirectusFile`, etc.) and command names (`readItems`, etc.) are unchanged.
+- **Docker paths.** Container working directory and default storage paths now under `/cairncms` (was `/directus`). Update bind mounts. Base image: `node:20-alpine`.
+- **Database table names preserved.** `directus_users`, `directus_roles`, and the rest of the system tables keep their names. GraphQL system schema names and OpenAPI identifiers derived from those tables are also preserved.
+
+### Security and fixes
+
+- Removed CORS origin fallback to a permissive wildcard. `CORS_ENABLED=true` now requires an explicit `CORS_ORIGIN`.
 - Gated OAuth2 and OpenID Connect state cookies on `REFRESH_TOKEN_COOKIE_SECURE`.
 - Multiple rounds of dependency updates resolving published CVEs.
 - Fixed date-only fields shifting by one day in non-UTC timezones.
 
-### Migration notes for Directus operators
-
-- Refresh-token cookie: now `cairncms_refresh_token` (was `directus_refresh_token`). Override via `REFRESH_TOKEN_COOKIE_NAME=directus_refresh_token` to preserve existing sessions.
-- Messenger namespace: now `cairncms` (was `directus`). Override via `MESSENGER_NAMESPACE=directus` for drop-in compatibility.
-- `/server/info`: top-level `directus` key is now `cairncms`. Update consumers of `response.data.directus.version`.
-- DB table names (`directus_users`, `directus_roles`, etc.) **preserved**. GraphQL system schema names and OpenAPI identifiers derived from these tables also preserved.
-- **SDK**: factory `createCairnCMS` (was `createDirectus`); client type `CairnCMSClient` (was `DirectusClient`). Schema-mirror types (`DirectusUser`, `DirectusFile`, etc.) and command names (`readItems`, etc.) unchanged.
-- **Docker**: container working directory and default storage paths now under `/cairncms` (was `/directus`). Update bind mounts. Base image: `node:20-alpine`.
-
 ### Acknowledgements
 
-The CairnCMS codebase originated in Directus v10. Thanks to the Directus team and contributors.
+The CairnCMS codebase originated in Directus v10. Thanks to the Directus team and contributors for the work the project is built on.
