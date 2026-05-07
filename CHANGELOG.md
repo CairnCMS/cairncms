@@ -23,7 +23,7 @@ CairnCMS 1.0.0 is a fork of Directus v10 relicensed under GPLv3 with telemetry r
 
 ### Platform changes
 
-- **Node 20 baseline.** Minimum Node 20.0.0; Node 18 is dropped. Node 20 is in maintenance LTS as of April 2026; the next minor will move the baseline to Node 22 LTS.
+- **Node 22 baseline.** Minimum Node 22.0.0. Node 20 reached end-of-life in April 2026 and is no longer supported.
 - **Supported database vendors in CI.** SQLite, PostgreSQL (current and 10.x LTS), MySQL (8 and 5.7), and MariaDB.
 - **Vendors dropped from CI.** Oracle, Microsoft SQL Server, and CockroachDB still work in code but are no longer covered by automated tests.
 
@@ -47,7 +47,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - **Messenger namespace.** `cairncms` (was `directus`). Override with `MESSENGER_NAMESPACE=directus` for drop-in compatibility.
 - **`/server/info` payload.** Top-level `directus` key is now `cairncms`. Update consumers of `response.data.directus.version`.
 - **SDK factory and client type.** `createCairnCMS` (was `createDirectus`); `CairnCMSClient` (was `DirectusClient`). Schema-mirror types (`DirectusUser`, `DirectusFile`, etc.) and command names (`readItems`, etc.) are unchanged.
-- **Docker paths.** Container working directory and default storage paths now under `/cairncms` (was `/directus`). Update bind mounts. Base image: `node:20-alpine`.
+- **Docker paths.** Container working directory and default storage paths now under `/cairncms` (was `/directus`). Update bind mounts. Base image: `node:22-alpine`.
 - **Database table names preserved.** `directus_users`, `directus_roles`, and the rest of the system tables keep their names. GraphQL system schema names and OpenAPI identifiers derived from those tables are also preserved.
 
 ### Security and fixes

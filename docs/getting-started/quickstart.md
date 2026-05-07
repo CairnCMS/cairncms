@@ -16,7 +16,7 @@ This guide is for local development. It is not a production deployment guide.
 Before you start, make sure you have:
 
 - Docker with Compose v2
-- Node 20 or newer if you want to use the generated `npm start`, `npm stop`, and `npm logs` shortcuts
+- Node 22 or newer if you want to use the generated `npm start`, `npm stop`, and `npm logs` shortcuts
 
 ## Create a local project
 
