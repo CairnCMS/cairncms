@@ -24,6 +24,7 @@ CairnCMS 1.0.0 is a fork of Directus v10 relicensed under GPLv3 with telemetry r
 ### Platform changes
 
 - **Node 22 baseline.** Minimum Node 22.0.0. Node 20 reached end-of-life in April 2026 and is no longer supported.
+- **pnpm 9.x baseline.** Minimum pnpm 9.0.0.
 - **Supported database vendors in CI.** SQLite, PostgreSQL (current and 10.x LTS), MySQL (8 and 5.7), and MariaDB.
 - **Vendors dropped from CI.** Oracle, Microsoft SQL Server, and CockroachDB still work in code but are no longer covered by automated tests.
 
@@ -56,6 +57,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Gated OAuth2 and OpenID Connect state cookies on `REFRESH_TOKEN_COOKIE_SECURE`.
 - Multiple rounds of dependency updates resolving published CVEs.
 - Fixed date-only fields shifting by one day in non-UTC timezones.
+- Restored default `DB_CLIENT=sqlite3` bootstrap in the published image.
 
 ### Acknowledgements
 
