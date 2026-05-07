@@ -18,7 +18,7 @@ The CairnCMS image is published on two registries:
 
 Tags follow the project's release versions (for example, `cairncms/cairncms:1.0.0`). A `latest` tag tracks the latest stable release. Multi-arch images are published for `linux/amd64` and `linux/arm64`.
 
-The image is based on `node:20-alpine`, runs as the unprivileged `node` user, and exposes port 8055. It contains:
+The image is based on `node:22-alpine`, runs as the unprivileged `node` user, and exposes port 8055. It contains:
 
 - the compiled API
 - the built admin app, served by the API
