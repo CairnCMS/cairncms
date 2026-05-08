@@ -58,7 +58,7 @@ The `/server` subtree exposes platform state and machine-readable specifications
 Returns a `data` envelope whose contents depend on the caller's accountability:
 
 - **Unauthenticated callers** receive only the public branding subset: `project.project_name`, `project_descriptor`, `project_logo`, `project_color`, `default_language`, `public_foreground`, `public_background`, `public_note`, and `custom_css`. This is what the admin app reads on the login screen before the user has authenticated.
-- **Authenticated users** additionally receive `rateLimit` and `rateLimitGlobal` blocks describing the configured rate-limiter policy, plus a `flows.execAllowedModules` array.
+- **Authenticated users** additionally receive `rateLimit` and `rateLimitGlobal` blocks describing the configured rate-limiter policy.
 - **Admins** additionally receive `cairncms.version`, a `node` block (Node version and uptime), and an `os` block.
 
 The platform version is admin-only on this endpoint. Clients that need to detect the running version without admin credentials should look at the package's published version channel rather than reading it from `/server/info`.
