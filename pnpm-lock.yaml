@@ -123,8 +123,8 @@ importers:
         specifier: 3.2.4
         version: 3.2.4
       axios:
-        specifier: 1.15.0
-        version: 1.15.0
+        specifier: 1.15.2
+        version: 1.15.2
       busboy:
         specifier: 1.6.0
         version: 1.6.0
@@ -633,8 +633,8 @@ importers:
         specifier: 3.39.0
         version: 3.39.0
       axios:
-        specifier: 1.15.0
-        version: 1.15.0
+        specifier: 1.15.2
+        version: 1.15.2
       base-64:
         specifier: 1.0.0
         version: 1.0.0
@@ -805,8 +805,8 @@ importers:
         specifier: 2.3.2
         version: 2.3.2(vue@3.2.47)
       axios:
-        specifier: 1.15.0
-        version: 1.15.0
+        specifier: 1.15.2
+        version: 1.15.2
       typescript:
         specifier: 5.0.4
         version: 5.0.4
@@ -1302,8 +1302,8 @@ importers:
         specifier: 7.10.0
         version: 7.10.0
       axios:
-        specifier: 1.15.0
-        version: 1.15.0
+        specifier: 1.15.2
+        version: 1.15.2
       globby:
         specifier: 11.1.0
         version: 11.1.0
@@ -4083,8 +4083,8 @@ packages:
   aws4@1.13.2:
     resolution: {integrity: sha512-lHe62zvbTB5eEABUVi/AwVh0ZKY9rMMDhmm+eeyuuUQbQ3+J+fONVQOZyj+DdrvD4BY33uYniyRJ4UJIaSKAfw==}
 
-  axios@1.15.0:
-    resolution: {integrity: sha512-wWyJDlAatxk30ZJer+GeCWS209sA42X+N5jU2jy6oHTp7ufw8uzUTVFBX9+wTfAlhiJXGS0Bq7X6efruWjuK9Q==}
+  axios@1.15.2:
+    resolution: {integrity: sha512-wLrXxPtcrPTsNlJmKjkPnNPK2Ihe0hn0wGSaTEiHRPxwjvJwT3hKmXF4dpqxmPO9SoNb2FsYXj/xEo0gHN+D5A==}
 
   babel-jest@29.7.0:
     resolution: {integrity: sha512-BrvGY3xZSwEcCzKvKsCi2GgHqDqsYkOP4/by5xCgIwGXQxIEh+8ew3gmrE1y7XRR6LHZIj6yLYnUi/mm2KXKBg==}
@@ -12405,7 +12405,7 @@ snapshots:
   aws4@1.13.2:
     optional: true
 
-  axios@1.15.0:
+  axios@1.15.2:
     dependencies:
       follow-redirects: 1.16.0
       form-data: 4.0.5
@@ -15391,7 +15391,7 @@ snapshots:
 
   mailgun.js@8.2.2:
     dependencies:
-      axios: 1.15.0
+      axios: 1.15.2
       base-64: 1.0.0
       url-join: 4.0.1
     transitivePeerDependencies:

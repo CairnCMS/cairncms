@@ -286,10 +286,12 @@ export class FilesService extends ItemsService {
 		const parsedURL = url.parse(fileResponse.request.res.responseUrl);
 		const filename = decodeURI(path.basename(parsedURL.pathname as string));
 
+		const contentType = fileResponse.headers['content-type'];
+
 		const payload = {
 			filename_download: filename,
 			storage: toArray(env['STORAGE_LOCATIONS'])[0],
-			type: fileResponse.headers['content-type'],
+			type: typeof contentType === 'string' ? contentType : null,
 			title: formatTitle(filename),
 			...(body || {}),
 		};

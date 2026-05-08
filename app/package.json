@@ -68,7 +68,7 @@
 		"@vue/compiler-sfc": "3.2.47",
 		"@vue/test-utils": "2.3.2",
 		"apexcharts": "3.39.0",
-		"axios": "1.15.0",
+		"axios": "1.15.2",
 		"base-64": "1.0.0",
 		"c8": "7.13.0",
 		"caret-pos": "2.0.0",
