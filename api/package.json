@@ -50,8 +50,8 @@
 	},
 	"scripts": {
 		"build": "tsc --build && copyfiles \"src/**/*.{yaml,liquid,md,txt}\" -u 1 dist",
-		"cli": "NODE_ENV=development SERVE_APP=false tsx src/cli/run.ts",
-		"dev": "NODE_ENV=development SERVE_APP=false tsx watch --clear-screen=false src/start.ts",
+		"cli": "NODE_ENV=development SERVE_APP=false NODE_OPTIONS=--no-node-snapshot tsx src/cli/run.ts",
+		"dev": "NODE_ENV=development SERVE_APP=false NODE_OPTIONS=--no-node-snapshot tsx watch --clear-screen=false src/start.ts",
 		"test": "vitest --watch=false"
 	},
 	"dependencies": {
@@ -75,7 +75,7 @@
 		"@rollup/plugin-alias": "5.0.0",
 		"@rollup/plugin-node-resolve": "15.0.2",
 		"@rollup/plugin-virtual": "3.0.1",
-		"argon2": "0.30.3",
+		"argon2": "0.40.3",
 		"async": "3.2.4",
 		"axios": "1.15.0",
 		"busboy": "1.6.0",

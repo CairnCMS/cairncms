@@ -57,8 +57,8 @@ jobs:
 
       - name: Run tests (SQLite)
         if: matrix.vendor == 'sqlite3'
-        run: TEST_DB=${{ matrix.vendor }} pnpm run test:blackbox -- --runInBand
+        run: TEST_DB=${{ matrix.vendor }} pnpm run test:blackbox --runInBand
 
       - name: Run tests (other vendors)
         if: matrix.vendor != 'sqlite3'
-        run: TEST_DB=${{ matrix.vendor }} pnpm run test:blackbox -- --maxWorkers=2
+        run: TEST_DB=${{ matrix.vendor }} pnpm run test:blackbox --maxWorkers=2

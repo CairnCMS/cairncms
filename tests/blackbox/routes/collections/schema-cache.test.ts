@@ -58,10 +58,10 @@ describeFn('Schema Caching Tests', () => {
 			env3[vendor]!.PORT = String(newServerPort3);
 			env4[vendor]!.PORT = String(newServerPort4);
 
-			const server1 = spawn('node', [paths.cli, 'start'], { cwd: paths.cwd, env: env1[vendor] });
-			const server2 = spawn('node', [paths.cli, 'start'], { cwd: paths.cwd, env: env2[vendor] });
-			const server3 = spawn('node', [paths.cli, 'start'], { cwd: paths.cwd, env: env3[vendor] });
-			const server4 = spawn('node', [paths.cli, 'start'], { cwd: paths.cwd, env: env4[vendor] });
+			const server1 = spawn('node', ['--no-node-snapshot', paths.cli, 'start'], { cwd: paths.cwd, env: env1[vendor] });
+			const server2 = spawn('node', ['--no-node-snapshot', paths.cli, 'start'], { cwd: paths.cwd, env: env2[vendor] });
+			const server3 = spawn('node', ['--no-node-snapshot', paths.cli, 'start'], { cwd: paths.cwd, env: env3[vendor] });
+			const server4 = spawn('node', ['--no-node-snapshot', paths.cli, 'start'], { cwd: paths.cwd, env: env4[vendor] });
 
 			tzDirectus[vendor] = [server1, server2, server3, server4];
 			envs[vendor] = [env1, env2, env3, env4];

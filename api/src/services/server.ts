@@ -69,7 +69,6 @@ export class ServerService {
 			} else {
 				info['rateLimitGlobal'] = false;
 			}
-
 		}
 
 		if (this.accountability?.admin === true) {

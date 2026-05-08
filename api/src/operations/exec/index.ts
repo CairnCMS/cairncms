@@ -23,10 +23,9 @@ function buildConsoleShim(logger: LoggerLike) {
 	for (const method of CONSOLE_METHODS) {
 		const target = method === 'log' ? 'info' : method;
 
-		shim[method] = new ivm.Callback(
-			(...rest: unknown[]) => logger[target](rest.length === 1 ? rest[0] : rest),
-			{ sync: true }
-		);
+		shim[method] = new ivm.Callback((...rest: unknown[]) => logger[target](rest.length === 1 ? rest[0] : rest), {
+			sync: true,
+		});
 	}
 
 	return shim;
@@ -67,14 +66,10 @@ export default defineOperationApi<Options>({
 				const inputCopy = new ivm.ExternalCopy({ data: stripFunctions(data) });
 
 				try {
-					const resultRef = await context.evalClosure(
-						wrapScript(code),
-						[inputCopy.copyInto()],
-						{
-							result: { reference: true, promise: true },
-							timeout: timeoutMs,
-						}
-					);
+					const resultRef = await context.evalClosure(wrapScript(code), [inputCopy.copyInto()], {
+						result: { reference: true, promise: true },
+						timeout: timeoutMs,
+					});
 
 					try {
 						return await resultRef.copy();

@@ -14,22 +14,21 @@ function callHandler(
 		logger?: unknown;
 	} = {}
 ) {
-	return config.handler(
-		{ code },
-		{
-			data: options.data ?? {},
-			env: options.env ?? DEFAULT_LIMITS,
-			logger: options.logger,
-		} as any
-	);
+	return config.handler({ code }, {
+		data: options.data ?? {},
+		env: options.env ?? DEFAULT_LIMITS,
+		logger: options.logger,
+	} as any);
 }
 
 function makeLogger() {
 	const calls: Array<{ method: string; arg: unknown }> = [];
 
-	const record = (method: string) => (...args: unknown[]) => {
-		calls.push({ method, arg: args.length === 1 ? args[0] : args });
-	};
+	const record =
+		(method: string) =>
+		(...args: unknown[]) => {
+			calls.push({ method, arg: args.length === 1 ? args[0] : args });
+		};
 
 	const logger = {
 		log: record('log'),
@@ -61,9 +60,9 @@ describe('exec — sandbox enforcement', () => {
 	it('aborts a synchronous script that runs past the configured timeout', async () => {
 		const code = 'for (;;) {}';
 
-		await expect(
-			callHandler(code, { env: { ...DEFAULT_LIMITS, FLOWS_RUN_SCRIPT_TIMEOUT: 250 } })
-		).rejects.toThrow(/timed out/i);
+		await expect(callHandler(code, { env: { ...DEFAULT_LIMITS, FLOWS_RUN_SCRIPT_TIMEOUT: 250 } })).rejects.toThrow(
+			/timed out/i
+		);
 	});
 
 	it('aborts an exported handler that loops forever', async () => {
@@ -76,9 +75,9 @@ describe('exec — sandbox enforcement', () => {
 			};
 		`;
 
-		await expect(
-			callHandler(code, { env: { ...DEFAULT_LIMITS, FLOWS_RUN_SCRIPT_TIMEOUT: 250 } })
-		).rejects.toThrow(/timed out/i);
+		await expect(callHandler(code, { env: { ...DEFAULT_LIMITS, FLOWS_RUN_SCRIPT_TIMEOUT: 250 } })).rejects.toThrow(
+			/timed out/i
+		);
 	});
 
 	it('rejects calls to the CommonJS require', async () => {
@@ -145,9 +144,10 @@ describe('exec — data and environment', () => {
 	it('exposes data.$env to the user script via process.env', async () => {
 		const code = `module.exports = () => ({ token: process.env.TOKEN, lang: process.env.LANG });`;
 
-		await expect(
-			callHandler(code, { data: { $env: { TOKEN: 'secret-value', LANG: 'en' } } })
-		).resolves.toEqual({ token: 'secret-value', lang: 'en' });
+		await expect(callHandler(code, { data: { $env: { TOKEN: 'secret-value', LANG: 'en' } } })).resolves.toEqual({
+			token: 'secret-value',
+			lang: 'en',
+		});
 	});
 
 	it('strips functions from the data payload before crossing the isolate boundary', async () => {
@@ -254,8 +254,8 @@ describe('exec — configuration validation', () => {
 	it('rejects when FLOWS_RUN_SCRIPT_TIMEOUT is not a number', async () => {
 		const code = `module.exports = () => null;`;
 
-		await expect(
-			callHandler(code, { env: { ...DEFAULT_LIMITS, FLOWS_RUN_SCRIPT_TIMEOUT: 'oops' } })
-		).rejects.toThrow(/timeout.*must be a 32-bit number/);
+		await expect(callHandler(code, { env: { ...DEFAULT_LIMITS, FLOWS_RUN_SCRIPT_TIMEOUT: 'oops' } })).rejects.toThrow(
+			/timeout.*must be a 32-bit number/
+		);
 	});
 });

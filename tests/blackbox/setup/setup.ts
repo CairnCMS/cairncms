@@ -39,7 +39,7 @@ export default async (): Promise<void> => {
 									writeFileSync(path.join(paths.cwd, 'test.db'), '');
 								}
 
-								const bootstrap = spawnSync('node', [paths.cli, 'bootstrap'], {
+								const bootstrap = spawnSync('node', ['--no-node-snapshot', paths.cli, 'bootstrap'], {
 									cwd: paths.cwd,
 									env: config.envs[vendor],
 								});
@@ -55,7 +55,7 @@ export default async (): Promise<void> => {
 								await database.destroy();
 
 								if (!process.env.TEST_LOCAL) {
-									const server = spawn('node', [paths.cli, 'start'], {
+									const server = spawn('node', ['--no-node-snapshot', paths.cli, 'start'], {
 										cwd: paths.cwd,
 										env: config.envs[vendor],
 									});
@@ -84,7 +84,12 @@ export default async (): Promise<void> => {
 									const noCacheEnv = clone(config.envs[vendor]!);
 									noCacheEnv.CACHE_SCHEMA = 'false';
 									noCacheEnv.PORT = String(parseInt(noCacheEnv.PORT!) + 50);
-									const serverNoCache = spawn('node', [paths.cli, 'start'], { cwd: paths.cwd, env: noCacheEnv });
+
+									const serverNoCache = spawn('node', ['--no-node-snapshot', paths.cli, 'start'], {
+										cwd: paths.cwd,
+										env: noCacheEnv,
+									});
+
 									global.directusNoCache[vendor] = serverNoCache;
 									let serverNoCacheOutput = '';
 									serverNoCache.stdout.setEncoding('utf8');

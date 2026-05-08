@@ -28,7 +28,7 @@ describe('Logger Redact Tests', () => {
 		for (const vendor of vendors) {
 			databases.set(vendor, knex(config.knexConfig[vendor]!));
 
-			const server = spawn('node', [paths.cli, 'start'], { cwd: paths.cwd, env: env[vendor] });
+			const server = spawn('node', ['--no-node-snapshot', paths.cli, 'start'], { cwd: paths.cwd, env: env[vendor] });
 			directusInstances[vendor] = server;
 
 			promises.push(awaitDirectusConnection(Number(env[vendor].PORT)));

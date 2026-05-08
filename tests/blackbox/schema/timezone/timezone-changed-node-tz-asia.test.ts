@@ -75,7 +75,7 @@ describe('schema', () => {
 			env.PORT = String(newServerPort);
 			tzEnvs[vendor] = env;
 
-			const server = spawn('node', [paths.cli, 'start'], { cwd: paths.cwd, env });
+			const server = spawn('node', ['--no-node-snapshot', paths.cli, 'start'], { cwd: paths.cwd, env });
 			tzDirectus[vendor] = server;
 
 			let serverOutput = '';
