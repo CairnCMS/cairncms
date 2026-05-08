@@ -1,6 +1,9 @@
 ---
 title: Guides
 description: Operator and content-author tasks in the admin app. How to model data, manage users and permissions, work with content and files, build dashboards, and configure flows.
+sidebar:
+  label: Overview
+  order: 0
 ---
 
 This section covers what to do with a running CairnCMS instance. The pages here are organized around the work an operator or content author actually does in the admin app: shaping the data model, managing access, creating content, configuring automation, and so on.

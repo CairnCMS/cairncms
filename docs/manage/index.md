@@ -1,6 +1,9 @@
 ---
 title: Manage
 description: Operating a CairnCMS deployment. Configuration, deployment, security hardening, backups, upgrades, and the schema-as-code and config-as-code workflows for moving state between environments.
+sidebar:
+  label: Overview
+  order: 0
 ---
 
 This section is for running CairnCMS in production. The pages here cover the operator-facing surfaces: configuring the environment, deploying the platform, hardening it for production traffic, backing it up, upgrading between versions, and moving schema and access-control state between deployments.

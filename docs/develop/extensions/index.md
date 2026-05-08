@@ -2,7 +2,8 @@
 title: Extensions
 description: The extension system in CairnCMS — types, categories, and how to choose between them.
 sidebar:
-  order: 2
+  label: Overview
+  order: 0
 ---
 
 CairnCMS is built to be extended. The same APIs and components that power the platform are available to you, so a custom extension can add new capabilities without forking the codebase.

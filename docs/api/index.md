@@ -1,6 +1,9 @@
 ---
 title: API reference
 description: REST and GraphQL reference for CairnCMS. Endpoint shapes, authentication, query DSL, the SDK, and the system collections that hold platform-managed state.
+sidebar:
+  label: Overview
+  order: 0
 ---
 
 This section is the endpoint reference for CairnCMS. Every collection, system or user-defined, has REST and GraphQL surfaces generated from the running schema, plus a small set of operator-side endpoints (`/schema/*`, `/config/*`, `/server/*`, `/utils/*`) that are not collection-shaped. The pages here cover the conventions, the per-collection specifics, and the SDK that wraps them.

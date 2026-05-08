@@ -1,6 +1,9 @@
 ---
 title: Develop
 description: Developer-facing customization for CairnCMS. Building applications against the API, extending the platform with the nine extension types, writing custom migrations, and authoring email templates.
+sidebar:
+  label: Overview
+  order: 0
 ---
 
 This section covers building things on or alongside CairnCMS. Two distinct activities live here: writing application code that consumes the platform's API (a frontend, a service-to-service integration, a CLI tool) and extending the platform itself (custom interfaces, hooks, endpoints, operations, and so on).

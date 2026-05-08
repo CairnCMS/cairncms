@@ -1,6 +1,9 @@
 ---
 title: Getting started
 description: Orientation for first-time CairnCMS users. What the platform is, how to spin one up locally, how it works under the hood, how the admin app is organized, and where to ask for help.
+sidebar:
+  label: Overview
+  order: 0
 ---
 
 CairnCMS is open content and data infrastructure for self-hosted teams. Use it to model data, manage content, expose APIs, and automate workflows from one workspace built on SQL tables you control. Your SQL schema defines the model; CairnCMS adds the governed workspace around it (admin app, REST and GraphQL API, role-based permissions, file management, dashboards, automation). This section is the first stop for someone new to the project: it covers what the platform is, how to run one, how the pieces fit together, and the vocabulary you will encounter throughout the rest of the docs.

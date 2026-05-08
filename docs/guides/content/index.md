@@ -2,7 +2,8 @@
 title: Content
 description: Manage records, layouts, filters, imports, shares, and activity in CairnCMS.
 sidebar:
-  order: 1
+  label: Overview
+  order: 0
 ---
 
 The Content module is where most users spend their time in CairnCMS. It is the working surface for records in your collections: browsing them, opening individual items, adjusting layouts, filtering large datasets, importing and exporting data, sharing individual records, and reviewing recent activity.

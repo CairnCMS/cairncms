@@ -2,7 +2,8 @@
 title: Automate
 description: Run logic in response to events, schedules, manual button clicks, and incoming webhooks using flows.
 sidebar:
-  order: 9
+  label: Overview
+  order: 0
 ---
 
 Flows are CairnCMS's automation primitive. Each flow runs a sequence of operations in response to a trigger, with the ability to read or write data, send email and notifications, transform values, branch on conditions, call external services, and chain to other flows.

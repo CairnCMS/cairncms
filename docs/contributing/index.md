@@ -1,6 +1,9 @@
 ---
 title: Contributing
 description: How to contribute code, documentation, and ideas to CairnCMS. The canonical files, the local-development setup, the PR conventions, and the AI policy.
+sidebar:
+  label: Overview
+  order: 0
 ---
 
 CairnCMS is an open-source project. Contributions of code, documentation, bug reports, and feedback are welcome. Maintainer time is finite, so the workflow leans on short, focused pull requests, clear test coverage, and a small set of conventions that keep review tractable.
