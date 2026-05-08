@@ -204,6 +204,14 @@ Asset transformation settings:
 - **`EXTENSIONS_AUTO_RELOAD`** — when `true`, the API watches extension files and reloads on change. Default `false`. Disabled in development; see the [Creating extensions](/docs/develop/extensions/creating-extensions/) page for the full caveat.
 - **`PACKAGE_FILE_LOCATION`** — directory containing the project `package.json` (used to discover npm-installed extensions). Default `.`.
 
+## Flows
+
+The Run Script flow operation runs user-supplied JavaScript inside an isolated V8 sandbox without `require()` or host APIs. Two env vars govern the isolate's resource budget; one governs which environment variables the script can read.
+
+- **`FLOWS_RUN_SCRIPT_MAX_MEMORY`** — memory limit for a single Run Script invocation, in MB. Default `32`. Scripts that exceed the limit are aborted.
+- **`FLOWS_RUN_SCRIPT_TIMEOUT`** — wall-clock timeout for a single Run Script invocation, in milliseconds. Default `10000`. Scripts that exceed the limit are aborted.
+- **`FLOWS_ENV_ALLOW_LIST`** — comma-separated list of environment variable names the Run Script operation is allowed to read via `process.env`. Default unset (no environment variables exposed to scripts).
+
 ## Resetting an admin password
 
 If you lose access to an admin account, the CLI can set a new password directly:

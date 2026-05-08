@@ -1894,16 +1894,6 @@ export class GraphQLService {
 							}),
 					  }
 					: GraphQLBoolean,
-				flows: {
-					type: new GraphQLObjectType({
-						name: 'server_info_flows',
-						fields: {
-							execAllowedModules: {
-								type: new GraphQLList(GraphQLString),
-							},
-						},
-					}),
-				},
 			});
 		}
 

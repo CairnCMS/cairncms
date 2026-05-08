@@ -5,3 +5,18 @@ packages:
   - sdk
   - packages/*
   - tests/*
+
+onlyBuiltDependencies:
+  - '@fortawesome/fontawesome-common-types'
+  - '@fortawesome/fontawesome-svg-core'
+  - '@fortawesome/free-brands-svg-icons'
+  - '@fortawesome/free-regular-svg-icons'
+  - '@fortawesome/free-solid-svg-icons'
+  - '@parcel/watcher'
+  - argon2
+  - esbuild
+  - isolated-vm
+  - sharp
+  - snappy
+  - sqlite3
+  - vue-demi

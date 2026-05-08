@@ -24,7 +24,7 @@ CairnCMS 1.0.0 is a fork of Directus v10 relicensed under GPLv3 with telemetry r
 ### Platform changes
 
 - **Node 22 baseline.** Minimum Node 22.0.0. Node 20 reached end-of-life in April 2026 and is no longer supported.
-- **pnpm 9.x baseline.** Minimum pnpm 9.0.0.
+- **pnpm 10.x baseline.** Minimum pnpm 10.0.0.
 - **Supported database vendors in CI.** SQLite, PostgreSQL (current and 10.x LTS), MySQL (8 and 5.7), and MariaDB.
 - **Vendors dropped from CI.** Oracle, Microsoft SQL Server, and CockroachDB still work in code but are no longer covered by automated tests.
 
@@ -39,6 +39,10 @@ CairnCMS 1.0.0 is a fork of Directus v10 relicensed under GPLv3 with telemetry r
 - **First-party JavaScript SDK.** `@cairncms/sdk` is a composable REST and GraphQL client vendored from `@directus/sdk`. Factory: `createCairnCMS`. Client type: `CairnCMSClient`.
 - **Official Docker images.** Multi-arch (`linux/amd64`, `linux/arm64`) on Docker Hub at `cairncms/cairncms` and GHCR at `ghcr.io/cairncms/cairncms`. Channel tags: `:beta`, `:latest`.
 - **Documentation overhaul.** Documentation rewritten end-to-end into six sections (Getting started, Guides, Develop, Manage, API reference, Contributing). 71 pages with consistent structure, code-verified facts, and review applied throughout. The legacy upstream docs at `docs-legacy/` are preserved as an internal reference and not published.
+
+### Breaking changes
+
+- **Run Script capability narrowed.** The `exec` flow operation now runs in an isolated-vm sandbox with no `require()` or host APIs. `FLOWS_EXEC_ALLOWED_MODULES` is removed; pre-1.0 flows that loaded modules need to be rewritten.
 
 ### Migration from Directus 10
 
@@ -58,6 +62,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Multiple rounds of dependency updates resolving published CVEs.
 - Fixed date-only fields shifting by one day in non-UTC timezones.
 - Restored default `DB_CLIENT=sqlite3` bootstrap in the published image.
+- Replaced vm2 with isolated-vm in the Run Script flow operation.
 
 ### Acknowledgements
 

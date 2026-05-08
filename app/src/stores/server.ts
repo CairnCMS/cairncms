@@ -45,9 +45,6 @@ export type Info = {
 				points: number;
 				duration: number;
 		  };
-	flows?: {
-		execAllowedModules: string[];
-	};
 };
 
 export type Auth = {
@@ -62,7 +59,6 @@ export const useServerStore = defineStore('serverStore', () => {
 		node: undefined,
 		os: undefined,
 		rateLimit: undefined,
-		flows: undefined,
 	});
 
 	const auth = reactive<Auth>({

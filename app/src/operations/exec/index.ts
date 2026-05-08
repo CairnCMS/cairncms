@@ -1,7 +1,5 @@
-import { useServerStore } from '@/stores/server';
 import { DeepPartial, Field } from '@cairncms/types';
 import { defineOperationApp } from '@cairncms/utils';
-import { i18n } from '@/lang';
 
 export default defineOperationApp({
 	id: 'exec',
@@ -10,10 +8,6 @@ export default defineOperationApp({
 	description: '$t:operations.exec.description',
 	overview: () => [],
 	options: () => {
-		const { t } = i18n.global;
-
-		const serverStore = useServerStore();
-
 		const standard: DeepPartial<Field>[] = [
 			{
 				field: 'code',
@@ -28,32 +22,12 @@ export default defineOperationApp({
 				},
 				schema: {
 					default_value: `module.exports = async function(data) {
-	// Do something...
+	// Transform data here. The script runs in an isolated sandbox without require().
 	return {};
 }`,
 				},
 			},
 		];
-
-		if (serverStore.info?.flows?.execAllowedModules && serverStore.info.flows.execAllowedModules.length > 0) {
-			return [
-				...standard,
-				{
-					field: 'notice',
-					name: '$t:interfaces.presentation-notice.notice',
-					type: 'alias',
-					meta: {
-						width: 'full',
-						interface: 'presentation-notice',
-						options: {
-							text:
-								t('operations.exec.modules') +
-								`<br>${serverStore.info.flows.execAllowedModules.map((mod) => `\`${mod}\``).join(', ')}`,
-						},
-					},
-				},
-			];
-		}
 
 		return standard;
 	},

@@ -187,7 +187,8 @@ const allowedEnvironmentVars = [
 	'RELATIONAL_BATCH_SIZE',
 	'EXPORT_BATCH_SIZE',
 	// flows
-	'FLOWS_EXEC_ALLOWED_MODULES',
+	'FLOWS_RUN_SCRIPT_MAX_MEMORY',
+	'FLOWS_RUN_SCRIPT_TIMEOUT',
 	'FLOWS_ENV_ALLOW_LIST',
 ].map((name) => new RegExp(`^${name}$`));
 
@@ -285,7 +286,8 @@ const defaults: Record<string, any> = {
 
 	GRAPHQL_INTROSPECTION: true,
 
-	FLOWS_EXEC_ALLOWED_MODULES: false,
+	FLOWS_RUN_SCRIPT_MAX_MEMORY: 32,
+	FLOWS_RUN_SCRIPT_TIMEOUT: 10000,
 	FLOWS_ENV_ALLOW_LIST: false,
 };
 
@@ -314,6 +316,9 @@ const typeMap: Record<string, string> = {
 	MAX_BATCH_MUTATION: 'number',
 
 	SERVER_SHUTDOWN_TIMEOUT: 'number',
+
+	FLOWS_RUN_SCRIPT_MAX_MEMORY: 'number',
+	FLOWS_RUN_SCRIPT_TIMEOUT: 'number',
 };
 
 let env: Record<string, any> = {

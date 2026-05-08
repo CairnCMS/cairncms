@@ -18,7 +18,7 @@ RUN pnpm install --recursive --offline --frozen-lockfile
 
 RUN : \
 	&& npm_config_workspace_concurrency=1 pnpm run build \
-	&& pnpm --filter cairncms deploy --prod dist \
+	&& pnpm --filter cairncms deploy --legacy --prod dist \
 	&& cd dist \
 	&& pnpm pack \
 	&& tar -zxvf *.tgz package/package.json \
@@ -49,6 +49,6 @@ ENV \
 COPY --from=builder --chown=node:node /cairncms/dist .
 
 CMD : \
-	&& node /cairncms/cli.js bootstrap \
-	&& node /cairncms/cli.js start \
+	&& node --no-node-snapshot /cairncms/cli.js bootstrap \
+	&& node --no-node-snapshot /cairncms/cli.js start \
 	;
