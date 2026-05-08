@@ -10,7 +10,7 @@ This page is for contributors who want to run CairnCMS from the source tree, mod
 ## Prerequisites
 
 - **Node.js 22 LTS** or newer. The platform targets Node 22 and runs CI against it.
-- **pnpm 9+**. The repo pins `pnpm@9.4.0` as its `packageManager`. Use corepack (`corepack enable`) to pick up the pinned version automatically.
+- **pnpm 10+**. The repo pins `pnpm@10.13.1` as its `packageManager`. Use corepack (`corepack enable`) to pick up the pinned version automatically.
 - **Docker and Docker Compose**, for the database and supporting services. The root `docker-compose.yml` provides every supported database vendor on local ports.
 - **Git**, with a configured user and email. Commits must be signed off (`git commit -s`) per the [Developer Certificate of Origin](https://developercertificate.org/).
 

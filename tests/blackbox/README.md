@@ -62,7 +62,7 @@ The blackbox suite runs the deployed `dist/` code, but inside an environment tha
 1. `tests/blackbox/common/config.ts:66` spreads `...process.env` into each vendor's env block.
 2. `tests/blackbox/setup/setup.ts:42` (bootstrap) and `tests/blackbox/setup/setup.ts:58` (server start) both pass that merged env to the spawned `node` process.
 
-When blackbox is invoked via `pnpm test:blackbox`, pnpm sets `NODE_PATH=<repo>/node_modules/.pnpm/node_modules` for the script run, and that `NODE_PATH` flows through into the spawned bootstrap. The published Docker image runs `node /cairncms/cli.js bootstrap` directly with no `NODE_PATH`.
+When blackbox is invoked via `pnpm test:blackbox`, pnpm sets `NODE_PATH=<repo>/node_modules/.pnpm/node_modules` for the script run, and that `NODE_PATH` flows through into the spawned bootstrap. The published Docker image runs `node --no-node-snapshot /cairncms/cli.js bootstrap` directly with no `NODE_PATH`.
 
 Practical consequence: the suite can pass even when the published image has a real module-resolution bug. The workspace's flat virtual store provides a fallback resolution path that the container does not have. If you are debugging "this works in CI but breaks in production," reproduce against the Docker image directly (`docker build` and `docker run`) instead of relying on a green blackbox run as evidence that runtime module resolution is healthy.
 

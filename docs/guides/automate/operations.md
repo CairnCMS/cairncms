@@ -23,13 +23,15 @@ When used at the end of a flow on a Filter (blocking) Event hook trigger, a fail
 
 ## Run Script
 
-Runs custom JavaScript inside an isolated vm2 sandbox.
+Runs custom JavaScript inside an isolated V8 sandbox.
 
-The sandbox has no file system access and no network access by default. The script receives the data chain as its argument and returns a JSON-serializable value, which is appended under the operation key.
+The sandbox is fully isolated from the host: no file system access, network access, or `require()` of built-in or external modules. The script receives the data chain as its argument and returns a JSON-serializable value, which is appended under the operation key. A `console` shim is available and routes to the platform logger.
+
+The script's `process.env` is populated from the operator-allow-listed environment variables (governed separately by `FLOWS_ENV_ALLOW_LIST`).
 
 Throwing inside a script ends the flow. On a Filter (blocking) Event hook trigger, throwing also cancels the original event transaction.
 
-Module access is disabled by default. Operators can opt in modules through the `FLOWS_EXEC_ALLOWED_MODULES` environment variable.
+The isolate has a configurable memory and time budget, set via `FLOWS_RUN_SCRIPT_MAX_MEMORY` (default 32, MB) and `FLOWS_RUN_SCRIPT_TIMEOUT` (default 10000, ms). Scripts that exceed either limit are aborted.
 
 ## Create Data
 
