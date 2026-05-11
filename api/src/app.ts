@@ -240,7 +240,7 @@ export default async function createApp(): Promise<express.Application> {
 
 	await emitter.emitInit('routes.before', { app });
 
-	app.use('/auth', authRouter);
+	app.use('/auth', helmet.crossOriginOpenerPolicy(), authRouter);
 
 	app.use('/graphql', graphqlRouter);
 
