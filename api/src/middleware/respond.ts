@@ -22,8 +22,13 @@ export const respond: RequestHandler = asyncHandler(async (req, res) => {
 		exceedsMaxSize = valueSize > maxSize;
 	}
 
+	const isAuthRoute = req.originalUrl?.startsWith('/auth') ?? false;
+
+	const isCacheableRequest =
+		(req.method.toLowerCase() === 'get' || req.originalUrl?.startsWith('/graphql')) && !isAuthRoute;
+
 	if (
-		(req.method.toLowerCase() === 'get' || req.originalUrl?.startsWith('/graphql')) &&
+		isCacheableRequest &&
 		env['CACHE_ENABLED'] === true &&
 		cache &&
 		!req.sanitizedQuery.export &&
