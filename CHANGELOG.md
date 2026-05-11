@@ -64,6 +64,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Restored default `DB_CLIENT=sqlite3` bootstrap in the published image.
 - Replaced vm2 with isolated-vm in the Run Script flow operation.
 - Redacted tokens in flow logs (GHSA-f24x-rm6g-3w5v / CVE-2025-53886).
+- Send password reset email to the stored address rather than the supplied input (GHSA-qw9g-7549-7wg5 / CVE-2024-27295).
 
 ### Acknowledgements
 
