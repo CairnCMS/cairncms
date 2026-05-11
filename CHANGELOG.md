@@ -66,6 +66,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Redacted tokens in flow logs (GHSA-f24x-rm6g-3w5v / CVE-2025-53886).
 - Send password reset email to the stored address rather than the supplied input (GHSA-qw9g-7549-7wg5 / CVE-2024-27295).
 - Unified local-login error responses to prevent SSO user enumeration (GHSA-jgf4-vwc3-r46v / CVE-2024-39896).
+- Excluded /auth responses from the response cache (GHSA-cff8-x7jv-4fm8 / CVE-2024-45596).
 
 ### Acknowledgements
 
