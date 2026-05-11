@@ -67,6 +67,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Send password reset email to the stored address rather than the supplied input (GHSA-qw9g-7549-7wg5 / CVE-2024-27295).
 - Unified local-login error responses to prevent SSO user enumeration (GHSA-jgf4-vwc3-r46v / CVE-2024-39896).
 - Excluded /auth responses from the response cache (GHSA-cff8-x7jv-4fm8 / CVE-2024-45596).
+- Sanitized condition operation validation errors in flow responses (GHSA-fm3h-p9wm-h74h / CVE-2025-30353).
 
 ### Acknowledgements
 
