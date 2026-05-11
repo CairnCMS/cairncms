@@ -9,12 +9,7 @@ import { DEFAULT_AUTH_PROVIDER } from '../constants.js';
 import getDatabase from '../database/index.js';
 import emitter from '../emitter.js';
 import env from '../env.js';
-import {
-	InvalidCredentialsException,
-	InvalidOTPException,
-	InvalidProviderException,
-	UserSuspendedException,
-} from '../exceptions/index.js';
+import { InvalidCredentialsException, InvalidOTPException, UserSuspendedException } from '../exceptions/index.js';
 import { createRateLimiter } from '../rate-limiter.js';
 import type { AbstractServiceOptions, CairnTokenPayload, LoginResult, Session, User } from '../types/index.js';
 import { getMilliseconds } from '../utils/get-milliseconds.js';
@@ -130,7 +125,7 @@ export class AuthenticationService {
 			}
 		} else if (user.provider !== providerName) {
 			await stall(STALL_TIME, timeStart);
-			throw new InvalidProviderException();
+			throw new InvalidCredentialsException();
 		}
 
 		const settingsService = new SettingsService({
