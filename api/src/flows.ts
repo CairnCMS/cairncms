@@ -10,7 +10,6 @@ import type {
 } from '@cairncms/types';
 import { Action } from '@cairncms/constants';
 import { applyOptionsData, isValidJSON, parseJSON, toArray } from '@cairncms/utils';
-import fastRedact from 'fast-redact';
 import type { Knex } from 'knex';
 import { omit, pick } from 'lodash-es';
 import { get } from 'micromustache';
@@ -31,14 +30,27 @@ import { constructFlowTree } from './utils/construct-flow-tree.js';
 import { getSchema } from './utils/get-schema.js';
 import { JobQueue } from './utils/job-queue.js';
 import { mapValuesDeep } from './utils/map-values-deep.js';
+import { collectSensitiveValues, redactFlowLog } from './utils/redact-flow-log.js';
 
 let flowManager: FlowManager | undefined;
 
-const redactLogs = fastRedact({
-	censor: '--redacted--',
-	paths: ['*.headers.authorization', '*.access_token', '*.headers.cookie'],
-	serialize: false,
-});
+export type Step = {
+	operation: string;
+	key: string;
+	status: 'resolve' | 'reject' | 'unknown';
+	options: Record<string, any> | null;
+};
+
+export function buildRevisionData(
+	steps: ReadonlyArray<Step>,
+	keyedData: Record<string, unknown>
+): { steps: ReadonlyArray<Step>; data: Record<string, unknown> } {
+	const sensitiveValues = collectSensitiveValues(keyedData['$trigger']);
+	return {
+		steps: redactFlowLog(steps, sensitiveValues),
+		data: redactFlowLog(omit(keyedData, '$accountability.permissions'), sensitiveValues) as Record<string, unknown>,
+	};
+}
 
 export function getFlowManager(): FlowManager {
 	if (flowManager) {
@@ -311,12 +323,7 @@ class FlowManager {
 		let nextOperation = flow.operation;
 		let lastOperationStatus: 'resolve' | 'reject' | 'unknown' = 'unknown';
 
-		const steps: {
-			operation: string;
-			key: string;
-			status: 'resolve' | 'reject' | 'unknown';
-			options: Record<string, any> | null;
-		}[] = [];
+		const steps: Step[] = [];
 
 		while (nextOperation !== null) {
 			const { successor, data, status, options } = await this.executeOperation(nextOperation, keyedData, context);
@@ -357,10 +364,7 @@ class FlowManager {
 					activity: activity,
 					collection: 'directus_flows',
 					item: flow.id,
-					data: {
-						steps: steps,
-						data: redactLogs(omit(keyedData, '$accountability.permissions')), // Permissions is a ton of data, and is just a copy of what's in the directus_permissions table
-					},
+					data: buildRevisionData(steps, keyedData),
 				});
 			}
 		}
