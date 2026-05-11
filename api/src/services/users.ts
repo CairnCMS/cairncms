@@ -18,6 +18,14 @@ import { ItemsService } from './items.js';
 import { MailService } from './mail/index.js';
 import { SettingsService } from './settings.js';
 
+type EmailLookupResult = {
+	id: string;
+	role: string;
+	status: string;
+	password: string;
+	email: string;
+};
+
 export class UsersService extends ItemsService {
 	constructor(options: AbstractServiceOptions) {
 		super('directus_users', options);
@@ -139,10 +147,10 @@ export class UsersService extends ItemsService {
 	/**
 	 * Get basic information of user identified by email
 	 */
-	private async getUserByEmail(email: string): Promise<{ id: string; role: string; status: string; password: string }> {
+	private async getUserByEmail(email: string): Promise<EmailLookupResult> {
 		return await this.knex
-			.select('id', 'role', 'status', 'password')
 			.from('directus_users')
+			.select(['id', 'role', 'status', 'password', 'email'])
 			.whereRaw(`LOWER(??) = ?`, ['email', email.toLowerCase()])
 			.first();
 	}
@@ -451,8 +459,13 @@ export class UsersService extends ItemsService {
 			accountability: this.accountability,
 		});
 
-		const payload = { email, scope: 'password-reset', hash: getSimpleHash('' + user.password) };
-		const token = jwt.sign(payload, env['SECRET'] as string, { expiresIn: '1d', issuer: 'cairncms' });
+		const { email: storedEmail, password: storedPassword } = user;
+
+		const token = jwt.sign(
+			{ scope: 'password-reset', hash: getSimpleHash(String(storedPassword)), email: storedEmail },
+			env['SECRET'] as string,
+			{ expiresIn: '1d', issuer: 'cairncms' }
+		);
 
 		const acceptURL = url
 			? new Url(url).setQuery('token', token).toString()
@@ -461,13 +474,13 @@ export class UsersService extends ItemsService {
 		const subjectLine = subject ? subject : 'Password Reset Request';
 
 		await mailService.send({
-			to: email,
+			to: storedEmail,
 			subject: subjectLine,
 			template: {
 				name: 'password-reset',
 				data: {
 					url: acceptURL,
-					email,
+					email: storedEmail,
 				},
 			},
 		});

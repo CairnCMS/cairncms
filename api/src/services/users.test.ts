@@ -6,6 +6,7 @@ import type { MockedFunction, MockInstance } from 'vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RecordNotUniqueException } from '../exceptions/database/record-not-unique.js';
 import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
+import jwt from 'jsonwebtoken';
 import { ItemsService, MailService, UsersService } from './index.js';
 
 vi.mock('../../src/database/index', () => ({
@@ -741,6 +742,35 @@ describe('Integration Tests', () => {
 
 				expect(superUpdateManySpy.mock.lastCall![0]).toEqual([1]);
 				expect(superUpdateManySpy.mock.lastCall![1]).toEqual({ role: 'invite-role' });
+			});
+		});
+
+		describe('requestPasswordReset', () => {
+			it('sends the reset email to the stored address even when supplied a confusable variant', async () => {
+				const storedEmail = 'julian@cure53.de';
+				const suppliedEmail = 'julian@cüre53.de';
+
+				vi.spyOn(UsersService.prototype as any, 'getUserByEmail').mockResolvedValueOnce({
+					id: 'user-id',
+					role: 'user-role',
+					status: 'active',
+					password: 'hashed-password',
+					email: storedEmail,
+				});
+
+				const promise = service.requestPasswordReset(suppliedEmail, null);
+				await expect(promise).resolves.not.toThrow();
+
+				expect(mailService.send).toBeCalledTimes(1);
+				const sendArgs = (mailService.send as any).mock.calls[0][0];
+
+				expect(sendArgs.to).toBe(storedEmail);
+				expect(sendArgs.template.data.email).toBe(storedEmail);
+
+				const tokenMatch = sendArgs.template.data.url.match(/token=([^&]+)/);
+				expect(tokenMatch).not.toBeNull();
+				const decoded = jwt.decode(tokenMatch[1]) as { email: string };
+				expect(decoded.email).toBe(storedEmail);
 			});
 		});
 	});
