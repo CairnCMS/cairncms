@@ -11,10 +11,13 @@ export default defineOperationApi<Options>({
 	handler: ({ filter }, { data }) => {
 		const errors = validatePayload(filter, data, { requireAll: true });
 
-		if (errors.length > 0) {
-			throw errors;
-		} else {
-			return null;
-		}
+		if (errors.length === 0) return null;
+
+		throw errors.flatMap((error) =>
+			error.details.map((detail) => ({
+				path: detail.path,
+				type: detail.type,
+			}))
+		);
 	},
 });

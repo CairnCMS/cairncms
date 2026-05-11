@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { REDACT_TEXT } from './constants.js';
-import { buildRevisionData, type Step } from './flows.js';
+import { buildRevisionData, getFlowManager, type Step } from './flows.js';
+import conditionOp from './operations/condition/index.js';
 
 const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.HEADER_PAYLOAD_LONG_ENOUGH_TO_BE_REAL_TOKEN';
 
@@ -100,5 +101,49 @@ describe('buildRevisionData', () => {
 		expect(step.operation).toBe('op-1');
 		expect(step.key).toBe('send-notification');
 		expect(step.status).toBe('resolve');
+	});
+});
+
+describe('executeFlow — webhook trigger with failing condition does not leak context into response', () => {
+	test('the value returned from executeFlow when a condition fails contains no $accountability or $trigger.headers markers', async () => {
+		const manager = getFlowManager();
+		manager.addOperation('condition', conditionOp.handler as any);
+
+		const flow = {
+			id: 'test-flow',
+			name: 'test-flow',
+			status: 'active',
+			trigger: 'webhook',
+			accountability: null,
+			options: { method: 'POST', return: '$last', async: false },
+			operation: {
+				id: 'op-1',
+				key: 'check',
+				type: 'condition',
+				options: { filter: { must_pass: { _eq: 'expected' } } },
+				resolve: null,
+				reject: null,
+			},
+		};
+
+		const data = {
+			path: '/flows/trigger/test',
+			method: 'POST',
+			headers: { authorization: 'Bearer TOKEN_MARKER_CCC_DO_NOT_LEAK' },
+			query: {},
+			body: { must_pass: 'actual' },
+		};
+
+		const context = {
+			accountability: { user: 'USER_MARKER_BBB_DO_NOT_LEAK', role: 'role-id', admin: true, app: true, ip: '127.0.0.1' },
+			database: {} as any,
+			schema: { collections: {}, relations: [] } as any,
+		};
+
+		const result = await (manager as any).executeFlow(flow, data, context);
+		const blob = JSON.stringify(result);
+
+		expect(blob).not.toContain('TOKEN_MARKER_CCC_DO_NOT_LEAK');
+		expect(blob).not.toContain('USER_MARKER_BBB_DO_NOT_LEAK');
 	});
 });
