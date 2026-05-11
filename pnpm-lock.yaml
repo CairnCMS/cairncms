@@ -186,9 +186,6 @@ importers:
       express:
         specifier: 4.21.2
         version: 4.21.2
-      fast-redact:
-        specifier: 3.1.2
-        version: 3.1.2
       flat:
         specifier: 5.0.2
         version: 5.0.2
@@ -379,9 +376,6 @@ importers:
       '@types/express-serve-static-core':
         specifier: 4.17.33
         version: 4.17.33
-      '@types/fast-redact':
-        specifier: 3.0.2
-        version: 3.0.2
       '@types/flat':
         specifier: 5.0.2
         version: 5.0.2
@@ -3516,9 +3510,6 @@ packages:
 
   '@types/express@4.17.17':
     resolution: {integrity: sha512-Q4FmmuLGBG58btUnfS1c1r/NQdlp3DMfGDGig8WhfpA2YRUtEkxAjkZb0yvplJGYdF1fsQ81iMDcH24sSCNC/Q==}
-
-  '@types/fast-redact@3.0.2':
-    resolution: {integrity: sha512-VQ8OBFBFnGT9hGbeBOzKrtHQYev7HN72tsD/7kxQ+/2tQ5PS9cifUOxT8Z42O6iNJK5QPN6IsFm7DNMw6Uq2SQ==}
 
   '@types/file-saver@2.0.5':
     resolution: {integrity: sha512-zv9kNf3keYegP5oThGLaPk8E081DFDuwfqjtiTzm6PoxChdJ1raSuADf2YGCVIyrSynLrgc8JWv296s7Q7pQSQ==}
@@ -11700,8 +11691,6 @@ snapshots:
       '@types/express-serve-static-core': 4.17.33
       '@types/qs': 6.9.7
       '@types/serve-static': 2.2.0
-
-  '@types/fast-redact@3.0.2': {}
 
   '@types/file-saver@2.0.5': {}
 

@@ -63,6 +63,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Fixed date-only fields shifting by one day in non-UTC timezones.
 - Restored default `DB_CLIENT=sqlite3` bootstrap in the published image.
 - Replaced vm2 with isolated-vm in the Run Script flow operation.
+- Redacted tokens in flow logs (GHSA-f24x-rm6g-3w5v / CVE-2025-53886).
 
 ### Acknowledgements
 
