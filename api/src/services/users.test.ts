@@ -14,6 +14,18 @@ vi.mock('../../src/database/index', () => ({
 	getDatabaseClient: vi.fn().mockReturnValue('postgres'),
 }));
 
+vi.mock('../env', () => {
+	const MOCK_ENV = {
+		SECRET: 'test-secret-for-jwt',
+		PUBLIC_URL: 'http://localhost:8055',
+	};
+
+	return {
+		default: MOCK_ENV,
+		getEnv: () => MOCK_ENV,
+	};
+});
+
 vi.mock('./mail', () => {
 	const MailService = vi.fn();
 	MailService.prototype.send = vi.fn();
