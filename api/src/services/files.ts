@@ -1,3 +1,4 @@
+import type { Query } from '@cairncms/types';
 import formatTitle from '@cairncms/format-title';
 import { toArray } from '@cairncms/utils';
 import encodeURL from 'encodeurl';
@@ -21,6 +22,19 @@ import { getStorage } from '../storage/index.js';
 import type { AbstractServiceOptions, File, Metadata, MutationOptions, PrimaryKey } from '../types/index.js';
 import { parseIptc, parseXmp } from '../utils/parse-image-metadata.js';
 import { ItemsService } from './items.js';
+
+const SERVER_CONTROLLED_FIELDS = ['filename_disk', 'uploaded_by'] as const;
+
+function sanitizeFilePayload<T extends Partial<File>>(payload: T): T {
+	if (!payload || typeof payload !== 'object') return payload;
+	const sanitized = { ...payload } as Record<string, unknown>;
+
+	for (const field of SERVER_CONTROLLED_FIELDS) {
+		delete sanitized[field];
+	}
+
+	return sanitized as T;
+}
 
 export class FilesService extends ItemsService {
 	constructor(options: AbstractServiceOptions) {
@@ -304,12 +318,34 @@ export class FilesService extends ItemsService {
 	 * Useful for associating metadata with existing file in storage
 	 */
 	override async createOne(data: Partial<File>, opts?: MutationOptions): Promise<PrimaryKey> {
-		if (!data.type) {
+		const sanitized = sanitizeFilePayload(data);
+
+		if (!sanitized.type) {
 			throw new InvalidPayloadException(`"type" is required`);
 		}
 
-		const key = await super.createOne(data, opts);
+		const key = await super.createOne(sanitized, opts);
 		return key;
+	}
+
+	override async createMany(data: Partial<File>[], opts?: MutationOptions): Promise<PrimaryKey[]> {
+		return super.createMany(data.map(sanitizeFilePayload), opts);
+	}
+
+	override async updateOne(key: PrimaryKey, data: Partial<File>, opts?: MutationOptions): Promise<PrimaryKey> {
+		return super.updateOne(key, sanitizeFilePayload(data), opts);
+	}
+
+	override async updateMany(keys: PrimaryKey[], data: Partial<File>, opts?: MutationOptions): Promise<PrimaryKey[]> {
+		return super.updateMany(keys, sanitizeFilePayload(data), opts);
+	}
+
+	override async updateBatch(data: Partial<File>[], opts?: MutationOptions): Promise<PrimaryKey[]> {
+		return super.updateBatch(data.map(sanitizeFilePayload), opts);
+	}
+
+	override async updateByQuery(query: Query, data: Partial<File>, opts?: MutationOptions): Promise<PrimaryKey[]> {
+		return super.updateByQuery(query, sanitizeFilePayload(data), opts);
 	}
 
 	/**
