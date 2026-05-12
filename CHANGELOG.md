@@ -71,6 +71,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Added Cross-Origin-Opener-Policy header to /auth routes (GHSA-8m32-p958-jg99 / CVE-2026-35408).
 - Stripped server-controlled fields from file metadata writes (GHSA-393c-p46r-7c95 / CVE-2026-39942).
 - Canonicalized IPv4-mapped IPv6 addresses before deny-list check in file imports (GHSA-wv3h-5fx7-966h / CVE-2026-35409).
+- Memoized GraphQL server_health resolver per request (GHSA-6q22-g298-grjh / CVE-2026-35441).
 
 ### Acknowledgements
 

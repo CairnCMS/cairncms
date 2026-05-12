@@ -114,11 +114,26 @@ export class GraphQLService {
 	schema: SchemaOverview;
 	scope: 'items' | 'system';
 
+	private serverHealthPromise: Promise<Record<string, any>> | null = null;
+
 	constructor(options: AbstractServiceOptions & { scope: 'items' | 'system' }) {
 		this.accountability = options?.accountability || null;
 		this.knex = options?.knex || getDatabase();
 		this.schema = options.schema;
 		this.scope = options.scope;
+	}
+
+	private resolveServerHealth(): Promise<Record<string, any>> {
+		if (!this.serverHealthPromise) {
+			const service = new ServerService({
+				accountability: this.accountability,
+				schema: this.schema,
+			});
+
+			this.serverHealthPromise = service.health();
+		}
+
+		return this.serverHealthPromise;
 	}
 
 	/**
@@ -2012,14 +2027,7 @@ export class GraphQLService {
 			},
 			server_health: {
 				type: GraphQLJSON,
-				resolve: async () => {
-					const service = new ServerService({
-						accountability: this.accountability,
-						schema: this.schema,
-					});
-
-					return await service.health();
-				},
+				resolve: () => this.resolveServerHealth(),
 			},
 		});
 
