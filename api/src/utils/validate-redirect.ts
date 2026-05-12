@@ -13,3 +13,25 @@ export function isSafeRedirect(redirect: unknown): boolean {
 		return false;
 	}
 }
+
+export function getSafeRedirect(redirect: unknown): string | null {
+	if (!isSafeRedirect(redirect)) return null;
+
+	const base = new URL(env['PUBLIC_URL'] as string);
+	const target = new URL(String(redirect), base);
+
+	return `${target.pathname}${target.search}${target.hash}`;
+}
+
+export function getSafeRedirectWithReason(redirect: unknown, reason: string): string | null {
+	if (!isSafeRedirect(redirect)) return null;
+
+	const base = new URL(env['PUBLIC_URL'] as string);
+	const target = new URL(String(redirect), base);
+
+	target.hash = '';
+	target.search = '';
+	target.searchParams.set('reason', reason);
+
+	return `${target.pathname}${target.search}`;
+}

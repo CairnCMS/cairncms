@@ -28,7 +28,7 @@ import { getConfigFromEnv } from '../../utils/get-config-from-env.js';
 import { getIPFromReq } from '../../utils/get-ip-from-req.js';
 import { getMilliseconds } from '../../utils/get-milliseconds.js';
 import { Url } from '../../utils/url.js';
-import { isSafeRedirect } from '../../utils/validate-redirect.js';
+import { getSafeRedirect, getSafeRedirectWithReason } from '../../utils/validate-redirect.js';
 import { LocalAuthDriver } from './local.js';
 
 export class OAuth2AuthDriver extends LocalAuthDriver {
@@ -364,8 +364,10 @@ export function createOAuth2AuthRouter(providerName: string): Router {
 						logger.warn(error, `[OAuth2] Unexpected error during OAuth2 login`);
 					}
 
-					if (isSafeRedirect(redirect)) {
-						return res.redirect(`${redirect.split('?')[0]}?reason=${reason}`);
+					const safeErrorRedirect = getSafeRedirectWithReason(redirect, reason);
+
+					if (safeErrorRedirect) {
+						return res.redirect(safeErrorRedirect);
 					}
 
 					logger.warn({ redirect }, '[OAuth2] Rejecting unsafe redirect on error path');
@@ -378,7 +380,9 @@ export function createOAuth2AuthRouter(providerName: string): Router {
 
 			const { accessToken, refreshToken, expires } = authResponse;
 
-			if (redirect && isSafeRedirect(redirect)) {
+			const safeRedirect = redirect ? getSafeRedirect(redirect) : null;
+
+			if (safeRedirect) {
 				res.cookie(env['REFRESH_TOKEN_COOKIE_NAME'], refreshToken, {
 					httpOnly: true,
 					domain: env['REFRESH_TOKEN_COOKIE_DOMAIN'],
@@ -387,7 +391,7 @@ export function createOAuth2AuthRouter(providerName: string): Router {
 					sameSite: (env['REFRESH_TOKEN_COOKIE_SAME_SITE'] as 'lax' | 'strict' | 'none') || 'strict',
 				});
 
-				return res.redirect(redirect);
+				return res.redirect(safeRedirect);
 			}
 
 			if (redirect) {

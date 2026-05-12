@@ -16,7 +16,7 @@ import { UsersService } from '../../services/users.js';
 import type { AuthDriverOptions, User } from '../../types/index.js';
 import asyncHandler from '../../utils/async-handler.js';
 import { getConfigFromEnv } from '../../utils/get-config-from-env.js';
-import { isSafeRedirect } from '../../utils/validate-redirect.js';
+import { getSafeRedirect, getSafeRedirectWithReason } from '../../utils/validate-redirect.js';
 import { LocalAuthDriver } from './local.js';
 
 // Register the samlify schema validator
@@ -170,9 +170,11 @@ export function createSAMLAuthRouter(providerName: string) {
 					},
 				};
 
-				if (relayState && isSafeRedirect(relayState)) {
+				const safeRelay = relayState ? getSafeRedirect(relayState) : null;
+
+				if (safeRelay) {
 					res.cookie(env['REFRESH_TOKEN_COOKIE_NAME'], refreshToken, COOKIE_OPTIONS);
-					return res.redirect(relayState);
+					return res.redirect(safeRelay);
 				}
 
 				if (relayState) {
@@ -190,8 +192,10 @@ export function createSAMLAuthRouter(providerName: string) {
 						logger.warn(error, `[SAML] Unexpected error during SAML login`);
 					}
 
-					if (isSafeRedirect(relayState)) {
-						return res.redirect(`${relayState.split('?')[0]}?reason=${reason}`);
+					const safeErrorRedirect = getSafeRedirectWithReason(relayState, reason);
+
+					if (safeErrorRedirect) {
+						return res.redirect(safeErrorRedirect);
 					}
 
 					logger.warn({ relayState }, '[SAML] Rejecting unsafe RelayState on error path');

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { isSafeRedirect } from './validate-redirect.js';
+import { getSafeRedirect, getSafeRedirectWithReason, isSafeRedirect } from './validate-redirect.js';
 
 const factoryEnv: { [k: string]: any } = {};
 
@@ -85,5 +85,91 @@ describe('isSafeRedirect — malformed and boundary inputs', () => {
 
 	test('rejects non-string object', () => {
 		expect(isSafeRedirect({ url: 'https://cairncms.example' })).toBe(false);
+	});
+});
+
+describe('getSafeRedirect — canonicalizes safe inputs to path-local form', () => {
+	test('safe absolute URL returns path-only, dropping origin', () => {
+		expect(getSafeRedirect('https://cairncms.example/admin/content')).toBe('/admin/content');
+	});
+
+	test('safe absolute URL with query and hash preserves them', () => {
+		expect(getSafeRedirect('https://cairncms.example/admin?foo=1#section')).toBe('/admin?foo=1#section');
+	});
+
+	test('safe relative path passes through as-is', () => {
+		expect(getSafeRedirect('/admin/content')).toBe('/admin/content');
+	});
+
+	test('safe bare-relative path resolves to root-relative form', () => {
+		expect(getSafeRedirect('admin/content')).toBe('/admin/content');
+	});
+
+	test('safe parent-traversal path resolves under origin', () => {
+		expect(getSafeRedirect('../admin')).toBe('/admin');
+	});
+
+	test('cross-origin absolute URL returns null', () => {
+		expect(getSafeRedirect('https://evil.example/path')).toBeNull();
+	});
+
+	test('protocol-relative URL returns null', () => {
+		expect(getSafeRedirect('//evil.example/path')).toBeNull();
+	});
+
+	test('javascript: URL returns null', () => {
+		expect(getSafeRedirect('javascript:alert(1)')).toBeNull();
+	});
+
+	test('empty string returns null', () => {
+		expect(getSafeRedirect('')).toBeNull();
+	});
+
+	test('undefined returns null', () => {
+		expect(getSafeRedirect(undefined)).toBeNull();
+	});
+});
+
+describe('getSafeRedirectWithReason — drops query/hash and sets reason', () => {
+	test('safe absolute URL with no query returns path with reason', () => {
+		expect(getSafeRedirectWithReason('https://cairncms.example/admin', 'TOKEN_EXPIRED')).toBe(
+			'/admin?reason=TOKEN_EXPIRED'
+		);
+	});
+
+	test('safe absolute URL with existing query has the query dropped', () => {
+		expect(getSafeRedirectWithReason('https://cairncms.example/admin?foo=1&bar=2', 'TOKEN_EXPIRED')).toBe(
+			'/admin?reason=TOKEN_EXPIRED'
+		);
+	});
+
+	test('safe absolute URL with hash has the hash dropped', () => {
+		expect(getSafeRedirectWithReason('https://cairncms.example/admin#section', 'TOKEN_EXPIRED')).toBe(
+			'/admin?reason=TOKEN_EXPIRED'
+		);
+	});
+
+	test('safe relative path returns path with reason', () => {
+		expect(getSafeRedirectWithReason('/admin', 'TOKEN_EXPIRED')).toBe('/admin?reason=TOKEN_EXPIRED');
+	});
+
+	test('reason value with special characters is URL-encoded', () => {
+		expect(getSafeRedirectWithReason('/admin', 'A B&C')).toBe('/admin?reason=A+B%26C');
+	});
+
+	test('cross-origin absolute URL returns null', () => {
+		expect(getSafeRedirectWithReason('https://evil.example/path', 'TOKEN_EXPIRED')).toBeNull();
+	});
+
+	test('protocol-relative URL returns null', () => {
+		expect(getSafeRedirectWithReason('//evil.example', 'TOKEN_EXPIRED')).toBeNull();
+	});
+
+	test('empty string returns null', () => {
+		expect(getSafeRedirectWithReason('', 'TOKEN_EXPIRED')).toBeNull();
+	});
+
+	test('undefined returns null', () => {
+		expect(getSafeRedirectWithReason(undefined, 'TOKEN_EXPIRED')).toBeNull();
 	});
 });
