@@ -16,8 +16,6 @@ import { loadExtensions, registerExtensions } from './extensions';
 init();
 
 async function init() {
-	const version = __CAIRNCMS_VERSION__;
-
 	console.log(CAIRNCMS_LOGO);
 
 	console.info(`%c🪨 CairnCMS | https://cairncms.dev`, 'color:Green');
@@ -50,11 +48,6 @@ async function init() {
 	console.timeEnd('🕓 Application Loaded');
 
 	console.group(`%c✨ Project Information`, 'color:DodgerBlue'); // groupCollapsed
-
-	if (import.meta.env.DEV) {
-		console.info(`%cVersion: v${version}`, 'color:DodgerBlue');
-	}
-
 	console.info(`%cEnvironment: ${import.meta.env.MODE}`, 'color:DodgerBlue');
 	console.groupEnd();
 

@@ -17,15 +17,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { searchForWorkspaceRoot } from 'vite';
 import { defineConfig } from 'vitest/config';
-import { version } from '../cairncms/package.json';
 
 const API_PATH = path.join('..', 'api');
 const EXTENSIONS_PATH = path.join(API_PATH, 'extensions');
 
 export default defineConfig({
-	define: {
-		__CAIRNCMS_VERSION__: JSON.stringify(version),
-	},
 	plugins: [
 		cairncmsExtensions(),
 		vue(),

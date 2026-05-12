@@ -16,7 +16,7 @@
 			</v-list-item-content>
 		</v-list-item>
 
-		<v-list-item href="https://github.com/CairnCMS/cairncms/releases" class="version">
+		<v-list-item v-if="version" href="https://github.com/CairnCMS/cairncms/releases" class="version">
 			<v-list-item-icon><v-icon small name="cairncms" /></v-list-item-icon>
 			<v-list-item-content>
 				<v-text-overflow class="version" :text="`CairnCMS ${version}`" />
@@ -26,12 +26,14 @@
 </template>
 
 <script lang="ts">
+import { useServerStore } from '@/stores/server';
 import { computed, defineComponent } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 export default defineComponent({
 	setup() {
-		const version = __CAIRNCMS_VERSION__;
+		const serverStore = useServerStore();
+		const version = computed(() => serverStore.info.cairncms?.version);
 
 		const { t } = useI18n();
 

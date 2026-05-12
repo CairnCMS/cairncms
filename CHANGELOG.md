@@ -73,6 +73,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Canonicalized IPv4-mapped IPv6 addresses before deny-list check in file imports (GHSA-wv3h-5fx7-966h / CVE-2026-35409).
 - Memoized GraphQL server_health resolver per request (GHSA-6q22-g298-grjh / CVE-2026-35441).
 - Masked concealed fields in aggregate query results (GHSA-38hg-ww64-rrwc / CVE-2026-35442).
+- Removed CairnCMS version string from unauthenticated admin bundle (GHSA-5mhg-wv8w-p59j / CVE-2024-27296).
 
 ### Acknowledgements
 
