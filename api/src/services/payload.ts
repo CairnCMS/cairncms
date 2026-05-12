@@ -195,6 +195,7 @@ export class PayloadService {
 		}
 
 		if (action === 'read') {
+			this.maskConcealedAggregates(processedPayload);
 			this.processAggregates(processedPayload);
 		}
 
@@ -203,6 +204,40 @@ export class PayloadService {
 		}
 
 		return processedPayload[0]!;
+	}
+
+	private static readonly VALUE_DERIVING_AGGREGATES = new Set([
+		'min',
+		'max',
+		'sum',
+		'sumDistinct',
+		'avg',
+		'avgDistinct',
+	]);
+
+	private maskConcealedAggregates(payload: Partial<Item>[]): void {
+		if (payload.length === 0) return;
+
+		const concealedFields = new Set(
+			Object.entries(this.schema.collections[this.collection]?.fields ?? {})
+				.filter(([_name, field]) => field.special?.includes('conceal'))
+				.map(([name]) => name)
+		);
+
+		if (concealedFields.size === 0) return;
+
+		for (const item of payload) {
+			for (const key of Object.keys(item)) {
+				if (!key.includes('->')) continue;
+
+				const [operation, operandField] = key.split('->');
+				if (!operation || !operandField) continue;
+				if (!PayloadService.VALUE_DERIVING_AGGREGATES.has(operation)) continue;
+				if (!concealedFields.has(operandField)) continue;
+
+				item[key] = item[key] == null ? null : '**********';
+			}
+		}
 	}
 
 	processAggregates(payload: Partial<Item>[]) {

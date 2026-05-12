@@ -254,6 +254,134 @@ describe('Integration Tests', () => {
 				});
 			});
 		});
+
+		describe('processValues — conceal masking on aggregate keys', () => {
+			function makeService() {
+				const field = (name: string, special: string[] = []) =>
+					({
+						field: name,
+						defaultValue: null,
+						nullable: true,
+						generated: false,
+						type: 'string' as const,
+						dbType: 'varchar',
+						precision: null,
+						scale: null,
+						special,
+						note: null,
+						validation: null,
+						alias: false,
+					} as any);
+
+				return new PayloadService('test', {
+					knex: db,
+					schema: {
+						collections: {
+							test: {
+								collection: 'test',
+								primary: 'id',
+								singleton: false,
+								sortField: null,
+								note: null,
+								accountability: null,
+								fields: {
+									id: field('id'),
+									status: field('status'),
+									tfa_secret: field('tfa_secret', ['conceal']),
+									token: field('token', ['conceal']),
+									password: field('password', ['conceal']),
+								},
+							},
+						},
+						relations: [],
+					},
+				});
+			}
+
+			it.each([
+				['min', 'tfa_secret', 'raw-secret'],
+				['max', 'tfa_secret', 'raw-secret'],
+				['min', 'token', 'raw-token'],
+				['max', 'password', 'raw-password'],
+				['sum', 'tfa_secret', 'raw-secret'],
+				['sumDistinct', 'tfa_secret', 'raw-secret'],
+				['avg', 'tfa_secret', 'raw-secret'],
+				['avgDistinct', 'tfa_secret', 'raw-secret'],
+			])('masks value-deriving aggregate %s on %s', async (op, fieldName, raw) => {
+				const service = makeService();
+				const flatKey = `${op}->${fieldName}`;
+
+				const result = (await service.processValues('read', [{ [flatKey]: raw }])) as any[];
+
+				expect(result[0][op][fieldName]).toBe('**********');
+			});
+
+			it.each([
+				['count', 'tfa_secret', 5],
+				['countDistinct', 'tfa_secret', 3],
+				['countAll', 'tfa_secret', 7],
+			])('does not mask count-style aggregate %s on %s', async (op, fieldName, count) => {
+				const service = makeService();
+				const flatKey = `${op}->${fieldName}`;
+
+				const result = (await service.processValues('read', [{ [flatKey]: count }])) as any[];
+
+				expect(result[0][op][fieldName]).toBe(count);
+			});
+
+			it.each([
+				['min', 'status', 'active'],
+				['max', 'id', 42],
+			])('does not mask aggregate %s on non-concealed field %s', async (op, fieldName, value) => {
+				const service = makeService();
+				const flatKey = `${op}->${fieldName}`;
+
+				const result = (await service.processValues('read', [{ [flatKey]: value }])) as any[];
+
+				expect(result[0][op][fieldName]).toBe(value);
+			});
+
+			it('masks a numeric zero result on a concealed aggregate without corrupting it to null', async () => {
+				const service = makeService();
+
+				const result = (await service.processValues('read', [{ 'sum->tfa_secret': 0 }])) as any[];
+
+				expect(result[0].sum.tfa_secret).toBe('**********');
+			});
+
+			it('passes null aggregate values through unchanged', async () => {
+				const service = makeService();
+
+				const result = (await service.processValues('read', [{ 'min->tfa_secret': null }])) as any[];
+
+				expect(result[0].min.tfa_secret).toBeNull();
+			});
+
+			it('still masks plain non-aggregate reads of concealed fields (regression)', async () => {
+				const service = makeService();
+
+				const result = (await service.processValues('read', [{ tfa_secret: 'raw-secret' }])) as any[];
+
+				expect(result[0].tfa_secret).toBe('**********');
+			});
+
+			it('masks concealed aggregates in every row of a grouped result', async () => {
+				const service = makeService();
+
+				const result = (await service.processValues('read', [
+					{ 'min->tfa_secret': 'secret-A', 'max->tfa_secret': 'secret-Z', id: 1 },
+					{ 'min->tfa_secret': 'secret-B', 'max->tfa_secret': 'secret-Y', id: 2 },
+				])) as any[];
+
+				for (const row of result) {
+					expect(row.min.tfa_secret).toBe('**********');
+					expect(row.max.tfa_secret).toBe('**********');
+				}
+
+				expect(result[0].id).toBe(1);
+				expect(result[1].id).toBe(2);
+			});
+		});
 	});
 });
 

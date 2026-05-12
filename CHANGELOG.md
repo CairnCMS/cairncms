@@ -72,6 +72,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Stripped server-controlled fields from file metadata writes (GHSA-393c-p46r-7c95 / CVE-2026-39942).
 - Canonicalized IPv4-mapped IPv6 addresses before deny-list check in file imports (GHSA-wv3h-5fx7-966h / CVE-2026-35409).
 - Memoized GraphQL server_health resolver per request (GHSA-6q22-g298-grjh / CVE-2026-35441).
+- Masked concealed fields in aggregate query results (GHSA-38hg-ww64-rrwc / CVE-2026-35442).
 
 ### Acknowledgements
 
