@@ -69,6 +69,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Excluded /auth responses from the response cache (GHSA-cff8-x7jv-4fm8 / CVE-2024-45596).
 - Sanitized condition operation validation errors in flow responses (GHSA-fm3h-p9wm-h74h / CVE-2025-30353).
 - Added Cross-Origin-Opener-Policy header to /auth routes (GHSA-8m32-p958-jg99 / CVE-2026-35408).
+- Stripped server-controlled fields from file metadata writes (GHSA-393c-p46r-7c95 / CVE-2026-39942).
 
 ### Acknowledgements
 
