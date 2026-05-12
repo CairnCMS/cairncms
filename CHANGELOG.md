@@ -77,6 +77,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Validated post-SSO redirect target in OAuth2 and OpenID login flows (GHSA-fr3w-2p22-6w7p / CVE-2024-28239).
 - Validated post-SSO redirect target in SAML login flow (GHSA-3573-4c68-g8cc / CVE-2026-22032).
 - Canonicalized post-SSO redirect targets to local paths across SSO login flows (GHSA-3573-4c68-g8cc / CVE-2026-22032, GHSA-fr3w-2p22-6w7p / CVE-2024-28239).
+- Moved outbound HTTP IP validation to connection time (GHSA-8p72-rcq4-h6pw / CVE-2024-39699).
 
 ### Acknowledgements
 
