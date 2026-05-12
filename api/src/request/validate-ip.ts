@@ -16,7 +16,7 @@ function canonicalize(ip: string): string {
 	}
 }
 
-export const validateIP = async (ip: string, url: string) => {
+export function validateIPSync(ip: string, url: string): void {
 	const env = getEnv();
 	const canonical = canonicalize(ip);
 
@@ -37,4 +37,6 @@ export const validateIP = async (ip: string, url: string) => {
 			}
 		}
 	}
-};
+}
+
+export const validateIP = async (ip: string, url: string) => validateIPSync(ip, url);
