@@ -302,6 +302,7 @@ const isWindows = ['win32', 'win64'].includes(process.platform);
 
 for (const vendor of allVendors) {
 	config.envs[vendor]!.TZ = isWindows ? '0' : 'UTC';
+	config.envs[vendor]!.PUBLIC_URL = `http://127.0.0.1:${config.envs[vendor]!.PORT}`;
 }
 
 export function getUrl(vendor: (typeof allVendors)[number], overrideEnv?: Env) {

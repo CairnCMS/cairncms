@@ -119,7 +119,7 @@ describe('/auth/login/saml', () => {
 				it.each(vendors)('%s', async (vendor) => {
 					// Action
 					const samlLogin = await request(getUrl(vendor))
-						.get(`/auth/login/saml?redirect=${getUrl(vendor)}/admin/login?continue`)
+						.get(`/auth/login/saml?redirect=${encodeURIComponent('/admin/login?continue')}`)
 						.expect(302);
 
 					const samlRedirectUrl = String(samlLogin.headers.location).split('/simplesaml/');
