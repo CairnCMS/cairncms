@@ -28,6 +28,7 @@ import { getConfigFromEnv } from '../../utils/get-config-from-env.js';
 import { getIPFromReq } from '../../utils/get-ip-from-req.js';
 import { getMilliseconds } from '../../utils/get-milliseconds.js';
 import { Url } from '../../utils/url.js';
+import { isSafeRedirect } from '../../utils/validate-redirect.js';
 import { LocalAuthDriver } from './local.js';
 
 export class OpenIDAuthDriver extends LocalAuthDriver {
@@ -395,7 +396,12 @@ export function createOpenIDAuthRouter(providerName: string): Router {
 						logger.warn(error, `[OpenID] Unexpected error during OpenID login`);
 					}
 
-					return res.redirect(`${redirect.split('?')[0]}?reason=${reason}`);
+					if (isSafeRedirect(redirect)) {
+						return res.redirect(`${redirect.split('?')[0]}?reason=${reason}`);
+					}
+
+					logger.warn({ redirect }, '[OpenID] Rejecting unsafe redirect on error path');
+					return res.redirect(`./?reason=${reason}`);
 				}
 
 				logger.warn(error, `[OpenID] Unexpected error during OpenID login`);
@@ -404,7 +410,7 @@ export function createOpenIDAuthRouter(providerName: string): Router {
 
 			const { accessToken, refreshToken, expires } = authResponse;
 
-			if (redirect) {
+			if (redirect && isSafeRedirect(redirect)) {
 				res.cookie(env['REFRESH_TOKEN_COOKIE_NAME'], refreshToken, {
 					httpOnly: true,
 					domain: env['REFRESH_TOKEN_COOKIE_DOMAIN'],
@@ -414,6 +420,10 @@ export function createOpenIDAuthRouter(providerName: string): Router {
 				});
 
 				return res.redirect(redirect);
+			}
+
+			if (redirect) {
+				logger.warn({ redirect }, '[OpenID] Rejecting unsafe redirect after successful login');
 			}
 
 			res.locals['payload'] = {
