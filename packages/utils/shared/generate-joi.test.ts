@@ -806,4 +806,48 @@ describe(`generateJoi`, () => {
 
 		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
 	});
+
+	describe(`_in / _nin with empty arrays (GHSA-hxgm-ghmv-xjjm)`, () => {
+		it(`_in [] rejects a string payload value`, () => {
+			const schema = generateJoi({ field: { _in: [] } } as unknown as FieldFilter);
+			expect(schema.validate({ field: 'anything' }).error).toBeDefined();
+		});
+
+		it(`_in [] rejects a numeric payload value`, () => {
+			const schema = generateJoi({ field: { _in: [] } } as unknown as FieldFilter);
+			expect(schema.validate({ field: 42 }).error).toBeDefined();
+		});
+
+		it(`_in [] rejects a null payload value`, () => {
+			const schema = generateJoi({ field: { _in: [] } } as unknown as FieldFilter);
+			expect(schema.validate({ field: null }).error).toBeDefined();
+		});
+
+		it(`_in [] is vacuously satisfied when the keyed field is absent from the payload`, () => {
+			const schema = generateJoi({ field: { _in: [] } } as unknown as FieldFilter);
+			expect(schema.validate({}).error).toBeUndefined();
+		});
+
+		it(`_nin [] accepts a string payload value`, () => {
+			const schema = generateJoi({ field: { _nin: [] } } as unknown as FieldFilter);
+			expect(schema.validate({ field: 'anything' }).error).toBeUndefined();
+		});
+
+		it(`_nin [] accepts a null payload value`, () => {
+			const schema = generateJoi({ field: { _nin: [] } } as unknown as FieldFilter);
+			expect(schema.validate({ field: null }).error).toBeUndefined();
+		});
+
+		it(`_in ['allowed'] accepts 'allowed' and rejects 'other'`, () => {
+			const schema = generateJoi({ field: { _in: ['allowed'] } } as unknown as FieldFilter);
+			expect(schema.validate({ field: 'allowed' }).error).toBeUndefined();
+			expect(schema.validate({ field: 'other' }).error).toBeDefined();
+		});
+
+		it(`_nin ['blocked'] accepts 'allowed' and rejects 'blocked'`, () => {
+			const schema = generateJoi({ field: { _nin: ['blocked'] } } as unknown as FieldFilter);
+			expect(schema.validate({ field: 'allowed' }).error).toBeUndefined();
+			expect(schema.validate({ field: 'blocked' }).error).toBeDefined();
+		});
+	});
 });
