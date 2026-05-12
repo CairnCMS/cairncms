@@ -16,6 +16,7 @@ import { UsersService } from '../../services/users.js';
 import type { AuthDriverOptions, User } from '../../types/index.js';
 import asyncHandler from '../../utils/async-handler.js';
 import { getConfigFromEnv } from '../../utils/get-config-from-env.js';
+import { isSafeRedirect } from '../../utils/validate-redirect.js';
 import { LocalAuthDriver } from './local.js';
 
 // Register the samlify schema validator
@@ -169,9 +170,13 @@ export function createSAMLAuthRouter(providerName: string) {
 					},
 				};
 
-				if (relayState) {
+				if (relayState && isSafeRedirect(relayState)) {
 					res.cookie(env['REFRESH_TOKEN_COOKIE_NAME'], refreshToken, COOKIE_OPTIONS);
 					return res.redirect(relayState);
+				}
+
+				if (relayState) {
+					logger.warn({ relayState }, '[SAML] Rejecting unsafe RelayState after successful login');
 				}
 
 				return next();
@@ -185,7 +190,12 @@ export function createSAMLAuthRouter(providerName: string) {
 						logger.warn(error, `[SAML] Unexpected error during SAML login`);
 					}
 
-					return res.redirect(`${relayState.split('?')[0]}?reason=${reason}`);
+					if (isSafeRedirect(relayState)) {
+						return res.redirect(`${relayState.split('?')[0]}?reason=${reason}`);
+					}
+
+					logger.warn({ relayState }, '[SAML] Rejecting unsafe RelayState on error path');
+					return res.redirect(`./?reason=${reason}`);
 				}
 
 				logger.warn(error, `[SAML] Unexpected error during SAML login`);

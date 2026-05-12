@@ -75,6 +75,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Masked concealed fields in aggregate query results (GHSA-38hg-ww64-rrwc / CVE-2026-35442).
 - Removed CairnCMS version string from unauthenticated admin bundle (GHSA-5mhg-wv8w-p59j / CVE-2024-27296).
 - Validated post-SSO redirect target in OAuth2 and OpenID login flows (GHSA-fr3w-2p22-6w7p / CVE-2024-28239).
+- Validated post-SSO redirect target in SAML login flow (GHSA-3573-4c68-g8cc / CVE-2026-22032).
 
 ### Acknowledgements
 
