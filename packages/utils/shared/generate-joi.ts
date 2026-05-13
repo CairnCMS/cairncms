@@ -67,6 +67,8 @@ const defaults: JoiOptions = {
 	requireAll: false,
 };
 
+const EMPTY_IN_SENTINEL = Symbol('cairncms-empty-in');
+
 /**
  * Generate a Joi schema from a filter object.
  *
@@ -198,11 +200,19 @@ export function generateJoi(filter: FieldFilter | null, options?: JoiOptions): A
 		}
 
 		if (operator === '_in') {
-			schema[key] = getAnySchema().equal(...(compareValue as (string | number)[]));
+			if (Array.isArray(compareValue) && compareValue.length === 0) {
+				schema[key] = Joi.any().valid(EMPTY_IN_SENTINEL);
+			} else {
+				schema[key] = getAnySchema().equal(...(compareValue as (string | number)[]));
+			}
 		}
 
 		if (operator === '_nin') {
-			schema[key] = getAnySchema().not(...(compareValue as (string | number)[]));
+			if (Array.isArray(compareValue) && compareValue.length === 0) {
+				schema[key] = Joi.any();
+			} else {
+				schema[key] = getAnySchema().not(...(compareValue as (string | number)[]));
+			}
 		}
 
 		if (operator === '_gt') {

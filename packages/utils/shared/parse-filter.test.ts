@@ -219,4 +219,24 @@ describe('', () => {
 		const mockAccountability = { role: 'admin', user: 'user' };
 		expect(parseFilter(mockFilter, mockAccountability)).toStrictEqual(mockResult);
 	});
+
+	it('substitutes an empty $CURRENT_USER scalar-array path into _in []', () => {
+		const mockFilter = { role: { _in: '$CURRENT_USER.allowed_roles' } } as Filter;
+		const mockAccountability = { role: 'admin', user: 'user' };
+		const mockContext = { $CURRENT_USER: { allowed_roles: [] } } as any;
+
+		expect(parseFilter(mockFilter, mockAccountability, mockContext)).toStrictEqual({
+			role: { _in: [] },
+		});
+	});
+
+	it('substitutes an empty $CURRENT_USER relational path into _in []', () => {
+		const mockFilter = { role: { _in: '$CURRENT_USER.user_roles.role' } } as Filter;
+		const mockAccountability = { role: 'admin', user: 'user' };
+		const mockContext = { $CURRENT_USER: { user_roles: [] } } as any;
+
+		expect(parseFilter(mockFilter, mockAccountability, mockContext)).toStrictEqual({
+			role: { _in: [] },
+		});
+	});
 });
