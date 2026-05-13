@@ -1,7 +1,7 @@
 import argon2 from 'argon2';
 import jwt from 'jsonwebtoken';
 import env from '../env.js';
-import { ForbiddenException, InvalidCredentialsException } from '../exceptions/index.js';
+import { ForbiddenException, InvalidCredentialsException, InvalidPayloadException } from '../exceptions/index.js';
 import type {
 	AbstractServiceOptions,
 	CairnTokenPayload,
@@ -33,9 +33,60 @@ export class SharesService extends ItemsService {
 		});
 	}
 
+	private validateShareRole(data: Partial<Item>, options: { requireRole?: boolean } = {}): void {
+		if (this.accountability?.admin === true) return;
+
+		const hasRole = 'role' in data;
+
+		if (options.requireRole && !hasRole) {
+			throw new InvalidPayloadException('"role" is required on share creation');
+		}
+
+		if (!hasRole) return;
+
+		const callerRole = this.accountability?.role ?? null;
+		const requestedRole = (data['role'] as string | null | undefined) ?? null;
+
+		if (callerRole === null) {
+			throw new ForbiddenException();
+		}
+
+		if (requestedRole !== callerRole) {
+			throw new ForbiddenException();
+		}
+	}
+
 	override async createOne(data: Partial<Item>, opts?: MutationOptions): Promise<PrimaryKey> {
+		this.validateShareRole(data, { requireRole: true });
 		await this.authorizationService.checkAccess('share', data['collection'], data['item']);
 		return super.createOne(data, opts);
+	}
+
+	override async createMany(data: Partial<Item>[], opts?: MutationOptions): Promise<PrimaryKey[]> {
+		for (const item of data) {
+			this.validateShareRole(item, { requireRole: true });
+			await this.authorizationService.checkAccess('share', item['collection'], item['item']);
+		}
+
+		return super.createMany(data, opts);
+	}
+
+	override async updateOne(key: PrimaryKey, data: Partial<Item>, opts?: MutationOptions): Promise<PrimaryKey> {
+		this.validateShareRole(data);
+		return super.updateOne(key, data, opts);
+	}
+
+	override async updateMany(keys: PrimaryKey[], data: Partial<Item>, opts?: MutationOptions): Promise<PrimaryKey[]> {
+		this.validateShareRole(data);
+		return super.updateMany(keys, data, opts);
+	}
+
+	override async updateBatch(data: Partial<Item>[], opts?: MutationOptions): Promise<PrimaryKey[]> {
+		for (const item of data) {
+			this.validateShareRole(item);
+		}
+
+		return super.updateBatch(data, opts);
 	}
 
 	async login(payload: Record<string, any>): Promise<LoginResult> {

@@ -81,6 +81,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Restricted _in/_nin filter operators with empty arrays (GHSA-hxgm-ghmv-xjjm).
 - Masked concealed fields routed through query aliases (GHSA-p8v3-m643-4xqx / CVE-2024-34708).
 - Deduplicated GraphQL aggregate field selections (GHSA-7hmh-pfrp-vcx4 / CVE-2024-39895).
+- Validated share role on create and update (GHSA-pmf4-v838-29hg / CVE-2025-24353).
 
 ### Acknowledgements
 
