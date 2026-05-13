@@ -185,6 +185,36 @@ router.get(
 			}
 		}
 
+		if (req.method.toLowerCase() === 'head') {
+			const { file, stat } = await service.statAsset(id, transformation, range);
+
+			const filename = req.params['filename'] ?? file.filename_download;
+			res.attachment(filename);
+			res.setHeader('Content-Type', file.type);
+			res.setHeader('Accept-Ranges', 'bytes');
+
+			res.setHeader('Cache-Control', getCacheControlHeader(req, getMilliseconds(env['ASSETS_CACHE_TTL']), false, true));
+
+			res.setHeader('Vary', vary.join(', '));
+
+			const unixTime = Date.parse(file.modified_on);
+
+			if (!Number.isNaN(unixTime)) {
+				res.setHeader('Last-Modified', new Date(unixTime).toUTCString());
+			}
+
+			if ('download' in req.query === false) {
+				res.setHeader('Content-Disposition', contentDisposition(filename, { type: 'inline' }));
+			}
+
+			if (stat) {
+				res.setHeader('Content-Length', stat.size);
+			}
+
+			res.status(200);
+			return res.end();
+		}
+
 		const { stream, file, stat } = await service.getAsset(id, transformation, range);
 
 		const filename = req.params['filename'] ?? file.filename_download;
@@ -211,14 +241,6 @@ router.get(
 
 		if ('download' in req.query === false) {
 			res.setHeader('Content-Disposition', contentDisposition(filename, { type: 'inline' }));
-		}
-
-		if (req.method.toLowerCase() === 'head') {
-			res.status(200);
-			res.setHeader('Accept-Ranges', 'bytes');
-			res.setHeader('Content-Length', stat.size);
-
-			return res.end();
 		}
 
 		let isDataSent = false;

@@ -86,6 +86,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Validated preset ownership on create and update (GHSA-3fff-gqw3-vj86 / CVE-2024-6534).
 - Redacted access_token query parameter from request logs (GHSA-vw58-ph65-6rxp / CVE-2024-47822).
 - Scoped the search query parameter to fields the caller is permitted to read (GHSA-7wq3-jr35-275c / CVE-2025-30352).
+- Avoided opening storage read streams for asset HEAD requests (GHSA-rv78-qqrq-73m5 / CVE-2025-30350).
 
 ### Acknowledgements
 
