@@ -85,6 +85,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Extended outbound IP deny-list to the full loopback range (GHSA-68g8-c275-xf2m / CVE-2024-46990).
 - Validated preset ownership on create and update (GHSA-3fff-gqw3-vj86 / CVE-2024-6534).
 - Redacted access_token query parameter from request logs (GHSA-vw58-ph65-6rxp / CVE-2024-47822).
+- Scoped the search query parameter to fields the caller is permitted to read (GHSA-7wq3-jr35-275c / CVE-2025-30352).
 
 ### Acknowledgements
 
