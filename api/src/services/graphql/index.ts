@@ -1684,6 +1684,8 @@ export class GraphQLService {
 
 		query.aggregate = {};
 
+		const aggregateFieldSets: Record<string, Set<string>> = {};
+
 		for (let aggregationGroup of selections) {
 			if ((aggregationGroup.kind === 'Field') !== true) continue;
 
@@ -1692,16 +1694,18 @@ export class GraphQLService {
 			// filter out graphql pointers, like __typename
 			if (aggregationGroup.name.value.startsWith('__')) continue;
 
-			const aggregateProperty = aggregationGroup.name.value as keyof Aggregate;
+			const operation = aggregationGroup.name.value;
+			const fieldSet = (aggregateFieldSets[operation] ??= new Set<string>());
 
-			query.aggregate[aggregateProperty] =
-				aggregationGroup.selectionSet?.selections
-					// filter out graphql pointers, like __typename
-					.filter((selectionNode) => !(selectionNode as FieldNode)?.name.value.startsWith('__'))
-					.map((selectionNode) => {
-						selectionNode = selectionNode as FieldNode;
-						return selectionNode.name.value;
-					}) ?? [];
+			for (const selectionNode of aggregationGroup.selectionSet?.selections ?? []) {
+				const fieldName = (selectionNode as FieldNode)?.name.value;
+				if (!fieldName || fieldName.startsWith('__')) continue;
+				fieldSet.add(fieldName);
+			}
+		}
+
+		for (const [operation, fieldSet] of Object.entries(aggregateFieldSets)) {
+			query.aggregate[operation as keyof Aggregate] = Array.from(fieldSet);
 		}
 
 		if (query.filter) {

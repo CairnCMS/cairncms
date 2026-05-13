@@ -80,6 +80,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Moved outbound HTTP IP validation to connection time (GHSA-8p72-rcq4-h6pw / CVE-2024-39699).
 - Restricted _in/_nin filter operators with empty arrays (GHSA-hxgm-ghmv-xjjm).
 - Masked concealed fields routed through query aliases (GHSA-p8v3-m643-4xqx / CVE-2024-34708).
+- Deduplicated GraphQL aggregate field selections (GHSA-7hmh-pfrp-vcx4 / CVE-2024-39895).
 
 ### Acknowledgements
 
