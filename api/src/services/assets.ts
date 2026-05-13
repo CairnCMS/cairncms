@@ -22,6 +22,17 @@ import { getMilliseconds } from '../utils/get-milliseconds.js';
 import * as TransformationUtils from '../utils/transformations.js';
 import { AuthorizationService } from './authorization.js';
 
+type StorageLocation = Awaited<ReturnType<typeof getStorage>>['location'] extends (name: string) => infer L ? L : never;
+
+type ResolvedAsset = {
+	file: File;
+	storageLocation: StorageLocation;
+	sourceFilename: string;
+	transforms: Transformation[];
+	transformedFilename: string | null;
+	transformedExists: boolean;
+};
+
 export class AssetsService {
 	knex: Knex;
 	accountability: Accountability | null;
@@ -33,107 +44,46 @@ export class AssetsService {
 		this.authorizationService = new AuthorizationService(options);
 	}
 
+	async statAsset(
+		id: string,
+		transformation: TransformationParams,
+		range?: Range
+	): Promise<{ file: any; stat: Stat | null }> {
+		const { file, storageLocation, sourceFilename, transformedFilename, transformedExists } = await this._resolveAsset(
+			id,
+			transformation,
+			range
+		);
+
+		if (transformedFilename) {
+			if (transformedExists) {
+				return { file, stat: await storageLocation.stat(transformedFilename) };
+			}
+
+			return { file, stat: null };
+		}
+
+		return { file, stat: await storageLocation.stat(sourceFilename) };
+	}
+
 	async getAsset(
 		id: string,
 		transformation: TransformationParams,
 		range?: Range
 	): Promise<{ stream: Readable; file: any; stat: Stat }> {
-		const storage = await getStorage();
+		const { file, storageLocation, sourceFilename, transforms, transformedFilename, transformedExists } =
+			await this._resolveAsset(id, transformation, range);
 
-		const publicSettings = await this.knex
-			.select('project_logo', 'public_background', 'public_foreground')
-			.from('directus_settings')
-			.first();
-
-		const systemPublicKeys = Object.values(publicSettings || {});
-
-		/**
-		 * This is a little annoying. Postgres will error out if you're trying to search in `where`
-		 * with a wrong type. In case of directus_files where id is a uuid, we'll have to verify the
-		 * validity of the uuid ahead of time.
-		 */
-		const isValidUUID = validateUUID(id, 4);
-
-		if (isValidUUID === false) throw new ForbiddenException();
-
-		if (systemPublicKeys.includes(id) === false && this.accountability?.admin !== true) {
-			await this.authorizationService.checkAccess('read', 'directus_files', id);
-		}
-
-		const file = (await this.knex.select('*').from('directus_files').where({ id }).first()) as File;
-
-		if (!file) throw new ForbiddenException();
-
-		const exists = await storage.location(file.storage).exists(file.filename_disk);
-
-		if (!exists) throw new ForbiddenException();
-
-		if (range) {
-			const missingRangeLimits = range.start === undefined && range.end === undefined;
-			const endBeforeStart = range.start !== undefined && range.end !== undefined && range.end <= range.start;
-			const startOverflow = range.start !== undefined && range.start >= file.filesize;
-			const endUnderflow = range.end !== undefined && range.end <= 0;
-
-			if (missingRangeLimits || endBeforeStart || startOverflow || endUnderflow) {
-				throw new RangeNotSatisfiableException(range);
-			}
-
-			const lastByte = file.filesize - 1;
-
-			if (range.end) {
-				if (range.start === undefined) {
-					// fetch chunk from tail
-					range.start = file.filesize - range.end;
-					range.end = lastByte;
-				}
-
-				if (range.end >= file.filesize) {
-					// fetch entire file
-					range.end = lastByte;
-				}
-			}
-
-			if (range.start) {
-				if (range.end === undefined) {
-					// fetch entire file
-					range.end = lastByte;
-				}
-
-				if (range.start < 0) {
-					// fetch file from head
-					range.start = 0;
-				}
-			}
-		}
-
-		const type = file.type;
-		const transforms = TransformationUtils.resolvePreset(transformation, file);
-
-		if (type && transforms.length > 0 && SUPPORTED_IMAGE_TRANSFORM_FORMATS.includes(type)) {
-			const maybeNewFormat = TransformationUtils.maybeExtractFormat(transforms);
-
-			const assetFilename =
-				path.basename(file.filename_disk, path.extname(file.filename_disk)) +
-				getAssetSuffix(transforms) +
-				(maybeNewFormat ? `.${maybeNewFormat}` : path.extname(file.filename_disk));
-
-			const exists = await storage.location(file.storage).exists(assetFilename);
-
-			if (maybeNewFormat) {
-				file.type = contentType(assetFilename) || null;
-			}
-
-			if (exists) {
+		if (transformedFilename) {
+			if (transformedExists) {
 				return {
-					stream: await storage.location(file.storage).read(assetFilename, range),
+					stream: await storageLocation.read(transformedFilename, range),
 					file,
-					stat: await storage.location(file.storage).stat(assetFilename),
+					stat: await storageLocation.stat(transformedFilename),
 				};
 			}
 
-			// Check image size before transforming. Processing an image that's too large for the
-			// system memory will kill the API. Sharp technically checks for this too in it's
-			// limitInputPixels, but we should have that check applied before starting the read streams
+			// Dimension precheck must precede the read stream; sharp's own limitInputPixels fires too late.
 			const { width, height } = file;
 
 			if (
@@ -155,7 +105,7 @@ export class AssetsService {
 				});
 			}
 
-			const readStream = await storage.location(file.storage).read(file.filename_disk, range);
+			const readStream = await storageLocation.read(sourceFilename, range);
 
 			const transformer = sharp({
 				limitInputPixels: Math.pow(env['ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION'], 2),
@@ -176,18 +126,117 @@ export class AssetsService {
 				readStream.unpipe(transformer);
 			});
 
-			await storage.location(file.storage).write(assetFilename, readStream.pipe(transformer), type);
+			await storageLocation.write(transformedFilename, readStream.pipe(transformer), file.type ?? undefined);
 
 			return {
-				stream: await storage.location(file.storage).read(assetFilename, range),
-				stat: await storage.location(file.storage).stat(assetFilename),
+				stream: await storageLocation.read(transformedFilename, range),
+				stat: await storageLocation.stat(transformedFilename),
 				file,
 			};
-		} else {
-			const readStream = await storage.location(file.storage).read(file.filename_disk, range);
-			const stat = await storage.location(file.storage).stat(file.filename_disk);
-			return { stream: readStream, file, stat };
 		}
+
+		const readStream = await storageLocation.read(sourceFilename, range);
+		const stat = await storageLocation.stat(sourceFilename);
+		return { stream: readStream, file, stat };
+	}
+
+	private async _resolveAsset(id: string, transformation: TransformationParams, range?: Range): Promise<ResolvedAsset> {
+		const storage = await getStorage();
+
+		const publicSettings = await this.knex
+			.select('project_logo', 'public_background', 'public_foreground')
+			.from('directus_settings')
+			.first();
+
+		const systemPublicKeys = Object.values(publicSettings || {});
+
+		// Postgres errors when a non-UUID string is used in a WHERE on a UUID column; validate up front.
+		const isValidUUID = validateUUID(id, 4);
+
+		if (isValidUUID === false) throw new ForbiddenException();
+
+		if (systemPublicKeys.includes(id) === false && this.accountability?.admin !== true) {
+			await this.authorizationService.checkAccess('read', 'directus_files', id);
+		}
+
+		const file = (await this.knex.select('*').from('directus_files').where({ id }).first()) as File;
+
+		if (!file) throw new ForbiddenException();
+
+		const storageLocation = storage.location(file.storage);
+		const exists = await storageLocation.exists(file.filename_disk);
+
+		if (!exists) throw new ForbiddenException();
+
+		if (range) {
+			const missingRangeLimits = range.start === undefined && range.end === undefined;
+			const endBeforeStart = range.start !== undefined && range.end !== undefined && range.end <= range.start;
+			const startOverflow = range.start !== undefined && range.start >= file.filesize;
+			const endUnderflow = range.end !== undefined && range.end <= 0;
+
+			if (missingRangeLimits || endBeforeStart || startOverflow || endUnderflow) {
+				throw new RangeNotSatisfiableException(range);
+			}
+
+			const lastByte = file.filesize - 1;
+
+			if (range.end) {
+				if (range.start === undefined) {
+					range.start = file.filesize - range.end;
+					range.end = lastByte;
+				}
+
+				if (range.end >= file.filesize) {
+					range.end = lastByte;
+				}
+			}
+
+			if (range.start) {
+				if (range.end === undefined) {
+					range.end = lastByte;
+				}
+
+				if (range.start < 0) {
+					range.start = 0;
+				}
+			}
+		}
+
+		const type = file.type;
+		const transforms = TransformationUtils.resolvePreset(transformation, file);
+
+		if (!type || transforms.length === 0 || !SUPPORTED_IMAGE_TRANSFORM_FORMATS.includes(type)) {
+			return {
+				file,
+				storageLocation,
+				sourceFilename: file.filename_disk,
+				transforms,
+				transformedFilename: null,
+				transformedExists: false,
+			};
+		}
+
+		const maybeNewFormat = TransformationUtils.maybeExtractFormat(transforms);
+
+		const transformedFilename =
+			path.basename(file.filename_disk, path.extname(file.filename_disk)) +
+			getAssetSuffix(transforms) +
+			(maybeNewFormat ? `.${maybeNewFormat}` : path.extname(file.filename_disk));
+
+		if (maybeNewFormat) {
+			file.type = contentType(transformedFilename) || null;
+		}
+
+		const transformedExists = await storageLocation.exists(transformedFilename);
+
+		return {
+			file,
+			storageLocation,
+			sourceFilename: file.filename_disk,
+			transforms,
+			transformedFilename,
+			transformedExists,
+		};
 	}
 }
 
