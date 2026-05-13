@@ -39,6 +39,32 @@ vi.mock('../database/index.js', () => ({
 	default: vi.fn(),
 }));
 
+const { sharpInstance, sharpFactory, loggerErrorSpy } = vi.hoisted(() => {
+	const instance: any = {};
+	instance.timeout = vi.fn(() => instance);
+	instance.rotate = vi.fn(() => instance);
+	instance.resize = vi.fn(() => instance);
+	instance.toFormat = vi.fn(() => instance);
+	instance.on = vi.fn(() => instance);
+	instance.pipe = vi.fn(() => instance);
+	const factory: any = vi.fn(() => instance);
+	factory.counters = vi.fn(() => ({ queue: 0, process: 0 }));
+	return { sharpInstance: instance, sharpFactory: factory, loggerErrorSpy: vi.fn() };
+});
+
+vi.mock('sharp', () => ({ default: sharpFactory }));
+
+vi.mock('../logger.js', () => ({
+	default: {
+		error: loggerErrorSpy,
+		warn: vi.fn(),
+		info: vi.fn(),
+		debug: vi.fn(),
+		trace: vi.fn(),
+		fatal: vi.fn(),
+	},
+}));
+
 function makeFileRow(overrides: Partial<Record<string, any>> = {}) {
 	return {
 		id: VALID_UUID,
@@ -265,5 +291,135 @@ describe('AssetsService.getAsset (regression — must still open a storage read)
 		expect(storageRead).toHaveBeenCalled();
 		const readPaths = storageRead.mock.calls.map((call) => call[0]);
 		expect(readPaths.some((name) => name.startsWith('11111111-2222-4333-8444-555555555555__'))).toBe(true);
+	});
+});
+
+describe('AssetsService.getAsset uncached-transform pipeline (GHSA-j8xj-7jff-46mx)', () => {
+	let db: MockedFunction<Knex>;
+	let tracker: Tracker;
+	const schema = { collections: {}, relations: [] } as unknown as SchemaOverview;
+
+	const adminAccountability: Accountability = {
+		user: 'admin-uuid',
+		role: 'role-uuid',
+		admin: true,
+		app: true,
+		ip: '127.0.0.1',
+		permissions: [],
+	};
+
+	function buildFakeReadStream() {
+		const handlers: Record<string, (...args: any[]) => void> = {};
+
+		const stream: any = {
+			on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+				handlers[event] = handler;
+				return stream;
+			}),
+			pipe: vi.fn(() => stream),
+			unpipe: vi.fn(() => stream),
+			destroy: vi.fn(),
+			__fireError: (err: Error) => handlers['error']?.(err),
+		};
+
+		return stream;
+	}
+
+	beforeAll(() => {
+		db = vi.mocked(knex.default({ client: MockClient }));
+		tracker = createTracker(db);
+	});
+
+	beforeEach(() => {
+		storageRead.mockReset();
+		storageStat.mockReset().mockResolvedValue({ size: 1024 });
+		storageWrite.mockReset().mockResolvedValue(undefined);
+		checkAccessSpy.mockReset().mockResolvedValue(undefined);
+		storageExists.mockReset().mockImplementation(async (name: string) => name === FILE_DISK_NAME);
+		sharpFactory.mockClear();
+		sharpInstance.timeout.mockClear();
+		sharpInstance.rotate.mockClear();
+		sharpInstance.resize.mockClear();
+		sharpInstance.toFormat.mockClear();
+		sharpInstance.on.mockClear();
+		sharpInstance.pipe.mockClear();
+		loggerErrorSpy.mockReset();
+	});
+
+	afterEach(() => {
+		tracker.reset();
+	});
+
+	it('does not open the source read stream when a transform method throws on apply', async () => {
+		primeKnex(tracker);
+
+		sharpInstance.resize.mockImplementationOnce(() => {
+			throw new Error('sharp: bad resize args');
+		});
+
+		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+		await expect(service.getAsset(VALID_UUID, { width: 100 })).rejects.toThrow(/bad resize args/);
+
+		expect(storageRead).not.toHaveBeenCalled();
+	});
+
+	it('destroys the source read stream and rethrows when storage.write rejects', async () => {
+		primeKnex(tracker);
+		const fakeReadStream = buildFakeReadStream();
+		storageRead.mockResolvedValue(fakeReadStream);
+		storageWrite.mockRejectedValueOnce(new Error('s3 write failed'));
+		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+		await expect(service.getAsset(VALID_UUID, { width: 100 })).rejects.toThrow(/s3 write failed/);
+
+		expect(fakeReadStream.destroy).toHaveBeenCalledTimes(1);
+	});
+
+	it('opens the source read stream on a valid transform (regression)', async () => {
+		primeKnex(tracker);
+		const fakeSourceStream = buildFakeReadStream();
+		const fakeCachedStream = buildFakeReadStream();
+		storageRead.mockResolvedValueOnce(fakeSourceStream).mockResolvedValueOnce(fakeCachedStream);
+		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+		await service.getAsset(VALID_UUID, { width: 100 });
+
+		expect(storageRead).toHaveBeenCalled();
+		expect(storageRead.mock.calls[0]![0]).toBe(FILE_DISK_NAME);
+		expect(fakeSourceStream.destroy).not.toHaveBeenCalled();
+		expect(storageWrite).toHaveBeenCalledTimes(1);
+	});
+
+	it('logs read-stream errors via the error handler while cleanup and rejection flow through the write catch', async () => {
+		primeKnex(tracker);
+		const fakeReadStream = buildFakeReadStream();
+		storageRead.mockResolvedValue(fakeReadStream);
+
+		let rejectWrite: (err: Error) => void = () => undefined;
+
+		storageWrite.mockImplementationOnce(
+			() =>
+				new Promise<void>((_resolve, reject) => {
+					rejectWrite = reject;
+				})
+		);
+
+		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+		const pending = service.getAsset(VALID_UUID, { width: 100 });
+
+		while (fakeReadStream.on.mock.calls.find((c: any[]) => c[0] === 'error') === undefined) {
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+
+		const readErr = new Error('s3 stream dropped');
+		fakeReadStream.__fireError(readErr);
+
+		expect(loggerErrorSpy).toHaveBeenCalledWith(readErr, expect.stringContaining(VALID_UUID));
+
+		rejectWrite(new Error('pipe broken'));
+
+		await expect(pending).rejects.toThrow(/pipe broken/);
+		expect(fakeReadStream.destroy).toHaveBeenCalledTimes(1);
 	});
 });

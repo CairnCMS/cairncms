@@ -105,8 +105,6 @@ export class AssetsService {
 				});
 			}
 
-			const readStream = await storageLocation.read(sourceFilename, range);
-
 			const transformer = sharp({
 				limitInputPixels: Math.pow(env['ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION'], 2),
 				sequentialRead: true,
@@ -121,12 +119,18 @@ export class AssetsService {
 
 			transforms.forEach(([method, ...args]) => (transformer[method] as any).apply(transformer, args));
 
+			const readStream = await storageLocation.read(sourceFilename, range);
+
 			readStream.on('error', (e: Error) => {
 				logger.error(e, `Couldn't transform file ${file.id}`);
-				readStream.unpipe(transformer);
 			});
 
-			await storageLocation.write(transformedFilename, readStream.pipe(transformer), file.type ?? undefined);
+			try {
+				await storageLocation.write(transformedFilename, readStream.pipe(transformer), file.type ?? undefined);
+			} catch (err) {
+				readStream.destroy();
+				throw err;
+			}
 
 			return {
 				stream: await storageLocation.read(transformedFilename, range),
