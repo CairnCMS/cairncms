@@ -382,6 +382,181 @@ describe('Integration Tests', () => {
 				expect(result[1].id).toBe(2);
 			});
 		});
+
+		describe('processValues — conceal masking on query aliases (GHSA-p8v3-m643-4xqx)', () => {
+			function makeService(collectionName: string, fieldConfigs: Array<[string, string[]?]>) {
+				const field = (name: string, special: string[] = []) =>
+					({
+						field: name,
+						defaultValue: null,
+						nullable: true,
+						generated: false,
+						type: 'string' as const,
+						dbType: 'varchar',
+						precision: null,
+						scale: null,
+						special,
+						note: null,
+						validation: null,
+						alias: false,
+					} as any);
+
+				const fields: Record<string, any> = {};
+
+				for (const [name, special] of fieldConfigs) {
+					fields[name] = field(name, special ?? []);
+				}
+
+				return new PayloadService(collectionName, {
+					knex: db,
+					schema: {
+						collections: {
+							[collectionName]: {
+								collection: collectionName,
+								primary: 'id',
+								singleton: false,
+								sortField: null,
+								note: null,
+								accountability: null,
+								fields,
+							},
+						},
+						relations: [],
+					},
+				});
+			}
+
+			function usersService() {
+				return makeService('directus_users', [
+					['id'],
+					['email'],
+					['password', ['conceal']],
+					['tfa_secret', ['conceal']],
+					['token', ['conceal']],
+				]);
+			}
+
+			function sharesService() {
+				return makeService('directus_shares', [['id'], ['password', ['conceal']]]);
+			}
+
+			it('masks an aliased concealed field', async () => {
+				const service = usersService();
+
+				const result = (await service.processValues('read', [{ hash: 'raw-hash' }], { hash: 'password' })) as any[];
+
+				expect(result[0].hash).toBe('**********');
+			});
+
+			it('does not mask an aliased non-concealed field', async () => {
+				const service = usersService();
+
+				const result = (await service.processValues('read', [{ display_email: 'a@b.com' }], {
+					display_email: 'email',
+				})) as any[];
+
+				expect(result[0].display_email).toBe('a@b.com');
+			});
+
+			it('masks multiple concealed aliases in a single payload', async () => {
+				const service = usersService();
+
+				const result = (await service.processValues('read', [{ h: 'raw-hash', e: 'a@b.com' }], {
+					h: 'password',
+					e: 'email',
+				})) as any[];
+
+				expect(result[0].h).toBe('**********');
+				expect(result[0].e).toBe('a@b.com');
+			});
+
+			it('still masks canonical concealed reads when no alias map is provided', async () => {
+				const service = usersService();
+
+				const result = (await service.processValues('read', [{ password: 'raw-hash' }])) as any[];
+
+				expect(result[0].password).toBe('**********');
+			});
+
+			it('still masks canonical concealed reads when alias map is empty', async () => {
+				const service = usersService();
+
+				const result = (await service.processValues('read', [{ password: 'raw-hash' }], {})) as any[];
+
+				expect(result[0].password).toBe('**********');
+			});
+
+			it('does not mask when alias target is not in the collection schema', async () => {
+				const service = usersService();
+
+				const result = (await service.processValues('read', [{ x: 'value' }], { x: 'no_such_field' })) as any[];
+
+				expect(result[0].x).toBe('value');
+			});
+
+			it('preserves null aliased concealed value as null', async () => {
+				const service = usersService();
+
+				const result = (await service.processValues('read', [{ hash: null }], { hash: 'password' })) as any[];
+
+				expect(result[0].hash).toBeNull();
+			});
+
+			it('masks empty-string aliased concealed value', async () => {
+				const service = usersService();
+
+				const result = (await service.processValues('read', [{ hash: '' }], { hash: 'password' })) as any[];
+
+				expect(result[0].hash).toBe('**********');
+			});
+
+			it('masks aliased concealed values across multiple rows', async () => {
+				const service = usersService();
+
+				const result = (await service.processValues('read', [{ hash: 'raw-1' }, { hash: 'raw-2' }], {
+					hash: 'password',
+				})) as any[];
+
+				expect(result[0].hash).toBe('**********');
+				expect(result[1].hash).toBe('**********');
+			});
+
+			it('masks aliased concealed field on directus_shares (multi-collection coverage)', async () => {
+				const service = sharesService();
+
+				const result = (await service.processValues('read', [{ shared_pwd: 'raw-share-hash' }], {
+					shared_pwd: 'password',
+				})) as any[];
+
+				expect(result[0].shared_pwd).toBe('**********');
+			});
+
+			it('masks both canonical and aliased concealed values in the same payload', async () => {
+				const service = usersService();
+
+				const result = (await service.processValues('read', [{ password: 'raw1', hash: 'raw2' }], {
+					hash: 'password',
+				})) as any[];
+
+				expect(result[0].password).toBe('**********');
+				expect(result[0].hash).toBe('**********');
+			});
+
+			it('masks a nested level when its own collection-scoped alias map is passed in (per-level seam, not a propagation test)', async () => {
+				const parentService = usersService();
+				const childService = sharesService();
+
+				const parentResult = (await parentService.processValues('read', [{ id: 'u1', email: 'a@b.com' }])) as any[];
+				expect(parentResult[0].id).toBe('u1');
+				expect(parentResult[0].email).toBe('a@b.com');
+
+				const childResult = (await childService.processValues('read', [{ shared_pwd: 'raw-share-hash' }], {
+					shared_pwd: 'password',
+				})) as any[];
+
+				expect(childResult[0].shared_pwd).toBe('**********');
+			});
+		});
 	});
 });
 
