@@ -22,6 +22,7 @@ import { BaseException } from '@cairncms/exceptions';
 import logger from './logger.js';
 import { getMessenger } from './messenger.js';
 import { ActivityService } from './services/activity.js';
+import { AuthorizationService } from './services/authorization.js';
 import * as services from './services/index.js';
 import { FlowsService } from './services/flows.js';
 import { RevisionsService } from './services/revisions.js';
@@ -248,32 +249,7 @@ class FlowManager {
 
 				this.webhookFlowHandlers[`${method}-${flow.id}`] = handler;
 			} else if (flow.trigger === 'manual') {
-				const handler = (data: unknown, context: Record<string, unknown>) => {
-					const enabledCollections = flow.options?.['collections'] ?? [];
-					const targetCollection = (data as Record<string, any>)?.['body'].collection;
-
-					if (!targetCollection) {
-						logger.warn(`Manual trigger requires "collection" to be specified in the payload`);
-						throw new exceptions.ForbiddenException();
-					}
-
-					if (enabledCollections.length === 0) {
-						logger.warn(`There is no collections configured for this manual trigger`);
-						throw new exceptions.ForbiddenException();
-					}
-
-					if (!enabledCollections.includes(targetCollection)) {
-						logger.warn(`Specified collection must be one of: ${enabledCollections.join(', ')}.`);
-						throw new exceptions.ForbiddenException();
-					}
-
-					if (flow.options['async']) {
-						this.executeFlow(flow, data, context);
-						return undefined;
-					} else {
-						return this.executeFlow(flow, data, context);
-					}
-				};
+				const handler = (data: unknown, context: Record<string, unknown>) => this._runManualFlow(flow, data, context);
 
 				// Default return to $last for manual
 				flow.options['return'] = '$last';
@@ -307,6 +283,60 @@ class FlowManager {
 		this.webhookFlowHandlers = {};
 
 		this.isLoaded = false;
+	}
+
+	private async _runManualFlow(flow: Flow, data: unknown, context: Record<string, unknown>): Promise<unknown> {
+		const accountability = context['accountability'] as Accountability | null | undefined;
+		const schema = context['schema'] as SchemaOverview;
+
+		if (!accountability || !accountability.user) {
+			throw new exceptions.ForbiddenException();
+		}
+
+		const enabledCollections = (flow.options?.['collections'] as string[] | undefined) ?? [];
+		const body = ((data as Record<string, any> | undefined)?.['body'] ?? {}) as Record<string, any>;
+		const targetCollection = body['collection'] as string | undefined;
+		const keys = body['keys'];
+
+		if (!targetCollection) {
+			logger.warn(`Manual trigger requires "collection" to be specified in the payload`);
+			throw new exceptions.ForbiddenException();
+		}
+
+		if (enabledCollections.length === 0) {
+			logger.warn(`There is no collections configured for this manual trigger`);
+			throw new exceptions.ForbiddenException();
+		}
+
+		if (!enabledCollections.includes(targetCollection)) {
+			logger.warn(`Specified collection must be one of: ${enabledCollections.join(', ')}.`);
+			throw new exceptions.ForbiddenException();
+		}
+
+		const authorizationService = new AuthorizationService({ accountability, knex: getDatabase(), schema });
+
+		await authorizationService.checkAccess('read', 'directus_flows', flow.id);
+
+		if (Array.isArray(keys) && keys.length > 0) {
+			await authorizationService.checkAccess('read', targetCollection, keys);
+		} else if (flow.options?.['requireSelection'] === false) {
+			if (accountability.admin !== true) {
+				const hasCollectionRead = accountability.permissions?.some(
+					(perm) => perm.collection === targetCollection && perm.action === 'read'
+				);
+
+				if (!hasCollectionRead) throw new exceptions.ForbiddenException();
+			}
+		} else {
+			throw new exceptions.ForbiddenException();
+		}
+
+		if (flow.options['async']) {
+			this.executeFlow(flow, data, context);
+			return undefined;
+		}
+
+		return this.executeFlow(flow, data, context);
 	}
 
 	private async executeFlow(flow: Flow, data: unknown = null, context: Record<string, unknown> = {}): Promise<unknown> {
