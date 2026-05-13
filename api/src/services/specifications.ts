@@ -1,6 +1,7 @@
 import { spec } from '@cairncms/specs';
 import type { Knex } from 'knex';
 import { cloneDeep, mergeWith } from 'lodash-es';
+import hash from 'object-hash';
 import type {
 	OpenAPIObject,
 	ParameterObject,
@@ -10,7 +11,6 @@ import type {
 	TagObject,
 } from 'openapi3-ts';
 import type { Accountability, Field, Permission, Relation, SchemaOverview, Type } from '@cairncms/types';
-import { version } from '../utils/package.js';
 import { OAS_REQUIRED_SCHEMAS } from '../constants.js';
 import getDatabase from '../database/index.js';
 import env from '../env.js';
@@ -97,13 +97,18 @@ class OASSpecsService implements SpecificationSubService {
 		const paths = await this.generatePaths(permissions, tags);
 		const components = await this.generateComponents(collections, fields, relations, tags);
 
+		const oasDocumentVersion = hash(
+			{ openapi: '3.0.1', tags, paths, components },
+			{ algorithm: 'sha1', encoding: 'hex' }
+		).slice(0, 16);
+
 		const spec: OpenAPIObject = {
 			openapi: '3.0.1',
 			info: {
 				title: 'Dynamic API Specification',
 				description:
 					'This is a dynamically generated API specification for all endpoints existing on the current project.',
-				version: version,
+				version: oasDocumentVersion,
 			},
 			servers: [
 				{
