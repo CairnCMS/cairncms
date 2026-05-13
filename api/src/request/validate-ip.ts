@@ -16,6 +16,14 @@ function canonicalize(ip: string): string {
 	}
 }
 
+function isLoopback(ip: string): boolean {
+	try {
+		return ipaddr.parse(ip).range() === 'loopback';
+	} catch {
+		return false;
+	}
+}
+
 export function validateIPSync(ip: string, url: string): void {
 	const env = getEnv();
 	const canonical = canonicalize(ip);
@@ -25,6 +33,10 @@ export function validateIPSync(ip: string, url: string): void {
 	}
 
 	if (env['IMPORT_IP_DENY_LIST'].includes('0.0.0.0')) {
+		if (isLoopback(canonical)) {
+			throw new Error(`Requested URL "${url}" resolves to a denied IP address`);
+		}
+
 		const networkInterfaces = os.networkInterfaces();
 
 		for (const networkInfo of Object.values(networkInterfaces)) {

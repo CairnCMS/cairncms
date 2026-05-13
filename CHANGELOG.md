@@ -82,6 +82,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Masked concealed fields routed through query aliases (GHSA-p8v3-m643-4xqx / CVE-2024-34708).
 - Deduplicated GraphQL aggregate field selections (GHSA-7hmh-pfrp-vcx4 / CVE-2024-39895).
 - Validated share role on create and update (GHSA-pmf4-v838-29hg / CVE-2025-24353).
+- Extended outbound IP deny-list to the full loopback range (GHSA-68g8-c275-xf2m / CVE-2024-46990).
 
 ### Acknowledgements
 
