@@ -39,6 +39,70 @@ afterEach(() => {
 	vi.clearAllMocks();
 });
 
+describe('req.query.access_token', () => {
+	test('Should redact access_token query parameter (GHSA-vw58-ph65-6rxp)', () => {
+		const instance = pino(httpLoggerOptions, stream);
+
+		instance.info({
+			req: {
+				query: {
+					access_token: 'test-access-token-value',
+				},
+			},
+		});
+
+		expect(logOutput.mock.calls[0][0]).toMatchObject({
+			req: {
+				query: {
+					access_token: REDACT_TEXT,
+				},
+			},
+		});
+	});
+
+	test('Should leave non-sensitive query parameters unchanged', () => {
+		const instance = pino(httpLoggerOptions, stream);
+
+		instance.info({
+			req: {
+				query: {
+					fields: 'id,name',
+				},
+			},
+		});
+
+		expect(logOutput.mock.calls[0][0]).toMatchObject({
+			req: {
+				query: {
+					fields: 'id,name',
+				},
+			},
+		});
+	});
+
+	test('Should redact access_token while preserving other query parameters in the same payload', () => {
+		const instance = pino(httpLoggerOptions, stream);
+
+		instance.info({
+			req: {
+				query: {
+					access_token: 'test-access-token-value',
+					fields: 'id,name',
+				},
+			},
+		});
+
+		expect(logOutput.mock.calls[0][0]).toMatchObject({
+			req: {
+				query: {
+					access_token: REDACT_TEXT,
+					fields: 'id,name',
+				},
+			},
+		});
+	});
+});
+
 describe('req.headers.authorization', () => {
 	test('Should redact bearer token in Authorization header', () => {
 		const instance = pino(httpLoggerOptions, stream);

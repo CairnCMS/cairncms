@@ -84,6 +84,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Validated share role on create and update (GHSA-pmf4-v838-29hg / CVE-2025-24353).
 - Extended outbound IP deny-list to the full loopback range (GHSA-68g8-c275-xf2m / CVE-2024-46990).
 - Validated preset ownership on create and update (GHSA-3fff-gqw3-vj86 / CVE-2024-6534).
+- Redacted access_token query parameter from request logs (GHSA-vw58-ph65-6rxp / CVE-2024-47822).
 
 ### Acknowledgements
 
