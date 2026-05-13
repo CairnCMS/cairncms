@@ -88,6 +88,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Scoped the search query parameter to fields the caller is permitted to read (GHSA-7wq3-jr35-275c / CVE-2025-30352).
 - Avoided opening storage read streams for asset HEAD requests (GHSA-rv78-qqrq-73m5 / CVE-2025-30350).
 - Validated asset transform args before opening the source stream (GHSA-j8xj-7jff-46mx / CVE-2025-30225).
+- Removed version string from OpenAPI spec responses (GHSA-rmjh-cf9q-pv7q / CVE-2025-53887).
 
 ### Acknowledgements
 

@@ -436,6 +436,32 @@ describe('Integration Tests', () => {
 						expect(targetSchema).not.toHaveProperty('type');
 					});
 				});
+
+				describe('info (GHSA-rmjh-cf9q-pv7q)', () => {
+					it('does not disclose the running package version as info.version', async () => {
+						const { version: packageVersion } = await import('../utils/package.js');
+						vi.spyOn(CollectionsService.prototype, 'readByQuery').mockResolvedValue([]);
+						vi.spyOn(FieldsService.prototype, 'readAll').mockResolvedValue([]);
+						vi.spyOn(RelationsService.prototype, 'readAll').mockResolvedValue([]);
+
+						const spec = await service.oas.generate();
+
+						expect(typeof spec.info.version).toBe('string');
+						expect(spec.info.version.length).toBeGreaterThan(0);
+						expect(spec.info.version).not.toBe(packageVersion);
+					});
+
+					it('returns a stable info.version for repeated calls against the same spec input', async () => {
+						vi.spyOn(CollectionsService.prototype, 'readByQuery').mockResolvedValue([]);
+						vi.spyOn(FieldsService.prototype, 'readAll').mockResolvedValue([]);
+						vi.spyOn(RelationsService.prototype, 'readAll').mockResolvedValue([]);
+
+						const first = await service.oas.generate();
+						const second = await service.oas.generate();
+
+						expect(first.info.version).toBe(second.info.version);
+					});
+				});
 			});
 		});
 	});
