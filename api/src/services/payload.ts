@@ -146,11 +146,14 @@ export class PayloadService {
 		},
 	};
 
-	processValues(action: Action, payloads: Partial<Item>[]): Promise<Partial<Item>[]>;
-	processValues(action: Action, payload: Partial<Item>): Promise<Partial<Item>>;
+	processValues(action: Action, payloads: Partial<Item>[], aliasMap?: Record<string, string>): Promise<Partial<Item>[]>;
+
+	processValues(action: Action, payload: Partial<Item>, aliasMap?: Record<string, string>): Promise<Partial<Item>>;
+
 	async processValues(
 		action: Action,
-		payload: Partial<Item> | Partial<Item>[]
+		payload: Partial<Item> | Partial<Item>[],
+		aliasMap?: Record<string, string>
 	): Promise<Partial<Item> | Partial<Item>[]> {
 		const processedPayload = toArray(payload);
 
@@ -196,6 +199,7 @@ export class PayloadService {
 
 		if (action === 'read') {
 			this.maskConcealedAggregates(processedPayload);
+			this.maskAliasedConcealedFields(processedPayload, aliasMap);
 			this.processAggregates(processedPayload);
 		}
 
@@ -236,6 +240,27 @@ export class PayloadService {
 				if (!concealedFields.has(operandField)) continue;
 
 				item[key] = item[key] == null ? null : '**********';
+			}
+		}
+	}
+
+	private maskAliasedConcealedFields(payload: Partial<Item>[], aliasMap?: Record<string, string>): void {
+		if (!aliasMap || payload.length === 0) return;
+
+		const concealedFields = new Set(
+			Object.entries(this.schema.collections[this.collection]?.fields ?? {})
+				.filter(([_name, field]) => field.special?.includes('conceal'))
+				.map(([name]) => name)
+		);
+
+		if (concealedFields.size === 0) return;
+
+		for (const [aliasKey, sourceField] of Object.entries(aliasMap)) {
+			if (!concealedFields.has(sourceField)) continue;
+
+			for (const item of payload) {
+				if (!(aliasKey in item)) continue;
+				item[aliasKey] = item[aliasKey] == null ? null : '**********';
 			}
 		}
 	}
