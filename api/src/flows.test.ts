@@ -1,7 +1,20 @@
-import { describe, expect, test } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, test, vi } from 'vitest';
 import { REDACT_TEXT } from './constants.js';
+import * as exceptions from './exceptions/index.js';
 import { buildRevisionData, getFlowManager, type Step } from './flows.js';
 import conditionOp from './operations/condition/index.js';
+
+const { checkAccessSpy } = vi.hoisted(() => ({ checkAccessSpy: vi.fn() }));
+
+vi.mock('./database/index.js', () => ({
+	default: vi.fn(() => ({})),
+}));
+
+vi.mock('./services/authorization.js', () => {
+	const AuthorizationService = vi.fn();
+	AuthorizationService.prototype.checkAccess = checkAccessSpy;
+	return { AuthorizationService };
+});
 
 const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.HEADER_PAYLOAD_LONG_ENOUGH_TO_BE_REAL_TOKEN';
 
@@ -145,5 +158,185 @@ describe('executeFlow — webhook trigger with failing condition does not leak c
 
 		expect(blob).not.toContain('TOKEN_MARKER_CCC_DO_NOT_LEAK');
 		expect(blob).not.toContain('USER_MARKER_BBB_DO_NOT_LEAK');
+	});
+});
+
+describe('FlowManager._runManualFlow (GHSA-7cvf-pxgp-42fc)', () => {
+	const FLOW_ID = 'manual-flow-id';
+	const TARGET_COLLECTION = 'articles';
+	const TARGET_KEYS = ['article-1', 'article-2'];
+
+	function buildFlow(overrides: { options?: Record<string, unknown> } = {}): any {
+		return {
+			id: FLOW_ID,
+			name: 'Manual Flow',
+			status: 'active',
+			trigger: 'manual',
+			accountability: null,
+			options: { collections: [TARGET_COLLECTION], ...(overrides.options ?? {}) },
+			operation: { id: 'op-1', key: 'log', type: 'log', options: {}, resolve: null, reject: null },
+		};
+	}
+
+	function buildData(
+		bodyOverrides: Record<string, unknown> = { collection: TARGET_COLLECTION, keys: TARGET_KEYS }
+	): any {
+		return {
+			path: `/flows/trigger/${FLOW_ID}`,
+			method: 'POST',
+			headers: {},
+			query: {},
+			body: bodyOverrides,
+		};
+	}
+
+	function buildContext(accountability: Record<string, unknown> | null): any {
+		return { accountability, schema: { collections: {}, relations: [] } as any };
+	}
+
+	const anonAccountability = {
+		user: null,
+		role: null,
+		admin: false,
+		app: false,
+		ip: '127.0.0.1',
+		permissions: [] as any[],
+	};
+
+	const adminAccountability = {
+		user: 'admin-uuid',
+		role: 'role-uuid',
+		admin: true,
+		app: true,
+		ip: '127.0.0.1',
+		permissions: [] as any[],
+	};
+
+	const nonAdminWithItemRead = {
+		user: 'user-uuid',
+		role: 'role-uuid',
+		admin: false,
+		app: true,
+		ip: '127.0.0.1',
+		permissions: [{ collection: TARGET_COLLECTION, action: 'read', fields: ['*'] } as any],
+	};
+
+	let manager: any;
+	let executeFlowSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		manager = getFlowManager();
+		executeFlowSpy = vi.spyOn(manager, 'executeFlow').mockResolvedValue('executed' as any);
+		checkAccessSpy.mockReset().mockResolvedValue(undefined);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	describe('bug-exposing — caller without auth or permission is rejected', () => {
+		it('rejects anonymous caller (accountability.user is null)', async () => {
+			await expect(
+				manager._runManualFlow(buildFlow(), buildData(), buildContext(anonAccountability))
+			).rejects.toBeInstanceOf(exceptions.ForbiddenException);
+
+			expect(executeFlowSpy).not.toHaveBeenCalled();
+		});
+
+		it('rejects when checkAccess on directus_flows fails', async () => {
+			checkAccessSpy.mockImplementation(async (_action: any, collection: any) => {
+				if (collection === 'directus_flows') throw new exceptions.ForbiddenException();
+			});
+
+			await expect(
+				manager._runManualFlow(buildFlow(), buildData(), buildContext(nonAdminWithItemRead))
+			).rejects.toBeInstanceOf(exceptions.ForbiddenException);
+
+			expect(executeFlowSpy).not.toHaveBeenCalled();
+		});
+
+		it('rejects when checkAccess on target items fails (keys path)', async () => {
+			checkAccessSpy.mockImplementation(async (_action: any, collection: any) => {
+				if (collection === TARGET_COLLECTION) throw new exceptions.ForbiddenException();
+			});
+
+			await expect(
+				manager._runManualFlow(buildFlow(), buildData(), buildContext(nonAdminWithItemRead))
+			).rejects.toBeInstanceOf(exceptions.ForbiddenException);
+
+			expect(executeFlowSpy).not.toHaveBeenCalled();
+		});
+
+		it('rejects collection-mode trigger when caller lacks collection read', async () => {
+			const flow = buildFlow({ options: { collections: [TARGET_COLLECTION], requireSelection: false } });
+			const data = buildData({ collection: TARGET_COLLECTION });
+
+			const nonAdminNoCollectionRead = {
+				user: 'user-uuid',
+				role: 'role-uuid',
+				admin: false,
+				app: true,
+				ip: '127.0.0.1',
+				permissions: [] as any[],
+			};
+
+			await expect(manager._runManualFlow(flow, data, buildContext(nonAdminNoCollectionRead))).rejects.toBeInstanceOf(
+				exceptions.ForbiddenException
+			);
+
+			expect(executeFlowSpy).not.toHaveBeenCalled();
+		});
+
+		it('rejects when keys is absent and requireSelection is not false (defensive)', async () => {
+			const flow = buildFlow();
+			const data = buildData({ collection: TARGET_COLLECTION });
+
+			await expect(manager._runManualFlow(flow, data, buildContext(adminAccountability))).rejects.toBeInstanceOf(
+				exceptions.ForbiddenException
+			);
+
+			expect(executeFlowSpy).not.toHaveBeenCalled();
+		});
+	});
+
+	describe('regression — authorized triggers execute', () => {
+		it('admin caller with keys executes the flow', async () => {
+			await manager._runManualFlow(buildFlow(), buildData(), buildContext(adminAccountability));
+			expect(executeFlowSpy).toHaveBeenCalledTimes(1);
+		});
+
+		it('admin caller with no keys and requireSelection: false executes the flow', async () => {
+			const flow = buildFlow({ options: { collections: [TARGET_COLLECTION], requireSelection: false } });
+			const data = buildData({ collection: TARGET_COLLECTION });
+
+			await manager._runManualFlow(flow, data, buildContext(adminAccountability));
+			expect(executeFlowSpy).toHaveBeenCalledTimes(1);
+		});
+
+		it('non-admin with item-read permissions and explicit keys executes the flow', async () => {
+			await manager._runManualFlow(buildFlow(), buildData(), buildContext(nonAdminWithItemRead));
+			expect(executeFlowSpy).toHaveBeenCalledTimes(1);
+			expect(checkAccessSpy).toHaveBeenCalledWith('read', 'directus_flows', FLOW_ID);
+			expect(checkAccessSpy).toHaveBeenCalledWith('read', TARGET_COLLECTION, TARGET_KEYS);
+		});
+
+		it('non-admin with collection-level read executes collection-mode flow (no keys + requireSelection: false)', async () => {
+			const flow = buildFlow({ options: { collections: [TARGET_COLLECTION], requireSelection: false } });
+			const data = buildData({ collection: TARGET_COLLECTION });
+
+			await manager._runManualFlow(flow, data, buildContext(nonAdminWithItemRead));
+			expect(executeFlowSpy).toHaveBeenCalledTimes(1);
+		});
+
+		it('preserves the existing collection-allowlist check', async () => {
+			const flow = buildFlow({ options: { collections: ['other-collection'] } });
+
+			await expect(manager._runManualFlow(flow, buildData(), buildContext(adminAccountability))).rejects.toBeInstanceOf(
+				exceptions.ForbiddenException
+			);
+
+			expect(executeFlowSpy).not.toHaveBeenCalled();
+			expect(checkAccessSpy).not.toHaveBeenCalled();
+		});
 	});
 });
