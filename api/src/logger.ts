@@ -12,7 +12,7 @@ import { getConfigFromEnv } from './utils/get-config-from-env.js';
 const pinoOptions: LoggerOptions = {
 	level: env['LOG_LEVEL'] || 'info',
 	redact: {
-		paths: ['req.headers.authorization', 'req.headers.cookie'],
+		paths: ['req.headers.authorization', 'req.headers.cookie', 'req.query.access_token'],
 		censor: REDACT_TEXT,
 	},
 };
@@ -20,7 +20,7 @@ const pinoOptions: LoggerOptions = {
 export const httpLoggerOptions: LoggerOptions = {
 	level: env['LOG_LEVEL'] || 'info',
 	redact: {
-		paths: ['req.headers.authorization', 'req.headers.cookie'],
+		paths: ['req.headers.authorization', 'req.headers.cookie', 'req.query.access_token'],
 		censor: REDACT_TEXT,
 	},
 };
@@ -50,7 +50,7 @@ if (env['LOG_STYLE'] !== 'raw') {
 
 if (env['LOG_STYLE'] === 'raw') {
 	httpLoggerOptions.redact = {
-		paths: ['req.headers.authorization', 'req.headers.cookie', 'res.headers'],
+		paths: ['req.headers.authorization', 'req.headers.cookie', 'req.query.access_token', 'res.headers'],
 		censor: (value, pathParts) => {
 			const path = pathParts.join('.');
 
