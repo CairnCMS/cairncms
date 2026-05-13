@@ -1,4 +1,4 @@
-import type { Item, Query, SchemaOverview } from '@cairncms/types';
+import type { Accountability, Item, Query, SchemaOverview } from '@cairncms/types';
 import { toArray } from '@cairncms/utils';
 import type { Knex } from 'knex';
 import { clone, cloneDeep, isNil, merge, pick, uniq } from 'lodash-es';
@@ -35,6 +35,8 @@ type RunASTOptions = {
 	 * Whether or not to strip out non-requested required fields automatically (eg IDs / FKs)
 	 */
 	stripNonRequested?: boolean;
+
+	accountability?: Accountability | null;
 };
 
 /**
@@ -75,7 +77,7 @@ export default async function runAST(
 		);
 
 		// The actual knex query builder instance. This is a promise that resolves with the raw items from the db
-		const dbQuery = await getDBQuery(schema, knex, collection, fieldNodes, query);
+		const dbQuery = await getDBQuery(schema, knex, collection, fieldNodes, query, options?.accountability ?? null);
 
 		const rawItems: Item | Item[] = await dbQuery;
 
@@ -107,7 +109,11 @@ export default async function runAST(
 						},
 					});
 
-					nestedItems = (await runAST(node, schema, { knex, nested: true })) as Item[] | null;
+					nestedItems = (await runAST(node, schema, {
+						knex,
+						nested: true,
+						accountability: options?.accountability ?? null,
+					})) as Item[] | null;
 
 					if (nestedItems) {
 						items = mergeWithParentItems(schema, nestedItems, items!, nestedNode)!;
@@ -124,7 +130,11 @@ export default async function runAST(
 					query: { limit: -1 },
 				});
 
-				nestedItems = (await runAST(node, schema, { knex, nested: true })) as Item[] | null;
+				nestedItems = (await runAST(node, schema, {
+					knex,
+					nested: true,
+					accountability: options?.accountability ?? null,
+				})) as Item[] | null;
 
 				if (nestedItems) {
 					// Merge all fetched nested records with the parent items
@@ -244,7 +254,8 @@ async function getDBQuery(
 	knex: Knex,
 	table: string,
 	fieldNodes: (FieldNode | FunctionFieldNode)[],
-	query: Query
+	query: Query,
+	accountability?: Accountability | null
 ): Promise<Knex.QueryBuilder> {
 	const preProcess = getColumnPreprocessor(knex, schema, table);
 	const queryCopy = clone(query);
@@ -255,7 +266,8 @@ async function getDBQuery(
 	// Queries with aggregates and groupBy will not have duplicate result
 	if (queryCopy.aggregate || queryCopy.group) {
 		const flatQuery = knex.select(fieldNodes.map(preProcess)).from(table);
-		return await applyQuery(knex, table, flatQuery, queryCopy, schema).query;
+		return await applyQuery(knex, table, flatQuery, queryCopy, schema, { accountability: accountability ?? null })
+			.query;
 	}
 
 	const primaryKey = schema.collections[table]!.primary;
@@ -278,6 +290,7 @@ async function getDBQuery(
 		aliasMap,
 		isInnerQuery: true,
 		hasMultiRelationalSort,
+		accountability: accountability ?? null,
 	});
 
 	const needsInnerQuery = hasMultiRelationalSort || hasMultiRelationalFilter;

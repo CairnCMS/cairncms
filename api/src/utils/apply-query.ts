@@ -1,4 +1,5 @@
 import type {
+	Accountability,
 	Aggregate,
 	ClientFilterOperator,
 	FieldFunction,
@@ -35,7 +36,12 @@ export default function applyQuery(
 	dbQuery: Knex.QueryBuilder,
 	query: Query,
 	schema: SchemaOverview,
-	options?: { aliasMap?: AliasMap; isInnerQuery?: boolean; hasMultiRelationalSort?: boolean | undefined }
+	options?: {
+		aliasMap?: AliasMap;
+		isInnerQuery?: boolean;
+		hasMultiRelationalSort?: boolean | undefined;
+		accountability?: Accountability | null;
+	}
 ) {
 	const aliasMap: AliasMap = options?.aliasMap ?? Object.create(null);
 	let hasMultiRelationalFilter = false;
@@ -55,7 +61,7 @@ export default function applyQuery(
 	}
 
 	if (query.search) {
-		applySearch(schema, dbQuery, query.search, collection);
+		applySearch(schema, dbQuery, query.search, collection, options?.accountability);
 	}
 
 	if (query.group) {
@@ -755,21 +761,53 @@ export async function applySearch(
 	schema: SchemaOverview,
 	dbQuery: Knex.QueryBuilder,
 	searchQuery: string,
-	collection: string
+	collection: string,
+	accountability?: Accountability | null
 ): Promise<void> {
-	const fields = Object.entries(schema.collections[collection]!.fields);
+	const allFields = Object.entries(schema.collections[collection]!.fields);
+
+	let searchableFields = allFields;
+
+	if (accountability && accountability.admin !== true) {
+		const readPermission = accountability.permissions?.find(
+			(perm) => perm.collection === collection && perm.action === 'read'
+		);
+
+		const allowed = readPermission?.fields ?? [];
+
+		if (!allowed.includes('*')) {
+			searchableFields = allFields.filter(([name]) => allowed.includes(name));
+		}
+	}
 
 	dbQuery.andWhere(function () {
-		fields.forEach(([name, field]) => {
+		if (searchableFields.length === 0) {
+			this.whereRaw('1 = 0');
+			return;
+		}
+
+		let emitted = false;
+
+		searchableFields.forEach(([name, field]) => {
 			if (['text', 'string'].includes(field.type)) {
 				this.orWhereRaw(`LOWER(??) LIKE ?`, [`${collection}.${name}`, `%${searchQuery.toLowerCase()}%`]);
+				emitted = true;
 			} else if (['bigInteger', 'integer', 'decimal', 'float'].includes(field.type)) {
 				const number = Number(searchQuery);
-				if (!isNaN(number)) this.orWhere({ [`${collection}.${name}`]: number });
+
+				if (!isNaN(number)) {
+					this.orWhere({ [`${collection}.${name}`]: number });
+					emitted = true;
+				}
 			} else if (field.type === 'uuid' && validate(searchQuery)) {
 				this.orWhere({ [`${collection}.${name}`]: searchQuery });
+				emitted = true;
 			}
 		});
+
+		if (!emitted) {
+			this.whereRaw('1 = 0');
+		}
 	});
 }
 
