@@ -18,6 +18,7 @@ vi.mock('../env', () => {
 	const MOCK_ENV = {
 		SECRET: 'test-secret-for-jwt',
 		PUBLIC_URL: 'http://localhost:8055',
+		PASSWORD_RESET_URL_ALLOW_LIST: 'https://example.com',
 	};
 
 	return {
@@ -28,7 +29,7 @@ vi.mock('../env', () => {
 
 vi.mock('./mail', () => {
 	const MailService = vi.fn();
-	MailService.prototype.send = vi.fn();
+	MailService.prototype.send = vi.fn().mockResolvedValue(undefined);
 
 	return { MailService };
 });
@@ -783,6 +784,77 @@ describe('Integration Tests', () => {
 				expect(tokenMatch).not.toBeNull();
 				const decoded = jwt.decode(tokenMatch[1]) as { email: string };
 				expect(decoded.email).toBe(storedEmail);
+			});
+
+			describe('GHSA-jr94-gj3h-c8rf', () => {
+				it('rejects an invalid reset_url BEFORE the user lookup (non-existing user)', async () => {
+					const getUserSpy = vi.spyOn(UsersService.prototype as any, 'getUserByEmail').mockResolvedValueOnce(null);
+
+					await expect(service.requestPasswordReset('attacker@example.com', 'https://evil.com')).rejects.toBeInstanceOf(
+						InvalidPayloadException
+					);
+
+					expect(getUserSpy).not.toHaveBeenCalled();
+				});
+
+				it('rejects an invalid reset_url BEFORE the user lookup (inactive user)', async () => {
+					const getUserSpy = vi.spyOn(UsersService.prototype as any, 'getUserByEmail').mockResolvedValueOnce({
+						id: 'user-id',
+						role: 'user-role',
+						status: 'suspended',
+						password: 'hashed-password',
+						email: 'suspended@example.com',
+					});
+
+					await expect(
+						service.requestPasswordReset('suspended@example.com', 'https://evil.com')
+					).rejects.toBeInstanceOf(InvalidPayloadException);
+
+					expect(getUserSpy).not.toHaveBeenCalled();
+				});
+
+				it('does not block the response on mail-send latency (active user, valid URL)', async () => {
+					vi.spyOn(UsersService.prototype as any, 'getUserByEmail').mockResolvedValueOnce({
+						id: 'user-id',
+						role: 'user-role',
+						status: 'active',
+						password: 'hashed-password',
+						email: 'active@example.com',
+					});
+
+					(mailService.send as any).mockImplementationOnce(() => new Promise((resolve) => setTimeout(resolve, 750)));
+
+					const t0 = Date.now();
+					await service.requestPasswordReset('active@example.com', 'https://example.com');
+					const elapsed = Date.now() - t0;
+
+					expect(elapsed).toBeLessThan(700);
+					expect(mailService.send).toHaveBeenCalledTimes(1);
+				});
+
+				it('does not propagate mail-send rejection out of the request handler', async () => {
+					vi.spyOn(UsersService.prototype as any, 'getUserByEmail').mockResolvedValueOnce({
+						id: 'user-id',
+						role: 'user-role',
+						status: 'active',
+						password: 'hashed-password',
+						email: 'active@example.com',
+					});
+
+					(mailService.send as any).mockRejectedValueOnce(new Error('SMTP failed'));
+
+					await expect(
+						service.requestPasswordReset('active@example.com', 'https://example.com')
+					).resolves.not.toThrow();
+				});
+
+				it('non-existing user with valid URL still hits the stall and throws ForbiddenException (regression)', async () => {
+					vi.spyOn(UsersService.prototype as any, 'getUserByEmail').mockResolvedValueOnce(null);
+
+					await expect(
+						service.requestPasswordReset('nobody@example.com', 'https://example.com')
+					).rejects.toBeInstanceOf(ForbiddenException);
+				});
 			});
 		});
 	});

@@ -7,6 +7,7 @@ import { cloneDeep, isEmpty } from 'lodash-es';
 import { performance } from 'perf_hooks';
 import getDatabase from '../database/index.js';
 import env from '../env.js';
+import logger from '../logger.js';
 import { RecordNotUniqueException } from '../exceptions/database/record-not-unique.js';
 import { ForbiddenException, InvalidPayloadException, UnprocessableEntityException } from '../exceptions/index.js';
 import type { AbstractServiceOptions, Item, MutationOptions, PrimaryKey } from '../types/index.js';
@@ -439,6 +440,10 @@ export class UsersService extends ItemsService {
 	}
 
 	async requestPasswordReset(email: string, url: string | null, subject?: string | null): Promise<void> {
+		if (url && isUrlAllowed(url, env['PASSWORD_RESET_URL_ALLOW_LIST']) === false) {
+			throw new InvalidPayloadException(`Url "${url}" can't be used to reset passwords.`);
+		}
+
 		const STALL_TIME = 500;
 		const timeStart = performance.now();
 
@@ -447,10 +452,6 @@ export class UsersService extends ItemsService {
 		if (user?.status !== 'active') {
 			await stall(STALL_TIME, timeStart);
 			throw new ForbiddenException();
-		}
-
-		if (url && isUrlAllowed(url, env['PASSWORD_RESET_URL_ALLOW_LIST']) === false) {
-			throw new InvalidPayloadException(`Url "${url}" can't be used to reset passwords.`);
 		}
 
 		const mailService = new MailService({
@@ -473,17 +474,19 @@ export class UsersService extends ItemsService {
 
 		const subjectLine = subject ? subject : 'Password Reset Request';
 
-		await mailService.send({
-			to: storedEmail,
-			subject: subjectLine,
-			template: {
-				name: 'password-reset',
-				data: {
-					url: acceptURL,
-					email: storedEmail,
+		mailService
+			.send({
+				to: storedEmail,
+				subject: subjectLine,
+				template: {
+					name: 'password-reset',
+					data: {
+						url: acceptURL,
+						email: storedEmail,
+					},
 				},
-			},
-		});
+			})
+			.catch((err) => logger.warn(err, '[email] password-reset send failed'));
 
 		await stall(STALL_TIME, timeStart);
 	}
