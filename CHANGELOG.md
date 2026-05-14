@@ -87,6 +87,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Redacted access_token query parameter from request logs (GHSA-vw58-ph65-6rxp / CVE-2024-47822).
 - Scoped the search query parameter to fields the caller is permitted to read (GHSA-7wq3-jr35-275c / CVE-2025-30352).
 - Avoided opening storage read streams for asset HEAD requests (GHSA-rv78-qqrq-73m5 / CVE-2025-30350).
+- Cleaned permission references to deleted fields (GHSA-9x5g-62gj-wqf2 / CVE-2025-64746).
 - Required read permission for manual flow triggers (GHSA-7cvf-pxgp-42fc / CVE-2025-53889).
 - Validated asset transform args before opening the source stream (GHSA-j8xj-7jff-46mx / CVE-2025-30225).
 - Removed version string from OpenAPI spec responses (GHSA-rmjh-cf9q-pv7q / CVE-2025-53887).
