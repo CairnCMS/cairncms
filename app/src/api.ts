@@ -2,7 +2,6 @@ import { logout, LogoutReason, refresh } from '@/auth';
 import { useRequestsStore } from '@/stores/requests';
 import { getRootPath } from '@/utils/get-root-path';
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios';
-import { addQueryToPath } from './utils/add-query-to-path';
 import PQueue, { Options, DefaultAddOptions } from 'p-queue';
 
 const api = axios.create({
@@ -99,17 +98,6 @@ api.interceptors.request.use(onRequest);
 api.interceptors.response.use(onResponse, onError);
 
 export default api;
-
-export function getToken(): string | null {
-	return api.defaults.headers.common['Authorization']?.split(' ')[1] || null;
-}
-
-export function addTokenToURL(url: string, token?: string): string {
-	const accessToken = token || getToken();
-	if (!accessToken) return url;
-
-	return addQueryToPath(url, { access_token: accessToken });
-}
 
 export async function replaceQueue(options?: Options<any, DefaultAddOptions>) {
 	await queue.onIdle();

@@ -97,6 +97,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Added parser-bypass regression coverage for SSO redirect validation (GHSA-cf45-hxwj-4cfj / CVE-2026-35410).
 - Gated GraphQL SDL specs on GRAPHQL_INTROSPECTION (GHSA-wxwm-3fxv-mrvx / CVE-2026-35413).
 - Deduplicated GraphQL read resolver invocations within a request (GHSA-ph52-67fq-75wj / CVE-2026-35441).
+- Removed access tokens from admin asset URL generation (GHSA-2ccr-g2rv-h677 / CVE-2024-28238).
 
 ### Acknowledgements
 

@@ -43,10 +43,15 @@ vi.mock('../env.js', () => {
 		ASSETS_TRANSFORM_MAX_CONCURRENT: 25,
 		ASSETS_TRANSFORM_TIMEOUT: '7500ms',
 		ASSETS_INVALID_IMAGE_SENSITIVITY_LEVEL: 'warning',
+		REFRESH_TOKEN_COOKIE_NAME: 'cairncms_refresh_token',
 	};
 
 	return { default: MOCK_ENV, getEnv: () => MOCK_ENV };
 });
+
+vi.mock('../middleware/extract-cookie-session.js', () => ({
+	default: (_req: any, _res: any, next: any) => next(),
+}));
 
 import assetsRouter from './assets.js';
 
