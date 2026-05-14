@@ -116,11 +116,32 @@ export class GraphQLService {
 
 	private serverHealthPromise: Promise<Record<string, any>> | null = null;
 
+	private resolverCache: Map<string, Promise<unknown>> = new Map();
+
 	constructor(options: AbstractServiceOptions & { scope: 'items' | 'system' }) {
 		this.accountability = options?.accountability || null;
 		this.knex = options?.knex || getDatabase();
 		this.schema = options.schema;
 		this.scope = options.scope;
+	}
+
+	private dedup<T>(key: string, thunk: () => Promise<T>): Promise<T> {
+		let cached = this.resolverCache.get(key) as Promise<T> | undefined;
+
+		if (!cached) {
+			cached = thunk();
+			this.resolverCache.set(key, cached);
+		}
+
+		return cached;
+	}
+
+	private stableStringify(value: unknown): string {
+		if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'undefined';
+		if (Array.isArray(value)) return '[' + value.map((v) => this.stableStringify(v)).join(',') + ']';
+		const obj = value as Record<string, unknown>;
+		const keys = Object.keys(obj).sort();
+		return '{' + keys.map((k) => JSON.stringify(k) + ':' + this.stableStringify(obj[k])).join(',') + '}';
 	}
 
 	private resolveServerHealth(): Promise<Record<string, any>> {
@@ -134,6 +155,144 @@ export class GraphQLService {
 		}
 
 		return this.serverHealthPromise;
+	}
+
+	private resolveSystemServerInfo(): Promise<Record<string, any>> {
+		return this.dedup('server_info', () => {
+			const service = new ServerService({
+				accountability: this.accountability,
+				schema: this.schema,
+			});
+
+			return service.serverInfo();
+		});
+	}
+
+	private resolveSystemServerSpecsOas(): Promise<Record<string, any>> {
+		return this.dedup('server_specs_oas', () => {
+			const service = new SpecificationService({ schema: this.schema, accountability: this.accountability });
+			return service.oas.generate();
+		});
+	}
+
+	private resolveSystemServerSpecsGraphql(args: Record<string, any>): Promise<string | GraphQLSchema> {
+		const key = 'server_specs_graphql:' + this.stableStringify({ args });
+		return this.dedup(key, () => {
+			const service = new GraphQLService({
+				schema: this.schema,
+				accountability: this.accountability,
+				scope: args['scope'] ?? 'items',
+			});
+
+			return Promise.resolve(service.getSchema('sdl'));
+		});
+	}
+
+	private resolveSystemCollections(): Promise<any[]> {
+		return this.dedup('collections', () => {
+			const collectionsService = new CollectionsService({
+				accountability: this.accountability,
+				schema: this.schema,
+			});
+
+			return collectionsService.readByQuery();
+		});
+	}
+
+	private resolveSystemCollectionsByName(args: Record<string, any>): Promise<any> {
+		const key = 'collections_by_name:' + this.stableStringify({ args });
+		return this.dedup(key, () => {
+			const collectionsService = new CollectionsService({
+				accountability: this.accountability,
+				schema: this.schema,
+			});
+
+			return collectionsService.readOne(args['name']);
+		});
+	}
+
+	private resolveSystemFields(): Promise<any[]> {
+		return this.dedup('fields', () => {
+			const service = new FieldsService({
+				accountability: this.accountability,
+				schema: this.schema,
+			});
+
+			return service.readAll();
+		});
+	}
+
+	private resolveSystemFieldsInCollection(args: Record<string, any>): Promise<any[]> {
+		const key = 'fields_in_collection:' + this.stableStringify({ args });
+		return this.dedup(key, () => {
+			const service = new FieldsService({
+				accountability: this.accountability,
+				schema: this.schema,
+			});
+
+			return service.readAll(args['collection']);
+		});
+	}
+
+	private resolveSystemFieldsByName(args: Record<string, any>): Promise<any> {
+		const key = 'fields_by_name:' + this.stableStringify({ args });
+		return this.dedup(key, () => {
+			const service = new FieldsService({
+				accountability: this.accountability,
+				schema: this.schema,
+			});
+
+			return service.readOne(args['collection'], args['field']);
+		});
+	}
+
+	private resolveSystemRelations(): Promise<any[]> {
+		return this.dedup('relations', () => {
+			const service = new RelationsService({
+				accountability: this.accountability,
+				schema: this.schema,
+			});
+
+			return service.readAll();
+		});
+	}
+
+	private resolveSystemRelationsInCollection(args: Record<string, any>): Promise<any[]> {
+		const key = 'relations_in_collection:' + this.stableStringify({ args });
+		return this.dedup(key, () => {
+			const service = new RelationsService({
+				accountability: this.accountability,
+				schema: this.schema,
+			});
+
+			return service.readAll(args['collection']);
+		});
+	}
+
+	private resolveSystemRelationsByName(args: Record<string, any>): Promise<any> {
+		const key = 'relations_by_name:' + this.stableStringify({ args });
+		return this.dedup(key, () => {
+			const service = new RelationsService({
+				accountability: this.accountability,
+				schema: this.schema,
+			});
+
+			return service.readOne(args['collection'], args['field']);
+		});
+	}
+
+	private resolveSystemUsersMe(args: Record<string, any>, info: GraphQLResolveInfo): Promise<Partial<Item> | null> {
+		if (!this.accountability?.user) return Promise.resolve(null);
+
+		const selections =
+			this.replaceFragmentsInSelections(info.fieldNodes[0]?.selectionSet?.selections, info.fragments) || [];
+
+		const query = this.getQuery(args, selections, info.variableValues);
+		const key = 'users_me:' + this.stableStringify({ user: this.accountability.user, query });
+		return this.dedup(key, () => {
+			const service = new UsersService({ schema: this.schema, accountability: this.accountability });
+			return service.readOne(this.accountability!.user!, query);
+		});
 	}
 
 	/**
@@ -1332,10 +1491,6 @@ export class GraphQLService {
 		}
 	}
 
-	/**
-	 * Generic resolver that's used for every "regular" items/system query. Converts the incoming GraphQL AST / fragments into
-	 * CairnCMS' query structure which is then executed by the services.
-	 */
 	async resolveQuery(info: GraphQLResolveInfo): Promise<Partial<Item> | null> {
 		let collection = info.fieldName;
 		if (this.scope === 'system') collection = `directus_${collection}`;
@@ -1374,13 +1529,21 @@ export class GraphQLService {
 			query.limit = 1;
 		}
 
-		// Transform count(a.b.c) into a.b.count(c)
 		if (query.fields?.length) {
 			for (let fieldIndex = 0; fieldIndex < query.fields.length; fieldIndex++) {
 				query.fields[fieldIndex] = parseFilterFunctionPath(query.fields[fieldIndex]!);
 			}
 		}
 
+		const key = 'resolveQuery:' + this.stableStringify({ collection, query });
+		return this.dedup(key, () => this.resolveQueryImpl(collection, args, query)) as Promise<Partial<Item> | null>;
+	}
+
+	private async resolveQueryImpl(
+		collection: string,
+		args: Record<string, any>,
+		query: Query
+	): Promise<Partial<Item> | null> {
 		const result = await this.read(collection, query);
 
 		if (args['id']) {
@@ -1992,10 +2155,7 @@ export class GraphQLService {
 			},
 			server_specs_oas: {
 				type: GraphQLJSON,
-				resolve: async () => {
-					const service = new SpecificationService({ schema: this.schema, accountability: this.accountability });
-					return await service.oas.generate();
-				},
+				resolve: () => this.resolveSystemServerSpecsOas(),
 			},
 			server_specs_graphql: {
 				type: GraphQLString,
@@ -2008,15 +2168,7 @@ export class GraphQLService {
 						},
 					}),
 				},
-				resolve: async (_, args) => {
-					const service = new GraphQLService({
-						schema: this.schema,
-						accountability: this.accountability,
-						scope: args['scope'] ?? 'items',
-					});
-
-					return service.getSchema('sdl');
-				},
+				resolve: (_, args) => this.resolveSystemServerSpecsGraphql(args),
 			},
 			server_ping: {
 				type: GraphQLString,
@@ -2024,14 +2176,7 @@ export class GraphQLService {
 			},
 			server_info: {
 				type: ServerInfo,
-				resolve: async () => {
-					const service = new ServerService({
-						accountability: this.accountability,
-						schema: this.schema,
-					});
-
-					return await service.serverInfo();
-				},
+				resolve: () => this.resolveSystemServerInfo(),
 			},
 			server_health: {
 				type: GraphQLJSON,
@@ -2425,14 +2570,7 @@ export class GraphQLService {
 			schemaComposer.Query.addFields({
 				collections: {
 					type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(Collection.getType()))),
-					resolve: async () => {
-						const collectionsService = new CollectionsService({
-							accountability: this.accountability,
-							schema: this.schema,
-						});
-
-						return await collectionsService.readByQuery();
-					},
+					resolve: () => this.resolveSystemCollections(),
 				},
 
 				collections_by_name: {
@@ -2440,14 +2578,7 @@ export class GraphQLService {
 					args: {
 						name: new GraphQLNonNull(GraphQLString),
 					},
-					resolve: async (_, args) => {
-						const collectionsService = new CollectionsService({
-							accountability: this.accountability,
-							schema: this.schema,
-						});
-
-						return await collectionsService.readOne(args['name']);
-					},
+					resolve: (_, args) => this.resolveSystemCollectionsByName(args),
 				},
 			});
 		}
@@ -2494,28 +2625,14 @@ export class GraphQLService {
 			schemaComposer.Query.addFields({
 				fields: {
 					type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(Field.getType()))),
-					resolve: async () => {
-						const service = new FieldsService({
-							accountability: this.accountability,
-							schema: this.schema,
-						});
-
-						return await service.readAll();
-					},
+					resolve: () => this.resolveSystemFields(),
 				},
 				fields_in_collection: {
 					type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(Field.getType()))),
 					args: {
 						collection: new GraphQLNonNull(GraphQLString),
 					},
-					resolve: async (_, args) => {
-						const service = new FieldsService({
-							accountability: this.accountability,
-							schema: this.schema,
-						});
-
-						return await service.readAll(args['collection']);
-					},
+					resolve: (_, args) => this.resolveSystemFieldsInCollection(args),
 				},
 				fields_by_name: {
 					type: Field,
@@ -2523,14 +2640,7 @@ export class GraphQLService {
 						collection: new GraphQLNonNull(GraphQLString),
 						field: new GraphQLNonNull(GraphQLString),
 					},
-					resolve: async (_, args) => {
-						const service = new FieldsService({
-							accountability: this.accountability,
-							schema: this.schema,
-						});
-
-						return await service.readOne(args['collection'], args['field']);
-					},
+					resolve: (_, args) => this.resolveSystemFieldsByName(args),
 				},
 			});
 		}
@@ -2568,28 +2678,14 @@ export class GraphQLService {
 			schemaComposer.Query.addFields({
 				relations: {
 					type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(Relation.getType()))),
-					resolve: async () => {
-						const service = new RelationsService({
-							accountability: this.accountability,
-							schema: this.schema,
-						});
-
-						return await service.readAll();
-					},
+					resolve: () => this.resolveSystemRelations(),
 				},
 				relations_in_collection: {
 					type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(Relation.getType()))),
 					args: {
 						collection: new GraphQLNonNull(GraphQLString),
 					},
-					resolve: async (_, args) => {
-						const service = new RelationsService({
-							accountability: this.accountability,
-							schema: this.schema,
-						});
-
-						return await service.readAll(args['collection']);
-					},
+					resolve: (_, args) => this.resolveSystemRelationsInCollection(args),
 				},
 				relations_by_name: {
 					type: Relation,
@@ -2597,14 +2693,7 @@ export class GraphQLService {
 						collection: new GraphQLNonNull(GraphQLString),
 						field: new GraphQLNonNull(GraphQLString),
 					},
-					resolve: async (_, args) => {
-						const service = new RelationsService({
-							accountability: this.accountability,
-							schema: this.schema,
-						});
-
-						return await service.readOne(args['collection'], args['field']);
-					},
+					resolve: (_, args) => this.resolveSystemRelationsByName(args),
 				},
 			});
 		}
@@ -2797,19 +2886,7 @@ export class GraphQLService {
 			schemaComposer.Query.addFields({
 				users_me: {
 					type: ReadCollectionTypes['directus_users']!,
-					resolve: async (_, args, __, info) => {
-						if (!this.accountability?.user) return null;
-						const service = new UsersService({ schema: this.schema, accountability: this.accountability });
-
-						const selections = this.replaceFragmentsInSelections(
-							info.fieldNodes[0]?.selectionSet?.selections,
-							info.fragments
-						);
-
-						const query = this.getQuery(args, selections || [], info.variableValues);
-
-						return await service.readOne(this.accountability.user, query);
-					},
+					resolve: (_, args, __, info) => this.resolveSystemUsersMe(args, info),
 				},
 			});
 		}

@@ -96,6 +96,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Concealed sensitive fields in revision history (GHSA-mvv8-v4jj-g47j / CVE-2026-39943).
 - Added parser-bypass regression coverage for SSO redirect validation (GHSA-cf45-hxwj-4cfj / CVE-2026-35410).
 - Gated GraphQL SDL specs on GRAPHQL_INTROSPECTION (GHSA-wxwm-3fxv-mrvx / CVE-2026-35413).
+- Deduplicated GraphQL read resolver invocations within a request (GHSA-ph52-67fq-75wj / CVE-2026-35441).
 
 ### Acknowledgements
 
