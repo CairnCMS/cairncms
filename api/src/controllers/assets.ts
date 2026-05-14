@@ -8,6 +8,7 @@ import getDatabase from '../database/index.js';
 import env from '../env.js';
 import { InvalidQueryException, RangeNotSatisfiableException } from '../exceptions/index.js';
 import logger from '../logger.js';
+import extractCookieSession from '../middleware/extract-cookie-session.js';
 import useCollection from '../middleware/use-collection.js';
 import { AssetsService } from '../services/assets.js';
 import { PayloadService } from '../services/payload.js';
@@ -21,6 +22,7 @@ import { getMilliseconds } from '../utils/get-milliseconds.js';
 const router = Router();
 
 router.use(useCollection('directus_files'));
+router.use(extractCookieSession);
 
 router.get(
 	'/:pk/:filename?',

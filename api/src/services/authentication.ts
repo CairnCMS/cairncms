@@ -20,6 +20,30 @@ import { TFAService } from './tfa.js';
 
 const loginAttemptsLimiter = createRateLimiter('RATE_LIMITER', { duration: 0 });
 
+export interface SessionRecord {
+	session_expires: Date;
+	user_id: string;
+	user_first_name: string;
+	user_last_name: string;
+	user_email: string;
+	user_password: string;
+	user_status: User['status'];
+	user_provider: string;
+	user_external_identifier: string;
+	user_auth_data: string;
+	role_id: string;
+	role_admin_access: boolean;
+	role_app_access: boolean;
+	share_id: string;
+	share_item: string;
+	share_role: string;
+	share_collection: string;
+	share_start: Date;
+	share_end: Date;
+	share_times_used: number;
+	share_max_uses: number;
+}
+
 export class AuthenticationService {
 	knex: Knex;
 	accountability: Accountability | null;
@@ -248,14 +272,8 @@ export class AuthenticationService {
 		};
 	}
 
-	async refresh(refreshToken: string): Promise<Record<string, any>> {
-		const { nanoid } = await import('nanoid');
-		const STALL_TIME = env['LOGIN_STALL_TIME'];
-		const timeStart = performance.now();
-
-		if (!refreshToken) {
-			throw new InvalidCredentialsException();
-		}
+	async lookupSession(refreshToken: string): Promise<SessionRecord | null> {
+		if (!refreshToken) return null;
 
 		const record = await this.knex
 			.select({
@@ -296,6 +314,20 @@ export class AuthenticationService {
 				subQuery.whereNull('d.date_start').orWhere('d.date_start', '<=', new Date());
 			})
 			.first();
+
+		return record ?? null;
+	}
+
+	async refresh(refreshToken: string): Promise<Record<string, any>> {
+		const { nanoid } = await import('nanoid');
+		const STALL_TIME = env['LOGIN_STALL_TIME'];
+		const timeStart = performance.now();
+
+		if (!refreshToken) {
+			throw new InvalidCredentialsException();
+		}
+
+		const record = await this.lookupSession(refreshToken);
 
 		if (!record || (!record.share_id && !record.user_id)) {
 			throw new InvalidCredentialsException();
