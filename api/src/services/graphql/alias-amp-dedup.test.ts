@@ -135,6 +135,7 @@ describe('GraphQLService.resolveQuery — dedup contract (GHSA-ph52-67fq-75wj)',
 				args: [arg('limit', { kind: 'IntValue', value: '5' })],
 			})
 		);
+
 		await service.resolveQuery(
 			makeInfo({
 				fieldName: 'probe_items',
@@ -163,9 +164,7 @@ describe('GraphQLService.resolveQuery — dedup contract (GHSA-ph52-67fq-75wj)',
 					arguments: [],
 					selectionSet: {
 						kind: 'SelectionSet',
-						selections: [
-							{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'probeFields' } },
-						],
+						selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'probeFields' } }],
 					},
 				},
 			],
@@ -199,6 +198,7 @@ describe('GraphQLService.resolveQuery — dedup contract (GHSA-ph52-67fq-75wj)',
 				selections: [field('id')],
 			})
 		);
+
 		await service.resolveQuery(
 			makeInfo({
 				fieldName: 'probe_items',
@@ -264,6 +264,7 @@ describe('GraphQLService system resolvers — dedup contract (GHSA-ph52-67fq-75w
 			fieldName: 'users_me',
 			selections: [field('id')],
 		});
+
 		const infoB = makeInfo({
 			fieldName: 'users_me',
 			selections: [field('id'), field('email')],
@@ -303,6 +304,7 @@ describe('GraphQLService system resolvers — dedup contract (GHSA-ph52-67fq-75w
 		const spy = vi
 			.spyOn(GraphQLService.prototype, 'getSchema')
 			.mockImplementation(((type: any) => (type === 'sdl' ? 'sdl-stub' : ({} as any))) as any);
+
 		const service = new GraphQLService({ accountability: adminAccountability, schema: makeSchema(), scope: 'system' });
 
 		await (service as any).resolveSystemServerSpecsGraphql({ scope: 'items' });

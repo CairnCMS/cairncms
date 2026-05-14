@@ -127,10 +127,12 @@ export class GraphQLService {
 
 	private dedup<T>(key: string, thunk: () => Promise<T>): Promise<T> {
 		let cached = this.resolverCache.get(key) as Promise<T> | undefined;
+
 		if (!cached) {
 			cached = thunk();
 			this.resolverCache.set(key, cached);
 		}
+
 		return cached;
 	}
 
@@ -161,6 +163,7 @@ export class GraphQLService {
 				accountability: this.accountability,
 				schema: this.schema,
 			});
+
 			return service.serverInfo();
 		});
 	}
@@ -180,6 +183,7 @@ export class GraphQLService {
 				accountability: this.accountability,
 				scope: args['scope'] ?? 'items',
 			});
+
 			return Promise.resolve(service.getSchema('sdl'));
 		});
 	}
@@ -190,6 +194,7 @@ export class GraphQLService {
 				accountability: this.accountability,
 				schema: this.schema,
 			});
+
 			return collectionsService.readByQuery();
 		});
 	}
@@ -201,6 +206,7 @@ export class GraphQLService {
 				accountability: this.accountability,
 				schema: this.schema,
 			});
+
 			return collectionsService.readOne(args['name']);
 		});
 	}
@@ -211,6 +217,7 @@ export class GraphQLService {
 				accountability: this.accountability,
 				schema: this.schema,
 			});
+
 			return service.readAll();
 		});
 	}
@@ -222,6 +229,7 @@ export class GraphQLService {
 				accountability: this.accountability,
 				schema: this.schema,
 			});
+
 			return service.readAll(args['collection']);
 		});
 	}
@@ -233,6 +241,7 @@ export class GraphQLService {
 				accountability: this.accountability,
 				schema: this.schema,
 			});
+
 			return service.readOne(args['collection'], args['field']);
 		});
 	}
@@ -243,6 +252,7 @@ export class GraphQLService {
 				accountability: this.accountability,
 				schema: this.schema,
 			});
+
 			return service.readAll();
 		});
 	}
@@ -254,6 +264,7 @@ export class GraphQLService {
 				accountability: this.accountability,
 				schema: this.schema,
 			});
+
 			return service.readAll(args['collection']);
 		});
 	}
@@ -265,14 +276,17 @@ export class GraphQLService {
 				accountability: this.accountability,
 				schema: this.schema,
 			});
+
 			return service.readOne(args['collection'], args['field']);
 		});
 	}
 
 	private resolveSystemUsersMe(args: Record<string, any>, info: GraphQLResolveInfo): Promise<Partial<Item> | null> {
 		if (!this.accountability?.user) return Promise.resolve(null);
+
 		const selections =
 			this.replaceFragmentsInSelections(info.fieldNodes[0]?.selectionSet?.selections, info.fragments) || [];
+
 		const query = this.getQuery(args, selections, info.variableValues);
 		const key = 'users_me:' + this.stableStringify({ user: this.accountability.user, query });
 		return this.dedup(key, () => {
