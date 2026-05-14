@@ -71,6 +71,15 @@ describe('buildRevisionData', () => {
 		expect(trigger.method).toBe('POST');
 	});
 
+	test('redacts refresh_token in $trigger.query', () => {
+		const keyedData = makeKeyedData({ query: { refresh_token: TOKEN, page: '1' } });
+		const result = buildRevisionData([], keyedData);
+		const trigger = (result.data as any).$trigger;
+
+		expect(trigger.query.refresh_token).toBe(REDACT_TEXT);
+		expect(trigger.query.page).toBe('1');
+	});
+
 	test('redacts access_token in $trigger.body', () => {
 		const keyedData = makeKeyedData({ body: { access_token: TOKEN, action: 'sync' } });
 		const result = buildRevisionData([], keyedData);
@@ -88,6 +97,30 @@ describe('buildRevisionData', () => {
 
 		expect(trigger.body.refresh_token).toBe(REDACT_TEXT);
 		expect(trigger.body.action).toBe('sync');
+	});
+
+	test('redacts password in $trigger.body and the same value interpolated into a step option', () => {
+		const PASSWORD = 'webhook-supplied-password-1234567890';
+		const keyedData = makeKeyedData({ body: { password: PASSWORD, action: 'sync' } });
+
+		const steps: Step[] = [
+			{
+				operation: 'op-1',
+				key: 'log-pw',
+				status: 'resolve',
+				options: { message: `Received password: ${PASSWORD}`, target: 'audit@example.com' },
+			},
+		];
+
+		const result = buildRevisionData(steps, keyedData);
+		const trigger = (result.data as any).$trigger;
+		const step = result.steps[0] as Step;
+
+		expect(trigger.body.password).toBe(REDACT_TEXT);
+		expect(trigger.body.action).toBe('sync');
+		expect(step.options).not.toBeNull();
+		expect((step.options as Record<string, unknown>)['message']).not.toContain(PASSWORD);
+		expect((step.options as Record<string, unknown>)['target']).toBe('audit@example.com');
 	});
 
 	test('redacts token value carried into a step option by template interpolation', () => {

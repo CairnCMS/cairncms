@@ -1,6 +1,22 @@
 import { REDACT_TEXT } from '../constants.js';
 
-const SENSITIVE_KEYS = new Set<string>(['authorization', 'cookie', 'set-cookie', 'access_token', 'refresh_token']);
+const SENSITIVE_KEYS = new Set<string>([
+	'authorization',
+	'cookie',
+	'set-cookie',
+	'access_token',
+	'refresh_token',
+	'password',
+	'token',
+	'tfa_secret',
+	'external_identifier',
+	'auth_data',
+	'credentials',
+	'ai_openai_api_key',
+	'ai_anthropic_api_key',
+	'ai_google_api_key',
+	'ai_openai_compatible_api_key',
+]);
 
 const MIN_SENSITIVE_VALUE_LENGTH = 12;
 
