@@ -258,38 +258,44 @@ function setContent() {
 	if (!contentEl.value) return;
 
 	if (props.modelValue === null || props.modelValue === '') {
-		contentEl.value.innerHTML = '<span class="text"></span>';
+		const emptySpan = document.createElement('span');
+		emptySpan.className = 'text';
+		contentEl.value.replaceChildren(emptySpan);
 		return;
 	}
 
 	if (props.modelValue !== getInputValue()) {
 		const regex = /({{.*?}})/g;
+		const fragment = document.createDocumentFragment();
 
-		const newInnerHTML = props.modelValue
-			.split(regex)
-			.map((part) => {
-				if (part.startsWith('{{') === false) {
-					return `<span class="text">${part}</span>`;
-				}
+		for (const part of props.modelValue.split(regex)) {
+			if (part.startsWith('{{') === false) {
+				const span = document.createElement('span');
+				span.className = 'text';
+				span.textContent = part;
+				fragment.appendChild(span);
+				continue;
+			}
 
-				const fieldKey = part.replace(/({|})/g, '').trim();
-				const fieldPath = fieldKey.split('.');
+			const fieldKey = part.replace(/({|})/g, '').trim();
+			const fieldPath = fieldKey.split('.');
 
-				for (let i = 0; i < fieldPath.length; i++) {
-					loadFieldRelations(fieldPath.slice(0, i).join('.'));
-				}
+			for (let i = 0; i < fieldPath.length; i++) {
+				loadFieldRelations(fieldPath.slice(0, i).join('.'));
+			}
 
-				const field = findTree(grouplessTree.value, fieldPath);
+			const field = findTree(grouplessTree.value, fieldPath);
+			if (!field) continue;
 
-				if (!field) return '';
+			const button = document.createElement('button');
+			button.setAttribute('contenteditable', 'false');
+			button.dataset['field'] = fieldKey;
+			if (props.disabled) button.disabled = true;
+			button.textContent = field.name;
+			fragment.appendChild(button);
+		}
 
-				return `<button contenteditable="false" data-field="${fieldKey}" ${props.disabled ? 'disabled' : ''}>${
-					field.name
-				}</button>`;
-			})
-			.join('');
-
-		contentEl.value.innerHTML = newInnerHTML;
+		contentEl.value.replaceChildren(fragment);
 	}
 }
 </script>
