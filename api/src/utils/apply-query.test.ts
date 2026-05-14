@@ -5,7 +5,7 @@ import { applySearch } from './apply-query.js';
 
 const PUBLIC_ROLE_ID = '00000000-0000-0000-0000-000000000000';
 
-function makeField(name: string, type: 'string' | 'integer' | 'uuid' = 'string'): any {
+function makeField(name: string, type: 'string' | 'integer' | 'uuid' = 'string', special: string[] = []): any {
 	return {
 		field: name,
 		defaultValue: null,
@@ -15,7 +15,7 @@ function makeField(name: string, type: 'string' | 'integer' | 'uuid' = 'string')
 		dbType: type === 'integer' ? 'integer' : type === 'uuid' ? 'uuid' : 'varchar',
 		precision: null,
 		scale: null,
-		special: [],
+		special,
 		note: null,
 		validation: null,
 		alias: false,
@@ -37,6 +37,7 @@ function makeSchema(): SchemaOverview {
 					title: makeField('title'),
 					body: makeField('body'),
 					secret_note: makeField('secret_note'),
+					secret_token: makeField('secret_token', 'string', ['conceal']),
 					rank: makeField('rank', 'integer'),
 				},
 			},
@@ -207,5 +208,68 @@ describe('applySearch — field-permission scoping (GHSA-7wq3-jr35-275c)', () =>
 			expect(sql).not.toContain('secret_note');
 			expect(sql).not.toContain('body');
 		});
+	});
+});
+
+describe('applySearch — conceal-field exclusion (GHSA-8jpw-gpr4-8cmh)', () => {
+	it('non-admin with read permission on a concealed field still does not search it', async () => {
+		const dbQuery = makeBuilder();
+		const accountability = makeAccountability({ permissions: [makePermission(['title', 'secret_token'])] });
+
+		await applySearch(makeSchema(), dbQuery, 'foo', 'notes', accountability);
+
+		const { sql } = dbQuery.toSQL();
+
+		expect(sql).toContain('title');
+		expect(sql).not.toContain('secret_token');
+	});
+
+	it('admin caller (admin === true) does not search concealed fields', async () => {
+		const dbQuery = makeBuilder();
+		const accountability = makeAccountability({ admin: true, permissions: [] });
+
+		await applySearch(makeSchema(), dbQuery, 'foo', 'notes', accountability);
+
+		const { sql } = dbQuery.toSQL();
+
+		expect(sql).toContain('title');
+		expect(sql).toContain('body');
+		expect(sql).not.toContain('secret_token');
+	});
+
+	it('trusted/null-accountability caller does not search concealed fields', async () => {
+		const dbQuery = makeBuilder();
+
+		await applySearch(makeSchema(), dbQuery, 'foo', 'notes', null);
+
+		const { sql } = dbQuery.toSQL();
+
+		expect(sql).toContain('title');
+		expect(sql).not.toContain('secret_token');
+	});
+
+	it('wildcard ["*"] permission does not widen search to concealed fields', async () => {
+		const dbQuery = makeBuilder();
+		const accountability = makeAccountability({ permissions: [makePermission(['*'])] });
+
+		await applySearch(makeSchema(), dbQuery, 'foo', 'notes', accountability);
+
+		const { sql } = dbQuery.toSQL();
+
+		expect(sql).toContain('title');
+		expect(sql).toContain('secret_note');
+		expect(sql).not.toContain('secret_token');
+	});
+
+	it('non-concealed permitted fields are still searched (regression)', async () => {
+		const dbQuery = makeBuilder();
+		const accountability = makeAccountability({ permissions: [makePermission(['title'])] });
+
+		await applySearch(makeSchema(), dbQuery, 'foo', 'notes', accountability);
+
+		const { sql } = dbQuery.toSQL();
+
+		expect(sql).toContain('title');
+		expect(sql).not.toContain('secret_token');
 	});
 });

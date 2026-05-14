@@ -780,6 +780,8 @@ export async function applySearch(
 		}
 	}
 
+	searchableFields = searchableFields.filter(([_name, field]) => !field.special?.includes('conceal'));
+
 	dbQuery.andWhere(function () {
 		if (searchableFields.length === 0) {
 			this.whereRaw('1 = 0');
