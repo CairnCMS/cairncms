@@ -31,6 +31,37 @@ describe('collectSensitiveValues', () => {
 		expect(collected.has(OTHER_TOKEN)).toBe(true);
 	});
 
+	test('collects values at the expanded sensitive-key set (password, token, tfa_secret, etc.)', () => {
+		const pwValue = 'webhook-body-password-1234567890';
+		const tokenValue = 'long-static-token-abcdefghijkl';
+		const tfaValue = 'tfa-secret-mnopqrstuvwxyz';
+		const extIdValue = 'oauth|google|long-external-id';
+		const authDataValue = 'auth-data-blob-9876543210abcd';
+		const credsValue = 'creds-blob-1234567890abcdef';
+		const aiKeyValue = 'sk-ai-key-1234567890abcdefgh';
+
+		const source = {
+			body: {
+				password: pwValue,
+				token: tokenValue,
+				tfa_secret: tfaValue,
+				external_identifier: extIdValue,
+				auth_data: authDataValue,
+				credentials: credsValue,
+				ai_openai_api_key: aiKeyValue,
+			},
+		};
+
+		const collected = collectSensitiveValues(source);
+		expect(collected.has(pwValue)).toBe(true);
+		expect(collected.has(tokenValue)).toBe(true);
+		expect(collected.has(tfaValue)).toBe(true);
+		expect(collected.has(extIdValue)).toBe(true);
+		expect(collected.has(authDataValue)).toBe(true);
+		expect(collected.has(credsValue)).toBe(true);
+		expect(collected.has(aiKeyValue)).toBe(true);
+	});
+
 	test('is case-insensitive on key matching', () => {
 		const source = { Headers: { Authorization: `Bearer ${TOKEN}` } };
 		const collected = collectSensitiveValues(source);
@@ -130,6 +161,36 @@ describe('redactFlowLog — key-based', () => {
 
 		expect(result.records[0].access_token).toBe(REDACT_TEXT);
 		expect(result.records[1].other).toBe('fine');
+	});
+
+	test('redacts the expanded sensitive-key set under arbitrary parent paths', () => {
+		const result = redactFlowLog({
+			$trigger: {
+				body: {
+					password: 'value',
+					token: 'value',
+					tfa_secret: 'value',
+					external_identifier: 'value',
+					auth_data: 'value',
+					credentials: 'value',
+					ai_openai_api_key: 'value',
+					ai_anthropic_api_key: 'value',
+					ai_google_api_key: 'value',
+					ai_openai_compatible_api_key: 'value',
+				},
+			},
+		}) as any;
+
+		expect(result.$trigger.body.password).toBe(REDACT_TEXT);
+		expect(result.$trigger.body.token).toBe(REDACT_TEXT);
+		expect(result.$trigger.body.tfa_secret).toBe(REDACT_TEXT);
+		expect(result.$trigger.body.external_identifier).toBe(REDACT_TEXT);
+		expect(result.$trigger.body.auth_data).toBe(REDACT_TEXT);
+		expect(result.$trigger.body.credentials).toBe(REDACT_TEXT);
+		expect(result.$trigger.body.ai_openai_api_key).toBe(REDACT_TEXT);
+		expect(result.$trigger.body.ai_anthropic_api_key).toBe(REDACT_TEXT);
+		expect(result.$trigger.body.ai_google_api_key).toBe(REDACT_TEXT);
+		expect(result.$trigger.body.ai_openai_compatible_api_key).toBe(REDACT_TEXT);
 	});
 });
 
