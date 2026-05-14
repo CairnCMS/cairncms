@@ -56,6 +56,25 @@ describe('isSafeRedirect — protocol-relative URLs', () => {
 	});
 });
 
+describe('isSafeRedirect — parser-bypass patterns (GHSA-cf45-hxwj-4cfj)', () => {
+	test.each([
+		['leading double-backslash', '\\\\evil.example/path'],
+		['slash then backslash', '/\\evil.example/path'],
+		['slash then double-backslash', '/\\\\evil.example/path'],
+		['backslash then slash', '\\/evil.example/path'],
+		['slash then backslash then slash', '/\\/evil.example/path'],
+		['double-backslash with userinfo', '\\\\user@evil.example/path'],
+		['multiple leading slashes', '////evil.example/path'],
+	])('rejects %s', (_label, redirect) => {
+		expect(isSafeRedirect(redirect)).toBe(false);
+	});
+
+	test('percent-encoded backslashes stay path content (same-origin)', () => {
+		expect(isSafeRedirect('/%5C%5Cevil.example/path')).toBe(true);
+		expect(getSafeRedirect('/%5C%5Cevil.example/path')).toBe('/%5C%5Cevil.example/path');
+	});
+});
+
 describe('isSafeRedirect — non-http(s) schemes', () => {
 	test.each([
 		['javascript', 'javascript:alert(1)'],

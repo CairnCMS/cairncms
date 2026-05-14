@@ -94,6 +94,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Excluded concealed fields from the search query parameter (GHSA-8jpw-gpr4-8cmh / CVE-2025-64748).
 - Closed user-enumeration on the password reset request endpoint (GHSA-jr94-gj3h-c8rf / CVE-2026-26185).
 - Concealed sensitive fields in revision history (GHSA-mvv8-v4jj-g47j / CVE-2026-39943).
+- Added parser-bypass regression coverage for SSO redirect validation (GHSA-cf45-hxwj-4cfj / CVE-2026-35410).
 
 ### Acknowledgements
 
