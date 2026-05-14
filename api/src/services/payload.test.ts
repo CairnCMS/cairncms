@@ -458,6 +458,31 @@ describe('Integration Tests', () => {
 				expect(result[0].display_email).toBe('a@b.com');
 			});
 
+			it('masks external_identifier and auth_data when their schema entries carry the conceal special (GHSA-mvv8-v4jj-g47j)', async () => {
+				const service = makeService('directus_users', [
+					['id'],
+					['email'],
+					['first_name'],
+					['external_identifier', ['conceal']],
+					['auth_data', ['conceal']],
+				]);
+
+				const result = (await service.processValues('read', [
+					{
+						id: 'u1',
+						email: 'a@b.c',
+						first_name: 'Probe',
+						external_identifier: 'oauth-google|SENSITIVE-ID',
+						auth_data: '{"refresh_token":"REFRESH-TOKEN-SECRET"}',
+					},
+				])) as any[];
+
+				expect(result[0].external_identifier).toBe('**********');
+				expect(result[0].auth_data).toBe('**********');
+				expect(result[0].email).toBe('a@b.c');
+				expect(result[0].first_name).toBe('Probe');
+			});
+
 			it('masks multiple concealed aliases in a single payload', async () => {
 				const service = usersService();
 

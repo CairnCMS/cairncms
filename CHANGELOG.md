@@ -93,6 +93,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Cleaned permission references to deleted fields (GHSA-9x5g-62gj-wqf2 / CVE-2025-64746).
 - Excluded concealed fields from the search query parameter (GHSA-8jpw-gpr4-8cmh / CVE-2025-64748).
 - Closed user-enumeration on the password reset request endpoint (GHSA-jr94-gj3h-c8rf / CVE-2026-26185).
+- Concealed sensitive fields in revision history (GHSA-mvv8-v4jj-g47j / CVE-2026-39943).
 
 ### Acknowledgements
 

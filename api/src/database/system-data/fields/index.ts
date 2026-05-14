@@ -16,7 +16,7 @@ const fieldData = fse.readdirSync(path.resolve(__dirname));
 export const systemFieldRows: FieldMeta[] = [];
 
 for (const filepath of fieldData) {
-	if (filepath.includes('_defaults') || filepath.includes('index')) continue;
+	if (filepath.includes('_defaults') || filepath.includes('index') || !filepath.endsWith('.yaml')) continue;
 
 	const systemFields = requireYAML(path.resolve(__dirname, filepath));
 
