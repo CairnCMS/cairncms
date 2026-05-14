@@ -180,6 +180,10 @@ fields:
     options:
       iconRight: account_circle
     interface: input
+    special:
+      - conceal
 
   - field: auth_data
     hidden: true
+    special:
+      - conceal
