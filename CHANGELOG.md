@@ -103,6 +103,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Returned controlled errors for malformed inputs on /auth/password/reset and /utils/hash/verify.
 - Rejected unknown sort field names before SQL generation.
 - Rejected non-object filter query inputs before recursive parsing.
+- Set X-Content-Type-Options: nosniff on all responses.
 
 ### Acknowledgements
 
