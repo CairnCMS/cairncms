@@ -102,6 +102,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Expanded sensitive-key coverage in flow log redaction.
 - Rejected unknown sort field names before SQL generation.
 - Rejected non-object filter query inputs before recursive parsing.
+- Removed stale super_admin_token parameter from the /server/info spec.
 
 ### Acknowledgements
 
