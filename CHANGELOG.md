@@ -104,6 +104,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Rejected unknown sort field names before SQL generation.
 - Rejected non-object filter query inputs before recursive parsing.
 - Set X-Content-Type-Options: nosniff on all responses.
+- Removed stale super_admin_token parameter from the /server/info spec.
 
 ### Acknowledgements
 
