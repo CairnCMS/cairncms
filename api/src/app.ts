@@ -132,6 +132,8 @@ export default async function createApp(): Promise<express.Application> {
 		)
 	);
 
+	app.use(helmet.noSniff());
+
 	if (env['HSTS_ENABLED']) {
 		app.use(helmet.hsts(getConfigFromEnv('HSTS_', ['HSTS_ENABLED'])));
 	}
