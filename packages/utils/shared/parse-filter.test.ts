@@ -240,3 +240,25 @@ describe('', () => {
 		});
 	});
 });
+
+describe('non-object filter inputs', () => {
+	it('does not recurse infinitely when the filter is a top-level string', () => {
+		expect(() => parseFilter('filter' as any, null)).not.toThrow();
+	});
+
+	it('does not recurse infinitely on a single-character string filter', () => {
+		expect(() => parseFilter('a' as any, null)).not.toThrow();
+	});
+
+	it('wraps a top-level string as { _eq: <string> }', () => {
+		expect(parseFilter('filter' as any, null)).toStrictEqual({ _eq: 'filter' });
+	});
+
+	it('wraps a top-level number as { _eq: <number> }', () => {
+		expect(parseFilter(42 as any, null)).toStrictEqual({ _eq: 42 });
+	});
+
+	it('wraps a top-level boolean as { _eq: <boolean> }', () => {
+		expect(parseFilter(true as any, null)).toStrictEqual({ _eq: true });
+	});
+});
