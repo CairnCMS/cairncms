@@ -147,6 +147,22 @@ describe('filter', () => {
 
 		expect(sanitizedQuery.filter).toEqual({ field_a: { _eq: 'test' } });
 	});
+
+	test('should throw InvalidQueryException when the filter is a non-JSON string', () => {
+		expect(() => sanitizeQuery({ filter: 'filter' })).toThrow(/filter/i);
+	});
+
+	test('should throw InvalidQueryException when the filter is a single character', () => {
+		expect(() => sanitizeQuery({ filter: 'a' })).toThrow(/filter/i);
+	});
+
+	test('should throw InvalidQueryException when the filter is a number', () => {
+		expect(() => sanitizeQuery({ filter: 42 })).toThrow(/filter/i);
+	});
+
+	test('should throw InvalidQueryException when the filter is an array', () => {
+		expect(() => sanitizeQuery({ filter: ['x'] })).toThrow(/filter/i);
+	});
 });
 
 describe('offset', () => {
