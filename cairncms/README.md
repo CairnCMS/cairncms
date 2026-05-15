@@ -8,7 +8,7 @@
 npm install -g cairncms
 ```
 
-Node 20 or newer is required. `pnpm` and `yarn` work too.
+Node 22 or newer is required. `pnpm` and `yarn` work too.
 
 ## Quick start
 
