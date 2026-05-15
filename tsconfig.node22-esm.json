@@ -1,6 +1,6 @@
 {
 	"$schema": "https://json.schemastore.org/tsconfig",
-	"display": "CairnCMS Node 20 ESM",
+	"display": "CairnCMS Node 22 ESM",
 	"compilerOptions": {
 		"lib": ["es2022"],
 		"module": "es2022",

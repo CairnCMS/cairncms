@@ -5,7 +5,7 @@ A CairnCMS project.
 ## Requirements
 
 - Docker with Compose v2 (Docker Desktop on macOS / Windows; Docker Engine + the compose plugin on Linux). On Apple Silicon, enable Rosetta in Docker Desktop settings. The default PostGIS image is amd64-only.
-- Node 20+ on the host if you use the bundled `npm start` / `npm stop` / `npm logs` shortcuts. They are thin wrappers around `docker compose`; if you'd rather skip Node, run the equivalent `docker compose --project-directory cairncms -f cairncms/docker-compose.yml ...` commands directly.
+- Node 22+ on the host if you use the bundled `npm start` / `npm stop` / `npm logs` shortcuts. They are thin wrappers around `docker compose`; if you'd rather skip Node, run the equivalent `docker compose --project-directory cairncms -f cairncms/docker-compose.yml ...` commands directly.
 
 ## This scaffold is for local development
 
