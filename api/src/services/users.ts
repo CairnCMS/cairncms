@@ -492,11 +492,15 @@ export class UsersService extends ItemsService {
 	}
 
 	async resetPassword(token: string, password: string): Promise<void> {
-		const { email, scope, hash } = jwt.verify(token, env['SECRET'] as string, { issuer: 'cairncms' }) as {
-			email: string;
-			scope: string;
-			hash: string;
-		};
+		let payload: { email: string; scope: string; hash: string };
+
+		try {
+			payload = jwt.verify(token, env['SECRET'] as string, { issuer: 'cairncms' }) as typeof payload;
+		} catch {
+			throw new ForbiddenException();
+		}
+
+		const { email, scope, hash } = payload;
 
 		if (scope !== 'password-reset' || !hash) throw new ForbiddenException();
 
