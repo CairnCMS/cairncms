@@ -1,6 +1,7 @@
 import type { Accountability, Aggregate, Filter, Query } from '@cairncms/types';
 import { parseFilter, parseJSON } from '@cairncms/utils';
 import { flatten, get, isPlainObject, merge, set } from 'lodash-es';
+import { InvalidQueryException } from '../exceptions/invalid-query.js';
 import logger from '../logger.js';
 import { Meta } from '../types/index.js';
 
@@ -121,6 +122,10 @@ function sanitizeFilter(rawFilter: any, accountability: Accountability | null) {
 		} catch {
 			logger.warn('Invalid value passed for filter query parameter.');
 		}
+	}
+
+	if (filters !== null && (typeof filters !== 'object' || Array.isArray(filters))) {
+		throw new InvalidQueryException('Filter must be an object.');
 	}
 
 	return parseFilter(filters, accountability);

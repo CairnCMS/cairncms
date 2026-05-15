@@ -31,6 +31,7 @@ const logicalFilterOperators = ['_and', '_or'];
 const bypassOperators = ['_none', '_some'];
 
 function shiftLogicalOperatorsUp(filter: any): any {
+	if (!isObjectLike(filter)) return filter;
 	const key = Object.keys(filter)[0];
 	if (!key) return filter;
 
