@@ -282,6 +282,12 @@ export function applySort(
 			const { relation, relationType } = getRelationInfo(relations, collection, pathRoot);
 
 			if (!relation || ['m2o', 'a2o'].includes(relationType ?? '')) {
+				const isFunctional = column[0]!.includes('(') && column[0]!.includes(')');
+
+				if (!isFunctional && !relation && !schema.collections[collection]?.fields?.[pathRoot]) {
+					throw new InvalidQueryException(`Invalid sort column "${pathRoot}"`);
+				}
+
 				return {
 					order,
 					column: returnRecords ? column[0] : (getColumn(knex, collection, column[0]!, false, schema) as any),

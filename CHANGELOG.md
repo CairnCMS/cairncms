@@ -100,6 +100,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Removed access tokens from admin asset URL generation (GHSA-2ccr-g2rv-h677 / CVE-2024-28238).
 - Closed DOM XSS in layout option template inputs (GHSA-9qrm-48qf-r2rw / CVE-2024-6533).
 - Expanded sensitive-key coverage in flow log redaction.
+- Rejected unknown sort field names before SQL generation.
 - Rejected non-object filter query inputs before recursive parsing.
 
 ### Acknowledgements
