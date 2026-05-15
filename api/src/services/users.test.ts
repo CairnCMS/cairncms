@@ -857,5 +857,54 @@ describe('Integration Tests', () => {
 				});
 			});
 		});
+
+		describe('resetPassword', () => {
+			describe('bug-exposing — malformed and invalid JWTs map to ForbiddenException', () => {
+				it('throws ForbiddenException on a malformed JWT', async () => {
+					await expect(service.resetPassword('not-a-jwt', 'NewPassw0rd!123')).rejects.toBeInstanceOf(
+						ForbiddenException
+					);
+				});
+
+				it('throws ForbiddenException on an expired JWT', async () => {
+					const expired = jwt.sign({ email: 'a@b.com', scope: 'password-reset', hash: 'h' }, 'test-secret-for-jwt', {
+						issuer: 'cairncms',
+						expiresIn: '-1s',
+					});
+
+					await expect(service.resetPassword(expired, 'NewPassw0rd!123')).rejects.toBeInstanceOf(ForbiddenException);
+				});
+
+				it('throws ForbiddenException on a signature-mismatched JWT', async () => {
+					const wrongSecret = jwt.sign(
+						{ email: 'a@b.com', scope: 'password-reset', hash: 'h' },
+						'completely-different-secret',
+						{ issuer: 'cairncms' }
+					);
+
+					await expect(service.resetPassword(wrongSecret, 'NewPassw0rd!123')).rejects.toBeInstanceOf(
+						ForbiddenException
+					);
+				});
+			});
+
+			describe('regression — existing scope and hash checks still fire', () => {
+				it('throws ForbiddenException on a valid JWT with wrong scope', async () => {
+					const wrongScope = jwt.sign({ email: 'a@b.com', scope: 'other-scope', hash: 'h' }, 'test-secret-for-jwt', {
+						issuer: 'cairncms',
+					});
+
+					await expect(service.resetPassword(wrongScope, 'NewPassw0rd!123')).rejects.toBeInstanceOf(ForbiddenException);
+				});
+
+				it('throws ForbiddenException on a valid JWT missing the hash claim', async () => {
+					const noHash = jwt.sign({ email: 'a@b.com', scope: 'password-reset' }, 'test-secret-for-jwt', {
+						issuer: 'cairncms',
+					});
+
+					await expect(service.resetPassword(noHash, 'NewPassw0rd!123')).rejects.toBeInstanceOf(ForbiddenException);
+				});
+			});
+		});
 	});
 });
