@@ -75,7 +75,6 @@ create_role: Luo rooli
 create_user: Luo käyttäjä
 message: Viesti
 delete_panel: Poista paneeli
-create_webhook: Luo webhook
 create_translation_string: Luo käännös
 no_translation_string: Ei käännöksiä
 no_translation_string_copy: Ei vielä käännöksiä.
@@ -506,8 +505,6 @@ file_count: 'Ei tiedostoja | Yksi tiedosto | {count} tiedostoa'
 no_files_copy: Täällä ei ole tiedostoja.
 user_count: 'Ei käyttäjiä | Yksi käyttäjä | {count} käyttäjää'
 no_users_copy: Tässä roolissa ei ole vielä käyttäjiä.
-webhooks_count: 'Ei webhookkeja | Yksi webhookki | {count} webhookkia'
-no_webhooks_copy: Webhookeja ei ole vielä määritelty. Aloita luomalla sellainen alapuolella.
 no_notifications: Ei ilmoituksia
 no_notifications_copy: Olet perillä kaikesta!
 activity_log: Tapahtumaloki
@@ -536,7 +533,6 @@ action: Toiminto
 ip_address: IP-osoite
 user_agent: Asiakasohjelma
 origin: Alkuperä
-webhooks: Webhookit
 decimals: Desimaalit
 value_decimals: Arvon desimaalit
 min_value: Minimiarvo
@@ -920,7 +916,6 @@ no_options_available: Ei valintoja saatavilla
 settings_data_model: Tietorakenne
 settings_permissions: Roolit ja oikeudet
 settings_project: Projektin asetukset
-settings_webhooks: Webhookit
 settings_flows: Toiminnot
 settings_presets: Esiasetukset ja kirjanmerkit
 one_or_more_options_are_missing: Yksi tai useampi vaihtoehto puuttuu
@@ -968,8 +963,6 @@ page_help_settings_presets_collection: >-
   **Selaa esiasetuksia** — Listaa kaikki projektin esiasetukset, mukaan lukien käyttäjät, roolit ja maailmanlaajuiset kirjanmerkit sekä oletusnäkymät.
 page_help_settings_presets_item: >-
   **Esiasetuksen yksityiskohdat** — Lomake kirjanmerkkien ja oletuskokoelmien esiasetusten hallintaan.
-page_help_settings_webhooks_collection: '**Selaa webhookkeja** — Listaa kaikki projektin webhookit.'
-page_help_settings_webhooks_item: '**Webhookkien yksityiskohdat** — Lomake projektin webhookkien luomiseen ja hallintaan.'
 page_help_users_collection: '**Käyttäjähakemisto** — Listaa kaikki järjestelmän käyttäjät tässä projektissa.'
 page_help_users_item: >-
   **Käyttäjätieto** — Hallitse tilitietojasi tai tarkastele muiden käyttäjien tietoja.
@@ -1002,7 +995,6 @@ directus_collection:
   directus_sessions: Käyttäjän istunnon tiedot
   directus_settings: Projektin konfiguraation asetukset
   directus_users: Alustan järjestelmäkäyttäjät
-  directus_webhooks: Konfiguraatio tapahtumapohjaisille HTTP-pyynnöille
 fields:
   directus_activity:
     item: Kohteen ensisijainen avain
@@ -1137,17 +1129,6 @@ fields:
     enforce_tfa: Vaadi 2FA
     users: Käyttäjät roolissa
     module_list: Moduulien navigointi
-  directus_webhooks:
-    name: Nimi
-    method: Metodi
-    status: Tila
-    data: Tiedot
-    header: Ylätunniste
-    value: Arvo
-    headers: Pyynnön otsikkotiedot
-    triggers: Laukaisijat
-    actions: Toiminnot
-    collections: Kokoelmat
 field_options:
   directus_settings:
     project_name_placeholder: Oma projekti...
@@ -1231,19 +1212,6 @@ field_options:
     status_dropdown_suspended: Keskeytetty
     status_dropdown_archived: Arkistoitu
     token: Syötä suojatun pääsyn tunniste...
-  directus_webhooks:
-    status_options_active: Aktiivinen
-    status_options_inactive: Ei käytössä
-    data_label: Lähetä tapahtuman tiedot
-    triggers_divider: Laukaisijat
-    actions_create: Luo
-    actions_update: Päivitä
-    actions_delete: Poista
-    actions_login: Kirjaudu
-    headers:
-      header: Otsikko
-      value: Arvo
-      add: Lisää otsikko
 no_fields_in_collection: 'Kokoelmassa "{collection}" ei ole vielä kenttiä'
 no_value: Ei arvoa
 do_nothing: Älä tee mitään
@@ -1262,7 +1230,6 @@ referential_action_no_action: Estä poisto
 choose_action: Valitse toiminto
 continue_label: Jatka
 editing_role: '{role} rooli'
-creating_webhook: Luodaan webhook
 default_label: Oletus
 delete_label: Poista
 delete_are_you_sure: >-

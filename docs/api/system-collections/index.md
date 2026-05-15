@@ -14,7 +14,7 @@ A system collection is any table whose name starts with `directus_`. The full se
 
 The full set:
 
-`directus_users`, `directus_roles`, `directus_permissions`, `directus_shares`, `directus_files`, `directus_folders`, `directus_presets`, `directus_flows`, `directus_operations`, `directus_webhooks`, `directus_dashboards`, `directus_panels`, `directus_notifications`, `directus_collections`, `directus_fields`, `directus_relations`, `directus_settings`, `directus_activity`, `directus_revisions`, `directus_migrations`, `directus_sessions`.
+`directus_users`, `directus_roles`, `directus_permissions`, `directus_shares`, `directus_files`, `directus_folders`, `directus_presets`, `directus_flows`, `directus_operations`, `directus_dashboards`, `directus_panels`, `directus_notifications`, `directus_collections`, `directus_fields`, `directus_relations`, `directus_settings`, `directus_activity`, `directus_revisions`, `directus_migrations`, `directus_sessions`.
 
 `directus_files` has its own page at [Files](/docs/api/files/) since the asset-serving surface is large enough to warrant separate treatment. The remaining collections are grouped on the pages linked below.
 
@@ -32,7 +32,6 @@ Every system collection has its own top-level REST path, named by stripping the 
 | `directus_presets` | `/presets` |
 | `directus_flows` | `/flows` |
 | `directus_operations` | `/operations` |
-| `directus_webhooks` | `/webhooks` |
 | `directus_dashboards` | `/dashboards` |
 | `directus_panels` | `/panels` |
 | `directus_notifications` | `/notifications` |
@@ -75,7 +74,7 @@ The reference is split into seven topical pages plus this hub. Most pages cover 
 
 - **[Access control](/docs/api/system-collections/access-control/)** — `directus_users`, `directus_roles`, `directus_permissions`, `directus_shares`, plus the `/config/snapshot` and `/config/apply` endpoints that snapshot and apply role/permission state.
 - **[Organization](/docs/api/system-collections/organization/)** — `directus_folders` and `directus_presets`. Folders organize files; presets store per-user view configurations.
-- **[Automation](/docs/api/system-collections/automation/)** — `directus_flows`, `directus_operations`, `directus_webhooks`. The platform's event-driven automation surface.
+- **[Automation](/docs/api/system-collections/automation/)** — `directus_flows`, `directus_operations`. The platform's event-driven automation surface.
 - **[Insights and UI](/docs/api/system-collections/insights-and-ui/)** — `directus_dashboards`, `directus_panels`, `directus_notifications`. Dashboard composition and the user-facing notification feed.
 - **[Schema and modeling](/docs/api/system-collections/schema-and-modeling/)** — `directus_collections`, `directus_fields`, `directus_relations`, plus the `/schema/snapshot`, `/schema/diff`, and `/schema/apply` endpoints. The full schema-introspection and schema-as-code surface in one place.
 - **[Activity and revisions](/docs/api/system-collections/activity-and-revisions/)** — `directus_activity` and `directus_revisions`. The audit trail and per-row history.

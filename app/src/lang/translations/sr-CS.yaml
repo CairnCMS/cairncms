@@ -76,7 +76,6 @@ create_role: Napravi ulogu
 create_user: Napravi korisnika
 message: Poruka
 delete_panel: Obriši Panel
-create_webhook: Napravi Webhook
 create_translation_string: Kreiraj String za Prevod
 no_translation_string: Nema Stringova za Prevod
 no_translation_string_copy: Još uvek nema Stringova za Prevod.
@@ -404,7 +403,6 @@ file_count: 'Nema Fajlova | Jedan Fajl | {count} Fajlova'
 no_files_copy: Ovdje nema fajlova.
 user_count: 'Nema Korisnika | Jedan Korisnik | {count} Korisnika'
 no_users_copy: Ne postoji nijedan korisnik u ovoj roli.
-webhooks_count: 'Ne postoje Webhooks | Jedan Webhook | {count} Webhooks'
 all_items: Sve Stavke
 csv: CSV
 no_collections: Nema Kolekcija
@@ -422,7 +420,6 @@ activity: Aktivnost
 action: Akcija
 ip_address: IP adresa
 user_agent: Korisnički Agent
-webhooks: Webhooks
 field_width: Širina Polja
 add_filter: Dodaj Filter
 upper_limit: Gornja granica...
@@ -681,7 +678,6 @@ no_options_available: Nema dostupnih opcija
 settings_data_model: Model Podataka
 settings_permissions: Uloge & Dozvole
 settings_project: Podešavanje Projekta
-settings_webhooks: Webhooks
 settings_presets: Izgledi & Oznake
 one_or_more_options_are_missing: Jedna ili više opcija nedostaje
 scope: Opseg
@@ -721,8 +717,6 @@ page_help_settings_presets_collection: >-
   **Pregled Izgleda** — Lista svih kreiranih setova izgleda u sklopu projekta, uključujući: korisnik, uloga, i globalne oznake, kao i podrazumijevane preglede.
 page_help_settings_presets_item: >-
   **Detalji Izgleda** — Forma za upravljanje oznakama i podrazumijevanim setovima izgleda kolekcije.
-page_help_settings_webhooks_collection: '**Pregled Webhooks** — Lista svih dostupnih "webhooks" u sklopu projekta.'
-page_help_settings_webhooks_item: '**Detalji Webhook" — Forma za pravljenje i uređivanje "webhooks" u sklopu projekta.'
 page_help_users_collection: '**Direktorijum Korisnika** — Lista svih sistemskih korisnika u sklopu projekta.'
 page_help_users_item: >-
   **Detalji Korisnika** — Upravljajte informacijama vašeg korisničkog računa, ili pregledajte detalje ostalih korisnika.
@@ -842,11 +836,6 @@ fields:
     enforce_tfa: Traži 2FA
     users: Svi korisnici ove Uloge
     module_list: Navigacija Modula
-  directus_webhooks:
-    name: Ime
-    status: Status
-    value: Vrijednost
-    collections: Kolekcije
 field_options:
   directus_activity:
     create: Kreiraj
@@ -870,12 +859,6 @@ field_options:
     collections_name: Kolekcije
   directus_users:
     status_dropdown_active: Aktivan
-  directus_webhooks:
-    status_options_active: Aktivan
-    actions_create: Kreiraj
-    actions_update: Ažuriranje
-    headers:
-      value: Vrijednost
 no_fields_in_collection: 'Trenutno ne postoji nijedno polje u "{collection}" kolekciji'
 do_nothing: Ne radi ništa
 generate_and_save_uuid: Generiši i Sačuvaj UUID
@@ -894,7 +877,6 @@ referential_action_set_null: Poništi vrijednost {field} polja
 referential_action_set_default: Postavi {field} na njegovu podrazumijevanu vrijednost
 choose_action: Izaberi Radnju
 editing_role: '{role} Uloga'
-creating_webhook: Kreiranje Webhook-a
 delete_are_you_sure: >-
   Ova akcija je trajna i ne može biti poništena. Da li ste sigurni da želite da nastavite?
 delete_field_are_you_sure: >-

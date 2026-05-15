@@ -66,7 +66,7 @@ const articles = await client.request(readItems('articles', {
 
 `rest()` adds a single method to the client: `request(command)`. The `command` argument is a value built from one of the SDK's command factories. `readItems`, `createItem`, `updateItem`, `deleteItem`, and similar functions build request descriptors that `request()` then executes. Each command corresponds to a REST endpoint and accepts the same query options as the underlying API.
 
-The full set of commands lives under `@cairncms/sdk` as named exports. They cover every system collection (users, files, roles, permissions, settings, dashboards, panels, presets, folders, flows, operations, webhooks, activity, revisions, notifications, shares), the items endpoint for user collections, server info and health, schema snapshot and apply, and the utility endpoints under `/utils`. The TypeScript types for query parameters and return shapes are derived from the schema, so editors give accurate completions for fields and filters when a schema is provided (see [Schema typing](#schema-typing) below).
+The full set of commands lives under `@cairncms/sdk` as named exports. They cover every system collection (users, files, roles, permissions, settings, dashboards, panels, presets, folders, flows, operations, activity, revisions, notifications, shares), the items endpoint for user collections, server info and health, schema snapshot and apply, and the utility endpoints under `/utils`. The TypeScript types for query parameters and return shapes are derived from the schema, so editors give accurate completions for fields and filters when a schema is provided (see [Schema typing](#schema-typing) below).
 
 A few API surfaces deliberately have no SDK command in v1:
 

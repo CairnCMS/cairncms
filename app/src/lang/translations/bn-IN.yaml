@@ -76,7 +76,6 @@ create_role: ভূমিকা তৈরি করুন
 create_user: ব্যবহারকারী তৈরি করুন
 message: বার্তা
 delete_panel: প্যানেল মুছুন
-create_webhook: ওয়েবহুক তৈরি করুন
 create_translation_string: অনুবাদ স্ট্রিং তৈরি করুন
 no_translation_string: কোন অনুবাদ স্ট্রিং নেই
 no_translation_string_copy: এখনও কোন অনুবাদ স্ট্রিং নেই।

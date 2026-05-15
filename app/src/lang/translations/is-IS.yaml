@@ -53,7 +53,6 @@ required: Nauðsynlegt
 create_role: Búa til Hlutverk
 create_user: Búa til Notanda
 message: Skilaboð
-create_webhook: Búa til Vefkrækju
 create_translation_string: Búa til Þýðingar Streng
 no_translation_string: Engir Þýðingar Strengir
 edit_translation_string: Breyta þýðingastreng
@@ -316,9 +315,6 @@ fields:
   directus_roles:
     name: Hlutverks Nafn
     description: Lýsing
-  directus_webhooks:
-    name: Nafn
-    status: Staða
 field_options:
   directus_settings:
     security_divider_title: Öryggi
@@ -337,13 +333,6 @@ field_options:
   directus_users:
     preferences_divider: Notandi Stillingar
     status_dropdown_draft: Drög
-  directus_webhooks:
-    actions_create: Búa til
-    actions_update: Uppfæra
-    actions_delete: Eyða
-    actions_login: Skrá inn
-    headers:
-      header: Haus
 do_nothing: Gera Ekkert
 share_copy_link: Afrita Hlekk
 description: Lýsing

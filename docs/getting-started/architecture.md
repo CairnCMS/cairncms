@@ -13,7 +13,7 @@ This page describes what each layer does and how a typical request moves through
 
 The platform breaks down into five conceptual layers. At the bottom is your database and file storage, which CairnCMS treats as the source of truth. Above that, schema inspection reads the database structure and produces an internal metadata model that the rest of the platform works against. The data engine and service layer use that model to handle reads, writes, queries, and side effects. Access control and authentication enforce who can do what before any data leaves the system. At the top sit the surfaces that users and other systems interact with: the admin app, REST and GraphQL APIs, the CLI, and the JavaScript SDK.
 
-The same collection can be used in several ways at once. Editors manage records in the admin app while clients query the same data through REST or GraphQL, permissions constrain what each of them sees, and flows and webhooks react to changes in the same collections. The internal model is what keeps all of these views consistent.
+The same collection can be used in several ways at once. Editors manage records in the admin app while clients query the same data through REST or GraphQL, permissions constrain what each of them sees, and flows react to changes in the same collections. The internal model is what keeps all of these views consistent.
 
 ## The database is the source of truth
 
@@ -27,11 +27,11 @@ CairnCMS keeps its own metadata in a set of system tables: users, roles, permiss
 
 When CairnCMS connects to a database, it reads the schema and builds an internal model of the collections, fields, relationships, and vendor-specific data types. This abstraction layer is what lets the platform work across multiple SQL vendors without exposing every database-specific difference to the rest of the codebase.
 
-The internal model is also what makes the admin app and generated APIs possible. If a collection exists in the model, CairnCMS can render it in the app, expose it through the API, apply permissions to it, use it in flows and webhooks, and include it in schema snapshots.
+The internal model is also what makes the admin app and generated APIs possible. If a collection exists in the model, CairnCMS can render it in the app, expose it through the API, apply permissions to it, use it in flows, and include it in schema snapshots.
 
 ## The data engine
 
-Above schema inspection sits the layer that handles the actual data work. It is responsible for CRUD operations against collections and items; filtering, sorting, pagination, and relational traversal; file processing and image transformations; schema snapshot, diff, and apply workflows; config snapshot and apply workflows; and triggering flows and webhooks when data changes.
+Above schema inspection sits the layer that handles the actual data work. It is responsible for CRUD operations against collections and items; filtering, sorting, pagination, and relational traversal; file processing and image transformations; schema snapshot, diff, and apply workflows; config snapshot and apply workflows; and triggering flows when data changes.
 
 Both REST and GraphQL rely on this layer. The two APIs are different interfaces over the same underlying services, not two separate data paths.
 
@@ -80,7 +80,7 @@ For a normal API request, the path looks like this:
 5. The query is executed against the database.
 6. The response is filtered to match the permission model.
 7. The result is returned to the client.
-8. If the request changed data, activity logs, revisions, flows, and webhooks may also be triggered.
+8. If the request changed data, activity logs, revisions, and flows may also be triggered.
 
 The admin app follows the same general path. It is not bypassing the platform; it is using it.
 

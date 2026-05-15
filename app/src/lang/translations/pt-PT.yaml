@@ -75,7 +75,6 @@ create_role: Criar estatuto
 create_user: Criar utilizador
 message: Mensagem
 delete_panel: Apagar painel
-create_webhook: Criar webhook
 create_translation_string: Criar tradução
 no_translation_string: Sem traduções
 no_translation_string_copy: Ainda não existem traduções.
@@ -448,7 +447,6 @@ file_count: 'Nenhum ficheiro | Um ficheiro | {count} ficheiros'
 no_files_copy: Não existem ficheiros aqui.
 user_count: 'Nenhum utilizador | Um utilizador | {count} utilizadores'
 no_users_copy: Ainda não existem utilizadores neste estatuto.
-webhooks_count: 'Nenhum webhook | Um webhook | {count} webhooks'
 no_notifications: Sem notificações
 activity_log: Registo de Atividade
 all_items: Todos os documentos
@@ -472,7 +470,6 @@ activity: Atividade
 action: Ação
 ip_address: Endereço IP
 user_agent: User Agent
-webhooks: Webhooks
 decimals: Decimais
 value_decimals: Valores decimais
 min_value: Valor mínimo
@@ -699,7 +696,6 @@ no_options_available: Nenhuma opção disponível
 settings_data_model: Modelo de dados
 settings_permissions: Perfis & Permissões
 settings_project: Definições do projeto
-settings_webhooks: Webhooks
 settings_presets: Predefinições & Marcadores
 one_or_more_options_are_missing: Uma ou mais opções estão em falta
 select: Selecionar...
@@ -806,9 +802,6 @@ fields:
     enforce_tfa: Exigir 2FA
     users: Utilizadores na função
     module_list: Navegação do Modulo
-  directus_webhooks:
-    name: Nome
-    status: Estado
 field_options:
   directus_settings:
     project_name_placeholder: O meu projeto...
@@ -832,11 +825,6 @@ field_options:
   directus_users:
     dropdown_auto: Automático (baseado no sistema)
     status_dropdown_active: Ativar
-  directus_webhooks:
-    status_options_active: Ativar
-    status_options_inactive: Inativo
-    actions_create: Criar
-    actions_update: Atualizar
 no_fields_in_collection: 'Ainda não há nenhum campo em "{collection}"'
 do_nothing: Não fazer nada
 generate_and_save_uuid: Gerar e guardar UUID
@@ -857,7 +845,6 @@ choose_action: Escolher ação
 continue_label: Continuar
 continue_as: >-
   {name} está autenticado no momento. Se você reconhecer esta conta, pressione continuar.
-creating_webhook: Criando Webhook
 delete_are_you_sure: >-
   Esta ação é permanente e não pode ser desfeita. Tem certeza de que deseja prosseguir?
 description: Descrição

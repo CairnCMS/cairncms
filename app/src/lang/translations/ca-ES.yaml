@@ -76,7 +76,6 @@ create_role: Crea un rol
 create_user: Crear usuari
 message: Missatge
 delete_panel: Elimina el panell
-create_webhook: Crear Webhook
 create_translation_string: Crea una cadena de traducció
 no_translation_string: No hi ha traduccions
 no_translation_string_copy: Encara no hi ha traduccions.
@@ -506,8 +505,6 @@ file_count: 'No hi ha fitxers | Un fitxer | {count} fitxers'
 no_files_copy: No hi ha fitxers aquí.
 user_count: 'No hi ha usuaris | Un usuari | {count} usuaris'
 no_users_copy: Encara no hi ha usuaris en aquest rol.
-webhooks_count: 'No hi ha webhooks | Un webhook | {count} webhooks'
-no_webhooks_copy: No s'han configurat webhooks encara. Comença creant-ne un.
 no_notifications: Cap notificació
 no_notifications_copy: Estàs al dia!
 activity_log: Registre d'activitat
@@ -536,7 +533,6 @@ action: Acció
 ip_address: Adreça IP
 user_agent: Agent de l'usuari
 origin: Origen
-webhooks: Webhooks
 decimals: Decimals
 value_decimals: Valor decimal
 min_value: Valor mínim
@@ -891,7 +887,6 @@ no_options_available: Sense opcions disponibles
 settings_data_model: Model de dades
 settings_permissions: Rols i permisos
 settings_project: Ajustaments del projecte
-settings_webhooks: Webhooks
 settings_flows: Fluxes
 settings_presets: Predefinits i Marcadors
 settings_translation_strings: Cadenes de traducció
@@ -940,8 +935,6 @@ page_help_settings_presets_collection: >-
   ** Examina predefinits **: Llista tots els predefinits del projecte, incloent marcadors d'usuari, rols, globals, així com la vista predeterminada.
 page_help_settings_presets_item: >-
   ** Detall de predefinit **: Un formulari per gestionar adreces d'interès i predefinits de col·lecció predeterminats.
-page_help_settings_webhooks_collection: '** Examina Webhooks **: Llista tots els webhooks del projecte.'
-page_help_settings_webhooks_item: '** Detall de webhook **: Un formulari per crear i gestionar webhooks del projecte.'
 page_help_settings_flows_collection: '**Examina els fluxos** — Llista tots els fluxos del projecte.'
 page_help_settings_translation_strings_collection: '**Examina cadenes de traducció** - Llista totes les cadenes de traducció del projecte.'
 page_help_users_collection: '**Directori de l''usuari**.'
@@ -986,7 +979,6 @@ directus_collection:
   directus_settings: Opcions de configuració del projecte
   directus_shares: Rastreja els elements compartits externament
   directus_users: Usuaris del sistema per a la plataforma
-  directus_webhooks: Configuració per a les peticions HTTP basades en esdeveniments
 fields:
   directus_activity:
     item: Clau primaria de l'ítem
@@ -1136,18 +1128,6 @@ fields:
     enforce_tfa: Requereix 2FA
     users: Usuaris al rol
     module_list: Navegació dels mòduls
-  directus_webhooks:
-    name: Nom
-    method: Mètode
-    status: Estat
-    data: Dades
-    header: Capçalera
-    value: Valor
-    headers: Capçaleres de petició
-    data_label: Envia les dades de l'event
-    triggers: Disparadors
-    actions: Accions
-    collections: Col·leccions
 field_options:
   directus_settings:
     project_name_placeholder: El meu projecte...
@@ -1216,17 +1196,6 @@ field_options:
     status_dropdown_suspended: Suspès
     status_dropdown_archived: Arxivat
     token: Entra un testimoni d'accés (token) segur...
-  directus_webhooks:
-    status_options_active: Activa
-    status_options_inactive: Inactiva
-    data_label: Envia les dades de l'event
-    triggers_divider: Disparadors
-    actions_create: Crear
-    actions_update: Actualitzar
-    actions_delete: Elimina
-    headers:
-      header: Capçalera
-      value: Valor
 no_fields_in_collection: 'Encara no hi ha camps a "{collection}"'
 do_nothing: No facis res
 generate_and_save_uuid: Genera i Desa UUID
@@ -1249,7 +1218,6 @@ continue_label: Continua
 continue_as: >-
   {name} està autenticat. Si no reconeixes aquest compte, polsa continua.
 editing_role: 'Rol {role}'
-creating_webhook: Creant el webhook
 default_label: Predeterminat
 delete_label: Elimina
 delete_are_you_sure: >-

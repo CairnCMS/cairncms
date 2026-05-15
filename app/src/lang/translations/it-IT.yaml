@@ -76,7 +76,6 @@ create_role: Crea ruolo
 create_user: Crea utente
 message: Messaggio
 delete_panel: Elimina Pannello
-create_webhook: Crea webhook
 create_translation_string: Crea stringa di traduzione
 no_translation_string: Nessuna stringa di traduzione
 no_translation_string_copy: Non ci sono ancora stringhe di traduzione.
@@ -514,8 +513,6 @@ file_count: 'Nessun File | Un File | {count} File'
 no_files_copy: Non ci sono file qui.
 user_count: 'Nessun Utente | Un Utente | {count} Utenti'
 no_users_copy: Non ci sono ancora utenti in questo ruolo.
-webhooks_count: 'Nessun webhook | 1 Webhook | {count} Webhook'
-no_webhooks_copy: Non sono ancora stati configurati webhook. Inizia creandone uno qui sotto.
 no_notifications: Nessuna notifica
 no_notifications_copy: È tutto!
 activity_log: Log delle attività
@@ -545,7 +542,6 @@ action: Azioni
 ip_address: Indirizzo IP
 user_agent: User agent
 origin: Origine
-webhooks: Webhooks
 decimals: Decimali
 value_decimals: Valore decimali
 min_value: Valore minimo
@@ -957,7 +953,6 @@ no_options_available: Nessuna opzione disponibile
 settings_data_model: Modello dei dati
 settings_permissions: Ruoli e permessi
 settings_project: Impostazioni progetto
-settings_webhooks: Webhooks
 settings_flows: Flussi
 settings_presets: Preset & Segnalibri
 settings_translation_strings: Stringhe di Traduzione
@@ -1006,8 +1001,6 @@ page_help_settings_presets_collection: >-
   **Sfoglia Preset** — Elenca tutti i preset del progetto, tra cui: utente, ruolo, segnalibri globali e viste predefinite.
 page_help_settings_presets_item: >-
   **Dettagli Preset** — Un modulo per la gestione dei segnalibri e dei preset predefiniti delle raccolte.
-page_help_settings_webhooks_collection: '**Sfoglia i webhooks** — Elenca tutti i webhooks nel progetto.'
-page_help_settings_webhooks_item: '**Dettaglio Webhook** — Un modulo per creare e gestire webhook del progetto.'
 page_help_settings_flows_collection: '**Sfoglia i flussi** — Elenca tutti i flussi nel progetto.'
 page_help_settings_flows_item: '**Dettagli del flusso** — Spazio di lavoro per gestire una o più operazioni.'
 page_help_settings_translation_strings_collection: '**Sfoglia le stringhe di traduzione** — Elenca tutte le stringhe di traduzione nel progetto.'
@@ -1053,7 +1046,6 @@ directus_collection:
   directus_settings: Opzioni di configurazione del progetto
   directus_shares: Traccia gli elementi condivisi esternamente
   directus_users: Utenti di sistema per la piattaforma
-  directus_webhooks: Configurazione per le richieste HTTP basate su eventi
 fields:
   directus_activity:
     item: Chiave primaria elemento
@@ -1204,18 +1196,6 @@ fields:
     enforce_tfa: Richiede 2FA
     users: Utenti nel ruolo
     module_list: Navigazione del modulo
-  directus_webhooks:
-    name: Nome
-    method: Metodo
-    status: Stato
-    data: Dati
-    header: Header
-    value: Valore
-    headers: Request Headers
-    data_label: Invia dati evento
-    triggers: Trigger
-    actions: Azioni
-    collections: Raccolte
 field_options:
   directus_settings:
     project_name_placeholder: Il mio progetto...
@@ -1305,19 +1285,6 @@ field_options:
     status_dropdown_suspended: Sospeso
     status_dropdown_archived: Archiviato
     token: Inserisci un token di accesso sicuro...
-  directus_webhooks:
-    status_options_active: Attivo
-    status_options_inactive: Disattivato
-    data_label: Invia dati evento
-    triggers_divider: Trigger
-    actions_create: Creare
-    actions_update: Modifica
-    actions_delete: Elimina
-    actions_login: Accedi
-    headers:
-      header: Header
-      value: Valore
-      add: Aggiungi Header
 no_fields_in_collection: 'Non ci sono ancora campi in "{collection}"'
 no_value: Nessun valore
 do_nothing: Non Fare Niente
@@ -1366,7 +1333,6 @@ continue_label: Continua
 continue_as: >-
   {name} è attualmente autenticato. Se riconosci questo account, premi continua.
 editing_role: 'Ruolo {role}'
-creating_webhook: Creazione Webhook
 default_label: Predefinito
 delete_label: Elimina
 delete_are_you_sure: >-

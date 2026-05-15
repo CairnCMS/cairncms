@@ -79,7 +79,6 @@ import { SpecificationService } from '../specifications.js';
 import { TFAService } from '../tfa.js';
 import { UsersService } from '../users.js';
 import { UtilsService } from '../utils.js';
-import { WebhooksService } from '../webhooks.js';
 import { GraphQLBigInt } from './types/bigint.js';
 import { GraphQLDate } from './types/date.js';
 import { GraphQLGeoJSON } from './types/geojson.js';
@@ -1952,8 +1951,6 @@ export class GraphQLService {
 				return new SettingsService(opts);
 			case 'directus_users':
 				return new UsersService(opts);
-			case 'directus_webhooks':
-				return new WebhooksService(opts);
 			case 'directus_shares':
 				return new SharesService(opts);
 			case 'directus_flows':

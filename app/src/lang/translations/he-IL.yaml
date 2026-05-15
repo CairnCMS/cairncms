@@ -70,7 +70,6 @@ create_preset: יצירת הגדרה מראש
 create_role: צור תפקיד
 create_user: צור משתמש
 message: הודעה
-create_webhook: צור Webhook
 translation_string_translations_placeholder: יצירת תרגום חדש
 edit_translation_string: אריכה של תרגום
 invite_users: הזמן משתמשים
@@ -204,8 +203,6 @@ fields:
   directus_roles:
     name: שם תפקיד
     description: תיאור
-  directus_webhooks:
-    status: סטטוס
 field_options:
   directus_collections:
     language: שפה

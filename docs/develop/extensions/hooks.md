@@ -241,7 +241,7 @@ CairnCMS events follow a `<type>.<event>` or `<collection>.items.<event>` naming
 
 ### System collection names
 
-Where the table above shows `<system-collection>`, replace it with one of: `activity`, `collections`, `dashboards`, `fields`, `files` (except create/update), `flows`, `folders`, `notifications`, `operations`, `panels`, `permissions`, `presets`, `relations`, `revisions`, `roles`, `settings`, `shares`, `users`, `webhooks`.
+Where the table above shows `<system-collection>`, replace it with one of: `activity`, `collections`, `dashboards`, `fields`, `files` (except create/update), `flows`, `folders`, `notifications`, `operations`, `panels`, `permissions`, `presets`, `relations`, `revisions`, `roles`, `settings`, `shares`, `users`.
 
 The `directus_` prefix is stripped from event names, so a handler that registers `users.create` fires whenever a user is created,  regardless of which API path triggered the create. Use the unprefixed form, not `directus_users.create`.
 

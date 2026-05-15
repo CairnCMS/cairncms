@@ -5,7 +5,7 @@ sidebar:
   order: 6
 ---
 
-The Settings module is where the project itself is configured, including branding, the module bar, password policy, file transformation rules, the Mapbox integration, image editor presets, and translation strings. It also hosts the data model, roles and permissions, presets and bookmarks, webhooks, and flows configuration screens, which are covered on their own guides.
+The Settings module is where the project itself is configured, including branding, the module bar, password policy, file transformation rules, the Mapbox integration, image editor presets, and translation strings. It also hosts the data model, roles and permissions, presets and bookmarks, and flows configuration screens, which are covered on their own guides.
 
 Only roles with admin access can open Settings.
 
@@ -119,7 +119,7 @@ The Settings module also contains the configuration screens for several features
 - [Data model](/docs/guides/data-model/) — collections, fields, and relationships
 - [Permissions](/docs/guides/permissions/) — roles and the CRUDS permissions matrix
 - Presets & Bookmarks — saved views; covered briefly in [Layouts](/docs/guides/content/layouts/)
-- [Automate](/docs/guides/automate/) — flows and webhooks
+- [Automate](/docs/guides/automate/) — flows and the webhook patterns built on top of them
 
 The Settings navigation pane also exposes shortcut links at the bottom for the current platform version, reporting a bug, and requesting a feature, all pointing to the CairnCMS GitHub repository.
 

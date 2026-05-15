@@ -73,7 +73,6 @@ create_role: Skep Rol
 create_user: Skep Gebruiker
 message: Boodskap
 delete_panel: Skrap paneel
-create_webhook: Skep 'n Webhaak
 create_translation_string: Skep 'n vertalingstring
 no_translation_string: Geen Vertalingstringe
 no_translation_string_copy: Daar is nog geen vertalingstringe nie.
@@ -195,15 +194,11 @@ fields:
   directus_roles:
     name: Rol Naam
     description: Beskrywing
-  directus_webhooks:
-    status: Status
 field_options:
   directus_activity:
     create: Skep
   directus_collections:
     language: Taal
-  directus_webhooks:
-    actions_create: Skep
 comment: Kommentaar
 description: Beskrywing
 email: E-pos

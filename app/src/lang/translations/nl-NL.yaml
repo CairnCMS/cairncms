@@ -76,7 +76,6 @@ create_role: Maak rol
 create_user: Gebruiker Aanmaken
 message: Bericht
 delete_panel: Paneel verwijderen
-create_webhook: Webhook Aanmaken
 create_translation_string: Vertalingen aanmaken
 no_translation_string: Vertaalde Strings
 no_translation_string_copy: Er zijn nog geen vertaling reeksen.
@@ -514,8 +513,6 @@ file_count: 'Geen bestanden | Één Bestand | {count} bestanden'
 no_files_copy: Er zijn geen bestanden hier.
 user_count: 'Geen gebruikers | Één gebruiker | {count} gebruikers'
 no_users_copy: Er zijn nog geen gebruikers in deze rol.
-webhooks_count: 'Geen webhooks | 1 Webhook | {count} Webhooks'
-no_webhooks_copy: Er zijn nog geen webhooks geconfigureerd. Ga aan de slag door er hieronder een aan te maken.
 no_notifications: Geen meldingen
 no_notifications_copy: Je bent helemaal mee!
 activity_log: Activiteitenlogboek
@@ -544,7 +541,6 @@ action: Actie
 ip_address: IP Adres
 user_agent: User Agent
 origin: Herkomst
-webhooks: Webhooks
 decimals: Decimalen
 value_decimals: Waarde Decimaal
 min_value: Minimumwaarde
@@ -948,7 +944,6 @@ no_options_available: Geen opties beschikbaar
 settings_data_model: Datamodel
 settings_permissions: Rollen & Permissies
 settings_project: Projectinstellingen
-settings_webhooks: Webhooks
 settings_flows: Flows
 settings_presets: Voorkeuren & Bladwijzers
 settings_translation_strings: Schermtekst vertalingen
@@ -997,8 +992,6 @@ page_help_settings_presets_collection: >-
   **Browse Voorkeuren** — Bewaart alle voorkeuren in dit project, inclusief: gebruikers, rol, en globale voorkeuren en standaard views.
 page_help_settings_presets_item: >-
   **Voorkeur Detail** — Formulier om voorkeuren en bladwijzers mee te beheren.
-page_help_settings_webhooks_collection: '**Browse Webhooks** — Toont alle webhooks in het project.'
-page_help_settings_webhooks_item: '**Webhook Detail** - Een formulier voor het maken en beheren van project webhooks.'
 page_help_settings_flows_collection: '**Blader door Flows** — Toon alle Flows in het project.'
 page_help_settings_flows_item: '**Flow details** — Werkruimte voor het beheren van één of meerdere operaties.'
 page_help_settings_translation_strings_collection: '**Blader door vertaling reeksen** — Toont alle vertaling reeksen in het project.'
@@ -1167,17 +1160,6 @@ fields:
     enforce_tfa: 2FA vereist
     users: Gebruikers in rol
     module_list: Module Navigatie
-  directus_webhooks:
-    name: Naam
-    method: Methode
-    status: Status
-    data: Data
-    header: Header
-    value: Waarde
-    headers: Verzoekheaders
-    triggers: Triggers
-    actions: Acties
-    collections: Collecties
 field_options:
   directus_settings:
     project_name_placeholder: Mijn project...
@@ -1245,18 +1227,6 @@ field_options:
     status_dropdown_active: Actief
     status_dropdown_suspended: Geschorst
     status_dropdown_archived: Gearchiveerd
-  directus_webhooks:
-    status_options_active: Actief
-    status_options_inactive: Inactief
-    triggers_divider: Triggers
-    actions_create: Maak
-    actions_update: Updaten
-    actions_delete: Verwijderen
-    actions_login: Inloggen
-    headers:
-      header: Header
-      value: Waarde
-      add: Header toevoegen
 no_fields_in_collection: 'Er zijn nog geen velden in "{collection}"'
 no_value: Geen waarde
 do_nothing: Niets doen
@@ -1290,7 +1260,6 @@ referential_action_no_action: Voorkom de verwijdering
 referential_action_cascade: Verwijder het {collection} item (cascade)
 continue_label: Doorgaan
 editing_role: '{role} Rol'
-creating_webhook: Webhook Aanmaken
 default_label: Standaard
 delete_label: Verwijderen
 delete_are_you_sure: >-

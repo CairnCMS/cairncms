@@ -67,10 +67,6 @@ vi.mock('./auth', () => ({
 	registerAuthProviders: vi.fn(),
 }));
 
-vi.mock('./webhooks', () => ({
-	init: vi.fn(),
-}));
-
 describe('createApp', async () => {
 	describe('Content Security Policy', () => {
 		test('Should set content-security-policy header by default', async () => {

@@ -67,7 +67,6 @@ create_panel: دروستکردنی پانێڵ
 create_role: دروستکردنی پلە
 create_user: دروستکردنی بەکارهێنەر
 delete_panel: سڕینەوەی پانێڵ
-create_webhook: دروستکردنی وێبهووک
 invite_users: بانگهێشتکردنی بەکارهێنەرەکان
 invite: بانگهێشت
 email_already_invited: ئیمەیڵی "{email}" پێشتر بانگهێشتکراوە

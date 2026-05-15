@@ -9,7 +9,7 @@ CairnCMS is open content and data infrastructure for self-hosted teams. Use it t
 
 ## What is CairnCMS?
 
-CairnCMS sits between your team and your database. You can model a new schema through the admin app, or connect to an existing SQL schema and work from there. Once a collection is set up, the same data is available through a browser-based interface for records and files, REST and GraphQL APIs for external clients, flows and webhooks for automation, and a role-based permission system that gates all of it.
+CairnCMS sits between your team and your database. You can model a new schema through the admin app, or connect to an existing SQL schema and work from there. Once a collection is set up, the same data is available through a browser-based interface for records and files, REST and GraphQL APIs for external clients, flows for automation, and a role-based permission system that gates all of it.
 
 The platform is not built around a fixed content model. Your SQL schema defines what an item is on a per-collection basis; CairnCMS provides the workspace, APIs, permissions, and workflows around whatever shape you give it. That makes it suitable for content that ships to a public-facing site, operational data that feeds an internal tool, structured records that drive a SaaS product, or any combination of those in one workspace.
 

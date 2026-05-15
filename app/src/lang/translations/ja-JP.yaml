@@ -76,7 +76,6 @@ create_role: 権限作成
 create_user: ユーザーの作成
 message: メッセージ
 delete_panel: パネルを削除
-create_webhook: Webhookの作成
 create_translation_string: 翻訳文字列を作成
 no_translation_string: 翻訳文字列なし
 no_translation_string_copy: 翻訳文字列がまだありません。
@@ -284,7 +283,6 @@ users: ユーザー
 activity: 操作履歴
 ip_address: IPアドレス
 user_agent: ユーザーエージェント
-webhooks: Webhook
 field_width: 入力欄幅
 user_directory: ユーザーディレクトリ
 documentation: ドキュメンテーション
@@ -403,7 +401,6 @@ editing_in_batch: 'バッチが {count} 個のアイテムを編集中'
 settings_data_model: データモデル
 settings_permissions: 役割・権限
 settings_project: プロジェクト設定
-settings_webhooks: Webhook
 settings_presets: プリセットとブックマーク
 layout: レイアウト
 editing_preset: プリセットを編集
@@ -485,11 +482,6 @@ fields:
     description: 説明
     ip_access: IP アクセス
     enforce_tfa: 二段階認証が必要
-  directus_webhooks:
-    name: 名前
-    status: ステータス
-    value: 値
-    collections: コレクション
 field_options:
   directus_activity:
     create: 作成
@@ -506,11 +498,6 @@ field_options:
       icon_name: アイコン
       name_name: 名前
     collections_name: コレクション
-  directus_webhooks:
-    actions_create: 作成
-    actions_update: 更新
-    headers:
-      value: 値
 no_fields_in_collection: 'まだ「{collection}」にフィールドがありません'
 do_nothing: 何もしない
 save_current_user_role: 現在のユーザーロールを保存

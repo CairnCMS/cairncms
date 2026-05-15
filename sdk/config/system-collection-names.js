@@ -29,7 +29,6 @@ export const systemCollectionNames = [
 	'directus_sessions',
 	'directus_settings',
 	'directus_users',
-	'directus_webhooks',
 	'directus_dashboards',
 	'directus_panels',
 	'directus_notifications',

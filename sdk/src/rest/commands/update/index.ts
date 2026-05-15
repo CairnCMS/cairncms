@@ -17,4 +17,3 @@ export * from './settings.js';
 export * from './shares.js';
 export * from './singleton.js';
 export * from './users.js';
-export * from './webhooks.js';

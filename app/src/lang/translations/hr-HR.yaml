@@ -76,7 +76,6 @@ create_role: Stvori novu ulogu
 create_user: Dodaj korisnika
 message: Poruka
 delete_panel: Ukloni ploču
-create_webhook: Kreiraj webhook
 create_translation_string: Dodaj prijevodni niz
 no_translation_string: Nema prijevodnih nizova
 no_translation_string_copy: Još nema prijevodnih nizova.
@@ -505,8 +504,6 @@ file_count: 'Nema datoteka | Jedna datoteka | Broj datoteka: {count}'
 no_files_copy: Nema datoteka.
 user_count: 'Nema korisnika | Jedan korisnik | Broj korisnika: {count}'
 no_users_copy: Još nema korisnika s ovom ulogom.
-webhooks_count: 'Nema web-dojavnika| Jedan web-dojavnik | {count} web-dojavnika'
-no_webhooks_copy: Još nije konfiguriran nijedan web-dojavnik. Započnite stvaranjem jednog u nastavku.
 no_notifications: Nema obavijesti
 no_notifications_copy: Upoznati ste s svime!
 activity_log: Dnevnik aktivnosti
@@ -535,7 +532,6 @@ action: Radnja
 ip_address: IP Adresa
 user_agent: Korisnički Agent
 origin: Podrijetlo
-webhooks: Web-dojavnici
 decimals: Decimale
 value_decimals: Decimalne vrijednosti
 min_value: Min. vrijednost
@@ -934,7 +930,6 @@ no_options_available: Nema dostupnih opcija
 settings_data_model: Model podataka
 settings_permissions: Uloge i dopuštenja
 settings_project: Postavke projekta
-settings_webhooks: Web-dojavnici
 settings_flows: Tokovi
 settings_presets: Zadane postavke i oznake
 settings_translation_strings: Prijevodni nizovi
@@ -983,8 +978,6 @@ page_help_settings_presets_collection: >-
   **Pregledaj unaprijed postavljene postavke** — Navodi sve unaprijed postavljene postavke u projektu, uključujući: korisničke, uloge i globalne oznake, kao i zadane prikaze.
 page_help_settings_presets_item: >-
   **Unaprijed postavljene pojedinosti** — Obrazac za upravljanje oznakama i zadanim postavkama zbirke.
-page_help_settings_webhooks_collection: '**Pregledaj web-dojavnike** — Prikazuje sve web-dojavnike unutar projekta.'
-page_help_settings_webhooks_item: '**Detalji web-dojavnika** — Forma za stvaranje i upravljanje web-dojavnicima.'
 page_help_settings_flows_collection: '**Pregledaj tokove** — Popisuje sve tokove unutar projekta.'
 page_help_settings_flows_item: '**Detalji toka** — Radni prostor za upravljanje jednom ili više operacija.'
 page_help_settings_translation_strings_collection: '**Pregledaj nizove prijevoda** — Navodi sve prijevodne nizove unutar projekta.'
@@ -1030,7 +1023,6 @@ directus_collection:
   directus_settings: Opcije konfiguracije projekta
   directus_shares: Prati vanjske dijeljene stavke
   directus_users: Korisnici sustava za platformu
-  directus_webhooks: Konfiguracija za HTTP zahtjeve temeljene na događajima
 fields:
   directus_activity:
     item: Primarni ključ stavke
@@ -1180,18 +1172,6 @@ fields:
     enforce_tfa: Zahtijevaj 2FA
     users: Korisnici s ulogom
     module_list: Navigacija modula
-  directus_webhooks:
-    name: Ime
-    method: Metoda
-    status: Status
-    data: Podaci
-    header: Zaglavlje
-    value: Vrijednosti
-    headers: Zaglavlja zahtijeva
-    data_label: Pošalji podatke o događaju
-    triggers: Okidači
-    actions: Radnje
-    collections: Zbirke
 field_options:
   directus_settings:
     project_name_placeholder: Moj projekt...
@@ -1281,19 +1261,6 @@ field_options:
     status_dropdown_suspended: Suspendiran
     status_dropdown_archived: Arhivirano
     token: Unesite siguran pristupni token...
-  directus_webhooks:
-    status_options_active: Aktivan
-    status_options_inactive: Neaktivan
-    data_label: Pošalji podatke o događaju
-    triggers_divider: Okidači
-    actions_create: Kreiraj
-    actions_update: Ažuriraj
-    actions_delete: Obriši
-    actions_login: Prijava
-    headers:
-      header: Zaglavlje
-      value: Vrijednost
-      add: Dodajte zaglavlje
 no_fields_in_collection: 'Još nema polja u "{collection}"'
 no_value: Nema vrijednosti
 do_nothing: Ne čini ništa
@@ -1342,7 +1309,6 @@ continue_label: Nastavi
 continue_as: >-
   {name} je trenutno prijavljen/a. Ako prepoznate ovaj račun, pritisnite Nastavi.
 editing_role: '{role} uloga'
-creating_webhook: Kreiraj web-dojavnik
 default_label: Zadano
 delete_label: Obriši
 delete_are_you_sure: >-

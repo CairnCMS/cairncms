@@ -209,11 +209,6 @@ fields:
   directus_roles:
     name: Nama peranan
     description: Penerangan
-  directus_webhooks:
-    name: Nama
-    status: Status
-    value: Nilai
-    collections: Koleksi-koleksi
 field_options:
   directus_activity:
     create: Cipta
@@ -222,11 +217,6 @@ field_options:
     fields:
       name_name: Nama
     collections_name: Koleksi-koleksi
-  directus_webhooks:
-    actions_create: Cipta
-    actions_update: Kemaskini
-    headers:
-      value: Nilai
 comment: Komen
 delete_field_are_you_sure: >-
   Adakah anda pasti ingin memadam medan "{field}"? Tindakan ini tidak dapat dibatalkan.

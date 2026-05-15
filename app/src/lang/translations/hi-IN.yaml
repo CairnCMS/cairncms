@@ -76,7 +76,6 @@ create_role: भूमिका बनाएं
 create_user: यूजर बनाएं
 message: संदेश
 delete_panel: पैनल हटाएं
-create_webhook: Webhook बनाएं
 create_translation_string: अनुवाद स्ट्रिंग बनाएं
 no_translation_string: कोई अनुवाद स्ट्रिंग नहीं
 no_translation_string_copy: अभी तक कोई अनुवाद स्ट्रिंग नहीं है।
@@ -377,7 +376,6 @@ information: जानकारी
 report_bug: बग रिपोर्ट करें
 request_feature: सुविधा के लिए अनुरोध करें
 csv: CSV
-webhooks: Webhooks
 upper_limit: ऊपरी सीमा
 lower_limit: निचली सीमा
 documentation: दस्तावेज़ीकरण
@@ -426,7 +424,6 @@ wysiwyg_options:
   forecolor: अग्रभूमि रंग
   backcolor: पृष्ठभूमि रंग
   selectall: सभी चुनें
-settings_webhooks: Webhooks
 fields:
   directus_collections:
     note: ध्यान दें
@@ -451,8 +448,6 @@ fields:
     translation: फ़ील्ड नाम अनुवाद
   directus_roles:
     name: भूमिका नाम
-  directus_webhooks:
-    name: नाम
 field_options:
   directus_activity:
     create: Create
@@ -464,9 +459,6 @@ field_options:
   directus_roles:
     fields:
       name_name: नाम
-  directus_webhooks:
-    actions_create: Create
-    actions_update: Update
 interfaces:
   presentation-links:
     primary: प्राइमरी

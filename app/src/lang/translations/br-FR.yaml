@@ -26,7 +26,6 @@ requires_value: An talvoud a zo ret
 create_preset: Krouiñ ur rakreoliñ
 create_role: Krouiñ ur roll
 create_user: Krouiñ un implijer
-create_webhook: Krouiñ ur webhook
 invite_users: Pediñ implijerien
 invite: Pediñ
 email_already_invited: '"{email}" a zo bet pedet dija'
@@ -332,8 +331,6 @@ file_count: 'Restr ebet | Ur restr | {count} restr'
 no_files_copy: N'eus restr ebet amañ.
 user_count: 'Implijer ebet | Un implijer | {count} implijer'
 no_users_copy: N'eus implijer ebet evit poent gant ar roll-mañ.
-webhooks_count: 'Webhook ebet | 1 Webhook | {count} Webhook'
-no_webhooks_copy: N'eus webhook ebet evit poent.
 all_items: An holl elfennoù
 no_collections: Dastumad ebet
 create_collection: Krouiñ un dastumad
@@ -350,7 +347,6 @@ activity: Obererezh
 action: Obererezh
 ip_address: Chomlec'h IP
 user_agent: Graer implijer
-webhooks: Webhookioù
 field_width: Led ar vaezienn
 add_filter: Ouzhpenn ur sil
 upper_limit: Bevenn uhel...
@@ -611,7 +607,6 @@ no_options_available: N'eus dibarzh ebet
 settings_data_model: Patrom roadennoù
 settings_permissions: Rolloù hag aotreoù
 settings_project: Arventennoù ar raktres
-settings_webhooks: Webhookioù
 settings_presets: Rakreoliñ ha pennrolloù
 one_or_more_options_are_missing: Mankout a ra un dibarzh pe meur a hini
 scope: Implijerien pe rolloù
@@ -652,8 +647,6 @@ page_help_settings_presets_collection: >-
   **Mont a-dreuz ar rakreoliñ** - Roll holl rakreoliñ ar raktres gant : an implijer, ar roll, ar pennrolloù hollek hag ar gweloù dre ziouer.
 page_help_settings_presets_item: >-
   **Munudoù ar rakreoliñ** — Ur furmskrid evit merañ ar pennrolloù ha rakreoliñ an dastumad dre ziouer.
-page_help_settings_webhooks_collection: '**Mont a-dreuz ar Webhookioù** — Roll holl webhookioù ar raktres.'
-page_help_settings_webhooks_item: '**Munudoù ar Webhook** — Ur furmskrid evit krouiñ ha merañ webhookioù ar raktres.'
 page_help_users_collection: '**Roll implijerien** — Roll an holl implijerien sistem er raktres-mañ.'
 page_help_users_item: >-
   **Munudoù an implijer** — Merañ titouroù ho kont pe sellet munudoù an implijerien all.
@@ -767,11 +760,6 @@ fields:
     enforce_tfa: Ret eo kaout A2F
     users: Izili gant ar roll
     module_list: Modulenn ar Merdeiñ
-  directus_webhooks:
-    name: Anv
-    status: Stad
-    value: Talvoud
-    collections: Dastumadoù
 field_options:
   directus_settings:
     mapbox_placeholder: pk.eyJ1Ijo.....
@@ -797,12 +785,6 @@ field_options:
     collections_name: Dastumadoù
   directus_users:
     status_dropdown_active: Oberiat
-  directus_webhooks:
-    status_options_active: Oberiat
-    actions_create: Krouiñ
-    actions_update: Hizivaat
-    headers:
-      value: Talvoud
 no_fields_in_collection: 'N''eus ket a vaezienn e "{collection}" evit poent'
 do_nothing: Ober netra
 generate_and_save_uuid: Genel hag Enrollañ an UUID
@@ -823,7 +805,6 @@ choose_action: Dibab un obererezh
 continue_as: >-
   {name} a zo dilesaet. Klikit evit kenderc'hel ma anavezit ar gont-mañ.
 editing_role: 'Roll {role}'
-creating_webhook: Krouiñ ar Webhook
 delete_are_you_sure: >-
   Padus e vo ha ne vo ket tu mont war-gil. Sur oc'h e fell deoc'h kenderc'hel ?
 delete_field_are_you_sure: >-
