@@ -2,7 +2,7 @@
 
 All notable changes to CairnCMS are documented in this file. Releases are listed in reverse chronological order. Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2026-05-06
+## [1.0.0] - 2026-05-15
 
 First public release of CairnCMS.
 
@@ -100,6 +100,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Removed access tokens from admin asset URL generation (GHSA-2ccr-g2rv-h677 / CVE-2024-28238).
 - Closed DOM XSS in layout option template inputs (GHSA-9qrm-48qf-r2rw / CVE-2024-6533).
 - Expanded sensitive-key coverage in flow log redaction.
+- Rejected unknown sort field names before SQL generation.
 
 ### Acknowledgements
 
