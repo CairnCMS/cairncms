@@ -101,6 +101,8 @@ These are the changes operators coming from Directus 10 will need to account for
 - Closed DOM XSS in layout option template inputs (GHSA-9qrm-48qf-r2rw / CVE-2024-6533).
 - Expanded sensitive-key coverage in flow log redaction.
 - Returned controlled errors for malformed inputs on /auth/password/reset and /utils/hash/verify.
+- Rejected unknown sort field names before SQL generation.
+- Rejected non-object filter query inputs before recursive parsing.
 
 ### Acknowledgements
 

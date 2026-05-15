@@ -1,7 +1,8 @@
 import type { Accountability, Permission, SchemaOverview } from '@cairncms/types';
 import knex from 'knex';
 import { describe, expect, it } from 'vitest';
-import { applySearch } from './apply-query.js';
+import { InvalidQueryException } from '../exceptions/invalid-query.js';
+import { applySearch, applySort } from './apply-query.js';
 
 const PUBLIC_ROLE_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -271,5 +272,45 @@ describe('applySearch — conceal-field exclusion (GHSA-8jpw-gpr4-8cmh)', () => 
 
 		expect(sql).toContain('title');
 		expect(sql).not.toContain('secret_token');
+	});
+});
+
+describe('applySort — unknown column validation', () => {
+	function callApplySort(sort: string[]) {
+		const dbQuery = makeBuilder();
+		const knexInstance = knex.default({ client: 'sqlite3', useNullAsDefault: true });
+		return applySort(knexInstance, makeSchema(), dbQuery, sort, 'notes', {});
+	}
+
+	describe('bug-exposing — unknown sort fields raise InvalidQueryException', () => {
+		it('throws InvalidQueryException when the sort field does not exist', () => {
+			expect(() => callApplySort(['sort'])).toThrow(InvalidQueryException);
+		});
+
+		it('throws InvalidQueryException with descending prefix on a missing field', () => {
+			expect(() => callApplySort(['-sort'])).toThrow(InvalidQueryException);
+		});
+
+		it('throws InvalidQueryException when one of several sort fields is missing', () => {
+			expect(() => callApplySort(['title', 'nonexistent'])).toThrow(InvalidQueryException);
+		});
+
+		it('error message names the unknown field', () => {
+			expect(() => callApplySort(['nonexistent'])).toThrow(/nonexistent/);
+		});
+	});
+
+	describe('regression — valid sorts continue to work', () => {
+		it('accepts a known field ascending', () => {
+			expect(() => callApplySort(['title'])).not.toThrow();
+		});
+
+		it('accepts a known field descending', () => {
+			expect(() => callApplySort(['-title'])).not.toThrow();
+		});
+
+		it('accepts multiple known fields', () => {
+			expect(() => callApplySort(['title', '-rank'])).not.toThrow();
+		});
 	});
 });
