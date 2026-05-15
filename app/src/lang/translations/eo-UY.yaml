@@ -67,7 +67,6 @@ create_role: Krei rolon
 create_user: Krei uzanton
 message: Mesaĝo
 delete_panel: Forigi la panelon
-create_webhook: Krei rethokon
 translation_string_translations_placeholder: Aldoni novan tradukon
 invite_users: Inviti uzantojn
 invite: Inviti
@@ -355,7 +354,6 @@ file_count: 'Neniu dosiero | 1 dosiero | {count} dosieroj'
 no_files_copy: Ne estas dosiero ĉi tie.
 user_count: 'Neniu uzanto | 1 uzanto | {count} uzantoj'
 no_users_copy: Ankoraŭ ne estas uzanto en la rolo.
-webhooks_count: 'Neniu rethoko | 1 rethoko | {count} rethokoj'
 no_notifications: Neniu sciigo
 all_items: Ĉiuj eroj
 any: Ajna
@@ -375,7 +373,6 @@ action: Ago
 ip_address: IP-adreso
 user_agent: Aplikaĵo de la uzanto
 origin: Origino
-webhooks: Rethokoj
 min_value: Minimuma valoro
 max_value: Maksimuma valoro
 automatic: Aŭtomata
@@ -600,7 +597,6 @@ unknown_user: Nekonata uzanto
 settings_data_model: Datummodelo
 settings_permissions: Roloj kaj permesoj
 settings_project: Agordoj de la projekto
-settings_webhooks: Rethokoj
 settings_flows: Fluoj
 settings_presets: Antaŭagordoj kaj legosignoj
 actions: Agoj
@@ -736,16 +732,6 @@ fields:
     description: Priskribo
     ip_access: IP-adreso
     enforce_tfa: Postuli dufaktoran kontroladon
-  directus_webhooks:
-    name: Nomo
-    method: Metodo
-    status: Stato
-    data: Datumoj
-    value: Valoro
-    data_label: Sendi eventodatumojn
-    triggers: Ekagiloj
-    actions: Agoj
-    collections: Kolektoj
 field_options:
   directus_settings:
     project_name_placeholder: Mia projekto...
@@ -798,16 +784,6 @@ field_options:
     status_dropdown_invited: Invitita
     status_dropdown_active: Aktiva
     status_dropdown_archived: Arĥivita
-  directus_webhooks:
-    status_options_active: Aktiva
-    status_options_inactive: Neaktiva
-    data_label: Sendi eventodatumojn
-    triggers_divider: Ekagiloj
-    actions_create: Krei
-    actions_delete: Forigi
-    actions_login: Ensaluti
-    headers:
-      value: Valoro
 no_fields_in_collection: 'Ankoraŭ ne estas kampo en "{collection}"'
 no_value: Neniu valoro
 do_nothing: Fari nenion
@@ -827,7 +803,6 @@ referential_action_set_null: Igi la kampon {field} NULL
 choose_action: Elekti agon
 continue_label: Daŭrigi
 editing_role: 'Rolo {role}'
-creating_webhook: Krei rethokon
 default_label: Defaŭlta
 delete_label: Forigi
 delete_field_are_you_sure: >-

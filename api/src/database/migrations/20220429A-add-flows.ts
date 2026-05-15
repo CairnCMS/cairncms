@@ -33,7 +33,9 @@ export async function up(knex: Knex): Promise<void> {
 		table.uuid('user_created').references('id').inTable('directus_users').onDelete('SET NULL');
 	});
 
-	const webhooks = await knex.select('*').from('directus_webhooks');
+	const webhooks = (await knex.schema.hasTable('directus_webhooks'))
+		? await knex.select('*').from('directus_webhooks')
+		: [];
 
 	const flows = [];
 	const operations = [];

@@ -32,7 +32,7 @@ This is also the package that gets installed globally with `npm install -g cairn
 
 ### `api/`
 
-The API server. Holds the entire REST and GraphQL surface, the auth flow, the items service, the schema and migrations runner, the flow engine, the webhook dispatcher, the asset transformation pipeline, and the CLI command set. Most code in `api/src/` falls into one of these directories:
+The API server. Holds the entire REST and GraphQL surface, the auth flow, the items service, the schema and migrations runner, the flow engine, the asset transformation pipeline, and the CLI command set. Most code in `api/src/` falls into one of these directories:
 
 - **`controllers/`** — Express route handlers, one file per top-level path. The collection endpoints (`/items/<collection>`, `/users`, `/roles`, etc.) live here.
 - **`services/`** — the business-logic layer. Each system collection has a service (`UsersService`, `RolesService`, `FilesService`, and so on). Controllers thin-call into services.

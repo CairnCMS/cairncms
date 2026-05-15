@@ -76,7 +76,6 @@ create_role: Szerepkör létrehozása
 create_user: Felhasználó létrehozása
 message: Üzenet
 delete_panel: Panel törlése
-create_webhook: Webhook létrehozása
 create_translation_string: Fordítás létrehozása
 no_translation_string: Nincs lefordított karakterlánc
 no_translation_string_copy: Nincs még lefordított karakterlánc.
@@ -508,8 +507,6 @@ file_count: 'Nincsenek fájlok | Egy fájl | {count} file'
 no_files_copy: Nincsenek fileok.
 user_count: 'Nincsenek felhasználók | Egy felhasználó | {count} felhasználó'
 no_users_copy: Ez a szerepkör még egy felhasználóhoz sem lett hozzárendelve.
-webhooks_count: 'Nincsenek webhookok | Egy webhook | {count} webhook'
-no_webhooks_copy: Még nincsenek webhookok konfigurálva. Hozzon létre egyet alább!
 no_notifications: Nincsenek értesítések
 no_notifications_copy: Felzárkózott!
 activity_log: Tevékenységnapló
@@ -538,7 +535,6 @@ action: Művelet
 ip_address: IP cím
 user_agent: Felhasználói ügynök
 origin: Eredeti
-webhooks: Webhookok
 decimals: Decimálisok
 value_decimals: Tizedes érték
 min_value: Min. érték
@@ -946,7 +942,6 @@ no_options_available: Nincs választási lehetőség
 settings_data_model: Adatmodell
 settings_permissions: Szerepkörök és jogosultságok
 settings_project: Projekt beállításai
-settings_webhooks: Webhookok
 settings_flows: Folyamatok
 settings_presets: Alapértelmezések és Könyvjelzők
 settings_translation_strings: Fordítási karakterláncok
@@ -995,8 +990,6 @@ page_help_settings_presets_collection: >-
   **Alapbeállítások Böngészése** - A projektben lévő összes alapbeállítás listázása, beleértve: a felhasználói, szerepköri és globális könyvjelzőket, valamint az alapértelmezett nézeteket.
 page_help_settings_presets_item: >-
   **Alapbeállítások Részletei** - Könyvjelzők és alapértelmezett gyűjteménybeállítások kezelésére szolgáló űrlap.
-page_help_settings_webhooks_collection: '**Webhookok Böngészése** — A projektben található összes webhook listája.'
-page_help_settings_webhooks_item: '**Webhook Részletei** — A projekt webhookjainak létrehozására és kezelésére szolgáló űrlap.'
 page_help_settings_flows_collection: '**Folyamatok tallózása** — A projekten belüli összes folyamat felsorolása.'
 page_help_settings_flows_item: '**A folyamat részletei** — Munkaterület egy vagy több művelet kezeléséhez.'
 page_help_settings_translation_strings_collection: '**Tallózás a fordítási karakterláncok között** — A projekten belüli összes fordítási karakterlánc felsorolása.'
@@ -1042,7 +1035,6 @@ directus_collection:
   directus_settings: Projekt konfigurációs lehetőségek
   directus_shares: Követi a külsőleg megosztott elemeket
   directus_users: A platform rendszerhasználói
-  directus_webhooks: Konfiguráció eseményalapú HTTP-kérésekhez
 fields:
   directus_activity:
     item: Elem elsődleges kulcsa
@@ -1192,18 +1184,6 @@ fields:
     enforce_tfa: 2FA megkövetelése
     users: Felhasználók a szerepkörben
     module_list: Modul navigáció felülbírálása
-  directus_webhooks:
-    name: Név
-    method: Metódus
-    status: Állapot
-    data: Adat
-    header: Fejléc
-    value: Érték
-    headers: Fejlécek kérése
-    data_label: Eseményadatok küldése
-    triggers: Triggerek
-    actions: Műveletek
-    collections: Gyűjtemények
 field_options:
   directus_settings:
     project_name_placeholder: Saját projektem...
@@ -1293,19 +1273,6 @@ field_options:
     status_dropdown_suspended: Felfüggesztve
     status_dropdown_archived: Archiválva
     token: Írja be a biztonságos hozzáférés tokenjét...
-  directus_webhooks:
-    status_options_active: Aktív
-    status_options_inactive: Inaktív
-    data_label: Eseményadatok küldése
-    triggers_divider: Triggerek
-    actions_create: Létrehozás
-    actions_update: Frissítés
-    actions_delete: Törlés
-    actions_login: Bejelentkezés
-    headers:
-      header: Fejléc
-      value: Érték
-      add: Fejléc hozzáadása
 no_fields_in_collection: 'A(z) {collection} még nem tartalmaz mezőt'
 no_value: Hiányzó érték
 do_nothing: Ne tegyen semmit
@@ -1354,7 +1321,6 @@ continue_label: Folytatás
 continue_as: >-
   {name} jelenleg hitelesített. Ha felismeri ezt a fiókot, nyomja meg a folytatás gombot.
 editing_role: '{role} szerepkör'
-creating_webhook: Webhook létrehozása
 default_label: Alapértelmezett
 delete_label: Törlés
 delete_are_you_sure: >-

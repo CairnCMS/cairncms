@@ -1,11 +1,11 @@
 ---
 title: Automation
-description: REST and GraphQL surfaces for flows, operations, and webhooks. The endpoints, record shapes, and the bespoke `/flows/trigger/<id>` route that turns a flow into an HTTP-callable handler.
+description: REST and GraphQL surfaces for flows and operations. The endpoints, record shapes, and the bespoke `/flows/trigger/<id>` route that turns a flow into an HTTP-callable handler.
 sidebar:
   order: 3
 ---
 
-CairnCMS's automation surface comes in three system collections: **flows** define automated processes, **operations** are the steps inside a flow, and **webhooks** call external HTTP endpoints when items change. The data model and the operator UX are documented in [Automate](/docs/guides/automate/); this page covers the API surface.
+CairnCMS's automation surface comes in two system collections: **flows** define automated processes and **operations** are the steps inside a flow. Flows handle both inbound HTTP requests (Webhook trigger) and outbound HTTP calls (Webhook / Request URL operation), so the standalone webhook collection from earlier Directus versions is not present. The data model and the operator UX are documented in [Automate](/docs/guides/automate/); this page covers the API surface.
 
 Each collection has the standard CRUD shape documented in [Items](/docs/api/items/), and `directus_flows` adds one bespoke endpoint that exposes a flow as an HTTP-callable handler.
 
@@ -115,48 +115,15 @@ There is no HTTP endpoint to invoke an operation directly. Operations run only a
 
 The platform stores operations independently of their parent flow. The flow's chain is built at runtime by traversing from `flow.operation` through `resolve`/`reject` references, so operations that are not reachable from the entry point still exist in the database but never run, and broken `resolve`/`reject` references only surface when the chain is constructed. There is no API-side enforcement that the chain is well-formed. Editing operations directly through `/operations` rather than the admin app is supported for migration and tooling, but the admin app is where the chain shape is most easily kept consistent.
 
-## Webhooks (`/webhooks`)
-
-A webhook is a simple outbound HTTP call triggered by item events. Each webhook row binds an event type and a set of collections to a target URL; when matching events fire, the platform makes the HTTP call.
-
-The webhook collection predates flows. For new automation work, prefer a flow with a Webhook URL operation: flows offer the same outbound capability with retry, conditional routing, transform steps, and error handling. The webhook collection is supported for compatibility and simple cases.
-
-### Endpoints
-
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/webhooks` | List webhooks. |
-| `SEARCH` | `/webhooks` | Read webhooks with the request body. |
-| `GET` | `/webhooks/<id>` | Read a single webhook. |
-| `POST` | `/webhooks` | Create one or many webhooks. |
-| `PATCH` | `/webhooks` | Update many webhooks (`{ keys, data }` or `{ query, data }` only; the array-of-records batch form supported by `/flows` and `/operations` is not registered for `/webhooks`). |
-| `PATCH` | `/webhooks/<id>` | Update a single webhook. |
-| `DELETE` | `/webhooks` | Delete many webhooks. |
-| `DELETE` | `/webhooks/<id>` | Delete a single webhook. |
-
-### Webhook record fields
-
-- **`id`** (auto-incrementing integer) — primary key.
-- **`name`** — display name.
-- **`method`** — `GET` or `POST`. The HTTP method used for the outbound call.
-- **`url`** — destination URL.
-- **`status`** — `active` or `inactive`. Inactive webhooks are skipped on event match.
-- **`data`** (bool) — when `true`, the outbound request body is a payload object containing the event name, the actor's user and role, and the event metadata (collection, keys, payload, and so on). When `false`, the request body is `null`. The HTTP request still fires; only the body content differs.
-- **`headers`** — array of `{ header, value }` pairs added to the outbound request.
-- **`actions`** — array containing one or more of `create`, `update`, `delete`. The events that fire this webhook. The admin app field also lists `login` as an option, but the dispatcher only subscribes to `items.<action>` events, and authentication emits `auth.login` rather than `items.login`, so the `login` action does not currently fire any webhook in practice.
-- **`collections`** — array of collection names the webhook listens on. A webhook fires only when both the action and the collection match.
-
-A webhook fires when an action in its `actions` set is performed on a collection in its `collections` set. Failures are logged but not retried; for retry semantics, use a flow with a Webhook URL operation and conditional reject branches.
-
 ## Permission semantics
 
-The three collections are admin-only by default. Granting non-admin write access to any of them is a privilege escalation surface (a role that can edit flows or operations can configure them to bypass accountability with `accountability: null`, and a role that can edit webhooks can exfiltrate item data on every change). Treat any non-admin grant as a deliberate decision.
+Both collections are admin-only by default. Granting non-admin write access to either is a privilege escalation surface: a role that can edit flows or operations can configure them to bypass accountability with `accountability: null`. Treat any non-admin grant as a deliberate decision.
 
 Read access is sometimes granted to non-admins for inspection and reporting, but the operation `options` payloads can contain credentials passed through to external services; consider field-level filtering when granting any read access.
 
 ## GraphQL
 
-All three collections are exposed on `/graphql/system` with the standard generated CRUD shape (`flows`, `operations`, `webhooks` for queries; `create_flows_item`, `update_operations_item`, `delete_webhooks_items`, and so on for mutations). Filter, sort, and pagination arguments work the same way as on user collections; see [Filters and queries / GraphQL](/docs/api/filters-and-queries/#graphql).
+Both collections are exposed on `/graphql/system` with the standard generated CRUD shape (`flows`, `operations` for queries; `create_flows_item`, `update_operations_item`, and so on for mutations). Filter, sort, and pagination arguments work the same way as on user collections; see [Filters and queries / GraphQL](/docs/api/filters-and-queries/#graphql).
 
 The bespoke `/flows/trigger/<id>` endpoint is REST-only. There is no GraphQL equivalent because the request shape varies per flow (the body becomes the operations' input data) and GraphQL's typed interface does not fit that shape.
 
@@ -165,4 +132,4 @@ The bespoke `/flows/trigger/<id>` endpoint is REST-only. There is no GraphQL equ
 - [Automate](/docs/guides/automate/) — operator-facing reference for designing flows, the trigger types, and the operation catalog.
 - [Operations](/docs/develop/extensions/operations/) — building custom operations as extensions.
 - [Hooks](/docs/develop/extensions/hooks/) — the lower-level event surface that flows are built on top of.
-- [Filters and queries](/docs/api/filters-and-queries/) — the query DSL for filtering flow / operation / webhook lists.
+- [Filters and queries](/docs/api/filters-and-queries/) — the query DSL for filtering flow and operation lists.

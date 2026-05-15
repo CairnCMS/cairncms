@@ -76,7 +76,6 @@ create_role: 创建角色
 create_user: 创建用户
 message: 消息
 delete_panel: 删除面板
-create_webhook: 创建网络钩子
 create_translation_string: 创建翻译字符串
 no_translation_string: 空
 no_translation_string_copy: 目前没有翻译字符串。
@@ -513,8 +512,6 @@ file_count: '没有文件 | 一个文件 | {count} 个文件'
 no_files_copy: 没有任何文件。
 user_count: '没有用户 | 一个用户 | {count} 个用户'
 no_users_copy: 该角色下还没有用户。
-webhooks_count: '没有 Web钩子 | 一个钩子 | {count} 个Web钩子'
-no_webhooks_copy: 尚未配置任何Webhooks，来创建一个吧。
 no_notifications: 无通知
 no_notifications_copy: 你已全部搞定！
 activity_log: 活动日志
@@ -543,7 +540,6 @@ action: 操作
 ip_address: IP 地址
 user_agent: 用户代理（User Agent）
 origin: 原始
-webhooks: Webhook
 decimals: 小数
 value_decimals: 小数的值
 min_value: 最小值
@@ -954,7 +950,6 @@ no_options_available: 无可用的选项
 settings_data_model: 数据模型
 settings_permissions: 角色与权限
 settings_project: 项目设置
-settings_webhooks: Webhook
 settings_flows: 流程
 settings_presets: 预设&书签
 settings_translation_strings: 翻译字符串
@@ -1003,8 +998,6 @@ page_help_settings_presets_collection: >-
   **Browse Presets** - 列出项目中的所有预设，包括：用户、角色、全局书签以及默认视图。
 page_help_settings_presets_item: >-
   **预设详细信息** - 管理书签和默认模型预设的表单。
-page_help_settings_webhooks_collection: '**Browse Webhooks** - 列出项目内的所有网络钩子。'
-page_help_settings_webhooks_item: '**Webhook Detail** - 用于创建和管理项目webhooks的表格。'
 page_help_settings_flows_collection: '**Browse Webhooks** - 列出项目内的所有流。'
 page_help_settings_flows_item: '**流程详情** - 管理一个或多个操作面板的工作空间。'
 page_help_settings_translation_strings_collection: '**浏览翻译字符串** - 列出项目中的所有翻译字符串。'
@@ -1050,7 +1043,6 @@ directus_collection:
   directus_settings: 项目配置
   directus_shares: 跟踪外部共享条目
   directus_users: 平台系统用户
-  directus_webhooks: 基于事件的 HTTP 请求配置
 fields:
   directus_activity:
     item: 条目主键
@@ -1200,18 +1192,6 @@ fields:
     enforce_tfa: 请求两步验证
     users: 角色中的用户
     module_list: 模块导航
-  directus_webhooks:
-    name: 名称
-    method: 方法
-    status: 状态
-    data: 数据
-    header: 报头
-    value: 值
-    headers: 请求报头
-    data_label: 发送事件数据
-    triggers: 触发条件
-    actions: 操作
-    collections: 数据模型
 field_options:
   directus_settings:
     project_name_placeholder: 我的项目
@@ -1301,19 +1281,6 @@ field_options:
     status_dropdown_suspended: 已停用
     status_dropdown_archived: 已存档
     token: 请输入安全访问令牌...
-  directus_webhooks:
-    status_options_active: 激活
-    status_options_inactive: 非活跃
-    data_label: 发送事件数据
-    triggers_divider: 触发条件
-    actions_create: 创建
-    actions_update: 更新
-    actions_delete: 删除
-    actions_login: 登录
-    headers:
-      header: 报头
-      value: 值
-      add: 添加报头
 no_fields_in_collection: '集合 {collection} 中没有任何字段'
 no_value: 没有值
 do_nothing: 什么都不做
@@ -1362,7 +1329,6 @@ continue_label: 继续
 continue_as: >-
   {name} 目前已被身份验证。如果您确认此帐户，请按继续。
 editing_role: '{role} 角色'
-creating_webhook: 正在创建 Webhook
 default_label: 默认值
 delete_label: 删除
 delete_are_you_sure: >-

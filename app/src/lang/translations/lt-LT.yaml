@@ -25,7 +25,6 @@ requires_value: Reikalinga reikšmė
 create_preset: Sukurti išankstinę parinktį
 create_role: Kurti vaidmenį
 create_user: Sukurti vartotojo paskyrą
-create_webhook: Sukurti Webhook'ą
 invite_users: Pakviesti vartotojus
 invite: Pakviesti
 email_already_invited: El. pašto "{email}" adresatas jau buvo pakviestas
@@ -327,7 +326,6 @@ file_count: 'Nėra failų | Vienas failas | {count} failų'
 no_files_copy: Nėra failų.
 user_count: 'Nėra vartotojų | Vienas vartotojas | {count} vartotojų'
 no_users_copy: Nėra vartotojų šioje grupėje.
-webhooks_count: 'Nėra "Webhook"ų | Vienas "Webhook"as | {count} "Webhook"ų"'
 all_items: Visi elementai
 csv: CSV
 no_collections: Nėra kolekcijų
@@ -345,7 +343,6 @@ activity: Veiksmas
 action: Veiksmas
 ip_address: IP adresas
 user_agent: Naršyklė
-webhooks: '„Webhook“''ai'
 field_width: Laukelio plotis
 add_filter: Pridėti filtrą
 upper_limit: Viršutinis limitas...
@@ -567,7 +564,6 @@ no_options_available: Nėra parinkčių
 settings_data_model: Duomenų modelis
 settings_permissions: Grupės ir leidimai
 settings_project: Projekto nustatymai
-settings_webhooks: '„Webhook“''ai'
 settings_presets: Ruošiniai ir žymos
 scope: Apimtis
 layout: Išdėstymas
@@ -602,7 +598,6 @@ page_help_settings_presets_collection: >-
   **Peržiurėti ruošinius** — atvaizduojami visi projekto ruošiniai, įskaitant vartotojų, grupių ir bendras žymas bei numatytuosius langus.
 page_help_settings_presets_item: >-
   **Ruošinio duomenys** — forma žymų ir numatytųjų kolekcijos ruošinių valdymui.
-page_help_settings_webhooks_collection: '**Peržiūrėti Webhook''us** - Rodomi visi projekto Webhook''ai.'
 page_help_users_collection: '**Vartotojų aplankas** — rodomi visi šio projekto vartotojai.'
 page_help_users_item: >-
   **Vartotojo duomenys** — valdykite savo paskyros informaciją arba peržiūrėkite kitų vartotojų duomenis.
@@ -708,11 +703,6 @@ fields:
     enforce_tfa: Reikalinga 2FA
     users: Vartotojai grupėje
     module_list: Modulių navigacija
-  directus_webhooks:
-    name: Pavadinimas
-    status: Būsena
-    value: Reikšmė
-    collections: Kolekcijos
 field_options:
   directus_activity:
     create: Kurti
@@ -732,12 +722,6 @@ field_options:
     collections_name: Kolekcijos
   directus_users:
     status_dropdown_active: Aktyvus
-  directus_webhooks:
-    status_options_active: Aktyvus
-    actions_create: Kurti
-    actions_update: Atnaujinti
-    headers:
-      value: Reikšmė
 no_fields_in_collection: 'Kolekcijoje "{collection}" dar nėra elementų'
 do_nothing: Nieko nedaryti
 generate_and_save_uuid: Generuoti ir išsaugoti UUID
@@ -748,7 +732,6 @@ block: Blokas
 inline: Toje pačioje eilutėje
 comment: Komentaras
 editing_role: '{role} grupė'
-creating_webhook: Kuriamas Webhook'ą
 delete_are_you_sure: >-
   Šis veiksmas negali būti atšauktas. Ar tikrai norite tęsti?
 delete_field_are_you_sure: >-

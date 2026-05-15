@@ -76,7 +76,6 @@ create_role: Створити роль
 create_user: Новий користувач
 message: Повідомлення
 delete_panel: Видалити панель
-create_webhook: Створити вебхук
 create_translation_string: Створити лінію перекладу
 no_translation_string: Немає рядків перекладу
 no_translation_string_copy: Ще немає рядків для перекладу.
@@ -508,8 +507,6 @@ file_count: 'Файлів немає | Один файл | {count} файлів'
 no_files_copy: Файлів не знайдено.
 user_count: 'Користувачів немає | Один користувач | {count} користувачів'
 no_users_copy: Ще немає користувачів в цій ролі.
-webhooks_count: 'Немає веб-хуків | Один веб-хук | {count} вебхуків'
-no_webhooks_copy: Ще не налаштовано жодного веб-хука. Розпочніть зі створення одного нижче.
 no_notifications: Немає сповіщень
 no_notifications_copy: У вас все налаштовано!
 activity_log: Журнал активності
@@ -538,7 +535,6 @@ action: Дія
 ip_address: IP адреса
 user_agent: Ідентифікатор браузера
 origin: Джерело
-webhooks: Вебхуки
 decimals: Десяткові знаки
 value_decimals: Оцінити десяткові знаки
 min_value: Мінімальне значення
@@ -942,7 +938,6 @@ no_options_available: Варіанти недоступні
 settings_data_model: Модель даних
 settings_permissions: Ролі і Дозволи
 settings_project: Налаштування проекту
-settings_webhooks: Вебхуки
 settings_flows: Автоматизація
 settings_presets: Шаблони і закладки
 settings_translation_strings: Переклади рядків
@@ -991,8 +986,6 @@ page_help_settings_presets_collection: >-
   **Огляд запрограмованих налаштувань** — перелік усіх попередніх налаштувань у проекті, включаючи: користувача, роль та глобальні закладки, а також вигляди за замовчуванням.
 page_help_settings_presets_item: >-
   **Деталі попереднього налаштування** — форма для керування закладками та стандартними налаштуваннями колекцій.
-page_help_settings_webhooks_collection: '**Переглянути веб-хуки** — перелік усіх веб-хуків у проекті.'
-page_help_settings_webhooks_item: '**Деталі веб-хуку** — форма для створення веб-хуків проекту та керування ними.'
 page_help_settings_flows_collection: '**Перегляд потоків** - Перелік всіх потоків в проєкті.'
 page_help_settings_flows_item: '**Деталі потоку** - Робочий простір для управління однією або кількома операціями.'
 page_help_settings_translation_strings_collection: '**Переглянути переклади рядків** — Відображається повний список рядків у проекті.'
@@ -1038,7 +1031,6 @@ directus_collection:
   directus_settings: Параметри конфігурації проекту
   directus_shares: Відстежує зовнішні елементи
   directus_users: Користувачі системи для платформи
-  directus_webhooks: Конфігурація HTTP-запитів на основі подій
 fields:
   directus_activity:
     item: Первинний ключ елемента
@@ -1188,18 +1180,6 @@ fields:
     enforce_tfa: Потрібен 2FA
     users: Користувачі у ролі
     module_list: Перемкнути навігацію
-  directus_webhooks:
-    name: Назва
-    method: Метод
-    status: Статус
-    data: Дані
-    header: Заголовок
-    value: Значення
-    headers: Заголовки запиту
-    data_label: Надіслати дані про подію
-    triggers: Тріггери
-    actions: Дії
-    collections: Колекції
 field_options:
   directus_settings:
     project_name_placeholder: Мій проект...
@@ -1289,19 +1269,6 @@ field_options:
     status_dropdown_suspended: Призупинені
     status_dropdown_archived: Архівовані
     token: Введіть надійний ключ доступу...
-  directus_webhooks:
-    status_options_active: Активний
-    status_options_inactive: Неактивний
-    data_label: Надіслати дані про подію
-    triggers_divider: Тріггери
-    actions_create: Створити
-    actions_update: Оновити
-    actions_delete: Видалити
-    actions_login: Логін
-    headers:
-      header: Заголовок
-      value: Значення
-      add: Додати заголовок
 no_fields_in_collection: 'Ще немає полей в колекції "{collection}"'
 no_value: Значення відсутнє
 do_nothing: Нічого не робити
@@ -1350,7 +1317,6 @@ continue_label: Продовжити
 continue_as: >-
   {name} наразі авторизований. Якщо ви впізнали цей обліковий запис, натисніть кнопку продовжити.
 editing_role: 'Роль {role}'
-creating_webhook: Створити вебхук
 default_label: За замовчуванням
 delete_label: Видалити
 delete_are_you_sure: >-

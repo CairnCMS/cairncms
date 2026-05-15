@@ -76,7 +76,6 @@ create_role: Opprett rolle
 create_user: Opprett bruker
 message: Melding
 delete_panel: Slett panel
-create_webhook: Lag Webhook
 create_translation_string: Opprett oversettelsestekst
 no_translation_string: Ingen oversettelse tekst
 no_translation_string_copy: Det finnes ingen oversettelsestekst ennå.
@@ -455,8 +454,6 @@ file_count: 'Ingen filer ″One File ε {count} Filer'
 no_files_copy: Det er ingen filer her.
 user_count: 'Ingen brukere | En bruker | {count} brukere'
 no_users_copy: Det er ingen brukere i denne rollen enda.
-webhooks_count: 'Ingen Webhooks | En Webhook | {count} Webhooks'
-no_webhooks_copy: Ingen webhooks er konfigurert ennå. Kom i gang ved å opprette en nedenfor.
 no_notifications: Ingen varslinger
 no_notifications_copy: Ingen varslinger!
 activity_log: Aktivitetslogg
@@ -485,7 +482,6 @@ action: Handling
 ip_address: IP-addresse
 user_agent: Brukeragent
 origin: Opprinnelse
-webhooks: Webhooks
 decimals: Desimaler
 value_decimals: Verdi desimaler
 min_value: Min. verdi
@@ -645,7 +641,6 @@ deselect: Velg bort
 editing_in_batch: 'Batch Editing {count} elementer'
 settings_permissions: Roller og tilganger
 settings_project: Prosjektinnstillinger
-settings_webhooks: Webhooks
 discard_changes: Forkast endringer
 keep_editing: Fortsett å rediger
 add_new: Legg til ny
@@ -707,11 +702,6 @@ fields:
   directus_roles:
     name: Rollenavn
     description: Beskrivelse
-  directus_webhooks:
-    name: Navn
-    status: Status
-    value: Verdi
-    collections: Kolleksjoner
 field_options:
   directus_settings:
     security_divider_title: Sikkerhet
@@ -729,13 +719,6 @@ field_options:
     collections_name: Kolleksjoner
   directus_users:
     status_dropdown_active: Aktiv
-  directus_webhooks:
-    status_options_active: Aktiv
-    status_options_inactive: Inaktiv
-    actions_create: Opprett
-    actions_update: Oppdater
-    headers:
-      value: Verdi
 comment: Kommenter
 delete_field_are_you_sure: >-
   Er du sikker på at du vil slette feltet "{field}"? Handlingen kan ikke angres..

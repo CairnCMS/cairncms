@@ -63,7 +63,6 @@ create_panel: Хавтан үүсгэх
 create_role: Үүрэг үүсгэх
 create_user: Хэрэглэгч үүсгэх
 delete_panel: Хавтан устгах
-create_webhook: Webhook үүсгэх
 invite_users: Хэрэглэгч урих
 invite: Урих
 email_already_invited: '"{email}" имэйл хаягийг өмнө нь урьсан байна'

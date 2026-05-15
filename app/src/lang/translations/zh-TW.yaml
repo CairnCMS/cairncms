@@ -76,7 +76,6 @@ create_role: 新建角色
 create_user: 建立用户
 message: 訊息
 delete_panel: 刪除面板
-create_webhook: 建立 Webhook
 create_translation_string: 建立翻譯字串
 no_translation_string: 尚無翻譯字串
 no_translation_string_copy: 目前尚無翻譯字串。
@@ -499,8 +498,6 @@ file_count: '沒有檔案 | 1 個檔案 | {count} 個檔案'
 no_files_copy: 這裡還沒有任何檔案。
 user_count: '沒有使用者 | 1 個使用者 | {count} 個使用者'
 no_users_copy: 這個角色中還沒有任何使用者。
-webhooks_count: 'No Webhooks | One Webhook | {count} Webhooks'
-no_webhooks_copy: 目前未設定任何 webhook ，從下方開始建立
 no_notifications: 沒有通知
 no_notifications_copy: 已經追上了！沒有新通知。
 activity_log: 歷程紀錄
@@ -529,7 +526,6 @@ action: 操作
 ip_address: IP位址
 user_agent: 代理用戶
 origin: 來源
-webhooks: Webhooks
 decimals: 小數點
 value_decimals: 含有小數點的值
 min_value: 最小值
@@ -931,7 +927,6 @@ no_options_available: 沒有可用的選項
 settings_data_model: 資料模型
 settings_permissions: 角色和權限
 settings_project: 專案設定
-settings_webhooks: Webhooks
 settings_flows: 流程
 settings_presets: 預設與書籤
 settings_translation_strings: 翻譯字串
@@ -1017,7 +1012,6 @@ directus_collection:
   directus_settings: 專案設定選項
   directus_shares: 追蹤外部分享資料項目
   directus_users: 平台的系統使用者
-  directus_webhooks: 事件驅動的 HTTP 請求設定
 fields:
   directus_activity:
     item: 項目主鍵值
@@ -1166,18 +1160,6 @@ fields:
     enforce_tfa: 必須兩步驟登入
     users: 角色中的使用者
     module_list: 模組導覽
-  directus_webhooks:
-    name: 名稱
-    method: 方法
-    status: 狀態
-    data: 資料
-    header: 標題
-    value: 值
-    headers: 請求標頭
-    data_label: 傳送事件資料
-    triggers: 觸發器
-    actions: 操作
-    collections: 資料集
 field_options:
   directus_settings:
     project_name_placeholder: 我的專案...
@@ -1267,19 +1249,6 @@ field_options:
     status_dropdown_suspended: 已暫停
     status_dropdown_archived: 已封存
     token: 輸入安全的 access token
-  directus_webhooks:
-    status_options_active: 有效的
-    status_options_inactive: 未啟用
-    data_label: 傳送事件資料
-    triggers_divider: 觸發器
-    actions_create: 新建
-    actions_update: 更新
-    actions_delete: 刪除
-    actions_login: 登入
-    headers:
-      header: 標題
-      value: 值
-      add: 新增標題
 no_fields_in_collection: '"{collection}" 中還沒有任何欄位'
 no_value: 尚無內容
 do_nothing: 無動作
@@ -1328,7 +1297,6 @@ continue_label: 繼續
 continue_as: >-
   {name} 目前已登入，若這是您的帳號，請點選繼續。
 editing_role: '{role} 角色'
-creating_webhook: 建立 Webhook
 default_label: 預設
 delete_label: 刪除
 delete_are_you_sure: >-

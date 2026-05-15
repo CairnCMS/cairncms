@@ -76,7 +76,6 @@ create_role: Rolle erstellen
 create_user: Benutzer erstellen
 message: Nachricht
 delete_panel: Panel löschen
-create_webhook: Webhook erstellen
 create_translation_string: Übersetzungselement erstellen
 no_translation_string: Keine Übersetzung
 no_translation_string_copy: Es existiert noch keine Übersetzung.
@@ -508,8 +507,6 @@ file_count: 'Keine Dateien | Eine Datei | {count} Dateien'
 no_files_copy: Keine Dateien vorhanden.
 user_count: 'Keine Benutzer | Ein Benutzer | {count} Benutzer'
 no_users_copy: Es gibt noch keine Benutzer in dieser Rolle.
-webhooks_count: 'Keine Webhooks | Ein Webhook | {count} Webhooks'
-no_webhooks_copy: Es wurden noch keine Webhooks konfiguriert.
 no_notifications: Keine Benachrichtigungen
 no_notifications_copy: Du bist auf dem neusten Stand!
 activity_log: Aktivitätsprotokoll
@@ -538,7 +535,6 @@ action: Aktion
 ip_address: IP Adresse
 user_agent: Benutzer-Agent
 origin: Ursprung
-webhooks: Webhooks
 decimals: Dezimalstellen
 value_decimals: Wert Dezimalstellen
 min_value: Minimalwert
@@ -942,7 +938,6 @@ no_options_available: Keine Optionen verfügbar
 settings_data_model: Datenmodell
 settings_permissions: Rollen & Berechtigungen
 settings_project: Projekteinstellungen
-settings_webhooks: Webhooks
 settings_flows: Flows
 settings_presets: Vorlagen & Lesezeichen
 settings_translation_strings: Übersetzungselemente
@@ -991,8 +986,6 @@ page_help_settings_presets_collection: >-
   **Vorlagen durchsuchen** — Auflistung aller Vorlagen im Projekt, einschließlich: Benutzer, Rolle, globale Lesezeichen, sowie Standardansichten.
 page_help_settings_presets_item: >-
   **Vorlagen-Details** — Ein Formular zur Verwaltung von Lesezeichen und Vorlagen für Sammlungen.
-page_help_settings_webhooks_collection: '**Durchsuche Webhooks** — Auflistung aller Webhooks in diesem Projekt.'
-page_help_settings_webhooks_item: '**Webhook-Detail** — Ein Formular zum Erstellen und Verwalten von Webhooks.'
 page_help_settings_flows_collection: '**Flows anzeigen** — Zeige alle Flows des Projektes.'
 page_help_settings_flows_item: '**Flow Details** — Verwaltung einer oder mehrerer Operationen.'
 page_help_settings_translation_strings_collection: '**Übersetzungsstrings durchsuchen** — Listet alle Übersetzungselemente im Projekt auf.'
@@ -1038,7 +1031,6 @@ directus_collection:
   directus_settings: Projekt-Konfiguration
   directus_shares: Verfolgen von extern freigegebenen Elementen
   directus_users: Systembenutzer für die Plattform
-  directus_webhooks: Konfiguration für ereignisbasierte HTTP-Anfragen
 fields:
   directus_activity:
     item: Item-Primärschlüssel
@@ -1188,18 +1180,6 @@ fields:
     enforce_tfa: 2FA erforderlich
     users: Benutzer in Rolle
     module_list: Modulnavigation
-  directus_webhooks:
-    name: Name
-    method: Methode
-    status: Status
-    data: Daten
-    header: Header
-    value: Wert
-    headers: Request-Headers
-    data_label: Ereignisdaten senden
-    triggers: Auslöser
-    actions: Aktionen
-    collections: Sammlungen
 field_options:
   directus_settings:
     project_name_placeholder: Mein Projekt...
@@ -1289,19 +1269,6 @@ field_options:
     status_dropdown_suspended: Gesperrt
     status_dropdown_archived: Archiviert
     token: Einen sicheren Zugangs-Token eingeben...
-  directus_webhooks:
-    status_options_active: Aktiv
-    status_options_inactive: Inaktiv
-    data_label: Ereignisdaten senden
-    triggers_divider: Auslöser
-    actions_create: Erstellen
-    actions_update: Aktualisieren
-    actions_delete: Löschen
-    actions_login: Login
-    headers:
-      header: Header
-      value: Wert
-      add: Header hinzufügen
 no_fields_in_collection: 'Es gibt noch keine Felder in "{collection}"'
 no_value: Kein Wert
 do_nothing: Keine Aktion
@@ -1350,7 +1317,6 @@ continue_label: Weiter
 continue_as: >-
   {name} ist derzeit angemeldet. Wenn Sie dieses Konto kennen, drücken Sie auf Fortfahren.
 editing_role: '{role} Rolle'
-creating_webhook: Webhook erstellen
 default_label: Standard
 delete_label: Löschen
 delete_are_you_sure: >-

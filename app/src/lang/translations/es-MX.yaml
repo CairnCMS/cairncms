@@ -76,7 +76,6 @@ create_role: Crear rol
 create_user: Crear usuario
 message: Mensaje
 delete_panel: Eliminar panel
-create_webhook: Crear webhook
 create_translation_string: Crear cadena de traducción
 no_translation_string: Sin cadenas de traducción
 no_translation_string_copy: Todavía no hay cadenas de traducción.
@@ -514,8 +513,6 @@ file_count: 'Sin Archivos | Un Archivo | {count} Archivos'
 no_files_copy: Aquí no hay archivos.
 user_count: 'Sin Usuarios | Un Usuario | {count} Usuarios'
 no_users_copy: No hay usuarios con este Rol aún.
-webhooks_count: 'Sin Webhooks | Un Webhook | {count} Webhooks'
-no_webhooks_copy: Aún no se ha configurado ningún webhooks. Comienza creando uno a continuación.
 no_notifications: Sin notificaciones
 no_notifications_copy: '¡Estás al día!'
 activity_log: Registro de actividad
@@ -545,7 +542,6 @@ action: Acción
 ip_address: Dirección IP
 user_agent: Agente de usuario
 origin: Origen
-webhooks: Webhooks
 decimals: Decimales
 value_decimals: Valor decimal
 min_value: Valor mínimo
@@ -957,7 +953,6 @@ no_options_available: Sin opciones disponibles
 settings_data_model: Modelo de datos
 settings_permissions: Roles y permisos
 settings_project: Configuración del proyecto
-settings_webhooks: Webhooks
 settings_flows: Flujos
 settings_presets: Preajustes y marcadores
 settings_translation_strings: Cadenas de traducción
@@ -1006,8 +1001,6 @@ page_help_settings_presets_collection: >-
   **Navegar en Predefinidos** — Lista todos los Predefinidos en el proyecto, incluye: Marcadores para usuario, rol y global, así como vistas por defecto.
 page_help_settings_presets_item: >-
   **Detalle de Predefinido** — Una manera de administrar Marcadores y Predefinidos por defecto de Colecciones.
-page_help_settings_webhooks_collection: '**Navegar en Webhooks** — Lista todos los webhooks en el proyecto.'
-page_help_settings_webhooks_item: '**Detalle de Webhook** — Una manera de crear y administrar los webhooks del proyecto.'
 page_help_settings_flows_collection: '**Explorar flujos** — Lista todos los flujos dentro del proyecto.'
 page_help_settings_flows_item: '**Detalle de flujo** — Espacio de trabajo para gestionar una o más operaciones.'
 page_help_settings_translation_strings_collection: '**Examinar cadenas de traducción** — Lista todas las cadenas de traducción dentro del proyecto.'
@@ -1053,7 +1046,6 @@ directus_collection:
   directus_settings: Opciones de configuración del proyecto
   directus_shares: Rastrear elementos compartidos externamente
   directus_users: Usuarios del sistema para la plataforma
-  directus_webhooks: Configuración de peticiones HTTP basadas en eventos
 fields:
   directus_activity:
     item: Llave primaria del elemento
@@ -1204,18 +1196,6 @@ fields:
     enforce_tfa: Requiere 2FA
     users: Usuarios en el rol
     module_list: Navegación en Módulo
-  directus_webhooks:
-    name: Nombre
-    method: Método
-    status: Estado
-    data: Datos
-    header: Encabezado
-    value: Valor
-    headers: Solicitar encabezados
-    data_label: Enviar datos del evento
-    triggers: Disparadores
-    actions: Acciones
-    collections: Colecciones
 field_options:
   directus_settings:
     project_name_placeholder: Mi proyecto...
@@ -1305,19 +1285,6 @@ field_options:
     status_dropdown_suspended: Suspendido
     status_dropdown_archived: Archivado
     token: Ingresa un token de acceso seguro...
-  directus_webhooks:
-    status_options_active: Activo
-    status_options_inactive: Inactivo
-    data_label: Enviar datos del evento
-    triggers_divider: Disparadores
-    actions_create: Crear
-    actions_update: Actualización
-    actions_delete: Eliminar
-    actions_login: Iniciar sesión
-    headers:
-      header: Encabezado
-      value: Valor
-      add: Añadir encabezado
 no_fields_in_collection: 'Aún no hay campos en "{collection}"'
 no_value: Sin valor
 do_nothing: No hacer nada
@@ -1366,7 +1333,6 @@ continue_label: Continuar
 continue_as: >-
   Actualmente {name} ha iniciado sesión. Si reconoce esta cuenta, presione continuar.
 editing_role: 'Rol {role}'
-creating_webhook: Creando Webhook
 default_label: Por defecto
 delete_label: Eliminar
 delete_are_you_sure: >-

@@ -15,4 +15,3 @@ export * from './relations.js';
 export * from './roles.js';
 export * from './shares.js';
 export * from './users.js';
-export * from './webhooks.js';

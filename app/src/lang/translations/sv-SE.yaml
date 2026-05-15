@@ -76,7 +76,6 @@ create_role: Skapa roll
 create_user: Skapa användare
 message: Meddelande
 delete_panel: Ta bort panel
-create_webhook: Skapa webhook
 create_translation_string: Skapa översättnings-sträng
 no_translation_string: Inga översättningssträngar
 no_translation_string_copy: Det finns inga översättningssträngar ännu.
@@ -504,8 +503,6 @@ file_count: 'Inga filer | En fil | {count} filer'
 no_files_copy: Det finns inga filer här.
 user_count: 'Inga användare | En användare | {count} användare'
 no_users_copy: Det finns inga användare i denna roll ännu.
-webhooks_count: 'Inga webhooks | En webhook | {count} webhooks'
-no_webhooks_copy: Inga webhooks har konfigurerats ännu. Kom igång genom att skapa en nedan.
 no_notifications: Inga notifikationer
 no_notifications_copy: Inget nytt!
 activity_log: Aktivitetslogg
@@ -534,7 +531,6 @@ action: Åtgärd
 ip_address: IP-adress
 user_agent: Användaragent
 origin: Ursprung
-webhooks: Webhooks
 decimals: Decimaler
 value_decimals: Värde decimaler
 min_value: Minsta värde
@@ -902,7 +898,6 @@ no_options_available: Inga tillgängliga alternativ
 settings_data_model: Datamodell
 settings_permissions: Roller & behörigheter
 settings_project: Projektinställningar
-settings_webhooks: Webhooks
 settings_flows: Flöden
 settings_presets: Förinställningar & bokmärken
 one_or_more_options_are_missing: Ett eller flera alternativ saknas
@@ -950,8 +945,6 @@ page_help_settings_presets_collection: >-
   **Bläddra i förinställningar** — Visar alla förinställningar i projektet, inklusive: användare, roll och globala bokmärken, samt standardvyer.
 page_help_settings_presets_item: >-
   **Förinställda detaljer** — Ett formulär för att hantera bokmärken och förinställningar för standardinsamling.
-page_help_settings_webhooks_collection: '**Bläddra bland webhooks** — Listar alla webhooks i projektet.'
-page_help_settings_webhooks_item: '**Detaljvy webhook** — Ett formulär för att skapa och hantera projektets webhooks.'
 page_help_settings_translation_strings_collection: '**Bläddra översättningssträngar** — Listar alla översättningssträngar inom projektet.'
 page_help_users_collection: '**Användarkatalog** — Listar alla systemanvändare i detta projekt.'
 page_help_users_item: >-
@@ -984,7 +977,6 @@ directus_collection:
   directus_sessions: Information om användarsessioner
   directus_settings: Projektets konfigurationsalternativ
   directus_users: Systemanvändare för plattformen
-  directus_webhooks: Konfiguration för eventbaserade HTTP-anrop
 fields:
   directus_activity:
     item: Primärnyckel för objekt
@@ -1111,17 +1103,6 @@ fields:
     enforce_tfa: Kräv 2FA
     users: Användare i rollen
     module_list: Navigering för modul
-  directus_webhooks:
-    name: Namn
-    method: Metod
-    status: Status
-    data: Data
-    value: Värde
-    headers: Headers för anrop
-    data_label: Skicka händelsedata
-    triggers: Utlösare
-    actions: Åtgärder
-    collections: Kollektioner
 field_options:
   directus_settings:
     project_name_placeholder: Mitt projekt...
@@ -1203,17 +1184,6 @@ field_options:
     status_dropdown_suspended: Avstängd
     status_dropdown_archived: Arkiverad
     token: Ange ett säkert åtkomsttoken...
-  directus_webhooks:
-    status_options_active: Aktiv
-    status_options_inactive: Inaktiv
-    data_label: Skicka händelsedata
-    triggers_divider: Utlösare
-    actions_create: Skapa
-    actions_update: Uppdatera
-    actions_delete: Radera
-    actions_login: Inloggning
-    headers:
-      value: Värde
 no_fields_in_collection: 'Det finns inga fält i "{collection}" ännu'
 no_value: Inget värde
 do_nothing: Gör ingenting
@@ -1246,7 +1216,6 @@ continue_label: Fortsätt
 continue_as: >-
   {name} är redan inloggad. Om det är du, tryck fortsätt.
 editing_role: '{role} roll'
-creating_webhook: Skapar Webhook
 default_label: Standard
 delete_label: Radera
 delete_are_you_sure: >-

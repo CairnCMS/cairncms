@@ -87,9 +87,6 @@ tags:
     x-collection: directus_users
   - name: Utilities
     description: CairnCMS comes with various utility endpoints you can use to simplify your development flow.
-  - name: Webhooks
-    description: Webhooks.
-    x-collection: directus_webhooks
 paths:
   # Activity
   /activity:
@@ -259,12 +256,6 @@ paths:
   /utils/random/string:
     $ref: './paths/utils/random.yaml'
 
-  # Webhooks
-  /webhooks:
-    $ref: './paths/webhooks/webhooks.yaml'
-  /webhooks/{id}:
-    $ref: './paths/webhooks/webhook.yaml'
-
 components:
   schemas:
     Activity:
@@ -303,8 +294,6 @@ components:
       $ref: './components/user.yaml'
     Query:
       $ref: './definitions/query.yaml'
-    Webhooks:
-      $ref: './components/webhook.yaml'
     x-metadata:
       type: object
       properties:

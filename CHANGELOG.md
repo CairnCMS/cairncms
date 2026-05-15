@@ -43,6 +43,7 @@ CairnCMS 1.0.0 is a fork of Directus v10 relicensed under GPLv3 with telemetry r
 ### Breaking changes
 
 - **Run Script capability narrowed.** The `exec` flow operation now runs in an isolated-vm sandbox with no `require()` or host APIs. `FLOWS_EXEC_ALLOWED_MODULES` is removed; pre-1.0 flows that loaded modules need to be rewritten.
+- **Legacy webhooks removed.** The Settings > Webhooks page and `directus_webhooks` collection are gone. Flows are the supported path. Existing records are not auto-migrated. The removal migration logs them at WARN level for manual recreation.
 
 ### Migration from Directus 10
 

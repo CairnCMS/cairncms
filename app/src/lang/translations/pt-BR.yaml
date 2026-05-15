@@ -76,7 +76,6 @@ create_role: Criar Cargo
 create_user: Criar Usuário
 message: Mensagem
 delete_panel: Excluir Painel
-create_webhook: Criar Webhook
 create_translation_string: String chave para a tradução
 no_translation_string: Nenhuma tradução
 no_translation_string_copy: Ainda não há nenhuma memória de tradução.
@@ -507,8 +506,6 @@ file_count: 'Nenhum arquivo | Um arquivo | {count} arquivos'
 no_files_copy: Ainda não há arquivos aqui.
 user_count: 'Nenhum usuário | Um usuário | {count} usuários'
 no_users_copy: Não há usuários neste cargo ainda.
-webhooks_count: 'Nenhum Webhook | Um Webhook | {count} Webhooks'
-no_webhooks_copy: Nenhum webhook foi configurado ainda. Comece criando um abaixo.
 no_notifications: Sem Notificações
 no_notifications_copy: Você está em dia!
 activity_log: Registro de atividades
@@ -537,7 +534,6 @@ action: Ação
 ip_address: Endereço de IP
 user_agent: Agente de Usuário
 origin: Origem
-webhooks: Webhooks
 decimals: Decimais
 value_decimals: Valores decimais
 min_value: Valor mínimo
@@ -941,7 +937,6 @@ no_options_available: Nenhuma opção disponível
 settings_data_model: Modelo de dados
 settings_permissions: Funções & Permissões
 settings_project: Configurações do projeto
-settings_webhooks: Webhooks
 settings_flows: Fluxos
 settings_presets: Predefinições & Marcadores
 settings_translation_strings: Traduções
@@ -990,8 +985,6 @@ page_help_settings_presets_collection: >-
   **Navegando em predefinições** — Lista todas as predefinições no projeto, incluindo: usuário, cargo e marcadores globais, bem como visualizações padrão.
 page_help_settings_presets_item: >-
   **Detalhe da predefinição** — Um formulário para gerenciar marcadores e predefinições de coleção padrão.
-page_help_settings_webhooks_collection: '**Navegando em Webhooks** — Lista todos os webhooks dentro do projeto.'
-page_help_settings_webhooks_item: '**Detalhe de Webhook** — Um formulário para criar e gerenciar os webhooks do projeto.'
 page_help_settings_flows_collection: '**Navegue fluxos** — Lista todos os fluxos dentro do projeto.'
 page_help_settings_flows_item: '**Detalhes do fluxo** — Área para gerenciar uma ou mais operações.'
 page_help_settings_translation_strings_collection: '**Navegue em traduções** — Lista todas as traduções do projeto.'
@@ -1037,7 +1030,6 @@ directus_collection:
   directus_settings: Opções de configuração do projeto
   directus_shares: Rastreia itens compartilhados externamente
   directus_users: Usuários do sistema para a plataforma
-  directus_webhooks: Configuração para solicitações HTTP baseadas em eventos
 fields:
   directus_activity:
     item: Chave Primária do Item
@@ -1187,18 +1179,6 @@ fields:
     enforce_tfa: Exigir 2FA
     users: Usuários no cargo
     module_list: Navegação do Módulo
-  directus_webhooks:
-    name: Nome
-    method: Método
-    status: Status
-    data: Dados
-    header: Cabeçalho
-    value: Valor
-    headers: Cabeçalhos de Requisição
-    data_label: Enviar Dados do Evento
-    triggers: Gatilhos
-    actions: Ações
-    collections: Coleções
 field_options:
   directus_settings:
     project_name_placeholder: Meu projeto...
@@ -1288,19 +1268,6 @@ field_options:
     status_dropdown_suspended: Suspenso
     status_dropdown_archived: Arquivado
     token: Digite um token de acesso seguro...
-  directus_webhooks:
-    status_options_active: Ativo
-    status_options_inactive: Inativo
-    data_label: Enviar Dados do Evento
-    triggers_divider: Gatilhos
-    actions_create: Criar
-    actions_update: Alteração
-    actions_delete: Excluir
-    actions_login: Entrar
-    headers:
-      header: Cabeçalho
-      value: Valor
-      add: Adicionar cabeçalho
 no_fields_in_collection: 'Ainda não há campos em "{collection}"'
 no_value: Nenhum valor
 do_nothing: Não fazer nada
@@ -1349,7 +1316,6 @@ continue_label: Continuar
 continue_as: >-
   {name} está autenticado. Se você reconhece esta conta, clique em continuar.
 editing_role: 'Cargo {role}'
-creating_webhook: Criando Webhook
 default_label: Padrão
 delete_label: Excluir
 delete_are_you_sure: >-

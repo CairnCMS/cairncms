@@ -17,4 +17,3 @@ export * from './role.js';
 export * from './settings.js';
 export * from './share.js';
 export * from './user.js';
-export * from './webhook.js';

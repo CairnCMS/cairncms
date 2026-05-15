@@ -76,7 +76,6 @@ create_role: Создать роль
 create_user: Создать пользователя
 message: Сообщение
 delete_panel: Удалить панель
-create_webhook: Создать веб-хук
 create_translation_string: Создать строку перевода
 no_translation_string: Нет строк перевода
 no_translation_string_copy: Строк перевода пока нет.
@@ -507,8 +506,6 @@ file_count: 'Нет файлов | Один файл | {count} файлов'
 no_files_copy: Здесь нет файлов.
 user_count: 'Нет пользователей | Один пользователь | {count} пользователей'
 no_users_copy: В этой роли пока нет пользователей.
-webhooks_count: 'Нет веб-хуков | Один веб-хук | {count} веб-хуков'
-no_webhooks_copy: Веб-хуки ещё не настроены. Начните с создания одного из них ниже.
 no_notifications: Нет уведомлений
 no_notifications_copy: Ничего нового!
 activity_log: Журнал действий
@@ -537,7 +534,6 @@ action: Действие
 ip_address: IP-адрес
 user_agent: Пользовательский агент
 origin: Источник
-webhooks: Веб-хуки
 decimals: Десятичные дроби
 value_decimals: Значение (десятичная дробь)
 min_value: Мин. значение
@@ -941,7 +937,6 @@ no_options_available: Нет доступных вариантов
 settings_data_model: Модель данных
 settings_permissions: Роли и права доступа
 settings_project: Настройки проекта
-settings_webhooks: Веб-хуки
 settings_flows: Процессы
 settings_presets: Шаблоны и закладки
 settings_translation_strings: Строки перевода
@@ -990,8 +985,6 @@ page_help_settings_presets_collection: >-
   **Просмотр шаблонов** — список всех шаблонов в проекте, включая: пользователей, роли и глобальные закладки, а также представления по умолчанию.
 page_help_settings_presets_item: >-
   **Карточка шаблона** — форма для управления шаблонами закладок и коллекций по умолчанию.
-page_help_settings_webhooks_collection: '**Просмотр веб-хуков** — список всех веб-хуков в проекте.'
-page_help_settings_webhooks_item: '**Карточка веб-хука** — форма для создания и управления веб-хуками проекта.'
 page_help_settings_flows_collection: '**Просмотреть процессы** — список всех процессов в проекте.'
 page_help_settings_flows_item: '**Карточка процесса** — рабочее пространство для управления одной или несколькими операциями.'
 page_help_settings_translation_strings_collection: '**Просмотр строк перевода** — список всех строк перевода в проекте.'
@@ -1037,7 +1030,6 @@ directus_collection:
   directus_settings: Параметры конфигурации проекта
   directus_shares: Отслеживает элементы с общим доступом
   directus_users: Системные пользователи для платформы
-  directus_webhooks: Конфигурация для HTTP-запросов на основе событий
 fields:
   directus_activity:
     item: Ключ элемента
@@ -1187,18 +1179,6 @@ fields:
     enforce_tfa: Требуется 2FA
     users: Пользователи в роли
     module_list: Навигация по модулям
-  directus_webhooks:
-    name: Название
-    method: Метод
-    status: Статус
-    data: Данные
-    header: HTTP-заголовок
-    value: Значение
-    headers: HTTP-заголовки
-    data_label: Отправлять данные о событии
-    triggers: Триггеры
-    actions: Действия
-    collections: Коллекции
 field_options:
   directus_settings:
     project_name_placeholder: Мой проект...
@@ -1288,19 +1268,6 @@ field_options:
     status_dropdown_suspended: Заблокирован
     status_dropdown_archived: В архиве
     token: Укажите достаточно надёжный ключ доступа...
-  directus_webhooks:
-    status_options_active: Активный
-    status_options_inactive: Неактивный
-    data_label: Отправлять данные о событии
-    triggers_divider: Триггеры
-    actions_create: Создать
-    actions_update: Обновить
-    actions_delete: Удалить
-    actions_login: Войти
-    headers:
-      header: HTTP-заголовок
-      value: Значение
-      add: Добавить заголовок
 no_fields_in_collection: 'В коллекции «{collection}» пока нет полей'
 no_value: Нет значения
 do_nothing: Ничего не делать
@@ -1341,7 +1308,6 @@ continue_label: Продолжить
 continue_as: >-
   {name} в данный момент аутентифицирован. Если вы узнаёте эту учётную запись, нажмите продолжить.
 editing_role: '{role} Роль'
-creating_webhook: Создание Веб-хука
 default_label: По умолчанию
 delete_label: Удалить
 delete_are_you_sure: >-

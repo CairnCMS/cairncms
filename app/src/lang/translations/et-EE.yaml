@@ -75,7 +75,6 @@ create_role: Loo Roll
 create_user: Loo Kasutaja
 message: Sõnum
 delete_panel: Kustutamise Paneel
-create_webhook: Loo Veebikonks
 create_translation_string: Loo Tõlkestring
 no_translation_string: Puuduvad Tõlkestringid
 no_translation_string_copy: Tõlkestringe veel pole.
@@ -451,7 +450,6 @@ file_count: 'Faile pole | Leiti 1 fail | {count} faili'
 no_files_copy: Faile pole.
 user_count: 'Kasutajaid pole | Üks kasutaja | {count} kasutajat'
 no_users_copy: Selles rollis pole ühtegi kasutajat.
-webhooks_count: 'Webhooke ei leitud | Üks webhook | {count} webhooki'
 activity_log: Tegevuste logi
 all_items: Kõik kirjed
 csv: CSV
@@ -473,7 +471,6 @@ activity: Tegevus
 action: Tegevus
 ip_address: IP aadress
 user_agent: Kasutaja agent
-webhooks: Webhooks
 min_value: Min väärtus
 max_value: Maksimaalne väärtus
 automatic: Automaatne
@@ -761,7 +758,6 @@ no_options_available: Valikud puuduvad
 settings_data_model: Andmemudel
 settings_permissions: Rollid ja õigused
 settings_project: Projekti seaded
-settings_webhooks: Webhooks
 settings_presets: Eelseaded ja järjehoidjad
 one_or_more_options_are_missing: Üks või mitu valikut puuduvad
 scope: Ulatus
@@ -801,8 +797,6 @@ page_help_settings_presets_collection: >-
   **Näita eelseadistusi** — Näitab kõiki projekti eelseadistusi, sh kasutajad, rollid, järjehoidjad ja vaikimisi vaated.
 page_help_settings_presets_item: >-
   **Eelseadistuse detailid" - Vorm järjehoidjate ja andmekogude eelseadistuste muutmiseks.
-page_help_settings_webhooks_collection: '**Vaata veebikonkse** - Näitab veebikonkse.'
-page_help_settings_webhooks_item: '**Veebikonksu detailid** - Vorm veebikonksude lisamiseks ja muutmiseks.'
 page_help_users_collection: '**Kasutajad** - Näitab kõiki kasutajaid.'
 page_help_users_item: >-
   **Kasutaja detailid** - Näitab konto infot.
@@ -924,11 +918,6 @@ fields:
     enforce_tfa: 2FA on nõutav
     users: Kasutajad selles rollis
     module_list: Moodulite näitamine
-  directus_webhooks:
-    name: Nimi
-    status: Staatus
-    value: Väärtus
-    collections: Kogud
 field_options:
   directus_settings:
     security_divider_title: Turvalisus
@@ -956,14 +945,6 @@ field_options:
   directus_users:
     status_dropdown_active: aktiivne
     status_dropdown_archived: Arhiveeritud
-  directus_webhooks:
-    status_options_active: aktiivne
-    status_options_inactive: Mitteaktiivne
-    actions_create: Loo
-    actions_update: Uuenda
-    actions_delete: Kustuta
-    headers:
-      value: Väärtus
 no_fields_in_collection: 'Andmekogus "{collection}" puuduvad kirjed'
 do_nothing: Ära tee midagi
 generate_and_save_uuid: Genereeri ja salvesta UUID
@@ -983,7 +964,6 @@ referential_action_set_default: Seadista {field} väljale vaikeväärtus
 choose_action: Vali tegevus
 continue_label: Jätka
 editing_role: '{role} roll'
-creating_webhook: Loo veebikonks
 delete_are_you_sure: >-
   See tegevus on lõplik ja seda ei saa tühistada. Kas oled kindel, et jätkame?
 delete_field_are_you_sure: >-
