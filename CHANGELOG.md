@@ -91,7 +91,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Validated asset transform args before opening the source stream (GHSA-j8xj-7jff-46mx / CVE-2025-30225).
 - Removed version string from OpenAPI spec responses (GHSA-rmjh-cf9q-pv7q / CVE-2025-53887).
 - Required read permission for manual flow triggers (GHSA-7cvf-pxgp-42fc / CVE-2025-53889).
-- Cleaned permission references to deleted fields (GHSA-9x5g-62gj-wqf2 / CVE-2025-64746).
+- Cleaned the `fields` array on permissions for deleted fields (GHSA-9x5g-62gj-wqf2 / CVE-2025-64746).
 - Excluded concealed fields from the search query parameter (GHSA-8jpw-gpr4-8cmh / CVE-2025-64748).
 - Closed user-enumeration on the password reset request endpoint (GHSA-jr94-gj3h-c8rf / CVE-2026-26185).
 - Concealed sensitive fields in revision history (GHSA-mvv8-v4jj-g47j / CVE-2026-39943).
