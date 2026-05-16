@@ -1,4 +1,6 @@
 > NOTE: CairnCMS is currently in beta! We recommend waiting for version 1 to release before starting your projects, because we are wrapping up some loose ends. :) In the meantime, feel free to open a discussion or request a feature.
+---
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12754/badge)](https://www.bestpractices.dev/projects/12754)
 
 # CairnCMS
 
