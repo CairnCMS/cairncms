@@ -726,76 +726,20 @@ export class FieldsService {
 	}
 }
 
-export function removeFieldFromFilter(
-	filter: Record<string, any> | null,
-	fieldName: string
-): Record<string, any> | null {
-	if (filter === null || typeof filter !== 'object') return filter;
-
-	const result: Record<string, any> = {};
-
-	for (const [key, value] of Object.entries(filter)) {
-		if (key === fieldName) continue;
-
-		if (key === '_and' || key === '_or') {
-			if (Array.isArray(value)) {
-				const cleaned = value
-					.map((clause) => removeFieldFromFilter(clause, fieldName))
-					.filter(
-						(clause): clause is Record<string, any> =>
-							clause !== null && typeof clause === 'object' && Object.keys(clause).length > 0
-					);
-
-				if (cleaned.length > 0) result[key] = cleaned;
-			}
-
-			continue;
-		}
-
-		result[key] = value;
-	}
-
-	return result;
-}
-
 export async function cleanupPermissionsOnFieldDelete(trx: Knex, collection: string, field: string): Promise<void> {
-	const permissionRows = await trx
-		.select('id', 'fields', 'permissions', 'validation')
-		.from('directus_permissions')
-		.where({ collection });
+	const permissionRows = await trx.select('id', 'fields').from('directus_permissions').where({ collection });
 
 	for (const row of permissionRows) {
-		const updates: Record<string, any> = {};
-
 		let fields: string[] | null = null;
 		if (typeof row.fields === 'string') fields = row.fields.split(',');
 		else if (Array.isArray(row.fields)) fields = row.fields;
 
-		if (fields && !fields.includes('*') && fields.includes(field)) {
-			const filtered = fields.filter((f) => f !== field);
-			updates['fields'] = filtered.length > 0 ? filtered.join(',') : null;
-		}
+		if (!fields || fields.includes('*') || !fields.includes(field)) continue;
 
-		const parsedPermissions =
-			typeof row.permissions === 'string' && row.permissions ? JSON.parse(row.permissions) : row.permissions ?? null;
+		const filtered = fields.filter((f) => f !== field);
 
-		const cleanedPermissions = removeFieldFromFilter(parsedPermissions, field);
-
-		if (JSON.stringify(cleanedPermissions) !== JSON.stringify(parsedPermissions)) {
-			updates['permissions'] = cleanedPermissions === null ? null : JSON.stringify(cleanedPermissions);
-		}
-
-		const parsedValidation =
-			typeof row.validation === 'string' && row.validation ? JSON.parse(row.validation) : row.validation ?? null;
-
-		const cleanedValidation = removeFieldFromFilter(parsedValidation, field);
-
-		if (JSON.stringify(cleanedValidation) !== JSON.stringify(parsedValidation)) {
-			updates['validation'] = cleanedValidation === null ? null : JSON.stringify(cleanedValidation);
-		}
-
-		if (Object.keys(updates).length > 0) {
-			await trx('directus_permissions').update(updates).where({ id: row.id });
-		}
+		await trx('directus_permissions')
+			.update({ fields: filtered.length > 0 ? filtered.join(',') : null })
+			.where({ id: row.id });
 	}
 }
