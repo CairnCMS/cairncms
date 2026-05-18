@@ -106,6 +106,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Rejected non-object filter query inputs before recursive parsing.
 - Set X-Content-Type-Options: nosniff on all responses.
 - Removed stale super_admin_token parameter from the /server/info spec.
+- Rejected value-deriving aggregate operations on concealed fields at the query layer.
 
 ### Acknowledgements
 
