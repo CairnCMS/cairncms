@@ -56,6 +56,44 @@ export class SharesService extends ItemsService {
 		}
 	}
 
+	private async validateEffectiveShareGrant(key: PrimaryKey, patch: Partial<Item>): Promise<void> {
+		if (this.accountability?.admin === true) return;
+
+		const existing = await this.knex
+			.select('role', 'collection', 'item')
+			.from('directus_shares')
+			.where('id', key)
+			.first();
+
+		if (!existing) {
+			throw new ForbiddenException();
+		}
+
+		const effectiveRole = 'role' in patch ? patch['role'] : existing.role;
+		const effectiveCollection = 'collection' in patch ? patch['collection'] : existing.collection;
+		const effectiveItem = 'item' in patch ? patch['item'] : existing.item;
+
+		const callerRole = this.accountability?.role ?? null;
+
+		if (callerRole === null) {
+			throw new ForbiddenException();
+		}
+
+		if (effectiveRole !== callerRole) {
+			throw new ForbiddenException();
+		}
+
+		if (typeof effectiveCollection !== 'string' || effectiveCollection.length === 0) {
+			throw new ForbiddenException();
+		}
+
+		if ((typeof effectiveItem !== 'string' && typeof effectiveItem !== 'number') || effectiveItem === '') {
+			throw new ForbiddenException();
+		}
+
+		await this.authorizationService.checkAccess('share', effectiveCollection, effectiveItem);
+	}
+
 	override async createOne(data: Partial<Item>, opts?: MutationOptions): Promise<PrimaryKey> {
 		this.validateShareRole(data, { requireRole: true });
 		await this.authorizationService.checkAccess('share', data['collection'], data['item']);
@@ -72,18 +110,30 @@ export class SharesService extends ItemsService {
 	}
 
 	override async updateOne(key: PrimaryKey, data: Partial<Item>, opts?: MutationOptions): Promise<PrimaryKey> {
-		this.validateShareRole(data);
-		return super.updateOne(key, data, opts);
+		await this.validateEffectiveShareGrant(key, data);
+		await super.updateMany([key], data, opts);
+		return key;
 	}
 
 	override async updateMany(keys: PrimaryKey[], data: Partial<Item>, opts?: MutationOptions): Promise<PrimaryKey[]> {
-		this.validateShareRole(data);
+		for (const key of keys) {
+			await this.validateEffectiveShareGrant(key, data);
+		}
+
 		return super.updateMany(keys, data, opts);
 	}
 
 	override async updateBatch(data: Partial<Item>[], opts?: MutationOptions): Promise<PrimaryKey[]> {
+		const primaryKeyField = this.schema.collections[this.collection]!.primary;
+
 		for (const item of data) {
-			this.validateShareRole(item);
+			const key = item[primaryKeyField];
+
+			if (!key) {
+				throw new InvalidPayloadException(`Item in update misses primary key.`);
+			}
+
+			await this.validateEffectiveShareGrant(key, item);
 		}
 
 		return super.updateBatch(data, opts);
