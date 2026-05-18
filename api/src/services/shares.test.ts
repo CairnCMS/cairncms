@@ -1,7 +1,7 @@
 import type { Accountability, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';
-import { MockClient, createTracker } from 'knex-mock-client';
+import { MockClient, Tracker, createTracker } from 'knex-mock-client';
 import type { MockedFunction } from 'vitest';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
@@ -106,14 +106,22 @@ const SHARE_ID = '33333333-3333-3333-3333-333333333333';
 
 describe('SharesService — role validation (GHSA-pmf4-v838-29hg)', () => {
 	let db: MockedFunction<Knex>;
+	let tracker: Tracker;
 
 	beforeAll(() => {
 		db = vi.mocked(knex.default({ client: MockClient }));
-		createTracker(db);
+		tracker = createTracker(db);
 	});
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+		tracker.reset();
+
+		tracker.on.select(/select.*from "directus_shares"/).response({
+			role: CALLER_ROLE,
+			collection: 'directus_users',
+			item: 'item-uuid',
+		});
 
 		vi.spyOn(AuthorizationService.prototype, 'checkAccess').mockResolvedValue(undefined as any);
 		vi.spyOn(ItemsService.prototype, 'createOne').mockResolvedValue(SHARE_ID);
@@ -312,6 +320,109 @@ describe('SharesService — role validation (GHSA-pmf4-v838-29hg)', () => {
 			const service = makeService({ role: null });
 
 			await expect(service.createOne(validCreatePayload(OTHER_ROLE))).rejects.toBeInstanceOf(ForbiddenException);
+		});
+	});
+
+	describe('bug-exposing — non-admin update-path effective-state validation', () => {
+		it('updateOne — rejects when role is omitted and stored role differs from caller role', async () => {
+			tracker.reset();
+
+			tracker.on.select(/select.*from "directus_shares"/).response({
+				role: OTHER_ROLE,
+				collection: 'directus_users',
+				item: 'item-uuid',
+			});
+
+			const service = makeService();
+
+			await expect(service.updateOne(SHARE_ID, { name: 'just-renaming' })).rejects.toBeInstanceOf(ForbiddenException);
+		});
+
+		it('updateOne — rejects when patch redirects item to a target the caller cannot share', async () => {
+			vi.spyOn(AuthorizationService.prototype, 'checkAccess').mockImplementation(async (_action, _collection, item) => {
+				if (item === 'forbidden-item') throw new ForbiddenException();
+			});
+
+			const service = makeService();
+
+			await expect(service.updateOne(SHARE_ID, { item: 'forbidden-item' })).rejects.toBeInstanceOf(ForbiddenException);
+		});
+
+		it('updateOne — rejects when patch redirects collection to a target the caller cannot share', async () => {
+			vi.spyOn(AuthorizationService.prototype, 'checkAccess').mockImplementation(async (_action, collection) => {
+				if (collection === 'forbidden-collection') throw new ForbiddenException();
+			});
+
+			const service = makeService();
+
+			await expect(service.updateOne(SHARE_ID, { collection: 'forbidden-collection' })).rejects.toBeInstanceOf(
+				ForbiddenException
+			);
+		});
+
+		it('updateMany — runs effective-state validation per key', async () => {
+			tracker.reset();
+
+			tracker.on.select(/select.*from "directus_shares"/).response({
+				role: OTHER_ROLE,
+				collection: 'directus_users',
+				item: 'item-uuid',
+			});
+
+			const service = makeService();
+
+			await expect(service.updateMany([SHARE_ID], { name: 'just-renaming' })).rejects.toBeInstanceOf(
+				ForbiddenException
+			);
+		});
+
+		it('updateBatch — runs effective-state validation before super.updateBatch', async () => {
+			tracker.reset();
+
+			tracker.on.select(/select.*from "directus_shares"/).response({
+				role: OTHER_ROLE,
+				collection: 'directus_users',
+				item: 'item-uuid',
+			});
+
+			const updateBatchSpy = vi.spyOn(ItemsService.prototype, 'updateBatch');
+
+			const service = makeService();
+
+			await expect(service.updateBatch([{ id: SHARE_ID, name: 'rename' }])).rejects.toBeInstanceOf(ForbiddenException);
+			expect(updateBatchSpy).not.toHaveBeenCalled();
+		});
+
+		it('updateByQuery — receives effective-state validation via the updateMany dispatch chain', async () => {
+			tracker.reset();
+
+			tracker.on.select(/select.*from "directus_shares"/).response({
+				role: OTHER_ROLE,
+				collection: 'directus_users',
+				item: 'item-uuid',
+			});
+
+			vi.spyOn(ItemsService.prototype as any, 'getKeysByQuery').mockResolvedValueOnce([SHARE_ID]);
+
+			const service = makeService();
+
+			await expect(service.updateByQuery({}, { name: 'rename' })).rejects.toBeInstanceOf(ForbiddenException);
+		});
+	});
+
+	describe('regression — admin update-path bypass', () => {
+		it('updateOne — admin bypasses effective-state validation even when stored role mismatches caller', async () => {
+			tracker.reset();
+
+			tracker.on.select(/select.*from "directus_shares"/).response({
+				role: OTHER_ROLE,
+				collection: 'directus_users',
+				item: 'item-uuid',
+			});
+
+			const service = makeService({ admin: true });
+
+			await expect(service.updateOne(SHARE_ID, { name: 'rename' })).resolves.toBe(SHARE_ID);
 		});
 	});
 });
