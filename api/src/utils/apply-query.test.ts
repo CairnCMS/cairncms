@@ -2,7 +2,7 @@ import type { Accountability, Permission, SchemaOverview } from '@cairncms/types
 import knex from 'knex';
 import { describe, expect, it } from 'vitest';
 import { InvalidQueryException } from '../exceptions/invalid-query.js';
-import { applySearch, applySort } from './apply-query.js';
+import applyQuery, { applySearch, applySort } from './apply-query.js';
 
 const PUBLIC_ROLE_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -146,17 +146,6 @@ describe('applySearch — field-permission scoping (GHSA-7wq3-jr35-275c)', () =>
 			const dbQuery = makeBuilder();
 
 			await applySearch(makeSchema(), dbQuery, 'foo', 'notes', null);
-
-			const { sql } = dbQuery.toSQL();
-
-			expect(sql).toContain('title');
-			expect(sql).toContain('secret_note');
-		});
-
-		it('undefined accountability bypasses the filter (no accountability argument)', async () => {
-			const dbQuery = makeBuilder();
-
-			await applySearch(makeSchema(), dbQuery, 'foo', 'notes');
 
 			const { sql } = dbQuery.toSQL();
 
@@ -311,6 +300,47 @@ describe('applySort — unknown column validation', () => {
 
 		it('accepts multiple known fields', () => {
 			expect(() => callApplySort(['title', '-rank'])).not.toThrow();
+		});
+	});
+});
+
+describe('applyQuery — explicit accountability required when search is present (GHSA-7wq3-jr35-275c follow-up)', () => {
+	function callApplyQuery(query: Parameters<typeof applyQuery>[3], options?: Parameters<typeof applyQuery>[5]) {
+		const dbQuery = makeBuilder();
+		const knexInstance = knex.default({ client: 'sqlite3', useNullAsDefault: true });
+		return applyQuery(knexInstance, 'notes', dbQuery, query, makeSchema(), options);
+	}
+
+	describe('bug-exposing — missing accountability with a search throws', () => {
+		it('throws when options is undefined and query.search is present', () => {
+			expect(() => callApplyQuery({ search: 'foo' })).toThrow(InvalidQueryException);
+		});
+
+		it('throws when options is provided without an accountability key and query.search is present', () => {
+			expect(() => callApplyQuery({ search: 'foo' }, {})).toThrow(InvalidQueryException);
+		});
+
+		it('error message names the accountability requirement', () => {
+			expect(() => callApplyQuery({ search: 'foo' })).toThrow(/accountability/);
+		});
+	});
+
+	describe('regression — explicit context and non-search paths continue to work', () => {
+		it('does not throw when accountability is explicit null (trusted/system caller)', () => {
+			expect(() => callApplyQuery({ search: 'foo' }, { accountability: null })).not.toThrow();
+		});
+
+		it('does not throw when accountability is a real Accountability', () => {
+			const accountability = makeAccountability({ permissions: [makePermission(['title'])] });
+			expect(() => callApplyQuery({ search: 'foo' }, { accountability })).not.toThrow();
+		});
+
+		it('does not throw when there is no search and no options', () => {
+			expect(() => callApplyQuery({})).not.toThrow();
+		});
+
+		it('does not throw on filter-only queries without accountability', () => {
+			expect(() => callApplyQuery({ filter: { title: { _eq: 'x' } } })).not.toThrow();
 		});
 	});
 });

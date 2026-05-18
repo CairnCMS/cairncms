@@ -82,7 +82,7 @@ export class MetaService {
 		}
 
 		if (query.search) {
-			applySearch(this.schema, dbQuery, query.search, collection);
+			applySearch(this.schema, dbQuery, query.search, collection, this.accountability);
 		}
 
 		const records = await dbQuery;
