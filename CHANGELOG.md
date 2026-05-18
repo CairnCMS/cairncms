@@ -110,6 +110,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Scoped metadata filter_count search to fields the caller is permitted to read.
 - Send user invites to the stored account email rather than the supplied input.
 - Redacted secrets from prior step outputs when persisting flow revisions.
+- Removed access tokens from admin export URLs.
 
 ### Acknowledgements
 

@@ -234,7 +234,7 @@
 <script lang="ts" setup>
 import api from '@/api';
 import { usePermissionsStore } from '@/stores/permissions';
-import { getPublicURL } from '@/utils/get-root-path';
+import { downloadLocalExport } from '@/utils/download-local-export';
 import { notify } from '@/utils/notify';
 import { readableMimeType } from '@/utils/readable-mime-type';
 import { unexpectedError } from '@/utils/unexpected-error';
@@ -501,31 +501,16 @@ function startExport() {
 	}
 }
 
-function exportDataLocal() {
-	const endpoint = getEndpoint(collection.value);
+async function exportDataLocal() {
+	exporting.value = true;
 
-	// usually getEndpoint contains leading slash, but here we need to remove it
-	const url = getPublicURL() + endpoint.substring(1);
-
-	let params: Record<string, unknown> = {
-		access_token: api.defaults.headers.common['Authorization'].substring(7),
-		export: format.value,
-	};
-
-	if (exportSettings.sort && exportSettings.sort !== '') params.sort = exportSettings.sort;
-	if (exportSettings.fields) params.fields = exportSettings.fields;
-	if (exportSettings.search) params.search = exportSettings.search;
-	if (exportSettings.filter) params.filter = exportSettings.filter;
-	if (exportSettings.search) params.search = exportSettings.search;
-
-	params.limit = exportSettings.limit ?? -1;
-
-	const exportUrl = api.getUri({
-		url,
-		params,
-	});
-
-	window.open(exportUrl);
+	try {
+		await downloadLocalExport(collection.value, format.value, exportSettings);
+	} catch (err) {
+		unexpectedError(err);
+	} finally {
+		exporting.value = false;
+	}
 }
 
 async function exportDataFiles() {
