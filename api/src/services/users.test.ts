@@ -9,6 +9,8 @@ import { ForbiddenException, InvalidPayloadException } from '../exceptions/index
 import jwt from 'jsonwebtoken';
 import { ItemsService, MailService, UsersService } from './index.js';
 
+const originalInviteUrl = (UsersService.prototype as any).inviteUrl;
+
 vi.mock('../../src/database/index', () => ({
 	default: vi.fn(),
 	getDatabaseClient: vi.fn().mockReturnValue('postgres'),
@@ -705,6 +707,7 @@ describe('Integration Tests', () => {
 				vi.spyOn(UsersService.prototype as any, 'getUserByEmail').mockResolvedValueOnce({
 					status: 'invited',
 					role: 'invite-role',
+					email: 'user@example.com',
 				});
 
 				const promise = service.inviteUser('user@example.com', 'invite-role', null);
@@ -725,6 +728,7 @@ describe('Integration Tests', () => {
 				vi.spyOn(UsersService.prototype as any, 'getUserByEmail').mockResolvedValueOnce({
 					status: 'active',
 					role: 'invite-role',
+					email: 'user@example.com',
 				});
 
 				const promise = service.inviteUser('user@example.com', 'invite-role', null);
@@ -748,6 +752,7 @@ describe('Integration Tests', () => {
 					id: 1,
 					status: 'invited',
 					role: 'existing-role',
+					email: 'user@example.com',
 				});
 
 				const promise = service.inviteUser('user@example.com', 'invite-role', null);
@@ -755,6 +760,56 @@ describe('Integration Tests', () => {
 
 				expect(superUpdateManySpy.mock.lastCall![0]).toEqual([1]);
 				expect(superUpdateManySpy.mock.lastCall![1]).toEqual({ role: 'invite-role' });
+			});
+
+			it('sends the invite to the stored address even when supplied a confusable variant', async () => {
+				vi.spyOn(UsersService.prototype as any, 'inviteUrl').mockImplementation(originalInviteUrl);
+
+				const storedEmail = 'julian@cure53.de';
+				const suppliedEmail = 'julian@cüre53.de';
+
+				vi.spyOn(UsersService.prototype as any, 'getUserByEmail').mockResolvedValueOnce({
+					id: 'user-id',
+					role: 'invite-role',
+					status: 'invited',
+					email: storedEmail,
+				});
+
+				const promise = service.inviteUser(suppliedEmail, 'invite-role', null);
+				await expect(promise).resolves.not.toThrow();
+
+				expect(mailService.send).toBeCalledTimes(1);
+				const sendArgs = (mailService.send as any).mock.calls[0][0];
+
+				expect(sendArgs.to).toBe(storedEmail);
+				expect(sendArgs.template.data.email).toBe(storedEmail);
+
+				const tokenMatch = sendArgs.template.data.url.match(/token=([^&]+)/);
+				expect(tokenMatch).not.toBeNull();
+				const decoded = jwt.decode(tokenMatch[1]) as { email: string };
+				expect(decoded.email).toBe(storedEmail);
+			});
+
+			it('sends the invite to the supplied address when the user is new (no existing account)', async () => {
+				vi.spyOn(UsersService.prototype as any, 'inviteUrl').mockImplementation(originalInviteUrl);
+
+				const suppliedEmail = 'new-user@example.com';
+
+				vi.spyOn(UsersService.prototype as any, 'getUserByEmail').mockResolvedValueOnce(null);
+
+				const promise = service.inviteUser(suppliedEmail, 'invite-role', null);
+				await expect(promise).resolves.not.toThrow();
+
+				expect(mailService.send).toBeCalledTimes(1);
+				const sendArgs = (mailService.send as any).mock.calls[0][0];
+
+				expect(sendArgs.to).toBe(suppliedEmail);
+				expect(sendArgs.template.data.email).toBe(suppliedEmail);
+
+				const tokenMatch = sendArgs.template.data.url.match(/token=([^&]+)/);
+				expect(tokenMatch).not.toBeNull();
+				const decoded = jwt.decode(tokenMatch[1]) as { email: string };
+				expect(decoded.email).toBe(suppliedEmail);
 			});
 		});
 
