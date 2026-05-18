@@ -46,10 +46,12 @@ export function buildRevisionData(
 	steps: ReadonlyArray<Step>,
 	keyedData: Record<string, unknown>
 ): { steps: ReadonlyArray<Step>; data: Record<string, unknown> } {
-	const sensitiveValues = collectSensitiveValues(keyedData['$trigger']);
+	const revisionData = omit(keyedData, '$accountability.permissions');
+	const sensitiveValues = collectSensitiveValues(revisionData);
+
 	return {
 		steps: redactFlowLog(steps, sensitiveValues),
-		data: redactFlowLog(omit(keyedData, '$accountability.permissions'), sensitiveValues) as Record<string, unknown>,
+		data: redactFlowLog(revisionData, sensitiveValues) as Record<string, unknown>,
 	};
 }
 
