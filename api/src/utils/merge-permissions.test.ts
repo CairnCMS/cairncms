@@ -1,6 +1,6 @@
 import type { Filter, Permission } from '@cairncms/types';
 import { describe, expect, test } from 'vitest';
-import { mergePermission } from './merge-permissions.js';
+import { mergePermission, mergePermissions } from './merge-permissions.js';
 
 const fullFilter = {} as Filter;
 const conditionalFilter = { user: { id: { _eq: '$CURRENT_USER' } } } as Filter;
@@ -31,7 +31,7 @@ describe('merging permissions', () => {
 		});
 	});
 
-	test('processes _or validations', () => {
+	test('composes non-empty validations with _and under _or strategy', () => {
 		const mergedPermission = mergePermission(
 			'or',
 			{ ...permissionTemplate, validation: conditionalFilter },
@@ -41,7 +41,7 @@ describe('merging permissions', () => {
 		expect(mergedPermission).toStrictEqual({
 			...permissionTemplate,
 			validation: {
-				_or: [conditionalFilter, conditionalFilter2],
+				_and: [conditionalFilter, conditionalFilter2],
 			},
 		});
 	});
@@ -86,16 +86,6 @@ describe('merging permissions', () => {
 		expect(mergedPermission).toStrictEqual({ ...permissionTemplate, permissions: fullFilter });
 	});
 
-	test('{} supersedes conditional validations in _or', () => {
-		const mergedPermission = mergePermission(
-			'or',
-			{ ...permissionTemplate, validation: fullFilter },
-			{ ...permissionTemplate, validation: conditionalFilter }
-		);
-
-		expect(mergedPermission).toStrictEqual({ ...permissionTemplate, validation: fullFilter });
-	});
-
 	test('{} does not supersede conditional permissions in _and', () => {
 		const mergedPermission = mergePermission(
 			'and',
@@ -113,20 +103,60 @@ describe('merging permissions', () => {
 		expect(mergedPermission).toStrictEqual(expectedPermission);
 	});
 
-	test('{} does not supersede conditional validations in _and', () => {
+	test('{} validation contributes nothing under _and strategy', () => {
 		const mergedPermission = mergePermission(
 			'and',
 			{ ...permissionTemplate, validation: fullFilter },
 			{ ...permissionTemplate, validation: conditionalFilter }
 		);
 
-		const expectedPermission = {
-			...permissionTemplate,
-			validation: {
-				_and: [fullFilter, conditionalFilter],
-			},
-		};
+		expect(mergedPermission).toStrictEqual({ ...permissionTemplate, validation: conditionalFilter });
+	});
 
-		expect(mergedPermission).toStrictEqual(expectedPermission);
+	test('null validation contributes nothing under _or strategy', () => {
+		const mergedPermission = mergePermission(
+			'or',
+			{ ...permissionTemplate, validation: conditionalFilter },
+			{ ...permissionTemplate, validation: null }
+		);
+
+		expect(mergedPermission).toStrictEqual({ ...permissionTemplate, validation: conditionalFilter });
+	});
+
+	test('{} validation contributes nothing under _or strategy', () => {
+		const mergedPermission = mergePermission(
+			'or',
+			{ ...permissionTemplate, validation: conditionalFilter },
+			{ ...permissionTemplate, validation: fullFilter }
+		);
+
+		expect(mergedPermission).toStrictEqual({ ...permissionTemplate, validation: conditionalFilter });
+	});
+
+	test('three-row merge flattens validation _and (no nesting)', () => {
+		const a = { user: { _eq: 'a' } } as Filter;
+		const b = { status: { _eq: 'published' } } as Filter;
+		const c = { tenant_id: { _eq: 't1' } } as Filter;
+
+		const merged = mergePermissions(
+			'or',
+			[{ ...permissionTemplate, validation: a }],
+			[{ ...permissionTemplate, validation: b }],
+			[{ ...permissionTemplate, validation: c }]
+		);
+
+		expect(merged[0]!.validation).toStrictEqual({ _and: [a, b, c] });
+	});
+
+	test('GHSA-3fff regression: baseline validation survives operator row with empty validation under _or', () => {
+		const baselineValidation = { user: { _eq: '$CURRENT_USER' } } as Filter;
+
+		const merged = mergePermissions(
+			'or',
+			[{ ...permissionTemplate, collection: 'directus_presets', action: 'update', validation: fullFilter }],
+			[{ ...permissionTemplate, collection: 'directus_presets', action: 'update', validation: baselineValidation }]
+		);
+
+		expect(merged[0]!.validation).toStrictEqual(baselineValidation);
 	});
 });

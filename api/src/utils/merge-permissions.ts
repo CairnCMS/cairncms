@@ -16,6 +16,17 @@ export function mergePermissions(strategy: 'and' | 'or', ...permissions: Permiss
 	return Array.from(mergedPermissions);
 }
 
+function validationParts(validation: Permission['validation']): unknown[] {
+	if (!validation || typeof validation !== 'object') return [];
+	const keys = Object.keys(validation);
+
+	if (keys[0] === '_and' && Array.isArray((validation as LogicalFilterAND)['_and'])) {
+		return (validation as LogicalFilterAND)['_and'];
+	}
+
+	return [validation];
+}
+
 export function mergePermission(
 	strategy: 'and' | 'or',
 	currentPerm: Permission,
@@ -52,27 +63,15 @@ export function mergePermission(
 		}
 	}
 
-	if (newPerm.validation) {
-		if (currentPerm.validation && Object.keys(currentPerm.validation)[0] === logicalKey) {
-			validation = {
-				[logicalKey]: [
-					...(currentPerm.validation as LogicalFilterOR & LogicalFilterAND)[logicalKey],
-					newPerm.validation,
-				],
-			} as LogicalFilterAND | LogicalFilterOR;
-		} else if (currentPerm.validation) {
-			// Empty {} supersedes other validations in _OR merge
-			if (strategy === 'or' && (isEqual(currentPerm.validation, {}) || isEqual(newPerm.validation, {}))) {
-				validation = {};
-			} else {
-				validation = {
-					[logicalKey]: [currentPerm.validation, newPerm.validation],
-				} as LogicalFilterAND | LogicalFilterOR;
-			}
+	const newValidationEmpty = !newPerm.validation || isEqual(newPerm.validation, {});
+	const currentValidationEmpty = !currentPerm.validation || isEqual(currentPerm.validation, {});
+
+	if (!newValidationEmpty) {
+		if (currentValidationEmpty) {
+			validation = newPerm.validation;
 		} else {
-			validation = {
-				[logicalKey]: [newPerm.validation],
-			} as LogicalFilterAND | LogicalFilterOR;
+			const parts = [...validationParts(currentPerm.validation), ...validationParts(newPerm.validation)];
+			validation = { _and: parts } as LogicalFilterAND;
 		}
 	}
 

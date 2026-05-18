@@ -32,6 +32,8 @@
 
 - collection: directus_presets
   action: create
+  presets:
+    user: $CURRENT_USER
   validation:
     user:
       _eq: $CURRENT_USER
