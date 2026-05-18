@@ -143,6 +143,54 @@ describe('Integration Tests', () => {
 					service.login('default', { email: 'local@example.com', password: 'wrong' })
 				).rejects.toBeInstanceOf(InvalidCredentialsException);
 			});
+
+			it('throws InvalidCredentialsException when the user is suspended', async () => {
+				mockLocalDriver.getUserID.mockResolvedValueOnce('suspended-user-id');
+
+				tracker.on.select(/select.*from "directus_users"/).response({
+					id: 'suspended-user-id',
+					first_name: 'Suspended',
+					last_name: 'User',
+					email: 'suspended@example.com',
+					password: 'hashed',
+					status: 'suspended',
+					role: 'role-id',
+					admin_access: false,
+					app_access: true,
+					tfa_secret: null,
+					provider: 'default',
+					external_identifier: null,
+					auth_data: null,
+				});
+
+				const service = new AuthenticationService({
+					knex: db,
+					schema: testSchema,
+				});
+
+				await expect(
+					service.login('default', { email: 'suspended@example.com', password: 'whatever' })
+				).rejects.toBeInstanceOf(InvalidCredentialsException);
+			});
+		});
+
+		describe('refresh — invalid-token responses are uniform', () => {
+			it('throws InvalidCredentialsException when the refresh-token session references a suspended user', async () => {
+				vi.spyOn(AuthenticationService.prototype as any, 'lookupSession').mockResolvedValueOnce({
+					user_id: 'suspended-user-id',
+					user_status: 'suspended',
+					share_id: null,
+				});
+
+				tracker.on.delete('directus_sessions').response(1);
+
+				const service = new AuthenticationService({
+					knex: db,
+					schema: testSchema,
+				});
+
+				await expect(service.refresh('suspended-refresh-token')).rejects.toBeInstanceOf(InvalidCredentialsException);
+			});
 		});
 	});
 });

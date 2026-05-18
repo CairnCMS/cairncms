@@ -9,7 +9,7 @@ import { DEFAULT_AUTH_PROVIDER } from '../constants.js';
 import getDatabase from '../database/index.js';
 import emitter from '../emitter.js';
 import env from '../env.js';
-import { InvalidCredentialsException, InvalidOTPException, UserSuspendedException } from '../exceptions/index.js';
+import { InvalidCredentialsException, InvalidOTPException } from '../exceptions/index.js';
 import { createRateLimiter } from '../rate-limiter.js';
 import type { AbstractServiceOptions, CairnTokenPayload, LoginResult, Session, User } from '../types/index.js';
 import { getMilliseconds } from '../utils/get-milliseconds.js';
@@ -137,17 +137,8 @@ export class AuthenticationService {
 			);
 		};
 
-		if (user?.status !== 'active') {
+		if (user?.status !== 'active' || user.provider !== providerName) {
 			emitStatus('fail');
-
-			if (user?.status === 'suspended') {
-				await stall(STALL_TIME, timeStart);
-				throw new UserSuspendedException();
-			} else {
-				await stall(STALL_TIME, timeStart);
-				throw new InvalidCredentialsException();
-			}
-		} else if (user.provider !== providerName) {
 			await stall(STALL_TIME, timeStart);
 			throw new InvalidCredentialsException();
 		}
@@ -335,14 +326,8 @@ export class AuthenticationService {
 
 		if (record.user_id && record.user_status !== 'active') {
 			await this.knex('directus_sessions').where({ token: refreshToken }).del();
-
-			if (record.user_status === 'suspended') {
-				await stall(STALL_TIME, timeStart);
-				throw new UserSuspendedException();
-			} else {
-				await stall(STALL_TIME, timeStart);
-				throw new InvalidCredentialsException();
-			}
+			await stall(STALL_TIME, timeStart);
+			throw new InvalidCredentialsException();
 		}
 
 		if (record.user_id) {
