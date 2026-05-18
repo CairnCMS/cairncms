@@ -276,18 +276,6 @@ describe('FlowManager._runManualFlow (GHSA-7cvf-pxgp-42fc)', () => {
 			expect(executeFlowSpy).not.toHaveBeenCalled();
 		});
 
-		it('rejects when checkAccess on directus_flows fails', async () => {
-			checkAccessSpy.mockImplementation(async (_action: any, collection: any) => {
-				if (collection === 'directus_flows') throw new exceptions.ForbiddenException();
-			});
-
-			await expect(
-				manager._runManualFlow(buildFlow(), buildData(), buildContext(nonAdminWithItemRead))
-			).rejects.toBeInstanceOf(exceptions.ForbiddenException);
-
-			expect(executeFlowSpy).not.toHaveBeenCalled();
-		});
-
 		it('rejects when checkAccess on target items fails (keys path)', async () => {
 			checkAccessSpy.mockImplementation(async (_action: any, collection: any) => {
 				if (collection === TARGET_COLLECTION) throw new exceptions.ForbiddenException();
@@ -346,11 +334,12 @@ describe('FlowManager._runManualFlow (GHSA-7cvf-pxgp-42fc)', () => {
 			expect(executeFlowSpy).toHaveBeenCalledTimes(1);
 		});
 
-		it('non-admin with item-read permissions and explicit keys executes the flow', async () => {
+		it('triggers without directus_flows.read when caller has target-item read (Decision #18)', async () => {
 			await manager._runManualFlow(buildFlow(), buildData(), buildContext(nonAdminWithItemRead));
+
 			expect(executeFlowSpy).toHaveBeenCalledTimes(1);
-			expect(checkAccessSpy).toHaveBeenCalledWith('read', 'directus_flows', FLOW_ID);
 			expect(checkAccessSpy).toHaveBeenCalledWith('read', TARGET_COLLECTION, TARGET_KEYS);
+			expect(checkAccessSpy).not.toHaveBeenCalledWith('read', 'directus_flows', expect.anything());
 		});
 
 		it('non-admin with collection-level read executes collection-mode flow (no keys + requireSelection: false)', async () => {

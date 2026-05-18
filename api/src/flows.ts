@@ -315,8 +315,6 @@ class FlowManager {
 
 		const authorizationService = new AuthorizationService({ accountability, knex: getDatabase(), schema });
 
-		await authorizationService.checkAccess('read', 'directus_flows', flow.id);
-
 		if (Array.isArray(keys) && keys.length > 0) {
 			await authorizationService.checkAccess('read', targetCollection, keys);
 		} else if (flow.options?.['requireSelection'] === false) {
