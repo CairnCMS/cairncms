@@ -71,6 +71,7 @@ export default function applyQuery(
 	}
 
 	if (query.group) {
+		validateGroupOperands(schema, collection, query.group);
 		dbQuery.groupBy(query.group.map((column) => getColumn(knex, collection, column, false, schema)));
 	}
 
@@ -295,6 +296,17 @@ export function applySort(
 					throw new InvalidQueryException(`Invalid sort column "${pathRoot}"`);
 				}
 
+				if (!relation) {
+					const fieldName = stripFunction(pathRoot);
+					const fieldMeta = schema.collections[collection]?.fields?.[fieldName];
+
+					if ((fieldMeta?.special as string[] | undefined)?.includes('conceal')) {
+						throw new InvalidQueryException(
+							`Sort operand "${fieldName}" is concealed and cannot be used as a sort field.`
+						);
+					}
+				}
+
 				return {
 					order,
 					column: returnRecords ? column[0] : (getColumn(knex, collection, column[0]!, false, schema) as any),
@@ -312,7 +324,7 @@ export function applySort(
 			knex,
 		});
 
-		const { columnPath } = getColumnPath({
+		const { columnPath, targetCollection } = getColumnPath({
 			path: column,
 			collection,
 			aliasMap,
@@ -321,6 +333,15 @@ export function applySort(
 		});
 
 		const [alias, field] = columnPath.split('.');
+
+		const targetFieldName = stripFunction(field!);
+		const targetFieldMeta = schema.collections[targetCollection]?.fields?.[targetFieldName];
+
+		if ((targetFieldMeta?.special as string[] | undefined)?.includes('conceal')) {
+			throw new InvalidQueryException(
+				`Sort operand "${targetFieldName}" is concealed and cannot be used as a sort field.`
+			);
+		}
 
 		if (!hasMultiRelationalSort) {
 			hasMultiRelationalSort = hasMultiRelational;
@@ -827,6 +848,20 @@ export async function applySearch(
 }
 
 const VALUE_DERIVING_AGGREGATE_OPS = new Set(['min', 'max', 'sum', 'sumDistinct', 'avg', 'avgDistinct']);
+
+export function validateGroupOperands(schema: SchemaOverview, collection: string, group: string[]): void {
+	const fields = schema.collections[collection]?.fields ?? {};
+
+	for (const operand of group) {
+		const fieldName = stripFunction(operand);
+		const field = fields[fieldName];
+		if (!field) continue;
+
+		if ((field.special as string[] | undefined)?.includes('conceal')) {
+			throw new InvalidQueryException(`Group operand "${fieldName}" is concealed and cannot be used as a group field.`);
+		}
+	}
+}
 
 export function validateAggregateOperands(schema: SchemaOverview, collection: string, aggregate: Aggregate): void {
 	const fields = schema.collections[collection]?.fields ?? {};
