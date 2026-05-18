@@ -399,16 +399,17 @@ export class UsersService extends ItemsService {
 
 			// Send invite for new and already invited users
 			if (isEmpty(user) || user.status === 'invited') {
+				const targetEmail = user?.email ?? email;
 				const subjectLine = subject ?? "You've been invited";
 
 				await mailService.send({
-					to: email,
+					to: targetEmail,
 					subject: subjectLine,
 					template: {
 						name: 'user-invitation',
 						data: {
-							url: this.inviteUrl(email, url),
-							email,
+							url: this.inviteUrl(targetEmail, url),
+							email: targetEmail,
 						},
 					},
 				});

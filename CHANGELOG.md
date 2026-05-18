@@ -108,6 +108,7 @@ These are the changes operators coming from Directus 10 will need to account for
 - Removed stale super_admin_token parameter from the /server/info spec.
 - Rejected value-deriving aggregate operations on concealed fields at the query layer.
 - Scoped metadata filter_count search to fields the caller is permitted to read.
+- Send user invites to the stored account email rather than the supplied input.
 
 ### Acknowledgements
 
