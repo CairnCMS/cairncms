@@ -69,6 +69,7 @@ export default function applyQuery(
 	}
 
 	if (query.aggregate) {
+		validateAggregateOperands(schema, collection, query.aggregate);
 		applyAggregate(dbQuery, query.aggregate, collection);
 	}
 
@@ -817,6 +818,34 @@ export async function applySearch(
 			this.whereRaw('1 = 0');
 		}
 	});
+}
+
+const VALUE_DERIVING_AGGREGATE_OPS = new Set(['min', 'max', 'sum', 'sumDistinct', 'avg', 'avgDistinct']);
+
+export function validateAggregateOperands(
+	schema: SchemaOverview,
+	collection: string,
+	aggregate: Aggregate
+): void {
+	const fields = schema.collections[collection]?.fields ?? {};
+
+	for (const [operation, operands] of Object.entries(aggregate)) {
+		if (!operands) continue;
+		if (!VALUE_DERIVING_AGGREGATE_OPS.has(operation)) continue;
+
+		for (const operand of operands) {
+			if (operand === '*') continue;
+
+			const field = fields[operand];
+			if (!field) continue;
+
+			if ((field.special as string[] | undefined)?.includes('conceal')) {
+				throw new InvalidQueryException(
+					`Aggregate operation "${operation}" is not valid on concealed field "${operand}".`
+				);
+			}
+		}
+	}
 }
 
 export function applyAggregate(dbQuery: Knex.QueryBuilder, aggregate: Aggregate, collection: string): void {
