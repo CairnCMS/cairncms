@@ -1,4 +1,4 @@
-import type { Accountability, Permission, SchemaOverview } from '@cairncms/types';
+import type { Accountability, Aggregate, Permission, SchemaOverview } from '@cairncms/types';
 import knex from 'knex';
 import { describe, expect, it } from 'vitest';
 import { InvalidQueryException } from '../exceptions/invalid-query.js';
@@ -341,6 +341,114 @@ describe('applyQuery — explicit accountability required when search is present
 
 		it('does not throw on filter-only queries without accountability', () => {
 			expect(() => callApplyQuery({ filter: { title: { _eq: 'x' } } })).not.toThrow();
+		});
+	});
+});
+
+describe('applyAggregate — concealed operand rejection (GHSA-38hg-ww64-rrwc follow-up)', () => {
+	function callApplyQuery(aggregate: Aggregate) {
+		const dbQuery = makeBuilder();
+		const knexInstance = knex.default({ client: 'sqlite3', useNullAsDefault: true });
+		return applyQuery(knexInstance, 'notes', dbQuery, { aggregate }, makeSchema(), { accountability: null });
+	}
+
+	describe('bug-exposing — value-deriving aggregates on concealed operands raise InvalidQueryException', () => {
+		it('throws on min over a concealed field', () => {
+			expect(() => callApplyQuery({ min: ['secret_token'] })).toThrow(InvalidQueryException);
+		});
+
+		it('throws on max over a concealed field', () => {
+			expect(() => callApplyQuery({ max: ['secret_token'] })).toThrow(InvalidQueryException);
+		});
+
+		it('throws on sum over a concealed field', () => {
+			expect(() => callApplyQuery({ sum: ['secret_token'] })).toThrow(InvalidQueryException);
+		});
+
+		it('throws on sumDistinct over a concealed field', () => {
+			expect(() => callApplyQuery({ sumDistinct: ['secret_token'] })).toThrow(InvalidQueryException);
+		});
+
+		it('throws on avg over a concealed field', () => {
+			expect(() => callApplyQuery({ avg: ['secret_token'] })).toThrow(InvalidQueryException);
+		});
+
+		it('throws on avgDistinct over a concealed field', () => {
+			expect(() => callApplyQuery({ avgDistinct: ['secret_token'] })).toThrow(InvalidQueryException);
+		});
+
+		it('error message names the operation and the concealed field', () => {
+			expect(() => callApplyQuery({ min: ['secret_token'] })).toThrow(/min/);
+			expect(() => callApplyQuery({ min: ['secret_token'] })).toThrow(/secret_token/);
+		});
+	});
+
+	describe('regression — count-style aggregates on concealed operands continue to work', () => {
+		it('accepts count over a concealed field', () => {
+			expect(() => callApplyQuery({ count: ['secret_token'] })).not.toThrow();
+		});
+
+		it('accepts countDistinct over a concealed field', () => {
+			expect(() => callApplyQuery({ countDistinct: ['secret_token'] })).not.toThrow();
+		});
+
+		it('accepts countAll (handled by applyAggregate but not in the Aggregate type)', () => {
+			expect(() => callApplyQuery({ countAll: ['*'] } as unknown as Aggregate)).not.toThrow();
+		});
+	});
+
+	describe('regression — value-deriving aggregates on non-concealed operands continue to work', () => {
+		it('accepts min on title', () => {
+			expect(() => callApplyQuery({ min: ['title'] })).not.toThrow();
+		});
+
+		it('accepts max on body', () => {
+			expect(() => callApplyQuery({ max: ['body'] })).not.toThrow();
+		});
+
+		it('accepts sum on rank', () => {
+			expect(() => callApplyQuery({ sum: ['rank'] })).not.toThrow();
+		});
+	});
+
+	describe('regression — role-independence', () => {
+		it('throws on concealed-field aggregate even when caller is admin', () => {
+			const dbQuery = makeBuilder();
+			const knexInstance = knex.default({ client: 'sqlite3', useNullAsDefault: true });
+
+			const adminAccountability: Accountability = {
+				user: 'user-uuid',
+				role: 'role-uuid',
+				admin: true,
+				app: true,
+				ip: '127.0.0.1',
+				permissions: [],
+			};
+
+			expect(() =>
+				applyQuery(knexInstance, 'notes', dbQuery, { aggregate: { min: ['secret_token'] } }, makeSchema(), {
+					accountability: adminAccountability,
+				})
+			).toThrow(InvalidQueryException);
+		});
+	});
+
+	describe('regression — empty and absent aggregate queries', () => {
+		it('does not throw when no aggregate is present', () => {
+			const dbQuery = makeBuilder();
+			const knexInstance = knex.default({ client: 'sqlite3', useNullAsDefault: true });
+
+			expect(() =>
+				applyQuery(knexInstance, 'notes', dbQuery, {}, makeSchema(), { accountability: null })
+			).not.toThrow();
+		});
+
+		it('does not throw on an empty aggregate object', () => {
+			expect(() => callApplyQuery({})).not.toThrow();
+		});
+
+		it('does not throw on a value-deriving aggregate with an empty operand list', () => {
+			expect(() => callApplyQuery({ min: [] })).not.toThrow();
 		});
 	});
 });
