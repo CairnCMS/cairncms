@@ -148,6 +148,94 @@ describe('buildRevisionData', () => {
 		expect(step.key).toBe('send-notification');
 		expect(step.status).toBe('resolve');
 	});
+
+	test('redacts a token produced by a prior step output and interpolated into a later step option', () => {
+		const STEP_TOKEN = 'sk_live_step_output_token_value';
+		const keyedData = makeKeyedData({});
+		keyedData['fetch-token'] = { data: { access_token: STEP_TOKEN } };
+
+		const steps: Step[] = [
+			{
+				operation: 'op-1',
+				key: 'fetch-token',
+				status: 'resolve',
+				options: { url: 'https://internal/token' },
+			},
+			{
+				operation: 'op-2',
+				key: 'send-notification',
+				status: 'resolve',
+				options: {
+					url: `https://hook.example.com/?key=${STEP_TOKEN}`,
+					method: 'POST',
+				},
+			},
+		];
+
+		const result = buildRevisionData(steps, keyedData);
+		const stepB = result.steps[1] as Step;
+
+		expect(stepB.options).not.toBeNull();
+		expect((stepB.options as Record<string, unknown>)['url']).toBe(`https://hook.example.com/?key=${REDACT_TEXT}`);
+		expect((stepB.options as Record<string, unknown>)['method']).toBe('POST');
+	});
+
+	test('redacts a credential produced by a prior step output and interpolated into a later step message', () => {
+		const STEP_CRED = 'super-secret-credential-value-1234';
+		const keyedData = makeKeyedData({});
+		keyedData['authenticate'] = { credentials: { password: STEP_CRED } };
+
+		const steps: Step[] = [
+			{
+				operation: 'op-1',
+				key: 'authenticate',
+				status: 'resolve',
+				options: { username: 'service-account' },
+			},
+			{
+				operation: 'op-2',
+				key: 'log-message',
+				status: 'resolve',
+				options: {
+					message: `Authenticated with ${STEP_CRED}`,
+					target: 'audit@example.com',
+				},
+			},
+		];
+
+		const result = buildRevisionData(steps, keyedData);
+		const stepB = result.steps[1] as Step;
+
+		expect(stepB.options).not.toBeNull();
+		expect((stepB.options as Record<string, unknown>)['message']).toBe(`Authenticated with ${REDACT_TEXT}`);
+		expect((stepB.options as Record<string, unknown>)['target']).toBe('audit@example.com');
+	});
+
+	test('does not redact non-sensitive-keyed step output values (regression — no false positives)', () => {
+		const PROSE = 'an innocuous descriptive prose string';
+		const keyedData = makeKeyedData({});
+		keyedData['fetch-content'] = { data: { description: PROSE } };
+
+		const steps: Step[] = [
+			{
+				operation: 'op-1',
+				key: 'fetch-content',
+				status: 'resolve',
+				options: { url: 'https://internal/content' },
+			},
+			{
+				operation: 'op-2',
+				key: 'forward',
+				status: 'resolve',
+				options: { message: `Fetched: ${PROSE}` },
+			},
+		];
+
+		const result = buildRevisionData(steps, keyedData);
+		const stepB = result.steps[1] as Step;
+
+		expect((stepB.options as Record<string, unknown>)['message']).toContain(PROSE);
+	});
 });
 
 describe('executeFlow — webhook trigger with failing condition does not leak context into response', () => {
