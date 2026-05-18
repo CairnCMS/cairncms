@@ -14,10 +14,12 @@ vi.mock('../../src/database/index', () => ({
 describe('cleanupPermissionsOnFieldDelete (GHSA-9x5g-62gj-wqf2)', () => {
 	let db: MockedFunction<Knex>;
 	let tracker: Tracker;
+	let trx: Knex.Transaction;
 
 	beforeAll(() => {
 		db = vi.mocked(knex.default({ client: MockClient }));
 		tracker = createTracker(db);
+		trx = db as unknown as Knex.Transaction;
 	});
 
 	afterEach(() => {
@@ -36,7 +38,7 @@ describe('cleanupPermissionsOnFieldDelete (GHSA-9x5g-62gj-wqf2)', () => {
 			return 1;
 		});
 
-		await cleanupPermissionsOnFieldDelete(db, 'articles', 'secret');
+		await cleanupPermissionsOnFieldDelete(trx, 'articles', 'secret');
 
 		expect(updates.length).toBe(1);
 		expect(updates[0]!.bindings[0]).toBe('title');
@@ -55,7 +57,7 @@ describe('cleanupPermissionsOnFieldDelete (GHSA-9x5g-62gj-wqf2)', () => {
 			return 1;
 		});
 
-		await cleanupPermissionsOnFieldDelete(db, 'articles', 'secret');
+		await cleanupPermissionsOnFieldDelete(trx, 'articles', 'secret');
 
 		expect(updates.length).toBe(1);
 		expect(updates[0]!.bindings[0]).toBeNull();
@@ -73,7 +75,7 @@ describe('cleanupPermissionsOnFieldDelete (GHSA-9x5g-62gj-wqf2)', () => {
 			return 1;
 		});
 
-		await cleanupPermissionsOnFieldDelete(db, 'articles', 'secret');
+		await cleanupPermissionsOnFieldDelete(trx, 'articles', 'secret');
 
 		expect(updates.length).toBe(0);
 	});
@@ -90,7 +92,7 @@ describe('cleanupPermissionsOnFieldDelete (GHSA-9x5g-62gj-wqf2)', () => {
 			return 1;
 		});
 
-		await cleanupPermissionsOnFieldDelete(db, 'articles', 'secret');
+		await cleanupPermissionsOnFieldDelete(trx, 'articles', 'secret');
 
 		expect(updates.length).toBe(1);
 		expect(updates[0]!.bindings[0]).toBe('title');
@@ -108,7 +110,30 @@ describe('cleanupPermissionsOnFieldDelete (GHSA-9x5g-62gj-wqf2)', () => {
 			return 1;
 		});
 
-		await cleanupPermissionsOnFieldDelete(db, 'articles', 'secret');
+		await cleanupPermissionsOnFieldDelete(trx, 'articles', 'secret');
+
+		expect(updates.length).toBe(0);
+	});
+
+	it('does not modify a permission row when only filter JSON or presets reference the deleted field (Decision #12)', async () => {
+		tracker.on.select('select "id", "fields" from "directus_permissions" where "collection" = ?').response([
+			{
+				id: 42,
+				fields: ['title'],
+				permissions: { _and: [{ secret: { _eq: 'tenant-a' } }, { title: { _nempty: true } }] },
+				validation: { secret: { _eq: 'tenant-a' } },
+				presets: { secret: 'tenant-a' },
+			},
+		]);
+
+		const updates: any[] = [];
+
+		tracker.on.update('directus_permissions').response((q) => {
+			updates.push(q);
+			return 1;
+		});
+
+		await cleanupPermissionsOnFieldDelete(trx, 'articles', 'secret');
 
 		expect(updates.length).toBe(0);
 	});

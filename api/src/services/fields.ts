@@ -726,7 +726,11 @@ export class FieldsService {
 	}
 }
 
-export async function cleanupPermissionsOnFieldDelete(trx: Knex, collection: string, field: string): Promise<void> {
+export async function cleanupPermissionsOnFieldDelete(
+	trx: Knex.Transaction,
+	collection: string,
+	field: string
+): Promise<void> {
 	const permissionRows = await trx.select('id', 'fields').from('directus_permissions').where({ collection });
 
 	for (const row of permissionRows) {
