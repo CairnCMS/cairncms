@@ -61,7 +61,13 @@ export default function applyQuery(
 	}
 
 	if (query.search) {
-		applySearch(schema, dbQuery, query.search, collection, options?.accountability);
+		if (options?.accountability === undefined) {
+			throw new InvalidQueryException(
+				'applyQuery: query.search requires explicit accountability; pass null for trusted/system callers'
+			);
+		}
+
+		applySearch(schema, dbQuery, query.search, collection, options.accountability);
 	}
 
 	if (query.group) {
@@ -769,7 +775,7 @@ export async function applySearch(
 	dbQuery: Knex.QueryBuilder,
 	searchQuery: string,
 	collection: string,
-	accountability?: Accountability | null
+	accountability: Accountability | null
 ): Promise<void> {
 	const allFields = Object.entries(schema.collections[collection]!.fields);
 
