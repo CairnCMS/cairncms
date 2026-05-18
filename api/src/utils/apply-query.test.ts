@@ -385,6 +385,7 @@ describe('applyAggregate — concealed operand rejection (GHSA-38hg-ww64-rrwc fo
 		it('throws on concealed-field aggregate even when caller is admin', () => {
 			const dbQuery = makeBuilder();
 			const knexInstance = knex.default({ client: 'sqlite3', useNullAsDefault: true });
+
 			const adminAccountability: Accountability = {
 				user: 'user-uuid',
 				role: 'role-uuid',
@@ -395,14 +396,9 @@ describe('applyAggregate — concealed operand rejection (GHSA-38hg-ww64-rrwc fo
 			};
 
 			expect(() =>
-				applyQuery(
-					knexInstance,
-					'notes',
-					dbQuery,
-					{ aggregate: { min: ['secret_token'] } },
-					makeSchema(),
-					{ accountability: adminAccountability }
-				)
+				applyQuery(knexInstance, 'notes', dbQuery, { aggregate: { min: ['secret_token'] } }, makeSchema(), {
+					accountability: adminAccountability,
+				})
 			).toThrow(InvalidQueryException);
 		});
 	});

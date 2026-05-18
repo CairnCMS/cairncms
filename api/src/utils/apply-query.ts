@@ -822,11 +822,7 @@ export async function applySearch(
 
 const VALUE_DERIVING_AGGREGATE_OPS = new Set(['min', 'max', 'sum', 'sumDistinct', 'avg', 'avgDistinct']);
 
-export function validateAggregateOperands(
-	schema: SchemaOverview,
-	collection: string,
-	aggregate: Aggregate
-): void {
+export function validateAggregateOperands(schema: SchemaOverview, collection: string, aggregate: Aggregate): void {
 	const fields = schema.collections[collection]?.fields ?? {};
 
 	for (const [operation, operands] of Object.entries(aggregate)) {
