@@ -173,6 +173,11 @@ export class AuthorizationService {
 							extractRequiredFieldPermissions(collection, ast.query?.[collection]?.filter ?? {})
 						);
 
+						requiredFieldPermissions = mergeRequiredFieldPermissions(
+							requiredFieldPermissions,
+							extractRequiredFieldPermissionsFromSort(collection, ast.query?.[collection]?.sort ?? [])
+						);
+
 						for (const child of ast.children[collection]!) {
 							const childPermissions = validateFilterPermissions(child, schema, action, accountability);
 
@@ -192,6 +197,11 @@ export class AuthorizationService {
 					requiredFieldPermissions = mergeRequiredFieldPermissions(
 						requiredFieldPermissions,
 						extractRequiredFieldPermissions(ast.name, ast.query?.filter ?? {})
+					);
+
+					requiredFieldPermissions = mergeRequiredFieldPermissions(
+						requiredFieldPermissions,
+						extractRequiredFieldPermissionsFromSort(ast.name, ast.query?.sort ?? [])
 					);
 
 					for (const child of ast.children) {
@@ -350,6 +360,64 @@ export class AuthorizationService {
 					},
 					{}
 				);
+			}
+
+			function extractRequiredFieldPermissionsFromSort(
+				collection: string,
+				sort: string[]
+			): Record<string, Set<string>> {
+				const result: Record<string, Set<string>> = {};
+
+				for (const rawOperand of sort) {
+					const operand = rawOperand.startsWith('-') ? rawOperand.substring(1) : rawOperand;
+					const segments = operand.split('.');
+
+					let currentCollection = collection;
+					let invalidPath = false;
+
+					for (let i = 0; i < segments.length; i++) {
+						const segment = segments[i]!;
+						const baseName = segment.split(':')[0]!;
+
+						if (i === segments.length - 1) {
+							const fieldName = stripFunction(baseName);
+
+							if (fieldName === schema.collections[currentCollection]?.primary) {
+								continue;
+							}
+
+							(result[currentCollection] || (result[currentCollection] = new Set())).add(fieldName);
+						} else {
+							(result[currentCollection] || (result[currentCollection] = new Set())).add(baseName);
+
+							const { relation, relationType } = getRelationInfo(schema.relations, currentCollection, baseName);
+
+							if (!relation) {
+								invalidPath = true;
+								break;
+							}
+
+							if (relationType === 'm2o') {
+								currentCollection = relation.related_collection!;
+							} else if (relationType === 'a2o') {
+								const pathScope = segment.split(':')[1];
+
+								if (!pathScope) {
+									invalidPath = true;
+									break;
+								}
+
+								currentCollection = pathScope;
+							} else {
+								currentCollection = relation.collection;
+							}
+						}
+					}
+
+					if (invalidPath) continue;
+				}
+
+				return result;
 			}
 
 			function mergeRequiredFieldPermissions(current: Record<string, Set<string>>, child: Record<string, Set<string>>) {

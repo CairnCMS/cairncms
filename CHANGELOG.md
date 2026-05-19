@@ -111,6 +111,8 @@ These are the changes operators coming from Directus 10 will need to account for
 - Send user invites to the stored account email rather than the supplied input.
 - Redacted secrets from prior step outputs when persisting flow revisions.
 - Removed access tokens from admin export URLs.
+- Required field-read permission for sort and group query operands.
+- Rejected sort and group on concealed fields at the query layer.
 
 ### Acknowledgements
 

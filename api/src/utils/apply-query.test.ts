@@ -2,7 +2,7 @@ import type { Accountability, Aggregate, Permission, SchemaOverview } from '@cai
 import knex from 'knex';
 import { describe, expect, it } from 'vitest';
 import { InvalidQueryException } from '../exceptions/invalid-query.js';
-import applyQuery, { applySearch, applySort } from './apply-query.js';
+import applyQuery, { applySearch, applySort, validateGroupOperands } from './apply-query.js';
 
 const PUBLIC_ROLE_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -44,6 +44,48 @@ function makeSchema(): SchemaOverview {
 			},
 		},
 		relations: [],
+	} as unknown as SchemaOverview;
+}
+
+function makeRelationalSchema(): SchemaOverview {
+	return {
+		collections: {
+			notes: {
+				collection: 'notes',
+				primary: 'id',
+				singleton: false,
+				sortField: null,
+				note: null,
+				accountability: null,
+				fields: {
+					id: makeField('id', 'uuid'),
+					title: makeField('title'),
+					author: makeField('author', 'uuid'),
+				},
+			},
+			users: {
+				collection: 'users',
+				primary: 'id',
+				singleton: false,
+				sortField: null,
+				note: null,
+				accountability: null,
+				fields: {
+					id: makeField('id', 'uuid'),
+					name: makeField('name'),
+					tfa_secret: makeField('tfa_secret', 'string', ['conceal']),
+				},
+			},
+		},
+		relations: [
+			{
+				collection: 'notes',
+				field: 'author',
+				related_collection: 'users',
+				schema: null,
+				meta: null,
+			},
+		],
 	} as unknown as SchemaOverview;
 }
 
@@ -449,6 +491,97 @@ describe('applyAggregate — concealed operand rejection (GHSA-38hg-ww64-rrwc fo
 
 		it('does not throw on a value-deriving aggregate with an empty operand list', () => {
 			expect(() => callApplyQuery({ min: [] })).not.toThrow();
+		});
+	});
+});
+
+describe('applySort — concealed operand rejection', () => {
+	function callApplySort(sort: string[]) {
+		const dbQuery = makeBuilder();
+		const knexInstance = knex.default({ client: 'sqlite3', useNullAsDefault: true });
+		return applySort(knexInstance, makeSchema(), dbQuery, sort, 'notes', {});
+	}
+
+	describe('bug-exposing — concealed sort operand raises InvalidQueryException', () => {
+		it('throws on plain concealed field', () => {
+			expect(() => callApplySort(['secret_token'])).toThrow(InvalidQueryException);
+		});
+
+		it('throws on descending concealed field', () => {
+			expect(() => callApplySort(['-secret_token'])).toThrow(InvalidQueryException);
+		});
+
+		it('throws on function-wrapped concealed field', () => {
+			expect(() => callApplySort(['year(secret_token)'])).toThrow(InvalidQueryException);
+		});
+
+		it('error message names the concealed field', () => {
+			expect(() => callApplySort(['secret_token'])).toThrow(/secret_token/);
+		});
+	});
+
+	describe('regression — non-concealed sort continues to work', () => {
+		it('accepts a non-concealed field', () => {
+			expect(() => callApplySort(['title'])).not.toThrow();
+		});
+
+		it('accepts descending non-concealed field', () => {
+			expect(() => callApplySort(['-title'])).not.toThrow();
+		});
+
+		it('does not raise the conceal error for function-wrapped non-concealed fields', () => {
+			expect(() => callApplySort(['year(title)'])).not.toThrow(/concealed/);
+		});
+	});
+
+	describe('bug-exposing — relational sort by a concealed field on the related collection is rejected', () => {
+		function callRelationalSort(sort: string[]) {
+			const dbQuery = knex.default({ client: 'sqlite3', useNullAsDefault: true }).from('notes').select('*');
+
+			const knexInstance = knex.default({ client: 'sqlite3', useNullAsDefault: true });
+			return applySort(knexInstance, makeRelationalSchema(), dbQuery, sort, 'notes', {});
+		}
+
+		it('throws InvalidQueryException for sort on a concealed field on the related collection', () => {
+			expect(() => callRelationalSort(['author.tfa_secret'])).toThrow(InvalidQueryException);
+		});
+
+		it('error message names the concealed field', () => {
+			expect(() => callRelationalSort(['author.tfa_secret'])).toThrow(/tfa_secret/);
+		});
+
+		it('accepts sort on a non-concealed field on the related collection (regression)', () => {
+			expect(() => callRelationalSort(['author.name'])).not.toThrow(/concealed/);
+		});
+	});
+});
+
+describe('validateGroupOperands — concealed operand rejection', () => {
+	describe('bug-exposing — concealed group operand raises InvalidQueryException', () => {
+		it('throws on direct concealed field', () => {
+			expect(() => validateGroupOperands(makeSchema(), 'notes', ['secret_token'])).toThrow(InvalidQueryException);
+		});
+
+		it('throws on function-wrapped concealed field', () => {
+			expect(() => validateGroupOperands(makeSchema(), 'notes', ['year(secret_token)'])).toThrow(InvalidQueryException);
+		});
+
+		it('error message names the concealed field', () => {
+			expect(() => validateGroupOperands(makeSchema(), 'notes', ['secret_token'])).toThrow(/secret_token/);
+		});
+	});
+
+	describe('regression — non-concealed group continues to work', () => {
+		it('accepts a non-concealed field', () => {
+			expect(() => validateGroupOperands(makeSchema(), 'notes', ['title'])).not.toThrow();
+		});
+
+		it('accepts multiple non-concealed fields', () => {
+			expect(() => validateGroupOperands(makeSchema(), 'notes', ['title', 'body'])).not.toThrow();
+		});
+
+		it('does not throw on empty group array', () => {
+			expect(() => validateGroupOperands(makeSchema(), 'notes', [])).not.toThrow();
 		});
 	});
 });

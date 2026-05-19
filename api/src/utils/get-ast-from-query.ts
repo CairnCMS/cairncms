@@ -75,15 +75,27 @@ export default async function getASTFromQuery(
 	delete query.deep;
 
 	if (!query.sort) {
-		// We'll default to the primary key for the standard sort output
-		let sortField = schema.collections[collection]!.primary;
+		const primary = schema.collections[collection]!.primary;
+		let sortField = primary;
 
-		// If a custom manual sort field is configured, use that
 		if (schema.collections[collection]?.sortField) {
-			sortField = schema.collections[collection]!.sortField as string;
+			const configured = schema.collections[collection]!.sortField as string;
+
+			if (accountability && accountability.admin !== true) {
+				const readPermission = accountability.permissions?.find(
+					(perm) => perm.collection === collection && perm.action === 'read'
+				);
+
+				const allowed = readPermission?.fields ?? [];
+
+				if (allowed.includes('*') || allowed.includes(configured)) {
+					sortField = configured;
+				}
+			} else {
+				sortField = configured;
+			}
 		}
 
-		// When group by is used, default to the first column provided in the group by clause
 		if (query.group?.[0]) {
 			sortField = query.group[0];
 		}
