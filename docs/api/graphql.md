@@ -73,7 +73,7 @@ query {
 }
 ```
 
-Set `GRAPHQL_INTROSPECTION=false` to disable introspection across both endpoints. With introspection off, the server rejects any query that touches `__schema` or `__type`. This is sometimes used as a hardening step on public-facing deployments where the schema shape itself is treated as sensitive.
+Set `GRAPHQL_INTROSPECTION=false` to disable introspection across both endpoints. With introspection off, the server rejects any query that touches `__schema` or `__type`, and also disables the SDL export endpoints (`GET /server/specs/graphql/<scope>` and the `server_specs_graphql` system query) so the schema shape cannot be retrieved through a parallel surface. This is sometimes used as a hardening step on public-facing deployments where the schema shape itself is treated as sensitive.
 
 Disabling introspection breaks Apollo Studio, GraphiQL, and other GraphQL-aware tooling that depend on it. The platform's own admin app does not require introspection on the server side, so disabling it does not affect the app's GraphQL features.
 

@@ -1,5 +1,5 @@
 ---
-title: Automate
+title: Flows
 description: Run logic in response to events, schedules, manual button clicks, and incoming webhooks using flows.
 sidebar:
   label: Overview
@@ -30,7 +30,7 @@ A trigger is the entry point for a flow. CairnCMS supports five trigger types:
 - **Another flow** — fires from a Trigger Flow operation in another flow. This is how flows compose.
 - **Manual** — fires when a user clicks a button in the app on a collection or item page.
 
-The full list of trigger types and their configuration is on the [Triggers](/docs/guides/automate/triggers/) page.
+The full list of trigger types and their configuration is on the [Triggers](/docs/guides/flows/triggers/) page.
 
 ## Operations
 
@@ -42,7 +42,7 @@ An operation is one step inside a flow. Operations cover three broad jobs:
 
 Built-in operations include item CRUD, condition branching, sending email and notifications, calling external URLs, sleeping, transforming payloads, running custom scripts, and triggering other flows. Custom operations can also be added through the extension system.
 
-The full list of operations and their configuration is on the [Operations](/docs/guides/automate/operations/) page.
+The full list of operations and their configuration is on the [Operations](/docs/guides/flows/operations/) page.
 
 ## The data chain
 
@@ -125,7 +125,7 @@ Each operation is added by clicking the success or failure connector on the prev
 
 The next two pages cover the full reference of trigger types and operations:
 
-- [Triggers](/docs/guides/automate/triggers/) covers each trigger type and its configuration.
-- [Operations](/docs/guides/automate/operations/) covers each built-in operation, what it does, and what it appends to the data chain.
+- [Triggers](/docs/guides/flows/triggers/) covers each trigger type and its configuration.
+- [Operations](/docs/guides/flows/operations/) covers each built-in operation, what it does, and what it appends to the data chain.
 
-For sending and receiving HTTP requests, see the [Webhooks](/docs/guides/automate/webhooks/) page.
+For sending and receiving HTTP requests, see the [Webhooks](/docs/guides/flows/webhooks/) page.

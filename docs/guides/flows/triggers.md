@@ -7,7 +7,7 @@ sidebar:
 
 A trigger defines when a flow runs. CairnCMS supports five trigger types: Event hook, Webhook, Schedule, Another flow, and Manual. Each has different semantics around when it fires, what payload it provides, and whether it can modify the original event.
 
-Every trigger appends its data into the `$trigger` key of the [data chain](/docs/guides/automate/#the-data-chain).
+Every trigger appends its data into the `$trigger` key of the [data chain](/docs/guides/flows/#the-data-chain).
 
 ## Event hook
 
@@ -39,7 +39,7 @@ Configuration:
 
 The full URL appears in the trigger panel after the flow is saved. Treat this URL as private; anyone with it can invoke the flow.
 
-For the broader pattern, see the [Webhooks](/docs/guides/automate/webhooks/) page.
+For the broader pattern, see the [Webhooks](/docs/guides/flows/webhooks/) page.
 
 ## Schedule (cron)
 

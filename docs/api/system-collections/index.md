@@ -51,7 +51,7 @@ The shape of each path follows the same conventions as `/items/<collection>`: li
 
 System collections are exposed through `/graphql/system`, separate from the user-collection root at `/graphql`. The split is documented in [GraphQL](/docs/api/graphql/). Many collections follow the standard generated CRUD shape (`<collection>`, `<collection>_by_id`, `create_<collection>_item`, and so on), but the system endpoint also includes several non-standard cases worth knowing about: `directus_collections`, `directus_fields`, and `directus_relations` have bespoke resolvers in place of the generic CRUD shape; `directus_activity` skips the generic mutations but adds dedicated comment mutations; `directus_files` adds an `import_file` mutation alongside the generic shape; and `directus_revisions` is read-only.
 
-`/graphql/system` also hosts the auth and TFA mutations (`auth_login`, `auth_refresh`, `auth_logout`, `auth_password_request`, `auth_password_reset`, `users_me_tfa_generate`, `users_me_tfa_enable`, `users_me_tfa_disable`) and a small set of operator queries (`server_info`, `server_health`, `server_ping`, `server_specs_oas`, `server_specs_graphql`).
+`/graphql/system` also hosts the auth and TFA mutations (`auth_login`, `auth_refresh`, `auth_logout`, `auth_password_request`, `auth_password_reset`, `users_me_tfa_generate`, `users_me_tfa_enable`, `users_me_tfa_disable`) and a small set of operator queries (`server_info`, `server_health`, `server_ping`, `server_specs_oas`, `server_specs_graphql`). `server_specs_graphql` is gated by `GRAPHQL_INTROSPECTION`; see [GraphQL / Schema introspection](/docs/api/graphql/#schema-introspection).
 
 The full per-collection map of what is and is not exposed is in [GraphQL / What `/graphql/system` exposes](/docs/api/graphql/#what-graphql-system-exposes).
 
@@ -74,7 +74,7 @@ The reference is split into seven topical pages plus this hub. Most pages cover 
 
 - **[Access control](/docs/api/system-collections/access-control/)** — `directus_users`, `directus_roles`, `directus_permissions`, `directus_shares`, plus the `/config/snapshot` and `/config/apply` endpoints that snapshot and apply role/permission state.
 - **[Organization](/docs/api/system-collections/organization/)** — `directus_folders` and `directus_presets`. Folders organize files; presets store per-user view configurations.
-- **[Automation](/docs/api/system-collections/automation/)** — `directus_flows`, `directus_operations`. The platform's event-driven automation surface.
+- **[Flows](/docs/api/system-collections/flows/)** — `directus_flows`, `directus_operations`. The platform's event-driven automation surface.
 - **[Insights and UI](/docs/api/system-collections/insights-and-ui/)** — `directus_dashboards`, `directus_panels`, `directus_notifications`. Dashboard composition and the user-facing notification feed.
 - **[Schema and modeling](/docs/api/system-collections/schema-and-modeling/)** — `directus_collections`, `directus_fields`, `directus_relations`, plus the `/schema/snapshot`, `/schema/diff`, and `/schema/apply` endpoints. The full schema-introspection and schema-as-code surface in one place.
 - **[Activity and revisions](/docs/api/system-collections/activity-and-revisions/)** — `directus_activity` and `directus_revisions`. The audit trail and per-row history.

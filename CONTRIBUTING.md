@@ -38,6 +38,16 @@ To improve the chance of your pull request being merged:
 
 Pull requests will be reviewed by a maintainer. Be prepared to answer questions about your changes and to make adjustments based on feedback.
 
+## Source Use and Clean Implementations
+
+Contributors are responsible for ensuring they have the right to submit their work under GPLv3.
+
+You may learn from public documentation, standards, issue discussions, CVE/GHSA disclosures, release notes, and observed product behavior. You must not copy code, tests, comments, helper structure, naming, or distinctive implementation shape from source that is not available to CairnCMS under GPL-compatible terms.
+
+If you inspect non-GPL-compatible source to understand behavior, write the CairnCMS implementation independently. Use later comparison only to verify behavior, not as a guide for structure or code shape.
+
+If a contribution adapts code from a compatible open-source project, preserve any required notices and mention the source in the PR. Maintainers may ask what sources informed a change, especially for security fixes or upstream-parity work.
+
 ## Development Setup
 
 See the [development guide](https://cairncms.dev/docs/contributing/running-locally) for instructions on running CairnCMS locally.

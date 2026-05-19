@@ -182,6 +182,21 @@ Filter variables are particularly useful in role permissions, where the same rul
 
 Operators that take no value (`_null`, `_nnull`, `_empty`, `_nempty`) accept `true` to apply the rule and `false` to apply its inverse. The case-insensitive variants are useful for fields that store user-supplied text without consistent casing (email addresses, search terms, tags).
 
+`_in` and `_nin` with an empty array preserve their mathematical meaning: `_in: []` matches no rows (the value is in an empty set, which is impossible), while `_nin: []` matches every row (the value is not in an empty set, which is trivially true). Permission rules expressed with these operators behave the same way; an `_in: []` permission filter denies all matches, and a `_nin: []` permission filter denies nothing.
+
+## Read-derived query operands require field-read authority
+
+Several query options derive information from field values rather than returning the value directly: `filter` row inclusion, `search` substring matching, `sort` ordering, `groupBy` bucketing, value-derived aggregates (`min`, `max`, `sum`, `sumDistinct`, `avg`, `avgDistinct`), and `alias` mappings. The platform enforces that operands of these operations must be readable by the caller. A caller cannot use a field as an indirect oracle for a value they cannot read directly.
+
+- **Filter** — an operand the caller cannot read is rejected with `403 FORBIDDEN`.
+- **Search** — search runs only across fields the caller can read. Other string fields are excluded from the substring match.
+- **Sort** — an explicit sort by an unread field is rejected with `403`. If the schema's configured `sort_field` is unread by the caller and no explicit sort is supplied, the request falls back to primary-key order rather than refusing the listing.
+- **`groupBy`** — an operand the caller cannot read is rejected with `403`.
+- **Aggregates** — every aggregate operand requires field-read permission, except `*` (used by `countAll` and `count('*')`). On an unread field, all aggregates with a specific field operand are rejected with `403`. On concealed fields specifically, value-derived aggregates (`min`, `max`, `sum`, `sumDistinct`, `avg`, `avgDistinct`) are rejected with `400 INVALID_QUERY` even when the caller has read permission on the field; count-style aggregates (`count`, `countDistinct`) on a permitted concealed field are not blocked by the conceal rule because they return an integer count and do not leak the value.
+- **Aliases** — an alias must resolve to a field the caller can read; aliases do not bypass field permissions.
+
+Concealed fields are subject to additional restrictions on top of normal read permissions and apply uniformly to all callers, including admins. See [Concealed fields](/docs/guides/permissions/#concealed-fields).
+
 ## Search
 
 `search` is a single-string match across all string fields the role can read.
@@ -205,6 +220,8 @@ Nested fields work with dot notation:
 ```http
 GET /items/articles?sort=author.name
 ```
+
+Sort operands are subject to field-read authority. An explicit sort by a field the caller cannot read is rejected with `403`. When no explicit sort is supplied and the collection's configured `sort_field` is unread by the caller, the implicit default is normalized to primary-key order rather than rejecting the listing. See [Read-derived query operands](#read-derived-query-operands-require-field-read-authority) for the full rule.
 
 ## Pagination
 
