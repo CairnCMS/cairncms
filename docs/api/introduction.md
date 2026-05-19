@@ -94,7 +94,9 @@ GraphQL collects partial errors alongside any successful selections rather than 
 By default, every request must carry an access token. Two ways to attach one:
 
 - **`Authorization` header** — `Authorization: Bearer <token>`. Preferred for server-to-server calls and any context where you control the request.
-- **`access_token` query parameter** — `?access_token=<token>`. Useful for asset URLs and other contexts where headers are inconvenient (an `<img>` tag, for example). Avoid in shared logs.
+- **`access_token` query parameter** — `?access_token=<token>`. Supported for compatibility with clients that cannot set headers. Avoid when practical because URLs are routinely captured by browser history, server and CDN logs, and `Referer` headers.
+
+Same-origin browser clients accessing `/assets/*` do not need to attach a token: the refresh-token cookie set during login is used to look up the session and authorize the asset request. The first-party admin app uses this path for protected asset loads.
 
 Endpoints that map to permissions configured for the Public role can be reached without a token. Anything outside the Public role's permitted set returns `403 FORBIDDEN`.
 

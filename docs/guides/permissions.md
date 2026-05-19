@@ -86,6 +86,20 @@ Item Permissions and Field Validation use the same filter-rule syntax as the res
 
 A common pattern is to combine Item Permissions with Field Permissions: scope which rows the role can touch, then within those rows scope which fields it can read or write.
 
+## Concealed fields
+
+The `conceal` field special hides a field's value from response payloads. The transform replaces the value with `**********` at read time. The shipped configuration uses it on `directus_users.password`, `directus_users.tfa_secret`, and `directus_users.token`. Operators can set `special: ['conceal']` on additional fields through the schema configuration.
+
+Concealed fields are not protected only at output. The platform extends conceal across the read-derived query surface to prevent indirect oracles. The rules apply to all callers including admins, because conceal is a property of the field rather than an operator-configurable permission:
+
+- **Search** — concealed fields are excluded from `search` matching even when the caller has read permission on them.
+- **Sort and `groupBy`** — sorting or grouping by a concealed field is rejected with `400 INVALID_QUERY`.
+- **Aggregates** — value-derived aggregates (`min`, `max`, `sum`, `sumDistinct`, `avg`, `avgDistinct`) on a concealed field are rejected with `400 INVALID_QUERY` even when the caller has read permission on the field. Count-style aggregates (`count`, `countDistinct`, `countAll`) are not blocked by the conceal rule because they return an integer count rather than a value. Ordinary field-read permission still applies to the operand (a caller without read on a concealed field cannot count it).
+- **Aliases** — aliasing a concealed field at output does not unmask it; the alias receives the same `**********` value.
+- **Revision history** — concealed values are masked in stored revision data and audit displays.
+
+Concealing a field does not remove it from the schema or block writes. Operators can still create, update, and delete records that include concealed fields; only the *read-side derivation* of the value is restricted.
+
 ## System collection permissions
 
 System collections power the platform itself: `directus_users`, `directus_roles`, `directus_files`, `directus_dashboards`, and so on. They are hidden from the permissions matrix by default. Click **System Collections** at the bottom of the matrix to expand them.
@@ -115,4 +129,4 @@ There is no separate "workflows" feature to configure. Roles, custom permissions
 
 - [Users](/docs/guides/users/) covers user records, role assignment, and the user directory.
 - [Auth](/docs/guides/auth/) covers password login, SSO, two-factor authentication, and static tokens.
-- [Automate](/docs/guides/automate/) covers flows, which are often used together with custom permissions for workflow patterns.
+- [Flows](/docs/guides/flows/) covers flows, which are often used together with custom permissions for workflow patterns.

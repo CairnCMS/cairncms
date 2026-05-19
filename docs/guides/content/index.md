@@ -1,5 +1,5 @@
 ---
-title: Content
+title: Content Module
 description: Manage records, layouts, filters, imports, shares, and activity in CairnCMS.
 sidebar:
   label: Overview

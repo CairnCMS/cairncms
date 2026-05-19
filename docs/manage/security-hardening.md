@@ -163,6 +163,18 @@ By default, deleting a file with a relation field set to `SET NULL` (the default
 
 For projects where files are critical (legal documents, audit trails, anything that should not silently disappear from related records), change the relation's `On Delete` to `RESTRICT` or `NO ACTION` so file deletion is blocked while references exist. See [Files](/docs/guides/files/) for the configuration UI.
 
+## File-import SSRF hardening
+
+`POST /files/import` lets the server fetch a URL and store the bytes as a new file. Because the request is issued by the server, it can potentially reach internal services unreachable from the original caller. The platform validates the resolved IP of every URL import against a deny list before opening the connection.
+
+The default deny list blocks:
+
+- loopback ranges (`127.0.0.0/8` and IPv6 `::1`),
+- any IP bound to one of the host's own network interfaces,
+- the EC2 / cloud metadata endpoint at `169.254.169.254`.
+
+Imports that resolve to a denied IP fail at the outbound connection step and return `503 SERVICE_UNAVAILABLE` with a body indicating the import URL could not be fetched. Operators can extend the deny list with `IMPORT_IP_DENY_LIST` (comma-separated exact IPs; CIDR is not supported). See [Configuration](/docs/manage/configuration/) for the exact behavior, including the special meaning of `0.0.0.0`.
+
 ## Database
 
 - **Use TLS to the database** if it travels outside your trusted network. Configure `DB_SSL__*` variables to require encryption and validate certificates.
@@ -175,6 +187,13 @@ Two surfaces help when investigating an incident:
 
 - The **activity log** records create, update, delete, comment, and login events with the actor, timestamp, IP, and user-agent. Reached through the **Activity Log** button at the bottom of the sidebar. Activity is its own module, not a Settings page.
 - The **server log** captures process-level information through Pino. Forward it to a centralized log destination so it survives container restarts.
+
+Two redaction layers are in place:
+
+- **HTTP request logs (pino-http)** redact the `Authorization` request header, the `Cookie` request header, and the `access_token` query parameter before writing the log line.
+- **Flow revision data** (written when a flow's `accountability` is `all`) redacts values associated with a known set of secret-bearing keys, and additionally redacts values that originate from those keys and propagate into later operation options.
+
+The redaction layers target secrets, not arbitrary PII. Operator-controlled debug sinks pass content through unredacted. The Log to Console flow operation writes its `message` directly to the server log, the Run Script operation forwards `console.*` output from the sandboxed script, and SQL query tracing (when enabled at the database driver level) emits raw query bindings. Treat these as debug-only surfaces. Do not route secret values through them.
 
 For audit-heavy projects, leave activity logging on (the default) and configure the role's accountability tracking to include revisions, not just activity. Revisions let you reconstruct an item's full history; activity records what happened.
 

@@ -212,15 +212,15 @@ REFRESH_TOKEN_COOKIE_SECURE="true"
 REFRESH_TOKEN_COOKIE_SAME_SITE="None"
 ```
 
-The frontend then sends users to a CairnCMS-hosted login URL with a `redirect` query parameter:
+The frontend directs users to a CairnCMS-hosted SSO login URL with a same-origin `redirect` target that completes the flow on the CairnCMS side:
 
 ```html
-<a href="https://cms.example.com/auth/login/google?redirect=https://app.example.com/login">
-  Login
-</a>
+<a href="https://cms.example.com/auth/login/google?redirect=/admin">Login</a>
 ```
 
-After the provider authenticates, CairnCMS sets the refresh-token cookie scoped to `cms.example.com` and redirects to `https://app.example.com/login`. The frontend then calls `POST /auth/refresh` with `credentials: 'include'` to exchange the cookie for an access token.
+After the provider authenticates and the `redirect` value passes the same-origin check, CairnCMS sets the refresh-token cookie scoped to `cms.example.com` and redirects the user to the local target (here, the admin app). The cross-domain frontend at `https://app.example.com` then calls `POST https://cms.example.com/auth/refresh` with `credentials: 'include'` to exchange the cookie for an access token.
+
+The `redirect` query parameter accepts only same-origin local paths. A cross-domain frontend cannot pass an external URL as the redirect target. If `redirect` is omitted or fails the same-origin check, the callback returns the access and refresh tokens in a JSON response body and the refresh cookie is not set. That shape suits programmatic clients but not a cross-domain browser frontend, which needs the cookie present on `cms.example.com` to call `/auth/refresh` from `app.example.com`. Practical patterns for completing the round-trip back to your frontend include opening the SSO login in a popup window with a same-origin completion page that closes after authentication and then having the parent frame call `/auth/refresh`, or directing users to a CairnCMS landing page that prompts them to return to your application.
 
 Cross-domain cookies require HTTPS in production. For local testing only, you can use `REFRESH_TOKEN_COOKIE_SECURE="false"` and `REFRESH_TOKEN_COOKIE_SAME_SITE="lax"`. Never run production with these settings. They expose the instance to CSRF attacks.
 

@@ -21,9 +21,11 @@ The middleware identifies which shape was sent by inspecting the token: anything
 Two ways to send a token:
 
 - **Authorization header** — `Authorization: Bearer <token>`. Preferred for server-to-server calls and any context where you control the request headers. The platform follows the bearer scheme exactly: case-insensitive scheme name, single space, then the token.
-- **`access_token` query parameter** — `?access_token=<token>`. Useful for asset URLs and other contexts where setting a header is inconvenient (an `<img>` tag, for example). Avoid in shared logs and avoid for any other request that does not need it — query parameters are commonly logged by web servers and CDNs.
+- **`access_token` query parameter** — `?access_token=<token>`. Supported for compatibility with clients that cannot set headers (legacy integrations, browser features like `<img>` tags that point at protected assets). URLs carrying tokens are routinely captured by browser history, server and CDN logs, and `Referer` headers; avoid when an Authorization header is available.
 
 If both are present, the header takes precedence. There is no documented behavior for sending different tokens through both so it's not recommended.
+
+Same-origin browser clients accessing `/assets/*` do not need to attach a token at all. The refresh-token cookie set during login is used to look up the session and authorize the asset request, which is the path the first-party admin app uses for protected asset loads. Other first-party API calls (including export downloads) send an `Authorization` header on a same-origin fetch and consume the response body directly, so bearer tokens still do not appear in browser URLs.
 
 Endpoints that map to permissions configured for the Public role can be reached without a token. Anything outside the Public role's permitted set returns `403 FORBIDDEN`.
 

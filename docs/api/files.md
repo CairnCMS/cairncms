@@ -25,6 +25,8 @@ Every uploaded file gets a row in `directus_files` with metadata describing it:
 - **`filesize`**, **`width`**, **`height`**, **`duration`**, **`metadata`** — derived properties extracted at upload time.
 - **`uploaded_by`**, **`uploaded_on`**, **`modified_by`**, **`modified_on`** — accountability fields.
 
+`filename_disk` and `uploaded_by` are server-controlled. `filename_disk` is derived from the file's primary key when the bytes are written to storage, and `uploaded_by` is set from the authenticated principal. Attempts to set either field through `POST /files`, `PATCH /files`, or `POST /files/import` are silently stripped from the inbound payload before the row is written; the request still succeeds, but the supplied values do not reach the database. The remaining accountability fields (`uploaded_on`, `modified_by`, `modified_on`) are platform-managed in the normal way (set on insert and update via the existing accountability machinery) and behave the same as on user collections.
+
 The platform does not prevent you from adding fields to `directus_files` through the normal field-creation surfaces. The system collection accepts custom fields the same way user collections do. That said, the cleaner pattern for project-specific metadata is usually a related user collection that references `directus_files` rather than columns added directly to the system collection. Custom fields on `directus_files` migrate, snapshot, and apply through schema-as-code, but they tend to entangle the system collection with project-specific shape in ways that are harder to maintain.
 
 ## Upload a file
@@ -93,6 +95,8 @@ Content-Type: application/json
 ```
 
 `url` is required and must be an absolute HTTP/HTTPS URL. `data` is an optional object of metadata fields applied to the resulting `directus_files` row. The platform fetches the URL, stores the bytes in the configured storage location, and returns the new file record.
+
+URL imports are subject to outbound IP validation. By default, loopback ranges, the host's own network interfaces, and the EC2/cloud metadata endpoint at `169.254.169.254` are blocked to prevent server-side request forgery against internal services. Imports that resolve to a denied IP fail at the outbound connection step and return `503 SERVICE_UNAVAILABLE` with a body indicating the import URL could not be fetched. Operators can extend the deny list through the `IMPORT_IP_DENY_LIST` environment variable; see [Configuration](/docs/manage/configuration/) for the exact behavior, including the special meaning of `0.0.0.0`.
 
 This endpoint is convenient for migrating asset references from another system, where re-uploading every file from the client would be slower than letting the server pull them in parallel.
 
@@ -280,6 +284,8 @@ File metadata permissions are role-driven the same way item permissions are. Per
 - **Create** — required for upload. Roles without create permission on `directus_files` get `403` on `POST /files` and `POST /files/import`.
 - **Update** — required for metadata edits and bytes replacement.
 - **Delete** — required for `DELETE /files`.
+
+Same-origin authenticated browser clients can fetch protected assets without attaching a token. The refresh-token cookie set during login is used to look up the session and authorize the asset request, which is the path the first-party admin app uses for protected asset loads. Cross-origin clients and server-to-server callers still need an `Authorization: Bearer` header (the `?access_token=` query parameter is also supported for compatibility, but not preferred — see [Authentication / Attaching a token](/docs/api/authentication/#attaching-a-token)).
 
 For asset URLs that should be reachable without a token, configure read permission for the Public role on `directus_files`. Be specific about the filter — granting `read all` to Public exposes every file the platform has stored.
 

@@ -5,7 +5,7 @@ sidebar:
   order: 9
 ---
 
-An operation extension adds a new step type to the [Automate](/docs/guides/automate/) system. Built-in operations cover CRUD, conditions, scripts, sleeps, email, notifications, and HTTP requests; an operation extension lets you add a step that does something specific to your project.
+An operation extension adds a new step type to the [Flows](/docs/guides/flows/) system. Built-in operations cover CRUD, conditions, scripts, sleeps, email, notifications, and HTTP requests; an operation extension lets you add a step that does something specific to your project.
 
 Operations are **hybrid extensions**, meaning they have both an app side and an API side. The app side describes how the operation appears in the flow editor (its icon, configuration form, and tile preview). The API side runs the work when a flow executes the operation.
 
@@ -143,7 +143,7 @@ export default defineOperationApi({
 });
 ```
 
-The result of the handler is what gets appended to the [data chain](/docs/guides/automate/#the-data-chain) under the operation's key.
+The result of the handler is what gets appended to the [data chain](/docs/guides/flows/#the-data-chain) under the operation's key.
 
 ## Success and failure paths
 
@@ -255,6 +255,6 @@ After build and install, the new operation appears in the operation picker. Edit
 
 ## Where to go next
 
-- [Automate](/docs/guides/automate/) covers flows from a user perspective for understanding where your operation slots in.
+- [Flows](/docs/guides/flows/) covers flows from a user perspective for understanding where your operation slots in.
 - [Hooks](/docs/develop/extensions/hooks/) and [Endpoints](/docs/develop/extensions/endpoints/) cover the other two server-side extension types.
 - [Creating extensions](/docs/develop/extensions/creating-extensions/) covers the toolchain in full.

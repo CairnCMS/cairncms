@@ -81,6 +81,8 @@ Returns the GraphQL SDL for one of the two GraphQL endpoints, served as a `.grap
 
 The downloaded file works with code generators (graphql-codegen) and any GraphQL-aware tooling. The SDL is generated dynamically against the running schema and the requesting role's permissions, so the same caveat as OpenAPI applies: two roles see different SDLs from the same deployment.
 
+This endpoint is gated by `GRAPHQL_INTROSPECTION`. When introspection is disabled, the endpoint returns a 403, alongside the corresponding rejection on `__schema` and `__type` queries. See [GraphQL / Schema introspection](/docs/api/graphql/#schema-introspection).
+
 ## Extensions (`/extensions/*`)
 
 The `/extensions` subtree exposes the platform's installed extensions. There is no `directus_extensions` table; extensions live on disk and are discovered at startup. The endpoints expose the discovered set, plus the JavaScript chunks the admin app loads at runtime.

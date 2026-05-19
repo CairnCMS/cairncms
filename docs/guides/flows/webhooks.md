@@ -11,13 +11,13 @@ CairnCMS handles webhooks through flows, in both directions. There is no separat
 
 Expose an HTTP endpoint that an external service can call to run logic in CairnCMS. Configure a flow with the **Webhook** trigger. The trigger panel shows the flow-specific URL once the flow is saved; that URL is unauthenticated, so treat it as a credential.
 
-See [Triggers](/docs/guides/automate/triggers/#webhook) for the trigger options, the URL location, and the asynchronous / synchronous response shape.
+See [Triggers](/docs/guides/flows/triggers/#webhook) for the trigger options, the URL location, and the asynchronous / synchronous response shape.
 
 ## Outgoing webhooks
 
 Send an HTTP request to a downstream service when something happens in CairnCMS. Configure a flow with an **Event hook** trigger (or any trigger that fits the source event) plus a **Webhook / Request URL** operation.
 
-See [Operations](/docs/guides/automate/operations/#webhook--request-url) for the operation options. The flow can also include a Condition operation to filter which events actually call the URL, a Transform Payload operation to reshape the request body, or multiple Webhook / Request URL operations to fan out.
+See [Operations](/docs/guides/flows/operations/#webhook--request-url) for the operation options. The flow can also include a Condition operation to filter which events actually call the URL, a Transform Payload operation to reshape the request body, or multiple Webhook / Request URL operations to fan out.
 
 ## Security
 

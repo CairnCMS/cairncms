@@ -7,7 +7,7 @@ sidebar:
 
 Operations are the individual steps inside a flow. CairnCMS ships with a built-in set of operations covering data work, branching, communication, scripting, and HTTP. Custom operations can be added through the extension system.
 
-Every operation appends a value to the [data chain](/docs/guides/automate/#the-data-chain) under its own key. Operations that do not produce data still append `null` so that downstream operations can reference them predictably.
+Every operation appends a value to the [data chain](/docs/guides/flows/#the-data-chain) under its own key. Operations that do not produce data still append `null` so that downstream operations can reference them predictably.
 
 ## Condition
 
@@ -118,7 +118,7 @@ Sends an HTTP request to an arbitrary URL.
 
 Appends the response under the operation key.
 
-For richer outgoing webhook patterns, see the [Webhooks](/docs/guides/automate/webhooks/) page.
+For richer outgoing webhook patterns, see the [Webhooks](/docs/guides/flows/webhooks/) page.
 
 ## Trigger Flow
 
@@ -145,7 +145,7 @@ Appends `null`. Use sparingly; long sleeps tie up flow workers.
 
 Builds a custom JSON object that subsequent operations can reference.
 
-- **JSON** — the object to build, with [data chain variables](/docs/guides/automate/#data-chain-variables) for dynamic values
+- **JSON** — the object to build, with [data chain variables](/docs/guides/flows/#data-chain-variables) for dynamic values
 
 Appends the resulting object.
 

@@ -5,6 +5,7 @@ If you use AI tools in your contribution:
 - You must understand what the code does and why it works
 - Plans and intent should come from you, not from the model
 - You are fully responsible for correctness, security, and adherence to project standards
+- You must not ask AI tools to reproduce, translate, or closely imitate code from non-GPL-compatible or proprietary sources
 - You must disclose AI use in the PR template
 
 We will close without review:

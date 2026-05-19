@@ -1,11 +1,11 @@
 ---
-title: Automation
+title: Flows
 description: REST and GraphQL surfaces for flows and operations. The endpoints, record shapes, and the bespoke `/flows/trigger/<id>` route that turns a flow into an HTTP-callable handler.
 sidebar:
   order: 3
 ---
 
-CairnCMS's automation surface comes in two system collections: **flows** define automated processes and **operations** are the steps inside a flow. Flows handle both inbound HTTP requests (Webhook trigger) and outbound HTTP calls (Webhook / Request URL operation), so the standalone webhook collection from earlier Directus versions is not present. The data model and the operator UX are documented in [Automate](/docs/guides/automate/); this page covers the API surface.
+CairnCMS's automation surface comes in two system collections: **flows** define automated processes and **operations** are the steps inside a flow. Flows handle both inbound HTTP requests (Webhook trigger) and outbound HTTP calls (Webhook / Request URL operation), so the standalone webhook collection from earlier Directus versions is not present. The data model and the operator UX are documented in [Flows](/docs/guides/flows/); this page covers the API surface.
 
 Each collection has the standard CRUD shape documented in [Items](/docs/api/items/), and `directus_flows` adds one bespoke endpoint that exposes a flow as an HTTP-callable handler.
 
@@ -48,6 +48,12 @@ The first two run on internal events; the next two are HTTP-callable; operation-
 - **`operations`** — alias field listing all operations belonging to this flow.
 - **`date_created`**, **`user_created`** — accountability.
 
+### Revision redaction
+
+When `accountability` is `all`, the persisted revision row contains the full keyed state of the flow run: trigger payload, accountability snapshot, environment, and every operation's output keyed by its operation key. Before this state is written to `directus_revisions`, the platform redacts values associated with a known set of secret-bearing keys (authorization headers, tokens, password fields, OAuth/API credentials, and similar). Values that originate from a secret-bearing input and are subsequently interpolated into a later operation's options are also redacted at the interpolated site, even when the surrounding key is not itself sensitive. Redacted values appear as `--redact--` in the revision.
+
+The redaction targets secret-bearing keys and values that propagate from them. It does not automatically redact arbitrary personally identifiable information. Operators who need PII suppression in flow revisions should remove the data before it enters the flow rather than expecting the redaction layer to catch it.
+
 ### `/flows/trigger/<id>`
 
 Two flow trigger types translate to HTTP routes: webhook and manual.
@@ -80,6 +86,8 @@ Content-Type: application/json
 The flow's `options.collections` lists which collections it can run against. Requests targeting a collection outside that list return `403 FORBIDDEN`. The flow operations receive the full request body plus path, query, method, and headers as input data.
 
 A request to `/flows/trigger/<id>` for a flow whose trigger type is anything other than `webhook` or `manual` (or for a flow that does not exist) returns `403 FORBIDDEN`. The response code is intentional: distinguishing "wrong trigger type" from "no such flow" would leak which flow IDs exist.
+
+**Authorization for manual triggers** requires: an authenticated caller, the target collection in the flow's `options.collections` list, and read permission on the target items (the `keys` array, when supplied) or read permission on the target collection (when `requireSelection: false`). The caller does not need read permission on `directus_flows` itself. The ability to fetch the flow's record through `/flows` is independent of the ability to trigger it. UI discovery and backend execution are separate capabilities.
 
 ## Operations (`/operations`)
 
@@ -129,7 +137,7 @@ The bespoke `/flows/trigger/<id>` endpoint is REST-only. There is no GraphQL equ
 
 ## Where to go next
 
-- [Automate](/docs/guides/automate/) — operator-facing reference for designing flows, the trigger types, and the operation catalog.
+- [Flows](/docs/guides/flows/) — operator-facing reference for designing flows, the trigger types, and the operation catalog.
 - [Operations](/docs/develop/extensions/operations/) — building custom operations as extensions.
 - [Hooks](/docs/develop/extensions/hooks/) — the lower-level event surface that flows are built on top of.
 - [Filters and queries](/docs/api/filters-and-queries/) — the query DSL for filtering flow and operation lists.

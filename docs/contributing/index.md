@@ -34,6 +34,16 @@ The project uses topic-prefixed branch names. Use one of these prefixes for the 
 
 Pick the prefix that best describes the dominant intent of the change. PRs that mix two prefixes are usually a sign the work should be split into two PRs.
 
+## Source use and clean implementations
+
+Contributors are responsible for ensuring they have the right to submit their work under GPLv3.
+
+You may learn from public documentation, standards, issue discussions, CVE/GHSA disclosures, release notes, and observed product behavior. You must not copy code, tests, comments, helper structure, naming, or distinctive implementation shape from source that is not available to CairnCMS under GPL-compatible terms.
+
+If you inspect non-GPL-compatible source to understand behavior, write the CairnCMS implementation independently. Use later comparison only to verify behavior, not as a guide for structure or code shape.
+
+If a contribution adapts code from a compatible open-source project, preserve any required notices and mention the source in the PR. Maintainers may ask what sources informed a change, especially for security fixes or upstream-parity work.
+
 ## Before you submit a PR
 
 A short checklist that runs faster locally than in CI:
