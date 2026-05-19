@@ -230,6 +230,6 @@ pnpm --filter api run cli bootstrap
 ## Where to go next
 
 - [Repository layout](/docs/contributing/repository-layout/) — the map of workspace members and where each piece of functionality lives.
-- [Pull request process](/docs/contributing/pull-request-process/) — branching, PR conventions, AI disclosure, and review expectations.
+- [Contributing overview](/docs/contributing/) — branching, the canonical `CONTRIBUTING.md` and `AI_POLICY.md` files, and review expectations.
 - [Configuration](/docs/manage/configuration/) — every environment variable that the API reads.
 - [Extensions](/docs/develop/extensions/) — building extensions, which is a different setup story (a separate package with its own dependencies).

@@ -126,5 +126,5 @@ The pattern is consistent enough that most workflows fit "filter then run." Fall
 ## Where to go next
 
 - [Running locally](/docs/contributing/running-locally/) — set up a development environment and run the platform against the local source.
-- [Pull request process](/docs/contributing/pull-request-process/) — branching conventions, PR template, AI disclosure, and review expectations.
+- [Contributing overview](/docs/contributing/) — branching conventions, the canonical `CONTRIBUTING.md` and `AI_POLICY.md` files, and review expectations.
 - [Extensions](/docs/develop/extensions/) — how the `@cairncms/extensions-sdk` and `@cairncms/create-cairncms-extension` packages described above fit into the operator-facing extension authoring story.
