@@ -52,10 +52,16 @@ export default defineComponent({
 		});
 
 		const items = computed(() => {
-			return collections.value.map((collection) => ({
-				text: collection.name,
-				value: collection.collection,
-			}));
+			return collections.value.reduce<{ text: string; value: string }[]>((acc, collection) => {
+				if (collection.type !== 'alias') {
+					acc.push({
+						text: collection.name,
+						value: collection.collection,
+					});
+				}
+
+				return acc;
+			}, []);
 		});
 
 		return { items, t };
