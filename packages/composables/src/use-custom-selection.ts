@@ -118,9 +118,11 @@ export function useCustomSelectionMultiple(
 				return otherValue;
 			});
 
-			const newEmitValue = [...valueWithoutPrevious, newValue];
-
-			emit(newEmitValue);
+			if (valueWithoutPrevious.length === currentValues.value?.length) {
+				emit(valueWithoutPrevious);
+			} else {
+				emit([...valueWithoutPrevious, newValue]);
+			}
 		}
 	}
 }
