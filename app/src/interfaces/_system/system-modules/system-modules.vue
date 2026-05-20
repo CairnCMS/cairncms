@@ -19,7 +19,7 @@
 						<v-icon class="drag-handle" name="drag_handle" />
 						<v-icon class="icon" :name="element.icon" />
 						<div class="info">
-							<div class="name">{{ element.name }}</div>
+							<div class="name">{{ element.displayName }}</div>
 							<div class="to">{{ element.to }}</div>
 						</div>
 						<div class="spacer" />
@@ -69,10 +69,12 @@ import { nanoid } from 'nanoid';
 import { Field, DeepPartial } from '@cairncms/types';
 import { MODULE_BAR_DEFAULT } from '@/constants';
 import { useExtensions } from '@/extensions';
+import { translate } from '@/utils/translate-object-values';
 
 type PreviewExtra = {
 	to: string;
 	name: string;
+	displayName: string;
 	icon: string;
 };
 
@@ -201,6 +203,7 @@ export default defineComponent({
 							to: part.url,
 							icon: part.icon,
 							name: part.name,
+							displayName: translate(part.name),
 						};
 					}
 
@@ -210,6 +213,7 @@ export default defineComponent({
 						...part,
 						to: `/${module.id}`,
 						name: module.name,
+						displayName: module.name,
 						icon: module.icon,
 					};
 				});
