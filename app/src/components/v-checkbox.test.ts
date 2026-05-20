@@ -90,3 +90,34 @@ test('disabled prop', async () => {
 
 	expect(wrapper.emitted()['update:modelValue']).not.toBeDefined();
 });
+
+test('array modelValue without a value prop does not emit update:modelValue', async () => {
+	const wrapper = mount(VCheckbox, {
+		props: {
+			modelValue: ['test'],
+		},
+		global,
+	});
+
+	await wrapper.get('.checkbox').trigger('click');
+
+	expect(wrapper.emitted()['update:modelValue']).not.toBeDefined();
+});
+
+test('clicking the customValue input does not toggle the checkbox', async () => {
+	const wrapper = mount(VCheckbox, {
+		props: {
+			customValue: true,
+			modelValue: false,
+		},
+		global,
+	});
+
+	await wrapper.find('input').trigger('click');
+
+	expect(wrapper.emitted()['update:modelValue']).not.toBeDefined();
+
+	await wrapper.find('input').setValue('my custom value');
+
+	expect(wrapper.emitted()['update:value'][0]).toEqual(['my custom value']);
+});
