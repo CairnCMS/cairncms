@@ -75,12 +75,12 @@ export default defineComponent({
 				{
 					icon: 'bug_report',
 					name: t('report_bug'),
-					href: 'https://github.com/CairnCMS/cairncms/issues/new?template=bug_report.yml',
+					href: 'https://github.com/CairnCMS/cairncms/issues/new',
 				},
 				{
 					icon: 'new_releases',
 					name: t('request_feature'),
-					href: 'https://github.com/CairnCMS/cairncms/discussions/new?category=feature-requests',
+					href: 'https://github.com/CairnCMS/cairncms/discussions/new',
 				},
 			];
 		});
