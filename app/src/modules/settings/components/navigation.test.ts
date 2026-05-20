@@ -61,3 +61,28 @@ describe('Settings Navigation — version display', () => {
 		expect(wrapper.html()).not.toContain('github.com/CairnCMS/cairncms/releases');
 	});
 });
+
+describe('Settings Navigation - support links', () => {
+	beforeEach(() => {
+		setActivePinia(
+			createTestingPinia({
+				createSpy: vi.fn,
+				stubActions: true,
+			})
+		);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('links to the generic issue and discussion pages without a preselected template or category', () => {
+		const wrapper = mountNavigation();
+		const hrefs = wrapper.findAll('a.v-list-item-stub').map((anchor) => anchor.attributes('href'));
+
+		expect(hrefs).toContain('https://github.com/CairnCMS/cairncms/issues/new');
+		expect(hrefs).toContain('https://github.com/CairnCMS/cairncms/discussions/new');
+		expect(hrefs.some((href) => href?.includes('?template='))).toBe(false);
+		expect(hrefs.some((href) => href?.includes('?category='))).toBe(false);
+	});
+});
