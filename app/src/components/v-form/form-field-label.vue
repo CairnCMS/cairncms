@@ -35,10 +35,10 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import { Field } from '@cairncms/types';
+import type { FormField } from './types';
 
 interface Props {
-	field: Field;
+	field: FormField;
 	toggle: (event: Event) => any;
 	batchMode?: boolean;
 	batchActive?: boolean;
@@ -155,7 +155,7 @@ const { t } = useI18n();
 			width: 4px;
 			height: 4px;
 			background-color: var(--foreground-subdued);
-			border-radius: 2px;
+			border-radius: 4px;
 			content: '';
 		}
 
