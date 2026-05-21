@@ -7,29 +7,18 @@
 	</div>
 </template>
 
-<script lang="ts">
-import { defineComponent } from 'vue';
-
-export default defineComponent({
-	props: {
-		icon: {
-			type: String,
-			default: null,
-		},
-		name: {
-			type: String,
-			required: true,
-		},
-		search: {
-			type: String,
-			default: null,
-		},
-		depth: {
-			type: Number,
-			default: 0,
-		},
-	},
-});
+<script setup lang="ts">
+withDefaults(
+	defineProps<{
+		name: string;
+		search?: string;
+		icon?: string;
+		depth?: number;
+	}>(),
+	{
+		depth: 0,
+	}
+);
 </script>
 
 <style scoped>

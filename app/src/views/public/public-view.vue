@@ -2,10 +2,18 @@
 	<div class="public-view" :class="{ branded: isBranded }">
 		<div class="container" :class="{ wide }">
 			<div class="title-box">
-				<div v-if="info?.project?.project_logo" class="logo" :style="{ backgroundColor: info?.project.project_color }">
+				<div
+					v-if="info?.project?.project_logo"
+					class="logo"
+					:style="info?.project.project_color ? { backgroundColor: info.project.project_color } : {}"
+				>
 					<v-image :src="logoURL" :alt="info?.project.project_name || 'Logo'" />
 				</div>
-				<div v-else class="logo" :style="{ backgroundColor: info?.project?.project_color }">
+				<div
+					v-else
+					class="logo"
+					:style="info?.project?.project_color ? { backgroundColor: info.project.project_color } : {}"
+				>
 					<img src="./logo-dark.svg" alt="CairnCMS" class="cairncms-logo" />
 				</div>
 				<div class="title">
@@ -150,7 +158,7 @@ const hasCustomBackground = computed(() => {
 });
 
 const artStyles = computed(() => {
-	if (!hasCustomBackground.value) return null;
+	if (!hasCustomBackground.value) return {};
 
 	const url = getRootPath() + `assets/${info.value!.project?.public_background}`;
 
