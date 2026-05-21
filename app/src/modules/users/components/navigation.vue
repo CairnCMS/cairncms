@@ -23,38 +23,36 @@
 	</v-list>
 </template>
 
-<script lang="ts">
+<script setup lang="ts">
+import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { computed, defineComponent } from 'vue';
-
 import useNavigation from '../composables/use-navigation';
 import NavigationRole from './navigation-role.vue';
 
-export default defineComponent({
-	components: { NavigationRole },
-	props: {
-		currentRole: {
-			type: String,
-			default: null,
-		},
-	},
-	setup() {
-		const { t } = useI18n();
+defineProps<{
+	currentRole?: string;
+}>();
 
-		const { roles, loading } = useNavigation();
+const { t } = useI18n();
 
-		const lastAdminRoleId = computed(() => {
-			if (!roles.value) return null;
-			const adminRoles = roles.value.filter((role) => role.admin_access === true);
-			return adminRoles.length === 1 ? adminRoles[0].id : null;
-		});
+const { roles, loading } = useNavigation();
 
-		return { t, roles, loading, lastAdminRoleId };
-	},
+const lastAdminRoleId = computed(() => {
+	if (!roles.value) return null;
+	const adminRoles = roles.value.filter((role) => role.admin_access === true);
+	return adminRoles.length === 1 ? adminRoles[0].id : null;
 });
 </script>
 
 <style lang="scss" scoped>
+.v-skeleton-loader {
+	--v-skeleton-loader-background-color: var(--background-normal-alt);
+}
+
+.v-divider {
+	--v-divider-color: var(--background-normal-alt);
+}
+
 .users-navigation {
 	--v-list-item-active-rule-width: 2px;
 	--v-list-item-active-rule-color: var(--primary);
@@ -63,13 +61,5 @@ export default defineComponent({
 	:deep(.v-list-item.active) {
 		--v-list-item-icon-color: var(--primary);
 	}
-}
-
-.v-skeleton-loader {
-	--v-skeleton-loader-background-color: var(--background-normal-alt);
-}
-
-.v-divider {
-	--v-divider-color: var(--background-normal-alt);
 }
 </style>
