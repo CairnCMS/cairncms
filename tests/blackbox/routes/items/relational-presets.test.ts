@@ -88,15 +88,11 @@ describe('Relational field presets on item create', () => {
 
 			// Delete the user before the role so it is never left orphaned with role = null.
 			if (userId[vendor]) {
-				await request(getUrl(vendor))
-					.delete(`/users/${userId[vendor]}`)
-					.set('Authorization', `Bearer ${adminToken}`);
+				await request(getUrl(vendor)).delete(`/users/${userId[vendor]}`).set('Authorization', `Bearer ${adminToken}`);
 			}
 
 			if (roleId[vendor]) {
-				await request(getUrl(vendor))
-					.delete(`/roles/${roleId[vendor]}`)
-					.set('Authorization', `Bearer ${adminToken}`);
+				await request(getUrl(vendor)).delete(`/roles/${roleId[vendor]}`).set('Authorization', `Bearer ${adminToken}`);
 			}
 		}
 	});
