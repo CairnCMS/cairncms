@@ -16,6 +16,7 @@ exports.list = {
 		{ testFilePath: '/logger/redact.test.ts' },
 		{ testFilePath: '/routes/collections/schema-cache.test.ts' },
 		{ testFilePath: '/routes/permissions/cache-purge.test.ts' },
+		{ testFilePath: '/routes/items/relational-presets.test.ts' },
 		{ testFilePath: '/routes/assets/format.test.ts' },
 		{ testFilePath: '/routes/assets/read.test.ts' },
 		{ testFilePath: '/routes/assets/limit.test.ts' },
