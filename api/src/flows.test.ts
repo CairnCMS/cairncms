@@ -1,10 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, test, vi } from 'vitest';
+import { BaseException } from '@cairncms/exceptions';
 import { REDACT_TEXT } from './constants.js';
 import * as exceptions from './exceptions/index.js';
 import { buildRevisionData, getFlowManager, type Step } from './flows.js';
 import conditionOp from './operations/condition/index.js';
 
-const { checkAccessSpy } = vi.hoisted(() => ({ checkAccessSpy: vi.fn() }));
+const { checkAccessSpy, revisionsCreateSpy } = vi.hoisted(() => ({
+	checkAccessSpy: vi.fn(),
+	revisionsCreateSpy: vi.fn(),
+}));
 
 vi.mock('./database/index.js', () => ({
 	default: vi.fn(() => ({})),
@@ -14,6 +18,18 @@ vi.mock('./services/authorization.js', () => {
 	const AuthorizationService = vi.fn();
 	AuthorizationService.prototype.checkAccess = checkAccessSpy;
 	return { AuthorizationService };
+});
+
+vi.mock('./services/activity.js', () => {
+	const ActivityService = vi.fn();
+	ActivityService.prototype.createOne = vi.fn().mockResolvedValue('test-activity-id');
+	return { ActivityService };
+});
+
+vi.mock('./services/revisions.js', () => {
+	const RevisionsService = vi.fn();
+	RevisionsService.prototype.createOne = revisionsCreateSpy;
+	return { RevisionsService };
 });
 
 const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.HEADER_PAYLOAD_LONG_ENOUGH_TO_BE_REAL_TOKEN';
@@ -448,5 +464,90 @@ describe('FlowManager._runManualFlow (GHSA-7cvf-pxgp-42fc)', () => {
 			expect(executeFlowSpy).not.toHaveBeenCalled();
 			expect(checkAccessSpy).not.toHaveBeenCalled();
 		});
+	});
+});
+
+describe('flow operation errors expose a curated reject payload', () => {
+	const triggerData = { path: '/flows/trigger/err', method: 'POST', headers: {}, query: {}, body: {} };
+	const context = { accountability: null, database: {} as any, schema: { collections: {}, relations: [] } as any };
+
+	function throwingFlow(type: string): any {
+		return {
+			id: 'flow-err',
+			name: 'flow-err',
+			status: 'active',
+			trigger: 'webhook',
+			accountability: null,
+			options: { method: 'POST', return: '$last', async: false },
+			operation: { id: 'op-1', key: 'fail', type, options: {}, resolve: null, reject: null },
+		};
+	}
+
+	it('exposes message only when an operation throws a plain Error', async () => {
+		const manager = getFlowManager();
+
+		manager.addOperation('test-plain-error', () => {
+			throw new Error('operation failed');
+		});
+
+		const result = await (manager as any).executeFlow(throwingFlow('test-plain-error'), triggerData, context);
+
+		expect(result).toEqual({ message: 'operation failed' });
+	});
+
+	it('does not carry an Error cause into the reject payload', async () => {
+		const manager = getFlowManager();
+
+		manager.addOperation('test-error-cause', () => {
+			throw new Error('operation failed', { cause: 'CAUSE_MARKER_MUST_NOT_SURVIVE' });
+		});
+
+		const result = await (manager as any).executeFlow(throwingFlow('test-error-cause'), triggerData, context);
+
+		expect(result).toEqual({ message: 'operation failed' });
+	});
+
+	it('exposes message, code, status, and extensions when an operation throws a BaseException', async () => {
+		const manager = getFlowManager();
+
+		manager.addOperation('test-base-exception', () => {
+			throw new BaseException('operation failed', 418, 'TEAPOT', { detail: 'context' });
+		});
+
+		const result = await (manager as any).executeFlow(throwingFlow('test-base-exception'), triggerData, context);
+
+		expect(result).toEqual({
+			message: 'operation failed',
+			code: 'TEAPOT',
+			status: 418,
+			extensions: { detail: 'context' },
+		});
+	});
+
+	it('persists only the curated error to the revision, without stack or cause', async () => {
+		const secret = 'sk_live_must_not_persist_in_revision';
+		const manager = getFlowManager();
+
+		manager.addOperation('test-revision-error', () => {
+			throw new Error('boom', { cause: secret });
+		});
+
+		revisionsCreateSpy.mockClear();
+
+		await (manager as any).executeFlow(
+			{ ...throwingFlow('test-revision-error'), accountability: 'all' },
+			triggerData,
+			context
+		);
+
+		expect(revisionsCreateSpy).toHaveBeenCalledTimes(1);
+
+		const revisionData = revisionsCreateSpy.mock.calls[0]![0].data;
+		expect(revisionData.data.$last).toEqual({ message: 'boom' });
+
+		const serialized = JSON.stringify(revisionData);
+		expect(serialized).not.toContain(secret);
+		expect(serialized).not.toContain('stack');
+		expect(serialized).not.toContain('cause');
 	});
 });
