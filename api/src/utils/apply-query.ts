@@ -831,7 +831,7 @@ export async function applySearch(
 			} else if (['bigInteger', 'integer', 'decimal', 'float'].includes(field.type)) {
 				const number = Number(searchQuery);
 
-				if (!isNaN(number)) {
+				if (validateNumber(searchQuery, number)) {
 					this.orWhere({ [`${collection}.${name}`]: number });
 					emitted = true;
 				}
@@ -845,6 +845,13 @@ export async function applySearch(
 			this.whereRaw('1 = 0');
 		}
 	});
+}
+
+function validateNumber(value: string, parsed: number) {
+	if (isNaN(parsed) || !Number.isFinite(parsed)) return false;
+	// casting parsed value back to string should be equal the original value
+	// (prevent unintended number parsing, e.g. String(7) !== "0b111")
+	return String(parsed) === value;
 }
 
 const VALUE_DERIVING_AGGREGATE_OPS = new Set(['min', 'max', 'sum', 'sumDistinct', 'avg', 'avgDistinct']);
