@@ -30,24 +30,34 @@ Place migration files under the configured extensions folder:
 
 ```
 <EXTENSIONS_PATH>/migrations/
-├── 20260101A-add-orders-index.js
-└── 20260205A-backfill-tenant-ids.js
+├── 20260101A-add-orders-index.mjs
+└── 20260205A-backfill-tenant-ids.cjs
 ```
 
 Custom migration files must:
 
-- be plain JavaScript (`.js`); the loader does not pick up `.ts` files for custom migrations
+- be JavaScript, with one of these extensions: `.js`, `.cjs`, or `.mjs` (the loader does not pick up `.ts` files for custom migrations)
 - start with a unique version prefix, separated from the description by a dash
 
 CairnCMS's built-in migrations use the format `<YYYYMMDD><LETTER>-<description>.ts`, where the letter disambiguates multiple migrations on the same date (`A`, `B`, `C`, …). Following the same convention for custom migrations is recommended, because it puts custom and built-in migrations in a sensible chronological order and avoids version collisions.
 
 The version (the part before the first `-`) must be unique across all migrations, built-in and custom combined. CairnCMS refuses to start if it detects two migrations with the same version key.
 
+## Module format
+
+The file extension determines how Node loads the migration:
+
+- **`.mjs`** is always treated as an ECMAScript module (ESM). Use `export async function up` and `export async function down`.
+- **`.cjs`** is always treated as CommonJS. Use `module.exports = { up, down }`.
+- **`.js`** follows the nearest `package.json` `"type"` field. Without `"type": "module"` Node loads the file as CommonJS; with it, as ESM. ESM syntax in a `.js` file in a project whose `package.json` does not declare `"type": "module"` raises a `SyntaxError` at load time.
+
+Prefer the explicit `.mjs` or `.cjs` extension when the surrounding `package.json` context is not under your control, so the migration's module shape is unambiguous.
+
 ## Migration file structure
 
 Each migration exports an `up` function and a `down` function. Both receive a Knex instance:
 
-```js
+```mjs
 export async function up(knex) {
   await knex.schema.createTable('audit_log', (table) => {
     table.increments('id');
@@ -109,9 +119,9 @@ The bootstrap process also uses this table to decide whether the database is ful
 
 A migration that adds a `tenant_id` column to an existing `orders` collection and indexes it.
 
-`<EXTENSIONS_PATH>/migrations/20260301A-add-orders-tenant-id.js`:
+`<EXTENSIONS_PATH>/migrations/20260301A-add-orders-tenant-id.mjs`:
 
-```js
+```mjs
 export async function up(knex) {
   await knex.schema.alterTable('orders', (table) => {
     table.string('tenant_id', 36);
