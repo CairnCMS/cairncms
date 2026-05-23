@@ -6,6 +6,12 @@ import applyQuery, { applySearch, applySort, validateGroupOperands } from './app
 
 const PUBLIC_ROLE_ID = '00000000-0000-0000-0000-000000000000';
 
+const DB_TYPE_BY_FIELD_TYPE: Record<'string' | 'integer' | 'uuid', string> = {
+	string: 'varchar',
+	integer: 'integer',
+	uuid: 'uuid',
+};
+
 function makeField(name: string, type: 'string' | 'integer' | 'uuid' = 'string', special: string[] = []): any {
 	return {
 		field: name,
@@ -13,7 +19,7 @@ function makeField(name: string, type: 'string' | 'integer' | 'uuid' = 'string',
 		nullable: true,
 		generated: false,
 		type,
-		dbType: type === 'integer' ? 'integer' : type === 'uuid' ? 'uuid' : 'varchar',
+		dbType: DB_TYPE_BY_FIELD_TYPE[type],
 		precision: null,
 		scale: null,
 		special,
