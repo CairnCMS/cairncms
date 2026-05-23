@@ -306,6 +306,35 @@ describe('applySearch — conceal-field exclusion (GHSA-8jpw-gpr4-8cmh)', () => 
 	});
 });
 
+describe('applySearch — numeric field accepts only decimal values', () => {
+	it.each(['0x56071c902718e681e274DB0AaC9B4Ed2d027924d', '0b11111', '0.42e3', 'Infinity', '42.000'])(
+		'does not match %s against a numeric field',
+		async (value) => {
+			const dbQuery = makeBuilder();
+			const accountability = makeAccountability({ permissions: [makePermission(['rank'])] });
+
+			await applySearch(makeSchema(), dbQuery, value, 'notes', accountability);
+
+			const { sql } = dbQuery.toSQL();
+
+			expect(sql).not.toContain('rank');
+			expect(sql).toContain('1 = 0');
+		}
+	);
+
+	it.each(['1234', '-128', '12.34'])('matches decimal %s against a numeric field', async (value) => {
+		const dbQuery = makeBuilder();
+		const accountability = makeAccountability({ permissions: [makePermission(['rank'])] });
+
+		await applySearch(makeSchema(), dbQuery, value, 'notes', accountability);
+
+		const { sql, bindings } = dbQuery.toSQL();
+
+		expect(sql).toContain('rank');
+		expect(bindings).toContain(Number(value));
+	});
+});
+
 describe('applySort — unknown column validation', () => {
 	function callApplySort(sort: string[]) {
 		const dbQuery = makeBuilder();
