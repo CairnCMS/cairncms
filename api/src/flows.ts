@@ -136,7 +136,11 @@ class FlowManager {
 		return handler(data, context);
 	}
 
-	public async runWebhookFlow(id: string, data: unknown, context: Record<string, unknown>): Promise<unknown> {
+	public async runWebhookFlow(
+		id: string,
+		data: unknown,
+		context: Record<string, unknown>
+	): Promise<{ result: unknown; cacheEnabled: boolean }> {
 		if (!(id in this.webhookFlowHandlers)) {
 			logger.warn(`Couldn't find webhook or manual triggered flow with id "${id}"`);
 			throw new exceptions.ForbiddenException();
@@ -235,23 +239,32 @@ class FlowManager {
 
 				this.operationFlowHandlers[flow.id] = handler;
 			} else if (flow.trigger === 'webhook') {
-				const handler = (data: unknown, context: Record<string, unknown>) => {
+				const method = flow.options?.['method'] ?? 'GET';
+
+				const handler = async (data: unknown, context: Record<string, unknown>) => {
+					let cacheEnabled = true;
+
+					if (method === 'GET') {
+						cacheEnabled = flow.options['cacheEnabled'] !== false;
+					}
+
 					if (flow.options['async']) {
 						this.executeFlow(flow, data, context);
-						return undefined;
+						return { result: undefined, cacheEnabled };
 					} else {
-						return this.executeFlow(flow, data, context);
+						return { result: await this.executeFlow(flow, data, context), cacheEnabled };
 					}
 				};
-
-				const method = flow.options?.['method'] ?? 'GET';
 
 				// Default return to $last for webhooks
 				flow.options['return'] = flow.options['return'] ?? '$last';
 
 				this.webhookFlowHandlers[`${method}-${flow.id}`] = handler;
 			} else if (flow.trigger === 'manual') {
-				const handler = (data: unknown, context: Record<string, unknown>) => this._runManualFlow(flow, data, context);
+				const handler = async (data: unknown, context: Record<string, unknown>) => ({
+					result: await this._runManualFlow(flow, data, context),
+					cacheEnabled: true,
+				});
 
 				// Default return to $last for manual
 				flow.options['return'] = '$last';
