@@ -1,0 +1,40 @@
+{
+	"name": "@cairncms/pressure",
+	"version": "1.0.0",
+	"type": "module",
+	"sideEffects": false,
+	"scripts": {
+		"build": "tsc --project tsconfig.prod.json",
+		"dev": "tsc --watch",
+		"test": "vitest --watch=false"
+	},
+	"description": "Pressure based rate limiter",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/CairnCMS/cairncms.git",
+		"directory": "packages/pressure"
+	},
+	"license": "MIT",
+	"author": "The CairnCMS Authors",
+	"exports": {
+		".": "./dist/index.js",
+		"./package.json": "./package.json"
+	},
+	"main": "dist/index.js",
+	"files": [
+		"dist",
+		"!**/*.test.{js,d.ts}"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"devDependencies": {
+		"@types/express": "4.17.17",
+		"@vitest/coverage-v8": "1.6.1",
+		"typescript": "5.0.4",
+		"vitest": "1.6.1"
+	},
+	"dependencies": {
+		"@cairncms/utils": "workspace:*"
+	}
+}

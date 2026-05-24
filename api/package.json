@@ -61,6 +61,7 @@
 		"@cairncms/constants": "workspace:*",
 		"@cairncms/exceptions": "workspace:*",
 		"@cairncms/format-title": "workspace:*",
+		"@cairncms/pressure": "workspace:*",
 		"@cairncms/schema": "workspace:*",
 		"@cairncms/specs": "workspace:*",
 		"@cairncms/storage": "workspace:*",

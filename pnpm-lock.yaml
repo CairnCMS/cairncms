@@ -78,6 +78,9 @@ importers:
       '@cairncms/format-title':
         specifier: workspace:*
         version: link:../packages/format-title
+      '@cairncms/pressure':
+        specifier: workspace:*
+        version: link:../packages/pressure
       '@cairncms/schema':
         specifier: workspace:*
         version: link:../packages/schema
@@ -945,6 +948,25 @@ importers:
 
   packages/format-title:
     devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 1.6.1
+        version: 1.6.1(vitest@1.6.1(@types/node@22.19.17)(happy-dom@14.12.3)(sass@1.62.0)(terser@5.46.1))
+      typescript:
+        specifier: 5.0.4
+        version: 5.0.4
+      vitest:
+        specifier: 1.6.1
+        version: 1.6.1(@types/node@22.19.17)(happy-dom@14.12.3)(sass@1.62.0)(terser@5.46.1)
+
+  packages/pressure:
+    dependencies:
+      '@cairncms/utils':
+        specifier: workspace:*
+        version: link:../utils
+    devDependencies:
+      '@types/express':
+        specifier: 4.17.17
+        version: 4.17.17
       '@vitest/coverage-v8':
         specifier: 1.6.1
         version: 1.6.1(vitest@1.6.1(@types/node@22.19.17)(happy-dom@14.12.3)(sass@1.62.0)(terser@5.46.1))
