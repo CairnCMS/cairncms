@@ -117,7 +117,7 @@ For pipelines that cannot shell into a container, the same workflow is exposed a
 
 - **`GET /schema/snapshot`** — returns the current snapshot as JSON. Equivalent to `cairncms schema snapshot --format json` to stdout.
 - **`POST /schema/diff`** — accepts a snapshot (JSON in the body, or YAML/JSON as multipart form upload), returns `{ hash, diff }`. The hash is a fingerprint of the current database snapshot at the moment the diff was computed.
-- **`POST /schema/apply`** — accepts the `{ hash, diff }` payload from the diff endpoint and applies the diff. The hash is re-checked against the current state; if the database has changed since the diff was produced, the apply is rejected.
+- **`POST /schema/apply`** — accepts the `{ hash, diff }` payload from the diff endpoint (JSON in the body, or YAML/JSON as multipart form upload) and applies the diff. The hash is re-checked against the current state. If the database has changed since the diff was produced, the apply is rejected.
 
 The two-step diff/apply flow is the safety net for HTTP. Between the moment you compute the diff and the moment you apply it, another admin or an automated process might have changed the schema. The hash check catches that and forces a re-diff.
 

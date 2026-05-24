@@ -321,13 +321,12 @@ describe('Schema Snapshots', () => {
 			);
 		});
 
-		describe('applies empty snapshot', () => {
+		describe('applies an empty snapshot via multipart/form-data with an application/json content-type', () => {
 			it.each(vendors)(
 				'%s',
 				async (vendor) => {
 					expect(snapshotsCacheEmpty[vendor]).toBeDefined();
 
-					// Action
 					const responseDiff = await request(getUrl(vendor))
 						.post('/schema/diff')
 						.send(snapshotsCacheEmpty[vendor])
@@ -336,11 +335,12 @@ describe('Schema Snapshots', () => {
 
 					const response = await request(getUrl(vendor))
 						.post('/schema/apply')
-						.send(responseDiff.body.data)
-						.set('Content-type', 'application/json')
+						.attach('file', Buffer.from(JSON.stringify(responseDiff.body.data)), {
+							contentType: 'application/json',
+							filename: 'diff.json',
+						})
 						.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`);
 
-					// Assert
 					expect(response.statusCode).toEqual(204);
 				},
 				1200000
@@ -359,13 +359,12 @@ describe('Schema Snapshots', () => {
 			});
 		});
 
-		describe('applies a snapshot (YAML)', () => {
+		describe('applies a snapshot (YAML) with multipart/form-data requests', () => {
 			it.each(vendors)(
 				'%s',
 				async (vendor) => {
 					expect(snapshotsCacheOriginalYaml[vendor]).toBeDefined();
 
-					// Action
 					const responseDiff = await request(getUrl(vendor))
 						.post('/schema/diff')
 						.attach('file', Buffer.from(snapshotsCacheOriginalYaml[vendor]))
@@ -373,11 +372,9 @@ describe('Schema Snapshots', () => {
 
 					const response = await request(getUrl(vendor))
 						.post('/schema/apply')
-						.send(responseDiff.body.data)
-						.set('Content-type', 'application/json')
+						.attach('file', Buffer.from(JSON.stringify(responseDiff.body.data)))
 						.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`);
 
-					// Assert
 					expect(response.statusCode).toEqual(204);
 				},
 				1200000
