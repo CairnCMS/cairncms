@@ -36,8 +36,11 @@ Configuration:
 - **Method** — GET or POST
 - **Asynchronous** — if enabled, the trigger responds immediately and the flow runs in the background. If disabled, the flow runs to completion before responding.
 - **Response Body** — what to return when not asynchronous (the value of `$last`, the entire data chain, or a specific operation key)
+- **Cache** — for GET only; when off, new responses for this flow are not stored in the response cache. The setting is hidden for POST because POST never hits the response cache.
 
 The full URL appears in the trigger panel after the flow is saved. Treat this URL as private; anyone with it can invoke the flow.
+
+The Cache toggle controls future writes, not lookups. If `CACHE_AUTO_PURGE=true` (the value the CairnCMS Docker bootstrap sets in new projects' env files) saving the flow clears the response cache, so flipping the toggle takes effect on the next request. If `CACHE_AUTO_PURGE=false` (the in-code default) a previously cached response for this flow continues to serve until its TTL expires or the cache is cleared explicitly via the admin endpoint; only then does the toggle suppress new writes.
 
 For the broader pattern, see the [Webhooks](/docs/guides/flows/webhooks/) page.
 
