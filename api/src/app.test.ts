@@ -1,7 +1,13 @@
 import { Router } from 'express';
 import request from 'supertest';
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import createApp from './app.js';
+
+const handlePressureMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@cairncms/pressure', () => ({
+	handlePressure: handlePressureMock,
+}));
 
 vi.mock('./database', () => ({
 	default: vi.fn(),
@@ -197,6 +203,61 @@ describe('createApp', async () => {
 					},
 				],
 			});
+		});
+	});
+
+	describe('Pressure limiter wiring', () => {
+		beforeEach(() => {
+			handlePressureMock.mockReset();
+
+			handlePressureMock.mockImplementation(
+				(options: { error?: Error }) => (_req: unknown, _res: unknown, next: (err?: Error) => void) =>
+					next(options.error ?? new Error('Pressure limit exceeded'))
+			);
+		});
+
+		afterEach(async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['PRESSURE_LIMITER_ENABLED'] = false;
+		});
+
+		test('does not register the pressure middleware when PRESSURE_LIMITER_ENABLED is false', async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['PRESSURE_LIMITER_ENABLED'] = false;
+
+			const app = await createApp();
+			const response = await request(app).get('/server/ping');
+
+			expect(handlePressureMock).not.toHaveBeenCalled();
+			expect(response.statusCode).toBe(200);
+			expect(response.text).toBe('pong');
+		});
+
+		test('registers the pressure middleware with env-derived options when PRESSURE_LIMITER_ENABLED is true', async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['PRESSURE_LIMITER_ENABLED'] = true;
+
+			const app = await createApp();
+
+			expect(handlePressureMock).toHaveBeenCalledOnce();
+			const options = handlePressureMock.mock.calls[0]![0] as Record<string, unknown>;
+
+			expect(options).toMatchObject({
+				sampleInterval: 250,
+				maxEventLoopUtilization: 0.99,
+				maxEventLoopDelay: 500,
+				maxMemoryRss: false,
+				maxMemoryHeapUsed: false,
+				retryAfter: false,
+			});
+
+			const error = options['error'] as { status?: number; message?: string };
+			expect(error.status).toBe(503);
+			expect(error.message).toBe('Under pressure');
+
+			const response = await request(app).get('/server/ping');
+			expect(response.statusCode).toBe(503);
+			expect(response.body.errors?.[0]?.extensions?.code).toBe('SERVICE_UNAVAILABLE');
 		});
 	});
 });
