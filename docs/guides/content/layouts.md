@@ -1,6 +1,6 @@
 ---
 title: Layouts
-description: Browse collection items as tables, cards, calendars, or maps.
+description: Browse collection items as tables, cards, calendars, maps, or kanban boards.
 sidebar:
   order: 1
 ---
@@ -11,12 +11,13 @@ Use layouts when the default table view is not the clearest way to work with a c
 
 ## Built-in layouts
 
-CairnCMS currently ships with four built-in collection layouts:
+CairnCMS currently ships with five built-in collection layouts:
 
 - **Table** for general-purpose browsing and bulk work
 - **Cards** for image-first or summary-oriented collections
 - **Calendar** for time-based records
 - **Map** for geospatial records
+- **Kanban** for grouping items into drag-and-drop columns by a status or category field
 
 Each layout has its own controls and its own requirements. Calendar needs date fields. Map needs compatible geometry or location data. Cards are most useful when the collection has an image and short summary fields.
 
@@ -78,6 +79,26 @@ Typical uses include:
 - survey or asset locations
 
 The collection needs a compatible geospatial field before this layout is useful.
+
+### Kanban
+
+Kanban is useful for collections that represent a small set of states, statuses, or categories. Items appear as cards inside columns, one column per group value. Operators drag a card from one column to another to change its group, which updates the underlying grouping field on the item.
+
+To use Kanban, the collection needs one of:
+
+- a single-select choice field on `string`, `integer`, `float`, or `bigInteger`
+- an M2O field to a small lookup collection
+
+Plain string fields with arbitrary values are not eligible. The grouping selector only offers fields that match one of the two shapes above so that drag-to-update produces valid persisted state.
+
+Each card can optionally surface:
+
+- a title field
+- a text field
+- a date field
+- a tags field
+- a related user (with avatar)
+- an image with cover or contain fit
 
 ## Display templates
 
