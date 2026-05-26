@@ -1014,6 +1014,9 @@ importers:
 
   packages/storage:
     devDependencies:
+      '@types/node':
+        specifier: 22.19.17
+        version: 22.19.17
       '@vitest/coverage-v8':
         specifier: 1.6.1
         version: 1.6.1(vitest@1.6.1(@types/node@22.19.17)(happy-dom@14.12.3)(sass@1.62.0)(terser@5.46.1))
@@ -1224,9 +1227,6 @@ importers:
       '@cairncms/constants':
         specifier: workspace:*
         version: link:../constants
-      '@cairncms/storage':
-        specifier: workspace:*
-        version: link:../storage
       date-fns:
         specifier: 2.29.3
         version: 2.29.3
@@ -1252,9 +1252,6 @@ importers:
       '@cairncms/types':
         specifier: workspace:*
         version: link:../types
-      '@ngneat/falso':
-        specifier: 6.4.0
-        version: 6.4.0
       '@types/fs-extra':
         specifier: 11.0.1
         version: 11.0.1
