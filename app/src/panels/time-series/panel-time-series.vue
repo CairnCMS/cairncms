@@ -6,6 +6,7 @@
 
 <script setup lang="ts">
 import { useFieldsStore } from '@/stores/fields';
+import { PanelFunction } from '@/types/panels';
 import type { Filter } from '@cairncms/types';
 import { abbreviateNumber, adjustDate } from '@cairncms/utils';
 import { cssVar } from '@cairncms/utils/browser';
@@ -35,7 +36,7 @@ const props = withDefaults(
 		collection: string;
 		dateField: string;
 		valueField: string;
-		function: 'count' | 'countDistinct' | 'avg' | 'avgDistinct' | 'sum' | 'sumDistinct' | 'min' | 'max';
+		function: PanelFunction;
 		precision?: string;
 		range?: string;
 		color?: string;
