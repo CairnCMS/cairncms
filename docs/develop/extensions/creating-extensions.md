@@ -97,6 +97,16 @@ The build command supports several flags:
 
 Most projects only ever need the bare `build` command and `--watch`.
 
+### Output format
+
+The build CLI emits ESM by default for newly scaffolded extensions. The scaffolder writes `"type": "module"` into the generated `package.json`, and the build reads that field to choose the output format.
+
+Existing extensions without a `"type"` field continue to emit CommonJS, so a rebuild does not change their loader behavior. To migrate an existing extension to ESM, add `"type": "module"` to its `package.json` and rebuild.
+
+The output file extension overrides the manifest. A path ending in `.mjs` always emits ESM. A path ending in `.cjs` always emits CommonJS. App-side bundles always emit ESM regardless of `type`.
+
+The same rules apply when building with explicit `-t -i -o` flags. The CLI consults the current directory's `package.json` to determine the `type`, with the same file-extension override.
+
 ### Custom Rollup configuration
 
 To extend the Rollup config — for example, to add a plugin — create one of these files at the root of the extension package:
