@@ -231,7 +231,6 @@ function formatColor(color: string | number, value: string | number) {
 
 	return formattedColor;
 }
-
 </script>
 
 <style scoped>

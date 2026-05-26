@@ -55,6 +55,7 @@ describe('panels/pie-chart/checkMatchingConditionalFill', () => {
 			expect(
 				checkMatchingConditionalFill('books', { ...baseFormat, operator: 'ncontains', value: 'elect' }, false)
 			).toBe(true);
+
 			expect(
 				checkMatchingConditionalFill('electronics', { ...baseFormat, operator: 'ncontains', value: 'elect' }, false)
 			).toBe(false);
@@ -86,11 +87,7 @@ describe('panels/pie-chart/checkMatchingConditionalFill', () => {
 
 		it('Falls back to false for the default case when an unknown operator slips through', () => {
 			expect(
-				checkMatchingConditionalFill(
-					'foo',
-					{ ...baseFormat, operator: 'unknown' as never, value: 'bar' },
-					false
-				)
+				checkMatchingConditionalFill('foo', { ...baseFormat, operator: 'unknown' as never, value: 'bar' }, false)
 			).toBe(false);
 		});
 	});

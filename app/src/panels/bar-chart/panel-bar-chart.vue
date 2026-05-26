@@ -283,21 +283,13 @@ function setUpChart() {
 				case '<=':
 					return Number(value) <= compareValue;
 				case 'contains':
-					return typeof value === 'string' && typeof compareValue === 'string'
-						? value.includes(compareValue)
-						: false;
+					return typeof value === 'string' && typeof compareValue === 'string' ? value.includes(compareValue) : false;
 				case 'ncontains':
-					return typeof value === 'string' && typeof compareValue === 'string'
-						? !value.includes(compareValue)
-						: false;
+					return typeof value === 'string' && typeof compareValue === 'string' ? !value.includes(compareValue) : false;
 				case 'starts_with':
-					return typeof value === 'string' && typeof compareValue === 'string'
-						? value.startsWith(compareValue)
-						: false;
+					return typeof value === 'string' && typeof compareValue === 'string' ? value.startsWith(compareValue) : false;
 				case 'ends_with':
-					return typeof value === 'string' && typeof compareValue === 'string'
-						? value.endsWith(compareValue)
-						: false;
+					return typeof value === 'string' && typeof compareValue === 'string' ? value.endsWith(compareValue) : false;
 				default:
 					return false;
 			}
