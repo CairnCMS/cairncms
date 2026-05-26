@@ -3,7 +3,7 @@
 	"version": "1.0.0",
 	"type": "module",
 	"scripts": {
-		"build": "tsc --build",
+		"build": "tsc --project tsconfig.prod.json",
 		"dev": "tsc --watch",
 		"test": "vitest --watch=false"
 	},
@@ -21,13 +21,13 @@
 	},
 	"main": "dist/index.js",
 	"files": [
-		"dist",
-		"!**/*.test.{js,d.ts}"
+		"dist"
 	],
 	"publishConfig": {
 		"access": "public"
 	},
 	"devDependencies": {
+		"@types/node": "22.19.17",
 		"@vitest/coverage-v8": "1.6.1",
 		"typescript": "5.0.4",
 		"vitest": "1.6.1"

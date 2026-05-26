@@ -41,15 +41,13 @@
 	},
 	"main": "dist/index.js",
 	"files": [
-		"dist",
-		"!**/*.test.js",
-		"!**/__*__/"
+		"dist"
 	],
 	"publishConfig": {
 		"access": "public"
 	},
 	"scripts": {
-		"build": "tsc --build && copyfiles \"src/**/*.{yaml,liquid,md,txt}\" -u 1 dist",
+		"build": "tsc --project tsconfig.prod.json && copyfiles \"src/**/*.{yaml,liquid,md,txt}\" -u 1 dist",
 		"cli": "NODE_ENV=development SERVE_APP=false NODE_OPTIONS=--no-node-snapshot tsx src/cli/run.ts",
 		"dev": "NODE_ENV=development SERVE_APP=false NODE_OPTIONS=--no-node-snapshot tsx watch --clear-screen=false src/start.ts",
 		"test": "vitest --watch=false"
