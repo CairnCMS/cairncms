@@ -42,7 +42,7 @@ For a role to use Insights at all, it needs read on both collections. For full e
 
 ## Panel types
 
-CairnCMS ships six built-in panel types.
+CairnCMS ships ten built-in panel types.
 
 ### Label
 
@@ -92,6 +92,67 @@ A line graph of an aggregate value over time.
 - **Filter** — restricts which items are considered
 
 The collection must have at least one date, datetime, or timestamp field for this panel to work. Custom ranges accept values like `3 years`, `1 month`, `2 weeks`, `5 days`.
+
+### Bar Chart
+
+A bar or column chart of an aggregate value across groups.
+
+- **Collection** - the source collection
+- **X-Axis** - the field to group by. Any field type works
+- **Y-Axis** - the field the aggregate runs over. Most functions require a numeric field. `count` can use any field
+- **Function** - see [Aggregate functions](#aggregate-functions)
+- **Horizontal** - draw horizontal bars instead of vertical columns
+- **Value Decimals** - number of decimals on the rendered y-axis values
+- **Color** - default bar color
+- **Show Axis Labels** - which axis labels to display
+- **Show Data Label** - render the aggregate value on each bar
+- **Conditional Fill** - recolor bars based on a per-axis operator and value. Available X-axis operators depend on the X-axis field type. Nonnumeric X-axis fields expose `=`, `!=`, `contains`, `ncontains`, `starts_with`, `ends_with`. Numeric X-axis fields expose `=`, `!=`, `>`, `>=`, `<`, `<=`. Y-axis comparisons always use `=`, `!=`, `>`, `>=`, `<`, `<=`
+- **Filter** - restricts which items are considered
+
+### Line Chart
+
+A line chart of values plotted against a numeric x-axis. Grouping is optional. When a Group field is set, the panel switches to aggregate mode and renders one aggregate per group.
+
+- **Collection** - the source collection
+- **X-Axis** - a numeric field. Used as the x-axis values
+- **Y-Axis** - the field to plot. Disabled when a Group is selected
+- **Group** - optional grouping field. Selecting one enables aggregation mode
+- **Function** - aggregate to apply when grouping. Disabled when no group is selected
+- **Value Decimals** - number of decimals on the rendered values
+- **Color** - line color
+- **Show Axis Labels**, **Show Marker** - axis label and tooltip-marker visibility
+- **Curve Type** - smooth, straight, or step-line
+- **Filter** - restricts which items are considered
+
+### Pie Chart
+
+A pie or donut chart showing the distribution of an aggregate across the distinct values of a single field.
+
+- **Collection** - the source collection
+- **Field** - the single field that is both grouped and aggregated
+- **Function** - aggregate to apply. `count` is the default. `avg`, `sum`, `min`, `max` are only available when the selected field is numeric
+- **Donut** - render a donut hole in the center of the chart
+- **Show Labels** - render slice labels
+- **Legend** - none, right, or bottom
+- **Value Decimals** - number of decimals on the rendered values
+- **Color** - the base color. The panel derives a monochromatic palette from this color by walking the LAB lightness axis, so each slice gets a distinct variant
+- **Conditional Fill** - recolor slices based on an operator and value. Available operators depend on the selected field type. Numeric fields expose `=`, `!=`, `>`, `>=`, `<`, `<=`. String fields expose `=`, `!=`, `contains`, `ncontains`, `starts_with`, `ends_with`. String comparisons match against the underlying group label, not the aggregate count
+- **Filter** - restricts which items are considered
+
+### Meter
+
+A radial-bar gauge of an aggregate value against a maximum.
+
+- **Collection** - the source collection
+- **Field** - the field the aggregate runs over
+- **Function** - aggregate to apply. `count` is the default. `countDistinct`, `avg`, `avgDistinct`, `sum`, `sumDistinct`, `min`, `max` are only enabled when the selected field is numeric
+- **Max** - the value the gauge fills to. The displayed percentage is the aggregate divided by Max
+- **Size** - Full Circle or Half Circle
+- **Stroke Width** - Thin, Medium, or Broad
+- **Color** - default gauge color
+- **Rounded Stroke** - round the gauge stroke caps
+- **Conditional Fill** - recolor the gauge based on an operator and a percentage value
+- **Filter** - restricts which items are considered
 
 ### Global Variable
 
