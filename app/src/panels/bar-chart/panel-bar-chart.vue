@@ -33,7 +33,7 @@ const props = withDefaults(
 			axis: 'X' | 'Y';
 			operator: StringConditionalFillOperators;
 			color: string;
-			value: number;
+			value: string | number;
 		}[];
 	}>(),
 	{
@@ -104,7 +104,7 @@ function setUpChart() {
 			if (isNaN(yValue)) return null;
 
 			return {
-				fillColor: getFillColor(x, y),
+				fillColor: getFillColor(x, yValue),
 				x: formatNumericValue(x),
 				y,
 			};
@@ -281,22 +281,22 @@ function setUpChart() {
 				case '<':
 					return Number(value) < compareValue;
 				case '<=':
-					return Number(value) < compareValue;
+					return Number(value) <= compareValue;
 				case 'contains':
-					return typeof compareValue === 'string' && typeof value === 'string'
-						? (compareValue as string).includes(value)
+					return typeof value === 'string' && typeof compareValue === 'string'
+						? value.includes(compareValue)
 						: false;
 				case 'ncontains':
-					return typeof compareValue === 'string' && typeof value === 'string'
-						? !(compareValue as string).includes(value)
+					return typeof value === 'string' && typeof compareValue === 'string'
+						? !value.includes(compareValue)
 						: false;
 				case 'starts_with':
-					return typeof compareValue === 'string' && typeof value === 'string'
-						? (compareValue as string).startsWith(value)
+					return typeof value === 'string' && typeof compareValue === 'string'
+						? value.startsWith(compareValue)
 						: false;
 				case 'ends_with':
-					return typeof compareValue === 'string' && typeof value === 'string'
-						? (compareValue as string).endsWith(value)
+					return typeof value === 'string' && typeof compareValue === 'string'
+						? value.endsWith(compareValue)
 						: false;
 				default:
 					return false;

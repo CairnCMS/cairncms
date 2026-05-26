@@ -120,13 +120,16 @@ const dashOffset = computed(() => {
 const conditionalColor = computed(() => {
 	const defaultColor = props.color ?? 'var(--primary)';
 
-	if (!unref(percent) || props.conditionalFill.length === 0) {
+	if (props.data.length === 0 || props.conditionalFill.length === 0) {
 		return defaultColor;
 	}
 
+	const percentValue = unref(percent) * 100;
+
+	if (Number.isNaN(percentValue)) return defaultColor;
+
 	return (
 		props.conditionalFill.find((format) => {
-			const percentValue = unref(percent) * 100;
 			const compareValue = +(format.value ?? 0);
 
 			switch (format.operator || '>=') {
@@ -141,7 +144,7 @@ const conditionalColor = computed(() => {
 				case '<':
 					return percentValue < compareValue;
 				case '<=':
-					return percentValue < compareValue;
+					return percentValue <= compareValue;
 			}
 		})?.color ?? defaultColor
 	);

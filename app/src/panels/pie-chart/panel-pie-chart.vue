@@ -6,13 +6,14 @@
 
 <script lang="ts" setup>
 import { useFieldsStore } from '@/stores/fields';
-import { PanelFunction, StringConditionalFillOperators } from '@/types/panels';
+import { PanelFunction } from '@/types/panels';
 import { cssVar } from '@cairncms/utils/browser';
 import ApexCharts from 'apexcharts';
 import { isNil } from 'lodash';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { monoThemeGenerator } from './color-generator';
+import { checkMatchingConditionalFill, type ConditionalFillFormat } from './conditional-fill';
 
 const props = withDefaults(
 	defineProps<{
@@ -28,11 +29,7 @@ const props = withDefaults(
 		color?: string;
 		height: number;
 		width: number;
-		conditionalFill?: {
-			operator: StringConditionalFillOperators;
-			color: string;
-			value: number;
-		}[];
+		conditionalFill?: ConditionalFillFormat[];
 	}>(),
 	{
 		showHeader: false,
@@ -114,7 +111,10 @@ async function setupChart() {
 
 	const baseColors: string[] = monoThemeGenerator(props.color ? props.color : cssVar('--primary'), labels.length);
 
-	const colors = baseColors.map((baseColor, index) => formatColor(baseColor, series[index]));
+	const colors = baseColors.map((baseColor, index) => {
+		const rawValue = props.data[index]?.['group']?.[props.column];
+		return formatColor(baseColor, isNumberColumn.value ? series[index] : rawValue);
+	});
 
 	const size = props.height < props.width ? props.height * 20 : props.width * 20;
 
@@ -225,51 +225,13 @@ function formatColor(color: string | number, value: string | number) {
 	let formattedColor = color;
 
 	for (const format of props.conditionalFill) {
-		const shouldChangeColor = checkMatchingConditionalFill(value, format);
+		const shouldChangeColor = checkMatchingConditionalFill(value, format, isNumberColumn.value);
 		if (shouldChangeColor) formattedColor = format.color;
 	}
 
 	return formattedColor;
 }
 
-function checkMatchingConditionalFill(
-	value: string | number,
-	format: (typeof props)['conditionalFill'][number]
-): boolean {
-	let baseValue: string | number = value;
-	let compareValue: string | number = format.value;
-
-	if (isNumberColumn.value) {
-		if (isNaN(Number(value)) || isNaN(Number(format.value))) return false;
-		baseValue = Number(value);
-		compareValue = Number(format.value);
-	}
-
-	switch (format.operator || '>=') {
-		case '=':
-			return baseValue === compareValue;
-		case '!=':
-			return baseValue !== compareValue;
-		case '>':
-			return Number(baseValue) > compareValue;
-		case '>=':
-			return Number(baseValue) >= compareValue;
-		case '<':
-			return Number(baseValue) < compareValue;
-		case '<=':
-			return Number(baseValue) < compareValue;
-		case 'contains':
-			return typeof compareValue === 'string' && typeof baseValue === 'string'
-				? (compareValue as string).includes(baseValue)
-				: false;
-		case 'ncontains':
-			return typeof compareValue === 'string' && typeof baseValue === 'string'
-				? !(compareValue as string).includes(baseValue)
-				: false;
-		default:
-			return false;
-	}
-}
 </script>
 
 <style scoped>
