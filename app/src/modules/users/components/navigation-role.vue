@@ -5,7 +5,7 @@
 
 		<v-menu v-if="isAdmin" ref="contextMenu" show-arrow placement="bottom-start">
 			<v-list>
-				<v-list-item clickable :to="settingLink">
+				<v-list-item clickable :to="`/settings/roles/${role.id}`">
 					<v-list-item-icon>
 						<v-icon name="list_alt" />
 					</v-list-item-icon>
@@ -20,25 +20,14 @@
 
 <script setup lang="ts">
 import { useUserStore } from '@/stores/user';
-import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { BasicRole } from '../composables/use-navigation';
 
-const props = defineProps<{
+defineProps<{
 	role: BasicRole;
-	lastAdmin: boolean;
 }>();
 
 const { t } = useI18n();
 
 const { isAdmin } = useUserStore();
-
-const settingLink = computed(() => {
-	return props.role.id !== 'public' && props.lastAdmin
-		? {
-				name: 'settings-roles-item',
-				params: { primaryKey: props.role.id, lastAdminRoleId: props.role.id },
-		  }
-		: `/settings/roles/${props.role.id}`;
-});
 </script>
