@@ -13,18 +13,11 @@
 			</v-list-item>
 		</template>
 
-		<navigation-role
-			v-for="role in roles"
-			:key="role.id"
-			:role="role"
-			:last-admin="lastAdminRoleId === role.id"
-			:active="currentRole === role.id"
-		/>
+		<navigation-role v-for="role in roles" :key="role.id" :role="role" :active="currentRole === role.id" />
 	</v-list>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import useNavigation from '../composables/use-navigation';
 import NavigationRole from './navigation-role.vue';
@@ -36,12 +29,6 @@ defineProps<{
 const { t } = useI18n();
 
 const { roles, loading } = useNavigation();
-
-const lastAdminRoleId = computed(() => {
-	if (!roles.value) return null;
-	const adminRoles = roles.value.filter((role) => role.admin_access === true);
-	return adminRoles.length === 1 ? adminRoles[0].id : null;
-});
 </script>
 
 <style lang="scss" scoped>
