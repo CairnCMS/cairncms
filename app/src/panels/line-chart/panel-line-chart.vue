@@ -22,10 +22,10 @@ const props = withDefaults(
 		data?: Record<string, any>[];
 		group?: string;
 		xAxis?: string;
-		function: PanelFunction;
+		function?: PanelFunction;
 		yAxis: string;
 		color?: string;
-		filter: Filter;
+		filter?: Filter;
 		decimals?: number;
 		showAxisLabels?: string;
 		showLegend?: boolean;
@@ -35,6 +35,8 @@ const props = withDefaults(
 	{
 		showHeader: false,
 		data: () => [],
+		function: 'count',
+		filter: () => ({}),
 		showAxisLabels: 'both',
 		showLegend: false,
 		showMarker: true,
