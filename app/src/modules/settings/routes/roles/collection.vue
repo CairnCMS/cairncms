@@ -78,11 +78,6 @@ const router = useRouter();
 const roles = ref<RoleItem[]>([]);
 const loading = ref(false);
 
-const lastAdminRoleId = computed(() => {
-	const adminRoles = roles.value.filter((role) => role.admin_access === true);
-	return adminRoles.length === 1 ? adminRoles[0].id : null;
-});
-
 const tableHeaders = ref<TableHeader[]>([
 	{
 		text: '',
@@ -164,14 +159,7 @@ async function fetchRoles() {
 }
 
 function navigateToRole({ item }: { item: Role }) {
-	if (item.id !== 'public' && lastAdminRoleId.value) {
-		router.push({
-			name: 'settings-roles-item',
-			params: { primaryKey: item.id, lastAdminRoleId: lastAdminRoleId.value },
-		});
-	} else {
-		router.push(`/settings/roles/${item.id}`);
-	}
+	router.push(`/settings/roles/${item.id}`);
 }
 </script>
 
