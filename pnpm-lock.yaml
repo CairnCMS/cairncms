@@ -298,8 +298,8 @@ importers:
         specifier: 10.0.0
         version: 10.0.0
       qs:
-        specifier: 6.12.3
-        version: 6.12.3
+        specifier: 6.15.2
+        version: 6.15.2
       rate-limiter-flexible:
         specifier: 2.4.1
         version: 2.4.1
@@ -7758,12 +7758,12 @@ packages:
     engines: {node: '>=10.13.0'}
     hasBin: true
 
-  qs@6.12.3:
-    resolution: {integrity: sha512-AWJm14H1vVaO/iNZ4/hO+HyaTehuy9nRqVdkTqlJt0HWvBiBIEXFmb4C0DGeYo3Xes9rrEW+TxHsaigCbN5ICQ==}
-    engines: {node: '>=0.6'}
-
   qs@6.13.0:
     resolution: {integrity: sha512-+38qI9SOr8tfZ4QmJNplMUxqjbe7LKvvZgWdExBOmd+egZTtjLB67Gu0HRX3u/XOq7UU2Nx6nsjvS16Z9uwfpg==}
+    engines: {node: '>=0.6'}
+
+  qs@6.15.2:
+    resolution: {integrity: sha512-Rzq0KEyX/w/tEybncDgdkZrJgVUsUMk3xjh3t5bv3S1HTAtg+uOYt72+ZfwiQwKdysThkTBdL/rTi6HDmX9Ddw==}
     engines: {node: '>=0.6'}
 
   qs@6.5.5:
@@ -13997,7 +13997,7 @@ snapshots:
       '@paralleldrive/cuid2': 2.3.1
       dezalgo: 1.0.4
       once: 1.4.0
-      qs: 6.12.3
+      qs: 6.15.2
 
   forwarded@0.2.0: {}
 
@@ -16634,11 +16634,11 @@ snapshots:
       pngjs: 5.0.0
       yargs: 15.4.1
 
-  qs@6.12.3:
+  qs@6.13.0:
     dependencies:
       side-channel: 1.1.0
 
-  qs@6.13.0:
+  qs@6.15.2:
     dependencies:
       side-channel: 1.1.0
 
@@ -17529,7 +17529,7 @@ snapshots:
       formidable: 2.1.5
       methods: 1.1.2
       mime: 2.6.0
-      qs: 6.12.3
+      qs: 6.15.2
       readable-stream: 3.6.2
       semver: 7.5.2
     transitivePeerDependencies:
@@ -17545,7 +17545,7 @@ snapshots:
       formidable: 2.1.5
       methods: 1.1.2
       mime: 2.6.0
-      qs: 6.12.3
+      qs: 6.15.2
       semver: 7.5.2
     transitivePeerDependencies:
       - supports-color
