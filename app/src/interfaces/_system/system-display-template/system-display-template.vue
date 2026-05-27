@@ -20,7 +20,7 @@ import { computed, inject, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 const props = defineProps<{
-	value: string | null;
+	value?: string | null;
 	disabled?: boolean;
 	collectionField?: string;
 	collectionName?: string;
