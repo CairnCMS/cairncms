@@ -14,12 +14,12 @@ import { computed } from 'vue';
 const props = withDefaults(
 	defineProps<{
 		value: boolean;
-		labelOn: string | null;
-		labelOff: string | null;
-		iconOn: string | null;
-		iconOff: string | null;
-		colorOn: string;
-		colorOff: string;
+		labelOn?: string | null;
+		labelOff?: string | null;
+		iconOn?: string | null;
+		iconOff?: string | null;
+		colorOn?: string;
+		colorOff?: string;
 	}>(),
 	{
 		value: false,
