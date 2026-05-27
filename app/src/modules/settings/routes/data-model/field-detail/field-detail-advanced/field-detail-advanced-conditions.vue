@@ -18,7 +18,7 @@ const fieldDetailStore = useFieldDetailStore();
 
 const { field, collection } = storeToRefs(fieldDetailStore);
 
-const conditions = syncFieldDetailStoreProperty('field.meta.conditions');
+const conditions = syncFieldDetailStoreProperty('field.meta.conditions', null);
 const interfaceId = computed(() => field.value.meta?.interface ?? null);
 
 const repeaterFields = computed<DeepPartial<Field>[]>(() => [
