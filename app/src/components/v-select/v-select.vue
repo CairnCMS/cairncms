@@ -139,7 +139,7 @@ import SelectListItem from './select-list-item.vue';
 import { Option } from './types';
 
 type ItemsRaw = (string | any)[];
-type InputValue = string[] | string | null;
+type InputValue = string[] | string | number | null;
 
 interface Props {
 	/** The items that should be selectable */
