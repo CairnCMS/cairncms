@@ -12,7 +12,7 @@
 			<v-dialog v-if="[1, 2].includes(+primaryKey) === false" v-model="confirmDelete" @esc="confirmDelete = false">
 				<template #activator="{ on }">
 					<v-button
-						v-if="primaryKey !== lastAdminRoleId"
+						v-if="isLastAdminRole === false"
 						v-tooltip.bottom="t('delete_label')"
 						rounded
 						icon
@@ -106,15 +106,18 @@
 </template>
 
 <script setup lang="ts">
+import api from '@/api';
 import { useEditsGuard } from '@/composables/use-edits-guard';
 import { useItem } from '@/composables/use-item';
 import { useShortcut } from '@/composables/use-shortcut';
 import { usePermissionsStore } from '@/stores/permissions';
 import { useServerStore } from '@/stores/server';
 import { useUserStore } from '@/stores/user';
+import { isLastAdminRole as computeLastAdmin } from '@/utils/is-last-admin-role';
+import { unexpectedError } from '@/utils/unexpected-error';
 import RevisionsDrawerDetail from '@/views/private/components/revisions-drawer-detail.vue';
 import UsersInvite from '@/views/private/components/users-invite.vue';
-import { computed, ref, toRefs } from 'vue';
+import { computed, onMounted, ref, toRefs } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import SettingsNavigation from '../../../components/navigation.vue';
@@ -124,8 +127,25 @@ import RoleInfoSidebarDetail from './components/role-info-sidebar-detail.vue';
 const props = defineProps<{
 	primaryKey: string;
 	permissionKey?: string;
-	lastAdminRoleId?: string;
 }>();
+
+type RoleSummary = { id: string; admin_access: boolean };
+
+const roles = ref<RoleSummary[] | null>(null);
+
+onMounted(async () => {
+	try {
+		const response = await api.get('/roles', {
+			params: { fields: ['id', 'admin_access'], limit: -1 },
+		});
+
+		roles.value = response.data.data;
+	} catch (error: any) {
+		unexpectedError(error);
+	}
+});
+
+const isLastAdminRole = computed(() => computeLastAdmin(roles.value, props.primaryKey));
 
 const { t } = useI18n();
 
