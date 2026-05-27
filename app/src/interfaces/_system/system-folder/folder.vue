@@ -34,7 +34,7 @@
 				:key="folder.id!"
 				clickable
 				:folder="folder"
-				:current-folder="value"
+				:current-folder="value ?? null"
 				:disabled="disabledFolders.includes(folder.id!)"
 				:disabled-folders="disabledFolders"
 				@click="emitValue"
@@ -51,8 +51,8 @@ import FolderListItem from './folder-list-item.vue';
 
 const props = withDefaults(
 	defineProps<{
-		value: string | null;
-		disabledFolders: string[];
+		value?: string | null;
+		disabledFolders?: string[];
 		disabled?: boolean;
 		placeholder?: string;
 	}>(),
