@@ -14,7 +14,7 @@
 				</template>
 
 				<template #append>
-					<v-icon v-if="value !== null" clickable name="close" @click="setIcon(null)" />
+					<v-icon v-if="value" clickable name="close" @click="setIcon(null)" />
 					<v-icon
 						v-else
 						clickable
@@ -53,7 +53,7 @@ import icons from './icons.json';
 
 withDefaults(
 	defineProps<{
-		value: string | null;
+		value?: string | null;
 		disabled?: boolean;
 		width?: string;
 	}>(),
