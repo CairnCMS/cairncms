@@ -83,7 +83,7 @@ const readonly = syncFieldDetailStoreProperty('field.meta.readonly', false);
 const hidden = syncFieldDetailStoreProperty('field.meta.hidden', false);
 const required = syncFieldDetailStoreProperty('field.meta.required', false);
 const note = syncFieldDetailStoreProperty('field.meta.note');
-const translations = syncFieldDetailStoreProperty('field.meta.translations');
+const translations = syncFieldDetailStoreProperty('field.meta.translations', null);
 const { loading, field } = storeToRefs(fieldDetailStore);
 const type = computed(() => field.value.type);
 const isGenerated = computed(() => field.value.schema?.is_generated);

@@ -14,7 +14,7 @@
 				:autofocus="disabled !== true && autofocus"
 				:disabled="disabled"
 				:loading="loading"
-				:value="modelValue === undefined ? field.schema?.default_value : modelValue"
+				:value="interfaceValue"
 				:width="(field.meta && field.meta.width) || 'full'"
 				:type="field.type"
 				:collection="field.collection"
@@ -57,7 +57,7 @@ interface Props {
 	batchMode?: boolean;
 	batchActive?: boolean;
 	primaryKey?: string | number | null;
-	modelValue?: string | number | boolean | Record<string, any> | Array<any>;
+	modelValue?: string | number | boolean | Record<string, any> | Array<any> | null;
 	loading?: boolean;
 	disabled?: boolean;
 	autofocus?: boolean;
@@ -94,6 +94,13 @@ const componentName = computed(() => {
 	return props.field?.meta?.interface
 		? `interface-${props.field.meta.interface}`
 		: `interface-${getDefaultInterfaceForType(props.field.type!)}`;
+});
+
+const interfaceValue = computed(() => {
+	if (props.modelValue !== undefined) return props.modelValue;
+
+	const defaultValue = props.field.schema?.default_value;
+	return defaultValue === undefined ? null : defaultValue;
 });
 </script>
 
