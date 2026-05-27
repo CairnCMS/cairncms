@@ -256,6 +256,8 @@ export default defineLayout<LayoutOptions, LayoutQuery>({
 			if (gField === null || pkField === undefined || event.removed) return;
 
 			if (event.moved) {
+				if (!sortField.value) return;
+
 				const item = group.items[event.moved.oldIndex]?.id;
 				const to = group.items[event.moved.newIndex]?.id;
 
@@ -272,7 +274,7 @@ export default defineLayout<LayoutOptions, LayoutQuery>({
 					return item;
 				});
 
-				if (group.items.length > 0) {
+				if (sortField.value && group.items.length > 0) {
 					const item = event.added.element;
 					const before = group.items[event.added.newIndex - 1] as Item | undefined;
 					const after = group.items[event.added.newIndex] as Item | undefined;
