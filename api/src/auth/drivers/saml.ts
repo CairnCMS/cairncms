@@ -157,10 +157,10 @@ export function createSAMLAuthRouter(providerName: string) {
 
 			try {
 				const { sp, idp } = getAuthProvider(providerName) as SAMLAuthDriver;
-				const { extract } = await sp.parseLoginResponse(idp, 'post', req);
+				const { extract } = await sp.parseLoginResponse(idp, 'post', { body: req.body });
 
 				const authService = new AuthenticationService({ accountability: req.accountability, schema: req.schema });
-				const { accessToken, refreshToken, expires } = await authService.login(providerName, extract.attributes);
+				const { accessToken, refreshToken, expires } = await authService.login(providerName, extract.attributes ?? {});
 
 				res.locals['payload'] = {
 					data: {

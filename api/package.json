@@ -135,7 +135,7 @@
 		"qs": "6.12.3",
 		"rate-limiter-flexible": "2.4.1",
 		"rollup": "4.60.1",
-		"samlify": "2.10.0",
+		"samlify": "2.13.0",
 		"sanitize-html": "2.13.0",
 		"sharp": "0.33.4",
 		"snappy": "7.2.2",
