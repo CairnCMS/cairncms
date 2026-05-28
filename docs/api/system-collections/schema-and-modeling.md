@@ -104,7 +104,7 @@ Three endpoints snapshot, diff, and apply the entire data model across deploymen
 
 These are admin-only and operator-facing rather than per-row CRUD. The two-step diff/apply pattern (with a hash handoff between calls) protects against a third party changing the schema between when the diff was computed and when it is applied. See [Schema as code](/docs/manage/schema-as-code/) for the full reference, including the snapshot file format, the version and vendor portability checks, the hash mechanism, and the relationship with the `cairncms schema snapshot` and `cairncms schema apply` CLI commands.
 
-The endpoints take and return JSON by default. `POST /schema/diff` also accepts YAML and JSON snapshot files as multipart uploads so the same workflow works against snapshot files committed to a repo without parsing them client-side.
+The endpoints take and return JSON by default. `POST /schema/diff` also accepts YAML and JSON snapshot files as multipart uploads so the same workflow works against snapshot files committed to a repo without parsing them client-side. `POST /schema/apply` accepts the same two shapes for its diff payload — the `{ hash, diff }` JSON returned by `/schema/diff` in the request body, or the same payload as a JSON or YAML file via `multipart/form-data`.
 
 ## GraphQL
 

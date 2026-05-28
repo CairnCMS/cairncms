@@ -14,7 +14,7 @@
 				:autofocus="disabled !== true && autofocus"
 				:disabled="disabled"
 				:loading="loading"
-				:value="modelValue === undefined ? field.schema?.default_value : modelValue"
+				:value="interfaceValue"
 				:width="(field.meta && field.meta.width) || 'full'"
 				:type="field.type"
 				:collection="field.collection"
@@ -46,18 +46,18 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n';
-import { computed } from 'vue';
-import { Field } from '@cairncms/types';
-import { getDefaultInterfaceForType } from '@/utils/get-default-interface-for-type';
 import { useExtension } from '@/composables/use-extension';
+import { getDefaultInterfaceForType } from '@/utils/get-default-interface-for-type';
+import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+import type { FormField } from './types';
 
 interface Props {
-	field: Field;
+	field: FormField;
 	batchMode?: boolean;
 	batchActive?: boolean;
 	primaryKey?: string | number | null;
-	modelValue?: string | number | boolean | Record<string, any> | Array<any>;
+	modelValue?: string | number | boolean | Record<string, any> | Array<any> | null;
 	loading?: boolean;
 	disabled?: boolean;
 	autofocus?: boolean;
@@ -93,7 +93,14 @@ const interfaceExists = computed(() => !!inter.value);
 const componentName = computed(() => {
 	return props.field?.meta?.interface
 		? `interface-${props.field.meta.interface}`
-		: `interface-${getDefaultInterfaceForType(props.field.type)}`;
+		: `interface-${getDefaultInterfaceForType(props.field.type!)}`;
+});
+
+const interfaceValue = computed(() => {
+	if (props.modelValue !== undefined) return props.modelValue;
+
+	const defaultValue = props.field.schema?.default_value;
+	return defaultValue === undefined ? null : defaultValue;
 });
 </script>
 

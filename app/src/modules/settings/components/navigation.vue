@@ -25,68 +25,62 @@
 	</v-list>
 </template>
 
-<script lang="ts">
+<script setup lang="ts">
 import { useServerStore } from '@/stores/server';
-import { computed, defineComponent } from 'vue';
+import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 
-export default defineComponent({
-	setup() {
-		const serverStore = useServerStore();
-		const version = computed(() => serverStore.info.cairncms?.version);
+const serverStore = useServerStore();
+const version = computed(() => serverStore.info.cairncms?.version);
 
-		const { t } = useI18n();
+const { t } = useI18n();
 
-		const navItems = [
-			{
-				icon: 'public',
-				name: t('settings_project'),
-				to: `/settings/project`,
-			},
-			{
-				icon: 'list_alt',
-				name: t('settings_data_model'),
-				to: `/settings/data-model`,
-			},
-			{
-				icon: 'admin_panel_settings',
-				name: t('settings_permissions'),
-				to: `/settings/roles`,
-			},
-			{
-				icon: 'bookmark',
-				name: t('settings_presets'),
-				to: `/settings/presets`,
-			},
-			{
-				icon: 'translate',
-				name: t('settings_translation_strings'),
-				to: `/settings/translation-strings`,
-			},
-			{
-				icon: 'bolt',
-				name: t('settings_flows'),
-				to: `/settings/flows`,
-			},
-		];
-
-		const externalItems = computed(() => {
-			return [
-				{
-					icon: 'bug_report',
-					name: t('report_bug'),
-					href: 'https://github.com/CairnCMS/cairncms/issues/new?template=bug_report.yml',
-				},
-				{
-					icon: 'new_releases',
-					name: t('request_feature'),
-					href: 'https://github.com/CairnCMS/cairncms/discussions/new?category=feature-requests',
-				},
-			];
-		});
-
-		return { version, navItems, externalItems };
+const navItems = [
+	{
+		icon: 'public',
+		name: t('settings_project'),
+		to: `/settings/project`,
 	},
+	{
+		icon: 'list_alt',
+		name: t('settings_data_model'),
+		to: `/settings/data-model`,
+	},
+	{
+		icon: 'admin_panel_settings',
+		name: t('settings_permissions'),
+		to: `/settings/roles`,
+	},
+	{
+		icon: 'bookmark',
+		name: t('settings_presets'),
+		to: `/settings/presets`,
+	},
+	{
+		icon: 'translate',
+		name: t('settings_translation_strings'),
+		to: `/settings/translation-strings`,
+	},
+	{
+		icon: 'bolt',
+		name: t('settings_flows'),
+		to: `/settings/flows`,
+	},
+];
+
+const externalItems = computed(() => {
+	return [
+		{
+			icon: 'bug_report',
+			name: t('report_bug'),
+			href: 'https://github.com/CairnCMS/cairncms/issues/new',
+		},
+		{
+			icon: 'new_releases',
+			name: t('request_feature'),
+			href: 'https://github.com/CairnCMS/cairncms/discussions/new',
+		},
+	];
 });
 </script>
 

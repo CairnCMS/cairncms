@@ -48,6 +48,8 @@ Variables that control how CairnCMS listens for requests:
 - **`MAX_PAYLOAD_SIZE`** — the maximum request body size. Default `1mb`. Increase when receiving large uploads or imports.
 - **`MAX_RELATIONAL_DEPTH`** — how deeply nested a single query can fetch related data. Default `10`.
 - **`MAX_BATCH_MUTATION`** — limit on items in a batch create/update/delete. Default unlimited.
+- **`QUERYSTRING_PARSE_DEPTH`** — maximum nesting depth parsed from URL query strings. Default `10`.
+- **`QUERYSTRING_ARRAY_LIMIT`** — maximum number of indexed query-string array entries parsed as arrays. Default `500`. Raise this if clients send large indexed arrays such as wide `_in` filters. Lower values reduce query parsing resource exposure.
 - **`ROBOTS_TXT`** — the body served at `/robots.txt`. Default disallows all crawlers.
 - **`ROOT_REDIRECT`** — where requests to `/` redirect. Default `./admin`.
 - **`SERVER_SHUTDOWN_TIMEOUT`** — milliseconds to wait for in-flight requests during shutdown. Default `1000`.
@@ -197,7 +199,7 @@ Disabled by default. Enable when a frontend on a different origin needs to call 
 
 ## Rate limiting
 
-Two independent rate limiters are available: per-IP and global. Both are off by default.
+Three independent rate limiters are available: per-IP, global, and pressure-based. All three are off by default.
 
 - **`RATE_LIMITER_ENABLED`** — per-IP limiter switch. Default `false`.
 - **`RATE_LIMITER_POINTS`** — requests allowed per duration window. Default `50`.
@@ -206,6 +208,22 @@ Two independent rate limiters are available: per-IP and global. Both are off by 
 - **`RATE_LIMITER_GLOBAL_*`** — same shape, applied across all callers globally rather than per-IP.
 
 For multi-instance deployments behind a load balancer, the `redis` store is required for the limit to be shared across processes. Per-store details (Redis connection settings, healthcheck thresholds) live under `RATE_LIMITER_*_REDIS`, `RATE_LIMITER_*_MEMCACHE`, and `RATE_LIMITER_*_HEALTHCHECK_THRESHOLD`. Both the per-IP and global limiters accept the same option set under their respective prefixes.
+
+### Pressure-based limiter
+
+A third limiter monitors Node event-loop and memory pressure and returns `503 Service Unavailable` when the process is overloaded. The goal is to give load balancers a fast failure signal under genuine saturation rather than letting requests queue behind an unresponsive server.
+
+- **`PRESSURE_LIMITER_ENABLED`**: pressure limiter switch. Default `false`.
+- **`PRESSURE_LIMITER_SAMPLE_INTERVAL`**: sampling cadence in milliseconds. Default `250`.
+- **`PRESSURE_LIMITER_MAX_EVENT_LOOP_UTILIZATION`**: fraction of event-loop utilization above which the process is considered overloaded. Default `0.99`.
+- **`PRESSURE_LIMITER_MAX_EVENT_LOOP_DELAY`**: maximum event-loop delay in milliseconds. Default `500`.
+- **`PRESSURE_LIMITER_MAX_MEMORY_RSS`**: maximum process resident set size in bytes. Default `false` (disabled).
+- **`PRESSURE_LIMITER_MAX_MEMORY_HEAP_USED`**: maximum heap-used memory in bytes. Default `false` (disabled).
+- **`PRESSURE_LIMITER_RETRY_AFTER`**: value sent in the `Retry-After` response header on 503 responses. Default `false` (header is not set).
+
+The CairnCMS default is opt-in. Pressure limiting is the most workload-sensitive of the three rate limiters. Long-running queries, imports, exports, image transforms, ETL jobs, and deployments on small container CPU limits can briefly saturate the event loop or RSS without the process actually being in trouble. Dry-run against a representative workload before enabling.
+
+The limiter is per Node process. In multi-instance deployments (Cloud Run, Kubernetes, multi-container Compose), each container monitors its own pressure independently. The middleware does not coordinate across instances and does not signal readiness or liveness failure to the orchestrator. A 503 from this limiter tells the immediate caller to retry. It does not remove the instance from the load balancer rotation.
 
 ## Caching
 

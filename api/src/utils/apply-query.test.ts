@@ -6,6 +6,12 @@ import applyQuery, { applySearch, applySort, validateGroupOperands } from './app
 
 const PUBLIC_ROLE_ID = '00000000-0000-0000-0000-000000000000';
 
+const DB_TYPE_BY_FIELD_TYPE: Record<'string' | 'integer' | 'uuid', string> = {
+	string: 'varchar',
+	integer: 'integer',
+	uuid: 'uuid',
+};
+
 function makeField(name: string, type: 'string' | 'integer' | 'uuid' = 'string', special: string[] = []): any {
 	return {
 		field: name,
@@ -13,7 +19,7 @@ function makeField(name: string, type: 'string' | 'integer' | 'uuid' = 'string',
 		nullable: true,
 		generated: false,
 		type,
-		dbType: type === 'integer' ? 'integer' : type === 'uuid' ? 'uuid' : 'varchar',
+		dbType: DB_TYPE_BY_FIELD_TYPE[type],
 		precision: null,
 		scale: null,
 		special,
@@ -303,6 +309,35 @@ describe('applySearch — conceal-field exclusion (GHSA-8jpw-gpr4-8cmh)', () => 
 
 		expect(sql).toContain('title');
 		expect(sql).not.toContain('secret_token');
+	});
+});
+
+describe('applySearch — numeric field accepts only decimal values', () => {
+	it.each(['0x56071c902718e681e274DB0AaC9B4Ed2d027924d', '0b11111', '0.42e3', 'Infinity', '42.000'])(
+		'does not match %s against a numeric field',
+		async (value) => {
+			const dbQuery = makeBuilder();
+			const accountability = makeAccountability({ permissions: [makePermission(['rank'])] });
+
+			await applySearch(makeSchema(), dbQuery, value, 'notes', accountability);
+
+			const { sql } = dbQuery.toSQL();
+
+			expect(sql).not.toContain('rank');
+			expect(sql).toContain('1 = 0');
+		}
+	);
+
+	it.each(['1234', '-128', '12.34'])('matches decimal %s against a numeric field', async (value) => {
+		const dbQuery = makeBuilder();
+		const accountability = makeAccountability({ permissions: [makePermission(['rank'])] });
+
+		await applySearch(makeSchema(), dbQuery, value, 'notes', accountability);
+
+		const { sql, bindings } = dbQuery.toSQL();
+
+		expect(sql).toContain('rank');
+		expect(bindings).toContain(Number(value));
 	});
 });
 

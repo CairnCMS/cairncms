@@ -6,10 +6,11 @@ import vendors from '@common/get-dbs-to-test';
 describe('/auth/login/saml', () => {
 	const authCookies: Record<string, string> = {};
 
-	const getCookies = (setCookie: string | string[] | undefined): string =>
-		(Array.isArray(setCookie) ? setCookie : setCookie ? [setCookie] : [])
-			.map((cookie) => cookie.split(';')[0])
-			.join(';');
+	const getCookies = (setCookie: string | string[] | undefined): string => {
+		if (setCookie === undefined) return '';
+		const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
+		return cookies.map((cookie) => cookie.split(';')[0]).join(';');
+	};
 
 	describe('GET /', () => {
 		describe('when incorrect credential is provided', () => {

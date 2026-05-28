@@ -242,6 +242,7 @@ import FolderPicker from '@/views/private/components/folder-picker.vue';
 import { useCollection } from '@cairncms/composables';
 import { Filter } from '@cairncms/types';
 import { getEndpoint } from '@cairncms/utils';
+import type { AxiosProgressEvent } from 'axios';
 import { debounce } from 'lodash';
 import { computed, reactive, ref, toRefs, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -333,7 +334,7 @@ watch(
 
 const format = ref('csv');
 const location = ref('download');
-const folder = ref<string>();
+const folder = ref<string | null>(null);
 
 const lockedToFiles = computed(() => {
 	const toBeDownloaded = exportSettings.limit ?? itemCount.value;
@@ -460,8 +461,8 @@ function useUpload() {
 
 		try {
 			await api.post(`/utils/import/${collection.value}`, formData, {
-				onUploadProgress: (progressEvent: ProgressEvent) => {
-					const percentCompleted = Math.floor((progressEvent.loaded * 100) / progressEvent.total);
+				onUploadProgress: (progressEvent: AxiosProgressEvent) => {
+					const percentCompleted = Math.floor((progressEvent.loaded * 100) / progressEvent.total!);
 					progress.value = percentCompleted;
 					importing.value = percentCompleted === 100 ? true : false;
 				},

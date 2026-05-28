@@ -11,7 +11,6 @@
 		"@types/lodash": "4.14.194",
 		"@types/seedrandom": "3.0.5",
 		"@types/supertest": "2.0.12",
-		"@types/uuid": "9.0.1",
 		"autocannon": "7.10.0",
 		"axios": "1.15.2",
 		"globby": "11.1.0",
@@ -26,7 +25,7 @@
 		"supertest": "6.3.3",
 		"ts-jest": "29.1.0",
 		"typescript": "5.0.4",
-		"uuid": "9.0.0"
+		"uuid": "11.1.1"
 	},
 	"version": "10.0.0"
 }

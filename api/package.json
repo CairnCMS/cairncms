@@ -41,15 +41,13 @@
 	},
 	"main": "dist/index.js",
 	"files": [
-		"dist",
-		"!**/*.test.js",
-		"!**/__*__/"
+		"dist"
 	],
 	"publishConfig": {
 		"access": "public"
 	},
 	"scripts": {
-		"build": "tsc --build && copyfiles \"src/**/*.{yaml,liquid,md,txt}\" -u 1 dist",
+		"build": "tsc --project tsconfig.prod.json && copyfiles \"src/**/*.{yaml,liquid,md,txt}\" -u 1 dist",
 		"cli": "NODE_ENV=development SERVE_APP=false NODE_OPTIONS=--no-node-snapshot tsx src/cli/run.ts",
 		"dev": "NODE_ENV=development SERVE_APP=false NODE_OPTIONS=--no-node-snapshot tsx watch --clear-screen=false src/start.ts",
 		"test": "vitest --watch=false"
@@ -61,6 +59,7 @@
 		"@cairncms/constants": "workspace:*",
 		"@cairncms/exceptions": "workspace:*",
 		"@cairncms/format-title": "workspace:*",
+		"@cairncms/pressure": "workspace:*",
 		"@cairncms/schema": "workspace:*",
 		"@cairncms/specs": "workspace:*",
 		"@cairncms/storage": "workspace:*",
@@ -115,7 +114,7 @@
 		"keyv": "4.5.2",
 		"knex": "2.4.2",
 		"ldapjs": "2.3.3",
-		"liquidjs": "10.25.7",
+		"liquidjs": "10.26.0",
 		"lodash-es": "4.18.1",
 		"marked": "4.3.0",
 		"micromustache": "8.0.3",
@@ -133,10 +132,10 @@
 		"pino-http": "8.3.3",
 		"pino-http-print": "3.1.0",
 		"pino-pretty": "10.0.0",
-		"qs": "6.12.3",
+		"qs": "6.15.2",
 		"rate-limiter-flexible": "2.4.1",
 		"rollup": "4.60.1",
-		"samlify": "2.10.0",
+		"samlify": "2.13.0",
 		"sanitize-html": "2.13.0",
 		"sharp": "0.33.4",
 		"snappy": "7.2.2",
@@ -144,7 +143,7 @@
 		"strip-bom-stream": "5.0.0",
 		"tmp-promise": "3.0.3",
 		"tsx": "3.12.6",
-		"uuid": "9.0.0",
+		"uuid": "11.1.1",
 		"uuid-validate": "0.0.3",
 		"wellknown": "0.5.0"
 	},
@@ -183,7 +182,6 @@
 		"@types/sanitize-html": "2.9.0",
 		"@types/stream-json": "1.7.3",
 		"@types/supertest": "2.0.12",
-		"@types/uuid": "9.0.1",
 		"@types/uuid-validate": "0.0.1",
 		"@types/wellknown": "0.5.4",
 		"@vitest/coverage-v8": "1.6.1",

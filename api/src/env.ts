@@ -28,6 +28,8 @@ const allowedEnvironmentVars = [
 	'SERVE_APP',
 	'GRAPHQL_INTROSPECTION',
 	'MAX_BATCH_MUTATION',
+	'QUERYSTRING_PARSE_DEPTH',
+	'QUERYSTRING_ARRAY_LIMIT',
 	'LOGGER_.+',
 	'ROBOTS_TXT',
 	// server
@@ -203,6 +205,8 @@ const defaults: Record<string, any> = {
 	MAX_PAYLOAD_SIZE: '1mb',
 	MAX_RELATIONAL_DEPTH: 10,
 	MAX_BATCH_MUTATION: Infinity,
+	QUERYSTRING_PARSE_DEPTH: 10,
+	QUERYSTRING_ARRAY_LIMIT: 500,
 	ROBOTS_TXT: 'User-agent: *\nDisallow: /',
 
 	DB_EXCLUDE_TABLES: 'spatial_ref_sys,sysdiagrams',
@@ -289,6 +293,14 @@ const defaults: Record<string, any> = {
 	FLOWS_RUN_SCRIPT_MAX_MEMORY: 32,
 	FLOWS_RUN_SCRIPT_TIMEOUT: 10000,
 	FLOWS_ENV_ALLOW_LIST: false,
+
+	PRESSURE_LIMITER_ENABLED: false,
+	PRESSURE_LIMITER_SAMPLE_INTERVAL: 250,
+	PRESSURE_LIMITER_MAX_EVENT_LOOP_UTILIZATION: 0.99,
+	PRESSURE_LIMITER_MAX_EVENT_LOOP_DELAY: 500,
+	PRESSURE_LIMITER_MAX_MEMORY_RSS: false,
+	PRESSURE_LIMITER_MAX_MEMORY_HEAP_USED: false,
+	PRESSURE_LIMITER_RETRY_AFTER: false,
 };
 
 // Allows us to force certain environment variable into a type, instead of relying
@@ -314,6 +326,9 @@ const typeMap: Record<string, string> = {
 	GRAPHQL_INTROSPECTION: 'boolean',
 
 	MAX_BATCH_MUTATION: 'number',
+
+	QUERYSTRING_PARSE_DEPTH: 'number',
+	QUERYSTRING_ARRAY_LIMIT: 'number',
 
 	SERVER_SHUTDOWN_TIMEOUT: 'number',
 

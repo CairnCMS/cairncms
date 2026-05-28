@@ -69,6 +69,8 @@ Content-Type: application/json
 
 The response body is the result of the last operation in the chain unless the flow's `options.return` is set to a different operation key. If the flow's `options.async` is `true`, the request returns immediately and the operations run in the background; otherwise the request waits for the chain to complete.
 
+`options.cacheEnabled` defaults to `true` and only takes effect when `method` is `GET`; setting it to `false` prevents new responses for that flow from being stored in the response cache. It does not invalidate entries that are already cached. With `CACHE_AUTO_PURGE=true` (the value the bootstrap installer writes for new projects) updating the flow clears the response cache as a side effect, so the new setting applies on the next request. With `CACHE_AUTO_PURGE=false` (the in-code default) a previously cached response continues to serve until its TTL expires or the cache is cleared with `POST /utils/cache/clear`.
+
 **Manual flows** also resolve through `/flows/trigger/<flow-id>` but require POST and a body that names the target collection:
 
 ```http

@@ -1,4 +1,4 @@
-import { test, expect } from 'vitest';
+import { test, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 
 import VSelect from './v-select.vue';
@@ -52,4 +52,57 @@ test('Mount component', () => {
 	});
 
 	expect(wrapper.html()).toMatchSnapshot();
+});
+
+test('Resolves a numeric scalar modelValue to the matching item text without a modelValue prop warning', () => {
+	const numericItems = [
+		{ text: 'Thin', value: 8 },
+		{ text: 'Medium', value: 20 },
+		{ text: 'Broad', value: 48 },
+	];
+
+	const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+	const slotAwareGlobal: GlobalMountOptions = {
+		...global,
+		stubs: {
+			'v-list': true,
+			'v-list-item': true,
+			'v-list-item-icon': true,
+			'v-list-item-content': true,
+			'v-divider': true,
+			'v-checkbox': true,
+			'v-icon': true,
+			'v-input': true,
+			'v-menu': {
+				name: 'v-menu',
+				template:
+					'<div><slot name="activator" :toggle="() => {}" :active="false" :deactivate="() => {}" /><slot /></div>',
+			},
+		},
+	};
+
+	try {
+		const wrapper = mount(VSelect, {
+			props: {
+				items: numericItems,
+				modelValue: 20,
+			},
+			global: slotAwareGlobal,
+		});
+
+		expect(wrapper.exists()).toBe(true);
+
+		const modelValueWarnings = warnSpy.mock.calls
+			.flatMap((call) => call.map(String))
+			.filter((message) => message.includes('modelValue'));
+
+		expect(modelValueWarnings).toEqual([]);
+
+		const previewInput = wrapper.find('v-input-stub');
+		expect(previewInput.exists()).toBe(true);
+		expect(previewInput.attributes('model-value')).toBe('Medium');
+	} finally {
+		warnSpy.mockRestore();
+	}
 });

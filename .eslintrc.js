@@ -37,6 +37,7 @@ const defaultRules = {
 		{ blankLine: 'any', prev: ['export', 'import'], next: ['export', 'import'] },
 	],
 	'lines-between-class-members': ['error', 'always', { exceptAfterSingleLine: true }],
+	'no-nested-ternary': 'error',
 };
 
 module.exports = {
@@ -81,6 +82,7 @@ module.exports = {
 			rules: {
 				...defaultRules,
 				'vue/multi-word-component-names': 'off',
+				'vue/require-default-prop': 'off',
 				// It's recommended to turn off this rule on TypeScript projects
 				'no-undef': 'off',
 				// Allow ts-directive comments (used to suppress TypeScript compiler errors)

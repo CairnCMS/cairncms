@@ -12,7 +12,6 @@ import { RecordNotUniqueException } from '../exceptions/database/record-not-uniq
 import { ForbiddenException, InvalidPayloadException, UnprocessableEntityException } from '../exceptions/index.js';
 import type { AbstractServiceOptions, Item, MutationOptions, PrimaryKey } from '../types/index.js';
 import isUrlAllowed from '../utils/is-url-allowed.js';
-import { verifyJWT } from '../utils/jwt.js';
 import { stall } from '../utils/stall.js';
 import { Url } from '../utils/url.js';
 import { ItemsService } from './items.js';
@@ -418,17 +417,22 @@ export class UsersService extends ItemsService {
 	}
 
 	async acceptInvite(token: string, password: string): Promise<void> {
-		const { email, scope } = verifyJWT(token, env['SECRET'] as string) as {
-			email: string;
-			scope: string;
-		};
+		let payload: { email: string; scope: string };
+
+		try {
+			payload = jwt.verify(token, env['SECRET'] as string, { issuer: 'cairncms' }) as typeof payload;
+		} catch {
+			throw new ForbiddenException();
+		}
+
+		const { email, scope } = payload;
 
 		if (scope !== 'invite') throw new ForbiddenException();
 
 		const user = await this.getUserByEmail(email);
 
 		if (user?.status !== 'invited') {
-			throw new InvalidPayloadException(`Email address ${email} hasn't been invited.`);
+			throw new ForbiddenException();
 		}
 
 		// Allow unauthenticated update

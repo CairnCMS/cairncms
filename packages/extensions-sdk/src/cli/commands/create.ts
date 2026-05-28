@@ -170,6 +170,7 @@ function getPackageManifest(name: string, options: ExtensionOptions, deps: Recor
 		icon: 'extension',
 		version: '1.0.0',
 		keywords: ['cairncms', 'cairncms-extension', `cairncms-custom-${options.type}`],
+		type: 'module',
 		[EXTENSION_PKG_KEY]: options,
 		scripts: {
 			build: 'cairncms-extension build',

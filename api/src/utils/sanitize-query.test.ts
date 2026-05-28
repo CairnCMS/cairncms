@@ -182,12 +182,26 @@ describe('offset', () => {
 		expect(sanitizedQuery.offset).toBe(1);
 	});
 
-	test('should ignore zero', () => {
+	test('should accept zero', () => {
 		const offset = 0;
 
 		const sanitizedQuery = sanitizeQuery({ offset });
 
-		expect(sanitizedQuery.offset).toBeUndefined();
+		expect(sanitizedQuery.offset).toBe(0);
+	});
+
+	test('should accept string zero', () => {
+		const offset = '0';
+
+		const sanitizedQuery = sanitizeQuery({ offset });
+
+		expect(sanitizedQuery.offset).toBe(0);
+	});
+
+	test('should accept zero in a deep sub-query', () => {
+		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _offset: 0 } } });
+
+		expect(sanitizedQuery.deep).toEqual({ translations: { _offset: 0 } });
 	});
 });
 
