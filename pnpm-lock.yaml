@@ -24,7 +24,7 @@ overrides:
   jws@<=3.2.2: 3.2.3
   jws@4.0.0: 4.0.1
   fast-xml-parser: 4.5.5
-  tmp@0.2.1: 0.2.4
+  tmp@>=0.2.0 <0.2.6: 0.2.6
   postcss@<8.5.10: 8.5.10
   '@xmldom/xmldom': 0.8.13
   fast-uri: 3.1.2
@@ -8632,10 +8632,6 @@ packages:
   tmp@0.0.33:
     resolution: {integrity: sha512-jRCJlojKnZ3addtTOjdIqoRuPEKBvNXcGYqzO6zWZX8KfKEpnGY5jfggJQ3EjKuu8D4bJRr0y+cYJFmYbImXGw==}
     engines: {node: '>=0.6.0'}
-
-  tmp@0.2.4:
-    resolution: {integrity: sha512-UdiSoX6ypifLmrfQ/XfiawN6hkjSBpCjhKxxZcWlUUmoXLaCKQU0bx4HF/tdDK2uzRuchf1txGvrWBzYREssoQ==}
-    engines: {node: '>=14.14'}
 
   tmp@0.2.6:
     resolution: {integrity: sha512-5sJPdPjfI5Kx+qbrDesxkglRBxW//g7hCsqspEjwkewGvBMGIKMOTKzLt1hFVJzyadba3lDUN20O9qhvbQUSTA==}
@@ -17756,13 +17752,11 @@ snapshots:
 
   tmp-promise@3.0.3:
     dependencies:
-      tmp: 0.2.4
+      tmp: 0.2.6
 
   tmp@0.0.33:
     dependencies:
       os-tmpdir: 1.0.2
-
-  tmp@0.2.4: {}
 
   tmp@0.2.6: {}
 
