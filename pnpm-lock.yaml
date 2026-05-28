@@ -1243,8 +1243,8 @@ importers:
         specifier: 8.0.3
         version: 8.0.3
       tmp:
-        specifier: 0.2.4
-        version: 0.2.4
+        specifier: 0.2.6
+        version: 0.2.6
       vue:
         specifier: 3.2.47
         version: 3.2.47
@@ -1262,8 +1262,8 @@ importers:
         specifier: 22.19.17
         version: 22.19.17
       '@types/tmp':
-        specifier: 0.2.3
-        version: 0.2.3
+        specifier: 0.2.6
+        version: 0.2.6
       '@vitest/coverage-v8':
         specifier: 1.6.1
         version: 1.6.1(vitest@1.6.1(@types/node@22.19.17)(happy-dom@14.12.3)(sass@1.62.0)(terser@5.46.1))
@@ -3702,8 +3702,8 @@ packages:
   '@types/through@0.0.33':
     resolution: {integrity: sha512-HsJ+z3QuETzP3cswwtzt2vEIiHBk/dCcHGhbmG5X3ecnwFD/lPrMpliGXxSCg03L9AhrdwA4Oz/qfspkDW+xGQ==}
 
-  '@types/tmp@0.2.3':
-    resolution: {integrity: sha512-dDZH/tXzwjutnuk4UacGgFRwV+JSLaXL1ikvidfJprkb7L9Nx1njcRHHmi3Dsvt7pgqqTEeucQuOrWHPFgzVHA==}
+  '@types/tmp@0.2.6':
+    resolution: {integrity: sha512-chhaNf2oKHlRkDGt+tiKE2Z5aJ6qalm7Z9rlLdBwmOiAAf09YQvvoLXjWK4HWPF1xU/fqvMgfNfpVoBscA/tKA==}
 
   '@types/tough-cookie@4.0.5':
     resolution: {integrity: sha512-/Ad8+nIOV7Rl++6f1BdKxFSMgmoqEoYbHRpPcx3JEfv8VRsQe9Z4mCXeJBzxs7mbHY/XOZZuXlRNfhpVPbs6ZA==}
@@ -8637,6 +8637,10 @@ packages:
     resolution: {integrity: sha512-UdiSoX6ypifLmrfQ/XfiawN6hkjSBpCjhKxxZcWlUUmoXLaCKQU0bx4HF/tdDK2uzRuchf1txGvrWBzYREssoQ==}
     engines: {node: '>=14.14'}
 
+  tmp@0.2.6:
+    resolution: {integrity: sha512-5sJPdPjfI5Kx+qbrDesxkglRBxW//g7hCsqspEjwkewGvBMGIKMOTKzLt1hFVJzyadba3lDUN20O9qhvbQUSTA==}
+    engines: {node: '>=14.14'}
+
   tmpl@1.0.5:
     resolution: {integrity: sha512-3f0uOEAQwIqGuWW2MVzYg8fV/QNnc/IpuJNG837rLuczAaLVHslWHZQj4IGiEl5Hs3kkbhwL9Ab7Hrsmuj+Smw==}
 
@@ -11906,7 +11910,7 @@ snapshots:
     dependencies:
       '@types/node': 22.19.17
 
-  '@types/tmp@0.2.3': {}
+  '@types/tmp@0.2.6': {}
 
   '@types/tough-cookie@4.0.5':
     optional: true
@@ -17759,6 +17763,8 @@ snapshots:
       os-tmpdir: 1.0.2
 
   tmp@0.2.4: {}
+
+  tmp@0.2.6: {}
 
   tmpl@1.0.5: {}
 
