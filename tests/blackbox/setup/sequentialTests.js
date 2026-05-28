@@ -8,6 +8,7 @@ exports.list = {
 		{ testFilePath: '/routes/collections/crud.test.ts' },
 		{ testFilePath: '/routes/fields/change-fields.test.ts' },
 		{ testFilePath: '/routes/fields/crud.test.ts' },
+		{ testFilePath: '/routes/relations/partial-patch-crash.test.ts' },
 	],
 	after: [
 		{ testFilePath: '/schema/timezone/timezone.test.ts' },

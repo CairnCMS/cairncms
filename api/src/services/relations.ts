@@ -271,8 +271,23 @@ export class RelationsService {
 			throw new InvalidPayloadException(`Field "${field}" in collection "${collection}" doesn't have a relationship.`);
 		}
 
+		let effectiveSchema: Relation['schema'];
+
+		if (Object.prototype.hasOwnProperty.call(relation, 'schema') === false) {
+			effectiveSchema = existingRelation.schema;
+		} else if (relation.schema === null) {
+			effectiveSchema = null;
+		} else {
+			effectiveSchema = { ...existingRelation.schema, ...relation.schema } as Relation['schema'];
+		}
+
+		const effectiveRelation = {
+			...existingRelation,
+			schema: effectiveSchema,
+		};
+
 		const runPostColumnChange = await this.helpers.schema.preColumnChange();
-		this.helpers.schema.preRelationChange(relation);
+		this.helpers.schema.preRelationChange(effectiveRelation);
 
 		const nestedActionEvents: ActionEventParams[] = [];
 
@@ -291,7 +306,7 @@ export class RelationsService {
 							existingRelation.schema.constraint_name = constraintName;
 						}
 
-						this.alterType(table, relation);
+						this.alterType(table, effectiveRelation);
 
 						const builder = table
 							.foreign(field, constraintName || undefined)
@@ -301,8 +316,8 @@ export class RelationsService {
 								}`
 							);
 
-						if (relation.schema?.on_delete) {
-							builder.onDelete(relation.schema.on_delete);
+						if (effectiveRelation.schema?.on_delete) {
+							builder.onDelete(effectiveRelation.schema.on_delete);
 						}
 					});
 				}
@@ -325,8 +340,8 @@ export class RelationsService {
 						await relationsItemService.createOne(
 							{
 								...(relation.meta || {}),
-								many_collection: relation.collection,
-								many_field: relation.field,
+								many_collection: effectiveRelation.collection,
+								many_field: effectiveRelation.field,
 								one_collection: existingRelation.related_collection || null,
 							},
 							{
