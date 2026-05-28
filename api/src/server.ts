@@ -61,7 +61,12 @@ export async function createServer(): Promise<http.Server> {
 					protocol,
 					host: req.headers.host,
 					size: metrics.in,
-					query: urlInfo.query ? qs.parse(urlInfo.query) : {},
+					query: urlInfo.query
+						? qs.parse(urlInfo.query, {
+								depth: Number(env['QUERYSTRING_PARSE_DEPTH']),
+								arrayLimit: Number(env['QUERYSTRING_ARRAY_LIMIT']),
+						  })
+						: {},
 					headers: req.headers,
 				},
 				response: {
