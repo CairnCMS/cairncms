@@ -3,7 +3,7 @@ name: Notify Docs Changed
 on:
   push:
     branches: [main]
-    paths: ['docs/**']
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -12,7 +12,23 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - uses: peter-evans/repository-dispatch@v3
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: docs
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif ! git rev-parse --quiet --verify "${{ github.event.before }}^{commit}" >/dev/null; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- docs | grep -q .; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.docs.outputs.changed == 'true'
+        uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.FRONTEND_REPO_PAT }}
           repository: CairnCMS/cairncms-website
