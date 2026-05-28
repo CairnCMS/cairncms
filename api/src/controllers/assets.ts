@@ -146,11 +146,13 @@ router.get(
 
 		const vary = ['Origin', 'Cache-Control'];
 
-		const transformation: TransformationParams = res.locals['transformation'].key
+		const selectedTransformation: TransformationParams = res.locals['transformation'].key
 			? (res.locals['shortcuts'] as TransformationParams[]).find(
 					(transformation) => transformation['key'] === res.locals['transformation'].key
 			  )
 			: res.locals['transformation'];
+
+		const transformation: TransformationParams = { ...selectedTransformation };
 
 		if (transformation.format === 'auto') {
 			let format: Exclude<TransformationParams['format'], 'auto'>;
