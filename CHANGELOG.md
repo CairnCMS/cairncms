@@ -2,6 +2,39 @@
 
 All notable changes to CairnCMS are documented in this file. Releases are listed in reverse chronological order. Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-05-28
+
+### New Features
+
+- Add a Cache toggle for webhook flows. (#93)
+- Accept multipart schema-diff uploads on `/schema/apply`. (#94)
+- Add an optional pressure-based rate limiter. (#95)
+- Add folder navigation to file and image selectors. (#98)
+- Add Kanban layout for grouped collection views. (#99)
+- Add bar chart, line chart, pie chart, and meter panels to Insights. (#100)
+- Enable `.cjs` and `.mjs` custom migration files. (#89)
+- Build new API extensions as ESM by default. (#101)
+
+### Fixes & Improvements
+
+- Fix admin UI edge cases. (#74, #103, #104, #105, #107)
+- Fix OAuth2 and OpenID refresh-token persistence for existing SSO users. (#75)
+- Clear cached item responses after permission changes. (#77)
+- Apply relational field presets when creating nested items. (#79)
+- Wait for field metadata before rendering form fields. (#80)
+- Resolve aliased fields in display templates and CSV exports. (#82)
+- Accept `offset=0` in sanitized REST queries. (#84)
+- Stop numeric search from matching hex, binary, exponent, and infinity values. (#85)
+- Close the database connection after bootstrap completes. (#87)
+- Stop asset preset resolution from changing the input transform array. (#90)
+- Clean up extension build config loading, Rollup warnings, and shared package metadata. (#91, #92)
+- Stop publishing test files in API and workspace package builds. (#102)
+- Fix Kanban drag-and-drop when no sort field is configured. (#106)
+- Prevent partial relation PATCH requests from crashing the API. (#110)
+- Keep `format: auto` asset preset negotiation isolated per request. (#111)
+- Update dependencies. (#108)
+- Return the same forbidden response for invalid invite-accept tokens and account states. (#109)
+
 ## [1.0.0] - 2026-05-19
 
 ### Highlights
