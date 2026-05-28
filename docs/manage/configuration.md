@@ -48,6 +48,8 @@ Variables that control how CairnCMS listens for requests:
 - **`MAX_PAYLOAD_SIZE`** — the maximum request body size. Default `1mb`. Increase when receiving large uploads or imports.
 - **`MAX_RELATIONAL_DEPTH`** — how deeply nested a single query can fetch related data. Default `10`.
 - **`MAX_BATCH_MUTATION`** — limit on items in a batch create/update/delete. Default unlimited.
+- **`QUERYSTRING_PARSE_DEPTH`** — maximum nesting depth parsed from URL query strings. Default `10`.
+- **`QUERYSTRING_ARRAY_LIMIT`** — maximum number of indexed query-string array entries parsed as arrays. Default `500`. Raise this if clients send large indexed arrays such as wide `_in` filters. Lower values reduce query parsing resource exposure.
 - **`ROBOTS_TXT`** — the body served at `/robots.txt`. Default disallows all crawlers.
 - **`ROOT_REDIRECT`** — where requests to `/` redirect. Default `./admin`.
 - **`SERVER_SHUTDOWN_TIMEOUT`** — milliseconds to wait for in-flight requests during shutdown. Default `1000`.

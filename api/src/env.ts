@@ -28,6 +28,8 @@ const allowedEnvironmentVars = [
 	'SERVE_APP',
 	'GRAPHQL_INTROSPECTION',
 	'MAX_BATCH_MUTATION',
+	'QUERYSTRING_PARSE_DEPTH',
+	'QUERYSTRING_ARRAY_LIMIT',
 	'LOGGER_.+',
 	'ROBOTS_TXT',
 	// server
@@ -203,6 +205,8 @@ const defaults: Record<string, any> = {
 	MAX_PAYLOAD_SIZE: '1mb',
 	MAX_RELATIONAL_DEPTH: 10,
 	MAX_BATCH_MUTATION: Infinity,
+	QUERYSTRING_PARSE_DEPTH: 10,
+	QUERYSTRING_ARRAY_LIMIT: 500,
 	ROBOTS_TXT: 'User-agent: *\nDisallow: /',
 
 	DB_EXCLUDE_TABLES: 'spatial_ref_sys,sysdiagrams',
@@ -322,6 +326,9 @@ const typeMap: Record<string, string> = {
 	GRAPHQL_INTROSPECTION: 'boolean',
 
 	MAX_BATCH_MUTATION: 'number',
+
+	QUERYSTRING_PARSE_DEPTH: 'number',
+	QUERYSTRING_ARRAY_LIMIT: 'number',
 
 	SERVER_SHUTDOWN_TIMEOUT: 'number',
 
