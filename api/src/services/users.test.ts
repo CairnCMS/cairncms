@@ -961,5 +961,120 @@ describe('Integration Tests', () => {
 				});
 			});
 		});
+
+		describe('acceptInvite', () => {
+			const FORBIDDEN_DEFAULT_MESSAGE = `You don't have permission to access this.`;
+
+			const expectUniformForbidden = (rejection: any, ...identifiersThatMustNotAppear: string[]) => {
+				expect(rejection).toBeInstanceOf(ForbiddenException);
+				expect(rejection.status).toBe(403);
+				expect(rejection.code).toBe('FORBIDDEN');
+				expect(rejection.message).toBe(FORBIDDEN_DEFAULT_MESSAGE);
+
+				for (const identifier of identifiersThatMustNotAppear) {
+					expect(rejection.message).not.toContain(identifier);
+				}
+			};
+
+			describe('failure modes collapse to uniform ForbiddenException', () => {
+				it('throws uniform ForbiddenException on a malformed JWT', async () => {
+					const rejection = await service.acceptInvite('not-a-jwt', 'NewPassw0rd!123').catch((err: any) => err);
+
+					expectUniformForbidden(rejection);
+				});
+
+				it('throws uniform ForbiddenException on a wrong-signature JWT', async () => {
+					const wrongSecret = jwt.sign(
+						{ email: 'token@example.test', scope: 'invite' },
+						'completely-different-secret',
+						{
+							issuer: 'cairncms',
+						}
+					);
+
+					const rejection = await service.acceptInvite(wrongSecret, 'NewPassw0rd!123').catch((err: any) => err);
+
+					expectUniformForbidden(rejection, 'token@example.test');
+				});
+
+				it('throws uniform ForbiddenException on an expired JWT', async () => {
+					const expired = jwt.sign({ email: 'token@example.test', scope: 'invite' }, 'test-secret-for-jwt', {
+						issuer: 'cairncms',
+						expiresIn: '-1s',
+					});
+
+					const rejection = await service.acceptInvite(expired, 'NewPassw0rd!123').catch((err: any) => err);
+
+					expectUniformForbidden(rejection, 'token@example.test');
+				});
+
+				it('throws uniform ForbiddenException on a valid JWT with wrong scope', async () => {
+					const wrongScope = jwt.sign({ email: 'token@example.test', scope: 'password-reset' }, 'test-secret-for-jwt', {
+						issuer: 'cairncms',
+					});
+
+					const rejection = await service.acceptInvite(wrongScope, 'NewPassw0rd!123').catch((err: any) => err);
+
+					expectUniformForbidden(rejection, 'token@example.test');
+				});
+
+				it('throws uniform ForbiddenException when no account matches the token email', async () => {
+					vi.spyOn(UsersService.prototype as any, 'getUserByEmail').mockResolvedValueOnce(null);
+
+					const validToken = jwt.sign({ email: 'attacker@example.test', scope: 'invite' }, 'test-secret-for-jwt', {
+						issuer: 'cairncms',
+					});
+
+					const rejection = await service.acceptInvite(validToken, 'NewPassw0rd!123').catch((err: any) => err);
+
+					expectUniformForbidden(rejection, 'attacker@example.test');
+				});
+
+				it('throws uniform ForbiddenException when the account is not in invited status, without leaking either email', async () => {
+					vi.spyOn(UsersService.prototype as any, 'getUserByEmail').mockResolvedValueOnce({
+						id: 'user-id',
+						role: 'user-role',
+						status: 'active',
+						password: 'hashed-password',
+						email: 'victim@example.test',
+					});
+
+					const validToken = jwt.sign({ email: 'attacker@example.test', scope: 'invite' }, 'test-secret-for-jwt', {
+						issuer: 'cairncms',
+					});
+
+					const rejection = await service.acceptInvite(validToken, 'NewPassw0rd!123').catch((err: any) => err);
+
+					expectUniformForbidden(rejection, 'attacker@example.test', 'victim@example.test');
+				});
+			});
+
+			describe('regression — happy path still updates the invited user', () => {
+				it('updates the user with password and active status on a valid invite token', async () => {
+					vi.spyOn(UsersService.prototype as any, 'getUserByEmail').mockResolvedValueOnce({
+						id: 'user-id',
+						role: 'user-role',
+						status: 'invited',
+						password: null,
+						email: 'invited@example.test',
+					});
+
+					const updateOneSpy = vi.spyOn(UsersService.prototype, 'updateOne').mockResolvedValueOnce('user-id');
+
+					const validToken = jwt.sign({ email: 'invited@example.test', scope: 'invite' }, 'test-secret-for-jwt', {
+						issuer: 'cairncms',
+					});
+
+					await service.acceptInvite(validToken, 'NewPassw0rd!123');
+
+					expect(updateOneSpy).toHaveBeenCalledTimes(1);
+
+					expect(updateOneSpy).toHaveBeenCalledWith('user-id', {
+						password: 'NewPassw0rd!123',
+						status: 'active',
+					});
+				});
+			});
+		});
 	});
 });
