@@ -20,6 +20,7 @@ exports.list = {
 		{ testFilePath: '/routes/permissions/cache-purge.test.ts' },
 		{ testFilePath: '/routes/items/relational-presets.test.ts' },
 		{ testFilePath: '/routes/assets/format.test.ts' },
+		{ testFilePath: '/routes/assets/system-preset-format-isolation.test.ts' },
 		{ testFilePath: '/routes/assets/read.test.ts' },
 		{ testFilePath: '/routes/assets/limit.test.ts' },
 		{ testFilePath: '/routes/assets/concurrency.test.ts' },
