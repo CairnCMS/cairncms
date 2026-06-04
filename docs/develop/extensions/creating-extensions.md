@@ -205,6 +205,40 @@ For Operation extensions (which have both an app and an api side), use `app.js` 
 
 This path is convenient for one-off extensions that do not need to live in their own package.
 
+## Server dependencies and native modules
+
+Server extensions (hooks, endpoints, operations, and the API side of a bundle) run as normal Node code in the API process. When the SDK builds a server extension, it compiles your own source but does not bundle the packages you depend on. Each declared dependency stays as a regular import and resolves from the extension package's own `node_modules` at runtime.
+
+This is what lets server extensions use native modules. A bundler cannot inline a compiled binary, so a package like `sharp` could not be bundled. Because the server build leaves declared dependencies external instead, your extension ships its own copy and it loads like any other Node dependency.
+
+To use a runtime dependency, declare it under `dependencies` (or `optionalDependencies`) in the extension's `package.json`, then install it into the package:
+
+```bash
+npm install sharp
+```
+
+The build externalizes everything in `dependencies` and `optionalDependencies`, so those packages must be present in the extension's `node_modules` when CairnCMS loads the extension. The package and local-package install paths described above both carry their dependencies. An npm-installed extension resolves them through normal Node resolution, and a local package folder in `EXTENSIONS_PATH` keeps its own `node_modules` next to its build output.
+
+Native modules need the package or local-package install path. The dependency has to resolve from a `node_modules` directory, and the loose local-file layout has nowhere to install one.
+
+Packages in `devDependencies` are still bundled, so build-time tooling such as `@cairncms/extensions-sdk` does not need to be installed at runtime. Run `npm install` before building so that tooling is available.
+
+### Native modules on Docker and Alpine
+
+The CairnCMS Docker image is based on Alpine, which uses musl rather than glibc. Most native modules publish prebuilt binaries for both, so installing the dependency in your extension package is usually all you need. `sharp`, for example, resolves a musl prebuilt on Alpine with no extra steps.
+
+If a module has no prebuilt binary for your platform and compiles from source, install the build toolchain first. For `sharp` on Alpine:
+
+```bash
+apk add --no-cache build-base vips-dev
+```
+
+When you ship an extension in a custom image, install its dependencies during the image build so the binaries are present when CairnCMS starts.
+
+### Do not rely on the platform's copy
+
+CairnCMS uses some native libraries internally, including `sharp`. If your extension imports a package it declared but did not install, Node may walk up the directory tree and resolve the platform's copy instead. Do not depend on that behavior. The platform's internal packages and their versions are implementation details that can change between releases, and this fallback is not a compatibility guarantee. Install the dependencies your extension declares.
+
 ## Publishing to npm
 
 To make an extension available to other CairnCMS operators, publish the npm package the SDK created:
