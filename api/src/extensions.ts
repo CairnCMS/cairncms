@@ -92,6 +92,7 @@ type ExtensionDiagnostic = {
 	name: string;
 	type: ExtensionType | null;
 	local: boolean;
+	version?: string;
 	status: 'loaded' | 'failed' | 'discovered';
 	reason?: SanitizedExtensionError;
 };
@@ -214,6 +215,7 @@ export class ExtensionManager {
 				status: diagnostic.status,
 			};
 
+			if (diagnostic.version) copy.version = diagnostic.version;
 			if (diagnostic.reason) copy.reason = { ...diagnostic.reason };
 
 			return copy;
@@ -245,34 +247,46 @@ export class ExtensionManager {
 	}
 
 	private recordLoaded(extension: Extension): void {
-		this.diagnostics.push({
+		const diagnostic: ExtensionDiagnostic = {
 			name: extension.name,
 			type: extension.type,
 			local: extension.local,
 			status: 'loaded',
-		});
+		};
+
+		if (extension.version) diagnostic.version = extension.version;
+
+		this.diagnostics.push(diagnostic);
 	}
 
 	private recordFailed(extension: Extension, reason: SanitizedExtensionError): void {
-		this.diagnostics.push({
+		const diagnostic: ExtensionDiagnostic = {
 			name: extension.name,
 			type: extension.type,
 			local: extension.local,
 			status: 'failed',
 			reason,
-		});
+		};
+
+		if (extension.version) diagnostic.version = extension.version;
+
+		this.diagnostics.push(diagnostic);
 	}
 
 	private recordAppDiagnostics(): void {
 		const appExtensions = this.extensions.filter((extension) => isIn(extension.type, APP_EXTENSION_TYPES));
 
 		for (const extension of appExtensions) {
-			this.diagnostics.push({
+			const diagnostic: ExtensionDiagnostic = {
 				name: extension.name,
 				type: extension.type,
 				local: extension.local,
 				status: 'discovered',
-			});
+			};
+
+			if (extension.version) diagnostic.version = extension.version;
+
+			this.diagnostics.push(diagnostic);
 		}
 
 		if (this.appBundleFailure) {

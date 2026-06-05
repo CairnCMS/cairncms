@@ -11,7 +11,8 @@ describe('/extensions', () => {
 				.set('Authorization', `Bearer ${USER.ADMIN.TOKEN}`)
 				.expect(200);
 
-			const byName: Record<string, { status: string; reason?: { code: string; detail: string } }> = {};
+			const byName: Record<string, { status: string; version?: string; reason?: { code: string; detail: string } }> =
+				{};
 
 			for (const entry of response.body.data) {
 				byName[entry.name] = entry;
@@ -19,10 +20,12 @@ describe('/extensions', () => {
 
 			expect(byName['cairn-broken']?.status).toBe('failed');
 			expect(byName['cairn-broken']?.reason?.detail).not.toContain('/opt/secret/path');
+			expect(byName['cairn-broken']?.version).toBeUndefined();
 
 			expect(byName['cairncms-extension-cairn-badmanifest']?.status).toBe('failed');
 
 			expect(byName['cairncms-extension-cairn-scoped']?.status).toBe('loaded');
+			expect(byName['cairncms-extension-cairn-scoped']?.version).toBe('1.0.0');
 		});
 
 		it.each(vendors)('%s rejects a non-admin request', async (vendor) => {
