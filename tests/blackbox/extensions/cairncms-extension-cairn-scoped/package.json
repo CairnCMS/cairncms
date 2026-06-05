@@ -1,0 +1,15 @@
+{
+	"name": "cairncms-extension-cairn-scoped",
+	"version": "1.0.0",
+	"type": "module",
+	"private": true,
+	"imports": {
+		"#marker": "./marker.js"
+	},
+	"cairncms:extension": {
+		"type": "endpoint",
+		"path": "index.js",
+		"source": "index.js",
+		"host": "^1.0.0"
+	}
+}
