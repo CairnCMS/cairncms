@@ -93,6 +93,7 @@ type ExtensionDiagnostic = {
 	type: ExtensionType | null;
 	local: boolean;
 	version?: string;
+	entries?: { name: string; type: string }[];
 	status: 'loaded' | 'failed' | 'discovered';
 	reason?: SanitizedExtensionError;
 };
@@ -216,6 +217,7 @@ export class ExtensionManager {
 			};
 
 			if (diagnostic.version) copy.version = diagnostic.version;
+			if (diagnostic.entries) copy.entries = diagnostic.entries.map((entry) => ({ ...entry }));
 			if (diagnostic.reason) copy.reason = { ...diagnostic.reason };
 
 			return copy;
@@ -256,6 +258,10 @@ export class ExtensionManager {
 
 		if (extension.version) diagnostic.version = extension.version;
 
+		if (extension.type === 'bundle') {
+			diagnostic.entries = extension.entries.map((entry) => ({ name: entry.name, type: entry.type }));
+		}
+
 		this.diagnostics.push(diagnostic);
 	}
 
@@ -269,6 +275,10 @@ export class ExtensionManager {
 		};
 
 		if (extension.version) diagnostic.version = extension.version;
+
+		if (extension.type === 'bundle') {
+			diagnostic.entries = extension.entries.map((entry) => ({ name: entry.name, type: entry.type }));
+		}
 
 		this.diagnostics.push(diagnostic);
 	}

@@ -1,0 +1,15 @@
+{
+	"name": "cairncms-extension-fixture-bundle",
+	"version": "1.0.0",
+	"type": "module",
+	"private": true,
+	"cairncms:extension": {
+		"type": "bundle",
+		"path": { "app": "app.js", "api": "api.js" },
+		"entries": [
+			{ "type": "interface", "name": "cairn-fixture-bundle-interface", "source": "src/iface/index.js" },
+			{ "type": "endpoint", "name": "cairn-fixture-bundle-endpoint", "source": "src/ep/index.js" }
+		],
+		"host": "^1.0.0"
+	}
+}

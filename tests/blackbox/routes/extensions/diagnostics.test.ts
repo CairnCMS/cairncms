@@ -11,8 +11,15 @@ describe('/extensions', () => {
 				.set('Authorization', `Bearer ${USER.ADMIN.TOKEN}`)
 				.expect(200);
 
-			const byName: Record<string, { status: string; version?: string; reason?: { code: string; detail: string } }> =
-				{};
+			const byName: Record<
+				string,
+				{
+					status: string;
+					version?: string;
+					entries?: { name: string; type: string }[];
+					reason?: { code: string; detail: string };
+				}
+			> = {};
 
 			for (const entry of response.body.data) {
 				byName[entry.name] = entry;
@@ -26,6 +33,16 @@ describe('/extensions', () => {
 
 			expect(byName['cairncms-extension-cairn-scoped']?.status).toBe('loaded');
 			expect(byName['cairncms-extension-cairn-scoped']?.version).toBe('1.0.0');
+
+			const fixtureBundle = byName['cairncms-extension-fixture-bundle'];
+			expect(fixtureBundle?.status).toBe('loaded');
+			expect(fixtureBundle?.version).toBe('1.0.0');
+			expect(fixtureBundle?.entries).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ name: 'cairn-fixture-bundle-interface', type: 'interface' }),
+					expect.objectContaining({ name: 'cairn-fixture-bundle-endpoint', type: 'endpoint' }),
+				])
+			);
 		});
 
 		it.each(vendors)('%s rejects a non-admin request', async (vendor) => {
