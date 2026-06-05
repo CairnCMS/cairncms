@@ -22,6 +22,7 @@ import FlowsOverview from './routes/flows/overview.vue';
 import FlowsDetail from './routes/flows/flow.vue';
 import FlowOperationDetail from './routes/flows/components/operation-detail.vue';
 import TranslationStringsCollection from './routes/translation-strings/collection.vue';
+import ExtensionsCollection from './routes/extensions/collection.vue';
 
 export default defineModule({
 	id: 'settings',
@@ -219,6 +220,17 @@ export default defineModule({
 					name: 'settings-translation-strings-collection',
 					path: '',
 					component: TranslationStringsCollection,
+				},
+			],
+		},
+		{
+			path: 'extensions',
+			component: RouterPass,
+			children: [
+				{
+					name: 'settings-extensions-collection',
+					path: '',
+					component: ExtensionsCollection,
 				},
 			],
 		},
