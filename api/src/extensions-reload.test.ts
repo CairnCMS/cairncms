@@ -98,4 +98,27 @@ describe('ExtensionManager reload lifecycle', () => {
 		expect(count(manager.getEmbeds().head, 'EMBED_A')).toBe(1);
 		expect(count(manager.getEmbeds().head, 'EMBED_B')).toBe(1);
 	});
+
+	it('survives removal of a loaded server extension and keeps the reload queue working', async () => {
+		writeExtension('endpoints', 'ep-a', "export default (router) => router.get('/', (_req, res) => res.send('A'));\n");
+
+		const manager = new ExtensionManager();
+		await manager.initialize({ schedule: false, watch: false });
+
+		const app = express();
+		app.use(manager.getEndpointRouter());
+
+		await request(app).get('/ep-a').expect(200, 'A');
+
+		rmSync(path.join(TMP, 'endpoints', 'ep-a'), { recursive: true, force: true });
+		manager.reload();
+
+		await waitFor(async () => (await request(app).get('/ep-a')).status === 404);
+
+		writeExtension('endpoints', 'ep-b', "export default (router) => router.get('/', (_req, res) => res.send('B'));\n");
+		manager.reload();
+
+		await waitFor(async () => (await request(app).get('/ep-b')).status === 200);
+		await request(app).get('/ep-b').expect(200, 'B');
+	});
 });

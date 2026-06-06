@@ -849,7 +849,12 @@ export class ExtensionManager {
 		flowManager.clearOperations();
 
 		for (const apiExtension of this.apiExtensions) {
-			delete require.cache[require.resolve(apiExtension.path)];
+			try {
+				delete require.cache[require.resolve(apiExtension.path)];
+			} catch (error: any) {
+				// A removed extension has no cached entry to evict, and require.resolve throws on its missing path.
+				if (error?.code !== 'MODULE_NOT_FOUND') throw error;
+			}
 		}
 
 		this.apiExtensions = [];
