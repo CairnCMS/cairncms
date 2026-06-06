@@ -96,4 +96,47 @@ describe('add mutates the bundle manifest and scaffolds entry sources', () => {
 		expect(manifest.name).toBe('cairncms-extension-combined');
 		expect(fse.pathExistsSync(resolve(dir, 'src', 'solo', 'index.js'))).toBe(true);
 	});
+
+	test('adds the typecheck script when a TypeScript entry is added to a bundle', async () => {
+		await writeManifest({
+			type: 'bundle',
+			path: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [],
+			host: '^1.0.0',
+		});
+
+		prompt.mockResolvedValueOnce({ type: 'interface', name: 'ts-iface', language: 'typescript' });
+		await runAdd(dir);
+
+		const manifest = await fse.readJson(resolve(dir, 'package.json'));
+
+		expect(manifest.devDependencies.typescript).toBeDefined();
+		expect(manifest.scripts.typecheck).toBe('tsc --noEmit');
+	});
+
+	test('adds the typecheck script when converting to a bundle with a TypeScript entry', async () => {
+		await writeManifest(
+			{ type: 'interface', path: 'dist/index.js', source: 'src/index.js', host: '^1.0.0' },
+			'cairncms-extension-solo'
+		);
+
+		await fse.outputFile(resolve(dir, 'src', 'index.js'), 'export default {};\n');
+
+		prompt.mockResolvedValueOnce({ proceed: true });
+
+		prompt.mockResolvedValueOnce({
+			type: 'endpoint',
+			name: 'ts-ep',
+			language: 'typescript',
+			convertName: 'solo',
+			extensionName: 'combined',
+		});
+
+		await runAdd(dir);
+
+		const manifest = await fse.readJson(resolve(dir, 'package.json'));
+
+		expect(manifest.devDependencies.typescript).toBeDefined();
+		expect(manifest.scripts.typecheck).toBe('tsc --noEmit');
+	});
 });

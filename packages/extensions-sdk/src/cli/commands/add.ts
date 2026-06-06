@@ -26,6 +26,7 @@ import getPackageManager from '../utils/get-package-manager.js';
 import { getLanguageFromPath, isLanguage, languageToShort } from '../utils/languages.js';
 import { log } from '../utils/logger.js';
 import copyTemplate from './helpers/copy-template.js';
+import ensureTypecheckScript from './helpers/ensure-typecheck-script.js';
 import getExtensionDevDeps from './helpers/get-extension-dev-deps.js';
 
 export default async function add(): Promise<void> {
@@ -121,11 +122,13 @@ export async function runAdd(extensionPath: string): Promise<void> {
 		const newExtensionManifest = {
 			...extensionManifest,
 			[EXTENSION_PKG_KEY]: newExtensionOptions,
-			devDependencies: await getExtensionDevDeps(
+			devDependencies: getExtensionDevDeps(
 				newEntries.map((entry) => entry.type),
 				getLanguageFromEntries(newEntries)
 			),
 		};
+
+		ensureTypecheckScript(newExtensionManifest);
 
 		await fse.writeJSON(packagePath, newExtensionManifest, { spaces: indent ?? '\t' });
 
@@ -263,11 +266,13 @@ export async function runAdd(extensionPath: string): Promise<void> {
 			name: EXTENSION_NAME_REGEX.test(extensionName) ? extensionName : `cairncms-extension-${extensionName}`,
 			keywords: ['cairncms', 'cairncms-extension', `cairncms-custom-bundle`],
 			[EXTENSION_PKG_KEY]: newExtensionOptions,
-			devDependencies: await getExtensionDevDeps(
+			devDependencies: getExtensionDevDeps(
 				entries.map((entry) => entry.type),
 				getLanguageFromEntries(entries)
 			),
 		};
+
+		ensureTypecheckScript(newExtensionManifest);
 
 		await fse.writeJSON(packagePath, newExtensionManifest, { spaces: indent ?? '\t' });
 
