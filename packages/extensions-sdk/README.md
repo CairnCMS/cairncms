@@ -1,6 +1,6 @@
 # @cairncms/extensions-sdk
 
-A toolkit for developing CairnCMS extensions. Provides the scaffolding, build, and linking tools extension authors use during development.
+A toolkit for developing CairnCMS extensions. Provides the build, bundle-entry, and linking tools extension authors use during development.
 
 ## Install
 
@@ -18,12 +18,11 @@ npm install --save-dev @cairncms/extensions-sdk
 
 ## Usage
 
-The package ships a `cairncms-extension` CLI binary:
+Inside an extension package, the SDK exposes a `cairncms-extension` CLI for working on the extension:
 
 ```sh
 npx cairncms-extension build                  # Bundle the extension to a single entrypoint
 npx cairncms-extension add                    # Add entries to an existing extension
-npx cairncms-extension create <type> <name>   # Scaffold a new extension
 npx cairncms-extension link <path>            # Symlink the extension into a CairnCMS install
 ```
 

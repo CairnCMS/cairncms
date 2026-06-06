@@ -125,6 +125,30 @@ export default {
 
 The supported option is `plugins`, which is an array of Rollup plugins added on top of the SDK's built-in plugins.
 
+## TypeScript
+
+Choose **TypeScript** at the scaffolder's language prompt to get a typed extension. The scaffold adds a
+`tsconfig.json`, a `typecheck` script, and a pinned toolchain (`typescript`, `vue` for app extensions, and
+`@types/node` for server extensions).
+
+Type-check your extension with:
+
+```bash
+npm run typecheck
+```
+
+That runs `tsc --noEmit`. The build does not type-check: `cairncms-extension build` uses esbuild, which strips
+types without checking them, so run `typecheck` separately, in your editor, a pre-commit step, or CI.
+
+What to import:
+
+- Import the `define*` helpers and their types from `@cairncms/extensions-sdk`, for example `import { defineInterface } from '@cairncms/extensions-sdk'`. That package is the public authoring surface. Do not import CairnCMS internal packages directly.
+- App extensions (interface, display, layout, module, panel, and the app side of an operation) include a `shims.d.ts` that declares `*.vue` imports, so you can import a single-file component and keep it typed.
+
+The scaffold pins exact toolchain versions for reproducibility, so an extension scaffolded today behaves the
+same later regardless of new `typescript` releases. To move to a newer toolchain, bump the versions in your
+`package.json`.
+
 ## Live reloading during development
 
 CairnCMS can reload extensions when their files change on disk, with no manual restart. The API watcher is opt-in through an environment variable, off by default:
