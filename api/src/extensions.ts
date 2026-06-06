@@ -39,7 +39,7 @@ import nodeResolveDefault from '@rollup/plugin-node-resolve';
 import virtualDefault from '@rollup/plugin-virtual';
 import chokidar, { FSWatcher } from 'chokidar';
 import express, { Router } from 'express';
-import { clone, escapeRegExp } from 'lodash-es';
+import { clone, debounce, escapeRegExp } from 'lodash-es';
 import { schedule, validate } from 'node-cron';
 import { readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -109,8 +109,10 @@ type Options = {
 
 const defaultOptions: Options = {
 	schedule: true,
-	watch: env['EXTENSIONS_AUTO_RELOAD'] && env['NODE_ENV'] !== 'development',
+	watch: env['EXTENSIONS_AUTO_RELOAD'],
 };
+
+const RELOAD_DEBOUNCE_MS = 250;
 
 export class ExtensionManager {
 	private isLoaded = false;
@@ -132,6 +134,9 @@ export class ExtensionManager {
 
 	private reloadQueue: JobQueue;
 	private watcher: FSWatcher | null = null;
+
+	// Paired with the watcher's awaitWriteFinish: a multi-file build (app.js + api.js) collapses into one reload.
+	private reloadDebounced = debounce(() => this.reload(), RELOAD_DEBOUNCE_MS);
 
 	constructor() {
 		this.options = defaultOptions;
@@ -378,6 +383,8 @@ export class ExtensionManager {
 		this.diagnostics = [];
 		this.appBundleFailure = null;
 		this.extensions = [];
+		this.hookEmbedsHead = [];
+		this.hookEmbedsBody = [];
 
 		try {
 			await ensureExtensionDirs(env['EXTENSIONS_PATH'], NESTED_EXTENSION_TYPES);
@@ -419,14 +426,18 @@ export class ExtensionManager {
 
 		const extensionDirUrl = pathToRelativeUrl(env['EXTENSIONS_PATH']);
 
+		// With SERVE_APP off, Vite owns app extensions, so the watcher tracks only server-relevant entrypoints.
+		const serveApp = env['SERVE_APP'];
+
 		const localExtensionUrls = NESTED_EXTENSION_TYPES.flatMap((type) => {
+			if (!serveApp && isIn(type, APP_EXTENSION_TYPES)) return [];
+
 			const typeDir = path.posix.join(extensionDirUrl, pluralize(type));
 
 			if (isIn(type, HYBRID_EXTENSION_TYPES)) {
-				return [
-					path.posix.join(typeDir, '*', `app.{${JAVASCRIPT_FILE_EXTS.join()}}`),
-					path.posix.join(typeDir, '*', `api.{${JAVASCRIPT_FILE_EXTS.join()}}`),
-				];
+				const apiGlob = path.posix.join(typeDir, '*', `api.{${JAVASCRIPT_FILE_EXTS.join()}}`);
+
+				return serveApp ? [path.posix.join(typeDir, '*', `app.{${JAVASCRIPT_FILE_EXTS.join()}}`), apiGlob] : [apiGlob];
 			} else {
 				return path.posix.join(typeDir, '*', `index.{${JAVASCRIPT_FILE_EXTS.join()}}`);
 			}
@@ -436,17 +447,20 @@ export class ExtensionManager {
 			[path.resolve('package.json'), path.posix.join(extensionDirUrl, '*', 'package.json'), ...localExtensionUrls],
 			{
 				ignoreInitial: true,
+				awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 50 },
 			}
 		);
 
 		this.watcher
-			.on('add', () => this.reload())
-			.on('change', () => this.reload())
-			.on('unlink', () => this.reload());
+			.on('add', () => this.reloadDebounced())
+			.on('change', () => this.reloadDebounced())
+			.on('unlink', () => this.reloadDebounced());
 	}
 
 	private async closeWatcher(): Promise<void> {
 		if (this.watcher) {
+			this.reloadDebounced.cancel();
+
 			await this.watcher.close();
 
 			this.watcher = null;
@@ -458,14 +472,15 @@ export class ExtensionManager {
 			const toPackageExtensionPaths = (extensions: Extension[]) =>
 				extensions
 					.filter((extension) => !extension.local || extension.type === 'bundle')
-					.flatMap((extension) =>
-						isTypeIn(extension, HYBRID_EXTENSION_TYPES) || extension.type === 'bundle'
-							? [
-									path.resolve(extension.path, extension.entrypoint.app),
-									path.resolve(extension.path, extension.entrypoint.api),
-							  ]
-							: path.resolve(extension.path, extension.entrypoint)
-					);
+					.flatMap((extension) => {
+						if (isTypeIn(extension, HYBRID_EXTENSION_TYPES) || extension.type === 'bundle') {
+							const apiPath = path.resolve(extension.path, extension.entrypoint.api);
+
+							return env['SERVE_APP'] ? [path.resolve(extension.path, extension.entrypoint.app), apiPath] : [apiPath];
+						}
+
+						return path.resolve(extension.path, extension.entrypoint);
+					});
 
 			const addedPackageExtensionPaths = toPackageExtensionPaths(added);
 			const removedPackageExtensionPaths = toPackageExtensionPaths(removed);
@@ -518,6 +533,8 @@ export class ExtensionManager {
 	}
 
 	private async generateExtensionBundle(): Promise<string | null> {
+		this.appExtensionChunks.clear();
+
 		const sharedDepsMapping = await this.getSharedDepsMapping(APP_SHARED_DEPS);
 
 		const internalImports = Object.entries(sharedDepsMapping).map(([name, path]) => ({
