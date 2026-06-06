@@ -7,4 +7,5 @@ export * from './list-folders.js';
 export * from './path-to-relative-url.js';
 export * from './pluralize.js';
 export * from './readable-stream-to-string.js';
+export * from './redact-error-detail.js';
 export * from './resolve-package.js';
