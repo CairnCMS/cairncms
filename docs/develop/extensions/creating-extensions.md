@@ -176,6 +176,45 @@ cairncms-extension link <path-to-instance>/extensions
 
 A server extension change takes effect on the next request. An app extension change is rebuilt into the served bundle on reload, but the browser still holds the app it loaded earlier, so refresh the page to load it.
 
+## Debugging
+
+Source maps let stack traces and breakpoints point at your extension source instead of the built output. They are opt-in through `--sourcemap` and stay off by default, because a built map embeds your source. Only enable them while debugging.
+
+The build is also minified by default, so without a map a stack trace points at minified output. Add `--sourcemap` to map it back, and `--no-minify` as well if you want the built file itself readable.
+
+### Server extensions
+
+A server extension's stack traces and breakpoints map to source when CairnCMS runs under plain Node with source maps enabled. Build with `--sourcemap` and set `NODE_OPTIONS` on the instance:
+
+```bash
+# rebuild on change, with source maps
+cairncms-extension build --watch --sourcemap
+
+# run the instance with source maps, plus the inspector for breakpoints
+export NODE_OPTIONS="--enable-source-maps --inspect"
+```
+
+Then attach a debugger to the inspector, for example the VS Code "Attach to Node Process" action.
+
+One caveat: the monorepo dev server (`pnpm --filter api dev`) runs under `tsx`, which does not apply source maps to the loader's cache-busted imports, so it does not map server extension stack traces. For source-mapped server traces use a plain-Node instance, either a released build or `pnpm --filter api build` followed by `node --enable-source-maps dist/cli/run.js start`.
+
+### App extensions
+
+App extension breakpoints map to source through the Vite dev server. Build the extension with `--sourcemap` and run the admin app from source:
+
+```bash
+cairncms-extension build --watch --sourcemap
+pnpm --filter app dev
+```
+
+Open the app, then in browser devtools set a breakpoint in your extension's source. It appears under its original path with readable content, because the Vite dev server chains your extension's map so breakpoints and stack frames resolve to source.
+
+### What source maps expose
+
+- CairnCMS never serves source maps over HTTP. The `/extensions/sources` route serves only the app entrypoint and its code chunks, never `.map` files, and the API-generated app bundle carries no map.
+- The Vite dev server does serve maps to the browser in development, which is how app debugging works. Do not expose the dev server publicly while source maps are enabled, because a map embeds your source.
+- Runtime errors follow the platform's existing behavior, which source maps do not change beyond the file and line a frame points at. In development, an unexpected (non-`BaseException`) error from an endpoint or a filter hook is logged and returned with its stack only to a requesting admin. A platform `BaseException` includes its development stack in the response extensions for any requester, per the existing error-handler behavior. Errors from action, init, and scheduled hooks are logged only. In production the stack is not included in the response.
+
 ## Symlinking a local extension
 
 If you want CairnCMS to pick up an extension you are developing in a separate directory, symlink it into a CairnCMS extensions folder:
