@@ -56,6 +56,11 @@ router.get(
 	'/sources/:chunk',
 	asyncHandler(async (req, res) => {
 		const chunk = req.params['chunk'] as string;
+
+		if (chunk.endsWith('.map')) {
+			throw new RouteNotFoundException(req.path);
+		}
+
 		const extensionManager = getExtensionManager();
 
 		let source: string | null;

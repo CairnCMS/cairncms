@@ -388,3 +388,65 @@ test('node build leaves Node builtin imports external', async () => {
 	expect(out).toMatch(/from\s*['"]node:os['"]/);
 	expect(out).toMatch(/from\s*['"]path['"]/);
 }, 30_000);
+
+test('build emits no source map by default and an external source map with --sourcemap', async () => {
+	const ext = uniquePath('ext-sourcemap');
+
+	await fse.outputJson(
+		resolve(ext, 'package.json'),
+		{ name: 'cairncms-extension-sm', version: '1.0.0', type: 'module' },
+		{ spaces: '\t' }
+	);
+
+	await fse.outputFile(
+		resolve(ext, 'src', 'index.js'),
+		`export default (router) => router.get('/', (_req, res) => res.json({ ok: true }));\n`
+	);
+
+	const buildArgs = ['../cli.js', 'build', '-t', 'endpoint', '-i', 'src/index.js', '-o', 'dist/index.js'];
+
+	await execa('node', buildArgs, { cwd: ext });
+	expect(fse.pathExistsSync(resolve(ext, 'dist', 'index.js.map'))).toBe(false);
+	expect(await fse.readFile(resolve(ext, 'dist', 'index.js'), 'utf-8')).not.toContain('sourceMappingURL');
+
+	await execa('node', [...buildArgs, '--sourcemap'], { cwd: ext });
+	expect(fse.pathExistsSync(resolve(ext, 'dist', 'index.js.map'))).toBe(true);
+	expect(await fse.readFile(resolve(ext, 'dist', 'index.js'), 'utf-8')).toContain('sourceMappingURL=index.js.map');
+}, 30_000);
+
+test('operation build emits maps and sourceMappingURL comments for both the app and api sides', async () => {
+	const ext = uniquePath('ext-op-sourcemap');
+
+	await fse.outputJson(
+		resolve(ext, 'package.json'),
+		{
+			name: 'cairncms-extension-op-sm',
+			version: '1.0.0',
+			type: 'module',
+			[EXTENSION_PKG_KEY]: {
+				type: 'operation',
+				path: { app: 'dist/app.js', api: 'dist/api.js' },
+				source: { app: 'src/app.js', api: 'src/api.js' },
+				host: '^1.1.0',
+			},
+		},
+		{ spaces: '\t' }
+	);
+
+	await fse.outputFile(
+		resolve(ext, 'src', 'app.js'),
+		`export default { id: 'op-sm', name: 'Op SM', icon: 'box', overview: () => [], options: [] };\n`
+	);
+
+	await fse.outputFile(
+		resolve(ext, 'src', 'api.js'),
+		`export default { id: 'op-sm', handler: () => ({ ok: true }) };\n`
+	);
+
+	await execa('node', ['../cli.js', 'build', '--sourcemap'], { cwd: ext });
+
+	expect(fse.pathExistsSync(resolve(ext, 'dist', 'app.js.map'))).toBe(true);
+	expect(fse.pathExistsSync(resolve(ext, 'dist', 'api.js.map'))).toBe(true);
+	expect(await fse.readFile(resolve(ext, 'dist', 'app.js'), 'utf-8')).toContain('sourceMappingURL=app.js.map');
+	expect(await fse.readFile(resolve(ext, 'dist', 'api.js'), 'utf-8')).toContain('sourceMappingURL=api.js.map');
+}, 30_000);
