@@ -127,15 +127,54 @@ The supported option is `plugins`, which is an array of Rollup plugins added on 
 
 ## Live reloading during development
 
-CairnCMS can reload extensions automatically when their files change on disk. Set the operator-side environment variable:
+CairnCMS can reload extensions when their files change on disk, with no manual restart. The API watcher is opt-in through an environment variable, off by default:
 
 ```bash
 EXTENSIONS_AUTO_RELOAD=true
 ```
 
-There is one important caveat: the extension watcher is intentionally disabled when `NODE_ENV=development`, on the assumption that development environments use a process-level reloader (nodemon, the dev script, and so on) that would conflict with the in-process watcher. To exercise the auto-reload path, leave `NODE_ENV` unset or set to `production`.
+CairnCMS runs an in-process watcher for this. The API dev script (`tsx watch`) only tracks the API source, not the extension build output, so this watcher is what notices a rebuild. A multi-file build, such as the app and api halves of a hybrid or a bundle, settles into a single reload rather than one reload per file, so the server picks up the finished build instead of a half-written one.
 
-The combination most developers want is `cairncms-extension build --watch` running in one terminal (rebuilding the extension on file change) and CairnCMS running with `EXTENSIONS_AUTO_RELOAD=true` (picking up the rebuilt output without a manual restart).
+You rebuild your extension with the build CLI in watch mode, and run CairnCMS one of two ways alongside it.
+
+### Against the app dev server
+
+Run the API and the admin app from the CairnCMS repo, with your extension linked into the repo's extensions folder. Each command is its own terminal:
+
+```bash
+# API, with the extension watcher enabled
+EXTENSIONS_AUTO_RELOAD=true pnpm --filter api dev
+
+# admin app dev server
+pnpm --filter app dev
+
+# your extension, rebuilding on every change
+cairncms-extension build --watch
+
+# link your extension into the repo's extensions folder (run once)
+cairncms-extension link <path-to-cairncms-repo>/api/extensions
+```
+
+Vite watches the `api/extensions` folder directly. Editing an app extension (an interface, display, layout, module, panel, or the app side of an operation or bundle) reloads the browser, and editing a server extension reloads in the API. Adding or removing an extension folder regenerates the Vite extension entrypoint. If the browser does not refresh automatically, refresh the page.
+
+Two things to expect:
+
+- The app reload is a full page reload, not a state-preserving hot swap. The extension registry is built once when the app boots and has no hot-accept boundary, so the page refreshes to load the new bundle. A `.vue` component inside an extension may still hot-update through the Vue plugin.
+- The Vite dev server only watches `api/extensions`. It does not read a custom `EXTENSIONS_PATH`. For app development through Vite, the extension has to live under that folder.
+
+### Against a running instance
+
+Run a normal CairnCMS instance with `EXTENSIONS_AUTO_RELOAD=true` set in its environment, where the API serves the built app. Rebuild your extension and link it into the instance's extensions folder:
+
+```bash
+# your extension, rebuilding on every change
+cairncms-extension build --watch
+
+# link it into the running instance's extensions folder (run once)
+cairncms-extension link <path-to-instance>/extensions
+```
+
+A server extension change takes effect on the next request. An app extension change is rebuilt into the served bundle on reload, but the browser still holds the app it loaded earlier, so refresh the page to load it.
 
 ## Symlinking a local extension
 
