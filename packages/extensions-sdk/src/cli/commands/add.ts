@@ -29,8 +29,11 @@ import copyTemplate from './helpers/copy-template.js';
 import getExtensionDevDeps from './helpers/get-extension-dev-deps.js';
 
 export default async function add(): Promise<void> {
-	const extensionPath = process.cwd();
-	const packagePath = path.resolve('package.json');
+	return runAdd(process.cwd());
+}
+
+export async function runAdd(extensionPath: string): Promise<void> {
+	const packagePath = path.resolve(extensionPath, 'package.json');
 
 	if (!(await fse.pathExists(packagePath))) {
 		log(`Current directory is not a valid package.`, 'error');
@@ -51,7 +54,7 @@ export default async function add(): Promise<void> {
 
 	const extensionOptions = extensionManifest[EXTENSION_PKG_KEY];
 
-	const sourceExists = await fse.pathExists(path.resolve('src'));
+	const sourceExists = await fse.pathExists(path.resolve(extensionPath, 'src'));
 
 	if (extensionOptions.type === 'bundle') {
 		const { type, name, language, alternativeSource } = await inquirer.prompt<{
@@ -90,7 +93,7 @@ export default async function add(): Promise<void> {
 
 		const source = alternativeSource ?? 'src';
 
-		const sourcePath = path.resolve(source, name);
+		const sourcePath = path.resolve(extensionPath, source, name);
 
 		await fse.ensureDir(sourcePath);
 		await copyTemplate(type, extensionPath, sourcePath, language);
@@ -199,13 +202,15 @@ export default async function add(): Promise<void> {
 
 		const source = alternativeSource ?? 'src';
 
-		const convertSourcePath = path.resolve(source, convertName);
-		const entrySourcePath = path.resolve(source, name);
+		const convertSourcePath = path.resolve(extensionPath, source, convertName);
+		const entrySourcePath = path.resolve(extensionPath, source, name);
 
-		const convertFiles = await fse.readdir(source);
+		const convertFiles = await fse.readdir(path.resolve(extensionPath, source));
 
 		await Promise.all(
-			convertFiles.map((file) => fse.move(path.resolve(source, file), path.join(convertSourcePath, file)))
+			convertFiles.map((file) =>
+				fse.move(path.resolve(extensionPath, source, file), path.join(convertSourcePath, file))
+			)
 		);
 
 		await fse.ensureDir(entrySourcePath);
