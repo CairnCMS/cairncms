@@ -1,6 +1,3 @@
-import { EXTENSION_TYPES } from '@cairncms/constants';
-import type { Plural } from '@cairncms/types';
-import { depluralize, isIn } from '@cairncms/utils';
 import { Router } from 'express';
 import env from '../env.js';
 import { ForbiddenException, RouteNotFoundException } from '../exceptions/index.js';
@@ -23,28 +20,6 @@ router.get(
 
 		res.locals['payload'] = {
 			data: extensionManager.getDiagnostics(),
-		};
-
-		return next();
-	}),
-	respond
-);
-
-router.get(
-	'/:type',
-	asyncHandler(async (req, res, next) => {
-		const type = depluralize(req.params['type'] as Plural<string>);
-
-		if (!isIn(type, EXTENSION_TYPES)) {
-			throw new RouteNotFoundException(req.path);
-		}
-
-		const extensionManager = getExtensionManager();
-
-		const extensions = extensionManager.getExtensionsList(type);
-
-		res.locals['payload'] = {
-			data: extensions,
 		};
 
 		return next();

@@ -1,0 +1,51 @@
+get:
+  tags:
+    - Extensions
+  operationId: getExtensions
+  summary: List Extension Diagnostics
+  description:
+    Returns load diagnostics for every discovered extension, including its load status and a sanitized reason
+    for any failure. This route is restricted to administrators.
+  responses:
+    '200':
+      description: Successful request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    type:
+                      type: string
+                      nullable: true
+                    local:
+                      type: boolean
+                    status:
+                      type: string
+                      enum:
+                        - loaded
+                        - discovered
+                        - failed
+                    version:
+                      type: string
+                    entries:
+                      type: array
+                      items:
+                        type: object
+                    reason:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                        detail:
+                          type: string
+    '401':
+      $ref: '../../openapi.yaml#/components/responses/UnauthorizedError'
+    '403':
+      description: The current user is not an administrator.

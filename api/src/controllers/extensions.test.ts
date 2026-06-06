@@ -83,3 +83,11 @@ describe('GET /extensions/sources serves only registered chunks, never maps', ()
 		expect(res.status).toBe(404);
 	});
 });
+
+describe('GET /extensions/<type> is no longer served', () => {
+	it('returns 404 for a typed list request', async () => {
+		const res = await request(makeApp(null)).get('/extensions/interfaces');
+
+		expect(res.status).toBe(404);
+	});
+});
