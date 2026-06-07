@@ -5,7 +5,8 @@
 	"sideEffects": false,
 	"scripts": {
 		"build": "tsc --project tsconfig.prod.json",
-		"dev": "tsc --watch"
+		"dev": "tsc --watch",
+		"test": "vitest --watch=false"
 	},
 	"description": "Shared constants for CairnCMS",
 	"repository": {
@@ -27,7 +28,8 @@
 		"access": "public"
 	},
 	"devDependencies": {
-		"typescript": "5.0.4"
+		"typescript": "5.0.4",
+		"vitest": "1.6.1"
 	},
 	"dependencies": {
 		"zod": "3.23.8"
