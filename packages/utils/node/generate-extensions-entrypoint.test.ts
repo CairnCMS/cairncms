@@ -72,6 +72,29 @@ describe('generateExtensionsEntrypoint', () => {
 		);
 	});
 
+	it("still emits a confined bundle's app entries through the app pipeline", () => {
+		const mockExtensions: Extension[] = [
+			{
+				path: './extensions/bundle',
+				name: 'mock-confined-bundle-extension',
+				version: '1.0.0',
+				type: 'bundle',
+				entrypoint: { app: 'app.js', api: 'api.js' },
+				entries: [
+					{ type: 'interface', name: 'mock-bundle-interface' },
+					{ type: 'endpoint', name: 'mock-bundle-endpoint' },
+				],
+				host: '^10.0.0',
+				local: false,
+				runtime: 'confined-server',
+			},
+		];
+
+		expect(generateExtensionsEntrypoint(mockExtensions)).toBe(
+			`import {interfaces as interfaceBundle0} from './extensions/bundle/app.js';export const interfaces = [...interfaceBundle0];export const displays = [];export const layouts = [];export const modules = [];export const panels = [];export const operations = [];`
+		);
+	});
+
 	it('returns an extension entrypoint exporting multiple extensions', () => {
 		const mockExtensions: Extension[] = [
 			{
