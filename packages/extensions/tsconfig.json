@@ -1,0 +1,7 @@
+{
+	"extends": "../../tsconfig.node22-esm.json",
+	"compilerOptions": {
+		"outDir": "dist"
+	},
+	"include": ["src"]
+}

@@ -1,0 +1,50 @@
+{
+	"name": "@cairncms/extensions",
+	"version": "1.1.0",
+	"type": "module",
+	"sideEffects": false,
+	"scripts": {
+		"build": "tsc --project tsconfig.prod.json",
+		"dev": "tsc --watch",
+		"test": "vitest --watch=false"
+	},
+	"description": "Internal validation and source scanner for CairnCMS extensions",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/CairnCMS/cairncms.git",
+		"directory": "packages/extensions"
+	},
+	"license": "MIT",
+	"author": "The CairnCMS Authors",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./node": {
+			"types": "./dist/node/index.d.ts",
+			"default": "./dist/node/index.js"
+		},
+		"./node/entry-integrity": {
+			"types": "./dist/node/entry-integrity.d.ts",
+			"default": "./dist/node/entry-integrity.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"files": [
+		"dist"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"dependencies": {
+		"zod": "3.23.8"
+	},
+	"devDependencies": {
+		"@types/node": "22.19.17",
+		"typescript": "5.0.4",
+		"vitest": "1.6.1"
+	}
+}
