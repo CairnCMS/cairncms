@@ -56,6 +56,7 @@ import logger from './logger.js';
 import * as services from './services/index.js';
 import type { EventHandler } from './types/index.js';
 import getModuleDefault from './utils/get-module-default.js';
+import { filterServerExtensions } from './utils/filter-server-extensions.js';
 import { sanitizeExtensionError, type SanitizedExtensionError } from './utils/sanitize-extension-error.js';
 import { getSchema } from './utils/get-schema.js';
 import { JobQueue } from './utils/job-queue.js';
@@ -119,6 +120,7 @@ export class ExtensionManager {
 	private options: Options;
 
 	private extensions: Extension[] = [];
+	private serverExtensions: Extension[] = [];
 
 	private appExtensions: AppExtensions = null;
 	private appExtensionChunks: Map<string, string>;
@@ -383,6 +385,7 @@ export class ExtensionManager {
 		this.diagnostics = [];
 		this.appBundleFailure = null;
 		this.extensions = [];
+		this.serverExtensions = [];
 		this.hookEmbedsHead = [];
 		this.hookEmbedsBody = [];
 
@@ -395,6 +398,8 @@ export class ExtensionManager {
 			logger.warn(`Couldn't load extensions: ${reason.code} ${reason.detail}`);
 			this.diagnostics.push({ name: '(extension discovery)', type: null, local: true, status: 'failed', reason });
 		}
+
+		this.serverExtensions = filterServerExtensions(this.extensions);
 
 		await this.registerHooks();
 		await this.registerEndpoints();
@@ -411,6 +416,8 @@ export class ExtensionManager {
 
 	private async unload(): Promise<void> {
 		this.unregisterApiExtensions();
+
+		this.serverExtensions = [];
 
 		this.apiEmitter.offAll();
 
@@ -593,7 +600,7 @@ export class ExtensionManager {
 	}
 
 	private async registerHooks(): Promise<void> {
-		const hooks = this.extensions.filter((extension): extension is ApiExtension => extension.type === 'hook');
+		const hooks = this.serverExtensions.filter((extension): extension is ApiExtension => extension.type === 'hook');
 
 		for (const hook of hooks) {
 			try {
@@ -619,7 +626,9 @@ export class ExtensionManager {
 	}
 
 	private async registerEndpoints(): Promise<void> {
-		const endpoints = this.extensions.filter((extension): extension is ApiExtension => extension.type === 'endpoint');
+		const endpoints = this.serverExtensions.filter(
+			(extension): extension is ApiExtension => extension.type === 'endpoint'
+		);
 
 		for (const endpoint of endpoints) {
 			try {
@@ -657,7 +666,7 @@ export class ExtensionManager {
 			this.registerOperation(config);
 		}
 
-		const operations = this.extensions.filter(
+		const operations = this.serverExtensions.filter(
 			(extension): extension is HybridExtension => extension.type === 'operation'
 		);
 
@@ -685,7 +694,9 @@ export class ExtensionManager {
 	}
 
 	private async registerBundles(): Promise<void> {
-		const bundles = this.extensions.filter((extension): extension is BundleExtension => extension.type === 'bundle');
+		const bundles = this.serverExtensions.filter(
+			(extension): extension is BundleExtension => extension.type === 'bundle'
+		);
 
 		for (const bundle of bundles) {
 			try {

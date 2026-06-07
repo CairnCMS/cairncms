@@ -2,6 +2,7 @@ import type {
 	API_EXTENSION_TYPES,
 	APP_EXTENSION_TYPES,
 	BUNDLE_EXTENSION_TYPES,
+	ConfinedRuntimeSchema,
 	EXTENSION_TYPES,
 	ExtensionManifest,
 	ExtensionOptions,
@@ -37,12 +38,15 @@ export type NestedExtensionType = (typeof NESTED_EXTENSION_TYPES)[number];
 
 export type SplitEntrypoint = z.infer<typeof SplitEntrypoint>;
 
+export type ConfinedRuntime = z.infer<typeof ConfinedRuntimeSchema>;
+
 type ExtensionBase = {
 	path: string;
 	name: string;
 	version?: string;
 	host?: string;
 	local: boolean;
+	runtime?: ConfinedRuntime;
 };
 
 export type AppExtension = ExtensionBase & {
