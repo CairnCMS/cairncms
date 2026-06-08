@@ -17,4 +17,4 @@ export const DEFAULT_CONFINED_LIMITS: ConfinedRuntimeLimits = {
 	maxInFlightHostCalls: 16,
 };
 
-export const DEFAULT_MAX_CONCURRENT_CONFINED_HOSTS = 4;
+export const DEFAULT_SANDBOX_MAX_PROCESSES = 4;
