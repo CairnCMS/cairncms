@@ -57,3 +57,52 @@ export interface ConfinedRuntimeError {
 }
 
 export type ConfinedResult = { ok: true; value: unknown } | { ok: false; error: ConfinedRuntimeError };
+
+export interface ConfinedJobMessage {
+	type: 'job';
+	invocation: ConfinedInvocation;
+}
+
+export interface ConfinedDoneMessage {
+	type: 'done';
+	result: ConfinedResult;
+}
+
+export interface ConfinedHostCall {
+	method: string;
+	args: unknown;
+}
+
+// Host failures travel as data (`ok: false`), never as thrown exceptions, so the
+// guest receives a denial as a value.
+export type ConfinedHostReply = { ok: true; value: unknown } | { ok: false; error: { code: string; message: string } };
+
+export interface ConfinedHostCallContext {
+	extensionId: string;
+	contributionId: string;
+	operationId: string;
+}
+
+// Child-side: forwards a guest host call to the parent.
+export type ConfinedHostBridge = (call: ConfinedHostCall) => Promise<ConfinedHostReply>;
+
+// Parent-side: serves a host call. The signal aborts at the per-call timeout, and a
+// long-running operation must honor it or abandoned work leaks.
+export type ConfinedHostDispatcher = (
+	call: ConfinedHostCall,
+	context: ConfinedHostCallContext,
+	signal: AbortSignal
+) => Promise<ConfinedHostReply>;
+
+export interface ConfinedHostCallMessage {
+	type: 'host-call';
+	id: number;
+	method: string;
+	args: unknown;
+}
+
+export interface ConfinedHostReplyMessage {
+	type: 'host-reply';
+	id: number;
+	reply: ConfinedHostReply;
+}
