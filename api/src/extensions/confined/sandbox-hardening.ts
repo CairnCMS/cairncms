@@ -6,7 +6,7 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, readFileSync, rmdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { createFrameReader, writeFrame } from './transport.js';
@@ -428,4 +428,57 @@ export async function validateComposedHardening(
 	}
 
 	return [];
+}
+
+// ---- delegated cgroup helpers (the mechanic used where a writable subtree exists) ----
+
+export interface ChildCgroup {
+	path: string;
+}
+
+/** Creates a per-child cgroup with `memory.max` set, or null when no delegated subtree is writable. */
+export function createChildCgroup(memoryMaxBytes: number): ChildCgroup | null {
+	const root = delegatedCgroupRoot();
+	if (!root) return null;
+
+	const path = join(root, `cairn-confined-${randomUUID()}`);
+
+	try {
+		mkdirSync(path);
+		writeFileSync(join(path, 'memory.max'), String(memoryMaxBytes));
+		writeFileSync(join(path, 'memory.swap.max'), '0');
+		return { path };
+	} catch {
+		// A write after mkdir can fail, so remove the half-created cgroup rather than leak it.
+		try {
+			rmdirSync(path);
+		} catch {
+			// nothing was created, or it is already gone
+		}
+
+		return null;
+	}
+}
+
+/** Places a spawned child into the cgroup. Best-effort. */
+export function placeInCgroup(cgroup: ChildCgroup, pid: number): boolean {
+	try {
+		writeFileSync(join(cgroup.path, 'cgroup.procs'), String(pid));
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Removes the emptied per-child cgroup, returning whether it succeeded. cgroup v2 refuses to
+ * remove a populated cgroup, so the caller must wait for the child to exit first.
+ */
+export function removeCgroup(cgroup: ChildCgroup): boolean {
+	try {
+		rmdirSync(cgroup.path);
+		return true;
+	} catch {
+		return false;
+	}
 }

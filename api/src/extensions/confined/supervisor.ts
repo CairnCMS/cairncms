@@ -1,10 +1,23 @@
 /** The confined supervisor: spawns the child host, drives it over the framed transport on fd 3, and brokers its host calls. */
 
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { Duplex } from 'node:stream';
 import { fileURLToPath } from 'node:url';
+import logger from '../../logger.js';
+import {
+	BASELINE_POSTURE,
+	buildHardenedSpawn,
+	createChildCgroup,
+	generateScopeUnit,
+	killScope,
+	placeInCgroup,
+	removeCgroup,
+	type ChildCgroup,
+	type HardenedSpawnSpec,
+	type SandboxPosture,
+} from './sandbox-hardening.js';
 import { resolveSandboxLimits, type SandboxLimits } from './sandbox-limits.js';
 import { createFrameReader, writeFrame } from './transport.js';
 import type {
@@ -127,6 +140,14 @@ export interface ConfinedSupervisorOptions {
 	// Test seam: overrides the spawned child script and its node args.
 	childPath?: string;
 	childExecArgv?: string[];
+	// The hardening layers apply only when the resolved child is the bundle.
+	isBundled?: boolean;
+	// The validated OS-hardening posture. Defaults to the conservative baseline.
+	posture?: SandboxPosture;
+	// Test seams for the OS-hardening side effects.
+	spawn?: typeof spawn;
+	cgroupOps?: ConfinedCgroupOps;
+	logger?: ConfinedSupervisorLogger;
 }
 
 /**
@@ -141,12 +162,13 @@ export interface ConfinedSupervisorOptions {
 export function resolveChild(confinedDir = dirname(fileURLToPath(import.meta.url))): {
 	path: string;
 	execArgv: string[];
+	isBundled: boolean;
 } {
 	const bundledPath = join(confinedDir, 'runtime', 'child-host.mjs');
-	if (existsSync(bundledPath)) return { path: bundledPath, execArgv: [] };
+	if (existsSync(bundledPath)) return { path: bundledPath, execArgv: [], isBundled: true };
 
 	const sourcePath = join(confinedDir, 'child-host.ts');
-	return { path: sourcePath, execArgv: ['--loader', 'tsx'] };
+	return { path: sourcePath, execArgv: ['--loader', 'tsx'], isBundled: false };
 }
 
 /**
@@ -167,12 +189,45 @@ function childEnv(limits: SandboxLimits): NodeJS.ProcessEnv {
 	return env;
 }
 
+// The cap must cover the child's base RSS (node, the WASM, the bundle), not the guest heap
+// alone, or the child is OS-killed before the engine loads. The in-engine `memoryBytes`
+// stays the guest fence, the cgroup is the OS backstop.
+const CHILD_BASE_RSS_BYTES = 95 * 1024 * 1024;
+const CGROUP_HEADROOM_BYTES = 64 * 1024 * 1024;
+
+function cgroupMemoryMax(guestHeapBytes: number): number {
+	return CHILD_BASE_RSS_BYTES + guestHeapBytes + CGROUP_HEADROOM_BYTES;
+}
+
+export interface ConfinedCgroupOps {
+	killScope: (scopeUnit: string) => void;
+	create: (memoryMaxBytes: number) => ChildCgroup | null;
+	place: (cgroup: ChildCgroup, pid: number) => boolean;
+	remove: (cgroup: ChildCgroup) => boolean;
+}
+
+const realCgroupOps: ConfinedCgroupOps = {
+	killScope,
+	create: createChildCgroup,
+	place: placeInCgroup,
+	remove: removeCgroup,
+};
+
+export interface ConfinedSupervisorLogger {
+	warn(detail: Record<string, unknown>, message: string): void;
+}
+
 export class ConfinedSupervisor {
 	private readonly limits: SandboxLimits;
 	private readonly maxConcurrent: number;
 	private readonly hostDispatcher: ConfinedHostDispatcher;
 	private readonly childPath: string;
 	private readonly childExecArgv: string[];
+	private readonly isBundled: boolean;
+	private readonly posture: SandboxPosture;
+	private readonly spawnFn: typeof spawn;
+	private readonly cgroupOps: ConfinedCgroupOps;
+	private readonly logger: ConfinedSupervisorLogger;
 	private active = 0;
 	private readonly waiters: Array<() => void> = [];
 
@@ -191,11 +246,23 @@ export class ConfinedSupervisor {
 		if (options.childPath !== undefined) {
 			this.childPath = options.childPath;
 			this.childExecArgv = options.childExecArgv ?? [];
+			this.isBundled = options.isBundled ?? false;
 		} else {
 			const resolved = resolveChild();
 			this.childPath = resolved.path;
 			this.childExecArgv = resolved.execArgv;
+			this.isBundled = options.isBundled ?? resolved.isBundled;
 		}
+
+		this.posture = options.posture ?? BASELINE_POSTURE;
+
+		if (this.posture.decision === 'refuse') {
+			throw new Error('confined runtime refuses to start: the required OS hardening core is unavailable');
+		}
+
+		this.spawnFn = options.spawn ?? spawn;
+		this.cgroupOps = options.cgroupOps ?? realCgroupOps;
+		this.logger = options.logger ?? logger;
 	}
 
 	async invoke(invocation: ConfinedInvocation, hostDispatcher?: ConfinedHostDispatcher): Promise<ConfinedResult> {
@@ -245,10 +312,30 @@ export class ConfinedSupervisor {
 
 	private runChild(invocation: ConfinedInvocation, dispatcher: ConfinedHostDispatcher): Promise<ConfinedResult> {
 		return new Promise<ConfinedResult>((resolve) => {
-			const child = spawn(process.execPath, [...this.childExecArgv, this.childPath], {
+			const spec: HardenedSpawnSpec = {
+				execPath: process.execPath,
+				childExecArgv: this.childExecArgv,
+				childPath: this.childPath,
+				runtimeDir: dirname(this.childPath),
+				isBundled: this.isBundled,
+				memoryMaxBytes: cgroupMemoryMax(invocation.limits.memoryBytes),
+				scopeUnit: generateScopeUnit(),
+				childEnv: childEnv(this.limits),
+				busEnv: {
+					DBUS_SESSION_BUS_ADDRESS: process.env['DBUS_SESSION_BUS_ADDRESS'],
+					XDG_RUNTIME_DIR: process.env['XDG_RUNTIME_DIR'],
+				},
+			};
+
+			const built = buildHardenedSpawn(this.posture, spec);
+			const cgroup = this.createDelegatedCgroup(spec.memoryMaxBytes, invocation);
+
+			const child = this.spawnFn(built.command, built.args, {
 				stdio: ['ignore', 'ignore', 'ignore', 'pipe'],
-				env: childEnv(this.limits),
+				env: built.env,
 			});
+
+			if (cgroup !== null) this.placeChildInCgroup(cgroup, child.pid, invocation);
 
 			const channel = child.stdio[3] as Duplex | null | undefined;
 
@@ -262,11 +349,15 @@ export class ConfinedSupervisor {
 
 				for (const controller of hostCallControllers) controller.abort();
 
+				if (built.scopeUnit !== null) this.cgroupOps.killScope(built.scopeUnit);
+
 				try {
 					child.kill('SIGKILL');
 				} catch {
 					// already gone
 				}
+
+				if (cgroup !== null) this.removeCgroupWhenExited(child, cgroup, invocation);
 
 				resolve(result);
 			};
@@ -342,6 +433,49 @@ export class ConfinedSupervisor {
 			const job: ConfinedJobMessage = { type: 'job', invocation };
 			writeFrame(channel, job, () => undefined);
 		});
+	}
+
+	private createDelegatedCgroup(memoryMaxBytes: number, invocation: ConfinedInvocation): ChildCgroup | null {
+		if (this.posture.cgroupMechanic !== 'delegated-cgroup' || !this.posture.applied.includes('cgroup-memory')) {
+			return null;
+		}
+
+		const cgroup = this.cgroupOps.create(memoryMaxBytes);
+
+		if (cgroup === null) {
+			this.logger.warn(
+				{ extensionId: invocation.extensionId, contributionId: invocation.contributionId },
+				'confined memory cgroup unavailable, falling back to the wall-clock backstop'
+			);
+		}
+
+		return cgroup;
+	}
+
+	private placeChildInCgroup(cgroup: ChildCgroup, pid: number | undefined, invocation: ConfinedInvocation): void {
+		if (pid !== undefined && this.cgroupOps.place(cgroup, pid)) return;
+
+		this.logger.warn(
+			{ extensionId: invocation.extensionId, contributionId: invocation.contributionId },
+			'confined child could not be placed in its memory cgroup, falling back to the wall-clock backstop'
+		);
+	}
+
+	private removeCgroupWhenExited(child: ChildProcess, cgroup: ChildCgroup, invocation: ConfinedInvocation): void {
+		const remove = () => {
+			if (this.cgroupOps.remove(cgroup)) return;
+
+			this.logger.warn(
+				{ extensionId: invocation.extensionId, contributionId: invocation.contributionId },
+				'confined memory cgroup could not be removed after the child exited'
+			);
+		};
+
+		if (child.exitCode !== null || child.signalCode !== null) {
+			remove();
+		} else {
+			child.once('exit', remove);
+		}
 	}
 
 	private async handleHostCall(

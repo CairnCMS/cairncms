@@ -1,13 +1,15 @@
 import { spawn } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Duplex } from 'node:stream';
+import { Duplex, PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { CgroupMechanic, ChildCgroup, HardeningLayer, SandboxPosture } from './sandbox-hardening.js';
 import { resolveSandboxLimits, type SandboxLimits } from './sandbox-limits.js';
-import { ConfinedSupervisor, resolveChild } from './supervisor.js';
+import { ConfinedSupervisor, resolveChild, type ConfinedCgroupOps } from './supervisor.js';
 import { createFrameReader, writeFrame } from './transport.js';
 import type {
 	ConfinedHostCallMessage,
@@ -735,4 +737,237 @@ describe('ConfinedSupervisor', () => {
 		},
 		ENGINE_TIMEOUT
 	);
+});
+
+const ALL_LAYERS: HardeningLayer[] = ['network-namespace', 'permission-model', 'cgroup-memory'];
+
+function posture(applied: HardeningLayer[], cgroupMechanic: CgroupMechanic | null = null): SandboxPosture {
+	return {
+		mode: 'auto',
+		applied,
+		missing: ALL_LAYERS.filter((layer) => !applied.includes(layer)),
+		coreSatisfied: applied.includes('network-namespace') && applied.includes('permission-model'),
+		decision: 'run',
+		cgroupMechanic,
+	};
+}
+
+// A spawned-child stand-in that drives the supervisor without a real process: a duplex on
+// fd 3 that swallows the job frame, and a deferred close so the invocation settles.
+class FakeChild extends EventEmitter {
+	readonly pid = 4242;
+	exitCode: number | null = null;
+	signalCode: NodeJS.Signals | null = null;
+	readonly channel = new PassThrough();
+	readonly stdio = [null, null, null, this.channel];
+
+	constructor() {
+		super();
+
+		setImmediate(() => {
+			this.channel.emit('close');
+			this.exitCode = 0;
+			this.emit('exit', 0, null);
+		});
+	}
+
+	kill(): boolean {
+		return true;
+	}
+}
+
+interface CapturedSpawn {
+	command: string;
+	args: string[];
+	env: NodeJS.ProcessEnv | undefined;
+}
+
+function fakeSpawn(): { spawnFn: typeof spawn; calls: CapturedSpawn[]; children: FakeChild[] } {
+	const calls: CapturedSpawn[] = [];
+	const children: FakeChild[] = [];
+
+	const spawnFn = ((command: string, args: readonly string[], options: { env?: NodeJS.ProcessEnv }) => {
+		calls.push({ command, args: [...args], env: options.env });
+		const child = new FakeChild();
+		children.push(child);
+		return child;
+	}) as unknown as typeof spawn;
+
+	return { spawnFn, calls, children };
+}
+
+interface CgroupEvent {
+	op: string;
+	arg: unknown;
+}
+
+function fakeCgroupOps(
+	create: () => ChildCgroup | null = () => ({ path: '/sys/fs/cgroup/fake' }),
+	place: () => boolean = () => true,
+	remove: () => boolean = () => true
+): {
+	ops: ConfinedCgroupOps;
+	events: CgroupEvent[];
+} {
+	const events: CgroupEvent[] = [];
+
+	const ops: ConfinedCgroupOps = {
+		killScope: (unit) => void events.push({ op: 'killScope', arg: unit }),
+		create: (bytes) => {
+			events.push({ op: 'create', arg: bytes });
+			return create();
+		},
+		place: (_cgroup, pid) => {
+			events.push({ op: 'place', arg: pid });
+			return place();
+		},
+		remove: (cgroup) => {
+			events.push({ op: 'remove', arg: cgroup.path });
+			return remove();
+		},
+	};
+
+	return { ops, events };
+}
+
+const BUNDLED = '/fake/runtime/child-host.mjs';
+
+function hardenedSupervisor(options: {
+	posture?: SandboxPosture;
+	spawn?: typeof spawn;
+	cgroupOps?: ConfinedCgroupOps;
+	logger?: { warn(detail: Record<string, unknown>, message: string): void };
+}): ConfinedSupervisor {
+	return new ConfinedSupervisor({ childPath: BUNDLED, childExecArgv: [], isBundled: true, ...options });
+}
+
+describe('ConfinedSupervisor OS hardening', () => {
+	it('constructs at baseline by default, applying no hardening to the bundled child', async () => {
+		const { spawnFn, calls } = fakeSpawn();
+		await hardenedSupervisor({ spawn: spawnFn }).invoke(positive());
+
+		expect(calls[0]?.command).toBe(process.execPath);
+		expect(calls[0]?.args).toEqual([BUNDLED]);
+	});
+
+	it('refuses construction under a refuse posture', () => {
+		expect(() => hardenedSupervisor({ posture: { ...posture([]), decision: 'refuse' } })).toThrow(/refuses to start/);
+	});
+
+	it('spawns the escape-containment core around the bundled child', async () => {
+		const { spawnFn, calls } = fakeSpawn();
+
+		await hardenedSupervisor({ posture: posture(['network-namespace', 'permission-model']), spawn: spawnFn }).invoke(
+			positive()
+		);
+
+		expect(calls[0]?.command).toBe('unshare');
+		expect(calls[0]?.args).toEqual(['-rn', process.execPath, '--permission', '--allow-fs-read=/fake/runtime', BUNDLED]);
+	});
+
+	it('wraps the full posture in systemd-run with the computed cap, the bus on the wrapper, off the child', async () => {
+		process.env['DBUS_SESSION_BUS_ADDRESS'] = 'unix:/test/bus';
+		process.env['XDG_RUNTIME_DIR'] = '/run/user/test';
+		process.env['NODE_PATH'] = '/host/node_modules';
+
+		try {
+			const { spawnFn, calls } = fakeSpawn();
+			await hardenedSupervisor({ posture: posture(ALL_LAYERS, 'systemd-run'), spawn: spawnFn }).invoke(positive());
+
+			const spawned = calls[0];
+			expect(spawned?.command).toBe('systemd-run');
+			// The default 64MB guest heap plus the 95MB base RSS plus 64MB headroom.
+			expect(spawned?.args).toContain('MemoryMax=233832448');
+			expect(spawned?.args.some((arg) => arg.startsWith('--unit='))).toBe(true);
+
+			const envI = spawned?.args.slice(spawned.args.indexOf('-i') + 1, spawned.args.indexOf('unshare')) ?? [];
+			expect(envI.some((arg) => arg.startsWith('NODE_PATH'))).toBe(false);
+			expect(envI.some((arg) => arg.startsWith('DBUS_') || arg.startsWith('XDG_'))).toBe(false);
+
+			expect(spawned?.env).toMatchObject({ DBUS_SESSION_BUS_ADDRESS: 'unix:/test/bus' });
+			expect(spawned?.env).not.toHaveProperty('NODE_PATH');
+		} finally {
+			delete process.env['DBUS_SESSION_BUS_ADDRESS'];
+			delete process.env['XDG_RUNTIME_DIR'];
+			delete process.env['NODE_PATH'];
+		}
+	});
+
+	it('kills the whole systemd-run scope by its generated unit, not the wrapper pid', async () => {
+		const { spawnFn, calls } = fakeSpawn();
+		const { ops, events } = fakeCgroupOps();
+
+		await hardenedSupervisor({ posture: posture(ALL_LAYERS, 'systemd-run'), spawn: spawnFn, cgroupOps: ops }).invoke(
+			positive()
+		);
+
+		const unit = calls[0]?.args.find((arg) => arg.startsWith('--unit='))?.slice('--unit='.length);
+		const killed = events.filter((event) => event.op === 'killScope');
+
+		expect(killed).toHaveLength(1);
+		expect(killed[0]?.arg).toBe(unit);
+	});
+
+	it('creates, places, then removes a delegated cgroup around the spawned child', async () => {
+		const { spawnFn, children } = fakeSpawn();
+		const { ops, events } = fakeCgroupOps();
+
+		await hardenedSupervisor({
+			posture: posture(ALL_LAYERS, 'delegated-cgroup'),
+			spawn: spawnFn,
+			cgroupOps: ops,
+		}).invoke(positive());
+
+		expect(events.map((event) => event.op)).toEqual(['create', 'place', 'remove']);
+		expect(events.find((event) => event.op === 'place')?.arg).toBe(children[0]?.pid);
+	});
+
+	it('logs a degradation and proceeds when the delegated cgroup cannot be created', async () => {
+		const { spawnFn, calls } = fakeSpawn();
+		const { ops } = fakeCgroupOps(() => null);
+		const warnings: string[] = [];
+
+		await hardenedSupervisor({
+			posture: posture(ALL_LAYERS, 'delegated-cgroup'),
+			spawn: spawnFn,
+			cgroupOps: ops,
+			logger: { warn: (_detail, message) => void warnings.push(message) },
+		}).invoke(positive());
+
+		expect(calls).toHaveLength(1);
+		expect(warnings.some((message) => /cgroup unavailable/.test(message))).toBe(true);
+	});
+
+	it('logs a degradation, proceeds, and still removes the cgroup when placement fails', async () => {
+		const { spawnFn, calls } = fakeSpawn();
+		const { ops, events } = fakeCgroupOps(undefined, () => false);
+		const warnings: string[] = [];
+
+		await hardenedSupervisor({
+			posture: posture(ALL_LAYERS, 'delegated-cgroup'),
+			spawn: spawnFn,
+			cgroupOps: ops,
+			logger: { warn: (_detail, message) => void warnings.push(message) },
+		}).invoke(positive());
+
+		expect(calls).toHaveLength(1);
+		expect(events.map((event) => event.op)).toEqual(['create', 'place', 'remove']);
+		expect(warnings.some((message) => /could not be placed/.test(message))).toBe(true);
+	});
+
+	it('removes the cgroup only after the child exits, and logs when removal fails', async () => {
+		const { spawnFn } = fakeSpawn();
+		const { ops, events } = fakeCgroupOps(undefined, undefined, () => false);
+		const warnings: string[] = [];
+
+		await hardenedSupervisor({
+			posture: posture(ALL_LAYERS, 'delegated-cgroup'),
+			spawn: spawnFn,
+			cgroupOps: ops,
+			logger: { warn: (_detail, message) => void warnings.push(message) },
+		}).invoke(positive());
+
+		expect(events.some((event) => event.op === 'remove')).toBe(true);
+		expect(warnings.some((message) => /could not be removed/.test(message))).toBe(true);
+	});
 });
