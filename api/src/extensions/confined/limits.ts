@@ -18,3 +18,14 @@ export const DEFAULT_CONFINED_LIMITS: ConfinedRuntimeLimits = {
 };
 
 export const DEFAULT_SANDBOX_MAX_PROCESSES = 4;
+
+// The cap must cover the child's base RSS (node, the WASM, the bundle), not the guest heap
+// alone, or the child is OS-killed before the engine loads. The in-engine `memoryBytes`
+// stays the guest fence, the cgroup is the OS backstop.
+export const CHILD_BASE_RSS_BYTES = 95 * 1024 * 1024;
+export const CGROUP_HEADROOM_BYTES = 64 * 1024 * 1024;
+
+/** The whole-process memory budget for one confined child: base RSS plus the guest heap plus headroom. */
+export function cgroupMemoryMax(guestHeapBytes: number): number {
+	return CHILD_BASE_RSS_BYTES + guestHeapBytes + CGROUP_HEADROOM_BYTES;
+}

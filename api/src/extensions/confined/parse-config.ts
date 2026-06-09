@@ -30,7 +30,8 @@ function fail(envVar: string, message: string): ConfigParseResult {
 	return { ok: false, error: { envVar, message: `${envVar} ${message}` } };
 }
 
-function isUnset(raw: unknown): boolean {
+/** Whether a config value is absent, so a caller can branch a default from an explicit value. */
+export function isUnset(raw: unknown): boolean {
 	return raw === undefined || raw === null || (typeof raw === 'string' && raw.trim() === '');
 }
 

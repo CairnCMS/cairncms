@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { CgroupMechanic, ChildCgroup, HardeningLayer, SandboxPosture } from './sandbox-hardening.js';
 import { resolveSandboxLimits, type SandboxLimits } from './sandbox-limits.js';
-import { ConfinedSupervisor, resolveChild, type ConfinedCgroupOps } from './supervisor.js';
+import { clampLimits, ConfinedSupervisor, resolveChild, type ConfinedCgroupOps } from './supervisor.js';
 import { createFrameReader, writeFrame } from './transport.js';
 import type {
 	ConfinedHostCallMessage,
@@ -293,17 +293,18 @@ describe('ConfinedSupervisor', () => {
 	);
 
 	it(
-		'kills a runaway allocation loop by the wall-clock backstop',
+		'bounds a runaway allocation by the engine memory ceiling',
 		async () => {
-			// Allocation loops evade the in-engine CPU timeout, and a generous memory limit
-			// trips only after seconds. The parent wall-clock kill is the bound.
+			// The caller requests 256mb, but the operator default caps it, so the WASM memory
+			// ceiling stops the allocation bomb as a guest error rather than letting it balloon.
 			const result = await new ConfinedSupervisor().invoke(
 				invocation(entry('() => { const a = []; while (true) { a.push(new Array(100000).fill(7)); } }'), {
-					limits: { ...LIMITS, cpuTimeoutMs: 10_000, memoryBytes: 256 * 1024 * 1024, wallClockMs: 800 },
+					limits: { ...LIMITS, cpuTimeoutMs: 10_000, memoryBytes: 256 * 1024 * 1024, wallClockMs: 5_000 },
 				})
 			);
 
-			expect(result).toMatchObject({ ok: false, error: { code: 'timeout' } });
+			expect(result.ok).toBe(false);
+			if (!result.ok) expect(['guest-error', 'timeout']).toContain(result.error.code);
 		},
 		ENGINE_TIMEOUT
 	);
@@ -837,6 +838,7 @@ function hardenedSupervisor(options: {
 	spawn?: typeof spawn;
 	cgroupOps?: ConfinedCgroupOps;
 	logger?: { warn(detail: Record<string, unknown>, message: string): void };
+	runtimeLimits?: ConfinedRuntimeLimits;
 }): ConfinedSupervisor {
 	return new ConfinedSupervisor({ childPath: BUNDLED, childExecArgv: [], isBundled: true, ...options });
 }
@@ -969,5 +971,46 @@ describe('ConfinedSupervisor OS hardening', () => {
 
 		expect(events.some((event) => event.op === 'remove')).toBe(true);
 		expect(warnings.some((message) => /could not be removed/.test(message))).toBe(true);
+	});
+
+	it('caps an invocation that requests more memory than operator policy', async () => {
+		const { spawnFn, calls } = fakeSpawn();
+		const operatorCap: ConfinedRuntimeLimits = { ...LIMITS, memoryBytes: 32 * 1024 * 1024 };
+
+		await hardenedSupervisor({
+			posture: posture(ALL_LAYERS, 'systemd-run'),
+			spawn: spawnFn,
+			runtimeLimits: operatorCap,
+		}).invoke(
+			invocation(entry('async () => ({ ok: true })'), { limits: { ...LIMITS, memoryBytes: 256 * 1024 * 1024 } })
+		);
+
+		// cgroupMemoryMax(32mb) = (95 + 32 + 64)mb, so the requested 256mb is clamped to 32mb.
+		expect(calls[0]?.args).toContain(`MemoryMax=${(95 + 32 + 64) * 1024 * 1024}`);
+	});
+});
+
+describe('clampLimits', () => {
+	const operator: ConfinedRuntimeLimits = {
+		...LIMITS,
+		memoryBytes: 64 * 1024 * 1024,
+		wallClockMs: 10_000,
+		cpuTimeoutMs: 2_000,
+	};
+
+	it('caps memory and the wall-clock to the operator maxima but allows a stricter request', () => {
+		const loose = clampLimits({ ...LIMITS, memoryBytes: 256 * 1024 * 1024, wallClockMs: 60_000 }, operator);
+		expect(loose.memoryBytes).toBe(64 * 1024 * 1024);
+		expect(loose.wallClockMs).toBe(10_000);
+
+		const strict = clampLimits({ ...LIMITS, memoryBytes: 16 * 1024 * 1024, wallClockMs: 3_000 }, operator);
+		expect(strict.memoryBytes).toBe(16 * 1024 * 1024);
+		expect(strict.wallClockMs).toBe(3_000);
+	});
+
+	it('keeps the CPU timeout strictly below the clamped wall-clock', () => {
+		const result = clampLimits({ ...LIMITS, wallClockMs: 500, cpuTimeoutMs: 10_000 }, operator);
+		expect(result.wallClockMs).toBe(500);
+		expect(result.cpuTimeoutMs).toBe(400);
 	});
 });

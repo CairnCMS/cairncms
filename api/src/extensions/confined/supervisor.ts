@@ -18,7 +18,8 @@ import {
 	type HardenedSpawnSpec,
 	type SandboxPosture,
 } from './sandbox-hardening.js';
-import { resolveSandboxLimits, type SandboxLimits } from './sandbox-limits.js';
+import { cgroupMemoryMax, DEFAULT_CONFINED_LIMITS } from './limits.js';
+import { resolveSandboxConfig, type SandboxLimits } from './sandbox-limits.js';
 import { createFrameReader, writeFrame } from './transport.js';
 import type {
 	ConfinedHostCallContext,
@@ -135,6 +136,9 @@ function validateHostCall(message: ConfinedHostCallMessage, maxHostApiCallBytes:
 export interface ConfinedSupervisorOptions {
 	// The resolved sandbox limits. When omitted, the supervisor resolves them from env.
 	limits?: SandboxLimits;
+	// The operator runtime maxima every invocation is clamped to. When omitted, resolved from
+	// env alongside the limits, or the conservative defaults when limits are injected directly.
+	runtimeLimits?: ConfinedRuntimeLimits;
 	// Serves brokered host calls. Defaults to denying every call.
 	hostDispatcher?: ConfinedHostDispatcher;
 	// Test seam: overrides the spawned child script and its node args.
@@ -189,16 +193,6 @@ function childEnv(limits: SandboxLimits): NodeJS.ProcessEnv {
 	return env;
 }
 
-// The cap must cover the child's base RSS (node, the WASM, the bundle), not the guest heap
-// alone, or the child is OS-killed before the engine loads. The in-engine `memoryBytes`
-// stays the guest fence, the cgroup is the OS backstop.
-const CHILD_BASE_RSS_BYTES = 95 * 1024 * 1024;
-const CGROUP_HEADROOM_BYTES = 64 * 1024 * 1024;
-
-function cgroupMemoryMax(guestHeapBytes: number): number {
-	return CHILD_BASE_RSS_BYTES + guestHeapBytes + CGROUP_HEADROOM_BYTES;
-}
-
 export interface ConfinedCgroupOps {
 	killScope: (scopeUnit: string) => void;
 	create: (memoryMaxBytes: number) => ChildCgroup | null;
@@ -217,8 +211,25 @@ export interface ConfinedSupervisorLogger {
 	warn(detail: Record<string, unknown>, message: string): void;
 }
 
+/**
+ * Clamps a caller's requested limits to the operator runtime maxima: memory and the
+ * wall-clock can be stricter than operator policy but never looser, and the CPU timeout is
+ * recomputed to stay strictly below the clamped wall-clock so it still trips first.
+ */
+export function clampLimits(requested: ConfinedRuntimeLimits, operator: ConfinedRuntimeLimits): ConfinedRuntimeLimits {
+	const wallClockMs = Math.min(requested.wallClockMs, operator.wallClockMs);
+
+	return {
+		...requested,
+		memoryBytes: Math.min(requested.memoryBytes, operator.memoryBytes),
+		wallClockMs,
+		cpuTimeoutMs: Math.min(requested.cpuTimeoutMs, operator.cpuTimeoutMs, Math.max(1, Math.floor(wallClockMs * 0.8))),
+	};
+}
+
 export class ConfinedSupervisor {
 	private readonly limits: SandboxLimits;
+	private readonly runtimeLimits: ConfinedRuntimeLimits;
 	private readonly maxConcurrent: number;
 	private readonly hostDispatcher: ConfinedHostDispatcher;
 	private readonly childPath: string;
@@ -234,10 +245,12 @@ export class ConfinedSupervisor {
 	constructor(options: ConfinedSupervisorOptions = {}) {
 		if (options.limits !== undefined) {
 			this.limits = options.limits;
+			this.runtimeLimits = options.runtimeLimits ?? DEFAULT_CONFINED_LIMITS;
 		} else {
-			const resolved = resolveSandboxLimits();
-			if (!resolved.ok) throw new Error(`invalid sandbox limits: ${resolved.error.message}`);
-			this.limits = resolved.limits;
+			const resolved = resolveSandboxConfig();
+			if (!resolved.ok) throw new Error(`invalid sandbox config: ${resolved.error.message}`);
+			this.limits = resolved.config.sandbox;
+			this.runtimeLimits = options.runtimeLimits ?? resolved.config.runtime;
 		}
 
 		this.maxConcurrent = this.limits.maxProcesses;
@@ -312,13 +325,18 @@ export class ConfinedSupervisor {
 
 	private runChild(invocation: ConfinedInvocation, dispatcher: ConfinedHostDispatcher): Promise<ConfinedResult> {
 		return new Promise<ConfinedResult>((resolve) => {
+			// Every invocation is clamped to the operator runtime maxima, so a caller cannot
+			// request more memory or a longer wall-clock than operator policy allows.
+			const limits = clampLimits(invocation.limits, this.runtimeLimits);
+			const effective: ConfinedInvocation = { ...invocation, limits };
+
 			const spec: HardenedSpawnSpec = {
 				execPath: process.execPath,
 				childExecArgv: this.childExecArgv,
 				childPath: this.childPath,
 				runtimeDir: dirname(this.childPath),
 				isBundled: this.isBundled,
-				memoryMaxBytes: cgroupMemoryMax(invocation.limits.memoryBytes),
+				memoryMaxBytes: cgroupMemoryMax(limits.memoryBytes),
 				scopeUnit: generateScopeUnit(),
 				childEnv: childEnv(this.limits),
 				busEnv: {
@@ -364,7 +382,7 @@ export class ConfinedSupervisor {
 
 			const timer = setTimeout(
 				() => finish({ ok: false, error: { code: 'timeout', message: CANONICAL_ERROR_MESSAGES.timeout } }),
-				invocation.limits.wallClockMs
+				limits.wallClockMs
 			);
 
 			if (!channel) {
@@ -389,20 +407,12 @@ export class ConfinedSupervisor {
 					if (isHostCallMessage(message)) {
 						hostCallTotal += 1;
 
-						if (hostCallTotal > invocation.limits.maxHostCalls) {
+						if (hostCallTotal > limits.maxHostCalls) {
 							this.replyHostCall(channel, message.id, rateLimited('too many host calls'));
 							return;
 						}
 
-						void this.handleHostCall(
-							channel,
-							message,
-							context,
-							invocation.limits,
-							inFlight,
-							hostCallControllers,
-							dispatcher
-						);
+						void this.handleHostCall(channel, message, context, limits, inFlight, hostCallControllers, dispatcher);
 
 						return;
 					}
@@ -430,7 +440,7 @@ export class ConfinedSupervisor {
 				finish({ ok: false, error: { code: 'crash', message: CANONICAL_ERROR_MESSAGES.crash } })
 			);
 
-			const job: ConfinedJobMessage = { type: 'job', invocation };
+			const job: ConfinedJobMessage = { type: 'job', invocation: effective };
 			writeFrame(channel, job, () => undefined);
 		});
 	}

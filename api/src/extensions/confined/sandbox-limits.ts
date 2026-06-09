@@ -1,6 +1,20 @@
-/** Operator sandbox limits: the `EXTENSIONS_SANDBOX_*` caps, their bounds, and the derived transport frame budgets. */
+/** Operator sandbox config: the `EXTENSIONS_SANDBOX_*` knobs, their bounds, the derived
+ * transport frame budgets, and the per-invocation runtime limits. One resolver is the source
+ * of truth, so the guest-memory budget weighs the memory cap and the process count together
+ * and never parses a var twice. */
 
-import { DEFAULT_SANDBOX_MAX_PROCESSES } from './limits.js';
+import { format as formatBytes } from 'bytes';
+import { detectEffectiveMemory } from './effective-memory.js';
+import { cgroupMemoryMax, DEFAULT_CONFINED_LIMITS, DEFAULT_SANDBOX_MAX_PROCESSES } from './limits.js';
+import {
+	isUnset,
+	parseCount,
+	parseDuration,
+	parseSize,
+	type BoundedSpec,
+	type ConfigParseError,
+} from './parse-config.js';
+import type { ConfinedRuntimeLimits } from './types.js';
 
 const KiB = 1024;
 const MiB = 1024 * 1024;
@@ -8,42 +22,53 @@ const MiB = 1024 * 1024;
 // Per-frame JSON wrapper overhead beyond the payload (message type, id, envelope keys).
 const ENVELOPE_BUDGET = 4 * KiB;
 
-// The per-invocation job carries the operation options, input, accountability, and
-// limits alongside the built artifact. This budgets that envelope.
+// The per-invocation job carries the operation options, input, accountability, and limits
+// alongside the built artifact. This budgets that envelope.
 const INVOCATION_ENVELOPE = 256 * KiB;
 
 // The parent's worst-case buffered transient must stay under this platform budget.
 const PARENT_MEMORY_BUDGET = 256 * MiB;
 
-interface CapSpec {
-	envVar: string;
-	defaultValue: number;
-	floor: number;
-	ceiling: number;
-}
+// The fraction of effective memory the confined sandbox may claim across concurrent
+// children, leaving the rest for the API process and the host.
+const SANDBOX_MEMORY_SHARE = 0.5;
 
-const RESULT_CAP: CapSpec = {
-	envVar: 'EXTENSIONS_SANDBOX_MAX_RESULT_BYTES',
+const RESULT_CAP: BoundedSpec = {
+	envVar: 'EXTENSIONS_SANDBOX_MAX_RESULT',
 	defaultValue: 1 * MiB,
 	floor: 1 * KiB,
 	ceiling: 16 * MiB,
 };
 
-const HOST_API_CALL_CAP: CapSpec = {
-	envVar: 'EXTENSIONS_SANDBOX_MAX_HOST_API_CALL_BYTES',
+const HOST_API_CALL_CAP: BoundedSpec = {
+	envVar: 'EXTENSIONS_SANDBOX_MAX_HOST_API_CALL',
 	defaultValue: 256 * KiB,
 	floor: 1 * KiB,
 	ceiling: 4 * MiB,
 };
 
-const ARTIFACT_CAP: CapSpec = {
-	envVar: 'EXTENSIONS_SANDBOX_MAX_ARTIFACT_BYTES',
+const ARTIFACT_CAP: BoundedSpec = {
+	envVar: 'EXTENSIONS_SANDBOX_MAX_ARTIFACT',
 	defaultValue: 8 * MiB,
 	floor: 1 * KiB,
 	ceiling: 32 * MiB,
 };
 
-const PROCESSES_CAP: CapSpec = {
+const MEMORY_CAP: BoundedSpec = {
+	envVar: 'EXTENSIONS_SANDBOX_MAX_MEMORY',
+	defaultValue: DEFAULT_CONFINED_LIMITS.memoryBytes,
+	floor: 16 * MiB,
+	ceiling: 512 * MiB,
+};
+
+const TIMEOUT_CAP: BoundedSpec = {
+	envVar: 'EXTENSIONS_SANDBOX_TIMEOUT',
+	defaultValue: DEFAULT_CONFINED_LIMITS.wallClockMs,
+	floor: 1_000,
+	ceiling: 300_000,
+};
+
+const PROCESSES_CAP: BoundedSpec = {
 	envVar: 'EXTENSIONS_SANDBOX_MAX_PROCESSES',
 	defaultValue: DEFAULT_SANDBOX_MAX_PROCESSES,
 	floor: 1,
@@ -59,66 +84,125 @@ export interface SandboxLimits {
 	parentToChildFrameMax: number;
 }
 
-export interface SandboxLimitsError {
-	envVar: string;
-	message: string;
+export type SandboxLimitsError = ConfigParseError;
+
+export interface SandboxConfig {
+	sandbox: SandboxLimits;
+	runtime: ConfinedRuntimeLimits;
 }
 
+export interface SandboxConfigDeps {
+	effectiveMemory?: () => number;
+}
+
+export type SandboxConfigResult = { ok: true; config: SandboxConfig } | { ok: false; error: SandboxLimitsError };
 export type SandboxLimitsResult = { ok: true; limits: SandboxLimits } | { ok: false; error: SandboxLimitsError };
 
-function resolveCap(
-	env: Record<string, string | undefined>,
-	cap: CapSpec
+/**
+ * The CPU timeout stays internal and must trip before the wall-clock, so a CPU loop hits the
+ * in-engine bound first and the parent kill backstops. It is clamped strictly below the
+ * operator's wall-clock.
+ */
+function cpuTimeoutFor(wallClockMs: number): number {
+	return Math.min(DEFAULT_CONFINED_LIMITS.cpuTimeoutMs, Math.floor(wallClockMs * 0.8));
+}
+
+function resolveProcesses(
+	raw: unknown,
+	perChildBudget: number,
+	memoryBudget: number,
+	effectiveMemory: number
 ): { ok: true; value: number } | { ok: false; error: SandboxLimitsError } {
-	const raw = env[cap.envVar];
-
-	if (raw === undefined || raw.trim() === '') return { ok: true, value: cap.defaultValue };
-
-	const trimmed = raw.trim();
-
-	if (!/^\d+$/.test(trimmed) || !Number.isSafeInteger(Number(trimmed))) {
+	// 1 is the universal runnable baseline, allowed however it is specified. Unset concurrency
+	// adapts to the memory budget so zero-config stays runnable on small hosts, floored to 1
+	// (which may exceed the share) and capped at the default. Any value above 1, adaptive or
+	// explicit, must fit the budget, so an explicit overcommit fails closed.
+	if (isUnset(raw)) {
 		return {
-			ok: false,
-			error: { envVar: cap.envVar, message: `${cap.envVar} must be a whole number of bytes, got "${raw}"` },
+			ok: true,
+			value: Math.min(DEFAULT_SANDBOX_MAX_PROCESSES, Math.max(1, Math.floor(memoryBudget / perChildBudget))),
 		};
 	}
 
-	const value = Number(trimmed);
+	const parsed = parseCount(raw, PROCESSES_CAP);
+	if (!parsed.ok) return parsed;
 
-	if (value < cap.floor) {
+	if (parsed.value > 1 && parsed.value * perChildBudget > memoryBudget) {
 		return {
 			ok: false,
-			error: { envVar: cap.envVar, message: `${cap.envVar} must be at least ${cap.floor}, got ${value}` },
+			error: {
+				envVar: PROCESSES_CAP.envVar,
+				message: `${PROCESSES_CAP.envVar} of ${parsed.value} needs ${formatBytes(
+					parsed.value * perChildBudget
+				)} of guest memory, over the ${formatBytes(
+					memoryBudget
+				)} sandbox budget (${SANDBOX_MEMORY_SHARE} of ${formatBytes(effectiveMemory)}). Lower ${MEMORY_CAP.envVar} or ${
+					PROCESSES_CAP.envVar
+				}.`,
+			},
 		};
 	}
 
-	if (value > cap.ceiling) {
-		return {
-			ok: false,
-			error: { envVar: cap.envVar, message: `${cap.envVar} must be at most ${cap.ceiling}, got ${value}` },
-		};
-	}
-
-	return { ok: true, value };
+	return { ok: true, value: parsed.value };
 }
 
 /**
- * Resolves the operator sandbox caps from env into validated limits and derived
- * frame budgets, or a structured error naming the offending variable. It returns
- * the error rather than throwing, so the caller decides whether a bad value blocks
- * boot or only fails the confined extensions.
+ * Resolves the operator sandbox config from env (or a config record of unknowns) into the
+ * supervisor's transport and process caps and the per-invocation runtime limits, or a
+ * structured error naming the offending variable. It returns the error rather than throwing,
+ * so the caller decides whether a bad value blocks boot or only fails confined extensions.
  */
-export function resolveSandboxLimits(env: Record<string, string | undefined> = process.env): SandboxLimitsResult {
-	const result = resolveCap(env, RESULT_CAP);
+export function resolveSandboxConfig(
+	env: Record<string, unknown> = process.env,
+	deps: SandboxConfigDeps = {}
+): SandboxConfigResult {
+	const result = parseSize(env[RESULT_CAP.envVar], RESULT_CAP);
 	if (!result.ok) return result;
 
-	const hostApiCall = resolveCap(env, HOST_API_CALL_CAP);
+	const hostApiCall = parseSize(env[HOST_API_CALL_CAP.envVar], HOST_API_CALL_CAP);
 	if (!hostApiCall.ok) return hostApiCall;
 
-	const artifact = resolveCap(env, ARTIFACT_CAP);
+	const artifact = parseSize(env[ARTIFACT_CAP.envVar], ARTIFACT_CAP);
 	if (!artifact.ok) return artifact;
 
-	const processes = resolveCap(env, PROCESSES_CAP);
+	const memory = parseSize(env[MEMORY_CAP.envVar], MEMORY_CAP);
+	if (!memory.ok) return memory;
+
+	const timeout = parseDuration(env[TIMEOUT_CAP.envVar], TIMEOUT_CAP);
+	if (!timeout.ok) return timeout;
+
+	const effectiveMemory = (deps.effectiveMemory ?? detectEffectiveMemory)();
+
+	if (!Number.isFinite(effectiveMemory) || effectiveMemory <= 0) {
+		return {
+			ok: false,
+			error: {
+				envVar: MEMORY_CAP.envVar,
+				message: `the effective memory budget could not be determined (got ${effectiveMemory})`,
+			},
+		};
+	}
+
+	const perChildBudget = cgroupMemoryMax(memory.value);
+
+	// Even the runnable baseline of one child must fit the effective memory. A per-child
+	// budget larger than the whole host or container can never run, so it fails closed
+	// regardless of the process count.
+	if (perChildBudget > effectiveMemory) {
+		return {
+			ok: false,
+			error: {
+				envVar: MEMORY_CAP.envVar,
+				message: `one confined child needs ${formatBytes(perChildBudget)}, over the ${formatBytes(
+					effectiveMemory
+				)} available. Lower ${MEMORY_CAP.envVar}.`,
+			},
+		};
+	}
+
+	const memoryBudget = Math.floor(SANDBOX_MEMORY_SHARE * effectiveMemory);
+
+	const processes = resolveProcesses(env[PROCESSES_CAP.envVar], perChildBudget, memoryBudget, effectiveMemory);
 	if (!processes.ok) return processes;
 
 	const maxResultBytes = result.value;
@@ -130,8 +214,8 @@ export function resolveSandboxLimits(env: Record<string, string | undefined> = p
 	const parentToChildFrameMax = maxArtifactBytes + INVOCATION_ENVELOPE + ENVELOPE_BUDGET;
 
 	// Bound the parent's worst-case transient: MAX_PROCESSES children each holding a
-	// child-to-parent and a parent-to-child frame buffer. The child-to-parent term is
-	// the security-critical one, an untrusted child ballooning the parent.
+	// child-to-parent and a parent-to-child frame buffer. The child-to-parent term is the
+	// security-critical one, an untrusted child ballooning the parent.
 	const transient = maxProcesses * (childToParentFrameMax + parentToChildFrameMax);
 
 	if (transient > PARENT_MEMORY_BUDGET) {
@@ -146,13 +230,31 @@ export function resolveSandboxLimits(env: Record<string, string | undefined> = p
 
 	return {
 		ok: true,
-		limits: {
-			maxResultBytes,
-			maxHostApiCallBytes,
-			maxArtifactBytes,
-			maxProcesses,
-			childToParentFrameMax,
-			parentToChildFrameMax,
+		config: {
+			sandbox: {
+				maxResultBytes,
+				maxHostApiCallBytes,
+				maxArtifactBytes,
+				maxProcesses,
+				childToParentFrameMax,
+				parentToChildFrameMax,
+			},
+			runtime: {
+				...DEFAULT_CONFINED_LIMITS,
+				memoryBytes: memory.value,
+				wallClockMs: timeout.value,
+				cpuTimeoutMs: cpuTimeoutFor(timeout.value),
+			},
 		},
 	};
+}
+
+/** The supervisor's transport and process caps, the `.sandbox` slice of the resolved config. */
+export function resolveSandboxLimits(
+	env: Record<string, unknown> = process.env,
+	deps: SandboxConfigDeps = {}
+): SandboxLimitsResult {
+	const result = resolveSandboxConfig(env, deps);
+	if (!result.ok) return result;
+	return { ok: true, limits: result.config.sandbox };
 }
