@@ -279,18 +279,34 @@ function probePermissionModel(execPath: string): boolean {
 }
 
 function delegatedCgroupRoot(): string | null {
-	// A writable cgroup v2 subtree with the memory controller delegated to the process. The
-	// process's own cgroup (from /proc/self/cgroup) is the delegated leaf where present.
 	try {
 		const line = readFileSync('/proc/self/cgroup', 'utf8').trim().split('\n')[0] ?? '';
 		const rel = line.split(':').pop() ?? '';
 		const dir = join('/sys/fs/cgroup', rel);
 		const controllers = readFileSync(join(dir, 'cgroup.controllers'), 'utf8');
 		if (!controllers.split(/\s+/).includes('memory')) return null;
-		// A probe child cgroup confirms write access without leaving state behind.
+
+		// A creatable child cgroup is not enough: the memory controller is usable in a child
+		// only when memory is active in the parent subtree_control, so the probe must get the
+		// writable memory.max and memory.swap.max that createChildCgroup writes. A privileged
+		// container's cgroup root is writable but delegates no memory. The write probe
+		// separates a real delegated subtree from that false positive.
 		const probe = join(dir, `.cairn-probe-${randomUUID()}`);
 		mkdirSync(probe);
-		rmdirSync(probe);
+
+		try {
+			writeFileSync(join(probe, 'memory.max'), 'max');
+			writeFileSync(join(probe, 'memory.swap.max'), 'max');
+		} catch {
+			return null;
+		} finally {
+			try {
+				rmdirSync(probe);
+			} catch {
+				// the empty probe cgroup is already gone
+			}
+		}
+
 		return dir;
 	} catch {
 		return null;
