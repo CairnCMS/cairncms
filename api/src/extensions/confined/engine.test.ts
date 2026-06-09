@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { hardenedSandboxOptions, MAX_GUEST_TIMERS, runConfinedEntry, unsupportedHostBridge } from './engine.js';
+import {
+	hardenedSandboxOptions,
+	MAX_GUEST_TIMERS,
+	runConfinedEntry,
+	unsupportedHostBridge,
+	WASM_INITIAL_PAGES,
+	wasmMaximumPages,
+} from './engine.js';
 import type { ConfinedHostBridge, ConfinedInvocation, ConfinedRuntimeLimits } from './types.js';
 
 function run(inv: ConfinedInvocation, bridge: ConfinedHostBridge = unsupportedHostBridge) {
@@ -156,9 +163,10 @@ describe('runConfinedEntry', () => {
 			})
 		);
 
-		// QuickJS may surface the memory limit as a catchable guest error or an
-		// engine-level resource interrupt, but it must never succeed. The
-		// process-level runaway-allocation case is bounded by the supervisor wall-clock kill.
+		// QuickJS may surface the memory limit as a catchable guest error or an engine-level
+		// resource interrupt, but it must never succeed. The WASM linear-memory ceiling is the
+		// primary per-guest bound, with the supervisor wall-clock, cgroup, and container limit
+		// as backstops.
 		expect(result.ok).toBe(false);
 		if (!result.ok) expect(['guest-error', 'timeout']).toContain(result.error.code);
 	});
@@ -291,5 +299,18 @@ describe('runConfinedEntry', () => {
 
 		expect(result.ok).toBe(true);
 		if (result.ok) expect(result.value).toEqual({ registered: MAX_GUEST_TIMERS, bounded: true });
+	});
+});
+
+describe('wasmMaximumPages', () => {
+	it('sizes the WASM ceiling from the guest heap plus the engine overhead', () => {
+		// guest heap + 32MB overhead, in 64KB pages: 32MB -> 1024, 64MB -> 1536.
+		expect(wasmMaximumPages(32 * 1024 * 1024)).toBe(1024);
+		expect(wasmMaximumPages(64 * 1024 * 1024)).toBe(1536);
+	});
+
+	it('never returns a maximum below the initial pages, so the module can load', () => {
+		expect(wasmMaximumPages(0)).toBeGreaterThanOrEqual(WASM_INITIAL_PAGES);
+		expect(wasmMaximumPages(1)).toBeGreaterThanOrEqual(WASM_INITIAL_PAGES);
 	});
 });

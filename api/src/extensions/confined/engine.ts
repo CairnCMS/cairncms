@@ -1,6 +1,6 @@
 import variant from '@jitl/quickjs-ng-wasmfile-release-asyncify';
 import { expose, loadAsyncQuickJs } from '@sebastianwessel/quickjs';
-import { Scope } from 'quickjs-emscripten-core';
+import { newVariant, Scope } from 'quickjs-emscripten-core';
 import type { ConfinedHostBridge, ConfinedInvocation, ConfinedResult, ConfinedRuntimeError } from './types.js';
 
 type QuickJsRuntime = Awaited<ReturnType<typeof loadAsyncQuickJs>>;
@@ -10,6 +10,36 @@ let runtimePromise: Promise<QuickJsRuntime> | undefined;
 // The variant package's default export is the async WASM variant at runtime, but
 // its types resolve to the module namespace, so it is cast to the loader's param.
 const asyncVariant = variant as unknown as Parameters<typeof loadAsyncQuickJs>[0];
+
+const WASM_PAGE_BYTES = 64 * 1024;
+
+// The module's default initial linear memory (16 MB), kept so the engine loads.
+export const WASM_INITIAL_PAGES = 256;
+
+// The engine's own linear-memory working set plus headroom, on top of the guest heap.
+const WASM_OVERHEAD_BYTES = 32 * 1024 * 1024;
+
+/**
+ * The WASM linear-memory maximum in 64 KB pages: the guest heap plus the engine working set
+ * and headroom, never below the initial size so the module can still load.
+ */
+export function wasmMaximumPages(memoryBytes: number): number {
+	const sized = Math.ceil((memoryBytes + WASM_OVERHEAD_BYTES) / WASM_PAGE_BYTES);
+	return Math.max(sized, WASM_INITIAL_PAGES);
+}
+
+/**
+ * The QuickJS memoryLimit accounts strings and objects but not array or typed-array backing
+ * stores, which otherwise grow the WASM linear memory to its ~2 GB default maximum. Capping
+ * the maximum bounds every allocation kind, so the linear-memory ceiling, not the QuickJS
+ * limit, is the real per-guest memory bound.
+ */
+function sizedVariant(memoryBytes: number): Parameters<typeof loadAsyncQuickJs>[0] {
+	const wasmMemory = new WebAssembly.Memory({ initial: WASM_INITIAL_PAGES, maximum: wasmMaximumPages(memoryBytes) });
+	return newVariant(asyncVariant as Parameters<typeof newVariant>[0], { wasmMemory }) as Parameters<
+		typeof loadAsyncQuickJs
+	>[0];
+}
 
 export const unsupportedHostBridge: ConfinedHostBridge = async () => ({
 	ok: false,
@@ -57,8 +87,9 @@ export const hardenedSandboxOptions = {
 	maxIntervalCount: MAX_GUEST_TIMERS,
 };
 
-async function getRuntime(): Promise<QuickJsRuntime> {
-	if (runtimePromise === undefined) runtimePromise = loadAsyncQuickJs(asyncVariant);
+/** The supervisor spawns one child per invocation, so the runtime loads once and the invocation's limit sizes the ceiling. */
+async function getRuntime(memoryBytes: number): Promise<QuickJsRuntime> {
+	if (runtimePromise === undefined) runtimePromise = loadAsyncQuickJs(sizedVariant(memoryBytes));
 	return runtimePromise;
 }
 
@@ -77,7 +108,7 @@ export async function runConfinedEntry(
 	let evaluated: { ok: true; data: unknown } | { ok: false; error: unknown };
 
 	try {
-		const { runSandboxed } = await getRuntime();
+		const { runSandboxed } = await getRuntime(invocation.limits.memoryBytes);
 
 		evaluated = (await runSandboxed(
 			async ({ ctx, evalCode }) => {
