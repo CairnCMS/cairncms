@@ -212,18 +212,26 @@ export interface ConfinedSupervisorLogger {
 }
 
 /**
- * Clamps a caller's requested limits to the operator runtime maxima: memory and the
- * wall-clock can be stricter than operator policy but never looser, and the CPU timeout is
- * recomputed to stay strictly below the clamped wall-clock so it still trips first.
+ * Clamps a caller's requested resource limits to the operator runtime maxima. Each resource
+ * field is the stricter of the requested and operator value, so a caller can narrow a limit
+ * but never widen one past operator policy. The CPU timeout additionally stays strictly
+ * below the clamped wall-clock so it still trips first. The fields are listed explicitly
+ * rather than spread, so a new limit field cannot be added without deciding how it clamps.
+ * `acquireTimeoutMs` is exempt: it is a supervisor queue policy, not a guest resource grant,
+ * and the operator default of 0 would otherwise pin every invocation to reject-fast.
  */
 export function clampLimits(requested: ConfinedRuntimeLimits, operator: ConfinedRuntimeLimits): ConfinedRuntimeLimits {
 	const wallClockMs = Math.min(requested.wallClockMs, operator.wallClockMs);
 
 	return {
-		...requested,
 		memoryBytes: Math.min(requested.memoryBytes, operator.memoryBytes),
 		wallClockMs,
 		cpuTimeoutMs: Math.min(requested.cpuTimeoutMs, operator.cpuTimeoutMs, Math.max(1, Math.floor(wallClockMs * 0.8))),
+		stackBytes: Math.min(requested.stackBytes, operator.stackBytes),
+		acquireTimeoutMs: requested.acquireTimeoutMs,
+		hostCallTimeoutMs: Math.min(requested.hostCallTimeoutMs, operator.hostCallTimeoutMs),
+		maxHostCalls: Math.min(requested.maxHostCalls, operator.maxHostCalls),
+		maxInFlightHostCalls: Math.min(requested.maxInFlightHostCalls, operator.maxInFlightHostCalls),
 	};
 }
 
@@ -326,7 +334,7 @@ export class ConfinedSupervisor {
 	private runChild(invocation: ConfinedInvocation, dispatcher: ConfinedHostDispatcher): Promise<ConfinedResult> {
 		return new Promise<ConfinedResult>((resolve) => {
 			// Every invocation is clamped to the operator runtime maxima, so a caller cannot
-			// request more memory or a longer wall-clock than operator policy allows.
+			// request looser limits than operator policy allows.
 			const limits = clampLimits(invocation.limits, this.runtimeLimits);
 			const effective: ConfinedInvocation = { ...invocation, limits };
 
@@ -441,7 +449,14 @@ export class ConfinedSupervisor {
 			);
 
 			const job: ConfinedJobMessage = { type: 'job', invocation: effective };
-			writeFrame(channel, job, () => undefined);
+
+			// A non-JSON-safe options or input throws in the frame writer. Resolve a
+			// structured failure rather than rejecting the invoke promise.
+			try {
+				writeFrame(channel, job, () => undefined);
+			} catch {
+				finish({ ok: false, error: { code: 'internal', message: CANONICAL_ERROR_MESSAGES.internal } });
+			}
 		});
 	}
 
@@ -547,7 +562,21 @@ export class ConfinedSupervisor {
 		try {
 			writeFrame(channel, replyMessage, () => undefined);
 		} catch {
-			// the child is already gone and the invocation has settled
+			// A non-JSON-safe reply value throws in the frame writer while the guest is
+			// still waiting on this id, so send a serializable error reply rather than
+			// leaving the guest to hang to its host-call timeout. A second throw means the
+			// child is already gone and the invocation has settled.
+			const fallback: ConfinedHostReplyMessage = {
+				type: 'host-reply',
+				id,
+				reply: { ok: false, error: { code: 'internal', message: 'the host call failed' } },
+			};
+
+			try {
+				writeFrame(channel, fallback, () => undefined);
+			} catch {
+				// the child is already gone and the invocation has settled
+			}
 		}
 	}
 

@@ -612,6 +612,52 @@ describe('ConfinedSupervisor', () => {
 	);
 
 	it(
+		'clamps a caller-requested host-call budget to the operator maximum',
+		async () => {
+			const dispatcher: ConfinedHostDispatcher = async () => ({ ok: true, value: null });
+
+			const supervisor = new ConfinedSupervisor({
+				hostDispatcher: dispatcher,
+				runtimeLimits: { ...LIMITS, maxHostCalls: 2 },
+			});
+
+			// The invocation asks for a far higher budget than operator policy allows.
+			const result = await supervisor.invoke(
+				invocation(
+					entry(
+						'async (_p, { host }) => { let limited = 0; for (let i = 0; i < 5; i++) { const r = await host.request.send({ url: "x" }); if (r && r.error && r.error.code === "rate_limited") limited++; } return { limited }; }'
+					),
+					{ limits: { ...LIMITS, maxHostCalls: 1_000_000 } }
+				)
+			);
+
+			// The operator cap of 2 wins, so the last three of five calls are rate-limited.
+			expect(result).toEqual({ ok: true, value: { limited: 3 } });
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
+		'replies with a structured host error when a host reply value is not JSON-safe',
+		async () => {
+			// A BigInt in the reply value cannot be serialized into the host-reply frame.
+			const dispatcher: ConfinedHostDispatcher = async () => ({ ok: true, value: 1n });
+			const supervisor = new ConfinedSupervisor({ hostDispatcher: dispatcher });
+
+			const result = await supervisor.invoke(
+				invocation(
+					entry(
+						'async (_p, { host }) => { const r = await host.request.send({ url: "x" }); return { ok: r.ok, code: r.error ? r.error.code : null }; }'
+					)
+				)
+			);
+
+			expect(result).toEqual({ ok: true, value: { ok: false, code: 'internal' } });
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
 		'aborts an in-flight host call when the invocation finishes',
 		async () => {
 			let capturedSignal: AbortSignal | undefined;
@@ -639,6 +685,15 @@ describe('ConfinedSupervisor', () => {
 		const result = await supervisor.invoke(positive());
 
 		expect(result).toMatchObject({ ok: false, error: { code: 'crash' } });
+	});
+
+	it('resolves a structured internal result when the job payload is not JSON-safe', async () => {
+		const supervisor = new ConfinedSupervisor({ childPath: echoChild, childExecArgv: [] });
+
+		// A BigInt in options cannot be JSON-serialized, so the frame writer throws.
+		const result = await supervisor.invoke(invocation(entry('() => ({ ok: true })'), { options: { amount: 1n } }));
+
+		expect(result).toMatchObject({ ok: false, error: { code: 'internal' } });
 	});
 
 	it(
@@ -1012,5 +1067,50 @@ describe('clampLimits', () => {
 		const result = clampLimits({ ...LIMITS, wallClockMs: 500, cpuTimeoutMs: 10_000 }, operator);
 		expect(result.wallClockMs).toBe(500);
 		expect(result.cpuTimeoutMs).toBe(400);
+	});
+
+	const operatorMax: ConfinedRuntimeLimits = {
+		wallClockMs: 10_000,
+		cpuTimeoutMs: 2_000,
+		memoryBytes: 64 * 1024 * 1024,
+		stackBytes: 512 * 1024,
+		acquireTimeoutMs: 1_000,
+		hostCallTimeoutMs: 5_000,
+		maxHostCalls: 1_000,
+		maxInFlightHostCalls: 16,
+	};
+
+	it('clamps every resource field to the operator maximum but exempts the acquire timeout', () => {
+		const clamped = clampLimits(
+			{
+				wallClockMs: 60_000,
+				cpuTimeoutMs: 30_000,
+				memoryBytes: 256 * 1024 * 1024,
+				stackBytes: 4 * 1024 * 1024,
+				acquireTimeoutMs: 60_000,
+				hostCallTimeoutMs: 60_000,
+				maxHostCalls: 1_000_000,
+				maxInFlightHostCalls: 4_096,
+			},
+			operatorMax
+		);
+
+		// acquireTimeoutMs is a supervisor queue policy, not a resource grant, so it passes through.
+		expect(clamped).toEqual({ ...operatorMax, acquireTimeoutMs: 60_000 });
+	});
+
+	it('passes a stricter request through on every field', () => {
+		const strict: ConfinedRuntimeLimits = {
+			wallClockMs: 3_000,
+			cpuTimeoutMs: 1_000,
+			memoryBytes: 16 * 1024 * 1024,
+			stackBytes: 256 * 1024,
+			acquireTimeoutMs: 500,
+			hostCallTimeoutMs: 2_000,
+			maxHostCalls: 100,
+			maxInFlightHostCalls: 4,
+		};
+
+		expect(clampLimits(strict, operatorMax)).toEqual(strict);
 	});
 });

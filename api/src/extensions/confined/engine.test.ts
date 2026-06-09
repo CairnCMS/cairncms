@@ -314,3 +314,19 @@ describe('wasmMaximumPages', () => {
 		expect(wasmMaximumPages(1)).toBeGreaterThanOrEqual(WASM_INITIAL_PAGES);
 	});
 });
+
+describe('runtime memory ceiling per job', () => {
+	// A typed-array backing store is not accounted by the QuickJS memoryLimit, so it is
+	// bounded only by the WASM linear-memory ceiling. A 40MB array fits the ceiling derived
+	// from a 128MB limit but not the one derived from a 16MB limit.
+	const allocLarge =
+		'() => { const a = new Uint8Array(40 * 1024 * 1024); a[a.length - 1] = 1; return { len: a.length }; }';
+
+	it('re-derives the WASM ceiling per job so a smaller later job is bounded by its own limit', async () => {
+		const large = await run(invocation(entry(allocLarge), { limits: { ...LIMITS, memoryBytes: 128 * 1024 * 1024 } }));
+		expect(large.ok).toBe(true);
+
+		const small = await run(invocation(entry(allocLarge), { limits: { ...LIMITS, memoryBytes: 16 * 1024 * 1024 } }));
+		expect(small.ok).toBe(false);
+	}, 20_000);
+});

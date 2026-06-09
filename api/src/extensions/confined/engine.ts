@@ -6,6 +6,7 @@ import type { ConfinedHostBridge, ConfinedInvocation, ConfinedResult, ConfinedRu
 type QuickJsRuntime = Awaited<ReturnType<typeof loadAsyncQuickJs>>;
 
 let runtimePromise: Promise<QuickJsRuntime> | undefined;
+let runtimeMemoryBytes: number | undefined;
 
 // The variant package's default export is the async WASM variant at runtime, but
 // its types resolve to the module namespace, so it is cast to the loader's param.
@@ -87,9 +88,20 @@ export const hardenedSandboxOptions = {
 	maxIntervalCount: MAX_GUEST_TIMERS,
 };
 
-/** The supervisor spawns one child per invocation, so the runtime loads once and the invocation's limit sizes the ceiling. */
+/**
+ * Loads the QuickJS runtime, sizing the WASM linear-memory ceiling from the job's memory
+ * limit. The supervisor spawns one child per invocation, so in production this resolves
+ * once. The runtime is keyed by memory limit and rebuilt when the limit changes, so the
+ * ceiling always reflects the current job's limit rather than inheriting an earlier job's
+ * size. The memory bound is therefore self-contained here, not dependent on the single-use
+ * guard in another module.
+ */
 async function getRuntime(memoryBytes: number): Promise<QuickJsRuntime> {
-	if (runtimePromise === undefined) runtimePromise = loadAsyncQuickJs(sizedVariant(memoryBytes));
+	if (runtimePromise === undefined || memoryBytes !== runtimeMemoryBytes) {
+		runtimeMemoryBytes = memoryBytes;
+		runtimePromise = loadAsyncQuickJs(sizedVariant(memoryBytes));
+	}
+
 	return runtimePromise;
 }
 
