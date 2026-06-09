@@ -2,6 +2,7 @@
 
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { Duplex } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { resolveSandboxLimits, type SandboxLimits } from './sandbox-limits.js';
@@ -129,14 +130,22 @@ export interface ConfinedSupervisorOptions {
 }
 
 /**
- * Resolves the child script. In the built API the sibling is `child-host.js`, run
- * directly. In dev and tests it is `child-host.ts`, run with the tsx loader.
+ * Resolves the child script from the confined directory. In the built API the production
+ * target is the self-contained `runtime/child-host.mjs` bundle, run directly. In dev and
+ * tests it is `child-host.ts`, run with the tsx loader. The unbundled tsc-built
+ * `child-host.js` is never the spawn target. the bundle's supported path requires no
+ * node_modules, and the hardened runtime-dir-only read scope blocks the deps' optional
+ * imports. The directory is a parameter so the resolution can be tested against a built
+ * dist tree.
  */
-function resolveChild(): { path: string; execArgv: string[] } {
-	const builtPath = fileURLToPath(new URL('./child-host.js', import.meta.url));
-	if (existsSync(builtPath)) return { path: builtPath, execArgv: [] };
+export function resolveChild(confinedDir = dirname(fileURLToPath(import.meta.url))): {
+	path: string;
+	execArgv: string[];
+} {
+	const bundledPath = join(confinedDir, 'runtime', 'child-host.mjs');
+	if (existsSync(bundledPath)) return { path: bundledPath, execArgv: [] };
 
-	const sourcePath = fileURLToPath(new URL('./child-host.ts', import.meta.url));
+	const sourcePath = join(confinedDir, 'child-host.ts');
 	return { path: sourcePath, execArgv: ['--loader', 'tsx'] };
 }
 

@@ -7,7 +7,7 @@ import { Duplex } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { resolveSandboxLimits, type SandboxLimits } from './sandbox-limits.js';
-import { ConfinedSupervisor } from './supervisor.js';
+import { ConfinedSupervisor, resolveChild } from './supervisor.js';
 import { createFrameReader, writeFrame } from './transport.js';
 import type {
 	ConfinedHostCallMessage,
@@ -174,9 +174,11 @@ function driveChildHost(job: unknown, options: DriveChildOptions = {}): Promise<
 	});
 }
 
-// The real built artifact, exercised under plain node when a build is present.
-const builtChildPath = fileURLToPath(new URL('../../../dist/extensions/confined/child-host.js', import.meta.url));
-const builtChildExists = existsSync(builtChildPath);
+// The production artifact (the bundled runtime), exercised under plain node when a build
+// is present.
+const distConfinedDir = fileURLToPath(new URL('../../../dist/extensions/confined', import.meta.url));
+const bundledChildPath = join(distConfinedDir, 'runtime', 'child-host.mjs');
+const bundledChildExists = existsSync(bundledChildPath);
 
 describe('ConfinedSupervisor', () => {
 	let tmpDir: string;
@@ -245,18 +247,25 @@ describe('ConfinedSupervisor', () => {
 		expect(result).toEqual({ ok: true, value: 'from-stub' });
 	});
 
-	// Drives the actual built child-host.js under plain node, the real production path:
-	// fd-3 framed transport over the spawned child's socketpair, no tsx loader. Runs only
-	// when a build is present (the suite cannot build the artifact itself).
-	it.skipIf(!builtChildExists)(
-		'runs an operation in the real built child-host.js under plain node',
+	// Drives the actual bundled runtime under plain node, the production spawn path: fd-3
+	// framed transport over the spawned child's socketpair, no tsx loader. Runs only when a
+	// build is present (the suite cannot build the artifact itself).
+	it.skipIf(!bundledChildExists)(
+		'runs an operation in the bundled production child under plain node',
 		async () => {
-			const supervisor = new ConfinedSupervisor({ childPath: builtChildPath, childExecArgv: [] });
+			const supervisor = new ConfinedSupervisor({ childPath: bundledChildPath, childExecArgv: [] });
 			const result = await supervisor.invoke(positive());
 			expect(result).toEqual({ ok: true, value: { ok: true, amount: 7 } });
 		},
 		ENGINE_TIMEOUT
 	);
+
+	it.skipIf(!bundledChildExists)('resolves production to the bundle, never the unbundled child-host.js', () => {
+		const resolved = resolveChild(distConfinedDir);
+		expect(resolved.path).toBe(bundledChildPath);
+		expect(resolved.execArgv).toEqual([]);
+		expect(resolved.path).not.toMatch(/child-host\.js$/);
+	});
 
 	it(
 		'does not leak a host process.env secret into the child',
