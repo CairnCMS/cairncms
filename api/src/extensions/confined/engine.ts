@@ -16,6 +16,47 @@ export const unsupportedHostBridge: ConfinedHostBridge = async () => ({
 	error: { code: 'unsupported', message: 'host API is not available in this runtime' },
 });
 
+// The cap on concurrent guest timers, an explicit bound against timer flooding rather
+// than the wrapper's implicit default.
+export const MAX_GUEST_TIMERS = 256;
+
+// Every guest console method is dropped, so guest output never reaches the host stream
+// rather than relying on the spawned child's stdout being discarded.
+const silencedConsole = Object.fromEntries(
+	[
+		'log',
+		'info',
+		'warn',
+		'error',
+		'debug',
+		'trace',
+		'assert',
+		'count',
+		'countReset',
+		'dir',
+		'dirxml',
+		'group',
+		'groupCollapsed',
+		'groupEnd',
+		'table',
+		'time',
+		'timeEnd',
+		'timeLog',
+		'clear',
+	].map((name) => [name, () => undefined])
+) as Record<string, () => void>;
+
+// The static engine-hardening options, separate from the per-invocation resource limits.
+// `dangerousSync` is deliberately absent: setting it would expose synchronous host
+// functions to the guest. its absence is asserted by the tests.
+export const hardenedSandboxOptions = {
+	allowFetch: false,
+	allowFs: false,
+	console: silencedConsole,
+	maxTimeoutCount: MAX_GUEST_TIMERS,
+	maxIntervalCount: MAX_GUEST_TIMERS,
+};
+
 async function getRuntime(): Promise<QuickJsRuntime> {
 	if (runtimePromise === undefined) runtimePromise = loadAsyncQuickJs(asyncVariant);
 	return runtimePromise;
@@ -53,8 +94,7 @@ export async function runConfinedEntry(
 				}
 			},
 			{
-				allowFetch: false,
-				allowFs: false,
+				...hardenedSandboxOptions,
 				executionTimeout: invocation.limits.cpuTimeoutMs,
 				memoryLimit: invocation.limits.memoryBytes,
 				maxStackSize: invocation.limits.stackBytes,

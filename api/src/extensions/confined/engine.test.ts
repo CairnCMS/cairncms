@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { runConfinedEntry, unsupportedHostBridge } from './engine.js';
+import { describe, expect, it, vi } from 'vitest';
+import { hardenedSandboxOptions, MAX_GUEST_TIMERS, runConfinedEntry, unsupportedHostBridge } from './engine.js';
 import type { ConfinedHostBridge, ConfinedInvocation, ConfinedRuntimeLimits } from './types.js';
 
 function run(inv: ConfinedInvocation, bridge: ConfinedHostBridge = unsupportedHostBridge) {
@@ -232,5 +232,64 @@ describe('runConfinedEntry', () => {
 		);
 
 		expect(result).toEqual({ ok: true, value: { ok: false, code: 'unsupported' } });
+	});
+
+	it('configures the engine-hardening options and never sets dangerousSync', () => {
+		expect(hardenedSandboxOptions.allowFetch).toBe(false);
+		expect(hardenedSandboxOptions.allowFs).toBe(false);
+		expect(typeof hardenedSandboxOptions.console.log).toBe('function');
+		expect(hardenedSandboxOptions.maxTimeoutCount).toBe(MAX_GUEST_TIMERS);
+		expect(hardenedSandboxOptions.maxIntervalCount).toBe(MAX_GUEST_TIMERS);
+		expect(MAX_GUEST_TIMERS).toBeGreaterThan(0);
+		expect('dangerousSync' in hardenedSandboxOptions).toBe(false);
+	});
+
+	it('drops every guest console method, not only the common ones', async () => {
+		const methods = Object.keys(hardenedSandboxOptions.console);
+		const hostConsole = console as unknown as Record<string, (...args: unknown[]) => void>;
+
+		const spies = methods
+			.filter((name) => typeof hostConsole[name] === 'function')
+			.map((name) => vi.spyOn(hostConsole, name).mockImplementation(() => undefined));
+
+		try {
+			const calls = methods.map((name) => `try { console.${name}("LEAK-${name}"); } catch (e) {}`).join(' ');
+			const result = await run(invocation(entry(`() => { ${calls} return { ok: true }; }`)));
+
+			expect(result).toEqual({ ok: true, value: { ok: true } });
+			for (const spy of spies) expect(spy).not.toHaveBeenCalledWith(expect.stringContaining('LEAK'));
+		} finally {
+			for (const spy of spies) spy.mockRestore();
+		}
+	});
+
+	it('bounds concurrent guest timers at MAX_GUEST_TIMERS', async () => {
+		const result = await run(
+			invocation(
+				entry(
+					`() => { const ids = []; let bounded = false; try { for (let i = 0; i < ${
+						MAX_GUEST_TIMERS + 50
+					}; i++) { ids.push(setTimeout(() => {}, 100000)); } } catch (e) { bounded = true; } for (const id of ids) { try { clearTimeout(id); } catch (e) {} } return { registered: ids.length, bounded }; }`
+				)
+			)
+		);
+
+		expect(result.ok).toBe(true);
+		if (result.ok) expect(result.value).toEqual({ registered: MAX_GUEST_TIMERS, bounded: true });
+	});
+
+	it('bounds concurrent guest intervals at MAX_GUEST_TIMERS', async () => {
+		const result = await run(
+			invocation(
+				entry(
+					`() => { const ids = []; let bounded = false; try { for (let i = 0; i < ${
+						MAX_GUEST_TIMERS + 50
+					}; i++) { ids.push(setInterval(() => {}, 100000)); } } catch (e) { bounded = true; } for (const id of ids) { try { clearInterval(id); } catch (e) {} } return { registered: ids.length, bounded }; }`
+				)
+			)
+		);
+
+		expect(result.ok).toBe(true);
+		if (result.ok) expect(result.value).toEqual({ registered: MAX_GUEST_TIMERS, bounded: true });
 	});
 });
