@@ -21,21 +21,21 @@ withDefaults(defineProps<Props>(), {
 <style>
 body {
 	--v-card-min-width: none;
-	--v-card-max-width: 400px;
+	--v-card-max-width: 25rem;
 	--v-card-height: auto;
 	--v-card-min-height: none;
 	--v-card-max-height: 90vh;
-	--v-card-padding: 16px;
+	--v-card-padding: 1rem;
 	--v-card-background-color: var(--background-subdued);
 }
 </style>
 
 <style lang="scss" scoped>
+@import '@/styles/mixins/form-field-sizing';
+
 .v-card {
-	--border-radius: 2px;
-	--input-height: 54px;
-	--input-padding: 14px;
-	--form-vertical-gap: 24px;
+	@include form-field-sizing;
+	--form-vertical-gap: 1.5rem;
 
 	min-width: var(--v-card-min-width);
 	max-width: var(--v-card-max-width);
@@ -45,8 +45,8 @@ body {
 	overflow: auto;
 
 	/* Page Content Spacing */
-	font-size: 15px;
-	line-height: 24px;
+	font-size: .9375rem;
+	line-height: 1.5rem;
 	background-color: var(--v-card-background-color);
 	border-radius: var(--border-radius);
 

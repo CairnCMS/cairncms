@@ -118,7 +118,7 @@ const availableCollections = computed(() => {
 	--v-input-font-family: var(--family-monospace);
 
 	&:not(:empty) {
-		margin-bottom: 20px;
+		margin-bottom: 1.25rem;
 	}
 
 	.v-input.matches {

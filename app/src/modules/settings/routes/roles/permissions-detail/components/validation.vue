@@ -49,6 +49,6 @@ const fields = computed(() => [
 
 <style lang="scss" scoped>
 .v-notice {
-	margin-bottom: 36px;
+	margin-bottom: 2.25rem;
 }
 </style>

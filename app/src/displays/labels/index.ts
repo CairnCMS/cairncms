@@ -105,6 +105,15 @@ export default defineDisplay({
 								width: 'half',
 							},
 						},
+						{
+							field: 'color',
+							name: '$t:color',
+							type: 'string',
+							meta: {
+								interface: 'select-color',
+								width: 'half',
+							},
+						},
 					],
 				},
 			},

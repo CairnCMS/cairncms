@@ -75,29 +75,29 @@ fields:
       lineNumber: true
       template: |
         #app, #main-content, body {
-          --primary-alt: #F1FAF6 !important;
-          --primary-10: #F1FAF6 !important;
-          --primary-25: #DBF2E9 !important;
-          --primary-50: #B7E4D4 !important;
-          --primary-75: #93D7BE !important;
-          --primary-90: #7DCEB1 !important;
+          --primary-alt: #ECF3F2 !important;
+          --primary-10: #ECF3F2 !important;
+          --primary-25: #CFE2DF !important;
+          --primary-50: #9FC5BF !important;
+          --primary-75: #6FA79E !important;
+          --primary-90: #52968B !important;
 
-          --primary: #6FC9A8 !important;
+          --primary: #3E8A7E !important;
 
-          --primary-110: #69BB9E !important;
-          --primary-125: #5FA68F !important;
-          --primary-150: #4F8376 !important;
-          --primary-175: #3E5F5C !important;
-          --primary-190: #354A4D !important;
+          --primary-110: #3C8178 !important;
+          --primary-125: #39746E !important;
+          --primary-150: #355F5E !important;
+          --primary-175: #30494D !important;
+          --primary-190: #2D3C44 !important;
 
-          --v-button-background-color: #DDB562 !important;
-          --v-button-background-color-hover: #C09A4C !important;
-          --sidebar-detail-color-active: #5FA68F !important;
+          --v-button-background-color: #3E8A7E !important;
+          --v-button-background-color-hover: #39746E !important;
+          --sidebar-detail-color-active: #39746E !important;
 
-          --module-background: #355F55 !important;
-          --module-background-alt: #284941 !important;
-          --module-icon: rgba(222, 229, 176, 0.5) !important;
-          --module-icon-alt: #DEE5B0 !important;
+          --module-background: #30494D !important;
+          --module-background-alt: #3A565B !important;
+          --module-icon: rgba(236, 243, 242, 0.5) !important;
+          --module-icon-alt: #ECF3F2 !important;
         }
     width: full
 

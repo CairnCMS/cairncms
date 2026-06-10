@@ -52,9 +52,9 @@ function close() {
 	align-items: center;
 	justify-content: flex-start;
 	width: 100%;
-	min-height: 44px;
-	margin-top: 4px;
-	padding: 12px;
+	min-height: 2.75rem;
+	margin-top: .25rem;
+	padding: .75rem;
 	color: var(--white);
 	border-radius: var(--border-radius);
 
@@ -64,9 +64,9 @@ function close() {
 		flex-shrink: 0;
 		align-items: center;
 		justify-content: center;
-		width: 44px;
-		height: 44px;
-		margin-right: 12px;
+		width: 2.75rem;
+		height: 2.75rem;
+		margin-right: .75rem;
 		background-color: rgb(255 255 255 / 0.25);
 		border-radius: 50%;
 	}
@@ -81,14 +81,14 @@ function close() {
 
 	&::after {
 		position: absolute;
-		right: 12px;
-		bottom: -5px;
+		right: .75rem;
+		bottom: -.3125rem;
 		z-index: -1;
 		display: block;
-		width: 20px;
-		height: 20px;
-		border-radius: 2px;
-		transform: rotate(45deg) translate(-5px, -5px);
+		width: 1.25rem;
+		height: 1.25rem;
+		border-radius: .125rem;
+		transform: rotate(45deg) translate(-.3125rem, -.3125rem);
 		transition: transform var(--slow) var(--transition);
 		content: '';
 		pointer-events: none;
@@ -101,12 +101,12 @@ function close() {
 	&.dense {
 		width: max-content;
 		max-width: 100%;
-		min-height: 44px;
+		min-height: 2.75rem;
 
 		.icon {
 			width: auto;
 			height: auto;
-			margin-right: 8px;
+			margin-right: .5rem;
 			background-color: transparent;
 		}
 

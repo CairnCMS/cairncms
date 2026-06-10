@@ -164,7 +164,7 @@ const steps = computed(() => {
 
 <style lang="scss" scoped>
 .v-progress-linear {
-	margin: 24px 0;
+	margin: 1.5rem 0;
 }
 
 .content {
@@ -185,11 +185,11 @@ const steps = computed(() => {
 
 	&::before {
 		position: absolute;
-		top: -4px;
-		left: -4px;
+		top: -.25rem;
+		left: -.25rem;
 		z-index: 1;
-		width: calc(100% + 8px);
-		height: calc(100% + 8px);
+		width: calc(100% + .5rem);
+		height: calc(100% + .5rem);
 		background-color: var(--background-normal-alt);
 		border-radius: var(--border-radius);
 		opacity: 0;
@@ -213,7 +213,7 @@ const steps = computed(() => {
 	}
 
 	& + & {
-		margin-top: 8px;
+		margin-top: .5rem;
 	}
 }
 
@@ -221,8 +221,8 @@ const steps = computed(() => {
 	background-color: var(--background-subdued);
 	font-family: var(--family-monospace);
 	border-radius: var(--border-radius);
-	padding: 20px;
-	margin-top: 20px;
+	padding: 1.25rem;
+	margin-top: 1.25rem;
 	white-space: pre-wrap;
 }
 
@@ -236,27 +236,27 @@ const steps = computed(() => {
 			content: '';
 			position: absolute;
 			width: var(--border-width);
-			left: -11px;
+			left: -.6875rem;
 			top: 0;
 			background-color: var(--border-subdued);
 			height: 100%;
 		}
 
 		&:first-child::after {
-			top: 8px;
-			height: calc(100% - 8px);
+			top: .5rem;
+			height: calc(100% - .5rem);
 		}
 
 		&:last-child::after {
-			height: 12px;
+			height: .75rem;
 		}
 
 		.inset {
-			padding-top: 12px;
-			padding-bottom: 32px;
+			padding-top: .75rem;
+			padding-bottom: 2rem;
 
 			.v-detail + .v-detail {
-				margin-top: 12px;
+				margin-top: .75rem;
 			}
 		}
 
@@ -272,14 +272,14 @@ const steps = computed(() => {
 
 	.dot {
 		position: absolute;
-		top: 6px;
-		left: -16px;
+		top: .375rem;
+		left: -1rem;
 		z-index: 2;
-		width: 12px;
-		height: 12px;
+		width: .75rem;
+		height: .75rem;
 		background-color: var(--primary);
 		border: 2px solid var(--background-page);
-		border-radius: 8px;
+		border-radius: .5rem;
 
 		&.resolve {
 			background-color: var(--primary);
@@ -292,7 +292,7 @@ const steps = computed(() => {
 }
 
 .empty {
-	margin-left: 2px;
+	margin-left: .125rem;
 	color: var(--foreground-subdued);
 	font-style: italic;
 }

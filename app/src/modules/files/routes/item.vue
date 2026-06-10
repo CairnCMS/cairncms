@@ -439,6 +439,6 @@ function useMovetoFolder() {
 	color: var(--primary);
 	cursor: pointer;
 	font-weight: 600;
-	margin-top: 12px;
+	margin-top: .75rem;
 }
 </style>

@@ -123,14 +123,14 @@ function updateTranslationStringsDialog(val: boolean) {
 }
 
 .search-input {
-	--input-height: 44px;
+	--input-height: 2.75rem;
 
 	:deep(.input) {
-		border-radius: 22px !important;
+		border-radius: 1.375rem !important;
 	}
 
 	&.active {
-		width: 300px;
+		width: 18.75rem;
 		border-color: var(--border-normal);
 
 		.icon-empty {

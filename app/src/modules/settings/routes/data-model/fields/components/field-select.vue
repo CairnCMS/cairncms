@@ -327,8 +327,8 @@ async function onGroupSortChange(fields: Field[]) {
 @import '@/styles/mixins/form-grid';
 
 .field-select {
-	--input-height: 48px;
-	--input-padding: 8px;
+	--input-height: 3rem;
+	--input-padding: .5rem;
 }
 
 .full,
@@ -372,11 +372,11 @@ async function onGroupSortChange(fields: Field[]) {
 
 .duplicate {
 	.type-label {
-		margin-bottom: 4px;
+		margin-bottom: .25rem;
 	}
 
 	.duplicate-field + .duplicate-field {
-		margin-bottom: 32px;
+		margin-bottom: 2rem;
 	}
 }
 
@@ -384,8 +384,8 @@ async function onGroupSortChange(fields: Field[]) {
 	position: relative;
 	min-height: var(--input-height);
 	padding: var(--input-padding);
-	padding-top: 40px;
-	padding-bottom: 16px;
+	padding-top: 2.5rem;
+	padding-bottom: 1rem;
 	border-radius: var(--border-radius);
 
 	> * {
@@ -396,12 +396,12 @@ async function onGroupSortChange(fields: Field[]) {
 	&::before {
 		position: absolute;
 		top: 0;
-		left: -2px;
+		left: -.125rem;
 		z-index: 1;
-		width: 4px;
+		width: .25rem;
 		height: 100%;
 		background-color: var(--primary);
-		border-radius: 2px;
+		border-radius: .125rem;
 		content: '';
 	}
 
@@ -424,15 +424,15 @@ async function onGroupSortChange(fields: Field[]) {
 		display: flex;
 		align-items: center;
 		width: 100%;
-		margin-bottom: 8px;
-		padding-top: 8px;
+		margin-bottom: .5rem;
+		padding-top: .5rem;
 		color: var(--primary);
 		font-family: var(--family-monospace);
 
 		.drag-handle {
 			--v-icon-color: var(--primary);
 
-			margin-right: 8px;
+			margin-right: .5rem;
 		}
 
 		.name {
@@ -444,11 +444,11 @@ async function onGroupSortChange(fields: Field[]) {
 .field-grid {
 	position: relative;
 	display: grid;
-	grid-gap: 8px;
+	grid-gap: .5rem;
 	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 
 	& + & {
-		margin-top: 8px;
+		margin-top: .5rem;
 	}
 
 	&.nested {
@@ -482,7 +482,7 @@ async function onGroupSortChange(fields: Field[]) {
 			text-overflow: ellipsis;
 
 			.name {
-				margin-right: 8px;
+				margin-right: .5rem;
 				font-family: var(--family-monospace);
 			}
 
@@ -511,7 +511,7 @@ async function onGroupSortChange(fields: Field[]) {
 
 .icons {
 	* + *:not(:last-child) {
-		margin-left: 8px;
+		margin-left: .5rem;
 	}
 }
 
@@ -520,12 +520,12 @@ async function onGroupSortChange(fields: Field[]) {
 }
 
 .form-grid {
-	--form-vertical-gap: 24px;
+	--form-vertical-gap: 1.5rem;
 }
 
 .required {
 	position: relative;
-	left: -8px;
+	left: -.5rem;
 	color: var(--primary);
 }
 

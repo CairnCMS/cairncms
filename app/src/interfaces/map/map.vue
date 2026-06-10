@@ -472,7 +472,7 @@ function handleKeyDown(event: any) {
 	.map {
 		position: relative;
 		width: 100%;
-		height: 500px;
+		height: 31.25rem;
 
 		&.error,
 		&.loading {
@@ -490,7 +490,7 @@ function handleKeyDown(event: any) {
 	}
 
 	.v-info {
-		padding: 20px;
+		padding: 1.25rem;
 		background-color: var(--background-input);
 		border-radius: var(--border-radius);
 		box-shadow: var(--card-shadow);
@@ -498,13 +498,13 @@ function handleKeyDown(event: any) {
 
 	.basemap-select {
 		position: absolute;
-		right: 10px;
-		bottom: 10px;
+		right: .625rem;
+		bottom: .625rem;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		height: 36px;
-		padding: 10px;
+		height: 2.25rem;
+		padding: .625rem;
 		color: var(--foreground-subdued);
 		background-color: var(--background-page);
 		border: var(--border-width) solid var(--background-page);
@@ -512,7 +512,7 @@ function handleKeyDown(event: any) {
 
 		span {
 			width: auto;
-			margin-right: 4px;
+			margin-right: .25rem;
 		}
 
 		.v-select {

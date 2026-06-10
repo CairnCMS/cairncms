@@ -74,7 +74,7 @@ const { t } = useI18n();
 .field-label {
 	position: relative;
 	display: flex;
-	margin-bottom: 8px;
+	margin-bottom: .5rem;
 	cursor: pointer;
 
 	.v-text-overflow {
@@ -87,28 +87,28 @@ const { t } = useI18n();
 	}
 
 	.v-checkbox {
-		height: 18px; // Don't push down label with normal icon height (24px)
-		margin-right: 4px;
+		height: 1.125rem; // Don't push down label with normal icon height (24px)
+		margin-right: .25rem;
 	}
 
 	.v-chip {
 		margin: 0;
 		flex-shrink: 0;
-		margin-left: 3px;
+		margin-left: .1875rem;
 	}
 
 	.required {
 		--v-icon-color: var(--primary);
 
-		margin-left: 3px;
+		margin-left: .1875rem;
 
 		&.has-badge {
-			margin-right: 6px;
+			margin-right: .375rem;
 		}
 	}
 
 	.ctx-arrow {
-		margin-top: -3px;
+		margin-top: -.1875rem;
 		color: var(--foreground-subdued);
 		opacity: 0;
 		transition: opacity var(--fast) var(--transition);
@@ -128,10 +128,10 @@ const { t } = useI18n();
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		height: 24px;
-		width: 24px;
-		margin-top: -2px;
-		margin-left: 5px;
+		height: 1.5rem;
+		width: 1.5rem;
+		margin-top: -.125rem;
+		margin-left: .3125rem;
 		color: var(--foreground-subdued);
 		transition: color var(--fast) var(--transition);
 
@@ -149,19 +149,19 @@ const { t } = useI18n();
 	&.edited {
 		.edit-dot {
 			position: absolute;
-			top: 7px;
-			left: -7px;
+			top: .4375rem;
+			left: -.4375rem;
 			display: block;
-			width: 4px;
-			height: 4px;
+			width: .25rem;
+			height: .25rem;
 			background-color: var(--foreground-subdued);
-			border-radius: 4px;
+			border-radius: .25rem;
 			content: '';
 		}
 
 		.field-name {
-			margin-left: -16px;
-			padding-left: 16px;
+			margin-left: -1rem;
+			padding-left: 1rem;
 		}
 	}
 

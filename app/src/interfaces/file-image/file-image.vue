@@ -222,7 +222,7 @@ img {
 }
 
 .is-svg {
-	padding: 32px;
+	padding: 2rem;
 
 	img {
 		object-fit: contain;
@@ -237,15 +237,15 @@ img {
 	height: 100%;
 	color: var(--foreground-subdued);
 	background-color: var(--background-normal);
-	padding: 32px;
+	padding: 2rem;
 
 	.v-icon {
-		margin-bottom: 6px;
+		margin-bottom: .375rem;
 	}
 
 	.message {
-		max-width: 300px;
-		padding: 0 16px;
+		max-width: 18.75rem;
+		padding: 0 1rem;
 		text-align: center;
 	}
 }
@@ -257,7 +257,7 @@ img {
 		left: 0;
 		z-index: 2;
 		width: 100%;
-		height: 40px;
+		height: 2.5rem;
 		overflow: hidden;
 		line-height: 1;
 		white-space: nowrap;
@@ -273,7 +273,7 @@ img {
 		--v-button-background-color-hover: var(--white);
 
 		position: absolute;
-		top: calc(50% - 32px);
+		top: calc(50% - 2rem);
 		left: 0;
 		z-index: 3;
 		display: flex;
@@ -281,8 +281,8 @@ img {
 		width: 100%;
 
 		.v-button {
-			margin-right: 12px;
-			transform: translateY(10px);
+			margin-right: .75rem;
+			transform: translateY(.625rem);
 			opacity: 0;
 			transition: var(--medium) var(--transition);
 			transition-property: opacity transform;
@@ -305,7 +305,7 @@ img {
 		left: 0;
 		z-index: 3;
 		width: 100%;
-		padding: 8px 12px;
+		padding: .5rem .75rem;
 		line-height: 1.2;
 	}
 
@@ -314,7 +314,7 @@ img {
 	}
 
 	.meta {
-		height: 17px;
+		height: 1.0625rem;
 		max-height: 0;
 		overflow: hidden;
 		color: rgb(255 255 255 / 0.75);
@@ -335,7 +335,7 @@ img {
 	}
 
 	.meta {
-		max-height: 17px;
+		max-height: 1.0625rem;
 	}
 }
 
@@ -344,7 +344,7 @@ img {
 	&.fill {
 		.image-preview {
 			height: auto;
-			max-height: 400px;
+			max-height: 25rem;
 		}
 	}
 

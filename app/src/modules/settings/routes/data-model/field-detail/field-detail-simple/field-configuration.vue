@@ -171,13 +171,13 @@ const options = computed({
 }
 
 .setup {
-	--form-vertical-gap: 20px;
+	--form-vertical-gap: 1.25rem;
 
-	margin: 34px;
+	margin: 2.125rem;
 }
 
 .schema {
-	margin-bottom: 20px;
+	margin-bottom: 1.25rem;
 	@include form-grid;
 }
 
@@ -186,11 +186,11 @@ const options = computed({
 }
 
 .save {
-	margin-top: 40px;
+	margin-top: 2.5rem;
 }
 
 .v-divider {
-	margin: 28px 0;
+	margin: 1.75rem 0;
 }
 
 :deep(.v-notice.normal) {
@@ -199,7 +199,7 @@ const options = computed({
 
 .toggle-advanced {
 	width: 100%;
-	margin-top: 20px;
+	margin-top: 1.25rem;
 	color: var(--foreground-subdued);
 	text-align: center;
 	transition: color var(--fast) var(--transition);

@@ -50,14 +50,14 @@ const ratingPercentage = computed(() => ({
 	&.simple {
 		display: inline-flex;
 		align-items: center;
-		padding: 2px 6px 2px 4px;
+		padding: .125rem .375rem .125rem .25rem;
 		color: #ffc107;
 		font-weight: 600;
 		background-color: rgb(255 193 7 / 0.15);
 		border-radius: var(--border-radius);
 
 		.v-icon {
-			margin-right: 4px;
+			margin-right: .25rem;
 		}
 	}
 

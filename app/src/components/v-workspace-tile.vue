@@ -381,10 +381,10 @@ function useDragDrop() {
 	top: 0;
 	right: 0;
 	z-index: 2;
-	padding: 17px 14px;
+	padding: 1.0625rem .875rem;
 	color: var(--foreground-subdued);
 	font-weight: 500;
-	font-size: 15px;
+	font-size: .9375rem;
 	font-family: var(--family-monospace);
 	font-style: normal;
 	line-height: 1;
@@ -405,33 +405,33 @@ function useDragDrop() {
 }
 
 .tile-content.has-header {
-	height: calc(100% - 42px);
+	height: calc(100% - 2.625rem);
 }
 
 .header {
 	display: flex;
 	align-items: center;
-	height: 42px;
-	padding: 12px;
+	height: 2.625rem;
+	padding: .75rem;
 }
 
 .footer {
-	padding: 0 12px;
+	padding: 0 .75rem;
 	border-top: 2px solid var(--border-subdued);
 	margin-top: auto;
-	padding-top: 8px;
+	padding-top: .5rem;
 }
 
 .icon {
 	--v-icon-color: var(--foreground-subdued);
 
-	margin-right: 4px;
+	margin-right: .25rem;
 }
 
 .name {
 	color: var(--foreground-normal-alt);
 	font-weight: 600;
-	font-size: 16px;
+	font-size: 1rem;
 	font-family: var(--family-sans-serif);
 	font-style: normal;
 }
@@ -459,9 +459,9 @@ function useDragDrop() {
 	right: 0;
 	z-index: 2;
 	display: flex;
-	gap: 4px;
+	gap: .25rem;
 	align-items: center;
-	padding: 12px 12px 8px;
+	padding: .75rem .75rem .5rem;
 	background-color: var(--background-page);
 	border-top-right-radius: var(--border-radius-outline);
 }
@@ -472,64 +472,64 @@ function useDragDrop() {
 }
 
 .resize-handlers .top {
-	top: -3px;
+	top: -.1875rem;
 	width: 100%;
-	height: 10px;
+	height: .625rem;
 	cursor: ns-resize;
 }
 
 .resize-handlers .right {
 	top: 0;
-	right: -3px;
-	width: 10px;
+	right: -.1875rem;
+	width: .625rem;
 	height: 100%;
 	cursor: ew-resize;
 }
 
 .resize-handlers .bottom {
-	bottom: -3px;
+	bottom: -.1875rem;
 	width: 100%;
-	height: 10px;
+	height: .625rem;
 	cursor: ns-resize;
 }
 
 .resize-handlers .left {
 	top: 0;
-	left: -3px;
-	width: 10px;
+	left: -.1875rem;
+	width: .625rem;
 	height: 100%;
 	cursor: ew-resize;
 }
 
 .resize-handlers .top-left {
-	top: -3px;
-	left: -3px;
-	width: 14px;
-	height: 14px;
+	top: -.1875rem;
+	left: -.1875rem;
+	width: .875rem;
+	height: .875rem;
 	cursor: nwse-resize;
 }
 
 .resize-handlers .top-right {
-	top: -3px;
-	right: -3px;
-	width: 14px;
-	height: 14px;
+	top: -.1875rem;
+	right: -.1875rem;
+	width: .875rem;
+	height: .875rem;
 	cursor: nesw-resize;
 }
 
 .resize-handlers .bottom-right {
-	right: -3px;
-	bottom: -3px;
-	width: 14px;
-	height: 14px;
+	right: -.1875rem;
+	bottom: -.1875rem;
+	width: .875rem;
+	height: .875rem;
 	cursor: nwse-resize;
 }
 
 .resize-handlers .bottom-left {
-	bottom: -3px;
-	left: -3px;
-	width: 14px;
-	height: 14px;
+	bottom: -.1875rem;
+	left: -.1875rem;
+	width: .875rem;
+	height: .875rem;
 	cursor: nesw-resize;
 }
 

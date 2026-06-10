@@ -61,8 +61,8 @@ body {
 	--v-progress-circular-background-color: var(--border-normal);
 	--v-progress-circular-transition: 400ms;
 	--v-progress-circular-speed: 2s;
-	--v-progress-circular-size: 28px;
-	--v-progress-circular-line-size: 3px;
+	--v-progress-circular-size: 1.75rem;
+	--v-progress-circular-line-size: .1875rem;
 }
 </style>
 
@@ -76,25 +76,25 @@ body {
 	height: var(--v-progress-circular-size);
 
 	&.x-small {
-		--v-progress-circular-size: 12px;
-		--v-progress-circular-line-size: 4px;
+		--v-progress-circular-size: .75rem;
+		--v-progress-circular-line-size: .25rem;
 	}
 
 	&.small {
-		--v-progress-circular-size: 20px;
-		--v-progress-circular-line-size: 3px;
+		--v-progress-circular-size: 1.25rem;
+		--v-progress-circular-line-size: .1875rem;
 
-		margin: 2px;
+		margin: .125rem;
 	}
 
 	&.large {
-		--v-progress-circular-size: 48px;
-		--v-progress-circular-line-size: 2.5px;
+		--v-progress-circular-size: 3rem;
+		--v-progress-circular-line-size: .15625rem;
 	}
 
 	&.x-large {
-		--v-progress-circular-size: 64px;
-		--v-progress-circular-line-size: 2px;
+		--v-progress-circular-size: 4rem;
+		--v-progress-circular-line-size: .125rem;
 	}
 
 	.circle {

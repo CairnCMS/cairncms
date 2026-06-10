@@ -254,7 +254,7 @@ function discardAndLeave() {
 
 .v-notice,
 .v-skeleton-loader {
-	max-width: 800px;
+	max-width: 50rem;
 }
 
 .header-icon {
@@ -266,6 +266,6 @@ function discardAndLeave() {
 
 .permissions-overview,
 .roles .v-notice {
-	margin-bottom: 48px;
+	margin-bottom: 3rem;
 }
 </style>

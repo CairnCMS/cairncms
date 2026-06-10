@@ -45,6 +45,6 @@ function done(id: string) {
 }
 
 .v-error {
-	margin-top: 12px;
+	margin-top: .75rem;
 }
 </style>

@@ -87,6 +87,18 @@
 			</template>
 
 			<template #actions>
+				<v-button
+					v-tooltip.bottom="t('full_screen')"
+					:active="fullScreen"
+					class="action-fullscreen desktop-only"
+					rounded
+					icon
+					secondary
+					@click="toggleFullScreen"
+				>
+					<v-icon :name="fullScreen ? 'fullscreen_exit' : 'fullscreen'" />
+				</v-button>
+
 				<search-input v-model="search" v-model:filter="filter" :collection="collection" />
 
 				<v-dialog v-if="selection.length > 0" v-model="confirmDelete" @esc="confirmDelete = false">
@@ -275,6 +287,7 @@
 import api from '@/api';
 import { useExtension } from '@/composables/use-extension';
 import { usePreset } from '@/composables/use-preset';
+import { useAppStore } from '@/stores/app';
 import { usePermissionsStore } from '@/stores/permissions';
 import { useUserStore } from '@/stores/user';
 import { unexpectedError } from '@/utils/unexpected-error';
@@ -289,6 +302,7 @@ import SearchInput from '@/views/private/components/search-input.vue';
 import { useCollection, useLayout } from '@cairncms/composables';
 import { Filter } from '@cairncms/types';
 import { mergeFilters } from '@cairncms/utils';
+import { storeToRefs } from 'pinia';
 import { computed, ref, toRefs, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
@@ -308,6 +322,10 @@ const props = defineProps<{
 const { t } = useI18n();
 
 const router = useRouter();
+
+const appStore = useAppStore();
+const { fullScreen } = storeToRefs(appStore);
+const toggleFullScreen = () => (fullScreen.value = !fullScreen.value);
 
 const userStore = useUserStore();
 const permissionsStore = usePermissionsStore();
@@ -605,6 +623,11 @@ function usePermissions() {
 </script>
 
 <style lang="scss" scoped>
+.v-button.secondary.action-fullscreen {
+	--v-button-color-active: var(--foreground-inverted);
+	--v-button-background-color-active: var(--primary);
+}
+
 .action-delete {
 	--v-button-background-color-hover: var(--danger) !important;
 	--v-button-color-hover: var(--white) !important;
@@ -620,7 +643,7 @@ function usePermissions() {
 	.saved,
 	.clear {
 		display: inline-block;
-		margin-left: 8px;
+		margin-left: .5rem;
 	}
 
 	.add,
@@ -647,7 +670,7 @@ function usePermissions() {
 	}
 
 	.clear {
-		margin-left: 4px;
+		margin-left: .25rem;
 		color: var(--foreground-subdued);
 
 		&:hover {

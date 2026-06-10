@@ -8,15 +8,18 @@ $green: #2ecda7;
 $yellow: #fbc54f;
 $orange: #ffa439;
 $red: #e35169;
-$ember: #c8552e;
-$lichen: #6fc9a8;
-$ochre: #ddb562;
+
+$graphite: #3f4956;
+$graphite-soft: #475063;
+$status-success: #1f8a52;
+$status-warning: #9a6a16;
+$status-danger: #c0322b;
 
 // Mixing colors
 $light-theme-tint: #fff;
-$light-theme-shade: #2e3c43;
+$light-theme-shade: #2b333d;
 $dark-theme-tint: #fff;
-$dark-theme-shade: #16151a;
+$dark-theme-shade: #161a21;
 
 // Color variant names -> Color to map to said name
 $color-mapping: (
@@ -27,11 +30,11 @@ $color-mapping: (
 	'yellow': $yellow,
 	'orange': $orange,
 	'red': $red,
-	'primary': $ember,
-	'secondary': $lichen,
-	'success': $lichen,
-	'warning': $ochre,
-	'danger': $ember,
+	'primary': $graphite,
+	'secondary': $graphite-soft,
+	'success': $status-success,
+	'warning': $status-warning,
+	'danger': $status-danger,
 );
 
 // Suffix -> Percentage mapping (Percentage of main color)

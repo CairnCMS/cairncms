@@ -227,8 +227,8 @@ const unsortableJunctionFields = computed(() => {
 	position: relative;
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 12px 28px;
-	margin-top: 48px;
+	gap: .75rem 1.75rem;
+	margin-top: 3rem;
 
 	.v-icon.arrow {
 		--v-icon-color: var(--primary);
@@ -238,17 +238,17 @@ const unsortableJunctionFields = computed(() => {
 		pointer-events: none;
 
 		&:first-of-type {
-			top: 117px;
+			top: 7.3125rem;
 			left: 32.5%;
 		}
 
 		&:nth-of-type(2) {
-			top: 190px;
+			top: 11.875rem;
 			left: 67.4%;
 		}
 
 		&:last-of-type {
-			top: 261px;
+			top: 16.3125rem;
 			left: 67.4%;
 		}
 	}
@@ -259,7 +259,7 @@ const unsortableJunctionFields = computed(() => {
 }
 
 .type-label {
-	margin-bottom: 8px;
+	margin-bottom: .5rem;
 }
 
 .v-list {
@@ -267,15 +267,15 @@ const unsortableJunctionFields = computed(() => {
 }
 
 .v-notice {
-	margin-bottom: 36px;
+	margin-bottom: 2.25rem;
 }
 
 .generated-data {
-	margin-top: 36px;
+	margin-top: 2.25rem;
 
 	ul {
-		padding-top: 4px;
-		padding-left: 24px;
+		padding-top: .25rem;
+		padding-left: 1.5rem;
 	}
 
 	.field-name {
@@ -303,19 +303,19 @@ const unsortableJunctionFields = computed(() => {
 	--v-input-font-family: var(--family-monospace);
 
 	.v-divider {
-		margin-top: 48px;
-		margin-bottom: 24px;
+		margin-top: 3rem;
+		margin-bottom: 1.5rem;
 	}
 }
 
 .relational-triggers {
-	--form-horizontal-gap: 12px;
-	--form-vertical-gap: 24px;
+	--form-horizontal-gap: .75rem;
+	--form-vertical-gap: 1.5rem;
 
 	@include form-grid;
 
 	.v-divider {
-		margin-top: 48px;
+		margin-top: 3rem;
 		margin-bottom: 0;
 	}
 }

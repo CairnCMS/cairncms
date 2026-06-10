@@ -296,7 +296,7 @@ function stepDown() {
 	height: var(--input-height);
 
 	.prepend-outer {
-		margin-right: 8px;
+		margin-right: .5rem;
 	}
 
 	.input {
@@ -316,15 +316,15 @@ function stepDown() {
 		transition: border-color var(--fast) var(--transition);
 
 		.prepend {
-			margin-right: 8px;
+			margin-right: .5rem;
 		}
 
 		.step-up {
-			margin-bottom: -8px;
+			margin-bottom: -.5rem;
 		}
 
 		.step-down {
-			margin-top: -8px;
+			margin-top: -.5rem;
 		}
 
 		.step-up,
@@ -381,13 +381,13 @@ function stepDown() {
 
 		.append {
 			flex-shrink: 0;
-			margin-left: 8px;
+			margin-left: .5rem;
 		}
 	}
 
 	input {
 		flex-grow: 1;
-		width: 20px; /* allows flex to grow/shrink to allow for slots */
+		width: 1.25rem; /* allows flex to grow/shrink to allow for slots */
 		height: 100%;
 		padding: var(--input-padding);
 		padding-right: 0px;
@@ -419,10 +419,10 @@ function stepDown() {
 	}
 
 	&.small {
-		height: 38px;
+		height: 2.375rem;
 
 		.input {
-			padding: 8px 12px;
+			padding: .5rem .75rem;
 		}
 	}
 
@@ -451,7 +451,7 @@ function stepDown() {
 		}
 
 		.append-outer {
-			margin-left: 8px;
+			margin-left: .5rem;
 		}
 	}
 }

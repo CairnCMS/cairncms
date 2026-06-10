@@ -149,22 +149,22 @@ watch(validationMessages, (newVal, oldVal) => {
 
 .v-divider.edited:not(.active) .edit-dot {
 	position: absolute;
-	top: 7px;
-	left: -7px;
+	top: .4375rem;
+	left: -.4375rem;
 	display: block;
-	width: 4px;
-	height: 4px;
+	width: .25rem;
+	height: .25rem;
 	background-color: var(--foreground-subdued);
-	border-radius: 2px;
+	border-radius: .125rem;
 	content: '';
 }
 
 .header-icon {
-	margin-right: 12px !important;
+	margin-right: .75rem !important;
 }
 
 .warning {
-	margin-left: 8px;
+	margin-left: .5rem;
 	color: var(--danger);
 }
 </style>

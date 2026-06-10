@@ -16,10 +16,10 @@
 
 	.fc-more-popover {
 		max-width: var(--form-column-width);
-		max-height: 330px;
+		max-height: 20.625rem;
 
 		.fc-popover-body {
-			max-height: 270px;
+			max-height: 16.875rem;
 			overflow: auto;
 		}
 	}
@@ -38,7 +38,7 @@
 	}
 
 	.fc-daygrid-dot-event {
-		padding: 0px 4px;
+		padding: 0px .25rem;
 		line-height: 1.5;
 
 		.fc-event-title {
@@ -65,8 +65,8 @@
 			&.fc-prev-button,
 			&.fc-next-button,
 			&.fc-nextYear-button {
-				padding-right: 4px;
-				padding-left: 4px;
+				padding-right: .25rem;
+				padding-left: .25rem;
 			}
 
 			&:focus {
@@ -100,9 +100,9 @@
 			top: var(--layout-offset-top);
 			z-index: 4;
 			width: 100%;
-			height: 52px;
-			margin-bottom: 36px;
-			padding: 0 8px;
+			height: 3.25rem;
+			margin-bottom: 2.25rem;
+			padding: 0 .5rem;
 			font-weight: inherit !important;
 			font-size: inherit !important;
 			background-color: var(--background-page);

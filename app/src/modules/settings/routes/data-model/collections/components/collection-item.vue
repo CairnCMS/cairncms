@@ -151,12 +151,12 @@ function onGroupSortChange(collections: Collection[]) {
 
 <style scoped>
 .drag-container {
-	margin-top: 8px;
-	margin-left: 20px;
+	margin-top: .5rem;
+	margin-left: 1.25rem;
 }
 
 .collection-item {
-	margin-bottom: 8px;
+	margin-bottom: .5rem;
 }
 
 .collection-item-detail {
@@ -178,7 +178,7 @@ function onGroupSortChange(collections: Collection[]) {
 }
 
 .collection-note {
-	margin-left: 16px;
+	margin-left: 1rem;
 	overflow: hidden;
 	color: var(--foreground-subdued);
 	white-space: nowrap;
@@ -192,7 +192,7 @@ function onGroupSortChange(collections: Collection[]) {
 }
 
 .collection-icon {
-	margin-right: 8px;
+	margin-right: .5rem;
 }
 
 .drag-handle {

@@ -23,7 +23,7 @@ defineProps<{
 .item-count {
 	position: relative;
 	display: none;
-	margin: 0 8px;
+	margin: 0 .5rem;
 	color: var(--foreground-subdued);
 	white-space: nowrap;
 

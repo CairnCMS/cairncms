@@ -88,17 +88,17 @@ async function enable() {
 
 <style lang="scss" scoped>
 h1 {
-	margin-bottom: 20px;
+	margin-bottom: 1.25rem;
 }
 
 .v-input,
 .v-notice,
 .v-error {
-	margin-bottom: 20px;
+	margin-bottom: 1.25rem;
 }
 
 .title {
-	margin-bottom: 10px;
+	margin-bottom: .625rem;
 	font-weight: 600;
 }
 
@@ -109,10 +109,10 @@ h1 {
 
 .secret {
 	display: block;
-	margin: 0 auto 16px;
+	margin: 0 auto 1rem;
 	color: var(--foreground-subdued);
 	font-family: var(--family-monospace);
-	letter-spacing: 2.6px;
+	letter-spacing: .1625rem;
 	text-align: center;
 }
 </style>

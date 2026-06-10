@@ -233,31 +233,31 @@ async function send() {
 }
 
 .v-progress-linear {
-	margin: 24px 0;
+	margin: 1.5rem 0;
 }
 
 .v-divider {
 	position: sticky;
 	top: 0;
 	z-index: 2;
-	margin-top: 8px;
-	margin-bottom: 8px;
-	padding-top: 8px;
-	padding-bottom: 8px;
+	margin-top: .5rem;
+	margin-bottom: .5rem;
+	padding-top: .5rem;
+	padding-bottom: .5rem;
 	background-color: var(--background-normal);
 	box-shadow: 0 0 4px 2px var(--background-normal);
 }
 
 .empty {
-	margin-top: 16px;
-	margin-bottom: 16px;
-	margin-left: 2px;
+	margin-top: 1rem;
+	margin-bottom: 1rem;
+	margin-left: .125rem;
 	color: var(--foreground-subdued);
 	font-style: italic;
 }
 
 .grid {
-	--form-vertical-gap: 20px;
+	--form-vertical-gap: 1.25rem;
 
 	@include form-grid;
 }

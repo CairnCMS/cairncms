@@ -137,7 +137,7 @@ function useActions() {
 
 <style lang="scss" scoped>
 .v-divider {
-	margin: 52px 0;
+	margin: 3.25rem 0;
 }
 
 .drawer-batch-content {

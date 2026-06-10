@@ -83,8 +83,8 @@ const percentageRemaining = computed(() => {
 
 .remaining {
 	position: absolute;
-	right: 10px;
-	bottom: 5px;
+	right: .625rem;
+	bottom: .3125rem;
 	color: var(--foreground-subdued);
 	font-weight: 600;
 	text-align: right;

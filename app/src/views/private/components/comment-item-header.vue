@@ -125,13 +125,13 @@ function useDelete() {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	margin-bottom: 8px;
+	margin-bottom: .5rem;
 
 	.v-avatar {
 		--v-avatar-color: var(--background-normal-alt);
 
-		flex-basis: 24px;
-		margin-right: 8px;
+		flex-basis: 1.5rem;
+		margin-right: .5rem;
 
 		.v-icon {
 			--v-icon-color: var(--foreground-subdued);
@@ -140,13 +140,13 @@ function useDelete() {
 
 	.name {
 		flex-grow: 1;
-		margin-right: 8px;
+		margin-right: .5rem;
 		font-weight: 600;
 	}
 
 	.header-right {
 		position: relative;
-		flex-basis: 24px;
+		flex-basis: 1.5rem;
 		color: var(--foreground-subdued);
 
 		.more {
@@ -169,7 +169,7 @@ function useDelete() {
 			right: 0;
 			display: flex;
 			align-items: center;
-			font-size: 12px;
+			font-size: .75rem;
 			white-space: nowrap;
 			text-align: right;
 			text-transform: lowercase;
@@ -193,11 +193,11 @@ function useDelete() {
 
 .dot {
 	display: inline-block;
-	width: 6px;
-	height: 6px;
-	margin-right: 4px;
+	width: .375rem;
+	height: .375rem;
+	margin-right: .25rem;
 	vertical-align: middle;
 	background-color: var(--warning);
-	border-radius: 3px;
+	border-radius: .1875rem;
 }
 </style>

@@ -62,14 +62,14 @@ const logoURL = computed<string | null>(() => {
 </script>
 
 <style scoped lang="scss">
+@import '@/styles/mixins/form-field-sizing';
+
 .shared {
-	--border-radius: 2px;
-	--input-height: 60px;
-	--input-padding: 16px;
+	@include form-field-sizing(3.75rem, 1rem);
 
 	width: 100%;
 	height: 100%;
-	padding-bottom: 64px;
+	padding-bottom: 4rem;
 	overflow: auto;
 	background-color: var(--background-subdued);
 }
@@ -79,14 +79,14 @@ const logoURL = computed<string | null>(() => {
 }
 
 header {
-	margin-bottom: 32px;
-	padding: 10px;
+	margin-bottom: 2rem;
+	padding: .625rem;
 	background-color: var(--background-page);
 	border-bottom: var(--border-width) solid var(--border-subdued);
 }
 
 .container {
-	max-width: 856px;
+	max-width: 53.5rem;
 	margin: 0 auto;
 }
 
@@ -95,17 +95,17 @@ header {
 	align-items: center;
 	width: max-content;
 	max-width: 100%;
-	height: 60px;
-	margin-top: 2px;
+	height: 3.75rem;
+	margin-top: .125rem;
 
 	.title {
-		margin-left: 16px;
+		margin-left: 1rem;
 
 		h1 {
 			color: var(--foreground-normal);
 			font-weight: 700;
-			font-size: 24px;
-			line-height: 24px;
+			font-size: 1.5rem;
+			line-height: 1.5rem;
 		}
 
 		.subtitle {
@@ -119,21 +119,21 @@ header {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 60px;
-	height: 60px;
+	width: 3.75rem;
+	height: 3.75rem;
 	background-color: var(--brand);
 	border-radius: var(--border-radius);
 
 	img {
-		width: 40px;
-		height: 40px;
+		width: 2.5rem;
+		height: 2.5rem;
 		object-fit: contain;
 		object-position: center center;
 	}
 }
 
 .content {
-	padding: 32px;
+	padding: 2rem;
 	background-color: var(--background-page);
 	border-radius: var(--border-radius);
 	box-shadow: 0px 4px 12px rgba(56, 62, 71, 0.08);
@@ -147,14 +147,14 @@ header {
 	.inline-container {
 		display: block;
 		width: 100%;
-		max-width: 856px;
-		padding: 32px;
+		max-width: 53.5rem;
+		padding: 2rem;
 		background-color: var(--background-page);
 		border-radius: var(--border-radius);
 		box-shadow: 0px 4px 12px rgba(56, 62, 71, 0.08);
 
 		@media (min-width: 618px) {
-			width: 618px;
+			width: 38.625rem;
 		}
 	}
 

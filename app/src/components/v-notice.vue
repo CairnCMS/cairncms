@@ -57,9 +57,9 @@ const iconName = computed(() => {
 	justify-content: flex-start;
 	width: auto;
 	min-height: var(--input-height);
-	padding: 12px 16px;
+	padding: .75rem 1rem;
 	color: var(--v-notice-color);
-	line-height: 22px;
+	line-height: 1.375rem;
 	background-color: var(--v-notice-background-color);
 	border-radius: var(--border-radius);
 	overflow: hidden;
@@ -71,7 +71,7 @@ const iconName = computed(() => {
 	position: absolute;
 	top: 0;
 	left: 0;
-	width: 4px;
+	width: .25rem;
 	height: 100%;
 	background-color: var(--v-notice-border-color);
 }
@@ -81,7 +81,7 @@ const iconName = computed(() => {
 }
 
 .v-icon.left {
-	margin-right: 16px;
+	margin-right: 1rem;
 }
 
 .info {

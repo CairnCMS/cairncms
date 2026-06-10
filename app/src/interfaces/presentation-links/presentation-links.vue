@@ -98,7 +98,7 @@ const linksParsed = computed(() => {
 .presentation-links {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 8px;
+	gap: .5rem;
 }
 
 .action {

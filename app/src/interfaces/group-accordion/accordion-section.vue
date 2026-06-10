@@ -139,7 +139,7 @@ function getFieldsForGroup(group: null | string, passed: string[] = []): Field[]
 	position: relative;
 	display: flex;
 	align-items: center;
-	margin: 8px 0;
+	margin: .5rem 0;
 
 	cursor: pointer;
 
@@ -160,30 +160,30 @@ function getFieldsForGroup(group: null | string, passed: string[] = []): Field[]
 	.required {
 		--v-icon-color: var(--primary);
 
-		margin-top: -12px;
-		margin-left: 2px;
+		margin-top: -.75rem;
+		margin-left: .125rem;
 	}
 
 	.v-chip {
 		margin: 0;
-		margin-left: 8px;
+		margin-left: .5rem;
 	}
 
 	.edit-dot {
 		position: absolute;
-		top: 14px;
-		left: -7px;
+		top: .875rem;
+		left: -.4375rem;
 		display: block;
-		width: 4px;
-		height: 4px;
+		width: .25rem;
+		height: .25rem;
 		background-color: var(--foreground-subdued);
-		border-radius: 2px;
+		border-radius: .125rem;
 		content: '';
 	}
 }
 
 .icon {
-	margin-right: 12px;
+	margin-right: .75rem;
 	transform: rotate(-90deg);
 	transition: transform var(--fast) var(--transition);
 
@@ -193,7 +193,7 @@ function getFieldsForGroup(group: null | string, passed: string[] = []): Field[]
 }
 
 .warning {
-	margin-left: 8px;
+	margin-left: .5rem;
 	color: var(--danger);
 }
 

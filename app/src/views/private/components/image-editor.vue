@@ -483,14 +483,14 @@ function setAspectRatio() {
 
 .editor-container {
 	width: 100%;
-	height: calc(100% - (65px + 24px + 24px)); /* header height + 2x margin */
+	height: calc(100% - (4.0625rem + 1.5rem + 1.5rem)); /* header height + 2x margin */
 	overflow: hidden;
 	background-color: var(--background-subdued);
 
 	.editor {
 		flex-grow: 1;
 		width: 100%;
-		height: calc(100% - 60px);
+		height: calc(100% - 3.75rem);
 	}
 
 	img {
@@ -511,14 +511,14 @@ function setAspectRatio() {
 	display: flex;
 	align-items: center;
 	width: 100%;
-	height: 60px;
-	padding: 0 24px;
+	height: 3.75rem;
+	padding: 0 1.5rem;
 	color: var(--white);
 	background-color: var(--module-background);
 
 	.v-icon {
 		display: inline-block;
-		margin-right: 16px;
+		margin-right: 1rem;
 	}
 }
 
@@ -527,7 +527,7 @@ function setAspectRatio() {
 }
 
 .dimensions {
-	margin-right: 12px;
+	margin-right: .75rem;
 	color: var(--foreground-subdued);
 	font-feature-settings: 'tnum';
 }
@@ -537,7 +537,7 @@ function setAspectRatio() {
 }
 
 .toolbar-button {
-	padding: 8px;
+	padding: .5rem;
 	background-color: rgb(255 255 255 / 0.2);
 	border-radius: var(--border-radius);
 	cursor: pointer;
@@ -549,8 +549,8 @@ function setAspectRatio() {
 }
 
 .drag-mode {
-	margin-right: 16px;
-	margin-left: -8px;
+	margin-right: 1rem;
+	margin-left: -.5rem;
 
 	.v-icon {
 		margin-right: 0;
@@ -562,12 +562,12 @@ function setAspectRatio() {
 	}
 
 	.v-icon:first-child {
-		margin-right: 8px;
+		margin-right: .5rem;
 	}
 }
 
 .cancel {
-	padding-right: 16px;
-	padding-left: 16px;
+	padding-right: 1rem;
+	padding-left: 1rem;
 }
 </style>

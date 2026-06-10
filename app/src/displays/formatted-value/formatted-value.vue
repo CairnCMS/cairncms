@@ -178,15 +178,15 @@ function matchNumber(left: number, right: number, operator: string) {
 
 	&.has-background,
 	&.has-border {
-		height: 28px;
-		padding: 0 10px;
-		font-size: 14px;
-		line-height: 28px;
-		border-radius: 24px;
+		height: 1.75rem;
+		padding: 0 .625rem;
+		font-size: .875rem;
+		line-height: 1.75rem;
+		border-radius: 1.5rem;
 	}
 
 	&.has-border {
-		line-height: 26px;
+		line-height: 1.625rem;
 	}
 
 	&.bold {
@@ -212,7 +212,7 @@ function matchNumber(left: number, right: number, operator: string) {
 
 	.v-icon {
 		flex-shrink: 0;
-		vertical-align: -3px;
+		vertical-align: -.1875rem;
 	}
 }
 </style>

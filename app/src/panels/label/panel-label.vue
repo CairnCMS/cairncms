@@ -35,11 +35,11 @@ export default defineComponent({
 	width: 100%;
 	height: 100%;
 	font-weight: 800;
-	font-size: 42px;
-	line-height: 52px;
+	font-size: 2.625rem;
+	line-height: 3.25rem;
 }
 
 .label.has-header {
-	height: calc(100% - 24px);
+	height: calc(100% - 1.5rem);
 }
 </style>

@@ -208,15 +208,15 @@ function saveOperation() {
 }
 
 .v-divider {
-	margin: 52px 0;
+	margin: 3.25rem 0;
 }
 .type-label {
-	margin-bottom: 8px;
+	margin-bottom: .5rem;
 }
 
 .type-title,
 .select {
-	margin-bottom: 32px;
+	margin-bottom: 2rem;
 }
 
 .not-found {
@@ -230,19 +230,19 @@ function saveOperation() {
 }
 
 .v-notice {
-	margin-bottom: 36px;
+	margin-bottom: 2.25rem;
 }
 
 .required {
 	--v-icon-color: var(--primary);
 
-	margin-top: -12px;
-	margin-left: -4px;
+	margin-top: -.75rem;
+	margin-left: -.25rem;
 }
 
 .error {
 	display: block;
-	margin-top: 4px;
+	margin-top: .25rem;
 	color: var(--danger);
 	font-style: italic;
 }

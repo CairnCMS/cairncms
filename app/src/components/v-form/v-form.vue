@@ -418,7 +418,7 @@ function useRawEditor() {
 }
 
 .v-divider {
-	margin-bottom: 50px;
+	margin-bottom: 3.125rem;
 	grid-column-start: 1;
 	grid-column-end: 3;
 }

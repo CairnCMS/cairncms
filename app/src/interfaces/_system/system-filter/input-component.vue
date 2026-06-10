@@ -177,18 +177,18 @@ function emitValue(val: string) {
 }
 
 .input {
-	padding: 8px 4px;
+	padding: .5rem .25rem;
 
 	&.date,
 	&.timestamp,
 	&.time,
 	&.dateTime {
-		min-width: 250px;
+		min-width: 15.625rem;
 	}
 
 	&.geometry,
 	&.json {
-		width: 500px;
+		width: 31.25rem;
 	}
 }
 
@@ -208,10 +208,10 @@ input {
 
 .dialog {
 	position: relative;
-	min-width: 800px;
+	min-width: 50rem;
 }
 
 .date-input {
-	min-width: 400px;
+	min-width: 25rem;
 }
 </style>

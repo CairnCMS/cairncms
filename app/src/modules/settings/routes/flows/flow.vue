@@ -740,16 +740,16 @@ function discardAndLeave() {
 }
 
 .status-dot {
-	margin-left: 6px;
+	margin-left: .375rem;
 }
 
 .container {
-	--column-size: 200px;
-	--row-size: 100px;
-	--gap-size: 40px;
+	--column-size: 12.5rem;
+	--row-size: 6.25rem;
+	--gap-size: 2.5rem;
 
 	&.center {
-		height: calc(100% - 48px - var(--header-bar-height));
+		height: calc(100% - 3rem - var(--header-bar-height));
 		display: grid;
 		place-items: center;
 	}

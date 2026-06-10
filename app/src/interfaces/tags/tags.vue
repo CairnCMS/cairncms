@@ -168,7 +168,7 @@ function emitValue() {
 	flex-wrap: wrap;
 	align-items: center;
 	justify-content: flex-start;
-	padding: 4px 0px 0px;
+	padding: .25rem 0px 0px;
 
 	span.tag-container {
 		display: contents;
@@ -176,8 +176,8 @@ function emitValue() {
 
 	.custom-tags-delimiter,
 	.tag {
-		margin-top: 8px;
-		margin-right: 8px;
+		margin-top: .5rem;
+		margin-right: .5rem;
 	}
 
 	.presets {

@@ -104,12 +104,12 @@ function navigateToUser() {
 
 .user-box {
 	display: flex;
-	min-width: 300px;
-	padding: 8px 4px;
+	min-width: 18.75rem;
+	padding: .5rem .25rem;
 	cursor: pointer;
 
 	.v-avatar {
-		margin-right: 16px;
+		margin-right: 1rem;
 	}
 
 	.status-role {
@@ -148,20 +148,20 @@ function navigateToUser() {
 
 	display: flex;
 	align-items: center;
-	height: 80px;
-	margin: 8px 4px;
+	height: 5rem;
+	margin: .5rem .25rem;
 
 	.avatar {
-		width: 80px;
-		height: 80px;
-		margin-right: 16px;
+		width: 5rem;
+		height: 5rem;
+		margin-right: 1rem;
 	}
 
 	div {
-		width: 140px;
+		width: 8.75rem;
 
 		.v-skeleton-loader:not(:last-child) {
-			margin-bottom: 12px;
+			margin-bottom: .75rem;
 		}
 	}
 }

@@ -1,49 +1,51 @@
-// Dark Mode
 @mixin dark {
-	$ember: #e06a42;
 	$color-mapping: map-merge(
 		$color-mapping,
 		(
-			'primary': $ember,
-			'danger': $ember,
+			'primary': #828b97,
+			'secondary': #828b97,
+			'success': #46c08a,
+			'warning': #d9b15f,
+			'danger': #f0584f,
 		)
 	);
 
 	color-scheme: dark;
 
-	--border-normal: #33383f;
-	--border-normal-alt: #484f58;
-	--border-subdued: #2a2e34;
+	--brand-default: #e58352;
 
-	--foreground-normal: #e8e6de;
-	--foreground-normal-alt: #faf8f3;
-	--foreground-subdued: #9ca2ac;
-	--foreground-inverted: #383e47;
+	--border-normal: #2c313c;
+	--border-normal-alt: #3f4956;
+	--border-subdued: #222630;
 
-	--background-normal: #2a2e34;
-	--background-normal-alt: #2e3238;
-	--background-subdued: #1a1d22;
-	--background-highlight: #262a30;
-	--background-page: #23272e;
-	--background-input: #23272e;
-	--background-page-rgb: 35, 39, 46;
-	--background-inverted: #faf8f3;
+	--foreground-normal: #e7e9ee;
+	--foreground-normal-alt: #f4f5f7;
+	--foreground-subdued: #9aa1ad;
+	--foreground-inverted: #11141a;
+
+	--background-normal: #1f232c;
+	--background-normal-alt: #232732;
+	--background-subdued: #11141a;
+	--background-highlight: #1d2129;
+	--background-page: #1b1f27;
+	--background-input: #1b1f27;
+	--background-page-rgb: 27, 31, 39;
+	--background-inverted: #e7e9ee;
 
 	--card-face-color: var(--background-page);
 	--card-shadow-color: 0, 0, 0;
-	--card-shadow: 0px 0px 6px 0px rgba(var(--card-shadow-color), 0.08);
-	--overlay-color: rgba(0, 0, 0, 0.9);
+	--card-shadow: 0px 1px 2px 0px rgba(var(--card-shadow-color), 0.4);
+	--overlay-color: rgba(0, 0, 0, 0.7);
 
 	--header-shadow: 0 4px 7px -4px rgb(0 0 0 / 0.2);
 	--navigation-shadow: 0px 0px 12px var(--black);
 	--sidebar-shadow: var(--navigation-shadow);
 
-	--module-background: #14171b;
-	--module-background-alt: #0e1014;
-	--module-icon: var(--foreground-subdued);
-	--module-icon-alt: var(--foreground-normal-alt);
+	--module-background: #0d1014;
+	--module-background-alt: #090b0e;
+	--module-icon: #6a717c;
+	--module-icon-alt: #e7e9ee;
 
-	// Generate color variations
 	@include generate-colors($color-mapping, $dark-theme-shade, $dark-theme-tint);
 
 	--purple-alt: var(--purple-10);
@@ -58,14 +60,16 @@
 	--warning-alt: var(--warning-10);
 	--danger-alt: var(--danger-10);
 
-	--status-published-fg: #8ddcbd;
-	--status-published-bg: rgba(111, 201, 168, 0.16);
-	--status-draft-fg: #e7c979;
-	--status-draft-bg: rgba(221, 181, 98, 0.16);
-	--status-archived-fg: #9ca2ac;
-	--status-archived-bg: #2a2e34;
+	--table-row-hover: var(--background-normal);
 
-	--table-row-hover: var(--background-subdued);
+	--status-published-fg: #4ade80;
+	--status-published-bg: rgba(34, 197, 94, 0.16);
+	--status-draft-fg: #fbbf24;
+	--status-draft-bg: rgba(202, 138, 4, 0.16);
+	--status-blocked-fg: #f87171;
+	--status-blocked-bg: rgba(220, 38, 38, 0.16);
+	--status-archived-fg: var(--foreground-subdued);
+	--status-archived-bg: var(--background-normal-alt);
 
 	.alt-colors {
 		--background-subdued: var(--background-page);

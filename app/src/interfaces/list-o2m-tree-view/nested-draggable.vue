@@ -279,7 +279,7 @@ function stageEdits(item: Record<string, any>) {
 
 <style lang="scss" scoped>
 .drag-area {
-	min-height: 12px;
+	min-height: .75rem;
 
 	&.root {
 		margin-left: 0;
@@ -293,7 +293,7 @@ function stageEdits(item: Record<string, any>) {
 
 .row {
 	.preview {
-		padding: 12px;
+		padding: .75rem;
 		background-color: var(--card-face-color);
 		border-radius: var(--border-radius);
 		box-shadow: 0px 0px 6px 0px rgb(var(--card-shadow-color), 0.2);
@@ -302,7 +302,7 @@ function stageEdits(item: Record<string, any>) {
 		transition-property: box-shadow, background-color;
 
 		& + .drag-area {
-			padding-top: 12px;
+			padding-top: .75rem;
 		}
 	}
 
@@ -317,10 +317,10 @@ function stageEdits(item: Record<string, any>) {
 }
 
 .actions {
-	margin-top: 12px;
+	margin-top: .75rem;
 }
 
 .actions .v-button + .v-button {
-	margin-left: 12px;
+	margin-left: .75rem;
 }
 </style>

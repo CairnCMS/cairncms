@@ -60,7 +60,7 @@ function stopSpinnerIfQueueIsEmpty() {
 
 <style lang="scss" scoped>
 .module-bar-logo {
-	--v-progress-linear-height: 2px;
+	--v-progress-linear-height: .125rem;
 	--v-progress-linear-color: var(--white);
 	--v-progress-linear-background-color: rgb(255 255 255 / 0.5);
 
@@ -68,32 +68,32 @@ function stopSpinnerIfQueueIsEmpty() {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 60px;
-	height: 60px;
-	padding: 12px;
+	width: 3.75rem;
+	height: 3.75rem;
+	padding: .75rem;
 	background-color: var(--brand);
 
 	.v-progress-linear {
 		position: absolute;
-		right: 10px;
-		bottom: 5px;
-		left: 10px;
-		width: 40px;
+		right: .625rem;
+		bottom: .3125rem;
+		left: .625rem;
+		width: 2.5rem;
 	}
 
 	.custom-logo {
 		display: block;
-		width: 40px;
-		height: 40px;
+		width: 2.5rem;
+		height: 2.5rem;
 		object-fit: contain;
 	}
 
 	.logo {
 		position: absolute;
-		top: 18px;
-		left: 10px;
-		width: 40px;
-		height: 32px;
+		top: 1.125rem;
+		left: .625rem;
+		width: 2.5rem;
+		height: 2rem;
 		margin: 0 auto;
 		overflow: hidden;
 	}
@@ -101,11 +101,11 @@ function stopSpinnerIfQueueIsEmpty() {
 	.logo::before {
 		content: '';
 		display: block;
-		width: 600px;
-		height: 32px;
+		width: 37.5rem;
+		height: 2rem;
 		background-image: url('../../../assets/sprite.svg');
 		background-repeat: no-repeat;
-		background-size: 600px 32px;
+		background-size: 37.5rem 2rem;
 		background-position: 0 0;
 	}
 
@@ -129,7 +129,7 @@ function stopSpinnerIfQueueIsEmpty() {
 
 @keyframes run {
 	100% {
-		transform: translate3d(-560px, 0, 0);
+		transform: translate3d(-35rem, 0, 0);
 	}
 }
 </style>

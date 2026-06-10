@@ -53,9 +53,9 @@ const styles = computed(() => {
 	.dot {
 		display: inline-block;
 		flex-shrink: 0;
-		width: 10px;
-		height: 10px;
-		border-radius: 5px;
+		width: .625rem;
+		height: .625rem;
+		border-radius: .3125rem;
 	}
 }
 </style>

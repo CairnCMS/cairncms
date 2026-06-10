@@ -4,8 +4,8 @@
 
 <style lang="scss" scoped>
 .v-card-subtitle {
-	margin-top: -16px;
-	padding: 16px;
+	margin-top: -1rem;
+	padding: 1rem;
 	padding-top: 0;
 }
 </style>

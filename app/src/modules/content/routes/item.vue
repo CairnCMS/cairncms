@@ -507,6 +507,6 @@ function revert(values: Record<string, any>) {
 }
 
 .title-loader {
-	width: 260px;
+	width: 16.25rem;
 }
 </style>

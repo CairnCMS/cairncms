@@ -88,7 +88,7 @@ const searchDebounced = ref('');
 	position: sticky;
 	top: 0;
 	z-index: 2;
-	padding: 10px;
+	padding: .625rem;
 	padding-bottom: 0;
 }
 
@@ -103,7 +103,7 @@ const searchDebounced = ref('');
 	z-index: 2;
 	float: right;
 	width: max-content;
-	padding: 4px 8px;
+	padding: .25rem .5rem;
 	text-align: right;
 	background-color: var(--background-page);
 	border-top-left-radius: var(--border-radius);
