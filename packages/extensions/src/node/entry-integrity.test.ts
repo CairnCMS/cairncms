@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { realEntryInsideRoot } from './entry-integrity.js';
+import { classifyEntryPath, realEntryInsideRoot } from './entry-integrity.js';
 
 const created: string[] = [];
 
@@ -57,5 +57,42 @@ describe('realEntryInsideRoot', () => {
 		await writeFile(realFile, 'export default {};');
 		await symlink(realFile, path.join(root, 'link.js'));
 		expect(await realEntryInsideRoot(root, 'link.js')).toBe(realFile);
+	});
+});
+
+describe('classifyEntryPath', () => {
+	it('classifies a regular file inside the root as inside with its real path', async () => {
+		const { root } = await makeBase();
+		await writeFile(path.join(root, 'index.js'), 'export default {};');
+		expect(await classifyEntryPath(root, 'index.js')).toEqual({ kind: 'inside', real: path.join(root, 'index.js') });
+	});
+
+	it('classifies a missing entry as unresolved', async () => {
+		const { root } = await makeBase();
+		expect(await classifyEntryPath(root, 'missing.js')).toEqual({ kind: 'unresolved' });
+	});
+
+	it('classifies the root directory itself as unresolved', async () => {
+		const { root } = await makeBase();
+		expect(await classifyEntryPath(root, '.')).toEqual({ kind: 'unresolved' });
+	});
+
+	it('classifies a traversing entry that resolves to a real outside file as escaping', async () => {
+		const { base, root } = await makeBase();
+		await writeFile(path.join(base, 'outside.js'), 'export default {};');
+		expect(await classifyEntryPath(root, '../outside.js')).toEqual({ kind: 'escapes-root' });
+	});
+
+	it('classifies a symlink that escapes the root as escaping', async () => {
+		const { base, root } = await makeBase();
+		const target = path.join(base, 'secret.js');
+		await writeFile(target, 'export default {};');
+		await symlink(target, path.join(root, 'link.js'));
+		expect(await classifyEntryPath(root, 'link.js')).toEqual({ kind: 'escapes-root' });
+	});
+
+	it('classifies a traversal to a missing outside file as unresolved, not escaping', async () => {
+		const { root } = await makeBase();
+		expect(await classifyEntryPath(root, '../missing.js')).toEqual({ kind: 'unresolved' });
 	});
 });

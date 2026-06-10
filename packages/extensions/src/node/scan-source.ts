@@ -1,6 +1,7 @@
-import { readFile, stat } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
 import path from 'node:path';
-import { realEntryInsideRoot } from './entry-integrity.js';
+import { readFileCapped } from './capped-read.js';
+import { classifyEntryPath } from './entry-integrity.js';
 import type { ExtensionValidationReason, ExtensionValidationReasonCode } from '../validation.js';
 import type { LocalExtensionCandidate } from './types.js';
 
@@ -8,8 +9,8 @@ import type { LocalExtensionCandidate } from './types.js';
  * Conservative lexical scanner. It reads local source files, follows only the
  * package's own relative imports, and classifies external specifiers by string.
  * It never resolves external dependencies, requires node_modules, runs a build,
- * or imports extension code. Textual false positives are acceptable: they
- * downgrade rather than under-flag.
+ * or imports extension code. Textual false positives are acceptable: they fail
+ * toward refusal rather than under-flag.
  */
 
 const RAW_FS = new Set(['fs', 'fs/promises']);
@@ -77,6 +78,16 @@ const PUBLIC_CAIRNCMS = new Set(['@cairncms/extensions-server-api']);
 
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'];
 
+// Bounds on what the walk will read into memory and the filesystem work it will
+// do. Real extension source sits far below these, so a breach is a hostile or
+// broken package, not a legitimate one. The attempts cap exists because a single
+// capped file can still carry tens of thousands of relative imports, and every
+// unresolvable one costs a fan-out of stat calls.
+export const MAX_SOURCE_FILE_BYTES = 1024 * 1024;
+export const MAX_SOURCE_GRAPH_BYTES = 16 * 1024 * 1024;
+export const MAX_SOURCE_FILE_COUNT = 1000;
+export const MAX_SOURCE_IMPORT_ATTEMPTS = 2_000;
+
 function classifyExternalSpecifier(specifier: string): ExtensionValidationReasonCode | null {
 	const base = specifier.startsWith('node:') ? specifier.slice(5) : specifier;
 
@@ -110,7 +121,7 @@ type TextScan = {
 // Matches an `import(` or `require(` call whose argument is not a single clean
 // string literal: an identifier, a concatenation, a template literal, or an
 // empty call. Static classification can only follow plain-string specifiers, so
-// any computed specifier must downgrade rather than slip past the by-string
+// any computed specifier must be flagged rather than slip past the by-string
 // import checks. The negative lookahead fails the call only when the argument is
 // exactly one quoted string that closes the call.
 const NON_LITERAL_CALL_ARG = '\\(\\s*(?![\'"][^\'"]*[\'"]\\s*\\))';
@@ -170,9 +181,9 @@ function startsRegexLiteral(out: string): boolean {
  * split an `import`/`require` token from its call parenthesis (or `process` from
  * `.env`) and slip past the call matchers. A removed comment can only reduce
  * matches on non-executable text, never hide executable code, so it stays
- * downgrade-safe. This is a lexical pass, not a parser: it tracks strings,
+ * fail-safe. This is a lexical pass, not a parser: it tracks strings,
  * template interpolation depth, and regex literals, and aims to fail toward
- * downgrade rather than to be a complete deobfuscator.
+ * refusal rather than to be a complete deobfuscator.
  */
 function stripComments(text: string): string {
 	let out = '';
@@ -333,20 +344,23 @@ async function collectSourceFiles(
 	candidate: LocalExtensionCandidate
 ): Promise<{ files: string[]; reasons: ExtensionValidationReason[] }> {
 	const files: string[] = [];
+	const reasons: ExtensionValidationReason[] = [];
 
 	for (const relativePath of candidate.entries) {
-		const real = await realEntryInsideRoot(candidate.root, relativePath);
-		if (real !== null) files.push(real);
+		const classified = await classifyEntryPath(candidate.root, relativePath);
+
+		if (classified.kind === 'inside') {
+			files.push(classified.real);
+		} else if (classified.kind === 'escapes-root') {
+			reasons.push({ code: 'local-path-escapes-root', message: 'a declared entry escapes the package root' });
+		}
 	}
 
 	if (files.length === 0) {
-		return {
-			files,
-			reasons: [{ code: 'source-unavailable', message: 'no readable source or entry files were found to analyze' }],
-		};
+		reasons.push({ code: 'source-unavailable', message: 'no readable source or entry files were found to analyze' });
 	}
 
-	return { files, reasons: [] };
+	return { files, reasons };
 }
 
 /**
@@ -354,9 +368,15 @@ async function collectSourceFiles(
  * reasons (one per code, with a representative file path and no source snippet)
  * plus the entry/source files that were resolved.
  */
+export type ScanSourceDeps = {
+	readFile?: typeof readFileCapped;
+};
+
 export async function scanCandidateSource(
-	candidate: LocalExtensionCandidate
+	candidate: LocalExtensionCandidate,
+	deps: ScanSourceDeps = {}
 ): Promise<{ reasons: ExtensionValidationReason[]; sourceFiles: string[] }> {
+	const readFile = deps.readFile ?? readFileCapped;
 	const { files, reasons: collectReasons } = await collectSourceFiles(candidate);
 	const reasons = new Map<ExtensionValidationReasonCode, ExtensionValidationReason>();
 
@@ -365,6 +385,8 @@ export async function scanCandidateSource(
 	const visited = new Set<string>();
 	const inspected = new Set<string>();
 	const queue = [...files];
+	let totalBytes = 0;
+	let importAttempts = 0;
 
 	const add = (code: ExtensionValidationReasonCode, file: string): void => {
 		if (!reasons.has(code)) reasons.set(code, { code, message: `detected in ${path.relative(candidate.root, file)}` });
@@ -375,17 +397,31 @@ export async function scanCandidateSource(
 		if (file === undefined || visited.has(file)) continue;
 		visited.add(file);
 
-		let text: string;
+		if (inspected.size >= MAX_SOURCE_FILE_COUNT) {
+			add('source-too-large', file);
+			break;
+		}
 
-		try {
-			text = await readFile(file, 'utf8');
-		} catch {
+		const read = await readFile(file, MAX_SOURCE_FILE_BYTES);
+
+		if (!read.ok) {
+			// A resolved file that cannot be fully read fails the candidate. Skipping it
+			// would certify a graph the scanner never read.
+			add(read.reason === 'too-large' ? 'source-too-large' : 'source-read-failed', file);
+			if (read.reason === 'too-large') break;
 			continue;
+		}
+
+		totalBytes += read.bytes;
+
+		if (totalBytes > MAX_SOURCE_GRAPH_BYTES) {
+			add('source-too-large', file);
+			break;
 		}
 
 		inspected.add(file);
 
-		const scan = scanText(text);
+		const scan = scanText(read.text);
 
 		if (scan.usesEnv) add('uses-raw-env', file);
 		if (scan.usesRawNetwork) add('uses-raw-network', file);
@@ -393,19 +429,33 @@ export async function scanCandidateSource(
 		if (scan.dynamicImport) add('uses-dynamic-import', file);
 		if (scan.dynamicCode) add('uses-dynamic-code', file);
 
+		let overAttempts = false;
+
 		for (const specifier of scan.specifiers) {
 			if (specifier.startsWith('.')) {
+				importAttempts += 1;
+
+				if (importAttempts > MAX_SOURCE_IMPORT_ATTEMPTS) {
+					add('source-too-large', file);
+					overAttempts = true;
+					break;
+				}
+
 				const resolved = await resolveLocalImport(file, specifier);
 
 				if (resolved !== null) {
-					const real = await realEntryInsideRoot(candidate.root, resolved);
-					if (real !== null) queue.push(real);
+					const classified = await classifyEntryPath(candidate.root, resolved);
+
+					if (classified.kind === 'inside') queue.push(classified.real);
+					else add('local-path-escapes-root', file);
 				}
 			} else {
 				const code = classifyExternalSpecifier(specifier);
 				if (code !== null) add(code, file);
 			}
 		}
+
+		if (overAttempts) break;
 	}
 
 	return { reasons: [...reasons.values()], sourceFiles: [...inspected] };

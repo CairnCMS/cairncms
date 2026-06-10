@@ -1,8 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { scanCandidateSource } from './scan-source.js';
+import {
+	MAX_SOURCE_FILE_BYTES,
+	MAX_SOURCE_FILE_COUNT,
+	MAX_SOURCE_GRAPH_BYTES,
+	MAX_SOURCE_IMPORT_ATTEMPTS,
+	scanCandidateSource,
+} from './scan-source.js';
 import type { ExtensionValidationReasonCode } from '../validation.js';
 
 const created: string[] = [];
@@ -101,7 +107,7 @@ describe('scanCandidateSource', () => {
 		expect(reasons.map((reason) => reason.code)).toContain('source-unavailable');
 	});
 
-	it('does not read an entry that symlinks outside the package root', async () => {
+	it('refuses an entry that symlinks outside the package root without reading it', async () => {
 		const base = await mkdtemp(path.join(os.tmpdir(), 'cairn-scan-'));
 		created.push(base);
 		const root = path.join(base, 'pkg');
@@ -110,10 +116,24 @@ describe('scanCandidateSource', () => {
 		await symlink(path.join(base, 'outside.js'), path.join(root, 'index.js'));
 		const codes = (await scanCandidateSource({ root, entries: ['index.js'] })).reasons.map((reason) => reason.code);
 		expect(codes).not.toContain('uses-raw-fs');
-		expect(codes).toContain('source-unavailable');
+		expect(codes).toContain('local-path-escapes-root');
 	});
 
-	it('does not follow a local import that symlinks outside the package root', async () => {
+	it('refuses an escaping declared entry even when a sibling entry resolves inside the root', async () => {
+		const base = await mkdtemp(path.join(os.tmpdir(), 'cairn-scan-'));
+		created.push(base);
+		const root = path.join(base, 'pkg');
+		await mkdir(root);
+		await writeFile(path.join(base, 'outside.js'), 'export default {};\n');
+		await symlink(path.join(base, 'outside.js'), path.join(root, 'escaping.js'));
+		await writeFile(path.join(root, 'index.js'), 'export default {};\n');
+		const { reasons } = await scanCandidateSource({ root, entries: ['index.js', 'escaping.js'] });
+		const codes = reasons.map((reason) => reason.code);
+		expect(codes).toContain('local-path-escapes-root');
+		expect(reasons.find((reason) => reason.code === 'local-path-escapes-root')?.message).not.toContain('outside');
+	});
+
+	it('refuses a local import that symlinks outside the package root without following it', async () => {
 		const base = await mkdtemp(path.join(os.tmpdir(), 'cairn-scan-'));
 		created.push(base);
 		const root = path.join(base, 'pkg');
@@ -121,7 +141,85 @@ describe('scanCandidateSource', () => {
 		await writeFile(path.join(base, 'outside.js'), "import { readFile } from 'node:fs/promises';\n");
 		await writeFile(path.join(root, 'index.js'), "import './link.js';\nexport default {};\n");
 		await symlink(path.join(base, 'outside.js'), path.join(root, 'link.js'));
-		const codes = (await scanCandidateSource({ root, entries: ['index.js'] })).reasons.map((reason) => reason.code);
+		const { reasons } = await scanCandidateSource({ root, entries: ['index.js'] });
+		const codes = reasons.map((reason) => reason.code);
 		expect(codes).not.toContain('uses-raw-fs');
+		expect(codes).toContain('local-path-escapes-root');
+		expect(reasons.find((reason) => reason.code === 'local-path-escapes-root')?.message).toContain('index.js');
 	});
+
+	it('treats an unresolvable local import as a non-event', async () => {
+		const codes = await scan("import './missing.js';\nexport default {};\n");
+		expect(codes).toHaveLength(0);
+	});
+
+	it('refuses a source file over the per-file cap during the read', async () => {
+		const oversized = `// ${'x'.repeat(MAX_SOURCE_FILE_BYTES)}\n`;
+		const codes = await scan(oversized);
+		expect(codes).toContain('source-too-large');
+	});
+
+	it('refuses a graph over the file-count cap', async () => {
+		const dir = await mkdtemp(path.join(os.tmpdir(), 'cairn-scan-'));
+		created.push(dir);
+		const count = MAX_SOURCE_FILE_COUNT;
+		const imports = Array.from({ length: count }, (_, index) => `import './f${index}.js';`).join('\n');
+		await writeFile(path.join(dir, 'index.js'), `${imports}\nexport default {};\n`);
+
+		await Promise.all(
+			Array.from({ length: count }, (_, index) => writeFile(path.join(dir, `f${index}.js`), 'export default {};\n'))
+		);
+
+		const { reasons } = await scanCandidateSource({ root: dir, entries: ['index.js'] });
+		expect(reasons.map((reason) => reason.code)).toContain('source-too-large');
+	});
+
+	it('refuses a graph over the total-bytes cap', async () => {
+		const dir = await mkdtemp(path.join(os.tmpdir(), 'cairn-scan-'));
+		created.push(dir);
+		const count = Math.ceil(MAX_SOURCE_GRAPH_BYTES / MAX_SOURCE_FILE_BYTES) + 1;
+		const filler = `// ${'x'.repeat(MAX_SOURCE_FILE_BYTES - 4)}\n`;
+		const imports = Array.from({ length: count }, (_, index) => `import './f${index}.js';`).join('\n');
+		await writeFile(path.join(dir, 'index.js'), `${imports}\nexport default {};\n`);
+
+		await Promise.all(Array.from({ length: count }, (_, index) => writeFile(path.join(dir, `f${index}.js`), filler)));
+
+		const { reasons } = await scanCandidateSource({ root: dir, entries: ['index.js'] });
+		expect(reasons.map((reason) => reason.code)).toContain('source-too-large');
+	});
+
+	it.skipIf(process.getuid?.() === 0)('refuses a resolved entry that cannot be read', async () => {
+		const dir = await mkdtemp(path.join(os.tmpdir(), 'cairn-scan-'));
+		created.push(dir);
+		const file = path.join(dir, 'index.js');
+		await writeFile(file, 'export default {};\n');
+		await chmod(file, 0o000);
+
+		const { reasons } = await scanCandidateSource({ root: dir, entries: ['index.js'] });
+		expect(reasons.map((reason) => reason.code)).toContain('source-read-failed');
+	});
+
+	it('maps an unreadable resolved file to source-read-failed through the read seam', async () => {
+		const dir = await mkdtemp(path.join(os.tmpdir(), 'cairn-scan-'));
+		created.push(dir);
+		await writeFile(path.join(dir, 'index.js'), 'export default {};\n');
+
+		const { reasons } = await scanCandidateSource(
+			{ root: dir, entries: ['index.js'] },
+			{ readFile: async () => ({ ok: false, reason: 'unreadable' }) }
+		);
+
+		expect(reasons.map((reason) => reason.code)).toContain('source-read-failed');
+	});
+
+	it('refuses a file whose relative imports exceed the resolution-attempt cap', async () => {
+		const dir = await mkdtemp(path.join(os.tmpdir(), 'cairn-scan-'));
+		created.push(dir);
+		const count = MAX_SOURCE_IMPORT_ATTEMPTS + 1;
+		const imports = Array.from({ length: count }, (_, index) => `import './m${index}.js';`).join('\n');
+		await writeFile(path.join(dir, 'index.js'), `${imports}\nexport default {};\n`);
+
+		const { reasons } = await scanCandidateSource({ root: dir, entries: ['index.js'] });
+		expect(reasons.map((reason) => reason.code)).toContain('source-too-large');
+	}, 15_000);
 });

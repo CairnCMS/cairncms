@@ -3,7 +3,8 @@ import { z } from 'zod';
 /**
  * Machine-readable reasons the source scan attaches to explain why a candidate
  * cannot run as confined code: raw Node authority, dynamic code, the legacy SDK
- * runtime import, internal imports, and unreadable source.
+ * runtime import, internal imports, source that is unreadable, oversized, or
+ * missing, and local paths that escape the package root.
  */
 export const EXTENSION_VALIDATION_REASON_CODES = [
 	'uses-node-builtin',
@@ -15,6 +16,9 @@ export const EXTENSION_VALIDATION_REASON_CODES = [
 	'uses-dynamic-require',
 	'uses-dynamic-import',
 	'source-unavailable',
+	'source-too-large',
+	'source-read-failed',
+	'local-path-escapes-root',
 	'uses-legacy-sdk-runtime-import',
 	'uses-dynamic-code',
 ] as const;

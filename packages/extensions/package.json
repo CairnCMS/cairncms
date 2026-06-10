@@ -29,6 +29,10 @@
 			"types": "./dist/node/entry-integrity.d.ts",
 			"default": "./dist/node/entry-integrity.js"
 		},
+		"./node/capped-read": {
+			"types": "./dist/node/capped-read.d.ts",
+			"default": "./dist/node/capped-read.js"
+		},
 		"./package.json": "./package.json"
 	},
 	"main": "dist/index.js",
