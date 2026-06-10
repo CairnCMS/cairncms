@@ -68,6 +68,22 @@ export interface ConfinedDoneMessage {
 	result: ConfinedResult;
 }
 
+// The load verdict: the entry evaluated and exposed a valid confined config, or
+// the reason it cannot be loaded. The probe never invokes the handler.
+export type ConfinedLoadProbeResult = { loadable: true } | { loadable: false; error: ConfinedRuntimeError };
+
+// A distinct job kind, not a flag on the run job, so the parent-to-child contract
+// never blends running a handler with probing loadability.
+export interface ConfinedProbeJobMessage {
+	type: 'probe';
+	invocation: ConfinedInvocation;
+}
+
+export interface ConfinedProbeDoneMessage {
+	type: 'probe-done';
+	result: ConfinedLoadProbeResult;
+}
+
 export interface ConfinedHostCall {
 	method: string;
 	args: unknown;

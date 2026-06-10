@@ -29,6 +29,8 @@ import type {
 	ConfinedHostReplyMessage,
 	ConfinedInvocation,
 	ConfinedJobMessage,
+	ConfinedLoadProbeResult,
+	ConfinedProbeJobMessage,
 	ConfinedResult,
 	ConfinedRuntimeErrorCode,
 	ConfinedRuntimeLimits,
@@ -93,8 +95,39 @@ function coerceConfinedResult(value: unknown): ConfinedResult {
 	return { ok: false, error: { code: 'internal', message: 'the confined runtime returned an unreadable result' } };
 }
 
+/**
+ * The probe verdict crosses from the lower-trust child, so its shape is validated
+ * and the message replaced with a parent-owned canonical one, mirroring
+ * `coerceConfinedResult`.
+ */
+function coerceProbeResult(value: unknown): ConfinedLoadProbeResult {
+	if (value !== null && typeof value === 'object') {
+		const record = value as Record<string, unknown>;
+
+		if (record['loadable'] === true) return { loadable: true };
+
+		if (record['loadable'] === false && record['error'] !== null && typeof record['error'] === 'object') {
+			const code = (record['error'] as Record<string, unknown>)['code'];
+
+			if (typeof code === 'string' && KNOWN_ERROR_CODES.has(code as ConfinedRuntimeErrorCode)) {
+				const known = code as ConfinedRuntimeErrorCode;
+				return { loadable: false, error: { code: known, message: CANONICAL_ERROR_MESSAGES[known] } };
+			}
+		}
+	}
+
+	return {
+		loadable: false,
+		error: { code: 'internal', message: 'the confined runtime returned an unreadable result' },
+	};
+}
+
 function isDoneMessage(message: unknown): message is { type: 'done'; result: unknown } {
 	return message !== null && typeof message === 'object' && (message as { type?: unknown }).type === 'done';
+}
+
+function isProbeDoneMessage(message: unknown): message is { type: 'probe-done'; result: unknown } {
+	return message !== null && typeof message === 'object' && (message as { type?: unknown }).type === 'probe-done';
 }
 
 function isHostCallMessage(message: unknown): message is ConfinedHostCallMessage {
@@ -300,6 +333,27 @@ export class ConfinedSupervisor {
 		}
 	}
 
+	/**
+	 * Evaluates a confined entry's loadability in the spawned child under the
+	 * resolved posture, never invoking the handler. A dedicated path beside
+	 * `invoke`, not a flag on it, so the run contract and the probe contract
+	 * cannot blend. Shares the capacity gate, so probes stay inside the
+	 * fork-storm bound.
+	 */
+	async probeLoad(invocation: ConfinedInvocation): Promise<ConfinedLoadProbeResult> {
+		const acquired = await this.acquire(invocation.limits.acquireTimeoutMs);
+
+		if (!acquired) {
+			return { loadable: false, error: { code: 'busy', message: CANONICAL_ERROR_MESSAGES.busy } };
+		}
+
+		try {
+			return await this.runProbeChild(invocation);
+		} finally {
+			this.release();
+		}
+	}
+
 	private async acquire(acquireTimeoutMs: number): Promise<boolean> {
 		if (this.active < this.maxConcurrent) {
 			this.active++;
@@ -331,13 +385,23 @@ export class ConfinedSupervisor {
 		if (next) next();
 	}
 
-	private runChild(invocation: ConfinedInvocation, dispatcher: ConfinedHostDispatcher): Promise<ConfinedResult> {
-		return new Promise<ConfinedResult>((resolve) => {
-			// Every invocation is clamped to the operator runtime maxima, so a caller cannot
-			// request looser limits than operator policy allows.
-			const limits = clampLimits(invocation.limits, this.runtimeLimits);
-			const effective: ConfinedInvocation = { ...invocation, limits };
+	/**
+	 * The shared child lifecycle of the run and probe paths: the hardened spawn,
+	 * the cgroup placement and cleanup ordering, the wall-clock kill, and the
+	 * framed channel. Frame semantics stay with the caller through `onFrame`, so
+	 * the run and probe contracts never blend inside the session.
+	 */
+	private runChildSession<T>(options: {
+		invocation: ConfinedInvocation;
+		limits: ConfinedRuntimeLimits;
+		job: ConfinedJobMessage | ConfinedProbeJobMessage;
+		failure: (code: 'timeout' | 'crash' | 'internal') => T;
+		onFrame: (message: unknown, finish: (result: T) => void, channel: Duplex) => void;
+		onFinish?: () => void;
+	}): Promise<T> {
+		const { invocation, limits, job, failure, onFrame, onFinish } = options;
 
+		return new Promise<T>((resolve) => {
 			const spec: HardenedSpawnSpec = {
 				execPath: process.execPath,
 				childExecArgv: this.childExecArgv,
@@ -366,14 +430,13 @@ export class ConfinedSupervisor {
 			const channel = child.stdio[3] as Duplex | null | undefined;
 
 			let settled = false;
-			const hostCallControllers = new Set<AbortController>();
 
-			const finish = (result: ConfinedResult) => {
+			const finish = (result: T) => {
 				if (settled) return;
 				settled = true;
 				clearTimeout(timer);
 
-				for (const controller of hostCallControllers) controller.abort();
+				onFinish?.();
 
 				if (built.scopeUnit !== null) this.cgroupOps.killScope(built.scopeUnit);
 
@@ -388,75 +451,108 @@ export class ConfinedSupervisor {
 				resolve(result);
 			};
 
-			const timer = setTimeout(
-				() => finish({ ok: false, error: { code: 'timeout', message: CANONICAL_ERROR_MESSAGES.timeout } }),
-				limits.wallClockMs
-			);
+			const timer = setTimeout(() => finish(failure('timeout')), limits.wallClockMs);
 
 			if (!channel) {
-				finish({ ok: false, error: { code: 'internal', message: CANONICAL_ERROR_MESSAGES.internal } });
+				finish(failure('internal'));
 				return;
 			}
-
-			const context: ConfinedHostCallContext = {
-				extensionId: invocation.extensionId,
-				contributionId: invocation.contributionId,
-				operationId: invocation.operationId,
-			};
-
-			let hostCallTotal = 0;
-			const inFlight = { count: 0 };
 
 			const read = createFrameReader({
 				maxFrameBytes: this.limits.childToParentFrameMax,
 				onFrame: (message) => {
 					if (settled) return;
-
-					if (isHostCallMessage(message)) {
-						hostCallTotal += 1;
-
-						if (hostCallTotal > limits.maxHostCalls) {
-							this.replyHostCall(channel, message.id, rateLimited('too many host calls'));
-							return;
-						}
-
-						void this.handleHostCall(channel, message, context, limits, inFlight, hostCallControllers, dispatcher);
-
-						return;
-					}
-
-					if (isDoneMessage(message)) finish(coerceConfinedResult(message.result));
+					onFrame(message, finish, channel);
 				},
-				onProtocolViolation: () =>
-					finish({ ok: false, error: { code: 'crash', message: CANONICAL_ERROR_MESSAGES.crash } }),
+				onProtocolViolation: () => finish(failure('crash')),
 			});
 
 			channel.on('data', read);
-
-			channel.on('error', () =>
-				finish({ ok: false, error: { code: 'internal', message: CANONICAL_ERROR_MESSAGES.internal } })
-			);
-
-			child.on('error', () =>
-				finish({ ok: false, error: { code: 'internal', message: CANONICAL_ERROR_MESSAGES.internal } })
-			);
+			channel.on('error', () => finish(failure('internal')));
+			child.on('error', () => finish(failure('internal')));
 
 			// Treat the channel close as the child going away, not the process exit event.
 			// The stream guarantees every data frame is delivered before close, so a done
 			// frame the child wrote just before exiting is never lost to an exit-vs-data race.
-			channel.on('close', () =>
-				finish({ ok: false, error: { code: 'crash', message: CANONICAL_ERROR_MESSAGES.crash } })
-			);
+			channel.on('close', () => finish(failure('crash')));
 
-			const job: ConfinedJobMessage = { type: 'job', invocation: effective };
-
-			// A non-JSON-safe options or input throws in the frame writer. Resolve a
-			// structured failure rather than rejecting the invoke promise.
+			// A non-JSON-safe payload throws in the frame writer. Resolve a structured
+			// failure rather than rejecting the session promise.
 			try {
 				writeFrame(channel, job, () => undefined);
 			} catch {
-				finish({ ok: false, error: { code: 'internal', message: CANONICAL_ERROR_MESSAGES.internal } });
+				finish(failure('internal'));
 			}
+		});
+	}
+
+	private runChild(invocation: ConfinedInvocation, dispatcher: ConfinedHostDispatcher): Promise<ConfinedResult> {
+		// Every invocation is clamped to the operator runtime maxima, so a caller cannot
+		// request looser limits than operator policy allows.
+		const limits = clampLimits(invocation.limits, this.runtimeLimits);
+		const effective: ConfinedInvocation = { ...invocation, limits };
+
+		const context: ConfinedHostCallContext = {
+			extensionId: invocation.extensionId,
+			contributionId: invocation.contributionId,
+			operationId: invocation.operationId,
+		};
+
+		let hostCallTotal = 0;
+		const inFlight = { count: 0 };
+		const hostCallControllers = new Set<AbortController>();
+
+		return this.runChildSession<ConfinedResult>({
+			invocation: effective,
+			limits,
+			job: { type: 'job', invocation: effective },
+			failure: (code) => ({ ok: false, error: { code, message: CANONICAL_ERROR_MESSAGES[code] } }),
+			onFinish: () => {
+				for (const controller of hostCallControllers) controller.abort();
+			},
+			onFrame: (message, finish, channel) => {
+				if (isHostCallMessage(message)) {
+					hostCallTotal += 1;
+
+					if (hostCallTotal > limits.maxHostCalls) {
+						this.replyHostCall(channel, message.id, rateLimited('too many host calls'));
+						return;
+					}
+
+					void this.handleHostCall(channel, message, context, limits, inFlight, hostCallControllers, dispatcher);
+
+					return;
+				}
+
+				if (isDoneMessage(message)) finish(coerceConfinedResult(message.result));
+			},
+		});
+	}
+
+	private runProbeChild(invocation: ConfinedInvocation): Promise<ConfinedLoadProbeResult> {
+		const limits = clampLimits(invocation.limits, this.runtimeLimits);
+		const effective: ConfinedInvocation = { ...invocation, limits };
+
+		const failure = (code: 'timeout' | 'crash' | 'internal'): ConfinedLoadProbeResult => ({
+			loadable: false,
+			error: { code, message: CANONICAL_ERROR_MESSAGES[code] },
+		});
+
+		return this.runChildSession<ConfinedLoadProbeResult>({
+			invocation: effective,
+			limits,
+			job: { type: 'probe', invocation: effective },
+			failure,
+			onFrame: (message, finish) => {
+				// The probe engine answers host calls deny-all in-process, so a host-call
+				// frame on this path is a contract violation from the child.
+				if (isHostCallMessage(message)) {
+					finish(failure('crash'));
+					return;
+				}
+
+				if (isProbeDoneMessage(message)) finish(coerceProbeResult(message.result));
+			},
 		});
 	}
 

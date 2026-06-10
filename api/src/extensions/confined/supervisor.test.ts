@@ -85,9 +85,11 @@ function positive(): ConfinedInvocation {
 /**
  * Generates a plain-node stub child that speaks the framed transport on fd 3. The
  * stub stands in for the real engine so a test can drive a chosen parent-visible
- * outcome without paying the QuickJS load. `jobAction` runs once a job frame arrives.
+ * outcome without paying the QuickJS load. `jobAction` runs once a frame of
+ * `triggerType` arrives. `sendDone` replies and exits, `sendRaw` writes any frame
+ * and keeps the child alive.
  */
-function framedStubChild(jobAction: string): string {
+function framedStubChild(jobAction: string, triggerType = 'job'): string {
 	return `
 import net from 'node:net';
 const channel = new net.Socket({ fd: 3, readable: true, writable: true });
@@ -101,9 +103,15 @@ channel.on('data', (chunk) => {
 		buf = buf.subarray(4 + len);
 		let message = null;
 		try { message = JSON.parse(body.toString('utf8')); } catch { message = null; }
-		if (message && message.type === 'job') { ${jobAction} }
+		if (message && message.type === ${JSON.stringify(triggerType)}) { ${jobAction} }
 	}
 });
+function sendRaw(message) {
+	const out = Buffer.from(JSON.stringify(message), 'utf8');
+	const header = Buffer.allocUnsafe(4);
+	header.writeUInt32BE(out.length, 0);
+	channel.write(Buffer.concat([header, out]));
+}
 function sendDone(result) {
 	const out = Buffer.from(JSON.stringify({ type: 'done', result }), 'utf8');
 	const header = Buffer.allocUnsafe(4);
@@ -176,6 +184,45 @@ function driveChildHost(job: unknown, options: DriveChildOptions = {}): Promise<
 	});
 }
 
+/**
+ * Spawns the real child host, writes the given frames back to back, and collects
+ * the reply message types until the child goes away, so a test can assert which
+ * child-side paths answered.
+ */
+function driveChildReplies(frames: unknown[]): Promise<string[]> {
+	const childTs = fileURLToPath(new URL('./child-host.ts', import.meta.url));
+	const env: NodeJS.ProcessEnv = { PATH: process.env['PATH'], CONFINED_SANDBOX_LIMITS: VALID_CHILD_LIMITS };
+
+	return new Promise((resolve) => {
+		const child = spawn(process.execPath, ['--loader', 'tsx', childTs], {
+			stdio: ['ignore', 'ignore', 'ignore', 'pipe'],
+			env,
+		});
+
+		const channel = child.stdio[3] as Duplex;
+		channel.on('error', () => undefined);
+
+		const replies: string[] = [];
+
+		const read = createFrameReader({
+			maxFrameBytes: 64 * 1024 * 1024,
+			onFrame: (message) => {
+				const record = message as { type?: unknown };
+				if (typeof record.type === 'string') replies.push(record.type);
+			},
+			onProtocolViolation: () => {
+				child.kill('SIGKILL');
+				resolve(replies);
+			},
+		});
+
+		channel.on('data', read);
+		channel.on('close', () => resolve(replies));
+
+		for (const frame of frames) writeFrame(channel, frame, () => undefined);
+	});
+}
+
 // The production artifact (the bundled runtime), exercised under plain node when a build
 // is present.
 const distConfinedDir = fileURLToPath(new URL('../../../dist/extensions/confined', import.meta.url));
@@ -189,6 +236,8 @@ describe('ConfinedSupervisor', () => {
 	let garbageChild: string;
 	let secretMessageChild: string;
 	let oversizeFrameChild: string;
+	let secretProbeChild: string;
+	let hostCallProbeChild: string;
 	let server: http.Server;
 	let loopbackUrl: string;
 
@@ -209,6 +258,23 @@ describe('ConfinedSupervisor', () => {
 		writeFileSync(
 			secretMessageChild,
 			framedStubChild("sendDone({ ok: false, error: { code: 'timeout', message: 'sk_live_LEAKED_FROM_CHILD' } });")
+		);
+
+		secretProbeChild = join(tmpDir, 'secret-probe-child.mjs');
+
+		writeFileSync(
+			secretProbeChild,
+			framedStubChild(
+				"sendRaw({ type: 'probe-done', result: { loadable: false, error: { code: 'timeout', message: 'sk_live_PROBE_LEAK' } } });",
+				'probe'
+			)
+		);
+
+		hostCallProbeChild = join(tmpDir, 'hostcall-probe-child.mjs');
+
+		writeFileSync(
+			hostCallProbeChild,
+			framedStubChild("sendRaw({ type: 'host-call', id: 1, method: 'request.send', args: {} });", 'probe')
 		);
 
 		// Declares a frame far larger than any parent cap without sending its body, so the
@@ -335,6 +401,86 @@ describe('ConfinedSupervisor', () => {
 		ENGINE_TIMEOUT
 	);
 
+	it(
+		'probeLoad reports a valid entry loadable over the spawned child',
+		async () => {
+			const result = await new ConfinedSupervisor().probeLoad(invocation(entry('() => ({ ok: true })')));
+			expect(result).toEqual({ loadable: true });
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
+		'probeLoad reports a crash-on-load entry not loadable with the engine code',
+		async () => {
+			const result = await new ConfinedSupervisor().probeLoad(
+				invocation(`throw new Error('boom at load');\n${entry('() => ({})')}`)
+			);
+
+			expect(result).toMatchObject({ loadable: false, error: { code: 'invalid-entry' } });
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
+		'probeLoad never invokes the handler over the spawn boundary',
+		async () => {
+			const result = await new ConfinedSupervisor().probeLoad(
+				invocation(entry('() => { throw new Error("HANDLER_RAN"); }'))
+			);
+
+			expect(result).toEqual({ loadable: true });
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
+		'probeLoad shares the capacity gate and reports busy rather than overcommitting',
+		async () => {
+			const supervisor = new ConfinedSupervisor({ limits: testLimits({ maxProcesses: 1 }) });
+
+			const first = supervisor.invoke(positive());
+			const probe = await supervisor.probeLoad(invocation(entry('() => ({})')));
+
+			expect(probe).toMatchObject({ loadable: false, error: { code: 'busy' } });
+
+			await first;
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it('replaces a child-supplied probe error message with a parent-owned canonical message', async () => {
+		const supervisor = new ConfinedSupervisor({ childPath: secretProbeChild, childExecArgv: [] });
+		const result = await supervisor.probeLoad(invocation(entry('() => ({})')));
+
+		expect(result).toEqual({
+			loadable: false,
+			error: { code: 'timeout', message: 'the operation exceeded its time limit' },
+		});
+
+		expect(JSON.stringify(result)).not.toContain('sk_live_PROBE_LEAK');
+	});
+
+	it('treats a host call during a probe as a crash and never dispatches it', async () => {
+		const calls: unknown[] = [];
+
+		const dispatcher: ConfinedHostDispatcher = async (call) => {
+			calls.push(call);
+			return { ok: true, value: null };
+		};
+
+		const supervisor = new ConfinedSupervisor({
+			childPath: hostCallProbeChild,
+			childExecArgv: [],
+			hostDispatcher: dispatcher,
+		});
+
+		const result = await supervisor.probeLoad(invocation(entry('() => ({})')));
+
+		expect(result).toMatchObject({ loadable: false, error: { code: 'crash' } });
+		expect(calls).toHaveLength(0);
+	});
+
 	it('clamps a malformed child result to an internal error', async () => {
 		const supervisor = new ConfinedSupervisor({ childPath: garbageChild, childExecArgv: [] });
 		const result = await supervisor.invoke(positive());
@@ -349,6 +495,21 @@ describe('ConfinedSupervisor', () => {
 		expect(result).toEqual({ ok: false, error: { code: 'timeout', message: 'the operation exceeded its time limit' } });
 		expect(JSON.stringify(result)).not.toContain('sk_live_LEAKED_FROM_CHILD');
 	});
+
+	it(
+		'the child answers a probe on the probe path and drops a second job of either kind',
+		async () => {
+			const inv = invocation(entry('() => ({ ok: true })'));
+
+			const replies = await driveChildReplies([
+				{ type: 'probe', invocation: inv },
+				{ type: 'job', invocation: inv },
+			]);
+
+			expect(replies).toEqual(['probe-done']);
+		},
+		ENGINE_TIMEOUT
+	);
 
 	it(
 		'the child fails closed on a malformed job',

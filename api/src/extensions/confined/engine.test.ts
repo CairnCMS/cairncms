@@ -3,6 +3,7 @@ import {
 	hardenedSandboxOptions,
 	MAX_GUEST_TIMERS,
 	runConfinedEntry,
+	runConfinedLoadProbe,
 	unsupportedHostBridge,
 	WASM_INITIAL_PAGES,
 	wasmMaximumPages,
@@ -312,6 +313,64 @@ describe('wasmMaximumPages', () => {
 	it('never returns a maximum below the initial pages, so the module can load', () => {
 		expect(wasmMaximumPages(0)).toBeGreaterThanOrEqual(WASM_INITIAL_PAGES);
 		expect(wasmMaximumPages(1)).toBeGreaterThanOrEqual(WASM_INITIAL_PAGES);
+	});
+});
+
+describe('runConfinedLoadProbe', () => {
+	it('reports a valid operation entry as loadable', async () => {
+		const result = await runConfinedLoadProbe(invocation(entry('() => ({ ok: true })')));
+		expect(result).toEqual({ loadable: true });
+	});
+
+	it('reports a syntax error as not loadable', async () => {
+		const result = await runConfinedLoadProbe(invocation('this is not (valid javascript'));
+		expect(result).toMatchObject({ loadable: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('reports a module-level throw as not loadable', async () => {
+		const result = await runConfinedLoadProbe(
+			invocation(`throw new Error('boom at load');\n${entry('() => ({ ok: true })')}`)
+		);
+
+		expect(result).toMatchObject({ loadable: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('reports an entry without a function handler as not loadable', async () => {
+		const result = await runConfinedLoadProbe(invocation(`var CairnOperation = { default: { id: 'x' } };`));
+		expect(result).toMatchObject({ loadable: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('reports an id mismatch as not loadable', async () => {
+		const wrongId = `var CairnOperation = { default: { id: 'flow-operation.other', handler: () => ({}) } };`;
+		const result = await runConfinedLoadProbe(invocation(wrongId));
+		expect(result).toMatchObject({ loadable: false, error: { code: 'identity-mismatch' } });
+	});
+
+	it('never invokes the handler: an entry whose handler throws is loadable', async () => {
+		const source = entry('() => { throw new Error("HANDLER_RAN"); }');
+
+		expect(await runConfinedLoadProbe(invocation(source))).toEqual({ loadable: true });
+
+		// The run path invokes the same handler and observes the throw, proving the
+		// probe verdict above could only come from not invoking it.
+		const ran = await runConfinedEntry(invocation(source), unsupportedHostBridge);
+		expect(ran).toMatchObject({ ok: false, error: { code: 'guest-error' } });
+	});
+
+	it('exposes the same host-call surface as the run path to module-level code', async () => {
+		const source = `if (typeof __hostCall !== 'function') throw new Error('no host surface');\n${entry(
+			'() => ({ ok: true })'
+		)}`;
+
+		expect(await runConfinedLoadProbe(invocation(source))).toEqual({ loadable: true });
+	});
+
+	it('bounds a module-level infinite loop with a resource timeout', async () => {
+		const result = await runConfinedLoadProbe(
+			invocation(`while (true) {}\n${entry('() => ({})')}`, { limits: { ...LIMITS, cpuTimeoutMs: 300 } })
+		);
+
+		expect(result).toMatchObject({ loadable: false, error: { code: 'timeout' } });
 	});
 });
 

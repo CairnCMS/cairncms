@@ -1,7 +1,13 @@
 import variant from '@jitl/quickjs-ng-wasmfile-release-asyncify';
 import { expose, loadAsyncQuickJs } from '@sebastianwessel/quickjs';
 import { newVariant, Scope } from 'quickjs-emscripten-core';
-import type { ConfinedHostBridge, ConfinedInvocation, ConfinedResult, ConfinedRuntimeError } from './types.js';
+import type {
+	ConfinedHostBridge,
+	ConfinedInvocation,
+	ConfinedLoadProbeResult,
+	ConfinedResult,
+	ConfinedRuntimeError,
+} from './types.js';
 
 type QuickJsRuntime = Awaited<ReturnType<typeof loadAsyncQuickJs>>;
 
@@ -105,18 +111,19 @@ async function getRuntime(memoryBytes: number): Promise<QuickJsRuntime> {
 	return runtimePromise;
 }
 
+type HarnessOutcome = { kind: 'evaluated'; data: unknown } | { kind: 'error'; error: ConfinedRuntimeError };
+
 /**
- * Evaluates a confined entry in QuickJS and returns a JSON-safe result. The entry
- * source must be an esbuild IIFE exposing globalName `CairnOperation` with
- * `{ default: { id, handler } }`. The engine grants no authority: fetch and fs are
- * off, no host env is passed, and the config id is checked against the contribution
- * id before invocation. The only host effect is the bridged `__hostCall`, so the
- * engine itself holds no privileged effect.
+ * Evaluates a harness in QuickJS under the invocation's limits with `__hostCall`
+ * exposed over the given bridge. The shared internal of the run and probe paths:
+ * it owns the engine setup and the eval-error classification, and nothing else,
+ * so the two contracts never blend.
  */
-export async function runConfinedEntry(
+async function runConfinedHarness(
 	invocation: ConfinedInvocation,
-	hostBridge: ConfinedHostBridge
-): Promise<ConfinedResult> {
+	hostBridge: ConfinedHostBridge,
+	harnessSource: string
+): Promise<HarnessOutcome> {
 	let evaluated: { ok: true; data: unknown } | { ok: false; error: unknown };
 
 	try {
@@ -131,7 +138,7 @@ export async function runConfinedEntry(
 						__hostCall: (method: unknown, args: unknown) => hostBridge({ method: String(method), args }),
 					});
 
-					return await evalCode(buildHarness(invocation));
+					return await evalCode(harnessSource);
 				} finally {
 					scope.dispose();
 				}
@@ -144,14 +151,48 @@ export async function runConfinedEntry(
 			}
 		)) as typeof evaluated;
 	} catch (error) {
-		return fail(classifyEvalError(error));
+		return { kind: 'error', error: classifyEvalError(error) };
 	}
 
 	if (evaluated.ok !== true) {
-		return fail(classifyEvalError(evaluated.error));
+		return { kind: 'error', error: classifyEvalError(evaluated.error) };
 	}
 
-	return interpretGuestOutput(evaluated.data);
+	return { kind: 'evaluated', data: evaluated.data };
+}
+
+/**
+ * Evaluates a confined entry in QuickJS and returns a JSON-safe result. The entry
+ * source must be an esbuild IIFE exposing globalName `CairnOperation` with
+ * `{ default: { id, handler } }`. The engine grants no authority: fetch and fs are
+ * off, no host env is passed, and the config id is checked against the contribution
+ * id before invocation. The only host effect is the bridged `__hostCall`, so the
+ * engine itself holds no privileged effect.
+ */
+export async function runConfinedEntry(
+	invocation: ConfinedInvocation,
+	hostBridge: ConfinedHostBridge
+): Promise<ConfinedResult> {
+	const outcome = await runConfinedHarness(invocation, hostBridge, buildHarness(invocation));
+
+	if (outcome.kind === 'error') return fail(outcome.error);
+
+	return interpretGuestOutput(outcome.data);
+}
+
+/**
+ * Evaluates a confined entry to a load verdict without ever invoking its handler.
+ * The probe environment matches the run path minus the handler call: the same
+ * engine options and the same `__hostCall` exposure, answered deny-all, so
+ * module-level code sees the surface it would see at run and the verdict is
+ * honest for the path it certifies.
+ */
+export async function runConfinedLoadProbe(invocation: ConfinedInvocation): Promise<ConfinedLoadProbeResult> {
+	const outcome = await runConfinedHarness(invocation, unsupportedHostBridge, buildLoadProbeHarness(invocation));
+
+	if (outcome.kind === 'error') return { loadable: false, error: outcome.error };
+
+	return interpretLoadProbeOutput(outcome.data);
 }
 
 function buildHarness(invocation: ConfinedInvocation): string {
@@ -213,6 +254,64 @@ function buildHarness(invocation: ConfinedInvocation): string {
 		};
 		export default JSON.stringify(await __run());
 	`;
+}
+
+/**
+ * The load-probe harness: evaluates the entry and validates the confined config
+ * shape and identity, and stops there. It must never invoke the handler, only
+ * type-check it, so probing an entry can have no handler side effect.
+ */
+function buildLoadProbeHarness(invocation: ConfinedInvocation): string {
+	const contributionId = JSON.stringify(invocation.contributionId);
+
+	return `
+		${invocation.entrySource}
+		const __config =
+			(typeof CairnOperation !== 'undefined' && CairnOperation.default)
+				? CairnOperation.default
+				: (typeof CairnOperation !== 'undefined' ? CairnOperation : undefined);
+		const __verdict = () => {
+			if (!__config || typeof __config.handler !== 'function') return { kind: 'invalid-entry' };
+			if (__config.id !== ${contributionId}) return { kind: 'identity-mismatch' };
+			return { kind: 'loadable' };
+		};
+		export default JSON.stringify(__verdict());
+	`;
+}
+
+function interpretLoadProbeOutput(data: unknown): ConfinedLoadProbeResult {
+	const unreadable: ConfinedLoadProbeResult = {
+		loadable: false,
+		error: { code: 'invalid-entry', message: 'the operation entry could not be evaluated' },
+	};
+
+	if (typeof data !== 'string') return unreadable;
+
+	let envelope: { kind?: unknown };
+
+	try {
+		envelope = JSON.parse(data);
+	} catch {
+		return unreadable;
+	}
+
+	if (envelope.kind === 'loadable') return { loadable: true };
+
+	if (envelope.kind === 'identity-mismatch') {
+		return {
+			loadable: false,
+			error: { code: 'identity-mismatch', message: 'the operation id does not match its contribution' },
+		};
+	}
+
+	if (envelope.kind === 'invalid-entry') {
+		return {
+			loadable: false,
+			error: { code: 'invalid-entry', message: 'the entry is not a flow operation config with a function handler' },
+		};
+	}
+
+	return unreadable;
 }
 
 function interpretGuestOutput(data: unknown): ConfinedResult {

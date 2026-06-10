@@ -1,7 +1,7 @@
 /** The confined child host: runs the QuickJS engine out of the API process and talks to the parent over the framed transport on fd 3. */
 
 import net from 'node:net';
-import { runConfinedEntry } from './engine.js';
+import { runConfinedEntry, runConfinedLoadProbe } from './engine.js';
 import { createFrameReader, writeFrame } from './transport.js';
 import type {
 	ConfinedDoneMessage,
@@ -9,6 +9,9 @@ import type {
 	ConfinedHostCallMessage,
 	ConfinedHostReply,
 	ConfinedJobMessage,
+	ConfinedLoadProbeResult,
+	ConfinedProbeDoneMessage,
+	ConfinedProbeJobMessage,
 	ConfinedResult,
 } from './types.js';
 
@@ -78,14 +81,29 @@ function handleFrame(message: unknown): void {
 		return;
 	}
 
-	if (type === 'job') {
+	// One job of either kind per child. A run job and a probe job take distinct
+	// paths to distinct replies, so the contracts never blend.
+	if (type === 'job' || type === 'probe') {
 		if (jobHandled) return;
 		jobHandled = true;
 
-		if (isJobMessage(message)) {
-			void handleJob(message);
+		if (type === 'job') {
+			if (isJobMessage(message)) {
+				void handleJob(message);
+			} else {
+				send({ ok: false, error: { code: 'internal', message: 'the confined runtime received an invalid job' } });
+			}
+
+			return;
+		}
+
+		if (isProbeMessage(message)) {
+			void handleProbe(message);
 		} else {
-			send({ ok: false, error: { code: 'internal', message: 'the confined runtime received an invalid job' } });
+			sendProbe({
+				loadable: false,
+				error: { code: 'internal', message: 'the confined runtime received an invalid probe' },
+			});
 		}
 	}
 }
@@ -112,6 +130,18 @@ async function handleJob(message: ConfinedJobMessage): Promise<void> {
 	send(result);
 }
 
+async function handleProbe(message: ConfinedProbeJobMessage): Promise<void> {
+	let result: ConfinedLoadProbeResult;
+
+	try {
+		result = await runConfinedLoadProbe(message.invocation);
+	} catch {
+		result = { loadable: false, error: { code: 'internal', message: 'the confined runtime failed' } };
+	}
+
+	sendProbe(result);
+}
+
 /**
  * Caps the result before framing. An oversized result fails as `invalid-result`, so
  * the parent reader never receives an over-cap frame it would reject as a crash. The
@@ -125,6 +155,12 @@ function send(result: ConfinedResult): void {
 	}
 
 	const done: ConfinedDoneMessage = { type: 'done', result: payload };
+	writeFrame(channel, done, () => process.exit(0));
+}
+
+/** The probe verdict is a small fixed shape built child-side, so no result cap applies. */
+function sendProbe(result: ConfinedLoadProbeResult): void {
+	const done: ConfinedProbeDoneMessage = { type: 'probe-done', result };
 	writeFrame(channel, done, () => process.exit(0));
 }
 
@@ -168,4 +204,10 @@ function isJobMessage(message: unknown): message is ConfinedJobMessage {
 	if (message === null || typeof message !== 'object') return false;
 	const record = message as { type?: unknown; invocation?: unknown };
 	return record.type === 'job' && record.invocation !== null && typeof record.invocation === 'object';
+}
+
+function isProbeMessage(message: unknown): message is ConfinedProbeJobMessage {
+	if (message === null || typeof message !== 'object') return false;
+	const record = message as { type?: unknown; invocation?: unknown };
+	return record.type === 'probe' && record.invocation !== null && typeof record.invocation === 'object';
 }
