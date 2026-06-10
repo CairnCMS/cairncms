@@ -21,6 +21,7 @@ export const EXTENSION_VALIDATION_REASON_CODES = [
 	'local-path-escapes-root',
 	'manifest-too-large',
 	'manifest-invalid',
+	'artifact-too-large',
 	'uses-legacy-sdk-runtime-import',
 	'uses-dynamic-code',
 ] as const;

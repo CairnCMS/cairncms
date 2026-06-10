@@ -1,9 +1,21 @@
 import type { Extension } from '@cairncms/types';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { gateConfinedExtension, MAX_MANIFEST_BYTES } from './load-gate.js';
+import { resolveSandboxConfig, type SandboxConfig } from './sandbox-limits.js';
+
+function defaultConfig(): SandboxConfig {
+	const resolved = resolveSandboxConfig({});
+	if (!resolved.ok) throw new Error('default sandbox config should resolve');
+	return resolved.config;
+}
+
+function tinyArtifactConfig(): SandboxConfig {
+	const config = defaultConfig();
+	return { ...config, sandbox: { ...config.sandbox, maxArtifactBytes: 64 } };
+}
 
 const created: string[] = [];
 
@@ -14,6 +26,20 @@ afterEach(async () => {
 const CLEAN_SOURCE = 'export default {};\n';
 const RAW_FS_SOURCE = "import { readFile } from 'node:fs/promises';\nexport default {};\n";
 const BROWSER_FETCH_SOURCE = 'export default { run: () => fetch("https://example.com") };\n';
+
+// A built operation entry whose config id equals the discovered extension name.
+const OPERATION_ENTRY =
+	"var CairnOperation = (() => { const handler = async () => ({ ok: true }); return { default: { id: 'test-extension', handler } }; })();\n";
+
+function operationManifest(): Record<string, unknown> {
+	return manifest({
+		type: 'operation',
+		path: { app: 'dist/app.js', api: 'dist/api.js' },
+		source: { app: 'src/app.js', api: 'src/api.js' },
+		runtime: 'confined-server',
+		host: '^10.0.0',
+	});
+}
 
 async function makeDir(manifest: unknown, files: Record<string, string>): Promise<string> {
 	const dir = await mkdtemp(path.join(os.tmpdir(), 'cairn-gate-'));
@@ -167,28 +193,26 @@ describe('gateConfinedExtension', () => {
 	});
 
 	it('scans a hybrid operation server source and not its app source', async () => {
-		const operationManifest = manifest({
-			type: 'operation',
-			path: { app: 'dist/app.js', api: 'dist/api.js' },
-			source: { app: 'src/app.js', api: 'src/api.js' },
-			runtime: 'confined-server',
-			host: '^10.0.0',
-		});
-
-		const passing = await makeDir(operationManifest, {
+		const passing = await makeDir(operationManifest(), {
 			'src/app.js': BROWSER_FETCH_SOURCE,
 			'src/api.js': CLEAN_SOURCE,
+			'dist/api.js': OPERATION_ENTRY,
 		});
 
-		expect(await gateConfinedExtension(extensionAt(passing, 'operation'))).toEqual({ ok: true });
+		const verdict = await gateConfinedExtension(extensionAt(passing, 'operation'), {
+			probe: async () => ({ loadable: true }),
+		});
 
-		const failing = await makeDir(operationManifest, {
+		expect(verdict).toMatchObject({ ok: true });
+
+		const failing = await makeDir(operationManifest(), {
 			'src/app.js': CLEAN_SOURCE,
 			'src/api.js': RAW_FS_SOURCE,
+			'dist/api.js': OPERATION_ENTRY,
 		});
 
-		const verdict = await gateConfinedExtension(extensionAt(failing, 'operation'));
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'uses-raw-fs' } });
+		const failed = await gateConfinedExtension(extensionAt(failing, 'operation'));
+		expect(failed).toMatchObject({ ok: false, error: { code: 'uses-raw-fs' } });
 	});
 
 	it('scans a bundle server-entry source and not its app-entry source', async () => {
@@ -218,6 +242,172 @@ describe('gateConfinedExtension', () => {
 
 		const verdict = await gateConfinedExtension(extensionAt(failing, 'bundle'));
 		expect(verdict).toMatchObject({ ok: false, error: { code: 'uses-raw-fs' } });
+	});
+
+	it('probes a clean operation through the real confined child and carries the probed bytes', async () => {
+		const dir = await makeDir(operationManifest(), {
+			'src/app.js': CLEAN_SOURCE,
+			'src/api.js': CLEAN_SOURCE,
+			'dist/api.js': OPERATION_ENTRY,
+		});
+
+		const verdict = await gateConfinedExtension(extensionAt(dir, 'operation'));
+
+		expect(verdict).toEqual({ ok: true, entrySource: OPERATION_ENTRY });
+	}, 20_000);
+
+	it('refuses an operation that passes the scanner but crashes on load', async () => {
+		const dir = await makeDir(operationManifest(), {
+			'src/app.js': CLEAN_SOURCE,
+			'src/api.js': CLEAN_SOURCE,
+			'dist/api.js': `throw new Error('boom at load');\n${OPERATION_ENTRY}`,
+		});
+
+		const verdict = await gateConfinedExtension(extensionAt(dir, 'operation'));
+
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'invalid-entry' } });
+	}, 20_000);
+
+	it('refuses an operation whose built entry declares a different id', async () => {
+		const wrongId = OPERATION_ENTRY.replace("id: 'test-extension'", "id: 'someone-else'");
+
+		const dir = await makeDir(operationManifest(), {
+			'src/app.js': CLEAN_SOURCE,
+			'src/api.js': CLEAN_SOURCE,
+			'dist/api.js': wrongId,
+		});
+
+		const verdict = await gateConfinedExtension(extensionAt(dir, 'operation'));
+
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'identity-mismatch' } });
+	}, 20_000);
+
+	it('refuses an over-cap built entry without probing it', async () => {
+		const probeCalls: unknown[] = [];
+
+		const dir = await makeDir(operationManifest(), {
+			'src/app.js': CLEAN_SOURCE,
+			'src/api.js': CLEAN_SOURCE,
+			'dist/api.js': OPERATION_ENTRY,
+		});
+
+		const verdict = await gateConfinedExtension(extensionAt(dir, 'operation'), {
+			config: tinyArtifactConfig(),
+			probe: async (invocation) => {
+				probeCalls.push(invocation);
+				return { loadable: true };
+			},
+		});
+
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'artifact-too-large' } });
+		expect(probeCalls).toHaveLength(0);
+	});
+
+	it('probes under the operator runtime limits, not the built-in defaults', async () => {
+		const dir = await makeDir(operationManifest(), {
+			'src/app.js': CLEAN_SOURCE,
+			'src/api.js': CLEAN_SOURCE,
+			'dist/api.js': OPERATION_ENTRY,
+		});
+
+		const config = defaultConfig();
+		const raised = { ...config, runtime: { ...config.runtime, memoryBytes: 256 * 1024 * 1024, wallClockMs: 60_000 } };
+		const received: unknown[] = [];
+
+		const verdict = await gateConfinedExtension(extensionAt(dir, 'operation'), {
+			config: raised,
+			probe: async (invocation) => {
+				received.push(invocation.limits);
+				return { loadable: true };
+			},
+		});
+
+		expect(verdict).toMatchObject({ ok: true });
+		expect(received).toEqual([raised.runtime]);
+	});
+
+	it('classifies a thrown probe as validation-incomplete instead of rejecting', async () => {
+		const dir = await makeDir(operationManifest(), {
+			'src/app.js': CLEAN_SOURCE,
+			'src/api.js': CLEAN_SOURCE,
+			'dist/api.js': OPERATION_ENTRY,
+		});
+
+		const verdict = await gateConfinedExtension(extensionAt(dir, 'operation'), {
+			probe: async () => {
+				throw new Error('host went away');
+			},
+		});
+
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'validation-incomplete' } });
+	});
+
+	it('refuses an operation whose built entry is missing', async () => {
+		const dir = await makeDir(operationManifest(), {
+			'src/app.js': CLEAN_SOURCE,
+			'src/api.js': CLEAN_SOURCE,
+		});
+
+		const verdict = await gateConfinedExtension(extensionAt(dir, 'operation'), {
+			probe: async () => ({ loadable: true }),
+		});
+
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'source-unavailable' } });
+	});
+
+	it('refuses an operation whose built entry escapes the package root', async () => {
+		const dir = await makeDir(operationManifest(), {
+			'src/app.js': CLEAN_SOURCE,
+			'src/api.js': CLEAN_SOURCE,
+		});
+
+		const outside = path.join(path.dirname(dir), `outside-${path.basename(dir)}.js`);
+		await writeFile(outside, OPERATION_ENTRY);
+		created.push(outside);
+		await mkdir(path.join(dir, 'dist'), { recursive: true });
+		await symlink(outside, path.join(dir, 'dist', 'api.js'));
+
+		const verdict = await gateConfinedExtension(extensionAt(dir, 'operation'), {
+			probe: async () => ({ loadable: true }),
+		});
+
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'local-path-escapes-root' } });
+	});
+
+	it('classifies a host-side probe failure as validation-incomplete, not a verdict on the extension', async () => {
+		const dir = await makeDir(operationManifest(), {
+			'src/app.js': CLEAN_SOURCE,
+			'src/api.js': CLEAN_SOURCE,
+			'dist/api.js': OPERATION_ENTRY,
+		});
+
+		const busy = await gateConfinedExtension(extensionAt(dir, 'operation'), {
+			probe: async () => ({ loadable: false, error: { code: 'busy', message: 'the confined runtime is at capacity' } }),
+		});
+
+		expect(busy).toMatchObject({ ok: false, error: { code: 'validation-incomplete' } });
+
+		const internal = await gateConfinedExtension(extensionAt(dir, 'operation'), {
+			probe: async () => ({ loadable: false, error: { code: 'internal', message: 'the confined runtime failed' } }),
+		});
+
+		expect(internal).toMatchObject({ ok: false, error: { code: 'validation-incomplete' } });
+	});
+
+	it('never probes a non-operation confined type and returns no entry bytes for it', async () => {
+		const probeCalls: unknown[] = [];
+
+		const dir = await makeDir(endpointManifest(), { 'src/index.js': CLEAN_SOURCE });
+
+		const verdict = await gateConfinedExtension(extensionAt(dir), {
+			probe: async (invocation) => {
+				probeCalls.push(invocation);
+				return { loadable: true };
+			},
+		});
+
+		expect(verdict).toEqual({ ok: true });
+		expect(probeCalls).toHaveLength(0);
 	});
 
 	it('collapses an unsafe reason message to a generic detail', async () => {

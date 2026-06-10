@@ -8,21 +8,36 @@ import {
 import type { ExtensionValidationReason, ExtensionValidationReasonCode } from '@cairncms/extensions';
 import { scanCandidateSource } from '@cairncms/extensions/node';
 import { readFileCapped } from '@cairncms/extensions/node/capped-read';
+import { classifyEntryPath } from '@cairncms/extensions/node/entry-integrity';
 import type { Extension, ExtensionOptions } from '@cairncms/types';
 import { isTypeIn } from '@cairncms/utils';
 import path from 'node:path';
 import type { SanitizedExtensionError } from '../../utils/sanitize-extension-error.js';
+import { resolveSandboxConfig, type SandboxConfig } from './sandbox-limits.js';
+import { getConfinedSupervisor } from './supervisor.js';
+import type { ConfinedInvocation, ConfinedLoadProbeResult } from './types.js';
 
 // The manifest is a package.json, far below this on any real package.
 export const MAX_MANIFEST_BYTES = 256 * 1024;
 
 const GENERIC_DETAIL = 'confined validation failed';
 
-export type ConfinedGateVerdict = { ok: true } | { ok: false; error: SanitizedExtensionError };
+// Gate-level, not a scanner reason: the gate could not complete (a host-side or
+// scheduling failure), which says nothing about the extension. Refused fail-closed,
+// but the remedy is revalidation, not a code change.
+export const VALIDATION_INCOMPLETE = 'validation-incomplete';
+
+// The probe codes that are honest not-loadable verdicts about the entry itself.
+// Anything else from the probe is a gate-infrastructure failure.
+const NOT_LOADABLE_CODES = new Set<string>(['invalid-entry', 'identity-mismatch', 'timeout', 'crash']);
+
+export type ConfinedGateVerdict = { ok: true; entrySource?: string } | { ok: false; error: SanitizedExtensionError };
 
 export interface ConfinedLoadGateDeps {
 	scan?: typeof scanCandidateSource;
 	readFile?: typeof readFileCapped;
+	probe?: (invocation: ConfinedInvocation) => Promise<ConfinedLoadProbeResult>;
+	config?: SandboxConfig;
 }
 
 /**
@@ -43,7 +58,7 @@ function safeDetail(message: string | undefined): string {
 	return unsafe ? GENERIC_DETAIL : message;
 }
 
-function refuse(code: ExtensionValidationReasonCode, detail: string): ConfinedGateVerdict {
+function refuse(code: ExtensionValidationReasonCode | string, detail: string): ConfinedGateVerdict {
 	return { ok: false, error: { code, detail } };
 }
 
@@ -162,5 +177,93 @@ export async function gateConfinedExtension(
 		return { ok: false, error: confinedValidationError(reason) };
 	}
 
+	// The eval probe applies to the operation contract only, the one proven runtime
+	// shape. Other confined server types are scanner-gated here and get their load
+	// contract with their binding.
+	if (isTypeIn(options, HYBRID_EXTENSION_TYPES)) {
+		return probeOperationEntry(extension, options.path.api, deps);
+	}
+
 	return { ok: true };
+}
+
+/**
+ * The dynamic half of the gate: reads the built operation entry under path
+ * containment and the artifact cap, evaluates it in the confined child through the
+ * load probe, and classifies the outcome. A not-loadable verdict refuses with the
+ * probe's code. A host-side failure refuses `validation-incomplete`, never blaming
+ * the extension for the gate's own failure. On success the probed bytes are
+ * returned, so the binding executes exactly what was scanned and probed.
+ */
+async function probeOperationEntry(
+	extension: Extension,
+	entryRelative: string,
+	deps: ConfinedLoadGateDeps
+): Promise<ConfinedGateVerdict> {
+	const readFile = deps.readFile ?? readFileCapped;
+	const probe = deps.probe ?? ((invocation: ConfinedInvocation) => getConfinedSupervisor().probeLoad(invocation));
+
+	let config = deps.config;
+
+	if (config === undefined) {
+		const resolved = resolveSandboxConfig();
+
+		if (!resolved.ok) {
+			return refuse(VALIDATION_INCOMPLETE, 'the sandbox configuration could not be resolved');
+		}
+
+		config = resolved.config;
+	}
+
+	const classified = await classifyEntryPath(extension.path, entryRelative);
+
+	if (classified.kind === 'escapes-root') {
+		return refuse('local-path-escapes-root', 'the built server entry escapes the package root');
+	}
+
+	if (classified.kind === 'unresolved') {
+		return refuse('source-unavailable', 'the built server entry was not found');
+	}
+
+	const entryRead = await readFile(classified.real, config.sandbox.maxArtifactBytes);
+
+	if (!entryRead.ok) {
+		return entryRead.reason === 'too-large'
+			? refuse('artifact-too-large', 'the built server entry exceeds the artifact cap')
+			: refuse('source-read-failed', 'the built server entry could not be read');
+	}
+
+	// The probe runs under the operator's resolved runtime maxima, not the built-in
+	// defaults: the supervisor clamps stricter-never-looser, so probing below an
+	// operator-raised cap would falsely refuse an entry the operator sized for.
+	const invocation: ConfinedInvocation = {
+		extensionId: extension.name,
+		contributionId: extension.name,
+		operationId: extension.name,
+		entrySource: entryRead.text,
+		options: {},
+		input: null,
+		accountability: null,
+		limits: config.runtime,
+	};
+
+	let result: ConfinedLoadProbeResult;
+
+	try {
+		result = await probe(invocation);
+	} catch {
+		// A thrown probe is a host-side failure. It fails this extension closed and
+		// must never abort the loader.
+		return refuse(VALIDATION_INCOMPLETE, 'confined validation could not complete');
+	}
+
+	if (result.loadable) {
+		return { ok: true, entrySource: entryRead.text };
+	}
+
+	if (NOT_LOADABLE_CODES.has(result.error.code)) {
+		return refuse(result.error.code, safeDetail(result.error.message));
+	}
+
+	return refuse(VALIDATION_INCOMPLETE, 'confined validation could not complete');
 }

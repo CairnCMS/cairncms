@@ -56,7 +56,12 @@ import { getFlowManager } from './flows.js';
 import logger from './logger.js';
 import * as services from './services/index.js';
 import type { EventHandler } from './types/index.js';
-import { gateConfinedExtension } from './extensions/confined/load-gate.js';
+import {
+	gateConfinedExtension,
+	VALIDATION_INCOMPLETE,
+	type ConfinedGateVerdict,
+	type ConfinedLoadGateDeps,
+} from './extensions/confined/load-gate.js';
 import getModuleDefault from './utils/get-module-default.js';
 import { filterServerExtensions } from './utils/filter-server-extensions.js';
 import { sanitizeExtensionError, type SanitizedExtensionError } from './utils/sanitize-extension-error.js';
@@ -126,10 +131,14 @@ export class ExtensionManager {
 
 	// Confined extensions that passed the load gate this load, for the confined
 	// bindings. Keyed by the discovered object itself, because a name is not a safe
-	// identity: two same-name packages can both be discovered. Transient by design:
-	// recomputed on every load, never persisted, and carrying no public diagnostic
-	// row until registration.
-	private confinedEligible = new Set<Extension>();
+	// identity: two same-name packages can both be discovered. An operation entry
+	// carries the probed entry bytes, so the binding executes exactly what the gate
+	// scanned and probed. Transient by design: recomputed on every load, never
+	// persisted, and carrying no public diagnostic row until registration.
+	private confinedEligible = new Map<Extension, { entrySource?: string }>();
+
+	// Test seam for the gate's scanner, probe, and limits dependencies.
+	private confinedGateDeps: ConfinedLoadGateDeps = {};
 
 	private appExtensions: AppExtensions = null;
 	private appExtensionChunks: Map<string, string>;
@@ -303,16 +312,33 @@ export class ExtensionManager {
 	 * Validates each declared-confined extension before it may run confined. A
 	 * failure refuses the extension into diagnostics, never downgrading it to full
 	 * authority. A pass joins the private eligible set with no public diagnostic
-	 * row, since a confined extension is rowed at registration.
+	 * row, since a confined extension is rowed at registration. Sequential by
+	 * design: probes spawn confined children, and one at a time stays inside the
+	 * supervisor's capacity gate, so a probe can never be refused busy by a
+	 * sibling probe.
 	 */
 	private async gateConfinedExtensions(): Promise<void> {
 		for (const extension of this.extensions) {
 			if (extension.runtime !== CONFINED_RUNTIME) continue;
 
-			const verdict = await gateConfinedExtension(extension);
+			let verdict: ConfinedGateVerdict;
+
+			try {
+				verdict = await gateConfinedExtension(extension, this.confinedGateDeps);
+			} catch {
+				// A gate failure fails this extension closed. It must never abort the
+				// loader and take every other extension down with it.
+				verdict = {
+					ok: false,
+					error: { code: VALIDATION_INCOMPLETE, detail: 'confined validation could not complete' },
+				};
+			}
 
 			if (verdict.ok) {
-				this.confinedEligible.add(extension);
+				this.confinedEligible.set(
+					extension,
+					verdict.entrySource === undefined ? {} : { entrySource: verdict.entrySource }
+				);
 			} else {
 				this.recordFailed(extension, verdict.error);
 			}

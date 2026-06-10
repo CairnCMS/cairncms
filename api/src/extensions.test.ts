@@ -58,6 +58,66 @@ function writeConfinedPackage(dir: string, source: string, name = dir): void {
 	writeFileSync(path.join(full, 'src', 'index.js'), source);
 }
 
+/**
+ * A complete confined operation package: a hybrid manifest, clean app and api
+ * source, and a built api entry whose config id equals the extension name.
+ */
+function writeConfinedOperationPackage(dir: string, name = dir): void {
+	const full = path.join(root, dir);
+	mkdirSync(path.join(full, 'src'), { recursive: true });
+
+	writeFileSync(
+		path.join(full, 'package.json'),
+		JSON.stringify({
+			name,
+			version: '1.0.0',
+			'cairncms:extension': {
+				type: 'operation',
+				path: { app: 'app.js', api: 'api.js' },
+				source: { app: 'src/app.js', api: 'src/api.js' },
+				runtime: 'confined-server',
+				host: '^10.0.0',
+			},
+		})
+	);
+
+	writeFileSync(path.join(full, 'src', 'app.js'), 'export default {};\n');
+	writeFileSync(path.join(full, 'src', 'api.js'), 'export default {};\n');
+
+	writeFileSync(
+		path.join(full, 'api.js'),
+		`var CairnOperation = (() => { const handler = async () => ({ ok: true }); return { default: { id: ${JSON.stringify(
+			name
+		)}, handler } }; })();\n`
+	);
+}
+
+/**
+ * A complete confined bundle package with one server entry and the given server
+ * entry source, matching the discovered bundle shape.
+ */
+function writeConfinedBundlePackage(dir: string, serverEntrySource: string, name = dir): void {
+	const full = path.join(root, dir);
+	mkdirSync(path.join(full, 'src'), { recursive: true });
+
+	writeFileSync(
+		path.join(full, 'package.json'),
+		JSON.stringify({
+			name,
+			version: '1.0.0',
+			'cairncms:extension': {
+				type: 'bundle',
+				path: { app: 'app.js', api: 'api.js' },
+				entries: [{ type: 'endpoint', name: `${name}-endpoint`, source: 'src/ep.js' }],
+				runtime: 'confined-server',
+				host: '^10.0.0',
+			},
+		})
+	);
+
+	writeFileSync(path.join(full, 'src', 'ep.js'), serverEntrySource);
+}
+
 function endpointExtension(dir: string, name: string, confined: boolean): Extension {
 	return {
 		path: path.join(root, dir),
@@ -287,5 +347,84 @@ describe('the confined load gate in the loader', () => {
 
 		await (instance as any).unload();
 		expect((instance as any).confinedEligible.size).toBe(0);
+	});
+
+	it('probes confined operations sequentially and carries the probed bytes into the eligible set', async () => {
+		writeConfinedOperationPackage('op-one');
+		writeConfinedOperationPackage('op-two');
+
+		const instance = new ExtensionManager();
+		const one = operationExtension('op-one', 'op-one', true);
+		const two = operationExtension('op-two', 'op-two', true);
+		(instance as any).getExtensions = async () => [one, two];
+
+		await (instance as any).load();
+
+		const eligible = (instance as any).confinedEligible;
+		expect(eligible.get(one)?.entrySource).toContain('CairnOperation');
+		expect(eligible.get(two)?.entrySource).toContain('CairnOperation');
+		expect((instance as any).getDiagnostics()).toHaveLength(0);
+	}, 30_000);
+
+	it('refuses a confined bundle with flagged server source while it stays available to the app pipeline', async () => {
+		writeConfinedBundlePackage('flagged-bundle', "import { readFile } from 'node:fs/promises';\nexport default {};\n");
+
+		const instance = new ExtensionManager();
+		const bundle = bundleExtension('flagged-bundle', 'flagged-bundle', true);
+		(instance as any).getExtensions = async () => [bundle];
+
+		await (instance as any).load();
+
+		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'flagged-bundle');
+		expect(row?.status).toBe('failed');
+		expect(row?.reason?.code).toBe('uses-raw-fs');
+		expect((instance as any).confinedEligible.has(bundle)).toBe(false);
+
+		// The discovered set feeds the app bundler, so the refusal of the server side
+		// does not remove the package from it.
+		expect((instance as any).extensions).toContain(bundle);
+		expect(filterServerExtensions((instance as any).extensions)).not.toContain(bundle);
+	});
+
+	it('fails closed on a throwing probe without aborting the load of other extensions', async () => {
+		writeConfinedOperationPackage('probe-thrower');
+
+		const instance = new ExtensionManager();
+		const operation = operationExtension('probe-thrower', 'probe-thrower', true);
+		const sibling = endpointExtension('confined-endpoint', 'confined-endpoint', true);
+		(instance as any).getExtensions = async () => [operation, sibling];
+
+		(instance as any).confinedGateDeps = {
+			probe: async () => {
+				throw new Error('host went away');
+			},
+		};
+
+		await (instance as any).load();
+
+		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'probe-thrower');
+		expect(row?.status).toBe('failed');
+		expect(row?.reason?.code).toBe('validation-incomplete');
+		expect((instance as any).confinedEligible.has(operation)).toBe(false);
+		expect((instance as any).confinedEligible.has(sibling)).toBe(true);
+	});
+
+	it('surfaces a host-side probe failure as validation-incomplete, not a verdict on the extension', async () => {
+		writeConfinedOperationPackage('probe-unlucky');
+
+		const instance = new ExtensionManager();
+		const operation = operationExtension('probe-unlucky', 'probe-unlucky', true);
+		(instance as any).getExtensions = async () => [operation];
+
+		(instance as any).confinedGateDeps = {
+			probe: async () => ({ loadable: false, error: { code: 'internal', message: 'the confined runtime failed' } }),
+		};
+
+		await (instance as any).load();
+
+		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'probe-unlucky');
+		expect(row?.status).toBe('failed');
+		expect(row?.reason?.code).toBe('validation-incomplete');
+		expect((instance as any).confinedEligible.has(operation)).toBe(false);
 	});
 });
