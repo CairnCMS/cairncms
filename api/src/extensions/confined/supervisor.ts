@@ -19,7 +19,7 @@ import {
 	type SandboxPosture,
 } from './sandbox-hardening.js';
 import { cgroupMemoryMax, DEFAULT_CONFINED_LIMITS } from './limits.js';
-import { resolveSandboxConfig, type SandboxLimits } from './sandbox-limits.js';
+import { OVER_CAP_HOST_REPLY, resolveSandboxConfig, type SandboxLimits } from './sandbox-limits.js';
 import { createFrameReader, writeFrame } from './transport.js';
 import type {
 	ConfinedHostCallContext,
@@ -653,7 +653,19 @@ export class ConfinedSupervisor {
 	}
 
 	private replyHostCall(channel: Duplex, id: number, reply: ConfinedHostReply): void {
-		const replyMessage: ConfinedHostReplyMessage = { type: 'host-reply', id, reply };
+		let replyMessage: ConfinedHostReplyMessage = { type: 'host-reply', id, reply };
+
+		// The chokepoint reply guard: a serialized reply over the broker-reply cap is
+		// replaced with the canonical over-cap error, so no dispatcher can produce a
+		// host-reply frame the child reader must reject as a protocol violation. The
+		// cap fits the parent-to-child frame budget by derivation.
+		try {
+			if (Buffer.byteLength(JSON.stringify(replyMessage), 'utf8') > this.limits.brokerReplyBytes) {
+				replyMessage = { type: 'host-reply', id, reply: OVER_CAP_HOST_REPLY };
+			}
+		} catch {
+			// a non-serializable reply falls through to the writer's own guard below
+		}
 
 		try {
 			writeFrame(channel, replyMessage, () => undefined);

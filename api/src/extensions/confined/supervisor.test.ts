@@ -8,7 +8,7 @@ import { Duplex, PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { CgroupMechanic, ChildCgroup, HardeningLayer, SandboxPosture } from './sandbox-hardening.js';
-import { resolveSandboxLimits, type SandboxLimits } from './sandbox-limits.js';
+import { BROKER_REPLY_BYTES, resolveSandboxLimits, type SandboxLimits } from './sandbox-limits.js';
 import { clampLimits, ConfinedSupervisor, resolveChild, type ConfinedCgroupOps } from './supervisor.js';
 import { createFrameReader, writeFrame } from './transport.js';
 import type {
@@ -445,6 +445,25 @@ describe('ConfinedSupervisor', () => {
 			expect(probe).toMatchObject({ loadable: false, error: { code: 'busy' } });
 
 			await first;
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
+		'replaces an over-cap host reply with the canonical over-cap error at the chokepoint',
+		async () => {
+			const dispatcher: ConfinedHostDispatcher = async () => ({ ok: true, value: 'x'.repeat(BROKER_REPLY_BYTES) });
+			const supervisor = new ConfinedSupervisor({ hostDispatcher: dispatcher });
+
+			const result = await supervisor.invoke(
+				invocation(
+					entry(
+						'async (_p, { host }) => { const r = await host.request.send({ url: "x" }); return { ok: r.ok, code: r.error ? r.error.code : null }; }'
+					)
+				)
+			);
+
+			expect(result).toEqual({ ok: true, value: { ok: false, code: 'invalid_request' } });
 		},
 		ENGINE_TIMEOUT
 	);

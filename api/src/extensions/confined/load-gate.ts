@@ -41,7 +41,9 @@ export type ConfinedEligibleEntry = {
 	entryCapabilities?: Record<string, ExtensionCapabilities>;
 };
 
-export type ConfinedGateVerdict = ({ ok: true } & ConfinedEligibleEntry) | { ok: false; error: SanitizedExtensionError };
+export type ConfinedGateVerdict =
+	| ({ ok: true } & ConfinedEligibleEntry)
+	| { ok: false; error: SanitizedExtensionError };
 
 export interface ConfinedLoadGateDeps {
 	scan?: typeof scanCandidateSource;

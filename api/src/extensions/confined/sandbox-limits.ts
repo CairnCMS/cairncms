@@ -75,6 +75,32 @@ const PROCESSES_CAP: BoundedSpec = {
 	ceiling: 32,
 };
 
+// The broker reply caps, internal defaults rather than operator knobs. The reply
+// cap bounds every serialized host-reply frame at the supervisor chokepoint, and
+// the parent-to-child frame budget derives from it, so a legitimate reply can
+// never be a frame the child reader must reject. Each per-surface cap is a bound
+// on the SERIALIZED reply value its surface produces, measured by the surface
+// before it replies, so passing a surface guarantees passing the chokepoint. The
+// surfaces also bound their raw work early (the stream read, the query clamps,
+// the render output) as derived controls.
+export const BROKER_REPLY_BYTES = 4 * MiB;
+export const HTTP_RESPONSE_BYTES = 2 * MiB;
+export const ITEMS_REPLY_BYTES = 2 * MiB;
+export const TEMPLATE_OUTPUT_BYTES = 1 * MiB;
+export const SETTINGS_VALUE_BYTES = 64 * KiB;
+
+// The host-reply frame wrapper around the serialized reply value (type, id, and
+// the reply object keys), budgeted generously.
+export const REPLY_ENVELOPE_BYTES = 1 * KiB;
+
+// The canonical reply that replaces an over-cap host reply at the chokepoint. It
+// must itself fit under the reply cap, asserted at resolution, so the fallback
+// can never recurse into its own rejection.
+export const OVER_CAP_HOST_REPLY = {
+	ok: false,
+	error: { code: 'invalid_request', message: 'the host reply exceeded the reply size cap' },
+} as const;
+
 export interface SandboxLimits {
 	maxResultBytes: number;
 	maxHostApiCallBytes: number;
@@ -82,6 +108,11 @@ export interface SandboxLimits {
 	maxProcesses: number;
 	childToParentFrameMax: number;
 	parentToChildFrameMax: number;
+	brokerReplyBytes: number;
+	httpResponseBytes: number;
+	itemsReplyBytes: number;
+	templateOutputBytes: number;
+	settingsValueBytes: number;
 }
 
 export type SandboxLimitsError = ConfigParseError;
@@ -210,8 +241,41 @@ export function resolveSandboxConfig(
 	const maxArtifactBytes = artifact.value;
 	const maxProcesses = processes.value;
 
+	// Every per-surface broker cap, plus the reply envelope, must fit under the reply
+	// cap, and the canonical over-cap fallback must itself fit, or the chokepoint
+	// could produce a frame the derivation below does not budget for. The surface
+	// caps are bounds on the SERIALIZED reply value a surface produces (JSON
+	// escaping can inflate a raw value severalfold, so a raw-bytes bound could pass
+	// the surface and still breach the chokepoint). Each surface measures its
+	// serialized value against its cap before replying. Constants today, asserted
+	// defensively so a future edit cannot silently break the coherence.
+	const surfaceCaps = [HTTP_RESPONSE_BYTES, ITEMS_REPLY_BYTES, TEMPLATE_OUTPUT_BYTES, SETTINGS_VALUE_BYTES];
+
+	const fallbackBytes = Buffer.byteLength(
+		JSON.stringify({ type: 'host-reply', id: Number.MAX_SAFE_INTEGER, reply: OVER_CAP_HOST_REPLY }),
+		'utf8'
+	);
+
+	if (
+		surfaceCaps.some((cap) => cap + REPLY_ENVELOPE_BYTES > BROKER_REPLY_BYTES) ||
+		fallbackBytes > BROKER_REPLY_BYTES
+	) {
+		return {
+			ok: false,
+			error: {
+				envVar: 'BROKER_REPLY_BYTES',
+				message:
+					'the broker reply caps are incoherent: every per-surface cap plus the reply envelope and the over-cap fallback must fit under the reply cap',
+			},
+		};
+	}
+
 	const childToParentFrameMax = Math.max(maxResultBytes, maxHostApiCallBytes) + ENVELOPE_BUDGET;
-	const parentToChildFrameMax = maxArtifactBytes + INVOCATION_ENVELOPE + ENVELOPE_BUDGET;
+
+	// The job frame carries the artifact plus the invocation envelope, a host-reply
+	// frame carries at most the reply cap. The child reader enforces this budget on
+	// every parent-to-child frame, so it must cover whichever is larger.
+	const parentToChildFrameMax = Math.max(maxArtifactBytes + INVOCATION_ENVELOPE, BROKER_REPLY_BYTES) + ENVELOPE_BUDGET;
 
 	// Bound the parent's worst-case transient: MAX_PROCESSES children each holding a
 	// child-to-parent and a parent-to-child frame buffer. The child-to-parent term is the
@@ -238,6 +302,11 @@ export function resolveSandboxConfig(
 				maxProcesses,
 				childToParentFrameMax,
 				parentToChildFrameMax,
+				brokerReplyBytes: BROKER_REPLY_BYTES,
+				httpResponseBytes: HTTP_RESPONSE_BYTES,
+				itemsReplyBytes: ITEMS_REPLY_BYTES,
+				templateOutputBytes: TEMPLATE_OUTPUT_BYTES,
+				settingsValueBytes: SETTINGS_VALUE_BYTES,
 			},
 			runtime: {
 				...DEFAULT_CONFINED_LIMITS,

@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { resolveSandboxConfig, resolveSandboxLimits, type SandboxConfigDeps } from './sandbox-limits.js';
+import {
+	BROKER_REPLY_BYTES,
+	HTTP_RESPONSE_BYTES,
+	ITEMS_REPLY_BYTES,
+	OVER_CAP_HOST_REPLY,
+	REPLY_ENVELOPE_BYTES,
+	resolveSandboxConfig,
+	resolveSandboxLimits,
+	SETTINGS_VALUE_BYTES,
+	TEMPLATE_OUTPUT_BYTES,
+	type SandboxConfigDeps,
+} from './sandbox-limits.js';
 
 const KiB = 1024;
 const MiB = 1024 * 1024;
@@ -179,6 +190,64 @@ describe('resolveSandboxConfig: adaptive and explicit concurrency', () => {
 	it('rejects an invalid effective-memory reading', () => {
 		for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
 			expect(resolveSandboxConfig({}, { effectiveMemory: () => bad }).ok).toBe(false);
+		}
+	});
+});
+
+describe('the broker reply caps and the frame budget', () => {
+	it('resolves the broker caps as limits', () => {
+		const result = resolve({});
+
+		expect(result.ok).toBe(true);
+
+		if (result.ok) {
+			expect(result.limits.brokerReplyBytes).toBe(BROKER_REPLY_BYTES);
+			expect(result.limits.httpResponseBytes).toBe(HTTP_RESPONSE_BYTES);
+			expect(result.limits.itemsReplyBytes).toBe(ITEMS_REPLY_BYTES);
+			expect(result.limits.templateOutputBytes).toBe(TEMPLATE_OUTPUT_BYTES);
+			expect(result.limits.settingsValueBytes).toBe(SETTINGS_VALUE_BYTES);
+		}
+	});
+
+	it('keeps every per-surface cap plus the reply envelope under the reply cap', () => {
+		for (const cap of [HTTP_RESPONSE_BYTES, ITEMS_REPLY_BYTES, TEMPLATE_OUTPUT_BYTES, SETTINGS_VALUE_BYTES]) {
+			expect(cap + REPLY_ENVELOPE_BYTES).toBeLessThanOrEqual(BROKER_REPLY_BYTES);
+		}
+	});
+
+	it('fits a serialized reply frame at any surface cap under the chokepoint cap', () => {
+		// The surface caps bound the serialized reply value, so the worst frame at a
+		// surface cap is the value plus the host-reply wrapper.
+		for (const cap of [HTTP_RESPONSE_BYTES, ITEMS_REPLY_BYTES, TEMPLATE_OUTPUT_BYTES, SETTINGS_VALUE_BYTES]) {
+			const wrapper = JSON.stringify({
+				type: 'host-reply',
+				id: Number.MAX_SAFE_INTEGER,
+				reply: { ok: true, value: '' },
+			});
+
+			expect(cap + Buffer.byteLength(wrapper, 'utf8')).toBeLessThanOrEqual(BROKER_REPLY_BYTES);
+		}
+	});
+
+	it('keeps the canonical over-cap fallback under the reply cap', () => {
+		const fallback = JSON.stringify({ type: 'host-reply', id: Number.MAX_SAFE_INTEGER, reply: OVER_CAP_HOST_REPLY });
+		expect(Buffer.byteLength(fallback, 'utf8')).toBeLessThanOrEqual(BROKER_REPLY_BYTES);
+	});
+
+	it('budgets the parent-to-child frame for the reply cap when the artifact budget is smaller', () => {
+		const result = resolve({ EXTENSIONS_SANDBOX_MAX_ARTIFACT: '1kb' });
+
+		expect(result.ok).toBe(true);
+		if (result.ok) expect(result.limits.parentToChildFrameMax).toBe(BROKER_REPLY_BYTES + 4 * KiB);
+	});
+
+	it('fits every broker reply under the child frame reader', () => {
+		const result = resolve({ EXTENSIONS_SANDBOX_MAX_ARTIFACT: '1kb' });
+
+		expect(result.ok).toBe(true);
+
+		if (result.ok) {
+			expect(BROKER_REPLY_BYTES).toBeLessThanOrEqual(result.limits.parentToChildFrameMax);
 		}
 	});
 });

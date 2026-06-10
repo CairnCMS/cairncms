@@ -111,7 +111,7 @@ describe('collectSensitiveValues', () => {
 	});
 });
 
-describe('redactFlowLog — key-based', () => {
+describe('redactFlowLog: key-based', () => {
 	test('redacts each sensitive key at top level', () => {
 		const result = redactFlowLog({
 			authorization: 'value',
@@ -194,7 +194,7 @@ describe('redactFlowLog — key-based', () => {
 	});
 });
 
-describe('redactFlowLog — value-based', () => {
+describe('redactFlowLog: value-based', () => {
 	test('replaces a sensitive value when it is the entire string', () => {
 		const sensitiveValues = new Set([TOKEN]);
 		const result = redactFlowLog({ message: TOKEN }, sensitiveValues) as { message: string };
@@ -221,7 +221,7 @@ describe('redactFlowLog — value-based', () => {
 	});
 });
 
-describe('redactFlowLog — JSON-safe normalization', () => {
+describe('redactFlowLog: JSON-safe normalization', () => {
 	test('Date becomes its ISO string representation', () => {
 		const date = new Date('2026-05-01T12:00:00.000Z');
 		const result = redactFlowLog({ when: date }) as { when: unknown };
@@ -275,7 +275,7 @@ describe('redactFlowLog — JSON-safe normalization', () => {
 	});
 });
 
-describe('redactFlowLog — general', () => {
+describe('redactFlowLog: general', () => {
 	test('passes JSON-safe non-sensitive values through unchanged', () => {
 		const input = { method: 'POST', path: '/flows/trigger/abc', body: { count: 3 } };
 		const result = redactFlowLog(input);
@@ -292,5 +292,34 @@ describe('redactFlowLog — general', () => {
 	test('preserves array structure', () => {
 		const result = redactFlowLog([1, 'a', { x: 2 }]);
 		expect(result).toEqual([1, 'a', { x: 2 }]);
+	});
+});
+
+describe('caller-declared sensitive keys', () => {
+	test('collects string values under a declared key, case-insensitively', () => {
+		const declared = new Set(['apikey']);
+		const source = { apiKey: TOKEN, nested: { APIKEY: OTHER_TOKEN }, plain: 'visible-value-long-enough' };
+
+		const collected = collectSensitiveValues(source, declared);
+
+		expect(collected.has(TOKEN)).toBe(true);
+		expect(collected.has(OTHER_TOKEN)).toBe(true);
+		expect(collected.has('visible-value-long-enough')).toBe(false);
+	});
+
+	test('redacts a declared key and its propagated value', () => {
+		const declared = new Set(['apikey']);
+		const source = { apiKey: TOKEN, note: `used ${TOKEN} today`, plain: 'kept' };
+
+		const result = redactFlowLog(source, collectSensitiveValues(source, declared), declared);
+
+		expect(result.apiKey).toBe(REDACT_TEXT);
+		expect(result.note).not.toContain(TOKEN);
+		expect(result.plain).toBe('kept');
+	});
+
+	test('declared keys do not affect calls that omit them', () => {
+		const source = { apiKey: 'visible-when-not-declared' };
+		expect(redactFlowLog(source)).toEqual(source);
 	});
 });
