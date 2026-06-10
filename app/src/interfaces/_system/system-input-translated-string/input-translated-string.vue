@@ -187,7 +187,7 @@ function updateTranslationStringsDialog(val: boolean) {
 .translation-input {
 	:deep(button) {
 		margin-right: auto;
-		padding: .125rem .5rem 0;
+		padding: 0.125rem 0.5rem 0;
 		color: var(--primary);
 		background-color: var(--primary-alt);
 		border-radius: var(--border-radius);
@@ -212,7 +212,7 @@ function updateTranslationStringsDialog(val: boolean) {
 }
 
 .search {
-	padding: .75rem .5rem .375rem .5rem;
+	padding: 0.75rem 0.5rem 0.375rem 0.5rem;
 
 	.search-input {
 		--input-height: 3rem;

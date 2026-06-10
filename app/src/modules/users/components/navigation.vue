@@ -39,5 +39,4 @@ const { roles, loading } = useNavigation();
 .v-divider {
 	--v-divider-color: var(--background-normal-alt);
 }
-
 </style>

@@ -307,7 +307,7 @@ function setContent() {
 	height: 100%;
 	padding: var(--input-padding) 0;
 	overflow: hidden;
-	font-size: .875rem;
+	font-size: 0.875rem;
 	font-family: var(--family-monospace);
 	white-space: nowrap;
 
@@ -323,8 +323,8 @@ function setContent() {
 }
 
 :deep(button) {
-	margin: -1px .25rem 0;
-	padding: .125rem .25rem 0;
+	margin: -1px 0.25rem 0;
+	padding: 0.125rem 0.25rem 0;
 	color: var(--primary);
 	background-color: var(--primary-alt);
 	border-radius: var(--border-radius);
@@ -341,7 +341,7 @@ function setContent() {
 .placeholder {
 	position: absolute;
 	top: 50%;
-	left: .875rem;
+	left: 0.875rem;
 	color: var(--foreground-subdued);
 	transform: translateY(-50%);
 	user-select: none;

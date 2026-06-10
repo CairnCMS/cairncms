@@ -80,7 +80,7 @@ const logoURL = computed<string | null>(() => {
 
 header {
 	margin-bottom: 2rem;
-	padding: .625rem;
+	padding: 0.625rem;
 	background-color: var(--background-page);
 	border-bottom: var(--border-width) solid var(--border-subdued);
 }
@@ -96,7 +96,7 @@ header {
 	width: max-content;
 	max-width: 100%;
 	height: 3.75rem;
-	margin-top: .125rem;
+	margin-top: 0.125rem;
 
 	.title {
 		margin-left: 1rem;

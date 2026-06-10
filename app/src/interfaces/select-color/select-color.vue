@@ -381,25 +381,25 @@ function useColor() {
 
 <style scoped lang="scss">
 .swatch {
-	--v-button-padding: .375rem;
+	--v-button-padding: 0.375rem;
 	--v-button-background-color: transparent;
 	--v-button-background-color-hover: var(--v-button-background-color);
 
 	position: relative;
 	box-sizing: border-box;
-	margin-left: -.5rem;
+	margin-left: -0.5rem;
 	width: calc(var(--input-height) - 1.25rem);
 	max-height: calc(var(--input-height) - 1.25rem);
 	overflow: hidden;
-	border-radius: calc(var(--border-radius) + .125rem);
+	border-radius: calc(var(--border-radius) + 0.125rem);
 	cursor: pointer;
 }
 
 .presets {
 	display: flex;
 	width: 100%;
-	margin-bottom: .875rem;
-	padding: .5rem;
+	margin-bottom: 0.875rem;
+	padding: 0.5rem;
 	overflow-x: auto;
 }
 
@@ -408,7 +408,7 @@ function useColor() {
 	--v-button-height: 1.25rem;
 	--v-button-width: 1.25rem;
 
-	margin: 0px .25rem;
+	margin: 0px 0.25rem;
 
 	&.low-contrast {
 		--v-button-height: 1.125rem;
@@ -437,7 +437,7 @@ function useColor() {
 	display: grid;
 	grid-gap: 0px;
 	width: 100%;
-	padding: .75rem .625rem;
+	padding: 0.75rem 0.625rem;
 }
 
 .color-data-inputs .color-data-input {
@@ -453,7 +453,7 @@ function useColor() {
 }
 
 .color-data-inputs .color-data-input:not(.color-type) {
-	--input-padding: .75rem .5rem;
+	--input-padding: 0.75rem 0.5rem;
 }
 
 .color-data-inputs .color-data-input:not(:first-child) :deep(.input) {
@@ -461,11 +461,11 @@ function useColor() {
 }
 
 .color-data-inputs .color-data-input:first-child {
-	--border-radius: .125rem 0px 0px .125rem;
+	--border-radius: 0.125rem 0px 0px 0.125rem;
 }
 
 .color-data-inputs .color-data-input:last-child {
-	--border-radius: 0px .125rem .125rem 0px;
+	--border-radius: 0px 0.125rem 0.125rem 0px;
 }
 
 .color-data-inputs.stacked .color-data-input:not(:first-child) :deep(.input) {
@@ -478,24 +478,24 @@ function useColor() {
 }
 
 .color-data-inputs.stacked .color-data-input:first-child {
-	--border-radius: .125rem .125rem 0px 0px;
+	--border-radius: 0.125rem 0.125rem 0px 0px;
 }
 
 .color-data-inputs.stacked .color-data-input:nth-child(2) {
-	--border-radius: 0px 0px 0px .125rem;
+	--border-radius: 0px 0px 0px 0.125rem;
 }
 
 .color-data-inputs.stacked .color-data-input:last-child {
-	--border-radius: 0px 0px .125rem 0px;
+	--border-radius: 0px 0px 0.125rem 0px;
 }
 
 .color-data-alphas {
 	display: grid;
-	grid-gap: .75rem;
+	grid-gap: 0.75rem;
 	align-items: baseline;
 	width: 100%;
 	height: 2.8125rem;
-	padding: .75rem .875rem;
+	padding: 0.75rem 0.875rem;
 }
 
 .color-data-alphas .color-data-alpha {

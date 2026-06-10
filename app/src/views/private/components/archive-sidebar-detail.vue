@@ -67,11 +67,11 @@ watch(selectedItem, () => {
 	@include form-grid;
 
 	.type-label {
-		font-size: .875rem;
+		font-size: 0.875rem;
 	}
 
 	.v-radio + .v-radio {
-		margin-top: .5rem;
+		margin-top: 0.5rem;
 	}
 }
 </style>

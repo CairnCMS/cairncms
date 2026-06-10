@@ -201,7 +201,7 @@ function saveChanges() {
 			display: flex;
 			flex-direction: column;
 			width: 20rem;
-			padding: .5rem 0;
+			padding: 0.5rem 0;
 			background-color: var(--background-normal);
 			border: var(--border-width) solid var(--border-normal);
 			border-radius: var(--border-radius);
@@ -216,7 +216,7 @@ function saveChanges() {
 			.header {
 				display: flex;
 				justify-content: space-between;
-				margin: 0 1rem .5rem 1rem;
+				margin: 0 1rem 0.5rem 1rem;
 				font-weight: 700;
 
 				.title {
@@ -229,29 +229,29 @@ function saveChanges() {
 						white-space: nowrap;
 						text-overflow: ellipsis;
 						color: var(--foreground-normal-alt);
-						margin-right: .375rem;
+						margin-right: 0.375rem;
 					}
 				}
 
 				.badge {
 					display: inline-flex;
 					justify-content: center;
-					padding: 0px .375rem;
+					padding: 0px 0.375rem;
 					height: 1.25rem;
 					min-width: 1.25rem;
-					margin-top: .125rem;
+					margin-top: 0.125rem;
 					text-align: center;
-					font-size: .75rem;
+					font-size: 0.75rem;
 					line-height: 1.25rem;
 					background-color: var(--background-normal-alt);
-					border-radius: .75rem;
+					border-radius: 0.75rem;
 				}
 
 				.actions {
 					color: var(--foreground-subdued);
 
 					.v-icon {
-						margin-left: .25rem;
+						margin-left: 0.25rem;
 						transition: color var(--transition) var(--fast);
 					}
 
@@ -268,8 +268,8 @@ function saveChanges() {
 
 				.item {
 					display: block;
-					margin: .125rem 1rem .375rem 1rem;
-					padding: .75rem 1rem;
+					margin: 0.125rem 1rem 0.375rem 1rem;
+					padding: 0.75rem 1rem;
 					background-color: var(--background-page);
 					border-radius: var(--border-radius);
 					box-shadow: 0px 2px 4px 0px rgba(var(--card-shadow-color), 0.1);
@@ -285,11 +285,11 @@ function saveChanges() {
 					transition: color var(--transition) var(--fast);
 					font-weight: 700;
 					line-height: 1.25;
-					margin-bottom: .25rem;
+					margin-bottom: 0.25rem;
 				}
 
 				.text {
-					font-size: .875rem;
+					font-size: 0.875rem;
 					line-height: 1.4em;
 					-webkit-line-clamp: 4;
 					-webkit-box-orient: vertical;
@@ -299,26 +299,26 @@ function saveChanges() {
 
 				.image {
 					width: 100%;
-					margin-top: .625rem;
+					margin-top: 0.625rem;
 					border-radius: var(--border-radius);
-					margin-top: .25rem;
+					margin-top: 0.25rem;
 					max-height: 18.75rem;
 				}
 
 				.display-labels {
 					display: flex;
 					flex-wrap: wrap;
-					margin-top: .375rem;
+					margin-top: 0.375rem;
 
 					:deep(.v-chip) {
 						border: none;
 						background-color: var(--background-normal);
-						font-size: .75rem;
+						font-size: 0.75rem;
 						font-weight: 600;
-						margin-top: .25rem;
-						margin-right: .25rem;
+						margin-top: 0.25rem;
+						margin-right: 0.25rem;
 						height: 1.25rem;
-						padding: 0 .375rem;
+						padding: 0 0.375rem;
 					}
 					:deep(.v-chip + .v-chip) {
 						margin-left: 0;
@@ -330,12 +330,12 @@ function saveChanges() {
 					display: flex;
 					justify-content: space-between;
 					align-items: center;
-					margin-top: .5rem;
-					margin-bottom: .125rem;
+					margin-top: 0.5rem;
+					margin-bottom: 0.125rem;
 					.datetime {
 						display: inline-block;
 						color: var(--foreground-subdued);
-						font-size: .8125rem;
+						font-size: 0.8125rem;
 						font-weight: 600;
 						line-height: 1.5rem;
 					}
@@ -350,14 +350,14 @@ function saveChanges() {
 							border: 4px solid var(--background-page);
 							height: 2rem;
 							width: 2rem;
-							margin-bottom: -.25rem;
-							margin-top: -.25rem;
+							margin-bottom: -0.25rem;
+							margin-top: -0.25rem;
 						}
 
 						.avatar-overflow {
 							align-self: center;
 							color: var(--foreground-subdued);
-							margin-left: .125rem;
+							margin-left: 0.125rem;
 						}
 					}
 				}
@@ -367,7 +367,7 @@ function saveChanges() {
 
 	.add-group {
 		cursor: pointer;
-		padding: .5rem .5rem;
+		padding: 0.5rem 0.5rem;
 		border: var(--border-width) dashed var(--border-subdued);
 		border-radius: var(--border-radius);
 		transition: border-color var(--transition) var(--fast);

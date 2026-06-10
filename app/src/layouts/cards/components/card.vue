@@ -129,7 +129,7 @@ function handleClick() {
 <style lang="scss" scoped>
 .loading {
 	.header {
-		margin-bottom: .5rem;
+		margin-bottom: 0.5rem;
 	}
 }
 
@@ -215,8 +215,8 @@ function handleClick() {
 
 	&::before {
 		position: absolute;
-		top: .4375rem;
-		left: .4375rem;
+		top: 0.4375rem;
+		left: 0.4375rem;
 		z-index: 2;
 		width: 1.125rem;
 		height: 1.125rem;
@@ -235,7 +235,7 @@ function handleClick() {
 		top: 0px;
 		left: 0px;
 		z-index: 3;
-		margin: .25rem;
+		margin: 0.25rem;
 		opacity: 0;
 		transition: opacity var(--fast) var(--transition), color var(--fast) var(--transition);
 
@@ -301,7 +301,7 @@ function handleClick() {
 	align-items: center;
 	width: 100%;
 	height: 1.25rem;
-	margin-top: .125rem;
+	margin-top: 0.125rem;
 	overflow: hidden;
 	line-height: 1.3em;
 	white-space: nowrap;

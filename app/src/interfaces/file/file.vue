@@ -292,7 +292,7 @@ function useURLImport() {
 	justify-content: center;
 	width: 2.5rem;
 	height: 2.5rem;
-	margin-left: -.5rem;
+	margin-left: -0.5rem;
 	overflow: hidden;
 	background-color: var(--background-normal);
 	border-radius: var(--border-radius);
@@ -308,12 +308,12 @@ function useURLImport() {
 	}
 
 	&.is-svg {
-		padding: .25rem;
+		padding: 0.25rem;
 		background-color: var(--background-normal-alt);
 
 		img {
 			object-fit: contain;
-			filter: drop-shadow(0px 0px .5rem rgb(0 0 0 / 0.25));
+			filter: drop-shadow(0px 0px 0.5rem rgb(0 0 0 / 0.25));
 		}
 	}
 }
@@ -321,7 +321,7 @@ function useURLImport() {
 .extension {
 	color: var(--primary);
 	font-weight: 600;
-	font-size: .6875rem;
+	font-size: 0.6875rem;
 	text-transform: uppercase;
 }
 
@@ -330,7 +330,7 @@ function useURLImport() {
 }
 
 .edit {
-	margin-right: .25rem;
+	margin-right: 0.25rem;
 
 	&:hover {
 		--v-icon-color: var(--foreground-normal);

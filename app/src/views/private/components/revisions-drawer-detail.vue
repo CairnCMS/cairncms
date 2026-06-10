@@ -93,13 +93,13 @@ defineExpose({
 	position: sticky;
 	top: 0;
 	z-index: 3;
-	margin-top: .5rem;
-	margin-right: -.5rem;
-	margin-bottom: .375rem;
-	margin-left: -.5rem;
-	padding-top: .5rem;
-	padding-right: .5rem;
-	padding-left: .5rem;
+	margin-top: 0.5rem;
+	margin-right: -0.5rem;
+	margin-bottom: 0.375rem;
+	margin-left: -0.5rem;
+	padding-top: 0.5rem;
+	padding-right: 0.5rem;
+	padding-left: 0.5rem;
 	background-color: var(--background-normal);
 	box-shadow: 0 0 2px 2px var(--background-normal);
 
@@ -111,7 +111,7 @@ defineExpose({
 .empty {
 	margin-top: 1rem;
 	margin-bottom: 1rem;
-	margin-left: .125rem;
+	margin-left: 0.125rem;
 	color: var(--foreground-subdued);
 	font-style: italic;
 }

@@ -181,7 +181,7 @@ function toggleInterface(id: string) {
 
 .group h2 {
 	margin-bottom: 2.5rem;
-	padding-bottom: .125rem;
+	padding-bottom: 0.125rem;
 	font-weight: 700;
 	border-bottom: var(--border-width) solid var(--border-subdued);
 }
@@ -224,7 +224,7 @@ function toggleInterface(id: string) {
 	justify-content: center;
 	width: 10rem;
 	height: 6.25rem;
-	margin-bottom: .5rem;
+	margin-bottom: 0.5rem;
 	border: var(--border-width) solid var(--border-subdued);
 	border-radius: var(--border-radius);
 	transition: var(--fast) var(--transition);
@@ -247,14 +247,14 @@ function toggleInterface(id: string) {
 }
 
 .preview :deep(svg) .glow {
-	filter: drop-shadow(0 0 .25rem var(--primary-50));
+	filter: drop-shadow(0 0 0.25rem var(--primary-50));
 }
 
 .preview .fallback {
 	--v-icon-color: var(--primary-75);
 
 	display: block;
-	padding: .5rem 1rem;
+	padding: 0.5rem 1rem;
 	background-color: var(--background-page);
 	border: 2px solid var(--primary);
 	border-radius: var(--border-radius);

@@ -112,7 +112,7 @@ const changes = computed(() => {
 }
 
 .type-label {
-	margin-bottom: .5rem;
+	margin-bottom: 0.5rem;
 }
 
 .change-line {

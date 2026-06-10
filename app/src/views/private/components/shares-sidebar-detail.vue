@@ -240,10 +240,10 @@ async function send() {
 	position: sticky;
 	top: 0;
 	z-index: 2;
-	margin-top: .5rem;
-	margin-bottom: .5rem;
-	padding-top: .5rem;
-	padding-bottom: .5rem;
+	margin-top: 0.5rem;
+	margin-bottom: 0.5rem;
+	padding-top: 0.5rem;
+	padding-bottom: 0.5rem;
 	background-color: var(--background-normal);
 	box-shadow: 0 0 4px 2px var(--background-normal);
 }
@@ -251,7 +251,7 @@ async function send() {
 .empty {
 	margin-top: 1rem;
 	margin-bottom: 1rem;
-	margin-left: .125rem;
+	margin-left: 0.125rem;
 	color: var(--foreground-subdued);
 	font-style: italic;
 }

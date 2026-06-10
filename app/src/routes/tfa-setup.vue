@@ -98,7 +98,7 @@ h1 {
 }
 
 .title {
-	margin-bottom: .625rem;
+	margin-bottom: 0.625rem;
 	font-weight: 600;
 }
 
@@ -112,7 +112,7 @@ h1 {
 	margin: 0 auto 1rem;
 	color: var(--foreground-subdued);
 	font-family: var(--family-monospace);
-	letter-spacing: .1625rem;
+	letter-spacing: 0.1625rem;
 	text-align: center;
 }
 </style>

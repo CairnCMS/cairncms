@@ -105,7 +105,7 @@ function navigateToUser() {
 .user-box {
 	display: flex;
 	min-width: 18.75rem;
-	padding: .5rem .25rem;
+	padding: 0.5rem 0.25rem;
 	cursor: pointer;
 
 	.v-avatar {
@@ -149,7 +149,7 @@ function navigateToUser() {
 	display: flex;
 	align-items: center;
 	height: 5rem;
-	margin: .5rem .25rem;
+	margin: 0.5rem 0.25rem;
 
 	.avatar {
 		width: 5rem;
@@ -161,7 +161,7 @@ function navigateToUser() {
 		width: 8.75rem;
 
 		.v-skeleton-loader:not(:last-child) {
-			margin-bottom: .75rem;
+			margin-bottom: 0.75rem;
 		}
 	}
 }

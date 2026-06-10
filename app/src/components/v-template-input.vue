@@ -340,18 +340,18 @@ function parseHTML(innerText?: string, isDirectInput = false) {
 	:deep(.preview) {
 		display: inline-block;
 		margin: 0px;
-		padding: .125rem .25rem;
+		padding: 0.125rem 0.25rem;
 		color: var(--primary);
 		font-size: 0;
 		line-height: 1;
-		vertical-align: -.125rem;
+		vertical-align: -0.125rem;
 		background: var(--primary-alt);
 		border-radius: var(--border-radius);
 		user-select: text;
 
 		&::before {
 			display: block;
-			font-size: .875rem;
+			font-size: 0.875rem;
 			content: attr(data-preview);
 		}
 	}

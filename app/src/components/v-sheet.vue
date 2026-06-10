@@ -13,7 +13,7 @@
 	--v-sheet-width: auto;
 	--v-sheet-min-width: none;
 	--v-sheet-max-width: none;
-	--v-sheet-padding: .5rem;
+	--v-sheet-padding: 0.5rem;
 }
 
 .v-sheet {

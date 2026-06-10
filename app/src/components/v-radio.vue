@@ -78,7 +78,7 @@ body {
 	appearance: none;
 
 	.label:not(:empty) {
-		margin-left: .5rem;
+		margin-left: 0.5rem;
 
 		@include no-wrap;
 	}
@@ -103,7 +103,7 @@ body {
 		position: relative;
 		width: 100%;
 		height: var(--input-height);
-		padding: .625rem;
+		padding: 0.625rem;
 		border: 2px solid var(--background-subdued);
 		border-radius: var(--border-radius);
 

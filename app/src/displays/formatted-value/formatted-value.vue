@@ -179,8 +179,8 @@ function matchNumber(left: number, right: number, operator: string) {
 	&.has-background,
 	&.has-border {
 		height: 1.75rem;
-		padding: 0 .625rem;
-		font-size: .875rem;
+		padding: 0 0.625rem;
+		font-size: 0.875rem;
 		line-height: 1.75rem;
 		border-radius: 1.5rem;
 	}
@@ -212,7 +212,7 @@ function matchNumber(left: number, right: number, operator: string) {
 
 	.v-icon {
 		flex-shrink: 0;
-		vertical-align: -.1875rem;
+		vertical-align: -0.1875rem;
 	}
 }
 </style>

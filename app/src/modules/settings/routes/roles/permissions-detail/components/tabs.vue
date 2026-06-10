@@ -26,8 +26,8 @@ const internalCurrentTab = useSync(props, 'currentTab', emit);
 }
 
 .dot {
-	width: .75rem;
-	height: .75rem;
+	width: 0.75rem;
+	height: 0.75rem;
 	background-color: var(--foreground-subdued);
 	border-radius: 50%;
 

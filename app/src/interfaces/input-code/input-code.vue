@@ -297,7 +297,7 @@ function fillTemplate() {
 .input-code {
 	position: relative;
 	width: 100%;
-	font-size: .875rem;
+	font-size: 0.875rem;
 }
 
 .small {
@@ -310,8 +310,8 @@ function fillTemplate() {
 
 .v-button {
 	position: absolute;
-	top: .625rem;
-	right: .625rem;
+	top: 0.625rem;
+	right: 0.625rem;
 	z-index: 4;
 	color: var(--primary);
 	cursor: pointer;

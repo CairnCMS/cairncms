@@ -99,8 +99,8 @@ async function getFormattedDate(revision: Revision) {
 
 .menu {
 	.v-icon {
-		margin-right: .25rem;
-		margin-left: -.25rem;
+		margin-right: 0.25rem;
+		margin-left: -0.25rem;
 		color: var(--foreground-subdued);
 	}
 

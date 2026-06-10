@@ -481,7 +481,7 @@ textarea {
 	margin-bottom: 0;
 	color: var(--foreground-normal-alt);
 	font-weight: 700;
-	font-size: .875rem;
+	font-size: 0.875rem;
 	font-family: v-bind(previewFamily), serif;
 	line-height: 1.5rem;
 }
@@ -491,7 +491,7 @@ textarea {
 	margin-bottom: 0;
 	color: var(--foreground-normal-alt);
 	font-weight: 700;
-	font-size: .75rem;
+	font-size: 0.75rem;
 	font-family: v-bind(previewFamily), serif;
 	line-height: 1.375rem;
 }
@@ -499,7 +499,7 @@ textarea {
 .preview-box :deep(p) {
 	margin: 1.5em 0;
 	font-weight: 500;
-	font-size: .9375rem;
+	font-size: 0.9375rem;
 	font-family: v-bind(previewFamily), serif;
 	line-height: 1.5rem;
 }
@@ -513,15 +513,15 @@ textarea {
 .preview-box :deep(ol) {
 	margin: 1.5em 0;
 	font-weight: 500;
-	font-size: .9375rem;
+	font-size: 0.9375rem;
 	font-family: v-bind(previewFamily), serif;
 	line-height: 1.5rem;
 }
 
 .remaining {
 	position: absolute;
-	right: .625rem;
-	bottom: .3125rem;
+	right: 0.625rem;
+	bottom: 0.3125rem;
 	color: var(--foreground-subdued);
 	font-weight: 600;
 	text-align: right;
@@ -550,9 +550,9 @@ textarea {
 }
 
 .preview-box :deep(code) {
-	padding: .125rem .25rem;
+	padding: 0.125rem 0.25rem;
 	font-weight: 500;
-	font-size: .9375rem;
+	font-size: 0.9375rem;
 	font-family: var(--family-monospace), monospace;
 	line-height: 1.5rem;
 	overflow-wrap: break-word;
@@ -564,7 +564,7 @@ textarea {
 	padding: 1em;
 	overflow: auto;
 	font-weight: 500;
-	font-size: .9375rem;
+	font-size: 0.9375rem;
 	font-family: var(--family-monospace), monospace;
 	line-height: 1.5rem;
 	background-color: var(--background-normal);
@@ -575,14 +575,14 @@ textarea {
 	margin-left: 0px;
 	padding-left: 1em;
 	font-weight: 500;
-	font-size: .9375rem;
+	font-size: 0.9375rem;
 	font-family: v-bind(previewFamily), serif;
 	line-height: 1.5rem;
 	border-left: 2px solid var(--border-normal);
 }
 
 .preview-box :deep(blockquote blockquote) {
-	margin-left: .625rem;
+	margin-left: 0.625rem;
 }
 
 .preview-box :deep(video),
@@ -603,25 +603,25 @@ textarea {
 
 .preview-box :deep(table) {
 	font-weight: 500;
-	font-size: .9375rem;
+	font-size: 0.9375rem;
 	line-height: 1.5rem;
 	border-collapse: collapse;
 }
 
 .preview-box :deep(table th),
 .preview-box :deep(table td) {
-	padding: .35rem;
+	padding: 0.35rem;
 	border: 1px solid var(--border-normal);
 }
 
 .preview-box :deep(figure) {
 	display: table;
-	margin: .875rem auto;
+	margin: 0.875rem auto;
 }
 
 .preview-box :deep(figure figcaption) {
 	display: block;
-	margin-top: .21875rem;
+	margin-top: 0.21875rem;
 	color: #999;
 	text-align: center;
 }
@@ -662,12 +662,12 @@ textarea {
 	flex-wrap: wrap;
 	align-items: center;
 	min-height: 2.5rem;
-	padding: 0 .25rem;
+	padding: 0 0.25rem;
 	background-color: var(--background-subdued);
 	border-bottom: 2px solid var(--border-normal);
 
 	.v-button + .v-button {
-		margin-left: .125rem;
+		margin-left: 0.125rem;
 	}
 
 	.spacer {
@@ -687,10 +687,10 @@ textarea {
 .table-options {
 	@include form-grid;
 
-	--form-vertical-gap: .75rem;
-	--form-horizontal-gap: .75rem;
+	--form-vertical-gap: 0.75rem;
+	--form-horizontal-gap: 0.75rem;
 
-	padding: .75rem;
+	padding: 0.75rem;
 
 	.v-input {
 		min-width: 6.25rem;

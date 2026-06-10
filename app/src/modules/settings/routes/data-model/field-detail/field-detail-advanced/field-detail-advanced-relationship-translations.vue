@@ -191,7 +191,7 @@ const relatedPrimaryKey = computed(
 	position: relative;
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: .75rem 1.75rem;
+	gap: 0.75rem 1.75rem;
 	margin-top: 3rem;
 
 	.v-input.matches {
@@ -218,7 +218,7 @@ const relatedPrimaryKey = computed(
 }
 
 .type-label {
-	margin-bottom: .5rem;
+	margin-bottom: 0.5rem;
 
 	@include no-wrap;
 }
@@ -236,7 +236,7 @@ const relatedPrimaryKey = computed(
 }
 
 .relational-triggers {
-	--form-horizontal-gap: .75rem;
+	--form-horizontal-gap: 0.75rem;
 	--form-vertical-gap: 1.5rem;
 
 	@include form-grid;

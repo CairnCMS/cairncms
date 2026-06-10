@@ -125,7 +125,7 @@ function toggleDescending() {
 	width: 100%;
 	height: 3.25rem;
 	margin-bottom: 2.25rem;
-	padding: 0 .5rem;
+	padding: 0 0.5rem;
 	background-color: var(--background-page);
 	border-top: var(--border-width) solid var(--border-subdued);
 	border-bottom: var(--border-width) solid var(--border-subdued);
@@ -135,7 +135,7 @@ function toggleDescending() {
 .start {
 	.label {
 		display: inline-block;
-		margin-left: .25rem;
+		margin-left: 0.25rem;
 		transform: translateY(1px);
 	}
 
@@ -168,7 +168,7 @@ function toggleDescending() {
 	}
 
 	.sort-selector {
-		margin-right: .5rem;
+		margin-right: 0.5rem;
 		transition: color var(--fast) var(--transition);
 
 		&:hover {

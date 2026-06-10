@@ -248,16 +248,16 @@ function formatColor(color: string | number, value: string | number) {
 .apexcharts-tooltip.apexcharts-theme-light .apexcharts-tooltip-title {
 	border-color: var(--border-normal) !important;
 	margin-bottom: 0;
-	padding: 0 .25rem;
+	padding: 0 0.25rem;
 	font-weight: 600 !important;
-	font-size: .625rem !important;
+	font-size: 0.625rem !important;
 	background-color: var(--background-subdued) !important;
 }
 
 .apexcharts-tooltip-y-group {
-	padding: 0 0 0 .25rem;
+	padding: 0 0 0 0.25rem;
 	font-weight: 600 !important;
-	font-size: .625rem !important;
+	font-size: 0.625rem !important;
 }
 
 .apexcharts-tooltip-series-group {
@@ -266,7 +266,7 @@ function formatColor(color: string | number, value: string | number) {
 }
 
 .apexcharts-tooltip-series-group .apexcharts-active {
-	padding: 0 .25rem 0 0 !important;
+	padding: 0 0.25rem 0 0 !important;
 }
 
 .apexcharts-tooltip-series-group:last-child {

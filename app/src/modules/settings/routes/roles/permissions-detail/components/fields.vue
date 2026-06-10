@@ -85,7 +85,7 @@ const fields = computed({
 
 <style lang="scss" scoped>
 .type-label {
-	margin-bottom: .5rem;
+	margin-bottom: 0.5rem;
 }
 
 .v-notice {

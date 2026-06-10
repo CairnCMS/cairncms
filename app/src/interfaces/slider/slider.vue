@@ -34,6 +34,6 @@ defineEmits(['input']);
 
 <style lang="scss" scoped>
 .v-slider {
-	margin-top: .75rem;
+	margin-top: 0.75rem;
 }
 </style>

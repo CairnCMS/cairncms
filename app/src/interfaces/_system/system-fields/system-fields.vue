@@ -129,8 +129,8 @@ const removeField = (field: string) => {
 .toggle {
 	color: var(--primary);
 	font-weight: 600;
-	margin-left: .625rem;
-	margin-top: .375rem;
+	margin-left: 0.625rem;
+	margin-top: 0.375rem;
 
 	.v-icon {
 		position: absolute;

@@ -45,7 +45,7 @@ body {
 	overflow: auto;
 
 	/* Page Content Spacing */
-	font-size: .9375rem;
+	font-size: 0.9375rem;
 	line-height: 1.5rem;
 	background-color: var(--v-card-background-color);
 	border-radius: var(--border-radius);

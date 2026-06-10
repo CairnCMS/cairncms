@@ -222,7 +222,7 @@ const runManualFlow = async (flowId: string) => {
 	--form-vertical-gap: 1.5rem;
 
 	.type-label {
-		font-size: .875rem;
+		font-size: 0.875rem;
 	}
 }
 
@@ -231,7 +231,7 @@ const runManualFlow = async (flowId: string) => {
 }
 
 .v-icon {
-	margin-right: .5rem;
+	margin-right: 0.5rem;
 }
 
 .confirm-form {
@@ -241,7 +241,7 @@ const runManualFlow = async (flowId: string) => {
 	margin-top: var(--v-card-padding);
 
 	:deep(.type-label) {
-		font-size: .875rem;
+		font-size: 0.875rem;
 	}
 }
 </style>

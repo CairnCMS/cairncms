@@ -187,7 +187,7 @@ watch(width, () => {
 
 		span {
 			width: auto;
-			margin-right: .25rem;
+			margin-right: 0.25rem;
 		}
 
 		.v-select {

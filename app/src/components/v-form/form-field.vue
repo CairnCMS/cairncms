@@ -231,7 +231,7 @@ function useComputedValues() {
 	position: relative;
 	display: block;
 	max-width: 32.5rem;
-	margin-top: .25rem;
+	margin-top: 0.25rem;
 
 	:deep(a) {
 		color: var(--primary);
@@ -243,8 +243,8 @@ function useComputedValues() {
 }
 
 .invalid {
-	margin: -.75rem;
-	padding: .75rem;
+	margin: -0.75rem;
+	padding: 0.75rem;
 	background-color: var(--danger-alt);
 	border-radius: var(--border-radius);
 	transition: var(--medium) var(--transition);
@@ -253,7 +253,7 @@ function useComputedValues() {
 
 .validation-error {
 	display: block;
-	margin-top: .25rem;
+	margin-top: 0.25rem;
 	color: var(--danger);
 	font-style: italic;
 }

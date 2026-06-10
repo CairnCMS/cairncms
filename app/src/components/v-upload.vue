@@ -357,7 +357,7 @@ function openFileBrowser() {
 	margin-bottom: 1.125rem;
 
 	.v-button {
-		margin-right: .75rem;
+		margin-right: 0.75rem;
 
 		&:last-child {
 			margin-right: 0;
@@ -388,14 +388,14 @@ function openFileBrowser() {
 
 	.upload-icon {
 		margin: 0 auto;
-		margin-bottom: .75rem;
+		margin-bottom: 0.75rem;
 	}
 }
 
 .uploading {
 	--v-progress-linear-color: var(--white);
 	--v-progress-linear-background-color: rgb(255 255 255 / 0.25);
-	--v-progress-linear-height: .5rem;
+	--v-progress-linear-height: 0.5rem;
 
 	color: var(--white);
 	background-color: var(--primary);

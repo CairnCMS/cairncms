@@ -191,8 +191,8 @@ function setListValue(index: number, newVal: any) {
 	align-items: center;
 
 	.v-icon {
-		margin-right: .5rem;
-		margin-left: .75rem;
+		margin-right: 0.5rem;
+		margin-left: 0.75rem;
 		color: var(--foreground-subdued);
 		cursor: pointer;
 
@@ -206,16 +206,16 @@ function setListValue(index: number, newVal: any) {
 	display: flex;
 
 	.value:not(:last-child)::after {
-		margin-right: .375rem;
+		margin-right: 0.375rem;
 		content: ',';
 	}
 
 	&.moveComma .value:not(:last-child)::after {
-		margin: 0 .5rem 0 -.375rem;
+		margin: 0 0.5rem 0 -0.375rem;
 	}
 }
 
 .and {
-	margin: 0px .5rem;
+	margin: 0px 0.5rem;
 }
 </style>

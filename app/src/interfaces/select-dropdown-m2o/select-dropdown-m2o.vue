@@ -261,7 +261,7 @@ function onSelection(selection: (number | string)[] | null) {
 }
 
 .edit {
-	margin-right: .25rem;
+	margin-right: 0.25rem;
 
 	&:hover {
 		--v-icon-color: var(--foreground-normal);

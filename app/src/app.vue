@@ -112,7 +112,7 @@ useSystem();
 	justify-content: center;
 	width: 100%;
 	height: 100%;
-	backdrop-filter: blur(.625rem);
+	backdrop-filter: blur(0.625rem);
 }
 
 .fade-enter-active,

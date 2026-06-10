@@ -202,10 +202,10 @@ function useReset() {
 }
 
 .title {
-	margin-bottom: .75rem;
+	margin-bottom: 0.75rem;
 
 	.instant-save {
-		margin-left: .25rem;
+		margin-left: 0.25rem;
 		color: var(--warning);
 	}
 }
@@ -224,13 +224,13 @@ function useReset() {
 	background-color: var(--background-subdued);
 
 	.v-icon {
-		vertical-align: -.4375rem;
+		vertical-align: -0.4375rem;
 	}
 }
 
 .reset-toggle {
 	display: block;
-	margin: .5rem auto;
+	margin: 0.5rem auto;
 	color: var(--foreground-subdued);
 	text-align: center;
 

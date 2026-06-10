@@ -32,20 +32,20 @@ defineProps<Props>();
 		left: 50%;
 		transform: translateX(-50%);
 		top: 55%;
-		font-size: .75rem;
+		font-size: 0.75rem;
 		font-weight: 800;
 		line-height: 1;
-		padding: .125rem 0;
+		padding: 0.125rem 0;
 		text-align: center;
 	}
 
 	&.right {
 		.label {
 			background-color: var(--v-icon-file-background-color);
-			left: calc(100% - .75rem - 3ch);
+			left: calc(100% - 0.75rem - 3ch);
 			text-align: left;
 			transform: none;
-			padding-right: .5rem;
+			padding-right: 0.5rem;
 		}
 	}
 }

@@ -184,7 +184,7 @@ async function setNestedSort(updates?: Field[]) {
 }
 
 .field-select {
-	margin: .25rem;
+	margin: 0.25rem;
 }
 
 .field-select:deep(.field-grid) {
@@ -192,26 +192,26 @@ async function setNestedSort(updates?: Field[]) {
 }
 
 .field-select:deep(.field-grid.group.full.nested) {
-	margin: .25rem 0;
+	margin: 0.25rem 0;
 
 	.field-select {
-		margin: .25rem;
+		margin: 0.25rem;
 	}
 }
 
 .add-field {
-	--v-button-font-size: .875rem;
+	--v-button-font-size: 0.875rem;
 	--v-button-background-color: var(--primary);
 	--v-button-background-color-hover: var(--primary-125);
 
-	margin-top: -.75rem;
+	margin-top: -0.75rem;
 }
 
 .add-field-advanced {
 	display: block;
 	width: max-content;
 	margin: 0 auto;
-	margin-top: .5rem;
+	margin-top: 0.5rem;
 	color: var(--foreground-subdued);
 	transition: color var(--fast) var(--transition);
 

@@ -93,7 +93,7 @@ onUnmounted(() => {
 	width: 100%;
 	height: var(--header-bar-height);
 	margin: 0;
-	padding: 0 .625rem;
+	padding: 0 0.625rem;
 	background-color: var(--background-page);
 	box-shadow: 0;
 	transition: box-shadow var(--medium) var(--transition), margin var(--fast) var(--transition);
@@ -117,7 +117,7 @@ onUnmounted(() => {
 		display: flex;
 		align-items: center;
 		width: 100%;
-		max-width: calc(100% - .75rem - 2.75rem - 7.5rem - .75rem - .5rem);
+		max-width: calc(100% - 0.75rem - 2.75rem - 7.5rem - 0.75rem - 0.5rem);
 		height: 100%;
 		margin-left: 1rem;
 		overflow: hidden;
@@ -127,7 +127,7 @@ onUnmounted(() => {
 		}
 
 		&.full {
-			margin-right: .75rem;
+			margin-right: 0.75rem;
 			padding-right: 0;
 			@media (min-width: 600px) {
 				margin-right: 1.25rem;
@@ -137,17 +137,17 @@ onUnmounted(() => {
 
 		.headline {
 			position: absolute;
-			top: .125rem;
+			top: 0.125rem;
 			left: 0;
 			color: var(--foreground-subdued);
 			font-weight: 600;
-			font-size: .75rem;
+			font-size: 0.75rem;
 			white-space: nowrap;
 			opacity: 1;
 			transition: opacity var(--fast) var(--transition);
 
 			@media (min-width: 600px) {
-				top: -.125rem;
+				top: -0.125rem;
 			}
 		}
 
@@ -202,7 +202,7 @@ onUnmounted(() => {
 
 	.sidebar-toggle {
 		flex-shrink: 0;
-		margin-left: .5rem;
+		margin-left: 0.5rem;
 
 		@media (min-width: 960px) {
 			display: none;

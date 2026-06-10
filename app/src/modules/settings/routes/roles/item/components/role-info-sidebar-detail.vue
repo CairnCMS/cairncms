@@ -52,7 +52,7 @@ const { isCopySupported, copyToClipboard } = useClipboard();
 		--v-icon-color: var(--foreground-subdued);
 		--v-icon-color-hover: var(--foreground-normal);
 
-		margin-left: .25rem;
+		margin-left: 0.25rem;
 	}
 }
 </style>

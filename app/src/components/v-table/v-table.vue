@@ -424,11 +424,11 @@ table :deep(.sortable-ghost .cell) {
 }
 
 .loading .loading-indicator .v-progress-linear {
-	--v-progress-linear-height: .125rem;
+	--v-progress-linear-height: 0.125rem;
 	--v-progress-linear-color: var(--border-normal-alt);
 
 	position: absolute;
-	top: -.125rem;
+	top: -0.125rem;
 	left: 0;
 	width: 100%;
 }

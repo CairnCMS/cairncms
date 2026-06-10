@@ -69,7 +69,7 @@ withDefaults(defineProps<Props>(), {
 }
 
 .title {
-	margin-bottom: .5rem;
+	margin-bottom: 0.5rem;
 }
 
 .content {

@@ -79,7 +79,7 @@ img {
 .extension {
 	color: var(--primary);
 	font-weight: 600;
-	font-size: .6875rem;
+	font-size: 0.6875rem;
 	text-transform: uppercase;
 }
 </style>

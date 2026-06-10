@@ -57,8 +57,8 @@ body {
 
 <style lang="scss" scoped>
 .sidebar-detail {
-	--v-badge-offset-x: .1875rem;
-	--v-badge-offset-y: .25rem;
+	--v-badge-offset-x: 0.1875rem;
+	--v-badge-offset-y: 0.25rem;
 	--v-badge-border-color: var(--background-normal-alt);
 	--v-badge-background-color: var(--primary);
 	--v-badge-color: var(--background-normal);
@@ -66,8 +66,8 @@ body {
 	display: contents;
 
 	:deep(.type-label) {
-		margin-bottom: .25rem;
-		font-size: .875rem;
+		margin-bottom: 0.25rem;
+		font-size: 0.875rem;
 	}
 
 	.toggle {
@@ -150,7 +150,7 @@ body {
 		padding: 1rem;
 
 		:deep(.page-description) {
-			margin-bottom: .5rem;
+			margin-bottom: 0.5rem;
 			color: var(--foreground-subdued);
 		}
 

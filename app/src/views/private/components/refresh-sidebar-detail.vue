@@ -86,11 +86,11 @@ const active = computed(() => interval.value !== null);
 	@include form-grid;
 
 	.type-label {
-		font-size: .875rem;
+		font-size: 0.875rem;
 	}
 }
 
 .v-checkbox {
-	margin-top: .5rem;
+	margin-top: 0.5rem;
 }
 </style>

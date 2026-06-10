@@ -113,9 +113,9 @@ const userFullName = userStore.fullName ?? undefined;
 			&::after {
 				position: absolute;
 				top: -1px;
-				right: .5rem;
-				left: .5rem;
-				height: .125rem;
+				right: 0.5rem;
+				left: 0.5rem;
+				height: 0.125rem;
 				background-color: var(--module-icon);
 				opacity: 0.25;
 				content: '';

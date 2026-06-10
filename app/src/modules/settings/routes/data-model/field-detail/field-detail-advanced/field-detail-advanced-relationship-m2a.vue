@@ -227,7 +227,7 @@ const unsortableJunctionFields = computed(() => {
 	position: relative;
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: .75rem 1.75rem;
+	gap: 0.75rem 1.75rem;
 	margin-top: 3rem;
 
 	.v-icon.arrow {
@@ -259,7 +259,7 @@ const unsortableJunctionFields = computed(() => {
 }
 
 .type-label {
-	margin-bottom: .5rem;
+	margin-bottom: 0.5rem;
 }
 
 .v-list {
@@ -274,7 +274,7 @@ const unsortableJunctionFields = computed(() => {
 	margin-top: 2.25rem;
 
 	ul {
-		padding-top: .25rem;
+		padding-top: 0.25rem;
 		padding-left: 1.5rem;
 	}
 
@@ -309,7 +309,7 @@ const unsortableJunctionFields = computed(() => {
 }
 
 .relational-triggers {
-	--form-horizontal-gap: .75rem;
+	--form-horizontal-gap: 0.75rem;
 	--form-vertical-gap: 1.5rem;
 
 	@include form-grid;

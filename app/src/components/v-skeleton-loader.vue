@@ -80,7 +80,7 @@ body {
 	@include loader;
 
 	& + & {
-		margin-top: .5rem;
+		margin-top: 0.5rem;
 	}
 }
 
@@ -92,14 +92,14 @@ body {
 	@include loader;
 
 	& + & {
-		margin-top: .25rem;
+		margin-top: 0.25rem;
 	}
 }
 
 .text {
 	flex-grow: 1;
-	height: .75rem;
-	border-radius: .125rem;
+	height: 0.75rem;
+	border-radius: 0.125rem;
 
 	@include loader;
 }
@@ -114,7 +114,7 @@ body {
 		flex-shrink: 0;
 		width: 1.5rem;
 		height: 1.5rem;
-		margin-right: .75rem;
+		margin-right: 0.75rem;
 		border-radius: 50%;
 
 		@include loader;
@@ -122,8 +122,8 @@ body {
 
 	.text {
 		flex-grow: 1;
-		height: .75rem;
-		border-radius: .125rem;
+		height: 0.75rem;
+		border-radius: 0.125rem;
 
 		@include loader;
 	}

@@ -136,7 +136,7 @@ body {
 
 	.label:not(:empty) {
 		flex-grow: 1;
-		margin-left: .5rem;
+		margin-left: 0.5rem;
 		transition: color var(--fast) var(--transition);
 
 		input {
@@ -172,7 +172,7 @@ body {
 		position: relative;
 		width: 100%;
 		height: var(--input-height);
-		padding: .625rem;
+		padding: 0.625rem;
 		background-color: var(--background-page);
 		border: var(--border-width) solid var(--border-normal);
 		border-radius: var(--border-radius);
@@ -236,7 +236,7 @@ body {
 	.prepend,
 	.append {
 		display: contents;
-		font-size: .875rem;
+		font-size: 0.875rem;
 	}
 }
 </style>

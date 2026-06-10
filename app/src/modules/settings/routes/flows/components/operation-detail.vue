@@ -211,7 +211,7 @@ function saveOperation() {
 	margin: 3.25rem 0;
 }
 .type-label {
-	margin-bottom: .5rem;
+	margin-bottom: 0.5rem;
 }
 
 .type-title,
@@ -236,13 +236,13 @@ function saveOperation() {
 .required {
 	--v-icon-color: var(--primary);
 
-	margin-top: -.75rem;
-	margin-left: -.25rem;
+	margin-top: -0.75rem;
+	margin-left: -0.25rem;
 }
 
 .error {
 	display: block;
-	margin-top: .25rem;
+	margin-top: 0.25rem;
 	color: var(--danger);
 	font-style: italic;
 }

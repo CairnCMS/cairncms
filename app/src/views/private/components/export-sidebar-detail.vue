@@ -565,7 +565,7 @@ const createAllowed = computed<boolean>(() => hasPermission(collection.value, 'c
 	--form-vertical-gap: 1.5rem;
 
 	.type-label {
-		font-size: .875rem;
+		font-size: 0.875rem;
 	}
 }
 
@@ -579,7 +579,7 @@ const createAllowed = computed<boolean>(() => hasPermission(collection.value, 'c
 
 .v-checkbox {
 	width: 100%;
-	margin-top: .5rem;
+	margin-top: 0.5rem;
 	overflow: hidden;
 	white-space: nowrap;
 	text-overflow: ellipsis;
@@ -604,12 +604,12 @@ const createAllowed = computed<boolean>(() => hasPermission(collection.value, 'c
 	.type-text {
 		display: flex;
 		justify-content: space-between;
-		margin-bottom: .25rem;
+		margin-bottom: 0.25rem;
 		color: var(--white);
 	}
 
 	.v-progress-linear {
-		margin-bottom: .25rem;
+		margin-bottom: 0.25rem;
 	}
 }
 
@@ -622,7 +622,7 @@ const createAllowed = computed<boolean>(() => hasPermission(collection.value, 'c
 	justify-content: center;
 	width: calc(var(--input-height) - 2 * var(--border-width));
 	height: calc(var(--input-height) - 2 * var(--border-width));
-	margin-left: -.5rem;
+	margin-left: -0.5rem;
 	overflow: hidden;
 	background-color: var(--background-normal);
 	border-radius: var(--border-radius);
@@ -635,7 +635,7 @@ const createAllowed = computed<boolean>(() => hasPermission(collection.value, 'c
 .extension {
 	color: var(--primary);
 	font-weight: 600;
-	font-size: .6875rem;
+	font-size: 0.6875rem;
 	text-transform: uppercase;
 }
 
@@ -672,7 +672,7 @@ const createAllowed = computed<boolean>(() => hasPermission(collection.value, 'c
 	text-align: center;
 	display: block;
 	width: 100%;
-	margin-top: .5rem;
+	margin-top: 0.5rem;
 	transition: color var(--fast) var(--transition);
 
 	&:hover {

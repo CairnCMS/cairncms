@@ -98,7 +98,7 @@ function setIcon(icon: string | null) {
 }
 
 .content {
-	padding: .5rem;
+	padding: 0.5rem;
 
 	--v-icon-color-hover: var(--foreground-normal);
 
@@ -115,7 +115,7 @@ function setIcon(icon: string | null) {
 
 .icons {
 	display: grid;
-	grid-gap: .5rem;
+	grid-gap: 0.5rem;
 	grid-template-columns: repeat(auto-fit, 1.5rem);
 	justify-content: center;
 	padding: 1.25rem 0;

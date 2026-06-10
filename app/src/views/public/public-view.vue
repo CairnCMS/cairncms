@@ -102,7 +102,7 @@ const logoURL = computed<string | null>(() => {
 	:slotted(.v-icon) {
 		--v-icon-color: var(--foreground-subdued);
 
-		margin-left: .25rem;
+		margin-left: 0.25rem;
 	}
 
 	.container {
@@ -121,7 +121,7 @@ const logoURL = computed<string | null>(() => {
 		overflow-y: auto;
 
 		/* Page Content Spacing */
-		font-size: .9375rem;
+		font-size: 0.9375rem;
 		line-height: 1.5rem;
 		box-shadow: 0 0 40px 0 rgb(38 50 56 / 0.1);
 		transition: max-width var(--medium) var(--transition);
@@ -175,18 +175,18 @@ const logoURL = computed<string | null>(() => {
 			display: flex;
 			align-items: flex-end;
 			justify-content: center;
-			height: .625rem;
+			height: 0.625rem;
 
 			.note {
 				max-width: 21.25rem;
 				margin: 0 auto;
-				padding: .5rem .75rem;
+				padding: 0.5rem 0.75rem;
 				color: var(--foreground-normal);
-				font-size: .9375rem;
+				font-size: 0.9375rem;
 				line-height: 1.5rem;
 				background-color: rgb(var(--background-page-rgb) / 0.7);
 				border-radius: var(--border-radius);
-				backdrop-filter: blur(.125rem);
+				backdrop-filter: blur(0.125rem);
 			}
 		}
 
@@ -208,7 +208,7 @@ const logoURL = computed<string | null>(() => {
 		height: 4rem;
 
 		.title {
-			margin-top: .125rem;
+			margin-top: 0.125rem;
 			margin-left: 1rem;
 
 			h1 {
@@ -232,7 +232,7 @@ const logoURL = computed<string | null>(() => {
 		width: 3.5rem;
 		height: 3.5rem;
 		background-color: var(--brand);
-		border-radius: calc(var(--border-radius) - .125rem);
+		border-radius: calc(var(--border-radius) - 0.125rem);
 
 		img {
 			width: 2.5rem;

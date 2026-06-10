@@ -152,13 +152,13 @@ const workspaceBoxSize = computed(() => {
 
 .workspace::before {
 	position: absolute;
-	top: -.25rem;
-	left: -.25rem;
+	top: -0.25rem;
+	left: -0.25rem;
 	display: block;
-	width: calc(100% + .5rem);
-	height: calc(100% + .5rem);
+	width: calc(100% + 0.5rem);
+	height: calc(100% + 0.5rem);
 	background-image: radial-gradient(var(--border-normal) 10%, transparent 10%);
-	background-position: -.375rem -.375rem;
+	background-position: -0.375rem -0.375rem;
 	background-size: 1.25rem 1.25rem;
 	opacity: 0;
 	transition: opacity var(--slow) var(--transition);

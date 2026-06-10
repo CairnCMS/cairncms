@@ -618,7 +618,7 @@ function discardAndLeave() {
 }
 
 :deep(.layout-options .type-label) {
-	font-size: .875rem;
+	font-size: 0.875rem;
 }
 
 .subdued {

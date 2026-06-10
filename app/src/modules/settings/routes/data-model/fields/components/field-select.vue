@@ -328,7 +328,7 @@ async function onGroupSortChange(fields: Field[]) {
 
 .field-select {
 	--input-height: 3rem;
-	--input-padding: .5rem;
+	--input-padding: 0.5rem;
 }
 
 .full,
@@ -372,7 +372,7 @@ async function onGroupSortChange(fields: Field[]) {
 
 .duplicate {
 	.type-label {
-		margin-bottom: .25rem;
+		margin-bottom: 0.25rem;
 	}
 
 	.duplicate-field + .duplicate-field {
@@ -396,12 +396,12 @@ async function onGroupSortChange(fields: Field[]) {
 	&::before {
 		position: absolute;
 		top: 0;
-		left: -.125rem;
+		left: -0.125rem;
 		z-index: 1;
-		width: .25rem;
+		width: 0.25rem;
 		height: 100%;
 		background-color: var(--primary);
-		border-radius: .125rem;
+		border-radius: 0.125rem;
 		content: '';
 	}
 
@@ -424,15 +424,15 @@ async function onGroupSortChange(fields: Field[]) {
 		display: flex;
 		align-items: center;
 		width: 100%;
-		margin-bottom: .5rem;
-		padding-top: .5rem;
+		margin-bottom: 0.5rem;
+		padding-top: 0.5rem;
 		color: var(--primary);
 		font-family: var(--family-monospace);
 
 		.drag-handle {
 			--v-icon-color: var(--primary);
 
-			margin-right: .5rem;
+			margin-right: 0.5rem;
 		}
 
 		.name {
@@ -444,11 +444,11 @@ async function onGroupSortChange(fields: Field[]) {
 .field-grid {
 	position: relative;
 	display: grid;
-	grid-gap: .5rem;
+	grid-gap: 0.5rem;
 	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 
 	& + & {
-		margin-top: .5rem;
+		margin-top: 0.5rem;
 	}
 
 	&.nested {
@@ -482,7 +482,7 @@ async function onGroupSortChange(fields: Field[]) {
 			text-overflow: ellipsis;
 
 			.name {
-				margin-right: .5rem;
+				margin-right: 0.5rem;
 				font-family: var(--family-monospace);
 			}
 
@@ -511,7 +511,7 @@ async function onGroupSortChange(fields: Field[]) {
 
 .icons {
 	* + *:not(:last-child) {
-		margin-left: .5rem;
+		margin-left: 0.5rem;
 	}
 }
 
@@ -525,7 +525,7 @@ async function onGroupSortChange(fields: Field[]) {
 
 .required {
 	position: relative;
-	left: -.5rem;
+	left: -0.5rem;
 	color: var(--primary);
 }
 

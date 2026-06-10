@@ -154,8 +154,8 @@ function emitValue() {
 <style lang="scss" scoped>
 .search-badge {
 	--v-badge-background-color: var(--primary);
-	--v-badge-offset-y: .5rem;
-	--v-badge-offset-x: .5rem;
+	--v-badge-offset-y: 0.5rem;
+	--v-badge-offset-x: 0.5rem;
 }
 
 .search-input {
@@ -174,7 +174,7 @@ function emitValue() {
 		--v-icon-color: var(--foreground-subdued);
 
 		display: none;
-		margin-left: .5rem;
+		margin-left: 0.5rem;
 
 		&:hover {
 			--v-icon-color: var(--danger);
@@ -187,12 +187,12 @@ function emitValue() {
 	}
 
 	.icon-search {
-		margin: 0 .5rem;
-		margin-right: .25rem;
+		margin: 0 0.5rem;
+		margin-right: 0.25rem;
 	}
 
 	.icon-filter {
-		margin: 0 .5rem;
+		margin: 0 0.5rem;
 		margin-left: 0;
 	}
 
@@ -242,7 +242,7 @@ function emitValue() {
 	}
 
 	&.filter-border {
-		padding-bottom: .125rem;
+		padding-bottom: 0.125rem;
 		border-bottom: none;
 		border-bottom-right-radius: 0;
 		border-bottom-left-radius: 0;
@@ -250,11 +250,11 @@ function emitValue() {
 
 		&::after {
 			position: absolute;
-			right: .125rem;
-			bottom: -.125rem;
-			left: .125rem;
+			right: 0.125rem;
+			bottom: -0.125rem;
+			left: 0.125rem;
 			width: auto;
-			height: .125rem;
+			height: 0.125rem;
 			background-color: var(--border-subdued);
 			content: '';
 			pointer-events: none;
@@ -301,6 +301,6 @@ function emitValue() {
 
 .filter-input {
 	/* Use margin instead of padding to make sure transition expand takes it into account */
-	margin: .625rem .5rem;
+	margin: 0.625rem 0.5rem;
 }
 </style>

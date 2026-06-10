@@ -147,13 +147,13 @@ body {
 	}
 
 	&.sup {
-		--v-icon-size: .5rem;
+		--v-icon-size: 0.5rem;
 
-		vertical-align: .3125rem;
+		vertical-align: 0.3125rem;
 	}
 
 	&.x-small {
-		--v-icon-size: .75rem;
+		--v-icon-size: 0.75rem;
 	}
 
 	&.small {
@@ -169,20 +169,20 @@ body {
 	}
 
 	&.left {
-		margin-right: .5rem;
+		margin-right: 0.5rem;
 
 		&.small {
-			margin-right: .25rem;
-			margin-left: -.125rem;
+			margin-right: 0.25rem;
+			margin-left: -0.125rem;
 		}
 	}
 
 	&.right {
-		margin-left: .375rem;
+		margin-left: 0.375rem;
 
 		&.small {
-			margin-right: .25rem;
-			margin-left: -.125rem;
+			margin-right: 0.25rem;
+			margin-left: -0.125rem;
 		}
 	}
 }

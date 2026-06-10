@@ -402,7 +402,7 @@ function useDisplayValue() {
 }
 
 .inline-display.label {
-	padding: .25rem .5rem;
+	padding: 0.25rem 0.5rem;
 	padding-right: 1.625rem;
 	color: var(--foreground-subdued);
 	background-color: var(--background-subdued);

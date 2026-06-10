@@ -99,7 +99,7 @@ const modules = computed(() => {
 		:deep(.button) {
 			border: 6px solid transparent;
 			background-clip: padding-box;
-			border-radius: .875rem;
+			border-radius: 0.875rem;
 		}
 	}
 }

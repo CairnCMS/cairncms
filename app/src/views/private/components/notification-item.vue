@@ -53,8 +53,8 @@ function close() {
 	justify-content: flex-start;
 	width: 100%;
 	min-height: 2.75rem;
-	margin-top: .25rem;
-	padding: .75rem;
+	margin-top: 0.25rem;
+	padding: 0.75rem;
 	color: var(--white);
 	border-radius: var(--border-radius);
 
@@ -66,7 +66,7 @@ function close() {
 		justify-content: center;
 		width: 2.75rem;
 		height: 2.75rem;
-		margin-right: .75rem;
+		margin-right: 0.75rem;
 		background-color: rgb(255 255 255 / 0.25);
 		border-radius: 50%;
 	}
@@ -81,14 +81,14 @@ function close() {
 
 	&::after {
 		position: absolute;
-		right: .75rem;
-		bottom: -.3125rem;
+		right: 0.75rem;
+		bottom: -0.3125rem;
 		z-index: -1;
 		display: block;
 		width: 1.25rem;
 		height: 1.25rem;
-		border-radius: .125rem;
-		transform: rotate(45deg) translate(-.3125rem, -.3125rem);
+		border-radius: 0.125rem;
+		transform: rotate(45deg) translate(-0.3125rem, -0.3125rem);
 		transition: transform var(--slow) var(--transition);
 		content: '';
 		pointer-events: none;
@@ -106,7 +106,7 @@ function close() {
 		.icon {
 			width: auto;
 			height: auto;
-			margin-right: .5rem;
+			margin-right: 0.5rem;
 			background-color: transparent;
 		}
 

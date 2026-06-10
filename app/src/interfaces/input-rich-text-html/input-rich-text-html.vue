@@ -483,8 +483,8 @@ function setFocus(val: boolean) {
 
 .remaining {
 	position: absolute;
-	right: .625rem;
-	bottom: .3125rem;
+	right: 0.625rem;
+	bottom: 0.3125rem;
 	color: var(--foreground-subdued);
 	font-weight: 600;
 	text-align: right;

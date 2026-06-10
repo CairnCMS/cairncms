@@ -195,7 +195,7 @@ function cancelAndClose() {
 	margin: 0 auto 1rem;
 	color: var(--foreground-subdued);
 	font-family: var(--family-monospace);
-	letter-spacing: .1625rem;
+	letter-spacing: 0.1625rem;
 	text-align: center;
 }
 

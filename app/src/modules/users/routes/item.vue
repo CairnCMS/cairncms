@@ -490,7 +490,7 @@ function revert(values: Record<string, any>) {
 	margin-bottom: var(--form-vertical-gap);
 	padding: 1.25rem;
 	background-color: var(--background-normal);
-	border-radius: calc(var(--border-radius) + .25rem);
+	border-radius: calc(var(--border-radius) + 0.25rem);
 
 	.avatar {
 		--v-icon-color: var(--foreground-subdued);
@@ -544,7 +544,7 @@ function revert(values: Record<string, any>) {
 			--v-chip-color-hover: var(--foreground-subdued);
 			--v-chip-background-color-hover: var(--background-subdued);
 
-			margin-top: .25rem;
+			margin-top: 0.25rem;
 
 			&.active {
 				--v-chip-color: var(--primary);

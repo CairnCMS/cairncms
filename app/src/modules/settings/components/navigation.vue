@@ -90,10 +90,9 @@ const externalItems = computed(() => {
 </script>
 
 <style scoped>
-
 .version .v-icon {
 	color: var(--foreground-subdued);
-	transform: translateY(.125rem);
+	transform: translateY(0.125rem);
 	transition: color var(--fast) var(--transition);
 }
 

@@ -125,7 +125,7 @@ function nudge() {
 }
 
 .container :slotted(.v-card) .v-card-title {
-	padding-bottom: .5rem;
+	padding-bottom: 0.5rem;
 }
 
 .container :slotted(.v-card) .v-card-actions {
@@ -175,7 +175,7 @@ function nudge() {
 
 	.container :slotted(.v-card) .v-card-actions > .v-button + .v-button {
 		margin-bottom: 0;
-		margin-left: .75rem;
+		margin-left: 0.75rem;
 	}
 }
 

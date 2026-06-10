@@ -54,6 +54,6 @@ async function save() {
 }
 
 .v-button:not(:last-child) {
-	margin-right: .5rem;
+	margin-right: 0.5rem;
 }
 </style>

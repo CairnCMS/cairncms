@@ -88,7 +88,7 @@ h1 {
 	}
 
 	.provider-select {
-		margin-bottom: .5rem;
+		margin-bottom: 0.5rem;
 	}
 }
 </style>

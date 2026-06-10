@@ -52,7 +52,7 @@ body {
 		.v-icon {
 			--v-icon-color: var(--v-breadcrumb-divider-color);
 
-			margin: 0 .25rem;
+			margin: 0 0.25rem;
 		}
 
 		&-link {
@@ -64,7 +64,7 @@ body {
 			.v-icon {
 				--v-icon-color: var(--v-breadcrumb-color);
 
-				margin: 0 .125rem;
+				margin: 0 0.125rem;
 			}
 
 			&:hover {

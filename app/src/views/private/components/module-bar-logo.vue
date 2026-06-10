@@ -60,7 +60,7 @@ function stopSpinnerIfQueueIsEmpty() {
 
 <style lang="scss" scoped>
 .module-bar-logo {
-	--v-progress-linear-height: .125rem;
+	--v-progress-linear-height: 0.125rem;
 	--v-progress-linear-color: var(--white);
 	--v-progress-linear-background-color: rgb(255 255 255 / 0.5);
 
@@ -70,14 +70,14 @@ function stopSpinnerIfQueueIsEmpty() {
 	justify-content: center;
 	width: 3.75rem;
 	height: 3.75rem;
-	padding: .75rem;
+	padding: 0.75rem;
 	background-color: var(--brand);
 
 	.v-progress-linear {
 		position: absolute;
-		right: .625rem;
-		bottom: .3125rem;
-		left: .625rem;
+		right: 0.625rem;
+		bottom: 0.3125rem;
+		left: 0.625rem;
 		width: 2.5rem;
 	}
 
@@ -91,7 +91,7 @@ function stopSpinnerIfQueueIsEmpty() {
 	.logo {
 		position: absolute;
 		top: 1.125rem;
-		left: .625rem;
+		left: 0.625rem;
 		width: 2.5rem;
 		height: 2rem;
 		margin: 0 auto;

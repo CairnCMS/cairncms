@@ -422,7 +422,7 @@ const refreshInterval = computed({
 	transform: translate(-50%, -50%);
 
 	&.header-offset {
-		top: calc(50% - .75rem);
+		top: calc(50% - 0.75rem);
 	}
 }
 
@@ -438,7 +438,7 @@ const refreshInterval = computed({
 	--v-icon-color: var(--danger);
 
 	.v-error {
-		margin-top: .5rem;
+		margin-top: 0.5rem;
 		max-width: 100%;
 	}
 }

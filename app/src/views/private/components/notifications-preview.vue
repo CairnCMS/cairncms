@@ -63,7 +63,7 @@ const { lastFour } = storeToRefs(notificationsStore);
 	}
 
 	&.has-items {
-		margin-bottom: .75rem;
+		margin-bottom: 0.75rem;
 	}
 }
 
@@ -87,7 +87,7 @@ const { lastFour } = storeToRefs(notificationsStore);
 	.padding-box {
 		position: relative;
 		width: 100%;
-		padding: .75rem;
+		padding: 0.75rem;
 	}
 }
 

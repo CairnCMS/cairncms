@@ -56,7 +56,7 @@ useGroupableParent(
 
 <style scoped>
 :global(body) {
-	--v-list-padding: .25rem 0;
+	--v-list-padding: 0.25rem 0;
 	--v-list-border-radius: var(--border-radius);
 	--v-list-max-height: none;
 	--v-list-max-width: none;
@@ -85,12 +85,12 @@ useGroupableParent(
 }
 
 .nav {
-	--v-list-padding: .75rem 0;
+	--v-list-padding: 0.75rem 0;
 	--v-list-item-icon-color: var(--foreground-subdued);
 }
 
 :slotted(.v-divider) {
 	max-width: calc(100% - 1rem);
-	margin: .5rem;
+	margin: 0.5rem;
 }
 </style>

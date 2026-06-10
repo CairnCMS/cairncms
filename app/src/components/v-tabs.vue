@@ -64,7 +64,7 @@ function update(newSelection: readonly (string | number)[]) {
 	align-items: center;
 	justify-content: center;
 	height: 2.375rem;
-	padding: .5rem 1.25rem;
+	padding: 0.5rem 1.25rem;
 	cursor: pointer;
 }
 </style>

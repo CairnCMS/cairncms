@@ -74,7 +74,7 @@ const hasHiddenCollections = computed(
 
 <style lang="scss" scoped>
 .group-name {
-	padding-left: .5rem;
+	padding-left: 0.5rem;
 	font-weight: 600;
 }
 
@@ -104,11 +104,11 @@ const hasHiddenCollections = computed(
 		}
 
 		&:not(:first-child) :deep(.v-divider) {
-			margin-top: .5rem;
+			margin-top: 0.5rem;
 		}
 
 		&.empty :deep(.v-divider) {
-			margin-bottom: .5rem;
+			margin-bottom: 0.5rem;
 		}
 	}
 }
@@ -123,7 +123,7 @@ const hasHiddenCollections = computed(
 	position: sticky;
 	top: 0;
 	z-index: 2;
-	padding: .75rem;
+	padding: 0.75rem;
 	padding-bottom: 0;
 	background-color: var(--background-normal);
 }

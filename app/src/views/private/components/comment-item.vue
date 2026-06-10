@@ -81,14 +81,14 @@ function useEdits() {
 <style lang="scss" scoped>
 .comment-item {
 	position: relative;
-	margin-bottom: .5rem;
-	padding: .5rem;
+	margin-bottom: 0.5rem;
+	padding: 0.5rem;
 	background-color: var(--background-page);
 	border-radius: var(--border-radius);
 }
 
 .comment-item:last-of-type {
-	margin-bottom: .5rem;
+	margin-bottom: 0.5rem;
 }
 
 .comment-item .content {
@@ -97,7 +97,7 @@ function useEdits() {
 	overflow-y: auto;
 	min-width: 100%;
 	max-width: 100%;
-	margin-bottom: -.375rem;
+	margin-bottom: -0.375rem;
 	line-height: 1.4;
 }
 
@@ -116,8 +116,8 @@ function useEdits() {
 }
 
 .comment-item .content :deep(blockquote) {
-	margin: .5rem 0;
-	padding-left: .375rem;
+	margin: 0.5rem 0;
+	padding-left: 0.375rem;
 	color: var(--foreground-subdued);
 	font-style: italic;
 	border-left: 2px solid var(--border-normal);
@@ -125,21 +125,21 @@ function useEdits() {
 
 .comment-item .content :deep(img) {
 	max-width: 100%;
-	margin: .5rem 0;
+	margin: 0.5rem 0;
 	border-radius: var(--border-radius);
 	display: block;
 }
 
 .comment-item .content :deep(hr) {
-	height: .125rem;
-	margin: .75rem 0;
+	height: 0.125rem;
+	margin: 0.75rem 0;
 	border: 0;
 	border-top: 2px solid var(--border-normal);
 }
 
 .comment-item .content :deep(mark) {
 	display: inline-block;
-	padding: .125rem .25rem;
+	padding: 0.125rem 0.25rem;
 	color: var(--primary);
 	line-height: 1;
 	background: var(--primary-alt);
@@ -149,11 +149,11 @@ function useEdits() {
 }
 
 .comment-item .content :deep(pre) {
-	padding: .125rem .25rem;
+	padding: 0.125rem 0.25rem;
 	color: var(--foreground-normal);
 	background-color: var(--background-normal);
 	border-radius: var(--border-radius);
-	margin: .125rem 0;
+	margin: 0.125rem 0;
 	font-family: var(--family-monospace);
 	white-space: nowrap;
 	max-width: 100%;
@@ -161,11 +161,11 @@ function useEdits() {
 }
 
 .comment-item .content :deep(code) {
-	padding: .125rem .25rem;
+	padding: 0.125rem 0.25rem;
 	color: var(--foreground-normal);
 	background-color: var(--background-normal);
 	border-radius: var(--border-radius);
-	margin: .125rem 0;
+	margin: 0.125rem 0;
 	font-family: var(--family-monospace);
 }
 
@@ -176,7 +176,7 @@ function useEdits() {
 }
 
 .comment-item .content :deep(:is(h1, h2, h3, h4, h5, h6)) {
-	margin-top: .75rem;
+	margin-top: 0.75rem;
 	font-weight: 600;
 	font-size: 1rem;
 	color: var(--foreground-normal-alt);
@@ -185,7 +185,7 @@ function useEdits() {
 .comment-item.expand .content::after {
 	position: absolute;
 	right: 0;
-	bottom: .25rem;
+	bottom: 0.25rem;
 	left: 0;
 	z-index: 1;
 	height: 2.5rem;
@@ -201,7 +201,7 @@ function useEdits() {
 .comment-item.expand .content .expand-text {
 	position: absolute;
 	right: 0;
-	bottom: .5rem;
+	bottom: 0.5rem;
 	left: 0;
 	z-index: 2;
 	height: 1.5rem;
@@ -210,12 +210,12 @@ function useEdits() {
 }
 
 .comment-item.expand .content .expand-text span {
-	padding: .25rem .75rem .3125rem;
+	padding: 0.25rem 0.75rem 0.3125rem;
 	color: var(--foreground-subdued);
 	font-weight: 600;
-	font-size: .75rem;
+	font-size: 0.75rem;
 	background-color: var(--background-normal);
-	border-radius: .75rem;
+	border-radius: 0.75rem;
 	transition: color var(--fast) var(--transition), background-color var(--fast) var(--transition);
 }
 
@@ -238,11 +238,11 @@ function useEdits() {
 
 .buttons {
 	position: absolute;
-	right: .5rem;
-	bottom: .5rem;
+	right: 0.5rem;
+	bottom: 0.5rem;
 }
 
 .cancel {
-	margin-right: .25rem;
+	margin-right: 0.25rem;
 }
 </style>

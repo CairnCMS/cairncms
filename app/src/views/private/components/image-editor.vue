@@ -527,7 +527,7 @@ function setAspectRatio() {
 }
 
 .dimensions {
-	margin-right: .75rem;
+	margin-right: 0.75rem;
 	color: var(--foreground-subdued);
 	font-feature-settings: 'tnum';
 }
@@ -537,7 +537,7 @@ function setAspectRatio() {
 }
 
 .toolbar-button {
-	padding: .5rem;
+	padding: 0.5rem;
 	background-color: rgb(255 255 255 / 0.2);
 	border-radius: var(--border-radius);
 	cursor: pointer;
@@ -550,7 +550,7 @@ function setAspectRatio() {
 
 .drag-mode {
 	margin-right: 1rem;
-	margin-left: -.5rem;
+	margin-left: -0.5rem;
 
 	.v-icon {
 		margin-right: 0;
@@ -562,7 +562,7 @@ function setAspectRatio() {
 	}
 
 	.v-icon:first-child {
-		margin-right: .5rem;
+		margin-right: 0.5rem;
 	}
 }
 

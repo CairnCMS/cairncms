@@ -114,12 +114,12 @@ const optionsFields = computed(() => {
 	--form-horizontal-gap: 1.5rem;
 	--form-vertical-gap: 1.5rem;
 
-	padding: .75rem;
+	padding: 0.75rem;
 	border: var(--border-width) solid var(--border-normal);
 	border-radius: var(--border-radius);
 
 	:deep(.type-label) {
-		font-size: .875rem;
+		font-size: 0.875rem;
 	}
 }
 </style>

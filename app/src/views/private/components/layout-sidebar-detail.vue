@@ -52,7 +52,7 @@ const layout = useSync(props, 'modelValue', emit);
 :deep(.layout-options) {
 	--form-vertical-gap: 1.25rem;
 
-	margin-bottom: .25rem;
+	margin-bottom: 0.25rem;
 
 	@include form-grid;
 }

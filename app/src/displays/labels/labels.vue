@@ -18,7 +18,12 @@
 			</v-chip>
 		</template>
 		<template v-else>
-			<display-color v-for="item in items" :key="item.value" v-tooltip="item.text" :value="item.dotColor ?? item.background" />
+			<display-color
+				v-for="item in items"
+				:key="item.value"
+				v-tooltip="item.text"
+				:value="item.dotColor ?? item.background"
+			/>
 		</template>
 	</div>
 </template>
@@ -100,25 +105,25 @@ const items = computed(() => {
 
 :deep(.v-chip.small) {
 	--v-chip-height-small: 1.375rem;
-	--v-chip-padding-small: 0 .5625rem;
+	--v-chip-padding-small: 0 0.5625rem;
 	--v-chip-border-radius-small: 1rem;
 }
 
 .v-chip.has-dot {
-	--v-chip-padding-small: 0 .625rem 0 .5rem;
+	--v-chip-padding-small: 0 0.625rem 0 0.5rem;
 }
 
 .label-dot {
 	display: inline-block;
 	flex-shrink: 0;
-	width: .375rem;
-	height: .375rem;
-	margin-right: .375rem;
+	width: 0.375rem;
+	height: 0.375rem;
+	margin-right: 0.375rem;
 	border-radius: 50%;
 	vertical-align: middle;
 }
 
 .v-chip + .v-chip {
-	margin-left: .25rem;
+	margin-left: 0.25rem;
 }
 </style>

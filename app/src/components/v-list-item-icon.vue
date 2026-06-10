@@ -26,15 +26,15 @@ body {
 
 	display: inline-flex;
 	align-self: center;
-	margin: .5rem 0;
+	margin: 0.5rem 0;
 
 	&:not(:only-child) {
 		&:first-child {
-			margin-right: .75rem;
+			margin-right: 0.75rem;
 		}
 
 		&:last-child {
-			margin-left: .75rem;
+			margin-left: 0.75rem;
 		}
 	}
 
@@ -44,16 +44,16 @@ body {
 			#{$this} {
 				--v-icon-color: var(--v-list-item-icon-color);
 
-				margin-top: .25rem;
-				margin-bottom: .25rem;
+				margin-top: 0.25rem;
+				margin-bottom: 0.25rem;
 
 				&:not(:only-child) {
 					&:first-child {
-						margin-right: .5rem;
+						margin-right: 0.5rem;
 					}
 
 					&:last-child {
-						margin-left: .5rem;
+						margin-left: 0.5rem;
 					}
 				}
 			}

@@ -84,16 +84,16 @@ function isLoading(action: string) {
 	display: flex;
 	align-items: center;
 	height: 3rem;
-	padding: 0 .75rem;
+	padding: 0 0.75rem;
 	background-color: var(--background-input);
 
 	.name {
 		flex-grow: 1;
 
 		.actions {
-			margin-left: .5rem;
+			margin-left: 0.5rem;
 			color: var(--foreground-subdued);
-			font-size: .75rem;
+			font-size: 0.75rem;
 			opacity: 0;
 			transition: opacity var(--fast) var(--transition);
 
@@ -112,7 +112,7 @@ function isLoading(action: string) {
 			}
 
 			.divider {
-				margin: 0 .375rem;
+				margin: 0 0.375rem;
 				cursor: default;
 			}
 		}

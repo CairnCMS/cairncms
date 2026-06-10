@@ -196,7 +196,7 @@ function openSidebar(event: PointerEvent) {
 @import '@/styles/mixins/form-field-sizing';
 
 .private-view {
-	--content-padding: .75rem;
+	--content-padding: 0.75rem;
 	--content-padding-bottom: 3.75rem;
 	--layout-offset-top: calc(var(--header-bar-height) - 1px);
 
@@ -251,7 +251,7 @@ function openSidebar(event: PointerEvent) {
 			display: inline-block;
 			width: 13.75rem;
 			height: 100%;
-			font-size: .875rem;
+			font-size: 0.875rem;
 			background-color: var(--background-page);
 			border-right: 1px solid var(--border-normal);
 
@@ -285,7 +285,7 @@ function openSidebar(event: PointerEvent) {
 		scroll-padding-top: 6.25rem;
 
 		/* Page Content Spacing (Could be converted to Project Setting toggle) */
-		font-size: .9375rem;
+		font-size: 0.9375rem;
 		line-height: 1.5rem;
 
 		main {

@@ -302,7 +302,7 @@ function pointerLeave() {
 .v-workspace-tile.block-container {
 	position: relative;
 	overflow: visible;
-	padding: .25rem;
+	padding: 0.25rem;
 
 	:deep(.header .name) {
 		color: var(--primary);
@@ -313,7 +313,7 @@ function pointerLeave() {
 	}
 
 	.block {
-		padding: 0 .75rem;
+		padding: 0 0.75rem;
 		height: 100%;
 		overflow-y: auto;
 
@@ -322,7 +322,7 @@ function pointerLeave() {
 			font-size: 1.25rem;
 			color: var(--foreground-normal-alt);
 			font-weight: 600;
-			margin-bottom: .5rem;
+			margin-bottom: 0.5rem;
 		}
 	}
 
@@ -340,7 +340,7 @@ function pointerLeave() {
 			bottom: 0;
 			left: 0;
 			right: 0;
-			border-radius: .125rem;
+			border-radius: 0.125rem;
 			z-index: -1;
 			opacity: 0.2;
 			box-shadow: 0 0 0 10px var(--primary);
@@ -392,7 +392,7 @@ function pointerLeave() {
 	.button-hint {
 		width: 2rem;
 		height: 2rem;
-		padding: .25rem;
+		padding: 0.25rem;
 	}
 
 	.hint {
@@ -401,7 +401,7 @@ function pointerLeave() {
 		justify-content: center;
 		align-items: center;
 		padding: 1.25rem 1.25rem 1.25rem 3.75rem;
-		transform: translate(-1px, calc(-50% - .15625rem));
+		transform: translate(-1px, calc(-50% - 0.15625rem));
 	}
 
 	.button {
@@ -498,14 +498,14 @@ function pointerLeave() {
 	--v-icon-color: var(--danger);
 
 	.v-error {
-		margin-top: .5rem;
+		margin-top: 0.5rem;
 		max-width: 100%;
 	}
 }
 
 .status-footer {
 	display: flex;
-	gap: .5rem;
+	gap: 0.5rem;
 }
 
 .fade-enter-active,

@@ -6,7 +6,7 @@
 
 <style>
 body {
-	--v-list-item-content-padding: .5625rem 0;
+	--v-list-item-content-padding: 0.5625rem 0;
 	--v-list-item-content-font-family: var(--family-sans-serif);
 }
 </style>
@@ -38,11 +38,11 @@ body {
 }
 
 .v-list-item-content > :slotted(*:not(:last-child)) {
-	margin-bottom: .125rem;
+	margin-bottom: 0.125rem;
 }
 
 .v-list:not(.nav) .v-list-item-content,
 .v-list-item:not(.nav) .v-list-item-content {
-	--v-list-item-content-padding: .25rem 0;
+	--v-list-item-content-padding: 0.25rem 0;
 }
 </style>

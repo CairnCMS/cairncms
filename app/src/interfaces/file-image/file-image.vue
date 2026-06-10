@@ -240,7 +240,7 @@ img {
 	padding: 2rem;
 
 	.v-icon {
-		margin-bottom: .375rem;
+		margin-bottom: 0.375rem;
 	}
 
 	.message {
@@ -281,8 +281,8 @@ img {
 		width: 100%;
 
 		.v-button {
-			margin-right: .75rem;
-			transform: translateY(.625rem);
+			margin-right: 0.75rem;
+			transform: translateY(0.625rem);
 			opacity: 0;
 			transition: var(--medium) var(--transition);
 			transition-property: opacity transform;
@@ -305,7 +305,7 @@ img {
 		left: 0;
 		z-index: 3;
 		width: 100%;
-		padding: .5rem .75rem;
+		padding: 0.5rem 0.75rem;
 		line-height: 1.2;
 	}
 

@@ -151,7 +151,7 @@ function toPage(page: number) {
 
 .gap {
 	display: none;
-	margin: 0 .25rem;
+	margin: 0 0.25rem;
 	color: var(--foreground-subdued);
 	line-height: 2em;
 }
@@ -167,7 +167,7 @@ function toPage(page: number) {
 	--v-button-background-color: var(--background-subdued);
 	--v-button-color: var(--foreground-normal);
 
-	margin: 0 .125rem;
+	margin: 0 0.125rem;
 	vertical-align: middle;
 }
 

@@ -185,11 +185,11 @@ const steps = computed(() => {
 
 	&::before {
 		position: absolute;
-		top: -.25rem;
-		left: -.25rem;
+		top: -0.25rem;
+		left: -0.25rem;
 		z-index: 1;
-		width: calc(100% + .5rem);
-		height: calc(100% + .5rem);
+		width: calc(100% + 0.5rem);
+		height: calc(100% + 0.5rem);
 		background-color: var(--background-normal-alt);
 		border-radius: var(--border-radius);
 		opacity: 0;
@@ -213,7 +213,7 @@ const steps = computed(() => {
 	}
 
 	& + & {
-		margin-top: .5rem;
+		margin-top: 0.5rem;
 	}
 }
 
@@ -236,27 +236,27 @@ const steps = computed(() => {
 			content: '';
 			position: absolute;
 			width: var(--border-width);
-			left: -.6875rem;
+			left: -0.6875rem;
 			top: 0;
 			background-color: var(--border-subdued);
 			height: 100%;
 		}
 
 		&:first-child::after {
-			top: .5rem;
-			height: calc(100% - .5rem);
+			top: 0.5rem;
+			height: calc(100% - 0.5rem);
 		}
 
 		&:last-child::after {
-			height: .75rem;
+			height: 0.75rem;
 		}
 
 		.inset {
-			padding-top: .75rem;
+			padding-top: 0.75rem;
 			padding-bottom: 2rem;
 
 			.v-detail + .v-detail {
-				margin-top: .75rem;
+				margin-top: 0.75rem;
 			}
 		}
 
@@ -272,14 +272,14 @@ const steps = computed(() => {
 
 	.dot {
 		position: absolute;
-		top: .375rem;
+		top: 0.375rem;
 		left: -1rem;
 		z-index: 2;
-		width: .75rem;
-		height: .75rem;
+		width: 0.75rem;
+		height: 0.75rem;
 		background-color: var(--primary);
 		border: 2px solid var(--background-page);
-		border-radius: .5rem;
+		border-radius: 0.5rem;
 
 		&.resolve {
 			background-color: var(--primary);
@@ -292,7 +292,7 @@ const steps = computed(() => {
 }
 
 .empty {
-	margin-left: .125rem;
+	margin-left: 0.125rem;
 	color: var(--foreground-subdued);
 	font-style: italic;
 }

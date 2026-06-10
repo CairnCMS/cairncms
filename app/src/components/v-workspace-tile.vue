@@ -381,10 +381,10 @@ function useDragDrop() {
 	top: 0;
 	right: 0;
 	z-index: 2;
-	padding: 1.0625rem .875rem;
+	padding: 1.0625rem 0.875rem;
 	color: var(--foreground-subdued);
 	font-weight: 500;
-	font-size: .9375rem;
+	font-size: 0.9375rem;
 	font-family: var(--family-monospace);
 	font-style: normal;
 	line-height: 1;
@@ -412,20 +412,20 @@ function useDragDrop() {
 	display: flex;
 	align-items: center;
 	height: 2.625rem;
-	padding: .75rem;
+	padding: 0.75rem;
 }
 
 .footer {
-	padding: 0 .75rem;
+	padding: 0 0.75rem;
 	border-top: 2px solid var(--border-subdued);
 	margin-top: auto;
-	padding-top: .5rem;
+	padding-top: 0.5rem;
 }
 
 .icon {
 	--v-icon-color: var(--foreground-subdued);
 
-	margin-right: .25rem;
+	margin-right: 0.25rem;
 }
 
 .name {
@@ -459,9 +459,9 @@ function useDragDrop() {
 	right: 0;
 	z-index: 2;
 	display: flex;
-	gap: .25rem;
+	gap: 0.25rem;
 	align-items: center;
-	padding: .75rem .75rem .5rem;
+	padding: 0.75rem 0.75rem 0.5rem;
 	background-color: var(--background-page);
 	border-top-right-radius: var(--border-radius-outline);
 }
@@ -472,64 +472,64 @@ function useDragDrop() {
 }
 
 .resize-handlers .top {
-	top: -.1875rem;
+	top: -0.1875rem;
 	width: 100%;
-	height: .625rem;
+	height: 0.625rem;
 	cursor: ns-resize;
 }
 
 .resize-handlers .right {
 	top: 0;
-	right: -.1875rem;
-	width: .625rem;
+	right: -0.1875rem;
+	width: 0.625rem;
 	height: 100%;
 	cursor: ew-resize;
 }
 
 .resize-handlers .bottom {
-	bottom: -.1875rem;
+	bottom: -0.1875rem;
 	width: 100%;
-	height: .625rem;
+	height: 0.625rem;
 	cursor: ns-resize;
 }
 
 .resize-handlers .left {
 	top: 0;
-	left: -.1875rem;
-	width: .625rem;
+	left: -0.1875rem;
+	width: 0.625rem;
 	height: 100%;
 	cursor: ew-resize;
 }
 
 .resize-handlers .top-left {
-	top: -.1875rem;
-	left: -.1875rem;
-	width: .875rem;
-	height: .875rem;
+	top: -0.1875rem;
+	left: -0.1875rem;
+	width: 0.875rem;
+	height: 0.875rem;
 	cursor: nwse-resize;
 }
 
 .resize-handlers .top-right {
-	top: -.1875rem;
-	right: -.1875rem;
-	width: .875rem;
-	height: .875rem;
+	top: -0.1875rem;
+	right: -0.1875rem;
+	width: 0.875rem;
+	height: 0.875rem;
 	cursor: nesw-resize;
 }
 
 .resize-handlers .bottom-right {
-	right: -.1875rem;
-	bottom: -.1875rem;
-	width: .875rem;
-	height: .875rem;
+	right: -0.1875rem;
+	bottom: -0.1875rem;
+	width: 0.875rem;
+	height: 0.875rem;
 	cursor: nwse-resize;
 }
 
 .resize-handlers .bottom-left {
-	bottom: -.1875rem;
-	left: -.1875rem;
-	width: .875rem;
-	height: .875rem;
+	bottom: -0.1875rem;
+	left: -0.1875rem;
+	width: 0.875rem;
+	height: 0.875rem;
 	cursor: nesw-resize;
 }
 

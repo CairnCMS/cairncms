@@ -177,7 +177,7 @@ function emitValue(val: string) {
 }
 
 .input {
-	padding: .5rem .25rem;
+	padding: 0.5rem 0.25rem;
 
 	&.date,
 	&.timestamp,

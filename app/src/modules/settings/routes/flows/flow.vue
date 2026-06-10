@@ -740,7 +740,7 @@ function discardAndLeave() {
 }
 
 .status-dot {
-	margin-left: .375rem;
+	margin-left: 0.375rem;
 }
 
 .container {

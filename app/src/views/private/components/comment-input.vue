@@ -360,7 +360,7 @@ function pressedEnter() {
 	height: 100%;
 	height: var(--input-height);
 	min-height: 6.25rem;
-	padding: .3125rem;
+	padding: 0.3125rem;
 	overflow: scroll;
 	white-space: pre;
 	background-color: var(--background-input);
@@ -387,15 +387,15 @@ function pressedEnter() {
 	right: 0;
 	bottom: 2.25rem;
 	left: 0;
-	height: .5rem;
+	height: 0.5rem;
 	background: linear-gradient(180deg, rgb(var(--background-page-rgb), 0) 0%, rgb(var(--background-page-rgb), 1) 100%);
 	content: '';
 }
 
 .new-comment .add-mention {
 	position: absolute;
-	bottom: .5rem;
-	left: .5rem;
+	bottom: 0.5rem;
+	left: 0.5rem;
 	color: var(--foreground-subdued);
 	cursor: pointer;
 	transition: color var(--fast) var(--transition);
@@ -403,7 +403,7 @@ function pressedEnter() {
 
 .new-comment .add-emoji {
 	position: absolute;
-	bottom: .5rem;
+	bottom: 0.5rem;
 	left: 2.25rem;
 	color: var(--foreground-subdued);
 	cursor: pointer;
@@ -416,9 +416,9 @@ function pressedEnter() {
 }
 
 .buttons {
-	margin-top: .25rem;
+	margin-top: 0.25rem;
 	display: flex;
-	gap: .25rem;
+	gap: 0.25rem;
 
 	.mention,
 	.emoji-button {

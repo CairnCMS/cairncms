@@ -97,7 +97,7 @@ const currentTriggerOptionFields = computed(() => {
 	margin: 3.25rem 0;
 }
 .type-label {
-	margin-bottom: .5rem;
+	margin-bottom: 0.5rem;
 }
 
 .type-title,

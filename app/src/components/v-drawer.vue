@@ -173,7 +173,7 @@ body {
 		overflow: hidden;
 
 		/* Page Content Spacing (Could be converted to Project Setting toggle) */
-		font-size: .9375rem;
+		font-size: 0.9375rem;
 		line-height: 1.5rem;
 
 		.sidebar {

@@ -296,7 +296,7 @@ function stepDown() {
 	height: var(--input-height);
 
 	.prepend-outer {
-		margin-right: .5rem;
+		margin-right: 0.5rem;
 	}
 
 	.input {
@@ -316,15 +316,15 @@ function stepDown() {
 		transition: border-color var(--fast) var(--transition);
 
 		.prepend {
-			margin-right: .5rem;
+			margin-right: 0.5rem;
 		}
 
 		.step-up {
-			margin-bottom: -.5rem;
+			margin-bottom: -0.5rem;
 		}
 
 		.step-down {
-			margin-top: -.5rem;
+			margin-top: -0.5rem;
 		}
 
 		.step-up,
@@ -381,7 +381,7 @@ function stepDown() {
 
 		.append {
 			flex-shrink: 0;
-			margin-left: .5rem;
+			margin-left: 0.5rem;
 		}
 	}
 
@@ -422,7 +422,7 @@ function stepDown() {
 		height: 2.375rem;
 
 		.input {
-			padding: .5rem .75rem;
+			padding: 0.5rem 0.75rem;
 		}
 	}
 
@@ -451,7 +451,7 @@ function stepDown() {
 		}
 
 		.append-outer {
-			margin-left: .5rem;
+			margin-left: 0.5rem;
 		}
 	}
 }

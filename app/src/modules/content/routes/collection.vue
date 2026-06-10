@@ -643,7 +643,7 @@ function usePermissions() {
 	.saved,
 	.clear {
 		display: inline-block;
-		margin-left: .5rem;
+		margin-left: 0.5rem;
 	}
 
 	.add,
@@ -670,7 +670,7 @@ function usePermissions() {
 	}
 
 	.clear {
-		margin-left: .25rem;
+		margin-left: 0.25rem;
 		color: var(--foreground-subdued);
 
 		&:hover {

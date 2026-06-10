@@ -174,10 +174,10 @@ function discardAndLeave() {
 
 <style lang="scss" scoped>
 .title {
-	margin-bottom: .75rem;
+	margin-bottom: 0.75rem;
 
 	.instant-save {
-		margin-left: .25rem;
+		margin-left: 0.25rem;
 		color: var(--warning);
 	}
 }

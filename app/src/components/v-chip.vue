@@ -96,7 +96,7 @@ body {
 	display: inline-flex;
 	align-items: center;
 	height: 2.25rem;
-	padding: 0 .5rem;
+	padding: 0 0.5rem;
 	color: var(--v-chip-color);
 	font-weight: var(--weight-normal);
 	line-height: 1.375rem;
@@ -130,16 +130,16 @@ body {
 
 	&.x-small {
 		height: 1.25rem;
-		padding: 0 .25rem;
-		font-size: .75rem;
-		border-radius: .625rem;
+		padding: 0 0.25rem;
+		font-size: 0.75rem;
+		border-radius: 0.625rem;
 	}
 
 	&.small {
 		height: var(--v-chip-height-small, 1.5rem);
-		padding: var(--v-chip-padding-small, 0 .25rem);
-		font-size: .875rem;
-		border-radius: var(--v-chip-border-radius-small, .75rem);
+		padding: var(--v-chip-padding-small, 0 0.25rem);
+		font-size: 0.875rem;
+		border-radius: var(--v-chip-border-radius-small, 0.75rem);
 	}
 
 	&.large {
@@ -167,15 +167,15 @@ body {
 
 		.close-outline {
 			position: relative;
-			right: -.25rem;
+			right: -0.25rem;
 			display: inline-flex;
 			align-items: center;
 			justify-content: center;
-			width: .875rem;
-			height: .875rem;
-			margin-left: .25rem;
+			width: 0.875rem;
+			height: 0.875rem;
+			margin-left: 0.25rem;
 			background-color: var(--v-chip-close-color);
-			border-radius: .625rem;
+			border-radius: 0.625rem;
 
 			.close {
 				--v-icon-color: var(--v-chip-background-color);

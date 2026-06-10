@@ -45,7 +45,7 @@ body {
 		flex-grow: 1;
 		order: 1;
 		max-width: 100%;
-		margin-top: .5rem;
+		margin-top: 0.5rem;
 		border: solid;
 		border-color: var(--v-divider-color);
 		border-width: var(--border-width) 0 0 0;
@@ -56,7 +56,7 @@ body {
 		color: var(--v-divider-label-color);
 
 		:slotted(.v-icon) {
-			margin-right: .25rem;
+			margin-right: 0.25rem;
 			transform: translateY(-1px);
 		}
 	}
@@ -78,9 +78,9 @@ body {
 
 		span.wrapper {
 			order: 0;
-			margin-right: .5rem;
+			margin-right: 0.5rem;
 			font-weight: 600;
-			font-size: .875rem;
+			font-size: 0.875rem;
 		}
 
 		hr {
@@ -102,7 +102,7 @@ body {
 
 		span.wrapper {
 			order: 0;
-			margin: 0 0 .5rem;
+			margin: 0 0 0.5rem;
 		}
 	}
 }

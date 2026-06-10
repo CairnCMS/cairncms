@@ -207,7 +207,7 @@ async function onSort(updates: Collection[], removeGroup = false) {
 }
 
 .root-drag-container {
-	padding: .5rem 0;
+	padding: 0.5rem 0;
 	overflow: hidden;
 }
 
@@ -223,7 +223,7 @@ async function onSort(updates: Collection[], removeGroup = false) {
 }
 
 .collection-icon {
-	margin-right: .5rem;
+	margin-right: 0.5rem;
 }
 
 .hidden .collection-name {

@@ -465,7 +465,7 @@ const allowDrag = computed(
 
 <style lang="scss" scoped>
 .v-list {
-	--v-list-padding: 0 0 .25rem;
+	--v-list-padding: 0 0 0.25rem;
 }
 
 .v-list-item {
@@ -492,9 +492,9 @@ const allowDrag = computed(
 }
 
 .actions {
-	margin-top: .5rem;
+	margin-top: 0.5rem;
 	display: flex;
-	gap: .5rem;
+	gap: 0.5rem;
 
 	.v-pagination {
 		margin-left: auto;
@@ -506,7 +506,7 @@ const allowDrag = computed(
 }
 
 .existing {
-	margin-left: .5rem;
+	margin-left: 0.5rem;
 }
 
 .drag-handle {
@@ -525,7 +525,7 @@ const allowDrag = computed(
 	--v-icon-color: var(--foreground-subdued);
 	--v-icon-color-hover: var(--danger);
 
-	margin-right: .5rem;
+	margin-right: 0.5rem;
 	color: var(--foreground-subdued);
 	transition: color var(--fast) var(--transition);
 

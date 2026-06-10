@@ -237,14 +237,14 @@ function addKeyAsNode() {
 
 	:deep(.group) {
 		margin-left: 1.125rem;
-		padding-left: .625rem;
+		padding-left: 0.625rem;
 		border-left: var(--border-width) solid var(--border-subdued);
 	}
 
 	.v-list {
 		min-width: auto;
-		margin: 0px 0px .625rem;
-		padding: 1.25rem 1.25rem .75rem;
+		margin: 0px 0px 0.625rem;
+		padding: 1.25rem 1.25rem 0.75rem;
 		border: var(--border-width) solid var(--border-subdued);
 
 		& > :deep(.group) {
@@ -255,7 +255,7 @@ function addKeyAsNode() {
 	}
 
 	.buttons {
-		padding: 0 .625rem;
+		padding: 0 0.625rem;
 		font-weight: 600;
 	}
 
@@ -316,12 +316,12 @@ function addKeyAsNode() {
 				}
 			}
 			.add {
-				margin-left: .375rem;
-				margin-right: .25rem;
+				margin-left: 0.375rem;
+				margin-right: 0.25rem;
 			}
 			.expand_more {
 				margin-left: auto;
-				margin-right: .375rem;
+				margin-right: 0.375rem;
 				transition: transform var(--medium) var(--transition-out);
 			}
 		}

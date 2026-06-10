@@ -73,7 +73,7 @@ const user = computed(() => {
 <style lang="scss" scoped>
 .revision-item {
 	position: relative;
-	margin-bottom: .75rem;
+	margin-bottom: 0.75rem;
 	margin-left: 1rem;
 
 	.header {
@@ -83,14 +83,14 @@ const user = computed(() => {
 
 		.dot {
 			position: absolute;
-			top: .375rem;
+			top: 0.375rem;
 			left: -1.125rem;
 			z-index: 2;
-			width: .75rem;
-			height: .75rem;
+			width: 0.75rem;
+			height: 0.75rem;
 			background-color: var(--warning);
 			border: 2px solid var(--background-normal);
-			border-radius: .5rem;
+			border-radius: 0.5rem;
 
 			&.create {
 				background-color: var(--primary);
@@ -108,22 +108,22 @@ const user = computed(() => {
 
 	&:not(.last)::after {
 		position: absolute;
-		top: .75rem;
-		left: -.8125rem;
+		top: 0.75rem;
+		left: -0.8125rem;
 		z-index: 1;
-		width: .125rem;
-		height: calc(100% + .75rem);
+		width: 0.125rem;
+		height: calc(100% + 0.75rem);
 		background-color: var(--background-normal-alt);
 		content: '';
 	}
 
 	&::before {
 		position: absolute;
-		top: -.25rem;
+		top: -0.25rem;
 		left: -1.5rem;
 		z-index: 1;
 		width: calc(100% + 2rem);
-		height: calc(100% + .625rem);
+		height: calc(100% + 0.625rem);
 		background-color: var(--background-normal-alt);
 		border-radius: var(--border-radius);
 		opacity: 0;
@@ -147,7 +147,7 @@ const user = computed(() => {
 	}
 
 	& + & {
-		margin-top: .75rem;
+		margin-top: 0.75rem;
 	}
 }
 
@@ -164,8 +164,8 @@ const user = computed(() => {
 
 	.user {
 		span {
-			margin: -.375rem;
-			padding: .375rem;
+			margin: -0.375rem;
+			padding: 0.375rem;
 		}
 
 		&:hover {

@@ -462,7 +462,7 @@ function useOnUpdate() {
 .note {
 	display: block;
 	max-width: 32.5rem;
-	margin-top: .25rem;
+	margin-top: 0.25rem;
 	color: var(--foreground-subdued);
 	font-style: italic;
 }
@@ -478,7 +478,7 @@ function useOnUpdate() {
 
 .precision-scale {
 	display: grid;
-	grid-gap: .75rem;
+	grid-gap: 0.75rem;
 	grid-template-columns: 1fr 1fr;
 }
 

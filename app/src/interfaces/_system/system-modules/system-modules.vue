@@ -273,7 +273,7 @@ function remove(id: string) {
 
 <style scoped>
 .icon {
-	margin: 0 .75rem;
+	margin: 0 0.75rem;
 }
 
 .v-list-item.enabled {
@@ -296,7 +296,7 @@ function remove(id: string) {
 }
 
 .list {
-	margin-bottom: .5rem;
+	margin-bottom: 0.5rem;
 	padding: 0;
 }
 </style>

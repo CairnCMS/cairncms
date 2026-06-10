@@ -498,13 +498,13 @@ function handleKeyDown(event: any) {
 
 	.basemap-select {
 		position: absolute;
-		right: .625rem;
-		bottom: .625rem;
+		right: 0.625rem;
+		bottom: 0.625rem;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		height: 2.25rem;
-		padding: .625rem;
+		padding: 0.625rem;
 		color: var(--foreground-subdued);
 		background-color: var(--background-page);
 		border: var(--border-width) solid var(--background-page);
@@ -512,7 +512,7 @@ function handleKeyDown(event: any) {
 
 		span {
 			width: auto;
-			margin-right: .25rem;
+			margin-right: 0.25rem;
 		}
 
 		.v-select {

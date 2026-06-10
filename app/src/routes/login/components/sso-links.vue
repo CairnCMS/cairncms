@@ -124,7 +124,7 @@ const errorFormatted = computed(() => {
 	}
 
 	& + & {
-		margin-top: .75rem;
+		margin-top: 0.75rem;
 	}
 }
 </style>
