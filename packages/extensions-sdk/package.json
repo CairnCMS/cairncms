@@ -14,11 +14,15 @@
 	},
 	"author": "The CairnCMS Authors",
 	"exports": {
-		".": "./dist/index.js",
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
 		"./cli": "./dist/cli/index.js",
 		"./package.json": "./package.json"
 	},
 	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
 	"bin": {
 		"cairncms-extension": "cli.js"
 	},
@@ -58,9 +62,11 @@
 	"devDependencies": {
 		"@types/fs-extra": "11.0.1",
 		"@types/inquirer": "9.0.3",
+		"@types/node": "22.19.17",
 		"@vitest/coverage-v8": "1.6.1",
 		"typescript": "5.0.4",
-		"vitest": "1.6.1"
+		"vitest": "1.6.1",
+		"vue": "3.2.47"
 	},
 	"engines": {
 		"node": ">=12.20.0"

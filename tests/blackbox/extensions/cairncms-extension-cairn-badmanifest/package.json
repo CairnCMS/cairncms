@@ -1,0 +1,8 @@
+{
+	"name": "cairncms-extension-cairn-badmanifest",
+	"version": "1.0.0",
+	"private": true,
+	"cairncms:extension": {
+		"type": "not-a-real-type"
+	}
+}

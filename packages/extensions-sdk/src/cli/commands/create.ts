@@ -25,6 +25,7 @@ import getSdkVersion from '../utils/get-sdk-version.js';
 import { isLanguage, languageToShort } from '../utils/languages.js';
 import { log } from '../utils/logger.js';
 import copyTemplate from './helpers/copy-template.js';
+import ensureTypecheckScript from './helpers/ensure-typecheck-script.js';
 import getExtensionDevDeps from './helpers/get-extension-dev-deps.js';
 
 type CreateOptions = { language?: string };
@@ -92,7 +93,7 @@ async function createPackageExtension({
 
 	const host = `^${getSdkVersion()}`;
 	const options = { type, path: { app: 'dist/app.js', api: 'dist/api.js' }, entries: [], host };
-	const packageManifest = getPackageManifest(name, options, await getExtensionDevDeps(type));
+	const packageManifest = getPackageManifest(name, options, getExtensionDevDeps(type));
 
 	await fse.writeJSON(path.join(targetPath, 'package.json'), packageManifest, { spaces: '\t' });
 
@@ -150,7 +151,7 @@ async function createLocalExtension({
 				host,
 		  };
 
-	const packageManifest = getPackageManifest(name, options, await getExtensionDevDeps(type, language));
+	const packageManifest = getPackageManifest(name, options, getExtensionDevDeps(type, language));
 
 	await fse.writeJSON(path.join(targetPath, 'package.json'), packageManifest, { spaces: '\t' });
 
@@ -183,6 +184,8 @@ function getPackageManifest(name: string, options: ExtensionOptions, deps: Recor
 	if (options.type === 'bundle') {
 		packageManifest['scripts']['add'] = 'cairncms-extension add';
 	}
+
+	ensureTypecheckScript(packageManifest);
 
 	return packageManifest;
 }

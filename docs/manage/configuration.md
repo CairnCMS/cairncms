@@ -348,7 +348,7 @@ Asset transformation settings:
 ## Extensions
 
 - **`EXTENSIONS_PATH`** — root folder for local extensions, custom migrations, and email templates. Default `./extensions`.
-- **`EXTENSIONS_AUTO_RELOAD`** — when `true`, the API watches extension files and reloads on change. Default `false`. Disabled in development; see the [Creating extensions](/docs/develop/extensions/creating-extensions/) page for the full caveat.
+- **`EXTENSIONS_AUTO_RELOAD`** — when `true`, the API watches extension files and reloads on change, including when `NODE_ENV=development`. Default `false`. See the [Creating extensions](/docs/develop/extensions/creating-extensions/) page for the development workflow.
 - **`EXTENSIONS_CACHE_TTL`** — `Cache-Control` max-age applied to the `/extensions/*` bundle responses. Unset by default (no client cache).
 - **`PACKAGE_FILE_LOCATION`** — directory containing the project `package.json` (used to discover npm-installed extensions). Default `.`.
 

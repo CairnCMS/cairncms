@@ -13,13 +13,78 @@ import { listFolders } from './list-folders.js';
 import { pluralize } from './pluralize.js';
 import { resolvePackage } from './resolve-package.js';
 
+export type ExtensionDiscoveryFailure = {
+	name: string;
+	local: boolean;
+	error: unknown;
+};
+
+export type OnExtensionDiscoveryFailure = (failure: ExtensionDiscoveryFailure) => void;
+
 export const findExtension = async (folder: string, filename: string) => {
 	if (await fse.exists(path.join(folder, `${filename}.cjs`))) return `${filename}.cjs`;
 	if (await fse.exists(path.join(folder, `${filename}.mjs`))) return `${filename}.mjs`;
 	return `${filename}.js`;
 };
 
-export async function resolvePackageExtensions(root: string, extensionNames?: string[]): Promise<Extension[]> {
+async function parsePackageExtension(extensionName: string, extensionPath: string, local: boolean): Promise<Extension> {
+	const extensionManifest: Record<string, any> = await fse.readJSON(path.join(extensionPath, 'package.json'));
+
+	let parsedManifest;
+
+	try {
+		parsedManifest = ExtensionManifest.parse(extensionManifest);
+	} catch (error) {
+		throw new Error(`The extension manifest of "${extensionName}" is not valid.\n${error}`);
+	}
+
+	const extensionOptions = parsedManifest[EXTENSION_PKG_KEY];
+
+	if (extensionOptions.type === 'bundle') {
+		return {
+			path: extensionPath,
+			name: parsedManifest.name,
+			version: parsedManifest.version,
+			type: extensionOptions.type,
+			entrypoint: {
+				app: extensionOptions.path.app,
+				api: extensionOptions.path.api,
+			},
+			entries: extensionOptions.entries,
+			host: extensionOptions.host,
+			local,
+		};
+	} else if (isTypeIn(extensionOptions, HYBRID_EXTENSION_TYPES)) {
+		return {
+			path: extensionPath,
+			name: parsedManifest.name,
+			version: parsedManifest.version,
+			type: extensionOptions.type,
+			entrypoint: {
+				app: extensionOptions.path.app,
+				api: extensionOptions.path.api,
+			},
+			host: extensionOptions.host,
+			local,
+		};
+	} else {
+		return {
+			path: extensionPath,
+			name: parsedManifest.name,
+			version: parsedManifest.version,
+			type: extensionOptions.type,
+			entrypoint: extensionOptions.path,
+			host: extensionOptions.host,
+			local,
+		};
+	}
+}
+
+export async function resolvePackageExtensions(
+	root: string,
+	extensionNames?: string[],
+	onFailure?: OnExtensionDiscoveryFailure
+): Promise<Extension[]> {
 	const extensions: Extension[] = [];
 
 	const local = extensionNames === undefined;
@@ -30,63 +95,27 @@ export async function resolvePackageExtensions(root: string, extensionNames?: st
 	}
 
 	for (const extensionName of extensionNames) {
-		const extensionPath = local ? path.join(root, extensionName) : resolvePackage(extensionName, root);
-		const extensionManifest: Record<string, any> = await fse.readJSON(path.join(extensionPath, 'package.json'));
-
-		let parsedManifest;
-
 		try {
-			parsedManifest = ExtensionManifest.parse(extensionManifest);
+			const extensionPath = local ? path.join(root, extensionName) : resolvePackage(extensionName, root);
+
+			extensions.push(await parsePackageExtension(extensionName, extensionPath, local));
 		} catch (error) {
-			throw new Error(`The extension manifest of "${extensionName}" is not valid.\n${error}`);
-		}
+			if (onFailure) {
+				onFailure({ name: extensionName, local, error });
+				continue;
+			}
 
-		const extensionOptions = parsedManifest[EXTENSION_PKG_KEY];
-
-		if (extensionOptions.type === 'bundle') {
-			extensions.push({
-				path: extensionPath,
-				name: parsedManifest.name,
-				version: parsedManifest.version,
-				type: extensionOptions.type,
-				entrypoint: {
-					app: extensionOptions.path.app,
-					api: extensionOptions.path.api,
-				},
-				entries: extensionOptions.entries,
-				host: extensionOptions.host,
-				local,
-			});
-		} else if (isTypeIn(extensionOptions, HYBRID_EXTENSION_TYPES)) {
-			extensions.push({
-				path: extensionPath,
-				name: parsedManifest.name,
-				version: parsedManifest.version,
-				type: extensionOptions.type,
-				entrypoint: {
-					app: extensionOptions.path.app,
-					api: extensionOptions.path.api,
-				},
-				host: extensionOptions.host,
-				local,
-			});
-		} else {
-			extensions.push({
-				path: extensionPath,
-				name: parsedManifest.name,
-				version: parsedManifest.version,
-				type: extensionOptions.type,
-				entrypoint: extensionOptions.path,
-				host: extensionOptions.host,
-				local,
-			});
+			throw error;
 		}
 	}
 
 	return extensions;
 }
 
-export async function getPackageExtensions(root: string): Promise<Extension[]> {
+export async function getPackageExtensions(
+	root: string,
+	onFailure?: OnExtensionDiscoveryFailure
+): Promise<Extension[]> {
 	let pkg: { dependencies?: Record<string, string> };
 
 	try {
@@ -97,7 +126,7 @@ export async function getPackageExtensions(root: string): Promise<Extension[]> {
 
 	const extensionNames = Object.keys(pkg.dependencies ?? {}).filter((dep) => EXTENSION_NAME_REGEX.test(dep));
 
-	return resolvePackageExtensions(root, extensionNames);
+	return resolvePackageExtensions(root, extensionNames, onFailure);
 }
 
 export async function getLocalExtensions(root: string): Promise<Extension[]> {

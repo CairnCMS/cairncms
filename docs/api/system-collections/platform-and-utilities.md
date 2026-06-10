@@ -85,41 +85,53 @@ This endpoint is gated by `GRAPHQL_INTROSPECTION`. When introspection is disable
 
 ## Extensions (`/extensions/*`)
 
-The `/extensions` subtree exposes the platform's installed extensions. There is no `directus_extensions` table; extensions live on disk and are discovered at startup. The endpoints expose the discovered set, plus the JavaScript chunks the admin app loads at runtime.
+The `/extensions` subtree exposes the platform's installed extensions. There is no `directus_extensions` table. Extensions live on disk and are discovered at startup. The endpoints expose admin-only load diagnostics for the discovered set, plus the JavaScript chunks the admin app loads at runtime.
 
 ### Endpoints
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/extensions/<type>` | List installed extensions of a given type. |
+| `GET` | `/extensions` | Admin-only load diagnostics for every discovered extension. |
 | `GET` | `/extensions/sources/<chunk>` | Fetch the bundled JavaScript chunk for app extensions. |
 
-`<type>` is the pluralized name of any of the nine extension types: `interfaces`, `displays`, `layouts`, `modules`, `panels`, `hooks`, `endpoints`, `operations`, `bundles`. An invalid type returns `404 ROUTE_NOT_FOUND`.
+### `GET /extensions`
 
-### `GET /extensions/<type>`
-
-Returns an array of `ExtensionInfo` objects describing installed extensions of the given type. The admin app uses this to populate the picker in field-configuration drawers (for interfaces and displays) and the panel-type picker on dashboards.
+Returns load diagnostics for every discovered extension. This endpoint is admin-only. A non-admin caller gets `403 FORBIDDEN`.
 
 ```http
-GET /extensions/interfaces
+GET /extensions
 ```
 
 ```json
 {
   "data": [
     {
+      "name": "audit-hook",
+      "type": "hook",
+      "local": true,
+      "status": "loaded"
+    },
+    {
       "name": "my-color-picker",
       "type": "interface",
       "local": false,
-      "version": "1.2.0",
-      "host": "^1.0.0",
-      "entries": []
+      "status": "discovered",
+      "version": "1.2.0"
+    },
+    {
+      "name": "broken-endpoint",
+      "type": "endpoint",
+      "local": true,
+      "status": "failed",
+      "reason": { "code": "ENTRYPOINT_NOT_FOUND", "detail": "Cannot find the extension entrypoint." }
     }
   ]
 }
 ```
 
-Each entry has `name`, `type`, `local` (whether the extension was discovered from a local path or from `node_modules`), and `entries` (populated for bundle extensions to describe their constituent extensions). The optional `version` and `host` fields appear when the extension's package.json declares them.
+Each entry has `name`, `type`, `local`, and `status`. A server extension that registered into the API has status `loaded`. An app extension that was found and built into the app bundle has status `discovered`, since it runs in the browser rather than the server. An extension that errored during discovery, build, or registration has status `failed` and carries a `reason` object with a stable `code` and a `detail` that has been run through the platform's error redaction, so the diagnostics never expose raw paths or secrets from the underlying error. The optional `version` and `entries` fields appear when available.
+
+This is the only `/extensions` route that requires authentication. The source route below is reachable without a token.
 
 ### `GET /extensions/sources/<chunk>`
 
@@ -251,7 +263,8 @@ The collections and endpoints on this page span the permission model:
 
 - **`directus_settings`** — read access is broadly granted by default so the admin app can render branding and pick up project preferences. Write access is admin-only by default.
 - **`/server/info`**, **`/server/health`**, and the spec routes — operator-facing rather than collection-CRUD. The basic `/server/info` and `/server/health` endpoints do not require authentication; spec generation and the per-subsystem `/server/health` detail are scoped to admin-readable schema.
-- **`/extensions/<type>`** and **`/extensions/sources/<chunk>`** — reachable without authentication. The routes sit behind the global authenticate middleware, but that middleware allows anonymous requests by assigning a default accountability, and the extensions controller does not add any further permission gate. The admin app loads these endpoints on its login screen before the user has authenticated, which is why they need to work unauthenticated. If your extension manifest reveals sensitive metadata, treat the endpoint as effectively public.
+- **`/extensions`** — admin-only. The root diagnostics route returns `403 FORBIDDEN` to non-admins.
+- **`/extensions/sources/<chunk>`** — unauthenticated. The admin app loads the bundled extension JavaScript on its login screen before anyone signs in, so this route cannot require a token. It serves client-side bundle code, the same as the static admin assets under `/admin`.
 - **`/utils/*`** — varies. `random/string` and `hash/*` are unauthenticated. `sort`, `revert`, `import`, and `export` require accountability and are gated by per-collection permissions. `cache/clear` is admin-only.
 
 ## GraphQL

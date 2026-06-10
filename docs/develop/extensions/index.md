@@ -78,5 +78,5 @@ The [Creating extensions](/docs/develop/extensions/creating-extensions/) page wa
 
 ## Where to go next
 
-- [Creating extensions](/docs/develop/extensions/creating-extensions/) covers the toolchain end to end: scaffold, build, install, hot reload, publish.
+- [Creating extensions](/docs/develop/extensions/creating-extensions/) covers the toolchain end to end: scaffold, build, install, hot reload, debug, publish.
 - The individual type pages above cover each extension type's API, file structure, and minimum example.

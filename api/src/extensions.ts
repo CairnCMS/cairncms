@@ -26,6 +26,7 @@ import type {
 import { isIn, isTypeIn, pluralize } from '@cairncms/utils';
 import {
 	ensureExtensionDirs,
+	type ExtensionDiscoveryFailure,
 	generateExtensionsEntrypoint,
 	getLocalExtensions,
 	getPackageExtensions,
@@ -38,7 +39,7 @@ import nodeResolveDefault from '@rollup/plugin-node-resolve';
 import virtualDefault from '@rollup/plugin-virtual';
 import chokidar, { FSWatcher } from 'chokidar';
 import express, { Router } from 'express';
-import { clone, escapeRegExp } from 'lodash-es';
+import { clone, debounce, escapeRegExp } from 'lodash-es';
 import { schedule, validate } from 'node-cron';
 import { readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -55,6 +56,7 @@ import logger from './logger.js';
 import * as services from './services/index.js';
 import type { EventHandler } from './types/index.js';
 import getModuleDefault from './utils/get-module-default.js';
+import { sanitizeExtensionError, type SanitizedExtensionError } from './utils/sanitize-extension-error.js';
 import { getSchema } from './utils/get-schema.js';
 import { JobQueue } from './utils/job-queue.js';
 import { Url } from './utils/url.js';
@@ -86,6 +88,16 @@ type BundleConfig = {
 	operations: { name: string; config: OperationApiConfig }[];
 };
 
+type ExtensionDiagnostic = {
+	name: string;
+	type: ExtensionType | null;
+	local: boolean;
+	version?: string;
+	entries?: { name: string; type: string }[];
+	status: 'loaded' | 'failed' | 'discovered';
+	reason?: SanitizedExtensionError;
+};
+
 type AppExtensions = string | null;
 
 type ApiExtensions = { path: string }[];
@@ -97,10 +109,12 @@ type Options = {
 
 const defaultOptions: Options = {
 	schedule: true,
-	watch: env['EXTENSIONS_AUTO_RELOAD'] && env['NODE_ENV'] !== 'development',
+	watch: env['EXTENSIONS_AUTO_RELOAD'],
 };
 
-class ExtensionManager {
+const RELOAD_DEBOUNCE_MS = 250;
+
+export class ExtensionManager {
 	private isLoaded = false;
 	private options: Options;
 
@@ -109,6 +123,8 @@ class ExtensionManager {
 	private appExtensions: AppExtensions = null;
 	private appExtensionChunks: Map<string, string>;
 	private apiExtensions: ApiExtensions = [];
+	private diagnostics: ExtensionDiagnostic[] = [];
+	private appBundleFailure: SanitizedExtensionError | null = null;
 
 	private apiEmitter: Emitter;
 	private hookEvents: EventHandler[] = [];
@@ -118,6 +134,9 @@ class ExtensionManager {
 
 	private reloadQueue: JobQueue;
 	private watcher: FSWatcher | null = null;
+
+	// Paired with the watcher's awaitWriteFinish: a multi-file build (app.js + api.js) collapses into one reload.
+	private reloadDebounced = debounce(() => this.reload(), RELOAD_DEBOUNCE_MS);
 
 	constructor() {
 		this.options = defaultOptions;
@@ -147,11 +166,7 @@ class ExtensionManager {
 		if (!this.isLoaded) {
 			await this.load();
 
-			const loadedExtensions = this.getExtensionsList();
-
-			if (loadedExtensions.length > 0) {
-				logger.info(`Loaded extensions: ${loadedExtensions.map((ext) => ext.name).join(', ')}`);
-			}
+			this.logExtensionStatus();
 		}
 
 		if (this.options.watch && !wasWatcherInitialized) {
@@ -189,10 +204,115 @@ class ExtensionManager {
 				if (removedExtensions.length > 0) {
 					logger.info(`Removed extensions: ${removedExtensions.join(', ')}`);
 				}
+
+				this.logExtensionStatus();
 			} else {
 				logger.warn('Extensions have to be loaded before they can be reloaded');
 			}
 		});
+	}
+
+	public getDiagnostics(): ExtensionDiagnostic[] {
+		return this.diagnostics.map((diagnostic) => {
+			const copy: ExtensionDiagnostic = {
+				name: diagnostic.name,
+				type: diagnostic.type,
+				local: diagnostic.local,
+				status: diagnostic.status,
+			};
+
+			if (diagnostic.version) copy.version = diagnostic.version;
+			if (diagnostic.entries) copy.entries = diagnostic.entries.map((entry) => ({ ...entry }));
+			if (diagnostic.reason) copy.reason = { ...diagnostic.reason };
+
+			return copy;
+		});
+	}
+
+	private logExtensionStatus(): void {
+		const loaded = this.diagnostics.filter((diagnostic) => diagnostic.status === 'loaded');
+
+		if (loaded.length > 0) {
+			logger.info(`Loaded extensions: ${loaded.map((diagnostic) => diagnostic.name).join(', ')}`);
+		}
+
+		const discovered = this.diagnostics.filter((diagnostic) => diagnostic.status === 'discovered');
+
+		if (discovered.length > 0) {
+			logger.info(`Discovered app extensions: ${discovered.map((diagnostic) => diagnostic.name).join(', ')}`);
+		}
+
+		const failed = this.diagnostics.filter((diagnostic) => diagnostic.status === 'failed');
+
+		if (failed.length > 0) {
+			logger.warn(
+				`Failed to load extensions: ${failed
+					.map((diagnostic) => `${diagnostic.name} (${diagnostic.reason?.code ?? 'UNKNOWN'})`)
+					.join(', ')}`
+			);
+		}
+	}
+
+	private recordLoaded(extension: Extension): void {
+		const diagnostic: ExtensionDiagnostic = {
+			name: extension.name,
+			type: extension.type,
+			local: extension.local,
+			status: 'loaded',
+		};
+
+		if (extension.version) diagnostic.version = extension.version;
+
+		if (extension.type === 'bundle') {
+			diagnostic.entries = extension.entries.map((entry) => ({ name: entry.name, type: entry.type }));
+		}
+
+		this.diagnostics.push(diagnostic);
+	}
+
+	private recordFailed(extension: Extension, reason: SanitizedExtensionError): void {
+		const diagnostic: ExtensionDiagnostic = {
+			name: extension.name,
+			type: extension.type,
+			local: extension.local,
+			status: 'failed',
+			reason,
+		};
+
+		if (extension.version) diagnostic.version = extension.version;
+
+		if (extension.type === 'bundle') {
+			diagnostic.entries = extension.entries.map((entry) => ({ name: entry.name, type: entry.type }));
+		}
+
+		this.diagnostics.push(diagnostic);
+	}
+
+	private recordAppDiagnostics(): void {
+		const appExtensions = this.extensions.filter((extension) => isIn(extension.type, APP_EXTENSION_TYPES));
+
+		for (const extension of appExtensions) {
+			const diagnostic: ExtensionDiagnostic = {
+				name: extension.name,
+				type: extension.type,
+				local: extension.local,
+				status: 'discovered',
+			};
+
+			if (extension.version) diagnostic.version = extension.version;
+
+			this.diagnostics.push(diagnostic);
+		}
+
+		if (this.appBundleFailure) {
+			this.diagnostics.push({
+				name: '(app bundle)',
+				type: null,
+				local: false,
+				status: 'failed',
+				reason: this.appBundleFailure,
+			});
+		}
 	}
 
 	public getExtensionsList(type?: ExtensionType) {
@@ -260,13 +380,20 @@ class ExtensionManager {
 	}
 
 	private async load(): Promise<void> {
+		this.diagnostics = [];
+		this.appBundleFailure = null;
+		this.extensions = [];
+		this.hookEmbedsHead = [];
+		this.hookEmbedsBody = [];
+
 		try {
 			await ensureExtensionDirs(env['EXTENSIONS_PATH'], NESTED_EXTENSION_TYPES);
 
 			this.extensions = await this.getExtensions();
 		} catch (err: any) {
-			logger.warn(`Couldn't load extensions`);
-			logger.warn(err);
+			const reason = sanitizeExtensionError(err, 'DISCOVERY_FAILED');
+			logger.warn(`Couldn't load extensions: ${reason.code} ${reason.detail}`);
+			this.diagnostics.push({ name: '(extension discovery)', type: null, local: true, status: 'failed', reason });
 		}
 
 		await this.registerHooks();
@@ -276,6 +403,7 @@ class ExtensionManager {
 
 		if (env['SERVE_APP']) {
 			this.appExtensions = await this.generateExtensionBundle();
+			this.recordAppDiagnostics();
 		}
 
 		this.isLoaded = true;
@@ -298,14 +426,18 @@ class ExtensionManager {
 
 		const extensionDirUrl = pathToRelativeUrl(env['EXTENSIONS_PATH']);
 
+		// With SERVE_APP off, Vite owns app extensions, so the watcher tracks only server-relevant entrypoints.
+		const serveApp = env['SERVE_APP'];
+
 		const localExtensionUrls = NESTED_EXTENSION_TYPES.flatMap((type) => {
+			if (!serveApp && isIn(type, APP_EXTENSION_TYPES)) return [];
+
 			const typeDir = path.posix.join(extensionDirUrl, pluralize(type));
 
 			if (isIn(type, HYBRID_EXTENSION_TYPES)) {
-				return [
-					path.posix.join(typeDir, '*', `app.{${JAVASCRIPT_FILE_EXTS.join()}}`),
-					path.posix.join(typeDir, '*', `api.{${JAVASCRIPT_FILE_EXTS.join()}}`),
-				];
+				const apiGlob = path.posix.join(typeDir, '*', `api.{${JAVASCRIPT_FILE_EXTS.join()}}`);
+
+				return serveApp ? [path.posix.join(typeDir, '*', `app.{${JAVASCRIPT_FILE_EXTS.join()}}`), apiGlob] : [apiGlob];
 			} else {
 				return path.posix.join(typeDir, '*', `index.{${JAVASCRIPT_FILE_EXTS.join()}}`);
 			}
@@ -315,17 +447,20 @@ class ExtensionManager {
 			[path.resolve('package.json'), path.posix.join(extensionDirUrl, '*', 'package.json'), ...localExtensionUrls],
 			{
 				ignoreInitial: true,
+				awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 50 },
 			}
 		);
 
 		this.watcher
-			.on('add', () => this.reload())
-			.on('change', () => this.reload())
-			.on('unlink', () => this.reload());
+			.on('add', () => this.reloadDebounced())
+			.on('change', () => this.reloadDebounced())
+			.on('unlink', () => this.reloadDebounced());
 	}
 
 	private async closeWatcher(): Promise<void> {
 		if (this.watcher) {
+			this.reloadDebounced.cancel();
+
 			await this.watcher.close();
 
 			this.watcher = null;
@@ -337,14 +472,15 @@ class ExtensionManager {
 			const toPackageExtensionPaths = (extensions: Extension[]) =>
 				extensions
 					.filter((extension) => !extension.local || extension.type === 'bundle')
-					.flatMap((extension) =>
-						isTypeIn(extension, HYBRID_EXTENSION_TYPES) || extension.type === 'bundle'
-							? [
-									path.resolve(extension.path, extension.entrypoint.app),
-									path.resolve(extension.path, extension.entrypoint.api),
-							  ]
-							: path.resolve(extension.path, extension.entrypoint)
-					);
+					.flatMap((extension) => {
+						if (isTypeIn(extension, HYBRID_EXTENSION_TYPES) || extension.type === 'bundle') {
+							const apiPath = path.resolve(extension.path, extension.entrypoint.api);
+
+							return env['SERVE_APP'] ? [path.resolve(extension.path, extension.entrypoint.app), apiPath] : [apiPath];
+						}
+
+						return path.resolve(extension.path, extension.entrypoint);
+					});
 
 			const addedPackageExtensionPaths = toPackageExtensionPaths(added);
 			const removedPackageExtensionPaths = toPackageExtensionPaths(removed);
@@ -355,9 +491,41 @@ class ExtensionManager {
 	}
 
 	private async getExtensions(): Promise<Extension[]> {
-		const packageExtensions = await getPackageExtensions(env['PACKAGE_FILE_LOCATION']);
-		const localPackageExtensions = await resolvePackageExtensions(env['EXTENSIONS_PATH']);
-		const localExtensions = await getLocalExtensions(env['EXTENSIONS_PATH']);
+		const onDiscoveryFailure = (failure: ExtensionDiscoveryFailure) => {
+			const reason = sanitizeExtensionError(failure.error, 'MANIFEST_INVALID');
+
+			this.diagnostics.push({
+				name: failure.name,
+				type: null,
+				local: failure.local,
+				status: 'failed',
+				reason,
+			});
+		};
+
+		const packageExtensions = await getPackageExtensions(env['PACKAGE_FILE_LOCATION'], onDiscoveryFailure);
+
+		const localPackageExtensions = await resolvePackageExtensions(
+			env['EXTENSIONS_PATH'],
+			undefined,
+			onDiscoveryFailure
+		);
+
+		let localExtensions: Extension[] = [];
+
+		try {
+			localExtensions = await getLocalExtensions(env['EXTENSIONS_PATH']);
+		} catch (error) {
+			const reason = sanitizeExtensionError(error, 'DISCOVERY_FAILED');
+
+			this.diagnostics.push({
+				name: '(local extensions)',
+				type: null,
+				local: true,
+				status: 'failed',
+				reason,
+			});
+		}
 
 		return [...packageExtensions, ...localPackageExtensions, ...localExtensions].filter(
 			(extension) => env['SERVE_APP'] || APP_EXTENSION_TYPES.includes(extension.type as any) === false
@@ -365,6 +533,8 @@ class ExtensionManager {
 	}
 
 	private async generateExtensionBundle(): Promise<string | null> {
+		this.appExtensionChunks.clear();
+
 		const sharedDepsMapping = await this.getSharedDepsMapping(APP_SHARED_DEPS);
 
 		const internalImports = Object.entries(sharedDepsMapping).map(([name, path]) => ({
@@ -394,8 +564,8 @@ class ExtensionManager {
 
 			return output[0].code;
 		} catch (error: any) {
-			logger.warn(`Couldn't bundle App extensions`);
-			logger.warn(error);
+			this.appBundleFailure = sanitizeExtensionError(error, 'BUNDLE_BUILD_FAILED');
+			logger.warn(`Couldn't bundle app extensions: ${this.appBundleFailure.code} ${this.appBundleFailure.detail}`);
 		}
 
 		return null;
@@ -438,9 +608,12 @@ class ExtensionManager {
 				this.registerHook(config);
 
 				this.apiExtensions.push({ path: hookPath });
+
+				this.recordLoaded(hook);
 			} catch (error: any) {
-				logger.warn(`Couldn't register hook "${hook.name}"`);
-				logger.warn(error);
+				const reason = sanitizeExtensionError(error, 'REGISTRATION_FAILED');
+				logger.warn(`Couldn't register hook "${hook.name}": ${reason.code} ${reason.detail}`);
+				this.recordFailed(hook, reason);
 			}
 		}
 	}
@@ -461,9 +634,12 @@ class ExtensionManager {
 				this.registerEndpoint(config, endpoint.name);
 
 				this.apiExtensions.push({ path: endpointPath });
+
+				this.recordLoaded(endpoint);
 			} catch (error: any) {
-				logger.warn(`Couldn't register endpoint "${endpoint.name}"`);
-				logger.warn(error);
+				const reason = sanitizeExtensionError(error, 'REGISTRATION_FAILED');
+				logger.warn(`Couldn't register endpoint "${endpoint.name}": ${reason.code} ${reason.detail}`);
+				this.recordFailed(endpoint, reason);
 			}
 		}
 	}
@@ -498,9 +674,12 @@ class ExtensionManager {
 				this.registerOperation(config);
 
 				this.apiExtensions.push({ path: operationPath });
+
+				this.recordLoaded(operation);
 			} catch (error: any) {
-				logger.warn(`Couldn't register operation "${operation.name}"`);
-				logger.warn(error);
+				const reason = sanitizeExtensionError(error, 'REGISTRATION_FAILED');
+				logger.warn(`Couldn't register operation "${operation.name}": ${reason.code} ${reason.detail}`);
+				this.recordFailed(operation, reason);
 			}
 		}
 	}
@@ -531,9 +710,12 @@ class ExtensionManager {
 				}
 
 				this.apiExtensions.push({ path: bundlePath });
+
+				this.recordLoaded(bundle);
 			} catch (error: any) {
-				logger.warn(`Couldn't register bundle "${bundle.name}"`);
-				logger.warn(error);
+				const reason = sanitizeExtensionError(error, 'REGISTRATION_FAILED');
+				logger.warn(`Couldn't register bundle "${bundle.name}": ${reason.code} ${reason.detail}`);
+				this.recordFailed(bundle, reason);
 			}
 		}
 	}
@@ -667,7 +849,12 @@ class ExtensionManager {
 		flowManager.clearOperations();
 
 		for (const apiExtension of this.apiExtensions) {
-			delete require.cache[require.resolve(apiExtension.path)];
+			try {
+				delete require.cache[require.resolve(apiExtension.path)];
+			} catch (error: any) {
+				// A removed extension has no cached entry to evict, and require.resolve throws on its missing path.
+				if (error?.code !== 'MODULE_NOT_FOUND') throw error;
+			}
 		}
 
 		this.apiExtensions = [];

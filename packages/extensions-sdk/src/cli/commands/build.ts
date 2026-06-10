@@ -24,6 +24,7 @@ import virtualDefault from '@rollup/plugin-virtual';
 import chalk from 'chalk';
 import fse from 'fs-extra';
 import ora from 'ora';
+import { builtinModules } from 'node:module';
 import path from 'path';
 import type { Plugin, RollupError, RollupOptions, OutputOptions as RollupOutputOptions } from 'rollup';
 import { rollup, watch as rollupWatch } from 'rollup';
@@ -72,15 +73,18 @@ export default async function build(options: BuildOptions): Promise<void> {
 		}
 
 		let extensionManifest: TExtensionManifest;
+		let packageJson: Record<string, any>;
 
 		try {
-			extensionManifest = ExtensionManifest.parse(await fse.readJSON(packagePath));
+			packageJson = await fse.readJSON(packagePath);
+			extensionManifest = ExtensionManifest.parse(packageJson);
 		} catch (err) {
 			log(`Current directory is not a valid CairnCMS extension.`, 'error');
 			process.exit(1);
 		}
 
 		const extensionOptions = extensionManifest[EXTENSION_PKG_KEY];
+		const runtimeDeps = collectRuntimeDeps(packageJson);
 
 		const format: Format = extensionManifest.type === 'module' ? 'esm' : 'cjs';
 
@@ -93,6 +97,7 @@ export default async function build(options: BuildOptions): Promise<void> {
 				watch,
 				sourcemap,
 				minify,
+				runtimeDeps,
 			});
 		} else if (isTypeIn(extensionOptions, HYBRID_EXTENSION_TYPES)) {
 			await buildHybridExtension({
@@ -104,6 +109,7 @@ export default async function build(options: BuildOptions): Promise<void> {
 				watch,
 				sourcemap,
 				minify,
+				runtimeDeps,
 			});
 		} else {
 			await buildAppOrApiExtension({
@@ -114,6 +120,7 @@ export default async function build(options: BuildOptions): Promise<void> {
 				watch,
 				sourcemap,
 				minify,
+				runtimeDeps,
 			});
 		}
 	} else {
@@ -152,11 +159,13 @@ export default async function build(options: BuildOptions): Promise<void> {
 		}
 
 		let format: Format = 'cjs';
+		let runtimeDeps: string[] = [];
 		const manifestPath = path.resolve('package.json');
 
 		if (await fse.pathExists(manifestPath)) {
 			const manifest = await fse.readJSON(manifestPath).catch(() => null);
 			if (manifest?.type === 'module') format = 'esm';
+			runtimeDeps = collectRuntimeDeps(manifest);
 		}
 
 		if (type === 'bundle') {
@@ -193,6 +202,7 @@ export default async function build(options: BuildOptions): Promise<void> {
 				watch,
 				sourcemap,
 				minify,
+				runtimeDeps,
 			});
 		} else if (isIn(type, HYBRID_EXTENSION_TYPES)) {
 			const splitInput = tryParseJson(input);
@@ -229,6 +239,7 @@ export default async function build(options: BuildOptions): Promise<void> {
 				watch,
 				sourcemap,
 				minify,
+				runtimeDeps,
 			});
 		} else {
 			await buildAppOrApiExtension({
@@ -239,6 +250,7 @@ export default async function build(options: BuildOptions): Promise<void> {
 				watch,
 				sourcemap,
 				minify,
+				runtimeDeps,
 			});
 		}
 	}
@@ -252,6 +264,7 @@ async function buildAppOrApiExtension({
 	watch,
 	sourcemap,
 	minify,
+	runtimeDeps,
 }: {
 	type: AppExtensionType | ApiExtensionType;
 	input: string;
@@ -260,6 +273,7 @@ async function buildAppOrApiExtension({
 	watch: boolean;
 	sourcemap: boolean;
 	minify: boolean;
+	runtimeDeps: string[];
 }) {
 	if (!(await fse.pathExists(input)) || !(await fse.stat(input)).isFile()) {
 		log(`Entrypoint ${chalk.bold(input)} does not exist.`, 'error');
@@ -276,7 +290,7 @@ async function buildAppOrApiExtension({
 
 	const mode = isIn(type, APP_EXTENSION_TYPES) ? 'browser' : 'node';
 
-	const rollupOptions = getRollupOptions({ mode, input, sourcemap, minify, plugins });
+	const rollupOptions = getRollupOptions({ mode, input, sourcemap, minify, plugins, runtimeDeps });
 	const rollupOutputOptions = getRollupOutputOptions({ mode, output, format, sourcemap });
 
 	if (watch) {
@@ -295,6 +309,7 @@ async function buildHybridExtension({
 	watch,
 	sourcemap,
 	minify,
+	runtimeDeps,
 }: {
 	inputApp: string;
 	inputApi: string;
@@ -304,6 +319,7 @@ async function buildHybridExtension({
 	watch: boolean;
 	sourcemap: boolean;
 	minify: boolean;
+	runtimeDeps: string[];
 }) {
 	if (!(await fse.pathExists(inputApp)) || !(await fse.stat(inputApp)).isFile()) {
 		log(`App entrypoint ${chalk.bold(inputApp)} does not exist.`, 'error');
@@ -342,6 +358,7 @@ async function buildHybridExtension({
 		sourcemap,
 		minify,
 		plugins,
+		runtimeDeps,
 	});
 
 	const rollupOutputOptionsApp = getRollupOutputOptions({ mode: 'browser', output: outputApp, format, sourcemap });
@@ -367,6 +384,7 @@ async function buildBundleExtension({
 	watch,
 	sourcemap,
 	minify,
+	runtimeDeps,
 }: {
 	entries: ExtensionOptionsBundleEntry[];
 	outputApp: string;
@@ -375,6 +393,7 @@ async function buildBundleExtension({
 	watch: boolean;
 	sourcemap: boolean;
 	minify: boolean;
+	runtimeDeps: string[];
 }) {
 	if (outputApp.length === 0) {
 		log(`App output file can not be empty.`, 'error');
@@ -406,6 +425,7 @@ async function buildBundleExtension({
 		sourcemap,
 		minify,
 		plugins,
+		runtimeDeps,
 	});
 
 	const rollupOutputOptionsApp = getRollupOutputOptions({ mode: 'browser', output: outputApp, format, sourcemap });
@@ -508,22 +528,38 @@ async function watchExtension(config: RollupConfig | RollupConfig[]) {
 	}
 }
 
+function collectRuntimeDeps(pkg: Record<string, any> | null): string[] {
+	return [...Object.keys(pkg?.['dependencies'] ?? {}), ...Object.keys(pkg?.['optionalDependencies'] ?? {})];
+}
+
+function createNodeExternal(runtimeDeps: string[]) {
+	const builtins = new Set([...builtinModules, ...builtinModules.map((name) => `node:${name}`)]);
+	const packages = [...API_SHARED_DEPS, ...runtimeDeps];
+
+	return (id: string) => {
+		if (builtins.has(id)) return true;
+		return packages.some((pkg) => id === pkg || id.startsWith(`${pkg}/`));
+	};
+}
+
 function getRollupOptions({
 	mode,
 	input,
 	sourcemap,
 	minify,
 	plugins,
+	runtimeDeps = [],
 }: {
 	mode: RollupMode;
 	input: string | Record<string, string>;
 	sourcemap: boolean;
 	minify: boolean;
 	plugins: Plugin[];
+	runtimeDeps?: string[];
 }): RollupOptions {
 	return {
 		input: typeof input !== 'string' ? 'entry' : input,
-		external: mode === 'browser' ? APP_SHARED_DEPS : API_SHARED_DEPS,
+		external: mode === 'browser' ? APP_SHARED_DEPS : createNodeExternal(runtimeDeps),
 		plugins: [
 			typeof input !== 'string' ? virtual(input) : null,
 			mode === 'browser' ? (vue({ preprocessStyles: true }) as Plugin) : null,

@@ -137,14 +137,10 @@ paths:
     $ref: './paths/collections/collection.yaml'
 
   # Extensions
-  /extensions/interfaces:
-    $ref: './paths/extensions/interfaces.yaml'
-  /extensions/layouts:
-    $ref: './paths/extensions/layouts.yaml'
-  /extensions/displays:
-    $ref: './paths/extensions/displays.yaml'
-  /extensions/modules:
-    $ref: './paths/extensions/modules.yaml'
+  /extensions:
+    $ref: './paths/extensions/diagnostics.yaml'
+  /extensions/sources/{chunk}:
+    $ref: './paths/extensions/sources.yaml'
 
   # Fields
   /fields:

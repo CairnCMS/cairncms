@@ -125,17 +125,119 @@ export default {
 
 The supported option is `plugins`, which is an array of Rollup plugins added on top of the SDK's built-in plugins.
 
+## TypeScript
+
+Choose **TypeScript** at the scaffolder's language prompt to get a typed extension. The scaffold adds a
+`tsconfig.json`, a `typecheck` script, and a pinned toolchain (`typescript`, `vue` for app extensions, and
+`@types/node` for server extensions).
+
+Type-check your extension with:
+
+```bash
+npm run typecheck
+```
+
+That runs `tsc --noEmit`. The build does not type-check: `cairncms-extension build` uses esbuild, which strips
+types without checking them, so run `typecheck` separately, in your editor, a pre-commit step, or CI.
+
+What to import:
+
+- Import the `define*` helpers and their types from `@cairncms/extensions-sdk`, for example `import { defineInterface } from '@cairncms/extensions-sdk'`. That package is the public authoring surface. Do not import CairnCMS internal packages directly.
+- App extensions (interface, display, layout, module, panel, and the app side of an operation) include a `shims.d.ts` that declares `*.vue` imports, so you can import a single-file component and keep it typed.
+
+The scaffold pins exact toolchain versions for reproducibility, so an extension scaffolded today behaves the
+same later regardless of new `typescript` releases. To move to a newer toolchain, bump the versions in your
+`package.json`.
+
 ## Live reloading during development
 
-CairnCMS can reload extensions automatically when their files change on disk. Set the operator-side environment variable:
+CairnCMS can reload extensions when their files change on disk, with no manual restart. The API watcher is opt-in through an environment variable, off by default:
 
 ```bash
 EXTENSIONS_AUTO_RELOAD=true
 ```
 
-There is one important caveat: the extension watcher is intentionally disabled when `NODE_ENV=development`, on the assumption that development environments use a process-level reloader (nodemon, the dev script, and so on) that would conflict with the in-process watcher. To exercise the auto-reload path, leave `NODE_ENV` unset or set to `production`.
+CairnCMS runs an in-process watcher for this. The API dev script (`tsx watch`) only tracks the API source, not the extension build output, so this watcher is what notices a rebuild. A multi-file build, such as the app and api halves of a hybrid or a bundle, settles into a single reload rather than one reload per file, so the server picks up the finished build instead of a half-written one.
 
-The combination most developers want is `cairncms-extension build --watch` running in one terminal (rebuilding the extension on file change) and CairnCMS running with `EXTENSIONS_AUTO_RELOAD=true` (picking up the rebuilt output without a manual restart).
+You rebuild your extension with the build CLI in watch mode, and run CairnCMS one of two ways alongside it.
+
+### Against the app dev server
+
+Run the API and the admin app from the CairnCMS repo, with your extension linked into the repo's extensions folder. Each command is its own terminal:
+
+```bash
+# API, with the extension watcher enabled
+EXTENSIONS_AUTO_RELOAD=true pnpm --filter api dev
+
+# admin app dev server
+pnpm --filter app dev
+
+# your extension, rebuilding on every change
+cairncms-extension build --watch
+
+# link your extension into the repo's extensions folder (run once)
+cairncms-extension link <path-to-cairncms-repo>/api/extensions
+```
+
+Vite watches the `api/extensions` folder directly. Editing an app extension (an interface, display, layout, module, panel, or the app side of an operation or bundle) reloads the browser, and editing a server extension reloads in the API. Adding or removing an extension folder regenerates the Vite extension entrypoint. If the browser does not refresh automatically, refresh the page.
+
+Two things to expect:
+
+- The app reload is a full page reload, not a state-preserving hot swap. The extension registry is built once when the app boots and has no hot-accept boundary, so the page refreshes to load the new bundle. A `.vue` component inside an extension may still hot-update through the Vue plugin.
+- The Vite dev server only watches `api/extensions`. It does not read a custom `EXTENSIONS_PATH`. For app development through Vite, the extension has to live under that folder.
+
+### Against a running instance
+
+Run a normal CairnCMS instance with `EXTENSIONS_AUTO_RELOAD=true` set in its environment, where the API serves the built app. Rebuild your extension and link it into the instance's extensions folder:
+
+```bash
+# your extension, rebuilding on every change
+cairncms-extension build --watch
+
+# link it into the running instance's extensions folder (run once)
+cairncms-extension link <path-to-instance>/extensions
+```
+
+A server extension change takes effect on the next request. An app extension change is rebuilt into the served bundle on reload, but the browser still holds the app it loaded earlier, so refresh the page to load it.
+
+## Debugging
+
+Source maps let stack traces and breakpoints point at your extension source instead of the built output. They are opt-in through `--sourcemap` and stay off by default, because a built map embeds your source. Only enable them while debugging.
+
+The build is also minified by default, so without a map a stack trace points at minified output. Add `--sourcemap` to map it back, and `--no-minify` as well if you want the built file itself readable.
+
+### Server extensions
+
+A server extension's stack traces and breakpoints map to source when CairnCMS runs under plain Node with source maps enabled. Build with `--sourcemap` and set `NODE_OPTIONS` on the instance:
+
+```bash
+# rebuild on change, with source maps
+cairncms-extension build --watch --sourcemap
+
+# run the instance with source maps, plus the inspector for breakpoints
+export NODE_OPTIONS="--enable-source-maps --inspect"
+```
+
+Then attach a debugger to the inspector, for example the VS Code "Attach to Node Process" action.
+
+One caveat: the monorepo dev server (`pnpm --filter api dev`) runs under `tsx`, which does not apply source maps to the loader's cache-busted imports, so it does not map server extension stack traces. For source-mapped server traces use a plain-Node instance, either a released build or `pnpm --filter api build` followed by `node --enable-source-maps dist/cli/run.js start`.
+
+### App extensions
+
+App extension breakpoints map to source through the Vite dev server. Build the extension with `--sourcemap` and run the admin app from source:
+
+```bash
+cairncms-extension build --watch --sourcemap
+pnpm --filter app dev
+```
+
+Open the app, then in browser devtools set a breakpoint in your extension's source. It appears under its original path with readable content, because the Vite dev server chains your extension's map so breakpoints and stack frames resolve to source.
+
+### What source maps expose
+
+- CairnCMS never serves source maps over HTTP. The `/extensions/sources` route serves only the app entrypoint and its code chunks, never `.map` files, and the API-generated app bundle carries no map.
+- The Vite dev server does serve maps to the browser in development, which is how app debugging works. Do not expose the dev server publicly while source maps are enabled, because a map embeds your source.
+- Runtime errors follow the platform's existing behavior, which source maps do not change beyond the file and line a frame points at. In development, an unexpected (non-`BaseException`) error from an endpoint or a filter hook is logged and returned with its stack only to a requesting admin. A platform `BaseException` includes its development stack in the response extensions for any requester, per the existing error-handler behavior. Errors from action, init, and scheduled hooks are logged only. In production the stack is not included in the response.
 
 ## Symlinking a local extension
 
@@ -204,6 +306,40 @@ For Operation extensions (which have both an app and an api side), use `app.js` 
 ```
 
 This path is convenient for one-off extensions that do not need to live in their own package.
+
+## Server dependencies and native modules
+
+Server extensions (hooks, endpoints, operations, and the API side of a bundle) run as normal Node code in the API process. When the SDK builds a server extension, it compiles your own source but does not bundle the packages you depend on. Each declared dependency stays as a regular import and resolves from the extension package's own `node_modules` at runtime.
+
+This is what lets server extensions use native modules. A bundler cannot inline a compiled binary, so a package like `sharp` could not be bundled. Because the server build leaves declared dependencies external instead, your extension ships its own copy and it loads like any other Node dependency.
+
+To use a runtime dependency, declare it under `dependencies` (or `optionalDependencies`) in the extension's `package.json`, then install it into the package:
+
+```bash
+npm install sharp
+```
+
+The build externalizes everything in `dependencies` and `optionalDependencies`, so those packages must be present in the extension's `node_modules` when CairnCMS loads the extension. The package and local-package install paths described above both carry their dependencies. An npm-installed extension resolves them through normal Node resolution, and a local package folder in `EXTENSIONS_PATH` keeps its own `node_modules` next to its build output.
+
+Native modules need the package or local-package install path. The dependency has to resolve from a `node_modules` directory, and the loose local-file layout has nowhere to install one.
+
+Packages in `devDependencies` are still bundled, so build-time tooling such as `@cairncms/extensions-sdk` does not need to be installed at runtime. Run `npm install` before building so that tooling is available.
+
+### Native modules on Docker and Alpine
+
+The CairnCMS Docker image is based on Alpine, which uses musl rather than glibc. Most native modules publish prebuilt binaries for both, so installing the dependency in your extension package is usually all you need. `sharp`, for example, resolves a musl prebuilt on Alpine with no extra steps.
+
+If a module has no prebuilt binary for your platform and compiles from source, install the build toolchain first. For `sharp` on Alpine:
+
+```bash
+apk add --no-cache build-base vips-dev
+```
+
+When you ship an extension in a custom image, install its dependencies during the image build so the binaries are present when CairnCMS starts.
+
+### Do not rely on the platform's copy
+
+CairnCMS uses some native libraries internally, including `sharp`. If your extension imports a package it declared but did not install, Node may walk up the directory tree and resolve the platform's copy instead. Do not depend on that behavior. The platform's internal packages and their versions are implementation details that can change between releases, and this fallback is not a compatibility guarantee. Install the dependencies your extension declares.
 
 ## Publishing to npm
 

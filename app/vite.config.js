@@ -9,14 +9,15 @@ import {
 	generateExtensionsEntrypoint,
 	getLocalExtensions,
 	getPackageExtensions,
+	redactErrorDetail,
 	resolvePackageExtensions,
 } from '@cairncms/utils/node';
 import yaml from '@rollup/plugin-yaml';
 import vue from '@vitejs/plugin-vue';
-import fs from 'node:fs';
 import path from 'node:path';
 import { searchForWorkspaceRoot } from 'vite';
 import { defineConfig } from 'vitest/config';
+import { getExtensionRealPaths, isUnderExtensions } from './vite-extension-utils.js';
 
 const API_PATH = path.join('..', 'api');
 const EXTENSIONS_PATH = path.join(API_PATH, 'extensions');
@@ -47,7 +48,7 @@ export default defineConfig({
 			},
 		},
 		fs: {
-			allow: [searchForWorkspaceRoot(process.cwd()), ...getExtensionsRealPaths()],
+			allow: [searchForWorkspaceRoot(process.cwd()), ...getExtensionRealPaths(EXTENSIONS_PATH)],
 		},
 	},
 	test: {
@@ -55,19 +56,6 @@ export default defineConfig({
 		setupFiles: ['src/__setup__/mock-globals.ts'],
 	},
 });
-
-function getExtensionsRealPaths() {
-	return fs.existsSync(EXTENSIONS_PATH)
-		? fs
-				.readdirSync(EXTENSIONS_PATH)
-				.flatMap((typeDir) => {
-					const extensionTypeDir = path.join(EXTENSIONS_PATH, typeDir);
-					if (!fs.lstatSync(extensionTypeDir).isDirectory()) return;
-					return fs.readdirSync(extensionTypeDir).map((dir) => fs.realpathSync(path.join(extensionTypeDir, dir)));
-				})
-				.filter((v) => v)
-		: [];
-}
 
 function cairncmsExtensions() {
 	const virtualExtensionsId = '@cairncms-extensions';
@@ -85,6 +73,43 @@ function cairncmsExtensions() {
 			}),
 			async buildStart() {
 				await loadExtensions();
+			},
+			configureServer(server) {
+				let reloadTimer = null;
+
+				const scheduleReload = () => {
+					if (reloadTimer) clearTimeout(reloadTimer);
+
+					reloadTimer = setTimeout(async () => {
+						try {
+							await loadExtensions();
+						} catch (error) {
+							server.config.logger.warn(`[cairncms] extension reload skipped: ${redactErrorDetail(error)}`);
+
+							return;
+						}
+
+						const allow = server.config.server.fs.allow;
+
+						for (const realPath of getExtensionRealPaths(EXTENSIONS_PATH)) {
+							if (!allow.includes(realPath)) allow.push(realPath);
+						}
+
+						const module = server.moduleGraph.getModuleById(virtualExtensionsId);
+						if (module) server.moduleGraph.invalidateModule(module);
+
+						server.ws.send({ type: 'full-reload' });
+					}, 150);
+				};
+
+				const extensionsRoot = path.resolve(EXTENSIONS_PATH);
+				server.watcher.add(extensionsRoot);
+
+				for (const event of ['add', 'addDir', 'unlink', 'unlinkDir']) {
+					server.watcher.on(event, (changedPath) => {
+						if (isUnderExtensions(extensionsRoot, changedPath)) scheduleReload();
+					});
+				}
 			},
 			resolveId(id) {
 				if (id === virtualExtensionsId) {

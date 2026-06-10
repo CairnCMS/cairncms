@@ -74,7 +74,7 @@ A few features from upstream Directus are deliberately not part of the v1 CairnC
 - **realtime / WebSocket subscriptions** (`realtime()`) — the WebSocket endpoint exists; clients can connect directly
 - **translation strings CRUD** — translation strings are stored on `directus_settings` (the `translation_strings` field); manage them by reading and patching that record
 - **content versioning** — not implemented in CairnCMS v1 at all; no API surface to call
-- **extensions CRUD** — the `/extensions` endpoints exist; call them directly via REST
+- **extension inventory and app-loader** — the `/extensions` endpoints are read-only (admin diagnostics and the app-side JS loader), with no create, update, or delete. Call them directly via REST
 
 Three of these have a working endpoint that the SDK simply does not wrap. Content versioning is the exception: it is genuinely absent in CairnCMS v1.
 
