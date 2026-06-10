@@ -44,7 +44,7 @@
 				<v-button
 					v-tooltip.bottom="t('fit_to_screen')"
 					:active="zoomToFit"
-					class="zoom-to-fit"
+					class="zoom-to-fit desktop-only"
 					rounded
 					icon
 					outlined
@@ -56,7 +56,7 @@
 				<v-button
 					v-tooltip.bottom="t('full_screen')"
 					:active="fullScreen"
-					class="fullscreen"
+					class="fullscreen desktop-only"
 					rounded
 					icon
 					outlined

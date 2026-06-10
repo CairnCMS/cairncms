@@ -354,20 +354,22 @@ function openSidebar(event: PointerEvent) {
 	}
 
 	&.full-screen {
-		#navigation {
-			position: fixed;
-			transform: translateX(-100%);
-			transition: none;
-		}
+		@media (min-width: 960px) {
+			#navigation {
+				position: fixed;
+				transform: translateX(-100%);
+				transition: none;
+			}
 
-		#main-content {
-			margin: 0;
-		}
+			#main-content {
+				margin: 0;
+			}
 
-		#sidebar {
-			position: fixed;
-			transform: translateX(100%);
-			transition: none;
+			#sidebar {
+				position: fixed;
+				transform: translateX(100%);
+				transition: none;
+			}
 		}
 	}
 }

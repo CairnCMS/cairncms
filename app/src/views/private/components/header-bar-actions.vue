@@ -104,6 +104,12 @@ const active = ref(false);
 	display: inherit;
 }
 
+@media (max-width: 959.98px) {
+	.actions .action-buttons > :deep(.desktop-only) {
+		display: none !important;
+	}
+}
+
 @media (min-width: 960px) {
 	.actions .action-buttons > :deep(*:not(.sidebar-toggle)) {
 		display: inherit !important;
