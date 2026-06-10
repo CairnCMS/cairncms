@@ -4,6 +4,7 @@ import type {
 	BUNDLE_EXTENSION_TYPES,
 	ConfinedRuntimeSchema,
 	EXTENSION_TYPES,
+	ExtensionCapabilitiesSchema,
 	ExtensionManifest,
 	ExtensionOptions,
 	ExtensionOptionsBundleEntries,
@@ -39,6 +40,8 @@ export type NestedExtensionType = (typeof NESTED_EXTENSION_TYPES)[number];
 export type SplitEntrypoint = z.infer<typeof SplitEntrypoint>;
 
 export type ConfinedRuntime = z.infer<typeof ConfinedRuntimeSchema>;
+
+export type ExtensionCapabilities = z.infer<typeof ExtensionCapabilitiesSchema>;
 
 type ExtensionBase = {
 	path: string;

@@ -4,7 +4,7 @@ import { ExtensionCapabilitiesSchema, ExtensionManifest, ExtensionOptions } from
 describe('ExtensionCapabilitiesSchema', () => {
 	it('accepts a brokered request plus log', () => {
 		const result = ExtensionCapabilitiesSchema.safeParse({
-			request: { methods: ['POST'], urls: ['https://api.github.com/**'] },
+			request: { methods: ['POST'], urls: ['https://api.github.com'] },
 			log: true,
 		});
 
@@ -33,6 +33,31 @@ describe('ExtensionCapabilitiesSchema', () => {
 			false
 		);
 	});
+
+	it('accepts origin-only request urls', () => {
+		for (const url of [
+			'https://api.example.com',
+			'https://api.example.com/',
+			'http://api.example.com',
+			'https://api.example.com:8443',
+		]) {
+			expect(ExtensionCapabilitiesSchema.safeParse({ request: { urls: [url] } }).success, url).toBe(true);
+		}
+	});
+
+	it('rejects request urls that are not a bare origin', () => {
+		for (const url of [
+			'https://api.example.com/safe',
+			'https://api.example.com/**',
+			'https://api.example.com/?q=1',
+			'https://api.example.com/#frag',
+			'https://user:pass@api.example.com',
+			'ftp://api.example.com',
+			'not a url',
+		]) {
+			expect(ExtensionCapabilitiesSchema.safeParse({ request: { urls: [url] } }).success, url).toBe(false);
+		}
+	});
 });
 
 const appOption = { host: '^1.1.0', type: 'interface', path: 'dist/index.js', source: 'src/index.js' };
@@ -55,7 +80,7 @@ const bundleOption = {
 	],
 };
 
-const capabilities = { request: { methods: ['POST'], urls: ['https://api.github.com/**'] }, log: true };
+const capabilities = { request: { methods: ['POST'], urls: ['https://api.github.com'] }, log: true };
 
 describe('ExtensionOptions confined opt-in', () => {
 	it('parses a plain manifest of every type', () => {

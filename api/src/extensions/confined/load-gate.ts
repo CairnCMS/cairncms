@@ -9,7 +9,7 @@ import type { ExtensionValidationReason, ExtensionValidationReasonCode } from '@
 import { scanCandidateSource } from '@cairncms/extensions/node';
 import { readFileCapped } from '@cairncms/extensions/node/capped-read';
 import { classifyEntryPath } from '@cairncms/extensions/node/entry-integrity';
-import type { Extension, ExtensionOptions } from '@cairncms/types';
+import type { Extension, ExtensionCapabilities, ExtensionOptions } from '@cairncms/types';
 import { isTypeIn } from '@cairncms/utils';
 import path from 'node:path';
 import type { SanitizedExtensionError } from '../../utils/sanitize-extension-error.js';
@@ -31,7 +31,17 @@ export const VALIDATION_INCOMPLETE = 'validation-incomplete';
 // Anything else from the probe is a gate-infrastructure failure.
 const NOT_LOADABLE_CODES = new Set<string>(['invalid-entry', 'identity-mismatch', 'timeout', 'crash']);
 
-export type ConfinedGateVerdict = { ok: true; entrySource?: string } | { ok: false; error: SanitizedExtensionError };
+// What a passing extension carries into the eligible set: the probed entry bytes
+// for an operation, and the gate-validated capabilities. A top-level api or hybrid
+// carries one capabilities object, a bundle carries a per-entry record keyed
+// `type:name`, never merged, so one entry's grant cannot bleed into another's.
+export type ConfinedEligibleEntry = {
+	entrySource?: string;
+	capabilities?: ExtensionCapabilities;
+	entryCapabilities?: Record<string, ExtensionCapabilities>;
+};
+
+export type ConfinedGateVerdict = ({ ok: true } & ConfinedEligibleEntry) | { ok: false; error: SanitizedExtensionError };
 
 export interface ConfinedLoadGateDeps {
 	scan?: typeof scanCandidateSource;
@@ -89,6 +99,43 @@ function matchesDiscovered(extension: Extension, manifestName: string, options: 
 	}
 
 	return false;
+}
+
+/**
+ * Collects the gate-validated capabilities per contribution. A top-level api or
+ * hybrid contributes one object, a bundle contributes a record keyed `type:name`
+ * over its server entries. Returns null when a bundle declares duplicate
+ * server-entry keys, because a keyed record would silently overwrite one entry's
+ * capabilities with another's and the binding identity would be ambiguous.
+ */
+function collectCapabilities(options: ExtensionOptions): ConfinedEligibleEntry | null {
+	if (isTypeIn(options, API_EXTENSION_TYPES) || isTypeIn(options, HYBRID_EXTENSION_TYPES)) {
+		return options.capabilities === undefined ? {} : { capabilities: options.capabilities };
+	}
+
+	if (options.type === 'bundle') {
+		const seen = new Set<string>();
+		const entryCapabilities: Record<string, ExtensionCapabilities> = {};
+		let declared = false;
+
+		for (const entry of options.entries) {
+			if (!isTypeIn(entry, API_EXTENSION_TYPES) && !isTypeIn(entry, HYBRID_EXTENSION_TYPES)) continue;
+
+			const key = `${entry.type}:${entry.name}`;
+
+			if (seen.has(key)) return null;
+			seen.add(key);
+
+			if (entry.capabilities !== undefined) {
+				entryCapabilities[key] = entry.capabilities;
+				declared = true;
+			}
+		}
+
+		return declared ? { entryCapabilities } : {};
+	}
+
+	return {};
 }
 
 /**
@@ -164,6 +211,12 @@ export async function gateConfinedExtension(
 		return refuse('manifest-invalid', 'the extension manifest does not match the discovered extension');
 	}
 
+	const collected = collectCapabilities(options);
+
+	if (collected === null) {
+		return refuse('manifest-invalid', 'the extension manifest declares duplicate server entries');
+	}
+
 	const entries = serverSourceEntries(options);
 
 	if (entries === null) {
@@ -181,10 +234,13 @@ export async function gateConfinedExtension(
 	// shape. Other confined server types are scanner-gated here and get their load
 	// contract with their binding.
 	if (isTypeIn(options, HYBRID_EXTENSION_TYPES)) {
-		return probeOperationEntry(extension, options.path.api, deps);
+		const probed = await probeOperationEntry(extension, options.path.api, deps);
+		if (!probed.ok) return probed;
+
+		return { ...probed, ...collected };
 	}
 
-	return { ok: true };
+	return { ok: true, ...collected };
 }
 
 /**

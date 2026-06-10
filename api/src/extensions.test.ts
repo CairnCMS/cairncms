@@ -36,7 +36,7 @@ function writeThrowingEntry(dir: string, file: string, marker: string): void {
  * A complete confined endpoint package the load gate can read: a valid manifest
  * declaring the confined runtime plus the declared source file.
  */
-function writeConfinedPackage(dir: string, source: string, name = dir): void {
+function writeConfinedPackage(dir: string, source: string, name = dir, capabilities?: Record<string, unknown>): void {
 	const full = path.join(root, dir);
 	mkdirSync(path.join(full, 'src'), { recursive: true });
 
@@ -51,6 +51,7 @@ function writeConfinedPackage(dir: string, source: string, name = dir): void {
 				source: 'src/index.js',
 				runtime: 'confined-server',
 				host: '^10.0.0',
+				...(capabilities && { capabilities }),
 			},
 		})
 	);
@@ -292,6 +293,19 @@ describe('the confined load gate in the loader', () => {
 
 		expect((instance as any).confinedEligible.has(confined)).toBe(true);
 		expect((instance as any).getDiagnostics()).toHaveLength(0);
+	});
+
+	it('carries the gate-validated capabilities into the eligible entry', async () => {
+		const capabilities = { log: true, request: { urls: ['https://api.example.com'] } };
+		writeConfinedPackage('capable-endpoint', 'export default {};\n', 'capable-endpoint', capabilities);
+
+		const instance = new ExtensionManager();
+		const capable = endpointExtension('capable-endpoint', 'capable-endpoint', true);
+		(instance as any).getExtensions = async () => [capable];
+
+		await (instance as any).load();
+
+		expect((instance as any).confinedEligible.get(capable)).toEqual({ capabilities });
 	});
 
 	it('keeps same-name extensions distinct, so a failing one is never eligible through a passing one', async () => {

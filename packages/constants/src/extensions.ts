@@ -39,10 +39,50 @@ export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'O
 
 export const HttpMethodSchema = z.enum(HTTP_METHODS);
 
+// URL is a runtime global in every supported environment (Node and the browser),
+// but this package compiles without DOM or Node type libraries, so the
+// constructor is declared minimally here. Validating with the same WHATWG parser
+// the runtime matches with keeps the schema and the broker in agreement.
+declare const URL: new (input: string) => {
+	protocol: string;
+	username: string;
+	password: string;
+	pathname: string;
+	search: string;
+	hash: string;
+};
+
+// The runtime matches request urls by origin equality only, so a path-bearing
+// entry would read as a narrowed grant while silently granting the whole origin.
+// Entries must therefore state the real grant: a bare http or https origin.
+function isOriginOnlyUrl(entry: string): boolean {
+	let url: InstanceType<typeof URL>;
+
+	try {
+		url = new URL(entry);
+	} catch {
+		return false;
+	}
+
+	if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+	if (url.username !== '' || url.password !== '') return false;
+	if (url.pathname !== '/' && url.pathname !== '') return false;
+	if (url.search !== '' || url.hash !== '') return false;
+
+	return true;
+}
+
 export const RequestCapabilitySchema = z
 	.object({
 		methods: z.array(HttpMethodSchema).optional(),
-		urls: z.array(z.string()).min(1),
+		urls: z
+			.array(
+				z.string().refine(isOriginOnlyUrl, {
+					message:
+						'a request capability url must be a bare http or https origin, with no path, query, fragment, or credentials',
+				})
+			)
+			.min(1),
 	})
 	.strict();
 

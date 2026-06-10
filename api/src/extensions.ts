@@ -59,6 +59,7 @@ import type { EventHandler } from './types/index.js';
 import {
 	gateConfinedExtension,
 	VALIDATION_INCOMPLETE,
+	type ConfinedEligibleEntry,
 	type ConfinedGateVerdict,
 	type ConfinedLoadGateDeps,
 } from './extensions/confined/load-gate.js';
@@ -131,11 +132,13 @@ export class ExtensionManager {
 
 	// Confined extensions that passed the load gate this load, for the confined
 	// bindings. Keyed by the discovered object itself, because a name is not a safe
-	// identity: two same-name packages can both be discovered. An operation entry
-	// carries the probed entry bytes, so the binding executes exactly what the gate
-	// scanned and probed. Transient by design: recomputed on every load, never
-	// persisted, and carrying no public diagnostic row until registration.
-	private confinedEligible = new Map<Extension, { entrySource?: string }>();
+	// identity: two same-name packages can both be discovered. An entry carries the
+	// probed entry bytes for an operation and the gate-validated capabilities (per
+	// bundle server entry, never merged), so the binding executes exactly what the
+	// gate scanned and probed under exactly what was validated. Transient by design:
+	// recomputed on every load, never persisted, and carrying no public diagnostic
+	// row until registration.
+	private confinedEligible = new Map<Extension, ConfinedEligibleEntry>();
 
 	// Test seam for the gate's scanner, probe, and limits dependencies.
 	private confinedGateDeps: ConfinedLoadGateDeps = {};
@@ -335,10 +338,12 @@ export class ExtensionManager {
 			}
 
 			if (verdict.ok) {
-				this.confinedEligible.set(
-					extension,
-					verdict.entrySource === undefined ? {} : { entrySource: verdict.entrySource }
-				);
+				const entry: ConfinedEligibleEntry = {};
+				if (verdict.entrySource !== undefined) entry.entrySource = verdict.entrySource;
+				if (verdict.capabilities !== undefined) entry.capabilities = verdict.capabilities;
+				if (verdict.entryCapabilities !== undefined) entry.entryCapabilities = verdict.entryCapabilities;
+
+				this.confinedEligible.set(extension, entry);
 			} else {
 				this.recordFailed(extension, verdict.error);
 			}

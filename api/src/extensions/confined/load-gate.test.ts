@@ -410,6 +410,154 @@ describe('gateConfinedExtension', () => {
 		expect(probeCalls).toHaveLength(0);
 	});
 
+	it('carries the manifest capabilities for a confined endpoint', async () => {
+		const capabilities = { log: true, request: { urls: ['https://api.example.com'] } };
+		const dir = await makeDir(endpointManifest({ capabilities }), { 'src/index.js': CLEAN_SOURCE });
+
+		const verdict = await gateConfinedExtension(extensionAt(dir));
+
+		expect(verdict).toEqual({ ok: true, capabilities });
+	});
+
+	it('carries the manifest capabilities beside the probed bytes for an operation', async () => {
+		const capabilities = { log: true };
+
+		const manifestWithCaps = manifest({
+			type: 'operation',
+			path: { app: 'dist/app.js', api: 'dist/api.js' },
+			source: { app: 'src/app.js', api: 'src/api.js' },
+			runtime: 'confined-server',
+			capabilities,
+			host: '^10.0.0',
+		});
+
+		const dir = await makeDir(manifestWithCaps, {
+			'src/app.js': CLEAN_SOURCE,
+			'src/api.js': CLEAN_SOURCE,
+			'dist/api.js': OPERATION_ENTRY,
+		});
+
+		const verdict = await gateConfinedExtension(extensionAt(dir, 'operation'), {
+			probe: async () => ({ loadable: true }),
+		});
+
+		expect(verdict).toEqual({ ok: true, entrySource: OPERATION_ENTRY, capabilities });
+	});
+
+	it('carries bundle capabilities per server entry under distinct keys, never merged', async () => {
+		const endpointCaps = { request: { urls: ['https://api.example.com'] } };
+		const operationCaps = { log: true };
+
+		const bundleManifest = manifest({
+			type: 'bundle',
+			path: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [
+				{ type: 'endpoint', name: 'ep', source: 'src/ep.js', capabilities: endpointCaps },
+				{
+					type: 'operation',
+					name: 'op',
+					source: { app: 'src/op-app.js', api: 'src/op-api.js' },
+					capabilities: operationCaps,
+				},
+				{ type: 'interface', name: 'ui', source: 'src/ui.js' },
+			],
+			runtime: 'confined-server',
+			host: '^10.0.0',
+		});
+
+		const dir = await makeDir(bundleManifest, {
+			'src/ep.js': CLEAN_SOURCE,
+			'src/op-app.js': CLEAN_SOURCE,
+			'src/op-api.js': CLEAN_SOURCE,
+			'src/ui.js': CLEAN_SOURCE,
+		});
+
+		const bundle: Extension = {
+			path: dir,
+			name: 'test-extension',
+			local: true,
+			runtime: 'confined-server',
+			type: 'bundle',
+			entrypoint: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [
+				{ type: 'endpoint', name: 'ep' },
+				{ type: 'operation', name: 'op' },
+				{ type: 'interface', name: 'ui' },
+			],
+		};
+
+		const verdict = await gateConfinedExtension(bundle);
+
+		expect(verdict).toEqual({
+			ok: true,
+			entryCapabilities: { 'endpoint:ep': endpointCaps, 'operation:op': operationCaps },
+		});
+	});
+
+	it('refuses a confined bundle with duplicate server entries', async () => {
+		const bundleManifest = manifest({
+			type: 'bundle',
+			path: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [
+				{ type: 'endpoint', name: 'ep', source: 'src/ep.js', capabilities: { log: true } },
+				{ type: 'endpoint', name: 'ep', source: 'src/ep2.js' },
+			],
+			runtime: 'confined-server',
+			host: '^10.0.0',
+		});
+
+		const dir = await makeDir(bundleManifest, { 'src/ep.js': CLEAN_SOURCE, 'src/ep2.js': CLEAN_SOURCE });
+
+		const bundle: Extension = {
+			path: dir,
+			name: 'test-extension',
+			local: true,
+			runtime: 'confined-server',
+			type: 'bundle',
+			entrypoint: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [
+				{ type: 'endpoint', name: 'ep' },
+				{ type: 'endpoint', name: 'ep' },
+			],
+		};
+
+		const verdict = await gateConfinedExtension(bundle);
+
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'manifest-invalid' } });
+	});
+
+	it('refuses duplicate server entries even when neither declares capabilities', async () => {
+		const bundleManifest = manifest({
+			type: 'bundle',
+			path: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [
+				{ type: 'endpoint', name: 'ep', source: 'src/ep.js' },
+				{ type: 'endpoint', name: 'ep', source: 'src/ep2.js' },
+			],
+			runtime: 'confined-server',
+			host: '^10.0.0',
+		});
+
+		const dir = await makeDir(bundleManifest, { 'src/ep.js': CLEAN_SOURCE, 'src/ep2.js': CLEAN_SOURCE });
+
+		const bundle: Extension = {
+			path: dir,
+			name: 'test-extension',
+			local: true,
+			runtime: 'confined-server',
+			type: 'bundle',
+			entrypoint: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [
+				{ type: 'endpoint', name: 'ep' },
+				{ type: 'endpoint', name: 'ep' },
+			],
+		};
+
+		const verdict = await gateConfinedExtension(bundle);
+
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'manifest-invalid' } });
+	});
+
 	it('collapses an unsafe reason message to a generic detail', async () => {
 		const dir = await makeDir(endpointManifest(), { 'src/index.js': CLEAN_SOURCE });
 
