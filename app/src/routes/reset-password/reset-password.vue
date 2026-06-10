@@ -28,6 +28,6 @@ const resetToken = computed(() => (Array.isArray(route.query.token) ? route.quer
 
 <style lang="scss" scoped>
 h1 {
-	margin-bottom: 20px;
+	margin-bottom: 1.25rem;
 }
 </style>

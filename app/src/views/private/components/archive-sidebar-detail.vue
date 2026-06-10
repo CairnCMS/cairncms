@@ -62,16 +62,16 @@ watch(selectedItem, () => {
 @import '@/styles/mixins/form-grid';
 
 .fields {
-	--form-vertical-gap: 24px;
+	--form-vertical-gap: 1.5rem;
 
 	@include form-grid;
 
 	.type-label {
-		font-size: 1rem;
+		font-size: .875rem;
 	}
 
 	.v-radio + .v-radio {
-		margin-top: 8px;
+		margin-top: .5rem;
 	}
 }
 </style>

@@ -11,8 +11,8 @@
 	}
 
 	button {
-		width: 36px;
-		height: 36px;
+		width: 2.25rem;
+		height: 2.25rem;
 		background: var(--background-input) !important;
 		border: none !important;
 		transition: background-color var(--fast) var(--transition);
@@ -42,7 +42,7 @@
 	button::after {
 		display: flex;
 		justify-content: center;
-		font-size: 24px;
+		font-size: 1.5rem;
 		font-family: 'Material Symbols', sans-serif;
 		font-style: normal;
 		font-variant: normal;
@@ -54,17 +54,17 @@
 .mapboxgl-search-location-dot,
 .mapboxgl-user-location-dot,
 .maplibregl-user-location-dot {
-	width: 12px;
-	height: 12px;
+	width: .75rem;
+	height: .75rem;
 
 	&::before {
-		width: 12px;
-		height: 12px;
+		width: .75rem;
+		height: .75rem;
 	}
 
 	&::after {
-		width: 16px;
-		height: 16px;
+		width: 1rem;
+		height: 1rem;
 	}
 	pointer-events: none;
 }
@@ -77,8 +77,8 @@
 }
 
 .mapboxgl-ctrl-attrib.mapboxgl-compact {
-	min-width: 24px;
-	min-height: 24px;
+	min-width: 1.5rem;
+	min-height: 1.5rem;
 	color: var(--foreground-normal);
 	background: var(--background-input) !important;
 	box-shadow: var(--card-shadow);
@@ -103,8 +103,8 @@
 
 	.maplibregl-ctrl-attrib-inner,
 	.mapboxgl-ctrl-attrib-inner {
-		font-size: 12px;
-		line-height: 20px;
+		font-size: .75rem;
+		line-height: 1.25rem;
 	}
 }
 
@@ -112,7 +112,7 @@
 	font-size: 0.8em;
 	color: var(--foreground-normal);
 	background: var(--background-input);
-	border-radius: 0 2px 0 0;
+	border-radius: 0 .125rem 0 0;
 	box-shadow: 0 0 3px 1px rgba(0, 0, 0, 0.1);
 
 	a {

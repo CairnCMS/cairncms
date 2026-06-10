@@ -24,6 +24,6 @@ defineProps<{
 
 <style lang="scss" scoped>
 .add-margin-top {
-	margin-top: 40px;
+	margin-top: 2.5rem;
 }
 </style>

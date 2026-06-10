@@ -123,9 +123,9 @@ function toggleDescending() {
 	align-items: center;
 	justify-content: space-between;
 	width: 100%;
-	height: 52px;
-	margin-bottom: 36px;
-	padding: 0 8px;
+	height: 3.25rem;
+	margin-bottom: 2.25rem;
+	padding: 0 .5rem;
 	background-color: var(--background-page);
 	border-top: var(--border-width) solid var(--border-subdued);
 	border-bottom: var(--border-width) solid var(--border-subdued);
@@ -135,7 +135,7 @@ function toggleDescending() {
 .start {
 	.label {
 		display: inline-block;
-		margin-left: 4px;
+		margin-left: .25rem;
 		transform: translateY(1px);
 	}
 
@@ -159,7 +159,7 @@ function toggleDescending() {
 	color: var(--foreground-subdued);
 
 	.size-selector {
-		margin-right: 16px;
+		margin-right: 1rem;
 		transition: color var(--fast) var(--transition);
 
 		&:hover {
@@ -168,7 +168,7 @@ function toggleDescending() {
 	}
 
 	.sort-selector {
-		margin-right: 8px;
+		margin-right: .5rem;
 		transition: color var(--fast) var(--transition);
 
 		&:hover {

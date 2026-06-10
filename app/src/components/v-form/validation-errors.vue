@@ -88,8 +88,8 @@ const validationErrorsWithNames = computed<
 
 <style lang="scss" scoped>
 .validation-errors-list {
-	margin-top: 4px;
-	padding-left: 28px;
+	margin-top: .25rem;
+	padding-left: 1.75rem;
 
 	.field {
 		cursor: pointer;
@@ -100,7 +100,7 @@ const validationErrorsWithNames = computed<
 	}
 
 	li:not(:last-child) {
-		margin-bottom: 4px;
+		margin-bottom: .25rem;
 	}
 }
 </style>

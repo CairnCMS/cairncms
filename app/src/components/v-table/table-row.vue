@@ -82,7 +82,7 @@ const cssHeight = computed(() => {
 	.cell {
 		display: flex;
 		align-items: center;
-		padding: 8px 12px;
+		padding: .5rem .75rem;
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
@@ -90,7 +90,7 @@ const cssHeight = computed(() => {
 		border-bottom: var(--border-width) solid var(--border-subdued);
 
 		&:last-child {
-			padding: 0 12px;
+			padding: 0 .75rem;
 		}
 
 		&.select {

@@ -189,26 +189,26 @@ async function loadUserPreviews(comments: Record<string, any>, regex: RegExp) {
 }
 
 .v-progress-linear {
-	margin: 24px 0;
+	margin: 1.5rem 0;
 }
 
 .v-divider {
 	position: sticky;
 	top: 0;
 	z-index: 2;
-	margin-top: 12px;
-	margin-bottom: 2px;
-	padding-top: 4px;
-	padding-bottom: 4px;
+	margin-top: .75rem;
+	margin-bottom: .125rem;
+	padding-top: .25rem;
+	padding-bottom: .25rem;
 	background-color: var(--background-normal);
 	box-shadow: 0 0 4px 2px var(--background-normal);
 	--v-divider-label-color: var(--foreground-subdued);
 }
 
 .empty {
-	margin-top: 16px;
-	margin-bottom: 8px;
-	margin-left: 2px;
+	margin-top: 1rem;
+	margin-bottom: .5rem;
+	margin-left: .125rem;
 	color: var(--foreground-subdued);
 	font-style: italic;
 }

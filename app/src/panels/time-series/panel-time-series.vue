@@ -349,16 +349,16 @@ function setupChart() {
 .apexcharts-tooltip.apexcharts-theme-light .apexcharts-tooltip-title {
 	border-color: var(--border-normal) !important;
 	margin-bottom: 0;
-	padding: 0 4px;
+	padding: 0 .25rem;
 	font-weight: 600 !important;
-	font-size: 10px !important;
+	font-size: .625rem !important;
 	background-color: var(--background-subdued) !important;
 }
 
 .apexcharts-tooltip-y-group {
-	padding: 0 0 0 4px;
+	padding: 0 0 0 .25rem;
 	font-weight: 600 !important;
-	font-size: 10px !important;
+	font-size: .625rem !important;
 }
 
 .apexcharts-tooltip-series-group {

@@ -84,11 +84,11 @@ async function onSubmit() {
 
 <style lang="scss" scoped>
 h1 {
-	margin-bottom: 20px;
+	margin-bottom: 1.25rem;
 }
 
 .v-input,
 .v-notice {
-	margin-bottom: 20px;
+	margin-bottom: 1.25rem;
 }
 </style>

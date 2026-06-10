@@ -196,8 +196,8 @@ function openSidebar(event: PointerEvent) {
 @import '@/styles/mixins/form-field-sizing';
 
 .private-view {
-	--content-padding: 12px;
-	--content-padding-bottom: 60px;
+	--content-padding: .75rem;
+	--content-padding-bottom: 3.75rem;
 	--layout-offset-top: calc(var(--header-bar-height) - 1px);
 
 	display: flex;
@@ -249,14 +249,14 @@ function openSidebar(event: PointerEvent) {
 		.module-nav {
 			position: relative;
 			display: inline-block;
-			width: 220px;
+			width: 13.75rem;
 			height: 100%;
-			font-size: 1rem;
+			font-size: .875rem;
 			background-color: var(--background-page);
 			border-right: 1px solid var(--border-normal);
 
 			&-content {
-				height: calc(100% - 64px);
+				height: calc(100% - 4rem);
 				overflow-x: hidden;
 				overflow-y: auto;
 			}
@@ -282,11 +282,11 @@ function openSidebar(event: PointerEvent) {
 		width: 100%;
 		height: 100%;
 		overflow: auto;
-		scroll-padding-top: 100px;
+		scroll-padding-top: 6.25rem;
 
 		/* Page Content Spacing (Could be converted to Project Setting toggle) */
-		font-size: 15px;
-		line-height: 24px;
+		font-size: .9375rem;
+		line-height: 1.5rem;
 
 		main {
 			display: contents;
@@ -294,7 +294,7 @@ function openSidebar(event: PointerEvent) {
 
 		/* Offset for partially visible sidebar */
 		@media (min-width: 960px) {
-			margin-right: 60px;
+			margin-right: 3.75rem;
 		}
 
 		@media (min-width: 1260px) {
@@ -307,7 +307,7 @@ function openSidebar(event: PointerEvent) {
 		top: 0;
 		right: 0;
 		z-index: 30;
-		width: 280px;
+		width: 17.5rem;
 		height: 100%;
 		overflow: hidden;
 		background-color: var(--background-normal);
@@ -328,29 +328,29 @@ function openSidebar(event: PointerEvent) {
 		.flex-container {
 			display: flex;
 			flex-direction: column;
-			width: 280px;
+			width: 17.5rem;
 			height: 100%;
 		}
 
 		@media (min-width: 960px) {
-			transform: translateX(calc(100% - 60px));
+			transform: translateX(calc(100% - 3.75rem));
 		}
 
 		@media (min-width: 1260px) {
 			position: relative;
-			flex-basis: 60px;
+			flex-basis: 3.75rem;
 			flex-shrink: 0;
 			transition: flex-basis var(--slow) var(--transition), transform var(--slow) var(--transition);
 
 			&.is-open {
-				flex-basis: 280px;
+				flex-basis: 17.5rem;
 			}
 		}
 	}
 
 	@media (min-width: 600px) {
-		--content-padding: 32px;
-		--content-padding-bottom: 132px;
+		--content-padding: 2rem;
+		--content-padding-bottom: 8.25rem;
 	}
 
 	&.full-screen {

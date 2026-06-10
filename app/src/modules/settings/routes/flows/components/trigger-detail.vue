@@ -94,15 +94,15 @@ const currentTriggerOptionFields = computed(() => {
 }
 
 .v-divider {
-	margin: 52px 0;
+	margin: 3.25rem 0;
 }
 .type-label {
-	margin-bottom: 8px;
+	margin-bottom: .5rem;
 }
 
 .type-title,
 .select {
-	margin-bottom: 32px;
+	margin-bottom: 2rem;
 }
 
 .not-found {
@@ -116,6 +116,6 @@ const currentTriggerOptionFields = computed(() => {
 }
 
 .v-notice {
-	margin-bottom: 36px;
+	margin-bottom: 2.25rem;
 }
 </style>

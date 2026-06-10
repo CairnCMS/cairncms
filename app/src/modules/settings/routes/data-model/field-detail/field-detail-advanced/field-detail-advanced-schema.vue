@@ -454,15 +454,15 @@ function useOnUpdate() {
 @import '@/styles/mixins/form-grid';
 
 .form {
-	--form-vertical-gap: 32px;
-	--form-horizontal-gap: 32px;
+	--form-vertical-gap: 2rem;
+	--form-horizontal-gap: 2rem;
 	@include form-grid;
 }
 
 .note {
 	display: block;
-	max-width: 520px;
-	margin-top: 4px;
+	max-width: 32.5rem;
+	margin-top: .25rem;
 	color: var(--foreground-subdued);
 	font-style: italic;
 }
@@ -478,11 +478,11 @@ function useOnUpdate() {
 
 .precision-scale {
 	display: grid;
-	grid-gap: 12px;
+	grid-gap: .75rem;
 	grid-template-columns: 1fr 1fr;
 }
 
 .v-notice {
-	margin-bottom: 36px;
+	margin-bottom: 2.25rem;
 }
 </style>

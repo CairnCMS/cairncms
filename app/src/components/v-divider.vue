@@ -45,7 +45,7 @@ body {
 		flex-grow: 1;
 		order: 1;
 		max-width: 100%;
-		margin-top: 8px;
+		margin-top: .5rem;
 		border: solid;
 		border-color: var(--v-divider-color);
 		border-width: var(--border-width) 0 0 0;
@@ -56,7 +56,7 @@ body {
 		color: var(--v-divider-label-color);
 
 		:slotted(.v-icon) {
-			margin-right: 4px;
+			margin-right: .25rem;
 			transform: translateY(-1px);
 		}
 	}
@@ -70,7 +70,7 @@ body {
 
 	&.large .type-text {
 		font-weight: 700;
-		font-size: 24px;
+		font-size: 1.5rem;
 	}
 
 	&.inlineTitle {
@@ -78,9 +78,9 @@ body {
 
 		span.wrapper {
 			order: 0;
-			margin-right: 8px;
+			margin-right: .5rem;
 			font-weight: 600;
-			font-size: 14px;
+			font-size: .875rem;
 		}
 
 		hr {
@@ -102,7 +102,7 @@ body {
 
 		span.wrapper {
 			order: 0;
-			margin: 0 0 8px;
+			margin: 0 0 .5rem;
 		}
 	}
 }

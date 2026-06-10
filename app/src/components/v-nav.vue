@@ -104,9 +104,9 @@ function onPointerUp() {
 .resize-handle {
 	position: absolute;
 	top: 0;
-	right: -2px;
+	right: -.125rem;
 	bottom: 0;
-	width: 4px;
+	width: .25rem;
 	background-color: var(--primary);
 	cursor: ew-resize;
 	opacity: 0;

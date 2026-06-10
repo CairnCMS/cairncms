@@ -409,11 +409,11 @@ const secondFields = computed(() => {
 	@include form-grid;
 
 	.v-form {
-		--form-vertical-gap: 32px;
+		--form-vertical-gap: 2rem;
 		--v-chip-color: var(--primary);
 		--v-chip-background-color: var(--primary-alt);
 
-		margin-top: 32px;
+		margin-top: 2rem;
 	}
 
 	.primary {

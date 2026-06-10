@@ -174,10 +174,10 @@ function discardAndLeave() {
 
 <style lang="scss" scoped>
 .title {
-	margin-bottom: 12px;
+	margin-bottom: .75rem;
 
 	.instant-save {
-		margin-left: 4px;
+		margin-left: .25rem;
 		color: var(--warning);
 	}
 }
@@ -189,8 +189,8 @@ function discardAndLeave() {
 }
 
 .fields {
-	max-width: 800px;
-	margin-bottom: 48px;
+	max-width: 50rem;
+	margin-bottom: 3rem;
 }
 
 .header-icon {

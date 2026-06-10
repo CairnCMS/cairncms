@@ -1,4 +1,4 @@
-@mixin form-field-sizing($height: 54px, $padding: 14px) {
+@mixin form-field-sizing($height: 3.375rem, $padding: .875rem) {
 	--input-height: #{$height};
 	--input-padding: #{$padding};
 }

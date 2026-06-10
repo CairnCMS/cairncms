@@ -39,8 +39,8 @@ const validationMessage = syncFieldDetailStoreProperty('field.meta.validation_me
 @import '@/styles/mixins/form-grid';
 
 .form {
-	--form-vertical-gap: 32px;
-	--form-horizontal-gap: 32px;
+	--form-vertical-gap: 2rem;
+	--form-horizontal-gap: 2rem;
 	@include form-grid;
 }
 
@@ -54,6 +54,6 @@ const validationMessage = syncFieldDetailStoreProperty('field.meta.validation_me
 }
 
 .v-notice {
-	margin-bottom: 36px;
+	margin-bottom: 2.25rem;
 }
 </style>

@@ -422,12 +422,12 @@ const refreshInterval = computed({
 	transform: translate(-50%, -50%);
 
 	&.header-offset {
-		top: calc(50% - 12px);
+		top: calc(50% - .75rem);
 	}
 }
 
 .panel-error {
-	padding: 20px;
+	padding: 1.25rem;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -438,7 +438,7 @@ const refreshInterval = computed({
 	--v-icon-color: var(--danger);
 
 	.v-error {
-		margin-top: 8px;
+		margin-top: .5rem;
 		max-width: 100%;
 	}
 }
@@ -451,7 +451,7 @@ const refreshInterval = computed({
 	height: 100%;
 
 	&.header-offset {
-		height: calc(100% - 24px);
+		height: calc(100% - 1.5rem);
 	}
 }
 </style>

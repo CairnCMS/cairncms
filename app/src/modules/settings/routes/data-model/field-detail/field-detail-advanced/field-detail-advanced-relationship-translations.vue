@@ -191,8 +191,8 @@ const relatedPrimaryKey = computed(
 	position: relative;
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 12px 28px;
-	margin-top: 48px;
+	gap: .75rem 1.75rem;
+	margin-top: 3rem;
 
 	.v-input.matches {
 		--v-input-color: var(--primary);
@@ -206,25 +206,25 @@ const relatedPrimaryKey = computed(
 		pointer-events: none;
 
 		&:first-of-type {
-			bottom: 161px;
+			bottom: 10.0625rem;
 			left: 32.5%;
 		}
 
 		&:last-of-type {
-			bottom: 89px;
+			bottom: 5.5625rem;
 			left: 67.4%;
 		}
 	}
 }
 
 .type-label {
-	margin-bottom: 8px;
+	margin-bottom: .5rem;
 
 	@include no-wrap;
 }
 
 .v-divider {
-	margin: 48px 0;
+	margin: 3rem 0;
 }
 
 .v-list {
@@ -232,17 +232,17 @@ const relatedPrimaryKey = computed(
 }
 
 .v-notice {
-	margin-bottom: 36px;
+	margin-bottom: 2.25rem;
 }
 
 .relational-triggers {
-	--form-horizontal-gap: 12px;
-	--form-vertical-gap: 24px;
+	--form-horizontal-gap: .75rem;
+	--form-vertical-gap: 1.5rem;
 
 	@include form-grid;
 
 	.v-divider {
-		margin-top: 48px;
+		margin-top: 3rem;
 		margin-bottom: 0;
 	}
 }

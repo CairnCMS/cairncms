@@ -201,14 +201,14 @@ const stageChanges = () => {
 }
 
 .select {
-	margin-bottom: 32px;
+	margin-bottom: 2rem;
 }
 
 .panel-type-label {
-	margin-bottom: 16px;
+	margin-bottom: 1rem;
 }
 
 .v-divider {
-	margin: 68px 0 48px;
+	margin: 4.25rem 0 3rem;
 }
 </style>

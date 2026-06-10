@@ -591,12 +591,12 @@ function useFileUpload() {
 	&.top,
 	&.bottom {
 		width: 100%;
-		height: 4px;
+		height: .25rem;
 	}
 
 	&.left,
 	&.right {
-		width: 4px;
+		width: .25rem;
 		height: 100%;
 	}
 

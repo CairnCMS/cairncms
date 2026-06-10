@@ -115,7 +115,7 @@ async function fetchFile() {
 	--v-button-color-hover: var(--foreground-normal);
 
 	position: absolute;
-	top: 32px;
-	right: 32px;
+	top: 2rem;
+	right: 2rem;
 }
 </style>

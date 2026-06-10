@@ -148,7 +148,7 @@ const limitWritable = useSync(props, 'limit', emit);
 
 <style lang="scss" scoped>
 .v-info {
-	padding: 40px;
+	padding: 2.5rem;
 	background-color: var(--background-page);
 	border-radius: var(--border-radius);
 	box-shadow: var(--card-shadow);
@@ -174,7 +174,7 @@ const limitWritable = useSync(props, 'limit', emit);
 .layout-map {
 	position: relative;
 	width: 100%;
-	height: calc(100% - 60px);
+	height: calc(100% - 3.75rem);
 }
 
 .center {
@@ -186,7 +186,7 @@ const limitWritable = useSync(props, 'limit', emit);
 
 .location-filter {
 	position: absolute;
-	top: 10px;
+	top: .625rem;
 	left: 50%;
 	box-shadow: var(--card-shadow);
 	transform: translate(-50%, 0%);
@@ -196,10 +196,10 @@ const limitWritable = useSync(props, 'limit', emit);
 	position: fixed;
 	z-index: 1;
 	max-width: 80%;
-	padding: 6px 10px;
+	padding: .375rem .625rem;
 	color: var(--foreground-normal-alt);
 	font-weight: 500;
-	font-size: 14px;
+	font-size: .875rem;
 	font-family: var(--family-sans-serif);
 	background-color: var(--background-page);
 	border-radius: var(--border-radius);
@@ -216,8 +216,8 @@ const limitWritable = useSync(props, 'limit', emit);
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	height: 36px;
-	padding: 10px;
+	height: 2.25rem;
+	padding: .625rem;
 	color: var(--foreground-subdued);
 	background-color: var(--background-page);
 	border: var(--border-width) solid var(--background-page);
@@ -226,7 +226,7 @@ const limitWritable = useSync(props, 'limit', emit);
 
 	span {
 		width: auto;
-		margin-right: 4px;
+		margin-right: .25rem;
 	}
 
 	.v-select {
@@ -240,7 +240,7 @@ const limitWritable = useSync(props, 'limit', emit);
 }
 
 .reset-preset {
-	margin-top: 24px;
+	margin-top: 1.5rem;
 }
 
 .footer {
@@ -251,15 +251,15 @@ const limitWritable = useSync(props, 'limit', emit);
 	align-items: center;
 	justify-content: space-between;
 	box-sizing: border-box;
-	padding: 10px;
+	padding: .625rem;
 	overflow: hidden;
 	background-color: transparent !important;
 
 	.pagination {
-		--v-button-height: 28px;
+		--v-button-height: 1.75rem;
 
 		display: inline-block;
-		margin-right: 10px;
+		margin-right: .625rem;
 
 		button {
 			box-shadow: 0 0 3px 1px rgba(0, 0, 0, 0.1);

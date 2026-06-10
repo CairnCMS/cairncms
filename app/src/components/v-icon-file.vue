@@ -21,7 +21,7 @@ defineProps<Props>();
 }
 
 .icon {
-	--v-icon-size: 64px;
+	--v-icon-size: 4rem;
 	--v-icon-color: var(--v-icon-file-color);
 	color: var(--v-icon-file-color);
 	position: relative;
@@ -32,20 +32,20 @@ defineProps<Props>();
 		left: 50%;
 		transform: translateX(-50%);
 		top: 55%;
-		font-size: 12px;
+		font-size: .75rem;
 		font-weight: 800;
 		line-height: 1;
-		padding: 2px 0;
+		padding: .125rem 0;
 		text-align: center;
 	}
 
 	&.right {
 		.label {
 			background-color: var(--v-icon-file-background-color);
-			left: calc(100% - 12px - 3ch);
+			left: calc(100% - .75rem - 3ch);
 			text-align: left;
 			transform: none;
-			padding-right: 8px;
+			padding-right: .5rem;
 		}
 	}
 }

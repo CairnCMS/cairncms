@@ -41,6 +41,6 @@ const displayInfo = useExtension('display', display);
 
 <style lang="scss" scoped>
 .display {
-	line-height: 22px;
+	line-height: 1.375rem;
 }
 </style>

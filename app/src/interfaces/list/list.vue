@@ -291,11 +291,11 @@ function closeDrawer() {
 
 <style lang="scss" scoped>
 .v-notice {
-	margin-bottom: 4px;
+	margin-bottom: .25rem;
 }
 
 .v-list {
-	--v-list-padding: 0 0 4px;
+	--v-list-padding: 0 0 .25rem;
 }
 
 .v-list-item {
@@ -313,6 +313,6 @@ function closeDrawer() {
 }
 
 .add-new {
-	margin-top: 8px;
+	margin-top: .5rem;
 }
 </style>

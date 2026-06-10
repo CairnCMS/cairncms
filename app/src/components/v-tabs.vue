@@ -63,8 +63,8 @@ function update(newSelection: readonly (string | number)[]) {
 	flex-shrink: 0;
 	align-items: center;
 	justify-content: center;
-	height: 38px;
-	padding: 8px 20px;
+	height: 2.375rem;
+	padding: .5rem 1.25rem;
 	cursor: pointer;
 }
 </style>

@@ -134,15 +134,15 @@ function onClick(event: PointerEvent) {
 
 <style>
 body {
-	--v-list-item-padding-nav: 2px var(--input-padding);
+	--v-list-item-padding-nav: .125rem var(--input-padding);
 	--v-list-item-padding: 0 var(--input-padding) 0 calc(var(--input-padding) + var(--v-list-item-indent, 0px));
-	--v-list-item-margin-nav: 2px 6px;
-	--v-list-item-margin: 2px 0;
+	--v-list-item-margin-nav: .125rem .375rem;
+	--v-list-item-margin: .125rem 0;
 	--v-list-item-min-width: none;
 	--v-list-item-max-width: none;
-	--v-list-item-min-height-nav: 40px;
-	--v-list-item-border-radius-nav: 8px;
-	--v-list-item-min-height: 32px;
+	--v-list-item-min-height-nav: 2.5rem;
+	--v-list-item-border-radius-nav: .5rem;
+	--v-list-item-min-height: 2rem;
 	--v-list-item-max-height: auto;
 	--v-list-item-border-radius: var(--border-radius);
 	--v-list-item-border-color: var(--border-subdued);
@@ -182,8 +182,8 @@ body {
 			position: absolute;
 			top: 0;
 			left: 0;
-			width: calc(100% - 4px);
-			height: calc(100% - 4px);
+			width: calc(100% - .25rem);
+			height: calc(100% - .25rem);
 			border: 2px dashed var(--border-normal);
 			content: '';
 			pointer-events: none;
@@ -241,7 +241,7 @@ body {
 		display: flex;
 		height: var(--input-height);
 		margin: 0;
-		padding: 8px var(--input-padding);
+		padding: .5rem var(--input-padding);
 		background-color: var(--v-list-item-background-color);
 		border: var(--border-width) solid var(--v-list-item-border-color);
 		border-radius: var(--border-radius);
@@ -277,15 +277,15 @@ body {
 		}
 
 		& + & {
-			margin-top: 8px;
+			margin-top: .5rem;
 		}
 
 		&.dense {
-			height: 44px;
-			padding: 4px 8px;
+			height: 2.75rem;
+			padding: .25rem .5rem;
 
 			& + & {
-				margin-top: 4px;
+				margin-top: .25rem;
 			}
 		}
 	}
@@ -322,7 +322,7 @@ body {
 
 		.v-list.nav.dense {
 			#{$this}:not(.dense) {
-				--v-list-item-min-height: 32px;
+				--v-list-item-min-height: 2rem;
 			}
 		}
 	}

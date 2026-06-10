@@ -81,16 +81,16 @@ const active = computed(() => interval.value !== null);
 @import '@/styles/mixins/form-grid';
 
 .fields {
-	--form-vertical-gap: 24px;
+	--form-vertical-gap: 1.5rem;
 
 	@include form-grid;
 
 	.type-label {
-		font-size: 1rem;
+		font-size: .875rem;
 	}
 }
 
 .v-checkbox {
-	margin-top: 8px;
+	margin-top: .5rem;
 }
 </style>

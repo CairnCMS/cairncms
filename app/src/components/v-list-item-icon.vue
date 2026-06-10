@@ -26,15 +26,15 @@ body {
 
 	display: inline-flex;
 	align-self: center;
-	margin: 8px 0;
+	margin: .5rem 0;
 
 	&:not(:only-child) {
 		&:first-child {
-			margin-right: 12px;
+			margin-right: .75rem;
 		}
 
 		&:last-child {
-			margin-left: 12px;
+			margin-left: .75rem;
 		}
 	}
 
@@ -44,23 +44,23 @@ body {
 			#{$this} {
 				--v-icon-color: var(--v-list-item-icon-color);
 
-				margin-top: 4px;
-				margin-bottom: 4px;
+				margin-top: .25rem;
+				margin-bottom: .25rem;
 
 				&:not(:only-child) {
 					&:first-child {
-						margin-right: 8px;
+						margin-right: .5rem;
 					}
 
 					&:last-child {
-						margin-left: 8px;
+						margin-left: .5rem;
 					}
 				}
 			}
 
 			&.nav #{$this} :slotted(.v-icon) {
 				&.dense {
-					--v-icon-size: 18px;
+					--v-icon-size: 1.125rem;
 				}
 			}
 

@@ -78,7 +78,7 @@ const modules = computed(() => {
 .module-bar {
 	display: flex;
 	flex-direction: column;
-	width: 60px;
+	width: 3.75rem;
 	height: 100%;
 	background-color: var(--module-background);
 
@@ -99,7 +99,7 @@ const modules = computed(() => {
 		:deep(.button) {
 			border: 6px solid transparent;
 			background-clip: padding-box;
-			border-radius: 14px;
+			border-radius: .875rem;
 		}
 	}
 }

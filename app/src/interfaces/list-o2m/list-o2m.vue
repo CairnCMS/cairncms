@@ -601,8 +601,8 @@ function getLinkForItem(item: DisplayItem) {
 }
 
 .v-list {
-	margin-top: 8px;
-	--v-list-padding: 0 0 4px;
+	margin-top: .5rem;
+	--v-list-padding: 0 0 .25rem;
 
 	.v-list-item.deleted {
 		--v-list-item-border-color: var(--danger-25);
@@ -618,7 +618,7 @@ function getLinkForItem(item: DisplayItem) {
 
 .v-skeleton-loader,
 .v-notice {
-	margin-top: 8px;
+	margin-top: .5rem;
 }
 
 .actions {
@@ -666,14 +666,14 @@ function getLinkForItem(item: DisplayItem) {
 	}
 
 	&.list {
-		margin-top: 8px;
+		margin-top: .5rem;
 	}
 }
 
 .item-link {
 	--v-icon-color: var(--foreground-subdued);
 	transition: color var(--fast) var(--transition);
-	margin: 0 4px;
+	margin: 0 .25rem;
 
 	&:hover {
 		--v-icon-color: var(--primary);
@@ -688,7 +688,7 @@ function getLinkForItem(item: DisplayItem) {
 .deselect {
 	--v-icon-color: var(--foreground-subdued);
 	transition: color var(--fast) var(--transition);
-	margin: 0 4px;
+	margin: 0 .25rem;
 
 	&:hover {
 		--v-icon-color: var(--danger);
@@ -699,14 +699,14 @@ function getLinkForItem(item: DisplayItem) {
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
-	width: 120px;
-	padding: 10px 0;
-	margin-right: 2px;
+	width: 7.5rem;
+	padding: .625rem 0;
+	margin-right: .125rem;
 	color: var(--foreground-subdued);
 
 	span {
 		width: auto;
-		margin-right: 8px;
+		margin-right: .5rem;
 	}
 
 	.v-select {

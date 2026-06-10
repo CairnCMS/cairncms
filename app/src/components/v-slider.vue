@@ -100,12 +100,12 @@ body {
 	align-items: center;
 
 	.prepend {
-		margin-right: 8px;
+		margin-right: .5rem;
 	}
 
 	.slider {
 		position: relative;
-		top: -3px;
+		top: -.1875rem;
 		flex-grow: 1;
 
 		&.disabled {
@@ -114,41 +114,41 @@ body {
 		}
 
 		&.thumb-label-visible {
-			margin-bottom: 30px;
+			margin-bottom: 1.875rem;
 		}
 
 		input {
 			width: 100%;
-			height: 4px;
-			padding: 8px 0;
+			height: .25rem;
+			padding: .5rem 0;
 			background-color: var(--background-page);
 			background-image: var(--v-slider-track-background-image);
-			border-radius: 10px;
+			border-radius: .625rem;
 			cursor: pointer;
 			appearance: none;
 
 			&::-webkit-slider-runnable-track {
-				height: 4px;
+				height: .25rem;
 				background: var(--v-slider-color);
 				border: none;
-				border-radius: 2px;
+				border-radius: .125rem;
 				box-shadow: none;
 			}
 
 			&::-moz-range-track {
-				height: 4px;
+				height: .25rem;
 				background: var(--v-slider-color);
 				border: none;
-				border-radius: 2px;
+				border-radius: .125rem;
 				box-shadow: none;
 			}
 
 			&::-webkit-slider-thumb {
 				position: relative;
 				z-index: 3;
-				width: 8px;
-				height: 8px;
-				margin-top: -2px;
+				width: .5rem;
+				height: .5rem;
+				margin-top: -.125rem;
 				background: var(--background-page);
 				border: none;
 				border-radius: 50%;
@@ -161,9 +161,9 @@ body {
 			&::-moz-range-thumb {
 				position: relative;
 				z-index: 3;
-				width: 8px;
-				height: 8px;
-				margin-top: -2px;
+				width: .5rem;
+				height: .5rem;
+				margin-top: -.125rem;
 				background: var(--v-slider-thumb-color);
 				border: none;
 				border-radius: 50%;
@@ -181,33 +181,33 @@ body {
 			left: 0;
 			z-index: 2;
 			width: 100%;
-			height: 4px;
+			height: .25rem;
 			background-color: var(--v-slider-fill-color);
-			border-radius: 2px;
-			transform: translateY(-5px) scaleX(calc(var(--_v-slider-percentage) / 100));
+			border-radius: .125rem;
+			transform: translateY(-.3125rem) scaleX(calc(var(--_v-slider-percentage) / 100));
 			transform-origin: left;
 			pointer-events: none;
 		}
 
 		.ticks {
 			position: absolute;
-			top: 14px;
+			top: .875rem;
 			left: 0;
 			z-index: 2;
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
 			width: 100%;
-			height: 4px;
-			padding: 0 7px;
+			height: .25rem;
+			padding: 0 .4375rem;
 			opacity: 0;
 			transition: opacity var(--fast) var(--transition);
 			pointer-events: none;
 
 			.tick {
 				display: inline-block;
-				width: 4px;
-				height: 4px;
+				width: .25rem;
+				height: .25rem;
 				background-color: var(--v-slider-color);
 				border-radius: 50%;
 			}
@@ -216,8 +216,8 @@ body {
 		.thumb-label-wrapper {
 			position: absolute;
 			top: 100%;
-			left: 7px;
-			width: calc(100% - 14px);
+			left: .4375rem;
+			width: calc(100% - .875rem);
 			overflow: visible;
 			pointer-events: none;
 		}
@@ -228,7 +228,7 @@ body {
 			top: 0px;
 			left: calc(var(--_v-slider-percentage) * 1%);
 			width: auto;
-			padding: 2px 6px;
+			padding: .125rem .375rem;
 			color: var(--foreground-inverted);
 			font-weight: 600;
 			background-color: var(--primary);
@@ -245,20 +245,20 @@ body {
 		&:hover:not(.disabled),
 		&:focus-within:not(.disabled) {
 			input {
-				height: 4px;
+				height: .25rem;
 
 				&::-webkit-slider-thumb {
-					width: 12px;
-					height: 12px;
-					margin-top: -4px;
+					width: .75rem;
+					height: .75rem;
+					margin-top: -.25rem;
 					box-shadow: 0 0 0 4px var(--v-slider-thumb-color);
 					cursor: ew-resize;
 				}
 
 				&::-moz-range-thumb {
-					width: 12px;
-					height: 12px;
-					margin-top: -4px;
+					width: .75rem;
+					height: .75rem;
+					margin-top: -.25rem;
 					box-shadow: 0 0 0 4px var(--v-slider-thumb-color);
 					cursor: ew-resize;
 				}
@@ -278,7 +278,7 @@ body {
 	}
 
 	.append {
-		margin-left: 8px;
+		margin-left: .5rem;
 	}
 }
 </style>

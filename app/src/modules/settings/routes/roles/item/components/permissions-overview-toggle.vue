@@ -150,10 +150,10 @@ async function openPermissions() {
 
 	&::before {
 		position: absolute;
-		top: -4px;
-		left: -4px;
-		width: calc(100% + 8px);
-		height: calc(100% + 8px);
+		top: -.25rem;
+		left: -.25rem;
+		width: calc(100% + .5rem);
+		height: calc(100% + .5rem);
 		background-color: var(--background-highlight);
 		border-radius: 50%;
 		opacity: 0;

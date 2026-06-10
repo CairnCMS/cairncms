@@ -499,7 +499,7 @@ function getSystemRelations() {
 @import '@/styles/mixins/form-grid';
 
 .type-title {
-	margin-bottom: 48px;
+	margin-bottom: 3rem;
 }
 
 .grid {
@@ -537,6 +537,6 @@ function getSystemRelations() {
 }
 
 .v-notice {
-	margin-bottom: 36px;
+	margin-bottom: 2.25rem;
 }
 </style>

@@ -135,11 +135,11 @@ const color = computed(() => {
 	width: 100%;
 	height: 100%;
 	font-weight: 800;
-	font-size: 42px;
-	line-height: 52px;
+	font-size: 2.625rem;
+	line-height: 3.25rem;
 }
 
 .metric.has-header {
-	height: calc(100% - 16px);
+	height: calc(100% - 1rem);
 }
 </style>

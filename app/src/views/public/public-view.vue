@@ -102,11 +102,11 @@ const logoURL = computed<string | null>(() => {
 	:slotted(.v-icon) {
 		--v-icon-color: var(--foreground-subdued);
 
-		margin-left: 4px;
+		margin-left: .25rem;
 	}
 
 	.container {
-		@include form-field-sizing(60px, 16px);
+		@include form-field-sizing(3.75rem, 1rem);
 
 		z-index: 2;
 		display: flex;
@@ -114,39 +114,39 @@ const logoURL = computed<string | null>(() => {
 		flex-direction: column;
 		justify-content: space-between;
 		width: 100%;
-		max-width: 500px;
+		max-width: 31.25rem;
 		height: 100%;
-		padding: 20px;
+		padding: 1.25rem;
 		overflow-x: hidden;
 		overflow-y: auto;
 
 		/* Page Content Spacing */
-		font-size: 15px;
-		line-height: 24px;
+		font-size: .9375rem;
+		line-height: 1.5rem;
 		box-shadow: 0 0 40px 0 rgb(38 50 56 / 0.1);
 		transition: max-width var(--medium) var(--transition);
 
 		:slotted(.type-title) {
 			font-weight: 800;
-			font-size: 42px;
-			line-height: 52px;
+			font-size: 2.625rem;
+			line-height: 3.25rem;
 		}
 
 		.content {
-			width: 340px;
+			width: 21.25rem;
 			max-width: 100%;
 		}
 
 		&.wide {
-			max-width: 872px;
+			max-width: 54.5rem;
 
 			.content {
-				width: 712px;
+				width: 44.5rem;
 			}
 		}
 
 		@media (min-width: 500px) {
-			padding: 40px 80px;
+			padding: 2.5rem 5rem;
 		}
 	}
 
@@ -164,29 +164,29 @@ const logoURL = computed<string | null>(() => {
 
 		.foreground {
 			width: 80%;
-			max-width: 400px;
+			max-width: 25rem;
 		}
 
 		.note-container {
 			position: absolute;
 			right: 0;
-			bottom: 34px;
+			bottom: 2.125rem;
 			left: 0;
 			display: flex;
 			align-items: flex-end;
 			justify-content: center;
-			height: 10px;
+			height: .625rem;
 
 			.note {
-				max-width: 340px;
+				max-width: 21.25rem;
 				margin: 0 auto;
-				padding: 8px 12px;
+				padding: .5rem .75rem;
 				color: var(--foreground-normal);
-				font-size: 15px;
-				line-height: 24px;
+				font-size: .9375rem;
+				line-height: 1.5rem;
 				background-color: rgb(var(--background-page-rgb) / 0.7);
 				border-radius: var(--border-radius);
-				backdrop-filter: blur(2px);
+				backdrop-filter: blur(.125rem);
 			}
 		}
 
@@ -205,16 +205,16 @@ const logoURL = computed<string | null>(() => {
 		align-items: center;
 		width: max-content;
 		max-width: 100%;
-		height: 64px;
+		height: 4rem;
 
 		.title {
-			margin-top: 2px;
-			margin-left: 16px;
+			margin-top: .125rem;
+			margin-left: 1rem;
 
 			h1 {
 				font-weight: 700;
-				font-size: 18px;
-				line-height: 18px;
+				font-size: 1.125rem;
+				line-height: 1.125rem;
 			}
 
 			.subtitle {
@@ -229,14 +229,14 @@ const logoURL = computed<string | null>(() => {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 56px;
-		height: 56px;
+		width: 3.5rem;
+		height: 3.5rem;
 		background-color: var(--brand);
-		border-radius: calc(var(--border-radius) - 2px);
+		border-radius: calc(var(--border-radius) - .125rem);
 
 		img {
-			width: 40px;
-			height: 40px;
+			width: 2.5rem;
+			height: 2.5rem;
 			object-fit: contain;
 			object-position: center center;
 		}

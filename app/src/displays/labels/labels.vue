@@ -99,26 +99,26 @@ const items = computed(() => {
 }
 
 :deep(.v-chip.small) {
-	--v-chip-height-small: 22px;
-	--v-chip-padding-small: 0 9px;
-	--v-chip-border-radius-small: 16px;
+	--v-chip-height-small: 1.375rem;
+	--v-chip-padding-small: 0 .5625rem;
+	--v-chip-border-radius-small: 1rem;
 }
 
 .v-chip.has-dot {
-	--v-chip-padding-small: 0 10px 0 8px;
+	--v-chip-padding-small: 0 .625rem 0 .5rem;
 }
 
 .label-dot {
 	display: inline-block;
 	flex-shrink: 0;
-	width: 6px;
-	height: 6px;
-	margin-right: 6px;
+	width: .375rem;
+	height: .375rem;
+	margin-right: .375rem;
 	border-radius: 50%;
 	vertical-align: middle;
 }
 
 .v-chip + .v-chip {
-	margin-left: 4px;
+	margin-left: .25rem;
 }
 </style>

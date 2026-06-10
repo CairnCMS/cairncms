@@ -232,16 +232,16 @@ async function fetchExtensions() {
 
 .summary {
 	display: flex;
-	gap: 24px;
-	margin-bottom: 24px;
+	gap: 1.5rem;
+	margin-bottom: 1.5rem;
 	color: var(--foreground-subdued);
-	font-size: 14px;
+	font-size: .875rem;
 }
 
 .summary .stat {
 	display: inline-flex;
 	align-items: center;
-	gap: 6px;
+	gap: .375rem;
 }
 
 .summary .count {
@@ -250,11 +250,11 @@ async function fetchExtensions() {
 }
 
 .group {
-	margin-bottom: 32px;
+	margin-bottom: 2rem;
 }
 
 .group-count {
-	margin-left: 8px;
+	margin-left: .5rem;
 }
 
 .expand-icon {
@@ -269,30 +269,30 @@ async function fetchExtensions() {
 
 .version {
 	flex-shrink: 0;
-	margin-left: 12px;
+	margin-left: .75rem;
 }
 
 .detail-meta {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: .5rem;
 }
 
 .detail-entries {
-	margin-top: 20px;
+	margin-top: 1.25rem;
 }
 
 .detail-label {
-	margin-bottom: 8px;
+	margin-bottom: .5rem;
 	color: var(--foreground-subdued);
-	font-size: 13px;
+	font-size: .8125rem;
 }
 
 .detail-entry {
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	padding: 6px 0;
+	gap: .5rem;
+	padding: .375rem 0;
 }
 
 .detail-entry-name {
@@ -300,6 +300,6 @@ async function fetchExtensions() {
 }
 
 .detail-notice {
-	margin-top: 20px;
+	margin-top: 1.25rem;
 }
 </style>

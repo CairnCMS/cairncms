@@ -84,7 +84,7 @@ defineExpose({
 
 <style lang="scss" scoped>
 .v-progress-linear {
-	margin: 24px 0;
+	margin: 1.5rem 0;
 }
 
 .v-divider {
@@ -93,13 +93,13 @@ defineExpose({
 	position: sticky;
 	top: 0;
 	z-index: 3;
-	margin-top: 8px;
-	margin-right: -8px;
-	margin-bottom: 6px;
-	margin-left: -8px;
-	padding-top: 8px;
-	padding-right: 8px;
-	padding-left: 8px;
+	margin-top: .5rem;
+	margin-right: -.5rem;
+	margin-bottom: .375rem;
+	margin-left: -.5rem;
+	padding-top: .5rem;
+	padding-right: .5rem;
+	padding-left: .5rem;
 	background-color: var(--background-normal);
 	box-shadow: 0 0 2px 2px var(--background-normal);
 
@@ -109,15 +109,15 @@ defineExpose({
 }
 
 .empty {
-	margin-top: 16px;
-	margin-bottom: 16px;
-	margin-left: 2px;
+	margin-top: 1rem;
+	margin-bottom: 1rem;
+	margin-left: .125rem;
 	color: var(--foreground-subdued);
 	font-style: italic;
 }
 
 .external {
-	margin-left: 20px;
+	margin-left: 1.25rem;
 	color: var(--foreground-subdued);
 	font-style: italic;
 }

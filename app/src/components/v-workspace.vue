@@ -134,10 +134,10 @@ const workspaceBoxSize = computed(() => {
 	position: absolute;
 	left: var(--content-padding);
 	display: grid;
-	grid-template-rows: repeat(auto-fill, 20px);
-	grid-template-columns: repeat(auto-fill, 20px);
+	grid-template-rows: repeat(auto-fill, 1.25rem);
+	grid-template-columns: repeat(auto-fill, 1.25rem);
 	min-width: calc(100%);
-	min-height: calc(100% - 120px);
+	min-height: calc(100% - 7.5rem);
 	transform: scale(1);
 	transform-origin: top left;
 
@@ -152,14 +152,14 @@ const workspaceBoxSize = computed(() => {
 
 .workspace::before {
 	position: absolute;
-	top: -4px;
-	left: -4px;
+	top: -.25rem;
+	left: -.25rem;
 	display: block;
-	width: calc(100% + 8px);
-	height: calc(100% + 8px);
+	width: calc(100% + .5rem);
+	height: calc(100% + .5rem);
 	background-image: radial-gradient(var(--border-normal) 10%, transparent 10%);
-	background-position: -6px -6px;
-	background-size: 20px 20px;
+	background-position: -.375rem -.375rem;
+	background-size: 1.25rem 1.25rem;
 	opacity: 0;
 	transition: opacity var(--slow) var(--transition);
 	content: '';

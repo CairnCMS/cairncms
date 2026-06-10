@@ -374,24 +374,24 @@ function isExistingField(node: Record<string, any>): boolean {
 	display: flex;
 	align-items: center;
 	width: fit-content;
-	margin-right: 18px;
-	margin-bottom: 8px;
-	padding: 2px 6px;
-	padding-right: 8px;
+	margin-right: 1.125rem;
+	margin-bottom: .5rem;
+	padding: .125rem .375rem;
+	padding-right: .5rem;
 	background-color: var(--background-page);
 	border: var(--border-width) solid var(--border-subdued);
-	border-radius: 100px;
+	border-radius: 6.25rem;
 	transition: border-color var(--fast) var(--transition);
 
 	.logic-type {
 		color: var(--foreground-subdued);
 
 		.key {
-			margin-right: 4px;
-			padding: 2px 6px;
+			margin-right: .25rem;
+			padding: .125rem .375rem;
 			color: var(--primary);
 			background-color: var(--primary-alt);
-			border-radius: 2px;
+			border-radius: .125rem;
 			cursor: pointer;
 			transition: var(--fast) var(--transition);
 			transition-property: color, background-color;
@@ -421,7 +421,7 @@ function isExistingField(node: Record<string, any>): boolean {
 
 	.plain-name {
 		display: inline-block;
-		margin-right: 8px;
+		margin-right: .5rem;
 	}
 
 	.name {
@@ -433,17 +433,17 @@ function isExistingField(node: Record<string, any>): boolean {
 		position: relative;
 		z-index: 2;
 		display: inline-block;
-		margin-right: 8px;
+		margin-right: .5rem;
 
 		&::before {
 			position: absolute;
 			top: 0px;
-			left: -4px;
+			left: -.25rem;
 			z-index: -1;
-			width: calc(100% + 8px);
+			width: calc(100% + .5rem);
 			height: 100%;
 			background-color: var(--background-normal);
-			border-radius: 2px;
+			border-radius: .125rem;
 			opacity: 0;
 			transition: opacity var(--fast) var(--transition);
 			content: '';
@@ -470,7 +470,7 @@ function isExistingField(node: Record<string, any>): boolean {
 		position: absolute;
 		top: 50%;
 		left: 100%;
-		padding-left: 4px;
+		padding-left: .25rem;
 		transform: translateY(-50%);
 		opacity: 0;
 		transition: opacity var(--fast) var(--transition);
@@ -488,17 +488,17 @@ function isExistingField(node: Record<string, any>): boolean {
 	.drag-handle {
 		--v-icon-color: var(--foreground-subdued);
 
-		margin-right: 4px;
+		margin-right: .25rem;
 		cursor: grab;
 	}
 
 	&.inline {
 		width: auto;
 		margin-right: 0;
-		padding-right: 12px;
+		padding-right: .75rem;
 
 		.delete {
-			right: 8px;
+			right: .5rem;
 			left: unset;
 			background-color: var(--background-page);
 		}
@@ -507,12 +507,12 @@ function isExistingField(node: Record<string, any>): boolean {
 
 .node {
 	&.logic {
-		padding-right: 4px;
+		padding-right: .25rem;
 		white-space: nowrap;
 	}
 
 	&.field {
-		padding-right: 4px;
+		padding-right: .25rem;
 	}
 }
 

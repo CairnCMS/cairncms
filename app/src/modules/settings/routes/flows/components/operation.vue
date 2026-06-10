@@ -302,7 +302,7 @@ function pointerLeave() {
 .v-workspace-tile.block-container {
 	position: relative;
 	overflow: visible;
-	padding: 4px;
+	padding: .25rem;
 
 	:deep(.header .name) {
 		color: var(--primary);
@@ -313,16 +313,16 @@ function pointerLeave() {
 	}
 
 	.block {
-		padding: 0 12px;
+		padding: 0 .75rem;
 		height: 100%;
 		overflow-y: auto;
 
 		.name {
 			display: inline-block;
-			font-size: 20px;
+			font-size: 1.25rem;
 			color: var(--foreground-normal-alt);
 			font-weight: 600;
-			margin-bottom: 8px;
+			margin-bottom: .5rem;
 		}
 	}
 
@@ -340,7 +340,7 @@ function pointerLeave() {
 			bottom: 0;
 			left: 0;
 			right: 0;
-			border-radius: 2px;
+			border-radius: .125rem;
 			z-index: -1;
 			opacity: 0.2;
 			box-shadow: 0 0 0 10px var(--primary);
@@ -390,9 +390,9 @@ function pointerLeave() {
 	}
 
 	.button-hint {
-		width: 32px;
-		height: 32px;
-		padding: 4px;
+		width: 2rem;
+		height: 2rem;
+		padding: .25rem;
 	}
 
 	.hint {
@@ -400,13 +400,13 @@ function pointerLeave() {
 		display: flex;
 		justify-content: center;
 		align-items: center;
-		padding: 20px 20px 20px 60px;
-		transform: translate(-1px, calc(-50% - 2.5px));
+		padding: 1.25rem 1.25rem 1.25rem 3.75rem;
+		transform: translate(-1px, calc(-50% - .15625rem));
 	}
 
 	.button {
-		width: 20px;
-		height: 20px;
+		width: 1.25rem;
+		height: 1.25rem;
 		display: flex;
 		justify-content: center;
 		align-items: center;
@@ -487,7 +487,7 @@ function pointerLeave() {
 }
 
 .options-overview-error {
-	padding: 20px;
+	padding: 1.25rem;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -498,14 +498,14 @@ function pointerLeave() {
 	--v-icon-color: var(--danger);
 
 	.v-error {
-		margin-top: 8px;
+		margin-top: .5rem;
 		max-width: 100%;
 	}
 }
 
 .status-footer {
 	display: flex;
-	gap: 8px;
+	gap: .5rem;
 }
 
 .fade-enter-active,

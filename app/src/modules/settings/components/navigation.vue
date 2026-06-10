@@ -93,7 +93,7 @@ const externalItems = computed(() => {
 
 .version .v-icon {
 	color: var(--foreground-subdued);
-	transform: translateY(2px);
+	transform: translateY(.125rem);
 	transition: color var(--fast) var(--transition);
 }
 

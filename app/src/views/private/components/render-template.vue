@@ -173,7 +173,7 @@ function handleObject(fieldKey: string) {
 	height: 100%;
 	position: relative;
 	max-width: 100%;
-	padding-right: 8px;
+	padding-right: .5rem;
 
 	.vertical-aligner {
 		display: inline-block;

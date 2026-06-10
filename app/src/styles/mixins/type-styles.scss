@@ -1,39 +1,39 @@
 @mixin type-title {
 	color: var(--foreground-normal-alt);
 	font-weight: 700;
-	font-size: 24px;
+	font-size: 1.5rem;
 	font-family: var(--family-sans-serif);
 	font-style: normal;
-	line-height: 34px;
+	line-height: 2.125rem;
 
 	@media (min-width: 600px) {
-		font-size: 24px;
+		font-size: 1.5rem;
 	}
 }
 
 @mixin type-label {
 	color: var(--foreground-normal-alt);
 	font-weight: 600;
-	font-size: 16px;
+	font-size: 1rem;
 	font-family: var(--family-sans-serif);
 	font-style: normal;
-	line-height: 19px;
+	line-height: 1.1875rem;
 }
 
 @mixin type-text {
 	color: var(--foreground-normal);
 	font-weight: 500;
-	font-size: 14px;
+	font-size: .875rem;
 	font-family: var(--family-sans-serif);
 	font-style: normal;
-	line-height: 22px;
+	line-height: 1.375rem;
 }
 
 @mixin type-note {
 	color: var(--foreground-subdued);
 	font-weight: 500;
-	font-size: 13px;
+	font-size: .8125rem;
 	font-family: var(--family-sans-serif);
 	font-style: italic;
-	line-height: 18px;
+	line-height: 1.125rem;
 }

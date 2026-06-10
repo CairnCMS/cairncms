@@ -30,7 +30,7 @@ const sizeClass = useSizeClass(props);
 <style>
 body {
 	--v-avatar-color: var(--background-normal);
-	--v-avatar-size: 48px;
+	--v-avatar-size: 3rem;
 }
 </style>
 
@@ -55,21 +55,21 @@ body {
 }
 
 .x-small {
-	--v-avatar-size: 24px;
+	--v-avatar-size: 1.5rem;
 
-	border-radius: 2px;
+	border-radius: .125rem;
 }
 
 .small {
-	--v-avatar-size: 36px;
+	--v-avatar-size: 2.25rem;
 }
 
 .large {
-	--v-avatar-size: 60px;
+	--v-avatar-size: 3.75rem;
 }
 
 .x-large {
-	--v-avatar-size: 80px;
+	--v-avatar-size: 5rem;
 }
 
 :slotted(img) {

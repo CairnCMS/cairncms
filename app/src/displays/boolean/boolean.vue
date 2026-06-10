@@ -50,7 +50,7 @@ const styles = computed(() => {
 	align-items: center;
 
 	.v-icon {
-		margin-right: 4px;
+		margin-right: .25rem;
 	}
 }
 </style>

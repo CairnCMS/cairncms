@@ -202,16 +202,16 @@ function useReset() {
 }
 
 .title {
-	margin-bottom: 12px;
+	margin-bottom: .75rem;
 
 	.instant-save {
-		margin-left: 4px;
+		margin-left: .25rem;
 		color: var(--warning);
 	}
 }
 
 .table {
-	max-width: 792px;
+	max-width: 49.5rem;
 	background-color: var(--background-input);
 	border: var(--border-width) solid var(--border-normal);
 	border-radius: var(--border-radius);
@@ -219,18 +219,18 @@ function useReset() {
 
 .system-toggle {
 	width: 100%;
-	height: 48px;
+	height: 3rem;
 	color: var(--foreground-subdued);
 	background-color: var(--background-subdued);
 
 	.v-icon {
-		vertical-align: -7px;
+		vertical-align: -.4375rem;
 	}
 }
 
 .reset-toggle {
 	display: block;
-	margin: 8px auto;
+	margin: .5rem auto;
 	color: var(--foreground-subdued);
 	text-align: center;
 

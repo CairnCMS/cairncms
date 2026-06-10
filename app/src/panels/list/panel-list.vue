@@ -84,16 +84,16 @@ async function saveEdits(item: Record<string, any>) {
 	--v-list-padding: 0;
 	--v-list-border-radius: 0;
 	--v-list-item-border-radius: 0;
-	--v-list-item-padding: 6px;
+	--v-list-item-padding: .375rem;
 	--v-list-item-margin: 0;
 
 	height: 100%;
-	padding: 0 12px;
+	padding: 0 .75rem;
 	overflow-y: auto;
 }
 
 .v-list-item {
-	height: 48px;
+	height: 3rem;
 	border-top: var(--border-width) solid var(--border-subdued);
 }
 

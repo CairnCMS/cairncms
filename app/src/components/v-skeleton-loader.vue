@@ -80,26 +80,26 @@ body {
 	@include loader;
 
 	& + & {
-		margin-top: 8px;
+		margin-top: .5rem;
 	}
 }
 
 .block-list-item-dense {
 	width: 100%;
-	height: 44px;
+	height: 2.75rem;
 	border-radius: var(--border-radius);
 
 	@include loader;
 
 	& + & {
-		margin-top: 4px;
+		margin-top: .25rem;
 	}
 }
 
 .text {
 	flex-grow: 1;
-	height: 12px;
-	border-radius: 2px;
+	height: .75rem;
+	border-radius: .125rem;
 
 	@include loader;
 }
@@ -108,13 +108,13 @@ body {
 	display: flex;
 	align-items: center;
 	width: 100%;
-	height: 46px;
+	height: 2.875rem;
 
 	.icon {
 		flex-shrink: 0;
-		width: 24px;
-		height: 24px;
-		margin-right: 12px;
+		width: 1.5rem;
+		height: 1.5rem;
+		margin-right: .75rem;
 		border-radius: 50%;
 
 		@include loader;
@@ -122,8 +122,8 @@ body {
 
 	.text {
 		flex-grow: 1;
-		height: 12px;
-		border-radius: 2px;
+		height: .75rem;
+		border-radius: .125rem;
 
 		@include loader;
 	}

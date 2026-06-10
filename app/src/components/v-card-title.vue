@@ -7,7 +7,7 @@
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	margin-top: 4px;
+	margin-top: .25rem;
 	padding: var(--v-card-padding);
 	font-weight: 600;
 	line-height: 1.6em;

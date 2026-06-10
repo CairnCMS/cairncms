@@ -113,9 +113,9 @@ const userFullName = userStore.fullName ?? undefined;
 			&::after {
 				position: absolute;
 				top: -1px;
-				right: 8px;
-				left: 8px;
-				height: 2px;
+				right: .5rem;
+				left: .5rem;
+				height: .125rem;
 				background-color: var(--module-icon);
 				opacity: 0.25;
 				content: '';
@@ -138,8 +138,8 @@ const userFullName = userStore.fullName ?? undefined;
 	}
 
 	.notifications-badge {
-		--v-badge-offset-x: 16px;
-		--v-badge-offset-y: 16px;
+		--v-badge-offset-x: 1rem;
+		--v-badge-offset-y: 1rem;
 	}
 
 	.notifications {

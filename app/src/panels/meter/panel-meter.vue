@@ -160,7 +160,7 @@ const halfSizeOutputOffset = computed(() => unref(radius) / 4 + props.strokeWidt
 	width: 100%;
 	height: 100%;
 	position: relative;
-	padding: 20px;
+	padding: 1.25rem;
 	display: grid;
 	align-items: center;
 	justify-items: center;
@@ -180,7 +180,7 @@ const halfSizeOutputOffset = computed(() => unref(radius) / 4 + props.strokeWidt
 	z-index: 1;
 	font-weight: 800;
 	font-size: v-bind(fontSize);
-	line-height: 52px;
+	line-height: 3.25rem;
 }
 
 .panel-meter.size-half output {
