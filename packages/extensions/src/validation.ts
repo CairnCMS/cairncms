@@ -19,6 +19,8 @@ export const EXTENSION_VALIDATION_REASON_CODES = [
 	'source-too-large',
 	'source-read-failed',
 	'local-path-escapes-root',
+	'manifest-too-large',
+	'manifest-invalid',
 	'uses-legacy-sdk-runtime-import',
 	'uses-dynamic-code',
 ] as const;

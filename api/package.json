@@ -58,6 +58,7 @@
 		"@cairncms/app": "workspace:*",
 		"@cairncms/constants": "workspace:*",
 		"@cairncms/exceptions": "workspace:*",
+		"@cairncms/extensions": "workspace:*",
 		"@cairncms/format-title": "workspace:*",
 		"@cairncms/pressure": "workspace:*",
 		"@cairncms/schema": "workspace:*",

@@ -1,6 +1,7 @@
 import {
 	APP_EXTENSION_TYPES,
 	APP_SHARED_DEPS,
+	CONFINED_RUNTIME,
 	HYBRID_EXTENSION_TYPES,
 	JAVASCRIPT_FILE_EXTS,
 	NESTED_EXTENSION_TYPES,
@@ -55,6 +56,7 @@ import { getFlowManager } from './flows.js';
 import logger from './logger.js';
 import * as services from './services/index.js';
 import type { EventHandler } from './types/index.js';
+import { gateConfinedExtension } from './extensions/confined/load-gate.js';
 import getModuleDefault from './utils/get-module-default.js';
 import { filterServerExtensions } from './utils/filter-server-extensions.js';
 import { sanitizeExtensionError, type SanitizedExtensionError } from './utils/sanitize-extension-error.js';
@@ -121,6 +123,13 @@ export class ExtensionManager {
 
 	private extensions: Extension[] = [];
 	private serverExtensions: Extension[] = [];
+
+	// Confined extensions that passed the load gate this load, for the confined
+	// bindings. Keyed by the discovered object itself, because a name is not a safe
+	// identity: two same-name packages can both be discovered. Transient by design:
+	// recomputed on every load, never persisted, and carrying no public diagnostic
+	// row until registration.
+	private confinedEligible = new Set<Extension>();
 
 	private appExtensions: AppExtensions = null;
 	private appExtensionChunks: Map<string, string>;
@@ -290,6 +299,26 @@ export class ExtensionManager {
 		this.diagnostics.push(diagnostic);
 	}
 
+	/**
+	 * Validates each declared-confined extension before it may run confined. A
+	 * failure refuses the extension into diagnostics, never downgrading it to full
+	 * authority. A pass joins the private eligible set with no public diagnostic
+	 * row, since a confined extension is rowed at registration.
+	 */
+	private async gateConfinedExtensions(): Promise<void> {
+		for (const extension of this.extensions) {
+			if (extension.runtime !== CONFINED_RUNTIME) continue;
+
+			const verdict = await gateConfinedExtension(extension);
+
+			if (verdict.ok) {
+				this.confinedEligible.add(extension);
+			} else {
+				this.recordFailed(extension, verdict.error);
+			}
+		}
+	}
+
 	private recordAppDiagnostics(): void {
 		const appExtensions = this.extensions.filter((extension) => isIn(extension.type, APP_EXTENSION_TYPES));
 
@@ -386,6 +415,7 @@ export class ExtensionManager {
 		this.appBundleFailure = null;
 		this.extensions = [];
 		this.serverExtensions = [];
+		this.confinedEligible.clear();
 		this.hookEmbedsHead = [];
 		this.hookEmbedsBody = [];
 
@@ -400,6 +430,8 @@ export class ExtensionManager {
 		}
 
 		this.serverExtensions = filterServerExtensions(this.extensions);
+
+		await this.gateConfinedExtensions();
 
 		await this.registerHooks();
 		await this.registerEndpoints();
@@ -418,6 +450,7 @@ export class ExtensionManager {
 		this.unregisterApiExtensions();
 
 		this.serverExtensions = [];
+		this.confinedEligible.clear();
 
 		this.apiEmitter.offAll();
 
