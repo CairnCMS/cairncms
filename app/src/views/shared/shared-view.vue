@@ -62,10 +62,10 @@ const logoURL = computed<string | null>(() => {
 </script>
 
 <style scoped lang="scss">
+@import '@/styles/mixins/form-field-sizing';
+
 .shared {
-	--border-radius: 2px;
-	--input-height: 60px;
-	--input-padding: 16px;
+	@include form-field-sizing(60px, 16px);
 
 	width: 100%;
 	height: 100%;

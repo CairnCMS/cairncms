@@ -202,6 +202,8 @@ const logoURL = computed<string | null>(() => {
 </script>
 
 <style lang="scss" scoped>
+@import '@/styles/mixins/form-field-sizing';
+
 .public-view {
 	display: flex;
 	width: 100%;
@@ -214,9 +216,7 @@ const logoURL = computed<string | null>(() => {
 	}
 
 	.container {
-		--border-radius: 2px;
-		--input-height: 60px;
-		--input-padding: 16px; /* (60 - 4 - 24) / 2 */
+		@include form-field-sizing(60px, 16px);
 
 		z-index: 2;
 		display: flex;

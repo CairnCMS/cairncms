@@ -1,5 +1,5 @@
 <template>
-	<tr class="table-row" :class="{ subdued: subdued, clickable: hasClickListener }" @click="$emit('click', $event)">
+	<tr class="table-row" :class="{ subdued: subdued, clickable: hasClickListener, selected: isSelected }" @click="$emit('click', $event)">
 		<td v-if="showManualSort" class="manual cell" @click.stop>
 			<v-icon name="drag_handle" class="drag-handle" :class="{ 'sorted-manually': sortedManually }" />
 		</td>
@@ -106,6 +106,10 @@ const cssHeight = computed(() => {
 	&.clickable:not(.subdued):hover .cell {
 		background-color: var(--table-row-hover);
 		cursor: pointer;
+	}
+
+	&.selected .cell {
+		background-color: var(--primary-10);
 	}
 
 	.drag-handle {

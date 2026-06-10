@@ -97,7 +97,7 @@ const userFullName = userStore.fullName ?? undefined;
 
 	.v-avatar {
 		--v-button-color: var(--module-icon);
-		--v-button-color-hover: var(--white);
+		--v-button-color-hover: var(--module-icon-alt);
 		--v-avatar-color: var(--module-background);
 
 		position: relative;
@@ -132,7 +132,7 @@ const userFullName = userStore.fullName ?? undefined;
 			}
 
 			.v-icon {
-				--v-icon-color: var(--white);
+				--v-icon-color: var(--module-icon-alt);
 			}
 		}
 	}
@@ -144,7 +144,7 @@ const userFullName = userStore.fullName ?? undefined;
 
 	.notifications {
 		--v-button-color: var(--module-icon);
-		--v-button-color-hover: var(--white);
+		--v-button-color-hover: var(--module-icon-alt);
 		--v-button-background-color: var(--module-background);
 		--v-button-background-color-hover: var(--module-background);
 	}

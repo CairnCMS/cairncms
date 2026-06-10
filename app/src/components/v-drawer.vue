@@ -130,6 +130,8 @@ body {
 </style>
 
 <style lang="scss" scoped>
+@import '@/styles/mixins/form-field-sizing';
+
 .v-drawer {
 	position: relative;
 	display: flex;
@@ -162,9 +164,7 @@ body {
 	}
 
 	.content {
-		--border-radius: 2px;
-		--input-height: 54px;
-		--input-padding: 14px;
+		@include form-field-sizing;
 		--form-vertical-gap: 24px;
 
 		position: relative;
@@ -177,8 +177,8 @@ body {
 		line-height: 24px;
 
 		.sidebar {
-			--v-list-item-background-color-hover: var(--background-normal-alt);
-			--v-list-item-background-color-active: var(--background-normal-alt);
+			--v-list-item-background-color-hover-nav: var(--border-subdued);
+			--v-list-item-background-color-active-nav: var(--border-normal);
 
 			display: none;
 

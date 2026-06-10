@@ -11,7 +11,6 @@
 				x-large
 				:to="modulePart.to"
 				:href="modulePart.href"
-				tile
 				:style="
 					modulePart.color
 						? {
@@ -91,11 +90,17 @@ const modules = computed(() => {
 
 	.v-button {
 		--v-button-color: var(--module-icon);
-		--v-button-color-hover: var(--white);
-		--v-button-color-active: var(--primary);
+		--v-button-color-hover: var(--module-icon-alt);
+		--v-button-color-active: var(--brand);
 		--v-button-background-color: var(--module-background);
 		--v-button-background-color-hover: var(--module-background);
 		--v-button-background-color-active: var(--module-background-alt);
+
+		:deep(.button) {
+			border: 6px solid transparent;
+			background-clip: padding-box;
+			border-radius: 14px;
+		}
 	}
 }
 </style>

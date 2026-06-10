@@ -27,7 +27,6 @@ export default defineModule({
 	id: 'settings',
 	name: '$t:settings',
 	icon: 'settings',
-	color: 'var(--primary)',
 	routes: [
 		{
 			name: 'settings-data-model-redirect',

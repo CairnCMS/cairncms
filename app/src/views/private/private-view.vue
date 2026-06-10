@@ -193,6 +193,8 @@ function openSidebar(event: PointerEvent) {
 </script>
 
 <style lang="scss" scoped>
+@import '@/styles/mixins/form-field-sizing';
+
 .private-view {
 	--content-padding: 12px;
 	--content-padding-bottom: 60px;
@@ -254,9 +256,6 @@ function openSidebar(event: PointerEvent) {
 			border-right: 1px solid var(--border-normal);
 
 			&-content {
-				--v-list-item-background-color-hover: var(--background-normal-alt);
-				--v-list-item-background-color-active: var(--background-normal);
-
 				height: calc(100% - 64px);
 				overflow-x: hidden;
 				overflow-y: auto;
@@ -276,9 +275,7 @@ function openSidebar(event: PointerEvent) {
 	}
 
 	#main-content {
-		--border-radius: 2px;
-		--input-height: 54px;
-		--input-padding: 14px;
+		@include form-field-sizing;
 
 		position: relative;
 		flex-grow: 1;

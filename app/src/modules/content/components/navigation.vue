@@ -12,7 +12,6 @@
 			tabindex="-1"
 			nav
 			:mandatory="false"
-			:dense="dense"
 		>
 			<navigation-item
 				v-for="collection in rootItems"
@@ -66,7 +65,6 @@ const rootItems = computed(() => {
 	);
 });
 
-const dense = computed(() => collectionsStore.visibleCollections.length > 5);
 const showSearch = computed(() => collectionsStore.visibleCollections.length > 20);
 
 const hasHiddenCollections = computed(
@@ -96,16 +94,9 @@ const hasHiddenCollections = computed(
 
 .content-navigation {
 	--v-list-min-height: calc(100% - 64px);
-	--v-list-item-active-rule-width: 2px;
-	--v-list-item-active-rule-color: var(--primary);
-	--v-list-item-border-radius-nav: 0;
 	--v-list-group-items-padding-left: 0;
 
 	flex-grow: 1;
-
-	:deep(.v-list-item.active) {
-		--v-list-item-icon-color: var(--primary);
-	}
 
 	.v-detail {
 		:deep(.v-divider) {

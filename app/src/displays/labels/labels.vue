@@ -11,12 +11,14 @@
 				small
 				disabled
 				:label="false"
+				:class="{ 'has-dot': !!item.dotColor }"
 			>
+				<span v-if="item.dotColor" class="label-dot" :style="{ backgroundColor: item.dotColor }" />
 				{{ item.text }}
 			</v-chip>
 		</template>
 		<template v-else>
-			<display-color v-for="item in items" :key="item.value" v-tooltip="item.text" :value="item.background" />
+			<display-color v-for="item in items" :key="item.value" v-tooltip="item.text" :value="item.dotColor ?? item.background" />
 		</template>
 	</div>
 </template>
@@ -31,6 +33,7 @@ type Choice = {
 	text: string;
 	foreground: string | null;
 	background: string | null;
+	color: string | null;
 };
 
 const props = withDefaults(
@@ -75,6 +78,7 @@ const items = computed(() => {
 				text: itemStringValue,
 				foreground: 'var(--foreground-normal)',
 				background: 'var(--background-normal)',
+				dotColor: null,
 			};
 		} else {
 			return {
@@ -82,6 +86,7 @@ const items = computed(() => {
 				text: choice.text || itemStringValue,
 				foreground: choice.foreground || 'var(--foreground-normal)',
 				background: choice.background || 'var(--background-normal)',
+				dotColor: choice.color || null,
 			};
 		}
 	});
@@ -94,9 +99,23 @@ const items = computed(() => {
 }
 
 :deep(.v-chip.small) {
-	--v-chip-height-small: 28px;
-	--v-chip-padding-small: 0 10px;
-	--v-chip-border-radius-small: 24px;
+	--v-chip-height-small: 22px;
+	--v-chip-padding-small: 0 9px;
+	--v-chip-border-radius-small: 16px;
+}
+
+.v-chip.has-dot {
+	--v-chip-padding-small: 0 10px 0 8px;
+}
+
+.label-dot {
+	display: inline-block;
+	flex-shrink: 0;
+	width: 6px;
+	height: 6px;
+	margin-right: 6px;
+	border-radius: 50%;
+	vertical-align: middle;
 }
 
 .v-chip + .v-chip {

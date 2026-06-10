@@ -31,10 +31,10 @@ body {
 </style>
 
 <style lang="scss" scoped>
+@import '@/styles/mixins/form-field-sizing';
+
 .v-card {
-	--border-radius: 2px;
-	--input-height: 54px;
-	--input-padding: 14px;
+	@include form-field-sizing;
 	--form-vertical-gap: 24px;
 
 	min-width: var(--v-card-min-width);
