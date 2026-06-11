@@ -22,7 +22,7 @@ const ALL_LAYERS: HardeningLayer[] = ['network-namespace', 'permission-model', '
 // scoped fs-read is intrinsic to `permission-model`, not a separate layer.
 const REQUIRED_CORE: HardeningLayer[] = ['network-namespace', 'permission-model'];
 
-const HARDENING_ENV_VAR = 'EXTENSIONS_SANDBOX_OS_HARDENING';
+export const HARDENING_ENV_VAR = 'EXTENSIONS_SANDBOX_OS_HARDENING';
 
 export interface HardeningCapabilities {
 	networkNamespace: boolean;

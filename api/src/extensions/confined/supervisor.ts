@@ -10,16 +10,23 @@ import {
 	BASELINE_POSTURE,
 	buildHardenedSpawn,
 	createChildCgroup,
+	detectCapabilities,
 	generateScopeUnit,
+	HARDENING_ENV_VAR,
 	killScope,
 	placeInCgroup,
+	reconcilePosture,
 	removeCgroup,
+	resolveHardeningPosture,
+	validateComposedHardening,
 	type ChildCgroup,
 	type HardenedSpawnSpec,
+	type HardeningCapabilities,
+	type HardeningLayer,
 	type SandboxPosture,
 } from './sandbox-hardening.js';
 import { cgroupMemoryMax, DEFAULT_CONFINED_LIMITS } from './limits.js';
-import { OVER_CAP_HOST_REPLY, resolveSandboxConfig, type SandboxLimits } from './sandbox-limits.js';
+import { OVER_CAP_HOST_REPLY, resolveSandboxConfig, type SandboxConfig, type SandboxLimits } from './sandbox-limits.js';
 import { createFrameReader, writeFrame } from './transport.js';
 import type {
 	ConfinedHostCallContext,
@@ -708,4 +715,106 @@ let supervisor: ConfinedSupervisor | undefined;
 export function getConfinedSupervisor(): ConfinedSupervisor {
 	if (supervisor === undefined) supervisor = new ConfinedSupervisor();
 	return supervisor;
+}
+
+export type ConfinedRuntimeResolution =
+	| { ok: true; supervisor: ConfinedSupervisor; config: SandboxConfig; posture: SandboxPosture }
+	| { ok: false; error: { envVar?: string; message: string } };
+
+export interface ResolveConfinedRuntimeDeps {
+	env?: Record<string, string | undefined>;
+	detect?: (execPath: string, env: Record<string, string | undefined>) => HardeningCapabilities;
+	validate?: (intended: SandboxPosture, spec: HardenedSpawnSpec) => Promise<HardeningLayer[]>;
+	resolveChild?: typeof resolveChild;
+	makeSupervisor?: (options: ConfinedSupervisorOptions) => ConfinedSupervisor;
+}
+
+/**
+ * The production confined-runtime boot. Resolves the operator sandbox config and
+ * the intended OS-hardening posture, runs the composed self-check that confirms
+ * each candidate layer works end to end on this host, reconciles the posture to
+ * what actually ran, and constructs one supervisor under it. A config or posture
+ * failure, or a `required`-mode host that cannot satisfy the hardening core,
+ * returns an error the caller fails confined extensions closed with, never
+ * touching inherited extensions. The composition lives here because it reuses
+ * the exact spawn spec the supervisor builds per invocation, so the self-check
+ * validates the same command the runtime will run.
+ */
+export async function resolveConfinedRuntime(
+	deps: ResolveConfinedRuntimeDeps = {}
+): Promise<ConfinedRuntimeResolution> {
+	const env = deps.env ?? process.env;
+	const detect = deps.detect ?? detectCapabilities;
+	const validate = deps.validate ?? validateComposedHardening;
+	const resolveChildFn = deps.resolveChild ?? resolveChild;
+
+	const makeSupervisor =
+		deps.makeSupervisor ?? ((options: ConfinedSupervisorOptions) => new ConfinedSupervisor(options));
+
+	const configResult = resolveSandboxConfig(env);
+
+	if (!configResult.ok) {
+		return { ok: false, error: { envVar: configResult.error.envVar, message: configResult.error.message } };
+	}
+
+	const config = configResult.config;
+
+	try {
+		const child = resolveChildFn();
+		const intended = resolveHardeningPosture(env, detect(process.execPath, env));
+
+		if (!intended.ok) {
+			return { ok: false, error: { envVar: intended.error.envVar, message: intended.error.message } };
+		}
+
+		const spec: HardenedSpawnSpec = {
+			execPath: process.execPath,
+			childExecArgv: child.execArgv,
+			childPath: child.path,
+			runtimeDir: dirname(child.path),
+			isBundled: child.isBundled,
+			memoryMaxBytes: cgroupMemoryMax(config.runtime.memoryBytes),
+			scopeUnit: generateScopeUnit(),
+			childEnv: childEnv(config.sandbox),
+			busEnv: {
+				DBUS_SESSION_BUS_ADDRESS: env['DBUS_SESSION_BUS_ADDRESS'],
+				XDG_RUNTIME_DIR: env['XDG_RUNTIME_DIR'],
+			},
+		};
+
+		// The unbundled dev child spawns pure baseline (buildHardenedSpawn drops every
+		// layer when isBundled is false), so no OS layer can apply regardless of what the
+		// self-check would report. Forcing no validated layers keeps the posture honest:
+		// auto runs baseline, required refuses for the unconfinable dev child.
+		const validatedLayers = child.isBundled ? await validate(intended.posture, spec) : [];
+		const posture = reconcilePosture(intended.posture, validatedLayers);
+
+		if (posture.decision === 'refuse') {
+			return {
+				ok: false,
+				error: { envVar: HARDENING_ENV_VAR, message: 'the required OS hardening core is unavailable on this host' },
+			};
+		}
+
+		return {
+			ok: true,
+			supervisor: makeSupervisor({
+				limits: config.sandbox,
+				runtimeLimits: config.runtime,
+				posture,
+				// The supervisor runs the exact child the self-check validated, not a
+				// second resolveChild() that could diverge.
+				childPath: child.path,
+				childExecArgv: child.execArgv,
+				isBundled: child.isBundled,
+			}),
+			config,
+			posture,
+		};
+	} catch {
+		// Detection, the composed self-check, or construction failed. Fail confined
+		// extensions closed without leaking host detail, leaving inherited extensions
+		// to the caller.
+		return { ok: false, error: { message: 'the confined runtime could not be initialized' } };
+	}
 }
