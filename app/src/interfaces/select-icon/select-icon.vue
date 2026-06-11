@@ -98,7 +98,7 @@ function setIcon(icon: string | null) {
 }
 
 .content {
-	padding: 8px;
+	padding: 0.5rem;
 
 	--v-icon-color-hover: var(--foreground-normal);
 
@@ -109,16 +109,16 @@ function setIcon(icon: string | null) {
 	.v-divider {
 		--v-divider-color: var(--background-normal);
 
-		margin: 0 22px;
+		margin: 0 1.375rem;
 	}
 }
 
 .icons {
 	display: grid;
-	grid-gap: 8px;
-	grid-template-columns: repeat(auto-fit, 24px);
+	grid-gap: 0.5rem;
+	grid-template-columns: repeat(auto-fit, 1.5rem);
 	justify-content: center;
-	padding: 20px 0;
+	padding: 1.25rem 0;
 	color: var(--foreground-subdued);
 }
 

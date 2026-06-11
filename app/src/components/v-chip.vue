@@ -95,15 +95,15 @@ body {
 .v-chip {
 	display: inline-flex;
 	align-items: center;
-	height: 36px;
-	padding: 0 8px;
+	height: 2.25rem;
+	padding: 0 0.5rem;
 	color: var(--v-chip-color);
 	font-weight: var(--weight-normal);
-	line-height: 22px;
+	line-height: 1.375rem;
 	background-color: var(--v-chip-background-color);
 	background-clip: padding-box;
 	border: var(--border-width) solid var(--v-chip-background-color);
-	border-radius: 16px;
+	border-radius: 1rem;
 
 	&.clickable:hover {
 		color: var(--v-chip-color-hover);
@@ -129,31 +129,31 @@ body {
 	}
 
 	&.x-small {
-		height: 20px;
-		padding: 0 4px;
-		font-size: 12px;
-		border-radius: 10px;
+		height: 1.25rem;
+		padding: 0 0.25rem;
+		font-size: 0.75rem;
+		border-radius: 0.625rem;
 	}
 
 	&.small {
-		height: var(--v-chip-height-small, 24px);
-		padding: var(--v-chip-padding-small, 0 4px);
-		font-size: 14px;
-		border-radius: var(--v-chip-border-radius-small, 12px);
+		height: var(--v-chip-height-small, 1.5rem);
+		padding: var(--v-chip-padding-small, 0 0.25rem);
+		font-size: 0.875rem;
+		border-radius: var(--v-chip-border-radius-small, 0.75rem);
 	}
 
 	&.large {
-		height: 44px;
-		padding: 0 20px;
-		font-size: 16px;
-		border-radius: 22px;
+		height: 2.75rem;
+		padding: 0 1.25rem;
+		font-size: 1rem;
+		border-radius: 1.375rem;
 	}
 
 	&.x-large {
-		height: 48px;
-		padding: 0 20px;
-		font-size: 18px;
-		border-radius: 24px;
+		height: 3rem;
+		padding: 0 1.25rem;
+		font-size: 1.125rem;
+		border-radius: 1.5rem;
 	}
 
 	&.label {
@@ -167,15 +167,15 @@ body {
 
 		.close-outline {
 			position: relative;
-			right: -4px;
+			right: -0.25rem;
 			display: inline-flex;
 			align-items: center;
 			justify-content: center;
-			width: 14px;
-			height: 14px;
-			margin-left: 4px;
+			width: 0.875rem;
+			height: 0.875rem;
+			margin-left: 0.25rem;
 			background-color: var(--v-chip-close-color);
-			border-radius: 10px;
+			border-radius: 0.625rem;
 
 			.close {
 				--v-icon-color: var(--v-chip-background-color);

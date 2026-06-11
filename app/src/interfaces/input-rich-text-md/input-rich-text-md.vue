@@ -411,7 +411,7 @@ function edit(type: Alteration, options?: Record<string, any>) {
 	--v-button-background-color-hover: var(--border-normal);
 	--v-button-color-hover: var(--foreground-normal);
 
-	min-height: 300px;
+	min-height: 18.75rem;
 	overflow: hidden;
 	font-family: var(--family-sans-serif);
 	border: 2px solid var(--border-normal);
@@ -433,7 +433,7 @@ textarea {
 
 .preview-box {
 	display: none;
-	padding: 20px;
+	padding: 1.25rem;
 }
 
 .preview-box :deep(h1) {
@@ -441,9 +441,9 @@ textarea {
 	margin-bottom: 0;
 	color: var(--foreground-normal-alt);
 	font-weight: 700;
-	font-size: 36px;
+	font-size: 2.25rem;
 	font-family: v-bind(previewFamily), serif;
-	line-height: 46px;
+	line-height: 2.875rem;
 }
 
 .preview-box :deep(h2) {
@@ -451,9 +451,9 @@ textarea {
 	margin-bottom: 0;
 	color: var(--foreground-normal-alt);
 	font-weight: 700;
-	font-size: 24px;
+	font-size: 1.5rem;
 	font-family: v-bind(previewFamily), serif;
-	line-height: 34px;
+	line-height: 2.125rem;
 }
 
 .preview-box :deep(h3) {
@@ -461,9 +461,9 @@ textarea {
 	margin-bottom: 0;
 	color: var(--foreground-normal-alt);
 	font-weight: 700;
-	font-size: 19px;
+	font-size: 1.1875rem;
 	font-family: v-bind(previewFamily), serif;
-	line-height: 29px;
+	line-height: 1.8125rem;
 }
 
 .preview-box :deep(h4) {
@@ -471,9 +471,9 @@ textarea {
 	margin-bottom: 0;
 	color: var(--foreground-normal-alt);
 	font-weight: 700;
-	font-size: 16px;
+	font-size: 1rem;
 	font-family: v-bind(previewFamily), serif;
-	line-height: 26px;
+	line-height: 1.625rem;
 }
 
 .preview-box :deep(h5) {
@@ -481,9 +481,9 @@ textarea {
 	margin-bottom: 0;
 	color: var(--foreground-normal-alt);
 	font-weight: 700;
-	font-size: 14px;
+	font-size: 0.875rem;
 	font-family: v-bind(previewFamily), serif;
-	line-height: 24px;
+	line-height: 1.5rem;
 }
 
 .preview-box :deep(h6) {
@@ -491,17 +491,17 @@ textarea {
 	margin-bottom: 0;
 	color: var(--foreground-normal-alt);
 	font-weight: 700;
-	font-size: 12px;
+	font-size: 0.75rem;
 	font-family: v-bind(previewFamily), serif;
-	line-height: 22px;
+	line-height: 1.375rem;
 }
 
 .preview-box :deep(p) {
 	margin: 1.5em 0;
 	font-weight: 500;
-	font-size: 15px;
+	font-size: 0.9375rem;
 	font-family: v-bind(previewFamily), serif;
-	line-height: 24px;
+	line-height: 1.5rem;
 }
 
 .preview-box :deep(a) {
@@ -513,15 +513,15 @@ textarea {
 .preview-box :deep(ol) {
 	margin: 1.5em 0;
 	font-weight: 500;
-	font-size: 15px;
+	font-size: 0.9375rem;
 	font-family: v-bind(previewFamily), serif;
-	line-height: 24px;
+	line-height: 1.5rem;
 }
 
 .remaining {
 	position: absolute;
-	right: 10px;
-	bottom: 5px;
+	right: 0.625rem;
+	bottom: 0.3125rem;
 	color: var(--foreground-subdued);
 	font-weight: 600;
 	text-align: right;
@@ -550,11 +550,11 @@ textarea {
 }
 
 .preview-box :deep(code) {
-	padding: 2px 4px;
+	padding: 0.125rem 0.25rem;
 	font-weight: 500;
-	font-size: 15px;
+	font-size: 0.9375rem;
 	font-family: var(--family-monospace), monospace;
-	line-height: 24px;
+	line-height: 1.5rem;
 	overflow-wrap: break-word;
 	background-color: var(--background-normal);
 	border-radius: var(--border-radius);
@@ -564,9 +564,9 @@ textarea {
 	padding: 1em;
 	overflow: auto;
 	font-weight: 500;
-	font-size: 15px;
+	font-size: 0.9375rem;
 	font-family: var(--family-monospace), monospace;
-	line-height: 24px;
+	line-height: 1.5rem;
 	background-color: var(--background-normal);
 	border-radius: var(--border-radius);
 }
@@ -575,14 +575,14 @@ textarea {
 	margin-left: 0px;
 	padding-left: 1em;
 	font-weight: 500;
-	font-size: 15px;
+	font-size: 0.9375rem;
 	font-family: v-bind(previewFamily), serif;
-	line-height: 24px;
+	line-height: 1.5rem;
 	border-left: 2px solid var(--border-normal);
 }
 
 .preview-box :deep(blockquote blockquote) {
-	margin-left: 10px;
+	margin-left: 0.625rem;
 }
 
 .preview-box :deep(video),
@@ -603,25 +603,25 @@ textarea {
 
 .preview-box :deep(table) {
 	font-weight: 500;
-	font-size: 15px;
-	line-height: 24px;
+	font-size: 0.9375rem;
+	line-height: 1.5rem;
 	border-collapse: collapse;
 }
 
 .preview-box :deep(table th),
 .preview-box :deep(table td) {
-	padding: 0.4rem;
+	padding: 0.35rem;
 	border: 1px solid var(--border-normal);
 }
 
 .preview-box :deep(figure) {
 	display: table;
-	margin: 1rem auto;
+	margin: 0.875rem auto;
 }
 
 .preview-box :deep(figure figcaption) {
 	display: block;
-	margin-top: 0.25rem;
+	margin-top: 0.21875rem;
 	color: #999;
 	text-align: center;
 }
@@ -638,19 +638,19 @@ textarea {
 }
 
 .interface-input-rich-text-md :deep(.CodeMirror .CodeMirror-lines) {
-	padding: 0 20px;
+	padding: 0 1.25rem;
 }
 
 .interface-input-rich-text-md :deep(.CodeMirror .CodeMirror-lines:first-of-type) {
-	margin-top: 20px;
+	margin-top: 1.25rem;
 }
 
 .interface-input-rich-text-md :deep(.CodeMirror .CodeMirror-lines:last-of-type) {
-	margin-bottom: 20px;
+	margin-bottom: 1.25rem;
 }
 
 .interface-input-rich-text-md :deep(.CodeMirror .CodeMirror-scroll) {
-	min-height: 260px;
+	min-height: 16.25rem;
 }
 
 .interface-input-rich-text-md.preview :deep(.CodeMirror) {
@@ -661,13 +661,13 @@ textarea {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	min-height: 40px;
-	padding: 0 4px;
+	min-height: 2.5rem;
+	padding: 0 0.25rem;
 	background-color: var(--background-subdued);
 	border-bottom: 2px solid var(--border-normal);
 
 	.v-button + .v-button {
-		margin-left: 2px;
+		margin-left: 0.125rem;
 	}
 
 	.spacer {
@@ -687,13 +687,13 @@ textarea {
 .table-options {
 	@include form-grid;
 
-	--form-vertical-gap: 12px;
-	--form-horizontal-gap: 12px;
+	--form-vertical-gap: 0.75rem;
+	--form-horizontal-gap: 0.75rem;
 
-	padding: 12px;
+	padding: 0.75rem;
 
 	.v-input {
-		min-width: 100px;
+		min-width: 6.25rem;
 	}
 }
 </style>

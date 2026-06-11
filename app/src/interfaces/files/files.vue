@@ -408,7 +408,7 @@ const allowDrag = computed(
 
 <style lang="scss" scoped>
 .v-list {
-	--v-list-padding: 0 0 4px;
+	--v-list-padding: 0 0 0.25rem;
 
 	.v-list-item.deleted {
 		--v-list-item-border-color: var(--danger-25);
@@ -423,9 +423,9 @@ const allowDrag = computed(
 }
 
 .actions {
-	margin-top: 8px;
+	margin-top: 0.5rem;
 	display: flex;
-	gap: 8px;
+	gap: 0.5rem;
 
 	.v-pagination {
 		margin-left: auto;
@@ -438,7 +438,7 @@ const allowDrag = computed(
 
 .deselect {
 	--v-icon-color: var(--foreground-subdued);
-	margin-right: 4px;
+	margin-right: 0.25rem;
 	transition: color var(--fast) var(--transition);
 	cursor: pointer;
 

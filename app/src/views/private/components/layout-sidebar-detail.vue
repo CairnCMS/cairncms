@@ -50,9 +50,9 @@ const layout = useSync(props, 'modelValue', emit);
 @import '@/styles/mixins/form-grid';
 
 :deep(.layout-options) {
-	--form-vertical-gap: 20px;
+	--form-vertical-gap: 1.25rem;
 
-	margin-bottom: 4px;
+	margin-bottom: 0.25rem;
 
 	@include form-grid;
 }

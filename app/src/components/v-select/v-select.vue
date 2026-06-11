@@ -397,13 +397,13 @@ function useDisplayValue() {
 
 .inline-display {
 	width: max-content;
-	padding-right: 18px;
+	padding-right: 1.125rem;
 	cursor: pointer;
 }
 
 .inline-display.label {
-	padding: 4px 8px;
-	padding-right: 26px;
+	padding: 0.25rem 0.5rem;
+	padding-right: 1.625rem;
 	color: var(--foreground-subdued);
 	background-color: var(--background-subdued);
 	border-radius: var(--border-radius);

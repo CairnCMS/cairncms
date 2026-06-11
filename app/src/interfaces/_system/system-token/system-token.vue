@@ -109,11 +109,11 @@ function emitValue(newValue: string | null) {
 }
 
 .v-notice {
-	margin-top: 12px;
+	margin-top: 0.75rem;
 }
 
 .regenerate-icon {
-	margin-right: 4px;
+	margin-right: 0.25rem;
 }
 
 .clear-icon {

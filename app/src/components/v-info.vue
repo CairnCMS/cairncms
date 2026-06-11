@@ -42,9 +42,9 @@ withDefaults(defineProps<Props>(), {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 100px;
-	height: 100px;
-	margin-bottom: 16px;
+	width: 6.25rem;
+	height: 6.25rem;
+	margin-bottom: 1rem;
 	border-radius: 50%;
 }
 
@@ -69,16 +69,16 @@ withDefaults(defineProps<Props>(), {
 }
 
 .title {
-	margin-bottom: 8px;
+	margin-bottom: 0.5rem;
 }
 
 .content {
-	max-width: 300px;
+	max-width: 18.75rem;
 	color: var(--foreground-subdued);
-	line-height: 22px;
+	line-height: 1.375rem;
 
 	&:not(:last-child) {
-		margin-bottom: 24px;
+		margin-bottom: 1.5rem;
 	}
 }
 

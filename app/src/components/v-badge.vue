@@ -45,7 +45,7 @@ withDefaults(defineProps<Props>(), {
 	--v-badge-border-color: var(--background-page);
 	--v-badge-offset-x: 0px;
 	--v-badge-offset-y: 0px;
-	--v-badge-size: 16px;
+	--v-badge-size: 1rem;
 }
 
 .v-badge {
@@ -53,10 +53,10 @@ withDefaults(defineProps<Props>(), {
 	display: inline-block;
 
 	&.dot {
-		--v-badge-size: 8px;
+		--v-badge-size: 0.5rem;
 
 		&.bordered {
-			--v-badge-size: 12px;
+			--v-badge-size: 0.75rem;
 		}
 	}
 
@@ -71,10 +71,10 @@ withDefaults(defineProps<Props>(), {
 		width: max-content;
 		min-width: var(--v-badge-size);
 		height: var(--v-badge-size);
-		padding: 0 5px;
+		padding: 0 0.3125rem;
 		color: var(--v-badge-color);
 		font-weight: 800;
-		font-size: 9px;
+		font-size: 0.5625rem;
 		background-color: var(--v-badge-background-color);
 		border-radius: calc(var(--v-badge-size) / 2);
 

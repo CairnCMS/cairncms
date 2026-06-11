@@ -57,8 +57,8 @@ body {
 
 <style lang="scss" scoped>
 .sidebar-detail {
-	--v-badge-offset-x: 3px;
-	--v-badge-offset-y: 4px;
+	--v-badge-offset-x: 0.1875rem;
+	--v-badge-offset-y: 0.25rem;
 	--v-badge-border-color: var(--background-normal-alt);
 	--v-badge-background-color: var(--primary);
 	--v-badge-color: var(--background-normal);
@@ -66,8 +66,8 @@ body {
 	display: contents;
 
 	:deep(.type-label) {
-		margin-bottom: 4px;
-		font-size: 1rem;
+		margin-bottom: 0.25rem;
+		font-size: 0.875rem;
 	}
 
 	.toggle {
@@ -76,7 +76,7 @@ body {
 		flex-shrink: 0;
 		justify-content: space-between;
 		width: 100%;
-		height: 60px;
+		height: 3.75rem;
 		color: var(--sidebar-detail-color);
 		background-color: var(--background-normal-alt);
 
@@ -86,7 +86,7 @@ body {
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			width: 60px;
+			width: 3.75rem;
 			height: 100%;
 		}
 
@@ -108,8 +108,8 @@ body {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 60px;
-		height: 60px;
+		width: 3.75rem;
+		height: 3.75rem;
 		color: var(--foreground-normal);
 		cursor: pointer;
 		transition: opacity var(--fast) var(--transition), color var(--fast) var(--transition);
@@ -135,7 +135,7 @@ body {
 	.title {
 		position: absolute;
 		top: 50%;
-		left: 52px;
+		left: 3.25rem;
 		overflow: hidden;
 		white-space: nowrap;
 		transform: translateY(-50%);
@@ -147,10 +147,10 @@ body {
 	}
 
 	.content {
-		padding: 16px;
+		padding: 1rem;
 
 		:deep(.page-description) {
-			margin-bottom: 8px;
+			margin-bottom: 0.5rem;
 			color: var(--foreground-subdued);
 		}
 

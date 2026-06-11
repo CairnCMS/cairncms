@@ -65,9 +65,9 @@ function deleteItem(elem: Record<string, any>) {
 	flex-direction: column;
 }
 .v-list {
-	margin-top: 8px;
+	margin-top: 0.5rem;
 	flex-grow: 1;
-	--v-list-padding: 0 0 4px;
+	--v-list-padding: 0 0 0.25rem;
 
 	.v-list-item.deleted {
 		--v-list-item-border-color: var(--danger-25);
@@ -83,7 +83,7 @@ function deleteItem(elem: Record<string, any>) {
 
 .v-skeleton-loader,
 .v-notice {
-	margin-top: 8px;
+	margin-top: 0.5rem;
 }
 
 .actions {
@@ -93,7 +93,7 @@ function deleteItem(elem: Record<string, any>) {
 
 	button {
 		color: var(--primary);
-		padding: 0 4px;
+		padding: 0 0.25rem;
 
 		&:hover {
 			color: var(--primary-125);
@@ -104,7 +104,7 @@ function deleteItem(elem: Record<string, any>) {
 .deselect {
 	--v-icon-color: var(--foreground-subdued);
 	transition: color var(--fast) var(--transition);
-	margin: 0 4px;
+	margin: 0 0.25rem;
 
 	&:hover {
 		--v-icon-color: var(--danger);

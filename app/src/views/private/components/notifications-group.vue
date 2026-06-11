@@ -34,10 +34,10 @@ const queue = toRefs(notificationsStore).queue;
 .notifications-group {
 	position: fixed;
 	top: 0;
-	right: 8px;
-	left: 8px;
+	right: 0.5rem;
+	left: 0.5rem;
 	z-index: 50;
-	width: 256px;
+	width: 16rem;
 	direction: rtl;
 
 	> *,
@@ -47,15 +47,15 @@ const queue = toRefs(notificationsStore).queue;
 
 	&.sidebar-open {
 		top: auto;
-		right: 12px;
-		bottom: 76px;
+		right: 0.75rem;
+		bottom: 4.75rem;
 		left: auto;
 	}
 
 	@media (min-width: 960px) {
 		top: auto;
-		right: 12px;
-		bottom: 76px;
+		right: 0.75rem;
+		bottom: 4.75rem;
 		left: auto;
 	}
 }
@@ -74,13 +74,13 @@ const queue = toRefs(notificationsStore).queue;
 }
 
 .slide-fade-enter-from {
-	transform: translateX(50px) scaleY(0) scaleX(0);
+	transform: translateX(3.125rem) scaleY(0) scaleX(0);
 	transform-origin: right bottom;
 	opacity: 0;
 }
 
 .slide-fade-leave-to {
-	transform: translateX(50px) scaleX(0);
+	transform: translateX(3.125rem) scaleX(0);
 	transform-origin: right;
 	opacity: 0;
 	transition-timing-function: cubic-bezier(0.4, 0, 1, 1);

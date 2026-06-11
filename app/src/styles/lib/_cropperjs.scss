@@ -105,16 +105,16 @@
 
 .cropper-center::before {
 	top: 0;
-	left: -3px;
-	width: 7px;
+	left: -.1875rem;
+	width: .4375rem;
 	height: 1px;
 }
 
 .cropper-center::after {
-	top: -3px;
+	top: -.1875rem;
 	left: 0;
 	width: 1px;
-	height: 7px;
+	height: .4375rem;
 }
 
 .cropper-face,
@@ -140,35 +140,35 @@
 
 .cropper-line.line-e {
 	top: 0;
-	right: -3px;
-	width: 5px;
+	right: -.1875rem;
+	width: .3125rem;
 	cursor: ew-resize;
 }
 
 .cropper-line.line-n {
-	top: -3px;
+	top: -.1875rem;
 	left: 0;
-	height: 5px;
+	height: .3125rem;
 	cursor: ns-resize;
 }
 
 .cropper-line.line-w {
 	top: 0;
-	left: -3px;
-	width: 5px;
+	left: -.1875rem;
+	width: .3125rem;
 	cursor: ew-resize;
 }
 
 .cropper-line.line-s {
-	bottom: -3px;
+	bottom: -.1875rem;
 	left: 0;
-	height: 5px;
+	height: .3125rem;
 	cursor: ns-resize;
 }
 
 .cropper-point {
-	width: 10px;
-	height: 10px;
+	width: .625rem;
+	height: .625rem;
 	background: #fff;
 	border-radius: 50%;
 	opacity: 1;
@@ -176,53 +176,53 @@
 
 .cropper-point.point-e {
 	top: 50%;
-	right: -5px;
-	margin-top: -5px;
+	right: -.3125rem;
+	margin-top: -.3125rem;
 	cursor: ew-resize;
 }
 
 .cropper-point.point-n {
-	top: -5px;
+	top: -.3125rem;
 	left: 50%;
-	margin-left: -5px;
+	margin-left: -.3125rem;
 	cursor: ns-resize;
 }
 
 .cropper-point.point-w {
 	top: 50%;
-	left: -5px;
-	margin-top: -5px;
+	left: -.3125rem;
+	margin-top: -.3125rem;
 	cursor: ew-resize;
 }
 
 .cropper-point.point-s {
-	bottom: -5px;
+	bottom: -.3125rem;
 	left: 50%;
-	margin-left: -5px;
+	margin-left: -.3125rem;
 	cursor: s-resize;
 }
 
 .cropper-point.point-ne {
-	top: -5px;
-	right: -5px;
+	top: -.3125rem;
+	right: -.3125rem;
 	cursor: nesw-resize;
 }
 
 .cropper-point.point-nw {
-	top: -5px;
-	left: -5px;
+	top: -.3125rem;
+	left: -.3125rem;
 	cursor: nwse-resize;
 }
 
 .cropper-point.point-sw {
-	bottom: -5px;
-	left: -5px;
+	bottom: -.3125rem;
+	left: -.3125rem;
 	cursor: nesw-resize;
 }
 
 .cropper-point.point-se {
-	right: -5px;
-	bottom: -5px;
+	right: -.3125rem;
+	bottom: -.3125rem;
 	cursor: nwse-resize;
 }
 

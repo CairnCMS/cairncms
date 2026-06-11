@@ -83,17 +83,17 @@ function isLoading(action: string) {
 .permissions-overview-row {
 	display: flex;
 	align-items: center;
-	height: 48px;
-	padding: 0 12px;
+	height: 3rem;
+	padding: 0 0.75rem;
 	background-color: var(--background-input);
 
 	.name {
 		flex-grow: 1;
 
 		.actions {
-			margin-left: 8px;
+			margin-left: 0.5rem;
 			color: var(--foreground-subdued);
-			font-size: 12px;
+			font-size: 0.75rem;
 			opacity: 0;
 			transition: opacity var(--fast) var(--transition);
 
@@ -112,7 +112,7 @@ function isLoading(action: string) {
 			}
 
 			.divider {
-				margin: 0 6px;
+				margin: 0 0.375rem;
 				cursor: default;
 			}
 		}
@@ -123,7 +123,7 @@ function isLoading(action: string) {
 	}
 
 	.permissions-overview-toggle + .permissions-overview-toggle {
-		margin-left: 20px;
+		margin-left: 1.25rem;
 	}
 
 	& + .permissions-overview-row {

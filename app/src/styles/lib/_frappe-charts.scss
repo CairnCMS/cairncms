@@ -4,7 +4,7 @@
 
 	.axis,
 	.chart-label {
-		font-size: 10px;
+		font-size: .625rem;
 		fill: var(--foreground-normal);
 
 		line {
@@ -64,12 +64,12 @@
 .graph-svg-tip {
 	position: absolute;
 	z-index: 99999;
-	padding: 10px;
+	padding: .625rem;
 	color: var(--border-normal);
-	font-size: 12px;
+	font-size: .75rem;
 	text-align: center;
 	background: rgba(0, 0, 0, 0.8);
-	border-radius: 3px;
+	border-radius: .1875rem;
 
 	ul {
 		display: flex;
@@ -89,7 +89,7 @@
 		.title {
 			display: block;
 			margin: 0;
-			padding: 10px;
+			padding: .625rem;
 			font-weight: 600;
 			line-height: 1;
 			pointer-events: none;
@@ -103,14 +103,14 @@
 
 		li {
 			display: inline-block;
-			padding: 5px 10px;
+			padding: .3125rem .625rem;
 		}
 	}
 
 	ul.data-point-list {
 		li {
 			flex: 1;
-			min-width: 90px;
+			min-width: 5.625rem;
 			font-weight: 600;
 		}
 	}
@@ -122,8 +122,8 @@
 
 	.svg-pointer {
 		position: absolute;
-		height: 5px;
-		margin: 0 0 0 -5px;
+		height: .3125rem;
+		margin: 0 0 0 -.3125rem;
 		border: 5px solid transparent;
 		border-top-color: rgba(0, 0, 0, 0.8);
 		content: ' ';

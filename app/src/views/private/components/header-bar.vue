@@ -93,7 +93,7 @@ onUnmounted(() => {
 	width: 100%;
 	height: var(--header-bar-height);
 	margin: 0;
-	padding: 0 10px;
+	padding: 0 0.625rem;
 	background-color: var(--background-page);
 	box-shadow: 0;
 	transition: box-shadow var(--medium) var(--transition), margin var(--fast) var(--transition);
@@ -117,9 +117,9 @@ onUnmounted(() => {
 		display: flex;
 		align-items: center;
 		width: 100%;
-		max-width: calc(100% - 12px - 44px - 120px - 12px - 8px);
+		max-width: calc(100% - 0.75rem - 2.75rem - 7.5rem - 0.75rem - 0.5rem);
 		height: 100%;
-		margin-left: 16px;
+		margin-left: 1rem;
 		overflow: hidden;
 
 		@media (min-width: 600px) {
@@ -127,27 +127,27 @@ onUnmounted(() => {
 		}
 
 		&.full {
-			margin-right: 12px;
+			margin-right: 0.75rem;
 			padding-right: 0;
 			@media (min-width: 600px) {
-				margin-right: 20px;
-				padding-right: 20px;
+				margin-right: 1.25rem;
+				padding-right: 1.25rem;
 			}
 		}
 
 		.headline {
 			position: absolute;
-			top: 2px;
+			top: 0.125rem;
 			left: 0;
 			color: var(--foreground-subdued);
 			font-weight: 600;
-			font-size: 12px;
+			font-size: 0.75rem;
 			white-space: nowrap;
 			opacity: 1;
 			transition: opacity var(--fast) var(--transition);
 
 			@media (min-width: 600px) {
-				top: -2px;
+				top: -0.125rem;
 			}
 		}
 
@@ -168,7 +168,7 @@ onUnmounted(() => {
 			:deep(.type-title) {
 				.render-template {
 					img {
-						height: 24px;
+						height: 1.5rem;
 					}
 				}
 			}
@@ -177,7 +177,7 @@ onUnmounted(() => {
 
 	&.small {
 		top: 0;
-		height: 60px;
+		height: 3.75rem;
 	}
 
 	&.small .title-container .headline {
@@ -202,7 +202,7 @@ onUnmounted(() => {
 
 	.sidebar-toggle {
 		flex-shrink: 0;
-		margin-left: 8px;
+		margin-left: 0.5rem;
 
 		@media (min-width: 960px) {
 			display: none;
@@ -210,10 +210,10 @@ onUnmounted(() => {
 	}
 
 	@media (min-width: 600px) {
-		padding: 0 32px;
+		padding: 0 2rem;
 
 		&:not(.small) {
-			margin: 24px 0;
+			margin: 1.5rem 0;
 		}
 	}
 }

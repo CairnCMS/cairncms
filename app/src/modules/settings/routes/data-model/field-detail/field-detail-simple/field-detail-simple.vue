@@ -180,14 +180,14 @@ function toggleInterface(id: string) {
 }
 
 .group h2 {
-	margin-bottom: 40px;
-	padding-bottom: 2px;
+	margin-bottom: 2.5rem;
+	padding-bottom: 0.125rem;
 	font-weight: 700;
 	border-bottom: var(--border-width) solid var(--border-subdued);
 }
 
 .group + .group {
-	margin-top: 80px;
+	margin-top: 5rem;
 }
 
 .grid {
@@ -195,7 +195,7 @@ function toggleInterface(id: string) {
 
 	display: grid;
 	grid-template-columns: repeat(var(--columns), 1fr);
-	gap: 32px;
+	gap: 2rem;
 
 	@media (min-width: 400px) {
 		--columns: 2;
@@ -211,7 +211,7 @@ function toggleInterface(id: string) {
 }
 
 .interface {
-	min-height: 100px;
+	min-height: 6.25rem;
 	overflow: hidden;
 	text-align: left;
 }
@@ -222,9 +222,9 @@ function toggleInterface(id: string) {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 160px;
-	height: 100px;
-	margin-bottom: 8px;
+	width: 10rem;
+	height: 6.25rem;
+	margin-bottom: 0.5rem;
 	border: var(--border-width) solid var(--border-subdued);
 	border-radius: var(--border-radius);
 	transition: var(--fast) var(--transition);
@@ -247,14 +247,14 @@ function toggleInterface(id: string) {
 }
 
 .preview :deep(svg) .glow {
-	filter: drop-shadow(0 0 4px var(--primary-50));
+	filter: drop-shadow(0 0 0.25rem var(--primary-50));
 }
 
 .preview .fallback {
 	--v-icon-color: var(--primary-75);
 
 	display: block;
-	padding: 8px 16px;
+	padding: 0.5rem 1rem;
 	background-color: var(--background-page);
 	border: 2px solid var(--primary);
 	border-radius: var(--border-radius);

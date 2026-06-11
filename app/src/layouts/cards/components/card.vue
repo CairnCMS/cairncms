@@ -129,7 +129,7 @@ function handleClick() {
 <style lang="scss" scoped>
 .loading {
 	.header {
-		margin-bottom: 8px;
+		margin-bottom: 0.5rem;
 	}
 }
 
@@ -197,7 +197,7 @@ function handleClick() {
 			left: 0;
 			z-index: 1;
 			width: 100%;
-			height: 48px;
+			height: 3rem;
 			opacity: 0;
 			transition: opacity var(--fast) var(--transition);
 
@@ -215,13 +215,13 @@ function handleClick() {
 
 	&::before {
 		position: absolute;
-		top: 7px;
-		left: 7px;
+		top: 0.4375rem;
+		left: 0.4375rem;
 		z-index: 2;
-		width: 18px;
-		height: 18px;
+		width: 1.125rem;
+		height: 1.125rem;
 		background-color: var(--background-page);
-		border-radius: 24px;
+		border-radius: 1.5rem;
 		opacity: 0;
 		transition: opacity var(--fast) var(--transition);
 		content: '';
@@ -235,7 +235,7 @@ function handleClick() {
 		top: 0px;
 		left: 0px;
 		z-index: 3;
-		margin: 4px;
+		margin: 0.25rem;
 		opacity: 0;
 		transition: opacity var(--fast) var(--transition), color var(--fast) var(--transition);
 
@@ -300,8 +300,8 @@ function handleClick() {
 	display: flex;
 	align-items: center;
 	width: 100%;
-	height: 20px;
-	margin-top: 2px;
+	height: 1.25rem;
+	margin-top: 0.125rem;
 	overflow: hidden;
 	line-height: 1.3em;
 	white-space: nowrap;

@@ -112,11 +112,11 @@ function getLinkForItem(item: any) {
 
 	&::before {
 		position: absolute;
-		top: -6px;
-		left: -6px;
+		top: -0.375rem;
+		left: -0.375rem;
 		z-index: 1;
-		width: calc(100% + 12px);
-		height: calc(100% + 12px);
+		width: calc(100% + 0.75rem);
+		height: calc(100% + 0.75rem);
 		background-color: var(--background-normal);
 		border-radius: var(--border-radius);
 		opacity: 0;

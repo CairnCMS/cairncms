@@ -93,12 +93,12 @@ const isGenerated = computed(() => field.value.schema?.is_generated);
 @import '@/styles/mixins/form-grid';
 
 .type-title {
-	margin-bottom: 32px;
+	margin-bottom: 2rem;
 }
 
 .form {
-	--form-vertical-gap: 32px;
-	--form-horizontal-gap: 32px;
+	--form-vertical-gap: 2rem;
+	--form-horizontal-gap: 2rem;
 
 	@include form-grid;
 }
@@ -112,6 +112,6 @@ const isGenerated = computed(() => field.value.schema?.is_generated);
 }
 
 .v-notice {
-	margin-bottom: 36px;
+	margin-bottom: 2.25rem;
 }
 </style>

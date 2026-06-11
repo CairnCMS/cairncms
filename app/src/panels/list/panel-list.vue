@@ -31,6 +31,7 @@ import api from '@/api';
 import { useFieldsStore } from '@/stores/fields';
 import { useInsightsStore } from '@/stores/insights';
 import { unexpectedError } from '@/utils/unexpected-error';
+import { getEndpoint } from '@cairncms/utils';
 
 const props = withDefaults(
 	defineProps<{
@@ -70,7 +71,7 @@ function cancelEdit() {
 
 async function saveEdits(item: Record<string, any>) {
 	try {
-		await api.patch(`/items/${props.collection}/${currentlyEditing.value}`, item);
+		await api.patch(`${getEndpoint(props.collection)}/${currentlyEditing.value}`, item);
 	} catch (err: any) {
 		unexpectedError(err);
 	}
@@ -84,16 +85,16 @@ async function saveEdits(item: Record<string, any>) {
 	--v-list-padding: 0;
 	--v-list-border-radius: 0;
 	--v-list-item-border-radius: 0;
-	--v-list-item-padding: 6px;
+	--v-list-item-padding: 0.375rem;
 	--v-list-item-margin: 0;
 
 	height: 100%;
-	padding: 0 12px;
+	padding: 0 0.75rem;
 	overflow-y: auto;
 }
 
 .v-list-item {
-	height: 48px;
+	height: 3rem;
 	border-top: var(--border-width) solid var(--border-subdued);
 }
 

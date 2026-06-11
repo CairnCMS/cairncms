@@ -57,13 +57,13 @@ const wholeThing = computed(() => {
 .change-line {
 	position: relative;
 	width: 100%;
-	padding: 8px 12px 8px 40px;
+	padding: 0.5rem 0.75rem 0.5rem 2.5rem;
 	border-radius: var(--border-radius);
 
 	.v-icon {
 		position: absolute;
-		top: 8px;
-		left: 8px;
+		top: 0.5rem;
+		left: 0.5rem;
 	}
 
 	&.added {
@@ -96,7 +96,7 @@ const wholeThing = computed(() => {
 .changed {
 	position: relative;
 	margin-right: 0.2em;
-	padding: 2px;
+	padding: 0.125rem;
 	border-radius: var(--border-radius);
 }
 

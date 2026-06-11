@@ -381,38 +381,38 @@ function useColor() {
 
 <style scoped lang="scss">
 .swatch {
-	--v-button-padding: 6px;
+	--v-button-padding: 0.375rem;
 	--v-button-background-color: transparent;
 	--v-button-background-color-hover: var(--v-button-background-color);
 
 	position: relative;
 	box-sizing: border-box;
-	margin-left: -8px;
-	width: calc(var(--input-height) - 20px);
-	max-height: calc(var(--input-height) - 20px);
+	margin-left: -0.5rem;
+	width: calc(var(--input-height) - 1.25rem);
+	max-height: calc(var(--input-height) - 1.25rem);
 	overflow: hidden;
-	border-radius: calc(var(--border-radius) + 2px);
+	border-radius: calc(var(--border-radius) + 0.125rem);
 	cursor: pointer;
 }
 
 .presets {
 	display: flex;
 	width: 100%;
-	margin-bottom: 14px;
-	padding: 8px;
+	margin-bottom: 0.875rem;
+	padding: 0.5rem;
 	overflow-x: auto;
 }
 
 .presets .preset {
 	--v-button-background-color-hover: var(--v-button-background-color);
-	--v-button-height: 20px;
-	--v-button-width: 20px;
+	--v-button-height: 1.25rem;
+	--v-button-width: 1.25rem;
 
-	margin: 0px 4px;
+	margin: 0px 0.25rem;
 
 	&.low-contrast {
-		--v-button-height: 18px;
-		--v-button-width: 18px;
+		--v-button-height: 1.125rem;
+		--v-button-width: 1.125rem;
 		border: 1px solid var(--border-normal-alt);
 	}
 }
@@ -437,7 +437,7 @@ function useColor() {
 	display: grid;
 	grid-gap: 0px;
 	width: 100%;
-	padding: 12px 10px;
+	padding: 0.75rem 0.625rem;
 }
 
 .color-data-inputs .color-data-input {
@@ -453,7 +453,7 @@ function useColor() {
 }
 
 .color-data-inputs .color-data-input:not(.color-type) {
-	--input-padding: 12px 8px;
+	--input-padding: 0.75rem 0.5rem;
 }
 
 .color-data-inputs .color-data-input:not(:first-child) :deep(.input) {
@@ -461,11 +461,11 @@ function useColor() {
 }
 
 .color-data-inputs .color-data-input:first-child {
-	--border-radius: 2px 0px 0px 2px;
+	--border-radius: 0.125rem 0px 0px 0.125rem;
 }
 
 .color-data-inputs .color-data-input:last-child {
-	--border-radius: 0px 2px 2px 0px;
+	--border-radius: 0px 0.125rem 0.125rem 0px;
 }
 
 .color-data-inputs.stacked .color-data-input:not(:first-child) :deep(.input) {
@@ -478,24 +478,24 @@ function useColor() {
 }
 
 .color-data-inputs.stacked .color-data-input:first-child {
-	--border-radius: 2px 2px 0px 0px;
+	--border-radius: 0.125rem 0.125rem 0px 0px;
 }
 
 .color-data-inputs.stacked .color-data-input:nth-child(2) {
-	--border-radius: 0px 0px 0px 2px;
+	--border-radius: 0px 0px 0px 0.125rem;
 }
 
 .color-data-inputs.stacked .color-data-input:last-child {
-	--border-radius: 0px 0px 2px 0px;
+	--border-radius: 0px 0px 0.125rem 0px;
 }
 
 .color-data-alphas {
 	display: grid;
-	grid-gap: 12px;
+	grid-gap: 0.75rem;
 	align-items: baseline;
 	width: 100%;
-	height: 45px;
-	padding: 12px 14px;
+	height: 2.8125rem;
+	padding: 0.75rem 0.875rem;
 }
 
 .color-data-alphas .color-data-alpha {

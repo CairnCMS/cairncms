@@ -87,11 +87,11 @@ function useSave() {
 
 <style lang="scss" scoped>
 .form-grid {
-	--form-horizontal-gap: 12px;
-	--form-vertical-gap: 24px;
+	--form-horizontal-gap: 0.75rem;
+	--form-vertical-gap: 1.5rem;
 
 	.type-label {
-		font-size: 1rem;
+		font-size: 0.875rem;
 	}
 }
 </style>

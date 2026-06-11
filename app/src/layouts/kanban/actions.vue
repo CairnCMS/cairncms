@@ -29,6 +29,6 @@ const { t } = useI18n();
 	background-color: var(--warning-10);
 	border: none;
 	color: var(--warning);
-	margin-right: 8px;
+	margin-right: 0.5rem;
 }
 </style>

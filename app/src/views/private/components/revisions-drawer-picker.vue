@@ -99,13 +99,13 @@ async function getFormattedDate(revision: Revision) {
 
 .menu {
 	.v-icon {
-		margin-right: 4px;
-		margin-left: -4px;
+		margin-right: 0.25rem;
+		margin-left: -0.25rem;
 		color: var(--foreground-subdued);
 	}
 
 	.v-list-item-content {
-		margin-right: 20px;
+		margin-right: 1.25rem;
 	}
 }
 </style>

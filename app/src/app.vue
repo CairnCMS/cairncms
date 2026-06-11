@@ -41,7 +41,7 @@ const { hydrating } = toRefs(appStore);
 
 const brandStyle = computed(() => {
 	return {
-		'--brand': serverStore.info?.project?.project_color || 'var(--module-background)',
+		'--brand': serverStore.info?.project?.project_color || 'var(--brand-default)',
 	} as StyleValue;
 });
 
@@ -112,7 +112,7 @@ useSystem();
 	justify-content: center;
 	width: 100%;
 	height: 100%;
-	backdrop-filter: blur(10px);
+	backdrop-filter: blur(0.625rem);
 }
 
 .fade-enter-active,

@@ -77,7 +77,7 @@ function cancel() {
 .fields {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
-	gap: 12px;
+	gap: 0.75rem;
 
 	.full {
 		grid-column: 1 / span 2;

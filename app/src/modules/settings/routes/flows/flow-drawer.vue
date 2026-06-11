@@ -276,6 +276,6 @@ async function save() {
 }
 
 .select {
-	margin-bottom: 32px;
+	margin-bottom: 2rem;
 }
 </style>

@@ -124,14 +124,4 @@ function clearNavFilter() {
 }
 </script>
 
-<style lang="scss" scoped>
-.activity-navigation {
-	--v-list-item-active-rule-width: 2px;
-	--v-list-item-active-rule-color: var(--primary);
-	--v-list-item-border-radius-nav: 0;
-
-	:deep(.v-list-item.active) {
-		--v-list-item-icon-color: var(--primary);
-	}
-}
-</style>
+<style lang="scss" scoped></style>

@@ -120,7 +120,7 @@ function onClick(event: MouseEvent) {
 	}
 
 	.items {
-		padding-left: var(--v-list-group-items-padding-left, 18px);
+		padding-left: var(--v-list-group-items-padding-left, 1.125rem);
 		list-style: none;
 	}
 }

@@ -307,7 +307,7 @@ function parseHTML(innerText?: string, isDirectInput = false) {
 	position: relative;
 	height: var(--input-height);
 	padding: var(--input-padding);
-	padding-bottom: 32px;
+	padding-bottom: 2rem;
 	overflow: hidden;
 	color: var(--foreground-normal);
 	font-family: var(--family-sans-serif);
@@ -340,18 +340,18 @@ function parseHTML(innerText?: string, isDirectInput = false) {
 	:deep(.preview) {
 		display: inline-block;
 		margin: 0px;
-		padding: 2px 4px;
+		padding: 0.125rem 0.25rem;
 		color: var(--primary);
 		font-size: 0;
 		line-height: 1;
-		vertical-align: -2px;
+		vertical-align: -0.125rem;
 		background: var(--primary-alt);
 		border-radius: var(--border-radius);
 		user-select: text;
 
 		&::before {
 			display: block;
-			font-size: 1rem;
+			font-size: 0.875rem;
 			content: attr(data-preview);
 		}
 	}

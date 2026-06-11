@@ -334,7 +334,7 @@ function openFileBrowser() {
 	flex-direction: column;
 	justify-content: center;
 	min-height: var(--input-height-tall);
-	padding: 32px;
+	padding: 2rem;
 	color: var(--foreground-subdued);
 	text-align: center;
 	border: 2px dashed var(--border-normal);
@@ -354,10 +354,10 @@ function openFileBrowser() {
 .actions {
 	display: flex;
 	justify-content: center;
-	margin-bottom: 18px;
+	margin-bottom: 1.125rem;
 
 	.v-button {
-		margin-right: 12px;
+		margin-right: 0.75rem;
 
 		&:last-child {
 			margin-right: 0;
@@ -388,14 +388,14 @@ function openFileBrowser() {
 
 	.upload-icon {
 		margin: 0 auto;
-		margin-bottom: 12px;
+		margin-bottom: 0.75rem;
 	}
 }
 
 .uploading {
 	--v-progress-linear-color: var(--white);
 	--v-progress-linear-background-color: rgb(255 255 255 / 0.25);
-	--v-progress-linear-height: 8px;
+	--v-progress-linear-height: 0.5rem;
 
 	color: var(--white);
 	background-color: var(--primary);
@@ -404,9 +404,9 @@ function openFileBrowser() {
 
 	.v-progress-linear {
 		position: absolute;
-		bottom: 30px;
-		left: 32px;
-		width: calc(100% - 64px);
+		bottom: 1.875rem;
+		left: 2rem;
+		width: calc(100% - 4rem);
 	}
 }
 </style>

@@ -96,8 +96,8 @@ function toggle(item: Record<string, any>) {
 	display: flex;
 	align-items: center;
 	width: 100%;
-	margin-bottom: 8px;
-	padding: 12px;
+	margin-bottom: 0.5rem;
+	padding: 0.75rem;
 	background-color: var(--background-normal);
 	border: var(--border-width) solid var(--background-normal);
 	border-radius: var(--border-radius);
@@ -119,9 +119,9 @@ function toggle(item: Record<string, any>) {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 44px;
-		height: 44px;
-		margin-right: 12px;
+		width: 2.75rem;
+		height: 2.75rem;
+		margin-right: 0.75rem;
 		background-color: var(--background-page);
 		border-radius: 50%;
 	}
@@ -171,6 +171,6 @@ function toggle(item: Record<string, any>) {
 }
 
 .v-divider {
-	margin: 24px 0;
+	margin: 1.5rem 0;
 }
 </style>

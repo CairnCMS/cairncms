@@ -176,12 +176,12 @@ async function authenticate() {
 
 <style lang="scss" scoped>
 h2 {
-	margin-bottom: 20px;
+	margin-bottom: 1.25rem;
 }
 
 .v-input,
 .v-notice {
-	margin-bottom: 32px;
+	margin-bottom: 2rem;
 }
 
 .hydrating {
@@ -200,10 +200,10 @@ h2 {
 
 .password.invalid::before {
 	position: absolute;
-	top: -12px;
-	left: -12px;
-	width: calc(100% + 24px);
-	height: calc(100% + 24px);
+	top: -0.75rem;
+	left: -0.75rem;
+	width: calc(100% + 1.5rem);
+	height: calc(100% + 1.5rem);
 	background-color: var(--danger-alt);
 	border-radius: var(--border-radius);
 	transition: var(--medium) var(--transition);

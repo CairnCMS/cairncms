@@ -42,7 +42,7 @@ const { sidebarOpen } = toRefs(appStore);
 	position: relative;
 	flex-shrink: 0;
 	width: 100%;
-	height: 60px;
+	height: 3.75rem;
 	color: var(--foreground-normal-alt);
 	background-color: var(--background-normal-alt);
 
@@ -50,14 +50,14 @@ const { sidebarOpen } = toRefs(appStore);
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 60px;
+		width: 3.75rem;
 		height: 100%;
 	}
 
 	.title {
 		position: absolute;
 		top: 50%;
-		left: 52px;
+		left: 3.25rem;
 		overflow: hidden;
 		white-space: nowrap;
 		transform: translateY(-50%);

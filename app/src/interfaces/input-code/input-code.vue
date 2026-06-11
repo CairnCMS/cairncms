@@ -297,21 +297,21 @@ function fillTemplate() {
 .input-code {
 	position: relative;
 	width: 100%;
-	font-size: 14px;
+	font-size: 0.875rem;
 }
 
 .small {
 	position: absolute;
 	right: 0;
-	bottom: -20px;
+	bottom: -1.25rem;
 	font-style: italic;
 	text-align: right;
 }
 
 .v-button {
 	position: absolute;
-	top: 10px;
-	right: 10px;
+	top: 0.625rem;
+	right: 0.625rem;
 	z-index: 4;
 	color: var(--primary);
 	cursor: pointer;

@@ -45,10 +45,10 @@ const value = computed({
 
 <style lang="scss" scope>
 .variable {
-	padding: 12px;
+	padding: 0.75rem;
 
 	&.show-header {
-		padding-top: 6px;
+		padding-top: 0.375rem;
 	}
 
 	display: grid;
