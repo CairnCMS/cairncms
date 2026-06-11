@@ -399,7 +399,12 @@ export class FieldsService {
 			if (hookAdjustedField.schema) {
 				const existingColumn = await this.schemaInspector.columnInfo(collection, hookAdjustedField.field);
 
-				if (!isEqual(sanitizeColumn(existingColumn), hookAdjustedField.schema)) {
+				// Snapshot application passes bypassLimits with autoPurgeSystemCache disabled and carries
+				// sanitized schema payloads, so only that path compares against the sanitized column
+				const columnToCompare =
+					opts?.bypassLimits && opts.autoPurgeSystemCache === false ? sanitizeColumn(existingColumn) : existingColumn;
+
+				if (!isEqual(columnToCompare, hookAdjustedField.schema)) {
 					try {
 						await this.knex.schema.alterTable(collection, (table) => {
 							if (!hookAdjustedField.schema) return;
