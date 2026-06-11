@@ -46,7 +46,7 @@ function makeField(overrides: Record<string, any> = {}) {
 const interfaceInputStub = {
 	name: 'interface-input',
 	template: '<div class="interface-input-stub" />',
-	props: ['value'],
+	props: ['value', 'primaryKey', 'batchMode', 'batchActive'],
 };
 
 const rawEditorStub = {
@@ -128,7 +128,7 @@ describe('FormFieldInterface normalizes the value passed to the rendered interfa
 		expect(wrapper.findComponent(interfaceInputStub).props('value')).toBe('operator-set');
 	});
 
-	it('routes the raw editor branch through the original inline expression, leaving the value undefined when neither modelValue nor default_value is set', () => {
+	it('resolves the raw editor value to null when modelValue is omitted and the schema has no default_value', () => {
 		const wrapper = mountField({
 			field: makeField(),
 			rawEditorEnabled: true,
@@ -137,6 +137,34 @@ describe('FormFieldInterface normalizes the value passed to the rendered interfa
 
 		const child = wrapper.findComponent(rawEditorStub);
 		expect(child.exists()).toBe(true);
-		expect(child.props('value')).toBeUndefined();
+		expect(child.props('value')).toBeNull();
+	});
+
+	it('passes the schema default_value to the raw editor when modelValue is omitted', () => {
+		const wrapper = mountField({
+			field: makeField({ schema: { default_value: 'fallback' } }),
+			rawEditorEnabled: true,
+			rawEditorActive: true,
+		});
+
+		expect(wrapper.findComponent(rawEditorStub).props('value')).toBe('fallback');
+	});
+
+	it('forwards an omitted primaryKey as undefined to the rendered interface', () => {
+		const wrapper = mountField({ field: makeField() });
+
+		expect(wrapper.findComponent(interfaceInputStub).props('primaryKey')).toBeUndefined();
+	});
+
+	it('forwards batch mode state to the rendered interface', () => {
+		const wrapper = mountField({
+			field: makeField(),
+			batchMode: true,
+			batchActive: true,
+		});
+
+		const child = wrapper.findComponent(interfaceInputStub);
+		expect(child.props('batchMode')).toBe(true);
+		expect(child.props('batchActive')).toBe(true);
 	});
 });

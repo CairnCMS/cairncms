@@ -14,7 +14,9 @@
 				:autofocus="disabled !== true && autofocus"
 				:disabled="disabled"
 				:loading="loading"
-				:value="interfaceValue"
+				:value="value"
+				:batch-mode="batchMode"
+				:batch-active="batchActive"
 				:width="(field.meta && field.meta.width) || 'full'"
 				:type="field.type"
 				:collection="field.collection"
@@ -34,7 +36,7 @@
 
 		<interface-system-raw-editor
 			v-else-if="rawEditorEnabled && rawEditorActive"
-			:value="modelValue === undefined ? field.schema?.default_value : modelValue"
+			:value="value"
 			:type="field.type"
 			@input="$emit('update:modelValue', $event)"
 		/>
@@ -52,32 +54,23 @@ import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { FormField } from './types';
 
-interface Props {
-	field: FormField;
-	batchMode?: boolean;
-	batchActive?: boolean;
-	primaryKey?: string | number | null;
-	modelValue?: string | number | boolean | Record<string, any> | Array<any> | null;
-	loading?: boolean;
-	disabled?: boolean;
-	autofocus?: boolean;
-	rawEditorEnabled?: boolean;
-	rawEditorActive?: boolean;
-	direction?: string;
-}
-
-const props = withDefaults(defineProps<Props>(), {
-	batchMode: false,
-	batchActive: false,
-	primaryKey: null,
-	modelValue: undefined,
-	loading: false,
-	disabled: false,
-	autofocus: false,
-	rawEditorEnabled: false,
-	rawEditorActive: false,
-	direction: undefined,
-});
+const props = withDefaults(
+	defineProps<{
+		field: FormField;
+		batchMode?: boolean;
+		batchActive?: boolean;
+		primaryKey?: string | number | null;
+		modelValue?: string | number | boolean | Record<string, any> | Array<any> | null;
+		loading?: boolean;
+		disabled?: boolean;
+		autofocus?: boolean;
+		rawEditorEnabled?: boolean;
+		rawEditorActive?: boolean;
+		direction?: string;
+	}>(),
+	// an absent modelValue must resolve to undefined, not Vue's boolean-prop false cast
+	{ modelValue: undefined }
+);
 
 defineEmits(['update:modelValue', 'setFieldValue']);
 
@@ -96,12 +89,9 @@ const componentName = computed(() => {
 		: `interface-${getDefaultInterfaceForType(props.field.type!)}`;
 });
 
-const interfaceValue = computed(() => {
-	if (props.modelValue !== undefined) return props.modelValue;
-
-	const defaultValue = props.field.schema?.default_value;
-	return defaultValue === undefined ? null : defaultValue;
-});
+const value = computed(() =>
+	props.modelValue === undefined ? props.field.schema?.default_value ?? null : props.modelValue
+);
 </script>
 
 <style lang="scss" scoped>
