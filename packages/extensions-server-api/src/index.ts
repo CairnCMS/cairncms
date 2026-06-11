@@ -103,6 +103,32 @@ export type ExtensionSettingsClient = {
 };
 
 /**
+ * Delimiter overrides for a brokered Liquid render. The names are the author
+ * contract's own, mapped by the host to the engine. The reference use case is
+ * authoring templates inside flow options, where the platform's interpolation
+ * already consumes the default output delimiters.
+ */
+export type ExtensionRenderDelimiters = {
+	tagLeft?: string;
+	tagRight?: string;
+	outputLeft?: string;
+	outputRight?: string;
+};
+
+export type ExtensionRenderOptions = {
+	delimiters?: ExtensionRenderDelimiters;
+};
+
+/** Brokered template rendering. The host owns the engine, its resource limits, and the absence of any filesystem reach. The dialect is named in the method. */
+export type ExtensionTemplateClient = {
+	renderLiquid(
+		template: string,
+		data?: Record<string, unknown>,
+		options?: ExtensionRenderOptions
+	): Promise<ExtensionResult<string>>;
+};
+
+/**
  * How a host delivers a sensitive value: `raw` to full-authority code,
  * `reference` as an opaque handle the host resolves, `brokered` used host-side
  * without revealing it. A delivery contract, not a storage guarantee.
@@ -121,6 +147,7 @@ export type ExtensionHostApi = {
 	request: ExtensionRequestClient;
 	items: ExtensionItemsClient;
 	settings: ExtensionSettingsClient;
+	template: ExtensionTemplateClient;
 };
 
 export type ExtensionInvocationContext = {

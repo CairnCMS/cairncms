@@ -10,7 +10,12 @@ import {
 	type ConfinedHostBrokerDeps,
 	type ConfinedLogEntry,
 } from './broker.js';
-import { HTTP_RESPONSE_BYTES, ITEMS_REPLY_BYTES, SETTINGS_VALUE_BYTES } from './sandbox-limits.js';
+import {
+	HTTP_RESPONSE_BYTES,
+	ITEMS_REPLY_BYTES,
+	SETTINGS_VALUE_BYTES,
+	TEMPLATE_OUTPUT_BYTES,
+} from './sandbox-limits.js';
 import { ConfinedSecretScope } from './secret-scope.js';
 import type { ConfinedHostCallContext } from './types.js';
 
@@ -29,6 +34,7 @@ function makeBroker(overrides: Partial<ConfinedHostBrokerDeps> = {}, scope = new
 			settingsValueBytes: SETTINGS_VALUE_BYTES,
 			httpResponseBytes: HTTP_RESPONSE_BYTES,
 			itemsReplyBytes: ITEMS_REPLY_BYTES,
+			templateOutputBytes: TEMPLATE_OUTPUT_BYTES,
 		},
 		...overrides,
 	};
@@ -772,7 +778,12 @@ describe('createConfinedHostBroker request', () => {
 		const cap = 64 * 1024;
 
 		const broker = requestBroker({
-			limits: { settingsValueBytes: SETTINGS_VALUE_BYTES, httpResponseBytes: cap, itemsReplyBytes: ITEMS_REPLY_BYTES },
+			limits: {
+				settingsValueBytes: SETTINGS_VALUE_BYTES,
+				httpResponseBytes: cap,
+				itemsReplyBytes: ITEMS_REPLY_BYTES,
+				templateOutputBytes: TEMPLATE_OUTPUT_BYTES,
+			},
 		});
 
 		const reply = await send(broker, { url: `${origin}/big?bytes=${cap * 4}` });
@@ -785,7 +796,12 @@ describe('createConfinedHostBroker request', () => {
 		const cap = 64 * 1024;
 
 		const broker = requestBroker({
-			limits: { settingsValueBytes: SETTINGS_VALUE_BYTES, httpResponseBytes: cap, itemsReplyBytes: ITEMS_REPLY_BYTES },
+			limits: {
+				settingsValueBytes: SETTINGS_VALUE_BYTES,
+				httpResponseBytes: cap,
+				itemsReplyBytes: ITEMS_REPLY_BYTES,
+				templateOutputBytes: TEMPLATE_OUTPUT_BYTES,
+			},
 		});
 
 		const reply = await send(broker, { url: `${origin}/gzip-bomb?bytes=${cap * 4}` });
@@ -799,7 +815,12 @@ describe('createConfinedHostBroker request', () => {
 		const cap = 64 * 1024;
 
 		const broker = requestBroker({
-			limits: { settingsValueBytes: SETTINGS_VALUE_BYTES, httpResponseBytes: cap, itemsReplyBytes: ITEMS_REPLY_BYTES },
+			limits: {
+				settingsValueBytes: SETTINGS_VALUE_BYTES,
+				httpResponseBytes: cap,
+				itemsReplyBytes: ITEMS_REPLY_BYTES,
+				templateOutputBytes: TEMPLATE_OUTPUT_BYTES,
+			},
 		});
 
 		const reply = await send(broker, { url: `${origin}/control-chars?bytes=${32 * 1024}` });
@@ -844,6 +865,26 @@ describe('createConfinedHostBroker items', () => {
 	it('denies items without the capability through the dispatcher', async () => {
 		const { dispatch } = makeBroker();
 		const reply = await dispatch({ method: 'items.read', args: { collection: 'articles' } }, context, liveSignal);
+		expect(reply).toMatchObject({ ok: false, error: { code: 'denied' } });
+	});
+});
+
+describe('createConfinedHostBroker template', () => {
+	it('routes template.renderLiquid through the dispatcher', async () => {
+		const { dispatch } = makeBroker({ capabilities: { template: true } });
+
+		const reply = await dispatch(
+			{ method: 'template.renderLiquid', args: { template: 'Hi {{ n }}', data: { n: 1 } } },
+			context,
+			liveSignal
+		);
+
+		expect(reply).toEqual({ ok: true, value: 'Hi 1' });
+	});
+
+	it('denies template.renderLiquid without the capability through the dispatcher', async () => {
+		const { dispatch } = makeBroker();
+		const reply = await dispatch({ method: 'template.renderLiquid', args: { template: 'x' } }, context, liveSignal);
 		expect(reply).toMatchObject({ ok: false, error: { code: 'denied' } });
 	});
 });

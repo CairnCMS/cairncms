@@ -224,6 +224,9 @@ function buildHarness(invocation: ConfinedInvocation): string {
 				readOne: (collection, key, query) => __hostCall('items.readOne', { collection, key, query }),
 			},
 			settings: { get: (key) => __hostCall('settings.get', { key }) },
+			template: {
+				renderLiquid: (template, data, options) => __hostCall('template.renderLiquid', { template, data, options }),
+			},
 		};
 		const __context = {
 			extensionId: ${extensionId},

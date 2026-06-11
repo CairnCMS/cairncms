@@ -231,6 +231,37 @@ describe('runConfinedEntry', () => {
 		expect(calls[1]?.args).toMatchObject({ url: 'https://api.example.com/x', method: 'POST' });
 	});
 
+	it('bridges template.renderLiquid with the author argument shape', async () => {
+		const calls: Array<{ method: string; args: unknown }> = [];
+
+		const bridge: ConfinedHostBridge = async (call) => {
+			calls.push(call);
+			return { ok: true, value: 'rendered' };
+		};
+
+		const result = await run(
+			invocation(
+				entry(
+					'async (_payload, { host }) => { const res = await host.template.renderLiquid("Hi {# n #}", { n: 1 }, { delimiters: { outputLeft: "{#", outputRight: "#}" } }); return res.value; }'
+				)
+			),
+			bridge
+		);
+
+		expect(result).toEqual({ ok: true, value: 'rendered' });
+
+		expect(calls).toEqual([
+			{
+				method: 'template.renderLiquid',
+				args: {
+					template: 'Hi {# n #}',
+					data: { n: 1 },
+					options: { delimiters: { outputLeft: '{#', outputRight: '#}' } },
+				},
+			},
+		]);
+	});
+
 	it('returns the unsupported reply from the default bridge', async () => {
 		const result = await run(
 			invocation(

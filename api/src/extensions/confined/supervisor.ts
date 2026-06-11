@@ -45,6 +45,7 @@ const ALLOWED_HOST_METHODS = new Set<string>([
 	'settings.get',
 	'items.read',
 	'items.readOne',
+	'template.renderLiquid',
 ]);
 
 const denyAllHostDispatcher: ConfinedHostDispatcher = async () => ({

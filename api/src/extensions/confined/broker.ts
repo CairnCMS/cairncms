@@ -4,6 +4,7 @@ import { collectSensitiveValues, redactFlowLog } from '../../utils/redact-flow-l
 import { redactionFallback, scrubString } from '../../utils/scrub-string.js';
 import { createConfinedItemsHost, type ConfinedItemsServiceFactory } from './host-items.js';
 import { ABORTED, abortable, denied, invalidRequest, timedOut, unsupported } from './host-reply.js';
+import { createConfinedTemplateHost } from './host-template.js';
 import type { ConfinedSecretBinding, ConfinedSecretScope } from './secret-scope.js';
 import type { ConfinedHostCall, ConfinedHostCallContext, ConfinedHostDispatcher, ConfinedHostReply } from './types.js';
 
@@ -47,7 +48,12 @@ export interface ConfinedHostBrokerDeps {
 	// Constructs the read service under the resolved authority. Absent means no
 	// brokered items path is wired, and items calls are denied.
 	itemsService?: ConfinedItemsServiceFactory;
-	limits: { settingsValueBytes: number; httpResponseBytes: number; itemsReplyBytes: number };
+	limits: {
+		settingsValueBytes: number;
+		httpResponseBytes: number;
+		itemsReplyBytes: number;
+		templateOutputBytes: number;
+	};
 }
 
 // Conservative outbound timeout bounds. The per-call host timeout still races
@@ -175,6 +181,11 @@ export function createConfinedHostBroker(
 		accountability: deps.accountability,
 		itemsService: deps.itemsService,
 		itemsReplyBytes: deps.limits.itemsReplyBytes,
+	});
+
+	const templateHost = createConfinedTemplateHost({
+		capabilities: deps.capabilities,
+		templateOutputBytes: deps.limits.templateOutputBytes,
 	});
 
 	function serveLog(level: ConfinedLogLevel, args: unknown, context: ConfinedHostCallContext): ConfinedHostReply {
@@ -459,6 +470,8 @@ export function createConfinedHostBroker(
 		if (call.method === 'items.read') return itemsHost.read(call.args, signal);
 
 		if (call.method === 'items.readOne') return itemsHost.readOne(call.args, signal);
+
+		if (call.method === 'template.renderLiquid') return templateHost.renderLiquid(call.args, signal);
 
 		return unsupported();
 	};
