@@ -1,7 +1,9 @@
-import type { ExtensionCapabilities } from '@cairncms/types';
+import type { Accountability, ExtensionCapabilities } from '@cairncms/types';
 import type { AxiosInstance } from 'axios';
 import { collectSensitiveValues, redactFlowLog } from '../../utils/redact-flow-log.js';
 import { redactionFallback, scrubString } from '../../utils/scrub-string.js';
+import { createConfinedItemsHost, type ConfinedItemsServiceFactory } from './host-items.js';
+import { ABORTED, abortable, denied, invalidRequest, timedOut, unsupported } from './host-reply.js';
 import type { ConfinedSecretBinding, ConfinedSecretScope } from './secret-scope.js';
 import type { ConfinedHostCall, ConfinedHostCallContext, ConfinedHostDispatcher, ConfinedHostReply } from './types.js';
 
@@ -39,7 +41,13 @@ export interface ConfinedHostBrokerDeps {
 	// Resolves a secret binding to its real value at the moment of brokered use.
 	// Absent means no brokered-use path is wired, and auth requests are denied.
 	resolveSecret?: (binding: ConfinedSecretBinding, signal: AbortSignal) => Promise<string | null>;
-	limits: { settingsValueBytes: number; httpResponseBytes: number };
+	// The invocation's accountability, carried explicitly for the current-user
+	// items mode. Absent and null both deny, never elevate.
+	accountability?: Accountability | null;
+	// Constructs the read service under the resolved authority. Absent means no
+	// brokered items path is wired, and items calls are denied.
+	itemsService?: ConfinedItemsServiceFactory;
+	limits: { settingsValueBytes: number; httpResponseBytes: number; itemsReplyBytes: number };
 }
 
 // Conservative outbound timeout bounds. The per-call host timeout still races
@@ -116,50 +124,6 @@ export function originForRequestUrl(rawUrl: string): string | null {
 	return url.origin;
 }
 
-function denied(message: string): ConfinedHostReply {
-	return { ok: false, error: { code: 'denied', message } };
-}
-
-function unsupported(): ConfinedHostReply {
-	return { ok: false, error: { code: 'unsupported', message: 'host method is not supported' } };
-}
-
-function invalidRequest(message: string): ConfinedHostReply {
-	return { ok: false, error: { code: 'invalid_request', message } };
-}
-
-const ABORTED = Symbol('aborted');
-
-function timedOut(): ConfinedHostReply {
-	return { ok: false, error: { code: 'timeout', message: 'the host call timed out' } };
-}
-
-/**
- * Races a dependency call against the per-call abort signal, so the broker
- * settles at the call timeout even when the dependency ignores its signal and
- * never resolves. An unsettled dispatcher promise would otherwise pin the
- * supervisor's in-flight accounting indefinitely.
- */
-function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T | typeof ABORTED> {
-	if (signal.aborted) return Promise.resolve(ABORTED);
-
-	return new Promise((resolve, reject) => {
-		const onAbort = () => resolve(ABORTED);
-		signal.addEventListener('abort', onAbort, { once: true });
-
-		work.then(
-			(value) => {
-				signal.removeEventListener('abort', onAbort);
-				resolve(value);
-			},
-			(error) => {
-				signal.removeEventListener('abort', onAbort);
-				reject(error);
-			}
-		);
-	});
-}
-
 const LOG_LEVELS: Record<string, ConfinedLogLevel> = {
 	'log.debug': 'debug',
 	'log.info': 'info',
@@ -205,6 +169,13 @@ export function createConfinedHostBroker(
 	);
 
 	const allowedMethods = new Set((deps.capabilities.request?.methods ?? ['GET']).map((method) => method.toUpperCase()));
+
+	const itemsHost = createConfinedItemsHost({
+		capabilities: deps.capabilities,
+		accountability: deps.accountability,
+		itemsService: deps.itemsService,
+		itemsReplyBytes: deps.limits.itemsReplyBytes,
+	});
 
 	function serveLog(level: ConfinedLogLevel, args: unknown, context: ConfinedHostCallContext): ConfinedHostReply {
 		if (deps.capabilities.log !== true) {
@@ -484,6 +455,10 @@ export function createConfinedHostBroker(
 		if (call.method === 'settings.get') return serveSettingsGet(call.args, context, signal);
 
 		if (call.method === 'request.send') return serveRequest(call.args, context, signal);
+
+		if (call.method === 'items.read') return itemsHost.read(call.args, signal);
+
+		if (call.method === 'items.readOne') return itemsHost.readOne(call.args, signal);
 
 		return unsupported();
 	};
