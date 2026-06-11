@@ -46,7 +46,7 @@ function makeField(overrides: Record<string, any> = {}) {
 const interfaceInputStub = {
 	name: 'interface-input',
 	template: '<div class="interface-input-stub" />',
-	props: ['value', 'primaryKey'],
+	props: ['value', 'primaryKey', 'batchMode', 'batchActive'],
 };
 
 const rawEditorStub = {
@@ -154,5 +154,17 @@ describe('FormFieldInterface normalizes the value passed to the rendered interfa
 		const wrapper = mountField({ field: makeField() });
 
 		expect(wrapper.findComponent(interfaceInputStub).props('primaryKey')).toBeUndefined();
+	});
+
+	it('forwards batch mode state to the rendered interface', () => {
+		const wrapper = mountField({
+			field: makeField(),
+			batchMode: true,
+			batchActive: true,
+		});
+
+		const child = wrapper.findComponent(interfaceInputStub);
+		expect(child.props('batchMode')).toBe(true);
+		expect(child.props('batchActive')).toBe(true);
 	});
 });
