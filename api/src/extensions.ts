@@ -63,6 +63,8 @@ import {
 	type ConfinedGateVerdict,
 	type ConfinedLoadGateDeps,
 } from './extensions/confined/load-gate.js';
+import { resolveConfinedRuntime } from './extensions/confined/supervisor.js';
+import { describePosture } from './extensions/confined/sandbox-hardening.js';
 import getModuleDefault from './utils/get-module-default.js';
 import { filterServerExtensions } from './utils/filter-server-extensions.js';
 import { sanitizeExtensionError, type SanitizedExtensionError } from './utils/sanitize-extension-error.js';
@@ -140,8 +142,19 @@ export class ExtensionManager {
 	// row until registration.
 	private confinedEligible = new Map<Extension, ConfinedEligibleEntry>();
 
-	// Test seam for the gate's scanner, probe, and limits dependencies.
+	// Test seam for the gate's scanner, probe, and limits dependencies. Overrides
+	// the production-resolved deps below, so a test can drive the gate directly.
 	private confinedGateDeps: ConfinedLoadGateDeps = {};
+
+	// The gate config and probe resolved from the confined runtime this load, when
+	// confined extensions are present. The probe runs under the operator's resolved
+	// posture, not the baseline default singleton.
+	private confinedRuntimeDeps: ConfinedLoadGateDeps = {};
+
+	// Set when the confined runtime could not be resolved this load. Every declared
+	// confined extension is failed closed and the gate is skipped, while inherited
+	// extensions load untouched.
+	private confinedRuntimeUnavailable = false;
 
 	private appExtensions: AppExtensions = null;
 	private appExtensionChunks: Map<string, string>;
@@ -312,6 +325,36 @@ export class ExtensionManager {
 	}
 
 	/**
+	 * Resolves the confined runtime once per load, only when a declared confined
+	 * extension is present, so a malformed sandbox env never affects a load with no
+	 * confined extensions. A resolution failure fails every confined extension closed
+	 * and leaves inherited extensions to load. On success the resolved config and a
+	 * probe bound to the posture-validated supervisor are injected into the gate, and
+	 * the resolved posture is logged once.
+	 */
+	private async prepareConfinedRuntime(): Promise<void> {
+		const confined = this.extensions.filter((extension) => extension.runtime === CONFINED_RUNTIME);
+
+		if (confined.length === 0) return;
+
+		const resolution = await resolveConfinedRuntime();
+
+		if (!resolution.ok) {
+			const reason: SanitizedExtensionError = { code: VALIDATION_INCOMPLETE, detail: resolution.error.message };
+			for (const extension of confined) this.recordFailed(extension, reason);
+			this.confinedRuntimeUnavailable = true;
+			return;
+		}
+
+		this.confinedRuntimeDeps = {
+			config: resolution.config,
+			probe: (invocation) => resolution.supervisor.probeLoad(invocation),
+		};
+
+		logger.info(describePosture(resolution.posture));
+	}
+
+	/**
 	 * Validates each declared-confined extension before it may run confined. A
 	 * failure refuses the extension into diagnostics, never downgrading it to full
 	 * authority. A pass joins the private eligible set with no public diagnostic
@@ -321,13 +364,18 @@ export class ExtensionManager {
 	 * sibling probe.
 	 */
 	private async gateConfinedExtensions(): Promise<void> {
+		// The runtime resolution already failed every confined extension closed.
+		if (this.confinedRuntimeUnavailable) return;
+
+		const deps: ConfinedLoadGateDeps = { ...this.confinedRuntimeDeps, ...this.confinedGateDeps };
+
 		for (const extension of this.extensions) {
 			if (extension.runtime !== CONFINED_RUNTIME) continue;
 
 			let verdict: ConfinedGateVerdict;
 
 			try {
-				verdict = await gateConfinedExtension(extension, this.confinedGateDeps);
+				verdict = await gateConfinedExtension(extension, deps);
 			} catch {
 				// A gate failure fails this extension closed. It must never abort the
 				// loader and take every other extension down with it.
@@ -447,6 +495,8 @@ export class ExtensionManager {
 		this.extensions = [];
 		this.serverExtensions = [];
 		this.confinedEligible.clear();
+		this.confinedRuntimeDeps = {};
+		this.confinedRuntimeUnavailable = false;
 		this.hookEmbedsHead = [];
 		this.hookEmbedsBody = [];
 
@@ -462,6 +512,7 @@ export class ExtensionManager {
 
 		this.serverExtensions = filterServerExtensions(this.extensions);
 
+		await this.prepareConfinedRuntime();
 		await this.gateConfinedExtensions();
 
 		await this.registerHooks();
@@ -482,6 +533,8 @@ export class ExtensionManager {
 
 		this.serverExtensions = [];
 		this.confinedEligible.clear();
+		this.confinedRuntimeDeps = {};
+		this.confinedRuntimeUnavailable = false;
 
 		this.apiEmitter.offAll();
 

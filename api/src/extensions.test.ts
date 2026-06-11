@@ -2,16 +2,51 @@ import type { Extension } from '@cairncms/types';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-const { envState } = vi.hoisted(() => ({
+const { envState, confinedRuntime } = vi.hoisted(() => ({
 	envState: { EXTENSIONS_PATH: './extensions', SERVE_APP: false, EXTENSIONS_AUTO_RELOAD: false } as Record<
 		string,
 		unknown
 	>,
+	// The manager resolves the confined runtime at load. The real resolver detects
+	// host hardening by spawning probes, so the whole suite drives it through this
+	// controllable stub: a baseline success by default, overridable per test.
+	confinedRuntime: { resolve: undefined as undefined | (() => Promise<unknown>) },
 }));
 
 vi.mock('./env.js', () => ({ default: envState, getEnv: () => envState, refreshEnv: () => undefined }));
+
+vi.mock('./extensions/confined/supervisor.js', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('./extensions/confined/supervisor.js')>();
+
+	const runtime = {
+		wallClockMs: 5000,
+		cpuTimeoutMs: 2000,
+		memoryBytes: 64 * 1024 * 1024,
+		stackBytes: 512 * 1024,
+		acquireTimeoutMs: 0,
+		hostCallTimeoutMs: 5000,
+		maxHostCalls: 1000,
+		maxInFlightHostCalls: 16,
+	};
+
+	const baseline = async () => ({
+		ok: true,
+		supervisor: { probeLoad: async () => ({ loadable: true }) },
+		config: { sandbox: { maxArtifactBytes: 8 * 1024 * 1024 }, runtime },
+		posture: {
+			mode: 'auto',
+			applied: [],
+			missing: ['network-namespace', 'permission-model', 'cgroup-memory'],
+			coreSatisfied: false,
+			decision: 'run',
+			cgroupMechanic: null,
+		},
+	});
+
+	return { ...actual, resolveConfinedRuntime: () => (confinedRuntime.resolve ?? baseline)() };
+});
 
 // The internal-operations loop reads its directory with a template-literal dynamic
 // import that the test bundler cannot resolve. Skipping that read lets the test
@@ -22,6 +57,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 });
 
 import { ExtensionManager } from './extensions.js';
+import logger from './logger.js';
 import { filterServerExtensions } from './utils/filter-server-extensions.js';
 
 let root: string;
@@ -440,5 +476,81 @@ describe('the confined load gate in the loader', () => {
 		expect(row?.status).toBe('failed');
 		expect(row?.reason?.code).toBe('validation-incomplete');
 		expect((instance as any).confinedEligible.has(operation)).toBe(false);
+	});
+});
+
+describe('the confined runtime boot', () => {
+	afterEach(() => {
+		confinedRuntime.resolve = undefined;
+		vi.restoreAllMocks();
+	});
+
+	it('resolves the runtime only when a confined extension is present', async () => {
+		const resolve = vi.fn(async () => ({ ok: false, error: { message: 'should not be called' } }));
+		confinedRuntime.resolve = resolve;
+
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [endpointExtension('plain', 'plain', false)];
+
+		await (instance as any).load();
+
+		expect(resolve).not.toHaveBeenCalled();
+	});
+
+	it('fails a confined extension closed when the runtime cannot be resolved, skipping the gate', async () => {
+		// The package is clean, so it would be eligible if the gate ran. The runtime
+		// failure must refuse it instead, proving the gate is skipped.
+		writeConfinedPackage('boot-clean', 'export default {};\n');
+
+		confinedRuntime.resolve = async () => ({
+			ok: false,
+			error: { envVar: 'EXTENSIONS_SANDBOX_MAX_MEMORY', message: 'EXTENSIONS_SANDBOX_MAX_MEMORY is invalid' },
+		});
+
+		const instance = new ExtensionManager();
+		const confined = endpointExtension('boot-clean', 'boot-clean', true);
+		(instance as any).getExtensions = async () => [confined];
+
+		await (instance as any).load();
+
+		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'boot-clean');
+		expect(row?.status).toBe('failed');
+		expect(row?.reason?.code).toBe('validation-incomplete');
+		expect((instance as any).confinedEligible.has(confined)).toBe(false);
+		expect(JSON.stringify((instance as any).getDiagnostics())).not.toContain(root);
+	});
+
+	it('keeps an inherited extension untouched when the confined runtime fails', async () => {
+		confinedRuntime.resolve = async () => ({ ok: false, error: { message: 'runtime down' } });
+
+		const instance = new ExtensionManager();
+		const confined = endpointExtension('confined-endpoint', 'confined-endpoint', true);
+		const plain = endpointExtension('plain-endpoint', 'plain-endpoint', false);
+		(instance as any).getExtensions = async () => [confined, plain];
+
+		await (instance as any).load();
+
+		const diagnostics = (instance as any).getDiagnostics();
+
+		// The confined extension is failed by the runtime; the inherited one follows its
+		// own registration path, never failed by the confined runtime's unavailability.
+		expect(diagnostics.find((entry: any) => entry.name === 'confined-endpoint')?.reason?.code).toBe(
+			'validation-incomplete'
+		);
+
+		expect((instance as any).isLoaded).toBe(true);
+	});
+
+	it('logs the resolved posture once per load', async () => {
+		const info = vi.spyOn(logger, 'info');
+		writeConfinedPackage('boot-posture', 'export default {};\n');
+
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [endpointExtension('boot-posture', 'boot-posture', true)];
+
+		await (instance as any).load();
+
+		const postureLogs = info.mock.calls.filter((call) => String(call[0]).includes('confined OS hardening'));
+		expect(postureLogs).toHaveLength(1);
 	});
 });
