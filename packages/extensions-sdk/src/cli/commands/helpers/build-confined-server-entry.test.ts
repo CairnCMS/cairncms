@@ -6,7 +6,20 @@ import {
 	buildConfinedServerEntry as exportedBuild,
 	ConfinedBuildError as ExportedError,
 } from '../../../confined-build.js';
-import { buildConfinedServerEntry, ConfinedBuildError } from './build-confined-server-entry.js';
+import {
+	buildConfinedServerEntry,
+	ConfinedBuildError,
+	watchConfinedServerEntry,
+} from './build-confined-server-entry.js';
+
+async function waitFor(predicate: () => boolean, timeoutMs = 10_000): Promise<void> {
+	const start = Date.now();
+
+	while (!predicate()) {
+		if (Date.now() - start > timeoutMs) throw new Error('timed out waiting for the watcher');
+		await new Promise((settle) => setTimeout(settle, 50));
+	}
+}
 
 let outer: string;
 let dir: string;
@@ -221,6 +234,46 @@ describe('containment', () => {
 
 		await expect(buildConfinedServerEntry({ input, root: dir })).rejects.toBeInstanceOf(ConfinedBuildError);
 	});
+});
+
+describe('watchConfinedServerEntry', () => {
+	it('builds initially, rebuilds on change, and reports failures sanitized', async () => {
+		write('src/server.js', "export default { id: 'one', handler: () => ({}) };");
+		const results: Array<{ ok: true } | { ok: false; message: string }> = [];
+
+		const watcher = await watchConfinedServerEntry({
+			input: 'src/server.js',
+			root: dir,
+			output: 'dist/server.js',
+			onRebuild: (result) => results.push(result),
+		});
+
+		try {
+			await waitFor(() => results.length >= 1);
+			expect(results[0]).toEqual({ ok: true });
+
+			const builtPath = join(dir, 'dist', 'server.js');
+			expect(evalGlobal(readFileSync(builtPath, 'utf8')).default.id).toBe('one');
+
+			write('src/server.js', "export default { id: 'two', handler: () => ({}) };");
+			await waitFor(() => results.length >= 2);
+			expect(results[1]).toEqual({ ok: true });
+			expect(evalGlobal(readFileSync(builtPath, 'utf8')).default.id).toBe('two');
+
+			write('src/server.js', "import { readFile } from 'node:fs'; export default { id: 'x', handler: () => ({}) };");
+			await waitFor(() => results.length >= 3);
+
+			const failure = results[2];
+			expect(failure).toMatchObject({ ok: false });
+
+			if (failure && !failure.ok) {
+				expect(failure.message).toMatch(/could not resolve/i);
+				expect(failure.message).not.toContain(dir);
+			}
+		} finally {
+			await watcher.close();
+		}
+	}, 30_000);
 });
 
 describe('the confined-build subpath', () => {

@@ -35,6 +35,11 @@ import type { Format, RollupConfig, RollupMode } from '../types.js';
 import { getFileExt } from '../utils/file.js';
 import { clear, log } from '../utils/logger.js';
 import tryParseJson from '../utils/try-parse-json.js';
+import {
+	buildConfinedServerEntry,
+	ConfinedBuildError,
+	watchConfinedServerEntry,
+} from './helpers/build-confined-server-entry.js';
 import generateBundleEntrypoint from './helpers/generate-bundle-entrypoint.js';
 import loadConfig from './helpers/load-config.js';
 import { validateSplitEntrypointOption } from './helpers/validate-cli-options.js';
@@ -87,6 +92,35 @@ export default async function build(options: BuildOptions): Promise<void> {
 		const runtimeDeps = collectRuntimeDeps(packageJson);
 
 		const format: Format = extensionManifest.type === 'module' ? 'esm' : 'cjs';
+
+		if ('runtime' in extensionOptions && extensionOptions.runtime === 'confined-server') {
+			if (extensionOptions.type !== 'operation') {
+				log(
+					`The confined runtime supports ${chalk.bold('operation')} extensions only. Type ${chalk.bold(
+						extensionOptions.type
+					)} cannot be built confined yet.`,
+					'error'
+				);
+
+				// Exit through the natural end of the process so piped stdio flushes
+				// the refusal message before the nonzero code lands.
+				process.exitCode = 1;
+				return;
+			}
+
+			await buildConfinedHybridExtension({
+				inputApp: extensionOptions.source.app,
+				inputApi: extensionOptions.source.api,
+				outputApp: extensionOptions.path.app,
+				outputApi: extensionOptions.path.api,
+				format,
+				watch,
+				sourcemap,
+				minify,
+			});
+
+			return;
+		}
 
 		if (extensionOptions.type === 'bundle') {
 			await buildBundleExtension({
@@ -164,6 +198,19 @@ export default async function build(options: BuildOptions): Promise<void> {
 
 		if (await fse.pathExists(manifestPath)) {
 			const manifest = await fse.readJSON(manifestPath).catch(() => null);
+
+			if (manifest?.[EXTENSION_PKG_KEY]?.runtime === 'confined-server') {
+				log(
+					`This package declares the confined runtime. Run ${chalk.blue(
+						'cairncms-extension build'
+					)} without explicit entrypoint arguments so the manifest drives the build.`,
+					'error'
+				);
+
+				process.exitCode = 1;
+				return;
+			}
+
 			if (manifest?.type === 'module') format = 'esm';
 			runtimeDeps = collectRuntimeDeps(manifest);
 		}
@@ -373,6 +420,98 @@ async function buildHybridExtension({
 		await watchExtension(rollupOptionsAll);
 	} else {
 		await buildExtension(rollupOptionsAll);
+	}
+}
+
+async function buildConfinedHybridExtension({
+	inputApp,
+	inputApi,
+	outputApp,
+	outputApi,
+	format,
+	watch,
+	sourcemap,
+	minify,
+}: {
+	inputApp: string;
+	inputApi: string;
+	outputApp: string;
+	outputApi: string;
+	format: Format;
+	watch: boolean;
+	sourcemap: boolean;
+	minify: boolean;
+}) {
+	if (!(await fse.pathExists(inputApp)) || !(await fse.stat(inputApp)).isFile()) {
+		log(`App entrypoint ${chalk.bold(inputApp)} does not exist.`, 'error');
+		process.exitCode = 1;
+		return;
+	}
+
+	if (!(await fse.pathExists(inputApi)) || !(await fse.stat(inputApi)).isFile()) {
+		log(`API entrypoint ${chalk.bold(inputApi)} does not exist.`, 'error');
+		process.exitCode = 1;
+		return;
+	}
+
+	if (outputApp.length === 0) {
+		log(`App output file can not be empty.`, 'error');
+		process.exitCode = 1;
+		return;
+	}
+
+	if (outputApi.length === 0) {
+		log(`API output file can not be empty.`, 'error');
+		process.exitCode = 1;
+		return;
+	}
+
+	const config = await loadConfig();
+	const plugins = config.plugins ?? [];
+	const root = path.resolve('.');
+
+	// The app entry keeps the v1 browser build. The api entry is the confined
+	// artifact: deterministic IIFE, no externals, containment-checked, so the
+	// minify and sourcemap flags deliberately do not apply to it.
+	const rollupOptionsApp = getRollupOptions({
+		mode: 'browser',
+		input: inputApp,
+		sourcemap,
+		minify,
+		plugins,
+	});
+
+	const rollupOutputOptionsApp = getRollupOutputOptions({ mode: 'browser', output: outputApp, format, sourcemap });
+	const appConfig = { rollupOptions: rollupOptionsApp, rollupOutputOptions: rollupOutputOptionsApp };
+
+	if (watch) {
+		await watchConfinedServerEntry({
+			input: inputApi,
+			root,
+			output: outputApi,
+			onRebuild: (result) => {
+				if (result.ok) {
+					log(chalk.bold.green('Confined server entry built.'));
+				} else {
+					log(`Confined server entry failed: ${result.message}`, 'error');
+				}
+			},
+		});
+
+		await watchExtension(appConfig);
+	} else {
+		try {
+			await buildConfinedServerEntry({ input: inputApi, root, output: outputApi });
+		} catch (error) {
+			const message =
+				error instanceof ConfinedBuildError ? error.message : 'the confined server entry could not be built';
+
+			log(`Confined server entry failed: ${message}`, 'error');
+			process.exitCode = 1;
+			return;
+		}
+
+		await buildExtension(appConfig);
 	}
 }
 

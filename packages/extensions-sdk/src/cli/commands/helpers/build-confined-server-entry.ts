@@ -1,6 +1,6 @@
 import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
-import { build, type BuildFailure } from 'esbuild';
+import { build, context, type BuildFailure, type BuildOptions } from 'esbuild';
 
 export class ConfinedBuildError extends Error {
 	constructor(message: string) {
@@ -82,51 +82,121 @@ async function assertContained(inputs: string[], rootAbs: string, realRoot: stri
  */
 export async function buildConfinedServerEntry(options: BuildConfinedServerEntryOptions): Promise<{ code: string }> {
 	const rootAbs = resolve(options.root);
-
-	let realRoot: string;
-
-	try {
-		realRoot = await realpath(rootAbs);
-	} catch {
-		throw new ConfinedBuildError('the package root could not be resolved on disk');
-	}
+	const realRoot = await resolveRealRoot(rootAbs);
 
 	let result;
 
 	try {
-		result = await build({
-			entryPoints: [resolve(rootAbs, options.input)],
-			absWorkingDir: rootAbs,
-			bundle: true,
-			format: 'iife',
-			globalName: 'CairnOperation',
-			platform: 'neutral',
-			target: 'es2022',
-			legalComments: 'none',
-			charset: 'utf8',
-			logLevel: 'silent',
-			write: false,
-			metafile: true,
-		});
+		result = await build(confinedEsbuildOptions(rootAbs, options.input));
 	} catch (error) {
 		throw new ConfinedBuildError(sanitizeBuildError(error));
 	}
 
-	await assertContained(Object.keys(result.metafile.inputs), rootAbs, realRoot);
+	await assertContained(Object.keys(result.metafile?.inputs ?? {}), rootAbs, realRoot);
 
-	const file = result.outputFiles[0];
+	const file = result.outputFiles?.[0];
 	if (file === undefined) throw new ConfinedBuildError('the confined server entry produced no output');
 
 	if (options.output !== undefined) {
-		const outputAbs = resolve(rootAbs, options.output);
-
-		try {
-			await mkdir(dirname(outputAbs), { recursive: true });
-			await writeFile(outputAbs, file.contents);
-		} catch {
-			throw new ConfinedBuildError('the built entry could not be written to the output path');
-		}
+		await writeOutput(rootAbs, options.output, file.contents);
 	}
 
 	return { code: file.text };
+}
+
+export interface WatchConfinedServerEntryOptions {
+	input: string;
+	root: string;
+	// The artifact must land on disk every rebuild, so output is required in watch.
+	output: string;
+	onRebuild: (result: { ok: true } | { ok: false; message: string }) => void;
+}
+
+/**
+ * The watch-mode counterpart: the same option set and the same containment and
+ * write pipeline, run on every rebuild through an esbuild context, with each
+ * outcome reported as a sanitized result. The first callback fires for the
+ * initial build.
+ */
+export async function watchConfinedServerEntry(
+	options: WatchConfinedServerEntryOptions
+): Promise<{ close: () => Promise<void> }> {
+	const rootAbs = resolve(options.root);
+	const realRoot = await resolveRealRoot(rootAbs);
+
+	const watcher = await context({
+		...confinedEsbuildOptions(rootAbs, options.input),
+		plugins: [
+			{
+				name: 'confined-containment',
+				setup(build) {
+					build.onEnd(async (result) => {
+						if (result.errors.length > 0) {
+							options.onRebuild({ ok: false, message: sanitizeBuildError({ errors: result.errors }) });
+							return;
+						}
+
+						try {
+							await assertContained(Object.keys(result.metafile?.inputs ?? {}), rootAbs, realRoot);
+
+							const file = result.outputFiles?.[0];
+							if (file === undefined) throw new ConfinedBuildError('the confined server entry produced no output');
+
+							await writeOutput(rootAbs, options.output, file.contents);
+						} catch (error) {
+							options.onRebuild({
+								ok: false,
+								message:
+									error instanceof ConfinedBuildError ? error.message : 'the confined server entry could not be built',
+							});
+
+							return;
+						}
+
+						options.onRebuild({ ok: true });
+					});
+				},
+			},
+		],
+	});
+
+	await watcher.watch();
+
+	return { close: () => watcher.dispose() };
+}
+
+function confinedEsbuildOptions(rootAbs: string, input: string): BuildOptions & { write: false; metafile: true } {
+	return {
+		entryPoints: [resolve(rootAbs, input)],
+		absWorkingDir: rootAbs,
+		bundle: true,
+		format: 'iife',
+		globalName: 'CairnOperation',
+		platform: 'neutral',
+		target: 'es2022',
+		legalComments: 'none',
+		charset: 'utf8',
+		logLevel: 'silent',
+		write: false,
+		metafile: true,
+	};
+}
+
+async function resolveRealRoot(rootAbs: string): Promise<string> {
+	try {
+		return await realpath(rootAbs);
+	} catch {
+		throw new ConfinedBuildError('the package root could not be resolved on disk');
+	}
+}
+
+async function writeOutput(rootAbs: string, output: string, contents: Uint8Array): Promise<void> {
+	const outputAbs = resolve(rootAbs, output);
+
+	try {
+		await mkdir(dirname(outputAbs), { recursive: true });
+		await writeFile(outputAbs, contents);
+	} catch {
+		throw new ConfinedBuildError('the built entry could not be written to the output path');
+	}
 }
