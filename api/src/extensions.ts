@@ -540,9 +540,24 @@ export class ExtensionManager {
 
 	private updateWatchedExtensions(added: Extension[], removed: Extension[] = []): void {
 		if (this.watcher) {
+			const nestedLocalTypeDir = (type: string) => path.resolve(env['EXTENSIONS_PATH'], pluralize(type));
+
+			// Package-style local extensions build into dist paths the nested-layout
+			// globs never see, so their server-relevant entrypoints are watched
+			// per-extension. The globs keep sole ownership of the nested layout:
+			// unwatching a path suppresses it in chokidar even where a glob still
+			// matches, so a dynamically managed nested entrypoint would lose its
+			// reloads permanently after a remove and re-add. App types stay with
+			// Vite unless the API serves the app.
 			const toPackageExtensionPaths = (extensions: Extension[]) =>
 				extensions
-					.filter((extension) => !extension.local || extension.type === 'bundle')
+					.filter((extension) => env['SERVE_APP'] || !isIn(extension.type, APP_EXTENSION_TYPES))
+					.filter(
+						(extension) =>
+							extension.type === 'bundle' ||
+							!extension.local ||
+							path.dirname(path.resolve(extension.path)) !== nestedLocalTypeDir(extension.type)
+					)
 					.flatMap((extension) => {
 						if (isTypeIn(extension, HYBRID_EXTENSION_TYPES) || extension.type === 'bundle') {
 							const apiPath = path.resolve(extension.path, extension.entrypoint.api);
