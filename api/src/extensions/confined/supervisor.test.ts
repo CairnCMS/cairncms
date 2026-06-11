@@ -1,3 +1,5 @@
+import type { Accountability } from '@cairncms/types';
+import axios from 'axios';
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -7,9 +9,20 @@ import { join } from 'node:path';
 import { Duplex, PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { REDACT_TEXT } from '../../constants.js';
+import { createConfinedHostBroker, type ConfinedLogEntry } from './broker.js';
 import type { CgroupMechanic, ChildCgroup, HardeningLayer, SandboxPosture } from './sandbox-hardening.js';
-import { BROKER_REPLY_BYTES, resolveSandboxLimits, type SandboxLimits } from './sandbox-limits.js';
+import {
+	BROKER_REPLY_BYTES,
+	HTTP_RESPONSE_BYTES,
+	ITEMS_REPLY_BYTES,
+	resolveSandboxLimits,
+	SETTINGS_VALUE_BYTES,
+	TEMPLATE_OUTPUT_BYTES,
+	type SandboxLimits,
+} from './sandbox-limits.js';
 import { clampLimits, ConfinedSupervisor, resolveChild, type ConfinedCgroupOps } from './supervisor.js';
+import { ConfinedSecretScope } from './secret-scope.js';
 import { createFrameReader, writeFrame } from './transport.js';
 import type {
 	ConfinedHostCallMessage,
@@ -973,6 +986,182 @@ describe('ConfinedSupervisor', () => {
 		},
 		ENGINE_TIMEOUT
 	);
+
+	describe('end-to-end broker pass', () => {
+		it(
+			'serves every host method through the real broker over the spawn boundary',
+			async () => {
+				const scope = new ConfinedSecretScope();
+				const logged: ConfinedLogEntry[] = [];
+				const itemsCalls: Array<{ collection: string; accountability: Accountability | null }> = [];
+				const accountability: Accountability = { user: 'u-1', role: 'r-1', admin: false };
+
+				const broker = createConfinedHostBroker(
+					{
+						capabilities: {
+							log: true,
+							request: { urls: [new URL(loopbackUrl).origin] },
+							settings: ['read'],
+							items: 'current-user',
+							template: true,
+						},
+						log: (logEntry) => logged.push(logEntry),
+						settings: {
+							declared: [
+								{ key: 'site', sensitive: false },
+								{ key: 'apiKey', sensitive: true },
+							],
+							value: (key) => (key === 'site' ? 'cairn' : 'sk_live_e2e_secret_value'),
+							hasSecret: () => true,
+						},
+						getAxios: async () => axios.create(),
+						accountability,
+						itemsService: (collection, acct) => {
+							itemsCalls.push({ collection, accountability: acct });
+
+							return {
+								readByQuery: async () => [{ id: 1, title: 'first' }],
+								readOne: async (key) => ({ id: key }),
+							};
+						},
+						limits: {
+							settingsValueBytes: SETTINGS_VALUE_BYTES,
+							httpResponseBytes: HTTP_RESPONSE_BYTES,
+							itemsReplyBytes: ITEMS_REPLY_BYTES,
+							templateOutputBytes: TEMPLATE_OUTPUT_BYTES,
+						},
+					},
+					scope
+				);
+
+				const supervisor = new ConfinedSupervisor({ hostDispatcher: broker });
+
+				const result = await supervisor.invoke(
+					invocation(
+						entry(
+							'async ({ options }, { host }) => {' +
+								' const secret = await host.settings.get("apiKey");' +
+								' await host.log.info("ref is " + secret.value.ref, { apiKey: "k-123456789012" });' +
+								' const req = await host.request.send({ url: options.url, method: "GET" });' +
+								' const site = await host.settings.get("site");' +
+								' const list = await host.items.read("articles", { limit: 5 });' +
+								' const one = await host.items.readOne("articles", 7);' +
+								' const tpl = await host.template.renderLiquid("Hi {# n #}!", { n: 2 }, { delimiters: { outputLeft: "{#", outputRight: "#}" } });' +
+								' return { status: req.value.status, body: req.value.body, site: site.value, secretKind: secret.value.kind, ref: secret.value.ref, list: list.value, one: one.value, rendered: tpl.value };' +
+								' }'
+						),
+						{ options: { url: loopbackUrl } }
+					)
+				);
+
+				expect(result.ok).toBe(true);
+				if (!result.ok) return;
+
+				const value = result.value as Record<string, unknown>;
+				expect(value['status']).toBe(200);
+				expect(value['body']).toEqual({ pong: true });
+				expect(value['site']).toBe('cairn');
+				expect(value['secretKind']).toBe('secret-reference');
+				expect(value['list']).toEqual([{ id: 1, title: 'first' }]);
+				expect(value['one']).toEqual({ id: 7 });
+				expect(value['rendered']).toBe('Hi 2!');
+
+				expect(scope.refs()).toContain(value['ref']);
+
+				expect(scope.resolve(value['ref'] as string)).toEqual({
+					kind: 'extension-setting',
+					extensionId: 'local.test',
+					contributionId: 'flow-operation.test',
+					key: 'apiKey',
+				});
+
+				expect(itemsCalls).toHaveLength(2);
+				expect(itemsCalls[0]?.collection).toBe('articles');
+				expect(itemsCalls[0]?.accountability).toBe(accountability);
+				expect(itemsCalls[1]?.collection).toBe('articles');
+				expect(itemsCalls[1]?.accountability).toBe(accountability);
+
+				const message = String(logged[0]?.message);
+				expect(message).not.toContain(String(value['ref']));
+				expect(message).toContain(REDACT_TEXT);
+				expect((logged[0]?.meta as Record<string, unknown>)['apiKey']).toBe(REDACT_TEXT);
+
+				expect(JSON.stringify(result)).not.toContain('sk_live_e2e_secret_value');
+				expect(JSON.stringify(logged)).not.toContain('sk_live_e2e_secret_value');
+			},
+			ENGINE_TIMEOUT
+		);
+
+		it(
+			'denies every surface over the spawn boundary when no capability is declared',
+			async () => {
+				const broker = createConfinedHostBroker(
+					{
+						capabilities: {},
+						log: () => undefined,
+						settings: { declared: [], value: () => null, hasSecret: () => false },
+						limits: {
+							settingsValueBytes: SETTINGS_VALUE_BYTES,
+							httpResponseBytes: HTTP_RESPONSE_BYTES,
+							itemsReplyBytes: ITEMS_REPLY_BYTES,
+							templateOutputBytes: TEMPLATE_OUTPUT_BYTES,
+						},
+					},
+					new ConfinedSecretScope()
+				);
+
+				const supervisor = new ConfinedSupervisor({ hostDispatcher: broker });
+
+				const result = await supervisor.invoke(
+					invocation(
+						entry(
+							// The author log client is fire-and-forget, so the log denial is
+							// observed through the raw bridge instead of a return value.
+							'async (_p, { host }) => {' +
+								' const calls = [' +
+								' await __hostCall("log.info", { message: "x" }),' +
+								' await host.request.send({ url: "https://blocked.test/" }),' +
+								' await host.settings.get("k"),' +
+								' await host.items.read("articles"),' +
+								' await host.template.renderLiquid("t")' +
+								' ];' +
+								' return calls.map((res) => (res.ok ? "ok" : res.error.code));' +
+								' }'
+						)
+					)
+				);
+
+				expect(result).toEqual({ ok: true, value: ['denied', 'denied', 'denied', 'denied', 'denied'] });
+			},
+			ENGINE_TIMEOUT
+		);
+
+		it(
+			'refuses a method outside the allowlist before any dispatcher runs',
+			async () => {
+				const reached: string[] = [];
+
+				const dispatcher: ConfinedHostDispatcher = async (call) => {
+					reached.push(call.method);
+					return { ok: true, value: 'reached' };
+				};
+
+				const supervisor = new ConfinedSupervisor({ hostDispatcher: dispatcher });
+
+				const result = await supervisor.invoke(
+					invocation(
+						entry(
+							'async () => { const res = await __hostCall("platform.exec", {}); return { ok: res.ok, code: res.error && res.error.code }; }'
+						)
+					)
+				);
+
+				expect(result).toEqual({ ok: true, value: { ok: false, code: 'unsupported' } });
+				expect(reached).toHaveLength(0);
+			},
+			ENGINE_TIMEOUT
+		);
+	});
 });
 
 const ALL_LAYERS: HardeningLayer[] = ['network-namespace', 'permission-model', 'cgroup-memory'];
