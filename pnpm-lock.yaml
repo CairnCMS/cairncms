@@ -970,6 +970,9 @@ importers:
         specifier: 6.0.0
         version: 6.0.0(@vue/compiler-sfc@3.2.47)
     devDependencies:
+      '@cairncms/extensions-server-api':
+        specifier: workspace:*
+        version: link:../extensions-server-api
       '@types/fs-extra':
         specifier: 11.0.1
         version: 11.0.1

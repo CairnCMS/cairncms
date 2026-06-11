@@ -28,7 +28,7 @@ import copyTemplate from './helpers/copy-template.js';
 import ensureTypecheckScript from './helpers/ensure-typecheck-script.js';
 import getExtensionDevDeps from './helpers/get-extension-dev-deps.js';
 
-type CreateOptions = { language?: string };
+type CreateOptions = { language?: string; confined?: boolean };
 
 export default async function create(type: string, name: string, options: CreateOptions): Promise<void> {
 	const targetDir = name.substring(name.lastIndexOf('/') + 1);
@@ -43,6 +43,18 @@ export default async function create(type: string, name: string, options: Create
 		);
 
 		process.exit(1);
+	}
+
+	if (options.confined && type !== 'operation') {
+		log(
+			`The confined runtime supports ${chalk.bold('operation')} extensions only. Type ${chalk.bold(
+				type
+			)} cannot be scaffolded confined yet.`,
+			'error'
+		);
+
+		process.exitCode = 1;
+		return;
 	}
 
 	if (targetDir.length === 0) {
@@ -71,7 +83,7 @@ export default async function create(type: string, name: string, options: Create
 	} else {
 		const language = options.language ?? 'javascript';
 
-		await createLocalExtension({ type, name, targetDir, targetPath, language });
+		await createLocalExtension({ type, name, targetDir, targetPath, language, confined: options.confined ?? false });
 	}
 }
 
@@ -112,12 +124,14 @@ async function createLocalExtension({
 	targetDir,
 	targetPath,
 	language,
+	confined,
 }: {
 	type: AppExtensionType | ApiExtensionType | HybridExtensionType;
 	name: string;
 	targetDir: string;
 	targetPath: string;
 	language: string;
+	confined: boolean;
 }) {
 	if (!isLanguage(language)) {
 		log(
@@ -133,27 +147,50 @@ async function createLocalExtension({
 	const spinner = ora(chalk.bold('Scaffolding CairnCMS extension...')).start();
 
 	await fse.ensureDir(targetPath);
-	await copyTemplate(type, targetPath, 'src', language);
+	await copyTemplate(confined ? 'operation-confined' : type, targetPath, 'src', language);
 
 	const host = `^${getSdkVersion()}`;
 
-	const options: ExtensionOptions = isIn(type, HYBRID_EXTENSION_TYPES)
-		? {
-				type,
-				path: { app: 'dist/app.js', api: 'dist/api.js' },
-				source: { app: `src/app.${languageToShort(language)}`, api: `src/api.${languageToShort(language)}` },
-				host,
-		  }
-		: {
-				type,
-				path: 'dist/index.js',
-				source: `src/index.${languageToShort(language)}`,
-				host,
-		  };
+	let options: ExtensionOptions;
 
-	const packageManifest = getPackageManifest(name, options, getExtensionDevDeps(type, language));
+	if (confined) {
+		options = {
+			type: 'operation',
+			path: { app: 'dist/app.js', api: 'dist/api.js' },
+			source: { app: `src/app.${languageToShort(language)}`, api: `src/api.${languageToShort(language)}` },
+			runtime: 'confined-server',
+			capabilities: { log: true },
+			host,
+		};
+	} else if (isIn(type, HYBRID_EXTENSION_TYPES)) {
+		options = {
+			type,
+			path: { app: 'dist/app.js', api: 'dist/api.js' },
+			source: { app: `src/app.${languageToShort(language)}`, api: `src/api.${languageToShort(language)}` },
+			host,
+		};
+	} else {
+		options = {
+			type,
+			path: 'dist/index.js',
+			source: `src/index.${languageToShort(language)}`,
+			host,
+		};
+	}
+
+	const devDeps = confined
+		? { ...getExtensionDevDeps(type, language), '@cairncms/extensions-server-api': getSdkVersion() }
+		: getExtensionDevDeps(type, language);
+
+	const packageManifest = getPackageManifest(name, options, devDeps);
 
 	await fse.writeJSON(path.join(targetPath, 'package.json'), packageManifest, { spaces: '\t' });
+
+	if (confined) {
+		// The engine's identity contract requires the entry id to equal the
+		// extension name, so the scaffold writes the final name into the source.
+		await applyExtensionName(targetPath, packageManifest['name']);
+	}
 
 	const packageManager = getPackageManager();
 
@@ -162,6 +199,19 @@ async function createLocalExtension({
 	spinner.succeed(chalk.bold('Done'));
 
 	log(getDoneMessage(type, targetDir, targetPath, packageManager));
+}
+
+async function applyExtensionName(targetPath: string, packageName: string): Promise<void> {
+	const sourceDir = path.join(targetPath, 'src');
+
+	for (const file of await fse.readdir(sourceDir)) {
+		const filePath = path.join(sourceDir, file);
+		const content = await fse.readFile(filePath, 'utf8');
+
+		if (content.includes('__extension_name__')) {
+			await fse.writeFile(filePath, content.replaceAll('__extension_name__', packageName));
+		}
+	}
 }
 
 function getPackageManifest(name: string, options: ExtensionOptions, deps: Record<string, string>) {

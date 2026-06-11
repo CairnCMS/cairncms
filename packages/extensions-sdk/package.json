@@ -64,6 +64,7 @@
 		"rollup-plugin-vue": "6.0.0"
 	},
 	"devDependencies": {
+		"@cairncms/extensions-server-api": "workspace:*",
 		"@types/fs-extra": "11.0.1",
 		"@types/inquirer": "9.0.3",
 		"@types/node": "22.19.17",
