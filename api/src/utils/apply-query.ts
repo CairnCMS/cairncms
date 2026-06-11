@@ -337,6 +337,10 @@ export function applySort(
 		const targetFieldName = stripFunction(field!);
 		const targetFieldMeta = schema.collections[targetCollection]?.fields?.[targetFieldName];
 
+		if (!targetFieldMeta) {
+			throw new InvalidQueryException(`Invalid sort column "${targetFieldName}"`);
+		}
+
 		if ((targetFieldMeta?.special as string[] | undefined)?.includes('conceal')) {
 			throw new InvalidQueryException(
 				`Sort operand "${targetFieldName}" is concealed and cannot be used as a sort field.`
@@ -411,7 +415,7 @@ export function applyFilter(
 
 			if (
 				filterPath.length > 1 ||
-				(!(key.includes('(') && key.includes(')')) && schema.collections[collection]!.fields[key]!.type === 'alias')
+				(!(key.includes('(') && key.includes(')')) && schema.collections[collection]?.fields[key]?.type === 'alias')
 			) {
 				const hasMultiRelational = addJoin({
 					path: filterPath,
@@ -468,7 +472,7 @@ export function applyFilter(
 
 			if (
 				filterPath.length > 1 ||
-				(!(key.includes('(') && key.includes(')')) && schema.collections[collection]!.fields[key]!.type === 'alias')
+				(!(key.includes('(') && key.includes(')')) && schema.collections[collection]?.fields[key]?.type === 'alias')
 			) {
 				if (!relation) continue;
 
