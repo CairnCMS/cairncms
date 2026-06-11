@@ -19,6 +19,10 @@
 			"default": "./dist/index.js"
 		},
 		"./cli": "./dist/cli/index.js",
+		"./confined-build": {
+			"types": "./dist/confined-build.d.ts",
+			"default": "./dist/confined-build.js"
+		},
 		"./package.json": "./package.json"
 	},
 	"main": "dist/index.js",
