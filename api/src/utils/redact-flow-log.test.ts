@@ -163,6 +163,27 @@ describe('redactFlowLog: key-based', () => {
 		expect(result.records[1].other).toBe('fine');
 	});
 
+	test('collapses a sensitive-key value that is a substring of the marker', () => {
+		const result = redactFlowLog({ password: 'redact', token: 'hunter2hunter2' }) as Record<string, unknown>;
+
+		expect(result['password']).toBe('');
+		expect(result['token']).toBe(REDACT_TEXT);
+	});
+
+	test('collapses a sensitive-key value that equals the marker', () => {
+		const result = redactFlowLog({ password: REDACT_TEXT }) as Record<string, unknown>;
+		expect(result['password']).toBe('');
+	});
+
+	test('keeps the marker for a sensitive-key value that is also a sensitive value', () => {
+		const result = redactFlowLog({ authorization: `Bearer ${TOKEN}` }, new Set([`Bearer ${TOKEN}`, TOKEN])) as Record<
+			string,
+			unknown
+		>;
+
+		expect(result['authorization']).toBe(REDACT_TEXT);
+	});
+
 	test('redacts the expanded sensitive-key set under arbitrary parent paths', () => {
 		const result = redactFlowLog({
 			$trigger: {
@@ -218,6 +239,33 @@ describe('redactFlowLog: value-based', () => {
 		const sensitiveValues = new Set([TOKEN]);
 		const result = redactFlowLog({ s: `${TOKEN} and ${TOKEN}` }, sensitiveValues) as { s: string };
 		expect(result.s).toBe(`${REDACT_TEXT} and ${REDACT_TEXT}`);
+	});
+
+	test('replaces the percent-encoded form of a sensitive value', () => {
+		const value = 'sensitive value with spaces';
+		const sensitiveValues = new Set([value]);
+
+		const result = redactFlowLog({ url: `https://example.com/?t=${encodeURIComponent(value)}` }, sensitiveValues) as {
+			url: string;
+		};
+
+		expect(result.url).toBe(`https://example.com/?t=${REDACT_TEXT}`);
+	});
+
+	test('collapses a string when a sensitive value is a substring of the marker', () => {
+		const result = redactFlowLog({ s: 'before redact after' }, new Set(['redact'])) as { s: string };
+		expect(result.s).toBe('');
+	});
+
+	test('replaces a longer sensitive value before a value it contains', () => {
+		const result = redactFlowLog(
+			{ s: `prefixed_${TOKEN} and bare ${TOKEN}` },
+			new Set([`prefixed_${TOKEN}`, TOKEN])
+		) as {
+			s: string;
+		};
+
+		expect(result.s).toBe(`${REDACT_TEXT} and bare ${REDACT_TEXT}`);
 	});
 });
 

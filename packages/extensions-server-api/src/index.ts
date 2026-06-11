@@ -62,7 +62,7 @@ export type ExtensionRequestAuth =
 /** A brokered outbound request. The host owns redirects, timeouts, and policy. */
 export type ExtensionRequest = {
 	url: string;
-	method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+	method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
 	headers?: Record<string, string>;
 	body?: unknown;
 	timeoutMs?: number;
