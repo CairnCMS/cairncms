@@ -1,7 +1,9 @@
 import type { Extension } from '@cairncms/types';
+import express from 'express';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import supertest from 'supertest';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 const { envState, confinedRuntime } = vi.hoisted(() => ({
@@ -16,6 +18,10 @@ const { envState, confinedRuntime } = vi.hoisted(() => ({
 }));
 
 vi.mock('./env.js', () => ({ default: envState, getEnv: () => envState, refreshEnv: () => undefined }));
+
+// registerEndpoint and its siblings build their register context eagerly, and the
+// real getDatabase exits the process when the test env declares no database.
+vi.mock('./database/index.js', () => ({ default: () => ({}) }));
 
 vi.mock('./extensions/confined/supervisor.js', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('./extensions/confined/supervisor.js')>();
@@ -33,7 +39,14 @@ vi.mock('./extensions/confined/supervisor.js', async (importOriginal) => {
 
 	const baseline = async () => ({
 		ok: true,
-		supervisor: { probeLoad: async () => ({ loadable: true }) },
+		supervisor: {
+			probeLoad: async () => ({ loadable: true }),
+			// Echoes the shaped input so binding tests can assert what reached the child.
+			invoke: async (invocation: { input: unknown }) => ({
+				ok: true,
+				value: { status: 200, body: { echoed: invocation.input } },
+			}),
+		},
 		config: { sandbox: { maxArtifactBytes: 8 * 1024 * 1024 }, runtime },
 		posture: {
 			mode: 'auto',
@@ -70,10 +83,19 @@ function writeThrowingEntry(dir: string, file: string, marker: string): void {
 }
 
 /**
- * A complete confined endpoint package the load gate can read: a valid manifest
- * declaring the confined runtime plus the declared source file.
+ * A complete confined endpoint or hook package the load gate can read: a valid
+ * manifest declaring the confined runtime, the declared source file, and for an
+ * endpoint a built entry. The built entry doubles as the never-imported canary:
+ * it throws a marker under Node, where `process` exists, while the probe's
+ * QuickJS guest sees a valid CairnEndpoint config.
  */
-function writeConfinedPackage(dir: string, source: string, name = dir, capabilities?: Record<string, unknown>): void {
+function writeConfinedPackage(
+	dir: string,
+	source: string,
+	name = dir,
+	capabilities?: Record<string, unknown>,
+	type: 'endpoint' | 'hook' = 'endpoint'
+): void {
 	const full = path.join(root, dir);
 	mkdirSync(path.join(full, 'src'), { recursive: true });
 
@@ -83,7 +105,7 @@ function writeConfinedPackage(dir: string, source: string, name = dir, capabilit
 			name,
 			version: '1.0.0',
 			'cairncms:extension': {
-				type: 'endpoint',
+				type,
 				path: 'index.js',
 				source: 'src/index.js',
 				runtime: 'confined-server',
@@ -94,6 +116,16 @@ function writeConfinedPackage(dir: string, source: string, name = dir, capabilit
 	);
 
 	writeFileSync(path.join(full, 'src', 'index.js'), source);
+
+	if (type === 'endpoint') {
+		writeFileSync(
+			path.join(full, 'index.js'),
+			`if (typeof process !== 'undefined') { throw new Error('CONFINED_ENDPOINT_IMPORTED'); }\n` +
+				`var CairnEndpoint = (() => { const handler = async () => ({ body: null }); return { default: { id: ${JSON.stringify(
+					name
+				)}, handler } }; })();\n`
+		);
+	}
 }
 
 /**
@@ -212,8 +244,11 @@ function manager(extensions: Extension[]): ExtensionManager {
 beforeAll(() => {
 	root = mkdtempSync(path.join(tmpdir(), 'cairn-confined-'));
 	envState['EXTENSIONS_PATH'] = root;
-	writeThrowingEntry('confined-endpoint', 'index.js', 'CONFINED_ENDPOINT_IMPORTED');
-	writeConfinedPackage('confined-endpoint', 'export default {};\n');
+
+	writeConfinedPackage('confined-endpoint', 'export default {};\n', 'confined-endpoint', {
+		endpoint: { access: 'public' },
+	});
+
 	writeConfinedPackage('flagged-endpoint', "import { readFile } from 'node:fs/promises';\nexport default {};\n");
 	writeThrowingEntry('control-endpoint', 'index.js', 'CONTROL_ENDPOINT_IMPORTED');
 	writeThrowingEntry('confined-hook', 'index.js', 'CONFINED_HOOK_IMPORTED');
@@ -299,7 +334,7 @@ describe('a confined server extension never reaches the full-authority import pa
 		const diagnostics = (instance as any).getDiagnostics();
 
 		expect(diagnostics.find((entry: any) => entry.name === 'control-endpoint')?.status).toBe('failed');
-		expect(diagnostics.map((entry: any) => entry.name)).not.toContain('confined-endpoint');
+		expect(diagnostics.find((entry: any) => entry.name === 'confined-endpoint')?.status).toBe('loaded');
 		expect((instance as any).confinedEligible.has(confined)).toBe(true);
 	});
 });
@@ -321,7 +356,7 @@ describe('the confined load gate in the loader', () => {
 		expect(JSON.stringify(diagnostics)).not.toContain(root);
 	});
 
-	it('admits a passing confined extension to the eligible set with no diagnostic row', async () => {
+	it('admits a passing confined extension with no gate-time row, then registers it as loaded', async () => {
 		const instance = new ExtensionManager();
 		const confined = endpointExtension('confined-endpoint', 'confined-endpoint', true);
 		(instance as any).getExtensions = async () => [confined];
@@ -329,7 +364,10 @@ describe('the confined load gate in the loader', () => {
 		await (instance as any).load();
 
 		expect((instance as any).confinedEligible.has(confined)).toBe(true);
-		expect((instance as any).getDiagnostics()).toHaveLength(0);
+
+		const diagnostics = (instance as any).getDiagnostics();
+		expect(diagnostics).toHaveLength(1);
+		expect(diagnostics[0]).toMatchObject({ name: 'confined-endpoint', status: 'loaded' });
 	});
 
 	it('carries the gate-validated capabilities into the eligible entry', async () => {
@@ -342,7 +380,10 @@ describe('the confined load gate in the loader', () => {
 
 		await (instance as any).load();
 
-		expect((instance as any).confinedEligible.get(capable)).toEqual({ capabilities });
+		expect((instance as any).confinedEligible.get(capable)).toEqual({
+			capabilities,
+			entrySource: expect.stringContaining('CairnEndpoint'),
+		});
 	});
 
 	it('keeps same-name extensions distinct, so a failing one is never eligible through a passing one', async () => {
@@ -493,11 +534,13 @@ describe('the confined load gate in the loader', () => {
 
 	it('fails closed on a throwing probe without aborting the load of other extensions', async () => {
 		writeConfinedOperationPackage('probe-thrower');
+		writeConfinedPackage('probe-hook-sibling', 'export default {};\n', 'probe-hook-sibling', undefined, 'hook');
 
 		const instance = new ExtensionManager();
 		const operation = operationExtension('probe-thrower', 'probe-thrower', true);
-		const sibling = endpointExtension('confined-endpoint', 'confined-endpoint', true);
-		(instance as any).getExtensions = async () => [operation, sibling];
+		const endpointSibling = endpointExtension('confined-endpoint', 'confined-endpoint', true);
+		const hookSibling = hookExtension('probe-hook-sibling', 'probe-hook-sibling', true);
+		(instance as any).getExtensions = async () => [operation, endpointSibling, hookSibling];
 
 		(instance as any).confinedGateDeps = {
 			probe: async () => {
@@ -507,11 +550,13 @@ describe('the confined load gate in the loader', () => {
 
 		await (instance as any).load();
 
+		// Both probed types fail closed; the scanner-gated hook is untouched.
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'probe-thrower');
 		expect(row?.status).toBe('failed');
 		expect(row?.reason?.code).toBe('validation-incomplete');
 		expect((instance as any).confinedEligible.has(operation)).toBe(false);
-		expect((instance as any).confinedEligible.has(sibling)).toBe(true);
+		expect((instance as any).confinedEligible.has(endpointSibling)).toBe(false);
+		expect((instance as any).confinedEligible.has(hookSibling)).toBe(true);
 	});
 
 	it('surfaces a host-side probe failure as validation-incomplete, not a verdict on the extension', async () => {
@@ -607,5 +652,237 @@ describe('the confined runtime boot', () => {
 
 		const postureLogs = info.mock.calls.filter((call) => String(call[0]).includes('confined OS hardening'));
 		expect(postureLogs).toHaveLength(1);
+	});
+});
+
+describe('the confined endpoint binding', () => {
+	const PUBLIC_CALLER = { user: null, role: null, admin: false };
+
+	function endpointApp(instance: ExtensionManager, accountability: unknown = PUBLIC_CALLER) {
+		const app = express();
+		app.use(express.json());
+
+		app.use((req, _res, next) => {
+			(req as any).accountability = accountability;
+			next();
+		});
+
+		app.use(instance.getEndpointRouter());
+
+		app.use((err: any, _req: any, res: any, _next: any) => {
+			res.status(err.status ?? 500).json({ code: err.code ?? 'INTERNAL' });
+		});
+
+		return app;
+	}
+
+	async function loadedManager(extensions: Extension[]): Promise<ExtensionManager> {
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => extensions;
+		await (instance as any).load();
+		return instance;
+	}
+
+	it('mounts an eligible confined endpoint and serves the shaped request without importing it', async () => {
+		writeConfinedPackage('served-endpoint', 'export default {};\n', 'served-endpoint', {
+			endpoint: { access: 'public' },
+		});
+
+		const instance = await loadedManager([endpointExtension('served-endpoint', 'served-endpoint', true)]);
+
+		const response = await supertest(endpointApp(instance))
+			.post('/served-endpoint/charge')
+			.query({ dry: 'true' })
+			.send({ amount: 12 });
+
+		expect(response.status).toBe(200);
+
+		expect(response.body.echoed).toEqual({
+			method: 'POST',
+			path: '/charge',
+			query: { dry: 'true' },
+			body: { amount: 12 },
+		});
+
+		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'served-endpoint');
+		expect(row?.status).toBe('loaded');
+	});
+
+	it('requires a user under authenticated access and serves one', async () => {
+		writeConfinedPackage('auth-endpoint', 'export default {};\n', 'auth-endpoint', {
+			endpoint: { access: 'authenticated' },
+		});
+
+		const instance = await loadedManager([endpointExtension('auth-endpoint', 'auth-endpoint', true)]);
+
+		const anonymous = await supertest(endpointApp(instance)).get('/auth-endpoint/');
+		expect(anonymous.status).toBe(401);
+
+		const authenticated = await supertest(endpointApp(instance, { user: 'u-1', role: 'r-1', admin: false })).get(
+			'/auth-endpoint/'
+		);
+
+		expect(authenticated.status).toBe(200);
+	});
+
+	it('fails closed on a route collision with an already registered endpoint', async () => {
+		writeConfinedPackage('colliding-endpoint', 'export default {};\n', 'colliding-endpoint', {
+			endpoint: { access: 'public' },
+		});
+
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [endpointExtension('colliding-endpoint', 'colliding-endpoint', true)];
+
+		const originalRegister = (instance as any).registerEndpoints.bind(instance);
+
+		(instance as any).registerEndpoints = async () => {
+			await originalRegister();
+			(instance as any).registeredEndpointRoutes.add('colliding-endpoint');
+		};
+
+		await (instance as any).load();
+
+		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'colliding-endpoint');
+		expect(row?.status).toBe('failed');
+		expect(row?.reason?.code).toBe('route-collision');
+
+		const response = await supertest(endpointApp(instance)).get('/colliding-endpoint/');
+		expect(response.status).toBe(404);
+	});
+
+	it('refuses a route name that is not a safe literal, so a pattern cannot shadow other routes', async () => {
+		for (const [dir, name] of [
+			['evil-param-endpoint', 'evil-:id'],
+			['evil-wildcard-endpoint', 'evil-*'],
+			['evil-group-endpoint', 'evil-(x)'],
+			['evil-case-endpoint', 'Evil-Case'],
+		] as const) {
+			writeConfinedPackage(dir, 'export default {};\n', name, { endpoint: { access: 'public' } });
+
+			const instance = await loadedManager([endpointExtension(dir, name, true)]);
+
+			const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === name);
+			expect(row?.status, name).toBe('failed');
+			expect(row?.reason?.code, name).toBe('route-invalid');
+
+			// The pattern a parameterized name would have mounted must match nothing.
+			const probe = await supertest(endpointApp(instance)).get('/evil-anything/');
+			expect(probe.status, name).toBe(404);
+		}
+	});
+
+	it('collides case-insensitively with an inherited route instead of shadowing it', async () => {
+		writeConfinedPackage('cased-endpoint', 'export default {};\n', 'cased-route', {
+			endpoint: { access: 'public' },
+		});
+
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [endpointExtension('cased-endpoint', 'cased-route', true)];
+
+		const originalRegister = (instance as any).registerEndpoints.bind(instance);
+
+		(instance as any).registerEndpoints = async () => {
+			await originalRegister();
+			// An inherited endpoint registered under a case variant of the same route.
+			(instance as any).registerEndpoint(() => undefined, 'CASED-Route');
+		};
+
+		await (instance as any).load();
+
+		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'cased-route');
+		expect(row?.status).toBe('failed');
+		expect(row?.reason?.code).toBe('route-collision');
+	});
+
+	it('fails both confined endpoints that declare the same route', async () => {
+		writeConfinedPackage('dup-endpoint-a', 'export default {};\n', 'dup-endpoint', { endpoint: { access: 'public' } });
+		writeConfinedPackage('dup-endpoint-b', 'export default {};\n', 'dup-endpoint', { endpoint: { access: 'public' } });
+
+		const instance = await loadedManager([
+			endpointExtension('dup-endpoint-a', 'dup-endpoint', true),
+			endpointExtension('dup-endpoint-b', 'dup-endpoint', true),
+		]);
+
+		const failed = (instance as any)
+			.getDiagnostics()
+			.filter((entry: any) => entry.name === 'dup-endpoint' && entry.reason?.code === 'ambiguous-endpoint');
+
+		expect(failed).toHaveLength(2);
+
+		const response = await supertest(endpointApp(instance)).get('/dup-endpoint/');
+		expect(response.status).toBe(404);
+	});
+
+	it('fails an endpoint that does not declare the endpoint capability', async () => {
+		writeConfinedPackage('capless-endpoint', 'export default {};\n');
+
+		const instance = await loadedManager([endpointExtension('capless-endpoint', 'capless-endpoint', true)]);
+
+		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'capless-endpoint');
+		expect(row?.status).toBe('failed');
+		expect(row?.reason?.code).toBe('capability-missing');
+
+		const response = await supertest(endpointApp(instance)).get('/capless-endpoint/');
+		expect(response.status).toBe(404);
+	});
+
+	it('unload clears the confined route so a stale route cannot survive a reload', async () => {
+		writeConfinedPackage('reload-endpoint', 'export default {};\n', 'reload-endpoint', {
+			endpoint: { access: 'public' },
+		});
+
+		const instance = await loadedManager([endpointExtension('reload-endpoint', 'reload-endpoint', true)]);
+
+		const before = await supertest(endpointApp(instance)).get('/reload-endpoint/');
+		expect(before.status).toBe(200);
+
+		await (instance as any).unload();
+
+		const after = await supertest(endpointApp(instance)).get('/reload-endpoint/');
+		expect(after.status).toBe(404);
+	});
+
+	it('maps a child failure to a sanitized platform error', async () => {
+		confinedRuntime.resolve = async () => ({
+			ok: true,
+			supervisor: {
+				probeLoad: async () => ({ loadable: true }),
+				invoke: async () => ({ ok: false, error: { code: 'timeout', message: 'the json endpoint failed' } }),
+			},
+			config: {
+				sandbox: { maxArtifactBytes: 8 * 1024 * 1024 },
+				runtime: {
+					wallClockMs: 5000,
+					cpuTimeoutMs: 2000,
+					memoryBytes: 64 * 1024 * 1024,
+					stackBytes: 512 * 1024,
+					acquireTimeoutMs: 0,
+					hostCallTimeoutMs: 5000,
+					maxHostCalls: 1000,
+					maxInFlightHostCalls: 16,
+				},
+			},
+			posture: {
+				mode: 'auto',
+				applied: [],
+				missing: [],
+				coreSatisfied: true,
+				decision: 'run',
+				cgroupMechanic: null,
+			},
+		});
+
+		writeConfinedPackage('failing-endpoint', 'export default {};\n', 'failing-endpoint', {
+			endpoint: { access: 'public' },
+		});
+
+		const instance = await loadedManager([endpointExtension('failing-endpoint', 'failing-endpoint', true)]);
+
+		const response = await supertest(endpointApp(instance)).get('/failing-endpoint/');
+
+		expect(response.status).toBe(500);
+		expect(JSON.stringify(response.body)).not.toContain('timeout');
+
+		confinedRuntime.resolve = undefined;
 	});
 });

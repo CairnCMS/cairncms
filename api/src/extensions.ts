@@ -54,7 +54,9 @@ import env from './env.js';
 import * as exceptions from './exceptions/index.js';
 import { getFlowManager, type ConfinedOperationDescriptor } from './flows.js';
 import { runConfinedOperation, type ConfinedOperationRequest } from './extensions/confined/operation.js';
+import { runConfinedEndpoint } from './extensions/confined/endpoint.js';
 import type { ConfinedLogEntry } from './extensions/confined/broker.js';
+import type { ConfinedHostDispatcher, ConfinedInvocation } from './extensions/confined/types.js';
 import { confinedItemsService } from './extensions/confined/items-service.js';
 import type { SandboxConfig } from './extensions/confined/sandbox-limits.js';
 import { getAxios } from './request/index.js';
@@ -130,6 +132,11 @@ const defaultOptions: Options = {
 
 const RELOAD_DEBOUNCE_MS = 250;
 
+// The literal route grammar a confined endpoint name must fit before it becomes an
+// Express mount: a lowercase npm-style name, optionally scoped, with no pattern
+// metacharacters (:, *, ?, +, parentheses) and no case variants.
+const CONFINED_ENDPOINT_ROUTE = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
+
 export class ExtensionManager {
 	private isLoaded = false;
 	private options: Options;
@@ -174,6 +181,10 @@ export class ExtensionManager {
 	private apiEmitter: Emitter;
 	private hookEvents: EventHandler[] = [];
 	private endpointRouter: Router;
+
+	// Every endpoint route mounted this load, inherited and confined, so a confined
+	// endpoint can fail closed on a collision instead of relying on Express order.
+	private registeredEndpointRoutes = new Set<string>();
 	private hookEmbedsHead: string[] = [];
 	private hookEmbedsBody: string[] = [];
 
@@ -455,19 +466,31 @@ export class ExtensionManager {
 		}
 	}
 
+	private confinedRunnerDeps(runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig }) {
+		const { supervisor, config } = runtime;
+
+		return {
+			invoke: (invocation: ConfinedInvocation, dispatcher: ConfinedHostDispatcher) =>
+				supervisor.invoke(invocation, dispatcher),
+			log: (entry: ConfinedLogEntry) => this.logConfinedEntry(entry),
+			getAxios: () => getAxios(),
+			itemsService: confinedItemsService,
+			brokerLimits: {
+				settingsValueBytes: config.sandbox.settingsValueBytes,
+				httpResponseBytes: config.sandbox.httpResponseBytes,
+				itemsReplyBytes: config.sandbox.itemsReplyBytes,
+				templateOutputBytes: config.sandbox.templateOutputBytes,
+			},
+			runtimeLimits: config.runtime,
+		};
+	}
+
 	private buildConfinedDescriptor(
 		extension: Extension,
 		eligible: ConfinedEligibleEntry,
 		runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig }
 	): ConfinedOperationDescriptor {
-		const { supervisor, config } = runtime;
-
-		const brokerLimits = {
-			settingsValueBytes: config.sandbox.settingsValueBytes,
-			httpResponseBytes: config.sandbox.httpResponseBytes,
-			itemsReplyBytes: config.sandbox.itemsReplyBytes,
-			templateOutputBytes: config.sandbox.templateOutputBytes,
-		};
+		const deps = this.confinedRunnerDeps(runtime);
 
 		return {
 			referenceKeys: Object.keys(eligible.optionDelivery ?? {}),
@@ -485,15 +508,135 @@ export class ExtensionManager {
 
 				if (eligible.optionDelivery !== undefined) request.optionDelivery = eligible.optionDelivery;
 
-				return runConfinedOperation(request, {
-					invoke: (invocation, dispatcher) => supervisor.invoke(invocation, dispatcher),
-					log: (entry) => this.logConfinedEntry(entry),
-					getAxios: () => getAxios(),
-					itemsService: confinedItemsService,
-					brokerLimits,
-					runtimeLimits: config.runtime,
-				});
+				return runConfinedOperation(request, deps);
 			},
+		};
+	}
+
+	/**
+	 * Registers the eligible confined endpoints onto the endpoint router without
+	 * importing any server artifact. A route already taken by an inherited endpoint
+	 * or declared by more than one confined endpoint fails closed in diagnostics,
+	 * and an endpoint without the declared endpoint capability never mounts.
+	 */
+	private registerConfinedEndpoints(): void {
+		const runtime = this.confinedRuntime;
+		if (runtime === undefined) return;
+
+		const endpoints = [...this.confinedEligible].filter(([extension]) => extension.type === 'endpoint');
+
+		const counts = new Map<string, number>();
+		for (const [extension] of endpoints) counts.set(extension.name, (counts.get(extension.name) ?? 0) + 1);
+
+		for (const [extension, eligible] of endpoints) {
+			// The name becomes an Express mount, which interprets pattern syntax and
+			// matches case-insensitively. Only a lowercase literal grammar mounts, so a
+			// name cannot smuggle a parameter or wildcard past the literal collision
+			// checks, and the grammar matches the canonical lowercase route key.
+			if (!CONFINED_ENDPOINT_ROUTE.test(extension.name)) {
+				this.recordFailed(extension, {
+					code: 'route-invalid',
+					detail: 'the confined endpoint route name is not a safe literal route',
+				});
+
+				continue;
+			}
+
+			if ((counts.get(extension.name) ?? 0) > 1) {
+				this.recordFailed(extension, {
+					code: 'ambiguous-endpoint',
+					detail: 'a confined endpoint route is declared more than once',
+				});
+
+				continue;
+			}
+
+			if (this.registeredEndpointRoutes.has(extension.name)) {
+				this.recordFailed(extension, {
+					code: 'route-collision',
+					detail: 'the confined endpoint route is already registered',
+				});
+
+				continue;
+			}
+
+			if (eligible.entrySource === undefined) {
+				this.recordFailed(extension, {
+					code: VALIDATION_INCOMPLETE,
+					detail: 'the confined endpoint entry is unavailable',
+				});
+
+				continue;
+			}
+
+			if (eligible.capabilities?.endpoint === undefined) {
+				this.recordFailed(extension, {
+					code: 'capability-missing',
+					detail: 'the endpoint capability is not declared',
+				});
+
+				continue;
+			}
+
+			this.endpointRouter.use(`/${extension.name}`, this.buildConfinedEndpointHandler(extension, eligible, runtime));
+			this.registeredEndpointRoutes.add(extension.name);
+			this.recordLoaded(extension);
+		}
+	}
+
+	private buildConfinedEndpointHandler(
+		extension: Extension,
+		eligible: ConfinedEligibleEntry,
+		runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig }
+	): express.RequestHandler {
+		const deps = this.confinedRunnerDeps(runtime);
+
+		return async (req, res, next) => {
+			try {
+				const result = await runConfinedEndpoint(
+					{
+						extensionId: extension.name,
+						contributionId: extension.name,
+						entrySource: eligible.entrySource!,
+						capabilities: eligible.capabilities ?? {},
+						method: req.method,
+						path: req.path,
+						query: req.query,
+						body: req.body,
+						accountability: req.accountability ?? null,
+					},
+					deps
+				);
+
+				if (result.ok) {
+					res.status(result.status);
+
+					if (req.method === 'HEAD') {
+						res.end();
+						return;
+					}
+
+					res.json(result.body);
+					return;
+				}
+
+				switch (result.failure) {
+					case 'unauthenticated':
+						next(new exceptions.InvalidCredentialsException());
+						return;
+					case 'denied':
+						next(new exceptions.ForbiddenException());
+						return;
+					case 'invalid-request':
+						next(new exceptions.InvalidPayloadException('the request is not a valid json endpoint request'));
+						return;
+					default:
+						next(new Error('the confined endpoint failed'));
+						return;
+				}
+			} catch {
+				next(new Error('the confined endpoint failed'));
+			}
 		};
 	}
 
@@ -634,6 +777,9 @@ export class ExtensionManager {
 		await this.registerOperations();
 		this.registerConfinedOperations();
 		await this.registerBundles();
+		// After every inherited registration, so the collision check sees every
+		// inherited route, bundle entries included.
+		this.registerConfinedEndpoints();
 
 		if (env['SERVE_APP']) {
 			this.appExtensions = await this.generateExtensionBundle();
@@ -1063,6 +1209,9 @@ export class ExtensionManager {
 
 		const scopedRouter = express.Router();
 		this.endpointRouter.use(`/${routeName}`, scopedRouter);
+		// Lowercased, because the router matches case-insensitively: a confined route
+		// must collide with an inherited case variant, not shadow it.
+		this.registeredEndpointRoutes.add(routeName.toLowerCase());
 
 		register(scopedRouter, {
 			services,
@@ -1102,6 +1251,7 @@ export class ExtensionManager {
 		this.hookEvents = [];
 
 		this.endpointRouter.stack = [];
+		this.registeredEndpointRoutes.clear();
 
 		const flowManager = getFlowManager();
 
