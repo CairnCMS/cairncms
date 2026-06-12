@@ -180,7 +180,7 @@ export function defineFlowOperation<Options = Record<string, unknown>, Input = u
 }
 
 export type JsonEndpointRequest<Input = unknown> = {
-	method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+	method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
 	path: string;
 	query: Record<string, string>;
 	body: Input;
@@ -200,3 +200,9 @@ export type JsonEndpointConfig<Input = unknown, Output = unknown> = {
 	id: string;
 	handler: JsonEndpointHandler<Input, Output>;
 };
+
+export function defineJsonEndpoint<Input = unknown, Output = unknown>(
+	config: JsonEndpointConfig<Input, Output>
+): JsonEndpointConfig<Input, Output> {
+	return config;
+}

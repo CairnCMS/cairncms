@@ -8,7 +8,8 @@ import type {
 	ExtensionSettingsClient,
 } from './index.js';
 import * as serverApi from './index.js';
-import { defineFlowOperation } from './index.js';
+import { defineFlowOperation, defineJsonEndpoint } from './index.js';
+import type { JsonEndpointRequest } from './index.js';
 
 const source = readFileSync(fileURLToPath(new URL('./index.ts', import.meta.url)), 'utf-8');
 
@@ -17,10 +18,17 @@ describe('extensions-server-api define helpers', () => {
 		const config = { id: 'x', handler: () => undefined } as any;
 
 		expect(defineFlowOperation(config)).toBe(config);
+		expect(defineJsonEndpoint(config)).toBe(config);
 	});
 
-	it('exposes only the portable identity helper as a runtime export', () => {
-		expect(Object.keys(serverApi).sort()).toEqual(['defineFlowOperation']);
+	it('exposes only the portable identity helpers as runtime exports', () => {
+		expect(Object.keys(serverApi).sort()).toEqual(['defineFlowOperation', 'defineJsonEndpoint']);
+	});
+
+	it('admits every JSON endpoint method including HEAD and OPTIONS', () => {
+		const methods: JsonEndpointRequest['method'][] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+
+		expect(methods).toHaveLength(7);
 	});
 
 	it('models host denials as a structured result rather than a thrown error', () => {

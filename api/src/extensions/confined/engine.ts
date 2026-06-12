@@ -177,7 +177,7 @@ export async function runConfinedEntry(
 
 	if (outcome.kind === 'error') return fail(outcome.error);
 
-	return interpretGuestOutput(outcome.data);
+	return interpretGuestOutput(outcome.data, guestContract(invocation).noun);
 }
 
 /**
@@ -192,24 +192,46 @@ export async function runConfinedLoadProbe(invocation: ConfinedInvocation): Prom
 
 	if (outcome.kind === 'error') return { loadable: false, error: outcome.error };
 
-	return interpretLoadProbeOutput(outcome.data);
+	return interpretLoadProbeOutput(outcome.data, guestContract(invocation).noun);
+}
+
+/**
+ * The guest contract an invocation selects: the global the built entry must
+ * expose, the activation type the context carries, and the noun for messages.
+ */
+function guestContract(invocation: ConfinedInvocation): {
+	globalName: string;
+	activation: 'flow-operation' | 'json-endpoint';
+	noun: string;
+} {
+	if (invocation.activation === 'json-endpoint') {
+		return { globalName: 'CairnEndpoint', activation: 'json-endpoint', noun: 'json endpoint' };
+	}
+
+	return { globalName: 'CairnOperation', activation: 'flow-operation', noun: 'flow operation' };
 }
 
 function buildHarness(invocation: ConfinedInvocation): string {
-	const options = JSON.stringify(invocation.options);
-	const input = JSON.stringify(invocation.input);
+	const contract = guestContract(invocation);
 	const accountability = JSON.stringify(invocation.accountability ?? null);
 	const extensionId = JSON.stringify(invocation.extensionId);
 	const contributionId = JSON.stringify(invocation.contributionId);
 
+	// An operation handler receives `{ options, input }`, a json endpoint handler
+	// receives the shaped request carried in `input`.
+	const payload =
+		contract.activation === 'json-endpoint'
+			? JSON.stringify(invocation.input)
+			: `{ options: ${JSON.stringify(invocation.options)}, input: ${JSON.stringify(invocation.input)} }`;
+
 	return `
 		${invocation.entrySource}
 		const __config =
-			(typeof CairnOperation !== 'undefined' && CairnOperation.default)
-				? CairnOperation.default
-				: (typeof CairnOperation !== 'undefined' ? CairnOperation : undefined);
+			(typeof ${contract.globalName} !== 'undefined' && ${contract.globalName}.default)
+				? ${contract.globalName}.default
+				: (typeof ${contract.globalName} !== 'undefined' ? ${contract.globalName} : undefined);
 		if (!__config || typeof __config.handler !== 'function') {
-			throw new Error('entry default export is not a flow operation config with a function handler');
+			throw new Error('entry default export is not a ${contract.noun} config with a function handler');
 		}
 		const host = {
 			log: {
@@ -231,11 +253,11 @@ function buildHarness(invocation: ConfinedInvocation): string {
 		const __context = {
 			extensionId: ${extensionId},
 			contributionId: ${contributionId},
-			activation: { type: 'flow-operation' },
+			activation: { type: ${JSON.stringify(contract.activation)} },
 			accountability: ${accountability},
 			host,
 		};
-		const __payload = { options: ${options}, input: ${input} };
+		const __payload = ${payload};
 		const __run = async () => {
 			if (__config.id !== ${contributionId}) return { kind: 'identity-mismatch' };
 			let value;
@@ -265,14 +287,15 @@ function buildHarness(invocation: ConfinedInvocation): string {
  * type-check it, so probing an entry can have no handler side effect.
  */
 function buildLoadProbeHarness(invocation: ConfinedInvocation): string {
+	const contract = guestContract(invocation);
 	const contributionId = JSON.stringify(invocation.contributionId);
 
 	return `
 		${invocation.entrySource}
 		const __config =
-			(typeof CairnOperation !== 'undefined' && CairnOperation.default)
-				? CairnOperation.default
-				: (typeof CairnOperation !== 'undefined' ? CairnOperation : undefined);
+			(typeof ${contract.globalName} !== 'undefined' && ${contract.globalName}.default)
+				? ${contract.globalName}.default
+				: (typeof ${contract.globalName} !== 'undefined' ? ${contract.globalName} : undefined);
 		const __verdict = () => {
 			if (!__config || typeof __config.handler !== 'function') return { kind: 'invalid-entry' };
 			if (__config.id !== ${contributionId}) return { kind: 'identity-mismatch' };
@@ -282,10 +305,10 @@ function buildLoadProbeHarness(invocation: ConfinedInvocation): string {
 	`;
 }
 
-function interpretLoadProbeOutput(data: unknown): ConfinedLoadProbeResult {
+function interpretLoadProbeOutput(data: unknown, noun: string): ConfinedLoadProbeResult {
 	const unreadable: ConfinedLoadProbeResult = {
 		loadable: false,
-		error: { code: 'invalid-entry', message: 'the operation entry could not be evaluated' },
+		error: { code: 'invalid-entry', message: `the ${noun} entry could not be evaluated` },
 	};
 
 	if (typeof data !== 'string') return unreadable;
@@ -303,23 +326,23 @@ function interpretLoadProbeOutput(data: unknown): ConfinedLoadProbeResult {
 	if (envelope.kind === 'identity-mismatch') {
 		return {
 			loadable: false,
-			error: { code: 'identity-mismatch', message: 'the operation id does not match its contribution' },
+			error: { code: 'identity-mismatch', message: `the ${noun} id does not match its contribution` },
 		};
 	}
 
 	if (envelope.kind === 'invalid-entry') {
 		return {
 			loadable: false,
-			error: { code: 'invalid-entry', message: 'the entry is not a flow operation config with a function handler' },
+			error: { code: 'invalid-entry', message: `the entry is not a ${noun} config with a function handler` },
 		};
 	}
 
 	return unreadable;
 }
 
-function interpretGuestOutput(data: unknown): ConfinedResult {
+function interpretGuestOutput(data: unknown, noun: string): ConfinedResult {
 	if (typeof data !== 'string') {
-		return fail({ code: 'invalid-result', message: 'the operation produced an unreadable result' });
+		return fail({ code: 'invalid-result', message: `the ${noun} produced an unreadable result` });
 	}
 
 	let envelope: { kind?: unknown; value?: unknown; message?: unknown };
@@ -327,30 +350,30 @@ function interpretGuestOutput(data: unknown): ConfinedResult {
 	try {
 		envelope = JSON.parse(data);
 	} catch {
-		return fail({ code: 'invalid-result', message: 'the operation produced an unreadable result' });
+		return fail({ code: 'invalid-result', message: `the ${noun} produced an unreadable result` });
 	}
 
 	if (envelope.kind === 'ok') {
 		try {
 			return { ok: true, value: JSON.parse(String(envelope.value)) };
 		} catch {
-			return fail({ code: 'invalid-result', message: 'the operation result is not JSON-serializable' });
+			return fail({ code: 'invalid-result', message: `the ${noun} result is not JSON-serializable` });
 		}
 	}
 
 	if (envelope.kind === 'guest-error') {
-		return fail({ code: 'guest-error', message: 'the operation failed' });
+		return fail({ code: 'guest-error', message: `the ${noun} failed` });
 	}
 
 	if (envelope.kind === 'identity-mismatch') {
-		return fail({ code: 'identity-mismatch', message: 'the operation id does not match its contribution' });
+		return fail({ code: 'identity-mismatch', message: `the ${noun} id does not match its contribution` });
 	}
 
 	if (envelope.kind === 'invalid-result') {
-		return fail({ code: 'invalid-result', message: 'the operation result is not JSON-serializable' });
+		return fail({ code: 'invalid-result', message: `the ${noun} result is not JSON-serializable` });
 	}
 
-	return fail({ code: 'internal', message: 'the operation produced an unexpected result' });
+	return fail({ code: 'internal', message: `the ${noun} produced an unexpected result` });
 }
 
 /**

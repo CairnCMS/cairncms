@@ -184,7 +184,7 @@ describe('runConfinedEntry', () => {
 
 		if (!result.ok) {
 			expect(result.error.code).toBe('guest-error');
-			expect(result.error.message).toBe('the operation failed');
+			expect(result.error.message).toBe('the flow operation failed');
 			expect(result.error.message).not.toContain('boom');
 			expect(result.error.message).not.toContain('sk_live_leaked_secret');
 		}
@@ -419,4 +419,84 @@ describe('runtime memory ceiling per job', () => {
 		const small = await run(invocation(entry(allocLarge), { limits: { ...LIMITS, memoryBytes: 16 * 1024 * 1024 } }));
 		expect(small.ok).toBe(false);
 	}, 20_000);
+});
+
+function endpointEntry(handlerBody: string): string {
+	return `var CairnEndpoint = (() => { const handler = ${handlerBody}; return { default: { id: 'json-endpoint.test', handler } }; })();`;
+}
+
+function endpointInvocation(entrySource: string, overrides: Partial<ConfinedInvocation> = {}): ConfinedInvocation {
+	return invocation(entrySource, {
+		activation: 'json-endpoint',
+		contributionId: 'json-endpoint.test',
+		operationId: 'json-endpoint.test',
+		...overrides,
+	});
+}
+
+describe('runConfinedEntry under the json-endpoint contract', () => {
+	it('hands the handler the shaped request and the json-endpoint activation', async () => {
+		const result = await run(
+			endpointInvocation(
+				endpointEntry(
+					'async (request, context) => ({ status: 201, body: { request, activation: context.activation } })'
+				),
+				{ input: { method: 'POST', path: '/charge', query: { dry: 'true' }, body: { amount: 12 } } }
+			)
+		);
+
+		expect(result).toEqual({
+			ok: true,
+			value: {
+				status: 201,
+				body: {
+					request: { method: 'POST', path: '/charge', query: { dry: 'true' }, body: { amount: 12 } },
+					activation: { type: 'json-endpoint' },
+				},
+			},
+		});
+	});
+
+	it('refuses an operation-shaped entry under the endpoint contract', async () => {
+		const result = await run(endpointInvocation(entry('() => ({})')));
+		expect(result).toMatchObject({ ok: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('enforces the identity contract for endpoints', async () => {
+		const wrongId = `var CairnEndpoint = { default: { id: 'someone-else', handler: () => ({ body: null }) } };`;
+		const result = await run(endpointInvocation(wrongId));
+		expect(result).toMatchObject({ ok: false, error: { code: 'identity-mismatch' } });
+	});
+
+	it('sanitizes a guest throw with the endpoint wording', async () => {
+		const result = await run(endpointInvocation(endpointEntry('() => { throw new Error("boom sk_live_leak"); }')));
+
+		expect(result.ok).toBe(false);
+
+		if (!result.ok) {
+			expect(result.error.code).toBe('guest-error');
+			expect(result.error.message).toBe('the json endpoint failed');
+			expect(result.error.message).not.toContain('sk_live_leak');
+		}
+	});
+});
+
+describe('runConfinedLoadProbe under the json-endpoint contract', () => {
+	it('probes a json endpoint entry loadable without invoking the handler', async () => {
+		const probed = await runConfinedLoadProbe(
+			endpointInvocation(endpointEntry('() => { throw new Error("HANDLER_MUST_NOT_RUN"); }'))
+		);
+
+		expect(probed).toEqual({ loadable: true });
+	});
+
+	it('refuses an operation-shaped entry probed as an endpoint', async () => {
+		const probed = await runConfinedLoadProbe(endpointInvocation(entry('() => ({})')));
+		expect(probed).toMatchObject({ loadable: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('keeps the operation contract when the activation is absent', async () => {
+		const probed = await runConfinedLoadProbe(invocation(entry('() => ({})')));
+		expect(probed).toEqual({ loadable: true });
+	});
 });

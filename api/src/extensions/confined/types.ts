@@ -32,10 +32,15 @@ export interface ConfinedAccountability {
 export interface ConfinedInvocation {
 	extensionId: string;
 	contributionId: string;
+	// The invocation owner carried into every host-call context: the flow operation
+	// row id for an operation, the contribution id for an endpoint.
 	operationId: string;
+	// Selects the guest contract the engine builds. Absent means flow-operation.
+	activation?: 'flow-operation' | 'json-endpoint';
 	// The built server entry the engine evaluates.
 	entrySource: string;
 	options: Record<string, unknown>;
+	// The flow `$last` for an operation, the shaped JSON request for an endpoint.
 	input: unknown;
 	accountability: ConfinedAccountability | null;
 	limits: ConfinedRuntimeLimits;
