@@ -12,7 +12,7 @@ import extractCookieSession from '../middleware/extract-cookie-session.js';
 import useCollection from '../middleware/use-collection.js';
 import { AssetsService } from '../services/assets.js';
 import { PayloadService } from '../services/payload.js';
-import type { TransformationParams } from '../types/assets.js';
+import type { TransformationFormat, TransformationParams } from '../types/assets.js';
 import { TransformationMethods } from '../types/assets.js';
 import asyncHandler from '../utils/async-handler.js';
 import { getCacheControlHeader } from '../utils/get-cache-headers.js';
@@ -146,26 +146,21 @@ router.get(
 
 		const vary = ['Origin', 'Cache-Control'];
 
-		const selectedTransformation: TransformationParams = res.locals['transformation'].key
+		const transformationParams: TransformationParams = res.locals['transformation'].key
 			? (res.locals['shortcuts'] as TransformationParams[]).find(
 					(transformation) => transformation['key'] === res.locals['transformation'].key
 			  )
 			: res.locals['transformation'];
 
-		const transformation: TransformationParams = { ...selectedTransformation };
+		let acceptFormat: TransformationFormat | undefined;
 
-		if (transformation.format === 'auto') {
-			let format: Exclude<TransformationParams['format'], 'auto'>;
-
+		if (transformationParams.format === 'auto') {
 			if (req.headers.accept?.includes('image/avif')) {
-				format = 'avif';
+				acceptFormat = 'avif';
 			} else if (req.headers.accept?.includes('image/webp')) {
-				format = 'webp';
-			} else {
-				format = 'jpg';
+				acceptFormat = 'webp';
 			}
 
-			transformation.format = format;
 			vary.push('Accept');
 		}
 
@@ -190,7 +185,7 @@ router.get(
 		}
 
 		if (req.method.toLowerCase() === 'head') {
-			const { file, stat } = await service.statAsset(id, transformation, range);
+			const { file, stat } = await service.statAsset(id, { transformationParams, acceptFormat }, range);
 
 			const filename = req.params['filename'] ?? file.filename_download;
 			res.attachment(filename);
@@ -219,7 +214,7 @@ router.get(
 			return res.end();
 		}
 
-		const { stream, file, stat } = await service.getAsset(id, transformation, range);
+		const { stream, file, stat } = await service.getAsset(id, { transformationParams, acceptFormat }, range);
 
 		const filename = req.params['filename'] ?? file.filename_download;
 		res.attachment(filename);

@@ -27,7 +27,7 @@ const inputFile: File = {
 
 describe('resolvePreset', () => {
 	test('does not mutate input.transforms on a single call', () => {
-		const inputData: TransformationParams = {
+		const transformationParams: TransformationParams = {
 			key: 'system-small-cover',
 			format: 'jpg',
 			transforms: [
@@ -42,9 +42,9 @@ describe('resolvePreset', () => {
 			],
 		};
 
-		resolvePreset(inputData, inputFile);
+		resolvePreset({ transformationParams }, inputFile);
 
-		expect(inputData.transforms).toStrictEqual([
+		expect(transformationParams.transforms).toStrictEqual([
 			[
 				'resize',
 				{
@@ -57,7 +57,7 @@ describe('resolvePreset', () => {
 	});
 
 	test('does not accumulate transforms in input across repeated calls', () => {
-		const inputData: TransformationParams = {
+		const transformationParams: TransformationParams = {
 			key: 'system-small-cover',
 			format: 'jpg',
 			transforms: [
@@ -72,13 +72,13 @@ describe('resolvePreset', () => {
 			],
 		};
 
-		resolvePreset(inputData, inputFile);
-		resolvePreset(inputData, inputFile);
-		resolvePreset(inputData, inputFile);
+		resolvePreset({ transformationParams }, inputFile);
+		resolvePreset({ transformationParams }, inputFile);
+		resolvePreset({ transformationParams }, inputFile);
 
-		expect(inputData.transforms).toHaveLength(1);
+		expect(transformationParams.transforms).toHaveLength(1);
 
-		expect(inputData.transforms).toStrictEqual([
+		expect(transformationParams.transforms).toStrictEqual([
 			[
 				'resize',
 				{
@@ -91,7 +91,7 @@ describe('resolvePreset', () => {
 	});
 
 	test('Add toFormat transformation', () => {
-		const inputData: TransformationParams = {
+		const transformationParams: TransformationParams = {
 			key: 'system-small-cover',
 			format: 'jpg',
 			quality: 80,
@@ -107,7 +107,7 @@ describe('resolvePreset', () => {
 			],
 		};
 
-		const output = resolvePreset(inputData, inputFile);
+		const output = resolvePreset({ transformationParams }, inputFile);
 
 		expect(output).toStrictEqual([
 			[
@@ -123,14 +123,14 @@ describe('resolvePreset', () => {
 	});
 
 	test('Add resize transformation', () => {
-		const inputData: TransformationParams = {
+		const transformationParams: TransformationParams = {
 			key: 'system-small-cover',
 			width: 64,
 			height: 64,
 			fit: 'cover',
 		};
 
-		const output = resolvePreset(inputData, inputFile);
+		const output = resolvePreset({ transformationParams }, inputFile);
 
 		expect(output).toStrictEqual([
 			[
@@ -143,6 +143,50 @@ describe('resolvePreset', () => {
 				},
 			],
 		]);
+	});
+
+	test('Resolve auto format (fallback)', () => {
+		const transformationParams: TransformationParams = {
+			format: 'auto',
+		};
+
+		const output = resolvePreset({ transformationParams }, inputFile);
+
+		expect(output).toStrictEqual([['toFormat', 'jpg', { quality: undefined }]]);
+	});
+
+	test('Resolve auto format (with accept header)', () => {
+		const transformationParams: TransformationParams = {
+			format: 'auto',
+		};
+
+		const output = resolvePreset({ transformationParams, acceptFormat: 'avif' }, inputFile);
+
+		expect(output).toStrictEqual([['toFormat', 'avif', { quality: undefined }]]);
+	});
+
+	test('Resolve auto format (format with transparency support)', () => {
+		const transformationParams: TransformationParams = {
+			format: 'auto',
+		};
+
+		const inputFileAvif = { ...inputFile, type: 'image/avif' };
+
+		const output = resolvePreset({ transformationParams }, inputFileAvif);
+
+		expect(output).toStrictEqual([['toFormat', 'png', { quality: undefined }]]);
+	});
+
+	test('Resolve auto format (original type)', () => {
+		const transformationParams: TransformationParams = {
+			format: 'auto',
+		};
+
+		const inputFilePng = { ...inputFile, type: 'image/png' };
+
+		const output = resolvePreset({ transformationParams }, inputFilePng);
+
+		expect(output).toStrictEqual([['toFormat', 'png', { quality: undefined }]]);
 	});
 });
 

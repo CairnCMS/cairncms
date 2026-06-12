@@ -250,13 +250,14 @@ Each entry is `[<operation>, <args>?]`. The operation set covers the Sharp libra
 
 ### Format auto-negotiation
 
-`format=auto` selects the output format based on the request's `Accept` header:
+`format=auto` selects the output format based on the request's `Accept` header and the source image:
 
 - AVIF if the client advertises `image/avif`.
 - WebP if the client advertises `image/webp` and not AVIF.
-- JPEG otherwise.
+- PNG if the client advertises neither and the source format supports transparency (AVIF, WebP, TIFF), so alpha channels survive the conversion.
+- The source's own format otherwise.
 
-This is the right default for modern browsers. The response includes `Vary: Accept` so caches and CDNs return the right variant per client.
+Sources with an unknown or unsupported type are not transformed at all; the original file is served unmodified. Modern browsers get the efficient formats; everything else gets an image that still looks like the original. PNG output is larger than JPEG, so clients that previously received the JPEG fallback may see bigger responses. The response includes `Vary: Accept` so caches and CDNs return the right variant per client.
 
 ### Project-level transform policy
 

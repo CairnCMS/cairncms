@@ -2,7 +2,7 @@ import type { Accountability, Aggregate, Permission, SchemaOverview } from '@cai
 import knex from 'knex';
 import { describe, expect, it } from 'vitest';
 import { InvalidQueryException } from '../exceptions/invalid-query.js';
-import applyQuery, { applySearch, applySort, validateGroupOperands } from './apply-query.js';
+import applyQuery, { applyFilter, applySearch, applySort, validateGroupOperands } from './apply-query.js';
 
 const PUBLIC_ROLE_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -377,6 +377,62 @@ describe('applySort — unknown column validation', () => {
 
 		it('accepts multiple known fields', () => {
 			expect(() => callApplySort(['title', '-rank'])).not.toThrow();
+		});
+	});
+});
+
+describe('applyFilter — unknown field validation', () => {
+	function callApplyFilter(filter: Record<string, any>) {
+		const dbQuery = makeBuilder();
+		const knexInstance = knex.default({ client: 'sqlite3', useNullAsDefault: true });
+		return applyFilter(knexInstance, makeRelationalSchema(), dbQuery, filter, 'notes', {});
+	}
+
+	describe('bug-exposing — unknown filter fields raise InvalidQueryException', () => {
+		it('throws InvalidQueryException for an unknown top-level filter key', () => {
+			expect(() => callApplyFilter({ nonexistent: { _eq: 'x' } })).toThrow(InvalidQueryException);
+		});
+
+		it('throws InvalidQueryException for an unknown key nested under a relation', () => {
+			expect(() => callApplyFilter({ author: { nonexistent: { _eq: 'x' } } })).toThrow(InvalidQueryException);
+		});
+
+		it('error message names the unknown key', () => {
+			expect(() => callApplyFilter({ nonexistent: { _eq: 'x' } })).toThrow(/nonexistent/);
+		});
+	});
+
+	describe('regression — valid filters continue to apply', () => {
+		it('accepts a known top-level field filter', () => {
+			expect(() => callApplyFilter({ title: { _eq: 'hello' } })).not.toThrow();
+		});
+
+		it('accepts a known nested relational field filter', () => {
+			expect(() => callApplyFilter({ author: { name: { _eq: 'Ada' } } })).not.toThrow();
+		});
+	});
+});
+
+describe('applySort — nested relational sort validation', () => {
+	function callApplySort(sort: string[]) {
+		const dbQuery = makeBuilder();
+		const knexInstance = knex.default({ client: 'sqlite3', useNullAsDefault: true });
+		return applySort(knexInstance, makeRelationalSchema(), dbQuery, sort, 'notes', {});
+	}
+
+	describe('bug-exposing — unknown nested sort targets raise InvalidQueryException', () => {
+		it('throws InvalidQueryException for an unknown field on the related collection', () => {
+			expect(() => callApplySort(['author.nonexistent'])).toThrow(InvalidQueryException);
+		});
+
+		it('error message names the unknown sort target', () => {
+			expect(() => callApplySort(['author.nonexistent'])).toThrow(/nonexistent/);
+		});
+	});
+
+	describe('regression — valid nested sorts continue to work', () => {
+		it('accepts a known field on the related collection', () => {
+			expect(() => callApplySort(['author.name'])).not.toThrow();
 		});
 	});
 });
