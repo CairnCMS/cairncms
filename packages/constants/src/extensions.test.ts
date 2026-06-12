@@ -113,6 +113,65 @@ describe('ExtensionOptions confined opt-in', () => {
 		expect(ExtensionOptions.safeParse({ ...appOption, capabilities }).success).toBe(false);
 	});
 
+	it('accepts optionDelivery on a confined operation and requires the confined runtime', () => {
+		const optionDelivery = { apiKey: { delivery: 'reference' } };
+
+		expect(ExtensionOptions.safeParse({ ...hybridOption, runtime: 'confined-server', optionDelivery }).success).toBe(
+			true
+		);
+
+		expect(ExtensionOptions.safeParse({ ...hybridOption, optionDelivery }).success).toBe(false);
+	});
+
+	it('rejects a malformed option delivery shape', () => {
+		const base = { ...hybridOption, runtime: 'confined-server' as const };
+
+		expect(ExtensionOptions.safeParse({ ...base, optionDelivery: { apiKey: { delivery: 'raw' } } }).success).toBe(
+			false
+		);
+
+		expect(ExtensionOptions.safeParse({ ...base, optionDelivery: { apiKey: { delivery: 'brokered' } } }).success).toBe(
+			false
+		);
+
+		expect(ExtensionOptions.safeParse({ ...base, optionDelivery: { apiKey: 'reference' } }).success).toBe(false);
+
+		expect(
+			ExtensionOptions.safeParse({ ...base, optionDelivery: { apiKey: { delivery: 'reference', extra: true } } })
+				.success
+		).toBe(false);
+	});
+
+	it('rejects optionDelivery anywhere but a top-level operation rather than stripping it', () => {
+		const optionDelivery = { apiKey: { delivery: 'reference' } };
+
+		expect(ExtensionOptions.safeParse({ ...appOption, optionDelivery }).success, 'app').toBe(false);
+		expect(ExtensionOptions.safeParse({ ...apiOption, optionDelivery }).success, 'endpoint').toBe(false);
+
+		expect(ExtensionOptions.safeParse({ ...apiOption, type: 'hook', optionDelivery }).success, 'hook').toBe(false);
+
+		expect(
+			ExtensionOptions.safeParse({ ...bundleOption, runtime: 'confined-server', optionDelivery }).success,
+			'bundle root'
+		).toBe(false);
+
+		expect(
+			ExtensionOptions.safeParse({
+				...bundleOption,
+				runtime: 'confined-server',
+				entries: [
+					{
+						type: 'operation',
+						name: 'my-operation',
+						source: { app: 'src/app.js', api: 'src/api.js' },
+						optionDelivery,
+					},
+				],
+			}).success,
+			'bundle operation entry'
+		).toBe(false);
+	});
+
 	it('rejects every runtime value that is not confined-server', () => {
 		for (const runtime of ['full-authority-server', 'browser', 'config', 'external-service']) {
 			expect(ExtensionOptions.safeParse({ ...apiOption, runtime }).success, runtime).toBe(false);

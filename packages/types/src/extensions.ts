@@ -2,6 +2,7 @@ import type {
 	API_EXTENSION_TYPES,
 	APP_EXTENSION_TYPES,
 	BUNDLE_EXTENSION_TYPES,
+	ConfinedOptionDeliverySchema,
 	ConfinedRuntimeSchema,
 	EXTENSION_TYPES,
 	ExtensionCapabilitiesSchema,
@@ -42,6 +43,8 @@ export type SplitEntrypoint = z.infer<typeof SplitEntrypoint>;
 export type ConfinedRuntime = z.infer<typeof ConfinedRuntimeSchema>;
 
 export type ExtensionCapabilities = z.infer<typeof ExtensionCapabilitiesSchema>;
+
+export type ConfinedOptionDelivery = z.infer<typeof ConfinedOptionDeliverySchema>;
 
 type ExtensionBase = {
 	path: string;

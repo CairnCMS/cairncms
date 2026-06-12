@@ -9,7 +9,7 @@ import type { ExtensionValidationReason, ExtensionValidationReasonCode } from '@
 import { scanCandidateSource } from '@cairncms/extensions/node';
 import { readFileCapped } from '@cairncms/extensions/node/capped-read';
 import { classifyEntryPath } from '@cairncms/extensions/node/entry-integrity';
-import type { Extension, ExtensionCapabilities, ExtensionOptions } from '@cairncms/types';
+import type { ConfinedOptionDelivery, Extension, ExtensionCapabilities, ExtensionOptions } from '@cairncms/types';
 import { isTypeIn } from '@cairncms/utils';
 import path from 'node:path';
 import type { SanitizedExtensionError } from '../../utils/sanitize-extension-error.js';
@@ -39,6 +39,11 @@ export type ConfinedEligibleEntry = {
 	entrySource?: string;
 	capabilities?: ExtensionCapabilities;
 	entryCapabilities?: Record<string, ExtensionCapabilities>;
+	// The operation option keys the manifest declares as opaque references. The
+	// binding mints a per-invocation handle for each and never sends its clear value
+	// to the guest. Top-level operations only here; bundle operation entries carry
+	// their own delivery with the bundle binding.
+	optionDelivery?: ConfinedOptionDelivery;
 };
 
 export type ConfinedGateVerdict =
@@ -112,7 +117,14 @@ function matchesDiscovered(extension: Extension, manifestName: string, options: 
  */
 function collectCapabilities(options: ExtensionOptions): ConfinedEligibleEntry | null {
 	if (isTypeIn(options, API_EXTENSION_TYPES) || isTypeIn(options, HYBRID_EXTENSION_TYPES)) {
-		return options.capabilities === undefined ? {} : { capabilities: options.capabilities };
+		const entry: ConfinedEligibleEntry = {};
+		if (options.capabilities !== undefined) entry.capabilities = options.capabilities;
+
+		if (isTypeIn(options, HYBRID_EXTENSION_TYPES) && options.optionDelivery !== undefined) {
+			entry.optionDelivery = options.optionDelivery;
+		}
+
+		return entry;
 	}
 
 	if (options.type === 'bundle') {

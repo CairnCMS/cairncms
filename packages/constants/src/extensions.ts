@@ -106,6 +106,13 @@ export const ExtensionCapabilitiesSchema = z
 	.partial()
 	.strict();
 
+// Per-key delivery for a confined operation's sensitive options. A declared key
+// reaches the guest only as an opaque reference the host resolves on brokered use,
+// never as a clear configured value, while an undeclared key is an ordinary JSON
+// option. Only 'reference' is defined: a host-side 'brokered' mode with no guest
+// handle has no operation consumer yet.
+export const ConfinedOptionDeliverySchema = z.record(z.object({ delivery: z.enum(['reference']) }).strict());
+
 export const CONFINED_RUNTIME = 'confined-server';
 
 export const ConfinedRuntimeSchema = z.literal(CONFINED_RUNTIME);
@@ -132,12 +139,23 @@ function rejectConfinedDeclaration(
 	}
 }
 
-function requireConfinedForCapabilities(value: { runtime?: unknown; capabilities?: unknown }, ctx: z.RefinementCtx) {
+function requireConfinedForCapabilities(
+	value: { runtime?: unknown; capabilities?: unknown; optionDelivery?: unknown },
+	ctx: z.RefinementCtx
+) {
 	if (value.capabilities !== undefined && value.runtime !== CONFINED_RUNTIME) {
 		ctx.addIssue({
 			code: z.ZodIssueCode.custom,
 			path: ['capabilities'],
 			message: `capabilities require runtime: ${CONFINED_RUNTIME}`,
+		});
+	}
+
+	if (value.optionDelivery !== undefined && value.runtime !== CONFINED_RUNTIME) {
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			path: ['optionDelivery'],
+			message: `optionDelivery requires runtime: ${CONFINED_RUNTIME}`,
 		});
 	}
 }
@@ -155,6 +173,21 @@ function rejectBundleEntryRuntime(value: { runtime?: unknown }, ctx: z.Refinemen
 	}
 }
 
+/**
+ * Rejects a misplaced optionDelivery declaration. The unsupported schemas capture
+ * the field rather than strip it, so a sensitive-option declaration in the wrong
+ * place fails closed here instead of vanishing and reaching the guest clear.
+ */
+function rejectOptionDelivery(value: { optionDelivery?: unknown }, ctx: z.RefinementCtx, subject: string) {
+	if (value.optionDelivery !== undefined) {
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			path: ['optionDelivery'],
+			message: `${subject} may not declare optionDelivery`,
+		});
+	}
+}
+
 const BUNDLE_SERVER_ENTRY_TYPES = new Set<string>([...API_EXTENSION_TYPES, ...HYBRID_EXTENSION_TYPES]);
 
 export const ExtensionOptionsBundleEntry = z.union([
@@ -165,9 +198,11 @@ export const ExtensionOptionsBundleEntry = z.union([
 			source: z.string(),
 			runtime: ConfinedRuntimeSchema.optional(),
 			capabilities: ExtensionCapabilitiesSchema.optional(),
+			optionDelivery: z.unknown().optional(),
 		})
 		.superRefine((value, ctx) => {
 			rejectBundleEntryRuntime(value, ctx);
+			rejectOptionDelivery(value, ctx, 'app entries in a bundle');
 
 			if (value.capabilities !== undefined) {
 				ctx.addIssue({
@@ -184,8 +219,12 @@ export const ExtensionOptionsBundleEntry = z.union([
 			source: z.string(),
 			runtime: ConfinedRuntimeSchema.optional(),
 			capabilities: ExtensionCapabilitiesSchema.optional(),
+			optionDelivery: z.unknown().optional(),
 		})
-		.superRefine(rejectBundleEntryRuntime),
+		.superRefine((value, ctx) => {
+			rejectBundleEntryRuntime(value, ctx);
+			rejectOptionDelivery(value, ctx, 'endpoint and hook entries in a bundle');
+		}),
 	z
 		.object({
 			type: z.enum(HYBRID_EXTENSION_TYPES),
@@ -193,8 +232,12 @@ export const ExtensionOptionsBundleEntry = z.union([
 			source: SplitEntrypoint,
 			runtime: ConfinedRuntimeSchema.optional(),
 			capabilities: ExtensionCapabilitiesSchema.optional(),
+			optionDelivery: z.unknown().optional(),
 		})
-		.superRefine(rejectBundleEntryRuntime),
+		.superRefine((value, ctx) => {
+			rejectBundleEntryRuntime(value, ctx);
+			rejectOptionDelivery(value, ctx, 'a bundle operation entry');
+		}),
 ]);
 
 export const ExtensionOptionsBase = z.object({
@@ -209,8 +252,12 @@ export const ExtensionOptionsApp = z
 		source: z.string(),
 		runtime: ConfinedRuntimeSchema.optional(),
 		capabilities: ExtensionCapabilitiesSchema.optional(),
+		optionDelivery: z.unknown().optional(),
 	})
-	.superRefine((value, ctx) => rejectConfinedDeclaration(value, ctx, 'app extension types'));
+	.superRefine((value, ctx) => {
+		rejectConfinedDeclaration(value, ctx, 'app extension types');
+		rejectOptionDelivery(value, ctx, 'app extension types');
+	});
 
 export const ExtensionOptionsApi = z
 	.object({
@@ -219,8 +266,12 @@ export const ExtensionOptionsApi = z
 		source: z.string(),
 		runtime: ConfinedRuntimeSchema.optional(),
 		capabilities: ExtensionCapabilitiesSchema.optional(),
+		optionDelivery: z.unknown().optional(),
 	})
-	.superRefine(requireConfinedForCapabilities);
+	.superRefine((value, ctx) => {
+		requireConfinedForCapabilities(value, ctx);
+		rejectOptionDelivery(value, ctx, 'endpoint and hook extensions');
+	});
 
 export const ExtensionOptionsHybrid = z
 	.object({
@@ -229,6 +280,7 @@ export const ExtensionOptionsHybrid = z
 		source: SplitEntrypoint,
 		runtime: ConfinedRuntimeSchema.optional(),
 		capabilities: ExtensionCapabilitiesSchema.optional(),
+		optionDelivery: ConfinedOptionDeliverySchema.optional(),
 	})
 	.superRefine(requireConfinedForCapabilities);
 
@@ -239,8 +291,11 @@ export const ExtensionOptionsBundle = z
 		entries: z.array(ExtensionOptionsBundleEntry),
 		runtime: ConfinedRuntimeSchema.optional(),
 		capabilities: ExtensionCapabilitiesSchema.optional(),
+		optionDelivery: z.unknown().optional(),
 	})
 	.superRefine((value, ctx) => {
+		rejectOptionDelivery(value, ctx, 'a bundle root');
+
 		if (value.capabilities !== undefined) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,

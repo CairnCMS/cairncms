@@ -256,6 +256,31 @@ describe('gateConfinedExtension', () => {
 		expect(verdict).toEqual({ ok: true, entrySource: OPERATION_ENTRY });
 	}, 20_000);
 
+	it('carries the declared option delivery into the operation verdict', async () => {
+		const withDelivery = manifest({
+			type: 'operation',
+			path: { app: 'dist/app.js', api: 'dist/api.js' },
+			source: { app: 'src/app.js', api: 'src/api.js' },
+			runtime: 'confined-server',
+			host: '^10.0.0',
+			optionDelivery: { apiKey: { delivery: 'reference' } },
+		});
+
+		const dir = await makeDir(withDelivery, {
+			'src/app.js': CLEAN_SOURCE,
+			'src/api.js': CLEAN_SOURCE,
+			'dist/api.js': OPERATION_ENTRY,
+		});
+
+		const verdict = await gateConfinedExtension(extensionAt(dir, 'operation'));
+
+		expect(verdict).toEqual({
+			ok: true,
+			entrySource: OPERATION_ENTRY,
+			optionDelivery: { apiKey: { delivery: 'reference' } },
+		});
+	}, 20_000);
+
 	it('refuses an operation that passes the scanner but crashes on load', async () => {
 		const dir = await makeDir(operationManifest(), {
 			'src/app.js': CLEAN_SOURCE,
