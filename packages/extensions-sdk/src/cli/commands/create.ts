@@ -24,7 +24,7 @@ import getPackageManager from '../utils/get-package-manager.js';
 import getSdkVersion from '../utils/get-sdk-version.js';
 import { isLanguage, languageToShort } from '../utils/languages.js';
 import { log } from '../utils/logger.js';
-import copyTemplate from './helpers/copy-template.js';
+import copyTemplate, { type TemplateName } from './helpers/copy-template.js';
 import ensureTypecheckScript from './helpers/ensure-typecheck-script.js';
 import getExtensionDevDeps from './helpers/get-extension-dev-deps.js';
 
@@ -45,11 +45,11 @@ export default async function create(type: string, name: string, options: Create
 		process.exit(1);
 	}
 
-	if (options.confined && type !== 'operation') {
+	if (options.confined && type !== 'operation' && type !== 'endpoint') {
 		log(
-			`The confined runtime supports ${chalk.bold('operation')} extensions only. Type ${chalk.bold(
-				type
-			)} cannot be scaffolded confined yet.`,
+			`The confined runtime supports ${chalk.bold('operation')} and ${chalk.bold(
+				'endpoint'
+			)} extensions only. Type ${chalk.bold(type)} cannot be scaffolded confined yet.`,
 			'error'
 		);
 
@@ -147,13 +147,27 @@ async function createLocalExtension({
 	const spinner = ora(chalk.bold('Scaffolding CairnCMS extension...')).start();
 
 	await fse.ensureDir(targetPath);
-	await copyTemplate(confined ? 'operation-confined' : type, targetPath, 'src', language);
+
+	let template: TemplateName = type;
+	if (confined) template = type === 'endpoint' ? 'endpoint-confined' : 'operation-confined';
+
+	await copyTemplate(template, targetPath, 'src', language);
 
 	const host = `^${getSdkVersion()}`;
 
 	let options: ExtensionOptions;
 
-	if (confined) {
+	if (confined && type === 'endpoint') {
+		options = {
+			type: 'endpoint',
+			path: 'dist/index.js',
+			source: `src/index.${languageToShort(language)}`,
+			runtime: 'confined-server',
+			// Authenticated by default: serving anonymous callers is a deliberate opt-in.
+			capabilities: { log: true, endpoint: { access: 'authenticated' } },
+			host,
+		};
+	} else if (confined) {
 		options = {
 			type: 'operation',
 			path: { app: 'dist/app.js', api: 'dist/api.js' },

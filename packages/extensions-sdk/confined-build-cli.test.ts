@@ -13,8 +13,8 @@ afterAll(async () => {
 	}
 });
 
-function evalGlobal(code: string): { default: { id: string; handler: unknown } } {
-	return new Function(`${code}\nreturn CairnOperation;`)();
+function evalGlobal(code: string, globalName = 'CairnOperation'): { default: { id: string; handler: unknown } } {
+	return new Function(`${code}\nreturn ${globalName};`)();
 }
 
 async function writeConfinedOperation(name: string): Promise<string> {
@@ -81,7 +81,7 @@ test('explicit entrypoint arguments refuse inside a confined-declared package', 
 	expect(await fse.pathExists(resolve(dir, 'dist'))).toBe(false);
 }, 30_000);
 
-test('a confined type without a runtime contract refuses by name', async () => {
+test('the manifest-driven build produces a confined endpoint artifact under its contract global', async () => {
 	const dir = `${testPrefix}-endpoint-${Date.now()}`;
 
 	await fse.outputJSON(resolve(dir, 'package.json'), {
@@ -90,6 +90,37 @@ test('a confined type without a runtime contract refuses by name', async () => {
 		type: 'module',
 		'cairncms:extension': {
 			type: 'endpoint',
+			path: 'dist/index.js',
+			source: 'src/index.js',
+			runtime: 'confined-server',
+			capabilities: { log: true, endpoint: { access: 'authenticated' } },
+			host: '^10.0.0',
+		},
+	});
+
+	await fse.outputFile(
+		resolve(dir, 'src', 'index.js'),
+		`export default { id: '${dir}', handler: async () => ({ body: null }) };\n`
+	);
+
+	await execa('node', ['../cli.js', 'build'], { cwd: dir });
+
+	const artifact = await fse.readFile(resolve(dir, 'dist', 'index.js'), 'utf8');
+	expect(artifact).toContain('var CairnEndpoint');
+	expect(artifact).not.toContain('var CairnOperation');
+	expect(evalGlobal(artifact, 'CairnEndpoint').default.id).toBe(dir);
+	expect(typeof evalGlobal(artifact, 'CairnEndpoint').default.handler).toBe('function');
+}, 30_000);
+
+test('a confined type without a runtime contract refuses by name', async () => {
+	const dir = `${testPrefix}-hook-${Date.now()}`;
+
+	await fse.outputJSON(resolve(dir, 'package.json'), {
+		name: dir,
+		version: '1.0.0',
+		type: 'module',
+		'cairncms:extension': {
+			type: 'hook',
 			path: 'dist/index.js',
 			source: 'src/index.js',
 			runtime: 'confined-server',
@@ -103,6 +134,6 @@ test('a confined type without a runtime contract refuses by name', async () => {
 	const result = await execa('node', ['../cli.js', 'build'], { cwd: dir, reject: false });
 
 	expect(result.exitCode).toBe(1);
-	expect(`${result.stdout}${result.stderr}`).toContain('operation');
+	expect(`${result.stdout}${result.stderr}`).toContain('hook');
 	expect(await fse.pathExists(resolve(dir, 'dist'))).toBe(false);
 }, 30_000);

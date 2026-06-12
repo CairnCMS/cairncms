@@ -9,13 +9,17 @@ export class ConfinedBuildError extends Error {
 	}
 }
 
+export type ConfinedGuestGlobal = 'CairnOperation' | 'CairnEndpoint';
+
 export interface BuildConfinedServerEntryOptions {
-	// The server entry source: an ESM module with a default-exported flow operation config.
+	// The server entry source: an ESM module with a default-exported confined config.
 	input: string;
 	// The package root every bundled file must be accounted to.
 	root: string;
 	// When set, the built entry is written here. The built code is always returned.
 	output?: string;
+	// The guest contract global the IIFE exposes. Defaults to the operation contract.
+	globalName?: ConfinedGuestGlobal;
 }
 
 function isBuildFailure(error: unknown): error is BuildFailure {
@@ -65,9 +69,10 @@ async function assertContained(inputs: string[], rootAbs: string, realRoot: stri
 }
 
 /**
- * Builds a confined Flow operation's server entry into the self-contained artifact
- * the confined engine evaluates: an esbuild IIFE bundle exposing globalName
- * `CairnOperation` whose module exports `{ default: { id, handler } }`.
+ * Builds a confined server entry into the self-contained artifact the confined
+ * engine evaluates: an esbuild IIFE bundle exposing the contract's global
+ * (`CairnOperation` or `CairnEndpoint`) whose module exports
+ * `{ default: { id, handler } }`.
  *
  * `platform: 'neutral'` means Node builtins are not auto-externalized, so a `node:`
  * import is unresolved and fails the build. There are no externals, so any
@@ -87,7 +92,7 @@ export async function buildConfinedServerEntry(options: BuildConfinedServerEntry
 	let result;
 
 	try {
-		result = await build(confinedEsbuildOptions(rootAbs, options.input));
+		result = await build(confinedEsbuildOptions(rootAbs, options.input, options.globalName));
 	} catch (error) {
 		throw new ConfinedBuildError(sanitizeBuildError(error));
 	}
@@ -109,6 +114,7 @@ export interface WatchConfinedServerEntryOptions {
 	root: string;
 	// The artifact must land on disk every rebuild, so output is required in watch.
 	output: string;
+	globalName?: ConfinedGuestGlobal;
 	onRebuild: (result: { ok: true } | { ok: false; message: string }) => void;
 }
 
@@ -125,7 +131,7 @@ export async function watchConfinedServerEntry(
 	const realRoot = await resolveRealRoot(rootAbs);
 
 	const watcher = await context({
-		...confinedEsbuildOptions(rootAbs, options.input),
+		...confinedEsbuildOptions(rootAbs, options.input, options.globalName),
 		plugins: [
 			{
 				name: 'confined-containment',
@@ -165,13 +171,17 @@ export async function watchConfinedServerEntry(
 	return { close: () => watcher.dispose() };
 }
 
-function confinedEsbuildOptions(rootAbs: string, input: string): BuildOptions & { write: false; metafile: true } {
+function confinedEsbuildOptions(
+	rootAbs: string,
+	input: string,
+	globalName: ConfinedGuestGlobal = 'CairnOperation'
+): BuildOptions & { write: false; metafile: true } {
 	return {
 		entryPoints: [resolve(rootAbs, input)],
 		absWorkingDir: rootAbs,
 		bundle: true,
 		format: 'iife',
-		globalName: 'CairnOperation',
+		globalName,
 		platform: 'neutral',
 		target: 'es2022',
 		legalComments: 'none',

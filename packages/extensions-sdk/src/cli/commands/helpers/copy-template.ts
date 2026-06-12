@@ -6,7 +6,7 @@ import getTemplatePath from '../../utils/get-template-path.js';
 
 // Template directories are extension types plus the confined variants, which
 // share a type with their plain counterpart but scaffold different source.
-export type TemplateName = ExtensionType | 'operation-confined';
+export type TemplateName = ExtensionType | 'operation-confined' | 'endpoint-confined';
 
 type TemplateFile = { type: 'config' | 'source'; path: string };
 

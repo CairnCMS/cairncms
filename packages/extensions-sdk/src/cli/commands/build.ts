@@ -39,6 +39,7 @@ import {
 	buildConfinedServerEntry,
 	ConfinedBuildError,
 	watchConfinedServerEntry,
+	type ConfinedGuestGlobal,
 } from './helpers/build-confined-server-entry.js';
 import generateBundleEntrypoint from './helpers/generate-bundle-entrypoint.js';
 import loadConfig from './helpers/load-config.js';
@@ -94,31 +95,42 @@ export default async function build(options: BuildOptions): Promise<void> {
 		const format: Format = extensionManifest.type === 'module' ? 'esm' : 'cjs';
 
 		if ('runtime' in extensionOptions && extensionOptions.runtime === 'confined-server') {
-			if (extensionOptions.type !== 'operation') {
-				log(
-					`The confined runtime supports ${chalk.bold('operation')} extensions only. Type ${chalk.bold(
-						extensionOptions.type
-					)} cannot be built confined yet.`,
-					'error'
-				);
+			if (extensionOptions.type === 'operation') {
+				await buildConfinedHybridExtension({
+					inputApp: extensionOptions.source.app,
+					inputApi: extensionOptions.source.api,
+					outputApp: extensionOptions.path.app,
+					outputApi: extensionOptions.path.api,
+					format,
+					watch,
+					sourcemap,
+					minify,
+				});
 
-				// Exit through the natural end of the process so piped stdio flushes
-				// the refusal message before the nonzero code lands.
-				process.exitCode = 1;
 				return;
 			}
 
-			await buildConfinedHybridExtension({
-				inputApp: extensionOptions.source.app,
-				inputApi: extensionOptions.source.api,
-				outputApp: extensionOptions.path.app,
-				outputApi: extensionOptions.path.api,
-				format,
-				watch,
-				sourcemap,
-				minify,
-			});
+			if (extensionOptions.type === 'endpoint') {
+				await buildConfinedApiExtension({
+					input: extensionOptions.source,
+					output: extensionOptions.path,
+					globalName: 'CairnEndpoint',
+					watch,
+				});
 
+				return;
+			}
+
+			log(
+				`The confined runtime supports ${chalk.bold('operation')} and ${chalk.bold(
+					'endpoint'
+				)} extensions only. Type ${chalk.bold(extensionOptions.type)} cannot be built confined yet.`,
+				'error'
+			);
+
+			// Exit through the natural end of the process so piped stdio flushes
+			// the refusal message before the nonzero code lands.
+			process.exitCode = 1;
 			return;
 		}
 
@@ -513,6 +525,67 @@ async function buildConfinedHybridExtension({
 
 		await buildExtension(appConfig);
 	}
+}
+
+/**
+ * Builds a confined api-only extension: a single server entry compiled into the
+ * confined artifact under the contract's global, with no browser build beside it.
+ */
+async function buildConfinedApiExtension({
+	input,
+	output,
+	globalName,
+	watch,
+}: {
+	input: string;
+	output: string;
+	globalName: ConfinedGuestGlobal;
+	watch: boolean;
+}) {
+	if (!(await fse.pathExists(input)) || !(await fse.stat(input)).isFile()) {
+		log(`Entrypoint ${chalk.bold(input)} does not exist.`, 'error');
+		process.exitCode = 1;
+		return;
+	}
+
+	if (output.length === 0) {
+		log(`Output file can not be empty.`, 'error');
+		process.exitCode = 1;
+		return;
+	}
+
+	const root = path.resolve('.');
+
+	if (watch) {
+		await watchConfinedServerEntry({
+			input,
+			root,
+			output,
+			globalName,
+			onRebuild: (result) => {
+				if (result.ok) {
+					log(chalk.bold.green('Confined server entry built.'));
+				} else {
+					log(`Confined server entry failed: ${result.message}`, 'error');
+				}
+			},
+		});
+
+		return;
+	}
+
+	try {
+		await buildConfinedServerEntry({ input, root, output, globalName });
+	} catch (error) {
+		const message =
+			error instanceof ConfinedBuildError ? error.message : 'the confined server entry could not be built';
+
+		log(`Confined server entry failed: ${message}`, 'error');
+		process.exitCode = 1;
+		return;
+	}
+
+	log(chalk.bold.green('Confined server entry built.'));
 }
 
 async function buildBundleExtension({
