@@ -244,11 +244,18 @@ export async function gateConfinedExtension(
 		return { ok: false, error: confinedValidationError(reason) };
 	}
 
-	// The eval probe applies to the operation contract only, the one proven runtime
-	// shape. Other confined server types are scanner-gated here and get their load
-	// contract with their binding.
+	// The eval probe certifies the contracts that have bindings: flow operations
+	// and json endpoints. Hooks and bundles stay scanner-gated here and get their
+	// load contract with their binding.
 	if (isTypeIn(options, HYBRID_EXTENSION_TYPES)) {
-		const probed = await probeOperationEntry(extension, options.path.api, deps);
+		const probed = await probeServerEntry(extension, options.path.api, 'flow-operation', deps);
+		if (!probed.ok) return probed;
+
+		return { ...probed, ...collected };
+	}
+
+	if (options.type === 'endpoint') {
+		const probed = await probeServerEntry(extension, options.path, 'json-endpoint', deps);
 		if (!probed.ok) return probed;
 
 		return { ...probed, ...collected };
@@ -258,16 +265,18 @@ export async function gateConfinedExtension(
 }
 
 /**
- * The dynamic half of the gate: reads the built operation entry under path
+ * The dynamic half of the gate: reads the built server entry under path
  * containment and the artifact cap, evaluates it in the confined child through the
- * load probe, and classifies the outcome. A not-loadable verdict refuses with the
- * probe's code. A host-side failure refuses `validation-incomplete`, never blaming
- * the extension for the gate's own failure. On success the probed bytes are
- * returned, so the binding executes exactly what was scanned and probed.
+ * load probe under the given activation's contract, and classifies the outcome. A
+ * not-loadable verdict refuses with the probe's code. A host-side failure refuses
+ * `validation-incomplete`, never blaming the extension for the gate's own failure.
+ * On success the probed bytes are returned, so the binding executes exactly what
+ * was scanned and probed.
  */
-async function probeOperationEntry(
+async function probeServerEntry(
 	extension: Extension,
 	entryRelative: string,
+	activation: 'flow-operation' | 'json-endpoint',
 	deps: ConfinedLoadGateDeps
 ): Promise<ConfinedGateVerdict> {
 	const readFile = deps.readFile ?? readFileCapped;
@@ -310,6 +319,7 @@ async function probeOperationEntry(
 		extensionId: extension.name,
 		contributionId: extension.name,
 		operationId: extension.name,
+		activation,
 		entrySource: entryRead.text,
 		options: {},
 		input: null,

@@ -31,6 +31,10 @@ const BROWSER_FETCH_SOURCE = 'export default { run: () => fetch("https://example
 const OPERATION_ENTRY =
 	"var CairnOperation = (() => { const handler = async () => ({ ok: true }); return { default: { id: 'test-extension', handler } }; })();\n";
 
+// A built endpoint entry under the same identity contract.
+const ENDPOINT_ENTRY =
+	"var CairnEndpoint = (() => { const handler = async () => ({ body: null }); return { default: { id: 'test-extension', handler } }; })();\n";
+
 function operationManifest(): Record<string, unknown> {
 	return manifest({
 		type: 'operation',
@@ -92,10 +96,14 @@ function extensionAt(dir: string, type: 'endpoint' | 'operation' | 'bundle' = 'e
 }
 
 describe('gateConfinedExtension', () => {
-	it('passes a clean confined endpoint', async () => {
-		const dir = await makeDir(endpointManifest(), { 'src/index.js': CLEAN_SOURCE });
-		expect(await gateConfinedExtension(extensionAt(dir))).toEqual({ ok: true });
-	});
+	it('passes a clean confined endpoint and carries the probed entry bytes', async () => {
+		const dir = await makeDir(endpointManifest(), {
+			'src/index.js': CLEAN_SOURCE,
+			'dist/index.js': ENDPOINT_ENTRY,
+		});
+
+		expect(await gateConfinedExtension(extensionAt(dir))).toEqual({ ok: true, entrySource: ENDPOINT_ENTRY });
+	}, 20_000);
 
 	it('refuses flagged source with the reason code and a relative detail', async () => {
 		const dir = await makeDir(endpointManifest(), { 'src/index.js': RAW_FS_SOURCE });
@@ -419,12 +427,39 @@ describe('gateConfinedExtension', () => {
 		expect(internal).toMatchObject({ ok: false, error: { code: 'validation-incomplete' } });
 	});
 
-	it('never probes a non-operation confined type and returns no entry bytes for it', async () => {
+	it('probes an endpoint under the json-endpoint activation and an operation under flow-operation', async () => {
+		const activations: unknown[] = [];
+
+		const probe = async (invocation: { activation?: string }) => {
+			activations.push(invocation.activation);
+			return { loadable: true };
+		};
+
+		const endpointDir = await makeDir(endpointManifest(), {
+			'src/index.js': CLEAN_SOURCE,
+			'dist/index.js': ENDPOINT_ENTRY,
+		});
+
+		await gateConfinedExtension(extensionAt(endpointDir), { probe });
+
+		const operationDir = await makeDir(operationManifest(), {
+			'src/app.js': CLEAN_SOURCE,
+			'src/api.js': CLEAN_SOURCE,
+			'dist/api.js': OPERATION_ENTRY,
+		});
+
+		await gateConfinedExtension(extensionAt(operationDir, 'operation'), { probe });
+
+		expect(activations).toEqual(['json-endpoint', 'flow-operation']);
+	});
+
+	it('never probes a confined hook and returns no entry bytes for it', async () => {
 		const probeCalls: unknown[] = [];
 
-		const dir = await makeDir(endpointManifest(), { 'src/index.js': CLEAN_SOURCE });
+		const dir = await makeDir(endpointManifest({ type: 'hook' }), { 'src/index.js': CLEAN_SOURCE });
+		const extension = { ...extensionAt(dir), type: 'hook' as const, entrypoint: 'dist/index.js' };
 
-		const verdict = await gateConfinedExtension(extensionAt(dir), {
+		const verdict = await gateConfinedExtension(extension, {
 			probe: async (invocation) => {
 				probeCalls.push(invocation);
 				return { loadable: true };
@@ -435,13 +470,17 @@ describe('gateConfinedExtension', () => {
 		expect(probeCalls).toHaveLength(0);
 	});
 
-	it('carries the manifest capabilities for a confined endpoint', async () => {
+	it('carries the manifest capabilities beside the probed bytes for a confined endpoint', async () => {
 		const capabilities = { log: true, request: { urls: ['https://api.example.com'] } };
-		const dir = await makeDir(endpointManifest({ capabilities }), { 'src/index.js': CLEAN_SOURCE });
 
-		const verdict = await gateConfinedExtension(extensionAt(dir));
+		const dir = await makeDir(endpointManifest({ capabilities }), {
+			'src/index.js': CLEAN_SOURCE,
+			'dist/index.js': ENDPOINT_ENTRY,
+		});
 
-		expect(verdict).toEqual({ ok: true, capabilities });
+		const verdict = await gateConfinedExtension(extensionAt(dir), { probe: async () => ({ loadable: true }) });
+
+		expect(verdict).toEqual({ ok: true, capabilities, entrySource: ENDPOINT_ENTRY });
 	});
 
 	it('carries the manifest capabilities beside the probed bytes for an operation', async () => {
