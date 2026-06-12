@@ -55,6 +55,7 @@ import * as exceptions from './exceptions/index.js';
 import { getFlowManager, type ConfinedOperationDescriptor } from './flows.js';
 import { runConfinedOperation, type ConfinedOperationRequest } from './extensions/confined/operation.js';
 import type { ConfinedLogEntry } from './extensions/confined/broker.js';
+import { confinedItemsService } from './extensions/confined/items-service.js';
 import type { SandboxConfig } from './extensions/confined/sandbox-limits.js';
 import { getAxios } from './request/index.js';
 import logger from './logger.js';
@@ -488,6 +489,7 @@ export class ExtensionManager {
 					invoke: (invocation, dispatcher) => supervisor.invoke(invocation, dispatcher),
 					log: (entry) => this.logConfinedEntry(entry),
 					getAxios: () => getAxios(),
+					itemsService: confinedItemsService,
 					brokerLimits,
 					runtimeLimits: config.runtime,
 				});
