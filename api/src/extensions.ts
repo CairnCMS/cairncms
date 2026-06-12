@@ -52,7 +52,11 @@ import getDatabase from './database/index.js';
 import emitter, { Emitter } from './emitter.js';
 import env from './env.js';
 import * as exceptions from './exceptions/index.js';
-import { getFlowManager } from './flows.js';
+import { getFlowManager, type ConfinedOperationDescriptor } from './flows.js';
+import { runConfinedOperation, type ConfinedOperationRequest } from './extensions/confined/operation.js';
+import type { ConfinedLogEntry } from './extensions/confined/broker.js';
+import type { SandboxConfig } from './extensions/confined/sandbox-limits.js';
+import { getAxios } from './request/index.js';
 import logger from './logger.js';
 import * as services from './services/index.js';
 import type { EventHandler } from './types/index.js';
@@ -63,7 +67,7 @@ import {
 	type ConfinedGateVerdict,
 	type ConfinedLoadGateDeps,
 } from './extensions/confined/load-gate.js';
-import { resolveConfinedRuntime } from './extensions/confined/supervisor.js';
+import { resolveConfinedRuntime, type ConfinedSupervisor } from './extensions/confined/supervisor.js';
 import { describePosture } from './extensions/confined/sandbox-hardening.js';
 import getModuleDefault from './utils/get-module-default.js';
 import { filterServerExtensions } from './utils/filter-server-extensions.js';
@@ -155,6 +159,10 @@ export class ExtensionManager {
 	// confined extension is failed closed and the gate is skipped, while inherited
 	// extensions load untouched.
 	private confinedRuntimeUnavailable = false;
+
+	// The resolved confined runtime this load, retained so confined operation bindings
+	// run under the posture-validated supervisor rather than a default singleton.
+	private confinedRuntime: { supervisor: ConfinedSupervisor; config: SandboxConfig } | undefined;
 
 	private appExtensions: AppExtensions = null;
 	private appExtensionChunks: Map<string, string>;
@@ -351,6 +359,8 @@ export class ExtensionManager {
 			probe: (invocation) => resolution.supervisor.probeLoad(invocation),
 		};
 
+		this.confinedRuntime = { supervisor: resolution.supervisor, config: resolution.config };
+
 		logger.info(describePosture(resolution.posture));
 	}
 
@@ -390,12 +400,113 @@ export class ExtensionManager {
 				if (verdict.entrySource !== undefined) entry.entrySource = verdict.entrySource;
 				if (verdict.capabilities !== undefined) entry.capabilities = verdict.capabilities;
 				if (verdict.entryCapabilities !== undefined) entry.entryCapabilities = verdict.entryCapabilities;
+				if (verdict.optionDelivery !== undefined) entry.optionDelivery = verdict.optionDelivery;
 
 				this.confinedEligible.set(extension, entry);
 			} else {
 				this.recordFailed(extension, verdict.error);
 			}
 		}
+	}
+
+	/**
+	 * Registers the eligible confined operations into the flow manager without
+	 * importing any server artifact. A contribution id declared by more than one
+	 * eligible operation is ambiguous: every one is failed in diagnostics and none is
+	 * registered, so an operator sees the conflict at load rather than at run.
+	 */
+	private registerConfinedOperations(): void {
+		const runtime = this.confinedRuntime;
+		if (runtime === undefined) return;
+
+		const operations = [...this.confinedEligible].filter(([extension]) => extension.type === 'operation');
+
+		const counts = new Map<string, number>();
+		for (const [extension] of operations) counts.set(extension.name, (counts.get(extension.name) ?? 0) + 1);
+
+		const flowManager = getFlowManager();
+
+		for (const [extension, eligible] of operations) {
+			if ((counts.get(extension.name) ?? 0) > 1) {
+				// Mark the id ambiguous in the flow manager too, so a flow referencing it
+				// takes the sanitized reject path rather than the missing-operation path.
+				flowManager.markConfinedOperationAmbiguous(extension.name);
+
+				this.recordFailed(extension, {
+					code: 'ambiguous-operation',
+					detail: 'a confined operation id is declared more than once',
+				});
+
+				continue;
+			}
+
+			if (eligible.entrySource === undefined) {
+				this.recordFailed(extension, {
+					code: VALIDATION_INCOMPLETE,
+					detail: 'the confined operation entry is unavailable',
+				});
+
+				continue;
+			}
+
+			flowManager.addConfinedOperation(extension.name, this.buildConfinedDescriptor(extension, eligible, runtime));
+			this.recordLoaded(extension);
+		}
+	}
+
+	private buildConfinedDescriptor(
+		extension: Extension,
+		eligible: ConfinedEligibleEntry,
+		runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig }
+	): ConfinedOperationDescriptor {
+		const { supervisor, config } = runtime;
+
+		const brokerLimits = {
+			settingsValueBytes: config.sandbox.settingsValueBytes,
+			httpResponseBytes: config.sandbox.httpResponseBytes,
+			itemsReplyBytes: config.sandbox.itemsReplyBytes,
+			templateOutputBytes: config.sandbox.templateOutputBytes,
+		};
+
+		return {
+			referenceKeys: Object.keys(eligible.optionDelivery ?? {}),
+			run: (params) => {
+				const request: ConfinedOperationRequest = {
+					extensionId: extension.name,
+					contributionId: extension.name,
+					operationId: params.operationId,
+					entrySource: eligible.entrySource!,
+					capabilities: eligible.capabilities ?? {},
+					options: params.options,
+					input: params.input,
+					accountability: params.accountability,
+				};
+
+				if (eligible.optionDelivery !== undefined) request.optionDelivery = eligible.optionDelivery;
+
+				return runConfinedOperation(request, {
+					invoke: (invocation, dispatcher) => supervisor.invoke(invocation, dispatcher),
+					log: (entry) => this.logConfinedEntry(entry),
+					getAxios: () => getAxios(),
+					brokerLimits,
+					runtimeLimits: config.runtime,
+				});
+			},
+		};
+	}
+
+	private logConfinedEntry(entry: ConfinedLogEntry): void {
+		// The broker redacts the entry before this sink, so the identifiers and the
+		// message are safe to write.
+		logger[entry.level](
+			{
+				extensionId: entry.context.extensionId,
+				contributionId: entry.context.contributionId,
+				operationId: entry.context.operationId,
+				meta: entry.meta,
+			},
+			String(entry.message)
+		);
 	}
 
 	private recordAppDiagnostics(): void {
@@ -497,6 +608,7 @@ export class ExtensionManager {
 		this.confinedEligible.clear();
 		this.confinedRuntimeDeps = {};
 		this.confinedRuntimeUnavailable = false;
+		this.confinedRuntime = undefined;
 		this.hookEmbedsHead = [];
 		this.hookEmbedsBody = [];
 
@@ -518,6 +630,7 @@ export class ExtensionManager {
 		await this.registerHooks();
 		await this.registerEndpoints();
 		await this.registerOperations();
+		this.registerConfinedOperations();
 		await this.registerBundles();
 
 		if (env['SERVE_APP']) {
@@ -535,6 +648,7 @@ export class ExtensionManager {
 		this.confinedEligible.clear();
 		this.confinedRuntimeDeps = {};
 		this.confinedRuntimeUnavailable = false;
+		this.confinedRuntime = undefined;
 
 		this.apiEmitter.offAll();
 
@@ -990,6 +1104,7 @@ export class ExtensionManager {
 		const flowManager = getFlowManager();
 
 		flowManager.clearOperations();
+		flowManager.clearConfinedOperations();
 
 		for (const apiExtension of this.apiExtensions) {
 			try {

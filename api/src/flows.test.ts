@@ -551,3 +551,136 @@ describe('flow operation errors expose a curated reject payload', () => {
 		expect(serialized).not.toContain('cause');
 	});
 });
+
+describe('confined operation binding', () => {
+	const triggerData = { path: '/x', method: 'POST', headers: {}, query: {}, body: {} };
+	const context = { accountability: null, database: {} as any, schema: { collections: {}, relations: [] } as any };
+
+	function confinedFlow(type: string, options: Record<string, unknown> = {}, accountability: unknown = null): any {
+		return {
+			id: 'flow-c',
+			name: 'flow-c',
+			status: 'active',
+			trigger: 'webhook',
+			accountability,
+			options: { method: 'POST', return: '$last', async: false },
+			operation: { id: 'op-row-9', key: 'step', type, options, resolve: null, reject: null },
+		};
+	}
+
+	beforeEach(() => {
+		const manager = getFlowManager();
+		manager.clearOperations();
+		manager.clearConfinedOperations();
+	});
+
+	it('runs a confined operation through its descriptor with $last input and resolved options', async () => {
+		const manager = getFlowManager();
+		let seen: { operationId: string; options: unknown; input: unknown } | undefined;
+
+		manager.addConfinedOperation('confined-op', {
+			referenceKeys: [],
+			run: async (params) => {
+				seen = params;
+				return { outcome: { ok: true, value: { done: true } }, redactionValues: [] };
+			},
+		});
+
+		const result = await (manager as any).executeFlow(
+			confinedFlow('confined-op', { channel: 'general' }),
+			{ last: 'x' },
+			context
+		);
+
+		expect(result).toEqual({ done: true });
+		expect(seen?.operationId).toBe('op-row-9');
+		expect(seen?.options).toEqual({ channel: 'general' });
+		expect(seen?.input).toEqual({ last: 'x' });
+	});
+
+	it('keeps an inherited operation running after the Map registry change', async () => {
+		const manager = getFlowManager();
+		manager.addOperation('inherited-op', (() => ({ ran: true })) as any);
+
+		const result = await (manager as any).executeFlow(confinedFlow('inherited-op'), triggerData, context);
+		expect(result).toEqual({ ran: true });
+	});
+
+	it('rejects an ambiguous duplicate confined id without running either', async () => {
+		const manager = getFlowManager();
+		let runs = 0;
+
+		const descriptor = {
+			referenceKeys: [],
+			run: async () => {
+				runs++;
+				return { outcome: { ok: true as const, value: 1 }, redactionValues: [] };
+			},
+		};
+
+		manager.addConfinedOperation('dup', descriptor);
+		manager.addConfinedOperation('dup', descriptor);
+
+		const result = await (manager as any).executeFlow(confinedFlow('dup'), triggerData, context);
+
+		expect(result).toMatchObject({ message: expect.stringContaining('could not be resolved') });
+		expect(runs).toBe(0);
+	});
+
+	it('rejects a type declared by both an inherited and a confined extension', async () => {
+		const manager = getFlowManager();
+		let inheritedRan = false;
+		let confinedRan = false;
+
+		manager.addOperation('collide', (() => {
+			inheritedRan = true;
+			return {};
+		}) as any);
+
+		manager.addConfinedOperation('collide', {
+			referenceKeys: [],
+			run: async () => {
+				confinedRan = true;
+				return { outcome: { ok: true as const, value: 1 }, redactionValues: [] };
+			},
+		});
+
+		const result = await (manager as any).executeFlow(confinedFlow('collide'), triggerData, context);
+
+		expect(result).toMatchObject({ message: expect.stringContaining('could not be resolved') });
+		expect(inheritedRan).toBe(false);
+		expect(confinedRan).toBe(false);
+	});
+
+	it('treats a constructor-named operation type as unknown, not an object prototype member', async () => {
+		const manager = getFlowManager();
+		const result = await (manager as any).executeFlow(confinedFlow('constructor'), triggerData, context);
+		expect(result).toBeNull();
+	});
+
+	it('redacts the configured secret, the handle, and a value nested under a camelCase declared key', async () => {
+		const manager = getFlowManager();
+
+		manager.addConfinedOperation('redact-op', {
+			// A camelCase key must still key-redact, since redactFlowLog lowercases keys.
+			referenceKeys: ['apiKey', 'webhookConfig'],
+			run: async () => ({
+				outcome: { ok: true as const, value: { echoedHandle: 'handle-ref-abc', note: 'used sk_live_secret today' } },
+				redactionValues: ['sk_live_secret', 'handle-ref-abc'],
+			}),
+		});
+
+		revisionsCreateSpy.mockClear();
+
+		await (manager as any).executeFlow(
+			confinedFlow('redact-op', { apiKey: 'sk_live_secret', webhookConfig: { token: 'nested_secret' } }, 'all'),
+			triggerData,
+			context
+		);
+
+		const serialized = JSON.stringify(revisionsCreateSpy.mock.calls[0]![0].data);
+		expect(serialized).not.toContain('sk_live_secret');
+		expect(serialized).not.toContain('handle-ref-abc');
+		expect(serialized).not.toContain('nested_secret');
+	});
+});

@@ -57,6 +57,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 });
 
 import { ExtensionManager } from './extensions.js';
+import { getFlowManager } from './flows.js';
 import logger from './logger.js';
 import { filterServerExtensions } from './utils/filter-server-extensions.js';
 
@@ -413,7 +414,61 @@ describe('the confined load gate in the loader', () => {
 		const eligible = (instance as any).confinedEligible;
 		expect(eligible.get(one)?.entrySource).toContain('CairnOperation');
 		expect(eligible.get(two)?.entrySource).toContain('CairnOperation');
-		expect((instance as any).getDiagnostics()).toHaveLength(0);
+
+		// Both pass the gate with no gate-time row, then register as loaded operations.
+		const diagnostics = (instance as any).getDiagnostics();
+
+		expect(diagnostics.map((entry: any) => `${entry.name}:${entry.status}`).sort()).toEqual([
+			'op-one:loaded',
+			'op-two:loaded',
+		]);
+	}, 30_000);
+
+	it('fails a duplicate confined operation id and rejects a flow that references it', async () => {
+		writeConfinedOperationPackage('dup-a', 'dup-op');
+		writeConfinedOperationPackage('dup-b', 'dup-op');
+
+		const flowManager = getFlowManager();
+		flowManager.clearConfinedOperations();
+
+		const instance = new ExtensionManager();
+
+		(instance as any).getExtensions = async () => [
+			operationExtension('dup-a', 'dup-op', true),
+			operationExtension('dup-b', 'dup-op', true),
+		];
+
+		await (instance as any).load();
+
+		const failed = (instance as any)
+			.getDiagnostics()
+			.filter((entry: any) => entry.name === 'dup-op' && entry.status === 'failed');
+
+		expect(failed).toHaveLength(2);
+
+		// The id is marked ambiguous in the flow manager, so a flow rejects rather than
+		// taking the missing-operation unknown path.
+		const flow = {
+			id: 'f',
+			name: 'f',
+			status: 'active',
+			trigger: 'webhook',
+			accountability: null,
+			options: { method: 'POST', return: '$last', async: false },
+			operation: { id: 'op-x', key: 'step', type: 'dup-op', options: {}, resolve: null, reject: null },
+		};
+
+		const result = await (flowManager as any).executeFlow(
+			flow,
+			{ x: 1 },
+			{
+				accountability: null,
+				database: {},
+				schema: { collections: {}, relations: [] },
+			}
+		);
+
+		expect(result).toMatchObject({ message: expect.stringContaining('could not be resolved') });
 	}, 30_000);
 
 	it('refuses a confined bundle with flagged server source while it stays available to the app pipeline', async () => {

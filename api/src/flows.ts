@@ -32,6 +32,23 @@ import { getSchema } from './utils/get-schema.js';
 import { JobQueue } from './utils/job-queue.js';
 import { mapValuesDeep } from './utils/map-values-deep.js';
 import { collectSensitiveValues, redactFlowLog } from './utils/redact-flow-log.js';
+import type { ConfinedOperationResult } from './extensions/confined/operation.js';
+
+/**
+ * A registered confined Flow operation. `run` executes the gate-probed entry in the
+ * confined child and returns a sanitized outcome plus the values to redact from the
+ * revision. `referenceKeys` are the declared reference option keys, key-redacted
+ * from the revision so a malformed or nested sensitive value cannot persist.
+ */
+export interface ConfinedOperationDescriptor {
+	run: (params: {
+		operationId: string;
+		options: Record<string, unknown>;
+		input: unknown;
+		accountability: Accountability | null;
+	}) => Promise<ConfinedOperationResult>;
+	referenceKeys: string[];
+}
 
 let flowManager: FlowManager | undefined;
 
@@ -44,14 +61,22 @@ export type Step = {
 
 export function buildRevisionData(
 	steps: ReadonlyArray<Step>,
-	keyedData: Record<string, unknown>
+	keyedData: Record<string, unknown>,
+	extraSensitiveValues: ReadonlyArray<string> = [],
+	extraSensitiveKeys: ReadonlySet<string> = new Set()
 ): { steps: ReadonlyArray<Step>; data: Record<string, unknown> } {
 	const revisionData = omit(keyedData, '$accountability.permissions');
 	const sensitiveValues = collectSensitiveValues(revisionData);
 
+	for (const value of extraSensitiveValues) sensitiveValues.add(value);
+
+	// redactFlowLog matches sensitive keys case-insensitively against a lowercased
+	// candidate, so a declared key like `apiKey` is lowercased to match.
+	const sensitiveKeys = new Set([...extraSensitiveKeys].map((key) => key.toLowerCase()));
+
 	return {
-		steps: redactFlowLog(steps, sensitiveValues),
-		data: redactFlowLog(revisionData, sensitiveValues) as Record<string, unknown>,
+		steps: redactFlowLog(steps, sensitiveValues, sensitiveKeys),
+		data: redactFlowLog(revisionData, sensitiveValues, sensitiveKeys) as Record<string, unknown>,
 	};
 }
 
@@ -78,7 +103,13 @@ const ENV_KEY = '$env';
 class FlowManager {
 	private isLoaded = false;
 
-	private operations: Record<string, OperationHandler> = {};
+	// A Map, not a plain object, so an operation type that collides with an inherited
+	// object key (constructor, __proto__) cannot be misread as a registered handler.
+	private operations: Map<string, OperationHandler> = new Map();
+
+	// Confined operation descriptors, keyed by operation type. A null value marks an
+	// ambiguous type declared by more than one confined operation, which runs neither.
+	private confinedOperations: Map<string, ConfinedOperationDescriptor | null> = new Map();
 
 	private triggerHandlers: TriggerHandler[] = [];
 	private operationFlowHandlers: Record<string, any> = {};
@@ -118,11 +149,28 @@ class FlowManager {
 	}
 
 	public addOperation(id: string, operation: OperationHandler): void {
-		this.operations[id] = operation;
+		this.operations.set(id, operation);
 	}
 
 	public clearOperations(): void {
-		this.operations = {};
+		this.operations.clear();
+	}
+
+	public addConfinedOperation(id: string, descriptor: ConfinedOperationDescriptor): void {
+		// A second descriptor for the same id is ambiguous: the type runs neither, so an
+		// operator can never be silently routed to one of two operations sharing an id.
+		this.confinedOperations.set(id, this.confinedOperations.has(id) ? null : descriptor);
+	}
+
+	public markConfinedOperationAmbiguous(id: string): void {
+		// The loader resolved a duplicate id and registered none of its descriptors, so
+		// the id is recorded ambiguous here too. A flow referencing it then takes the
+		// sanitized reject path rather than the missing-operation unknown path.
+		this.confinedOperations.set(id, null);
+	}
+
+	public clearConfinedOperations(): void {
+		this.confinedOperations.clear();
 	}
 
 	public async runOperationFlow(id: string, data: unknown, context: Record<string, unknown>): Promise<unknown> {
@@ -367,14 +415,25 @@ class FlowManager {
 		let lastOperationStatus: 'resolve' | 'reject' | 'unknown' = 'unknown';
 
 		const steps: Step[] = [];
+		const confinedRedactionValues: string[] = [];
+		const confinedReferenceKeys = new Set<string>();
 
 		while (nextOperation !== null) {
-			const { successor, data, status, options } = await this.executeOperation(nextOperation, keyedData, context);
+			const { successor, data, status, options, redaction } = await this.executeOperation(
+				nextOperation,
+				keyedData,
+				context
+			);
 
 			keyedData[nextOperation.key] = data;
 			keyedData[LAST_KEY] = data;
 			lastOperationStatus = status;
 			steps.push({ operation: nextOperation!.id, key: nextOperation.key, status, options });
+
+			if (redaction !== undefined) {
+				confinedRedactionValues.push(...redaction.values);
+				for (const key of redaction.keys) confinedReferenceKeys.add(key);
+			}
 
 			nextOperation = successor;
 		}
@@ -407,7 +466,7 @@ class FlowManager {
 					activity: activity,
 					collection: 'directus_flows',
 					item: flow.id,
-					data: buildRevisionData(steps, keyedData),
+					data: buildRevisionData(steps, keyedData, confinedRedactionValues, confinedReferenceKeys),
 				});
 			}
 		}
@@ -434,13 +493,44 @@ class FlowManager {
 		status: 'resolve' | 'reject' | 'unknown';
 		data: unknown;
 		options: Record<string, any> | null;
+		redaction?: { values: string[]; keys: string[] };
 	}> {
-		if (!(operation.type in this.operations)) {
+		const handler = this.operations.get(operation.type);
+		const isConfined = this.confinedOperations.has(operation.type);
+
+		// A type in both registries, or a duplicated confined type, is ambiguous and
+		// runs neither path. Rejecting with a sanitized message keeps the operator from
+		// being silently routed to one of two operations.
+		if (handler !== undefined && isConfined) {
+			logger.warn(`Operation type "${operation.type}" is declared by both an inherited and a confined extension`);
+			return {
+				successor: operation.reject,
+				status: 'reject',
+				data: { message: 'the operation could not be resolved' },
+				options: null,
+			};
+		}
+
+		if (isConfined) {
+			const descriptor = this.confinedOperations.get(operation.type);
+
+			if (!descriptor) {
+				logger.warn(`Confined operation type "${operation.type}" is ambiguous`);
+				return {
+					successor: operation.reject,
+					status: 'reject',
+					data: { message: 'the operation could not be resolved' },
+					options: null,
+				};
+			}
+
+			return this.executeConfinedOperation(operation, descriptor, keyedData, context);
+		}
+
+		if (handler === undefined) {
 			logger.warn(`Couldn't find operation ${operation.type}`);
 			return { successor: null, status: 'unknown', data: null, options: null };
 		}
-
-		const handler = this.operations[operation.type]!;
 
 		const options = applyOptionsData(operation.options, keyedData);
 
@@ -489,5 +579,55 @@ class FlowManager {
 				options,
 			};
 		}
+	}
+
+	/**
+	 * Runs a confined operation through its descriptor. The resolved clear options are
+	 * recorded as the step options, the same shape an inherited operation records, and
+	 * the returned redaction values plus the declared reference keys scrub the secrets
+	 * from the revision. The guest receives only `$last` and the handle-substituted
+	 * options, never the full flow data bag.
+	 */
+	private async executeConfinedOperation(
+		operation: Operation,
+		descriptor: ConfinedOperationDescriptor,
+		keyedData: Record<string, unknown>,
+		context: Record<string, unknown>
+	): Promise<{
+		successor: Operation | null;
+		status: 'resolve' | 'reject';
+		data: unknown;
+		options: Record<string, any> | null;
+		redaction: { values: string[]; keys: string[] };
+	}> {
+		const options = applyOptionsData(operation.options, keyedData);
+		const accountability = (context['accountability'] as Accountability | null | undefined) ?? null;
+
+		const result = await descriptor.run({
+			operationId: operation.id,
+			options,
+			input: keyedData[LAST_KEY],
+			accountability,
+		});
+
+		const redaction = { values: result.redactionValues, keys: descriptor.referenceKeys };
+
+		if (result.outcome.ok) {
+			return {
+				successor: operation.resolve,
+				status: 'resolve',
+				data: result.outcome.value ?? null,
+				options,
+				redaction,
+			};
+		}
+
+		return {
+			successor: operation.reject,
+			status: 'reject',
+			data: { message: result.outcome.error.message, code: result.outcome.error.code },
+			options,
+			redaction,
+		};
 	}
 }
