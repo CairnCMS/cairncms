@@ -1,0 +1,19 @@
+{
+	"name": "cairncms-extension-confined-echo-endpoint",
+	"version": "1.0.0",
+	"type": "module",
+	"private": true,
+	"cairncms:extension": {
+		"type": "endpoint",
+		"path": "index.js",
+		"source": "src/index.js",
+		"runtime": "confined-server",
+		"capabilities": {
+			"endpoint": {
+				"access": "public"
+			},
+			"items": "current-user"
+		},
+		"host": "^1.0.0"
+	}
+}
