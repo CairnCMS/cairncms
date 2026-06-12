@@ -30,6 +30,14 @@ export interface ConfinedSettingsSource {
 	hasSecret(key: string, signal: AbortSignal): boolean | Promise<boolean>;
 }
 
+// Settings ship dark in this milestone: no key is declared, so settings.get always
+// returns null and mints no handle. A later slice defines declaration and storage.
+export const DARK_SETTINGS: ConfinedSettingsSource = {
+	declared: [],
+	value: () => null,
+	hasSecret: () => false,
+};
+
 export interface ConfinedHostBrokerDeps {
 	// The gate-validated capabilities for this invocation's contribution.
 	capabilities: ExtensionCapabilities;

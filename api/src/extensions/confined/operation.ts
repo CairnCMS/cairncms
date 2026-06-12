@@ -1,10 +1,5 @@
 import type { Accountability, ConfinedOptionDelivery, ExtensionCapabilities } from '@cairncms/types';
-import {
-	createConfinedHostBroker,
-	type ConfinedHostBrokerDeps,
-	type ConfinedLogEntry,
-	type ConfinedSettingsSource,
-} from './broker.js';
+import { createConfinedHostBroker, DARK_SETTINGS, type ConfinedHostBrokerDeps, type ConfinedLogEntry } from './broker.js';
 import { prepareOperationOptions } from './operation-options.js';
 import { ConfinedSecretScope } from './secret-scope.js';
 import type {
@@ -54,15 +49,7 @@ export interface ConfinedOperationResult {
 	redactionValues: string[];
 }
 
-// Settings ship dark in this milestone: no key is declared, so settings.get always
-// returns null and mints no handle. A later slice defines declaration and storage.
-const DARK_SETTINGS: ConfinedSettingsSource = {
-	declared: [],
-	value: () => null,
-	hasSecret: () => false,
-};
-
-function toConfinedAccountability(accountability: Accountability | null): ConfinedAccountability | null {
+export function toConfinedAccountability(accountability: Accountability | null): ConfinedAccountability | null {
 	if (accountability === null) return null;
 	return { user: accountability.user ?? null, role: accountability.role ?? null, admin: accountability.admin ?? false };
 }
