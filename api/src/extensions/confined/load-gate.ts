@@ -260,6 +260,13 @@ export async function gateConfinedExtension(
 		return refuse('manifest-invalid', 'the confined declaration is not valid for this extension type');
 	}
 
+	// The schema admits a confined bundle shell with no server entry as an editing state.
+	// Loadability is enforced here: a confined bundle with nothing to confine is refused
+	// with a clear reason rather than the indirect source-unavailable an empty scan gives.
+	if (options.type === 'bundle' && entries.length === 0) {
+		return refuse('manifest-invalid', 'a confined bundle must declare at least one server entry');
+	}
+
 	const { reasons } = await scan({ root: extension.path, entries });
 	const reason = reasons[0];
 

@@ -253,8 +253,6 @@ function rejectHookEvents(value: { events?: unknown }, ctx: z.RefinementCtx, sub
 	}
 }
 
-const BUNDLE_SERVER_ENTRY_TYPES = new Set<string>([...API_EXTENSION_TYPES, ...HYBRID_EXTENSION_TYPES]);
-
 export const ExtensionOptionsBundleEntry = z.union([
 	z
 		.object({
@@ -446,16 +444,6 @@ export const ExtensionOptionsBundle = z
 					message: 'a hook entry in a confined bundle must declare events',
 				});
 			}
-		}
-
-		const hasServerEntry = value.entries.some((entry) => BUNDLE_SERVER_ENTRY_TYPES.has(entry.type));
-
-		if (value.runtime === CONFINED_RUNTIME && !hasServerEntry) {
-			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
-				path: ['runtime'],
-				message: `a ${CONFINED_RUNTIME} bundle must declare at least one server entry`,
-			});
 		}
 	});
 

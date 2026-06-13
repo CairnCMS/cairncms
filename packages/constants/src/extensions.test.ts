@@ -398,14 +398,21 @@ describe('ExtensionOptions confined bundle', () => {
 		expect(result.success).toBe(false);
 	});
 
-	it('rejects a confined bundle with no server entry', () => {
-		const result = ExtensionOptions.safeParse({
+	it('accepts a confined bundle shell with no server entry as an editing state', () => {
+		// The schema validates structure. A confined bundle with no server entry yet, the
+		// state `create bundle --confined` writes before `add` fills it, is a valid shape.
+		// The load gate, not the schema, refuses a loaded confined bundle that has no
+		// server entry.
+		const empty = ExtensionOptions.safeParse({ ...bundleOption, runtime: 'confined-server', entries: [] });
+
+		const appOnly = ExtensionOptions.safeParse({
 			...bundleOption,
 			runtime: 'confined-server',
 			entries: [{ type: 'interface', name: 'my-interface', source: 'src/interface.js' }],
 		});
 
-		expect(result.success).toBe(false);
+		expect(empty.success).toBe(true);
+		expect(appOnly.success).toBe(true);
 	});
 
 	it('rejects capabilities declared at the bundle root', () => {

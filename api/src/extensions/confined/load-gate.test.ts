@@ -269,6 +269,35 @@ describe('gateConfinedExtension', () => {
 		expect(verdict).toMatchObject({ ok: false, error: { code: 'uses-raw-fs' } });
 	});
 
+	it('refuses a confined bundle that declares no server entry', async () => {
+		// The schema admits this shell as an editing state, so loadability is the gate's
+		// to enforce: an app-only confined bundle has nothing to confine and is refused.
+		const appOnly = manifest({
+			type: 'bundle',
+			path: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [{ type: 'interface', name: 'ui', source: 'src/ui.js' }],
+			runtime: 'confined-server',
+			host: '^10.0.0',
+		});
+
+		const dir = await makeDir(appOnly, { 'src/ui.js': CLEAN_SOURCE, 'dist/api.js': BUNDLE_PLACEHOLDER });
+
+		const extension: Extension = {
+			path: dir,
+			name: 'test-extension',
+			local: true,
+			runtime: 'confined-server',
+			type: 'bundle',
+			entrypoint: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [{ type: 'interface', name: 'ui' }],
+		};
+
+		const verdict = await gateConfinedExtension(extension, PROBE_LOADABLE);
+
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'manifest-invalid' } });
+		expect(JSON.stringify(verdict)).toContain('at least one server entry');
+	});
+
 	it('carries per-entry capabilities and hook events into the bundle verdict', async () => {
 		const bundleManifest = manifest({
 			type: 'bundle',
