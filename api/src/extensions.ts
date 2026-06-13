@@ -2,12 +2,14 @@ import {
 	APP_EXTENSION_TYPES,
 	APP_SHARED_DEPS,
 	CONFINED_RUNTIME,
+	hasSafeEventSegments,
 	HYBRID_EXTENSION_TYPES,
 	JAVASCRIPT_FILE_EXTS,
 	NESTED_EXTENSION_TYPES,
 } from '@cairncms/constants';
 import * as sharedExceptions from '@cairncms/exceptions';
 import type {
+	Accountability,
 	ActionHandler,
 	ApiExtension,
 	BundleExtension,
@@ -55,6 +57,7 @@ import * as exceptions from './exceptions/index.js';
 import { getFlowManager, type ConfinedOperationDescriptor } from './flows.js';
 import { runConfinedOperation, type ConfinedOperationRequest } from './extensions/confined/operation.js';
 import { runConfinedEndpoint } from './extensions/confined/endpoint.js';
+import { runConfinedActionHook, runConfinedFilterHook } from './extensions/confined/hook.js';
 import type { ConfinedLogEntry } from './extensions/confined/broker.js';
 import type { ConfinedHostDispatcher, ConfinedInvocation } from './extensions/confined/types.js';
 import { confinedItemsService } from './extensions/confined/items-service.js';
@@ -413,6 +416,7 @@ export class ExtensionManager {
 				if (verdict.capabilities !== undefined) entry.capabilities = verdict.capabilities;
 				if (verdict.entryCapabilities !== undefined) entry.entryCapabilities = verdict.entryCapabilities;
 				if (verdict.optionDelivery !== undefined) entry.optionDelivery = verdict.optionDelivery;
+				if (verdict.events !== undefined) entry.events = verdict.events;
 
 				this.confinedEligible.set(extension, entry);
 			} else {
@@ -580,6 +584,100 @@ export class ExtensionManager {
 
 			this.endpointRouter.use(`/${extension.name}`, this.buildConfinedEndpointHandler(extension, eligible, runtime));
 			this.registeredEndpointRoutes.add(extension.name);
+			this.recordLoaded(extension);
+		}
+	}
+
+	/**
+	 * Registers the eligible confined hooks onto the platform emitter without
+	 * importing any server artifact, subscribing exactly the manifest-declared
+	 * events the probe verified against the entry. A filter failure blocks the
+	 * platform action with a sanitized error, because a filter that cannot run
+	 * must not be silently skipped. An action failure logs and never blocks.
+	 */
+	private registerConfinedHooks(): void {
+		const runtime = this.confinedRuntime;
+		if (runtime === undefined) return;
+
+		const hooks = [...this.confinedEligible].filter(([extension]) => extension.type === 'hook');
+
+		const counts = new Map<string, number>();
+		for (const [extension] of hooks) counts.set(extension.name, (counts.get(extension.name) ?? 0) + 1);
+
+		for (const [extension, eligible] of hooks) {
+			if ((counts.get(extension.name) ?? 0) > 1) {
+				this.recordFailed(extension, {
+					code: 'ambiguous-hook',
+					detail: 'a confined hook id is declared more than once',
+				});
+
+				continue;
+			}
+
+			if (eligible.entrySource === undefined || eligible.events === undefined) {
+				this.recordFailed(extension, {
+					code: VALIDATION_INCOMPLETE,
+					detail: 'the confined hook entry is unavailable',
+				});
+
+				continue;
+			}
+
+			const declaredEvents = [...(eligible.events.filter ?? []), ...(eligible.events.action ?? [])];
+
+			// The manifest schema already refuses these, so this is defense in depth:
+			// a reserved-segment name reaching the emitter would pollute shared globals
+			// and alias unrelated events, so the whole hook fails before any subscription.
+			if (!declaredEvents.every(hasSafeEventSegments)) {
+				this.recordFailed(extension, {
+					code: 'event-invalid',
+					detail: 'a confined hook event name is not a safe literal event',
+				});
+
+				continue;
+			}
+
+			const deps = this.confinedRunnerDeps(runtime);
+
+			const baseRequest = (event: string, meta: Record<string, unknown>, accountability: Accountability | null) => ({
+				extensionId: extension.name,
+				contributionId: extension.name,
+				entrySource: eligible.entrySource!,
+				capabilities: eligible.capabilities ?? {},
+				event,
+				meta,
+				accountability,
+			});
+
+			for (const event of eligible.events.filter ?? []) {
+				const handler: FilterHandler = async (payload, meta, context) => {
+					const result = await runConfinedFilterHook(
+						{ ...baseRequest(event, meta, context.accountability ?? null), payload },
+						deps
+					);
+
+					if (!result.ok) throw new Error(`the confined hook "${extension.name}" failed`);
+
+					return result.unchanged ? undefined : result.payload;
+				};
+
+				emitter.onFilter(event, handler);
+				this.hookEvents.push({ type: 'filter', name: event, handler });
+			}
+
+			for (const event of eligible.events.action ?? []) {
+				const handler: ActionHandler = async (meta, context) => {
+					const result = await runConfinedActionHook(baseRequest(event, meta, context.accountability ?? null), deps);
+
+					if (!result.ok) {
+						logger.warn(`The confined hook "${extension.name}" failed for action "${event}"`);
+					}
+				};
+
+				emitter.onAction(event, handler);
+				this.hookEvents.push({ type: 'action', name: event, handler });
+			}
+
 			this.recordLoaded(extension);
 		}
 	}
@@ -780,6 +878,7 @@ export class ExtensionManager {
 		// After every inherited registration, so the collision check sees every
 		// inherited route, bundle entries included.
 		this.registerConfinedEndpoints();
+		this.registerConfinedHooks();
 
 		if (env['SERVE_APP']) {
 			this.appExtensions = await this.generateExtensionBundle();

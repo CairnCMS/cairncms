@@ -41,11 +41,19 @@ vi.mock('./extensions/confined/supervisor.js', async (importOriginal) => {
 		ok: true,
 		supervisor: {
 			probeLoad: async () => ({ loadable: true }),
-			// Echoes the shaped input so binding tests can assert what reached the child.
-			invoke: async (invocation: { input: unknown }) => ({
-				ok: true,
-				value: { status: 200, body: { echoed: invocation.input } },
-			}),
+			// Echoes the shaped input per contract so binding tests can assert what
+			// reached the child.
+			invoke: async (invocation: { activation?: string; input: unknown }) => {
+				if (invocation.activation === 'event-filter') {
+					return { ok: true, value: { unchanged: false, payload: { echoed: invocation.input } } };
+				}
+
+				if (invocation.activation === 'event-action') {
+					return { ok: true, value: { done: true } };
+				}
+
+				return { ok: true, value: { status: 200, body: { echoed: invocation.input } } };
+			},
 		},
 		config: { sandbox: { maxArtifactBytes: 8 * 1024 * 1024 }, runtime },
 		posture: {
@@ -69,6 +77,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 	return { ...actual, readdir: async () => [] };
 });
 
+import emitter from './emitter.js';
 import { ExtensionManager } from './extensions.js';
 import { getFlowManager } from './flows.js';
 import logger from './logger.js';
@@ -94,7 +103,8 @@ function writeConfinedPackage(
 	source: string,
 	name = dir,
 	capabilities?: Record<string, unknown>,
-	type: 'endpoint' | 'hook' = 'endpoint'
+	type: 'endpoint' | 'hook' = 'endpoint',
+	events: { filter?: string[]; action?: string[] } = { action: ['server.start'] }
 ): void {
 	const full = path.join(root, dir);
 	mkdirSync(path.join(full, 'src'), { recursive: true });
@@ -111,21 +121,29 @@ function writeConfinedPackage(
 				runtime: 'confined-server',
 				host: '^10.0.0',
 				...(capabilities && { capabilities }),
+				...(type === 'hook' && { events }),
 			},
 		})
 	);
 
 	writeFileSync(path.join(full, 'src', 'index.js'), source);
 
-	if (type === 'endpoint') {
-		writeFileSync(
-			path.join(full, 'index.js'),
-			`if (typeof process !== 'undefined') { throw new Error('CONFINED_ENDPOINT_IMPORTED'); }\n` +
-				`var CairnEndpoint = (() => { const handler = async () => ({ body: null }); return { default: { id: ${JSON.stringify(
+	const handlers = (names: string[] | undefined) =>
+		(names ?? []).map((event) => `${JSON.stringify(event)}: () => undefined`).join(', ');
+
+	const guestEntry =
+		type === 'endpoint'
+			? `var CairnEndpoint = (() => { const handler = async () => ({ body: null }); return { default: { id: ${JSON.stringify(
 					name
-				)}, handler } }; })();\n`
-		);
-	}
+			  )}, handler } }; })();\n`
+			: `var CairnHook = (() => ({ default: { id: ${JSON.stringify(name)}, filters: { ${handlers(
+					events.filter
+			  )} }, actions: { ${handlers(events.action)} } } }))();\n`;
+
+	writeFileSync(
+		path.join(full, 'index.js'),
+		`if (typeof process !== 'undefined') { throw new Error('CONFINED_ENDPOINT_IMPORTED'); }\n${guestEntry}`
+	);
 }
 
 /**
@@ -534,13 +552,13 @@ describe('the confined load gate in the loader', () => {
 
 	it('fails closed on a throwing probe without aborting the load of other extensions', async () => {
 		writeConfinedOperationPackage('probe-thrower');
-		writeConfinedPackage('probe-hook-sibling', 'export default {};\n', 'probe-hook-sibling', undefined, 'hook');
+		writeConfinedBundlePackage('probe-bundle-sibling', 'export default {};\n');
 
 		const instance = new ExtensionManager();
 		const operation = operationExtension('probe-thrower', 'probe-thrower', true);
 		const endpointSibling = endpointExtension('confined-endpoint', 'confined-endpoint', true);
-		const hookSibling = hookExtension('probe-hook-sibling', 'probe-hook-sibling', true);
-		(instance as any).getExtensions = async () => [operation, endpointSibling, hookSibling];
+		const bundleSibling = bundleExtension('probe-bundle-sibling', 'probe-bundle-sibling', true);
+		(instance as any).getExtensions = async () => [operation, endpointSibling, bundleSibling];
 
 		(instance as any).confinedGateDeps = {
 			probe: async () => {
@@ -550,13 +568,13 @@ describe('the confined load gate in the loader', () => {
 
 		await (instance as any).load();
 
-		// Both probed types fail closed; the scanner-gated hook is untouched.
+		// Every probed type fails closed; the scanner-gated bundle is untouched.
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'probe-thrower');
 		expect(row?.status).toBe('failed');
 		expect(row?.reason?.code).toBe('validation-incomplete');
 		expect((instance as any).confinedEligible.has(operation)).toBe(false);
 		expect((instance as any).confinedEligible.has(endpointSibling)).toBe(false);
-		expect((instance as any).confinedEligible.has(hookSibling)).toBe(true);
+		expect((instance as any).confinedEligible.has(bundleSibling)).toBe(true);
 	});
 
 	it('surfaces a host-side probe failure as validation-incomplete, not a verdict on the extension', async () => {
@@ -884,5 +902,273 @@ describe('the confined endpoint binding', () => {
 		expect(JSON.stringify(response.body)).not.toContain('timeout');
 
 		confinedRuntime.resolve = undefined;
+	});
+});
+
+describe('the confined hook binding', () => {
+	const EVENT_CONTEXT = { database: {} as never, schema: null, accountability: null };
+	let current: ExtensionManager | undefined;
+
+	afterEach(async () => {
+		if (current !== undefined) await (current as any).unload();
+		current = undefined;
+		confinedRuntime.resolve = undefined;
+	});
+
+	async function loadedHookManager(dir: string, name: string, events: { filter?: string[]; action?: string[] }) {
+		writeConfinedPackage(dir, 'export default {};\n', name, { log: true }, 'hook', events);
+
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [hookExtension(dir, name, true)];
+		await (instance as any).load();
+		current = instance;
+		return instance;
+	}
+
+	it('subscribes the manifest events and serves a filter through the emitter without importing', async () => {
+		const instance = await loadedHookManager('filtering-hook', 'filtering-hook', {
+			filter: ['confined-binding.filter'],
+		});
+
+		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'filtering-hook');
+		expect(row?.status).toBe('loaded');
+
+		const result = await emitter.emitFilter('confined-binding.filter', { v: 1 }, { collection: 'c' }, EVENT_CONTEXT);
+
+		// The baseline child stub echoes the shaped input back as the new payload.
+		expect(result).toEqual({
+			echoed: {
+				event: 'confined-binding.filter',
+				payload: { v: 1 },
+				meta: { event: 'confined-binding.filter', collection: 'c' },
+			},
+		});
+	});
+
+	it('keeps the platform payload when the guest answers no-change', async () => {
+		confinedRuntime.resolve = async () => ({
+			ok: true,
+			supervisor: {
+				probeLoad: async () => ({ loadable: true }),
+				invoke: async () => ({ ok: true, value: { unchanged: true } }),
+			},
+			config: {
+				sandbox: { maxArtifactBytes: 8 * 1024 * 1024 },
+				runtime: {
+					wallClockMs: 5000,
+					cpuTimeoutMs: 2000,
+					memoryBytes: 64 * 1024 * 1024,
+					stackBytes: 512 * 1024,
+					acquireTimeoutMs: 0,
+					hostCallTimeoutMs: 5000,
+					maxHostCalls: 1000,
+					maxInFlightHostCalls: 16,
+				},
+			},
+			posture: { mode: 'auto', applied: [], missing: [], coreSatisfied: true, decision: 'run', cgroupMechanic: null },
+		});
+
+		await loadedHookManager('unchanged-hook', 'unchanged-hook', { filter: ['confined-binding.unchanged'] });
+
+		const payload = { v: 1 };
+		const result = await emitter.emitFilter('confined-binding.unchanged', payload, {}, EVENT_CONTEXT);
+
+		expect(result).toBe(payload);
+	});
+
+	it('blocks the platform action with a sanitized error when a filter fails', async () => {
+		confinedRuntime.resolve = async () => ({
+			ok: true,
+			supervisor: {
+				probeLoad: async () => ({ loadable: true }),
+				invoke: async () => {
+					throw new Error('child exploded at /home/alison/secret');
+				},
+			},
+			config: {
+				sandbox: { maxArtifactBytes: 8 * 1024 * 1024 },
+				runtime: {
+					wallClockMs: 5000,
+					cpuTimeoutMs: 2000,
+					memoryBytes: 64 * 1024 * 1024,
+					stackBytes: 512 * 1024,
+					acquireTimeoutMs: 0,
+					hostCallTimeoutMs: 5000,
+					maxHostCalls: 1000,
+					maxInFlightHostCalls: 16,
+				},
+			},
+			posture: { mode: 'auto', applied: [], missing: [], coreSatisfied: true, decision: 'run', cgroupMechanic: null },
+		});
+
+		await loadedHookManager('failing-filter-hook', 'failing-filter-hook', { filter: ['confined-binding.failing'] });
+
+		await expect(emitter.emitFilter('confined-binding.failing', { v: 1 }, {}, EVENT_CONTEXT)).rejects.toThrow(
+			'the confined hook "failing-filter-hook" failed'
+		);
+
+		await expect(emitter.emitFilter('confined-binding.failing', { v: 1 }, {}, EVENT_CONTEXT)).rejects.not.toThrow(
+			/secret/
+		);
+	});
+
+	it('fires an action hook from the platform emitter and logs a failure without blocking', async () => {
+		// A confined action hook has no production-observable sink (request is SSRF
+		// gated, items is read-only), so its dispatch is proven here: the manifest
+		// action event, emitted through the real platform emitter, drives the confined
+		// runner, and a failure logs a sanitized warning without blocking the action.
+		const invoke = vi.fn(async () => ({ ok: false, error: { code: 'timeout', message: 'the event hook failed' } }));
+
+		confinedRuntime.resolve = async () => ({
+			ok: true,
+			supervisor: { probeLoad: async () => ({ loadable: true }), invoke },
+			config: {
+				sandbox: { maxArtifactBytes: 8 * 1024 * 1024 },
+				runtime: {
+					wallClockMs: 5000,
+					cpuTimeoutMs: 2000,
+					memoryBytes: 64 * 1024 * 1024,
+					stackBytes: 512 * 1024,
+					acquireTimeoutMs: 0,
+					hostCallTimeoutMs: 5000,
+					maxHostCalls: 1000,
+					maxInFlightHostCalls: 16,
+				},
+			},
+			posture: { mode: 'auto', applied: [], missing: [], coreSatisfied: true, decision: 'run', cgroupMechanic: null },
+		});
+
+		await loadedHookManager('failing-action-hook', 'failing-action-hook', {
+			action: ['confined-binding.action-fails'],
+		});
+
+		const warn = vi.spyOn(logger, 'warn');
+
+		// emitAction is fire-and-forget: it returns without throwing, which is the
+		// non-block property at this layer, then the handler runs asynchronously.
+		expect(() =>
+			emitter.emitAction('confined-binding.action-fails', { collection: 'articles' }, EVENT_CONTEXT)
+		).not.toThrow();
+
+		for (let attempt = 0; attempt < 100 && invoke.mock.calls.length === 0; attempt++) {
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+
+		expect(invoke).toHaveBeenCalledTimes(1);
+
+		const invocation = invoke.mock.calls[0]![0] as { activation: string; input: unknown };
+		expect(invocation.activation).toBe('event-action');
+
+		expect(invocation.input).toEqual({
+			event: 'confined-binding.action-fails',
+			meta: { event: 'confined-binding.action-fails', collection: 'articles' },
+		});
+
+		for (let attempt = 0; attempt < 100 && warn.mock.calls.length === 0; attempt++) {
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+
+		expect(warn).toHaveBeenCalledWith(
+			'The confined hook "failing-action-hook" failed for action "confined-binding.action-fails"'
+		);
+
+		warn.mockRestore();
+	});
+
+	it('unload removes the confined handlers so a reload cannot double-fire', async () => {
+		const instance = await loadedHookManager('reload-hook', 'reload-hook', { filter: ['confined-binding.reload'] });
+
+		const before = await emitter.emitFilter('confined-binding.reload', { v: 1 }, {}, EVENT_CONTEXT);
+		expect(before).toHaveProperty('echoed');
+
+		await (instance as any).unload();
+		current = undefined;
+
+		const payload = { v: 1 };
+		const after = await emitter.emitFilter('confined-binding.reload', payload, {}, EVENT_CONTEXT);
+		expect(after).toBe(payload);
+	});
+
+	it('refuses a hook whose manifest declares a prototype-key event and never subscribes', async () => {
+		const proto = Object.getPrototypeOf({});
+
+		writeConfinedPackage('proto-hook', 'export default {};\n', 'proto-hook', { log: true }, 'hook', {
+			filter: ['__proto__.create'],
+		});
+
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [hookExtension('proto-hook', 'proto-hook', true)];
+		await (instance as any).load();
+		current = instance;
+
+		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'proto-hook');
+		expect(row?.status).toBe('failed');
+		expect(row?.reason?.code).toBe('manifest-invalid');
+
+		expect((instance as any).hookEvents.some((event: any) => event.name === '__proto__.create')).toBe(false);
+
+		// The reserved segment never reached the emitter, so Object.prototype is clean.
+		expect(Object.prototype.hasOwnProperty.call(proto, 'create')).toBe(false);
+	});
+
+	it('refuses to subscribe a reserved-segment event that reaches eligibility past the schema', () => {
+		const instance = new ExtensionManager();
+
+		(instance as any).confinedRuntime = {
+			supervisor: { invoke: async () => ({ ok: true, value: { done: true } }) },
+			config: {
+				sandbox: {
+					settingsValueBytes: 1,
+					httpResponseBytes: 1,
+					itemsReplyBytes: 1,
+					templateOutputBytes: 1,
+					maxArtifactBytes: 1,
+				},
+				runtime: {},
+			},
+		};
+
+		const extension = hookExtension('guard-hook', 'guard-hook', true);
+
+		(instance as any).confinedEligible.set(extension, {
+			entrySource: 'var CairnHook = {};',
+			capabilities: {},
+			events: { action: ['constructor.create'] },
+		});
+
+		(instance as any).registerConfinedHooks();
+
+		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'guard-hook');
+		expect(row?.status).toBe('failed');
+		expect(row?.reason?.code).toBe('event-invalid');
+
+		// No handler joined the unregister list, so nothing subscribed to the emitter.
+		expect((instance as any).hookEvents).toHaveLength(0);
+	});
+
+	it('fails both confined hooks that declare the same id', async () => {
+		writeConfinedPackage('dup-hook-a', 'export default {};\n', 'dup-hook', undefined, 'hook', {
+			action: ['server.start'],
+		});
+
+		writeConfinedPackage('dup-hook-b', 'export default {};\n', 'dup-hook', undefined, 'hook', {
+			action: ['server.start'],
+		});
+
+		const instance = new ExtensionManager();
+
+		(instance as any).getExtensions = async () => [
+			hookExtension('dup-hook-a', 'dup-hook', true),
+			hookExtension('dup-hook-b', 'dup-hook', true),
+		];
+
+		await (instance as any).load();
+		current = instance;
+
+		const failed = (instance as any)
+			.getDiagnostics()
+			.filter((entry: any) => entry.name === 'dup-hook' && entry.reason?.code === 'ambiguous-hook');
+
+		expect(failed).toHaveLength(2);
 	});
 });
