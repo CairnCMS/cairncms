@@ -169,6 +169,14 @@ class FlowManager {
 		this.confinedOperations.set(id, null);
 	}
 
+	public hasConfinedOperation(id: string): boolean {
+		return this.confinedOperations.has(id);
+	}
+
+	public hasOperation(id: string): boolean {
+		return this.operations.has(id);
+	}
+
 	public clearConfinedOperations(): void {
 		this.confinedOperations.clear();
 	}

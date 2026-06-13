@@ -18,6 +18,8 @@ export interface ConfinedHookRequest {
 	contributionId: string;
 	// The gate-probed built server entry bytes. Executed as bytes, never imported.
 	entrySource: string;
+	// When the entry is one server entry of a bundle artifact, its `type:name` key.
+	bundleEntryKey?: string;
 	capabilities: ExtensionCapabilities;
 	// The exact platform event that fired.
 	event: string;
@@ -71,7 +73,7 @@ function buildInvocation(
 	input: Record<string, unknown>,
 	limits: ConfinedRuntimeLimits
 ): ConfinedInvocation {
-	return {
+	const invocation: ConfinedInvocation = {
 		extensionId: request.extensionId,
 		contributionId: request.contributionId,
 		operationId: request.contributionId,
@@ -82,6 +84,10 @@ function buildInvocation(
 		accountability: toConfinedAccountability(request.accountability),
 		limits,
 	};
+
+	if (request.bundleEntryKey !== undefined) invocation.bundleEntryKey = request.bundleEntryKey;
+
+	return invocation;
 }
 
 function buildDispatcher(request: ConfinedHookRequest, deps: ConfinedHookDeps): ConfinedHostDispatcher {

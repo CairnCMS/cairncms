@@ -644,3 +644,121 @@ describe('runConfinedLoadProbe under the event hook contract', () => {
 		expect(probed).toMatchObject({ loadable: false, error: { code: 'identity-mismatch' } });
 	});
 });
+
+const BUNDLE_ARTIFACT = `var CairnBundle = (() => ({ default: {
+	'endpoint:ep': { id: 'ep', handler: async (request) => ({ status: 201, body: { echoed: request } }) },
+	'operation:op': { id: 'op', handler: async ({ options, input }) => ({ ran: options.x, last: input }) },
+	'hook:hk': { id: 'hk', filters: { 'items.create': (payload) => ({ ...payload, stamped: true }) }, actions: { 'auth.login': () => undefined } },
+} }))();`;
+
+function bundleInvocation(key: string, overrides: Partial<ConfinedInvocation> = {}): ConfinedInvocation {
+	return invocation(BUNDLE_ARTIFACT, {
+		bundleEntryKey: key,
+		contributionId: key.split(':')[1],
+		...overrides,
+	});
+}
+
+describe('runConfinedEntry selecting a bundle entry from CairnBundle', () => {
+	it('runs a bundle endpoint entry under the json-endpoint contract', async () => {
+		const result = await run(
+			bundleInvocation('endpoint:ep', { activation: 'json-endpoint', input: { method: 'GET', path: '/x' } })
+		);
+
+		expect(result).toEqual({ ok: true, value: { status: 201, body: { echoed: { method: 'GET', path: '/x' } } } });
+	});
+
+	it('runs a bundle operation entry under the flow-operation contract', async () => {
+		const result = await run(bundleInvocation('operation:op', { options: { x: 5 }, input: { last: 1 } }));
+		expect(result).toEqual({ ok: true, value: { ran: 5, last: { last: 1 } } });
+	});
+
+	it('runs a bundle hook filter entry under the event-filter contract', async () => {
+		const result = await run(
+			bundleInvocation('hook:hk', {
+				activation: 'event-filter',
+				input: { event: 'items.create', payload: { a: 1 }, meta: {} },
+			})
+		);
+
+		expect(result).toEqual({ ok: true, value: { unchanged: false, payload: { a: 1, stamped: true } } });
+	});
+
+	it('fails a bundle entry whose key is absent from the artifact', async () => {
+		const result = await run(bundleInvocation('endpoint:missing', { activation: 'json-endpoint', input: {} }));
+		expect(result).toMatchObject({ ok: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('rejects a bundle entry whose config id does not match its name', async () => {
+		const result = await run(
+			bundleInvocation('endpoint:ep', { activation: 'json-endpoint', contributionId: 'not-ep', input: {} })
+		);
+
+		expect(result).toMatchObject({ ok: false, error: { code: 'identity-mismatch' } });
+	});
+
+	it('does not let a prototype-named bundle key resolve to an inherited member', async () => {
+		const result = await run(
+			bundleInvocation('constructor', { activation: 'json-endpoint', contributionId: 'constructor', input: {} })
+		);
+
+		expect(result).toMatchObject({ ok: false, error: { code: 'invalid-entry' } });
+	});
+});
+
+describe('runConfinedLoadProbe over a whole bundle artifact', () => {
+	const CLEAN_ENTRIES = [
+		{ key: 'endpoint:ep', name: 'ep', kind: 'endpoint' as const },
+		{ key: 'operation:op', name: 'op', kind: 'operation' as const },
+		{
+			key: 'hook:hk',
+			name: 'hk',
+			kind: 'hook' as const,
+			events: { filters: ['items.create'], actions: ['auth.login'] },
+		},
+	];
+
+	function probe(artifact: string, entries: unknown[]) {
+		return runConfinedLoadProbe(invocation(artifact, { bundleEntries: entries as never, contributionId: 'bundle' }));
+	}
+
+	it('probes a clean bundle loadable in one pass', async () => {
+		expect(await probe(BUNDLE_ARTIFACT, CLEAN_ENTRIES)).toEqual({ loadable: true });
+	});
+
+	it('refuses when a declared entry is absent from the artifact', async () => {
+		const entries = [...CLEAN_ENTRIES, { key: 'endpoint:ghost', name: 'ghost', kind: 'endpoint' as const }];
+		expect(await probe(BUNDLE_ARTIFACT, entries)).toMatchObject({ loadable: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('refuses an entry whose config id does not equal its name', async () => {
+		const artifact = `var CairnBundle = (() => ({ default: { 'endpoint:ep': { id: 'wrong', handler: () => ({}) } } }))();`;
+
+		expect(await probe(artifact, [{ key: 'endpoint:ep', name: 'ep', kind: 'endpoint' }])).toMatchObject({
+			loadable: false,
+			error: { code: 'identity-mismatch' },
+		});
+	});
+
+	it('refuses an operation or endpoint entry without a handler', async () => {
+		const artifact = `var CairnBundle = (() => ({ default: { 'endpoint:ep': { id: 'ep' } } }))();`;
+
+		expect(await probe(artifact, [{ key: 'endpoint:ep', name: 'ep', kind: 'endpoint' }])).toMatchObject({
+			loadable: false,
+			error: { code: 'invalid-entry' },
+		});
+	});
+
+	it('refuses a hook entry whose declared handlers differ from its manifest events', async () => {
+		expect(
+			await probe(BUNDLE_ARTIFACT, [
+				{ key: 'hook:hk', name: 'hk', kind: 'hook', events: { filters: ['items.create'], actions: [] } },
+			])
+		).toMatchObject({ loadable: false, error: { code: 'identity-mismatch' } });
+	});
+
+	it('never invokes a handler while probing', async () => {
+		const artifact = `var CairnBundle = (() => ({ default: { 'endpoint:ep': { id: 'ep', handler: () => { throw new Error('PROBE_RAN_HANDLER'); } } } }))();`;
+		expect(await probe(artifact, [{ key: 'endpoint:ep', name: 'ep', kind: 'endpoint' }])).toEqual({ loadable: true });
+	});
+});

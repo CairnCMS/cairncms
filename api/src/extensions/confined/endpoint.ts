@@ -1,5 +1,10 @@
 import type { Accountability, ExtensionCapabilities } from '@cairncms/types';
-import { createConfinedHostBroker, DARK_SETTINGS, type ConfinedHostBrokerDeps, type ConfinedLogEntry } from './broker.js';
+import {
+	createConfinedHostBroker,
+	DARK_SETTINGS,
+	type ConfinedHostBrokerDeps,
+	type ConfinedLogEntry,
+} from './broker.js';
 import { toConfinedAccountability } from './operation.js';
 import { ConfinedSecretScope } from './secret-scope.js';
 import type { ConfinedHostDispatcher, ConfinedInvocation, ConfinedResult, ConfinedRuntimeLimits } from './types.js';
@@ -18,6 +23,8 @@ export interface ConfinedEndpointRequest {
 	contributionId: string;
 	// The gate-probed built server entry bytes. Executed as bytes, never imported.
 	entrySource: string;
+	// When the entry is one server entry of a bundle artifact, its `type:name` key.
+	bundleEntryKey?: string;
 	capabilities: ExtensionCapabilities;
 	// The inbound HTTP request, body already parsed and bounded by the platform.
 	method: string;
@@ -161,6 +168,8 @@ export async function runConfinedEndpoint(
 			accountability: toConfinedAccountability(request.accountability),
 			limits: deps.runtimeLimits,
 		};
+
+		if (request.bundleEntryKey !== undefined) invocation.bundleEntryKey = request.bundleEntryKey;
 
 		const result = await deps.invoke(invocation, dispatcher);
 

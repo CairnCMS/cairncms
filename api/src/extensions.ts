@@ -13,6 +13,9 @@ import type {
 	ActionHandler,
 	ApiExtension,
 	BundleExtension,
+	ConfinedHookEvents,
+	ConfinedOptionDelivery,
+	ExtensionCapabilities,
 	EmbedHandler,
 	EndpointConfig,
 	Extension,
@@ -56,8 +59,8 @@ import env from './env.js';
 import * as exceptions from './exceptions/index.js';
 import { getFlowManager, type ConfinedOperationDescriptor } from './flows.js';
 import { runConfinedOperation, type ConfinedOperationRequest } from './extensions/confined/operation.js';
-import { runConfinedEndpoint } from './extensions/confined/endpoint.js';
-import { runConfinedActionHook, runConfinedFilterHook } from './extensions/confined/hook.js';
+import { runConfinedEndpoint, type ConfinedEndpointRequest } from './extensions/confined/endpoint.js';
+import { runConfinedActionHook, runConfinedFilterHook, type ConfinedHookRequest } from './extensions/confined/hook.js';
 import type { ConfinedLogEntry } from './extensions/confined/broker.js';
 import type { ConfinedHostDispatcher, ConfinedInvocation } from './extensions/confined/types.js';
 import { confinedItemsService } from './extensions/confined/items-service.js';
@@ -109,13 +112,25 @@ type BundleConfig = {
 	operations: { name: string; config: OperationApiConfig }[];
 };
 
+// A confined bundle's server entries register independently, so each carries its own
+// status and reason. An app entry, or an inherited bundle's entry, has no per-entry
+// status.
+type ExtensionDiagnosticEntry = {
+	name: string;
+	type: string;
+	status?: 'loaded' | 'failed';
+	reason?: SanitizedExtensionError;
+};
+
 type ExtensionDiagnostic = {
 	name: string;
 	type: ExtensionType | null;
 	local: boolean;
 	version?: string;
-	entries?: { name: string; type: string }[];
-	status: 'loaded' | 'failed' | 'discovered';
+	entries?: ExtensionDiagnosticEntry[];
+	// `partial` is a confined bundle whose server entries did not all register the same
+	// way: some loaded, some failed.
+	status: 'loaded' | 'failed' | 'discovered' | 'partial';
 	reason?: SanitizedExtensionError;
 };
 
@@ -134,6 +149,17 @@ const defaultOptions: Options = {
 };
 
 const RELOAD_DEBOUNCE_MS = 250;
+
+// The per-contribution facts a confined runner binding needs, identical for a
+// top-level extension and one server entry of a bundle. A bundle entry adds the
+// `type:name` key so the engine selects it from the shared CairnBundle artifact.
+type ConfinedBinding = {
+	extensionId: string;
+	contributionId: string;
+	entrySource: string;
+	capabilities: ExtensionCapabilities;
+	bundleEntryKey?: string;
+};
 
 // The literal route grammar a confined endpoint name must fit before it becomes an
 // Express mount: a lowercase npm-style name, optionally scoped, with no pattern
@@ -188,6 +214,13 @@ export class ExtensionManager {
 	// Every endpoint route mounted this load, inherited and confined, so a confined
 	// endpoint can fail closed on a collision instead of relying on Express order.
 	private registeredEndpointRoutes = new Set<string>();
+
+	// Confined operation ids that may not register this load, computed once across
+	// every confined operation contributor (top-level and bundle entries) plus the
+	// inherited operations, so a duplicate or inherited collision fails every
+	// contributor at registration rather than one being recorded loaded and then
+	// turned ambiguous by a later one. Keyed id to the sanitized failure reason.
+	private confinedOperationBlocks = new Map<string, SanitizedExtensionError>();
 	private hookEmbedsHead: string[] = [];
 	private hookEmbedsBody: string[] = [];
 
@@ -281,7 +314,14 @@ export class ExtensionManager {
 			};
 
 			if (diagnostic.version) copy.version = diagnostic.version;
-			if (diagnostic.entries) copy.entries = diagnostic.entries.map((entry) => ({ ...entry }));
+
+			if (diagnostic.entries) {
+				copy.entries = diagnostic.entries.map((entry) => ({
+					...entry,
+					...(entry.reason && { reason: { ...entry.reason } }),
+				}));
+			}
+
 			if (diagnostic.reason) copy.reason = { ...diagnostic.reason };
 
 			return copy;
@@ -308,6 +348,23 @@ export class ExtensionManager {
 				`Failed to load extensions: ${failed
 					.map((diagnostic) => `${diagnostic.name} (${diagnostic.reason?.code ?? 'UNKNOWN'})`)
 					.join(', ')}`
+			);
+		}
+
+		const partial = this.diagnostics.filter((diagnostic) => diagnostic.status === 'partial');
+
+		if (partial.length > 0) {
+			logger.warn(
+				`Partially loaded confined bundles: ${partial
+					.map((diagnostic) => {
+						const failedEntries = (diagnostic.entries ?? [])
+							.filter((entry) => entry.status === 'failed')
+							.map((entry) => `${entry.type}:${entry.name} (${entry.reason?.code ?? 'UNKNOWN'})`)
+							.join(', ');
+
+						return `${diagnostic.name} [${failedEntries}]`;
+					})
+					.join('; ')}`
 			);
 		}
 	}
@@ -415,6 +472,7 @@ export class ExtensionManager {
 				if (verdict.entrySource !== undefined) entry.entrySource = verdict.entrySource;
 				if (verdict.capabilities !== undefined) entry.capabilities = verdict.capabilities;
 				if (verdict.entryCapabilities !== undefined) entry.entryCapabilities = verdict.entryCapabilities;
+				if (verdict.entryEvents !== undefined) entry.entryEvents = verdict.entryEvents;
 				if (verdict.optionDelivery !== undefined) entry.optionDelivery = verdict.optionDelivery;
 				if (verdict.events !== undefined) entry.events = verdict.events;
 
@@ -435,24 +493,23 @@ export class ExtensionManager {
 		const runtime = this.confinedRuntime;
 		if (runtime === undefined) return;
 
-		const operations = [...this.confinedEligible].filter(([extension]) => extension.type === 'operation');
-
-		const counts = new Map<string, number>();
-		for (const [extension] of operations) counts.set(extension.name, (counts.get(extension.name) ?? 0) + 1);
-
 		const flowManager = getFlowManager();
 
+		// Computed once across every confined operation contributor and the inherited
+		// operations, before any descriptor is added, so a blocked id never records one
+		// contributor loaded and then turns it ambiguous when a later one collides.
+		this.confinedOperationBlocks = this.resolveConfinedOperationBlocks(flowManager);
+
+		const operations = [...this.confinedEligible].filter(([extension]) => extension.type === 'operation');
+
 		for (const [extension, eligible] of operations) {
-			if ((counts.get(extension.name) ?? 0) > 1) {
-				// Mark the id ambiguous in the flow manager too, so a flow referencing it
-				// takes the sanitized reject path rather than the missing-operation path.
+			const block = this.confinedOperationBlocks.get(extension.name);
+
+			if (block !== undefined) {
+				// Mark the id ambiguous so a flow referencing it, or its inherited
+				// namesake, takes the sanitized reject path and runs neither.
 				flowManager.markConfinedOperationAmbiguous(extension.name);
-
-				this.recordFailed(extension, {
-					code: 'ambiguous-operation',
-					detail: 'a confined operation id is declared more than once',
-				});
-
+				this.recordFailed(extension, block);
 				continue;
 			}
 
@@ -465,9 +522,66 @@ export class ExtensionManager {
 				continue;
 			}
 
-			flowManager.addConfinedOperation(extension.name, this.buildConfinedDescriptor(extension, eligible, runtime));
+			const binding: ConfinedBinding = {
+				extensionId: extension.name,
+				contributionId: extension.name,
+				entrySource: eligible.entrySource,
+				capabilities: eligible.capabilities ?? {},
+			};
+
+			flowManager.addConfinedOperation(
+				extension.name,
+				this.buildConfinedDescriptor(binding, eligible.optionDelivery, runtime)
+			);
+
 			this.recordLoaded(extension);
 		}
+	}
+
+	/**
+	 * Computes the confined operation ids that may not register this load. An id is
+	 * blocked when more than one confined contributor declares it (top-level
+	 * operations and bundle operation entries share the operation namespace) or when
+	 * it collides with an inherited operation, whether a built-in, a top-level
+	 * operation, or one contributed by an inherited bundle. A blocked id runs neither
+	 * contribution, so the duplicate reads ambiguous and the inherited collision reads
+	 * as a collision.
+	 */
+	private resolveConfinedOperationBlocks(
+		flowManager: ReturnType<typeof getFlowManager>
+	): Map<string, SanitizedExtensionError> {
+		const ids: string[] = [];
+
+		for (const [extension] of this.confinedEligible) {
+			if (extension.type === 'operation') {
+				ids.push(extension.name);
+			} else if (extension.type === 'bundle') {
+				for (const entry of extension.entries) {
+					if (entry.type === 'operation') ids.push(entry.name);
+				}
+			}
+		}
+
+		const counts = new Map<string, number>();
+		for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
+
+		const blocked = new Map<string, SanitizedExtensionError>();
+
+		for (const id of new Set(ids)) {
+			if (flowManager.hasOperation(id)) {
+				blocked.set(id, {
+					code: 'operation-collision',
+					detail: 'the operation id is declared by an inherited operation',
+				});
+			} else if ((counts.get(id) ?? 0) > 1) {
+				blocked.set(id, {
+					code: 'ambiguous-operation',
+					detail: 'a confined operation id is declared more than once',
+				});
+			}
+		}
+
+		return blocked;
 	}
 
 	private confinedRunnerDeps(runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig }) {
@@ -490,27 +604,28 @@ export class ExtensionManager {
 	}
 
 	private buildConfinedDescriptor(
-		extension: Extension,
-		eligible: ConfinedEligibleEntry,
+		binding: ConfinedBinding,
+		optionDelivery: ConfinedOptionDelivery | undefined,
 		runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig }
 	): ConfinedOperationDescriptor {
 		const deps = this.confinedRunnerDeps(runtime);
 
 		return {
-			referenceKeys: Object.keys(eligible.optionDelivery ?? {}),
+			referenceKeys: Object.keys(optionDelivery ?? {}),
 			run: (params) => {
 				const request: ConfinedOperationRequest = {
-					extensionId: extension.name,
-					contributionId: extension.name,
+					extensionId: binding.extensionId,
+					contributionId: binding.contributionId,
 					operationId: params.operationId,
-					entrySource: eligible.entrySource!,
-					capabilities: eligible.capabilities ?? {},
+					entrySource: binding.entrySource,
+					capabilities: binding.capabilities,
 					options: params.options,
 					input: params.input,
 					accountability: params.accountability,
 				};
 
-				if (eligible.optionDelivery !== undefined) request.optionDelivery = eligible.optionDelivery;
+				if (binding.bundleEntryKey !== undefined) request.bundleEntryKey = binding.bundleEntryKey;
+				if (optionDelivery !== undefined) request.optionDelivery = optionDelivery;
 
 				return runConfinedOperation(request, deps);
 			},
@@ -582,7 +697,14 @@ export class ExtensionManager {
 				continue;
 			}
 
-			this.endpointRouter.use(`/${extension.name}`, this.buildConfinedEndpointHandler(extension, eligible, runtime));
+			const binding: ConfinedBinding = {
+				extensionId: extension.name,
+				contributionId: extension.name,
+				entrySource: eligible.entrySource,
+				capabilities: eligible.capabilities ?? {},
+			};
+
+			this.endpointRouter.use(`/${extension.name}`, this.buildConfinedEndpointHandler(binding, runtime));
 			this.registeredEndpointRoutes.add(extension.name);
 			this.recordLoaded(extension);
 		}
@@ -637,74 +759,258 @@ export class ExtensionManager {
 				continue;
 			}
 
-			const deps = this.confinedRunnerDeps(runtime);
-
-			const baseRequest = (event: string, meta: Record<string, unknown>, accountability: Accountability | null) => ({
+			const binding: ConfinedBinding = {
 				extensionId: extension.name,
 				contributionId: extension.name,
-				entrySource: eligible.entrySource!,
+				entrySource: eligible.entrySource,
 				capabilities: eligible.capabilities ?? {},
-				event,
-				meta,
-				accountability,
-			});
+			};
 
-			for (const event of eligible.events.filter ?? []) {
-				const handler: FilterHandler = async (payload, meta, context) => {
-					const result = await runConfinedFilterHook(
-						{ ...baseRequest(event, meta, context.accountability ?? null), payload },
-						deps
-					);
-
-					if (!result.ok) throw new Error(`the confined hook "${extension.name}" failed`);
-
-					return result.unchanged ? undefined : result.payload;
-				};
-
-				emitter.onFilter(event, handler);
-				this.hookEvents.push({ type: 'filter', name: event, handler });
-			}
-
-			for (const event of eligible.events.action ?? []) {
-				const handler: ActionHandler = async (meta, context) => {
-					const result = await runConfinedActionHook(baseRequest(event, meta, context.accountability ?? null), deps);
-
-					if (!result.ok) {
-						logger.warn(`The confined hook "${extension.name}" failed for action "${event}"`);
-					}
-				};
-
-				emitter.onAction(event, handler);
-				this.hookEvents.push({ type: 'action', name: event, handler });
-			}
-
+			this.subscribeConfinedHook(binding, eligible.events, runtime);
 			this.recordLoaded(extension);
 		}
 	}
 
+	/**
+	 * Subscribes one confined hook binding's manifest events onto the platform
+	 * emitter. A filter failure blocks the platform action with a sanitized error,
+	 * since a filter that cannot run must not be silently skipped. An action failure
+	 * logs and never blocks. Handlers join `hookEvents`, so unload unregisters them
+	 * the same way it does inherited hooks.
+	 */
+	private subscribeConfinedHook(
+		binding: ConfinedBinding,
+		events: ConfinedHookEvents,
+		runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig }
+	): void {
+		const deps = this.confinedRunnerDeps(runtime);
+
+		const baseRequest = (
+			event: string,
+			meta: Record<string, unknown>,
+			accountability: Accountability | null
+		): ConfinedHookRequest => {
+			const request: ConfinedHookRequest = {
+				extensionId: binding.extensionId,
+				contributionId: binding.contributionId,
+				entrySource: binding.entrySource,
+				capabilities: binding.capabilities,
+				event,
+				meta,
+				accountability,
+			};
+
+			if (binding.bundleEntryKey !== undefined) request.bundleEntryKey = binding.bundleEntryKey;
+
+			return request;
+		};
+
+		for (const event of events.filter ?? []) {
+			const handler: FilterHandler = async (payload, meta, context) => {
+				const result = await runConfinedFilterHook(
+					{ ...baseRequest(event, meta, context.accountability ?? null), payload },
+					deps
+				);
+
+				if (!result.ok) throw new Error(`the confined hook "${binding.contributionId}" failed`);
+
+				return result.unchanged ? undefined : result.payload;
+			};
+
+			emitter.onFilter(event, handler);
+			this.hookEvents.push({ type: 'filter', name: event, handler });
+		}
+
+		for (const event of events.action ?? []) {
+			const handler: ActionHandler = async (meta, context) => {
+				const result = await runConfinedActionHook(baseRequest(event, meta, context.accountability ?? null), deps);
+
+				if (!result.ok) {
+					logger.warn(`The confined hook "${binding.contributionId}" failed for action "${event}"`);
+				}
+			};
+
+			emitter.onAction(event, handler);
+			this.hookEvents.push({ type: 'action', name: event, handler });
+		}
+	}
+
+	/**
+	 * Registers every confined bundle's server entries from its one shared artifact,
+	 * each through the same runner as its top-level counterpart, selecting that
+	 * entry's own capabilities and events by `type:name`. An entry's registration
+	 * identity may collide (an operation id, an endpoint route): that entry fails on
+	 * its own while its siblings register, and the bundle's diagnostic carries each
+	 * entry's status. The shared artifact being unavailable fails the whole bundle.
+	 * Runs after the inherited and top-level confined registrations, so the route and
+	 * operation collision checks see everything already mounted.
+	 */
+	private registerConfinedBundles(): void {
+		const runtime = this.confinedRuntime;
+		if (runtime === undefined) return;
+
+		const flowManager = getFlowManager();
+
+		for (const [extension, eligible] of this.confinedEligible) {
+			if (extension.type !== 'bundle') continue;
+
+			if (eligible.entrySource === undefined) {
+				this.recordFailed(extension, {
+					code: VALIDATION_INCOMPLETE,
+					detail: 'the confined bundle entry is unavailable',
+				});
+
+				continue;
+			}
+
+			const entryStatuses: ExtensionDiagnosticEntry[] = [];
+
+			for (const entry of extension.entries) {
+				const kind = entry.type;
+				if (kind !== 'operation' && kind !== 'endpoint' && kind !== 'hook') continue;
+
+				const key = `${kind}:${entry.name}`;
+
+				const binding: ConfinedBinding = {
+					extensionId: extension.name,
+					contributionId: entry.name,
+					entrySource: eligible.entrySource,
+					capabilities: eligible.entryCapabilities?.[key] ?? {},
+					bundleEntryKey: key,
+				};
+
+				const outcome = this.registerConfinedBundleEntry(
+					kind,
+					entry.name,
+					binding,
+					eligible.entryEvents?.[key],
+					runtime,
+					flowManager
+				);
+
+				entryStatuses.push({
+					name: entry.name,
+					type: kind,
+					status: outcome.status,
+					...(outcome.reason && { reason: outcome.reason }),
+				});
+			}
+
+			this.recordBundle(extension, entryStatuses);
+		}
+	}
+
+	private registerConfinedBundleEntry(
+		kind: 'operation' | 'endpoint' | 'hook',
+		name: string,
+		binding: ConfinedBinding,
+		events: ConfinedHookEvents | undefined,
+		runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig },
+		flowManager: ReturnType<typeof getFlowManager>
+	): { status: 'loaded' | 'failed'; reason?: SanitizedExtensionError } {
+		if (kind === 'operation') {
+			const block = this.confinedOperationBlocks.get(name);
+
+			if (block !== undefined) {
+				flowManager.markConfinedOperationAmbiguous(name);
+				return { status: 'failed', reason: block };
+			}
+
+			flowManager.addConfinedOperation(name, this.buildConfinedDescriptor(binding, undefined, runtime));
+			return { status: 'loaded' };
+		}
+
+		if (kind === 'endpoint') {
+			if (!CONFINED_ENDPOINT_ROUTE.test(name)) {
+				return {
+					status: 'failed',
+					reason: { code: 'route-invalid', detail: 'the confined endpoint route name is not a safe literal route' },
+				};
+			}
+
+			if (this.registeredEndpointRoutes.has(name)) {
+				return {
+					status: 'failed',
+					reason: { code: 'route-collision', detail: 'the confined endpoint route is already registered' },
+				};
+			}
+
+			if (binding.capabilities.endpoint === undefined) {
+				return {
+					status: 'failed',
+					reason: { code: 'capability-missing', detail: 'the endpoint capability is not declared' },
+				};
+			}
+
+			this.endpointRouter.use(`/${name}`, this.buildConfinedEndpointHandler(binding, runtime));
+			this.registeredEndpointRoutes.add(name);
+			return { status: 'loaded' };
+		}
+
+		if (events === undefined) {
+			return {
+				status: 'failed',
+				reason: { code: VALIDATION_INCOMPLETE, detail: 'the confined hook entry events are unavailable' },
+			};
+		}
+
+		const declaredEvents = [...(events.filter ?? []), ...(events.action ?? [])];
+
+		if (!declaredEvents.every(hasSafeEventSegments)) {
+			return {
+				status: 'failed',
+				reason: { code: 'event-invalid', detail: 'a confined hook event name is not a safe literal event' },
+			};
+		}
+
+		this.subscribeConfinedHook(binding, events, runtime);
+		return { status: 'loaded' };
+	}
+
+	private recordBundle(extension: BundleExtension, entries: ExtensionDiagnosticEntry[]): void {
+		const failed = entries.filter((entry) => entry.status === 'failed').length;
+		const loaded = entries.length - failed;
+
+		let status: ExtensionDiagnostic['status'] = 'partial';
+		if (failed === 0) status = 'loaded';
+		else if (loaded === 0) status = 'failed';
+
+		const diagnostic: ExtensionDiagnostic = {
+			name: extension.name,
+			type: extension.type,
+			local: extension.local,
+			status,
+			entries,
+		};
+
+		if (extension.version) diagnostic.version = extension.version;
+
+		this.diagnostics.push(diagnostic);
+	}
+
 	private buildConfinedEndpointHandler(
-		extension: Extension,
-		eligible: ConfinedEligibleEntry,
+		binding: ConfinedBinding,
 		runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig }
 	): express.RequestHandler {
 		const deps = this.confinedRunnerDeps(runtime);
 
 		return async (req, res, next) => {
 			try {
-				const result = await runConfinedEndpoint(
-					{
-						extensionId: extension.name,
-						contributionId: extension.name,
-						entrySource: eligible.entrySource!,
-						capabilities: eligible.capabilities ?? {},
-						method: req.method,
-						path: req.path,
-						query: req.query,
-						body: req.body,
-						accountability: req.accountability ?? null,
-					},
-					deps
-				);
+				const request: ConfinedEndpointRequest = {
+					extensionId: binding.extensionId,
+					contributionId: binding.contributionId,
+					entrySource: binding.entrySource,
+					capabilities: binding.capabilities,
+					method: req.method,
+					path: req.path,
+					query: req.query,
+					body: req.body,
+					accountability: req.accountability ?? null,
+				};
+
+				if (binding.bundleEntryKey !== undefined) request.bundleEntryKey = binding.bundleEntryKey;
+
+				const result = await runConfinedEndpoint(request, deps);
 
 				if (result.ok) {
 					res.status(result.status);
@@ -849,6 +1155,7 @@ export class ExtensionManager {
 		this.extensions = [];
 		this.serverExtensions = [];
 		this.confinedEligible.clear();
+		this.confinedOperationBlocks.clear();
 		this.confinedRuntimeDeps = {};
 		this.confinedRuntimeUnavailable = false;
 		this.confinedRuntime = undefined;
@@ -873,12 +1180,18 @@ export class ExtensionManager {
 		await this.registerHooks();
 		await this.registerEndpoints();
 		await this.registerOperations();
-		this.registerConfinedOperations();
 		await this.registerBundles();
+		// After every inherited operation source, top-level and bundle, so a confined
+		// operation colliding with an inherited one is caught at load rather than read
+		// loaded and rejected only at run.
+		this.registerConfinedOperations();
 		// After every inherited registration, so the collision check sees every
 		// inherited route, bundle entries included.
 		this.registerConfinedEndpoints();
 		this.registerConfinedHooks();
+		// Last, so a bundle entry's collision check sees every inherited and top-level
+		// confined route and operation already registered.
+		this.registerConfinedBundles();
 
 		if (env['SERVE_APP']) {
 			this.appExtensions = await this.generateExtensionBundle();

@@ -1,5 +1,10 @@
 import type { Accountability, ConfinedOptionDelivery, ExtensionCapabilities } from '@cairncms/types';
-import { createConfinedHostBroker, DARK_SETTINGS, type ConfinedHostBrokerDeps, type ConfinedLogEntry } from './broker.js';
+import {
+	createConfinedHostBroker,
+	DARK_SETTINGS,
+	type ConfinedHostBrokerDeps,
+	type ConfinedLogEntry,
+} from './broker.js';
 import { prepareOperationOptions } from './operation-options.js';
 import { ConfinedSecretScope } from './secret-scope.js';
 import type {
@@ -18,6 +23,9 @@ export interface ConfinedOperationRequest {
 	operationId: string;
 	// The gate-probed built server entry bytes. Executed as bytes, never imported.
 	entrySource: string;
+	// When the entry is one server entry of a bundle artifact, its `type:name` key,
+	// so the engine selects it from the CairnBundle record.
+	bundleEntryKey?: string;
 	capabilities: ExtensionCapabilities;
 	optionDelivery?: ConfinedOptionDelivery;
 	// The resolved (clear) configured options for this operation.
@@ -138,6 +146,8 @@ export async function runConfinedOperation(
 			accountability: toConfinedAccountability(request.accountability),
 			limits: deps.runtimeLimits,
 		};
+
+		if (request.bundleEntryKey !== undefined) invocation.bundleEntryKey = request.bundleEntryKey;
 
 		const result = await deps.invoke(invocation, dispatcher);
 

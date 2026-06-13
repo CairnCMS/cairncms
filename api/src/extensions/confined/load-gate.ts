@@ -21,7 +21,7 @@ import path from 'node:path';
 import type { SanitizedExtensionError } from '../../utils/sanitize-extension-error.js';
 import { resolveSandboxConfig, type SandboxConfig } from './sandbox-limits.js';
 import { getConfinedSupervisor } from './supervisor.js';
-import type { ConfinedInvocation, ConfinedLoadProbeResult } from './types.js';
+import type { ConfinedBundleProbeEntry, ConfinedInvocation, ConfinedLoadProbeResult } from './types.js';
 
 // The manifest is a package.json, far below this on any real package.
 export const MAX_MANIFEST_BYTES = 256 * 1024;
@@ -45,10 +45,14 @@ export type ConfinedEligibleEntry = {
 	entrySource?: string;
 	capabilities?: ExtensionCapabilities;
 	entryCapabilities?: Record<string, ExtensionCapabilities>;
+	// The exact event names declared per bundle hook entry, keyed `type:name`, the
+	// declarations the bundle binding subscribes and the probe verifies the entry
+	// against. A top-level hook carries its events in `events` instead.
+	entryEvents?: Record<string, ConfinedHookEvents>;
 	// The operation option keys the manifest declares as opaque references. The
 	// binding mints a per-invocation handle for each and never sends its clear value
-	// to the guest. Top-level operations only here; bundle operation entries carry
-	// their own delivery with the bundle binding.
+	// to the guest. Top-level operations only: the schema rejects optionDelivery on a
+	// bundle operation entry, so a secret-bearing operation stays a top-level one.
 	optionDelivery?: ConfinedOptionDelivery;
 	// The exact event names a confined hook subscribes to, from the manifest, the
 	// declaration the probe verified the entry against.
@@ -143,7 +147,8 @@ function collectCapabilities(options: ExtensionOptions): ConfinedEligibleEntry |
 	if (options.type === 'bundle') {
 		const seen = new Set<string>();
 		const entryCapabilities: Record<string, ExtensionCapabilities> = {};
-		let declared = false;
+		const entryEvents: Record<string, ConfinedHookEvents> = {};
+		const collected: ConfinedEligibleEntry = {};
 
 		for (const entry of options.entries) {
 			if (!isTypeIn(entry, API_EXTENSION_TYPES) && !isTypeIn(entry, HYBRID_EXTENSION_TYPES)) continue;
@@ -155,11 +160,16 @@ function collectCapabilities(options: ExtensionOptions): ConfinedEligibleEntry |
 
 			if (entry.capabilities !== undefined) {
 				entryCapabilities[key] = entry.capabilities;
-				declared = true;
+				collected.entryCapabilities = entryCapabilities;
+			}
+
+			if (entry.type === 'hook' && entry.events !== undefined) {
+				entryEvents[key] = entry.events;
+				collected.entryEvents = entryEvents;
 			}
 		}
 
-		return declared ? { entryCapabilities } : {};
+		return collected;
 	}
 
 	return {};
@@ -257,18 +267,19 @@ export async function gateConfinedExtension(
 		return { ok: false, error: confinedValidationError(reason) };
 	}
 
-	// The eval probe certifies the contracts that have bindings: flow operations,
-	// json endpoints, and event hooks. Bundles stay scanner-gated here and get
-	// their load contract with their binding.
+	// The eval probe certifies every contract that has a binding: flow operations,
+	// json endpoints, event hooks, and bundles. A bundle probes its one shared
+	// artifact against all declared server entries at once, so a single bad entry
+	// fails the whole server side.
 	if (isTypeIn(options, HYBRID_EXTENSION_TYPES)) {
-		const probed = await probeServerEntry(extension, options.path.api, 'flow-operation', deps);
+		const probed = await probeServerEntry(extension, options.path.api, deps, { activation: 'flow-operation' });
 		if (!probed.ok) return probed;
 
 		return { ...probed, ...collected };
 	}
 
 	if (options.type === 'endpoint') {
-		const probed = await probeServerEntry(extension, options.path, 'json-endpoint', deps);
+		const probed = await probeServerEntry(extension, options.path, deps, { activation: 'json-endpoint' });
 		if (!probed.ok) return probed;
 
 		return { ...probed, ...collected };
@@ -283,7 +294,43 @@ export async function gateConfinedExtension(
 		// declaration, so the reviewed subscription surface is the real one.
 		const expected = { filters: options.events.filter ?? [], actions: options.events.action ?? [] };
 
-		const probed = await probeServerEntry(extension, options.path, 'event-filter', deps, expected);
+		const probed = await probeServerEntry(extension, options.path, deps, {
+			activation: 'event-filter',
+			input: expected,
+		});
+
+		if (!probed.ok) return probed;
+
+		return { ...probed, ...collected };
+	}
+
+	if (options.type === 'bundle') {
+		// Each declared server entry, keyed `type:name`, with the config id it must
+		// carry and, for a hook, the manifest events its handler sets must equal.
+		const bundleEntries: ConfinedBundleProbeEntry[] = [];
+
+		for (const entry of options.entries) {
+			if (entry.type === 'endpoint') {
+				bundleEntries.push({ key: `endpoint:${entry.name}`, name: entry.name, kind: 'endpoint' });
+			} else if (entry.type === 'hook') {
+				// Defense in depth past the schema: a hook entry without events would
+				// probe inert, so it fails closed here too.
+				if (entry.events === undefined) {
+					return refuse('manifest-invalid', 'a hook entry in a bundle must declare its events');
+				}
+
+				bundleEntries.push({
+					key: `hook:${entry.name}`,
+					name: entry.name,
+					kind: 'hook',
+					events: { filters: entry.events.filter ?? [], actions: entry.events.action ?? [] },
+				});
+			} else if (isTypeIn(entry, HYBRID_EXTENSION_TYPES)) {
+				bundleEntries.push({ key: `operation:${entry.name}`, name: entry.name, kind: 'operation' });
+			}
+		}
+
+		const probed = await probeServerEntry(extension, options.path.api, deps, { bundleEntries });
 		if (!probed.ok) return probed;
 
 		return { ...probed, ...collected };
@@ -304,9 +351,8 @@ export async function gateConfinedExtension(
 async function probeServerEntry(
 	extension: Extension,
 	entryRelative: string,
-	activation: 'flow-operation' | 'json-endpoint' | 'event-filter',
 	deps: ConfinedLoadGateDeps,
-	probeInput: unknown = null
+	shape: { activation?: ConfinedInvocation['activation']; input?: unknown; bundleEntries?: ConfinedBundleProbeEntry[] }
 ): Promise<ConfinedGateVerdict> {
 	const readFile = deps.readFile ?? readFileCapped;
 	const probe = deps.probe ?? ((invocation: ConfinedInvocation) => getConfinedSupervisor().probeLoad(invocation));
@@ -348,13 +394,15 @@ async function probeServerEntry(
 		extensionId: extension.name,
 		contributionId: extension.name,
 		operationId: extension.name,
-		activation,
 		entrySource: entryRead.text,
 		options: {},
-		input: probeInput,
+		input: shape.input ?? null,
 		accountability: null,
 		limits: config.runtime,
 	};
+
+	if (shape.activation !== undefined) invocation.activation = shape.activation;
+	if (shape.bundleEntries !== undefined) invocation.bundleEntries = shape.bundleEntries;
 
 	let result: ConfinedLoadProbeResult;
 

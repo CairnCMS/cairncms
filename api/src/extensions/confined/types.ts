@@ -29,6 +29,15 @@ export interface ConfinedAccountability {
 	admin: boolean;
 }
 
+// One declared server entry of a confined bundle, for the all-entries bundle probe.
+// `key` is the `type:name` key the entry is exposed under in the CairnBundle record,
+// and `name` is the config id the entry must carry. A hook entry must carry the
+// manifest events its declared handler sets are required to equal, so a hook with no
+// subscription cannot load inert.
+export type ConfinedBundleProbeEntry =
+	| { key: string; name: string; kind: 'operation' | 'endpoint' }
+	| { key: string; name: string; kind: 'hook'; events: { filters: string[]; actions: string[] } };
+
 export interface ConfinedInvocation {
 	extensionId: string;
 	contributionId: string;
@@ -37,6 +46,12 @@ export interface ConfinedInvocation {
 	operationId: string;
 	// Selects the guest contract the engine builds. Absent means flow-operation.
 	activation?: 'flow-operation' | 'json-endpoint' | 'event-filter' | 'event-action';
+	// When set, the run path selects this entry from the bundle artifact's CairnBundle
+	// record instead of the top-level contract global.
+	bundleEntryKey?: string;
+	// When set, the probe path validates every declared entry against the one bundle
+	// artifact rather than a single top-level config.
+	bundleEntries?: ConfinedBundleProbeEntry[];
 	// The built server entry the engine evaluates.
 	entrySource: string;
 	options: Record<string, unknown>;

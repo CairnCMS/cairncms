@@ -39,6 +39,17 @@ const ENDPOINT_ENTRY =
 const HOOK_ENTRY =
 	"var CairnHook = (() => ({ default: { id: 'test-extension', filters: { 'items.create': () => undefined }, actions: { 'auth.login': () => undefined } } }))();\n";
 
+// A placeholder bundle artifact for tests that stub the probe and only assert the
+// gate-level wiring, not the probe's per-entry validation.
+const BUNDLE_PLACEHOLDER = 'var CairnBundle = { default: {} };\n';
+
+const PROBE_LOADABLE = { probe: async () => ({ loadable: true as const }) };
+
+// A built bundle artifact whose entries match a manifest of an `ep` endpoint and an
+// `hk` hook that subscribes to `items.create`.
+const BUNDLE_ENTRY =
+	"var CairnBundle = (() => ({ default: { 'endpoint:ep': { id: 'ep', handler: async () => ({ body: null }) }, 'hook:hk': { id: 'hk', actions: { 'items.create': () => undefined } } } }))();\n";
+
 function operationManifest(): Record<string, unknown> {
 	return manifest({
 		type: 'operation',
@@ -243,17 +254,167 @@ describe('gateConfinedExtension', () => {
 		const passing = await makeDir(bundleManifest('src/ep.js'), {
 			'src/ep.js': CLEAN_SOURCE,
 			'src/ui.js': BROWSER_FETCH_SOURCE,
+			'dist/api.js': BUNDLE_PLACEHOLDER,
 		});
 
-		expect(await gateConfinedExtension(extensionAt(passing, 'bundle'))).toEqual({ ok: true });
+		expect(await gateConfinedExtension(extensionAt(passing, 'bundle'), PROBE_LOADABLE)).toMatchObject({ ok: true });
 
 		const failing = await makeDir(bundleManifest('src/ep.js'), {
 			'src/ep.js': RAW_FS_SOURCE,
 			'src/ui.js': CLEAN_SOURCE,
 		});
 
-		const verdict = await gateConfinedExtension(extensionAt(failing, 'bundle'));
+		// The scanner catches the flagged server entry before the probe runs.
+		const verdict = await gateConfinedExtension(extensionAt(failing, 'bundle'), PROBE_LOADABLE);
 		expect(verdict).toMatchObject({ ok: false, error: { code: 'uses-raw-fs' } });
+	});
+
+	it('carries per-entry capabilities and hook events into the bundle verdict', async () => {
+		const bundleManifest = manifest({
+			type: 'bundle',
+			path: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [
+				{ type: 'endpoint', name: 'ep', source: 'src/ep.js', capabilities: { log: true } },
+				{ type: 'hook', name: 'hk', source: 'src/hk.js', events: { action: ['items.create'] } },
+			],
+			runtime: 'confined-server',
+			host: '^10.0.0',
+		});
+
+		const dir = await makeDir(bundleManifest, {
+			'src/ep.js': CLEAN_SOURCE,
+			'src/hk.js': CLEAN_SOURCE,
+			'dist/api.js': BUNDLE_PLACEHOLDER,
+		});
+
+		const extension = {
+			path: dir,
+			name: 'test-extension',
+			local: true,
+			runtime: 'confined-server' as const,
+			type: 'bundle' as const,
+			entrypoint: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [
+				{ type: 'endpoint' as const, name: 'ep' },
+				{ type: 'hook' as const, name: 'hk' },
+			],
+		};
+
+		const verdict = await gateConfinedExtension(extension, PROBE_LOADABLE);
+
+		expect(verdict).toEqual({
+			ok: true,
+			entrySource: BUNDLE_PLACEHOLDER,
+			entryCapabilities: { 'endpoint:ep': { log: true } },
+			entryEvents: { 'hook:hk': { action: ['items.create'] } },
+		});
+	});
+
+	it('probes a clean bundle through the real confined child and carries the artifact bytes', async () => {
+		const bundleManifest = manifest({
+			type: 'bundle',
+			path: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [
+				{ type: 'endpoint', name: 'ep', source: 'src/ep.js', capabilities: { endpoint: { access: 'public' } } },
+				{ type: 'hook', name: 'hk', source: 'src/hk.js', events: { action: ['items.create'] } },
+			],
+			runtime: 'confined-server',
+			host: '^10.0.0',
+		});
+
+		const dir = await makeDir(bundleManifest, {
+			'src/ep.js': CLEAN_SOURCE,
+			'src/hk.js': CLEAN_SOURCE,
+			'dist/api.js': BUNDLE_ENTRY,
+		});
+
+		const extension = {
+			path: dir,
+			name: 'test-extension',
+			local: true,
+			runtime: 'confined-server' as const,
+			type: 'bundle' as const,
+			entrypoint: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [
+				{ type: 'endpoint' as const, name: 'ep' },
+				{ type: 'hook' as const, name: 'hk' },
+			],
+		};
+
+		const verdict = await gateConfinedExtension(extension);
+
+		expect(verdict).toEqual({
+			ok: true,
+			entrySource: BUNDLE_ENTRY,
+			entryCapabilities: { 'endpoint:ep': { endpoint: { access: 'public' } } },
+			entryEvents: { 'hook:hk': { action: ['items.create'] } },
+		});
+	}, 20_000);
+
+	it('refuses a bundle whose artifact is missing a declared server entry', async () => {
+		const bundleManifest = manifest({
+			type: 'bundle',
+			path: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [
+				{ type: 'endpoint', name: 'ep', source: 'src/ep.js' },
+				{ type: 'hook', name: 'hk', source: 'src/hk.js', events: { action: ['items.create'] } },
+			],
+			runtime: 'confined-server',
+			host: '^10.0.0',
+		});
+
+		// The artifact exposes only the endpoint entry, not the declared hook.
+		const partial =
+			"var CairnBundle = (() => ({ default: { 'endpoint:ep': { id: 'ep', handler: async () => ({ body: null }) } } }))();\n";
+
+		const dir = await makeDir(bundleManifest, {
+			'src/ep.js': CLEAN_SOURCE,
+			'src/hk.js': CLEAN_SOURCE,
+			'dist/api.js': partial,
+		});
+
+		const extension = {
+			path: dir,
+			name: 'test-extension',
+			local: true,
+			runtime: 'confined-server' as const,
+			type: 'bundle' as const,
+			entrypoint: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [
+				{ type: 'endpoint' as const, name: 'ep' },
+				{ type: 'hook' as const, name: 'hk' },
+			],
+		};
+
+		const verdict = await gateConfinedExtension(extension);
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'invalid-entry' } });
+	}, 20_000);
+
+	it('refuses a confined bundle whose hook entry declares no events', async () => {
+		const bundleManifest = manifest({
+			type: 'bundle',
+			path: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [{ type: 'hook', name: 'hk', source: 'src/hk.js' }],
+			runtime: 'confined-server',
+			host: '^10.0.0',
+		});
+
+		const dir = await makeDir(bundleManifest, { 'src/hk.js': CLEAN_SOURCE, 'dist/api.js': BUNDLE_PLACEHOLDER });
+
+		const extension = {
+			path: dir,
+			name: 'test-extension',
+			local: true,
+			runtime: 'confined-server' as const,
+			type: 'bundle' as const,
+			entrypoint: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [{ type: 'hook' as const, name: 'hk' }],
+		};
+
+		// The manifest schema refuses a hook entry without events before the gate
+		// reaches its own defense, so an inert hook never probes.
+		const verdict = await gateConfinedExtension(extension, PROBE_LOADABLE);
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'manifest-invalid' } });
 	});
 
 	it('probes a clean operation through the real confined child and carries the probed bytes', async () => {
@@ -578,6 +739,7 @@ describe('gateConfinedExtension', () => {
 			'src/op-app.js': CLEAN_SOURCE,
 			'src/op-api.js': CLEAN_SOURCE,
 			'src/ui.js': CLEAN_SOURCE,
+			'dist/api.js': BUNDLE_PLACEHOLDER,
 		});
 
 		const bundle: Extension = {
@@ -594,10 +756,11 @@ describe('gateConfinedExtension', () => {
 			],
 		};
 
-		const verdict = await gateConfinedExtension(bundle);
+		const verdict = await gateConfinedExtension(bundle, PROBE_LOADABLE);
 
 		expect(verdict).toEqual({
 			ok: true,
+			entrySource: BUNDLE_PLACEHOLDER,
 			entryCapabilities: { 'endpoint:ep': endpointCaps, 'operation:op': operationCaps },
 		});
 	});

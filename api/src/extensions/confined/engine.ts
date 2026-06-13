@@ -192,7 +192,9 @@ export async function runConfinedLoadProbe(invocation: ConfinedInvocation): Prom
 
 	if (outcome.kind === 'error') return { loadable: false, error: outcome.error };
 
-	return interpretLoadProbeOutput(outcome.data, guestContract(invocation).noun);
+	const noun = invocation.bundleEntries !== undefined ? 'confined bundle' : guestContract(invocation).noun;
+
+	return interpretLoadProbeOutput(outcome.data, noun);
 }
 
 /**
@@ -219,6 +221,35 @@ function isEventActivation(invocation: ConfinedInvocation): boolean {
 	return invocation.activation === 'event-filter' || invocation.activation === 'event-action';
 }
 
+/**
+ * The JS that declares `__config`, the entry to run. A top-level entry comes from
+ * its contract global's default export; a bundle entry is selected by `type:name`
+ * from the artifact's CairnBundle record, through an own-property check so a
+ * prototype-named key can never resolve to an inherited member.
+ */
+function configSelector(invocation: ConfinedInvocation): string {
+	if (invocation.bundleEntryKey !== undefined) {
+		const key = JSON.stringify(invocation.bundleEntryKey);
+
+		return `const __cairnBundle =
+				(typeof CairnBundle !== 'undefined' && CairnBundle.default)
+					? CairnBundle.default
+					: (typeof CairnBundle !== 'undefined' ? CairnBundle : undefined);
+			const __config =
+				(__cairnBundle !== null && typeof __cairnBundle === 'object' &&
+					Object.prototype.hasOwnProperty.call(__cairnBundle, ${key}))
+					? __cairnBundle[${key}]
+					: undefined;`;
+	}
+
+	const global = guestContract(invocation).globalName;
+
+	return `const __config =
+			(typeof ${global} !== 'undefined' && ${global}.default)
+				? ${global}.default
+				: (typeof ${global} !== 'undefined' ? ${global} : undefined);`;
+}
+
 function buildHarness(invocation: ConfinedInvocation): string {
 	if (isEventActivation(invocation)) return buildHookHarness(invocation);
 
@@ -236,10 +267,7 @@ function buildHarness(invocation: ConfinedInvocation): string {
 
 	return `
 		${invocation.entrySource}
-		const __config =
-			(typeof ${contract.globalName} !== 'undefined' && ${contract.globalName}.default)
-				? ${contract.globalName}.default
-				: (typeof ${contract.globalName} !== 'undefined' ? ${contract.globalName} : undefined);
+		${configSelector(invocation)}
 		if (!__config || typeof __config.handler !== 'function') {
 			throw new Error('entry default export is not a ${contract.noun} config with a function handler');
 		}
@@ -312,10 +340,7 @@ function buildHookHarness(invocation: ConfinedInvocation): string {
 
 	return `
 		${invocation.entrySource}
-		const __config =
-			(typeof CairnHook !== 'undefined' && CairnHook.default)
-				? CairnHook.default
-				: (typeof CairnHook !== 'undefined' ? CairnHook : undefined);
+		${configSelector(invocation)}
 		if (!__config || typeof __config.id !== 'string') {
 			throw new Error('entry default export is not an event hook config');
 		}
@@ -375,6 +400,7 @@ function buildHookHarness(invocation: ConfinedInvocation): string {
  * drift from the declaration the operator reviewed.
  */
 function buildLoadProbeHarness(invocation: ConfinedInvocation): string {
+	if (invocation.bundleEntries !== undefined) return buildBundleProbeHarness(invocation);
 	if (isEventActivation(invocation)) return buildHookProbeHarness(invocation);
 
 	const contract = guestContract(invocation);
@@ -425,6 +451,59 @@ function buildHookProbeHarness(invocation: ConfinedInvocation): string {
 			if (filters === null || actions === null) return { kind: 'invalid-entry' };
 			if (!__sameSet(filters, __expected.filters) || !__sameSet(actions, __expected.actions)) {
 				return { kind: 'declaration-mismatch' };
+			}
+			return { kind: 'loadable' };
+		};
+		export default JSON.stringify(__verdict());
+	`;
+}
+
+/**
+ * The bundle load-probe harness: evaluates the one bundle artifact and validates
+ * every declared server entry against the CairnBundle record in a single pass, with
+ * no handler invoked. Each entry must be present under its `type:name` key with a
+ * config id equal to its name, an operation or endpoint entry must expose a handler
+ * function, and a hook entry's declared handler sets must equal its manifest events.
+ * Any one failing entry fails the whole bundle, since the artifact is shared.
+ */
+function buildBundleProbeHarness(invocation: ConfinedInvocation): string {
+	const expected = JSON.stringify(invocation.bundleEntries ?? []);
+
+	return `
+		${invocation.entrySource}
+		const __bundle =
+			(typeof CairnBundle !== 'undefined' && CairnBundle.default)
+				? CairnBundle.default
+				: (typeof CairnBundle !== 'undefined' ? CairnBundle : undefined);
+		const __expected = ${expected};
+		const __own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+		const __declared = (record) => {
+			if (record === undefined) return [];
+			if (record === null || typeof record !== 'object' || Array.isArray(record)) return null;
+			const names = Object.keys(record);
+			for (const name of names) {
+				if (typeof record[name] !== 'function') return null;
+			}
+			return names;
+		};
+		const __sameSet = (a, b) =>
+			a.length === b.length && [...a].sort().join('\\n') === [...b].sort().join('\\n');
+		const __verdict = () => {
+			if (!__bundle || typeof __bundle !== 'object') return { kind: 'invalid-entry' };
+			for (const entry of __expected) {
+				const config = __own(__bundle, entry.key) ? __bundle[entry.key] : undefined;
+				if (!config || typeof config !== 'object') return { kind: 'invalid-entry' };
+				if (config.id !== entry.name) return { kind: 'identity-mismatch' };
+				if (entry.kind === 'hook') {
+					const filters = __declared(config.filters);
+					const actions = __declared(config.actions);
+					if (filters === null || actions === null) return { kind: 'invalid-entry' };
+					if (!__sameSet(filters, entry.events.filters) || !__sameSet(actions, entry.events.actions)) {
+						return { kind: 'declaration-mismatch' };
+					}
+				} else if (typeof config.handler !== 'function') {
+					return { kind: 'invalid-entry' };
+				}
 			}
 			return { kind: 'loadable' };
 		};

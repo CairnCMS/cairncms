@@ -204,6 +204,17 @@ function writeConfinedBundlePackage(dir: string, serverEntrySource: string, name
 	);
 
 	writeFileSync(path.join(full, 'src', 'ep.js'), serverEntrySource);
+
+	// The built bundle artifact the gate reads and probes, exposing the one endpoint
+	// entry under its `type:name` key.
+	const entryName = `${name}-endpoint`;
+
+	writeFileSync(
+		path.join(full, 'api.js'),
+		`var CairnBundle = (() => ({ default: { ${JSON.stringify(`endpoint:${entryName}`)}: { id: ${JSON.stringify(
+			entryName
+		)}, handler: async () => ({ body: null }) } } }))();\n`
+	);
 }
 
 function endpointExtension(dir: string, name: string, confined: boolean): Extension {
@@ -404,6 +415,63 @@ describe('the confined load gate in the loader', () => {
 		});
 	});
 
+	it('carries the per-entry bundle capabilities and hook events into the eligible entry', async () => {
+		const dir = path.join(root, 'capable-bundle');
+		mkdirSync(path.join(dir, 'src'), { recursive: true });
+
+		writeFileSync(
+			path.join(dir, 'package.json'),
+			JSON.stringify({
+				name: 'capable-bundle',
+				version: '1.0.0',
+				'cairncms:extension': {
+					type: 'bundle',
+					path: { app: 'app.js', api: 'api.js' },
+					entries: [
+						{ type: 'endpoint', name: 'ep', source: 'src/ep.js', capabilities: { log: true } },
+						{ type: 'hook', name: 'hk', source: 'src/hk.js', events: { action: ['items.create'] } },
+					],
+					runtime: 'confined-server',
+					host: '^10.0.0',
+				},
+			})
+		);
+
+		writeFileSync(path.join(dir, 'src', 'ep.js'), 'export default {};\n');
+		writeFileSync(path.join(dir, 'src', 'hk.js'), 'export default {};\n');
+
+		// The built bundle artifact the gate reads and probes; the mocked supervisor
+		// answers the probe loadable, so its content is not validated here.
+		const bundleArtifact =
+			"var CairnBundle = (() => ({ default: { 'endpoint:ep': { id: 'ep', handler: async () => ({}) }, 'hook:hk': { id: 'hk', actions: { 'items.create': () => undefined } } } }))();\n";
+
+		writeFileSync(path.join(dir, 'api.js'), bundleArtifact);
+
+		const bundle: Extension = {
+			path: dir,
+			name: 'capable-bundle',
+			type: 'bundle',
+			entrypoint: { app: 'app.js', api: 'api.js' },
+			entries: [
+				{ type: 'endpoint', name: 'ep' },
+				{ type: 'hook', name: 'hk' },
+			],
+			local: true,
+			runtime: 'confined-server',
+		};
+
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [bundle];
+
+		await (instance as any).load();
+
+		expect((instance as any).confinedEligible.get(bundle)).toEqual({
+			entrySource: bundleArtifact,
+			entryCapabilities: { 'endpoint:ep': { log: true } },
+			entryEvents: { 'hook:hk': { action: ['items.create'] } },
+		});
+	});
+
 	it('keeps same-name extensions distinct, so a failing one is never eligible through a passing one', async () => {
 		writeConfinedPackage('dup-clean', 'export default {};\n', 'duplicate-name');
 
@@ -568,13 +636,19 @@ describe('the confined load gate in the loader', () => {
 
 		await (instance as any).load();
 
-		// Every probed type fails closed; the scanner-gated bundle is untouched.
-		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'probe-thrower');
-		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('validation-incomplete');
+		// Every probed type, including the bundle, fails closed, and each is processed
+		// (gets a diagnostic) rather than the loader aborting after the first throw.
+		const diagnostics = (instance as any).getDiagnostics();
+
+		for (const name of ['probe-thrower', 'confined-endpoint', 'probe-bundle-sibling']) {
+			const row = diagnostics.find((entry: any) => entry.name === name);
+			expect(row?.status, name).toBe('failed');
+			expect(row?.reason?.code, name).toBe('validation-incomplete');
+		}
+
 		expect((instance as any).confinedEligible.has(operation)).toBe(false);
 		expect((instance as any).confinedEligible.has(endpointSibling)).toBe(false);
-		expect((instance as any).confinedEligible.has(bundleSibling)).toBe(true);
+		expect((instance as any).confinedEligible.has(bundleSibling)).toBe(false);
 	});
 
 	it('surfaces a host-side probe failure as validation-incomplete, not a verdict on the extension', async () => {
@@ -1170,5 +1244,445 @@ describe('the confined hook binding', () => {
 			.filter((entry: any) => entry.name === 'dup-hook' && entry.reason?.code === 'ambiguous-hook');
 
 		expect(failed).toHaveLength(2);
+	});
+});
+
+describe('the confined bundle binding', () => {
+	const EVENT_CONTEXT = { database: {} as never, schema: null, accountability: null };
+	let current: ExtensionManager | undefined;
+
+	afterEach(async () => {
+		if (current !== undefined) await (current as any).unload();
+		current = undefined;
+		confinedRuntime.resolve = undefined;
+	});
+
+	type BundleEntrySpec = {
+		type: 'operation' | 'endpoint' | 'hook';
+		name: string;
+		capabilities?: Record<string, unknown>;
+		events?: { filter?: string[]; action?: string[] };
+	};
+
+	function writeConfinedBundle(dir: string, name: string, entries: BundleEntrySpec[]): void {
+		const full = path.join(root, dir);
+		mkdirSync(path.join(full, 'src'), { recursive: true });
+
+		const manifestEntries = entries.map((entry) => ({
+			type: entry.type,
+			name: entry.name,
+			source:
+				entry.type === 'operation'
+					? { app: `src/${entry.name}-app.js`, api: `src/${entry.name}-api.js` }
+					: `src/${entry.name}.js`,
+			...(entry.capabilities && { capabilities: entry.capabilities }),
+			...(entry.events && { events: entry.events }),
+		}));
+
+		writeFileSync(
+			path.join(full, 'package.json'),
+			JSON.stringify({
+				name,
+				version: '1.0.0',
+				'cairncms:extension': {
+					type: 'bundle',
+					path: { app: 'app.js', api: 'api.js' },
+					entries: manifestEntries,
+					runtime: 'confined-server',
+					host: '^10.0.0',
+				},
+			})
+		);
+
+		for (const entry of entries) {
+			if (entry.type === 'operation') {
+				writeFileSync(path.join(full, 'src', `${entry.name}-app.js`), 'export default {};\n');
+				writeFileSync(path.join(full, 'src', `${entry.name}-api.js`), 'export default {};\n');
+			} else {
+				writeFileSync(path.join(full, 'src', `${entry.name}.js`), 'export default {};\n');
+			}
+		}
+
+		const members = entries.map((entry) => {
+			const key = JSON.stringify(`${entry.type}:${entry.name}`);
+
+			if (entry.type === 'hook') {
+				const handlers = (names: string[] | undefined) =>
+					(names ?? []).map((event) => `${JSON.stringify(event)}: () => undefined`).join(', ');
+
+				return `${key}: { id: ${JSON.stringify(entry.name)}, filters: { ${handlers(
+					entry.events?.filter
+				)} }, actions: { ${handlers(entry.events?.action)} } }`;
+			}
+
+			return `${key}: { id: ${JSON.stringify(entry.name)}, handler: async () => ({ body: null }) }`;
+		});
+
+		writeFileSync(path.join(full, 'api.js'), `var CairnBundle = (() => ({ default: { ${members.join(', ')} } }))();\n`);
+	}
+
+	function confinedBundleExtension(dir: string, name: string, entries: BundleEntrySpec[]): Extension {
+		return {
+			path: path.join(root, dir),
+			name,
+			type: 'bundle',
+			entrypoint: { app: 'app.js', api: 'api.js' },
+			entries: entries.map((entry) => ({ type: entry.type, name: entry.name })),
+			local: true,
+			runtime: 'confined-server',
+		};
+	}
+
+	function endpointApp(
+		instance: ExtensionManager,
+		accountability: unknown = { user: 'u-1', role: 'r-1', admin: false }
+	) {
+		const app = express();
+		app.use(express.json());
+
+		app.use((req, _res, next) => {
+			(req as any).accountability = accountability;
+			next();
+		});
+
+		app.use(instance.getEndpointRouter());
+
+		app.use((err: any, _req: any, res: any, _next: any) => {
+			res.status(err.status ?? 500).json({ code: err.code ?? 'INTERNAL' });
+		});
+
+		return app;
+	}
+
+	function diagnosticFor(instance: ExtensionManager, name: string): any {
+		return (instance as any).getDiagnostics().find((entry: any) => entry.name === name);
+	}
+
+	it('registers every server entry of a bundle from the one artifact, selecting each entry by its key', async () => {
+		const seen: string[] = [];
+
+		confinedRuntime.resolve = async () => ({
+			ok: true,
+			supervisor: {
+				probeLoad: async () => ({ loadable: true }),
+				invoke: async (invocation: { activation?: string; bundleEntryKey?: string; input: unknown }) => {
+					seen.push(invocation.bundleEntryKey ?? 'none');
+
+					if (invocation.activation === 'event-filter') {
+						return { ok: true, value: { unchanged: false, payload: { stamped: invocation.bundleEntryKey } } };
+					}
+
+					return { ok: true, value: { status: 200, body: { key: invocation.bundleEntryKey } } };
+				},
+			},
+			config: {
+				sandbox: { maxArtifactBytes: 8 * 1024 * 1024 },
+				runtime: {
+					wallClockMs: 5000,
+					cpuTimeoutMs: 2000,
+					memoryBytes: 64 * 1024 * 1024,
+					stackBytes: 512 * 1024,
+					acquireTimeoutMs: 0,
+					hostCallTimeoutMs: 5000,
+					maxHostCalls: 1000,
+					maxInFlightHostCalls: 16,
+				},
+			},
+			posture: { mode: 'auto', applied: [], missing: [], coreSatisfied: true, decision: 'run', cgroupMechanic: null },
+		});
+
+		const entries: BundleEntrySpec[] = [
+			{ type: 'endpoint', name: 'bep', capabilities: { endpoint: { access: 'authenticated' } } },
+			{ type: 'hook', name: 'bhk', capabilities: { log: true }, events: { filter: ['confined-bundle.filter'] } },
+			{ type: 'operation', name: 'bop', capabilities: { log: true } },
+		];
+
+		writeConfinedBundle('multi-bundle', 'multi-bundle', entries);
+
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [confinedBundleExtension('multi-bundle', 'multi-bundle', entries)];
+		await (instance as any).load();
+		current = instance;
+
+		const row = diagnosticFor(instance, 'multi-bundle');
+		expect(row.status).toBe('loaded');
+
+		expect(row.entries).toEqual([
+			{ name: 'bep', type: 'endpoint', status: 'loaded' },
+			{ name: 'bhk', type: 'hook', status: 'loaded' },
+			{ name: 'bop', type: 'operation', status: 'loaded' },
+		]);
+
+		// The endpoint entry serves, selected by its `endpoint:bep` key.
+		const served = await supertest(endpointApp(instance)).get('/bep/ping');
+		expect(served.status).toBe(200);
+		expect(served.body.key).toBe('endpoint:bep');
+
+		// The hook entry is subscribed, selected by its `hook:bhk` key.
+		const filtered = await emitter.emitFilter('confined-bundle.filter', { v: 1 }, {}, EVENT_CONTEXT);
+		expect(filtered).toEqual({ stamped: 'hook:bhk' });
+
+		// The operation entry is registered under its own contribution id.
+		expect(getFlowManager().hasConfinedOperation('bop')).toBe(true);
+
+		expect(seen).toContain('endpoint:bep');
+		expect(seen).toContain('hook:bhk');
+	});
+
+	it('fails one entry on a route collision while its sibling still registers', async () => {
+		const entries: BundleEntrySpec[] = [
+			{ type: 'endpoint', name: 'taken-route', capabilities: { endpoint: { access: 'public' } } },
+			{ type: 'hook', name: 'live-hook', capabilities: { log: true }, events: { filter: ['confined-bundle.collide'] } },
+		];
+
+		writeConfinedBundle('collide-bundle', 'collide-bundle', entries);
+
+		const instance = new ExtensionManager();
+
+		(instance as any).getExtensions = async () => [
+			confinedBundleExtension('collide-bundle', 'collide-bundle', entries),
+		];
+
+		// An inherited endpoint already owns the route the bundle's endpoint entry wants.
+		const originalRegister = (instance as any).registerEndpoints.bind(instance);
+
+		(instance as any).registerEndpoints = async () => {
+			await originalRegister();
+			(instance as any).registeredEndpointRoutes.add('taken-route');
+		};
+
+		await (instance as any).load();
+		current = instance;
+
+		const row = diagnosticFor(instance, 'collide-bundle');
+		expect(row.status).toBe('partial');
+
+		const endpointEntry = row.entries.find((entry: any) => entry.name === 'taken-route');
+		expect(endpointEntry.status).toBe('failed');
+		expect(endpointEntry.reason.code).toBe('route-collision');
+
+		const hookEntry = row.entries.find((entry: any) => entry.name === 'live-hook');
+		expect(hookEntry.status).toBe('loaded');
+
+		// The sibling hook actually subscribed despite the endpoint collision: the
+		// baseline child stub transforms the payload, so the result is not the input.
+		const filtered = await emitter.emitFilter('confined-bundle.collide', { v: 1 }, {}, EVENT_CONTEXT);
+		expect(filtered).toHaveProperty('echoed');
+	});
+
+	it('fails both contributors of a duplicate operation id while the endpoint sibling mounts', async () => {
+		const entries: BundleEntrySpec[] = [
+			{ type: 'operation', name: 'dup-op', capabilities: { log: true } },
+			{ type: 'endpoint', name: 'mounted-ep', capabilities: { endpoint: { access: 'public' } } },
+		];
+
+		writeConfinedBundle('op-dup-bundle', 'op-dup-bundle', entries);
+
+		// A top-level confined operation declares the same id the bundle op entry wants.
+		// The id is resolved blocked across both contributors before either registers, so
+		// neither is recorded loaded and then turned ambiguous by the other.
+		writeConfinedOperationPackage('dup-top', 'dup-op');
+
+		const instance = new ExtensionManager();
+
+		(instance as any).getExtensions = async () => [
+			operationExtension('dup-top', 'dup-op', true),
+			confinedBundleExtension('op-dup-bundle', 'op-dup-bundle', entries),
+		];
+
+		await (instance as any).load();
+		current = instance;
+
+		// The top-level operation row is failed, not a stale loaded.
+		const topRow = diagnosticFor(instance, 'dup-op');
+		expect(topRow.status).toBe('failed');
+		expect(topRow.reason.code).toBe('ambiguous-operation');
+
+		const row = diagnosticFor(instance, 'op-dup-bundle');
+		expect(row.status).toBe('partial');
+
+		const opEntry = row.entries.find((entry: any) => entry.name === 'dup-op');
+		expect(opEntry.status).toBe('failed');
+		expect(opEntry.reason.code).toBe('ambiguous-operation');
+
+		const epEntry = row.entries.find((entry: any) => entry.name === 'mounted-ep');
+		expect(epEntry.status).toBe('loaded');
+
+		const served = await supertest(endpointApp(instance)).get('/mounted-ep/x');
+		expect(served.status).toBe(200);
+	}, 30_000);
+
+	it('fails a confined operation that collides with an inherited operation id', async () => {
+		writeConfinedOperationPackage('inherited-clash', 'shared-op');
+
+		// An inherited operation already owns the id, so the confined contributor is a
+		// collision the precompute blocks before it registers a descriptor.
+		getFlowManager().addOperation('shared-op', (() => ({ ok: true })) as any);
+
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [operationExtension('inherited-clash', 'shared-op', true)];
+
+		await (instance as any).load();
+		current = instance;
+
+		const row = diagnosticFor(instance, 'shared-op');
+		expect(row.status).toBe('failed');
+		expect(row.reason.code).toBe('operation-collision');
+
+		// A flow referencing the id rejects rather than silently running the inherited
+		// operation that the confined contributor tried to shadow.
+		const flow = {
+			id: 'f',
+			name: 'f',
+			status: 'active',
+			trigger: 'webhook',
+			accountability: null,
+			options: { method: 'POST', return: '$last', async: false },
+			operation: { id: 'op-x', key: 'step', type: 'shared-op', options: {}, resolve: null, reject: null },
+		};
+
+		const result = await (getFlowManager() as any).executeFlow(
+			flow,
+			{ x: 1 },
+			{
+				accountability: null,
+				database: {},
+				schema: { collections: {}, relations: [] },
+			}
+		);
+
+		expect(result).toMatchObject({ message: expect.stringContaining('could not be resolved') });
+
+		getFlowManager().clearOperations();
+	}, 30_000);
+
+	it('fails a top-level confined operation that collides with an inherited bundle operation', async () => {
+		writeConfinedOperationPackage('bundle-clash-top', 'bundle-op');
+
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [operationExtension('bundle-clash-top', 'bundle-op', true)];
+
+		// An inherited bundle contributes the id during registerBundles, after the
+		// inherited top-level operations and before the confined lane, so the confined
+		// precompute only sees it because it now runs after registerBundles.
+		const originalRegister = (instance as any).registerBundles.bind(instance);
+
+		(instance as any).registerBundles = async () => {
+			await originalRegister();
+			getFlowManager().addOperation('bundle-op', (() => ({ ok: true })) as any);
+		};
+
+		await (instance as any).load();
+		current = instance;
+
+		const row = diagnosticFor(instance, 'bundle-op');
+		expect(row.status).toBe('failed');
+		expect(row.reason.code).toBe('operation-collision');
+
+		getFlowManager().clearOperations();
+	}, 30_000);
+
+	it('fails a confined bundle operation entry that collides with an inherited bundle operation', async () => {
+		const entries: BundleEntrySpec[] = [
+			{ type: 'operation', name: 'bundle-op', capabilities: { log: true } },
+			{ type: 'endpoint', name: 'sibling-ep', capabilities: { endpoint: { access: 'public' } } },
+		];
+
+		writeConfinedBundle('entry-clash-bundle', 'entry-clash-bundle', entries);
+
+		const instance = new ExtensionManager();
+
+		(instance as any).getExtensions = async () => [
+			confinedBundleExtension('entry-clash-bundle', 'entry-clash-bundle', entries),
+		];
+
+		// The same inherited bundle operation registered during registerBundles, so the
+		// confined bundle op entry is a collision the precompute blocks before it mounts.
+		const originalRegister = (instance as any).registerBundles.bind(instance);
+
+		(instance as any).registerBundles = async () => {
+			await originalRegister();
+			getFlowManager().addOperation('bundle-op', (() => ({ ok: true })) as any);
+		};
+
+		await (instance as any).load();
+		current = instance;
+
+		const row = diagnosticFor(instance, 'entry-clash-bundle');
+		expect(row.status).toBe('partial');
+
+		const opEntry = row.entries.find((entry: any) => entry.name === 'bundle-op');
+		expect(opEntry.status).toBe('failed');
+		expect(opEntry.reason.code).toBe('operation-collision');
+
+		// The sibling endpoint still mounts, so the collision fails only its own entry.
+		const epEntry = row.entries.find((entry: any) => entry.name === 'sibling-ep');
+		expect(epEntry.status).toBe('loaded');
+
+		getFlowManager().clearOperations();
+	}, 30_000);
+
+	it('fails the whole bundle with no per-entry loaded statuses when the shared artifact does not probe', async () => {
+		const entries: BundleEntrySpec[] = [
+			{ type: 'endpoint', name: 'ep', capabilities: { endpoint: { access: 'public' } } },
+			{ type: 'hook', name: 'hk', capabilities: { log: true }, events: { action: ['items.create'] } },
+		];
+
+		writeConfinedBundle('bad-bundle', 'bad-bundle', entries);
+
+		const extension = confinedBundleExtension('bad-bundle', 'bad-bundle', entries);
+
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [extension];
+
+		(instance as any).confinedGateDeps = {
+			probe: async () => ({
+				loadable: false,
+				error: { code: 'invalid-entry', message: 'the bundle artifact is missing an entry' },
+			}),
+		};
+
+		await (instance as any).load();
+		current = instance;
+
+		const row = diagnosticFor(instance, 'bad-bundle');
+		expect(row.status).toBe('failed');
+
+		// The whole server side failed at the gate, so no entry carries a loaded status.
+		for (const entry of row.entries ?? []) {
+			expect(entry.status).not.toBe('loaded');
+		}
+
+		// The same extension object the loader saw, so the absence is real and not an
+		// identity miss against a throwaway clone.
+		expect((instance as any).confinedEligible.has(extension)).toBe(false);
+	});
+
+	it('deep-copies per-entry reasons out of the diagnostics inventory', async () => {
+		const entries: BundleEntrySpec[] = [
+			{ type: 'endpoint', name: 'copy-route', capabilities: { endpoint: { access: 'public' } } },
+			{ type: 'hook', name: 'copy-hook', capabilities: { log: true }, events: { action: ['items.create'] } },
+		];
+
+		writeConfinedBundle('copy-bundle', 'copy-bundle', entries);
+
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [confinedBundleExtension('copy-bundle', 'copy-bundle', entries)];
+
+		const originalRegister = (instance as any).registerEndpoints.bind(instance);
+
+		(instance as any).registerEndpoints = async () => {
+			await originalRegister();
+			(instance as any).registeredEndpointRoutes.add('copy-route');
+		};
+
+		await (instance as any).load();
+		current = instance;
+
+		const first = diagnosticFor(instance, 'copy-bundle').entries.find((entry: any) => entry.name === 'copy-route');
+		first.reason.code = 'mutated';
+
+		const second = diagnosticFor(instance, 'copy-bundle').entries.find((entry: any) => entry.name === 'copy-route');
+		expect(second.reason.code).toBe('route-collision');
 	});
 });
