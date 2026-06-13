@@ -110,11 +110,11 @@ export default async function build(options: BuildOptions): Promise<void> {
 				return;
 			}
 
-			if (extensionOptions.type === 'endpoint') {
+			if (extensionOptions.type === 'endpoint' || extensionOptions.type === 'hook') {
 				await buildConfinedApiExtension({
 					input: extensionOptions.source,
 					output: extensionOptions.path,
-					globalName: 'CairnEndpoint',
+					globalName: extensionOptions.type === 'hook' ? 'CairnHook' : 'CairnEndpoint',
 					watch,
 				});
 
@@ -122,8 +122,8 @@ export default async function build(options: BuildOptions): Promise<void> {
 			}
 
 			log(
-				`The confined runtime supports ${chalk.bold('operation')} and ${chalk.bold(
-					'endpoint'
+				`The confined runtime supports ${chalk.bold('operation')}, ${chalk.bold('endpoint')}, and ${chalk.bold(
+					'hook'
 				)} extensions only. Type ${chalk.bold(extensionOptions.type)} cannot be built confined yet.`,
 				'error'
 			);

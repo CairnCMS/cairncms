@@ -9,7 +9,7 @@ export class ConfinedBuildError extends Error {
 	}
 }
 
-export type ConfinedGuestGlobal = 'CairnOperation' | 'CairnEndpoint';
+export type ConfinedGuestGlobal = 'CairnOperation' | 'CairnEndpoint' | 'CairnHook';
 
 export interface BuildConfinedServerEntryOptions {
 	// The server entry source: an ESM module with a default-exported confined config.

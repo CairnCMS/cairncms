@@ -45,10 +45,10 @@ export default async function create(type: string, name: string, options: Create
 		process.exit(1);
 	}
 
-	if (options.confined && type !== 'operation' && type !== 'endpoint') {
+	if (options.confined && type !== 'operation' && type !== 'endpoint' && type !== 'hook') {
 		log(
-			`The confined runtime supports ${chalk.bold('operation')} and ${chalk.bold(
-				'endpoint'
+			`The confined runtime supports ${chalk.bold('operation')}, ${chalk.bold('endpoint')}, and ${chalk.bold(
+				'hook'
 			)} extensions only. Type ${chalk.bold(type)} cannot be scaffolded confined yet.`,
 			'error'
 		);
@@ -149,7 +149,10 @@ async function createLocalExtension({
 	await fse.ensureDir(targetPath);
 
 	let template: TemplateName = type;
-	if (confined) template = type === 'endpoint' ? 'endpoint-confined' : 'operation-confined';
+
+	if (confined && type === 'endpoint') template = 'endpoint-confined';
+	else if (confined && type === 'hook') template = 'hook-confined';
+	else if (confined) template = 'operation-confined';
 
 	await copyTemplate(template, targetPath, 'src', language);
 
@@ -165,6 +168,17 @@ async function createLocalExtension({
 			runtime: 'confined-server',
 			// Authenticated by default: serving anonymous callers is a deliberate opt-in.
 			capabilities: { log: true, endpoint: { access: 'authenticated' } },
+			host,
+		};
+	} else if (confined && type === 'hook') {
+		options = {
+			type: 'hook',
+			path: 'dist/index.js',
+			source: `src/index.${languageToShort(language)}`,
+			runtime: 'confined-server',
+			capabilities: { log: true },
+			// Must equal the template's declared handlers: the load probe enforces it.
+			events: { action: ['items.create'] },
 			host,
 		};
 	} else if (confined) {
