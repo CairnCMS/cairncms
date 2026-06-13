@@ -36,7 +36,7 @@ export interface ConfinedInvocation {
 	// row id for an operation, the contribution id for an endpoint.
 	operationId: string;
 	// Selects the guest contract the engine builds. Absent means flow-operation.
-	activation?: 'flow-operation' | 'json-endpoint';
+	activation?: 'flow-operation' | 'json-endpoint' | 'event-filter' | 'event-action';
 	// The built server entry the engine evaluates.
 	entrySource: string;
 	options: Record<string, unknown>;

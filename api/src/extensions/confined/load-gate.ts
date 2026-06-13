@@ -9,7 +9,13 @@ import type { ExtensionValidationReason, ExtensionValidationReasonCode } from '@
 import { scanCandidateSource } from '@cairncms/extensions/node';
 import { readFileCapped } from '@cairncms/extensions/node/capped-read';
 import { classifyEntryPath } from '@cairncms/extensions/node/entry-integrity';
-import type { ConfinedOptionDelivery, Extension, ExtensionCapabilities, ExtensionOptions } from '@cairncms/types';
+import type {
+	ConfinedHookEvents,
+	ConfinedOptionDelivery,
+	Extension,
+	ExtensionCapabilities,
+	ExtensionOptions,
+} from '@cairncms/types';
 import { isTypeIn } from '@cairncms/utils';
 import path from 'node:path';
 import type { SanitizedExtensionError } from '../../utils/sanitize-extension-error.js';
@@ -44,6 +50,9 @@ export type ConfinedEligibleEntry = {
 	// to the guest. Top-level operations only here; bundle operation entries carry
 	// their own delivery with the bundle binding.
 	optionDelivery?: ConfinedOptionDelivery;
+	// The exact event names a confined hook subscribes to, from the manifest, the
+	// declaration the probe verified the entry against.
+	events?: ConfinedHookEvents;
 };
 
 export type ConfinedGateVerdict =
@@ -122,6 +131,10 @@ function collectCapabilities(options: ExtensionOptions): ConfinedEligibleEntry |
 
 		if (isTypeIn(options, HYBRID_EXTENSION_TYPES) && options.optionDelivery !== undefined) {
 			entry.optionDelivery = options.optionDelivery;
+		}
+
+		if (options.type === 'hook' && options.events !== undefined) {
+			entry.events = options.events;
 		}
 
 		return entry;
@@ -244,9 +257,9 @@ export async function gateConfinedExtension(
 		return { ok: false, error: confinedValidationError(reason) };
 	}
 
-	// The eval probe certifies the contracts that have bindings: flow operations
-	// and json endpoints. Hooks and bundles stay scanner-gated here and get their
-	// load contract with their binding.
+	// The eval probe certifies the contracts that have bindings: flow operations,
+	// json endpoints, and event hooks. Bundles stay scanner-gated here and get
+	// their load contract with their binding.
 	if (isTypeIn(options, HYBRID_EXTENSION_TYPES)) {
 		const probed = await probeServerEntry(extension, options.path.api, 'flow-operation', deps);
 		if (!probed.ok) return probed;
@@ -256,6 +269,21 @@ export async function gateConfinedExtension(
 
 	if (options.type === 'endpoint') {
 		const probed = await probeServerEntry(extension, options.path, 'json-endpoint', deps);
+		if (!probed.ok) return probed;
+
+		return { ...probed, ...collected };
+	}
+
+	if (options.type === 'hook') {
+		if (options.events === undefined) {
+			return refuse('manifest-invalid', 'a confined hook must declare its events in the manifest');
+		}
+
+		// The probe verifies the entry's declared handler sets equal the manifest
+		// declaration, so the reviewed subscription surface is the real one.
+		const expected = { filters: options.events.filter ?? [], actions: options.events.action ?? [] };
+
+		const probed = await probeServerEntry(extension, options.path, 'event-filter', deps, expected);
 		if (!probed.ok) return probed;
 
 		return { ...probed, ...collected };
@@ -276,8 +304,9 @@ export async function gateConfinedExtension(
 async function probeServerEntry(
 	extension: Extension,
 	entryRelative: string,
-	activation: 'flow-operation' | 'json-endpoint',
-	deps: ConfinedLoadGateDeps
+	activation: 'flow-operation' | 'json-endpoint' | 'event-filter',
+	deps: ConfinedLoadGateDeps,
+	probeInput: unknown = null
 ): Promise<ConfinedGateVerdict> {
 	const readFile = deps.readFile ?? readFileCapped;
 	const probe = deps.probe ?? ((invocation: ConfinedInvocation) => getConfinedSupervisor().probeLoad(invocation));
@@ -322,7 +351,7 @@ async function probeServerEntry(
 		activation,
 		entrySource: entryRead.text,
 		options: {},
-		input: null,
+		input: probeInput,
 		accountability: null,
 		limits: config.runtime,
 	};

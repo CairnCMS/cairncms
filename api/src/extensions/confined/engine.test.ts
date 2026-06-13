@@ -500,3 +500,147 @@ describe('runConfinedLoadProbe under the json-endpoint contract', () => {
 		expect(probed).toEqual({ loadable: true });
 	});
 });
+
+function hookEntry(body: string): string {
+	return `var CairnHook = (() => { return { default: { id: 'event-hook.test', ${body} } }; })();`;
+}
+
+function hookInvocation(
+	entrySource: string,
+	activation: 'event-filter' | 'event-action',
+	input: unknown,
+	overrides: Partial<ConfinedInvocation> = {}
+): ConfinedInvocation {
+	return invocation(entrySource, {
+		activation,
+		contributionId: 'event-hook.test',
+		operationId: 'event-hook.test',
+		input,
+		...overrides,
+	});
+}
+
+describe('runConfinedEntry under the event hook contract', () => {
+	it('runs a filter handler and wraps a transformed payload in the explicit envelope', async () => {
+		const entry = hookEntry(
+			"filters: { 'items.create': async (payload, meta, context) => ({ ...payload, stamped: meta.collection, activation: context.activation }) }"
+		);
+
+		const result = await run(
+			hookInvocation(entry, 'event-filter', {
+				event: 'items.create',
+				payload: { title: 'x' },
+				meta: { collection: 'articles' },
+			})
+		);
+
+		expect(result).toEqual({
+			ok: true,
+			value: {
+				unchanged: false,
+				payload: {
+					title: 'x',
+					stamped: 'articles',
+					activation: { type: 'event-filter', event: 'items.create' },
+				},
+			},
+		});
+	});
+
+	it('encodes an undefined filter return as an explicit no-change envelope', async () => {
+		const entry = hookEntry("filters: { 'items.create': () => undefined }");
+
+		const result = await run(
+			hookInvocation(entry, 'event-filter', { event: 'items.create', payload: { title: 'x' }, meta: {} })
+		);
+
+		expect(result).toEqual({ ok: true, value: { unchanged: true } });
+	});
+
+	it('runs an action handler and reports completion only', async () => {
+		const entry = hookEntry("actions: { 'items.create': async (meta) => { meta.collection; } }");
+
+		const result = await run(
+			hookInvocation(entry, 'event-action', { event: 'items.create', meta: { collection: 'articles' } })
+		);
+
+		expect(result).toEqual({ ok: true, value: { done: true } });
+	});
+
+	it('sanitizes a hook guest throw with the hook wording', async () => {
+		const entry = hookEntry("filters: { 'items.create': () => { throw new Error('boom sk_live_leak'); } }");
+
+		const result = await run(hookInvocation(entry, 'event-filter', { event: 'items.create', payload: {}, meta: {} }));
+
+		expect(result).toMatchObject({ ok: false, error: { code: 'guest-error', message: 'the event hook failed' } });
+	});
+
+	it('treats a prototype-named event with no own handler as a guest failure, never an invocation', async () => {
+		const entry = hookEntry("filters: { 'items.create': () => undefined }");
+
+		const result = await run(hookInvocation(entry, 'event-filter', { event: 'constructor', payload: {}, meta: {} }));
+
+		expect(result).toMatchObject({ ok: false, error: { code: 'guest-error' } });
+	});
+});
+
+describe('runConfinedLoadProbe under the event hook contract', () => {
+	const declared = hookEntry(
+		"filters: { 'items.create': () => undefined }, actions: { 'auth.login': () => undefined }"
+	);
+
+	function probeInput(filters: string[], actions: string[]) {
+		return { filters, actions };
+	}
+
+	it('probes loadable when the entry declarations equal the manifest events', async () => {
+		const probed = await runConfinedLoadProbe(
+			hookInvocation(declared, 'event-filter', probeInput(['items.create'], ['auth.login']))
+		);
+
+		expect(probed).toEqual({ loadable: true });
+	});
+
+	it('refuses an entry declaring events the manifest does not', async () => {
+		const probed = await runConfinedLoadProbe(hookInvocation(declared, 'event-filter', probeInput([], ['auth.login'])));
+
+		expect(probed).toMatchObject({
+			loadable: false,
+			error: { code: 'identity-mismatch', message: 'the event hook entry does not declare the manifest events' },
+		});
+	});
+
+	it('refuses an entry missing a manifest-declared event', async () => {
+		const probed = await runConfinedLoadProbe(
+			hookInvocation(declared, 'event-filter', probeInput(['items.create', 'items.update'], ['auth.login']))
+		);
+
+		expect(probed).toMatchObject({ loadable: false, error: { code: 'identity-mismatch' } });
+	});
+
+	it('refuses a non-function handler', async () => {
+		const entry = hookEntry("filters: { 'items.create': 'not-a-function' }");
+
+		const probed = await runConfinedLoadProbe(hookInvocation(entry, 'event-filter', probeInput(['items.create'], [])));
+
+		expect(probed).toMatchObject({ loadable: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('refuses an operation-shaped entry probed as a hook without invoking anything', async () => {
+		const probed = await runConfinedLoadProbe(
+			hookInvocation(entry('() => { throw new Error("HANDLER_MUST_NOT_RUN"); }'), 'event-filter', probeInput([], []))
+		);
+
+		expect(probed).toMatchObject({ loadable: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('enforces the identity contract for hooks', async () => {
+		const wrongId = `var CairnHook = { default: { id: 'someone-else', filters: { 'items.create': () => undefined } } };`;
+
+		const probed = await runConfinedLoadProbe(
+			hookInvocation(wrongId, 'event-filter', probeInput(['items.create'], []))
+		);
+
+		expect(probed).toMatchObject({ loadable: false, error: { code: 'identity-mismatch' } });
+	});
+});

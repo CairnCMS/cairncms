@@ -35,6 +35,10 @@ const OPERATION_ENTRY =
 const ENDPOINT_ENTRY =
 	"var CairnEndpoint = (() => { const handler = async () => ({ body: null }); return { default: { id: 'test-extension', handler } }; })();\n";
 
+// A built hook entry declaring one filter and one action under the same identity.
+const HOOK_ENTRY =
+	"var CairnHook = (() => ({ default: { id: 'test-extension', filters: { 'items.create': () => undefined }, actions: { 'auth.login': () => undefined } } }))();\n";
+
 function operationManifest(): Record<string, unknown> {
 	return manifest({
 		type: 'operation',
@@ -453,7 +457,7 @@ describe('gateConfinedExtension', () => {
 		expect(activations).toEqual(['json-endpoint', 'flow-operation']);
 	});
 
-	it('never probes a confined hook and returns no entry bytes for it', async () => {
+	it('refuses a confined hook that declares no events in the manifest', async () => {
 		const probeCalls: unknown[] = [];
 
 		const dir = await makeDir(endpointManifest({ type: 'hook' }), { 'src/index.js': CLEAN_SOURCE });
@@ -466,9 +470,49 @@ describe('gateConfinedExtension', () => {
 			},
 		});
 
-		expect(verdict).toEqual({ ok: true });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'manifest-invalid' } });
 		expect(probeCalls).toHaveLength(0);
 	});
+
+	it('probes a confined hook against its manifest events and carries the bytes and events', async () => {
+		const events = { filter: ['items.create'], action: ['auth.login'] };
+
+		const dir = await makeDir(endpointManifest({ type: 'hook', events }), {
+			'src/index.js': CLEAN_SOURCE,
+			'dist/index.js': HOOK_ENTRY,
+		});
+
+		const extension = { ...extensionAt(dir), type: 'hook' as const, entrypoint: 'dist/index.js' };
+		const probeInputs: unknown[] = [];
+
+		const verdict = await gateConfinedExtension(extension, {
+			probe: async (invocation) => {
+				probeInputs.push({ activation: invocation.activation, input: invocation.input });
+				return { loadable: true };
+			},
+		});
+
+		expect(verdict).toEqual({ ok: true, entrySource: HOOK_ENTRY, events });
+
+		expect(probeInputs).toEqual([
+			{ activation: 'event-filter', input: { filters: ['items.create'], actions: ['auth.login'] } },
+		]);
+	});
+
+	it('refuses a hook entry that does not match its manifest events through the real probe', async () => {
+		const events = { filter: ['items.update'] };
+
+		const dir = await makeDir(endpointManifest({ type: 'hook', events }), {
+			'src/index.js': CLEAN_SOURCE,
+			'dist/index.js': HOOK_ENTRY,
+		});
+
+		const extension = { ...extensionAt(dir), type: 'hook' as const, entrypoint: 'dist/index.js' };
+
+		const verdict = await gateConfinedExtension(extension, {});
+
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'identity-mismatch' } });
+	}, 20_000);
 
 	it('carries the manifest capabilities beside the probed bytes for a confined endpoint', async () => {
 		const capabilities = { log: true, request: { urls: ['https://api.example.com'] } };

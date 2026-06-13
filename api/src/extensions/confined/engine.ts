@@ -201,17 +201,27 @@ export async function runConfinedLoadProbe(invocation: ConfinedInvocation): Prom
  */
 function guestContract(invocation: ConfinedInvocation): {
 	globalName: string;
-	activation: 'flow-operation' | 'json-endpoint';
+	activation: NonNullable<ConfinedInvocation['activation']>;
 	noun: string;
 } {
 	if (invocation.activation === 'json-endpoint') {
 		return { globalName: 'CairnEndpoint', activation: 'json-endpoint', noun: 'json endpoint' };
 	}
 
+	if (invocation.activation === 'event-filter' || invocation.activation === 'event-action') {
+		return { globalName: 'CairnHook', activation: invocation.activation, noun: 'event hook' };
+	}
+
 	return { globalName: 'CairnOperation', activation: 'flow-operation', noun: 'flow operation' };
 }
 
+function isEventActivation(invocation: ConfinedInvocation): boolean {
+	return invocation.activation === 'event-filter' || invocation.activation === 'event-action';
+}
+
 function buildHarness(invocation: ConfinedInvocation): string {
+	if (isEventActivation(invocation)) return buildHookHarness(invocation);
+
 	const contract = guestContract(invocation);
 	const accountability = JSON.stringify(invocation.accountability ?? null);
 	const extensionId = JSON.stringify(invocation.extensionId);
@@ -233,23 +243,7 @@ function buildHarness(invocation: ConfinedInvocation): string {
 		if (!__config || typeof __config.handler !== 'function') {
 			throw new Error('entry default export is not a ${contract.noun} config with a function handler');
 		}
-		const host = {
-			log: {
-				debug: async (message, meta) => { await __hostCall('log.debug', { message, meta }); },
-				info: async (message, meta) => { await __hostCall('log.info', { message, meta }); },
-				warn: async (message, meta) => { await __hostCall('log.warn', { message, meta }); },
-				error: async (message, meta) => { await __hostCall('log.error', { message, meta }); },
-			},
-			request: { send: (request) => __hostCall('request.send', request) },
-			items: {
-				read: (collection, query) => __hostCall('items.read', { collection, query }),
-				readOne: (collection, key, query) => __hostCall('items.readOne', { collection, key, query }),
-			},
-			settings: { get: (key) => __hostCall('settings.get', { key }) },
-			template: {
-				renderLiquid: (template, data, options) => __hostCall('template.renderLiquid', { template, data, options }),
-			},
-		};
+		${GUEST_HOST_SURFACE}
 		const __context = {
 			extensionId: ${extensionId},
 			contributionId: ${contributionId},
@@ -281,12 +275,108 @@ function buildHarness(invocation: ConfinedInvocation): string {
 	`;
 }
 
+// The guest host surface, shared verbatim by every run harness so the contracts
+// cannot drift apart.
+const GUEST_HOST_SURFACE = `const host = {
+			log: {
+				debug: async (message, meta) => { await __hostCall('log.debug', { message, meta }); },
+				info: async (message, meta) => { await __hostCall('log.info', { message, meta }); },
+				warn: async (message, meta) => { await __hostCall('log.warn', { message, meta }); },
+				error: async (message, meta) => { await __hostCall('log.error', { message, meta }); },
+			},
+			request: { send: (request) => __hostCall('request.send', request) },
+			items: {
+				read: (collection, query) => __hostCall('items.read', { collection, query }),
+				readOne: (collection, key, query) => __hostCall('items.readOne', { collection, key, query }),
+			},
+			settings: { get: (key) => __hostCall('settings.get', { key }) },
+			template: {
+				renderLiquid: (template, data, options) => __hostCall('template.renderLiquid', { template, data, options }),
+			},
+		};`;
+
+/**
+ * The run harness for the event hook contract. The handler is selected from the
+ * entry's own declared record by exact event name, and a filter result is wrapped
+ * in an explicit envelope: `{ unchanged: true }` when the handler returned
+ * undefined, `{ unchanged: false, payload }` otherwise, so JSON transport cannot
+ * blur no-change with a missing reply.
+ */
+function buildHookHarness(invocation: ConfinedInvocation): string {
+	const accountability = JSON.stringify(invocation.accountability ?? null);
+	const extensionId = JSON.stringify(invocation.extensionId);
+	const contributionId = JSON.stringify(invocation.contributionId);
+	const input = JSON.stringify(invocation.input);
+	const isFilter = invocation.activation === 'event-filter';
+	const record = isFilter ? 'filters' : 'actions';
+
+	return `
+		${invocation.entrySource}
+		const __config =
+			(typeof CairnHook !== 'undefined' && CairnHook.default)
+				? CairnHook.default
+				: (typeof CairnHook !== 'undefined' ? CairnHook : undefined);
+		if (!__config || typeof __config.id !== 'string') {
+			throw new Error('entry default export is not an event hook config');
+		}
+		${GUEST_HOST_SURFACE}
+		const __input = ${input};
+		const __context = {
+			extensionId: ${extensionId},
+			contributionId: ${contributionId},
+			activation: { type: ${JSON.stringify(invocation.activation)}, event: __input.event },
+			accountability: ${accountability},
+			host,
+		};
+		const __run = async () => {
+			if (__config.id !== ${contributionId}) return { kind: 'identity-mismatch' };
+			const __record = __config[${JSON.stringify(record)}];
+			const __handler =
+				__record && Object.prototype.hasOwnProperty.call(__record, __input.event)
+					? __record[__input.event]
+					: undefined;
+			if (typeof __handler !== 'function') return { kind: 'guest-error' };
+			let value;
+			try {
+				value = ${
+					isFilter
+						? 'await __handler(__input.payload, __input.meta, __context)'
+						: 'await __handler(__input.meta, __context)'
+				};
+			} catch (error) {
+				// The raw guest message can carry payload or secret values, so it is
+				// dropped here, not surfaced to the host.
+				return { kind: 'guest-error' };
+			}
+			const __envelope = ${
+				isFilter
+					? '(value === undefined ? { unchanged: true } : { unchanged: false, payload: value })'
+					: '{ done: true }'
+			};
+			let serialized;
+			try {
+				serialized = JSON.stringify(__envelope);
+			} catch {
+				return { kind: 'invalid-result' };
+			}
+			if (serialized === undefined) return { kind: 'invalid-result' };
+			return { kind: 'ok', value: serialized };
+		};
+		export default JSON.stringify(await __run());
+	`;
+}
+
 /**
  * The load-probe harness: evaluates the entry and validates the confined config
- * shape and identity, and stops there. It must never invoke the handler, only
- * type-check it, so probing an entry can have no handler side effect.
+ * shape and identity, and stops there. It must never invoke a handler, only
+ * type-check it, so probing an entry can have no handler side effect. The event
+ * hook arm additionally requires the entry's declared handler sets to equal the
+ * manifest's declared events, carried in the probe input, so the entry cannot
+ * drift from the declaration the operator reviewed.
  */
 function buildLoadProbeHarness(invocation: ConfinedInvocation): string {
+	if (isEventActivation(invocation)) return buildHookProbeHarness(invocation);
+
 	const contract = guestContract(invocation);
 	const contributionId = JSON.stringify(invocation.contributionId);
 
@@ -299,6 +389,43 @@ function buildLoadProbeHarness(invocation: ConfinedInvocation): string {
 		const __verdict = () => {
 			if (!__config || typeof __config.handler !== 'function') return { kind: 'invalid-entry' };
 			if (__config.id !== ${contributionId}) return { kind: 'identity-mismatch' };
+			return { kind: 'loadable' };
+		};
+		export default JSON.stringify(__verdict());
+	`;
+}
+
+function buildHookProbeHarness(invocation: ConfinedInvocation): string {
+	const contributionId = JSON.stringify(invocation.contributionId);
+	const expected = JSON.stringify(invocation.input ?? { filters: [], actions: [] });
+
+	return `
+		${invocation.entrySource}
+		const __config =
+			(typeof CairnHook !== 'undefined' && CairnHook.default)
+				? CairnHook.default
+				: (typeof CairnHook !== 'undefined' ? CairnHook : undefined);
+		const __expected = ${expected};
+		const __declared = (record) => {
+			if (record === undefined) return [];
+			if (record === null || typeof record !== 'object' || Array.isArray(record)) return null;
+			const names = Object.keys(record);
+			for (const name of names) {
+				if (typeof record[name] !== 'function') return null;
+			}
+			return names;
+		};
+		const __sameSet = (declared, expected) =>
+			declared.length === expected.length && [...declared].sort().join('\\n') === [...expected].sort().join('\\n');
+		const __verdict = () => {
+			if (!__config || typeof __config.id !== 'string') return { kind: 'invalid-entry' };
+			if (__config.id !== ${contributionId}) return { kind: 'identity-mismatch' };
+			const filters = __declared(__config.filters);
+			const actions = __declared(__config.actions);
+			if (filters === null || actions === null) return { kind: 'invalid-entry' };
+			if (!__sameSet(filters, __expected.filters) || !__sameSet(actions, __expected.actions)) {
+				return { kind: 'declaration-mismatch' };
+			}
 			return { kind: 'loadable' };
 		};
 		export default JSON.stringify(__verdict());
@@ -327,6 +454,13 @@ function interpretLoadProbeOutput(data: unknown, noun: string): ConfinedLoadProb
 		return {
 			loadable: false,
 			error: { code: 'identity-mismatch', message: `the ${noun} id does not match its contribution` },
+		};
+	}
+
+	if (envelope.kind === 'declaration-mismatch') {
+		return {
+			loadable: false,
+			error: { code: 'identity-mismatch', message: `the ${noun} entry does not declare the manifest events` },
 		};
 	}
 
