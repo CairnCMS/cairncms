@@ -113,6 +113,56 @@ export const ExtensionCapabilitiesSchema = z
 // handle has no operation consumer yet.
 export const ConfinedOptionDeliverySchema = z.record(z.object({ delivery: z.enum(['reference']) }).strict());
 
+// Exact platform event names a confined hook subscribes to, declared in the
+// manifest so the subscription surface is operator-reviewable without reading
+// code. Exact names only: no wildcard, no pattern, bounded count and length.
+const CONFINED_EVENT_NAME = /^[a-zA-Z0-9_][a-zA-Z0-9_.:-]*$/;
+
+const CONFINED_EVENTS_MAX = 16;
+
+// The platform emitter (EventEmitter2, wildcard mode) grows its listener tree as
+// plain objects keyed by the dot-delimited event segments, `tree[segment] ||
+// (tree[segment] = {})`. A segment naming an Object.prototype member resolves to an
+// inherited object instead of a fresh branch, and `_listeners` collides with the
+// node's own listener key, so either pollutes shared globals and aliases unrelated
+// events. A name with such a segment in any position is refused, so the declared
+// subscription surface is exactly what the operator reviewed.
+function isReservedEventSegment(segment: string): boolean {
+	return (
+		segment.length === 0 || segment === '_listeners' || Object.prototype.hasOwnProperty.call(Object.prototype, segment)
+	);
+}
+
+// Segment safety only, not the full event grammar: the schema composes this after
+// the regex and length checks, and the manager reuses it purely as a reserved-
+// segment guard on names already grammar-validated at the gate.
+export function hasSafeEventSegments(name: string): boolean {
+	return name.split('.').every((segment) => !isReservedEventSegment(segment));
+}
+
+const ConfinedEventNameSchema = z
+	.string()
+	.min(1)
+	.max(128)
+	.regex(CONFINED_EVENT_NAME)
+	.refine(hasSafeEventSegments, { message: 'an event name segment may not be a reserved object or emitter key' });
+
+const ConfinedEventListSchema = z
+	.array(ConfinedEventNameSchema)
+	.min(1)
+	.max(CONFINED_EVENTS_MAX)
+	.refine((names) => new Set(names).size === names.length, { message: 'event names must be unique' });
+
+export const ConfinedHookEventsSchema = z
+	.object({
+		filter: ConfinedEventListSchema.optional(),
+		action: ConfinedEventListSchema.optional(),
+	})
+	.strict()
+	.refine((value) => value.filter !== undefined || value.action !== undefined, {
+		message: 'events must declare at least one filter or action list',
+	});
+
 export const CONFINED_RUNTIME = 'confined-server';
 
 export const ConfinedRuntimeSchema = z.literal(CONFINED_RUNTIME);
@@ -188,6 +238,21 @@ function rejectOptionDelivery(value: { optionDelivery?: unknown }, ctx: z.Refine
 	}
 }
 
+/**
+ * Rejects a misplaced events declaration the same way: captured rather than
+ * stripped, so a subscription declared in the wrong place fails closed instead
+ * of vanishing.
+ */
+function rejectHookEvents(value: { events?: unknown }, ctx: z.RefinementCtx, subject: string) {
+	if (value.events !== undefined) {
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			path: ['events'],
+			message: `${subject} may not declare events`,
+		});
+	}
+}
+
 const BUNDLE_SERVER_ENTRY_TYPES = new Set<string>([...API_EXTENSION_TYPES, ...HYBRID_EXTENSION_TYPES]);
 
 export const ExtensionOptionsBundleEntry = z.union([
@@ -199,10 +264,12 @@ export const ExtensionOptionsBundleEntry = z.union([
 			runtime: ConfinedRuntimeSchema.optional(),
 			capabilities: ExtensionCapabilitiesSchema.optional(),
 			optionDelivery: z.unknown().optional(),
+			events: z.unknown().optional(),
 		})
 		.superRefine((value, ctx) => {
 			rejectBundleEntryRuntime(value, ctx);
 			rejectOptionDelivery(value, ctx, 'app entries in a bundle');
+			rejectHookEvents(value, ctx, 'app entries in a bundle');
 
 			if (value.capabilities !== undefined) {
 				ctx.addIssue({
@@ -220,10 +287,12 @@ export const ExtensionOptionsBundleEntry = z.union([
 			runtime: ConfinedRuntimeSchema.optional(),
 			capabilities: ExtensionCapabilitiesSchema.optional(),
 			optionDelivery: z.unknown().optional(),
+			events: z.unknown().optional(),
 		})
 		.superRefine((value, ctx) => {
 			rejectBundleEntryRuntime(value, ctx);
 			rejectOptionDelivery(value, ctx, 'endpoint and hook entries in a bundle');
+			rejectHookEvents(value, ctx, 'endpoint and hook entries in a bundle');
 		}),
 	z
 		.object({
@@ -233,10 +302,12 @@ export const ExtensionOptionsBundleEntry = z.union([
 			runtime: ConfinedRuntimeSchema.optional(),
 			capabilities: ExtensionCapabilitiesSchema.optional(),
 			optionDelivery: z.unknown().optional(),
+			events: z.unknown().optional(),
 		})
 		.superRefine((value, ctx) => {
 			rejectBundleEntryRuntime(value, ctx);
 			rejectOptionDelivery(value, ctx, 'a bundle operation entry');
+			rejectHookEvents(value, ctx, 'a bundle operation entry');
 		}),
 ]);
 
@@ -253,10 +324,12 @@ export const ExtensionOptionsApp = z
 		runtime: ConfinedRuntimeSchema.optional(),
 		capabilities: ExtensionCapabilitiesSchema.optional(),
 		optionDelivery: z.unknown().optional(),
+		events: z.unknown().optional(),
 	})
 	.superRefine((value, ctx) => {
 		rejectConfinedDeclaration(value, ctx, 'app extension types');
 		rejectOptionDelivery(value, ctx, 'app extension types');
+		rejectHookEvents(value, ctx, 'app extension types');
 	});
 
 export const ExtensionOptionsApi = z
@@ -267,10 +340,27 @@ export const ExtensionOptionsApi = z
 		runtime: ConfinedRuntimeSchema.optional(),
 		capabilities: ExtensionCapabilitiesSchema.optional(),
 		optionDelivery: z.unknown().optional(),
+		events: ConfinedHookEventsSchema.optional(),
 	})
 	.superRefine((value, ctx) => {
 		requireConfinedForCapabilities(value, ctx);
 		rejectOptionDelivery(value, ctx, 'endpoint and hook extensions');
+
+		if (value.events !== undefined && value.type !== 'hook') {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ['events'],
+				message: 'only a hook extension may declare events',
+			});
+		}
+
+		if (value.events !== undefined && value.runtime !== CONFINED_RUNTIME) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ['events'],
+				message: `events require runtime: ${CONFINED_RUNTIME}`,
+			});
+		}
 	});
 
 export const ExtensionOptionsHybrid = z
@@ -281,8 +371,12 @@ export const ExtensionOptionsHybrid = z
 		runtime: ConfinedRuntimeSchema.optional(),
 		capabilities: ExtensionCapabilitiesSchema.optional(),
 		optionDelivery: ConfinedOptionDeliverySchema.optional(),
+		events: z.unknown().optional(),
 	})
-	.superRefine(requireConfinedForCapabilities);
+	.superRefine((value, ctx) => {
+		requireConfinedForCapabilities(value, ctx);
+		rejectHookEvents(value, ctx, 'an operation extension');
+	});
 
 export const ExtensionOptionsBundle = z
 	.object({
@@ -292,9 +386,11 @@ export const ExtensionOptionsBundle = z
 		runtime: ConfinedRuntimeSchema.optional(),
 		capabilities: ExtensionCapabilitiesSchema.optional(),
 		optionDelivery: z.unknown().optional(),
+		events: z.unknown().optional(),
 	})
 	.superRefine((value, ctx) => {
 		rejectOptionDelivery(value, ctx, 'a bundle root');
+		rejectHookEvents(value, ctx, 'a bundle root');
 
 		if (value.capabilities !== undefined) {
 			ctx.addIssue({

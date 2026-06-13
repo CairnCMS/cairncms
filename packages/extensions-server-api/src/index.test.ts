@@ -8,7 +8,7 @@ import type {
 	ExtensionSettingsClient,
 } from './index.js';
 import * as serverApi from './index.js';
-import { defineFlowOperation, defineJsonEndpoint } from './index.js';
+import { defineEventHook, defineFlowOperation, defineJsonEndpoint } from './index.js';
 import type { JsonEndpointRequest } from './index.js';
 
 const source = readFileSync(fileURLToPath(new URL('./index.ts', import.meta.url)), 'utf-8');
@@ -19,10 +19,11 @@ describe('extensions-server-api define helpers', () => {
 
 		expect(defineFlowOperation(config)).toBe(config);
 		expect(defineJsonEndpoint(config)).toBe(config);
+		expect(defineEventHook({ id: 'x', filters: {} })).toEqual({ id: 'x', filters: {} });
 	});
 
 	it('exposes only the portable identity helpers as runtime exports', () => {
-		expect(Object.keys(serverApi).sort()).toEqual(['defineFlowOperation', 'defineJsonEndpoint']);
+		expect(Object.keys(serverApi).sort()).toEqual(['defineEventHook', 'defineFlowOperation', 'defineJsonEndpoint']);
 	});
 
 	it('admits every JSON endpoint method including HEAD and OPTIONS', () => {

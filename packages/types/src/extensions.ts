@@ -2,6 +2,7 @@ import type {
 	API_EXTENSION_TYPES,
 	APP_EXTENSION_TYPES,
 	BUNDLE_EXTENSION_TYPES,
+	ConfinedHookEventsSchema,
 	ConfinedOptionDeliverySchema,
 	ConfinedRuntimeSchema,
 	EXTENSION_TYPES,
@@ -45,6 +46,8 @@ export type ConfinedRuntime = z.infer<typeof ConfinedRuntimeSchema>;
 export type ExtensionCapabilities = z.infer<typeof ExtensionCapabilitiesSchema>;
 
 export type ConfinedOptionDelivery = z.infer<typeof ConfinedOptionDeliverySchema>;
+
+export type ConfinedHookEvents = z.infer<typeof ConfinedHookEventsSchema>;
 
 type ExtensionBase = {
 	path: string;

@@ -185,6 +185,94 @@ describe('ExtensionOptions confined opt-in', () => {
 	});
 });
 
+describe('ExtensionOptions confined hook events', () => {
+	const hookOption = { ...apiOption, type: 'hook', runtime: 'confined-server' as const };
+
+	it('accepts a confined hook with exact event declarations', () => {
+		const events = { filter: ['items.create', 'articles.items.update'], action: ['auth.login'] };
+		expect(ExtensionOptions.safeParse({ ...hookOption, events }).success).toBe(true);
+	});
+
+	it('accepts a single-kind declaration', () => {
+		expect(ExtensionOptions.safeParse({ ...hookOption, events: { action: ['server.start'] } }).success).toBe(true);
+	});
+
+	it('rejects events without the confined runtime', () => {
+		const events = { action: ['auth.login'] };
+		expect(ExtensionOptions.safeParse({ ...apiOption, type: 'hook', events }).success).toBe(false);
+	});
+
+	it('rejects events on anything but a hook rather than stripping them', () => {
+		const events = { action: ['auth.login'] };
+
+		expect(ExtensionOptions.safeParse({ ...apiOption, runtime: 'confined-server', events }).success, 'endpoint').toBe(
+			false
+		);
+
+		expect(ExtensionOptions.safeParse({ ...appOption, events }).success, 'app').toBe(false);
+
+		expect(
+			ExtensionOptions.safeParse({ ...hybridOption, runtime: 'confined-server', events }).success,
+			'operation'
+		).toBe(false);
+
+		expect(
+			ExtensionOptions.safeParse({ ...bundleOption, runtime: 'confined-server', events }).success,
+			'bundle root'
+		).toBe(false);
+
+		expect(
+			ExtensionOptions.safeParse({
+				...bundleOption,
+				runtime: 'confined-server',
+				entries: [{ type: 'hook', name: 'my-hook', source: 'src/hook.js', events }],
+			}).success,
+			'bundle hook entry'
+		).toBe(false);
+	});
+
+	it('rejects an event name with a prototype or emitter-reserved segment in any position', () => {
+		for (const name of [
+			'__proto__',
+			'constructor',
+			'toString',
+			'valueOf',
+			'hasOwnProperty',
+			'_listeners',
+			'items.__proto__',
+			'items.constructor.create',
+			'a.toString',
+			'_listeners.create',
+			'a..b',
+		]) {
+			expect(ExtensionOptions.safeParse({ ...hookOption, events: { filter: [name] } }).success, name).toBe(false);
+		}
+	});
+
+	it('accepts an event name that merely contains a prototype-like substring within a segment', () => {
+		// `prototype` is not an Object.prototype member, and a reserved word inside a
+		// longer segment is a distinct literal key, so neither aliases.
+		for (const name of ['prototype', 'items.prototypes', 'constructor_id.create', 'my__proto__field']) {
+			expect(ExtensionOptions.safeParse({ ...hookOption, events: { action: [name] } }).success, name).toBe(true);
+		}
+	});
+
+	it('rejects an empty, wildcard, oversized, or duplicated declaration', () => {
+		for (const events of [
+			{},
+			{ filter: [] },
+			{ filter: ['*'] },
+			{ filter: ['items.*'] },
+			{ action: ['items.create', 'items.create'] },
+			{ action: Array.from({ length: 17 }, (_, i) => `event.${i}`) },
+			{ action: ['x'.repeat(129)] },
+			{ schedule: ['*/5 * * * *'] },
+		]) {
+			expect(ExtensionOptions.safeParse({ ...hookOption, events }).success, JSON.stringify(events)).toBe(false);
+		}
+	});
+});
+
 describe('ExtensionOptions confined bundle', () => {
 	it('accepts a confined bundle with per-server-entry capabilities', () => {
 		const result = ExtensionOptions.safeParse({

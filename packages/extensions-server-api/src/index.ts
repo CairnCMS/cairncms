@@ -13,7 +13,9 @@ export type ExtensionAccountability = {
 };
 
 export type ExtensionActivation = {
-	type: 'flow-operation' | 'json-endpoint';
+	type: 'flow-operation' | 'json-endpoint' | 'event-filter' | 'event-action';
+	// The exact platform event name, present for the event activations.
+	event?: string;
 };
 
 /** Coarse, stable denial and failure categories, so author code can branch without depending on host internals. */
@@ -204,5 +206,39 @@ export type JsonEndpointConfig<Input = unknown, Output = unknown> = {
 export function defineJsonEndpoint<Input = unknown, Output = unknown>(
 	config: JsonEndpointConfig<Input, Output>
 ): JsonEndpointConfig<Input, Output> {
+	return config;
+}
+
+/**
+ * A filter handler observes and may transform an event payload. Returning
+ * `undefined` means no change, matching the platform's filter semantics, and the
+ * runtime carries that distinction explicitly so serialization cannot blur it.
+ * A throw blocks the platform action with a sanitized error.
+ */
+export type EventFilterHandler<Payload = unknown> = (
+	payload: Payload,
+	meta: Record<string, unknown>,
+	context: ExtensionInvocationContext
+) => Payload | undefined | Promise<Payload | undefined>;
+
+/** An action handler observes a completed platform action. A failure is logged and never blocks the action. */
+export type EventActionHandler = (
+	meta: Record<string, unknown>,
+	context: ExtensionInvocationContext
+) => void | Promise<void>;
+
+/**
+ * Handlers keyed by exact platform event name. The same events must be declared
+ * in the extension manifest, which is the operator-reviewable subscription
+ * surface; an entry whose handlers do not match its manifest declaration fails
+ * to load.
+ */
+export type EventHookConfig = {
+	id: string;
+	filters?: Record<string, EventFilterHandler<any>>;
+	actions?: Record<string, EventActionHandler>;
+};
+
+export function defineEventHook(config: EventHookConfig): EventHookConfig {
 	return config;
 }
