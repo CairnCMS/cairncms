@@ -4,10 +4,16 @@ import fse from 'fs-extra';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterAll, expect, test } from 'vitest';
+import { afterAll, expect, test, vi } from 'vitest';
+import { runAdd } from './src/cli/commands/add.js';
 import { create } from './src/cli/index.js';
 import getPackageManager from './src/cli/utils/get-package-manager.js';
 import { languageToShort } from './src/cli/utils/languages.js';
+
+// `create bundle --confined` writes an empty shell, then `add` fills it. `add` prompts
+// interactively, so the test drives the prompt. `create` itself never prompts.
+const { prompt } = vi.hoisted(() => ({ prompt: vi.fn() }));
+vi.mock('inquirer', () => ({ default: { prompt } }));
 
 // Disjoint from every other test file's cleanup prefix, because the suites run
 // in parallel and each afterAll sweeps its own prefix.
@@ -193,6 +199,42 @@ test.each(['javascript', 'typescript'])(
 	},
 	120_000
 );
+
+test('scaffolds a confined bundle shell, fills it with add, and builds a probing artifact', async () => {
+	const dir = `${testPrefix}-bundle-${Date.now()}`;
+
+	await create('bundle', dir, { confined: true });
+
+	// The empty confined shell: runtime once at the root, no entries yet, schema-valid.
+	const shell = await fse.readJSON(resolve(dir, 'package.json'));
+	expect(shell['cairncms:extension'].runtime).toBe('confined-server');
+	expect(shell['cairncms:extension'].entries).toEqual([]);
+	expect(shell.devDependencies['@cairncms/extensions-server-api']).toBeDefined();
+	expect(() => ExtensionManifest.parse(shell)).not.toThrow();
+
+	// A confined server entry and its app companion, the primary bundle shape.
+	prompt.mockResolvedValueOnce({ type: 'operation', name: 'my-op', language: 'typescript' });
+	await runAdd(resolve(dir));
+
+	prompt.mockResolvedValueOnce({ type: 'interface', name: 'my-iface', language: 'typescript' });
+	await runAdd(resolve(dir));
+
+	await stageRegistryStyleDependency(dir);
+	await fse.ensureSymlink(sdkRoot, resolve(dir, 'node_modules', '@cairncms', 'extensions-sdk'), 'dir');
+
+	await execa('node', ['../cli.js', 'build'], { cwd: dir });
+
+	// The server side builds to one probing CairnBundle artifact with the operation
+	// entry under its `type:name` key, its config id the entry name.
+	const apiArtifact = await fse.readFile(resolve(dir, 'dist', 'api.js'), 'utf8');
+	expect(apiArtifact).toContain('var CairnBundle');
+
+	const bundle = evalGlobal(apiArtifact, 'CairnBundle').default as unknown as Record<string, { id: string }>;
+	expect(bundle['operation:my-op']?.id).toBe('my-op');
+
+	// The app entry lands in the app bundle, not the confined server artifact.
+	expect(await fse.pathExists(resolve(dir, 'dist', 'app.js'))).toBe(true);
+}, 240_000);
 
 test('refuses a confined scaffold for a type without a runtime contract', async () => {
 	const result = await execa(
