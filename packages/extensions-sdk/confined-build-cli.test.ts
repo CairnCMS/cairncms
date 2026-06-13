@@ -143,7 +143,7 @@ test('the manifest-driven build produces a confined hook artifact under its cont
 	expect(evalGlobal(artifact, 'CairnHook').default.id).toBe(dir);
 }, 30_000);
 
-test('a confined type without a runtime contract refuses by name', async () => {
+test('the manifest-driven build assembles a confined CairnBundle from the server entries', async () => {
 	const dir = `${testPrefix}-bundle-${Date.now()}`;
 
 	await fse.outputJSON(resolve(dir, 'package.json'), {
@@ -153,17 +153,48 @@ test('a confined type without a runtime contract refuses by name', async () => {
 		'cairncms:extension': {
 			type: 'bundle',
 			path: { app: 'dist/app.js', api: 'dist/api.js' },
-			entries: [{ type: 'endpoint', name: 'inner', source: 'src/inner.js' }],
+			entries: [
+				{ type: 'endpoint', name: 'ep', source: 'src/ep.js', capabilities: { endpoint: { access: 'authenticated' } } },
+				{
+					type: 'hook',
+					name: 'hk',
+					source: 'src/hk.js',
+					capabilities: { log: true },
+					events: { action: ['items.create'] },
+				},
+			],
 			runtime: 'confined-server',
 			host: '^10.0.0',
 		},
 	});
 
-	await fse.outputFile(resolve(dir, 'src', 'inner.js'), 'export default () => {};\n');
+	await fse.outputFile(
+		resolve(dir, 'src', 'ep.js'),
+		`export default { id: 'ep', handler: async () => ({ body: null }) };\n`
+	);
 
-	const result = await execa('node', ['../cli.js', 'build'], { cwd: dir, reject: false });
+	await fse.outputFile(
+		resolve(dir, 'src', 'hk.js'),
+		`export default { id: 'hk', actions: { 'items.create': async () => undefined } };\n`
+	);
 
-	expect(result.exitCode).toBe(1);
-	expect(`${result.stdout}${result.stderr}`).toContain('bundle');
-	expect(await fse.pathExists(resolve(dir, 'dist'))).toBe(false);
+	await execa('node', ['../cli.js', 'build'], { cwd: dir });
+
+	const artifact = await fse.readFile(resolve(dir, 'dist', 'api.js'), 'utf8');
+	expect(artifact).toContain('var CairnBundle');
+	expect(artifact).not.toContain('var CairnOperation');
+
+	const bundle = new Function(`${artifact}\nreturn CairnBundle.default;`)() as Record<
+		string,
+		{ id: string; handler?: unknown; actions?: Record<string, unknown> }
+	>;
+
+	expect(Object.keys(bundle).sort()).toEqual(['endpoint:ep', 'hook:hk']);
+	expect(bundle['endpoint:ep']!.id).toBe('ep');
+	expect(typeof bundle['endpoint:ep']!.handler).toBe('function');
+	expect(bundle['hook:hk']!.id).toBe('hk');
+	expect(Object.keys(bundle['hook:hk']!.actions!)).toEqual(['items.create']);
+
+	// The app side is produced beside the confined server artifact.
+	expect(await fse.pathExists(resolve(dir, 'dist', 'app.js'))).toBe(true);
 }, 30_000);

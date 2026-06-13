@@ -234,6 +234,46 @@ describe('containment', () => {
 
 		await expect(buildConfinedServerEntry({ input, root: dir })).rejects.toBeInstanceOf(ConfinedBuildError);
 	});
+
+	it('containment-checks the real imports of a generated entry, refusing a symlinked-outside one', async () => {
+		writeFileSync(join(outer, 'leaked.js'), 'export const id = 1;');
+		symlinkSync(join(outer, 'leaked.js'), join(dir, 'leaked.js'));
+
+		const stdin = "import { id } from './leaked.js'; export default { 'endpoint:ep': { id } };";
+
+		let message = '';
+
+		try {
+			await buildConfinedServerEntry({ stdin, root: dir, globalName: 'CairnBundle' });
+		} catch (caught) {
+			expect(caught).toBeInstanceOf(ConfinedBuildError);
+			message = (caught as Error).message;
+		}
+
+		expect(message).toContain('resolves outside the package root');
+		expect(message).not.toContain(outer);
+
+		// In place, the same import builds: only the generated entry itself is exempt.
+		rmSync(join(dir, 'leaked.js'));
+		writeFileSync(join(dir, 'leaked.js'), 'export const id = 1;');
+
+		const { code } = await buildConfinedServerEntry({ stdin, root: dir, globalName: 'CairnBundle' });
+		expect(code).toContain('CairnBundle');
+	});
+});
+
+describe('source selection', () => {
+	it('refuses a build that declares neither an entry file nor a generated entry', async () => {
+		await expect(buildConfinedServerEntry({ root: dir } as never)).rejects.toBeInstanceOf(ConfinedBuildError);
+	});
+
+	it('refuses a build that declares both', async () => {
+		const input = write('server.js', "export default { id: 'x', handler: () => ({}) };");
+
+		await expect(buildConfinedServerEntry({ input, stdin: 'export default {};', root: dir } as never)).rejects.toThrow(
+			/exactly one/
+		);
+	});
 });
 
 describe('watchConfinedServerEntry', () => {

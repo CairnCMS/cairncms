@@ -42,6 +42,7 @@ import {
 	type ConfinedGuestGlobal,
 } from './helpers/build-confined-server-entry.js';
 import generateBundleEntrypoint from './helpers/generate-bundle-entrypoint.js';
+import generateConfinedBundleEntrypoint from './helpers/generate-confined-bundle-entrypoint.js';
 import loadConfig from './helpers/load-config.js';
 import { validateSplitEntrypointOption } from './helpers/validate-cli-options.js';
 
@@ -121,12 +122,23 @@ export default async function build(options: BuildOptions): Promise<void> {
 				return;
 			}
 
-			log(
-				`The confined runtime supports ${chalk.bold('operation')}, ${chalk.bold('endpoint')}, and ${chalk.bold(
-					'hook'
-				)} extensions only. Type ${chalk.bold(extensionOptions.type)} cannot be built confined yet.`,
-				'error'
-			);
+			if (extensionOptions.type === 'bundle') {
+				await buildConfinedBundleExtension({
+					entries: extensionOptions.entries,
+					outputApp: extensionOptions.path.app,
+					outputApi: extensionOptions.path.api,
+					format,
+					watch,
+					sourcemap,
+					minify,
+				});
+
+				return;
+			}
+
+			// The schema only admits confined-server on these types, so this is a
+			// defensive fallback rather than a reachable path for a valid manifest.
+			log(`Type ${chalk.bold(extensionOptions.type)} cannot be built confined.`, 'error');
 
 			// Exit through the natural end of the process so piped stdio flushes
 			// the refusal message before the nonzero code lands.
@@ -586,6 +598,92 @@ async function buildConfinedApiExtension({
 	}
 
 	log(chalk.bold.green('Confined server entry built.'));
+}
+
+/**
+ * Builds a confined bundle: the app side keeps the ordinary browser bundle of the
+ * app entries, and the server side is one confined `CairnBundle` artifact assembled
+ * from the declared server entries, containment-checked like every confined build.
+ */
+async function buildConfinedBundleExtension({
+	entries,
+	outputApp,
+	outputApi,
+	format,
+	watch,
+	sourcemap,
+	minify,
+}: {
+	entries: ExtensionOptionsBundleEntry[];
+	outputApp: string;
+	outputApi: string;
+	format: Format;
+	watch: boolean;
+	sourcemap: boolean;
+	minify: boolean;
+}) {
+	if (outputApp.length === 0) {
+		log(`App output file can not be empty.`, 'error');
+		process.exitCode = 1;
+		return;
+	}
+
+	if (outputApi.length === 0) {
+		log(`API output file can not be empty.`, 'error');
+		process.exitCode = 1;
+		return;
+	}
+
+	const config = await loadConfig();
+	const plugins = config.plugins ?? [];
+	const root = path.resolve('.');
+
+	const entrypointApp = generateBundleEntrypoint('app', entries);
+
+	const rollupOptionsApp = getRollupOptions({
+		mode: 'browser',
+		input: { entry: entrypointApp },
+		sourcemap,
+		minify,
+		plugins,
+	});
+
+	const rollupOutputOptionsApp = getRollupOutputOptions({ mode: 'browser', output: outputApp, format, sourcemap });
+	const appConfig = { rollupOptions: rollupOptionsApp, rollupOutputOptions: rollupOutputOptionsApp };
+
+	const stdin = generateConfinedBundleEntrypoint(entries);
+
+	if (watch) {
+		await watchConfinedServerEntry({
+			stdin,
+			root,
+			output: outputApi,
+			globalName: 'CairnBundle',
+			onRebuild: (result) => {
+				if (result.ok) {
+					log(chalk.bold.green('Confined bundle server entry built.'));
+				} else {
+					log(`Confined bundle server entry failed: ${result.message}`, 'error');
+				}
+			},
+		});
+
+		await watchExtension([appConfig]);
+		return;
+	}
+
+	try {
+		await buildConfinedServerEntry({ stdin, root, output: outputApi, globalName: 'CairnBundle' });
+	} catch (error) {
+		const message =
+			error instanceof ConfinedBuildError ? error.message : 'the confined server entry could not be built';
+
+		log(`Confined bundle server entry failed: ${message}`, 'error');
+		process.exitCode = 1;
+		return;
+	}
+
+	await buildExtension([appConfig]);
 }
 
 async function buildBundleExtension({
