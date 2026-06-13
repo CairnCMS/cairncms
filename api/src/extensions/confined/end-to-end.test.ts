@@ -1,0 +1,434 @@
+import axios from 'axios';
+import http from 'node:http';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { REDACT_TEXT } from '../../constants.js';
+import {
+	HTTP_RESPONSE_BYTES,
+	ITEMS_REPLY_BYTES,
+	SETTINGS_VALUE_BYTES,
+	TEMPLATE_OUTPUT_BYTES,
+} from './sandbox-limits.js';
+import { runConfinedEndpoint } from './endpoint.js';
+import { runConfinedActionHook, runConfinedFilterHook } from './hook.js';
+import { runConfinedOperation } from './operation.js';
+import { ConfinedSupervisor } from './supervisor.js';
+import type { ConfinedHostDispatcher, ConfinedInvocation, ConfinedResult, ConfinedRuntimeLimits } from './types.js';
+
+// The full stack with nothing stubbed between the guest and the host: a real spawned
+// QuickJS child driven by the real supervisor, brokered by the real
+// createConfinedHostBroker the runners build internally. The dev tsx child path needs
+// no build, the same path supervisor.test.ts exercises by default.
+const ENGINE_TIMEOUT = 20_000;
+
+const LIMITS: ConfinedRuntimeLimits = {
+	wallClockMs: 5000,
+	cpuTimeoutMs: 2000,
+	memoryBytes: 64 * 1024 * 1024,
+	stackBytes: 512 * 1024,
+	acquireTimeoutMs: 0,
+	hostCallTimeoutMs: 5000,
+	maxHostCalls: 1000,
+	maxInFlightHostCalls: 16,
+};
+
+const BROKER_LIMITS = {
+	settingsValueBytes: SETTINGS_VALUE_BYTES,
+	httpResponseBytes: HTTP_RESPONSE_BYTES,
+	itemsReplyBytes: ITEMS_REPLY_BYTES,
+	templateOutputBytes: TEMPLATE_OUTPUT_BYTES,
+};
+
+const supervisor = new ConfinedSupervisor();
+
+const invoke = (invocation: ConfinedInvocation, dispatcher: ConfinedHostDispatcher): Promise<ConfinedResult> =>
+	supervisor.invoke(invocation, dispatcher);
+
+let logs: { level: string; message: string }[] = [];
+const log = (entry: { level: string; message: string }) => logs.push(entry);
+
+beforeEach(() => {
+	logs = [];
+});
+
+function operationEntry(handlerBody: string): string {
+	return `var CairnOperation = (() => { const handler = ${handlerBody}; return { default: { id: 'e2e-op', handler } }; })();`;
+}
+
+function endpointEntry(handlerBody: string): string {
+	return `var CairnEndpoint = (() => { const handler = ${handlerBody}; return { default: { id: 'e2e-ep', handler } }; })();`;
+}
+
+function hookEntry(kind: 'filters' | 'actions', event: string, handlerBody: string): string {
+	return `var CairnHook = (() => { const handler = ${handlerBody}; return { default: { id: 'e2e-hook', ${kind}: { ${JSON.stringify(
+		event
+	)}: handler } } }; })();`;
+}
+
+function baseOperationRequest(entrySource: string, overrides: Record<string, unknown> = {}) {
+	return {
+		extensionId: 'local.e2e',
+		contributionId: 'e2e-op',
+		operationId: 'op-1',
+		entrySource,
+		capabilities: {},
+		options: {},
+		input: null,
+		accountability: null,
+		...overrides,
+	};
+}
+
+const deps = { invoke, log, brokerLimits: BROKER_LIMITS, runtimeLimits: LIMITS };
+
+describe('confined contracts through a real child', () => {
+	it(
+		'runs an operation, reading an option and returning a value',
+		async () => {
+			const result = await runConfinedOperation(
+				baseOperationRequest(operationEntry('async ({ options }) => ({ doubled: options.n * 2 })'), {
+					options: { n: 21 },
+				}),
+				deps
+			);
+
+			expect(result.outcome).toEqual({ ok: true, value: { doubled: 42 } });
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
+		'runs a json endpoint, shaping the request and holding the result contract',
+		async () => {
+			const result = await runConfinedEndpoint(
+				{
+					extensionId: 'local.e2e',
+					contributionId: 'e2e-ep',
+					entrySource: endpointEntry(
+						'async (request) => ({ status: 201, body: { method: request.method, path: request.path, query: request.query } })'
+					),
+					capabilities: { endpoint: { access: 'public' } },
+					method: 'GET',
+					path: '/widgets',
+					query: { page: '2' },
+					body: null,
+					accountability: null,
+				},
+				deps
+			);
+
+			expect(result).toEqual({
+				ok: true,
+				status: 201,
+				body: { method: 'GET', path: '/widgets', query: { page: '2' } },
+			});
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
+		'runs a filter hook, carrying the changed payload through the envelope',
+		async () => {
+			const result = await runConfinedFilterHook(
+				{
+					extensionId: 'local.e2e',
+					contributionId: 'e2e-hook',
+					entrySource: hookEntry('filters', 'e2e.filter', 'async (payload) => ({ ...payload, stamped: true })'),
+					capabilities: { log: true },
+					event: 'e2e.filter',
+					payload: { value: 1 },
+					meta: {},
+					accountability: null,
+				},
+				deps
+			);
+
+			expect(result).toEqual({ ok: true, unchanged: false, payload: { value: 1, stamped: true } });
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
+		'runs an action hook, completing without blocking',
+		async () => {
+			const result = await runConfinedActionHook(
+				{
+					extensionId: 'local.e2e',
+					contributionId: 'e2e-hook',
+					entrySource: hookEntry('actions', 'e2e.action', 'async () => ({ done: true })'),
+					capabilities: { log: true },
+					event: 'e2e.action',
+					meta: { collection: 'widgets' },
+					accountability: null,
+				},
+				deps
+			);
+
+			expect(result).toEqual({ ok: true });
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
+		'selects one entry of a bundle artifact by its type:name key',
+		async () => {
+			const artifact = `var CairnBundle = (() => ({ default: { 'operation:bundled': { id: 'bundled', handler: async ({ options }) => ({ fromBundle: options.n }) }, 'operation:other': { id: 'other', handler: async () => ({ wrong: true }) } } }))();`;
+
+			const result = await runConfinedOperation(
+				baseOperationRequest(artifact, {
+					contributionId: 'bundled',
+					bundleEntryKey: 'operation:bundled',
+					options: { n: 7 },
+				}),
+				deps
+			);
+
+			expect(result.outcome).toEqual({ ok: true, value: { fromBundle: 7 } });
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
+		'executes the entry as bytes in the child and never imports it into the API process',
+		async () => {
+			// `global` is a Node global the QuickJS guest does not expose (it carries a
+			// `process` shim, so process is not a discriminator here). The guard throws
+			// under Node, so importing this entry into the API process would fail loudly. In
+			// the child `global` is absent, so the same bytes produce a valid config and
+			// run, proving the entry was executed as bytes, never imported.
+			const canary = `if (typeof global !== 'undefined') { throw new Error('IMPORTED_UNDER_NODE'); }\n${operationEntry(
+				'async () => ({ ran: true })'
+			)}`;
+
+			expect(() => new Function(`${canary}\nreturn CairnOperation;`)()).toThrow('IMPORTED_UNDER_NODE');
+
+			const result = await runConfinedOperation(baseOperationRequest(canary), deps);
+			expect(result.outcome).toEqual({ ok: true, value: { ran: true } });
+		},
+		ENGINE_TIMEOUT
+	);
+});
+
+describe('host methods through a real child and the real broker', () => {
+	it(
+		'reaches the log sink under the log capability and never without it',
+		async () => {
+			const granted = await runConfinedOperation(
+				baseOperationRequest(
+					operationEntry(
+						"async (_input, { host }) => { await host.log.info('hello from the guest'); return { ran: true }; }"
+					),
+					{ capabilities: { log: true } }
+				),
+				deps
+			);
+
+			expect(granted.outcome).toEqual({ ok: true, value: { ran: true } });
+			expect(logs).toHaveLength(1);
+			expect(logs[0]?.level).toBe('info');
+
+			logs = [];
+
+			// The guest log wrapper discards the host reply, so denial is observable only at
+			// the sink: the operation still returns, but nothing was logged.
+			const denied = await runConfinedOperation(
+				baseOperationRequest(
+					operationEntry(
+						"async (_input, { host }) => { await host.log.info('hello from the guest'); return { ran: true }; }"
+					),
+					{ capabilities: {} }
+				),
+				deps
+			);
+
+			expect(denied.outcome).toEqual({ ok: true, value: { ran: true } });
+			expect(logs).toHaveLength(0);
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
+		'serves settings dark: denied without the capability, null with it',
+		async () => {
+			const denied = await runConfinedOperation(
+				baseOperationRequest(operationEntry("async (_input, { host }) => host.settings.get('mode')"), {
+					capabilities: {},
+				}),
+				deps
+			);
+
+			expect(denied.outcome).toMatchObject({ ok: true, value: { ok: false, error: { code: 'denied' } } });
+
+			// The runners hardcode DARK_SETTINGS, so a declared capability still reads null
+			// for every key. This asserts that shipped dark contract through the real child.
+			const dark = await runConfinedOperation(
+				baseOperationRequest(operationEntry("async (_input, { host }) => host.settings.get('mode')"), {
+					capabilities: { settings: ['read'] },
+				}),
+				deps
+			);
+
+			expect(dark.outcome).toEqual({ ok: true, value: { ok: true, value: null } });
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
+		'reads items through the wired service under the items capability',
+		async () => {
+			const itemsService = () => ({
+				readByQuery: async () => [{ id: 1, title: 'one' }],
+				readOne: async (key: string | number) => ({ id: key }),
+			});
+
+			// Both bridge methods are exercised: read and readOne have distinct guest
+			// wrappers and broker dispatch, so a drift in either would otherwise pass.
+			const granted = await runConfinedOperation(
+				baseOperationRequest(
+					operationEntry(
+						"async (_input, { host }) => ({ read: await host.items.read('widgets', {}), readOne: await host.items.readOne('widgets', '1', {}) })"
+					),
+					{ capabilities: { items: 'system' } }
+				),
+				{ ...deps, itemsService }
+			);
+
+			expect(granted.outcome).toEqual({
+				ok: true,
+				value: {
+					read: { ok: true, value: [{ id: 1, title: 'one' }] },
+					readOne: { ok: true, value: { id: '1' } },
+				},
+			});
+
+			const denied = await runConfinedOperation(
+				baseOperationRequest(operationEntry("async (_input, { host }) => host.items.read('widgets', {})"), {
+					capabilities: {},
+				}),
+				{ ...deps, itemsService }
+			);
+
+			expect(denied.outcome).toMatchObject({ ok: true, value: { ok: false, error: { code: 'denied' } } });
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
+		'renders a template under the template capability and denies without it',
+		async () => {
+			const granted = await runConfinedOperation(
+				baseOperationRequest(
+					operationEntry("async (_input, { host }) => host.template.renderLiquid('Hi {{ n }}', { n: 1 })"),
+					{ capabilities: { template: true } }
+				),
+				deps
+			);
+
+			expect(granted.outcome).toEqual({ ok: true, value: { ok: true, value: 'Hi 1' } });
+
+			const denied = await runConfinedOperation(
+				baseOperationRequest(operationEntry("async (_input, { host }) => host.template.renderLiquid('Hi', {})"), {
+					capabilities: {},
+				}),
+				deps
+			);
+
+			expect(denied.outcome).toMatchObject({ ok: true, value: { ok: false, error: { code: 'denied' } } });
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
+		'denies request.send at the capability gate before any url or axios work',
+		async () => {
+			let axiosCalls = 0;
+
+			const getAxios = async () => {
+				axiosCalls++;
+				return axios.create();
+			};
+
+			// A malformed url and a counting axios seam make the test discriminating: if the
+			// capability gate did not run first, url validation would answer invalid_request
+			// or the axios seam would be reached. The denied reply (not invalid_request) and
+			// the untouched seam prove the missing-capability check runs before either.
+			const denied = await runConfinedOperation(
+				baseOperationRequest(
+					operationEntry("async (_input, { host }) => host.request.send({ url: 'not-a-valid-url', method: 'GET' })"),
+					{ capabilities: {} }
+				),
+				{ ...deps, getAxios }
+			);
+
+			expect(denied.outcome).toMatchObject({ ok: true, value: { ok: false, error: { code: 'denied' } } });
+			expect(axiosCalls).toBe(0);
+		},
+		ENGINE_TIMEOUT
+	);
+});
+
+describe('brokered request with a real secret through a real child', () => {
+	let server: http.Server;
+	let origin: string;
+	const authSeen: Array<string | undefined> = [];
+
+	beforeAll(async () => {
+		server = http.createServer((request, response) => {
+			authSeen.push(request.headers['authorization']);
+			response.writeHead(200, { 'content-type': 'application/json' });
+			response.end(JSON.stringify({ echoedAuth: request.headers['authorization'] ?? null }));
+		});
+
+		await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+		origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+	});
+
+	afterAll(() => {
+		server.close();
+	});
+
+	it(
+		'delivers the real token to the upstream as a bearer header while the guest only ever holds the opaque handle, scrubbed from the output',
+		async () => {
+			const secret = 'sk_live_E2E_SECRET_TOKEN';
+
+			const result = await runConfinedOperation(
+				baseOperationRequest(
+					// The guest logs the opaque handle ref it holds, then makes the brokered
+					// call. The configured secret reaches the guest only as { kind, ref }.
+					operationEntry(
+						"async ({ options }, { host }) => { await host.log.info('calling upstream with ' + options.apiKey.ref); return host.request.send({ url: options.url, method: 'GET', auth: { bearer: options.apiKey } }); }"
+					),
+					{
+						capabilities: { request: { urls: [origin] }, log: true },
+						options: { url: `${origin}/echo`, apiKey: secret },
+						optionDelivery: { apiKey: { delivery: 'reference' } },
+					}
+				),
+				{ ...deps, getAxios: async () => axios.create() }
+			);
+
+			// The real token reached the upstream as the broker-owned Authorization header.
+			expect(authSeen).toContain(`Bearer ${secret}`);
+
+			// The guest never saw the raw token: it is scrubbed from the response the guest
+			// receives and is in the redaction set for revision and log scrubbing.
+			expect(result.outcome).toMatchObject({ ok: true });
+			expect(JSON.stringify(result.outcome)).not.toContain(secret);
+			expect(result.redactionValues).toContain(secret);
+
+			// The log sink scrub is real, not vacuous: the guest wrote a log carrying the
+			// opaque handle, and the broker redacted it before the sink. The minted handle
+			// is the redaction value that is not the secret, so assert the entry exists,
+			// carries the marker, and leaks neither the raw secret nor the handle itself.
+			const handle = result.redactionValues.find((value) => value !== secret);
+			expect(handle).toBeDefined();
+
+			const serializedLogs = JSON.stringify(logs);
+			expect(logs).not.toHaveLength(0);
+			expect(serializedLogs).toContain(REDACT_TEXT);
+			expect(serializedLogs).not.toContain(secret);
+			expect(serializedLogs).not.toContain(String(handle));
+		},
+		ENGINE_TIMEOUT
+	);
+});
