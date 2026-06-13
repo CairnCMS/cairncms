@@ -287,12 +287,23 @@ export const ExtensionOptionsBundleEntry = z.union([
 			runtime: ConfinedRuntimeSchema.optional(),
 			capabilities: ExtensionCapabilitiesSchema.optional(),
 			optionDelivery: z.unknown().optional(),
-			events: z.unknown().optional(),
+			events: ConfinedHookEventsSchema.optional(),
 		})
 		.superRefine((value, ctx) => {
 			rejectBundleEntryRuntime(value, ctx);
 			rejectOptionDelivery(value, ctx, 'endpoint and hook entries in a bundle');
-			rejectHookEvents(value, ctx, 'endpoint and hook entries in a bundle');
+
+			// A hook entry declares its events like a top-level hook; an endpoint entry
+			// may not, so a misplaced subscription fails closed rather than vanishing.
+			// Whether a hook entry is required to declare events depends on the bundle
+			// root runtime, so that rule lives in the bundle refine, not here.
+			if (value.events !== undefined && value.type !== 'hook') {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ['events'],
+					message: 'only a hook entry in a bundle may declare events',
+				});
+			}
 		}),
 	z
 		.object({
@@ -410,6 +421,31 @@ export const ExtensionOptionsBundle = z
 				path: ['runtime'],
 				message: `a bundle entry declares capabilities, so the bundle must declare runtime: ${CONFINED_RUNTIME}`,
 			});
+		}
+
+		const entryDeclaresEvents = value.entries.some((entry) => 'events' in entry && entry.events !== undefined);
+
+		if (entryDeclaresEvents && value.runtime !== CONFINED_RUNTIME) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ['runtime'],
+				message: `a bundle entry declares events, so the bundle must declare runtime: ${CONFINED_RUNTIME}`,
+			});
+		}
+
+		// A confined hook is inert without a subscription, so a confined bundle's hook
+		// entries must declare events. An inherited bundle hook needs no declaration, so
+		// this applies only under the confined runtime.
+		if (value.runtime === CONFINED_RUNTIME) {
+			const inertHook = value.entries.some((entry) => entry.type === 'hook' && entry.events === undefined);
+
+			if (inertHook) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ['entries'],
+					message: 'a hook entry in a confined bundle must declare events',
+				});
+			}
 		}
 
 		const hasServerEntry = value.entries.some((entry) => BUNDLE_SERVER_ENTRY_TYPES.has(entry.type));

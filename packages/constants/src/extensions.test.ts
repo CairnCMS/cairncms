@@ -225,9 +225,67 @@ describe('ExtensionOptions confined hook events', () => {
 			ExtensionOptions.safeParse({
 				...bundleOption,
 				runtime: 'confined-server',
+				entries: [{ type: 'endpoint', name: 'my-endpoint', source: 'src/endpoint.js', events }],
+			}).success,
+			'bundle endpoint entry'
+		).toBe(false);
+
+		expect(
+			ExtensionOptions.safeParse({
+				...bundleOption,
+				runtime: 'confined-server',
+				entries: [
+					{ type: 'operation', name: 'my-operation', source: { app: 'src/app.js', api: 'src/api.js' }, events },
+				],
+			}).success,
+			'bundle operation entry'
+		).toBe(false);
+	});
+
+	it('accepts events on a confined bundle hook entry and requires the confined runtime', () => {
+		const events = { action: ['items.create'] };
+
+		expect(
+			ExtensionOptions.safeParse({
+				...bundleOption,
+				runtime: 'confined-server',
 				entries: [{ type: 'hook', name: 'my-hook', source: 'src/hook.js', events }],
 			}).success,
-			'bundle hook entry'
+			'confined bundle hook entry'
+		).toBe(true);
+
+		// Events on a bundle entry imply confinement, so a plain bundle is rejected.
+		expect(
+			ExtensionOptions.safeParse({
+				...bundleOption,
+				entries: [{ type: 'hook', name: 'my-hook', source: 'src/hook.js', events }],
+			}).success,
+			'plain bundle hook entry'
+		).toBe(false);
+	});
+
+	it('requires events on a confined bundle hook entry but not an inherited one', () => {
+		const hookEntry = { type: 'hook', name: 'my-hook', source: 'src/hook.js' };
+
+		// An inherited bundle hook needs no manifest events, so a plain bundle accepts it.
+		expect(ExtensionOptions.safeParse({ ...bundleOption, entries: [hookEntry] }).success, 'plain bundle hook').toBe(
+			true
+		);
+
+		// A confined hook is inert without a subscription, so it must declare events.
+		expect(
+			ExtensionOptions.safeParse({ ...bundleOption, runtime: 'confined-server', entries: [hookEntry] }).success,
+			'confined bundle hook without events'
+		).toBe(false);
+
+		// Declaring events implies the confined runtime, so a plain bundle hook with
+		// events is still rejected.
+		expect(
+			ExtensionOptions.safeParse({
+				...bundleOption,
+				entries: [{ ...hookEntry, events: { action: ['items.create'] } }],
+			}).success,
+			'plain bundle hook with events'
 		).toBe(false);
 	});
 
