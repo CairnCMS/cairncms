@@ -20,6 +20,7 @@ exports.list = {
 		{ testFilePath: '/routes/extensions/confined-items.test.ts' },
 		{ testFilePath: '/routes/extensions/confined-endpoints.test.ts' },
 		{ testFilePath: '/routes/extensions/confined-hooks.test.ts' },
+		{ testFilePath: '/routes/extensions/confined-bundle.test.ts' },
 		{ testFilePath: '/routes/collections/schema-cache.test.ts' },
 		{ testFilePath: '/routes/permissions/cache-purge.test.ts' },
 		{ testFilePath: '/routes/items/relational-presets.test.ts' },
