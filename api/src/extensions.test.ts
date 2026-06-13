@@ -1429,6 +1429,67 @@ describe('the confined bundle binding', () => {
 		expect(seen).toContain('hook:bhk');
 	});
 
+	it('removes every server entry surface of a confined bundle on unload', async () => {
+		confinedRuntime.resolve = async () => ({
+			ok: true,
+			supervisor: {
+				probeLoad: async () => ({ loadable: true }),
+				invoke: async (invocation: { activation?: string; bundleEntryKey?: string }) => {
+					if (invocation.activation === 'event-filter') {
+						return { ok: true, value: { unchanged: false, payload: { stamped: invocation.bundleEntryKey } } };
+					}
+
+					return { ok: true, value: { status: 200, body: { key: invocation.bundleEntryKey } } };
+				},
+			},
+			config: {
+				sandbox: { maxArtifactBytes: 8 * 1024 * 1024 },
+				runtime: {
+					wallClockMs: 5000,
+					cpuTimeoutMs: 2000,
+					memoryBytes: 64 * 1024 * 1024,
+					stackBytes: 512 * 1024,
+					acquireTimeoutMs: 0,
+					hostCallTimeoutMs: 5000,
+					maxHostCalls: 1000,
+					maxInFlightHostCalls: 16,
+				},
+			},
+			posture: { mode: 'auto', applied: [], missing: [], coreSatisfied: true, decision: 'run', cgroupMechanic: null },
+		});
+
+		const entries: BundleEntrySpec[] = [
+			{ type: 'endpoint', name: 'rbep', capabilities: { endpoint: { access: 'authenticated' } } },
+			{ type: 'hook', name: 'rbhk', capabilities: { log: true }, events: { filter: ['confined-bundle.reload'] } },
+			{ type: 'operation', name: 'rbop', capabilities: { log: true } },
+		];
+
+		writeConfinedBundle('reload-bundle', 'reload-bundle', entries);
+
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [confinedBundleExtension('reload-bundle', 'reload-bundle', entries)];
+		await (instance as any).load();
+		current = instance;
+
+		// Every entry's surface is live before unload.
+		expect((await supertest(endpointApp(instance)).get('/rbep/ping')).status).toBe(200);
+
+		expect(await emitter.emitFilter('confined-bundle.reload', { v: 1 }, {}, EVENT_CONTEXT)).toEqual({
+			stamped: 'hook:rbhk',
+		});
+
+		expect(getFlowManager().hasConfinedOperation('rbop')).toBe(true);
+
+		await (instance as any).unload();
+
+		// No stale route, handler, or operation survives the unload.
+		expect((await supertest(endpointApp(instance)).get('/rbep/ping')).status).toBe(404);
+
+		const payload = { v: 2 };
+		expect(await emitter.emitFilter('confined-bundle.reload', payload, {}, EVENT_CONTEXT)).toBe(payload);
+		expect(getFlowManager().hasConfinedOperation('rbop')).toBe(false);
+	});
+
 	it('fails one entry on a route collision while its sibling still registers', async () => {
 		const entries: BundleEntrySpec[] = [
 			{ type: 'endpoint', name: 'taken-route', capabilities: { endpoint: { access: 'public' } } },
