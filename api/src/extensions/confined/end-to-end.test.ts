@@ -431,4 +431,47 @@ describe('brokered request with a real secret through a real child', () => {
 		},
 		ENGINE_TIMEOUT
 	);
+
+	it(
+		'delivers a confined bundle operation entry the same brokered secret as a handle, scrubbed from output and logs',
+		async () => {
+			const secret = 'sk_live_BUNDLE_SECRET_TOKEN';
+
+			// One server entry of a CairnBundle, selected by its `operation:secret-op` key.
+			// The entry holds the configured option only as the opaque handle, passes it as
+			// brokered auth, and the resolved secret reaches the upstream but not the guest.
+			const artifact =
+				"var CairnBundle = (() => ({ default: { 'operation:secret-op': { id: 'secret-op', handler: async ({ options }, { host }) => { await host.log.info('calling upstream with ' + options.apiKey.ref); return host.request.send({ url: options.url, method: 'GET', auth: { bearer: options.apiKey } }); } } } }))();";
+
+			const result = await runConfinedOperation(
+				baseOperationRequest(artifact, {
+					contributionId: 'secret-op',
+					bundleEntryKey: 'operation:secret-op',
+					capabilities: { request: { urls: [origin] }, log: true },
+					options: { url: `${origin}/echo`, apiKey: secret },
+					optionDelivery: { apiKey: { delivery: 'reference' } },
+				}),
+				{ ...deps, getAxios: async () => axios.create() }
+			);
+
+			// The brokered request succeeding is the delivery proof: a clear value would not
+			// resolve as a handle, so the real token reaches the upstream only because the
+			// entry received the opaque handle and passed it as auth.
+			expect(authSeen).toContain(`Bearer ${secret}`);
+
+			expect(result.outcome).toMatchObject({ ok: true });
+			expect(JSON.stringify(result.outcome)).not.toContain(secret);
+			expect(result.redactionValues).toContain(secret);
+
+			const handle = result.redactionValues.find((value) => value !== secret);
+			expect(handle).toBeDefined();
+
+			const serializedLogs = JSON.stringify(logs);
+			expect(logs).not.toHaveLength(0);
+			expect(serializedLogs).toContain(REDACT_TEXT);
+			expect(serializedLogs).not.toContain(secret);
+			expect(serializedLogs).not.toContain(String(handle));
+		},
+		ENGINE_TIMEOUT
+	);
 });

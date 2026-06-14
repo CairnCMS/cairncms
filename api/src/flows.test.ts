@@ -252,6 +252,35 @@ describe('buildRevisionData', () => {
 
 		expect((stepB.options as Record<string, unknown>)['message']).toContain(PROSE);
 	});
+
+	test('redacts a confined operation reference value, its minted handle, and the reference key', () => {
+		const secret = 'sk_live_confined_reference_secret_value';
+		const handle = 'cairn-secret-ref-abc123';
+
+		// The flow data after a confined operation (top-level or a bundle entry) ran with a
+		// reference option: a step option carries the configured secret under the declared
+		// reference key, and the operation output echoes the minted handle the guest held.
+		const keyedData = makeKeyedData({});
+		keyedData['secret-op'] = { echoedHandle: handle, marker: 'ran' };
+
+		const steps: Step[] = [
+			{ operation: 'op-1', key: 'secret-op', status: 'resolve', options: { apiKey: secret, note: 'plain' } },
+		];
+
+		// The runner returns the resolved secret and the minted handle as redaction values,
+		// and the descriptor's declared reference keys drive key-redaction.
+		const result = buildRevisionData(steps, keyedData, [secret, handle], new Set(['apiKey']));
+		const serialized = JSON.stringify(result);
+
+		// Neither the resolved secret nor the minted handle persists anywhere in the revision.
+		expect(serialized).not.toContain(secret);
+		expect(serialized).not.toContain(handle);
+
+		// The declared reference key is key-redacted; the plain sibling option is preserved.
+		const step = result.steps[0] as Step;
+		expect((step.options as Record<string, unknown>)['apiKey']).toBe(REDACT_TEXT);
+		expect((step.options as Record<string, unknown>)['note']).toBe('plain');
+	});
 });
 
 describe('executeFlow — webhook trigger with failing condition does not leak context into response', () => {
@@ -295,6 +324,78 @@ describe('executeFlow — webhook trigger with failing condition does not leak c
 
 		expect(blob).not.toContain('TOKEN_MARKER_CCC_DO_NOT_LEAK');
 		expect(blob).not.toContain('USER_MARKER_BBB_DO_NOT_LEAK');
+	});
+});
+
+describe('executeFlow — confined operation reference redaction reaches the revision sink', () => {
+	beforeEach(() => {
+		revisionsCreateSpy.mockReset();
+		getFlowManager().clearConfinedOperations();
+	});
+
+	test('the persisted revision carries neither the secret, the handle, nor a nested sensitive value under the reference key', async () => {
+		const rawSecret = 'sk_live_confined_flow_secret_value';
+		const handle = 'cairn-secret-ref-xyz789';
+
+		const manager = getFlowManager();
+
+		// A confined operation descriptor as the bundle binding registers one: the declared
+		// reference keys drive key-redaction, and the run returns the resolved secret and the
+		// minted handle as the redaction values a real runner produces.
+		manager.addConfinedOperation('confined-secret-op', {
+			referenceKeys: ['apiKey'],
+			run: async () => ({
+				outcome: { ok: true, value: { echoedHandle: handle } },
+				redactionValues: [rawSecret, handle],
+			}),
+		});
+
+		const flow = {
+			id: 'secret-flow',
+			name: 'secret-flow',
+			status: 'active',
+			trigger: 'webhook',
+			// Only accountability 'all' persists a revision, so this drives the real sink.
+			accountability: 'all',
+			options: { method: 'POST', return: '$last', async: false },
+			operation: {
+				id: 'op-1',
+				key: 'run-secret',
+				type: 'confined-secret-op',
+				options: { apiKey: rawSecret, note: 'plain', audit: { token: rawSecret } },
+				resolve: null,
+				reject: null,
+			},
+		};
+
+		const context = {
+			accountability: { user: 'u-1', role: 'r-1', admin: true, ip: '127.0.0.1' },
+			database: {} as any,
+			schema: { collections: {}, relations: [] } as any,
+		};
+
+		await (manager as any).executeFlow(flow, { x: 1 }, context);
+
+		expect(revisionsCreateSpy).toHaveBeenCalledTimes(1);
+
+		const revision = revisionsCreateSpy.mock.calls[0]![0] as { data: { steps: Step[]; data: Record<string, unknown> } };
+		const serialized = JSON.stringify(revision.data);
+
+		// The real flow collected the descriptor's referenceKeys and the runner's redaction
+		// values and passed them to the sink, so neither persists anywhere in the revision.
+		expect(serialized).not.toContain(rawSecret);
+		expect(serialized).not.toContain(handle);
+
+		const step = revision.data.steps[0] as Step;
+
+		// Key-redaction of the declared reference key.
+		expect((step.options as Record<string, unknown>)['apiKey']).toBe(REDACT_TEXT);
+
+		// Value-redaction of the same secret echoed into a non-sensitive-keyed nested option.
+		expect((step.options as Record<string, any>)['audit']['token']).toBe(REDACT_TEXT);
+
+		// A non-sensitive option is preserved.
+		expect((step.options as Record<string, unknown>)['note']).toBe('plain');
 	});
 });
 
