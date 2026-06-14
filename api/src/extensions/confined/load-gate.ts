@@ -49,11 +49,15 @@ export type ConfinedEligibleEntry = {
 	// declarations the bundle binding subscribes and the probe verifies the entry
 	// against. A top-level hook carries its events in `events` instead.
 	entryEvents?: Record<string, ConfinedHookEvents>;
-	// The operation option keys the manifest declares as opaque references. The
-	// binding mints a per-invocation handle for each and never sends its clear value
-	// to the guest. Top-level operations only: the schema rejects optionDelivery on a
-	// bundle operation entry, so a secret-bearing operation stays a top-level one.
+	// The operation option keys the manifest declares as opaque references for a
+	// top-level operation. The binding mints a per-invocation handle for each and
+	// never sends its clear value to the guest.
 	optionDelivery?: ConfinedOptionDelivery;
+	// The same reference-option declarations per bundle operation entry, keyed
+	// `operation:name`, so the binding gives each entry's descriptor only its own
+	// declarations. The enumerated gate-verdict copy in the manager must carry this, or
+	// a declared secret silently reaches the guest clear.
+	entryOptionDelivery?: Record<string, ConfinedOptionDelivery>;
 	// The exact event names a confined hook subscribes to, from the manifest, the
 	// declaration the probe verified the entry against.
 	events?: ConfinedHookEvents;
@@ -148,6 +152,7 @@ function collectCapabilities(options: ExtensionOptions): ConfinedEligibleEntry |
 		const seen = new Set<string>();
 		const entryCapabilities: Record<string, ExtensionCapabilities> = {};
 		const entryEvents: Record<string, ConfinedHookEvents> = {};
+		const entryOptionDelivery: Record<string, ConfinedOptionDelivery> = {};
 		const collected: ConfinedEligibleEntry = {};
 
 		for (const entry of options.entries) {
@@ -166,6 +171,13 @@ function collectCapabilities(options: ExtensionOptions): ConfinedEligibleEntry |
 			if (entry.type === 'hook' && entry.events !== undefined) {
 				entryEvents[key] = entry.events;
 				collected.entryEvents = entryEvents;
+			}
+
+			// Only an operation entry may declare reference options, the same rule as a
+			// top-level operation. The schema rejects optionDelivery on every other entry.
+			if (isTypeIn(entry, HYBRID_EXTENSION_TYPES) && entry.optionDelivery !== undefined) {
+				entryOptionDelivery[key] = entry.optionDelivery;
+				collected.entryOptionDelivery = entryOptionDelivery;
 			}
 		}
 

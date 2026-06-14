@@ -339,6 +339,56 @@ describe('gateConfinedExtension', () => {
 		});
 	});
 
+	it('carries per-entry optionDelivery into the bundle verdict, keyed and only for the declaring operation entry', async () => {
+		const bundleManifest = manifest({
+			type: 'bundle',
+			path: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [
+				{
+					type: 'operation',
+					name: 'secret-op',
+					source: { app: 'src/secret-app.js', api: 'src/secret-api.js' },
+					optionDelivery: { apiKey: { delivery: 'reference' } },
+				},
+				{ type: 'operation', name: 'plain-op', source: { app: 'src/plain-app.js', api: 'src/plain-api.js' } },
+			],
+			runtime: 'confined-server',
+			host: '^10.0.0',
+		});
+
+		const dir = await makeDir(bundleManifest, {
+			'src/secret-api.js': CLEAN_SOURCE,
+			'src/plain-api.js': CLEAN_SOURCE,
+			'dist/api.js': BUNDLE_PLACEHOLDER,
+		});
+
+		const extension = {
+			path: dir,
+			name: 'test-extension',
+			local: true,
+			runtime: 'confined-server' as const,
+			type: 'bundle' as const,
+			entrypoint: { app: 'dist/app.js', api: 'dist/api.js' },
+			entries: [
+				{ type: 'operation' as const, name: 'secret-op' },
+				{ type: 'operation' as const, name: 'plain-op' },
+			],
+		};
+
+		const verdict = await gateConfinedExtension(extension, PROBE_LOADABLE);
+
+		// Only the declaring entry is keyed; the plain sibling carries nothing, so a
+		// declaration cannot bleed across entries.
+		expect(verdict).toMatchObject({
+			ok: true,
+			entryOptionDelivery: { 'operation:secret-op': { apiKey: { delivery: 'reference' } } },
+		});
+
+		expect((verdict as { entryOptionDelivery?: Record<string, unknown> }).entryOptionDelivery).not.toHaveProperty(
+			'operation:plain-op'
+		);
+	});
+
 	it('probes a clean bundle through the real confined child and carries the artifact bytes', async () => {
 		const bundleManifest = manifest({
 			type: 'bundle',

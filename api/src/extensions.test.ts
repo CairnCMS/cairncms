@@ -1262,6 +1262,7 @@ describe('the confined bundle binding', () => {
 		name: string;
 		capabilities?: Record<string, unknown>;
 		events?: { filter?: string[]; action?: string[] };
+		optionDelivery?: Record<string, { delivery: 'reference' }>;
 	};
 
 	function writeConfinedBundle(dir: string, name: string, entries: BundleEntrySpec[]): void {
@@ -1277,6 +1278,7 @@ describe('the confined bundle binding', () => {
 					: `src/${entry.name}.js`,
 			...(entry.capabilities && { capabilities: entry.capabilities }),
 			...(entry.events && { events: entry.events }),
+			...(entry.optionDelivery && { optionDelivery: entry.optionDelivery }),
 		}));
 
 		writeFileSync(
@@ -1488,6 +1490,39 @@ describe('the confined bundle binding', () => {
 		const payload = { v: 2 };
 		expect(await emitter.emitFilter('confined-bundle.reload', payload, {}, EVENT_CONTEXT)).toBe(payload);
 		expect(getFlowManager().hasConfinedOperation('rbop')).toBe(false);
+	});
+
+	it('gives a bundle operation entry its own optionDelivery and bleeds none onto a sibling', async () => {
+		const entries: BundleEntrySpec[] = [
+			{
+				type: 'operation',
+				name: 'secret-op',
+				capabilities: { log: true },
+				optionDelivery: { apiKey: { delivery: 'reference' } },
+			},
+			{ type: 'operation', name: 'plain-op', capabilities: { log: true } },
+		];
+
+		writeConfinedBundle('optdelivery-bundle', 'optdelivery-bundle', entries);
+
+		const instance = new ExtensionManager();
+
+		(instance as any).getExtensions = async () => [
+			confinedBundleExtension('optdelivery-bundle', 'optdelivery-bundle', entries),
+		];
+
+		await (instance as any).load();
+		current = instance;
+
+		expect(diagnosticFor(instance, 'optdelivery-bundle').status).toBe('loaded');
+
+		// Through the real load() copy, the descriptor registered for each entry carries
+		// only that entry's reference keys, so a sensitive declaration is delivered to the
+		// declaring entry and never bleeds onto a sibling that declared none.
+		const confinedOps = (getFlowManager() as any).confinedOperations as Map<string, { referenceKeys: string[] } | null>;
+
+		expect(confinedOps.get('secret-op')?.referenceKeys).toEqual(['apiKey']);
+		expect(confinedOps.get('plain-op')?.referenceKeys).toEqual([]);
 	});
 
 	it('fails one entry on a route collision while its sibling still registers', async () => {

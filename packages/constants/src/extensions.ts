@@ -310,12 +310,11 @@ export const ExtensionOptionsBundleEntry = z.union([
 			source: SplitEntrypoint,
 			runtime: ConfinedRuntimeSchema.optional(),
 			capabilities: ExtensionCapabilitiesSchema.optional(),
-			optionDelivery: z.unknown().optional(),
+			optionDelivery: ConfinedOptionDeliverySchema.optional(),
 			events: z.unknown().optional(),
 		})
 		.superRefine((value, ctx) => {
 			rejectBundleEntryRuntime(value, ctx);
-			rejectOptionDelivery(value, ctx, 'a bundle operation entry');
 			rejectHookEvents(value, ctx, 'a bundle operation entry');
 		}),
 ]);
@@ -428,6 +427,18 @@ export const ExtensionOptionsBundle = z
 				code: z.ZodIssueCode.custom,
 				path: ['runtime'],
 				message: `a bundle entry declares events, so the bundle must declare runtime: ${CONFINED_RUNTIME}`,
+			});
+		}
+
+		const entryDeclaresOptionDelivery = value.entries.some(
+			(entry) => 'optionDelivery' in entry && entry.optionDelivery !== undefined
+		);
+
+		if (entryDeclaresOptionDelivery && value.runtime !== CONFINED_RUNTIME) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ['runtime'],
+				message: `a bundle entry declares optionDelivery, so the bundle must declare runtime: ${CONFINED_RUNTIME}`,
 			});
 		}
 

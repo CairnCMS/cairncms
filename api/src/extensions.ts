@@ -474,6 +474,9 @@ export class ExtensionManager {
 				if (verdict.entryCapabilities !== undefined) entry.entryCapabilities = verdict.entryCapabilities;
 				if (verdict.entryEvents !== undefined) entry.entryEvents = verdict.entryEvents;
 				if (verdict.optionDelivery !== undefined) entry.optionDelivery = verdict.optionDelivery;
+				// The fail-open boundary: a per-entry reference declaration dropped here would
+				// reach the guest as a clear configured value, so it is copied explicitly.
+				if (verdict.entryOptionDelivery !== undefined) entry.entryOptionDelivery = verdict.entryOptionDelivery;
 				if (verdict.events !== undefined) entry.events = verdict.events;
 
 				this.confinedEligible.set(extension, entry);
@@ -884,6 +887,7 @@ export class ExtensionManager {
 					entry.name,
 					binding,
 					eligible.entryEvents?.[key],
+					eligible.entryOptionDelivery?.[key],
 					runtime,
 					flowManager
 				);
@@ -905,6 +909,7 @@ export class ExtensionManager {
 		name: string,
 		binding: ConfinedBinding,
 		events: ConfinedHookEvents | undefined,
+		optionDelivery: ConfinedOptionDelivery | undefined,
 		runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig },
 		flowManager: ReturnType<typeof getFlowManager>
 	): { status: 'loaded' | 'failed'; reason?: SanitizedExtensionError } {
@@ -916,7 +921,7 @@ export class ExtensionManager {
 				return { status: 'failed', reason: block };
 			}
 
-			flowManager.addConfinedOperation(name, this.buildConfinedDescriptor(binding, undefined, runtime));
+			flowManager.addConfinedOperation(name, this.buildConfinedDescriptor(binding, optionDelivery, runtime));
 			return { status: 'loaded' };
 		}
 

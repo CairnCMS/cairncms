@@ -142,7 +142,7 @@ describe('ExtensionOptions confined opt-in', () => {
 		).toBe(false);
 	});
 
-	it('rejects optionDelivery anywhere but a top-level operation rather than stripping it', () => {
+	it('rejects optionDelivery on app, endpoint, and hook types and on a bundle root rather than stripping it', () => {
 		const optionDelivery = { apiKey: { delivery: 'reference' } };
 
 		expect(ExtensionOptions.safeParse({ ...appOption, optionDelivery }).success, 'app').toBe(false);
@@ -154,21 +154,62 @@ describe('ExtensionOptions confined opt-in', () => {
 			ExtensionOptions.safeParse({ ...bundleOption, runtime: 'confined-server', optionDelivery }).success,
 			'bundle root'
 		).toBe(false);
+	});
+
+	it('accepts optionDelivery on a confined bundle operation entry and requires the confined runtime', () => {
+		const optionDelivery = { apiKey: { delivery: 'reference' } };
+
+		const operationEntry = {
+			type: 'operation',
+			name: 'my-operation',
+			source: { app: 'src/app.js', api: 'src/api.js' },
+			optionDelivery,
+		};
+
+		// A confined bundle's operation entry may declare reference options, matching
+		// top-level operation behavior.
+		expect(
+			ExtensionOptions.safeParse({ ...bundleOption, runtime: 'confined-server', entries: [operationEntry] }).success,
+			'confined bundle operation entry'
+		).toBe(true);
+
+		// Without the confined runtime at the root, the declaration fails closed rather than
+		// reaching the guest clear.
+		expect(
+			ExtensionOptions.safeParse({ ...bundleOption, entries: [operationEntry] }).success,
+			'non-confined bundle operation entry'
+		).toBe(false);
+
+		// Only an operation entry may declare it. An endpoint, hook, or app entry may not,
+		// even in a confined bundle, and the declaration is rejected rather than stripped.
+		// Each sibling entry is otherwise valid, so the optionDelivery is the sole failure.
+		expect(
+			ExtensionOptions.safeParse({
+				...bundleOption,
+				runtime: 'confined-server',
+				entries: [{ type: 'endpoint', name: 'ep', source: 'src/ep.js', optionDelivery }],
+			}).success,
+			'bundle endpoint entry'
+		).toBe(false);
 
 		expect(
 			ExtensionOptions.safeParse({
 				...bundleOption,
 				runtime: 'confined-server',
 				entries: [
-					{
-						type: 'operation',
-						name: 'my-operation',
-						source: { app: 'src/app.js', api: 'src/api.js' },
-						optionDelivery,
-					},
+					{ type: 'hook', name: 'hk', source: 'src/hk.js', events: { action: ['items.create'] }, optionDelivery },
 				],
 			}).success,
-			'bundle operation entry'
+			'bundle hook entry'
+		).toBe(false);
+
+		expect(
+			ExtensionOptions.safeParse({
+				...bundleOption,
+				runtime: 'confined-server',
+				entries: [{ type: 'interface', name: 'ui', source: 'src/ui.js', optionDelivery }],
+			}).success,
+			'bundle app entry'
 		).toBe(false);
 	});
 
