@@ -50,7 +50,8 @@
 		"build": "tsc --project tsconfig.prod.json && copyfiles \"src/**/*.{yaml,liquid,md,txt}\" -u 1 dist && node scripts/build-confined-runtime.mjs",
 		"cli": "NODE_ENV=development SERVE_APP=false NODE_OPTIONS=--no-node-snapshot tsx src/cli/run.ts",
 		"dev": "NODE_ENV=development SERVE_APP=false NODE_OPTIONS=--no-node-snapshot tsx watch --clear-screen=false src/start.ts",
-		"test": "vitest --watch=false"
+		"test": "vitest --watch=false",
+		"test:soak": "NODE_OPTIONS='--no-node-snapshot --expose-gc' tsx src/extensions/confined/soak/run.ts"
 	},
 	"dependencies": {
 		"@authenio/samlify-node-xmllint": "2.0.0",

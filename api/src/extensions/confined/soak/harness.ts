@@ -2,6 +2,7 @@ import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
 import type { SandboxPosture } from '../sandbox-hardening.js';
 import { resolveSandboxLimits, type SandboxLimits } from '../sandbox-limits.js';
 import { ConfinedSupervisor } from '../supervisor.js';
@@ -134,6 +135,22 @@ export interface HostCallProof {
 	totalDenials: number;
 }
 
+export interface SoakTiming {
+	totalMs: number;
+	perInvocationP50Ms: number;
+	perInvocationP95Ms: number;
+}
+
+export interface SoakMemory {
+	// heapUsed sampled after a best-effort GC, before and after the run, so a steady leak
+	// shows as positive heap growth. RSS is a high-water mark that does not shrink after GC,
+	// so peak RSS is reported as a capacity number, not the leak signal.
+	startHeapBytes: number;
+	endHeapBytes: number;
+	heapGrowthBytes: number;
+	peakRssBytes: number;
+}
+
 export interface SoakResult {
 	plannedPaths: Record<SoakExitPath, number>;
 	observedPaths: Record<SoakExitPath, number>;
@@ -146,6 +163,8 @@ export interface SoakResult {
 	// case) is a later slice.
 	spawnedChildren: number;
 	orphanedPids: number;
+	timing: SoakTiming;
+	memory: SoakMemory;
 	liveness: { active: number; queued: number };
 	cgroup: CgroupTally;
 }
@@ -173,13 +192,22 @@ export async function runSoak(config: SoakConfig): Promise<SoakResult> {
 	const plannedPaths = emptyPathCounts();
 	const observedPaths = emptyPathCounts();
 	const hostCall: HostCallProof = { dispatched: 0, timeouts: 0, inFlightDenials: 0, totalDenials: 0 };
+	const durations: number[] = [];
 	let mismatches = 0;
+
+	forceGc();
+	const startHeapBytes = heapUsed();
+	let peakRssBytes = rss();
+	const runStart = now();
 
 	try {
 		// Drive each exit path serially and classify it by its observed outcome.
 		for (const path of plan) {
 			plannedPaths[path] += 1;
+			const invokeStart = now();
 			const result = await supervisor.invoke(invocationFor(path));
+			durations.push(now() - invokeStart);
+			peakRssBytes = Math.max(peakRssBytes, rss());
 
 			// Count the path only when the observed result matches its intended branch, so a
 			// fixture that stops exercising its cleanup path fails coverage instead of passing
@@ -195,6 +223,7 @@ export async function runSoak(config: SoakConfig): Promise<SoakResult> {
 		// Then drive more concurrent invocations than the process cap, so the acquire queue
 		// and the busy path run under contention.
 		const saturation = await runSaturation(supervisor);
+		peakRssBytes = Math.max(peakRssBytes, rss());
 
 		// invoke resolves before the child is reaped and its cgroup removed, so wait for the
 		// deferred removals to fire before reading the tally.
@@ -206,6 +235,11 @@ export async function runSoak(config: SoakConfig): Promise<SoakResult> {
 
 		hostCall.dispatched = hostCallState.calls;
 
+		forceGc();
+		const endHeapBytes = heapUsed();
+		// Measured at the end so it covers the serial pass, the saturation pass, and the drain.
+		const totalMs = now() - runStart;
+
 		return {
 			plannedPaths,
 			observedPaths,
@@ -214,6 +248,12 @@ export async function runSoak(config: SoakConfig): Promise<SoakResult> {
 			saturation,
 			spawnedChildren: spawnedPids.length,
 			orphanedPids: spawnedPids.filter(isAlive).length,
+			timing: {
+				totalMs,
+				perInvocationP50Ms: percentile(durations, 50),
+				perInvocationP95Ms: percentile(durations, 95),
+			},
+			memory: { startHeapBytes, endHeapBytes, heapGrowthBytes: endHeapBytes - startHeapBytes, peakRssBytes },
 			liveness: supervisor.liveness(),
 			cgroup: counting.tally(),
 		};
@@ -293,6 +333,40 @@ export function assertSoakClean(result: SoakResult): void {
 	}
 
 	if (cgroup.pending !== 0) throw new Error(`cgroup pending leak: ${cgroup.pending} pending after drain`);
+}
+
+// The heap slope is the one judgment-prone check, so it stays out of assertSoakClean (the
+// deterministic gate the bounded smoke shares) and is applied only by the heavy runner, which
+// runs with GC exposed so the heap reading is clean.
+export function assertHeapBounded(result: SoakResult, maxGrowthBytes: number): void {
+	if (result.memory.heapGrowthBytes > maxGrowthBytes) {
+		throw new Error(`heap growth ${result.memory.heapGrowthBytes} bytes exceeds bound ${maxGrowthBytes} bytes`);
+	}
+}
+
+// An aggregate-only proof report: counts, timing, and memory, never request URLs, auth
+// material, secret handles, raw host-call args, or per-invocation payloads.
+export function buildReport(result: SoakResult): string {
+	const serial = sumValues(result.plannedPaths);
+	const paths = ALL_PATHS.map((path) => `${path}=${result.observedPaths[path]}`).join(' ');
+	const { hostCall, saturation, cgroup, timing, memory } = result;
+
+	return [
+		'confined runtime soak report',
+		`  invocations: ${serial} serial, ${saturation.burst * 2} saturation`,
+		`  exit paths: ${paths}`,
+		`  host calls: dispatched=${hostCall.dispatched} timeouts=${hostCall.timeouts} inFlightDenials=${hostCall.inFlightDenials} totalDenials=${hostCall.totalDenials}`,
+		`  saturation: maxConcurrent=${saturation.maxConcurrent} busy=${saturation.busy} queueRan=${saturation.queueRan}`,
+		`  children: spawned=${result.spawnedChildren} orphaned=${result.orphanedPids}`,
+		`  cgroups: created=${cgroup.created} placed=${cgroup.placed} removed=${cgroup.removed} pending=${cgroup.pending}`,
+		`  timing: total=${Math.round(timing.totalMs)}ms perInvocation p50=${timing.perInvocationP50Ms}ms p95=${
+			timing.perInvocationP95Ms
+		}ms`,
+		`  heap after gc: start=${mb(memory.startHeapBytes)} end=${mb(memory.endHeapBytes)} growth=${mb(
+			memory.heapGrowthBytes
+		)}`,
+		`  peak rss: ${mb(memory.peakRssBytes)}`,
+	].join('\n');
 }
 
 // Drives more concurrent invocations than the process cap twice: once with no acquire wait,
@@ -463,4 +537,36 @@ function isAlive(pid: number): boolean {
 		// ESRCH means the process is gone. EPERM means it exists but is not ours, so alive.
 		return (error as NodeJS.ErrnoException).code === 'EPERM';
 	}
+}
+
+function now(): number {
+	return performance.now();
+}
+
+function rss(): number {
+	return process.memoryUsage().rss;
+}
+
+function heapUsed(): number {
+	return process.memoryUsage().heapUsed;
+}
+
+function forceGc(): void {
+	const gc = (globalThis as { gc?: () => void }).gc;
+	if (typeof gc === 'function') gc();
+}
+
+function percentile(values: number[], p: number): number {
+	if (values.length === 0) return 0;
+	const sorted = [...values].sort((a, b) => a - b);
+	const index = Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length));
+	return Math.round(sorted[index]!);
+}
+
+function sumValues(counts: Record<SoakExitPath, number>): number {
+	return Object.values(counts).reduce((total, value) => total + value, 0);
+}
+
+function mb(bytes: number): string {
+	return `${(bytes / (1024 * 1024)).toFixed(1)}mb`;
 }
