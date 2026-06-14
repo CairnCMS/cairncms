@@ -131,32 +131,52 @@ export default async function createApp(): Promise<express.Application> {
 		);
 	}
 
-	app.use(
-		helmet.contentSecurityPolicy(
-			merge(
-				{
-					useDefaults: true,
-					directives: {
-						// Unsafe-eval is required for vue3 / vue-i18n / app extensions
-						scriptSrc: ["'self'", "'unsafe-eval'"],
+	const cspConfig = getConfigFromEnv('CONTENT_SECURITY_POLICY_');
 
-						// Even though this is recommended to have enabled, it breaks most local
-						// installations. Making this opt-in rather than opt-out is a little more
-						// friendly. Ref #10806
-						upgradeInsecureRequests: null,
+	// lodash merges arrays by index, so an operator's connect-src override would
+	// otherwise inherit default origins at its unset tail. Pull it out of the
+	// merge and replace the directive outright.
+	const connectSrcOverride = cspConfig['directives']?.connectSrc;
+	if (connectSrcOverride !== undefined) delete cspConfig['directives'].connectSrc;
 
-						// These are required for MapLibre
-						workerSrc: ["'self'", 'blob:'],
-						childSrc: ["'self'", 'blob:'],
-						imgSrc: ["'self'", 'data:', 'blob:'],
-						mediaSrc: ["'self'"],
-						connectSrc: ["'self'", 'https://*'],
-					},
-				},
-				getConfigFromEnv('CONTENT_SECURITY_POLICY_')
-			)
-		)
+	const csp = merge(
+		{
+			useDefaults: true,
+			directives: {
+				// Unsafe-eval is required for vue3 / vue-i18n / app extensions
+				scriptSrc: ["'self'", "'unsafe-eval'"],
+
+				// Even though this is recommended to have enabled, it breaks most local
+				// installations. Making this opt-in rather than opt-out is a little more
+				// friendly.
+				upgradeInsecureRequests: null,
+
+				// These are required for MapLibre
+				workerSrc: ["'self'", 'blob:'],
+				childSrc: ["'self'", 'blob:'],
+				imgSrc: ["'self'", 'data:', 'blob:'],
+				mediaSrc: ["'self'"],
+
+				// MapLibre fetches map tiles and glyphs over fetch/XHR, so these
+				// hosts go in connect-src, not img-src.
+				connectSrc: [
+					"'self'",
+					'https://a.tile.openstreetmap.org',
+					'https://b.tile.openstreetmap.org',
+					'https://c.tile.openstreetmap.org',
+					'https://fonts.openmaptiles.org',
+					'https://api.mapbox.com',
+				],
+			},
+		},
+		cspConfig
 	);
+
+	if (connectSrcOverride !== undefined) {
+		csp.directives.connectSrc = connectSrcOverride;
+	}
+
+	app.use(helmet.contentSecurityPolicy(csp));
 
 	app.use(helmet.noSniff());
 

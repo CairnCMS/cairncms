@@ -73,13 +73,107 @@ vi.mock('./auth', () => ({
 	registerAuthProviders: vi.fn(),
 }));
 
+function parseCsp(header: string): Record<string, string[]> {
+	const directives: Record<string, string[]> = {};
+
+	for (const part of header.split(';')) {
+		const tokens = part.trim().split(/\s+/).filter(Boolean);
+		const name = tokens.shift();
+		if (name) directives[name] = tokens;
+	}
+
+	return directives;
+}
+
 describe('createApp', async () => {
 	describe('Content Security Policy', () => {
+		const DEFAULT_CONNECT_SRC = [
+			"'self'",
+			'https://a.tile.openstreetmap.org',
+			'https://b.tile.openstreetmap.org',
+			'https://c.tile.openstreetmap.org',
+			'https://fonts.openmaptiles.org',
+			'https://api.mapbox.com',
+		];
+
+		afterEach(async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			delete env['CONTENT_SECURITY_POLICY_DIRECTIVES__CONNECT_SRC'];
+		});
+
 		test('Should set content-security-policy header by default', async () => {
 			const app = await createApp();
 			const response = await request(app).get('/');
 
 			expect(response.headers).toHaveProperty('content-security-policy');
+		});
+
+		test('limits connect-src to first-party and map origins, with no external wildcard', async () => {
+			const app = await createApp();
+			const response = await request(app).get('/');
+
+			const csp = parseCsp(response.headers['content-security-policy']!);
+
+			expect(csp['connect-src']).toEqual(DEFAULT_CONNECT_SRC);
+
+			for (const wildcard of ['https://*', 'wss://*', 'https:', 'wss:', '*']) {
+				expect(csp['connect-src']).not.toContain(wildcard);
+			}
+		});
+
+		test('locks the security-relevant directive defaults', async () => {
+			const app = await createApp();
+			const response = await request(app).get('/');
+
+			const csp = parseCsp(response.headers['content-security-policy']!);
+
+			expect(csp['default-src']).toEqual(["'self'"]);
+			expect(csp['base-uri']).toEqual(["'self'"]);
+			expect(csp['object-src']).toEqual(["'none'"]);
+			expect(csp['form-action']).toEqual(["'self'"]);
+			expect(csp['script-src-attr']).toEqual(["'none'"]);
+		});
+
+		test('lets an operator fully replace connect-src, dropping the default origins they omit', async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['CONTENT_SECURITY_POLICY_DIRECTIVES__CONNECT_SRC'] = ["'self'", 'https://api.stripe.com'];
+
+			const app = await createApp();
+			const response = await request(app).get('/');
+
+			const csp = parseCsp(response.headers['content-security-policy']!);
+
+			expect(csp['connect-src']).toEqual(["'self'", 'https://api.stripe.com']);
+
+			for (const origin of DEFAULT_CONNECT_SRC) {
+				if (origin === "'self'") continue;
+				expect(csp['connect-src']).not.toContain(origin);
+			}
+		});
+
+		test('accepts a single-string connect-src override', async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['CONTENT_SECURITY_POLICY_DIRECTIVES__CONNECT_SRC'] = 'https://api.stripe.com';
+
+			const app = await createApp();
+			const response = await request(app).get('/');
+
+			const csp = parseCsp(response.headers['content-security-policy']!);
+
+			expect(csp['connect-src']).toEqual(['https://api.stripe.com']);
+		});
+
+		test('preserves an operator null override by disabling connect-src', async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['CONTENT_SECURITY_POLICY_DIRECTIVES__CONNECT_SRC'] = null;
+
+			const app = await createApp();
+			const response = await request(app).get('/');
+
+			const csp = parseCsp(response.headers['content-security-policy']!);
+
+			expect(csp['connect-src']).toBeUndefined();
+			expect(csp['default-src']).toEqual(["'self'"]);
 		});
 	});
 
