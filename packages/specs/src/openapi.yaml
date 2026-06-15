@@ -262,6 +262,8 @@ components:
       $ref: './components/collection.yaml'
     Diff:
       $ref: './components/diff.yaml'
+    ExtensionCapabilities:
+      $ref: './components/extension-capabilities.yaml'
     Fields:
       $ref: './components/field.yaml'
     Files:

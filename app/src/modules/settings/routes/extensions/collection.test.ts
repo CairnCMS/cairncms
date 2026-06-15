@@ -251,5 +251,29 @@ describe('Settings Extensions collection', () => {
 			expect(entries.text()).toContain('cairn-bundle-interface');
 			expect(entries.text()).toContain('cairn-bundle-endpoint');
 		});
+
+		it('renders declared capabilities and defaults an omitted request method to GET', async () => {
+			const capable = {
+				name: 'cairn-capable-op',
+				type: 'operation',
+				local: true,
+				status: 'loaded',
+				capabilities: { log: true, request: { urls: ['https://api.example.com'] } },
+			};
+
+			vi.mocked(api.get).mockResolvedValue({ data: { data: [capable] } });
+
+			const wrapper = mountCollection();
+			await flushPromises();
+			await rowFor(wrapper, 'cairn-capable-op')!.trigger('click');
+			await nextTick();
+
+			const caps = wrapper.find('.v-dialog .detail-capabilities');
+			expect(caps.exists()).toBe(true);
+			expect(caps.text()).toContain('log');
+			// An omitted request method defaults to GET, matching the broker allowlist.
+			expect(caps.text()).toContain('GET');
+			expect(caps.text()).toContain('https://api.example.com');
+		});
 	});
 });

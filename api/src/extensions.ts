@@ -120,6 +120,7 @@ type ExtensionDiagnosticEntry = {
 	type: string;
 	status?: 'loaded' | 'failed';
 	reason?: SanitizedExtensionError;
+	capabilities?: ExtensionCapabilities;
 };
 
 type ExtensionDiagnostic = {
@@ -132,6 +133,9 @@ type ExtensionDiagnostic = {
 	// way: some loaded, some failed.
 	status: 'loaded' | 'failed' | 'discovered' | 'partial';
 	reason?: SanitizedExtensionError;
+	// A confined top-level extension carries its gate-validated declared capabilities here.
+	// A confined bundle carries them per entry instead, so the bundle row has none.
+	capabilities?: ExtensionCapabilities;
 };
 
 type AppExtensions = string | null;
@@ -319,10 +323,12 @@ export class ExtensionManager {
 				copy.entries = diagnostic.entries.map((entry) => ({
 					...entry,
 					...(entry.reason && { reason: { ...entry.reason } }),
+					...(entry.capabilities && { capabilities: structuredClone(entry.capabilities) }),
 				}));
 			}
 
 			if (diagnostic.reason) copy.reason = { ...diagnostic.reason };
+			if (diagnostic.capabilities) copy.capabilities = structuredClone(diagnostic.capabilities);
 
 			return copy;
 		});
@@ -383,6 +389,9 @@ export class ExtensionManager {
 			diagnostic.entries = extension.entries.map((entry) => ({ name: entry.name, type: entry.type }));
 		}
 
+		const eligible = this.confinedEligible.get(extension);
+		if (eligible?.capabilities !== undefined) diagnostic.capabilities = eligible.capabilities;
+
 		this.diagnostics.push(diagnostic);
 	}
 
@@ -400,6 +409,9 @@ export class ExtensionManager {
 		if (extension.type === 'bundle') {
 			diagnostic.entries = extension.entries.map((entry) => ({ name: entry.name, type: entry.type }));
 		}
+
+		const eligible = this.confinedEligible.get(extension);
+		if (eligible?.capabilities !== undefined) diagnostic.capabilities = eligible.capabilities;
 
 		this.diagnostics.push(diagnostic);
 	}
@@ -897,6 +909,7 @@ export class ExtensionManager {
 					type: kind,
 					status: outcome.status,
 					...(outcome.reason && { reason: outcome.reason }),
+					...(eligible.entryCapabilities?.[key] && { capabilities: eligible.entryCapabilities[key] }),
 				});
 			}
 

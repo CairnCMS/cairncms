@@ -105,6 +105,15 @@
 						{{ selected.reason.code }}: {{ selected.reason.detail }}
 					</v-notice>
 
+					<div v-if="selected.capabilities" class="detail-capabilities">
+						<div class="detail-label">{{ t('extension_capabilities') }}</div>
+						<div class="capability-chips">
+							<span v-for="label in capabilityLabels(selected.capabilities)" :key="label" class="capability-chip">
+								{{ label }}
+							</span>
+						</div>
+					</div>
+
 					<div v-if="selected.entries && selected.entries.length > 0" class="detail-entries">
 						<div class="detail-label">{{ t('extension_bundle_contents') }}</div>
 						<div
@@ -112,13 +121,22 @@
 							:key="`${entry.type}:${entry.name}:${index}`"
 							class="detail-entry"
 						>
-							<display-color v-if="entry.status" :value="statusColor(entry.status)" />
-							<v-icon :name="typeIcon(entry.type)" small />
-							<span class="detail-entry-name">{{ entry.name }}</span>
-							<v-chip x-small>{{ entry.type }}</v-chip>
-							<span v-if="entry.status === 'failed' && entry.reason" class="detail-entry-reason">
-								{{ entry.reason.code }}
-							</span>
+							<v-divider :inline-title="false" class="entry-head">
+								<template #icon><v-icon :name="typeIcon(entry.type)" small /></template>
+								<span class="entry-name">{{ entry.name }}</span>
+								<display-color v-if="entry.status" :value="statusColor(entry.status)" />
+								<span v-if="entry.status === 'failed' && entry.reason" class="detail-entry-reason">
+									{{ entry.reason.code }}
+								</span>
+							</v-divider>
+							<div v-if="entry.capabilities" class="detail-entry-caps">
+								<div class="detail-label">{{ t('extension_capabilities') }}</div>
+								<div class="capability-chips">
+									<span v-for="label in capabilityLabels(entry.capabilities)" :key="label" class="capability-chip">
+										{{ label }}
+									</span>
+								</div>
+							</div>
 						</div>
 					</div>
 				</v-card-text>
@@ -144,9 +162,16 @@ type ExtensionDiagnostic = {
 	type: string | null;
 	local: boolean;
 	version?: string;
-	entries?: { name: string; type: string; status?: 'loaded' | 'failed'; reason?: { code: string; detail: string } }[];
+	entries?: {
+		name: string;
+		type: string;
+		status?: 'loaded' | 'failed';
+		reason?: { code: string; detail: string };
+		capabilities?: Record<string, unknown>;
+	}[];
 	status: 'loaded' | 'discovered' | 'failed' | 'partial';
 	reason?: { code: string; detail: string };
+	capabilities?: Record<string, unknown>;
 };
 
 type ExtensionRow = ExtensionDiagnostic & { _key: string };
@@ -185,6 +210,28 @@ function statusLabel(status: string): string {
 	if (status === 'failed') return t('extension_failed');
 	if (status === 'partial') return t('extension_partial');
 	return t('extension_active');
+}
+
+function capabilityLabels(capabilities: Record<string, unknown>): string[] {
+	return Object.entries(capabilities).map(([key, value]) => {
+		if (value === true) return key;
+		if (typeof value === 'string') return `${key}: ${value}`;
+		if (Array.isArray(value)) return `${key}: ${value.join(', ')}`;
+
+		if (value && typeof value === 'object') {
+			const obj = value as Record<string, unknown>;
+			if (typeof obj.access === 'string') return `${key}: ${obj.access}`;
+
+			if (Array.isArray(obj.urls)) {
+				// An omitted request method allowlist defaults to GET in the broker, so show that
+				// rather than an empty method scope.
+				const methods = Array.isArray(obj.methods) ? obj.methods : ['GET'];
+				return `${key}: ${methods.join(', ')} ${(obj.urls as unknown[]).join(', ')}`;
+			}
+		}
+
+		return key;
+	});
 }
 
 const groups = computed(() => {
@@ -315,13 +362,21 @@ async function fetchExtensions() {
 
 .detail-entry {
 	display: flex;
-	align-items: center;
-	gap: .5rem;
-	padding: .375rem 0;
+	flex-direction: column;
+	gap: .625rem;
+	margin-bottom: 1.5rem;
 }
 
-.detail-entry-name {
+.entry-head :deep(.type-text) {
+	display: flex;
+	align-items: center;
+	gap: .5rem;
+	font-size: .9375rem;
+}
+
+.entry-name {
 	flex-grow: 1;
+	min-width: 0;
 }
 
 .detail-entry-reason {
@@ -332,5 +387,34 @@ async function fetchExtensions() {
 
 .detail-notice {
 	margin-top: 1.25rem;
+}
+
+.detail-capabilities {
+	margin-top: 1.25rem;
+}
+
+.capability-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: .375rem;
+}
+
+.detail-capabilities .capability-chips {
+	margin-top: .5rem;
+}
+
+.detail-entry-caps .detail-label {
+	margin-bottom: .25rem;
+}
+
+.capability-chip {
+	max-width: 100%;
+	padding: 0 .375rem;
+	border: var(--border-width) solid var(--border-subdued);
+	border-radius: var(--border-radius);
+	color: var(--foreground-subdued);
+	font-size: .75rem;
+	line-height: 1.7;
+	overflow-wrap: anywhere;
 }
 </style>

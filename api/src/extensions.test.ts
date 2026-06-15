@@ -495,6 +495,37 @@ describe('the confined load gate in the loader', () => {
 		expect(diagnostics.some((entry: any) => entry.name === 'duplicate-name' && entry.status === 'failed')).toBe(true);
 	});
 
+	it('attaches capabilities to the eligible row, never a same-name failed sibling', async () => {
+		writeConfinedPackage('dup-cap-clean', 'export default {};\n', 'duplicate-name', {
+			endpoint: { access: 'public' },
+			log: true,
+		});
+
+		writeConfinedPackage(
+			'dup-cap-flagged',
+			"import { readFile } from 'node:fs/promises';\nexport default {};\n",
+			'duplicate-name'
+		);
+
+		const instance = new ExtensionManager();
+		const passing = endpointExtension('dup-cap-clean', 'duplicate-name', true);
+		const failing = endpointExtension('dup-cap-flagged', 'duplicate-name', true);
+		(instance as any).getExtensions = async () => [passing, failing];
+
+		await (instance as any).load();
+
+		const rows = (instance as any).getDiagnostics().filter((entry: any) => entry.name === 'duplicate-name');
+		expect(rows).toHaveLength(2);
+
+		// A name-keyed join would put the eligible extension's capabilities on its gate-failed
+		// same-name sibling too. The object-identity join keeps them on the eligible row only.
+		const gateFailed = rows.find((row: any) => row.reason?.code === 'uses-raw-fs');
+		const eligible = rows.find((row: any) => row.reason?.code !== 'uses-raw-fs');
+
+		expect(gateFailed.capabilities).toBeUndefined();
+		expect(eligible.capabilities).toEqual({ endpoint: { access: 'public' }, log: true });
+	});
+
 	it('recomputes the verdict at reload, so a stale eligibility does not survive', async () => {
 		writeConfinedPackage('mutable-endpoint', 'export default {};\n');
 
@@ -1410,9 +1441,9 @@ describe('the confined bundle binding', () => {
 		expect(row.status).toBe('loaded');
 
 		expect(row.entries).toEqual([
-			{ name: 'bep', type: 'endpoint', status: 'loaded' },
-			{ name: 'bhk', type: 'hook', status: 'loaded' },
-			{ name: 'bop', type: 'operation', status: 'loaded' },
+			{ name: 'bep', type: 'endpoint', status: 'loaded', capabilities: { endpoint: { access: 'authenticated' } } },
+			{ name: 'bhk', type: 'hook', status: 'loaded', capabilities: { log: true } },
+			{ name: 'bop', type: 'operation', status: 'loaded', capabilities: { log: true } },
 		]);
 
 		// The endpoint entry serves, selected by its `endpoint:bep` key.
@@ -1591,6 +1622,37 @@ describe('the confined bundle binding', () => {
 		const serialized = JSON.stringify((instance as any).getDiagnostics());
 		expect(serialized).not.toContain(root);
 		expect(serialized).not.toContain('file://');
+	});
+
+	it('surfaces each bundle entry declared capabilities, scoped to that entry and present even when it fails', async () => {
+		const entries: BundleEntrySpec[] = [
+			{ type: 'endpoint', name: 'granted-ep', capabilities: { endpoint: { access: 'public' }, log: true } },
+			{ type: 'endpoint', name: 'ungranted-ep', capabilities: { log: true } },
+		];
+
+		writeConfinedBundle('cap-bundle', 'cap-bundle', entries);
+
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [confinedBundleExtension('cap-bundle', 'cap-bundle', entries)];
+
+		await (instance as any).load();
+		current = instance;
+
+		const row = diagnosticFor(instance, 'cap-bundle');
+		expect(row.status).toBe('partial');
+		// A bundle carries capabilities per entry, never one merged row-level object.
+		expect(row.capabilities).toBeUndefined();
+
+		const granted = row.entries.find((entry: any) => entry.name === 'granted-ep');
+		expect(granted.status).toBe('loaded');
+		expect(granted.capabilities).toEqual({ endpoint: { access: 'public' }, log: true });
+
+		// The grant stays on its own entry, and survives even though this entry failed to
+		// register, because eligibility existed.
+		const ungranted = row.entries.find((entry: any) => entry.name === 'ungranted-ep');
+		expect(ungranted.status).toBe('failed');
+		expect(ungranted.reason.code).toBe('capability-missing');
+		expect(ungranted.capabilities).toEqual({ log: true });
 	});
 
 	it('fails both contributors of a duplicate operation id while the endpoint sibling mounts', async () => {

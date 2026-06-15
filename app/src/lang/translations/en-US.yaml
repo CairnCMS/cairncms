@@ -1025,6 +1025,7 @@ extension_active: active
 extension_failed: failed
 extension_partial: partial
 extension_bundle_contents: Bundled extensions
+extension_capabilities: Capabilities
 extension_status_loaded_detail: Loaded and running on the server.
 extension_status_discovered_detail: Discovered and served to the app, where it runs in the browser.
 extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
