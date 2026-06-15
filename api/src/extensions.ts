@@ -77,7 +77,7 @@ import {
 	type ConfinedLoadGateDeps,
 } from './extensions/confined/load-gate.js';
 import { resolveConfinedRuntime, type ConfinedSupervisor } from './extensions/confined/supervisor.js';
-import { describePosture } from './extensions/confined/sandbox-hardening.js';
+import { describePosture, type SandboxPosture } from './extensions/confined/sandbox-hardening.js';
 import getModuleDefault from './utils/get-module-default.js';
 import { filterServerExtensions } from './utils/filter-server-extensions.js';
 import { sanitizeExtensionError, type SanitizedExtensionError } from './utils/sanitize-extension-error.js';
@@ -136,6 +136,23 @@ type ExtensionDiagnostic = {
 	// A confined top-level extension carries its gate-validated declared capabilities here.
 	// A confined bundle carries them per entry instead, so the bundle row has none.
 	capabilities?: ExtensionCapabilities;
+};
+
+// The global confined-runtime metadata on the diagnostics response. `not-required` means no
+// confined extension this load (the sandbox env is never resolved), `available` carries the
+// resolved posture, `unavailable` means a confined extension was present but the runtime did
+// not resolve.
+type ConfinedPostureSummary = {
+	mode: SandboxPosture['mode'];
+	decision: SandboxPosture['decision'];
+	applied: SandboxPosture['applied'];
+	missing: SandboxPosture['missing'];
+	cgroupMechanic: SandboxPosture['cgroupMechanic'];
+};
+
+type ConfinedRuntimeMeta = {
+	state: 'not-required' | 'available' | 'unavailable';
+	posture: ConfinedPostureSummary | null;
 };
 
 type AppExtensions = string | null;
@@ -204,6 +221,10 @@ export class ExtensionManager {
 	// The resolved confined runtime this load, retained so confined operation bindings
 	// run under the posture-validated supervisor rather than a default singleton.
 	private confinedRuntime: { supervisor: ConfinedSupervisor; config: SandboxConfig } | undefined;
+
+	// The resolved OS hardening posture this load, retained for the operator diagnostics
+	// metadata. Present only when a confined extension is present and the runtime resolved.
+	private confinedRuntimePosture: SandboxPosture | undefined;
 
 	private appExtensions: AppExtensions = null;
 	private appExtensionChunks: Map<string, string>;
@@ -334,6 +355,32 @@ export class ExtensionManager {
 		});
 	}
 
+	/**
+	 * The global confined-runtime metadata for the diagnostics response. Derived from the
+	 * load state, never by resolving the runtime, so a plain-only load (no confined
+	 * extension) stays `not-required` and never touches the sandbox env.
+	 */
+	public getConfinedRuntimeMeta(): ConfinedRuntimeMeta {
+		if (this.confinedRuntime !== undefined && this.confinedRuntimePosture !== undefined) {
+			const posture = this.confinedRuntimePosture;
+
+			return {
+				state: 'available',
+				posture: {
+					mode: posture.mode,
+					decision: posture.decision,
+					applied: [...posture.applied],
+					missing: [...posture.missing],
+					cgroupMechanic: posture.cgroupMechanic,
+				},
+			};
+		}
+
+		if (this.confinedRuntimeUnavailable) return { state: 'unavailable', posture: null };
+
+		return { state: 'not-required', posture: null };
+	}
+
 	private logExtensionStatus(): void {
 		const loaded = this.diagnostics.filter((diagnostic) => diagnostic.status === 'loaded');
 
@@ -444,6 +491,7 @@ export class ExtensionManager {
 		};
 
 		this.confinedRuntime = { supervisor: resolution.supervisor, config: resolution.config };
+		this.confinedRuntimePosture = resolution.posture;
 
 		logger.info(describePosture(resolution.posture));
 	}
@@ -1177,6 +1225,7 @@ export class ExtensionManager {
 		this.confinedRuntimeDeps = {};
 		this.confinedRuntimeUnavailable = false;
 		this.confinedRuntime = undefined;
+		this.confinedRuntimePosture = undefined;
 		this.hookEmbedsHead = [];
 		this.hookEmbedsBody = [];
 
@@ -1227,6 +1276,7 @@ export class ExtensionManager {
 		this.confinedRuntimeDeps = {};
 		this.confinedRuntimeUnavailable = false;
 		this.confinedRuntime = undefined;
+		this.confinedRuntimePosture = undefined;
 
 		this.apiEmitter.offAll();
 

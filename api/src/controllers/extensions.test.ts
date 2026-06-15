@@ -5,6 +5,10 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../extensions.js', () => ({
 	getExtensionManager: () => ({
 		getDiagnostics: () => [{ name: 'demo', type: 'hook', local: true, status: 'loaded' }],
+		getConfinedRuntimeMeta: () => ({
+			state: 'available',
+			posture: { mode: 'auto', decision: 'run', applied: [], missing: ['cgroup-memory'], cgroupMechanic: null },
+		}),
 		getAppExtensions: () => 'export default [];\n',
 		getAppExtensionChunk: (name: string) => {
 			if (name === 'registered-chunk.js') return 'export const chunk = 1;\n';
@@ -54,6 +58,13 @@ describe('GET /extensions admin guard', () => {
 
 		expect(res.status).toBe(200);
 		expect(res.body.data?.[0]?.name).toBe('demo');
+
+		expect(res.body.meta).toEqual({
+			confinedRuntime: {
+				state: 'available',
+				posture: { mode: 'auto', decision: 'run', applied: [], missing: ['cgroup-memory'], cgroupMechanic: null },
+			},
+		});
 	});
 });
 

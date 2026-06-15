@@ -720,6 +720,49 @@ describe('the confined runtime boot', () => {
 		expect(resolve).not.toHaveBeenCalled();
 	});
 
+	it('reports not-required confined runtime metadata when no confined extension is present', async () => {
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [endpointExtension('plain', 'plain', false)];
+
+		await (instance as any).load();
+
+		expect((instance as any).getConfinedRuntimeMeta()).toEqual({ state: 'not-required', posture: null });
+	});
+
+	it('reports the resolved posture as available confined runtime metadata', async () => {
+		writeConfinedPackage('meta-available', 'export default {};\n');
+
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [endpointExtension('meta-available', 'meta-available', true)];
+
+		await (instance as any).load();
+
+		// The summary is exactly the operator-facing fields, never `coreSatisfied`.
+		expect((instance as any).getConfinedRuntimeMeta()).toEqual({
+			state: 'available',
+			posture: {
+				mode: 'auto',
+				decision: 'run',
+				applied: [],
+				missing: ['network-namespace', 'permission-model', 'cgroup-memory'],
+				cgroupMechanic: null,
+			},
+		});
+	});
+
+	it('reports unavailable confined runtime metadata when the runtime fails to resolve', async () => {
+		confinedRuntime.resolve = async () => ({ ok: false, error: { message: 'runtime down' } });
+
+		writeConfinedPackage('meta-unavailable', 'export default {};\n');
+
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [endpointExtension('meta-unavailable', 'meta-unavailable', true)];
+
+		await (instance as any).load();
+
+		expect((instance as any).getConfinedRuntimeMeta()).toEqual({ state: 'unavailable', posture: null });
+	});
+
 	it('fails a confined extension closed when the runtime cannot be resolved, skipping the gate', async () => {
 		// The package is clean, so it would be eligible if the gate ran. The runtime
 		// failure must refuse it instead, proving the gate is skipped.

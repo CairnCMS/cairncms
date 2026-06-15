@@ -183,6 +183,61 @@ describe('Settings Extensions collection', () => {
 		expect(wrapper.findAll('.v-list-item')).toHaveLength(2);
 	});
 
+	it('renders the confined runtime posture when available', async () => {
+		vi.mocked(api.get).mockResolvedValue({
+			data: {
+				data: [loadedHook],
+				meta: {
+					confinedRuntime: {
+						state: 'available',
+						posture: {
+							mode: 'auto',
+							decision: 'run',
+							applied: ['network-namespace'],
+							missing: ['cgroup-memory'],
+							cgroupMechanic: null,
+						},
+					},
+				},
+			},
+		});
+
+		const wrapper = mountCollection();
+		await flushPromises();
+
+		const panel = wrapper.find('.confined-runtime');
+		expect(panel.exists()).toBe(true);
+		expect(panel.text()).toContain('network-namespace');
+		expect(panel.text()).toContain('cgroup-memory');
+	});
+
+	it('hides the confined runtime panel when not required', async () => {
+		vi.mocked(api.get).mockResolvedValue({
+			data: { data: [loadedHook], meta: { confinedRuntime: { state: 'not-required', posture: null } } },
+		});
+
+		const wrapper = mountCollection();
+		await flushPromises();
+
+		expect(wrapper.find('.confined-runtime').exists()).toBe(false);
+	});
+
+	it('renders a warning when the confined runtime is unavailable', async () => {
+		vi.mocked(api.get).mockResolvedValue({
+			data: { data: [loadedHook], meta: { confinedRuntime: { state: 'unavailable', posture: null } } },
+		});
+
+		const wrapper = mountCollection();
+		await flushPromises();
+
+		const panel = wrapper.find('.confined-runtime');
+		expect(panel.exists()).toBe(true);
+
+		const notice = panel.find('.v-notice[data-type="warning"]');
+		expect(notice.exists()).toBe(true);
+		expect(notice.text()).toContain('did not resolve');
+	});
+
 	describe('detail modal', () => {
 		it('is closed until a row is clicked', async () => {
 			vi.mocked(api.get).mockResolvedValue({ data: { data: [loadedHook] } });

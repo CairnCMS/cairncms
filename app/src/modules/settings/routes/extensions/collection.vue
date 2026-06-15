@@ -47,6 +47,33 @@
 				</span>
 			</div>
 
+			<div v-if="confinedRuntime && confinedRuntime.state !== 'not-required'" class="confined-runtime">
+				<div class="detail-label">{{ t('confined_runtime') }}</div>
+				<v-notice v-if="confinedRuntime.state === 'unavailable'" type="warning">
+					{{ t('confined_runtime_unavailable') }}
+				</v-notice>
+				<div v-else-if="confinedRuntime.posture" class="cr-posture">
+					<span class="cr-mode">
+						{{
+							t('confined_runtime_mode', {
+								decision: confinedRuntime.posture.decision,
+								mode: confinedRuntime.posture.mode,
+							})
+						}}
+					</span>
+					<div class="capability-chips">
+						<span v-for="layer in confinedRuntime.posture.applied" :key="layer" class="capability-chip layer-applied">
+							<v-icon name="check" x-small />
+							{{ layer }}
+						</span>
+						<span v-for="layer in confinedRuntime.posture.missing" :key="layer" class="capability-chip layer-missing">
+							<v-icon name="close" x-small />
+							{{ layer }}
+						</span>
+					</div>
+				</div>
+			</div>
+
 			<v-detail v-for="group in groups" :key="group.type" start-open class="group">
 				<template #activator="{ toggle, active }">
 					<v-divider :inline-title="false" large class="group-head" @click="toggle">
@@ -191,10 +218,22 @@ const TYPE_ICONS: Record<string, string> = {
 
 const { t } = useI18n();
 
+type ConfinedRuntimeMeta = {
+	state: 'not-required' | 'available' | 'unavailable';
+	posture: {
+		mode: string;
+		decision: string;
+		applied: string[];
+		missing: string[];
+		cgroupMechanic: string | null;
+	} | null;
+};
+
 const extensions = ref<ExtensionRow[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const selected = ref<ExtensionRow | null>(null);
+const confinedRuntime = ref<ConfinedRuntimeMeta | null>(null);
 
 const failedCount = computed(() => extensions.value.filter((extension) => extension.status === 'failed').length);
 const partialCount = computed(() => extensions.value.filter((extension) => extension.status === 'partial').length);
@@ -268,6 +307,8 @@ async function fetchExtensions() {
 			...entry,
 			_key: `${index}:${entry.name}`,
 		}));
+
+		confinedRuntime.value = response.data.meta?.confinedRuntime ?? null;
 	} catch (err: any) {
 		error.value = t('extensions_load_failed');
 		unexpectedError(err);
@@ -307,13 +348,13 @@ async function fetchExtensions() {
 	gap: 1.5rem;
 	margin-bottom: 1.5rem;
 	color: var(--foreground-subdued);
-	font-size: .875rem;
+	font-size: 0.875rem;
 }
 
 .summary .stat {
 	display: inline-flex;
 	align-items: center;
-	gap: .375rem;
+	gap: 0.375rem;
 }
 
 .summary .count {
@@ -326,7 +367,7 @@ async function fetchExtensions() {
 }
 
 .group-count {
-	margin-left: .5rem;
+	margin-left: 0.5rem;
 }
 
 .expand-icon {
@@ -341,13 +382,13 @@ async function fetchExtensions() {
 
 .version {
 	flex-shrink: 0;
-	margin-left: .75rem;
+	margin-left: 0.75rem;
 }
 
 .detail-meta {
 	display: flex;
 	align-items: center;
-	gap: .5rem;
+	gap: 0.5rem;
 }
 
 .detail-entries {
@@ -355,23 +396,23 @@ async function fetchExtensions() {
 }
 
 .detail-label {
-	margin-bottom: .5rem;
+	margin-bottom: 0.5rem;
 	color: var(--foreground-subdued);
-	font-size: .8125rem;
+	font-size: 0.8125rem;
 }
 
 .detail-entry {
 	display: flex;
 	flex-direction: column;
-	gap: .625rem;
+	gap: 0.625rem;
 	margin-bottom: 1.5rem;
 }
 
 .entry-head :deep(.type-text) {
 	display: flex;
 	align-items: center;
-	gap: .5rem;
-	font-size: .9375rem;
+	gap: 0.5rem;
+	font-size: 0.9375rem;
 }
 
 .entry-name {
@@ -382,7 +423,7 @@ async function fetchExtensions() {
 .detail-entry-reason {
 	color: var(--danger);
 	font-family: var(--family-monospace);
-	font-size: .8125rem;
+	font-size: 0.8125rem;
 }
 
 .detail-notice {
@@ -396,25 +437,57 @@ async function fetchExtensions() {
 .capability-chips {
 	display: flex;
 	flex-wrap: wrap;
-	gap: .375rem;
+	gap: 0.375rem;
 }
 
 .detail-capabilities .capability-chips {
-	margin-top: .5rem;
+	margin-top: 0.5rem;
 }
 
 .detail-entry-caps .detail-label {
-	margin-bottom: .25rem;
+	margin-bottom: 0.25rem;
 }
 
 .capability-chip {
 	max-width: 100%;
-	padding: 0 .375rem;
+	padding: 0 0.375rem;
 	border: var(--border-width) solid var(--border-subdued);
 	border-radius: var(--border-radius);
 	color: var(--foreground-subdued);
-	font-size: .75rem;
+	font-size: 0.75rem;
 	line-height: 1.7;
 	overflow-wrap: anywhere;
+}
+
+.layer-applied {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.125rem;
+	border-color: var(--success);
+	color: var(--success);
+}
+
+.layer-missing {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.125rem;
+	color: var(--foreground-subdued);
+}
+
+.confined-runtime {
+	margin-bottom: 2rem;
+}
+
+.cr-posture {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.75rem;
+	margin-top: 0.5rem;
+}
+
+.cr-mode {
+	color: var(--foreground-subdued);
+	font-size: 0.8125rem;
 }
 </style>
