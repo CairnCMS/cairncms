@@ -32,12 +32,30 @@ get:
                         - loaded
                         - discovered
                         - failed
+                        - partial
                     version:
                       type: string
                     entries:
                       type: array
                       items:
                         type: object
+                        properties:
+                          name:
+                            type: string
+                          type:
+                            type: string
+                          status:
+                            type: string
+                            enum:
+                              - loaded
+                              - failed
+                          reason:
+                            type: object
+                            properties:
+                              code:
+                                type: string
+                              detail:
+                                type: string
                     reason:
                       type: object
                       properties:

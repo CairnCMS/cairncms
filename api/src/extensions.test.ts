@@ -1566,6 +1566,33 @@ describe('the confined bundle binding', () => {
 		expect(filtered).toHaveProperty('echoed');
 	});
 
+	it('keeps a partial bundle diagnostic free of its package path and any file url', async () => {
+		const entries: BundleEntrySpec[] = [
+			{ type: 'endpoint', name: 'served', capabilities: { endpoint: { access: 'public' } } },
+			{ type: 'endpoint', name: 'ungranted', capabilities: { log: true } },
+		];
+
+		writeConfinedBundle('redact-bundle', 'redact-bundle', entries);
+
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [confinedBundleExtension('redact-bundle', 'redact-bundle', entries)];
+
+		await (instance as any).load();
+		current = instance;
+
+		const row = diagnosticFor(instance, 'redact-bundle');
+		expect(row.status).toBe('partial');
+
+		const ungranted = row.entries.find((entry: any) => entry.name === 'ungranted');
+		expect(ungranted.status).toBe('failed');
+		expect(ungranted.reason.code).toBe('capability-missing');
+		expect(typeof ungranted.reason.detail).toBe('string');
+
+		const serialized = JSON.stringify((instance as any).getDiagnostics());
+		expect(serialized).not.toContain(root);
+		expect(serialized).not.toContain('file://');
+	});
+
 	it('fails both contributors of a duplicate operation id while the endpoint sibling mounts', async () => {
 		const entries: BundleEntrySpec[] = [
 			{ type: 'operation', name: 'dup-op', capabilities: { log: true } },

@@ -40,6 +40,11 @@
 					<span class="count">{{ failedCount }}</span>
 					{{ t('extension_failed') }}
 				</span>
+				<span v-if="partialCount > 0" class="stat">
+					<display-color value="var(--warning)" />
+					<span class="count">{{ partialCount }}</span>
+					{{ t('extension_partial') }}
+				</span>
 			</div>
 
 			<v-detail v-for="group in groups" :key="group.type" start-open class="group">
@@ -60,7 +65,7 @@
 					@click="selected = extension"
 				>
 					<v-list-item-icon>
-						<display-color :value="extension.status === 'failed' ? 'var(--danger)' : 'var(--success)'" />
+						<display-color :value="statusColor(extension.status)" />
 					</v-list-item-icon>
 					<v-list-item-content>
 						<v-text-overflow :text="extension.name" />
@@ -81,8 +86,8 @@
 
 				<v-card-text>
 					<div class="detail-meta">
-						<display-color :value="selected.status === 'failed' ? 'var(--danger)' : 'var(--success)'" />
-						<span>{{ selected.status === 'failed' ? t('extension_failed') : t('extension_active') }}</span>
+						<display-color :value="statusColor(selected.status)" />
+						<span>{{ statusLabel(selected.status) }}</span>
 						<v-chip v-if="selected.type" x-small>{{ selected.type }}</v-chip>
 						<v-chip v-if="selected.version" x-small label>{{ selected.version }}</v-chip>
 					</div>
@@ -92,6 +97,9 @@
 					</v-notice>
 					<v-notice v-else-if="selected.status === 'discovered'" type="success" class="detail-notice">
 						{{ t('extension_status_discovered_detail') }}
+					</v-notice>
+					<v-notice v-else-if="selected.status === 'partial'" type="warning" class="detail-notice">
+						{{ t('extension_status_partial_detail') }}
 					</v-notice>
 					<v-notice v-else-if="selected.reason" type="danger" class="detail-notice">
 						{{ selected.reason.code }}: {{ selected.reason.detail }}
@@ -104,9 +112,13 @@
 							:key="`${entry.type}:${entry.name}:${index}`"
 							class="detail-entry"
 						>
+							<display-color v-if="entry.status" :value="statusColor(entry.status)" />
 							<v-icon :name="typeIcon(entry.type)" small />
 							<span class="detail-entry-name">{{ entry.name }}</span>
 							<v-chip x-small>{{ entry.type }}</v-chip>
+							<span v-if="entry.status === 'failed' && entry.reason" class="detail-entry-reason">
+								{{ entry.reason.code }}
+							</span>
 						</div>
 					</div>
 				</v-card-text>
@@ -132,8 +144,8 @@ type ExtensionDiagnostic = {
 	type: string | null;
 	local: boolean;
 	version?: string;
-	entries?: { name: string; type: string }[];
-	status: 'loaded' | 'discovered' | 'failed';
+	entries?: { name: string; type: string; status?: 'loaded' | 'failed'; reason?: { code: string; detail: string } }[];
+	status: 'loaded' | 'discovered' | 'failed' | 'partial';
 	reason?: { code: string; detail: string };
 };
 
@@ -160,7 +172,20 @@ const error = ref<string | null>(null);
 const selected = ref<ExtensionRow | null>(null);
 
 const failedCount = computed(() => extensions.value.filter((extension) => extension.status === 'failed').length);
-const activeCount = computed(() => extensions.value.length - failedCount.value);
+const partialCount = computed(() => extensions.value.filter((extension) => extension.status === 'partial').length);
+const activeCount = computed(() => extensions.value.length - failedCount.value - partialCount.value);
+
+function statusColor(status?: string): string {
+	if (status === 'failed') return 'var(--danger)';
+	if (status === 'partial') return 'var(--warning)';
+	return 'var(--success)';
+}
+
+function statusLabel(status: string): string {
+	if (status === 'failed') return t('extension_failed');
+	if (status === 'partial') return t('extension_partial');
+	return t('extension_active');
+}
 
 const groups = computed(() => {
 	const byType = new Map<string, ExtensionRow[]>();
@@ -297,6 +322,12 @@ async function fetchExtensions() {
 
 .detail-entry-name {
 	flex-grow: 1;
+}
+
+.detail-entry-reason {
+	color: var(--danger);
+	font-family: var(--family-monospace);
+	font-size: .8125rem;
 }
 
 .detail-notice {
