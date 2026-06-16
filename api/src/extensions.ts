@@ -52,7 +52,7 @@ import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import path from 'path';
-import { rollup } from 'rollup';
+import { rollup, type OutputChunk } from 'rollup';
 import getDatabase from './database/index.js';
 import emitter, { Emitter } from './emitter.js';
 import env from './env.js';
@@ -1452,7 +1452,17 @@ export class ExtensionManager {
 
 			await bundle.close();
 
-			return output[0].code;
+			// Dynamic imports in the entrypoint make rollup emit multiple chunks, so the
+			// entry is not reliably output[0]. Select it explicitly, and treat a missing
+			// entry as a build failure (through the catch) rather than returning null,
+			// which would 404 /extensions/sources/index.js with no diagnostic.
+			const entryChunk = output.find((out): out is OutputChunk => out.type === 'chunk' && out.isEntry);
+
+			if (!entryChunk) {
+				throw new Error('app extension bundle produced no entry chunk');
+			}
+
+			return entryChunk.code;
 		} catch (error: any) {
 			this.appBundleFailure = sanitizeExtensionError(error, 'BUNDLE_BUILD_FAILED');
 			logger.warn(`Couldn't bundle app extensions: ${this.appBundleFailure.code} ${this.appBundleFailure.detail}`);

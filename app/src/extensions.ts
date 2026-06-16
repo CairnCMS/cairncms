@@ -26,9 +26,17 @@ const onDehydrateCallbacks: (() => Promise<void>)[] = [];
 
 export async function loadExtensions(): Promise<void> {
 	try {
-		customExtensions = import.meta.env.DEV
+		const loaded = import.meta.env.DEV
 			? await import(/* @vite-ignore */ '@cairncms-extensions')
 			: await import(/* @vite-ignore */ `${getRootPath()}extensions/sources/index.js`);
+
+		// The entrypoint loads and registers each extension in isolation, resolving
+		// `ready` once every load has settled and pushed. Await it before exposing the
+		// module, so registerExtensions never reads a partially populated inventory and
+		// a rejection leaves customExtensions null. Absent on an empty entrypoint.
+		await (loaded as { ready?: Promise<unknown> } | null)?.ready;
+
+		customExtensions = loaded;
 	} catch (err: any) {
 		// eslint-disable-next-line no-console
 		console.warn(`Couldn't load extensions`);
