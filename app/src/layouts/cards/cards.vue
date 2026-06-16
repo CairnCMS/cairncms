@@ -140,15 +140,15 @@ const mainElement = inject<Ref<Element | undefined>>('main-element');
 
 const layoutElement = ref<HTMLElement>();
 
-const { width } = useElementSize(layoutElement);
+const { width: innerWidth } = useElementSize(layoutElement);
 
 watch(
 	() => props.page,
 	() => mainElement!.value?.scrollTo({ top: 0, behavior: 'smooth' })
 );
 
-watch(width, () => {
-	emit('update:width', width.value);
+watch(innerWidth, () => {
+	emit('update:width', innerWidth.value);
 });
 </script>
 
