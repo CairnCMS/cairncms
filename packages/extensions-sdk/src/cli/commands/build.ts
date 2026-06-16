@@ -30,7 +30,7 @@ import type { Plugin, RollupError, RollupOptions, OutputOptions as RollupOutputO
 import { rollup, watch as rollupWatch } from 'rollup';
 import esbuildDefault from 'rollup-plugin-esbuild';
 import stylesDefault from 'rollup-plugin-styles';
-import vueDefault from 'rollup-plugin-vue';
+import vueDefault from '@vitejs/plugin-vue';
 import type { Format, RollupConfig, RollupMode } from '../types.js';
 import { getFileExt } from '../utils/file.js';
 import { clear, log } from '../utils/logger.js';
@@ -47,9 +47,10 @@ import loadConfig from './helpers/load-config.js';
 import { validateSplitEntrypointOption } from './helpers/validate-cli-options.js';
 
 // Rollup plugins ship with CJS-style `default` exports but are typed as the module itself;
-// these casts unwrap to the real functions.
+// the cast unwraps virtual to the real function. @vitejs/plugin-vue is ESM, so its default is
+// already the plugin factory and needs no unwrap.
 const virtual = virtualDefault as unknown as typeof virtualDefault.default;
-const vue = vueDefault as unknown as typeof vueDefault.default;
+const vue = vueDefault;
 const esbuild = esbuildDefault as unknown as typeof esbuildDefault.default;
 const styles = stylesDefault as unknown as typeof stylesDefault.default;
 const commonjs = commonjsDefault as unknown as typeof commonjsDefault.default;
@@ -872,7 +873,7 @@ function getRollupOptions({
 		external: mode === 'browser' ? APP_SHARED_DEPS : createNodeExternal(runtimeDeps),
 		plugins: [
 			typeof input !== 'string' ? virtual(input) : null,
-			mode === 'browser' ? (vue({ preprocessStyles: true }) as Plugin) : null,
+			mode === 'browser' ? (vue({ isProduction: true }) as Plugin) : null,
 			esbuild({ include: /\.tsx?$/, sourceMap: sourcemap }),
 			mode === 'browser' ? styles() : null,
 			...plugins,

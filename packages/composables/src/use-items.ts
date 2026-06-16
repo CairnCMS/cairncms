@@ -90,7 +90,7 @@ export function useItems(collection: Ref<string | null>, query: ComputedQuery): 
 				newSearch !== oldSearch
 			) {
 				if (oldCollection) {
-					page.value = 1;
+					(page as Ref<Query['page']>).value = 1;
 				}
 			}
 
@@ -190,7 +190,7 @@ export function useItems(collection: Ref<string | null>, query: ComputedQuery): 
 			items.value = fetchedItems;
 
 			if (page && fetchedItems.length === 0 && page?.value !== 1) {
-				page.value = 1;
+				(page as Ref<Query['page']>).value = 1;
 			}
 		} catch (err: any) {
 			if (axios.isCancel(err)) {
