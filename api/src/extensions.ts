@@ -187,6 +187,15 @@ type ConfinedBinding = {
 // metacharacters (:, *, ?, +, parentheses) and no case variants.
 const CONFINED_ENDPOINT_ROUTE = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 
+// Matches an app shared-dependency entry chunk by name, e.g. "vue" ->
+// "vue.ev7YwI6S.entry.js". The hash is Vite's URL-safe [hash], base64url with
+// mixed case plus - and _, not lowercase hex, so the charset must allow
+// [A-Za-z0-9_-] or no shared dep ever resolves and the app bundler re-bundles them.
+export function findSharedDepAsset(dep: string, assetFiles: string[]): string | undefined {
+	const depRegex = new RegExp(`^${escapeRegExp(dep.replace(/\//g, '_'))}\\.[A-Za-z0-9_-]+\\.entry\\.js$`);
+	return assetFiles.find((file) => depRegex.test(file));
+}
+
 export class ExtensionManager {
 	private isLoaded = false;
 	private options: Options;
@@ -1458,8 +1467,7 @@ export class ExtensionManager {
 		const depsMapping: Record<string, string> = {};
 
 		for (const dep of deps) {
-			const depRegex = new RegExp(`${escapeRegExp(dep.replace(/\//g, '_'))}\\.[0-9a-f]{8}\\.entry\\.js`);
-			const depName = appDir.find((file) => depRegex.test(file));
+			const depName = findSharedDepAsset(dep, appDir);
 
 			if (depName) {
 				const depUrl = new Url(env['PUBLIC_URL']).addPath('admin', 'assets', depName);
