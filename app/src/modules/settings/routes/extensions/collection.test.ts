@@ -68,6 +68,16 @@ const bundle = {
 	],
 };
 
+const sandboxedBundle = {
+	name: 'cairncms-extension-api-metric',
+	type: 'bundle',
+	local: false,
+	version: '1.0.0',
+	status: 'loaded',
+	runtime: 'confined-server',
+	entries: [{ name: 'api-metric-panel', type: 'panel' }],
+};
+
 const failedEndpoint = {
 	name: 'cairn-broken-endpoint',
 	type: 'endpoint',
@@ -183,6 +193,80 @@ describe('Settings Extensions collection', () => {
 		expect(wrapper.findAll('.v-list-item')).toHaveLength(2);
 	});
 
+	it('marks only sandboxed rows with a Sandboxed chip', async () => {
+		vi.mocked(api.get).mockResolvedValue({ data: { data: [sandboxedBundle, loadedHook, discoveredInterface] } });
+
+		const wrapper = mountCollection();
+		await flushPromises();
+
+		const sandboxedRow = rowFor(wrapper, 'cairncms-extension-api-metric')!;
+		expect(sandboxedRow.find('.sandboxed').exists()).toBe(true);
+		expect(sandboxedRow.find('.sandboxed').text()).toBe('Sandboxed');
+
+		expect(rowFor(wrapper, 'cairn-fixture-hook')!.find('.sandboxed').exists()).toBe(false);
+		expect(rowFor(wrapper, 'cairn-fixture-interface')!.find('.sandboxed').exists()).toBe(false);
+	});
+
+	it('renders the OS hardening posture inside the advanced diagnostics section', async () => {
+		vi.mocked(api.get).mockResolvedValue({
+			data: {
+				data: [loadedHook],
+				meta: {
+					confinedRuntime: {
+						state: 'available',
+						posture: {
+							mode: 'auto',
+							decision: 'run',
+							applied: ['network-namespace'],
+							missing: ['cgroup-memory'],
+							cgroupMechanic: null,
+						},
+					},
+				},
+			},
+		});
+
+		const wrapper = mountCollection();
+		await flushPromises();
+
+		const section = wrapper.find('.advanced-diagnostics');
+		expect(section.exists()).toBe(true);
+		expect(section.text()).toContain('Advanced Diagnostics');
+		expect(section.text()).toContain('network-namespace');
+		expect(section.text()).toContain('cgroup-memory');
+
+		// The posture is not a top-level notice.
+		expect(wrapper.find('.sandbox-warning').exists()).toBe(false);
+	});
+
+	it('shows neither the warning nor the advanced diagnostics when not required', async () => {
+		vi.mocked(api.get).mockResolvedValue({
+			data: { data: [loadedHook], meta: { confinedRuntime: { state: 'not-required', posture: null } } },
+		});
+
+		const wrapper = mountCollection();
+		await flushPromises();
+
+		expect(wrapper.find('.sandbox-warning').exists()).toBe(false);
+		expect(wrapper.find('.advanced-diagnostics').exists()).toBe(false);
+	});
+
+	it('shows the unavailable warning at the top, not in the advanced diagnostics', async () => {
+		vi.mocked(api.get).mockResolvedValue({
+			data: { data: [loadedHook], meta: { confinedRuntime: { state: 'unavailable', posture: null } } },
+		});
+
+		const wrapper = mountCollection();
+		await flushPromises();
+
+		const notice = wrapper.find('.sandbox-warning');
+		expect(notice.exists()).toBe(true);
+		expect(notice.text()).toContain('did not resolve');
+
+		// Posture is absent when unavailable, so there is no advanced diagnostics section.
+		expect(wrapper.find('.advanced-diagnostics').exists()).toBe(false);
+	});
+
 	describe('detail modal', () => {
 		it('is closed until a row is clicked', async () => {
 			vi.mocked(api.get).mockResolvedValue({ data: { data: [loadedHook] } });
@@ -238,6 +322,39 @@ describe('Settings Extensions collection', () => {
 			expect(notice.text()).toContain('REGISTRATION_FAILED: boom');
 		});
 
+		it('states the runtime as sandboxed, full authority, or browser app per extension', async () => {
+			vi.mocked(api.get).mockResolvedValue({ data: { data: [sandboxedBundle, loadedHook, discoveredInterface] } });
+
+			const wrapper = mountCollection();
+			await flushPromises();
+
+			await rowFor(wrapper, 'cairncms-extension-api-metric')!.trigger('click');
+			await nextTick();
+			expect(wrapper.find('.v-dialog .detail-runtime').text()).toContain('Sandboxed');
+
+			await rowFor(wrapper, 'cairn-fixture-hook')!.trigger('click');
+			await nextTick();
+			expect(wrapper.find('.v-dialog .detail-runtime').text()).toContain('Full authority');
+
+			await rowFor(wrapper, 'cairn-fixture-interface')!.trigger('click');
+			await nextTick();
+			const browserRuntime = wrapper.find('.v-dialog .detail-runtime').text();
+			expect(browserRuntime).toContain('Browser app');
+			expect(browserRuntime).not.toContain('Full authority');
+		});
+
+		it('omits the runtime line for a synthetic row that is not an extension', async () => {
+			vi.mocked(api.get).mockResolvedValue({ data: { data: [syntheticFailure] } });
+
+			const wrapper = mountCollection();
+			await flushPromises();
+			await rowFor(wrapper, '(extension discovery)')!.trigger('click');
+			await nextTick();
+
+			expect(wrapper.find('.v-dialog').exists()).toBe(true);
+			expect(wrapper.find('.v-dialog .detail-runtime').exists()).toBe(false);
+		});
+
 		it('lists the nested extensions for a bundle', async () => {
 			vi.mocked(api.get).mockResolvedValue({ data: { data: [bundle] } });
 
@@ -250,6 +367,30 @@ describe('Settings Extensions collection', () => {
 			expect(entries.exists()).toBe(true);
 			expect(entries.text()).toContain('cairn-bundle-interface');
 			expect(entries.text()).toContain('cairn-bundle-endpoint');
+		});
+
+		it('renders declared capabilities and defaults an omitted request method to GET', async () => {
+			const capable = {
+				name: 'cairn-capable-op',
+				type: 'operation',
+				local: true,
+				status: 'loaded',
+				capabilities: { log: true, request: { urls: ['https://api.example.com'] } },
+			};
+
+			vi.mocked(api.get).mockResolvedValue({ data: { data: [capable] } });
+
+			const wrapper = mountCollection();
+			await flushPromises();
+			await rowFor(wrapper, 'cairn-capable-op')!.trigger('click');
+			await nextTick();
+
+			const caps = wrapper.find('.v-dialog .detail-capabilities');
+			expect(caps.exists()).toBe(true);
+			expect(caps.text()).toContain('log');
+			// An omitted request method defaults to GET, matching the broker allowlist.
+			expect(caps.text()).toContain('GET');
+			expect(caps.text()).toContain('https://api.example.com');
 		});
 	});
 });

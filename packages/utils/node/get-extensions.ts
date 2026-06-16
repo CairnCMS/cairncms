@@ -53,6 +53,7 @@ async function parsePackageExtension(extensionName: string, extensionPath: strin
 			entries: extensionOptions.entries,
 			host: extensionOptions.host,
 			local,
+			...(extensionOptions.runtime !== undefined && { runtime: extensionOptions.runtime }),
 		};
 	} else if (isTypeIn(extensionOptions, HYBRID_EXTENSION_TYPES)) {
 		return {
@@ -66,6 +67,7 @@ async function parsePackageExtension(extensionName: string, extensionPath: strin
 			},
 			host: extensionOptions.host,
 			local,
+			...(extensionOptions.runtime !== undefined && { runtime: extensionOptions.runtime }),
 		};
 	} else {
 		return {
@@ -76,6 +78,7 @@ async function parsePackageExtension(extensionName: string, extensionPath: strin
 			entrypoint: extensionOptions.path,
 			host: extensionOptions.host,
 			local,
+			...(extensionOptions.runtime !== undefined && { runtime: extensionOptions.runtime }),
 		};
 	}
 }

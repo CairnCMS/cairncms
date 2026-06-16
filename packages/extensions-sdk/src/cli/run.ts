@@ -15,6 +15,7 @@ program
 	.arguments('<type> <name>')
 	.description('Scaffold a new CairnCMS extension')
 	.option('-l, --language <language>', 'specify the language to use')
+	.option('--confined', 'scaffold the extension for the confined runtime')
 	.action(create);
 
 program.command('add').description('Add entries to an existing CairnCMS extension').action(add);

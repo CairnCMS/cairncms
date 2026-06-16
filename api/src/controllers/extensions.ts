@@ -20,6 +20,7 @@ router.get(
 
 		res.locals['payload'] = {
 			data: extensionManager.getDiagnostics(),
+			meta: { confinedRuntime: extensionManager.getConfinedRuntimeMeta() },
 		};
 
 		return next();

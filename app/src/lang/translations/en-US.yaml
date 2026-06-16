@@ -1023,9 +1023,21 @@ page_help_settings_flows_item: '**Flow Detail** — Workspace for managing one o
 page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
 extension_active: active
 extension_failed: failed
+extension_partial: partial
 extension_bundle_contents: Bundled extensions
+extension_capabilities: Capabilities
+extension_advanced_diagnostics: Advanced Diagnostics
+extension_sandboxed: Sandboxed
+extension_runtime: Runtime
+extension_runtime_sandboxed: Sandboxed
+extension_runtime_full_authority: Full authority
+extension_runtime_browser: Browser app
+confined_runtime: Sandbox
+confined_runtime_mode: 'OS hardening: {decision} ({mode})'
+confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
 extension_status_loaded_detail: Loaded and running on the server.
 extension_status_discovered_detail: Discovered and served to the app, where it runs in the browser.
+extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
 extension_type_group_hook: Hooks
 extension_type_group_endpoint: Endpoints
 extension_type_group_operation: Operations

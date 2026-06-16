@@ -32,12 +32,32 @@ get:
                         - loaded
                         - discovered
                         - failed
+                        - partial
                     version:
                       type: string
                     entries:
                       type: array
                       items:
                         type: object
+                        properties:
+                          name:
+                            type: string
+                          type:
+                            type: string
+                          status:
+                            type: string
+                            enum:
+                              - loaded
+                              - failed
+                          reason:
+                            type: object
+                            properties:
+                              code:
+                                type: string
+                              detail:
+                                type: string
+                          capabilities:
+                            $ref: '../../openapi.yaml#/components/schemas/ExtensionCapabilities'
                     reason:
                       type: object
                       properties:
@@ -45,6 +65,62 @@ get:
                           type: string
                         detail:
                           type: string
+                    capabilities:
+                      $ref: '../../openapi.yaml#/components/schemas/ExtensionCapabilities'
+                    runtime:
+                      type: string
+                      description: Present when the extension runs in the sandboxed (confined) server runtime.
+                      enum:
+                        - confined-server
+              meta:
+                type: object
+                properties:
+                  confinedRuntime:
+                    type: object
+                    description: Global confined-runtime state and the resolved OS hardening posture when available.
+                    properties:
+                      state:
+                        type: string
+                        enum:
+                          - not-required
+                          - available
+                          - unavailable
+                      posture:
+                        type: object
+                        nullable: true
+                        properties:
+                          mode:
+                            type: string
+                            enum:
+                              - auto
+                              - required
+                          decision:
+                            type: string
+                            enum:
+                              - run
+                              - refuse
+                          applied:
+                            type: array
+                            items:
+                              type: string
+                              enum:
+                                - network-namespace
+                                - permission-model
+                                - cgroup-memory
+                          missing:
+                            type: array
+                            items:
+                              type: string
+                              enum:
+                                - network-namespace
+                                - permission-model
+                                - cgroup-memory
+                          cgroupMechanic:
+                            type: string
+                            nullable: true
+                            enum:
+                              - systemd-run
+                              - delegated-cgroup
     '401':
       $ref: '../../openapi.yaml#/components/responses/UnauthorizedError'
     '403':

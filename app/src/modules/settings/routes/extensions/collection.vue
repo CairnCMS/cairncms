@@ -40,7 +40,20 @@
 					<span class="count">{{ failedCount }}</span>
 					{{ t('extension_failed') }}
 				</span>
+				<span v-if="partialCount > 0" class="stat">
+					<display-color value="var(--warning)" />
+					<span class="count">{{ partialCount }}</span>
+					{{ t('extension_partial') }}
+				</span>
 			</div>
+
+			<v-notice
+				v-if="confinedRuntime && confinedRuntime.state === 'unavailable'"
+				type="warning"
+				class="sandbox-warning"
+			>
+				{{ t('confined_runtime_unavailable') }}
+			</v-notice>
 
 			<v-detail v-for="group in groups" :key="group.type" start-open class="group">
 				<template #activator="{ toggle, active }">
@@ -60,13 +73,50 @@
 					@click="selected = extension"
 				>
 					<v-list-item-icon>
-						<display-color :value="extension.status === 'failed' ? 'var(--danger)' : 'var(--success)'" />
+						<display-color :value="statusColor(extension.status)" />
 					</v-list-item-icon>
 					<v-list-item-content>
 						<v-text-overflow :text="extension.name" />
 					</v-list-item-content>
+					<v-chip v-if="extension.runtime === 'confined-server'" class="sandboxed" small label>
+						{{ t('extension_sandboxed') }}
+					</v-chip>
 					<v-chip v-if="extension.version" class="version" small label>{{ extension.version }}</v-chip>
 				</v-list-item>
+			</v-detail>
+
+			<v-detail v-if="confinedRuntime && confinedRuntime.posture" class="advanced-diagnostics">
+				<template #activator="{ toggle, active }">
+					<v-divider :inline-title="false" large class="group-head" @click="toggle">
+						<template #icon><v-icon name="shield" /></template>
+						<span class="group-name">{{ t('extension_advanced_diagnostics') }}</span>
+						<v-icon class="expand-icon" :class="{ active }" name="expand_more" />
+					</v-divider>
+				</template>
+
+				<div class="confined-runtime">
+					<div class="detail-label">{{ t('confined_runtime') }}</div>
+					<div class="cr-posture">
+						<span class="cr-mode">
+							{{
+								t('confined_runtime_mode', {
+									decision: confinedRuntime.posture.decision,
+									mode: confinedRuntime.posture.mode,
+								})
+							}}
+						</span>
+						<div class="capability-chips">
+							<span v-for="layer in confinedRuntime.posture.applied" :key="layer" class="capability-chip layer-applied">
+								<v-icon name="check" x-small />
+								{{ layer }}
+							</span>
+							<span v-for="layer in confinedRuntime.posture.missing" :key="layer" class="capability-chip layer-missing">
+								<v-icon name="close" x-small />
+								{{ layer }}
+							</span>
+						</div>
+					</div>
+				</div>
 			</v-detail>
 		</div>
 
@@ -81,10 +131,15 @@
 
 				<v-card-text>
 					<div class="detail-meta">
-						<display-color :value="selected.status === 'failed' ? 'var(--danger)' : 'var(--success)'" />
-						<span>{{ selected.status === 'failed' ? t('extension_failed') : t('extension_active') }}</span>
+						<display-color :value="statusColor(selected.status)" />
+						<span>{{ statusLabel(selected.status) }}</span>
 						<v-chip v-if="selected.type" x-small>{{ selected.type }}</v-chip>
 						<v-chip v-if="selected.version" x-small label>{{ selected.version }}</v-chip>
+					</div>
+
+					<div v-if="selected.type" class="detail-runtime">
+						<span class="detail-label">{{ t('extension_runtime') }}</span>
+						<span class="detail-runtime-value">{{ runtimeLabel(selected) }}</span>
 					</div>
 
 					<v-notice v-if="selected.status === 'loaded'" type="success" class="detail-notice">
@@ -93,9 +148,21 @@
 					<v-notice v-else-if="selected.status === 'discovered'" type="success" class="detail-notice">
 						{{ t('extension_status_discovered_detail') }}
 					</v-notice>
+					<v-notice v-else-if="selected.status === 'partial'" type="warning" class="detail-notice">
+						{{ t('extension_status_partial_detail') }}
+					</v-notice>
 					<v-notice v-else-if="selected.reason" type="danger" class="detail-notice">
 						{{ selected.reason.code }}: {{ selected.reason.detail }}
 					</v-notice>
+
+					<div v-if="selected.capabilities" class="detail-capabilities">
+						<div class="detail-label">{{ t('extension_capabilities') }}</div>
+						<div class="capability-chips">
+							<span v-for="label in capabilityLabels(selected.capabilities)" :key="label" class="capability-chip">
+								{{ label }}
+							</span>
+						</div>
+					</div>
 
 					<div v-if="selected.entries && selected.entries.length > 0" class="detail-entries">
 						<div class="detail-label">{{ t('extension_bundle_contents') }}</div>
@@ -104,9 +171,22 @@
 							:key="`${entry.type}:${entry.name}:${index}`"
 							class="detail-entry"
 						>
-							<v-icon :name="typeIcon(entry.type)" small />
-							<span class="detail-entry-name">{{ entry.name }}</span>
-							<v-chip x-small>{{ entry.type }}</v-chip>
+							<v-divider :inline-title="false" class="entry-head">
+								<template #icon><v-icon :name="typeIcon(entry.type)" small /></template>
+								<span class="entry-name">{{ entry.name }}</span>
+								<display-color v-if="entry.status" :value="statusColor(entry.status)" />
+								<span v-if="entry.status === 'failed' && entry.reason" class="detail-entry-reason">
+									{{ entry.reason.code }}
+								</span>
+							</v-divider>
+							<div v-if="entry.capabilities" class="detail-entry-caps">
+								<div class="detail-label">{{ t('extension_capabilities') }}</div>
+								<div class="capability-chips">
+									<span v-for="label in capabilityLabels(entry.capabilities)" :key="label" class="capability-chip">
+										{{ label }}
+									</span>
+								</div>
+							</div>
 						</div>
 					</div>
 				</v-card-text>
@@ -132,9 +212,17 @@ type ExtensionDiagnostic = {
 	type: string | null;
 	local: boolean;
 	version?: string;
-	entries?: { name: string; type: string }[];
-	status: 'loaded' | 'discovered' | 'failed';
+	entries?: {
+		name: string;
+		type: string;
+		status?: 'loaded' | 'failed';
+		reason?: { code: string; detail: string };
+		capabilities?: Record<string, unknown>;
+	}[];
+	status: 'loaded' | 'discovered' | 'failed' | 'partial';
 	reason?: { code: string; detail: string };
+	capabilities?: Record<string, unknown>;
+	runtime?: 'confined-server';
 };
 
 type ExtensionRow = ExtensionDiagnostic & { _key: string };
@@ -154,13 +242,68 @@ const TYPE_ICONS: Record<string, string> = {
 
 const { t } = useI18n();
 
+type ConfinedRuntimeMeta = {
+	state: 'not-required' | 'available' | 'unavailable';
+	posture: {
+		mode: string;
+		decision: string;
+		applied: string[];
+		missing: string[];
+		cgroupMechanic: string | null;
+	} | null;
+};
+
 const extensions = ref<ExtensionRow[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const selected = ref<ExtensionRow | null>(null);
+const confinedRuntime = ref<ConfinedRuntimeMeta | null>(null);
 
 const failedCount = computed(() => extensions.value.filter((extension) => extension.status === 'failed').length);
-const activeCount = computed(() => extensions.value.length - failedCount.value);
+const partialCount = computed(() => extensions.value.filter((extension) => extension.status === 'partial').length);
+const activeCount = computed(() => extensions.value.length - failedCount.value - partialCount.value);
+
+function statusColor(status?: string): string {
+	if (status === 'failed') return 'var(--danger)';
+	if (status === 'partial') return 'var(--warning)';
+	return 'var(--success)';
+}
+
+function statusLabel(status: string): string {
+	if (status === 'failed') return t('extension_failed');
+	if (status === 'partial') return t('extension_partial');
+	return t('extension_active');
+}
+
+function runtimeLabel(row: ExtensionDiagnostic): string {
+	if (row.runtime === 'confined-server') return t('extension_runtime_sandboxed');
+	// A discovered extension is app-only and runs in the browser, not on the server, so it is
+	// neither sandboxed nor full-authority in the server sense.
+	if (row.status === 'discovered') return t('extension_runtime_browser');
+	return t('extension_runtime_full_authority');
+}
+
+function capabilityLabels(capabilities: Record<string, unknown>): string[] {
+	return Object.entries(capabilities).map(([key, value]) => {
+		if (value === true) return key;
+		if (typeof value === 'string') return `${key}: ${value}`;
+		if (Array.isArray(value)) return `${key}: ${value.join(', ')}`;
+
+		if (value && typeof value === 'object') {
+			const obj = value as Record<string, unknown>;
+			if (typeof obj.access === 'string') return `${key}: ${obj.access}`;
+
+			if (Array.isArray(obj.urls)) {
+				// An omitted request method allowlist defaults to GET in the broker, so show that
+				// rather than an empty method scope.
+				const methods = Array.isArray(obj.methods) ? obj.methods : ['GET'];
+				return `${key}: ${methods.join(', ')} ${(obj.urls as unknown[]).join(', ')}`;
+			}
+		}
+
+		return key;
+	});
+}
 
 const groups = computed(() => {
 	const byType = new Map<string, ExtensionRow[]>();
@@ -196,6 +339,8 @@ async function fetchExtensions() {
 			...entry,
 			_key: `${index}:${entry.name}`,
 		}));
+
+		confinedRuntime.value = response.data.meta?.confinedRuntime ?? null;
 	} catch (err: any) {
 		error.value = t('extensions_load_failed');
 		unexpectedError(err);
@@ -235,13 +380,13 @@ async function fetchExtensions() {
 	gap: 1.5rem;
 	margin-bottom: 1.5rem;
 	color: var(--foreground-subdued);
-	font-size: .875rem;
+	font-size: 0.875rem;
 }
 
 .summary .stat {
 	display: inline-flex;
 	align-items: center;
-	gap: .375rem;
+	gap: 0.375rem;
 }
 
 .summary .count {
@@ -254,7 +399,7 @@ async function fetchExtensions() {
 }
 
 .group-count {
-	margin-left: .5rem;
+	margin-left: 0.5rem;
 }
 
 .expand-icon {
@@ -269,13 +414,30 @@ async function fetchExtensions() {
 
 .version {
 	flex-shrink: 0;
-	margin-left: .75rem;
+	margin-left: 0.75rem;
+}
+
+.sandboxed {
+	flex-shrink: 0;
+	margin-left: 0.75rem;
+	--v-chip-color: var(--primary);
 }
 
 .detail-meta {
 	display: flex;
 	align-items: center;
-	gap: .5rem;
+	gap: 0.5rem;
+}
+
+.detail-runtime {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin-top: 0.75rem;
+}
+
+.detail-runtime .detail-label {
+	margin-bottom: 0;
 }
 
 .detail-entries {
@@ -283,23 +445,106 @@ async function fetchExtensions() {
 }
 
 .detail-label {
-	margin-bottom: .5rem;
+	margin-bottom: 0.5rem;
 	color: var(--foreground-subdued);
-	font-size: .8125rem;
+	font-size: 0.8125rem;
 }
 
 .detail-entry {
 	display: flex;
-	align-items: center;
-	gap: .5rem;
-	padding: .375rem 0;
+	flex-direction: column;
+	gap: 0.625rem;
+	margin-bottom: 1.5rem;
 }
 
-.detail-entry-name {
+.entry-head :deep(.type-text) {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-size: 0.9375rem;
+}
+
+.entry-name {
 	flex-grow: 1;
+	min-width: 0;
+}
+
+.detail-entry-reason {
+	color: var(--danger);
+	font-family: var(--family-monospace);
+	font-size: 0.8125rem;
 }
 
 .detail-notice {
 	margin-top: 1.25rem;
+}
+
+.detail-capabilities {
+	margin-top: 1.25rem;
+}
+
+.capability-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.375rem;
+}
+
+.detail-capabilities .capability-chips {
+	margin-top: 0.5rem;
+}
+
+.detail-entry-caps .detail-label {
+	margin-bottom: 0.25rem;
+}
+
+.capability-chip {
+	max-width: 100%;
+	padding: 0 0.375rem;
+	border: var(--border-width) solid var(--border-subdued);
+	border-radius: var(--border-radius);
+	color: var(--foreground-subdued);
+	font-size: 0.75rem;
+	line-height: 1.7;
+	overflow-wrap: anywhere;
+}
+
+.layer-applied {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.125rem;
+	border-color: var(--success);
+	color: var(--success);
+}
+
+.layer-missing {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.125rem;
+	color: var(--foreground-subdued);
+}
+
+.sandbox-warning {
+	margin-bottom: 1.5rem;
+}
+
+.advanced-diagnostics {
+	margin-bottom: 2rem;
+}
+
+.confined-runtime {
+	padding-top: 0.75rem;
+}
+
+.cr-posture {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.75rem;
+	margin-top: 0.5rem;
+}
+
+.cr-mode {
+	color: var(--foreground-subdued);
+	font-size: 0.8125rem;
 }
 </style>

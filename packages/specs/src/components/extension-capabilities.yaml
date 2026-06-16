@@ -1,0 +1,65 @@
+type: object
+description:
+  The declared host capabilities a confined extension is granted. Every field is optional and present only when the
+  manifest declares it.
+properties:
+  log:
+    type: boolean
+  request:
+    type: object
+    properties:
+      methods:
+        type: array
+        items:
+          type: string
+          enum:
+            - GET
+            - POST
+            - PUT
+            - PATCH
+            - DELETE
+            - HEAD
+            - OPTIONS
+      urls:
+        type: array
+        items:
+          type: string
+          description: A bare credential-free http or https origin.
+  template:
+    type: boolean
+  endpoint:
+    type: object
+    properties:
+      access:
+        type: string
+        enum:
+          - public
+          - authenticated
+  items:
+    type: string
+    enum:
+      - current-user
+      - system
+  files:
+    type: string
+    enum:
+      - current-user
+      - system
+  schema:
+    type: array
+    items:
+      type: string
+      enum:
+        - read
+        - write
+  secrets:
+    type: boolean
+  settings:
+    type: array
+    items:
+      type: string
+      enum:
+        - read
+        - write
+  jobs:
+    type: boolean

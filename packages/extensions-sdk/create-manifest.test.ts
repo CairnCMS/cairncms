@@ -73,16 +73,19 @@ describe('the SDK carries no contract, confined, or validate machinery', () => {
 		expect(commands).toEqual(['add', 'build', 'create', 'link']);
 	});
 
-	test('no contract-manifest, confined-build, or validate modules exist', () => {
-		const forbidden = [
-			'./src/cli/commands/validate.ts',
-			'./src/cli/commands/helpers/contract-manifest.ts',
-			'./src/cli/commands/helpers/build-confined-server-entry.ts',
-			'./src/confined-build.ts',
-		];
+	test('no contract-manifest or validate modules exist, and the confined build does', () => {
+		// The confined build is in-scope v2 tooling. The contract manifest and the
+		// validate command stay fenced off until the managed-distribution milestone.
+		const forbidden = ['./src/cli/commands/validate.ts', './src/cli/commands/helpers/contract-manifest.ts'];
 
 		for (const modulePath of forbidden) {
 			expect(fse.pathExistsSync(fromHere(modulePath))).toBe(false);
+		}
+
+		const expected = ['./src/cli/commands/helpers/build-confined-server-entry.ts', './src/confined-build.ts'];
+
+		for (const modulePath of expected) {
+			expect(fse.pathExistsSync(fromHere(modulePath))).toBe(true);
 		}
 	});
 });

@@ -2,7 +2,11 @@ import type {
 	API_EXTENSION_TYPES,
 	APP_EXTENSION_TYPES,
 	BUNDLE_EXTENSION_TYPES,
+	ConfinedHookEventsSchema,
+	ConfinedOptionDeliverySchema,
+	ConfinedRuntimeSchema,
 	EXTENSION_TYPES,
+	ExtensionCapabilitiesSchema,
 	ExtensionManifest,
 	ExtensionOptions,
 	ExtensionOptionsBundleEntries,
@@ -37,12 +41,21 @@ export type NestedExtensionType = (typeof NESTED_EXTENSION_TYPES)[number];
 
 export type SplitEntrypoint = z.infer<typeof SplitEntrypoint>;
 
+export type ConfinedRuntime = z.infer<typeof ConfinedRuntimeSchema>;
+
+export type ExtensionCapabilities = z.infer<typeof ExtensionCapabilitiesSchema>;
+
+export type ConfinedOptionDelivery = z.infer<typeof ConfinedOptionDeliverySchema>;
+
+export type ConfinedHookEvents = z.infer<typeof ConfinedHookEventsSchema>;
+
 type ExtensionBase = {
 	path: string;
 	name: string;
 	version?: string;
 	host?: string;
 	local: boolean;
+	runtime?: ConfinedRuntime;
 };
 
 export type AppExtension = ExtensionBase & {

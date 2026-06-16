@@ -47,10 +47,11 @@
 		"access": "public"
 	},
 	"scripts": {
-		"build": "tsc --project tsconfig.prod.json && copyfiles \"src/**/*.{yaml,liquid,md,txt}\" -u 1 dist",
+		"build": "tsc --project tsconfig.prod.json && copyfiles \"src/**/*.{yaml,liquid,md,txt}\" -u 1 dist && node scripts/build-confined-runtime.mjs",
 		"cli": "NODE_ENV=development SERVE_APP=false NODE_OPTIONS=--no-node-snapshot tsx src/cli/run.ts",
 		"dev": "NODE_ENV=development SERVE_APP=false NODE_OPTIONS=--no-node-snapshot tsx watch --clear-screen=false src/start.ts",
-		"test": "vitest --watch=false"
+		"test": "vitest --watch=false",
+		"test:soak": "NODE_OPTIONS='--no-node-snapshot --expose-gc' tsx src/extensions/confined/soak/run.ts"
 	},
 	"dependencies": {
 		"@authenio/samlify-node-xmllint": "2.0.0",
@@ -58,6 +59,7 @@
 		"@cairncms/app": "workspace:*",
 		"@cairncms/constants": "workspace:*",
 		"@cairncms/exceptions": "workspace:*",
+		"@cairncms/extensions": "workspace:*",
 		"@cairncms/format-title": "workspace:*",
 		"@cairncms/pressure": "workspace:*",
 		"@cairncms/schema": "workspace:*",
@@ -71,9 +73,11 @@
 		"@cairncms/update-check": "workspace:*",
 		"@cairncms/utils": "workspace:*",
 		"@godaddy/terminus": "4.12.0",
+		"@jitl/quickjs-ng-wasmfile-release-asyncify": "0.31.0",
 		"@rollup/plugin-alias": "5.0.0",
 		"@rollup/plugin-node-resolve": "15.0.2",
 		"@rollup/plugin-virtual": "3.0.1",
+		"@sebastianwessel/quickjs": "3.0.1",
 		"argon2": "0.40.3",
 		"async": "3.2.4",
 		"axios": "1.15.2",
@@ -133,6 +137,7 @@
 		"pino-http-print": "3.1.0",
 		"pino-pretty": "10.0.0",
 		"qs": "6.15.2",
+		"quickjs-emscripten-core": "0.31.0",
 		"rate-limiter-flexible": "2.4.1",
 		"rollup": "4.60.1",
 		"samlify": "2.13.0",
@@ -186,6 +191,7 @@
 		"@types/wellknown": "0.5.4",
 		"@vitest/coverage-v8": "1.6.1",
 		"copyfiles": "2.4.1",
+		"esbuild": "0.17.17",
 		"form-data": "4.0.4",
 		"knex-mock-client": "2.0.0",
 		"supertest": "6.3.3",

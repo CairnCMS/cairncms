@@ -19,6 +19,10 @@
 			"default": "./dist/index.js"
 		},
 		"./cli": "./dist/cli/index.js",
+		"./confined-build": {
+			"types": "./dist/confined-build.d.ts",
+			"default": "./dist/confined-build.js"
+		},
 		"./package.json": "./package.json"
 	},
 	"main": "dist/index.js",
@@ -60,6 +64,7 @@
 		"rollup-plugin-vue": "6.0.0"
 	},
 	"devDependencies": {
+		"@cairncms/extensions-server-api": "workspace:*",
 		"@types/fs-extra": "11.0.1",
 		"@types/inquirer": "9.0.3",
 		"@types/node": "22.19.17",

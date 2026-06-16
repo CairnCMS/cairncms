@@ -1,0 +1,27 @@
+name: Confined Soak
+
+on:
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: soak-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  soak:
+    name: Confined runtime soak
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare
+        uses: ./.github/actions/prepare
+
+      - name: Run soak
+        run: pnpm --filter @cairncms/api run test:soak --count 3000

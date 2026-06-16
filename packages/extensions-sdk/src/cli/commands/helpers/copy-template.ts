@@ -4,6 +4,10 @@ import path from 'path';
 import type { Language } from '../../types.js';
 import getTemplatePath from '../../utils/get-template-path.js';
 
+// Template directories are extension types plus the confined variants, which
+// share a type with their plain counterpart but scaffold different source.
+export type TemplateName = ExtensionType | 'operation-confined' | 'endpoint-confined' | 'hook-confined';
+
 type TemplateFile = { type: 'config' | 'source'; path: string };
 
 async function copyTemplateFile(templateFile: TemplateFile, extensionPath: string, sourcePath?: string) {
@@ -49,7 +53,7 @@ async function getTypeTemplateFiles(templateTypePath: string, language?: Languag
 	return [...commonTemplateFiles, ...(languageTemplateFiles ? languageTemplateFiles : [])];
 }
 
-async function getTemplateFiles(type: ExtensionType, language?: Language): Promise<TemplateFile[]> {
+async function getTemplateFiles(type: TemplateName, language?: Language): Promise<TemplateFile[]> {
 	const templatePath = getTemplatePath();
 
 	const [commonTemplateFiles, typeTemplateFiles] = await Promise.all([
@@ -61,7 +65,7 @@ async function getTemplateFiles(type: ExtensionType, language?: Language): Promi
 }
 
 export default async function copyTemplate(
-	type: ExtensionType,
+	type: TemplateName,
 	extensionPath: string,
 	sourcePath?: string,
 	language?: Language

@@ -1,0 +1,764 @@
+import { describe, expect, it, vi } from 'vitest';
+import {
+	hardenedSandboxOptions,
+	MAX_GUEST_TIMERS,
+	runConfinedEntry,
+	runConfinedLoadProbe,
+	unsupportedHostBridge,
+	WASM_INITIAL_PAGES,
+	wasmMaximumPages,
+} from './engine.js';
+import type { ConfinedHostBridge, ConfinedInvocation, ConfinedRuntimeLimits } from './types.js';
+
+function run(inv: ConfinedInvocation, bridge: ConfinedHostBridge = unsupportedHostBridge) {
+	return runConfinedEntry(inv, bridge);
+}
+
+const LIMITS: ConfinedRuntimeLimits = {
+	wallClockMs: 5000,
+	cpuTimeoutMs: 1000,
+	memoryBytes: 64 * 1024 * 1024,
+	stackBytes: 512 * 1024,
+	acquireTimeoutMs: 0,
+	hostCallTimeoutMs: 5000,
+	maxHostCalls: 1000,
+	maxInFlightHostCalls: 16,
+};
+
+function entry(handlerBody: string): string {
+	return `var CairnOperation = (() => { const handler = ${handlerBody}; return { default: { id: 'flow-operation.test', handler } }; })();`;
+}
+
+function invocation(entrySource: string, overrides: Partial<ConfinedInvocation> = {}): ConfinedInvocation {
+	return {
+		extensionId: 'local.test',
+		contributionId: 'flow-operation.test',
+		operationId: 'op-1',
+		entrySource,
+		options: {},
+		input: null,
+		accountability: null,
+		limits: LIMITS,
+		...overrides,
+	};
+}
+
+describe('runConfinedEntry', () => {
+	it('runs a portable operation and returns a JSON-safe result', async () => {
+		const result = await run(
+			invocation(entry('async ({ options, input }) => ({ ok: true, amount: options.amount, echoed: input })'), {
+				options: { amount: 1200 },
+				input: { id: 'evt_1' },
+			})
+		);
+
+		expect(result).toEqual({ ok: true, value: { ok: true, amount: 1200, echoed: { id: 'evt_1' } } });
+	});
+
+	it('cannot read a host secret from process.env', async () => {
+		process.env['CONFINED_PROBE_SECRET'] = 'host-secret-must-not-leak';
+
+		try {
+			const result = await run(
+				invocation(
+					entry(
+						'() => ({ secret: (typeof process !== "undefined" && process.env) ? (process.env.CONFINED_PROBE_SECRET ?? null) : null })'
+					)
+				)
+			);
+
+			expect(result.ok).toBe(true);
+			if (result.ok) expect((result.value as Record<string, unknown>)['secret']).toBeNull();
+		} finally {
+			delete process.env['CONFINED_PROBE_SECRET'];
+		}
+	});
+
+	it('has no require', async () => {
+		const result = await run(invocation(entry('() => ({ require: typeof require })')));
+		expect(result).toMatchObject({ ok: true, value: { require: 'undefined' } });
+	});
+
+	it('cannot make a network call with fetch', async () => {
+		const result = await run(
+			invocation(
+				entry(
+					'async () => { try { await fetch("http://127.0.0.1:1/"); return { reached: true }; } catch (e) { return { reached: false, denied: String((e && e.message) || e) }; } }'
+				)
+			)
+		);
+
+		expect(result.ok).toBe(true);
+
+		if (result.ok) {
+			const value = result.value as Record<string, unknown>;
+			expect(value['reached']).toBe(false);
+			expect(String(value['denied'])).toMatch(/disabled|not supported/i);
+		}
+	});
+
+	it('cannot read host files via node:fs', async () => {
+		const result = await run(
+			invocation(
+				entry(
+					'async () => { try { const fs = await import("node:fs"); fs.readFileSync("/etc/hostname"); return { read: true }; } catch (e) { return { read: false, denied: String((e && e.message) || e) }; } }'
+				)
+			)
+		);
+
+		expect(result.ok).toBe(true);
+
+		if (result.ok) {
+			const value = result.value as Record<string, unknown>;
+			expect(value['read']).toBe(false);
+			expect(String(value['denied'])).toMatch(/disabled|access/i);
+		}
+	});
+
+	it('cannot reach host authority through a Function escape', async () => {
+		process.env['CONFINED_PROBE_SECRET'] = 'host-secret-must-not-leak';
+
+		try {
+			const result = await run(
+				invocation(
+					entry(
+						'() => { const g = Function("return this")(); return { hostSecret: (g.process && g.process.env) ? (g.process.env.CONFINED_PROBE_SECRET ?? null) : null, require: typeof g.require }; }'
+					)
+				)
+			);
+
+			expect(result.ok).toBe(true);
+
+			if (result.ok) {
+				const value = result.value as Record<string, unknown>;
+				expect(value['hostSecret']).toBeNull();
+				expect(value['require']).toBe('undefined');
+			}
+		} finally {
+			delete process.env['CONFINED_PROBE_SECRET'];
+		}
+	});
+
+	it('rejects an internal cairncms import as an invalid entry', async () => {
+		const result = await run(invocation(`import x from '@cairncms/api';\n${entry('() => ({})')}`));
+		expect(result).toMatchObject({ ok: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('rejects an unresolved import as an invalid entry', async () => {
+		const result = await run(invocation(`import x from 'some-unresolved-pkg';\n${entry('() => ({})')}`));
+		expect(result).toMatchObject({ ok: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('bounds a CPU loop with a resource timeout', async () => {
+		const result = await run(
+			invocation(entry('() => { while (true) {} }'), { limits: { ...LIMITS, cpuTimeoutMs: 300 } })
+		);
+
+		expect(result).toMatchObject({ ok: false, error: { code: 'timeout' } });
+	});
+
+	it('bounds an oversized allocation (memory limit) as a failure, never a success', async () => {
+		const result = await run(
+			invocation(entry('() => { const a = new Array(50000000).fill(7); return a.length; }'), {
+				limits: { ...LIMITS, memoryBytes: 16 * 1024 * 1024 },
+			})
+		);
+
+		// QuickJS may surface the memory limit as a catchable guest error or an engine-level
+		// resource interrupt, but it must never succeed. The WASM linear-memory ceiling is the
+		// primary per-guest bound, with the supervisor wall-clock, cgroup, and container limit
+		// as backstops.
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(['guest-error', 'timeout']).toContain(result.error.code);
+	});
+
+	it('rejects a non-JSON-safe result', async () => {
+		const result = await run(invocation(entry('() => { const a = {}; a.self = a; return a; }')));
+		expect(result).toMatchObject({ ok: false, error: { code: 'invalid-result' } });
+	});
+
+	it('surfaces a guest throw as a generic guest error without leaking the message', async () => {
+		const result = await run(invocation(entry('() => { throw new Error("boom sk_live_leaked_secret"); }')));
+
+		expect(result.ok).toBe(false);
+
+		if (!result.ok) {
+			expect(result.error.code).toBe('guest-error');
+			expect(result.error.message).toBe('the flow operation failed');
+			expect(result.error.message).not.toContain('boom');
+			expect(result.error.message).not.toContain('sk_live_leaked_secret');
+		}
+	});
+
+	it('rejects an entry whose config id does not match the contribution id', async () => {
+		const wrongId = `var CairnOperation = { default: { id: 'flow-operation.other', handler: () => ({ ok: true }) } };`;
+		const result = await run(invocation(wrongId));
+
+		expect(result).toMatchObject({ ok: false, error: { code: 'identity-mismatch' } });
+	});
+
+	it('rejects a raw export-default entry', async () => {
+		const result = await run(invocation(`export default { id: 'x', handler: () => ({}) };`));
+		expect(result).toMatchObject({ ok: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('rejects an entry whose default export has no handler', async () => {
+		const result = await run(invocation(`var CairnOperation = { default: { id: 'x' } };`));
+		expect(result).toMatchObject({ ok: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('bridges guest host calls to the host bridge and returns the reply', async () => {
+		const calls: Array<{ method: string; args: unknown }> = [];
+
+		const bridge: ConfinedHostBridge = async (call) => {
+			calls.push(call);
+			if (call.method === 'request.send') return { ok: true, value: { status: 204 } };
+			return { ok: true, value: null };
+		};
+
+		const result = await run(
+			invocation(
+				entry(
+					'async ({ options }, { host }) => { await host.log.info("hi"); const res = await host.request.send({ url: options.url, method: "POST" }); return { ok: res.ok, status: res.value.status }; }'
+				),
+				{ options: { url: 'https://api.example.com/x' } }
+			),
+			bridge
+		);
+
+		expect(result).toEqual({ ok: true, value: { ok: true, status: 204 } });
+		expect(calls.map((call) => call.method)).toEqual(['log.info', 'request.send']);
+		expect(calls[1]?.args).toMatchObject({ url: 'https://api.example.com/x', method: 'POST' });
+	});
+
+	it('bridges template.renderLiquid with the author argument shape', async () => {
+		const calls: Array<{ method: string; args: unknown }> = [];
+
+		const bridge: ConfinedHostBridge = async (call) => {
+			calls.push(call);
+			return { ok: true, value: 'rendered' };
+		};
+
+		const result = await run(
+			invocation(
+				entry(
+					'async (_payload, { host }) => { const res = await host.template.renderLiquid("Hi {# n #}", { n: 1 }, { delimiters: { outputLeft: "{#", outputRight: "#}" } }); return res.value; }'
+				)
+			),
+			bridge
+		);
+
+		expect(result).toEqual({ ok: true, value: 'rendered' });
+
+		expect(calls).toEqual([
+			{
+				method: 'template.renderLiquid',
+				args: {
+					template: 'Hi {# n #}',
+					data: { n: 1 },
+					options: { delimiters: { outputLeft: '{#', outputRight: '#}' } },
+				},
+			},
+		]);
+	});
+
+	it('returns the unsupported reply from the default bridge', async () => {
+		const result = await run(
+			invocation(
+				entry(
+					'async (_payload, { host }) => { const res = await host.settings.get("token"); return { ok: res.ok, code: res.error && res.error.code }; }'
+				)
+			)
+		);
+
+		expect(result).toEqual({ ok: true, value: { ok: false, code: 'unsupported' } });
+	});
+
+	it('configures the engine-hardening options and never sets dangerousSync', () => {
+		expect(hardenedSandboxOptions.allowFetch).toBe(false);
+		expect(hardenedSandboxOptions.allowFs).toBe(false);
+		expect(typeof hardenedSandboxOptions.console.log).toBe('function');
+		expect(hardenedSandboxOptions.maxTimeoutCount).toBe(MAX_GUEST_TIMERS);
+		expect(hardenedSandboxOptions.maxIntervalCount).toBe(MAX_GUEST_TIMERS);
+		expect(MAX_GUEST_TIMERS).toBeGreaterThan(0);
+		expect('dangerousSync' in hardenedSandboxOptions).toBe(false);
+	});
+
+	it('drops every guest console method, not only the common ones', async () => {
+		const methods = Object.keys(hardenedSandboxOptions.console);
+		const hostConsole = console as unknown as Record<string, (...args: unknown[]) => void>;
+
+		const spies = methods
+			.filter((name) => typeof hostConsole[name] === 'function')
+			.map((name) => vi.spyOn(hostConsole, name).mockImplementation(() => undefined));
+
+		try {
+			const calls = methods.map((name) => `try { console.${name}("LEAK-${name}"); } catch (e) {}`).join(' ');
+			const result = await run(invocation(entry(`() => { ${calls} return { ok: true }; }`)));
+
+			expect(result).toEqual({ ok: true, value: { ok: true } });
+			for (const spy of spies) expect(spy).not.toHaveBeenCalledWith(expect.stringContaining('LEAK'));
+		} finally {
+			for (const spy of spies) spy.mockRestore();
+		}
+	});
+
+	it('bounds concurrent guest timers at MAX_GUEST_TIMERS', async () => {
+		const result = await run(
+			invocation(
+				entry(
+					`() => { const ids = []; let bounded = false; try { for (let i = 0; i < ${
+						MAX_GUEST_TIMERS + 50
+					}; i++) { ids.push(setTimeout(() => {}, 100000)); } } catch (e) { bounded = true; } for (const id of ids) { try { clearTimeout(id); } catch (e) {} } return { registered: ids.length, bounded }; }`
+				)
+			)
+		);
+
+		expect(result.ok).toBe(true);
+		if (result.ok) expect(result.value).toEqual({ registered: MAX_GUEST_TIMERS, bounded: true });
+	});
+
+	it('bounds concurrent guest intervals at MAX_GUEST_TIMERS', async () => {
+		const result = await run(
+			invocation(
+				entry(
+					`() => { const ids = []; let bounded = false; try { for (let i = 0; i < ${
+						MAX_GUEST_TIMERS + 50
+					}; i++) { ids.push(setInterval(() => {}, 100000)); } } catch (e) { bounded = true; } for (const id of ids) { try { clearInterval(id); } catch (e) {} } return { registered: ids.length, bounded }; }`
+				)
+			)
+		);
+
+		expect(result.ok).toBe(true);
+		if (result.ok) expect(result.value).toEqual({ registered: MAX_GUEST_TIMERS, bounded: true });
+	});
+});
+
+describe('wasmMaximumPages', () => {
+	it('sizes the WASM ceiling from the guest heap plus the engine overhead', () => {
+		// guest heap + 32MB overhead, in 64KB pages: 32MB -> 1024, 64MB -> 1536.
+		expect(wasmMaximumPages(32 * 1024 * 1024)).toBe(1024);
+		expect(wasmMaximumPages(64 * 1024 * 1024)).toBe(1536);
+	});
+
+	it('never returns a maximum below the initial pages, so the module can load', () => {
+		expect(wasmMaximumPages(0)).toBeGreaterThanOrEqual(WASM_INITIAL_PAGES);
+		expect(wasmMaximumPages(1)).toBeGreaterThanOrEqual(WASM_INITIAL_PAGES);
+	});
+});
+
+describe('runConfinedLoadProbe', () => {
+	it('reports a valid operation entry as loadable', async () => {
+		const result = await runConfinedLoadProbe(invocation(entry('() => ({ ok: true })')));
+		expect(result).toEqual({ loadable: true });
+	});
+
+	it('reports a syntax error as not loadable', async () => {
+		const result = await runConfinedLoadProbe(invocation('this is not (valid javascript'));
+		expect(result).toMatchObject({ loadable: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('reports a module-level throw as not loadable', async () => {
+		const result = await runConfinedLoadProbe(
+			invocation(`throw new Error('boom at load');\n${entry('() => ({ ok: true })')}`)
+		);
+
+		expect(result).toMatchObject({ loadable: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('reports an entry without a function handler as not loadable', async () => {
+		const result = await runConfinedLoadProbe(invocation(`var CairnOperation = { default: { id: 'x' } };`));
+		expect(result).toMatchObject({ loadable: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('reports an id mismatch as not loadable', async () => {
+		const wrongId = `var CairnOperation = { default: { id: 'flow-operation.other', handler: () => ({}) } };`;
+		const result = await runConfinedLoadProbe(invocation(wrongId));
+		expect(result).toMatchObject({ loadable: false, error: { code: 'identity-mismatch' } });
+	});
+
+	it('never invokes the handler: an entry whose handler throws is loadable', async () => {
+		const source = entry('() => { throw new Error("HANDLER_RAN"); }');
+
+		expect(await runConfinedLoadProbe(invocation(source))).toEqual({ loadable: true });
+
+		// The run path invokes the same handler and observes the throw, proving the
+		// probe verdict above could only come from not invoking it.
+		const ran = await runConfinedEntry(invocation(source), unsupportedHostBridge);
+		expect(ran).toMatchObject({ ok: false, error: { code: 'guest-error' } });
+	});
+
+	it('exposes the same host-call surface as the run path to module-level code', async () => {
+		const source = `if (typeof __hostCall !== 'function') throw new Error('no host surface');\n${entry(
+			'() => ({ ok: true })'
+		)}`;
+
+		expect(await runConfinedLoadProbe(invocation(source))).toEqual({ loadable: true });
+	});
+
+	it('bounds a module-level infinite loop with a resource timeout', async () => {
+		const result = await runConfinedLoadProbe(
+			invocation(`while (true) {}\n${entry('() => ({})')}`, { limits: { ...LIMITS, cpuTimeoutMs: 300 } })
+		);
+
+		expect(result).toMatchObject({ loadable: false, error: { code: 'timeout' } });
+	});
+});
+
+describe('runtime memory ceiling per job', () => {
+	// A typed-array backing store is not accounted by the QuickJS memoryLimit, so it is
+	// bounded only by the WASM linear-memory ceiling. A 40MB array fits the ceiling derived
+	// from a 128MB limit but not the one derived from a 16MB limit.
+	const allocLarge =
+		'() => { const a = new Uint8Array(40 * 1024 * 1024); a[a.length - 1] = 1; return { len: a.length }; }';
+
+	it('re-derives the WASM ceiling per job so a smaller later job is bounded by its own limit', async () => {
+		const large = await run(invocation(entry(allocLarge), { limits: { ...LIMITS, memoryBytes: 128 * 1024 * 1024 } }));
+		expect(large.ok).toBe(true);
+
+		const small = await run(invocation(entry(allocLarge), { limits: { ...LIMITS, memoryBytes: 16 * 1024 * 1024 } }));
+		expect(small.ok).toBe(false);
+	}, 20_000);
+});
+
+function endpointEntry(handlerBody: string): string {
+	return `var CairnEndpoint = (() => { const handler = ${handlerBody}; return { default: { id: 'json-endpoint.test', handler } }; })();`;
+}
+
+function endpointInvocation(entrySource: string, overrides: Partial<ConfinedInvocation> = {}): ConfinedInvocation {
+	return invocation(entrySource, {
+		activation: 'json-endpoint',
+		contributionId: 'json-endpoint.test',
+		operationId: 'json-endpoint.test',
+		...overrides,
+	});
+}
+
+describe('runConfinedEntry under the json-endpoint contract', () => {
+	it('hands the handler the shaped request and the json-endpoint activation', async () => {
+		const result = await run(
+			endpointInvocation(
+				endpointEntry(
+					'async (request, context) => ({ status: 201, body: { request, activation: context.activation } })'
+				),
+				{ input: { method: 'POST', path: '/charge', query: { dry: 'true' }, body: { amount: 12 } } }
+			)
+		);
+
+		expect(result).toEqual({
+			ok: true,
+			value: {
+				status: 201,
+				body: {
+					request: { method: 'POST', path: '/charge', query: { dry: 'true' }, body: { amount: 12 } },
+					activation: { type: 'json-endpoint' },
+				},
+			},
+		});
+	});
+
+	it('refuses an operation-shaped entry under the endpoint contract', async () => {
+		const result = await run(endpointInvocation(entry('() => ({})')));
+		expect(result).toMatchObject({ ok: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('enforces the identity contract for endpoints', async () => {
+		const wrongId = `var CairnEndpoint = { default: { id: 'someone-else', handler: () => ({ body: null }) } };`;
+		const result = await run(endpointInvocation(wrongId));
+		expect(result).toMatchObject({ ok: false, error: { code: 'identity-mismatch' } });
+	});
+
+	it('sanitizes a guest throw with the endpoint wording', async () => {
+		const result = await run(endpointInvocation(endpointEntry('() => { throw new Error("boom sk_live_leak"); }')));
+
+		expect(result.ok).toBe(false);
+
+		if (!result.ok) {
+			expect(result.error.code).toBe('guest-error');
+			expect(result.error.message).toBe('the json endpoint failed');
+			expect(result.error.message).not.toContain('sk_live_leak');
+		}
+	});
+});
+
+describe('runConfinedLoadProbe under the json-endpoint contract', () => {
+	it('probes a json endpoint entry loadable without invoking the handler', async () => {
+		const probed = await runConfinedLoadProbe(
+			endpointInvocation(endpointEntry('() => { throw new Error("HANDLER_MUST_NOT_RUN"); }'))
+		);
+
+		expect(probed).toEqual({ loadable: true });
+	});
+
+	it('refuses an operation-shaped entry probed as an endpoint', async () => {
+		const probed = await runConfinedLoadProbe(endpointInvocation(entry('() => ({})')));
+		expect(probed).toMatchObject({ loadable: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('keeps the operation contract when the activation is absent', async () => {
+		const probed = await runConfinedLoadProbe(invocation(entry('() => ({})')));
+		expect(probed).toEqual({ loadable: true });
+	});
+});
+
+function hookEntry(body: string): string {
+	return `var CairnHook = (() => { return { default: { id: 'event-hook.test', ${body} } }; })();`;
+}
+
+function hookInvocation(
+	entrySource: string,
+	activation: 'event-filter' | 'event-action',
+	input: unknown,
+	overrides: Partial<ConfinedInvocation> = {}
+): ConfinedInvocation {
+	return invocation(entrySource, {
+		activation,
+		contributionId: 'event-hook.test',
+		operationId: 'event-hook.test',
+		input,
+		...overrides,
+	});
+}
+
+describe('runConfinedEntry under the event hook contract', () => {
+	it('runs a filter handler and wraps a transformed payload in the explicit envelope', async () => {
+		const entry = hookEntry(
+			"filters: { 'items.create': async (payload, meta, context) => ({ ...payload, stamped: meta.collection, activation: context.activation }) }"
+		);
+
+		const result = await run(
+			hookInvocation(entry, 'event-filter', {
+				event: 'items.create',
+				payload: { title: 'x' },
+				meta: { collection: 'articles' },
+			})
+		);
+
+		expect(result).toEqual({
+			ok: true,
+			value: {
+				unchanged: false,
+				payload: {
+					title: 'x',
+					stamped: 'articles',
+					activation: { type: 'event-filter', event: 'items.create' },
+				},
+			},
+		});
+	});
+
+	it('encodes an undefined filter return as an explicit no-change envelope', async () => {
+		const entry = hookEntry("filters: { 'items.create': () => undefined }");
+
+		const result = await run(
+			hookInvocation(entry, 'event-filter', { event: 'items.create', payload: { title: 'x' }, meta: {} })
+		);
+
+		expect(result).toEqual({ ok: true, value: { unchanged: true } });
+	});
+
+	it('runs an action handler and reports completion only', async () => {
+		const entry = hookEntry("actions: { 'items.create': async (meta) => { meta.collection; } }");
+
+		const result = await run(
+			hookInvocation(entry, 'event-action', { event: 'items.create', meta: { collection: 'articles' } })
+		);
+
+		expect(result).toEqual({ ok: true, value: { done: true } });
+	});
+
+	it('sanitizes a hook guest throw with the hook wording', async () => {
+		const entry = hookEntry("filters: { 'items.create': () => { throw new Error('boom sk_live_leak'); } }");
+
+		const result = await run(hookInvocation(entry, 'event-filter', { event: 'items.create', payload: {}, meta: {} }));
+
+		expect(result).toMatchObject({ ok: false, error: { code: 'guest-error', message: 'the event hook failed' } });
+	});
+
+	it('treats a prototype-named event with no own handler as a guest failure, never an invocation', async () => {
+		const entry = hookEntry("filters: { 'items.create': () => undefined }");
+
+		const result = await run(hookInvocation(entry, 'event-filter', { event: 'constructor', payload: {}, meta: {} }));
+
+		expect(result).toMatchObject({ ok: false, error: { code: 'guest-error' } });
+	});
+});
+
+describe('runConfinedLoadProbe under the event hook contract', () => {
+	const declared = hookEntry(
+		"filters: { 'items.create': () => undefined }, actions: { 'auth.login': () => undefined }"
+	);
+
+	function probeInput(filters: string[], actions: string[]) {
+		return { filters, actions };
+	}
+
+	it('probes loadable when the entry declarations equal the manifest events', async () => {
+		const probed = await runConfinedLoadProbe(
+			hookInvocation(declared, 'event-filter', probeInput(['items.create'], ['auth.login']))
+		);
+
+		expect(probed).toEqual({ loadable: true });
+	});
+
+	it('refuses an entry declaring events the manifest does not', async () => {
+		const probed = await runConfinedLoadProbe(hookInvocation(declared, 'event-filter', probeInput([], ['auth.login'])));
+
+		expect(probed).toMatchObject({
+			loadable: false,
+			error: { code: 'identity-mismatch', message: 'the event hook entry does not declare the manifest events' },
+		});
+	});
+
+	it('refuses an entry missing a manifest-declared event', async () => {
+		const probed = await runConfinedLoadProbe(
+			hookInvocation(declared, 'event-filter', probeInput(['items.create', 'items.update'], ['auth.login']))
+		);
+
+		expect(probed).toMatchObject({ loadable: false, error: { code: 'identity-mismatch' } });
+	});
+
+	it('refuses a non-function handler', async () => {
+		const entry = hookEntry("filters: { 'items.create': 'not-a-function' }");
+
+		const probed = await runConfinedLoadProbe(hookInvocation(entry, 'event-filter', probeInput(['items.create'], [])));
+
+		expect(probed).toMatchObject({ loadable: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('refuses an operation-shaped entry probed as a hook without invoking anything', async () => {
+		const probed = await runConfinedLoadProbe(
+			hookInvocation(entry('() => { throw new Error("HANDLER_MUST_NOT_RUN"); }'), 'event-filter', probeInput([], []))
+		);
+
+		expect(probed).toMatchObject({ loadable: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('enforces the identity contract for hooks', async () => {
+		const wrongId = `var CairnHook = { default: { id: 'someone-else', filters: { 'items.create': () => undefined } } };`;
+
+		const probed = await runConfinedLoadProbe(
+			hookInvocation(wrongId, 'event-filter', probeInput(['items.create'], []))
+		);
+
+		expect(probed).toMatchObject({ loadable: false, error: { code: 'identity-mismatch' } });
+	});
+});
+
+const BUNDLE_ARTIFACT = `var CairnBundle = (() => ({ default: {
+	'endpoint:ep': { id: 'ep', handler: async (request) => ({ status: 201, body: { echoed: request } }) },
+	'operation:op': { id: 'op', handler: async ({ options, input }) => ({ ran: options.x, last: input }) },
+	'hook:hk': { id: 'hk', filters: { 'items.create': (payload) => ({ ...payload, stamped: true }) }, actions: { 'auth.login': () => undefined } },
+} }))();`;
+
+function bundleInvocation(key: string, overrides: Partial<ConfinedInvocation> = {}): ConfinedInvocation {
+	return invocation(BUNDLE_ARTIFACT, {
+		bundleEntryKey: key,
+		contributionId: key.split(':')[1],
+		...overrides,
+	});
+}
+
+describe('runConfinedEntry selecting a bundle entry from CairnBundle', () => {
+	it('runs a bundle endpoint entry under the json-endpoint contract', async () => {
+		const result = await run(
+			bundleInvocation('endpoint:ep', { activation: 'json-endpoint', input: { method: 'GET', path: '/x' } })
+		);
+
+		expect(result).toEqual({ ok: true, value: { status: 201, body: { echoed: { method: 'GET', path: '/x' } } } });
+	});
+
+	it('runs a bundle operation entry under the flow-operation contract', async () => {
+		const result = await run(bundleInvocation('operation:op', { options: { x: 5 }, input: { last: 1 } }));
+		expect(result).toEqual({ ok: true, value: { ran: 5, last: { last: 1 } } });
+	});
+
+	it('runs a bundle hook filter entry under the event-filter contract', async () => {
+		const result = await run(
+			bundleInvocation('hook:hk', {
+				activation: 'event-filter',
+				input: { event: 'items.create', payload: { a: 1 }, meta: {} },
+			})
+		);
+
+		expect(result).toEqual({ ok: true, value: { unchanged: false, payload: { a: 1, stamped: true } } });
+	});
+
+	it('fails a bundle entry whose key is absent from the artifact', async () => {
+		const result = await run(bundleInvocation('endpoint:missing', { activation: 'json-endpoint', input: {} }));
+		expect(result).toMatchObject({ ok: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('rejects a bundle entry whose config id does not match its name', async () => {
+		const result = await run(
+			bundleInvocation('endpoint:ep', { activation: 'json-endpoint', contributionId: 'not-ep', input: {} })
+		);
+
+		expect(result).toMatchObject({ ok: false, error: { code: 'identity-mismatch' } });
+	});
+
+	it('does not let a prototype-named bundle key resolve to an inherited member', async () => {
+		const result = await run(
+			bundleInvocation('constructor', { activation: 'json-endpoint', contributionId: 'constructor', input: {} })
+		);
+
+		expect(result).toMatchObject({ ok: false, error: { code: 'invalid-entry' } });
+	});
+});
+
+describe('runConfinedLoadProbe over a whole bundle artifact', () => {
+	const CLEAN_ENTRIES = [
+		{ key: 'endpoint:ep', name: 'ep', kind: 'endpoint' as const },
+		{ key: 'operation:op', name: 'op', kind: 'operation' as const },
+		{
+			key: 'hook:hk',
+			name: 'hk',
+			kind: 'hook' as const,
+			events: { filters: ['items.create'], actions: ['auth.login'] },
+		},
+	];
+
+	function probe(artifact: string, entries: unknown[]) {
+		return runConfinedLoadProbe(invocation(artifact, { bundleEntries: entries as never, contributionId: 'bundle' }));
+	}
+
+	it('probes a clean bundle loadable in one pass', async () => {
+		expect(await probe(BUNDLE_ARTIFACT, CLEAN_ENTRIES)).toEqual({ loadable: true });
+	});
+
+	it('refuses when a declared entry is absent from the artifact', async () => {
+		const entries = [...CLEAN_ENTRIES, { key: 'endpoint:ghost', name: 'ghost', kind: 'endpoint' as const }];
+		expect(await probe(BUNDLE_ARTIFACT, entries)).toMatchObject({ loadable: false, error: { code: 'invalid-entry' } });
+	});
+
+	it('refuses an entry whose config id does not equal its name', async () => {
+		const artifact = `var CairnBundle = (() => ({ default: { 'endpoint:ep': { id: 'wrong', handler: () => ({}) } } }))();`;
+
+		expect(await probe(artifact, [{ key: 'endpoint:ep', name: 'ep', kind: 'endpoint' }])).toMatchObject({
+			loadable: false,
+			error: { code: 'identity-mismatch' },
+		});
+	});
+
+	it('refuses an operation or endpoint entry without a handler', async () => {
+		const artifact = `var CairnBundle = (() => ({ default: { 'endpoint:ep': { id: 'ep' } } }))();`;
+
+		expect(await probe(artifact, [{ key: 'endpoint:ep', name: 'ep', kind: 'endpoint' }])).toMatchObject({
+			loadable: false,
+			error: { code: 'invalid-entry' },
+		});
+	});
+
+	it('refuses a hook entry whose declared handlers differ from its manifest events', async () => {
+		expect(
+			await probe(BUNDLE_ARTIFACT, [
+				{ key: 'hook:hk', name: 'hk', kind: 'hook', events: { filters: ['items.create'], actions: [] } },
+			])
+		).toMatchObject({ loadable: false, error: { code: 'identity-mismatch' } });
+	});
+
+	it('never invokes a handler while probing', async () => {
+		const artifact = `var CairnBundle = (() => ({ default: { 'endpoint:ep': { id: 'ep', handler: () => { throw new Error('PROBE_RAN_HANDLER'); } } } }))();`;
+		expect(await probe(artifact, [{ key: 'endpoint:ep', name: 'ep', kind: 'endpoint' }])).toEqual({ loadable: true });
+	});
+});
