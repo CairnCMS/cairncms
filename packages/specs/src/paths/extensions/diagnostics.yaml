@@ -67,6 +67,11 @@ get:
                           type: string
                     capabilities:
                       $ref: '../../openapi.yaml#/components/schemas/ExtensionCapabilities'
+                    runtime:
+                      type: string
+                      description: Present when the extension runs in the sandboxed (confined) server runtime.
+                      enum:
+                        - confined-server
               meta:
                 type: object
                 properties:

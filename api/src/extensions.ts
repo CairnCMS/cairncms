@@ -136,6 +136,8 @@ type ExtensionDiagnostic = {
 	// A confined top-level extension carries its gate-validated declared capabilities here.
 	// A confined bundle carries them per entry instead, so the bundle row has none.
 	capabilities?: ExtensionCapabilities;
+	// Set to the confined runtime only when the extension runs sandboxed, omitted otherwise.
+	runtime?: typeof CONFINED_RUNTIME;
 };
 
 // The global confined-runtime metadata on the diagnostics response. `not-required` means no
@@ -359,6 +361,7 @@ export class ExtensionManager {
 
 			if (diagnostic.reason) copy.reason = { ...diagnostic.reason };
 			if (diagnostic.capabilities) copy.capabilities = structuredClone(diagnostic.capabilities);
+			if (diagnostic.runtime) copy.runtime = diagnostic.runtime;
 
 			return copy;
 		});
@@ -448,6 +451,8 @@ export class ExtensionManager {
 		const eligible = this.confinedEligible.get(extension);
 		if (eligible?.capabilities !== undefined) diagnostic.capabilities = eligible.capabilities;
 
+		if (extension.runtime === CONFINED_RUNTIME) diagnostic.runtime = extension.runtime;
+
 		this.diagnostics.push(diagnostic);
 	}
 
@@ -468,6 +473,8 @@ export class ExtensionManager {
 
 		const eligible = this.confinedEligible.get(extension);
 		if (eligible?.capabilities !== undefined) diagnostic.capabilities = eligible.capabilities;
+
+		if (extension.runtime === CONFINED_RUNTIME) diagnostic.runtime = extension.runtime;
 
 		this.diagnostics.push(diagnostic);
 	}
@@ -1059,6 +1066,8 @@ export class ExtensionManager {
 		};
 
 		if (extension.version) diagnostic.version = extension.version;
+
+		if (extension.runtime === CONFINED_RUNTIME) diagnostic.runtime = extension.runtime;
 
 		this.diagnostics.push(diagnostic);
 	}

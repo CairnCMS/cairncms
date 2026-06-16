@@ -47,32 +47,13 @@
 				</span>
 			</div>
 
-			<div v-if="confinedRuntime && confinedRuntime.state !== 'not-required'" class="confined-runtime">
-				<div class="detail-label">{{ t('confined_runtime') }}</div>
-				<v-notice v-if="confinedRuntime.state === 'unavailable'" type="warning">
-					{{ t('confined_runtime_unavailable') }}
-				</v-notice>
-				<div v-else-if="confinedRuntime.posture" class="cr-posture">
-					<span class="cr-mode">
-						{{
-							t('confined_runtime_mode', {
-								decision: confinedRuntime.posture.decision,
-								mode: confinedRuntime.posture.mode,
-							})
-						}}
-					</span>
-					<div class="capability-chips">
-						<span v-for="layer in confinedRuntime.posture.applied" :key="layer" class="capability-chip layer-applied">
-							<v-icon name="check" x-small />
-							{{ layer }}
-						</span>
-						<span v-for="layer in confinedRuntime.posture.missing" :key="layer" class="capability-chip layer-missing">
-							<v-icon name="close" x-small />
-							{{ layer }}
-						</span>
-					</div>
-				</div>
-			</div>
+			<v-notice
+				v-if="confinedRuntime && confinedRuntime.state === 'unavailable'"
+				type="warning"
+				class="sandbox-warning"
+			>
+				{{ t('confined_runtime_unavailable') }}
+			</v-notice>
 
 			<v-detail v-for="group in groups" :key="group.type" start-open class="group">
 				<template #activator="{ toggle, active }">
@@ -97,8 +78,45 @@
 					<v-list-item-content>
 						<v-text-overflow :text="extension.name" />
 					</v-list-item-content>
+					<v-chip v-if="extension.runtime === 'confined-server'" class="sandboxed" small label>
+						{{ t('extension_sandboxed') }}
+					</v-chip>
 					<v-chip v-if="extension.version" class="version" small label>{{ extension.version }}</v-chip>
 				</v-list-item>
+			</v-detail>
+
+			<v-detail v-if="confinedRuntime && confinedRuntime.posture" class="advanced-diagnostics">
+				<template #activator="{ toggle, active }">
+					<v-divider :inline-title="false" large class="group-head" @click="toggle">
+						<template #icon><v-icon name="shield" /></template>
+						<span class="group-name">{{ t('extension_advanced_diagnostics') }}</span>
+						<v-icon class="expand-icon" :class="{ active }" name="expand_more" />
+					</v-divider>
+				</template>
+
+				<div class="confined-runtime">
+					<div class="detail-label">{{ t('confined_runtime') }}</div>
+					<div class="cr-posture">
+						<span class="cr-mode">
+							{{
+								t('confined_runtime_mode', {
+									decision: confinedRuntime.posture.decision,
+									mode: confinedRuntime.posture.mode,
+								})
+							}}
+						</span>
+						<div class="capability-chips">
+							<span v-for="layer in confinedRuntime.posture.applied" :key="layer" class="capability-chip layer-applied">
+								<v-icon name="check" x-small />
+								{{ layer }}
+							</span>
+							<span v-for="layer in confinedRuntime.posture.missing" :key="layer" class="capability-chip layer-missing">
+								<v-icon name="close" x-small />
+								{{ layer }}
+							</span>
+						</div>
+					</div>
+				</div>
 			</v-detail>
 		</div>
 
@@ -117,6 +135,11 @@
 						<span>{{ statusLabel(selected.status) }}</span>
 						<v-chip v-if="selected.type" x-small>{{ selected.type }}</v-chip>
 						<v-chip v-if="selected.version" x-small label>{{ selected.version }}</v-chip>
+					</div>
+
+					<div v-if="selected.type" class="detail-runtime">
+						<span class="detail-label">{{ t('extension_runtime') }}</span>
+						<span class="detail-runtime-value">{{ runtimeLabel(selected) }}</span>
 					</div>
 
 					<v-notice v-if="selected.status === 'loaded'" type="success" class="detail-notice">
@@ -199,6 +222,7 @@ type ExtensionDiagnostic = {
 	status: 'loaded' | 'discovered' | 'failed' | 'partial';
 	reason?: { code: string; detail: string };
 	capabilities?: Record<string, unknown>;
+	runtime?: 'confined-server';
 };
 
 type ExtensionRow = ExtensionDiagnostic & { _key: string };
@@ -249,6 +273,14 @@ function statusLabel(status: string): string {
 	if (status === 'failed') return t('extension_failed');
 	if (status === 'partial') return t('extension_partial');
 	return t('extension_active');
+}
+
+function runtimeLabel(row: ExtensionDiagnostic): string {
+	if (row.runtime === 'confined-server') return t('extension_runtime_sandboxed');
+	// A discovered extension is app-only and runs in the browser, not on the server, so it is
+	// neither sandboxed nor full-authority in the server sense.
+	if (row.status === 'discovered') return t('extension_runtime_browser');
+	return t('extension_runtime_full_authority');
 }
 
 function capabilityLabels(capabilities: Record<string, unknown>): string[] {
@@ -385,10 +417,27 @@ async function fetchExtensions() {
 	margin-left: 0.75rem;
 }
 
+.sandboxed {
+	flex-shrink: 0;
+	margin-left: 0.75rem;
+	--v-chip-color: var(--primary);
+}
+
 .detail-meta {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
+}
+
+.detail-runtime {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin-top: 0.75rem;
+}
+
+.detail-runtime .detail-label {
+	margin-bottom: 0;
 }
 
 .detail-entries {
@@ -474,8 +523,16 @@ async function fetchExtensions() {
 	color: var(--foreground-subdued);
 }
 
-.confined-runtime {
+.sandbox-warning {
+	margin-bottom: 1.5rem;
+}
+
+.advanced-diagnostics {
 	margin-bottom: 2rem;
+}
+
+.confined-runtime {
+	padding-top: 0.75rem;
 }
 
 .cr-posture {

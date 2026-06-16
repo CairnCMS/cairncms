@@ -305,6 +305,8 @@ describe('a confined server extension never reaches the full-authority import pa
 		const diagnostics = (instance as any).getDiagnostics();
 
 		expect(diagnostics.find((entry: any) => entry.name === 'control-endpoint')?.status).toBe('failed');
+		// A full-authority extension carries no runtime marker.
+		expect(diagnostics.find((entry: any) => entry.name === 'control-endpoint')?.runtime).toBeUndefined();
 		expect(diagnostics.map((entry: any) => entry.name)).not.toContain('confined-endpoint');
 	});
 
@@ -805,6 +807,9 @@ describe('the confined runtime boot', () => {
 			'validation-incomplete'
 		);
 
+		// A failed confined extension still carries its runtime marker.
+		expect(diagnostics.find((entry: any) => entry.name === 'confined-endpoint')?.runtime).toBe('confined-server');
+
 		expect((instance as any).isLoaded).toBe(true);
 	});
 
@@ -873,6 +878,7 @@ describe('the confined endpoint binding', () => {
 
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'served-endpoint');
 		expect(row?.status).toBe('loaded');
+		expect(row?.runtime).toBe('confined-server');
 	});
 
 	it('requires a user under authenticated access and serves one', async () => {
@@ -1483,6 +1489,7 @@ describe('the confined bundle binding', () => {
 
 		const row = diagnosticFor(instance, 'multi-bundle');
 		expect(row.status).toBe('loaded');
+		expect(row.runtime).toBe('confined-server');
 
 		expect(row.entries).toEqual([
 			{ name: 'bep', type: 'endpoint', status: 'loaded', capabilities: { endpoint: { access: 'authenticated' } } },
