@@ -7,6 +7,19 @@ import { pathToRelativeUrl } from './path-to-relative-url.js';
 
 const APP_OR_HYBRID_TYPES = [...APP_EXTENSION_TYPES, ...HYBRID_EXTENSION_TYPES];
 
+// U+2028 and U+2029 terminate a string literal in older engines, and JSON.stringify leaves them raw.
+const LINE_SEPARATORS = new RegExp(`[${String.fromCharCode(0x2028, 0x2029)}]`, 'g');
+
+/**
+ * Serialize a string as a JS string literal for the generated entrypoint, escaping the line
+ * separators JSON.stringify leaves raw. Manifest names and entrypoint paths reach the generated
+ * code from extension package.json, which the manifest schema validates only as a string, so every
+ * embedded literal is emitted through here.
+ */
+function jsString(value: string): string {
+	return JSON.stringify(value).replace(LINE_SEPARATORS, (char) => `\\u${char.charCodeAt(0).toString(16)}`);
+}
+
 // Emitted once when there is at least one extension to load. Each extension is
 // imported dynamically inside loadExtension's try/catch and registered inside a
 // per-extension try/catch, so one extension that throws while evaluating or
@@ -64,7 +77,7 @@ export function generateExtensionsEntrypoint(extensions: Extension[]): string {
 			loads.push({
 				name: extension.name,
 				specifier: `./${entry}`,
-				push: (ref) => `pushConfig(${JSON.stringify(extension.name)}, ${pluralize(type)}, ${ref}.default);`,
+				push: (ref) => `pushConfig(${jsString(extension.name)}, ${pluralize(type)}, ${ref}.default);`,
 			});
 		}
 	}
@@ -79,22 +92,20 @@ export function generateExtensionsEntrypoint(extensions: Extension[]): string {
 			specifier: `./${entry}`,
 			push: (ref) =>
 				appTypes
-					.map(
-						(type) => `pushEntries(${JSON.stringify(extension.name)}, ${pluralize(type)}, ${ref}.${pluralize(type)});`
-					)
+					.map((type) => `pushEntries(${jsString(extension.name)}, ${pluralize(type)}, ${ref}.${pluralize(type)});`)
 					.join(''),
 		});
 	}
 
 	const promiseAll = `Promise.all([${loads
-		.map((load) => `loadExtension(${JSON.stringify(load.name)}, () => import(${JSON.stringify(load.specifier)}))`)
+		.map((load) => `loadExtension(${jsString(load.name)}, () => import(${jsString(load.specifier)}))`)
 		.join(',')}])`;
 
 	const thenBody = loads
 		.map(
 			(load, i) =>
 				`if (mods[${i}]) { try { ${load.push(`mods[${i}]`)} } catch (error) { ` +
-				`console.warn('Failed to register extension ' + ${JSON.stringify(load.name)}, error); } }`
+				`console.warn('Failed to register extension ' + ${jsString(load.name)}, error); } }`
 		)
 		.join('');
 
