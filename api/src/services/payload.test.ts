@@ -8,6 +8,7 @@ import { getHelpers } from '../../src/database/helpers/index.js';
 import { PayloadService } from '../../src/services/index.js';
 
 vi.mock('../../src/database/index', () => ({
+	default: vi.fn(),
 	getDatabaseClient: vi.fn().mockReturnValue('postgres'),
 }));
 
