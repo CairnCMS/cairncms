@@ -342,5 +342,31 @@ describe('generateExtensionsEntrypoint', () => {
 
 			warn.mockRestore();
 		});
+
+		it('escapes line separators in names and specifiers so the generated literal stays valid', async () => {
+			const u2028 = String.fromCharCode(0x2028);
+			const u2029 = String.fromCharCode(0x2029);
+
+			writeFileSync(path.join(dir, 'good.mjs'), 'export default { id: "good" };');
+
+			const extensions: Extension[] = [
+				{ path: dir, name: `evil${u2028}${u2029}"\nname`, type: 'display', entrypoint: 'good.mjs', local: true },
+				{ path: dir, name: 'pathy', type: 'display', entrypoint: `nope${u2028}.mjs`, local: true },
+			];
+
+			const source = generateExtensionsEntrypoint(extensions);
+
+			// A raw separator would terminate the string literal, so neither reaches the source.
+			expect(source).not.toContain(u2028);
+			expect(source).not.toContain(u2029);
+			// They are emitted as escapes instead, from both the name and the import specifier.
+			expect(source).toContain('\\u2028');
+			expect(source).toContain('\\u2029');
+
+			// The generated module still parses and the valid extension loads (the bad-path one is skipped).
+			const mod = await evaluate(extensions);
+			await mod.ready;
+			expect(mod.displays).toEqual([{ id: 'good' }]);
+		});
 	});
 });
