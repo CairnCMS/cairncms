@@ -2,6 +2,7 @@
 title: Module extensions
 description: Custom top-level modules for the module bar.
 sidebar:
+  label: Modules
   order: 5
 ---
 
@@ -10,6 +11,8 @@ A module is a top-level area of the admin app. CairnCMS ships six built-in modul
 Modules are the broadest extension type. Where an interface affects a single field and a layout affects a single collection page, a module is an entire workspace with its own routes, navigation, and page structure. Reach for a module when none of the existing surfaces fit and you need a custom area inside the app.
 
 A module extension is a single npm package created by the [extensions toolchain](/docs/develop/extensions/creating-extensions/). It registers a set of routes, each rendered by a Vue component.
+
+Like every app extension, a module runs unsandboxed in the admin browser under the logged-in user's permissions. See [App extensions](/docs/develop/extensions/app-extensions/) for the runtime model, the Vue baseline, and browser egress.
 
 ## Anatomy
 
@@ -190,6 +193,6 @@ Build with `npm run build` and install or symlink the package. Then enable the m
 
 ## Where to go next
 
-- [Endpoints](/docs/develop/extensions/endpoints/) cover the API-side counterpart for modules that need their own server routes.
-- [Hooks](/docs/develop/extensions/hooks/) cover server-side reactions to platform events; useful when a module needs to listen for or modify platform behavior.
+- [Endpoints](/docs/develop/extensions/server-extensions/endpoints/) cover the API-side counterpart for modules that need their own server routes.
+- [Hooks](/docs/develop/extensions/server-extensions/hooks/) cover server-side reactions to platform events; useful when a module needs to listen for or modify platform behavior.
 - [Creating extensions](/docs/develop/extensions/creating-extensions/) covers the toolchain in full.

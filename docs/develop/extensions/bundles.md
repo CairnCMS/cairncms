@@ -2,6 +2,7 @@
 title: Bundle extensions
 description: Combine several extensions into a single distributable package.
 sidebar:
+  label: Bundles
   order: 10
 ---
 
@@ -159,6 +160,43 @@ export default defineHook(({ action }, { logger }) => {
 ```
 
 Build with `npm run build`. The resulting package can be installed once and brings both extensions along.
+
+## Confined bundles
+
+A bundle can run its server entries in the sandbox. Declare `runtime: confined-server` once at the bundle root, next to `type: "bundle"`. A bundle entry never declares its own runtime. Each server entry then declares the `capabilities` it uses, a hook entry its `events`, and an operation entry its `optionDelivery`, while app entries declare none of these:
+
+```json
+{
+  "cairncms:extension": {
+    "type": "bundle",
+    "runtime": "confined-server",
+    "path": { "app": "dist/app.js", "api": "dist/api.js" },
+    "entries": [
+      {
+        "type": "panel",
+        "name": "metric-card",
+        "source": "src/metric-card/index.ts"
+      },
+      {
+        "type": "endpoint",
+        "name": "metric-feed",
+        "source": "src/metric-feed/index.ts",
+        "capabilities": {
+          "endpoint": { "access": "authenticated" },
+          "request": { "urls": ["https://api.example.com"], "methods": ["GET"] }
+        }
+      }
+    ],
+    "host": "^1.0.0"
+  }
+}
+```
+
+The app entry (`metric-card`) runs in the browser and carries no capabilities. The server entry (`metric-feed`) runs confined, is authored with `defineJsonEndpoint`, and declares only what it uses. The panel can call that endpoint on the same origin, which is the supported pattern for an app extension that needs external data without a direct cross-origin fetch from the browser.
+
+The confined gate is all-or-nothing for the shared server artifact: one bad server entry fails the whole server side before any entry registers. If the artifact passes the gate but some entries then fail to register, such as a route collision, the bundle loads with a `partial` status, and the diagnostics show which entries loaded and which did not. `partial` is a status the runtime reports, not a manifest field you set.
+
+See the [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) page for the host API, the capability vocabulary, and the per-entry rules.
 
 ## Where to go next
 

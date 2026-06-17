@@ -151,6 +151,10 @@ If you skip the rebuild on a major upgrade, the extension may still load, but it
 
 Bundles use the same `host` field; rebuilding a bundle rebuilds all of its entries.
 
+App extensions carry an extra consideration. They share the admin app's Vue runtime rather than bundling their own, so a host-Vue or SDK change can require rebuilding them even within a compatible `host` range. If an app extension fails to mount after an upgrade, rebuild it against the current SDK before investigating further. See [Creating extensions](/docs/develop/extensions/creating-extensions/).
+
+Confined extensions depend on the capability vocabulary and the brokered host API, which can grow or change across major versions. A confined extension may need its manifest `capabilities` or its `host.*` usage updated when those evolve. The [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) reference documents the current capability set.
+
 ## Where to go next
 
 - [Backups](/docs/manage/backups/) — the prerequisite for any upgrade you would actually be willing to roll back from.

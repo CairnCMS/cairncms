@@ -2,12 +2,15 @@
 title: Panel extensions
 description: Custom dashboard panels for Insights.
 sidebar:
+  label: Panels
   order: 6
 ---
 
 A panel is a unit of analytics or interaction inside an Insights dashboard. CairnCMS ships six built-in panel types (Label, List, Metric, Time Series, Global Variable, Global Relational Variable); a panel extension adds a new one.
 
 A panel extension is a single npm package created by the [extensions toolchain](/docs/develop/extensions/creating-extensions/). It registers a panel type with a Vue component, a configuration schema, and an optional query function that the platform calls to fetch the panel's data.
+
+Like every app extension, a panel runs unsandboxed in the admin browser under the logged-in user's permissions. See [App extensions](/docs/develop/extensions/app-extensions/) for the runtime model, the Vue baseline, and browser egress.
 
 ## Anatomy
 

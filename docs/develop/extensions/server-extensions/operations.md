@@ -2,6 +2,7 @@
 title: Operation extensions
 description: Custom flow operations for the automation system.
 sidebar:
+  label: Operations
   order: 9
 ---
 
@@ -253,8 +254,60 @@ export default defineOperationApi({
 
 After build and install, the new operation appears in the operation picker. Editors configure it by selecting which two prior operation outputs to join and which field to match on.
 
+## Confined variant
+
+An operation runs full-authority by default. To run its server side in the sandbox, declare `runtime: confined-server` in the manifest and author the API entrypoint with `defineFlowOperation` from `@cairncms/extensions-server-api` instead of `defineOperationApi`. The app entrypoint does not change.
+
+The handler signature changes with it. A confined handler receives `(payload, context)`, where `payload` is `{ options, input }` and `context` carries a brokered `host` instead of `services`, `database`, and the rest. Every privileged effect goes through a `host.*` call, and most return an `ExtensionResult` the handler branches on (logging is fire-and-forget):
+
+```ts
+import { defineFlowOperation } from '@cairncms/extensions-server-api';
+
+type Options = { status: string };
+
+export default defineFlowOperation<Options>({
+  id: 'list-articles',
+  async handler(payload, { host }) {
+    const result = await host.items.read('articles', {
+      filter: { status: { _eq: payload.options.status } },
+      fields: ['id', 'title'],
+      limit: 50,
+    });
+
+    if (!result.ok) {
+      await host.log.warn('article read failed', { code: result.error.code });
+      return { articles: [] };
+    }
+
+    return { articles: result.value };
+  },
+});
+```
+
+The manifest declares the runtime and the capabilities the handler uses:
+
+```json
+{
+  "cairncms:extension": {
+    "type": "operation",
+    "path": { "app": "dist/app.js", "api": "dist/api.js" },
+    "source": { "app": "src/app.ts", "api": "src/api.ts" },
+    "host": "^1.0.0",
+    "runtime": "confined-server",
+    "capabilities": {
+      "items": "current-user",
+      "log": true
+    }
+  }
+}
+```
+
+The `items: "current-user"` mode reads as the user who triggered the flow, so the operation sees exactly what that user could read through the API. Keep the app-side options honest about the declared capabilities, and do not offer a configuration the broker would reject, such as a request method outside `request.methods`. To pass a secret to the handler without the guest ever seeing it, mark the option with `optionDelivery`.
+
+See the [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) page for the full host API, the capability vocabulary, `optionDelivery`, and the accountability modes.
+
 ## Where to go next
 
 - [Flows](/docs/guides/flows/) covers flows from a user perspective for understanding where your operation slots in.
-- [Hooks](/docs/develop/extensions/hooks/) and [Endpoints](/docs/develop/extensions/endpoints/) cover the other two server-side extension types.
+- [Hooks](/docs/develop/extensions/server-extensions/hooks/) and [Endpoints](/docs/develop/extensions/server-extensions/endpoints/) cover the other two server-side extension types.
 - [Creating extensions](/docs/develop/extensions/creating-extensions/) covers the toolchain in full.

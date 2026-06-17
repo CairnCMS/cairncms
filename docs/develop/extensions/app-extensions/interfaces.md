@@ -2,12 +2,15 @@
 title: Interface extensions
 description: Custom field editing widgets for the admin app.
 sidebar:
+  label: Interfaces
   order: 2
 ---
 
 An interface is the editing widget for a field — what users see and interact with when entering or modifying a value on the item form. CairnCMS ships a long list of built-in interfaces (input, dropdown, datetime, tags, color, and so on); a custom interface adds a new one.
 
 An interface extension has two parts: a configuration object that registers the interface with the app, and a Vue component that renders the editing UI. Both live inside a single npm package created by the [extensions toolchain](/docs/develop/extensions/creating-extensions/).
+
+Like every app extension, an interface runs unsandboxed in the admin browser under the logged-in user's permissions. See [App extensions](/docs/develop/extensions/app-extensions/) for the runtime model, the Vue baseline, and browser egress.
 
 ## Anatomy
 
@@ -162,5 +165,5 @@ Build with `npm run build`, then install the resulting package or symlink it int
 
 ## Where to go next
 
-- [Displays](/docs/develop/extensions/displays/) cover the read-only counterpart — how a field's value is rendered in non-edit contexts like list rows.
+- [Displays](/docs/develop/extensions/app-extensions/displays/) cover the read-only counterpart — how a field's value is rendered in non-edit contexts like list rows.
 - [Creating extensions](/docs/develop/extensions/creating-extensions/) covers the toolchain in full, including how to install and reload extensions during development.

@@ -2,12 +2,15 @@
 title: Layout extensions
 description: Custom collection page layouts for the admin app.
 sidebar:
+  label: Layouts
   order: 4
 ---
 
-A layout controls how items in a collection are browsed in the app. CairnCMS ships built-in layouts (Tabular, Cards, Calendar, Map); a layout extension adds a new one.
+A layout controls how items in a collection are browsed in the app. CairnCMS ships built-in layouts (Tabular, Cards, Calendar, Map, Kanban); a layout extension adds a new one.
 
 A layout is the most structurally complex of the app extensions. It has four Vue components — a main component plus three slots — and a `setup` function that builds shared state for all of them. All five live inside a single npm package created by the [extensions toolchain](/docs/develop/extensions/creating-extensions/).
+
+Like every app extension, a layout runs unsandboxed in the admin browser under the logged-in user's permissions. See [App extensions](/docs/develop/extensions/app-extensions/) for the runtime model, the Vue baseline, and browser egress.
 
 ## Anatomy
 
@@ -65,6 +68,7 @@ The fields available on a layout configuration object:
 - **`setup`** — a function that builds shared state for all four components. Receives the standard layout props as the first argument and a context object (with `emit`) as the second. Returns an object whose properties are merged into every component's props.
 - **`smallHeader`** — when `true`, the page header is rendered in a more compact style.
 - **`headerShadow`** — when `false`, the drop shadow under the header is suppressed. Useful when the layout has its own header treatment.
+- **`sidebarShadow`** — when `false`, the drop shadow on the layout sidebar is suppressed.
 
 ## The setup function
 
@@ -215,6 +219,6 @@ Build with `npm run build`, then install or symlink the package into a CairnCMS 
 
 ## Where to go next
 
-- [Interfaces](/docs/develop/extensions/interfaces/) and [Displays](/docs/develop/extensions/displays/) cover field-level customization.
-- [Modules](/docs/develop/extensions/modules/) cover entirely new top-level workspaces, beyond the scope of one collection.
+- [Interfaces](/docs/develop/extensions/app-extensions/interfaces/) and [Displays](/docs/develop/extensions/app-extensions/displays/) cover field-level customization.
+- [Modules](/docs/develop/extensions/app-extensions/modules/) cover entirely new top-level workspaces, beyond the scope of one collection.
 - [Creating extensions](/docs/develop/extensions/creating-extensions/) covers the toolchain in full.
