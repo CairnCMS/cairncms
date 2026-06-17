@@ -79,7 +79,7 @@ describe('Services / Schema', () => {
 
 			const service = new SchemaService({ knex: db, accountability: { role: 'test', admin: false } });
 
-			expect(service.snapshot()).rejects.toThrowError(ForbiddenException);
+			await expect(service.snapshot()).rejects.toThrowError(ForbiddenException);
 		});
 
 		it('should return snapshot for admin user', async () => {
@@ -87,7 +87,7 @@ describe('Services / Schema', () => {
 
 			const service = new SchemaService({ knex: db, accountability: { role: 'admin', admin: true } });
 
-			expect(service.snapshot()).resolves.toEqual(testSnapshot);
+			await expect(service.snapshot()).resolves.toEqual(testSnapshot);
 		});
 	});
 
@@ -106,7 +106,7 @@ describe('Services / Schema', () => {
 
 			const service = new SchemaService({ knex: db, accountability: { role: 'test', admin: false } });
 
-			expect(service.apply(snapshotDiffWithHash)).rejects.toThrowError(ForbiddenException);
+			await expect(service.apply(snapshotDiffWithHash)).rejects.toThrowError(ForbiddenException);
 			expect(vi.mocked(applyDiff)).not.toHaveBeenCalledOnce();
 		});
 
@@ -152,7 +152,7 @@ describe('Services / Schema', () => {
 		it('should throw ForbiddenException for non-admin user', async () => {
 			const service = new SchemaService({ knex: db, accountability: { role: 'test', admin: false } });
 
-			expect(service.diff(snapshotToApply, { currentSnapshot: testSnapshot, force: true })).rejects.toThrowError(
+			await expect(service.diff(snapshotToApply, { currentSnapshot: testSnapshot, force: true })).rejects.toThrowError(
 				ForbiddenException
 			);
 		});
@@ -160,7 +160,7 @@ describe('Services / Schema', () => {
 		it('should return diff for admin user', async () => {
 			const service = new SchemaService({ knex: db, accountability: { role: 'admin', admin: true } });
 
-			expect(service.diff(snapshotToApply, { currentSnapshot: testSnapshot, force: true })).resolves.toEqual({
+			await expect(service.diff(snapshotToApply, { currentSnapshot: testSnapshot, force: true })).resolves.toEqual({
 				collections: [testCollectionDiff],
 				fields: [],
 				relations: [],
@@ -170,7 +170,7 @@ describe('Services / Schema', () => {
 		it('should return null for empty diff', async () => {
 			const service = new SchemaService({ knex: db, accountability: { role: 'admin', admin: true } });
 
-			expect(service.diff(testSnapshot, { currentSnapshot: testSnapshot, force: true })).resolves.toBeNull();
+			await expect(service.diff(testSnapshot, { currentSnapshot: testSnapshot, force: true })).resolves.toBeNull();
 		});
 	});
 
