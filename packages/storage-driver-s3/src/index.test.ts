@@ -306,6 +306,7 @@ describe('#fullPath', () => {
 
 describe('#read', () => {
 	beforeEach(() => {
+		driver['getClient'] = vi.fn().mockReturnValue(driver['client']);
 		vi.mocked(driver['client'].send).mockReturnValue({ Body: new Readable() } as unknown as void);
 		vi.mocked(isReadableStream).mockReturnValue(true);
 	});
@@ -365,7 +366,7 @@ describe('#read', () => {
 	test('Throws an error when returned stream is not a readable stream', async () => {
 		vi.mocked(isReadableStream).mockReturnValue(false);
 
-		expect(driver.read(sample.path.input, sample.range)).rejects.toThrowError(
+		await expect(driver.read(sample.path.input, sample.range)).rejects.toThrowError(
 			new Error(`No stream returned for file "${sample.path.input}"`)
 		);
 	});

@@ -843,7 +843,7 @@ describe('Integration Tests', () => {
 
 			describe('GHSA-jr94-gj3h-c8rf', () => {
 				it('rejects an invalid reset_url BEFORE the user lookup (non-existing user)', async () => {
-					const getUserSpy = vi.spyOn(UsersService.prototype as any, 'getUserByEmail').mockResolvedValueOnce(null);
+					const getUserSpy = vi.spyOn(UsersService.prototype as any, 'getUserByEmail');
 
 					await expect(service.requestPasswordReset('attacker@example.com', 'https://evil.com')).rejects.toBeInstanceOf(
 						InvalidPayloadException
@@ -853,13 +853,7 @@ describe('Integration Tests', () => {
 				});
 
 				it('rejects an invalid reset_url BEFORE the user lookup (inactive user)', async () => {
-					const getUserSpy = vi.spyOn(UsersService.prototype as any, 'getUserByEmail').mockResolvedValueOnce({
-						id: 'user-id',
-						role: 'user-role',
-						status: 'suspended',
-						password: 'hashed-password',
-						email: 'suspended@example.com',
-					});
+					const getUserSpy = vi.spyOn(UsersService.prototype as any, 'getUserByEmail');
 
 					await expect(
 						service.requestPasswordReset('suspended@example.com', 'https://evil.com')
