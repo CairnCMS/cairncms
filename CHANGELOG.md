@@ -2,6 +2,32 @@
 
 All notable changes to CairnCMS are documented in this file. Releases are listed in reverse chronological order. Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-06-17
+
+### Breaking Changes
+
+- Update the Vue baseline to 3.5 and migrate the extensions SDK build to `@vitejs/plugin-vue`. Rebuild app extensions against the new baseline. (PR #120)
+
+### New Features
+
+- Add a sandboxed runtime for confined server extensions, covering operations, endpoints, hooks, and bundles. (PR #115)
+- Show confined extension status, declared capabilities, and the sandbox posture in the admin extensions view. (PR #115)
+- Add a full-screen toggle to collection pages. (PR #113)
+
+### Fixes & Improvements
+
+- Fix an empty preview box when batch-editing files. (PR #114)
+- Fix inviting users from the user directory. (PR #114)
+- Fix list panel edits for system collections. (PR #114)
+- Restyle the admin app with a neutral theme. (PR #113)
+- Fix default value handling in the raw editor and exposed batch editing state to interface components. (PR #116)
+- Reduce spurious column alters during field updates. (PR #117)
+- Fix unknown filter and sort fields returning internal errors. (PR #118)
+- Fix automatic image format conversion destroying transparency. (PR #119)
+- Isolate app extension loading so one failing extension cannot break the others. (PR #115)
+- Fix shared-dependency externalization for app extensions in production builds. (PR #115)
+- Escape line and paragraph separators when generating the extensions entrypoint. (PR #121)
+
 ## [1.1.0] - 2026-05-28
 
 ### New Features
