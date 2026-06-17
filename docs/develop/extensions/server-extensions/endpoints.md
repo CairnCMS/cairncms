@@ -2,12 +2,13 @@
 title: Endpoint extensions
 description: Custom HTTP endpoints registered with the API.
 sidebar:
+  label: Endpoints
   order: 8
 ---
 
 An endpoint extension adds custom HTTP routes to the CairnCMS API. Reach for one when you need behavior that does not map to a collection's CRUD endpoints, for example, a complex aggregation, a third-party integration, a webhook receiver that doesn't fit the flow trigger model, or a custom business operation that should be exposed as a single REST call.
 
-An endpoint extension is a single npm package created by the [extensions toolchain](/docs/develop/extensions/creating-extensions/). It runs server-side in the same Node process as the rest of the API, with full access to the platform's services and database connection.
+An endpoint extension is a single npm package created by the [extensions toolchain](/docs/develop/extensions/creating-extensions/). By default it runs server-side in the same Node process as the rest of the API, with full access to the platform's services and database connection. It can also run sandboxed in the confined runtime, covered in the [Confined variant](#confined-variant) section below.
 
 ## Anatomy
 
@@ -194,8 +195,53 @@ export default defineEndpoint({
 
 After build and install, the endpoint is reachable at `GET /article-stats/by-author`. Permissions on the `articles` collection are applied automatically because the service was constructed with the request's `accountability`.
 
+## Confined variant
+
+An endpoint runs full-authority by default. To run it in the sandbox, declare `runtime: confined-server` in the manifest and author it with `defineJsonEndpoint` from `@cairncms/extensions-server-api` instead of an Express router.
+
+A confined endpoint has no router. The handler is the whole endpoint. It receives the request as plain data, `{ method, path, query, body }`, and returns `{ status?, body }`, where `status` is the HTTP status code and `body` is the response body:
+
+```ts
+import { defineJsonEndpoint } from '@cairncms/extensions-server-api';
+
+export default defineJsonEndpoint({
+  id: 'greet',
+  async handler(request, { host }) {
+    if (request.method !== 'GET') {
+      return { status: 405, body: { error: 'method not allowed' } };
+    }
+
+    await host.log.info('greeting a caller');
+
+    return { status: 200, body: { message: 'Hello from the sandbox' } };
+  },
+});
+```
+
+The manifest declares the runtime, the endpoint's access level, and any other capabilities:
+
+```json
+{
+  "cairncms:extension": {
+    "type": "endpoint",
+    "path": "dist/index.js",
+    "source": "src/index.js",
+    "host": "^1.0.0",
+    "runtime": "confined-server",
+    "capabilities": {
+      "endpoint": { "access": "authenticated" },
+      "log": true
+    }
+  }
+}
+```
+
+The `endpoint.access` value sets the auth gate. `authenticated` returns 401 to an anonymous caller, while `public` admits anyone. There is no app-only access level. An outbound call from the handler uses `host.request.send` and reaches only the origins declared in the `request` capability.
+
+See the [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) page for the full host API and the capability vocabulary.
+
 ## Where to go next
 
-- [Hooks](/docs/develop/extensions/hooks/) cover server-side reactions to platform events. Use a hook when you need to react to a built-in operation rather than expose a new HTTP route.
-- [Operations](/docs/develop/extensions/operations/) cover custom flow operations. Use an operation when the work belongs inside a flow.
+- [Hooks](/docs/develop/extensions/server-extensions/hooks/) cover server-side reactions to platform events. Use a hook when you need to react to a built-in operation rather than expose a new HTTP route.
+- [Operations](/docs/develop/extensions/server-extensions/operations/) cover custom flow operations. Use an operation when the work belongs inside a flow.
 - [Creating extensions](/docs/develop/extensions/creating-extensions/) covers the toolchain in full.

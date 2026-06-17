@@ -2,12 +2,13 @@
 title: Hook extensions
 description: Filter, action, init, schedule, and embed hooks for extending the API event lifecycle.
 sidebar:
+  label: Hooks
   order: 7
 ---
 
 A hook extension lets server-side code react to events in the platform, such as items being created, users logging in, the server starting up, scheduled times being reached, and so on. Hooks are the primary way to add logic that runs alongside CairnCMS's built-in operations rather than replacing them.
 
-A hook extension is a single npm package created by the [extensions toolchain](/docs/develop/extensions/creating-extensions/). It runs server-side in the same Node process as the rest of the API, with full access to the platform's services and database connection.
+A hook extension is a single npm package created by the [extensions toolchain](/docs/develop/extensions/creating-extensions/). By default it runs server-side in the same Node process as the rest of the API, with full access to the platform's services and database connection. It can also run sandboxed in the confined runtime, covered in the [Confined variant](#confined-variant) section below.
 
 ## Anatomy
 
@@ -196,6 +197,8 @@ CairnCMS events follow a `<type>.<event>` or `<collection>.items.<event>` naming
 | `database.error` | the database error | `client` |
 | `auth.login` | the login payload | `status`, `user`, `provider` |
 | `auth.jwt` | the auth token | `status`, `user`, `provider`, `type` |
+| `auth.create` | the SSO user about to be created | `identifier`, `provider`, `providerPayload` |
+| `auth.update` | the SSO user update payload | `identifier`, `provider`, `providerPayload` |
 | `authenticate` | the empty accountability object | `req` |
 | `(<collection>.)items.query` | the items query | `collection` |
 | `(<collection>.)items.read` | the read item | `query`, `collection` |
@@ -205,6 +208,8 @@ CairnCMS events follow a `<type>.<event>` or `<collection>.items.<event>` naming
 | `<system-collection>.create` | the new item | `collection` |
 | `<system-collection>.update` | the updated item | `keys`, `collection` |
 | `<system-collection>.delete` | the keys of the item | `collection` |
+
+The auth events carry credentials. The `auth.jwt` payload is the session token. For `auth.create` and `auth.update`, the payload can include `auth_data` (a stored refresh token), and the `providerPayload` meta holds the identity provider's access token, SAML assertion, or raw user info. A hook on these events must not log or persist those values unless it is deliberately handling credentials.
 
 ### Action events
 
@@ -272,8 +277,46 @@ export default defineHook(({ filter }) => {
 
 After build and install, this filter fires whenever an article is created (through the API, the app, or a flow), generating a slug if the editor did not supply one. Returning the modified `input` is what causes the platform to continue with the new value.
 
+## Confined variant
+
+A hook runs full-authority by default. To run it in the sandbox, declare `runtime: confined-server` in the manifest and author it with `defineEventHook` from `@cairncms/extensions-server-api` instead of `defineHook`.
+
+A confined hook supports filter and action events only. The `init`, `schedule`, and `embed` register functions have no confined equivalent and stay full-authority. Rather than a register callback, `defineEventHook` takes `{ id, filters?, actions? }`, keyed by exact platform event name. A filter handler returns the payload (transformed, unchanged, or `undefined` for no change), and a throw blocks the event. An action handler returns nothing and never blocks:
+
+```ts
+import { defineEventHook } from '@cairncms/extensions-server-api';
+
+export default defineEventHook({
+  id: 'stamp-items',
+  filters: {
+    'items.create': async (payload, meta, { host }) => {
+      await host.log.info('stamping a new item');
+      return payload;
+    },
+  },
+});
+```
+
+The same events must be declared in the manifest, where they are the operator-reviewable subscription surface. The handler keys and the manifest events must match, or the entry fails to load:
+
+```json
+{
+  "cairncms:extension": {
+    "type": "hook",
+    "path": "dist/index.js",
+    "source": "src/index.js",
+    "host": "^1.0.0",
+    "runtime": "confined-server",
+    "capabilities": { "log": true },
+    "events": { "filter": ["items.create"] }
+  }
+}
+```
+
+See the [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) page for the full host API, the capability vocabulary, and the event rules.
+
 ## Where to go next
 
-- [Endpoints](/docs/develop/extensions/endpoints/) cover custom HTTP routes when you need to expose a new API surface rather than react to existing ones.
-- [Operations](/docs/develop/extensions/operations/) cover custom flow operations when the work belongs inside a configurable, user-built flow.
+- [Endpoints](/docs/develop/extensions/server-extensions/endpoints/) cover custom HTTP routes when you need to expose a new API surface rather than react to existing ones.
+- [Operations](/docs/develop/extensions/server-extensions/operations/) cover custom flow operations when the work belongs inside a configurable, user-built flow.
 - [Creating extensions](/docs/develop/extensions/creating-extensions/) covers the toolchain in full.

@@ -84,7 +84,7 @@ The generated `package.json` calls the SDK's CLI:
 }
 ```
 
-Internally, the CLI uses Rollup to bundle the extension into a single entrypoint.
+Internally, most builds use Rollup to bundle the extension into a single entrypoint. Confined server artifacts use a separate self-contained build path instead, covered in [Confined extensions](#confined-extensions).
 
 The build command supports several flags:
 
@@ -124,6 +124,12 @@ export default {
 ```
 
 The supported option is `plugins`, which is an array of Rollup plugins added on top of the SDK's built-in plugins.
+
+### App extensions and the Vue baseline
+
+An app extension does not bundle its own copy of Vue. It shares the admin app's Vue runtime, and because `vue` is a shared dependency, the build binds the extension to the host's Vue version. The host Vue is the floor the extension builds against.
+
+So a host-Vue or SDK change means rebuilding the extension. A `dist` built against an older toolchain can fail to mount against a newer host runtime, and rebuilding against the current SDK realigns it.
 
 ## TypeScript
 
@@ -307,9 +313,9 @@ For Operation extensions (which have both an app and an api side), use `app.js` 
 
 This path is convenient for one-off extensions that do not need to live in their own package.
 
-## Server dependencies and native modules
+## Full-authority server dependencies and native modules
 
-Server extensions (hooks, endpoints, operations, and the API side of a bundle) run as normal Node code in the API process. When the SDK builds a server extension, it compiles your own source but does not bundle the packages you depend on. Each declared dependency stays as a regular import and resolves from the extension package's own `node_modules` at runtime.
+Full-authority server extensions (hooks, endpoints, operations, and the API side of a bundle) run as normal Node code in the API process. When the SDK builds one, it compiles your own source but does not bundle the packages you depend on. Each declared dependency stays as a regular import and resolves from the extension package's own `node_modules` at runtime. A confined extension is different: its build is self-contained with no externals, so native modules and unbundled runtime dependencies are not available to it. See [Confined extensions](#confined-extensions).
 
 This is what lets server extensions use native modules. A bundler cannot inline a compiled binary, so a package like `sharp` could not be bundled. Because the server build leaves declared dependencies external instead, your extension ships its own copy and it loads like any other Node dependency.
 
@@ -352,10 +358,41 @@ Operators install with `npm install <name>` and CairnCMS auto-discovers it.
 
 The CairnCMS extension naming convention exists so the loader can find packages without configuration. A package named `cairncms-extension-my-fancy-thing` is auto-discovered; a package named `my-fancy-thing` is not.
 
+## Confined extensions
+
+A standalone operation, endpoint, or hook can run its server code in the sandbox instead of the API process, and a confined bundle runs its server entries in the sandbox while its app entries still run in the browser. Scaffold a confined extension with the SDK's `create` command and the `--confined` flag. From a fresh start, run it through `npx`:
+
+```bash
+npx @cairncms/extensions-sdk create operation my-op --confined
+```
+
+The confined runtime supports the operation, endpoint, hook, and bundle types. The interactive `npm init cairncms-extension` scaffolder does not offer it, so use the `create` command for a confined extension. The authoring API is covered on each server type page and in the [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) reference.
+
+A confined extension is checked at two stages, build and load.
+
+**Build.** The confined build bundles the server entry into a single self-contained artifact. It runs with Node builtins not externalized, so a `node:` import or any other unresolved import fails the build rather than failing at runtime. It then containment-checks the bundled inputs: an input that resolves inside the package or to a published dependency under `node_modules` is allowed, while a `workspace:`, `file:`, or `link:` dependency that resolves outside the package is refused. So a confined extension needs its dependencies installed as published `node_modules` entries before publication, not linked from a workspace.
+
+**Load.** When the API loads a confined extension, it re-reads the manifest, scans the declared server source, and probes the built artifact inside the sandbox before admitting it. The static source scan runs here, at load, not at build. A failed gate is recorded as a load failure in the diagnostics with a sanitized reason.
+
+See the [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) page for the runtime model, the host API, and the full set of constraints.
+
+## CLI reference
+
+Two binaries are involved. The scaffolder bootstraps a new package, and the SDK CLI runs inside one.
+
+The scaffolder is `npm init cairncms-extension` (also `npx create-cairncms-extension` or `npx cce`). It prompts for type, name, and language and does not read CLI arguments. It does not offer the confined runtime, so use the `create` command below for a confined extension.
+
+The SDK CLI is `cairncms-extension`, available once `@cairncms/extensions-sdk` is installed. The generated `package.json` wires it into `npm run build`. Its commands:
+
+- **`cairncms-extension create <type> <name>`** — scaffold an extension. Flags: `--language <javascript|typescript>` and `--confined` (for an operation, endpoint, hook, or bundle). See [Confined extensions](#confined-extensions).
+- **`cairncms-extension add`** — add an entry to an existing bundle. See [Working on a bundle](#working-on-a-bundle).
+- **`cairncms-extension build`** — bundle the extension. Flags: `-w`/`--watch`, `--sourcemap`, `--no-minify`, `-t`/`--type`, `-i`/`--input`, `-o`/`--output`. See [Building](#building).
+- **`cairncms-extension link <path>`** — symlink the extension into a CairnCMS install's extensions folder. See [Symlinking a local extension](#symlinking-a-local-extension).
+
 ## Where to go next
 
 - The individual extension type pages cover the API and minimum example for each:
-  - [Interface](/docs/develop/extensions/interfaces/), [Display](/docs/develop/extensions/displays/), [Layout](/docs/develop/extensions/layouts/), [Module](/docs/develop/extensions/modules/), [Panel](/docs/develop/extensions/panels/)
-  - [Hook](/docs/develop/extensions/hooks/), [Endpoint](/docs/develop/extensions/endpoints/)
-  - [Operation](/docs/develop/extensions/operations/)
+  - [Interface](/docs/develop/extensions/app-extensions/interfaces/), [Display](/docs/develop/extensions/app-extensions/displays/), [Layout](/docs/develop/extensions/app-extensions/layouts/), [Module](/docs/develop/extensions/app-extensions/modules/), [Panel](/docs/develop/extensions/app-extensions/panels/)
+  - [Hook](/docs/develop/extensions/server-extensions/hooks/), [Endpoint](/docs/develop/extensions/server-extensions/endpoints/)
+  - [Operation](/docs/develop/extensions/server-extensions/operations/)
   - [Bundle](/docs/develop/extensions/bundles/)

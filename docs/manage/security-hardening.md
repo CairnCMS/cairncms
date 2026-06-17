@@ -197,6 +197,26 @@ The redaction layers target secrets, not arbitrary PII. Operator-controlled debu
 
 For audit-heavy projects, leave activity logging on (the default) and configure the role's accountability tracking to include revisions, not just activity. Revisions let you reconstruct an item's full history; activity records what happened.
 
+## Extensions
+
+Extensions run third-party code inside the platform, so the security model depends on which runtime an extension uses. The [extension docs](/docs/develop/extensions/) cover the runtimes in full. The operator-facing summary:
+
+- **App extensions** run in the admin browser under the logged-in user's own permissions. They are not a security boundary, so treat an installed app extension as code you trust with that user's session.
+- **Full-authority server extensions** run in the API process with full access to services, the database, and the environment. They are unconfined. Install only what you are willing to run with that reach.
+- **Confined server extensions** run sandboxed. This is the boundary that lets you run a server extension without granting it the API process.
+
+### The confined sandbox
+
+A confined server extension runs in a QuickJS engine with no host imports, no Node, no `fetch`, and no filesystem. Every privileged effect goes through a brokered `host.*` call gated by the capabilities the extension declares in its manifest, so what an extension can reach is visible and bounded before it runs.
+
+The platform adds OS-level hardening around the sandbox child process where the host supports it: a network namespace, the Node permission model with a scoped read, and a cgroup memory cap. `EXTENSIONS_SANDBOX_OS_HARDENING` governs how strictly these are enforced. Under `auto`, the default, they are best-effort and never block an extension, because the engine boundary already contains the guest. Under `required`, the runtime refuses to start a confined extension on a host that cannot provide the escape-containment core (the network namespace and the Node permission model). See the [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) reference for the runtime model and [Configuration](/docs/manage/configuration/) for the sandbox variables.
+
+### App extension egress
+
+An app extension runs in the admin browser, so its outbound network access is governed by the admin app's Content Security Policy, not by the sandbox. The default `connect-src` is limited to first-party (`'self'`) plus the built-in map origins, with no external wildcard. An app extension that tries to fetch an external CDN or third-party API directly from the browser is blocked by that policy.
+
+The supported pattern is to route external data through a same-origin endpoint. A confined endpoint, or a bundle's confined endpoint entry, fetches the external API server-side under its declared `request` origins, and the app extension calls that endpoint on its own origin. If an operator genuinely needs the browser to reach a specific external origin, they can set `CONTENT_SECURITY_POLICY_DIRECTIVES__CONNECT_SRC`, which fully replaces the default list. See [Configuration](/docs/manage/configuration/).
+
 ## Where to go next
 
 - [Configuration](/docs/manage/configuration/) is the reference for every environment variable mentioned here.

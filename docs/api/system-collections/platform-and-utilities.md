@@ -119,17 +119,58 @@ GET /extensions
       "version": "1.2.0"
     },
     {
+      "name": "shout-operation",
+      "type": "operation",
+      "local": true,
+      "status": "loaded",
+      "runtime": "confined-server",
+      "capabilities": { "log": true, "items": "current-user" }
+    },
+    {
+      "name": "metrics-bundle",
+      "type": "bundle",
+      "local": true,
+      "status": "partial",
+      "runtime": "confined-server",
+      "entries": [
+        { "name": "metric-card", "type": "panel", "status": "loaded" },
+        {
+          "name": "metric-feed",
+          "type": "endpoint",
+          "status": "failed",
+          "reason": { "code": "route-collision", "detail": "the confined endpoint route is already registered" },
+          "capabilities": { "endpoint": { "access": "authenticated" }, "request": { "urls": ["https://api.example.com"], "methods": ["GET"] } }
+        }
+      ]
+    },
+    {
       "name": "broken-endpoint",
       "type": "endpoint",
       "local": true,
       "status": "failed",
       "reason": { "code": "ENTRYPOINT_NOT_FOUND", "detail": "Cannot find the extension entrypoint." }
     }
-  ]
+  ],
+  "meta": {
+    "confinedRuntime": {
+      "state": "available",
+      "posture": {
+        "mode": "auto",
+        "decision": "run",
+        "applied": ["network-namespace", "permission-model"],
+        "missing": ["cgroup-memory"],
+        "cgroupMechanic": null
+      }
+    }
+  }
 }
 ```
 
-Each entry has `name`, `type`, `local`, and `status`. A server extension that registered into the API has status `loaded`. An app extension that was found and built into the app bundle has status `discovered`, since it runs in the browser rather than the server. An extension that errored during discovery, build, or registration has status `failed` and carries a `reason` object with a stable `code` and a `detail` that has been run through the platform's error redaction, so the diagnostics never expose raw paths or secrets from the underlying error. The optional `version` and `entries` fields appear when available.
+Each row has `name`, `type`, `local`, and `status`. A server extension that registered into the API has status `loaded`. An app extension that was found and built into the app bundle has status `discovered`, since it runs in the browser rather than the server. An extension that errored during discovery, build, or registration has status `failed` and carries a `reason` object with a stable `code` and a `detail` that has been run through the platform's error redaction, so the diagnostics never expose raw paths or secrets from the underlying error. A bundle whose entries did not all load has status `partial`.
+
+A confined (sandboxed) extension also carries `runtime: "confined-server"` and the `capabilities` it declared. A bundle lists its nested extensions under `entries`, each with its own `name`, `type`, `status`, optional `reason`, and `capabilities`. The optional `version` field appears when available.
+
+The `meta.confinedRuntime` object reports the global confined-runtime state (`not-required`, `available`, or `unavailable`) and, when available, the resolved OS hardening `posture`: the `mode` (`auto` or `required`), the `decision` (`run` or `refuse`), the hardening layers `applied` and `missing`, and the `cgroupMechanic` in use.
 
 This is the only `/extensions` route that requires authentication. The source route below is reachable without a token.
 

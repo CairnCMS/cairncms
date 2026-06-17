@@ -140,6 +140,6 @@ The bespoke `/flows/trigger/<id>` endpoint is REST-only. There is no GraphQL equ
 ## Where to go next
 
 - [Flows](/docs/guides/flows/) — operator-facing reference for designing flows, the trigger types, and the operation catalog.
-- [Operations](/docs/develop/extensions/operations/) — building custom operations as extensions.
-- [Hooks](/docs/develop/extensions/hooks/) — the lower-level event surface that flows are built on top of.
+- [Operations](/docs/develop/extensions/server-extensions/operations/) — building custom operations as extensions.
+- [Hooks](/docs/develop/extensions/server-extensions/hooks/) — the lower-level event surface that flows are built on top of.
 - [Filters and queries](/docs/api/filters-and-queries/) — the query DSL for filtering flow and operation lists.

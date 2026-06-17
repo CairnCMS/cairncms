@@ -2,6 +2,7 @@
 title: Display extensions
 description: Custom read-only field renderers for the admin app.
 sidebar:
+  label: Displays
   order: 3
 ---
 
@@ -10,6 +11,8 @@ A display is the read-only counterpart to an interface. Where an interface is th
 CairnCMS ships built-in displays (raw, formatted value, datetime, color, image, filesize, and so on); a display extension adds a new one.
 
 A display extension has two parts: a configuration object that registers the display with the app, and a Vue component that renders the value. Both live inside a single npm package created by the [extensions toolchain](/docs/develop/extensions/creating-extensions/).
+
+Like every app extension, a display runs unsandboxed in the admin browser under the logged-in user's permissions. See [App extensions](/docs/develop/extensions/app-extensions/) for the runtime model, the Vue baseline, and browser egress.
 
 ## Anatomy
 
@@ -214,5 +217,5 @@ Build with `npm run build`, then install or symlink the package into a CairnCMS 
 
 ## Where to go next
 
-- [Interfaces](/docs/develop/extensions/interfaces/) cover the editing-side counterpart — how a field's value is captured.
+- [Interfaces](/docs/develop/extensions/app-extensions/interfaces/) cover the editing-side counterpart — how a field's value is captured.
 - [Creating extensions](/docs/develop/extensions/creating-extensions/) covers the toolchain in full.

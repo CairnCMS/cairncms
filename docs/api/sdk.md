@@ -248,7 +248,7 @@ const result = await client.request(customEndpoint<MyResponse>({
 }));
 ```
 
-Useful for endpoints exposed by [custom extensions](/docs/develop/extensions/endpoints/) where a typed command does not exist.
+Useful for endpoints exposed by [custom extensions](/docs/develop/extensions/server-extensions/endpoints/) where a typed command does not exist.
 
 ### `withOptions`
 
