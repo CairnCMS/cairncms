@@ -4,6 +4,7 @@
 			ref="editorElement"
 			v-model="internalValue"
 			:init="editorOptions"
+			:license-key="tinymceLicenseKey"
 			:disabled="disabled"
 			model-events="change keydown blur focus paste ExecCommand SetContent"
 			@focusin="setFocus(true)"
@@ -376,6 +377,11 @@ const editorOptions = computed(() => {
 		setup,
 		...(props.tinymceOverrides || {}),
 	};
+});
+
+const tinymceLicenseKey = computed(() => {
+	const licenseKey = props.tinymceOverrides?.license_key;
+	return typeof licenseKey === 'string' ? licenseKey : 'gpl';
 });
 
 const percRemaining = computed(() => percentage(count.value, props.softLength) ?? 100);
