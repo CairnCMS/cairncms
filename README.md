@@ -1,6 +1,9 @@
+
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12754/badge)](https://www.bestpractices.dev/projects/12754)
 
 # CairnCMS
+
+<a href="https://demo.cairncms.dev"><img width="1898" height="672" alt="CairnCMS admin dashboard — live demo" src="https://github.com/user-attachments/assets/70dd98d5-3a98-4329-b867-d3df75e18904" /></a>
 
 ## Open Content & Data Infrastructure for Self-Hosted Teams
 
