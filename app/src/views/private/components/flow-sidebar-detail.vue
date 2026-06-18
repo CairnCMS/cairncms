@@ -219,10 +219,10 @@ const runManualFlow = async (flowId: string) => {
 }
 
 .fields {
-	--form-vertical-gap: 24px;
+	--form-vertical-gap: 1.5rem;
 
 	.type-label {
-		font-size: 1rem;
+		font-size: 0.875rem;
 	}
 }
 
@@ -231,17 +231,17 @@ const runManualFlow = async (flowId: string) => {
 }
 
 .v-icon {
-	margin-right: 8px;
+	margin-right: 0.5rem;
 }
 
 .confirm-form {
-	--form-horizontal-gap: 24px;
-	--form-vertical-gap: 24px;
+	--form-horizontal-gap: 1.5rem;
+	--form-vertical-gap: 1.5rem;
 
 	margin-top: var(--v-card-padding);
 
 	:deep(.type-label) {
-		font-size: 1rem;
+		font-size: 0.875rem;
 	}
 }
 </style>

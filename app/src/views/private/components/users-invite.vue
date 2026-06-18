@@ -13,7 +13,7 @@
 						<div class="type-label">{{ t('emails') }}</div>
 						<v-textarea v-model="emails" :nullable="false" placeholder="admin@example.com, user@example.com..." />
 					</div>
-					<div v-if="role === null" class="field">
+					<div v-if="!role" class="field">
 						<div class="type-label">{{ t('role') }}</div>
 						<v-select v-model="roleSelected" :items="roles" />
 					</div>
@@ -32,7 +32,7 @@
 
 			<v-card-actions>
 				<v-button secondary @click="$emit('update:modelValue', false)">{{ t('cancel') }}</v-button>
-				<v-button :disabled="emails === null || emails.length === 0" :loading="loading" @click="inviteUsers">
+				<v-button :disabled="emails.length === 0" :loading="loading" @click="inviteUsers">
 					{{ t('invite') }}
 				</v-button>
 			</v-card-actions>
@@ -121,7 +121,7 @@ async function loadRoles() {
 			value: role.id,
 		}));
 
-	if (roles.value.length > 0 && roleSelected.value === null) {
+	if (roles.value.length > 0 && !roleSelected.value) {
 		roleSelected.value = roles.value[0].value;
 	}
 }
@@ -131,12 +131,12 @@ async function loadRoles() {
 @import '@/styles/mixins/form-grid';
 
 .grid {
-	--form-vertical-gap: 20px;
+	--form-vertical-gap: 1.25rem;
 
 	@include form-grid;
 }
 
 .v-card-title {
-	font-size: 20px;
+	font-size: 1.25rem;
 }
 </style>

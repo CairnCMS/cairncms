@@ -146,4 +146,47 @@ describe('GET/HEAD /assets/:pk (GHSA-rv78-qqrq-73m5)', () => {
 			expect(statAssetSpy).not.toHaveBeenCalled();
 		});
 	});
+
+	describe('transformation set threading', () => {
+		const expectedSet = {
+			transformationParams: { format: 'auto', width: '100' },
+			acceptFormat: 'avif',
+		};
+
+		it('passes the resolved TransformationSet to statAsset on HEAD', async () => {
+			const app = buildApp();
+
+			await request(app).head(`/assets/${VALID_UUID}?format=auto&width=100`).set('Accept', 'image/avif');
+
+			expect(statAssetSpy).toHaveBeenCalledWith(VALID_UUID, expectedSet, undefined);
+		});
+
+		it('passes the identical TransformationSet to getAsset on GET', async () => {
+			const app = buildApp();
+
+			await request(app).get(`/assets/${VALID_UUID}?format=auto&width=100`).set('Accept', 'image/avif');
+
+			expect(getAssetSpy).toHaveBeenCalledWith(VALID_UUID, expectedSet, undefined);
+		});
+
+		it('leaves acceptFormat undefined when the client advertises no modern format', async () => {
+			const app = buildApp();
+
+			await request(app).get(`/assets/${VALID_UUID}?format=auto`).set('Accept', '*/*');
+
+			expect(getAssetSpy).toHaveBeenCalledWith(
+				VALID_UUID,
+				{ transformationParams: { format: 'auto' }, acceptFormat: undefined },
+				undefined
+			);
+		});
+
+		it('adds Accept to the Vary header on auto-format requests', async () => {
+			const app = buildApp();
+
+			const res = await request(app).get(`/assets/${VALID_UUID}?format=auto`).set('Accept', '*/*');
+
+			expect(res.headers['vary']).toContain('Accept');
+		});
+	});
 });

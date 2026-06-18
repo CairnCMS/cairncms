@@ -136,7 +136,7 @@ watch(
 
 	:deep(.CodeMirror) {
 		width: 100%;
-		line-height: 18px;
+		line-height: 1.125rem;
 		padding: var(--input-padding);
 
 		.cm-tag {
@@ -158,7 +158,7 @@ watch(
 
 		:deep(.CodeMirror),
 		:deep(.CodeMirror-scroll) {
-			max-height: 480px;
+			max-height: 30rem;
 		}
 
 		:deep(.CodeMirror-scroll) {

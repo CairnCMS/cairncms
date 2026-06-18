@@ -1,4 +1,5 @@
 import {
+	CONFINED_RUNTIME,
 	EXTENSION_LANGUAGES,
 	EXTENSION_NAME_REGEX,
 	EXTENSION_PKG_KEY,
@@ -23,14 +24,24 @@ import path from 'path';
 import type { Language } from '../types.js';
 import detectJsonIndent from '../utils/detect-json-indent.js';
 import getPackageManager from '../utils/get-package-manager.js';
+import getSdkVersion from '../utils/get-sdk-version.js';
 import { getLanguageFromPath, isLanguage, languageToShort } from '../utils/languages.js';
 import { log } from '../utils/logger.js';
-import copyTemplate from './helpers/copy-template.js';
+import applyExtensionName from './helpers/apply-extension-name.js';
+import copyTemplate, { type TemplateName } from './helpers/copy-template.js';
+import ensureTypecheckScript from './helpers/ensure-typecheck-script.js';
 import getExtensionDevDeps from './helpers/get-extension-dev-deps.js';
 
+// The bundle entry types that run server-side and so become confined under a confined
+// bundle's root runtime. App entry types stay plain browser entries.
+const SERVER_ENTRY_TYPES = ['operation', 'endpoint', 'hook'] as const;
+
 export default async function add(): Promise<void> {
-	const extensionPath = process.cwd();
-	const packagePath = path.resolve('package.json');
+	return runAdd(process.cwd());
+}
+
+export async function runAdd(extensionPath: string): Promise<void> {
+	const packagePath = path.resolve(extensionPath, 'package.json');
 
 	if (!(await fse.pathExists(packagePath))) {
 		log(`Current directory is not a valid package.`, 'error');
@@ -51,7 +62,7 @@ export default async function add(): Promise<void> {
 
 	const extensionOptions = extensionManifest[EXTENSION_PKG_KEY];
 
-	const sourceExists = await fse.pathExists(path.resolve('src'));
+	const sourceExists = await fse.pathExists(path.resolve(extensionPath, 'src'));
 
 	if (extensionOptions.type === 'bundle') {
 		const { type, name, language, alternativeSource } = await inquirer.prompt<{
@@ -86,43 +97,49 @@ export default async function add(): Promise<void> {
 			},
 		]);
 
+		// The bundle declares the confined runtime once at its root. A server entry added
+		// to a confined bundle is itself confined, an app entry stays a plain browser
+		// entry. Non-confined bundles keep their existing plain behavior.
+		const confinedServerEntry = extensionOptions.runtime === CONFINED_RUNTIME && isIn(type, SERVER_ENTRY_TYPES);
+
 		const spinner = ora(chalk.bold('Modifying CairnCMS extension...')).start();
 
 		const source = alternativeSource ?? 'src';
 
-		const sourcePath = path.resolve(source, name);
+		const sourcePath = path.resolve(extensionPath, source, name);
 
 		await fse.ensureDir(sourcePath);
-		await copyTemplate(type, extensionPath, sourcePath, language);
+		await copyTemplate(confinedServerEntry ? confinedTemplate(type) : type, extensionPath, sourcePath, language);
+
+		if (confinedServerEntry) {
+			// The load probe requires each confined entry's config id to equal its name.
+			await applyExtensionName(sourcePath, name);
+		}
 
 		const newEntries: ExtensionOptionsBundleEntry[] = [
 			...extensionOptions.entries,
-			isIn(type, HYBRID_EXTENSION_TYPES)
-				? {
-						type,
-						name,
-						source: {
-							app: `${pathToRelativeUrl(source)}/${name}/app.${languageToShort(language)}`,
-							api: `${pathToRelativeUrl(source)}/${name}/api.${languageToShort(language)}`,
-						},
-				  }
-				: {
-						type,
-						name,
-						source: `${pathToRelativeUrl(source)}/${name}/index.${languageToShort(language)}`,
-				  },
+			buildBundleEntry(type, name, source, language, confinedServerEntry),
 		];
 
 		const newExtensionOptions: ExtensionOptions = { ...extensionOptions, entries: newEntries };
 
+		const devDependencies = getExtensionDevDeps(
+			newEntries.map((entry) => entry.type),
+			getLanguageFromEntries(newEntries)
+		);
+
+		// A confined bundle's server entries author against the server API package.
+		if (extensionOptions.runtime === CONFINED_RUNTIME) {
+			devDependencies['@cairncms/extensions-server-api'] = getSdkVersion();
+		}
+
 		const newExtensionManifest = {
 			...extensionManifest,
 			[EXTENSION_PKG_KEY]: newExtensionOptions,
-			devDependencies: await getExtensionDevDeps(
-				newEntries.map((entry) => entry.type),
-				getLanguageFromEntries(newEntries)
-			),
+			devDependencies,
 		};
+
+		ensureTypecheckScript(newExtensionManifest);
 
 		await fse.writeJSON(packagePath, newExtensionManifest, { spaces: indent ?? '\t' });
 
@@ -132,6 +149,22 @@ export default async function add(): Promise<void> {
 
 		spinner.succeed(chalk.bold('Done'));
 	} else {
+		// Converting a confined extension would have to move its runtime to the bundle
+		// root and carry its capabilities (and an operation's option delivery, which a
+		// bundle entry cannot declare yet) onto the entry. Until that holds, conversion
+		// would silently downgrade a confined extension to a full-authority bundle, so it
+		// is refused. A confined bundle is authored with `create bundle --confined`.
+		if (extensionOptions.runtime === CONFINED_RUNTIME) {
+			log(
+				`Converting a confined extension into a bundle is not supported yet. Scaffold a confined bundle with ${chalk.bold(
+					'create bundle --confined'
+				)} and add entries to it.`,
+				'error'
+			);
+
+			process.exit(1);
+		}
+
 		const { proceed } = await inquirer.prompt<{ proceed: boolean }>([
 			{
 				type: 'confirm',
@@ -199,13 +232,15 @@ export default async function add(): Promise<void> {
 
 		const source = alternativeSource ?? 'src';
 
-		const convertSourcePath = path.resolve(source, convertName);
-		const entrySourcePath = path.resolve(source, name);
+		const convertSourcePath = path.resolve(extensionPath, source, convertName);
+		const entrySourcePath = path.resolve(extensionPath, source, name);
 
-		const convertFiles = await fse.readdir(source);
+		const convertFiles = await fse.readdir(path.resolve(extensionPath, source));
 
 		await Promise.all(
-			convertFiles.map((file) => fse.move(path.resolve(source, file), path.join(convertSourcePath, file)))
+			convertFiles.map((file) =>
+				fse.move(path.resolve(extensionPath, source, file), path.join(convertSourcePath, file))
+			)
 		);
 
 		await fse.ensureDir(entrySourcePath);
@@ -258,11 +293,13 @@ export default async function add(): Promise<void> {
 			name: EXTENSION_NAME_REGEX.test(extensionName) ? extensionName : `cairncms-extension-${extensionName}`,
 			keywords: ['cairncms', 'cairncms-extension', `cairncms-custom-bundle`],
 			[EXTENSION_PKG_KEY]: newExtensionOptions,
-			devDependencies: await getExtensionDevDeps(
+			devDependencies: getExtensionDevDeps(
 				entries.map((entry) => entry.type),
 				getLanguageFromEntries(entries)
 			),
 		};
+
+		ensureTypecheckScript(newExtensionManifest);
 
 		await fse.writeJSON(packagePath, newExtensionManifest, { spaces: indent ?? '\t' });
 
@@ -272,6 +309,47 @@ export default async function add(): Promise<void> {
 
 		spinner.succeed(chalk.bold('Done'));
 	}
+}
+
+function confinedTemplate(type: NestedExtensionType): TemplateName {
+	if (type === 'operation') return 'operation-confined';
+	if (type === 'endpoint') return 'endpoint-confined';
+	return 'hook-confined';
+}
+
+// Builds the new bundle entry. A confined server entry carries the minimal per-entry
+// capabilities the single-type confined scaffolds default to, which the author widens.
+function buildBundleEntry(
+	type: NestedExtensionType,
+	name: string,
+	source: string,
+	language: Language,
+	confined: boolean
+): ExtensionOptionsBundleEntry {
+	const short = languageToShort(language);
+
+	if (isIn(type, HYBRID_EXTENSION_TYPES)) {
+		const entry = {
+			type,
+			name,
+			source: {
+				app: `${pathToRelativeUrl(source)}/${name}/app.${short}`,
+				api: `${pathToRelativeUrl(source)}/${name}/api.${short}`,
+			},
+		};
+
+		return confined ? { ...entry, capabilities: { log: true } } : entry;
+	}
+
+	const entry = { type, name, source: `${pathToRelativeUrl(source)}/${name}/index.${short}` };
+
+	if (!confined) return entry;
+
+	if (type === 'endpoint') {
+		return { ...entry, capabilities: { log: true, endpoint: { access: 'authenticated' } } };
+	}
+
+	return { ...entry, capabilities: { log: true }, events: { action: ['items.create'] } };
 }
 
 function getLanguageFromEntries(entries: ExtensionOptionsBundleEntry[]): Language[] {

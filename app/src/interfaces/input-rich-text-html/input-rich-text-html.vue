@@ -4,6 +4,7 @@
 			ref="editorElement"
 			v-model="internalValue"
 			:init="editorOptions"
+			:license-key="tinymceLicenseKey"
 			:disabled="disabled"
 			model-events="change keydown blur focus paste ExecCommand SetContent"
 			@focusin="setFocus(true)"
@@ -378,6 +379,11 @@ const editorOptions = computed(() => {
 	};
 });
 
+const tinymceLicenseKey = computed(() => {
+	const licenseKey = props.tinymceOverrides?.license_key;
+	return typeof licenseKey === 'string' ? licenseKey : 'gpl';
+});
+
 const percRemaining = computed(() => percentage(count.value, props.softLength) ?? 100);
 
 let observer: MutationObserver;
@@ -474,7 +480,7 @@ function setFocus(val: boolean) {
 @import '@/styles/mixins/form-grid';
 
 .body {
-	padding: 20px;
+	padding: 1.25rem;
 }
 
 .grid {
@@ -483,8 +489,8 @@ function setFocus(val: boolean) {
 
 .remaining {
 	position: absolute;
-	right: 10px;
-	bottom: 5px;
+	right: 0.625rem;
+	bottom: 0.3125rem;
 	color: var(--foreground-subdued);
 	font-weight: 600;
 	text-align: right;
@@ -504,7 +510,7 @@ function setFocus(val: boolean) {
 .media-preview {
 	width: 100%;
 	height: var(--input-height-tall);
-	margin-bottom: 24px;
+	margin-bottom: 1.5rem;
 	object-fit: cover;
 	border-radius: var(--border-radius);
 }

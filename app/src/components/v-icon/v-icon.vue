@@ -89,7 +89,7 @@ function emitClick(event: MouseEvent) {
 body {
 	--v-icon-color: currentColor;
 	--v-icon-color-hover: currentColor;
-	--v-icon-size: 24px;
+	--v-icon-size: 1.5rem;
 }
 </style>
 
@@ -147,42 +147,42 @@ body {
 	}
 
 	&.sup {
-		--v-icon-size: 8px;
+		--v-icon-size: 0.5rem;
 
-		vertical-align: 5px;
+		vertical-align: 0.3125rem;
 	}
 
 	&.x-small {
-		--v-icon-size: 12px;
+		--v-icon-size: 0.75rem;
 	}
 
 	&.small {
-		--v-icon-size: 18px;
+		--v-icon-size: 1.125rem;
 	}
 
 	&.large {
-		--v-icon-size: 36px;
+		--v-icon-size: 2.25rem;
 	}
 
 	&.x-large {
-		--v-icon-size: 48px;
+		--v-icon-size: 3rem;
 	}
 
 	&.left {
-		margin-right: 8px;
+		margin-right: 0.5rem;
 
 		&.small {
-			margin-right: 4px;
-			margin-left: -2px;
+			margin-right: 0.25rem;
+			margin-left: -0.125rem;
 		}
 	}
 
 	&.right {
-		margin-left: 6px;
+		margin-left: 0.375rem;
 
 		&.small {
-			margin-right: 4px;
-			margin-left: -2px;
+			margin-right: 0.25rem;
+			margin-left: -0.125rem;
 		}
 	}
 }

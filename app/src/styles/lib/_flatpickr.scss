@@ -36,14 +36,14 @@
 	color: var(--foreground-normal-alt);
 	background: var(--background-normal);
 	fill: none;
-	padding: 20px 0;
+	padding: 1.25rem 0;
 }
 
 .flatpickr-months .flatpickr-prev-month,
 .flatpickr-months .flatpickr-next-month {
 	display: flex;
 	align-items: center;
-	padding: 20px 10px;
+	padding: 1.25rem .625rem;
 }
 
 .flatpickr-months .flatpickr-prev-month svg,
@@ -65,7 +65,7 @@
 	width: auto;
 	padding: 0;
 	font-weight: inherit;
-	font-size: 16px;
+	font-size: 1rem;
 	font-weight: 600;
 }
 
@@ -73,14 +73,14 @@
 	border-radius: var(--border-radius);
 	appearance: none;
 	text-align: right;
-	font-size: 16px;
-	height: 20px;
+	font-size: 1rem;
+	height: 1.25rem;
 	font-weight: 600;
 	color: var(--primary);
 }
 
 .flatpickr-current-month input.cur-year {
-	font-size: 16px;
+	font-size: 1rem;
 	font-weight: 600;
 	color: var(--primary);
 }
@@ -100,9 +100,9 @@
 }
 
 .flatpickr-current-month .numInputWrapper input {
-	font-size: 16px;
-	height: 20px;
-	vertical-align: 4px;
+	font-size: 1rem;
+	height: 1.25rem;
+	vertical-align: .25rem;
 }
 
 .flatpickr-current-month .numInputWrapper:hover {
@@ -122,7 +122,7 @@
 }
 
 .flatpickr-weekdays {
-	padding: 10px 4px;
+	padding: .625rem .25rem;
 	background: var(--background-normal);
 }
 
@@ -142,9 +142,9 @@
 	width: auto;
 	min-width: auto;
 	max-width: none;
-	gap: 4px;
-	padding: 4px;
-	margin-top: 4px;
+	gap: .25rem;
+	padding: .25rem;
+	margin-top: .25rem;
 }
 
 span.flatpickr-weekday {
@@ -156,7 +156,7 @@ span.flatpickr-weekday {
 	width: 100%;
 	max-width: none;
 	color: var(--foreground-normal-alt);
-	line-height: 36px;
+	line-height: 2.25rem;
 	font-weight: 500;
 	transition: var(--fast) var(--transition);
 	transition-property: background, border-color, color;
@@ -257,13 +257,13 @@ span.flatpickr-weekday {
 .flatpickr-time > * {
 	flex-grow: 0 !important;
 	width: max-content !important;
-	min-width: 50px;
+	min-width: 3.125rem;
 }
 
 .flatpickr-time .numInputWrapper span {
 	display: flex;
 	justify-content: center;
-	width: 24px;
+	width: 1.5rem;
 }
 
 .flatpickr-time .numInputWrapper span.arrowUp {
@@ -286,8 +286,8 @@ span.flatpickr-weekday {
 }
 
 .flatpickr-calendar.hasTime .flatpickr-time {
-	height: 43px;
-	margin-top: 8px;
+	height: 2.6875rem;
+	margin-top: .5rem;
 	border-top: var(--border-width) solid var(--border-subdued);
 }
 
@@ -322,7 +322,7 @@ span.flatpickr-weekday {
 
 .flatpickr-calendar .set-to-now-button {
 	width: 100%;
-	padding: 8px 0;
+	padding: .5rem 0;
 	color: var(--primary);
 	border-top: var(--border-width) solid var(--border-subdued);
 	transition: background-color var(--fast) var(--transition);

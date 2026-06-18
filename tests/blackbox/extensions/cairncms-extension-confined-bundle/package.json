@@ -1,0 +1,39 @@
+{
+	"name": "cairncms-extension-confined-bundle",
+	"version": "1.0.0",
+	"type": "module",
+	"private": true,
+	"cairncms:extension": {
+		"type": "bundle",
+		"path": { "app": "app.js", "api": "api.js" },
+		"entries": [
+			{
+				"type": "operation",
+				"name": "confined-bundle-op",
+				"source": { "app": "src/op/app.js", "api": "src/op/api.js" },
+				"capabilities": { "log": true }
+			},
+			{
+				"type": "endpoint",
+				"name": "confined-bundle-reader",
+				"source": "src/reader/index.js",
+				"capabilities": { "endpoint": { "access": "public" }, "items": "current-user" }
+			},
+			{
+				"type": "endpoint",
+				"name": "confined-bundle-bare",
+				"source": "src/bare/index.js",
+				"capabilities": { "endpoint": { "access": "public" } }
+			},
+			{
+				"type": "hook",
+				"name": "confined-bundle-hook",
+				"source": "src/hook/index.js",
+				"capabilities": { "log": true },
+				"events": { "filter": ["confined_bundle_records.items.create"] }
+			}
+		],
+		"runtime": "confined-server",
+		"host": "^1.0.0"
+	}
+}

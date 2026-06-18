@@ -24,10 +24,12 @@ import getPackageManager from '../utils/get-package-manager.js';
 import getSdkVersion from '../utils/get-sdk-version.js';
 import { isLanguage, languageToShort } from '../utils/languages.js';
 import { log } from '../utils/logger.js';
-import copyTemplate from './helpers/copy-template.js';
+import applyExtensionName from './helpers/apply-extension-name.js';
+import copyTemplate, { type TemplateName } from './helpers/copy-template.js';
+import ensureTypecheckScript from './helpers/ensure-typecheck-script.js';
 import getExtensionDevDeps from './helpers/get-extension-dev-deps.js';
 
-type CreateOptions = { language?: string };
+type CreateOptions = { language?: string; confined?: boolean };
 
 export default async function create(type: string, name: string, options: CreateOptions): Promise<void> {
 	const targetDir = name.substring(name.lastIndexOf('/') + 1);
@@ -42,6 +44,18 @@ export default async function create(type: string, name: string, options: Create
 		);
 
 		process.exit(1);
+	}
+
+	if (options.confined && type !== 'operation' && type !== 'endpoint' && type !== 'hook' && type !== 'bundle') {
+		log(
+			`The confined runtime supports ${chalk.bold('operation')}, ${chalk.bold('endpoint')}, ${chalk.bold(
+				'hook'
+			)}, and ${chalk.bold('bundle')} extensions. Type ${chalk.bold(type)} cannot be scaffolded confined.`,
+			'error'
+		);
+
+		process.exitCode = 1;
+		return;
 	}
 
 	if (targetDir.length === 0) {
@@ -66,11 +80,11 @@ export default async function create(type: string, name: string, options: Create
 	}
 
 	if (isIn(type, BUNDLE_EXTENSION_TYPES)) {
-		await createPackageExtension({ type, name, targetDir, targetPath });
+		await createPackageExtension({ type, name, targetDir, targetPath, confined: options.confined ?? false });
 	} else {
 		const language = options.language ?? 'javascript';
 
-		await createLocalExtension({ type, name, targetDir, targetPath, language });
+		await createLocalExtension({ type, name, targetDir, targetPath, language, confined: options.confined ?? false });
 	}
 }
 
@@ -79,11 +93,13 @@ async function createPackageExtension({
 	name,
 	targetDir,
 	targetPath,
+	confined,
 }: {
 	type: BundleExtensionType;
 	name: string;
 	targetDir: string;
 	targetPath: string;
+	confined: boolean;
 }) {
 	const spinner = ora(chalk.bold('Scaffolding CairnCMS extension...')).start();
 
@@ -91,8 +107,19 @@ async function createPackageExtension({
 	await copyTemplate(type, targetPath);
 
 	const host = `^${getSdkVersion()}`;
-	const options = { type, path: { app: 'dist/app.js', api: 'dist/api.js' }, entries: [], host };
-	const packageManifest = getPackageManifest(name, options, await getExtensionDevDeps(type));
+
+	// A confined bundle declares its runtime once at the root and starts empty, the
+	// editing shell `add` fills. Its server entries are confined, so the server API
+	// package is a dev dependency from the start.
+	const options: ExtensionOptions = confined
+		? { type, path: { app: 'dist/app.js', api: 'dist/api.js' }, entries: [], runtime: 'confined-server', host }
+		: { type, path: { app: 'dist/app.js', api: 'dist/api.js' }, entries: [], host };
+
+	const devDeps = confined
+		? { ...getExtensionDevDeps(type), '@cairncms/extensions-server-api': getSdkVersion() }
+		: getExtensionDevDeps(type);
+
+	const packageManifest = getPackageManifest(name, options, devDeps);
 
 	await fse.writeJSON(path.join(targetPath, 'package.json'), packageManifest, { spaces: '\t' });
 
@@ -111,12 +138,14 @@ async function createLocalExtension({
 	targetDir,
 	targetPath,
 	language,
+	confined,
 }: {
 	type: AppExtensionType | ApiExtensionType | HybridExtensionType;
 	name: string;
 	targetDir: string;
 	targetPath: string;
 	language: string;
+	confined: boolean;
 }) {
 	if (!isLanguage(language)) {
 		log(
@@ -132,27 +161,78 @@ async function createLocalExtension({
 	const spinner = ora(chalk.bold('Scaffolding CairnCMS extension...')).start();
 
 	await fse.ensureDir(targetPath);
-	await copyTemplate(type, targetPath, 'src', language);
+
+	let template: TemplateName = type;
+
+	if (confined && type === 'endpoint') template = 'endpoint-confined';
+	else if (confined && type === 'hook') template = 'hook-confined';
+	else if (confined) template = 'operation-confined';
+
+	await copyTemplate(template, targetPath, 'src', language);
 
 	const host = `^${getSdkVersion()}`;
 
-	const options: ExtensionOptions = isIn(type, HYBRID_EXTENSION_TYPES)
-		? {
-				type,
-				path: { app: 'dist/app.js', api: 'dist/api.js' },
-				source: { app: `src/app.${languageToShort(language)}`, api: `src/api.${languageToShort(language)}` },
-				host,
-		  }
-		: {
-				type,
-				path: 'dist/index.js',
-				source: `src/index.${languageToShort(language)}`,
-				host,
-		  };
+	let options: ExtensionOptions;
 
-	const packageManifest = getPackageManifest(name, options, await getExtensionDevDeps(type, language));
+	if (confined && type === 'endpoint') {
+		options = {
+			type: 'endpoint',
+			path: 'dist/index.js',
+			source: `src/index.${languageToShort(language)}`,
+			runtime: 'confined-server',
+			// Authenticated by default: serving anonymous callers is a deliberate opt-in.
+			capabilities: { log: true, endpoint: { access: 'authenticated' } },
+			host,
+		};
+	} else if (confined && type === 'hook') {
+		options = {
+			type: 'hook',
+			path: 'dist/index.js',
+			source: `src/index.${languageToShort(language)}`,
+			runtime: 'confined-server',
+			capabilities: { log: true },
+			// Must equal the template's declared handlers: the load probe enforces it.
+			events: { action: ['items.create'] },
+			host,
+		};
+	} else if (confined) {
+		options = {
+			type: 'operation',
+			path: { app: 'dist/app.js', api: 'dist/api.js' },
+			source: { app: `src/app.${languageToShort(language)}`, api: `src/api.${languageToShort(language)}` },
+			runtime: 'confined-server',
+			capabilities: { log: true },
+			host,
+		};
+	} else if (isIn(type, HYBRID_EXTENSION_TYPES)) {
+		options = {
+			type,
+			path: { app: 'dist/app.js', api: 'dist/api.js' },
+			source: { app: `src/app.${languageToShort(language)}`, api: `src/api.${languageToShort(language)}` },
+			host,
+		};
+	} else {
+		options = {
+			type,
+			path: 'dist/index.js',
+			source: `src/index.${languageToShort(language)}`,
+			host,
+		};
+	}
+
+	const devDeps = confined
+		? { ...getExtensionDevDeps(type, language), '@cairncms/extensions-server-api': getSdkVersion() }
+		: getExtensionDevDeps(type, language);
+
+	const packageManifest = getPackageManifest(name, options, devDeps);
 
 	await fse.writeJSON(path.join(targetPath, 'package.json'), packageManifest, { spaces: '\t' });
+
+	if (confined) {
+		// The engine's identity contract requires the entry id to equal the
+		// extension name, so the scaffold writes the final name into the source.
+		await applyExtensionName(path.join(targetPath, 'src'), packageManifest['name']);
+	}
 
 	const packageManager = getPackageManager();
 
@@ -183,6 +263,8 @@ function getPackageManifest(name: string, options: ExtensionOptions, deps: Recor
 	if (options.type === 'bundle') {
 		packageManifest['scripts']['add'] = 'cairncms-extension add';
 	}
+
+	ensureTypecheckScript(packageManifest);
 
 	return packageManifest;
 }

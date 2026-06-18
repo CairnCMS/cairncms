@@ -424,11 +424,11 @@ table :deep(.sortable-ghost .cell) {
 }
 
 .loading .loading-indicator .v-progress-linear {
-	--v-progress-linear-height: 2px;
+	--v-progress-linear-height: 0.125rem;
 	--v-progress-linear-color: var(--border-normal-alt);
 
 	position: absolute;
-	top: -2px;
+	top: -0.125rem;
 	left: 0;
 	width: 100%;
 }
@@ -439,7 +439,7 @@ table :deep(.sortable-ghost .cell) {
 
 .loading .loading-indicator.sticky th {
 	position: sticky;
-	top: 48px;
+	top: 3rem;
 	z-index: 2;
 }
 
@@ -451,7 +451,7 @@ table :deep(.sortable-ghost .cell) {
 
 .loading-text td,
 .no-items-text td {
-	padding: 16px;
+	padding: 1rem;
 	color: var(--foreground-subdued);
 }
 

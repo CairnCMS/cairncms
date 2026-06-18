@@ -252,6 +252,35 @@ describe('buildRevisionData', () => {
 
 		expect((stepB.options as Record<string, unknown>)['message']).toContain(PROSE);
 	});
+
+	test('redacts a confined operation reference value, its minted handle, and the reference key', () => {
+		const secret = 'sk_live_confined_reference_secret_value';
+		const handle = 'cairn-secret-ref-abc123';
+
+		// The flow data after a confined operation (top-level or a bundle entry) ran with a
+		// reference option: a step option carries the configured secret under the declared
+		// reference key, and the operation output echoes the minted handle the guest held.
+		const keyedData = makeKeyedData({});
+		keyedData['secret-op'] = { echoedHandle: handle, marker: 'ran' };
+
+		const steps: Step[] = [
+			{ operation: 'op-1', key: 'secret-op', status: 'resolve', options: { apiKey: secret, note: 'plain' } },
+		];
+
+		// The runner returns the resolved secret and the minted handle as redaction values,
+		// and the descriptor's declared reference keys drive key-redaction.
+		const result = buildRevisionData(steps, keyedData, [secret, handle], new Set(['apiKey']));
+		const serialized = JSON.stringify(result);
+
+		// Neither the resolved secret nor the minted handle persists anywhere in the revision.
+		expect(serialized).not.toContain(secret);
+		expect(serialized).not.toContain(handle);
+
+		// The declared reference key is key-redacted; the plain sibling option is preserved.
+		const step = result.steps[0] as Step;
+		expect((step.options as Record<string, unknown>)['apiKey']).toBe(REDACT_TEXT);
+		expect((step.options as Record<string, unknown>)['note']).toBe('plain');
+	});
 });
 
 describe('executeFlow — webhook trigger with failing condition does not leak context into response', () => {
@@ -295,6 +324,78 @@ describe('executeFlow — webhook trigger with failing condition does not leak c
 
 		expect(blob).not.toContain('TOKEN_MARKER_CCC_DO_NOT_LEAK');
 		expect(blob).not.toContain('USER_MARKER_BBB_DO_NOT_LEAK');
+	});
+});
+
+describe('executeFlow — confined operation reference redaction reaches the revision sink', () => {
+	beforeEach(() => {
+		revisionsCreateSpy.mockReset();
+		getFlowManager().clearConfinedOperations();
+	});
+
+	test('the persisted revision carries neither the secret, the handle, nor a nested sensitive value under the reference key', async () => {
+		const rawSecret = 'sk_live_confined_flow_secret_value';
+		const handle = 'cairn-secret-ref-xyz789';
+
+		const manager = getFlowManager();
+
+		// A confined operation descriptor as the bundle binding registers one: the declared
+		// reference keys drive key-redaction, and the run returns the resolved secret and the
+		// minted handle as the redaction values a real runner produces.
+		manager.addConfinedOperation('confined-secret-op', {
+			referenceKeys: ['apiKey'],
+			run: async () => ({
+				outcome: { ok: true, value: { echoedHandle: handle } },
+				redactionValues: [rawSecret, handle],
+			}),
+		});
+
+		const flow = {
+			id: 'secret-flow',
+			name: 'secret-flow',
+			status: 'active',
+			trigger: 'webhook',
+			// Only accountability 'all' persists a revision, so this drives the real sink.
+			accountability: 'all',
+			options: { method: 'POST', return: '$last', async: false },
+			operation: {
+				id: 'op-1',
+				key: 'run-secret',
+				type: 'confined-secret-op',
+				options: { apiKey: rawSecret, note: 'plain', audit: { token: rawSecret } },
+				resolve: null,
+				reject: null,
+			},
+		};
+
+		const context = {
+			accountability: { user: 'u-1', role: 'r-1', admin: true, ip: '127.0.0.1' },
+			database: {} as any,
+			schema: { collections: {}, relations: [] } as any,
+		};
+
+		await (manager as any).executeFlow(flow, { x: 1 }, context);
+
+		expect(revisionsCreateSpy).toHaveBeenCalledTimes(1);
+
+		const revision = revisionsCreateSpy.mock.calls[0]![0] as { data: { steps: Step[]; data: Record<string, unknown> } };
+		const serialized = JSON.stringify(revision.data);
+
+		// The real flow collected the descriptor's referenceKeys and the runner's redaction
+		// values and passed them to the sink, so neither persists anywhere in the revision.
+		expect(serialized).not.toContain(rawSecret);
+		expect(serialized).not.toContain(handle);
+
+		const step = revision.data.steps[0] as Step;
+
+		// Key-redaction of the declared reference key.
+		expect((step.options as Record<string, unknown>)['apiKey']).toBe(REDACT_TEXT);
+
+		// Value-redaction of the same secret echoed into a non-sensitive-keyed nested option.
+		expect((step.options as Record<string, any>)['audit']['token']).toBe(REDACT_TEXT);
+
+		// A non-sensitive option is preserved.
+		expect((step.options as Record<string, unknown>)['note']).toBe('plain');
 	});
 });
 
@@ -549,5 +650,138 @@ describe('flow operation errors expose a curated reject payload', () => {
 		expect(serialized).not.toContain(secret);
 		expect(serialized).not.toContain('stack');
 		expect(serialized).not.toContain('cause');
+	});
+});
+
+describe('confined operation binding', () => {
+	const triggerData = { path: '/x', method: 'POST', headers: {}, query: {}, body: {} };
+	const context = { accountability: null, database: {} as any, schema: { collections: {}, relations: [] } as any };
+
+	function confinedFlow(type: string, options: Record<string, unknown> = {}, accountability: unknown = null): any {
+		return {
+			id: 'flow-c',
+			name: 'flow-c',
+			status: 'active',
+			trigger: 'webhook',
+			accountability,
+			options: { method: 'POST', return: '$last', async: false },
+			operation: { id: 'op-row-9', key: 'step', type, options, resolve: null, reject: null },
+		};
+	}
+
+	beforeEach(() => {
+		const manager = getFlowManager();
+		manager.clearOperations();
+		manager.clearConfinedOperations();
+	});
+
+	it('runs a confined operation through its descriptor with $last input and resolved options', async () => {
+		const manager = getFlowManager();
+		let seen: { operationId: string; options: unknown; input: unknown } | undefined;
+
+		manager.addConfinedOperation('confined-op', {
+			referenceKeys: [],
+			run: async (params) => {
+				seen = params;
+				return { outcome: { ok: true, value: { done: true } }, redactionValues: [] };
+			},
+		});
+
+		const result = await (manager as any).executeFlow(
+			confinedFlow('confined-op', { channel: 'general' }),
+			{ last: 'x' },
+			context
+		);
+
+		expect(result).toEqual({ done: true });
+		expect(seen?.operationId).toBe('op-row-9');
+		expect(seen?.options).toEqual({ channel: 'general' });
+		expect(seen?.input).toEqual({ last: 'x' });
+	});
+
+	it('keeps an inherited operation running after the Map registry change', async () => {
+		const manager = getFlowManager();
+		manager.addOperation('inherited-op', (() => ({ ran: true })) as any);
+
+		const result = await (manager as any).executeFlow(confinedFlow('inherited-op'), triggerData, context);
+		expect(result).toEqual({ ran: true });
+	});
+
+	it('rejects an ambiguous duplicate confined id without running either', async () => {
+		const manager = getFlowManager();
+		let runs = 0;
+
+		const descriptor = {
+			referenceKeys: [],
+			run: async () => {
+				runs++;
+				return { outcome: { ok: true as const, value: 1 }, redactionValues: [] };
+			},
+		};
+
+		manager.addConfinedOperation('dup', descriptor);
+		manager.addConfinedOperation('dup', descriptor);
+
+		const result = await (manager as any).executeFlow(confinedFlow('dup'), triggerData, context);
+
+		expect(result).toMatchObject({ message: expect.stringContaining('could not be resolved') });
+		expect(runs).toBe(0);
+	});
+
+	it('rejects a type declared by both an inherited and a confined extension', async () => {
+		const manager = getFlowManager();
+		let inheritedRan = false;
+		let confinedRan = false;
+
+		manager.addOperation('collide', (() => {
+			inheritedRan = true;
+			return {};
+		}) as any);
+
+		manager.addConfinedOperation('collide', {
+			referenceKeys: [],
+			run: async () => {
+				confinedRan = true;
+				return { outcome: { ok: true as const, value: 1 }, redactionValues: [] };
+			},
+		});
+
+		const result = await (manager as any).executeFlow(confinedFlow('collide'), triggerData, context);
+
+		expect(result).toMatchObject({ message: expect.stringContaining('could not be resolved') });
+		expect(inheritedRan).toBe(false);
+		expect(confinedRan).toBe(false);
+	});
+
+	it('treats a constructor-named operation type as unknown, not an object prototype member', async () => {
+		const manager = getFlowManager();
+		const result = await (manager as any).executeFlow(confinedFlow('constructor'), triggerData, context);
+		expect(result).toBeNull();
+	});
+
+	it('redacts the configured secret, the handle, and a value nested under a camelCase declared key', async () => {
+		const manager = getFlowManager();
+
+		manager.addConfinedOperation('redact-op', {
+			// A camelCase key must still key-redact, since redactFlowLog lowercases keys.
+			referenceKeys: ['apiKey', 'webhookConfig'],
+			run: async () => ({
+				outcome: { ok: true as const, value: { echoedHandle: 'handle-ref-abc', note: 'used sk_live_secret today' } },
+				redactionValues: ['sk_live_secret', 'handle-ref-abc'],
+			}),
+		});
+
+		revisionsCreateSpy.mockClear();
+
+		await (manager as any).executeFlow(
+			confinedFlow('redact-op', { apiKey: 'sk_live_secret', webhookConfig: { token: 'nested_secret' } }, 'all'),
+			triggerData,
+			context
+		);
+
+		const serialized = JSON.stringify(revisionsCreateSpy.mock.calls[0]![0].data);
+		expect(serialized).not.toContain('sk_live_secret');
+		expect(serialized).not.toContain('handle-ref-abc');
+		expect(serialized).not.toContain('nested_secret');
 	});
 });

@@ -1,7 +1,7 @@
 :root {
-	--family-sans-serif: 'IBM Plex Sans', system-ui, -apple-system, 'BlinkMacSystemFont', 'Segoe UI', 'Roboto',
-		'Helvetica', 'Arial', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
-	--family-monospace: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	--family-sans-serif: 'Inter', -apple-system, 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial',
+		sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+	--family-monospace: 'Fira Mono', monospace, sans-serif;
 	--family-serif: 'Merriweather', serif;
 }
 
@@ -9,33 +9,53 @@
 
 @font-face {
 	font-weight: 400;
-	font-family: 'IBM Plex Sans';
+	font-family: 'Inter';
 	font-style: normal;
-	src: url('../assets/fonts/IBMPlexSans-Regular.woff2') format('woff2');
+	src: url('../assets/fonts/Inter-Regular.woff2') format('woff2'),
+		url('../assets/fonts/Inter-Regular.woff') format('woff');
 	font-display: block;
 }
 
 @font-face {
 	font-weight: 500;
-	font-family: 'IBM Plex Sans';
+	font-family: 'Inter';
 	font-style: normal;
-	src: url('../assets/fonts/IBMPlexSans-Medium.woff2') format('woff2');
+	src: url('../assets/fonts/Inter-Medium.woff2') format('woff2'),
+		url('../assets/fonts/Inter-Medium.woff') format('woff');
+	font-display: block;
+}
+
+@font-face {
+	font-weight: 500;
+	font-family: 'Inter';
+	font-style: italic;
+	src: url('../assets/fonts/Inter-MediumItalic.woff2') format('woff2'),
+		url('../assets/fonts/Inter-MediumItalic.woff') format('woff');
 	font-display: block;
 }
 
 @font-face {
 	font-weight: 600;
-	font-family: 'IBM Plex Sans';
+	font-family: 'Inter';
 	font-style: normal;
-	src: url('../assets/fonts/IBMPlexSans-SemiBold.woff2') format('woff2');
+	src: url('../assets/fonts/Inter-SemiBold.woff2') format('woff2'),
+		url('../assets/fonts/Inter-SemiBold.woff') format('woff');
 	font-display: block;
 }
 
 @font-face {
 	font-weight: 700;
-	font-family: 'IBM Plex Sans';
+	font-family: 'Inter';
 	font-style: normal;
-	src: url('../assets/fonts/IBMPlexSans-Bold.woff2') format('woff2');
+	src: url('../assets/fonts/Inter-Bold.woff2') format('woff2'), url('../assets/fonts/Inter-Bold.woff') format('woff');
+	font-display: block;
+}
+
+@font-face {
+	font-weight: 800;
+	font-family: 'Inter';
+	font-style: normal;
+	src: url('../assets/fonts/Inter-Black.woff2') format('woff2'), url('../assets/fonts/Inter-Black.woff') format('woff');
 	font-display: block;
 }
 
@@ -43,10 +63,10 @@
 
 @font-face {
 	font-weight: 500;
-	font-family: 'IBM Plex Mono';
+	font-family: 'Fira Mono';
 	font-style: normal;
-	src: url('../assets/fonts/IBMPlexMono-Medium.woff2') format('woff2');
-	font-display: block;
+	src: url('../assets/fonts/FiraMono-Medium.woff2') format('woff2'),
+		url('../assets/fonts/FiraMono-Medium.woff') format('woff');
 }
 
 // Serif

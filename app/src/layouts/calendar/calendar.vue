@@ -49,12 +49,12 @@ export default defineComponent({
 
 <style lang="scss" scoped>
 .calendar-layout {
-	height: calc(100% - calc(var(--header-bar-height) + 2 * 24px));
+	height: calc(100% - calc(var(--header-bar-height) + 2 * 1.5rem));
 	padding: var(--content-padding);
 	padding-top: 0;
 }
 
 .v-notice {
-	margin-bottom: 24px;
+	margin-bottom: 1.5rem;
 }
 </style>

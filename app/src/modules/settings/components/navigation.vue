@@ -66,6 +66,11 @@ const navItems = [
 		name: t('settings_flows'),
 		to: `/settings/flows`,
 	},
+	{
+		icon: 'brick',
+		name: t('settings_extensions'),
+		to: `/settings/extensions`,
+	},
 ];
 
 const externalItems = computed(() => {
@@ -85,19 +90,9 @@ const externalItems = computed(() => {
 </script>
 
 <style scoped>
-.settings-navigation {
-	--v-list-item-active-rule-width: 2px;
-	--v-list-item-active-rule-color: var(--primary);
-	--v-list-item-border-radius-nav: 0;
-
-	:deep(.v-list-item.active) {
-		--v-list-item-icon-color: var(--primary);
-	}
-}
-
 .version .v-icon {
 	color: var(--foreground-subdued);
-	transform: translateY(2px);
+	transform: translateY(0.125rem);
 	transition: color var(--fast) var(--transition);
 }
 

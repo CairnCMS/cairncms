@@ -72,7 +72,8 @@ A few API surfaces deliberately have no SDK command in v1:
 
 - **Config-as-code endpoints** (`/config/snapshot`, `/config/apply`). Use `customEndpoint` from [Helpers](#helpers) below, or call the endpoints directly with `fetch`.
 - **Realtime / WebSocket subscriptions** (`realtime()`). Not implemented.
-- **Translation strings CRUD**, **content versioning**, and **extensions CRUD**. Use `customEndpoint` if you need them, or hit the REST endpoints directly.
+- **Translation strings CRUD** and the **read-only extension endpoints** (`/extensions`, inventory and the app-side loader). Use `customEndpoint`, or hit the REST endpoints directly.
+- **Content versioning**. Not implemented in v1, so there is no endpoint to call.
 
 The `rest()` composable also accepts options:
 
@@ -247,7 +248,7 @@ const result = await client.request(customEndpoint<MyResponse>({
 }));
 ```
 
-Useful for endpoints exposed by [custom extensions](/docs/develop/extensions/endpoints/) where a typed command does not exist.
+Useful for endpoints exposed by [custom extensions](/docs/develop/extensions/server-extensions/endpoints/) where a typed command does not exist.
 
 ### `withOptions`
 

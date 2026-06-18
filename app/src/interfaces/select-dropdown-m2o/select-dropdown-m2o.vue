@@ -248,7 +248,7 @@ function onSelection(selection: (number | string)[] | null) {
 .preview {
 	display: block;
 	flex-grow: 1;
-	height: calc(100% - 16px);
+	height: calc(100% - 1rem);
 	overflow: hidden;
 }
 
@@ -261,7 +261,7 @@ function onSelection(selection: (number | string)[] | null) {
 }
 
 .edit {
-	margin-right: 4px;
+	margin-right: 0.25rem;
 
 	&:hover {
 		--v-icon-color: var(--foreground-normal);

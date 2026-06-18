@@ -1,5 +1,5 @@
 .tooltip, #tooltip {
-	$arrow-alignment: 5px;
+	$arrow-alignment: .3125rem;
 
 	--tooltip-foreground-color: var(--foreground-inverted);
 	--tooltip-background-color: var(--background-inverted);
@@ -9,12 +9,12 @@
 	left: 0;
 	z-index: 850;
 	display: none;
-	max-width: 260px;
-	padding: 4px 8px;
+	max-width: 16.25rem;
+	padding: .25rem .5rem;
 	color: var(--tooltip-foreground-color);
 	word-break: break-word;
 	background-color: var(--tooltip-background-color);
-	border-radius: 2px;
+	border-radius: .125rem;
 	transition: opacity 200ms;
 
 	&.inverted {
@@ -42,8 +42,8 @@
 
 	&::after {
 		position: absolute;
-		top: -5px;
-		left: calc(50% - 5px);
+		top: -.3125rem;
+		left: calc(50% - .3125rem);
 		width: 0;
 		height: 0;
 		border-right: 5px solid transparent;
@@ -63,8 +63,8 @@
 
 	&.top::after {
 		top: unset;
-		bottom: -5px;
-		left: calc(50% - 5px);
+		bottom: -.3125rem;
+		left: calc(50% - .3125rem);
 		border-top: 5px solid var(--tooltip-background-color);
 		border-right: 5px solid transparent;
 		border-bottom: unset;
@@ -81,8 +81,8 @@
 	}
 
 	&.left::after {
-		top: calc(50% - 5px);
-		right: -5px;
+		top: calc(50% - .3125rem);
+		right: -.3125rem;
 		left: unset;
 		border-top: 5px solid transparent;
 		border-right: unset;
@@ -100,8 +100,8 @@
 	}
 
 	&.right::after {
-		top: calc(50% - 5px);
-		left: -5px;
+		top: calc(50% - .3125rem);
+		left: -.3125rem;
 		border-top: 5px solid transparent;
 		border-right: 5px solid var(--tooltip-background-color);
 		border-bottom: 5px solid transparent;

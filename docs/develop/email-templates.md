@@ -132,5 +132,5 @@ A flow that sends this template would set:
 ## Where to go next
 
 - [Configuration](/docs/manage/configuration/) covers `EXTENSIONS_PATH`, `EMAIL_FROM`, and the broader email transport configuration.
-- [Operations](/docs/develop/extensions/operations/) covers custom flow operations if you want a richer API for sending email than the built-in Send Email operation provides.
+- [Operations](/docs/develop/extensions/server-extensions/operations/) covers custom flow operations if you want a richer API for sending email than the built-in Send Email operation provides.
 - [Custom migrations](/docs/develop/custom-migrations/) is the other convention-based developer customization path documented here.

@@ -594,11 +594,11 @@ function discardAndLeave() {
 
 .layout {
 	--content-padding: 0px;
-	--content-padding-bottom: 32px;
+	--content-padding-bottom: 2rem;
 
 	position: relative;
 	width: 100%;
-	margin-top: 48px;
+	margin-top: 3rem;
 	overflow: auto;
 }
 
@@ -606,19 +606,19 @@ function discardAndLeave() {
 	--sidebar-detail-icon-color: var(--primary);
 	--sidebar-detail-color: var(--primary);
 	--sidebar-detail-color-active: var(--primary);
-	--form-vertical-gap: 24px;
+	--form-vertical-gap: 1.5rem;
 
 	display: contents;
 }
 
 :deep(.layout-options) {
-	--form-vertical-gap: 24px;
+	--form-vertical-gap: 1.5rem;
 
 	@include form-grid;
 }
 
 :deep(.layout-options .type-label) {
-	font-size: 1rem;
+	font-size: 0.875rem;
 }
 
 .subdued {

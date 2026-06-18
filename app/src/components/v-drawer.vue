@@ -125,11 +125,13 @@ const internalActive = computed({
 
 <style>
 body {
-	--v-drawer-max-width: 856px;
+	--v-drawer-max-width: 53.5rem;
 }
 </style>
 
 <style lang="scss" scoped>
+@import '@/styles/mixins/form-field-sizing';
+
 .v-drawer {
 	position: relative;
 	display: flex;
@@ -142,8 +144,8 @@ body {
 	.cancel {
 		display: none;
 		position: absolute;
-		top: 32px;
-		left: -76px;
+		top: 2rem;
+		left: -4.75rem;
 
 		@media (min-width: 960px) {
 			display: inline-flex;
@@ -162,10 +164,8 @@ body {
 	}
 
 	.content {
-		--border-radius: 2px;
-		--input-height: 54px;
-		--input-padding: 14px;
-		--form-vertical-gap: 24px;
+		@include form-field-sizing;
+		--form-vertical-gap: 1.5rem;
 
 		position: relative;
 		display: flex;
@@ -173,12 +173,12 @@ body {
 		overflow: hidden;
 
 		/* Page Content Spacing (Could be converted to Project Setting toggle) */
-		font-size: 15px;
-		line-height: 24px;
+		font-size: 0.9375rem;
+		line-height: 1.5rem;
 
 		.sidebar {
-			--v-list-item-background-color-hover: var(--background-normal-alt);
-			--v-list-item-background-color-active: var(--background-normal-alt);
+			--v-list-item-background-color-hover-nav: var(--border-subdued);
+			--v-list-item-background-color-active-nav: var(--border-normal);
 
 			display: none;
 
@@ -186,7 +186,7 @@ body {
 				position: relative;
 				display: block;
 				flex-shrink: 0;
-				width: 220px;
+				width: 13.75rem;
 				height: 100%;
 				height: auto;
 				background-color: var(--background-normal);
@@ -210,22 +210,22 @@ body {
 		}
 
 		.main {
-			--content-padding: 16px;
-			--content-padding-bottom: 32px;
+			--content-padding: 1rem;
+			--content-padding-bottom: 2rem;
 
 			position: relative;
 			flex-grow: 1;
 			overflow: auto;
 
 			@media (min-width: 600px) {
-				--content-padding: 32px;
-				--content-padding-bottom: 132px;
+				--content-padding: 2rem;
+				--content-padding-bottom: 8.25rem;
 			}
 		}
 	}
 
 	@media (min-width: 960px) {
-		width: calc(100% - 64px);
+		width: calc(100% - 4rem);
 	}
 }
 

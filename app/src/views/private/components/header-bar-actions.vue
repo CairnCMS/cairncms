@@ -51,7 +51,7 @@ const active = ref(false);
 	--v-icon-color: var(--foreground-normal);
 
 	flex-shrink: 0;
-	margin-right: 8px;
+	margin-right: 0.5rem;
 }
 
 @media (min-width: 960px) {
@@ -71,7 +71,7 @@ const active = ref(false);
 
 .actions .action-buttons > :deep(*:not(:last-child)) {
 	display: none;
-	margin-right: 8px;
+	margin-right: 0.5rem;
 }
 
 .actions .action-buttons .sidebar-toggle {
@@ -92,7 +92,7 @@ const active = ref(false);
 	justify-content: flex-end;
 	height: 100%;
 	padding: inherit;
-	padding-left: 8px;
+	padding-left: 0.5rem;
 	background-color: var(--background-page);
 }
 
@@ -102,6 +102,12 @@ const active = ref(false);
 
 .actions.active .action-buttons > :deep(*) {
 	display: inherit;
+}
+
+@media (max-width: 959.98px) {
+	.actions .action-buttons > :deep(.desktop-only) {
+		display: none !important;
+	}
 }
 
 @media (min-width: 960px) {

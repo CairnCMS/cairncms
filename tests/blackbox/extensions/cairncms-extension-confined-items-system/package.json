@@ -1,0 +1,22 @@
+{
+	"name": "cairncms-extension-confined-items-system",
+	"version": "1.0.0",
+	"type": "module",
+	"private": true,
+	"cairncms:extension": {
+		"type": "operation",
+		"path": {
+			"app": "app.js",
+			"api": "api.js"
+		},
+		"source": {
+			"app": "src/app.js",
+			"api": "src/api.js"
+		},
+		"runtime": "confined-server",
+		"capabilities": {
+			"items": "system"
+		},
+		"host": "^1.0.0"
+	}
+}

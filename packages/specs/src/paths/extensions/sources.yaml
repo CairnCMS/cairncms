@@ -1,0 +1,26 @@
+get:
+  tags:
+    - Extensions
+  operationId: getExtensionSource
+  summary: Get an App Extension Bundle Chunk
+  description:
+    Serves the bundled JavaScript for installed app extensions. The admin app loads these chunks at boot, so
+    this route is reachable without authentication. The response carries a Cache-Control header derived from
+    EXTENSIONS_CACHE_TTL.
+  security: []
+  parameters:
+    - name: chunk
+      in: path
+      description: The name of the bundled chunk, for example index.js.
+      required: true
+      schema:
+        type: string
+  responses:
+    '200':
+      description: Successful request
+      content:
+        application/javascript:
+          schema:
+            type: string
+    '404':
+      $ref: '../../openapi.yaml#/components/responses/NotFoundError'

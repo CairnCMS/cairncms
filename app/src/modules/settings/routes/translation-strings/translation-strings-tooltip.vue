@@ -70,7 +70,7 @@ const displayedTranslation = computed(() => {
 
 <style lang="scss" scoped>
 .v-list {
-	width: 300px;
+	width: 18.75rem;
 }
 .translation-strings-display {
 	display: flex;
@@ -89,12 +89,12 @@ const displayedTranslation = computed(() => {
 }
 
 .translation-display-text {
-	margin-right: 4px;
-	padding: 2px 0;
+	margin-right: 0.25rem;
+	padding: 0.125rem 0;
 }
 
 .translation-item-text {
-	padding-top: 2px;
+	padding-top: 0.125rem;
 }
 .translation-display-text,
 .translation-item-text {
@@ -105,36 +105,36 @@ const displayedTranslation = computed(() => {
 
 .header {
 	display: flex;
-	gap: 20px;
+	gap: 1.25rem;
 	align-items: center;
 	justify-content: space-between;
 	color: var(--foreground-subdued);
-	font-size: 12px;
+	font-size: 0.75rem;
 
 	.lang {
 		font-weight: 600;
 	}
 
 	.v-icon {
-		margin-right: 4px;
+		margin-right: 0.25rem;
 	}
 
 	.v-progress-linear {
 		flex: 1;
 		width: unset;
-		max-width: 100px;
-		border-radius: 2px;
+		max-width: 6.25rem;
+		border-radius: 0.125rem;
 	}
 }
 
 .v-list-item-content {
-	padding-top: 4px;
-	padding-bottom: 2px;
+	padding-top: 0.25rem;
+	padding-bottom: 0.125rem;
 }
 
 .v-list-item:not(:first-child) {
 	.header {
-		padding-top: 8px;
+		padding-top: 0.5rem;
 		border-top: var(--border-width) solid var(--border-subdued);
 	}
 }

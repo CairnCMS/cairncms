@@ -139,7 +139,7 @@ const { otherValues, addOtherValue, setOtherValue } = useCustomSelectionMultiple
 	--columns: 1;
 
 	display: grid;
-	grid-gap: 12px 32px;
+	grid-gap: 0.75rem 2rem;
 	grid-template-columns: repeat(var(--columns), minmax(0, 1fr));
 }
 
@@ -193,16 +193,16 @@ const { otherValues, addOtherValue, setOtherValue } = useCustomSelectionMultiple
 	align-items: center;
 	width: 100%;
 	height: var(--input-height);
-	padding: 10px;
+	padding: 0.625rem;
 	border: 2px dashed var(--border-normal);
 	border-radius: var(--border-radius);
 
 	input {
 		display: block;
 		flex-grow: 1;
-		width: 20px; /* this will auto grow with flex above */
+		width: 1.25rem; /* this will auto grow with flex above */
 		margin: 0;
-		margin-left: 8px;
+		margin-left: 0.5rem;
 		padding: 0;
 		background-color: transparent;
 		border: none;

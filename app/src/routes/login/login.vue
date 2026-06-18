@@ -74,21 +74,21 @@ const authenticated = computed(() => appStore.authenticated);
 
 <style lang="scss" scoped>
 h1 {
-	margin-bottom: 20px;
+	margin-bottom: 1.25rem;
 }
 
 .header {
 	display: flex;
 	align-items: end;
 	justify-content: space-between;
-	margin-bottom: 20px;
+	margin-bottom: 1.25rem;
 
 	.type-title {
 		margin-bottom: 0;
 	}
 
 	.provider-select {
-		margin-bottom: 8px;
+		margin-bottom: 0.5rem;
 	}
 }
 </style>

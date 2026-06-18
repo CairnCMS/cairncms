@@ -22,7 +22,7 @@ const svg = (color: string, hide: boolean) => `
 </svg>`;
 
 export function setFavicon(color: string | null | undefined, hide = false): void {
-	color = color || cssVar('--primary');
+	color = color || cssVar('--brand');
 
 	const icon = svg(color, hide);
 	const wrapper = document.createElement('div');

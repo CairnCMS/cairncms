@@ -31,7 +31,7 @@ const emit = defineEmits<{
 }>();
 
 const navEl = ref<HTMLElement>();
-const minWidth = ref<number>(0);
+const resolvedMinWidth = ref<number>(0);
 const handleHover = ref<boolean>(false);
 const dragging = ref<boolean>(false);
 const dragStartX = ref<number>(0);
@@ -40,7 +40,7 @@ const currentWidth = ref<number | null>(null);
 const rafId = ref<number | null>(null);
 
 onMounted(() => {
-	minWidth.value = props.minWidth ? props.minWidth : navEl.value?.offsetWidth || 0;
+	resolvedMinWidth.value = props.minWidth ? props.minWidth : navEl.value?.offsetWidth || 0;
 
 	if (props.width && navEl.value) navEl.value.style.width = `${props.width}px`;
 });
@@ -65,7 +65,7 @@ function onResizeHandlePointerDown(event: PointerEvent) {
 }
 
 function resetNavWidth() {
-	currentWidth.value = minWidth.value;
+	currentWidth.value = resolvedMinWidth.value;
 
 	if (navEl.value) {
 		navEl.value.style.width = `${currentWidth.value}px`;
@@ -76,11 +76,11 @@ function onPointerMove(event: PointerEvent) {
 	if (!dragging.value) return;
 
 	rafId.value = window.requestAnimationFrame(() => {
-		currentWidth.value = Math.max(minWidth.value, dragStartWidth.value + (event.pageX - dragStartX.value));
+		currentWidth.value = Math.max(resolvedMinWidth.value, dragStartWidth.value + (event.pageX - dragStartX.value));
 		if (props.maxWidth && currentWidth.value >= props.maxWidth) currentWidth.value = props.maxWidth;
 
-		if (currentWidth.value > minWidth.value && currentWidth.value <= minWidth.value + 10) {
-			currentWidth.value = minWidth.value; // Snap when nearing min width
+		if (currentWidth.value > resolvedMinWidth.value && currentWidth.value <= resolvedMinWidth.value + 10) {
+			currentWidth.value = resolvedMinWidth.value; // Snap when nearing min width
 		}
 
 		if (navEl.value) {
@@ -104,9 +104,9 @@ function onPointerUp() {
 .resize-handle {
 	position: absolute;
 	top: 0;
-	right: -2px;
+	right: -0.125rem;
 	bottom: 0;
-	width: 4px;
+	width: 0.25rem;
 	background-color: var(--primary);
 	cursor: ew-resize;
 	opacity: 0;

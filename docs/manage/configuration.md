@@ -179,7 +179,7 @@ CairnCMS sets standard security response headers via Helmet. Most can be tuned p
 
 - **`HSTS_ENABLED`** — emit the `Strict-Transport-Security` header. Default `false`. Enable in production when serving over HTTPS.
 - **`HSTS_*`** — pass-through to Helmet's HSTS options (`HSTS_MAX_AGE`, `HSTS_INCLUDE_SUBDOMAINS`, `HSTS_PRELOAD`).
-- **`CONTENT_SECURITY_POLICY_*`** — pass-through to Helmet's CSP option shape. The default CSP allows the admin app to load its own assets and connect to the API origin.
+- **`CONTENT_SECURITY_POLICY_*`** — pass-through to Helmet's CSP option shape. The default policy limits the admin app's `connect-src` to first-party (`'self'`) plus the built-in map origins (OpenStreetMap tiles, OpenMapTiles fonts, and Mapbox), with no external wildcard. Setting `CONTENT_SECURITY_POLICY_DIRECTIVES__CONNECT_SRC` fully replaces that list, so include `'self'` and any map origins you still rely on. This bounds where an app extension can connect from the browser. See [Security hardening](/docs/manage/security-hardening/) for the extension egress details.
 - **`ASSETS_CONTENT_SECURITY_POLICY`** — separate CSP applied only to `/assets/*` responses. Useful when serving user-uploaded content with a stricter policy than the rest of the API.
 - **`IMPORT_IP_DENY_LIST`** — comma-separated exact IP addresses blocked from URL imports (SSRF defense). Matches are literal string comparisons; CIDR notation is not supported. Default blocks `0.0.0.0` and the EC2/cloud metadata endpoint `169.254.169.254`. The `0.0.0.0` entry has a special meaning: when present, all loopback addresses and any address bound to the host's own network interfaces are also blocked. To block other addresses, list each one explicitly.
 
@@ -348,9 +348,21 @@ Asset transformation settings:
 ## Extensions
 
 - **`EXTENSIONS_PATH`** — root folder for local extensions, custom migrations, and email templates. Default `./extensions`.
-- **`EXTENSIONS_AUTO_RELOAD`** — when `true`, the API watches extension files and reloads on change. Default `false`. Disabled in development; see the [Creating extensions](/docs/develop/extensions/creating-extensions/) page for the full caveat.
+- **`EXTENSIONS_AUTO_RELOAD`** — when `true`, the API watches extension files and reloads on change, including when `NODE_ENV=development`. Default `false`. See the [Creating extensions](/docs/develop/extensions/creating-extensions/) page for the development workflow.
 - **`EXTENSIONS_CACHE_TTL`** — `Cache-Control` max-age applied to the `/extensions/*` bundle responses. Unset by default (no client cache).
 - **`PACKAGE_FILE_LOCATION`** — directory containing the project `package.json` (used to discover npm-installed extensions). Default `.`.
+
+### Sandboxed extensions
+
+These govern the sandboxed server runtime that a confined extension runs in. It is separate from the Flows Run Script sandbox documented below. The size variables accept a byte count or a size string such as `64MB`, and the timeout accepts a millisecond count or a duration string such as `10s`. See the [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) reference for the runtime model.
+
+- **`EXTENSIONS_SANDBOX_OS_HARDENING`** — `auto` or `required`. Default `auto`. Under `auto`, the OS hardening layers are applied wherever the host supports them and never block a confined extension from running. Under `required`, the runtime refuses to start a confined extension on a host that cannot provide the escape-containment core (the network namespace and the Node permission model).
+- **`EXTENSIONS_SANDBOX_MAX_MEMORY`** — per-invocation memory cap for the QuickJS guest heap. Default `64MB`. Bounded between 16MB and 512MB. When cgroup hardening is available, the whole-process memory limit is derived from this value plus the child's base RSS and headroom.
+- **`EXTENSIONS_SANDBOX_TIMEOUT`** — per-invocation wall-clock timeout for a confined child process. Default `10s`. Bounded between 1s and 5m.
+- **`EXTENSIONS_SANDBOX_MAX_PROCESSES`** — maximum number of concurrent confined child processes. Defaults to an adaptive value up to `4`, lowered on smaller hosts. An explicit value is bounded between 1 and 32 and fails closed if it would overcommit the sandbox memory budget.
+- **`EXTENSIONS_SANDBOX_MAX_RESULT`** — maximum serialized size of a handler result. Default `1MB`. Bounded between 1KB and 16MB.
+- **`EXTENSIONS_SANDBOX_MAX_HOST_API_CALL`** — maximum serialized size of a single `host.*` call payload. Default `256KB`. Bounded between 1KB and 4MB.
+- **`EXTENSIONS_SANDBOX_MAX_ARTIFACT`** — maximum size of a built confined artifact the loader will read. Default `8MB`. Bounded between 1KB and 32MB.
 
 ## Flows
 

@@ -48,7 +48,7 @@ body {
 .v-tab.horizontal {
 	color: var(--v-tab-color);
 	font-weight: 500;
-	font-size: 14px;
+	font-size: 0.875rem;
 	background-color: var(--v-tab-background-color);
 	transition: color var(--fast) var(--transition);
 

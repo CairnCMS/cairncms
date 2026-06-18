@@ -140,15 +140,15 @@ const mainElement = inject<Ref<Element | undefined>>('main-element');
 
 const layoutElement = ref<HTMLElement>();
 
-const { width } = useElementSize(layoutElement);
+const { width: innerWidth } = useElementSize(layoutElement);
 
 watch(
 	() => props.page,
 	() => mainElement!.value?.scrollTo({ top: 0, behavior: 'smooth' })
 );
 
-watch(width, () => {
-	emit('update:width', width.value);
+watch(innerWidth, () => {
+	emit('update:width', innerWidth.value);
 });
 </script>
 
@@ -161,7 +161,7 @@ watch(width, () => {
 .grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(var(--size), 1fr));
-	gap: 32px 24px;
+	gap: 2rem 1.5rem;
 
 	&.single-row {
 		grid-template-columns: repeat(auto-fit, var(--size));
@@ -172,7 +172,7 @@ watch(width, () => {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding-top: 40px;
+	padding-top: 2.5rem;
 
 	.pagination {
 		display: inline-block;
@@ -182,12 +182,12 @@ watch(width, () => {
 		display: flex;
 		align-items: center;
 		justify-content: flex-end;
-		width: 240px;
+		width: 15rem;
 		color: var(--foreground-subdued);
 
 		span {
 			width: auto;
-			margin-right: 4px;
+			margin-right: 0.25rem;
 		}
 
 		.v-select {
@@ -197,6 +197,6 @@ watch(width, () => {
 }
 
 .reset-preset {
-	margin-top: 24px;
+	margin-top: 1.5rem;
 }
 </style>

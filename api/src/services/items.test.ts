@@ -456,7 +456,7 @@ describe('Integration Tests', () => {
 						schema: schemas[schema].schema,
 					});
 
-					expect(() =>
+					await expect(
 						itemsService.readOne(rawItems[0]!.id, { filter: { name: { _eq: 'something' } } })
 					).rejects.toThrow("You don't have permission to access this.");
 
@@ -678,7 +678,7 @@ describe('Integration Tests', () => {
 						schema: schemas[schema].schema,
 					});
 
-					expect(() =>
+					await expect(
 						itemsService.readOne(rawItems[0]!.id, {
 							fields: ['id', 'items.*'],
 							deep: { items: { _filter: { title: { _eq: childItems[0]!.title } } } as NestedDeepQuery },
@@ -706,7 +706,7 @@ describe('Integration Tests', () => {
 						schema: customSchema,
 					});
 
-					expect(() => itemsService.readOne(rawItems[0]!.id)).rejects.toThrow(
+					await expect(itemsService.readOne(rawItems[0]!.id)).rejects.toThrow(
 						"You don't have permission to access this."
 					);
 
@@ -740,7 +740,7 @@ describe('Integration Tests', () => {
 						schema: schemas[schema].schema,
 					});
 
-					expect(() => itemsService.readOne(rawItems[0]!.id)).rejects.toThrow(
+					await expect(itemsService.readOne(rawItems[0]!.id)).rejects.toThrow(
 						"You don't have permission to access this."
 					);
 

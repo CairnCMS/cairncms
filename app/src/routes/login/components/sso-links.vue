@@ -80,11 +80,11 @@ const errorFormatted = computed(() => {
 
 <style lang="scss" scoped>
 .v-divider {
-	margin: 24px 0;
+	margin: 1.5rem 0;
 }
 
 .v-notice {
-	margin-bottom: 20px;
+	margin-bottom: 1.25rem;
 }
 
 .sso-link {
@@ -108,15 +108,15 @@ const errorFormatted = computed(() => {
 		border-radius: var(--border-radius);
 
 		span {
-			--v-icon-size: 28px;
+			--v-icon-size: 1.75rem;
 		}
 	}
 
 	.sso-title {
 		display: flex;
 		align-items: center;
-		padding: 0 16px 0 20px;
-		font-size: 16px;
+		padding: 0 1rem 0 1.25rem;
+		font-size: 1rem;
 	}
 
 	&:hover {
@@ -124,7 +124,7 @@ const errorFormatted = computed(() => {
 	}
 
 	& + & {
-		margin-top: 12px;
+		margin-top: 0.75rem;
 	}
 }
 </style>

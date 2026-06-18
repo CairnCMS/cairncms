@@ -63,7 +63,7 @@ async function onSubmit() {
 
 .v-input,
 .v-notice {
-	margin-bottom: 20px;
+	margin-bottom: 1.25rem;
 }
 
 .sign-in {

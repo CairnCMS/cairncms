@@ -126,7 +126,7 @@ describe('AssetsService.statAsset (GHSA-rv78-qqrq-73m5)', () => {
 			primeKnex(tracker);
 			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
 
-			const result = await service.statAsset(VALID_UUID, {});
+			const result = await service.statAsset(VALID_UUID, { transformationParams: {} });
 
 			expect(result.file.id).toBe(VALID_UUID);
 			expect(result.stat).toEqual({ size: 1024 });
@@ -142,7 +142,7 @@ describe('AssetsService.statAsset (GHSA-rv78-qqrq-73m5)', () => {
 			storageStat.mockImplementation(async (name: string) => ({ size: name === FILE_DISK_NAME ? 1024 : 256 }));
 
 			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
-			const result = await service.statAsset(VALID_UUID, { width: 100 });
+			const result = await service.statAsset(VALID_UUID, { transformationParams: { width: 100 } });
 
 			expect(result.stat).not.toBeNull();
 			expect(result.stat!.size).toBe(256);
@@ -162,7 +162,7 @@ describe('AssetsService.statAsset (GHSA-rv78-qqrq-73m5)', () => {
 			storageExists.mockImplementation(async (name: string) => name === FILE_DISK_NAME);
 
 			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
-			const result = await service.statAsset(VALID_UUID, { width: 313, format: 'avif' });
+			const result = await service.statAsset(VALID_UUID, { transformationParams: { width: 313, format: 'avif' } });
 
 			expect(result.stat).toBeNull();
 			expect(storageRead).not.toHaveBeenCalled();
@@ -174,7 +174,7 @@ describe('AssetsService.statAsset (GHSA-rv78-qqrq-73m5)', () => {
 			storageExists.mockImplementation(async (name: string) => name === FILE_DISK_NAME);
 
 			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
-			const result = await service.statAsset(VALID_UUID, { format: 'webp' });
+			const result = await service.statAsset(VALID_UUID, { transformationParams: { format: 'webp' } });
 
 			expect(result.file.type).toBe('image/webp');
 			expect(result.stat).toBeNull();
@@ -195,7 +195,7 @@ describe('AssetsService.statAsset (GHSA-rv78-qqrq-73m5)', () => {
 			};
 
 			const service = new AssetsService({ knex: db, accountability: nonAdminAccountability, schema });
-			await service.statAsset(VALID_UUID, {});
+			await service.statAsset(VALID_UUID, { transformationParams: {} });
 
 			expect(checkAccessSpy).toHaveBeenCalledWith('read', 'directus_files', VALID_UUID);
 		});
@@ -204,7 +204,10 @@ describe('AssetsService.statAsset (GHSA-rv78-qqrq-73m5)', () => {
 			primeKnex(tracker);
 			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
 
-			await expect(service.statAsset(INVALID_UUID, {})).rejects.toBeInstanceOf(ForbiddenException);
+			await expect(service.statAsset(INVALID_UUID, { transformationParams: {} })).rejects.toBeInstanceOf(
+				ForbiddenException
+			);
+
 			expect(storageRead).not.toHaveBeenCalled();
 		});
 
@@ -212,7 +215,10 @@ describe('AssetsService.statAsset (GHSA-rv78-qqrq-73m5)', () => {
 			primeKnex(tracker, null);
 			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
 
-			await expect(service.statAsset(VALID_UUID, {})).rejects.toBeInstanceOf(ForbiddenException);
+			await expect(service.statAsset(VALID_UUID, { transformationParams: {} })).rejects.toBeInstanceOf(
+				ForbiddenException
+			);
+
 			expect(storageRead).not.toHaveBeenCalled();
 		});
 
@@ -221,7 +227,10 @@ describe('AssetsService.statAsset (GHSA-rv78-qqrq-73m5)', () => {
 			storageExists.mockResolvedValue(false);
 			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
 
-			await expect(service.statAsset(VALID_UUID, {})).rejects.toBeInstanceOf(ForbiddenException);
+			await expect(service.statAsset(VALID_UUID, { transformationParams: {} })).rejects.toBeInstanceOf(
+				ForbiddenException
+			);
+
 			expect(storageRead).not.toHaveBeenCalled();
 		});
 
@@ -229,7 +238,10 @@ describe('AssetsService.statAsset (GHSA-rv78-qqrq-73m5)', () => {
 			primeKnex(tracker);
 			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
 
-			await expect(service.statAsset(VALID_UUID, {}, {})).rejects.toBeInstanceOf(RangeNotSatisfiableException);
+			await expect(service.statAsset(VALID_UUID, { transformationParams: {} }, {})).rejects.toBeInstanceOf(
+				RangeNotSatisfiableException
+			);
+
 			expect(storageRead).not.toHaveBeenCalled();
 		});
 	});
@@ -275,7 +287,7 @@ describe('AssetsService.getAsset (regression — must still open a storage read)
 		primeKnex(tracker);
 		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
 
-		await service.getAsset(VALID_UUID, {});
+		await service.getAsset(VALID_UUID, { transformationParams: {} });
 
 		expect(storageRead).toHaveBeenCalled();
 		expect(storageRead.mock.calls[0]![0]).toBe(FILE_DISK_NAME);
@@ -286,7 +298,7 @@ describe('AssetsService.getAsset (regression — must still open a storage read)
 		storageExists.mockImplementation(async () => true);
 		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
 
-		await service.getAsset(VALID_UUID, { width: 100 });
+		await service.getAsset(VALID_UUID, { transformationParams: { width: 100 } });
 
 		expect(storageRead).toHaveBeenCalled();
 		const readPaths = storageRead.mock.calls.map((call) => call[0]);
@@ -359,7 +371,9 @@ describe('AssetsService.getAsset uncached-transform pipeline (GHSA-j8xj-7jff-46m
 
 		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
 
-		await expect(service.getAsset(VALID_UUID, { width: 100 })).rejects.toThrow(/bad resize args/);
+		await expect(service.getAsset(VALID_UUID, { transformationParams: { width: 100 } })).rejects.toThrow(
+			/bad resize args/
+		);
 
 		expect(storageRead).not.toHaveBeenCalled();
 	});
@@ -371,7 +385,9 @@ describe('AssetsService.getAsset uncached-transform pipeline (GHSA-j8xj-7jff-46m
 		storageWrite.mockRejectedValueOnce(new Error('s3 write failed'));
 		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
 
-		await expect(service.getAsset(VALID_UUID, { width: 100 })).rejects.toThrow(/s3 write failed/);
+		await expect(service.getAsset(VALID_UUID, { transformationParams: { width: 100 } })).rejects.toThrow(
+			/s3 write failed/
+		);
 
 		expect(fakeReadStream.destroy).toHaveBeenCalledTimes(1);
 	});
@@ -383,7 +399,7 @@ describe('AssetsService.getAsset uncached-transform pipeline (GHSA-j8xj-7jff-46m
 		storageRead.mockResolvedValueOnce(fakeSourceStream).mockResolvedValueOnce(fakeCachedStream);
 		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
 
-		await service.getAsset(VALID_UUID, { width: 100 });
+		await service.getAsset(VALID_UUID, { transformationParams: { width: 100 } });
 
 		expect(storageRead).toHaveBeenCalled();
 		expect(storageRead.mock.calls[0]![0]).toBe(FILE_DISK_NAME);
@@ -406,7 +422,7 @@ describe('AssetsService.getAsset uncached-transform pipeline (GHSA-j8xj-7jff-46m
 		);
 
 		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
-		const pending = service.getAsset(VALID_UUID, { width: 100 });
+		const pending = service.getAsset(VALID_UUID, { transformationParams: { width: 100 } });
 
 		while (fakeReadStream.on.mock.calls.find((c: any[]) => c[0] === 'error') === undefined) {
 			await new Promise((resolve) => setTimeout(resolve, 5));

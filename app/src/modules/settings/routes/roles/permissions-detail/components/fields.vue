@@ -85,24 +85,24 @@ const fields = computed({
 
 <style lang="scss" scoped>
 .type-label {
-	margin-bottom: 8px;
+	margin-bottom: 0.5rem;
 }
 
 .v-notice {
-	margin-bottom: 36px;
+	margin-bottom: 2.25rem;
 }
 
 .app-minimal {
 	.v-divider {
-		margin: 24px 0;
+		margin: 1.5rem 0;
 	}
 
 	.v-notice {
-		margin-bottom: 24px;
+		margin-bottom: 1.5rem;
 	}
 
 	.app-minimal-preview {
-		padding: 16px;
+		padding: 1rem;
 		font-family: var(--family-monospace);
 		background-color: var(--background-subdued);
 		border-radius: var(--border-radius);

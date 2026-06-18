@@ -58,7 +58,7 @@ div.preview {
 	display: flex;
 
 	&:not(.open) {
-		margin-bottom: 12px;
+		margin-bottom: 0.75rem;
 	}
 
 	.spacer {
@@ -70,7 +70,7 @@ div.preview {
 		--v-icon-color-hover: var(--foreground-normal);
 
 		.v-icon + .v-icon {
-			margin-left: 4px;
+			margin-left: 0.25rem;
 		}
 
 		.deselect {

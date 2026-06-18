@@ -486,11 +486,11 @@ function revert(values: Record<string, any>) {
 	display: flex;
 	align-items: center;
 	max-width: calc(var(--form-column-max-width) * 2 + var(--form-horizontal-gap));
-	height: 112px;
+	height: 7rem;
 	margin-bottom: var(--form-vertical-gap);
-	padding: 20px;
+	padding: 1.25rem;
 	background-color: var(--background-normal);
-	border-radius: calc(var(--border-radius) + 4px);
+	border-radius: calc(var(--border-radius) + 0.25rem);
 
 	.avatar {
 		--v-icon-color: var(--foreground-subdued);
@@ -499,9 +499,9 @@ function revert(values: Record<string, any>) {
 		flex-shrink: 0;
 		align-items: center;
 		justify-content: center;
-		width: 84px;
-		height: 84px;
-		margin-right: 16px;
+		width: 5.25rem;
+		height: 5.25rem;
+		margin-right: 1rem;
 		overflow: hidden;
 		background-color: var(--background-normal);
 		border: solid 6px var(--white);
@@ -520,9 +520,9 @@ function revert(values: Record<string, any>) {
 		}
 
 		@media (min-width: 600px) {
-			width: 144px;
-			height: 144px;
-			margin-right: 22px;
+			width: 9rem;
+			height: 9rem;
+			margin-right: 1.375rem;
 		}
 	}
 
@@ -531,11 +531,11 @@ function revert(values: Record<string, any>) {
 		overflow: hidden;
 
 		.v-skeleton-loader {
-			width: 175px;
+			width: 10.9375rem;
 		}
 
 		.v-skeleton-loader:not(:last-child) {
-			margin-bottom: 16px;
+			margin-bottom: 1rem;
 		}
 
 		.v-chip {
@@ -544,7 +544,7 @@ function revert(values: Record<string, any>) {
 			--v-chip-color-hover: var(--foreground-subdued);
 			--v-chip-background-color-hover: var(--background-subdued);
 
-			margin-top: 4px;
+			margin-top: 0.25rem;
 
 			&.active {
 				--v-chip-color: var(--primary);
@@ -570,7 +570,7 @@ function revert(values: Record<string, any>) {
 	}
 
 	@media (min-width: 600px) {
-		height: 188px;
+		height: 11.75rem;
 
 		.user-box-content .location {
 			display: block;

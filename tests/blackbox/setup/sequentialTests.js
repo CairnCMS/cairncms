@@ -9,6 +9,7 @@ exports.list = {
 		{ testFilePath: '/routes/fields/change-fields.test.ts' },
 		{ testFilePath: '/routes/fields/crud.test.ts' },
 		{ testFilePath: '/routes/relations/partial-patch-crash.test.ts' },
+		{ testFilePath: '/routes/extensions/diagnostics.test.ts' },
 	],
 	after: [
 		{ testFilePath: '/schema/timezone/timezone.test.ts' },
@@ -16,6 +17,10 @@ exports.list = {
 		{ testFilePath: '/schema/timezone/timezone-changed-node-tz-asia.test.ts' },
 		{ testFilePath: '/logger/redact.test.ts' },
 		{ testFilePath: '/routes/flows/webhook.test.ts' },
+		{ testFilePath: '/routes/extensions/confined-items.test.ts' },
+		{ testFilePath: '/routes/extensions/confined-endpoints.test.ts' },
+		{ testFilePath: '/routes/extensions/confined-hooks.test.ts' },
+		{ testFilePath: '/routes/extensions/confined-bundle.test.ts' },
 		{ testFilePath: '/routes/collections/schema-cache.test.ts' },
 		{ testFilePath: '/routes/permissions/cache-purge.test.ts' },
 		{ testFilePath: '/routes/items/relational-presets.test.ts' },

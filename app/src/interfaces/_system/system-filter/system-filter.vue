@@ -236,15 +236,15 @@ function addKeyAsNode() {
 	}
 
 	:deep(.group) {
-		margin-left: 18px;
-		padding-left: 10px;
+		margin-left: 1.125rem;
+		padding-left: 0.625rem;
 		border-left: var(--border-width) solid var(--border-subdued);
 	}
 
 	.v-list {
 		min-width: auto;
-		margin: 0px 0px 10px;
-		padding: 20px 20px 12px;
+		margin: 0px 0px 0.625rem;
+		padding: 1.25rem 1.25rem 0.75rem;
 		border: var(--border-width) solid var(--border-subdued);
 
 		& > :deep(.group) {
@@ -255,7 +255,7 @@ function addKeyAsNode() {
 	}
 
 	.buttons {
-		padding: 0 10px;
+		padding: 0 0.625rem;
 		font-weight: 600;
 	}
 
@@ -298,12 +298,12 @@ function addKeyAsNode() {
 			display: flex;
 			align-items: center;
 			width: 100%;
-			height: 30px;
+			height: 1.875rem;
 			padding: 0;
 			color: var(--foreground-subdued);
 			background-color: var(--background-page);
 			border: var(--border-width) solid var(--border-subdued);
-			border-radius: 100px;
+			border-radius: 6.25rem;
 			transition: border-color var(--fast) var(--transition);
 			&:hover,
 			&.active {
@@ -316,12 +316,12 @@ function addKeyAsNode() {
 				}
 			}
 			.add {
-				margin-left: 6px;
-				margin-right: 4px;
+				margin-left: 0.375rem;
+				margin-right: 0.25rem;
 			}
 			.expand_more {
 				margin-left: auto;
-				margin-right: 6px;
+				margin-right: 0.375rem;
 				transition: transform var(--medium) var(--transition-out);
 			}
 		}
@@ -336,7 +336,7 @@ function addKeyAsNode() {
 	}
 
 	button + button {
-		margin-left: 24px;
+		margin-left: 1.5rem;
 	}
 }
 

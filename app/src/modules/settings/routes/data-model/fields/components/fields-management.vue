@@ -169,22 +169,22 @@ async function setNestedSort(updates?: Field[]) {
 
 <style lang="scss" scoped>
 .v-divider {
-	margin: 32px 0;
+	margin: 2rem 0;
 }
 
 .fields-management {
-	margin-bottom: 24px;
+	margin-bottom: 1.5rem;
 }
 
 .field-grid {
 	position: relative;
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-	padding-bottom: 24px;
+	padding-bottom: 1.5rem;
 }
 
 .field-select {
-	margin: 4px;
+	margin: 0.25rem;
 }
 
 .field-select:deep(.field-grid) {
@@ -192,26 +192,26 @@ async function setNestedSort(updates?: Field[]) {
 }
 
 .field-select:deep(.field-grid.group.full.nested) {
-	margin: 4px 0;
+	margin: 0.25rem 0;
 
 	.field-select {
-		margin: 4px;
+		margin: 0.25rem;
 	}
 }
 
 .add-field {
-	--v-button-font-size: 14px;
+	--v-button-font-size: 0.875rem;
 	--v-button-background-color: var(--primary);
 	--v-button-background-color-hover: var(--primary-125);
 
-	margin-top: -12px;
+	margin-top: -0.75rem;
 }
 
 .add-field-advanced {
 	display: block;
 	width: max-content;
 	margin: 0 auto;
-	margin-top: 8px;
+	margin-top: 0.5rem;
 	color: var(--foreground-subdued);
 	transition: color var(--fast) var(--transition);
 
@@ -221,7 +221,7 @@ async function setNestedSort(updates?: Field[]) {
 }
 
 .visible {
-	margin-bottom: 24px;
+	margin-bottom: 1.5rem;
 }
 
 .list-move {

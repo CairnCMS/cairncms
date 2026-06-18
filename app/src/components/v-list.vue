@@ -56,11 +56,11 @@ useGroupableParent(
 
 <style scoped>
 :global(body) {
-	--v-list-padding: 4px 0;
+	--v-list-padding: 0.25rem 0;
 	--v-list-border-radius: var(--border-radius);
 	--v-list-max-height: none;
 	--v-list-max-width: none;
-	--v-list-min-width: 220px;
+	--v-list-min-width: 13.75rem;
 	--v-list-min-height: none;
 	--v-list-color: var(--foreground-normal-alt);
 	--v-list-color-hover: var(--foreground-normal-alt);
@@ -79,18 +79,18 @@ useGroupableParent(
 	padding: var(--v-list-padding);
 	overflow: auto;
 	color: var(--v-list-color);
-	line-height: 22px;
+	line-height: 1.375rem;
 	list-style: none;
 	border-radius: var(--v-list-border-radius);
 }
 
 .nav {
-	--v-list-padding: 12px 0;
+	--v-list-padding: 0.75rem 0;
 	--v-list-item-icon-color: var(--foreground-subdued);
 }
 
 :slotted(.v-divider) {
-	max-width: calc(100% - 16px);
-	margin: 8px;
+	max-width: calc(100% - 1rem);
+	margin: 0.5rem;
 }
 </style>

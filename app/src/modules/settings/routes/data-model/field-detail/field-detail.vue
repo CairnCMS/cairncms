@@ -136,12 +136,12 @@ async function save() {
 }
 
 .v-input.search {
-	--border-radius: calc(44px / 2);
-	width: 200px;
+	--border-radius: calc(2.75rem / 2);
+	width: 12.5rem;
 	margin-left: auto;
 
 	@media (min-width: 600px) {
-		width: 300px;
+		width: 18.75rem;
 		margin-top: 0px;
 	}
 }

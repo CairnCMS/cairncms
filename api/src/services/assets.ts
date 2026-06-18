@@ -17,7 +17,7 @@ import { RangeNotSatisfiableException } from '../exceptions/range-not-satisfiabl
 import { ServiceUnavailableException } from '../exceptions/service-unavailable.js';
 import logger from '../logger.js';
 import { getStorage } from '../storage/index.js';
-import type { AbstractServiceOptions, File, Transformation, TransformationParams } from '../types/index.js';
+import type { AbstractServiceOptions, File, Transformation, TransformationSet } from '../types/index.js';
 import { getMilliseconds } from '../utils/get-milliseconds.js';
 import * as TransformationUtils from '../utils/transformations.js';
 import { AuthorizationService } from './authorization.js';
@@ -46,7 +46,7 @@ export class AssetsService {
 
 	async statAsset(
 		id: string,
-		transformation: TransformationParams,
+		transformation: TransformationSet,
 		range?: Range
 	): Promise<{ file: any; stat: Stat | null }> {
 		const { file, storageLocation, sourceFilename, transformedFilename, transformedExists } = await this._resolveAsset(
@@ -68,7 +68,7 @@ export class AssetsService {
 
 	async getAsset(
 		id: string,
-		transformation: TransformationParams,
+		transformation: TransformationSet,
 		range?: Range
 	): Promise<{ stream: Readable; file: any; stat: Stat }> {
 		const { file, storageLocation, sourceFilename, transforms, transformedFilename, transformedExists } =
@@ -144,7 +144,7 @@ export class AssetsService {
 		return { stream: readStream, file, stat };
 	}
 
-	private async _resolveAsset(id: string, transformation: TransformationParams, range?: Range): Promise<ResolvedAsset> {
+	private async _resolveAsset(id: string, transformation: TransformationSet, range?: Range): Promise<ResolvedAsset> {
 		const storage = await getStorage();
 
 		const publicSettings = await this.knex

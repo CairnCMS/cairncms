@@ -61,7 +61,7 @@ An environment is a separate CairnCMS instance used for a specific stage of work
 
 ## Extension
 
-An extension adds custom behavior to CairnCMS without patching core. Supported extension types include interfaces, displays, layouts, modules, panels, hooks, endpoints, operations, themes, migrations, bundles, and email templates.
+An extension adds custom behavior to CairnCMS without patching core. The supported extension types are interfaces, displays, layouts, modules, panels, hooks, endpoints, operations, and bundles.
 
 ## Field
 

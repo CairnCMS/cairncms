@@ -189,7 +189,7 @@ async function onClick(event: MouseEvent) {
 <style scoped>
 :global(body) {
 	--v-button-width: auto;
-	--v-button-height: 44px;
+	--v-button-height: 2.75rem;
 	--v-button-color: var(--foreground-inverted);
 	--v-button-color-hover: var(--foreground-inverted);
 	--v-button-color-active: var(--foreground-inverted);
@@ -198,10 +198,10 @@ async function onClick(event: MouseEvent) {
 	--v-button-background-color-hover: var(--primary-125);
 	--v-button-background-color-active: var(--primary);
 	--v-button-background-color-disabled: var(--background-normal);
-	--v-button-font-size: 16px;
+	--v-button-font-size: 1rem;
 	--v-button-font-weight: 600;
-	--v-button-line-height: 22px;
-	--v-button-min-width: 140px;
+	--v-button-line-height: 1.375rem;
+	--v-button-min-width: 8.75rem;
 }
 
 .info {
@@ -282,7 +282,7 @@ async function onClick(event: MouseEvent) {
 	width: var(--v-button-width);
 	min-width: var(--v-button-min-width);
 	height: var(--v-button-height);
-	padding: 0 19px;
+	padding: 0 1.1875rem;
 	color: var(--v-button-color);
 	font-weight: var(--v-button-font-weight);
 	font-size: var(--v-button-font-size);
@@ -357,36 +357,36 @@ async function onClick(event: MouseEvent) {
 }
 
 .x-small {
-	--v-button-height: 28px;
-	--v-button-font-size: 12px;
+	--v-button-height: 1.75rem;
+	--v-button-font-size: 0.75rem;
 	--v-button-font-weight: 600;
-	--v-button-min-width: 60px;
-	--border-radius: 2px;
+	--v-button-min-width: 3.75rem;
+	--border-radius: 0.125rem;
 
-	padding: 0 12px;
+	padding: 0 0.75rem;
 }
 
 .small {
-	--v-button-height: 36px;
-	--v-button-font-size: 14px;
-	--v-button-min-width: 120px;
+	--v-button-height: 2.25rem;
+	--v-button-font-size: 0.875rem;
+	--v-button-min-width: 7.5rem;
 
-	padding: 0 12px;
+	padding: 0 0.75rem;
 }
 
 .large {
-	--v-button-height: 52px;
-	--v-button-min-width: 154px;
+	--v-button-height: 3.25rem;
+	--v-button-min-width: 9.625rem;
 
-	padding: 0 12px;
+	padding: 0 0.75rem;
 }
 
 .x-large {
-	--v-button-height: 60px;
-	--v-button-font-size: 18px;
-	--v-button-min-width: 180px;
+	--v-button-height: 3.75rem;
+	--v-button-font-size: 1.125rem;
+	--v-button-min-width: 11.25rem;
 
-	padding: 0 12px;
+	padding: 0 0.75rem;
 }
 
 .icon {

@@ -67,11 +67,11 @@ const displayValue = computed(() => {
 
 	.display-value {
 		flex-grow: 1;
-		margin-left: 8px;
+		margin-left: 0.5rem;
 	}
 
 	.append-slot:not(:empty) {
-		margin-left: 8px;
+		margin-left: 0.5rem;
 	}
 }
 
@@ -82,7 +82,7 @@ const displayValue = computed(() => {
 }
 
 .v-icon {
-	margin-left: 6px;
+	margin-left: 0.375rem;
 }
 
 .secondary {
@@ -98,7 +98,7 @@ const displayValue = computed(() => {
 .v-list {
 	.v-list-item {
 		display: flex;
-		gap: 10px;
+		gap: 0.625rem;
 		align-items: center;
 		justify-content: space-between;
 		white-space: nowrap;
@@ -113,7 +113,7 @@ const displayValue = computed(() => {
 		.end {
 			display: flex;
 			flex-grow: 1;
-			gap: 10px;
+			gap: 0.625rem;
 			align-items: center;
 			justify-content: flex-end;
 			color: var(--foreground-subdued);
@@ -124,21 +124,21 @@ const displayValue = computed(() => {
 		}
 
 		.dot {
-			width: 8px;
+			width: 0.5rem;
 			height: 100%;
 
 			&.show::before {
 				display: block;
-				width: 4px;
-				height: 4px;
+				width: 0.25rem;
+				height: 0.25rem;
 				background-color: var(--foreground-subdued);
-				border-radius: 2px;
+				border-radius: 0.125rem;
 				content: '';
 			}
 		}
 
 		.v-progress-linear {
-			max-width: 100px;
+			max-width: 6.25rem;
 		}
 	}
 }

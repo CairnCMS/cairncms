@@ -79,10 +79,10 @@ function toggle() {
 }
 
 .v-icon {
-	margin-right: 4px;
+	margin-right: 0.25rem;
 }
 
 .content {
-	margin-top: 12px;
+	margin-top: 0.75rem;
 }
 </style>

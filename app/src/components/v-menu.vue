@@ -413,7 +413,7 @@ function usePopper(
 
 <style>
 body {
-	--v-menu-min-width: 100px;
+	--v-menu-min-width: 6.25rem;
 }
 </style>
 
@@ -428,10 +428,10 @@ body {
 
 .v-menu-popper {
 	position: fixed;
-	left: -999px;
+	left: -62.4375rem;
 	z-index: 500;
 	min-width: var(--v-menu-min-width);
-	transform: translateY(2px);
+	transform: translateY(0.125rem);
 	pointer-events: none;
 
 	&.active {
@@ -443,10 +443,10 @@ body {
 .arrow::after {
 	position: absolute;
 	z-index: 1;
-	width: 10px;
-	height: 10px;
+	width: 0.625rem;
+	height: 0.625rem;
 	overflow: hidden;
-	border-radius: 2px;
+	border-radius: 0.125rem;
 	box-shadow: none;
 }
 
@@ -466,44 +466,44 @@ body {
 }
 
 [data-placement^='top'] .arrow {
-	bottom: -6px;
+	bottom: -0.375rem;
 
 	&::after {
-		bottom: 3px;
+		bottom: 0.1875rem;
 		box-shadow: 2px 2px 4px -2px rgba(var(--card-shadow-color), 0.2);
 	}
 }
 
 [data-placement^='bottom'] .arrow {
-	top: -6px;
+	top: -0.375rem;
 
 	&::after {
-		top: 3px;
+		top: 0.1875rem;
 		box-shadow: -2px -2px 4px -2px rgba(var(--card-shadow-color), 0.2);
 	}
 }
 
 [data-placement^='right'] .arrow {
-	left: -6px;
+	left: -0.375rem;
 
 	&::after {
-		left: 2px;
+		left: 0.125rem;
 		box-shadow: -2px 2px 4px -2px rgba(var(--card-shadow-color), 0.2);
 	}
 }
 
 [data-placement^='left'] .arrow {
-	right: -6px;
+	right: -0.375rem;
 
 	&::after {
-		right: 2px;
+		right: 0.125rem;
 		box-shadow: 2px -2px 4px -2px rgba(var(--card-shadow-color), 0.2);
 	}
 }
 
 .v-menu-content {
 	max-height: 30vh;
-	padding: 0 4px;
+	padding: 0 0.25rem;
 	overflow-x: hidden;
 	overflow-y: auto;
 	background-color: var(--card-face-color);
@@ -579,13 +579,13 @@ body {
 .attached {
 	&[data-placement^='top'] {
 		> .v-menu-content {
-			transform: translateY(-2px);
+			transform: translateY(-0.125rem);
 		}
 	}
 
 	&[data-placement^='bottom'] {
 		> .v-menu-content {
-			transform: translateY(2px);
+			transform: translateY(0.125rem);
 		}
 	}
 }

@@ -15,7 +15,7 @@
 		"eslint-config-prettier": "8.8.0",
 		"eslint-plugin-jest": "27.2.1",
 		"eslint-plugin-prettier": "4.2.1",
-		"eslint-plugin-vue": "9.11.0",
+		"eslint-plugin-vue": "9.33.0",
 		"prettier": "2.8.7"
 	},
 	"packageManager": "pnpm@10.13.1",
@@ -44,13 +44,14 @@
 			"jws@<=3.2.2": "3.2.3",
 			"jws@4.0.0": "4.0.1",
 			"fast-xml-parser": "4.5.5",
-			"tmp@>=0.2.0 <0.2.6": "0.2.6",
+			"tmp@>=0.2.0 <0.2.7": "0.2.7",
 			"postcss@<8.5.10": "8.5.10",
 			"@xmldom/xmldom": "0.8.13",
 			"fast-uri": "3.1.2",
 			"ip-address": "10.1.1",
 			"@tootallnate/once@1": "2.0.1",
-			"@tootallnate/once@2": "2.0.1"
+			"@tootallnate/once@2": "2.0.1",
+			"shell-quote@<1.8.4": "1.8.4"
 		}
 	}
 }

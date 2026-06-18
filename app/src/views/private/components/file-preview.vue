@@ -105,8 +105,8 @@ const authenticatedSrc = computed(() => getRootPath() + props.src);
 		justify-content: center;
 
 		video {
-			min-height: 80px;
-			min-width: 80px;
+			min-height: 5rem;
+			min-width: 5rem;
 		}
 	}
 
@@ -122,7 +122,7 @@ const authenticatedSrc = computed(() => getRootPath() + props.src);
 	&.svg,
 	&.small {
 		.image {
-			padding: 64px;
+			padding: 4rem;
 		}
 	}
 

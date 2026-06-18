@@ -154,19 +154,19 @@ function emitValue() {
 <style lang="scss" scoped>
 .search-badge {
 	--v-badge-background-color: var(--primary);
-	--v-badge-offset-y: 8px;
-	--v-badge-offset-x: 8px;
+	--v-badge-offset-y: 0.5rem;
+	--v-badge-offset-x: 0.5rem;
 }
 
 .search-input {
 	display: flex;
 	align-items: center;
-	width: 72px;
+	width: 4.5rem;
 	max-width: 100%;
-	height: 44px;
+	height: 2.75rem;
 	overflow: hidden;
 	border: 2px solid var(--border-normal);
-	border-radius: calc(44px / 2);
+	border-radius: calc(2.75rem / 2);
 	transition: width var(--slow) var(--transition), border-bottom-left-radius var(--fast) var(--transition),
 		border-bottom-right-radius var(--fast) var(--transition);
 
@@ -174,7 +174,7 @@ function emitValue() {
 		--v-icon-color: var(--foreground-subdued);
 
 		display: none;
-		margin-left: 8px;
+		margin-left: 0.5rem;
 
 		&:hover {
 			--v-icon-color: var(--danger);
@@ -187,12 +187,12 @@ function emitValue() {
 	}
 
 	.icon-search {
-		margin: 0 8px;
-		margin-right: 4px;
+		margin: 0 0.5rem;
+		margin-right: 0.25rem;
 	}
 
 	.icon-filter {
-		margin: 0 8px;
+		margin: 0 0.5rem;
 		margin-left: 0;
 	}
 
@@ -201,7 +201,7 @@ function emitValue() {
 	}
 
 	&.has-content {
-		width: 200px;
+		width: 12.5rem;
 
 		.icon-empty {
 			display: block;
@@ -213,7 +213,7 @@ function emitValue() {
 	}
 
 	&.active {
-		width: 300px;
+		width: 18.75rem;
 		border-color: var(--border-normal);
 
 		.icon-empty {
@@ -222,27 +222,27 @@ function emitValue() {
 	}
 
 	&.filter-active {
-		width: 200px;
+		width: 12.5rem;
 
 		.icon-filter {
 			--v-icon-color: var(--primary);
 		}
 
 		@media (min-width: 600px) {
-			width: 250px;
+			width: 15.625rem;
 		}
 
 		@media (min-width: 960px) {
-			width: 300px;
+			width: 18.75rem;
 		}
 
 		@media (min-width: 1260px) {
-			width: 420px; /* blaze it */
+			width: 26.25rem; /* blaze it */
 		}
 	}
 
 	&.filter-border {
-		padding-bottom: 2px;
+		padding-bottom: 0.125rem;
 		border-bottom: none;
 		border-bottom-right-radius: 0;
 		border-bottom-left-radius: 0;
@@ -250,11 +250,11 @@ function emitValue() {
 
 		&::after {
 			position: absolute;
-			right: 2px;
-			bottom: -2px;
-			left: 2px;
+			right: 0.125rem;
+			bottom: -0.125rem;
+			left: 0.125rem;
 			width: auto;
-			height: 2px;
+			height: 0.125rem;
 			background-color: var(--border-subdued);
 			content: '';
 			pointer-events: none;
@@ -295,12 +295,12 @@ function emitValue() {
 	padding: 0;
 	background-color: var(--background-subdued);
 	border: 2px solid var(--border-normal);
-	border-bottom-right-radius: 22px;
-	border-bottom-left-radius: 22px;
+	border-bottom-right-radius: 1.375rem;
+	border-bottom-left-radius: 1.375rem;
 }
 
 .filter-input {
 	/* Use margin instead of padding to make sure transition expand takes it into account */
-	margin: 10px 8px;
+	margin: 0.625rem 0.5rem;
 }
 </style>

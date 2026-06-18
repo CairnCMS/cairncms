@@ -137,7 +137,7 @@ function close() {
 
 <style lang="scss" scoped>
 .type-label:not(:first-child) {
-	margin-top: 24px;
+	margin-top: 1.5rem;
 }
 
 .content {

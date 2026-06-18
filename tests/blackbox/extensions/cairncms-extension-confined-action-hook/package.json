@@ -1,0 +1,19 @@
+{
+	"name": "cairncms-extension-confined-action-hook",
+	"version": "1.0.0",
+	"type": "module",
+	"private": true,
+	"cairncms:extension": {
+		"type": "hook",
+		"path": "index.js",
+		"source": "src/index.js",
+		"runtime": "confined-server",
+		"capabilities": {
+			"log": true
+		},
+		"events": {
+			"action": ["confined_hook_records.items.create"]
+		},
+		"host": "^1.0.0"
+	}
+}

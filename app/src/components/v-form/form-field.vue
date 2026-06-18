@@ -230,8 +230,8 @@ function useComputedValues() {
 .type-note {
 	position: relative;
 	display: block;
-	max-width: 520px;
-	margin-top: 4px;
+	max-width: 32.5rem;
+	margin-top: 0.25rem;
 
 	:deep(a) {
 		color: var(--primary);
@@ -243,8 +243,8 @@ function useComputedValues() {
 }
 
 .invalid {
-	margin: -12px;
-	padding: 12px;
+	margin: -0.75rem;
+	padding: 0.75rem;
 	background-color: var(--danger-alt);
 	border-radius: var(--border-radius);
 	transition: var(--medium) var(--transition);
@@ -253,12 +253,12 @@ function useComputedValues() {
 
 .validation-error {
 	display: block;
-	margin-top: 4px;
+	margin-top: 0.25rem;
 	color: var(--danger);
 	font-style: italic;
 }
 
 .label-spacer {
-	height: 28px;
+	height: 1.75rem;
 }
 </style>

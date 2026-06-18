@@ -86,3 +86,36 @@ describe('Settings Navigation - support links', () => {
 		expect(hrefs.some((href) => href?.includes('?category='))).toBe(false);
 	});
 });
+
+describe('Settings Navigation - sections', () => {
+	beforeEach(() => {
+		setActivePinia(
+			createTestingPinia({
+				createSpy: vi.fn,
+				stubActions: true,
+			})
+		);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('links to the Extensions view', () => {
+		const wrapper = mountNavigation();
+		const tos = wrapper.findAll('a.v-list-item-stub').map((anchor) => anchor.attributes('data-to'));
+
+		expect(tos).toContain('/settings/extensions');
+	});
+
+	it('renders the brick icon for the Extensions entry', () => {
+		const wrapper = mountNavigation();
+
+		const extensionsItem = wrapper
+			.findAll('a.v-list-item-stub')
+			.find((anchor) => anchor.attributes('data-to') === '/settings/extensions');
+
+		expect(extensionsItem).toBeDefined();
+		expect(extensionsItem?.html()).toContain('data-name="brick"');
+	});
+});

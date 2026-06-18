@@ -2,6 +2,7 @@ import { EXTENSION_LANGUAGES, EXTENSION_PKG_KEY, JAVASCRIPT_FILE_EXTS } from '@c
 import { execa } from 'execa';
 import fse from 'fs-extra';
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterAll, expect, test } from 'vitest';
 import { create } from './src/cli/index.js';
 import { languageToShort } from './src/cli/utils/languages.js';
@@ -172,3 +173,280 @@ test.each<ContentCase>([
 	},
 	30_000
 );
+
+function uniquePath(label: string) {
+	return `${testPrefix}-${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+const bareDepImport = /from\s*['"]fixture-runtime-dep['"]/;
+const subpathDepImport = /from\s*['"]fixture-runtime-dep\/sub['"]/;
+
+async function addLocalRuntimeDep(extPath: string, depName: string, { subpath = false, optional = false } = {}) {
+	const depDir = resolve(extPath, 'node_modules', depName);
+	await fse.outputJson(resolve(depDir, 'package.json'), { name: depName, version: '1.0.0', main: 'index.js' });
+	await fse.outputFile(resolve(depDir, 'index.js'), `module.exports = { marker: 'DEP_MAIN_MARKER' };\n`);
+
+	if (subpath) {
+		await fse.outputFile(resolve(depDir, 'sub.js'), `module.exports = { marker: 'DEP_SUB_MARKER' };\n`);
+	}
+
+	const field = optional ? 'optionalDependencies' : 'dependencies';
+	const manifestPath = resolve(extPath, 'package.json');
+	const manifest = await fse.readJson(manifestPath);
+	manifest[field] = { ...(manifest[field] ?? {}), [depName]: '1.0.0' };
+	await fse.writeJson(manifestPath, manifest, { spaces: '\t' });
+}
+
+async function addLocalSdk(extPath: string) {
+	const dir = resolve(extPath, 'node_modules', '@cairncms', 'extensions-sdk');
+
+	await fse.outputJson(resolve(dir, 'package.json'), {
+		name: '@cairncms/extensions-sdk',
+		version: '1.0.0',
+		type: 'module',
+		main: 'index.js',
+	});
+
+	await fse.outputFile(
+		resolve(dir, 'index.js'),
+		[`export const defineEndpoint = (config) => config;`, `export const defineHook = (config) => config;`, ``].join(
+			'\n'
+		)
+	);
+}
+
+test('node endpoint build externalizes declared runtime deps and subpaths, bundles relative source and the SDK', async () => {
+	const ext = uniquePath('ext-node');
+	await create('endpoint', ext, { language: 'javascript' });
+	await addLocalRuntimeDep(ext, 'fixture-runtime-dep', { subpath: true });
+	await addLocalSdk(ext);
+
+	await fse.outputFile(resolve(ext, 'src', 'helper.js'), `export const RELATIVE_HELPER = 'RELATIVE_HELPER_MARKER';\n`);
+
+	await fse.outputFile(
+		resolve(ext, 'src', 'index.js'),
+		[
+			`import { defineEndpoint } from '@cairncms/extensions-sdk';`,
+			`import depMain from 'fixture-runtime-dep';`,
+			`import depSub from 'fixture-runtime-dep/sub';`,
+			`import { RELATIVE_HELPER } from './helper.js';`,
+			`export default defineEndpoint((router) => {`,
+			`	router.get('/', (_req, res) => res.json({ depMain, depSub, RELATIVE_HELPER }));`,
+			`});`,
+			``,
+		].join('\n')
+	);
+
+	await execa('node', ['../cli.js', 'build', '--no-minify'], { cwd: ext });
+	const out = await fse.readFile(resolve(ext, 'dist', 'index.js'), 'utf-8');
+
+	expect(out).toMatch(bareDepImport);
+	expect(out).toMatch(subpathDepImport);
+	expect(out).toContain('RELATIVE_HELPER_MARKER');
+	expect(out).not.toContain('@cairncms/extensions-sdk');
+}, 30_000);
+
+test('browser interface build bundles declared runtime deps instead of externalizing them', async () => {
+	const ext = uniquePath('ext-browser');
+	await create('interface', ext, { language: 'javascript' });
+	await addLocalRuntimeDep(ext, 'fixture-runtime-dep');
+
+	await fse.outputFile(
+		resolve(ext, 'src', 'index.js'),
+		[
+			`import dep from 'fixture-runtime-dep';`,
+			`export default {`,
+			`	id: 'fixture-iface', name: 'Fixture', icon: 'box',`,
+			`	component: { render: () => dep.marker }, types: ['string'],`,
+			`};`,
+			``,
+		].join('\n')
+	);
+
+	await execa('node', ['../cli.js', 'build', '--no-minify'], { cwd: ext });
+	const out = await fse.readFile(resolve(ext, 'dist', 'index.js'), 'utf-8');
+
+	expect(out).toContain('DEP_MAIN_MARKER');
+	expect(out).not.toMatch(bareDepImport);
+}, 30_000);
+
+test('operation build externalizes runtime deps on the api side but bundles them on the app side', async () => {
+	const ext = uniquePath('ext-op');
+	await create('operation', ext, { language: 'javascript' });
+	await addLocalRuntimeDep(ext, 'fixture-runtime-dep');
+
+	await fse.outputFile(
+		resolve(ext, 'src', 'api.js'),
+		[
+			`import dep from 'fixture-runtime-dep';`,
+			`export default { id: 'fixture-op', handler: () => dep.marker };`,
+			``,
+		].join('\n')
+	);
+
+	await fse.outputFile(
+		resolve(ext, 'src', 'app.js'),
+		[
+			`import dep from 'fixture-runtime-dep';`,
+			`export default { id: 'fixture-op', name: 'Fixture', icon: 'box', overview: () => [], options: [], marker: dep.marker };`,
+			``,
+		].join('\n')
+	);
+
+	await execa('node', ['../cli.js', 'build', '--no-minify'], { cwd: ext });
+	const apiOut = await fse.readFile(resolve(ext, 'dist', 'api.js'), 'utf-8');
+	const appOut = await fse.readFile(resolve(ext, 'dist', 'app.js'), 'utf-8');
+
+	expect(apiOut).toMatch(bareDepImport);
+	expect(appOut).toContain('DEP_MAIN_MARKER');
+	expect(appOut).not.toMatch(bareDepImport);
+}, 30_000);
+
+test('bundle build externalizes runtime deps on the api side', async () => {
+	const ext = uniquePath('ext-bundle');
+	await create('endpoint', ext, { language: 'javascript' });
+	await addLocalRuntimeDep(ext, 'fixture-runtime-dep');
+
+	await fse.outputFile(
+		resolve(ext, 'src', 'entry.js'),
+		[
+			`import dep from 'fixture-runtime-dep';`,
+			`export default (router) => router.get('/', (_req, res) => res.json({ m: dep.marker }));`,
+			``,
+		].join('\n')
+	);
+
+	const entries = JSON.stringify([{ type: 'endpoint', name: 'bundled-endpoint', source: 'src/entry.js' }]);
+	const output = JSON.stringify({ app: 'dist/app.js', api: 'dist/api.js' });
+
+	await execa('node', ['../cli.js', 'build', '-t', 'bundle', '-i', entries, '-o', output, '--no-minify'], { cwd: ext });
+	const apiOut = await fse.readFile(resolve(ext, 'dist', 'api.js'), 'utf-8');
+
+	expect(apiOut).toMatch(bareDepImport);
+}, 30_000);
+
+test('an externalized runtime dep resolves from the extension package node_modules at load', async () => {
+	const ext = uniquePath('ext-runtime');
+	await create('endpoint', ext, { language: 'javascript' });
+	await addLocalRuntimeDep(ext, 'fixture-runtime-dep');
+
+	await fse.outputFile(
+		resolve(ext, 'src', 'index.js'),
+		[
+			`import dep from 'fixture-runtime-dep';`,
+			`export const depMarker = dep.marker;`,
+			`export default (router) => router.get('/', (_req, res) => res.json({ m: dep.marker }));`,
+			``,
+		].join('\n')
+	);
+
+	await execa('node', ['../cli.js', 'build', '--no-minify'], { cwd: ext });
+	const builtUrl = pathToFileURL(resolve(ext, 'dist', 'index.js')).href;
+	const mod = await import(builtUrl);
+
+	expect(mod.depMarker).toBe('DEP_MAIN_MARKER');
+	expect(typeof mod.default).toBe('function');
+}, 30_000);
+
+test('node build externalizes optionalDependencies the same as dependencies', async () => {
+	const ext = uniquePath('ext-optional');
+	await create('endpoint', ext, { language: 'javascript' });
+	await addLocalRuntimeDep(ext, 'fixture-runtime-dep', { optional: true });
+
+	await fse.outputFile(
+		resolve(ext, 'src', 'index.js'),
+		[
+			`import dep from 'fixture-runtime-dep';`,
+			`export default (router) => router.get('/', (_req, res) => res.json({ m: dep.marker }));`,
+			``,
+		].join('\n')
+	);
+
+	await execa('node', ['../cli.js', 'build', '--no-minify'], { cwd: ext });
+	const out = await fse.readFile(resolve(ext, 'dist', 'index.js'), 'utf-8');
+
+	expect(out).toMatch(bareDepImport);
+}, 30_000);
+
+test('node build leaves Node builtin imports external', async () => {
+	const ext = uniquePath('ext-builtin');
+	await create('endpoint', ext, { language: 'javascript' });
+
+	await fse.outputFile(
+		resolve(ext, 'src', 'index.js'),
+		[
+			`import os from 'node:os';`,
+			`import path from 'path';`,
+			`export default (router) => router.get('/', (_req, res) => res.json({ p: path.basename(String(os.hostname())) }));`,
+			``,
+		].join('\n')
+	);
+
+	await execa('node', ['../cli.js', 'build', '--no-minify'], { cwd: ext });
+	const out = await fse.readFile(resolve(ext, 'dist', 'index.js'), 'utf-8');
+
+	expect(out).toMatch(/from\s*['"]node:os['"]/);
+	expect(out).toMatch(/from\s*['"]path['"]/);
+}, 30_000);
+
+test('build emits no source map by default and an external source map with --sourcemap', async () => {
+	const ext = uniquePath('ext-sourcemap');
+
+	await fse.outputJson(
+		resolve(ext, 'package.json'),
+		{ name: 'cairncms-extension-sm', version: '1.0.0', type: 'module' },
+		{ spaces: '\t' }
+	);
+
+	await fse.outputFile(
+		resolve(ext, 'src', 'index.js'),
+		`export default (router) => router.get('/', (_req, res) => res.json({ ok: true }));\n`
+	);
+
+	const buildArgs = ['../cli.js', 'build', '-t', 'endpoint', '-i', 'src/index.js', '-o', 'dist/index.js'];
+
+	await execa('node', buildArgs, { cwd: ext });
+	expect(fse.pathExistsSync(resolve(ext, 'dist', 'index.js.map'))).toBe(false);
+	expect(await fse.readFile(resolve(ext, 'dist', 'index.js'), 'utf-8')).not.toContain('sourceMappingURL');
+
+	await execa('node', [...buildArgs, '--sourcemap'], { cwd: ext });
+	expect(fse.pathExistsSync(resolve(ext, 'dist', 'index.js.map'))).toBe(true);
+	expect(await fse.readFile(resolve(ext, 'dist', 'index.js'), 'utf-8')).toContain('sourceMappingURL=index.js.map');
+}, 30_000);
+
+test('operation build emits maps and sourceMappingURL comments for both the app and api sides', async () => {
+	const ext = uniquePath('ext-op-sourcemap');
+
+	await fse.outputJson(
+		resolve(ext, 'package.json'),
+		{
+			name: 'cairncms-extension-op-sm',
+			version: '1.0.0',
+			type: 'module',
+			[EXTENSION_PKG_KEY]: {
+				type: 'operation',
+				path: { app: 'dist/app.js', api: 'dist/api.js' },
+				source: { app: 'src/app.js', api: 'src/api.js' },
+				host: '^1.1.0',
+			},
+		},
+		{ spaces: '\t' }
+	);
+
+	await fse.outputFile(
+		resolve(ext, 'src', 'app.js'),
+		`export default { id: 'op-sm', name: 'Op SM', icon: 'box', overview: () => [], options: [] };\n`
+	);
+
+	await fse.outputFile(
+		resolve(ext, 'src', 'api.js'),
+		`export default { id: 'op-sm', handler: () => ({ ok: true }) };\n`
+	);
+
+	await execa('node', ['../cli.js', 'build', '--sourcemap'], { cwd: ext });
+
+	expect(fse.pathExistsSync(resolve(ext, 'dist', 'app.js.map'))).toBe(true);
+	expect(fse.pathExistsSync(resolve(ext, 'dist', 'api.js.map'))).toBe(true);
+	expect(await fse.readFile(resolve(ext, 'dist', 'app.js'), 'utf-8')).toContain('sourceMappingURL=app.js.map');
+	expect(await fse.readFile(resolve(ext, 'dist', 'api.js'), 'utf-8')).toContain('sourceMappingURL=api.js.map');
+}, 30_000);

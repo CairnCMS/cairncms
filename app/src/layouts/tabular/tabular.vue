@@ -324,7 +324,7 @@ function removeField(fieldKey: string) {
 	align-items: center;
 	justify-content: space-between;
 	width: 100%;
-	padding: 32px var(--content-padding);
+	padding: 2rem var(--content-padding);
 
 	.pagination {
 		display: inline-block;
@@ -334,12 +334,12 @@ function removeField(fieldKey: string) {
 		display: flex;
 		align-items: center;
 		justify-content: flex-end;
-		width: 240px;
+		width: 15rem;
 		color: var(--foreground-subdued);
 
 		span {
 			width: auto;
-			margin-right: 4px;
+			margin-right: 0.25rem;
 		}
 
 		.v-select {
@@ -349,7 +349,7 @@ function removeField(fieldKey: string) {
 }
 
 .reset-preset {
-	margin-top: 24px;
+	margin-top: 1.5rem;
 }
 
 .add-field {

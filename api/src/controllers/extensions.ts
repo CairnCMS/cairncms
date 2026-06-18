@@ -1,9 +1,6 @@
-import { EXTENSION_TYPES } from '@cairncms/constants';
-import type { Plural } from '@cairncms/types';
-import { depluralize, isIn } from '@cairncms/utils';
 import { Router } from 'express';
 import env from '../env.js';
-import { RouteNotFoundException } from '../exceptions/index.js';
+import { ForbiddenException, RouteNotFoundException } from '../exceptions/index.js';
 import { getExtensionManager } from '../extensions.js';
 import { respond } from '../middleware/respond.js';
 import asyncHandler from '../utils/async-handler.js';
@@ -13,20 +10,17 @@ import { getMilliseconds } from '../utils/get-milliseconds.js';
 const router = Router();
 
 router.get(
-	'/:type',
+	'/',
 	asyncHandler(async (req, res, next) => {
-		const type = depluralize(req.params['type'] as Plural<string>);
-
-		if (!isIn(type, EXTENSION_TYPES)) {
-			throw new RouteNotFoundException(req.path);
+		if (req.accountability?.admin !== true) {
+			throw new ForbiddenException();
 		}
 
 		const extensionManager = getExtensionManager();
 
-		const extensions = extensionManager.getExtensionsList(type);
-
 		res.locals['payload'] = {
-			data: extensions,
+			data: extensionManager.getDiagnostics(),
+			meta: { confinedRuntime: extensionManager.getConfinedRuntimeMeta() },
 		};
 
 		return next();
@@ -38,6 +32,11 @@ router.get(
 	'/sources/:chunk',
 	asyncHandler(async (req, res) => {
 		const chunk = req.params['chunk'] as string;
+
+		if (chunk.endsWith('.map')) {
+			throw new RouteNotFoundException(req.path);
+		}
+
 		const extensionManager = getExtensionManager();
 
 		let source: string | null;

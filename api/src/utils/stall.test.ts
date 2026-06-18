@@ -1,3 +1,4 @@
+import { performance } from 'perf_hooks';
 import type { SpyInstance } from 'vitest';
 import { afterAll, beforeAll, expect, test, vi } from 'vitest';
 import { stall } from './stall.js';

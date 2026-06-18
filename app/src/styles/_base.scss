@@ -13,17 +13,16 @@
 }
 
 html {
-	font-size: 14px;
 	-webkit-tap-highlight-color: rgba(0, 0, 0, 0);
 }
 
 body {
 	color: var(--foreground-normal);
 	font-weight: 500;
-	font-size: 14px;
+	font-size: .875rem;
 	font-family: var(--family-sans-serif);
 	font-style: normal;
-	line-height: 22px;
+	line-height: 1.375rem;
 	background-color: var(--background-page);
 	-webkit-font-smoothing: antialiased;
 	text-rendering: optimizeLegibility;
@@ -85,14 +84,14 @@ label {
 }
 
 fieldset {
-	padding: 10px 0 20px;
+	padding: .625rem 0 1.25rem;
 	border: 0;
 
 	&.centered {
 		border-top: 1px solid var(--blue-grey-200);
 
 		legend {
-			padding: 10px 20px;
+			padding: .625rem 1.25rem;
 			color: var(--blue-grey-400);
 			text-align: center;
 		}
@@ -117,7 +116,7 @@ code {
 
 dl > div {
 	display: flex;
-	margin-bottom: 8px;
+	margin-bottom: .5rem;
 }
 
 dt,
@@ -127,7 +126,7 @@ dd {
 
 dt {
 	flex-shrink: 0;
-	margin-right: 8px;
+	margin-right: .5rem;
 	font-weight: 600;
 }
 

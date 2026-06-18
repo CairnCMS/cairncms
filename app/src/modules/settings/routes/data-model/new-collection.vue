@@ -346,18 +346,21 @@ function getSystemFields() {
 							value: 'published',
 							foreground: 'var(--status-published-fg)',
 							background: 'var(--status-published-bg)',
+							color: 'var(--status-published-fg)',
 						},
 						{
 							text: '$t:draft',
 							value: 'draft',
 							foreground: 'var(--status-draft-fg)',
 							background: 'var(--status-draft-bg)',
+							color: 'var(--status-draft-fg)',
 						},
 						{
 							text: '$t:archived',
 							value: 'archived',
 							foreground: 'var(--status-archived-fg)',
 							background: 'var(--status-archived-bg)',
+							color: 'var(--status-archived-fg)',
 						},
 					],
 				},
@@ -496,7 +499,7 @@ function getSystemRelations() {
 @import '@/styles/mixins/form-grid';
 
 .type-title {
-	margin-bottom: 48px;
+	margin-bottom: 3rem;
 }
 
 .grid {
@@ -534,6 +537,6 @@ function getSystemRelations() {
 }
 
 .v-notice {
-	margin-bottom: 36px;
+	margin-bottom: 2.25rem;
 }
 </style>

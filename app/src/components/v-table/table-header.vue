@@ -274,10 +274,10 @@ function toggleManualSort() {
 .table-header {
 	.cell {
 		position: relative;
-		height: 50px; /* +2px for bottom border */
-		padding: 0 12px;
+		height: 3.125rem; /* +2px for bottom border */
+		padding: 0 0.75rem;
 		font-weight: 500;
-		font-size: 14px;
+		font-size: 0.875rem;
 		background-color: var(--v-table-background-color);
 		border-bottom: var(--border-width) solid var(--border-subdued);
 
@@ -326,7 +326,7 @@ function toggleManualSort() {
 		position: relative;
 
 		.action-icon {
-			margin-left: 4px;
+			margin-left: 0.25rem;
 			color: var(--foreground-subdued);
 			opacity: 0;
 			transition: opacity var(--fast) var(--transition);
@@ -373,7 +373,7 @@ function toggleManualSort() {
 
 		.v-icon {
 			position: relative;
-			left: 2px;
+			left: 0.125rem;
 		}
 
 		&.sorted-manually {
@@ -385,7 +385,7 @@ function toggleManualSort() {
 		position: absolute;
 		top: 0;
 		right: 0;
-		width: 5px;
+		width: 0.3125rem;
 		height: 100%;
 		cursor: ew-resize;
 		transition: opacity var(--fast) var(--transition);
@@ -393,7 +393,7 @@ function toggleManualSort() {
 		&::after {
 			position: relative;
 			top: 20%;
-			left: 3px;
+			left: 0.1875rem;
 			display: block;
 			width: var(--border-width);
 			height: 60%;
@@ -415,7 +415,7 @@ function toggleManualSort() {
 :deep(.header-order-ghost) {
 	&::after,
 	&::before {
-		width: 2px;
+		width: 0.125rem;
 		content: '';
 		display: block;
 		position: absolute;
@@ -436,12 +436,12 @@ function toggleManualSort() {
 }
 
 .description-dot {
-	width: 8px;
-	height: 8px;
+	width: 0.5rem;
+	height: 0.5rem;
 	background-color: var(--foreground-subdued);
 	display: inline-block;
 	border-radius: 50%;
-	margin-right: 8px;
+	margin-right: 0.5rem;
 	vertical-align: middle;
 }
 </style>

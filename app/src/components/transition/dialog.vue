@@ -27,12 +27,12 @@
 	opacity: 0;
 
 	&.center > *:not(.v-overlay) {
-		transform: translateY(50px);
+		transform: translateY(3.125rem);
 		transition: transform var(--slow) var(--transition-out);
 	}
 
 	&.right > *:not(.v-overlay) {
-		transform: translateX(50px);
+		transform: translateX(3.125rem);
 		transition: transform var(--slow) var(--transition-out);
 	}
 }

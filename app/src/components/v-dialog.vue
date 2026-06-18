@@ -119,13 +119,13 @@ function nudge() {
 }
 
 .container :slotted(.v-card) {
-	--v-card-min-width: calc(100vw - 40px);
-	--v-card-padding: 28px;
+	--v-card-min-width: calc(100vw - 2.5rem);
+	--v-card-padding: 1.75rem;
 	--v-card-background-color: var(--background-page);
 }
 
 .container :slotted(.v-card) .v-card-title {
-	padding-bottom: 8px;
+	padding-bottom: 0.5rem;
 }
 
 .container :slotted(.v-card) .v-card-actions {
@@ -142,13 +142,13 @@ function nudge() {
 }
 
 .container :slotted(.v-card) .v-card-actions > .v-button + .v-button {
-	margin-bottom: 20px;
+	margin-bottom: 1.25rem;
 	margin-left: 0;
 }
 
 .container :slotted(.v-sheet) {
-	--v-sheet-padding: 24px;
-	--v-sheet-max-width: 560px;
+	--v-sheet-padding: 1.5rem;
+	--v-sheet-max-width: 35rem;
 }
 
 .container .v-overlay {
@@ -157,7 +157,7 @@ function nudge() {
 
 @media (min-width: 600px) {
 	.container :slotted(.v-card) {
-		--v-card-min-width: 540px;
+		--v-card-min-width: 33.75rem;
 	}
 
 	.container :slotted(.v-card) .v-card-actions {
@@ -175,7 +175,7 @@ function nudge() {
 
 	.container :slotted(.v-card) .v-card-actions > .v-button + .v-button {
 		margin-bottom: 0;
-		margin-left: 12px;
+		margin-left: 0.75rem;
 	}
 }
 

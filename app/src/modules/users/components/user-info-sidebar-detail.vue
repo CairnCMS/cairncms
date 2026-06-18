@@ -75,7 +75,7 @@ watch(
 
 <style lang="scss" scoped>
 .v-divider {
-	margin: 20px 0;
+	margin: 1.25rem 0;
 }
 
 .description-list {
@@ -86,7 +86,7 @@ watch(
 		--v-icon-color: var(--foreground-subdued);
 		--v-icon-color-hover: var(--foreground-normal);
 
-		margin-left: 4px;
+		margin-left: 0.25rem;
 	}
 }
 </style>

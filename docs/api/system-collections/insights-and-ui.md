@@ -119,6 +119,6 @@ The notification email side effect fires on the GraphQL mutation just as it does
 ## Where to go next
 
 - [Insights](/docs/guides/insights/) — operator-side reference for designing dashboards and configuring panel types.
-- [Panels](/docs/develop/extensions/panels/) — building custom panel types as extensions.
+- [Panels](/docs/develop/extensions/app-extensions/panels/) — building custom panel types as extensions.
 - [Filters and queries](/docs/api/filters-and-queries/) — the query DSL stored in panel `options` fields and used to filter notification feeds.
 - [Email templates](/docs/develop/email-templates/) — customizing the notification email template.
