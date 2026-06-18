@@ -2,7 +2,7 @@
 
 All notable changes to CairnCMS are documented in this file. Releases are listed in reverse chronological order. Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.2.0] - 2026-06-17
+## [1.2.0] - 2026-06-18
 
 ### Breaking Changes
 
