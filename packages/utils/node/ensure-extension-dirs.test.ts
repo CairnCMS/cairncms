@@ -19,9 +19,9 @@ describe('ensureExtensionDirs', () => {
 		expect(await ensureExtensionDirs(rootDir.name, NESTED_EXTENSION_TYPES)).toBe(undefined);
 	});
 
-	it('throws an error when a folder can not be opened', () => {
-		expect(async () => {
-			await ensureExtensionDirs('/.', NESTED_EXTENSION_TYPES);
-		}).rejects.toThrow(`Extension folder "/interfaces" couldn't be opened`);
+	it('throws an error when a folder can not be opened', async () => {
+		await expect(ensureExtensionDirs('/.', NESTED_EXTENSION_TYPES)).rejects.toThrow(
+			`Extension folder "/interfaces" couldn't be opened`
+		);
 	});
 });

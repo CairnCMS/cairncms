@@ -200,7 +200,7 @@ test('Throws InvalidCredentialsException when static token is used, but user doe
 	const res = {} as Response;
 	const next = vi.fn();
 
-	expect(handler(req, res, next)).rejects.toEqual(new InvalidCredentialsException());
+	await expect(handler(req, res, next)).rejects.toEqual(new InvalidCredentialsException());
 	expect(next).toHaveBeenCalledTimes(0);
 });
 
