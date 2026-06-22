@@ -76,6 +76,7 @@ import {
 	type ConfinedGateVerdict,
 	type ConfinedLoadGateDeps,
 } from './extensions/confined/load-gate.js';
+import { resolveSettingsSubjects, type ConfinedSettingsCapabilities } from './extensions/settings-subjects.js';
 import { resolveConfinedRuntime, type ConfinedSupervisor } from './extensions/confined/supervisor.js';
 import { describePosture, type SandboxPosture } from './extensions/confined/sandbox-hardening.js';
 import getModuleDefault from './utils/get-module-default.js';
@@ -214,6 +215,8 @@ export class ExtensionManager {
 	// recomputed on every load, never persisted, and carrying no public diagnostic
 	// row until registration.
 	private confinedEligible = new Map<Extension, ConfinedEligibleEntry>();
+
+	private settingsEligible = new Set<Extension>();
 
 	// Test seam for the gate's scanner, probe, and limits dependencies. Overrides
 	// the production-resolved deps below, so a test can drive the gate directly.
@@ -365,6 +368,10 @@ export class ExtensionManager {
 
 			return copy;
 		});
+	}
+
+	public isSettingsEligible(extension: Extension): boolean {
+		return this.settingsEligible.has(extension);
 	}
 
 	/**
@@ -558,6 +565,33 @@ export class ExtensionManager {
 				this.confinedEligible.set(extension, entry);
 			} else {
 				this.recordFailed(extension, verdict.error);
+			}
+		}
+	}
+
+	/**
+	 * Gates each settings owner's durable subject after confined gating, so any confined
+	 * capabilities it reads are already validated. A bad or colliding subject is refused
+	 * settings only, never failing the extension's load.
+	 */
+	private gateSettingsSubjects(): void {
+		const statuses = resolveSettingsSubjects(this.extensions, (extension) => {
+			const eligible = this.confinedEligible.get(extension);
+			if (eligible === undefined) return undefined;
+
+			const capabilities: ConfinedSettingsCapabilities = {};
+			if (eligible.capabilities !== undefined) capabilities.self = eligible.capabilities;
+			if (eligible.entryCapabilities !== undefined) capabilities.entries = eligible.entryCapabilities;
+			return capabilities;
+		});
+
+		this.settingsEligible = new Set();
+
+		for (const [extension, status] of statuses) {
+			if (status.eligible) {
+				this.settingsEligible.add(extension);
+			} else {
+				logger.warn(`Settings disabled for extension "${extension.name}": ${status.reason.detail}`);
 			}
 		}
 	}
@@ -1240,6 +1274,7 @@ export class ExtensionManager {
 		this.serverExtensions = [];
 		this.confinedEligible.clear();
 		this.confinedOperationBlocks.clear();
+		this.settingsEligible.clear();
 		this.confinedRuntimeDeps = {};
 		this.confinedRuntimeUnavailable = false;
 		this.confinedRuntime = undefined;
@@ -1261,6 +1296,7 @@ export class ExtensionManager {
 
 		await this.prepareConfinedRuntime();
 		await this.gateConfinedExtensions();
+		this.gateSettingsSubjects();
 
 		await this.registerHooks();
 		await this.registerEndpoints();
@@ -1291,6 +1327,7 @@ export class ExtensionManager {
 
 		this.serverExtensions = [];
 		this.confinedEligible.clear();
+		this.settingsEligible.clear();
 		this.confinedRuntimeDeps = {};
 		this.confinedRuntimeUnavailable = false;
 		this.confinedRuntime = undefined;

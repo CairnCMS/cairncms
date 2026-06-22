@@ -1956,3 +1956,69 @@ describe('findSharedDepAsset', () => {
 		expect(findSharedDepAsset('vue', ['vue.runtime.esm-bundler-BsuNjI30.js'])).toBeUndefined();
 	});
 });
+
+describe('the settings subject gate in the loader', () => {
+	const declaration = { preview_url: { type: 'string', scope: 'global' } } as any;
+
+	function settingsOwner(dir: string, name: string): Extension {
+		return { ...endpointExtension(dir, name, false), settings: declaration };
+	}
+
+	it('marks a valid unique settings owner eligible without removing it from the load', async () => {
+		const instance = new ExtensionManager();
+		const owner = settingsOwner('preview', 'cairncms-extension-preview');
+		(instance as any).getExtensions = async () => [owner];
+
+		await (instance as any).load();
+
+		expect((instance as any).isSettingsEligible(owner)).toBe(true);
+		expect((instance as any).extensions).toContain(owner);
+	});
+
+	it('refuses an invalid settings subject without failing the extension, warning instead', async () => {
+		const warn = vi.spyOn(logger, 'warn');
+		const instance = new ExtensionManager();
+		const owner = settingsOwner('bad', 'bad-subject');
+		(instance as any).getExtensions = async () => [owner];
+
+		await (instance as any).load();
+
+		expect((instance as any).isSettingsEligible(owner)).toBe(false);
+		expect((instance as any).extensions).toContain(owner);
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining('bad-subject'));
+	});
+
+	it('refuses every owner on a subject collision', async () => {
+		const instance = new ExtensionManager();
+		const first = settingsOwner('dup-a', 'cairncms-extension-dup');
+		const second = settingsOwner('dup-b', 'cairncms-extension-dup');
+		(instance as any).getExtensions = async () => [first, second];
+
+		await (instance as any).load();
+
+		expect((instance as any).isSettingsEligible(first)).toBe(false);
+		expect((instance as any).isSettingsEligible(second)).toBe(false);
+	});
+
+	it('does not treat an extension without a settings declaration as an owner', async () => {
+		const instance = new ExtensionManager();
+		const plain = endpointExtension('plain-owner', 'cairncms-extension-plain', false);
+		(instance as any).getExtensions = async () => [plain];
+
+		await (instance as any).load();
+
+		expect((instance as any).isSettingsEligible(plain)).toBe(false);
+	});
+
+	it('refuses a non-owner that shares an owner name, keying eligibility by identity not name', async () => {
+		const instance = new ExtensionManager();
+		const owner = settingsOwner('shared-owner', 'cairncms-extension-shared');
+		const nonOwner = endpointExtension('shared-plain', 'cairncms-extension-shared', false);
+		(instance as any).getExtensions = async () => [owner, nonOwner];
+
+		await (instance as any).load();
+
+		expect((instance as any).isSettingsEligible(owner)).toBe(true);
+		expect((instance as any).isSettingsEligible(nonOwner)).toBe(false);
+	});
+});

@@ -319,9 +319,45 @@ export const ExtensionOptionsBundleEntry = z.union([
 		}),
 ]);
 
+export const ExtensionSettingDeclaration = z
+	.object({
+		type: z.enum(['string', 'number', 'boolean']),
+		scope: z.enum(['global', 'collection']),
+		sensitive: z.boolean().optional(),
+	})
+	.strict()
+	.superRefine((value, ctx) => {
+		if (value.sensitive === true && value.type !== 'string') {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ['type'],
+				message: 'a sensitive setting must be type string',
+			});
+		}
+	});
+
+const RESERVED_SETTING_KEYS = ['__proto__', 'constructor', 'prototype'];
+
+export const ExtensionSettingKeySchema = z
+	.string()
+	.regex(/^[a-z][a-z0-9_]*$/)
+	.max(64)
+	.refine((key) => RESERVED_SETTING_KEYS.includes(key) === false, {
+		message: 'a settings key must not be a reserved property name',
+	});
+
+export const ExtensionSettingsSchema = z
+	.record(ExtensionSettingKeySchema, ExtensionSettingDeclaration)
+	.refine((value) => Object.keys(value).length > 0, {
+		message: 'a settings declaration must declare at least one key',
+	});
+
+export const ExtensionSettingsSubjectSchema = z.string().regex(EXTENSION_NAME_REGEX);
+
 export const ExtensionOptionsBase = z.object({
 	host: z.string(),
 	hidden: z.boolean().optional(),
+	settings: ExtensionSettingsSchema.optional(),
 });
 
 export const ExtensionOptionsApp = z

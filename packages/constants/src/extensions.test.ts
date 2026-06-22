@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { ExtensionCapabilitiesSchema, ExtensionManifest, ExtensionOptions } from './extensions.js';
+import {
+	ExtensionCapabilitiesSchema,
+	ExtensionManifest,
+	ExtensionOptions,
+	ExtensionSettingsSubjectSchema,
+} from './extensions.js';
 
 describe('ExtensionCapabilitiesSchema', () => {
 	it('accepts a brokered request plus log', () => {
@@ -490,5 +495,87 @@ describe('ExtensionManifest', () => {
 		});
 
 		expect(result.success).toBe(true);
+	});
+});
+
+describe('ExtensionOptions settings declaration', () => {
+	it('accepts a settings declaration on an app extension, which cannot declare capabilities', () => {
+		const settings = { preview_url: { type: 'string', scope: 'collection' } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(true);
+	});
+
+	it('accepts a settings declaration on every extension type', () => {
+		const settings = { preview_url: { type: 'string', scope: 'global' } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(true);
+		expect(ExtensionOptions.safeParse({ ...apiOption, settings }).success).toBe(true);
+		expect(ExtensionOptions.safeParse({ ...hybridOption, settings }).success).toBe(true);
+		expect(ExtensionOptions.safeParse({ ...bundleOption, settings }).success).toBe(true);
+	});
+
+	it('accepts an extension that omits settings', () => {
+		expect(ExtensionOptions.safeParse(appOption).success).toBe(true);
+	});
+
+	it('rejects an empty settings declaration so ownership is never ambiguous', () => {
+		expect(ExtensionOptions.safeParse({ ...appOption, settings: {} }).success).toBe(false);
+	});
+
+	it('accepts a sensitive string setting', () => {
+		const settings = { api_key: { type: 'string', scope: 'global', sensitive: true } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(true);
+	});
+
+	it('rejects a sensitive non-string setting', () => {
+		const settings = { api_key: { type: 'number', scope: 'global', sensitive: true } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(false);
+	});
+
+	it('rejects an unknown key inside a setting declaration', () => {
+		const settings = { preview_url: { type: 'string', scope: 'global', surprise: true } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(false);
+	});
+
+	it('rejects an invalid type or scope', () => {
+		expect(
+			ExtensionOptions.safeParse({ ...appOption, settings: { x: { type: 'date', scope: 'global' } } }).success
+		).toBe(false);
+
+		expect(
+			ExtensionOptions.safeParse({ ...appOption, settings: { x: { type: 'string', scope: 'tenant' } } }).success
+		).toBe(false);
+	});
+
+	it('accepts a conventional snake_case key', () => {
+		const settings = { preview_url: { type: 'string', scope: 'global' } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(true);
+	});
+
+	it('rejects unsafe or reserved setting keys', () => {
+		for (const key of [
+			'__proto__',
+			'constructor',
+			'prototype',
+			'Preview',
+			'preview-url',
+			'preview url',
+			'preview.url',
+			'1preview',
+		]) {
+			const settings = { [key]: { type: 'string', scope: 'global' } };
+			expect(ExtensionOptions.safeParse({ ...appOption, settings }).success, key).toBe(false);
+		}
+	});
+});
+
+describe('ExtensionSettingsSubjectSchema', () => {
+	it('accepts the package-name convention', () => {
+		expect(ExtensionSettingsSubjectSchema.safeParse('cairncms-extension-foo').success).toBe(true);
+		expect(ExtensionSettingsSubjectSchema.safeParse('@scope/cairncms-extension-foo').success).toBe(true);
+		expect(ExtensionSettingsSubjectSchema.safeParse('@cairncms/extension-foo').success).toBe(true);
+	});
+
+	it('rejects a name outside the convention', () => {
+		expect(ExtensionSettingsSubjectSchema.safeParse('my-extension').success).toBe(false);
+		expect(ExtensionSettingsSubjectSchema.safeParse('').success).toBe(false);
 	});
 });
