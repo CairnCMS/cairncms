@@ -10,6 +10,7 @@ import { ALIAS_TYPES } from '../constants.js';
 import type { Helpers } from '../database/helpers/index.js';
 import { getHelpers } from '../database/helpers/index.js';
 import getDatabase, { getSchemaInspector } from '../database/index.js';
+import { isInternalTable } from '../database/internal-tables.js';
 import { systemCollectionRows } from '../database/system-data/collections/index.js';
 import emitter from '../emitter.js';
 import env from '../env.js';
@@ -260,6 +261,9 @@ export class CollectionsService {
 		})) as CollectionMeta[];
 
 		meta.push(...systemCollectionRows);
+
+		tablesInDatabase = tablesInDatabase.filter((table) => !isInternalTable(table.name));
+		meta = meta.filter((collectionMeta) => !isInternalTable(collectionMeta.collection));
 
 		if (this.accountability && this.accountability.admin !== true) {
 			const collectionsGroups: { [key: string]: string } = meta.reduce(

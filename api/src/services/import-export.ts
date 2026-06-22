@@ -15,6 +15,7 @@ import StreamArray from 'stream-json/streamers/StreamArray.js';
 import stripBomStream from 'strip-bom-stream';
 import { file as createTmpFile } from 'tmp-promise';
 import getDatabase from '../database/index.js';
+import { isInternalTable } from '../database/internal-tables.js';
 import emitter from '../emitter.js';
 import env from '../env.js';
 import {
@@ -44,6 +45,7 @@ export class ImportService {
 	}
 
 	async import(collection: string, mimetype: string, stream: Readable): Promise<void> {
+		if (isInternalTable(collection)) throw new ForbiddenException();
 		if (this.accountability?.admin !== true && collection.startsWith('directus_')) throw new ForbiddenException();
 
 		const createPermissions = this.accountability?.permissions?.find(
@@ -200,6 +202,8 @@ export class ExportService {
 			file?: Partial<File>;
 		}
 	) {
+		if (isInternalTable(collection)) throw new ForbiddenException();
+
 		try {
 			const mimeTypes = {
 				csv: 'text/csv',
