@@ -26,6 +26,20 @@ function ownsSettings(extension: Extension, capabilities: ConfinedSettingsCapabi
 	return false;
 }
 
+/**
+ * Renders an extension name safe for a log line or operator message. A name reaching the
+ * invalid-subject path failed validation, so it is untrusted and may carry control
+ * characters or newlines.
+ */
+export function safeExtensionName(name: string): string {
+	const sanitized = Array.from(name, (char) => {
+		const code = char.charCodeAt(0);
+		return code < 0x20 || (code >= 0x7f && code <= 0x9f) ? '?' : char;
+	}).join('');
+
+	return sanitized.length > 64 ? `${sanitized.slice(0, 64)}...` : sanitized;
+}
+
 export function resolveSettingsSubjects(
 	extensions: Extension[],
 	confinedCapabilities: ConfinedCapabilitiesLookup
@@ -46,7 +60,7 @@ export function resolveSettingsSubjects(
 				eligible: false,
 				reason: {
 					code: SETTINGS_SUBJECT_INVALID,
-					detail: `the settings subject "${owner.name}" is not a valid extension package name`,
+					detail: `the settings subject "${safeExtensionName(owner.name)}" is not a valid extension package name`,
 				},
 			});
 
@@ -58,7 +72,7 @@ export function resolveSettingsSubjects(
 				eligible: false,
 				reason: {
 					code: SETTINGS_SUBJECT_DUPLICATE,
-					detail: `the settings subject "${owner.name}" is declared by more than one extension`,
+					detail: `the settings subject "${safeExtensionName(owner.name)}" is declared by more than one extension`,
 				},
 			});
 

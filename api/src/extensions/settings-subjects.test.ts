@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	type ConfinedCapabilitiesLookup,
 	resolveSettingsSubjects,
+	safeExtensionName,
 	SETTINGS_SUBJECT_DUPLICATE,
 	SETTINGS_SUBJECT_INVALID,
 } from './settings-subjects.js';
@@ -38,6 +39,17 @@ describe('resolveSettingsSubjects', () => {
 
 		expect(status?.eligible).toBe(false);
 		expect(status?.eligible === false && status.reason.code).toBe(SETTINGS_SUBJECT_INVALID);
+	});
+
+	it('sanitizes a control-character subject so the refusal reason is safe to log', () => {
+		const owner = makeExtension(`cairncms-extension-${String.fromCharCode(10)}evil`, { settings: declaration });
+
+		const status = resolveSettingsSubjects([owner], noConfined).get(owner);
+
+		expect(status?.eligible).toBe(false);
+		const detail = status?.eligible === false ? status.reason.detail : '';
+		expect(detail.includes(String.fromCharCode(10))).toBe(false);
+		expect(detail).toContain('?');
 	});
 
 	it('marks every owner ineligible on a subject collision', () => {
@@ -90,5 +102,16 @@ describe('resolveSettingsSubjects', () => {
 		const statuses = resolveSettingsSubjects([plain], noConfined);
 
 		expect(statuses.has(plain)).toBe(false);
+	});
+});
+
+describe('safeExtensionName', () => {
+	it('replaces control characters and truncates an overlong name', () => {
+		expect(safeExtensionName(`a${String.fromCharCode(10)}b${String.fromCharCode(0)}c`)).toBe('a?b?c');
+		expect(safeExtensionName('x'.repeat(100))).toBe(`${'x'.repeat(64)}...`);
+	});
+
+	it('leaves a conventional name unchanged', () => {
+		expect(safeExtensionName('cairncms-extension-preview')).toBe('cairncms-extension-preview');
 	});
 });

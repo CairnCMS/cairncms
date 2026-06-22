@@ -591,7 +591,7 @@ export class ExtensionManager {
 			if (status.eligible) {
 				this.settingsEligible.add(extension);
 			} else {
-				logger.warn(`Settings disabled for extension "${extension.name}": ${status.reason.detail}`);
+				logger.warn(`Settings disabled: ${status.reason.detail}`);
 			}
 		}
 	}
