@@ -1,0 +1,133 @@
+get:
+  tags:
+    - Extensions
+  operationId: getExtensionSettings
+  summary: Read Extension Settings
+  description:
+    Returns the stored settings for an extension subject. A secret pointer is returned as stored, never resolved.
+    This route is restricted to administrators.
+  parameters:
+    - name: subject
+      in: query
+      required: true
+      description: The extension's package name.
+      schema:
+        type: string
+    - name: scope
+      in: query
+      required: false
+      schema:
+        type: string
+        enum:
+          - global
+          - collection
+    - name: scope_key
+      in: query
+      required: false
+      schema:
+        type: string
+  responses:
+    '200':
+      description: Successful request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    scope:
+                      type: string
+                    scope_key:
+                      type: string
+                    key:
+                      type: string
+                    value:
+                      $ref: '../../openapi.yaml#/components/schemas/ExtensionSettingValue'
+    '400':
+      description: The request is missing the required subject.
+    '401':
+      $ref: '../../openapi.yaml#/components/responses/UnauthorizedError'
+    '403':
+      description: The current user is not an administrator.
+post:
+  tags:
+    - Extensions
+  operationId: setExtensionSetting
+  summary: Write an Extension Setting
+  description:
+    Validates a setting value against the extension's manifest declaration and stores it. A sensitive setting
+    accepts only a secret pointer, never a raw value. This route is restricted to administrators.
+  requestBody:
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - subject
+            - scope
+            - scope_key
+            - key
+            - value
+          properties:
+            subject:
+              type: string
+            scope:
+              type: string
+              enum:
+                - global
+                - collection
+            scope_key:
+              type: string
+            key:
+              type: string
+            value:
+              $ref: '../../openapi.yaml#/components/schemas/ExtensionSettingValue'
+  responses:
+    '200':
+      description: The setting was stored.
+    '400':
+      description: The key is undeclared, the value is out of shape, or the scope does not match the declaration.
+    '401':
+      $ref: '../../openapi.yaml#/components/responses/UnauthorizedError'
+    '403':
+      description: The current user is not an administrator, or the subject is not an eligible settings owner.
+delete:
+  tags:
+    - Extensions
+  operationId: deleteExtensionSettings
+  summary: Purge an Extension's Settings
+  description:
+    Removes every stored setting for an extension subject across all scopes. This route is restricted to administrators.
+  requestBody:
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - subject
+          properties:
+            subject:
+              type: string
+  responses:
+    '200':
+      description: The settings were removed.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: object
+                properties:
+                  removed:
+                    type: integer
+    '400':
+      description: The request is missing the required subject.
+    '401':
+      $ref: '../../openapi.yaml#/components/responses/UnauthorizedError'
+    '403':
+      description: The current user is not an administrator.

@@ -141,6 +141,8 @@ paths:
     $ref: './paths/extensions/diagnostics.yaml'
   /extensions/sources/{chunk}:
     $ref: './paths/extensions/sources.yaml'
+  /extension-settings:
+    $ref: './paths/extension-settings/settings.yaml'
 
   # Fields
   /fields:
@@ -254,6 +256,26 @@ paths:
 
 components:
   schemas:
+    ExtensionSettingValue:
+      description: A scalar setting value, or a secret pointer for a sensitive key.
+      oneOf:
+        - type: string
+        - type: number
+        - type: boolean
+        - type: object
+          required:
+            - source
+            - name
+          additionalProperties: false
+          properties:
+            source:
+              type: string
+              enum:
+                - config
+            name:
+              type: string
+              pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+              maxLength: 128
     Activity:
       $ref: './components/activity.yaml'
     Presets:
