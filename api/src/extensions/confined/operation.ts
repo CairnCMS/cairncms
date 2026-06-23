@@ -1,12 +1,8 @@
 import type { Accountability, ConfinedOptionDelivery, ExtensionCapabilities } from '@cairncms/types';
-import {
-	createConfinedHostBroker,
-	DARK_SETTINGS,
-	type ConfinedHostBrokerDeps,
-	type ConfinedLogEntry,
-} from './broker.js';
+import { createConfinedHostBroker, type ConfinedHostBrokerDeps, type ConfinedLogEntry } from './broker.js';
 import { prepareOperationOptions } from './operation-options.js';
 import { ConfinedSecretScope } from './secret-scope.js';
+import type { ConfinedSettingsAccess } from './settings-access.js';
 import type {
 	ConfinedAccountability,
 	ConfinedHostDispatcher,
@@ -42,6 +38,7 @@ export interface ConfinedOperationDeps {
 	log: (entry: ConfinedLogEntry) => void;
 	getAxios?: ConfinedHostBrokerDeps['getAxios'];
 	itemsService?: ConfinedHostBrokerDeps['itemsService'];
+	settingsAccess: (subject: string) => ConfinedSettingsAccess;
 	brokerLimits: ConfinedHostBrokerDeps['limits'];
 	runtimeLimits: ConfinedRuntimeLimits;
 }
@@ -113,14 +110,20 @@ export async function runConfinedOperation(
 			};
 		}
 
+		const access = deps.settingsAccess(request.extensionId);
+
 		const brokerDeps: ConfinedHostBrokerDeps = {
 			capabilities: request.capabilities,
 			log: deps.log,
-			settings: DARK_SETTINGS,
+			settings: access.source,
 			accountability: request.accountability,
 			limits: deps.brokerLimits,
 			resolveSecret: async (binding, signal) => {
 				if (signal.aborted) return null;
+
+				if (binding.kind === 'extension-setting') {
+					return access.resolveExtensionSecret(binding, signal);
+				}
 
 				if (binding.kind === 'flow-operation-option' && binding.operationId === request.operationId) {
 					const value = prepared.referenceValues[binding.key];

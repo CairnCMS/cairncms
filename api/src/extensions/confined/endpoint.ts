@@ -1,12 +1,8 @@
 import type { Accountability, ExtensionCapabilities } from '@cairncms/types';
-import {
-	createConfinedHostBroker,
-	DARK_SETTINGS,
-	type ConfinedHostBrokerDeps,
-	type ConfinedLogEntry,
-} from './broker.js';
+import { createConfinedHostBroker, type ConfinedHostBrokerDeps, type ConfinedLogEntry } from './broker.js';
 import { toConfinedAccountability } from './operation.js';
 import { ConfinedSecretScope } from './secret-scope.js';
+import type { ConfinedSettingsAccess } from './settings-access.js';
 import type { ConfinedHostDispatcher, ConfinedInvocation, ConfinedResult, ConfinedRuntimeLimits } from './types.js';
 
 export const ENDPOINT_PATH_MAX = 2048;
@@ -41,6 +37,7 @@ export interface ConfinedEndpointDeps {
 	log: (entry: ConfinedLogEntry) => void;
 	getAxios?: ConfinedHostBrokerDeps['getAxios'];
 	itemsService?: ConfinedHostBrokerDeps['itemsService'];
+	settingsAccess: (subject: string) => ConfinedSettingsAccess;
 	brokerLimits: ConfinedHostBrokerDeps['limits'];
 	runtimeLimits: ConfinedRuntimeLimits;
 }
@@ -142,14 +139,23 @@ export async function runConfinedEndpoint(
 	try {
 		const scope = new ConfinedSecretScope();
 
+		const access = deps.settingsAccess(request.extensionId);
+
 		const brokerDeps: ConfinedHostBrokerDeps = {
 			capabilities: request.capabilities,
 			log: deps.log,
-			settings: DARK_SETTINGS,
+			settings: access.source,
 			accountability: request.accountability,
 			limits: deps.brokerLimits,
-			// Endpoints mint no option handles, so no reference ever resolves.
-			resolveSecret: async () => null,
+			resolveSecret: async (binding, signal) => {
+				if (signal.aborted) return null;
+
+				if (binding.kind === 'extension-setting') {
+					return access.resolveExtensionSecret(binding, signal);
+				}
+
+				return null;
+			},
 		};
 
 		if (deps.getAxios !== undefined) brokerDeps.getAxios = deps.getAxios;

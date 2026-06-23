@@ -64,6 +64,8 @@ import { runConfinedActionHook, runConfinedFilterHook, type ConfinedHookRequest 
 import type { ConfinedLogEntry } from './extensions/confined/broker.js';
 import type { ConfinedHostDispatcher, ConfinedInvocation } from './extensions/confined/types.js';
 import { confinedItemsService } from './extensions/confined/items-service.js';
+import { buildConfinedSettingsAccess } from './extensions/confined/settings-access.js';
+import { readGlobalSettings } from './services/extension-settings-store.js';
 import type { SandboxConfig } from './extensions/confined/sandbox-limits.js';
 import { getAxios } from './request/index.js';
 import logger from './logger.js';
@@ -714,6 +716,11 @@ export class ExtensionManager {
 			log: (entry: ConfinedLogEntry) => this.logConfinedEntry(entry),
 			getAxios: () => getAxios(),
 			itemsService: confinedItemsService,
+			settingsAccess: (subject: string) =>
+				buildConfinedSettingsAccess({
+					declaration: this.getSettingsOwner(subject)?.settings,
+					readRows: (signal) => readGlobalSettings(getDatabase(), subject, signal),
+				}),
 			brokerLimits: {
 				settingsValueBytes: config.sandbox.settingsValueBytes,
 				httpResponseBytes: config.sandbox.httpResponseBytes,

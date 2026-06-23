@@ -8,6 +8,7 @@ import {
 	SETTINGS_VALUE_BYTES,
 	TEMPLATE_OUTPUT_BYTES,
 } from './sandbox-limits.js';
+import { EMPTY_SETTINGS_ACCESS } from './settings-access.js';
 import type { ConfinedHostCallContext, ConfinedInvocation, ConfinedResult } from './types.js';
 
 const RUNTIME_LIMITS = {
@@ -48,6 +49,7 @@ function deps(overrides: Partial<ConfinedOperationDeps> = {}): ConfinedOperation
 		log: () => undefined,
 		brokerLimits: BROKER_LIMITS,
 		runtimeLimits: RUNTIME_LIMITS,
+		settingsAccess: () => EMPTY_SETTINGS_ACCESS,
 		...overrides,
 	};
 }

@@ -11,6 +11,7 @@ import {
 import { runConfinedEndpoint } from './endpoint.js';
 import { runConfinedActionHook, runConfinedFilterHook } from './hook.js';
 import { runConfinedOperation } from './operation.js';
+import { buildConfinedSettingsAccess, EMPTY_SETTINGS_ACCESS } from './settings-access.js';
 import { ConfinedSupervisor } from './supervisor.js';
 import type { ConfinedHostDispatcher, ConfinedInvocation, ConfinedResult, ConfinedRuntimeLimits } from './types.js';
 
@@ -78,7 +79,13 @@ function baseOperationRequest(entrySource: string, overrides: Record<string, unk
 	};
 }
 
-const deps = { invoke, log, brokerLimits: BROKER_LIMITS, runtimeLimits: LIMITS };
+const deps = {
+	invoke,
+	log,
+	brokerLimits: BROKER_LIMITS,
+	runtimeLimits: LIMITS,
+	settingsAccess: () => EMPTY_SETTINGS_ACCESS,
+};
 
 describe('confined contracts through a real child', () => {
 	it(
@@ -247,7 +254,7 @@ describe('host methods through a real child and the real broker', () => {
 	);
 
 	it(
-		'serves settings dark: denied without the capability, null with it',
+		'an extension with no declared settings: denied without the capability, null with it',
 		async () => {
 			const denied = await runConfinedOperation(
 				baseOperationRequest(operationEntry("async (_input, { host }) => host.settings.get('mode')"), {
@@ -258,8 +265,8 @@ describe('host methods through a real child and the real broker', () => {
 
 			expect(denied.outcome).toMatchObject({ ok: true, value: { ok: false, error: { code: 'denied' } } });
 
-			// The runners hardcode DARK_SETTINGS, so a declared capability still reads null
-			// for every key. This asserts that shipped dark contract through the real child.
+			// An extension that declares no settings reads null for every key, even with the
+			// read capability. The empty settings access is the no-owner shape.
 			const dark = await runConfinedOperation(
 				baseOperationRequest(operationEntry("async (_input, { host }) => host.settings.get('mode')"), {
 					capabilities: { settings: ['read'] },
@@ -471,6 +478,165 @@ describe('brokered request with a real secret through a real child', () => {
 			expect(serializedLogs).toContain(REDACT_TEXT);
 			expect(serializedLogs).not.toContain(secret);
 			expect(serializedLogs).not.toContain(String(handle));
+		},
+		ENGINE_TIMEOUT
+	);
+});
+
+describe('extension settings reads and brokered secret through a real child', () => {
+	let server: http.Server;
+	let origin: string;
+	const authSeen: Array<string | undefined> = [];
+
+	const SETTING_SECRET = 'sk_live_SETTINGS_SECRET_TOKEN';
+	const BASE_URL = 'https://preview.example.com';
+
+	const SETTINGS_DECLARATION: any = {
+		base_url: { type: 'string', scope: 'global' },
+		api_key: { type: 'string', scope: 'global', sensitive: true },
+		unset_key: { type: 'string', scope: 'global', sensitive: true },
+	};
+
+	const SETTINGS_ROWS = [
+		{ key: 'base_url', value: BASE_URL },
+		{ key: 'api_key', value: { source: 'config', name: 'CAIRN_E2E_SETTING_SECRET' } },
+		{ key: 'unset_key', value: { source: 'config', name: 'CAIRN_E2E_NEVER_SET' } },
+	];
+
+	// Subject-aware so a wrong subject yields an empty access. The bundle case passing
+	// proves the bundle's own subject (local.e2e) reaches the settings read.
+	const settingsAccess = (subject: string) =>
+		buildConfinedSettingsAccess({
+			declaration: subject === 'local.e2e' ? SETTINGS_DECLARATION : undefined,
+			readRows: async () => (subject === 'local.e2e' ? SETTINGS_ROWS : []),
+		});
+
+	const settingsDeps = { ...deps, settingsAccess, getAxios: async () => axios.create() };
+
+	beforeAll(async () => {
+		process.env['CAIRN_E2E_SETTING_SECRET'] = SETTING_SECRET;
+		delete process.env['CAIRN_E2E_NEVER_SET'];
+
+		server = http.createServer((request, response) => {
+			authSeen.push(request.headers['authorization']);
+			response.writeHead(200, { 'content-type': 'application/json' });
+			response.end(JSON.stringify({ ok: true }));
+		});
+
+		await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+		origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+	});
+
+	afterAll(() => {
+		server.close();
+		delete process.env['CAIRN_E2E_SETTING_SECRET'];
+	});
+
+	beforeEach(() => {
+		authSeen.length = 0;
+	});
+
+	it(
+		'operation reads a value and a handle, an unset secret and an undeclared key as null, and resolves the handle',
+		async () => {
+			const result = await runConfinedOperation(
+				baseOperationRequest(
+					operationEntry(
+						`async (_input, { host }) => { const baseUrl = (await host.settings.get('base_url')).value; const apiKey = (await host.settings.get('api_key')).value; const unsetKey = (await host.settings.get('unset_key')).value; const undeclared = (await host.settings.get('nope')).value; await host.log.info('handle ' + apiKey.ref); await host.request.send({ url: '${origin}/echo', method: 'GET', auth: { bearer: apiKey } }); return { baseUrl, apiKeyKind: apiKey.kind, unsetKey, undeclared }; }`
+					),
+					{ capabilities: { settings: ['read'], request: { urls: [origin] }, log: true } }
+				),
+				settingsDeps
+			);
+
+			expect(result.outcome).toMatchObject({
+				ok: true,
+				value: { baseUrl: BASE_URL, apiKeyKind: 'secret-reference', unsetKey: null, undeclared: null },
+			});
+
+			expect(authSeen).toContain(`Bearer ${SETTING_SECRET}`);
+			expect(JSON.stringify(result.outcome)).not.toContain(SETTING_SECRET);
+			expect(result.redactionValues).toContain(SETTING_SECRET);
+
+			const serializedLogs = JSON.stringify(logs);
+			expect(serializedLogs).toContain(REDACT_TEXT);
+			expect(serializedLogs).not.toContain(SETTING_SECRET);
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
+		'endpoint reads its settings and resolves the handle at brokered use',
+		async () => {
+			const result = await runConfinedEndpoint(
+				{
+					extensionId: 'local.e2e',
+					contributionId: 'e2e-ep',
+					entrySource: endpointEntry(
+						`async (_request, { host }) => { const baseUrl = (await host.settings.get('base_url')).value; const apiKey = (await host.settings.get('api_key')).value; await host.request.send({ url: '${origin}/echo', method: 'GET', auth: { bearer: apiKey } }); return { status: 200, body: { baseUrl } }; }`
+					),
+					capabilities: { endpoint: { access: 'public' }, settings: ['read'], request: { urls: [origin] } },
+					method: 'GET',
+					path: '/run',
+					query: {},
+					body: null,
+					accountability: null,
+				},
+				settingsDeps
+			);
+
+			expect(result).toMatchObject({ ok: true, status: 200, body: { baseUrl: BASE_URL } });
+			expect(authSeen).toContain(`Bearer ${SETTING_SECRET}`);
+			expect(JSON.stringify(result)).not.toContain(SETTING_SECRET);
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
+		'action hook reads its settings and resolves the handle at brokered use',
+		async () => {
+			const result = await runConfinedActionHook(
+				{
+					extensionId: 'local.e2e',
+					contributionId: 'e2e-hook',
+					entrySource: hookEntry(
+						'actions',
+						'e2e.settings',
+						`async (_meta, { host }) => { const baseUrl = (await host.settings.get('base_url')).value; await host.log.info('base ' + baseUrl); const apiKey = (await host.settings.get('api_key')).value; await host.request.send({ url: '${origin}/echo', method: 'GET', auth: { bearer: apiKey } }); return { done: true }; }`
+					),
+					capabilities: { log: true, settings: ['read'], request: { urls: [origin] } },
+					event: 'e2e.settings',
+					meta: {},
+					accountability: null,
+				},
+				settingsDeps
+			);
+
+			expect(result).toEqual({ ok: true });
+			expect(authSeen).toContain(`Bearer ${SETTING_SECRET}`);
+			expect(JSON.stringify(logs)).toContain(`base ${BASE_URL}`);
+			expect(JSON.stringify(logs)).not.toContain(SETTING_SECRET);
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
+		'bundle operation entry reads settings under the bundle subject and resolves the handle',
+		async () => {
+			const artifact = `var CairnBundle = (() => ({ default: { 'operation:settings-op': { id: 'settings-op', handler: async (_input, { host }) => { const baseUrl = (await host.settings.get('base_url')).value; const apiKey = (await host.settings.get('api_key')).value; await host.request.send({ url: '${origin}/echo', method: 'GET', auth: { bearer: apiKey } }); return { baseUrl }; } } } }))();`;
+
+			const result = await runConfinedOperation(
+				baseOperationRequest(artifact, {
+					contributionId: 'settings-op',
+					bundleEntryKey: 'operation:settings-op',
+					capabilities: { settings: ['read'], request: { urls: [origin] } },
+				}),
+				settingsDeps
+			);
+
+			expect(result.outcome).toMatchObject({ ok: true, value: { baseUrl: BASE_URL } });
+			expect(authSeen).toContain(`Bearer ${SETTING_SECRET}`);
+			expect(JSON.stringify(result.outcome)).not.toContain(SETTING_SECRET);
 		},
 		ENGINE_TIMEOUT
 	);
