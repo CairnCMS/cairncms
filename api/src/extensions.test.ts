@@ -2010,7 +2010,7 @@ describe('the settings subject gate in the loader', () => {
 		expect((instance as any).isSettingsEligible(plain)).toBe(false);
 	});
 
-	it('refuses a non-owner that shares an owner name, keying eligibility by identity not name', async () => {
+	it('resolves the owner and eligibility by identity, not by a shared name', async () => {
 		const instance = new ExtensionManager();
 		const owner = settingsOwner('shared-owner', 'cairncms-extension-shared');
 		const nonOwner = endpointExtension('shared-plain', 'cairncms-extension-shared', false);
@@ -2020,5 +2020,7 @@ describe('the settings subject gate in the loader', () => {
 
 		expect((instance as any).isSettingsEligible(owner)).toBe(true);
 		expect((instance as any).isSettingsEligible(nonOwner)).toBe(false);
+		expect((instance as any).getSettingsOwner('cairncms-extension-shared')).toBe(owner);
+		expect((instance as any).getSettingsOwner('cairncms-extension-absent')).toBeUndefined();
 	});
 });

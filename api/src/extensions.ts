@@ -374,6 +374,14 @@ export class ExtensionManager {
 		return this.settingsEligible.has(extension);
 	}
 
+	public getSettingsOwner(subject: string): Extension | undefined {
+		for (const extension of this.settingsEligible) {
+			if (extension.name === subject) return extension;
+		}
+
+		return undefined;
+	}
+
 	/**
 	 * The global confined-runtime metadata for the diagnostics response. Derived from the
 	 * load state, never by resolving the runtime, so a plain-only load (no confined

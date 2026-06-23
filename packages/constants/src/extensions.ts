@@ -354,6 +354,16 @@ export const ExtensionSettingsSchema = z
 
 export const ExtensionSettingsSubjectSchema = z.string().regex(EXTENSION_NAME_REGEX).max(255);
 
+export const ExtensionSecretPointerSchema = z
+	.object({
+		source: z.literal('config'),
+		name: z
+			.string()
+			.regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
+			.max(128),
+	})
+	.strict();
+
 export const ExtensionOptionsBase = z.object({
 	host: z.string(),
 	hidden: z.boolean().optional(),

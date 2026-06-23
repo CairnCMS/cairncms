@@ -3,6 +3,7 @@ import {
 	ExtensionCapabilitiesSchema,
 	ExtensionManifest,
 	ExtensionOptions,
+	ExtensionSecretPointerSchema,
 	ExtensionSettingsSubjectSchema,
 } from './extensions.js';
 
@@ -581,5 +582,21 @@ describe('ExtensionSettingsSubjectSchema', () => {
 
 	it('rejects a subject longer than the storage bound', () => {
 		expect(ExtensionSettingsSubjectSchema.safeParse(`cairncms-extension-${'x'.repeat(260)}`).success).toBe(false);
+	});
+});
+
+describe('ExtensionSecretPointerSchema', () => {
+	it('accepts a config pointer with a valid variable name', () => {
+		expect(ExtensionSecretPointerSchema.safeParse({ source: 'config', name: 'MY_API_KEY' }).success).toBe(true);
+		expect(ExtensionSecretPointerSchema.safeParse({ source: 'config', name: '_private' }).success).toBe(true);
+	});
+
+	it('rejects a non-config source, a malformed name, extra keys, and a raw value', () => {
+		expect(ExtensionSecretPointerSchema.safeParse({ source: 'env', name: 'MY_API_KEY' }).success).toBe(false);
+		expect(ExtensionSecretPointerSchema.safeParse({ source: 'config', name: '1bad' }).success).toBe(false);
+		expect(ExtensionSecretPointerSchema.safeParse({ source: 'config', name: 'a b' }).success).toBe(false);
+		expect(ExtensionSecretPointerSchema.safeParse({ source: 'config', name: '' }).success).toBe(false);
+		expect(ExtensionSecretPointerSchema.safeParse({ source: 'config', name: 'OK', extra: true }).success).toBe(false);
+		expect(ExtensionSecretPointerSchema.safeParse('raw-secret-value').success).toBe(false);
 	});
 });
