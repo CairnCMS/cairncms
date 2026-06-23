@@ -352,7 +352,7 @@ export const ExtensionSettingsSchema = z
 		message: 'a settings declaration must declare at least one key',
 	});
 
-export const ExtensionSettingsSubjectSchema = z.string().regex(EXTENSION_NAME_REGEX);
+export const ExtensionSettingsSubjectSchema = z.string().regex(EXTENSION_NAME_REGEX).max(255);
 
 export const ExtensionOptionsBase = z.object({
 	host: z.string(),

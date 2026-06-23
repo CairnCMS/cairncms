@@ -578,4 +578,8 @@ describe('ExtensionSettingsSubjectSchema', () => {
 		expect(ExtensionSettingsSubjectSchema.safeParse('my-extension').success).toBe(false);
 		expect(ExtensionSettingsSubjectSchema.safeParse('').success).toBe(false);
 	});
+
+	it('rejects a subject longer than the storage bound', () => {
+		expect(ExtensionSettingsSubjectSchema.safeParse(`cairncms-extension-${'x'.repeat(260)}`).success).toBe(false);
+	});
 });

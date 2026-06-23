@@ -6,7 +6,7 @@
  * per-surface opt-in.
  */
 
-const internalTables = new Set<string>();
+const internalTables = new Set<string>(['cairncms_extension_settings']);
 
 export function isInternalTable(collection: string): boolean {
 	return internalTables.has(collection);

@@ -100,6 +100,34 @@ describe('internal-table classification', () => {
 		expect(Object.keys(schema.collections)).not.toContain(FIXTURE);
 	});
 
+	it('getSchema excludes every registered internal table, so a newly registered table is auto-covered', async () => {
+		const columns = {
+			id: { column_name: 'id', data_type: 'integer', is_nullable: false, is_generated: false },
+		};
+
+		const registered = getInternalTables();
+
+		const overview: Record<string, { primary: string; columns: typeof columns }> = {
+			[NORMAL]: { primary: 'id', columns },
+		};
+
+		for (const table of registered) overview[table] = { primary: 'id', columns };
+
+		mockInspector.overview.mockResolvedValue(overview);
+		tracker.on.select('directus_collections').response([]);
+		tracker.on.select('directus_fields').response([]);
+		vi.spyOn(RelationsService.prototype, 'readAll').mockResolvedValue([]);
+
+		const schema = await getSchema({ database: db, bypassCache: true });
+
+		expect(registered).toContain('cairncms_extension_settings');
+		expect(Object.keys(schema.collections)).toContain(NORMAL);
+
+		for (const table of registered) {
+			expect(Object.keys(schema.collections)).not.toContain(table);
+		}
+	});
+
 	it('CollectionsService.readByQuery excludes an internal table on both the physical and metadata paths', async () => {
 		mockInspector.tableInfo.mockResolvedValue([{ name: FIXTURE }, { name: NORMAL }]);
 
