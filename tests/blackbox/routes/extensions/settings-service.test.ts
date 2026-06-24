@@ -184,4 +184,96 @@ describe('the extension settings service over /extension-settings', () => {
 		const res = await request(url).get(`/extension-settings?subject=${SUBJECT}`);
 		expect([401, 403]).toContain(res.status);
 	});
+
+	it.each(vendors)(
+		'%s: deleting a collection purges its collection-scoped settings and leaves global ones',
+		async (vendor) => {
+			const url = getUrl(vendor);
+			const auth = `Bearer ${TOKEN()}`;
+			const db = databases.get(vendor)!;
+			const collection = 'settings_cascade_target';
+
+			await db(TABLE).where({ extension: SUBJECT }).del();
+			await DeleteCollection(vendor, { collection });
+			await CreateCollection(vendor, { collection });
+
+			await request(url)
+				.post('/extension-settings')
+				.set('Authorization', auth)
+				.send({ subject: SUBJECT, scope: 'collection', scope_key: collection, key: 'preview_url', value: 'https://x' });
+
+			await request(url)
+				.post('/extension-settings')
+				.set('Authorization', auth)
+				.send({ subject: SUBJECT, scope: 'global', scope_key: '', key: 'base_url', value: 'https://g' });
+
+			await DeleteCollection(vendor, { collection });
+
+			const read = await request(url).get(`/extension-settings?subject=${SUBJECT}`).set('Authorization', auth);
+			const rows: any[] = read.body.data;
+			expect(rows.some((row) => row.scope_key === collection)).toBe(false);
+			expect(rows.some((row) => row.scope === 'global' && row.key === 'base_url')).toBe(true);
+
+			await db(TABLE).where({ extension: SUBJECT }).del();
+		}
+	);
+
+	it.each(vendors)('%s: deleting a meta-only collection purges its collection-scoped settings', async (vendor) => {
+		const url = getUrl(vendor);
+		const auth = `Bearer ${TOKEN()}`;
+		const db = databases.get(vendor)!;
+		const folder = 'settings_meta_folder';
+
+		await db(TABLE).where({ extension: SUBJECT, scope: 'collection', scope_key: folder }).del();
+		await DeleteCollection(vendor, { collection: folder });
+
+		const created = await request(url)
+			.post('/collections')
+			.set('Authorization', auth)
+			.send({ collection: folder, schema: null, meta: {} });
+
+		expect(created.status).toBe(200);
+
+		await db(TABLE).insert({
+			id: '00000000-0000-4000-8000-000000000010',
+			extension: SUBJECT,
+			scope: 'collection',
+			scope_key: folder,
+			key: 'preview_url',
+			value: JSON.stringify('https://x'),
+		});
+
+		await DeleteCollection(vendor, { collection: folder });
+
+		const remaining = await db(TABLE).where({ extension: SUBJECT, scope: 'collection', scope_key: folder });
+		expect(remaining).toHaveLength(0);
+	});
+
+	it.each(vendors)('%s: the collection-scoped purge rolls back with its transaction', async (vendor) => {
+		const db = databases.get(vendor)!;
+		const collection = 'settings_rollback_target';
+
+		await db(TABLE).where({ extension: SUBJECT, scope: 'collection', scope_key: collection }).del();
+
+		await db(TABLE).insert({
+			id: '00000000-0000-4000-8000-000000000011',
+			extension: SUBJECT,
+			scope: 'collection',
+			scope_key: collection,
+			key: 'preview_url',
+			value: JSON.stringify('https://x'),
+		});
+
+		await db
+			.transaction(async (trx) => {
+				await trx(TABLE).where({ scope: 'collection', scope_key: collection }).delete();
+				throw new Error('force rollback');
+			})
+			.catch(() => undefined);
+
+		const remaining = await db(TABLE).where({ extension: SUBJECT, scope: 'collection', scope_key: collection });
+		expect(remaining).toHaveLength(1);
+
+		await db(TABLE).where({ extension: SUBJECT, scope: 'collection', scope_key: collection }).del();
+	});
 });

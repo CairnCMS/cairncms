@@ -1,7 +1,7 @@
 import knex from 'knex';
 import { createTracker, MockClient, type Tracker } from 'knex-mock-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readGlobalSettings } from './extension-settings-store.js';
+import { deleteSettingsByCollection, readGlobalSettings } from './extension-settings-store.js';
 
 const TABLE = 'cairncms_extension_settings';
 
@@ -60,5 +60,26 @@ describe('readGlobalSettings', () => {
 
 		expect(await readGlobalSettings(db, 'cairncms-extension-x', controller.signal)).toEqual([]);
 		expect(tracker.history.select).toHaveLength(0);
+	});
+});
+
+describe('deleteSettingsByCollection', () => {
+	let db: any;
+	let tracker: Tracker;
+
+	beforeEach(() => {
+		db = vi.mocked(knex.default({ client: Client_PG }));
+		tracker = createTracker(db);
+	});
+
+	afterEach(() => {
+		tracker.reset();
+	});
+
+	it('deletes only the named collection-scoped rows', async () => {
+		tracker.on.delete(TABLE).response(2);
+
+		expect(await deleteSettingsByCollection(db, 'articles')).toBe(2);
+		expect(tracker.history.delete[0]?.bindings).toEqual(['collection', 'articles']);
 	});
 });

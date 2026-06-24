@@ -35,3 +35,11 @@ export async function readGlobalSettings(
 
 	return settings;
 }
+
+/**
+ * Deletes a collection's collection-scoped settings as part of a collection delete. Runs on the
+ * caller's transaction handle. Global settings and other collections' settings are untouched.
+ */
+export async function deleteSettingsByCollection(knex: Knex, collection: string): Promise<number> {
+	return knex(TABLE).where({ scope: 'collection', scope_key: collection }).delete();
+}

@@ -15,6 +15,7 @@ import { systemCollectionRows } from '../database/system-data/collections/index.
 import emitter from '../emitter.js';
 import env from '../env.js';
 import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
+import { deleteSettingsByCollection } from '../services/extension-settings-store.js';
 import { FieldsService } from '../services/fields.js';
 import { ItemsService } from '../services/items.js';
 import type {
@@ -650,6 +651,8 @@ export class CollectionsService {
 							.where({ id: relation.meta!.id });
 					}
 				}
+
+				await deleteSettingsByCollection(trx, collectionKey);
 			});
 
 			return collectionKey;
