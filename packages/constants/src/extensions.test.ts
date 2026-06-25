@@ -531,6 +531,16 @@ describe('ExtensionOptions settings declaration', () => {
 		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(false);
 	});
 
+	it('accepts an app-readable non-sensitive setting', () => {
+		const settings = { preview_url: { type: 'string', scope: 'collection', appReadable: true } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(true);
+	});
+
+	it('rejects an app-readable sensitive setting', () => {
+		const settings = { api_key: { type: 'string', scope: 'global', sensitive: true, appReadable: true } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(false);
+	});
+
 	it('rejects an unknown key inside a setting declaration', () => {
 		const settings = { preview_url: { type: 'string', scope: 'global', surprise: true } };
 		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(false);

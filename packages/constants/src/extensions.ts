@@ -324,6 +324,7 @@ export const ExtensionSettingDeclaration = z
 		type: z.enum(['string', 'number', 'boolean']),
 		scope: z.enum(['global', 'collection']),
 		sensitive: z.boolean().optional(),
+		appReadable: z.boolean().optional(),
 	})
 	.strict()
 	.superRefine((value, ctx) => {
@@ -332,6 +333,14 @@ export const ExtensionSettingDeclaration = z
 				code: z.ZodIssueCode.custom,
 				path: ['type'],
 				message: 'a sensitive setting must be type string',
+			});
+		}
+
+		if (value.sensitive === true && value.appReadable === true) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ['appReadable'],
+				message: 'a sensitive setting cannot be app-readable',
 			});
 		}
 	});
