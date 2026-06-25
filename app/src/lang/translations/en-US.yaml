@@ -503,7 +503,8 @@ enable_select_button: Enable Select Button
 allow_duplicates: Allow Duplicates
 comments: Comments
 no_comments: No Comments Yet
-click_to_expand: Click to Expand
+expand: Expand
+collapse: Collapse
 select_item: Select Item
 no_items: No items
 search_items: Search items...
@@ -1659,6 +1660,7 @@ interfaces:
     notice: Notice
     description: Display a short notice
     text: Enter notice content here...
+    no_text: No text configured...
   list-o2m:
     one-to-many: One to Many
     description: Select multiple related items
