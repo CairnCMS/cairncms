@@ -21,7 +21,7 @@ const TABLE = 'cairncms_extension_settings';
 
 class Client_PG extends MockClient {}
 
-const admin = { role: 'admin', admin: true } as any;
+const admin = { role: 'admin', admin: true, user: 'admin-user', app: true } as any;
 const schema = { collections: { articles: {} }, relations: [] } as any;
 
 const declaration = {
@@ -217,7 +217,7 @@ describe('ExtensionSettingsService', () => {
 			store.readGlobalSettings.mockResolvedValue([{ key: 'theme', value: 'dark' }]);
 			store.readCollectionSettings.mockResolvedValue([{ key: 'preview_url', value: 'https://x' }]);
 
-			const editor = { user: 'u', permissions: [{ action: 'read', collection: 'articles' }] };
+			const editor = { user: 'u', app: true, permissions: [{ action: 'read', collection: 'articles' }] };
 
 			expect(await service(editor).readForApp('cairncms-extension-preview', 'articles')).toEqual({
 				theme: 'dark',
@@ -232,7 +232,7 @@ describe('ExtensionSettingsService', () => {
 			manager.getSettingsOwner.mockReturnValue(appOwner);
 			store.readGlobalSettings.mockResolvedValue([{ key: 'theme', value: 'dark' }]);
 
-			const restricted = { user: 'u', permissions: [{ action: 'read', collection: 'other' }] };
+			const restricted = { user: 'u', app: true, permissions: [{ action: 'read', collection: 'other' }] };
 
 			expect(await service(restricted).readForApp('cairncms-extension-preview', 'articles')).toEqual({ theme: 'dark' });
 			expect(store.readCollectionSettings).not.toHaveBeenCalled();
@@ -242,7 +242,7 @@ describe('ExtensionSettingsService', () => {
 			manager.getSettingsOwner.mockReturnValue(appOwner);
 			store.readGlobalSettings.mockResolvedValue([{ key: 'theme', value: 'dark' }]);
 
-			expect(await service({ user: 'u' }).readForApp('cairncms-extension-preview', 'articles')).toEqual({
+			expect(await service({ user: 'u', app: true }).readForApp('cairncms-extension-preview', 'articles')).toEqual({
 				theme: 'dark',
 			});
 
@@ -275,6 +275,12 @@ describe('ExtensionSettingsService', () => {
 
 		it('refuses a read without accountability', async () => {
 			await expect(service(null).readForApp('cairncms-extension-preview')).rejects.toBeInstanceOf(ForbiddenException);
+		});
+
+		it('refuses a caller without app access', async () => {
+			await expect(service({ user: 'u', app: false }).readForApp('cairncms-extension-preview')).rejects.toBeInstanceOf(
+				ForbiddenException
+			);
 		});
 	});
 });

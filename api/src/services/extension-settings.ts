@@ -78,7 +78,7 @@ export class ExtensionSettingsService {
 	}
 
 	async readForApp(subject: string, collection?: string): Promise<Record<string, unknown>> {
-		if (this.accountability === null) throw new ForbiddenException();
+		this.requireAppAccess();
 
 		const declared = getExtensionManager().getSettingsOwner(subject)?.settings;
 		if (declared === undefined) return {};
@@ -98,6 +98,10 @@ export class ExtensionSettingsService {
 
 	private requireAdmin(): void {
 		if (this.accountability?.admin !== true) throw new ForbiddenException();
+	}
+
+	private requireAppAccess(): void {
+		if (!this.accountability?.user || this.accountability?.app !== true) throw new ForbiddenException();
 	}
 
 	private validateScope(scope: SettingsScope, scopeKey: string): void {

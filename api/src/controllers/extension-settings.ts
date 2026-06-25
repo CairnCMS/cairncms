@@ -1,10 +1,36 @@
 import express from 'express';
-import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
+import { ForbiddenException, InvalidCredentialsException, InvalidPayloadException } from '../exceptions/index.js';
 import { respond } from '../middleware/respond.js';
 import { ExtensionSettingsService } from '../services/extension-settings.js';
 import asyncHandler from '../utils/async-handler.js';
 
 const router = express.Router();
+
+// Registered before the admin gate below, so this route runs its own app-access gate
+// instead of requiring admin. The registration order is load-bearing.
+router.get(
+	'/app',
+	asyncHandler(async (req, res, next) => {
+		if (!req.accountability?.user) throw new InvalidCredentialsException();
+		if (req.accountability.app !== true) throw new ForbiddenException();
+
+		const subject = req.query['subject'];
+		if (typeof subject !== 'string') throw new InvalidPayloadException('"subject" is required.');
+
+		const collection = req.query['collection'];
+
+		if (collection !== undefined && typeof collection !== 'string') {
+			throw new InvalidPayloadException('"collection" must be a string.');
+		}
+
+		const service = new ExtensionSettingsService({ accountability: req.accountability, schema: req.schema });
+		const data = await service.readForApp(subject, collection);
+
+		res.locals['payload'] = { data };
+		return next();
+	}),
+	respond
+);
 
 router.use(
 	asyncHandler(async (req, _res, next) => {

@@ -10,7 +10,8 @@
 		"host": "^1.0.0",
 		"settings": {
 			"base_url": { "type": "string", "scope": "global" },
-			"preview_url": { "type": "string", "scope": "collection" },
+			"theme": { "type": "string", "scope": "global", "appReadable": true },
+			"preview_url": { "type": "string", "scope": "collection", "appReadable": true },
 			"api_key": { "type": "string", "scope": "global", "sensitive": true }
 		}
 	}

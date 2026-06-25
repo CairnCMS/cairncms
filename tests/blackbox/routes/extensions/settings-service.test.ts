@@ -277,3 +277,129 @@ describe('the extension settings service over /extension-settings', () => {
 		await db(TABLE).where({ extension: SUBJECT, scope: 'collection', scope_key: collection }).del();
 	});
 });
+
+describe('the app-side settings read over /extension-settings/app', () => {
+	const databases = new Map<string, Knex>();
+	const APP_COLLECTION = 'settings_app_target';
+	const adminAuth = `Bearer ${common.USER.ADMIN.TOKEN}`;
+
+	async function seed(vendor: string) {
+		const url = getUrl(vendor);
+		const post = (body: any) => request(url).post('/extension-settings').set('Authorization', adminAuth).send(body);
+
+		const writes = [
+			{ subject: SUBJECT, scope: 'global', scope_key: '', key: 'theme', value: 'dark' },
+			{ subject: SUBJECT, scope: 'global', scope_key: '', key: 'base_url', value: 'https://internal' },
+			{ subject: SUBJECT, scope: 'global', scope_key: '', key: 'api_key', value: { source: 'config', name: 'APP_KEY' } },
+			{ subject: SUBJECT, scope: 'collection', scope_key: APP_COLLECTION, key: 'preview_url', value: 'https://preview' },
+		];
+
+		for (const body of writes) {
+			const res = await post(body);
+			expect(res.status).toBe(200);
+		}
+	}
+
+	beforeAll(async () => {
+		for (const vendor of vendors) {
+			databases.set(vendor, knex(config.knexConfig[vendor]!));
+			await CreateCollection(vendor, { collection: APP_COLLECTION });
+			await seed(vendor);
+		}
+	});
+
+	afterAll(async () => {
+		for (const [vendor, db] of databases) {
+			await db('directus_permissions').where({ collection: APP_COLLECTION }).del();
+			await db(TABLE).where({ extension: SUBJECT }).del();
+			await DeleteCollection(vendor, { collection: APP_COLLECTION });
+			await db.destroy();
+		}
+	});
+
+	it.each(vendors)(
+		'%s: returns app-readable values, omitting non-opted-in and sensitive keys and the pointer',
+		async (vendor) => {
+			const read = await request(getUrl(vendor))
+				.get(`/extension-settings/app?subject=${SUBJECT}&collection=${APP_COLLECTION}`)
+				.set('Authorization', adminAuth);
+
+			expect(read.status).toBe(200);
+			expect(read.body.data).toEqual({ theme: 'dark', preview_url: 'https://preview' });
+
+			const serialized = JSON.stringify(read.body.data);
+			expect(serialized).not.toContain('api_key');
+			expect(serialized).not.toContain('APP_KEY');
+			expect(serialized).not.toContain('base_url');
+		}
+	);
+
+	it.each(vendors)('%s: refuses a non-app-access caller and an unauthenticated request', async (vendor) => {
+		const url = getUrl(vendor);
+
+		const apiOnly = await request(url)
+			.get(`/extension-settings/app?subject=${SUBJECT}`)
+			.set('Authorization', `Bearer ${common.USER.API_ONLY.TOKEN}`);
+		expect(apiOnly.status).toBe(403);
+
+		const anon = await request(url).get(`/extension-settings/app?subject=${SUBJECT}`);
+		expect(anon.status).toBe(401);
+	});
+
+	it.each(vendors)('%s: returns an empty object for an absent subject', async (vendor) => {
+		const read = await request(getUrl(vendor))
+			.get('/extension-settings/app?subject=cairncms-extension-not-installed')
+			.set('Authorization', adminAuth);
+
+		expect(read.status).toBe(200);
+		expect(read.body.data).toEqual({});
+	});
+
+	it.each(vendors)('%s: rejects a missing or non-string parameter with a 400', async (vendor) => {
+		const url = getUrl(vendor);
+
+		const noSubject = await request(url).get('/extension-settings/app').set('Authorization', adminAuth);
+		expect(noSubject.status).toBe(400);
+
+		const arrayCollection = await request(url)
+			.get(`/extension-settings/app?subject=${SUBJECT}&collection=a&collection=b`)
+			.set('Authorization', adminAuth);
+		expect(arrayCollection.status).toBe(400);
+	});
+
+	it.each(vendors)('%s: denies a non-admin the collection value without read permission', async (vendor) => {
+		const read = await request(getUrl(vendor))
+			.get(`/extension-settings/app?subject=${SUBJECT}&collection=${APP_COLLECTION}`)
+			.set('Authorization', `Bearer ${common.USER.APP_ACCESS.TOKEN}`);
+
+		expect(read.status).toBe(200);
+		expect(read.body.data).toEqual({ theme: 'dark' });
+	});
+
+	it.each(vendors)('%s: returns the collection value to a non-admin granted read permission', async (vendor) => {
+		const url = getUrl(vendor);
+		const appAuth = `Bearer ${common.USER.APP_ACCESS.TOKEN}`;
+
+		const me = await request(url).get('/users/me?fields=role').set('Authorization', appAuth);
+		const role = me.body.data.role;
+
+		const created = await request(url)
+			.post('/permissions')
+			.set('Authorization', adminAuth)
+			.send({ role, collection: APP_COLLECTION, action: 'read', fields: ['*'] });
+		expect(created.status).toBe(200);
+
+		const permissionId = created.body.data.id;
+
+		try {
+			const read = await request(url)
+				.get(`/extension-settings/app?subject=${SUBJECT}&collection=${APP_COLLECTION}`)
+				.set('Authorization', appAuth);
+
+			expect(read.status).toBe(200);
+			expect(read.body.data).toEqual({ theme: 'dark', preview_url: 'https://preview' });
+		} finally {
+			await request(url).delete(`/permissions/${permissionId}`).set('Authorization', adminAuth);
+		}
+	});
+});

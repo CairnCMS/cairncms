@@ -143,6 +143,8 @@ paths:
     $ref: './paths/extensions/sources.yaml'
   /extension-settings:
     $ref: './paths/extension-settings/settings.yaml'
+  /extension-settings/app:
+    $ref: './paths/extension-settings/app.yaml'
 
   # Fields
   /fields:
