@@ -584,8 +584,8 @@ export class ExtensionManager {
 	 * capabilities it reads are already validated. A bad or colliding subject is refused
 	 * settings only, never failing the extension's load.
 	 */
-	private gateSettingsSubjects(): void {
-		const statuses = resolveSettingsSubjects(this.extensions, (extension) => {
+	private gateSettingsSubjects(discovered: Extension[]): void {
+		const statuses = resolveSettingsSubjects(discovered, (extension) => {
 			const eligible = this.confinedEligible.get(extension);
 			if (eligible === undefined) return undefined;
 
@@ -1297,10 +1297,19 @@ export class ExtensionManager {
 		this.hookEmbedsHead = [];
 		this.hookEmbedsBody = [];
 
+		let discovered: Extension[] = [];
+
 		try {
 			await ensureExtensionDirs(env['EXTENSIONS_PATH'], NESTED_EXTENSION_TYPES);
 
-			this.extensions = await this.getExtensions();
+			discovered = await this.getExtensions();
+
+			// The settings gate sees every discovered extension so an app extension's settings
+			// ownership resolves even when SERVE_APP is off and an external bundler serves the app.
+			// this.extensions stays the SERVE_APP-filtered set used for serving and listing.
+			this.extensions = env['SERVE_APP']
+				? discovered
+				: discovered.filter((extension) => APP_EXTENSION_TYPES.includes(extension.type as any) === false);
 		} catch (err: any) {
 			const reason = sanitizeExtensionError(err, 'DISCOVERY_FAILED');
 			logger.warn(`Couldn't load extensions: ${reason.code} ${reason.detail}`);
@@ -1311,7 +1320,7 @@ export class ExtensionManager {
 
 		await this.prepareConfinedRuntime();
 		await this.gateConfinedExtensions();
-		this.gateSettingsSubjects();
+		this.gateSettingsSubjects(discovered);
 
 		await this.registerHooks();
 		await this.registerEndpoints();
@@ -1478,9 +1487,7 @@ export class ExtensionManager {
 			});
 		}
 
-		return [...packageExtensions, ...localPackageExtensions, ...localExtensions].filter(
-			(extension) => env['SERVE_APP'] || APP_EXTENSION_TYPES.includes(extension.type as any) === false
-		);
+		return [...packageExtensions, ...localPackageExtensions, ...localExtensions];
 	}
 
 	private async generateExtensionBundle(): Promise<string | null> {

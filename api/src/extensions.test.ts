@@ -827,6 +827,28 @@ describe('the confined runtime boot', () => {
 	});
 });
 
+describe('app-extension settings ownership is independent of SERVE_APP', () => {
+	it('owns settings with SERVE_APP off while staying out of the served set', async () => {
+		const instance = new ExtensionManager();
+
+		const appExtension: Extension = {
+			path: path.join(root, 'preview-module'),
+			name: 'cairncms-extension-preview',
+			type: 'module',
+			entrypoint: 'app.js',
+			local: true,
+			settings: { theme: { type: 'string', scope: 'global', appReadable: true } },
+		};
+
+		(instance as any).getExtensions = async () => [appExtension];
+
+		await (instance as any).load();
+
+		expect((instance as any).getSettingsOwner('cairncms-extension-preview')).toBe(appExtension);
+		expect((instance as any).getExtensionsList('module')).toEqual([]);
+	});
+});
+
 describe('the confined endpoint binding', () => {
 	const PUBLIC_CALLER = { user: null, role: null, admin: false };
 
