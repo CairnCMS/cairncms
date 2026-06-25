@@ -745,9 +745,6 @@ importers:
       pinia:
         specifier: 2.3.1
         version: 2.3.1(typescript@5.0.4)(vue@3.5.38(typescript@5.0.4))
-      pretty-bytes:
-        specifier: 6.1.0
-        version: 6.1.0
       pretty-ms:
         specifier: 8.0.0
         version: 8.0.0
@@ -7940,10 +7937,6 @@ packages:
   pretty-bytes@5.6.0:
     resolution: {integrity: sha512-FFw039TmrBqFK8ma/7OL3sDz/VytdtJr044/QUJtH0wK9lb9jLq9tJyIxUwtQJHwar2BqtiA4iCWSwo9JLkzFg==}
     engines: {node: '>=6'}
-
-  pretty-bytes@6.1.0:
-    resolution: {integrity: sha512-Rk753HI8f4uivXi4ZCIYdhmG1V+WKzvRMg/X+M42a6t7D07RcmopXJMDNk6N++7Bl75URRGsb40ruvg7Hcp2wQ==}
-    engines: {node: ^14.13.1 || >=16.0.0}
 
   pretty-format@29.7.0:
     resolution: {integrity: sha512-Pdlw/oPxN+aXdmM9R00JVC9WVFoCLTKJvDVLgmJ+qAffBMxsV85l/Lu7sNx4zSzPyoL2euImuEwHhOXdEgNFZQ==}
@@ -17032,8 +17025,6 @@ snapshots:
   prettier@2.8.7: {}
 
   pretty-bytes@5.6.0: {}
-
-  pretty-bytes@6.1.0: {}
 
   pretty-format@29.7.0:
     dependencies:
