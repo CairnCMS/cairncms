@@ -31,16 +31,6 @@ const mockServerInfo: Info = {
 	cairncms: {
 		version: '10.10.10',
 	},
-	node: {
-		version: '20.0.0',
-		uptime: 123,
-	},
-	os: {
-		type: 'Test OS',
-		version: '10.10.10',
-		uptime: 10000,
-		totalmem: 12345678,
-	},
 };
 
 const mockAuthProviders: Auth['providers'] = [
@@ -341,8 +331,6 @@ describe('dehyrate action', () => {
 
 		expect(serverStore.info.project).toEqual(null);
 		expect(serverStore.info.cairncms).toEqual(undefined);
-		expect(serverStore.info.node).toEqual(undefined);
-		expect(serverStore.info.os).toEqual(undefined);
 		expect(serverStore.auth.providers).toEqual([]);
 		expect(serverStore.auth.disableDefault).toEqual(false);
 	});

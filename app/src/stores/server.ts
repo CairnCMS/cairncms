@@ -29,16 +29,6 @@ export type Info = {
 	cairncms?: {
 		version: string;
 	};
-	node?: {
-		version: string;
-		uptime: number;
-	};
-	os?: {
-		type: string;
-		version: string;
-		uptime: number;
-		totalmem: number;
-	};
 	rateLimit?:
 		| false
 		| {
@@ -56,8 +46,6 @@ export const useServerStore = defineStore('serverStore', () => {
 	const info = reactive<Info>({
 		project: null,
 		cairncms: undefined,
-		node: undefined,
-		os: undefined,
 		rateLimit: undefined,
 	});
 
@@ -90,8 +78,6 @@ export const useServerStore = defineStore('serverStore', () => {
 
 		info.project = serverInfoResponse.data.data?.project;
 		info.cairncms = serverInfoResponse.data.data?.cairncms;
-		info.node = serverInfoResponse.data.data?.node;
-		info.os = serverInfoResponse.data.data?.os;
 		info.flows = serverInfoResponse.data.data?.flows;
 
 		auth.providers = authResponse.data.data;
@@ -118,8 +104,6 @@ export const useServerStore = defineStore('serverStore', () => {
 	const dehydrate = () => {
 		info.project = null;
 		info.cairncms = undefined;
-		info.node = undefined;
-		info.os = undefined;
 
 		auth.providers = [];
 		auth.disableDefault = false;
