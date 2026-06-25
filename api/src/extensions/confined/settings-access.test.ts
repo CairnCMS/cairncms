@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { StoredGlobalSetting } from '../../services/extension-settings-store.js';
+import type { StoredSettingRow } from '../../services/extension-settings-store.js';
 import { buildConfinedSettingsAccess } from './settings-access.js';
 
 const declaration: any = {
@@ -9,13 +9,13 @@ const declaration: any = {
 	preview_url: { type: 'string', scope: 'collection' },
 };
 
-const rows: StoredGlobalSetting[] = [
+const rows: StoredSettingRow[] = [
 	{ key: 'base_url', value: 'https://x' },
 	{ key: 'retries', value: 3 },
 	{ key: 'api_key', value: { source: 'config', name: 'CAIRN_TEST_API_KEY' } },
 ];
 
-const access = (rowsOverride: StoredGlobalSetting[] = rows) =>
+const access = (rowsOverride: StoredSettingRow[] = rows) =>
 	buildConfinedSettingsAccess({ declaration, readRows: async () => rowsOverride });
 
 const live = () => new AbortController().signal;

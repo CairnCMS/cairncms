@@ -2,9 +2,17 @@ import knex from 'knex';
 import { createTracker, MockClient, type Tracker } from 'knex-mock-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { manager } = vi.hoisted(() => ({ manager: { getSettingsOwner: vi.fn() } }));
+const { manager, store } = vi.hoisted(() => ({
+	manager: { getSettingsOwner: vi.fn() },
+	store: { readGlobalSettings: vi.fn(), readCollectionSettings: vi.fn() },
+}));
 
 vi.mock('../extensions.js', () => ({ getExtensionManager: () => manager }));
+
+vi.mock('./extension-settings-store.js', () => ({
+	readGlobalSettings: store.readGlobalSettings,
+	readCollectionSettings: store.readCollectionSettings,
+}));
 
 import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
 import { ExtensionSettingsService } from './extension-settings.js';
@@ -32,6 +40,8 @@ describe('ExtensionSettingsService', () => {
 		db = vi.mocked(knex.default({ client: Client_PG }));
 		tracker = createTracker(db);
 		manager.getSettingsOwner.mockReset();
+		store.readGlobalSettings.mockReset();
+		store.readCollectionSettings.mockReset();
 	});
 
 	afterEach(() => {
@@ -176,6 +186,95 @@ describe('ExtensionSettingsService', () => {
 		it('refuses a non-admin read and delete', async () => {
 			await expect(service({ admin: false }).get('x')).rejects.toBeInstanceOf(ForbiddenException);
 			await expect(service({ admin: false }).deleteBySubject('x')).rejects.toBeInstanceOf(ForbiddenException);
+		});
+	});
+
+	describe('readForApp', () => {
+		const appDeclaration = {
+			theme: { type: 'string', scope: 'global', appReadable: true },
+			internal_base: { type: 'string', scope: 'global' },
+			api_key: { type: 'string', scope: 'global', sensitive: true },
+			preview_url: { type: 'string', scope: 'collection', appReadable: true },
+		};
+
+		const appOwner = { name: 'cairncms-extension-preview', settings: appDeclaration } as any;
+
+		it('returns only global app-readable values, omitting non-opted-in and sensitive keys', async () => {
+			manager.getSettingsOwner.mockReturnValue(appOwner);
+
+			store.readGlobalSettings.mockResolvedValue([
+				{ key: 'theme', value: 'dark' },
+				{ key: 'internal_base', value: 'https://internal' },
+				{ key: 'api_key', value: { source: 'config', name: 'API_KEY' } },
+			]);
+
+			expect(await service(admin).readForApp('cairncms-extension-preview')).toEqual({ theme: 'dark' });
+			expect(store.readGlobalSettings).toHaveBeenCalledWith(db, 'cairncms-extension-preview');
+		});
+
+		it('adds a collection-scoped value when the collection exists and the caller can read it', async () => {
+			manager.getSettingsOwner.mockReturnValue(appOwner);
+			store.readGlobalSettings.mockResolvedValue([{ key: 'theme', value: 'dark' }]);
+			store.readCollectionSettings.mockResolvedValue([{ key: 'preview_url', value: 'https://x' }]);
+
+			const editor = { user: 'u', permissions: [{ action: 'read', collection: 'articles' }] };
+
+			expect(await service(editor).readForApp('cairncms-extension-preview', 'articles')).toEqual({
+				theme: 'dark',
+				preview_url: 'https://x',
+			});
+
+			expect(store.readGlobalSettings).toHaveBeenCalledWith(db, 'cairncms-extension-preview');
+			expect(store.readCollectionSettings).toHaveBeenCalledWith(db, 'cairncms-extension-preview', 'articles');
+		});
+
+		it('omits the collection-scoped value when the caller cannot read the collection', async () => {
+			manager.getSettingsOwner.mockReturnValue(appOwner);
+			store.readGlobalSettings.mockResolvedValue([{ key: 'theme', value: 'dark' }]);
+
+			const restricted = { user: 'u', permissions: [{ action: 'read', collection: 'other' }] };
+
+			expect(await service(restricted).readForApp('cairncms-extension-preview', 'articles')).toEqual({ theme: 'dark' });
+			expect(store.readCollectionSettings).not.toHaveBeenCalled();
+		});
+
+		it('denies collection-scoped values closed when the permission set is missing', async () => {
+			manager.getSettingsOwner.mockReturnValue(appOwner);
+			store.readGlobalSettings.mockResolvedValue([{ key: 'theme', value: 'dark' }]);
+
+			expect(await service({ user: 'u' }).readForApp('cairncms-extension-preview', 'articles')).toEqual({
+				theme: 'dark',
+			});
+
+			expect(store.readCollectionSettings).not.toHaveBeenCalled();
+		});
+
+		it('omits a collection-scoped value when the collection no longer exists', async () => {
+			manager.getSettingsOwner.mockReturnValue(appOwner);
+			store.readGlobalSettings.mockResolvedValue([{ key: 'theme', value: 'dark' }]);
+
+			expect(await service(admin).readForApp('cairncms-extension-preview', 'ghosts')).toEqual({ theme: 'dark' });
+			expect(store.readCollectionSettings).not.toHaveBeenCalled();
+		});
+
+		it('omits a stored value whose shape no longer matches the declaration', async () => {
+			manager.getSettingsOwner.mockReturnValue(appOwner);
+
+			store.readGlobalSettings.mockResolvedValue([
+				{ key: 'theme', value: { source: 'config', name: 'WAS_SENSITIVE' } },
+			]);
+
+			expect(await service(admin).readForApp('cairncms-extension-preview')).toEqual({});
+		});
+
+		it('returns an empty object for an absent or ineligible subject', async () => {
+			manager.getSettingsOwner.mockReturnValue(undefined);
+
+			expect(await service(admin).readForApp('cairncms-extension-missing')).toEqual({});
+		});
+
+		it('refuses a read without accountability', async () => {
+			await expect(service(null).readForApp('cairncms-extension-preview')).rejects.toBeInstanceOf(ForbiddenException);
 		});
 	});
 });

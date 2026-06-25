@@ -1,7 +1,7 @@
 import { ExtensionSecretPointerSchema } from '@cairncms/constants';
 import type { ExtensionSettings } from '@cairncms/types';
 import { readRawConfigSecret } from '../../utils/read-raw-config-secret.js';
-import type { StoredGlobalSetting } from '../../services/extension-settings-store.js';
+import type { StoredSettingRow } from '../../services/extension-settings-store.js';
 import type { ConfinedSettingsSource } from './broker.js';
 import type { ConfinedSecretBinding } from './secret-scope.js';
 
@@ -19,7 +19,7 @@ export interface ConfinedSettingsAccess {
  */
 export function buildConfinedSettingsAccess(deps: {
 	declaration: ExtensionSettings | undefined;
-	readRows: (signal?: AbortSignal) => Promise<StoredGlobalSetting[]>;
+	readRows: (signal?: AbortSignal) => Promise<StoredSettingRow[]>;
 }): ConfinedSettingsAccess {
 	const { declaration, readRows } = deps;
 
@@ -31,9 +31,9 @@ export function buildConfinedSettingsAccess(deps: {
 		}
 	}
 
-	let cache: StoredGlobalSetting[] | undefined;
+	let cache: StoredSettingRow[] | undefined;
 
-	async function loadRows(signal?: AbortSignal): Promise<StoredGlobalSetting[]> {
+	async function loadRows(signal?: AbortSignal): Promise<StoredSettingRow[]> {
 		if (cache !== undefined) return cache;
 		if (signal?.aborted) return [];
 

@@ -6,6 +6,7 @@ import getDatabase from '../database/index.js';
 import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
 import { getExtensionManager } from '../extensions.js';
 import type { AbstractServiceOptions } from '../types/index.js';
+import { readCollectionSettings, readGlobalSettings, type StoredSettingRow } from './extension-settings-store.js';
 
 const TABLE = 'cairncms_extension_settings';
 
@@ -76,6 +77,25 @@ export class ExtensionSettingsService {
 		return await this.knex(TABLE).where({ extension: subject }).delete();
 	}
 
+	async readForApp(subject: string, collection?: string): Promise<Record<string, unknown>> {
+		if (this.accountability === null) throw new ForbiddenException();
+
+		const declared = getExtensionManager().getSettingsOwner(subject)?.settings;
+		if (declared === undefined) return {};
+
+		const result: Record<string, unknown> = {};
+
+		const globalRows = await readGlobalSettings(this.knex, subject);
+		this.collectAppReadable(result, declared, 'global', globalRows);
+
+		if (collection !== undefined && this.canReadCollection(collection)) {
+			const collectionRows = await readCollectionSettings(this.knex, subject, collection);
+			this.collectAppReadable(result, declared, 'collection', collectionRows);
+		}
+
+		return result;
+	}
+
 	private requireAdmin(): void {
 		if (this.accountability?.admin !== true) throw new ForbiddenException();
 	}
@@ -113,5 +133,43 @@ export class ExtensionSettingsService {
 		if (declared.type === 'number' && Number.isFinite(value) === false) {
 			throw new InvalidPayloadException(`A number setting must be a finite number.`);
 		}
+	}
+
+	private collectAppReadable(
+		result: Record<string, unknown>,
+		declared: Record<
+			string,
+			{ type: string; scope: string; sensitive?: boolean | undefined; appReadable?: boolean | undefined }
+		>,
+		scope: SettingsScope,
+		rows: StoredSettingRow[]
+	): void {
+		for (const row of rows) {
+			const declaration = declared[row.key];
+			if (declaration === undefined) continue;
+			if (declaration.scope !== scope) continue;
+			if (declaration.sensitive === true) continue;
+			if (declaration.appReadable !== true) continue;
+			if (this.matchesAppValue(declaration, row.value) === false) continue;
+
+			result[row.key] = row.value;
+		}
+	}
+
+	private canReadCollection(collection: string): boolean {
+		if (Object.prototype.hasOwnProperty.call(this.schema.collections, collection) === false) return false;
+		if (this.accountability?.admin === true) return true;
+
+		const permissions = this.accountability?.permissions;
+		if (!permissions) return false;
+
+		return permissions.some((permission) => permission.action === 'read' && permission.collection === collection);
+	}
+
+	private matchesAppValue(declared: { type: string }, value: unknown): boolean {
+		if (typeof value !== declared.type) return false;
+		if (declared.type === 'number' && Number.isFinite(value) === false) return false;
+
+		return true;
 	}
 }

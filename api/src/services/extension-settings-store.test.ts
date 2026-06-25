@@ -1,7 +1,7 @@
 import knex from 'knex';
 import { createTracker, MockClient, type Tracker } from 'knex-mock-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { deleteSettingsByCollection, readGlobalSettings } from './extension-settings-store.js';
+import { deleteSettingsByCollection, readCollectionSettings, readGlobalSettings } from './extension-settings-store.js';
 
 const TABLE = 'cairncms_extension_settings';
 
@@ -59,6 +59,47 @@ describe('readGlobalSettings', () => {
 		controller.abort();
 
 		expect(await readGlobalSettings(db, 'cairncms-extension-x', controller.signal)).toEqual([]);
+		expect(tracker.history.select).toHaveLength(0);
+	});
+});
+
+describe('readCollectionSettings', () => {
+	let db: any;
+	let tracker: Tracker;
+
+	beforeEach(() => {
+		db = vi.mocked(knex.default({ client: Client_PG }));
+		tracker = createTracker(db);
+	});
+
+	afterEach(() => {
+		tracker.reset();
+	});
+
+	it('returns parsed values and omits a corrupt row', async () => {
+		tracker.on.select(TABLE).response([
+			{ key: 'preview_url', value: '"https://x"' },
+			{ key: 'corrupt', value: 'not json{' },
+		]);
+
+		expect(await readCollectionSettings(db, 'cairncms-extension-x', 'articles')).toEqual([
+			{ key: 'preview_url', value: 'https://x' },
+		]);
+	});
+
+	it('restricts the query to the collection scope and the named scope key', async () => {
+		tracker.on.select(TABLE).response([{ key: 'preview_url', value: '"https://x"' }]);
+
+		await readCollectionSettings(db, 'cairncms-extension-x', 'articles');
+
+		expect(tracker.history.select[0]?.bindings).toEqual(['cairncms-extension-x', 'collection', 'articles']);
+	});
+
+	it('short-circuits an already-aborted signal without querying', async () => {
+		const controller = new AbortController();
+		controller.abort();
+
+		expect(await readCollectionSettings(db, 'cairncms-extension-x', 'articles', controller.signal)).toEqual([]);
 		expect(tracker.history.select).toHaveLength(0);
 	});
 });
