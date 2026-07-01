@@ -2,10 +2,22 @@ import knex from 'knex';
 import { createTracker, MockClient, type Tracker } from 'knex-mock-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { manager, store } = vi.hoisted(() => ({
-	manager: { getSettingsOwner: vi.fn() },
+const { manager, store, encryptionKey } = vi.hoisted(() => ({
+	manager: { getSettingsOwner: vi.fn(), getDeclaredSettings: vi.fn() },
 	store: { readGlobalSettings: vi.fn(), readCollectionSettings: vi.fn() },
+	encryptionKey: { value: undefined as string | undefined },
 }));
+
+vi.mock('../env.js', async (importOriginal) => {
+	const actual = (await importOriginal()) as { default: Record<string, unknown>; [key: string]: unknown };
+
+	return {
+		...actual,
+		default: new Proxy(actual.default, {
+			get: (target, prop) => (prop === 'SECRETS_ENCRYPTION_KEY' ? encryptionKey.value : target[prop as string]),
+		}),
+	};
+});
 
 vi.mock('../extensions.js', () => ({ getExtensionManager: () => manager }));
 
@@ -15,11 +27,14 @@ vi.mock('./extension-settings-store.js', () => ({
 }));
 
 import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
+import { encryptSecret, SECRET_MASK } from '../utils/encrypt-secret.js';
 import { ExtensionSettingsService } from './extension-settings.js';
 
 const TABLE = 'cairncms_extension_settings';
 
 class Client_PG extends MockClient {}
+
+const KEY = Buffer.alloc(32, 7).toString('base64');
 
 const admin = { role: 'admin', admin: true, user: 'admin-user', app: true } as any;
 const schema = { collections: { articles: {} }, relations: [] } as any;
@@ -27,7 +42,8 @@ const schema = { collections: { articles: {} }, relations: [] } as any;
 const declaration = {
 	preview_url: { type: 'string', scope: 'collection' },
 	count: { type: 'number', scope: 'global' },
-	api_key: { type: 'string', scope: 'global', sensitive: true },
+	api_key: { type: 'string', scope: 'global', secret: { source: 'inline' } },
+	billing_key: { type: 'string', scope: 'global', secret: { source: 'config' } },
 };
 
 const owner = { name: 'cairncms-extension-preview', settings: declaration } as any;
@@ -39,7 +55,10 @@ describe('ExtensionSettingsService', () => {
 	beforeEach(() => {
 		db = vi.mocked(knex.default({ client: Client_PG }));
 		tracker = createTracker(db);
+		encryptionKey.value = KEY;
 		manager.getSettingsOwner.mockReset();
+		manager.getDeclaredSettings.mockReset();
+		manager.getDeclaredSettings.mockReturnValue([]);
 		store.readGlobalSettings.mockReset();
 		store.readCollectionSettings.mockReset();
 	});
@@ -60,13 +79,15 @@ describe('ExtensionSettingsService', () => {
 			expect(tracker.history.insert).toHaveLength(1);
 		});
 
-		it('accepts a sensitive secret pointer', async () => {
+		it('encrypts an inline secret to a marked envelope, never the plaintext', async () => {
 			manager.getSettingsOwner.mockReturnValue(owner);
 			tracker.on.insert(TABLE).response([1]);
 
-			await service().set('cairncms-extension-preview', 'global', '', 'api_key', { source: 'config', name: 'API_KEY' });
+			await service().set('cairncms-extension-preview', 'global', '', 'api_key', 'sk_live_123');
 
-			expect(tracker.history.insert).toHaveLength(1);
+			const bindings = tracker.history.insert[0]?.bindings ?? [];
+			expect(bindings.some((b) => typeof b === 'string' && b.includes('cairncms-secret-envelope'))).toBe(true);
+			expect(bindings.every((b) => typeof b !== 'string' || b.includes('sk_live_123') === false)).toBe(true);
 		});
 
 		it('refuses a non-admin', async () => {
@@ -151,11 +172,27 @@ describe('ExtensionSettingsService', () => {
 			).rejects.toBeInstanceOf(InvalidPayloadException);
 		});
 
-		it('refuses a sensitive value that is not a secret pointer', async () => {
+		it('refuses a non-string inline secret value', async () => {
 			manager.getSettingsOwner.mockReturnValue(owner);
 
 			await expect(
-				service().set('cairncms-extension-preview', 'global', '', 'api_key', 'raw-secret')
+				service().set('cairncms-extension-preview', 'global', '', 'api_key', { was: 'an object' })
+			).rejects.toBeInstanceOf(InvalidPayloadException);
+		});
+
+		it('refuses writing the mask back to a secret', async () => {
+			manager.getSettingsOwner.mockReturnValue(owner);
+
+			await expect(
+				service().set('cairncms-extension-preview', 'global', '', 'api_key', SECRET_MASK)
+			).rejects.toBeInstanceOf(InvalidPayloadException);
+		});
+
+		it('refuses any write to a config-sourced secret', async () => {
+			manager.getSettingsOwner.mockReturnValue(owner);
+
+			await expect(
+				service().set('cairncms-extension-preview', 'global', '', 'billing_key', 'anything')
 			).rejects.toBeInstanceOf(InvalidPayloadException);
 		});
 	});
@@ -177,6 +214,38 @@ describe('ExtensionSettingsService', () => {
 			]);
 		});
 
+		it('masks a declared-secret key and a marked envelope, leaving non-secrets in cleartext', async () => {
+			manager.getDeclaredSettings.mockReturnValue([declaration]);
+			const envelope = await encryptSecret('sk_live_123');
+
+			tracker.on.select(TABLE).response([
+				{ scope: 'global', scope_key: '', key: 'api_key', value: JSON.stringify(envelope) },
+				{ scope: 'global', scope_key: '', key: 'count', value: '42' },
+				{ scope: 'global', scope_key: '', key: 'orphan', value: JSON.stringify(envelope) },
+			]);
+
+			const rows = await service().get('cairncms-extension-preview');
+
+			expect(rows).toEqual([
+				{ scope: 'global', scope_key: '', key: 'api_key', value: SECRET_MASK },
+				{ scope: 'global', scope_key: '', key: 'count', value: 42 },
+				{ scope: 'global', scope_key: '', key: 'orphan', value: SECRET_MASK },
+			]);
+		});
+
+		it('masks from the discovered declaration even when the owner is gated ineligible', async () => {
+			manager.getSettingsOwner.mockReturnValue(undefined);
+			manager.getDeclaredSettings.mockReturnValue([declaration]);
+
+			tracker.on
+				.select(TABLE)
+				.response([{ scope: 'global', scope_key: '', key: 'api_key', value: '"sk_live_stored_clear"' }]);
+
+			const rows = await service().get('cairncms-extension-preview');
+
+			expect(rows).toEqual([{ scope: 'global', scope_key: '', key: 'api_key', value: SECRET_MASK }]);
+		});
+
 		it('deletes every row for a subject', async () => {
 			tracker.on.delete(TABLE).response(3);
 
@@ -193,19 +262,19 @@ describe('ExtensionSettingsService', () => {
 		const appDeclaration = {
 			theme: { type: 'string', scope: 'global', appReadable: true },
 			internal_base: { type: 'string', scope: 'global' },
-			api_key: { type: 'string', scope: 'global', sensitive: true },
+			api_key: { type: 'string', scope: 'global', secret: { source: 'inline' } },
 			preview_url: { type: 'string', scope: 'collection', appReadable: true },
 		};
 
 		const appOwner = { name: 'cairncms-extension-preview', settings: appDeclaration } as any;
 
-		it('returns only global app-readable values, omitting non-opted-in and sensitive keys', async () => {
+		it('returns only global app-readable values, omitting non-opted-in and secret keys', async () => {
 			manager.getSettingsOwner.mockReturnValue(appOwner);
 
 			store.readGlobalSettings.mockResolvedValue([
 				{ key: 'theme', value: 'dark' },
 				{ key: 'internal_base', value: 'https://internal' },
-				{ key: 'api_key', value: { source: 'config', name: 'API_KEY' } },
+				{ key: 'api_key', value: 'sk_live_stored' },
 			]);
 
 			expect(await service(admin).readForApp('cairncms-extension-preview')).toEqual({ theme: 'dark' });
@@ -260,9 +329,7 @@ describe('ExtensionSettingsService', () => {
 		it('omits a stored value whose shape no longer matches the declaration', async () => {
 			manager.getSettingsOwner.mockReturnValue(appOwner);
 
-			store.readGlobalSettings.mockResolvedValue([
-				{ key: 'theme', value: { source: 'config', name: 'WAS_SENSITIVE' } },
-			]);
+			store.readGlobalSettings.mockResolvedValue([{ key: 'theme', value: { was: 'an object' } }]);
 
 			expect(await service(admin).readForApp('cairncms-extension-preview')).toEqual({});
 		});

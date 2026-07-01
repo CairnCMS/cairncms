@@ -329,7 +329,10 @@ export const ExtensionSettingDeclaration = z
 	.object({
 		type: z.enum(['string', 'number', 'boolean']),
 		scope: z.enum(['global', 'collection']).default('global'),
-		sensitive: z.boolean().optional(),
+		secret: z
+			.object({ source: z.enum(['inline', 'config']).default('inline') })
+			.strict()
+			.optional(),
 		appReadable: z.boolean().optional(),
 		presentation: z
 			.object({ order: z.number().int().optional(), width: z.enum(['half', 'full']).optional() })
@@ -338,19 +341,27 @@ export const ExtensionSettingDeclaration = z
 	})
 	.strict()
 	.superRefine((value, ctx) => {
-		if (value.sensitive === true && value.type !== 'string') {
+		if (value.secret !== undefined && value.type !== 'string') {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
 				path: ['type'],
-				message: 'a sensitive setting must be type string',
+				message: 'a secret setting must be type string',
 			});
 		}
 
-		if (value.sensitive === true && value.appReadable === true) {
+		if (value.secret !== undefined && value.appReadable === true) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
 				path: ['appReadable'],
-				message: 'a sensitive setting cannot be app-readable',
+				message: 'a secret setting cannot be app-readable',
+			});
+		}
+
+		if (value.secret?.source === 'config' && value.scope === 'collection') {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ['secret', 'source'],
+				message: 'a config-sourced secret must be global-scoped',
 			});
 		}
 	});
@@ -398,16 +409,6 @@ export function getExtensionConfigSecretName(subject: string, key: string): stri
 
 	return `CAIRNCMS_EXT_${slug}_${toConfigSegment(key)}`;
 }
-
-export const ExtensionSecretPointerSchema = z
-	.object({
-		source: z.literal('config'),
-		name: z
-			.string()
-			.regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
-			.max(128),
-	})
-	.strict();
 
 export const ExtensionOptionsBase = z.object({
 	host: z.string(),

@@ -12,7 +12,8 @@
 			"base_url": { "type": "string", "scope": "global" },
 			"theme": { "type": "string", "scope": "global", "appReadable": true },
 			"preview_url": { "type": "string", "scope": "collection", "appReadable": true },
-			"api_key": { "type": "string", "scope": "global", "sensitive": true }
+			"api_key": { "type": "string", "scope": "global", "secret": { "source": "inline" } },
+			"billing_key": { "type": "string", "scope": "global", "secret": { "source": "config" } }
 		}
 	}
 }

@@ -20,6 +20,7 @@ import type {
 	EndpointConfig,
 	Extension,
 	ExtensionInfo,
+	ExtensionSettings,
 	ExtensionType,
 	FilterHandler,
 	HookConfig,
@@ -220,6 +221,10 @@ export class ExtensionManager {
 
 	private settingsEligible = new Set<Extension>();
 
+	// Every discovered owner's declaration by subject, eligibility-independent, so the
+	// admin read's secret masking cannot weaken when an owner is gated ineligible.
+	private declaredSettingsBySubject = new Map<string, ExtensionSettings[]>();
+
 	// Test seam for the gate's scanner, probe, and limits dependencies. Overrides
 	// the production-resolved deps below, so a test can drive the gate directly.
 	private confinedGateDeps: ConfinedLoadGateDeps = {};
@@ -382,6 +387,16 @@ export class ExtensionManager {
 		}
 
 		return undefined;
+	}
+
+	/**
+	 * Every discovered declaration for a subject, whatever its eligibility, duplicates
+	 * included. Concealment consumers mask from this set so a stored secret under a
+	 * gated-ineligible owner never reads back in cleartext. Function-granting paths
+	 * (writes, confined reads) stay on the eligibility-gated owner.
+	 */
+	public getDeclaredSettings(subject: string): ExtensionSettings[] {
+		return this.declaredSettingsBySubject.get(subject) ?? [];
 	}
 
 	/**
@@ -588,6 +603,15 @@ export class ExtensionManager {
 		const statuses = resolveSettingsSubjects(discovered);
 
 		this.settingsEligible = new Set();
+		this.declaredSettingsBySubject = new Map();
+
+		for (const extension of discovered) {
+			if (extension.settings === undefined) continue;
+
+			const declarations = this.declaredSettingsBySubject.get(extension.name) ?? [];
+			declarations.push(extension.settings);
+			this.declaredSettingsBySubject.set(extension.name, declarations);
+		}
 
 		for (const [extension, status] of statuses) {
 			if (status.eligible) {
@@ -710,6 +734,7 @@ export class ExtensionManager {
 			itemsService: confinedItemsService,
 			settingsAccess: (subject: string) =>
 				buildConfinedSettingsAccess({
+					subject,
 					declaration: this.getSettingsOwner(subject)?.settings,
 					readRows: (signal) => readGlobalSettings(getDatabase(), subject, signal),
 				}),
@@ -1282,6 +1307,7 @@ export class ExtensionManager {
 		this.confinedEligible.clear();
 		this.confinedOperationBlocks.clear();
 		this.settingsEligible.clear();
+		this.declaredSettingsBySubject.clear();
 		this.confinedRuntimeDeps = {};
 		this.confinedRuntimeUnavailable = false;
 		this.confinedRuntime = undefined;
@@ -1344,6 +1370,7 @@ export class ExtensionManager {
 		this.serverExtensions = [];
 		this.confinedEligible.clear();
 		this.settingsEligible.clear();
+		this.declaredSettingsBySubject.clear();
 		this.confinedRuntimeDeps = {};
 		this.confinedRuntimeUnavailable = false;
 		this.confinedRuntime = undefined;

@@ -14,6 +14,11 @@
 			},
 			"items": "current-user"
 		},
+		"settings": {
+			"site_label": { "type": "string", "scope": "global" },
+			"api_key": { "type": "string", "scope": "global", "secret": { "source": "inline" } },
+			"billing_key": { "type": "string", "scope": "global", "secret": { "source": "config" } }
+		},
 		"host": "^1.0.0"
 	}
 }

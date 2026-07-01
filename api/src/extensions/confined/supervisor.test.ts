@@ -1007,8 +1007,8 @@ describe('ConfinedSupervisor', () => {
 						log: (logEntry) => logged.push(logEntry),
 						settings: {
 							declared: [
-								{ key: 'site', sensitive: false },
-								{ key: 'apiKey', sensitive: true },
+								{ key: 'site', isSecret: false },
+								{ key: 'apiKey', isSecret: true },
 							],
 							value: (key) => (key === 'site' ? 'cairn' : 'sk_live_e2e_secret_value'),
 							hasSecret: () => true,

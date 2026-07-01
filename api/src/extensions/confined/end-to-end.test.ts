@@ -483,22 +483,23 @@ describe('extension settings reads and brokered secret through a real child', ()
 	const SETTING_SECRET = 'sk_live_SETTINGS_SECRET_TOKEN';
 	const BASE_URL = 'https://preview.example.com';
 
+	const SETTINGS_SUBJECT = 'cairncms-extension-e2e';
+	const API_KEY_VAR = 'CAIRNCMS_EXT_E2E_API_KEY';
+	const UNSET_KEY_VAR = 'CAIRNCMS_EXT_E2E_UNSET_KEY';
+
 	const SETTINGS_DECLARATION: any = {
 		base_url: { type: 'string', scope: 'global' },
-		api_key: { type: 'string', scope: 'global', sensitive: true },
-		unset_key: { type: 'string', scope: 'global', sensitive: true },
+		api_key: { type: 'string', scope: 'global', secret: { source: 'config' } },
+		unset_key: { type: 'string', scope: 'global', secret: { source: 'config' } },
 	};
 
-	const SETTINGS_ROWS = [
-		{ key: 'base_url', value: BASE_URL },
-		{ key: 'api_key', value: { source: 'config', name: 'CAIRN_E2E_SETTING_SECRET' } },
-		{ key: 'unset_key', value: { source: 'config', name: 'CAIRN_E2E_NEVER_SET' } },
-	];
+	const SETTINGS_ROWS = [{ key: 'base_url', value: BASE_URL }];
 
 	// Subject-aware so a wrong subject yields an empty access. The bundle case passing
 	// proves the bundle's own subject (local.e2e) reaches the settings read.
 	const settingsAccess = (subject: string) =>
 		buildConfinedSettingsAccess({
+			subject: SETTINGS_SUBJECT,
 			declaration: subject === 'local.e2e' ? SETTINGS_DECLARATION : undefined,
 			readRows: async () => (subject === 'local.e2e' ? SETTINGS_ROWS : []),
 		});
@@ -506,8 +507,8 @@ describe('extension settings reads and brokered secret through a real child', ()
 	const settingsDeps = { ...deps, settingsAccess, getAxios: async () => axios.create() };
 
 	beforeAll(async () => {
-		process.env['CAIRN_E2E_SETTING_SECRET'] = SETTING_SECRET;
-		delete process.env['CAIRN_E2E_NEVER_SET'];
+		process.env[API_KEY_VAR] = SETTING_SECRET;
+		delete process.env[UNSET_KEY_VAR];
 
 		server = http.createServer((request, response) => {
 			authSeen.push(request.headers['authorization']);
@@ -521,7 +522,7 @@ describe('extension settings reads and brokered secret through a real child', ()
 
 	afterAll(() => {
 		server.close();
-		delete process.env['CAIRN_E2E_SETTING_SECRET'];
+		delete process.env[API_KEY_VAR];
 	});
 
 	beforeEach(() => {

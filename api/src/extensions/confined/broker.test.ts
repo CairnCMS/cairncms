@@ -67,11 +67,11 @@ describe('createConfinedHostBroker log', () => {
 		expect(logged).toEqual([{ level: 'warn', message: 'careful', meta: { n: 1 }, context }]);
 	});
 
-	it('redacts a declared-sensitive key and its propagated value before the sink', async () => {
+	it('redacts a declared-secret key and its propagated value before the sink', async () => {
 		const { dispatch, logged } = makeBroker({
 			capabilities: { log: true },
 			settings: {
-				declared: [{ key: 'apiKey', sensitive: true }],
+				declared: [{ key: 'apiKey', isSecret: true }],
 				value: () => null,
 				hasSecret: () => false,
 			},
@@ -136,24 +136,24 @@ describe('createConfinedHostBroker settings', () => {
 		expect(reply).toEqual({ ok: true, value: null });
 	});
 
-	it('returns a declared non-sensitive value', async () => {
+	it('returns a declared non-secret value', async () => {
 		const { dispatch } = makeBroker({
 			capabilities: {},
-			settings: { declared: [{ key: 'mode', sensitive: false }], value: () => 'fast', hasSecret: () => false },
+			settings: { declared: [{ key: 'mode', isSecret: false }], value: () => 'fast', hasSecret: () => false },
 		});
 
 		const reply = await dispatch({ method: 'settings.get', args: { key: 'mode' } }, context, liveSignal);
 		expect(reply).toEqual({ ok: true, value: 'fast' });
 	});
 
-	it('mints a fresh per-call reference for a sensitive setting and never the value', async () => {
+	it('mints a fresh per-call reference for a secret setting and never the value', async () => {
 		const scope = new ConfinedSecretScope();
 
 		const { dispatch } = makeBroker(
 			{
 				capabilities: {},
 				settings: {
-					declared: [{ key: 'apiKey', sensitive: true }],
+					declared: [{ key: 'apiKey', isSecret: true }],
 					value: () => 'sk_live_raw_never_crosses',
 					hasSecret: () => true,
 				},
@@ -181,10 +181,10 @@ describe('createConfinedHostBroker settings', () => {
 		});
 	});
 
-	it('returns null for a sensitive setting with no backing secret', async () => {
+	it('returns null for a secret setting with no backing secret', async () => {
 		const { dispatch } = makeBroker({
 			capabilities: {},
-			settings: { declared: [{ key: 'apiKey', sensitive: true }], value: () => null, hasSecret: () => false },
+			settings: { declared: [{ key: 'apiKey', isSecret: true }], value: () => null, hasSecret: () => false },
 		});
 
 		const reply = await dispatch({ method: 'settings.get', args: { key: 'apiKey' } }, context, liveSignal);
@@ -195,7 +195,7 @@ describe('createConfinedHostBroker settings', () => {
 		const { dispatch } = makeBroker({
 			capabilities: {},
 			settings: {
-				declared: [{ key: 'blob', sensitive: false }],
+				declared: [{ key: 'blob', isSecret: false }],
 				value: () => 'x'.repeat(SETTINGS_VALUE_BYTES + 1),
 				hasSecret: () => false,
 			},
@@ -205,23 +205,23 @@ describe('createConfinedHostBroker settings', () => {
 		expect(reply).toMatchObject({ ok: false, error: { code: 'invalid_request' } });
 	});
 
-	it('treats a key with conflicting duplicate declarations as sensitive, in either order and any case', async () => {
+	it('treats a key with conflicting duplicate declarations as secret, in either order and any case', async () => {
 		for (const declared of [
 			[
-				{ key: 'apiKey', sensitive: false },
-				{ key: 'apiKey', sensitive: true },
+				{ key: 'apiKey', isSecret: false },
+				{ key: 'apiKey', isSecret: true },
 			],
 			[
-				{ key: 'apiKey', sensitive: true },
-				{ key: 'apiKey', sensitive: false },
+				{ key: 'apiKey', isSecret: true },
+				{ key: 'apiKey', isSecret: false },
 			],
 			[
-				{ key: 'apikey', sensitive: false },
-				{ key: 'ApiKey', sensitive: true },
+				{ key: 'apikey', isSecret: false },
+				{ key: 'ApiKey', isSecret: true },
 			],
 			[
-				{ key: 'APIKEY', sensitive: true },
-				{ key: 'apiKey', sensitive: false },
+				{ key: 'APIKEY', isSecret: true },
+				{ key: 'apiKey', isSecret: false },
 			],
 		]) {
 			const { dispatch } = makeBroker({
@@ -243,7 +243,7 @@ describe('createConfinedHostBroker settings', () => {
 
 		const { dispatch } = makeBroker({
 			capabilities: {},
-			settings: { declared: [{ key: 'blob', sensitive: false }], value: () => quoteHeavy, hasSecret: () => false },
+			settings: { declared: [{ key: 'blob', isSecret: false }], value: () => quoteHeavy, hasSecret: () => false },
 		});
 
 		const reply = await dispatch({ method: 'settings.get', args: { key: 'blob' } }, context, liveSignal);
@@ -256,7 +256,7 @@ describe('createConfinedHostBroker settings', () => {
 		const { dispatch } = makeBroker({
 			capabilities: {},
 			settings: {
-				declared: [{ key: 'slow', sensitive: false }],
+				declared: [{ key: 'slow', isSecret: false }],
 				value: () => new Promise(() => undefined),
 				hasSecret: () => false,
 			},
@@ -274,7 +274,7 @@ describe('createConfinedHostBroker settings', () => {
 		const { dispatch } = makeBroker({
 			capabilities: {},
 			settings: {
-				declared: [{ key: 'mode', sensitive: false }],
+				declared: [{ key: 'mode', isSecret: false }],
 				value: (_key, signal) => {
 					seen.push(signal);
 					return 'fast';
@@ -500,7 +500,7 @@ describe('createConfinedHostBroker request', () => {
 		expect(reply).toMatchObject({ ok: false, error: { code: 'invalid_request' } });
 	});
 
-	it('allows only GET when no methods are declared and matches declared methods case-insensitively', async () => {
+	it('allows only GET when no methods are declared and matches declared methods case-insecretly', async () => {
 		const getOnly = requestBroker();
 
 		expect(await send(getOnly, { url: `${origin}/echo`, method: 'POST' })).toMatchObject({

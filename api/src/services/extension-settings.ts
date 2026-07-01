@@ -1,4 +1,3 @@
-import { ExtensionSecretPointerSchema } from '@cairncms/constants';
 import type { Accountability, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import { v4 as uuid } from 'uuid';
@@ -6,6 +5,7 @@ import getDatabase from '../database/index.js';
 import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
 import { getExtensionManager } from '../extensions.js';
 import type { AbstractServiceOptions } from '../types/index.js';
+import { encryptSecret, hasSecretMarker, SECRET_MASK } from '../utils/encrypt-secret.js';
 import { readCollectionSettings, readGlobalSettings, type StoredSettingRow } from './extension-settings-store.js';
 
 const TABLE = 'cairncms_extension_settings';
@@ -45,9 +45,7 @@ export class ExtensionSettingsService {
 			throw new InvalidPayloadException(`The setting key "${key}" is declared at "${declared.scope}" scope.`);
 		}
 
-		this.validateValue(declared, value);
-
-		const serialized = JSON.stringify(value);
+		const serialized = JSON.stringify(await this.prepareStoredValue(declared, value));
 
 		await this.knex(TABLE)
 			.insert({ id: uuid(), extension: subject, scope, scope_key: scopeKey, key, value: serialized })
@@ -55,8 +53,34 @@ export class ExtensionSettingsService {
 			.merge({ value: serialized });
 	}
 
+	private async prepareStoredValue(
+		declared: { type: string; secret?: { source: 'inline' | 'config' } | undefined },
+		value: unknown
+	): Promise<unknown> {
+		if (declared.secret === undefined) {
+			this.validateValue(declared, value);
+			return value;
+		}
+
+		if (declared.secret.source === 'config') {
+			throw new InvalidPayloadException('A config-sourced secret is provisioned in deployment config, not stored.');
+		}
+
+		if (typeof value !== 'string') {
+			throw new InvalidPayloadException('A secret setting value must be a string.');
+		}
+
+		if (value === SECRET_MASK) {
+			throw new InvalidPayloadException('The mask cannot be written back to a secret setting.');
+		}
+
+		return await encryptSecret(value);
+	}
+
 	async get(subject: string, scope?: SettingsScope, scopeKey?: string): Promise<StoredSetting[]> {
 		this.requireAdmin();
+
+		const declarations = getExtensionManager().getDeclaredSettings(subject);
 
 		const query = this.knex(TABLE).where({ extension: subject });
 		if (scope !== undefined) query.where({ scope });
@@ -64,12 +88,14 @@ export class ExtensionSettingsService {
 
 		const rows = await query.select('scope', 'scope_key', 'key', 'value');
 
-		return rows.map((row) => ({
-			scope: row.scope,
-			scope_key: row.scope_key,
-			key: row.key,
-			value: JSON.parse(row.value),
-		}));
+		return rows.map((row) => {
+			const value = JSON.parse(row.value);
+
+			const masked =
+				declarations.some((declaration) => declaration[row.key]?.secret !== undefined) || hasSecretMarker(value);
+
+			return { scope: row.scope, scope_key: row.scope_key, key: row.key, value: masked ? SECRET_MASK : value };
+		});
 	}
 
 	async deleteBySubject(subject: string): Promise<number> {
@@ -121,15 +147,7 @@ export class ExtensionSettingsService {
 		}
 	}
 
-	private validateValue(declared: { type: string; sensitive?: boolean | undefined }, value: unknown): void {
-		if (declared.sensitive === true) {
-			if (ExtensionSecretPointerSchema.safeParse(value).success === false) {
-				throw new InvalidPayloadException(`A sensitive setting must be stored as a secret pointer.`);
-			}
-
-			return;
-		}
-
+	private validateValue(declared: { type: string }, value: unknown): void {
 		if (typeof value !== declared.type) {
 			throw new InvalidPayloadException(`The setting value does not match the declared type.`);
 		}
@@ -143,7 +161,12 @@ export class ExtensionSettingsService {
 		result: Record<string, unknown>,
 		declared: Record<
 			string,
-			{ type: string; scope: string; sensitive?: boolean | undefined; appReadable?: boolean | undefined }
+			{
+				type: string;
+				scope: string;
+				secret?: { source: 'inline' | 'config' } | undefined;
+				appReadable?: boolean | undefined;
+			}
 		>,
 		scope: SettingsScope,
 		rows: StoredSettingRow[]
@@ -152,7 +175,7 @@ export class ExtensionSettingsService {
 			const declaration = declared[row.key];
 			if (declaration === undefined) continue;
 			if (declaration.scope !== scope) continue;
-			if (declaration.sensitive === true) continue;
+			if (declaration.secret !== undefined) continue;
 			if (declaration.appReadable !== true) continue;
 			if (this.matchesAppValue(declaration, row.value) === false) continue;
 

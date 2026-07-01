@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest';
 import {
 	resolveSettingsSubjects,
 	safeExtensionName,
+	SETTINGS_SUBJECT_CONFIG_COLLISION,
 	SETTINGS_SUBJECT_DUPLICATE,
 	SETTINGS_SUBJECT_INVALID,
 } from './settings-subjects.js';
 
 const declaration = { preview_url: { type: 'string', scope: 'global' } } as any;
+const configDecl = { api_key: { type: 'string', scope: 'global', secret: { source: 'config' } } } as any;
 
 function makeExtension(name: string, overrides: Partial<Extension> = {}): Extension {
 	return {
@@ -77,6 +79,64 @@ describe('resolveSettingsSubjects', () => {
 		const statuses = resolveSettingsSubjects([plain]);
 
 		expect(statuses.has(plain)).toBe(false);
+	});
+
+	it('leaves a lone config-secret owner eligible', () => {
+		const owner = makeExtension('@acme/cairncms-extension-stripe-sync', { settings: configDecl });
+
+		expect(resolveSettingsSubjects([owner]).get(owner)).toEqual({ eligible: true });
+	});
+
+	it('fails both owners of a shared config variable and names it', () => {
+		const first = makeExtension('@acme/cairncms-extension-stripe-sync', { settings: configDecl, path: '/a' });
+		const second = makeExtension('@acme/cairncms-extension-stripe.sync', { settings: configDecl, path: '/b' });
+
+		const statuses = resolveSettingsSubjects([first, second]);
+
+		const firstStatus = statuses.get(first);
+		const secondStatus = statuses.get(second);
+		expect(firstStatus?.eligible === false && firstStatus.reason.code).toBe(SETTINGS_SUBJECT_CONFIG_COLLISION);
+		expect(secondStatus?.eligible === false && secondStatus.reason.code).toBe(SETTINGS_SUBJECT_CONFIG_COLLISION);
+
+		const detail = firstStatus?.eligible === false ? firstStatus.reason.detail : '';
+		expect(detail).toContain('CAIRNCMS_EXT_ACME_STRIPE_SYNC_API_KEY');
+		expect(detail).toContain('@acme/cairncms-extension-stripe.sync');
+	});
+
+	it('collides an app-only owner with a confined-server owner over the full owner set', () => {
+		const appOwner = makeExtension('@acme/cairncms-extension-stripe-sync', {
+			settings: configDecl,
+			path: '/a',
+			type: 'interface',
+		});
+
+		const serverOwner = makeExtension('@acme/cairncms-extension-stripe.sync', {
+			settings: configDecl,
+			path: '/b',
+			type: 'endpoint',
+		});
+
+		const statuses = resolveSettingsSubjects([appOwner, serverOwner]);
+
+		expect(statuses.get(appOwner)?.eligible).toBe(false);
+		expect(statuses.get(serverOwner)?.eligible).toBe(false);
+	});
+
+	it('leaves alike namespaces with different config keys eligible', () => {
+		const first = makeExtension('@acme/cairncms-extension-stripe-sync', {
+			settings: { alpha_key: { type: 'string', scope: 'global', secret: { source: 'config' } } } as any,
+			path: '/a',
+		});
+
+		const second = makeExtension('@acme/cairncms-extension-stripe.sync', {
+			settings: { beta_key: { type: 'string', scope: 'global', secret: { source: 'config' } } } as any,
+			path: '/b',
+		});
+
+		const statuses = resolveSettingsSubjects([first, second]);
+
+		expect(statuses.get(first)).toEqual({ eligible: true });
+		expect(statuses.get(second)).toEqual({ eligible: true });
 	});
 });
 

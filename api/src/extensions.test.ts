@@ -2022,6 +2022,19 @@ describe('the settings subject gate in the loader', () => {
 		expect((instance as any).isSettingsEligible(second)).toBe(false);
 	});
 
+	it('exposes a gated-ineligible owner declaration through getDeclaredSettings for masking', async () => {
+		const instance = new ExtensionManager();
+		const first = settingsOwner('dup-a', 'cairncms-extension-dup');
+		const second = settingsOwner('dup-b', 'cairncms-extension-dup');
+		(instance as any).getExtensions = async () => [first, second];
+
+		await (instance as any).load();
+
+		expect((instance as any).getSettingsOwner('cairncms-extension-dup')).toBeUndefined();
+		expect((instance as any).getDeclaredSettings('cairncms-extension-dup')).toEqual([declaration, declaration]);
+		expect((instance as any).getDeclaredSettings('cairncms-extension-absent')).toEqual([]);
+	});
+
 	it('does not treat an extension without a settings declaration as an owner', async () => {
 		const instance = new ExtensionManager();
 		const plain = endpointExtension('plain-owner', 'cairncms-extension-plain', false);

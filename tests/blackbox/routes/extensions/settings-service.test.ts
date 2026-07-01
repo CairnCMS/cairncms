@@ -11,6 +11,7 @@ const BAD_SUBJECT = 'bad-subject';
 const ORPHAN_SUBJECT = 'cairncms-extension-uninstalled';
 const PREVIEW_COLLECTION = 'settings_preview_target';
 const TOKEN = () => common.USER.ADMIN.TOKEN;
+const SECRET_MASK = '**********';
 
 describe('the extension settings service over /extension-settings', () => {
 	const databases = new Map<string, Knex>();
@@ -30,9 +31,11 @@ describe('the extension settings service over /extension-settings', () => {
 		}
 	});
 
-	it.each(vendors)('%s: round-trips a value, stores a secret pointer unresolved, and purges', async (vendor) => {
+	it.each(vendors)('%s: round-trips a value, encrypts a secret at rest, masks its read, and purges', async (vendor) => {
 		const url = getUrl(vendor);
 		const auth = `Bearer ${TOKEN()}`;
+		const db = databases.get(vendor)!;
+		const plaintext = 'sk_live_blackbox_secret';
 
 		const set = await request(url)
 			.post('/extension-settings')
@@ -44,13 +47,7 @@ describe('the extension settings service over /extension-settings', () => {
 		const setSecret = await request(url)
 			.post('/extension-settings')
 			.set('Authorization', auth)
-			.send({
-				subject: SUBJECT,
-				scope: 'global',
-				scope_key: '',
-				key: 'api_key',
-				value: { source: 'config', name: 'MY_API_KEY' },
-			});
+			.send({ subject: SUBJECT, scope: 'global', scope_key: '', key: 'api_key', value: plaintext });
 
 		expect(setSecret.status).toBe(200);
 
@@ -59,7 +56,13 @@ describe('the extension settings service over /extension-settings', () => {
 
 		const byKey = Object.fromEntries(read.body.data.map((row: any) => [row.key, row.value]));
 		expect(byKey.base_url).toBe('https://preview.example.com');
-		expect(byKey.api_key).toEqual({ source: 'config', name: 'MY_API_KEY' });
+		expect(byKey.api_key).toBe(SECRET_MASK);
+		expect(JSON.stringify(read.body)).not.toContain(plaintext);
+
+		const stored = await db(TABLE).where({ extension: SUBJECT, key: 'api_key' }).first();
+		const storedValue = JSON.parse(stored.value);
+		expect(storedValue.kind).toBe('cairncms-secret-envelope');
+		expect(stored.value).not.toContain(plaintext);
 
 		const removed = await request(url)
 			.delete('/extension-settings')
@@ -111,9 +114,20 @@ describe('the extension settings service over /extension-settings', () => {
 			request(url).post('/extension-settings').set('Authorization', `Bearer ${TOKEN()}`).send(body);
 
 		expect((await post({ subject: SUBJECT, scope: 'global', scope_key: '', key: 'nope', value: 'x' })).status).toBe(400);
-		expect((await post({ subject: SUBJECT, scope: 'global', scope_key: '', key: 'api_key', value: 'raw' })).status).toBe(
-			400
-		);
+
+		expect(
+			(await post({ subject: SUBJECT, scope: 'global', scope_key: '', key: 'api_key', value: { source: 'config' } }))
+				.status
+		).toBe(400);
+
+		expect(
+			(await post({ subject: SUBJECT, scope: 'global', scope_key: '', key: 'api_key', value: SECRET_MASK })).status
+		).toBe(400);
+
+		expect(
+			(await post({ subject: SUBJECT, scope: 'global', scope_key: '', key: 'billing_key', value: 'anything' })).status
+		).toBe(400);
+
 		expect(
 			(await post({ subject: SUBJECT, scope: 'global', scope_key: '', key: 'preview_url', value: 'x' })).status
 		).toBe(400);
@@ -290,7 +304,7 @@ describe('the app-side settings read over /extension-settings/app', () => {
 		const writes = [
 			{ subject: SUBJECT, scope: 'global', scope_key: '', key: 'theme', value: 'dark' },
 			{ subject: SUBJECT, scope: 'global', scope_key: '', key: 'base_url', value: 'https://internal' },
-			{ subject: SUBJECT, scope: 'global', scope_key: '', key: 'api_key', value: { source: 'config', name: 'APP_KEY' } },
+			{ subject: SUBJECT, scope: 'global', scope_key: '', key: 'api_key', value: 'sk_live_app_secret' },
 			{ subject: SUBJECT, scope: 'collection', scope_key: APP_COLLECTION, key: 'preview_url', value: 'https://preview' },
 		];
 
@@ -318,7 +332,7 @@ describe('the app-side settings read over /extension-settings/app', () => {
 	});
 
 	it.each(vendors)(
-		'%s: returns app-readable values, omitting non-opted-in and sensitive keys and the pointer',
+		'%s: returns app-readable values, omitting non-opted-in and secret keys and any secret material',
 		async (vendor) => {
 			const read = await request(getUrl(vendor))
 				.get(`/extension-settings/app?subject=${SUBJECT}&collection=${APP_COLLECTION}`)
@@ -329,7 +343,7 @@ describe('the app-side settings read over /extension-settings/app', () => {
 
 			const serialized = JSON.stringify(read.body.data);
 			expect(serialized).not.toContain('api_key');
-			expect(serialized).not.toContain('APP_KEY');
+			expect(serialized).not.toContain('sk_live_app_secret');
 			expect(serialized).not.toContain('base_url');
 		}
 	);
@@ -401,5 +415,80 @@ describe('the app-side settings read over /extension-settings/app', () => {
 		} finally {
 			await request(url).delete(`/permissions/${permissionId}`).set('Authorization', adminAuth);
 		}
+	});
+});
+
+describe('confined delivery of declared secrets', () => {
+	const ECHO_SUBJECT = 'cairncms-extension-confined-echo-endpoint';
+	const CONFINED_PLAINTEXT = 'sk_live_confined_blackbox_secret';
+	const CONFIG_PLAINTEXT = 'confined-billing-secret-value';
+	const databases = new Map<string, Knex>();
+	const adminAuth = `Bearer ${common.USER.ADMIN.TOKEN}`;
+
+	beforeAll(async () => {
+		for (const vendor of vendors) {
+			databases.set(vendor, knex(config.knexConfig[vendor]!));
+			const url = getUrl(vendor);
+			const post = (body: any) => request(url).post('/extension-settings').set('Authorization', adminAuth).send(body);
+
+			const label = await post({
+				subject: ECHO_SUBJECT,
+				scope: 'global',
+				scope_key: '',
+				key: 'site_label',
+				value: 'Cairn Blackbox',
+			});
+
+			expect(label.status).toBe(200);
+
+			const secret = await post({
+				subject: ECHO_SUBJECT,
+				scope: 'global',
+				scope_key: '',
+				key: 'api_key',
+				value: CONFINED_PLAINTEXT,
+			});
+
+			expect(secret.status).toBe(200);
+		}
+	});
+
+	afterAll(async () => {
+		for (const [, db] of databases) {
+			await db(TABLE).where({ extension: ECHO_SUBJECT }).del();
+			await db.destroy();
+		}
+	});
+
+	it.each(vendors)(
+		'%s: the confined guest reads a value and receives each secret only as a reference',
+		async (vendor) => {
+			const response = await request(getUrl(vendor)).get(`/${ECHO_SUBJECT}/settings`);
+
+			expect(response.status).toBe(200);
+			expect(response.body.label).toBe('Cairn Blackbox');
+			expect(response.body.apiKey.kind).toBe('secret-reference');
+			expect(typeof response.body.apiKey.ref).toBe('string');
+			expect(response.body.billingKey.kind).toBe('secret-reference');
+			expect(response.body.undeclared).toBeNull();
+
+			const serialized = JSON.stringify(response.body);
+			expect(serialized).not.toContain(CONFINED_PLAINTEXT);
+			expect(serialized).not.toContain(CONFIG_PLAINTEXT);
+		}
+	);
+
+	it.each(vendors)('%s: the admin read of the confined subject masks the secret and skips config keys', async (vendor) => {
+		const read = await request(getUrl(vendor))
+			.get(`/extension-settings?subject=${ECHO_SUBJECT}`)
+			.set('Authorization', adminAuth);
+
+		expect(read.status).toBe(200);
+
+		const byKey = Object.fromEntries(read.body.data.map((row: any) => [row.key, row.value]));
+		expect(byKey.site_label).toBe('Cairn Blackbox');
+		expect(byKey.api_key).toBe(SECRET_MASK);
+		expect(byKey.billing_key).toBeUndefined();
+		expect(JSON.stringify(read.body)).not.toContain(CONFINED_PLAINTEXT);
 	});
 });

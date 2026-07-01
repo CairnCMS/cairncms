@@ -81,6 +81,9 @@ const directusConfig = {
 	MAX_BATCH_MUTATION: '100', // Must be in multiples of 10 for tests
 	ACCESS_TOKEN_TTL: '25d', // should be larger than 24.86 days to test Expires value larger than 32-bit signed integer
 	DB_HEALTHCHECK_THRESHOLD: '1000',
+	SECRETS_ENCRYPTION_KEY: 'YmxhY2tib3gtc2VjcmV0cy1lbmNyeXB0aW9uLWtleSE=',
+	CAIRNCMS_EXT_SETTINGS_FIXTURE_BILLING_KEY: 'billing-secret-from-config',
+	CAIRNCMS_EXT_CONFINED_ECHO_ENDPOINT_BILLING_KEY: 'confined-billing-secret-value',
 	...directusAuthConfig,
 	...directusStorageConfig,
 };

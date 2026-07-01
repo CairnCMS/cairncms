@@ -3,7 +3,6 @@ import {
 	ExtensionCapabilitiesSchema,
 	ExtensionManifest,
 	ExtensionOptions,
-	ExtensionSecretPointerSchema,
 	ExtensionSettingDeclaration,
 	ExtensionSettingsSubjectSchema,
 	getExtensionConfigSecretName,
@@ -596,23 +595,31 @@ describe('ExtensionOptions settings declaration', () => {
 		expect(ExtensionOptions.safeParse({ ...appOption, settings: {} }).success).toBe(false);
 	});
 
-	it('accepts a sensitive string setting', () => {
-		const settings = { api_key: { type: 'string', scope: 'global', sensitive: true } };
-		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(true);
+	it('accepts an inline and a config secret string setting', () => {
+		const inline = { api_key: { type: 'string', scope: 'global', secret: { source: 'inline' } } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings: inline }).success).toBe(true);
+
+		const config = { api_key: { type: 'string', scope: 'global', secret: { source: 'config' } } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings: config }).success).toBe(true);
 	});
 
-	it('rejects a sensitive non-string setting', () => {
-		const settings = { api_key: { type: 'number', scope: 'global', sensitive: true } };
+	it('rejects a secret non-string setting', () => {
+		const settings = { api_key: { type: 'number', scope: 'global', secret: { source: 'inline' } } };
 		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(false);
 	});
 
-	it('accepts an app-readable non-sensitive setting', () => {
+	it('rejects a config-sourced secret at collection scope', () => {
+		const settings = { api_key: { type: 'string', scope: 'collection', secret: { source: 'config' } } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(false);
+	});
+
+	it('accepts an app-readable non-secret setting', () => {
 		const settings = { preview_url: { type: 'string', scope: 'collection', appReadable: true } };
 		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(true);
 	});
 
-	it('rejects an app-readable sensitive setting', () => {
-		const settings = { api_key: { type: 'string', scope: 'global', sensitive: true, appReadable: true } };
+	it('rejects an app-readable secret setting', () => {
+		const settings = { api_key: { type: 'string', scope: 'global', secret: { source: 'inline' }, appReadable: true } };
 		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(false);
 	});
 
@@ -677,19 +684,29 @@ describe('ExtensionSettingDeclaration', () => {
 		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', presentation: { label: 'X' } }).success).toBe(false);
 	});
 
-	it('rejects a secret field as unknown until the secret runtime lands', () => {
-		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', secret: { source: 'inline' } }).success).toBe(false);
-		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', secretSource: 'inline' }).success).toBe(false);
+	it('accepts a secret declaration and defaults its source to inline', () => {
+		expect(ExtensionSettingDeclaration.parse({ type: 'string', secret: {} })).toMatchObject({
+			secret: { source: 'inline' },
+		});
+
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', secret: { source: 'config' } }).success).toBe(true);
 	});
 
-	it('keeps the sensitive rules unchanged', () => {
-		expect(ExtensionSettingDeclaration.safeParse({ type: 'number', sensitive: true }).success).toBe(false);
+	it('enforces the secret rules and rejects the removed sensitive shape', () => {
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'number', secret: { source: 'inline' } }).success).toBe(false);
 
-		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', sensitive: true, appReadable: true }).success).toBe(
-			false
-		);
+		expect(
+			ExtensionSettingDeclaration.safeParse({ type: 'string', secret: { source: 'inline' }, appReadable: true }).success
+		).toBe(false);
 
-		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', sensitive: true }).success).toBe(true);
+		expect(
+			ExtensionSettingDeclaration.safeParse({ type: 'string', scope: 'collection', secret: { source: 'config' } })
+				.success
+		).toBe(false);
+
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', secret: { source: 'env' } }).success).toBe(false);
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', sensitive: true }).success).toBe(false);
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', secretSource: 'inline' }).success).toBe(false);
 	});
 });
 
@@ -735,21 +752,5 @@ describe('getExtensionConfigSecretName', () => {
 		expect(getExtensionConfigSecretName('@acme/cairncms-extension-stripe-sync', 'api_key')).toBe(
 			getExtensionConfigSecretName('@acme/cairncms-extension-stripe.sync', 'api_key')
 		);
-	});
-});
-
-describe('ExtensionSecretPointerSchema', () => {
-	it('accepts a config pointer with a valid variable name', () => {
-		expect(ExtensionSecretPointerSchema.safeParse({ source: 'config', name: 'MY_API_KEY' }).success).toBe(true);
-		expect(ExtensionSecretPointerSchema.safeParse({ source: 'config', name: '_private' }).success).toBe(true);
-	});
-
-	it('rejects a non-config source, a malformed name, extra keys, and a raw value', () => {
-		expect(ExtensionSecretPointerSchema.safeParse({ source: 'env', name: 'MY_API_KEY' }).success).toBe(false);
-		expect(ExtensionSecretPointerSchema.safeParse({ source: 'config', name: '1bad' }).success).toBe(false);
-		expect(ExtensionSecretPointerSchema.safeParse({ source: 'config', name: 'a b' }).success).toBe(false);
-		expect(ExtensionSecretPointerSchema.safeParse({ source: 'config', name: '' }).success).toBe(false);
-		expect(ExtensionSecretPointerSchema.safeParse({ source: 'config', name: 'OK', extra: true }).success).toBe(false);
-		expect(ExtensionSecretPointerSchema.safeParse('raw-secret-value').success).toBe(false);
 	});
 });
