@@ -1001,7 +1001,7 @@ describe('ConfinedSupervisor', () => {
 						capabilities: {
 							log: true,
 							request: { urls: [new URL(loopbackUrl).origin] },
-							items: 'current-user',
+							items: { accountability: 'user' },
 							template: true,
 						},
 						log: (logEntry) => logged.push(logEntry),

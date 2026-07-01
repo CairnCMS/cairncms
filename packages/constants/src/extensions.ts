@@ -86,18 +86,27 @@ export const RequestCapabilitySchema = z
 	})
 	.strict();
 
+// items and files select the accountability host.items and host.files run under, and grant no
+// collection, field, or CRUD permission, which stay with CairnCMS roles and permissions. The
+// bare strings 'current-user' and 'system' are deprecated aliases normalized to the object form
+// so a shipped manifest loads unchanged.
+export const AccountabilityCapabilitySchema = z.union([
+	z.object({ accountability: z.enum(['user', 'full-access']) }).strict(),
+	z.enum(['current-user', 'system']).transform((value) => ({
+		accountability: value === 'current-user' ? ('user' as const) : ('full-access' as const),
+	})),
+]);
+
 // Raw powers such as fs, process.env, database access, child processes, and internal imports
 // must not be smuggled in as capability keys, so unknown keys are rejected rather than ignored.
-// items and files are accountability modes, not per-collection grants. Per-collection and
-// per-field access stays with CairnCMS roles and permissions.
 export const ExtensionCapabilitiesSchema = z
 	.object({
 		log: z.boolean(),
 		request: RequestCapabilitySchema,
 		template: z.boolean(),
 		endpoint: z.object({ access: z.enum(['public', 'authenticated']) }).strict(),
-		items: z.enum(['current-user', 'system']),
-		files: z.enum(['current-user', 'system']),
+		items: AccountabilityCapabilitySchema,
+		files: AccountabilityCapabilitySchema,
 		schema: z.array(z.enum(['read', 'write'])).min(1),
 	})
 	.partial()

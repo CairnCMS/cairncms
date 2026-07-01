@@ -36,6 +36,27 @@ describe('ExtensionCapabilitiesSchema', () => {
 		expect(ExtensionCapabilitiesSchema.safeParse({ jobs: true }).success).toBe(false);
 	});
 
+	it('normalizes the items and files accountability aliases to the object form', () => {
+		expect(ExtensionCapabilitiesSchema.parse({ items: 'current-user' })).toEqual({ items: { accountability: 'user' } });
+
+		expect(ExtensionCapabilitiesSchema.parse({ items: 'system' })).toEqual({
+			items: { accountability: 'full-access' },
+		});
+
+		expect(ExtensionCapabilitiesSchema.parse({ files: 'current-user' })).toEqual({ files: { accountability: 'user' } });
+	});
+
+	it('accepts the canonical accountability object and rejects a malformed one', () => {
+		expect(ExtensionCapabilitiesSchema.safeParse({ items: { accountability: 'user' } }).success).toBe(true);
+		expect(ExtensionCapabilitiesSchema.safeParse({ items: { accountability: 'full-access' } }).success).toBe(true);
+		expect(ExtensionCapabilitiesSchema.safeParse({ items: { accountability: 'root' } }).success).toBe(false);
+		expect(ExtensionCapabilitiesSchema.safeParse({ items: 'admin' }).success).toBe(false);
+
+		expect(ExtensionCapabilitiesSchema.safeParse({ items: { accountability: 'user', extra: true } }).success).toBe(
+			false
+		);
+	});
+
 	it('requires at least one url for the request capability', () => {
 		expect(ExtensionCapabilitiesSchema.safeParse({ request: { methods: ['POST'] } }).success).toBe(false);
 	});
@@ -502,6 +523,44 @@ describe('ExtensionManifest', () => {
 		});
 
 		expect(result.success).toBe(true);
+	});
+
+	it('normalizes a deprecated items alias to the object form through the full manifest path', () => {
+		const result = ExtensionManifest.safeParse({
+			name: 'cairncms-extension-test',
+			version: '1.0.0',
+			'cairncms:extension': { ...hybridOption, runtime: 'confined-server', capabilities: { items: 'current-user' } },
+		});
+
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+
+		const options = result.data['cairncms:extension'] as { capabilities?: { items?: unknown } };
+		expect(options.capabilities?.items).toEqual({ accountability: 'user' });
+	});
+
+	it('normalizes a deprecated items alias on a confined bundle entry through the full manifest path', () => {
+		const result = ExtensionManifest.safeParse({
+			name: 'cairncms-extension-test',
+			version: '1.0.0',
+			'cairncms:extension': {
+				...bundleOption,
+				runtime: 'confined-server',
+				entries: [
+					{ type: 'interface', name: 'my-interface', source: 'src/interface.js' },
+					{ type: 'endpoint', name: 'my-endpoint', source: 'src/endpoint.js', capabilities: { items: 'system' } },
+				],
+			},
+		});
+
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+
+		const options = result.data['cairncms:extension'] as {
+			entries?: Array<{ capabilities?: { items?: unknown } }>;
+		};
+
+		expect(options.entries?.[1]?.capabilities?.items).toEqual({ accountability: 'full-access' });
 	});
 });
 

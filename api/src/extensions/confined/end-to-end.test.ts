@@ -258,7 +258,7 @@ describe('host methods through a real child and the real broker', () => {
 		async () => {
 			// Settings are ownership-gated, not capability-gated: an extension that declares no
 			// settings has the empty settings access (the no-owner shape), so every key reads null
-			// rather than denying. There is no settings capability to gate on.
+			// rather than denying.
 			const result = await runConfinedOperation(
 				baseOperationRequest(operationEntry("async (_input, { host }) => host.settings.get('mode')"), {
 					capabilities: {},
@@ -286,7 +286,7 @@ describe('host methods through a real child and the real broker', () => {
 					operationEntry(
 						"async (_input, { host }) => ({ read: await host.items.read('widgets', {}), readOne: await host.items.readOne('widgets', '1', {}) })"
 					),
-					{ capabilities: { items: 'system' } }
+					{ capabilities: { items: { accountability: 'full-access' } } }
 				),
 				{ ...deps, itemsService }
 			);

@@ -834,7 +834,7 @@ describe('createConfinedHostBroker items', () => {
 		const seen: Array<string | number> = [];
 
 		const { dispatch } = makeBroker({
-			capabilities: { items: 'system' },
+			capabilities: { items: { accountability: 'full-access' } },
 			itemsService: () => ({
 				readByQuery: async () => [{ id: 1 }],
 				readOne: async (key) => {
