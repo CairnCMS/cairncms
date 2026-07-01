@@ -4,6 +4,7 @@ import {
 	ExtensionManifest,
 	ExtensionOptions,
 	ExtensionSecretPointerSchema,
+	ExtensionSettingDeclaration,
 	ExtensionSettingsSubjectSchema,
 } from './extensions.js';
 
@@ -648,6 +649,46 @@ describe('ExtensionOptions settings declaration', () => {
 			const settings = { [key]: { type: 'string', scope: 'global' } };
 			expect(ExtensionOptions.safeParse({ ...appOption, settings }).success, key).toBe(false);
 		}
+	});
+});
+
+describe('ExtensionSettingDeclaration', () => {
+	it('defaults scope to global and preserves an explicit collection scope', () => {
+		expect(ExtensionSettingDeclaration.parse({ type: 'string' })).toEqual({ type: 'string', scope: 'global' });
+
+		expect(ExtensionSettingDeclaration.parse({ type: 'string', scope: 'collection' })).toMatchObject({
+			scope: 'collection',
+		});
+	});
+
+	it('accepts presentation metadata and rejects a malformed one', () => {
+		expect(
+			ExtensionSettingDeclaration.safeParse({ type: 'string', presentation: { order: 2, width: 'half' } }).success
+		).toBe(true);
+
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', presentation: {} }).success).toBe(true);
+
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', presentation: { width: 'wide' } }).success).toBe(
+			false
+		);
+
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', presentation: { order: 1.5 } }).success).toBe(false);
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', presentation: { label: 'X' } }).success).toBe(false);
+	});
+
+	it('rejects a secret field as unknown until the secret runtime lands', () => {
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', secret: { source: 'inline' } }).success).toBe(false);
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', secretSource: 'inline' }).success).toBe(false);
+	});
+
+	it('keeps the sensitive rules unchanged', () => {
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'number', sensitive: true }).success).toBe(false);
+
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', sensitive: true, appReadable: true }).success).toBe(
+			false
+		);
+
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', sensitive: true }).success).toBe(true);
 	});
 });
 

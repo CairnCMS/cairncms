@@ -328,9 +328,13 @@ export const ExtensionOptionsBundleEntry = z.union([
 export const ExtensionSettingDeclaration = z
 	.object({
 		type: z.enum(['string', 'number', 'boolean']),
-		scope: z.enum(['global', 'collection']),
+		scope: z.enum(['global', 'collection']).default('global'),
 		sensitive: z.boolean().optional(),
 		appReadable: z.boolean().optional(),
+		presentation: z
+			.object({ order: z.number().int().optional(), width: z.enum(['half', 'full']).optional() })
+			.strict()
+			.optional(),
 	})
 	.strict()
 	.superRefine((value, ctx) => {
