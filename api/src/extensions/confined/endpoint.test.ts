@@ -178,6 +178,68 @@ describe('runConfinedEndpoint', () => {
 		expect(authenticated).toEqual({ ok: true, status: 200, body: null });
 	});
 
+	it('requires a user then the app flag before the child under app access', async () => {
+		let invoked = false;
+
+		const dependencies = deps({
+			invoke: async () => {
+				invoked = true;
+				return { ok: true, value: { body: null } };
+			},
+		});
+
+		const capabilities = { endpoint: { access: 'app' as const } };
+
+		const anonymous = await runConfinedEndpoint(request({ capabilities }), dependencies);
+		expect(anonymous).toEqual({ ok: false, failure: 'unauthenticated' });
+
+		const nonApp = await runConfinedEndpoint(
+			request({ capabilities, accountability: { user: 'u-1', role: 'r-1', admin: false } as never }),
+			dependencies
+		);
+
+		expect(nonApp).toEqual({ ok: false, failure: 'denied' });
+		expect(invoked).toBe(false);
+
+		const appCaller = await runConfinedEndpoint(
+			request({ capabilities, accountability: { user: 'u-1', role: 'r-1', admin: false, app: true } as never }),
+			dependencies
+		);
+
+		expect(appCaller).toEqual({ ok: true, status: 200, body: null });
+	});
+
+	it('requires a user then the admin flag before the child under admin access', async () => {
+		let invoked = false;
+
+		const dependencies = deps({
+			invoke: async () => {
+				invoked = true;
+				return { ok: true, value: { body: null } };
+			},
+		});
+
+		const capabilities = { endpoint: { access: 'admin' as const } };
+
+		const anonymous = await runConfinedEndpoint(request({ capabilities }), dependencies);
+		expect(anonymous).toEqual({ ok: false, failure: 'unauthenticated' });
+
+		const nonAdmin = await runConfinedEndpoint(
+			request({ capabilities, accountability: { user: 'u-1', role: 'r-1', admin: false } as never }),
+			dependencies
+		);
+
+		expect(nonAdmin).toEqual({ ok: false, failure: 'denied' });
+		expect(invoked).toBe(false);
+
+		const adminCaller = await runConfinedEndpoint(
+			request({ capabilities, accountability: { user: 'u-1', role: 'r-1', admin: true } as never }),
+			dependencies
+		);
+
+		expect(adminCaller).toEqual({ ok: true, status: 200, body: null });
+	});
+
 	it('refuses an unsupported method', async () => {
 		const result = await runConfinedEndpoint(request({ method: 'TRACE' }), deps());
 		expect(result).toEqual({ ok: false, failure: 'invalid-request' });

@@ -57,6 +57,14 @@ describe('ExtensionCapabilitiesSchema', () => {
 		);
 	});
 
+	it('accepts the app and admin endpoint access levels and rejects an unknown one', () => {
+		expect(ExtensionCapabilitiesSchema.safeParse({ endpoint: { access: 'public' } }).success).toBe(true);
+		expect(ExtensionCapabilitiesSchema.safeParse({ endpoint: { access: 'authenticated' } }).success).toBe(true);
+		expect(ExtensionCapabilitiesSchema.safeParse({ endpoint: { access: 'app' } }).success).toBe(true);
+		expect(ExtensionCapabilitiesSchema.safeParse({ endpoint: { access: 'admin' } }).success).toBe(true);
+		expect(ExtensionCapabilitiesSchema.safeParse({ endpoint: { access: 'root' } }).success).toBe(false);
+	});
+
 	it('requires at least one url for the request capability', () => {
 		expect(ExtensionCapabilitiesSchema.safeParse({ request: { methods: ['POST'] } }).success).toBe(false);
 	});

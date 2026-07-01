@@ -105,8 +105,9 @@ function shapeGuestResult(value: unknown, method: string): ConfinedEndpointResul
 
 /**
  * Runs a confined JSON endpoint. The authority gate is decided before any child
- * exists: an undeclared endpoint capability denies, and `authenticated` access
- * requires a caller with a user. The inbound request is shaped and bounded before
+ * exists: an undeclared endpoint capability denies, `authenticated` requires a
+ * caller with a user, and `app` and `admin` additionally require that caller's app
+ * or admin flag. The inbound request is shaped and bounded before
  * the parent materializes it into a child frame, the guest receives only
  * `{ method, path, query, body }`, and the guest's reply is held to the result
  * contract: a `status` in 100 to 599, a JSON `body`, and nothing else.
@@ -119,8 +120,14 @@ export async function runConfinedEndpoint(
 
 	if (access === undefined) return { ok: false, failure: 'denied' };
 
-	if (access === 'authenticated' && !request.accountability?.user) {
-		return { ok: false, failure: 'unauthenticated' };
+	// public needs no caller. authenticated, app, and admin all require a user, so no user
+	// is 'unauthenticated' (401), and a user lacking the app or admin flag is 'denied' (403).
+	if (access !== 'public') {
+		const accountability = request.accountability;
+
+		if (!accountability?.user) return { ok: false, failure: 'unauthenticated' };
+		if (access === 'app' && accountability.app !== true) return { ok: false, failure: 'denied' };
+		if (access === 'admin' && accountability.admin !== true) return { ok: false, failure: 'denied' };
 	}
 
 	const method = typeof request.method === 'string' ? request.method.toUpperCase() : '';

@@ -104,7 +104,7 @@ export const ExtensionCapabilitiesSchema = z
 		log: z.boolean(),
 		request: RequestCapabilitySchema,
 		template: z.boolean(),
-		endpoint: z.object({ access: z.enum(['public', 'authenticated']) }).strict(),
+		endpoint: z.object({ access: z.enum(['public', 'authenticated', 'app', 'admin']) }).strict(),
 		items: AccountabilityCapabilitySchema,
 		files: AccountabilityCapabilitySchema,
 		schema: z.array(z.enum(['read', 'write'])).min(1),

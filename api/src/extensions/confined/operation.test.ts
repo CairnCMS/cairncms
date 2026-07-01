@@ -1,7 +1,12 @@
 import axios from 'axios';
 import http from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { runConfinedOperation, type ConfinedOperationDeps, type ConfinedOperationRequest } from './operation.js';
+import {
+	runConfinedOperation,
+	toConfinedAccountability,
+	type ConfinedOperationDeps,
+	type ConfinedOperationRequest,
+} from './operation.js';
 import {
 	HTTP_RESPONSE_BYTES,
 	ITEMS_REPLY_BYTES,
@@ -294,5 +299,17 @@ describe('runConfinedOperation brokered option secret', () => {
 		const reply = (result.outcome as { value: { ok: boolean } }).value;
 		expect(reply.ok).toBe(false);
 		expect(authSeen).toHaveLength(0);
+	});
+});
+
+describe('toConfinedAccountability', () => {
+	it('strips app so the guest accountability carries only user, role, and admin', () => {
+		const result = toConfinedAccountability({ user: 'u-1', role: 'r-1', admin: true, app: true } as never);
+		expect(result).toEqual({ user: 'u-1', role: 'r-1', admin: true });
+		expect(result).not.toHaveProperty('app');
+	});
+
+	it('maps a null accountability to null', () => {
+		expect(toConfinedAccountability(null)).toBe(null);
 	});
 });
