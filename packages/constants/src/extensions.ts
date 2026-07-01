@@ -373,6 +373,32 @@ export const ExtensionSettingsSchema = z
 
 export const ExtensionSettingsSubjectSchema = z.string().regex(EXTENSION_NAME_REGEX).max(255);
 
+function toConfigSegment(value: string): string {
+	return value
+		.toUpperCase()
+		.replace(/[^A-Z0-9]+/g, '_')
+		.replace(/^_+|_+$/g, '');
+}
+
+/**
+ * Derives the deployment variable name for a config-sourced extension secret. Both inputs are
+ * validated, so a name never derives for an invalid subject or key. The subject's npm scope
+ * and its local name (the part after the `cairncms-extension-` or `@cairncms/extension-`
+ * prefix) join with the key, each uppercased with non-alphanumeric runs collapsed to `_`.
+ */
+export function getExtensionConfigSecretName(subject: string, key: string): string {
+	ExtensionSettingsSubjectSchema.parse(subject);
+	ExtensionSettingKeySchema.parse(key);
+
+	const localName = EXTENSION_NAME_REGEX.exec(subject)?.[1];
+	if (localName === undefined) throw new Error('the extension subject has no derivable local name');
+
+	const scope = subject.startsWith('@') ? subject.slice(1, subject.indexOf('/')) : '';
+	const slug = toConfigSegment(scope ? `${scope}/${localName}` : localName);
+
+	return `CAIRNCMS_EXT_${slug}_${toConfigSegment(key)}`;
+}
+
 export const ExtensionSecretPointerSchema = z
 	.object({
 		source: z.literal('config'),

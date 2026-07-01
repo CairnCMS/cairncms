@@ -6,6 +6,7 @@ import {
 	ExtensionSecretPointerSchema,
 	ExtensionSettingDeclaration,
 	ExtensionSettingsSubjectSchema,
+	getExtensionConfigSecretName,
 } from './extensions.js';
 
 describe('ExtensionCapabilitiesSchema', () => {
@@ -706,6 +707,34 @@ describe('ExtensionSettingsSubjectSchema', () => {
 
 	it('rejects a subject longer than the storage bound', () => {
 		expect(ExtensionSettingsSubjectSchema.safeParse(`cairncms-extension-${'x'.repeat(260)}`).success).toBe(false);
+	});
+});
+
+describe('getExtensionConfigSecretName', () => {
+	it('derives a readable variable from the subject scope, local name, and key', () => {
+		expect(getExtensionConfigSecretName('@acme/cairncms-extension-stripe-sync', 'api_key')).toBe(
+			'CAIRNCMS_EXT_ACME_STRIPE_SYNC_API_KEY'
+		);
+
+		expect(getExtensionConfigSecretName('cairncms-extension-api-metric', 'api_key')).toBe(
+			'CAIRNCMS_EXT_API_METRIC_API_KEY'
+		);
+
+		expect(getExtensionConfigSecretName('@cairncms/extension-foo', 'api_key')).toBe(
+			'CAIRNCMS_EXT_CAIRNCMS_FOO_API_KEY'
+		);
+	});
+
+	it('rejects an invalid subject or key', () => {
+		expect(() => getExtensionConfigSecretName('@acme/not-an-extension', 'api_key')).toThrow();
+		expect(() => getExtensionConfigSecretName('cairncms-extension-foo', 'Api-Key')).toThrow();
+		expect(() => getExtensionConfigSecretName('cairncms-extension-foo', 'constructor')).toThrow();
+	});
+
+	it('derives the same variable for two subjects that normalize alike, the collision the loader gates', () => {
+		expect(getExtensionConfigSecretName('@acme/cairncms-extension-stripe-sync', 'api_key')).toBe(
+			getExtensionConfigSecretName('@acme/cairncms-extension-stripe.sync', 'api_key')
+		);
 	});
 });
 
