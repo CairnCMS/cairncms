@@ -168,7 +168,9 @@ export default function useMedia(editor: Ref<any>, imageToken: Ref<string | unde
 		openMediaTab.value = ['video'];
 	}
 
-	function onMediaSelect(media: Record<string, any>) {
+	function onMediaSelect(media: Record<string, any> | null) {
+		if (!media) return;
+
 		const sourceUrl = getPublicURL() + 'assets/' + media.id;
 		const tag = media.type.startsWith('audio') ? 'audio' : 'video';
 

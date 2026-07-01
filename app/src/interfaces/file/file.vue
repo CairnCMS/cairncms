@@ -237,9 +237,10 @@ function setSelection(selection: (string | number)[] | null) {
 	}
 }
 
-function onUpload(fileInfo: FileInfo) {
-	file.value = fileInfo;
+function onUpload(fileInfo: FileInfo | null) {
 	activeDialog.value = null;
+	if (!fileInfo) return;
+	file.value = fileInfo;
 	update(fileInfo.id);
 }
 

@@ -14,6 +14,8 @@ import { FilesService } from '../services/files.js';
 import { MetaService } from '../services/meta.js';
 import type { PrimaryKey } from '../types/index.js';
 import asyncHandler from '../utils/async-handler.js';
+import { getMaxUploadSize } from '../utils/get-max-upload-size.js';
+import { resolveMimeType } from '../utils/mime-type.js';
 import { sanitizeQuery } from '../utils/sanitize-query.js';
 
 const router = express.Router();
@@ -34,7 +36,16 @@ export const multipartHandler: RequestHandler = (req, res, next) => {
 		};
 	}
 
-	const busboy = Busboy({ headers, defParamCharset: 'utf8' });
+	const maxUploadSize = getMaxUploadSize();
+
+	// Busboy fires `limit` (and sets stream.truncated) when a file REACHES fileSize, so set it to the cap
+	// plus one byte to accept a file exactly at the cap and reject only what exceeds it.
+	const busboy = Busboy({
+		headers,
+		defParamCharset: 'utf8',
+		limits: { fileSize: maxUploadSize === undefined ? undefined : maxUploadSize + 1 },
+	});
+
 	const savedFiles: PrimaryKey[] = [];
 	const service = new FilesService({ accountability: req.accountability, schema: req.schema });
 
@@ -49,6 +60,7 @@ export const multipartHandler: RequestHandler = (req, res, next) => {
 	let disk: string = toArray(env['STORAGE_LOCATIONS'])[0];
 	let payload: any = {};
 	let fileCount = 0;
+	let done = false;
 
 	busboy.on('field', (fieldname, val) => {
 		let fieldValue: string | null | boolean = val;
@@ -65,8 +77,22 @@ export const multipartHandler: RequestHandler = (req, res, next) => {
 	});
 
 	busboy.on('file', async (_fieldname, fileStream, { filename, mimeType }) => {
+		if (done) {
+			// A prior failure already resolved the request; drain so the parser can finish.
+			fileStream.resume();
+			return;
+		}
+
 		if (!filename) {
-			return busboy.emit('error', new InvalidPayloadException(`File is missing filename`));
+			fileStream.resume();
+			return fail(new InvalidPayloadException(`File is missing filename`));
+		}
+
+		const { mimeType: normalizedMimeType, allowed } = resolveMimeType(mimeType);
+
+		if (allowed === false) {
+			fileStream.resume();
+			return fail(new InvalidPayloadException(`File is of invalid content type`));
 		}
 
 		fileCount++;
@@ -81,7 +107,7 @@ export const multipartHandler: RequestHandler = (req, res, next) => {
 
 		const payloadWithRequiredFields = {
 			...payload,
-			type: mimeType,
+			type: normalizedMimeType,
 			storage: payload.storage || disk,
 		};
 
@@ -93,14 +119,14 @@ export const multipartHandler: RequestHandler = (req, res, next) => {
 			savedFiles.push(primaryKey);
 			tryDone();
 		} catch (error: any) {
-			busboy.emit('error', error);
+			fail(error);
 		}
 
 		return undefined;
 	});
 
 	busboy.on('error', (error: Error) => {
-		next(error);
+		fail(error);
 	});
 
 	busboy.on('close', () => {
@@ -109,14 +135,23 @@ export const multipartHandler: RequestHandler = (req, res, next) => {
 
 	req.pipe(busboy);
 
+	function fail(error: Error) {
+		if (done) return;
+		done = true;
+		next(error);
+	}
+
 	function tryDone() {
+		if (done) return;
+
 		if (savedFiles.length === fileCount) {
 			if (fileCount === 0) {
-				return next(new InvalidPayloadException(`No files were included in the body`));
+				return fail(new InvalidPayloadException(`No files were included in the body`));
 			}
 
+			done = true;
 			res.locals['savedFiles'] = savedFiles;
-			return next();
+			next();
 		}
 	}
 };
