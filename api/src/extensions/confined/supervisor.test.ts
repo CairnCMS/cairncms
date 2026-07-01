@@ -1001,7 +1001,6 @@ describe('ConfinedSupervisor', () => {
 						capabilities: {
 							log: true,
 							request: { urls: [new URL(loopbackUrl).origin] },
-							settings: ['read'],
 							items: 'current-user',
 							template: true,
 						},
@@ -1093,7 +1092,7 @@ describe('ConfinedSupervisor', () => {
 		);
 
 		it(
-			'denies every surface over the spawn boundary when no capability is declared',
+			'denies the capability-gated surfaces over the spawn boundary when no capability is declared',
 			async () => {
 				const broker = createConfinedHostBroker(
 					{
@@ -1131,7 +1130,10 @@ describe('ConfinedSupervisor', () => {
 					)
 				);
 
-				expect(result).toEqual({ ok: true, value: ['denied', 'denied', 'denied', 'denied', 'denied'] });
+				// settings.get is ownership-gated, not capability-gated: with an empty source and no
+				// declared key it reads null, so it is 'ok' here while the four capability-gated
+				// surfaces deny.
+				expect(result).toEqual({ ok: true, value: ['denied', 'denied', 'ok', 'denied', 'denied'] });
 			},
 			ENGINE_TIMEOUT
 		);

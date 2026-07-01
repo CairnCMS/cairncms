@@ -99,9 +99,6 @@ export const ExtensionCapabilitiesSchema = z
 		items: z.enum(['current-user', 'system']),
 		files: z.enum(['current-user', 'system']),
 		schema: z.array(z.enum(['read', 'write'])).min(1),
-		secrets: z.boolean(),
-		settings: z.array(z.enum(['read', 'write'])).min(1),
-		jobs: z.boolean(),
 	})
 	.partial()
 	.strict();

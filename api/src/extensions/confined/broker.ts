@@ -213,10 +213,6 @@ export function createConfinedHostBroker(
 		context: ConfinedHostCallContext,
 		signal: AbortSignal
 	): Promise<ConfinedHostReply> {
-		if (!deps.capabilities.settings?.includes('read')) {
-			return denied('the settings read capability is not declared');
-		}
-
 		const key = args !== null && typeof args === 'object' ? (args as Record<string, unknown>)['key'] : undefined;
 
 		if (typeof key !== 'string' || key.length === 0) {

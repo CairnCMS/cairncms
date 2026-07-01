@@ -30,6 +30,12 @@ describe('ExtensionCapabilitiesSchema', () => {
 		expect(ExtensionCapabilitiesSchema.safeParse({ env: true }).success).toBe(false);
 	});
 
+	it('rejects the removed settings, secrets, and jobs capabilities as unknown keys', () => {
+		expect(ExtensionCapabilitiesSchema.safeParse({ settings: ['read'] }).success).toBe(false);
+		expect(ExtensionCapabilitiesSchema.safeParse({ secrets: true }).success).toBe(false);
+		expect(ExtensionCapabilitiesSchema.safeParse({ jobs: true }).success).toBe(false);
+	});
+
 	it('requires at least one url for the request capability', () => {
 		expect(ExtensionCapabilitiesSchema.safeParse({ request: { methods: ['POST'] } }).success).toBe(false);
 	});

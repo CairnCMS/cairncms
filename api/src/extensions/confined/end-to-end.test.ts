@@ -254,27 +254,19 @@ describe('host methods through a real child and the real broker', () => {
 	);
 
 	it(
-		'an extension with no declared settings: denied without the capability, null with it',
+		'an extension with no declared settings reads null for every key',
 		async () => {
-			const denied = await runConfinedOperation(
+			// Settings are ownership-gated, not capability-gated: an extension that declares no
+			// settings has the empty settings access (the no-owner shape), so every key reads null
+			// rather than denying. There is no settings capability to gate on.
+			const result = await runConfinedOperation(
 				baseOperationRequest(operationEntry("async (_input, { host }) => host.settings.get('mode')"), {
 					capabilities: {},
 				}),
 				deps
 			);
 
-			expect(denied.outcome).toMatchObject({ ok: true, value: { ok: false, error: { code: 'denied' } } });
-
-			// An extension that declares no settings reads null for every key, even with the
-			// read capability. The empty settings access is the no-owner shape.
-			const dark = await runConfinedOperation(
-				baseOperationRequest(operationEntry("async (_input, { host }) => host.settings.get('mode')"), {
-					capabilities: { settings: ['read'] },
-				}),
-				deps
-			);
-
-			expect(dark.outcome).toEqual({ ok: true, value: { ok: true, value: null } });
+			expect(result.outcome).toEqual({ ok: true, value: { ok: true, value: null } });
 		},
 		ENGINE_TIMEOUT
 	);
@@ -544,7 +536,7 @@ describe('extension settings reads and brokered secret through a real child', ()
 					operationEntry(
 						`async (_input, { host }) => { const baseUrl = (await host.settings.get('base_url')).value; const apiKey = (await host.settings.get('api_key')).value; const unsetKey = (await host.settings.get('unset_key')).value; const undeclared = (await host.settings.get('nope')).value; await host.log.info('handle ' + apiKey.ref); await host.request.send({ url: '${origin}/echo', method: 'GET', auth: { bearer: apiKey } }); return { baseUrl, apiKeyKind: apiKey.kind, unsetKey, undeclared }; }`
 					),
-					{ capabilities: { settings: ['read'], request: { urls: [origin] }, log: true } }
+					{ capabilities: { request: { urls: [origin] }, log: true } }
 				),
 				settingsDeps
 			);
@@ -575,7 +567,7 @@ describe('extension settings reads and brokered secret through a real child', ()
 					entrySource: endpointEntry(
 						`async (_request, { host }) => { const baseUrl = (await host.settings.get('base_url')).value; const apiKey = (await host.settings.get('api_key')).value; await host.request.send({ url: '${origin}/echo', method: 'GET', auth: { bearer: apiKey } }); return { status: 200, body: { baseUrl } }; }`
 					),
-					capabilities: { endpoint: { access: 'public' }, settings: ['read'], request: { urls: [origin] } },
+					capabilities: { endpoint: { access: 'public' }, request: { urls: [origin] } },
 					method: 'GET',
 					path: '/run',
 					query: {},
@@ -604,7 +596,7 @@ describe('extension settings reads and brokered secret through a real child', ()
 						'e2e.settings',
 						`async (_meta, { host }) => { const baseUrl = (await host.settings.get('base_url')).value; await host.log.info('base ' + baseUrl); const apiKey = (await host.settings.get('api_key')).value; await host.request.send({ url: '${origin}/echo', method: 'GET', auth: { bearer: apiKey } }); return { done: true }; }`
 					),
-					capabilities: { log: true, settings: ['read'], request: { urls: [origin] } },
+					capabilities: { log: true, request: { urls: [origin] } },
 					event: 'e2e.settings',
 					meta: {},
 					accountability: null,
@@ -629,7 +621,7 @@ describe('extension settings reads and brokered secret through a real child', ()
 				baseOperationRequest(artifact, {
 					contributionId: 'settings-op',
 					bundleEntryKey: 'operation:settings-op',
-					capabilities: { settings: ['read'], request: { urls: [origin] } },
+					capabilities: { request: { urls: [origin] } },
 				}),
 				settingsDeps
 			);

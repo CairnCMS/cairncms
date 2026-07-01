@@ -78,7 +78,7 @@ import {
 	type ConfinedGateVerdict,
 	type ConfinedLoadGateDeps,
 } from './extensions/confined/load-gate.js';
-import { resolveSettingsSubjects, type ConfinedSettingsCapabilities } from './extensions/settings-subjects.js';
+import { resolveSettingsSubjects } from './extensions/settings-subjects.js';
 import { resolveConfinedRuntime, type ConfinedSupervisor } from './extensions/confined/supervisor.js';
 import { describePosture, type SandboxPosture } from './extensions/confined/sandbox-hardening.js';
 import getModuleDefault from './utils/get-module-default.js';
@@ -585,15 +585,7 @@ export class ExtensionManager {
 	 * settings only, never failing the extension's load.
 	 */
 	private gateSettingsSubjects(discovered: Extension[]): void {
-		const statuses = resolveSettingsSubjects(discovered, (extension) => {
-			const eligible = this.confinedEligible.get(extension);
-			if (eligible === undefined) return undefined;
-
-			const capabilities: ConfinedSettingsCapabilities = {};
-			if (eligible.capabilities !== undefined) capabilities.self = eligible.capabilities;
-			if (eligible.entryCapabilities !== undefined) capabilities.entries = eligible.entryCapabilities;
-			return capabilities;
-		});
+		const statuses = resolveSettingsSubjects(discovered);
 
 		this.settingsEligible = new Set();
 

@@ -1,5 +1,5 @@
 import { ExtensionSettingsSubjectSchema } from '@cairncms/constants';
-import type { Extension, ExtensionCapabilities } from '@cairncms/types';
+import type { Extension } from '@cairncms/types';
 
 export const SETTINGS_SUBJECT_INVALID = 'settings-subject-invalid';
 export const SETTINGS_SUBJECT_DUPLICATE = 'settings-subject-duplicate';
@@ -8,22 +8,8 @@ export type SettingsSubjectReason = { code: string; detail: string };
 
 export type SettingsSubjectStatus = { eligible: true } | { eligible: false; reason: SettingsSubjectReason };
 
-export type ConfinedSettingsCapabilities = {
-	self?: ExtensionCapabilities;
-	entries?: Record<string, ExtensionCapabilities>;
-};
-
-export type ConfinedCapabilitiesLookup = (extension: Extension) => ConfinedSettingsCapabilities | undefined;
-
-function ownsSettings(extension: Extension, capabilities: ConfinedSettingsCapabilities | undefined): boolean {
-	if (extension.settings !== undefined) return true;
-	if (capabilities?.self?.settings !== undefined) return true;
-
-	if (capabilities?.entries && Object.values(capabilities.entries).some((entry) => entry.settings !== undefined)) {
-		return true;
-	}
-
-	return false;
+function ownsSettings(extension: Extension): boolean {
+	return extension.settings !== undefined;
 }
 
 /**
@@ -40,11 +26,8 @@ export function safeExtensionName(name: string): string {
 	return sanitized.length > 64 ? `${sanitized.slice(0, 64)}...` : sanitized;
 }
 
-export function resolveSettingsSubjects(
-	extensions: Extension[],
-	confinedCapabilities: ConfinedCapabilitiesLookup
-): Map<Extension, SettingsSubjectStatus> {
-	const owners = extensions.filter((extension) => ownsSettings(extension, confinedCapabilities(extension)));
+export function resolveSettingsSubjects(extensions: Extension[]): Map<Extension, SettingsSubjectStatus> {
+	const owners = extensions.filter((extension) => ownsSettings(extension));
 
 	const ownerCountBySubject = new Map<string, number>();
 

@@ -112,14 +112,8 @@ describe('createConfinedHostBroker log', () => {
 });
 
 describe('createConfinedHostBroker settings', () => {
-	it('denies settings.get without the read capability', async () => {
-		const { dispatch } = makeBroker({ capabilities: { settings: ['write'] } });
-		const reply = await dispatch({ method: 'settings.get', args: { key: 'mode' } }, context, liveSignal);
-		expect(reply).toMatchObject({ ok: false, error: { code: 'denied' } });
-	});
-
 	it('rejects a missing or non-string key', async () => {
-		const { dispatch } = makeBroker({ capabilities: { settings: ['read'] } });
+		const { dispatch } = makeBroker({ capabilities: {} });
 
 		expect(await dispatch({ method: 'settings.get', args: {} }, context, liveSignal)).toMatchObject({
 			ok: false,
@@ -134,7 +128,7 @@ describe('createConfinedHostBroker settings', () => {
 
 	it('returns null for an undeclared key even when the source would have a value', async () => {
 		const { dispatch } = makeBroker({
-			capabilities: { settings: ['read'] },
+			capabilities: {},
 			settings: { declared: [], value: () => 'stale', hasSecret: () => false },
 		});
 
@@ -144,7 +138,7 @@ describe('createConfinedHostBroker settings', () => {
 
 	it('returns a declared non-sensitive value', async () => {
 		const { dispatch } = makeBroker({
-			capabilities: { settings: ['read'] },
+			capabilities: {},
 			settings: { declared: [{ key: 'mode', sensitive: false }], value: () => 'fast', hasSecret: () => false },
 		});
 
@@ -157,7 +151,7 @@ describe('createConfinedHostBroker settings', () => {
 
 		const { dispatch } = makeBroker(
 			{
-				capabilities: { settings: ['read'] },
+				capabilities: {},
 				settings: {
 					declared: [{ key: 'apiKey', sensitive: true }],
 					value: () => 'sk_live_raw_never_crosses',
@@ -189,7 +183,7 @@ describe('createConfinedHostBroker settings', () => {
 
 	it('returns null for a sensitive setting with no backing secret', async () => {
 		const { dispatch } = makeBroker({
-			capabilities: { settings: ['read'] },
+			capabilities: {},
 			settings: { declared: [{ key: 'apiKey', sensitive: true }], value: () => null, hasSecret: () => false },
 		});
 
@@ -199,7 +193,7 @@ describe('createConfinedHostBroker settings', () => {
 
 	it('refuses an over-cap setting value before it can reach the reply', async () => {
 		const { dispatch } = makeBroker({
-			capabilities: { settings: ['read'] },
+			capabilities: {},
 			settings: {
 				declared: [{ key: 'blob', sensitive: false }],
 				value: () => 'x'.repeat(SETTINGS_VALUE_BYTES + 1),
@@ -231,7 +225,7 @@ describe('createConfinedHostBroker settings', () => {
 			],
 		]) {
 			const { dispatch } = makeBroker({
-				capabilities: { settings: ['read'] },
+				capabilities: {},
 				settings: { declared, value: () => 'sk_live_raw_never_crosses', hasSecret: () => true },
 			});
 
@@ -248,7 +242,7 @@ describe('createConfinedHostBroker settings', () => {
 		const quoteHeavy = '"'.repeat(SETTINGS_VALUE_BYTES - 1024);
 
 		const { dispatch } = makeBroker({
-			capabilities: { settings: ['read'] },
+			capabilities: {},
 			settings: { declared: [{ key: 'blob', sensitive: false }], value: () => quoteHeavy, hasSecret: () => false },
 		});
 
@@ -260,7 +254,7 @@ describe('createConfinedHostBroker settings', () => {
 		const controller = new AbortController();
 
 		const { dispatch } = makeBroker({
-			capabilities: { settings: ['read'] },
+			capabilities: {},
 			settings: {
 				declared: [{ key: 'slow', sensitive: false }],
 				value: () => new Promise(() => undefined),
@@ -278,7 +272,7 @@ describe('createConfinedHostBroker settings', () => {
 		const seen: AbortSignal[] = [];
 
 		const { dispatch } = makeBroker({
-			capabilities: { settings: ['read'] },
+			capabilities: {},
 			settings: {
 				declared: [{ key: 'mode', sensitive: false }],
 				value: (_key, signal) => {
