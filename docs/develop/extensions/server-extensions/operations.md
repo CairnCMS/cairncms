@@ -295,14 +295,14 @@ The manifest declares the runtime and the capabilities the handler uses:
     "host": "^1.0.0",
     "runtime": "confined-server",
     "capabilities": {
-      "items": "current-user",
+      "items": { "accountability": "user" },
       "log": true
     }
   }
 }
 ```
 
-The `items: "current-user"` mode reads as the user who triggered the flow, so the operation sees exactly what that user could read through the API. Keep the app-side options honest about the declared capabilities, and do not offer a configuration the broker would reject, such as a request method outside `request.methods`. To pass a secret to the handler without the guest ever seeing it, mark the option with `optionDelivery`.
+The `items: { accountability: "user" }` mode reads as the user who triggered the flow, so the operation sees exactly what that user could read through the API. Keep the app-side options honest about the declared capabilities, and do not offer a configuration the broker would reject, such as a request method outside `request.methods`. To pass a secret to the handler without the guest ever seeing it, mark the option with `optionDelivery`.
 
 See the [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) page for the full host API, the capability vocabulary, `optionDelivery`, and the accountability modes.
 

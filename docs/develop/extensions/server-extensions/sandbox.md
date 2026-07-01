@@ -10,7 +10,7 @@ sidebar:
 Its capability surface is expanding. The host API and capabilities on this page describe the current version, and not the complete, finished contract. Expect the brokered API to gain capabilities, and several of the current restrictions to lift, in future releases.
 :::
 
-The sandbox is the confined server runtime. A server extension opts into it by declaring `runtime: confined-server`, and its code then runs in a confined child process instead of the API process. The confined process has no host imports and no raw Node. Every privileged effect goes through a brokered `host.*` call that the platform gates against the capabilities the extension declares.
+The sandbox is the confined server runtime. A server extension opts into it by declaring `runtime: confined-server`, and its code then runs in a confined child process instead of the API process. The confined process has no host imports and no raw Node. Every privileged effect goes through a brokered `host.*` call that the platform gates against the capabilities and settings the extension declares.
 
 This page is the reference for that runtime: how it runs, the boundary it enforces, how to author against it, the host API, the capability vocabulary, the build and load path, and the diagnostics. For the choice between full authority and the sandbox, see [Server extensions](/docs/develop/extensions/server-extensions/).
 
@@ -18,13 +18,13 @@ This page is the reference for that runtime: how it runs, the boundary it enforc
 
 A confined extension runs in a short-lived child process, one per invocation. The API spawns a child host that loads a QuickJS engine compiled to WebAssembly, evaluates the extension's built artifact inside it, runs the handler, and returns the result.
 
-The guest code never touches the host directly. It has no `fetch`, no filesystem, no Node builtins, and no imports from the platform. When it needs a privileged effect it calls a `host.*` method. That call is framed and sent over a dedicated channel to a broker in the API, which checks the call against the declared capabilities, performs the effect, and frames a reply back. The guest sees only the reply.
+The guest code never touches the host directly. It has no `fetch`, no filesystem, no Node builtins, and no imports from the platform. When it needs a privileged effect it calls a `host.*` method. That call is framed and sent over a dedicated channel to a broker in the API, which checks the call against the declared capabilities and settings, performs the effect, and frames a reply back. The guest sees only the reply.
 
 Inside the engine, the guest runs under per-invocation CPU, memory, and stack limits, with the console silenced and a cap on the number of timers it can create. A run that exceeds its CPU, memory, or stack limit is terminated.
 
 ## The boundary
 
-The boundary is the engine. A confined guest runs inside a QuickJS engine with no host imports, no Node, no `fetch`, and no filesystem, so it cannot reach the API process, the database, the environment, or the network by itself. Its only way out is a `host.*` call, and every call is checked by the broker against the capabilities the extension declares. This is the sandbox: it is present in every mode and on every host, and it does not depend on the operating system. The OS hardening below is additional containment, not what makes the sandbox a sandbox.
+The boundary is the engine. A confined guest runs inside a QuickJS engine with no host imports, no Node, no `fetch`, and no filesystem, so it cannot reach the API process, the database, the environment, or the network by itself. Its only way out is a `host.*` call, and every call is checked by the broker against the capabilities and settings the extension declares. This is the sandbox: it is present in every mode and on every host, and it does not depend on the operating system. The OS hardening below is additional containment, not what makes the sandbox a sandbox.
 
 ## Defense in depth: OS hardening
 
@@ -116,19 +116,21 @@ The methods:
 - `host.log.debug | info | warn | error(message, meta?)` writes a structured log line on the host. Logging is fire-and-forget and needs the `log` capability.
 - `host.request.send(request)` makes an outbound HTTP request from the host and returns `ExtensionResult<{ status, headers, body }>`. The `request` is `{ url, method?, headers?, body?, timeoutMs?, auth? }`. It needs the `request` capability, and the URL's origin must be one the manifest declares.
 - `host.items.read(collection, query?)` returns `ExtensionResult<T[]>` and `host.items.readOne(collection, key, query?)` returns `ExtensionResult<T | null>`. The `query` is `{ fields?, filter?, sort?, limit?, offset?, page?, search? }`. Both need the `items` capability. Reads are read-only in this version.
-- `host.settings.get(key)` returns `ExtensionResult<T | ExtensionSecretReference | null>` and needs the `settings` capability. No settings are declared readable to confined extensions in this version, so it resolves to `null` today.
+- `host.settings.get(key)` returns `ExtensionResult<T | ExtensionSecretReference | null>` for a key the extension package declares in its settings. It is gated by package settings ownership and the declared key, not by a `settings` capability. Collection-scoped settings are not exposed to confined server code.
 - `host.template.renderLiquid(template, data?, options?)` renders a Liquid template on the host and returns `ExtensionResult<string>`. The `options` may set custom `delimiters`. It needs the `template` capability.
 
 A call whose capability is not declared, or whose target is not allowed by the declared capability, comes back as `{ ok: false, error: { code: 'denied' } }` rather than throwing.
 
 ## Reading data: accountability modes
 
-`host.items` reads under one of two accountability modes, fixed per extension by the `items` capability. It is not chosen per invocation.
+`host.items` runs under an accountability mode set by the `items` capability, `{ accountability: 'user' | 'full-access' }`. The mode is fixed per extension in the manifest and is not chosen per call. The capability selects the mode only. It grants no collection, field, or CRUD permission, which CairnCMS roles and permissions always enforce.
 
-- `items: 'current-user'` reads as whoever triggered the work. A manual flow runs as the user who clicked Run Flow, an event-triggered flow as the user whose action fired the event, an authenticated request as the caller's token. Field permissions apply exactly as on a REST read, and the read fails closed: a forbidden field is a hard denial, and the primary key must be among the readable fields. A null accountability, such as an anonymous webhook or a schedule, is denied in this mode. Prefer this mode.
-- `items: 'system'` reads with unrestricted system authority, for genuinely user-less flows such as schedules and anonymous webhooks. It is still confined and still read-only, and it is visible in the diagnostics as an elevated opt-in.
+- **`{ accountability: 'user' }`** — reads run as the invoking accountability. That resolves per call to the user who ran the flow, the user whose action fired an event, or the token on an authenticated request. Field permissions apply as on a REST read, and the read fails closed. A forbidden field is a hard denial, and the primary key must be among the readable fields. A call with no accountability, such as an anonymous webhook or a schedule, is denied. Prefer this mode.
+- **`{ accountability: 'full-access' }`** — reads run under unrestricted system authority, for user-less flows such as schedules and anonymous webhooks. It stays confined and read-only, and the diagnostics mark it as an elevated opt-in.
 
-There is no per-flow identity. A flow runs as its trigger. For user-less work that should stay least-privilege, use a dedicated service user on an authenticated trigger and keep `current-user`.
+The bare `'current-user'` and `'system'` strings still load as deprecated aliases for the object form.
+
+There is no per-flow identity. A flow runs as its trigger. For user-less work that should stay least-privilege, use a dedicated service user on an authenticated trigger and keep `{ accountability: 'user' }`.
 
 ## Capabilities
 
@@ -139,15 +141,14 @@ The manifest `capabilities` block is the operator-reviewable list of what the ex
 | `log` | `true` | Present. Enables `host.log`.                              |
 | `request` | `{ urls: string[], methods?: string[] }` | Present. Enables `host.request.send`.                     |
 | `template` | `true` | Present. Enables `host.template.renderLiquid`.            |
-| `items` | `'current-user' \| 'system'` | Present, read-only. Enables `host.items`.                 |
-| `settings` | `('read' \| 'write')[]` | `read` enables `host.settings.get`, which resolves to `null` today (no readable settings are declared yet). |
-| `endpoint` | `{ access: 'public' \| 'authenticated' }` | Present. Sets the auth gate for a confined endpoint.      |
-| `files` | `'current-user' \| 'system'` | Declarable for forward compatibility, not exposed in the host API.    |
+| `items` | `{ accountability: 'user' \| 'full-access' }` | Present, read-only. Enables `host.items`.                 |
+| `endpoint` | `{ access: 'public' \| 'authenticated' \| 'app' \| 'admin' }` | Present. Sets the auth gate for a confined endpoint.      |
+| `files` | `{ accountability: 'user' \| 'full-access' }` | Declarable for forward compatibility, not exposed in the host API.    |
 | `schema` | `('read' \| 'write')[]` | Declarable for forward compatibility, not exposed in the host API.    |
-| `secrets` | `true` | Declarable for forward compatibility, not exposed in the host API.    |
-| `jobs` | `true` | Declarable for forward compatibility, not exposed in the host API.    |
 
-These four capabilities validate and load, but the host API exposes no method for them in this version, so there is nothing to call. They are reserved for forward compatibility and operator review. Do not build on them yet.
+`host.settings.get` needs no capability. A confined server entry reads the settings its own package declares, gated by package ownership rather than a capability flag.
+
+The `files` and `schema` capabilities validate and load, but the host API exposes no method for them in this version, so there is nothing to call. They are reserved for forward compatibility and operator review. Do not build on them yet.
 
 ### Request origins and methods
 
@@ -160,7 +161,12 @@ A "reach any API" design is not expressible. The operator enumerates every origi
 
 ### Endpoint access
 
-A confined endpoint declares `endpoint: { access: ... }`. `authenticated` returns 401 to an anonymous caller. `public` admits anonymous callers. There is no app-only access level.
+A confined endpoint declares `endpoint: { access: ... }`. The endpoint runner enforces the level before any child spawns.
+
+- **`public`** — any caller.
+- **`authenticated`** — a caller with a user. An anonymous caller gets 401.
+- **`app`** — a user whose role grants app access. An anonymous caller gets 401, and a user without app access gets 403.
+- **`admin`** — an admin user. An anonymous caller gets 401, and a non-admin user gets 403.
 
 ### Hook events
 
@@ -170,7 +176,7 @@ A confined hook declares the events it subscribes to in `events`, as `{ filter?:
 
 An operation can mark sensitive option fields with `optionDelivery`, a record of `{ <optionKey>: { delivery: 'reference' } }`. A field marked this way is delivered to the handler as a reference the broker resolves on the host, so the secret value is never serialized into the guest. The handler can pass that reference to `host.request.send` as `auth`, so a confined operation can call a secret-protected external API without the secret ever entering the guest.
 
-`optionDelivery` is operations-only in this version, and settings are dark, so an endpoint or panel has no source for a secret reference yet. A confined endpoint or panel that calls an external API must use a non-secret or public one for now.
+`optionDelivery` is operation-option delivery only. Confined endpoints and hooks use package settings for durable configuration and secret references. They do not have per-invocation operation options.
 
 ## Building and loading
 
