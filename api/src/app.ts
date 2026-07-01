@@ -62,6 +62,7 @@ import rateLimiterGlobal from './middleware/rate-limiter-global.js';
 import rateLimiter from './middleware/rate-limiter-ip.js';
 import sanitizeQuery from './middleware/sanitize-query.js';
 import schema from './middleware/schema.js';
+import { validateSecretsEncryptionKey } from './utils/encrypt-secret.js';
 import { getConfigFromEnv } from './utils/get-config-from-env.js';
 import { Url } from './utils/url.js';
 import { validateEnv } from './utils/validate-env.js';
@@ -73,6 +74,13 @@ export default async function createApp(): Promise<express.Application> {
 	const helmet = await import('helmet');
 
 	validateEnv(['KEY', 'SECRET']);
+
+	try {
+		validateSecretsEncryptionKey();
+	} catch (error) {
+		logger.error(`"SECRETS_ENCRYPTION_KEY" is set but invalid: ${(error as Error).message}`);
+		process.exit(1);
+	}
 
 	if (!new Url(env['PUBLIC_URL']).isAbsolute()) {
 		logger.warn('PUBLIC_URL should be a full URL');
