@@ -1,19 +1,34 @@
 import type { Request, Response } from 'express';
 import FormData from 'form-data';
 import { PassThrough } from 'stream';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import env from '../env.js';
 import { InvalidPayloadException } from '../exceptions/invalid-payload.js';
+import { FilesService } from '../services/files.js';
 import { multipartHandler } from './files.js';
 
 vi.mock('../../src/database');
 
-vi.mock('../services', () => {
+vi.mock('../services/files.js', () => {
 	const FilesService = vi.fn();
 	FilesService.prototype.uploadOne = vi.fn();
-	const MetaService = vi.fn();
-	MetaService.prototype.getMetaForQuery = vi.fn().mockResolvedValue({});
 	return { FilesService };
 });
+
+function multipartRequest(fakeForm: FormData) {
+	const stream = new PassThrough();
+	stream.push(fakeForm.getBuffer());
+
+	const req = {
+		headers: fakeForm.getHeaders(),
+		is: vi.fn().mockReturnValue(true),
+		body: fakeForm.getBuffer(),
+		params: {},
+		pipe: (input: NodeJS.WritableStream) => stream.pipe(input),
+	} as unknown as Request;
+
+	return req;
+}
 
 describe('multipartHandler', () => {
 	it(`Errors out if request doesn't contain any files to upload`, () => {
@@ -67,5 +82,46 @@ describe('multipartHandler', () => {
 			expect(err.message).toBe('File is missing filename');
 			expect(err).toBeInstanceOf(InvalidPayloadException);
 		});
+	});
+
+	afterEach(() => {
+		env['FILES_MIME_TYPE_ALLOW_LIST'] = '*/*';
+		vi.mocked(FilesService.prototype.uploadOne).mockReset();
+	});
+
+	it('rejects a file whose content type is not in the allow-list, calling next once without uploading', async () => {
+		env['FILES_MIME_TYPE_ALLOW_LIST'] = 'image/*';
+
+		const fakeForm = new FormData();
+		fakeForm.append('file', Buffer.from('%PDF-1.4 fake'), { filename: 'doc.pdf', contentType: 'application/pdf' });
+
+		const next = vi.fn();
+		multipartHandler(multipartRequest(fakeForm), {} as Response, next);
+
+		await vi.waitFor(() => expect(next).toHaveBeenCalled());
+		// Let the parser close so a second (double) next would surface.
+		await new Promise((resolve) => setTimeout(resolve, 50));
+
+		expect(next).toHaveBeenCalledTimes(1);
+		expect(next.mock.calls[0]![0]).toBeInstanceOf(InvalidPayloadException);
+		expect((next.mock.calls[0]![0] as Error).message).toBe('File is of invalid content type');
+		expect(FilesService.prototype.uploadOne).not.toHaveBeenCalled();
+	});
+
+	it('uploads a file whose content type matches the allow-list', async () => {
+		env['FILES_MIME_TYPE_ALLOW_LIST'] = 'image/*';
+		vi.mocked(FilesService.prototype.uploadOne).mockResolvedValue('new-key');
+
+		const fakeForm = new FormData();
+		fakeForm.append('file', Buffer.from('fake-png-bytes'), { filename: 'photo.png', contentType: 'image/png' });
+
+		await new Promise<void>((resolve) => {
+			multipartHandler(multipartRequest(fakeForm), { locals: {} } as unknown as Response, (err) => {
+				expect(err).toBeUndefined();
+				resolve();
+			});
+		});
+
+		expect(FilesService.prototype.uploadOne).toHaveBeenCalledOnce();
 	});
 });

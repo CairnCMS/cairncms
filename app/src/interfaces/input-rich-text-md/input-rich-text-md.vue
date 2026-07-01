@@ -384,6 +384,11 @@ useShortcut('meta+alt+6', () => edit('heading', { level: 6 }), markdownInterface
 function onImageUpload(image: any) {
 	if (!codemirror) return;
 
+	if (!image) {
+		imageDialogOpen.value = false;
+		return;
+	}
+
 	let url = getPublicURL() + `assets/` + image.id;
 
 	if (props.imageToken) {
