@@ -207,6 +207,47 @@ describe('Settings Extensions collection', () => {
 		expect(rowFor(wrapper, 'cairn-fixture-interface')!.find('.sandboxed').exists()).toBe(false);
 	});
 
+	it('marks settings-unavailable owners with a chip and maps the reason in the modal', async () => {
+		const collided = {
+			name: 'cairncms-extension-edge-sync',
+			type: 'hook',
+			local: true,
+			status: 'loaded',
+			settings: {
+				status: 'unavailable',
+				reason: {
+					code: 'settings-subject-config-collision',
+					detail:
+						'the settings subject "cairncms-extension-edge-sync" derives a config-secret variable that collides with "cairncms-extension-edge.sync"',
+				},
+			},
+		};
+
+		const healthy = { ...loadedHook, settings: { status: 'available' } };
+
+		vi.mocked(api.get).mockResolvedValue({ data: { data: [collided, healthy, discoveredInterface] } });
+
+		const wrapper = mountCollection();
+		await flushPromises();
+
+		const collidedRow = rowFor(wrapper, 'cairncms-extension-edge-sync')!;
+		expect(collidedRow.find('.settings-unavailable').exists()).toBe(true);
+		expect(collidedRow.find('.settings-unavailable').text()).toBe('Settings unavailable');
+
+		expect(rowFor(wrapper, 'cairn-fixture-hook')!.find('.settings-unavailable').exists()).toBe(false);
+		expect(rowFor(wrapper, 'cairn-fixture-interface')!.find('.settings-unavailable').exists()).toBe(false);
+
+		await collidedRow.trigger('click');
+		await nextTick();
+
+		const notice = wrapper.find('.v-dialog .v-notice[data-type="warning"]');
+		expect(notice.exists()).toBe(true);
+		expect(notice.text()).toContain("Its configuration variables collide with another installed extension's");
+		expect(notice.text()).toContain('cairncms-extension-edge.sync');
+
+		expect(wrapper.html()).not.toContain('CAIRNCMS_EXT_');
+	});
+
 	it('renders the OS hardening posture inside the advanced diagnostics section', async () => {
 		vi.mocked(api.get).mockResolvedValue({
 			data: {
@@ -306,7 +347,7 @@ describe('Settings Extensions collection', () => {
 			await nextTick();
 
 			const notice = wrapper.find('.v-dialog .v-notice[data-type="success"]');
-			expect(notice.text()).toContain('runs in the browser');
+			expect(notice.text()).toContain('reports discovery rather than a load');
 		});
 
 		it('shows the failure reason in a danger notice for a failed extension', async () => {

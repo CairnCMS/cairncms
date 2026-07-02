@@ -199,6 +199,33 @@ describe('the extension settings service over /extension-settings', () => {
 		expect([401, 403]).toContain(res.status);
 	});
 
+	it.each(vendors)('%s: lists the settings owners with declarations and nothing infrastructure-facing', async (vendor) => {
+		const url = getUrl(vendor);
+
+		const anonymous = await request(url).get('/extension-settings/owners');
+		expect([401, 403]).toContain(anonymous.status);
+
+		const owners = await request(url).get('/extension-settings/owners').set('Authorization', `Bearer ${TOKEN()}`);
+		expect(owners.status).toBe(200);
+
+		const bySubject = Object.fromEntries(owners.body.data.map((owner: any) => [owner.displaySubject, owner]));
+
+		expect(bySubject[SUBJECT]).toMatchObject({
+			subject: SUBJECT,
+			status: 'available',
+			declaration: {
+				api_key: { type: 'string', scope: 'global', secret: { source: 'inline' } },
+				billing_key: { type: 'string', scope: 'global', secret: { source: 'config' } },
+			},
+		});
+
+		expect(bySubject[BAD_SUBJECT]?.status).toBe('unavailable');
+		expect(bySubject[BAD_SUBJECT] && 'subject' in bySubject[BAD_SUBJECT]).toBe(false);
+		expect(bySubject[BAD_SUBJECT] && 'declaration' in bySubject[BAD_SUBJECT]).toBe(false);
+
+		expect(JSON.stringify(owners.body)).not.toContain('CAIRNCMS_EXT_');
+	});
+
 	it.each(vendors)(
 		'%s: deleting a collection purges its collection-scoped settings and leaves global ones',
 		async (vendor) => {

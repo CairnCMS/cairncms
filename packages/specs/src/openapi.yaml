@@ -145,6 +145,8 @@ paths:
     $ref: './paths/extension-settings/settings.yaml'
   /extension-settings/app:
     $ref: './paths/extension-settings/app.yaml'
+  /extension-settings/owners:
+    $ref: './paths/extension-settings/owners.yaml'
 
   # Fields
   /fields:
@@ -259,25 +261,12 @@ paths:
 components:
   schemas:
     ExtensionSettingValue:
-      description: A scalar setting value, or a secret pointer for a sensitive key.
+      description:
+        A scalar setting value. An inline secret is written as its raw string and always read back masked.
       oneOf:
         - type: string
         - type: number
         - type: boolean
-        - type: object
-          required:
-            - source
-            - name
-          additionalProperties: false
-          properties:
-            source:
-              type: string
-              enum:
-                - config
-            name:
-              type: string
-              pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-              maxLength: 128
     Activity:
       $ref: './components/activity.yaml'
     Presets:

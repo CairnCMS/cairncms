@@ -8,7 +8,12 @@ export const SETTINGS_SUBJECT_CONFIG_COLLISION = 'settings-subject-config-collis
 
 export type SettingsSubjectReason = { code: string; detail: string };
 
-export type SettingsSubjectStatus = { eligible: true } | { eligible: false; reason: SettingsSubjectReason };
+// `reason` is the public diagnostic (the diagnostics field and the owners endpoint publish
+// it), so it never carries a derived config variable. `logDetail`, when present, is the
+// variable-bearing line for the load-time log only, the deployment admin's channel.
+export type SettingsSubjectStatus =
+	| { eligible: true }
+	| { eligible: false; reason: SettingsSubjectReason; logDetail?: string };
 
 function ownsSettings(extension: Extension): boolean {
 	return extension.settings !== undefined;
@@ -112,8 +117,11 @@ export function resolveSettingsSubjects(extensions: Extension[]): Map<Extension,
 				eligible: false,
 				reason: {
 					code: SETTINGS_SUBJECT_CONFIG_COLLISION,
-					detail: `config-secret variable ${variables} for "${safeExtensionName(owner.name)}" collides with ${others}`,
+					detail: `the settings subject "${safeExtensionName(
+						owner.name
+					)}" derives a config-secret variable that collides with ${others}`,
 				},
+				logDetail: `config-secret variable ${variables} for "${safeExtensionName(owner.name)}" collides with ${others}`,
 			});
 
 			continue;

@@ -847,6 +847,37 @@ describe('app-extension settings ownership is independent of SERVE_APP', () => {
 		expect((instance as any).getSettingsOwner('cairncms-extension-preview')).toBe(appExtension);
 		expect((instance as any).getExtensionsList('module')).toEqual([]);
 	});
+
+	it('lists the app-only owner as a discovered row with its settings status', async () => {
+		const instance = new ExtensionManager();
+
+		const appExtension: Extension = {
+			path: path.join(root, 'preview-module'),
+			name: 'cairncms-extension-preview',
+			type: 'module',
+			entrypoint: 'app.js',
+			local: true,
+			settings: { theme: { type: 'string', scope: 'global', appReadable: true } },
+		};
+
+		(instance as any).getExtensions = async () => [appExtension];
+
+		await (instance as any).load();
+
+		const row = instance.getDiagnostics().find((diagnostic) => diagnostic.name === 'cairncms-extension-preview');
+		expect(row).toMatchObject({ type: 'module', status: 'discovered', settings: { status: 'available' } });
+
+		const owners = instance.getSettingsOwners();
+
+		expect(owners).toEqual([
+			{
+				subject: 'cairncms-extension-preview',
+				displaySubject: 'cairncms-extension-preview',
+				status: 'available',
+				declaration: { theme: { type: 'string', scope: 'global', appReadable: true } },
+			},
+		]);
+	});
 });
 
 describe('the confined endpoint binding', () => {
@@ -2057,5 +2088,76 @@ describe('the settings subject gate in the loader', () => {
 		expect((instance as any).isSettingsEligible(nonOwner)).toBe(false);
 		expect((instance as any).getSettingsOwner('cairncms-extension-shared')).toBe(owner);
 		expect((instance as any).getSettingsOwner('cairncms-extension-absent')).toBeUndefined();
+	});
+
+	it('annotates every owner row with its settings status, by identity', async () => {
+		const instance = new ExtensionManager();
+		const first = settingsOwner('dup-a', 'cairncms-extension-dup');
+		const second = settingsOwner('dup-b', 'cairncms-extension-dup');
+		const nonOwner = endpointExtension('dup-plain', 'cairncms-extension-dup', false);
+		(instance as any).getExtensions = async () => [first, second, nonOwner];
+
+		await (instance as any).load();
+
+		const rows = instance.getDiagnostics().filter((diagnostic) => diagnostic.name === 'cairncms-extension-dup');
+		const annotated = rows.filter((row) => row.settings !== undefined);
+
+		expect(rows.length).toBe(3);
+		expect(annotated.length).toBe(2);
+
+		for (const row of annotated) {
+			expect(row.settings).toMatchObject({
+				status: 'unavailable',
+				reason: { code: 'settings-subject-duplicate' },
+			});
+		}
+	});
+
+	it('returns owners with the raw subject and declaration only when available', async () => {
+		const instance = new ExtensionManager();
+		const good = settingsOwner('preview', 'cairncms-extension-preview');
+		const bad = settingsOwner('bad', 'bad-subject');
+		(instance as any).getExtensions = async () => [good, bad];
+
+		await (instance as any).load();
+
+		const owners = instance.getSettingsOwners();
+		expect(owners.length).toBe(2);
+
+		const available = owners.find((owner) => owner.status === 'available');
+
+		expect(available).toEqual({
+			subject: 'cairncms-extension-preview',
+			displaySubject: 'cairncms-extension-preview',
+			status: 'available',
+			declaration,
+		});
+
+		const unavailable = owners.find((owner) => owner.status === 'unavailable');
+		expect(unavailable?.displaySubject).toBe('bad-subject');
+		expect(unavailable && 'subject' in unavailable).toBe(false);
+		expect(unavailable && 'declaration' in unavailable).toBe(false);
+		expect(unavailable?.reason?.code).toBe('settings-subject-invalid');
+	});
+
+	it('keeps the derived config variable out of every public surface on a collision', async () => {
+		const warn = vi.spyOn(logger, 'warn');
+		const instance = new ExtensionManager();
+
+		const configSettings = { api_key: { type: 'string', scope: 'global', secret: { source: 'config' } } } as any;
+		const first = { ...endpointExtension('edge-a', 'cairncms-extension-edge-sync', false), settings: configSettings };
+		const second = { ...endpointExtension('edge-b', 'cairncms-extension-edge.sync', false), settings: configSettings };
+		(instance as any).getExtensions = async () => [first, second];
+
+		await (instance as any).load();
+
+		const owners = instance.getSettingsOwners();
+		expect(owners.every((owner) => owner.status === 'unavailable')).toBe(true);
+		expect(owners.every((owner) => owner.reason?.code === 'settings-subject-config-collision')).toBe(true);
+
+		expect(JSON.stringify(owners)).not.toContain('CAIRNCMS_EXT_');
+		expect(JSON.stringify(instance.getDiagnostics())).not.toContain('CAIRNCMS_EXT_');
+
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining('CAIRNCMS_EXT_'));
 	});
 });

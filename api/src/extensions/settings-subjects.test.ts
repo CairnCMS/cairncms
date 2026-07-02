@@ -87,7 +87,7 @@ describe('resolveSettingsSubjects', () => {
 		expect(resolveSettingsSubjects([owner]).get(owner)).toEqual({ eligible: true });
 	});
 
-	it('fails both owners of a shared config variable and names it', () => {
+	it('fails both owners of a shared config variable, the variable in the log detail only', () => {
 		const first = makeExtension('@acme/cairncms-extension-stripe-sync', { settings: configDecl, path: '/a' });
 		const second = makeExtension('@acme/cairncms-extension-stripe.sync', { settings: configDecl, path: '/b' });
 
@@ -99,8 +99,12 @@ describe('resolveSettingsSubjects', () => {
 		expect(secondStatus?.eligible === false && secondStatus.reason.code).toBe(SETTINGS_SUBJECT_CONFIG_COLLISION);
 
 		const detail = firstStatus?.eligible === false ? firstStatus.reason.detail : '';
-		expect(detail).toContain('CAIRNCMS_EXT_ACME_STRIPE_SYNC_API_KEY');
+		expect(detail).not.toContain('CAIRNCMS_EXT_');
 		expect(detail).toContain('@acme/cairncms-extension-stripe.sync');
+
+		const logDetail = firstStatus?.eligible === false ? firstStatus.logDetail : undefined;
+		expect(logDetail).toContain('CAIRNCMS_EXT_ACME_STRIPE_SYNC_API_KEY');
+		expect(logDetail).toContain('@acme/cairncms-extension-stripe.sync');
 	});
 
 	it('collides an app-only owner with a confined-server owner over the full owner set', () => {

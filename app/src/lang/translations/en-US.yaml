@@ -1031,8 +1031,13 @@ confined_runtime: Sandbox
 confined_runtime_mode: 'OS hardening: {decision} ({mode})'
 confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
 extension_status_loaded_detail: Loaded and running on the server.
-extension_status_discovered_detail: Discovered and served to the app, where it runs in the browser.
+extension_status_discovered_detail: Discovered on this instance. App extensions run in the browser, so the server reports discovery rather than a load.
 extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
+extension_settings_unavailable: Settings unavailable
+extension_settings_reason_invalid: The extension's package name is not a valid settings subject.
+extension_settings_reason_duplicate: More than one installed extension uses this package name.
+extension_settings_reason_config_collision: Its configuration variables collide with another installed extension's.
+extension_settings_reason_unknown: The extension's settings cannot be managed.
 extension_type_group_hook: Hooks
 extension_type_group_endpoint: Endpoints
 extension_type_group_operation: Operations

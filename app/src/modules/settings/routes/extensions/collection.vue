@@ -78,6 +78,9 @@
 					<v-list-item-content>
 						<v-text-overflow :text="extension.name" />
 					</v-list-item-content>
+					<v-chip v-if="extension.settings?.status === 'unavailable'" class="settings-unavailable" small label>
+						{{ t('extension_settings_unavailable') }}
+					</v-chip>
 					<v-chip v-if="extension.runtime === 'confined-server'" class="sandboxed" small label>
 						{{ t('extension_sandboxed') }}
 					</v-chip>
@@ -155,6 +158,11 @@
 						{{ selected.reason.code }}: {{ selected.reason.detail }}
 					</v-notice>
 
+					<v-notice v-if="selected.settings?.status === 'unavailable'" type="warning" class="detail-notice">
+						{{ settingsReasonLabel(selected.settings.reason?.code) }}
+						<template v-if="selected.settings.reason?.detail">&nbsp;({{ selected.settings.reason.detail }})</template>
+					</v-notice>
+
 					<div v-if="selected.capabilities" class="detail-capabilities">
 						<div class="detail-label">{{ t('extension_capabilities') }}</div>
 						<div class="capability-chips">
@@ -223,6 +231,7 @@ type ExtensionDiagnostic = {
 	reason?: { code: string; detail: string };
 	capabilities?: Record<string, unknown>;
 	runtime?: 'confined-server';
+	settings?: { status: 'available' | 'unavailable'; reason?: { code: string; detail: string } };
 };
 
 type ExtensionRow = ExtensionDiagnostic & { _key: string };
@@ -273,6 +282,13 @@ function statusLabel(status: string): string {
 	if (status === 'failed') return t('extension_failed');
 	if (status === 'partial') return t('extension_partial');
 	return t('extension_active');
+}
+
+function settingsReasonLabel(code?: string): string {
+	if (code === 'settings-subject-invalid') return t('extension_settings_reason_invalid');
+	if (code === 'settings-subject-duplicate') return t('extension_settings_reason_duplicate');
+	if (code === 'settings-subject-config-collision') return t('extension_settings_reason_config_collision');
+	return t('extension_settings_reason_unknown');
 }
 
 function runtimeLabel(row: ExtensionDiagnostic): string {
@@ -421,6 +437,12 @@ async function fetchExtensions() {
 	flex-shrink: 0;
 	margin-left: 0.75rem;
 	--v-chip-color: var(--primary);
+}
+
+.settings-unavailable {
+	flex-shrink: 0;
+	margin-left: 0.75rem;
+	--v-chip-color: var(--warning);
 }
 
 .detail-meta {

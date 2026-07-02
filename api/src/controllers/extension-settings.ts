@@ -1,5 +1,6 @@
 import express from 'express';
 import { ForbiddenException, InvalidCredentialsException, InvalidPayloadException } from '../exceptions/index.js';
+import { getExtensionManager } from '../extensions.js';
 import { respond } from '../middleware/respond.js';
 import { ExtensionSettingsService } from '../services/extension-settings.js';
 import asyncHandler from '../utils/async-handler.js';
@@ -37,6 +38,15 @@ router.use(
 		if (req.accountability?.admin !== true) throw new ForbiddenException();
 		return next();
 	})
+);
+
+router.get(
+	'/owners',
+	asyncHandler(async (_req, res, next) => {
+		res.locals['payload'] = { data: getExtensionManager().getSettingsOwners() };
+		return next();
+	}),
+	respond
 );
 
 router.post(
