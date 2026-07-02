@@ -385,10 +385,14 @@ export const ExtensionSettingsSchema = z
 export const ExtensionSettingsSubjectSchema = z.string().regex(EXTENSION_NAME_REGEX).max(255);
 
 function toConfigSegment(value: string): string {
-	return value
-		.toUpperCase()
-		.replace(/[^A-Z0-9]+/g, '_')
-		.replace(/^_+|_+$/g, '');
+	const collapsed = value.toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+
+	let start = 0;
+	let end = collapsed.length;
+	while (start < end && collapsed[start] === '_') start++;
+	while (end > start && collapsed[end - 1] === '_') end--;
+
+	return collapsed.slice(start, end);
 }
 
 /**

@@ -742,6 +742,10 @@ describe('getExtensionConfigSecretName', () => {
 		);
 	});
 
+	it('strips leading and trailing separator runs from the derived segment', () => {
+		expect(getExtensionConfigSecretName('cairncms-extension--edge-', 'api_key')).toBe('CAIRNCMS_EXT_EDGE_API_KEY');
+	});
+
 	it('rejects an invalid subject or key', () => {
 		expect(() => getExtensionConfigSecretName('@acme/not-an-extension', 'api_key')).toThrow();
 		expect(() => getExtensionConfigSecretName('cairncms-extension-foo', 'Api-Key')).toThrow();
