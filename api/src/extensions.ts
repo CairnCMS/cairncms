@@ -67,6 +67,7 @@ import type { ConfinedHostDispatcher, ConfinedInvocation } from './extensions/co
 import { confinedItemsService } from './extensions/confined/items-service.js';
 import { buildConfinedSettingsAccess } from './extensions/confined/settings-access.js';
 import { readGlobalSettings } from './services/extension-settings-store.js';
+import { clearOperationOptionSecrets, registerOperationOptionSecrets } from './services/operation-option-secrets.js';
 import type { SandboxConfig } from './extensions/confined/sandbox-limits.js';
 import { getAxios } from './request/index.js';
 import logger from './logger.js';
@@ -673,6 +674,8 @@ export class ExtensionManager {
 				this.buildConfinedDescriptor(binding, eligible.optionDelivery, runtime)
 			);
 
+			registerOperationOptionSecrets(extension.name, Object.keys(eligible.optionDelivery ?? {}));
+
 			this.recordLoaded(extension);
 		}
 	}
@@ -1065,6 +1068,7 @@ export class ExtensionManager {
 			}
 
 			flowManager.addConfinedOperation(name, this.buildConfinedDescriptor(binding, optionDelivery, runtime));
+			registerOperationOptionSecrets(name, Object.keys(optionDelivery ?? {}));
 			return { status: 'loaded' };
 		}
 
@@ -1842,6 +1846,7 @@ export class ExtensionManager {
 
 		flowManager.clearOperations();
 		flowManager.clearConfinedOperations();
+		clearOperationOptionSecrets();
 
 		for (const apiExtension of this.apiExtensions) {
 			try {

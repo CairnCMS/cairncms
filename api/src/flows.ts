@@ -25,6 +25,8 @@ import { ActivityService } from './services/activity.js';
 import { AuthorizationService } from './services/authorization.js';
 import * as services from './services/index.js';
 import { FlowsService } from './services/flows.js';
+import { decryptOperationOptions, findUnencryptedSecretOptions } from './services/operation-option-secrets.js';
+import { safeLogFragment } from './utils/safe-log-fragment.js';
 import { RevisionsService } from './services/revisions.js';
 import type { EventHandler } from './types/index.js';
 import { constructFlowTree } from './utils/construct-flow-tree.js';
@@ -208,13 +210,50 @@ class FlowManager {
 	}
 
 	private async load(): Promise<void> {
-		const flowsService = new FlowsService({ knex: getDatabase(), schema: await getSchema() });
+		const database = getDatabase();
+		const flowsService = new FlowsService({ knex: database, schema: await getSchema() });
 
 		const flows = await flowsService.readByQuery({
 			filter: { status: { _eq: 'active' } },
 			fields: ['*', 'operations.*'],
 			limit: -1,
 		});
+
+		// The generic read masks secret operation options, so the runtime restores them
+		// through this internal load, the only reveal path. Envelopes stay encrypted in
+		// memory until the confined execution decrypts its declared keys.
+		const storedOptions = new Map<string, unknown>();
+
+		for (const row of await database.select('id', 'type', 'options').from('directus_operations')) {
+			let options: unknown;
+
+			try {
+				options = typeof row.options === 'string' ? parseJSON(row.options) : row.options;
+			} catch {
+				// an unparseable row keeps its masked read value
+				continue;
+			}
+
+			storedOptions.set(row.id, options);
+
+			for (const key of findUnencryptedSecretOptions(row.type, options)) {
+				logger.warn(
+					`Operation "${safeLogFragment(
+						row.id
+					)}" holds an unencrypted value under its declared secret option "${safeLogFragment(
+						key
+					)}"; it will not run until the option is saved again`
+				);
+			}
+		}
+
+		for (const flow of flows) {
+			for (const operation of flow['operations'] ?? []) {
+				if (storedOptions.has(operation.id)) {
+					operation.options = storedOptions.get(operation.id) as Record<string, any>;
+				}
+			}
+		}
 
 		const flowTrees = flows.map((flow) => constructFlowTree(flow));
 
@@ -608,7 +647,10 @@ class FlowManager {
 		options: Record<string, any> | null;
 		redaction: { values: string[]; keys: string[] };
 	}> {
-		const options = applyOptionsData(operation.options, keyedData);
+		// Decrypt before interpolation, so a templated secret interpolates its cleartext
+		// and the preparation then mints the reference from the resolved string.
+		const revealed = await decryptOperationOptions(operation.options, descriptor.referenceKeys);
+		const options = applyOptionsData(revealed, keyedData);
 		const accountability = (context['accountability'] as Accountability | null | undefined) ?? null;
 
 		const result = await descriptor.run({

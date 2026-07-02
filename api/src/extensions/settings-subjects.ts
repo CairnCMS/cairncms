@@ -1,5 +1,6 @@
 import { ExtensionSettingsSubjectSchema, getExtensionConfigSecretName } from '@cairncms/constants';
 import type { Extension } from '@cairncms/types';
+import { safeLogFragment } from '../utils/safe-log-fragment.js';
 
 export const SETTINGS_SUBJECT_INVALID = 'settings-subject-invalid';
 export const SETTINGS_SUBJECT_DUPLICATE = 'settings-subject-duplicate';
@@ -25,12 +26,7 @@ function configSecretKeys(extension: Extension): string[] {
  * characters or newlines.
  */
 export function safeExtensionName(name: string): string {
-	const sanitized = Array.from(name, (char) => {
-		const code = char.charCodeAt(0);
-		return code < 0x20 || (code >= 0x7f && code <= 0x9f) ? '?' : char;
-	}).join('');
-
-	return sanitized.length > 64 ? `${sanitized.slice(0, 64)}...` : sanitized;
+	return safeLogFragment(name);
 }
 
 export function resolveSettingsSubjects(extensions: Extension[]): Map<Extension, SettingsSubjectStatus> {

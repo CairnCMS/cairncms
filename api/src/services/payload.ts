@@ -21,6 +21,7 @@ import type {
 } from '../types/index.js';
 import { generateHash } from '../utils/generate-hash.js';
 import { ItemsService } from './items.js';
+import { maskOperationOptions } from './operation-option-secrets.js';
 
 type Action = 'create' | 'read' | 'update';
 
@@ -201,6 +202,14 @@ export class PayloadService {
 			this.maskConcealedAggregates(processedPayload);
 			this.maskAliasedConcealedFields(processedPayload, aliasMap);
 			this.processAggregates(processedPayload);
+
+			// Every generic read masks, REST, GraphQL, export, and revision deltas alike.
+			// The flow runtime is the only reveal path, through its own internal load.
+			if (this.collection === 'directus_operations') {
+				for (const record of processedPayload) {
+					maskOperationOptions(record);
+				}
+			}
 		}
 
 		if (Array.isArray(payload)) {

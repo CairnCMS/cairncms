@@ -22,6 +22,7 @@ import type {
 import getASTFromQuery from '../utils/get-ast-from-query.js';
 import { validateKeys } from '../utils/validate-keys.js';
 import { AuthorizationService } from './authorization.js';
+import { encryptOperationOptionsForCreate, encryptOperationOptionsForUpdate } from './operation-option-secrets.js';
 import { PayloadService } from './payload.js';
 
 export type QueryOptions = {
@@ -170,6 +171,11 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 			} = await payloadService.processA2O(payloadWithM2O, opts);
 
 			const payloadWithoutAliases = pick(payloadWithA2O, without(fields, ...aliases));
+
+			if (this.collection === 'directus_operations') {
+				await encryptOperationOptionsForCreate(payloadWithoutAliases);
+			}
+
 			const payloadWithTypeCasting = await payloadService.processValues('create', payloadWithoutAliases);
 
 			// In case of manual string / UUID primary keys, the PK already exists in the object we're saving.
@@ -626,6 +632,11 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 			} = await payloadService.processA2O(payloadWithM2O, opts);
 
 			const payloadWithoutAliasAndPK = pick(payloadWithA2O, without(fields, primaryKeyField, ...aliases));
+
+			if (this.collection === 'directus_operations') {
+				await encryptOperationOptionsForUpdate(trx, keys, payloadWithoutAliasAndPK);
+			}
+
 			const payloadWithTypeCasting = await payloadService.processValues('update', payloadWithoutAliasAndPK);
 
 			if (Object.keys(payloadWithTypeCasting).length > 0) {

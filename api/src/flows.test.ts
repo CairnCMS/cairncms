@@ -5,10 +5,22 @@ import * as exceptions from './exceptions/index.js';
 import { buildRevisionData, getFlowManager, type Step } from './flows.js';
 import conditionOp from './operations/condition/index.js';
 
-const { checkAccessSpy, revisionsCreateSpy } = vi.hoisted(() => ({
+const { checkAccessSpy, revisionsCreateSpy, encryptionKey } = vi.hoisted(() => ({
 	checkAccessSpy: vi.fn(),
 	revisionsCreateSpy: vi.fn(),
+	encryptionKey: { value: undefined as string | undefined },
 }));
+
+vi.mock('./env.js', async (importOriginal) => {
+	const actual = (await importOriginal()) as { default: Record<string, unknown>; [key: string]: unknown };
+
+	return {
+		...actual,
+		default: new Proxy(actual.default, {
+			get: (target, prop) => (prop === 'SECRETS_ENCRYPTION_KEY' ? encryptionKey.value : target[prop as string]),
+		}),
+	};
+});
 
 vi.mock('./database/index.js', () => ({
 	default: vi.fn(() => ({})),
@@ -396,6 +408,81 @@ describe('executeFlow — confined operation reference redaction reaches the rev
 
 		// A non-sensitive option is preserved.
 		expect((step.options as Record<string, unknown>)['note']).toBe('plain');
+	});
+});
+
+describe('executeFlow — confined operation envelopes decrypt before interpolation', () => {
+	beforeEach(() => {
+		encryptionKey.value = Buffer.alloc(32, 5).toString('base64');
+		getFlowManager().clearConfinedOperations();
+	});
+
+	async function runWithStoredOption(storedValue: unknown): Promise<Record<string, unknown>> {
+		const manager = getFlowManager();
+		let received: Record<string, unknown> = {};
+
+		manager.addConfinedOperation('envelope-op', {
+			referenceKeys: ['apiKey'],
+			run: async ({ options }: { options: Record<string, unknown> }) => {
+				received = options;
+				return { outcome: { ok: true, value: null }, redactionValues: [] };
+			},
+		} as any);
+
+		const flow = {
+			id: 'envelope-flow',
+			name: 'envelope-flow',
+			status: 'active',
+			trigger: 'webhook',
+			accountability: null,
+			options: { method: 'POST', return: '$last', async: false },
+			operation: {
+				id: 'op-env-1',
+				key: 'run-envelope',
+				type: 'envelope-op',
+				options: { apiKey: storedValue, note: 'plain' },
+				resolve: null,
+				reject: null,
+			},
+		};
+
+		const context = {
+			accountability: null,
+			database: {} as any,
+			schema: { collections: {}, relations: [] } as any,
+		};
+
+		await (getFlowManager() as any).executeFlow(flow, { suffix: 'A1' }, context);
+
+		return received;
+	}
+
+	test('a stored envelope decrypts and its templated cleartext interpolates before the handler', async () => {
+		const { encryptSecret } = await import('./utils/encrypt-secret.js');
+		const envelope = await encryptSecret('sk_live_{{$trigger.suffix}}');
+
+		const received = await runWithStoredOption(envelope);
+
+		expect(received['apiKey']).toBe('sk_live_A1');
+		expect(received['note']).toBe('plain');
+	});
+
+	test('a tampered envelope never resolves to plaintext', async () => {
+		const { encryptSecret, hasSecretMarker } = await import('./utils/encrypt-secret.js');
+		const envelope: any = await encryptSecret('sk_live_secret');
+		const tampered = { ...envelope, ct: Buffer.from('tampered').toString('base64') };
+
+		const received = await runWithStoredOption(tampered);
+
+		expect(hasSecretMarker(received['apiKey'])).toBe(true);
+		expect(JSON.stringify(received)).not.toContain('sk_live_secret');
+	});
+
+	test('a plaintext value under a declared key never reaches the handler as a usable string', async () => {
+		const received = await runWithStoredOption('sk_live_plaintext_at_rest');
+
+		expect(typeof received['apiKey']).not.toBe('string');
+		expect(JSON.stringify(received)).not.toContain('sk_live_plaintext_at_rest');
 	});
 });
 
