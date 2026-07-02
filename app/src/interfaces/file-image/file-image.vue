@@ -80,7 +80,14 @@
 
 			<file-lightbox :id="image.id" v-model="lightboxActive" />
 		</div>
-		<v-upload v-else from-library from-url :from-user="createAllowed" :folder="folder" @input="update($event.id)" />
+		<v-upload
+			v-else
+			from-library
+			from-url
+			:from-user="createAllowed"
+			:folder="folder"
+			@input="$event && update($event.id)"
+		/>
 	</div>
 </template>
 

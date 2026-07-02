@@ -112,7 +112,9 @@ export default function useImage(
 		imageDrawerOpen.value = false;
 	}
 
-	function onImageSelect(image: Record<string, any>) {
+	function onImageSelect(image: Record<string, any> | null) {
+		if (!image) return;
+
 		const assetUrl = getPublicURL() + 'assets/' + image.id;
 
 		imageSelection.value = {

@@ -64,6 +64,7 @@ import sanitizeQuery from './middleware/sanitize-query.js';
 import schema from './middleware/schema.js';
 import { validateSecretsEncryptionKey } from './utils/encrypt-secret.js';
 import { getConfigFromEnv } from './utils/get-config-from-env.js';
+import { getMaxUploadSize } from './utils/get-max-upload-size.js';
 import { Url } from './utils/url.js';
 import { validateEnv } from './utils/validate-env.js';
 import { validateStorage } from './utils/validate-storage.js';
@@ -81,6 +82,9 @@ export default async function createApp(): Promise<express.Application> {
 		logger.error(`"SECRETS_ENCRYPTION_KEY" is set but invalid: ${(error as Error).message}`);
 		process.exit(1);
 	}
+
+	// Validate FILES_MAX_UPLOAD_SIZE at boot so a malformed value fails startup, not the first upload.
+	getMaxUploadSize();
 
 	if (!new Url(env['PUBLIC_URL']).isAbsolute()) {
 		logger.warn('PUBLIC_URL should be a full URL');

@@ -1,8 +1,7 @@
-/** Parses the operator sandbox config in the project's conventions: sizes via `bytes`
- * ("16mb"), durations via `ms` ("10s"), counts as integers. Values arrive as env strings or
- * as numbers from a config file, so each parser takes `unknown`, handles a string or a
- * number deliberately, and returns a validated value or a structured error that names the
- * variable and its format. */
+/** Parses operator config values in the project's conventions: sizes via `bytes` ("16mb"),
+ * durations via `ms` ("10s"), counts as integers. Values arrive as env strings or as numbers
+ * from a config file, so each parser takes `unknown`, handles a string or a number deliberately,
+ * and returns a validated value or a structured error that names the variable and its format. */
 
 import { format as formatBytes, parse as parseBytes } from 'bytes';
 import ms from 'ms';
@@ -66,6 +65,18 @@ export function parseSize(raw: unknown, spec: BoundedSpec): ConfigParseResult {
 	}
 
 	return bounded(spec, value, formatBytes);
+}
+
+/** Parses an optional size: an unset value resolves to `undefined` (the feature is off) rather
+ * than a default, so a caller can distinguish "not configured" from a concrete cap. A set value
+ * is validated by parseSize against the spec bounds. */
+export function parseOptionalSize(
+	raw: unknown,
+	spec: Omit<BoundedSpec, 'defaultValue'>
+): { ok: true; value: number | undefined } | { ok: false; error: ConfigParseError } {
+	if (isUnset(raw)) return { ok: true, value: undefined };
+
+	return parseSize(raw, { ...spec, defaultValue: spec.floor });
 }
 
 /** Parses a duration ("10s", or a number of milliseconds) against the spec bounds. */

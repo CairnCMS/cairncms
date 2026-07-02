@@ -7,6 +7,7 @@ import type { IccProfile } from 'icc';
 import { parse as parseIcc } from 'icc';
 import { clone, pick } from 'lodash-es';
 import { extension } from 'mime-types';
+import { nanoid } from 'nanoid';
 import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import path from 'path';
@@ -15,12 +16,21 @@ import url from 'url';
 import { SUPPORTED_IMAGE_METADATA_FORMATS } from '../constants.js';
 import emitter from '../emitter.js';
 import env from '../env.js';
-import { ForbiddenException, InvalidPayloadException, ServiceUnavailableException } from '../exceptions/index.js';
+import {
+	ContentTooLargeException,
+	ForbiddenException,
+	InvalidPayloadException,
+	ServiceUnavailableException,
+} from '../exceptions/index.js';
 import logger from '../logger.js';
 import { getAxios } from '../request/index.js';
 import { getStorage } from '../storage/index.js';
 import type { AbstractServiceOptions, File, Metadata, MutationOptions, PrimaryKey } from '../types/index.js';
+import { getMaxUploadSize } from '../utils/get-max-upload-size.js';
+import { resolveMimeType } from '../utils/mime-type.js';
 import { parseIptc, parseXmp } from '../utils/parse-image-metadata.js';
+import { createUploadSizeLimit } from '../utils/upload-size-limit.js';
+import { AuthorizationService } from './authorization.js';
 import { ItemsService } from './items.js';
 
 const SERVER_CONTROLLED_FIELDS = ['filename_disk', 'uploaded_by'] as const;
@@ -53,17 +63,28 @@ export class FilesService extends ItemsService {
 		const storage = await getStorage();
 
 		let existingFile = {};
+		let existingMetadata: Partial<File> = {};
 
 		if (primaryKey !== undefined) {
-			existingFile =
+			const existing =
 				(await this.knex
-					.select('folder', 'filename_download')
+					.select('folder', 'filename_download', 'storage', 'title', 'description', 'tags', 'metadata')
 					.from('directus_files')
 					.where({ id: primaryKey })
 					.first()) ?? {};
+
+			const { title, description, tags, metadata, ...rest } = existing;
+
+			existingFile = rest;
+
+			// Kept out of the pre-gate payload so a replace preserves operator-set display metadata (applied
+			// via the sudo update below) without requiring the caller to hold write access to those fields.
+			existingMetadata = { title, description, tags, metadata };
 		}
 
-		const payload = { ...existingFile, ...clone(data) };
+		// The final sudo update bypasses the FilesService sanitizer, so strip caller-controlled fields
+		// (filename_disk, uploaded_by) from the data here.
+		const payload = { ...existingFile, ...sanitizeFilePayload(clone(data)) };
 
 		if ('folder' in payload === false) {
 			const settings = await this.knex.select('storage_default_folder').from('directus_settings').first();
@@ -73,24 +94,35 @@ export class FilesService extends ItemsService {
 			}
 		}
 
-		if (primaryKey !== undefined) {
-			await this.updateOne(primaryKey, payload, { emitEvents: false });
+		const isNewFile = primaryKey === undefined;
 
-			// If the file you're uploading already exists, we'll consider this upload a replace. In that case, we'll
-			// delete the previously saved file and thumbnails to ensure they're generated fresh
-			const disk = storage.location(payload.storage);
+		// A replace's file write happens before the route's own permission check, so this is the only
+		// pre-write gate. It must not mutate the row, so all row changes are deferred until the new object
+		// is written. New uploads are gated by createOne below.
+		if (isNewFile === false && this.accountability) {
+			const authorizationService = new AuthorizationService({
+				knex: this.knex,
+				schema: this.schema,
+				accountability: this.accountability,
+			});
 
-			for await (const filepath of disk.list(String(primaryKey))) {
-				await disk.delete(filepath);
-			}
-		} else {
-			primaryKey = await this.createOne(payload, { emitEvents: false });
+			await authorizationService.checkAccess('update', 'directus_files', primaryKey!);
+
+			Object.assign(payload, authorizationService.validatePayload('update', 'directus_files', payload));
 		}
 
 		const fileExtension =
 			path.extname(payload.filename_download!) || (payload.type && '.' + extension(payload.type)) || '';
 
-		payload.filename_disk = primaryKey + (fileExtension || '');
+		if (primaryKey === undefined) {
+			primaryKey = await this.createOne(payload, { emitEvents: false });
+			payload.filename_disk = primaryKey + (fileExtension || '');
+		} else {
+			// Write the replacement to a fresh, primary-key-prefixed object so the existing file stays
+			// intact until the write succeeds. A flat key (no path separator) keeps drivers whose public
+			// id strips directories on the primary-key prefix that deletion relies on.
+			payload.filename_disk = `${primaryKey}-${nanoid(10)}${fileExtension || ''}`;
+		}
 
 		if (!payload.type) {
 			payload.type = 'application/octet-stream';
@@ -101,32 +133,67 @@ export class FilesService extends ItemsService {
 		} catch (err: any) {
 			logger.warn(`Couldn't save file ${payload.filename_disk}`);
 			logger.warn(err);
+			await this.cleanupFailedUpload(data.storage, payload.filename_disk, isNewFile, primaryKey);
 			throw new ServiceUnavailableException(`Couldn't save file ${payload.filename_disk}`, { service: 'files' });
 		}
 
-		const { size } = await storage.location(data.storage).stat(payload.filename_disk);
-		payload.filesize = size;
-
-		if (SUPPORTED_IMAGE_METADATA_FORMATS.includes(payload.type)) {
-			const stream = await storage.location(data.storage).read(payload.filename_disk);
-			const { height, width, description, title, tags, metadata } = await this.getMetadata(stream);
-
-			payload.height ??= height ?? null;
-			payload.width ??= width ?? null;
-			payload.description ??= description ?? null;
-			payload.title ??= title ?? null;
-			payload.tags ??= tags ?? null;
-			payload.metadata ??= metadata ?? null;
+		// Busboy (multipart) and the URL-import counting stream both flag truncation past the size cap
+		// by ending the stream with `truncated`, so a too-large upload must be cleaned up, not persisted.
+		if ((stream as Readable & { truncated?: boolean }).truncated) {
+			await this.cleanupFailedUpload(data.storage, payload.filename_disk, isNewFile, primaryKey);
+			throw new ContentTooLargeException(`Uploaded file is too large`);
 		}
 
-		// We do this in a service without accountability. Even if you don't have update permissions to the file,
-		// we still want to be able to set the extracted values from the file on create
-		const sudoService = new ItemsService('directus_files', {
-			knex: this.knex,
-			schema: this.schema,
-		});
+		// Any failure between the write and the row referencing the new object would orphan the fresh
+		// object (and a new upload's row), so clean up before rethrowing.
+		try {
+			const { size } = await storage.location(data.storage).stat(payload.filename_disk);
+			payload.filesize = size;
 
-		await sudoService.updateOne(primaryKey, payload, { emitEvents: false });
+			if (SUPPORTED_IMAGE_METADATA_FORMATS.includes(payload.type)) {
+				const fileStream = await storage.location(data.storage).read(payload.filename_disk);
+				const { height, width, description, title, tags, metadata } = await this.getMetadata(fileStream);
+
+				payload.height ??= height ?? null;
+				payload.width ??= width ?? null;
+				// On a replace, keep operator-set title/description/tags (unless the caller re-supplied them)
+				// rather than nulling them when the new file carries no embedded values.
+				payload.description ??= existingMetadata.description ?? description ?? null;
+				payload.title ??= existingMetadata.title ?? title ?? null;
+				payload.tags ??= existingMetadata.tags ?? tags ?? null;
+				payload.metadata ??= existingMetadata.metadata ?? metadata ?? null;
+			}
+
+			// We do this in a service without accountability. Even if you don't have update permissions to
+			// the file, we still want to be able to set the extracted values from the file on create
+			const sudoService = new ItemsService('directus_files', {
+				knex: this.knex,
+				schema: this.schema,
+			});
+
+			await sudoService.updateOne(primaryKey, payload, { emitEvents: false });
+		} catch (err: any) {
+			await this.cleanupFailedUpload(data.storage, payload.filename_disk, isNewFile, primaryKey);
+			throw err;
+		}
+
+		if (isNewFile === false) {
+			// The row now references the new object. Remove the previous objects from the old location,
+			// never the live one. A failure here only leaks old bytes (the new file is already live), so it
+			// is logged, not thrown.
+			const oldLocation = (existingFile as { storage?: string }).storage ?? payload.storage;
+			const disk = storage.location(oldLocation);
+
+			try {
+				for await (const filepath of disk.list(String(primaryKey))) {
+					if (oldLocation === payload.storage && filepath === payload.filename_disk) continue;
+					await disk.delete(filepath);
+				}
+			} catch (err: any) {
+				logger.warn(`Couldn't remove the previous objects for file ${primaryKey} after a replace`);
+				logger.warn(err);
+			}
+		}
 
 		if (this.cache && env['CACHE_AUTO_PURGE'] && opts?.autoPurgeCache !== false) {
 			await this.cache.clear();
@@ -149,6 +216,39 @@ export class FilesService extends ItemsService {
 		}
 
 		return primaryKey;
+	}
+
+	/**
+	 * Clean up after an upload that failed or was rejected mid-write. A replace leaves the existing row
+	 * and binary untouched and drops only the freshly written object. A new upload's created row and
+	 * object are removed. Best-effort: a cleanup failure is logged, not thrown, so the original upload
+	 * error still surfaces.
+	 */
+	private async cleanupFailedUpload(
+		location: string,
+		filenameDisk: string,
+		isNewFile: boolean,
+		primaryKey: PrimaryKey
+	): Promise<void> {
+		// Object cleanup and row cleanup are guarded independently so a storage failure (a bad or removed
+		// location) cannot prevent the dangling row from being removed.
+		try {
+			const storage = await getStorage();
+			await storage.location(location).delete(filenameDisk);
+		} catch (err: any) {
+			logger.warn(`Couldn't remove ${filenameDisk} after a failed upload`);
+			logger.warn(err);
+		}
+
+		if (isNewFile) {
+			try {
+				const sudoService = new ItemsService('directus_files', { knex: this.knex, schema: this.schema });
+				await sudoService.deleteOne(primaryKey, { emitEvents: false });
+			} catch (err: any) {
+				logger.warn(`Couldn't remove the file row ${primaryKey} after a failed upload`);
+				logger.warn(err);
+			}
+		}
 	}
 
 	/**
@@ -301,16 +401,29 @@ export class FilesService extends ItemsService {
 		const filename = decodeURI(path.basename(parsedURL.pathname as string));
 
 		const contentType = fileResponse.headers['content-type'];
+		const { mimeType, allowed } = resolveMimeType(typeof contentType === 'string' ? contentType : undefined);
+
+		if (allowed === false) {
+			fileResponse.data.destroy();
+			throw new InvalidPayloadException(`File is of invalid content type`);
+		}
 
 		const payload = {
 			filename_download: filename,
 			storage: toArray(env['STORAGE_LOCATIONS'])[0],
-			type: typeof contentType === 'string' ? contentType : null,
 			title: formatTitle(filename),
 			...(body || {}),
+			// The server-resolved, allow-list-checked type wins over any caller-supplied type.
+			type: mimeType,
 		};
 
-		return await this.uploadOne(fileResponse.data, payload);
+		// URL imports honor the same size cap as multipart uploads by counting bytes as they stream.
+		const maxUploadSize = getMaxUploadSize();
+
+		const stream =
+			maxUploadSize === undefined ? fileResponse.data : createUploadSizeLimit(fileResponse.data, maxUploadSize);
+
+		return await this.uploadOne(stream, payload);
 	}
 
 	/**

@@ -13,7 +13,7 @@ import {
 	parseSize,
 	type BoundedSpec,
 	type ConfigParseError,
-} from './parse-config.js';
+} from '../../utils/parse-config.js';
 import type { ConfinedRuntimeLimits } from './types.js';
 
 const KiB = 1024;

@@ -25,6 +25,7 @@ exports.list = {
 		{ testFilePath: '/routes/extensions/settings-service.test.ts' },
 		{ testFilePath: '/routes/collections/schema-cache.test.ts' },
 		{ testFilePath: '/routes/permissions/cache-purge.test.ts' },
+		{ testFilePath: '/routes/files/upload-limits.test.ts' },
 		{ testFilePath: '/routes/items/relational-presets.test.ts' },
 		{ testFilePath: '/routes/assets/format.test.ts' },
 		{ testFilePath: '/routes/assets/system-preset-format-isolation.test.ts' },
