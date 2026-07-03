@@ -144,8 +144,6 @@ describe('the extension settings service over /extension-settings', () => {
 		const post = (body: any) => request(url).post('/extension-settings').set('Authorization', auth).send(body);
 		const del = (body: any) => request(url).delete('/extension-settings').set('Authorization', auth).send(body);
 
-		// Asserts by owned key over the scoped read, so the test stays order-independent
-		// of any other test's rows for this subject.
 		const readGlobalKeys = async () => {
 			const read = await request(url)
 				.get(`/extension-settings?subject=${SUBJECT}&scope=global&scope_key=`)

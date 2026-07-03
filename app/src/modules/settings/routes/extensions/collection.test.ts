@@ -36,6 +36,16 @@ const stubs = {
 	'v-card-title': { template: '<div class="v-card-title"><slot /></div>' },
 	'v-card-text': { template: '<div class="v-card-text"><slot /></div>' },
 	'v-card-actions': { template: '<div class="v-card-actions"><slot /></div>' },
+	'extension-options': {
+		name: 'extension-options',
+		emits: ['open-settings'],
+		template: '<i class="ctx-toggle" />',
+	},
+	'extension-settings-drawer': {
+		name: 'extension-settings-drawer',
+		props: ['modelValue', 'subject', 'settings'],
+		template: '<div class="settings-drawer" />',
+	},
 };
 
 const directives = {
@@ -164,8 +174,8 @@ describe('Settings Extensions collection', () => {
 
 		const summary = wrapper.find('.summary').text();
 		expect(summary).toContain('3');
-		expect(summary).toContain('active');
-		expect(summary).not.toContain('failed');
+		expect(summary).toContain('Normal');
+		expect(summary).not.toContain('Failed');
 	});
 
 	it('marks failures with a danger dot, counts them, and groups typeless failures under Other', async () => {
@@ -174,7 +184,7 @@ describe('Settings Extensions collection', () => {
 		const wrapper = mountCollection();
 		await flushPromises();
 
-		expect(wrapper.find('.summary').text()).toContain('failed');
+		expect(wrapper.find('.summary').text()).toContain('Failed');
 		expect(wrapper.findAll('.v-list-item .dot[data-color="var(--danger)"]')).toHaveLength(2);
 
 		const labels = wrapper.findAll('.group-name').map((node) => node.text());
@@ -207,7 +217,7 @@ describe('Settings Extensions collection', () => {
 		expect(rowFor(wrapper, 'cairn-fixture-interface')!.find('.sandboxed').exists()).toBe(false);
 	});
 
-	it('marks settings-unavailable owners with a chip and maps the reason in the modal', async () => {
+	it('marks settings-unavailable owners with a warning health dot and maps the reason in the modal', async () => {
 		const collided = {
 			name: 'cairncms-extension-edge-sync',
 			type: 'hook',
@@ -231,11 +241,12 @@ describe('Settings Extensions collection', () => {
 		await flushPromises();
 
 		const collidedRow = rowFor(wrapper, 'cairncms-extension-edge-sync')!;
-		expect(collidedRow.find('.settings-unavailable').exists()).toBe(true);
-		expect(collidedRow.find('.settings-unavailable').text()).toBe('Settings unavailable');
+		expect(collidedRow.find('.dot').attributes('data-color')).toBe('var(--warning)');
+		expect(rowFor(wrapper, 'cairn-fixture-hook')!.find('.dot').attributes('data-color')).toBe('var(--success)');
 
-		expect(rowFor(wrapper, 'cairn-fixture-hook')!.find('.settings-unavailable').exists()).toBe(false);
-		expect(rowFor(wrapper, 'cairn-fixture-interface')!.find('.settings-unavailable').exists()).toBe(false);
+		const summary = wrapper.find('.summary').text();
+		expect(summary).toContain('Warning');
+		expect(summary).toContain('1');
 
 		await collidedRow.trigger('click');
 		await nextTick();
@@ -243,9 +254,35 @@ describe('Settings Extensions collection', () => {
 		const notice = wrapper.find('.v-dialog .v-notice[data-type="warning"]');
 		expect(notice.exists()).toBe(true);
 		expect(notice.text()).toContain("Its configuration variables collide with another installed extension's");
-		expect(notice.text()).toContain('cairncms-extension-edge.sync');
+		expect(notice.find('code.diagnostic-detail').text()).toContain('cairncms-extension-edge.sync');
+
+		expect(wrapper.find('.v-dialog .detail-meta').text()).toContain('Warning');
+		expect(wrapper.find('.v-dialog .v-notice[data-type="success"]').exists()).toBe(false);
+		expect(wrapper.find('.v-dialog').text()).not.toContain('Loaded and running on the server');
 
 		expect(wrapper.html()).not.toContain('CAIRNCMS_EXT_');
+	});
+
+	it('renders the settings menu only on settings-owning rows and opens the drawer', async () => {
+		const owner = { ...loadedHook, settings: { status: 'available' } };
+
+		vi.mocked(api.get).mockResolvedValue({ data: { data: [owner, discoveredInterface] } });
+
+		const wrapper = mountCollection();
+		await flushPromises();
+
+		const ownerRow = rowFor(wrapper, 'cairn-fixture-hook')!;
+		expect(ownerRow.find('.ctx-toggle').exists()).toBe(true);
+		expect(rowFor(wrapper, 'cairn-fixture-interface')!.find('.ctx-toggle').exists()).toBe(false);
+
+		expect(wrapper.findComponent({ name: 'extension-settings-drawer' }).exists()).toBe(false);
+
+		ownerRow.findComponent({ name: 'extension-options' }).vm.$emit('open-settings');
+		await nextTick();
+
+		const drawer = wrapper.findComponent({ name: 'extension-settings-drawer' });
+		expect(drawer.exists()).toBe(true);
+		expect(drawer.props('subject')).toBe('cairn-fixture-hook');
 	});
 
 	it('renders the OS hardening posture inside the advanced diagnostics section', async () => {
@@ -375,13 +412,13 @@ describe('Settings Extensions collection', () => {
 
 			await rowFor(wrapper, 'cairn-fixture-hook')!.trigger('click');
 			await nextTick();
-			expect(wrapper.find('.v-dialog .detail-runtime').text()).toContain('Full authority');
+			expect(wrapper.find('.v-dialog .detail-runtime').text()).toContain('Full Authority');
 
 			await rowFor(wrapper, 'cairn-fixture-interface')!.trigger('click');
 			await nextTick();
 			const browserRuntime = wrapper.find('.v-dialog .detail-runtime').text();
-			expect(browserRuntime).toContain('Browser app');
-			expect(browserRuntime).not.toContain('Full authority');
+			expect(browserRuntime).toContain('Browser App');
+			expect(browserRuntime).not.toContain('Full Authority');
 		});
 
 		it('omits the runtime line for a synthetic row that is not an extension', async () => {

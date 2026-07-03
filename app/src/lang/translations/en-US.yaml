@@ -1016,28 +1016,33 @@ page_help_settings_presets_item: >-
 page_help_settings_flows_collection: '**Browse Flows** — Lists all Flows within the project.'
 page_help_settings_flows_item: '**Flow Detail** — Workspace for managing one or more operations.'
 page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
-extension_active: active
-extension_failed: failed
-extension_partial: partial
+extension_health_normal: Normal
+extension_health_warning: Warning | Warnings
+extension_health_failed: Failed
 extension_bundle_contents: Bundled extensions
 extension_capabilities: Capabilities
 extension_advanced_diagnostics: Advanced Diagnostics
 extension_sandboxed: Sandboxed
 extension_runtime: Runtime
 extension_runtime_sandboxed: Sandboxed
-extension_runtime_full_authority: Full authority
-extension_runtime_browser: Browser app
+extension_runtime_full_authority: Full Authority
+extension_runtime_browser: Browser App
 confined_runtime: Sandbox
 confined_runtime_mode: 'OS hardening: {decision} ({mode})'
 confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
 extension_status_loaded_detail: Loaded and running on the server.
 extension_status_discovered_detail: Discovered on this instance. App extensions run in the browser, so the server reports discovery rather than a load.
 extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
-extension_settings_unavailable: Settings unavailable
+extension_status_failed_detail: The extension failed to load on this instance.
 extension_settings_reason_invalid: The extension's package name is not a valid settings subject.
 extension_settings_reason_duplicate: More than one installed extension uses this package name.
 extension_settings_reason_config_collision: Its configuration variables collide with another installed extension's.
 extension_settings_reason_unknown: The extension's settings cannot be managed.
+extension_settings_drawer_subtitle: Extension settings
+extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
+extension_settings_no_global_keys: This extension declares no global settings.
+extension_settings_load_failed: Could not load the extension's settings.
+extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
 extension_type_group_hook: Hooks
 extension_type_group_endpoint: Endpoints
 extension_type_group_operation: Operations
@@ -1597,6 +1602,9 @@ interfaces:
     description: Enter a value to be hashed
     masked: Masked
     masked_label: Hide the true values
+  system-extension-secret:
+    name: Extension Secret
+    value_stored: Value Securely Encrypted
   select-icon:
     icon: Icon
     description: Select an icon from a dropdown
