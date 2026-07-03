@@ -2,10 +2,11 @@ import type { Accountability, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import { v4 as uuid } from 'uuid';
 import getDatabase from '../database/index.js';
-import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
+import env from '../env.js';
+import { ForbiddenException, InvalidConfigException, InvalidPayloadException } from '../exceptions/index.js';
 import { getExtensionManager } from '../extensions.js';
 import type { AbstractServiceOptions } from '../types/index.js';
-import { encryptSecret, hasSecretMarker, SECRET_MASK } from '../utils/encrypt-secret.js';
+import { encryptSecret, hasSecretMarker, SECRET_MASK, validateSecretsEncryptionKey } from '../utils/encrypt-secret.js';
 import { readCollectionSettings, readGlobalSettings, type StoredSettingRow } from './extension-settings-store.js';
 
 const TABLE = 'cairncms_extension_settings';
@@ -74,7 +75,25 @@ export class ExtensionSettingsService {
 			throw new InvalidPayloadException('The mask cannot be written back to a secret setting.');
 		}
 
+		this.requireEncryptionKey();
+
 		return await encryptSecret(value);
+	}
+
+	// The key is required only at actual use, so a missing or malformed key surfaces as an
+	// operator configuration error on the secret write, never a raw crypto error.
+	private requireEncryptionKey(): void {
+		const raw = env['SECRETS_ENCRYPTION_KEY'];
+
+		if (typeof raw !== 'string' || raw.trim().length === 0) {
+			throw new InvalidConfigException('"SECRETS_ENCRYPTION_KEY" must be configured to store an inline secret.');
+		}
+
+		try {
+			validateSecretsEncryptionKey();
+		} catch {
+			throw new InvalidConfigException('"SECRETS_ENCRYPTION_KEY" is invalid, so an inline secret cannot be stored.');
+		}
 	}
 
 	async get(subject: string, scope?: SettingsScope, scopeKey?: string): Promise<StoredSetting[]> {
@@ -101,6 +120,11 @@ export class ExtensionSettingsService {
 	async deleteBySubject(subject: string): Promise<number> {
 		this.requireAdmin();
 		return await this.knex(TABLE).where({ extension: subject }).delete();
+	}
+
+	async deleteOne(subject: string, scope: SettingsScope, scopeKey: string, key: string): Promise<number> {
+		this.requireAdmin();
+		return await this.knex(TABLE).where({ extension: subject, scope, scope_key: scopeKey, key }).delete();
 	}
 
 	async readForApp(subject: string, collection?: string): Promise<Record<string, unknown>> {

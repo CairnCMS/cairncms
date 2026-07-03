@@ -104,12 +104,33 @@ router.get(
 router.delete(
 	'/',
 	asyncHandler(async (req, res, next) => {
-		const subject = req.body?.subject;
+		const body = req.body ?? {};
+		const { subject, scope, scope_key, key } = body;
 		if (typeof subject !== 'string') throw new InvalidPayloadException('"subject" is required.');
 
 		const service = new ExtensionSettingsService({ accountability: req.accountability, schema: req.schema });
 
-		const removed = await service.deleteBySubject(subject);
+		// Two exact body shapes, matched on the actual keys present, so a partial, mixed,
+		// or mistyped body never falls through to the subject-wide purge.
+		const bodyShape = Object.keys(body).sort().join(',');
+
+		if (bodyShape === 'subject') {
+			const removed = await service.deleteBySubject(subject);
+
+			res.locals['payload'] = { data: { removed } };
+			return next();
+		}
+
+		if (
+			bodyShape !== 'key,scope,scope_key,subject' ||
+			(scope !== 'global' && scope !== 'collection') ||
+			typeof scope_key !== 'string' ||
+			typeof key !== 'string'
+		) {
+			throw new InvalidPayloadException('The body must be exactly { subject } or { subject, scope, scope_key, key }.');
+		}
+
+		const removed = await service.deleteOne(subject, scope, scope_key, key);
 
 		res.locals['payload'] = { data: { removed } };
 		return next();

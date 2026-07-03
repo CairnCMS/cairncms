@@ -97,23 +97,49 @@ post:
       $ref: '../../openapi.yaml#/components/responses/UnauthorizedError'
     '403':
       description: The current user is not an administrator, or the subject is not an eligible settings owner.
+    '503':
+      description: An inline secret cannot be stored because SECRETS_ENCRYPTION_KEY is not configured or is invalid.
 delete:
   tags:
     - Extensions
   operationId: deleteExtensionSettings
-  summary: Purge an Extension's Settings
+  summary: Delete Extension Settings
   description:
-    Removes every stored setting for an extension subject across all scopes. This route is restricted to administrators.
+    Accepts exactly two body shapes. A body carrying only the subject removes every stored setting for that
+    extension across all scopes. A body carrying the subject with scope, scope_key, and key removes that one
+    stored value. A partial or mixed body is rejected and never falls through to the subject-wide purge. This
+    route is restricted to administrators.
   requestBody:
     content:
       application/json:
         schema:
-          type: object
-          required:
-            - subject
-          properties:
-            subject:
-              type: string
+          oneOf:
+            - type: object
+              required:
+                - subject
+              additionalProperties: false
+              properties:
+                subject:
+                  type: string
+            - type: object
+              required:
+                - subject
+                - scope
+                - scope_key
+                - key
+              additionalProperties: false
+              properties:
+                subject:
+                  type: string
+                scope:
+                  type: string
+                  enum:
+                    - global
+                    - collection
+                scope_key:
+                  type: string
+                key:
+                  type: string
   responses:
     '200':
       description: The settings were removed.
@@ -128,7 +154,7 @@ delete:
                   removed:
                     type: integer
     '400':
-      description: The request is missing the required subject.
+      description: The request is missing the required subject, or carries a partial single-value key.
     '401':
       $ref: '../../openapi.yaml#/components/responses/UnauthorizedError'
     '403':

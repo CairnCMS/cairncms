@@ -138,6 +138,50 @@ describe('the extension settings service over /extension-settings', () => {
 		expect((await post({ scope: 'global', scope_key: '', key: 'base_url', value: 'x' })).status).toBe(400);
 	});
 
+	it.each(vendors)('%s: clears exactly one value and refuses a partial delete body without purging', async (vendor) => {
+		const url = getUrl(vendor);
+		const auth = `Bearer ${TOKEN()}`;
+		const post = (body: any) => request(url).post('/extension-settings').set('Authorization', auth).send(body);
+		const del = (body: any) => request(url).delete('/extension-settings').set('Authorization', auth).send(body);
+
+		// Asserts by owned key over the scoped read, so the test stays order-independent
+		// of any other test's rows for this subject.
+		const readGlobalKeys = async () => {
+			const read = await request(url)
+				.get(`/extension-settings?subject=${SUBJECT}&scope=global&scope_key=`)
+				.set('Authorization', auth);
+
+			expect(read.status).toBe(200);
+			return Object.fromEntries(read.body.data.map((row: any) => [row.key, row.value]));
+		};
+
+		expect((await post({ subject: SUBJECT, scope: 'global', scope_key: '', key: 'base_url', value: 'https://a' })).status).toBe(200);
+		expect((await post({ subject: SUBJECT, scope: 'global', scope_key: '', key: 'theme', value: 'dark' })).status).toBe(200);
+
+		const partial = await del({ subject: SUBJECT, key: 'base_url' });
+		expect(partial.status).toBe(400);
+
+		const mistyped = await del({ subject: SUBJECT, scopeKey: 'articles' });
+		expect(mistyped.status).toBe(400);
+
+		const extraneous = await del({ subject: SUBJECT, scope: 'global', scope_key: '', key: 'base_url', extra: true });
+		expect(extraneous.status).toBe(400);
+
+		const afterRefusals = await readGlobalKeys();
+		expect(afterRefusals['base_url']).toBe('https://a');
+		expect(afterRefusals['theme']).toBe('dark');
+
+		const cleared = await del({ subject: SUBJECT, scope: 'global', scope_key: '', key: 'base_url' });
+		expect(cleared.status).toBe(200);
+		expect(cleared.body.data.removed).toBe(1);
+
+		const afterClear = await readGlobalKeys();
+		expect(afterClear['base_url']).toBeUndefined();
+		expect(afterClear['theme']).toBe('dark');
+
+		await del({ subject: SUBJECT });
+	});
+
 	it.each(vendors)('%s: refuses an ineligible or absent subject while the extension still loads', async (vendor) => {
 		const url = getUrl(vendor);
 		const auth = `Bearer ${TOKEN()}`;

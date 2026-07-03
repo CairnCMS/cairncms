@@ -26,7 +26,7 @@ vi.mock('./extension-settings-store.js', () => ({
 	readCollectionSettings: store.readCollectionSettings,
 }));
 
-import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
+import { ForbiddenException, InvalidConfigException, InvalidPayloadException } from '../exceptions/index.js';
 import { encryptSecret, SECRET_MASK } from '../utils/encrypt-secret.js';
 import { ExtensionSettingsService } from './extension-settings.js';
 
@@ -88,6 +88,33 @@ describe('ExtensionSettingsService', () => {
 			const bindings = tracker.history.insert[0]?.bindings ?? [];
 			expect(bindings.some((b) => typeof b === 'string' && b.includes('cairncms-secret-envelope'))).toBe(true);
 			expect(bindings.every((b) => typeof b !== 'string' || b.includes('sk_live_123') === false)).toBe(true);
+		});
+
+		it('fails an inline-secret write as invalid config when the key is unset or malformed, not a raw error', async () => {
+			manager.getSettingsOwner.mockReturnValue(owner);
+
+			encryptionKey.value = undefined;
+
+			await expect(
+				service().set('cairncms-extension-preview', 'global', '', 'api_key', 'sk_live_123')
+			).rejects.toBeInstanceOf(InvalidConfigException);
+
+			encryptionKey.value = 'not-a-valid-key';
+
+			await expect(
+				service().set('cairncms-extension-preview', 'global', '', 'api_key', 'sk_live_123')
+			).rejects.toBeInstanceOf(InvalidConfigException);
+		});
+
+		it('stores a non-secret value without the encryption key', async () => {
+			manager.getSettingsOwner.mockReturnValue(owner);
+			tracker.on.insert(TABLE).response([1]);
+
+			encryptionKey.value = undefined;
+
+			await service().set('cairncms-extension-preview', 'global', '', 'count', 7);
+
+			expect(tracker.history.insert).toHaveLength(1);
 		});
 
 		it('refuses a non-admin', async () => {
@@ -252,9 +279,25 @@ describe('ExtensionSettingsService', () => {
 			expect(await service().deleteBySubject('cairncms-extension-preview')).toBe(3);
 		});
 
+		it('deletes exactly the one addressed row', async () => {
+			tracker.on.delete(TABLE).response(1);
+
+			expect(await service().deleteOne('cairncms-extension-preview', 'global', '', 'base_url')).toBe(1);
+
+			expect(tracker.history.delete).toHaveLength(1);
+
+			expect(tracker.history.delete[0]?.bindings).toEqual(
+				expect.arrayContaining(['cairncms-extension-preview', 'global', '', 'base_url'])
+			);
+		});
+
 		it('refuses a non-admin read and delete', async () => {
 			await expect(service({ admin: false }).get('x')).rejects.toBeInstanceOf(ForbiddenException);
 			await expect(service({ admin: false }).deleteBySubject('x')).rejects.toBeInstanceOf(ForbiddenException);
+
+			await expect(service({ admin: false }).deleteOne('x', 'global', '', 'k')).rejects.toBeInstanceOf(
+				ForbiddenException
+			);
 		});
 	});
 
