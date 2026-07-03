@@ -45,7 +45,7 @@
 		"@pinia/testing": "0.1.7",
 		"@popperjs/core": "2.11.7",
 		"@rollup/plugin-yaml": "4.0.1",
-		"@sindresorhus/slugify": "2.2.0",
+		"@sindresorhus/slugify": "2.2.1",
 		"@tinymce/tinymce-vue": "6.1.0",
 		"@turf/meta": "6.5.0",
 		"@types/base-64": "1.0.0",
