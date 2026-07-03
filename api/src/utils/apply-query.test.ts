@@ -1,4 +1,4 @@
-import type { Accountability, Aggregate, Permission, SchemaOverview } from '@cairncms/types';
+import type { Accountability, Aggregate, Permission, Query, SchemaOverview } from '@cairncms/types';
 import knex from 'knex';
 import { describe, expect, it } from 'vitest';
 import { InvalidQueryException } from '../exceptions/invalid-query.js';
@@ -674,5 +674,53 @@ describe('validateGroupOperands — concealed operand rejection', () => {
 		it('does not throw on empty group array', () => {
 			expect(() => validateGroupOperands(makeSchema(), 'notes', [])).not.toThrow();
 		});
+	});
+});
+
+describe('applyAggregate primary key countDistinct optimization', () => {
+	function runAggregateQuery(schema: SchemaOverview, query: Query) {
+		const dbQuery = makeBuilder();
+		const knexInstance = knex.default({ client: 'sqlite3', useNullAsDefault: true });
+
+		applyQuery(knexInstance, 'notes', dbQuery, query, schema, { accountability: null });
+
+		return dbQuery.toSQL().sql.toLowerCase();
+	}
+
+	it('emits a plain count for the primary key when the query adds no joins', () => {
+		const sql = runAggregateQuery(makeSchema(), { aggregate: { countDistinct: ['id'] } });
+
+		expect(sql).toContain('count(');
+		expect(sql).not.toContain('count(distinct');
+	});
+
+	it('keeps countDistinct for the primary key when a relational filter adds a join', () => {
+		const sql = runAggregateQuery(makeRelationalSchema(), {
+			aggregate: { countDistinct: ['id'] },
+			filter: { author: { name: { _eq: 'Rijk' } } },
+		});
+
+		expect(sql).toContain('count(distinct');
+	});
+
+	it('keeps countDistinct for the primary key when a relational sort adds a join', () => {
+		const sql = runAggregateQuery(makeRelationalSchema(), {
+			aggregate: { countDistinct: ['id'] },
+			sort: ['author.name'],
+		});
+
+		expect(sql).toContain('count(distinct');
+	});
+
+	it('keeps countDistinct for non-primary-key fields without joins', () => {
+		const sql = runAggregateQuery(makeSchema(), { aggregate: { countDistinct: ['title'] } });
+
+		expect(sql).toContain('count(distinct');
+	});
+
+	it('still rejects value-deriving aggregates on concealed operands with a filter present', () => {
+		expect(() =>
+			runAggregateQuery(makeSchema(), { aggregate: { min: ['secret_token'] }, filter: { title: { _eq: 'x' } } })
+		).toThrow(InvalidQueryException);
 	});
 });
