@@ -1034,11 +1034,9 @@ extension_status_loaded_detail: Loaded and running on the server.
 extension_status_discovered_detail: Discovered on this instance. App extensions run in the browser, so the server reports discovery rather than a load.
 extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
 extension_status_failed_detail: The extension failed to load on this instance.
-extension_settings_reason_invalid: The extension's package name is not a valid settings subject.
-extension_settings_reason_duplicate: More than one installed extension uses this package name.
-extension_settings_reason_config_collision: Its configuration variables collide with another installed extension's.
-extension_settings_reason_unknown: The extension's settings cannot be managed.
+extension_settings_unavailable_detail: Extension settings are unavailable.
 extension_settings_drawer_subtitle: Extension settings
+extension_settings_section: Extension Settings
 extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
 extension_settings_no_global_keys: This extension declares no global settings.
 extension_settings_load_failed: Could not load the extension's settings.

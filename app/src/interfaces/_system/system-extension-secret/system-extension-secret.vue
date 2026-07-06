@@ -23,11 +23,9 @@ export default defineComponent({
 </script>
 
 <script setup lang="ts">
+import { SECRET_MASK } from '@cairncms/constants';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-
-// Must equal the mask the settings value read returns for a stored secret.
-const SECRET_MASK = '**********';
 
 const props = defineProps<{
 	value: string | null;

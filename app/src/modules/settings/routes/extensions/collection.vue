@@ -76,7 +76,12 @@
 						<display-color :value="rowHealthColor(extension)" />
 					</v-list-item-icon>
 					<v-list-item-content>
-						<v-text-overflow :text="extension.name" />
+						<v-text-overflow :text="extensionIdentity(extension.name).title" />
+						<v-text-overflow
+							v-if="extensionIdentity(extension.name).title !== extension.name"
+							class="package-name"
+							:text="extension.name"
+						/>
 					</v-list-item-content>
 					<v-chip v-if="extension.runtime === 'confined-server'" class="sandboxed" small label>
 						{{ t('extension_sandboxed') }}
@@ -128,7 +133,14 @@
 			@esc="selected = null"
 		>
 			<v-card v-if="selected">
-				<v-card-title>{{ selected.name }}</v-card-title>
+				<v-card-title>
+					<div class="detail-title">
+						<div>{{ extensionIdentity(selected.name).title }}</div>
+						<div v-if="extensionIdentity(selected.name).title !== selected.name" class="package-name">
+							{{ selected.name }}
+						</div>
+					</div>
+				</v-card-title>
 
 				<v-card-text>
 					<div class="detail-meta">
@@ -169,9 +181,9 @@
 
 					<v-notice v-if="selected.settings?.status === 'unavailable'" type="warning" class="detail-notice">
 						<div>
-							{{ settingsReasonLabel(selected.settings.reason?.code) }}
-							<code v-if="selected.settings.reason?.detail" class="diagnostic-detail">
-								{{ selected.settings.reason.detail }}
+							{{ t('extension_settings_unavailable_detail') }}
+							<code v-if="selected.settings.reason" class="diagnostic-detail">
+								{{ selected.settings.reason.code }}: {{ selected.settings.reason.detail }}
 							</code>
 						</div>
 					</v-notice>
@@ -236,9 +248,9 @@ import { unexpectedError } from '@/utils/unexpected-error';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import SettingsNavigation from '../../components/navigation.vue';
+import { extensionIdentity } from './components/extension-identity';
 import ExtensionOptions from './components/extension-options.vue';
 import ExtensionSettingsDrawer from './components/extension-settings-drawer.vue';
-import { settingsReasonKey } from './components/settings-reason';
 
 type ExtensionDiagnostic = {
 	name: string;
@@ -323,10 +335,6 @@ function rowHealthLabel(row: ExtensionDiagnostic): string {
 	if (row.status === 'failed') return t('extension_health_failed');
 	if (row.status === 'partial' || row.settings?.status === 'unavailable') return t('extension_health_warning', 1);
 	return t('extension_health_normal');
-}
-
-function settingsReasonLabel(code?: string): string {
-	return t(settingsReasonKey(code));
 }
 
 function runtimeLabel(row: ExtensionDiagnostic): string {
@@ -432,11 +440,21 @@ async function resolveDeclaration(subject: string): Promise<Record<string, unkno
 </script>
 
 <style lang="scss" scoped>
+@import '@/styles/mixins/package-name';
+
 .header-icon {
 	--v-button-color-disabled: var(--primary);
 	--v-button-background-color-disabled: var(--primary-10);
 	--v-button-background-color-hover-disabled: var(--primary-25);
 	--v-button-color-hover-disabled: var(--primary);
+}
+
+.package-name {
+	@include package-name;
+}
+
+.detail-title {
+	text-align: left;
 }
 
 .extensions {

@@ -1,8 +1,8 @@
 <template>
 	<v-drawer
 		:model-value="modelValue"
-		:title="subject"
-		:subtitle="t('extension_settings_drawer_subtitle')"
+		:title="identity.title"
+		:subtitle="identity.title === subject ? t('extension_settings_drawer_subtitle') : subject"
 		icon="settings"
 		persistent
 		@update:model-value="$emit('update:modelValue', $event)"
@@ -11,8 +11,10 @@
 		<div class="drawer-content">
 			<v-notice v-if="settings?.status === 'unavailable'" type="warning">
 				<div>
-					{{ t(settingsReasonKey(settings.reason?.code)) }}
-					<code v-if="settings.reason?.detail" class="diagnostic-detail">{{ settings.reason.detail }}</code>
+					{{ t('extension_settings_unavailable_detail') }}
+					<code v-if="settings.reason" class="diagnostic-detail">
+						{{ settings.reason.code }}: {{ settings.reason.detail }}
+					</code>
 				</div>
 			</v-notice>
 
@@ -64,24 +66,10 @@
 import api from '@/api';
 import { useNotificationsStore } from '@/stores/notifications';
 import { unexpectedError } from '@/utils/unexpected-error';
-import formatTitle from '@cairncms/format-title';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { settingsReasonKey } from './settings-reason';
-
-type SettingDeclaration = {
-	type: 'string' | 'number' | 'boolean';
-	scope?: 'global' | 'collection';
-	secret?: { source: 'inline' | 'config' };
-	appReadable?: boolean;
-	presentation?: { order?: number; width?: 'half' | 'full' };
-};
-
-const FIELD_TYPES: Record<SettingDeclaration['type'], string> = {
-	string: 'string',
-	number: 'float',
-	boolean: 'boolean',
-};
+import { extensionIdentity } from './extension-identity';
+import { synthesizeSettingsFields, type SettingDeclaration } from './settings-fields';
 
 const props = defineProps<{
 	modelValue: boolean;
@@ -95,6 +83,8 @@ const emit = defineEmits(['update:modelValue']);
 const { t } = useI18n();
 const notificationsStore = useNotificationsStore();
 
+const identity = computed(() => extensionIdentity(props.subject));
+
 const loading = ref(false);
 const showSpinner = ref(false);
 const loadError = ref(false);
@@ -107,29 +97,7 @@ const hasEdits = computed(() => Object.keys(edits.value).length > 0);
 
 const hasConfigKeys = computed(() => Object.values(declaration.value).some((decl) => decl.secret?.source === 'config'));
 
-const fields = computed(() => {
-	const entries = Object.entries(declaration.value).filter(
-		([, decl]) => (decl.scope ?? 'global') === 'global' && decl.secret?.source !== 'config'
-	);
-
-	const sorted = entries
-		.map(([key, decl], index) => ({ key, decl, order: decl.presentation?.order ?? index + 1000 }))
-		.sort((a, b) => a.order - b.order);
-
-	return sorted.map(({ key, decl }, index) => ({
-		field: key,
-		name: formatTitle(key),
-		type: FIELD_TYPES[decl.type],
-		meta: {
-			field: key,
-			width: decl.presentation?.width ?? 'full',
-			sort: index + 1,
-			interface:
-				decl.secret?.source === 'inline' ? 'system-extension-secret' : decl.type === 'boolean' ? 'boolean' : 'input',
-		},
-		schema: null,
-	}));
-});
+const fields = computed(() => synthesizeSettingsFields(declaration.value, 'global'));
 
 watch(
 	() => props.modelValue,
@@ -143,8 +111,6 @@ watch(
 		loadError.value = false;
 		showSpinner.value = false;
 
-		// The declaration usually resolves from the page's prefetch, so the spinner only
-		// appears when the values read is genuinely slow, not as a one-frame flash.
 		const spinnerTimer = setTimeout(() => (showSpinner.value = true), 150);
 
 		try {

@@ -1,6 +1,9 @@
+import { SECRET_MASK } from '@cairncms/constants';
 import { createCipheriv, createDecipheriv, hkdf, randomBytes } from 'node:crypto';
 import { promisify } from 'node:util';
 import env from '../env.js';
+
+export { SECRET_MASK };
 
 const ENVELOPE_KIND = 'cairncms-secret-envelope';
 const ENVELOPE_VERSION = 1;
@@ -19,8 +22,6 @@ const TAG_BYTES = 16;
 const MIN_KEY_BYTES = 32;
 
 const hkdfAsync = promisify(hkdf);
-
-export const SECRET_MASK = '**********';
 
 export interface SecretEnvelope {
 	kind: typeof ENVELOPE_KIND;

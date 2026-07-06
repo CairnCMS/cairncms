@@ -13,6 +13,7 @@ vi.mock('@/stores/notifications', () => ({ useNotificationsStore: () => ({ add: 
 
 const stubs = {
 	'v-drawer': {
+		name: 'v-drawer',
 		props: ['modelValue', 'title', 'subtitle'],
 		template: '<div class="v-drawer"><slot /><slot name="actions" /></div>',
 	},
@@ -73,6 +74,10 @@ describe('extension settings drawer', () => {
 
 		const wrapper = mountDrawer();
 		await flushPromises();
+
+		const drawer = wrapper.findComponent({ name: 'v-drawer' });
+		expect(drawer.props('title')).toBe('Demo');
+		expect(drawer.props('subtitle')).toBe('cairncms-extension-demo');
 
 		const form = wrapper.findComponent({ name: 'v-form' });
 		const fields = form.props('fields') as any[];
@@ -181,7 +186,7 @@ describe('extension settings drawer', () => {
 	it('renders the reason only, with no form and no save, for an unavailable owner', async () => {
 		const wrapper = mountDrawer({
 			status: 'unavailable',
-			reason: { code: 'settings-subject-duplicate', detail: 'the settings subject "x" is declared by more than one extension' },
+			reason: { code: 'SETTINGS_SUBJECT_DUPLICATE', detail: 'the settings subject "x" is declared by more than one extension' },
 		});
 
 		await flushPromises();
@@ -192,7 +197,10 @@ describe('extension settings drawer', () => {
 		expect(wrapper.find('button.save').exists()).toBe(false);
 
 		const notice = wrapper.find('.v-notice[data-type="warning"]');
-		expect(notice.text()).toContain('More than one installed extension uses this package name');
+		expect(notice.text()).toContain('Extension settings are unavailable.');
+		expect(notice.find('code.diagnostic-detail').text()).toContain(
+			'SETTINGS_SUBJECT_DUPLICATE: the settings subject "x" is declared by more than one extension'
+		);
 	});
 
 });

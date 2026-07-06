@@ -52,7 +52,7 @@ describe('/extensions', () => {
 			expect(byName['cairncms-extension-settings-fixture']?.settings).toEqual({ status: 'available' });
 			expect(byName['bad-subject']?.settings).toEqual({
 				status: 'unavailable',
-				reason: expect.objectContaining({ code: 'settings-subject-invalid' }),
+				reason: expect.objectContaining({ code: 'SETTINGS_SUBJECT_INVALID' }),
 			});
 
 			expect(JSON.stringify(response.body)).not.toContain('CAIRNCMS_EXT_');

@@ -2,9 +2,9 @@ import { ExtensionSettingsSubjectSchema, getExtensionConfigSecretName } from '@c
 import type { Extension } from '@cairncms/types';
 import { safeLogFragment } from '../utils/safe-log-fragment.js';
 
-export const SETTINGS_SUBJECT_INVALID = 'settings-subject-invalid';
-export const SETTINGS_SUBJECT_DUPLICATE = 'settings-subject-duplicate';
-export const SETTINGS_SUBJECT_CONFIG_COLLISION = 'settings-subject-config-collision';
+export const SETTINGS_SUBJECT_INVALID = 'SETTINGS_SUBJECT_INVALID';
+export const SETTINGS_SUBJECT_DUPLICATE = 'SETTINGS_SUBJECT_DUPLICATE';
+export const SETTINGS_SUBJECT_CONFIG_COLLISION = 'SETTINGS_SUBJECT_CONFIG_COLLISION';
 
 export type SettingsSubjectReason = { code: string; detail: string };
 

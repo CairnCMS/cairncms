@@ -2108,7 +2108,7 @@ describe('the settings subject gate in the loader', () => {
 		for (const row of annotated) {
 			expect(row.settings).toMatchObject({
 				status: 'unavailable',
-				reason: { code: 'settings-subject-duplicate' },
+				reason: { code: 'SETTINGS_SUBJECT_DUPLICATE' },
 			});
 		}
 	});
@@ -2137,7 +2137,7 @@ describe('the settings subject gate in the loader', () => {
 		expect(unavailable?.displaySubject).toBe('bad-subject');
 		expect(unavailable && 'subject' in unavailable).toBe(false);
 		expect(unavailable && 'declaration' in unavailable).toBe(false);
-		expect(unavailable?.reason?.code).toBe('settings-subject-invalid');
+		expect(unavailable?.reason?.code).toBe('SETTINGS_SUBJECT_INVALID');
 	});
 
 	it('keeps the derived config variable out of every public surface on a collision', async () => {
@@ -2153,7 +2153,7 @@ describe('the settings subject gate in the loader', () => {
 
 		const owners = instance.getSettingsOwners();
 		expect(owners.every((owner) => owner.status === 'unavailable')).toBe(true);
-		expect(owners.every((owner) => owner.reason?.code === 'settings-subject-config-collision')).toBe(true);
+		expect(owners.every((owner) => owner.reason?.code === 'SETTINGS_SUBJECT_CONFIG_COLLISION')).toBe(true);
 
 		expect(JSON.stringify(owners)).not.toContain('CAIRNCMS_EXT_');
 		expect(JSON.stringify(instance.getDiagnostics())).not.toContain('CAIRNCMS_EXT_');

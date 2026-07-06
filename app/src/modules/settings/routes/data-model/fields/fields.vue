@@ -44,6 +44,7 @@
 				v-tooltip.bottom="t('save')"
 				rounded
 				icon
+				class="action-save"
 				:loading="saving"
 				:disabled="hasEdits === false"
 				@click="saveAndQuit"
@@ -76,6 +77,8 @@
 				:primary-key="collection"
 				:disabled="item && item.collection.startsWith('directus_')"
 			/>
+
+			<extension-collection-settings ref="extensionSettings" :collection="collection" />
 		</div>
 
 		<template #sidebar>
@@ -110,6 +113,7 @@ import { computed, ref, toRefs } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import SettingsNavigation from '../../../components/navigation.vue';
+import ExtensionCollectionSettings from './components/extension-collection-settings.vue';
 import FieldsManagement from './components/fields-management.vue';
 
 const props = defineProps<{
@@ -133,10 +137,14 @@ const { edits, item, saving, loading, save, remove, deleting, isBatch } = useIte
 	collection
 );
 
-const hasEdits = computed<boolean>(() => {
+const extensionSettings = ref<InstanceType<typeof ExtensionCollectionSettings> | null>(null);
+
+const metaHasEdits = computed<boolean>(() => {
 	if (!edits.value.meta) return false;
 	return Object.keys(edits.value.meta).length > 0;
 });
+
+const hasEdits = computed<boolean>(() => metaHasEdits.value || extensionSettings.value?.hasEdits === true);
 
 useShortcut('meta+s', () => {
 	if (hasEdits.value) saveAndStay();
@@ -154,19 +162,32 @@ async function deleteAndQuit() {
 }
 
 async function saveAndStay() {
-	await save();
-	await Promise.all([collectionsStore.hydrate(), fieldsStore.hydrate()]);
+	if (metaHasEdits.value) {
+		await save();
+		await Promise.all([collectionsStore.hydrate(), fieldsStore.hydrate()]);
+	}
+
+	if (extensionSettings.value?.hasEdits) await extensionSettings.value.save();
 }
 
 async function saveAndQuit() {
-	await save();
-	await Promise.all([collectionsStore.hydrate(), fieldsStore.hydrate()]);
+	if (metaHasEdits.value) {
+		await save();
+		await Promise.all([collectionsStore.hydrate(), fieldsStore.hydrate()]);
+	}
+
+	if (extensionSettings.value?.hasEdits) {
+		const saved = await extensionSettings.value.save();
+		if (!saved) return;
+	}
+
 	router.push(`/settings/data-model`);
 }
 
 function discardAndLeave() {
 	if (!leaveTo.value) return;
 	edits.value = {};
+	extensionSettings.value?.discard();
 	confirmLeave.value = false;
 	router.push(leaveTo.value);
 }

@@ -1,3 +1,4 @@
+import { SECRET_MASK } from '@cairncms/constants';
 import type { Accountability, Query, SchemaOverview } from '@cairncms/types';
 import { parseJSON, toArray } from '@cairncms/utils';
 import { format, isValid, parseISO } from 'date-fns';
@@ -101,7 +102,7 @@ export class PayloadService {
 			return value;
 		},
 		async conceal({ action, value }) {
-			if (action === 'read') return value ? '**********' : null;
+			if (action === 'read') return value ? SECRET_MASK : null;
 			return value;
 		},
 		async 'user-created'({ action, value, accountability }) {
@@ -248,7 +249,7 @@ export class PayloadService {
 				if (!PayloadService.VALUE_DERIVING_AGGREGATES.has(operation)) continue;
 				if (!concealedFields.has(operandField)) continue;
 
-				item[key] = item[key] == null ? null : '**********';
+				item[key] = item[key] == null ? null : SECRET_MASK;
 			}
 		}
 	}
@@ -269,7 +270,7 @@ export class PayloadService {
 
 			for (const item of payload) {
 				if (!(aliasKey in item)) continue;
-				item[aliasKey] = item[aliasKey] == null ? null : '**********';
+				item[aliasKey] = item[aliasKey] == null ? null : SECRET_MASK;
 			}
 		}
 	}

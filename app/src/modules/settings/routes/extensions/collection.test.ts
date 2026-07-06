@@ -226,7 +226,7 @@ describe('Settings Extensions collection', () => {
 			settings: {
 				status: 'unavailable',
 				reason: {
-					code: 'settings-subject-config-collision',
+					code: 'SETTINGS_SUBJECT_CONFIG_COLLISION',
 					detail:
 						'the settings subject "cairncms-extension-edge-sync" derives a config-secret variable that collides with "cairncms-extension-edge.sync"',
 				},
@@ -244,6 +244,10 @@ describe('Settings Extensions collection', () => {
 		expect(collidedRow.find('.dot').attributes('data-color')).toBe('var(--warning)');
 		expect(rowFor(wrapper, 'cairn-fixture-hook')!.find('.dot').attributes('data-color')).toBe('var(--success)');
 
+		expect(collidedRow.findAll('.text-overflow')[0]!.text()).toBe('Edge Sync');
+		expect(collidedRow.find('.package-name').text()).toBe('cairncms-extension-edge-sync');
+		expect(rowFor(wrapper, 'cairn-fixture-hook')!.find('.package-name').exists()).toBe(false);
+
 		const summary = wrapper.find('.summary').text();
 		expect(summary).toContain('Warning');
 		expect(summary).toContain('1');
@@ -253,9 +257,12 @@ describe('Settings Extensions collection', () => {
 
 		const notice = wrapper.find('.v-dialog .v-notice[data-type="warning"]');
 		expect(notice.exists()).toBe(true);
-		expect(notice.text()).toContain("Its configuration variables collide with another installed extension's");
+		expect(notice.text()).toContain('Extension settings are unavailable.');
+		expect(notice.find('code.diagnostic-detail').text()).toContain('SETTINGS_SUBJECT_CONFIG_COLLISION:');
 		expect(notice.find('code.diagnostic-detail').text()).toContain('cairncms-extension-edge.sync');
 
+		expect(wrapper.find('.v-dialog .detail-title').text()).toContain('Edge Sync');
+		expect(wrapper.find('.v-dialog .detail-title .package-name').text()).toBe('cairncms-extension-edge-sync');
 		expect(wrapper.find('.v-dialog .detail-meta').text()).toContain('Warning');
 		expect(wrapper.find('.v-dialog .v-notice[data-type="success"]').exists()).toBe(false);
 		expect(wrapper.find('.v-dialog').text()).not.toContain('Loaded and running on the server');
