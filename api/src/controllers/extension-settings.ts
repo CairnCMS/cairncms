@@ -1,4 +1,5 @@
 import express from 'express';
+import Joi from 'joi';
 import { ForbiddenException, InvalidCredentialsException, InvalidPayloadException } from '../exceptions/index.js';
 import { getExtensionManager } from '../extensions.js';
 import { respond } from '../middleware/respond.js';
@@ -101,6 +102,18 @@ router.get(
 	respond
 );
 
+// The own-key set is matched explicitly, not through Joi: Joi drops a `__proto__` own
+// key before validating, so a purge body could carry a smuggled key and still pass.
+const DELETE_PURGE_SHAPE = 'subject';
+const DELETE_SINGLE_SHAPE = 'key,scope,scope_key,subject';
+
+const deleteValueSchema = Joi.object({
+	subject: Joi.string().allow('').required(),
+	scope: Joi.string().valid('global', 'collection').required(),
+	scope_key: Joi.string().allow('').required(),
+	key: Joi.string().allow('').required(),
+});
+
 router.delete(
 	'/',
 	asyncHandler(async (req, res, next) => {
@@ -110,23 +123,18 @@ router.delete(
 
 		const service = new ExtensionSettingsService({ accountability: req.accountability, schema: req.schema });
 
-		// Two exact body shapes, matched on the actual keys present, so a partial, mixed,
-		// or mistyped body never falls through to the subject-wide purge.
-		const bodyShape = Object.keys(body).sort().join(',');
+		const shape = Object.keys(body).sort().join(',');
 
-		if (bodyShape === 'subject') {
+		if (shape === DELETE_PURGE_SHAPE) {
 			const removed = await service.deleteBySubject(subject);
 
 			res.locals['payload'] = { data: { removed } };
 			return next();
 		}
 
-		if (
-			bodyShape !== 'key,scope,scope_key,subject' ||
-			(scope !== 'global' && scope !== 'collection') ||
-			typeof scope_key !== 'string' ||
-			typeof key !== 'string'
-		) {
+		const { error } = deleteValueSchema.validate(body, { convert: false });
+
+		if (shape !== DELETE_SINGLE_SHAPE || error) {
 			throw new InvalidPayloadException('The body must be exactly { subject } or { subject, scope, scope_key, key }.');
 		}
 

@@ -165,6 +165,20 @@ describe('the extension settings service over /extension-settings', () => {
 		const extraneous = await del({ subject: SUBJECT, scope: 'global', scope_key: '', key: 'base_url', extra: true });
 		expect(extraneous.status).toBe(400);
 
+		const arrayBody = await del([{ subject: SUBJECT }]);
+		expect(arrayBody.status).toBe(400);
+
+		const rawProtoJson = `{"subject":"${SUBJECT}","__proto__":{"scope":"global"}}`;
+		expect(Object.keys(JSON.parse(rawProtoJson))).toContain('__proto__');
+
+		const protoBody = await request(url)
+			.delete('/extension-settings')
+			.set('Authorization', auth)
+			.set('Content-Type', 'application/json')
+			.send(rawProtoJson);
+
+		expect(protoBody.status).toBe(400);
+
 		const afterRefusals = await readGlobalKeys();
 		expect(afterRefusals['base_url']).toBe('https://a');
 		expect(afterRefusals['theme']).toBe('dark');
