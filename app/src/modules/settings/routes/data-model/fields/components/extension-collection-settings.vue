@@ -132,8 +132,8 @@ async function save(): Promise<boolean> {
 	try {
 		for (const group of groups.value) {
 			for (const [key, value] of Object.entries(edits.value[group.subject] ?? {})) {
-				// A stale masked secret is not a value: storing the mask would replace the
-				// stored secret with the concealment string.
+				// The mask round-trips from reads as the field's value. The server refuses it
+				// as input, so an unedited secret left in the form would fail the whole save.
 				if (value === SECRET_MASK && isInlineSecret(group.declaration, key)) continue;
 
 				if (value === null) {

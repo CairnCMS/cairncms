@@ -69,7 +69,7 @@ import { unexpectedError } from '@/utils/unexpected-error';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { extensionIdentity } from './extension-identity';
-import { synthesizeSettingsFields, type SettingDeclaration } from './settings-fields';
+import { isInlineSecret, SECRET_MASK, synthesizeSettingsFields, type SettingDeclaration } from './settings-fields';
 
 const props = defineProps<{
 	modelValue: boolean;
@@ -154,6 +154,10 @@ async function save() {
 
 	try {
 		for (const [key, value] of Object.entries(edits.value)) {
+			// The mask round-trips from reads as the field's value. The server refuses it
+			// as input, so an unedited secret left in the form would fail the whole save.
+			if (value === SECRET_MASK && isInlineSecret(declaration.value, key)) continue;
+
 			if (value === null) {
 				await api.delete('/extension-settings', {
 					data: { subject: props.subject, scope: 'global', scope_key: '', key },

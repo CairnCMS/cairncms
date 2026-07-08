@@ -145,6 +145,36 @@ describe('extension settings drawer', () => {
 		expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([false]);
 	});
 
+	it('skips an unchanged masked secret staged through the raw editor, saving the rest', async () => {
+		mockLoad();
+		vi.mocked(api.post).mockResolvedValue({} as any);
+
+		const wrapper = mountDrawer();
+		await flushPromises();
+
+		wrapper.findComponent({ name: 'v-form' }).vm.$emit('update:modelValue', {
+			base_url: 'https://y',
+			api_key: '**********',
+		});
+
+		await nextTick();
+		await wrapper.find('button.save').trigger('click');
+		await flushPromises();
+
+		expect(api.post).toHaveBeenCalledTimes(1);
+
+		expect(api.post).toHaveBeenCalledWith('/extension-settings', {
+			subject: 'cairncms-extension-demo',
+			scope: 'global',
+			scope_key: '',
+			key: 'base_url',
+			value: 'https://y',
+		});
+
+		expect(api.delete).not.toHaveBeenCalled();
+		expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([false]);
+	});
+
 	it('surfaces the encryption-key precondition as the operator message, not a raw error', async () => {
 		mockLoad();
 
