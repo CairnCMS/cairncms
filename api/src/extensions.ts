@@ -786,12 +786,12 @@ export class ExtensionManager {
 		for (const id of new Set(ids)) {
 			if (flowManager.hasOperation(id)) {
 				blocked.set(id, {
-					code: 'operation-collision',
+					code: 'OPERATION_COLLISION',
 					detail: 'the operation id is declared by an inherited operation',
 				});
 			} else if ((counts.get(id) ?? 0) > 1) {
 				blocked.set(id, {
-					code: 'ambiguous-operation',
+					code: 'AMBIGUOUS_OPERATION',
 					detail: 'a confined operation id is declared more than once',
 				});
 			}
@@ -876,7 +876,7 @@ export class ExtensionManager {
 			// checks, and the grammar matches the canonical lowercase route key.
 			if (!CONFINED_ENDPOINT_ROUTE.test(extension.name)) {
 				this.recordFailed(extension, {
-					code: 'route-invalid',
+					code: 'ROUTE_INVALID',
 					detail: 'the confined endpoint route name is not a safe literal route',
 				});
 
@@ -885,7 +885,7 @@ export class ExtensionManager {
 
 			if ((counts.get(extension.name) ?? 0) > 1) {
 				this.recordFailed(extension, {
-					code: 'ambiguous-endpoint',
+					code: 'AMBIGUOUS_ENDPOINT',
 					detail: 'a confined endpoint route is declared more than once',
 				});
 
@@ -894,7 +894,7 @@ export class ExtensionManager {
 
 			if (this.registeredEndpointRoutes.has(extension.name)) {
 				this.recordFailed(extension, {
-					code: 'route-collision',
+					code: 'ROUTE_COLLISION',
 					detail: 'the confined endpoint route is already registered',
 				});
 
@@ -912,7 +912,7 @@ export class ExtensionManager {
 
 			if (eligible.capabilities?.endpoint === undefined) {
 				this.recordFailed(extension, {
-					code: 'capability-missing',
+					code: 'CAPABILITY_MISSING',
 					detail: 'the endpoint capability is not declared',
 				});
 
@@ -951,7 +951,7 @@ export class ExtensionManager {
 		for (const [extension, eligible] of hooks) {
 			if ((counts.get(extension.name) ?? 0) > 1) {
 				this.recordFailed(extension, {
-					code: 'ambiguous-hook',
+					code: 'AMBIGUOUS_HOOK',
 					detail: 'a confined hook id is declared more than once',
 				});
 
@@ -974,7 +974,7 @@ export class ExtensionManager {
 			// and alias unrelated events, so the whole hook fails before any subscription.
 			if (!declaredEvents.every(hasSafeEventSegments)) {
 				this.recordFailed(extension, {
-					code: 'event-invalid',
+					code: 'EVENT_INVALID',
 					detail: 'a confined hook event name is not a safe literal event',
 				});
 
@@ -1150,21 +1150,21 @@ export class ExtensionManager {
 			if (!CONFINED_ENDPOINT_ROUTE.test(name)) {
 				return {
 					status: 'failed',
-					reason: { code: 'route-invalid', detail: 'the confined endpoint route name is not a safe literal route' },
+					reason: { code: 'ROUTE_INVALID', detail: 'the confined endpoint route name is not a safe literal route' },
 				};
 			}
 
 			if (this.registeredEndpointRoutes.has(name)) {
 				return {
 					status: 'failed',
-					reason: { code: 'route-collision', detail: 'the confined endpoint route is already registered' },
+					reason: { code: 'ROUTE_COLLISION', detail: 'the confined endpoint route is already registered' },
 				};
 			}
 
 			if (binding.capabilities.endpoint === undefined) {
 				return {
 					status: 'failed',
-					reason: { code: 'capability-missing', detail: 'the endpoint capability is not declared' },
+					reason: { code: 'CAPABILITY_MISSING', detail: 'the endpoint capability is not declared' },
 				};
 			}
 
@@ -1185,7 +1185,7 @@ export class ExtensionManager {
 		if (!declaredEvents.every(hasSafeEventSegments)) {
 			return {
 				status: 'failed',
-				reason: { code: 'event-invalid', detail: 'a confined hook event name is not a safe literal event' },
+				reason: { code: 'EVENT_INVALID', detail: 'a confined hook event name is not a safe literal event' },
 			};
 		}
 

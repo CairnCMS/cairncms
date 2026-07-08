@@ -383,7 +383,7 @@ describe('the confined load gate in the loader', () => {
 		const row = diagnostics.find((entry: any) => entry.name === 'flagged-endpoint');
 
 		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('uses-raw-fs');
+		expect(row?.reason?.code).toBe('USES_RAW_FS');
 		expect((instance as any).confinedEligible.has(flagged)).toBe(false);
 		expect(JSON.stringify(diagnostics)).not.toContain(root);
 	});
@@ -522,8 +522,8 @@ describe('the confined load gate in the loader', () => {
 
 		// A name-keyed join would put the eligible extension's capabilities on its gate-failed
 		// same-name sibling too. The object-identity join keeps them on the eligible row only.
-		const gateFailed = rows.find((row: any) => row.reason?.code === 'uses-raw-fs');
-		const eligible = rows.find((row: any) => row.reason?.code !== 'uses-raw-fs');
+		const gateFailed = rows.find((row: any) => row.reason?.code === 'USES_RAW_FS');
+		const eligible = rows.find((row: any) => row.reason?.code !== 'USES_RAW_FS');
 
 		expect(gateFailed.capabilities).toBeUndefined();
 		expect(eligible.capabilities).toEqual({ endpoint: { access: 'public' }, log: true });
@@ -643,7 +643,7 @@ describe('the confined load gate in the loader', () => {
 
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'flagged-bundle');
 		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('uses-raw-fs');
+		expect(row?.reason?.code).toBe('USES_RAW_FS');
 		expect((instance as any).confinedEligible.has(bundle)).toBe(false);
 
 		// The discovered set feeds the app bundler, so the refusal of the server side
@@ -677,7 +677,7 @@ describe('the confined load gate in the loader', () => {
 		for (const name of ['probe-thrower', 'confined-endpoint', 'probe-bundle-sibling']) {
 			const row = diagnostics.find((entry: any) => entry.name === name);
 			expect(row?.status, name).toBe('failed');
-			expect(row?.reason?.code, name).toBe('validation-incomplete');
+			expect(row?.reason?.code, name).toBe('VALIDATION_INCOMPLETE');
 		}
 
 		expect((instance as any).confinedEligible.has(operation)).toBe(false);
@@ -685,7 +685,7 @@ describe('the confined load gate in the loader', () => {
 		expect((instance as any).confinedEligible.has(bundleSibling)).toBe(false);
 	});
 
-	it('surfaces a host-side probe failure as validation-incomplete, not a verdict on the extension', async () => {
+	it('surfaces a host-side probe failure as VALIDATION_INCOMPLETE, not a verdict on the extension', async () => {
 		writeConfinedOperationPackage('probe-unlucky');
 
 		const instance = new ExtensionManager();
@@ -700,7 +700,7 @@ describe('the confined load gate in the loader', () => {
 
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'probe-unlucky');
 		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('validation-incomplete');
+		expect(row?.reason?.code).toBe('VALIDATION_INCOMPLETE');
 		expect((instance as any).confinedEligible.has(operation)).toBe(false);
 	});
 });
@@ -784,7 +784,7 @@ describe('the confined runtime boot', () => {
 
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'boot-clean');
 		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('validation-incomplete');
+		expect(row?.reason?.code).toBe('VALIDATION_INCOMPLETE');
 		expect((instance as any).confinedEligible.has(confined)).toBe(false);
 		expect(JSON.stringify((instance as any).getDiagnostics())).not.toContain(root);
 	});
@@ -804,7 +804,7 @@ describe('the confined runtime boot', () => {
 		// The confined extension is failed by the runtime; the inherited one follows its
 		// own registration path, never failed by the confined runtime's unavailability.
 		expect(diagnostics.find((entry: any) => entry.name === 'confined-endpoint')?.reason?.code).toBe(
-			'validation-incomplete'
+			'VALIDATION_INCOMPLETE'
 		);
 
 		// A failed confined extension still carries its runtime marker.
@@ -970,7 +970,7 @@ describe('the confined endpoint binding', () => {
 
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'colliding-endpoint');
 		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('route-collision');
+		expect(row?.reason?.code).toBe('ROUTE_COLLISION');
 
 		const response = await supertest(endpointApp(instance)).get('/colliding-endpoint/');
 		expect(response.status).toBe(404);
@@ -989,7 +989,7 @@ describe('the confined endpoint binding', () => {
 
 			const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === name);
 			expect(row?.status, name).toBe('failed');
-			expect(row?.reason?.code, name).toBe('route-invalid');
+			expect(row?.reason?.code, name).toBe('ROUTE_INVALID');
 
 			// The pattern a parameterized name would have mounted must match nothing.
 			const probe = await supertest(endpointApp(instance)).get('/evil-anything/');
@@ -1017,7 +1017,7 @@ describe('the confined endpoint binding', () => {
 
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'cased-route');
 		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('route-collision');
+		expect(row?.reason?.code).toBe('ROUTE_COLLISION');
 	});
 
 	it('fails both confined endpoints that declare the same route', async () => {
@@ -1031,7 +1031,7 @@ describe('the confined endpoint binding', () => {
 
 		const failed = (instance as any)
 			.getDiagnostics()
-			.filter((entry: any) => entry.name === 'dup-endpoint' && entry.reason?.code === 'ambiguous-endpoint');
+			.filter((entry: any) => entry.name === 'dup-endpoint' && entry.reason?.code === 'AMBIGUOUS_ENDPOINT');
 
 		expect(failed).toHaveLength(2);
 
@@ -1046,7 +1046,7 @@ describe('the confined endpoint binding', () => {
 
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'capless-endpoint');
 		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('capability-missing');
+		expect(row?.reason?.code).toBe('CAPABILITY_MISSING');
 
 		const response = await supertest(endpointApp(instance)).get('/capless-endpoint/');
 		expect(response.status).toBe(404);
@@ -1311,7 +1311,7 @@ describe('the confined hook binding', () => {
 
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'proto-hook');
 		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('manifest-invalid');
+		expect(row?.reason?.code).toBe('MANIFEST_INVALID');
 
 		expect((instance as any).hookEvents.some((event: any) => event.name === '__proto__.create')).toBe(false);
 
@@ -1348,7 +1348,7 @@ describe('the confined hook binding', () => {
 
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'guard-hook');
 		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('event-invalid');
+		expect(row?.reason?.code).toBe('EVENT_INVALID');
 
 		// No handler joined the unregister list, so nothing subscribed to the emitter.
 		expect((instance as any).hookEvents).toHaveLength(0);
@@ -1375,7 +1375,7 @@ describe('the confined hook binding', () => {
 
 		const failed = (instance as any)
 			.getDiagnostics()
-			.filter((entry: any) => entry.name === 'dup-hook' && entry.reason?.code === 'ambiguous-hook');
+			.filter((entry: any) => entry.name === 'dup-hook' && entry.reason?.code === 'AMBIGUOUS_HOOK');
 
 		expect(failed).toHaveLength(2);
 	});
@@ -1690,7 +1690,7 @@ describe('the confined bundle binding', () => {
 
 		const endpointEntry = row.entries.find((entry: any) => entry.name === 'taken-route');
 		expect(endpointEntry.status).toBe('failed');
-		expect(endpointEntry.reason.code).toBe('route-collision');
+		expect(endpointEntry.reason.code).toBe('ROUTE_COLLISION');
 
 		const hookEntry = row.entries.find((entry: any) => entry.name === 'live-hook');
 		expect(hookEntry.status).toBe('loaded');
@@ -1720,7 +1720,7 @@ describe('the confined bundle binding', () => {
 
 		const ungranted = row.entries.find((entry: any) => entry.name === 'ungranted');
 		expect(ungranted.status).toBe('failed');
-		expect(ungranted.reason.code).toBe('capability-missing');
+		expect(ungranted.reason.code).toBe('CAPABILITY_MISSING');
 		expect(typeof ungranted.reason.detail).toBe('string');
 
 		const serialized = JSON.stringify((instance as any).getDiagnostics());
@@ -1755,7 +1755,7 @@ describe('the confined bundle binding', () => {
 		// register, because eligibility existed.
 		const ungranted = row.entries.find((entry: any) => entry.name === 'ungranted-ep');
 		expect(ungranted.status).toBe('failed');
-		expect(ungranted.reason.code).toBe('capability-missing');
+		expect(ungranted.reason.code).toBe('CAPABILITY_MISSING');
 		expect(ungranted.capabilities).toEqual({ log: true });
 	});
 
@@ -1785,14 +1785,14 @@ describe('the confined bundle binding', () => {
 		// The top-level operation row is failed, not a stale loaded.
 		const topRow = diagnosticFor(instance, 'dup-op');
 		expect(topRow.status).toBe('failed');
-		expect(topRow.reason.code).toBe('ambiguous-operation');
+		expect(topRow.reason.code).toBe('AMBIGUOUS_OPERATION');
 
 		const row = diagnosticFor(instance, 'op-dup-bundle');
 		expect(row.status).toBe('partial');
 
 		const opEntry = row.entries.find((entry: any) => entry.name === 'dup-op');
 		expect(opEntry.status).toBe('failed');
-		expect(opEntry.reason.code).toBe('ambiguous-operation');
+		expect(opEntry.reason.code).toBe('AMBIGUOUS_OPERATION');
 
 		const epEntry = row.entries.find((entry: any) => entry.name === 'mounted-ep');
 		expect(epEntry.status).toBe('loaded');
@@ -1816,7 +1816,7 @@ describe('the confined bundle binding', () => {
 
 		const row = diagnosticFor(instance, 'shared-op');
 		expect(row.status).toBe('failed');
-		expect(row.reason.code).toBe('operation-collision');
+		expect(row.reason.code).toBe('OPERATION_COLLISION');
 
 		// A flow referencing the id rejects rather than silently running the inherited
 		// operation that the confined contributor tried to shadow.
@@ -1866,7 +1866,7 @@ describe('the confined bundle binding', () => {
 
 		const row = diagnosticFor(instance, 'bundle-op');
 		expect(row.status).toBe('failed');
-		expect(row.reason.code).toBe('operation-collision');
+		expect(row.reason.code).toBe('OPERATION_COLLISION');
 
 		getFlowManager().clearOperations();
 	}, 30_000);
@@ -1902,7 +1902,7 @@ describe('the confined bundle binding', () => {
 
 		const opEntry = row.entries.find((entry: any) => entry.name === 'bundle-op');
 		expect(opEntry.status).toBe('failed');
-		expect(opEntry.reason.code).toBe('operation-collision');
+		expect(opEntry.reason.code).toBe('OPERATION_COLLISION');
 
 		// The sibling endpoint still mounts, so the collision fails only its own entry.
 		const epEntry = row.entries.find((entry: any) => entry.name === 'sibling-ep');
@@ -1972,7 +1972,7 @@ describe('the confined bundle binding', () => {
 		first.reason.code = 'mutated';
 
 		const second = diagnosticFor(instance, 'copy-bundle').entries.find((entry: any) => entry.name === 'copy-route');
-		expect(second.reason.code).toBe('route-collision');
+		expect(second.reason.code).toBe('ROUTE_COLLISION');
 	});
 });
 
