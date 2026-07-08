@@ -78,7 +78,7 @@ The reference is split into seven topical pages plus this hub. Most pages cover 
 - **[Insights and UI](/docs/api/system-collections/insights-and-ui/)** — `directus_dashboards`, `directus_panels`, `directus_notifications`. Dashboard composition and the user-facing notification feed.
 - **[Schema and modeling](/docs/api/system-collections/schema-and-modeling/)** — `directus_collections`, `directus_fields`, `directus_relations`, plus the `/schema/snapshot`, `/schema/diff`, and `/schema/apply` endpoints. The full schema-introspection and schema-as-code surface in one place.
 - **[Activity and revisions](/docs/api/system-collections/activity-and-revisions/)** — `directus_activity` and `directus_revisions`. The audit trail and per-row history.
-- **[Platform and utilities](/docs/api/system-collections/platform-and-utilities/)** — `directus_settings` (a singleton row-backed collection), the `/server/*` operator endpoints, the `/utils/*` utility endpoints, and the `/extensions` endpoint.
+- **[Platform and utilities](/docs/api/system-collections/platform-and-utilities/)** — `directus_settings` (a singleton row-backed collection), the `/server/*` operator endpoints, the `/utils/*` utility endpoints, and the `/extensions` and `/extension-settings` endpoints.
 
 The first five groups cover row-backed collections only, occasionally paired with the operator endpoints that snapshot and apply that same state. The last two groups (and especially Platform and utilities) include endpoints that are not collection-shaped at all, like server health checks and cache flushing. Read the page intros for the precise scope.
 

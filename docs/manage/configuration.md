@@ -353,6 +353,8 @@ Asset transformation settings:
 - **`EXTENSIONS_AUTO_RELOAD`** — when `true`, the API watches extension files and reloads on change, including when `NODE_ENV=development`. Default `false`. See the [Creating extensions](/docs/develop/extensions/creating-extensions/) page for the development workflow.
 - **`EXTENSIONS_CACHE_TTL`** — `Cache-Control` max-age applied to the `/extensions/*` bundle responses. Unset by default (no client cache).
 - **`PACKAGE_FILE_LOCATION`** — directory containing the project `package.json` (used to discover npm-installed extensions). Default `.`.
+- **`SECRETS_ENCRYPTION_KEY`** — key under which inline extension secrets and secret flow-operation options are encrypted at rest. The value must be canonical base64 decoding to at least 32 bytes; generate one with `openssl rand -base64 32`. Leaving it unset is allowed until the first secret is saved; without it the save fails with a configuration error, and non-secret values are unaffected. Setting it to a malformed value fails startup. Treat as a credential, and keep it distinct from `SECRET`, which signs tokens and is unrelated. Changing it makes previously stored secret values unreadable: they fail closed rather than decrypting wrongly, and each must be re-entered.
+- **`CAIRNCMS_EXT_<NAME>_<KEY>`** — the variable family for extension secrets declared with the `config` source. The extension's documentation names the exact variables; the name derives from the package name and setting key, so it is stable and can be provisioned in a secret manager ahead of deployment. See [Extension settings](/docs/develop/extensions/settings/#secret-settings) for the derivation.
 
 ### Sandboxed extensions
 

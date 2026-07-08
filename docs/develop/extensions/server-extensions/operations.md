@@ -302,7 +302,9 @@ The manifest declares the runtime and the capabilities the handler uses:
 }
 ```
 
-The `items: { accountability: "user" }` mode reads as the user who triggered the flow, so the operation sees exactly what that user could read through the API. Keep the app-side options honest about the declared capabilities, and do not offer a configuration the broker would reject, such as a request method outside `request.methods`. To pass a secret to the handler without the guest ever seeing it, mark the option with `optionDelivery`.
+The `items: { accountability: "user" }` mode reads as the user who triggered the flow, so the operation sees exactly what that user could read through the API. Keep the app-side options honest about the declared capabilities, and do not offer a configuration the broker would reject, such as a request method outside `request.methods`.
+
+Secrets have two homes, by where the value belongs. A value configured per flow, such as a token the flow author pastes into the operation's options, is marked with `optionDelivery`: it is stored encrypted at rest, masked on reads, and delivered to the handler as a reference the guest never sees raw. A durable credential that belongs to the extension rather than to one flow is a [secret package setting](/docs/develop/extensions/settings/) read through `host.settings.get`. Declared operation-option secrets and inline package-setting secrets are both encrypted at rest, while a config-sourced package secret is never stored and resolves from deployment configuration.
 
 See the [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) page for the full host API, the capability vocabulary, `optionDelivery`, and the accountability modes.
 

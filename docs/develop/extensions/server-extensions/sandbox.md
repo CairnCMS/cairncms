@@ -116,7 +116,7 @@ The methods:
 - `host.log.debug | info | warn | error(message, meta?)` writes a structured log line on the host. Logging is fire-and-forget and needs the `log` capability.
 - `host.request.send(request)` makes an outbound HTTP request from the host and returns `ExtensionResult<{ status, headers, body }>`. The `request` is `{ url, method?, headers?, body?, timeoutMs?, auth? }`. It needs the `request` capability, and the URL's origin must be one the manifest declares.
 - `host.items.read(collection, query?)` returns `ExtensionResult<T[]>` and `host.items.readOne(collection, key, query?)` returns `ExtensionResult<T | null>`. The `query` is `{ fields?, filter?, sort?, limit?, offset?, page?, search? }`. Both need the `items` capability. Reads are read-only in this version.
-- `host.settings.get(key)` returns `ExtensionResult<T | ExtensionSecretReference | null>` for a key the extension package declares in its settings. It is gated by package settings ownership and the declared key, not by a `settings` capability. Collection-scoped settings are not exposed to confined server code.
+- `host.settings.get(key)` returns `ExtensionResult<T | ExtensionSecretReference | null>` for a key the extension package declares in its settings. A non-secret key resolves to its stored value, a secret key resolves to an opaque secret reference for use as request auth, and an undeclared or unset key resolves to `null`. It is gated by package settings ownership and the declared key, not by a `settings` capability. Collection-scoped settings are not exposed to confined server code. See [Extension settings](/docs/develop/extensions/settings/) for the declaration.
 - `host.template.renderLiquid(template, data?, options?)` renders a Liquid template on the host and returns `ExtensionResult<string>`. The `options` may set custom `delimiters`. It needs the `template` capability.
 
 A call whose capability is not declared, or whose target is not allowed by the declared capability, comes back as `{ ok: false, error: { code: 'denied' } }` rather than throwing.
@@ -172,11 +172,11 @@ A confined endpoint declares `endpoint: { access: ... }`. The endpoint runner en
 
 A confined hook declares the events it subscribes to in `events`, as `{ filter?: string[], action?: string[] }`, with at least one list. Each list holds up to sixteen exact platform event names. The declared events are the operator-reviewable subscription surface, and an entry whose handlers do not match its declared events fails to load. Confined hooks subscribe to filter and action events only.
 
-### Sensitive operation options
+### Secret operation options
 
-An operation can mark sensitive option fields with `optionDelivery`, a record of `{ <optionKey>: { delivery: 'reference' } }`. A field marked this way is delivered to the handler as a reference the broker resolves on the host, so the secret value is never serialized into the guest. The handler can pass that reference to `host.request.send` as `auth`, so a confined operation can call a secret-protected external API without the secret ever entering the guest.
+An operation can mark secret option fields with `optionDelivery`, a record of `{ <optionKey>: { delivery: 'reference' } }`. A field marked this way is stored encrypted at rest, masked on external reads, and delivered to the handler as a reference the broker resolves on the host, so the secret value is never serialized into the guest. Saving a flow whose masked value is unchanged preserves the stored secret. The handler can pass the reference to `host.request.send` as `auth`, so a confined operation can call a secret-protected external API without the secret ever entering the guest.
 
-`optionDelivery` is operation-option delivery only. Confined endpoints and hooks use package settings for durable configuration and secret references. They do not have per-invocation operation options.
+`optionDelivery` is operation-option delivery only. Confined endpoints and hooks use [package settings](/docs/develop/extensions/settings/) for durable configuration and secret references. They do not have per-invocation operation options.
 
 ## Building and loading
 
@@ -192,6 +192,6 @@ To scaffold a confined extension, pass `--confined` to the create command. [Crea
 
 ## Diagnostics
 
-The resolved state of every extension is on the Settings > Extensions page. Each extension can be opened to display the runtime label: Sandboxed, Full authority, or Browser app. A sandboxed entry row shows its declared capabilities, and a `partial` status when some of its entries loaded and others did not.
+The resolved state of every extension is on the Settings > Extensions page. Each row carries a health indicator: Normal, Warning when something needs attention (bundle entries that failed while others loaded, or settings that are unavailable), or Failed when the extension did not load. Opening a row shows the runtime label (Sandboxed, Full Authority, or Browser App), a sandboxed extension's declared capabilities, and the diagnostic reason behind any warning or failure. An extension that declares settings carries a Settings action in its row menu.
 
 An Advanced Diagnostics section holds the OS-hardening posture: the resolved mode, the decision to run or refuse, which hardening layers were applied, which are missing, and the cgroup mechanic when one is used. The same diagnostics are available from the `GET /extensions` API.
