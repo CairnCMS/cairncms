@@ -99,6 +99,15 @@ describe('operation-option-secrets', () => {
 			await expect(encryptOperationOptionsForCreate(payload)).rejects.toBeInstanceOf(InvalidPayloadException);
 		});
 
+		it('encrypts a declared key on a custom-prototype options object', async () => {
+			const options = Object.assign(Object.create({ inherited: true }), { api_key: 'sk_live_123' });
+			const payload: Record<string, unknown> = { type: 'secret-op', options };
+
+			await encryptOperationOptionsForCreate(payload);
+
+			expect(hasSecretMarker((payload['options'] as Record<string, unknown>)['api_key'])).toBe(true);
+		});
+
 		it('leaves an undeclared type and a non-object options untouched', async () => {
 			const payload: Record<string, unknown> = { type: 'core-request', options: { api_key: 'plain' } };
 			await encryptOperationOptionsForCreate(payload);
@@ -271,6 +280,15 @@ describe('operation-option-secrets', () => {
 			const bare: Record<string, unknown> = { type: 'secret-op', options: null };
 			maskOperationOptions(bare);
 			expect(bare['options']).toBeNull();
+		});
+
+		it('masks a declared key on a custom-prototype options object', () => {
+			const options = Object.assign(Object.create({ inherited: true }), { api_key: 'sk_live_clear' });
+			const record: Record<string, unknown> = { type: 'secret-op', options };
+
+			maskOperationOptions(record);
+
+			expect((record['options'] as Record<string, unknown>)['api_key']).toBe(SECRET_MASK);
 		});
 	});
 
