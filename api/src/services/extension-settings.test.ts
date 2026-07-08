@@ -273,6 +273,19 @@ describe('ExtensionSettingsService', () => {
 			expect(rows).toEqual([{ scope: 'global', scope_key: '', key: 'api_key', value: SECRET_MASK }]);
 		});
 
+		it('skips an unreadable stored row and returns the rest', async () => {
+			manager.getDeclaredSettings.mockReturnValue([declaration]);
+
+			tracker.on.select(TABLE).response([
+				{ scope: 'global', scope_key: '', key: 'count', value: 'not-json{' },
+				{ scope: 'global', scope_key: '', key: 'api_key', value: '"sk_live_stored"' },
+			]);
+
+			const rows = await service().get('cairncms-extension-preview');
+
+			expect(rows).toEqual([{ scope: 'global', scope_key: '', key: 'api_key', value: SECRET_MASK }]);
+		});
+
 		it('deletes every row for a subject', async () => {
 			tracker.on.delete(TABLE).response(3);
 

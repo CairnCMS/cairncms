@@ -5,8 +5,10 @@ import getDatabase from '../database/index.js';
 import env from '../env.js';
 import { ForbiddenException, InvalidConfigException, InvalidPayloadException } from '../exceptions/index.js';
 import { getExtensionManager } from '../extensions.js';
+import logger from '../logger.js';
 import type { AbstractServiceOptions } from '../types/index.js';
 import { encryptSecret, hasSecretMarker, SECRET_MASK, validateSecretsEncryptionKey } from '../utils/encrypt-secret.js';
+import { safeLogFragment } from '../utils/safe-log-fragment.js';
 import { readCollectionSettings, readGlobalSettings, type StoredSettingRow } from './extension-settings-store.js';
 
 const TABLE = 'cairncms_extension_settings';
@@ -107,13 +109,25 @@ export class ExtensionSettingsService {
 
 		const rows = await query.select('scope', 'scope_key', 'key', 'value');
 
-		return rows.map((row) => {
-			const value = JSON.parse(row.value);
+		return rows.flatMap((row) => {
+			let value: unknown;
+
+			try {
+				value = JSON.parse(row.value);
+			} catch {
+				logger.warn(
+					`Skipped an unreadable extension setting row for "${safeLogFragment(subject)}" (${safeLogFragment(
+						row.scope
+					)}/${safeLogFragment(row.scope_key)}/${safeLogFragment(row.key)}).`
+				);
+
+				return [];
+			}
 
 			const masked =
 				declarations.some((declaration) => declaration[row.key]?.secret !== undefined) || hasSecretMarker(value);
 
-			return { scope: row.scope, scope_key: row.scope_key, key: row.key, value: masked ? SECRET_MASK : value };
+			return [{ scope: row.scope, scope_key: row.scope_key, key: row.key, value: masked ? SECRET_MASK : value }];
 		});
 	}
 
