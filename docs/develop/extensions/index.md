@@ -86,5 +86,5 @@ The [Creating extensions](/docs/develop/extensions/creating-extensions/) page wa
 - [App extensions](/docs/develop/extensions/app-extensions/) covers the browser lane and links to each app type.
 - [Server extensions](/docs/develop/extensions/server-extensions/) covers the Node lane and the full-authority versus sandboxed choice.
 - [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) is the reference for the confined runtime: the host API, capabilities, and diagnostics.
-- [Extension settings](/docs/develop/extensions/settings/) covers declaring operator-managed settings and secrets, and how sandboxed server entries and app extensions read them.
+- [Extension settings](/docs/develop/extensions/settings/) covers declaring operator-managed settings and secrets, and how server and app extension code reads them.
 - [Creating extensions](/docs/develop/extensions/creating-extensions/) covers the toolchain end to end: scaffold, build, install, hot reload, debug, publish.

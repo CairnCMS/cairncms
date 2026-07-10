@@ -1,6 +1,6 @@
 ---
 title: Extension Settings
-description: Declaring operator-managed settings in the manifest, secret values, scopes, and how sandboxed server entries and app extensions read them.
+description: Declaring operator-managed settings in the manifest, secret values, scopes, and how server and app extension code reads them.
 sidebar:
   label: Settings
   order: 2
@@ -121,6 +121,37 @@ export default defineEventHook({
 - Collection-scoped keys are not exposed to sandboxed code. `host.settings.get` reads global keys only.
 
 See the [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) reference for the host API and the secret-reference request auth.
+
+## Reading settings from a full-authority server extension
+
+A full-authority hook, endpoint, or operation reads its own settings through the `extensionSettings` member of its context. The reader is bound to the extension's package at registration, so there is no way to name another package's subject. The same extension built full-authority instead of sandboxed reads the same declared keys:
+
+```js
+export default ({ action }, { extensionSettings, logger }) => {
+  action('items.create', async () => {
+    const from = (await extensionSettings.get('sender_name')) ?? 'CairnCMS';
+    const token = await extensionSettings.get('api_token');
+
+    if (token === null) {
+      logger.warn('chat-notify: no API token is configured');
+      return;
+    }
+
+    await fetch('https://chat.example.com/api/messages', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ from, text: 'New content was created' }),
+    });
+  });
+};
+```
+
+- `get(key)` reads a global key. A collection-scoped key is read explicitly: `get(key, { scope: 'collection', collection: 'articles' })`.
+- A non-secret key resolves to its stored value, or `null` when it is unset or mismatches its declared type.
+- A secret key resolves to its raw value. An inline secret decrypts server-side, and a config secret reads its derived deployment variable. There is no brokered reference outside the sandbox.
+- An undeclared key, an unavailable settings identity, a mismatched value, and an unreadable stored secret all resolve to `null`. Infrastructure failures, such as database errors, can still reject the read.
+
+The secret handling is the difference between the runtimes. An inline secret is encrypted at rest either way, but sandboxed code receives an opaque reference the platform resolves outside the sandbox, while full-authority code receives the decrypted value, as the `Bearer ${token}` header above shows. A full-authority extension is trusted server code. The at-rest encryption protects the stored value against database exposure, not against the extension itself.
 
 ## Reading settings from app extensions
 

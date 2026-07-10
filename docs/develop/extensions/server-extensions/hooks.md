@@ -179,6 +179,7 @@ The context object passed as the second argument to the registration function ha
 - **`env`** — parsed environment variables
 - **`logger`** — a Pino logger instance
 - **`emitter`** — the platform's event emitter, for firing custom events that other hooks can listen for
+- **`extensionSettings`** — a read-only accessor for the settings this extension declares in its manifest, bound to its own package (see [Extension settings](/docs/develop/extensions/settings/))
 
 When you use the emitter, never emit an event that your own hook handles. Direct or indirect self-emission produces an infinite loop with no useful exit.
 

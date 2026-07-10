@@ -34,6 +34,8 @@ An extension that declares settings carries a **Settings** action in its row men
 - Clear a stored value from the field's menu with **Clear Value** and save. The stored value is removed, not set to empty.
 - A secret field never shows its stored value. Once a secret is saved, the field shows a locked, encrypted state. Entering a new value replaces the stored one.
 
+The encryption protects the stored value at rest. Where the secret goes at runtime depends on the extension's runtime: a sandboxed extension receives only an opaque reference the platform resolves on its behalf, while a full-authority extension receives the value itself, as trusted server code.
+
 Saving an inline secret requires `SECRETS_ENCRYPTION_KEY` to be configured on the deployment. If it is not, the save fails with a dialog naming the missing configuration. See [Configuration](/docs/manage/configuration/#extensions).
 
 Some extensions also read secrets directly from deployment configuration. Those never appear as editable fields. The drawer shows a general notice that the extension uses deployment configuration, and the extension's own documentation should name the variables to set. See [Configuration](/docs/manage/configuration/#extensions) for how those variables are derived.

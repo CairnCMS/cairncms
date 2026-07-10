@@ -81,6 +81,7 @@ The second argument is a context object with everything an endpoint typically ne
 - **`env`** — the parsed environment variables.
 - **`logger`** — a Pino logger instance. Use this rather than `console.log` so messages flow through the platform's logging pipeline.
 - **`emitter`** — the platform's event emitter. Use this to fire custom events that other extensions can subscribe to with hooks.
+- **`extensionSettings`** — a read-only accessor for the settings this extension declares in its manifest, bound to its own package. See [Extension settings](/docs/develop/extensions/settings/).
 
 ```js
 export default (router, { services, exceptions }) => {

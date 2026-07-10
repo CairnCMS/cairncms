@@ -118,7 +118,7 @@ The handler runs each time a flow reaches the operation. It receives:
 
 - **`options`** — the operation's configured options, with any data chain variables already interpolated. If the editor configured `to: '{{ $trigger.payload.email }}'`, the handler receives the resolved email address, not the template string.
 - **`context`** — an object that combines the standard API extension context with two additions specific to operations:
-  - `services`, `exceptions`, `database`, `env`, `logger`, `getSchema` — same as endpoint and hook contexts
+  - `services`, `exceptions`, `database`, `env`, `logger`, `getSchema`, `extensionSettings` — same as endpoint and hook contexts
   - **`data`** — the entire flow data chain, with every prior operation's output keyed by operation key
   - **`accountability`** — the accountability object derived from the flow's trigger (the originating user, role, IP, and so on)
 
