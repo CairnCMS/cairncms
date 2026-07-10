@@ -6,7 +6,6 @@ import {
 	JAVASCRIPT_FILE_EXTS,
 	NESTED_EXTENSION_TYPES,
 } from '@cairncms/constants';
-import * as sharedExceptions from '@cairncms/exceptions';
 import type {
 	Accountability,
 	ActionHandler,
@@ -15,7 +14,6 @@ import type {
 	ConfinedHookEvents,
 	ConfinedOptionDelivery,
 	ExtensionCapabilities,
-	EmbedHandler,
 	EndpointConfig,
 	Extension,
 	ExtensionInfo,
@@ -24,10 +22,8 @@ import type {
 	FilterHandler,
 	HookConfig,
 	HybridExtension,
-	InitHandler,
 	NestedExtensionType,
 	OperationApiConfig,
-	ScheduleHandler,
 } from '@cairncms/types';
 import { isIn, isTypeIn, pluralize } from '@cairncms/utils';
 import {
@@ -41,7 +37,6 @@ import {
 import chokidar, { FSWatcher } from 'chokidar';
 import express, { Router } from 'express';
 import { clone, debounce } from 'lodash-es';
-import { schedule, validate } from 'node-cron';
 import { readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
@@ -68,12 +63,17 @@ import type {
 	ExtensionDiagnosticEntry,
 } from './extensions/diagnostics.js';
 import { buildExtensionSettingsReader } from './extensions/extension-settings-reader.js';
+import {
+	registerEndpoint as registerFullAuthorityEndpoint,
+	registerHook as registerFullAuthorityHook,
+	registerOperation as registerFullAuthorityOperation,
+	type FullAuthorityRegistrationDeps,
+} from './extensions/full-authority-registration.js';
 import { readCollectionSettings, readGlobalSettings } from './services/extension-settings-store.js';
 import { clearOperationOptionSecrets, registerOperationOptionSecrets } from './services/operation-option-secrets.js';
 import type { SandboxConfig } from './extensions/confined/sandbox-limits.js';
 import { getAxios } from './request/index.js';
 import logger from './logger.js';
-import * as services from './services/index.js';
 import type { EventHandler } from './types/index.js';
 import {
 	gateConfinedExtension,
@@ -88,7 +88,6 @@ import { describePosture, type SandboxPosture } from './extensions/confined/sand
 import getModuleDefault from './utils/get-module-default.js';
 import { filterServerExtensions } from './utils/filter-server-extensions.js';
 import { sanitizeExtensionError, type SanitizedExtensionError } from './utils/sanitize-extension-error.js';
-import { getSchema } from './utils/get-schema.js';
 import { JobQueue } from './utils/job-queue.js';
 
 const require = createRequire(import.meta.url);
@@ -1529,120 +1528,30 @@ export class ExtensionManager {
 		});
 	}
 
-	private registerHook(register: HookConfig, subject: string): void {
-		const registerFunctions = {
-			filter: (event: string, handler: FilterHandler) => {
-				emitter.onFilter(event, handler);
-
-				this.hookEvents.push({
-					type: 'filter',
-					name: event,
-					handler,
-				});
-			},
-			action: (event: string, handler: ActionHandler) => {
-				emitter.onAction(event, handler);
-
-				this.hookEvents.push({
-					type: 'action',
-					name: event,
-					handler,
-				});
-			},
-			init: (event: string, handler: InitHandler) => {
-				emitter.onInit(event, handler);
-
-				this.hookEvents.push({
-					type: 'init',
-					name: event,
-					handler,
-				});
-			},
-			schedule: (cron: string, handler: ScheduleHandler) => {
-				if (validate(cron)) {
-					const task = schedule(cron, async () => {
-						if (this.options.schedule) {
-							try {
-								await handler();
-							} catch (error: any) {
-								logger.error(error);
-							}
-						}
-					});
-
-					this.hookEvents.push({
-						type: 'schedule',
-						task,
-					});
-				} else {
-					logger.warn(`Couldn't register cron hook. Provided cron is invalid: ${cron}`);
-				}
-			},
-			embed: (position: 'head' | 'body', code: string | EmbedHandler) => {
-				const content = typeof code === 'function' ? code() : code;
-
-				if (content.trim().length === 0) {
-					logger.warn(`Couldn't register embed hook. Provided code is empty!`);
-					return;
-				}
-
-				if (position === 'head') {
-					this.hookEmbedsHead.push(content);
-				}
-
-				if (position === 'body') {
-					this.hookEmbedsBody.push(content);
-				}
-			},
+	// The manager owns the registration state; the leaf functions receive it and mutate it here.
+	private fullAuthorityDeps(): FullAuthorityRegistrationDeps {
+		return {
+			apiEmitter: this.apiEmitter,
+			makeSettingsReader: (subject) => this.settingsReaderFor(subject),
+			hookEvents: this.hookEvents,
+			hookEmbedsHead: this.hookEmbedsHead,
+			hookEmbedsBody: this.hookEmbedsBody,
+			scheduleEnabled: () => this.options.schedule,
+			endpointRouter: this.endpointRouter,
+			registeredEndpointRoutes: this.registeredEndpointRoutes,
 		};
+	}
 
-		register(registerFunctions, {
-			services,
-			exceptions: { ...exceptions, ...sharedExceptions },
-			env,
-			database: getDatabase(),
-			emitter: this.apiEmitter,
-			logger,
-			getSchema,
-			extensionSettings: this.settingsReaderFor(subject),
-		});
+	private registerHook(register: HookConfig, subject: string): void {
+		registerFullAuthorityHook(register, subject, this.fullAuthorityDeps());
 	}
 
 	private registerEndpoint(config: EndpointConfig, name: string, subject: string): void {
-		const register = typeof config === 'function' ? config : config.handler;
-		const routeName = typeof config === 'function' ? name : config.id;
-
-		const scopedRouter = express.Router();
-		this.endpointRouter.use(`/${routeName}`, scopedRouter);
-		// Lowercased, because the router matches case-insensitively: a confined route
-		// must collide with an inherited case variant, not shadow it.
-		this.registeredEndpointRoutes.add(routeName.toLowerCase());
-
-		register(scopedRouter, {
-			services,
-			exceptions: { ...exceptions, ...sharedExceptions },
-			env,
-			database: getDatabase(),
-			emitter: this.apiEmitter,
-			logger,
-			getSchema,
-			extensionSettings: this.settingsReaderFor(subject),
-		});
+		registerFullAuthorityEndpoint(config, name, subject, this.fullAuthorityDeps());
 	}
 
 	private registerOperation(config: OperationApiConfig, subject?: string): void {
-		const flowManager = getFlowManager();
-
-		if (subject === undefined) {
-			flowManager.addOperation(config.id, config.handler);
-			return;
-		}
-
-		const extensionSettings = this.settingsReaderFor(subject);
-
-		flowManager.addOperation(config.id, (options, context) =>
-			config.handler(options, { ...context, extensionSettings })
-		);
+		registerFullAuthorityOperation(config, subject, this.fullAuthorityDeps());
 	}
 
 	private unregisterApiExtensions(): void {
