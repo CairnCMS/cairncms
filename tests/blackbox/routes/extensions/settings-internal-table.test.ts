@@ -9,6 +9,10 @@ const TABLE = 'cairncms_extension_settings';
 const FORBIDDEN = [403, 404];
 const TOKEN = () => common.USER.ADMIN.TOKEN;
 
+// These assertions pin the HTTP surfaces for the one registered internal table by name.
+// Proof that a newly registered internal table is auto-covered lives in the unit suite at
+// api/src/database/internal-tables.test.ts, which iterates the registry. The blackbox package
+// cannot import that registry, so a new internal table must be added to the checks below by hand.
 describe('internal table cairncms_extension_settings stays hidden from every operator surface', () => {
 	const databases = new Map<string, Knex>();
 

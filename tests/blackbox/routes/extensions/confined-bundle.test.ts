@@ -1,6 +1,7 @@
 import config, { getUrl } from '@common/config';
 import { CreateCollection } from '@common/functions';
 import vendors from '@common/get-dbs-to-test';
+import { requestGraphQL } from '@common/index';
 import { USER } from '@common/variables';
 import knex, { type Knex } from 'knex';
 import request from 'supertest';
@@ -329,6 +330,22 @@ describe('Confined bundle server entries through the real binding', () => {
 				const nestedOperation = nested.body.data.operations.find((operation: { id: string }) => operation.id === id);
 				expect(nestedOperation.options.api_key).toBe(SECRET_MASK);
 				expect(JSON.stringify(nested.body)).not.toContain(PLAINTEXT);
+
+				const gql = await requestGraphQL(getUrl(vendor), true, USER.ADMIN.TOKEN, {
+					query: {
+						operations: {
+							__args: { filter: { id: { _eq: id } } },
+							type: true,
+							options: true,
+						},
+					},
+				});
+
+				expect(gql.statusCode).toBe(200);
+				const gqlOptions = gql.body.data.operations[0].options;
+				const gqlParsed = typeof gqlOptions === 'string' ? JSON.parse(gqlOptions) : gqlOptions;
+				expect(gqlParsed.api_key).toBe(SECRET_MASK);
+				expect(JSON.stringify(gql.body)).not.toContain(PLAINTEXT);
 
 				const patchRevision = await admin(
 					request(getUrl(vendor))

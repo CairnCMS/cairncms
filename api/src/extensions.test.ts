@@ -2053,6 +2053,29 @@ describe('the settings subject gate in the loader', () => {
 		expect((instance as any).isSettingsEligible(second)).toBe(false);
 	});
 
+	it('keeps the surviving owner ineligible when its same-name twin fails to load', async () => {
+		writeConfinedPackage('dup-set-clean', 'export default {};\n', 'cairncms-extension-dup');
+
+		writeConfinedPackage(
+			'dup-set-flagged',
+			"import { readFile } from 'node:fs/promises';\nexport default {};\n",
+			'cairncms-extension-dup'
+		);
+
+		const instance = new ExtensionManager();
+		const loading = { ...endpointExtension('dup-set-clean', 'cairncms-extension-dup', true), settings: declaration };
+		const failing = { ...endpointExtension('dup-set-flagged', 'cairncms-extension-dup', true), settings: declaration };
+		(instance as any).getExtensions = async () => [loading, failing];
+
+		await (instance as any).load();
+
+		expect((instance as any).confinedEligible.has(loading)).toBe(true);
+		expect((instance as any).confinedEligible.has(failing)).toBe(false);
+
+		expect((instance as any).isSettingsEligible(loading)).toBe(false);
+		expect((instance as any).getSettingsOwner('cairncms-extension-dup')).toBeUndefined();
+	});
+
 	it('exposes a gated-ineligible owner declaration through getDeclaredSettings for masking', async () => {
 		const instance = new ExtensionManager();
 		const first = settingsOwner('dup-a', 'cairncms-extension-dup');

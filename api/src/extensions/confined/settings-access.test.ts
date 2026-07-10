@@ -109,6 +109,22 @@ describe('buildConfinedSettingsAccess', () => {
 		expect(await a.resolveExtensionSecret(binding('api_key'), live())).toBeNull();
 	});
 
+	it('inline resolve fails closed on an envelope with an unsupported key id', async () => {
+		const envelope: any = await encryptSecret('sk_live_123');
+		const orphaned = { ...envelope, kid: 'env:rotated' };
+		const a = access([{ key: 'api_key', value: orphaned }]);
+		expect(await a.resolveExtensionSecret(binding('api_key'), live())).toBeNull();
+	});
+
+	it('inline resolve fails closed when the encryption key material has changed', async () => {
+		const envelope = await encryptSecret('sk_live_123');
+		const a = access([{ key: 'api_key', value: envelope }]);
+
+		factoryEnv.SECRETS_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString('base64');
+
+		expect(await a.resolveExtensionSecret(binding('api_key'), live())).toBeNull();
+	});
+
 	it('does not read or cache on an aborted first call, so a later live read still works', async () => {
 		const aborted = new AbortController();
 		aborted.abort();

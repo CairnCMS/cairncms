@@ -337,6 +337,26 @@ describe('operation-option-secrets', () => {
 			expect(JSON.stringify(resolved)).not.toContain('written-before-the-declaration');
 		});
 
+		it('keeps an unsupported-kid envelope in place so the preparation fails closed', async () => {
+			const envelope: any = await encryptSecret('sk_live_123');
+			const orphaned = { ...envelope, kid: 'env:rotated' };
+
+			const resolved = await decryptOperationOptions({ api_key: orphaned }, ['api_key']);
+
+			expect(hasSecretMarker(resolved['api_key'])).toBe(true);
+			expect(JSON.stringify(resolved)).not.toContain('sk_live_123');
+		});
+
+		it('keeps an envelope encrypted under changed key material in place, failing closed', async () => {
+			const envelope = await encryptSecret('sk_live_123');
+			encryptionKey.value = Buffer.alloc(32, 9).toString('base64');
+
+			const resolved = await decryptOperationOptions({ api_key: envelope }, ['api_key']);
+
+			expect(hasSecretMarker(resolved['api_key'])).toBe(true);
+			expect(JSON.stringify(resolved)).not.toContain('sk_live_123');
+		});
+
 		it('passes an absent or empty declared value and a null options through unchanged', async () => {
 			const resolved = await decryptOperationOptions({ api_key: '', url: 'https://x' }, ['api_key']);
 			expect(resolved['api_key']).toBe('');
