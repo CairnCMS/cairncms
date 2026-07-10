@@ -66,7 +66,8 @@ import type { ConfinedLogEntry } from './extensions/confined/broker.js';
 import type { ConfinedHostDispatcher, ConfinedInvocation } from './extensions/confined/types.js';
 import { confinedItemsService } from './extensions/confined/items-service.js';
 import { buildConfinedSettingsAccess } from './extensions/confined/settings-access.js';
-import { readGlobalSettings } from './services/extension-settings-store.js';
+import { buildExtensionSettingsReader } from './extensions/extension-settings-reader.js';
+import { readCollectionSettings, readGlobalSettings } from './services/extension-settings-store.js';
 import { clearOperationOptionSecrets, registerOperationOptionSecrets } from './services/operation-option-secrets.js';
 import type { SandboxConfig } from './extensions/confined/sandbox-limits.js';
 import { getAxios } from './request/index.js';
@@ -1680,7 +1681,7 @@ export class ExtensionManager {
 
 				const config = getModuleDefault(hookInstance);
 
-				this.registerHook(config);
+				this.registerHook(config, hook.name);
 
 				this.apiExtensions.push({ path: hookPath });
 
@@ -1708,7 +1709,7 @@ export class ExtensionManager {
 
 				const config = getModuleDefault(endpointInstance);
 
-				this.registerEndpoint(config, endpoint.name);
+				this.registerEndpoint(config, endpoint.name, endpoint.name);
 
 				this.apiExtensions.push({ path: endpointPath });
 
@@ -1748,7 +1749,7 @@ export class ExtensionManager {
 
 				const config = getModuleDefault(operationInstance);
 
-				this.registerOperation(config);
+				this.registerOperation(config, operation.name);
 
 				this.apiExtensions.push({ path: operationPath });
 
@@ -1777,15 +1778,15 @@ export class ExtensionManager {
 				const configs = getModuleDefault(bundleInstances);
 
 				for (const { config } of configs.hooks) {
-					this.registerHook(config);
+					this.registerHook(config, bundle.name);
 				}
 
 				for (const { config, name } of configs.endpoints) {
-					this.registerEndpoint(config, name);
+					this.registerEndpoint(config, name, bundle.name);
 				}
 
 				for (const { config } of configs.operations) {
-					this.registerOperation(config);
+					this.registerOperation(config, bundle.name);
 				}
 
 				this.apiExtensions.push({ path: bundlePath });
@@ -1799,7 +1800,16 @@ export class ExtensionManager {
 		}
 	}
 
-	private registerHook(register: HookConfig): void {
+	private settingsReaderFor(subject: string) {
+		return buildExtensionSettingsReader({
+			subject,
+			getDeclaration: () => this.getSettingsOwner(subject)?.settings,
+			readGlobalRows: () => readGlobalSettings(getDatabase(), subject),
+			readCollectionRows: (collection) => readCollectionSettings(getDatabase(), subject, collection),
+		});
+	}
+
+	private registerHook(register: HookConfig, subject: string): void {
 		const registerFunctions = {
 			filter: (event: string, handler: FilterHandler) => {
 				emitter.onFilter(event, handler);
@@ -1874,10 +1884,11 @@ export class ExtensionManager {
 			emitter: this.apiEmitter,
 			logger,
 			getSchema,
+			extensionSettings: this.settingsReaderFor(subject),
 		});
 	}
 
-	private registerEndpoint(config: EndpointConfig, name: string): void {
+	private registerEndpoint(config: EndpointConfig, name: string, subject: string): void {
 		const register = typeof config === 'function' ? config : config.handler;
 		const routeName = typeof config === 'function' ? name : config.id;
 
@@ -1895,13 +1906,23 @@ export class ExtensionManager {
 			emitter: this.apiEmitter,
 			logger,
 			getSchema,
+			extensionSettings: this.settingsReaderFor(subject),
 		});
 	}
 
-	private registerOperation(config: OperationApiConfig): void {
+	private registerOperation(config: OperationApiConfig, subject?: string): void {
 		const flowManager = getFlowManager();
 
-		flowManager.addOperation(config.id, config.handler);
+		if (subject === undefined) {
+			flowManager.addOperation(config.id, config.handler);
+			return;
+		}
+
+		const extensionSettings = this.settingsReaderFor(subject);
+
+		flowManager.addOperation(config.id, (options, context) =>
+			config.handler(options, { ...context, extensionSettings })
+		);
 	}
 
 	private unregisterApiExtensions(): void {

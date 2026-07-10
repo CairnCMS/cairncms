@@ -2184,3 +2184,124 @@ describe('the settings subject gate in the loader', () => {
 		expect(warn).toHaveBeenCalledWith(expect.stringContaining('CAIRNCMS_EXT_'));
 	});
 });
+
+describe('full-authority extension settings threading', () => {
+	const SUBJECT = 'cairncms-extension-threaded';
+	const CONFIG_VAR = 'CAIRNCMS_EXT_THREADED_BILLING_KEY';
+	const BUNDLE_SUBJECT = 'cairncms-extension-fa-bundle';
+	const BUNDLE_CONFIG_VAR = 'CAIRNCMS_EXT_FA_BUNDLE_BILLING_KEY';
+
+	const configDecl = { billing_key: { type: 'string', scope: 'global', secret: { source: 'config' } } } as any;
+
+	function seedOwner(instance: ExtensionManager, subject: string) {
+		(instance as any).settingsEligible = new Set([{ name: subject, settings: configDecl }]);
+	}
+
+	afterEach(() => {
+		delete process.env[CONFIG_VAR];
+		delete process.env[BUNDLE_CONFIG_VAR];
+		delete (globalThis as any).__faBundleHookContext;
+		delete (globalThis as any).__faBundleEndpointContext;
+		delete (globalThis as any).__faBundleOperationContext;
+		getFlowManager().clearOperations();
+		vi.restoreAllMocks();
+	});
+
+	it('binds a hook context reader to the registering subject', async () => {
+		process.env[CONFIG_VAR] = 'hook-secret';
+		const instance = new ExtensionManager();
+		seedOwner(instance, SUBJECT);
+
+		let captured: any;
+
+		(instance as any).registerHook((_register: any, context: any) => {
+			captured = context;
+		}, SUBJECT);
+
+		expect(await captured.extensionSettings.get('billing_key')).toBe('hook-secret');
+		expect(await captured.extensionSettings.get('undeclared')).toBeNull();
+	});
+
+	it('binds an endpoint context reader to the registering subject', async () => {
+		process.env[CONFIG_VAR] = 'endpoint-secret';
+		const instance = new ExtensionManager();
+		seedOwner(instance, SUBJECT);
+
+		let captured: any;
+
+		(instance as any).registerEndpoint(
+			(_router: any, context: any) => {
+				captured = context;
+			},
+			'threaded-endpoint',
+			SUBJECT
+		);
+
+		expect(await captured.extensionSettings.get('billing_key')).toBe('endpoint-secret');
+	});
+
+	it('wraps an extension operation handler with a bound reader and leaves an internal one unwrapped', async () => {
+		const flowManager = getFlowManager();
+		const spy = vi.spyOn(flowManager, 'addOperation');
+		const instance = new ExtensionManager();
+		seedOwner(instance, SUBJECT);
+
+		let captured: any;
+
+		const handler = (_options: any, context: any) => {
+			captured = context;
+			return null;
+		};
+
+		(instance as any).registerOperation({ id: 'threaded-op-16-7', handler }, SUBJECT);
+
+		const wrapped = spy.mock.calls.at(-1)![1] as any;
+		expect(wrapped).not.toBe(handler);
+
+		process.env[CONFIG_VAR] = 'operation-secret';
+		await wrapped({}, { data: { fed: true }, accountability: null });
+
+		expect(captured.data).toEqual({ fed: true });
+		expect(await captured.extensionSettings.get('billing_key')).toBe('operation-secret');
+
+		(instance as any).registerOperation({ id: 'internal-op-16-7', handler });
+		expect(spy.mock.calls.at(-1)![1]).toBe(handler);
+	});
+
+	it('binds bundle entry contexts to the bundle subject, not the entry name', async () => {
+		process.env[BUNDLE_CONFIG_VAR] = 'bundle-secret';
+
+		const dir = path.join(root, 'fa-bundle');
+		mkdirSync(dir, { recursive: true });
+
+		writeFileSync(
+			path.join(dir, 'api.js'),
+			'export default { hooks: [{ config: (_register, context) => { globalThis.__faBundleHookContext = context; } }], ' +
+				"endpoints: [{ name: 'inner-endpoint', config: (_router, context) => { globalThis.__faBundleEndpointContext = context; } }], " +
+				"operations: [{ config: { id: 'fa-bundle-op-16-7', handler: (_options, context) => { globalThis.__faBundleOperationContext = context; return null; } } }] };\n"
+		);
+
+		const flowManager = getFlowManager();
+		const spy = vi.spyOn(flowManager, 'addOperation');
+
+		const bundle = bundleExtension('fa-bundle', BUNDLE_SUBJECT, false);
+		const instance = manager([bundle]);
+		seedOwner(instance, BUNDLE_SUBJECT);
+
+		await (instance as any).registerBundles();
+
+		const hookContext = (globalThis as any).__faBundleHookContext;
+		const endpointContext = (globalThis as any).__faBundleEndpointContext;
+
+		expect(await hookContext.extensionSettings.get('billing_key')).toBe('bundle-secret');
+		expect(await endpointContext.extensionSettings.get('billing_key')).toBe('bundle-secret');
+
+		const registered = spy.mock.calls.find(([id]) => id === 'fa-bundle-op-16-7');
+		expect(registered).toBeDefined();
+
+		await (registered![1] as any)({}, { data: {}, accountability: null });
+
+		const operationContext = (globalThis as any).__faBundleOperationContext;
+		expect(await operationContext.extensionSettings.get('billing_key')).toBe('bundle-secret');
+	});
+});

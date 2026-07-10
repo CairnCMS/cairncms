@@ -101,6 +101,10 @@ export type AppExtensionConfigs = {
 	operations: OperationAppConfig[];
 };
 
+export type ExtensionSettingsReader = {
+	get(key: string, options?: { scope: 'collection'; collection: string }): Promise<unknown>;
+};
+
 export type ApiExtensionContext = {
 	services: any;
 	exceptions: any;
@@ -108,6 +112,7 @@ export type ApiExtensionContext = {
 	env: Record<string, any>;
 	logger: Logger;
 	getSchema: (options?: { accountability?: Accountability; database?: Knex }) => Promise<SchemaOverview>;
+	extensionSettings: ExtensionSettingsReader;
 };
 
 export type ExtensionOptionsContext = {

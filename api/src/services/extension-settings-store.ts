@@ -8,9 +8,10 @@ export type StoredSettingRow = {
 };
 
 /**
- * Reads a subject's global-scoped settings for the confined runtime. This is a
- * system-internal read with no accountability and no admin gate, kept free of any
- * import of extensions.ts so the runtime path cannot close an import cycle.
+ * Reads a subject's global-scoped settings for a runtime consumer (the confined access
+ * and the full-authority reader). This is a system-internal read with no accountability
+ * and no admin gate, kept free of any import of extensions.ts so the runtime path cannot
+ * close an import cycle.
  */
 export async function readGlobalSettings(
 	knex: Knex,
@@ -39,7 +40,9 @@ export async function readGlobalSettings(
 /**
  * Reads a subject's collection-scoped settings for one collection. A system-internal read with
  * no accountability, kept free of any import of extensions.ts so the read path cannot close an
- * import cycle. The caller filters by app-readability and applies collection authority.
+ * import cycle. Authority is the caller's contract: the app read filters by app-readability
+ * and the caller's collection permission, while the full-authority reader is already trusted
+ * server code bound to its own subject.
  */
 export async function readCollectionSettings(
 	knex: Knex,

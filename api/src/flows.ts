@@ -18,6 +18,7 @@ import getDatabase from './database/index.js';
 import emitter from './emitter.js';
 import env from './env.js';
 import * as exceptions from './exceptions/index.js';
+import { EMPTY_EXTENSION_SETTINGS_READER } from './extensions/extension-settings-reader.js';
 import { BaseException } from '@cairncms/exceptions';
 import logger from './logger.js';
 import { getMessenger } from './messenger.js';
@@ -589,6 +590,10 @@ class FlowManager {
 				database: getDatabase(),
 				logger,
 				getSchema,
+				// A built-in operation owns no settings, so it reads null through the empty
+				// reader. An extension operation's registration wrap rebinds this member to
+				// its own package subject.
+				extensionSettings: EMPTY_EXTENSION_SETTINGS_READER,
 				data: keyedData,
 				accountability: null,
 				...context,
