@@ -13,6 +13,17 @@ var CairnEndpoint = (() => {
 			return { body: 'x'.repeat(Number(request.query.bytes ?? '0')) };
 		}
 
+		if (request.path === '/settings') {
+			return {
+				body: {
+					label: (await context.host.settings.get('site_label')).value,
+					apiKey: (await context.host.settings.get('api_key')).value,
+					billingKey: (await context.host.settings.get('billing_key')).value,
+					undeclared: (await context.host.settings.get('nope')).value,
+				},
+			};
+		}
+
 		return {
 			status: 200,
 			body: {

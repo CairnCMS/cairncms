@@ -1,0 +1,161 @@
+get:
+  tags:
+    - Extensions
+  operationId: getExtensionSettings
+  summary: Read Extension Settings
+  description:
+    Returns the stored settings for an extension subject. A stored secret is returned masked, never the value
+    and never its encrypted form, and a config-sourced key has no stored row. This route is restricted to
+    administrators.
+  parameters:
+    - name: subject
+      in: query
+      required: true
+      description: The extension's package name.
+      schema:
+        type: string
+    - name: scope
+      in: query
+      required: false
+      schema:
+        type: string
+        enum:
+          - global
+          - collection
+    - name: scope_key
+      in: query
+      required: false
+      schema:
+        type: string
+  responses:
+    '200':
+      description: Successful request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    scope:
+                      type: string
+                    scope_key:
+                      type: string
+                    key:
+                      type: string
+                    value:
+                      $ref: '../../openapi.yaml#/components/schemas/ExtensionSettingValue'
+    '400':
+      description: The request is missing the required subject.
+    '401':
+      $ref: '../../openapi.yaml#/components/responses/UnauthorizedError'
+    '403':
+      description: The current user is not an administrator.
+post:
+  tags:
+    - Extensions
+  operationId: setExtensionSetting
+  summary: Write an Extension Setting
+  description:
+    Validates a setting value against the extension's manifest declaration and stores it. An inline secret is
+    entered as its raw string and stored encrypted, writing the mask back is rejected, and a config-sourced key
+    accepts no value at all. This route is restricted to administrators.
+  requestBody:
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - subject
+            - scope
+            - scope_key
+            - key
+            - value
+          properties:
+            subject:
+              type: string
+            scope:
+              type: string
+              enum:
+                - global
+                - collection
+            scope_key:
+              type: string
+            key:
+              type: string
+            value:
+              $ref: '../../openapi.yaml#/components/schemas/ExtensionSettingValue'
+  responses:
+    '200':
+      description: The setting was stored.
+    '400':
+      description: The key is undeclared, the value is out of shape, or the scope does not match the declaration.
+    '401':
+      $ref: '../../openapi.yaml#/components/responses/UnauthorizedError'
+    '403':
+      description: The current user is not an administrator, or the subject is not an eligible settings owner.
+    '503':
+      description: An inline secret cannot be stored because SECRETS_ENCRYPTION_KEY is not configured or is invalid.
+delete:
+  tags:
+    - Extensions
+  operationId: deleteExtensionSettings
+  summary: Delete Extension Settings
+  description:
+    Accepts exactly two body shapes. A body carrying only the subject removes every stored setting for that
+    extension across all scopes. A body carrying the subject with scope, scope_key, and key removes that one
+    stored value. A partial or mixed body is rejected and never falls through to the subject-wide purge. This
+    route is restricted to administrators.
+  requestBody:
+    content:
+      application/json:
+        schema:
+          oneOf:
+            - type: object
+              required:
+                - subject
+              additionalProperties: false
+              properties:
+                subject:
+                  type: string
+            - type: object
+              required:
+                - subject
+                - scope
+                - scope_key
+                - key
+              additionalProperties: false
+              properties:
+                subject:
+                  type: string
+                scope:
+                  type: string
+                  enum:
+                    - global
+                    - collection
+                scope_key:
+                  type: string
+                key:
+                  type: string
+  responses:
+    '200':
+      description: The settings were removed.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: object
+                properties:
+                  removed:
+                    type: integer
+    '400':
+      description: The request is missing the required subject, or carries a partial single-value key.
+    '401':
+      $ref: '../../openapi.yaml#/components/responses/UnauthorizedError'
+    '403':
+      description: The current user is not an administrator.

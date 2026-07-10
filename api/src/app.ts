@@ -16,6 +16,7 @@ import collectionsRouter from './controllers/collections.js';
 import configRouter from './controllers/config.js';
 import dashboardsRouter from './controllers/dashboards.js';
 import extensionsRouter from './controllers/extensions.js';
+import extensionSettingsRouter from './controllers/extension-settings.js';
 import fieldsRouter from './controllers/fields.js';
 import filesRouter from './controllers/files.js';
 import flowsRouter from './controllers/flows.js';
@@ -61,6 +62,7 @@ import rateLimiterGlobal from './middleware/rate-limiter-global.js';
 import rateLimiter from './middleware/rate-limiter-ip.js';
 import sanitizeQuery from './middleware/sanitize-query.js';
 import schema from './middleware/schema.js';
+import { validateSecretsEncryptionKey } from './utils/encrypt-secret.js';
 import { getConfigFromEnv } from './utils/get-config-from-env.js';
 import { getMaxUploadSize } from './utils/get-max-upload-size.js';
 import { Url } from './utils/url.js';
@@ -73,6 +75,13 @@ export default async function createApp(): Promise<express.Application> {
 	const helmet = await import('helmet');
 
 	validateEnv(['KEY', 'SECRET']);
+
+	try {
+		validateSecretsEncryptionKey();
+	} catch (error) {
+		logger.error(`"SECRETS_ENCRYPTION_KEY" is set but invalid: ${(error as Error).message}`);
+		process.exit(1);
+	}
 
 	// Validate FILES_MAX_UPLOAD_SIZE at boot so a malformed value fails startup, not the first upload.
 	getMaxUploadSize();
@@ -302,6 +311,7 @@ export default async function createApp(): Promise<express.Application> {
 	app.use('/config', configRouter);
 	app.use('/dashboards', dashboardsRouter);
 	app.use('/extensions', extensionsRouter);
+	app.use('/extension-settings', extensionSettingsRouter);
 	app.use('/fields', fieldsRouter);
 	app.use('/files', filesRouter);
 	app.use('/flows', flowsRouter);

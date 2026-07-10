@@ -11,6 +11,7 @@ import type {
 	ExtensionOptions,
 	ExtensionOptionsBundleEntries,
 	ExtensionOptionsBundleEntry,
+	ExtensionSettingsSchema,
 	HYBRID_EXTENSION_TYPES,
 	LOCAL_TYPES,
 	NESTED_EXTENSION_TYPES,
@@ -45,6 +46,8 @@ export type ConfinedRuntime = z.infer<typeof ConfinedRuntimeSchema>;
 
 export type ExtensionCapabilities = z.infer<typeof ExtensionCapabilitiesSchema>;
 
+export type ExtensionSettings = z.infer<typeof ExtensionSettingsSchema>;
+
 export type ConfinedOptionDelivery = z.infer<typeof ConfinedOptionDeliverySchema>;
 
 export type ConfinedHookEvents = z.infer<typeof ConfinedHookEventsSchema>;
@@ -56,6 +59,7 @@ type ExtensionBase = {
 	host?: string;
 	local: boolean;
 	runtime?: ConfinedRuntime;
+	settings?: ExtensionSettings;
 };
 
 export type AppExtension = ExtensionBase & {
@@ -97,6 +101,10 @@ export type AppExtensionConfigs = {
 	operations: OperationAppConfig[];
 };
 
+export type ExtensionSettingsReader = {
+	get(key: string, options?: { scope: 'collection'; collection: string }): Promise<unknown>;
+};
+
 export type ApiExtensionContext = {
 	services: any;
 	exceptions: any;
@@ -104,6 +112,7 @@ export type ApiExtensionContext = {
 	env: Record<string, any>;
 	logger: Logger;
 	getSchema: (options?: { accountability?: Accountability; database?: Knex }) => Promise<SchemaOverview>;
+	extensionSettings: ExtensionSettingsReader;
 };
 
 export type ExtensionOptionsContext = {

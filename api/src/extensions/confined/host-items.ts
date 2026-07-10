@@ -358,8 +358,8 @@ export interface ConfinedItemsHost {
 
 /**
  * Read-first platform data access under the authority model. The capability is
- * the accountability mode alone: current-user reads as the invocation's caller
- * and denies without one, system is the catalogued elevated opt-in. The
+ * the accountability mode alone: user reads as the invocation's caller
+ * and denies without one, full-access is the catalogued elevated opt-in. The
  * permission layer stays the authority, the broker only refuses to construct
  * the service under an authority the capability does not declare.
  */
@@ -367,11 +367,11 @@ export function createConfinedItemsHost(deps: ConfinedItemsHostDeps): ConfinedIt
 	function resolveAuthority():
 		| { ok: true; accountability: Accountability | null }
 		| { ok: false; reply: ConfinedHostReply } {
-		const mode = deps.capabilities.items;
+		const mode = deps.capabilities.items?.accountability;
 
 		if (mode === undefined) return { ok: false, reply: denied('the items capability is not declared') };
 
-		if (mode === 'current-user') {
+		if (mode === 'user') {
 			const accountability = deps.accountability;
 
 			if (accountability === undefined || accountability === null) {
@@ -381,7 +381,7 @@ export function createConfinedItemsHost(deps: ConfinedItemsHostDeps): ConfinedIt
 			return { ok: true, accountability };
 		}
 
-		if (mode === 'system') return { ok: true, accountability: null };
+		if (mode === 'full-access') return { ok: true, accountability: null };
 
 		return { ok: false, reply: denied('the items capability is not declared') };
 	}

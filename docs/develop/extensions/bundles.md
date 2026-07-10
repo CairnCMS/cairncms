@@ -194,6 +194,8 @@ A bundle can run its server entries in the sandbox. Declare `runtime: confined-s
 
 The app entry (`metric-card`) runs in the browser and carries no capabilities. The server entry (`metric-feed`) runs confined, is authored with `defineJsonEndpoint`, and declares only what it uses. The panel can call that endpoint on the same origin, which is the supported pattern for an app extension that needs external data without a direct cross-origin fetch from the browser.
 
+Settings are the exception to per-entry declaration. A bundle declares `settings` once at the package root, next to `type: "bundle"`, and every entry shares that one declaration and its stored values. There are no per-entry settings. See [Extension settings](/docs/develop/extensions/settings/).
+
 The confined gate is all-or-nothing for the shared server artifact: one bad server entry fails the whole server side before any entry registers. If the artifact passes the gate but some entries then fail to register, such as a route collision, the bundle loads with a `partial` status, and the diagnostics show which entries loaded and which did not. `partial` is a status the runtime reports, not a manifest field you set.
 
 See the [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) page for the host API, the capability vocabulary, and the per-entry rules.

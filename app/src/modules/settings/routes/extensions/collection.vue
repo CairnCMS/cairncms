@@ -32,18 +32,18 @@
 			<div class="summary">
 				<span class="stat">
 					<display-color value="var(--success)" />
-					<span class="count">{{ activeCount }}</span>
-					{{ t('extension_active') }}
+					<span class="count">{{ normalCount }}</span>
+					{{ t('extension_health_normal') }}
+				</span>
+				<span v-if="warningCount > 0" class="stat">
+					<display-color value="var(--warning)" />
+					<span class="count">{{ warningCount }}</span>
+					{{ t('extension_health_warning', warningCount) }}
 				</span>
 				<span v-if="failedCount > 0" class="stat">
 					<display-color value="var(--danger)" />
 					<span class="count">{{ failedCount }}</span>
-					{{ t('extension_failed') }}
-				</span>
-				<span v-if="partialCount > 0" class="stat">
-					<display-color value="var(--warning)" />
-					<span class="count">{{ partialCount }}</span>
-					{{ t('extension_partial') }}
+					{{ t('extension_health_failed') }}
 				</span>
 			</div>
 
@@ -61,7 +61,7 @@
 						<template #icon><v-icon :name="typeIcon(group.type)" /></template>
 						<span class="group-name">{{ groupLabel(group.type) }}</span>
 						<v-chip class="group-count" x-small>{{ group.items.length }}</v-chip>
-						<v-icon class="expand-icon" :class="{ active }" name="expand_more" />
+						<v-icon class="expand-icon" :name="active ? 'expand_more' : 'chevron_right'" />
 					</v-divider>
 				</template>
 
@@ -73,15 +73,21 @@
 					@click="selected = extension"
 				>
 					<v-list-item-icon>
-						<display-color :value="statusColor(extension.status)" />
+						<display-color :value="rowHealthColor(extension)" />
 					</v-list-item-icon>
 					<v-list-item-content>
-						<v-text-overflow :text="extension.name" />
+						<v-text-overflow :text="extensionIdentity(extension.name).title" />
+						<v-text-overflow
+							v-if="extensionIdentity(extension.name).title !== extension.name"
+							class="package-name"
+							:text="extension.name"
+						/>
 					</v-list-item-content>
 					<v-chip v-if="extension.runtime === 'confined-server'" class="sandboxed" small label>
 						{{ t('extension_sandboxed') }}
 					</v-chip>
 					<v-chip v-if="extension.version" class="version" small label>{{ extension.version }}</v-chip>
+					<extension-options v-if="extension.settings" @open-settings="settingsTarget = extension" />
 				</v-list-item>
 			</v-detail>
 
@@ -90,7 +96,7 @@
 					<v-divider :inline-title="false" large class="group-head" @click="toggle">
 						<template #icon><v-icon name="shield" /></template>
 						<span class="group-name">{{ t('extension_advanced_diagnostics') }}</span>
-						<v-icon class="expand-icon" :class="{ active }" name="expand_more" />
+						<v-icon class="expand-icon" :name="active ? 'expand_more' : 'chevron_right'" />
 					</v-divider>
 				</template>
 
@@ -127,12 +133,19 @@
 			@esc="selected = null"
 		>
 			<v-card v-if="selected">
-				<v-card-title>{{ selected.name }}</v-card-title>
+				<v-card-title>
+					<div class="detail-title">
+						<div>{{ extensionIdentity(selected.name).title }}</div>
+						<div v-if="extensionIdentity(selected.name).title !== selected.name" class="package-name">
+							{{ selected.name }}
+						</div>
+					</div>
+				</v-card-title>
 
 				<v-card-text>
 					<div class="detail-meta">
-						<display-color :value="statusColor(selected.status)" />
-						<span>{{ statusLabel(selected.status) }}</span>
+						<display-color :value="rowHealthColor(selected)" />
+						<span>{{ rowHealthLabel(selected) }}</span>
 						<v-chip v-if="selected.type" x-small>{{ selected.type }}</v-chip>
 						<v-chip v-if="selected.version" x-small label>{{ selected.version }}</v-chip>
 					</div>
@@ -142,17 +155,37 @@
 						<span class="detail-runtime-value">{{ runtimeLabel(selected) }}</span>
 					</div>
 
-					<v-notice v-if="selected.status === 'loaded'" type="success" class="detail-notice">
-						{{ t('extension_status_loaded_detail') }}
-					</v-notice>
-					<v-notice v-else-if="selected.status === 'discovered'" type="success" class="detail-notice">
-						{{ t('extension_status_discovered_detail') }}
+					<v-notice
+						v-if="
+							(selected.status === 'loaded' || selected.status === 'discovered') &&
+							selected.settings?.status !== 'unavailable'
+						"
+						type="success"
+						class="detail-notice"
+					>
+						{{
+							selected.status === 'loaded'
+								? t('extension_status_loaded_detail')
+								: t('extension_status_discovered_detail')
+						}}
 					</v-notice>
 					<v-notice v-else-if="selected.status === 'partial'" type="warning" class="detail-notice">
 						{{ t('extension_status_partial_detail') }}
 					</v-notice>
 					<v-notice v-else-if="selected.reason" type="danger" class="detail-notice">
-						{{ selected.reason.code }}: {{ selected.reason.detail }}
+						<div>
+							{{ t('extension_status_failed_detail') }}
+							<code class="diagnostic-detail">{{ selected.reason.code }}: {{ selected.reason.detail }}</code>
+						</div>
+					</v-notice>
+
+					<v-notice v-if="selected.settings?.status === 'unavailable'" type="warning" class="detail-notice">
+						<div>
+							{{ t('extension_settings_unavailable_detail') }}
+							<code v-if="selected.settings.reason" class="diagnostic-detail">
+								{{ selected.settings.reason.code }}: {{ selected.settings.reason.detail }}
+							</code>
+						</div>
 					</v-notice>
 
 					<div v-if="selected.capabilities" class="detail-capabilities">
@@ -196,6 +229,15 @@
 				</v-card-actions>
 			</v-card>
 		</v-dialog>
+
+		<extension-settings-drawer
+			v-if="settingsTarget"
+			:model-value="settingsTarget !== null"
+			:subject="settingsTarget.name"
+			:settings="settingsTarget.settings"
+			:resolve-declaration="resolveDeclaration"
+			@update:model-value="settingsTarget = null"
+		/>
 	</private-view>
 </template>
 
@@ -206,6 +248,9 @@ import { unexpectedError } from '@/utils/unexpected-error';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import SettingsNavigation from '../../components/navigation.vue';
+import { extensionIdentity } from './components/extension-identity';
+import ExtensionOptions from './components/extension-options.vue';
+import ExtensionSettingsDrawer from './components/extension-settings-drawer.vue';
 
 type ExtensionDiagnostic = {
 	name: string;
@@ -223,6 +268,7 @@ type ExtensionDiagnostic = {
 	reason?: { code: string; detail: string };
 	capabilities?: Record<string, unknown>;
 	runtime?: 'confined-server';
+	settings?: { status: 'available' | 'unavailable'; reason?: { code: string; detail: string } };
 };
 
 type ExtensionRow = ExtensionDiagnostic & { _key: string };
@@ -257,11 +303,21 @@ const extensions = ref<ExtensionRow[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const selected = ref<ExtensionRow | null>(null);
+const settingsTarget = ref<ExtensionRow | null>(null);
 const confinedRuntime = ref<ConfinedRuntimeMeta | null>(null);
 
 const failedCount = computed(() => extensions.value.filter((extension) => extension.status === 'failed').length);
-const partialCount = computed(() => extensions.value.filter((extension) => extension.status === 'partial').length);
-const activeCount = computed(() => extensions.value.length - failedCount.value - partialCount.value);
+
+const warningCount = computed(
+	() =>
+		extensions.value.filter(
+			(extension) =>
+				extension.status === 'partial' ||
+				(extension.status !== 'failed' && extension.settings?.status === 'unavailable')
+		).length
+);
+
+const normalCount = computed(() => extensions.value.length - failedCount.value - warningCount.value);
 
 function statusColor(status?: string): string {
 	if (status === 'failed') return 'var(--danger)';
@@ -269,10 +325,16 @@ function statusColor(status?: string): string {
 	return 'var(--success)';
 }
 
-function statusLabel(status: string): string {
-	if (status === 'failed') return t('extension_failed');
-	if (status === 'partial') return t('extension_partial');
-	return t('extension_active');
+function rowHealthColor(row: ExtensionDiagnostic): string {
+	if (row.status === 'failed') return 'var(--danger)';
+	if (row.settings?.status === 'unavailable') return 'var(--warning)';
+	return statusColor(row.status);
+}
+
+function rowHealthLabel(row: ExtensionDiagnostic): string {
+	if (row.status === 'failed') return t('extension_health_failed');
+	if (row.status === 'partial' || row.settings?.status === 'unavailable') return t('extension_health_warning', 1);
+	return t('extension_health_normal');
 }
 
 function runtimeLabel(row: ExtensionDiagnostic): string {
@@ -341,6 +403,8 @@ async function fetchExtensions() {
 		}));
 
 		confinedRuntime.value = response.data.meta?.confinedRuntime ?? null;
+
+		loadOwnerDeclarations().catch(() => undefined);
 	} catch (err: any) {
 		error.value = t('extensions_load_failed');
 		unexpectedError(err);
@@ -348,14 +412,49 @@ async function fetchExtensions() {
 		loading.value = false;
 	}
 }
+
+let ownerDeclarationsRequest: Promise<Record<string, Record<string, unknown>>> | null = null;
+
+function loadOwnerDeclarations(): Promise<Record<string, Record<string, unknown>>> {
+	ownerDeclarationsRequest ??= api
+		.get('/extension-settings/owners')
+		.then((response) =>
+			Object.fromEntries(
+				(response.data.data as { subject?: string; declaration?: Record<string, unknown> }[])
+					.filter((owner) => owner.subject !== undefined && owner.declaration !== undefined)
+					.map((owner) => [owner.subject!, owner.declaration!])
+			)
+		)
+		.catch((error) => {
+			ownerDeclarationsRequest = null;
+			throw error;
+		});
+
+	return ownerDeclarationsRequest;
+}
+
+async function resolveDeclaration(subject: string): Promise<Record<string, unknown> | undefined> {
+	const declarations = await loadOwnerDeclarations();
+	return declarations[subject];
+}
 </script>
 
 <style lang="scss" scoped>
+@import '@/styles/mixins/package-name';
+
 .header-icon {
 	--v-button-color-disabled: var(--primary);
 	--v-button-background-color-disabled: var(--primary-10);
 	--v-button-background-color-hover-disabled: var(--primary-25);
 	--v-button-color-hover-disabled: var(--primary);
+}
+
+.package-name {
+	@include package-name;
+}
+
+.detail-title {
+	text-align: left;
 }
 
 .extensions {
@@ -404,12 +503,6 @@ async function fetchExtensions() {
 
 .expand-icon {
 	float: right;
-	transform: rotate(90deg);
-	transition: transform var(--fast) var(--transition);
-}
-
-.expand-icon.active {
-	transform: rotate(0);
 }
 
 .version {
@@ -471,6 +564,13 @@ async function fetchExtensions() {
 
 .detail-entry-reason {
 	color: var(--danger);
+	font-family: var(--family-monospace);
+	font-size: 0.8125rem;
+}
+
+.diagnostic-detail {
+	display: block;
+	margin-top: 0.5rem;
 	font-family: var(--family-monospace);
 	font-size: 0.8125rem;
 }

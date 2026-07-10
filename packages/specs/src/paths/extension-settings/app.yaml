@@ -1,0 +1,45 @@
+get:
+  tags:
+    - Extensions
+  operationId: getAppExtensionSettings
+  summary: Read App-Readable Extension Settings
+  description:
+    Returns the settings an extension exposes to its browser app code, as a flat key-value object. Only keys
+    declared appReadable and not declared secret are returned. Global keys are always included for an app-access
+    caller. Collection-scoped keys are included only when the collection exists and the caller can read it. A
+    declared secret never crosses to the browser in any form. An absent, ineligible, or no-app-readable subject
+    returns an empty object.
+  parameters:
+    - name: subject
+      in: query
+      required: true
+      description: The extension's package name.
+      schema:
+        type: string
+    - name: collection
+      in: query
+      required: false
+      description: A collection to include collection-scoped app-readable keys for, subject to read authority.
+      schema:
+        type: string
+  responses:
+    '200':
+      description: Successful request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: object
+                additionalProperties:
+                  oneOf:
+                    - type: string
+                    - type: number
+                    - type: boolean
+    '400':
+      description: The required subject is missing, or subject or collection is not a single string.
+    '401':
+      $ref: '../../openapi.yaml#/components/responses/UnauthorizedError'
+    '403':
+      description: The caller's role does not have app access.

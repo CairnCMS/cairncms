@@ -383,7 +383,7 @@ describe('the confined load gate in the loader', () => {
 		const row = diagnostics.find((entry: any) => entry.name === 'flagged-endpoint');
 
 		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('uses-raw-fs');
+		expect(row?.reason?.code).toBe('USES_RAW_FS');
 		expect((instance as any).confinedEligible.has(flagged)).toBe(false);
 		expect(JSON.stringify(diagnostics)).not.toContain(root);
 	});
@@ -522,8 +522,8 @@ describe('the confined load gate in the loader', () => {
 
 		// A name-keyed join would put the eligible extension's capabilities on its gate-failed
 		// same-name sibling too. The object-identity join keeps them on the eligible row only.
-		const gateFailed = rows.find((row: any) => row.reason?.code === 'uses-raw-fs');
-		const eligible = rows.find((row: any) => row.reason?.code !== 'uses-raw-fs');
+		const gateFailed = rows.find((row: any) => row.reason?.code === 'USES_RAW_FS');
+		const eligible = rows.find((row: any) => row.reason?.code !== 'USES_RAW_FS');
 
 		expect(gateFailed.capabilities).toBeUndefined();
 		expect(eligible.capabilities).toEqual({ endpoint: { access: 'public' }, log: true });
@@ -643,7 +643,7 @@ describe('the confined load gate in the loader', () => {
 
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'flagged-bundle');
 		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('uses-raw-fs');
+		expect(row?.reason?.code).toBe('USES_RAW_FS');
 		expect((instance as any).confinedEligible.has(bundle)).toBe(false);
 
 		// The discovered set feeds the app bundler, so the refusal of the server side
@@ -677,7 +677,7 @@ describe('the confined load gate in the loader', () => {
 		for (const name of ['probe-thrower', 'confined-endpoint', 'probe-bundle-sibling']) {
 			const row = diagnostics.find((entry: any) => entry.name === name);
 			expect(row?.status, name).toBe('failed');
-			expect(row?.reason?.code, name).toBe('validation-incomplete');
+			expect(row?.reason?.code, name).toBe('VALIDATION_INCOMPLETE');
 		}
 
 		expect((instance as any).confinedEligible.has(operation)).toBe(false);
@@ -685,7 +685,7 @@ describe('the confined load gate in the loader', () => {
 		expect((instance as any).confinedEligible.has(bundleSibling)).toBe(false);
 	});
 
-	it('surfaces a host-side probe failure as validation-incomplete, not a verdict on the extension', async () => {
+	it('surfaces a host-side probe failure as VALIDATION_INCOMPLETE, not a verdict on the extension', async () => {
 		writeConfinedOperationPackage('probe-unlucky');
 
 		const instance = new ExtensionManager();
@@ -700,7 +700,7 @@ describe('the confined load gate in the loader', () => {
 
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'probe-unlucky');
 		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('validation-incomplete');
+		expect(row?.reason?.code).toBe('VALIDATION_INCOMPLETE');
 		expect((instance as any).confinedEligible.has(operation)).toBe(false);
 	});
 });
@@ -784,7 +784,7 @@ describe('the confined runtime boot', () => {
 
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'boot-clean');
 		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('validation-incomplete');
+		expect(row?.reason?.code).toBe('VALIDATION_INCOMPLETE');
 		expect((instance as any).confinedEligible.has(confined)).toBe(false);
 		expect(JSON.stringify((instance as any).getDiagnostics())).not.toContain(root);
 	});
@@ -804,7 +804,7 @@ describe('the confined runtime boot', () => {
 		// The confined extension is failed by the runtime; the inherited one follows its
 		// own registration path, never failed by the confined runtime's unavailability.
 		expect(diagnostics.find((entry: any) => entry.name === 'confined-endpoint')?.reason?.code).toBe(
-			'validation-incomplete'
+			'VALIDATION_INCOMPLETE'
 		);
 
 		// A failed confined extension still carries its runtime marker.
@@ -824,6 +824,59 @@ describe('the confined runtime boot', () => {
 
 		const postureLogs = info.mock.calls.filter((call) => String(call[0]).includes('confined OS hardening'));
 		expect(postureLogs).toHaveLength(1);
+	});
+});
+
+describe('app-extension settings ownership is independent of SERVE_APP', () => {
+	it('owns settings with SERVE_APP off while staying out of the served set', async () => {
+		const instance = new ExtensionManager();
+
+		const appExtension: Extension = {
+			path: path.join(root, 'preview-module'),
+			name: 'cairncms-extension-preview',
+			type: 'module',
+			entrypoint: 'app.js',
+			local: true,
+			settings: { theme: { type: 'string', scope: 'global', appReadable: true } },
+		};
+
+		(instance as any).getExtensions = async () => [appExtension];
+
+		await (instance as any).load();
+
+		expect((instance as any).getSettingsOwner('cairncms-extension-preview')).toBe(appExtension);
+		expect((instance as any).getExtensionsList('module')).toEqual([]);
+	});
+
+	it('lists the app-only owner as a discovered row with its settings status', async () => {
+		const instance = new ExtensionManager();
+
+		const appExtension: Extension = {
+			path: path.join(root, 'preview-module'),
+			name: 'cairncms-extension-preview',
+			type: 'module',
+			entrypoint: 'app.js',
+			local: true,
+			settings: { theme: { type: 'string', scope: 'global', appReadable: true } },
+		};
+
+		(instance as any).getExtensions = async () => [appExtension];
+
+		await (instance as any).load();
+
+		const row = instance.getDiagnostics().find((diagnostic) => diagnostic.name === 'cairncms-extension-preview');
+		expect(row).toMatchObject({ type: 'module', status: 'discovered', settings: { status: 'available' } });
+
+		const owners = instance.getSettingsOwners();
+
+		expect(owners).toEqual([
+			{
+				subject: 'cairncms-extension-preview',
+				displaySubject: 'cairncms-extension-preview',
+				status: 'available',
+				declaration: { theme: { type: 'string', scope: 'global', appReadable: true } },
+			},
+		]);
 	});
 });
 
@@ -917,7 +970,7 @@ describe('the confined endpoint binding', () => {
 
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'colliding-endpoint');
 		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('route-collision');
+		expect(row?.reason?.code).toBe('ROUTE_COLLISION');
 
 		const response = await supertest(endpointApp(instance)).get('/colliding-endpoint/');
 		expect(response.status).toBe(404);
@@ -936,7 +989,7 @@ describe('the confined endpoint binding', () => {
 
 			const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === name);
 			expect(row?.status, name).toBe('failed');
-			expect(row?.reason?.code, name).toBe('route-invalid');
+			expect(row?.reason?.code, name).toBe('ROUTE_INVALID');
 
 			// The pattern a parameterized name would have mounted must match nothing.
 			const probe = await supertest(endpointApp(instance)).get('/evil-anything/');
@@ -964,7 +1017,7 @@ describe('the confined endpoint binding', () => {
 
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'cased-route');
 		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('route-collision');
+		expect(row?.reason?.code).toBe('ROUTE_COLLISION');
 	});
 
 	it('fails both confined endpoints that declare the same route', async () => {
@@ -978,7 +1031,7 @@ describe('the confined endpoint binding', () => {
 
 		const failed = (instance as any)
 			.getDiagnostics()
-			.filter((entry: any) => entry.name === 'dup-endpoint' && entry.reason?.code === 'ambiguous-endpoint');
+			.filter((entry: any) => entry.name === 'dup-endpoint' && entry.reason?.code === 'AMBIGUOUS_ENDPOINT');
 
 		expect(failed).toHaveLength(2);
 
@@ -993,7 +1046,7 @@ describe('the confined endpoint binding', () => {
 
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'capless-endpoint');
 		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('capability-missing');
+		expect(row?.reason?.code).toBe('CAPABILITY_MISSING');
 
 		const response = await supertest(endpointApp(instance)).get('/capless-endpoint/');
 		expect(response.status).toBe(404);
@@ -1258,7 +1311,7 @@ describe('the confined hook binding', () => {
 
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'proto-hook');
 		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('manifest-invalid');
+		expect(row?.reason?.code).toBe('MANIFEST_INVALID');
 
 		expect((instance as any).hookEvents.some((event: any) => event.name === '__proto__.create')).toBe(false);
 
@@ -1295,7 +1348,7 @@ describe('the confined hook binding', () => {
 
 		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'guard-hook');
 		expect(row?.status).toBe('failed');
-		expect(row?.reason?.code).toBe('event-invalid');
+		expect(row?.reason?.code).toBe('EVENT_INVALID');
 
 		// No handler joined the unregister list, so nothing subscribed to the emitter.
 		expect((instance as any).hookEvents).toHaveLength(0);
@@ -1322,7 +1375,7 @@ describe('the confined hook binding', () => {
 
 		const failed = (instance as any)
 			.getDiagnostics()
-			.filter((entry: any) => entry.name === 'dup-hook' && entry.reason?.code === 'ambiguous-hook');
+			.filter((entry: any) => entry.name === 'dup-hook' && entry.reason?.code === 'AMBIGUOUS_HOOK');
 
 		expect(failed).toHaveLength(2);
 	});
@@ -1637,7 +1690,7 @@ describe('the confined bundle binding', () => {
 
 		const endpointEntry = row.entries.find((entry: any) => entry.name === 'taken-route');
 		expect(endpointEntry.status).toBe('failed');
-		expect(endpointEntry.reason.code).toBe('route-collision');
+		expect(endpointEntry.reason.code).toBe('ROUTE_COLLISION');
 
 		const hookEntry = row.entries.find((entry: any) => entry.name === 'live-hook');
 		expect(hookEntry.status).toBe('loaded');
@@ -1667,7 +1720,7 @@ describe('the confined bundle binding', () => {
 
 		const ungranted = row.entries.find((entry: any) => entry.name === 'ungranted');
 		expect(ungranted.status).toBe('failed');
-		expect(ungranted.reason.code).toBe('capability-missing');
+		expect(ungranted.reason.code).toBe('CAPABILITY_MISSING');
 		expect(typeof ungranted.reason.detail).toBe('string');
 
 		const serialized = JSON.stringify((instance as any).getDiagnostics());
@@ -1702,7 +1755,7 @@ describe('the confined bundle binding', () => {
 		// register, because eligibility existed.
 		const ungranted = row.entries.find((entry: any) => entry.name === 'ungranted-ep');
 		expect(ungranted.status).toBe('failed');
-		expect(ungranted.reason.code).toBe('capability-missing');
+		expect(ungranted.reason.code).toBe('CAPABILITY_MISSING');
 		expect(ungranted.capabilities).toEqual({ log: true });
 	});
 
@@ -1732,14 +1785,14 @@ describe('the confined bundle binding', () => {
 		// The top-level operation row is failed, not a stale loaded.
 		const topRow = diagnosticFor(instance, 'dup-op');
 		expect(topRow.status).toBe('failed');
-		expect(topRow.reason.code).toBe('ambiguous-operation');
+		expect(topRow.reason.code).toBe('AMBIGUOUS_OPERATION');
 
 		const row = diagnosticFor(instance, 'op-dup-bundle');
 		expect(row.status).toBe('partial');
 
 		const opEntry = row.entries.find((entry: any) => entry.name === 'dup-op');
 		expect(opEntry.status).toBe('failed');
-		expect(opEntry.reason.code).toBe('ambiguous-operation');
+		expect(opEntry.reason.code).toBe('AMBIGUOUS_OPERATION');
 
 		const epEntry = row.entries.find((entry: any) => entry.name === 'mounted-ep');
 		expect(epEntry.status).toBe('loaded');
@@ -1763,7 +1816,7 @@ describe('the confined bundle binding', () => {
 
 		const row = diagnosticFor(instance, 'shared-op');
 		expect(row.status).toBe('failed');
-		expect(row.reason.code).toBe('operation-collision');
+		expect(row.reason.code).toBe('OPERATION_COLLISION');
 
 		// A flow referencing the id rejects rather than silently running the inherited
 		// operation that the confined contributor tried to shadow.
@@ -1813,7 +1866,7 @@ describe('the confined bundle binding', () => {
 
 		const row = diagnosticFor(instance, 'bundle-op');
 		expect(row.status).toBe('failed');
-		expect(row.reason.code).toBe('operation-collision');
+		expect(row.reason.code).toBe('OPERATION_COLLISION');
 
 		getFlowManager().clearOperations();
 	}, 30_000);
@@ -1849,7 +1902,7 @@ describe('the confined bundle binding', () => {
 
 		const opEntry = row.entries.find((entry: any) => entry.name === 'bundle-op');
 		expect(opEntry.status).toBe('failed');
-		expect(opEntry.reason.code).toBe('operation-collision');
+		expect(opEntry.reason.code).toBe('OPERATION_COLLISION');
 
 		// The sibling endpoint still mounts, so the collision fails only its own entry.
 		const epEntry = row.entries.find((entry: any) => entry.name === 'sibling-ep');
@@ -1919,7 +1972,7 @@ describe('the confined bundle binding', () => {
 		first.reason.code = 'mutated';
 
 		const second = diagnosticFor(instance, 'copy-bundle').entries.find((entry: any) => entry.name === 'copy-route');
-		expect(second.reason.code).toBe('route-collision');
+		expect(second.reason.code).toBe('ROUTE_COLLISION');
 	});
 });
 
@@ -1954,5 +2007,301 @@ describe('findSharedDepAsset', () => {
 
 	it('only matches an .entry.js chunk, not a plain dep chunk', () => {
 		expect(findSharedDepAsset('vue', ['vue.runtime.esm-bundler-BsuNjI30.js'])).toBeUndefined();
+	});
+});
+
+describe('the settings subject gate in the loader', () => {
+	const declaration = { preview_url: { type: 'string', scope: 'global' } } as any;
+
+	function settingsOwner(dir: string, name: string): Extension {
+		return { ...endpointExtension(dir, name, false), settings: declaration };
+	}
+
+	it('marks a valid unique settings owner eligible without removing it from the load', async () => {
+		const instance = new ExtensionManager();
+		const owner = settingsOwner('preview', 'cairncms-extension-preview');
+		(instance as any).getExtensions = async () => [owner];
+
+		await (instance as any).load();
+
+		expect((instance as any).isSettingsEligible(owner)).toBe(true);
+		expect((instance as any).extensions).toContain(owner);
+	});
+
+	it('refuses an invalid settings subject without failing the extension, warning instead', async () => {
+		const warn = vi.spyOn(logger, 'warn');
+		const instance = new ExtensionManager();
+		const owner = settingsOwner('bad', 'bad-subject');
+		(instance as any).getExtensions = async () => [owner];
+
+		await (instance as any).load();
+
+		expect((instance as any).isSettingsEligible(owner)).toBe(false);
+		expect((instance as any).extensions).toContain(owner);
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining('bad-subject'));
+	});
+
+	it('refuses every owner on a subject collision', async () => {
+		const instance = new ExtensionManager();
+		const first = settingsOwner('dup-a', 'cairncms-extension-dup');
+		const second = settingsOwner('dup-b', 'cairncms-extension-dup');
+		(instance as any).getExtensions = async () => [first, second];
+
+		await (instance as any).load();
+
+		expect((instance as any).isSettingsEligible(first)).toBe(false);
+		expect((instance as any).isSettingsEligible(second)).toBe(false);
+	});
+
+	it('keeps the surviving owner ineligible when its same-name twin fails to load', async () => {
+		writeConfinedPackage('dup-set-clean', 'export default {};\n', 'cairncms-extension-dup');
+
+		writeConfinedPackage(
+			'dup-set-flagged',
+			"import { readFile } from 'node:fs/promises';\nexport default {};\n",
+			'cairncms-extension-dup'
+		);
+
+		const instance = new ExtensionManager();
+		const loading = { ...endpointExtension('dup-set-clean', 'cairncms-extension-dup', true), settings: declaration };
+		const failing = { ...endpointExtension('dup-set-flagged', 'cairncms-extension-dup', true), settings: declaration };
+		(instance as any).getExtensions = async () => [loading, failing];
+
+		await (instance as any).load();
+
+		expect((instance as any).confinedEligible.has(loading)).toBe(true);
+		expect((instance as any).confinedEligible.has(failing)).toBe(false);
+
+		expect((instance as any).isSettingsEligible(loading)).toBe(false);
+		expect((instance as any).getSettingsOwner('cairncms-extension-dup')).toBeUndefined();
+	});
+
+	it('exposes a gated-ineligible owner declaration through getDeclaredSettings for masking', async () => {
+		const instance = new ExtensionManager();
+		const first = settingsOwner('dup-a', 'cairncms-extension-dup');
+		const second = settingsOwner('dup-b', 'cairncms-extension-dup');
+		(instance as any).getExtensions = async () => [first, second];
+
+		await (instance as any).load();
+
+		expect((instance as any).getSettingsOwner('cairncms-extension-dup')).toBeUndefined();
+		expect((instance as any).getDeclaredSettings('cairncms-extension-dup')).toEqual([declaration, declaration]);
+		expect((instance as any).getDeclaredSettings('cairncms-extension-absent')).toEqual([]);
+	});
+
+	it('does not treat an extension without a settings declaration as an owner', async () => {
+		const instance = new ExtensionManager();
+		const plain = endpointExtension('plain-owner', 'cairncms-extension-plain', false);
+		(instance as any).getExtensions = async () => [plain];
+
+		await (instance as any).load();
+
+		expect((instance as any).isSettingsEligible(plain)).toBe(false);
+	});
+
+	it('resolves the owner and eligibility by identity, not by a shared name', async () => {
+		const instance = new ExtensionManager();
+		const owner = settingsOwner('shared-owner', 'cairncms-extension-shared');
+		const nonOwner = endpointExtension('shared-plain', 'cairncms-extension-shared', false);
+		(instance as any).getExtensions = async () => [owner, nonOwner];
+
+		await (instance as any).load();
+
+		expect((instance as any).isSettingsEligible(owner)).toBe(true);
+		expect((instance as any).isSettingsEligible(nonOwner)).toBe(false);
+		expect((instance as any).getSettingsOwner('cairncms-extension-shared')).toBe(owner);
+		expect((instance as any).getSettingsOwner('cairncms-extension-absent')).toBeUndefined();
+	});
+
+	it('annotates every owner row with its settings status, by identity', async () => {
+		const instance = new ExtensionManager();
+		const first = settingsOwner('dup-a', 'cairncms-extension-dup');
+		const second = settingsOwner('dup-b', 'cairncms-extension-dup');
+		const nonOwner = endpointExtension('dup-plain', 'cairncms-extension-dup', false);
+		(instance as any).getExtensions = async () => [first, second, nonOwner];
+
+		await (instance as any).load();
+
+		const rows = instance.getDiagnostics().filter((diagnostic) => diagnostic.name === 'cairncms-extension-dup');
+		const annotated = rows.filter((row) => row.settings !== undefined);
+
+		expect(rows.length).toBe(3);
+		expect(annotated.length).toBe(2);
+
+		for (const row of annotated) {
+			expect(row.settings).toMatchObject({
+				status: 'unavailable',
+				reason: { code: 'SETTINGS_SUBJECT_DUPLICATE' },
+			});
+		}
+	});
+
+	it('returns owners with the raw subject and declaration only when available', async () => {
+		const instance = new ExtensionManager();
+		const good = settingsOwner('preview', 'cairncms-extension-preview');
+		const bad = settingsOwner('bad', 'bad-subject');
+		(instance as any).getExtensions = async () => [good, bad];
+
+		await (instance as any).load();
+
+		const owners = instance.getSettingsOwners();
+		expect(owners.length).toBe(2);
+
+		const available = owners.find((owner) => owner.status === 'available');
+
+		expect(available).toEqual({
+			subject: 'cairncms-extension-preview',
+			displaySubject: 'cairncms-extension-preview',
+			status: 'available',
+			declaration,
+		});
+
+		const unavailable = owners.find((owner) => owner.status === 'unavailable');
+		expect(unavailable?.displaySubject).toBe('bad-subject');
+		expect(unavailable && 'subject' in unavailable).toBe(false);
+		expect(unavailable && 'declaration' in unavailable).toBe(false);
+		expect(unavailable?.reason?.code).toBe('SETTINGS_SUBJECT_INVALID');
+	});
+
+	it('keeps the derived config variable out of every public surface on a collision', async () => {
+		const warn = vi.spyOn(logger, 'warn');
+		const instance = new ExtensionManager();
+
+		const configSettings = { api_key: { type: 'string', scope: 'global', secret: { source: 'config' } } } as any;
+		const first = { ...endpointExtension('edge-a', 'cairncms-extension-edge-sync', false), settings: configSettings };
+		const second = { ...endpointExtension('edge-b', 'cairncms-extension-edge.sync', false), settings: configSettings };
+		(instance as any).getExtensions = async () => [first, second];
+
+		await (instance as any).load();
+
+		const owners = instance.getSettingsOwners();
+		expect(owners.every((owner) => owner.status === 'unavailable')).toBe(true);
+		expect(owners.every((owner) => owner.reason?.code === 'SETTINGS_SUBJECT_CONFIG_COLLISION')).toBe(true);
+
+		expect(JSON.stringify(owners)).not.toContain('CAIRNCMS_EXT_');
+		expect(JSON.stringify(instance.getDiagnostics())).not.toContain('CAIRNCMS_EXT_');
+
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining('CAIRNCMS_EXT_'));
+	});
+});
+
+describe('full-authority extension settings threading', () => {
+	const SUBJECT = 'cairncms-extension-threaded';
+	const CONFIG_VAR = 'CAIRNCMS_EXT_THREADED_BILLING_KEY';
+	const BUNDLE_SUBJECT = 'cairncms-extension-fa-bundle';
+	const BUNDLE_CONFIG_VAR = 'CAIRNCMS_EXT_FA_BUNDLE_BILLING_KEY';
+
+	const configDecl = { billing_key: { type: 'string', scope: 'global', secret: { source: 'config' } } } as any;
+
+	function seedOwner(instance: ExtensionManager, subject: string) {
+		(instance as any).settingsEligible = new Set([{ name: subject, settings: configDecl }]);
+	}
+
+	afterEach(() => {
+		delete process.env[CONFIG_VAR];
+		delete process.env[BUNDLE_CONFIG_VAR];
+		delete (globalThis as any).__faBundleHookContext;
+		delete (globalThis as any).__faBundleEndpointContext;
+		delete (globalThis as any).__faBundleOperationContext;
+		getFlowManager().clearOperations();
+		vi.restoreAllMocks();
+	});
+
+	it('binds a hook context reader to the registering subject', async () => {
+		process.env[CONFIG_VAR] = 'hook-secret';
+		const instance = new ExtensionManager();
+		seedOwner(instance, SUBJECT);
+
+		let captured: any;
+
+		(instance as any).registerHook((_register: any, context: any) => {
+			captured = context;
+		}, SUBJECT);
+
+		expect(await captured.extensionSettings.get('billing_key')).toBe('hook-secret');
+		expect(await captured.extensionSettings.get('undeclared')).toBeNull();
+	});
+
+	it('binds an endpoint context reader to the registering subject', async () => {
+		process.env[CONFIG_VAR] = 'endpoint-secret';
+		const instance = new ExtensionManager();
+		seedOwner(instance, SUBJECT);
+
+		let captured: any;
+
+		(instance as any).registerEndpoint(
+			(_router: any, context: any) => {
+				captured = context;
+			},
+			'threaded-endpoint',
+			SUBJECT
+		);
+
+		expect(await captured.extensionSettings.get('billing_key')).toBe('endpoint-secret');
+	});
+
+	it('wraps an extension operation handler with a bound reader and leaves an internal one unwrapped', async () => {
+		const flowManager = getFlowManager();
+		const spy = vi.spyOn(flowManager, 'addOperation');
+		const instance = new ExtensionManager();
+		seedOwner(instance, SUBJECT);
+
+		let captured: any;
+
+		const handler = (_options: any, context: any) => {
+			captured = context;
+			return null;
+		};
+
+		(instance as any).registerOperation({ id: 'threaded-op-16-7', handler }, SUBJECT);
+
+		const wrapped = spy.mock.calls.at(-1)![1] as any;
+		expect(wrapped).not.toBe(handler);
+
+		process.env[CONFIG_VAR] = 'operation-secret';
+		await wrapped({}, { data: { fed: true }, accountability: null });
+
+		expect(captured.data).toEqual({ fed: true });
+		expect(await captured.extensionSettings.get('billing_key')).toBe('operation-secret');
+
+		(instance as any).registerOperation({ id: 'internal-op-16-7', handler });
+		expect(spy.mock.calls.at(-1)![1]).toBe(handler);
+	});
+
+	it('binds bundle entry contexts to the bundle subject, not the entry name', async () => {
+		process.env[BUNDLE_CONFIG_VAR] = 'bundle-secret';
+
+		const dir = path.join(root, 'fa-bundle');
+		mkdirSync(dir, { recursive: true });
+
+		writeFileSync(
+			path.join(dir, 'api.js'),
+			'export default { hooks: [{ config: (_register, context) => { globalThis.__faBundleHookContext = context; } }], ' +
+				"endpoints: [{ name: 'inner-endpoint', config: (_router, context) => { globalThis.__faBundleEndpointContext = context; } }], " +
+				"operations: [{ config: { id: 'fa-bundle-op-16-7', handler: (_options, context) => { globalThis.__faBundleOperationContext = context; return null; } } }] };\n"
+		);
+
+		const flowManager = getFlowManager();
+		const spy = vi.spyOn(flowManager, 'addOperation');
+
+		const bundle = bundleExtension('fa-bundle', BUNDLE_SUBJECT, false);
+		const instance = manager([bundle]);
+		seedOwner(instance, BUNDLE_SUBJECT);
+
+		await (instance as any).registerBundles();
+
+		const hookContext = (globalThis as any).__faBundleHookContext;
+		const endpointContext = (globalThis as any).__faBundleEndpointContext;
+
+		expect(await hookContext.extensionSettings.get('billing_key')).toBe('bundle-secret');
+		expect(await endpointContext.extensionSettings.get('billing_key')).toBe('bundle-secret');
+
+		const registered = spy.mock.calls.find(([id]) => id === 'fa-bundle-op-16-7');
+		expect(registered).toBeDefined();
+
+		await (registered![1] as any)({}, { data: {}, accountability: null });
+
+		const operationContext = (globalThis as any).__faBundleOperationContext;
+		expect(await operationContext.extensionSettings.get('billing_key')).toBe('bundle-secret');
 	});
 });

@@ -81,6 +81,7 @@ The second argument is a context object with everything an endpoint typically ne
 - **`env`** — the parsed environment variables.
 - **`logger`** — a Pino logger instance. Use this rather than `console.log` so messages flow through the platform's logging pipeline.
 - **`emitter`** — the platform's event emitter. Use this to fire custom events that other extensions can subscribe to with hooks.
+- **`extensionSettings`** — a read-only accessor for the settings this extension declares in its manifest, bound to its own package. See [Extension settings](/docs/develop/extensions/settings/).
 
 ```js
 export default (router, { services, exceptions }) => {
@@ -236,7 +237,7 @@ The manifest declares the runtime, the endpoint's access level, and any other ca
 }
 ```
 
-The `endpoint.access` value sets the auth gate. `authenticated` returns 401 to an anonymous caller, while `public` admits anyone. There is no app-only access level. An outbound call from the handler uses `host.request.send` and reaches only the origins declared in the `request` capability.
+The `endpoint.access` value sets the auth gate. `public` admits anyone, `authenticated` requires a user, `app` requires a user whose role grants app access, and `admin` requires an admin user. An anonymous caller gets 401, and a caller who lacks the required access gets 403. An outbound call from the handler uses `host.request.send` and reaches only the origins declared in the `request` capability.
 
 See the [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) page for the full host API and the capability vocabulary.
 

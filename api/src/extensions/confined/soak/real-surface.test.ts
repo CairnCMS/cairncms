@@ -2,6 +2,7 @@ import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { describe, expect, it } from 'vitest';
 import type { ConfinedLogEntry } from '../broker.js';
 import { runConfinedOperation, type ConfinedOperationDeps } from '../operation.js';
+import { EMPTY_SETTINGS_ACCESS } from '../settings-access.js';
 import {
 	HTTP_RESPONSE_BYTES,
 	ITEMS_REPLY_BYTES,
@@ -59,6 +60,7 @@ describe('confined runtime real-surface drain', () => {
 				},
 				brokerLimits: BROKER_LIMITS,
 				runtimeLimits: LIMITS,
+				settingsAccess: () => EMPTY_SETTINGS_ACCESS,
 			};
 
 			const request = {

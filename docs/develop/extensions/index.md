@@ -16,7 +16,7 @@ Before you pick a type, it helps to know where your code runs. CairnCMS has thre
 
 - **In the browser.** App extensions (interface, display, layout, module, panel) are Vue components that run in the admin app, inside the logged-in user's browser. They act through the API with that user's own permissions, and can do whatever that user can do, no more and no less. The browser is not a security boundary. See [App extensions](/docs/develop/extensions/app-extensions/).
 - **In the API, with full authority.** A server extension (hook, endpoint, operation) runs in the API's Node process. By default it has full access to services, the database, and the environment. This is the home for code that needs native modules, raw services, or schema changes. It is the default when a server extension declares no runtime.
-- **In the API, sandboxed.** The same server types can opt into the confined runtime by declaring `runtime: confined-server`. The code then runs in a sandboxed child with no host imports and no raw Node. Every privileged effect goes through a brokered `host.*` call that the platform gates against the capabilities the extension declares. See [Sandbox](/docs/develop/extensions/server-extensions/sandbox/).
+- **In the API, sandboxed.** The same server types can opt into the confined runtime by declaring `runtime: confined-server`. The code then runs in a sandboxed child with no host imports and no raw Node. Every privileged effect goes through a brokered `host.*` call that the platform gates against the capabilities and settings the extension declares. See [Sandbox](/docs/develop/extensions/server-extensions/sandbox/).
 
 A server extension is full-authority unless it opts into the sandbox. Prefer the sandbox for new server extensions when the brokered API covers what they need, and reach for full authority only for what the sandbox cannot host. [Server extensions](/docs/develop/extensions/server-extensions/) covers the choice in full.
 
@@ -86,4 +86,5 @@ The [Creating extensions](/docs/develop/extensions/creating-extensions/) page wa
 - [App extensions](/docs/develop/extensions/app-extensions/) covers the browser lane and links to each app type.
 - [Server extensions](/docs/develop/extensions/server-extensions/) covers the Node lane and the full-authority versus sandboxed choice.
 - [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) is the reference for the confined runtime: the host API, capabilities, and diagnostics.
+- [Extension settings](/docs/develop/extensions/settings/) covers declaring operator-managed settings and secrets, and how server and app extension code reads them.
 - [Creating extensions](/docs/develop/extensions/creating-extensions/) covers the toolchain end to end: scaffold, build, install, hot reload, debug, publish.

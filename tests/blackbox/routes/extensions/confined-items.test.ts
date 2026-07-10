@@ -661,4 +661,21 @@ describe('Confined items host through the real flow binding', () => {
 			60000
 		);
 	});
+
+	describe('host.items cannot reach an internal table', () => {
+		it.each(vendors)(
+			'%s answers a request for cairncms_extension_settings with a host error',
+			async (vendor) => {
+				const reply = await runOperation(
+					vendor,
+					'currentUser',
+					{ collection: 'cairncms_extension_settings' },
+					TENANT_A_TOKEN
+				);
+
+				expect(reply.ok).toBe(false);
+			},
+			60000
+		);
+	});
 });

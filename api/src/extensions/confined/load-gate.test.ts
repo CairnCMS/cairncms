@@ -127,7 +127,7 @@ describe('gateConfinedExtension', () => {
 		expect(verdict.ok).toBe(false);
 
 		if (!verdict.ok) {
-			expect(verdict.error.code).toBe('uses-raw-fs');
+			expect(verdict.error.code).toBe('USES_RAW_FS');
 			expect(verdict.error.detail).toContain('index.js');
 			expect(verdict.error.detail).not.toContain(dir);
 		}
@@ -136,7 +136,7 @@ describe('gateConfinedExtension', () => {
 	it('refuses a confined extension whose declared source does not exist', async () => {
 		const dir = await makeDir(endpointManifest(), {});
 		const verdict = await gateConfinedExtension(extensionAt(dir));
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'source-unavailable' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'SOURCE_UNAVAILABLE' } });
 	});
 
 	it('refuses an over-cap manifest without parsing it', async () => {
@@ -147,13 +147,13 @@ describe('gateConfinedExtension', () => {
 
 		const dir = await makeDir(padded, { 'src/index.js': CLEAN_SOURCE });
 		const verdict = await gateConfinedExtension(extensionAt(dir));
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'manifest-too-large' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'MANIFEST_TOO_LARGE' } });
 	});
 
 	it('refuses a manifest that is not valid JSON', async () => {
 		const dir = await makeDir('{ not json', { 'src/index.js': CLEAN_SOURCE });
 		const verdict = await gateConfinedExtension(extensionAt(dir));
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'manifest-invalid' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'MANIFEST_INVALID' } });
 	});
 
 	it('refuses a manifest that fails schema validation', async () => {
@@ -161,7 +161,7 @@ describe('gateConfinedExtension', () => {
 		delete (options['cairncms:extension'] as Record<string, unknown>)['host'];
 		const dir = await makeDir(options, { 'src/index.js': CLEAN_SOURCE });
 		const verdict = await gateConfinedExtension(extensionAt(dir));
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'manifest-invalid' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'MANIFEST_INVALID' } });
 	});
 
 	it('refuses when the re-read manifest no longer declares a confined runtime', async () => {
@@ -169,13 +169,13 @@ describe('gateConfinedExtension', () => {
 		delete (options['cairncms:extension'] as Record<string, unknown>)['runtime'];
 		const dir = await makeDir(options, { 'src/index.js': CLEAN_SOURCE });
 		const verdict = await gateConfinedExtension(extensionAt(dir));
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'manifest-invalid' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'MANIFEST_INVALID' } });
 	});
 
 	it('refuses when the re-read manifest name differs from the discovered name', async () => {
 		const dir = await makeDir({ ...endpointManifest(), name: 'renamed-extension' }, { 'src/index.js': CLEAN_SOURCE });
 		const verdict = await gateConfinedExtension(extensionAt(dir));
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'manifest-invalid' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'MANIFEST_INVALID' } });
 	});
 
 	it('refuses when the re-read manifest type differs from the discovered type', async () => {
@@ -189,13 +189,13 @@ describe('gateConfinedExtension', () => {
 
 		const dir = await makeDir(operationManifest, { 'src/api.js': CLEAN_SOURCE });
 		const verdict = await gateConfinedExtension(extensionAt(dir, 'endpoint'));
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'manifest-invalid' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'MANIFEST_INVALID' } });
 	});
 
 	it('refuses when the re-read manifest entrypoint differs from the discovered entrypoint', async () => {
 		const dir = await makeDir(endpointManifest({ path: 'dist/other.js' }), { 'src/index.js': CLEAN_SOURCE });
 		const verdict = await gateConfinedExtension(extensionAt(dir));
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'manifest-invalid' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'MANIFEST_INVALID' } });
 	});
 
 	it('refuses when the re-read bundle entries differ from the discovered entries', async () => {
@@ -212,7 +212,7 @@ describe('gateConfinedExtension', () => {
 
 		const dir = await makeDir(bundleManifest, { 'src/ep.js': CLEAN_SOURCE, 'src/ui.js': CLEAN_SOURCE });
 		const verdict = await gateConfinedExtension(extensionAt(dir, 'bundle'));
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'manifest-invalid' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'MANIFEST_INVALID' } });
 	});
 
 	it('scans a hybrid operation server source and not its app source', async () => {
@@ -235,7 +235,7 @@ describe('gateConfinedExtension', () => {
 		});
 
 		const failed = await gateConfinedExtension(extensionAt(failing, 'operation'));
-		expect(failed).toMatchObject({ ok: false, error: { code: 'uses-raw-fs' } });
+		expect(failed).toMatchObject({ ok: false, error: { code: 'USES_RAW_FS' } });
 	});
 
 	it('scans a bundle server-entry source and not its app-entry source', async () => {
@@ -266,7 +266,7 @@ describe('gateConfinedExtension', () => {
 
 		// The scanner catches the flagged server entry before the probe runs.
 		const verdict = await gateConfinedExtension(extensionAt(failing, 'bundle'), PROBE_LOADABLE);
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'uses-raw-fs' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'USES_RAW_FS' } });
 	});
 
 	it('refuses a confined bundle that declares no server entry', async () => {
@@ -294,7 +294,7 @@ describe('gateConfinedExtension', () => {
 
 		const verdict = await gateConfinedExtension(extension, PROBE_LOADABLE);
 
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'manifest-invalid' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'MANIFEST_INVALID' } });
 		expect(JSON.stringify(verdict)).toContain('at least one server entry');
 	});
 
@@ -466,7 +466,7 @@ describe('gateConfinedExtension', () => {
 		};
 
 		const verdict = await gateConfinedExtension(extension);
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'invalid-entry' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'INVALID_ENTRY' } });
 	}, 20_000);
 
 	it('refuses a confined bundle whose hook entry declares no events', async () => {
@@ -493,7 +493,7 @@ describe('gateConfinedExtension', () => {
 		// The manifest schema refuses a hook entry without events before the gate
 		// reaches its own defense, so an inert hook never probes.
 		const verdict = await gateConfinedExtension(extension, PROBE_LOADABLE);
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'manifest-invalid' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'MANIFEST_INVALID' } });
 	});
 
 	it('probes a clean operation through the real confined child and carries the probed bytes', async () => {
@@ -542,7 +542,7 @@ describe('gateConfinedExtension', () => {
 
 		const verdict = await gateConfinedExtension(extensionAt(dir, 'operation'));
 
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'invalid-entry' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'INVALID_ENTRY' } });
 	}, 20_000);
 
 	it('refuses an operation whose built entry declares a different id', async () => {
@@ -556,7 +556,7 @@ describe('gateConfinedExtension', () => {
 
 		const verdict = await gateConfinedExtension(extensionAt(dir, 'operation'));
 
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'identity-mismatch' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'IDENTITY_MISMATCH' } });
 	}, 20_000);
 
 	it('refuses an over-cap built entry without probing it', async () => {
@@ -576,7 +576,7 @@ describe('gateConfinedExtension', () => {
 			},
 		});
 
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'artifact-too-large' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'ARTIFACT_TOO_LARGE' } });
 		expect(probeCalls).toHaveLength(0);
 	});
 
@@ -603,7 +603,7 @@ describe('gateConfinedExtension', () => {
 		expect(received).toEqual([raised.runtime]);
 	});
 
-	it('classifies a thrown probe as validation-incomplete instead of rejecting', async () => {
+	it('classifies a thrown probe as VALIDATION_INCOMPLETE instead of rejecting', async () => {
 		const dir = await makeDir(operationManifest(), {
 			'src/app.js': CLEAN_SOURCE,
 			'src/api.js': CLEAN_SOURCE,
@@ -616,7 +616,7 @@ describe('gateConfinedExtension', () => {
 			},
 		});
 
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'validation-incomplete' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'VALIDATION_INCOMPLETE' } });
 	});
 
 	it('refuses an operation whose built entry is missing', async () => {
@@ -629,7 +629,7 @@ describe('gateConfinedExtension', () => {
 			probe: async () => ({ loadable: true }),
 		});
 
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'source-unavailable' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'SOURCE_UNAVAILABLE' } });
 	});
 
 	it('refuses an operation whose built entry escapes the package root', async () => {
@@ -648,10 +648,10 @@ describe('gateConfinedExtension', () => {
 			probe: async () => ({ loadable: true }),
 		});
 
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'local-path-escapes-root' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'LOCAL_PATH_ESCAPES_ROOT' } });
 	});
 
-	it('classifies a host-side probe failure as validation-incomplete, not a verdict on the extension', async () => {
+	it('classifies a host-side probe failure as VALIDATION_INCOMPLETE, not a verdict on the extension', async () => {
 		const dir = await makeDir(operationManifest(), {
 			'src/app.js': CLEAN_SOURCE,
 			'src/api.js': CLEAN_SOURCE,
@@ -662,13 +662,13 @@ describe('gateConfinedExtension', () => {
 			probe: async () => ({ loadable: false, error: { code: 'busy', message: 'the confined runtime is at capacity' } }),
 		});
 
-		expect(busy).toMatchObject({ ok: false, error: { code: 'validation-incomplete' } });
+		expect(busy).toMatchObject({ ok: false, error: { code: 'VALIDATION_INCOMPLETE' } });
 
 		const internal = await gateConfinedExtension(extensionAt(dir, 'operation'), {
 			probe: async () => ({ loadable: false, error: { code: 'internal', message: 'the confined runtime failed' } }),
 		});
 
-		expect(internal).toMatchObject({ ok: false, error: { code: 'validation-incomplete' } });
+		expect(internal).toMatchObject({ ok: false, error: { code: 'VALIDATION_INCOMPLETE' } });
 	});
 
 	it('probes an endpoint under the json-endpoint activation and an operation under flow-operation', async () => {
@@ -710,7 +710,7 @@ describe('gateConfinedExtension', () => {
 			},
 		});
 
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'manifest-invalid' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'MANIFEST_INVALID' } });
 		expect(probeCalls).toHaveLength(0);
 	});
 
@@ -751,7 +751,7 @@ describe('gateConfinedExtension', () => {
 
 		const verdict = await gateConfinedExtension(extension, {});
 
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'identity-mismatch' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'IDENTITY_MISMATCH' } });
 	}, 20_000);
 
 	it('carries the manifest capabilities beside the probed bytes for a confined endpoint', async () => {
@@ -873,7 +873,7 @@ describe('gateConfinedExtension', () => {
 
 		const verdict = await gateConfinedExtension(bundle);
 
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'manifest-invalid' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'MANIFEST_INVALID' } });
 	});
 
 	it('refuses duplicate server entries even when neither declares capabilities', async () => {
@@ -905,7 +905,7 @@ describe('gateConfinedExtension', () => {
 
 		const verdict = await gateConfinedExtension(bundle);
 
-		expect(verdict).toMatchObject({ ok: false, error: { code: 'manifest-invalid' } });
+		expect(verdict).toMatchObject({ ok: false, error: { code: 'MANIFEST_INVALID' } });
 	});
 
 	it('collapses an unsafe reason message to a generic detail', async () => {
@@ -918,7 +918,7 @@ describe('gateConfinedExtension', () => {
 			}),
 		});
 
-		expect(absolute).toMatchObject({ ok: false, error: { code: 'uses-raw-fs', detail: 'confined validation failed' } });
+		expect(absolute).toMatchObject({ ok: false, error: { code: 'USES_RAW_FS', detail: 'confined validation failed' } });
 
 		const traversal = await gateConfinedExtension(extensionAt(dir), {
 			scan: async () => ({
@@ -937,5 +937,35 @@ describe('gateConfinedExtension', () => {
 		});
 
 		expect(relative).toMatchObject({ ok: false, error: { detail: 'detected in src/index.js' } });
+	});
+
+	it('collapses rooted, escaping, or encoded paths regardless of surrounding punctuation', async () => {
+		const dir = await makeDir(endpointManifest(), { 'src/index.js': CLEAN_SOURCE });
+
+		const detailFor = async (message: string) => {
+			const verdict = await gateConfinedExtension(extensionAt(dir), {
+				scan: async () => ({ reasons: [{ code: 'uses-raw-fs', message }], sourceFiles: [] }),
+			});
+
+			if (verdict.ok) throw new Error('expected a refusal');
+			return verdict.error.detail;
+		};
+
+		const collapsed = [
+			'path=/home/app/extensions/x.js',
+			'(/home/app/extensions/x.js)',
+			'C:\\Users\\app\\x.js',
+			'contains %2e%2e%2f encoded traversal',
+		];
+
+		for (const message of collapsed) {
+			expect(await detailFor(message)).toBe('confined validation failed');
+		}
+
+		const preserved = ['detected in src/index.js', 'detected in nested/deep/mod.js'];
+
+		for (const message of preserved) {
+			expect(await detailFor(message)).toBe(message);
+		}
 	});
 });

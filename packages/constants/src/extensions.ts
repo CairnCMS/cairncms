@@ -86,22 +86,28 @@ export const RequestCapabilitySchema = z
 	})
 	.strict();
 
+// items and files select the accountability host.items and host.files run under, and grant no
+// collection, field, or CRUD permission, which stay with CairnCMS roles and permissions. The
+// bare strings 'current-user' and 'system' are deprecated aliases normalized to the object form
+// so a shipped manifest loads unchanged.
+export const AccountabilityCapabilitySchema = z.union([
+	z.object({ accountability: z.enum(['user', 'full-access']) }).strict(),
+	z.enum(['current-user', 'system']).transform((value) => ({
+		accountability: value === 'current-user' ? ('user' as const) : ('full-access' as const),
+	})),
+]);
+
 // Raw powers such as fs, process.env, database access, child processes, and internal imports
 // must not be smuggled in as capability keys, so unknown keys are rejected rather than ignored.
-// items and files are accountability modes, not per-collection grants. Per-collection and
-// per-field access stays with CairnCMS roles and permissions.
 export const ExtensionCapabilitiesSchema = z
 	.object({
 		log: z.boolean(),
 		request: RequestCapabilitySchema,
 		template: z.boolean(),
-		endpoint: z.object({ access: z.enum(['public', 'authenticated']) }).strict(),
-		items: z.enum(['current-user', 'system']),
-		files: z.enum(['current-user', 'system']),
+		endpoint: z.object({ access: z.enum(['public', 'authenticated', 'app', 'admin']) }).strict(),
+		items: AccountabilityCapabilitySchema,
+		files: AccountabilityCapabilitySchema,
 		schema: z.array(z.enum(['read', 'write'])).min(1),
-		secrets: z.boolean(),
-		settings: z.array(z.enum(['read', 'write'])).min(1),
-		jobs: z.boolean(),
 	})
 	.partial()
 	.strict();
@@ -319,9 +325,109 @@ export const ExtensionOptionsBundleEntry = z.union([
 		}),
 ]);
 
+export const ExtensionSettingDeclaration = z
+	.object({
+		type: z.enum(['string', 'number', 'boolean']),
+		scope: z.enum(['global', 'collection']).default('global'),
+		secret: z
+			.object({ source: z.enum(['inline', 'config']).default('inline') })
+			.strict()
+			.optional(),
+		appReadable: z.boolean().optional(),
+		presentation: z
+			.object({ order: z.number().int().optional(), width: z.enum(['half', 'full']).optional() })
+			.strict()
+			.optional(),
+	})
+	.strict()
+	.superRefine((value, ctx) => {
+		if (value.secret !== undefined && value.type !== 'string') {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ['type'],
+				message: 'a secret setting must be type string',
+			});
+		}
+
+		if (value.secret !== undefined && value.appReadable === true) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ['appReadable'],
+				message: 'a secret setting cannot be app-readable',
+			});
+		}
+
+		if (value.secret?.source === 'config' && value.scope === 'collection') {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ['secret', 'source'],
+				message: 'a config-sourced secret must be global-scoped',
+			});
+		}
+	});
+
+const RESERVED_SETTING_KEYS = ['__proto__', 'constructor', 'prototype'];
+
+export const ExtensionSettingKeySchema = z
+	.string()
+	.regex(/^[a-z][a-z0-9_]*$/)
+	.max(64)
+	.refine((key) => RESERVED_SETTING_KEYS.includes(key) === false, {
+		message: 'a settings key must not be a reserved property name',
+	});
+
+export const ExtensionSettingsSchema = z
+	.record(ExtensionSettingKeySchema, ExtensionSettingDeclaration)
+	.refine((value) => Object.keys(value).length > 0, {
+		message: 'a settings declaration must declare at least one key',
+	});
+
+// Must stay stricter than EXTENSION_NAME_REGEX: this name derives a deployment-variable
+// segment and must be canonical, not merely loadable.
+const EXTENSION_SUBJECT_REGEX =
+	/^(?:(?:@[a-z0-9][a-z0-9._~-]*\/)?cairncms-extension-|@cairncms\/extension-)[a-z0-9][a-z0-9._~-]*$/;
+
+export const ExtensionSettingsSubjectSchema = z.string().regex(EXTENSION_SUBJECT_REGEX).max(255);
+
+function toConfigSegment(value: string): string {
+	const collapsed = value.toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+
+	let start = 0;
+	let end = collapsed.length;
+	while (start < end && collapsed[start] === '_') start++;
+	while (end > start && collapsed[end - 1] === '_') end--;
+
+	return collapsed.slice(start, end);
+}
+
+/**
+ * Derives the deployment variable name for a config-sourced extension secret. Both inputs are
+ * validated, so a name never derives for an invalid subject or key. The subject's npm scope
+ * and its local name (the part after the `cairncms-extension-` or `@cairncms/extension-`
+ * prefix) join with the key, each uppercased with non-alphanumeric runs collapsed to `_`.
+ */
+export function getExtensionConfigSecretName(subject: string, key: string): string {
+	ExtensionSettingsSubjectSchema.parse(subject);
+	ExtensionSettingKeySchema.parse(key);
+
+	const localName = EXTENSION_NAME_REGEX.exec(subject)?.[1];
+	if (localName === undefined) throw new Error('the extension subject has no derivable local name');
+
+	const scope = subject.startsWith('@') ? subject.slice(1, subject.indexOf('/')) : '';
+	const slug = toConfigSegment(scope ? `${scope}/${localName}` : localName);
+	const keySegment = toConfigSegment(key);
+
+	if (slug.length === 0 || keySegment.length === 0) {
+		throw new Error('the extension config-secret name derives an empty segment');
+	}
+
+	return `CAIRNCMS_EXT_${slug}_${keySegment}`;
+}
+
 export const ExtensionOptionsBase = z.object({
 	host: z.string(),
 	hidden: z.boolean().optional(),
+	settings: ExtensionSettingsSchema.optional(),
 });
 
 export const ExtensionOptionsApp = z

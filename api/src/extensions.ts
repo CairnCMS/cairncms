@@ -20,6 +20,7 @@ import type {
 	EndpointConfig,
 	Extension,
 	ExtensionInfo,
+	ExtensionSettings,
 	ExtensionType,
 	FilterHandler,
 	HookConfig,
@@ -64,6 +65,10 @@ import { runConfinedActionHook, runConfinedFilterHook, type ConfinedHookRequest 
 import type { ConfinedLogEntry } from './extensions/confined/broker.js';
 import type { ConfinedHostDispatcher, ConfinedInvocation } from './extensions/confined/types.js';
 import { confinedItemsService } from './extensions/confined/items-service.js';
+import { buildConfinedSettingsAccess } from './extensions/confined/settings-access.js';
+import { buildExtensionSettingsReader } from './extensions/extension-settings-reader.js';
+import { readCollectionSettings, readGlobalSettings } from './services/extension-settings-store.js';
+import { clearOperationOptionSecrets, registerOperationOptionSecrets } from './services/operation-option-secrets.js';
 import type { SandboxConfig } from './extensions/confined/sandbox-limits.js';
 import { getAxios } from './request/index.js';
 import logger from './logger.js';
@@ -76,6 +81,7 @@ import {
 	type ConfinedGateVerdict,
 	type ConfinedLoadGateDeps,
 } from './extensions/confined/load-gate.js';
+import { resolveSettingsSubjects, safeExtensionName } from './extensions/settings-subjects.js';
 import { resolveConfinedRuntime, type ConfinedSupervisor } from './extensions/confined/supervisor.js';
 import { describePosture, type SandboxPosture } from './extensions/confined/sandbox-hardening.js';
 import getModuleDefault from './utils/get-module-default.js';
@@ -138,6 +144,20 @@ type ExtensionDiagnostic = {
 	capabilities?: ExtensionCapabilities;
 	// Set to the confined runtime only when the extension runs sandboxed, omitted otherwise.
 	runtime?: typeof CONFINED_RUNTIME;
+	// Present only on a settings-declaring owner: whether its settings are manageable, with
+	// the sanitized reason when they are not. Status only, never the declaration.
+	settings?: { status: 'available' | 'unavailable'; reason?: SanitizedExtensionError };
+};
+
+// One settings-declaring owner for the management surface. `subject` is the validated raw
+// package name, present only for an available owner, and `declaration` likewise, so an
+// ineligible owner exposes nothing beyond its sanitized name and reason.
+export type SettingsOwner = {
+	subject?: string;
+	displaySubject: string;
+	status: 'available' | 'unavailable';
+	reason?: SanitizedExtensionError;
+	declaration?: ExtensionSettings;
 };
 
 // The global confined-runtime metadata on the diagnostics response. `not-required` means no
@@ -214,6 +234,24 @@ export class ExtensionManager {
 	// recomputed on every load, never persisted, and carrying no public diagnostic
 	// row until registration.
 	private confinedEligible = new Map<Extension, ConfinedEligibleEntry>();
+
+	private settingsEligible = new Set<Extension>();
+
+	// The public, variable-free reason per ineligible owner, what the diagnostics field
+	// and the owners endpoint publish. The variable-bearing collision detail is log-only.
+	private settingsIneligible = new Map<Extension, SanitizedExtensionError>();
+
+	// Every discovered settings-declaring owner in discovery order, whatever its
+	// eligibility and whether or not this instance serves it.
+	private settingsOwners: Extension[] = [];
+
+	// Every discovered app extension, for the diagnostics listing. Serving and bundling
+	// stay on the SERVE_APP-filtered set; the listing is topology-complete.
+	private discoveredAppExtensions: Extension[] = [];
+
+	// Every discovered owner's declaration by subject, eligibility-independent, so the
+	// admin read's secret masking cannot weaken when an owner is gated ineligible.
+	private declaredSettingsBySubject = new Map<string, ExtensionSettings[]>();
 
 	// Test seam for the gate's scanner, probe, and limits dependencies. Overrides
 	// the production-resolved deps below, so a test can drive the gate directly.
@@ -361,10 +399,75 @@ export class ExtensionManager {
 
 			if (diagnostic.reason) copy.reason = { ...diagnostic.reason };
 			if (diagnostic.capabilities) copy.capabilities = structuredClone(diagnostic.capabilities);
+
+			if (diagnostic.settings) {
+				copy.settings = {
+					status: diagnostic.settings.status,
+					...(diagnostic.settings.reason && { reason: { ...diagnostic.settings.reason } }),
+				};
+			}
+
 			if (diagnostic.runtime) copy.runtime = diagnostic.runtime;
 
 			return copy;
 		});
+	}
+
+	public isSettingsEligible(extension: Extension): boolean {
+		return this.settingsEligible.has(extension);
+	}
+
+	public getSettingsOwner(subject: string): Extension | undefined {
+		for (const extension of this.settingsEligible) {
+			if (extension.name === subject) return extension;
+		}
+
+		return undefined;
+	}
+
+	/**
+	 * Every discovered declaration for a subject, whatever its eligibility, duplicates
+	 * included. Concealment consumers mask from this set so a stored secret under a
+	 * gated-ineligible owner never reads back in cleartext. Function-granting paths
+	 * (writes, confined reads) stay on the eligibility-gated owner.
+	 */
+	public getDeclaredSettings(subject: string): ExtensionSettings[] {
+		return this.declaredSettingsBySubject.get(subject) ?? [];
+	}
+
+	public getSettingsOwners(): SettingsOwner[] {
+		return this.settingsOwners.map((extension) => {
+			const displaySubject = safeExtensionName(extension.name);
+
+			if (this.settingsEligible.has(extension)) {
+				return {
+					subject: extension.name,
+					displaySubject,
+					status: 'available' as const,
+					declaration: structuredClone(extension.settings!),
+				};
+			}
+
+			const reason = this.settingsIneligible.get(extension);
+
+			return {
+				displaySubject,
+				status: 'unavailable' as const,
+				...(reason && { reason: { ...reason } }),
+			};
+		});
+	}
+
+	private applySettingsDiagnostic(diagnostic: ExtensionDiagnostic, extension: Extension): void {
+		if (extension.settings === undefined) return;
+
+		if (this.settingsEligible.has(extension)) {
+			diagnostic.settings = { status: 'available' };
+			return;
+		}
+
+		const reason = this.settingsIneligible.get(extension);
+		if (reason !== undefined) diagnostic.settings = { status: 'unavailable', reason };
 	}
 
 	/**
@@ -453,6 +556,8 @@ export class ExtensionManager {
 
 		if (extension.runtime === CONFINED_RUNTIME) diagnostic.runtime = extension.runtime;
 
+		this.applySettingsDiagnostic(diagnostic, extension);
+
 		this.diagnostics.push(diagnostic);
 	}
 
@@ -475,6 +580,8 @@ export class ExtensionManager {
 		if (eligible?.capabilities !== undefined) diagnostic.capabilities = eligible.capabilities;
 
 		if (extension.runtime === CONFINED_RUNTIME) diagnostic.runtime = extension.runtime;
+
+		this.applySettingsDiagnostic(diagnostic, extension);
 
 		this.diagnostics.push(diagnostic);
 	}
@@ -563,6 +670,35 @@ export class ExtensionManager {
 	}
 
 	/**
+	 * Gates each settings owner's durable subject after confined gating, so any confined
+	 * capabilities it reads are already validated. A bad or colliding subject is refused
+	 * settings only, never failing the extension's load.
+	 */
+	private gateSettingsSubjects(discovered: Extension[]): void {
+		const statuses = resolveSettingsSubjects(discovered);
+
+		this.settingsEligible = new Set();
+		this.settingsIneligible = new Map();
+		this.settingsOwners = discovered.filter((extension) => extension.settings !== undefined);
+		this.declaredSettingsBySubject = new Map();
+
+		for (const extension of this.settingsOwners) {
+			const declarations = this.declaredSettingsBySubject.get(extension.name) ?? [];
+			declarations.push(extension.settings!);
+			this.declaredSettingsBySubject.set(extension.name, declarations);
+		}
+
+		for (const [extension, status] of statuses) {
+			if (status.eligible) {
+				this.settingsEligible.add(extension);
+			} else {
+				this.settingsIneligible.set(extension, status.reason);
+				logger.warn(`Settings disabled: ${status.logDetail ?? status.reason.detail}`);
+			}
+		}
+	}
+
+	/**
 	 * Registers the eligible confined operations into the flow manager without
 	 * importing any server artifact. A contribution id declared by more than one
 	 * eligible operation is ambiguous: every one is failed in diagnostics and none is
@@ -613,6 +749,8 @@ export class ExtensionManager {
 				this.buildConfinedDescriptor(binding, eligible.optionDelivery, runtime)
 			);
 
+			registerOperationOptionSecrets(extension.name, Object.keys(eligible.optionDelivery ?? {}));
+
 			this.recordLoaded(extension);
 		}
 	}
@@ -649,12 +787,12 @@ export class ExtensionManager {
 		for (const id of new Set(ids)) {
 			if (flowManager.hasOperation(id)) {
 				blocked.set(id, {
-					code: 'operation-collision',
+					code: 'OPERATION_COLLISION',
 					detail: 'the operation id is declared by an inherited operation',
 				});
 			} else if ((counts.get(id) ?? 0) > 1) {
 				blocked.set(id, {
-					code: 'ambiguous-operation',
+					code: 'AMBIGUOUS_OPERATION',
 					detail: 'a confined operation id is declared more than once',
 				});
 			}
@@ -672,6 +810,12 @@ export class ExtensionManager {
 			log: (entry: ConfinedLogEntry) => this.logConfinedEntry(entry),
 			getAxios: () => getAxios(),
 			itemsService: confinedItemsService,
+			settingsAccess: (subject: string) =>
+				buildConfinedSettingsAccess({
+					subject,
+					declaration: this.getSettingsOwner(subject)?.settings,
+					readRows: (signal) => readGlobalSettings(getDatabase(), subject, signal),
+				}),
 			brokerLimits: {
 				settingsValueBytes: config.sandbox.settingsValueBytes,
 				httpResponseBytes: config.sandbox.httpResponseBytes,
@@ -733,7 +877,7 @@ export class ExtensionManager {
 			// checks, and the grammar matches the canonical lowercase route key.
 			if (!CONFINED_ENDPOINT_ROUTE.test(extension.name)) {
 				this.recordFailed(extension, {
-					code: 'route-invalid',
+					code: 'ROUTE_INVALID',
 					detail: 'the confined endpoint route name is not a safe literal route',
 				});
 
@@ -742,7 +886,7 @@ export class ExtensionManager {
 
 			if ((counts.get(extension.name) ?? 0) > 1) {
 				this.recordFailed(extension, {
-					code: 'ambiguous-endpoint',
+					code: 'AMBIGUOUS_ENDPOINT',
 					detail: 'a confined endpoint route is declared more than once',
 				});
 
@@ -751,7 +895,7 @@ export class ExtensionManager {
 
 			if (this.registeredEndpointRoutes.has(extension.name)) {
 				this.recordFailed(extension, {
-					code: 'route-collision',
+					code: 'ROUTE_COLLISION',
 					detail: 'the confined endpoint route is already registered',
 				});
 
@@ -769,7 +913,7 @@ export class ExtensionManager {
 
 			if (eligible.capabilities?.endpoint === undefined) {
 				this.recordFailed(extension, {
-					code: 'capability-missing',
+					code: 'CAPABILITY_MISSING',
 					detail: 'the endpoint capability is not declared',
 				});
 
@@ -808,7 +952,7 @@ export class ExtensionManager {
 		for (const [extension, eligible] of hooks) {
 			if ((counts.get(extension.name) ?? 0) > 1) {
 				this.recordFailed(extension, {
-					code: 'ambiguous-hook',
+					code: 'AMBIGUOUS_HOOK',
 					detail: 'a confined hook id is declared more than once',
 				});
 
@@ -831,7 +975,7 @@ export class ExtensionManager {
 			// and alias unrelated events, so the whole hook fails before any subscription.
 			if (!declaredEvents.every(hasSafeEventSegments)) {
 				this.recordFailed(extension, {
-					code: 'event-invalid',
+					code: 'EVENT_INVALID',
 					detail: 'a confined hook event name is not a safe literal event',
 				});
 
@@ -999,6 +1143,7 @@ export class ExtensionManager {
 			}
 
 			flowManager.addConfinedOperation(name, this.buildConfinedDescriptor(binding, optionDelivery, runtime));
+			registerOperationOptionSecrets(name, Object.keys(optionDelivery ?? {}));
 			return { status: 'loaded' };
 		}
 
@@ -1006,21 +1151,21 @@ export class ExtensionManager {
 			if (!CONFINED_ENDPOINT_ROUTE.test(name)) {
 				return {
 					status: 'failed',
-					reason: { code: 'route-invalid', detail: 'the confined endpoint route name is not a safe literal route' },
+					reason: { code: 'ROUTE_INVALID', detail: 'the confined endpoint route name is not a safe literal route' },
 				};
 			}
 
 			if (this.registeredEndpointRoutes.has(name)) {
 				return {
 					status: 'failed',
-					reason: { code: 'route-collision', detail: 'the confined endpoint route is already registered' },
+					reason: { code: 'ROUTE_COLLISION', detail: 'the confined endpoint route is already registered' },
 				};
 			}
 
 			if (binding.capabilities.endpoint === undefined) {
 				return {
 					status: 'failed',
-					reason: { code: 'capability-missing', detail: 'the endpoint capability is not declared' },
+					reason: { code: 'CAPABILITY_MISSING', detail: 'the endpoint capability is not declared' },
 				};
 			}
 
@@ -1041,7 +1186,7 @@ export class ExtensionManager {
 		if (!declaredEvents.every(hasSafeEventSegments)) {
 			return {
 				status: 'failed',
-				reason: { code: 'event-invalid', detail: 'a confined hook event name is not a safe literal event' },
+				reason: { code: 'EVENT_INVALID', detail: 'a confined hook event name is not a safe literal event' },
 			};
 		}
 
@@ -1068,6 +1213,8 @@ export class ExtensionManager {
 		if (extension.version) diagnostic.version = extension.version;
 
 		if (extension.runtime === CONFINED_RUNTIME) diagnostic.runtime = extension.runtime;
+
+		this.applySettingsDiagnostic(diagnostic, extension);
 
 		this.diagnostics.push(diagnostic);
 	}
@@ -1143,9 +1290,7 @@ export class ExtensionManager {
 	}
 
 	private recordAppDiagnostics(): void {
-		const appExtensions = this.extensions.filter((extension) => isIn(extension.type, APP_EXTENSION_TYPES));
-
-		for (const extension of appExtensions) {
+		for (const extension of this.discoveredAppExtensions) {
 			const diagnostic: ExtensionDiagnostic = {
 				name: extension.name,
 				type: extension.type,
@@ -1154,6 +1299,8 @@ export class ExtensionManager {
 			};
 
 			if (extension.version) diagnostic.version = extension.version;
+
+			this.applySettingsDiagnostic(diagnostic, extension);
 
 			this.diagnostics.push(diagnostic);
 		}
@@ -1240,6 +1387,11 @@ export class ExtensionManager {
 		this.serverExtensions = [];
 		this.confinedEligible.clear();
 		this.confinedOperationBlocks.clear();
+		this.settingsEligible.clear();
+		this.settingsIneligible.clear();
+		this.settingsOwners = [];
+		this.discoveredAppExtensions = [];
+		this.declaredSettingsBySubject.clear();
 		this.confinedRuntimeDeps = {};
 		this.confinedRuntimeUnavailable = false;
 		this.confinedRuntime = undefined;
@@ -1247,10 +1399,21 @@ export class ExtensionManager {
 		this.hookEmbedsHead = [];
 		this.hookEmbedsBody = [];
 
+		let discovered: Extension[] = [];
+
 		try {
 			await ensureExtensionDirs(env['EXTENSIONS_PATH'], NESTED_EXTENSION_TYPES);
 
-			this.extensions = await this.getExtensions();
+			discovered = await this.getExtensions();
+
+			// The settings gate sees every discovered extension so an app extension's settings
+			// ownership resolves even when SERVE_APP is off and an external bundler serves the app.
+			// this.extensions stays the SERVE_APP-filtered set used for serving and listing.
+			this.extensions = env['SERVE_APP']
+				? discovered
+				: discovered.filter((extension) => APP_EXTENSION_TYPES.includes(extension.type as any) === false);
+
+			this.discoveredAppExtensions = discovered.filter((extension) => isIn(extension.type, APP_EXTENSION_TYPES));
 		} catch (err: any) {
 			const reason = sanitizeExtensionError(err, 'DISCOVERY_FAILED');
 			logger.warn(`Couldn't load extensions: ${reason.code} ${reason.detail}`);
@@ -1261,6 +1424,7 @@ export class ExtensionManager {
 
 		await this.prepareConfinedRuntime();
 		await this.gateConfinedExtensions();
+		this.gateSettingsSubjects(discovered);
 
 		await this.registerHooks();
 		await this.registerEndpoints();
@@ -1280,8 +1444,9 @@ export class ExtensionManager {
 
 		if (env['SERVE_APP']) {
 			this.appExtensions = await this.generateExtensionBundle();
-			this.recordAppDiagnostics();
 		}
+
+		this.recordAppDiagnostics();
 
 		this.isLoaded = true;
 	}
@@ -1291,6 +1456,11 @@ export class ExtensionManager {
 
 		this.serverExtensions = [];
 		this.confinedEligible.clear();
+		this.settingsEligible.clear();
+		this.settingsIneligible.clear();
+		this.settingsOwners = [];
+		this.discoveredAppExtensions = [];
+		this.declaredSettingsBySubject.clear();
 		this.confinedRuntimeDeps = {};
 		this.confinedRuntimeUnavailable = false;
 		this.confinedRuntime = undefined;
@@ -1426,9 +1596,7 @@ export class ExtensionManager {
 			});
 		}
 
-		return [...packageExtensions, ...localPackageExtensions, ...localExtensions].filter(
-			(extension) => env['SERVE_APP'] || APP_EXTENSION_TYPES.includes(extension.type as any) === false
-		);
+		return [...packageExtensions, ...localPackageExtensions, ...localExtensions];
 	}
 
 	private async generateExtensionBundle(): Promise<string | null> {
@@ -1513,7 +1681,7 @@ export class ExtensionManager {
 
 				const config = getModuleDefault(hookInstance);
 
-				this.registerHook(config);
+				this.registerHook(config, hook.name);
 
 				this.apiExtensions.push({ path: hookPath });
 
@@ -1541,7 +1709,7 @@ export class ExtensionManager {
 
 				const config = getModuleDefault(endpointInstance);
 
-				this.registerEndpoint(config, endpoint.name);
+				this.registerEndpoint(config, endpoint.name, endpoint.name);
 
 				this.apiExtensions.push({ path: endpointPath });
 
@@ -1581,7 +1749,7 @@ export class ExtensionManager {
 
 				const config = getModuleDefault(operationInstance);
 
-				this.registerOperation(config);
+				this.registerOperation(config, operation.name);
 
 				this.apiExtensions.push({ path: operationPath });
 
@@ -1610,15 +1778,15 @@ export class ExtensionManager {
 				const configs = getModuleDefault(bundleInstances);
 
 				for (const { config } of configs.hooks) {
-					this.registerHook(config);
+					this.registerHook(config, bundle.name);
 				}
 
 				for (const { config, name } of configs.endpoints) {
-					this.registerEndpoint(config, name);
+					this.registerEndpoint(config, name, bundle.name);
 				}
 
 				for (const { config } of configs.operations) {
-					this.registerOperation(config);
+					this.registerOperation(config, bundle.name);
 				}
 
 				this.apiExtensions.push({ path: bundlePath });
@@ -1632,7 +1800,16 @@ export class ExtensionManager {
 		}
 	}
 
-	private registerHook(register: HookConfig): void {
+	private settingsReaderFor(subject: string) {
+		return buildExtensionSettingsReader({
+			subject,
+			getDeclaration: () => this.getSettingsOwner(subject)?.settings,
+			readGlobalRows: () => readGlobalSettings(getDatabase(), subject),
+			readCollectionRows: (collection) => readCollectionSettings(getDatabase(), subject, collection),
+		});
+	}
+
+	private registerHook(register: HookConfig, subject: string): void {
 		const registerFunctions = {
 			filter: (event: string, handler: FilterHandler) => {
 				emitter.onFilter(event, handler);
@@ -1707,10 +1884,11 @@ export class ExtensionManager {
 			emitter: this.apiEmitter,
 			logger,
 			getSchema,
+			extensionSettings: this.settingsReaderFor(subject),
 		});
 	}
 
-	private registerEndpoint(config: EndpointConfig, name: string): void {
+	private registerEndpoint(config: EndpointConfig, name: string, subject: string): void {
 		const register = typeof config === 'function' ? config : config.handler;
 		const routeName = typeof config === 'function' ? name : config.id;
 
@@ -1728,13 +1906,23 @@ export class ExtensionManager {
 			emitter: this.apiEmitter,
 			logger,
 			getSchema,
+			extensionSettings: this.settingsReaderFor(subject),
 		});
 	}
 
-	private registerOperation(config: OperationApiConfig): void {
+	private registerOperation(config: OperationApiConfig, subject?: string): void {
 		const flowManager = getFlowManager();
 
-		flowManager.addOperation(config.id, config.handler);
+		if (subject === undefined) {
+			flowManager.addOperation(config.id, config.handler);
+			return;
+		}
+
+		const extensionSettings = this.settingsReaderFor(subject);
+
+		flowManager.addOperation(config.id, (options, context) =>
+			config.handler(options, { ...context, extensionSettings })
+		);
 	}
 
 	private unregisterApiExtensions(): void {
@@ -1764,6 +1952,7 @@ export class ExtensionManager {
 
 		flowManager.clearOperations();
 		flowManager.clearConfinedOperations();
+		clearOperationOptionSecrets();
 
 		for (const apiExtension of this.apiExtensions) {
 			try {

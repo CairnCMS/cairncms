@@ -1,12 +1,8 @@
 import type { Accountability, ExtensionCapabilities } from '@cairncms/types';
-import {
-	createConfinedHostBroker,
-	DARK_SETTINGS,
-	type ConfinedHostBrokerDeps,
-	type ConfinedLogEntry,
-} from './broker.js';
+import { createConfinedHostBroker, type ConfinedHostBrokerDeps, type ConfinedLogEntry } from './broker.js';
 import { toConfinedAccountability } from './operation.js';
 import { ConfinedSecretScope } from './secret-scope.js';
+import type { ConfinedSettingsAccess } from './settings-access.js';
 import type { ConfinedHostDispatcher, ConfinedInvocation, ConfinedResult, ConfinedRuntimeLimits } from './types.js';
 
 export const HOOK_PAYLOAD_BYTES_MAX = 1024 * 1024;
@@ -38,6 +34,7 @@ export interface ConfinedHookDeps {
 	log: (entry: ConfinedLogEntry) => void;
 	getAxios?: ConfinedHostBrokerDeps['getAxios'];
 	itemsService?: ConfinedHostBrokerDeps['itemsService'];
+	settingsAccess: (subject: string) => ConfinedSettingsAccess;
 	brokerLimits: ConfinedHostBrokerDeps['limits'];
 	runtimeLimits: ConfinedRuntimeLimits;
 }
@@ -91,14 +88,23 @@ function buildInvocation(
 }
 
 function buildDispatcher(request: ConfinedHookRequest, deps: ConfinedHookDeps): ConfinedHostDispatcher {
+	const access = deps.settingsAccess(request.extensionId);
+
 	const brokerDeps: ConfinedHostBrokerDeps = {
 		capabilities: request.capabilities,
 		log: deps.log,
-		settings: DARK_SETTINGS,
+		settings: access.source,
 		accountability: request.accountability,
 		limits: deps.brokerLimits,
-		// Hooks mint no option handles, so no reference ever resolves.
-		resolveSecret: async () => null,
+		resolveSecret: async (binding, signal) => {
+			if (signal.aborted) return null;
+
+			if (binding.kind === 'extension-setting') {
+				return access.resolveExtensionSecret(binding, signal);
+			}
+
+			return null;
+		},
 	};
 
 	if (deps.getAxios !== undefined) brokerDeps.getAxios = deps.getAxios;

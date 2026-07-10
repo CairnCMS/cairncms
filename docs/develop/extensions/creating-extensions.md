@@ -64,6 +64,8 @@ The `package.json` contains a `cairncms:extension` block with the extension's me
 - **`source`** — the source entrypoint passed to the build.
 - **`host`** — a semver range describing which CairnCMS versions this extension is compatible with.
 
+The block can also declare a `settings` object: operator-managed settings, including secrets, that your extension's code reads at runtime. The package name owns the stored values and also derives the deployment variable names for config-sourced secrets, which are never stored. Renaming a published package leaves stored values behind under the old name and changes the derived variable names. See [Extension settings](/docs/develop/extensions/settings/).
+
 The build CLI uses these fields by default. The `type`, `source`, and `path` values can be overridden at the command line; `host` cannot.
 
 ## Building

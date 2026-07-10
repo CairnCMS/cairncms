@@ -39,6 +39,7 @@ const allowedEnvironmentVars = [
 	// security
 	'KEY',
 	'SECRET',
+	'SECRETS_ENCRYPTION_KEY',
 	'ACCESS_TOKEN_TTL',
 	'REFRESH_TOKEN_TTL',
 	'REFRESH_TOKEN_COOKIE_DOMAIN',
@@ -313,6 +314,8 @@ const defaults: Record<string, any> = {
 const typeMap: Record<string, string> = {
 	HOST: 'string',
 	PORT: 'string',
+
+	SECRETS_ENCRYPTION_KEY: 'string',
 
 	DB_NAME: 'string',
 	DB_USER: 'string',

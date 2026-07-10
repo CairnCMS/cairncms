@@ -141,6 +141,12 @@ paths:
     $ref: './paths/extensions/diagnostics.yaml'
   /extensions/sources/{chunk}:
     $ref: './paths/extensions/sources.yaml'
+  /extension-settings:
+    $ref: './paths/extension-settings/settings.yaml'
+  /extension-settings/app:
+    $ref: './paths/extension-settings/app.yaml'
+  /extension-settings/owners:
+    $ref: './paths/extension-settings/owners.yaml'
 
   # Fields
   /fields:
@@ -254,6 +260,13 @@ paths:
 
 components:
   schemas:
+    ExtensionSettingValue:
+      description:
+        A scalar setting value. An inline secret is written as its raw string and always read back masked.
+      oneOf:
+        - type: string
+        - type: number
+        - type: boolean
     Activity:
       $ref: './components/activity.yaml'
     Presets:
