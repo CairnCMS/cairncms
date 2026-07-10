@@ -938,4 +938,34 @@ describe('gateConfinedExtension', () => {
 
 		expect(relative).toMatchObject({ ok: false, error: { detail: 'detected in src/index.js' } });
 	});
+
+	it('collapses rooted, escaping, or encoded paths regardless of surrounding punctuation', async () => {
+		const dir = await makeDir(endpointManifest(), { 'src/index.js': CLEAN_SOURCE });
+
+		const detailFor = async (message: string) => {
+			const verdict = await gateConfinedExtension(extensionAt(dir), {
+				scan: async () => ({ reasons: [{ code: 'uses-raw-fs', message }], sourceFiles: [] }),
+			});
+
+			if (verdict.ok) throw new Error('expected a refusal');
+			return verdict.error.detail;
+		};
+
+		const collapsed = [
+			'path=/home/app/extensions/x.js',
+			'(/home/app/extensions/x.js)',
+			'C:\\Users\\app\\x.js',
+			'contains %2e%2e%2f encoded traversal',
+		];
+
+		for (const message of collapsed) {
+			expect(await detailFor(message)).toBe('confined validation failed');
+		}
+
+		const preserved = ['detected in src/index.js', 'detected in nested/deep/mod.js'];
+
+		for (const message of preserved) {
+			expect(await detailFor(message)).toBe(message);
+		}
+	});
 });
