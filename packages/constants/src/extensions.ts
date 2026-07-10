@@ -382,7 +382,12 @@ export const ExtensionSettingsSchema = z
 		message: 'a settings declaration must declare at least one key',
 	});
 
-export const ExtensionSettingsSubjectSchema = z.string().regex(EXTENSION_NAME_REGEX).max(255);
+// Must stay stricter than EXTENSION_NAME_REGEX: this name derives a deployment-variable
+// segment and must be canonical, not merely loadable.
+const EXTENSION_SUBJECT_REGEX =
+	/^(?:(?:@[a-z0-9][a-z0-9._~-]*\/)?cairncms-extension-|@cairncms\/extension-)[a-z0-9][a-z0-9._~-]*$/;
+
+export const ExtensionSettingsSubjectSchema = z.string().regex(EXTENSION_SUBJECT_REGEX).max(255);
 
 function toConfigSegment(value: string): string {
 	const collapsed = value.toUpperCase().replace(/[^A-Z0-9]+/g, '_');
@@ -410,8 +415,13 @@ export function getExtensionConfigSecretName(subject: string, key: string): stri
 
 	const scope = subject.startsWith('@') ? subject.slice(1, subject.indexOf('/')) : '';
 	const slug = toConfigSegment(scope ? `${scope}/${localName}` : localName);
+	const keySegment = toConfigSegment(key);
 
-	return `CAIRNCMS_EXT_${slug}_${toConfigSegment(key)}`;
+	if (slug.length === 0 || keySegment.length === 0) {
+		throw new Error('the extension config-secret name derives an empty segment');
+	}
+
+	return `CAIRNCMS_EXT_${slug}_${keySegment}`;
 }
 
 export const ExtensionOptionsBase = z.object({

@@ -43,13 +43,11 @@ export function resolveSettingsSubjects(extensions: Extension[]): Map<Extension,
 		ownerCountBySubject.set(owner.name, (ownerCountBySubject.get(owner.name) ?? 0) + 1);
 	}
 
-	// A config-sourced secret reads from CAIRNCMS_EXT_<subject>_<KEY>, where <subject> is the
-	// package name sanitized for an env var. Sanitization is lossy, so two distinct package
-	// names can normalize to one namespace and, sharing a key, one full variable that each
-	// would read as the other's secret. Collect the config variables across the valid, unique
-	// owners and fail both owners of any shared variable closed. Different keys derive
-	// different variables and do not collide.
-	const subjectsByVariable = new Map<string, Set<string>>();
+	// A config-sourced secret reads from CAIRNCMS_EXT_<subject>_<key>, both parts sanitized
+	// for an env var. Sanitization is lossy, so two package names can normalize to one
+	// variable, and two keys of one owner can too. A variable derived more than once would be
+	// read as more than one secret, so every owner of a repeated variable is failed closed.
+	const derivationsByVariable = new Map<string, { subject: string; key: string }[]>();
 
 	for (const owner of owners) {
 		if (ExtensionSettingsSubjectSchema.safeParse(owner.name).success === false) continue;
@@ -57,23 +55,33 @@ export function resolveSettingsSubjects(extensions: Extension[]): Map<Extension,
 
 		for (const key of configSecretKeys(owner)) {
 			const variable = getExtensionConfigSecretName(owner.name, key);
-			const subjects = subjectsByVariable.get(variable) ?? new Set<string>();
-			subjects.add(owner.name);
-			subjectsByVariable.set(variable, subjects);
+			const derivations = derivationsByVariable.get(variable) ?? [];
+			derivations.push({ subject: owner.name, key });
+			derivationsByVariable.set(variable, derivations);
 		}
 	}
 
-	const collisionsBySubject = new Map<string, { variables: Set<string>; others: Set<string> }>();
+	const collisionsBySubject = new Map<string, { variables: Set<string>; others: Set<string>; keys: Set<string> }>();
 
-	for (const [variable, subjects] of subjectsByVariable) {
-		if (subjects.size <= 1) continue;
+	for (const [variable, derivations] of derivationsByVariable) {
+		if (derivations.length <= 1) continue;
 
-		for (const subject of subjects) {
-			const collision = collisionsBySubject.get(subject) ?? { variables: new Set(), others: new Set() };
+		for (const { subject, key } of derivations) {
+			const collision = collisionsBySubject.get(subject) ?? {
+				variables: new Set<string>(),
+				others: new Set<string>(),
+				keys: new Set<string>(),
+			};
+
 			collision.variables.add(variable);
 
-			for (const other of subjects) {
-				if (other !== subject) collision.others.add(other);
+			for (const other of derivations) {
+				if (other.subject !== subject) {
+					collision.others.add(other.subject);
+				} else if (other.key !== key) {
+					collision.keys.add(key);
+					collision.keys.add(other.key);
+				}
 			}
 
 			collisionsBySubject.set(subject, collision);
@@ -110,18 +118,33 @@ export function resolveSettingsSubjects(extensions: Extension[]): Map<Extension,
 		const collision = collisionsBySubject.get(owner.name);
 
 		if (collision !== undefined) {
+			const name = safeExtensionName(owner.name);
 			const variables = [...collision.variables].join(', ');
-			const others = [...collision.others].map((other) => `"${safeExtensionName(other)}"`).join(', ');
+
+			if (collision.others.size > 0) {
+				const others = [...collision.others].map((other) => `"${safeExtensionName(other)}"`).join(', ');
+
+				statuses.set(owner, {
+					eligible: false,
+					reason: {
+						code: SETTINGS_SUBJECT_CONFIG_COLLISION,
+						detail: `the settings subject "${name}" derives a config-secret variable that collides with ${others}`,
+					},
+					logDetail: `config-secret variable ${variables} for "${name}" collides with ${others}`,
+				});
+
+				continue;
+			}
+
+			const keys = [...collision.keys].map((key) => `"${safeLogFragment(key)}"`).join(', ');
 
 			statuses.set(owner, {
 				eligible: false,
 				reason: {
 					code: SETTINGS_SUBJECT_CONFIG_COLLISION,
-					detail: `the settings subject "${safeExtensionName(
-						owner.name
-					)}" derives a config-secret variable that collides with ${others}`,
+					detail: `the settings subject "${name}" derives one config-secret variable from more than one of its keys (${keys})`,
 				},
-				logDetail: `config-secret variable ${variables} for "${safeExtensionName(owner.name)}" collides with ${others}`,
+				logDetail: `config-secret variable ${variables} for "${name}" derives from keys ${keys}`,
 			});
 
 			continue;

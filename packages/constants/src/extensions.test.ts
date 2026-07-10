@@ -722,6 +722,21 @@ describe('ExtensionSettingsSubjectSchema', () => {
 		expect(ExtensionSettingsSubjectSchema.safeParse('').success).toBe(false);
 	});
 
+	it('rejects a junk or non-canonical name that would still load', () => {
+		expect(ExtensionSettingsSubjectSchema.safeParse('cairncms-extension-!!!').success).toBe(false);
+		expect(ExtensionSettingsSubjectSchema.safeParse('cairncms-extension-Foo').success).toBe(false);
+		expect(ExtensionSettingsSubjectSchema.safeParse('cairncms-extension--leading').success).toBe(false);
+
+		expect(ExtensionSettingsSubjectSchema.safeParse(`cairncms-extension-${String.fromCharCode(0)}`).success).toBe(
+			false
+		);
+	});
+
+	it('rejects a non-conventional scope', () => {
+		expect(ExtensionSettingsSubjectSchema.safeParse('@BAD/cairncms-extension-foo').success).toBe(false);
+		expect(ExtensionSettingsSubjectSchema.safeParse('@ acme/cairncms-extension-foo').success).toBe(false);
+	});
+
 	it('rejects a subject longer than the storage bound', () => {
 		expect(ExtensionSettingsSubjectSchema.safeParse(`cairncms-extension-${'x'.repeat(260)}`).success).toBe(false);
 	});
@@ -742,8 +757,8 @@ describe('getExtensionConfigSecretName', () => {
 		);
 	});
 
-	it('strips leading and trailing separator runs from the derived segment', () => {
-		expect(getExtensionConfigSecretName('cairncms-extension--edge-', 'api_key')).toBe('CAIRNCMS_EXT_EDGE_API_KEY');
+	it('strips a trailing separator run from the derived segment', () => {
+		expect(getExtensionConfigSecretName('cairncms-extension-edge-', 'api_key')).toBe('CAIRNCMS_EXT_EDGE_API_KEY');
 	});
 
 	it('rejects an invalid subject or key', () => {

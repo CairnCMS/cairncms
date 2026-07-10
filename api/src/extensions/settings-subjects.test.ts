@@ -40,6 +40,14 @@ describe('resolveSettingsSubjects', () => {
 		expect(status?.eligible === false && status.reason.code).toBe(SETTINGS_SUBJECT_INVALID);
 	});
 
+	it('refuses a prefixed subject with non-canonical characters, and it would still load', () => {
+		const owner = makeExtension('cairncms-extension-!!!', { settings: declaration });
+
+		const status = resolveSettingsSubjects([owner]).get(owner);
+
+		expect(status?.eligible === false && status.reason.code).toBe(SETTINGS_SUBJECT_INVALID);
+	});
+
 	it('sanitizes a control-character subject so the refusal reason is safe to log', () => {
 		const owner = makeExtension(`cairncms-extension-${String.fromCharCode(10)}evil`, { settings: declaration });
 
@@ -105,6 +113,27 @@ describe('resolveSettingsSubjects', () => {
 		const logDetail = firstStatus?.eligible === false ? firstStatus.logDetail : undefined;
 		expect(logDetail).toContain('CAIRNCMS_EXT_ACME_STRIPE_SYNC_API_KEY');
 		expect(logDetail).toContain('@acme/cairncms-extension-stripe.sync');
+	});
+
+	it('fails an owner deriving one config variable from two of its own keys, keys in the reason, variable in the log', () => {
+		const owner = makeExtension('cairncms-extension-metric', {
+			settings: {
+				api_key: { type: 'string', scope: 'global', secret: { source: 'config' } },
+				api__key: { type: 'string', scope: 'global', secret: { source: 'config' } },
+			} as any,
+		});
+
+		const status = resolveSettingsSubjects([owner]).get(owner);
+
+		expect(status?.eligible === false && status.reason.code).toBe(SETTINGS_SUBJECT_CONFIG_COLLISION);
+
+		const detail = status?.eligible === false ? status.reason.detail : '';
+		expect(detail).not.toContain('CAIRNCMS_EXT_');
+		expect(detail).toContain('api_key');
+		expect(detail).toContain('api__key');
+
+		const logDetail = status?.eligible === false ? status.logDetail : undefined;
+		expect(logDetail).toContain('CAIRNCMS_EXT_METRIC_API_KEY');
 	});
 
 	it('collides an app-only owner with a confined-server owner over the full owner set', () => {
