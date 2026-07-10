@@ -1,13 +1,10 @@
-import { getExtensionConfigSecretName } from '@cairncms/constants';
 import type { ExtensionSettings } from '@cairncms/types';
-import { decryptSecret, hasSecretMarker } from '../../utils/encrypt-secret.js';
 import type { StoredSettingRow } from '../../services/extension-settings-store.js';
+import { resolveDeclaredSecret, resolveDeclaredValue, type DeclaredSetting } from '../settings-resolver.js';
 import type { ConfinedSettingsSource } from './broker.js';
 import type { ConfinedSecretBinding } from './secret-scope.js';
 
 type ExtensionSettingBinding = Extract<ConfinedSecretBinding, { kind: 'extension-setting' }>;
-
-type DeclaredSetting = { type: string; secret: 'inline' | 'config' | undefined };
 
 export interface ConfinedSettingsAccess {
 	source: ConfinedSettingsSource;
@@ -56,21 +53,9 @@ export function buildConfinedSettingsAccess(deps: {
 
 	async function resolveSecretForKey(normalizedKey: string, signal?: AbortSignal): Promise<string | null> {
 		const declared = globalDeclared.get(normalizedKey);
-		if (declared === undefined || declared.secret === undefined) return null;
+		if (declared === undefined) return null;
 
-		if (declared.secret === 'config') {
-			const raw = process.env[getExtensionConfigSecretName(subject, normalizedKey)];
-			return typeof raw === 'string' && raw.length > 0 ? raw : null;
-		}
-
-		const value = await storedValue(normalizedKey, signal);
-		if (!hasSecretMarker(value)) return null;
-
-		try {
-			return await decryptSecret(value);
-		} catch {
-			return null;
-		}
+		return resolveDeclaredSecret(subject, normalizedKey, declared, () => storedValue(normalizedKey, signal));
 	}
 
 	const source: ConfinedSettingsSource = {
@@ -80,11 +65,7 @@ export function buildConfinedSettingsAccess(deps: {
 			const declared = globalDeclared.get(normalizedKey);
 			if (declared === undefined || declared.secret !== undefined) return null;
 
-			const value = await storedValue(normalizedKey, signal);
-			if (typeof value !== declared.type) return null;
-			if (declared.type === 'number' && !Number.isFinite(value)) return null;
-
-			return value;
+			return resolveDeclaredValue(declared, await storedValue(normalizedKey, signal));
 		},
 		async hasSecret(key, signal) {
 			return (await resolveSecretForKey(key.toLowerCase(), signal)) !== null;
