@@ -1,6 +1,5 @@
 import {
 	APP_EXTENSION_TYPES,
-	APP_SHARED_DEPS,
 	CONFINED_RUNTIME,
 	hasSafeEventSegments,
 	HYBRID_EXTENSION_TYPES,
@@ -34,26 +33,20 @@ import { isIn, isTypeIn, pluralize } from '@cairncms/utils';
 import {
 	ensureExtensionDirs,
 	type ExtensionDiscoveryFailure,
-	generateExtensionsEntrypoint,
 	getLocalExtensions,
 	getPackageExtensions,
 	pathToRelativeUrl,
-	resolvePackage,
 	resolvePackageExtensions,
 } from '@cairncms/utils/node';
-import aliasDefault from '@rollup/plugin-alias';
-import nodeResolveDefault from '@rollup/plugin-node-resolve';
-import virtualDefault from '@rollup/plugin-virtual';
 import chokidar, { FSWatcher } from 'chokidar';
 import express, { Router } from 'express';
-import { clone, debounce, escapeRegExp } from 'lodash-es';
+import { clone, debounce } from 'lodash-es';
 import { schedule, validate } from 'node-cron';
 import { readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import path from 'path';
-import { rollup, type OutputChunk } from 'rollup';
 import getDatabase from './database/index.js';
 import emitter, { Emitter } from './emitter.js';
 import env from './env.js';
@@ -66,6 +59,14 @@ import type { ConfinedLogEntry } from './extensions/confined/broker.js';
 import type { ConfinedHostDispatcher, ConfinedInvocation } from './extensions/confined/types.js';
 import { confinedItemsService } from './extensions/confined/items-service.js';
 import { buildConfinedSettingsAccess } from './extensions/confined/settings-access.js';
+import { buildAppExtensionBundle } from './extensions/app-bundle.js';
+import * as diagnosticsLog from './extensions/diagnostics.js';
+import type {
+	ConfinedRuntimeMeta,
+	DiagnosticsView,
+	ExtensionDiagnostic,
+	ExtensionDiagnosticEntry,
+} from './extensions/diagnostics.js';
 import { buildExtensionSettingsReader } from './extensions/extension-settings-reader.js';
 import { readCollectionSettings, readGlobalSettings } from './services/extension-settings-store.js';
 import { clearOperationOptionSecrets, registerOperationOptionSecrets } from './services/operation-option-secrets.js';
@@ -89,13 +90,6 @@ import { filterServerExtensions } from './utils/filter-server-extensions.js';
 import { sanitizeExtensionError, type SanitizedExtensionError } from './utils/sanitize-extension-error.js';
 import { getSchema } from './utils/get-schema.js';
 import { JobQueue } from './utils/job-queue.js';
-import { Url } from './utils/url.js';
-
-// Rollup plugins ship with CJS-style `default` exports but are typed as the module itself;
-// these casts unwrap to the real functions.
-const virtual = virtualDefault as unknown as typeof virtualDefault.default;
-const alias = aliasDefault as unknown as typeof aliasDefault.default;
-const nodeResolve = nodeResolveDefault as unknown as typeof nodeResolveDefault.default;
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -118,37 +112,6 @@ type BundleConfig = {
 	operations: { name: string; config: OperationApiConfig }[];
 };
 
-// A confined bundle's server entries register independently, so each carries its own
-// status and reason. An app entry, or an inherited bundle's entry, has no per-entry
-// status.
-type ExtensionDiagnosticEntry = {
-	name: string;
-	type: string;
-	status?: 'loaded' | 'failed';
-	reason?: SanitizedExtensionError;
-	capabilities?: ExtensionCapabilities;
-};
-
-type ExtensionDiagnostic = {
-	name: string;
-	type: ExtensionType | null;
-	local: boolean;
-	version?: string;
-	entries?: ExtensionDiagnosticEntry[];
-	// `partial` is a confined bundle whose server entries did not all register the same
-	// way: some loaded, some failed.
-	status: 'loaded' | 'failed' | 'discovered' | 'partial';
-	reason?: SanitizedExtensionError;
-	// A confined top-level extension carries its gate-validated declared capabilities here.
-	// A confined bundle carries them per entry instead, so the bundle row has none.
-	capabilities?: ExtensionCapabilities;
-	// Set to the confined runtime only when the extension runs sandboxed, omitted otherwise.
-	runtime?: typeof CONFINED_RUNTIME;
-	// Present only on a settings-declaring owner: whether its settings are manageable, with
-	// the sanitized reason when they are not. Status only, never the declaration.
-	settings?: { status: 'available' | 'unavailable'; reason?: SanitizedExtensionError };
-};
-
 // One settings-declaring owner for the management surface. `subject` is the validated raw
 // package name, present only for an available owner, and `declaration` likewise, so an
 // ineligible owner exposes nothing beyond its sanitized name and reason.
@@ -158,23 +121,6 @@ export type SettingsOwner = {
 	status: 'available' | 'unavailable';
 	reason?: SanitizedExtensionError;
 	declaration?: ExtensionSettings;
-};
-
-// The global confined-runtime metadata on the diagnostics response. `not-required` means no
-// confined extension this load (the sandbox env is never resolved), `available` carries the
-// resolved posture, `unavailable` means a confined extension was present but the runtime did
-// not resolve.
-type ConfinedPostureSummary = {
-	mode: SandboxPosture['mode'];
-	decision: SandboxPosture['decision'];
-	applied: SandboxPosture['applied'];
-	missing: SandboxPosture['missing'];
-	cgroupMechanic: SandboxPosture['cgroupMechanic'];
-};
-
-type ConfinedRuntimeMeta = {
-	state: 'not-required' | 'available' | 'unavailable';
-	posture: ConfinedPostureSummary | null;
 };
 
 type AppExtensions = string | null;
@@ -209,14 +155,7 @@ type ConfinedBinding = {
 // metacharacters (:, *, ?, +, parentheses) and no case variants.
 const CONFINED_ENDPOINT_ROUTE = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 
-// Matches an app shared-dependency entry chunk by name, e.g. "vue" ->
-// "vue.ev7YwI6S.entry.js". The hash is Vite's URL-safe [hash], base64url with
-// mixed case plus - and _, not lowercase hex, so the charset must allow
-// [A-Za-z0-9_-] or no shared dep ever resolves and the app bundler re-bundles them.
-export function findSharedDepAsset(dep: string, assetFiles: string[]): string | undefined {
-	const depRegex = new RegExp(`^${escapeRegExp(dep.replace(/\//g, '_'))}\\.[A-Za-z0-9_-]+\\.entry\\.js$`);
-	return assetFiles.find((file) => depRegex.test(file));
-}
+export { findSharedDepAsset } from './extensions/app-bundle.js';
 
 export class ExtensionManager {
 	private isLoaded = false;
@@ -379,38 +318,21 @@ export class ExtensionManager {
 	}
 
 	public getDiagnostics(): ExtensionDiagnostic[] {
-		return this.diagnostics.map((diagnostic) => {
-			const copy: ExtensionDiagnostic = {
-				name: diagnostic.name,
-				type: diagnostic.type,
-				local: diagnostic.local,
-				status: diagnostic.status,
-			};
+		return diagnosticsLog.copyDiagnostics(this.diagnostics);
+	}
 
-			if (diagnostic.version) copy.version = diagnostic.version;
+	private diagnosticsView(): DiagnosticsView {
+		return {
+			diagnostics: this.diagnostics,
+			capabilitiesOf: (extension) => this.confinedEligible.get(extension)?.capabilities,
+			settingsStatusOf: (extension) => {
+				if (extension.settings === undefined) return undefined;
+				if (this.settingsEligible.has(extension)) return { status: 'available' };
 
-			if (diagnostic.entries) {
-				copy.entries = diagnostic.entries.map((entry) => ({
-					...entry,
-					...(entry.reason && { reason: { ...entry.reason } }),
-					...(entry.capabilities && { capabilities: structuredClone(entry.capabilities) }),
-				}));
-			}
-
-			if (diagnostic.reason) copy.reason = { ...diagnostic.reason };
-			if (diagnostic.capabilities) copy.capabilities = structuredClone(diagnostic.capabilities);
-
-			if (diagnostic.settings) {
-				copy.settings = {
-					status: diagnostic.settings.status,
-					...(diagnostic.settings.reason && { reason: { ...diagnostic.settings.reason } }),
-				};
-			}
-
-			if (diagnostic.runtime) copy.runtime = diagnostic.runtime;
-
-			return copy;
-		});
+				const reason = this.settingsIneligible.get(extension);
+				return reason !== undefined ? { status: 'unavailable', reason } : undefined;
+			},
+		};
 	}
 
 	public isSettingsEligible(extension: Extension): boolean {
@@ -458,132 +380,26 @@ export class ExtensionManager {
 		});
 	}
 
-	private applySettingsDiagnostic(diagnostic: ExtensionDiagnostic, extension: Extension): void {
-		if (extension.settings === undefined) return;
-
-		if (this.settingsEligible.has(extension)) {
-			diagnostic.settings = { status: 'available' };
-			return;
-		}
-
-		const reason = this.settingsIneligible.get(extension);
-		if (reason !== undefined) diagnostic.settings = { status: 'unavailable', reason };
-	}
-
 	/**
 	 * The global confined-runtime metadata for the diagnostics response. Derived from the
 	 * load state, never by resolving the runtime, so a plain-only load (no confined
 	 * extension) stays `not-required` and never touches the sandbox env.
 	 */
 	public getConfinedRuntimeMeta(): ConfinedRuntimeMeta {
-		if (this.confinedRuntime !== undefined && this.confinedRuntimePosture !== undefined) {
-			const posture = this.confinedRuntimePosture;
-
-			return {
-				state: 'available',
-				posture: {
-					mode: posture.mode,
-					decision: posture.decision,
-					applied: [...posture.applied],
-					missing: [...posture.missing],
-					cgroupMechanic: posture.cgroupMechanic,
-				},
-			};
-		}
-
-		if (this.confinedRuntimeUnavailable) return { state: 'unavailable', posture: null };
-
-		return { state: 'not-required', posture: null };
+		const posture = this.confinedRuntime !== undefined ? this.confinedRuntimePosture : undefined;
+		return diagnosticsLog.summarizeConfinedRuntime(posture, this.confinedRuntimeUnavailable);
 	}
 
 	private logExtensionStatus(): void {
-		const loaded = this.diagnostics.filter((diagnostic) => diagnostic.status === 'loaded');
-
-		if (loaded.length > 0) {
-			logger.info(`Loaded extensions: ${loaded.map((diagnostic) => diagnostic.name).join(', ')}`);
-		}
-
-		const discovered = this.diagnostics.filter((diagnostic) => diagnostic.status === 'discovered');
-
-		if (discovered.length > 0) {
-			logger.info(`Discovered app extensions: ${discovered.map((diagnostic) => diagnostic.name).join(', ')}`);
-		}
-
-		const failed = this.diagnostics.filter((diagnostic) => diagnostic.status === 'failed');
-
-		if (failed.length > 0) {
-			logger.warn(
-				`Failed to load extensions: ${failed
-					.map((diagnostic) => `${diagnostic.name} (${diagnostic.reason?.code ?? 'UNKNOWN'})`)
-					.join(', ')}`
-			);
-		}
-
-		const partial = this.diagnostics.filter((diagnostic) => diagnostic.status === 'partial');
-
-		if (partial.length > 0) {
-			logger.warn(
-				`Partially loaded confined bundles: ${partial
-					.map((diagnostic) => {
-						const failedEntries = (diagnostic.entries ?? [])
-							.filter((entry) => entry.status === 'failed')
-							.map((entry) => `${entry.type}:${entry.name} (${entry.reason?.code ?? 'UNKNOWN'})`)
-							.join(', ');
-
-						return `${diagnostic.name} [${failedEntries}]`;
-					})
-					.join('; ')}`
-			);
-		}
+		diagnosticsLog.logExtensionStatus(this.diagnostics);
 	}
 
 	private recordLoaded(extension: Extension): void {
-		const diagnostic: ExtensionDiagnostic = {
-			name: extension.name,
-			type: extension.type,
-			local: extension.local,
-			status: 'loaded',
-		};
-
-		if (extension.version) diagnostic.version = extension.version;
-
-		if (extension.type === 'bundle') {
-			diagnostic.entries = extension.entries.map((entry) => ({ name: entry.name, type: entry.type }));
-		}
-
-		const eligible = this.confinedEligible.get(extension);
-		if (eligible?.capabilities !== undefined) diagnostic.capabilities = eligible.capabilities;
-
-		if (extension.runtime === CONFINED_RUNTIME) diagnostic.runtime = extension.runtime;
-
-		this.applySettingsDiagnostic(diagnostic, extension);
-
-		this.diagnostics.push(diagnostic);
+		diagnosticsLog.recordLoaded(this.diagnosticsView(), extension);
 	}
 
 	private recordFailed(extension: Extension, reason: SanitizedExtensionError): void {
-		const diagnostic: ExtensionDiagnostic = {
-			name: extension.name,
-			type: extension.type,
-			local: extension.local,
-			status: 'failed',
-			reason,
-		};
-
-		if (extension.version) diagnostic.version = extension.version;
-
-		if (extension.type === 'bundle') {
-			diagnostic.entries = extension.entries.map((entry) => ({ name: entry.name, type: entry.type }));
-		}
-
-		const eligible = this.confinedEligible.get(extension);
-		if (eligible?.capabilities !== undefined) diagnostic.capabilities = eligible.capabilities;
-
-		if (extension.runtime === CONFINED_RUNTIME) diagnostic.runtime = extension.runtime;
-
-		this.applySettingsDiagnostic(diagnostic, extension);
-
-		this.diagnostics.push(diagnostic);
+		diagnosticsLog.recordFailed(this.diagnosticsView(), extension, reason);
 	}
 
 	/**
@@ -1195,28 +1011,7 @@ export class ExtensionManager {
 	}
 
 	private recordBundle(extension: BundleExtension, entries: ExtensionDiagnosticEntry[]): void {
-		const failed = entries.filter((entry) => entry.status === 'failed').length;
-		const loaded = entries.length - failed;
-
-		let status: ExtensionDiagnostic['status'] = 'partial';
-		if (failed === 0) status = 'loaded';
-		else if (loaded === 0) status = 'failed';
-
-		const diagnostic: ExtensionDiagnostic = {
-			name: extension.name,
-			type: extension.type,
-			local: extension.local,
-			status,
-			entries,
-		};
-
-		if (extension.version) diagnostic.version = extension.version;
-
-		if (extension.runtime === CONFINED_RUNTIME) diagnostic.runtime = extension.runtime;
-
-		this.applySettingsDiagnostic(diagnostic, extension);
-
-		this.diagnostics.push(diagnostic);
+		diagnosticsLog.recordBundle(this.diagnosticsView(), extension, entries);
 	}
 
 	private buildConfinedEndpointHandler(
@@ -1290,30 +1085,7 @@ export class ExtensionManager {
 	}
 
 	private recordAppDiagnostics(): void {
-		for (const extension of this.discoveredAppExtensions) {
-			const diagnostic: ExtensionDiagnostic = {
-				name: extension.name,
-				type: extension.type,
-				local: extension.local,
-				status: 'discovered',
-			};
-
-			if (extension.version) diagnostic.version = extension.version;
-
-			this.applySettingsDiagnostic(diagnostic, extension);
-
-			this.diagnostics.push(diagnostic);
-		}
-
-		if (this.appBundleFailure) {
-			this.diagnostics.push({
-				name: '(app bundle)',
-				type: null,
-				local: false,
-				status: 'failed',
-				reason: this.appBundleFailure,
-			});
-		}
+		diagnosticsLog.recordAppDiagnostics(this.diagnosticsView(), this.discoveredAppExtensions, this.appBundleFailure);
 	}
 
 	public getExtensionsList(type?: ExtensionType) {
@@ -1602,70 +1374,18 @@ export class ExtensionManager {
 	private async generateExtensionBundle(): Promise<string | null> {
 		this.appExtensionChunks.clear();
 
-		const sharedDepsMapping = await this.getSharedDepsMapping(APP_SHARED_DEPS);
+		const bundle = await buildAppExtensionBundle(this.extensions);
 
-		const internalImports = Object.entries(sharedDepsMapping).map(([name, path]) => ({
-			find: name,
-			replacement: path,
-		}));
-
-		const entrypoint = generateExtensionsEntrypoint(this.extensions);
-
-		try {
-			const bundle = await rollup({
-				input: 'entry',
-				external: Object.values(sharedDepsMapping),
-				makeAbsoluteExternalsRelative: false,
-				plugins: [virtual({ entry: entrypoint }), alias({ entries: internalImports }), nodeResolve({ browser: true })],
-			});
-
-			const { output } = await bundle.generate({ format: 'es', compact: true });
-
-			for (const out of output) {
-				if (out.type === 'chunk') {
-					this.appExtensionChunks.set(out.fileName, out.code);
-				}
-			}
-
-			await bundle.close();
-
-			// Dynamic imports in the entrypoint make rollup emit multiple chunks, so the
-			// entry is not reliably output[0]. Select it explicitly, and treat a missing
-			// entry as a build failure (through the catch) rather than returning null,
-			// which would 404 /extensions/sources/index.js with no diagnostic.
-			const entryChunk = output.find((out): out is OutputChunk => out.type === 'chunk' && out.isEntry);
-
-			if (!entryChunk) {
-				throw new Error('app extension bundle produced no entry chunk');
-			}
-
-			return entryChunk.code;
-		} catch (error: any) {
-			this.appBundleFailure = sanitizeExtensionError(error, 'BUNDLE_BUILD_FAILED');
-			logger.warn(`Couldn't bundle app extensions: ${this.appBundleFailure.code} ${this.appBundleFailure.detail}`);
+		for (const [name, code] of bundle.chunks) {
+			this.appExtensionChunks.set(name, code);
 		}
 
-		return null;
-	}
-
-	private async getSharedDepsMapping(deps: string[]): Promise<Record<string, string>> {
-		const appDir = await readdir(path.join(resolvePackage('@cairncms/app', __dirname), 'dist', 'assets'));
-
-		const depsMapping: Record<string, string> = {};
-
-		for (const dep of deps) {
-			const depName = findSharedDepAsset(dep, appDir);
-
-			if (depName) {
-				const depUrl = new Url(env['PUBLIC_URL']).addPath('admin', 'assets', depName);
-
-				depsMapping[dep] = depUrl.toString({ rootRelative: true });
-			} else {
-				logger.warn(`Couldn't find shared extension dependency "${dep}"`);
-			}
+		if (bundle.failure !== null) {
+			this.appBundleFailure = bundle.failure;
+			logger.warn(`Couldn't bundle app extensions: ${bundle.failure.code} ${bundle.failure.detail}`);
 		}
 
-		return depsMapping;
+		return bundle.code;
 	}
 
 	private async registerHooks(): Promise<void> {
