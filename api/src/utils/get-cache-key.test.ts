@@ -16,42 +16,42 @@ const requests = [
 	{
 		name: 'as unauthenticated request',
 		params: { method, originalUrl: restUrl },
-		key: '20ada3d7cc37fb7e742d2a723f6f1d7a64686d2e',
+		key: 'da8873209dfcc5473fe3a936336f509f60e48549',
 	},
 	{
 		name: 'as authenticated request',
 		params: { method, originalUrl: restUrl, accountability },
-		key: '79daba5bf38b6b80cb4bf4e2de95d6a8380f7927',
+		key: 'ef231c52ee2621b894a05a1661bdda0f5b95ad45',
 	},
 	{
 		name: 'a request with a fields query',
 		params: { method, originalUrl: restUrl, sanitizedQuery: { fields: ['id', 'name'] } },
-		key: 'e1839f7379b39188622e797fdbe2e3e6d477cbdc',
+		key: 'a45fd98e95672c52fdbde57ceb14ebadfae4dff7',
 	},
 	{
 		name: 'a request with a filter query',
 		params: { method, originalUrl: restUrl, sanitizedQuery: { filter: { name: { _eq: 'test' } } } },
-		key: '0bcc9af5f628db85043133e59226b2de154d7183',
+		key: '28020b3017e0952bea96828abb0d11461b55f833',
 	},
 	{
 		name: 'a GraphQL GET query request',
 		params: { method, originalUrl: graphQlUrl, query: { query: 'query { test { id } }' } },
-		key: '14bc276cf21e2d22334b84841533e2c8e1bba9bd',
+		key: '66cfc24341701a732000ff3dc9d8940bfeac2aa6',
 	},
 	{
 		name: 'a GraphQL POST query request',
 		params: { method: 'POST', originalUrl: graphQlUrl, body: { query: 'query { test { name } }' } },
-		key: 'c5bf03e138e0f7bbaa50dde9cad554bef47a81d2',
+		key: 'cfbbe707330099cc1626b58cb90aa5c76cbd2e4b',
 	},
 	{
 		name: 'an authenticated GraphQL GET query request',
 		params: { method, originalUrl: graphQlUrl, accountability, query: { query: 'query { test { id } }' } },
-		key: '981f27be4c0cfed0b4eca6ac2514f6629aea6be1',
+		key: 'ac48e12f4780029e20749c8405272d84d0969c1f',
 	},
 	{
 		name: 'an authenticated GraphQL POST query request',
 		params: { method: 'POST', originalUrl: graphQlUrl, accountability, body: { query: 'query { test { name } }' } },
-		key: '358336a2c61f7ea2b41b5c1566bbebe692be601d',
+		key: '8d466caca70f084073face70a5a82978234697be',
 	},
 ];
 
@@ -108,5 +108,69 @@ describe('get cache key', () => {
 		expect(getCacheKey(postReq1)).not.toEqual(getCacheKey(postReq2));
 		expect(getCacheKey(req1)).toEqual(getCacheKey(postReq1));
 		expect(getCacheKey(req2)).toEqual(getCacheKey(postReq2));
+	});
+});
+
+describe('authorization-context segmentation', () => {
+	const namedUser = '00000000-0000-0000-0000-000000000000';
+	const scope = { item: '1', collection: 'articles' };
+
+	const req = (acc: Record<string, any> | undefined): Request =>
+		({ method, originalUrl: restUrl, accountability: acc } as unknown as Request);
+
+	test('a share and an anonymous request do not share a key', () => {
+		const share = req({ user: null, role: 'role-a', share: 'share-a', share_scope: scope });
+		const anonymous = req(undefined);
+
+		expect(getCacheKey(share)).not.toEqual(getCacheKey(anonymous));
+	});
+
+	test('two shares with the same role and scope but different share ids do not share a key', () => {
+		const shareA = req({ user: null, role: 'role-a', share: 'share-a', share_scope: scope });
+		const shareB = req({ user: null, role: 'role-a', share: 'share-b', share_scope: scope });
+
+		expect(getCacheKey(shareA)).not.toEqual(getCacheKey(shareB));
+	});
+
+	test('two shares with different scope do not share a key', () => {
+		const shareX = req({
+			user: null,
+			role: 'role-a',
+			share: 'share-a',
+			share_scope: { item: '1', collection: 'articles' },
+		});
+
+		const shareY = req({
+			user: null,
+			role: 'role-a',
+			share: 'share-a',
+			share_scope: { item: '2', collection: 'articles' },
+		});
+
+		expect(getCacheKey(shareX)).not.toEqual(getCacheKey(shareY));
+	});
+
+	test('requests differing only by role do not share a key', () => {
+		expect(getCacheKey(req({ user: null, role: 'role-a' }))).not.toEqual(
+			getCacheKey(req({ user: null, role: 'role-b' }))
+		);
+	});
+
+	test('requests differing only by app access do not share a key', () => {
+		expect(getCacheKey(req({ user: namedUser, app: true }))).not.toEqual(
+			getCacheKey(req({ user: namedUser, app: false }))
+		);
+	});
+
+	test('requests differing only by admin do not share a key', () => {
+		expect(getCacheKey(req({ user: namedUser, admin: true }))).not.toEqual(
+			getCacheKey(req({ user: namedUser, admin: false }))
+		);
+	});
+
+	test('the same user and accountability produce the same key (cache hit preserved)', () => {
+		const acc = { user: namedUser, role: 'role-a', app: true, admin: false };
+
+		expect(getCacheKey(req({ ...acc }))).toEqual(getCacheKey(req({ ...acc })));
 	});
 });
