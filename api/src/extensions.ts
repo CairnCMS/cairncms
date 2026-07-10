@@ -1,25 +1,18 @@
 import {
 	APP_EXTENSION_TYPES,
 	CONFINED_RUNTIME,
-	hasSafeEventSegments,
 	HYBRID_EXTENSION_TYPES,
 	JAVASCRIPT_FILE_EXTS,
 	NESTED_EXTENSION_TYPES,
 } from '@cairncms/constants';
 import type {
-	Accountability,
-	ActionHandler,
 	ApiExtension,
 	BundleExtension,
-	ConfinedHookEvents,
-	ConfinedOptionDelivery,
-	ExtensionCapabilities,
 	EndpointConfig,
 	Extension,
 	ExtensionInfo,
 	ExtensionSettings,
 	ExtensionType,
-	FilterHandler,
 	HookConfig,
 	HybridExtension,
 	NestedExtensionType,
@@ -35,7 +28,7 @@ import {
 	resolvePackageExtensions,
 } from '@cairncms/utils/node';
 import chokidar, { FSWatcher } from 'chokidar';
-import express, { Router } from 'express';
+import { Router } from 'express';
 import { clone, debounce } from 'lodash-es';
 import { readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -45,16 +38,9 @@ import path from 'path';
 import getDatabase from './database/index.js';
 import emitter, { Emitter } from './emitter.js';
 import env from './env.js';
-import * as exceptions from './exceptions/index.js';
-import { getFlowManager, type ConfinedOperationDescriptor } from './flows.js';
-import { runConfinedOperation, type ConfinedOperationRequest } from './extensions/confined/operation.js';
-import { runConfinedEndpoint, type ConfinedEndpointRequest } from './extensions/confined/endpoint.js';
-import { runConfinedActionHook, runConfinedFilterHook, type ConfinedHookRequest } from './extensions/confined/hook.js';
-import type { ConfinedLogEntry } from './extensions/confined/broker.js';
-import type { ConfinedHostDispatcher, ConfinedInvocation } from './extensions/confined/types.js';
-import { confinedItemsService } from './extensions/confined/items-service.js';
-import { buildConfinedSettingsAccess } from './extensions/confined/settings-access.js';
+import { getFlowManager } from './flows.js';
 import { buildAppExtensionBundle } from './extensions/app-bundle.js';
+import { ConfinedRegistrar } from './extensions/confined/registration.js';
 import * as diagnosticsLog from './extensions/diagnostics.js';
 import type {
 	ConfinedRuntimeMeta,
@@ -70,9 +56,8 @@ import {
 	type FullAuthorityRegistrationDeps,
 } from './extensions/full-authority-registration.js';
 import { readCollectionSettings, readGlobalSettings } from './services/extension-settings-store.js';
-import { clearOperationOptionSecrets, registerOperationOptionSecrets } from './services/operation-option-secrets.js';
+import { clearOperationOptionSecrets } from './services/operation-option-secrets.js';
 import type { SandboxConfig } from './extensions/confined/sandbox-limits.js';
-import { getAxios } from './request/index.js';
 import logger from './logger.js';
 import type { EventHandler } from './types/index.js';
 import {
@@ -141,18 +126,6 @@ const RELOAD_DEBOUNCE_MS = 250;
 // The per-contribution facts a confined runner binding needs, identical for a
 // top-level extension and one server entry of a bundle. A bundle entry adds the
 // `type:name` key so the engine selects it from the shared CairnBundle artifact.
-type ConfinedBinding = {
-	extensionId: string;
-	contributionId: string;
-	entrySource: string;
-	capabilities: ExtensionCapabilities;
-	bundleEntryKey?: string;
-};
-
-// The literal route grammar a confined endpoint name must fit before it becomes an
-// Express mount: a lowercase npm-style name, optionally scoped, with no pattern
-// metacharacters (:, *, ?, +, parentheses) and no case variants.
-const CONFINED_ENDPOINT_ROUTE = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 
 export { findSharedDepAsset } from './extensions/app-bundle.js';
 
@@ -232,7 +205,7 @@ export class ExtensionManager {
 	// inherited operations, so a duplicate or inherited collision fails every
 	// contributor at registration rather than one being recorded loaded and then
 	// turned ambiguous by a later one. Keyed id to the sanitized failure reason.
-	private confinedOperationBlocks = new Map<string, SanitizedExtensionError>();
+	private confinedRegistrar: ConfinedRegistrar;
 	private hookEmbedsHead: string[] = [];
 	private hookEmbedsBody: string[] = [];
 
@@ -251,6 +224,18 @@ export class ExtensionManager {
 		this.reloadQueue = new JobQueue();
 
 		this.appExtensionChunks = new Map();
+
+		this.confinedRegistrar = new ConfinedRegistrar({
+			runtime: () => this.confinedRuntime,
+			eligible: () => this.confinedEligible,
+			endpointRouter: () => this.endpointRouter,
+			registeredEndpointRoutes: () => this.registeredEndpointRoutes,
+			hookEvents: () => this.hookEvents,
+			getSettingsOwner: (subject) => this.getSettingsOwner(subject),
+			recordLoaded: (extension) => this.recordLoaded(extension),
+			recordFailed: (extension, reason) => this.recordFailed(extension, reason),
+			recordBundle: (extension, entries) => this.recordBundle(extension, entries),
+		});
 	}
 
 	public async initialize(options: Partial<Options> = {}): Promise<void> {
@@ -513,574 +498,24 @@ export class ExtensionManager {
 		}
 	}
 
-	/**
-	 * Registers the eligible confined operations into the flow manager without
-	 * importing any server artifact. A contribution id declared by more than one
-	 * eligible operation is ambiguous: every one is failed in diagnostics and none is
-	 * registered, so an operator sees the conflict at load rather than at run.
-	 */
 	private registerConfinedOperations(): void {
-		const runtime = this.confinedRuntime;
-		if (runtime === undefined) return;
-
-		const flowManager = getFlowManager();
-
-		// Computed once across every confined operation contributor and the inherited
-		// operations, before any descriptor is added, so a blocked id never records one
-		// contributor loaded and then turns it ambiguous when a later one collides.
-		this.confinedOperationBlocks = this.resolveConfinedOperationBlocks(flowManager);
-
-		const operations = [...this.confinedEligible].filter(([extension]) => extension.type === 'operation');
-
-		for (const [extension, eligible] of operations) {
-			const block = this.confinedOperationBlocks.get(extension.name);
-
-			if (block !== undefined) {
-				// Mark the id ambiguous so a flow referencing it, or its inherited
-				// namesake, takes the sanitized reject path and runs neither.
-				flowManager.markConfinedOperationAmbiguous(extension.name);
-				this.recordFailed(extension, block);
-				continue;
-			}
-
-			if (eligible.entrySource === undefined) {
-				this.recordFailed(extension, {
-					code: VALIDATION_INCOMPLETE,
-					detail: 'the confined operation entry is unavailable',
-				});
-
-				continue;
-			}
-
-			const binding: ConfinedBinding = {
-				extensionId: extension.name,
-				contributionId: extension.name,
-				entrySource: eligible.entrySource,
-				capabilities: eligible.capabilities ?? {},
-			};
-
-			flowManager.addConfinedOperation(
-				extension.name,
-				this.buildConfinedDescriptor(binding, eligible.optionDelivery, runtime)
-			);
-
-			registerOperationOptionSecrets(extension.name, Object.keys(eligible.optionDelivery ?? {}));
-
-			this.recordLoaded(extension);
-		}
+		this.confinedRegistrar.registerOperations();
 	}
 
-	/**
-	 * Computes the confined operation ids that may not register this load. An id is
-	 * blocked when more than one confined contributor declares it (top-level
-	 * operations and bundle operation entries share the operation namespace) or when
-	 * it collides with an inherited operation, whether a built-in, a top-level
-	 * operation, or one contributed by an inherited bundle. A blocked id runs neither
-	 * contribution, so the duplicate reads ambiguous and the inherited collision reads
-	 * as a collision.
-	 */
-	private resolveConfinedOperationBlocks(
-		flowManager: ReturnType<typeof getFlowManager>
-	): Map<string, SanitizedExtensionError> {
-		const ids: string[] = [];
-
-		for (const [extension] of this.confinedEligible) {
-			if (extension.type === 'operation') {
-				ids.push(extension.name);
-			} else if (extension.type === 'bundle') {
-				for (const entry of extension.entries) {
-					if (entry.type === 'operation') ids.push(entry.name);
-				}
-			}
-		}
-
-		const counts = new Map<string, number>();
-		for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
-
-		const blocked = new Map<string, SanitizedExtensionError>();
-
-		for (const id of new Set(ids)) {
-			if (flowManager.hasOperation(id)) {
-				blocked.set(id, {
-					code: 'OPERATION_COLLISION',
-					detail: 'the operation id is declared by an inherited operation',
-				});
-			} else if ((counts.get(id) ?? 0) > 1) {
-				blocked.set(id, {
-					code: 'AMBIGUOUS_OPERATION',
-					detail: 'a confined operation id is declared more than once',
-				});
-			}
-		}
-
-		return blocked;
-	}
-
-	private confinedRunnerDeps(runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig }) {
-		const { supervisor, config } = runtime;
-
-		return {
-			invoke: (invocation: ConfinedInvocation, dispatcher: ConfinedHostDispatcher) =>
-				supervisor.invoke(invocation, dispatcher),
-			log: (entry: ConfinedLogEntry) => this.logConfinedEntry(entry),
-			getAxios: () => getAxios(),
-			itemsService: confinedItemsService,
-			settingsAccess: (subject: string) =>
-				buildConfinedSettingsAccess({
-					subject,
-					declaration: this.getSettingsOwner(subject)?.settings,
-					readRows: (signal) => readGlobalSettings(getDatabase(), subject, signal),
-				}),
-			brokerLimits: {
-				settingsValueBytes: config.sandbox.settingsValueBytes,
-				httpResponseBytes: config.sandbox.httpResponseBytes,
-				itemsReplyBytes: config.sandbox.itemsReplyBytes,
-				templateOutputBytes: config.sandbox.templateOutputBytes,
-			},
-			runtimeLimits: config.runtime,
-		};
-	}
-
-	private buildConfinedDescriptor(
-		binding: ConfinedBinding,
-		optionDelivery: ConfinedOptionDelivery | undefined,
-		runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig }
-	): ConfinedOperationDescriptor {
-		const deps = this.confinedRunnerDeps(runtime);
-
-		return {
-			referenceKeys: Object.keys(optionDelivery ?? {}),
-			run: (params) => {
-				const request: ConfinedOperationRequest = {
-					extensionId: binding.extensionId,
-					contributionId: binding.contributionId,
-					operationId: params.operationId,
-					entrySource: binding.entrySource,
-					capabilities: binding.capabilities,
-					options: params.options,
-					input: params.input,
-					accountability: params.accountability,
-				};
-
-				if (binding.bundleEntryKey !== undefined) request.bundleEntryKey = binding.bundleEntryKey;
-				if (optionDelivery !== undefined) request.optionDelivery = optionDelivery;
-
-				return runConfinedOperation(request, deps);
-			},
-		};
-	}
-
-	/**
-	 * Registers the eligible confined endpoints onto the endpoint router without
-	 * importing any server artifact. A route already taken by an inherited endpoint
-	 * or declared by more than one confined endpoint fails closed in diagnostics,
-	 * and an endpoint without the declared endpoint capability never mounts.
-	 */
 	private registerConfinedEndpoints(): void {
-		const runtime = this.confinedRuntime;
-		if (runtime === undefined) return;
-
-		const endpoints = [...this.confinedEligible].filter(([extension]) => extension.type === 'endpoint');
-
-		const counts = new Map<string, number>();
-		for (const [extension] of endpoints) counts.set(extension.name, (counts.get(extension.name) ?? 0) + 1);
-
-		for (const [extension, eligible] of endpoints) {
-			// The name becomes an Express mount, which interprets pattern syntax and
-			// matches case-insensitively. Only a lowercase literal grammar mounts, so a
-			// name cannot smuggle a parameter or wildcard past the literal collision
-			// checks, and the grammar matches the canonical lowercase route key.
-			if (!CONFINED_ENDPOINT_ROUTE.test(extension.name)) {
-				this.recordFailed(extension, {
-					code: 'ROUTE_INVALID',
-					detail: 'the confined endpoint route name is not a safe literal route',
-				});
-
-				continue;
-			}
-
-			if ((counts.get(extension.name) ?? 0) > 1) {
-				this.recordFailed(extension, {
-					code: 'AMBIGUOUS_ENDPOINT',
-					detail: 'a confined endpoint route is declared more than once',
-				});
-
-				continue;
-			}
-
-			if (this.registeredEndpointRoutes.has(extension.name)) {
-				this.recordFailed(extension, {
-					code: 'ROUTE_COLLISION',
-					detail: 'the confined endpoint route is already registered',
-				});
-
-				continue;
-			}
-
-			if (eligible.entrySource === undefined) {
-				this.recordFailed(extension, {
-					code: VALIDATION_INCOMPLETE,
-					detail: 'the confined endpoint entry is unavailable',
-				});
-
-				continue;
-			}
-
-			if (eligible.capabilities?.endpoint === undefined) {
-				this.recordFailed(extension, {
-					code: 'CAPABILITY_MISSING',
-					detail: 'the endpoint capability is not declared',
-				});
-
-				continue;
-			}
-
-			const binding: ConfinedBinding = {
-				extensionId: extension.name,
-				contributionId: extension.name,
-				entrySource: eligible.entrySource,
-				capabilities: eligible.capabilities ?? {},
-			};
-
-			this.endpointRouter.use(`/${extension.name}`, this.buildConfinedEndpointHandler(binding, runtime));
-			this.registeredEndpointRoutes.add(extension.name);
-			this.recordLoaded(extension);
-		}
+		this.confinedRegistrar.registerEndpoints();
 	}
 
-	/**
-	 * Registers the eligible confined hooks onto the platform emitter without
-	 * importing any server artifact, subscribing exactly the manifest-declared
-	 * events the probe verified against the entry. A filter failure blocks the
-	 * platform action with a sanitized error, because a filter that cannot run
-	 * must not be silently skipped. An action failure logs and never blocks.
-	 */
 	private registerConfinedHooks(): void {
-		const runtime = this.confinedRuntime;
-		if (runtime === undefined) return;
-
-		const hooks = [...this.confinedEligible].filter(([extension]) => extension.type === 'hook');
-
-		const counts = new Map<string, number>();
-		for (const [extension] of hooks) counts.set(extension.name, (counts.get(extension.name) ?? 0) + 1);
-
-		for (const [extension, eligible] of hooks) {
-			if ((counts.get(extension.name) ?? 0) > 1) {
-				this.recordFailed(extension, {
-					code: 'AMBIGUOUS_HOOK',
-					detail: 'a confined hook id is declared more than once',
-				});
-
-				continue;
-			}
-
-			if (eligible.entrySource === undefined || eligible.events === undefined) {
-				this.recordFailed(extension, {
-					code: VALIDATION_INCOMPLETE,
-					detail: 'the confined hook entry is unavailable',
-				});
-
-				continue;
-			}
-
-			const declaredEvents = [...(eligible.events.filter ?? []), ...(eligible.events.action ?? [])];
-
-			// The manifest schema already refuses these, so this is defense in depth:
-			// a reserved-segment name reaching the emitter would pollute shared globals
-			// and alias unrelated events, so the whole hook fails before any subscription.
-			if (!declaredEvents.every(hasSafeEventSegments)) {
-				this.recordFailed(extension, {
-					code: 'EVENT_INVALID',
-					detail: 'a confined hook event name is not a safe literal event',
-				});
-
-				continue;
-			}
-
-			const binding: ConfinedBinding = {
-				extensionId: extension.name,
-				contributionId: extension.name,
-				entrySource: eligible.entrySource,
-				capabilities: eligible.capabilities ?? {},
-			};
-
-			this.subscribeConfinedHook(binding, eligible.events, runtime);
-			this.recordLoaded(extension);
-		}
+		this.confinedRegistrar.registerHooks();
 	}
 
-	/**
-	 * Subscribes one confined hook binding's manifest events onto the platform
-	 * emitter. A filter failure blocks the platform action with a sanitized error,
-	 * since a filter that cannot run must not be silently skipped. An action failure
-	 * logs and never blocks. Handlers join `hookEvents`, so unload unregisters them
-	 * the same way it does inherited hooks.
-	 */
-	private subscribeConfinedHook(
-		binding: ConfinedBinding,
-		events: ConfinedHookEvents,
-		runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig }
-	): void {
-		const deps = this.confinedRunnerDeps(runtime);
-
-		const baseRequest = (
-			event: string,
-			meta: Record<string, unknown>,
-			accountability: Accountability | null
-		): ConfinedHookRequest => {
-			const request: ConfinedHookRequest = {
-				extensionId: binding.extensionId,
-				contributionId: binding.contributionId,
-				entrySource: binding.entrySource,
-				capabilities: binding.capabilities,
-				event,
-				meta,
-				accountability,
-			};
-
-			if (binding.bundleEntryKey !== undefined) request.bundleEntryKey = binding.bundleEntryKey;
-
-			return request;
-		};
-
-		for (const event of events.filter ?? []) {
-			const handler: FilterHandler = async (payload, meta, context) => {
-				const result = await runConfinedFilterHook(
-					{ ...baseRequest(event, meta, context.accountability ?? null), payload },
-					deps
-				);
-
-				if (!result.ok) throw new Error(`the confined hook "${binding.contributionId}" failed`);
-
-				return result.unchanged ? undefined : result.payload;
-			};
-
-			emitter.onFilter(event, handler);
-			this.hookEvents.push({ type: 'filter', name: event, handler });
-		}
-
-		for (const event of events.action ?? []) {
-			const handler: ActionHandler = async (meta, context) => {
-				const result = await runConfinedActionHook(baseRequest(event, meta, context.accountability ?? null), deps);
-
-				if (!result.ok) {
-					logger.warn(`The confined hook "${binding.contributionId}" failed for action "${event}"`);
-				}
-			};
-
-			emitter.onAction(event, handler);
-			this.hookEvents.push({ type: 'action', name: event, handler });
-		}
-	}
-
-	/**
-	 * Registers every confined bundle's server entries from its one shared artifact,
-	 * each through the same runner as its top-level counterpart, selecting that
-	 * entry's own capabilities and events by `type:name`. An entry's registration
-	 * identity may collide (an operation id, an endpoint route): that entry fails on
-	 * its own while its siblings register, and the bundle's diagnostic carries each
-	 * entry's status. The shared artifact being unavailable fails the whole bundle.
-	 * Runs after the inherited and top-level confined registrations, so the route and
-	 * operation collision checks see everything already mounted.
-	 */
 	private registerConfinedBundles(): void {
-		const runtime = this.confinedRuntime;
-		if (runtime === undefined) return;
-
-		const flowManager = getFlowManager();
-
-		for (const [extension, eligible] of this.confinedEligible) {
-			if (extension.type !== 'bundle') continue;
-
-			if (eligible.entrySource === undefined) {
-				this.recordFailed(extension, {
-					code: VALIDATION_INCOMPLETE,
-					detail: 'the confined bundle entry is unavailable',
-				});
-
-				continue;
-			}
-
-			const entryStatuses: ExtensionDiagnosticEntry[] = [];
-
-			for (const entry of extension.entries) {
-				const kind = entry.type;
-				if (kind !== 'operation' && kind !== 'endpoint' && kind !== 'hook') continue;
-
-				const key = `${kind}:${entry.name}`;
-
-				const binding: ConfinedBinding = {
-					extensionId: extension.name,
-					contributionId: entry.name,
-					entrySource: eligible.entrySource,
-					capabilities: eligible.entryCapabilities?.[key] ?? {},
-					bundleEntryKey: key,
-				};
-
-				const outcome = this.registerConfinedBundleEntry(
-					kind,
-					entry.name,
-					binding,
-					eligible.entryEvents?.[key],
-					eligible.entryOptionDelivery?.[key],
-					runtime,
-					flowManager
-				);
-
-				entryStatuses.push({
-					name: entry.name,
-					type: kind,
-					status: outcome.status,
-					...(outcome.reason && { reason: outcome.reason }),
-					...(eligible.entryCapabilities?.[key] && { capabilities: eligible.entryCapabilities[key] }),
-				});
-			}
-
-			this.recordBundle(extension, entryStatuses);
-		}
-	}
-
-	private registerConfinedBundleEntry(
-		kind: 'operation' | 'endpoint' | 'hook',
-		name: string,
-		binding: ConfinedBinding,
-		events: ConfinedHookEvents | undefined,
-		optionDelivery: ConfinedOptionDelivery | undefined,
-		runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig },
-		flowManager: ReturnType<typeof getFlowManager>
-	): { status: 'loaded' | 'failed'; reason?: SanitizedExtensionError } {
-		if (kind === 'operation') {
-			const block = this.confinedOperationBlocks.get(name);
-
-			if (block !== undefined) {
-				flowManager.markConfinedOperationAmbiguous(name);
-				return { status: 'failed', reason: block };
-			}
-
-			flowManager.addConfinedOperation(name, this.buildConfinedDescriptor(binding, optionDelivery, runtime));
-			registerOperationOptionSecrets(name, Object.keys(optionDelivery ?? {}));
-			return { status: 'loaded' };
-		}
-
-		if (kind === 'endpoint') {
-			if (!CONFINED_ENDPOINT_ROUTE.test(name)) {
-				return {
-					status: 'failed',
-					reason: { code: 'ROUTE_INVALID', detail: 'the confined endpoint route name is not a safe literal route' },
-				};
-			}
-
-			if (this.registeredEndpointRoutes.has(name)) {
-				return {
-					status: 'failed',
-					reason: { code: 'ROUTE_COLLISION', detail: 'the confined endpoint route is already registered' },
-				};
-			}
-
-			if (binding.capabilities.endpoint === undefined) {
-				return {
-					status: 'failed',
-					reason: { code: 'CAPABILITY_MISSING', detail: 'the endpoint capability is not declared' },
-				};
-			}
-
-			this.endpointRouter.use(`/${name}`, this.buildConfinedEndpointHandler(binding, runtime));
-			this.registeredEndpointRoutes.add(name);
-			return { status: 'loaded' };
-		}
-
-		if (events === undefined) {
-			return {
-				status: 'failed',
-				reason: { code: VALIDATION_INCOMPLETE, detail: 'the confined hook entry events are unavailable' },
-			};
-		}
-
-		const declaredEvents = [...(events.filter ?? []), ...(events.action ?? [])];
-
-		if (!declaredEvents.every(hasSafeEventSegments)) {
-			return {
-				status: 'failed',
-				reason: { code: 'EVENT_INVALID', detail: 'a confined hook event name is not a safe literal event' },
-			};
-		}
-
-		this.subscribeConfinedHook(binding, events, runtime);
-		return { status: 'loaded' };
+		this.confinedRegistrar.registerBundles();
 	}
 
 	private recordBundle(extension: BundleExtension, entries: ExtensionDiagnosticEntry[]): void {
 		diagnosticsLog.recordBundle(this.diagnosticsView(), extension, entries);
-	}
-
-	private buildConfinedEndpointHandler(
-		binding: ConfinedBinding,
-		runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig }
-	): express.RequestHandler {
-		const deps = this.confinedRunnerDeps(runtime);
-
-		return async (req, res, next) => {
-			try {
-				const request: ConfinedEndpointRequest = {
-					extensionId: binding.extensionId,
-					contributionId: binding.contributionId,
-					entrySource: binding.entrySource,
-					capabilities: binding.capabilities,
-					method: req.method,
-					path: req.path,
-					query: req.query,
-					body: req.body,
-					accountability: req.accountability ?? null,
-				};
-
-				if (binding.bundleEntryKey !== undefined) request.bundleEntryKey = binding.bundleEntryKey;
-
-				const result = await runConfinedEndpoint(request, deps);
-
-				if (result.ok) {
-					res.status(result.status);
-
-					if (req.method === 'HEAD') {
-						res.end();
-						return;
-					}
-
-					res.json(result.body);
-					return;
-				}
-
-				switch (result.failure) {
-					case 'unauthenticated':
-						next(new exceptions.InvalidCredentialsException());
-						return;
-					case 'denied':
-						next(new exceptions.ForbiddenException());
-						return;
-					case 'invalid-request':
-						next(new exceptions.InvalidPayloadException('the request is not a valid json endpoint request'));
-						return;
-					default:
-						next(new Error('the confined endpoint failed'));
-						return;
-				}
-			} catch {
-				next(new Error('the confined endpoint failed'));
-			}
-		};
-	}
-
-	private logConfinedEntry(entry: ConfinedLogEntry): void {
-		// The broker redacts the entry before this sink, so the identifiers and the
-		// message are safe to write.
-		logger[entry.level](
-			{
-				extensionId: entry.context.extensionId,
-				contributionId: entry.context.contributionId,
-				operationId: entry.context.operationId,
-				meta: entry.meta,
-			},
-			String(entry.message)
-		);
 	}
 
 	private recordAppDiagnostics(): void {
@@ -1157,7 +592,6 @@ export class ExtensionManager {
 		this.extensions = [];
 		this.serverExtensions = [];
 		this.confinedEligible.clear();
-		this.confinedOperationBlocks.clear();
 		this.settingsEligible.clear();
 		this.settingsIneligible.clear();
 		this.settingsOwners = [];
