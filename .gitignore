@@ -10,6 +10,7 @@ node_modules
 # Builds / Caches
 dist
 coverage
+.vitest-tmp
 *.tsbuildinfo
 **/.vitepress/cache
 **/.vitepress/.temp

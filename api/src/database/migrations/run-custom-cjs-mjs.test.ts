@@ -2,13 +2,12 @@ import type { Knex } from 'knex';
 import knex from 'knex';
 import { createTracker, MockClient, type Tracker } from 'knex-mock-client';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { MockedFunction } from 'vitest';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { WIRED_TMP, CUSTOM_DIR } = vi.hoisted(() => {
-	const wt = `/tmp/cairncms-cjs-mjs-wired-${process.pid}-${Date.now()}`;
+	const wt = `${process.cwd()}/.vitest-tmp/cairncms-cjs-mjs-wired-${process.pid}-${Date.now()}`;
 	return { WIRED_TMP: wt, CUSTOM_DIR: `${wt}/migrations` };
 });
 
@@ -21,6 +20,8 @@ vi.mock('../../cache.js', () => ({ flushCaches: vi.fn().mockResolvedValue(undefi
 
 import getModuleDefault from '../../utils/get-module-default.js';
 import run, { CUSTOM_MIGRATION_FILE_PATTERN } from './run.js';
+
+const VITEST_TMP = path.join(process.cwd(), '.vitest-tmp');
 
 describe('CUSTOM_MIGRATION_FILE_PATTERN', () => {
 	it.each(['custom.js', '20260524A-test.cjs', '20260524B-test.mjs', 'a.cjs', 'b.mjs'])('accepts %s', (name) => {
@@ -39,7 +40,8 @@ describe('getModuleDefault normalises CJS and ESM custom-migration module shapes
 	let tmp: string;
 
 	beforeEach(() => {
-		tmp = mkdtempSync(path.join(tmpdir(), 'cairncms-mod-shape-'));
+		mkdirSync(VITEST_TMP, { recursive: true });
+		tmp = mkdtempSync(path.join(VITEST_TMP, 'cairncms-mod-shape-'));
 	});
 
 	afterEach(() => {

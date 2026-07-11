@@ -4,7 +4,9 @@ import path from 'node:path';
 import request from 'supertest';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { TMP } = vi.hoisted(() => ({ TMP: `/tmp/cairncms-ext-reload-${process.pid}-${Date.now()}` }));
+const { TMP } = vi.hoisted(() => ({
+	TMP: `${process.cwd()}/.vitest-tmp/cairncms-ext-reload-${process.pid}-${Date.now()}`,
+}));
 
 vi.mock('./env.js', () => {
 	const env = {
