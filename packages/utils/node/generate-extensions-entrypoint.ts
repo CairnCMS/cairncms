@@ -48,9 +48,8 @@ const HELPERS =
 	`return Array.isArray(values) ? values.map((value) => bindSubject(name, value)) : values;` +
 	`}`;
 
-// Types whose registry entries carry the owning package as `subject`, assigned here at
-// generation time rather than trusted from the extension's own export. A bundle's
-// entries carry the bundle name, matching the server-side settings-subject rule.
+// These registry entries carry the owning package as `subject`, stamped at generation
+// time and never trusted from the extension's export. Bundle entries carry the bundle name.
 const SUBJECT_BOUND_TYPES = ['item-view'];
 
 export function generateExtensionsEntrypoint(extensions: Extension[]): string {
@@ -63,9 +62,6 @@ export function generateExtensionsEntrypoint(extensions: Extension[]): string {
 			extension.type === 'bundle' && extension.entries.some((entry) => isIn(entry.type, APP_OR_HYBRID_TYPES))
 	);
 
-	// The canonical registry key for a type is pluralize(type), but a hyphenated key is
-	// not a valid identifier, so the arrays are declared under identifier-safe names and
-	// the exports alias back to the canonical keys.
 	const arrayIdentifiers = APP_OR_HYBRID_TYPES.map((type) => pluralizeToIdentifier(type));
 
 	const exportSpecifiers = APP_OR_HYBRID_TYPES.map((type) => {

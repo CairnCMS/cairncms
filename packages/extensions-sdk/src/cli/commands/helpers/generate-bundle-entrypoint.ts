@@ -34,9 +34,6 @@ export default function generateBundleEntrypoint(mode: 'app' | 'api', entries: E
 			return result;
 		}, []);
 
-		// A hyphenated type pluralizes to a key that is not a valid identifier, so the
-		// array is declared under an identifier-safe name and exported under the
-		// canonical key as a string export name.
 		const key = pluralize(type);
 		const identifier = pluralizeToIdentifier(type);
 

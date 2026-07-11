@@ -222,9 +222,7 @@ const mainResizeOptions = computed<ResizeableOptions>(() => {
 
 const mainEl = ref<HTMLElement>();
 
-// The split toggle swaps the scroll container between #main-content and main, so the
-// position must be carried across by hand: read it from the outgoing container before
-// the DOM updates, write it into the incoming one after.
+// Pre-flush: the outgoing scroll container must be read before the DOM swap.
 watch(splitViewWritable, async (splitView) => {
 	const scrollTop = (splitView ? contentEl.value?.scrollTop : mainEl.value?.scrollTop) ?? 0;
 
