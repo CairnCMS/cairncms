@@ -4,6 +4,7 @@ export {
 	useExtensions,
 	useFilterFields,
 	useItems,
+	useItemViewContext,
 	useLayout,
 	useStores,
 	useSync,
