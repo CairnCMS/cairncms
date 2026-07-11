@@ -102,27 +102,58 @@ async function load() {
 
 		if (collectionOwners.length === 0) return;
 
-		const values = await Promise.all(
-			collectionOwners.map((owner) =>
-				api.get('/extension-settings', {
-					params: { subject: owner.subject, scope: 'collection', scope_key: target },
-				})
-			)
-		);
+		const values = await fetchValues(collectionOwners, target);
 
 		if (token !== loadToken) return;
 
-		for (const [index, owner] of collectionOwners.entries()) {
-			initialValues.value[owner.subject] = Object.fromEntries(
-				(values[index]!.data.data as { key: string; value: unknown }[]).map((row) => [row.key, row.value])
-			);
-		}
-
+		applyValues(collectionOwners, values);
 		groups.value = collectionOwners;
 		loadedCollection.value = target;
 	} catch (error) {
 		if (token === loadToken) unexpectedError(error);
 	}
+}
+
+// Re-reads values (masks are server-presented) without remounting the groups.
+async function refreshValues(): Promise<boolean> {
+	const token = ++loadToken;
+	const target = loadedCollection.value;
+
+	if (!target || groups.value.length === 0) return true;
+
+	try {
+		const values = await fetchValues(groups.value, target);
+
+		if (token !== loadToken) return false;
+
+		applyValues(groups.value, values);
+		return true;
+	} catch (error) {
+		if (token === loadToken) unexpectedError(error);
+		return false;
+	}
+}
+
+function fetchValues(owners: OwnerGroup[], target: string) {
+	return Promise.all(
+		owners.map((owner) =>
+			api.get('/extension-settings', {
+				params: { subject: owner.subject, scope: 'collection', scope_key: target },
+			})
+		)
+	);
+}
+
+function applyValues(owners: OwnerGroup[], values: Awaited<ReturnType<typeof fetchValues>>) {
+	const next: Record<string, Record<string, unknown>> = {};
+
+	for (const [index, owner] of owners.entries()) {
+		next[owner.subject] = Object.fromEntries(
+			(values[index]!.data.data as { key: string; value: unknown }[]).map((row) => [row.key, row.value])
+		);
+	}
+
+	initialValues.value = next;
 }
 
 async function save(): Promise<boolean> {
@@ -152,8 +183,12 @@ async function save(): Promise<boolean> {
 			}
 		}
 
+		// Refresh before clearing: the form must not fall back to stale initial values
+		// while the re-read is in flight, and edits survive a failed re-read.
+		const refreshed = await refreshValues();
+		if (!refreshed) return false;
+
 		edits.value = {};
-		await load();
 		return true;
 	} catch (error: any) {
 		const code = error?.response?.data?.errors?.[0]?.extensions?.code;

@@ -6,10 +6,12 @@ import FieldsPage from './fields.vue';
 
 const holders = vi.hoisted(() => ({
 	guard: {} as any,
+	itemEdits: null as any,
 	itemSave: vi.fn(),
 	routerPush: vi.fn(),
 	childSave: vi.fn(),
 	childDiscard: vi.fn(),
+	notify: vi.fn(),
 }));
 
 vi.mock('@/composables/use-edits-guard', async () => {
@@ -27,10 +29,11 @@ vi.mock('@/composables/use-edits-guard', async () => {
 
 vi.mock('@/composables/use-item', async () => {
 	const { ref } = await import('vue');
+	holders.itemEdits ??= ref<Record<string, any>>({});
 
 	return {
 		useItem: () => ({
-			edits: ref<Record<string, any>>({}),
+			edits: holders.itemEdits,
 			item: ref({ collection: 'articles', meta: {} }),
 			saving: ref(false),
 			loading: ref(false),
@@ -41,6 +44,8 @@ vi.mock('@/composables/use-item', async () => {
 		}),
 	};
 });
+
+vi.mock('@/utils/notify', () => ({ notify: holders.notify }));
 
 vi.mock('@/composables/use-shortcut', () => ({ useShortcut: vi.fn() }));
 vi.mock('@/stores/collections', () => ({ useCollectionsStore: () => ({ hydrate: vi.fn() }) }));
@@ -98,6 +103,7 @@ function mountPage() {
 afterEach(() => {
 	vi.clearAllMocks();
 	childHasEdits.value = false;
+	if (holders.itemEdits) holders.itemEdits.value = {};
 });
 
 describe('data model fields page and extension settings integration', () => {
@@ -141,6 +147,49 @@ describe('data model fields page and extension settings integration', () => {
 		await flushPromises();
 
 		expect(holders.routerPush).toHaveBeenCalledWith('/settings/data-model');
+	});
+
+	it('toasts once for an extension-only save', async () => {
+		childHasEdits.value = true;
+		holders.childSave.mockResolvedValue(true);
+
+		const wrapper = mountPage();
+		await flushPromises();
+
+		await wrapper.find('.action-save').trigger('click');
+		await flushPromises();
+
+		expect(holders.notify).toHaveBeenCalledTimes(1);
+		expect(holders.notify).toHaveBeenCalledWith({ title: 'Item Updated' });
+	});
+
+	it('does not toast the extension save when collection metadata also saved', async () => {
+		holders.itemEdits.value = { meta: { note: 'x' } };
+		childHasEdits.value = true;
+		holders.itemSave.mockResolvedValue({});
+		holders.childSave.mockResolvedValue(true);
+
+		const wrapper = mountPage();
+		await flushPromises();
+
+		await wrapper.find('.action-save').trigger('click');
+		await flushPromises();
+
+		expect(holders.itemSave).toHaveBeenCalledTimes(1);
+		expect(holders.notify).not.toHaveBeenCalled();
+	});
+
+	it('does not toast when the extension save fails', async () => {
+		childHasEdits.value = true;
+		holders.childSave.mockResolvedValue(false);
+
+		const wrapper = mountPage();
+		await flushPromises();
+
+		await wrapper.find('.action-save').trigger('click');
+		await flushPromises();
+
+		expect(holders.notify).not.toHaveBeenCalled();
 	});
 
 	it('discards extension edits from the unsaved-changes dialog', async () => {
