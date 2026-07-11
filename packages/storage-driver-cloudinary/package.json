@@ -30,7 +30,7 @@
 		"@cairncms/storage": "workspace:*",
 		"@cairncms/utils": "workspace:*",
 		"p-queue": "7.3.4",
-		"undici": "6.24.0"
+		"undici": "6.27.0"
 	},
 	"devDependencies": {
 		"@ngneat/falso": "6.4.0",
