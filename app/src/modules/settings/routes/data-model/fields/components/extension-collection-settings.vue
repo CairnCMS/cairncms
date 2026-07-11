@@ -96,7 +96,7 @@ async function load() {
 			.map((owner) => ({
 				subject: owner.subject!,
 				declaration: owner.declaration!,
-				fields: synthesizeSettingsFields(owner.declaration!, 'collection'),
+				fields: synthesizeSettingsFields(owner.declaration!, 'collection', target),
 			}))
 			.filter((owner) => owner.fields.length > 0);
 

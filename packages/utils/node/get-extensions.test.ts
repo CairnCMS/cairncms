@@ -71,6 +71,51 @@ describe('resolvePackageExtensions discovery resilience', () => {
 		expect(failures.map((failure) => failure.name)).toContain('cairncms-extension-missing');
 		expect(failures[0]?.local).toBe(false);
 	});
+
+	it('fails a manifest with an invalid settings presentation at discovery and carries a valid one through', async () => {
+		const root = makeRoot();
+
+		const settingsFor = (scope: string) => ({
+			preview_url: {
+				type: 'string',
+				scope,
+				appReadable: true,
+				presentation: { interface: 'system-display-template' },
+			},
+		});
+
+		writePackage(root, 'cairncms-extension-template-ok', {
+			name: 'cairncms-extension-template-ok',
+			version: '1.0.0',
+			'cairncms:extension': {
+				type: 'endpoint',
+				path: 'dist/index.js',
+				source: 'src/index.js',
+				host: '^1.0.0',
+				settings: settingsFor('collection'),
+			},
+		});
+
+		writePackage(root, 'cairncms-extension-template-bad', {
+			name: 'cairncms-extension-template-bad',
+			version: '1.0.0',
+			'cairncms:extension': {
+				type: 'endpoint',
+				path: 'dist/index.js',
+				source: 'src/index.js',
+				host: '^1.0.0',
+				settings: settingsFor('global'),
+			},
+		});
+
+		const failures: { name: string; local: boolean }[] = [];
+		const extensions = await resolvePackageExtensions(root, undefined, (failure) => failures.push(failure));
+
+		expect(failures.map((failure) => failure.name)).toContain('cairncms-extension-template-bad');
+
+		const carried = extensions.find((extension) => extension.name === 'cairncms-extension-template-ok');
+		expect(carried?.settings?.['preview_url']?.presentation?.interface).toBe('system-display-template');
+	});
 });
 
 const confinedEndpointManifest = {
