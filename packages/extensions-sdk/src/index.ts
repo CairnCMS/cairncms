@@ -13,6 +13,7 @@ export {
 	defineEndpoint,
 	defineHook,
 	defineInterface,
+	defineItemView,
 	defineLayout,
 	defineModule,
 	defineOperationApi,

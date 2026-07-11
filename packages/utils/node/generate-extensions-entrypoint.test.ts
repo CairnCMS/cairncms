@@ -6,14 +6,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Extension } from '@cairncms/types';
 import { generateExtensionsEntrypoint } from './generate-extensions-entrypoint.js';
 
-const DECL = `const interfaces = [], displays = [], layouts = [], modules = [], panels = [], operations = [];`;
+const DECL = `const interfaces = [], displays = [], layouts = [], modules = [], panels = [], itemViews = [], operations = [];`;
 
 const HELPERS =
 	`async function loadExtension(name, importer) {try { return await importer(); }catch (error) { console.warn('Failed to load extension ' + name, error); return null; }}` +
 	`function pushConfig(name, collection, value) {if (value && typeof value === 'object' && !Array.isArray(value)) collection.push(value);else console.warn('Extension ' + name + ' has no valid default export');}` +
-	`function pushEntries(name, collection, values) {if (Array.isArray(values)) collection.push(...values);else if (values == null) console.warn('Extension ' + name + ' is missing a declared app entry export');else console.warn('Extension ' + name + ' exported a non-array app entry');}`;
+	`function pushEntries(name, collection, values) {if (Array.isArray(values)) collection.push(...values);else if (values == null) console.warn('Extension ' + name + ' is missing a declared app entry export');else console.warn('Extension ' + name + ' exported a non-array app entry');}` +
+	`function bindSubject(name, value) {return value && typeof value === 'object' && !Array.isArray(value) ? { ...value, subject: name } : value;}` +
+	`function bindSubjectEntries(name, values) {return Array.isArray(values) ? values.map((value) => bindSubject(name, value)) : values;}`;
 
-const EXPORTS = `export { interfaces, displays, layouts, modules, panels, operations`;
+const EXPORTS = `export { interfaces, displays, layouts, modules, panels, itemViews as "item-views", operations`;
 
 const reg = (index: number, name: string, push: string) =>
 	`if (mods[${index}]) { try { ${push} } catch (error) { console.warn('Failed to register extension ' + ${JSON.stringify(
@@ -181,6 +183,52 @@ describe('generateExtensionsEntrypoint', () => {
 				2,
 				'mock-bundle0-extension',
 				`pushEntries("mock-bundle0-extension", layouts, mods[2].layouts);pushEntries("mock-bundle0-extension", operations, mods[2].operations);`
+			)}});${EXPORTS}, ready };`
+		);
+	});
+
+	it('binds the owning package as subject on a standalone item-view', () => {
+		const mockExtensions: Extension[] = [
+			{
+				path: './extensions/item-view',
+				name: 'mock-item-view-extension',
+				type: 'item-view',
+				entrypoint: 'index.js',
+				local: true,
+			},
+		];
+
+		expect(generateExtensionsEntrypoint(mockExtensions)).toBe(
+			`${DECL}${HELPERS}const ready = Promise.all([loadExtension("mock-item-view-extension", () => import("./extensions/item-view/index.js"))]).then((mods) => {${reg(
+				0,
+				'mock-item-view-extension',
+				`pushConfig("mock-item-view-extension", itemViews, bindSubject("mock-item-view-extension", mods[0].default));`
+			)}});${EXPORTS}, ready };`
+		);
+	});
+
+	it('binds the bundle name as subject on bundled item-view entries', () => {
+		const mockExtensions: Extension[] = [
+			{
+				path: './extensions/bundle',
+				name: 'mock-bundle-extension',
+				version: '1.0.0',
+				type: 'bundle',
+				entrypoint: { app: 'app.js', api: 'api.js' },
+				entries: [
+					{ type: 'item-view', name: 'mock-bundle-item-view' },
+					{ type: 'interface', name: 'mock-bundle-interface' },
+				],
+				host: '^10.0.0',
+				local: false,
+			},
+		];
+
+		expect(generateExtensionsEntrypoint(mockExtensions)).toBe(
+			`${DECL}${HELPERS}const ready = Promise.all([loadExtension("mock-bundle-extension", () => import("./extensions/bundle/app.js"))]).then((mods) => {${reg(
+				0,
+				'mock-bundle-extension',
+				`pushEntries("mock-bundle-extension", interfaces, mods[0].interfaces);pushEntries("mock-bundle-extension", itemViews, bindSubjectEntries("mock-bundle-extension", mods[0]["item-views"]));`
 			)}});${EXPORTS}, ready };`
 		);
 	});
@@ -367,6 +415,48 @@ describe('generateExtensionsEntrypoint', () => {
 			const mod = await evaluate(extensions);
 			await mod.ready;
 			expect(mod.displays).toEqual([{ id: 'good' }]);
+		});
+
+		it('exports item-views under the hyphenated key with the subject bound at load', async () => {
+			writeFileSync(path.join(dir, 'itemview.mjs'), 'export default { id: "preview", subject: "spoofed" };');
+
+			const extensions: Extension[] = [
+				{ path: dir, name: 'my-item-view', type: 'item-view', entrypoint: 'itemview.mjs', local: true },
+			];
+
+			const mod = await evaluate(extensions);
+			await mod.ready;
+
+			// The generation-time binding overwrites a subject smuggled in the export.
+			expect(mod['item-views']).toEqual([{ id: 'preview', subject: 'my-item-view' }]);
+		});
+
+		it('binds the bundle name onto bundled item-view entries at load', async () => {
+			writeFileSync(
+				path.join(dir, 'ivbundle.mjs'),
+				'const itemViews = [{ id: "one" }, { id: "two", subject: "spoofed" }];export { itemViews as "item-views" };'
+			);
+
+			const extensions: Extension[] = [
+				{
+					path: dir,
+					name: 'iv-bundle',
+					version: '1.0.0',
+					type: 'bundle',
+					entrypoint: { app: 'ivbundle.mjs', api: 'api.js' },
+					entries: [{ type: 'item-view', name: 'one' }],
+					host: '^10.0.0',
+					local: false,
+				},
+			];
+
+			const mod = await evaluate(extensions);
+			await mod.ready;
+
+			expect(mod['item-views']).toEqual([
+				{ id: 'one', subject: 'iv-bundle' },
+				{ id: 'two', subject: 'iv-bundle' },
+			]);
 		});
 	});
 });

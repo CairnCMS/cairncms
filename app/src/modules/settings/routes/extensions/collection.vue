@@ -283,6 +283,7 @@ const TYPE_ICONS: Record<string, string> = {
 	layout: 'grid_view',
 	module: 'category',
 	panel: 'insert_chart',
+	'item-view': 'vertical_split',
 	other: 'extension',
 };
 

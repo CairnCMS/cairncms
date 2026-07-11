@@ -2,7 +2,7 @@ import { APP_EXTENSION_TYPES, HYBRID_EXTENSION_TYPES } from '@cairncms/constants
 import type { AppExtension, BundleExtension, Extension, HybridExtension } from '@cairncms/types';
 import path from 'path';
 import { isIn, isTypeIn } from './array-helpers.js';
-import { pluralize } from './pluralize.js';
+import { pluralize, pluralizeToIdentifier } from './pluralize.js';
 import { pathToRelativeUrl } from './path-to-relative-url.js';
 
 const APP_OR_HYBRID_TYPES = [...APP_EXTENSION_TYPES, ...HYBRID_EXTENSION_TYPES];
@@ -40,7 +40,18 @@ const HELPERS =
 	`if (Array.isArray(values)) collection.push(...values);` +
 	`else if (values == null) console.warn('Extension ' + name + ' is missing a declared app entry export');` +
 	`else console.warn('Extension ' + name + ' exported a non-array app entry');` +
+	`}` +
+	`function bindSubject(name, value) {` +
+	`return value && typeof value === 'object' && !Array.isArray(value) ? { ...value, subject: name } : value;` +
+	`}` +
+	`function bindSubjectEntries(name, values) {` +
+	`return Array.isArray(values) ? values.map((value) => bindSubject(name, value)) : values;` +
 	`}`;
+
+// Types whose registry entries carry the owning package as `subject`, assigned here at
+// generation time rather than trusted from the extension's own export. A bundle's
+// entries carry the bundle name, matching the server-side settings-subject rule.
+const SUBJECT_BOUND_TYPES = ['item-view'];
 
 export function generateExtensionsEntrypoint(extensions: Extension[]): string {
 	const appOrHybridExtensions = extensions.filter((extension): extension is AppExtension | HybridExtension =>
@@ -52,11 +63,21 @@ export function generateExtensionsEntrypoint(extensions: Extension[]): string {
 			extension.type === 'bundle' && extension.entries.some((entry) => isIn(entry.type, APP_OR_HYBRID_TYPES))
 	);
 
-	const arrayNames = APP_OR_HYBRID_TYPES.map((type) => pluralize(type));
-	const declarations = `const ${arrayNames.join(' = [], ')} = [];`;
+	// The canonical registry key for a type is pluralize(type), but a hyphenated key is
+	// not a valid identifier, so the arrays are declared under identifier-safe names and
+	// the exports alias back to the canonical keys.
+	const arrayIdentifiers = APP_OR_HYBRID_TYPES.map((type) => pluralizeToIdentifier(type));
+
+	const exportSpecifiers = APP_OR_HYBRID_TYPES.map((type) => {
+		const key = pluralize(type);
+		const identifier = pluralizeToIdentifier(type);
+		return identifier === key ? identifier : `${identifier} as ${jsString(key)}`;
+	});
+
+	const declarations = `const ${arrayIdentifiers.join(' = [], ')} = [];`;
 
 	if (appOrHybridExtensions.length === 0 && bundleExtensions.length === 0) {
-		return `${declarations}export { ${arrayNames.join(', ')} };`;
+		return `${declarations}export { ${exportSpecifiers.join(', ')} };`;
 	}
 
 	// A flat, deterministic order: standalones grouped by app/hybrid type, then
@@ -74,10 +95,13 @@ export function generateExtensionsEntrypoint(extensions: Extension[]): string {
 				)
 			);
 
+			const config = (ref: string) =>
+				isIn(type, SUBJECT_BOUND_TYPES) ? `bindSubject(${jsString(extension.name)}, ${ref}.default)` : `${ref}.default`;
+
 			loads.push({
 				name: extension.name,
 				specifier: `./${entry}`,
-				push: (ref) => `pushConfig(${jsString(extension.name)}, ${pluralize(type)}, ${ref}.default);`,
+				push: (ref) => `pushConfig(${jsString(extension.name)}, ${pluralizeToIdentifier(type)}, ${config(ref)});`,
 			});
 		}
 	}
@@ -92,7 +116,16 @@ export function generateExtensionsEntrypoint(extensions: Extension[]): string {
 			specifier: `./${entry}`,
 			push: (ref) =>
 				appTypes
-					.map((type) => `pushEntries(${jsString(extension.name)}, ${pluralize(type)}, ${ref}.${pluralize(type)});`)
+					.map((type) => {
+						const key = pluralize(type);
+						const property = key === pluralizeToIdentifier(type) ? `${ref}.${key}` : `${ref}[${jsString(key)}]`;
+
+						const entries = isIn(type, SUBJECT_BOUND_TYPES)
+							? `bindSubjectEntries(${jsString(extension.name)}, ${property})`
+							: property;
+
+						return `pushEntries(${jsString(extension.name)}, ${pluralizeToIdentifier(type)}, ${entries});`;
+					})
 					.join(''),
 		});
 	}
@@ -111,5 +144,5 @@ export function generateExtensionsEntrypoint(extensions: Extension[]): string {
 
 	const ready = `const ready = ${promiseAll}.then((mods) => {${thenBody}});`;
 
-	return `${declarations}${HELPERS}${ready}export { ${arrayNames.join(', ')}, ready };`;
+	return `${declarations}${HELPERS}${ready}export { ${exportSpecifiers.join(', ')}, ready };`;
 }
