@@ -6,7 +6,9 @@ import { getEnv } from '../env.js';
 import { getConfigFromEnv } from '../utils/get-config-from-env.js';
 import { registerLocations } from './register-locations.js';
 
-vi.mock('../env.js');
+// A factory, not an automock: automocking evaluates the real module, which processes
+// the developer's actual .env at import and fails on any type-prefixed value there.
+vi.mock('../env.js', () => ({ getEnv: vi.fn() }));
 vi.mock('@cairncms/utils');
 vi.mock('../utils/get-config-from-env.js');
 
