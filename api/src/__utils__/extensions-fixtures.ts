@@ -1,6 +1,5 @@
 import type { Extension } from '@cairncms/types';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ExtensionManager } from '../extensions.js';
 import { filterServerExtensions } from '../utils/filter-server-extensions.js';
@@ -200,7 +199,9 @@ export function manager(extensions: Extension[]): ExtensionManager {
  * the root. The caller stores the root and points the mocked `EXTENSIONS_PATH` at it.
  */
 export function createExtensionFixtures(): string {
-	root = mkdtempSync(path.join(tmpdir(), 'cairn-confined-'));
+	const scratch = path.join(process.cwd(), '.vitest-tmp');
+	mkdirSync(scratch, { recursive: true });
+	root = mkdtempSync(path.join(scratch, 'cairn-confined-'));
 
 	writeConfinedPackage('confined-endpoint', 'export default {};\n', 'confined-endpoint', {
 		endpoint: { access: 'public' },
