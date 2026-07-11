@@ -194,6 +194,13 @@ describe('preValidateIpLiteral — synchronous pre-connect validation for IP lit
 		const result = preValidateIpLiteral({});
 		expect(result).toBeNull();
 	});
+
+	test('returns an Error when IP-literal host is the IPv6 unspecified address and 0.0.0.0 is denied', () => {
+		factoryEnv['IMPORT_IP_DENY_LIST'] = ['0.0.0.0'];
+		const result = preValidateIpLiteral({ host: '::' });
+		expect(result).toBeInstanceOf(Error);
+		expect(result?.message).toContain('denied IP address');
+	});
 });
 
 describe('ValidatingHttpAgent — pre-connect rejection of denied IP literals', () => {
@@ -213,6 +220,27 @@ describe('ValidatingHttpAgent — pre-connect rejection of denied IP literals', 
 		expect(parentSpy).not.toHaveBeenCalled();
 		expect(callbackErr).toBeInstanceOf(Error);
 		expect(callbackErr?.message).toContain('denied IP address');
+	});
+
+	test('does NOT call super.createConnection when host is the IPv6 unspecified address', async () => {
+		factoryEnv['IMPORT_IP_DENY_LIST'] = ['0.0.0.0'];
+		const agent = new ValidatingHttpAgent();
+
+		const parentSpy = vi
+			.spyOn(Object.getPrototypeOf(Object.getPrototypeOf(agent)), 'createConnection')
+			.mockImplementation(() => undefined);
+
+		const callback = vi.fn();
+		(agent as any).createConnection({ host: '::', port: 80 }, callback);
+
+		// The denial is delivered via process.nextTick, so let one tick pass before asserting.
+		await new Promise((resolve) => setImmediate(resolve));
+
+		expect(parentSpy).not.toHaveBeenCalled();
+		expect(callback).toHaveBeenCalledOnce();
+		const err = callback.mock.calls[0]?.[0];
+		expect(err).toBeInstanceOf(Error);
+		expect(err?.message).toContain('denied IP address');
 	});
 
 	test('calls super.createConnection when IP-literal host is allowed', async () => {
