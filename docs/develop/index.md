@@ -1,6 +1,6 @@
 ---
 title: Develop
-description: Developer-facing customization for CairnCMS. Building applications against the API, extending the platform with the nine extension types, writing custom migrations, and authoring email templates.
+description: Developer-facing customization for CairnCMS. Building applications against the API, extending the platform with the ten extension types, writing custom migrations, and authoring email templates.
 sidebar:
   label: Overview
   order: 0
@@ -13,7 +13,7 @@ For administering the data model and content through the admin app, see [Guides]
 ## Pages in this section
 
 - **[Clients](/docs/develop/clients/)** — durable patterns for building applications against CairnCMS: authentication, querying items, mutations, file upload, the SDK versus raw HTTP, and public access.
-- **[Extensions](/docs/develop/extensions/)** — the nine extension types (interface, display, layout, module, panel, hook, endpoint, operation, bundle), the SDK and scaffolder, and the build, install, and publish workflow.
+- **[Extensions](/docs/develop/extensions/)** — the ten extension types (interface, display, layout, module, panel, item view, hook, endpoint, operation, bundle), the SDK and scaffolder, and the build, install, and publish workflow.
 - **[Custom migrations](/docs/develop/custom-migrations/)** — adding migration files to `EXTENSIONS_PATH/migrations` so they run alongside platform migrations.
 - **[Email templates](/docs/develop/email-templates/)** — overriding the built-in email templates and adding new ones for the Send Email flow operation.
 

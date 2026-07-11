@@ -6,7 +6,7 @@ sidebar:
   order: 0
 ---
 
-App extensions extend the admin app. They are written as Vue components and run in the browser, in the same page as the rest of the admin app. There are five types: interface, display, layout, module, and panel.
+App extensions extend the admin app. They are written as Vue components and run in the browser, in the same page as the rest of the admin app. There are six types: interface, display, layout, module, panel, and item view.
 
 ## How app extensions run
 
@@ -33,6 +33,7 @@ The practical consequence: when the host Vue or the SDK changes, rebuild the ext
 - **[Layout](/docs/develop/extensions/app-extensions/layouts/)** is a custom collection page layout, alongside the built-in Table, Cards, Calendar, Map, and Kanban.
 - **[Module](/docs/develop/extensions/app-extensions/modules/)** is a top-level area in the module bar. Use this when you need an entire workspace that does not fit into the existing modules.
 - **[Panel](/docs/develop/extensions/app-extensions/panels/)** is a custom panel type for Insights dashboards.
+- **[Item View](/docs/develop/extensions/app-extensions/item-views/)** is a contextual split pane in the item editor, behind a platform-rendered toggle. Use this for previews, related information, or anything an editor wants beside the form.
 
 ## Where to go next
 

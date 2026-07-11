@@ -41,7 +41,7 @@ A settings key must start with a lowercase letter and may contain lowercase lett
 - **`scope`** — `global` or `collection`. Defaults to `global`. A global key holds one value for the whole instance. A collection key holds one value per collection, edited on each collection's data-model page.
 - **`secret`** — marks the key as a secret. `{ "source": "inline" }` for a value the operator enters in the admin app, `{ "source": "config" }` for a value supplied by deployment configuration. A secret must be type `string`. See [Secret settings](#secret-settings).
 - **`appReadable`** — set `true` to expose the stored value to app extension code in the browser. Defaults to unreadable. A secret can never be app-readable. See [Reading settings from app extensions](#reading-settings-from-app-extensions).
-- **`presentation`** — how the field renders in the admin app: `order` sorts the fields, and `width` is `half` or `full`. Optional.
+- **`presentation`** — how the field renders in the admin app: `order` sorts the fields, and `width` is `half` or `full`. Optional. `interface` selects the editing component from a platform allowlist. The only allowlisted value is `system-display-template`, the field-aware template input, valid only on a non-secret, collection-scoped string. The platform supplies the interface's context (the edited collection), never the manifest, and an id outside the allowlist or an invalid combination fails the manifest at discovery.
 
 Field labels derive from the key name, so `sender_name` renders as "Sender Name". Pick key names that read well as labels.
 
@@ -165,6 +165,8 @@ GET /extension-settings/app?subject=cairncms-extension-chat-notify&collection=ar
 The response maps key to value. Global app-readable values are always included. Collection-scoped values are included only when the request names a collection and the signed-in user has read permission on it. Secrets are never served, because a secret can never be app-readable. For the example above, an app extension could read the `channel` configured for `articles`, but never `api_token`.
 
 The endpoint requires a signed-in user with app access. Every user with app access can read the global values, so mark a key `appReadable` only when its value is safe for everyone who can open the admin app.
+
+An [item view](/docs/develop/extensions/app-extensions/item-views/) pane does not call the endpoint directly. Its context carries a `settings` reader already bound to the owning package and the current collection.
 
 ## How operators set values
 
