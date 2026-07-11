@@ -24,6 +24,15 @@ function isLoopback(ip: string): boolean {
 	}
 }
 
+function isIPv6Unspecified(ip: string): boolean {
+	try {
+		const parsed = ipaddr.parse(ip);
+		return parsed.kind() === 'ipv6' && parsed.range() === 'unspecified';
+	} catch {
+		return false;
+	}
+}
+
 export function validateIPSync(ip: string, url: string): void {
 	const env = getEnv();
 	const canonical = canonicalize(ip);
@@ -33,7 +42,7 @@ export function validateIPSync(ip: string, url: string): void {
 	}
 
 	if (env['IMPORT_IP_DENY_LIST'].includes('0.0.0.0')) {
-		if (isLoopback(canonical)) {
+		if (isLoopback(canonical) || isIPv6Unspecified(canonical)) {
 			throw new Error(`Requested URL "${url}" resolves to a denied IP address`);
 		}
 
