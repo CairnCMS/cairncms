@@ -3,7 +3,7 @@ title: UI components
 description: The component library and theme tokens available to app extensions.
 sidebar:
   label: UI components
-  order: 8
+  order: 9
 ---
 
 The admin app registers its component library globally, so an app extension can use those components in its own Vue templates without importing them. They are the same components the app is built from, so an extension that uses them looks and behaves like the rest of the application and stays consistent across themes.

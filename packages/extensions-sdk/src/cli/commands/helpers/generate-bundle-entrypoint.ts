@@ -1,6 +1,6 @@
 import { API_EXTENSION_TYPES, APP_EXTENSION_TYPES, HYBRID_EXTENSION_TYPES } from '@cairncms/constants';
 import type { ExtensionOptionsBundleEntry } from '@cairncms/types';
-import { isIn, isTypeIn, pluralize } from '@cairncms/utils';
+import { isIn, isTypeIn, pluralize, pluralizeToIdentifier } from '@cairncms/utils';
 import { pathToRelativeUrl } from '@cairncms/utils/node';
 import path from 'path';
 
@@ -34,7 +34,14 @@ export default function generateBundleEntrypoint(mode: 'app' | 'api', entries: E
 			return result;
 		}, []);
 
-		return `export const ${pluralize(type)} = [${entries.join(',')}];`;
+		const key = pluralize(type);
+		const identifier = pluralizeToIdentifier(type);
+
+		if (identifier === key) {
+			return `export const ${key} = [${entries.join(',')}];`;
+		}
+
+		return `const ${identifier} = [${entries.join(',')}];export { ${identifier} as ${JSON.stringify(key)} };`;
 	});
 
 	return `${imports.join('')}${exports.join('')}`;

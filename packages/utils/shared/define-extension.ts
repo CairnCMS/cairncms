@@ -1,6 +1,7 @@
 import type {
 	InterfaceConfig,
 	DisplayConfig,
+	ItemViewConfig,
 	LayoutConfig,
 	ModuleConfig,
 	PanelConfig,
@@ -29,6 +30,10 @@ export function defineModule<T extends ModuleConfig>(config: T): T {
 }
 
 export function definePanel<T extends PanelConfig>(config: T): T {
+	return config;
+}
+
+export function defineItemView<T extends ItemViewConfig>(config: T): T {
 	return config;
 }
 

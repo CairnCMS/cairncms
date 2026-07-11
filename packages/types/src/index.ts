@@ -10,6 +10,7 @@ export * from './flows.js';
 export * from './geometry.js';
 export * from './hooks.js';
 export * from './interfaces.js';
+export * from './item-views.js';
 export * from './items.js';
 export * from './layouts.js';
 export * from './misc.js';

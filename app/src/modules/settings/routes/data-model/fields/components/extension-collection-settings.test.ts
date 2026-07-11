@@ -1,5 +1,6 @@
 import api from '@/api';
 import { i18n } from '@/lang';
+import { unexpectedError } from '@/utils/unexpected-error';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ExtensionCollectionSettings from './extension-collection-settings.vue';
@@ -231,5 +232,109 @@ describe('extension collection settings', () => {
 
 		expect(api.get).not.toHaveBeenCalled();
 		expect(wrapper.find('.extension-collection-settings').exists()).toBe(false);
+	});
+
+	it('keeps the section mounted through a save and refreshes only the values', async () => {
+		mockLoad();
+
+		const wrapper = mountBlock();
+		await flushPromises();
+
+		expect(wrapper.findAll('.owner-group').length).toBeGreaterThan(0);
+
+		const form = wrapper.findComponent({ name: 'v-form' });
+		form.vm.$emit('update:modelValue', { preview_url: 'https://new' });
+		await flushPromises();
+
+		vi.mocked(api.get).mockClear();
+		vi.mocked(api.post).mockResolvedValue({} as any);
+
+		let resolveValues!: (value: unknown) => void;
+
+		vi.mocked(api.get).mockImplementation((path: string) => {
+			if (path === '/extension-settings/owners') throw new Error('owners must not be refetched on save');
+			return new Promise((resolve) => (resolveValues = resolve)) as any;
+		});
+
+		const saving = (wrapper.vm as any).save() as Promise<boolean>;
+		await flushPromises();
+
+		expect(wrapper.findAll('.owner-group').length).toBeGreaterThan(0);
+
+		expect(wrapper.findComponent({ name: 'v-form' }).props('modelValue')).toEqual({
+			preview_url: 'https://new',
+		});
+
+		resolveValues({
+			data: { data: [{ scope: 'collection', scope_key: 'articles', key: 'preview_url', value: 'https://new' }] },
+		});
+
+		await expect(saving).resolves.toBe(true);
+		await flushPromises();
+
+		expect(wrapper.findAll('.owner-group').length).toBeGreaterThan(0);
+		expect(wrapper.findComponent({ name: 'v-form' }).props('modelValue')).toBeUndefined();
+
+		expect(wrapper.findComponent({ name: 'v-form' }).props('initialValues')).toEqual({
+			preview_url: 'https://new',
+		});
+	});
+
+	it('wires the template interface to the edited collection', async () => {
+		vi.mocked(api.get).mockImplementation(async (path: string) => {
+			if (path === '/extension-settings/owners') {
+				return {
+					data: {
+						data: [
+							{
+								subject: 'cairncms-extension-preview',
+								displaySubject: 'cairncms-extension-preview',
+								status: 'available',
+								declaration: {
+									preview_url: {
+										type: 'string',
+										scope: 'collection',
+										appReadable: true,
+										presentation: { interface: 'system-display-template' },
+									},
+								},
+							},
+						],
+					},
+				} as any;
+			}
+
+			return { data: { data: [] } } as any;
+		});
+
+		const wrapper = mountBlock('articles');
+		await flushPromises();
+
+		const fields = wrapper.findComponent({ name: 'v-form' }).props('fields') as any[];
+
+		expect(fields[0].meta.interface).toBe('system-display-template');
+		expect(fields[0].meta.options).toEqual({ collectionName: 'articles' });
+	});
+
+	it('preserves edits and reports failure when the re-read fails after a successful write', async () => {
+		mockLoad();
+
+		const wrapper = mountBlock();
+		await flushPromises();
+
+		const form = wrapper.findComponent({ name: 'v-form' });
+		form.vm.$emit('update:modelValue', { preview_url: 'https://new' });
+		await flushPromises();
+
+		vi.mocked(api.post).mockResolvedValue({} as any);
+		vi.mocked(api.get).mockRejectedValue(new Error('offline'));
+
+		await expect((wrapper.vm as any).save()).resolves.toBe(false);
+
+		expect(unexpectedError).toHaveBeenCalled();
+
+		expect(wrapper.findComponent({ name: 'v-form' }).props('modelValue')).toEqual({
+			preview_url: 'https://new',
+		});
 	});
 });

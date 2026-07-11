@@ -3,7 +3,12 @@
 		v-if="error || !collectionInfo || (collectionInfo?.meta?.singleton === true && primaryKey !== null)"
 	/>
 
-	<private-view v-else :title="title">
+	<private-view
+		v-else
+		v-model:split-view="splitViewOpen"
+		:split-view-min-width="activeItemView?.placements.splitPane.minWidth ?? 0"
+		:title="title"
+	>
 		<template v-if="collectionInfo.meta && collectionInfo.meta.singleton === true" #title>
 			<h1 class="type-title">
 				{{ collectionInfo.name }}
@@ -57,6 +62,18 @@
 		</template>
 
 		<template #actions>
+			<v-button
+				v-for="itemView in itemViews"
+				:key="itemViewKey(itemView)"
+				v-tooltip.bottom="itemView.name"
+				rounded
+				icon
+				:secondary="activeItemView !== itemView"
+				@click="toggleItemView(itemView)"
+			>
+				<v-icon :name="itemView.icon" outline />
+			</v-button>
+
 			<v-dialog v-if="!isNew" v-model="confirmDelete" :disabled="deleteAllowed === false" @esc="confirmDelete = false">
 				<template #activator="{ on }">
 					<v-button
@@ -212,15 +229,25 @@
 				@refresh="refresh"
 			/>
 		</template>
+
+		<template #splitView>
+			<component
+				:is="activeItemView.placements.splitPane.component"
+				v-if="activeItemView"
+				:key="itemViewKey(activeItemView)"
+			/>
+		</template>
 	</private-view>
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, unref, toRefs } from 'vue';
+import { computed, provide, ref, unref, toRefs } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { ITEM_VIEW_CONTEXT_INJECT } from '@cairncms/constants';
 
 import { useEditsGuard } from '@/composables/use-edits-guard';
 import { useItem } from '@/composables/use-item';
+import { itemViewKey, useItemViews } from '@/composables/use-item-views';
 import { usePermissions } from '@/composables/use-permissions';
 import { useShortcut } from '@/composables/use-shortcut';
 import { useTemplateData } from '@/composables/use-template-data';
@@ -280,6 +307,12 @@ const {
 } = useItem(collection, primaryKey);
 
 const { templateData, loading: templateDataLoading } = useTemplateData(collectionInfo, primaryKey);
+
+const { itemViews, activeItemView, splitViewOpen, itemViewContext, toggleItemView, notifyItemViewSaved } = useItemViews(
+	{ collection, primaryKey, collectionInfo, isNew, item }
+);
+
+provide(ITEM_VIEW_CONTEXT_INJECT, itemViewContext);
 
 const isSavable = computed(() => {
 	if (saveAllowed.value === false) return false;
@@ -391,8 +424,13 @@ async function saveAndQuit() {
 	if (isSavable.value === false) return;
 
 	try {
-		await save();
-		if (props.singleton === false) router.push(`/content/${props.collection}`);
+		const savedItem: Record<string, any> = await save();
+
+		if (props.singleton === false) {
+			router.push(`/content/${props.collection}`);
+		} else {
+			notifyItemViewSaved(savedItem);
+		}
 	} catch {
 		// Save shows unexpected error dialog
 	}
@@ -404,6 +442,7 @@ async function saveAndStay() {
 	try {
 		const savedItem: Record<string, any> = await save();
 
+		notifyItemViewSaved(savedItem);
 		revisionsDrawerDetailRef.value?.refresh?.();
 
 		if (props.primaryKey === '+') {
