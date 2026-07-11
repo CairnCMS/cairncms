@@ -1050,6 +1050,7 @@ extension_type_group_display: Displays
 extension_type_group_layout: Layouts
 extension_type_group_module: Modules
 extension_type_group_panel: Panels
+extension_type_group_item-view: Item Views
 extension_type_group_other: Other
 no_extensions: No Extensions
 no_extensions_copy: No extensions were discovered in the configured extensions path.

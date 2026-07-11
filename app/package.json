@@ -67,6 +67,7 @@
 		"@types/wellknown": "0.5.4",
 		"@vitejs/plugin-vue": "5.2.4",
 		"@vue/test-utils": "2.4.11",
+		"@vueuse/core": "10.9.0",
 		"apexcharts": "3.39.0",
 		"axios": "1.16.0",
 		"base-64": "1.0.0",

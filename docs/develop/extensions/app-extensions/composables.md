@@ -3,7 +3,7 @@ title: Composables
 description: The Vue composables the SDK provides for app extensions.
 sidebar:
   label: Composables
-  order: 7
+  order: 8
 ---
 
 App extensions are Vue components, and the SDK ships a set of composables for what an extension commonly needs: calling the API as the current user, reading collection metadata, fetching items, and reaching the admin app's stores. Import them from `@cairncms/extensions-sdk`.

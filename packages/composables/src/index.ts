@@ -3,6 +3,7 @@ export * from './use-custom-selection.js';
 export * from './use-element-size.js';
 export * from './use-filter-fields.js';
 export * from './use-groupable.js';
+export * from './use-item-view-context.js';
 export * from './use-items.js';
 export * from './use-layout.js';
 export * from './use-size-class.js';

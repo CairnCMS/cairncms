@@ -25,6 +25,7 @@ import type { Collection } from './collection.js';
 import type { DisplayConfig } from './displays.js';
 import type { Field } from './fields.js';
 import type { InterfaceConfig } from './interfaces.js';
+import type { ItemViewConfig } from './item-views.js';
 import type { LayoutConfig } from './layouts.js';
 import type { DeepPartial } from './misc.js';
 import type { ModuleConfig } from './modules.js';
@@ -98,6 +99,7 @@ export type AppExtensionConfigs = {
 	layouts: LayoutConfig[];
 	modules: ModuleConfig[];
 	panels: PanelConfig[];
+	'item-views': ItemViewConfig[];
 	operations: OperationAppConfig[];
 };
 

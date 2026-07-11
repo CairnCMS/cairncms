@@ -9,7 +9,7 @@ The docs are organized into six sections, each scoped to a particular kind of wo
 
 - **[Getting started](/docs/getting-started/)** — orientation for first-time users. What CairnCMS is, how to spin one up, how the pieces fit together, and the vocabulary used throughout the rest of the docs.
 - **[Guides](/docs/guides/)** — operator and content-author tasks in the admin app. Modeling data, managing users and permissions, creating content, configuring automation.
-- **[Develop](/docs/develop/)** — building applications against the API and extending the platform with custom interfaces, hooks, endpoints, operations, and the rest of the nine extension types.
+- **[Develop](/docs/develop/)** — building applications against the API and extending the platform with custom interfaces, hooks, endpoints, operations, and the rest of the ten extension types.
 - **[Manage](/docs/manage/)** — running CairnCMS in production. Configuration, deployment, security hardening, backups, upgrades, and the schema-as-code and config-as-code workflows.
 - **[API reference](/docs/api/)** — REST and GraphQL endpoint reference. Authentication, items, files, the query DSL, the SDK, and the system collections that hold platform-managed state.
 - **[Contributing](/docs/contributing/)** — how to contribute code or documentation to CairnCMS itself: repository layout, local development setup, and the project's PR conventions.

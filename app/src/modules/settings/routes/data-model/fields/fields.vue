@@ -108,6 +108,7 @@ import { useItem } from '@/composables/use-item';
 import { useShortcut } from '@/composables/use-shortcut';
 import { useCollectionsStore } from '@/stores/collections';
 import { useFieldsStore } from '@/stores/fields';
+import { notify } from '@/utils/notify';
 import { useCollection } from '@cairncms/composables';
 import { computed, ref, toRefs } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -162,16 +163,23 @@ async function deleteAndQuit() {
 }
 
 async function saveAndStay() {
-	if (metaHasEdits.value) {
+	const metaSaved = metaHasEdits.value;
+
+	if (metaSaved) {
 		await save();
 		await Promise.all([collectionsStore.hydrate(), fieldsStore.hydrate()]);
 	}
 
-	if (extensionSettings.value?.hasEdits) await extensionSettings.value.save();
+	if (extensionSettings.value?.hasEdits) {
+		const saved = await extensionSettings.value.save();
+		if (saved && !metaSaved) notify({ title: t('item_update_success', 1) });
+	}
 }
 
 async function saveAndQuit() {
-	if (metaHasEdits.value) {
+	const metaSaved = metaHasEdits.value;
+
+	if (metaSaved) {
 		await save();
 		await Promise.all([collectionsStore.hydrate(), fieldsStore.hydrate()]);
 	}
@@ -179,6 +187,7 @@ async function saveAndQuit() {
 	if (extensionSettings.value?.hasEdits) {
 		const saved = await extensionSettings.value.save();
 		if (!saved) return;
+		if (!metaSaved) notify({ title: t('item_update_success', 1) });
 	}
 
 	router.push(`/settings/data-model`);

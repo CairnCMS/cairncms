@@ -7,7 +7,7 @@
 		</template>
 	</v-info>
 
-	<div v-else class="private-view" :class="{ theme, 'full-screen': fullScreen }">
+	<div v-else class="private-view" :class="{ theme, 'full-screen': fullScreen, 'split-view': splitView }">
 		<aside
 			id="navigation"
 			role="navigation"
@@ -32,8 +32,8 @@
 		</aside>
 		<div id="main-content" ref="contentEl" class="content">
 			<header-bar
-				:small="smallHeader"
-				:shadow="headerShadow"
+				:small="smallHeader || splitView"
+				:shadow="headerShadow || splitView"
 				show-sidebar-toggle
 				:title="title"
 				@toggle:sidebar="sidebarOpen = !sidebarOpen"
@@ -44,9 +44,24 @@
 				</template>
 			</header-bar>
 
-			<main>
-				<slot />
-			</main>
+			<div class="content-wrapper">
+				<v-resizeable
+					v-model:width="mainWidth"
+					:min-width="SIZES.minContentWidth"
+					:max-width="maxWidthMain"
+					:disabled="!splitView"
+					:options="mainResizeOptions"
+					@dragging="(value: boolean) => (isDraggingMain = value)"
+				>
+					<main v-show="showMain" ref="mainEl">
+						<slot />
+					</main>
+				</v-resizeable>
+
+				<div v-if="splitView" id="split-content" :class="{ 'is-dragging': isDraggingMain }">
+					<slot name="splitView" />
+				</div>
+			</div>
 		</div>
 		<aside
 			id="sidebar"
@@ -78,14 +93,16 @@
 </template>
 
 <script lang="ts" setup>
-import { useElementSize } from '@cairncms/composables';
+import VResizeable, { type ResizeableOptions } from '@/components/v-resizeable.vue';
+import { useElementSize, useSync } from '@cairncms/composables';
 import { useLocalStorage } from '@/composables/use-local-storage';
 import { useTitle } from '@/composables/use-title';
 import { useWindowSize } from '@/composables/use-window-size';
 import { useAppStore } from '@/stores/app';
 import { useUserStore } from '@/stores/user';
+import { debounce } from 'lodash';
 import { storeToRefs } from 'pinia';
-import { computed, provide, ref, toRefs, watch } from 'vue';
+import { computed, nextTick, provide, ref, toRefs, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import HeaderBar from './components/header-bar.vue';
@@ -97,11 +114,20 @@ import NotificationsPreview from './components/notifications-preview.vue';
 import ProjectInfo from './components/project-info.vue';
 import SidebarDetailGroup from './components/sidebar-detail-group.vue';
 
+const SIZES = {
+	moduleBarWidth: 60,
+	minModuleNavWidth: 220,
+	minContentWidth: 590,
+	collapsedSidebarWidth: 60,
+} as const;
+
 interface Props {
 	title?: string | null;
 	smallHeader?: boolean;
 	headerShadow?: boolean;
 	sidebarShadow?: boolean;
+	splitView?: boolean;
+	splitViewMinWidth?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -109,23 +135,105 @@ const props = withDefaults(defineProps<Props>(), {
 	smallHeader: false,
 	headerShadow: true,
 	sidebarShadow: false,
+	splitView: false,
+	splitViewMinWidth: 0,
 });
+
+const emit = defineEmits(['update:splitView']);
 
 const { t } = useI18n();
 
 const router = useRouter();
 
-const contentEl = ref<Element>();
+const splitViewWritable = useSync(props, 'splitView', emit);
+
+const contentEl = ref<HTMLElement>();
 const sidebarEl = ref<Element>();
 const { width: windowWidth } = useWindowSize();
 const { width: contentWidth } = useElementSize(contentEl);
 const { width: sidebarWidth } = useElementSize(sidebarEl);
 
 const { data: localStorageModuleNavWidth } = useLocalStorage('module-nav-width');
-const moduleNavMinWidth = 220;
+const moduleNavMinWidth = SIZES.minModuleNavWidth;
 const moduleNavMaxWidth = ref();
 const moduleNavWidth = ref(localStorageModuleNavWidth.value);
 const moduleNavCurrentWidth = ref();
+
+const showMain = computed(() => {
+	if (!splitViewWritable.value) return true;
+
+	let remainingWidth;
+
+	if (windowWidth.value >= 1260) {
+		remainingWidth =
+			windowWidth.value - SIZES.moduleBarWidth - SIZES.minModuleNavWidth - SIZES.minContentWidth - sidebarWidth.value;
+	} else if (windowWidth.value >= 960) {
+		remainingWidth =
+			windowWidth.value -
+			SIZES.moduleBarWidth -
+			SIZES.minModuleNavWidth -
+			SIZES.minContentWidth -
+			SIZES.collapsedSidebarWidth;
+	} else {
+		remainingWidth = windowWidth.value - SIZES.minContentWidth;
+	}
+
+	return remainingWidth >= props.splitViewMinWidth;
+});
+
+const { data: localStorageMainWidth } = useLocalStorage('main-content-width');
+const mainWidth = ref(getWidth(localStorageMainWidth.value, SIZES.minContentWidth));
+
+watch(
+	mainWidth,
+	debounce((value: number) => {
+		localStorageMainWidth.value = value;
+	}, 300)
+);
+
+const maxWidthMain = computed(() => {
+	const splitViewMinWidth = splitViewWritable.value ? props.splitViewMinWidth : 0;
+	const navWidth = getWidth(moduleNavCurrentWidth.value ?? moduleNavWidth.value, SIZES.minModuleNavWidth);
+
+	let maxWidth;
+
+	if (windowWidth.value >= 1260) {
+		maxWidth = windowWidth.value - SIZES.moduleBarWidth - navWidth - splitViewMinWidth - sidebarWidth.value;
+	} else if (windowWidth.value >= 960) {
+		maxWidth = windowWidth.value - SIZES.moduleBarWidth - navWidth - splitViewMinWidth - SIZES.collapsedSidebarWidth;
+	} else {
+		maxWidth = windowWidth.value - splitViewMinWidth;
+	}
+
+	return Math.max(maxWidth, SIZES.minContentWidth);
+});
+
+const isDraggingMain = ref(false);
+
+const mainResizeOptions = computed<ResizeableOptions>(() => {
+	return {
+		snapZones: [
+			{ width: 40, snapPos: SIZES.minContentWidth, direction: 'left' },
+			{ width: 40, snapPos: maxWidthMain.value, direction: 'right' },
+		],
+		alwaysShowHandle: true,
+	};
+});
+
+const mainEl = ref<HTMLElement>();
+
+// Pre-flush: the outgoing scroll container must be read before the DOM swap.
+watch(splitViewWritable, async (splitView) => {
+	const scrollTop = (splitView ? contentEl.value?.scrollTop : mainEl.value?.scrollTop) ?? 0;
+
+	await nextTick();
+
+	if (splitView) {
+		if (mainEl.value) mainEl.value.scrollTop = scrollTop;
+	} else if (contentEl.value) {
+		contentEl.value.scrollTop = scrollTop;
+	}
+});
 
 const { title } = toRefs(props);
 const navOpen = ref(false);
@@ -189,6 +297,13 @@ function openSidebar(event: PointerEvent) {
 	if (event.target && (event.target as HTMLElement).classList.contains('close') === false) {
 		sidebarOpen.value = true;
 	}
+}
+
+function getWidth(input: unknown, fallback: number): number {
+	if (!input) return fallback;
+
+	const value = Number(input);
+	return Number.isFinite(value) ? value : fallback;
 }
 </script>
 
@@ -292,6 +407,10 @@ function openSidebar(event: PointerEvent) {
 			display: contents;
 		}
 
+		.content-wrapper {
+			display: contents;
+		}
+
 		/* Offset for partially visible sidebar */
 		@media (min-width: 960px) {
 			margin-right: 3.75rem;
@@ -299,6 +418,32 @@ function openSidebar(event: PointerEvent) {
 
 		@media (min-width: 1260px) {
 			margin-right: 0;
+		}
+	}
+
+	&.split-view #main-content {
+		overflow: hidden;
+
+		.content-wrapper {
+			display: flex;
+			height: calc(100% - var(--layout-offset-top));
+
+			main {
+				display: block;
+				flex-grow: 0;
+				max-height: 100%;
+				overflow: auto;
+			}
+
+			#split-content {
+				flex-grow: 1;
+				height: 100%;
+				overflow: auto;
+
+				&.is-dragging {
+					pointer-events: none;
+				}
+			}
 		}
 	}
 

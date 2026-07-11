@@ -684,6 +684,62 @@ describe('ExtensionSettingDeclaration', () => {
 		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', presentation: { label: 'X' } }).success).toBe(false);
 	});
 
+	it('accepts an allowlisted presentation interface on a collection-scoped string', () => {
+		expect(
+			ExtensionSettingDeclaration.safeParse({
+				type: 'string',
+				scope: 'collection',
+				presentation: { interface: 'system-display-template' },
+			}).success
+		).toBe(true);
+	});
+
+	it('rejects a presentation interface outside the allowlist', () => {
+		expect(
+			ExtensionSettingDeclaration.safeParse({
+				type: 'string',
+				scope: 'collection',
+				presentation: { interface: 'input-code' },
+			}).success
+		).toBe(false);
+	});
+
+	it('rejects a presentation interface on a global scope, a non-string type, and a secret', () => {
+		expect(
+			ExtensionSettingDeclaration.safeParse({
+				type: 'string',
+				presentation: { interface: 'system-display-template' },
+			}).success
+		).toBe(false);
+
+		expect(
+			ExtensionSettingDeclaration.safeParse({
+				type: 'number',
+				scope: 'collection',
+				presentation: { interface: 'system-display-template' },
+			}).success
+		).toBe(false);
+
+		expect(
+			ExtensionSettingDeclaration.safeParse({
+				type: 'string',
+				scope: 'collection',
+				secret: { source: 'inline' },
+				presentation: { interface: 'system-display-template' },
+			}).success
+		).toBe(false);
+	});
+
+	it('rejects a presentation options key until it is supported', () => {
+		expect(
+			ExtensionSettingDeclaration.safeParse({
+				type: 'string',
+				scope: 'collection',
+				presentation: { interface: 'system-display-template', options: {} },
+			}).success
+		).toBe(false);
+	});
+
 	it('accepts a secret declaration and defaults its source to inline', () => {
 		expect(ExtensionSettingDeclaration.parse({ type: 'string', secret: {} })).toMatchObject({
 			secret: { source: 'inline' },
