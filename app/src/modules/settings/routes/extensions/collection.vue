@@ -87,7 +87,9 @@
 						{{ t('extension_sandboxed') }}
 					</v-chip>
 					<v-chip v-if="extension.version" class="version" small label>{{ extension.version }}</v-chip>
-					<extension-options v-if="extension.settings" @open-settings="settingsTarget = extension" />
+					<span class="options-slot">
+						<extension-options v-if="hasGlobalSettings(extension)" @open-settings="settingsTarget = extension" />
+					</span>
 				</v-list-item>
 			</v-detail>
 
@@ -405,13 +407,34 @@ async function fetchExtensions() {
 
 		confinedRuntime.value = response.data.meta?.confinedRuntime ?? null;
 
-		loadOwnerDeclarations().catch(() => undefined);
+		loadOwnerDeclarations()
+			.then((declarations) => {
+				ownerDeclarations.value = declarations;
+				ownersLoadFailed.value = false;
+			})
+			.catch(() => {
+				ownersLoadFailed.value = true;
+			});
 	} catch (err: any) {
 		error.value = t('extensions_load_failed');
 		unexpectedError(err);
 	} finally {
 		loading.value = false;
 	}
+}
+
+const ownerDeclarations = ref<Record<string, Record<string, unknown>> | null>(null);
+const ownersLoadFailed = ref(false);
+
+function hasGlobalSettings(extension: { name: string; settings?: unknown }): boolean {
+	// When the owners load failed, the diagnostics signal gates instead, and opening
+	// the drawer retries the load.
+	if (ownerDeclarations.value === null) return ownersLoadFailed.value && extension.settings !== undefined;
+
+	const declaration = ownerDeclarations.value[extension.name];
+	if (!declaration) return false;
+
+	return Object.values(declaration).some((decl) => ((decl as { scope?: string })?.scope ?? 'global') === 'global');
 }
 
 let ownerDeclarationsRequest: Promise<Record<string, Record<string, unknown>>> | null = null;
@@ -517,6 +540,14 @@ async function resolveDeclaration(subject: string): Promise<Record<string, unkno
 	--v-chip-color: var(--primary);
 }
 
+.options-slot {
+	display: inline-flex;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 1.5rem;
+	margin-left: 0.75rem;
+}
+
 .detail-meta {
 	display: flex;
 	align-items: center;
@@ -534,6 +565,10 @@ async function resolveDeclaration(subject: string): Promise<Record<string, unkno
 	margin-bottom: 0;
 }
 
+.detail-runtime-value {
+	font-size: 0.8125rem;
+}
+
 .detail-entries {
 	margin-top: 1.25rem;
 }
@@ -549,6 +584,14 @@ async function resolveDeclaration(subject: string): Promise<Record<string, unkno
 	flex-direction: column;
 	gap: 0.625rem;
 	margin-bottom: 1.5rem;
+}
+
+.entry-head :deep(.wrapper) {
+	align-items: center;
+}
+
+.entry-head :deep(.wrapper .v-icon) {
+	transform: none;
 }
 
 .entry-head :deep(.type-text) {
