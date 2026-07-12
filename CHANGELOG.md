@@ -2,6 +2,40 @@
 
 All notable changes to CairnCMS are documented in this file. Releases are listed in reverse chronological order. Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-07-12
+
+### Breaking Changes
+
+- Remove host Node and OS details from `/server/info` (REST and GraphQL). Admin callers no longer receive the `node` and `os` blocks, and GraphQL queries for those fields now error. The product version is still available to admins as `cairncms.version`. If your tooling read host metrics from this endpoint, source them from your host or infrastructure layer instead. (#136)
+- Store replacement file bytes under a fresh `filename_disk` (`<id>-<nonce><ext>`) while new uploads keep the initial `<id><ext>` name. This lets failed replacements preserve the existing row and bytes. Tooling that constructs storage object names from file IDs should read the current `filename_disk` from `/files/<id>` or serve bytes through `/assets/<id>` instead. (#137)
+
+### New Features
+
+- Add expand/collapse for collection items in the data model. (#135)
+- Add `FILES_MAX_UPLOAD_SIZE` and `FILES_MIME_TYPE_ALLOW_LIST` upload limits. (#137)
+- Add declared extension settings and their management surface. (#134)
+- Add the item-view extension type for split panes in the item editor. (#147)
+
+### Fixes & Improvements
+
+- Declare axios as a runtime dependency of the composables package. (#129)
+- Localize the empty-text fallback in the presentation-notice interface. (#131)
+- Fix the metric panel's abbreviate-value option defaulting to on. (#132)
+- Improve custom options-component detection for setup-based Vue components. (#133)
+- Harden file upload and replacement failure handling. (#137)
+- Markdown headings rendered in the app no longer get generated DOM IDs. (#138)
+- Translate field names in the collection folder dialog. (#139)
+- Bump @sindresorhus/slugify to 2.2.1. (#140)
+- Optimize countDistinct aggregation on primary key fields. (#141)
+- Segment the response cache key by authorization context. (#144)
+- Deny the IPv6 unspecified address in outbound-request IP validation. (#145)
+- Bump form-data to 4.0.6, 3.0.5, and 2.5.6. (#146)
+- Bump vite to 6.4.3. (#148)
+- Bump undici to 6.27.0. (#149)
+- Bump nodemailer to 9.0.1. (#150)
+- Override tmp@0.0.33 to 0.2.7. (#151)
+- Polish the extensions page detail dialog and settings menu. (#152)
+
 ## [1.2.0] - 2026-06-18
 
 ### Breaking Changes
