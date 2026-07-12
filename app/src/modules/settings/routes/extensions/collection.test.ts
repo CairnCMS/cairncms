@@ -270,16 +270,40 @@ describe('Settings Extensions collection', () => {
 		expect(wrapper.html()).not.toContain('CAIRNCMS_EXT_');
 	});
 
-	it('renders the settings menu only on settings-owning rows and opens the drawer', async () => {
+	it('renders the settings menu only on rows with global keys and opens the drawer', async () => {
 		const owner = { ...loadedHook, settings: { status: 'available' } };
 
-		vi.mocked(api.get).mockResolvedValue({ data: { data: [owner, discoveredInterface] } });
+		const collectionOnly = {
+			...discoveredInterface,
+			name: 'cairn-fixture-collection-only',
+			settings: { status: 'available' },
+		};
+
+		vi.mocked(api.get).mockImplementation(async (path: string) => {
+			if (path === '/extension-settings/owners') {
+				return {
+					data: {
+						data: [
+							{ subject: 'cairn-fixture-hook', status: 'available', declaration: { theme: { type: 'string' } } },
+							{
+								subject: 'cairn-fixture-collection-only',
+								status: 'available',
+								declaration: { preview_url: { type: 'string', scope: 'collection' } },
+							},
+						],
+					},
+				} as any;
+			}
+
+			return { data: { data: [owner, collectionOnly, discoveredInterface] } } as any;
+		});
 
 		const wrapper = mountCollection();
 		await flushPromises();
 
 		const ownerRow = rowFor(wrapper, 'cairn-fixture-hook')!;
 		expect(ownerRow.find('.ctx-toggle').exists()).toBe(true);
+		expect(rowFor(wrapper, 'cairn-fixture-collection-only')!.find('.ctx-toggle').exists()).toBe(false);
 		expect(rowFor(wrapper, 'cairn-fixture-interface')!.find('.ctx-toggle').exists()).toBe(false);
 
 		expect(wrapper.findComponent({ name: 'extension-settings-drawer' }).exists()).toBe(false);
@@ -290,6 +314,21 @@ describe('Settings Extensions collection', () => {
 		const drawer = wrapper.findComponent({ name: 'extension-settings-drawer' });
 		expect(drawer.exists()).toBe(true);
 		expect(drawer.props('subject')).toBe('cairn-fixture-hook');
+	});
+
+	it('falls back to the diagnostics signal when the owners load fails', async () => {
+		const owner = { ...loadedHook, settings: { status: 'available' } };
+
+		vi.mocked(api.get).mockImplementation(async (path: string) => {
+			if (path === '/extension-settings/owners') throw new Error('offline');
+			return { data: { data: [owner, discoveredInterface] } } as any;
+		});
+
+		const wrapper = mountCollection();
+		await flushPromises();
+
+		expect(rowFor(wrapper, 'cairn-fixture-hook')!.find('.ctx-toggle').exists()).toBe(true);
+		expect(rowFor(wrapper, 'cairn-fixture-interface')!.find('.ctx-toggle').exists()).toBe(false);
 	});
 
 	it('renders the OS hardening posture inside the advanced diagnostics section', async () => {
@@ -391,7 +430,7 @@ describe('Settings Extensions collection', () => {
 			await nextTick();
 
 			const notice = wrapper.find('.v-dialog .v-notice[data-type="success"]');
-			expect(notice.text()).toContain('reports discovery rather than a load');
+			expect(notice.text()).toContain('Discovered on this instance.');
 		});
 
 		it('shows the failure reason in a danger notice for a failed extension', async () => {

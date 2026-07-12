@@ -1031,7 +1031,7 @@ confined_runtime: Sandbox
 confined_runtime_mode: 'OS hardening: {decision} ({mode})'
 confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
 extension_status_loaded_detail: Loaded and running on the server.
-extension_status_discovered_detail: Discovered on this instance. App extensions run in the browser, so the server reports discovery rather than a load.
+extension_status_discovered_detail: Discovered on this instance.
 extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
 extension_status_failed_detail: The extension failed to load on this instance.
 extension_settings_unavailable_detail: Extension settings are unavailable.
