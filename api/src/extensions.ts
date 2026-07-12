@@ -1,73 +1,64 @@
 import {
 	APP_EXTENSION_TYPES,
-	APP_SHARED_DEPS,
 	CONFINED_RUNTIME,
-	hasSafeEventSegments,
 	HYBRID_EXTENSION_TYPES,
 	JAVASCRIPT_FILE_EXTS,
 	NESTED_EXTENSION_TYPES,
 } from '@cairncms/constants';
-import * as sharedExceptions from '@cairncms/exceptions';
 import type {
-	Accountability,
-	ActionHandler,
 	ApiExtension,
 	BundleExtension,
-	ConfinedHookEvents,
-	ConfinedOptionDelivery,
-	ExtensionCapabilities,
-	EmbedHandler,
 	EndpointConfig,
 	Extension,
 	ExtensionInfo,
+	ExtensionSettings,
 	ExtensionType,
-	FilterHandler,
 	HookConfig,
 	HybridExtension,
-	InitHandler,
 	NestedExtensionType,
 	OperationApiConfig,
-	ScheduleHandler,
 } from '@cairncms/types';
 import { isIn, isTypeIn, pluralize } from '@cairncms/utils';
 import {
 	ensureExtensionDirs,
 	type ExtensionDiscoveryFailure,
-	generateExtensionsEntrypoint,
 	getLocalExtensions,
 	getPackageExtensions,
 	pathToRelativeUrl,
-	resolvePackage,
 	resolvePackageExtensions,
 } from '@cairncms/utils/node';
-import aliasDefault from '@rollup/plugin-alias';
-import nodeResolveDefault from '@rollup/plugin-node-resolve';
-import virtualDefault from '@rollup/plugin-virtual';
 import chokidar, { FSWatcher } from 'chokidar';
-import express, { Router } from 'express';
-import { clone, debounce, escapeRegExp } from 'lodash-es';
-import { schedule, validate } from 'node-cron';
+import { Router } from 'express';
+import { clone, debounce } from 'lodash-es';
 import { readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import path from 'path';
-import { rollup, type OutputChunk } from 'rollup';
 import getDatabase from './database/index.js';
 import emitter, { Emitter } from './emitter.js';
 import env from './env.js';
-import * as exceptions from './exceptions/index.js';
-import { getFlowManager, type ConfinedOperationDescriptor } from './flows.js';
-import { runConfinedOperation, type ConfinedOperationRequest } from './extensions/confined/operation.js';
-import { runConfinedEndpoint, type ConfinedEndpointRequest } from './extensions/confined/endpoint.js';
-import { runConfinedActionHook, runConfinedFilterHook, type ConfinedHookRequest } from './extensions/confined/hook.js';
-import type { ConfinedLogEntry } from './extensions/confined/broker.js';
-import type { ConfinedHostDispatcher, ConfinedInvocation } from './extensions/confined/types.js';
-import { confinedItemsService } from './extensions/confined/items-service.js';
+import { getFlowManager } from './flows.js';
+import { buildAppExtensionBundle } from './extensions/app-bundle.js';
+import { ConfinedRegistrar } from './extensions/confined/registration.js';
+import * as diagnosticsLog from './extensions/diagnostics.js';
+import type {
+	ConfinedRuntimeMeta,
+	DiagnosticsView,
+	ExtensionDiagnostic,
+	ExtensionDiagnosticEntry,
+} from './extensions/diagnostics.js';
+import { buildExtensionSettingsReader } from './extensions/extension-settings-reader.js';
+import {
+	registerEndpoint as registerFullAuthorityEndpoint,
+	registerHook as registerFullAuthorityHook,
+	registerOperation as registerFullAuthorityOperation,
+	type FullAuthorityRegistrationDeps,
+} from './extensions/full-authority-registration.js';
+import { readCollectionSettings, readGlobalSettings } from './services/extension-settings-store.js';
+import { clearOperationOptionSecrets } from './services/operation-option-secrets.js';
 import type { SandboxConfig } from './extensions/confined/sandbox-limits.js';
-import { getAxios } from './request/index.js';
 import logger from './logger.js';
-import * as services from './services/index.js';
 import type { EventHandler } from './types/index.js';
 import {
 	gateConfinedExtension,
@@ -76,20 +67,13 @@ import {
 	type ConfinedGateVerdict,
 	type ConfinedLoadGateDeps,
 } from './extensions/confined/load-gate.js';
+import { resolveSettingsSubjects, safeExtensionName } from './extensions/settings-subjects.js';
 import { resolveConfinedRuntime, type ConfinedSupervisor } from './extensions/confined/supervisor.js';
 import { describePosture, type SandboxPosture } from './extensions/confined/sandbox-hardening.js';
 import getModuleDefault from './utils/get-module-default.js';
 import { filterServerExtensions } from './utils/filter-server-extensions.js';
 import { sanitizeExtensionError, type SanitizedExtensionError } from './utils/sanitize-extension-error.js';
-import { getSchema } from './utils/get-schema.js';
 import { JobQueue } from './utils/job-queue.js';
-import { Url } from './utils/url.js';
-
-// Rollup plugins ship with CJS-style `default` exports but are typed as the module itself;
-// these casts unwrap to the real functions.
-const virtual = virtualDefault as unknown as typeof virtualDefault.default;
-const alias = aliasDefault as unknown as typeof aliasDefault.default;
-const nodeResolve = nodeResolveDefault as unknown as typeof nodeResolveDefault.default;
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -112,49 +96,15 @@ type BundleConfig = {
 	operations: { name: string; config: OperationApiConfig }[];
 };
 
-// A confined bundle's server entries register independently, so each carries its own
-// status and reason. An app entry, or an inherited bundle's entry, has no per-entry
-// status.
-type ExtensionDiagnosticEntry = {
-	name: string;
-	type: string;
-	status?: 'loaded' | 'failed';
+// One settings-declaring owner for the management surface. `subject` is the validated raw
+// package name, present only for an available owner, and `declaration` likewise, so an
+// ineligible owner exposes nothing beyond its sanitized name and reason.
+export type SettingsOwner = {
+	subject?: string;
+	displaySubject: string;
+	status: 'available' | 'unavailable';
 	reason?: SanitizedExtensionError;
-	capabilities?: ExtensionCapabilities;
-};
-
-type ExtensionDiagnostic = {
-	name: string;
-	type: ExtensionType | null;
-	local: boolean;
-	version?: string;
-	entries?: ExtensionDiagnosticEntry[];
-	// `partial` is a confined bundle whose server entries did not all register the same
-	// way: some loaded, some failed.
-	status: 'loaded' | 'failed' | 'discovered' | 'partial';
-	reason?: SanitizedExtensionError;
-	// A confined top-level extension carries its gate-validated declared capabilities here.
-	// A confined bundle carries them per entry instead, so the bundle row has none.
-	capabilities?: ExtensionCapabilities;
-	// Set to the confined runtime only when the extension runs sandboxed, omitted otherwise.
-	runtime?: typeof CONFINED_RUNTIME;
-};
-
-// The global confined-runtime metadata on the diagnostics response. `not-required` means no
-// confined extension this load (the sandbox env is never resolved), `available` carries the
-// resolved posture, `unavailable` means a confined extension was present but the runtime did
-// not resolve.
-type ConfinedPostureSummary = {
-	mode: SandboxPosture['mode'];
-	decision: SandboxPosture['decision'];
-	applied: SandboxPosture['applied'];
-	missing: SandboxPosture['missing'];
-	cgroupMechanic: SandboxPosture['cgroupMechanic'];
-};
-
-type ConfinedRuntimeMeta = {
-	state: 'not-required' | 'available' | 'unavailable';
-	posture: ConfinedPostureSummary | null;
+	declaration?: ExtensionSettings;
 };
 
 type AppExtensions = string | null;
@@ -176,27 +126,8 @@ const RELOAD_DEBOUNCE_MS = 250;
 // The per-contribution facts a confined runner binding needs, identical for a
 // top-level extension and one server entry of a bundle. A bundle entry adds the
 // `type:name` key so the engine selects it from the shared CairnBundle artifact.
-type ConfinedBinding = {
-	extensionId: string;
-	contributionId: string;
-	entrySource: string;
-	capabilities: ExtensionCapabilities;
-	bundleEntryKey?: string;
-};
 
-// The literal route grammar a confined endpoint name must fit before it becomes an
-// Express mount: a lowercase npm-style name, optionally scoped, with no pattern
-// metacharacters (:, *, ?, +, parentheses) and no case variants.
-const CONFINED_ENDPOINT_ROUTE = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
-
-// Matches an app shared-dependency entry chunk by name, e.g. "vue" ->
-// "vue.ev7YwI6S.entry.js". The hash is Vite's URL-safe [hash], base64url with
-// mixed case plus - and _, not lowercase hex, so the charset must allow
-// [A-Za-z0-9_-] or no shared dep ever resolves and the app bundler re-bundles them.
-export function findSharedDepAsset(dep: string, assetFiles: string[]): string | undefined {
-	const depRegex = new RegExp(`^${escapeRegExp(dep.replace(/\//g, '_'))}\\.[A-Za-z0-9_-]+\\.entry\\.js$`);
-	return assetFiles.find((file) => depRegex.test(file));
-}
+export { findSharedDepAsset } from './extensions/app-bundle.js';
 
 export class ExtensionManager {
 	private isLoaded = false;
@@ -214,6 +145,24 @@ export class ExtensionManager {
 	// recomputed on every load, never persisted, and carrying no public diagnostic
 	// row until registration.
 	private confinedEligible = new Map<Extension, ConfinedEligibleEntry>();
+
+	private settingsEligible = new Set<Extension>();
+
+	// The public, variable-free reason per ineligible owner, what the diagnostics field
+	// and the owners endpoint publish. The variable-bearing collision detail is log-only.
+	private settingsIneligible = new Map<Extension, SanitizedExtensionError>();
+
+	// Every discovered settings-declaring owner in discovery order, whatever its
+	// eligibility and whether or not this instance serves it.
+	private settingsOwners: Extension[] = [];
+
+	// Every discovered app extension, for the diagnostics listing. Serving and bundling
+	// stay on the SERVE_APP-filtered set; the listing is topology-complete.
+	private discoveredAppExtensions: Extension[] = [];
+
+	// Every discovered owner's declaration by subject, eligibility-independent, so the
+	// admin read's secret masking cannot weaken when an owner is gated ineligible.
+	private declaredSettingsBySubject = new Map<string, ExtensionSettings[]>();
 
 	// Test seam for the gate's scanner, probe, and limits dependencies. Overrides
 	// the production-resolved deps below, so a test can drive the gate directly.
@@ -256,7 +205,7 @@ export class ExtensionManager {
 	// inherited operations, so a duplicate or inherited collision fails every
 	// contributor at registration rather than one being recorded loaded and then
 	// turned ambiguous by a later one. Keyed id to the sanitized failure reason.
-	private confinedOperationBlocks = new Map<string, SanitizedExtensionError>();
+	private confinedRegistrar: ConfinedRegistrar;
 	private hookEmbedsHead: string[] = [];
 	private hookEmbedsBody: string[] = [];
 
@@ -275,6 +224,18 @@ export class ExtensionManager {
 		this.reloadQueue = new JobQueue();
 
 		this.appExtensionChunks = new Map();
+
+		this.confinedRegistrar = new ConfinedRegistrar({
+			runtime: () => this.confinedRuntime,
+			eligible: () => this.confinedEligible,
+			endpointRouter: () => this.endpointRouter,
+			registeredEndpointRoutes: () => this.registeredEndpointRoutes,
+			hookEvents: () => this.hookEvents,
+			getSettingsOwner: (subject) => this.getSettingsOwner(subject),
+			recordLoaded: (extension) => this.recordLoaded(extension),
+			recordFailed: (extension, reason) => this.recordFailed(extension, reason),
+			recordBundle: (extension, entries) => this.recordBundle(extension, entries),
+		});
 	}
 
 	public async initialize(options: Partial<Options> = {}): Promise<void> {
@@ -341,29 +302,65 @@ export class ExtensionManager {
 	}
 
 	public getDiagnostics(): ExtensionDiagnostic[] {
-		return this.diagnostics.map((diagnostic) => {
-			const copy: ExtensionDiagnostic = {
-				name: diagnostic.name,
-				type: diagnostic.type,
-				local: diagnostic.local,
-				status: diagnostic.status,
-			};
+		return diagnosticsLog.copyDiagnostics(this.diagnostics);
+	}
 
-			if (diagnostic.version) copy.version = diagnostic.version;
+	private diagnosticsView(): DiagnosticsView {
+		return {
+			diagnostics: this.diagnostics,
+			capabilitiesOf: (extension) => this.confinedEligible.get(extension)?.capabilities,
+			settingsStatusOf: (extension) => {
+				if (extension.settings === undefined) return undefined;
+				if (this.settingsEligible.has(extension)) return { status: 'available' };
 
-			if (diagnostic.entries) {
-				copy.entries = diagnostic.entries.map((entry) => ({
-					...entry,
-					...(entry.reason && { reason: { ...entry.reason } }),
-					...(entry.capabilities && { capabilities: structuredClone(entry.capabilities) }),
-				}));
+				const reason = this.settingsIneligible.get(extension);
+				return reason !== undefined ? { status: 'unavailable', reason } : undefined;
+			},
+		};
+	}
+
+	public isSettingsEligible(extension: Extension): boolean {
+		return this.settingsEligible.has(extension);
+	}
+
+	public getSettingsOwner(subject: string): Extension | undefined {
+		for (const extension of this.settingsEligible) {
+			if (extension.name === subject) return extension;
+		}
+
+		return undefined;
+	}
+
+	/**
+	 * Every discovered declaration for a subject, whatever its eligibility, duplicates
+	 * included. Concealment consumers mask from this set so a stored secret under a
+	 * gated-ineligible owner never reads back in cleartext. Function-granting paths
+	 * (writes, confined reads) stay on the eligibility-gated owner.
+	 */
+	public getDeclaredSettings(subject: string): ExtensionSettings[] {
+		return this.declaredSettingsBySubject.get(subject) ?? [];
+	}
+
+	public getSettingsOwners(): SettingsOwner[] {
+		return this.settingsOwners.map((extension) => {
+			const displaySubject = safeExtensionName(extension.name);
+
+			if (this.settingsEligible.has(extension)) {
+				return {
+					subject: extension.name,
+					displaySubject,
+					status: 'available' as const,
+					declaration: structuredClone(extension.settings!),
+				};
 			}
 
-			if (diagnostic.reason) copy.reason = { ...diagnostic.reason };
-			if (diagnostic.capabilities) copy.capabilities = structuredClone(diagnostic.capabilities);
-			if (diagnostic.runtime) copy.runtime = diagnostic.runtime;
+			const reason = this.settingsIneligible.get(extension);
 
-			return copy;
+			return {
+				displaySubject,
+				status: 'unavailable' as const,
+				...(reason && { reason: { ...reason } }),
+			};
 		});
 	}
 
@@ -373,110 +370,20 @@ export class ExtensionManager {
 	 * extension) stays `not-required` and never touches the sandbox env.
 	 */
 	public getConfinedRuntimeMeta(): ConfinedRuntimeMeta {
-		if (this.confinedRuntime !== undefined && this.confinedRuntimePosture !== undefined) {
-			const posture = this.confinedRuntimePosture;
-
-			return {
-				state: 'available',
-				posture: {
-					mode: posture.mode,
-					decision: posture.decision,
-					applied: [...posture.applied],
-					missing: [...posture.missing],
-					cgroupMechanic: posture.cgroupMechanic,
-				},
-			};
-		}
-
-		if (this.confinedRuntimeUnavailable) return { state: 'unavailable', posture: null };
-
-		return { state: 'not-required', posture: null };
+		const posture = this.confinedRuntime !== undefined ? this.confinedRuntimePosture : undefined;
+		return diagnosticsLog.summarizeConfinedRuntime(posture, this.confinedRuntimeUnavailable);
 	}
 
 	private logExtensionStatus(): void {
-		const loaded = this.diagnostics.filter((diagnostic) => diagnostic.status === 'loaded');
-
-		if (loaded.length > 0) {
-			logger.info(`Loaded extensions: ${loaded.map((diagnostic) => diagnostic.name).join(', ')}`);
-		}
-
-		const discovered = this.diagnostics.filter((diagnostic) => diagnostic.status === 'discovered');
-
-		if (discovered.length > 0) {
-			logger.info(`Discovered app extensions: ${discovered.map((diagnostic) => diagnostic.name).join(', ')}`);
-		}
-
-		const failed = this.diagnostics.filter((diagnostic) => diagnostic.status === 'failed');
-
-		if (failed.length > 0) {
-			logger.warn(
-				`Failed to load extensions: ${failed
-					.map((diagnostic) => `${diagnostic.name} (${diagnostic.reason?.code ?? 'UNKNOWN'})`)
-					.join(', ')}`
-			);
-		}
-
-		const partial = this.diagnostics.filter((diagnostic) => diagnostic.status === 'partial');
-
-		if (partial.length > 0) {
-			logger.warn(
-				`Partially loaded confined bundles: ${partial
-					.map((diagnostic) => {
-						const failedEntries = (diagnostic.entries ?? [])
-							.filter((entry) => entry.status === 'failed')
-							.map((entry) => `${entry.type}:${entry.name} (${entry.reason?.code ?? 'UNKNOWN'})`)
-							.join(', ');
-
-						return `${diagnostic.name} [${failedEntries}]`;
-					})
-					.join('; ')}`
-			);
-		}
+		diagnosticsLog.logExtensionStatus(this.diagnostics);
 	}
 
 	private recordLoaded(extension: Extension): void {
-		const diagnostic: ExtensionDiagnostic = {
-			name: extension.name,
-			type: extension.type,
-			local: extension.local,
-			status: 'loaded',
-		};
-
-		if (extension.version) diagnostic.version = extension.version;
-
-		if (extension.type === 'bundle') {
-			diagnostic.entries = extension.entries.map((entry) => ({ name: entry.name, type: entry.type }));
-		}
-
-		const eligible = this.confinedEligible.get(extension);
-		if (eligible?.capabilities !== undefined) diagnostic.capabilities = eligible.capabilities;
-
-		if (extension.runtime === CONFINED_RUNTIME) diagnostic.runtime = extension.runtime;
-
-		this.diagnostics.push(diagnostic);
+		diagnosticsLog.recordLoaded(this.diagnosticsView(), extension);
 	}
 
 	private recordFailed(extension: Extension, reason: SanitizedExtensionError): void {
-		const diagnostic: ExtensionDiagnostic = {
-			name: extension.name,
-			type: extension.type,
-			local: extension.local,
-			status: 'failed',
-			reason,
-		};
-
-		if (extension.version) diagnostic.version = extension.version;
-
-		if (extension.type === 'bundle') {
-			diagnostic.entries = extension.entries.map((entry) => ({ name: entry.name, type: entry.type }));
-		}
-
-		const eligible = this.confinedEligible.get(extension);
-		if (eligible?.capabilities !== undefined) diagnostic.capabilities = eligible.capabilities;
-
-		if (extension.runtime === CONFINED_RUNTIME) diagnostic.runtime = extension.runtime;
-
-		this.diagnostics.push(diagnostic);
+		diagnosticsLog.recordFailed(this.diagnosticsView(), extension, reason);
 	}
 
 	/**
@@ -563,610 +470,56 @@ export class ExtensionManager {
 	}
 
 	/**
-	 * Registers the eligible confined operations into the flow manager without
-	 * importing any server artifact. A contribution id declared by more than one
-	 * eligible operation is ambiguous: every one is failed in diagnostics and none is
-	 * registered, so an operator sees the conflict at load rather than at run.
+	 * Gates each settings owner's durable subject after confined gating, so any confined
+	 * capabilities it reads are already validated. A bad or colliding subject is refused
+	 * settings only, never failing the extension's load.
 	 */
+	private gateSettingsSubjects(discovered: Extension[]): void {
+		const statuses = resolveSettingsSubjects(discovered);
+
+		this.settingsEligible = new Set();
+		this.settingsIneligible = new Map();
+		this.settingsOwners = discovered.filter((extension) => extension.settings !== undefined);
+		this.declaredSettingsBySubject = new Map();
+
+		for (const extension of this.settingsOwners) {
+			const declarations = this.declaredSettingsBySubject.get(extension.name) ?? [];
+			declarations.push(extension.settings!);
+			this.declaredSettingsBySubject.set(extension.name, declarations);
+		}
+
+		for (const [extension, status] of statuses) {
+			if (status.eligible) {
+				this.settingsEligible.add(extension);
+			} else {
+				this.settingsIneligible.set(extension, status.reason);
+				logger.warn(`Settings disabled: ${status.logDetail ?? status.reason.detail}`);
+			}
+		}
+	}
+
 	private registerConfinedOperations(): void {
-		const runtime = this.confinedRuntime;
-		if (runtime === undefined) return;
-
-		const flowManager = getFlowManager();
-
-		// Computed once across every confined operation contributor and the inherited
-		// operations, before any descriptor is added, so a blocked id never records one
-		// contributor loaded and then turns it ambiguous when a later one collides.
-		this.confinedOperationBlocks = this.resolveConfinedOperationBlocks(flowManager);
-
-		const operations = [...this.confinedEligible].filter(([extension]) => extension.type === 'operation');
-
-		for (const [extension, eligible] of operations) {
-			const block = this.confinedOperationBlocks.get(extension.name);
-
-			if (block !== undefined) {
-				// Mark the id ambiguous so a flow referencing it, or its inherited
-				// namesake, takes the sanitized reject path and runs neither.
-				flowManager.markConfinedOperationAmbiguous(extension.name);
-				this.recordFailed(extension, block);
-				continue;
-			}
-
-			if (eligible.entrySource === undefined) {
-				this.recordFailed(extension, {
-					code: VALIDATION_INCOMPLETE,
-					detail: 'the confined operation entry is unavailable',
-				});
-
-				continue;
-			}
-
-			const binding: ConfinedBinding = {
-				extensionId: extension.name,
-				contributionId: extension.name,
-				entrySource: eligible.entrySource,
-				capabilities: eligible.capabilities ?? {},
-			};
-
-			flowManager.addConfinedOperation(
-				extension.name,
-				this.buildConfinedDescriptor(binding, eligible.optionDelivery, runtime)
-			);
-
-			this.recordLoaded(extension);
-		}
+		this.confinedRegistrar.registerOperations();
 	}
 
-	/**
-	 * Computes the confined operation ids that may not register this load. An id is
-	 * blocked when more than one confined contributor declares it (top-level
-	 * operations and bundle operation entries share the operation namespace) or when
-	 * it collides with an inherited operation, whether a built-in, a top-level
-	 * operation, or one contributed by an inherited bundle. A blocked id runs neither
-	 * contribution, so the duplicate reads ambiguous and the inherited collision reads
-	 * as a collision.
-	 */
-	private resolveConfinedOperationBlocks(
-		flowManager: ReturnType<typeof getFlowManager>
-	): Map<string, SanitizedExtensionError> {
-		const ids: string[] = [];
-
-		for (const [extension] of this.confinedEligible) {
-			if (extension.type === 'operation') {
-				ids.push(extension.name);
-			} else if (extension.type === 'bundle') {
-				for (const entry of extension.entries) {
-					if (entry.type === 'operation') ids.push(entry.name);
-				}
-			}
-		}
-
-		const counts = new Map<string, number>();
-		for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
-
-		const blocked = new Map<string, SanitizedExtensionError>();
-
-		for (const id of new Set(ids)) {
-			if (flowManager.hasOperation(id)) {
-				blocked.set(id, {
-					code: 'operation-collision',
-					detail: 'the operation id is declared by an inherited operation',
-				});
-			} else if ((counts.get(id) ?? 0) > 1) {
-				blocked.set(id, {
-					code: 'ambiguous-operation',
-					detail: 'a confined operation id is declared more than once',
-				});
-			}
-		}
-
-		return blocked;
-	}
-
-	private confinedRunnerDeps(runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig }) {
-		const { supervisor, config } = runtime;
-
-		return {
-			invoke: (invocation: ConfinedInvocation, dispatcher: ConfinedHostDispatcher) =>
-				supervisor.invoke(invocation, dispatcher),
-			log: (entry: ConfinedLogEntry) => this.logConfinedEntry(entry),
-			getAxios: () => getAxios(),
-			itemsService: confinedItemsService,
-			brokerLimits: {
-				settingsValueBytes: config.sandbox.settingsValueBytes,
-				httpResponseBytes: config.sandbox.httpResponseBytes,
-				itemsReplyBytes: config.sandbox.itemsReplyBytes,
-				templateOutputBytes: config.sandbox.templateOutputBytes,
-			},
-			runtimeLimits: config.runtime,
-		};
-	}
-
-	private buildConfinedDescriptor(
-		binding: ConfinedBinding,
-		optionDelivery: ConfinedOptionDelivery | undefined,
-		runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig }
-	): ConfinedOperationDescriptor {
-		const deps = this.confinedRunnerDeps(runtime);
-
-		return {
-			referenceKeys: Object.keys(optionDelivery ?? {}),
-			run: (params) => {
-				const request: ConfinedOperationRequest = {
-					extensionId: binding.extensionId,
-					contributionId: binding.contributionId,
-					operationId: params.operationId,
-					entrySource: binding.entrySource,
-					capabilities: binding.capabilities,
-					options: params.options,
-					input: params.input,
-					accountability: params.accountability,
-				};
-
-				if (binding.bundleEntryKey !== undefined) request.bundleEntryKey = binding.bundleEntryKey;
-				if (optionDelivery !== undefined) request.optionDelivery = optionDelivery;
-
-				return runConfinedOperation(request, deps);
-			},
-		};
-	}
-
-	/**
-	 * Registers the eligible confined endpoints onto the endpoint router without
-	 * importing any server artifact. A route already taken by an inherited endpoint
-	 * or declared by more than one confined endpoint fails closed in diagnostics,
-	 * and an endpoint without the declared endpoint capability never mounts.
-	 */
 	private registerConfinedEndpoints(): void {
-		const runtime = this.confinedRuntime;
-		if (runtime === undefined) return;
-
-		const endpoints = [...this.confinedEligible].filter(([extension]) => extension.type === 'endpoint');
-
-		const counts = new Map<string, number>();
-		for (const [extension] of endpoints) counts.set(extension.name, (counts.get(extension.name) ?? 0) + 1);
-
-		for (const [extension, eligible] of endpoints) {
-			// The name becomes an Express mount, which interprets pattern syntax and
-			// matches case-insensitively. Only a lowercase literal grammar mounts, so a
-			// name cannot smuggle a parameter or wildcard past the literal collision
-			// checks, and the grammar matches the canonical lowercase route key.
-			if (!CONFINED_ENDPOINT_ROUTE.test(extension.name)) {
-				this.recordFailed(extension, {
-					code: 'route-invalid',
-					detail: 'the confined endpoint route name is not a safe literal route',
-				});
-
-				continue;
-			}
-
-			if ((counts.get(extension.name) ?? 0) > 1) {
-				this.recordFailed(extension, {
-					code: 'ambiguous-endpoint',
-					detail: 'a confined endpoint route is declared more than once',
-				});
-
-				continue;
-			}
-
-			if (this.registeredEndpointRoutes.has(extension.name)) {
-				this.recordFailed(extension, {
-					code: 'route-collision',
-					detail: 'the confined endpoint route is already registered',
-				});
-
-				continue;
-			}
-
-			if (eligible.entrySource === undefined) {
-				this.recordFailed(extension, {
-					code: VALIDATION_INCOMPLETE,
-					detail: 'the confined endpoint entry is unavailable',
-				});
-
-				continue;
-			}
-
-			if (eligible.capabilities?.endpoint === undefined) {
-				this.recordFailed(extension, {
-					code: 'capability-missing',
-					detail: 'the endpoint capability is not declared',
-				});
-
-				continue;
-			}
-
-			const binding: ConfinedBinding = {
-				extensionId: extension.name,
-				contributionId: extension.name,
-				entrySource: eligible.entrySource,
-				capabilities: eligible.capabilities ?? {},
-			};
-
-			this.endpointRouter.use(`/${extension.name}`, this.buildConfinedEndpointHandler(binding, runtime));
-			this.registeredEndpointRoutes.add(extension.name);
-			this.recordLoaded(extension);
-		}
+		this.confinedRegistrar.registerEndpoints();
 	}
 
-	/**
-	 * Registers the eligible confined hooks onto the platform emitter without
-	 * importing any server artifact, subscribing exactly the manifest-declared
-	 * events the probe verified against the entry. A filter failure blocks the
-	 * platform action with a sanitized error, because a filter that cannot run
-	 * must not be silently skipped. An action failure logs and never blocks.
-	 */
 	private registerConfinedHooks(): void {
-		const runtime = this.confinedRuntime;
-		if (runtime === undefined) return;
-
-		const hooks = [...this.confinedEligible].filter(([extension]) => extension.type === 'hook');
-
-		const counts = new Map<string, number>();
-		for (const [extension] of hooks) counts.set(extension.name, (counts.get(extension.name) ?? 0) + 1);
-
-		for (const [extension, eligible] of hooks) {
-			if ((counts.get(extension.name) ?? 0) > 1) {
-				this.recordFailed(extension, {
-					code: 'ambiguous-hook',
-					detail: 'a confined hook id is declared more than once',
-				});
-
-				continue;
-			}
-
-			if (eligible.entrySource === undefined || eligible.events === undefined) {
-				this.recordFailed(extension, {
-					code: VALIDATION_INCOMPLETE,
-					detail: 'the confined hook entry is unavailable',
-				});
-
-				continue;
-			}
-
-			const declaredEvents = [...(eligible.events.filter ?? []), ...(eligible.events.action ?? [])];
-
-			// The manifest schema already refuses these, so this is defense in depth:
-			// a reserved-segment name reaching the emitter would pollute shared globals
-			// and alias unrelated events, so the whole hook fails before any subscription.
-			if (!declaredEvents.every(hasSafeEventSegments)) {
-				this.recordFailed(extension, {
-					code: 'event-invalid',
-					detail: 'a confined hook event name is not a safe literal event',
-				});
-
-				continue;
-			}
-
-			const binding: ConfinedBinding = {
-				extensionId: extension.name,
-				contributionId: extension.name,
-				entrySource: eligible.entrySource,
-				capabilities: eligible.capabilities ?? {},
-			};
-
-			this.subscribeConfinedHook(binding, eligible.events, runtime);
-			this.recordLoaded(extension);
-		}
+		this.confinedRegistrar.registerHooks();
 	}
 
-	/**
-	 * Subscribes one confined hook binding's manifest events onto the platform
-	 * emitter. A filter failure blocks the platform action with a sanitized error,
-	 * since a filter that cannot run must not be silently skipped. An action failure
-	 * logs and never blocks. Handlers join `hookEvents`, so unload unregisters them
-	 * the same way it does inherited hooks.
-	 */
-	private subscribeConfinedHook(
-		binding: ConfinedBinding,
-		events: ConfinedHookEvents,
-		runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig }
-	): void {
-		const deps = this.confinedRunnerDeps(runtime);
-
-		const baseRequest = (
-			event: string,
-			meta: Record<string, unknown>,
-			accountability: Accountability | null
-		): ConfinedHookRequest => {
-			const request: ConfinedHookRequest = {
-				extensionId: binding.extensionId,
-				contributionId: binding.contributionId,
-				entrySource: binding.entrySource,
-				capabilities: binding.capabilities,
-				event,
-				meta,
-				accountability,
-			};
-
-			if (binding.bundleEntryKey !== undefined) request.bundleEntryKey = binding.bundleEntryKey;
-
-			return request;
-		};
-
-		for (const event of events.filter ?? []) {
-			const handler: FilterHandler = async (payload, meta, context) => {
-				const result = await runConfinedFilterHook(
-					{ ...baseRequest(event, meta, context.accountability ?? null), payload },
-					deps
-				);
-
-				if (!result.ok) throw new Error(`the confined hook "${binding.contributionId}" failed`);
-
-				return result.unchanged ? undefined : result.payload;
-			};
-
-			emitter.onFilter(event, handler);
-			this.hookEvents.push({ type: 'filter', name: event, handler });
-		}
-
-		for (const event of events.action ?? []) {
-			const handler: ActionHandler = async (meta, context) => {
-				const result = await runConfinedActionHook(baseRequest(event, meta, context.accountability ?? null), deps);
-
-				if (!result.ok) {
-					logger.warn(`The confined hook "${binding.contributionId}" failed for action "${event}"`);
-				}
-			};
-
-			emitter.onAction(event, handler);
-			this.hookEvents.push({ type: 'action', name: event, handler });
-		}
-	}
-
-	/**
-	 * Registers every confined bundle's server entries from its one shared artifact,
-	 * each through the same runner as its top-level counterpart, selecting that
-	 * entry's own capabilities and events by `type:name`. An entry's registration
-	 * identity may collide (an operation id, an endpoint route): that entry fails on
-	 * its own while its siblings register, and the bundle's diagnostic carries each
-	 * entry's status. The shared artifact being unavailable fails the whole bundle.
-	 * Runs after the inherited and top-level confined registrations, so the route and
-	 * operation collision checks see everything already mounted.
-	 */
 	private registerConfinedBundles(): void {
-		const runtime = this.confinedRuntime;
-		if (runtime === undefined) return;
-
-		const flowManager = getFlowManager();
-
-		for (const [extension, eligible] of this.confinedEligible) {
-			if (extension.type !== 'bundle') continue;
-
-			if (eligible.entrySource === undefined) {
-				this.recordFailed(extension, {
-					code: VALIDATION_INCOMPLETE,
-					detail: 'the confined bundle entry is unavailable',
-				});
-
-				continue;
-			}
-
-			const entryStatuses: ExtensionDiagnosticEntry[] = [];
-
-			for (const entry of extension.entries) {
-				const kind = entry.type;
-				if (kind !== 'operation' && kind !== 'endpoint' && kind !== 'hook') continue;
-
-				const key = `${kind}:${entry.name}`;
-
-				const binding: ConfinedBinding = {
-					extensionId: extension.name,
-					contributionId: entry.name,
-					entrySource: eligible.entrySource,
-					capabilities: eligible.entryCapabilities?.[key] ?? {},
-					bundleEntryKey: key,
-				};
-
-				const outcome = this.registerConfinedBundleEntry(
-					kind,
-					entry.name,
-					binding,
-					eligible.entryEvents?.[key],
-					eligible.entryOptionDelivery?.[key],
-					runtime,
-					flowManager
-				);
-
-				entryStatuses.push({
-					name: entry.name,
-					type: kind,
-					status: outcome.status,
-					...(outcome.reason && { reason: outcome.reason }),
-					...(eligible.entryCapabilities?.[key] && { capabilities: eligible.entryCapabilities[key] }),
-				});
-			}
-
-			this.recordBundle(extension, entryStatuses);
-		}
-	}
-
-	private registerConfinedBundleEntry(
-		kind: 'operation' | 'endpoint' | 'hook',
-		name: string,
-		binding: ConfinedBinding,
-		events: ConfinedHookEvents | undefined,
-		optionDelivery: ConfinedOptionDelivery | undefined,
-		runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig },
-		flowManager: ReturnType<typeof getFlowManager>
-	): { status: 'loaded' | 'failed'; reason?: SanitizedExtensionError } {
-		if (kind === 'operation') {
-			const block = this.confinedOperationBlocks.get(name);
-
-			if (block !== undefined) {
-				flowManager.markConfinedOperationAmbiguous(name);
-				return { status: 'failed', reason: block };
-			}
-
-			flowManager.addConfinedOperation(name, this.buildConfinedDescriptor(binding, optionDelivery, runtime));
-			return { status: 'loaded' };
-		}
-
-		if (kind === 'endpoint') {
-			if (!CONFINED_ENDPOINT_ROUTE.test(name)) {
-				return {
-					status: 'failed',
-					reason: { code: 'route-invalid', detail: 'the confined endpoint route name is not a safe literal route' },
-				};
-			}
-
-			if (this.registeredEndpointRoutes.has(name)) {
-				return {
-					status: 'failed',
-					reason: { code: 'route-collision', detail: 'the confined endpoint route is already registered' },
-				};
-			}
-
-			if (binding.capabilities.endpoint === undefined) {
-				return {
-					status: 'failed',
-					reason: { code: 'capability-missing', detail: 'the endpoint capability is not declared' },
-				};
-			}
-
-			this.endpointRouter.use(`/${name}`, this.buildConfinedEndpointHandler(binding, runtime));
-			this.registeredEndpointRoutes.add(name);
-			return { status: 'loaded' };
-		}
-
-		if (events === undefined) {
-			return {
-				status: 'failed',
-				reason: { code: VALIDATION_INCOMPLETE, detail: 'the confined hook entry events are unavailable' },
-			};
-		}
-
-		const declaredEvents = [...(events.filter ?? []), ...(events.action ?? [])];
-
-		if (!declaredEvents.every(hasSafeEventSegments)) {
-			return {
-				status: 'failed',
-				reason: { code: 'event-invalid', detail: 'a confined hook event name is not a safe literal event' },
-			};
-		}
-
-		this.subscribeConfinedHook(binding, events, runtime);
-		return { status: 'loaded' };
+		this.confinedRegistrar.registerBundles();
 	}
 
 	private recordBundle(extension: BundleExtension, entries: ExtensionDiagnosticEntry[]): void {
-		const failed = entries.filter((entry) => entry.status === 'failed').length;
-		const loaded = entries.length - failed;
-
-		let status: ExtensionDiagnostic['status'] = 'partial';
-		if (failed === 0) status = 'loaded';
-		else if (loaded === 0) status = 'failed';
-
-		const diagnostic: ExtensionDiagnostic = {
-			name: extension.name,
-			type: extension.type,
-			local: extension.local,
-			status,
-			entries,
-		};
-
-		if (extension.version) diagnostic.version = extension.version;
-
-		if (extension.runtime === CONFINED_RUNTIME) diagnostic.runtime = extension.runtime;
-
-		this.diagnostics.push(diagnostic);
-	}
-
-	private buildConfinedEndpointHandler(
-		binding: ConfinedBinding,
-		runtime: { supervisor: ConfinedSupervisor; config: SandboxConfig }
-	): express.RequestHandler {
-		const deps = this.confinedRunnerDeps(runtime);
-
-		return async (req, res, next) => {
-			try {
-				const request: ConfinedEndpointRequest = {
-					extensionId: binding.extensionId,
-					contributionId: binding.contributionId,
-					entrySource: binding.entrySource,
-					capabilities: binding.capabilities,
-					method: req.method,
-					path: req.path,
-					query: req.query,
-					body: req.body,
-					accountability: req.accountability ?? null,
-				};
-
-				if (binding.bundleEntryKey !== undefined) request.bundleEntryKey = binding.bundleEntryKey;
-
-				const result = await runConfinedEndpoint(request, deps);
-
-				if (result.ok) {
-					res.status(result.status);
-
-					if (req.method === 'HEAD') {
-						res.end();
-						return;
-					}
-
-					res.json(result.body);
-					return;
-				}
-
-				switch (result.failure) {
-					case 'unauthenticated':
-						next(new exceptions.InvalidCredentialsException());
-						return;
-					case 'denied':
-						next(new exceptions.ForbiddenException());
-						return;
-					case 'invalid-request':
-						next(new exceptions.InvalidPayloadException('the request is not a valid json endpoint request'));
-						return;
-					default:
-						next(new Error('the confined endpoint failed'));
-						return;
-				}
-			} catch {
-				next(new Error('the confined endpoint failed'));
-			}
-		};
-	}
-
-	private logConfinedEntry(entry: ConfinedLogEntry): void {
-		// The broker redacts the entry before this sink, so the identifiers and the
-		// message are safe to write.
-		logger[entry.level](
-			{
-				extensionId: entry.context.extensionId,
-				contributionId: entry.context.contributionId,
-				operationId: entry.context.operationId,
-				meta: entry.meta,
-			},
-			String(entry.message)
-		);
+		diagnosticsLog.recordBundle(this.diagnosticsView(), extension, entries);
 	}
 
 	private recordAppDiagnostics(): void {
-		const appExtensions = this.extensions.filter((extension) => isIn(extension.type, APP_EXTENSION_TYPES));
-
-		for (const extension of appExtensions) {
-			const diagnostic: ExtensionDiagnostic = {
-				name: extension.name,
-				type: extension.type,
-				local: extension.local,
-				status: 'discovered',
-			};
-
-			if (extension.version) diagnostic.version = extension.version;
-
-			this.diagnostics.push(diagnostic);
-		}
-
-		if (this.appBundleFailure) {
-			this.diagnostics.push({
-				name: '(app bundle)',
-				type: null,
-				local: false,
-				status: 'failed',
-				reason: this.appBundleFailure,
-			});
-		}
+		diagnosticsLog.recordAppDiagnostics(this.diagnosticsView(), this.discoveredAppExtensions, this.appBundleFailure);
 	}
 
 	public getExtensionsList(type?: ExtensionType) {
@@ -1239,7 +592,11 @@ export class ExtensionManager {
 		this.extensions = [];
 		this.serverExtensions = [];
 		this.confinedEligible.clear();
-		this.confinedOperationBlocks.clear();
+		this.settingsEligible.clear();
+		this.settingsIneligible.clear();
+		this.settingsOwners = [];
+		this.discoveredAppExtensions = [];
+		this.declaredSettingsBySubject.clear();
 		this.confinedRuntimeDeps = {};
 		this.confinedRuntimeUnavailable = false;
 		this.confinedRuntime = undefined;
@@ -1247,10 +604,21 @@ export class ExtensionManager {
 		this.hookEmbedsHead = [];
 		this.hookEmbedsBody = [];
 
+		let discovered: Extension[] = [];
+
 		try {
 			await ensureExtensionDirs(env['EXTENSIONS_PATH'], NESTED_EXTENSION_TYPES);
 
-			this.extensions = await this.getExtensions();
+			discovered = await this.getExtensions();
+
+			// The settings gate sees every discovered extension so an app extension's settings
+			// ownership resolves even when SERVE_APP is off and an external bundler serves the app.
+			// this.extensions stays the SERVE_APP-filtered set used for serving and listing.
+			this.extensions = env['SERVE_APP']
+				? discovered
+				: discovered.filter((extension) => APP_EXTENSION_TYPES.includes(extension.type as any) === false);
+
+			this.discoveredAppExtensions = discovered.filter((extension) => isIn(extension.type, APP_EXTENSION_TYPES));
 		} catch (err: any) {
 			const reason = sanitizeExtensionError(err, 'DISCOVERY_FAILED');
 			logger.warn(`Couldn't load extensions: ${reason.code} ${reason.detail}`);
@@ -1261,6 +629,7 @@ export class ExtensionManager {
 
 		await this.prepareConfinedRuntime();
 		await this.gateConfinedExtensions();
+		this.gateSettingsSubjects(discovered);
 
 		await this.registerHooks();
 		await this.registerEndpoints();
@@ -1280,8 +649,9 @@ export class ExtensionManager {
 
 		if (env['SERVE_APP']) {
 			this.appExtensions = await this.generateExtensionBundle();
-			this.recordAppDiagnostics();
 		}
+
+		this.recordAppDiagnostics();
 
 		this.isLoaded = true;
 	}
@@ -1291,6 +661,11 @@ export class ExtensionManager {
 
 		this.serverExtensions = [];
 		this.confinedEligible.clear();
+		this.settingsEligible.clear();
+		this.settingsIneligible.clear();
+		this.settingsOwners = [];
+		this.discoveredAppExtensions = [];
+		this.declaredSettingsBySubject.clear();
 		this.confinedRuntimeDeps = {};
 		this.confinedRuntimeUnavailable = false;
 		this.confinedRuntime = undefined;
@@ -1426,78 +801,24 @@ export class ExtensionManager {
 			});
 		}
 
-		return [...packageExtensions, ...localPackageExtensions, ...localExtensions].filter(
-			(extension) => env['SERVE_APP'] || APP_EXTENSION_TYPES.includes(extension.type as any) === false
-		);
+		return [...packageExtensions, ...localPackageExtensions, ...localExtensions];
 	}
 
 	private async generateExtensionBundle(): Promise<string | null> {
 		this.appExtensionChunks.clear();
 
-		const sharedDepsMapping = await this.getSharedDepsMapping(APP_SHARED_DEPS);
+		const bundle = await buildAppExtensionBundle(this.extensions);
 
-		const internalImports = Object.entries(sharedDepsMapping).map(([name, path]) => ({
-			find: name,
-			replacement: path,
-		}));
-
-		const entrypoint = generateExtensionsEntrypoint(this.extensions);
-
-		try {
-			const bundle = await rollup({
-				input: 'entry',
-				external: Object.values(sharedDepsMapping),
-				makeAbsoluteExternalsRelative: false,
-				plugins: [virtual({ entry: entrypoint }), alias({ entries: internalImports }), nodeResolve({ browser: true })],
-			});
-
-			const { output } = await bundle.generate({ format: 'es', compact: true });
-
-			for (const out of output) {
-				if (out.type === 'chunk') {
-					this.appExtensionChunks.set(out.fileName, out.code);
-				}
-			}
-
-			await bundle.close();
-
-			// Dynamic imports in the entrypoint make rollup emit multiple chunks, so the
-			// entry is not reliably output[0]. Select it explicitly, and treat a missing
-			// entry as a build failure (through the catch) rather than returning null,
-			// which would 404 /extensions/sources/index.js with no diagnostic.
-			const entryChunk = output.find((out): out is OutputChunk => out.type === 'chunk' && out.isEntry);
-
-			if (!entryChunk) {
-				throw new Error('app extension bundle produced no entry chunk');
-			}
-
-			return entryChunk.code;
-		} catch (error: any) {
-			this.appBundleFailure = sanitizeExtensionError(error, 'BUNDLE_BUILD_FAILED');
-			logger.warn(`Couldn't bundle app extensions: ${this.appBundleFailure.code} ${this.appBundleFailure.detail}`);
+		for (const [name, code] of bundle.chunks) {
+			this.appExtensionChunks.set(name, code);
 		}
 
-		return null;
-	}
-
-	private async getSharedDepsMapping(deps: string[]): Promise<Record<string, string>> {
-		const appDir = await readdir(path.join(resolvePackage('@cairncms/app', __dirname), 'dist', 'assets'));
-
-		const depsMapping: Record<string, string> = {};
-
-		for (const dep of deps) {
-			const depName = findSharedDepAsset(dep, appDir);
-
-			if (depName) {
-				const depUrl = new Url(env['PUBLIC_URL']).addPath('admin', 'assets', depName);
-
-				depsMapping[dep] = depUrl.toString({ rootRelative: true });
-			} else {
-				logger.warn(`Couldn't find shared extension dependency "${dep}"`);
-			}
+		if (bundle.failure !== null) {
+			this.appBundleFailure = bundle.failure;
+			logger.warn(`Couldn't bundle app extensions: ${bundle.failure.code} ${bundle.failure.detail}`);
 		}
 
-		return depsMapping;
+		return bundle.code;
 	}
 
 	private async registerHooks(): Promise<void> {
@@ -1513,7 +834,7 @@ export class ExtensionManager {
 
 				const config = getModuleDefault(hookInstance);
 
-				this.registerHook(config);
+				this.registerHook(config, hook.name);
 
 				this.apiExtensions.push({ path: hookPath });
 
@@ -1541,7 +862,7 @@ export class ExtensionManager {
 
 				const config = getModuleDefault(endpointInstance);
 
-				this.registerEndpoint(config, endpoint.name);
+				this.registerEndpoint(config, endpoint.name, endpoint.name);
 
 				this.apiExtensions.push({ path: endpointPath });
 
@@ -1581,7 +902,7 @@ export class ExtensionManager {
 
 				const config = getModuleDefault(operationInstance);
 
-				this.registerOperation(config);
+				this.registerOperation(config, operation.name);
 
 				this.apiExtensions.push({ path: operationPath });
 
@@ -1610,15 +931,15 @@ export class ExtensionManager {
 				const configs = getModuleDefault(bundleInstances);
 
 				for (const { config } of configs.hooks) {
-					this.registerHook(config);
+					this.registerHook(config, bundle.name);
 				}
 
 				for (const { config, name } of configs.endpoints) {
-					this.registerEndpoint(config, name);
+					this.registerEndpoint(config, name, bundle.name);
 				}
 
 				for (const { config } of configs.operations) {
-					this.registerOperation(config);
+					this.registerOperation(config, bundle.name);
 				}
 
 				this.apiExtensions.push({ path: bundlePath });
@@ -1632,109 +953,39 @@ export class ExtensionManager {
 		}
 	}
 
-	private registerHook(register: HookConfig): void {
-		const registerFunctions = {
-			filter: (event: string, handler: FilterHandler) => {
-				emitter.onFilter(event, handler);
+	private settingsReaderFor(subject: string) {
+		return buildExtensionSettingsReader({
+			subject,
+			getDeclaration: () => this.getSettingsOwner(subject)?.settings,
+			readGlobalRows: () => readGlobalSettings(getDatabase(), subject),
+			readCollectionRows: (collection) => readCollectionSettings(getDatabase(), subject, collection),
+		});
+	}
 
-				this.hookEvents.push({
-					type: 'filter',
-					name: event,
-					handler,
-				});
-			},
-			action: (event: string, handler: ActionHandler) => {
-				emitter.onAction(event, handler);
-
-				this.hookEvents.push({
-					type: 'action',
-					name: event,
-					handler,
-				});
-			},
-			init: (event: string, handler: InitHandler) => {
-				emitter.onInit(event, handler);
-
-				this.hookEvents.push({
-					type: 'init',
-					name: event,
-					handler,
-				});
-			},
-			schedule: (cron: string, handler: ScheduleHandler) => {
-				if (validate(cron)) {
-					const task = schedule(cron, async () => {
-						if (this.options.schedule) {
-							try {
-								await handler();
-							} catch (error: any) {
-								logger.error(error);
-							}
-						}
-					});
-
-					this.hookEvents.push({
-						type: 'schedule',
-						task,
-					});
-				} else {
-					logger.warn(`Couldn't register cron hook. Provided cron is invalid: ${cron}`);
-				}
-			},
-			embed: (position: 'head' | 'body', code: string | EmbedHandler) => {
-				const content = typeof code === 'function' ? code() : code;
-
-				if (content.trim().length === 0) {
-					logger.warn(`Couldn't register embed hook. Provided code is empty!`);
-					return;
-				}
-
-				if (position === 'head') {
-					this.hookEmbedsHead.push(content);
-				}
-
-				if (position === 'body') {
-					this.hookEmbedsBody.push(content);
-				}
-			},
+	// The manager owns the registration state; the leaf functions receive it and mutate it here.
+	private fullAuthorityDeps(): FullAuthorityRegistrationDeps {
+		return {
+			apiEmitter: this.apiEmitter,
+			makeSettingsReader: (subject) => this.settingsReaderFor(subject),
+			hookEvents: this.hookEvents,
+			hookEmbedsHead: this.hookEmbedsHead,
+			hookEmbedsBody: this.hookEmbedsBody,
+			scheduleEnabled: () => this.options.schedule,
+			endpointRouter: this.endpointRouter,
+			registeredEndpointRoutes: this.registeredEndpointRoutes,
 		};
-
-		register(registerFunctions, {
-			services,
-			exceptions: { ...exceptions, ...sharedExceptions },
-			env,
-			database: getDatabase(),
-			emitter: this.apiEmitter,
-			logger,
-			getSchema,
-		});
 	}
 
-	private registerEndpoint(config: EndpointConfig, name: string): void {
-		const register = typeof config === 'function' ? config : config.handler;
-		const routeName = typeof config === 'function' ? name : config.id;
-
-		const scopedRouter = express.Router();
-		this.endpointRouter.use(`/${routeName}`, scopedRouter);
-		// Lowercased, because the router matches case-insensitively: a confined route
-		// must collide with an inherited case variant, not shadow it.
-		this.registeredEndpointRoutes.add(routeName.toLowerCase());
-
-		register(scopedRouter, {
-			services,
-			exceptions: { ...exceptions, ...sharedExceptions },
-			env,
-			database: getDatabase(),
-			emitter: this.apiEmitter,
-			logger,
-			getSchema,
-		});
+	private registerHook(register: HookConfig, subject: string): void {
+		registerFullAuthorityHook(register, subject, this.fullAuthorityDeps());
 	}
 
-	private registerOperation(config: OperationApiConfig): void {
-		const flowManager = getFlowManager();
+	private registerEndpoint(config: EndpointConfig, name: string, subject: string): void {
+		registerFullAuthorityEndpoint(config, name, subject, this.fullAuthorityDeps());
+	}
 
-		flowManager.addOperation(config.id, config.handler);
+	private registerOperation(config: OperationApiConfig, subject?: string): void {
+		registerFullAuthorityOperation(config, subject, this.fullAuthorityDeps());
 	}
 
 	private unregisterApiExtensions(): void {
@@ -1764,6 +1015,7 @@ export class ExtensionManager {
 
 		flowManager.clearOperations();
 		flowManager.clearConfinedOperations();
+		clearOperationOptionSecrets();
 
 		for (const apiExtension of this.apiExtensions) {
 			try {

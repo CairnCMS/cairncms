@@ -5,7 +5,8 @@ get:
   summary: List Extension Diagnostics
   description:
     Returns load diagnostics for every discovered extension, including its load status and a sanitized reason
-    for any failure. This route is restricted to administrators.
+    for any failure. App extensions report the discovered status regardless of whether this instance serves
+    the admin app. This route is restricted to administrators.
   responses:
     '200':
       description: Successful request
@@ -72,6 +73,24 @@ get:
                       description: Present when the extension runs in the sandboxed (confined) server runtime.
                       enum:
                         - confined-server
+                    settings:
+                      type: object
+                      description:
+                        Present only on an extension that declares settings. Whether its settings are
+                        manageable, with a sanitized reason when they are not. Never the declaration.
+                      properties:
+                        status:
+                          type: string
+                          enum:
+                            - available
+                            - unavailable
+                        reason:
+                          type: object
+                          properties:
+                            code:
+                              type: string
+                            detail:
+                              type: string
               meta:
                 type: object
                 properties:

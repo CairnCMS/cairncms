@@ -450,3 +450,56 @@ test('operation build emits maps and sourceMappingURL comments for both the app 
 	expect(await fse.readFile(resolve(ext, 'dist', 'app.js'), 'utf-8')).toContain('sourceMappingURL=app.js.map');
 	expect(await fse.readFile(resolve(ext, 'dist', 'api.js'), 'utf-8')).toContain('sourceMappingURL=api.js.map');
 }, 30_000);
+
+test('create and build a new item-view extension', async () => {
+	const currentTime = Date.now();
+
+	for (const language of EXTENSION_LANGUAGES) {
+		const testExtensionPath = `${testPrefix}-item-view-${language}-${currentTime}`;
+
+		await create('item-view', testExtensionPath, { language });
+
+		expect(fse.pathExistsSync(resolve(testExtensionPath, 'src', `index.${languageToShort(language)}`))).toBe(true);
+
+		await execa('node', ['../cli.js', 'build'], { cwd: testExtensionPath });
+
+		expect(fse.pathExistsSync(resolve(testExtensionPath, 'dist', 'index.js'))).toBe(true);
+	}
+}, 30_000);
+
+test('builds a bundle with an item-view entry into a loadable app bundle under the hyphenated key', async () => {
+	const ext = uniquePath('iv-bundle');
+
+	await fse.outputJson(
+		resolve(ext, 'package.json'),
+		{
+			name: 'cairncms-extension-iv-bundle',
+			version: '1.0.0',
+			type: 'module',
+			[EXTENSION_PKG_KEY]: {
+				type: 'bundle',
+				path: { app: 'dist/app.js', api: 'dist/api.js' },
+				entries: [{ type: 'item-view', name: 'iv', source: 'src/iv/index.js' }],
+				host: '^1.1.0',
+			},
+		},
+		{ spaces: '\t' }
+	);
+
+	await fse.outputFile(
+		resolve(ext, 'src', 'iv', 'index.js'),
+		`import Pane from './item-view.vue';\nexport default { id: 'iv', name: 'IV', icon: 'box', placements: { splitPane: { component: Pane } } };\n`
+	);
+
+	await fse.outputFile(
+		resolve(ext, 'src', 'iv', 'item-view.vue'),
+		`<template>\n\t<div class="pane" />\n</template>\n\n<script>\nexport default {};\n</script>\n`
+	);
+
+	await execa('node', ['../cli.js', 'build'], { cwd: ext });
+
+	const mod = await import(pathToFileURL(resolve(ext, 'dist', 'app.js')).href);
+
+	expect(mod['item-views']).toHaveLength(1);
+	expect(mod['item-views'][0].id).toBe('iv');
+}, 30_000);

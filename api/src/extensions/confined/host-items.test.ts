@@ -36,7 +36,7 @@ function makeHost(overrides: Partial<ConfinedItemsHostDeps> = {}) {
 	};
 
 	const deps: ConfinedItemsHostDeps = {
-		capabilities: { items: 'current-user' },
+		capabilities: { items: { accountability: 'user' } },
 		accountability: user,
 		itemsService: (collection, accountability) => {
 			calls.push({ collection, accountability });
@@ -289,7 +289,7 @@ describe('createConfinedItemsHost authority', () => {
 		expect(calls).toHaveLength(0);
 	});
 
-	it('denies current-user with a null or missing accountability', async () => {
+	it('denies user with a null or missing accountability', async () => {
 		for (const accountability of [null, undefined]) {
 			const { host, calls } = makeHost({ accountability });
 			const reply = await host.read({ collection: 'articles' }, liveSignal);
@@ -299,7 +299,7 @@ describe('createConfinedItemsHost authority', () => {
 		}
 	});
 
-	it('passes the exact invocation accountability to the factory under current-user', async () => {
+	it('passes the exact invocation accountability to the factory under user', async () => {
 		const { host, calls } = makeHost();
 		await host.read({ collection: 'articles' }, liveSignal);
 
@@ -308,8 +308,12 @@ describe('createConfinedItemsHost authority', () => {
 		expect(calls[0]?.accountability).toBe(user);
 	});
 
-	it('passes the system context only under the declared system mode', async () => {
-		const { host, calls } = makeHost({ capabilities: { items: 'system' }, accountability: user });
+	it('passes the system context only under the declared full-access mode', async () => {
+		const { host, calls } = makeHost({
+			capabilities: { items: { accountability: 'full-access' } },
+			accountability: user,
+		});
+
 		await host.read({ collection: 'articles' }, liveSignal);
 
 		expect(calls).toHaveLength(1);

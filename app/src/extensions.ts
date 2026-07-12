@@ -2,6 +2,7 @@ import { AppExtensionConfigs, RefRecord } from '@cairncms/types';
 import { App, shallowRef, watch } from 'vue';
 import { getInternalDisplays, registerDisplays } from './displays';
 import { getInternalInterfaces, registerInterfaces } from './interfaces';
+import { getInternalItemViews } from './item-views';
 import { i18n } from './lang';
 import { getInternalLayouts, registerLayouts } from './layouts';
 import { getInternalModules, registerModules } from './modules';
@@ -18,6 +19,7 @@ const extensions: RefRecord<AppExtensionConfigs> = {
 	layouts: shallowRef([]),
 	modules: shallowRef([]),
 	panels: shallowRef([]),
+	'item-views': shallowRef([]),
 	operations: shallowRef([]),
 };
 
@@ -51,6 +53,7 @@ export function registerExtensions(app: App): void {
 	const layouts = getInternalLayouts();
 	const modules = getInternalModules();
 	const panels = getInternalPanels();
+	const itemViews = getInternalItemViews();
 	const operations = getInternalOperations();
 
 	if (customExtensions !== null) {
@@ -59,6 +62,7 @@ export function registerExtensions(app: App): void {
 		layouts.push(...customExtensions.layouts);
 		modules.push(...customExtensions.modules);
 		panels.push(...customExtensions.panels);
+		itemViews.push(...(customExtensions['item-views'] ?? []));
 		operations.push(...customExtensions.operations);
 	}
 
@@ -75,6 +79,7 @@ export function registerExtensions(app: App): void {
 			extensions.displays.value = translate(displays);
 			extensions.layouts.value = translate(layouts);
 			extensions.panels.value = translate(panels);
+			extensions['item-views'].value = translate(itemViews);
 			extensions.operations.value = translate(operations);
 		},
 		{ immediate: true }

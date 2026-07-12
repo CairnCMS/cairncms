@@ -1,0 +1,19 @@
+{
+	"name": "cairncms-extension-settings-fixture",
+	"version": "1.0.0",
+	"type": "module",
+	"private": true,
+	"cairncms:extension": {
+		"type": "endpoint",
+		"path": "index.js",
+		"source": "index.js",
+		"host": "^1.0.0",
+		"settings": {
+			"base_url": { "type": "string", "scope": "global" },
+			"theme": { "type": "string", "scope": "global", "appReadable": true },
+			"preview_url": { "type": "string", "scope": "collection", "appReadable": true },
+			"api_key": { "type": "string", "scope": "global", "secret": { "source": "inline" } },
+			"billing_key": { "type": "string", "scope": "global", "secret": { "source": "config" } }
+		}
+	}
+}

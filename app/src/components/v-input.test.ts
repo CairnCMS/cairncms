@@ -192,6 +192,35 @@ describe('emitValue', () => {
 		expect(wrapper.emitted()['update:modelValue'][0]).toEqual(['test-']);
 	});
 
+	test('should collapse possessives instead of separating them for slug input', async () => {
+		const wrapper = mount(VInput, {
+			props: {
+				modelValue: "customer's orders",
+				slug: true,
+			},
+			global,
+		});
+
+		await wrapper.find('input').trigger('input');
+
+		expect(wrapper.emitted()['update:modelValue'][0]).toEqual(['customers-orders']);
+	});
+
+	test('should collapse possessives with a custom slug separator', async () => {
+		const wrapper = mount(VInput, {
+			props: {
+				modelValue: "customer's orders",
+				slug: true,
+				slugSeparator: '_',
+			},
+			global,
+		});
+
+		await wrapper.find('input').trigger('input');
+
+		expect(wrapper.emitted()['update:modelValue'][0]).toEqual(['customers_orders']);
+	});
+
 	test('should turn space into underscores for dbSafe input', async () => {
 		const wrapper = mount(VInput, {
 			props: {

@@ -8,6 +8,7 @@ import { clearSystemCache, getCache } from '../cache.js';
 import type { Helpers } from '../database/helpers/index.js';
 import { getHelpers } from '../database/helpers/index.js';
 import getDatabase, { getSchemaInspector } from '../database/index.js';
+import { isInternalTable } from '../database/internal-tables.js';
 import { systemRelationRows } from '../database/system-data/relations/index.js';
 import emitter from '../emitter.js';
 import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
@@ -73,7 +74,13 @@ export class RelationsService {
 		});
 
 		const schemaRows = await this.schemaInspector.foreignKeys(collection);
-		const results = this.stitchRelations(metaRows, schemaRows);
+
+		const results = this.stitchRelations(metaRows, schemaRows).filter((relation) => {
+			if (isInternalTable(relation.collection)) return false;
+			if (relation.related_collection && isInternalTable(relation.related_collection)) return false;
+			return true;
+		});
+
 		return await this.filterForbidden(results);
 	}
 
@@ -117,7 +124,12 @@ export class RelationsService {
 			(foreignKey) => foreignKey.column === field
 		);
 
-		const stitched = this.stitchRelations(metaRow, schemaRow ? [schemaRow] : []);
+		const stitched = this.stitchRelations(metaRow, schemaRow ? [schemaRow] : []).filter((relation) => {
+			if (isInternalTable(relation.collection)) return false;
+			if (relation.related_collection && isInternalTable(relation.related_collection)) return false;
+			return true;
+		});
+
 		const results = await this.filterForbidden(stitched);
 
 		if (results.length === 0) {

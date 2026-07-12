@@ -18,6 +18,7 @@ describe('/extensions', () => {
 					version?: string;
 					entries?: { name: string; type: string }[];
 					reason?: { code: string; detail: string };
+					settings?: { status: string; reason?: { code: string; detail: string } };
 				}
 			> = {};
 
@@ -43,6 +44,18 @@ describe('/extensions', () => {
 					expect.objectContaining({ name: 'cairn-fixture-bundle-endpoint', type: 'endpoint' }),
 				])
 			);
+
+			// The suite runs SERVE_APP=false, so the app fixture proves the listing is
+			// topology-complete: found on this instance, not served by it.
+			expect(byName['cairn-fixture-interface']?.status).toBe('discovered');
+
+			expect(byName['cairncms-extension-settings-fixture']?.settings).toEqual({ status: 'available' });
+			expect(byName['bad-subject']?.settings).toEqual({
+				status: 'unavailable',
+				reason: expect.objectContaining({ code: 'SETTINGS_SUBJECT_INVALID' }),
+			});
+
+			expect(JSON.stringify(response.body)).not.toContain('CAIRNCMS_EXT_');
 		});
 
 		it.each(vendors)('%s rejects a non-admin request', async (vendor) => {

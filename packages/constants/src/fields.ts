@@ -67,3 +67,10 @@ export const RELATIONAL_TYPES = [
 ] as const;
 
 export const FUNCTIONS = ['year', 'month', 'week', 'day', 'weekday', 'hour', 'minute', 'second', 'count'] as const;
+
+/**
+ * The string returned in place of a sensitive stored value on read. Concealed field
+ * values and stored extension secrets both present as this mask, and secret-aware
+ * inputs compare against it to detect a saved state.
+ */
+export const SECRET_MASK = '**********';

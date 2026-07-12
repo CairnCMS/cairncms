@@ -6,7 +6,7 @@ sidebar:
   order: 0
 ---
 
-App extensions extend the admin app. They are written as Vue components and run in the browser, in the same page as the rest of the admin app. There are five types: interface, display, layout, module, and panel.
+App extensions extend the admin app. They are written as Vue components and run in the browser, in the same page as the rest of the admin app. There are six types: interface, display, layout, module, panel, and item view.
 
 ## How app extensions run
 
@@ -18,7 +18,7 @@ That makes the app lane the wrong place for anything that must hold regardless o
 
 Because an app extension runs in the browser, its outbound network requests go through the admin app's Content Security Policy. The default policy limits `connect-src` to the app's own origin plus the built-in map origins, with no external wildcard, so an app extension that tries to fetch an external API or CDN directly from the browser is blocked.
 
-To use external data, route it through a same-origin endpoint instead. A confined server endpoint, or a bundle's endpoint entry, fetches the external API server-side, and your app extension calls that endpoint on its own origin. This keeps the browser egress and the declared external origins on the server. A confined endpoint cannot hold a secret in this version, so a call that needs a secret belongs in a full-authority endpoint or a confined operation with `optionDelivery`. An operator can widen the policy with `CONTENT_SECURITY_POLICY_DIRECTIVES__CONNECT_SRC` when a specific external origin must be reachable from the browser, but the same-origin endpoint is the default pattern. See [Security hardening](/docs/manage/security-hardening/) for the operator side.
+To use external data, route it through a same-origin endpoint instead. A confined server endpoint, or a bundle's endpoint entry, fetches the external API server-side, and your app extension calls that endpoint on its own origin. This keeps the browser egress and the declared external origins on the server. When the external API needs a credential, declare it as a [secret package setting](/docs/develop/extensions/settings/): the endpoint reads it through `host.settings.get` as an opaque reference and the platform injects the value outside the sandbox, so the secret reaches neither the browser nor the sandboxed code. An operator can widen the policy with `CONTENT_SECURITY_POLICY_DIRECTIVES__CONNECT_SRC` when a specific external origin must be reachable from the browser, but the same-origin endpoint is the default pattern. See [Security hardening](/docs/manage/security-hardening/) for the operator side.
 
 ## The Vue baseline
 
@@ -33,6 +33,7 @@ The practical consequence: when the host Vue or the SDK changes, rebuild the ext
 - **[Layout](/docs/develop/extensions/app-extensions/layouts/)** is a custom collection page layout, alongside the built-in Table, Cards, Calendar, Map, and Kanban.
 - **[Module](/docs/develop/extensions/app-extensions/modules/)** is a top-level area in the module bar. Use this when you need an entire workspace that does not fit into the existing modules.
 - **[Panel](/docs/develop/extensions/app-extensions/panels/)** is a custom panel type for Insights dashboards.
+- **[Item View](/docs/develop/extensions/app-extensions/item-views/)** is a contextual split pane in the item editor, behind a platform-rendered toggle. Use this for previews, related information, or anything an editor wants beside the form.
 
 ## Where to go next
 

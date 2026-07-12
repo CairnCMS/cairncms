@@ -32,7 +32,11 @@ The platform requires two secret values:
 - **`KEY`** — instance identifier. Surfaced as the service ID in server info and health-check responses. Not part of token signing.
 - **`SECRET`** — random secret used to sign access and refresh tokens. Treat as a credential. Changing it invalidates every existing token, so rotate deliberately.
 
-Plus the database password, any SSO provider client secrets, any storage backend credentials, any SMTP password, and any static tokens generated for service accounts.
+A third becomes required once extensions or flows store secrets:
+
+- **`SECRETS_ENCRYPTION_KEY`** — key under which inline extension secrets and secret flow-operation options are encrypted at rest. Canonical base64 decoding to at least 32 bytes (`openssl rand -base64 32`); a malformed value fails startup. Deliberately separate from `SECRET`, so rotating the token-signing secret never affects stored encrypted data. Changing this key makes previously stored secret values unreadable: they fail closed and must be re-entered.
+
+Plus the database password, any SSO provider client secrets, any storage backend credentials, any SMTP password, any `CAIRNCMS_EXT_*` extension secrets provisioned through deployment config, and any static tokens generated for service accounts.
 
 For production:
 
@@ -207,7 +211,7 @@ Extensions run third-party code inside the platform, so the security model depen
 
 ### The confined sandbox
 
-A confined server extension runs in a QuickJS engine with no host imports, no Node, no `fetch`, and no filesystem. Every privileged effect goes through a brokered `host.*` call gated by the capabilities the extension declares in its manifest, so what an extension can reach is visible and bounded before it runs.
+A confined server extension runs in a QuickJS engine with no host imports, no Node, no `fetch`, and no filesystem. Every privileged effect goes through a brokered `host.*` call gated by the capabilities and settings the extension declares in its manifest, so what an extension can reach is visible and bounded before it runs.
 
 The platform adds OS-level hardening around the sandbox child process where the host supports it: a network namespace, the Node permission model with a scoped read, and a cgroup memory cap. `EXTENSIONS_SANDBOX_OS_HARDENING` governs how strictly these are enforced. Under `auto`, the default, they are best-effort and never block an extension, because the engine boundary already contains the guest. Under `required`, the runtime refuses to start a confined extension on a host that cannot provide the escape-containment core (the network namespace and the Node permission model). See the [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) reference for the runtime model and [Configuration](/docs/manage/configuration/) for the sandbox variables.
 

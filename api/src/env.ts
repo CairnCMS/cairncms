@@ -39,6 +39,7 @@ const allowedEnvironmentVars = [
 	// security
 	'KEY',
 	'SECRET',
+	'SECRETS_ENCRYPTION_KEY',
 	'ACCESS_TOKEN_TTL',
 	'REFRESH_TOKEN_TTL',
 	'REFRESH_TOKEN_COOKIE_DOMAIN',
@@ -106,6 +107,9 @@ const allowedEnvironmentVars = [
 	'STORAGE_.+_HEALTHCHECK_THRESHOLD',
 	// metadata
 	'FILE_METADATA_ALLOW_LIST',
+	// files
+	'FILES_MAX_UPLOAD_SIZE',
+	'FILES_MIME_TYPE_ALLOW_LIST',
 	// assets
 	'ASSETS_CACHE_TTL',
 	'ASSETS_TRANSFORM_MAX_CONCURRENT',
@@ -301,6 +305,8 @@ const defaults: Record<string, any> = {
 	PRESSURE_LIMITER_MAX_MEMORY_RSS: false,
 	PRESSURE_LIMITER_MAX_MEMORY_HEAP_USED: false,
 	PRESSURE_LIMITER_RETRY_AFTER: false,
+
+	FILES_MIME_TYPE_ALLOW_LIST: '*/*',
 };
 
 // Allows us to force certain environment variable into a type, instead of relying
@@ -308,6 +314,8 @@ const defaults: Record<string, any> = {
 const typeMap: Record<string, string> = {
 	HOST: 'string',
 	PORT: 'string',
+
+	SECRETS_ENCRYPTION_KEY: 'string',
 
 	DB_NAME: 'string',
 	DB_USER: 'string',

@@ -1,4 +1,5 @@
 import express from 'express';
+import { isInternalTable } from '../database/internal-tables.js';
 import { ForbiddenException, RouteNotFoundException } from '../exceptions/index.js';
 import collectionExists from '../middleware/collection-exists.js';
 import { respond } from '../middleware/respond.js';
@@ -15,7 +16,8 @@ router.post(
 	'/:collection',
 	collectionExists,
 	asyncHandler(async (req, res, next) => {
-		if (req.params['collection']!.startsWith('directus_')) throw new ForbiddenException();
+		if (req.params['collection']!.startsWith('directus_') || isInternalTable(req.params['collection']!))
+			throw new ForbiddenException();
 
 		if (req.singleton) {
 			throw new RouteNotFoundException(req.path);
@@ -58,7 +60,8 @@ router.post(
 );
 
 const readHandler = asyncHandler(async (req, res, next) => {
-	if (req.params['collection']!.startsWith('directus_')) throw new ForbiddenException();
+	if (req.params['collection']!.startsWith('directus_') || isInternalTable(req.params['collection']!))
+		throw new ForbiddenException();
 
 	const service = new ItemsService(req.collection, {
 		accountability: req.accountability,
@@ -97,7 +100,8 @@ router.get(
 	'/:collection/:pk',
 	collectionExists,
 	asyncHandler(async (req, res, next) => {
-		if (req.params['collection']!.startsWith('directus_')) throw new ForbiddenException();
+		if (req.params['collection']!.startsWith('directus_') || isInternalTable(req.params['collection']!))
+			throw new ForbiddenException();
 
 		const service = new ItemsService(req.collection, {
 			accountability: req.accountability,
@@ -120,7 +124,8 @@ router.patch(
 	collectionExists,
 	validateBatch('update'),
 	asyncHandler(async (req, res, next) => {
-		if (req.params['collection']!.startsWith('directus_')) throw new ForbiddenException();
+		if (req.params['collection']!.startsWith('directus_') || isInternalTable(req.params['collection']!))
+			throw new ForbiddenException();
 
 		const service = new ItemsService(req.collection, {
 			accountability: req.accountability,
@@ -166,7 +171,8 @@ router.patch(
 	'/:collection/:pk',
 	collectionExists,
 	asyncHandler(async (req, res, next) => {
-		if (req.params['collection']!.startsWith('directus_')) throw new ForbiddenException();
+		if (req.params['collection']!.startsWith('directus_') || isInternalTable(req.params['collection']!))
+			throw new ForbiddenException();
 
 		if (req.singleton) {
 			throw new RouteNotFoundException(req.path);
@@ -200,7 +206,8 @@ router.delete(
 	collectionExists,
 	validateBatch('delete'),
 	asyncHandler(async (req, _res, next) => {
-		if (req.params['collection']!.startsWith('directus_')) throw new ForbiddenException();
+		if (req.params['collection']!.startsWith('directus_') || isInternalTable(req.params['collection']!))
+			throw new ForbiddenException();
 
 		const service = new ItemsService(req.collection, {
 			accountability: req.accountability,
@@ -225,7 +232,8 @@ router.delete(
 	'/:collection/:pk',
 	collectionExists,
 	asyncHandler(async (req, _res, next) => {
-		if (req.params['collection']!.startsWith('directus_')) throw new ForbiddenException();
+		if (req.params['collection']!.startsWith('directus_') || isInternalTable(req.params['collection']!))
+			throw new ForbiddenException();
 
 		const service = new ItemsService(req.collection, {
 			accountability: req.accountability,

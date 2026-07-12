@@ -11,7 +11,8 @@
 				"type": "operation",
 				"name": "confined-bundle-op",
 				"source": { "app": "src/op/app.js", "api": "src/op/api.js" },
-				"capabilities": { "log": true }
+				"capabilities": { "log": true },
+				"optionDelivery": { "api_key": { "delivery": "reference" } }
 			},
 			{
 				"type": "endpoint",

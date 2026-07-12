@@ -11,6 +11,11 @@ export function getCacheKey(req: Request): string {
 	const info = {
 		version,
 		user: req.accountability?.user || null,
+		role: req.accountability?.role || null,
+		admin: req.accountability?.admin || false,
+		app: req.accountability?.app || false,
+		share: req.accountability?.share || null,
+		share_scope: req.accountability?.share_scope || null,
 		path,
 		query: isGraphQl ? getGraphqlQueryAndVariables(req) : req.sanitizedQuery,
 	};

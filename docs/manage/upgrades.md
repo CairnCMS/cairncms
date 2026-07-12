@@ -153,7 +153,7 @@ Bundles use the same `host` field; rebuilding a bundle rebuilds all of its entri
 
 App extensions carry an extra consideration. They share the admin app's Vue runtime rather than bundling their own, so a host-Vue or SDK change can require rebuilding them even within a compatible `host` range. If an app extension fails to mount after an upgrade, rebuild it against the current SDK before investigating further. See [Creating extensions](/docs/develop/extensions/creating-extensions/).
 
-Confined extensions depend on the capability vocabulary and the brokered host API, which can grow or change across major versions. A confined extension may need its manifest `capabilities` or its `host.*` usage updated when those evolve. The [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) reference documents the current capability set.
+Confined extensions depend on the capability and settings vocabulary and the brokered host API, which can grow or change across major versions. A confined extension may need its manifest `capabilities`, its `settings` declaration, or its `host.*` usage updated when those evolve. The [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) reference documents the current capability set.
 
 ## Where to go next
 

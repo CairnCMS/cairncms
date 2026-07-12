@@ -120,6 +120,7 @@ The Settings module also contains the configuration screens for several features
 - [Permissions](/docs/guides/permissions/) — roles and the CRUDS permissions matrix
 - Presets & Bookmarks — saved views; covered briefly in [Layouts](/docs/guides/content/layouts/)
 - [Flows](/docs/guides/flows/) — flows and the webhook patterns built on top of them
+- [Extensions](/docs/guides/extensions/) — extension health, diagnostics, and extension settings
 
 The Settings navigation pane also exposes shortcut links at the bottom for the current platform version, reporting a bug, and requesting a feature, all pointing to the CairnCMS GitHub repository.
 

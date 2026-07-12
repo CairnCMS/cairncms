@@ -1,0 +1,84 @@
+get:
+  tags:
+    - Extensions
+  operationId: getExtensionSettingsOwners
+  summary: List Extension Settings Owners
+  description:
+    Returns every discovered extension that declares settings, with its manageability status and, for an
+    available owner, its raw subject and settings declaration. An unavailable owner carries only its sanitized
+    name and a sanitized reason. Config-sourced secret keys appear in the declaration by source only, never a
+    derived variable name or a configured status. This route is restricted to administrators.
+  responses:
+    '200':
+      description: Successful request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    subject:
+                      type: string
+                      description: The validated package name. Present only for an available owner.
+                    displaySubject:
+                      type: string
+                      description: The sanitized name, safe to render, present on every owner.
+                    status:
+                      type: string
+                      enum:
+                        - available
+                        - unavailable
+                    reason:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                        detail:
+                          type: string
+                    declaration:
+                      type: object
+                      description:
+                        The declared settings keys with their type, scope, secret source, and presentation
+                        metadata. Present only for an available owner.
+                      additionalProperties:
+                        type: object
+                        properties:
+                          type:
+                            type: string
+                            enum:
+                              - string
+                              - number
+                              - boolean
+                          scope:
+                            type: string
+                            enum:
+                              - global
+                              - collection
+                          secret:
+                            type: object
+                            properties:
+                              source:
+                                type: string
+                                enum:
+                                  - inline
+                                  - config
+                          appReadable:
+                            type: boolean
+                          presentation:
+                            type: object
+                            properties:
+                              order:
+                                type: integer
+                              width:
+                                type: string
+                                enum:
+                                  - half
+                                  - full
+    '401':
+      $ref: '../../openapi.yaml#/components/responses/UnauthorizedError'
+    '403':
+      description: The current user is not an administrator.

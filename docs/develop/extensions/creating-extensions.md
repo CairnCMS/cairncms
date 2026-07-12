@@ -59,10 +59,12 @@ The `package.json` contains a `cairncms:extension` block with the extension's me
 }
 ```
 
-- **`type`** — one of the nine extension types (interface, display, layout, module, panel, hook, endpoint, operation, bundle).
+- **`type`** — one of the ten extension types (interface, display, layout, module, panel, item-view, hook, endpoint, operation, bundle).
 - **`path`** — the built output the loader will read.
 - **`source`** — the source entrypoint passed to the build.
 - **`host`** — a semver range describing which CairnCMS versions this extension is compatible with.
+
+The block can also declare a `settings` object: operator-managed settings, including secrets, that your extension's code reads at runtime. The package name owns the stored values and also derives the deployment variable names for config-sourced secrets, which are never stored. Renaming a published package leaves stored values behind under the old name and changes the derived variable names. See [Extension settings](/docs/develop/extensions/settings/).
 
 The build CLI uses these fields by default. The `type`, `source`, and `path` values can be overridden at the command line; `host` cannot.
 
@@ -149,7 +151,7 @@ types without checking them, so run `typecheck` separately, in your editor, a pr
 What to import:
 
 - Import the `define*` helpers and their types from `@cairncms/extensions-sdk`, for example `import { defineInterface } from '@cairncms/extensions-sdk'`. That package is the public authoring surface. Do not import CairnCMS internal packages directly.
-- App extensions (interface, display, layout, module, panel, and the app side of an operation) include a `shims.d.ts` that declares `*.vue` imports, so you can import a single-file component and keep it typed.
+- App extensions (interface, display, layout, module, panel, item view, and the app side of an operation) include a `shims.d.ts` that declares `*.vue` imports, so you can import a single-file component and keep it typed.
 
 The scaffold pins exact toolchain versions for reproducibility, so an extension scaffolded today behaves the
 same later regardless of new `typescript` releases. To move to a newer toolchain, bump the versions in your
@@ -185,7 +187,7 @@ cairncms-extension build --watch
 cairncms-extension link <path-to-cairncms-repo>/api/extensions
 ```
 
-Vite watches the `api/extensions` folder directly. Editing an app extension (an interface, display, layout, module, panel, or the app side of an operation or bundle) reloads the browser, and editing a server extension reloads in the API. Adding or removing an extension folder regenerates the Vite extension entrypoint. If the browser does not refresh automatically, refresh the page.
+Vite watches the `api/extensions` folder directly. Editing an app extension (an interface, display, layout, module, panel, item view, or the app side of an operation or bundle) reloads the browser, and editing a server extension reloads in the API. Adding or removing an extension folder regenerates the Vite extension entrypoint. If the browser does not refresh automatically, refresh the page.
 
 Two things to expect:
 

@@ -115,13 +115,6 @@ public_label: Public
 public_description: Controls what API data is available without authenticating.
 admin_description: Initial administrative role with unrestricted App/API access.
 not_allowed: Not Allowed
-directus_version: CairnCMS Version
-node_version: Node Version
-node_uptime: Node Uptime
-os_type: OS Type
-os_version: OS Version
-os_uptime: OS Uptime
-os_totalmem: OS Memory
 archive: Archive
 archive_confirm: Are you sure you want to archive this item?
 archive_confirm_count: >-
@@ -503,7 +496,8 @@ enable_select_button: Enable Select Button
 allow_duplicates: Allow Duplicates
 comments: Comments
 no_comments: No Comments Yet
-click_to_expand: Click to Expand
+expand: Expand
+collapse: Collapse
 select_item: Select Item
 no_items: No items
 search_items: Search items...
@@ -628,6 +622,7 @@ errors:
   RANGE_NOT_SATISFIABLE: Invalid range
   METHOD_NOT_ALLOWED: Method not allowed
   REQUESTS_EXCEEDED: Requests limit reached
+  CONTENT_TOO_LARGE: Submitted item/file is too large
 security: Security
 value_hashed: Value Securely Hashed
 bookmark_name: Bookmark name...
@@ -1021,23 +1016,31 @@ page_help_settings_presets_item: >-
 page_help_settings_flows_collection: '**Browse Flows** — Lists all Flows within the project.'
 page_help_settings_flows_item: '**Flow Detail** — Workspace for managing one or more operations.'
 page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
-extension_active: active
-extension_failed: failed
-extension_partial: partial
+extension_health_normal: Normal
+extension_health_warning: Warning | Warnings
+extension_health_failed: Failed
 extension_bundle_contents: Bundled extensions
 extension_capabilities: Capabilities
 extension_advanced_diagnostics: Advanced Diagnostics
 extension_sandboxed: Sandboxed
 extension_runtime: Runtime
 extension_runtime_sandboxed: Sandboxed
-extension_runtime_full_authority: Full authority
-extension_runtime_browser: Browser app
+extension_runtime_full_authority: Full Authority
+extension_runtime_browser: Browser App
 confined_runtime: Sandbox
 confined_runtime_mode: 'OS hardening: {decision} ({mode})'
 confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
 extension_status_loaded_detail: Loaded and running on the server.
-extension_status_discovered_detail: Discovered and served to the app, where it runs in the browser.
+extension_status_discovered_detail: Discovered on this instance.
 extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
+extension_status_failed_detail: The extension failed to load on this instance.
+extension_settings_unavailable_detail: Extension settings are unavailable.
+extension_settings_drawer_subtitle: Extension settings
+extension_settings_section: Extension Settings
+extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
+extension_settings_no_global_keys: This extension declares no global settings.
+extension_settings_load_failed: Could not load the extension's settings.
+extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
 extension_type_group_hook: Hooks
 extension_type_group_endpoint: Endpoints
 extension_type_group_operation: Operations
@@ -1047,6 +1050,7 @@ extension_type_group_display: Displays
 extension_type_group_layout: Layouts
 extension_type_group_module: Modules
 extension_type_group_panel: Panels
+extension_type_group_item-view: Item Views
 extension_type_group_other: Other
 no_extensions: No Extensions
 no_extensions_copy: No extensions were discovered in the configured extensions path.
@@ -1597,6 +1601,9 @@ interfaces:
     description: Enter a value to be hashed
     masked: Masked
     masked_label: Hide the true values
+  system-extension-secret:
+    name: Extension Secret
+    value_stored: Value Securely Encrypted
   select-icon:
     icon: Icon
     description: Select an icon from a dropdown
@@ -1659,6 +1666,7 @@ interfaces:
     notice: Notice
     description: Display a short notice
     text: Enter notice content here...
+    no_text: No text configured...
   list-o2m:
     one-to-many: One to Many
     description: Select multiple related items

@@ -31,7 +31,7 @@ const GENERIC_DETAIL = 'confined validation failed';
 // Gate-level, not a scanner reason: the gate could not complete (a host-side or
 // scheduling failure), which says nothing about the extension. Refused fail-closed,
 // but the remedy is revalidation, not a code change.
-export const VALIDATION_INCOMPLETE = 'validation-incomplete';
+export const VALIDATION_INCOMPLETE = 'VALIDATION_INCOMPLETE';
 
 // The probe codes that are honest not-loadable verdicts about the entry itself.
 // Anything else from the probe is a gate-infrastructure failure.
@@ -81,19 +81,36 @@ export interface ConfinedLoadGateDeps {
  * generic message rather than reach diagnostics.
  */
 export function confinedValidationError(reason: ExtensionValidationReason): SanitizedExtensionError {
-	return { code: reason.code, detail: safeDetail(reason.message) };
+	return { code: toDiagnosticCode(reason.code), detail: safeDetail(reason.message) };
 }
+
+function toDiagnosticCode(code: string): string {
+	return code.toUpperCase().replace(/-/g, '_');
+}
+
+// A scanner reason's only path-bearing form is a package-relative location, where every
+// separator sits between path characters. These match a location that is rooted or escapes
+// the package instead, whichever separator or encoding it uses, so the whole message
+// collapses rather than reach an operator diagnostic. `.` and `-` are path characters, so
+// a leading `./` or a `my-ext/` prefix is preserved; a leading or `..` traversal is not.
+const DRIVE_ROOT = /[A-Za-z]:[\\/]/;
+const ROOTED_SEPARATOR = /(^|[^A-Za-z0-9._-])[\\/]/;
+const ENCODED_SEPARATOR = /%2e|%2f|%5c/i;
 
 function safeDetail(message: string | undefined): string {
 	if (message === undefined || message.length === 0) return GENERIC_DETAIL;
 
-	const unsafe = message.split(/\s+/).some((token) => path.isAbsolute(token) || token.includes('..'));
+	const unsafe =
+		message.includes('..') ||
+		DRIVE_ROOT.test(message) ||
+		ROOTED_SEPARATOR.test(message) ||
+		ENCODED_SEPARATOR.test(message);
 
 	return unsafe ? GENERIC_DETAIL : message;
 }
 
 function refuse(code: ExtensionValidationReasonCode | string, detail: string): ConfinedGateVerdict {
-	return { ok: false, error: { code, detail } };
+	return { ok: false, error: { code: toDiagnosticCode(code), detail } };
 }
 
 /**
@@ -363,7 +380,7 @@ export async function gateConfinedExtension(
  * containment and the artifact cap, evaluates it in the confined child through the
  * load probe under the given activation's contract, and classifies the outcome. A
  * not-loadable verdict refuses with the probe's code. A host-side failure refuses
- * `validation-incomplete`, never blaming the extension for the gate's own failure.
+ * `VALIDATION_INCOMPLETE`, never blaming the extension for the gate's own failure.
  * On success the probed bytes are returned, so the binding executes exactly what
  * was scanned and probed.
  */

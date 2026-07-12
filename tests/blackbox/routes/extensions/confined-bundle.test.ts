@@ -1,7 +1,9 @@
-import { getUrl } from '@common/config';
+import config, { getUrl } from '@common/config';
 import { CreateCollection } from '@common/functions';
 import vendors from '@common/get-dbs-to-test';
+import { requestGraphQL } from '@common/index';
 import { USER } from '@common/variables';
+import knex, { type Knex } from 'knex';
 import request from 'supertest';
 import { sleep } from '@utils/sleep';
 
@@ -240,6 +242,171 @@ describe('Confined bundle server entries through the real binding', () => {
 
 				expect(triggered.status).toBe(200);
 				expect(triggered.body).toMatchObject({ marker: OP_TYPE, received: 'pong' });
+			},
+			60000
+		);
+	});
+
+	describe('operation secret options through the at-rest contract', () => {
+		const SECRET_MASK = '**********';
+		const PLAINTEXT = 'sk_live_blackbox_flow_secret';
+		const databases = new Map<string, Knex>();
+
+		beforeAll(() => {
+			for (const vendor of vendors) {
+				databases.set(vendor, knex(config.knexConfig[vendor]!));
+			}
+		});
+
+		afterAll(async () => {
+			for (const [, db] of databases) {
+				await db.destroy();
+			}
+		});
+
+		async function operationId(vendor: string): Promise<string> {
+			const found = await admin(
+				request(getUrl(vendor))
+					.get('/operations')
+					.query({ filter: { flow: { _eq: flowIds[vendor] } }, fields: ['id'], limit: -1 })
+			);
+
+			return found.body.data[0].id;
+		}
+
+		async function storedOptions(vendor: string, id: string): Promise<Record<string, any>> {
+			const row = await databases.get(vendor)!('directus_operations').where({ id }).first();
+			return typeof row.options === 'string' ? JSON.parse(row.options) : row.options;
+		}
+
+		async function triggerUntilSecretReady(vendor: string, probe: string): Promise<Record<string, any>> {
+			for (let attempt = 0; attempt < 50; attempt++) {
+				const response = await request(getUrl(vendor)).post(`/flows/trigger/${flowIds[vendor]}`).send({ probe });
+
+				if (response.status === 200 && response.body?.apiKeyKind === 'secret-reference') return response.body;
+
+				await sleep(100);
+			}
+
+			throw new Error('the operation never received its secret as a reference');
+		}
+
+		it.each(vendors)(
+			'%s encrypts at rest, masks every external read, preserves on mask resave, and delivers a reference',
+			async (vendor) => {
+				const id = await operationId(vendor);
+
+				const written = await admin(request(getUrl(vendor)).patch(`/operations/${id}`)).send({
+					options: { probe: '{{$trigger.body.probe}}', api_key: PLAINTEXT },
+				});
+
+				expect(written.status).toBe(200);
+				expect(written.body.data.options.api_key).toBe(SECRET_MASK);
+				expect(JSON.stringify(written.body)).not.toContain(PLAINTEXT);
+
+				const atRest = await storedOptions(vendor, id);
+				expect(atRest.api_key.kind).toBe('cairncms-secret-envelope');
+				expect(JSON.stringify(atRest)).not.toContain(PLAINTEXT);
+
+				const read = await admin(
+					request(getUrl(vendor))
+						.get(`/operations/${id}`)
+						.query({ fields: ['type', 'options'] })
+				);
+
+				expect(read.status).toBe(200);
+				expect(read.body.data.options.api_key).toBe(SECRET_MASK);
+				expect(read.body.data.options.probe).toBe('{{$trigger.body.probe}}');
+				expect(JSON.stringify(read.body)).not.toContain(PLAINTEXT);
+
+				const nested = await admin(
+					request(getUrl(vendor))
+						.get(`/flows/${flowIds[vendor]}`)
+						.query({ fields: ['*', 'operations.*'] })
+				);
+
+				expect(nested.status).toBe(200);
+
+				const nestedOperation = nested.body.data.operations.find((operation: { id: string }) => operation.id === id);
+				expect(nestedOperation.options.api_key).toBe(SECRET_MASK);
+				expect(JSON.stringify(nested.body)).not.toContain(PLAINTEXT);
+
+				const gql = await requestGraphQL(getUrl(vendor), true, USER.ADMIN.TOKEN, {
+					query: {
+						operations: {
+							__args: { filter: { id: { _eq: id } } },
+							type: true,
+							options: true,
+						},
+					},
+				});
+
+				expect(gql.statusCode).toBe(200);
+				const gqlOptions = gql.body.data.operations[0].options;
+				const gqlParsed = typeof gqlOptions === 'string' ? JSON.parse(gqlOptions) : gqlOptions;
+				expect(gqlParsed.api_key).toBe(SECRET_MASK);
+				expect(JSON.stringify(gql.body)).not.toContain(PLAINTEXT);
+
+				const patchRevision = await admin(
+					request(getUrl(vendor))
+						.get('/revisions')
+						.query({
+							filter: { collection: { _eq: 'directus_operations' }, item: { _eq: id } },
+							sort: '-id',
+							limit: 1,
+						})
+				);
+
+				expect(patchRevision.status).toBe(200);
+				expect(patchRevision.body.data.length).toBe(1);
+				expect(JSON.stringify(patchRevision.body)).not.toContain(PLAINTEXT);
+
+				const resaved = await admin(request(getUrl(vendor)).patch(`/operations/${id}`)).send({
+					options: { probe: '{{$trigger.body.probe}}', api_key: SECRET_MASK },
+				});
+
+				expect(resaved.status).toBe(200);
+
+				const preserved = await storedOptions(vendor, id);
+				expect(preserved.api_key.ct).toBe(atRest.api_key.ct);
+
+				const outcome = await triggerUntilSecretReady(vendor, 'secret-run');
+				expect(outcome).toMatchObject({ marker: OP_TYPE, received: 'secret-run', apiKeyKind: 'secret-reference' });
+				expect(JSON.stringify(outcome)).not.toContain(PLAINTEXT);
+
+				const runRevision = await admin(
+					request(getUrl(vendor))
+						.get('/revisions')
+						.query({
+							filter: { collection: { _eq: 'directus_flows' }, item: { _eq: flowIds[vendor] } },
+							sort: '-id',
+							limit: 1,
+						})
+				);
+
+				expect(runRevision.status).toBe(200);
+				expect(runRevision.body.data.length).toBe(1);
+				expect(JSON.stringify(runRevision.body)).not.toContain(PLAINTEXT);
+			},
+			120000
+		);
+
+		it.each(vendors)(
+			'%s rejects a mask write with no stored secret behind it',
+			async (vendor) => {
+				const id = await operationId(vendor);
+
+				const cleared = await admin(request(getUrl(vendor)).patch(`/operations/${id}`)).send({
+					options: { probe: '{{$trigger.body.probe}}', api_key: '' },
+				});
+
+				expect(cleared.status).toBe(200);
+
+				const masked = await admin(request(getUrl(vendor)).patch(`/operations/${id}`)).send({
+					options: { probe: '{{$trigger.body.probe}}', api_key: SECRET_MASK },
+				});
+
+				expect(masked.status).toBe(400);
 			},
 			60000
 		);

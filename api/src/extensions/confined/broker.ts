@@ -17,26 +17,18 @@ export interface ConfinedLogEntry {
 	context: ConfinedHostCallContext;
 }
 
-// The settings contract the broker consumes. Declared keys and their sensitivity
-// come from this dep, never from guest input and never from the capability schema,
-// which carries only the read and write verbs. The value source must return values
+// The settings contract the broker consumes. Declared keys and their secret status
+// come from the owner's package settings declaration through this dep, never from
+// guest input or the capability schema. The value source must return values
 // already bounded by the settings-value cap, and the broker checks defensively.
 export interface ConfinedSettingsSource {
-	declared: Array<{ key: string; sensitive: boolean }>;
+	declared: Array<{ key: string; isSecret: boolean }>;
 	// The signal is the per-call timeout. A storage-backed source must honor it, and
 	// the broker additionally races it, so an unresponsive source cannot pin the
 	// supervisor's in-flight accounting past the call timeout.
 	value(key: string, signal: AbortSignal): unknown | Promise<unknown>;
 	hasSecret(key: string, signal: AbortSignal): boolean | Promise<boolean>;
 }
-
-// Settings ship dark in this milestone: no key is declared, so settings.get always
-// returns null and mints no handle. A later slice defines declaration and storage.
-export const DARK_SETTINGS: ConfinedSettingsSource = {
-	declared: [],
-	value: () => null,
-	hasSecret: () => false,
-};
 
 export interface ConfinedHostBrokerDeps {
 	// The gate-validated capabilities for this invocation's contribution.
@@ -159,21 +151,19 @@ export function createConfinedHostBroker(
 	// One normalized view of the declarations, read by both the redaction set and
 	// the settings lookup, so the two can never disagree. Keys collapse to lowercase
 	// because the redaction path matches keys case-insensitively, and duplicates
-	// (exact or case-variant) take the most restrictive interpretation: sensitive if
+	// (exact or case-variant) take the most restrictive interpretation: secret if
 	// any duplicate says so. Conflicting declarations therefore cannot open a
 	// raw-value path that redaction closed, regardless of how a backing store
 	// treats key case.
-	const declaredByKey = new Map<string, { sensitive: boolean }>();
+	const declaredByKey = new Map<string, { isSecret: boolean }>();
 
 	for (const entry of deps.settings.declared) {
 		const lowered = entry.key.toLowerCase();
 		const existing = declaredByKey.get(lowered);
-		declaredByKey.set(lowered, { sensitive: entry.sensitive || existing?.sensitive === true });
+		declaredByKey.set(lowered, { isSecret: entry.isSecret || existing?.isSecret === true });
 	}
 
-	const sensitiveKeys = new Set(
-		[...declaredByKey.entries()].filter(([, entry]) => entry.sensitive).map(([key]) => key)
-	);
+	const secretKeys = new Set([...declaredByKey.entries()].filter(([, entry]) => entry.isSecret).map(([key]) => key));
 
 	// The granted origins, fixed per invocation from the gate-validated capability.
 	const allowedOrigins = new Set(
@@ -204,12 +194,12 @@ export function createConfinedHostBroker(
 		const record = args !== null && typeof args === 'object' ? (args as Record<string, unknown>) : {};
 		const payload = { message: record['message'], meta: record['meta'] };
 
-		// Redaction layering before the sink: values under declared-sensitive keys
+		// Redaction layering before the sink: values under declared-secret keys
 		// (value propagation included), the scope tokens, and any resolved secrets.
-		const sensitiveValues = collectSensitiveValues(payload, sensitiveKeys);
+		const sensitiveValues = collectSensitiveValues(payload, secretKeys);
 		for (const value of scope.redactionValues()) sensitiveValues.add(value);
 
-		const redacted = redactFlowLog(payload, sensitiveValues, sensitiveKeys);
+		const redacted = redactFlowLog(payload, sensitiveValues, secretKeys);
 
 		deps.log({ level, message: redacted.message, meta: redacted.meta, context });
 
@@ -221,10 +211,6 @@ export function createConfinedHostBroker(
 		context: ConfinedHostCallContext,
 		signal: AbortSignal
 	): Promise<ConfinedHostReply> {
-		if (!deps.capabilities.settings?.includes('read')) {
-			return denied('the settings read capability is not declared');
-		}
-
 		const key = args !== null && typeof args === 'object' ? (args as Record<string, unknown>)['key'] : undefined;
 
 		if (typeof key !== 'string' || key.length === 0) {
@@ -239,8 +225,8 @@ export function createConfinedHostBroker(
 			return { ok: true, value: null };
 		}
 
-		if (declared.sensitive) {
-			// A sensitive setting never crosses as a value. A fresh per-call reference is
+		if (declared.isSecret) {
+			// A secret setting never crosses as a value. A fresh per-call reference is
 			// minted when a backing secret exists, so a token cannot be replayed across
 			// calls and the redaction set always knows it.
 			const exists = await abortable(Promise.resolve(deps.settings.hasSecret(key, signal)), signal);

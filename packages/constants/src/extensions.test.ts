@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { ExtensionCapabilitiesSchema, ExtensionManifest, ExtensionOptions } from './extensions.js';
+import {
+	ExtensionCapabilitiesSchema,
+	ExtensionManifest,
+	ExtensionOptions,
+	ExtensionSettingDeclaration,
+	ExtensionSettingsSubjectSchema,
+	getExtensionConfigSecretName,
+} from './extensions.js';
 
 describe('ExtensionCapabilitiesSchema', () => {
 	it('accepts a brokered request plus log', () => {
@@ -22,6 +29,41 @@ describe('ExtensionCapabilitiesSchema', () => {
 	it('rejects unknown keys so raw powers cannot pose as capabilities', () => {
 		expect(ExtensionCapabilitiesSchema.safeParse({ fs: true }).success).toBe(false);
 		expect(ExtensionCapabilitiesSchema.safeParse({ env: true }).success).toBe(false);
+	});
+
+	it('rejects the removed settings, secrets, and jobs capabilities as unknown keys', () => {
+		expect(ExtensionCapabilitiesSchema.safeParse({ settings: ['read'] }).success).toBe(false);
+		expect(ExtensionCapabilitiesSchema.safeParse({ secrets: true }).success).toBe(false);
+		expect(ExtensionCapabilitiesSchema.safeParse({ jobs: true }).success).toBe(false);
+	});
+
+	it('normalizes the items and files accountability aliases to the object form', () => {
+		expect(ExtensionCapabilitiesSchema.parse({ items: 'current-user' })).toEqual({ items: { accountability: 'user' } });
+
+		expect(ExtensionCapabilitiesSchema.parse({ items: 'system' })).toEqual({
+			items: { accountability: 'full-access' },
+		});
+
+		expect(ExtensionCapabilitiesSchema.parse({ files: 'current-user' })).toEqual({ files: { accountability: 'user' } });
+	});
+
+	it('accepts the canonical accountability object and rejects a malformed one', () => {
+		expect(ExtensionCapabilitiesSchema.safeParse({ items: { accountability: 'user' } }).success).toBe(true);
+		expect(ExtensionCapabilitiesSchema.safeParse({ items: { accountability: 'full-access' } }).success).toBe(true);
+		expect(ExtensionCapabilitiesSchema.safeParse({ items: { accountability: 'root' } }).success).toBe(false);
+		expect(ExtensionCapabilitiesSchema.safeParse({ items: 'admin' }).success).toBe(false);
+
+		expect(ExtensionCapabilitiesSchema.safeParse({ items: { accountability: 'user', extra: true } }).success).toBe(
+			false
+		);
+	});
+
+	it('accepts the app and admin endpoint access levels and rejects an unknown one', () => {
+		expect(ExtensionCapabilitiesSchema.safeParse({ endpoint: { access: 'public' } }).success).toBe(true);
+		expect(ExtensionCapabilitiesSchema.safeParse({ endpoint: { access: 'authenticated' } }).success).toBe(true);
+		expect(ExtensionCapabilitiesSchema.safeParse({ endpoint: { access: 'app' } }).success).toBe(true);
+		expect(ExtensionCapabilitiesSchema.safeParse({ endpoint: { access: 'admin' } }).success).toBe(true);
+		expect(ExtensionCapabilitiesSchema.safeParse({ endpoint: { access: 'root' } }).success).toBe(false);
 	});
 
 	it('requires at least one url for the request capability', () => {
@@ -490,5 +532,300 @@ describe('ExtensionManifest', () => {
 		});
 
 		expect(result.success).toBe(true);
+	});
+
+	it('normalizes a deprecated items alias to the object form through the full manifest path', () => {
+		const result = ExtensionManifest.safeParse({
+			name: 'cairncms-extension-test',
+			version: '1.0.0',
+			'cairncms:extension': { ...hybridOption, runtime: 'confined-server', capabilities: { items: 'current-user' } },
+		});
+
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+
+		const options = result.data['cairncms:extension'] as { capabilities?: { items?: unknown } };
+		expect(options.capabilities?.items).toEqual({ accountability: 'user' });
+	});
+
+	it('normalizes a deprecated items alias on a confined bundle entry through the full manifest path', () => {
+		const result = ExtensionManifest.safeParse({
+			name: 'cairncms-extension-test',
+			version: '1.0.0',
+			'cairncms:extension': {
+				...bundleOption,
+				runtime: 'confined-server',
+				entries: [
+					{ type: 'interface', name: 'my-interface', source: 'src/interface.js' },
+					{ type: 'endpoint', name: 'my-endpoint', source: 'src/endpoint.js', capabilities: { items: 'system' } },
+				],
+			},
+		});
+
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+
+		const options = result.data['cairncms:extension'] as {
+			entries?: Array<{ capabilities?: { items?: unknown } }>;
+		};
+
+		expect(options.entries?.[1]?.capabilities?.items).toEqual({ accountability: 'full-access' });
+	});
+});
+
+describe('ExtensionOptions settings declaration', () => {
+	it('accepts a settings declaration on an app extension, which cannot declare capabilities', () => {
+		const settings = { preview_url: { type: 'string', scope: 'collection' } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(true);
+	});
+
+	it('accepts a settings declaration on every extension type', () => {
+		const settings = { preview_url: { type: 'string', scope: 'global' } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(true);
+		expect(ExtensionOptions.safeParse({ ...apiOption, settings }).success).toBe(true);
+		expect(ExtensionOptions.safeParse({ ...hybridOption, settings }).success).toBe(true);
+		expect(ExtensionOptions.safeParse({ ...bundleOption, settings }).success).toBe(true);
+	});
+
+	it('accepts an extension that omits settings', () => {
+		expect(ExtensionOptions.safeParse(appOption).success).toBe(true);
+	});
+
+	it('rejects an empty settings declaration so ownership is never ambiguous', () => {
+		expect(ExtensionOptions.safeParse({ ...appOption, settings: {} }).success).toBe(false);
+	});
+
+	it('accepts an inline and a config secret string setting', () => {
+		const inline = { api_key: { type: 'string', scope: 'global', secret: { source: 'inline' } } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings: inline }).success).toBe(true);
+
+		const config = { api_key: { type: 'string', scope: 'global', secret: { source: 'config' } } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings: config }).success).toBe(true);
+	});
+
+	it('rejects a secret non-string setting', () => {
+		const settings = { api_key: { type: 'number', scope: 'global', secret: { source: 'inline' } } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(false);
+	});
+
+	it('rejects a config-sourced secret at collection scope', () => {
+		const settings = { api_key: { type: 'string', scope: 'collection', secret: { source: 'config' } } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(false);
+	});
+
+	it('accepts an app-readable non-secret setting', () => {
+		const settings = { preview_url: { type: 'string', scope: 'collection', appReadable: true } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(true);
+	});
+
+	it('rejects an app-readable secret setting', () => {
+		const settings = { api_key: { type: 'string', scope: 'global', secret: { source: 'inline' }, appReadable: true } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(false);
+	});
+
+	it('rejects an unknown key inside a setting declaration', () => {
+		const settings = { preview_url: { type: 'string', scope: 'global', surprise: true } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(false);
+	});
+
+	it('rejects an invalid type or scope', () => {
+		expect(
+			ExtensionOptions.safeParse({ ...appOption, settings: { x: { type: 'date', scope: 'global' } } }).success
+		).toBe(false);
+
+		expect(
+			ExtensionOptions.safeParse({ ...appOption, settings: { x: { type: 'string', scope: 'tenant' } } }).success
+		).toBe(false);
+	});
+
+	it('accepts a conventional snake_case key', () => {
+		const settings = { preview_url: { type: 'string', scope: 'global' } };
+		expect(ExtensionOptions.safeParse({ ...appOption, settings }).success).toBe(true);
+	});
+
+	it('rejects unsafe or reserved setting keys', () => {
+		for (const key of [
+			'__proto__',
+			'constructor',
+			'prototype',
+			'Preview',
+			'preview-url',
+			'preview url',
+			'preview.url',
+			'1preview',
+		]) {
+			const settings = { [key]: { type: 'string', scope: 'global' } };
+			expect(ExtensionOptions.safeParse({ ...appOption, settings }).success, key).toBe(false);
+		}
+	});
+});
+
+describe('ExtensionSettingDeclaration', () => {
+	it('defaults scope to global and preserves an explicit collection scope', () => {
+		expect(ExtensionSettingDeclaration.parse({ type: 'string' })).toEqual({ type: 'string', scope: 'global' });
+
+		expect(ExtensionSettingDeclaration.parse({ type: 'string', scope: 'collection' })).toMatchObject({
+			scope: 'collection',
+		});
+	});
+
+	it('accepts presentation metadata and rejects a malformed one', () => {
+		expect(
+			ExtensionSettingDeclaration.safeParse({ type: 'string', presentation: { order: 2, width: 'half' } }).success
+		).toBe(true);
+
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', presentation: {} }).success).toBe(true);
+
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', presentation: { width: 'wide' } }).success).toBe(
+			false
+		);
+
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', presentation: { order: 1.5 } }).success).toBe(false);
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', presentation: { label: 'X' } }).success).toBe(false);
+	});
+
+	it('accepts an allowlisted presentation interface on a collection-scoped string', () => {
+		expect(
+			ExtensionSettingDeclaration.safeParse({
+				type: 'string',
+				scope: 'collection',
+				presentation: { interface: 'system-display-template' },
+			}).success
+		).toBe(true);
+	});
+
+	it('rejects a presentation interface outside the allowlist', () => {
+		expect(
+			ExtensionSettingDeclaration.safeParse({
+				type: 'string',
+				scope: 'collection',
+				presentation: { interface: 'input-code' },
+			}).success
+		).toBe(false);
+	});
+
+	it('rejects a presentation interface on a global scope, a non-string type, and a secret', () => {
+		expect(
+			ExtensionSettingDeclaration.safeParse({
+				type: 'string',
+				presentation: { interface: 'system-display-template' },
+			}).success
+		).toBe(false);
+
+		expect(
+			ExtensionSettingDeclaration.safeParse({
+				type: 'number',
+				scope: 'collection',
+				presentation: { interface: 'system-display-template' },
+			}).success
+		).toBe(false);
+
+		expect(
+			ExtensionSettingDeclaration.safeParse({
+				type: 'string',
+				scope: 'collection',
+				secret: { source: 'inline' },
+				presentation: { interface: 'system-display-template' },
+			}).success
+		).toBe(false);
+	});
+
+	it('rejects a presentation options key until it is supported', () => {
+		expect(
+			ExtensionSettingDeclaration.safeParse({
+				type: 'string',
+				scope: 'collection',
+				presentation: { interface: 'system-display-template', options: {} },
+			}).success
+		).toBe(false);
+	});
+
+	it('accepts a secret declaration and defaults its source to inline', () => {
+		expect(ExtensionSettingDeclaration.parse({ type: 'string', secret: {} })).toMatchObject({
+			secret: { source: 'inline' },
+		});
+
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', secret: { source: 'config' } }).success).toBe(true);
+	});
+
+	it('enforces the secret rules and rejects the removed sensitive shape', () => {
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'number', secret: { source: 'inline' } }).success).toBe(false);
+
+		expect(
+			ExtensionSettingDeclaration.safeParse({ type: 'string', secret: { source: 'inline' }, appReadable: true }).success
+		).toBe(false);
+
+		expect(
+			ExtensionSettingDeclaration.safeParse({ type: 'string', scope: 'collection', secret: { source: 'config' } })
+				.success
+		).toBe(false);
+
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', secret: { source: 'env' } }).success).toBe(false);
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', sensitive: true }).success).toBe(false);
+		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', secretSource: 'inline' }).success).toBe(false);
+	});
+});
+
+describe('ExtensionSettingsSubjectSchema', () => {
+	it('accepts the package-name convention', () => {
+		expect(ExtensionSettingsSubjectSchema.safeParse('cairncms-extension-foo').success).toBe(true);
+		expect(ExtensionSettingsSubjectSchema.safeParse('@scope/cairncms-extension-foo').success).toBe(true);
+		expect(ExtensionSettingsSubjectSchema.safeParse('@cairncms/extension-foo').success).toBe(true);
+	});
+
+	it('rejects a name outside the convention', () => {
+		expect(ExtensionSettingsSubjectSchema.safeParse('my-extension').success).toBe(false);
+		expect(ExtensionSettingsSubjectSchema.safeParse('').success).toBe(false);
+	});
+
+	it('rejects a junk or non-canonical name that would still load', () => {
+		expect(ExtensionSettingsSubjectSchema.safeParse('cairncms-extension-!!!').success).toBe(false);
+		expect(ExtensionSettingsSubjectSchema.safeParse('cairncms-extension-Foo').success).toBe(false);
+		expect(ExtensionSettingsSubjectSchema.safeParse('cairncms-extension--leading').success).toBe(false);
+
+		expect(ExtensionSettingsSubjectSchema.safeParse(`cairncms-extension-${String.fromCharCode(0)}`).success).toBe(
+			false
+		);
+	});
+
+	it('rejects a non-conventional scope', () => {
+		expect(ExtensionSettingsSubjectSchema.safeParse('@BAD/cairncms-extension-foo').success).toBe(false);
+		expect(ExtensionSettingsSubjectSchema.safeParse('@ acme/cairncms-extension-foo').success).toBe(false);
+	});
+
+	it('rejects a subject longer than the storage bound', () => {
+		expect(ExtensionSettingsSubjectSchema.safeParse(`cairncms-extension-${'x'.repeat(260)}`).success).toBe(false);
+	});
+});
+
+describe('getExtensionConfigSecretName', () => {
+	it('derives a readable variable from the subject scope, local name, and key', () => {
+		expect(getExtensionConfigSecretName('@acme/cairncms-extension-stripe-sync', 'api_key')).toBe(
+			'CAIRNCMS_EXT_ACME_STRIPE_SYNC_API_KEY'
+		);
+
+		expect(getExtensionConfigSecretName('cairncms-extension-api-metric', 'api_key')).toBe(
+			'CAIRNCMS_EXT_API_METRIC_API_KEY'
+		);
+
+		expect(getExtensionConfigSecretName('@cairncms/extension-foo', 'api_key')).toBe(
+			'CAIRNCMS_EXT_CAIRNCMS_FOO_API_KEY'
+		);
+	});
+
+	it('strips a trailing separator run from the derived segment', () => {
+		expect(getExtensionConfigSecretName('cairncms-extension-edge-', 'api_key')).toBe('CAIRNCMS_EXT_EDGE_API_KEY');
+	});
+
+	it('rejects an invalid subject or key', () => {
+		expect(() => getExtensionConfigSecretName('@acme/not-an-extension', 'api_key')).toThrow();
+		expect(() => getExtensionConfigSecretName('cairncms-extension-foo', 'Api-Key')).toThrow();
+		expect(() => getExtensionConfigSecretName('cairncms-extension-foo', 'constructor')).toThrow();
+	});
+
+	it('derives the same variable for two subjects that normalize alike, the collision the loader gates', () => {
+		expect(getExtensionConfigSecretName('@acme/cairncms-extension-stripe-sync', 'api_key')).toBe(
+			getExtensionConfigSecretName('@acme/cairncms-extension-stripe.sync', 'api_key')
+		);
 	});
 });

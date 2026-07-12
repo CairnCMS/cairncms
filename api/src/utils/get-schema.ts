@@ -7,6 +7,7 @@ import { mapValues } from 'lodash-es';
 import { getSchemaCache, setSchemaCache } from '../cache.js';
 import { ALIAS_TYPES } from '../constants.js';
 import getDatabase from '../database/index.js';
+import { isInternalTable } from '../database/internal-tables.js';
 import { systemCollectionRows } from '../database/system-data/collections/index.js';
 import { systemFieldRows } from '../database/system-data/fields/index.js';
 import env from '../env.js';
@@ -72,6 +73,8 @@ async function getDatabaseSchema(database: Knex, schemaInspector: SchemaInspecto
 	];
 
 	for (const [collection, info] of Object.entries(schemaOverview)) {
+		if (isInternalTable(collection)) continue;
+
 		if (toArray(env['DB_EXCLUDE_TABLES']).includes(collection)) {
 			logger.trace(`Collection "${collection}" is configured to be excluded and will be ignored`);
 			continue;

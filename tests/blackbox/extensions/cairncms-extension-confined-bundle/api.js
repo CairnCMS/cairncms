@@ -2,6 +2,7 @@ var CairnBundle = (() => {
 	const operationHandler = async ({ options }) => ({
 		marker: 'confined-bundle-op',
 		received: options.probe ?? null,
+		apiKeyKind: options.api_key ? (options.api_key.kind ?? typeof options.api_key) : null,
 	});
 
 	// Both endpoint entries run this exact code. Only the gate-validated per-entry

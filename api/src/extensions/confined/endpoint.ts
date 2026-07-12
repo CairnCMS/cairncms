@@ -1,12 +1,8 @@
 import type { Accountability, ExtensionCapabilities } from '@cairncms/types';
-import {
-	createConfinedHostBroker,
-	DARK_SETTINGS,
-	type ConfinedHostBrokerDeps,
-	type ConfinedLogEntry,
-} from './broker.js';
+import { createConfinedHostBroker, type ConfinedHostBrokerDeps, type ConfinedLogEntry } from './broker.js';
 import { toConfinedAccountability } from './operation.js';
 import { ConfinedSecretScope } from './secret-scope.js';
+import type { ConfinedSettingsAccess } from './settings-access.js';
 import type { ConfinedHostDispatcher, ConfinedInvocation, ConfinedResult, ConfinedRuntimeLimits } from './types.js';
 
 export const ENDPOINT_PATH_MAX = 2048;
@@ -41,6 +37,7 @@ export interface ConfinedEndpointDeps {
 	log: (entry: ConfinedLogEntry) => void;
 	getAxios?: ConfinedHostBrokerDeps['getAxios'];
 	itemsService?: ConfinedHostBrokerDeps['itemsService'];
+	settingsAccess: (subject: string) => ConfinedSettingsAccess;
 	brokerLimits: ConfinedHostBrokerDeps['limits'];
 	runtimeLimits: ConfinedRuntimeLimits;
 }
@@ -108,8 +105,9 @@ function shapeGuestResult(value: unknown, method: string): ConfinedEndpointResul
 
 /**
  * Runs a confined JSON endpoint. The authority gate is decided before any child
- * exists: an undeclared endpoint capability denies, and `authenticated` access
- * requires a caller with a user. The inbound request is shaped and bounded before
+ * exists: an undeclared endpoint capability denies, `authenticated` requires a
+ * caller with a user, and `app` and `admin` additionally require that caller's app
+ * or admin flag. The inbound request is shaped and bounded before
  * the parent materializes it into a child frame, the guest receives only
  * `{ method, path, query, body }`, and the guest's reply is held to the result
  * contract: a `status` in 100 to 599, a JSON `body`, and nothing else.
@@ -122,8 +120,14 @@ export async function runConfinedEndpoint(
 
 	if (access === undefined) return { ok: false, failure: 'denied' };
 
-	if (access === 'authenticated' && !request.accountability?.user) {
-		return { ok: false, failure: 'unauthenticated' };
+	// public needs no caller. authenticated, app, and admin all require a user, so no user
+	// is 'unauthenticated' (401), and a user lacking the app or admin flag is 'denied' (403).
+	if (access !== 'public') {
+		const accountability = request.accountability;
+
+		if (!accountability?.user) return { ok: false, failure: 'unauthenticated' };
+		if (access === 'app' && accountability.app !== true) return { ok: false, failure: 'denied' };
+		if (access === 'admin' && accountability.admin !== true) return { ok: false, failure: 'denied' };
 	}
 
 	const method = typeof request.method === 'string' ? request.method.toUpperCase() : '';
@@ -142,14 +146,23 @@ export async function runConfinedEndpoint(
 	try {
 		const scope = new ConfinedSecretScope();
 
+		const access = deps.settingsAccess(request.extensionId);
+
 		const brokerDeps: ConfinedHostBrokerDeps = {
 			capabilities: request.capabilities,
 			log: deps.log,
-			settings: DARK_SETTINGS,
+			settings: access.source,
 			accountability: request.accountability,
 			limits: deps.brokerLimits,
-			// Endpoints mint no option handles, so no reference ever resolves.
-			resolveSecret: async () => null,
+			resolveSecret: async (binding, signal) => {
+				if (signal.aborted) return null;
+
+				if (binding.kind === 'extension-setting') {
+					return access.resolveExtensionSecret(binding, signal);
+				}
+
+				return null;
+			},
 		};
 
 		if (deps.getAxios !== undefined) brokerDeps.getAxios = deps.getAxios;

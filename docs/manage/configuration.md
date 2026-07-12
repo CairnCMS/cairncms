@@ -45,7 +45,7 @@ Variables that control how CairnCMS listens for requests:
 - **`PUBLIC_URL`** — the externally-reachable URL of the instance. Used to construct asset URLs, redirect targets, and email links. Set this whenever the instance is reachable through a hostname or path that isn't `http://localhost:8055`.
 - **`SERVE_APP`** — whether to serve the admin app at `/admin`. Default `true`. Set to `false` for headless API deployments where no operator UI is needed.
 - **`GRAPHQL_INTROSPECTION`** — whether the GraphQL schema is introspectable. Default `true`. Disable in production if you do not want unauthenticated clients to enumerate the schema.
-- **`MAX_PAYLOAD_SIZE`** — the maximum request body size. Default `1mb`. Increase when receiving large uploads or imports.
+- **`MAX_PAYLOAD_SIZE`** — the maximum request body size. Default `1mb`. Increase when receiving large uploads or imports. For a per-file upload cap, see `FILES_MAX_UPLOAD_SIZE` under Files and batch operations.
 - **`MAX_RELATIONAL_DEPTH`** — how deeply nested a single query can fetch related data. Default `10`.
 - **`MAX_BATCH_MUTATION`** — limit on items in a batch create/update/delete. Default unlimited.
 - **`QUERYSTRING_PARSE_DEPTH`** — maximum nesting depth parsed from URL query strings. Default `10`.
@@ -342,6 +342,8 @@ Asset transformation settings:
 ## Files and batch operations
 
 - **`FILE_METADATA_ALLOW_LIST`** — comma-separated list of EXIF and IFD tag paths to extract from uploaded image files. Default includes camera make, model, F-number, exposure, focal length, and ISO. Restrict further or expand depending on your privacy and metadata-display requirements.
+- **`FILES_MAX_UPLOAD_SIZE`** — the maximum size of a single uploaded file, applied to both multipart uploads and URL imports. Unset by default (no limit). Accepts a whole-number size such as `10mb`, `1gb`, or `500kb`. This is a per-file cap, distinct from `MAX_PAYLOAD_SIZE` (the whole request body). A malformed value fails startup rather than silently disabling the cap.
+- **`FILES_MIME_TYPE_ALLOW_LIST`** — the content types allowed for upload, applied to both multipart uploads and URL imports. Default `*/*` (all types). Comma-separated glob patterns, for example `image/*,application/pdf`. The check matches the declared content type, not the file's actual bytes, so treat it as a guard, not a guarantee.
 - **`RELATIONAL_BATCH_SIZE`** — chunk size for batched relational queries. Default `25000`. Larger values reduce round trips at the cost of memory; smaller values trade more queries for lower memory use.
 - **`EXPORT_BATCH_SIZE`** — chunk size for streaming exports. Default `5000`. Tunes memory pressure on large exports.
 
@@ -351,6 +353,8 @@ Asset transformation settings:
 - **`EXTENSIONS_AUTO_RELOAD`** — when `true`, the API watches extension files and reloads on change, including when `NODE_ENV=development`. Default `false`. See the [Creating extensions](/docs/develop/extensions/creating-extensions/) page for the development workflow.
 - **`EXTENSIONS_CACHE_TTL`** — `Cache-Control` max-age applied to the `/extensions/*` bundle responses. Unset by default (no client cache).
 - **`PACKAGE_FILE_LOCATION`** — directory containing the project `package.json` (used to discover npm-installed extensions). Default `.`.
+- **`SECRETS_ENCRYPTION_KEY`** — key under which inline extension secrets and secret flow-operation options are encrypted at rest. The value must be canonical base64 decoding to at least 32 bytes; generate one with `openssl rand -base64 32`. Leaving it unset is allowed until the first secret is saved; without it the save fails with a configuration error, and non-secret values are unaffected. Setting it to a malformed value fails startup. Treat as a credential, and keep it distinct from `SECRET`, which signs tokens and is unrelated. Changing it makes previously stored secret values unreadable: they fail closed rather than decrypting wrongly, and each must be re-entered.
+- **`CAIRNCMS_EXT_<NAME>_<KEY>`** — the variable family for extension secrets declared with the `config` source. The extension's documentation names the exact variables; the name derives from the package name and setting key, so it is stable and can be provisioned in a secret manager ahead of deployment. See [Extension settings](/docs/develop/extensions/settings/#secret-settings) for the derivation.
 
 ### Sandboxed extensions
 

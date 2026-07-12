@@ -95,7 +95,7 @@ test('the scaffold tsconfig uses bundler resolution, not the deprecated node10',
 	expect(tsconfig.compilerOptions.moduleResolution).not.toBe('node');
 });
 
-test.each(['interface', 'display', 'layout', 'module', 'panel', 'hook', 'endpoint', 'operation'])(
+test.each(['interface', 'display', 'layout', 'module', 'panel', 'item-view', 'hook', 'endpoint', 'operation'])(
 	'TypeScript %s scaffold type-checks against the pinned local SDK',
 	async (type) => {
 		const result = await withPinnedFixture(async (dir) => {

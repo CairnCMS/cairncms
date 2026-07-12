@@ -76,7 +76,7 @@
 						<span class="collection-name">{{ collection.name }}</span>
 					</router-link>
 
-					<collection-options :collection="collection" />
+					<collection-options :collection="collection" :has-nested-collections="false" />
 				</v-list-item>
 			</v-list>
 

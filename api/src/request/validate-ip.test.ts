@@ -265,6 +265,40 @@ test('composition with GHSA-wv3h-5fx7-966h: IPv4-mapped IPv6 of 127.0.0.1 is den
 	await expectDenied('::ffff:127.0.0.1', DENY_URL);
 });
 
+test('IPv6 unspecified :: is denied when 0.0.0.0 is in the deny-list', async () => {
+	vi.mocked(getEnv).mockReturnValue({ IMPORT_IP_DENY_LIST: ['0.0.0.0'] });
+	mockOnlyLoopbackInterface();
+	await expectDenied('::', DENY_URL);
+});
+
+test.each([
+	['compressed zero', '::0'],
+	['fully expanded', '0:0:0:0:0:0:0:0'],
+])('IPv6 unspecified spelling (%s) is denied when 0.0.0.0 is in the deny-list', async (_label, form) => {
+	vi.mocked(getEnv).mockReturnValue({ IMPORT_IP_DENY_LIST: ['0.0.0.0'] });
+	mockOnlyLoopbackInterface();
+	await expectDenied(form, DENY_URL);
+});
+
+test('IPv6 unspecified :: is allowed when 0.0.0.0 is not in the deny-list', async () => {
+	vi.mocked(getEnv).mockReturnValue({ IMPORT_IP_DENY_LIST: ['169.254.169.254'] });
+	await expectAllowed('::', DENY_URL);
+});
+
+test('IPv6 unspecified :: is denied when it is a literal deny-list member', async () => {
+	vi.mocked(getEnv).mockReturnValue({ IMPORT_IP_DENY_LIST: ['::'] });
+	await expectDenied('::', DENY_URL);
+});
+
+test.each([['0.0.0.1'], ['0.1.2.3']])(
+	'IPv4 %s in the 0/8 range is allowed when 0.0.0.0 is in the deny-list (narrowness)',
+	async (ip) => {
+		vi.mocked(getEnv).mockReturnValue({ IMPORT_IP_DENY_LIST: ['0.0.0.0'] });
+		mockOnlyLoopbackInterface();
+		await expectAllowed(ip, DENY_URL);
+	}
+);
+
 test('composition with GHSA-wv3h-5fx7-966h: IPv4-mapped IPv6 of 169.254.169.254 is denied via canonical match', async () => {
 	vi.mocked(getEnv).mockReturnValue({ IMPORT_IP_DENY_LIST: ['169.254.169.254'] });
 	await expectDenied('::ffff:169.254.169.254', DENY_URL);

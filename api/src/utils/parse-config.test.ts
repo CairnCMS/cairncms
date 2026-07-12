@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCount, parseDuration, parseSize, type BoundedSpec } from './parse-config.js';
+import { parseCount, parseDuration, parseOptionalSize, parseSize, type BoundedSpec } from './parse-config.js';
 
 const KiB = 1024;
 const MiB = 1024 * 1024;
@@ -39,6 +39,32 @@ describe('parseSize', () => {
 		expect(parseSize('32mb', SIZE).ok).toBe(false);
 		const floor = parseSize('512b', SIZE);
 		if (!floor.ok) expect(floor.error.message).toMatch(/at least 1KB/i);
+	});
+});
+
+describe('parseOptionalSize', () => {
+	const OPT = { envVar: 'X_OPT', floor: 1 * KiB, ceiling: 16 * MiB };
+
+	it('returns undefined when unset, null, or blank (disabled, not a default)', () => {
+		expect(parseOptionalSize(undefined, OPT)).toEqual({ ok: true, value: undefined });
+		expect(parseOptionalSize(null, OPT)).toEqual({ ok: true, value: undefined });
+		expect(parseOptionalSize('   ', OPT)).toEqual({ ok: true, value: undefined });
+	});
+
+	it('parses a set whole-number size', () => {
+		expect(parseOptionalSize('16mb', OPT)).toEqual({ ok: true, value: 16 * MiB });
+		expect(parseOptionalSize('256kb', OPT)).toEqual({ ok: true, value: 256 * KiB });
+	});
+
+	it('rejects malformed, lax, and decimal values', () => {
+		for (const bad of ['10mbb', '1gib', '1foo', '1.5mb']) {
+			expect(parseOptionalSize(bad, OPT).ok).toBe(false);
+		}
+	});
+
+	it('enforces the floor and ceiling', () => {
+		expect(parseOptionalSize('512b', OPT).ok).toBe(false);
+		expect(parseOptionalSize('32mb', OPT).ok).toBe(false);
 	});
 });
 

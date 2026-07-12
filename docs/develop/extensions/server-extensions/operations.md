@@ -118,7 +118,7 @@ The handler runs each time a flow reaches the operation. It receives:
 
 - **`options`** — the operation's configured options, with any data chain variables already interpolated. If the editor configured `to: '{{ $trigger.payload.email }}'`, the handler receives the resolved email address, not the template string.
 - **`context`** — an object that combines the standard API extension context with two additions specific to operations:
-  - `services`, `exceptions`, `database`, `env`, `logger`, `getSchema` — same as endpoint and hook contexts
+  - `services`, `exceptions`, `database`, `env`, `logger`, `getSchema`, `extensionSettings` — same as endpoint and hook contexts
   - **`data`** — the entire flow data chain, with every prior operation's output keyed by operation key
   - **`accountability`** — the accountability object derived from the flow's trigger (the originating user, role, IP, and so on)
 
@@ -295,14 +295,16 @@ The manifest declares the runtime and the capabilities the handler uses:
     "host": "^1.0.0",
     "runtime": "confined-server",
     "capabilities": {
-      "items": "current-user",
+      "items": { "accountability": "user" },
       "log": true
     }
   }
 }
 ```
 
-The `items: "current-user"` mode reads as the user who triggered the flow, so the operation sees exactly what that user could read through the API. Keep the app-side options honest about the declared capabilities, and do not offer a configuration the broker would reject, such as a request method outside `request.methods`. To pass a secret to the handler without the guest ever seeing it, mark the option with `optionDelivery`.
+The `items: { accountability: "user" }` mode reads as the user who triggered the flow, so the operation sees exactly what that user could read through the API. Keep the app-side options honest about the declared capabilities, and do not offer a configuration the broker would reject, such as a request method outside `request.methods`.
+
+Secrets have two homes, by where the value belongs. A value configured per flow, such as a token the flow author pastes into the operation's options, is marked with `optionDelivery`: it is stored encrypted at rest, masked on reads, and delivered to the handler as a reference the guest never sees raw. A durable credential that belongs to the extension rather than to one flow is a [secret package setting](/docs/develop/extensions/settings/) read through `host.settings.get`. Declared operation-option secrets and inline package-setting secrets are both encrypted at rest, while a config-sourced package secret is never stored and resolves from deployment configuration.
 
 See the [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) page for the full host API, the capability vocabulary, `optionDelivery`, and the accountability modes.
 

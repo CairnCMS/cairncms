@@ -1,3 +1,4 @@
+import { SECRET_MASK } from '@cairncms/constants';
 import type { Accountability, Query, SchemaOverview } from '@cairncms/types';
 import { parseJSON, toArray } from '@cairncms/utils';
 import { format, isValid, parseISO } from 'date-fns';
@@ -21,6 +22,7 @@ import type {
 } from '../types/index.js';
 import { generateHash } from '../utils/generate-hash.js';
 import { ItemsService } from './items.js';
+import { maskOperationOptions } from './operation-option-secrets.js';
 
 type Action = 'create' | 'read' | 'update';
 
@@ -100,7 +102,7 @@ export class PayloadService {
 			return value;
 		},
 		async conceal({ action, value }) {
-			if (action === 'read') return value ? '**********' : null;
+			if (action === 'read') return value ? SECRET_MASK : null;
 			return value;
 		},
 		async 'user-created'({ action, value, accountability }) {
@@ -201,6 +203,14 @@ export class PayloadService {
 			this.maskConcealedAggregates(processedPayload);
 			this.maskAliasedConcealedFields(processedPayload, aliasMap);
 			this.processAggregates(processedPayload);
+
+			// Every generic read masks, REST, GraphQL, export, and revision deltas alike.
+			// The flow runtime is the only reveal path, through its own internal load.
+			if (this.collection === 'directus_operations') {
+				for (const record of processedPayload) {
+					maskOperationOptions(record);
+				}
+			}
 		}
 
 		if (Array.isArray(payload)) {
@@ -239,7 +249,7 @@ export class PayloadService {
 				if (!PayloadService.VALUE_DERIVING_AGGREGATES.has(operation)) continue;
 				if (!concealedFields.has(operandField)) continue;
 
-				item[key] = item[key] == null ? null : '**********';
+				item[key] = item[key] == null ? null : SECRET_MASK;
 			}
 		}
 	}
@@ -260,7 +270,7 @@ export class PayloadService {
 
 			for (const item of payload) {
 				if (!(aliasKey in item)) continue;
-				item[aliasKey] = item[aliasKey] == null ? null : '**********';
+				item[aliasKey] = item[aliasKey] == null ? null : SECRET_MASK;
 			}
 		}
 	}

@@ -20,6 +20,7 @@ For platform setup and operations (configuration, deployment, security, upgrades
 - **[Settings](/docs/guides/settings/)** — project settings, branding, themes, and translation strings.
 - **[Files](/docs/guides/files/)** — the file library, folders, and storage backends.
 - **[Insights](/docs/guides/insights/)** — building dashboards from collection data.
+- **[Extensions](/docs/guides/extensions/)** — extension health, diagnostics, and configuring the settings extensions declare.
 - **[Flows](/docs/guides/flows/)** — flows, triggers, operations, and webhooks.
 
 ## Where to go after this section

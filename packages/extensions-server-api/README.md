@@ -43,7 +43,7 @@ The three entrypoints:
 - `defineJsonEndpoint` for an HTTP endpoint, where the handler is the whole endpoint and returns `{ status?, body }`.
 - `defineEventHook` for filter and action event hooks.
 
-Every privileged effect goes through the brokered `host.*` API (`host.log`, `host.request`, `host.items`, `host.settings`, `host.template`), gated by the capabilities the extension declares in its manifest. Most of these calls return an `ExtensionResult` envelope, so a handler branches on the outcome rather than catching exceptions. Logging is fire-and-forget and resolves to nothing.
+Every privileged effect goes through the brokered `host.*` API (`host.log`, `host.request`, `host.items`, `host.settings`, `host.template`), gated by the capabilities and settings the extension declares in its manifest. Most of these calls return an `ExtensionResult` envelope, so a handler branches on the outcome rather than catching exceptions. Logging is fire-and-forget and resolves to nothing.
 
 For the full host API, the capability vocabulary, and the runtime model, see the [Sandbox documentation](https://cairncms.dev/docs/develop/extensions/server-extensions/sandbox/).
 

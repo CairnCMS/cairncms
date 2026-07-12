@@ -35,7 +35,8 @@ const emit = defineEmits(['update:modelValue', 'replaced']);
 
 const { t } = useI18n();
 
-function uploaded() {
+function uploaded(fileInfo: Record<string, any> | null) {
+	if (!fileInfo) return;
 	emit('update:modelValue', false);
 	emit('replaced');
 }

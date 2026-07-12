@@ -1,6 +1,6 @@
 ---
 title: Platform and utilities
-description: The mixed bag at the edge of the API. The settings singleton, the server info / health / specs endpoints, the extensions discovery endpoint, and the `/utils/*` operator routes.
+description: The mixed bag at the edge of the API. The settings singleton, the server info / health / specs endpoints, the extensions discovery and extension-settings endpoints, and the `/utils/*` operator routes.
 sidebar:
   order: 7
 ---
@@ -59,7 +59,7 @@ Returns a `data` envelope whose contents depend on the caller's accountability:
 
 - **Unauthenticated callers** receive only the public branding subset: `project.project_name`, `project_descriptor`, `project_logo`, `project_color`, `default_language`, `public_foreground`, `public_background`, `public_note`, and `custom_css`. This is what the admin app reads on the login screen before the user has authenticated.
 - **Authenticated users** additionally receive `rateLimit` and `rateLimitGlobal` blocks describing the configured rate-limiter policy.
-- **Admins** additionally receive `cairncms.version`, a `node` block (Node version and uptime), and an `os` block.
+- **Admins** additionally receive `cairncms.version`.
 
 The platform version is admin-only on this endpoint. Clients that need to detect the running version without admin credentials should look at the package's published version channel rather than reading it from `/server/info`.
 
@@ -112,22 +112,23 @@ GET /extensions
       "status": "loaded"
     },
     {
-      "name": "my-color-picker",
+      "name": "cairncms-extension-color-picker",
       "type": "interface",
       "local": false,
       "status": "discovered",
       "version": "1.2.0"
     },
     {
-      "name": "shout-operation",
+      "name": "cairncms-extension-shout-operation",
       "type": "operation",
       "local": true,
       "status": "loaded",
       "runtime": "confined-server",
-      "capabilities": { "log": true, "items": "current-user" }
+      "capabilities": { "log": true, "items": { "accountability": "user" } },
+      "settings": { "status": "available" }
     },
     {
-      "name": "metrics-bundle",
+      "name": "cairncms-extension-metrics-bundle",
       "type": "bundle",
       "local": true,
       "status": "partial",
@@ -138,7 +139,7 @@ GET /extensions
           "name": "metric-feed",
           "type": "endpoint",
           "status": "failed",
-          "reason": { "code": "route-collision", "detail": "the confined endpoint route is already registered" },
+          "reason": { "code": "ROUTE_COLLISION", "detail": "the confined endpoint route is already registered" },
           "capabilities": { "endpoint": { "access": "authenticated" }, "request": { "urls": ["https://api.example.com"], "methods": ["GET"] } }
         }
       ]
@@ -166,9 +167,11 @@ GET /extensions
 }
 ```
 
-Each row has `name`, `type`, `local`, and `status`. A server extension that registered into the API has status `loaded`. An app extension that was found and built into the app bundle has status `discovered`, since it runs in the browser rather than the server. An extension that errored during discovery, build, or registration has status `failed` and carries a `reason` object with a stable `code` and a `detail` that has been run through the platform's error redaction, so the diagnostics never expose raw paths or secrets from the underlying error. A bundle whose entries did not all load has status `partial`.
+Each row has `name`, `type`, `local`, and `status`. A server extension that registered into the API has status `loaded`. An app extension that was found on this instance has status `discovered`: it runs in the browser rather than the server, and the row appears whether or not this instance serves the admin app. An extension that errored during discovery, build, or registration has status `failed` and carries a `reason` object with a stable `code` and a `detail` that has been run through the platform's error redaction, so the diagnostics never expose raw paths or secrets from the underlying error. A bundle whose entries did not all load has status `partial`.
 
 A confined (sandboxed) extension also carries `runtime: "confined-server"` and the `capabilities` it declared. A bundle lists its nested extensions under `entries`, each with its own `name`, `type`, `status`, optional `reason`, and `capabilities`. The optional `version` field appears when available.
+
+An extension that declares settings carries a `settings` field: `{ "status": "available" }` when its settings are editable, or `{ "status": "unavailable", "reason": { "code": "...", "detail": "..." } }` when the settings subject is refused. The reason codes are `SETTINGS_SUBJECT_INVALID` (the package name is not a valid extension name), `SETTINGS_SUBJECT_DUPLICATE` (more than one installed extension uses the name), and `SETTINGS_SUBJECT_CONFIG_COLLISION` (two packages derive the same config-secret deployment variable). An unavailable subject affects the settings surface only, never whether the extension loads.
 
 The `meta.confinedRuntime` object reports the global confined-runtime state (`not-required`, `available`, or `unavailable`) and, when available, the resolved OS hardening `posture`: the `mode` (`auto` or `required`), the `decision` (`run` or `refuse`), the hardening layers `applied` and `missing`, and the `cgroupMechanic` in use.
 
@@ -179,6 +182,101 @@ This is the only `/extensions` route that requires authentication. The source ro
 Serves the bundled JavaScript code for installed app extensions. The admin app calls `/extensions/sources/index.js` at boot to load every app-side extension's code, plus follow-up calls to load chunks named by the manifest. The response is `application/javascript` with a `Cache-Control` header derived from `EXTENSIONS_CACHE_TTL`.
 
 Operators rarely call this directly. It exists for the admin app's runtime loader.
+
+## Extension settings (`/extension-settings/*`)
+
+Stored operator values for the settings an extension declares in its manifest. The values live in internal platform storage reached only through these routes. There is no generic collection, no `/items` path, and nothing in the `/schema` snapshot. See [Extension settings](/docs/develop/extensions/settings/) for the declaration model these routes serve.
+
+### Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/extension-settings` | Admin-only. Stored values for one subject, optionally filtered by scope. |
+| `POST` | `/extension-settings` | Admin-only. Set one value. |
+| `DELETE` | `/extension-settings` | Admin-only. Clear one value, or purge a subject. |
+| `GET` | `/extension-settings/owners` | Admin-only. Every settings-declaring extension, with its declaration or refusal reason. |
+| `GET` | `/extension-settings/app` | App access. Non-secret app-readable values, for app extension code. |
+
+### `GET /extension-settings`
+
+Returns the stored values for one subject. `subject` is required, `scope` (`global` or `collection`) and `scope_key` are optional filters.
+
+```http
+GET /extension-settings?subject=cairncms-extension-chat-notify&scope=global&scope_key=
+```
+
+```json
+{
+  "data": [
+    { "scope": "global", "scope_key": "", "key": "sender_name", "value": "Newsroom Bot" },
+    { "scope": "global", "scope_key": "", "key": "api_token", "value": "**********" }
+  ]
+}
+```
+
+A stored secret always reads back as the mask, never the value.
+
+### `POST /extension-settings`
+
+Sets one value. The body requires all five fields; a global value uses an empty `scope_key`.
+
+```json
+{ "subject": "cairncms-extension-chat-notify", "scope": "collection", "scope_key": "articles", "key": "channel", "value": "#news" }
+```
+
+A write to a key the subject does not declare, a value of the wrong type, or a collection `scope_key` that names no existing collection is refused with `400 INVALID_PAYLOAD`. So is a write to a config-sourced secret, which is provisioned in deployment config and never stored, and a write of the literal mask back to a secret key. Writing an inline secret when `SECRETS_ENCRYPTION_KEY` is not configured fails with `503 INVALID_CONFIG` naming the missing configuration.
+
+### `DELETE /extension-settings`
+
+Accepts exactly two body shapes and refuses everything else with `400 INVALID_PAYLOAD`, so a malformed request can never escalate a one-value clear into a purge.
+
+```json
+{ "subject": "cairncms-extension-chat-notify", "scope": "collection", "scope_key": "articles", "key": "channel" }
+```
+
+clears one value, and
+
+```json
+{ "subject": "cairncms-extension-chat-notify" }
+```
+
+purges every value stored for the subject. Both return `{ "data": { "removed": <count> } }`.
+
+### `GET /extension-settings/owners`
+
+Returns every installed extension that declares settings. An available owner carries its raw `subject` and full `declaration`; an unavailable owner carries only a sanitized `displaySubject` and the refusal `reason`, so an invalid package name is never echoed raw.
+
+```json
+{
+  "data": [
+    {
+      "subject": "cairncms-extension-chat-notify",
+      "displaySubject": "cairncms-extension-chat-notify",
+      "status": "available",
+      "declaration": { "api_token": { "type": "string", "scope": "global", "secret": { "source": "inline" } } }
+    },
+    {
+      "displaySubject": "bad-subject",
+      "status": "unavailable",
+      "reason": { "code": "SETTINGS_SUBJECT_INVALID", "detail": "the settings subject \"bad-subject\" is not a valid extension package name" }
+    }
+  ]
+}
+```
+
+### `GET /extension-settings/app`
+
+Serves declared keys marked `appReadable` to app extension code. `subject` is required, `collection` is optional. The response maps key to value. Global app-readable values are always included. Collection-scoped values are included only when `collection` is supplied and the caller's permissions allow reading that collection. Secret keys are never served, because a secret can never be app-readable.
+
+```http
+GET /extension-settings/app?subject=cairncms-extension-chat-notify&collection=articles
+```
+
+```json
+{ "data": { "channel": "#news" } }
+```
+
+This is the one route in the subtree that does not require admin. It requires a signed-in user whose role has app access.
 
 ## Utils (`/utils/*`)
 
@@ -306,6 +404,7 @@ The collections and endpoints on this page span the permission model:
 - **`/server/info`**, **`/server/health`**, and the spec routes — operator-facing rather than collection-CRUD. The basic `/server/info` and `/server/health` endpoints do not require authentication; spec generation and the per-subsystem `/server/health` detail are scoped to admin-readable schema.
 - **`/extensions`** — admin-only. The root diagnostics route returns `403 FORBIDDEN` to non-admins.
 - **`/extensions/sources/<chunk>`** — unauthenticated. The admin app loads the bundled extension JavaScript on its login screen before anyone signs in, so this route cannot require a token. It serves client-side bundle code, the same as the static admin assets under `/admin`.
+- **`/extension-settings`** — admin-only, except `GET /extension-settings/app`, which requires a signed-in user with app access and applies the caller's collection read permissions to collection-scoped values.
 - **`/utils/*`** — varies. `random/string` and `hash/*` are unauthenticated. `sort`, `revert`, `import`, and `export` require accountability and are gated by per-collection permissions. `cache/clear` is admin-only.
 
 ## GraphQL
@@ -314,7 +413,7 @@ The settings collection appears on `/graphql/system` with singleton-shaped resol
 
 The server queries (`server_info`, `server_health`, `server_ping`, `server_specs_oas`, `server_specs_graphql`) live on `/graphql/system` as ordinary queries. See [GraphQL / What `/graphql/system` exposes](/docs/api/graphql/#what-graphql-system-exposes) for the full list.
 
-`/graphql/system` also exposes an `extensions` query that returns the installed app-side extensions (`interfaces`, `displays`, `layouts`, `modules`) as nested string arrays. It does not cover hooks, endpoints, operations, or bundles, and there is no GraphQL equivalent of `/extensions/sources/<chunk>` (the bundled-JS loader is REST-only by necessity).
+`/graphql/system` also exposes an `extensions` query that returns the installed app-side extensions (`interfaces`, `displays`, `layouts`, `modules`) as nested string arrays. It does not cover hooks, endpoints, operations, or bundles, and there is no GraphQL equivalent of `/extensions/sources/<chunk>` (the bundled-JS loader is REST-only by necessity). The extension-settings surface is REST-only too: none of the `/extension-settings` routes have a GraphQL equivalent.
 
 The rest of `/utils` is REST-only. There is no GraphQL equivalent for cache flushing, asset import / export, sort, revert, hash generation, or random string generation.
 

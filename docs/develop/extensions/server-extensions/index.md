@@ -18,7 +18,7 @@ Full authority is the home for what the sandbox cannot host: native modules, raw
 
 ## Sandboxed
 
-A server extension opts into the sandbox by declaring `runtime: confined-server`. The code then runs in a confined child process with no host imports and no raw Node. Every privileged effect goes through a brokered `host.*` call that the platform gates against the capabilities the extension declares, so the operator can see and bound what the extension can reach before it runs.
+A server extension opts into the sandbox by declaring `runtime: confined-server`. The code then runs in a confined child process with no host imports and no raw Node. Every privileged effect goes through a brokered `host.*` call that the platform gates against the capabilities and settings the extension declares, so the operator can see and bound what the extension can reach before it runs.
 
 Endpoint handlers and operation server handlers run confined. An operation's app-side configuration form still runs in the browser, as it does for any operation. Confined hooks support filter and action events, while the `init`, `schedule`, and `embed` lifecycles stay full-authority, with no confined equivalent.
 
