@@ -149,7 +149,7 @@ export function registerOperation(
 	const flowManager = getFlowManager();
 
 	if (subject === undefined) {
-		flowManager.addOperation(config.id, config.handler);
+		flowManager.addOperation(config.id, config.handler, true);
 		return;
 	}
 
