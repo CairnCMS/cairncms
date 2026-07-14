@@ -104,6 +104,12 @@ function normalize(
 ): unknown {
 	if (typeof value === 'string') return scrubString(value, sensitiveValues);
 
+	// A numeric sensitive value is matched exactly, since substring scrubbing applies only to
+	// strings.
+	if (typeof value === 'number' || typeof value === 'bigint') {
+		return sensitiveValues.includes(String(value)) ? REDACT_TEXT : value;
+	}
+
 	if (value === null || typeof value !== 'object') return value;
 
 	if (value instanceof Error) {

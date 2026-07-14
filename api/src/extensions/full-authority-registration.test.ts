@@ -257,6 +257,21 @@ describe('full-authority extension settings threading', () => {
 		expect(spy.mock.calls.at(-1)![1]).toBe(handler);
 	});
 
+	it('registers internal operations trusted and extension operations untrusted', () => {
+		const flowManager = getFlowManager();
+		const spy = vi.spyOn(flowManager, 'addOperation');
+		const instance = new ExtensionManager();
+		seedOwner(instance, SUBJECT);
+
+		const handler = () => null;
+
+		(instance as any).registerOperation({ id: 'trust-internal-16-7', handler });
+		expect(spy.mock.calls.at(-1)![2]).toBe(true);
+
+		(instance as any).registerOperation({ id: 'trust-extension-16-7', handler }, SUBJECT);
+		expect(spy.mock.calls.at(-1)![2]).toBeFalsy();
+	});
+
 	it('binds bundle entry contexts to the bundle subject, not the entry name', async () => {
 		process.env[BUNDLE_CONFIG_VAR] = 'bundle-secret';
 
