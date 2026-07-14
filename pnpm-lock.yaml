@@ -20,6 +20,7 @@ overrides:
   lodash: 4.18.1
   minimatch@3: 3.1.4
   minimatch@>=9.0.0 <9.0.7: 9.0.7
+  uuid@>=8.0.0 <11.1.1: 11.1.1
   underscore: 1.13.8
   serialize-javascript@<7.0.5: 7.0.5
   semver@>=7.0.0 <7.5.2: 7.5.2
@@ -2145,15 +2146,15 @@ packages:
 
   '@esbuild-kit/cjs-loader@2.4.4':
     resolution: {integrity: sha512-NfsJX4PdzhwSkfJukczyUiZGc7zNNWZcEAyqeISpDnn0PTfzMJR1aR8xAIPskBejIxBJbIgCCMzbaYa9SXepIg==}
-    deprecated: 'Merged into tsx: https://tsx.is'
+    deprecated: 'Merged into tsx: https://tsx.hirok.io'
 
   '@esbuild-kit/core-utils@3.3.2':
     resolution: {integrity: sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ==}
-    deprecated: 'Merged into tsx: https://tsx.is'
+    deprecated: 'Merged into tsx: https://tsx.hirok.io'
 
   '@esbuild-kit/esm-loader@2.6.5':
     resolution: {integrity: sha512-FxEMIkJKnodyA1OaCUoEvbYRkoZlLZ4d/eXFu9Fh8CbBBgP5EmZxrfTRyN0qpXZ4vOvqnE5YdRdcrmUUXuU+dA==}
-    deprecated: 'Merged into tsx: https://tsx.is'
+    deprecated: 'Merged into tsx: https://tsx.hirok.io'
 
   '@esbuild/aix-ppc64@0.25.12':
     resolution: {integrity: sha512-Hhmwd6CInZ3dwpuGTF8fJG6yoWmsToE+vYgD4nytZVxcu1ulHpUQRAB1UJ8+N1Am3Mz4+xOByoQoSZf4D+CpkA==}
@@ -9307,16 +9308,6 @@ packages:
     deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
-  uuid@8.3.2:
-    resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
-    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
-    hasBin: true
-
-  uuid@9.0.0:
-    resolution: {integrity: sha512-MXcSTerfPa4uqyzStbRoTgt5XIe3x5+42+q1sDuy3R5MDk66URdLMOZe5aPX/SQd+kuYAh0FdP/pO28IkQyTeg==}
-    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
-    hasBin: true
-
   v8-to-istanbul@9.3.0:
     resolution: {integrity: sha512-kiGUalWN+rgBJ/1OHZsBtU4rXZOfj/7rKQxULKlIzwzQSvMJUUNgPwJEEh7gU6xEVxC0ahoOBvN2YI8GH6FNgA==}
     engines: {node: '>=10.12.0'}
@@ -10237,7 +10228,7 @@ snapshots:
       '@aws-sdk/util-middleware': 3.310.0
       '@aws-sdk/util-retry': 3.310.0
       tslib: 2.8.1
-      uuid: 8.3.2
+      uuid: 11.1.1
 
   '@aws-sdk/middleware-sdk-s3@3.310.0':
     dependencies:
@@ -10545,7 +10536,7 @@ snapshots:
       process: 0.11.10
       tslib: 2.8.1
       tunnel: 0.0.6
-      uuid: 8.3.2
+      uuid: 11.1.1
       xml2js: 0.5.0
     transitivePeerDependencies:
       - encoding
@@ -10612,7 +10603,7 @@ snapshots:
       open: 8.4.2
       stoppable: 1.1.0
       tslib: 2.8.1
-      uuid: 8.3.2
+      uuid: 11.1.1
     transitivePeerDependencies:
       - supports-color
     optional: true
@@ -10675,7 +10666,7 @@ snapshots:
     dependencies:
       '@azure/msal-common': 13.3.1
       jsonwebtoken: 9.0.0
-      uuid: 8.3.2
+      uuid: 11.1.1
     optional: true
 
   '@azure/storage-blob@12.14.0(encoding@0.1.13)':
@@ -11329,7 +11320,7 @@ snapshots:
       p-limit: 3.1.0
       retry-request: 5.0.2
       teeny-request: 8.0.3(encoding@0.1.13)
-      uuid: 8.3.2
+      uuid: 11.1.1
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -11957,7 +11948,7 @@ snapshots:
   '@ngneat/falso@6.4.0':
     dependencies:
       seedrandom: 3.0.5
-      uuid: 8.3.2
+      uuid: 11.1.1
 
   '@noble/hashes@1.8.0': {}
 
@@ -15103,7 +15094,7 @@ snapshots:
   hyperid@3.3.0:
     dependencies:
       buffer: 5.7.1
-      uuid: 8.3.2
+      uuid: 11.1.1
       uuid-parse: 1.1.0
 
   icc@3.0.0: {}
@@ -16484,7 +16475,7 @@ snapshots:
 
   node-cron@3.0.2:
     dependencies:
-      uuid: 8.3.2
+      uuid: 11.1.1
 
   node-fetch@2.7.0(encoding@0.1.13):
     dependencies:
@@ -18423,7 +18414,7 @@ snapshots:
       https-proxy-agent: 5.0.1
       node-fetch: 2.7.0(encoding@0.1.13)
       stream-events: 1.0.5
-      uuid: 9.0.0
+      uuid: 11.1.1
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -18776,10 +18767,6 @@ snapshots:
 
   uuid@3.4.0:
     optional: true
-
-  uuid@8.3.2: {}
-
-  uuid@9.0.0: {}
 
   v8-to-istanbul@9.3.0:
     dependencies:
