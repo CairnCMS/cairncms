@@ -8,6 +8,8 @@ import type {
 	SnapshotRelation,
 	SnapshotWithHash,
 } from '../types/snapshot.js';
+import { DiffKind } from '../types/snapshot.js';
+import { InvalidPayloadException } from '../exceptions/invalid-payload.js';
 import { validateApplyDiff } from './validate-diff.js';
 
 test('should fail on invalid diff schema', () => {
@@ -320,4 +322,25 @@ test('should pass on valid diff', () => {
 	const snapshot = { hash: 'abc' } as SnapshotWithHash;
 
 	expect(validateApplyDiff(diff, snapshot)).toBe(true);
+});
+
+test('should throw InvalidPayloadException, not a raw RangeError, for a deeply nested recursive diff', () => {
+	let item: Record<string, unknown> = { kind: DiffKind.NEW, rhs: 0 };
+
+	for (let depth = 0; depth < 50000; depth++) {
+		item = { kind: DiffKind.ARRAY, index: 0, item };
+	}
+
+	const diff = {
+		hash: 'abc',
+		diff: {
+			collections: [{ collection: 'test', diff: [item] }],
+			fields: [],
+			relations: [],
+		},
+	} as unknown as SnapshotDiffWithHash;
+
+	const snapshot = { hash: 'xyz' } as SnapshotWithHash;
+
+	expect(() => validateApplyDiff(diff, snapshot)).toThrow(InvalidPayloadException);
 });

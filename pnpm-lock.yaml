@@ -242,8 +242,8 @@ importers:
         specifier: 5.0.3
         version: 5.0.3
       joi:
-        specifier: 17.9.1
-        version: 17.9.1
+        specifier: 17.13.4
+        version: 17.13.4
       js-yaml:
         specifier: 4.2.0
         version: 4.2.0
@@ -889,8 +889,8 @@ importers:
         specifier: 3.2.6
         version: 3.2.6(vitest@3.2.6(@types/node@22.19.17)(happy-dom@20.10.6)(jsdom@26.1.0)(sass@1.62.0)(terser@5.46.1)(yaml@2.8.3))
       joi:
-        specifier: 17.9.1
-        version: 17.9.1
+        specifier: 17.13.4
+        version: 17.13.4
       typescript:
         specifier: 5.0.4
         version: 5.0.4
@@ -1302,8 +1302,8 @@ importers:
         specifier: 11.1.1
         version: 11.1.1
       joi:
-        specifier: 17.9.1
-        version: 17.9.1
+        specifier: 17.13.4
+        version: 17.13.4
       lodash-es:
         specifier: 4.18.1
         version: 4.18.1
@@ -6623,8 +6623,8 @@ packages:
       node-notifier:
         optional: true
 
-  joi@17.9.1:
-    resolution: {integrity: sha512-FariIi9j6QODKATGBrEX7HZcja8Bsh3rfdGYy/Sb65sGlZWK/QWesU1ghk7aJWDj95knjXlQfSmzFSPPkLVsfw==}
+  joi@17.13.4:
+    resolution: {integrity: sha512-1RuuER6kmt8K8I3nIWvPZKi5RQCb568ZPyY4Pwjlua+yo+63ZTmIwxLZH0heBmiKN4uxjvCiarDrjaeH84xicQ==}
 
   jose@4.15.9:
     resolution: {integrity: sha512-1vUQX+IdDMVPj4k8kOxgUqlcK518yluMuGZwqlr44FS1ppZB/5GWh4rZG89erpOBOJjU/OBsnCVFfapsRz6nEA==}
@@ -15565,7 +15565,7 @@ snapshots:
       - supports-color
       - ts-node
 
-  joi@17.9.1:
+  joi@17.13.4:
     dependencies:
       '@hapi/hoek': 9.3.0
       '@hapi/topo': 5.1.0
