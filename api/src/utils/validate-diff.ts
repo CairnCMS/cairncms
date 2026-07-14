@@ -57,7 +57,16 @@ const applyJoiSchema = Joi.object({
  * @returns True if the diff can be applied (valid & not empty).
  */
 export function validateApplyDiff(applyDiff: SnapshotDiffWithHash, currentSnapshotWithHash: SnapshotWithHash) {
-	const { error } = applyJoiSchema.validate(applyDiff);
+	let error: Joi.ValidationError | undefined;
+
+	try {
+		({ error } = applyJoiSchema.validate(applyDiff));
+	} catch (err) {
+		// joi throws a RangeError rather than returning a ValidationError when a recursive link schema exceeds the runtime stack depth
+		if (err instanceof RangeError) throw new InvalidPayloadException('Provided diff is invalid.');
+		throw err;
+	}
+
 	if (error) throw new InvalidPayloadException(error.message);
 
 	// No changes to apply
