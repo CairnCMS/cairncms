@@ -130,7 +130,7 @@ describe('resolveConfinedRuntime', () => {
 			deps({
 				detect: () => FULL_CAPABILITIES,
 				validate,
-				resolveChild: () => ({ path: '/src/child-host.ts', execArgv: ['--loader', 'tsx'], isBundled: false }),
+				resolveChild: () => ({ path: '/src/child-host.ts', execArgv: ['--import', 'tsx'], isBundled: false }),
 			})
 		);
 
@@ -145,7 +145,7 @@ describe('resolveConfinedRuntime', () => {
 				env: { EXTENSIONS_SANDBOX_OS_HARDENING: 'required' },
 				detect: () => FULL_CAPABILITIES,
 				validate: async () => ['network-namespace', 'permission-model'],
-				resolveChild: () => ({ path: '/src/child-host.ts', execArgv: ['--loader', 'tsx'], isBundled: false }),
+				resolveChild: () => ({ path: '/src/child-host.ts', execArgv: ['--import', 'tsx'], isBundled: false }),
 			})
 		);
 

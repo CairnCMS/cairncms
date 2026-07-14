@@ -148,7 +148,7 @@
 		"stream-json": "1.7.5",
 		"strip-bom-stream": "5.0.0",
 		"tmp-promise": "3.0.3",
-		"tsx": "3.12.6",
+		"tsx": "4.20.6",
 		"uuid": "11.1.1",
 		"uuid-validate": "0.0.3",
 		"wellknown": "0.5.0"
@@ -192,7 +192,7 @@
 		"@types/wellknown": "0.5.4",
 		"@vitest/coverage-v8": "3.2.6",
 		"copyfiles": "2.4.1",
-		"esbuild": "0.17.17",
+		"esbuild": "0.25.12",
 		"form-data": "4.0.6",
 		"knex-mock-client": "2.0.0",
 		"supertest": "6.3.3",

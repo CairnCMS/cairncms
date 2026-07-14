@@ -198,7 +198,7 @@ export interface ConfinedSupervisorOptions {
 /**
  * Resolves the child script from the confined directory. In the built API the production
  * target is the self-contained `runtime/child-host.mjs` bundle, run directly. In dev and
- * tests it is `child-host.ts`, run with the tsx loader. The unbundled tsc-built
+ * tests it is `child-host.ts`, run with tsx's import hook. The unbundled tsc-built
  * `child-host.js` is never the spawn target. the bundle's supported path requires no
  * node_modules, and the hardened runtime-dir-only read scope blocks the deps' optional
  * imports. The directory is a parameter so the resolution can be tested against a built
@@ -213,7 +213,7 @@ export function resolveChild(confinedDir = dirname(fileURLToPath(import.meta.url
 	if (existsSync(bundledPath)) return { path: bundledPath, execArgv: [], isBundled: true };
 
 	const sourcePath = join(confinedDir, 'child-host.ts');
-	return { path: sourcePath, execArgv: ['--loader', 'tsx'], isBundled: false };
+	return { path: sourcePath, execArgv: ['--import', 'tsx'], isBundled: false };
 }
 
 /**
