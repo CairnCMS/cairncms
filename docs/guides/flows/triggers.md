@@ -40,7 +40,11 @@ Configuration:
 
 The full URL appears in the trigger panel after the flow is saved. Treat this URL as private; anyone with it can invoke the flow.
 
-The Cache toggle controls future writes, not lookups. If `CACHE_AUTO_PURGE=true` (the value the CairnCMS Docker bootstrap sets in new projects' env files) saving the flow clears the response cache, so flipping the toggle takes effect on the next request. If `CACHE_AUTO_PURGE=false` (the in-code default) a previously cached response for this flow continues to serve until its TTL expires or the cache is cleared explicitly via the admin endpoint; only then does the toggle suppress new writes.
+The Cache toggle controls future writes, not lookups. If `CACHE_AUTO_PURGE=true` (the value the CairnCMS Docker bootstrap sets in new projects' env files) saving the flow clears the response cache, so flipping the toggle takes effect on the next request. If `CACHE_AUTO_PURGE=false` (the in-code default) a previously cached response for this flow continues to serve until its TTL expires or the cache is cleared explicitly via the admin endpoint. Only then does the toggle suppress new writes.
+
+Even with the cache on, a GET webhook result is keyed on the request context the flow sees: the path, raw query, body, headers, and stable accountability fields. The internal entry is reused only when that context matches, so public or highly variable traffic sees little reuse. Leave the cache off for those flows.
+
+Webhook flow results are sent with `Cache-Control: no-store`, which tells browsers, proxies, and CDNs not to retain them even when the internal cache is on.
 
 For the broader pattern, see the [Webhooks](/docs/guides/flows/webhooks/) page.
 
