@@ -47,6 +47,79 @@ describe('/flows', () => {
 	});
 
 	describe('Webhook Trigger', () => {
+		describe('cacheEnabled GET responses are segmented by request context', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const env = envs[vendor];
+
+				const payloadFlowCreate = {
+					name: 'request-context segmentation flow',
+					icon: 'bolt',
+					color: null,
+					description: null,
+					status: 'active',
+					accountability: null,
+					trigger: 'webhook',
+					options: {},
+				};
+
+				const payloadOperationCreate = {
+					position_x: 19,
+					position_y: 1,
+					name: 'Get epoch milliseconds',
+					key: 'op_exev',
+					type: 'exec',
+					options: { code: 'module.exports = async function() { return { epoch: Date.now() }; }' },
+				};
+
+				const flowId = (
+					await request(getUrl(vendor, env))
+						.post('/flows')
+						.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`)
+						.query({ fields: ['id'] })
+						.send(payloadFlowCreate)
+				).body.data.id;
+
+				await request(getUrl(vendor, env))
+					.patch(`/flows/${flowId}`)
+					.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`)
+					.send({ operation: { ...payloadOperationCreate, flow: flowId } });
+
+				const triggerPath = `/flows/trigger/${flowId}`;
+
+				const alpha1 = await request(getUrl(vendor, env)).get(triggerPath).set('x-cairn-test', 'alpha');
+				await sleep(100);
+				const alpha2 = await request(getUrl(vendor, env)).get(triggerPath).set('x-cairn-test', 'alpha');
+
+				await sleep(100);
+				const beta1 = await request(getUrl(vendor, env)).get(triggerPath).set('x-cairn-test', 'beta');
+				await sleep(100);
+				const beta2 = await request(getUrl(vendor, env)).get(triggerPath).set('x-cairn-test', 'beta');
+
+				await sleep(100);
+				const query1 = await request(getUrl(vendor, env)).get(triggerPath).query({ nonce: '1' });
+				await sleep(100);
+				const query2 = await request(getUrl(vendor, env)).get(triggerPath).query({ nonce: '2' });
+
+				const upperPath = `/FLOWS/TRIGGER/${flowId}`;
+				const upperAlpha = await request(getUrl(vendor, env)).get(upperPath).set('x-cairn-test', 'alpha');
+				await sleep(100);
+				const upperBeta = await request(getUrl(vendor, env)).get(upperPath).set('x-cairn-test', 'beta');
+
+				for (const response of [alpha1, alpha2, beta1, beta2, query1, query2, upperAlpha, upperBeta]) {
+					expect(response.body).toEqual(expect.objectContaining({ epoch: expect.any(Number) }));
+				}
+
+				expect(alpha1.body.epoch).toEqual(alpha2.body.epoch);
+				expect(beta1.body.epoch).toEqual(beta2.body.epoch);
+				expect(alpha1.body.epoch).not.toEqual(beta1.body.epoch);
+				expect(query1.body.epoch).not.toEqual(query2.body.epoch);
+				expect(upperAlpha.body.epoch).not.toEqual(upperBeta.body.epoch);
+
+				expect(alpha1.headers['cache-control']).toBe('no-store');
+				expect(alpha2.headers['cache-control']).toBe('no-store');
+			});
+		});
+
 		describe('cacheEnabled works for GET', () => {
 			it.each(vendors)('%s', async (vendor) => {
 				const env = envs[vendor];

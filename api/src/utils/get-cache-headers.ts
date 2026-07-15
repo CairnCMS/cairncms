@@ -1,5 +1,6 @@
 import type { Request } from 'express';
 import env from '../env.js';
+import { isWebhookTriggerRoute } from './is-webhook-trigger-route.js';
 import { shouldSkipCache } from './should-skip-cache.js';
 
 /**
@@ -18,6 +19,8 @@ export function getCacheControlHeader(
 ): string {
 	// When the user explicitly asked to skip the cache
 	if (shouldSkipCache(req)) return 'no-store';
+
+	if (isWebhookTriggerRoute(req)) return 'no-store';
 
 	// When the resource / current request shouldn't be cached
 	if (ttl === undefined || ttl < 0) return 'no-cache';
