@@ -8,6 +8,7 @@ import asyncHandler from '../utils/async-handler.js';
 import { getCacheControlHeader } from '../utils/get-cache-headers.js';
 import { getCacheKey } from '../utils/get-cache-key.js';
 import { getDateFormatted } from '../utils/get-date-formatted.js';
+import { isWebhookTriggerRoute } from '../utils/is-webhook-trigger-route.js';
 import { getMilliseconds } from '../utils/get-milliseconds.js';
 import { stringByteSize } from '../utils/get-string-byte-size.js';
 
@@ -27,6 +28,8 @@ export const respond: RequestHandler = asyncHandler(async (req, res) => {
 	const isCacheableRequest =
 		(req.method.toLowerCase() === 'get' || req.originalUrl?.startsWith('/graphql')) && !isAuthRoute;
 
+	const uncacheableControl = isWebhookTriggerRoute(req) ? 'no-store' : 'no-cache';
+
 	if (
 		isCacheableRequest &&
 		env['CACHE_ENABLED'] === true &&
@@ -35,20 +38,34 @@ export const respond: RequestHandler = asyncHandler(async (req, res) => {
 		res.locals['cache'] !== false &&
 		exceedsMaxSize === false
 	) {
-		const key = getCacheKey(req);
+		let key: string | undefined = res.locals['cacheKey'];
 
-		try {
-			await setCacheValue(cache, key, res.locals['payload'], getMilliseconds(env['CACHE_TTL']));
-			await setCacheValue(cache, `${key}__expires_at`, { exp: Date.now() + getMilliseconds(env['CACHE_TTL'], 0) });
-		} catch (err: any) {
-			logger.warn(err, `[cache] Couldn't set key ${key}. ${err}`);
+		if (key === undefined) {
+			try {
+				key = getCacheKey(req);
+			} catch (err: any) {
+				logger.warn(err, `[cache] Couldn't compute cache key. ${err}`);
+				res.locals['cache'] = false;
+			}
 		}
 
-		res.setHeader('Cache-Control', getCacheControlHeader(req, getMilliseconds(env['CACHE_TTL']), true, true));
-		res.setHeader('Vary', 'Origin, Cache-Control');
+		if (key !== undefined) {
+			try {
+				await setCacheValue(cache, key, res.locals['payload'], getMilliseconds(env['CACHE_TTL']));
+				await setCacheValue(cache, `${key}__expires_at`, { exp: Date.now() + getMilliseconds(env['CACHE_TTL'], 0) });
+			} catch (err: any) {
+				logger.warn(err, `[cache] Couldn't set key ${key}. ${err}`);
+			}
+
+			res.setHeader('Cache-Control', getCacheControlHeader(req, getMilliseconds(env['CACHE_TTL']), true, true));
+			res.setHeader('Vary', 'Origin, Cache-Control');
+		} else {
+			res.setHeader('Cache-Control', uncacheableControl);
+			res.setHeader('Vary', 'Origin, Cache-Control');
+		}
 	} else {
 		// Don't cache anything by default
-		res.setHeader('Cache-Control', 'no-cache');
+		res.setHeader('Cache-Control', uncacheableControl);
 		res.setHeader('Vary', 'Origin, Cache-Control');
 	}
 
