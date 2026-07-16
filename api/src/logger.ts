@@ -20,8 +20,18 @@ const pinoOptions: LoggerOptions = {
 export const httpLoggerOptions: LoggerOptions = {
 	level: env['LOG_LEVEL'] || 'info',
 	redact: {
-		paths: ['req.headers.authorization', 'req.headers.cookie', 'req.query.access_token'],
-		censor: REDACT_TEXT,
+		paths: ['req.headers.authorization', 'req.headers.cookie', 'req.query.access_token', 'res.headers'],
+		censor: (value, pathParts) => {
+			if (pathParts.join('.') === 'res.headers') {
+				if ('set-cookie' in value) {
+					value['set-cookie'] = REDACT_TEXT;
+				}
+
+				return value;
+			}
+
+			return REDACT_TEXT;
+		},
 	},
 };
 
@@ -44,25 +54,6 @@ if (env['LOG_STYLE'] !== 'raw') {
 				ignore: 'hostname,pid',
 				sync: true,
 			},
-		},
-	};
-}
-
-if (env['LOG_STYLE'] === 'raw') {
-	httpLoggerOptions.redact = {
-		paths: ['req.headers.authorization', 'req.headers.cookie', 'req.query.access_token', 'res.headers'],
-		censor: (value, pathParts) => {
-			const path = pathParts.join('.');
-
-			if (path === 'res.headers') {
-				if ('set-cookie' in value) {
-					value['set-cookie'] = REDACT_TEXT;
-				}
-
-				return value;
-			}
-
-			return REDACT_TEXT;
 		},
 	};
 }
