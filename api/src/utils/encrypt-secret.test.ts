@@ -58,6 +58,14 @@ describe('encrypt-secret', () => {
 		await expect(decryptSecret({ ...envelope, tag: Buffer.alloc(16, 9).toString('base64') })).rejects.toThrow();
 	});
 
+	it('pins the GCM tag to 16 bytes and rejects a truncated tag', async () => {
+		const envelope = await encryptSecret('sk_live_secret');
+		expect(Buffer.from(envelope.tag, 'base64').length).toBe(16);
+
+		const truncatedTag = Buffer.from(envelope.tag, 'base64').subarray(0, 4).toString('base64');
+		await expect(decryptSecret({ ...envelope, tag: truncatedTag })).rejects.toThrow();
+	});
+
 	it('fails closed when decrypting under a different key', async () => {
 		const envelope = await encryptSecret('sk_live_secret');
 		factoryEnv['SECRETS_ENCRYPTION_KEY'] = KEY_B;
