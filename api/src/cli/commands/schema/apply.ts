@@ -8,7 +8,7 @@ import getDatabase, { isInstalled, validateDatabaseConnection } from '../../../d
 import logger from '../../../logger.js';
 import type { Snapshot } from '../../../types/index.js';
 import { DiffKind } from '../../../types/index.js';
-import { isNestedMetaUpdate } from '../../../utils/apply-diff.js';
+import { isNestedMetaUpdate } from '../../../utils/is-nested-meta-update.js';
 import { applySnapshot } from '../../../utils/apply-snapshot.js';
 import { getSnapshotDiff } from '../../../utils/get-snapshot-diff.js';
 import { getSnapshot } from '../../../utils/get-snapshot.js';
@@ -60,21 +60,24 @@ export async function apply(snapshotPath: string, options?: { yes: boolean; dryR
 				message += chalk.black.underline.bold('Collections:');
 
 				for (const { collection, diff } of snapshotDiff.collections) {
-					if (diff[0]?.kind === DiffKind.EDIT) {
+					if (diff[0]?.kind === DiffKind.EDIT || diff[0]?.kind === DiffKind.ARRAY || isNestedMetaUpdate(diff[0])) {
 						message += `\n  - ${chalk.blue('Update')} ${collection}`;
 
 						for (const change of diff) {
+							const path = change.path!.slice(1).join('.');
+
 							if (change.kind === DiffKind.EDIT) {
-								const path = change.path!.slice(1).join('.');
 								message += `\n    - Set ${path} to ${change.rhs}`;
+							} else if (change.kind === DiffKind.DELETE) {
+								message += `\n    - Remove ${path}`;
+							} else if (change.kind === DiffKind.NEW) {
+								message += `\n    - Add ${path} and set it to ${change.rhs}`;
 							}
 						}
 					} else if (diff[0]?.kind === DiffKind.DELETE) {
 						message += `\n  - ${chalk.red('Delete')} ${collection}`;
 					} else if (diff[0]?.kind === DiffKind.NEW) {
 						message += `\n  - ${chalk.green('Create')} ${collection}`;
-					} else if (diff[0]?.kind === DiffKind.ARRAY) {
-						message += `\n  - ${chalk.blue('Update')} ${collection}`;
 					}
 				}
 			}
