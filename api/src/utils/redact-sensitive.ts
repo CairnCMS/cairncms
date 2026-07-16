@@ -152,11 +152,14 @@ function normalize(
 	}
 }
 
-export function redactFlowLog<T>(
+export function redactSensitive<T>(
 	value: T,
-	sensitiveValues?: ReadonlySet<string>,
+	sensitiveValues: ReadonlySet<string>,
 	extraSensitiveKeys?: ReadonlySet<string>
 ): T {
-	const values = sensitiveValues ? Array.from(sensitiveValues) : [];
-	return normalize(value, values, new WeakSet<object>(), extraSensitiveKeys) as T;
+	return normalize(value, Array.from(sensitiveValues), new WeakSet<object>(), extraSensitiveKeys) as T;
+}
+
+export function redactKeysOnly<T>(value: T, extraSensitiveKeys?: ReadonlySet<string>): T {
+	return normalize(value, [], new WeakSet<object>(), extraSensitiveKeys) as T;
 }

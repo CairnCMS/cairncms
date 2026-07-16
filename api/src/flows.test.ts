@@ -973,7 +973,6 @@ describe('confined operation binding', () => {
 		const manager = getFlowManager();
 
 		manager.addConfinedOperation('redact-op', {
-			// A camelCase key must still key-redact, since redactFlowLog lowercases keys.
 			referenceKeys: ['apiKey', 'webhookConfig'],
 			run: async () => ({
 				outcome: { ok: true as const, value: { echoedHandle: 'handle-ref-abc', note: 'used sk_live_secret today' } },

@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { REDACT_TEXT } from '../../constants.js';
-import { collectSensitiveValues, redactFlowLog } from '../../utils/redact-flow-log.js';
+import { collectSensitiveValues, redactSensitive } from '../../utils/redact-sensitive.js';
 
 const loggerInfo = vi.fn();
 
@@ -23,7 +23,7 @@ function makeRedactor(
 ) {
 	const values = new Set([...collectSensitiveValues(keyedData), ...confinedValues]);
 	const keys = new Set(confinedKeys.map((key) => key.toLowerCase()));
-	return (value: unknown) => redactFlowLog(value, values, keys);
+	return (value: unknown) => redactSensitive(value, values, keys);
 }
 
 function contextWith(redactForFlowLog: (value: unknown) => unknown) {

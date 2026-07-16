@@ -1,6 +1,6 @@
 import type { Accountability, ExtensionCapabilities } from '@cairncms/types';
 import type { AxiosInstance } from 'axios';
-import { collectSensitiveValues, redactFlowLog } from '../../utils/redact-flow-log.js';
+import { collectSensitiveValues, redactSensitive } from '../../utils/redact-sensitive.js';
 import { redactionFallback, scrubString } from '../../utils/scrub-string.js';
 import { createConfinedItemsHost, type ConfinedItemsServiceFactory } from './host-items.js';
 import { ABORTED, abortable, denied, invalidRequest, timedOut, unsupported } from './host-reply.js';
@@ -199,7 +199,7 @@ export function createConfinedHostBroker(
 		const sensitiveValues = collectSensitiveValues(payload, secretKeys);
 		for (const value of scope.redactionValues()) sensitiveValues.add(value);
 
-		const redacted = redactFlowLog(payload, sensitiveValues, secretKeys);
+		const redacted = redactSensitive(payload, sensitiveValues, secretKeys);
 
 		deps.log({ level, message: redacted.message, meta: redacted.meta, context });
 
