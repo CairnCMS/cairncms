@@ -24,6 +24,7 @@ overrides:
   uuid@>=8.0.0 <11.1.1: 11.1.1
   '@sendgrid/mail': 8.1.6
   js-yaml@>=4.0.0 <=4.1.1: 4.2.0
+  js-yaml@3: 3.15.0
   underscore: 1.13.8
   serialize-javascript@<7.0.5: 7.0.5
   semver@>=7.0.0 <7.5.2: 7.5.2
@@ -6375,8 +6376,8 @@ packages:
   js-tokens@9.0.1:
     resolution: {integrity: sha512-mxa9E9ITFOt0ban3j6L5MpjwegGz6lBQmM1IJkWeBZGcMxto50+eWdjC/52xDbS2vy0k7vIMK0Fe2wfL9OQSpQ==}
 
-  js-yaml@3.14.2:
-    resolution: {integrity: sha512-PMSmkqxr106Xa156c2M265Z+FTrPl+oxd/rgOQy2tijQeK5TxQ43psO1ZCwhVOSdnn+RzkzlRz/eY4BgJBYVpg==}
+  js-yaml@3.15.0:
+    resolution: {integrity: sha512-ttBQIIQPDeLjpPOohtUdXuXUVoA2uIB6fEH9HyJ7234s5mBJ5wTx20njxplLZQgLaOfpmPQA7X2t5AX6tIPbog==}
     hasBin: true
 
   js-yaml@4.2.0:
@@ -9303,7 +9304,7 @@ snapshots:
     dependencies:
       '@apidevtools/swagger-parser': 10.1.1(openapi-types@12.1.0)
       chalk: 4.1.2
-      js-yaml: 3.14.2
+      js-yaml: 3.15.0
       yargs: 15.4.1
     transitivePeerDependencies:
       - openapi-types
@@ -10927,7 +10928,7 @@ snapshots:
       camelcase: 5.3.1
       find-up: 4.1.0
       get-package-type: 0.1.0
-      js-yaml: 3.14.2
+      js-yaml: 3.15.0
       resolve-from: 5.0.0
 
   '@istanbuljs/schema@0.1.6': {}
@@ -15129,7 +15130,7 @@ snapshots:
 
   js-tokens@9.0.1: {}
 
-  js-yaml@3.14.2:
+  js-yaml@3.15.0:
     dependencies:
       argparse: 1.0.10
       esprima: 4.0.1
@@ -15186,7 +15187,7 @@ snapshots:
     dependencies:
       commander: 4.1.1
       graphlib: 2.1.8
-      js-yaml: 3.14.2
+      js-yaml: 3.15.0
       lodash: 4.18.1
       native-promise-only: 0.8.1
       path-loader: 1.0.12
@@ -17634,7 +17635,7 @@ snapshots:
       chokidar: 3.5.3
       commander: 5.1.0
       express: 4.21.2
-      js-yaml: 3.14.2
+      js-yaml: 3.15.0
       json-refs: 3.0.15
       open: 7.4.2
       path: 0.12.7
