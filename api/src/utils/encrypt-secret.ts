@@ -101,7 +101,7 @@ export async function encryptSecret(plaintext: string): Promise<SecretEnvelope> 
 	const keyMaterial = resolveKeyMaterial(DEFAULT_KID);
 	const salt = randomBytes(SALT_BYTES);
 	const iv = randomBytes(IV_BYTES);
-	const cipher = createCipheriv(ALGORITHM, await deriveKey(keyMaterial, salt), iv);
+	const cipher = createCipheriv(ALGORITHM, await deriveKey(keyMaterial, salt), iv, { authTagLength: TAG_BYTES });
 	const ct = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
 
 	return {
@@ -153,7 +153,11 @@ function parseEnvelope(value: unknown): { salt: Buffer; iv: Buffer; ct: Buffer; 
 export async function decryptSecret(value: unknown): Promise<string> {
 	const parsed = parseEnvelope(value);
 	const keyMaterial = resolveKeyMaterial(DEFAULT_KID);
-	const decipher = createDecipheriv(ALGORITHM, await deriveKey(keyMaterial, parsed.salt), parsed.iv);
+
+	const decipher = createDecipheriv(ALGORITHM, await deriveKey(keyMaterial, parsed.salt), parsed.iv, {
+		authTagLength: TAG_BYTES,
+	});
+
 	decipher.setAuthTag(parsed.tag);
 
 	return Buffer.concat([decipher.update(parsed.ct), decipher.final()]).toString('utf8');
