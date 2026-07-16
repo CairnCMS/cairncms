@@ -34,7 +34,7 @@ import { constructFlowTree } from './utils/construct-flow-tree.js';
 import { getSchema } from './utils/get-schema.js';
 import { JobQueue } from './utils/job-queue.js';
 import { mapValuesDeep } from './utils/map-values-deep.js';
-import { collectSensitiveValues, redactFlowLog } from './utils/redact-flow-log.js';
+import { collectSensitiveValues, redactSensitive } from './utils/redact-sensitive.js';
 import type { ConfinedOperationResult } from './extensions/confined/operation.js';
 
 /**
@@ -74,13 +74,13 @@ export function buildRevisionData(
 	for (const value of extraSensitiveValues) sensitiveValues.add(value);
 	for (const value of collectEnvValues(keyedData)) sensitiveValues.add(value);
 
-	// redactFlowLog matches sensitive keys case-insensitively against a lowercased
+	// redactSensitive matches sensitive keys case-insensitively against a lowercased
 	// candidate, so a declared key like `apiKey` is lowercased to match.
 	const sensitiveKeys = new Set([...extraSensitiveKeys].map((key) => key.toLowerCase()));
 
 	return {
-		steps: redactFlowLog(steps, sensitiveValues, sensitiveKeys),
-		data: redactFlowLog(revisionData, sensitiveValues, sensitiveKeys) as Record<string, unknown>,
+		steps: redactSensitive(steps, sensitiveValues, sensitiveKeys),
+		data: redactSensitive(revisionData, sensitiveValues, sensitiveKeys) as Record<string, unknown>,
 	};
 }
 
@@ -142,7 +142,7 @@ function buildFlowLogRedactor(
 
 	const sensitiveKeys = new Set([...(accumulatedRedaction?.keys ?? [])].map((key) => key.toLowerCase()));
 
-	return (value) => redactFlowLog(value, sensitiveValues, sensitiveKeys);
+	return (value) => redactSensitive(value, sensitiveValues, sensitiveKeys);
 }
 
 type TriggerHandler = {

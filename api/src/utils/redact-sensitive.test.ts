@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { REDACT_TEXT } from '../constants.js';
-import { collectSensitiveValues, redactFlowLog } from './redact-flow-log.js';
+import { collectSensitiveValues, redactKeysOnly, redactSensitive } from './redact-sensitive.js';
 
 const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.HEADER_PAYLOAD_LONG_ENOUGH_TO_BE_REAL_TOKEN';
 const OTHER_TOKEN = 'another-distinct-token-value-also-long-enough';
@@ -111,9 +111,9 @@ describe('collectSensitiveValues', () => {
 	});
 });
 
-describe('redactFlowLog: key-based', () => {
+describe('key-based redaction', () => {
 	test('redacts each sensitive key at top level', () => {
-		const result = redactFlowLog({
+		const result = redactKeysOnly({
 			authorization: 'value',
 			cookie: 'value',
 			'set-cookie': 'value',
@@ -131,7 +131,7 @@ describe('redactFlowLog: key-based', () => {
 	});
 
 	test('redacts sensitive keys nested under plain objects', () => {
-		const result = redactFlowLog({
+		const result = redactKeysOnly({
 			$trigger: {
 				headers: { authorization: 'value' },
 				body: { refresh_token: 'value' },
@@ -143,7 +143,7 @@ describe('redactFlowLog: key-based', () => {
 	});
 
 	test('matches sensitive keys case-insensitively', () => {
-		const result = redactFlowLog({
+		const result = redactKeysOnly({
 			Authorization: 'value',
 			COOKIE: 'value',
 			Access_Token: 'value',
@@ -155,7 +155,7 @@ describe('redactFlowLog: key-based', () => {
 	});
 
 	test('redacts sensitive keys nested inside arrays', () => {
-		const result = redactFlowLog({
+		const result = redactKeysOnly({
 			records: [{ access_token: 'value' }, { other: 'fine' }],
 		}) as any;
 
@@ -164,19 +164,19 @@ describe('redactFlowLog: key-based', () => {
 	});
 
 	test('collapses a sensitive-key value that is a substring of the marker', () => {
-		const result = redactFlowLog({ password: 'redact', token: 'hunter2hunter2' }) as Record<string, unknown>;
+		const result = redactKeysOnly({ password: 'redact', token: 'hunter2hunter2' }) as Record<string, unknown>;
 
 		expect(result['password']).toBe('');
 		expect(result['token']).toBe(REDACT_TEXT);
 	});
 
 	test('collapses a sensitive-key value that equals the marker', () => {
-		const result = redactFlowLog({ password: REDACT_TEXT }) as Record<string, unknown>;
+		const result = redactKeysOnly({ password: REDACT_TEXT }) as Record<string, unknown>;
 		expect(result['password']).toBe('');
 	});
 
 	test('keeps the marker for a sensitive-key value that is also a sensitive value', () => {
-		const result = redactFlowLog({ authorization: `Bearer ${TOKEN}` }, new Set([`Bearer ${TOKEN}`, TOKEN])) as Record<
+		const result = redactSensitive({ authorization: `Bearer ${TOKEN}` }, new Set([`Bearer ${TOKEN}`, TOKEN])) as Record<
 			string,
 			unknown
 		>;
@@ -185,7 +185,7 @@ describe('redactFlowLog: key-based', () => {
 	});
 
 	test('redacts the expanded sensitive-key set under arbitrary parent paths', () => {
-		const result = redactFlowLog({
+		const result = redactKeysOnly({
 			$trigger: {
 				body: {
 					password: 'value',
@@ -215,29 +215,24 @@ describe('redactFlowLog: key-based', () => {
 	});
 });
 
-describe('redactFlowLog: value-based', () => {
+describe('value-propagation (redactSensitive)', () => {
 	test('replaces a sensitive value when it is the entire string', () => {
 		const sensitiveValues = new Set([TOKEN]);
-		const result = redactFlowLog({ message: TOKEN }, sensitiveValues) as { message: string };
+		const result = redactSensitive({ message: TOKEN }, sensitiveValues) as { message: string };
 		expect(result.message).toBe(REDACT_TEXT);
 	});
 
 	test('replaces only the sensitive substring inside a larger string', () => {
 		const sensitiveValues = new Set([TOKEN]);
 
-		const result = redactFlowLog({ url: `https://example.com/?t=${TOKEN}&x=1` }, sensitiveValues) as { url: string };
+		const result = redactSensitive({ url: `https://example.com/?t=${TOKEN}&x=1` }, sensitiveValues) as { url: string };
 
 		expect(result.url).toBe(`https://example.com/?t=${REDACT_TEXT}&x=1`);
 	});
 
-	test('does not redact when no sensitive values are provided', () => {
-		const result = redactFlowLog({ message: TOKEN }) as { message: string };
-		expect(result.message).toBe(TOKEN);
-	});
-
 	test('replaces every occurrence of a sensitive value in the same string', () => {
 		const sensitiveValues = new Set([TOKEN]);
-		const result = redactFlowLog({ s: `${TOKEN} and ${TOKEN}` }, sensitiveValues) as { s: string };
+		const result = redactSensitive({ s: `${TOKEN} and ${TOKEN}` }, sensitiveValues) as { s: string };
 		expect(result.s).toBe(`${REDACT_TEXT} and ${REDACT_TEXT}`);
 	});
 
@@ -245,7 +240,7 @@ describe('redactFlowLog: value-based', () => {
 		const value = 'sensitive value with spaces';
 		const sensitiveValues = new Set([value]);
 
-		const result = redactFlowLog({ url: `https://example.com/?t=${encodeURIComponent(value)}` }, sensitiveValues) as {
+		const result = redactSensitive({ url: `https://example.com/?t=${encodeURIComponent(value)}` }, sensitiveValues) as {
 			url: string;
 		};
 
@@ -253,12 +248,12 @@ describe('redactFlowLog: value-based', () => {
 	});
 
 	test('collapses a string when a sensitive value is a substring of the marker', () => {
-		const result = redactFlowLog({ s: 'before redact after' }, new Set(['redact'])) as { s: string };
+		const result = redactSensitive({ s: 'before redact after' }, new Set(['redact'])) as { s: string };
 		expect(result.s).toBe('');
 	});
 
 	test('replaces a longer sensitive value before a value it contains', () => {
-		const result = redactFlowLog(
+		const result = redactSensitive(
 			{ s: `prefixed_${TOKEN} and bare ${TOKEN}` },
 			new Set([`prefixed_${TOKEN}`, TOKEN])
 		) as {
@@ -269,34 +264,34 @@ describe('redactFlowLog: value-based', () => {
 	});
 });
 
-describe('redactFlowLog: JSON-safe normalization', () => {
+describe('JSON-safe normalization', () => {
 	test('Date becomes its ISO string representation', () => {
 		const date = new Date('2026-05-01T12:00:00.000Z');
-		const result = redactFlowLog({ when: date }) as { when: unknown };
+		const result = redactKeysOnly({ when: date }) as { when: unknown };
 		expect(result.when).toBe('2026-05-01T12:00:00.000Z');
 	});
 
 	test('URL becomes its href string', () => {
 		const url = new URL('https://example.com/path?x=1');
-		const result = redactFlowLog({ url }) as { url: unknown };
+		const result = redactKeysOnly({ url }) as { url: unknown };
 		expect(result.url).toBe('https://example.com/path?x=1');
 	});
 
 	test('URL containing a sensitive value has the substring redacted within the href', () => {
 		const sensitiveValues = new Set([TOKEN]);
 		const url = new URL(`https://example.com/path?t=${TOKEN}`);
-		const result = redactFlowLog({ url }, sensitiveValues) as { url: unknown };
+		const result = redactSensitive({ url }, sensitiveValues) as { url: unknown };
 		expect(result.url).toBe(`https://example.com/path?t=${REDACT_TEXT}`);
 	});
 
 	test('Buffer becomes its JSON representation', () => {
 		const buf = Buffer.from('hello');
-		const result = redactFlowLog({ data: buf }) as unknown as { data: { type: string; data: number[] } };
+		const result = redactKeysOnly({ data: buf }) as unknown as { data: { type: string; data: number[] } };
 		expect(result.data).toEqual({ type: 'Buffer', data: [104, 101, 108, 108, 111] });
 	});
 
 	test('Set and Map serialize to empty plain objects', () => {
-		const result = redactFlowLog({
+		const result = redactKeysOnly({
 			set: new Set(['a', 'b']),
 			map: new Map([['k', 'v']]),
 		}) as { set: unknown; map: unknown };
@@ -308,7 +303,7 @@ describe('redactFlowLog: JSON-safe normalization', () => {
 	test('Error objects serialize to a plain object with name, message, stack, cause', () => {
 		const err = new Error(`boom: ${TOKEN}`);
 		const sensitiveValues = new Set([TOKEN]);
-		const result = redactFlowLog({ err }, sensitiveValues) as unknown as { err: Record<string, unknown> };
+		const result = redactSensitive({ err }, sensitiveValues) as unknown as { err: Record<string, unknown> };
 		expect(result.err['name']).toBe('Error');
 		expect(result.err['message']).toBe(`boom: ${REDACT_TEXT}`);
 		expect(typeof result.err['stack']).toBe('string');
@@ -317,28 +312,28 @@ describe('redactFlowLog: JSON-safe normalization', () => {
 	test('cycles produce a [Circular] placeholder instead of throwing', () => {
 		const input: Record<string, unknown> = { headers: { authorization: 'value' } };
 		input['self'] = input;
-		const result = redactFlowLog(input) as Record<string, unknown>;
+		const result = redactKeysOnly(input) as Record<string, unknown>;
 		expect((result['headers'] as Record<string, unknown>)['authorization']).toBe(REDACT_TEXT);
 		expect(result['self']).toBe('[Circular]');
 	});
 });
 
-describe('redactFlowLog: general', () => {
+describe('pass-through and immutability', () => {
 	test('passes JSON-safe non-sensitive values through unchanged', () => {
 		const input = { method: 'POST', path: '/flows/trigger/abc', body: { count: 3 } };
-		const result = redactFlowLog(input);
+		const result = redactKeysOnly(input);
 		expect(result).toEqual(input);
 	});
 
 	test('does not mutate the input object', () => {
 		const input = { headers: { authorization: 'real-value' } };
 		const snapshot = JSON.parse(JSON.stringify(input));
-		redactFlowLog(input);
+		redactKeysOnly(input);
 		expect(input).toEqual(snapshot);
 	});
 
 	test('preserves array structure', () => {
-		const result = redactFlowLog([1, 'a', { x: 2 }]);
+		const result = redactKeysOnly([1, 'a', { x: 2 }]);
 		expect(result).toEqual([1, 'a', { x: 2 }]);
 	});
 });
@@ -359,15 +354,28 @@ describe('caller-declared sensitive keys', () => {
 		const declared = new Set(['apikey']);
 		const source = { apiKey: TOKEN, note: `used ${TOKEN} today`, plain: 'kept' };
 
-		const result = redactFlowLog(source, collectSensitiveValues(source, declared), declared);
+		const result = redactSensitive(source, collectSensitiveValues(source, declared), declared);
 
 		expect(result.apiKey).toBe(REDACT_TEXT);
 		expect(result.note).not.toContain(TOKEN);
 		expect(result.plain).toBe('kept');
 	});
+});
 
-	test('declared keys do not affect calls that omit them', () => {
-		const source = { apiKey: 'visible-when-not-declared' };
-		expect(redactFlowLog(source)).toEqual(source);
+describe('explicit redaction modes', () => {
+	test('redactSensitive throws when the value set is omitted, rather than silently reducing to key-only', () => {
+		expect(() => Reflect.apply(redactSensitive, undefined, [{ message: TOKEN }])).toThrow();
+	});
+
+	test('redactKeysOnly redacts a declared extra key without propagating its value', () => {
+		const secret = 'a-static-secret-value';
+
+		const result = redactKeysOnly({ apiKey: secret, plain: secret }, new Set(['apikey'])) as {
+			apiKey: string;
+			plain: string;
+		};
+
+		expect(result.apiKey).toBe(REDACT_TEXT);
+		expect(result.plain).toBe(secret);
 	});
 });
