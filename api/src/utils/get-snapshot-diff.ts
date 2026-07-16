@@ -2,6 +2,7 @@ import deepDiff from 'deep-diff';
 import { orderBy } from 'lodash-es';
 import type { Snapshot, SnapshotDiff } from '../types/index.js';
 import { DiffKind } from '../types/index.js';
+import { isNestedMetaUpdate } from './is-nested-meta-update.js';
 import { sanitizeCollection, sanitizeField, sanitizeRelation } from './sanitize-schema.js';
 
 export function getSnapshotDiff(current: Snapshot, after: Snapshot): SnapshotDiff {
@@ -109,7 +110,7 @@ export function getSnapshotDiff(current: Snapshot, after: Snapshot): SnapshotDif
 	 */
 
 	const deletedCollections = diffedSnapshot.collections
-		.filter((collection) => collection.diff?.[0]?.kind === DiffKind.DELETE)
+		.filter((collection) => collection.diff?.[0]?.kind === DiffKind.DELETE && !isNestedMetaUpdate(collection.diff?.[0]))
 		.map(({ collection }) => collection);
 
 	diffedSnapshot.fields = diffedSnapshot.fields.filter(
