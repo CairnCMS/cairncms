@@ -1,7 +1,7 @@
 import { toArray } from '@cairncms/utils';
 import { merge } from 'lodash-es';
 import { pino } from 'pino';
-import type { LoggerOptions } from 'pino';
+import type { Logger, LoggerOptions } from 'pino';
 import type { Request, RequestHandler } from 'express';
 import { pinoHttp, stdSerializers } from 'pino-http';
 import { URL } from 'url';
@@ -94,19 +94,25 @@ const logger = pino(merge(pinoOptions, loggerEnvConfig));
 
 const httpLoggerEnvConfig = getConfigFromEnv('LOGGER_HTTP', ['LOGGER_HTTP_LOGGER']);
 
-export const expressLogger = pinoHttp({
-	logger: pino(merge(httpLoggerOptions, loggerEnvConfig)),
-	...httpLoggerEnvConfig,
-	serializers: {
-		req(request: Request) {
-			const output = stdSerializers.req(request);
-			output.url = redactQuery(output.url);
-			return output;
-		},
-	},
-}) as RequestHandler;
+export const expressLogger = createExpressLogger(pino(merge(httpLoggerOptions, loggerEnvConfig)));
 
 export default logger;
+
+export function createExpressLogger(httpLogger: Logger): RequestHandler {
+	return pinoHttp({
+		logger: httpLogger,
+		...httpLoggerEnvConfig,
+		serializers: {
+			req: redactRequestSerializer,
+		},
+	}) as RequestHandler;
+}
+
+function redactRequestSerializer(request: Request) {
+	const output = stdSerializers.req(request);
+	output.url = redactQuery(output.url);
+	return output;
+}
 
 function redactQuery(originalPath: string) {
 	const url = new URL(originalPath, 'http://example.com/');

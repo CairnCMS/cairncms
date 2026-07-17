@@ -2,7 +2,6 @@ import http from 'node:http';
 import { Socket } from 'node:net';
 import { Writable } from 'node:stream';
 import { pino } from 'pino';
-import { pinoHttp } from 'pino-http';
 import { describe, expect, test, vi } from 'vitest';
 import { REDACT_TEXT } from './constants.js';
 
@@ -15,11 +14,10 @@ vi.doMock('./env', async () => {
 	};
 });
 
-const { httpLoggerOptions } = await import('./logger.js');
+const { httpLoggerOptions, createExpressLogger } = await import('./logger.js');
 
-// Drive the real pino-http response path in memory: a ServerResponse over an unconnected socket
-// (no bind/listen), the middleware, then a synchronous 'finish' that emits the captured log.
-function captureResponseLog(applyHeaders: (res: http.ServerResponse) => void): any {
+function captureLog(options: { url?: string; applyHeaders?: (res: http.ServerResponse) => void } = {}): any {
+	const { url = '/', applyHeaders = () => undefined } = options;
 	const logs: any[] = [];
 
 	const stream = new Writable({
@@ -29,13 +27,14 @@ function captureResponseLog(applyHeaders: (res: http.ServerResponse) => void): a
 		},
 	});
 
-	// Drop the pretty-print transport so the output lands on the test stream.
-	const middleware = pinoHttp({ logger: pino({ ...httpLoggerOptions, transport: undefined }, stream) });
+	// The pretty-print transport is dropped so the log lands on the capture stream instead.
+	const middleware = createExpressLogger(pino({ ...httpLoggerOptions, transport: undefined }, stream));
 
+	// An unconnected socket drives pino-http without binding a network port.
 	const socket = new Socket();
 	const req = new http.IncomingMessage(socket);
 	req.method = 'GET';
-	req.url = '/';
+	req.url = url;
 	req.headers = {};
 
 	const res = new http.ServerResponse(req);
@@ -50,12 +49,22 @@ function captureResponseLog(applyHeaders: (res: http.ServerResponse) => void): a
 
 describe('default log style redaction through the real pino-http path', () => {
 	test('censors set-cookie in the response headers while keeping other headers', () => {
-		const log = captureResponseLog((res) => {
-			res.setHeader('set-cookie', 'cairncms_refresh_token=test-refresh-token-value; HttpOnly');
-			res.setHeader('content-type', 'application/json');
+		const log = captureLog({
+			applyHeaders: (res) => {
+				res.setHeader('set-cookie', 'cairncms_refresh_token=test-refresh-token-value; HttpOnly');
+				res.setHeader('content-type', 'application/json');
+			},
 		});
 
 		expect(log.res.headers['set-cookie']).toBe(REDACT_TEXT);
 		expect(log.res.headers['content-type']).toBe('application/json');
+	});
+
+	test('redacts access_token in the request url while keeping other query parameters', () => {
+		const log = captureLog({ url: '/items/thing?access_token=test-access-token-value&fields=id' });
+
+		expect(JSON.stringify(log)).not.toContain('test-access-token-value');
+		expect(log.req.url).toContain(`access_token=${REDACT_TEXT}`);
+		expect(log.req.url).toContain('fields=id');
 	});
 });
