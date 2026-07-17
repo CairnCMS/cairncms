@@ -10,6 +10,39 @@ import knex from 'knex';
 import { cloneDeep } from 'lodash';
 import request from 'supertest';
 
+const ERROR_SINK_ENDPOINT = '/cairncms-extension-error-sink/throw';
+
+const KEYED_SECRET = 'keyed-extension-secret-7b3d1e5f';
+
+interface ErrorLogRecord {
+	err: { message: string; extensions?: Record<string, unknown> };
+}
+
+function isErrorLogRecord(value: unknown): value is ErrorLogRecord {
+	if (typeof value !== 'object' || value === null || !('err' in value)) return false;
+	const err = (value as { err: unknown }).err;
+	return typeof err === 'object' && err !== null && typeof (err as { message?: unknown }).message === 'string';
+}
+
+function findErrorRecord(logs: string, needle: string): ErrorLogRecord | undefined {
+	for (const line of logs.split('\n')) {
+		const trimmed = line.trim();
+		if (!trimmed.startsWith('{')) continue;
+
+		let record: unknown;
+
+		try {
+			record = JSON.parse(trimmed);
+		} catch {
+			continue;
+		}
+
+		if (isErrorLogRecord(record) && record.err.message.includes(needle)) return record;
+	}
+
+	return undefined;
+}
+
 describe('Logger Redact Tests', () => {
 	const databases = new Map<string, Knex>();
 	const directusInstances = {} as { [vendor: string]: ChildProcess };
@@ -263,5 +296,79 @@ describe('Logger Redact Tests', () => {
 				});
 			});
 		});
+	});
+
+	describe('REST error sink', () => {
+		it.each(vendors)(
+			'%s redacts a propagated request secret and a keyed extension secret in the response and the log',
+			async (vendor) => {
+				const propagatedSecret = 'propagated-body-secret-4f9a2c1d';
+
+				const logger = new TestLogger(directusInstances[vendor], ERROR_SINK_ENDPOINT);
+
+				const response = await request(getUrl(vendor, env))
+					.post(ERROR_SINK_ENDPOINT)
+					.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`)
+					.send({ password: propagatedSecret })
+					.expect('Content-Type', /application\/json/)
+					.expect(500);
+
+				const logs = await logger.getLogs();
+
+				const error = response.body.errors[0];
+				expect(error.message).toBe('error-sink endpoint failure echoing --redact--');
+				expect(error.extensions.code).toBe('INTERNAL_SERVER_ERROR');
+				expect(error.extensions.detail).toBe('propagated request value was --redact--');
+				expect(error.extensions.token).toBe('--redact--');
+
+				const responseText = JSON.stringify(response.body);
+				expect(responseText).not.toContain(propagatedSecret);
+				expect(responseText).not.toContain(KEYED_SECRET);
+
+				const errorRecord = findErrorRecord(logs, 'error-sink endpoint failure');
+				expect(errorRecord).toBeDefined();
+				expect(errorRecord?.err.message).toBe('error-sink endpoint failure echoing --redact--');
+				expect(errorRecord?.err.extensions?.detail).toBe('propagated request value was --redact--');
+				expect(errorRecord?.err.extensions?.token).toBe('--redact--');
+				expect(logs).not.toContain(propagatedSecret);
+				expect(logs).not.toContain(KEYED_SECRET);
+			},
+			60000
+		);
+	});
+
+	describe('GraphQL error sink', () => {
+		it.each(vendors)(
+			'%s redacts a variable secret echoed in a coercion error in the response and the log',
+			async (vendor) => {
+				const variableSecret = 'graphql-variable-secret-8c2f1a3b';
+
+				const logger = new TestLogger(directusInstances[vendor], '/graphql/system');
+
+				const response = await request(getUrl(vendor, env))
+					.post('/graphql/system')
+					.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`)
+					.send({
+						query: 'query ($password: Int) { users(limit: $password) { id } }',
+						variables: { password: variableSecret },
+					})
+					.expect('Content-Type', /application\/json/)
+					.expect(200);
+
+				const logs = await logger.getLogs();
+
+				const error = response.body.errors[0];
+				expect(error.message).toContain('got invalid value "--redact--"');
+
+				const responseText = JSON.stringify(response.body);
+				expect(responseText).not.toContain(variableSecret);
+
+				const errorRecord = findErrorRecord(logs, 'got invalid value');
+				expect(errorRecord).toBeDefined();
+				expect(errorRecord?.err.message).toContain('got invalid value "--redact--"');
+				expect(logs).not.toContain(variableSecret);
+			},
+			60000
+		);
 	});
 });
