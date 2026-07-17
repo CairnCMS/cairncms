@@ -213,4 +213,30 @@ describe('get cache headers', () => {
 			);
 		});
 	}
+
+	test('a webhook trigger route is never externally stored', () => {
+		factoryEnv = {};
+
+		const req = {
+			originalUrl: '/flows/trigger/11111111-1111-1111-1111-111111111111',
+			headers: {},
+			accountability: null,
+			get: () => undefined,
+		} as unknown as Request;
+
+		expect(getCacheControlHeader(req, 5678910, true, true)).toBe('no-store');
+	});
+
+	test('a mixed-case webhook trigger route is also never externally stored', () => {
+		factoryEnv = {};
+
+		const req = {
+			originalUrl: '/FLOWS/TRIGGER/11111111-1111-1111-1111-111111111111',
+			headers: {},
+			accountability: null,
+			get: () => undefined,
+		} as unknown as Request;
+
+		expect(getCacheControlHeader(req, 5678910, true, true)).toBe('no-store');
+	});
 });

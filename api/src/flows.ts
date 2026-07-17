@@ -11,7 +11,7 @@ import type {
 import { Action } from '@cairncms/constants';
 import { applyOptionsData, isValidJSON, parseJSON, toArray } from '@cairncms/utils';
 import type { Knex } from 'knex';
-import { omit, pick } from 'lodash-es';
+import { isPlainObject, omit, pick } from 'lodash-es';
 import { get } from 'micromustache';
 import { schedule, validate } from 'node-cron';
 import getDatabase from './database/index.js';
@@ -34,7 +34,7 @@ import { constructFlowTree } from './utils/construct-flow-tree.js';
 import { getSchema } from './utils/get-schema.js';
 import { JobQueue } from './utils/job-queue.js';
 import { mapValuesDeep } from './utils/map-values-deep.js';
-import { collectSensitiveValues, redactFlowLog } from './utils/redact-flow-log.js';
+import { collectSensitiveValues, redactSensitive } from './utils/redact-sensitive.js';
 import type { ConfinedOperationResult } from './extensions/confined/operation.js';
 
 /**
@@ -72,14 +72,15 @@ export function buildRevisionData(
 	const sensitiveValues = collectSensitiveValues(revisionData);
 
 	for (const value of extraSensitiveValues) sensitiveValues.add(value);
+	for (const value of collectEnvValues(keyedData)) sensitiveValues.add(value);
 
-	// redactFlowLog matches sensitive keys case-insensitively against a lowercased
+	// redactSensitive matches sensitive keys case-insensitively against a lowercased
 	// candidate, so a declared key like `apiKey` is lowercased to match.
 	const sensitiveKeys = new Set([...extraSensitiveKeys].map((key) => key.toLowerCase()));
 
 	return {
-		steps: redactFlowLog(steps, sensitiveValues, sensitiveKeys),
-		data: redactFlowLog(revisionData, sensitiveValues, sensitiveKeys) as Record<string, unknown>,
+		steps: redactSensitive(steps, sensitiveValues, sensitiveKeys),
+		data: redactSensitive(revisionData, sensitiveValues, sensitiveKeys) as Record<string, unknown>,
 	};
 }
 
@@ -91,6 +92,57 @@ export function getFlowManager(): FlowManager {
 	flowManager = new FlowManager();
 
 	return flowManager;
+}
+
+const REDACTING_BUILTIN_OPERATION_TYPES = new Set(['log', 'exec']);
+
+function collectLeafValues(value: unknown, out: string[], seen: WeakSet<object>): void {
+	if (typeof value === 'string') {
+		if (value.trim().length > 0) out.push(value);
+		return;
+	}
+
+	if (typeof value === 'number') {
+		out.push(String(value));
+		return;
+	}
+
+	if (value === null || typeof value !== 'object' || seen.has(value)) return;
+
+	seen.add(value);
+
+	if (Array.isArray(value)) {
+		for (const item of value) collectLeafValues(item, out, seen);
+	} else if (isPlainObject(value)) {
+		for (const item of Object.values(value as Record<string, unknown>)) collectLeafValues(item, out, seen);
+	}
+}
+
+// Only JSON-compatible containers contribute leaves. A JavaScript config may expose cyclic or
+// non-data objects.
+function collectEnvValues(keyedData: Record<string, unknown>): string[] {
+	const flowEnv = keyedData['$env'];
+	if (!isPlainObject(flowEnv)) return [];
+
+	const values: string[] = [];
+	const seen = new WeakSet<object>();
+	for (const value of Object.values(flowEnv as Record<string, unknown>)) collectLeafValues(value, values, seen);
+	return values;
+}
+
+function buildFlowLogRedactor(
+	keyedData: Record<string, unknown>,
+	accumulatedRedaction: { values: readonly string[]; keys: ReadonlySet<string> } | undefined
+): (value: unknown) => unknown {
+	const sensitiveValues = new Set([
+		...collectSensitiveValues(keyedData),
+		...collectEnvValues(keyedData),
+		...(accumulatedRedaction?.values ?? []),
+	]);
+
+	const sensitiveKeys = new Set([...(accumulatedRedaction?.keys ?? [])].map((key) => key.toLowerCase()));
+
+	return (value) => redactSensitive(value, sensitiveValues, sensitiveKeys);
 }
 
 type TriggerHandler = {
@@ -108,7 +160,7 @@ class FlowManager {
 
 	// A Map, not a plain object, so an operation type that collides with an inherited
 	// object key (constructor, __proto__) cannot be misread as a registered handler.
-	private operations: Map<string, OperationHandler> = new Map();
+	private operations: Map<string, { handler: OperationHandler; trusted: boolean }> = new Map();
 
 	// Confined operation descriptors, keyed by operation type. A null value marks an
 	// ambiguous type declared by more than one confined operation, which runs neither.
@@ -151,8 +203,8 @@ class FlowManager {
 		messenger.publish('flows', { type: 'reload' });
 	}
 
-	public addOperation(id: string, operation: OperationHandler): void {
-		this.operations.set(id, operation);
+	public addOperation(id: string, operation: OperationHandler, trusted = false): void {
+		this.operations.set(id, { handler: operation, trusted });
 	}
 
 	public clearOperations(): void {
@@ -470,7 +522,8 @@ class FlowManager {
 			const { successor, data, status, options, redaction } = await this.executeOperation(
 				nextOperation,
 				keyedData,
-				context
+				context,
+				{ values: confinedRedactionValues, keys: confinedReferenceKeys }
 			);
 
 			keyedData[nextOperation.key] = data;
@@ -535,7 +588,8 @@ class FlowManager {
 	private async executeOperation(
 		operation: Operation,
 		keyedData: Record<string, unknown>,
-		context: Record<string, unknown> = {}
+		context: Record<string, unknown> = {},
+		accumulatedRedaction?: { values: readonly string[]; keys: ReadonlySet<string> }
 	): Promise<{
 		successor: Operation | null;
 		status: 'resolve' | 'reject' | 'unknown';
@@ -543,7 +597,8 @@ class FlowManager {
 		options: Record<string, any> | null;
 		redaction?: { values: string[]; keys: string[] };
 	}> {
-		const handler = this.operations.get(operation.type);
+		const entry = this.operations.get(operation.type);
+		const handler = entry?.handler;
 		const isConfined = this.confinedOperations.has(operation.type);
 
 		// A type in both registries, or a duplicated confined type, is ambiguous and
@@ -583,7 +638,7 @@ class FlowManager {
 		const options = applyOptionsData(operation.options, keyedData);
 
 		try {
-			let result = await handler(options, {
+			const handlerContext = {
 				services,
 				exceptions: { ...exceptions, ...sharedExceptions },
 				env,
@@ -597,7 +652,16 @@ class FlowManager {
 				data: keyedData,
 				accountability: null,
 				...context,
-			});
+			} as Record<string, unknown>;
+
+			// Expose a redaction capability, not the captured secret set, so the receiving
+			// handler cannot read the decrypted values. Attached after the caller context so a
+			// flow-level key cannot shadow it.
+			if (entry?.trusted && REDACTING_BUILTIN_OPERATION_TYPES.has(operation.type)) {
+				handlerContext['redactForFlowLog'] = buildFlowLogRedactor(keyedData, accumulatedRedaction);
+			}
+
+			let result = await handler(options, handlerContext as Parameters<OperationHandler>[1]);
 
 			// Validate that the operations result is serializable and thus catching the error inside the flow execution
 			JSON.stringify(result ?? null);

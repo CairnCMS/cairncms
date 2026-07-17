@@ -57,7 +57,7 @@ export const COLUMN_TRANSFORMS = ['year', 'month', 'day', 'weekday', 'hour', 'mi
 
 export const GENERATE_SPECIAL = ['uuid', 'date-created', 'role-created', 'user-created'];
 
-export const UUID_REGEX = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+export { UUID_REGEX } from './utils/is-valid-uuid.js';
 
 export const COOKIE_OPTIONS: CookieOptions = {
 	httpOnly: true,

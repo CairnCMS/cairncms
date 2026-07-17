@@ -4,12 +4,26 @@ import { REDACT_TEXT } from './constants.js';
 import * as exceptions from './exceptions/index.js';
 import { buildRevisionData, getFlowManager, type Step } from './flows.js';
 import conditionOp from './operations/condition/index.js';
+import logOp from './operations/log/index.js';
+import execOp from './operations/exec/index.js';
+import getDatabase from './database/index.js';
 
-const { checkAccessSpy, revisionsCreateSpy, encryptionKey } = vi.hoisted(() => ({
+const { checkAccessSpy, revisionsCreateSpy, encryptionKey, logSpy, envOverrides } = vi.hoisted(() => ({
 	checkAccessSpy: vi.fn(),
 	revisionsCreateSpy: vi.fn(),
 	encryptionKey: { value: undefined as string | undefined },
+	logSpy: {
+		info: vi.fn(),
+		warn: vi.fn(),
+		error: vi.fn(),
+		trace: vi.fn(),
+		debug: vi.fn(),
+		log: vi.fn(),
+	},
+	envOverrides: {} as Record<string, unknown>,
 }));
+
+vi.mock('./logger.js', () => ({ default: logSpy }));
 
 vi.mock('./env.js', async (importOriginal) => {
 	const actual = (await importOriginal()) as { default: Record<string, unknown>; [key: string]: unknown };
@@ -17,7 +31,12 @@ vi.mock('./env.js', async (importOriginal) => {
 	return {
 		...actual,
 		default: new Proxy(actual.default, {
-			get: (target, prop) => (prop === 'SECRETS_ENCRYPTION_KEY' ? encryptionKey.value : target[prop as string]),
+			get: (target, prop) => {
+				if (prop === 'SECRETS_ENCRYPTION_KEY') return encryptionKey.value;
+				if (typeof prop === 'string' && prop in envOverrides) return envOverrides[prop];
+				return target[prop as string];
+			},
+			has: (target, prop) => (typeof prop === 'string' && prop in envOverrides) || prop in target,
 		}),
 	};
 });
@@ -292,6 +311,110 @@ describe('buildRevisionData', () => {
 		const step = result.steps[0] as Step;
 		expect((step.options as Record<string, unknown>)['apiKey']).toBe(REDACT_TEXT);
 		expect((step.options as Record<string, unknown>)['note']).toBe('plain');
+	});
+
+	test('redacts an allowlisted $env value carried into a step option', () => {
+		const envSecret = 'sk_live_env_secret_value_1234';
+		const keyedData = makeKeyedData({});
+		keyedData['$env'] = { STRIPE_KEY: envSecret };
+
+		const steps: Step[] = [
+			{ operation: 'op-1', key: 'call', status: 'resolve', options: { message: `charge with ${envSecret}` } },
+		];
+
+		const result = buildRevisionData(steps, keyedData);
+		const serialized = JSON.stringify(result);
+
+		expect(serialized).not.toContain(envSecret);
+		expect((result.data as any).$env.STRIPE_KEY).toBe(REDACT_TEXT);
+	});
+
+	test('redacts an allowlisted $env value but preserves an unrelated arbitrary value', () => {
+		const envSecret = 'sk_live_env_secret_value_1234';
+		const ordinary = 'ordinary-non-secret-value-5678';
+		const keyedData = makeKeyedData({});
+		keyedData['$env'] = { STRIPE_KEY: envSecret };
+		keyedData['fetch'] = { note: ordinary };
+
+		const steps: Step[] = [
+			{ operation: 'op-1', key: 'render', status: 'resolve', options: { message: `${envSecret} and ${ordinary}` } },
+		];
+
+		const serialized = JSON.stringify(buildRevisionData(steps, keyedData));
+
+		expect(serialized).not.toContain(envSecret);
+		expect(serialized).toContain(ordinary);
+	});
+
+	test('redacts a short allowlisted $env value rather than leaving it in cleartext', () => {
+		const shortSecret = 'pin-8842';
+		const keyedData = makeKeyedData({});
+		keyedData['$env'] = { PIN: shortSecret };
+
+		const steps: Step[] = [
+			{ operation: 'op-1', key: 'render', status: 'resolve', options: { message: `code ${shortSecret} sent` } },
+		];
+
+		expect(JSON.stringify(buildRevisionData(steps, keyedData))).not.toContain(shortSecret);
+	});
+
+	test('redacts an allowlisted $env value the env parser coerced to a number', () => {
+		const keyedData = makeKeyedData({});
+		keyedData['$env'] = { PIN: 123456 };
+
+		const steps: Step[] = [
+			{ operation: 'op-1', key: 'render', status: 'resolve', options: { message: 'code 123456 sent' } },
+		];
+
+		const result = buildRevisionData(steps, keyedData);
+
+		expect(JSON.stringify(result)).not.toContain('123456');
+		expect((result.data as any).$env.PIN).toBe(REDACT_TEXT);
+	});
+
+	test('redacts a nested leaf of a json-typed allowlisted $env value', () => {
+		const nestedSecret = 'nested_env_secret_value_1234';
+		const keyedData = makeKeyedData({});
+		keyedData['$env'] = { SERVICE_CONFIG: { private_key: nestedSecret, region: 'us-east-1' } };
+
+		const steps: Step[] = [
+			{
+				operation: 'op-1',
+				key: 'render',
+				status: 'resolve',
+				options: { message: `authenticating with ${nestedSecret}` },
+			},
+		];
+
+		const serialized = JSON.stringify(buildRevisionData(steps, keyedData));
+
+		expect(serialized).not.toContain(nestedSecret);
+		expect((JSON.parse(serialized).data.$env.SERVICE_CONFIG as any).private_key).toBe(REDACT_TEXT);
+	});
+
+	test('handles a cyclic allowlisted $env value without looping', () => {
+		const keyedData = makeKeyedData({});
+		const cyclic: Record<string, unknown> = { name: 'config' };
+		cyclic['self'] = cyclic;
+		keyedData['$env'] = { CFG: cyclic };
+
+		const steps: Step[] = [{ operation: 'op-1', key: 'render', status: 'resolve', options: { message: 'ok' } }];
+
+		expect(() => buildRevisionData(steps, keyedData)).not.toThrow();
+	});
+
+	test('does not collect the bytes of a non-plain allowlisted $env value', () => {
+		const keyedData = makeKeyedData({});
+		keyedData['$env'] = { BIN: Buffer.from([104, 105]) };
+
+		const steps: Step[] = [
+			{ operation: 'op-1', key: 'render', status: 'resolve', options: { message: 'count 104 items', code: 105 } },
+		];
+
+		const result = buildRevisionData(steps, keyedData);
+
+		expect(JSON.stringify(result)).toContain('count 104 items');
+		expect((result.steps[0] as any).options.code).toBe(105);
 	});
 });
 
@@ -850,7 +973,6 @@ describe('confined operation binding', () => {
 		const manager = getFlowManager();
 
 		manager.addConfinedOperation('redact-op', {
-			// A camelCase key must still key-redact, since redactFlowLog lowercases keys.
 			referenceKeys: ['apiKey', 'webhookConfig'],
 			run: async () => ({
 				outcome: { ok: true as const, value: { echoedHandle: 'handle-ref-abc', note: 'used sk_live_secret today' } },
@@ -870,5 +992,407 @@ describe('confined operation binding', () => {
 		expect(serialized).not.toContain('sk_live_secret');
 		expect(serialized).not.toContain('handle-ref-abc');
 		expect(serialized).not.toContain('nested_secret');
+	});
+});
+
+describe('executeFlow — trusted log and exec operations redact secrets in live output', () => {
+	beforeEach(() => {
+		logSpy.info.mockReset();
+		(getDatabase as any).mockReset();
+		(getDatabase as any).mockImplementation(() => ({}));
+		getFlowManager().clearOperations();
+		getFlowManager().clearConfinedOperations();
+		for (const key of Object.keys(envOverrides)) delete envOverrides[key];
+	});
+
+	const flowContext = {
+		accountability: { user: 'u-1', role: 'r-1', admin: true, ip: '127.0.0.1' },
+		database: {} as any,
+		schema: { collections: {}, relations: [] } as any,
+	};
+
+	function confinedThenOp(secondOp: Record<string, unknown>) {
+		return {
+			id: 'live-log-flow',
+			name: 'live-log-flow',
+			status: 'active',
+			trigger: 'webhook',
+			accountability: null,
+			options: { method: 'POST', return: '$last', async: false },
+			operation: {
+				id: 'op-1',
+				key: 'secretstep',
+				type: 'confined-secret-op',
+				options: {},
+				resolve: secondOp,
+				reject: null,
+			},
+		};
+	}
+
+	test('a trusted Log to Console step redacts a confined secret while preserving surrounding text', async () => {
+		const rawSecret = 'sk_live_confined_log_secret_value';
+		const manager = getFlowManager();
+
+		manager.addOperation('log', logOp.handler as any, true);
+
+		manager.addConfinedOperation('confined-secret-op', {
+			referenceKeys: ['apiKey'],
+			run: async () => ({
+				outcome: { ok: true as const, value: { result: rawSecret } },
+				redactionValues: [rawSecret],
+			}),
+		});
+
+		const flow = confinedThenOp({
+			id: 'op-2',
+			key: 'logstep',
+			type: 'log',
+			options: { message: 'before {{ secretstep.result }} after' },
+			resolve: null,
+			reject: null,
+		});
+
+		await (manager as any).executeFlow(flow, { x: 1 }, flowContext);
+
+		expect(logSpy.info).toHaveBeenCalledWith(`before ${REDACT_TEXT} after`);
+	});
+
+	test('a trusted Log step key-redacts a camelCase reference key whose value is not in the value set', async () => {
+		const marker = 'plain-marker-not-a-declared-value';
+		const manager = getFlowManager();
+
+		manager.addOperation('log', logOp.handler as any, true);
+
+		manager.addConfinedOperation('confined-secret-op', {
+			referenceKeys: ['apiKey'],
+			run: async () => ({
+				outcome: { ok: true as const, value: { apiKey: marker, keep: 'ok' } },
+				redactionValues: [],
+			}),
+		});
+
+		const flow = confinedThenOp({
+			id: 'op-2',
+			key: 'logstep',
+			type: 'log',
+			options: { message: '{{ secretstep }}' },
+			resolve: null,
+			reject: null,
+		});
+
+		await (manager as any).executeFlow(flow, { x: 1 }, flowContext);
+
+		expect(logSpy.info).toHaveBeenCalledWith(JSON.stringify({ apiKey: REDACT_TEXT, keep: 'ok' }));
+	});
+
+	test('a trusted log operation receives the redactForFlowLog capability', async () => {
+		let captured: Record<string, unknown> | null = null;
+		const manager = getFlowManager();
+
+		manager.addOperation(
+			'log',
+			((_options: unknown, context: Record<string, unknown>) => {
+				captured = context;
+				return null;
+			}) as any,
+			true
+		);
+
+		const flow = {
+			id: 'capture-flow',
+			name: 'capture-flow',
+			status: 'active',
+			trigger: 'webhook',
+			accountability: null,
+			options: { method: 'POST', return: '$last', async: false },
+			operation: { id: 'op-1', key: 'logstep', type: 'log', options: { message: 'hi' }, resolve: null, reject: null },
+		};
+
+		await (manager as any).executeFlow(flow, { x: 1 }, flowContext);
+
+		expect(typeof (captured as any)?.redactForFlowLog).toBe('function');
+	});
+
+	test('a log operation registered without the trusted flag does not receive the redactor', async () => {
+		let captured: Record<string, unknown> | null = null;
+		const manager = getFlowManager();
+
+		manager.addOperation('log', ((_options: unknown, context: Record<string, unknown>) => {
+			captured = context;
+			return null;
+		}) as any);
+
+		const flow = {
+			id: 'shadow-flow',
+			name: 'shadow-flow',
+			status: 'active',
+			trigger: 'webhook',
+			accountability: null,
+			options: { method: 'POST', return: '$last', async: false },
+			operation: { id: 'op-1', key: 'logstep', type: 'log', options: { message: 'hi' }, resolve: null, reject: null },
+		};
+
+		await (manager as any).executeFlow(flow, { x: 1 }, flowContext);
+
+		expect(captured).not.toBeNull();
+		expect((captured as any)?.redactForFlowLog).toBeUndefined();
+	});
+
+	test('a downstream non-gated operation context carries no raw confined redaction values', async () => {
+		const rawSecret = 'sk_live_confined_isolation_secret';
+		let captured: Record<string, unknown> | null = null;
+		const manager = getFlowManager();
+
+		manager.addConfinedOperation('confined-secret-op', {
+			referenceKeys: ['apiKey'],
+			run: async () => ({
+				outcome: { ok: true as const, value: { result: rawSecret } },
+				redactionValues: [rawSecret],
+			}),
+		});
+
+		manager.addOperation(
+			'capture',
+			((_options: unknown, context: Record<string, unknown>) => {
+				captured = context;
+				return null;
+			}) as any,
+			true
+		);
+
+		const flow = confinedThenOp({
+			id: 'op-2',
+			key: 'capturestep',
+			type: 'capture',
+			options: {},
+			resolve: null,
+			reject: null,
+		});
+
+		await (manager as any).executeFlow(flow, { x: 1 }, flowContext);
+
+		expect(captured).not.toBeNull();
+		const contextWithoutKeyedData: Record<string, unknown> = { ...(captured as Record<string, unknown>) };
+		delete contextWithoutKeyedData['data'];
+		expect(JSON.stringify(contextWithoutKeyedData)).not.toContain(rawSecret);
+
+		expect(captured).not.toHaveProperty('redactionValues');
+		expect(captured).not.toHaveProperty('redactionKeys');
+		expect((captured as any)?.redactForFlowLog).toBeUndefined();
+	});
+
+	test('redacts an allowlisted $env value referenced in a Log to Console message', async () => {
+		const envSecret = 'sk_live_env_secret_value_1234';
+		envOverrides['FLOWS_ENV_ALLOW_LIST'] = 'STRIPE_KEY';
+		envOverrides['STRIPE_KEY'] = envSecret;
+
+		const manager = getFlowManager();
+		manager.addOperation('log', logOp.handler as any, true);
+
+		const flow = {
+			id: 'env-log-flow',
+			name: 'env-log-flow',
+			status: 'active',
+			trigger: 'webhook',
+			accountability: null,
+			options: { method: 'POST', return: '$last', async: false },
+			operation: {
+				id: 'op-1',
+				key: 'logstep',
+				type: 'log',
+				options: { message: 'charging {{ $env.STRIPE_KEY }} now' },
+				resolve: null,
+				reject: null,
+			},
+		};
+
+		await (manager as any).executeFlow(flow, { x: 1 }, flowContext);
+
+		expect(logSpy.info).toHaveBeenCalledWith('charging --redact-- now');
+	});
+
+	test('redacts an allowlisted $env value printed by a Run Script', async () => {
+		const envSecret = 'sk_live_env_secret_value_1234';
+		envOverrides['FLOWS_ENV_ALLOW_LIST'] = 'STRIPE_KEY';
+		envOverrides['STRIPE_KEY'] = envSecret;
+
+		const manager = getFlowManager();
+		manager.addOperation('exec', execOp.handler as any, true);
+
+		const flow = {
+			id: 'env-exec-flow',
+			name: 'env-exec-flow',
+			status: 'active',
+			trigger: 'webhook',
+			accountability: null,
+			options: { method: 'POST', return: '$last', async: false },
+			operation: {
+				id: 'op-1',
+				key: 'execstep',
+				type: 'exec',
+				options: {
+					code: "module.exports = function () { console.log('charging ' + process.env.STRIPE_KEY + ' now'); return null; };",
+				},
+				resolve: null,
+				reject: null,
+			},
+		};
+
+		await (manager as any).executeFlow(flow, { x: 1 }, flowContext);
+
+		expect(logSpy.info).toHaveBeenCalledWith('charging --redact-- now');
+	});
+
+	test('redacts a numeric allowlisted $env value printed by a Run Script', async () => {
+		envOverrides['FLOWS_ENV_ALLOW_LIST'] = 'PIN';
+		envOverrides['PIN'] = 123456;
+
+		const manager = getFlowManager();
+		manager.addOperation('exec', execOp.handler as any, true);
+
+		const flow = {
+			id: 'env-exec-numeric-flow',
+			name: 'env-exec-numeric-flow',
+			status: 'active',
+			trigger: 'webhook',
+			accountability: null,
+			options: { method: 'POST', return: '$last', async: false },
+			operation: {
+				id: 'op-1',
+				key: 'execstep',
+				type: 'exec',
+				options: {
+					code: "module.exports = function () { console.log('code ' + process.env.PIN + ' sent'); return null; };",
+				},
+				resolve: null,
+				reject: null,
+			},
+		};
+
+		await (manager as any).executeFlow(flow, { x: 1 }, flowContext);
+
+		expect(logSpy.info).toHaveBeenCalledWith('code --redact-- sent');
+	});
+
+	test('redacts a nested leaf of a json-typed allowlisted $env value printed by a Run Script', async () => {
+		const nestedSecret = 'nested_env_secret_value_1234';
+		envOverrides['FLOWS_ENV_ALLOW_LIST'] = 'SERVICE_CONFIG';
+		envOverrides['SERVICE_CONFIG'] = { private_key: nestedSecret };
+
+		const manager = getFlowManager();
+		manager.addOperation('exec', execOp.handler as any, true);
+
+		const flow = {
+			id: 'env-exec-json-flow',
+			name: 'env-exec-json-flow',
+			status: 'active',
+			trigger: 'webhook',
+			accountability: null,
+			options: { method: 'POST', return: '$last', async: false },
+			operation: {
+				id: 'op-1',
+				key: 'execstep',
+				type: 'exec',
+				options: {
+					code: "module.exports = function () { console.log('auth ' + process.env.SERVICE_CONFIG.private_key + ' done'); return null; };",
+				},
+				resolve: null,
+				reject: null,
+			},
+		};
+
+		await (manager as any).executeFlow(flow, { x: 1 }, flowContext);
+
+		expect(logSpy.info).toHaveBeenCalledWith('auth --redact-- done');
+	});
+
+	test('a throw during handler context construction follows the operation reject path', async () => {
+		const manager = getFlowManager();
+		manager.addOperation('log', logOp.handler as any, true);
+
+		(getDatabase as any).mockImplementationOnce(() => {
+			throw new Error('CONTEXT_CONSTRUCTION_BOOM');
+		});
+
+		const flow = {
+			id: 'boundary-flow',
+			name: 'boundary-flow',
+			status: 'active',
+			trigger: 'webhook',
+			accountability: null,
+			options: { method: 'POST', return: '$last', async: false },
+			operation: {
+				id: 'op-1',
+				key: 'logstep',
+				type: 'log',
+				options: { message: 'hi' },
+				resolve: null,
+				reject: null,
+			},
+		};
+
+		const result = await (manager as any).executeFlow(flow, { x: 1 }, flowContext);
+
+		expect(result).toEqual({ message: 'CONTEXT_CONSTRUCTION_BOOM' });
+	});
+});
+
+describe('executeFlow — trusted Run Script redacts secrets in console output', () => {
+	beforeEach(() => {
+		logSpy.info.mockReset();
+		getFlowManager().clearOperations();
+		getFlowManager().clearConfinedOperations();
+	});
+
+	test('a trusted Run Script step redacts a confined secret printed via console.log', async () => {
+		const rawSecret = 'sk_live_confined_exec_secret_value';
+		const manager = getFlowManager();
+
+		manager.addOperation('exec', execOp.handler as any, true);
+
+		manager.addConfinedOperation('confined-secret-op', {
+			referenceKeys: ['apiKey'],
+			run: async () => ({
+				outcome: { ok: true as const, value: { result: rawSecret } },
+				redactionValues: [rawSecret],
+			}),
+		});
+
+		const flow = {
+			id: 'exec-flow',
+			name: 'exec-flow',
+			status: 'active',
+			trigger: 'webhook',
+			accountability: null,
+			options: { method: 'POST', return: '$last', async: false },
+			operation: {
+				id: 'op-1',
+				key: 'secretstep',
+				type: 'confined-secret-op',
+				options: {},
+				resolve: {
+					id: 'op-2',
+					key: 'execstep',
+					type: 'exec',
+					options: {
+						code: "module.exports = function (data) { console.log('before ' + data.secretstep.result + ' after'); return null; };",
+					},
+					resolve: null,
+					reject: null,
+				},
+				reject: null,
+			},
+		};
+
+		const context = {
+			accountability: { user: 'u-1', role: 'r-1', admin: true, ip: '127.0.0.1' },
+			database: {} as any,
+			schema: { collections: {}, relations: [] } as any,
+		};
+
+		await (manager as any).executeFlow(flow, { x: 1 }, context);
+
+		expect(logSpy.info).toHaveBeenCalledWith(`before ${REDACT_TEXT} after`);
 	});
 });

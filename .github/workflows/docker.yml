@@ -29,14 +29,21 @@ jobs:
       - name: Determine version and ref
         id: meta
         shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          VERSION="${{ inputs.version }}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "ref=refs/tags/v$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+            printf '%s\n' 'Invalid version format' >&2
+            exit 1
+          fi
+
+          printf '%s\n' "version=$VERSION" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "ref=refs/tags/v$VERSION" >> "$GITHUB_OUTPUT"
+
           if [[ "$VERSION" == *-* ]]; then
-            echo "channel=beta" >> "$GITHUB_OUTPUT"
+            printf '%s\n' "channel=beta" >> "$GITHUB_OUTPUT"
           else
-            echo "channel=latest" >> "$GITHUB_OUTPUT"
+            printf '%s\n' "channel=latest" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout repository at tag

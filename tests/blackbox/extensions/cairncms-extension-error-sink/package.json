@@ -1,0 +1,12 @@
+{
+	"name": "cairncms-extension-error-sink",
+	"version": "1.0.0",
+	"type": "module",
+	"private": true,
+	"cairncms:extension": {
+		"type": "endpoint",
+		"path": "index.js",
+		"source": "index.js",
+		"host": "^1.0.0"
+	}
+}

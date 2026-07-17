@@ -19,7 +19,18 @@ const checkCacheMiddleware: RequestHandler = asyncHandler(async (req, res, next)
 		return next();
 	}
 
-	const key = getCacheKey(req);
+	let key: string;
+
+	try {
+		key = getCacheKey(req);
+	} catch (err: any) {
+		logger.warn(err, `[cache] Couldn't compute cache key. ${err.message}`);
+		res.locals['cache'] = false;
+		if (env['CACHE_STATUS_HEADER']) res.setHeader(`${env['CACHE_STATUS_HEADER']}`, 'MISS');
+		return next();
+	}
+
+	res.locals['cacheKey'] = key;
 
 	let cachedData;
 

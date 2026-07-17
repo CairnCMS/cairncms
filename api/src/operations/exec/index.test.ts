@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { REDACT_TEXT } from '../../constants.js';
 import config from './index.js';
 
 const DEFAULT_LIMITS = {
@@ -6,18 +7,22 @@ const DEFAULT_LIMITS = {
 	FLOWS_RUN_SCRIPT_TIMEOUT: 10000,
 };
 
+const identityRedactor = (value: unknown) => value;
+
 function callHandler(
 	code: string,
 	options: {
 		data?: Record<string, unknown>;
 		env?: Record<string, unknown>;
 		logger?: unknown;
+		redactForFlowLog?: (value: unknown) => unknown;
 	} = {}
 ) {
 	return config.handler({ code }, {
 		data: options.data ?? {},
 		env: options.env ?? DEFAULT_LIMITS,
 		logger: options.logger,
+		redactForFlowLog: options.redactForFlowLog,
 	} as any);
 }
 
@@ -210,7 +215,7 @@ describe('exec — console bridge', () => {
 			};
 		`;
 
-		await callHandler(code, { logger });
+		await callHandler(code, { logger, redactForFlowLog: identityRedactor });
 
 		expect(calls).toEqual([
 			{ method: 'info', arg: 'routed-log' },
@@ -233,12 +238,33 @@ describe('exec — console bridge', () => {
 			};
 		`;
 
-		await callHandler(code, { logger });
+		await callHandler(code, { logger, redactForFlowLog: identityRedactor });
 
 		expect(calls).toEqual([
 			{ method: 'info', arg: 'only' },
 			{ method: 'info', arg: ['first', 'second', 'third'] },
 		]);
+	});
+
+	it('redacts console output through the supplied redactor', async () => {
+		const { logger, calls } = makeLogger();
+		const redactForFlowLog = (value: unknown) => (value === 'longsecretvalue123' ? REDACT_TEXT : value);
+
+		const code = `module.exports = function () { console.log('longsecretvalue123'); return null; };`;
+
+		await callHandler(code, { logger, redactForFlowLog });
+
+		expect(calls).toEqual([{ method: 'info', arg: REDACT_TEXT }]);
+	});
+
+	it('fails closed: with no redactor supplied, console output is fully redacted', async () => {
+		const { logger, calls } = makeLogger();
+
+		const code = `module.exports = function () { console.log('would-be-secret-output'); return null; };`;
+
+		await callHandler(code, { logger });
+
+		expect(calls).toEqual([{ method: 'info', arg: REDACT_TEXT }]);
 	});
 });
 

@@ -174,3 +174,75 @@ describe('authorization-context segmentation', () => {
 		expect(getCacheKey(req({ ...acc }))).toEqual(getCacheKey(req({ ...acc })));
 	});
 });
+
+describe('webhook request-context segmentation', () => {
+	const uuid = '11111111-1111-1111-1111-111111111111';
+	const webhookUrl = `${baseUrl}/flows/trigger/${uuid}`;
+
+	const webhookReq = (overrides: Record<string, any>): Request =>
+		({ method, originalUrl: webhookUrl, sanitizedQuery: {}, ...overrides } as unknown as Request);
+
+	test('requests differing only by a header do not share a key', () => {
+		expect(getCacheKey(webhookReq({ headers: { cookie: 'session=alice' } }))).not.toEqual(
+			getCacheKey(webhookReq({ headers: { cookie: 'session=mallory' } }))
+		);
+	});
+
+	test('requests differing only by a raw query param dropped by sanitizeQuery do not share a key', () => {
+		expect(getCacheKey(webhookReq({ query: { foo: 'a' }, sanitizedQuery: {} }))).not.toEqual(
+			getCacheKey(webhookReq({ query: { foo: 'b' }, sanitizedQuery: {} }))
+		);
+	});
+
+	test('requests differing only by body do not share a key', () => {
+		expect(getCacheKey(webhookReq({ body: { value: 1 } }))).not.toEqual(
+			getCacheKey(webhookReq({ body: { value: 2 } }))
+		);
+	});
+
+	test('requests differing only by accountability ip do not share a key', () => {
+		expect(getCacheKey(webhookReq({ accountability: { user: null, ip: '10.0.0.1' } }))).not.toEqual(
+			getCacheKey(webhookReq({ accountability: { user: null, ip: '10.0.0.2' } }))
+		);
+	});
+
+	test('a mixed-case trigger path is recognized and enriched', () => {
+		const upperUrl = `${baseUrl}/FLOWS/TRIGGER/${uuid}`;
+
+		const upper = (headers: Record<string, string>): Request =>
+			({ method, originalUrl: upperUrl, sanitizedQuery: {}, headers } as unknown as Request);
+
+		expect(getCacheKey(upper({ cookie: 'session=alice' }))).not.toEqual(
+			getCacheKey(upper({ cookie: 'session=mallory' }))
+		);
+	});
+
+	test('a trailing-slash trigger path is recognized and enriched', () => {
+		const slashUrl = `${baseUrl}/flows/trigger/${uuid}/`;
+
+		const slash = (headers: Record<string, string>): Request =>
+			({ method, originalUrl: slashUrl, sanitizedQuery: {}, headers } as unknown as Request);
+
+		expect(getCacheKey(slash({ cookie: 'session=alice' }))).not.toEqual(
+			getCacheKey(slash({ cookie: 'session=mallory' }))
+		);
+	});
+
+	test('identical request context produces the same key (cache hit preserved)', () => {
+		const context = {
+			headers: { cookie: 'session=alice', 'user-agent': 'agent' },
+			query: { foo: 'a' },
+			body: { value: 1 },
+			accountability: { user: null, ip: '10.0.0.1' },
+		};
+
+		expect(getCacheKey(webhookReq({ ...context }))).toEqual(getCacheKey(webhookReq({ ...context })));
+	});
+
+	test('a non-webhook route is not enriched, so differing headers still share a key', () => {
+		const rest = (headers: Record<string, string>): Request =>
+			({ method, originalUrl: restUrl, sanitizedQuery: {}, headers } as unknown as Request);
+
+		expect(getCacheKey(rest({ cookie: 'session=alice' }))).toEqual(getCacheKey(rest({ cookie: 'session=mallory' })));
+	});
+});

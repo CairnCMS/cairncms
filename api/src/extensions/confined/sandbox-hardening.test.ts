@@ -181,7 +181,7 @@ describe('buildHardenedSpawn', () => {
 	it('returns the plain baseline on the dev path regardless of posture', () => {
 		const spec = makeSpec({
 			isBundled: false,
-			childExecArgv: ['--loader', 'tsx'],
+			childExecArgv: ['--import', 'tsx'],
 			childPath: '/app/src/child-host.ts',
 		});
 
@@ -189,7 +189,7 @@ describe('buildHardenedSpawn', () => {
 
 		expect(spawned).toEqual({
 			command: '/usr/bin/node',
-			args: ['--loader', 'tsx', '/app/src/child-host.ts'],
+			args: ['--import', 'tsx', '/app/src/child-host.ts'],
 			env: { PATH: '/usr/bin', CONFINED_SANDBOX_LIMITS: '{"maxResultBytes":16}' },
 			scopeUnit: null,
 		});
@@ -319,7 +319,7 @@ describe('buildHardenedSpawn', () => {
 	it('forwards the full env on the dev path, where tsx resolves through node_modules', () => {
 		const spec = makeSpec({
 			isBundled: false,
-			childExecArgv: ['--loader', 'tsx'],
+			childExecArgv: ['--import', 'tsx'],
 			childPath: '/app/src/child-host.ts',
 			childEnv: { PATH: '/usr/bin', NODE_PATH: '/app/node_modules' },
 		});

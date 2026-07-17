@@ -21,6 +21,11 @@ const SENSITIVE_KEYS = new Set<string>([
 
 const MIN_SENSITIVE_VALUE_LENGTH = 12;
 
+type CollectOptions = { minLength: number; includeNumbers: boolean };
+
+const FLOORED_COLLECT_OPTIONS: CollectOptions = { minLength: MIN_SENSITIVE_VALUE_LENGTH, includeNumbers: false };
+const EXHAUSTIVE_COLLECT_OPTIONS: CollectOptions = { minLength: 1, includeNumbers: true };
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
 	const proto = Object.getPrototypeOf(value);
@@ -37,12 +42,18 @@ function collectInto(
 	out: Set<string>,
 	path: WeakSet<object>,
 	inheritedSensitivity: boolean,
-	extraKeys: ReadonlySet<string> | undefined
+	extraKeys: ReadonlySet<string> | undefined,
+	options: CollectOptions
 ): void {
 	if (typeof value === 'string') {
 		if (!inheritedSensitivity) return;
 		const trimmed = value.trim();
-		if (trimmed.length >= MIN_SENSITIVE_VALUE_LENGTH) out.add(value);
+		if (trimmed.length >= options.minLength) out.add(value);
+		return;
+	}
+
+	if (options.includeNumbers && inheritedSensitivity && typeof value === 'number' && Number.isFinite(value)) {
+		out.add(String(value));
 		return;
 	}
 
@@ -54,7 +65,8 @@ function collectInto(
 			out,
 			path,
 			inheritedSensitivity,
-			extraKeys
+			extraKeys,
+			options
 		);
 
 		return;
@@ -63,7 +75,7 @@ function collectInto(
 	if (path.has(value)) return;
 
 	if (typeof (value as { toJSON?: unknown }).toJSON === 'function') {
-		collectInto((value as { toJSON: () => unknown }).toJSON(), out, path, inheritedSensitivity, extraKeys);
+		collectInto((value as { toJSON: () => unknown }).toJSON(), out, path, inheritedSensitivity, extraKeys, options);
 		return;
 	}
 
@@ -71,28 +83,34 @@ function collectInto(
 
 	try {
 		if (Array.isArray(value)) {
-			for (const item of value) collectInto(item, out, path, inheritedSensitivity, extraKeys);
+			for (const item of value) collectInto(item, out, path, inheritedSensitivity, extraKeys, options);
 			return;
 		}
 
 		if (!isPlainObject(value)) return;
 
 		for (const [key, val] of Object.entries(value)) {
-			collectInto(val, out, path, inheritedSensitivity || isSensitiveKey(key, extraKeys), extraKeys);
+			collectInto(val, out, path, inheritedSensitivity || isSensitiveKey(key, extraKeys), extraKeys, options);
 		}
 	} finally {
 		path.delete(value);
 	}
 }
 
-/**
- * Collects string values that sit under sensitive keys, the built-in set plus any
- * caller-declared keys (a confined extension's declared-sensitive settings and
- * options), lowercased for comparison.
- */
+/** Collects strings at least 12 characters long beneath sensitive keys. */
 export function collectSensitiveValues(source: unknown, extraSensitiveKeys?: ReadonlySet<string>): Set<string> {
 	const out = new Set<string>();
-	collectInto(source, out, new WeakSet<object>(), false, extraSensitiveKeys);
+	collectInto(source, out, new WeakSet<object>(), false, extraSensitiveKeys, FLOORED_COLLECT_OPTIONS);
+	return out;
+}
+
+/** Collects nonblank strings and finite numbers beneath sensitive keys, with no length floor. */
+export function collectSensitiveValuesExhaustive(
+	source: unknown,
+	extraSensitiveKeys?: ReadonlySet<string>
+): Set<string> {
+	const out = new Set<string>();
+	collectInto(source, out, new WeakSet<object>(), false, extraSensitiveKeys, EXHAUSTIVE_COLLECT_OPTIONS);
 	return out;
 }
 
@@ -103,6 +121,12 @@ function normalize(
 	extraKeys: ReadonlySet<string> | undefined
 ): unknown {
 	if (typeof value === 'string') return scrubString(value, sensitiveValues);
+
+	// A numeric sensitive value is matched exactly, since substring scrubbing applies only to
+	// strings.
+	if (typeof value === 'number' || typeof value === 'bigint') {
+		return sensitiveValues.includes(String(value)) ? REDACT_TEXT : value;
+	}
 
 	if (value === null || typeof value !== 'object') return value;
 
@@ -146,11 +170,14 @@ function normalize(
 	}
 }
 
-export function redactFlowLog<T>(
+export function redactSensitive<T>(
 	value: T,
-	sensitiveValues?: ReadonlySet<string>,
+	sensitiveValues: ReadonlySet<string>,
 	extraSensitiveKeys?: ReadonlySet<string>
 ): T {
-	const values = sensitiveValues ? Array.from(sensitiveValues) : [];
-	return normalize(value, values, new WeakSet<object>(), extraSensitiveKeys) as T;
+	return normalize(value, Array.from(sensitiveValues), new WeakSet<object>(), extraSensitiveKeys) as T;
+}
+
+export function redactKeysOnly<T>(value: T, extraSensitiveKeys?: ReadonlySet<string>): T {
+	return normalize(value, [], new WeakSet<object>(), extraSensitiveKeys) as T;
 }

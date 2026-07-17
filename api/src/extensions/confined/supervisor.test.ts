@@ -158,7 +158,7 @@ function driveChildHost(job: unknown, options: DriveChildOptions = {}): Promise<
 	if (limitsEnv !== null) env['CONFINED_SANDBOX_LIMITS'] = limitsEnv;
 
 	return new Promise<ConfinedResult>((resolve) => {
-		const child = spawn(process.execPath, ['--loader', 'tsx', childTs], {
+		const child = spawn(process.execPath, ['--import', 'tsx', childTs], {
 			stdio: ['ignore', 'ignore', 'ignore', 'pipe'],
 			env,
 		});
@@ -207,7 +207,7 @@ function driveChildReplies(frames: unknown[]): Promise<string[]> {
 	const env: NodeJS.ProcessEnv = { PATH: process.env['PATH'], CONFINED_SANDBOX_LIMITS: VALID_CHILD_LIMITS };
 
 	return new Promise((resolve) => {
-		const child = spawn(process.execPath, ['--loader', 'tsx', childTs], {
+		const child = spawn(process.execPath, ['--import', 'tsx', childTs], {
 			stdio: ['ignore', 'ignore', 'ignore', 'pipe'],
 			env,
 		});
