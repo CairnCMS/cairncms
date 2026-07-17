@@ -1,7 +1,7 @@
 import { toArray } from '@cairncms/utils';
 import { merge } from 'lodash-es';
 import { pino } from 'pino';
-import type { LoggerOptions } from 'pino';
+import type { Logger, LoggerOptions } from 'pino';
 import type { Request, RequestHandler } from 'express';
 import { pinoHttp, stdSerializers } from 'pino-http';
 import { URL } from 'url';
@@ -20,8 +20,18 @@ const pinoOptions: LoggerOptions = {
 export const httpLoggerOptions: LoggerOptions = {
 	level: env['LOG_LEVEL'] || 'info',
 	redact: {
-		paths: ['req.headers.authorization', 'req.headers.cookie', 'req.query.access_token'],
-		censor: REDACT_TEXT,
+		paths: ['req.headers.authorization', 'req.headers.cookie', 'req.query.access_token', 'res.headers'],
+		censor: (value, pathParts) => {
+			if (pathParts.join('.') === 'res.headers') {
+				if ('set-cookie' in value) {
+					value['set-cookie'] = REDACT_TEXT;
+				}
+
+				return value;
+			}
+
+			return REDACT_TEXT;
+		},
 	},
 };
 
@@ -44,25 +54,6 @@ if (env['LOG_STYLE'] !== 'raw') {
 				ignore: 'hostname,pid',
 				sync: true,
 			},
-		},
-	};
-}
-
-if (env['LOG_STYLE'] === 'raw') {
-	httpLoggerOptions.redact = {
-		paths: ['req.headers.authorization', 'req.headers.cookie', 'req.query.access_token', 'res.headers'],
-		censor: (value, pathParts) => {
-			const path = pathParts.join('.');
-
-			if (path === 'res.headers') {
-				if ('set-cookie' in value) {
-					value['set-cookie'] = REDACT_TEXT;
-				}
-
-				return value;
-			}
-
-			return REDACT_TEXT;
 		},
 	};
 }
@@ -103,19 +94,25 @@ const logger = pino(merge(pinoOptions, loggerEnvConfig));
 
 const httpLoggerEnvConfig = getConfigFromEnv('LOGGER_HTTP', ['LOGGER_HTTP_LOGGER']);
 
-export const expressLogger = pinoHttp({
-	logger: pino(merge(httpLoggerOptions, loggerEnvConfig)),
-	...httpLoggerEnvConfig,
-	serializers: {
-		req(request: Request) {
-			const output = stdSerializers.req(request);
-			output.url = redactQuery(output.url);
-			return output;
-		},
-	},
-}) as RequestHandler;
+export const expressLogger = createExpressLogger(pino(merge(httpLoggerOptions, loggerEnvConfig)));
 
 export default logger;
+
+export function createExpressLogger(httpLogger: Logger): RequestHandler {
+	return pinoHttp({
+		logger: httpLogger,
+		...httpLoggerEnvConfig,
+		serializers: {
+			req: redactRequestSerializer,
+		},
+	}) as RequestHandler;
+}
+
+function redactRequestSerializer(request: Request) {
+	const output = stdSerializers.req(request);
+	output.url = redactQuery(output.url);
+	return output;
+}
 
 function redactQuery(originalPath: string) {
 	const url = new URL(originalPath, 'http://example.com/');

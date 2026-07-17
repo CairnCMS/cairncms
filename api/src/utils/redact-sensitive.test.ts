@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'vitest';
 import { REDACT_TEXT } from '../constants.js';
-import { collectSensitiveValues, redactKeysOnly, redactSensitive } from './redact-sensitive.js';
+import {
+	collectSensitiveValues,
+	collectSensitiveValuesExhaustive,
+	redactKeysOnly,
+	redactSensitive,
+} from './redact-sensitive.js';
 
 const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.HEADER_PAYLOAD_LONG_ENOUGH_TO_BE_REAL_TOKEN';
 const OTHER_TOKEN = 'another-distinct-token-value-also-long-enough';
@@ -108,6 +113,48 @@ describe('collectSensitiveValues', () => {
 		const source = { body: { access_token: { deep: { nested: TOKEN } } } };
 		const collected = collectSensitiveValues(source);
 		expect(collected.has(TOKEN)).toBe(true);
+	});
+});
+
+describe('collectSensitiveValuesExhaustive', () => {
+	test('collects a sub-threshold string under a sensitive key that the floored collector skips', () => {
+		const source = { extensions: { password: 'pw12' } };
+		expect(collectSensitiveValues(source).has('pw12')).toBe(false);
+		expect(collectSensitiveValuesExhaustive(source).has('pw12')).toBe(true);
+	});
+
+	test('collects a finite numeric value under a sensitive key, stringified', () => {
+		const source = { extensions: { password: 123456 } };
+		expect(collectSensitiveValues(source).size).toBe(0);
+		expect(collectSensitiveValuesExhaustive(source).has('123456')).toBe(true);
+	});
+
+	test('does not collect non-finite numbers', () => {
+		const source = { body: { token: Number.NaN, access_token: Number.POSITIVE_INFINITY } };
+		expect(collectSensitiveValuesExhaustive(source).size).toBe(0);
+	});
+
+	test('excludes whitespace-only strings and booleans under a sensitive key', () => {
+		const source = { body: { password: '   ', token: true, refresh_token: '' } };
+		expect(collectSensitiveValuesExhaustive(source).size).toBe(0);
+	});
+
+	test('collects only under a sensitive key, not from ordinary keys', () => {
+		const source = { body: { count: 123456, note: 'plain' } };
+		expect(collectSensitiveValuesExhaustive(source).size).toBe(0);
+	});
+
+	test('traverses arrays and nested plain objects under a sensitive key', () => {
+		const source = { body: { credentials: [{ deep: 'short' }, 42] } };
+		const collected = collectSensitiveValuesExhaustive(source);
+		expect(collected.has('short')).toBe(true);
+		expect(collected.has('42')).toBe(true);
+	});
+
+	test('does not infinite-loop on cycles', () => {
+		const source: Record<string, unknown> = { extensions: { password: 'pw12' } };
+		source['self'] = source;
+		expect(collectSensitiveValuesExhaustive(source).has('pw12')).toBe(true);
 	});
 });
 
