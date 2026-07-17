@@ -41,14 +41,11 @@ describe('snapshotError', () => {
 		expect('errors' in snap).toBe(false);
 	});
 
-	test('captures a non-enumerable originalError by name and recurses it', () => {
-		const inner = Object.assign(new Error('inner boom'), { code: 'INNER' });
+	test('excludes originalError from the snapshot', () => {
 		const outer = new Error('outer');
-		Object.defineProperty(outer, 'originalError', { value: inner, enumerable: false });
-		const snap = snapshotError(outer) as any;
-		expect(snap.originalError.type).toBe('Error');
-		expect(snap.originalError.message).toBe('inner boom');
-		expect(snap.originalError.code).toBe('INNER');
+		Object.defineProperty(outer, 'originalError', { value: new Error('inner'), enumerable: true, configurable: true });
+		const snap = snapshotError(outer);
+		expect('originalError' in snap).toBe(false);
 	});
 
 	test('reads each property once, so a getter is invoked a single time', () => {

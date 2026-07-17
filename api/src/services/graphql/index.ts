@@ -86,7 +86,7 @@ import { GraphQLHash } from './types/hash.js';
 import { GraphQLStringOrFloat } from './types/string-or-float.js';
 import { GraphQLVoid } from './types/void.js';
 import { addPathToValidationError } from './utils/add-path-to-validation-error.js';
-import processError from './utils/process-error.js';
+import formatGraphqlErrors from './utils/process-error.js';
 
 const validationRules = Array.from(specifiedRules);
 
@@ -331,7 +331,7 @@ export class GraphQLService {
 
 		if (result['data']) formattedResult.data = result['data'];
 		if (result['errors'])
-			formattedResult.errors = result['errors'].map((error) => processError(this.accountability, error));
+			formattedResult.errors = formatGraphqlErrors(result['errors'], variables, this.accountability);
 		if (result['extensions']) formattedResult.extensions = result['extensions'];
 
 		return formattedResult;

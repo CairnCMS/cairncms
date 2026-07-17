@@ -1,6 +1,6 @@
 const MAX_SNAPSHOT_DEPTH = 64;
 
-const STANDARD_ERROR_FIELDS = ['message', 'stack', 'cause', 'originalError', 'errors'] as const;
+const STANDARD_ERROR_FIELDS = ['message', 'stack', 'cause', 'errors'] as const;
 
 function snapshotErrorObject(error: object, seen: WeakSet<object>, depth: number): Record<string, unknown> {
 	if (depth > MAX_SNAPSHOT_DEPTH) return { type: '[Max depth exceeded]' };
@@ -8,11 +8,13 @@ function snapshotErrorObject(error: object, seen: WeakSet<object>, depth: number
 	seen.add(error);
 
 	try {
-		// Read each property once: enumerable own props, then the standard non-enumerable
-		// error fields Object.entries misses.
+		// Object.keys (not Object.entries) so the skipped originalError accessor is never invoked.
 		const fields = new Map<string, unknown>();
 
-		for (const [key, val] of Object.entries(error)) fields.set(key, val);
+		for (const key of Object.keys(error)) {
+			if (key === 'originalError') continue;
+			fields.set(key, (error as Record<string, unknown>)[key]);
+		}
 
 		for (const key of STANDARD_ERROR_FIELDS) {
 			if (fields.has(key)) continue;
@@ -106,9 +108,9 @@ function toPlain(value: unknown, seen: WeakSet<object>, depth: number): unknown 
 
 /**
  * Reads an error once into a fresh plain-data snapshot: the pino-style type, the standard
- * fields, every enumerable own property, and the cause, originalError, and aggregate-error
- * chains. Getters are resolved, values are materialized to JSON-compatible plain data, and
- * cycles are guarded, so the result shares no reference with the raw error.
+ * fields, every enumerable own property, and the cause and aggregate-error chains. Getters are
+ * resolved, values are materialized to JSON-compatible plain data, and cycles are guarded, so
+ * the result shares no reference with the raw error.
  */
 export function snapshotError(error: unknown): Record<string, unknown> {
 	const plain = toPlain(error, new WeakSet<object>(), 0);
