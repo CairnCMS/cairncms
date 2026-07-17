@@ -192,15 +192,16 @@ Two surfaces help when investigating an incident:
 - The **activity log** records create, update, delete, comment, and login events with the actor, timestamp, IP, and user-agent. Reached through the **Activity Log** button at the bottom of the sidebar. Activity is its own module, not a Settings page.
 - The **server log** captures process-level information through Pino. Forward it to a centralized log destination so it survives container restarts.
 
-Three redaction layers are in place:
+The following platform sinks apply redaction:
 
-- **HTTP request logs (pino-http)** redact the `Authorization` request header, the `Cookie` request header, and the `access_token` query parameter before writing the log line.
+- **HTTP request logs (pino-http)** redact the `Authorization` request header, the `Cookie` request header, the `access_token` query parameter, and the `Set-Cookie` response header before writing the log line.
 - **Flow revision data** (written when a flow's `accountability` is `all`) redacts values associated with a known set of secret-bearing keys, values that originate from those keys and propagate into later operation options, and the deployment values a flow can read through `FLOWS_ENV_ALLOW_LIST`.
 - **Flow log output** from the Log to Console and Run Script operations redacts the same secrets before writing to the server log, so a secret referenced in a log message or printed with `console.*` is replaced rather than logged in cleartext.
+- **REST and GraphQL error output** redacts the values CairnCMS identifies as secrets from error responses and their server logs. Detection matches recognized sensitive keys, and it propagates the recognized secret values found in the REST request context, in GraphQL variables, and in an error's cause chain, so those values are replaced wherever they reappear in a message or stack.
 
 Values exposed to a flow through `FLOWS_ENV_ALLOW_LIST` are treated as confidential in both platform logs and revisions. Allowlisting a deployment variable lets a flow read it, but it does not consent to persisting that value in a log. Redaction covers scalar string and numeric values and the string and numeric leaves of `json:` and `array:` values, so a non-secret allowlisted value is redacted too. It does not cover booleans, whitespace-only strings, or the contents of non-data objects that a JavaScript config file can expose.
 
-The redaction layers target secrets, not arbitrary PII, and match a secret by its key or its value, including common encoded forms of the value. A secret that a flow derives into a new value before logging, such as a hash or a substring, no longer matches and is not redacted. SQL query tracing, which runs only at the `trace` log level, still writes raw query bindings. Treat trace-level logs as debug-only and keep secret values out of them.
+Redaction targets secrets, not arbitrary PII, and matches a secret by its key or its value, including common encoded forms of the value. A secret that a flow derives into a new value before logging, such as a hash or a substring, no longer matches and is not redacted. SQL query tracing, which runs only at the `trace` log level, still writes raw query bindings. Treat trace-level logs as debug-only and keep secret values out of them.
 
 For audit-heavy projects, leave activity logging on (the default) and configure the role's accountability tracking to include revisions, not just activity. Revisions let you reconstruct an item's full history; activity records what happened.
 

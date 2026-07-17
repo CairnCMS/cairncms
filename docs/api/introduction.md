@@ -121,7 +121,7 @@ REST returns a consistent envelope on failure:
 
 `errors[]` always exists; multiple errors can be returned in a single response when validation collects more than one issue. Each error has a human-readable `message` and a machine-readable `extensions.code`. Treat `extensions.code` as the authoritative signal for what went wrong — the HTTP status code on the response is informative but not the right thing to switch on, especially when an error array contains entries with different statuses.
 
-Errors from internal failures (uncaught exceptions, database connection problems) sanitize their messages for non-admin requesters to avoid leaking stack traces or implementation details. Admins see the full error.
+Errors from internal failures (uncaught exceptions, database connection problems) sanitize their messages for non-admin requesters to avoid leaking stack traces or implementation details. Admins receive the detailed message and extensions instead. In both cases the values CairnCMS identifies as secrets are redacted from the returned message and extensions. See [Security hardening](/docs/manage/security-hardening/) for what counts as a secret.
 
 The codes used across the API:
 
