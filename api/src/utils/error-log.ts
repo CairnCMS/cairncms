@@ -53,7 +53,7 @@ export function createErrorSinkLogger(logger: Logger): Logger {
 	return logger.child({}, { serializers: { err: (value: unknown) => value } });
 }
 
-const errorSinkLogger = createErrorSinkLogger(baseLogger);
+let errorSinkLogger: Logger | undefined;
 
 /** Logs a snapshot's redacted projection at the given level, preserving pino's `{ err, msg }` shape. */
 export function logRedactedError(
@@ -62,6 +62,7 @@ export function logRedactedError(
 	sensitiveValues: ReadonlySet<string>,
 	extraSensitiveKeys?: ReadonlySet<string>
 ): void {
+	const sink = (errorSinkLogger ??= createErrorSinkLogger(baseLogger));
 	const { err, msg } = redactLogPayload(snapshot, sensitiveValues, extraSensitiveKeys);
-	errorSinkLogger[level]({ err }, msg);
+	sink[level]({ err }, msg);
 }
