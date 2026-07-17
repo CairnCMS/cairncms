@@ -2,6 +2,26 @@
 
 All notable changes to CairnCMS are documented in this file. Releases are listed in reverse chronological order. Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-07-17
+
+### Fixes & Improvements
+
+- Bump minimatch to 9.0.7. (#154)
+- Bump ws to 8.21.0. (#156)
+- Bump tar to 7.5.16. (#157)
+- Bump dompurify to 3.4.11. (#158)
+- Bump happy-dom to 20.10.6. (#159)
+- Bump uuid to 11.1.1 and @sendgrid/mail to 8.1.6. (#160)
+- Redact secret-bearing values in flow log and Run Script output. (#163)
+- Bump js-yaml to 4.2.0. (#161)
+- Bump joi to 17.13.4 and handle recursive diff validation errors. (#162)
+- Bump esbuild to 0.25.12 and tsx to 4.20.6. (#164)
+- Bump @babel/core to 7.29.6. (#165)
+- Fix accordion field groups rendering empty values on initial load. (#166)
+- Prevent cached webhook flows from sharing request context. (#167)
+- Fix nested collection metadata handling during schema apply. (#168)
+- Redact secrets from REST and GraphQL error sinks. (#173)
+
 ## [1.3.0] - 2026-07-12
 
 ### Breaking Changes
