@@ -107,6 +107,7 @@ export const useServerStore = defineStore('serverStore', () => {
 	const dehydrate = () => {
 		info.project = null;
 		info.cairncms = undefined;
+		info.queryLimit = undefined;
 
 		auth.providers = [];
 		auth.disableDefault = false;
