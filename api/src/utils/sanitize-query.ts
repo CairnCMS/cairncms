@@ -1,19 +1,30 @@
 import type { Accountability, Aggregate, Filter, Query } from '@cairncms/types';
 import { parseFilter, parseJSON } from '@cairncms/utils';
 import { flatten, get, isPlainObject, merge, set } from 'lodash-es';
+import { getEnv } from '../env.js';
 import { InvalidQueryException } from '../exceptions/invalid-query.js';
 import logger from '../logger.js';
 import { Meta } from '../types/index.js';
+import { getQueryLimitConfig, hasFiniteMax } from './query-limit.js';
 
-export function sanitizeQuery(rawQuery: Record<string, any>, accountability?: Accountability | null): Query {
+export function sanitizeQuery(
+	rawQuery: Record<string, any>,
+	accountability?: Accountability | null,
+	options?: { applyDefaultLimit?: boolean }
+): Query {
 	const query: Query = {};
+
+	const queryLimit = getQueryLimitConfig(getEnv());
+	const finiteMax = hasFiniteMax(queryLimit);
 
 	if (rawQuery['limit'] !== undefined) {
 		const limit = sanitizeLimit(rawQuery['limit']);
 
 		if (typeof limit === 'number') {
-			query.limit = limit;
+			query.limit = limit === -1 && finiteMax ? queryLimit.max : limit;
 		}
+	} else if ((options?.applyDefaultLimit ?? true) && finiteMax) {
+		query.limit = queryLimit.effectiveDefault;
 	}
 
 	if (rawQuery['fields']) {
@@ -183,11 +194,17 @@ function sanitizeDeep(deep: Record<string, any>, accountability?: Accountability
 
 			if (key.startsWith('_')) {
 				// Sanitize query only accepts non-underscore-prefixed query options
-				const parsedSubQuery = sanitizeQuery({ [key.substring(1)]: value }, accountability);
+				const parsedSubQuery = sanitizeQuery({ [key.substring(1)]: value }, accountability, {
+					applyDefaultLimit: false,
+				});
+
 				// ...however we want to keep them for the nested structure of deep, otherwise there's no
 				// way of knowing when to keep nesting and when to stop
-				const [parsedKey, parsedValue] = Object.entries(parsedSubQuery)[0]!;
-				parsedLevel[`_${parsedKey}`] = parsedValue;
+				const entry = Object.entries(parsedSubQuery)[0];
+
+				if (entry) {
+					parsedLevel[`_${entry[0]}`] = entry[1];
+				}
 			} else if (isPlainObject(value)) {
 				parse(value, [...path, key]);
 			}

@@ -1,6 +1,25 @@
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
+import env from '../env.js';
 
-import { sanitizeQuery } from './sanitize-query.js';
+let factoryEnv: { [k: string]: any } = {};
+
+vi.doMock('../env', () => ({
+	default: new Proxy(
+		{},
+		{
+			get(_target, prop) {
+				return { ...env, ...factoryEnv }[prop as string];
+			},
+		}
+	),
+	getEnv: vi.fn().mockImplementation(() => ({ ...env, ...factoryEnv })),
+}));
+
+afterEach(() => {
+	factoryEnv = {};
+});
+
+const { sanitizeQuery } = await import('./sanitize-query.js');
 
 vi.mock('@cairncms/utils', async () => {
 	const actual = (await vi.importActual('@cairncms/utils')) as any;
@@ -24,6 +43,54 @@ describe('limit', () => {
 		const sanitizedQuery = sanitizeQuery({ limit });
 
 		expect(sanitizedQuery.limit).toBe(1);
+	});
+});
+
+describe('max limit', () => {
+	test('should replace -1', () => {
+		factoryEnv = { QUERY_LIMIT_MAX: 100 };
+
+		const sanitizedQuery = sanitizeQuery({ limit: -1 });
+
+		expect(sanitizedQuery.limit).toBe(100);
+	});
+
+	test.each([1, 25, 150])('should accept number %i', (limit) => {
+		factoryEnv = { QUERY_LIMIT_MAX: 100 };
+
+		const sanitizedQuery = sanitizeQuery({ limit });
+
+		expect(sanitizedQuery.limit).toBe(limit);
+	});
+
+	test('should apply max if no limit passed in request', () => {
+		factoryEnv = { QUERY_LIMIT_MAX: 100 };
+
+		const sanitizedQuery = sanitizeQuery({});
+
+		expect(sanitizedQuery.limit).toBe(100);
+	});
+
+	test('should apply lower value if no limit passed in request', () => {
+		factoryEnv = { QUERY_LIMIT_MAX: 100, QUERY_LIMIT_DEFAULT: 25 };
+
+		const sanitizedQuery = sanitizeQuery({});
+
+		expect(sanitizedQuery.limit).toBe(25);
+	});
+
+	test('should apply limit from request if no max defined', () => {
+		const sanitizedQuery = sanitizeQuery({ limit: 150 });
+
+		expect(sanitizedQuery.limit).toBe(150);
+	});
+
+	test('should apply limit from request if max is unlimited', () => {
+		factoryEnv = { QUERY_LIMIT_MAX: -1 };
+
+		const sanitizedQuery = sanitizeQuery({ limit: 150 });
+
+		expect(sanitizedQuery.limit).toBe(150);
 	});
 });
 
@@ -295,6 +362,46 @@ describe('deep', () => {
 		const sanitizedQuery = sanitizeQuery({ deep });
 
 		expect(sanitizedQuery.deep).toEqual({ deep: { relational_field_a: { _sort: ['name'] } } });
+	});
+
+	test('resolves a deep _limit of -1 to the maximum', () => {
+		factoryEnv = { QUERY_LIMIT_MAX: 10 };
+
+		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _limit: -1 } } });
+
+		expect(sanitizedQuery.deep).toEqual({ translations: { _limit: 10 } });
+	});
+
+	test('keeps an explicit deep _limit under the maximum', () => {
+		factoryEnv = { QUERY_LIMIT_MAX: 10 };
+
+		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _limit: 5 } } });
+
+		expect(sanitizedQuery.deep).toEqual({ translations: { _limit: 5 } });
+	});
+
+	test('does not inject a deep _limit when only other options are present', () => {
+		factoryEnv = { QUERY_LIMIT_MAX: 10 };
+
+		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _sort: ['id'] } } });
+
+		expect(sanitizedQuery.deep).toEqual({ translations: { _sort: ['id'] } });
+	});
+
+	test('preserves deep options alongside a limit when a maximum is configured', () => {
+		factoryEnv = { QUERY_LIMIT_MAX: 10 };
+
+		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _sort: ['id'], _limit: 3 } } });
+
+		expect(sanitizedQuery.deep).toEqual({ translations: { _sort: ['id'], _limit: 3 } });
+	});
+
+	test('drops a null deep _limit instead of crashing', () => {
+		factoryEnv = { QUERY_LIMIT_MAX: 10 };
+
+		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _limit: null, _sort: ['id'] } } });
+
+		expect(sanitizedQuery.deep).toEqual({ translations: { _sort: ['id'] } });
 	});
 });
 

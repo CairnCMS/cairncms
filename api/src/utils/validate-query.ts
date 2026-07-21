@@ -5,6 +5,7 @@ import { stringify } from 'wellknown';
 import env from '../env.js';
 import { InvalidQueryException } from '../exceptions/invalid-query.js';
 import { calculateFieldDepth } from './calculate-field-depth.js';
+import { getQueryLimitConfig, hasFiniteMax } from './query-limit.js';
 
 const querySchema = Joi.object({
 	fields: Joi.array().items(Joi.string()),
@@ -25,12 +26,27 @@ const querySchema = Joi.object({
 export function validateQuery(query: Query): Query {
 	const { error } = querySchema.validate(query);
 
+	const queryLimit = getQueryLimitConfig(env);
+
+	const limitSchema = hasFiniteMax(queryLimit)
+		? Joi.number().integer().min(-1).max(queryLimit.max).label('limit')
+		: Joi.number().integer().min(-1).label('limit');
+
+	if (query.limit !== undefined) {
+		const { error: limitError } = limitSchema.validate(query.limit);
+		if (limitError) throw new InvalidQueryException(limitError.message);
+	}
+
 	if (query.filter && Object.keys(query.filter).length > 0) {
 		validateFilter(query.filter);
 	}
 
 	if (query.alias) {
 		validateAlias(query.alias);
+	}
+
+	if (query.deep) {
+		validateDeepLimits(query.deep, limitSchema);
 	}
 
 	validateRelationalDepth(query);
@@ -40,6 +56,17 @@ export function validateQuery(query: Query): Query {
 	}
 
 	return query;
+}
+
+function validateDeepLimits(deep: Record<string, any>, limitSchema: Joi.NumberSchema) {
+	for (const [key, value] of Object.entries(deep)) {
+		if (key === '_limit') {
+			const { error } = limitSchema.validate(value);
+			if (error) throw new InvalidQueryException(error.message);
+		} else if (!key.startsWith('_') && isPlainObject(value)) {
+			validateDeepLimits(value as Record<string, any>, limitSchema);
+		}
+	}
 }
 
 function validateFilter(filter: Query['filter']) {

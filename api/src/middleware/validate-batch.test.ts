@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { validateBatch } from './validate-batch.js';
 import '../../src/types/express.d.ts';
 import { InvalidPayloadException } from '../exceptions/invalid-payload.js';
+import { InvalidQueryException } from '../exceptions/invalid-query.js';
 import { FailedValidationException } from '@cairncms/exceptions';
 import { vi, beforeEach, test, expect } from 'vitest';
 
@@ -67,6 +68,19 @@ test(`Sets sanitizedQuery based on body.query in read operations`, async () => {
 	expect(mockRequest.sanitizedQuery).toEqual({
 		sort: ['id'],
 	});
+});
+
+test(`Validates the body query on SEARCH and rejects an invalid limit`, async () => {
+	mockRequest.method = 'SEARCH';
+
+	mockRequest.body = {
+		query: { deep: { translations: { _limit: -2 } } },
+	};
+
+	await validateBatch('read')(mockRequest as Request, mockResponse as Response, nextFunction);
+
+	expect(nextFunction).toHaveBeenCalledTimes(1);
+	expect(vi.mocked(nextFunction).mock.calls[0][0]).toBeInstanceOf(InvalidQueryException);
 });
 
 test(`Doesn't allow both query and keys in a batch delete`, async () => {
