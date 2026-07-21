@@ -31,6 +31,10 @@ const mockServerInfo: Info = {
 	cairncms: {
 		version: '10.10.10',
 	},
+	queryLimit: {
+		default: 100,
+		max: 100,
+	},
 };
 
 const mockAuthProviders: Auth['providers'] = [
