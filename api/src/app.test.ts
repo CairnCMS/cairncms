@@ -354,4 +354,27 @@ describe('createApp', async () => {
 			expect(response.body.errors?.[0]?.extensions?.code).toBe('SERVICE_UNAVAILABLE');
 		});
 	});
+
+	describe('Query limit config validation', () => {
+		afterEach(async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			delete env['QUERY_LIMIT_MAX'];
+		});
+
+		test('fails startup when QUERY_LIMIT_MAX is invalid', async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['QUERY_LIMIT_MAX'] = 'not-a-number';
+
+			const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+				throw new Error('process.exit called');
+			}) as typeof process.exit);
+
+			try {
+				await expect(createApp()).rejects.toThrow('process.exit called');
+				expect(exitSpy).toHaveBeenCalledWith(1);
+			} finally {
+				exitSpy.mockRestore();
+			}
+		});
+	});
 });

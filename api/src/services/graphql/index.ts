@@ -1822,7 +1822,10 @@ export class GraphQLService {
 							merge(
 								{},
 								get(query.deep, currentAlias ?? current),
-								mapKeys(sanitizeQuery(args, this.accountability), (_value, key) => `_${key}`)
+								mapKeys(
+									sanitizeQuery(args, this.accountability, { applyDefaultLimit: false }),
+									(_value, key) => `_${key}`
+								)
 							)
 						);
 					}
@@ -2077,6 +2080,15 @@ export class GraphQLService {
 							}),
 					  }
 					: GraphQLBoolean,
+				queryLimit: {
+					type: new GraphQLObjectType({
+						name: 'server_info_query_limit',
+						fields: {
+							default: { type: GraphQLInt },
+							max: { type: GraphQLInt },
+						},
+					}),
+				},
 			});
 		}
 

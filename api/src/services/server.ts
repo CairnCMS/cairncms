@@ -8,6 +8,7 @@ import { getCache } from '../cache.js';
 import getDatabase, { hasDatabaseConnection } from '../database/index.js';
 import env from '../env.js';
 import logger from '../logger.js';
+import { getQueryLimitConfig } from '../utils/query-limit.js';
 import getMailer from '../mailer.js';
 import { rateLimiterGlobal } from '../middleware/rate-limiter-global.js';
 import { rateLimiter } from '../middleware/rate-limiter-ip.js';
@@ -67,6 +68,15 @@ export class ServerService {
 			} else {
 				info['rateLimitGlobal'] = false;
 			}
+		}
+
+		if (this.accountability?.user || this.accountability?.share) {
+			const queryLimit = getQueryLimitConfig(env);
+
+			info['queryLimit'] = {
+				default: queryLimit.default,
+				max: queryLimit.max,
+			};
 		}
 
 		if (this.accountability?.admin === true) {
