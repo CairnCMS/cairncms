@@ -56,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import api from '@/api';
+import { fetchAll } from '@/utils/fetch-all';
 import { Header as TableHeader } from '@/components/v-table/types';
 import { translate } from '@/utils/translate-object-values';
 import { unexpectedError } from '@/utils/unexpected-error';
@@ -68,7 +68,16 @@ import { useRouter } from 'vue-router';
 import SettingsNavigation from '../../components/navigation.vue';
 
 type RoleItem = Partial<Role> & {
-	count?: number;
+	count?: number | null;
+};
+
+type FetchedRole = {
+	id: string;
+	name: string;
+	description: string | null;
+	icon: string;
+	admin_access: boolean;
+	users: { count: { id: number } }[];
 };
 
 const { t } = useI18n();
@@ -123,9 +132,8 @@ async function fetchRoles() {
 	loading.value = true;
 
 	try {
-		const response = await api.get(`/roles`, {
+		const response = await fetchAll<FetchedRole>(`/roles`, {
 			params: {
-				limit: -1,
 				fields: ['id', 'name', 'description', 'icon', 'admin_access', 'users'],
 				deep: {
 					users: {
@@ -139,7 +147,7 @@ async function fetchRoles() {
 			},
 		});
 
-		roles.value = response.data.data.map((role: any) => {
+		roles.value = response.map((role: FetchedRole) => {
 			const isSentinel = role.id === PUBLIC_ROLE_ID;
 
 			return {

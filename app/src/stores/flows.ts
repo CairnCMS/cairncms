@@ -1,5 +1,5 @@
 import { FlowRaw } from '@cairncms/types';
-import api from '@/api';
+import { fetchAll } from '@/utils/fetch-all';
 import { defineStore } from 'pinia';
 import { useUserStore } from '@/stores/user';
 import { usePermissionsStore } from '@/stores/permissions';
@@ -18,11 +18,9 @@ export const useFlowsStore = defineStore({
 				this.flows = [];
 			} else {
 				try {
-					const response = await api.get<any>('/flows', {
-						params: { limit: -1, fields: ['*', 'operations.*'] },
+					this.flows = await fetchAll<FlowRaw>('/flows', {
+						params: { fields: ['*', 'operations.*'] },
 					});
-
-					this.flows = response.data.data;
 				} catch {
 					this.flows = [];
 				}

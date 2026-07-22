@@ -1,4 +1,5 @@
 import api from '@/api';
+import { fetchAll } from '@/utils/fetch-all';
 import { RelationM2A } from '@/composables/use-relation-m2a';
 import { RelationM2M } from '@/composables/use-relation-m2m';
 import { RelationO2M } from '@/composables/use-relation-o2m';
@@ -508,7 +509,7 @@ export function useRelationMultiple(
 			const targetCollection = relation.relatedCollection.collection;
 			const targetPKField = relation.relatedPrimaryKeyField.field;
 
-			const response = await api.get(getEndpoint(targetCollection), {
+			fetchedSelectItems.value = await fetchAll<Record<string, any>>(getEndpoint(targetCollection), {
 				params: {
 					fields: Array.from(fields),
 					filter: {
@@ -516,11 +517,8 @@ export function useRelationMultiple(
 							_in: selectedOnPage.value.map(getRelatedIDs),
 						},
 					},
-					limit: -1,
 				},
 			});
-
-			fetchedSelectItems.value = response.data.data;
 		}
 
 		async function loadSelectedDisplayM2M(relation: RelationM2M) {
@@ -542,7 +540,7 @@ export function useRelationMultiple(
 
 			const relatedPKField = relation.relatedPrimaryKeyField.field;
 
-			const response = await api.get(getEndpoint(relation.relatedCollection.collection), {
+			const response = await fetchAll<Record<string, any>>(getEndpoint(relation.relatedCollection.collection), {
 				params: {
 					fields: Array.from(fields),
 					filter: {
@@ -550,11 +548,10 @@ export function useRelationMultiple(
 							_in: selectedOnPage.value.map(getRelatedIDs),
 						},
 					},
-					limit: -1,
 				},
 			});
 
-			fetchedSelectItems.value = response.data.data.map((item: Record<string, any>) => ({
+			fetchedSelectItems.value = response.map((item: Record<string, any>) => ({
 				[relation.junctionField.field]: item,
 			}));
 		}
@@ -590,7 +587,7 @@ export function useRelationMultiple(
 
 					fields.add(pkField);
 
-					return api.get(getEndpoint(collection), {
+					return fetchAll<Record<string, any>>(getEndpoint(collection), {
 						params: {
 							fields: Array.from(fields),
 							filter: {
@@ -598,7 +595,6 @@ export function useRelationMultiple(
 									_in: items.map((item) => item[relation.junctionField.field][pkField]),
 								},
 							},
-							limit: -1,
 						},
 					});
 				})
@@ -606,7 +602,7 @@ export function useRelationMultiple(
 
 			fetchedSelectItems.value = responses.reduce((acc, item, index) => {
 				acc.push(
-					...item.data.data.map((item: Record<string, any>) => ({
+					...item.map((item: Record<string, any>) => ({
 						[relation.collectionField.field]: Object.keys(selectGrouped)[index],
 						[relation.junctionField.field]: item,
 					}))

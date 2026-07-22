@@ -1,4 +1,5 @@
 import api from '@/api';
+import { fetchAll } from '@/utils/fetch-all';
 import { useUserStore } from '@/stores/user';
 import { Preset } from '@cairncms/types';
 import { cloneDeep, merge, orderBy } from 'lodash';
@@ -19,7 +20,7 @@ const defaultPreset: Omit<Preset, 'collection'> = {
 	color: null,
 };
 
-const systemDefaults: Record<string, Partial<Preset>> = {
+const systemDefaults: Record<string, Partial<Preset> & Pick<Preset, 'collection'>> = {
 	directus_files: {
 		collection: 'directus_files',
 		layout: 'cards',
@@ -124,31 +125,28 @@ export const usePresetsStore = defineStore({
 
 			const values = await Promise.all([
 				// All user saved bookmarks and presets
-				api.get(`/presets`, {
+				fetchAll<Preset>(`/presets`, {
 					params: {
 						'filter[user][_eq]': id,
-						limit: -1,
 					},
 				}),
 				// All role saved bookmarks and presets
-				api.get(`/presets`, {
+				fetchAll<Preset>(`/presets`, {
 					params: {
 						'filter[role][_eq]': role.id,
 						'filter[user][_null]': true,
-						limit: -1,
 					},
 				}),
 				// All global saved bookmarks and presets
-				api.get(`/presets`, {
+				fetchAll<Preset>(`/presets`, {
 					params: {
 						'filter[role][_null]': true,
 						'filter[user][_null]': true,
-						limit: -1,
 					},
 				}),
 			]);
 
-			const presets = values.map((response) => response.data.data).flat();
+			const presets = values.flat();
 
 			// Inject system defaults if they don't exist
 			for (const systemCollection of Object.keys(systemDefaults)) {
