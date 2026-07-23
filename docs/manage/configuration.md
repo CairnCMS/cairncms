@@ -56,6 +56,19 @@ Variables that control how CairnCMS listens for requests:
 - **`IP_TRUST_PROXY`** — whether Express should trust `X-Forwarded-For` headers. Default `true` (assumes a reverse proxy in front).
 - **`IP_CUSTOM_HEADER`** — alternative header to read the client IP from, when not using `X-Forwarded-For`.
 
+## Query limits
+
+Two environment variables bound how many rows a list read returns. Both accept `-1` for unlimited or an integer in the per-variable range below, and the largest value either one accepts is `2147483647`. A malformed, fractional, negative (other than `-1`), or out-of-range value stops the server from starting.
+
+- **`QUERY_LIMIT_DEFAULT`** — the page size applied to a list read that omits its own `limit`. Default `100`. Accepts `0` or higher, or `-1` to return every matching row by default when `QUERY_LIMIT_MAX` is also unlimited.
+- **`QUERY_LIMIT_MAX`** — the ceiling on how many rows a single list may return. Default `-1` (no ceiling). A finite ceiling must be `1` or higher.
+
+With a finite `QUERY_LIMIT_MAX`, a `limit=-1` request resolves to the ceiling. An explicit `limit` above the ceiling is rejected with `400 INVALID_QUERY` rather than clamped. A read that omits `limit` uses the configured default, or the ceiling when the default is unlimited or larger than it. The same ceiling applies to nested relational limits set through `deep` and to queries sent in a SEARCH request body.
+
+The ceiling applies to the top-level list and to each nested relational list separately, not to the total number of objects in a response. A response with many parents or relational fields can therefore hold more than `QUERY_LIMIT_MAX` objects. The ceiling also does not by itself bound the database or memory work behind a relational query, since related records are fetched in batches before the response is assembled. Treat it as a per-list response-cardinality control and a partial mitigation against unbounded reads through the public and authenticated APIs.
+
+Permission list reads through `/permissions` force an unbounded limit after normal query validation. An accepted `limit` or `page` does not truncate the result, while other constraints such as filter, offset, search, sort, and fields stay effective. An explicit `limit` above a finite `QUERY_LIMIT_MAX` is still rejected before the read runs. A role-filtered request returns every permission matching its other constraints, so the admin app can render a role's permission set in full. The server stays the authority on what each role is allowed to do.
+
 ## Logging
 
 CairnCMS uses pino for structured logging.

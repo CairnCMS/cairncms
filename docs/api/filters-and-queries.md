@@ -243,9 +243,9 @@ GET /items/articles?limit=20&page=3
 
 Pick whichever knob fits your client. `offset` is a raw skip count; `page` is a friendlier shape when the UI thinks in pages.
 
-`limit=-1` returns every matching row with no cap. Reach for it when the result set is bounded by a strict filter (a singleton-style use case). Avoid it on open queries against large collections; it can produce arbitrarily large responses and slow queries.
+`limit=-1` asks for every matching row. When `QUERY_LIMIT_MAX` is unset or `-1`, it returns the full result set with no cap. When a finite maximum is configured, it returns at most `QUERY_LIMIT_MAX` rows. Reach for `limit=-1` when the result set is bounded by a strict filter, such as a singleton-style read. Avoid it on open queries against large collections, where it can produce arbitrarily large responses and slow queries.
 
-The default `limit` for a list endpoint is `100`, configurable through the `QUERY_LIMIT_DEFAULT` environment variable. The hard cap is `QUERY_LIMIT_MAX`.
+A list endpoint that omits `limit` returns `QUERY_LIMIT_DEFAULT` rows, `100` by default, and `QUERY_LIMIT_MAX` caps each list separately, the top-level list and every nested relational list, rather than the total object count of a response. An explicit `limit` larger than a finite `QUERY_LIMIT_MAX` is rejected as an invalid query rather than clamped. Both variables are described under [Query limits](/docs/manage/configuration/#query-limits). Reads through `/permissions` force an unbounded read after validation, so an accepted `limit` or `page` does not truncate the permissions matching your query, and the admin app can load a role's permission set in full.
 
 ## Aggregate and groupBy
 
