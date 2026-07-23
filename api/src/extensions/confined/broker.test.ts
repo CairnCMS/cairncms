@@ -830,7 +830,7 @@ describe('createConfinedHostBroker request', () => {
 });
 
 describe('createConfinedHostBroker items', () => {
-	it('routes items.read and items.readOne through the wired seam', async () => {
+	it('routes items.readMany and items.readOne through the wired seam', async () => {
 		const seen: Array<string | number> = [];
 
 		const { dispatch } = makeBroker({
@@ -844,10 +844,12 @@ describe('createConfinedHostBroker items', () => {
 			}),
 		});
 
-		expect(await dispatch({ method: 'items.read', args: { collection: 'articles' } }, context, liveSignal)).toEqual({
-			ok: true,
-			value: [{ id: 1 }],
-		});
+		expect(await dispatch({ method: 'items.readMany', args: { collection: 'articles' } }, context, liveSignal)).toEqual(
+			{
+				ok: true,
+				value: [{ id: 1 }],
+			}
+		);
 
 		expect(
 			await dispatch({ method: 'items.readOne', args: { collection: 'articles', key: 7 } }, context, liveSignal)
@@ -858,7 +860,7 @@ describe('createConfinedHostBroker items', () => {
 
 	it('denies items without the capability through the dispatcher', async () => {
 		const { dispatch } = makeBroker();
-		const reply = await dispatch({ method: 'items.read', args: { collection: 'articles' } }, context, liveSignal);
+		const reply = await dispatch({ method: 'items.readMany', args: { collection: 'articles' } }, context, liveSignal);
 		expect(reply).toMatchObject({ ok: false, error: { code: 'denied' } });
 	});
 });

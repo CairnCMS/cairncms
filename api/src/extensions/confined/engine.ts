@@ -313,10 +313,14 @@ const GUEST_HOST_SURFACE = `const host = {
 				error: async (message, meta) => { await __hostCall('log.error', { message, meta }); },
 			},
 			request: { send: (request) => __hostCall('request.send', request) },
-			items: {
-				read: (collection, query) => __hostCall('items.read', { collection, query }),
-				readOne: (collection, key, query) => __hostCall('items.readOne', { collection, key, query }),
-			},
+			items: (() => {
+				const readMany = (collection, query) => __hostCall('items.readMany', { collection, query });
+				return {
+					readMany,
+					read: readMany,
+					readOne: (collection, key, query) => __hostCall('items.readOne', { collection, key, query }),
+				};
+			})(),
 			settings: { get: (key) => __hostCall('settings.get', { key }) },
 			template: {
 				renderLiquid: (template, data, options) => __hostCall('template.renderLiquid', { template, data, options }),

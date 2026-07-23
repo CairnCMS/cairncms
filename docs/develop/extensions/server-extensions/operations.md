@@ -268,7 +268,7 @@ type Options = { status: string };
 export default defineFlowOperation<Options>({
   id: 'list-articles',
   async handler(payload, { host }) {
-    const result = await host.items.read('articles', {
+    const result = await host.items.readMany('articles', {
       filter: { status: { _eq: payload.options.status } },
       fields: ['id', 'title'],
       limit: 50,

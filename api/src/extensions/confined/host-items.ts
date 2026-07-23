@@ -352,7 +352,7 @@ function isForbidden(error: unknown): boolean {
 }
 
 export interface ConfinedItemsHost {
-	read(args: unknown, signal: AbortSignal): Promise<ConfinedHostReply>;
+	readMany(args: unknown, signal: AbortSignal): Promise<ConfinedHostReply>;
 	readOne(args: unknown, signal: AbortSignal): Promise<ConfinedHostReply>;
 }
 
@@ -455,7 +455,7 @@ export function createConfinedItemsHost(deps: ConfinedItemsHostDeps): ConfinedIt
 	}
 
 	return {
-		read(args, signal) {
+		readMany(args, signal) {
 			return serve(args, signal, () => ({
 				ok: true,
 				run: (reader, query) => reader.readByQuery(query),

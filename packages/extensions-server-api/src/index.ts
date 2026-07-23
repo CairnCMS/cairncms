@@ -92,6 +92,8 @@ export type ExtensionQuery = {
 };
 
 export type ExtensionItemsClient = {
+	readMany<T = unknown>(collection: string, query?: ExtensionQuery): Promise<ExtensionResult<T[]>>;
+	/** @deprecated Use `readMany`. Removed at the next major. */
 	read<T = unknown>(collection: string, query?: ExtensionQuery): Promise<ExtensionResult<T[]>>;
 	readOne<T = unknown>(
 		collection: string,

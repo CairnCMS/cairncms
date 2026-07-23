@@ -461,7 +461,7 @@ export function createConfinedHostBroker(
 
 		if (call.method === 'request.send') return serveRequest(call.args, context, signal);
 
-		if (call.method === 'items.read') return itemsHost.read(call.args, signal);
+		if (call.method === 'items.readMany') return itemsHost.readMany(call.args, signal);
 
 		if (call.method === 'items.readOne') return itemsHost.readOne(call.args, signal);
 

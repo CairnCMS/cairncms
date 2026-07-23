@@ -280,7 +280,7 @@ describe('createConfinedItemsHost authority', () => {
 		const { host, calls } = makeHost({ capabilities: {} });
 
 		for (const reply of [
-			await host.read({ collection: 'articles' }, liveSignal),
+			await host.readMany({ collection: 'articles' }, liveSignal),
 			await host.readOne({ collection: 'articles', key: 1 }, liveSignal),
 		]) {
 			expect(reply).toMatchObject({ ok: false, error: { code: 'denied' } });
@@ -292,7 +292,7 @@ describe('createConfinedItemsHost authority', () => {
 	it('denies user with a null or missing accountability', async () => {
 		for (const accountability of [null, undefined]) {
 			const { host, calls } = makeHost({ accountability });
-			const reply = await host.read({ collection: 'articles' }, liveSignal);
+			const reply = await host.readMany({ collection: 'articles' }, liveSignal);
 
 			expect(reply).toMatchObject({ ok: false, error: { code: 'denied' } });
 			expect(calls).toHaveLength(0);
@@ -301,7 +301,7 @@ describe('createConfinedItemsHost authority', () => {
 
 	it('passes the exact invocation accountability to the factory under user', async () => {
 		const { host, calls } = makeHost();
-		await host.read({ collection: 'articles' }, liveSignal);
+		await host.readMany({ collection: 'articles' }, liveSignal);
 
 		expect(calls).toHaveLength(1);
 		expect(calls[0]?.collection).toBe('articles');
@@ -314,7 +314,7 @@ describe('createConfinedItemsHost authority', () => {
 			accountability: user,
 		});
 
-		await host.read({ collection: 'articles' }, liveSignal);
+		await host.readMany({ collection: 'articles' }, liveSignal);
 
 		expect(calls).toHaveLength(1);
 		expect(calls[0]?.accountability).toBeNull();
@@ -322,23 +322,23 @@ describe('createConfinedItemsHost authority', () => {
 
 	it('denies when no items service is wired', async () => {
 		const { host } = makeHost({ itemsService: undefined });
-		const reply = await host.read({ collection: 'articles' }, liveSignal);
+		const reply = await host.readMany({ collection: 'articles' }, liveSignal);
 		expect(reply).toMatchObject({ ok: false, error: { code: 'denied' } });
 	});
 });
 
-describe('createConfinedItemsHost read', () => {
+describe('createConfinedItemsHost readMany', () => {
 	it('marshals results as JSON values', async () => {
 		const { host } = makeHost();
-		const reply = await host.read({ collection: 'articles' }, liveSignal);
+		const reply = await host.readMany({ collection: 'articles' }, liveSignal);
 		expect(reply).toEqual({ ok: true, value: [{ id: 1 }] });
 	});
 
 	it('clamps an over-max limit before the service runs and always sends an explicit limit', async () => {
 		const { host, queries } = makeHost();
 
-		await host.read({ collection: 'articles', query: { limit: 10_000 } }, liveSignal);
-		await host.read({ collection: 'articles' }, liveSignal);
+		await host.readMany({ collection: 'articles', query: { limit: 10_000 } }, liveSignal);
+		await host.readMany({ collection: 'articles' }, liveSignal);
 
 		expect(queries[0]?.limit).toBe(ITEMS_MAX_LIMIT);
 		expect(queries[1]?.limit).toBe(ITEMS_MAX_LIMIT);
@@ -348,7 +348,7 @@ describe('createConfinedItemsHost read', () => {
 		const { host, calls } = makeHost();
 
 		for (const key of ['deep', 'alias', 'aggregate', 'groupBy', 'export', 'anythingElse']) {
-			const reply = await host.read({ collection: 'articles', query: { [key]: {} } }, liveSignal);
+			const reply = await host.readMany({ collection: 'articles', query: { [key]: {} } }, liveSignal);
 			expect(reply, key).toMatchObject({ ok: false, error: { code: 'invalid_request' } });
 		}
 
@@ -368,7 +368,7 @@ describe('createConfinedItemsHost read', () => {
 			{ offset: ITEMS_MAX_OFFSET + 1 },
 			{ page: Number.MAX_SAFE_INTEGER },
 		]) {
-			const reply = await host.read({ collection: 'articles', query }, liveSignal);
+			const reply = await host.readMany({ collection: 'articles', query }, liveSignal);
 			expect(reply, JSON.stringify(query)).toMatchObject({ ok: false, error: { code: 'invalid_request' } });
 		}
 
@@ -379,7 +379,7 @@ describe('createConfinedItemsHost read', () => {
 		const { host, calls } = makeHost();
 
 		for (const collection of [undefined, '', 7, 'x'.repeat(256)]) {
-			const reply = await host.read({ collection }, liveSignal);
+			const reply = await host.readMany({ collection }, liveSignal);
 			expect(reply).toMatchObject({ ok: false, error: { code: 'invalid_request' } });
 		}
 
@@ -395,7 +395,7 @@ describe('createConfinedItemsHost read', () => {
 		};
 
 		const { host } = makeHost({ itemsService: () => reader });
-		const reply = await host.read({ collection: 'articles' }, liveSignal);
+		const reply = await host.readMany({ collection: 'articles' }, liveSignal);
 
 		expect(reply).toEqual({ ok: false, error: { code: 'denied', message: 'the read was denied' } });
 	});
@@ -409,7 +409,7 @@ describe('createConfinedItemsHost read', () => {
 		};
 
 		const { host } = makeHost({ itemsService: () => reader });
-		const reply = await host.read({ collection: 'articles' }, liveSignal);
+		const reply = await host.readMany({ collection: 'articles' }, liveSignal);
 
 		expect(reply).toEqual({ ok: false, error: { code: 'internal', message: 'the items read failed' } });
 		expect(JSON.stringify(reply)).not.toContain('ECONNREFUSED');
@@ -422,7 +422,7 @@ describe('createConfinedItemsHost read', () => {
 		};
 
 		const { host } = makeHost({ itemsService: () => reader });
-		const reply = await host.read({ collection: 'articles' }, liveSignal);
+		const reply = await host.readMany({ collection: 'articles' }, liveSignal);
 
 		expect(reply).toMatchObject({ ok: false, error: { code: 'invalid_request' } });
 	});
@@ -436,7 +436,7 @@ describe('createConfinedItemsHost read', () => {
 		};
 
 		const { host } = makeHost({ itemsService: () => reader });
-		const pending = host.read({ collection: 'articles' }, controller.signal);
+		const pending = host.readMany({ collection: 'articles' }, controller.signal);
 		controller.abort();
 
 		expect(await pending).toMatchObject({ ok: false, error: { code: 'timeout' } });
