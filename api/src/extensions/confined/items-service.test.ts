@@ -1,6 +1,7 @@
 import type { Accountability, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import { describe, expect, it } from 'vitest';
+import { getInternalTables } from '../../database/internal-tables.js';
 import { createConfinedItemsService, type ConfinedItemsServiceDeps } from './items-service.js';
 
 type ServiceCall = {
@@ -100,5 +101,30 @@ describe('createConfinedItemsService', () => {
 
 		expect(calls).toHaveLength(1);
 		expect(calls[0]?.collection).toBe('constructor');
+	});
+
+	it('refuses a directus_* system collection before the service exists, even when it is in the schema', async () => {
+		const { factory, calls } = harness(['articles', 'directus_users', 'directus_roles']);
+
+		for (const collection of ['directus_users', 'directus_roles']) {
+			await expect(factory(collection, null).readByQuery({})).rejects.toMatchObject({ code: 'FORBIDDEN' });
+			await expect(factory(collection, null).readOne(1, {})).rejects.toMatchObject({ code: 'FORBIDDEN' });
+		}
+
+		expect(calls).toHaveLength(0);
+	});
+
+	it('refuses a registered internal table before the service exists, even when it is in the schema', async () => {
+		const internal = getInternalTables();
+		expect(internal.length).toBeGreaterThan(0);
+
+		const { factory, calls } = harness(['articles', ...internal]);
+
+		for (const collection of internal) {
+			await expect(factory(collection, null).readByQuery({})).rejects.toMatchObject({ code: 'FORBIDDEN' });
+			await expect(factory(collection, null).readOne(1, {})).rejects.toMatchObject({ code: 'FORBIDDEN' });
+		}
+
+		expect(calls).toHaveLength(0);
 	});
 });

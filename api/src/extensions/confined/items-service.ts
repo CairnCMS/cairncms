@@ -1,6 +1,7 @@
 import type { Accountability, Query, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import getDatabase from '../../database/index.js';
+import { isInternalTable } from '../../database/internal-tables.js';
 import { ForbiddenException } from '../../exceptions/index.js';
 import { ItemsService } from '../../services/items.js';
 import { getSchema } from '../../utils/get-schema.js';
@@ -33,6 +34,8 @@ export interface ConfinedItemsServiceDeps {
 export function createConfinedItemsService(deps: ConfinedItemsServiceDeps): ConfinedItemsServiceFactory {
 	return (collection, accountability): ConfinedItemsReader => {
 		async function reader(): Promise<ConfinedReadService> {
+			if (collection.startsWith('directus_') || isInternalTable(collection)) throw new ForbiddenException();
+
 			const knex = deps.database();
 			const schema = await deps.schema({ database: knex });
 

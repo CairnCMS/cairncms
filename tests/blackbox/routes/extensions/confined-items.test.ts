@@ -543,6 +543,35 @@ describe('Confined items host through the real flow binding', () => {
 		);
 	});
 
+	describe('top-level system collections are refused', () => {
+		it.each(vendors)(
+			'%s refuses a top-level directus_* system collection under full-access, identically to a nonexistent collection',
+			async (vendor) => {
+				const refused = await runOperation(vendor, 'system', { collection: 'directus_users' });
+
+				const missing = await runOperation(vendor, 'system', { collection: 'no_such_collection' });
+
+				expect(refused).toMatchObject({ ok: false, error: { code: 'denied' } });
+				expect(missing).toEqual(refused);
+			},
+			60000
+		);
+
+		it.each(vendors)(
+			'%s collapses a top-level directus_* readOne of a real user to null under full-access',
+			async (vendor) => {
+				const refused = await runOperation(vendor, 'system', {
+					action: 'readOne',
+					collection: 'directus_users',
+					key: USER.TESTS_FLOW.ID,
+				});
+
+				expect(refused).toEqual({ ok: true, value: null });
+			},
+			60000
+		);
+	});
+
 	describe('caller authority', () => {
 		it.each(vendors)(
 			'%s reads as public for an unauthenticated caller and is denied without a public grant',
