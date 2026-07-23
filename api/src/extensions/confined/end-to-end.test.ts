@@ -314,6 +314,84 @@ describe('host methods through a real child and the real broker', () => {
 	);
 
 	it(
+		'wires every write verb through the guest client across the spawn boundary',
+		async () => {
+			const seen: Array<{ method: string; args: unknown[] }> = [];
+
+			const itemsService = () => ({
+				readByQuery: async () => [],
+				readOne: async () => null,
+				createOne: async (payload: unknown) => {
+					seen.push({ method: 'createOne', args: [payload] });
+					return 'c1';
+				},
+				createMany: async (payloads: unknown) => {
+					seen.push({ method: 'createMany', args: [payloads] });
+					return ['c1', 'c2'];
+				},
+				updateOne: async (key: unknown, payload: unknown) => {
+					seen.push({ method: 'updateOne', args: [key, payload] });
+					return key;
+				},
+				updateMany: async (keys: unknown, payload: unknown) => {
+					seen.push({ method: 'updateMany', args: [keys, payload] });
+					return keys;
+				},
+				deleteOne: async (key: unknown) => {
+					seen.push({ method: 'deleteOne', args: [key] });
+					return key;
+				},
+				deleteMany: async (keys: unknown) => {
+					seen.push({ method: 'deleteMany', args: [keys] });
+					return keys;
+				},
+			});
+
+			const granted = await runConfinedOperation(
+				baseOperationRequest(
+					operationEntry(
+						"async (_input, { host }) => ({ createOne: await host.items.createOne('widgets', { title: 'one', author: { name: 'nested' } }), createMany: await host.items.createMany('widgets', [{ title: 'a' }, { title: 'b' }]), updateOne: await host.items.updateOne('widgets', 7, { title: 'two' }), updateMany: await host.items.updateMany('widgets', [7, 8], { title: 'three' }), deleteOne: await host.items.deleteOne('widgets', 9), deleteMany: await host.items.deleteMany('widgets', [10, 11]) })"
+					),
+					{ capabilities: { items: { accountability: 'full-access' } } }
+				),
+				{ ...deps, itemsService }
+			);
+
+			expect(granted.outcome).toEqual({
+				ok: true,
+				value: {
+					createOne: { ok: true, value: 'c1' },
+					createMany: { ok: true, value: ['c1', 'c2'] },
+					updateOne: { ok: true, value: 7 },
+					updateMany: { ok: true, value: [7, 8] },
+					deleteOne: { ok: true, value: 9 },
+					deleteMany: { ok: true, value: [10, 11] },
+				},
+			});
+
+			expect(seen).toEqual([
+				{ method: 'createOne', args: [{ title: 'one', author: { name: 'nested' } }] },
+				{ method: 'createMany', args: [[{ title: 'a' }, { title: 'b' }]] },
+				{ method: 'updateOne', args: [7, { title: 'two' }] },
+				{ method: 'updateMany', args: [[7, 8], { title: 'three' }] },
+				{ method: 'deleteOne', args: [9] },
+				{ method: 'deleteMany', args: [[10, 11]] },
+			]);
+
+			const denied = await runConfinedOperation(
+				baseOperationRequest(
+					operationEntry("async (_input, { host }) => host.items.createOne('widgets', { title: 'x' })"),
+					{ capabilities: {} }
+				),
+				{ ...deps, itemsService }
+			);
+
+			expect(denied.outcome).toMatchObject({ ok: true, value: { ok: false, error: { code: 'denied' } } });
+		},
+		ENGINE_TIMEOUT
+	);
+
+	it(
 		'renders a template under the template capability and denies without it',
 		async () => {
 			const granted = await runConfinedOperation(

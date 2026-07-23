@@ -52,6 +52,12 @@ const ALLOWED_HOST_METHODS = new Set<string>([
 	'settings.get',
 	'items.readMany',
 	'items.readOne',
+	'items.createOne',
+	'items.createMany',
+	'items.updateOne',
+	'items.updateMany',
+	'items.deleteOne',
+	'items.deleteMany',
 	'template.renderLiquid',
 ]);
 
