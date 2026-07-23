@@ -123,10 +123,10 @@ A call whose capability is not declared, or whose target is not allowed by the d
 
 ## Reading data: accountability modes
 
-`host.items` runs under an accountability mode set by the `items` capability, `{ accountability: 'user' | 'full-access' }`. The mode is fixed per extension in the manifest and is not chosen per call. The capability selects the mode only. It grants no collection, field, or CRUD permission, which CairnCMS roles and permissions always enforce.
+`host.items` runs under an accountability mode set by the `items` capability, `{ accountability: 'user' | 'full-access' }`. The mode is fixed per extension in the manifest and is not chosen per call. `host.items` is a generic item surface. A `directus_*` system collection or internal table cannot be the top-level collection passed to `host.items`, in either mode. Relational field paths still resolve natively, so a read of a user collection may follow a relation into a related system row, the same as a REST read. There is no confined surface for working with system collections directly. Within the surface the mode selects the accountability a read runs under: `user` applies CairnCMS role permissions, `full-access` bypasses them.
 
 - **`{ accountability: 'user' }`** — reads run as the invoking accountability. That resolves per call to the user who ran the flow, the user whose action fired an event, or the token on an authenticated request. Field permissions apply as on a REST read, and the read fails closed. A forbidden field is a hard denial, and the primary key must be among the readable fields. A call with no accountability, such as an anonymous webhook or a schedule, is denied. Prefer this mode.
-- **`{ accountability: 'full-access' }`** — reads run under unrestricted system authority, for user-less flows such as schedules and anonymous webhooks. It stays confined and read-only, and the diagnostics mark it as an elevated opt-in.
+- **`{ accountability: 'full-access' }`** — reads run with elevated authority over user collections, bypassing role permissions, for user-less flows such as schedules and anonymous webhooks. It cannot pass a system or internal collection as its top-level target, per the generic-surface note above. It stays confined and read-only, and the diagnostics mark it as an elevated opt-in.
 
 The bare `'current-user'` and `'system'` strings still load as deprecated aliases for the object form.
 

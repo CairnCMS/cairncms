@@ -1,12 +1,38 @@
 import { getUrl } from '@common/config';
+import { CreateCollection, CreateItem } from '@common/functions';
 import vendors from '@common/get-dbs-to-test';
 import { USER } from '@common/variables';
 import request from 'supertest';
 
 const ECHO_ENDPOINT = 'cairncms-extension-confined-echo-endpoint';
 const AUTH_ENDPOINT = 'cairncms-extension-confined-auth-endpoint';
+const RECORD_COLLECTION = 'confined_endpoint_records';
+const RECORD_TITLE = 'endpoint record';
+
+function admin(req: request.Test): request.Test {
+	return req.set('Authorization', `Bearer ${USER.ADMIN.TOKEN}`);
+}
 
 describe('Confined JSON endpoints through the real binding', () => {
+	beforeAll(async () => {
+		for (const vendor of vendors) {
+			await CreateCollection(vendor, {
+				collection: RECORD_COLLECTION,
+				fields: [{ field: 'title', type: 'string', meta: {}, schema: {} }],
+			});
+
+			const existing = await admin(
+				request(getUrl(vendor)).get(`/items/${RECORD_COLLECTION}`).query({ fields: ['id'], limit: -1 })
+			);
+			const ids = (existing.body.data ?? []).map((row: { id: number }) => row.id);
+			if (ids.length > 0) {
+				await admin(request(getUrl(vendor)).delete(`/items/${RECORD_COLLECTION}`)).send(ids);
+			}
+
+			await CreateItem(vendor, { collection: RECORD_COLLECTION, item: { title: RECORD_TITLE } });
+		}
+	}, 60000);
+
 	describe('fixture registration', () => {
 		it.each(vendors)('%s loads both confined endpoint fixtures through the real loader', async (vendor) => {
 			const response = await request(getUrl(vendor))
@@ -76,23 +102,24 @@ describe('Confined JSON endpoints through the real binding', () => {
 		);
 
 		it.each(vendors)(
-			'%s limits a public caller to public permissions through the brokered items host',
+			'%s applies public and admin accountability when reading a user collection',
 			async (vendor) => {
 				const denied = await request(getUrl(vendor))
 					.post(`/${ECHO_ENDPOINT}/items`)
-					.send({ collection: 'directus_settings', query: { fields: ['id'], limit: 1 } });
+					.send({ collection: RECORD_COLLECTION, query: { fields: ['title'], limit: 1 } });
 
 				expect(denied.status).toBe(200);
 				expect(denied.body).toMatchObject({ ok: false, error: { code: 'denied' } });
 
-				const allowed = await request(getUrl(vendor))
-					.post(`/${ECHO_ENDPOINT}/items`)
-					.set('Authorization', `Bearer ${USER.ADMIN.TOKEN}`)
-					.send({ collection: 'directus_settings', query: { fields: ['id'], limit: 1 } });
+				const allowed = await admin(
+					request(getUrl(vendor))
+						.post(`/${ECHO_ENDPOINT}/items`)
+						.send({ collection: RECORD_COLLECTION, query: { fields: ['title'], limit: 1 } })
+				);
 
 				expect(allowed.status).toBe(200);
 				expect(allowed.body.ok).toBe(true);
-				expect(Array.isArray(allowed.body.value)).toBe(true);
+				expect(allowed.body.value).toEqual([{ title: RECORD_TITLE }]);
 			},
 			60000
 		);
