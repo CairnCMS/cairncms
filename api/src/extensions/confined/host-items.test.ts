@@ -1,14 +1,20 @@
 import type { Accountability, Query } from '@cairncms/types';
 import { describe, expect, it, vi } from 'vitest';
+import type { Item, PrimaryKey } from '../../types/items.js';
 import {
+	CONFINED_WRITE_MAX_BYTES,
+	CONFINED_WRITE_MAX_DEPTH,
 	createConfinedItemsHost,
 	ITEMS_MAX_LIMIT,
 	ITEMS_MAX_OFFSET,
 	normalizeItemsQuery,
+	type ConfinedItemsHost,
 	type ConfinedItemsHostDeps,
 	type ConfinedItemsReader,
+	type ConfinedItemsWriter,
 } from './host-items.js';
 import { ITEMS_REPLY_BYTES } from './sandbox-limits.js';
+import type { ConfinedHostReply } from './types.js';
 
 const liveSignal = new AbortController().signal;
 
@@ -18,12 +24,37 @@ class SeamForbidden extends Error {
 	code = 'FORBIDDEN';
 }
 
+type ConfinedItemsService = ConfinedItemsReader & ConfinedItemsWriter;
+
+function serviceStub(overrides: Partial<ConfinedItemsService> = {}): ConfinedItemsService {
+	return {
+		readByQuery: async () => [],
+		readOne: async () => null,
+		createOne: async () => 1,
+		createMany: async () => [1],
+		updateOne: async () => 1,
+		updateMany: async () => [1],
+		deleteOne: async () => 1,
+		deleteMany: async () => [1],
+		...overrides,
+	};
+}
+
+type WriteCall = { method: string; args: unknown[] };
+
 function makeHost(overrides: Partial<ConfinedItemsHostDeps> = {}) {
 	const calls: Array<{ collection: string; accountability: Accountability | null }> = [];
 	const queries: Query[] = [];
 	const keys: Array<string | number> = [];
+	const writes: WriteCall[] = [];
 
-	const reader: ConfinedItemsReader = {
+	const record =
+		(method: string) =>
+		(...args: unknown[]) => {
+			writes.push({ method, args });
+		};
+
+	const service: ConfinedItemsService = {
 		readByQuery: vi.fn(async (query: Query) => {
 			queries.push(query);
 			return [{ id: 1 }];
@@ -33,6 +64,30 @@ function makeHost(overrides: Partial<ConfinedItemsHostDeps> = {}) {
 			queries.push(query);
 			return { id: key };
 		}),
+		createOne: vi.fn(async (payload: Partial<Item>) => {
+			record('createOne')(payload);
+			return 'created-1';
+		}),
+		createMany: vi.fn(async (payloads: Partial<Item>[]) => {
+			record('createMany')(payloads);
+			return payloads.map((_, index) => `created-${index + 1}`);
+		}),
+		updateOne: vi.fn(async (key: PrimaryKey, payload: Partial<Item>) => {
+			record('updateOne')(key, payload);
+			return key;
+		}),
+		updateMany: vi.fn(async (keys: PrimaryKey[], payload: Partial<Item>) => {
+			record('updateMany')(keys, payload);
+			return keys;
+		}),
+		deleteOne: vi.fn(async (key: PrimaryKey) => {
+			record('deleteOne')(key);
+			return key;
+		}),
+		deleteMany: vi.fn(async (keys: PrimaryKey[]) => {
+			record('deleteMany')(keys);
+			return keys;
+		}),
 	};
 
 	const deps: ConfinedItemsHostDeps = {
@@ -40,13 +95,13 @@ function makeHost(overrides: Partial<ConfinedItemsHostDeps> = {}) {
 		accountability: user,
 		itemsService: (collection, accountability) => {
 			calls.push({ collection, accountability });
-			return reader;
+			return service;
 		},
 		itemsReplyBytes: ITEMS_REPLY_BYTES,
 		...overrides,
 	};
 
-	return { host: createConfinedItemsHost(deps), calls, queries, keys, reader };
+	return { host: createConfinedItemsHost(deps), calls, queries, keys, writes, service };
 }
 
 describe('normalizeItemsQuery', () => {
@@ -387,28 +442,26 @@ describe('createConfinedItemsHost readMany', () => {
 	});
 
 	it('maps a forbidden read to a sanitized denial', async () => {
-		const reader: ConfinedItemsReader = {
+		const service = serviceStub({
 			readByQuery: async () => {
 				throw new SeamForbidden();
 			},
-			readOne: async () => null,
-		};
+		});
 
-		const { host } = makeHost({ itemsService: () => reader });
+		const { host } = makeHost({ itemsService: () => service });
 		const reply = await host.readMany({ collection: 'articles' }, liveSignal);
 
 		expect(reply).toEqual({ ok: false, error: { code: 'denied', message: 'the read was denied' } });
 	});
 
 	it('maps a thrown service to a sanitized internal error', async () => {
-		const reader: ConfinedItemsReader = {
+		const service = serviceStub({
 			readByQuery: async () => {
 				throw new Error('connect ECONNREFUSED 10.0.0.5:5432');
 			},
-			readOne: async () => null,
-		};
+		});
 
-		const { host } = makeHost({ itemsService: () => reader });
+		const { host } = makeHost({ itemsService: () => service });
 		const reply = await host.readMany({ collection: 'articles' }, liveSignal);
 
 		expect(reply).toEqual({ ok: false, error: { code: 'internal', message: 'the items read failed' } });
@@ -416,12 +469,11 @@ describe('createConfinedItemsHost readMany', () => {
 	});
 
 	it('refuses an over-cap reply at the surface', async () => {
-		const reader: ConfinedItemsReader = {
+		const service = serviceStub({
 			readByQuery: async () => [{ blob: 'x'.repeat(ITEMS_REPLY_BYTES) }],
-			readOne: async () => null,
-		};
+		});
 
-		const { host } = makeHost({ itemsService: () => reader });
+		const { host } = makeHost({ itemsService: () => service });
 		const reply = await host.readMany({ collection: 'articles' }, liveSignal);
 
 		expect(reply).toMatchObject({ ok: false, error: { code: 'invalid_request' } });
@@ -430,12 +482,11 @@ describe('createConfinedItemsHost readMany', () => {
 	it('settles with a timeout when the service ignores the abort signal', async () => {
 		const controller = new AbortController();
 
-		const reader: ConfinedItemsReader = {
+		const service = serviceStub({
 			readByQuery: () => new Promise(() => undefined),
-			readOne: async () => null,
-		};
+		});
 
-		const { host } = makeHost({ itemsService: () => reader });
+		const { host } = makeHost({ itemsService: () => service });
 		const pending = host.readMany({ collection: 'articles' }, controller.signal);
 		controller.abort();
 
@@ -464,16 +515,420 @@ describe('createConfinedItemsHost readOne', () => {
 	});
 
 	it('collapses forbidden and missing to the same null', async () => {
-		const reader: ConfinedItemsReader = {
-			readByQuery: async () => [],
+		const service = serviceStub({
 			readOne: async () => {
 				throw new SeamForbidden();
 			},
-		};
+		});
 
-		const { host } = makeHost({ itemsService: () => reader });
+		const { host } = makeHost({ itemsService: () => service });
 		const reply = await host.readOne({ collection: 'articles', key: 'missing-or-forbidden' }, liveSignal);
 
 		expect(reply).toEqual({ ok: true, value: null });
+	});
+});
+
+class SeamFailedValidation extends Error {
+	code = 'FAILED_VALIDATION';
+
+	constructor() {
+		super('Value for field "email" is invalid');
+	}
+}
+
+class SeamInvalidPayload extends Error {
+	code = 'INVALID_PAYLOAD';
+
+	constructor() {
+		super('Exceeded max batch mutation limit of 500.');
+	}
+}
+
+const writeInvocations = [
+	{
+		verb: 'createOne',
+		invoke: (host) => host.createOne({ collection: 'articles', payload: { title: 'x' } }, liveSignal),
+		forwarded: [{ title: 'x' }],
+		value: 'created-1',
+	},
+	{
+		verb: 'createMany',
+		invoke: (host) => host.createMany({ collection: 'articles', payloads: [{ a: 1 }, { a: 2 }] }, liveSignal),
+		forwarded: [[{ a: 1 }, { a: 2 }]],
+		value: ['created-1', 'created-2'],
+	},
+	{
+		verb: 'updateOne',
+		invoke: (host) => host.updateOne({ collection: 'articles', key: 7, payload: { a: 1 } }, liveSignal),
+		forwarded: [7, { a: 1 }],
+		value: 7,
+	},
+	{
+		verb: 'updateMany',
+		invoke: (host) => host.updateMany({ collection: 'articles', keys: [7, 8], payload: { a: 1 } }, liveSignal),
+		forwarded: [[7, 8], { a: 1 }],
+		value: [7, 8],
+	},
+	{
+		verb: 'deleteOne',
+		invoke: (host) => host.deleteOne({ collection: 'articles', key: 7 }, liveSignal),
+		forwarded: [7],
+		value: 7,
+	},
+	{
+		verb: 'deleteMany',
+		invoke: (host) => host.deleteMany({ collection: 'articles', keys: [7, 8] }, liveSignal),
+		forwarded: [[7, 8]],
+		value: [7, 8],
+	},
+] satisfies Array<{
+	verb: string;
+	invoke: (host: ConfinedItemsHost) => Promise<ConfinedHostReply>;
+	forwarded: unknown[];
+	value: unknown;
+}>;
+
+function allWritesThrow(error: () => Error): ConfinedItemsService {
+	return serviceStub({
+		createOne: async () => {
+			throw error();
+		},
+		createMany: async () => {
+			throw error();
+		},
+		updateOne: async () => {
+			throw error();
+		},
+		updateMany: async () => {
+			throw error();
+		},
+		deleteOne: async () => {
+			throw error();
+		},
+		deleteMany: async () => {
+			throw error();
+		},
+	});
+}
+
+describe('createConfinedItemsHost writes', () => {
+	it('dispatches each verb to the service and shapes its result', async () => {
+		for (const testCase of writeInvocations) {
+			const { host, calls, writes } = makeHost();
+
+			const reply = await testCase.invoke(host);
+
+			expect(reply, testCase.verb).toEqual({ ok: true, value: testCase.value });
+			expect(writes, testCase.verb).toEqual([{ method: testCase.verb, args: testCase.forwarded }]);
+			expect(calls[0]?.accountability, testCase.verb).toBe(user);
+		}
+	});
+
+	it('applies the shared authority resolution to writes', async () => {
+		const undeclared = makeHost({ capabilities: {} });
+		const undeclaredReply = await undeclared.host.createOne({ collection: 'articles', payload: { a: 1 } }, liveSignal);
+		expect(undeclaredReply).toMatchObject({ ok: false, error: { code: 'denied' } });
+		expect(undeclared.calls).toHaveLength(0);
+		expect(undeclared.writes).toHaveLength(0);
+
+		for (const accountability of [null, undefined]) {
+			const { host, calls } = makeHost({ accountability });
+			const reply = await host.createOne({ collection: 'articles', payload: { a: 1 } }, liveSignal);
+			expect(reply).toMatchObject({ ok: false, error: { code: 'denied' } });
+			expect(calls).toHaveLength(0);
+		}
+
+		const anonymous: Accountability = { user: null, role: null, admin: false };
+		const publicHost = makeHost({ accountability: anonymous });
+		const publicReply = await publicHost.host.createOne({ collection: 'articles', payload: { a: 1 } }, liveSignal);
+		expect(publicReply).toEqual({ ok: true, value: 'created-1' });
+		expect(publicHost.calls[0]?.accountability).toBe(anonymous);
+
+		const elevated = makeHost({ capabilities: { items: { accountability: 'full-access' } } });
+		await elevated.host.createOne({ collection: 'articles', payload: { a: 1 } }, liveSignal);
+		expect(elevated.calls[0]?.accountability).toBeNull();
+	});
+
+	it('refuses a malformed collection on writes before constructing the service', async () => {
+		const { host, calls } = makeHost();
+
+		for (const collection of [undefined, '', 7, 'x'.repeat(256)]) {
+			const create = await host.createOne({ collection, payload: { a: 1 } }, liveSignal);
+			const remove = await host.deleteMany({ collection, keys: [1] }, liveSignal);
+			expect(create, String(collection)).toMatchObject({ ok: false, error: { code: 'invalid_request' } });
+			expect(remove, String(collection)).toMatchObject({ ok: false, error: { code: 'invalid_request' } });
+		}
+
+		expect(calls).toHaveLength(0);
+	});
+
+	it('refuses malformed and duplicate keys', async () => {
+		const { host, writes } = makeHost();
+
+		for (const key of [undefined, '', 1.5, { id: 1 }, [1], true, 'x'.repeat(256)]) {
+			expect(await host.updateOne({ collection: 'articles', key, payload: { a: 1 } }, liveSignal)).toMatchObject({
+				ok: false,
+				error: { code: 'invalid_request' },
+			});
+
+			expect(await host.deleteOne({ collection: 'articles', key }, liveSignal)).toMatchObject({
+				ok: false,
+				error: { code: 'invalid_request' },
+			});
+		}
+
+		for (const keys of [
+			[1, 1],
+			[1, undefined],
+			['a', 'a'],
+			[1, {}],
+		]) {
+			expect(await host.updateMany({ collection: 'articles', keys, payload: { a: 1 } }, liveSignal)).toMatchObject({
+				ok: false,
+				error: { code: 'invalid_request' },
+			});
+
+			expect(await host.deleteMany({ collection: 'articles', keys }, liveSignal)).toMatchObject({
+				ok: false,
+				error: { code: 'invalid_request' },
+			});
+		}
+
+		expect(writes).toHaveLength(0);
+	});
+
+	it('refuses over-cap, empty, sparse, and non-array batches', async () => {
+		const { host, writes } = makeHost();
+
+		const overCapPayloads = Array.from({ length: ITEMS_MAX_LIMIT + 1 }, (_, i) => ({ i }));
+		const overCapKeys = Array.from({ length: ITEMS_MAX_LIMIT + 1 }, (_, i) => i + 1);
+
+		for (const reply of [
+			await host.createMany({ collection: 'articles', payloads: overCapPayloads }, liveSignal),
+			await host.createMany({ collection: 'articles', payloads: [] }, liveSignal),
+			await host.createMany({ collection: 'articles', payloads: [{ a: 1 }, undefined] }, liveSignal),
+			await host.createMany({ collection: 'articles', payloads: 'not-an-array' }, liveSignal),
+			await host.createMany({ collection: 'articles', payloads: [{ a: 1 }, 7] }, liveSignal),
+			await host.updateMany({ collection: 'articles', keys: overCapKeys, payload: { a: 1 } }, liveSignal),
+			await host.deleteMany({ collection: 'articles', keys: [] }, liveSignal),
+			await host.deleteMany({ collection: 'articles', keys: [1, undefined] }, liveSignal),
+		]) {
+			expect(reply).toMatchObject({ ok: false, error: { code: 'invalid_request' } });
+		}
+
+		expect(writes).toHaveLength(0);
+	});
+
+	it('refuses a non-object payload', async () => {
+		const { host, writes } = makeHost();
+
+		for (const payload of [undefined, null, 'x', 7, [1]]) {
+			expect(await host.createOne({ collection: 'articles', payload }, liveSignal)).toMatchObject({
+				ok: false,
+				error: { code: 'invalid_request' },
+			});
+
+			expect(await host.updateOne({ collection: 'articles', key: 1, payload }, liveSignal)).toMatchObject({
+				ok: false,
+				error: { code: 'invalid_request' },
+			});
+		}
+
+		expect(writes).toHaveLength(0);
+	});
+
+	it('refuses a query key and any unsupported key on a write', async () => {
+		const { host, writes } = makeHost();
+
+		for (const reply of [
+			await host.createOne({ collection: 'articles', payload: { a: 1 }, query: { limit: 1 } }, liveSignal),
+			await host.deleteMany({ collection: 'articles', keys: [1], query: {} }, liveSignal),
+			await host.createOne({ collection: 'articles', payload: { a: 1 }, surprise: true }, liveSignal),
+		]) {
+			expect(reply).toMatchObject({ ok: false, error: { code: 'invalid_request' } });
+		}
+
+		expect(writes).toHaveLength(0);
+	});
+
+	it('shapes a write reply and refuses an over-cap reply at the surface', async () => {
+		const { host } = makeHost();
+		const created = await host.createOne({ collection: 'articles', payload: { a: 1 } }, liveSignal);
+		expect(created).toEqual({ ok: true, value: 'created-1' });
+
+		const big = serviceStub({ createOne: async () => 'x'.repeat(ITEMS_REPLY_BYTES + 1) });
+		const { host: bigHost } = makeHost({ itemsService: () => big });
+		const over = await bigHost.createOne({ collection: 'articles', payload: { a: 1 } }, liveSignal);
+		expect(over).toMatchObject({ ok: false, error: { code: 'invalid_request' } });
+	});
+
+	it('passes relational and irregular payloads through to the service verbatim', async () => {
+		const payloads: Partial<Item>[] = [
+			{ title: 'x', author: { name: 'nested' } },
+			{ tags: [{ name: 'a' }, { name: 'b' }] },
+			{ author: 42 },
+			{ title: 'x', count: 3, meta: { nested: { json: true } } },
+			{ not_a_real_field: 'kept here, stripped by the service' },
+		];
+
+		for (const payload of payloads) {
+			const { host, writes } = makeHost();
+			const reply = await host.createOne({ collection: 'articles', payload }, liveSignal);
+			expect(reply, JSON.stringify(payload)).toEqual({ ok: true, value: 'created-1' });
+			expect(writes).toEqual([{ method: 'createOne', args: [payload] }]);
+		}
+	});
+
+	it('treats a __proto__ object key as ordinary payload data', async () => {
+		const { host, writes } = makeHost();
+		const payload = JSON.parse('{"__proto__":{"role":"admin"},"title":"ok"}');
+
+		const reply = await host.createOne({ collection: 'articles', payload }, liveSignal);
+
+		expect(reply).toEqual({ ok: true, value: 'created-1' });
+		expect(writes).toHaveLength(1);
+		expect(Object.prototype.hasOwnProperty.call(writes[0]!.args[0], '__proto__')).toBe(true);
+	});
+
+	it('accepts a payload at the depth cap and refuses one past it', async () => {
+		const nest = (levels: number) => {
+			let node: Record<string, unknown> = { leaf: true };
+			for (let i = 0; i < levels; i++) node = { child: node };
+			return node;
+		};
+
+		const { host, writes } = makeHost();
+
+		const atCap = await host.createOne({ collection: 'articles', payload: nest(CONFINED_WRITE_MAX_DEPTH) }, liveSignal);
+
+		expect(atCap).toEqual({ ok: true, value: 'created-1' });
+
+		const overCap = await host.createOne(
+			{ collection: 'articles', payload: nest(CONFINED_WRITE_MAX_DEPTH + 1) },
+			liveSignal
+		);
+
+		expect(overCap).toMatchObject({ ok: false, error: { code: 'invalid_request' } });
+
+		expect(writes).toHaveLength(1);
+	});
+
+	it('refuses a payload over the byte cap', async () => {
+		const { host, writes } = makeHost();
+		const payload = { blob: 'x'.repeat(CONFINED_WRITE_MAX_BYTES) };
+
+		const reply = await host.createOne({ collection: 'articles', payload }, liveSignal);
+
+		expect(reply).toMatchObject({ ok: false, error: { code: 'invalid_request' } });
+		expect(writes).toHaveLength(0);
+	});
+
+	it('maps a forbidden write to a sanitized denial on every verb', async () => {
+		for (const testCase of writeInvocations) {
+			const { host } = makeHost({ itemsService: () => allWritesThrow(() => new SeamForbidden()) });
+			const reply = await testCase.invoke(host);
+			expect(reply, testCase.verb).toEqual({ ok: false, error: { code: 'denied', message: 'the write was denied' } });
+		}
+	});
+
+	it('maps a failed validation, single or array, to a sanitized invalid_request', async () => {
+		for (const thrown of [new SeamFailedValidation(), [new SeamFailedValidation(), new SeamFailedValidation()]]) {
+			const service = serviceStub({
+				createOne: async () => {
+					throw thrown;
+				},
+			});
+
+			const { host } = makeHost({ itemsService: () => service });
+
+			const reply = await host.createOne({ collection: 'articles', payload: { a: 1 } }, liveSignal);
+
+			expect(reply).toEqual({ ok: false, error: { code: 'invalid_request', message: 'the write failed validation' } });
+			expect(JSON.stringify(reply)).not.toContain('email');
+		}
+	});
+
+	it('maps an invalid payload, ceiling overrun included, to a sanitized invalid_request', async () => {
+		const service = serviceStub({
+			createOne: async () => {
+				throw new SeamInvalidPayload();
+			},
+		});
+
+		const { host } = makeHost({ itemsService: () => service });
+
+		const reply = await host.createOne({ collection: 'articles', payload: { a: 1 } }, liveSignal);
+
+		expect(reply).toEqual({ ok: false, error: { code: 'invalid_request', message: 'the write request is invalid' } });
+		expect(JSON.stringify(reply)).not.toContain('Exceeded');
+	});
+
+	it('maps an unknown write error to a sanitized internal error', async () => {
+		const service = serviceStub({
+			createOne: async () => {
+				throw new Error('connect ECONNREFUSED 10.0.0.5:5432');
+			},
+		});
+
+		const { host } = makeHost({ itemsService: () => service });
+
+		const reply = await host.createOne({ collection: 'articles', payload: { a: 1 } }, liveSignal);
+
+		expect(reply).toEqual({ ok: false, error: { code: 'internal', message: 'the items write failed' } });
+		expect(JSON.stringify(reply)).not.toContain('ECONNREFUSED');
+	});
+
+	it('never invokes the service when the signal is already aborted', async () => {
+		const controller = new AbortController();
+		controller.abort();
+
+		const { host, calls, writes } = makeHost();
+		const reply = await host.createOne({ collection: 'articles', payload: { a: 1 } }, controller.signal);
+
+		expect(reply).toMatchObject({ ok: false, error: { code: 'timeout' } });
+		expect(calls).toHaveLength(0);
+		expect(writes).toHaveLength(0);
+	});
+
+	it('settles with a timeout when the write ignores the abort signal', async () => {
+		const controller = new AbortController();
+		const service = serviceStub({ createOne: () => new Promise<PrimaryKey>(() => undefined) });
+		const { host } = makeHost({ itemsService: () => service });
+
+		const pending = host.createOne({ collection: 'articles', payload: { a: 1 } }, controller.signal);
+		controller.abort();
+
+		expect(await pending).toMatchObject({ ok: false, error: { code: 'timeout' } });
+	});
+
+	it('ignores a late rejection after a timeout without a second reply or unhandled rejection', async () => {
+		const controller = new AbortController();
+		let rejectWrite: (error: unknown) => void = () => undefined;
+
+		const service = serviceStub({
+			createOne: () =>
+				new Promise<PrimaryKey>((_resolve, reject) => {
+					rejectWrite = reject;
+				}),
+		});
+
+		const { host } = makeHost({ itemsService: () => service });
+
+		const unhandled = vi.fn();
+		process.on('unhandledRejection', unhandled);
+
+		try {
+			const pending = host.createOne({ collection: 'articles', payload: { a: 1 } }, controller.signal);
+			controller.abort();
+			const reply = await pending;
+			expect(reply).toMatchObject({ ok: false, error: { code: 'timeout' } });
+
+			rejectWrite(new Error('late failure'));
+			await new Promise((resolve) => setImmediate(resolve));
+
+			expect(unhandled).not.toHaveBeenCalled();
+		} finally {
+			process.off('unhandledRejection', unhandled);
+		}
 	});
 });
