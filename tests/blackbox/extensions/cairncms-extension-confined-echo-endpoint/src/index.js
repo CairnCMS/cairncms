@@ -2,7 +2,7 @@ export default {
 	id: 'cairncms-extension-confined-echo-endpoint',
 	handler: async (request, context) => {
 		if (request.path === '/items') {
-			const reply = await context.host.items.read(request.body.collection, request.body.query ?? {});
+			const reply = await context.host.items.readMany(request.body.collection, request.body.query ?? {});
 			return { body: reply };
 		}
 

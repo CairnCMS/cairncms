@@ -9,7 +9,7 @@ var CairnBundle = (() => {
 	// capability differs, so a denied items read on one and a successful read on the
 	// other proves the broker selects capabilities per entry, not per artifact.
 	const readItems = async (request, context) => {
-		const reply = await context.host.items.read(request.body.collection, request.body.query ?? {});
+		const reply = await context.host.items.readMany(request.body.collection, request.body.query ?? {});
 		return { body: reply };
 	};
 

@@ -5,6 +5,6 @@ export default {
 			return host.items.readOne(options.collection, options.key, options.query ?? {});
 		}
 
-		return host.items.read(options.collection, options.query ?? {});
+		return host.items.readMany(options.collection, options.query ?? {});
 	},
 };

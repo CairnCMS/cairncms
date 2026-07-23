@@ -1043,7 +1043,7 @@ describe('ConfinedSupervisor', () => {
 								' await host.log.info("ref is " + secret.value.ref, { apiKey: "k-123456789012" });' +
 								' const req = await host.request.send({ url: options.url, method: "GET" });' +
 								' const site = await host.settings.get("site");' +
-								' const list = await host.items.read("articles", { limit: 5 });' +
+								' const list = await host.items.readMany("articles", { limit: 5 });' +
 								' const one = await host.items.readOne("articles", 7);' +
 								' const tpl = await host.template.renderLiquid("Hi {# n #}!", { n: 2 }, { delimiters: { outputLeft: "{#", outputRight: "#}" } });' +
 								' return { status: req.value.status, body: req.value.body, site: site.value, secretKind: secret.value.kind, ref: secret.value.ref, list: list.value, one: one.value, rendered: tpl.value };' +
@@ -1121,7 +1121,7 @@ describe('ConfinedSupervisor', () => {
 								' await __hostCall("log.info", { message: "x" }),' +
 								' await host.request.send({ url: "https://blocked.test/" }),' +
 								' await host.settings.get("k"),' +
-								' await host.items.read("articles"),' +
+								' await host.items.readMany("articles"),' +
 								' await host.template.renderLiquid("t")' +
 								' ];' +
 								' return calls.map((res) => (res.ok ? "ok" : res.error.code));' +

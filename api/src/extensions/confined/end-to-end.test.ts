@@ -272,19 +272,20 @@ describe('host methods through a real child and the real broker', () => {
 	);
 
 	it(
-		'reads items through the wired service under the items capability',
+		'reads items through the wired service, with the deprecated read alias equal to readMany',
 		async () => {
 			const itemsService = () => ({
 				readByQuery: async () => [{ id: 1, title: 'one' }],
 				readOne: async (key: string | number) => ({ id: key }),
 			});
 
-			// Both bridge methods are exercised: read and readOne have distinct guest
-			// wrappers and broker dispatch, so a drift in either would otherwise pass.
+			// read is the deprecated alias of readMany and must return the same result.
+			// The broker accepts only items.readMany, so a passing read proves the alias
+			// dispatches the canonical wire key, not a stale items.read.
 			const granted = await runConfinedOperation(
 				baseOperationRequest(
 					operationEntry(
-						"async (_input, { host }) => ({ read: await host.items.read('widgets', {}), readOne: await host.items.readOne('widgets', '1', {}) })"
+						"async (_input, { host }) => ({ readMany: await host.items.readMany('widgets', {}), read: await host.items.read('widgets', {}), readOne: await host.items.readOne('widgets', '1', {}) })"
 					),
 					{ capabilities: { items: { accountability: 'full-access' } } }
 				),
@@ -294,13 +295,14 @@ describe('host methods through a real child and the real broker', () => {
 			expect(granted.outcome).toEqual({
 				ok: true,
 				value: {
+					readMany: { ok: true, value: [{ id: 1, title: 'one' }] },
 					read: { ok: true, value: [{ id: 1, title: 'one' }] },
 					readOne: { ok: true, value: { id: '1' } },
 				},
 			});
 
 			const denied = await runConfinedOperation(
-				baseOperationRequest(operationEntry("async (_input, { host }) => host.items.read('widgets', {})"), {
+				baseOperationRequest(operationEntry("async (_input, { host }) => host.items.readMany('widgets', {})"), {
 					capabilities: {},
 				}),
 				{ ...deps, itemsService }
