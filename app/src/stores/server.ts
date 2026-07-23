@@ -35,6 +35,10 @@ export type Info = {
 				points: number;
 				duration: number;
 		  };
+	queryLimit?: {
+		default: number;
+		max: number;
+	};
 };
 
 export type Auth = {
@@ -47,6 +51,7 @@ export const useServerStore = defineStore('serverStore', () => {
 		project: null,
 		cairncms: undefined,
 		rateLimit: undefined,
+		queryLimit: undefined,
 	});
 
 	const auth = reactive<Auth>({
@@ -71,14 +76,12 @@ export const useServerStore = defineStore('serverStore', () => {
 	});
 
 	const hydrate = async (options?: HydrateOptions) => {
-		const [serverInfoResponse, authResponse] = await Promise.all([
-			api.get(`/server/info`, { params: { limit: -1 } }),
-			api.get('/auth'),
-		]);
+		const [serverInfoResponse, authResponse] = await Promise.all([api.get(`/server/info`), api.get('/auth')]);
 
 		info.project = serverInfoResponse.data.data?.project;
 		info.cairncms = serverInfoResponse.data.data?.cairncms;
 		info.flows = serverInfoResponse.data.data?.flows;
+		info.queryLimit = serverInfoResponse.data.data?.queryLimit;
 
 		auth.providers = authResponse.data.data;
 		auth.disableDefault = authResponse.data.disableDefault;
@@ -104,6 +107,7 @@ export const useServerStore = defineStore('serverStore', () => {
 	const dehydrate = () => {
 		info.project = null;
 		info.cairncms = undefined;
+		info.queryLimit = undefined;
 
 		auth.providers = [];
 		auth.disableDefault = false;

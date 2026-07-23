@@ -63,6 +63,7 @@ import rateLimiter from './middleware/rate-limiter-ip.js';
 import sanitizeQuery from './middleware/sanitize-query.js';
 import schema from './middleware/schema.js';
 import { validateSecretsEncryptionKey } from './utils/encrypt-secret.js';
+import { validateQueryLimitConfig } from './utils/query-limit.js';
 import { getConfigFromEnv } from './utils/get-config-from-env.js';
 import { getMaxUploadSize } from './utils/get-max-upload-size.js';
 import { Url } from './utils/url.js';
@@ -80,6 +81,13 @@ export default async function createApp(): Promise<express.Application> {
 		validateSecretsEncryptionKey();
 	} catch (error) {
 		logger.error(`"SECRETS_ENCRYPTION_KEY" is set but invalid: ${(error as Error).message}`);
+		process.exit(1);
+	}
+
+	try {
+		validateQueryLimitConfig();
+	} catch (error) {
+		logger.error((error as Error).message);
 		process.exit(1);
 	}
 

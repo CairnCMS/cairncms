@@ -103,8 +103,6 @@ const { permissions, fetchPermissions, refreshing } = usePermissions();
 
 const { resetActive, resetSystemPermissions, resetting } = useReset();
 
-fetchPermissions();
-
 watch(() => props.permission, fetchPermissions, { immediate: true });
 
 provide('refresh-permissions', fetchPermissions);
@@ -122,7 +120,6 @@ function usePermissions() {
 		try {
 			const params: any = {
 				filter: { role: { _eq: resolvedRoleId.value } },
-				limit: -1,
 			};
 
 			const response = await api.get('/permissions', { params });

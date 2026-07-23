@@ -29,6 +29,7 @@ exports.list = {
 		{ testFilePath: '/routes/permissions/cache-share-segmentation.test.ts' },
 		{ testFilePath: '/routes/files/upload-limits.test.ts' },
 		{ testFilePath: '/routes/items/relational-presets.test.ts' },
+		{ testFilePath: '/routes/items/query-limit.test.ts' },
 		{ testFilePath: '/routes/assets/format.test.ts' },
 		{ testFilePath: '/routes/assets/system-preset-format-isolation.test.ts' },
 		{ testFilePath: '/routes/assets/read.test.ts' },

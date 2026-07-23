@@ -3,6 +3,7 @@ import Joi from 'joi';
 import { InvalidPayloadException } from '../exceptions/index.js';
 import asyncHandler from '../utils/async-handler.js';
 import { sanitizeQuery } from '../utils/sanitize-query.js';
+import { validateQuery } from '../utils/validate-query.js';
 
 export const validateBatch = (scope: 'read' | 'update' | 'delete') =>
 	asyncHandler(async (req, _res, next) => {
@@ -24,6 +25,7 @@ export const validateBatch = (scope: 'read' | 'update' | 'delete') =>
 		// In reads, the query in the body should override the query params for searching
 		if (scope === 'read' && req.body.query) {
 			req.sanitizedQuery = sanitizeQuery(req.body.query, req.accountability);
+			validateQuery(req.sanitizedQuery);
 		}
 
 		// Every cRUD action has either keys or query

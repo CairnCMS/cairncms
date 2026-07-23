@@ -31,6 +31,10 @@ const mockServerInfo: Info = {
 	cairncms: {
 		version: '10.10.10',
 	},
+	queryLimit: {
+		default: 100,
+		max: 100,
+	},
 };
 
 const mockAuthProviders: Auth['providers'] = [
@@ -327,10 +331,14 @@ describe('dehyrate action', () => {
 
 		const serverStore = useServerStore();
 		await serverStore.hydrate();
+
+		expect(serverStore.info.queryLimit).toEqual(mockServerInfo.queryLimit);
+
 		serverStore.dehydrate();
 
 		expect(serverStore.info.project).toEqual(null);
 		expect(serverStore.info.cairncms).toEqual(undefined);
+		expect(serverStore.info.queryLimit).toEqual(undefined);
 		expect(serverStore.auth.providers).toEqual([]);
 		expect(serverStore.auth.disableDefault).toEqual(false);
 	});

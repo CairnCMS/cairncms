@@ -36,7 +36,7 @@
 <script lang="ts" setup>
 import { useI18n } from 'vue-i18n';
 import { computed, ref } from 'vue';
-import api from '@/api';
+import { fetchAll } from '@/utils/fetch-all';
 import FolderPickerListItem from './folder-picker-list-item.vue';
 import { unexpectedError } from '@/utils/unexpected-error';
 
@@ -112,14 +112,11 @@ async function fetchFolders() {
 	loading.value = true;
 
 	try {
-		const response = await api.get(`/folders`, {
+		folders.value = await fetchAll<FolderRaw>(`/folders`, {
 			params: {
-				limit: -1,
 				sort: 'name',
 			},
 		});
-
-		folders.value = response.data.data;
 	} catch (err: any) {
 		unexpectedError(err);
 	} finally {

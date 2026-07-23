@@ -10,6 +10,7 @@ import { applyFunctionToColumnName } from '../utils/apply-function-to-column-nam
 import type { ColumnSortRecord } from '../utils/apply-query.js';
 import applyQuery, { applyLimit, applySort, generateAlias } from '../utils/apply-query.js';
 import { getCollectionFromAlias } from '../utils/get-collection-from-alias.js';
+import { getQueryLimitConfig } from '../utils/query-limit.js';
 import type { AliasMap } from '../utils/get-column-path.js';
 import { getColumn } from '../utils/get-column.js';
 import { stripFunction } from '../utils/strip-function.js';
@@ -260,8 +261,9 @@ async function getDBQuery(
 	const preProcess = getColumnPreprocessor(knex, schema, table);
 	const queryCopy = clone(query);
 	const helpers = getHelpers(knex);
+	const { effectiveDefault } = getQueryLimitConfig(env);
 
-	queryCopy.limit = typeof queryCopy.limit === 'number' ? queryCopy.limit : 100;
+	queryCopy.limit = typeof queryCopy.limit === 'number' ? queryCopy.limit : effectiveDefault;
 
 	// Queries with aggregates and groupBy will not have duplicate result
 	if (queryCopy.aggregate || queryCopy.group) {
@@ -446,7 +448,7 @@ function applyParentFilters(
 	return nestedCollectionNodes;
 }
 
-function mergeWithParentItems(
+export function mergeWithParentItems(
 	schema: SchemaOverview,
 	nestedItem: Item | Item[],
 	parentItem: Item | Item[],
@@ -454,6 +456,7 @@ function mergeWithParentItems(
 ) {
 	const nestedItems = toArray(nestedItem);
 	const parentItems = clone(toArray(parentItem));
+	const { effectiveDefault } = getQueryLimitConfig(env);
 
 	if (nestedNode.type === 'm2o') {
 		for (const parentItem of parentItems) {
@@ -485,9 +488,11 @@ function mergeWithParentItems(
 
 			parentItem[nestedNode.fieldKey].push(...itemChildren);
 
-			if (nestedNode.query.page && nestedNode.query.page > 1) {
+			const nestedLimit = nestedNode.query.limit ?? effectiveDefault;
+
+			if (nestedNode.query.page && nestedNode.query.page > 1 && nestedLimit !== -1) {
 				parentItem[nestedNode.fieldKey] = parentItem[nestedNode.fieldKey].slice(
-					(nestedNode.query.limit ?? 100) * (nestedNode.query.page - 1)
+					nestedLimit * (nestedNode.query.page - 1)
 				);
 			}
 
@@ -495,8 +500,8 @@ function mergeWithParentItems(
 				parentItem[nestedNode.fieldKey] = parentItem[nestedNode.fieldKey].slice(nestedNode.query.offset);
 			}
 
-			if (nestedNode.query.limit !== -1) {
-				parentItem[nestedNode.fieldKey] = parentItem[nestedNode.fieldKey].slice(0, nestedNode.query.limit ?? 100);
+			if (nestedLimit !== -1) {
+				parentItem[nestedNode.fieldKey] = parentItem[nestedNode.fieldKey].slice(0, nestedLimit);
 			}
 
 			parentItem[nestedNode.fieldKey] = parentItem[nestedNode.fieldKey].sort((a: Item, b: Item) => {

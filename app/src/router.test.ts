@@ -19,6 +19,7 @@ const nonPublicRoutes = ['first', 'second', 'third'].map((route) => ({
 
 let router: Router;
 const authRefresh = vi.fn();
+const serverHydrate = vi.fn();
 const userStoreTrackPage = vi.fn();
 
 vi.mock('@/auth', () => ({
@@ -34,7 +35,7 @@ vi.mock('@/stores/server', () => ({
 		info: {
 			project: null,
 		},
-		hydrate: vi.fn(),
+		hydrate: serverHydrate,
 	}),
 }));
 
@@ -92,16 +93,32 @@ describe('onBeforeEach', () => {
 		expect(authRefresh).not.toHaveBeenCalled();
 	});
 
-	test('should not try retrieving a fresh access token after the first load', async () => {
-		router.push('/');
-		await router.isReady();
+	test('resolves the access-token refresh before hydrating the serverStore on first load', async () => {
+		let signalRefreshStarted: () => void = () => undefined;
+		const refreshStarted = new Promise<void>((resolve) => (signalRefreshStarted = resolve));
+		let resolveRefresh: () => void = () => undefined;
 
-		// clear calls since there was an initial auth refresh
-		authRefresh.mockClear();
+		authRefresh.mockImplementationOnce(() => {
+			signalRefreshStarted();
+			return new Promise<void>((resolve) => (resolveRefresh = resolve));
+		});
 
-		await router.push('/login');
+		const navigation = router.push('/first');
 
-		expect(authRefresh).not.toHaveBeenCalled();
+		const winner = await Promise.race([
+			refreshStarted.then(() => 'refresh-started'),
+			navigation.then(() => 'navigation'),
+		]);
+
+		expect(winner).toBe('refresh-started');
+
+		expect(authRefresh).toHaveBeenCalledOnce();
+		expect(serverHydrate).not.toHaveBeenCalled();
+
+		resolveRefresh();
+		await navigation;
+
+		expect(serverHydrate).toHaveBeenCalled();
 	});
 });
 
