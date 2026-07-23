@@ -3,6 +3,7 @@ import vendors from '@common/get-dbs-to-test';
 import * as common from '@common/index';
 import { requestGraphQL } from '@common/index';
 import { awaitDirectusConnection } from '@utils/await-connection';
+import type { PermissionsAction } from '@cairncms/types';
 import { ChildProcess, spawn } from 'child_process';
 import { cloneDeep } from 'lodash';
 import request from 'supertest';
@@ -13,6 +14,16 @@ const childCollection = 'test_items_query_limit_child';
 const maxLimit = 10;
 const parentCount = 15;
 const childCount = 15;
+const permsCollection = 'test_items_query_limit_perms';
+const permsRoleName = 'query_limit_perms_role';
+const permsUserToken = 'QueryLimitPermsToken';
+const permsUserEmail = 'query-limit-perms@example.com';
+const permsCount = maxLimit + 1;
+const permissionActions = ['read', 'create', 'update', 'delete'] as const satisfies readonly PermissionsAction[];
+
+const permissionTargets = [parentCollection, childCollection, permsCollection]
+	.flatMap((collection) => permissionActions.map((action) => ({ collection, action })))
+	.slice(0, permsCount);
 
 type CleanupResult = { ok: true } | { ok: false; reason: string };
 
@@ -58,6 +69,22 @@ async function deleteCollection(vendor: string, collection: string): Promise<Cle
 	}
 }
 
+async function deleteResource(vendor: string, resource: string): Promise<CleanupResult> {
+	try {
+		const response = await request(getUrl(vendor))
+			.delete(resource)
+			.set('Authorization', `Bearer ${common.USER.TESTS_FLOW.TOKEN}`);
+
+		if (response.statusCode >= 400 && response.statusCode !== 404) {
+			return { ok: false, reason: `DELETE ${resource} on ${vendor} returned ${response.statusCode}` };
+		}
+
+		return { ok: true };
+	} catch (error) {
+		return { ok: false, reason: `DELETE ${resource} on ${vendor} threw ${String(error)}` };
+	}
+}
+
 describe('/items QUERY_LIMIT_MAX enforcement', () => {
 	// A spawned instance shares the database, which SQLite cannot do safely, so only server vendors run.
 	const supportedVendors = vendors.filter((vendor) => vendor !== 'sqlite3');
@@ -67,6 +94,9 @@ describe('/items QUERY_LIMIT_MAX enforcement', () => {
 		const instances = {} as { [vendor: string]: ChildProcess };
 		const envs = {} as { [vendor: string]: Env };
 		const parentIds = {} as { [vendor: string]: number };
+		const roleIds = {} as { [vendor: string]: string };
+		const userIds = {} as { [vendor: string]: string };
+		const seededPermissionIds = {} as { [vendor: string]: number[] };
 
 		beforeAll(async () => {
 			const promises = [];
@@ -77,6 +107,9 @@ describe('/items QUERY_LIMIT_MAX enforcement', () => {
 
 				const child = await common.CreateCollection(vendor, { collection: childCollection });
 				expect(child.collection).toBe(childCollection);
+
+				const perms = await common.CreateCollection(vendor, { collection: permsCollection });
+				expect(perms.collection).toBe(permsCollection);
 
 				const titleField = await common.CreateField(vendor, {
 					collection: parentCollection,
@@ -112,6 +145,39 @@ describe('/items QUERY_LIMIT_MAX enforcement', () => {
 
 				expect(children).toHaveLength(childCount);
 
+				const role = await common.CreateRole(vendor, {
+					name: permsRoleName,
+					appAccessEnabled: true,
+					adminAccessEnabled: false,
+				});
+
+				expect(role.id).toBeDefined();
+				roleIds[vendor] = role.id;
+
+				const user = await common.CreateUser(vendor, {
+					token: permsUserToken,
+					email: permsUserEmail,
+					role: role.id,
+				});
+
+				expect(user.id).toBeDefined();
+				userIds[vendor] = user.id;
+
+				const permissionIds: number[] = [];
+
+				for (const target of permissionTargets) {
+					const created = await request(getUrl(vendor))
+						.post('/permissions')
+						.set('Authorization', `Bearer ${adminToken}`)
+						.send({ role: role.id, collection: target.collection, action: target.action, fields: ['*'] });
+
+					expect(created.statusCode).toBe(200);
+					permissionIds.push(created.body.data.id);
+				}
+
+				expect(permissionIds).toHaveLength(permsCount);
+				seededPermissionIds[vendor] = permissionIds;
+
 				const env = cloneDeep(config.envs);
 				env[vendor].QUERY_LIMIT_MAX = String(maxLimit);
 
@@ -143,8 +209,19 @@ describe('/items QUERY_LIMIT_MAX enforcement', () => {
 				supportedVendors.map(async (vendor) => {
 					const vendorFailures: string[] = [];
 
+					// Delete the user before its role; role deletion drops the seeded permission rows.
+					if (userIds[vendor]) {
+						const result = await deleteResource(vendor, `/users/${userIds[vendor]}`);
+						if (!result.ok) vendorFailures.push(result.reason);
+					}
+
+					if (roleIds[vendor]) {
+						const result = await deleteResource(vendor, `/roles/${roleIds[vendor]}`);
+						if (!result.ok) vendorFailures.push(result.reason);
+					}
+
 					// Drop the child collection before the parent so the m2o relation is gone first.
-					for (const collection of [childCollection, parentCollection]) {
+					for (const collection of [childCollection, parentCollection, permsCollection]) {
 						const result = await deleteCollection(vendor, collection);
 						if (!result.ok) vendorFailures.push(result.reason);
 					}
@@ -263,5 +340,28 @@ describe('/items QUERY_LIMIT_MAX enforcement', () => {
 			expect(atMax.body.errors).toBeUndefined();
 			expect(atMax.body.data[parentCollection][0].children).toHaveLength(maxLimit);
 		});
+
+		it.each(supportedVendors)(
+			"%s returns a role's full permission set to an app user despite the maximum",
+			async (vendor) => {
+				const env = envs[vendor]!;
+
+				const response = await request(getUrl(vendor, env))
+					.get('/permissions')
+					.query({ 'filter[role][_eq]': roleIds[vendor] })
+					.set('Authorization', `Bearer ${permsUserToken}`);
+
+				expect(response.statusCode).toBe(200);
+
+				// App-access permissions are synthetic and carry no ID; only stored rows do.
+				const storedIds = (response.body.data as { id?: number }[])
+					.map((permission) => permission.id)
+					.filter((id): id is number => typeof id === 'number');
+
+				expect(storedIds.slice().sort((a, b) => a - b)).toEqual(
+					seededPermissionIds[vendor]!.slice().sort((a, b) => a - b)
+				);
+			}
+		);
 	});
 });
