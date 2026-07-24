@@ -55,6 +55,38 @@ describe('buildExportParams', () => {
 	});
 });
 
+describe('buildExportParams query limit clamp', () => {
+	it('clamps a limit above the maximum to the maximum', () => {
+		const params = buildExportParams('csv', { limit: 50 }, 10);
+		expect(params['limit']).toBe(10);
+	});
+
+	it('keeps a limit below the maximum unchanged', () => {
+		const params = buildExportParams('csv', { limit: 5 }, 10);
+		expect(params['limit']).toBe(5);
+	});
+
+	it('passes -1 through unchanged', () => {
+		const params = buildExportParams('csv', { limit: -1 }, 10);
+		expect(params['limit']).toBe(-1);
+	});
+
+	it('defaults an absent limit to -1 with a maximum configured', () => {
+		const params = buildExportParams('csv', {}, 10);
+		expect(params['limit']).toBe(-1);
+	});
+
+	it('keeps a limit of 0 as 0', () => {
+		const params = buildExportParams('csv', { limit: 0 }, 10);
+		expect(params['limit']).toBe(0);
+	});
+
+	it('passes any limit through when no maximum is given', () => {
+		const params = buildExportParams('csv', { limit: 5000 });
+		expect(params['limit']).toBe(5000);
+	});
+});
+
 describe('getFilenameFromContentDisposition', () => {
 	it('parses quoted filename', () => {
 		expect(getFilenameFromContentDisposition('attachment; filename="Collection 2026-05-18.csv"')).toBe(

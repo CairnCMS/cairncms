@@ -10,7 +10,11 @@ export type ExportSettings = {
 	limit?: number;
 };
 
-export function buildExportParams(format: string, settings: ExportSettings): Record<string, unknown> {
+export function buildExportParams(
+	format: string,
+	settings: ExportSettings,
+	queryLimitMax = Infinity
+): Record<string, unknown> {
 	const params: Record<string, unknown> = { export: format };
 
 	if (settings.sort && settings.sort !== '') params['sort'] = settings.sort;
@@ -18,7 +22,8 @@ export function buildExportParams(format: string, settings: ExportSettings): Rec
 	if (settings.search) params['search'] = settings.search;
 	if (settings.filter) params['filter'] = settings.filter;
 
-	params['limit'] = settings.limit ?? -1;
+	const limit = settings.limit ?? -1;
+	params['limit'] = limit > 0 ? Math.min(limit, queryLimitMax) : limit;
 
 	return params;
 }
@@ -45,9 +50,14 @@ export function getFilenameFromContentDisposition(header: string | undefined | n
 	return match[1].trim();
 }
 
-export async function downloadLocalExport(collection: string, format: string, settings: ExportSettings): Promise<void> {
+export async function downloadLocalExport(
+	collection: string,
+	format: string,
+	settings: ExportSettings,
+	queryLimitMax = Infinity
+): Promise<void> {
 	const response = await api.get(getEndpoint(collection), {
-		params: buildExportParams(format, settings),
+		params: buildExportParams(format, settings, queryLimitMax),
 		responseType: 'blob',
 	});
 
