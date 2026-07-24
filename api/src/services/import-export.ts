@@ -232,9 +232,8 @@ export class ExportService {
 					})
 					.then((result) => Number(result?.[0]?.['count'] ?? 0));
 
-				const count = query.limit ? Math.min(totalCount, query.limit) : totalCount;
-
 				const requestedLimit = query.limit ?? -1;
+				const count = requestedLimit === -1 ? totalCount : Math.max(0, Math.min(totalCount, requestedLimit));
 				const batchesRequired = Math.ceil(count / env['EXPORT_BATCH_SIZE']);
 
 				let readCount = 0;
@@ -263,6 +262,10 @@ export class ExportService {
 							})
 						);
 					}
+				}
+
+				if (count === 0) {
+					await appendFile(path, this.transform([], format, { includeHeader: true, includeFooter: true }));
 				}
 			});
 
