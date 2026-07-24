@@ -40,8 +40,7 @@ export interface ConfinedItemsServiceDeps {
 /**
  * Builds the production items factory for the confined bindings. The service is
  * constructed per call with the current database and schema, the exact authority
- * the broker resolved (the invocation's accountability under current-user, the
- * explicit null under declared system). A read runs with events off so a brokered
+ * the broker resolved. A read runs with events off so a brokered
  * read never fires item read or query emissions. A write runs with events on and a
  * single bounded mutation tracker, so filter and action hooks fire and the whole
  * graph rolls back if it exceeds the confined ceiling. A collection absent from the

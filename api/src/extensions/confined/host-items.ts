@@ -1,5 +1,6 @@
 import type { Accountability, ExtensionCapabilities, Query } from '@cairncms/types';
 import type { Item, PrimaryKey } from '../../types/items.js';
+import { getSystemAccountability } from '../../utils/get-system-accountability.js';
 import { ABORTED, abortable, denied, invalidRequest, timedOut } from './host-reply.js';
 import type { ConfinedHostReply } from './types.js';
 
@@ -520,9 +521,7 @@ export interface ConfinedItemsHost {
  * service under an authority the capability does not declare.
  */
 export function createConfinedItemsHost(deps: ConfinedItemsHostDeps): ConfinedItemsHost {
-	function resolveAuthority():
-		| { ok: true; accountability: Accountability | null }
-		| { ok: false; reply: ConfinedHostReply } {
+	function resolveAuthority(): { ok: true; accountability: Accountability } | { ok: false; reply: ConfinedHostReply } {
 		const mode = deps.capabilities.items?.accountability;
 
 		if (mode === undefined) return { ok: false, reply: denied('the items capability is not declared') };
@@ -537,7 +536,7 @@ export function createConfinedItemsHost(deps: ConfinedItemsHostDeps): ConfinedIt
 			return { ok: true, accountability };
 		}
 
-		if (mode === 'full-access') return { ok: true, accountability: null };
+		if (mode === 'full-access') return { ok: true, accountability: getSystemAccountability() };
 
 		return { ok: false, reply: denied('the items capability is not declared') };
 	}

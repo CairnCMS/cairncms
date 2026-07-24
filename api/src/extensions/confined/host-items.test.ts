@@ -20,6 +20,8 @@ const liveSignal = new AbortController().signal;
 
 const user: Accountability = { user: 'user-1', role: 'role-1', admin: false };
 
+const fullAccessAccountability = { user: null, role: null, admin: true, app: true, permissions: [] };
+
 class SeamForbidden extends Error {
 	code = 'FORBIDDEN';
 }
@@ -372,7 +374,7 @@ describe('createConfinedItemsHost authority', () => {
 		await host.readMany({ collection: 'articles' }, liveSignal);
 
 		expect(calls).toHaveLength(1);
-		expect(calls[0]?.accountability).toBeNull();
+		expect(calls[0]?.accountability).toEqual(fullAccessAccountability);
 	});
 
 	it('denies when no items service is wired', async () => {
@@ -646,7 +648,7 @@ describe('createConfinedItemsHost writes', () => {
 
 		const elevated = makeHost({ capabilities: { items: { accountability: 'full-access' } } });
 		await elevated.host.createOne({ collection: 'articles', payload: { a: 1 } }, liveSignal);
-		expect(elevated.calls[0]?.accountability).toBeNull();
+		expect(elevated.calls[0]?.accountability).toEqual(fullAccessAccountability);
 	});
 
 	it('refuses a malformed collection on writes before constructing the service', async () => {

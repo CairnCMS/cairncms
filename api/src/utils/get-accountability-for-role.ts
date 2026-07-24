@@ -2,6 +2,7 @@ import type { Accountability, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import { InvalidConfigException } from '../exceptions/index.js';
 import { getPermissions } from './get-permissions.js';
+import { getSystemAccountability } from './get-system-accountability.js';
 
 export async function getAccountabilityForRole(
 	role: null | string,
@@ -23,13 +24,7 @@ export async function getAccountabilityForRole(
 
 		generatedAccountability.permissions = await getPermissions(generatedAccountability, context.schema);
 	} else if (role === 'system') {
-		generatedAccountability = {
-			user: null,
-			role: null,
-			admin: true,
-			app: true,
-			permissions: [],
-		};
+		generatedAccountability = getSystemAccountability();
 	} else {
 		const roleInfo = await context.database
 			.select(['app_access', 'admin_access'])

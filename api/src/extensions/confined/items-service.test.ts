@@ -102,7 +102,7 @@ describe('createConfinedItemsService', () => {
 		expect(calls[0]?.args).toEqual([{ limit: 1 }, { emitEvents: false }]);
 	});
 
-	it('reads with the explicit null authority under declared system', async () => {
+	it('forwards a null accountability to the service unchanged', async () => {
 		const { factory, calls } = harness();
 
 		await factory('articles', null).readOne(42, {});
