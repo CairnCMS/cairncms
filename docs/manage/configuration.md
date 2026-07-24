@@ -69,6 +69,8 @@ The ceiling applies to the top-level list and to each nested relational list sep
 
 Permission list reads through `/permissions` force an unbounded limit after normal query validation. An accepted `limit` or `page` does not truncate the result, while other constraints such as filter, offset, search, sort, and fields stay effective. An explicit `limit` above a finite `QUERY_LIMIT_MAX` is still rejected before the read runs. A role-filtered request returns every permission matching its other constraints, so the admin app can render a role's permission set in full. The server stays the authority on what each role is allowed to do.
 
+Background exports through `POST /utils/export` are the other exception. They may exceed the ceiling for the top-level rows written to the export file, because the export runs asynchronously and streams to a file in batches. A `limit` of `-1`, `null`, or an omitted limit exports every matching top-level row, and a positive `limit` above the ceiling is honored rather than rejected. Nested relational lists inside the export keep ordinary query-limit behavior, so a nested `_limit` above the ceiling is still rejected. See [Platform and utilities](/docs/api/system-collections/platform-and-utilities/) for the endpoint details.
+
 ## Logging
 
 CairnCMS uses pino for structured logging.

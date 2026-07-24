@@ -7,12 +7,14 @@ import { InvalidQueryException } from '../exceptions/invalid-query.js';
 import { calculateFieldDepth } from './calculate-field-depth.js';
 import { getQueryLimitConfig, hasFiniteMax } from './query-limit.js';
 
+export const baseLimitSchema = Joi.number().integer().min(-1).label('limit');
+
 const querySchema = Joi.object({
 	fields: Joi.array().items(Joi.string()),
 	group: Joi.array().items(Joi.string()),
 	sort: Joi.array().items(Joi.string()),
 	filter: Joi.object({}).unknown(),
-	limit: Joi.number().integer().min(-1),
+	limit: baseLimitSchema,
 	offset: Joi.number().integer().min(0),
 	page: Joi.number().integer().min(0),
 	meta: Joi.array().items(Joi.string().valid('total_count', 'filter_count')),
@@ -23,14 +25,19 @@ const querySchema = Joi.object({
 	alias: Joi.object(),
 }).id('query');
 
+function getConfiguredLimitSchema() {
+	const queryLimit = getQueryLimitConfig(env);
+	return hasFiniteMax(queryLimit) ? baseLimitSchema.max(queryLimit.max) : baseLimitSchema;
+}
+
+export function validateDeepQueryLimits(deep: Record<string, any>): void {
+	validateDeepLimits(deep, getConfiguredLimitSchema());
+}
+
 export function validateQuery(query: Query): Query {
 	const { error } = querySchema.validate(query);
 
-	const queryLimit = getQueryLimitConfig(env);
-
-	const limitSchema = hasFiniteMax(queryLimit)
-		? Joi.number().integer().min(-1).max(queryLimit.max).label('limit')
-		: Joi.number().integer().min(-1).label('limit');
+	const limitSchema = getConfiguredLimitSchema();
 
 	if (query.limit !== undefined) {
 		const { error: limitError } = limitSchema.validate(query.limit);

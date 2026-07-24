@@ -2,7 +2,7 @@ import type { Query } from '@cairncms/types';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import env from '../env.js';
 
-const getValidateQuery = async (mockedEnv?: { [k: string]: any }) => {
+const loadValidateQueryModule = async (mockedEnv?: Partial<typeof env>) => {
 	vi.doMock('../env', async () => {
 		return {
 			default: {
@@ -12,7 +12,11 @@ const getValidateQuery = async (mockedEnv?: { [k: string]: any }) => {
 		};
 	});
 
-	return (await import('./validate-query.js')).validateQuery;
+	return await import('./validate-query.js');
+};
+
+const getValidateQuery = async (mockedEnv?: Partial<typeof env>) => {
+	return (await loadValidateQueryModule(mockedEnv)).validateQuery;
 };
 
 beforeEach(() => {
@@ -88,6 +92,36 @@ describe('deep max limit', () => {
 		const validateQuery = await getValidateQuery();
 
 		expect(() => validateQuery({ deep: { translations: { _limit: 999 } } } satisfies Query)).not.toThrowError();
+	});
+});
+
+describe('validateDeepQueryLimits', () => {
+	const getValidateDeepQueryLimits = async (mockedEnv?: Partial<typeof env>) => {
+		return (await loadValidateQueryModule(mockedEnv)).validateDeepQueryLimits;
+	};
+
+	test('rejects a deep _limit above the configured maximum', async () => {
+		const validateDeepQueryLimits = await getValidateDeepQueryLimits({ QUERY_LIMIT_MAX: 10 });
+
+		expect(() => validateDeepQueryLimits({ children: { _limit: 1000 } })).toThrowError('limit');
+	});
+
+	test('rejects a nested deep _limit above the configured maximum', async () => {
+		const validateDeepQueryLimits = await getValidateDeepQueryLimits({ QUERY_LIMIT_MAX: 10 });
+
+		expect(() => validateDeepQueryLimits({ children: { grandchildren: { _limit: 1000 } } })).toThrowError('limit');
+	});
+
+	test('accepts a deep _limit at the configured maximum', async () => {
+		const validateDeepQueryLimits = await getValidateDeepQueryLimits({ QUERY_LIMIT_MAX: 10 });
+
+		expect(() => validateDeepQueryLimits({ children: { _limit: 10 } })).not.toThrowError();
+	});
+
+	test('accepts a deep _limit above the default cap when no maximum is configured', async () => {
+		const validateDeepQueryLimits = await getValidateDeepQueryLimits();
+
+		expect(() => validateDeepQueryLimits({ children: { _limit: 1000 } })).not.toThrowError();
 	});
 });
 
