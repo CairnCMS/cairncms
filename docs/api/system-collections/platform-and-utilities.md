@@ -387,6 +387,8 @@ Body fields:
 
 The export creates a new file in `directus_files` with the result content. Watch `directus_files` for the new row to know when the export has finished.
 
+The top-level `limit` accepted here is `-1` or an integer of at least `0`, and a `null` or omitted limit is treated as unlimited. Anything else returns `400 INVALID_QUERY`. Because the export streams to a file in batches, its top-level row count is exempt from `QUERY_LIMIT_MAX`: `-1`, `null`, or an omitted limit exports every matching row, and a positive `limit` above the ceiling is honored. A `limit` of `0` produces a format-valid empty export, `[]` for JSON and an empty file for CSV. Nested relational lists keep ordinary query-limit behavior, so a nested `_limit` above a configured maximum is rejected (see [Query limits](/docs/manage/configuration/#query-limits)).
+
 ### `POST /utils/cache/clear`
 
 Flushes every cache the platform maintains: response cache, schema cache, permissions cache. Admin-only; non-admin callers get `403 FORBIDDEN`.
