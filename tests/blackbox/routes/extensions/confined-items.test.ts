@@ -123,7 +123,12 @@ function expectOk(res: request.Response, label: string): request.Response {
 }
 
 type FieldShape = { type: string; meta: { special?: string[] | null } | null };
-type RelationShape = { related_collection: string | null; meta: { one_field?: string | null } | null };
+
+type RelationShape = {
+	related_collection: string | null;
+	meta: { one_field?: string | null } | null;
+	schema: { foreign_key_table?: string | null } | null;
+};
 
 async function getField(vendor: string, collection: string, field: string): Promise<FieldShape | null> {
 	const res = expectOk(await admin(request(getUrl(vendor)).get(`/fields/${collection}`)), `read fields ${collection}`);
@@ -148,30 +153,24 @@ async function getRelation(vendor: string, collection: string, field: string): P
 	return res.body.data ?? null;
 }
 
-async function m2oCorrect(
-	vendor: string,
-	collection: string,
-	field: string,
-	related: string,
-	pkType: 'uuid' | 'integer'
-): Promise<boolean> {
+async function m2oCorrect(vendor: string, collection: string, field: string, related: string): Promise<boolean> {
 	const relation = await getRelation(vendor, collection, field);
 	const shape = await getField(vendor, collection, field);
 
 	return (
 		relation?.related_collection === related &&
-		shape?.type === pkType &&
+		relation.schema?.foreign_key_table === related &&
 		(shape?.meta?.special ?? []).includes('m2o')
 	);
 }
 
 async function ensureM2O(vendor: string, collection: string, field: string, related: string, pkType: 'uuid' | 'integer') {
-	if (await m2oCorrect(vendor, collection, field, related, pkType)) return;
+	if (await m2oCorrect(vendor, collection, field, related)) return;
 
 	await deleteFieldIfExists(vendor, collection, field);
 	await CreateFieldM2O(vendor, { collection, field, otherCollection: related, primaryKeyType: pkType });
 
-	if (!(await m2oCorrect(vendor, collection, field, related, pkType))) {
+	if (!(await m2oCorrect(vendor, collection, field, related))) {
 		throw new Error(`m2o ${collection}.${field} -> ${related} not established`);
 	}
 }
