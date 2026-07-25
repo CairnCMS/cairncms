@@ -319,6 +319,12 @@ const GUEST_HOST_SURFACE = `const host = {
 					readMany,
 					read: readMany,
 					readOne: (collection, key, query) => __hostCall('items.readOne', { collection, key, query }),
+					createOne: (collection, payload) => __hostCall('items.createOne', { collection, payload }),
+					createMany: (collection, payloads) => __hostCall('items.createMany', { collection, payloads }),
+					updateOne: (collection, key, payload) => __hostCall('items.updateOne', { collection, key, payload }),
+					updateMany: (collection, keys, payload) => __hostCall('items.updateMany', { collection, keys, payload }),
+					deleteOne: (collection, key) => __hostCall('items.deleteOne', { collection, key }),
+					deleteMany: (collection, keys) => __hostCall('items.deleteMany', { collection, keys }),
 				};
 			})(),
 			settings: { get: (key) => __hostCall('settings.get', { key }) },

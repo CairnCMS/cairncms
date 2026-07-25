@@ -1,4 +1,6 @@
 import type { Accountability, ExtensionCapabilities, Query } from '@cairncms/types';
+import type { Item, PrimaryKey } from '../../types/items.js';
+import { getSystemAccountability } from '../../utils/get-system-accountability.js';
 import { ABORTED, abortable, denied, invalidRequest, timedOut } from './host-reply.js';
 import type { ConfinedHostReply } from './types.js';
 
@@ -11,6 +13,12 @@ export const ITEMS_MAX_LIMIT = 100;
 // (direct, or implied by page times limit) is bounded separately and refused
 // over the maximum rather than silently clamped to a different page.
 export const ITEMS_MAX_OFFSET = 10_000;
+
+export const CONFINED_WRITE_MAX_BYTES = 128 * 1024;
+
+// Recursion-safety bound, checked iteratively so a deep payload cannot overflow the
+// recursive payload parser.
+export const CONFINED_WRITE_MAX_DEPTH = 64;
 
 const MAX_COLLECTION_LENGTH = 255;
 const MAX_KEY_LENGTH = 255;
@@ -66,10 +74,20 @@ export interface ConfinedItemsReader {
 	readOne(key: string | number, query: Query): Promise<unknown>;
 }
 
+/** The write slice of the items service the broker consumes. */
+export interface ConfinedItemsWriter {
+	createOne(payload: Partial<Item>): Promise<PrimaryKey>;
+	createMany(payloads: Partial<Item>[]): Promise<PrimaryKey[]>;
+	updateOne(key: PrimaryKey, payload: Partial<Item>): Promise<PrimaryKey>;
+	updateMany(keys: PrimaryKey[], payload: Partial<Item>): Promise<PrimaryKey[]>;
+	deleteOne(key: PrimaryKey): Promise<PrimaryKey>;
+	deleteMany(keys: PrimaryKey[]): Promise<PrimaryKey[]>;
+}
+
 export type ConfinedItemsServiceFactory = (
 	collection: string,
 	accountability: Accountability | null
-) => ConfinedItemsReader;
+) => ConfinedItemsReader & ConfinedItemsWriter;
 
 export interface ConfinedItemsHostDeps {
 	capabilities: ExtensionCapabilities;
@@ -347,26 +365,163 @@ export function normalizeItemsQuery(raw: unknown): NormalizedQuery {
 	return { ok: true, query };
 }
 
+const CREATE_ONE_KEYS = new Set(['collection', 'payload']);
+const CREATE_MANY_KEYS = new Set(['collection', 'payloads']);
+const UPDATE_ONE_KEYS = new Set(['collection', 'key', 'payload']);
+const UPDATE_MANY_KEYS = new Set(['collection', 'keys', 'payload']);
+const DELETE_ONE_KEYS = new Set(['collection', 'key']);
+const DELETE_MANY_KEYS = new Set(['collection', 'keys']);
+
+type Parsed<T> = { ok: true; value: T } | { ok: false; reply: ConfinedHostReply };
+
+function refuseWrite(reason: string): { ok: false; reply: ConfinedHostReply } {
+	return { ok: false, reply: invalidRequest(reason) };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return (
+		typeof value === 'object' &&
+		value !== null &&
+		!Array.isArray(value) &&
+		Object.getPrototypeOf(value) === Object.prototype
+	);
+}
+
+function isValidKey(value: unknown): value is string | number {
+	return (
+		(typeof value === 'string' && value.length > 0 && value.length <= MAX_KEY_LENGTH) ||
+		(typeof value === 'number' && Number.isSafeInteger(value))
+	);
+}
+
+// Iterative so the check stays stack-safe on the deep input it exists to reject.
+// Every object or array nesting edge counts toward the depth.
+function exceedsDepth(root: unknown, max: number): boolean {
+	const stack: Array<{ node: unknown; depth: number }> = [{ node: root, depth: 0 }];
+
+	while (stack.length > 0) {
+		const { node, depth } = stack.pop()!;
+		if (node === null || typeof node !== 'object') continue;
+		if (depth > max) return true;
+
+		const children = Array.isArray(node) ? node : Object.values(node as Record<string, unknown>);
+		for (const child of children) stack.push({ node: child, depth: depth + 1 });
+	}
+
+	return false;
+}
+
+// Depth before size: JSON.stringify recurses and would overflow before a size check
+// could reject a deep tree.
+function validateWriteTree(value: unknown): string | null {
+	if (exceedsDepth(value, CONFINED_WRITE_MAX_DEPTH)) return 'the payload is too deeply nested';
+
+	let serialized: string;
+
+	try {
+		serialized = JSON.stringify(value) ?? 'null';
+	} catch {
+		return 'the payload is not serializable';
+	}
+
+	if (Buffer.byteLength(serialized, 'utf8') > CONFINED_WRITE_MAX_BYTES) return 'the payload exceeds the size cap';
+
+	return null;
+}
+
+function parseWritePayload(value: unknown): Parsed<Partial<Item>> {
+	if (!isPlainObject(value)) return refuseWrite('the payload must be an object');
+
+	const reason = validateWriteTree(value);
+	if (reason !== null) return refuseWrite(reason);
+
+	return { ok: true, value: value as Partial<Item> };
+}
+
+function parseWritePayloads(value: unknown): Parsed<Partial<Item>[]> {
+	if (!Array.isArray(value) || value.length === 0 || value.length > ITEMS_MAX_LIMIT) {
+		return refuseWrite('payloads must be a bounded non-empty array');
+	}
+
+	for (const entry of value) {
+		if (!isPlainObject(entry)) return refuseWrite('each payload must be an object');
+	}
+
+	const reason = validateWriteTree(value);
+	if (reason !== null) return refuseWrite(reason);
+
+	return { ok: true, value: value as Partial<Item>[] };
+}
+
+function parseWriteKey(value: unknown): Parsed<PrimaryKey> {
+	if (!isValidKey(value)) return refuseWrite('the key must be a non-empty string or an integer');
+	return { ok: true, value };
+}
+
+function parseWriteKeys(value: unknown): Parsed<PrimaryKey[]> {
+	if (!Array.isArray(value) || value.length === 0 || value.length > ITEMS_MAX_LIMIT) {
+		return refuseWrite('keys must be a bounded non-empty array');
+	}
+
+	const seen = new Set<PrimaryKey>();
+
+	for (const entry of value) {
+		if (!isValidKey(entry)) return refuseWrite('each key must be a non-empty string or an integer');
+		if (seen.has(entry)) return refuseWrite('keys must not contain duplicates');
+		seen.add(entry);
+	}
+
+	return { ok: true, value: value as PrimaryKey[] };
+}
+
+function rejectUnknownWriteKeys(record: Record<string, unknown>, allowed: Set<string>): string | null {
+	for (const key of Object.keys(record)) {
+		if (!allowed.has(key)) return `the key "${key}" is not supported`;
+	}
+
+	return null;
+}
+
+function hasCode(error: unknown, code: string): boolean {
+	return error !== null && typeof error === 'object' && (error as { code?: unknown }).code === code;
+}
+
 function isForbidden(error: unknown): boolean {
-	return error !== null && typeof error === 'object' && (error as { code?: unknown }).code === 'FORBIDDEN';
+	return hasCode(error, 'FORBIDDEN');
+}
+
+function isFailedValidation(error: unknown): boolean {
+	if (Array.isArray(error)) {
+		return error.length > 0 && error.every((entry) => hasCode(entry, 'FAILED_VALIDATION'));
+	}
+
+	return hasCode(error, 'FAILED_VALIDATION');
+}
+
+function isInvalidPayload(error: unknown): boolean {
+	return hasCode(error, 'INVALID_PAYLOAD');
 }
 
 export interface ConfinedItemsHost {
 	readMany(args: unknown, signal: AbortSignal): Promise<ConfinedHostReply>;
 	readOne(args: unknown, signal: AbortSignal): Promise<ConfinedHostReply>;
+	createOne(args: unknown, signal: AbortSignal): Promise<ConfinedHostReply>;
+	createMany(args: unknown, signal: AbortSignal): Promise<ConfinedHostReply>;
+	updateOne(args: unknown, signal: AbortSignal): Promise<ConfinedHostReply>;
+	updateMany(args: unknown, signal: AbortSignal): Promise<ConfinedHostReply>;
+	deleteOne(args: unknown, signal: AbortSignal): Promise<ConfinedHostReply>;
+	deleteMany(args: unknown, signal: AbortSignal): Promise<ConfinedHostReply>;
 }
 
 /**
- * Read-first platform data access under the authority model. The capability is
- * the accountability mode alone: user reads as the invocation's caller
+ * Brokered platform data access, reads and writes, under the authority model. The
+ * capability is the accountability mode alone: user runs as the invocation's caller
  * and denies without one, full-access is the catalogued elevated opt-in. The
- * permission layer stays the authority, the broker only refuses to construct
- * the service under an authority the capability does not declare.
+ * permission layer stays the authority, the broker only refuses to construct the
+ * service under an authority the capability does not declare.
  */
 export function createConfinedItemsHost(deps: ConfinedItemsHostDeps): ConfinedItemsHost {
-	function resolveAuthority():
-		| { ok: true; accountability: Accountability | null }
-		| { ok: false; reply: ConfinedHostReply } {
+	function resolveAuthority(): { ok: true; accountability: Accountability } | { ok: false; reply: ConfinedHostReply } {
 		const mode = deps.capabilities.items?.accountability;
 
 		if (mode === undefined) return { ok: false, reply: denied('the items capability is not declared') };
@@ -381,7 +536,7 @@ export function createConfinedItemsHost(deps: ConfinedItemsHostDeps): ConfinedIt
 			return { ok: true, accountability };
 		}
 
-		if (mode === 'full-access') return { ok: true, accountability: null };
+		if (mode === 'full-access') return { ok: true, accountability: getSystemAccountability() };
 
 		return { ok: false, reply: denied('the items capability is not declared') };
 	}
@@ -398,13 +553,13 @@ export function createConfinedItemsHost(deps: ConfinedItemsHostDeps): ConfinedIt
 		return { ok: true, collection };
 	}
 
-	function shapeReply(value: unknown): ConfinedHostReply {
+	function shapeReply(value: unknown, internalMessage = 'the items read failed'): ConfinedHostReply {
 		let serialized: string;
 
 		try {
 			serialized = JSON.stringify(value) ?? 'null';
 		} catch {
-			return { ok: false, error: { code: 'internal', message: 'the items read failed' } };
+			return { ok: false, error: { code: 'internal', message: internalMessage } };
 		}
 
 		if (Buffer.byteLength(serialized, 'utf8') > deps.itemsReplyBytes) {
@@ -454,6 +609,53 @@ export function createConfinedItemsHost(deps: ConfinedItemsHostDeps): ConfinedIt
 		return shapeReply(value);
 	}
 
+	type PreparedWrite =
+		| { ok: true; run: (writer: ConfinedItemsWriter) => Promise<PrimaryKey | PrimaryKey[]> }
+		| { ok: false; reply: ConfinedHostReply };
+
+	function mapWriteError(error: unknown): ConfinedHostReply {
+		if (isForbidden(error)) return denied('the write was denied');
+		if (isFailedValidation(error)) return invalidRequest('the write failed validation');
+		if (isInvalidPayload(error)) return invalidRequest('the write request is invalid');
+		return { ok: false, error: { code: 'internal', message: 'the items write failed' } };
+	}
+
+	async function serveWrite(
+		args: unknown,
+		signal: AbortSignal,
+		prepare: (record: Record<string, unknown>) => PreparedWrite
+	): Promise<ConfinedHostReply> {
+		const authority = resolveAuthority();
+		if (!authority.ok) return authority.reply;
+
+		if (deps.itemsService === undefined) return denied('brokered items access is not available');
+
+		const record = args !== null && typeof args === 'object' ? (args as Record<string, unknown>) : {};
+
+		const collection = readCollection(record);
+		if (!collection.ok) return collection.reply;
+
+		const prepared = prepare(record);
+		if (!prepared.ok) return prepared.reply;
+
+		// abortable evaluates prepared.run before it can honor an already-aborted
+		// signal, so a pre-aborted write is short-circuited before the service runs.
+		if (signal.aborted) return timedOut();
+
+		let value: unknown;
+
+		try {
+			const writer = deps.itemsService(collection.collection, authority.accountability);
+			const result = await abortable(prepared.run(writer), signal);
+			if (result === ABORTED) return timedOut();
+			value = result;
+		} catch (error) {
+			return mapWriteError(error);
+		}
+
+		return shapeReply(value, 'the items write failed');
+	}
+
 	return {
 		readMany(args, signal) {
 			return serve(args, signal, () => ({
@@ -467,11 +669,7 @@ export function createConfinedItemsHost(deps: ConfinedItemsHostDeps): ConfinedIt
 			return serve(args, signal, (record) => {
 				const key = record['key'];
 
-				const validKey =
-					(typeof key === 'string' && key.length > 0 && key.length <= MAX_KEY_LENGTH) ||
-					(typeof key === 'number' && Number.isSafeInteger(key));
-
-				if (!validKey) {
+				if (!isValidKey(key)) {
 					return { ok: false, reply: invalidRequest('the key must be a non-empty string or an integer') };
 				}
 
@@ -479,9 +677,87 @@ export function createConfinedItemsHost(deps: ConfinedItemsHostDeps): ConfinedIt
 				// layer's non-leak semantic carried through the broker.
 				return {
 					ok: true,
-					run: (reader, query) => reader.readOne(key as string | number, query),
+					run: (reader, query) => reader.readOne(key, query),
 					forbidden: { ok: true, value: null },
 				};
+			});
+		},
+
+		createOne(args, signal) {
+			return serveWrite(args, signal, (record) => {
+				const rejected = rejectUnknownWriteKeys(record, CREATE_ONE_KEYS);
+				if (rejected !== null) return refuseWrite(rejected);
+
+				const payload = parseWritePayload(record['payload']);
+				if (!payload.ok) return payload;
+
+				return { ok: true, run: (writer) => writer.createOne(payload.value) };
+			});
+		},
+
+		createMany(args, signal) {
+			return serveWrite(args, signal, (record) => {
+				const rejected = rejectUnknownWriteKeys(record, CREATE_MANY_KEYS);
+				if (rejected !== null) return refuseWrite(rejected);
+
+				const payloads = parseWritePayloads(record['payloads']);
+				if (!payloads.ok) return payloads;
+
+				return { ok: true, run: (writer) => writer.createMany(payloads.value) };
+			});
+		},
+
+		updateOne(args, signal) {
+			return serveWrite(args, signal, (record) => {
+				const rejected = rejectUnknownWriteKeys(record, UPDATE_ONE_KEYS);
+				if (rejected !== null) return refuseWrite(rejected);
+
+				const key = parseWriteKey(record['key']);
+				if (!key.ok) return key;
+
+				const payload = parseWritePayload(record['payload']);
+				if (!payload.ok) return payload;
+
+				return { ok: true, run: (writer) => writer.updateOne(key.value, payload.value) };
+			});
+		},
+
+		updateMany(args, signal) {
+			return serveWrite(args, signal, (record) => {
+				const rejected = rejectUnknownWriteKeys(record, UPDATE_MANY_KEYS);
+				if (rejected !== null) return refuseWrite(rejected);
+
+				const keys = parseWriteKeys(record['keys']);
+				if (!keys.ok) return keys;
+
+				const payload = parseWritePayload(record['payload']);
+				if (!payload.ok) return payload;
+
+				return { ok: true, run: (writer) => writer.updateMany(keys.value, payload.value) };
+			});
+		},
+
+		deleteOne(args, signal) {
+			return serveWrite(args, signal, (record) => {
+				const rejected = rejectUnknownWriteKeys(record, DELETE_ONE_KEYS);
+				if (rejected !== null) return refuseWrite(rejected);
+
+				const key = parseWriteKey(record['key']);
+				if (!key.ok) return key;
+
+				return { ok: true, run: (writer) => writer.deleteOne(key.value) };
+			});
+		},
+
+		deleteMany(args, signal) {
+			return serveWrite(args, signal, (record) => {
+				const rejected = rejectUnknownWriteKeys(record, DELETE_MANY_KEYS);
+				if (rejected !== null) return refuseWrite(rejected);
+
+				const keys = parseWriteKeys(record['keys']);
+				if (!keys.ok) return keys;
+
+				return { ok: true, run: (writer) => writer.deleteMany(keys.value) };
 			});
 		},
 	};

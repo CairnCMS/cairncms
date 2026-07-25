@@ -858,10 +858,77 @@ describe('createConfinedHostBroker items', () => {
 		expect(seen).toEqual([7]);
 	});
 
-	it('denies items without the capability through the dispatcher', async () => {
+	it('routes every write verb through the wired seam', async () => {
+		const writes: Array<{ method: string; args: unknown[] }> = [];
+
+		const { dispatch } = makeBroker({
+			capabilities: { items: { accountability: 'full-access' } },
+			itemsService: () => ({
+				readByQuery: async () => [],
+				readOne: async () => null,
+				createOne: async (payload) => {
+					writes.push({ method: 'createOne', args: [payload] });
+					return 'pk';
+				},
+				createMany: async (payloads) => {
+					writes.push({ method: 'createMany', args: [payloads] });
+					return ['pk'];
+				},
+				updateOne: async (key, payload) => {
+					writes.push({ method: 'updateOne', args: [key, payload] });
+					return key;
+				},
+				updateMany: async (keys, payload) => {
+					writes.push({ method: 'updateMany', args: [keys, payload] });
+					return keys;
+				},
+				deleteOne: async (key) => {
+					writes.push({ method: 'deleteOne', args: [key] });
+					return key;
+				},
+				deleteMany: async (keys) => {
+					writes.push({ method: 'deleteMany', args: [keys] });
+					return keys;
+				},
+			}),
+		});
+
+		const calls: Array<[string, Record<string, unknown>]> = [
+			['items.createOne', { collection: 'articles', payload: { title: 'x' } }],
+			['items.createMany', { collection: 'articles', payloads: [{ title: 'x' }] }],
+			['items.updateOne', { collection: 'articles', key: 7, payload: { title: 'y' } }],
+			['items.updateMany', { collection: 'articles', keys: [7, 8], payload: { title: 'y' } }],
+			['items.deleteOne', { collection: 'articles', key: 7 }],
+			['items.deleteMany', { collection: 'articles', keys: [7, 8] }],
+		];
+
+		for (const [method, args] of calls) {
+			expect(await dispatch({ method, args }, context, liveSignal), method).toMatchObject({ ok: true });
+		}
+
+		expect(writes).toEqual([
+			{ method: 'createOne', args: [{ title: 'x' }] },
+			{ method: 'createMany', args: [[{ title: 'x' }]] },
+			{ method: 'updateOne', args: [7, { title: 'y' }] },
+			{ method: 'updateMany', args: [[7, 8], { title: 'y' }] },
+			{ method: 'deleteOne', args: [7] },
+			{ method: 'deleteMany', args: [[7, 8]] },
+		]);
+	});
+
+	it('refuses an unwired items method through the dispatcher', async () => {
+		const { dispatch } = makeBroker({ capabilities: { items: { accountability: 'full-access' } } });
+		const reply = await dispatch({ method: 'items.upsertOne', args: { collection: 'articles' } }, context, liveSignal);
+		expect(reply).toMatchObject({ ok: false, error: { code: 'unsupported' } });
+	});
+
+	it('denies items reads and writes without the capability through the dispatcher', async () => {
 		const { dispatch } = makeBroker();
-		const reply = await dispatch({ method: 'items.readMany', args: { collection: 'articles' } }, context, liveSignal);
-		expect(reply).toMatchObject({ ok: false, error: { code: 'denied' } });
+
+		for (const method of ['items.readMany', 'items.createOne', 'items.deleteMany']) {
+			const reply = await dispatch({ method, args: { collection: 'articles' } }, context, liveSignal);
+			expect(reply, method).toMatchObject({ ok: false, error: { code: 'denied' } });
+		}
 	});
 });
 

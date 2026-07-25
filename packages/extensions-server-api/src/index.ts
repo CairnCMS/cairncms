@@ -91,15 +91,37 @@ export type ExtensionQuery = {
 	search?: string;
 };
 
+export type ExtensionPrimaryKey = string | number;
+
 export type ExtensionItemsClient = {
 	readMany<T = unknown>(collection: string, query?: ExtensionQuery): Promise<ExtensionResult<T[]>>;
 	/** @deprecated Use `readMany`. Removed at the next major. */
 	read<T = unknown>(collection: string, query?: ExtensionQuery): Promise<ExtensionResult<T[]>>;
 	readOne<T = unknown>(
 		collection: string,
-		key: string | number,
+		key: ExtensionPrimaryKey,
 		query?: ExtensionQuery
 	): Promise<ExtensionResult<T | null>>;
+	createOne<T extends object = Record<string, unknown>>(
+		collection: string,
+		payload: Partial<T>
+	): Promise<ExtensionResult<ExtensionPrimaryKey>>;
+	createMany<T extends object = Record<string, unknown>>(
+		collection: string,
+		payloads: Partial<T>[]
+	): Promise<ExtensionResult<ExtensionPrimaryKey[]>>;
+	updateOne<T extends object = Record<string, unknown>>(
+		collection: string,
+		key: ExtensionPrimaryKey,
+		payload: Partial<T>
+	): Promise<ExtensionResult<ExtensionPrimaryKey>>;
+	updateMany<T extends object = Record<string, unknown>>(
+		collection: string,
+		keys: ExtensionPrimaryKey[],
+		payload: Partial<T>
+	): Promise<ExtensionResult<ExtensionPrimaryKey[]>>;
+	deleteOne(collection: string, key: ExtensionPrimaryKey): Promise<ExtensionResult<ExtensionPrimaryKey>>;
+	deleteMany(collection: string, keys: ExtensionPrimaryKey[]): Promise<ExtensionResult<ExtensionPrimaryKey[]>>;
 };
 
 export type ExtensionSettingsClient = {
