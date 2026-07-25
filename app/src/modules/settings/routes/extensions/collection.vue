@@ -356,6 +356,7 @@ function capabilityLabels(capabilities: Record<string, unknown>): string[] {
 
 		if (value && typeof value === 'object') {
 			const obj = value as Record<string, unknown>;
+			if (typeof obj.accountability === 'string') return `${key}: ${obj.accountability}`;
 			if (typeof obj.access === 'string') return `${key}: ${obj.access}`;
 
 			if (Array.isArray(obj.urls)) {
