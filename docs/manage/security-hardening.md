@@ -219,6 +219,15 @@ A confined server extension runs in a QuickJS engine with no host imports, no No
 
 The platform adds OS-level hardening around the sandbox child process where the host supports it: a network namespace, the Node permission model with a scoped read, and a cgroup memory cap. `EXTENSIONS_SANDBOX_OS_HARDENING` governs how strictly these are enforced. Under `auto`, the default, they are best-effort and never block an extension, because the engine boundary already contains the guest. Under `required`, the runtime refuses to start a confined extension on a host that cannot provide the escape-containment core (the network namespace and the Node permission model). See the [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) reference for the runtime model and [Configuration](/docs/manage/configuration/) for the sandbox variables.
 
+### Review the items capability at install time
+
+The `items` capability permits reads and writes. Review its accountability mode in **Settings > Extensions** before installing:
+
+- `user` enforces the invocation's role permissions. Prefer this mode.
+- `full-access` bypasses role permissions on user collections, for reads and writes. Treat it as you would a flow configured with Full Access.
+
+Top-level system and internal collections remain unavailable in both modes. When a collection records activity, full-access writes use a null user. Where user attribution matters, use `user` mode with a dedicated service user.
+
 ### App extension egress
 
 An app extension runs in the admin browser, so its outbound network access is governed by the admin app's Content Security Policy, not by the sandbox. The default `connect-src` is limited to first-party (`'self'`) plus the built-in map origins, with no external wildcard. An app extension that tries to fetch an external CDN or third-party API directly from the browser is blocked by that policy.

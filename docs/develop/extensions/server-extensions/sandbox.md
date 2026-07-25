@@ -115,22 +115,65 @@ The methods:
 
 - `host.log.debug | info | warn | error(message, meta?)` writes a structured log line on the host. Logging is fire-and-forget and needs the `log` capability.
 - `host.request.send(request)` makes an outbound HTTP request from the host and returns `ExtensionResult<{ status, headers, body }>`. The `request` is `{ url, method?, headers?, body?, timeoutMs?, auth? }`. It needs the `request` capability, and the URL's origin must be one the manifest declares.
-- `host.items.readMany(collection, query?)` returns `ExtensionResult<T[]>` and `host.items.readOne(collection, key, query?)` returns `ExtensionResult<T | null>`. The `query` is `{ fields?, filter?, sort?, limit?, offset?, page?, search? }`. Both need the `items` capability. Reads are read-only in this version. `host.items.read` is a deprecated alias of `readMany`, kept for backward compatibility and removed at the next major.
+- `host.items.readMany(collection, query?)` returns `ExtensionResult<T[]>` and `host.items.readOne(collection, key, query?)` returns `ExtensionResult<T | null>`. The `query` is `{ fields?, filter?, sort?, limit?, offset?, page?, search? }`. `host.items.read` is a deprecated alias of `readMany`, kept for backward compatibility and removed at the next major.
+- `host.items.createOne(collection, payload)` returns `ExtensionResult<ExtensionPrimaryKey>` and `host.items.createMany(collection, payloads)` returns `ExtensionResult<ExtensionPrimaryKey[]>`. An `ExtensionPrimaryKey` is a string or a number.
+- `host.items.updateOne(collection, key, payload)` returns `ExtensionResult<ExtensionPrimaryKey>` and `host.items.updateMany(collection, keys, payload)` returns `ExtensionResult<ExtensionPrimaryKey[]>`, applying one payload to every listed key.
+- `host.items.deleteOne(collection, key)` returns `ExtensionResult<ExtensionPrimaryKey>` and `host.items.deleteMany(collection, keys)` returns `ExtensionResult<ExtensionPrimaryKey[]>`.
+- The six write methods need the `items` capability, which selects the accountability a write runs under exactly as it does for a read. See [Writing data](#writing-data) for the bounds and the transactional behavior.
 - `host.settings.get(key)` returns `ExtensionResult<T | ExtensionSecretReference | null>` for a key the extension package declares in its settings. A non-secret key resolves to its stored value, a secret key resolves to an opaque secret reference for use as request auth, and an undeclared or unset key resolves to `null`. It is gated by package settings ownership and the declared key, not by a `settings` capability. Collection-scoped settings are not exposed to confined server code. See [Extension settings](/docs/develop/extensions/settings/) for the declaration.
 - `host.template.renderLiquid(template, data?, options?)` renders a Liquid template on the host and returns `ExtensionResult<string>`. The `options` may set custom `delimiters`. It needs the `template` capability.
 
 A call whose capability is not declared, or whose target is not allowed by the declared capability, comes back as `{ ok: false, error: { code: 'denied' } }` rather than throwing.
 
-## Reading data: accountability modes
+## Accessing data: accountability modes
 
-`host.items` runs under an accountability mode set by the `items` capability, `{ accountability: 'user' | 'full-access' }`. The mode is fixed per extension in the manifest and is not chosen per call. `host.items` is a generic item surface. A `directus_*` system collection or internal table cannot be the top-level collection passed to `host.items`, in either mode. Relational field paths still resolve natively, so a read of a user collection may follow a relation into a related system row, the same as a REST read. There is no confined surface for working with system collections directly. Within the surface the mode selects the accountability a read runs under: `user` applies CairnCMS role permissions, `full-access` bypasses them.
+The `items` capability selects one accountability mode, `{ accountability: 'user' | 'full-access' }`, for every `host.items` call. The mode is fixed per extension in the manifest and is not chosen per call. It applies to reads and writes alike, and it declares no collection, field, or action grants of its own.
 
-- **`{ accountability: 'user' }`** — reads run as the invoking accountability. That resolves per call to the user who ran the flow, the user whose action fired an event, or the token on an authenticated request. Field permissions apply as on a REST read, and the read fails closed. A forbidden field is a hard denial, and the primary key must be among the readable fields. A call with no accountability, such as an anonymous webhook or a schedule, is denied. Prefer this mode.
-- **`{ accountability: 'full-access' }`** — reads run with elevated authority over user collections, bypassing role permissions, for user-less flows such as schedules and anonymous webhooks. It cannot pass a system or internal collection as its top-level target, per the generic-surface note above. It stays confined and read-only, and the diagnostics mark it as an elevated opt-in.
+`host.items` is a generic item surface. A `directus_*` system collection or internal table cannot be the top-level collection passed to `host.items`, in either mode, for any verb, and no dedicated system service is exposed to confined code. Relational field paths still resolve natively, so a call against a user collection may follow a relation into a related system row, the same as a REST call.
+
+- **`{ accountability: 'user' }`** — calls run as the invocation's accountability and its role permissions are enforced. That resolves per call to the user who ran the flow, the user whose action fired an event, or the token on an authenticated request. An anonymous request carries the Public accountability and is bound by the public role's permissions. Permissions apply as on a REST call, and the call fails closed: a forbidden field is a hard denial, and on a read the primary key must be among the readable fields. A call whose invocation carries no accountability at all is denied. Prefer this mode.
+- **`{ accountability: 'full-access' }`** — calls bypass role permissions on user collections, for both reads and writes, for user-less work such as schedules and anonymous webhooks. An extension declaring this mode can create, update, and delete any item in a user collection. Top-level system and internal collections remain unavailable. Settings > Extensions displays the declared full-access mode.
 
 The bare `'current-user'` and `'system'` strings still load as deprecated aliases for the object form.
 
 There is no per-flow identity. A flow runs as its trigger. For user-less work that should stay least-privilege, use a dedicated service user on an authenticated trigger and keep `{ accountability: 'user' }`.
+
+## Writing data
+
+A write payload is an ordinary item payload, the same shape REST and the SDK accept, including nested relational alterations for many-to-one, one-to-many, many-to-many, and any-to-one fields. Unknown fields are stripped by the service, and field defaults and validation apply as they do on a REST write.
+
+### Bounds
+
+| Bound | Value |
+|---|---|
+| Items per `createMany`, or keys per `updateMany` and `deleteMany` | 100 |
+| Serialized payload size | 128 KiB |
+| Payload nesting depth | 64 |
+| Mutations per call, counting top-level and related rows | the lower of 500 and `MAX_BATCH_MUTATION` |
+
+Payload and batch limits are checked before service execution. The mutation limit is enforced while the service processes top-level and related rows. A bound failure returns `invalid_request`, and exceeding the mutation limit rolls back the database transaction.
+
+Keys must be a non-empty string of at most 255 characters or a safe integer, and a call may not repeat a key.
+
+### Atomicity and timeouts
+
+A write and its whole nested graph run in one database transaction, so a failure anywhere rolls the entire call back. Nothing partial is committed.
+
+That guarantee covers database rows only. If a filter hook already performed an external side effect, such as sending mail or calling an upstream service, a later rollback does not undo it.
+
+A write that reaches the host call timeout is **indeterminate**. The reply comes back as `timeout`, but the underlying transaction is not cancelled and may still commit. The call is still all-or-nothing at the database, so it either applied entirely or not at all, but the guest cannot tell which from the reply. Write handlers that may retry should be idempotent, or should read back the affected item before retrying.
+
+### Events, activity, and revisions
+
+A confined write fires filter and action hooks exactly like a write from REST, GraphQL, or the SDK. Filters can modify or block a write. Actions fire after commit.
+
+Activity and revisions follow the collection's accountability setting. A collection with accountability disabled records neither. An authenticated `{ accountability: 'user' }` call is attributed to the invoking user. Public and `full-access` calls record a null user, the same way a full-access flow records its writes, not the extension that performed them.
+
+::: warning A hook that writes what it subscribes to will recurse
+
+An action hook can trigger itself by writing to a collection it watches. The per-invocation limits do not stop this event chain. Use an idempotency or termination check, or write to another collection.
+
+:::
 
 ## Capabilities
 
@@ -141,7 +184,7 @@ The manifest `capabilities` block is the operator-reviewable list of what the ex
 | `log` | `true` | Present. Enables `host.log`.                              |
 | `request` | `{ urls: string[], methods?: string[] }` | Present. Enables `host.request.send`.                     |
 | `template` | `true` | Present. Enables `host.template.renderLiquid`.            |
-| `items` | `{ accountability: 'user' \| 'full-access' }` | Present, read-only. Enables `host.items`.                 |
+| `items` | `{ accountability: 'user' \| 'full-access' }` | Present. Enables `host.items` reads and writes under the selected accountability. |
 | `endpoint` | `{ access: 'public' \| 'authenticated' \| 'app' \| 'admin' }` | Present. Sets the auth gate for a confined endpoint.      |
 | `files` | `{ accountability: 'user' \| 'full-access' }` | Declarable for forward compatibility, not exposed in the host API.    |
 | `schema` | `('read' \| 'write')[]` | Declarable for forward compatibility, not exposed in the host API.    |
