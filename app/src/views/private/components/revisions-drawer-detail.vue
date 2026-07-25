@@ -22,7 +22,7 @@
 					{{ t('revision_delta_created_externally') }}
 				</div>
 			</template>
-			<v-pagination v-if="pagesCount > 1" v-model="page" :length="pagesCount" :total-visible="2" />
+			<v-pagination v-if="pagesCount > 1" v-model="page" :length="pagesCount" :total-visible="3" />
 		</template>
 
 		<revisions-drawer
@@ -130,5 +130,6 @@ defineExpose({
 
 .v-pagination {
 	justify-content: center;
+	margin-top: 1.5rem;
 }
 </style>

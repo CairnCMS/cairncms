@@ -60,7 +60,7 @@
 				<div v-md="t('page_help_settings_flows_item')" class="page-description" />
 			</sidebar-detail>
 
-			<logs-sidebar-detail v-if="flow" :flow="flow" />
+			<logs-sidebar-detail v-if="flow" :key="flow.id" :flow="flow" />
 		</template>
 
 		<template #navigation>
