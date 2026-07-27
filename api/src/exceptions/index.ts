@@ -1,3 +1,7 @@
+export * from './config-invalid.js';
+export * from './config-placeholder-unresolved.js';
+export * from './config-read-failed.js';
+export * from './config-unsupported-version.js';
 export * from './content-too-large.js';
 export * from './forbidden.js';
 export * from './graphql-validation.js';
