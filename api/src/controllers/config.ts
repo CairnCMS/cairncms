@@ -1,4 +1,5 @@
 import express from 'express';
+import { isPlainObject } from 'lodash-es';
 import getDatabase from '../database/index.js';
 import env from '../env.js';
 import {
@@ -122,32 +123,36 @@ function assertCairnConfigShape(value: unknown): CairnConfig {
 		);
 	}
 
-	if (!isPlainObject(value['manifest'])) {
+	const body = value as Record<string, unknown>;
+
+	if (!isPlainObject(body['manifest'])) {
 		throw new InvalidPayloadException('Request body is missing the required "manifest" object.');
 	}
 
-	if (!Array.isArray(value['roles'])) {
+	if (!Array.isArray(body['roles'])) {
 		throw new InvalidPayloadException('Request body field "roles" must be an array.');
 	}
 
-	if (!Array.isArray(value['permissions'])) {
+	if (!Array.isArray(body['permissions'])) {
 		throw new InvalidPayloadException('Request body field "permissions" must be an array.');
 	}
 
-	value['roles'].forEach((role, index) => {
+	body['roles'].forEach((role: unknown, index: number) => {
 		if (!isPlainObject(role)) {
 			throw new InvalidPayloadException(`roles[${index}] must be an object.`);
 		}
 
-		if (typeof role['key'] !== 'string') {
+		if (typeof (role as Record<string, unknown>)['key'] !== 'string') {
 			throw new InvalidPayloadException(`roles[${index}] is missing a string "key".`);
 		}
 	});
 
-	value['permissions'].forEach((set, setIndex) => {
-		if (!isPlainObject(set)) {
+	body['permissions'].forEach((rawSet: unknown, setIndex: number) => {
+		if (!isPlainObject(rawSet)) {
 			throw new InvalidPayloadException(`permissions[${setIndex}] must be an object.`);
 		}
+
+		const set = rawSet as Record<string, unknown>;
 
 		if (typeof set['role'] !== 'string') {
 			throw new InvalidPayloadException(`permissions[${setIndex}] is missing a string "role".`);
@@ -162,13 +167,15 @@ function assertCairnConfigShape(value: unknown): CairnConfig {
 				throw new InvalidPayloadException(`permissions[${setIndex}].permissions[${permIndex}] must be an object.`);
 			}
 
-			if (typeof perm['collection'] !== 'string') {
+			const entry = perm as Record<string, unknown>;
+
+			if (typeof entry['collection'] !== 'string') {
 				throw new InvalidPayloadException(
 					`permissions[${setIndex}].permissions[${permIndex}] is missing a string "collection".`
 				);
 			}
 
-			if (typeof perm['action'] !== 'string') {
+			if (typeof entry['action'] !== 'string') {
 				throw new InvalidPayloadException(
 					`permissions[${setIndex}].permissions[${permIndex}] is missing a string "action".`
 				);
@@ -177,10 +184,6 @@ function assertCairnConfigShape(value: unknown): CairnConfig {
 	});
 
 	return value as unknown as CairnConfig;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-	return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
 export default router;
