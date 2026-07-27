@@ -179,6 +179,28 @@ export function isOwnedConfigFilename(name: string, kind: ConfigKind): boolean {
 	return true;
 }
 
+/**
+ * Lists a directory inside the config tree, returning null only when it is genuinely absent.
+ * A caller may read null as an empty set. Every other outcome throws.
+ */
+export async function readContainedDirectory(root: string, target: string): Promise<string[] | null> {
+	const entry = await classifyConfigEntry(root, target);
+
+	if (entry.kind === 'absent') return null;
+
+	if (entry.kind !== 'directory') {
+		throw new ConfigInvalidException(`Config path "${labelFor(root, target)}" is not a directory.`);
+	}
+
+	try {
+		return await fs.readdir(entry.real);
+	} catch (err) {
+		throw new ConfigReadFailedException(
+			`Config directory "${labelFor(root, target)}" could not be listed (${errnoOf(err)}).`
+		);
+	}
+}
+
 /** Reads a file that must resolve to a regular file inside the config tree. */
 export async function readContainedFile(root: string, target: string): Promise<string> {
 	const real = await assertSafeFile(root, target);

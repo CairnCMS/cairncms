@@ -1,8 +1,30 @@
-import { load as loadYaml } from 'js-yaml';
-import { promises as fs } from 'fs';
+import { isPlainObject } from 'lodash-es';
 import path from 'path';
+import { ConfigInvalidException } from '../exceptions/config-invalid.js';
+import { ConfigUnsupportedVersionException } from '../exceptions/config-unsupported-version.js';
 import logger from '../logger.js';
-import type { ConfigManifest, ConfigPermissionSet, ConfigRole, CairnConfig } from '../types/config.js';
+import { safeLogFragment } from './safe-log-fragment.js';
+import type { CairnConfig, ConfigManifest, ConfigPermissionSet, ConfigRole } from '../types/config.js';
+import {
+	classifyConfigEntry,
+	isOwnedConfigFilename,
+	readContainedDirectory,
+	readContainedFile,
+	resolveConfigRoot,
+	type ConfigKind,
+} from './config-path-safety.js';
+import { parseConfigYaml } from './parse-config-document.js';
+
+const MANIFEST_FILENAME = 'cairncms-config.yaml';
+
+type NoticeSink = (message: string) => void;
+
+/**
+ * Where the absent-directory and ignored-filename notices go. Placeholder diagnostics still reach the
+ * logger directly. The default logger writes to stdout, which the CLI also uses for machine-readable
+ * plan output, so a caller producing JSON must pass a sink that keeps stdout clean.
+ */
+export type ConfigReadOptions = { notice?: NoticeSink };
 
 const ENV_VAR_PATTERN = /^\{\{([A-Z_][A-Z0-9_]*)\}\}$/;
 
@@ -35,63 +57,115 @@ function interpolateRole(role: ConfigRole): ConfigRole {
 	return result;
 }
 
-export async function readConfigDirectory(configPath: string): Promise<CairnConfig> {
-	const manifestPath = path.join(configPath, 'cairncms-config.yaml');
+async function readManifest(root: string): Promise<ConfigManifest> {
+	const target = path.join(root, MANIFEST_FILENAME);
 
-	let manifestRaw: string;
+	const entry = await classifyConfigEntry(root, target);
 
-	try {
-		manifestRaw = await fs.readFile(manifestPath, 'utf-8');
-	} catch {
-		throw new Error(`Config manifest not found at ${manifestPath}. Is this a valid config directory?`);
+	if (entry.kind === 'absent') {
+		throw new ConfigInvalidException(
+			`Config manifest "${MANIFEST_FILENAME}" was not found. Is this a config directory?`
+		);
 	}
 
-	const manifest = loadYaml(manifestRaw) as ConfigManifest;
-
-	if (!manifest || manifest.version !== 1) {
-		throw new Error(`Unsupported config version: ${manifest?.version ?? 'missing'}. This engine supports version 1.`);
+	if (entry.kind !== 'file') {
+		throw new ConfigInvalidException(`Config manifest "${MANIFEST_FILENAME}" is not a regular file.`);
 	}
 
-	if (!manifest.resources || !Array.isArray(manifest.resources)) {
-		throw new Error('Config manifest must declare a "resources" array.');
+	const source = await readContainedFile(root, target);
+	const manifest = parseConfigYaml(source, MANIFEST_FILENAME);
+
+	if (!isPlainObject(manifest)) {
+		throw new ConfigInvalidException(`Config manifest "${MANIFEST_FILENAME}" must be a mapping.`);
 	}
+
+	const declared = manifest as Partial<ConfigManifest>;
+
+	if (declared.version !== 1) {
+		throw new ConfigUnsupportedVersionException(
+			`Config manifest "${MANIFEST_FILENAME}" declares version ${
+				declared.version ?? 'none'
+			}. This engine supports version 1.`
+		);
+	}
+
+	if (!Array.isArray(declared.resources)) {
+		throw new ConfigInvalidException(`Config manifest "${MANIFEST_FILENAME}" must declare a "resources" array.`);
+	}
+
+	return declared as ConfigManifest;
+}
+
+/**
+ * Record filenames the kind generates, in a stable order. An absent directory yields an empty set,
+ * which is the one absence a managed kind may report. Other entries belong to the operator and are
+ * left unread, but named, so an intended record that is misfiled does not silently do nothing. The
+ * reserved `roles/public.yaml` is the exception and is rejected outright.
+ */
+async function readKindFilenames(root: string, kind: ConfigKind, notice: NoticeSink): Promise<string[]> {
+	const entries = await readContainedDirectory(root, path.join(root, kind));
+
+	if (entries === null) {
+		notice(`No ${kind}/ directory in the config tree; treating ${kind} as empty.`);
+		return [];
+	}
+
+	const owned: string[] = [];
+
+	for (const entry of entries.sort()) {
+		if (!entry.endsWith('.yaml')) continue;
+
+		if (kind === 'roles' && entry === 'public.yaml') {
+			throw new ConfigInvalidException(
+				`Role key "public" is reserved for public permissions. Remove roles/public.yaml. ` +
+					`Public permissions belong in permissions/public.yaml only.`
+			);
+		}
+
+		if (!isOwnedConfigFilename(entry, kind)) {
+			notice(`Ignoring "${kind}/${safeLogFragment(entry)}": not a name this config engine generates.`);
+			continue;
+		}
+
+		owned.push(entry);
+	}
+
+	return owned;
+}
+
+async function readRecord(root: string, kind: ConfigKind, filename: string): Promise<unknown> {
+	const label = `${kind}/${filename}`;
+	const document = await readContainedFile(root, path.join(root, kind, filename));
+	const parsed = parseConfigYaml(document, label);
+
+	if (!isPlainObject(parsed)) {
+		throw new ConfigInvalidException(`Config document "${label}" must be a mapping.`);
+	}
+
+	return parsed;
+}
+
+export async function readConfigDirectory(configPath: string, options?: ConfigReadOptions): Promise<CairnConfig> {
+	const notice = options?.notice ?? ((message: string) => logger.warn(message));
+	const root = await resolveConfigRoot(configPath, 'read');
+	const manifest = await readManifest(root);
 
 	const roles: ConfigRole[] = [];
 	const permissions: ConfigPermissionSet[] = [];
 
 	if (manifest.resources.includes('roles')) {
-		const rolesDir = path.join(configPath, 'roles');
+		for (const filename of await readKindFilenames(root, 'roles', notice)) {
+			const role = (await readRecord(root, 'roles', filename)) as ConfigRole;
 
-		let entries: string[];
-
-		try {
-			entries = await fs.readdir(rolesDir);
-		} catch {
-			entries = [];
-		}
-
-		for (const entry of entries) {
-			if (!entry.endsWith('.yaml')) continue;
-
-			const content = await fs.readFile(path.join(rolesDir, entry), 'utf-8');
-			const role = loadYaml(content) as ConfigRole;
-
-			if (!role || typeof role !== 'object' || !role.key) {
-				throw new Error(`Invalid role file: ${entry} — missing "key" field.`);
-			}
-
-			if (role.key === 'public') {
-				throw new Error(
-					`Role key "public" is reserved for public permissions. Remove roles/public.yaml — ` +
-						`public permissions belong in permissions/public.yaml only.`
-				);
+			if (!role.key) {
+				throw new ConfigInvalidException(`Invalid role file: ${filename} — missing "key" field.`);
 			}
 
 			const expectedFilename = `${role.key}.yaml`;
 
-			if (entry !== expectedFilename) {
-				throw new Error(
-					`Role file "${entry}" contains key "${role.key}" — filename must match key ("${expectedFilename}").`
+			if (filename !== expectedFilename) {
+				throw new ConfigInvalidException(
+					`Role file "${filename}" contains key "${role.key}" — filename must match key ("${expectedFilename}").`
 				);
 			}
 
@@ -100,46 +174,29 @@ export async function readConfigDirectory(configPath: string): Promise<CairnConf
 	}
 
 	if (manifest.resources.includes('permissions')) {
-		const permissionsDir = path.join(configPath, 'permissions');
+		for (const filename of await readKindFilenames(root, 'permissions', notice)) {
+			const permSet = (await readRecord(root, 'permissions', filename)) as ConfigPermissionSet;
 
-		let entries: string[];
-
-		try {
-			entries = await fs.readdir(permissionsDir);
-		} catch {
-			entries = [];
-		}
-
-		for (const entry of entries) {
-			if (!entry.endsWith('.yaml')) continue;
-
-			const content = await fs.readFile(path.join(permissionsDir, entry), 'utf-8');
-			const permSet = loadYaml(content) as ConfigPermissionSet;
-
-			if (!permSet || typeof permSet !== 'object' || !permSet.role) {
-				throw new Error(`Invalid permission file: ${entry} — missing "role" field.`);
+			if (!permSet.role) {
+				throw new ConfigInvalidException(`Invalid permission file: ${filename} — missing "role" field.`);
 			}
 
 			if (!Array.isArray(permSet.permissions)) {
-				throw new Error(`Invalid permission file: ${entry} — "permissions" must be an array.`);
+				throw new ConfigInvalidException(`Invalid permission file: ${filename} — "permissions" must be an array.`);
 			}
 
 			const expectedFilename = `${permSet.role}.yaml`;
 
-			if (entry !== expectedFilename) {
-				throw new Error(
-					`Permission file "${entry}" contains role "${permSet.role}" — filename must match role ("${expectedFilename}").`
+			if (filename !== expectedFilename) {
+				throw new ConfigInvalidException(
+					`Permission file "${filename}" contains role "${permSet.role}" — filename must match role ("${expectedFilename}").`
 				);
 			}
 
-			if (permSet.role !== 'public') {
-				const matchingRole = roles.find((r) => r.key === permSet.role);
-
-				if (!matchingRole) {
-					throw new Error(
-						`Permission file "${entry}" references role "${permSet.role}" which has no matching file in roles/.`
-					);
-				}
+			if (permSet.role !== 'public' && !roles.some((r) => r.key === permSet.role)) {
+				throw new ConfigInvalidException(
+					`Permission file "${filename}" references role "${permSet.role}" which has no matching file in roles/.`
+				);
 			}
 
 			permissions.push(permSet);

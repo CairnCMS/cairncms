@@ -11,6 +11,7 @@ import {
 	assertSafeFile,
 	classifyConfigEntry,
 	isOwnedConfigFilename,
+	readContainedDirectory,
 	readContainedFile,
 	replaceFileAtomically,
 	resolveConfigRoot,
@@ -222,6 +223,38 @@ describe('assertSafeFile and assertSafeDirectory', () => {
 		);
 
 		await expect(assertSafeDirectory(root, path.join(root, 'missing'))).rejects.toThrow(ConfigInvalidException);
+	});
+});
+
+describe('readContainedDirectory', () => {
+	it('lists a directory and reports a missing one as absent rather than empty', async () => {
+		await fs.writeFile(path.join(root, 'roles', 'editor.yaml'), 'key: editor\n');
+
+		await expect(readContainedDirectory(root, path.join(root, 'roles'))).resolves.toEqual(['editor.yaml']);
+		await expect(readContainedDirectory(root, path.join(root, 'permissions'))).resolves.toBeNull();
+	});
+
+	it('refuses a link that does not resolve rather than reporting it as absent', async () => {
+		await fs.symlink(path.join(tmpDir, 'never-created'), path.join(root, 'permissions'));
+
+		await expect(readContainedDirectory(root, path.join(root, 'permissions'))).rejects.toThrow(ConfigInvalidException);
+	});
+
+	it('refuses a file where a directory is expected', async () => {
+		await fs.writeFile(path.join(root, 'permissions'), '');
+
+		await expect(readContainedDirectory(root, path.join(root, 'permissions'))).rejects.toThrow(ConfigInvalidException);
+	});
+
+	it('reports a listing failure as a read failure rather than as absent', async () => {
+		const denied = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+		const readdir = vi.spyOn(fs, 'readdir').mockRejectedValueOnce(denied);
+
+		try {
+			await expect(readContainedDirectory(root, path.join(root, 'roles'))).rejects.toThrow(ConfigReadFailedException);
+		} finally {
+			readdir.mockRestore();
+		}
 	});
 });
 
