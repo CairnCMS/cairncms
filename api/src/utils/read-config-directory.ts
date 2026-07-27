@@ -28,6 +28,11 @@ export type ConfigReadOptions = { notice?: NoticeSink };
 
 const ENV_VAR_PATTERN = /^\{\{([A-Z_][A-Z0-9_]*)\}\}$/;
 
+/** Whether a value is the whole-string placeholder form this reader would substitute. */
+export function isPlaceholder(value: unknown): boolean {
+	return typeof value === 'string' && ENV_VAR_PATTERN.test(value);
+}
+
 function interpolateEnvVar(value: string, field: string): string {
 	const match = value.match(ENV_VAR_PATTERN);
 	if (!match) return value;

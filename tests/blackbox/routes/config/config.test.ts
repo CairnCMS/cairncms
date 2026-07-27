@@ -2,6 +2,7 @@ import request from 'supertest';
 import { dump as dumpYaml, load as loadYaml } from 'js-yaml';
 import { getUrl } from '@common/config';
 import vendors from '@common/get-dbs-to-test';
+import type { Filter } from '@cairncms/types';
 import * as common from '@common/index';
 
 type ConfigSnapshot = {
@@ -44,6 +45,29 @@ async function applyConfig(
 async function resetToBaseline(vendor: string): Promise<void> {
 	const baseline = await getBaseline(vendor);
 	await applyConfig(vendor, baseline, { destructive: true });
+}
+
+/**
+ * Places a filter on a public permission. The filter uses canonical grammar against a real field, so a
+ * rejection can only come from the guard under test rather than from later filter validation.
+ */
+function setPublicFilter(config: ConfigSnapshot, filter: Filter): void {
+	const permission = {
+		collection: 'directus_files',
+		action: 'read',
+		permissions: filter,
+		validation: null,
+		presets: null,
+		fields: ['*'],
+	};
+
+	const publicSet = config.permissions.find((set) => set.role === 'public');
+
+	if (publicSet) {
+		publicSet.permissions.push(permission);
+	} else {
+		config.permissions.push({ role: 'public', permissions: [permission] });
+	}
 }
 
 describe('Config-as-Code API', () => {
@@ -284,8 +308,93 @@ describe('Config-as-Code API', () => {
 					.send('manifest: [: not valid');
 
 				expect(response.statusCode).toBe(400);
-				expect(response.body.errors[0].extensions.code).toBe('INVALID_PAYLOAD');
-				expect(response.body.errors[0].message).toContain('Invalid YAML');
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+				expect(response.body.errors[0].message).toContain('could not be parsed');
+			});
+		});
+
+		describe('does not echo the offending source line when YAML fails to parse', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const response = await request(getUrl(vendor))
+					.post('/config/apply')
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+					.set('Content-Type', 'text/yaml')
+					.send('manifest: {version: 1, resources: []}\ntoken: "s3cret-probe-value\n');
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+				expect(JSON.stringify(response.body)).not.toContain('s3cret-probe-value');
+			});
+		});
+
+		describe('rejects a YAML filter value that cannot be stored without silent change', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const baseline = await getBaseline(vendor);
+				setPublicFilter(baseline, { filesize: { _eq: '__NON_FINITE__' } });
+				const yaml = dumpYaml(baseline).replace('__NON_FINITE__', '.inf');
+
+				const response = await request(getUrl(vendor))
+					.post('/config/apply')
+					.query({ dry_run: 'true' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+					.set('Content-Type', 'text/yaml')
+					.send(yaml);
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+				expect(response.body.errors[0].message).toContain('cannot be stored');
+				expect(response.body.errors[0].message).toContain('filesize');
+			});
+		});
+
+		describe('rejects a JSON filter nested past the supported depth', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const baseline = await getBaseline(vendor);
+
+				let nested: Filter = { id: { _eq: 'probe' } };
+				for (let level = 0; level < 150; level++) nested = { _and: [nested] };
+				setPublicFilter(baseline, nested);
+
+				const response = await request(getUrl(vendor))
+					.post('/config/apply')
+					.query({ dry_run: 'true' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+					.set('Content-Type', 'application/json')
+					.send(baseline);
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+				expect(response.body.errors[0].message).toContain('nesting is deeper than');
+			});
+		});
+
+		describe('rejects placeholder syntax and stores nothing', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const baseline = await getBaseline(vendor);
+
+				baseline.roles.push({
+					key: 'probe_placeholder',
+					name: '{{CAIRNCMS_CONFIG_ROLE_NAME}}',
+					admin_access: false,
+					app_access: true,
+				});
+
+				try {
+					const response = await applyConfig(vendor, baseline);
+
+					expect(response.statusCode).toBe(400);
+					expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+					expect(response.body.errors[0].message).toContain('placeholder syntax');
+
+					const snapshot = await request(getUrl(vendor))
+						.get('/config/snapshot')
+						.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+					expect(snapshot.statusCode).toBe(200);
+					expect(snapshot.body.data.roles.find((r: any) => r.key === 'probe_placeholder')).toBeUndefined();
+				} finally {
+					await resetToBaseline(vendor);
+				}
 			});
 		});
 
