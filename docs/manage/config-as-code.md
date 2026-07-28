@@ -72,7 +72,9 @@ config/
     └── public.yaml               # public role's permissions (no roles/public.yaml)
 ```
 
-The split is deliberate: per-role changes show up as small, scoped diffs in source control rather than one giant file every time anyone touches a permission.
+Snapshot treats any record file whose filename and declared identity match as managed, including hand-authored files. It leaves other files unchanged during cleanup.
+
+Files and directories that CairnCMS reads or writes may use symlinks whose targets remain inside the config directory. Snapshot writes through contained symlinks and preserves them. When a stale record is a symlink, snapshot removes the link without deleting its target. Dangling links, targets outside the config directory, and targets that are not regular files or directories stop the command.
 
 ### Apply
 
@@ -97,6 +99,12 @@ Three flags adjust the flow:
 - **`--destructive`** — opt in to deleting roles and permissions that exist in the database but are absent from the config directory. Off by default so accidental omissions do not silently delete state.
 
 The destructive flag is the one that makes orphan removal possible. Without it, an apply only creates and updates while orphans in the database remain. This is the safer default for environments where the config directory might not represent the full intended state.
+
+### Environment variables
+
+Fields that support interpolation accept a placeholder in the form `{{CAIRNCMS_CONFIG_<NAME>}}`. The placeholder must occupy the entire field value. The CLI reads the value from its environment before it builds a plan. A variable outside the `CAIRNCMS_CONFIG_` namespace or a variable that is not set stops the command.
+
+The HTTP API does not resolve placeholders. Send resolved values in the request body.
 
 ## The HTTP API
 
@@ -169,8 +177,10 @@ This matches the schema-as-code semantic: the snapshot describes the desired sta
 
 ## Validation
 
-Before applying, the engine validates the plan and rejects the entire apply if any check fails. The validation surface:
+Config files and HTTP request bodies use the same structural checks. Before applying, the engine validates the plan and rejects the entire apply if any check fails. The validation surface:
 
+- **Readable state** — an unreadable manifest, managed directory, config record, or current database value stops the run before a plan is created.
+- **Supported document values** — config values must round-trip without changing meaning. Binary YAML values and non-finite numbers are rejected. Dates remain supported and normalize to ISO 8601 strings. Documents nested deeper than 100 levels or using more than 50 YAML aliases to mappings or sequences are outside the supported range.
 - **Manifest version** — only versions the engine recognizes are accepted. Future-format payloads are rejected rather than partially applied.
 - **Last admin role protection** — an apply that would leave the deployment with no role flagged as `admin_access: true` is rejected. There is no override and no special "Administrator" entity. The protection is purely about the flag, on whatever roles carry it.
 - **Undefined role references** — a permission set whose `role` is missing from both the payload's `roles[]` and the existing database is rejected. The HTTP path tolerates references to roles that exist in the database but are absent from the payload; the CLI rejects them at directory-read time before the engine sees them.
@@ -178,6 +188,8 @@ Before applying, the engine validates the plan and rejects the entire apply if a
 - **Reserved key misuse** — the `public` key in `roles[]` is rejected. The Public role record is platform-managed and cannot be created or updated as a role definition. The same `public` key in `permissions[]` is the supported way to manage Public access.
 
 When validation fails, the API returns a 400 with a flat `errors` array of human-readable messages so all failures surface in one response. The CLI prints the messages and exits with a distinct code (`2`) so CI can distinguish validation failures from connection failures or runtime errors.
+
+Config-as-code reads current state without running extension query filters, read filters, or read actions. Mutation events are unchanged.
 
 ## Source-control workflow
 
