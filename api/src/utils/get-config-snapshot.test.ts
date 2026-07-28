@@ -1,14 +1,37 @@
-import type { SchemaOverview } from '@cairncms/types';
+import type { Filter, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';
 import { MockClient } from 'knex-mock-client';
 import type { MockedFunction } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import logger from '../logger.js';
 import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
 import { getConfigSnapshot } from './get-config-snapshot.js';
 import * as getSchema from './get-schema.js';
+
+function mockRole(overrides: Record<string, any> = {}): void {
+	vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
+		{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: false, app_access: true, ...overrides },
+	]);
+}
+
+function mockPermission(overrides: Record<string, any> = {}): void {
+	vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
+		{
+			id: 42,
+			role: 'uuid-1',
+			collection: 'articles',
+			action: 'read',
+			permissions: null,
+			validation: null,
+			presets: null,
+			fields: null,
+			...overrides,
+		},
+	]);
+}
 
 vi.mock('../logger.js', () => ({
 	default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
@@ -255,34 +278,167 @@ describe('getConfigSnapshot', () => {
 		expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('orphaned permission'));
 	});
 
-	it('treats malformed JSON payload fields as null and warns', async () => {
+	it('aborts on a malformed JSON payload field rather than exporting it as no policy', async () => {
+		mockRole();
+		mockPermission({ permissions: '{not valid json' });
+
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow('id=42');
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow('permissions');
+	});
+
+	it('aborts on stored policy that parses to a scalar or an array', async () => {
+		for (const value of ['"just a string"', '42', 'true', '[{"_eq":1}]']) {
+			mockRole();
+			mockPermission({ permissions: value });
+
+			await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+		}
+	});
+
+	it('aborts on a bare array in a policy column', async () => {
+		mockRole();
+		mockPermission({ validation: [{ _eq: 1 }] });
+
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+	});
+
+	it('aborts on numeric and boolean policy columns', async () => {
+		for (const value of [42, true]) {
+			mockRole();
+			mockPermission({ presets: value });
+
+			await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+		}
+	});
+
+	it('aborts when a policy column is absent from the row, which is an incomplete read', async () => {
+		mockRole();
+		mockPermission({ permissions: undefined });
+
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow('incomplete');
+	});
+
+	it('aborts on a non-string element in a stored field list', async () => {
+		mockRole();
+		mockPermission({ fields: ['title', 7] });
+
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+	});
+
+	it('aborts on a stored filter nested past the supported depth', async () => {
+		let nested: Filter = { id: { _eq: 'probe' } };
+		for (let level = 0; level < 150; level++) nested = { _and: [nested] };
+
+		mockRole();
+		mockPermission({ permissions: nested });
+
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+	});
+
+	it('accepts every action the permission contract defines', async () => {
+		for (const action of ['create', 'read', 'update', 'delete', 'comment', 'explain', 'share']) {
+			mockRole();
+			mockPermission({ action });
+
+			const config = await getConfigSnapshot({ database: db });
+
+			expect(config.permissions[0]!.permissions[0]!.action).toBe(action);
+		}
+	});
+
+	it('aborts on a role key that is empty or fails the key grammar', async () => {
+		for (const key of ['', 'Editor', '2fa_admin', '_tmp']) {
+			vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
+				{ id: 'uuid-1', key, name: 'Editor', admin_access: false, app_access: true },
+			]);
+
+			vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+			await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+		}
+	});
+
+	it('aborts on a string admin_access, which would count as an administrator by truthiness', async () => {
 		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: false, app_access: true },
+			{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: 'false', app_access: true },
 		]);
 
-		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow('admin_access');
+	});
+
+	it('aborts on a non-boolean app_access and a malformed ip_access element', async () => {
+		for (const role of [
+			{ admin_access: false, app_access: 1 },
+			{ admin_access: false, app_access: true, ip_access: ['10.0.0.1', 7] },
+		]) {
+			vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
+				{ id: 'uuid-1', key: 'editor', name: 'Editor', ...role },
+			]);
+
+			vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+			await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+		}
+	});
+
+	it('aborts on an unsupported permission action', async () => {
+		mockRole();
+		mockPermission({ action: 'drop' });
+
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow('supported action');
+	});
+
+	it('reads current state unfiltered, so no query filter, read filter, or read action can shape it', async () => {
+		const roles = vi
+			.spyOn(RolesService.prototype, 'readByQuery')
+			.mockResolvedValue([{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: false, app_access: true }]);
+
+		const perms = vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		await getConfigSnapshot({ database: db });
+
+		expect(roles).toHaveBeenCalledWith(expect.anything(), { emitEvents: false });
+		expect(perms).toHaveBeenCalledWith(expect.anything(), { emitEvents: false });
+	});
+
+	it('still exports a real NULL policy column as null', async () => {
+		mockRole();
+		mockPermission({ permissions: null, validation: null, presets: null, fields: null });
+
+		const config = await getConfigSnapshot({ database: db });
+		const permission = config.permissions[0]!.permissions[0]!;
+
+		expect(permission.permissions).toBeNull();
+		expect(permission.validation).toBeNull();
+		expect(permission.presets).toBeNull();
+		expect(permission.fields).toBeNull();
+	});
+
+	it('exports display-only columns without validating them, so the narrowing stays deliberate', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
 			{
-				id: 42,
-				role: 'uuid-1',
-				collection: 'articles',
-				action: 'read',
-				permissions: '{not valid json',
-				validation: 'also not json',
-				presets: '{"almost": "valid"',
-				fields: null,
+				id: 'uuid-1',
+				key: 'editor',
+				name: 42,
+				icon: true,
+				description: ['odd'],
+				admin_access: false,
+				app_access: true,
 			},
 		]);
 
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
 		const config = await getConfigSnapshot({ database: db });
 
-		expect(config.permissions[0]!.permissions[0]!.permissions).toBeNull();
-		expect(config.permissions[0]!.permissions[0]!.validation).toBeNull();
-		expect(config.permissions[0]!.permissions[0]!.presets).toBeNull();
-
-		expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('permissions'));
-		expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('validation'));
-		expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('presets'));
-		expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('id=42'));
+		expect(config.roles[0]!.name).toBe(42);
+		expect(config.roles[0]!.icon).toBe(true);
 	});
 
 	it('skips synthetic system permissions', async () => {

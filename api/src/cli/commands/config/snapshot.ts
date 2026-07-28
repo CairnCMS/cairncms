@@ -1,8 +1,7 @@
-import { promises as fs } from 'fs';
-import path from 'path';
 import inquirer from 'inquirer';
 import getDatabase, { isInstalled, validateDatabaseConnection } from '../../../database/index.js';
 import logger from '../../../logger.js';
+import { readContainedDirectory, resolveConfigRoot } from '../../../utils/config-path-safety.js';
 import { getConfigSnapshot } from '../../../utils/get-config-snapshot.js';
 import { writeConfigDirectory } from '../../../utils/write-config-directory.js';
 
@@ -18,20 +17,11 @@ export async function configSnapshot(targetPath: string, options?: { yes: boolea
 	}
 
 	try {
-		const resolved = path.resolve(process.cwd(), targetPath);
+		const resolved = await resolveConfigRoot(targetPath, 'write');
+		const existing = await readContainedDirectory(resolved, resolved);
+		const dirNotEmpty = (existing ?? []).length > 0;
 
-		let dirExists = false;
-		let dirNotEmpty = false;
-
-		try {
-			const entries = await fs.readdir(resolved);
-			dirExists = true;
-			dirNotEmpty = entries.length > 0;
-		} catch {
-			dirExists = false;
-		}
-
-		if (dirExists && dirNotEmpty && options?.yes !== true) {
+		if (dirNotEmpty && options?.yes !== true) {
 			const { overwrite } = await inquirer.prompt([
 				{
 					type: 'confirm',

@@ -2,7 +2,6 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import getDatabase, { isInstalled, validateDatabaseConnection } from '../../../database/index.js';
 import logger from '../../../logger.js';
-import path from 'path';
 import { applyConfigPlan } from '../../../utils/apply-config-plan.js';
 import { computeConfigPlan, validateConfigPlan } from '../../../utils/compute-config-plan.js';
 import { getConfigSnapshot } from '../../../utils/get-config-snapshot.js';
@@ -88,12 +87,15 @@ export async function configApply(
 	}
 
 	try {
-		const resolved = path.resolve(process.cwd(), configPath);
 		const dryRun = options?.dryRun === true;
 		const destructive = options?.destructive === true;
 		const format = options?.format ?? 'human';
 
-		const desired = await readConfigDirectory(resolved);
+		// stdout carries the JSON plan, so read-path notices go to the log stream only in human mode.
+		const desired = await readConfigDirectory(configPath, {
+			notice: format === 'json' ? () => undefined : (message) => logger.warn(message),
+		});
+
 		const current = await getConfigSnapshot({ database });
 		const plan = computeConfigPlan(current, desired);
 
