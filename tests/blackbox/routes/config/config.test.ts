@@ -1,9 +1,14 @@
 import request from 'supertest';
+import { spawnSync } from 'child_process';
+import { promises as fs } from 'fs';
+import os from 'os';
+import path from 'path';
 import { dump as dumpYaml, load as loadYaml } from 'js-yaml';
-import { getUrl } from '@common/config';
+import config, { getUrl, paths } from '@common/config';
 import vendors from '@common/get-dbs-to-test';
 import type { Filter } from '@cairncms/types';
 import * as common from '@common/index';
+import knex, { type Knex } from 'knex';
 
 type ConfigSnapshot = {
 	manifest: { version: number; resources: string[] };
@@ -51,7 +56,7 @@ async function resetToBaseline(vendor: string): Promise<void> {
  * Places a filter on a public permission. The filter uses canonical grammar against a real field, so a
  * rejection can only come from the guard under test rather than from later filter validation.
  */
-function setPublicFilter(config: ConfigSnapshot, filter: Filter): void {
+function setPublicFilter(snapshot: ConfigSnapshot, filter: Filter): void {
 	const permission = {
 		collection: 'directus_files',
 		action: 'read',
@@ -61,12 +66,12 @@ function setPublicFilter(config: ConfigSnapshot, filter: Filter): void {
 		fields: ['*'],
 	};
 
-	const publicSet = config.permissions.find((set) => set.role === 'public');
+	const publicSet = snapshot.permissions.find((set) => set.role === 'public');
 
 	if (publicSet) {
 		publicSet.permissions.push(permission);
 	} else {
-		config.permissions.push({ role: 'public', permissions: [permission] });
+		snapshot.permissions.push({ role: 'public', permissions: [permission] });
 	}
 }
 
@@ -555,6 +560,149 @@ describe('Config-as-Code API', () => {
 					await resetToBaseline(vendor);
 				}
 			});
+		});
+	});
+});
+
+describe('cairncms config apply refuses a tree it cannot read', () => {
+	let fixtureRoot: string;
+
+	beforeEach(async () => {
+		fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'cairncms-config-cli-'));
+	});
+
+	afterEach(async () => {
+		await fs.rm(fixtureRoot, { recursive: true, force: true });
+	});
+
+	async function snapshotData(vendor: string): Promise<ConfigSnapshot> {
+		const response = await request(getUrl(vendor))
+			.get('/config/snapshot')
+			.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+		expect(response.statusCode).toBe(200);
+		return response.body.data as ConfigSnapshot;
+	}
+
+	function expectApplyRefused(vendor: string, diagnostic: string): void {
+		const result = spawnSync('node', ['--no-node-snapshot', paths.cli, 'config', 'apply', fixtureRoot, '--yes'], {
+			cwd: paths.cwd,
+			env: config.envs[vendor as keyof typeof config.envs],
+			encoding: 'utf8',
+		});
+
+		expect(result.error).toBeUndefined();
+		expect(typeof result.status).toBe('number');
+		expect(result.status).not.toBe(0);
+		expect(`${result.stdout ?? ''}${result.stderr ?? ''}`).toContain(diagnostic);
+	}
+
+	async function writeManifest(version = 1): Promise<void> {
+		await fs.writeFile(
+			path.join(fixtureRoot, 'cairncms-config.yaml'),
+			dumpYaml({ version, resources: ['roles', 'permissions'] })
+		);
+	}
+
+	describe('an unsupported manifest version terminates nonzero and writes nothing', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const before = await snapshotData(vendor);
+			await writeManifest(99);
+
+			expectApplyRefused(vendor, 'declares version 99');
+			expect(await snapshotData(vendor)).toEqual(before);
+		});
+	});
+
+	describe('a managed directory whose link does not resolve terminates nonzero and writes nothing', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const before = await snapshotData(vendor);
+			await writeManifest();
+			await fs.symlink(path.join(fixtureRoot, 'never-created'), path.join(fixtureRoot, 'roles'));
+
+			expectApplyRefused(vendor, 'is a link that does not resolve');
+			expect(await snapshotData(vendor)).toEqual(before);
+		});
+	});
+
+	describe('a placeholder outside the supported namespace terminates nonzero and writes nothing', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const before = await snapshotData(vendor);
+			await writeManifest();
+			await fs.mkdir(path.join(fixtureRoot, 'roles'), { recursive: true });
+
+			await fs.writeFile(
+				path.join(fixtureRoot, 'roles', 'cli_probe.yaml'),
+				dumpYaml({
+					key: 'cli_probe',
+					name: '{{DATABASE_PASSWORD}}',
+					admin_access: false,
+					app_access: true,
+				})
+			);
+
+			expectApplyRefused(vendor, 'outside the CAIRNCMS_CONFIG_ namespace');
+
+			const after = await snapshotData(vendor);
+			expect(after).toEqual(before);
+			expect(after.roles.map((role) => role.key)).not.toContain('cli_probe');
+		});
+	});
+});
+
+describe('Config-as-Code stored state', () => {
+	const databases = new Map<string, Knex>();
+	const PROBE_COLLECTION = 'cairncms_config_stored_state_probe';
+
+	beforeAll(() => {
+		for (const vendor of vendors) databases.set(vendor, knex(config.knexConfig[vendor]!));
+	});
+
+	afterAll(async () => {
+		for (const [, db] of databases) await db.destroy();
+	});
+
+	describe('refuses to read a stored filter it cannot interpret', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const db = databases.get(vendor)!;
+			const role = await db('directus_roles').select('id').first();
+			expect(role).toBeDefined();
+
+			// A JSON array is valid JSON on every vendor, so the column accepts it and the read path is what
+			// rejects it. Syntactically broken text would be refused by Postgres before reaching the engine.
+			await db('directus_permissions').insert({
+				role: role.id,
+				collection: PROBE_COLLECTION,
+				action: 'read',
+				permissions: '[]',
+			});
+
+			try {
+				const snapshot = await request(getUrl(vendor))
+					.get('/config/snapshot')
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(snapshot.statusCode).toBe(500);
+				expect(snapshot.body.errors[0].extensions.code).toBe('CONFIG_READ_FAILED');
+
+				const apply = await request(getUrl(vendor))
+					.post('/config/apply')
+					.query({ dry_run: 'true' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+					.set('Content-Type', 'application/json')
+					.send({ manifest: { version: 1, resources: ['roles', 'permissions'] }, roles: [], permissions: [] });
+
+				expect(apply.statusCode).toBe(500);
+				expect(apply.body.errors[0].extensions.code).toBe('CONFIG_READ_FAILED');
+			} finally {
+				await db('directus_permissions').where({ collection: PROBE_COLLECTION }).del();
+			}
+
+			const recovered = await request(getUrl(vendor))
+				.get('/config/snapshot')
+				.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+			expect(recovered.statusCode).toBe(200);
 		});
 	});
 });
