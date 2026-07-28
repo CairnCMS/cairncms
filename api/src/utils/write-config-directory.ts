@@ -1,7 +1,28 @@
-import { dump as toYaml } from 'js-yaml';
 import { promises as fs } from 'fs';
+import { dump as toYaml } from 'js-yaml';
+import { isPlainObject } from 'lodash-es';
 import path from 'path';
-import type { ConfigPermission, ConfigPermissionSet, CairnConfig } from '../types/config.js';
+import { ConfigInvalidException } from '../exceptions/config-invalid.js';
+import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
+import logger from '../logger.js';
+import type { CairnConfig, ConfigPermission, ConfigPermissionSet } from '../types/config.js';
+import {
+	isOwnedConfigFilename,
+	readContainedDirectory,
+	readContainedFile,
+	replaceFileAtomically,
+	type ConfigKind,
+} from './config-path-safety.js';
+import { assertConfigValueSafe, parseConfigYaml } from './parse-config-document.js';
+import { safeLogFragment } from './safe-log-fragment.js';
+
+const MANIFEST_FILENAME = 'cairncms-config.yaml';
+
+const YAML_SUFFIX = '.yaml';
+
+const IDENTITY_FIELD: Record<ConfigKind, string> = { roles: 'key', permissions: 'role' };
+
+type PendingDocument = { label: string; target: string; document: unknown };
 
 function sortStringArray(arr: string[] | null | undefined): string[] | null {
 	if (!arr) return null;
@@ -22,59 +43,121 @@ function dumpYaml(data: unknown): string {
 	return toYaml(data, { indent: 2, sortKeys: true, lineWidth: -1, noRefs: true });
 }
 
-async function cleanDirectory(dir: string, keepFiles: Set<string>): Promise<void> {
-	let entries: string[];
+function buildDocuments(config: CairnConfig, root: string): { pending: PendingDocument[]; keep: Set<string> } {
+	const pending: PendingDocument[] = [
+		{ label: MANIFEST_FILENAME, target: path.join(root, MANIFEST_FILENAME), document: config.manifest },
+	];
 
-	try {
-		entries = await fs.readdir(dir);
-	} catch {
-		return;
-	}
+	const keep = new Set<string>();
 
-	for (const entry of entries) {
-		if (entry.endsWith('.yaml') && !keepFiles.has(entry)) {
-			await fs.unlink(path.join(dir, entry));
-		}
-	}
-}
-
-export async function writeConfigDirectory(config: CairnConfig, targetPath: string): Promise<void> {
-	const rolesDir = path.join(targetPath, 'roles');
-	const permissionsDir = path.join(targetPath, 'permissions');
-
-	await fs.mkdir(rolesDir, { recursive: true });
-	await fs.mkdir(permissionsDir, { recursive: true });
-
-	await fs.writeFile(path.join(targetPath, 'cairncms-config.yaml'), dumpYaml(config.manifest));
-
-	const sortedRoles = [...config.roles].sort((a, b) => a.key.localeCompare(b.key));
-	const roleFiles = new Set<string>();
-
-	for (const role of sortedRoles) {
-		const filename = `${role.key}.yaml`;
-		roleFiles.add(filename);
+	for (const role of [...config.roles].sort((a, b) => a.key.localeCompare(b.key))) {
+		const filename = `${role.key}${YAML_SUFFIX}`;
+		keep.add(`roles/${filename}`);
 
 		const normalized = { ...role };
 		if (normalized.ip_access) normalized.ip_access = sortStringArray(normalized.ip_access);
 
-		await fs.writeFile(path.join(rolesDir, filename), dumpYaml(normalized));
+		pending.push({
+			label: `roles/${filename}`,
+			target: path.join(root, 'roles', filename),
+			document: normalized,
+		});
 	}
 
-	const sortedPermSets = [...config.permissions].sort((a, b) => a.role.localeCompare(b.role));
-	const permFiles = new Set<string>();
-
-	for (const permSet of sortedPermSets) {
-		const filename = `${permSet.role}.yaml`;
-		permFiles.add(filename);
+	for (const permSet of [...config.permissions].sort((a, b) => a.role.localeCompare(b.role))) {
+		const filename = `${permSet.role}${YAML_SUFFIX}`;
+		keep.add(`permissions/${filename}`);
 
 		const sorted: ConfigPermissionSet = {
 			role: permSet.role,
 			permissions: sortPermissions(permSet.permissions),
 		};
 
-		await fs.writeFile(path.join(permissionsDir, filename), dumpYaml(sorted));
+		pending.push({
+			label: `permissions/${filename}`,
+			target: path.join(root, 'permissions', filename),
+			document: sorted,
+		});
 	}
 
-	await cleanDirectory(rolesDir, roleFiles);
-	await cleanDirectory(permissionsDir, permFiles);
+	return { pending, keep };
+}
+
+/**
+ * Removal requires an owned filename that parses and declares the identity its stem promises. Provenance
+ * is not recorded, so a hand-authored record indistinguishable from generated output is removed too.
+ */
+async function cleanKindDirectory(root: string, kind: ConfigKind, keep: Set<string>): Promise<void> {
+	const entries = await readContainedDirectory(root, path.join(root, kind));
+	if (entries === null) return;
+
+	for (const entry of entries.sort()) {
+		const label = `${kind}/${entry}`;
+
+		if (!entry.endsWith(YAML_SUFFIX) || keep.has(label)) continue;
+
+		if (!isOwnedConfigFilename(entry, kind)) {
+			logger.warn(`Leaving "${kind}/${safeLogFragment(entry)}": not a name this config engine generates.`);
+			continue;
+		}
+
+		const target = path.join(root, kind, entry);
+		const source = await readContainedFile(root, target);
+
+		let declared: unknown;
+
+		try {
+			declared = parseConfigYaml(source, label);
+		} catch (err) {
+			if (!(err instanceof ConfigInvalidException)) throw err;
+
+			logger.warn(`Leaving "${label}": it does not read as a config record.`);
+			continue;
+		}
+
+		const identity = isPlainObject(declared) ? (declared as Record<string, unknown>)[IDENTITY_FIELD[kind]] : undefined;
+
+		if (identity !== entry.slice(0, -YAML_SUFFIX.length)) {
+			logger.warn(`Leaving "${label}": it does not declare the identity its filename promises.`);
+			continue;
+		}
+
+		await fs.unlink(target);
+	}
+}
+
+export async function writeConfigDirectory(config: CairnConfig, root: string): Promise<void> {
+	const { pending, keep } = buildDocuments(config, root);
+
+	// The checks protect the serializer, so every document is validated before any is serialized or written.
+	for (const { label, document } of pending) {
+		try {
+			assertConfigValueSafe(document, label);
+		} catch (err) {
+			if (err instanceof ConfigInvalidException) throw new ConfigReadFailedException(err.message);
+			throw err;
+		}
+	}
+
+	const serialized = pending.map(({ label, target, document }) => {
+		try {
+			return { target, contents: dumpYaml(document) };
+		} catch (err) {
+			throw new ConfigReadFailedException(
+				`Config document "${safeLogFragment(label)}" could not be serialized: ${safeLogFragment(
+					(err as Error).message
+				)}.`
+			);
+		}
+	});
+
+	await fs.mkdir(path.join(root, 'roles'), { recursive: true });
+	await fs.mkdir(path.join(root, 'permissions'), { recursive: true });
+
+	for (const { target, contents } of serialized) {
+		await replaceFileAtomically(root, target, contents);
+	}
+
+	await cleanKindDirectory(root, 'roles', keep);
+	await cleanKindDirectory(root, 'permissions', keep);
 }
