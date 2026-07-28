@@ -21,8 +21,19 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+	vi.unstubAllEnvs();
 	await fs.rm(tmpDir, { recursive: true, force: true });
 });
+
+async function captureRejection(run: () => Promise<unknown>): Promise<any> {
+	try {
+		await run();
+	} catch (err) {
+		return err;
+	}
+
+	throw new Error('expected the call to reject');
+}
 
 async function writeManifest(resources: string[] = ['roles', 'permissions']): Promise<void> {
 	await fs.writeFile(path.join(tmpDir, 'cairncms-config.yaml'), toYaml({ version: 1, resources }));
@@ -136,29 +147,50 @@ describe('readConfigDirectory', () => {
 		expect(config.permissions[0]!.role).toBe('public');
 	});
 
-	it('interpolates env vars in role name and description', async () => {
-		process.env['TEST_ROLE_NAME'] = 'Interpolated Name';
-		process.env['TEST_ROLE_DESC'] = 'Interpolated Description';
+	it('substitutes variables inside the supported namespace', async () => {
+		vi.stubEnv('CAIRNCMS_CONFIG_ROLE_NAME', 'Interpolated Name');
+		vi.stubEnv('CAIRNCMS_CONFIG_ROLE_DESC', 'Interpolated Description');
 
 		await writeManifest();
-		await writeRole('editor', { name: '{{TEST_ROLE_NAME}}', description: '{{TEST_ROLE_DESC}}' });
+
+		await writeRole('editor', {
+			name: '{{CAIRNCMS_CONFIG_ROLE_NAME}}',
+			description: '{{CAIRNCMS_CONFIG_ROLE_DESC}}',
+		});
 
 		const config = await readConfigDirectory(tmpDir);
 
 		expect(config.roles[0]!.name).toBe('Interpolated Name');
 		expect(config.roles[0]!.description).toBe('Interpolated Description');
-
-		delete process.env['TEST_ROLE_NAME'];
-		delete process.env['TEST_ROLE_DESC'];
 	});
 
-	it('leaves unresolved env vars as literals with warning', async () => {
+	it('refuses a variable outside the supported namespace instead of reading it', async () => {
+		for (const varName of ['DATABASE_PASSWORD', 'SECRET']) {
+			vi.stubEnv(varName, 'a-real-secret-value');
+
+			await writeManifest();
+			await writeRole('editor', { name: `{{${varName}}}` });
+
+			const error = await captureRejection(() => readConfigDirectory(tmpDir));
+
+			expect(error).toMatchObject({ code: 'CONFIG_INVALID' });
+			expect(error.message).toContain(varName);
+			expect(error.message).not.toContain('a-real-secret-value');
+		}
+	});
+
+	it('refuses an in-namespace variable with no value, naming the variable, role, and field', async () => {
+		vi.stubEnv('CAIRNCMS_CONFIG_MISSING', undefined);
+
 		await writeManifest();
-		await writeRole('editor', { name: '{{NONEXISTENT_VAR}}' });
+		await writeRole('editor', { description: '{{CAIRNCMS_CONFIG_MISSING}}' });
 
-		const config = await readConfigDirectory(tmpDir);
+		const error = await captureRejection(() => readConfigDirectory(tmpDir));
 
-		expect(config.roles[0]!.name).toBe('{{NONEXISTENT_VAR}}');
+		expect(error).toMatchObject({ code: 'CONFIG_PLACEHOLDER_UNRESOLVED' });
+		expect(error.message).toContain('CAIRNCMS_CONFIG_MISSING');
+		expect(error.message).toContain('editor');
+		expect(error.message).toContain('description');
 	});
 
 	it('does not interpolate partial env var patterns', async () => {

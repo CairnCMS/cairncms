@@ -1,6 +1,7 @@
 import { isPlainObject } from 'lodash-es';
 import path from 'path';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
+import { ConfigPlaceholderUnresolvedException } from '../exceptions/config-placeholder-unresolved.js';
 import { ConfigUnsupportedVersionException } from '../exceptions/config-unsupported-version.js';
 import logger from '../logger.js';
 import { safeLogFragment } from './safe-log-fragment.js';
@@ -19,11 +20,7 @@ const MANIFEST_FILENAME = 'cairncms-config.yaml';
 
 type NoticeSink = (message: string) => void;
 
-/**
- * Where the absent-directory and ignored-filename notices go. Placeholder diagnostics still reach the
- * logger directly. The default logger writes to stdout, which the CLI also uses for machine-readable
- * plan output, so a caller producing JSON must pass a sink that keeps stdout clean.
- */
+/** The default sink logs to stdout, which the CLI also uses for plan output, so a JSON caller must supply its own. */
 export type ConfigReadOptions = { notice?: NoticeSink };
 
 const ENV_VAR_PATTERN = /^\{\{([A-Z_][A-Z0-9_]*)\}\}$/;
@@ -33,16 +30,28 @@ export function isPlaceholder(value: unknown): boolean {
 	return typeof value === 'string' && ENV_VAR_PATTERN.test(value);
 }
 
-function interpolateEnvVar(value: string, field: string): string {
+const PLACEHOLDER_NAMESPACE = 'CAIRNCMS_CONFIG_';
+
+function interpolateEnvVar(value: string, field: string, roleKey: unknown): string {
 	const match = value.match(ENV_VAR_PATTERN);
 	if (!match) return value;
 
 	const varName = match[1]!;
+	const where = `role "${safeLogFragment(roleKey)}" field "${field}"`;
+
+	if (!varName.startsWith(PLACEHOLDER_NAMESPACE)) {
+		throw new ConfigInvalidException(
+			`${where} references {{${safeLogFragment(varName)}}}, which is outside the ${PLACEHOLDER_NAMESPACE} namespace. ` +
+				`Only variables in that namespace are substituted.`
+		);
+	}
+
 	const resolved = process.env[varName];
 
 	if (resolved === undefined) {
-		logger.warn(`Unresolved env var {{${varName}}} in field "${field}" — leaving as literal.`);
-		return value;
+		throw new ConfigPlaceholderUnresolvedException(
+			`${where} references {{${safeLogFragment(varName)}}}, which has no value in this environment.`
+		);
 	}
 
 	return resolved;
@@ -52,11 +61,11 @@ function interpolateRole(role: ConfigRole): ConfigRole {
 	const result = { ...role };
 
 	if (typeof result.name === 'string') {
-		result.name = interpolateEnvVar(result.name, 'name');
+		result.name = interpolateEnvVar(result.name, 'name', role.key);
 	}
 
 	if (typeof result.description === 'string') {
-		result.description = interpolateEnvVar(result.description, 'description');
+		result.description = interpolateEnvVar(result.description, 'description', role.key);
 	}
 
 	return result;
