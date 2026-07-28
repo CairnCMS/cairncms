@@ -121,25 +121,19 @@ export async function applyConfigPlan(
 				throw new Error(`Cannot update permission: role "${roleKey}" not found.`);
 			}
 
-			const filter: Record<string, any> = {
-				collection: { _eq: permission.collection },
-				action: { _eq: permission.action },
-				role: { _eq: roleId },
-			};
+			const existing = await trx('directus_permissions')
+				.select('id')
+				.where({ collection: permission.collection, action: permission.action, role: roleId })
+				.first();
 
-			const existing = await permissionsService.readByQuery({
-				filter,
-				limit: 1,
-			});
-
-			if (existing.length === 0) {
+			if (existing === undefined) {
 				throw new Error(
 					`Permission not found for update: role="${roleKey}" collection="${permission.collection}" action="${permission.action}".`
 				);
 			}
 
 			await permissionsService.updateOne(
-				existing[0]!['id'],
+				existing['id'],
 				{
 					permissions: permission.permissions,
 					validation: permission.validation,
@@ -173,19 +167,13 @@ export async function applyConfigPlan(
 
 				if (roleId === undefined) continue;
 
-				const filter: Record<string, any> = {
-					collection: { _eq: collection },
-					action: { _eq: action },
-					role: { _eq: roleId },
-				};
+				const existing = await trx('directus_permissions')
+					.select('id')
+					.where({ collection, action, role: roleId })
+					.first();
 
-				const existing = await permissionsService.readByQuery({
-					filter,
-					limit: 1,
-				});
-
-				if (existing.length > 0) {
-					await permissionsService.deleteOne(existing[0]!['id'], skipCache);
+				if (existing !== undefined) {
+					await permissionsService.deleteOne(existing['id'], skipCache);
 					result.permissions.deleted++;
 				}
 			}

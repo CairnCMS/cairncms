@@ -1,6 +1,37 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyConfigPlan } from './apply-config-plan.js';
 import type { ConfigPlan } from '../types/config.js';
+
+const permissionsService = { createOne: vi.fn(), updateOne: vi.fn(), deleteOne: vi.fn(), readByQuery: vi.fn() };
+const rolesService = { createOne: vi.fn(), updateOne: vi.fn(), deleteOne: vi.fn() };
+
+let trxRows: Record<string, Array<Record<string, any>>> = {};
+
+/** Applies `where`, so seeding competing rows proves a query selects by its full tuple. */
+function trxStub(table: string): any {
+	let rows = trxRows[table] ?? [];
+
+	const chain: any = {
+		select: () => chain,
+		where: (predicate: Record<string, any>) => {
+			rows = rows.filter((row) => Object.entries(predicate).every(([column, value]) => row[column] === value));
+			return chain;
+		},
+		first: () => Promise.resolve(rows[0]),
+		then: (onFulfilled: any, onRejected?: any) => Promise.resolve(rows).then(onFulfilled, onRejected),
+	};
+
+	return chain;
+}
+
+vi.mock('../database/index.js', () => ({
+	default: () => ({ transaction: async (cb: any) => cb(trxStub) }),
+}));
+
+vi.mock('./get-schema.js', () => ({ getSchema: async () => ({ collections: {}, relations: [] }) }));
+vi.mock('../cache.js', () => ({ clearSystemCache: vi.fn() }));
+vi.mock('../services/permissions.js', () => ({ PermissionsService: vi.fn(() => permissionsService) }));
+vi.mock('../services/roles.js', () => ({ RolesService: vi.fn(() => rolesService) }));
 
 function emptyPlan(): ConfigPlan {
 	return {
@@ -131,5 +162,87 @@ describe('applyConfigPlan — dryRun', () => {
 
 		const result = await applyConfigPlan(plan, { dryRun: true, destructive: true });
 		expect(result.permissions.deleted).toBe(1);
+	});
+});
+
+describe('applyConfigPlan — permission identity is resolved in the transaction', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+
+		// Competing rows differ from the target by exactly one tuple member, so a query missing any part
+		// of (role, collection, action) selects the wrong row.
+		trxRows = {
+			directus_roles: [
+				{ id: 'role-1', key: 'editor' },
+				{ id: 'role-2', key: 'viewer' },
+			],
+			directus_permissions: [
+				{ id: 'perm-other-role', role: 'role-2', collection: 'articles', action: 'read' },
+				{ id: 'perm-other-collection', role: 'role-1', collection: 'pages', action: 'read' },
+				{ id: 'perm-other-action', role: 'role-1', collection: 'articles', action: 'update' },
+				{ id: 'perm-real', role: 'role-1', collection: 'articles', action: 'read' },
+			],
+		};
+	});
+
+	function updatePlan(): ConfigPlan {
+		const plan = emptyPlan();
+
+		plan.permissions.update.push({
+			roleKey: 'editor',
+			permission: {
+				collection: 'articles',
+				action: 'read',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: null,
+			},
+		});
+
+		return plan;
+	}
+
+	it('updates the row found in the transaction even when a read hook hides it', async () => {
+		permissionsService.readByQuery.mockResolvedValue([]);
+
+		const result = await applyConfigPlan(updatePlan(), {});
+
+		expect(result.permissions.updated).toBe(1);
+		expect(permissionsService.updateOne).toHaveBeenCalledWith('perm-real', expect.anything(), expect.anything());
+		expect(permissionsService.readByQuery).not.toHaveBeenCalled();
+	});
+
+	it('does not let a read hook redirect the update at another row', async () => {
+		permissionsService.readByQuery.mockResolvedValue([{ id: 'perm-attacker' }]);
+
+		await applyConfigPlan(updatePlan(), {});
+
+		expect(permissionsService.updateOne).toHaveBeenCalledWith('perm-real', expect.anything(), expect.anything());
+
+		expect(permissionsService.updateOne).not.toHaveBeenCalledWith(
+			'perm-attacker',
+			expect.anything(),
+			expect.anything()
+		);
+	});
+
+	it('deletes the row found in the transaction even when a read hook hides it', async () => {
+		permissionsService.readByQuery.mockResolvedValue([]);
+
+		const plan = emptyPlan();
+		plan.permissions.delete.push({ roleKey: 'editor', collection: 'articles', action: 'read' });
+
+		const result = await applyConfigPlan(plan, { destructive: true });
+
+		expect(result.permissions.deleted).toBe(1);
+		expect(permissionsService.deleteOne).toHaveBeenCalledWith('perm-real', expect.anything());
+		expect(permissionsService.readByQuery).not.toHaveBeenCalled();
+	});
+
+	it('still reports a genuinely absent row as a failed update', async () => {
+		trxRows['directus_permissions'] = trxRows['directus_permissions']!.filter((row) => row['id'] !== 'perm-real');
+
+		await expect(applyConfigPlan(updatePlan(), {})).rejects.toThrow('Permission not found for update');
 	});
 });
