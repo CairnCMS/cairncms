@@ -181,7 +181,6 @@ function permissionErrors(
 		subjects.add(set.role);
 
 		if (set.role !== PUBLIC_ROLE_KEY) {
-			// A database-only role may be deleted by this apply, cascading any permission that references it.
 			if (managed.has('roles')) {
 				if (!declaredRoleKeys.has(set.role)) {
 					errors.push(`Permission set references role "${subject}", which no role file declares.`);
