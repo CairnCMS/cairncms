@@ -1,10 +1,13 @@
 import type { PermissionsAction } from '@cairncms/types';
 
+export const CONFIG_KINDS = ['roles', 'permissions'] as const;
+export type ConfigKind = (typeof CONFIG_KINDS)[number];
+
 export interface ConfigRole {
 	key: string;
 	name: string;
 	icon?: string;
-	description?: string;
+	description?: string | null;
 	admin_access: boolean;
 	app_access: boolean;
 	enforce_tfa?: boolean;
@@ -27,7 +30,7 @@ export interface ConfigPermission {
 
 export interface ConfigManifest {
 	version: 1;
-	resources: Array<'roles' | 'permissions'>;
+	resources: ConfigKind[];
 }
 
 export interface CairnConfig {

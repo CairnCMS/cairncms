@@ -1,5 +1,5 @@
 import { PUBLIC_ROLE_ID } from '@cairncms/constants';
-import type { PermissionsAction, SchemaOverview } from '@cairncms/types';
+import type { SchemaOverview } from '@cairncms/types';
 import { normalizeRoleKey } from '@cairncms/utils';
 import type { Knex } from 'knex';
 import getDatabase from '../database/index.js';
@@ -9,25 +9,10 @@ import logger from '../logger.js';
 import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
 import type { CairnConfig, ConfigPermission, ConfigPermissionSet, ConfigRole } from '../types/config.js';
+import { SUPPORTED_ACTIONS } from './config-contract.js';
 import { assertConfigValueSafe } from './parse-config-document.js';
 import { getSchema } from './get-schema.js';
 import { safeLogFragment } from './safe-log-fragment.js';
-
-/**
- * Every action the permission contract defines. `satisfies` makes the union exhaustive, so adding a
- * member to `PermissionsAction` fails the build here rather than silently rejecting stored rows.
- */
-const SUPPORTED_ACTIONS = new Set(
-	Object.keys({
-		create: true,
-		read: true,
-		update: true,
-		delete: true,
-		comment: true,
-		explain: true,
-		share: true,
-	} satisfies Record<PermissionsAction, true>)
-);
 
 /** Reads never emit query filters, read filters, or read actions, so a hook cannot shape or observe them. */
 const UNFILTERED = { emitEvents: false } as const;

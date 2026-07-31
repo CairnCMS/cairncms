@@ -1,3 +1,4 @@
+import { PUBLIC_ROLE_KEY } from '@cairncms/constants';
 import { isEqual } from 'lodash-es';
 import type { ConfigPlan, ConfigPlanErrors, ConfigPermission, ConfigRole, CairnConfig } from '../types/config.js';
 
@@ -90,7 +91,7 @@ export function computeConfigPlan(current: CairnConfig, desired: CairnConfig): C
 	}
 
 	for (const permSet of current.permissions) {
-		const roleInDesired = desiredRolesByKey.has(permSet.role) || permSet.role === 'public';
+		const roleInDesired = desiredRolesByKey.has(permSet.role) || permSet.role === PUBLIC_ROLE_KEY;
 		if (!roleInDesired) continue;
 
 		for (const perm of permSet.permissions) {
@@ -121,7 +122,7 @@ export function validateConfigPlan(
 	}
 
 	for (const role of desired.roles) {
-		if (role.key === 'public') {
+		if (role.key === PUBLIC_ROLE_KEY) {
 			errors.push('Role key "public" is reserved for public permissions.');
 		}
 	}
@@ -129,7 +130,7 @@ export function validateConfigPlan(
 	const desiredRoleKeys = new Set(desired.roles.map((r) => r.key));
 
 	for (const permSet of desired.permissions) {
-		if (permSet.role === 'public') continue;
+		if (permSet.role === PUBLIC_ROLE_KEY) continue;
 
 		if (!desiredRoleKeys.has(permSet.role) && !context.currentRoles.has(permSet.role)) {
 			errors.push(`Permission set references role "${permSet.role}" which does not exist in config or database.`);

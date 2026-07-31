@@ -1,19 +1,14 @@
+import { PUBLIC_ROLE_KEY } from '@cairncms/constants';
 import { normalizeRoleKey } from '@cairncms/utils';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
+import type { ConfigKind } from '../types/config.js';
+import { ROLE_KEY_MAX_LENGTH } from './config-contract.js';
 import { safeLogFragment } from './safe-log-fragment.js';
 
-export type ConfigKind = 'roles' | 'permissions';
-
 export type ConfigEntry = { kind: 'absent' } | { kind: 'file'; real: string } | { kind: 'directory'; real: string };
-
-/** Mirrors the length of `directus_roles.key`, which a record filename stem becomes. */
-const ROLE_KEY_MAX_LENGTH = 255;
-
-/** Reserved as a permission subject, so it is never the key of a stored role. */
-const RESERVED_ROLE_KEYS = new Set(['public']);
 
 const TEMPORARY_SUFFIX = '.tmp';
 
@@ -174,7 +169,7 @@ export function isOwnedConfigFilename(name: string, kind: ConfigKind): boolean {
 
 	if (stem === '' || stem.length > ROLE_KEY_MAX_LENGTH) return false;
 	if (normalizeRoleKey(stem) !== stem) return false;
-	if (kind === 'roles' && RESERVED_ROLE_KEYS.has(stem)) return false;
+	if (kind === 'roles' && stem === PUBLIC_ROLE_KEY) return false;
 
 	return true;
 }

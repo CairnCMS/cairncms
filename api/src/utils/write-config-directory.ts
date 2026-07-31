@@ -5,13 +5,12 @@ import path from 'path';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import logger from '../logger.js';
-import type { CairnConfig, ConfigPermission, ConfigPermissionSet } from '../types/config.js';
+import type { CairnConfig, ConfigKind, ConfigPermission, ConfigPermissionSet } from '../types/config.js';
 import {
 	isOwnedConfigFilename,
 	readContainedDirectory,
 	readContainedFile,
 	replaceFileAtomically,
-	type ConfigKind,
 } from './config-path-safety.js';
 import { assertConfigValueSafe, parseConfigYaml } from './parse-config-document.js';
 import { safeLogFragment } from './safe-log-fragment.js';
