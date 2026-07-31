@@ -31,7 +31,7 @@
 										<v-list-item-icon><v-icon name="edit" /></v-list-item-icon>
 										<v-list-item-content>{{ t('layouts.kanban.edit_group') }}</v-list-item-content>
 									</v-list-item>
-									<v-list-item v-if="isRelational" class="danger" clickable @click="deleteGroup(group.id)">
+									<v-list-item v-if="isRelational" class="danger" clickable @click="groupPendingDelete = group.id">
 										<v-list-item-icon><v-icon name="delete" /></v-list-item-icon>
 										<v-list-item-content>{{ t('layouts.kanban.delete_group') }}</v-list-item-content>
 									</v-list-item>
@@ -50,7 +50,7 @@
 						@change="change(group, $event)"
 					>
 						<template #item="{ element }">
-							<router-link :to="`${collection}/${element.id}`" class="item">
+							<router-link :to="getItemRoute(collection, element.id)" class="item">
 								<div v-if="element.title" class="title">{{ element.title }}</div>
 								<img v-if="element.image" class="image" :src="element.image" />
 								<div v-if="element.text" class="text">{{ element.text }}</div>
@@ -98,6 +98,21 @@
 				</v-card-actions>
 			</v-card>
 		</v-dialog>
+
+		<v-dialog :model-value="groupPendingDelete !== null" @esc="cancelDeleteGroup">
+			<v-card>
+				<v-card-title>{{ t('delete_are_you_sure') }}</v-card-title>
+
+				<v-card-actions>
+					<v-button secondary :disabled="deletingGroup" @click="cancelDeleteGroup">
+						{{ t('cancel') }}
+					</v-button>
+					<v-button kind="danger" :loading="deletingGroup" :disabled="deletingGroup" @click="confirmDeleteGroup">
+						{{ t('delete_label') }}
+					</v-button>
+				</v-card-actions>
+			</v-card>
+		</v-dialog>
 	</div>
 </template>
 
@@ -108,7 +123,9 @@ export default {
 </script>
 
 <script lang="ts" setup>
+import { getItemRoute } from '@/utils/get-item-route';
 import { getRootPath } from '@/utils/get-root-path';
+import { unexpectedError } from '@/utils/unexpected-error';
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import Draggable from 'vuedraggable';
@@ -154,6 +171,8 @@ const { t } = useI18n();
 
 const editDialogOpen = ref<string | number | null>(null);
 const editTitle = ref('');
+const groupPendingDelete = ref<string | number | null>(null);
+const deletingGroup = ref(false);
 
 function openEditGroup(group: Group) {
 	editDialogOpen.value = group.id;
@@ -182,6 +201,28 @@ function saveChanges() {
 
 	editDialogOpen.value = null;
 	editTitle.value = '';
+}
+
+function cancelDeleteGroup() {
+	if (deletingGroup.value) return;
+	groupPendingDelete.value = null;
+}
+
+async function confirmDeleteGroup() {
+	const id = groupPendingDelete.value;
+
+	if (id === null || deletingGroup.value) return;
+
+	deletingGroup.value = true;
+
+	try {
+		await props.deleteGroup(id);
+	} catch (error: any) {
+		unexpectedError(error);
+	} finally {
+		deletingGroup.value = false;
+		if (groupPendingDelete.value === id) groupPendingDelete.value = null;
+	}
 }
 </script>
 
