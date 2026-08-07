@@ -65,7 +65,7 @@
 			"ip-address": "10.1.1",
 			"@tootallnate/once@1": "2.0.1",
 			"@tootallnate/once@2": "2.0.1",
-			"shell-quote@<1.8.4": "1.8.4"
+			"shell-quote@>=1.0.0 <1.10.0": "1.10.0"
 		}
 	}
 }
