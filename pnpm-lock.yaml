@@ -42,7 +42,7 @@ overrides:
   postcss@>=8.0.0 <8.5.26: 8.5.26
   '@xmldom/xmldom': 0.8.13
   fast-uri: 3.1.2
-  ip-address: 10.1.1
+  ip-address: 10.3.1
   '@tootallnate/once@1': 2.0.1
   '@tootallnate/once@2': 2.0.1
   shell-quote@>=1.0.0 <1.10.0: 1.10.0
@@ -5974,8 +5974,8 @@ packages:
     resolution: {integrity: sha512-1DKMMzlIHM02eBBVOFQ1+AolGjs6+xEcM4PDL7NqOS6szq7H9jSaEkIUH6/a5Hl241LzW6JLSiAbNvTQjUupUA==}
     engines: {node: '>=12.22.0'}
 
-  ip-address@10.1.1:
-    resolution: {integrity: sha512-1FMu8/N15Ck1BL551Jf42NYIoin2unWjLQ2Fze/DXryJRl5twqtwNHlO39qERGbIOcKYWHdgRryhOC+NG4eaLw==}
+  ip-address@10.3.1:
+    resolution: {integrity: sha512-1e9d3kb97NHJTIJDZW9rKqW2h6+dFa50Dy0fpPSMQp2ADje5gvKsXmdiK6dwY5t76TaTt5+P5N1Y/LoToIxP6g==}
     engines: {node: '>= 12'}
 
   ipaddr.js@1.9.1:
@@ -14544,7 +14544,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  ip-address@10.1.1:
+  ip-address@10.3.1:
     optional: true
 
   ipaddr.js@1.9.1: {}
@@ -17282,7 +17282,7 @@ snapshots:
 
   socks@2.8.7:
     dependencies:
-      ip-address: 10.1.1
+      ip-address: 10.3.1
       smart-buffer: 4.2.0
     optional: true
 
