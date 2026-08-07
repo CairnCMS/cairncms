@@ -80,7 +80,7 @@
 		"@sebastianwessel/quickjs": "3.0.1",
 		"argon2": "0.40.3",
 		"async": "3.2.4",
-		"axios": "1.16.0",
+		"axios": "1.18.1",
 		"busboy": "1.6.0",
 		"bytes": "3.1.2",
 		"camelcase": "7.0.1",
