@@ -136,6 +136,9 @@ importers:
       '@godaddy/terminus':
         specifier: 4.12.0
         version: 4.12.0
+      '@img/sharp-wasm32':
+        specifier: 0.35.3
+        version: 0.35.3
       '@jitl/quickjs-ng-wasmfile-release-asyncify':
         specifier: 0.31.0
         version: 0.31.0
@@ -10581,7 +10584,6 @@ snapshots:
   '@emnapi/runtime@1.11.3':
     dependencies:
       tslib: 2.8.1
-    optional: true
 
   '@esbuild/aix-ppc64@0.25.12':
     optional: true
@@ -10954,7 +10956,6 @@ snapshots:
   '@img/sharp-wasm32@0.35.3':
     dependencies:
       '@emnapi/runtime': 1.11.3
-    optional: true
 
   '@img/sharp-webcontainers-wasm32@0.35.3':
     dependencies:

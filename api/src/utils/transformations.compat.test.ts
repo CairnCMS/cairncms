@@ -52,14 +52,13 @@ const allowlistArgs: Record<string, (t: Sharp) => Sharp> = {
 	bandbool: (t) => t.bandbool('and'),
 };
 
-// Every chainable sharp method outside the allowlist that a preset can invoke and
-// that succeeds on the pinned 0.33.4 baseline, enumerated against the installed
-// package with the same terminal the asset service uses (no forced output format).
-// composite, boolean, and joinChannel take an operand image; a preset carries it as
-// a path, so the operand here is a temporary file. A text-input composite exercises
-// native text rendering, a documented WebAssembly limitation. jxl is excluded: its
-// save is unavailable in the pinned libvips on both versions. Output-format methods
-// carry their reported format so a later forced encode cannot mask a regression.
+// Chainable sharp methods a preset can invoke beyond the allowlist, enumerated with
+// the same terminal the asset service uses (no forced output format). composite,
+// boolean, and joinChannel take an operand image the preset carries as a path, so the
+// operand here is a temporary file. A text-input composite exercises native text
+// rendering, a documented WebAssembly limitation. jxl is excluded because its save is
+// unavailable in the bundled libvips. Output-format methods carry their reported
+// format so a later forced encode cannot mask a regression.
 type BaselineCase = { apply: (t: Sharp, operandPath: string) => Sharp; format?: string };
 
 const presetBaselineArgs: Record<string, BaselineCase> = {
@@ -95,6 +94,23 @@ const presetBaselineArgs: Record<string, BaselineCase> = {
 const transformFormats = ['jpeg', 'png', 'webp', 'tiff', 'avif'] as const;
 const reportedFormat: Record<string, string> = { avif: 'heif', jpeg: 'jpeg', png: 'png', webp: 'webp', tiff: 'tiff' };
 
+// A forced-WASM run sets SHARP_COMPAT_BACKEND=wasm. tile (deep-zoom dzsave) and
+// text-composite rendering are the two documented limitations of the WASM fallback.
+// Native Sharp supports both. An unrecognized value throws so a misspelled backend
+// cannot become a native false pass.
+const backendEnv = process.env['SHARP_COMPAT_BACKEND'];
+
+if (backendEnv !== undefined && backendEnv !== 'native' && backendEnv !== 'wasm') {
+	throw new Error(`SHARP_COMPAT_BACKEND must be "native" or "wasm", received "${backendEnv}"`);
+}
+
+const backend: 'native' | 'wasm' = backendEnv === 'wasm' ? 'wasm' : 'native';
+
+const wasmUnavailable: Record<string, RegExp> = {
+	tile: /dzsave_buffer/,
+	'composite text': /class "text"/,
+};
+
 function makeInput(): Promise<Buffer> {
 	return sharp({ create: { width: 40, height: 24, channels: 4, background: { r: 200, g: 90, b: 40, alpha: 1 } } })
 		.png()
@@ -125,6 +141,10 @@ describe('sharp transform compatibility', () => {
 		expect(sharp.versions.vips).toBe('8.18.3');
 	});
 
+	test(`runs on the ${backend} backend`, () => {
+		expect('emscripten' in sharp.versions).toBe(backend === 'wasm');
+	});
+
 	test('every allowlisted method has a compatibility case', () => {
 		for (const method of TransformationMethods) {
 			expect(allowlistArgs[method], `missing compatibility case for "${method}"`).toBeDefined();
@@ -140,10 +160,15 @@ describe('sharp transform compatibility', () => {
 	});
 
 	test.each(Object.keys(presetBaselineArgs))(
-		'preset-invokable baseline method "%s" survives the bump',
+		'preset-invokable method "%s" produces valid output or a documented WASM limitation',
 		async (method) => {
 			const input = await makeInput();
 			const { apply, format } = presetBaselineArgs[method]!;
+
+			if (backend === 'wasm' && wasmUnavailable[method]) {
+				await expect(apply(sharp(input), operandPath).toBuffer()).rejects.toThrow(wasmUnavailable[method]!);
+				return;
+			}
 
 			const transformer = sharp(input);
 			apply(transformer, operandPath);

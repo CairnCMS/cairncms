@@ -246,7 +246,7 @@ For chained operations beyond resize-and-format, the `transforms` parameter take
 GET /assets/<id>?transforms=[["resize",{"width":600,"fit":"inside"}],["blur",2],["grayscale"]]
 ```
 
-Each entry is `[<operation>, <args>?]`. The operation set covers the Sharp library's image methods (resize, rotate, blur, sharpen, grayscale, modulate, and so on). The number of operations per request is bounded by `ASSETS_TRANSFORM_MAX_OPERATIONS` (default `5`); the cap protects against pathological transform requests that would consume CPU on the server.
+Each entry is `[<operation>, <args>?]`. The API accepts a fixed set of Sharp operations rather than arbitrary Sharp methods. Unsupported operations are rejected, and `ASSETS_TRANSFORM_MAX_OPERATIONS` limits each request to five operations by default. Project presets support additional operations. See [Transformation Presets](/docs/guides/settings/#files-and-storage).
 
 ### Format auto-negotiation
 

@@ -73,6 +73,7 @@
 		"@cairncms/update-check": "workspace:*",
 		"@cairncms/utils": "workspace:*",
 		"@godaddy/terminus": "4.12.0",
+		"@img/sharp-wasm32": "0.35.3",
 		"@jitl/quickjs-ng-wasmfile-release-asyncify": "0.31.0",
 		"@rollup/plugin-alias": "5.0.0",
 		"@rollup/plugin-node-resolve": "15.0.2",
