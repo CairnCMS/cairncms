@@ -270,6 +270,24 @@ describe('Schema Snapshots', () => {
 			});
 		});
 
+		describe('rejects a non-admin multipart upload before parsing its YAML', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const malformed = Buffer.from('collections: [unclosed\n');
+
+				const unauthenticated = await request(getUrl(vendor))
+					.post('/schema/apply')
+					.attach('file', malformed, { filename: 'snapshot.yaml', contentType: 'application/x-yaml' });
+
+				const nonAdmin = await request(getUrl(vendor))
+					.post('/schema/apply')
+					.attach('file', malformed, { filename: 'snapshot.yaml', contentType: 'application/x-yaml' })
+					.set('Authorization', `Bearer ${common.USER.APP_ACCESS.TOKEN}`);
+
+				expect(unauthenticated.statusCode).toEqual(403);
+				expect(nonAdmin.statusCode).toEqual(403);
+			});
+		});
+
 		describe('applies a snapshot (JSON)', () => {
 			it.each(vendors)(
 				'%s',
