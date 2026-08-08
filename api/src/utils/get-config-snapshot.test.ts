@@ -1,3 +1,4 @@
+import { PUBLIC_ROLE_ID } from '@cairncms/constants';
 import type { Filter, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';
@@ -8,13 +9,27 @@ import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import logger from '../logger.js';
 import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
-import { getConfigSnapshot } from './get-config-snapshot.js';
+import { getConfigSnapshot, readCurrentConfig } from './get-config-snapshot.js';
 import * as getSchema from './get-schema.js';
+import { validateDesiredConfig } from './validate-desired-config.js';
+
+function roleRow(overrides: Record<string, any> = {}): Record<string, any> {
+	return {
+		id: 'uuid-1',
+		key: 'editor',
+		name: 'Editor',
+		icon: 'supervised_user_circle',
+		description: null,
+		admin_access: false,
+		app_access: true,
+		enforce_tfa: false,
+		ip_access: null,
+		...overrides,
+	};
+}
 
 function mockRole(overrides: Record<string, any> = {}): void {
-	vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-		{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: false, app_access: true, ...overrides },
-	]);
+	vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow(overrides)]);
 }
 
 function mockPermission(overrides: Record<string, any> = {}): void {
@@ -91,6 +106,7 @@ describe('getConfigSnapshot', () => {
 			admin_access: false,
 			app_access: true,
 			enforce_tfa: false,
+			ip_access: null,
 		});
 
 		expect(config.roles[0]).not.toHaveProperty('external_identifier');
@@ -98,17 +114,17 @@ describe('getConfigSnapshot', () => {
 		expect(config.roles[0]).not.toHaveProperty('id');
 	});
 
-	it('omits null-valued optional fields from role snapshots', async () => {
+	it('records explicit null for nullable columns so the snapshot fully describes the row', async () => {
 		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
 			{
 				id: 'uuid-1',
 				key: 'editor',
 				name: 'Editor',
-				icon: null,
+				icon: 'badge',
 				description: null,
 				admin_access: false,
 				app_access: true,
-				enforce_tfa: null,
+				enforce_tfa: false,
 				ip_access: null,
 			},
 		]);
@@ -117,22 +133,39 @@ describe('getConfigSnapshot', () => {
 
 		const config = await getConfigSnapshot({ database: db });
 
-		expect(config.roles[0]).not.toHaveProperty('icon');
-		expect(config.roles[0]).not.toHaveProperty('description');
-		expect(config.roles[0]).not.toHaveProperty('enforce_tfa');
-		expect(config.roles[0]).not.toHaveProperty('ip_access');
+		expect(config.roles[0]!.description).toBeNull();
+		expect(config.roles[0]!.ip_access).toBeNull();
+	});
+
+	it('aborts when the nullable description column is absent, rather than fabricating null', async () => {
+		const row = roleRow();
+		delete row['description'];
+
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([row]);
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const error = await getConfigSnapshot({ database: db }).catch((err) => err);
+
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+		expect(error.message).toContain('"description" was absent from the row');
+	});
+
+	it('aborts when the nullable ip_access column is absent, rather than fabricating null', async () => {
+		const row = roleRow();
+		delete row['ip_access'];
+
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([row]);
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const error = await getConfigSnapshot({ database: db }).catch((err) => err);
+
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+		expect(error.message).toContain('"ip_access" was absent from the row');
 	});
 
 	it('canonicalizes ip_access by sorting alphabetically', async () => {
 		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{
-				id: 'uuid-1',
-				key: 'editor',
-				name: 'Editor',
-				admin_access: false,
-				app_access: true,
-				ip_access: ['10.0.0.2', '192.168.1.1', '10.0.0.1'],
-			},
+			roleRow({ ip_access: ['10.0.0.2', '192.168.1.1', '10.0.0.1'] }),
 		]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
@@ -151,20 +184,8 @@ describe('getConfigSnapshot', () => {
 				admin_access: false,
 				app_access: false,
 			},
-			{
-				id: 'admin-uuid',
-				key: 'administrator',
-				name: 'Administrator',
-				admin_access: true,
-				app_access: true,
-			},
-			{
-				id: 'editor-uuid',
-				key: 'editor',
-				name: 'Editor',
-				admin_access: false,
-				app_access: true,
-			},
+			roleRow({ id: 'admin-uuid', key: 'administrator', name: 'Administrator', admin_access: true }),
+			roleRow({ id: 'editor-uuid', key: 'editor', name: 'Editor' }),
 		]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
@@ -242,9 +263,7 @@ describe('getConfigSnapshot', () => {
 	});
 
 	it('skips orphaned permissions referencing non-existent roles and warns', async () => {
-		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: false, app_access: true },
-		]);
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
 			{
@@ -395,9 +414,7 @@ describe('getConfigSnapshot', () => {
 	});
 
 	it('reads current state unfiltered, so no query filter, read filter, or read action can shape it', async () => {
-		const roles = vi
-			.spyOn(RolesService.prototype, 'readByQuery')
-			.mockResolvedValue([{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: false, app_access: true }]);
+		const roles = vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
 
 		const perms = vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
 
@@ -420,31 +437,20 @@ describe('getConfigSnapshot', () => {
 		expect(permission.fields).toBeNull();
 	});
 
-	it('exports display-only columns without validating them, so the narrowing stays deliberate', async () => {
-		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{
-				id: 'uuid-1',
-				key: 'editor',
-				name: 42,
-				icon: true,
-				description: ['odd'],
-				admin_access: false,
-				app_access: true,
-			},
-		]);
+	it('refuses to export a display column it cannot represent, naming the role', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow({ name: 42 })]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
 
-		const config = await getConfigSnapshot({ database: db });
+		const error = await getConfigSnapshot({ database: db }).catch((err) => err);
 
-		expect(config.roles[0]!.name).toBe(42);
-		expect(config.roles[0]!.icon).toBe(true);
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+		expect(error.message).toContain('role key=editor');
+		expect(error.message).toContain('"name" must be a string');
 	});
 
 	it('skips synthetic system permissions', async () => {
-		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: false, app_access: true },
-		]);
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
 			{
@@ -466,9 +472,7 @@ describe('getConfigSnapshot', () => {
 	});
 
 	it('throws on duplicate (role, collection, action) tuples', async () => {
-		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: false, app_access: true },
-		]);
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
 			{
@@ -497,9 +501,7 @@ describe('getConfigSnapshot', () => {
 	});
 
 	it('parses stringified JSON payload fields', async () => {
-		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: false, app_access: true },
-		]);
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
 			{
@@ -520,9 +522,7 @@ describe('getConfigSnapshot', () => {
 	});
 
 	it('parses CSV fields and sorts them alphabetically', async () => {
-		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: false, app_access: true },
-		]);
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
 			{
@@ -543,9 +543,7 @@ describe('getConfigSnapshot', () => {
 	});
 
 	it('returns null for empty CSV fields', async () => {
-		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: false, app_access: true },
-		]);
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
 			{
@@ -567,8 +565,8 @@ describe('getConfigSnapshot', () => {
 
 	it('sorts output deterministically (roles by key, permissions by collection+action)', async () => {
 		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{ id: 'uuid-b', key: 'zebra', name: 'Zebra', admin_access: false, app_access: true },
-			{ id: 'uuid-a', key: 'alpha', name: 'Alpha', admin_access: false, app_access: true },
+			roleRow({ id: 'uuid-b', key: 'zebra', name: 'Zebra' }),
+			roleRow({ id: 'uuid-a', key: 'alpha', name: 'Alpha' }),
 		]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
@@ -613,5 +611,127 @@ describe('getConfigSnapshot', () => {
 			'articles:update',
 			'posts:read',
 		]);
+	});
+});
+
+describe('readCurrentConfig', () => {
+	let db: MockedFunction<Knex>;
+
+	beforeEach(() => {
+		db = vi.mocked(knex.default({ client: MockClient }));
+		vi.spyOn(getSchema, 'getSchema').mockResolvedValue(testSchema);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('groups permissions under a portable role key without exporting the role', async () => {
+		const roles = vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
+
+		mockPermission();
+
+		const { config, currentRoleKeys } = await readCurrentConfig({ database: db, resources: ['permissions'] });
+
+		expect(roles).toHaveBeenCalledWith({ limit: -1, fields: ['id', 'key'] }, { emitEvents: false });
+		expect(config.roles).toEqual([]);
+		expect(config.permissions[0]!.role).toBe('editor');
+		expect(currentRoleKeys.has('editor')).toBe(true);
+	});
+
+	it('reads an unrelated role that cannot be exported, because only its identity is needed', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
+			roleRow(),
+			{ id: 'uuid-2', key: 'broken', name: 'Broken', admin_access: 'false', app_access: true },
+		]);
+
+		mockPermission();
+
+		const { config } = await readCurrentConfig({ database: db, resources: ['permissions'] });
+
+		expect(config.permissions[0]!.role).toBe('editor');
+	});
+
+	it('still refuses a malformed access column when roles are managed', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
+			{ id: 'uuid-2', key: 'broken', name: 'Broken', admin_access: 'false', app_access: true },
+		]);
+
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		await expect(readCurrentConfig({ database: db, resources: ['roles'] })).rejects.toMatchObject({
+			code: 'CONFIG_READ_FAILED',
+		});
+	});
+
+	it('skips the permission query when only roles are managed', async () => {
+		mockRole();
+		const perms = vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const { config } = await readCurrentConfig({ database: db, resources: ['roles'] });
+
+		expect(perms).not.toHaveBeenCalled();
+		expect(config.permissions).toEqual([]);
+		expect(config.roles).toHaveLength(1);
+	});
+
+	it('queries neither service when nothing is managed', async () => {
+		const roles = vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([]);
+		const perms = vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const { config, currentRoleKeys } = await readCurrentConfig({ database: db, resources: [] });
+
+		expect(roles).not.toHaveBeenCalled();
+		expect(perms).not.toHaveBeenCalled();
+		expect(config).toEqual({ manifest: { version: 1, resources: [] }, roles: [], permissions: [] });
+		expect(currentRoleKeys.size).toBe(0);
+	});
+
+	it('produces a document its own validator accepts, including permissions on the public role', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
+			{ id: PUBLIC_ROLE_ID, key: 'public', name: 'Public', admin_access: false, app_access: false },
+			{
+				id: 'uuid-1',
+				key: 'editor',
+				name: 'Editor',
+				icon: 'edit',
+				description: null,
+				admin_access: false,
+				app_access: true,
+				enforce_tfa: false,
+				ip_access: '10.0.0.1,10.0.0.2',
+			},
+		]);
+
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
+			{
+				id: 1,
+				role: 'uuid-1',
+				collection: 'articles',
+				action: 'read',
+				permissions: { status: { _eq: 'published' } },
+				validation: null,
+				presets: null,
+				fields: 'title,body',
+			},
+			{
+				id: 2,
+				role: PUBLIC_ROLE_ID,
+				collection: 'articles',
+				action: 'read',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: null,
+			},
+		]);
+
+		const { config, currentRoleKeys } = await readCurrentConfig({
+			database: db,
+			resources: ['roles', 'permissions'],
+		});
+
+		expect(config.permissions.map((set) => set.role)).toEqual(['editor', 'public']);
+		expect(validateDesiredConfig(config, { label: 'snapshot', currentRoleKeys })).toEqual([]);
 	});
 });

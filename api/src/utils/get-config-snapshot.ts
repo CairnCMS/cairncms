@@ -8,11 +8,19 @@ import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import logger from '../logger.js';
 import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
-import type { CairnConfig, ConfigPermission, ConfigPermissionSet, ConfigRole } from '../types/config.js';
+import {
+	CONFIG_KINDS,
+	type CairnConfig,
+	type ConfigKind,
+	type ConfigPermission,
+	type ConfigPermissionSet,
+	type ConfigRole,
+} from '../types/config.js';
 import { SUPPORTED_ACTIONS } from './config-contract.js';
 import { assertConfigValueSafe } from './parse-config-document.js';
 import { getSchema } from './get-schema.js';
 import { safeLogFragment } from './safe-log-fragment.js';
+import { validateConfigRecord } from './validate-desired-config.js';
 
 /** Reads never emit query filters, read filters, or read actions, so a hook cannot shape or observe them. */
 const UNFILTERED = { emitEvents: false } as const;
@@ -101,24 +109,44 @@ function assertStringArray(subject: string, field: string, value: unknown): stri
 	return [...(value as string[])].sort();
 }
 
-/**
- * Identity and policy-bearing columns are validated because a wrong type either breaks a filename or
- * degrades an authority invariant. `admin_access` is read by truthiness in the last-administrator
- * check, so a string "false" would count as an administrator. Display-only columns are left alone.
- */
-function assertRoleRow(role: Record<string, any>): void {
+/** Identity is read even for an unmanaged role, because a permission is grouped and applied by its role key. */
+function assertRoleIdentity(role: Record<string, any>): void {
 	const id = role['id'];
 
 	if (typeof id !== 'string' || id === '') {
 		throw unreadable('a role row', 'column "id" is not a non-empty string');
 	}
 
-	const subject = `role id=${safeLogFragment(id)}`;
 	const key = role['key'];
 
 	if (typeof key !== 'string' || key === '' || normalizeRoleKey(key) !== key) {
-		throw unreadable(subject, `column "key" is not a usable role key`);
+		throw unreadable(`role id=${safeLogFragment(id)}`, `column "key" is not a usable role key`);
 	}
+}
+
+/** An absent column means the read is incomplete, distinct from a stored null, which is a value to export. */
+function requireColumn(role: Record<string, any>, field: string): any {
+	if (role[field] === undefined) {
+		throw unreadable(
+			`role id=${safeLogFragment(role['id'])}`,
+			`column "${field}" was absent from the row, so the read is incomplete`
+		);
+	}
+
+	return role[field];
+}
+
+function readIpAccess(role: Record<string, any>): string[] | null {
+	const value = requireColumn(role, 'ip_access');
+	if (value === null) return null;
+
+	if (typeof value === 'string') return parseStoredCSV(role['id'], value);
+	return assertStringArray(`role id=${safeLogFragment(role['id'])}`, 'ip_access', value);
+}
+
+/** The last-administrator check reads `admin_access` by truthiness, so a string "false" would count as an admin. */
+function assertRolePolicy(role: Record<string, any>): void {
+	const subject = `role id=${safeLogFragment(role['id'])}`;
 
 	for (const field of ['admin_access', 'app_access'] as const) {
 		if (typeof role[field] !== 'boolean') {
@@ -155,50 +183,78 @@ function assertPermissionRow(perm: Record<string, any>): void {
 	}
 }
 
-export async function getConfigSnapshot(options?: { database?: Knex; schema?: SchemaOverview }): Promise<CairnConfig> {
-	const database = options?.database ?? getDatabase();
-	const schema = options?.schema ?? (await getSchema({ database, bypassCache: true }));
+export type CurrentConfigRead = {
+	config: CairnConfig;
+	currentRoleKeys: ReadonlySet<string>;
+};
 
+export type CurrentConfigOptions = {
+	database?: Knex;
+	schema?: SchemaOverview;
+	resources: readonly ConfigKind[];
+};
+
+function assertEmittedRecord(kind: ConfigKind, subject: string, record: unknown): void {
+	const problems = validateConfigRecord(kind, record);
+
+	if (problems.length > 0) {
+		throw unreadable(subject, `it cannot be represented in the config format (${problems.join('; ')})`);
+	}
+}
+
+export async function readCurrentConfig(options: CurrentConfigOptions): Promise<CurrentConfigRead> {
+	const database = options.database ?? getDatabase();
+	const managed = new Set<ConfigKind>(options.resources);
+	const manifest = { version: 1 as const, resources: [...options.resources] };
+
+	if (managed.size === 0) {
+		return { config: { manifest, roles: [], permissions: [] }, currentRoleKeys: new Set() };
+	}
+
+	const schema = options.schema ?? (await getSchema({ database, bypassCache: true }));
 	const rolesService = new RolesService({ knex: database, schema });
-	const permissionsService = new PermissionsService({ knex: database, schema });
 
-	const rolesRaw = await rolesService.readByQuery({ limit: -1 }, UNFILTERED);
+	const roleQuery = managed.has('roles') ? { limit: -1 } : { limit: -1, fields: ['id', 'key'] };
+	const rolesRaw = await rolesService.readByQuery(roleQuery, UNFILTERED);
 
 	const roleKeyById = new Map<string, string>();
+	const currentRoleKeys = new Set<string>();
 	const roles: ConfigRole[] = [];
 
 	for (const role of rolesRaw) {
-		assertRoleRow(role);
+		assertRoleIdentity(role);
+		if (managed.has('roles')) assertRolePolicy(role);
 
 		roleKeyById.set(role['id'], role['key']);
+		currentRoleKeys.add(role['key']);
 
-		// Sentinel is a system-managed row representing unauthenticated access;
-		// its UUID→key mapping stays in roleKeyById so permissions on it group
-		// under the "public" key, but the role itself has no configurable
-		// surface and doesn't belong in config.roles.
+		// The sentinel keeps its id→key mapping so its permissions group under "public", but it has no
+		// configurable surface of its own and never appears in config.roles.
 		if (role['id'] === PUBLIC_ROLE_ID) continue;
+		if (!managed.has('roles')) continue;
 
 		const configRole: ConfigRole = {
 			key: role['key'],
-			name: role['name'],
+			name: requireColumn(role, 'name'),
 			admin_access: role['admin_access'],
 			app_access: role['app_access'],
+			icon: requireColumn(role, 'icon'),
+			enforce_tfa: requireColumn(role, 'enforce_tfa'),
+			description: requireColumn(role, 'description'),
+			ip_access: readIpAccess(role),
 		};
 
-		if (role['icon'] != null) configRole.icon = role['icon'];
-		if (role['description'] != null) configRole.description = role['description'];
-		if (role['enforce_tfa'] != null) configRole.enforce_tfa = role['enforce_tfa'];
-
-		if (role['ip_access'] != null) {
-			configRole.ip_access =
-				typeof role['ip_access'] === 'string'
-					? parseStoredCSV(role['id'], role['ip_access'])
-					: assertStringArray(`role id=${safeLogFragment(role['id'])}`, 'ip_access', role['ip_access']);
-		}
+		assertEmittedRecord('roles', `role key=${safeLogFragment(role['key'])}`, configRole);
 
 		roles.push(configRole);
 	}
 
+	if (!managed.has('permissions')) {
+		roles.sort((a, b) => a.key.localeCompare(b.key));
+		return { config: { manifest, roles, permissions: [] }, currentRoleKeys };
+	}
+
+	const permissionsService = new PermissionsService({ knex: database, schema });
 	const permissionsRaw = await permissionsService.readByQuery({ limit: -1 }, UNFILTERED);
 
 	const permissionsByRoleKey = new Map<string, ConfigPermission[]>();
@@ -264,18 +320,21 @@ export async function getConfigSnapshot(options?: { database?: Knex; schema?: Sc
 			return a.action.localeCompare(b.action);
 		});
 
-		permissions.push({ role: roleKey, permissions: perms });
+		const permissionSet: ConfigPermissionSet = { role: roleKey, permissions: perms };
+
+		assertEmittedRecord('permissions', `permissions for role key=${safeLogFragment(roleKey)}`, permissionSet);
+
+		permissions.push(permissionSet);
 	}
 
 	permissions.sort((a, b) => a.role.localeCompare(b.role));
 	roles.sort((a, b) => a.key.localeCompare(b.key));
 
-	return {
-		manifest: {
-			version: 1,
-			resources: ['roles', 'permissions'],
-		},
-		roles,
-		permissions,
-	};
+	return { config: { manifest, roles, permissions }, currentRoleKeys };
+}
+
+export async function getConfigSnapshot(options?: { database?: Knex; schema?: SchemaOverview }): Promise<CairnConfig> {
+	const { config } = await readCurrentConfig({ ...options, resources: CONFIG_KINDS });
+
+	return config;
 }

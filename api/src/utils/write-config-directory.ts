@@ -5,7 +5,13 @@ import path from 'path';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import logger from '../logger.js';
-import type { CairnConfig, ConfigKind, ConfigPermission, ConfigPermissionSet } from '../types/config.js';
+import {
+	CONFIG_KINDS,
+	type CairnConfig,
+	type ConfigKind,
+	type ConfigPermission,
+	type ConfigPermissionSet,
+} from '../types/config.js';
 import {
 	isOwnedConfigFilename,
 	readContainedDirectory,
@@ -43,40 +49,46 @@ function dumpYaml(data: unknown): string {
 }
 
 function buildDocuments(config: CairnConfig, root: string): { pending: PendingDocument[]; keep: Set<string> } {
+	const managed = new Set<ConfigKind>(config.manifest.resources);
+
 	const pending: PendingDocument[] = [
 		{ label: MANIFEST_FILENAME, target: path.join(root, MANIFEST_FILENAME), document: config.manifest },
 	];
 
 	const keep = new Set<string>();
 
-	for (const role of [...config.roles].sort((a, b) => a.key.localeCompare(b.key))) {
-		const filename = `${role.key}${YAML_SUFFIX}`;
-		keep.add(`roles/${filename}`);
+	if (managed.has('roles')) {
+		for (const role of [...config.roles].sort((a, b) => a.key.localeCompare(b.key))) {
+			const filename = `${role.key}${YAML_SUFFIX}`;
+			keep.add(`roles/${filename}`);
 
-		const normalized = { ...role };
-		if (normalized.ip_access) normalized.ip_access = sortStringArray(normalized.ip_access);
+			const normalized = { ...role };
+			if (normalized.ip_access) normalized.ip_access = sortStringArray(normalized.ip_access);
 
-		pending.push({
-			label: `roles/${filename}`,
-			target: path.join(root, 'roles', filename),
-			document: normalized,
-		});
+			pending.push({
+				label: `roles/${filename}`,
+				target: path.join(root, 'roles', filename),
+				document: normalized,
+			});
+		}
 	}
 
-	for (const permSet of [...config.permissions].sort((a, b) => a.role.localeCompare(b.role))) {
-		const filename = `${permSet.role}${YAML_SUFFIX}`;
-		keep.add(`permissions/${filename}`);
+	if (managed.has('permissions')) {
+		for (const permSet of [...config.permissions].sort((a, b) => a.role.localeCompare(b.role))) {
+			const filename = `${permSet.role}${YAML_SUFFIX}`;
+			keep.add(`permissions/${filename}`);
 
-		const sorted: ConfigPermissionSet = {
-			role: permSet.role,
-			permissions: sortPermissions(permSet.permissions),
-		};
+			const sorted: ConfigPermissionSet = {
+				role: permSet.role,
+				permissions: sortPermissions(permSet.permissions),
+			};
 
-		pending.push({
-			label: `permissions/${filename}`,
-			target: path.join(root, 'permissions', filename),
-			document: sorted,
-		});
+			pending.push({
+				label: `permissions/${filename}`,
+				target: path.join(root, 'permissions', filename),
+				document: sorted,
+			});
+		}
 	}
 
 	return { pending, keep };
@@ -150,13 +162,17 @@ export async function writeConfigDirectory(config: CairnConfig, root: string): P
 		}
 	});
 
-	await fs.mkdir(path.join(root, 'roles'), { recursive: true });
-	await fs.mkdir(path.join(root, 'permissions'), { recursive: true });
+	const managed = new Set<ConfigKind>(config.manifest.resources);
+
+	for (const kind of CONFIG_KINDS) {
+		if (managed.has(kind)) await fs.mkdir(path.join(root, kind), { recursive: true });
+	}
 
 	for (const { target, contents } of serialized) {
 		await replaceFileAtomically(root, target, contents);
 	}
 
-	await cleanKindDirectory(root, 'roles', keep);
-	await cleanKindDirectory(root, 'permissions', keep);
+	for (const kind of CONFIG_KINDS) {
+		if (managed.has(kind)) await cleanKindDirectory(root, kind, keep);
+	}
 }
