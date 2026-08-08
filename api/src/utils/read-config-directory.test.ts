@@ -129,24 +129,17 @@ describe('readConfigDirectory', () => {
 		await expect(readConfigDirectory(tmpDir)).rejects.toThrow('missing "key" field');
 	});
 
-	it('throws when permission file references a non-existent role', async () => {
-		await writeManifest();
-		await writePermissions('ghost', []);
-
-		await expect(readConfigDirectory(tmpDir)).rejects.toThrow('no matching file in roles/');
-	});
-
-	it('allows permissions/public.yaml without a matching role file', async () => {
+	it('reads a permission set without requiring a matching role file', async () => {
 		await writeManifest();
 
-		await writePermissions('public', [
+		await writePermissions('editor', [
 			{ collection: 'articles', action: 'read', permissions: null, validation: null, presets: null, fields: null },
 		]);
 
 		const config = await readConfigDirectory(tmpDir);
 
 		expect(config.permissions).toHaveLength(1);
-		expect(config.permissions[0]!.role).toBe('public');
+		expect(config.permissions[0]!.role).toBe('editor');
 	});
 
 	it('substitutes variables inside the supported namespace', async () => {

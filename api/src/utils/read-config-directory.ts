@@ -201,12 +201,6 @@ export async function readConfigDirectory(configPath: string, options?: ConfigRe
 				);
 			}
 
-			if (permSet.role !== PUBLIC_ROLE_KEY && !roles.some((r) => r.key === permSet.role)) {
-				throw new ConfigInvalidException(
-					`Permission file "${filename}" references role "${permSet.role}" which has no matching file in roles/.`
-				);
-			}
-
 			permissions.push(permSet);
 		}
 	}

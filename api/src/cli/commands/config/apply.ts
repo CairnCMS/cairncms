@@ -4,8 +4,9 @@ import getDatabase, { isInstalled, validateDatabaseConnection } from '../../../d
 import logger from '../../../logger.js';
 import { applyConfigPlan } from '../../../utils/apply-config-plan.js';
 import { computeConfigPlan, validateConfigPlan } from '../../../utils/compute-config-plan.js';
-import { getConfigSnapshot } from '../../../utils/get-config-snapshot.js';
+import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
 import { readConfigDirectory } from '../../../utils/read-config-directory.js';
+import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
 import type { ConfigPlan } from '../../../types/config.js';
 
 function formatPlanHuman(plan: ConfigPlan, destructive: boolean): string {
@@ -96,7 +97,22 @@ export async function configApply(
 			notice: format === 'json' ? () => undefined : (message) => logger.warn(message),
 		});
 
-		const current = await getConfigSnapshot({ database });
+		const { config: current, currentRoleKeys } = await readCurrentConfig({
+			database,
+			resources: desired.manifest.resources,
+		});
+
+		const documentErrors = validateDesiredConfig(desired, { label: configPath, currentRoleKeys });
+
+		if (documentErrors.length > 0) {
+			for (const error of documentErrors) {
+				logger.error(error);
+			}
+
+			database.destroy();
+			process.exit(2);
+		}
+
 		const plan = computeConfigPlan(current, desired);
 
 		const currentRoles = new Map(current.roles.map((r) => [r.key, { admin_access: r.admin_access }]));

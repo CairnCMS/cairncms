@@ -240,33 +240,13 @@ describe('validateConfigPlan', () => {
 		expect(result.errors).toEqual([]);
 	});
 
-	it('errors when permission references unknown role', () => {
+	it('checks only plan-dependent invariants, reporting no document-validity error', () => {
 		const desired = makeConfig({
-			permissions: [{ role: 'ghost', permissions: [makePerm('articles', 'read')] }],
+			roles: [makeRole('public')],
+			permissions: [{ role: 'ghost', permissions: [makePerm('articles', 'read'), makePerm('articles', 'read')] }],
 		});
 
-		const plan = computeConfigPlan(makeConfig(), desired);
-		const result = validateConfigPlan(plan, desired, { currentRoles: new Map() });
-
-		expect(result.errors).toHaveLength(1);
-		expect(result.errors[0]).toContain('ghost');
-	});
-
-	it('allows permission referencing role that exists in DB but not config', () => {
-		const desired = makeConfig({
-			permissions: [{ role: 'legacy', permissions: [makePerm('articles', 'read')] }],
-		});
-
-		const plan = computeConfigPlan(makeConfig(), desired);
-		const result = validateConfigPlan(plan, desired, { currentRoles: new Map([['legacy', { admin_access: false }]]) });
-
-		expect(result.errors).toEqual([]);
-	});
-
-	it('allows public permissions without a role entry', () => {
-		const desired = makeConfig({
-			permissions: [{ role: 'public', permissions: [makePerm('articles', 'read')] }],
-		});
+		(desired.manifest as any).version = 2;
 
 		const plan = computeConfigPlan(makeConfig(), desired);
 		const result = validateConfigPlan(plan, desired, { currentRoles: new Map() });
@@ -329,47 +309,6 @@ describe('validateConfigPlan', () => {
 
 		expect(result.errors).toHaveLength(1);
 		expect(result.errors[0]).toContain('last admin role');
-	});
-
-	it('errors when config version is unsupported', () => {
-		const desired = makeConfig();
-		(desired.manifest as any).version = 2;
-
-		const plan = computeConfigPlan(makeConfig(), desired);
-		const result = validateConfigPlan(plan, desired, { currentRoles: new Map() });
-
-		expect(result.errors).toHaveLength(1);
-		expect(result.errors[0]).toContain('Unsupported config version');
-	});
-
-	it('errors when a role uses reserved key "public"', () => {
-		const desired = makeConfig({
-			roles: [makeRole('public')],
-		});
-
-		const plan = computeConfigPlan(makeConfig(), desired);
-		const result = validateConfigPlan(plan, desired, { currentRoles: new Map() });
-
-		expect(result.errors.length).toBeGreaterThan(0);
-		expect(result.errors.some((e) => e.includes('reserved for public permissions'))).toBe(true);
-	});
-
-	it('errors on duplicate permission tuples', () => {
-		const desired = makeConfig({
-			roles: [makeRole('editor')],
-			permissions: [
-				{
-					role: 'editor',
-					permissions: [makePerm('articles', 'read'), makePerm('articles', 'read')],
-				},
-			],
-		});
-
-		const plan = computeConfigPlan(makeConfig(), desired);
-		const result = validateConfigPlan(plan, desired, { currentRoles: new Map() });
-
-		expect(result.errors.length).toBeGreaterThan(0);
-		expect(result.errors.some((e) => e.includes('Duplicate'))).toBe(true);
 	});
 });
 

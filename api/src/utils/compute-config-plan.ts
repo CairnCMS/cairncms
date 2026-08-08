@@ -1,4 +1,3 @@
-import { PUBLIC_ROLE_KEY } from '@cairncms/constants';
 import { isEqual } from 'lodash-es';
 import type {
 	ConfigKind,
@@ -131,42 +130,6 @@ export function validateConfigPlan(
 	context: { currentRoles: Map<string, { admin_access: boolean }> }
 ): ConfigPlanErrors {
 	const errors: string[] = [];
-
-	if (desired.manifest.version !== 1) {
-		errors.push(`Unsupported config version: ${desired.manifest.version}. This engine supports version 1.`);
-	}
-
-	for (const role of desired.roles) {
-		if (role.key === PUBLIC_ROLE_KEY) {
-			errors.push('Role key "public" is reserved for public permissions.');
-		}
-	}
-
-	const desiredRoleKeys = new Set(desired.roles.map((r) => r.key));
-
-	for (const permSet of desired.permissions) {
-		if (permSet.role === PUBLIC_ROLE_KEY) continue;
-
-		if (!desiredRoleKeys.has(permSet.role) && !context.currentRoles.has(permSet.role)) {
-			errors.push(`Permission set references role "${permSet.role}" which does not exist in config or database.`);
-		}
-	}
-
-	const seenTuples = new Set<string>();
-
-	for (const permSet of desired.permissions) {
-		for (const perm of permSet.permissions) {
-			const key = permKey(permSet.role, perm);
-
-			if (seenTuples.has(key)) {
-				errors.push(
-					`Duplicate permission: role="${permSet.role}" collection="${perm.collection}" action="${perm.action}".`
-				);
-			}
-
-			seenTuples.add(key);
-		}
-	}
 
 	if (plan.roles.delete.length > 0) {
 		const deletedKeys = new Set(plan.roles.delete);
