@@ -64,9 +64,11 @@ Each preset has:
 - **Quality** — output compression
 - **Upscaling** — whether the source can be enlarged
 - **Format** — output format
-- **Additional Transformations** — any further options passed through to the underlying image library
+- **Additional Transformations** — ordered Sharp operations applied after the preset's standard options. Presets support operations that URL transforms do not.
 
 Presets exist primarily to reduce the surface area of allowed asset URLs. If a public site requests `?key=thumb` instead of `?width=200&height=200&fit=cover&...`, it is harder for an attacker to fan out random sizes against your storage.
+
+The WebAssembly image fallback does not support `tile` or text input for `composite`. See [Image processing](/docs/manage/deployment/#image-processing).
 
 ### Mapping
 
