@@ -1,4 +1,4 @@
-import { PUBLIC_ROLE_ID } from '@cairncms/constants';
+import { PUBLIC_ROLE_ID, PUBLIC_ROLE_KEY } from '@cairncms/constants';
 import type { Query } from '@cairncms/types';
 import { normalizeRoleKey } from '@cairncms/utils';
 import { ForbiddenException, InvalidPayloadException, UnprocessableEntityException } from '../exceptions/index.js';
@@ -29,7 +29,7 @@ export class RolesService extends ItemsService {
 		return key;
 	}
 
-	private static readonly RESERVED_KEYS = new Set(['public']);
+	private static readonly RESERVED_KEYS = new Set([PUBLIC_ROLE_KEY]);
 
 	private static readonly SENTINEL_IMMUTABLE_FIELDS = new Set([
 		'admin_access',

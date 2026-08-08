@@ -8,7 +8,8 @@ import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import { ConfigUnsupportedVersionException } from '../exceptions/config-unsupported-version.js';
 import logger from '../logger.js';
 import { computeConfigPlan } from './compute-config-plan.js';
-import { readConfigDirectory } from './read-config-directory.js';
+import { resolveConfigRoot } from './config-path-safety.js';
+import { readConfigDirectory, readConfigManifest, readOptionalConfigManifest } from './read-config-directory.js';
 
 vi.mock('../logger.js', () => ({
 	default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
@@ -102,7 +103,8 @@ describe('readConfigDirectory', () => {
 
 	it('throws on missing resources array', async () => {
 		await fs.writeFile(path.join(tmpDir, 'cairncms-config.yaml'), toYaml({ version: 1 }));
-		await expect(readConfigDirectory(tmpDir)).rejects.toThrow('must declare a "resources" array');
+		await expect(readConfigDirectory(tmpDir)).rejects.toMatchObject({ code: 'CONFIG_INVALID' });
+		await expect(readConfigDirectory(tmpDir)).rejects.toThrow('"resources" is required');
 	});
 
 	it('throws when role file key does not match filename', async () => {
@@ -127,24 +129,17 @@ describe('readConfigDirectory', () => {
 		await expect(readConfigDirectory(tmpDir)).rejects.toThrow('missing "key" field');
 	});
 
-	it('throws when permission file references a non-existent role', async () => {
-		await writeManifest();
-		await writePermissions('ghost', []);
-
-		await expect(readConfigDirectory(tmpDir)).rejects.toThrow('no matching file in roles/');
-	});
-
-	it('allows permissions/public.yaml without a matching role file', async () => {
+	it('reads a permission set without requiring a matching role file', async () => {
 		await writeManifest();
 
-		await writePermissions('public', [
+		await writePermissions('editor', [
 			{ collection: 'articles', action: 'read', permissions: null, validation: null, presets: null, fields: null },
 		]);
 
 		const config = await readConfigDirectory(tmpDir);
 
 		expect(config.permissions).toHaveLength(1);
-		expect(config.permissions[0]!.role).toBe('public');
+		expect(config.permissions[0]!.role).toBe('editor');
 	});
 
 	it('substitutes variables inside the supported namespace', async () => {
@@ -411,5 +406,75 @@ describe('readConfigDirectory', () => {
 			{ status: 'published', published_on: '2024-01-01T00:00:00.000Z' },
 			{ status: 'published', published_on: '2024-01-01T00:00:00.000Z', approved: true },
 		]);
+	});
+});
+
+describe('readConfigManifest', () => {
+	it('returns the declaration from a tree that has one', async () => {
+		await writeManifest(['roles']);
+
+		const root = await resolveConfigRoot(tmpDir, 'read');
+
+		expect(await readConfigManifest(root)).toEqual({ version: 1, resources: ['roles'] });
+	});
+
+	it('rejects a tree with no declaration, because there is nothing to reconcile against', async () => {
+		const root = await resolveConfigRoot(tmpDir, 'read');
+
+		await expect(readConfigManifest(root)).rejects.toMatchObject({ code: 'CONFIG_INVALID' });
+	});
+});
+
+describe('readOptionalConfigManifest', () => {
+	it('reports a genuinely absent declaration as absent', async () => {
+		const root = await resolveConfigRoot(tmpDir, 'read');
+
+		expect(await readOptionalConfigManifest(root)).toBeNull();
+	});
+
+	it('returns the declaration when the tree has one', async () => {
+		await writeManifest([]);
+
+		const root = await resolveConfigRoot(tmpDir, 'read');
+
+		expect(await readOptionalConfigManifest(root)).toEqual({ version: 1, resources: [] });
+	});
+
+	it('refuses a declaration that is a link to nowhere instead of reporting absence', async () => {
+		await fs.symlink(path.join(tmpDir, 'gone.yaml'), path.join(tmpDir, 'cairncms-config.yaml'));
+
+		const root = await resolveConfigRoot(tmpDir, 'read');
+
+		await expect(readOptionalConfigManifest(root)).rejects.toMatchObject({ code: 'CONFIG_INVALID' });
+	});
+
+	it('refuses an unreadable declaration instead of reporting absence', async () => {
+		await writeManifest();
+
+		const root = await resolveConfigRoot(tmpDir, 'read');
+		const denied = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+		const readFile = vi.spyOn(fs, 'readFile').mockRejectedValueOnce(denied);
+
+		try {
+			await expect(readOptionalConfigManifest(root)).rejects.toMatchObject({ code: 'CONFIG_READ_FAILED' });
+		} finally {
+			readFile.mockRestore();
+		}
+	});
+
+	it('refuses a malformed declaration instead of reporting absence', async () => {
+		await fs.writeFile(path.join(tmpDir, 'cairncms-config.yaml'), 'version: 1\nresources: [roles\n');
+
+		const root = await resolveConfigRoot(tmpDir, 'read');
+
+		await expect(readOptionalConfigManifest(root)).rejects.toMatchObject({ code: 'CONFIG_INVALID' });
+	});
+
+	it('refuses an unsupported version instead of reporting absence', async () => {
+		await fs.writeFile(path.join(tmpDir, 'cairncms-config.yaml'), toYaml({ version: 99, resources: [] }));
+
+		const root = await resolveConfigRoot(tmpDir, 'read');
+
+		await expect(readOptionalConfigManifest(root)).rejects.toMatchObject({ code: 'CONFIG_UNSUPPORTED_VERSION' });
 	});
 });

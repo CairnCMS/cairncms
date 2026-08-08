@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { computeConfigPlan, validateConfigPlan } from './compute-config-plan.js';
-import type { CairnConfig } from '../types/config.js';
+import type { CairnConfig, ConfigKind } from '../types/config.js';
 
 const emptyManifest = { version: 1 as const, resources: ['roles' as const, 'permissions' as const] };
+
+function manifestFor(...resources: ConfigKind[]) {
+	return { version: 1 as const, resources };
+}
 
 function makeConfig(overrides?: Partial<CairnConfig>): CairnConfig {
 	return {
@@ -176,7 +180,7 @@ describe('computeConfigPlan', () => {
 		expect(plan.permissions.update).toHaveLength(1);
 	});
 
-	it('does not delete permissions for roles not in desired config', () => {
+	it('does not queue permissions for a role the plan deletes, because the cascade removes them', () => {
 		const current = makeConfig({
 			roles: [makeRole('editor'), makeRole('viewer')],
 			permissions: [
@@ -191,6 +195,8 @@ describe('computeConfigPlan', () => {
 		});
 
 		const plan = computeConfigPlan(current, desired);
+
+		expect(plan.roles.delete).toEqual(['viewer']);
 		expect(plan.permissions.delete).toEqual([]);
 	});
 
@@ -234,33 +240,13 @@ describe('validateConfigPlan', () => {
 		expect(result.errors).toEqual([]);
 	});
 
-	it('errors when permission references unknown role', () => {
+	it('checks only plan-dependent invariants, reporting no document-validity error', () => {
 		const desired = makeConfig({
-			permissions: [{ role: 'ghost', permissions: [makePerm('articles', 'read')] }],
+			roles: [makeRole('public')],
+			permissions: [{ role: 'ghost', permissions: [makePerm('articles', 'read'), makePerm('articles', 'read')] }],
 		});
 
-		const plan = computeConfigPlan(makeConfig(), desired);
-		const result = validateConfigPlan(plan, desired, { currentRoles: new Map() });
-
-		expect(result.errors).toHaveLength(1);
-		expect(result.errors[0]).toContain('ghost');
-	});
-
-	it('allows permission referencing role that exists in DB but not config', () => {
-		const desired = makeConfig({
-			permissions: [{ role: 'legacy', permissions: [makePerm('articles', 'read')] }],
-		});
-
-		const plan = computeConfigPlan(makeConfig(), desired);
-		const result = validateConfigPlan(plan, desired, { currentRoles: new Map([['legacy', { admin_access: false }]]) });
-
-		expect(result.errors).toEqual([]);
-	});
-
-	it('allows public permissions without a role entry', () => {
-		const desired = makeConfig({
-			permissions: [{ role: 'public', permissions: [makePerm('articles', 'read')] }],
-		});
+		(desired.manifest as any).version = 2;
 
 		const plan = computeConfigPlan(makeConfig(), desired);
 		const result = validateConfigPlan(plan, desired, { currentRoles: new Map() });
@@ -324,45 +310,91 @@ describe('validateConfigPlan', () => {
 		expect(result.errors).toHaveLength(1);
 		expect(result.errors[0]).toContain('last admin role');
 	});
+});
 
-	it('errors when config version is unsupported', () => {
-		const desired = makeConfig();
-		(desired.manifest as any).version = 2;
-
-		const plan = computeConfigPlan(makeConfig(), desired);
-		const result = validateConfigPlan(plan, desired, { currentRoles: new Map() });
-
-		expect(result.errors).toHaveLength(1);
-		expect(result.errors[0]).toContain('Unsupported config version');
-	});
-
-	it('errors when a role uses reserved key "public"', () => {
-		const desired = makeConfig({
-			roles: [makeRole('public')],
+describe('managed scope', () => {
+	it('leaves every permission alone in all directions when the manifest declares only roles', () => {
+		const current = makeConfig({
+			roles: [makeRole('editor'), makeRole('viewer')],
+			permissions: [
+				{ role: 'editor', permissions: [makePerm('articles', 'read'), makePerm('pages', 'read')] },
+				{ role: 'viewer', permissions: [makePerm('articles', 'read')] },
+			],
 		});
 
-		const plan = computeConfigPlan(makeConfig(), desired);
-		const result = validateConfigPlan(plan, desired, { currentRoles: new Map() });
-
-		expect(result.errors.length).toBeGreaterThan(0);
-		expect(result.errors.some((e) => e.includes('reserved for public permissions'))).toBe(true);
-	});
-
-	it('errors on duplicate permission tuples', () => {
 		const desired = makeConfig({
+			manifest: manifestFor('roles'),
 			roles: [makeRole('editor')],
 			permissions: [
 				{
 					role: 'editor',
-					permissions: [makePerm('articles', 'read'), makePerm('articles', 'read')],
+					permissions: [{ ...makePerm('articles', 'read'), fields: ['title'] }, makePerm('items', 'create')],
 				},
 			],
 		});
 
-		const plan = computeConfigPlan(makeConfig(), desired);
-		const result = validateConfigPlan(plan, desired, { currentRoles: new Map() });
+		const plan = computeConfigPlan(current, desired);
 
-		expect(result.errors.length).toBeGreaterThan(0);
-		expect(result.errors.some((e) => e.includes('Duplicate'))).toBe(true);
+		expect(plan.roles.delete).toEqual(['viewer']);
+		expect(plan.permissions).toEqual({ create: [], update: [], delete: [] });
+	});
+
+	it('leaves every role alone when the manifest declares only permissions', () => {
+		const current = makeConfig({ roles: [makeRole('editor'), makeRole('viewer')] });
+
+		const desired = makeConfig({
+			manifest: manifestFor('permissions'),
+			roles: [makeRole('editor', { name: 'Renamed' }), makeRole('author')],
+		});
+
+		const plan = computeConfigPlan(current, desired);
+
+		expect(plan.roles).toEqual({ create: [], update: [], delete: [] });
+	});
+
+	it('deletes a stale permission when roles are unmanaged, because no role deletion can cascade', () => {
+		const current = makeConfig({
+			roles: [makeRole('editor')],
+			permissions: [{ role: 'editor', permissions: [makePerm('articles', 'read')] }],
+		});
+
+		const desired = makeConfig({
+			manifest: manifestFor('permissions'),
+			roles: [],
+			permissions: [{ role: 'editor', permissions: [] }],
+		});
+
+		const plan = computeConfigPlan(current, desired);
+
+		expect(plan.permissions.delete).toEqual([{ roleKey: 'editor', collection: 'articles', action: 'read' }]);
+	});
+
+	it('queues nothing when the manifest declares no kinds', () => {
+		const current = makeConfig({
+			roles: [makeRole('editor')],
+			permissions: [{ role: 'editor', permissions: [makePerm('articles', 'read')] }],
+		});
+
+		const desired = makeConfig({
+			manifest: manifestFor(),
+			roles: [makeRole('viewer')],
+			permissions: [{ role: 'viewer', permissions: [makePerm('pages', 'update')] }],
+		});
+
+		expect(computeConfigPlan(current, desired)).toEqual({
+			roles: { create: [], update: [], delete: [] },
+			permissions: { create: [], update: [], delete: [] },
+		});
+	});
+
+	it('does not report a last-administrator error when roles are unmanaged', () => {
+		const current = makeConfig({ roles: [makeRole('admin', { admin_access: true })] });
+		const desired = makeConfig({ manifest: manifestFor('permissions'), roles: [] });
+
+		const plan = computeConfigPlan(current, desired);
+		const currentRoles = new Map([['admin', { admin_access: true }]]);
+
+		expect(plan.roles.delete).toEqual([]);
+		expect(validateConfigPlan(plan, desired, { currentRoles }).errors).toEqual([]);
 	});
 });

@@ -33,7 +33,7 @@ async function getBaseline(vendor: string): Promise<ConfigSnapshot> {
 
 async function applyConfig(
 	vendor: string,
-	desired: ConfigSnapshot,
+	desired: unknown,
 	options: { destructive?: boolean; dryRun?: boolean } = {}
 ) {
 	const req = request(getUrl(vendor))
@@ -44,12 +44,22 @@ async function applyConfig(
 	if (options.destructive) req.query({ destructive: 'true' });
 	if (options.dryRun) req.query({ dry_run: 'true' });
 
-	return req.send(desired);
+	return req.send(desired as object);
 }
 
 async function resetToBaseline(vendor: string): Promise<void> {
 	const baseline = await getBaseline(vendor);
-	await applyConfig(vendor, baseline, { destructive: true });
+	const response = await applyConfig(vendor, baseline, { destructive: true });
+	expect(response.statusCode).toBe(200);
+}
+
+/** Reads validation messages without depending on the transport envelope. */
+function errorMessages(response: { body: { errors?: unknown } }): string[] {
+	const errors = response.body.errors;
+	if (!Array.isArray(errors)) return [];
+	return errors.map((error: unknown) =>
+		typeof error === 'string' ? error : String((error as { message?: unknown }).message ?? '')
+	);
 }
 
 /**
@@ -564,6 +574,204 @@ describe('Config-as-Code API', () => {
 	});
 });
 
+describe('Config-as-Code managed scope', () => {
+	function sanitize(vendor: string): string {
+		return vendor.replace(/[^a-z0-9_]/gi, '_');
+	}
+
+	async function currentSnapshot(vendor: string): Promise<ConfigSnapshot> {
+		const response = await request(getUrl(vendor))
+			.get('/config/snapshot')
+			.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+		expect(response.statusCode).toBe(200);
+		return response.body.data as ConfigSnapshot;
+	}
+
+	describe('a roles-only destructive apply leaves permissions untouched', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const before = await currentSnapshot(vendor);
+			const desired = JSON.parse(JSON.stringify(before)) as ConfigSnapshot;
+			desired.manifest = { version: 1, resources: ['roles'] };
+			desired.permissions = [];
+
+			try {
+				const response = await applyConfig(vendor, desired, { destructive: true });
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.roles.deleted).toEqual([]);
+				expect(response.body.data.permissions.created).toBe(0);
+				expect(response.body.data.permissions.updated).toBe(0);
+				expect(response.body.data.permissions.deleted).toBe(0);
+
+				expect(await currentSnapshot(vendor)).toEqual(before);
+			} finally {
+				await resetToBaseline(vendor);
+			}
+		});
+	});
+
+	describe('an empty managed scope ignores malformed records and changes nothing', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const before = await currentSnapshot(vendor);
+
+			try {
+				const response = await applyConfig(
+					vendor,
+					{
+						manifest: { version: 1, resources: [] },
+						roles: [null, { nonsense: true }],
+						permissions: [{ role: 42, permissions: 'not-an-array' }],
+					},
+					{ destructive: true }
+				);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.roles.created).toEqual([]);
+				expect(response.body.data.roles.updated).toEqual([]);
+				expect(response.body.data.roles.deleted).toEqual([]);
+				expect(response.body.data.permissions.created).toBe(0);
+				expect(response.body.data.permissions.updated).toBe(0);
+				expect(response.body.data.permissions.deleted).toBe(0);
+
+				expect(await currentSnapshot(vendor)).toEqual(before);
+			} finally {
+				await resetToBaseline(vendor);
+			}
+		});
+	});
+
+	describe('a resources mapping is refused as CONFIG_INVALID and changes nothing', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const before = await currentSnapshot(vendor);
+
+			const response = await request(getUrl(vendor))
+				.post('/config/apply')
+				.query({ dry_run: 'true' })
+				.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+				.set('Content-Type', 'application/json')
+				.send({ manifest: { version: 1, resources: {} }, roles: [], permissions: [] });
+
+			expect(response.statusCode).toBe(400);
+			expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+
+			expect(await currentSnapshot(vendor)).toEqual(before);
+		});
+	});
+
+	describe('a permissions-only apply creates a permission for a role it does not manage', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const roleKey = `perm_only_${sanitize(vendor)}`;
+			const baseline = await getBaseline(vendor);
+
+			const withRole = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+			withRole.roles.push({ key: roleKey, name: 'Perm Only', admin_access: false, app_access: true });
+
+			try {
+				const create = await applyConfig(vendor, withRole);
+				expect(create.statusCode).toBe(200);
+				expect(create.body.data.roles.created).toContain(roleKey);
+
+				const rolesAfterSetup = (await currentSnapshot(vendor)).roles;
+
+				const permsOnly = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+				permsOnly.manifest = { version: 1, resources: ['permissions'] };
+				permsOnly.roles = [];
+
+				permsOnly.permissions.push({
+					role: roleKey,
+					permissions: [
+						{
+							collection: 'directus_files',
+							action: 'read',
+							permissions: null,
+							validation: null,
+							presets: null,
+							fields: ['*'],
+						},
+					],
+				});
+
+				const response = await applyConfig(vendor, permsOnly);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.permissions.created).toBe(1);
+				expect(response.body.data.permissions.updated).toBe(0);
+				expect(response.body.data.permissions.deleted).toBe(0);
+
+				const final = await currentSnapshot(vendor);
+				expect(final.roles).toEqual(rolesAfterSetup);
+
+				const set = final.permissions.find((p) => p.role === roleKey);
+				expect(set).toBeDefined();
+				expect(set!.permissions.find((p) => p.collection === 'directus_files')).toBeDefined();
+			} finally {
+				await resetToBaseline(vendor);
+			}
+		});
+	});
+
+	describe('a both-managed apply rejects a permission for a role it does not declare', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const roleKey = `ref_probe_${sanitize(vendor)}`;
+			const baseline = await getBaseline(vendor);
+
+			const withRole = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+			withRole.roles.push({ key: roleKey, name: 'Ref Probe', admin_access: false, app_access: true });
+
+			try {
+				expect((await applyConfig(vendor, withRole)).statusCode).toBe(200);
+				const afterCreate = await currentSnapshot(vendor);
+
+				const both = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+
+				both.permissions.push({
+					role: roleKey,
+					permissions: [
+						{
+							collection: 'directus_files',
+							action: 'read',
+							permissions: null,
+							validation: null,
+							presets: null,
+							fields: ['*'],
+						},
+					],
+				});
+
+				const response = await applyConfig(vendor, both);
+
+				expect(response.statusCode).toBe(400);
+				expect(errorMessages(response).some((message) => message.includes(roleKey))).toBe(true);
+
+				expect(await currentSnapshot(vendor)).toEqual(afterCreate);
+			} finally {
+				await resetToBaseline(vendor);
+			}
+		});
+	});
+
+	describe('an unknown role field is refused', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const baseline = await getBaseline(vendor);
+			const desired = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+
+			desired.roles.push({
+				key: `unknown_field_${sanitize(vendor)}`,
+				name: 'Unknown Field',
+				admin_access: false,
+				app_access: true,
+				bogus_field: true,
+			});
+
+			const response = await applyConfig(vendor, desired, { dryRun: true });
+
+			expect(response.statusCode).toBe(400);
+			expect(errorMessages(response).some((message) => message.includes('bogus_field'))).toBe(true);
+		});
+	});
+});
+
 describe('cairncms config apply refuses a tree it cannot read', () => {
 	let fixtureRoot: string;
 
@@ -641,11 +849,111 @@ describe('cairncms config apply refuses a tree it cannot read', () => {
 				})
 			);
 
-			expectApplyRefused(vendor, 'outside the CAIRNCMS_CONFIG_ namespace');
+			try {
+				expectApplyRefused(vendor, 'outside the CAIRNCMS_CONFIG_ namespace');
 
-			const after = await snapshotData(vendor);
-			expect(after).toEqual(before);
-			expect(after.roles.map((role) => role.key)).not.toContain('cli_probe');
+				const after = await snapshotData(vendor);
+				expect(after).toEqual(before);
+				expect(after.roles.map((role) => role.key)).not.toContain('cli_probe');
+			} finally {
+				await resetToBaseline(vendor);
+			}
+		});
+	});
+
+	describe('a role file with an unsupported field terminates nonzero and writes nothing', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const before = await snapshotData(vendor);
+			await writeManifest();
+			await fs.mkdir(path.join(fixtureRoot, 'roles'), { recursive: true });
+
+			await fs.writeFile(
+				path.join(fixtureRoot, 'roles', 'cli_unknown.yaml'),
+				dumpYaml({
+					key: 'cli_unknown',
+					name: 'CLI Unknown',
+					admin_access: false,
+					app_access: true,
+					bogus_field: true,
+				})
+			);
+
+			try {
+				expectApplyRefused(vendor, 'bogus_field');
+
+				const after = await snapshotData(vendor);
+				expect(after).toEqual(before);
+				expect(after.roles.map((role) => role.key)).not.toContain('cli_unknown');
+			} finally {
+				await resetToBaseline(vendor);
+			}
+		});
+	});
+});
+
+describe('cairncms config snapshot preserves managed scope', () => {
+	let fixtureRoot: string;
+
+	beforeEach(async () => {
+		fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'cairncms-config-snap-'));
+	});
+
+	afterEach(async () => {
+		await fs.rm(fixtureRoot, { recursive: true, force: true });
+	});
+
+	function runSnapshot(vendor: string) {
+		return spawnSync('node', ['--no-node-snapshot', paths.cli, 'config', 'snapshot', fixtureRoot, '--yes'], {
+			cwd: paths.cwd,
+			env: {
+				...config.envs[vendor as keyof typeof config.envs],
+				LOG_LEVEL: 'info',
+				LOG_STYLE: 'raw',
+			},
+			encoding: 'utf8',
+		});
+	}
+
+	async function readManifest(): Promise<{ resources: string[] }> {
+		return loadYaml(await fs.readFile(path.join(fixtureRoot, 'cairncms-config.yaml'), 'utf8')) as {
+			resources: string[];
+		};
+	}
+
+	describe('snapshotting a roles-only tree keeps it roles-only and leaves permission files untouched', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			await fs.writeFile(
+				path.join(fixtureRoot, 'cairncms-config.yaml'),
+				dumpYaml({ version: 1, resources: ['roles'] })
+			);
+
+			await fs.mkdir(path.join(fixtureRoot, 'permissions'), { recursive: true });
+
+			const survivor = path.join(fixtureRoot, 'permissions', 'editor.yaml');
+			const survivorBody = dumpYaml({ role: 'editor', permissions: [] });
+			await fs.writeFile(survivor, survivorBody);
+			await fs.writeFile(path.join(fixtureRoot, 'permissions', 'broken.yaml'), 'this: [not, valid');
+
+			const result = runSnapshot(vendor);
+
+			expect(result.error).toBeUndefined();
+			expect(result.status).toBe(0);
+			expect((await readManifest()).resources).toEqual(['roles']);
+
+			const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+			expect(output.match(/Leaving permissions unmanaged/g)?.length ?? 0).toBe(1);
+
+			expect(await fs.readFile(survivor, 'utf8')).toBe(survivorBody);
+		});
+	});
+
+	describe('snapshotting an empty directory manages every supported kind', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const result = runSnapshot(vendor);
+
+			expect(result.error).toBeUndefined();
+			expect(result.status).toBe(0);
+			expect((await readManifest()).resources.slice().sort()).toEqual(['permissions', 'roles']);
 		});
 	});
 });

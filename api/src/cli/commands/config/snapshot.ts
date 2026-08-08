@@ -2,7 +2,10 @@ import inquirer from 'inquirer';
 import getDatabase, { isInstalled, validateDatabaseConnection } from '../../../database/index.js';
 import logger from '../../../logger.js';
 import { readContainedDirectory, resolveConfigRoot } from '../../../utils/config-path-safety.js';
-import { getConfigSnapshot } from '../../../utils/get-config-snapshot.js';
+import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
+import { readOptionalConfigManifest } from '../../../utils/read-config-directory.js';
+import { replaceControlCharacters } from '../../../utils/safe-log-fragment.js';
+import { CONFIG_KINDS } from '../../../types/config.js';
 import { writeConfigDirectory } from '../../../utils/write-config-directory.js';
 
 export async function configSnapshot(targetPath: string, options?: { yes: boolean }): Promise<void> {
@@ -36,12 +39,23 @@ export async function configSnapshot(targetPath: string, options?: { yes: boolea
 			}
 		}
 
-		const config = await getConfigSnapshot({ database });
+		const declared = await readOptionalConfigManifest(resolved);
+		const resources = declared?.resources ?? CONFIG_KINDS;
+
+		const { config } = await readCurrentConfig({ database, resources });
 
 		await writeConfigDirectory(config, resolved);
 
+		const where = replaceControlCharacters(resolved);
+
+		for (const kind of CONFIG_KINDS) {
+			if (!config.manifest.resources.includes(kind)) {
+				logger.info(`Leaving ${kind} unmanaged: the manifest in ${where} does not declare it.`);
+			}
+		}
+
 		logger.info(
-			`Snapshot: ${config.roles.length} role(s), ${config.permissions.length} permission set(s) written to ${resolved}`
+			`Snapshot: ${config.roles.length} role(s), ${config.permissions.length} permission set(s) written to ${where}`
 		);
 
 		database.destroy();

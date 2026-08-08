@@ -1,5 +1,12 @@
 import { isEqual } from 'lodash-es';
-import type { ConfigPlan, ConfigPlanErrors, ConfigPermission, ConfigRole, CairnConfig } from '../types/config.js';
+import type {
+	ConfigKind,
+	ConfigPlan,
+	ConfigPlanErrors,
+	ConfigPermission,
+	ConfigRole,
+	CairnConfig,
+} from '../types/config.js';
 
 function permKey(roleKey: string, perm: ConfigPermission): string {
 	return `${roleKey}::${perm.collection}::${perm.action}`;
@@ -41,67 +48,75 @@ export function computeConfigPlan(current: CairnConfig, desired: CairnConfig): C
 		permissions: { create: [], update: [], delete: [] },
 	};
 
-	const currentRolesByKey = new Map(current.roles.map((r) => [r.key, r]));
-	const desiredRolesByKey = new Map(desired.roles.map((r) => [r.key, r]));
+	const managed = new Set<ConfigKind>(desired.manifest.resources);
 
-	for (const desiredRole of desired.roles) {
-		const currentRole = currentRolesByKey.get(desiredRole.key);
+	if (managed.has('roles')) {
+		const currentRolesByKey = new Map(current.roles.map((r) => [r.key, r]));
+		const desiredRolesByKey = new Map(desired.roles.map((r) => [r.key, r]));
 
-		if (!currentRole) {
-			plan.roles.create.push(desiredRole);
-		} else {
-			const diff = roleChanged(currentRole, desiredRole);
+		for (const desiredRole of desired.roles) {
+			const currentRole = currentRolesByKey.get(desiredRole.key);
 
-			if (diff) {
-				plan.roles.update.push({ key: desiredRole.key, diff });
+			if (!currentRole) {
+				plan.roles.create.push(desiredRole);
+			} else {
+				const diff = roleChanged(currentRole, desiredRole);
+
+				if (diff) {
+					plan.roles.update.push({ key: desiredRole.key, diff });
+				}
+			}
+		}
+
+		for (const currentRole of current.roles) {
+			if (!desiredRolesByKey.has(currentRole.key)) {
+				plan.roles.delete.push(currentRole.key);
 			}
 		}
 	}
 
-	for (const currentRole of current.roles) {
-		if (!desiredRolesByKey.has(currentRole.key)) {
-			plan.roles.delete.push(currentRole.key);
-		}
-	}
+	if (managed.has('permissions')) {
+		const currentPermsByKey = new Map<string, ConfigPermission>();
 
-	const currentPermsByKey = new Map<string, ConfigPermission>();
-
-	for (const permSet of current.permissions) {
-		for (const perm of permSet.permissions) {
-			currentPermsByKey.set(permKey(permSet.role, perm), perm);
-		}
-	}
-
-	const desiredPermKeys = new Set<string>();
-
-	for (const permSet of desired.permissions) {
-		for (const perm of permSet.permissions) {
-			const key = permKey(permSet.role, perm);
-			desiredPermKeys.add(key);
-
-			const currentPerm = currentPermsByKey.get(key);
-
-			if (!currentPerm) {
-				plan.permissions.create.push({ roleKey: permSet.role, permission: perm });
-			} else if (permChanged(currentPerm, perm)) {
-				plan.permissions.update.push({ roleKey: permSet.role, permission: perm });
+		for (const permSet of current.permissions) {
+			for (const perm of permSet.permissions) {
+				currentPermsByKey.set(permKey(permSet.role, perm), perm);
 			}
 		}
-	}
 
-	for (const permSet of current.permissions) {
-		const roleInDesired = desiredRolesByKey.has(permSet.role) || permSet.role === 'public';
-		if (!roleInDesired) continue;
+		const desiredPermKeys = new Set<string>();
 
-		for (const perm of permSet.permissions) {
-			const key = permKey(permSet.role, perm);
+		for (const permSet of desired.permissions) {
+			for (const perm of permSet.permissions) {
+				const key = permKey(permSet.role, perm);
+				desiredPermKeys.add(key);
 
-			if (!desiredPermKeys.has(key)) {
-				plan.permissions.delete.push({
-					roleKey: permSet.role,
-					collection: perm.collection,
-					action: perm.action,
-				});
+				const currentPerm = currentPermsByKey.get(key);
+
+				if (!currentPerm) {
+					plan.permissions.create.push({ roleKey: permSet.role, permission: perm });
+				} else if (permChanged(currentPerm, perm)) {
+					plan.permissions.update.push({ roleKey: permSet.role, permission: perm });
+				}
+			}
+		}
+
+		const deletedRoleKeys = new Set(plan.roles.delete);
+
+		for (const permSet of current.permissions) {
+			// Role deletion cascades to its permissions, so the plan does not list them separately.
+			if (deletedRoleKeys.has(permSet.role)) continue;
+
+			for (const perm of permSet.permissions) {
+				const key = permKey(permSet.role, perm);
+
+				if (!desiredPermKeys.has(key)) {
+					plan.permissions.delete.push({
+						roleKey: permSet.role,
+						collection: perm.collection,
+						action: perm.action,
+					});
+				}
 			}
 		}
 	}
@@ -115,42 +130,6 @@ export function validateConfigPlan(
 	context: { currentRoles: Map<string, { admin_access: boolean }> }
 ): ConfigPlanErrors {
 	const errors: string[] = [];
-
-	if (desired.manifest.version !== 1) {
-		errors.push(`Unsupported config version: ${desired.manifest.version}. This engine supports version 1.`);
-	}
-
-	for (const role of desired.roles) {
-		if (role.key === 'public') {
-			errors.push('Role key "public" is reserved for public permissions.');
-		}
-	}
-
-	const desiredRoleKeys = new Set(desired.roles.map((r) => r.key));
-
-	for (const permSet of desired.permissions) {
-		if (permSet.role === 'public') continue;
-
-		if (!desiredRoleKeys.has(permSet.role) && !context.currentRoles.has(permSet.role)) {
-			errors.push(`Permission set references role "${permSet.role}" which does not exist in config or database.`);
-		}
-	}
-
-	const seenTuples = new Set<string>();
-
-	for (const permSet of desired.permissions) {
-		for (const perm of permSet.permissions) {
-			const key = permKey(permSet.role, perm);
-
-			if (seenTuples.has(key)) {
-				errors.push(
-					`Duplicate permission: role="${permSet.role}" collection="${perm.collection}" action="${perm.action}".`
-				);
-			}
-
-			seenTuples.add(key);
-		}
-	}
 
 	if (plan.roles.delete.length > 0) {
 		const deletedKeys = new Set(plan.roles.delete);

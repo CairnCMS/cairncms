@@ -5,7 +5,7 @@ sidebar:
   order: 8
 ---
 
-CairnCMS treats roles and permissions as state that lives next to your data model that can be captured to a file, reviewed as a diff, and applied to other environments. The same machinery powers two surfaces: a `cairncms config` CLI that operates on a directory tree, and a `/config/*` HTTP API that operates on a single JSON or YAML payload. Both flow through the same plan/apply engine, with one structural difference at the input layer — see [Two surfaces, one engine](#two-surfaces-one-engine) below.
+CairnCMS treats project configuration, including roles and permissions, as state that can be captured in files, reviewed as a diff, and applied to another instance. The CLI reads a directory tree, while the HTTP API reads a single JSON or YAML document. Both feed the same planning and apply engine.
 
 This page covers what config-as-code captures, the CLI workflow, the HTTP equivalent, and the operator practices that make the two work together.
 
@@ -25,7 +25,15 @@ It does not contain:
 
 Roles with `admin_access: true` are captured like any other role, but the engine refuses applies that would leave the deployment with no role flagged as `admin_access: true` — see [Validation](#validation) below.
 
-Use config-as-code for the access-control side of the model. Use schema-as-code for structure. Use database backups for the actual user data.
+Use schema-as-code for collections, fields, and relations. Use database backups for content and user data.
+
+## Managed scope
+
+The `resources` list in `cairncms-config.yaml` defines which resource kinds the config manages. CairnCMS reconciles only the listed kinds. An empty list manages nothing. When snapshotting into an existing directory, the CLI preserves the manifest's scope. Change the manifest explicitly to start or stop managing a kind.
+
+Roles and permissions can be managed independently. When both are managed, each permission set must reference a role declared in the config. When only permissions are managed, role references resolve against roles already in the target database.
+
+Deleting a managed role still runs the platform's normal role-deletion cascade. Its permissions and presets are deleted, and users assigned to it are suspended and unassigned, even when those related resources are not managed by the manifest. Review the dry-run output before applying a deletion.
 
 ## Two surfaces, one engine
 
@@ -33,19 +41,14 @@ The CLI and the HTTP API share the same plan/apply engine but differ in how they
 
 | | CLI | HTTP API |
 |---|---|---|
-| Format | Directory tree | Single flat payload |
+| Format | Directory tree | Single document |
 | Source format | YAML files | YAML or JSON |
 | Invocation | Local `cairncms` binary | Bearer-authed HTTP |
 | Safety | Interactive confirmation | Opt-in query flags |
 
 The CLI suits local development and GitOps pipelines where the directory tree is committed to source control and applied by a runner that has container access. The HTTP API suits remote instances behind a load balancer, automation that lives outside the container, and tooling in any language.
 
-The two are mostly substitutable. Using snapshot via one, and apply via the other works in practice with one structural divergence at the input layer:
-
-- **The CLI directory reader is strict about role/permission file pairing.** A `permissions/<key>.yaml` whose role does not have a matching `roles/<key>.yaml` (other than the reserved `public`) is rejected at read time.
-- **The HTTP apply path is permissive in the same situation.** A permission set whose `role` is omitted from `roles[]` in the payload is allowed if a role with that key already exists in the database. This makes payloads that only update permissions without re-stating roles a working pattern over HTTP.
-
-Both behaviors are intentional: the CLI surface is opinionated about the directory shape it reads, while the HTTP surface accepts narrower payloads that target an already-bootstrapped database. If you need consistent validation across both, run `--dry-run` against the directory tree before posting any narrowed payload to HTTP.
+After loading input, both surfaces interpret managed scope and compute and apply changes the same way. The CLI also checks that each filename matches the identity declared by its record. For example, `roles/editor.yaml` must declare `key: editor`. HTTP payloads have no filenames, so this check does not apply.
 
 ## The CLI
 
@@ -86,11 +89,12 @@ cairncms config apply ./config
 
 The flow:
 
-1. Load the directory tree into a single payload.
-2. Read the current database state and compute a plan (creates, updates, deletes).
-3. Validate the plan (manifest version, last-admin-role protection, undefined-role references, duplicate permission tuples).
-4. If the plan is empty, log `No changes to apply` and exit.
-5. Print the plan summary, prompt for confirmation, then apply.
+1. Load the directory tree.
+2. Read the required current database state.
+3. Validate the desired config.
+4. Compute and validate the plan.
+5. If the plan is empty, log `No changes to apply` and exit.
+6. Print the plan summary, prompt for confirmation, then apply.
 
 Three flags adjust the flow:
 
@@ -170,26 +174,32 @@ If you need to inspect the plan before applying, use `?dry_run=true` and read th
 
 Both CLI and API follow the same omit-versus-null rule:
 
-- **Omitted optional role fields are preserved, not cleared.** If a role payload omits `icon`, `description`, or `enforce_tfa`, the database value is left untouched.
-- **Explicitly null fields are cleared.** To unset a nullable field like `description`, `ip_access`, and others, set it to `null` in the payload.
+- **Omitted optional role fields are preserved.** If a role payload omits `icon`, `description`, `enforce_tfa`, or `ip_access`, the database value is left unchanged.
+- **Explicitly null fields are cleared.** Only `description` and `ip_access` accept `null`.
 
-This matches the schema-as-code semantic: the snapshot describes the desired state of the fields it mentions, not the desired state of every field.
+An apply changes only the fields present in the declaration. Generated snapshots include the complete supported field set for reproducibility.
+
+### Supported fields
+
+Each resource kind accepts only the fields defined by its config format. Unknown fields stop the apply instead of being ignored.
+
+Fields outside this contract are not exported or updated by config-as-code. They remain part of the database record and are removed if that record is deleted.
 
 ## Validation
 
-Config files and HTTP request bodies use the same structural checks. Before applying, the engine validates the plan and rejects the entire apply if any check fails. The validation surface:
+After their input-specific checks, both surfaces validate the same config contract. The engine rejects the entire apply if either the desired config or the resulting plan fails validation. Validation includes:
 
 - **Readable state** — an unreadable manifest, managed directory, config record, or current database value stops the run before a plan is created.
 - **Supported document values** — config values must round-trip without changing meaning. Binary YAML values and non-finite numbers are rejected. Dates remain supported and normalize to ISO 8601 strings. Documents nested deeper than 100 levels or using more than 50 YAML aliases to mappings or sequences are outside the supported range.
 - **Manifest version** — only versions the engine recognizes are accepted. Future-format payloads are rejected rather than partially applied.
 - **Last admin role protection** — an apply that would leave the deployment with no role flagged as `admin_access: true` is rejected. There is no override and no special "Administrator" entity. The protection is purely about the flag, on whatever roles carry it.
-- **Undefined role references** — a permission set whose `role` is missing from both the payload's `roles[]` and the existing database is rejected. The HTTP path tolerates references to roles that exist in the database but are absent from the payload; the CLI rejects them at directory-read time before the engine sees them.
+- **Undefined role references** — a permission set whose `role` cannot be resolved is rejected, identically on both surfaces. When the config manages roles, the role must be declared in the config. When it does not, the role must already exist in the database (see [Managed scope](#managed-scope)).
 - **Duplicate permission tuples** — two rules in the same role's set targeting the same `(collection, action)` are rejected. Permissions must be unique on that tuple.
 - **Reserved key misuse** — the `public` key in `roles[]` is rejected. The Public role record is platform-managed and cannot be created or updated as a role definition. The same `public` key in `permissions[]` is the supported way to manage Public access.
 
-When validation fails, the API returns a 400 with a flat `errors` array of human-readable messages so all failures surface in one response. The CLI prints the messages and exits with a distinct code (`2`) so CI can distinguish validation failures from connection failures or runtime errors.
+Validation failures are reported without applying changes.
 
-Config-as-code reads current state without running extension query filters, read filters, or read actions. Mutation events are unchanged.
+Config-as-code reads current state without running extension query filters, read filters, or read actions.
 
 ## Source-control workflow
 

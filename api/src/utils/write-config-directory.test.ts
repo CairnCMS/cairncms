@@ -431,4 +431,44 @@ describe('writeConfigDirectory', () => {
 
 		await expect(writeConfigDirectory(makeConfig(), tmpDir)).rejects.toThrow(ConfigInvalidException);
 	});
+
+	it('leaves an unmanaged kind on disk untouched, even when the config carries records for it', async () => {
+		await fs.mkdir(path.join(tmpDir, 'permissions'), { recursive: true });
+
+		const survivor = path.join(tmpDir, 'permissions', 'editor.yaml');
+		const contents = dumpYaml({ role: 'editor', permissions: [] });
+		await fs.writeFile(survivor, contents);
+
+		const config = makeConfig({
+			manifest: { version: 1, resources: ['roles'] },
+			roles: [{ key: 'editor', name: 'Editor', admin_access: false, app_access: true }],
+			permissions: [
+				{
+					role: 'editor',
+					permissions: [
+						{
+							collection: 'articles',
+							action: 'read',
+							permissions: null,
+							validation: null,
+							presets: null,
+							fields: null,
+						},
+					],
+				},
+			],
+		});
+
+		await writeConfigDirectory(config, tmpDir);
+
+		expect(await fs.readFile(survivor, 'utf8')).toBe(contents);
+	});
+
+	it('does not create a directory for an unmanaged kind', async () => {
+		const config = makeConfig({ manifest: { version: 1, resources: ['roles'] } });
+
+		await writeConfigDirectory(config, tmpDir);
+
+		expect(await fs.readdir(tmpDir)).toEqual(['cairncms-config.yaml', 'roles']);
+	});
 });
