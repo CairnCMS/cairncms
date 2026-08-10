@@ -12,6 +12,14 @@ export default ({ filter, action }, { database }) => {
 		return payload;
 	});
 
+	filter('confined_tenant_records.items.create', (payload) => {
+		if (payload.title === 'canary-modify') {
+			return { ...payload, public_body: 'canary-touched' };
+		}
+
+		return payload;
+	});
+
 	action('confined_tenant_records.items.read', async () => {
 		await record('read');
 	});

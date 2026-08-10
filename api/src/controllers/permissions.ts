@@ -65,15 +65,18 @@ const readHandler = asyncHandler(async (req, res, next) => {
 
 	let result;
 
+	// Permission reads are intentionally unbounded so the app never renders a truncated permission set.
+	const temporaryQuery = { ...req.sanitizedQuery, limit: -1 };
+
 	if (req.singleton) {
-		result = await service.readSingleton(req.sanitizedQuery);
+		result = await service.readSingleton(temporaryQuery);
 	} else if (req.body.keys) {
-		result = await service.readMany(req.body.keys, req.sanitizedQuery);
+		result = await service.readMany(req.body.keys, temporaryQuery);
 	} else {
-		result = await service.readByQuery(req.sanitizedQuery);
+		result = await service.readByQuery(temporaryQuery);
 	}
 
-	const meta = await metaService.getMetaForQuery('directus_permissions', req.sanitizedQuery);
+	const meta = await metaService.getMetaForQuery('directus_permissions', temporaryQuery);
 
 	res.locals['payload'] = { data: result, meta };
 	return next();

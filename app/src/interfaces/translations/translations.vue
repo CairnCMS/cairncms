@@ -66,7 +66,7 @@
 </template>
 
 <script setup lang="ts">
-import api from '@/api';
+import { fetchAll } from '@/utils/fetch-all';
 import VDivider from '@/components/v-divider.vue';
 import VForm from '@/components/v-form/v-form.vue';
 import VIcon from '@/components/v-icon/v-icon.vue';
@@ -78,11 +78,11 @@ import vTooltip from '@/directives/tooltip';
 import { useFieldsStore } from '@/stores/fields';
 import { usePermissionsStore } from '@/stores/permissions';
 import { unexpectedError } from '@/utils/unexpected-error';
-import { toArray } from '@cairncms/utils';
 import { cloneDeep, isNil } from 'lodash';
 import { computed, ref, toRefs, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import LanguageSelect from './language-select.vue';
+import { getEndpoint } from '@cairncms/utils';
 
 const props = withDefaults(
 	defineProps<{
@@ -291,15 +291,15 @@ function useLanguages() {
 		loading.value = true;
 
 		try {
-			const response = await api.get<any>(`/items/${relationInfo.value.relatedCollection.collection}`, {
-				params: {
-					fields: Array.from(fields),
-					limit: -1,
-					sort: props.languageField ?? pkField,
-				},
-			});
-
-			languages.value = response.data.data ? toArray(response.data.data) : [];
+			languages.value = await fetchAll<Record<string, any>>(
+				getEndpoint(relationInfo.value.relatedCollection.collection),
+				{
+					params: {
+						fields: Array.from(fields),
+						sort: props.languageField ?? pkField,
+					},
+				}
+			);
 
 			if (!firstLang.value) {
 				const userLocale = userLanguage.value ? locale.value : defaultLanguage.value;

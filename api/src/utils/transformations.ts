@@ -4,9 +4,12 @@ export function resolvePreset({ transformationParams, acceptFormat }: Transforma
 	const transforms = transformationParams.transforms ? [...transformationParams.transforms] : [];
 
 	if (transformationParams.format || transformationParams.quality) {
+		// sharp 0.35 dropped "jpg" from its format type but still accepts it at runtime as jpeg.
+		const format = getFormat(file, transformationParams.format, acceptFormat) as Exclude<TransformationFormat, 'jpg'>;
+
 		transforms.push([
 			'toFormat',
-			getFormat(file, transformationParams.format, acceptFormat),
+			format,
 			{
 				quality: transformationParams.quality ? Number(transformationParams.quality) : undefined,
 			},

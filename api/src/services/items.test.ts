@@ -9,6 +9,7 @@ import { getDatabaseClient } from '../../src/database/index.js';
 import { ItemsService } from '../../src/services/index.js';
 import { sqlFieldFormatter, sqlFieldList } from '../__utils__/items-utils.js';
 import { systemSchema, userSchema } from '../__utils__/schemas.js';
+import env from '../env.js';
 import { InvalidPayloadException } from '../exceptions/index.js';
 
 vi.mock('../env', async () => {
@@ -61,6 +62,48 @@ describe('Integration Tests', () => {
 
 	afterEach(() => {
 		tracker.reset();
+	});
+
+	describe('createMutationTracker', () => {
+		const service = () =>
+			new ItemsService(schemas['user'].tables[0], { knex: db, accountability: null, schema: schemas['user'].schema });
+
+		let originalMax: unknown;
+
+		beforeEach(() => {
+			originalMax = env['MAX_BATCH_MUTATION'];
+			env['MAX_BATCH_MUTATION'] = 1000;
+		});
+
+		afterEach(() => {
+			env['MAX_BATCH_MUTATION'] = originalMax;
+		});
+
+		it('caps mutations at an explicit maxCount override below the operator limit', () => {
+			const tracker = service().createMutationTracker(0, { maxCount: 3 });
+			expect(() => tracker.trackMutations(3)).not.toThrow();
+			expect(() => tracker.trackMutations(1)).toThrow(InvalidPayloadException);
+		});
+
+		it('uses the operator MAX_BATCH_MUTATION when no override is given', () => {
+			env['MAX_BATCH_MUTATION'] = 2;
+			const tracker = service().createMutationTracker();
+			expect(() => tracker.trackMutations(2)).not.toThrow();
+			expect(() => tracker.trackMutations(1)).toThrow(InvalidPayloadException);
+		});
+
+		it('takes the lower of the operator limit and the override', () => {
+			env['MAX_BATCH_MUTATION'] = 2;
+			const tracker = service().createMutationTracker(0, { maxCount: 5 });
+			expect(() => tracker.trackMutations(2)).not.toThrow();
+			expect(() => tracker.trackMutations(1)).toThrow(InvalidPayloadException);
+		});
+
+		it('counts from a nonzero initial count against the override', () => {
+			const tracker = service().createMutationTracker(2, { maxCount: 3 });
+			expect(() => tracker.trackMutations(1)).not.toThrow();
+			expect(() => tracker.trackMutations(1)).toThrow(InvalidPayloadException);
+		});
 	});
 
 	describe('createOne', () => {

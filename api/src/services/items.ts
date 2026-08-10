@@ -55,8 +55,9 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 		return this;
 	}
 
-	createMutationTracker(initialCount = 0): MutationTracker {
-		const maxCount = Number(env['MAX_BATCH_MUTATION']);
+	createMutationTracker(initialCount = 0, options?: { maxCount?: number }): MutationTracker {
+		const envMax = Number(env['MAX_BATCH_MUTATION']);
+		const maxCount = options?.maxCount === undefined ? envMax : Math.min(envMax, options.maxCount);
 		let mutationCount = initialCount;
 		return {
 			trackMutations(count: number) {

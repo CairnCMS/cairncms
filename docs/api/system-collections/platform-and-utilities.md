@@ -59,6 +59,7 @@ Returns a `data` envelope whose contents depend on the caller's accountability:
 
 - **Unauthenticated callers** receive only the public branding subset: `project.project_name`, `project_descriptor`, `project_logo`, `project_color`, `default_language`, `public_foreground`, `public_background`, `public_note`, and `custom_css`. This is what the admin app reads on the login screen before the user has authenticated.
 - **Authenticated users** additionally receive `rateLimit` and `rateLimitGlobal` blocks describing the configured rate-limiter policy.
+- **Authenticated users and share sessions** receive a `queryLimit` block with `default` and `max`, the configured query-limit policy. The admin app reads it to size its paginated requests. A `max` of `-1` means no ceiling.
 - **Admins** additionally receive `cairncms.version`.
 
 The platform version is admin-only on this endpoint. Clients that need to detect the running version without admin credentials should look at the package's published version channel rather than reading it from `/server/info`.
@@ -385,6 +386,8 @@ Body fields:
 - **`file`** (optional) — metadata for the resulting `directus_files` row. Useful for placing the export in a specific folder.
 
 The export creates a new file in `directus_files` with the result content. Watch `directus_files` for the new row to know when the export has finished.
+
+The top-level `limit` accepted here is `-1` or an integer of at least `0`, and a `null` or omitted limit is treated as unlimited. Anything else returns `400 INVALID_QUERY`. Because the export streams to a file in batches, its top-level row count is exempt from `QUERY_LIMIT_MAX`: `-1`, `null`, or an omitted limit exports every matching row, and a positive `limit` above the ceiling is honored. A `limit` of `0` produces a format-valid empty export, `[]` for JSON and an empty file for CSV. Nested relational lists keep ordinary query-limit behavior, so a nested `_limit` above a configured maximum is rejected (see [Query limits](/docs/manage/configuration/#query-limits)).
 
 ### `POST /utils/cache/clear`
 

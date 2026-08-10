@@ -106,7 +106,7 @@
 </template>
 
 <script setup lang="ts">
-import api from '@/api';
+import { fetchAll } from '@/utils/fetch-all';
 import { useEditsGuard } from '@/composables/use-edits-guard';
 import { useItem } from '@/composables/use-item';
 import { useShortcut } from '@/composables/use-shortcut';
@@ -135,11 +135,9 @@ const roles = ref<RoleSummary[] | null>(null);
 
 onMounted(async () => {
 	try {
-		const response = await api.get('/roles', {
-			params: { fields: ['id', 'admin_access'], limit: -1 },
+		roles.value = await fetchAll<RoleSummary>('/roles', {
+			params: { fields: ['id', 'admin_access'], sort: ['id'] },
 		});
-
-		roles.value = response.data.data;
 	} catch (error: any) {
 		unexpectedError(error);
 	}

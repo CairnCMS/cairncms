@@ -461,9 +461,21 @@ export function createConfinedHostBroker(
 
 		if (call.method === 'request.send') return serveRequest(call.args, context, signal);
 
-		if (call.method === 'items.read') return itemsHost.read(call.args, signal);
+		if (call.method === 'items.readMany') return itemsHost.readMany(call.args, signal);
 
 		if (call.method === 'items.readOne') return itemsHost.readOne(call.args, signal);
+
+		if (call.method === 'items.createOne') return itemsHost.createOne(call.args, signal);
+
+		if (call.method === 'items.createMany') return itemsHost.createMany(call.args, signal);
+
+		if (call.method === 'items.updateOne') return itemsHost.updateOne(call.args, signal);
+
+		if (call.method === 'items.updateMany') return itemsHost.updateMany(call.args, signal);
+
+		if (call.method === 'items.deleteOne') return itemsHost.deleteOne(call.args, signal);
+
+		if (call.method === 'items.deleteMany') return itemsHost.deleteMany(call.args, signal);
 
 		if (call.method === 'template.renderLiquid') return templateHost.renderLiquid(call.args, signal);
 

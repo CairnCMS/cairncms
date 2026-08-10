@@ -516,5 +516,25 @@ describe('Settings Extensions collection', () => {
 			expect(caps.text()).toContain('GET');
 			expect(caps.text()).toContain('https://api.example.com');
 		});
+
+		it('renders the accountability mode of an items capability', async () => {
+			const elevated = {
+				name: 'cairn-elevated-op',
+				type: 'operation',
+				local: true,
+				status: 'loaded',
+				capabilities: { items: { accountability: 'full-access' } },
+			};
+
+			vi.mocked(api.get).mockResolvedValue({ data: { data: [elevated] } });
+
+			const wrapper = mountCollection();
+			await flushPromises();
+			await rowFor(wrapper, 'cairn-elevated-op')!.trigger('click');
+			await nextTick();
+
+			const caps = wrapper.find('.v-dialog .detail-capabilities');
+			expect(caps.text()).toContain('items: full-access');
+		});
 	});
 });

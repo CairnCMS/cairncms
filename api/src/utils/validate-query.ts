@@ -5,13 +5,16 @@ import { stringify } from 'wellknown';
 import env from '../env.js';
 import { InvalidQueryException } from '../exceptions/invalid-query.js';
 import { calculateFieldDepth } from './calculate-field-depth.js';
+import { getQueryLimitConfig, hasFiniteMax } from './query-limit.js';
+
+export const baseLimitSchema = Joi.number().integer().min(-1).label('limit');
 
 const querySchema = Joi.object({
 	fields: Joi.array().items(Joi.string()),
 	group: Joi.array().items(Joi.string()),
 	sort: Joi.array().items(Joi.string()),
 	filter: Joi.object({}).unknown(),
-	limit: Joi.number().integer().min(-1),
+	limit: baseLimitSchema,
 	offset: Joi.number().integer().min(0),
 	page: Joi.number().integer().min(0),
 	meta: Joi.array().items(Joi.string().valid('total_count', 'filter_count')),
@@ -22,8 +25,24 @@ const querySchema = Joi.object({
 	alias: Joi.object(),
 }).id('query');
 
+function getConfiguredLimitSchema() {
+	const queryLimit = getQueryLimitConfig(env);
+	return hasFiniteMax(queryLimit) ? baseLimitSchema.max(queryLimit.max) : baseLimitSchema;
+}
+
+export function validateDeepQueryLimits(deep: Record<string, any>): void {
+	validateDeepLimits(deep, getConfiguredLimitSchema());
+}
+
 export function validateQuery(query: Query): Query {
 	const { error } = querySchema.validate(query);
+
+	const limitSchema = getConfiguredLimitSchema();
+
+	if (query.limit !== undefined) {
+		const { error: limitError } = limitSchema.validate(query.limit);
+		if (limitError) throw new InvalidQueryException(limitError.message);
+	}
 
 	if (query.filter && Object.keys(query.filter).length > 0) {
 		validateFilter(query.filter);
@@ -33,6 +52,10 @@ export function validateQuery(query: Query): Query {
 		validateAlias(query.alias);
 	}
 
+	if (query.deep) {
+		validateDeepLimits(query.deep, limitSchema);
+	}
+
 	validateRelationalDepth(query);
 
 	if (error) {
@@ -40,6 +63,17 @@ export function validateQuery(query: Query): Query {
 	}
 
 	return query;
+}
+
+function validateDeepLimits(deep: Record<string, any>, limitSchema: Joi.NumberSchema) {
+	for (const [key, value] of Object.entries(deep)) {
+		if (key === '_limit') {
+			const { error } = limitSchema.validate(value);
+			if (error) throw new InvalidQueryException(error.message);
+		} else if (!key.startsWith('_') && isPlainObject(value)) {
+			validateDeepLimits(value as Record<string, any>, limitSchema);
+		}
+	}
 }
 
 function validateFilter(filter: Query['filter']) {

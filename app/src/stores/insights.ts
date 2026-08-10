@@ -10,6 +10,7 @@ import { nanoid } from 'nanoid';
 import { acceptHMRUpdate, defineStore } from 'pinia';
 import { computed, reactive, ref, unref } from 'vue';
 import { Dashboard } from '@/types/insights';
+import { fetchAll } from '@/utils/fetch-all';
 import escapeStringRegexp from 'escape-string-regexp';
 import { useExtensions } from '@/extensions';
 
@@ -110,14 +111,14 @@ export const useInsightsStore = defineStore('insightsStore', () => {
 		) {
 			try {
 				const [dashboardsResponse, panelsResponse] = await Promise.all([
-					api.get<any>('/dashboards', {
-						params: { limit: -1, fields: ['*'], sort: ['name'] },
+					fetchAll<Dashboard>('/dashboards', {
+						params: { fields: ['*'], sort: ['name'] },
 					}),
-					api.get('/panels', { params: { limit: -1, fields: ['*'], sort: ['dashboard'] } }),
+					fetchAll<Panel>('/panels', { params: { fields: ['*'], sort: ['dashboard'] } }),
 				]);
 
-				dashboards.value = dashboardsResponse.data.data;
-				panels.value = panelsResponse.data.data;
+				dashboards.value = dashboardsResponse;
+				panels.value = panelsResponse;
 			} catch {
 				dashboards.value = [];
 				panels.value = [];

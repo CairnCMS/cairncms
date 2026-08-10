@@ -16,6 +16,7 @@ import { UtilsService } from '../services/utils.js';
 import asyncHandler from '../utils/async-handler.js';
 import { generateHash } from '../utils/generate-hash.js';
 import { sanitizeQuery } from '../utils/sanitize-query.js';
+import { baseLimitSchema, validateDeepQueryLimits } from '../utils/validate-query.js';
 import { verifyHash } from '../utils/verify-hash.js';
 
 const router = Router();
@@ -163,7 +164,26 @@ router.post(
 			schema: req.schema,
 		});
 
-		const sanitizedQuery = sanitizeQuery(req.body.query, req.accountability ?? null);
+		const rawLimit = req.body.query.limit;
+		let requestedUnlimited = false;
+
+		if (rawLimit !== undefined && rawLimit !== null) {
+			const { error: limitError, value: limitValue } = baseLimitSchema.validate(rawLimit);
+			if (limitError) throw new InvalidQueryException(limitError.message);
+			requestedUnlimited = limitValue === -1;
+		}
+
+		const sanitizedQuery = sanitizeQuery(req.body.query, req.accountability ?? null, { applyDefaultLimit: false });
+
+		if (sanitizedQuery.deep) {
+			validateDeepQueryLimits(sanitizedQuery.deep);
+		}
+
+		// File-backed batched exports keep the unlimited request meaning, so the sanitized
+		// response-cardinality maximum must not replace an explicit -1.
+		if (requestedUnlimited) {
+			sanitizedQuery.limit = -1;
+		}
 
 		// We're not awaiting this, as it's supposed to run async in the background
 		service.exportToFile(req.params['collection']!, sanitizedQuery, req.body.format, {
