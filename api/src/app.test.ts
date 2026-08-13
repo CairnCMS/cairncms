@@ -39,10 +39,16 @@ vi.mock('./env', async () => {
 const mockGetEndpointRouter = vi.fn().mockReturnValue(Router());
 const mockGetEmbeds = vi.fn().mockReturnValue({ head: '', body: '' });
 
+const { mockExtensionInitialize, mockFlowInitialize, mockInitScheduleCoordination } = vi.hoisted(() => ({
+	mockExtensionInitialize: vi.fn(),
+	mockFlowInitialize: vi.fn(),
+	mockInitScheduleCoordination: vi.fn().mockResolvedValue('ready'),
+}));
+
 vi.mock('./extensions', () => ({
 	getExtensionManager: vi.fn().mockImplementation(() => {
 		return {
-			initialize: vi.fn(),
+			initialize: mockExtensionInitialize,
 			getEndpointRouter: mockGetEndpointRouter,
 			getEmbeds: mockGetEmbeds,
 		};
@@ -52,9 +58,13 @@ vi.mock('./extensions', () => ({
 vi.mock('./flows', () => ({
 	getFlowManager: vi.fn().mockImplementation(() => {
 		return {
-			initialize: vi.fn(),
+			initialize: mockFlowInitialize,
 		};
 	}),
+}));
+
+vi.mock('./schedule-coordination.js', () => ({
+	initScheduleCoordination: mockInitScheduleCoordination,
 }));
 
 vi.mock('./middleware/check-ip', () => ({
@@ -375,6 +385,67 @@ describe('createApp', async () => {
 			} finally {
 				exitSpy.mockRestore();
 			}
+		});
+	});
+
+	describe('Schedule coordination readiness gate', () => {
+		beforeEach(() => {
+			mockInitScheduleCoordination.mockReset();
+			mockInitScheduleCoordination.mockResolvedValue('ready');
+			mockExtensionInitialize.mockReset();
+			mockFlowInitialize.mockReset();
+		});
+
+		test('awaits schedule coordination before initializing the extension and flow managers', async () => {
+			const order: string[] = [];
+			let releaseCoordination!: (status: 'ready') => void;
+			let signalReached!: () => void;
+
+			const coordinationGate = new Promise<'ready'>((resolve) => {
+				releaseCoordination = resolve;
+			});
+
+			const reached = new Promise<void>((resolve) => {
+				signalReached = resolve;
+			});
+
+			mockInitScheduleCoordination.mockImplementation(() => {
+				order.push('coordination');
+				signalReached();
+				return coordinationGate;
+			});
+
+			mockExtensionInitialize.mockImplementation(async () => {
+				order.push('extension');
+			});
+
+			mockFlowInitialize.mockImplementation(async () => {
+				order.push('flow');
+			});
+
+			const appPromise = createApp();
+
+			try {
+				await reached;
+
+				expect(order).toEqual(['coordination']);
+				expect(mockExtensionInitialize).not.toHaveBeenCalled();
+				expect(mockFlowInitialize).not.toHaveBeenCalled();
+			} finally {
+				releaseCoordination('ready');
+			}
+
+			await appPromise;
+
+			expect(order).toEqual(['coordination', 'extension', 'flow']);
+		});
+
+		test('continues startup and still initializes the managers when coordination is unavailable', async () => {
+			mockInitScheduleCoordination.mockResolvedValue('unavailable');
+
+			await expect(createApp()).resolves.toBeDefined();
+			expect(mockExtensionInitialize).toHaveBeenCalled();
+			expect(mockFlowInitialize).toHaveBeenCalled();
 		});
 	});
 });

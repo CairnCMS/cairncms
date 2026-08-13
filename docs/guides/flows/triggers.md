@@ -70,6 +70,10 @@ The 6-point cron syntax is:
 
 Common patterns include `0 0 * * * *` (every hour on the hour), `0 0 0 * * *` (every day at midnight), and `0 0 0 * * 0` (every Sunday at midnight).
 
+If both the day-of-month and day-of-week fields are restricted, both must match. For example, `0 0 0 13 * 5` runs only at midnight on Friday the 13th.
+
+With Redis messaging, [schedule coordination](/docs/manage/configuration/#schedule-coordination) allows at most one instance to run each occurrence. Missed occurrences are not retried.
+
 There is no `$trigger.payload` for schedule-based runs.
 
 ## Another flow

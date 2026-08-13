@@ -12,7 +12,7 @@ import type {
 	ScheduleHandler,
 } from '@cairncms/types';
 import express, { type Router } from 'express';
-import { schedule, validate } from 'node-cron';
+import { scheduleSynchronizedJob } from '../utils/schedule.js';
 import getDatabase from '../database/index.js';
 import type { Emitter } from '../emitter.js';
 import emitter from '../emitter.js';
@@ -53,7 +53,14 @@ function buildContext(
 	};
 }
 
-export function registerHook(register: HookConfig, subject: string, deps: FullAuthorityRegistrationDeps): void {
+export function registerHook(
+	register: HookConfig,
+	subject: string,
+	scheduleKey: string,
+	deps: FullAuthorityRegistrationDeps
+): void {
+	let scheduleIndex = 0;
+
 	const registerFunctions = {
 		filter: (event: string, handler: FilterHandler) => {
 			emitter.onFilter(event, handler);
@@ -83,23 +90,23 @@ export function registerHook(register: HookConfig, subject: string, deps: FullAu
 			});
 		},
 		schedule: (cron: string, handler: ScheduleHandler) => {
-			if (validate(cron)) {
-				const task = schedule(cron, async () => {
-					if (deps.scheduleEnabled()) {
-						try {
-							await handler();
-						} catch (error: any) {
-							logger.error(error);
-						}
-					}
-				});
+			const scheduleId = `${scheduleKey}:${scheduleIndex}`;
+			scheduleIndex++;
 
+			const job = scheduleSynchronizedJob(
+				scheduleId,
+				cron,
+				async () => {
+					await handler();
+				},
+				deps.scheduleEnabled
+			);
+
+			if (job) {
 				deps.hookEvents.push({
 					type: 'schedule',
-					task,
+					job,
 				});
-			} else {
-				logger.warn(`Couldn't register cron hook. Provided cron is invalid: ${cron}`);
 			}
 		},
 		embed: (position: 'head' | 'body', code: string | EmbedHandler) => {

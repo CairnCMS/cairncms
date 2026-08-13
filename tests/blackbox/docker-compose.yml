@@ -100,6 +100,16 @@ services:
     ports:
       - 6108:6379
 
+  redis7:
+    image: redis:7-alpine
+    ports:
+      - 6109:6379
+
+  redis60:
+    image: redis:6.0-alpine
+    ports:
+      - 6110:6379
+
   auth-saml:
     image: kristophjunge/test-saml-idp
     ports:

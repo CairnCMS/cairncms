@@ -283,6 +283,22 @@ The messenger is the inter-process communication layer that broadcasts events li
 - **`MESSENGER_REDIS`** — connection string for the messenger Redis.
 - **`MESSENGER_REDIS_HOST` / `MESSENGER_REDIS_PORT` / `MESSENGER_REDIS_PASSWORD`** — broken-out fields, used as an alternative to `MESSENGER_REDIS`.
 
+### Schedule coordination
+
+When `MESSENGER_STORE` is `redis`, CairnCMS coordinates scheduled flows and extension hooks across instances. Each occurrence can run on at most one instance. With the default `local` store, every instance runs its schedules independently. Coordination uses the messenger Redis configuration automatically and has no separate setting.
+
+For a multi-instance deployment:
+
+- Use a currently supported Redis release with Redis 6.2 protocol support, or a compatible Valkey release.
+- Configure every instance to use the same Redis deployment, `MESSENGER_NAMESPACE`, and system timezone (`TZ`).
+- Assign a different `MESSENGER_NAMESPACE` to each CairnCMS deployment that shares a Redis server. Reusing a namespace can cause one deployment to suppress schedules in another.
+
+If Redis is unavailable or does not support coordination, the API starts but scheduled flows and extension hooks remain disabled. CairnCMS resumes scheduling automatically after Redis recovers. Occurrences missed during the outage are not replayed. Check `/server/health` for the current messenger and coordination status.
+
+Messenger messages are not queued while Redis is unavailable. Cache invalidations and flow reloads sent during an outage are lost, so instances can remain out of sync until a later update, reload, or restart.
+
+If Redis ACLs restrict publishing, allow `PUBLISH` on `<namespace>:messenger-probe`. Without this permission, `/server/health` reports the messenger as degraded.
+
 ## Email
 
 - **`EMAIL_FROM`** — sender address for all transactional emails. Required for any email feature.

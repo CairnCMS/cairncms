@@ -22,7 +22,7 @@ Blackbox tests run automatically in GitHub Actions on every push to `main`. The 
 Start the database and supporting services using the **blackbox** compose file:
 
 ```bash
-docker compose -f tests/blackbox/docker-compose.yml up postgres auth-saml redis minio minio-mc -d
+docker compose -f tests/blackbox/docker-compose.yml up postgres auth-saml redis redis7 redis60 minio minio-mc -d
 ```
 
 For SQLite (no database container needed):
@@ -44,7 +44,7 @@ This runs blackbox tests against the currently built server code.
 On systems with limited RAM (<8GB), limit parallelism:
 
 ```bash
-TEST_DB=postgres pnpm test:blackbox -- --maxWorkers=2
+TEST_DB=postgres pnpm run test:blackbox --maxWorkers=2
 ```
 
 #### Important: blackbox runs against whatever is already in `dist/`
@@ -148,7 +148,7 @@ This bypasses the ordering barrier (the file becomes index 0). Revert `only` to 
 Run the full blackbox suite for one vendor locally and confirm both that your file passes and that the suite as a whole still passes:
 
 ```bash
-pnpm build && TEST_DB=postgres pnpm test:blackbox -- --runInBand
+pnpm build && TEST_DB=postgres pnpm run test:blackbox --runInBand
 ```
 
-CI runs the full vendor matrix automatically on push to `main`. `--runInBand` matches the CI invocation (see `.github/workflows/blackbox-main.yml`) and avoids worker port collisions.
+CI runs the full vendor matrix automatically on push to `main`. The non-SQLite jobs run under `--maxWorkers=2` (see `.github/workflows/blackbox-main.yml`). `--runInBand` is a safe local choice that avoids worker port collisions.
