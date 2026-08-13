@@ -52,8 +52,8 @@ jobs:
       - name: Start services (other vendors)
         if: matrix.vendor != 'sqlite3'
         run:
-          docker compose -f tests/blackbox/docker-compose.yml up ${{ matrix.vendor }} auth-saml redis minio minio-mc -d
-          --quiet-pull --wait
+          docker compose -f tests/blackbox/docker-compose.yml up ${{ matrix.vendor }} auth-saml redis redis7 redis60 minio minio-mc
+          -d --quiet-pull --wait
 
       - name: Run tests (SQLite)
         if: matrix.vendor == 'sqlite3'

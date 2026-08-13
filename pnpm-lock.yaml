@@ -299,8 +299,8 @@ importers:
         specifier: 5.0.9
         version: 5.0.9
       node-cron:
-        specifier: 3.0.2
-        version: 3.0.2
+        specifier: 4.6.0
+        version: 4.6.0
       nodemailer:
         specifier: 9.0.1
         version: 9.0.1
@@ -458,9 +458,6 @@ importers:
       '@types/node':
         specifier: 22.19.17
         version: 22.19.17
-      '@types/node-cron':
-        specifier: 3.0.7
-        version: 3.0.7
       '@types/nodemailer':
         specifier: 6.4.7
         version: 6.4.7
@@ -3690,9 +3687,6 @@ packages:
 
   '@types/ms@0.7.31':
     resolution: {integrity: sha512-iiUgKzV9AuaEkZqkOLDIvlQiL6ltuZd9tGcW3gwpnX8JbuiuhFlEGmmFXEXkN50Cvq7Os88IY2v0dkDqXYWVgA==}
-
-  '@types/node-cron@3.0.7':
-    resolution: {integrity: sha512-9PuLtBboc/+JJ7FshmJWv769gDonTpItN0Ol5TMwclpSQNjVyB2SRxSKBcTtbSysSL5R7Oea06kTTFNciCoYwA==}
 
   '@types/node-fetch@2.6.11':
     resolution: {integrity: sha512-24xFj9R5+rfQJLRyM56qh+wnVSYhyXC2tkoBndtY0U+vubqNsYXGjufB2nn8Q6gt0LrARwL6UBtMCSVCwl4B1g==}
@@ -7029,9 +7023,9 @@ packages:
     resolution: {integrity: sha512-9MdFxmkKaOYVTV+XVRG8ArDwwQ77XIgIPyKASB1k3JPq3M8fGQQQE3YpMOrKm6g//Ktx8ivZr8xo1Qmtqub+GA==}
     engines: {node: ^18 || ^20 || >= 21}
 
-  node-cron@3.0.2:
-    resolution: {integrity: sha512-iP8l0yGlNpE0e6q1o185yOApANRe47UPbLf4YxfbiNHt/RU5eBcGB/e0oudruheSf+LQeDMezqC5BVAb5wwRcQ==}
-    engines: {node: '>=6.0.0'}
+  node-cron@4.6.0:
+    resolution: {integrity: sha512-Si/bzYiKRHOB8/a99T2+SDGN582ONDMSTlJr5oCkT6GtnqPjZ2s10eoQRYkW9ZHwjVxONL+W8Fb+qR0AHMQsdg==}
+    engines: {node: '>=20'}
 
   node-fetch@2.7.0:
     resolution: {integrity: sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A==}
@@ -12024,8 +12018,6 @@ snapshots:
 
   '@types/ms@0.7.31': {}
 
-  '@types/node-cron@3.0.7': {}
-
   '@types/node-fetch@2.6.11':
     dependencies:
       '@types/node': 22.19.17
@@ -15887,9 +15879,7 @@ snapshots:
 
   node-addon-api@8.7.0: {}
 
-  node-cron@3.0.2:
-    dependencies:
-      uuid: 11.1.1
+  node-cron@4.6.0: {}
 
   node-fetch@2.7.0(encoding@0.1.13):
     dependencies:

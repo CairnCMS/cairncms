@@ -140,7 +140,11 @@ Cron expressions:
 
 The schedule register function takes the cron expression as the first argument and the handler as the second. The handler receives no arguments.
 
+If both the day-of-month and day-of-week fields are restricted, both must match. For example, `0 0 13 * 5` runs only at midnight on Friday the 13th.
+
 Schedule hooks run whenever the extension manager is initialized with `schedule: true`, which is the default. The API server uses the default, so schedule hooks run there. The CLI explicitly opts out (`{ schedule: false, watch: false }`), so commands like database migrations and schema snapshots do not trip schedule handlers.
+
+With Redis messaging, [schedule coordination](/docs/manage/configuration/#schedule-coordination) allows at most one instance to run each occurrence. Missed occurrences are not retried. Keep `schedule()` calls in the same order across releases because changing their order changes the identity used for coordination.
 
 ## Embed hooks
 

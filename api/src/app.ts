@@ -62,6 +62,7 @@ import rateLimiterGlobal from './middleware/rate-limiter-global.js';
 import rateLimiter from './middleware/rate-limiter-ip.js';
 import sanitizeQuery from './middleware/sanitize-query.js';
 import schema from './middleware/schema.js';
+import { initScheduleCoordination } from './schedule-coordination.js';
 import { validateSecretsEncryptionKey } from './utils/encrypt-secret.js';
 import { validateQueryLimitConfig } from './utils/query-limit.js';
 import { getConfigFromEnv } from './utils/get-config-from-env.js';
@@ -116,6 +117,8 @@ export default async function createApp(): Promise<express.Application> {
 
 	const extensionManager = getExtensionManager();
 	const flowManager = getFlowManager();
+
+	await initScheduleCoordination();
 
 	await extensionManager.initialize();
 	await flowManager.initialize();

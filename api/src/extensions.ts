@@ -657,7 +657,7 @@ export class ExtensionManager {
 	}
 
 	private async unload(): Promise<void> {
-		this.unregisterApiExtensions();
+		await this.unregisterApiExtensions();
 
 		this.serverExtensions = [];
 		this.confinedEligible.clear();
@@ -834,7 +834,7 @@ export class ExtensionManager {
 
 				const config = getModuleDefault(hookInstance);
 
-				this.registerHook(config, hook.name);
+				this.registerHook(config, hook.name, hook.name);
 
 				this.apiExtensions.push({ path: hookPath });
 
@@ -930,8 +930,19 @@ export class ExtensionManager {
 
 				const configs = getModuleDefault(bundleInstances);
 
-				for (const { config } of configs.hooks) {
-					this.registerHook(config, bundle.name);
+				// Hook entry names seed schedule identities and must be unique within a bundle.
+				const hookNames = new Set<string>();
+
+				for (const { name } of configs.hooks) {
+					if (hookNames.has(name)) {
+						throw new Error(`bundle declares more than one hook entry named "${name}"`);
+					}
+
+					hookNames.add(name);
+				}
+
+				for (const { config, name } of configs.hooks) {
+					this.registerHook(config, bundle.name, `${bundle.name}:${name}`);
 				}
 
 				for (const { config, name } of configs.endpoints) {
@@ -976,8 +987,8 @@ export class ExtensionManager {
 		};
 	}
 
-	private registerHook(register: HookConfig, subject: string): void {
-		registerFullAuthorityHook(register, subject, this.fullAuthorityDeps());
+	private registerHook(register: HookConfig, subject: string, scheduleKey: string): void {
+		registerFullAuthorityHook(register, subject, scheduleKey, this.fullAuthorityDeps());
 	}
 
 	private registerEndpoint(config: EndpointConfig, name: string, subject: string): void {
@@ -988,7 +999,7 @@ export class ExtensionManager {
 		registerFullAuthorityOperation(config, subject, this.fullAuthorityDeps());
 	}
 
-	private unregisterApiExtensions(): void {
+	private async unregisterApiExtensions(): Promise<void> {
 		for (const event of this.hookEvents) {
 			switch (event.type) {
 				case 'filter':
@@ -1001,7 +1012,7 @@ export class ExtensionManager {
 					emitter.offInit(event.name, event.handler);
 					break;
 				case 'schedule':
-					event.task.stop();
+					await event.job.stop();
 					break;
 			}
 		}
