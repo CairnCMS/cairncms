@@ -36,6 +36,7 @@ exports.list = {
 		{ testFilePath: '/routes/assets/limit.test.ts' },
 		{ testFilePath: '/routes/assets/concurrency.test.ts' },
 		{ testFilePath: '/flows/schedule-coordination.test.ts' },
+		{ testFilePath: '/utils/await-connection.test.ts' },
 	],
 	// If specified, only run these tests sequentially
 	only: [
