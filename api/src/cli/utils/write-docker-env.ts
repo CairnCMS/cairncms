@@ -49,6 +49,7 @@ function renderEnv(secrets: GeneratedSecrets, cairncmsPort: number): string {
 		'# Cache Configuration',
 		'CACHE_ENABLED=true',
 		'CACHE_AUTO_PURGE=true',
+		'CACHE_AUTO_PURGE_IGNORE_LIST=directus_activity,directus_presets',
 		'',
 		'# CORS Configuration',
 		'CORS_ENABLED=true',
