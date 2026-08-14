@@ -1,10 +1,12 @@
 import type { Accountability, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
+import { getCache } from '../cache.js';
 import getDatabase from '../database/index.js';
 import { systemCollectionRows } from '../database/system-data/collections/index.js';
 import emitter from '../emitter.js';
 import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
 import type { AbstractServiceOptions, PrimaryKey } from '../types/index.js';
+import { shouldClearCache } from '../utils/should-clear-cache.js';
 
 export class UtilsService {
 	knex: Knex;
@@ -122,6 +124,12 @@ export class UtilsService {
 				.where(sortField, '>=', targetSortValue)
 				.andWhere(sortField, '<=', sourceSortValue)
 				.andWhereNot({ [primaryKeyField]: item });
+		}
+
+		const { cache } = getCache();
+
+		if (shouldClearCache(cache, undefined, collection)) {
+			await cache.clear();
 		}
 
 		emitter.emitAction(

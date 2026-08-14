@@ -253,6 +253,7 @@ Variables for the response cache:
 - **`CACHE_STORE`** — `memory`, `redis`, or `memcache`.
 - **`CACHE_TTL`** — default cache duration. Default `5m`.
 - **`CACHE_AUTO_PURGE`** — when `true`, the cache invalidates automatically on writes to relevant collections.
+- **`CACHE_AUTO_PURGE_IGNORE_LIST`** — comma-separated collections whose writes do not purge the response cache when `CACHE_AUTO_PURGE` is `true`. Default `directus_activity,directus_presets`. Cached responses may remain until `CACHE_TTL` expires. Remove a collection from the list if its writes must invalidate cached responses.
 - **`CACHE_CONTROL_S_MAXAGE`** — value for the `Cache-Control: s-maxage` directive on cached responses, in seconds. Default `0`.
 - **`CACHE_STATUS_HEADER`** — name of the response header indicating cache hit/miss. Unset by default (no header emitted).
 - **`CACHE_VALUE_MAX_SIZE`** — maximum size in bytes for a cacheable response. Larger responses bypass the cache. Default `false` (no limit).

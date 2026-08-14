@@ -139,6 +139,7 @@ function dockerComposeEnv(): NodeJS.ProcessEnv {
 		'CAIRNCMS_PORT',
 		'CACHE_ENABLED',
 		'CACHE_AUTO_PURGE',
+		'CACHE_AUTO_PURGE_IGNORE_LIST',
 		'CACHE_STORE',
 		'CACHE_REDIS',
 		'PUBLIC_URL',
