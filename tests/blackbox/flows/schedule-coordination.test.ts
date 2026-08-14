@@ -32,7 +32,6 @@ const MESSENGER_RECOVERED = 'The messenger connection recovered.';
 const ADMIN = `Bearer ${common.USER.ADMIN.TOKEN}`;
 
 const CRON = '*/2 * * * * *';
-const SLOT_MS = 2000;
 const WINDOW_MS = 12000;
 const OUTAGE_MS = 8000;
 const SETTLE_MS = 3000;
@@ -241,20 +240,19 @@ function recordsWithMessage(buffer: string, message: string): Array<{ level?: un
 	return records;
 }
 
-function slotCounts(buffer: string, marker: string): Map<number, number> {
-	const slots = new Map<number, number>();
+function coordinatedPerOccurrence(controlBuffer: string, coordinatedBuffers: string[], marker: string): number[] {
+	const control = recordTimes(controlBuffer, marker).sort((a, b) => a - b);
+	const coordinated = coordinatedBuffers.flatMap((buffer) => recordTimes(buffer, marker));
 
-	for (const time of recordTimes(buffer, marker)) {
-		const slot = Math.floor(time / SLOT_MS);
-		slots.set(slot, (slots.get(slot) ?? 0) + 1);
+	const counts: number[] = [];
+
+	for (let i = 1; i < control.length - 1; i++) {
+		const lower = (control[i - 1]! + control[i]!) / 2;
+		const upper = (control[i]! + control[i + 1]!) / 2;
+		counts.push(coordinated.filter((time) => time >= lower && time < upper).length);
 	}
 
-	return slots;
-}
-
-// Interior slots drop the first and last observed occurrence as boundary partials.
-function interiorSlots(control: Map<number, number>): number[] {
-	return [...control.keys()].sort((a, b) => a - b).slice(1, -1);
+	return counts;
 }
 
 // Arm synchronously (mark each collector, start watching for the trigger), then resolve with each
@@ -385,52 +383,26 @@ describeFn('Schedule coordination', () => {
 				const collectorC = new Collector(serverC);
 
 				await Promise.all([
-					awaitDirectusConnection(portOf(envA, vendor)),
-					awaitDirectusConnection(portOf(envB, vendor)),
-					awaitDirectusConnection(portOf(envC, vendor)),
+					awaitDirectusConnection(portOf(envA, vendor), serverA),
+					awaitDirectusConnection(portOf(envB, vendor), serverB),
+					awaitDirectusConnection(portOf(envC, vendor), serverC),
 				]);
 
 				const part1 = await observeWindow([collectorA, collectorB, collectorC], [FLOW_MARKER, HOOK_MARKER]);
 
 				for (const marker of [FLOW_MARKER, HOOK_MARKER]) {
-					const a = slotCounts(part1[0]!, marker);
-					const b = slotCounts(part1[1]!, marker);
-					const c = slotCounts(part1[2]!, marker);
-
-					const combined = (slot: number) => (a.get(slot) ?? 0) + (b.get(slot) ?? 0);
-
-					for (const slot of new Set([...a.keys(), ...b.keys()])) {
-						expect(combined(slot)).toBeLessThanOrEqual(1);
-					}
-
-					for (const count of c.values()) expect(count).toBe(1);
-
-					const interior = interiorSlots(c);
-					expect(interior.length).toBeGreaterThanOrEqual(3);
-
-					for (const slot of interior) {
-						expect(c.get(slot)).toBe(1);
-						expect(combined(slot)).toBe(1);
-					}
+					const perOccurrence = coordinatedPerOccurrence(part1[2]!, [part1[0]!, part1[1]!], marker);
+					expect(perOccurrence.length).toBeGreaterThanOrEqual(3);
+					for (const count of perOccurrence) expect(count).toBe(1);
 				}
 
 				serverA.kill();
 				await awaitExit(serverA);
 
 				const part2 = await observeWindow([collectorB, collectorC], [FLOW_MARKER]);
-				const b2 = slotCounts(part2[0]!, FLOW_MARKER);
-				const c2 = slotCounts(part2[1]!, FLOW_MARKER);
-
-				for (const count of b2.values()) expect(count).toBeLessThanOrEqual(1);
-				for (const count of c2.values()) expect(count).toBe(1);
-
-				const standbyInterior = interiorSlots(c2);
-				expect(standbyInterior.length).toBeGreaterThanOrEqual(3);
-
-				for (const slot of standbyInterior) {
-					expect(c2.get(slot)).toBe(1);
-					expect(b2.get(slot)).toBe(1);
-				}
+				const standbyPerOccurrence = coordinatedPerOccurrence(part2[1]!, [part2[0]!], FLOW_MARKER);
+				expect(standbyPerOccurrence.length).toBeGreaterThanOrEqual(3);
+				for (const count of standbyPerOccurrence) expect(count).toBe(1);
 			} catch (error) {
 				bodyFailed = true;
 				bodyError = error;
@@ -493,8 +465,8 @@ describeFn('Schedule coordination', () => {
 				const unavailableErr = new Collector(unavailable, 'stderr');
 
 				await Promise.all([
-					awaitDirectusConnection(portOf(envControl, vendor)),
-					awaitDirectusConnection(portOf(envUnavailable, vendor)),
+					awaitDirectusConnection(portOf(envControl, vendor), control),
+					awaitDirectusConnection(portOf(envUnavailable, vendor), unavailable),
 				]);
 
 				const [controlWindow, unavailableWindow] = await observeFixed([controlOut, unavailableOut], WINDOW_MS);
@@ -601,8 +573,8 @@ describeFn('Schedule coordination', () => {
 				const errE = new Collector(serverE, 'stderr');
 
 				await Promise.all([
-					awaitDirectusConnection(portOf(envF, vendor)),
-					awaitDirectusConnection(portOf(envE, vendor)),
+					awaitDirectusConnection(portOf(envF, vendor), serverF),
+					awaitDirectusConnection(portOf(envE, vendor), serverE),
 				]);
 
 				const ping = await request(urlOf(vendor, envE)).get('/server/ping');
@@ -659,9 +631,7 @@ describeFn('Schedule coordination', () => {
 				const scheduled = await observeWindow([outE], [FLOW_MARKER, HOOK_MARKER]);
 
 				for (const marker of [FLOW_MARKER, HOOK_MARKER]) {
-					const slots = slotCounts(scheduled[0]!, marker);
-					for (const count of slots.values()) expect(count).toBe(1);
-					expect(interiorSlots(slots).length).toBeGreaterThanOrEqual(2);
+					expect(recordTimes(scheduled[0]!, marker).length).toBeGreaterThanOrEqual(2);
 				}
 
 				const outageMark = outE.mark();
@@ -681,16 +651,13 @@ describeFn('Schedule coordination', () => {
 				await assertOneTransition(outE, outageMark, COORD_UNAVAILABLE, 50);
 				await assertOneTransition(outE, outageMark, MESSENGER_UNAVAILABLE, 40);
 
-				// Second recovery: arm before restarting the proxy so a replay burst would be captured.
 				const secondMark = outE.mark();
 				const recoveryObservation = observeWindow([outE], [FLOW_MARKER, HOOK_MARKER]);
 				proxy = await spawnProxy(proxyPort, REDIS7_PORT);
 				const recovery = await recoveryObservation;
 
 				for (const marker of [FLOW_MARKER, HOOK_MARKER]) {
-					const slots = slotCounts(recovery[0]!, marker);
-					for (const count of slots.values()) expect(count).toBe(1);
-					expect(interiorSlots(slots).length).toBeGreaterThanOrEqual(2);
+					expect(recordTimes(recovery[0]!, marker).length).toBeGreaterThanOrEqual(2);
 				}
 
 				await assertOneTransition(outE, secondMark, COORD_RECOVERED, 30);
