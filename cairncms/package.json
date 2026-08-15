@@ -40,7 +40,8 @@
 		"cairncms": "cli.js"
 	},
 	"dependencies": {
-		"@cairncms/api": "workspace:*"
+		"@cairncms/api": "workspace:*",
+		"@cairncms/update-check": "workspace:*"
 	},
 	"engines": {
 		"node": ">=22.0.0"

@@ -33,6 +33,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	vi.useRealTimers();
 	vi.resetAllMocks();
 });
 
@@ -58,8 +59,12 @@ test('Throws error if response is not ok', async () => {
 });
 
 test('Extracts latest version from package information', async () => {
+	vi.useFakeTimers();
+
 	await isUpToDate(sample.name, sample.version);
+
 	expect(mockResponse.json).toHaveBeenCalledOnce();
+	expect(vi.getTimerCount()).toBe(0);
 });
 
 test('Throws error if latest version does not exist in json response', async () => {
@@ -97,4 +102,30 @@ test('Returns null if gte is true', async () => {
 	const result = await isUpToDate(sample.name, sample.version);
 
 	expect(result).toBeNull();
+});
+
+test('Rejects when the request exceeds the deadline', async () => {
+	vi.useFakeTimers();
+
+	vi.mocked(fetch).mockImplementation((_url, options) => {
+		const signal = options?.signal;
+
+		if (!signal) {
+			throw new Error('fetch was called without an abort signal');
+		}
+
+		return new Promise<Response>((_resolve, reject) => {
+			signal.addEventListener('abort', () => reject(new Error('aborted')));
+		});
+	});
+
+	const promise = isUpToDate(sample.name, sample.version);
+	const settled = vi.fn();
+	promise.then(settled, settled);
+
+	await vi.advanceTimersByTimeAsync(4999);
+	expect(settled).not.toHaveBeenCalled();
+
+	await vi.advanceTimersByTimeAsync(1);
+	await expect(promise).rejects.toThrow();
 });

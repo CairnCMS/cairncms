@@ -127,9 +127,6 @@ importers:
       '@cairncms/storage-driver-s3':
         specifier: workspace:*
         version: link:../packages/storage-driver-s3
-      '@cairncms/update-check':
-        specifier: workspace:*
-        version: link:../packages/update-check
       '@cairncms/utils':
         specifier: workspace:*
         version: link:../packages/utils
@@ -817,6 +814,9 @@ importers:
       '@cairncms/api':
         specifier: workspace:*
         version: link:../api
+      '@cairncms/update-check':
+        specifier: workspace:*
+        version: link:../packages/update-check
 
   packages/composables:
     dependencies:
