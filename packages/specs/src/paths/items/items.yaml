@@ -43,8 +43,7 @@ post:
   requestBody:
     content:
       application/json:
-        # Schema intentionally empty — createItem accepts arbitrary item shapes determined by the collection's field definitions at runtime.
-        schema:
+        schema: {}
   responses:
     '200':
       description: Successful request
