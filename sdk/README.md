@@ -48,7 +48,6 @@ Full reference: [`docs/reference/sdk.md`](https://github.com/CairnCMS/cairncms/b
 **Not supported in v1** (see [SDK reference](https://github.com/CairnCMS/cairncms/blob/main/docs/reference/sdk.md#compatibility) for details):
 
 - Realtime / WebSocket subscriptions (`realtime()`)
-- Translation strings CRUD (`readTranslations`, `createTranslation`, etc.)
 - Content versioning (`readContentVersions`, `saveToContentVersion`, etc.)
 - Extensions CRUD (`readExtensions`, `updateExtension`)
 

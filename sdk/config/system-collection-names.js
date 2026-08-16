@@ -35,4 +35,5 @@ export const systemCollectionNames = [
 	'directus_shares',
 	'directus_flows',
 	'directus_operations',
+	'directus_translations',
 ];

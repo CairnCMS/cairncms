@@ -16,15 +16,6 @@ import * as sdk from '../src/index.js';
 const UNSUPPORTED_EXPORTS = [
 	// realtime: WebSocket client (no /websocket endpoint in CairnCMS)
 	'realtime',
-	// directus_translations: not a CRUD table (JSON-blob-on-settings)
-	'readTranslations',
-	'readTranslation',
-	'createTranslation',
-	'createTranslations',
-	'updateTranslation',
-	'updateTranslations',
-	'deleteTranslation',
-	'deleteTranslations',
 	// directus_versions: content versioning not implemented
 	'readContentVersions',
 	'readContentVersion',
@@ -57,10 +48,6 @@ describe('public export surface', () => {
 	});
 
 	it('does NOT export helpers for unsupported collections at type-check time', () => {
-		// @ts-expect-error
-		const _a = sdk.readTranslations;
-		// @ts-expect-error
-		const _b = sdk.createTranslation;
 		// @ts-expect-error
 		const _c = sdk.readContentVersions;
 		// @ts-expect-error

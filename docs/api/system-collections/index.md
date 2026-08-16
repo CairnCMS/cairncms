@@ -14,7 +14,7 @@ A system collection is any table whose name starts with `directus_`. The full se
 
 The full set:
 
-`directus_users`, `directus_roles`, `directus_permissions`, `directus_shares`, `directus_files`, `directus_folders`, `directus_presets`, `directus_flows`, `directus_operations`, `directus_dashboards`, `directus_panels`, `directus_notifications`, `directus_collections`, `directus_fields`, `directus_relations`, `directus_settings`, `directus_activity`, `directus_revisions`, `directus_migrations`, `directus_sessions`.
+`directus_users`, `directus_roles`, `directus_permissions`, `directus_shares`, `directus_files`, `directus_folders`, `directus_presets`, `directus_flows`, `directus_operations`, `directus_dashboards`, `directus_panels`, `directus_notifications`, `directus_translations`, `directus_collections`, `directus_fields`, `directus_relations`, `directus_settings`, `directus_activity`, `directus_revisions`, `directus_migrations`, `directus_sessions`.
 
 `directus_files` has its own page at [Files](/docs/api/files/) since the asset-serving surface is large enough to warrant separate treatment. The remaining collections are grouped on the pages linked below.
 
@@ -35,6 +35,7 @@ Every system collection has its own top-level REST path, named by stripping the 
 | `directus_dashboards` | `/dashboards` |
 | `directus_panels` | `/panels` |
 | `directus_notifications` | `/notifications` |
+| `directus_translations` | `/translations` |
 | `directus_collections` | `/collections` |
 | `directus_fields` | `/fields` |
 | `directus_relations` | `/relations` |

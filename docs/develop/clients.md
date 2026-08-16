@@ -67,17 +67,6 @@ const products = await client.request(readItems('products'));
 
 The full SDK reference, including every command (`readItems`, `createItem`, `updateItem`, `uploadFiles`, and so on), schema typing, and the filter DSL, is on the SDK API reference page.
 
-### What the v1 SDK does not include
-
-A few features from upstream Directus are deliberately not part of the v1 CairnCMS SDK:
-
-- **realtime / WebSocket subscriptions** (`realtime()`) — the WebSocket endpoint exists; clients can connect directly
-- **translation strings CRUD** — translation strings are stored on `directus_settings` (the `translation_strings` field); manage them by reading and patching that record
-- **content versioning** — not implemented in CairnCMS v1 at all; no API surface to call
-- **extension inventory and app-loader** — the `/extensions` endpoints are read-only (admin diagnostics and the app-side JS loader), with no create, update, or delete. Call them directly via REST
-
-Three of these have a working endpoint that the SDK simply does not wrap. Content versioning is the exception: it is genuinely absent in CairnCMS v1.
-
 ## Authentication
 
 Three authentication paths cover almost all client cases.

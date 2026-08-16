@@ -6,10 +6,6 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 vi.mock('@/lang/set-language', () => ({ setLanguage: vi.fn() }));
 vi.mock('@/utils/geometry/basemap', () => ({ getBasemapSources: () => [{ name: 'test' }] }));
 
-vi.mock('@/composables/use-translation-strings', () => ({
-	useTranslationStrings: () => ({ loadParsedTranslationStrings: vi.fn() }),
-}));
-
 vi.mock('./extensions', () => ({
 	onHydrateExtensions: vi.fn(),
 	onDehydrateExtensions: vi.fn(),
