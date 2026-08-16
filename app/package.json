@@ -25,6 +25,7 @@
 		"test": "vitest --watch=false"
 	},
 	"devDependencies": {
+		"@cairncms/composables": "workspace:*",
 		"@cairncms/constants": "workspace:*",
 		"@cairncms/exceptions": "workspace:*",
 		"@cairncms/extensions-sdk": "workspace:*",
@@ -118,8 +119,5 @@
 	},
 	"publishConfig": {
 		"access": "public"
-	},
-	"dependencies": {
-		"@cairncms/composables": "workspace:*"
 	}
 }
