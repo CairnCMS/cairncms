@@ -21,7 +21,8 @@ import RolesPublicItem from './routes/roles/public-item.vue';
 import FlowsOverview from './routes/flows/overview.vue';
 import FlowsDetail from './routes/flows/flow.vue';
 import FlowOperationDetail from './routes/flows/components/operation-detail.vue';
-import TranslationStringsCollection from './routes/translation-strings/collection.vue';
+import TranslationsCollection from './routes/translations/collection.vue';
+import TranslationsItem from './routes/translations/item.vue';
 import ExtensionsCollection from './routes/extensions/collection.vue';
 
 export default defineModule({
@@ -212,13 +213,19 @@ export default defineModule({
 			],
 		},
 		{
-			path: 'translation-strings',
+			path: 'translations',
 			component: RouterPass,
 			children: [
 				{
-					name: 'settings-translation-strings-collection',
+					name: 'settings-translations-collection',
 					path: '',
-					component: TranslationStringsCollection,
+					component: TranslationsCollection,
+				},
+				{
+					name: 'settings-translations-item',
+					path: ':primaryKey',
+					component: TranslationsItem,
+					props: true,
 				},
 			],
 		},

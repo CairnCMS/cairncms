@@ -36,6 +36,7 @@ import schemaRouter from './controllers/schema.js';
 import serverRouter from './controllers/server.js';
 import settingsRouter from './controllers/settings.js';
 import sharesRouter from './controllers/shares.js';
+import translationsRouter from './controllers/translations.js';
 import usersRouter from './controllers/users.js';
 import utilsRouter from './controllers/utils.js';
 import {
@@ -340,6 +341,7 @@ export default async function createApp(): Promise<express.Application> {
 	app.use('/server', serverRouter);
 	app.use('/settings', settingsRouter);
 	app.use('/shares', sharesRouter);
+	app.use('/translations', translationsRouter);
 	app.use('/users', usersRouter);
 	app.use('/utils', utilsRouter);
 
