@@ -533,11 +533,10 @@ importers:
         version: 16.0.0(@azure/core-client@1.10.1)
 
   app:
-    dependencies:
+    devDependencies:
       '@cairncms/composables':
         specifier: workspace:*
         version: link:../packages/composables
-    devDependencies:
       '@cairncms/constants':
         specifier: workspace:*
         version: link:../packages/constants
