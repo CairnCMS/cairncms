@@ -21,7 +21,7 @@
 	],
 	"scripts": {
 		"build": "vite build",
-		"dev": "vite --clearScreen false",
+		"dev": "vite",
 		"test": "vitest --watch=false"
 	},
 	"devDependencies": {
