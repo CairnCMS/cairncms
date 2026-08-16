@@ -87,16 +87,16 @@ The numeric value is the ratio expressed as a fraction. A 16:10 ratio is `1.6` (
 
 ## Translation strings
 
-Translation strings are key-value pairs that translate UI labels and content into other languages without changing the underlying schema. They are stored as a JSON array on the `directus_settings` record (the `translation_strings` field) and reused throughout the app wherever a field, label, dropdown option, or note supports translation.
+Translation strings are key-value pairs that translate UI labels and content into other languages without changing the underlying schema. They live in the `directus_translations` collection, one row per key and language (`key`, `language`, `value`), and are reused throughout the app wherever a field, label, dropdown option, or note supports translation.
 
 ### Creating a translation string
 
-1. Go to **Settings > Translation Strings**.
+1. Go to **Settings > Translations**.
 2. Click the create button in the page header.
-3. Enter a key, then add one translation per language. Each translation is its own row inside the string.
+3. Enter a key, choose a language, and enter the value. Each key/language pair is its own row, so add one row per language for the same key.
 4. Save.
 
-A translation string can carry as many language entries as you need. If a user is set to a language that the string has no entry for, the raw key is shown instead.
+A key can carry as many languages as you need. If a user is set to a language the key has no row for, the raw key is shown instead. A key and language together are unique. You cannot store two values for the same pair.
 
 ### Using a translation string
 
