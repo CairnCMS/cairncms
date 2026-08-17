@@ -64,6 +64,7 @@ import rateLimiter from './middleware/rate-limiter-ip.js';
 import sanitizeQuery from './middleware/sanitize-query.js';
 import schema from './middleware/schema.js';
 import { initScheduleCoordination } from './schedule-coordination.js';
+import { validateGraphQLQueryTokenLimit } from './services/graphql/query-gate.js';
 import { validateSecretsEncryptionKey } from './utils/encrypt-secret.js';
 import { validateQueryLimitConfig } from './utils/query-limit.js';
 import { getConfigFromEnv } from './utils/get-config-from-env.js';
@@ -88,6 +89,13 @@ export default async function createApp(): Promise<express.Application> {
 
 	try {
 		validateQueryLimitConfig();
+	} catch (error) {
+		logger.error((error as Error).message);
+		process.exit(1);
+	}
+
+	try {
+		validateGraphQLQueryTokenLimit();
 	} catch (error) {
 		logger.error((error as Error).message);
 		process.exit(1);

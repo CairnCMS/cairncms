@@ -388,6 +388,48 @@ describe('createApp', async () => {
 		});
 	});
 
+	describe('GraphQL query token limit validation', () => {
+		afterEach(async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			delete env['GRAPHQL_QUERY_TOKEN_LIMIT'];
+		});
+
+		async function expectStartupFailure(value: unknown) {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['GRAPHQL_QUERY_TOKEN_LIMIT'] = value;
+
+			const logger = (await import('./logger.js')).default;
+
+			const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+				throw new Error('process.exit called');
+			}) as typeof process.exit);
+
+			const errorSpy = vi.spyOn(logger, 'error').mockImplementation((() => logger) as never);
+
+			try {
+				await expect(createApp()).rejects.toThrow('process.exit called');
+				expect(exitSpy).toHaveBeenCalledWith(1);
+
+				expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('GRAPHQL_QUERY_TOKEN_LIMIT'));
+			} finally {
+				errorSpy.mockRestore();
+				exitSpy.mockRestore();
+			}
+		}
+
+		test('logs and exits when GRAPHQL_QUERY_TOKEN_LIMIT is not a number', async () => {
+			await expectStartupFailure('not-a-number');
+		});
+
+		test('logs and exits when GRAPHQL_QUERY_TOKEN_LIMIT is zero', async () => {
+			await expectStartupFailure(0);
+		});
+
+		test('logs and exits when GRAPHQL_QUERY_TOKEN_LIMIT is not representable as a whole number', async () => {
+			await expectStartupFailure(2 ** 53);
+		});
+	});
+
 	describe('Schedule coordination readiness gate', () => {
 		beforeEach(() => {
 			mockInitScheduleCoordination.mockReset();
