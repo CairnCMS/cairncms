@@ -29,10 +29,7 @@ import {
 	GraphQLSchema,
 	GraphQLString,
 	GraphQLUnionType,
-	NoSchemaIntrospectionCustomRule,
 	execute,
-	specifiedRules,
-	validate,
 } from 'graphql';
 import type {
 	InputTypeComposerFieldConfigMapDefinition,
@@ -85,14 +82,9 @@ import { GraphQLGeoJSON } from './types/geojson.js';
 import { GraphQLHash } from './types/hash.js';
 import { GraphQLStringOrFloat } from './types/string-or-float.js';
 import { GraphQLVoid } from './types/void.js';
+import { validateGraphQLDocument } from './query-gate.js';
 import { addPathToValidationError } from './utils/add-path-to-validation-error.js';
 import formatGraphqlErrors from './utils/process-error.js';
-
-const validationRules = Array.from(specifiedRules);
-
-if (env['GRAPHQL_INTROSPECTION'] === false) {
-	validationRules.push(NoSchemaIntrospectionCustomRule);
-}
 
 /**
  * These should be ignored in the context of GraphQL, and/or are replaced by a custom resolver (for non-standard structures)
@@ -305,7 +297,7 @@ export class GraphQLService {
 	}: GraphQLParams): Promise<FormattedExecutionResult> {
 		const schema = this.getSchema();
 
-		const validationErrors = validate(schema, document, validationRules).map((validationError) =>
+		const validationErrors = validateGraphQLDocument(schema, document).map((validationError) =>
 			addPathToValidationError(validationError)
 		);
 

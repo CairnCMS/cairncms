@@ -45,6 +45,7 @@ Variables that control how CairnCMS listens for requests:
 - **`PUBLIC_URL`** — the externally-reachable URL of the instance. Used to construct asset URLs, redirect targets, and email links. Set this whenever the instance is reachable through a hostname or path that isn't `http://localhost:8055`.
 - **`SERVE_APP`** — whether to serve the admin app at `/admin`. Default `true`. Set to `false` for headless API deployments where no operator UI is needed.
 - **`GRAPHQL_INTROSPECTION`** — whether the GraphQL schema is introspectable. Default `true`. Disable in production if you do not want unauthenticated clients to enumerate the schema.
+- **`GRAPHQL_QUERY_TOKEN_LIMIT`** — maximum tokens allowed in one GraphQL document. Default `5000`. CairnCMS rejects larger documents before validation or execution. Accepts a whole number of `1` or greater; invalid or imprecise values prevent startup. Higher limits allow larger documents but increase parser resource use. CairnCMS does not define a universally safe maximum.
 - **`MAX_PAYLOAD_SIZE`** — the maximum request body size. Default `1mb`. Increase when receiving large uploads or imports. For a per-file upload cap, see `FILES_MAX_UPLOAD_SIZE` under Files and batch operations.
 - **`MAX_RELATIONAL_DEPTH`** — how deeply nested a single query can fetch related data. Default `10`.
 - **`MAX_BATCH_MUTATION`** — limit on items in a batch create/update/delete. Default unlimited.
@@ -55,6 +56,8 @@ Variables that control how CairnCMS listens for requests:
 - **`SERVER_SHUTDOWN_TIMEOUT`** — milliseconds to wait for in-flight requests during shutdown. Default `1000`.
 - **`IP_TRUST_PROXY`** — whether Express should trust `X-Forwarded-For` headers. Default `true` (assumes a reverse proxy in front).
 - **`IP_CUSTOM_HEADER`** — alternative header to read the client IP from, when not using `X-Forwarded-For`.
+
+Limits below about `200` tokens can prevent GraphiQL or Apollo Studio from loading the schema. Large Insights dashboards may also require a higher limit because the admin app sends all panel queries in one GraphQL document.
 
 ## Query limits
 

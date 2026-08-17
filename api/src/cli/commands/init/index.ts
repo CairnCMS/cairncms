@@ -143,6 +143,7 @@ function dockerComposeEnv(): NodeJS.ProcessEnv {
 		'CACHE_STORE',
 		'CACHE_REDIS',
 		'PUBLIC_URL',
+		'GRAPHQL_QUERY_TOKEN_LIMIT',
 		'CORS_ENABLED',
 		'CORS_ORIGIN',
 		'REFRESH_TOKEN_COOKIE_SECURE',
