@@ -1,7 +1,7 @@
 /** Every GraphQL transport must use this gate for parsing and validation. */
 
-import type { DocumentNode, ValidationRule } from 'graphql';
-import { NoSchemaIntrospectionCustomRule, parse, Source, specifiedRules } from 'graphql';
+import type { DocumentNode, GraphQLSchema, ValidationRule } from 'graphql';
+import { GraphQLError, NoSchemaIntrospectionCustomRule, parse, Source, specifiedRules, validate } from 'graphql';
 import { getEnv } from '../../env.js';
 import { type BoundedSpec, type ConfigParseError, parseCount } from '../../utils/parse-config.js';
 
@@ -42,4 +42,30 @@ export function buildValidationRules(): ValidationRule[] {
 	}
 
 	return rules;
+}
+
+// Near-match suggestions expose additional schema names when introspection is disabled.
+const SCHEMA_SUGGESTION = /\s*Did you mean\b[\s\S]*$/;
+
+function withoutSchemaSuggestion(error: GraphQLError): GraphQLError {
+	const message = error.message.replace(SCHEMA_SUGGESTION, '');
+
+	if (message === error.message) return error;
+
+	return new GraphQLError(message, {
+		nodes: error.nodes ?? null,
+		source: error.source,
+		positions: error.positions,
+		path: error.path,
+		originalError: error.originalError,
+		extensions: error.extensions,
+	});
+}
+
+export function validateGraphQLDocument(schema: GraphQLSchema, document: DocumentNode): readonly GraphQLError[] {
+	const errors = validate(schema, document, buildValidationRules());
+
+	if (getEnv()['GRAPHQL_INTROSPECTION'] !== false) return errors;
+
+	return errors.map(withoutSchemaSuggestion);
 }

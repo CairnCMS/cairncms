@@ -30,7 +30,6 @@ import {
 	GraphQLString,
 	GraphQLUnionType,
 	execute,
-	validate,
 } from 'graphql';
 import type {
 	InputTypeComposerFieldConfigMapDefinition,
@@ -83,7 +82,7 @@ import { GraphQLGeoJSON } from './types/geojson.js';
 import { GraphQLHash } from './types/hash.js';
 import { GraphQLStringOrFloat } from './types/string-or-float.js';
 import { GraphQLVoid } from './types/void.js';
-import { buildValidationRules } from './query-gate.js';
+import { validateGraphQLDocument } from './query-gate.js';
 import { addPathToValidationError } from './utils/add-path-to-validation-error.js';
 import formatGraphqlErrors from './utils/process-error.js';
 
@@ -298,7 +297,7 @@ export class GraphQLService {
 	}: GraphQLParams): Promise<FormattedExecutionResult> {
 		const schema = this.getSchema();
 
-		const validationErrors = validate(schema, document, buildValidationRules()).map((validationError) =>
+		const validationErrors = validateGraphQLDocument(schema, document).map((validationError) =>
 			addPathToValidationError(validationError)
 		);
 

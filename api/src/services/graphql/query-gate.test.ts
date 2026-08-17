@@ -1,7 +1,13 @@
-import { NoSchemaIntrospectionCustomRule } from 'graphql';
+import { buildSchema, NoSchemaIntrospectionCustomRule, parse } from 'graphql';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { getEnv, refreshEnv } from '../../env.js';
-import { buildValidationRules, getQueryTokenLimit, parseGraphQLQuery, resolveQueryTokenLimit } from './query-gate.js';
+import {
+	buildValidationRules,
+	getQueryTokenLimit,
+	parseGraphQLQuery,
+	resolveQueryTokenLimit,
+	validateGraphQLDocument,
+} from './query-gate.js';
 
 // refreshEnv() replaces the object, so tests must read it through getEnv().
 const env = () => getEnv() as Record<string, unknown>;
@@ -150,6 +156,54 @@ describe('Services / GraphQL / query gate', () => {
 			expect(message).not.toBe('');
 			expect(message).not.toContain('secretCollection');
 			expect(message).not.toContain('secretField');
+		});
+	});
+
+	describe('schema suggestion suppression', () => {
+		const schema = buildSchema(
+			'enum Color { RED GREEN } type Thing { title: String } type Query { thing(name: String): Thing, color(c: Color): String }'
+		);
+
+		const messagesFor = (query: string) =>
+			validateGraphQLDocument(schema, parse(query))
+				.map((error) => error.message)
+				.join(' ');
+
+		const cases: [string, string, string][] = [
+			['unknown field', '{ thing { titl } }', 'title'],
+			['unknown argument', '{ thing(nam: "x") { title } }', 'name'],
+			['unknown enum value', '{ color(c: RE) }', 'RED'],
+			['unknown type', 'fragment F on Thin { title } { thing { title } }', 'Thing'],
+		];
+
+		it.each(cases)('suppresses the %s suggestion when introspection is disabled', (_label, query, leaked) => {
+			env()['GRAPHQL_INTROSPECTION'] = false;
+
+			const messages = messagesFor(query);
+
+			expect(messages).not.toContain('Did you mean');
+			expect(messages).not.toContain(leaked);
+			expect(messages.length).toBeGreaterThan(0);
+		});
+
+		it.each(cases)('keeps the %s suggestion when introspection is enabled', (_label, query, suggested) => {
+			env()['GRAPHQL_INTROSPECTION'] = true;
+
+			const messages = messagesFor(query);
+
+			expect(messages).toContain('Did you mean');
+			expect(messages).toContain(suggested);
+		});
+
+		it('still reports the error itself, so a rejected query is not silently valid', () => {
+			env()['GRAPHQL_INTROSPECTION'] = false;
+			expect(messagesFor('{ thing { titl } }')).toContain('Cannot query field "titl"');
+		});
+
+		it('leaves an error carrying no suggestion untouched', () => {
+			env()['GRAPHQL_INTROSPECTION'] = false;
+			const [error] = validateGraphQLDocument(schema, parse('fragment Unused on Thing { title } { thing { title } }'));
+			expect(error?.message).toBe('Fragment "Unused" is never used.');
 		});
 	});
 
