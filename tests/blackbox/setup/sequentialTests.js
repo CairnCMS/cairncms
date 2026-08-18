@@ -30,6 +30,7 @@ exports.list = {
 		{ testFilePath: '/routes/permissions/cache-data-studio.test.ts' },
 		{ testFilePath: '/routes/translations/translations.test.ts' },
 		{ testFilePath: '/routes/files/upload-limits.test.ts' },
+		{ testFilePath: '/routes/security/trusted-ip.test.ts' },
 		{ testFilePath: '/routes/items/relational-presets.test.ts' },
 		{ testFilePath: '/routes/items/query-limit.test.ts' },
 		{ testFilePath: '/routes/assets/format.test.ts' },
