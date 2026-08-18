@@ -54,8 +54,8 @@ Variables that control how CairnCMS listens for requests:
 - **`ROBOTS_TXT`** — the body served at `/robots.txt`. Default disallows all crawlers.
 - **`ROOT_REDIRECT`** — where requests to `/` redirect. Default `./admin`.
 - **`SERVER_SHUTDOWN_TIMEOUT`** — milliseconds to wait for in-flight requests during shutdown. Default `1000`.
-- **`IP_TRUST_PROXY`** — whether Express should trust `X-Forwarded-For` headers. Default `true` (assumes a reverse proxy in front).
-- **`IP_CUSTOM_HEADER`** — alternative header to read the client IP from, when not using `X-Forwarded-For`.
+- **`IP_TRUST_PROXY`** — proxy addresses trusted to supply forwarded client IPs. Default `false`. Set an exact IP or CIDR, a comma-separated list, or `loopback`. Without it, proxied requests use the proxy's IP. Use `true` only when every ingress sanitizes forwarded headers; see [Trusted proxies and client IP](security-hardening.md#trusted-proxies-and-client-ip).
+- **`IP_CUSTOM_HEADER`** — a header CairnCMS reads the client IP from instead of `X-Forwarded-For`. Honored only when the immediate peer is a trusted proxy per `IP_TRUST_PROXY`. Default `false` (disabled).
 
 Limits below about `200` tokens can prevent GraphiQL or Apollo Studio from loading the schema. Large Insights dashboards may also require a higher limit because the admin app sends all panel queries in one GraphQL document.
 

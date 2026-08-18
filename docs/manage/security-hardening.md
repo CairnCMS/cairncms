@@ -11,7 +11,7 @@ The goal here is not exhaustive security advice; it is a checklist of the platfo
 
 ## TLS
 
-The CairnCMS image does not terminate TLS. Run a reverse proxy (Caddy, Traefik, nginx) or a managed load balancer in front of it. Set `IP_TRUST_PROXY=true` (the default) so CairnCMS reads the real client IP from `X-Forwarded-For`.
+The CairnCMS image does not terminate TLS. Run a reverse proxy (Caddy, Traefik, nginx) or a managed load balancer in front of it. Behind a proxy, set `IP_TRUST_PROXY` to that proxy's address so CairnCMS reads the real client IP from `X-Forwarded-For`. See [Trusted proxies and client IP](#trusted-proxies-and-client-ip).
 
 For production over HTTPS, set the refresh-token cookie to be secure-only:
 
@@ -93,6 +93,18 @@ These settings are independent of the password policy and form a separate accoun
 
 - **Auth Login Attempts** — number of failed logins before the account is automatically locked. Default `25`. Configured under **Settings > Project Settings > Security**. Locked accounts must be reactivated by an admin (set the user's status back to Active in the User Directory).
 - **`LOGIN_STALL_TIME`** — milliseconds the platform waits before responding to a failed login. Default `500`. Mitigates timing attacks against the login endpoint; do not lower it.
+
+## Trusted proxies and client IP
+
+Rate limiting, IP allowlists, audit records, and login records all key on the client IP CairnCMS derives for each request. That IP is only trustworthy if CairnCMS knows which upstream proxies may report it.
+
+`IP_TRUST_PROXY` defaults to `false`, meaning CairnCMS trusts no proxy and reads the immediate connection's address. A directly exposed instance is correct out of the box: a client cannot claim a different IP by sending `X-Forwarded-For`.
+
+Behind a reverse proxy or load balancer, set `IP_TRUST_PROXY` to that proxy's exact address or subnet (for example `10.0.0.5/32`), a comma-separated list, or `loopback` for a same-host proxy. CairnCMS then reads the forwarded client IP only when the immediate peer is in that trusted set. Do not set a broad range you do not control.
+
+Avoid `true` (trust every hop). It is safe only if every ingress in front of CairnCMS strips or overwrites client-supplied `X-Forwarded-For` and related headers, so a value the client sent cannot survive to CairnCMS. Blocking direct network access to the API is not sufficient on its own, because a request that reaches CairnCMS through the proxy still carries whatever forwarding headers the client set unless the proxy rewrites them.
+
+`IP_CUSTOM_HEADER` names an alternative header for the client IP. It is honored only from a trusted immediate peer under the same rule, so a direct client cannot use it to spoof.
 
 ## IP allowlists
 

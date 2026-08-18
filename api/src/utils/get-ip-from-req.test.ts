@@ -185,4 +185,10 @@ describe('getIPFromReq wired through Express', () => {
 		expect(res.status).toBe(200);
 		expect(res.text).toBe('9.9.9.9');
 	});
+
+	test('the configured IP_TRUST_PROXY default ignores a forged X-Forwarded-For', async () => {
+		const res = await request(serve(getEnv()['IP_TRUST_PROXY'])).get('/').set('X-Forwarded-For', '1.2.3.4');
+		expect(res.status).toBe(200);
+		expect(res.text).toBe('127.0.0.1');
+	});
 });

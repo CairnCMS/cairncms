@@ -430,6 +430,54 @@ describe('createApp', async () => {
 		});
 	});
 
+	describe('IP proxy config validation', () => {
+		afterEach(async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['IP_TRUST_PROXY'] = false;
+			env['IP_CUSTOM_HEADER'] = false;
+		});
+
+		async function expectStartupFailure(key: string, value: unknown, variable: string) {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env[key] = value;
+
+			const logger = (await import('./logger.js')).default;
+
+			const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+				throw new Error('process.exit called');
+			}) as typeof process.exit);
+
+			const errorSpy = vi.spyOn(logger, 'error').mockImplementation((() => logger) as never);
+
+			try {
+				await expect(createApp()).rejects.toThrow('process.exit called');
+				expect(exitSpy).toHaveBeenCalledWith(1);
+				expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining(variable));
+			} finally {
+				errorSpy.mockRestore();
+				exitSpy.mockRestore();
+			}
+		}
+
+		test('logs and exits when IP_TRUST_PROXY is an invalid trust value', async () => {
+			await expectStartupFailure('IP_TRUST_PROXY', 'not-a-cidr', 'IP_TRUST_PROXY');
+		});
+
+		test('logs and exits when IP_CUSTOM_HEADER is not a valid header name', async () => {
+			await expectStartupFailure('IP_CUSTOM_HEADER', 'X Real IP', 'IP_CUSTOM_HEADER');
+		});
+
+		test('starts and trims a spaced comma-separated IP_TRUST_PROXY list', async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['IP_TRUST_PROXY'] = ['127.0.0.1', ' 10.0.0.5'];
+
+			const app = await createApp();
+			const trust = app.get('trust proxy fn') as (addr: string, hop: number) => boolean;
+
+			expect(trust('10.0.0.5', 0)).toBe(true);
+		});
+	});
+
 	describe('Schedule coordination readiness gate', () => {
 		beforeEach(() => {
 			mockInitScheduleCoordination.mockReset();

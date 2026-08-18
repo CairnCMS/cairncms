@@ -66,6 +66,7 @@ import schema from './middleware/schema.js';
 import { initScheduleCoordination } from './schedule-coordination.js';
 import { validateGraphQLQueryTokenLimit } from './services/graphql/query-gate.js';
 import { validateSecretsEncryptionKey } from './utils/encrypt-secret.js';
+import { normalizeTrustProxy, validateIpProxyConfig } from './utils/validate-ip-proxy-config.js';
 import { validateQueryLimitConfig } from './utils/query-limit.js';
 import { getConfigFromEnv } from './utils/get-config-from-env.js';
 import { getMaxUploadSize } from './utils/get-max-upload-size.js';
@@ -89,6 +90,13 @@ export default async function createApp(): Promise<express.Application> {
 
 	try {
 		validateQueryLimitConfig();
+	} catch (error) {
+		logger.error((error as Error).message);
+		process.exit(1);
+	}
+
+	try {
+		validateIpProxyConfig();
 	} catch (error) {
 		logger.error((error as Error).message);
 		process.exit(1);
@@ -135,7 +143,7 @@ export default async function createApp(): Promise<express.Application> {
 	const app = express();
 
 	app.disable('x-powered-by');
-	app.set('trust proxy', env['IP_TRUST_PROXY']);
+	app.set('trust proxy', normalizeTrustProxy(env['IP_TRUST_PROXY']));
 
 	app.set('query parser', (str: string) =>
 		qs.parse(str, {
