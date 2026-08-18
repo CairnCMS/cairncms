@@ -29,6 +29,9 @@ afterEach(() => {
 test('Short-circuits when authenticate filter is used', async () => {
 	const req = {
 		ip: '127.0.0.1',
+		app: { get: () => () => false },
+		socket: { remoteAddress: '127.0.0.1' },
+		headers: {},
 		get: vi.fn(),
 	} as unknown as Request;
 
@@ -48,6 +51,9 @@ test('Short-circuits when authenticate filter is used', async () => {
 test('Uses default public accountability when no token is given', async () => {
 	const req = {
 		ip: '127.0.0.1',
+		app: { get: () => () => false },
+		socket: { remoteAddress: '127.0.0.1' },
+		headers: {},
 		get: vi.fn((string) => {
 			switch (string) {
 				case 'user-agent':
@@ -108,6 +114,9 @@ test('Sets accountability to payload contents if valid token is passed', async (
 
 	const req = {
 		ip: '127.0.0.1',
+		app: { get: () => () => false },
+		socket: { remoteAddress: '127.0.0.1' },
+		headers: {},
 		get: vi.fn((string) => {
 			switch (string) {
 				case 'user-agent':
@@ -184,6 +193,9 @@ test('Throws InvalidCredentialsException when static token is used, but user doe
 
 	const req = {
 		ip: '127.0.0.1',
+		app: { get: () => () => false },
+		socket: { remoteAddress: '127.0.0.1' },
+		headers: {},
 		get: vi.fn((string) => {
 			switch (string) {
 				case 'user-agent':
@@ -207,6 +219,9 @@ test('Throws InvalidCredentialsException when static token is used, but user doe
 test('Sets accountability to user information when static token is used', async () => {
 	const req = {
 		ip: '127.0.0.1',
+		app: { get: () => () => false },
+		socket: { remoteAddress: '127.0.0.1' },
+		headers: {},
 		get: vi.fn((string) => {
 			switch (string) {
 				case 'user-agent':

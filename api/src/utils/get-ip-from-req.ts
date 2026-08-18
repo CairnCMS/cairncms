@@ -1,21 +1,11 @@
 import type { Request } from 'express';
-import { isIP } from 'net';
-import env from '../env.js';
-import logger from '../logger.js';
+import { getEnv } from '../env.js';
+import { getTrustProxyFn, resolveClientIp } from './resolve-client-ip.js';
 
 export function getIPFromReq(req: Request): string {
-	let ip = req.ip;
+	const trust = getTrustProxyFn(req.app);
+	const configured = getEnv()['IP_CUSTOM_HEADER'];
+	const customHeader = typeof configured === 'string' && configured.length > 0 ? configured : false;
 
-	if (env['IP_CUSTOM_HEADER']) {
-		const customIPHeaderValue = req.get(env['IP_CUSTOM_HEADER']) as unknown;
-
-		if (typeof customIPHeaderValue === 'string' && isIP(customIPHeaderValue) !== 0) {
-			ip = customIPHeaderValue;
-		} else {
-			logger.warn(`Custom IP header didn't return valid IP address: ${JSON.stringify(customIPHeaderValue)}`);
-		}
-	}
-
-	// IP addresses starting with ::ffff: are IPv4 addresses in IPv6 format. We can strip the prefix to get back to IPv4
-	return ip.startsWith('::ffff:') ? ip.substring(7) : ip;
+	return resolveClientIp(req, trust, customHeader);
 }

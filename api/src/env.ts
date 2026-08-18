@@ -285,7 +285,7 @@ const defaults: Record<string, any> = {
 	ASSETS_TRANSFORM_TIMEOUT: '7500ms',
 	ASSETS_INVALID_IMAGE_SENSITIVITY_LEVEL: 'warning',
 
-	IP_TRUST_PROXY: true,
+	IP_TRUST_PROXY: false,
 	IP_CUSTOM_HEADER: false,
 
 	IMPORT_IP_DENY_LIST: ['0.0.0.0', '169.254.169.254'],
