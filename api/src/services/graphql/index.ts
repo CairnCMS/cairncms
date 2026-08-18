@@ -83,6 +83,7 @@ import { GraphQLHash } from './types/hash.js';
 import { GraphQLStringOrFloat } from './types/string-or-float.js';
 import { GraphQLVoid } from './types/void.js';
 import { validateGraphQLDocument } from './query-gate.js';
+import { authenticationAccountabilityFromRequest } from './request-accountability.js';
 import { addPathToValidationError } from './utils/add-path-to-validation-error.js';
 import formatGraphqlErrors from './utils/process-error.js';
 
@@ -2178,15 +2179,7 @@ export class GraphQLService {
 					otp: GraphQLString,
 				},
 				resolve: async (_, args, { req, res }) => {
-					const accountability: Accountability = { role: null };
-
-					if (req?.ip) accountability.ip = req.ip;
-
-					const userAgent = req?.get('user-agent');
-					if (userAgent) accountability.userAgent = userAgent;
-
-					const origin = req?.get('origin');
-					if (origin) accountability.origin = origin;
+					const accountability = authenticationAccountabilityFromRequest(req);
 
 					const authenticationService = new AuthenticationService({
 						accountability: accountability,
@@ -2219,15 +2212,7 @@ export class GraphQLService {
 					mode: AuthMode,
 				},
 				resolve: async (_, args, { req, res }) => {
-					const accountability: Accountability = { role: null };
-
-					if (req?.ip) accountability.ip = req.ip;
-
-					const userAgent = req?.get('user-agent');
-					if (userAgent) accountability.userAgent = userAgent;
-
-					const origin = req?.get('origin');
-					if (origin) accountability.origin = origin;
+					const accountability = authenticationAccountabilityFromRequest(req);
 
 					const authenticationService = new AuthenticationService({
 						accountability: accountability,
@@ -2265,15 +2250,7 @@ export class GraphQLService {
 					refresh_token: GraphQLString,
 				},
 				resolve: async (_, args, { req }) => {
-					const accountability: Accountability = { role: null };
-
-					if (req?.ip) accountability.ip = req.ip;
-
-					const userAgent = req?.get('user-agent');
-					if (userAgent) accountability.userAgent = userAgent;
-
-					const origin = req?.get('origin');
-					if (origin) accountability.origin = origin;
+					const accountability = authenticationAccountabilityFromRequest(req);
 
 					const authenticationService = new AuthenticationService({
 						accountability: accountability,
@@ -2297,15 +2274,7 @@ export class GraphQLService {
 					reset_url: GraphQLString,
 				},
 				resolve: async (_, args, { req }) => {
-					const accountability: Accountability = { role: null };
-
-					if (req?.ip) accountability.ip = req.ip;
-
-					const userAgent = req?.get('user-agent');
-					if (userAgent) accountability.userAgent = userAgent;
-
-					const origin = req?.get('origin');
-					if (origin) accountability.origin = origin;
+					const accountability = authenticationAccountabilityFromRequest(req);
 					const service = new UsersService({ accountability, schema: this.schema });
 
 					try {
@@ -2326,15 +2295,7 @@ export class GraphQLService {
 					password: new GraphQLNonNull(GraphQLString),
 				},
 				resolve: async (_, args, { req }) => {
-					const accountability: Accountability = { role: null };
-
-					if (req?.ip) accountability.ip = req.ip;
-
-					const userAgent = req?.get('user-agent');
-					if (userAgent) accountability.userAgent = userAgent;
-
-					const origin = req?.get('origin');
-					if (origin) accountability.origin = origin;
+					const accountability = authenticationAccountabilityFromRequest(req);
 
 					const service = new UsersService({ accountability, schema: this.schema });
 					await service.resetPassword(args['token'], args['password']);
