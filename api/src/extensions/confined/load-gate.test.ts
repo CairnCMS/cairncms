@@ -1,3 +1,4 @@
+import { RESERVED_EVENT_NAMESPACE_ERROR } from '@cairncms/constants';
 import type { Extension } from '@cairncms/types';
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -162,6 +163,46 @@ describe('gateConfinedExtension', () => {
 		const dir = await makeDir(options, { 'src/index.js': CLEAN_SOURCE });
 		const verdict = await gateConfinedExtension(extensionAt(dir));
 		expect(verdict).toMatchObject({ ok: false, error: { code: 'MANIFEST_INVALID' } });
+	});
+
+	it('refuses a confined hook subscribing to a reserved namespace with the reserved detail, others generic', async () => {
+		const hookManifest = (events: unknown) =>
+			manifest({
+				type: 'hook',
+				path: 'dist/index.js',
+				source: 'src/index.js',
+				runtime: 'confined-server',
+				host: '^10.0.0',
+				events,
+			});
+
+		const hookAt = (dir: string): Extension => ({
+			path: dir,
+			name: 'test-extension',
+			local: true,
+			runtime: 'confined-server',
+			type: 'hook',
+			entrypoint: 'dist/index.js',
+		});
+
+		const reservedDir = await makeDir(hookManifest({ filter: ['websocket.message'] }), {
+			'src/index.js': CLEAN_SOURCE,
+			'dist/index.js': HOOK_ENTRY,
+		});
+
+		expect(await gateConfinedExtension(hookAt(reservedDir))).toMatchObject({
+			ok: false,
+			error: { code: 'MANIFEST_INVALID', detail: RESERVED_EVENT_NAMESPACE_ERROR },
+		});
+
+		const wildcardDir = await makeDir(hookManifest({ filter: ['items.*'] }), {
+			'src/index.js': CLEAN_SOURCE,
+			'dist/index.js': HOOK_ENTRY,
+		});
+
+		const wildcard = await gateConfinedExtension(hookAt(wildcardDir));
+		expect(wildcard.ok).toBe(false);
+		if (!wildcard.ok) expect(wildcard.error.detail).toBe('the extension manifest failed validation');
 	});
 
 	it('refuses when the re-read manifest no longer declares a confined runtime', async () => {

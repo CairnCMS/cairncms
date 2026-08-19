@@ -8,7 +8,7 @@ import type {
 	ExtensionCapabilities,
 	FilterHandler,
 } from '@cairncms/types';
-import { hasSafeEventSegments } from '@cairncms/constants';
+import { RESERVED_EVENT_NAMESPACE_ERROR, hasSafeEventSegments, isReservedEventNamespace } from '@cairncms/constants';
 import express, { type Router } from 'express';
 import getDatabase from '../../database/index.js';
 import emitter from '../../emitter.js';
@@ -348,6 +348,15 @@ export class ConfinedRegistrar {
 				continue;
 			}
 
+			if (declaredEvents.some(isReservedEventNamespace)) {
+				this.view.recordFailed(extension, {
+					code: 'EVENT_INVALID',
+					detail: RESERVED_EVENT_NAMESPACE_ERROR,
+				});
+
+				continue;
+			}
+
 			const binding: ConfinedBinding = {
 				extensionId: extension.name,
 				contributionId: extension.name,
@@ -549,6 +558,13 @@ export class ConfinedRegistrar {
 			return {
 				status: 'failed',
 				reason: { code: 'EVENT_INVALID', detail: 'a confined hook event name is not a safe literal event' },
+			};
+		}
+
+		if (declaredEvents.some(isReservedEventNamespace)) {
+			return {
+				status: 'failed',
+				reason: { code: 'EVENT_INVALID', detail: RESERVED_EVENT_NAMESPACE_ERROR },
 			};
 		}
 

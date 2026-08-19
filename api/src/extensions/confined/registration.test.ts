@@ -1,3 +1,4 @@
+import { RESERVED_EVENT_NAMESPACE_ERROR } from '@cairncms/constants';
 import type { Extension } from '@cairncms/types';
 import express from 'express';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -573,6 +574,124 @@ describe('the confined hook binding', () => {
 
 		// No handler joined the unregister list, so nothing subscribed to the emitter.
 		expect((instance as any).hookEvents).toHaveLength(0);
+	});
+
+	it('refuses to subscribe a reserved-namespace event that reaches eligibility past the schema', () => {
+		const instance = new ExtensionManager();
+		current = instance;
+
+		(instance as any).confinedRuntime = {
+			supervisor: { invoke: async () => ({ ok: true, value: { done: true } }) },
+			config: {
+				sandbox: {
+					settingsValueBytes: 1,
+					httpResponseBytes: 1,
+					itemsReplyBytes: 1,
+					templateOutputBytes: 1,
+					maxArtifactBytes: 1,
+				},
+				runtime: {},
+			},
+		};
+
+		const extension = hookExtension('ws-guard-hook', 'ws-guard-hook', true);
+
+		(instance as any).confinedEligible.set(extension, {
+			entrySource: 'var CairnHook = {};',
+			capabilities: {},
+			events: { filter: ['websocket.message'] },
+		});
+
+		(instance as any).registerConfinedHooks();
+
+		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'ws-guard-hook');
+		expect(row?.status).toBe('failed');
+		expect(row?.reason?.code).toBe('EVENT_INVALID');
+		expect(row?.reason?.detail).toBe(RESERVED_EVENT_NAMESPACE_ERROR);
+		expect((instance as any).hookEvents).toHaveLength(0);
+	});
+
+	it('refuses a bundle hook entry that subscribes to a reserved namespace past the schema', () => {
+		const instance = new ExtensionManager();
+		current = instance;
+
+		(instance as any).confinedRuntime = {
+			supervisor: { invoke: async () => ({ ok: true, value: { done: true } }) },
+			config: {
+				sandbox: {
+					settingsValueBytes: 1,
+					httpResponseBytes: 1,
+					itemsReplyBytes: 1,
+					templateOutputBytes: 1,
+					maxArtifactBytes: 1,
+				},
+				runtime: {},
+			},
+		};
+
+		const extension: Extension = {
+			path: 'ws-guard-bundle',
+			name: 'ws-guard-bundle',
+			type: 'bundle',
+			entrypoint: { app: 'app.js', api: 'api.js' },
+			entries: [{ type: 'hook', name: 'ws-entry' }],
+			local: true,
+			runtime: 'confined-server',
+		};
+
+		(instance as any).confinedEligible.set(extension, {
+			entrySource: 'var CairnBundle = {};',
+			entryEvents: { 'hook:ws-entry': { filter: ['websocket.message'] } },
+			entryCapabilities: { 'hook:ws-entry': {} },
+		});
+
+		(instance as any).registerConfinedBundles();
+
+		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'ws-guard-bundle');
+		const hookEntry = row?.entries?.find((entry: any) => entry.name === 'ws-entry');
+		expect(hookEntry?.status).toBe('failed');
+		expect(hookEntry?.reason?.code).toBe('EVENT_INVALID');
+		expect(hookEntry?.reason?.detail).toBe(RESERVED_EVENT_NAMESPACE_ERROR);
+		expect((instance as any).hookEvents).toHaveLength(0);
+	});
+
+	it('refuses a hook whose manifest subscribes to the reserved websocket namespace and never subscribes', async () => {
+		writeConfinedPackage('ws-hook', 'export default {};\n', 'ws-hook', { log: true }, 'hook', {
+			filter: ['websocket.message'],
+		});
+
+		const instance = new ExtensionManager();
+		(instance as any).getExtensions = async () => [hookExtension('ws-hook', 'ws-hook', true)];
+		await (instance as any).load();
+		current = instance;
+
+		const row = (instance as any).getDiagnostics().find((entry: any) => entry.name === 'ws-hook');
+		expect(row?.status).toBe('failed');
+		expect(row?.reason?.detail).toBe(RESERVED_EVENT_NAMESPACE_ERROR);
+
+		expect((instance as any).hookEvents.some((event: any) => event.name === 'websocket.message')).toBe(false);
+	});
+
+	it('drops the old listener on reload and adds none when the reloaded manifest is reserved', async () => {
+		const first = await loadedHookManager('ws-reload-hook', 'ws-reload-hook', { filter: ['confined-binding.reload'] });
+
+		const fired = await emitter.emitFilter('confined-binding.reload', { v: 1 }, {}, EVENT_CONTEXT);
+		expect(fired).toHaveProperty('echoed');
+
+		await (first as any).unload();
+		current = undefined;
+
+		const second = await loadedHookManager('ws-reload-hook', 'ws-reload-hook', { filter: ['websocket.message'] });
+
+		const oldPayload = { v: 2 };
+		expect(await emitter.emitFilter('confined-binding.reload', oldPayload, {}, EVENT_CONTEXT)).toBe(oldPayload);
+
+		const reservedPayload = { v: 3 };
+		expect(await emitter.emitFilter('websocket.message', reservedPayload, {}, EVENT_CONTEXT)).toBe(reservedPayload);
+
+		const row = (second as any).getDiagnostics().find((entry: any) => entry.name === 'ws-reload-hook');
+		expect(row?.status).toBe('failed');
+		expect(row?.reason?.detail).toBe(RESERVED_EVENT_NAMESPACE_ERROR);
 	});
 
 	it('fails both confined hooks that declare the same id', async () => {

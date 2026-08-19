@@ -1,10 +1,11 @@
-import { NESTED_EXTENSION_TYPES } from '@cairncms/constants';
+import { NESTED_EXTENSION_TYPES, RESERVED_EVENT_NAMESPACE_ERROR } from '@cairncms/constants';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ensureExtensionDirs } from './ensure-extension-dirs.js';
-import { getLocalExtensions, resolvePackageExtensions } from './get-extensions.js';
+import { getLocalExtensions, resolvePackageExtensions, type ExtensionDiscoveryFailure } from './get-extensions.js';
+import { redactErrorDetail } from './redact-error-detail.js';
 
 const roots: string[] = [];
 
@@ -115,6 +116,41 @@ describe('resolvePackageExtensions discovery resilience', () => {
 
 		const carried = extensions.find((extension) => extension.name === 'cairncms-extension-template-ok');
 		expect(carried?.settings?.['preview_url']?.presentation?.interface).toBe('system-display-template');
+	});
+
+	it('surfaces the reserved-namespace detail at discovery while an unrelated failure stays generic', async () => {
+		const root = makeRoot();
+
+		writePackage(root, 'cairncms-extension-ws', {
+			name: 'cairncms-extension-ws',
+			version: '1.0.0',
+			'cairncms:extension': {
+				type: 'hook',
+				path: 'dist/index.js',
+				source: 'src/index.js',
+				host: '^1.0.0',
+				runtime: 'confined-server',
+				events: { filter: ['websocket.message'] },
+			},
+		});
+
+		writePackage(root, 'cairncms-extension-bad', badManifest);
+
+		const failures: ExtensionDiscoveryFailure[] = [];
+		const extensions = await resolvePackageExtensions(root, undefined, (failure) => failures.push(failure));
+
+		expect(extensions.map((extension) => extension.name)).not.toContain('cairncms-extension-ws');
+
+		const reserved = failures.find((failure) => failure.name === 'cairncms-extension-ws');
+		expect(reserved).toBeDefined();
+		expect(redactErrorDetail(reserved!.error)).toBe(RESERVED_EVENT_NAMESPACE_ERROR);
+
+		const unrelated = failures.find((failure) => failure.name === 'cairncms-extension-bad');
+		expect(unrelated).toBeDefined();
+
+		expect(redactErrorDetail(unrelated!.error)).toBe(
+			'The extension manifest of "cairncms-extension-bad" is not valid.'
+		);
 	});
 });
 

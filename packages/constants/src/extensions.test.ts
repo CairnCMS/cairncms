@@ -5,7 +5,10 @@ import {
 	ExtensionOptions,
 	ExtensionSettingDeclaration,
 	ExtensionSettingsSubjectSchema,
+	RESERVED_EVENT_NAMESPACE_ERROR,
 	getExtensionConfigSecretName,
+	isReservedEventNamespace,
+	isReservedEventNamespaceError,
 } from './extensions.js';
 
 describe('ExtensionCapabilitiesSchema', () => {
@@ -411,6 +414,63 @@ describe('ExtensionOptions confined hook events', () => {
 		]) {
 			expect(ExtensionOptions.safeParse({ ...hookOption, events }).success, JSON.stringify(events)).toBe(false);
 		}
+	});
+});
+
+describe('reserved websocket event namespace', () => {
+	const hookOption = { ...apiOption, type: 'hook', runtime: 'confined-server' as const };
+
+	function messages(result: ReturnType<typeof ExtensionOptions.safeParse>): string[] {
+		return result.success ? [] : result.error.issues.map((issue) => issue.message);
+	}
+
+	it('matches the exact name and dot descendants only', () => {
+		expect(isReservedEventNamespace('websocket')).toBe(true);
+		expect(isReservedEventNamespace('websocket.message')).toBe(true);
+		expect(isReservedEventNamespace('websocket.auth.success')).toBe(true);
+
+		for (const near of ['websockets.connect', 'custom.websocket', 'my-websocket-event', 'items.create']) {
+			expect(isReservedEventNamespace(near), near).toBe(false);
+		}
+	});
+
+	it('rejects a reserved event in filter and action lists, for a top-level hook and a bundle entry', () => {
+		for (const events of [
+			{ filter: ['websocket'] },
+			{ filter: ['websocket.message'] },
+			{ action: ['websocket.connect'] },
+			{ filter: ['items.create'], action: ['websocket.close'] },
+		]) {
+			const topLevel = ExtensionOptions.safeParse({ ...hookOption, events });
+			expect(topLevel.success, `top-level ${JSON.stringify(events)}`).toBe(false);
+			expect(messages(topLevel)).toContain(RESERVED_EVENT_NAMESPACE_ERROR);
+
+			const bundle = ExtensionOptions.safeParse({
+				...bundleOption,
+				runtime: 'confined-server',
+				entries: [{ type: 'hook', name: 'my-hook', source: 'src/hook.js', events }],
+			});
+
+			expect(bundle.success, `bundle ${JSON.stringify(events)}`).toBe(false);
+			expect(messages(bundle)).toContain(RESERVED_EVENT_NAMESPACE_ERROR);
+		}
+	});
+
+	it('accepts near names that share the websocket prefix', () => {
+		const events = { filter: ['websockets.connect', 'custom.websocket'], action: ['my-websocket-event'] };
+		expect(ExtensionOptions.safeParse({ ...hookOption, events }).success).toBe(true);
+	});
+
+	it('recognizes the reserved failure and nothing else', () => {
+		const reserved = ExtensionOptions.safeParse({ ...hookOption, events: { filter: ['websocket.message'] } });
+		expect(reserved.success).toBe(false);
+		expect(isReservedEventNamespaceError(reserved.success ? null : reserved.error)).toBe(true);
+
+		const unrelated = ExtensionOptions.safeParse({ ...hookOption, events: { filter: ['items.*'] } });
+		expect(unrelated.success).toBe(false);
+		expect(isReservedEventNamespaceError(unrelated.success ? null : unrelated.error)).toBe(false);
+
+		expect(isReservedEventNamespaceError(new Error('nope'))).toBe(false);
 	});
 });
 

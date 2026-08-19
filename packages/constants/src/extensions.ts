@@ -146,12 +146,28 @@ export function hasSafeEventSegments(name: string): boolean {
 	return name.split('.').every((segment) => !isReservedEventSegment(segment));
 }
 
+// Raw realtime events can expose transport state or alter protocol processing outside the confined broker.
+export const RESERVED_CONFINED_EVENT_NAMESPACES = ['websocket'] as const;
+
+export function isReservedEventNamespace(name: string): boolean {
+	return RESERVED_CONFINED_EVENT_NAMESPACES.some((namespace) => name === namespace || name.startsWith(`${namespace}.`));
+}
+
+export const RESERVED_EVENT_NAMESPACE_ERROR = `a confined hook may not subscribe to a reserved platform event namespace (${RESERVED_CONFINED_EVENT_NAMESPACES.join(
+	', '
+)})`;
+
+export function isReservedEventNamespaceError(error: unknown): boolean {
+	return error instanceof z.ZodError && error.issues.some((issue) => issue.message === RESERVED_EVENT_NAMESPACE_ERROR);
+}
+
 const ConfinedEventNameSchema = z
 	.string()
 	.min(1)
 	.max(128)
 	.regex(CONFINED_EVENT_NAME)
-	.refine(hasSafeEventSegments, { message: 'an event name segment may not be a reserved object or emitter key' });
+	.refine(hasSafeEventSegments, { message: 'an event name segment may not be a reserved object or emitter key' })
+	.refine((name) => !isReservedEventNamespace(name), { message: RESERVED_EVENT_NAMESPACE_ERROR });
 
 const ConfinedEventListSchema = z
 	.array(ConfinedEventNameSchema)
