@@ -326,6 +326,7 @@ const defaults: Record<string, any> = {
 	WEBSOCKETS_HEARTBEAT_PERIOD: 30,
 	WEBSOCKETS_USER_CONN_LIMIT: 10,
 	WEBSOCKETS_IP_CONN_LIMIT: 50,
+	WEBSOCKETS_PROCESS_CONN_LIMIT: 1000,
 };
 
 // Allows us to force certain environment variable into a type, instead of relying

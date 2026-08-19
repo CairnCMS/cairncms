@@ -45,13 +45,29 @@ describe('getWebSocketConfig', () => {
 		expect(realtimeErrors(resolution)).toEqual(['WEBSOCKETS_ENABLED']);
 	});
 
-	it('resolves active with the provisional candidates when enabled', () => {
+	it('resolves active with the configured defaults when enabled', () => {
 		setEnv(enabled);
 
 		expect(getWebSocketConfig()).toEqual({
 			active: true,
-			shared: { maxPayload: 1048576, heartbeatPeriodMs: 30000, userConnLimit: 10, ipConnLimit: 50 },
+			shared: {
+				maxPayload: 1048576,
+				heartbeatPeriodMs: 30000,
+				userConnLimit: 10,
+				ipConnLimit: 50,
+				processConnLimit: 1000,
+			},
 			rest: { active: true, config: { path: '/websocket', connLimit: 1000, auth: 'handshake', authTimeoutMs: 10000 } },
+		});
+	});
+
+	it('carries WEBSOCKETS_PROCESS_CONN_LIMIT into the shared config, distinct from the transport limit', () => {
+		setEnv({ ...enabled, WEBSOCKETS_PROCESS_CONN_LIMIT: '5000', WEBSOCKETS_REST_CONN_LIMIT: '2000' });
+
+		expect(getWebSocketConfig()).toMatchObject({
+			active: true,
+			shared: { processConnLimit: 5000 },
+			rest: { active: true, config: { connLimit: 2000 } },
 		});
 	});
 
@@ -69,7 +85,7 @@ describe('getWebSocketConfig', () => {
 		});
 
 		it('deactivates all realtime when a shared setting is invalid', () => {
-			setEnv({ ...enabled, WEBSOCKETS_HEARTBEAT_PERIOD: '5' });
+			setEnv({ ...enabled, WEBSOCKETS_HEARTBEAT_PERIOD: '0' });
 			const resolution = getWebSocketConfig();
 			expect(resolution.active).toBe(false);
 			expect(realtimeErrors(resolution)).toEqual(['WEBSOCKETS_HEARTBEAT_PERIOD']);
@@ -147,62 +163,69 @@ describe('getWebSocketConfig', () => {
 				scope: realtimeErrors,
 				accepts: (n: number) => ({ active: true, shared: { ipConnLimit: n } }),
 			},
+			{
+				variable: 'WEBSOCKETS_PROCESS_CONN_LIMIT',
+				scope: realtimeErrors,
+				accepts: (n: number) => ({ active: true, shared: { processConnLimit: n } }),
+			},
 		];
 
 		for (const { variable, scope, accepts } of cases) {
-			it(`accepts ${variable} at its boundaries and rejects beyond them`, () => {
+			it(`accepts ${variable} from its floor to the representation ceiling and rejects beyond them`, () => {
 				setEnv({ ...enabled, [variable]: '1' });
 				expect(getWebSocketConfig()).toMatchObject(accepts(1));
 
-				setEnv({ ...enabled, [variable]: '1000' });
-				expect(getWebSocketConfig()).toMatchObject(accepts(1000));
+				setEnv({ ...enabled, [variable]: String(Number.MAX_SAFE_INTEGER) });
+				expect(getWebSocketConfig()).toMatchObject(accepts(Number.MAX_SAFE_INTEGER));
 
 				setEnv({ ...enabled, [variable]: '0' });
 				expect(scope(getWebSocketConfig())).toEqual([variable]);
 
-				setEnv({ ...enabled, [variable]: '1001' });
+				setEnv({ ...enabled, [variable]: String(Number.MAX_SAFE_INTEGER + 1) });
 				expect(scope(getWebSocketConfig())).toEqual([variable]);
 			});
 
-			it(`rejects a non-integer ${variable}`, () => {
-				setEnv({ ...enabled, [variable]: '0x10' });
-				expect(scope(getWebSocketConfig())).toEqual([variable]);
+			it(`rejects a non-integer, non-finite, or Infinity ${variable}`, () => {
+				for (const value of ['0x10', '1.5', 'Infinity', '-1']) {
+					setEnv({ ...enabled, [variable]: value });
+					expect(scope(getWebSocketConfig())).toEqual([variable]);
+				}
 			});
 		}
 	});
 
 	describe('time ranges', () => {
-		it('bounds WEBSOCKETS_HEARTBEAT_PERIOD to [15, 120]', () => {
-			setEnv({ ...enabled, WEBSOCKETS_HEARTBEAT_PERIOD: '15' });
-			expect(getWebSocketConfig()).toMatchObject({ active: true, shared: { heartbeatPeriodMs: 15000 } });
+		it('bounds WEBSOCKETS_HEARTBEAT_PERIOD from 1 to the timer boundary', () => {
+			setEnv({ ...enabled, WEBSOCKETS_HEARTBEAT_PERIOD: '1' });
+			expect(getWebSocketConfig()).toMatchObject({ active: true, shared: { heartbeatPeriodMs: 1000 } });
 
-			setEnv({ ...enabled, WEBSOCKETS_HEARTBEAT_PERIOD: '120' });
-			expect(getWebSocketConfig()).toMatchObject({ active: true, shared: { heartbeatPeriodMs: 120000 } });
+			setEnv({ ...enabled, WEBSOCKETS_HEARTBEAT_PERIOD: '1073741' });
+			expect(getWebSocketConfig()).toMatchObject({ active: true, shared: { heartbeatPeriodMs: 1073741000 } });
 
-			setEnv({ ...enabled, WEBSOCKETS_HEARTBEAT_PERIOD: '14' });
+			setEnv({ ...enabled, WEBSOCKETS_HEARTBEAT_PERIOD: '0' });
 			expect(realtimeErrors(getWebSocketConfig())).toEqual(['WEBSOCKETS_HEARTBEAT_PERIOD']);
 
-			setEnv({ ...enabled, WEBSOCKETS_HEARTBEAT_PERIOD: '121' });
+			setEnv({ ...enabled, WEBSOCKETS_HEARTBEAT_PERIOD: '1073742' });
 			expect(realtimeErrors(getWebSocketConfig())).toEqual(['WEBSOCKETS_HEARTBEAT_PERIOD']);
 		});
 
-		it('bounds WEBSOCKETS_REST_AUTH_TIMEOUT to [1, 45] in handshake mode', () => {
+		it('bounds WEBSOCKETS_REST_AUTH_TIMEOUT from 1 to the timer boundary', () => {
 			setEnv({ ...enabled, WEBSOCKETS_REST_AUTH_TIMEOUT: '1' });
 			expect(getWebSocketConfig()).toMatchObject({ rest: { active: true, config: { authTimeoutMs: 1000 } } });
 
-			setEnv({ ...enabled, WEBSOCKETS_REST_AUTH_TIMEOUT: '45' });
-			expect(getWebSocketConfig()).toMatchObject({ rest: { active: true, config: { authTimeoutMs: 45000 } } });
+			setEnv({ ...enabled, WEBSOCKETS_REST_AUTH_TIMEOUT: '2147483' });
+			expect(getWebSocketConfig()).toMatchObject({ rest: { active: true, config: { authTimeoutMs: 2147483000 } } });
 
 			setEnv({ ...enabled, WEBSOCKETS_REST_AUTH_TIMEOUT: '0' });
 			expect(restErrors(getWebSocketConfig())).toEqual(['WEBSOCKETS_REST_AUTH_TIMEOUT']);
 
-			setEnv({ ...enabled, WEBSOCKETS_REST_AUTH_TIMEOUT: '46' });
+			setEnv({ ...enabled, WEBSOCKETS_REST_AUTH_TIMEOUT: '2147484' });
 			expect(restErrors(getWebSocketConfig())).toEqual(['WEBSOCKETS_REST_AUTH_TIMEOUT']);
 		});
 	});
 
-	describe('auth-mode-conditional timeout', () => {
-		it('converts heartbeat and handshake timeout seconds to milliseconds', () => {
+	describe('auth timeout across modes', () => {
+		it('converts heartbeat and auth-timeout seconds to milliseconds', () => {
 			setEnv({ ...enabled, WEBSOCKETS_HEARTBEAT_PERIOD: '20', WEBSOCKETS_REST_AUTH_TIMEOUT: '12' });
 
 			expect(getWebSocketConfig()).toMatchObject({
@@ -211,18 +234,20 @@ describe('getWebSocketConfig', () => {
 			});
 		});
 
-		it('ignores a malformed auth timeout in public and strict modes', () => {
-			setEnv({ ...enabled, WEBSOCKETS_REST_AUTH: 'public', WEBSOCKETS_REST_AUTH_TIMEOUT: 'garbage' });
-			expect(getWebSocketConfig()).toMatchObject({ rest: { active: true, config: { auth: 'public' } } });
+		for (const auth of ['public', 'handshake', 'strict']) {
+			it(`resolves authTimeoutMs in ${auth} mode`, () => {
+				setEnv({ ...enabled, WEBSOCKETS_REST_AUTH: auth, WEBSOCKETS_REST_AUTH_TIMEOUT: '15' });
 
-			setEnv({ ...enabled, WEBSOCKETS_REST_AUTH: 'strict', WEBSOCKETS_REST_AUTH_TIMEOUT: 'garbage' });
-			expect(getWebSocketConfig()).toMatchObject({ rest: { active: true, config: { auth: 'strict' } } });
-		});
+				expect(getWebSocketConfig()).toMatchObject({
+					rest: { active: true, config: { auth, authTimeoutMs: 15000 } },
+				});
+			});
 
-		it('validates the auth timeout in handshake mode', () => {
-			setEnv({ ...enabled, WEBSOCKETS_REST_AUTH: 'handshake', WEBSOCKETS_REST_AUTH_TIMEOUT: 'garbage' });
-			expect(restErrors(getWebSocketConfig())).toEqual(['WEBSOCKETS_REST_AUTH_TIMEOUT']);
-		});
+			it(`validates a malformed auth timeout in ${auth} mode`, () => {
+				setEnv({ ...enabled, WEBSOCKETS_REST_AUTH: auth, WEBSOCKETS_REST_AUTH_TIMEOUT: 'garbage' });
+				expect(restErrors(getWebSocketConfig())).toEqual(['WEBSOCKETS_REST_AUTH_TIMEOUT']);
+			});
+		}
 	});
 
 	it('resolves a WEBSOCKETS_*_FILE value into the parsed config, proving the allowlist entry', () => {

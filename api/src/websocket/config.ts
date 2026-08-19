@@ -12,21 +12,65 @@ const MAX_PAYLOAD_SPEC = {
 	ceiling: Number.MAX_SAFE_INTEGER,
 };
 
-const HEARTBEAT_PERIOD_SPEC = { envVar: 'WEBSOCKETS_HEARTBEAT_PERIOD', defaultValue: 30, floor: 15, ceiling: 120 };
-const AUTH_TIMEOUT_SPEC = { envVar: 'WEBSOCKETS_REST_AUTH_TIMEOUT', defaultValue: 10, floor: 1, ceiling: 45 };
-const USER_CONN_LIMIT_SPEC = { envVar: 'WEBSOCKETS_USER_CONN_LIMIT', defaultValue: 10, floor: 1, ceiling: 1000 };
-const IP_CONN_LIMIT_SPEC = { envVar: 'WEBSOCKETS_IP_CONN_LIMIT', defaultValue: 50, floor: 1, ceiling: 1000 };
-const REST_CONN_LIMIT_SPEC = { envVar: 'WEBSOCKETS_REST_CONN_LIMIT', defaultValue: 1000, floor: 1, ceiling: 1000 };
+export const TIMER_MAX_MS = 2_147_483_647;
 
-export type WebSocketRestConfig =
-	| { path: string; connLimit: number; auth: 'public' | 'strict' }
-	| { path: string; connLimit: number; auth: 'handshake'; authTimeoutMs: number };
+const HEARTBEAT_PERIOD_SPEC = {
+	envVar: 'WEBSOCKETS_HEARTBEAT_PERIOD',
+	defaultValue: 30,
+	floor: 1,
+	ceiling: Math.floor(TIMER_MAX_MS / (2 * 1000)),
+};
+
+const AUTH_TIMEOUT_SPEC = {
+	envVar: 'WEBSOCKETS_REST_AUTH_TIMEOUT',
+	defaultValue: 10,
+	floor: 1,
+	ceiling: Math.floor(TIMER_MAX_MS / 1000),
+};
+
+const CONN_LIMIT_CEILING = Number.MAX_SAFE_INTEGER;
+
+const USER_CONN_LIMIT_SPEC = {
+	envVar: 'WEBSOCKETS_USER_CONN_LIMIT',
+	defaultValue: 10,
+	floor: 1,
+	ceiling: CONN_LIMIT_CEILING,
+};
+
+const IP_CONN_LIMIT_SPEC = {
+	envVar: 'WEBSOCKETS_IP_CONN_LIMIT',
+	defaultValue: 50,
+	floor: 1,
+	ceiling: CONN_LIMIT_CEILING,
+};
+
+const REST_CONN_LIMIT_SPEC = {
+	envVar: 'WEBSOCKETS_REST_CONN_LIMIT',
+	defaultValue: 1000,
+	floor: 1,
+	ceiling: CONN_LIMIT_CEILING,
+};
+
+const PROCESS_CONN_LIMIT_SPEC = {
+	envVar: 'WEBSOCKETS_PROCESS_CONN_LIMIT',
+	defaultValue: 1000,
+	floor: 1,
+	ceiling: CONN_LIMIT_CEILING,
+};
+
+export type WebSocketRestConfig = {
+	path: string;
+	connLimit: number;
+	auth: AuthMode;
+	authTimeoutMs: number;
+};
 
 export type WebSocketSharedConfig = {
 	maxPayload: number;
 	heartbeatPeriodMs: number;
 	userConnLimit: number;
 	ipConnLimit: number;
+	processConnLimit: number;
 };
 
 export type TransportResolution<T> = { active: true; config: T } | { active: false; errors: ConfigParseError[] };
@@ -82,24 +126,20 @@ function resolveRest(env: Record<string, any>): TransportResolution<WebSocketRes
 	const auth = parseAuthMode('WEBSOCKETS_REST_AUTH', env['WEBSOCKETS_REST_AUTH']);
 	if (!auth.ok) errors.push(auth.error);
 
-	let authTimeoutMs: number | undefined;
+	const authTimeout = parseCount(env['WEBSOCKETS_REST_AUTH_TIMEOUT'], AUTH_TIMEOUT_SPEC);
+	if (!authTimeout.ok) errors.push(authTimeout.error);
 
-	if (auth.ok && auth.value === 'handshake') {
-		const timeout = parseCount(env['WEBSOCKETS_REST_AUTH_TIMEOUT'], AUTH_TIMEOUT_SPEC);
-		if (timeout.ok) authTimeoutMs = timeout.value * 1000;
-		else errors.push(timeout.error);
-	}
+	if (errors.length > 0 || !path.ok || !connLimit.ok || !auth.ok || !authTimeout.ok) return { active: false, errors };
 
-	if (errors.length > 0 || !path.ok || !connLimit.ok || !auth.ok) return { active: false, errors };
-
-	if (auth.value === 'handshake') {
-		return {
-			active: true,
-			config: { path: path.value, connLimit: connLimit.value, auth: 'handshake', authTimeoutMs: authTimeoutMs! },
-		};
-	}
-
-	return { active: true, config: { path: path.value, connLimit: connLimit.value, auth: auth.value } };
+	return {
+		active: true,
+		config: {
+			path: path.value,
+			connLimit: connLimit.value,
+			auth: auth.value,
+			authTimeoutMs: authTimeout.value * 1000,
+		},
+	};
 }
 
 export function getWebSocketConfig(): WebSocketResolution {
@@ -123,7 +163,17 @@ export function getWebSocketConfig(): WebSocketResolution {
 	const ipConnLimit = parseCount(env['WEBSOCKETS_IP_CONN_LIMIT'], IP_CONN_LIMIT_SPEC);
 	if (!ipConnLimit.ok) errors.push(ipConnLimit.error);
 
-	if (errors.length > 0 || !maxPayload.ok || !heartbeat.ok || !userConnLimit.ok || !ipConnLimit.ok) {
+	const processConnLimit = parseCount(env['WEBSOCKETS_PROCESS_CONN_LIMIT'], PROCESS_CONN_LIMIT_SPEC);
+	if (!processConnLimit.ok) errors.push(processConnLimit.error);
+
+	if (
+		errors.length > 0 ||
+		!maxPayload.ok ||
+		!heartbeat.ok ||
+		!userConnLimit.ok ||
+		!ipConnLimit.ok ||
+		!processConnLimit.ok
+	) {
 		return { active: false, errors };
 	}
 
@@ -132,6 +182,7 @@ export function getWebSocketConfig(): WebSocketResolution {
 		heartbeatPeriodMs: heartbeat.value * 1000,
 		userConnLimit: userConnLimit.value,
 		ipConnLimit: ipConnLimit.value,
+		processConnLimit: processConnLimit.value,
 	};
 
 	return { active: true, shared, rest: resolveRest(env) };
