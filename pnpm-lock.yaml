@@ -376,6 +376,9 @@ importers:
       wellknown:
         specifier: 0.5.0
         version: 0.5.0
+      ws:
+        specifier: 8.21.0
+        version: 8.21.0
     devDependencies:
       '@cairncms/types':
         specifier: workspace:*
@@ -485,6 +488,9 @@ importers:
       '@types/wellknown':
         specifier: 0.5.4
         version: 0.5.4
+      '@types/ws':
+        specifier: 8.18.1
+        version: 8.18.1
       '@vitest/coverage-v8':
         specifier: 3.2.6
         version: 3.2.6(vitest@3.2.6(@types/node@22.19.17)(happy-dom@20.10.6)(jsdom@26.1.0)(sass@1.62.0)(terser@5.46.1)(tsx@4.20.6)(yaml@2.8.3))

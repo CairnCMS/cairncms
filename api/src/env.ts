@@ -200,6 +200,8 @@ const allowedEnvironmentVars = [
 	'FLOWS_RUN_SCRIPT_MAX_MEMORY',
 	'FLOWS_RUN_SCRIPT_TIMEOUT',
 	'FLOWS_ENV_ALLOW_LIST',
+	// realtime
+	'WEBSOCKETS_.+',
 ].map((name) => new RegExp(`^${name}$`));
 
 const acceptedEnvTypes = ['string', 'number', 'regex', 'array', 'json'];
@@ -314,6 +316,16 @@ const defaults: Record<string, any> = {
 	PRESSURE_LIMITER_RETRY_AFTER: false,
 
 	FILES_MIME_TYPE_ALLOW_LIST: '*/*',
+
+	WEBSOCKETS_ENABLED: false,
+	WEBSOCKETS_REST_ENABLED: true,
+	WEBSOCKETS_REST_PATH: '/websocket',
+	WEBSOCKETS_REST_AUTH: 'handshake',
+	WEBSOCKETS_REST_AUTH_TIMEOUT: 10,
+	WEBSOCKETS_REST_CONN_LIMIT: 1000,
+	WEBSOCKETS_HEARTBEAT_PERIOD: 30,
+	WEBSOCKETS_USER_CONN_LIMIT: 10,
+	WEBSOCKETS_IP_CONN_LIMIT: 50,
 };
 
 // Allows us to force certain environment variable into a type, instead of relying
