@@ -52,6 +52,26 @@ export interface ConfigPlan {
 	};
 }
 
+export type PermissionIdentity = { role: string; collection: string; action: PermissionsAction };
+
+export type ConfigPlanWarning = {
+	code: 'COLLECTION_MISSING';
+	kind: 'permissions';
+	identity: PermissionIdentity;
+	message: string;
+};
+
+export type RoleDeletionImpactEntry =
+	| { kind: 'permissions'; identity: PermissionIdentity }
+	| { kind: 'presets'; count: number; bookmarks: string[] }
+	| { kind: 'users'; suspended: string[] }
+	| { kind: 'sessions'; active: number };
+
+export interface ConfigPlanEnrichment {
+	roleDeletionImpact: Map<string, RoleDeletionImpactEntry[]>;
+	warnings: ConfigPlanWarning[];
+}
+
 export interface ConfigPlanErrors {
 	errors: string[];
 }
