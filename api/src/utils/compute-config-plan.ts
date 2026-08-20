@@ -6,40 +6,87 @@ import type {
 	ConfigPermission,
 	ConfigRole,
 	CairnConfig,
+	PermissionFieldChanges,
+	RoleFieldChanges,
 } from '../types/config.js';
+import { canonicalizePermission, canonicalizeRole } from './canonicalize-config-record.js';
 
 function permKey(roleKey: string, perm: ConfigPermission): string {
 	return `${roleKey}::${perm.collection}::${perm.action}`;
 }
 
-function roleChanged(current: ConfigRole, desired: ConfigRole): Partial<ConfigRole> | null {
-	const diff: Partial<ConfigRole> = {};
-	let hasChanges = false;
+function roleChanges(current: ConfigRole, desired: ConfigRole): RoleFieldChanges {
+	const before = canonicalizeRole(current);
+	const after = canonicalizeRole(desired);
+	const changes: RoleFieldChanges = {};
 
-	for (const field of ['name', 'icon', 'description', 'admin_access', 'app_access', 'enforce_tfa'] as const) {
-		if (!Object.hasOwn(desired, field)) continue;
-
-		if (!isEqual(current[field], desired[field])) {
-			(diff as any)[field] = desired[field];
-			hasChanges = true;
-		}
+	if (Object.hasOwn(desired, 'name') && !isEqual(before.name, after.name)) {
+		changes.name = { before: before.name, after: after.name };
 	}
 
-	if (Object.hasOwn(desired, 'ip_access') && !isEqual(current.ip_access ?? null, desired.ip_access ?? null)) {
-		diff.ip_access = desired.ip_access ?? null;
-		hasChanges = true;
+	if (Object.hasOwn(desired, 'icon') && !isEqual(before.icon, after.icon)) {
+		changes.icon = { before: before.icon, after: after.icon };
 	}
 
-	return hasChanges ? diff : null;
+	if (Object.hasOwn(desired, 'description') && !isEqual(before.description, after.description)) {
+		changes.description = { before: before.description, after: after.description };
+	}
+
+	if (Object.hasOwn(desired, 'admin_access') && !isEqual(before.admin_access, after.admin_access)) {
+		changes.admin_access = { before: before.admin_access, after: after.admin_access };
+	}
+
+	if (Object.hasOwn(desired, 'app_access') && !isEqual(before.app_access, after.app_access)) {
+		changes.app_access = { before: before.app_access, after: after.app_access };
+	}
+
+	if (Object.hasOwn(desired, 'enforce_tfa') && !isEqual(before.enforce_tfa, after.enforce_tfa)) {
+		changes.enforce_tfa = { before: before.enforce_tfa, after: after.enforce_tfa };
+	}
+
+	if (Object.hasOwn(desired, 'ip_access') && !isEqual(before.ip_access, after.ip_access)) {
+		changes.ip_access = { before: before.ip_access, after: after.ip_access };
+	}
+
+	return changes;
 }
 
-function permChanged(current: ConfigPermission, desired: ConfigPermission): boolean {
-	return (
-		!isEqual(current.permissions, desired.permissions) ||
-		!isEqual(current.validation, desired.validation) ||
-		!isEqual(current.presets, desired.presets) ||
-		!isEqual(current.fields, desired.fields)
-	);
+function permChanges(current: ConfigPermission, desired: ConfigPermission): PermissionFieldChanges {
+	const before = canonicalizePermission(current);
+	const after = canonicalizePermission(desired);
+	const changes: PermissionFieldChanges = {};
+
+	if (!isEqual(before.permissions, after.permissions)) {
+		changes.permissions = { before: before.permissions, after: after.permissions };
+	}
+
+	if (!isEqual(before.validation, after.validation)) {
+		changes.validation = { before: before.validation, after: after.validation };
+	}
+
+	if (!isEqual(before.presets, after.presets)) {
+		changes.presets = { before: before.presets, after: after.presets };
+	}
+
+	if (!isEqual(before.fields, after.fields)) {
+		changes.fields = { before: before.fields, after: after.fields };
+	}
+
+	return changes;
+}
+
+function roleDiffFromChanges(changes: RoleFieldChanges): Partial<ConfigRole> {
+	const diff: Partial<ConfigRole> = {};
+
+	if (changes.name) diff.name = changes.name.after;
+	if (changes.icon) diff.icon = changes.icon.after;
+	if (changes.description) diff.description = changes.description.after;
+	if (changes.admin_access) diff.admin_access = changes.admin_access.after;
+	if (changes.app_access) diff.app_access = changes.app_access.after;
+	if (changes.enforce_tfa) diff.enforce_tfa = changes.enforce_tfa.after;
+	if (changes.ip_access) diff.ip_access = changes.ip_access.after;
+
+	return diff;
 }
 
 export function computeConfigPlan(current: CairnConfig, desired: CairnConfig): ConfigPlan {
@@ -60,10 +107,10 @@ export function computeConfigPlan(current: CairnConfig, desired: CairnConfig): C
 			if (!currentRole) {
 				plan.roles.create.push(desiredRole);
 			} else {
-				const diff = roleChanged(currentRole, desiredRole);
+				const changes = roleChanges(currentRole, desiredRole);
 
-				if (diff) {
-					plan.roles.update.push({ key: desiredRole.key, diff });
+				if (Object.keys(changes).length > 0) {
+					plan.roles.update.push({ key: desiredRole.key, diff: roleDiffFromChanges(changes), changes });
 				}
 			}
 		}
@@ -95,8 +142,12 @@ export function computeConfigPlan(current: CairnConfig, desired: CairnConfig): C
 
 				if (!currentPerm) {
 					plan.permissions.create.push({ roleKey: permSet.role, permission: perm });
-				} else if (permChanged(currentPerm, perm)) {
-					plan.permissions.update.push({ roleKey: permSet.role, permission: perm });
+				} else {
+					const changes = permChanges(currentPerm, perm);
+
+					if (Object.keys(changes).length > 0) {
+						plan.permissions.update.push({ roleKey: permSet.role, permission: perm, changes });
+					}
 				}
 			}
 		}
