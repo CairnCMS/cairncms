@@ -1,7 +1,9 @@
+import { BaseException } from '@cairncms/exceptions';
 import type { SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import { clearSystemCache } from '../cache.js';
 import getDatabase from '../database/index.js';
+import { ConfigApplyFailedException } from '../exceptions/config-apply-failed.js';
 import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
 import type { ApplyResult, ConfigPlan } from '../types/config.js';
@@ -52,131 +54,132 @@ export async function applyConfigPlan(
 	const schema = opts.schema ?? (await getSchema({ database, bypassCache: true }));
 
 	await database.transaction(async (trx) => {
-		const rolesService = new RolesService({ knex: trx, schema });
-		const permissionsService = new PermissionsService({ knex: trx, schema });
-		const skipCache = { autoPurgeCache: false as const };
+		try {
+			const rolesService = new RolesService({ knex: trx, schema });
+			const permissionsService = new PermissionsService({ knex: trx, schema });
+			const skipCache = { autoPurgeCache: false as const };
 
-		// Step 1: create and update roles
-		for (const role of plan.roles.create) {
-			await rolesService.createOne({
-				name: role.name,
-				key: role.key,
-				icon: role.icon ?? 'supervised_user_circle',
-				description: role.description ?? null,
-				admin_access: role.admin_access,
-				app_access: role.app_access,
-				enforce_tfa: role.enforce_tfa ?? false,
-				ip_access: role.ip_access ?? null,
-			});
+			for (const role of plan.roles.create) {
+				await rolesService.createOne({
+					name: role.name,
+					key: role.key,
+					icon: role.icon ?? 'supervised_user_circle',
+					description: role.description ?? null,
+					admin_access: role.admin_access,
+					app_access: role.app_access,
+					enforce_tfa: role.enforce_tfa ?? false,
+					ip_access: role.ip_access ?? null,
+				});
 
-			result.roles.created.push(role.key);
-		}
-
-		for (const { key, diff } of plan.roles.update) {
-			const existing = await trx('directus_roles').select('id').where({ key }).first();
-			if (!existing) throw new Error(`Role "${key}" not found during apply.`);
-
-			await rolesService.updateOne(existing.id, diff);
-			result.roles.updated.push(key);
-		}
-
-		// Step 2: rebuild key → id map from transactional state
-		const allRoles = await trx('directus_roles').select('id', 'key');
-		const roleIdByKey = new Map<string, string>();
-
-		for (const row of allRoles) {
-			roleIdByKey.set(row.key, row.id);
-		}
-
-		// Step 3: create and update permissions
-		// `roleIdByKey` includes the sentinel row (key='public' → PUBLIC_ROLE_ID),
-		// so 'public' resolves naturally with no special case.
-		for (const { roleKey, permission } of plan.permissions.create) {
-			const roleId = roleIdByKey.get(roleKey);
-
-			if (roleId === undefined) {
-				throw new Error(`Cannot create permission: role "${roleKey}" not found.`);
+				result.roles.created.push(role.key);
 			}
 
-			await permissionsService.createOne(
-				{
-					role: roleId,
-					collection: permission.collection,
-					action: permission.action,
-					permissions: permission.permissions,
-					validation: permission.validation,
-					presets: permission.presets,
-					fields: permission.fields,
-				},
-				skipCache
-			);
-
-			result.permissions.created++;
-		}
-
-		for (const { roleKey, permission } of plan.permissions.update) {
-			const roleId = roleIdByKey.get(roleKey);
-
-			if (roleId === undefined) {
-				throw new Error(`Cannot update permission: role "${roleKey}" not found.`);
-			}
-
-			const existing = await trx('directus_permissions')
-				.select('id')
-				.where({ collection: permission.collection, action: permission.action, role: roleId })
-				.first();
-
-			if (existing === undefined) {
-				throw new Error(
-					`Permission not found for update: role="${roleKey}" collection="${permission.collection}" action="${permission.action}".`
-				);
-			}
-
-			await permissionsService.updateOne(
-				existing['id'],
-				{
-					permissions: permission.permissions,
-					validation: permission.validation,
-					presets: permission.presets,
-					fields: permission.fields,
-				},
-				skipCache
-			);
-
-			result.permissions.updated++;
-		}
-
-		// Step 4: destructive role deletions
-		if (opts.destructive) {
-			for (const key of plan.roles.delete) {
+			for (const { key, diff } of plan.roles.update) {
 				const existing = await trx('directus_roles').select('id').where({ key }).first();
+				if (!existing) throw new Error(`Role "${key}" not found during apply.`);
 
-				if (existing) {
-					await rolesService.deleteOne(existing.id);
-					result.roles.deleted.push(key);
-				}
+				await rolesService.updateOne(existing.id, diff);
+				result.roles.updated.push(key);
 			}
-		}
 
-		// Step 5: destructive permission deletions (for kept roles only)
-		if (opts.destructive) {
-			for (const { roleKey, collection, action } of plan.permissions.delete) {
-				if (plan.roles.delete.includes(roleKey)) continue;
+			const allRoles = await trx('directus_roles').select('id', 'key');
+			const roleIdByKey = new Map<string, string>();
 
+			for (const row of allRoles) {
+				roleIdByKey.set(row.key, row.id);
+			}
+
+			// `roleIdByKey` includes the sentinel row (key='public' → PUBLIC_ROLE_ID),
+			// so 'public' resolves naturally with no special case.
+			for (const { roleKey, permission } of plan.permissions.create) {
 				const roleId = roleIdByKey.get(roleKey);
 
-				if (roleId === undefined) continue;
+				if (roleId === undefined) {
+					throw new Error(`Cannot create permission: role "${roleKey}" not found.`);
+				}
+
+				await permissionsService.createOne(
+					{
+						role: roleId,
+						collection: permission.collection,
+						action: permission.action,
+						permissions: permission.permissions,
+						validation: permission.validation,
+						presets: permission.presets,
+						fields: permission.fields,
+					},
+					skipCache
+				);
+
+				result.permissions.created++;
+			}
+
+			for (const { roleKey, permission } of plan.permissions.update) {
+				const roleId = roleIdByKey.get(roleKey);
+
+				if (roleId === undefined) {
+					throw new Error(`Cannot update permission: role "${roleKey}" not found.`);
+				}
 
 				const existing = await trx('directus_permissions')
 					.select('id')
-					.where({ collection, action, role: roleId })
+					.where({ collection: permission.collection, action: permission.action, role: roleId })
 					.first();
 
-				if (existing !== undefined) {
-					await permissionsService.deleteOne(existing['id'], skipCache);
-					result.permissions.deleted++;
+				if (existing === undefined) {
+					throw new Error(
+						`Permission not found for update: role="${roleKey}" collection="${permission.collection}" action="${permission.action}".`
+					);
+				}
+
+				await permissionsService.updateOne(
+					existing['id'],
+					{
+						permissions: permission.permissions,
+						validation: permission.validation,
+						presets: permission.presets,
+						fields: permission.fields,
+					},
+					skipCache
+				);
+
+				result.permissions.updated++;
+			}
+
+			if (opts.destructive) {
+				for (const key of plan.roles.delete) {
+					const existing = await trx('directus_roles').select('id').where({ key }).first();
+
+					if (existing) {
+						await rolesService.deleteOne(existing.id);
+						result.roles.deleted.push(key);
+					}
 				}
 			}
+
+			if (opts.destructive) {
+				for (const { roleKey, collection, action } of plan.permissions.delete) {
+					// A deleted role's permissions go with it through the RolesService cascade, so skip them here.
+					if (plan.roles.delete.includes(roleKey)) continue;
+
+					const roleId = roleIdByKey.get(roleKey);
+
+					if (roleId === undefined) continue;
+
+					const existing = await trx('directus_permissions')
+						.select('id')
+						.where({ collection, action, role: roleId })
+						.first();
+
+					if (existing !== undefined) {
+						await permissionsService.deleteOne(existing['id'], skipCache);
+						result.permissions.deleted++;
+					}
+				}
+			}
+		} catch (err) {
+			if (err instanceof BaseException) throw err;
+			throw new ConfigApplyFailedException();
 		}
 	});
 

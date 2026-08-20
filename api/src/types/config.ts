@@ -112,9 +112,9 @@ export type SerializedConfigPlan = {
 	warnings: ConfigPlanWarning[];
 };
 
-export interface ConfigPlanErrors {
-	errors: string[];
-}
+export type ConfigFailureCode = 'CONFIG_INVALID' | 'CONFIG_IDENTITY_CONFLICT' | 'CONFIG_PROTECTED_RECORD';
+
+export type ConfigFailure = { code: ConfigFailureCode; message: string };
 
 export interface ApplyResult {
 	roles: { created: string[]; updated: string[]; deleted: string[] };

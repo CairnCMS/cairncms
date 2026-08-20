@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { clearSystemCache } from '../cache.js';
+import { ConfigApplyFailedException } from '../exceptions/config-apply-failed.js';
+import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import { applyConfigPlan } from './apply-config-plan.js';
 import type { ConfigPlan } from '../types/config.js';
 
@@ -243,6 +246,51 @@ describe('applyConfigPlan — permission identity is resolved in the transaction
 	it('still reports a genuinely absent row as a failed update', async () => {
 		trxRows['directus_permissions'] = trxRows['directus_permissions']!.filter((row) => row['id'] !== 'perm-real');
 
-		await expect(applyConfigPlan(updatePlan(), {})).rejects.toThrow('Permission not found for update');
+		await expect(applyConfigPlan(updatePlan(), {})).rejects.toBeInstanceOf(ConfigApplyFailedException);
+	});
+});
+
+describe('applyConfigPlan — transaction failure wrapper', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+
+		trxRows = {
+			directus_roles: [{ id: 'role-1', key: 'editor' }],
+			directus_permissions: [],
+		};
+	});
+
+	function createPlan(): ConfigPlan {
+		const plan = emptyPlan();
+		plan.roles.create.push({ key: 'editor', name: 'Editor', admin_access: false, app_access: true });
+		return plan;
+	}
+
+	it('wraps a non-typed failure inside the transaction as CONFIG_APPLY_FAILED', async () => {
+		rolesService.createOne.mockRejectedValueOnce(new Error('constraint violation'));
+
+		const error = (await applyConfigPlan(createPlan(), {}).catch((thrown) => thrown)) as ConfigApplyFailedException;
+
+		expect(error).toBeInstanceOf(ConfigApplyFailedException);
+		expect(error.code).toBe('CONFIG_APPLY_FAILED');
+		expect(error.status).toBe(500);
+		expect(error.message).toContain('Retry the operation and report the failure if it persists');
+		expect(error.message).not.toContain('constraint violation');
+	});
+
+	it('rethrows a typed failure from inside the transaction unchanged', async () => {
+		const typed = new ConfigInvalidException('service rejected the record');
+		rolesService.createOne.mockRejectedValueOnce(typed);
+
+		await expect(applyConfigPlan(createPlan(), {})).rejects.toBe(typed);
+	});
+
+	it('does not wrap a post-commit cache failure as a rollback', async () => {
+		vi.mocked(clearSystemCache).mockRejectedValueOnce(new Error('cache unavailable'));
+
+		const error = (await applyConfigPlan(createPlan(), {}).catch((thrown) => thrown)) as Error;
+
+		expect(error).not.toBeInstanceOf(ConfigApplyFailedException);
+		expect(error.message).toContain('cache unavailable');
 	});
 });

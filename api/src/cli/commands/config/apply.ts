@@ -105,8 +105,8 @@ export async function configApply(
 		const documentErrors = validateDesiredConfig(desired, { label: configPath, currentRoleKeys });
 
 		if (documentErrors.length > 0) {
-			for (const error of documentErrors) {
-				logger.error(error);
+			for (const failure of documentErrors) {
+				logger.error(failure.message);
 			}
 
 			database.destroy();
@@ -117,11 +117,11 @@ export async function configApply(
 
 		const currentRoles = new Map(current.roles.map((r) => [r.key, { admin_access: r.admin_access }]));
 
-		const validation = validateConfigPlan(plan, desired, { currentRoles });
+		const planFailures = validateConfigPlan(plan, desired, { currentRoles });
 
-		if (validation.errors.length > 0) {
-			for (const error of validation.errors) {
-				logger.error(error);
+		if (planFailures.length > 0) {
+			for (const failure of planFailures) {
+				logger.error(failure.message);
 			}
 
 			database.destroy();

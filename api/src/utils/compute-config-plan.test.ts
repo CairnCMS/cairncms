@@ -266,7 +266,7 @@ describe('validateConfigPlan', () => {
 		const plan = computeConfigPlan(makeConfig(), desired);
 		const result = validateConfigPlan(plan, desired, { currentRoles: new Map() });
 
-		expect(result.errors).toEqual([]);
+		expect(result).toEqual([]);
 	});
 
 	it('checks only plan-dependent invariants, reporting no document-validity error', () => {
@@ -280,7 +280,7 @@ describe('validateConfigPlan', () => {
 		const plan = computeConfigPlan(makeConfig(), desired);
 		const result = validateConfigPlan(plan, desired, { currentRoles: new Map() });
 
-		expect(result.errors).toEqual([]);
+		expect(result).toEqual([]);
 	});
 
 	it('errors when deleting the last admin role', () => {
@@ -293,8 +293,9 @@ describe('validateConfigPlan', () => {
 			currentRoles: new Map([['administrator', { admin_access: true }]]),
 		});
 
-		expect(result.errors).toHaveLength(1);
-		expect(result.errors[0]).toContain('last admin role');
+		expect(result).toHaveLength(1);
+		expect(result[0]!.message).toContain('last admin role');
+		expect(result[0]!.code).toBe('CONFIG_PROTECTED_RECORD');
 	});
 
 	it('allows deleting an admin role when another admin remains', () => {
@@ -315,7 +316,7 @@ describe('validateConfigPlan', () => {
 			]),
 		});
 
-		expect(result.errors).toEqual([]);
+		expect(result).toEqual([]);
 	});
 
 	it('errors when deleting admin role and only non-admin roles remain', () => {
@@ -336,8 +337,9 @@ describe('validateConfigPlan', () => {
 			]),
 		});
 
-		expect(result.errors).toHaveLength(1);
-		expect(result.errors[0]).toContain('last admin role');
+		expect(result).toHaveLength(1);
+		expect(result[0]!.message).toContain('last admin role');
+		expect(result[0]!.code).toBe('CONFIG_PROTECTED_RECORD');
 	});
 });
 
@@ -424,6 +426,6 @@ describe('managed scope', () => {
 		const currentRoles = new Map([['admin', { admin_access: true }]]);
 
 		expect(plan.roles.delete).toEqual([]);
-		expect(validateConfigPlan(plan, desired, { currentRoles }).errors).toEqual([]);
+		expect(validateConfigPlan(plan, desired, { currentRoles })).toEqual([]);
 	});
 });

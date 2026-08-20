@@ -1,8 +1,8 @@
 import { isEqual } from 'lodash-es';
 import type {
+	ConfigFailure,
 	ConfigKind,
 	ConfigPlan,
-	ConfigPlanErrors,
 	ConfigPermission,
 	ConfigRole,
 	CairnConfig,
@@ -179,8 +179,8 @@ export function validateConfigPlan(
 	plan: ConfigPlan,
 	desired: CairnConfig,
 	context: { currentRoles: Map<string, { admin_access: boolean }> }
-): ConfigPlanErrors {
-	const errors: string[] = [];
+): ConfigFailure[] {
+	const failures: ConfigFailure[] = [];
 
 	if (plan.roles.delete.length > 0) {
 		const deletedKeys = new Set(plan.roles.delete);
@@ -196,9 +196,9 @@ export function validateConfigPlan(
 		}).length;
 
 		if (remainingAdminCount + desiredAdminCount === 0) {
-			errors.push('Cannot delete the last admin role.');
+			failures.push({ code: 'CONFIG_PROTECTED_RECORD', message: 'Cannot delete the last admin role.' });
 		}
 	}
 
-	return { errors };
+	return failures;
 }
