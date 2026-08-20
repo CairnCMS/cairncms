@@ -1,4 +1,3 @@
-import chalk from 'chalk';
 import inquirer from 'inquirer';
 import type { Knex } from 'knex';
 import getDatabase, { isInstalled, validateDatabaseConnection } from '../../../database/index.js';
@@ -12,53 +11,8 @@ import { readConfigDirectory } from '../../../utils/read-config-directory.js';
 import { serializeConfigPlan } from '../../../utils/serialize-config-plan.js';
 import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
 import type { CairnConfig, ConfigPlan, SerializedConfigPlan } from '../../../types/config.js';
-
-function formatPlanHuman(plan: ConfigPlan, destructive: boolean): string {
-	const lines: string[] = [];
-
-	if (plan.roles.create.length > 0) {
-		lines.push(chalk.underline.bold('Roles:'));
-
-		for (const role of plan.roles.create) {
-			lines.push(`  ${chalk.green('Create')} ${role.key} (${role.name})`);
-		}
-	}
-
-	if (plan.roles.update.length > 0) {
-		if (lines.length === 0) lines.push(chalk.underline.bold('Roles:'));
-
-		for (const { key, changes } of plan.roles.update) {
-			const fields = Object.keys(changes).join(', ');
-			lines.push(`  ${chalk.blue('Update')} ${key} (${fields})`);
-		}
-	}
-
-	if (destructive && plan.roles.delete.length > 0) {
-		if (lines.length === 0) lines.push(chalk.underline.bold('Roles:'));
-
-		for (const key of plan.roles.delete) {
-			lines.push(`  ${chalk.red('Delete')} ${key}`);
-		}
-	}
-
-	const permCreates = plan.permissions.create.length;
-	const permUpdates = plan.permissions.update.length;
-
-	const permDeletes = destructive
-		? plan.permissions.delete.filter((d) => !plan.roles.delete.includes(d.roleKey)).length
-		: 0;
-
-	if (permCreates > 0 || permUpdates > 0 || permDeletes > 0) {
-		lines.push('');
-		lines.push(chalk.underline.bold('Permissions:'));
-
-		if (permCreates > 0) lines.push(`  ${chalk.green('Create')} ${permCreates} permission(s)`);
-		if (permUpdates > 0) lines.push(`  ${chalk.blue('Update')} ${permUpdates} permission(s)`);
-		if (permDeletes > 0) lines.push(`  ${chalk.red('Delete')} ${permDeletes} permission(s)`);
-	}
-
-	return lines.join('\n');
-}
+import { confirmPrompt } from '../../presentation.js';
+import { renderConfigPlan, renderRefusal, renderWarnings } from './render-config-plan.js';
 
 function isPlanEmpty(plan: ConfigPlan): boolean {
 	if (plan.roles.create.length > 0) return false;
@@ -146,32 +100,40 @@ export async function configApply(
 		}
 
 		if (empty) {
-			logger.info('No changes to apply.');
+			if (desired.manifest.resources.includes('permissions')) {
+				const warnings = renderWarnings(await serializePlan(plan, desired, database));
+				logger.info(warnings ? `No changes to apply.\n\n${warnings}` : 'No changes to apply.');
+			} else {
+				logger.info('No changes to apply.');
+			}
+
 			database.destroy();
 			process.exit(0);
 		}
 
+		const serialized = await serializePlan(plan, desired, database);
+
 		if (dryRun) {
-			logger.info('Planned changes:\n\n' + formatPlanHuman(plan, destructive));
+			logger.info(renderConfigPlan(serialized));
 			database.destroy();
 			process.exit(1);
 		}
 
 		if (!destructive && planHasDeletions(plan)) {
-			logger.info('Planned changes:\n\n' + formatPlanHuman(plan, true));
-			logger.error('Apply refused: the plan contains deletions. Re-run with --destructive to authorize them.');
+			logger.info(renderConfigPlan(serialized));
+			logger.error(renderRefusal(serialized));
 			database.destroy();
 			process.exit(2);
 		}
 
-		logger.info('Planned changes:\n\n' + formatPlanHuman(plan, destructive));
+		logger.info(renderConfigPlan(serialized));
 
 		if (options?.yes !== true) {
 			const { proceed } = await inquirer.prompt([
 				{
 					type: 'confirm',
 					name: 'proceed',
-					message: 'Apply these changes?',
+					message: confirmPrompt,
 				},
 			]);
 
