@@ -1,3 +1,5 @@
+// Must run before index.js constructs the shared logger.
+import './machine-output.js';
 import { createCli } from './index.js';
 
 createCli()
