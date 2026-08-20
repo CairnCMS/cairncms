@@ -5,12 +5,12 @@ export interface AdmissionLimits {
 	readonly transports: Readonly<Record<string, number>>;
 }
 
-export interface AuthHold {
+export interface WorkHold {
 	clear(): void;
 }
 
 export interface Lease {
-	beginAuthHold(): AuthHold | null;
+	beginWorkHold(): WorkHold | null;
 	transitionToUser(user: string): boolean;
 	transitionToAnonymous(): boolean;
 	close(): void;
@@ -20,7 +20,7 @@ interface LeaseState {
 	readonly transport: string;
 	readonly ip: string;
 	user: string | null;
-	hold: AuthHold | null;
+	workCount: number;
 	closed: boolean;
 	released: boolean;
 }
@@ -77,7 +77,7 @@ export class Admission {
 			return null;
 		}
 
-		return this.createLease({ transport, ip, user: null, hold: null, closed: false, released: false });
+		return this.createLease({ transport, ip, user: null, workCount: 0, closed: false, released: false });
 	}
 
 	private createLease(state: LeaseState): Lease {
@@ -92,19 +92,20 @@ export class Admission {
 		};
 
 		return {
-			beginAuthHold: () => {
-				if (state.closed || state.hold !== null) return null;
+			beginWorkHold: () => {
+				if (state.closed) return null;
 
-				const hold: AuthHold = {
+				state.workCount++;
+				let cleared = false;
+
+				return {
 					clear: () => {
-						if (state.hold !== hold) return;
-						state.hold = null;
-						if (state.closed) release();
+						if (cleared) return;
+						cleared = true;
+						state.workCount--;
+						if (state.closed && state.workCount === 0) release();
 					},
 				};
-
-				state.hold = hold;
-				return hold;
 			},
 			transitionToUser: (user: string) => {
 				if (state.closed) return false;
@@ -128,7 +129,7 @@ export class Admission {
 			close: () => {
 				if (state.released) return;
 				state.closed = true;
-				if (state.hold !== null) return;
+				if (state.workCount > 0) return;
 				release();
 			},
 		};

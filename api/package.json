@@ -153,7 +153,8 @@
 		"uuid": "11.1.1",
 		"uuid-validate": "0.0.3",
 		"wellknown": "0.5.0",
-		"ws": "8.21.0"
+		"ws": "8.21.0",
+		"zod": "3.23.8"
 	},
 	"devDependencies": {
 		"@cairncms/types": "workspace:*",

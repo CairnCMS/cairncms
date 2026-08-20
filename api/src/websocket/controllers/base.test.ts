@@ -12,12 +12,33 @@ import { getEnv } from '../../env.js';
 import logger from '../../logger.js';
 import type { RateLimitConsumption } from '../../middleware/rate-limiter-ip.js';
 import { Admission } from '../admission.js';
-import { TIMER_MAX_MS, type AuthMode } from '../config.js';
+import { PENDING_COMMAND_LIMIT, TIMER_MAX_MS, type AuthMode } from '../config.js';
 import type { SocketClient, SocketControllerOptions } from './base.js';
 import { WebSocketController } from './rest.js';
 
 class TestController extends WebSocketController {
 	public expiryBehavior: () => void = () => undefined;
+	public commandGate: (() => Promise<void>) | null = null;
+	public commandLog: (string | number | undefined)[] = [];
+	public handlerError: Error | null = null;
+
+	public get clientCount(): number {
+		return this.clients.size;
+	}
+
+	public stopClient(client: SocketClient, options?: { code?: number; terminate?: boolean }): void {
+		this.stop(client, options);
+	}
+
+	constructor(options: SocketControllerOptions) {
+		super(options);
+
+		this.handlers.set('test', async (_client, message) => {
+			this.commandLog.push(message.uid);
+			if (this.commandGate) await this.commandGate();
+			if (this.handlerError) throw this.handlerError;
+		});
+	}
 
 	protected override buildOnExpiry(_client: SocketClient): () => void {
 		return () => this.expiryBehavior();
@@ -84,7 +105,7 @@ type ConnectResult =
 	| { kind: 'open'; ws: WebSocket }
 	| { kind: 'reject'; status: number; headers: IncomingHttpHeaders; body: string };
 
-let emitAction: ReturnType<typeof vi.spyOn>;
+let emitActionBounded: ReturnType<typeof vi.spyOn>;
 
 async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
 	const admission = options.admission ?? new Admission({ process: 100, ip: 100, user: 100, transports: { rest: 100 } });
@@ -170,7 +191,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
 }
 
 function callsFor(event: string): unknown[][] {
-	return emitAction.mock.calls.filter((call) => call[0] === event);
+	return emitActionBounded.mock.calls.filter((call) => call[0] === event);
 }
 
 function deferred<T>() {
@@ -201,6 +222,28 @@ function deferredDatabase() {
 	return { database: chain as unknown as Knex, resolve: () => gate.resolve(undefined), called: calledGate.promise };
 }
 
+function deferredUserDatabase(user: string) {
+	const gate = deferred<{ id: string; role: string; admin_access: boolean; app_access: boolean }>();
+	const calledGate = deferred<void>();
+
+	const chain: Record<string, unknown> = {
+		select: () => chain,
+		from: () => chain,
+		leftJoin: () => chain,
+		where: () => chain,
+		first: () => {
+			calledGate.resolve();
+			return gate.promise;
+		},
+	};
+
+	return {
+		database: chain as unknown as Knex,
+		resolve: () => gate.resolve({ id: user, role: 'role-1', admin_access: false, app_access: true }),
+		called: calledGate.promise,
+	};
+}
+
 function deferredSchema() {
 	const gate = deferred<SchemaOverview>();
 	const calledGate = deferred<void>();
@@ -219,16 +262,30 @@ function flush(): Promise<void> {
 	return new Promise((resolve) => setImmediate(resolve));
 }
 
+function collect(ws: WebSocket): Record<string, any>[] {
+	const frames: Record<string, any>[] = [];
+	ws.on('message', (data) => frames.push(JSON.parse(data.toString())));
+	return frames;
+}
+
+function sendJson(ws: WebSocket, message: Record<string, unknown>): void {
+	ws.send(JSON.stringify(message));
+}
+
+async function waitFrames(predicate: () => boolean): Promise<void> {
+	for (let i = 0; i < 2000 && !predicate(); i++) await new Promise((resolve) => setImmediate(resolve));
+}
+
 let harness: Harness | null = null;
 
 beforeEach(() => {
-	emitAction = vi.spyOn(emitter, 'emitAction');
+	emitActionBounded = vi.spyOn(emitter, 'emitActionBounded');
 });
 
 afterEach(async () => {
 	if (harness) await harness.teardown();
 	harness = null;
-	emitAction.mockRestore();
+	emitActionBounded.mockRestore();
 	vi.useRealTimers();
 });
 
@@ -793,5 +850,456 @@ describe('token-expiry timer', () => {
 
 		vi.advanceTimersByTime(200_000);
 		expect(fired).toBe(0);
+	});
+});
+
+async function openClient(options?: HarnessOptions): Promise<{ ws: WebSocket; frames: Record<string, any>[] }> {
+	harness = await createHarness(options);
+	const opened = await harness.connect();
+	if (opened.kind !== 'open') throw new Error('expected an open connection');
+	return { ws: opened.ws, frames: collect(opened.ws) };
+}
+
+describe('REST message path', () => {
+	it('answers a malformed frame with INVALID_PAYLOAD and stays open', async () => {
+		const { ws, frames } = await openClient();
+
+		ws.send('not json');
+		await vi.waitFor(() => expect(frames).toHaveLength(1));
+		expect(frames[0]).toMatchObject({ status: 'error', error: { code: 'INVALID_PAYLOAD' } });
+		expect(ws.readyState).toBe(WebSocket.OPEN);
+	});
+
+	it('answers an unregistered type with UNSUPPORTED_MESSAGE_TYPE, carrying the uid', async () => {
+		const { ws, frames } = await openClient({ controllerClass: TestController });
+
+		sendJson(ws, { type: 'nope', uid: 5 });
+		await vi.waitFor(() => expect(frames).toHaveLength(1));
+		expect(frames[0]).toMatchObject({ status: 'error', error: { code: 'UNSUPPORTED_MESSAGE_TYPE' }, uid: 5 });
+	});
+
+	it('runs commands serially, the second only after the first resolves', async () => {
+		const { ws } = await openClient({ controllerClass: TestController });
+		const controller = harness!.controller as TestController;
+		const gate = deferred<void>();
+		controller.commandGate = () => gate.promise;
+
+		sendJson(ws, { type: 'test', uid: 1 });
+		sendJson(ws, { type: 'test', uid: 2 });
+
+		await vi.waitFor(() => expect(controller.commandLog).toEqual([1]));
+		await flush();
+		expect(controller.commandLog).toEqual([1]);
+
+		gate.resolve();
+		await vi.waitFor(() => expect(controller.commandLog).toEqual([1, 2]));
+	});
+
+	it('emits websocket.message after a successful command', async () => {
+		const { ws } = await openClient({ controllerClass: TestController });
+
+		sendJson(ws, { type: 'test', uid: 8 });
+		await vi.waitFor(() => expect(callsFor('websocket.message')).toHaveLength(1));
+		const meta = callsFor('websocket.message')[0]![1] as { message: { type: string; uid: number } };
+		expect(meta.message).toMatchObject({ type: 'test', uid: 8 });
+	});
+
+	it('answers a handler rejection with INTERNAL_ERROR and no raw error', async () => {
+		const { ws, frames } = await openClient({ controllerClass: TestController });
+		(harness!.controller as TestController).handlerError = new Error('handler boom');
+
+		sendJson(ws, { type: 'test', uid: 6 });
+		await vi.waitFor(() => expect(frames).toHaveLength(1));
+		expect(frames[0]).toMatchObject({ status: 'error', error: { code: 'INTERNAL_ERROR' } });
+		expect(frames[0]!['error'].message).not.toContain('handler boom');
+	});
+
+	it('charges the shared limiter per message and answers REQUESTS_EXCEEDED without closing', async () => {
+		let budget = 1;
+
+		const { ws, frames } = await openClient({
+			controllerClass: TestController,
+			consumeIpRateLimit: async () => (budget-- > 0 ? { allowed: true } : { allowed: false, retryAfterMs: 1000 }),
+		});
+
+		sendJson(ws, { type: 'test', uid: 9 });
+		await vi.waitFor(() => expect(frames).toHaveLength(1));
+		expect(frames[0]).toMatchObject({ status: 'error', error: { code: 'REQUESTS_EXCEEDED' } });
+		expect(ws.readyState).toBe(WebSocket.OPEN);
+	});
+
+	it('rejects the overflowing frame with TOO_MANY_PENDING and closes 1013', async () => {
+		const { ws, frames } = await openClient({ controllerClass: TestController });
+		const controller = harness!.controller as TestController;
+		const gate = deferred<void>();
+		controller.commandGate = () => gate.promise;
+
+		const closed = new Promise<number>((resolve) => ws.on('close', (code) => resolve(code)));
+		for (let i = 0; i < PENDING_COMMAND_LIMIT + 2; i++) sendJson(ws, { type: 'test', uid: i });
+
+		await vi.waitFor(() => expect(frames.some((f) => f['error']?.code === 'TOO_MANY_PENDING')).toBe(true));
+		expect(await closed).toBe(1013);
+		gate.resolve();
+	});
+
+	it('keeps the admission slot counted after close until a stalled handler settles', async () => {
+		const admission = new Admission({ process: 1, ip: 100, user: 100, transports: { rest: 100 } });
+		const { ws } = await openClient({ controllerClass: TestController, admission });
+		const controller = harness!.controller as TestController;
+		const gate = deferred<void>();
+		controller.commandGate = () => gate.promise;
+
+		sendJson(ws, { type: 'test', uid: 1 });
+		await vi.waitFor(() => expect(controller.commandLog).toEqual([1]));
+
+		const clientClosed = new Promise<void>((resolve) => ws.on('close', () => resolve()));
+		ws.close();
+		await clientClosed;
+		expect(admission.reserve('rest', '2.2.2.2')).toBeNull();
+
+		gate.resolve();
+		await vi.waitFor(() => expect(admission.reserve('rest', '2.2.2.2')).not.toBeNull());
+	});
+
+	it('discards waiting commands on close so no waiter runs', async () => {
+		const { ws } = await openClient({ controllerClass: TestController });
+		const controller = harness!.controller as TestController;
+		const gate = deferred<void>();
+		controller.commandGate = () => gate.promise;
+
+		sendJson(ws, { type: 'test', uid: 1 });
+		sendJson(ws, { type: 'test', uid: 2 });
+		sendJson(ws, { type: 'test', uid: 3 });
+		await vi.waitFor(() => expect(controller.commandLog).toEqual([1]));
+
+		const clientClosed = new Promise<void>((resolve) => ws.on('close', () => resolve()));
+		ws.close();
+		await clientClosed;
+
+		gate.resolve();
+		await flush();
+		expect(controller.commandLog).toEqual([1]);
+	});
+});
+
+describe('handshake auth-message path', () => {
+	it('authenticates the first message, emits only connect, and sends the auth-success frame', async () => {
+		const { ws, frames } = await openClient({ authMode: 'handshake' });
+
+		sendJson(ws, { type: 'auth', access_token: signUser('alice'), uid: 1 });
+		await vi.waitFor(() => expect(callsFor('websocket.connect')).toHaveLength(1));
+
+		const context = callsFor('websocket.connect')[0]![2] as { schema: unknown; accountability: { user: string } };
+		expect(context.accountability.user).toBe('alice');
+		expect(context.schema).toBe(SCHEMA);
+		expect(callsFor('websocket.auth.success')).toHaveLength(0);
+
+		await vi.waitFor(() => expect(frames.some((f) => f['type'] === 'auth' && f['status'] === 'ok')).toBe(true));
+	});
+
+	it('closes on a non-auth first message with no connect or auth event', async () => {
+		const { ws } = await openClient({ authMode: 'handshake' });
+		const closed = new Promise<void>((resolve) => ws.on('close', () => resolve()));
+
+		sendJson(ws, { type: 'subscribe', uid: 1 });
+		await closed;
+		expect(callsFor('websocket.connect')).toHaveLength(0);
+		expect(callsFor('websocket.auth.failure')).toHaveLength(0);
+	});
+
+	it('closes on an invalid token first message with AUTH_FAILED', async () => {
+		const { ws, frames } = await openClient({ authMode: 'handshake' });
+		const closed = new Promise<void>((resolve) => ws.on('close', () => resolve()));
+
+		sendJson(ws, { type: 'auth', access_token: signInvalid() });
+		await closed;
+		expect(callsFor('websocket.connect')).toHaveLength(0);
+		expect(frames.some((f) => f['error']?.code === 'AUTH_FAILED')).toBe(true);
+	});
+
+	it('closes on a userless (share) token first message, matching strict', async () => {
+		const { ws } = await openClient({ authMode: 'handshake' });
+		const closed = new Promise<void>((resolve) => ws.on('close', () => resolve()));
+
+		sendJson(ws, { type: 'auth', access_token: signShare() });
+		await closed;
+		expect(callsFor('websocket.connect')).toHaveLength(0);
+	});
+
+	it('suppresses connect when the peer disconnects during post-auth schema resolution', async () => {
+		const schema = deferredSchema();
+
+		const { ws } = await openClient({
+			authMode: 'handshake',
+			getSchema: schema.getSchema,
+			controllerClass: TestController,
+		});
+
+		const controller = harness!.controller as TestController;
+
+		sendJson(ws, { type: 'auth', access_token: signUser('alice') });
+		await schema.called;
+
+		ws.terminate();
+		await vi.waitFor(() => expect(controller.clientCount).toBe(0));
+		schema.resolve();
+		await flush();
+
+		expect(callsFor('websocket.connect')).toHaveLength(0);
+	});
+});
+
+describe('public auth-message path', () => {
+	it('elevates a public connection, emitting websocket.auth.success', async () => {
+		const { ws, frames } = await openClient({ authMode: 'public' });
+
+		sendJson(ws, { type: 'auth', access_token: signUser('alice'), uid: 2 });
+		await vi.waitFor(() => expect(callsFor('websocket.auth.success')).toHaveLength(1));
+
+		const context = callsFor('websocket.auth.success')[0]![2] as { accountability: { user: string } };
+		expect(context.accountability.user).toBe('alice');
+		await vi.waitFor(() => expect(frames.some((f) => f['type'] === 'auth' && f['status'] === 'ok')).toBe(true));
+	});
+
+	it('reverts a failed reauthentication to anonymous, emitting auth.failure and staying open', async () => {
+		const { ws } = await openClient({ authMode: 'public' });
+
+		sendJson(ws, { type: 'auth', access_token: signUser('alice') });
+		await vi.waitFor(() => expect(callsFor('websocket.auth.success')).toHaveLength(1));
+
+		sendJson(ws, { type: 'auth', access_token: signInvalid() });
+		await vi.waitFor(() => expect(callsFor('websocket.auth.failure')).toHaveLength(1));
+
+		const context = callsFor('websocket.auth.failure')[0]![2] as { accountability: { user: string | null } };
+		expect(context.accountability.user).toBeNull();
+		expect(ws.readyState).toBe(WebSocket.OPEN);
+	});
+
+	it('closes on a different-user reauthentication', async () => {
+		const { ws } = await openClient({ authMode: 'public' });
+		const closed = new Promise<void>((resolve) => ws.on('close', () => resolve()));
+
+		sendJson(ws, { type: 'auth', access_token: signUser('alice') });
+		await vi.waitFor(() => expect(callsFor('websocket.auth.success')).toHaveLength(1));
+
+		sendJson(ws, { type: 'auth', access_token: signUser('bob') });
+		await closed;
+	});
+
+	it('closes with 1013 when the user bucket is full during public elevation', async () => {
+		const admission = new Admission({ process: 100, ip: 100, user: 1, transports: { rest: 100 } });
+		admission.reserve('rest', '9.9.9.9')!.transitionToUser('alice');
+		const { ws } = await openClient({ authMode: 'public', admission });
+		const closed = new Promise<number>((resolve) => ws.on('close', (code) => resolve(code)));
+
+		sendJson(ws, { type: 'auth', access_token: signUser('alice') });
+		expect(await closed).toBe(1013);
+	});
+
+	it('sends TOKEN_EXPIRED before closing a strict connection on expiry', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+		vi.setSystemTime(new Date('2030-01-01T00:00:00Z'));
+
+		const token = signUser('alice', { expiresIn: '100s' });
+		harness = await createHarness({ authMode: 'strict' });
+		const opened = await harness.connect({ headers: { authorization: `Bearer ${token}` } });
+		if (opened.kind !== 'open') throw new Error('expected an open connection');
+		const frames = collect(opened.ws);
+		const closed = new Promise<void>((resolve) => opened.ws.on('close', () => resolve()));
+
+		vi.advanceTimersByTime(100_000);
+		await closed;
+		expect(frames.some((f) => f['error']?.code === 'TOKEN_EXPIRED')).toBe(true);
+	});
+});
+
+describe('commit-6 review additions', () => {
+	it('discards a queued command when a failed reauthentication initiates close', async () => {
+		const db = deferredDatabase();
+		harness = await createHarness({ authMode: 'strict', database: db.database, controllerClass: TestController });
+		const controller = harness.controller as TestController;
+		const opened = await harness.connect({ headers: { authorization: `Bearer ${signUser('alice')}` } });
+		if (opened.kind !== 'open') throw new Error('expected an open connection');
+
+		sendJson(opened.ws, { type: 'auth', access_token: 'static-bad-token' });
+		await db.called;
+		sendJson(opened.ws, { type: 'test', uid: 1 });
+		await flush();
+
+		db.resolve();
+		await flush();
+		await flush();
+
+		expect(controller.commandLog).toEqual([]);
+	});
+
+	it('fails the handshake on first-frame limiter exhaustion so a later permitted frame cannot establish', async () => {
+		let call = 0;
+
+		const { ws } = await openClient({
+			authMode: 'handshake',
+			authTimeoutMs: 10_000,
+			consumeIpRateLimit: async () => {
+				call++;
+				return call === 2 ? { allowed: false, retryAfterMs: 1000 } : { allowed: true };
+			},
+		});
+
+		const closed = new Promise<void>((resolve) => ws.on('close', () => resolve()));
+
+		sendJson(ws, { type: 'auth', access_token: signUser('alice') });
+		sendJson(ws, { type: 'auth', access_token: signUser('alice') });
+		await closed;
+		expect(callsFor('websocket.connect')).toHaveLength(0);
+		expect(callsFor('websocket.auth.failure')).toHaveLength(0);
+	});
+
+	it('supersedes a public reauthentication that times out and discards a late success', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+		vi.setSystemTime(new Date('2030-01-01T00:00:00Z'));
+
+		const db = deferredUserDatabase('alice');
+
+		const { ws } = await openClient({
+			authMode: 'public',
+			authTimeoutMs: 5000,
+			database: db.database,
+			controllerClass: TestController,
+		});
+
+		sendJson(ws, { type: 'auth', access_token: 'static-token' });
+		await db.called;
+		vi.advanceTimersByTime(6000);
+		expect(ws.readyState).toBe(WebSocket.OPEN);
+
+		db.resolve();
+		await flush();
+		await flush();
+		expect(callsFor('websocket.auth.success')).toHaveLength(0);
+
+		sendJson(ws, { type: 'test', uid: 9 });
+		await waitFrames(() => callsFor('websocket.message').length >= 1);
+		const context = callsFor('websocket.message')[0]![2] as { accountability: { user: string | null } };
+		expect(context.accountability.user).toBeNull();
+	});
+
+	it('invalidates an in-flight authentication when stop is called, holding admission until finalization', async () => {
+		const admission = new Admission({ process: 1, ip: 100, user: 100, transports: { rest: 100 } });
+		const db = deferredUserDatabase('alice');
+
+		const { ws } = await openClient({
+			authMode: 'public',
+			authTimeoutMs: 10_000,
+			admission,
+			database: db.database,
+			controllerClass: TestController,
+		});
+
+		const controller = harness!.controller as TestController;
+		const serverWs = (callsFor('websocket.connect')[0]![1] as { client: SocketClient }).client;
+		ws.pause();
+
+		sendJson(ws, { type: 'auth', access_token: 'static-token' });
+		await db.called;
+
+		controller.stopClient(serverWs);
+		expect(admission.reserve('rest', '2.2.2.2')).toBeNull();
+
+		db.resolve();
+		await flush();
+		await flush();
+
+		expect(serverWs.auth.accountability.user).toBeNull();
+		expect(admission.reserve('rest', '2.2.2.2')).toBeNull();
+	});
+
+	it('escalates an already-stopping client to forced termination', async () => {
+		const { ws } = await openClient({ authMode: 'public', controllerClass: TestController });
+		const controller = harness!.controller as TestController;
+		const serverWs = (callsFor('websocket.connect')[0]![1] as { client: SocketClient }).client;
+		void ws;
+
+		controller.stopClient(serverWs);
+		expect(serverWs.stopping).toBe(true);
+
+		const terminateSpy = vi.spyOn(serverWs, 'terminate');
+		controller.stopClient(serverWs, { terminate: true });
+		expect(terminateSpy).toHaveBeenCalled();
+	});
+
+	it('rejects a command whose full-authority filter changed the message type', async () => {
+		const { ws, frames } = await openClient({ controllerClass: TestController });
+		const controller = harness!.controller as TestController;
+		const filter = (message: Record<string, unknown>) => ({ ...message, type: 'rerouted' });
+		emitter.onFilter('websocket.message', filter);
+
+		try {
+			sendJson(ws, { type: 'test', uid: 7 });
+			await vi.waitFor(() => expect(frames.some((f) => f['error']?.code === 'INVALID_PAYLOAD')).toBe(true));
+			expect(controller.commandLog).toEqual([]);
+		} finally {
+			emitter.offFilter('websocket.message', filter);
+		}
+	});
+
+	it('keys the message limiter on the immutable connection IP, not mutable accountability', async () => {
+		const ipCalls: string[] = [];
+
+		const tamper = (meta: { client: SocketClient }) => {
+			(meta.client.auth.accountability as { ip: string }).ip = 'tampered';
+		};
+
+		emitter.onAction('websocket.connect', tamper);
+
+		try {
+			const { ws } = await openClient({
+				controllerClass: TestController,
+				consumeIpRateLimit: async (ip) => {
+					ipCalls.push(ip);
+					return { allowed: true };
+				},
+			});
+
+			sendJson(ws, { type: 'test', uid: 1 });
+			await vi.waitFor(() => expect((harness!.controller as TestController).commandLog).toEqual([1]));
+			expect(ipCalls.length).toBeGreaterThan(0);
+			expect(ipCalls).not.toContain('tampered');
+		} finally {
+			emitter.offAction('websocket.connect', tamper);
+		}
+	});
+
+	it('rejects a userless (share) token on public elevation, reverting and staying open', async () => {
+		const { ws, frames } = await openClient({ authMode: 'public' });
+
+		sendJson(ws, { type: 'auth', access_token: signShare() });
+		await vi.waitFor(() => expect(frames.some((f) => f['error']?.code === 'AUTH_FAILED')).toBe(true));
+		await vi.waitFor(() => expect(callsFor('websocket.auth.failure')).toHaveLength(1));
+		expect(callsFor('websocket.auth.success')).toHaveLength(0);
+		expect(ws.readyState).toBe(WebSocket.OPEN);
+	});
+
+	it('replaces the expiry timer on a successful reauthentication', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+		vi.setSystemTime(new Date('2030-01-01T00:00:00Z'));
+
+		const { ws, frames } = await openClient({ authMode: 'public' });
+		const okCount = () => frames.filter((f) => f['type'] === 'auth' && f['status'] === 'ok').length;
+		const expiredSeen = () => frames.some((f) => f['error']?.code === 'TOKEN_EXPIRED');
+
+		sendJson(ws, { type: 'auth', access_token: signUser('alice', { expiresIn: '100s' }) });
+		await waitFrames(() => okCount() >= 1);
+
+		sendJson(ws, { type: 'auth', access_token: signUser('alice', { expiresIn: '300s' }) });
+		await waitFrames(() => okCount() >= 2);
+
+		vi.advanceTimersByTime(150_000);
+		await flush();
+		expect(expiredSeen()).toBe(false);
+		expect(ws.readyState).toBe(WebSocket.OPEN);
+
+		vi.advanceTimersByTime(200_000);
+		await waitFrames(expiredSeen);
+		expect(expiredSeen()).toBe(true);
 	});
 });

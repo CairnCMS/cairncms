@@ -155,7 +155,7 @@ describe('Admission', () => {
 
 			expect(lease.transitionToUser('alice')).toBe(false);
 			expect(lease.transitionToAnonymous()).toBe(false);
-			expect(lease.beginAuthHold()).toBeNull();
+			expect(lease.beginWorkHold()).toBeNull();
 		});
 	});
 
@@ -171,14 +171,13 @@ describe('Admission', () => {
 		expect(admission.reserve('rest', '1.1.1.1')).toBeNull();
 	});
 
-	describe('exclusive auth hold at limit 1', () => {
-		it('holds the slot until the lookup settles, and clears exactly once', () => {
+	describe('reference-counted work holds', () => {
+		it('holds the slot until a single work hold clears', () => {
 			const admission = makeAdmission({ ip: 1 });
 			const lease = admission.reserve('rest', '1.1.1.1')!;
 
-			const hold = lease.beginAuthHold();
+			const hold = lease.beginWorkHold();
 			expect(hold).not.toBeNull();
-			expect(lease.beginAuthHold()).toBeNull();
 
 			lease.close();
 			expect(admission.reserve('rest', '1.1.1.1')).toBeNull();
@@ -187,15 +186,23 @@ describe('Admission', () => {
 			expect(admission.reserve('rest', '1.1.1.1')).not.toBeNull();
 		});
 
-		it('does not double-release on a repeated clear', () => {
+		it('allows concurrent holds and releases once, only when the last clears', () => {
 			const admission = makeAdmission({ ip: 2 });
 			const lease = admission.reserve('rest', '1.1.1.1')!;
 			admission.reserve('rest', '1.1.1.1');
 
-			const hold = lease.beginAuthHold()!;
+			const first = lease.beginWorkHold()!;
+			const second = lease.beginWorkHold()!;
+			expect(first).not.toBeNull();
+			expect(second).not.toBeNull();
+
 			lease.close();
-			hold.clear();
-			hold.clear();
+			first.clear();
+			expect(admission.reserve('rest', '1.1.1.1')).toBeNull();
+
+			first.clear();
+			second.clear();
+			second.clear();
 
 			expect(admission.reserve('rest', '1.1.1.1')).not.toBeNull();
 			expect(admission.reserve('rest', '1.1.1.1')).toBeNull();

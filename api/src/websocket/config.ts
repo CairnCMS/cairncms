@@ -14,6 +14,10 @@ const MAX_PAYLOAD_SPEC = {
 
 export const TIMER_MAX_MS = 2_147_483_647;
 
+export const OUTBOUND_QUEUE_BYTES = 1_048_576;
+export const OUTBOUND_FRAME_CAP = 1_048_576;
+export const PENDING_COMMAND_LIMIT = 10;
+
 const HEARTBEAT_PERIOD_SPEC = {
 	envVar: 'WEBSOCKETS_HEARTBEAT_PERIOD',
 	defaultValue: 30,

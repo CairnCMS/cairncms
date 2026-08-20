@@ -6,7 +6,7 @@ import {
 	type RequestContext,
 } from '../utils/get-anonymous-accountability.js';
 import { getTokenIdentity, type TokenIdentity } from '../utils/get-token-identity.js';
-import type { Lease } from './admission.js';
+import type { Lease, WorkHold } from './admission.js';
 import { getTokenExpiry } from './utils/get-token-expiry.js';
 
 export type AuthReject = 'auth-failed' | 'token-expired' | 'different-user';
@@ -56,8 +56,8 @@ export class ConnectionAuth {
 		if (this.closed) return { status: 'superseded' };
 		if (this.lookupInFlight) return { status: 'busy' };
 
-		const hold = this.lease.beginAuthHold();
-		if (hold === null) throw new Error('WebSocket auth hold unavailable for an open connection');
+		const hold = this.lease.beginWorkHold();
+		if (hold === null) throw new Error('WebSocket work hold unavailable for an open connection');
 
 		this.lookupInFlight = true;
 		const generation = this.generation;
@@ -117,6 +117,10 @@ export class ConnectionAuth {
 		this.closed = true;
 		this.generation++;
 		this.lease.close();
+	}
+
+	beginWorkHold(): WorkHold | null {
+		return this.lease.beginWorkHold();
 	}
 
 	private buildAccountability(identity: TokenIdentity): RequestAccountability {
