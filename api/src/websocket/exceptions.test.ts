@@ -20,6 +20,11 @@ describe('WebSocketException', () => {
 		const frame = JSON.parse(new WebSocketException('server', 'INVALID_PAYLOAD').toMessage());
 		expect(frame.uid).toBeUndefined();
 	});
+
+	it('normalizes a malformed code to INTERNAL_ERROR so the wire never carries it', () => {
+		const frame = JSON.parse(new WebSocketException('items', 'lowercase_code', 2).toMessage());
+		expect(frame.error.code).toBe('INTERNAL_ERROR');
+	});
 });
 
 describe('toWebSocketException', () => {
@@ -40,10 +45,20 @@ describe('toWebSocketException', () => {
 		expect(result.toMessage()).not.toContain('secret-value');
 	});
 
-	it('maps an unknown code and an unknown error to INTERNAL_ERROR without leaking the raw error', () => {
+	it('passes through a valid machine code with a redacted message', () => {
+		const result = toWebSocketException(new BaseException('denied: token=secret-value', 403, 'FORBIDDEN'), 'items', 4);
+
+		expect(result.code).toBe('FORBIDDEN');
+		expect(result.message).toBe('The request could not be completed.');
+		expect(result.toMessage()).not.toContain('secret-value');
+		const frame = JSON.parse(result.toMessage());
+		expect(frame).toMatchObject({ type: 'items', uid: 4, error: { code: 'FORBIDDEN' } });
+	});
+
+	it('maps a malformed code and an unknown error to INTERNAL_ERROR without leaking the raw error', () => {
 		const debug = vi.spyOn(logger, 'debug').mockImplementation(() => logger);
 
-		expect(toWebSocketException(new BaseException('boom-secret', 500, 'FORBIDDEN'), 'server').code).toBe(
+		expect(toWebSocketException(new BaseException('boom-secret', 500, 'lowercase_code'), 'server').code).toBe(
 			'INTERNAL_ERROR'
 		);
 
@@ -55,5 +70,11 @@ describe('toWebSocketException', () => {
 		expect(logged).not.toContain('raw-secret');
 
 		debug.mockRestore();
+	});
+
+	it('gives INVALID_COLLECTION a fixed message', () => {
+		expect(new WebSocketException('items', 'INVALID_COLLECTION').message).toBe(
+			'The requested collection is not accessible.'
+		);
 	});
 });

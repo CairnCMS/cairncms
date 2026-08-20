@@ -13,7 +13,8 @@ import logger from '../../logger.js';
 import type { RateLimitConsumption } from '../../middleware/rate-limiter-ip.js';
 import { Admission } from '../admission.js';
 import { PENDING_COMMAND_LIMIT, TIMER_MAX_MS, type AuthMode } from '../config.js';
-import type { SocketClient, SocketControllerOptions } from './base.js';
+import { WebSocketException } from '../exceptions.js';
+import type { CommandContext, SocketClient, SocketControllerOptions } from './base.js';
 import { WebSocketController } from './rest.js';
 
 class TestController extends WebSocketController {
@@ -21,6 +22,8 @@ class TestController extends WebSocketController {
 	public commandGate: (() => Promise<void>) | null = null;
 	public commandLog: (string | number | undefined)[] = [];
 	public handlerError: Error | null = null;
+	public refreshGate: (() => Promise<boolean>) | null = null;
+	public lastContext: CommandContext | null = null;
 
 	public get clientCount(): number {
 		return this.clients.size;
@@ -33,8 +36,9 @@ class TestController extends WebSocketController {
 	constructor(options: SocketControllerOptions) {
 		super(options);
 
-		this.handlers.set('test', async (_client, message) => {
+		this.handlers.set('test', async (_client, message, context) => {
 			this.commandLog.push(message.uid);
+			this.lastContext = context;
 			if (this.commandGate) await this.commandGate();
 			if (this.handlerError) throw this.handlerError;
 		});
@@ -42,6 +46,10 @@ class TestController extends WebSocketController {
 
 	protected override buildOnExpiry(_client: SocketClient): () => void {
 		return () => this.expiryBehavior();
+	}
+
+	protected override async refreshBeforeCommand(): Promise<boolean> {
+		return this.refreshGate ? this.refreshGate() : true;
 	}
 }
 
@@ -1301,5 +1309,61 @@ describe('commit-6 review additions', () => {
 		vi.advanceTimersByTime(200_000);
 		await waitFrames(expiredSeen);
 		expect(expiredSeen()).toBe(true);
+	});
+});
+
+describe('commit-7 drain additions', () => {
+	it('skips the handler and the success action when the refresh does not proceed', async () => {
+		const { ws } = await openClient({ controllerClass: TestController });
+		const controller = harness!.controller as TestController;
+		const reached = deferred<void>();
+
+		controller.refreshGate = async () => {
+			reached.resolve();
+			return false;
+		};
+
+		sendJson(ws, { type: 'test', uid: 1 });
+		await reached.promise;
+		await flush();
+
+		expect(controller.commandLog).toEqual([]);
+		expect(callsFor('websocket.message')).toHaveLength(0);
+		expect(ws.readyState).toBe(WebSocket.OPEN);
+	});
+
+	it('gives the handler the schema fetched at command time, not the connect snapshot', async () => {
+		const connectSchema = { collections: {}, relations: [] } as unknown as SchemaOverview;
+		const commandSchema = { collections: {}, relations: [] } as unknown as SchemaOverview;
+		let calls = 0;
+		const getSchema = async () => (calls++ === 0 ? connectSchema : commandSchema);
+
+		const { ws } = await openClient({ controllerClass: TestController, getSchema });
+		const controller = harness!.controller as TestController;
+		const serverWs = (callsFor('websocket.connect')[0]![1] as { client: SocketClient }).client;
+
+		sendJson(ws, { type: 'test', uid: 1 });
+		await vi.waitFor(() => expect(controller.commandLog).toEqual([1]));
+
+		expect(controller.lastContext?.schema).toBe(commandSchema);
+		expect(serverWs.schema).toBe(connectSchema);
+	});
+
+	it('sends a handler-thrown WebSocketException with its own envelope and fires no success action', async () => {
+		const { ws, frames } = await openClient({ controllerClass: TestController });
+		(harness!.controller as TestController).handlerError = new WebSocketException('items', 'FORBIDDEN', 3);
+
+		sendJson(ws, { type: 'test', uid: 3 });
+		await vi.waitFor(() => expect(frames).toHaveLength(1));
+
+		expect(frames[0]).toMatchObject({
+			type: 'items',
+			status: 'error',
+			uid: 3,
+			error: { code: 'FORBIDDEN', message: 'The request could not be completed.' },
+		});
+
+		expect(callsFor('websocket.message')).toHaveLength(0);
+		expect(ws.readyState).toBe(WebSocket.OPEN);
 	});
 });

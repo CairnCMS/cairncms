@@ -1,3 +1,4 @@
+import type { Permission, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TokenExpiredException } from '../exceptions/index.js';
@@ -8,15 +9,23 @@ import { ConnectionAuth } from './authenticate.js';
 
 vi.mock('../utils/get-token-identity.js', () => ({ getTokenIdentity: vi.fn() }));
 vi.mock('./utils/get-token-expiry.js', () => ({ getTokenExpiry: vi.fn(() => null) }));
+vi.mock('../utils/get-permissions.js', () => ({ getPermissions: vi.fn() }));
 
 const { getTokenIdentity } = await import('../utils/get-token-identity.js');
 const { getTokenExpiry } = await import('./utils/get-token-expiry.js');
+const { getPermissions } = await import('../utils/get-permissions.js');
 
 const resolver = vi.mocked(getTokenIdentity);
 const expiry = vi.mocked(getTokenExpiry);
+const permissions = vi.mocked(getPermissions);
 
 const CONTEXT: RequestContext = { ip: '1.1.1.1', userAgent: 'agent', origin: null };
 const DEPS = { database: {} as Knex };
+const SCHEMA = { collections: {}, relations: [] } as unknown as SchemaOverview;
+
+function permission(collection: string): Permission {
+	return { collection, action: 'read' } as unknown as Permission;
+}
 
 function userIdentity(user: string): TokenIdentity {
 	return { user, role: 'role-1', admin: false, app: true };
@@ -50,6 +59,7 @@ beforeEach(() => {
 	resolver.mockReset();
 	expiry.mockReset();
 	expiry.mockReturnValue(null);
+	permissions.mockReset();
 });
 
 afterEach(() => {
@@ -266,5 +276,46 @@ describe('ConnectionAuth admission reclaim', () => {
 		gate.resolve(userIdentity('alice'));
 		expect(await pending).toEqual({ status: 'superseded' });
 		expect(admission.reserve('rest', '2.2.2.2')).not.toBeNull();
+	});
+});
+
+describe('ConnectionAuth.refreshPermissions', () => {
+	it('installs refreshed permissions while preserving the identity and context', async () => {
+		resolver.mockResolvedValue(userIdentity('alice'));
+		const { auth } = makeAuth();
+		await auth.authenticate('token');
+
+		permissions.mockResolvedValue([permission('articles')]);
+
+		expect(await auth.refreshPermissions(SCHEMA)).toBe(true);
+		expect(auth.accountability.permissions).toEqual([permission('articles')]);
+		expect(auth.accountability.user).toBe('alice');
+		expect(auth.accountability.ip).toBe(CONTEXT.ip);
+
+		expect(permissions).toHaveBeenCalledWith(
+			expect.objectContaining({ user: 'alice', role: 'role-1', app: true, admin: false }),
+			SCHEMA
+		);
+	});
+
+	it('discards the result when the generation changes during the await', async () => {
+		const gate = deferred<Permission[]>();
+		permissions.mockReturnValue(gate.promise);
+		const { auth } = makeAuth();
+
+		const pending = auth.refreshPermissions(SCHEMA);
+		auth.supersedeToAnonymous();
+		gate.resolve([permission('articles')]);
+
+		expect(await pending).toBe(false);
+		expect(auth.accountability.permissions).toBeUndefined();
+	});
+
+	it('returns false without loading permissions once closed', async () => {
+		const { auth } = makeAuth();
+		auth.close();
+
+		expect(await auth.refreshPermissions(SCHEMA)).toBe(false);
+		expect(permissions).not.toHaveBeenCalled();
 	});
 });

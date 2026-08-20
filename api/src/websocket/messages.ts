@@ -1,3 +1,5 @@
+import type { Item, Query } from '@cairncms/types';
+import { isPlainObject } from 'lodash-es';
 import { z } from 'zod';
 
 const zodStringOrNumber = z.union([z.string(), z.number()]);
@@ -34,3 +36,41 @@ export const WebSocketAuthMessage = WebSocketMessage.extend({
 });
 
 export type WebSocketAuthMessage = z.infer<typeof WebSocketAuthMessage>;
+
+const ZodItem = z.custom<Partial<Item>>((value) => isPlainObject(value));
+const ZodQuery = z.custom<Query>((value) => isPlainObject(value));
+
+const PartialItemsMessage = z.object({
+	uid: zodStringOrNumber.optional(),
+	type: z.literal('items'),
+	collection: z.string(),
+});
+
+export const WebSocketItemsMessage = z.union([
+	PartialItemsMessage.extend({
+		action: z.literal('create'),
+		data: z.union([z.array(ZodItem), ZodItem]),
+		query: ZodQuery.optional(),
+	}),
+	PartialItemsMessage.extend({
+		action: z.literal('read'),
+		ids: z.array(zodStringOrNumber).optional(),
+		id: zodStringOrNumber.optional(),
+		query: ZodQuery.optional(),
+	}),
+	PartialItemsMessage.extend({
+		action: z.literal('update'),
+		data: ZodItem,
+		ids: z.array(zodStringOrNumber).optional(),
+		id: zodStringOrNumber.optional(),
+		query: ZodQuery.optional(),
+	}),
+	PartialItemsMessage.extend({
+		action: z.literal('delete'),
+		ids: z.array(zodStringOrNumber).optional(),
+		id: zodStringOrNumber.optional(),
+		query: ZodQuery.optional(),
+	}),
+]);
+
+export type WebSocketItemsMessage = z.infer<typeof WebSocketItemsMessage>;

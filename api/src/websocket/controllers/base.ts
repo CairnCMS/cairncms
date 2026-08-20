@@ -9,7 +9,7 @@ import { WebSocket, WebSocketServer, type RawData } from 'ws';
 import emitter from '../../emitter.js';
 import logger from '../../logger.js';
 import type { RateLimitConsumption } from '../../middleware/rate-limiter-ip.js';
-import type { RequestContext } from '../../utils/get-anonymous-accountability.js';
+import type { RequestAccountability, RequestContext } from '../../utils/get-anonymous-accountability.js';
 import { getIPForRequest } from '../../utils/get-ip-from-req.js';
 import type { Admission, Lease, WorkHold } from '../admission.js';
 import { ConnectionAuth, type AuthResult } from '../authenticate.js';
@@ -33,7 +33,16 @@ const DISCONNECT_EVENTS = ['close', 'error', 'end'] as const;
 
 const OUTBOUND_LIMITS: OutboundLimits = { frameCap: OUTBOUND_FRAME_CAP, queueByteBound: OUTBOUND_QUEUE_BYTES };
 
-export type CommandHandler = (client: SocketClient, message: WebSocketMessage) => Promise<void>;
+export type CommandContext = {
+	schema: SchemaOverview;
+	accountability: RequestAccountability;
+};
+
+export type CommandHandler = (
+	client: SocketClient,
+	message: WebSocketMessage,
+	context: CommandContext
+) => Promise<void>;
 
 interface ConnectionState {
 	readonly ip: string;
@@ -546,15 +555,19 @@ export abstract class SocketController {
 			return void this.send(client, this.errorFrame('INVALID_PAYLOAD', message.uid));
 		}
 
-		await this.refreshBeforeCommand(client);
-		await handler(client, filtered);
+		const schema = await this.getSchema({ database: this.database });
+		if (client.stopping) return;
+
+		if (!(await this.refreshBeforeCommand(client, schema)) || client.stopping) return;
+
+		await handler(client, filtered, { schema, accountability: client.auth.accountability });
 
 		if (client.stopping) return;
 		await this.emitEventAwaited('websocket.message', client, { message: filtered });
 	}
 
-	protected async refreshBeforeCommand(_client: SocketClient): Promise<void> {
-		return;
+	protected async refreshBeforeCommand(client: SocketClient, schema: SchemaOverview): Promise<boolean> {
+		return client.auth.refreshPermissions(schema);
 	}
 
 	private rejectRateLimitedMessage(client: SocketClient, preConnect: boolean): void {

@@ -1,3 +1,4 @@
+import type { SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import { TokenExpiredException } from '../exceptions/index.js';
 import {
@@ -5,6 +6,7 @@ import {
 	type RequestAccountability,
 	type RequestContext,
 } from '../utils/get-anonymous-accountability.js';
+import { getPermissions } from '../utils/get-permissions.js';
 import { getTokenIdentity, type TokenIdentity } from '../utils/get-token-identity.js';
 import type { Lease, WorkHold } from './admission.js';
 import { getTokenExpiry } from './utils/get-token-expiry.js';
@@ -95,6 +97,27 @@ export class ConnectionAuth {
 			return { status: 'authenticated', user };
 		} finally {
 			this.lookupInFlight = false;
+			hold.clear();
+		}
+	}
+
+	async refreshPermissions(schema: SchemaOverview): Promise<boolean> {
+		if (this.closed) return false;
+
+		const hold = this.lease.beginWorkHold();
+		if (hold === null) return false;
+
+		const generation = this.generation;
+
+		try {
+			const current = this.accountabilityValue;
+			const permissions = await getPermissions(current, schema);
+
+			if (this.closed || this.generation !== generation) return false;
+
+			this.accountabilityValue = { ...current, permissions };
+			return true;
+		} finally {
 			hold.clear();
 		}
 	}
