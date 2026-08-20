@@ -3,7 +3,7 @@ import { parseCount, parseSize, type ConfigParseError } from '../utils/parse-con
 
 const AUTH_MODES = ['public', 'handshake', 'strict'] as const;
 
-type AuthMode = (typeof AUTH_MODES)[number];
+export type AuthMode = (typeof AUTH_MODES)[number];
 
 const MAX_PAYLOAD_SPEC = {
 	envVar: 'MAX_PAYLOAD_SIZE',
