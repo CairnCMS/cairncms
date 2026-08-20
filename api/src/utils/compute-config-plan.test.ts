@@ -62,7 +62,6 @@ describe('computeConfigPlan', () => {
 
 		expect(plan.roles.update).toHaveLength(1);
 		expect(plan.roles.update[0]!.key).toBe('editor');
-		expect(plan.roles.update[0]!.diff).toEqual({ name: 'Content Editor' });
 		expect(plan.roles.update[0]!.changes).toEqual({ name: { before: 'Editor', after: 'Content Editor' } });
 	});
 
@@ -121,7 +120,6 @@ describe('computeConfigPlan', () => {
 			const plan = computeConfigPlan(current, desired);
 
 			expect(plan.roles.update).toHaveLength(1);
-			expect(plan.roles.update[0]!.diff).toEqual({ description: null });
 			expect(plan.roles.update[0]!.changes).toEqual({ description: { before: 'old description', after: null } });
 		});
 
@@ -137,7 +135,6 @@ describe('computeConfigPlan', () => {
 			const plan = computeConfigPlan(current, desired);
 
 			expect(plan.roles.update).toHaveLength(1);
-			expect(plan.roles.update[0]!.diff).toEqual({ ip_access: ['10.0.0.0/8'] });
 			expect(plan.roles.update[0]!.changes).toEqual({ ip_access: { before: null, after: ['10.0.0.0/8'] } });
 		});
 	});

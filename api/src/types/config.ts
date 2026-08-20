@@ -66,12 +66,12 @@ export type PermissionFieldChanges = { [K in keyof PermissionValues]?: FieldChan
 export interface ConfigPlan {
 	roles: {
 		create: ConfigRole[];
-		update: Array<{ key: string; diff: Partial<ConfigRole>; changes: RoleFieldChanges }>;
+		update: Array<{ key: string; changes: RoleFieldChanges }>;
 		delete: string[];
 	};
 	permissions: {
 		create: Array<{ roleKey: string; permission: ConfigPermission }>;
-		update: Array<{ roleKey: string; permission: ConfigPermission; changes: PermissionFieldChanges }>;
+		update: Array<{ roleKey: string; collection: string; action: PermissionsAction; changes: PermissionFieldChanges }>;
 		delete: Array<{ roleKey: string; collection: string; action: PermissionsAction }>;
 	};
 }

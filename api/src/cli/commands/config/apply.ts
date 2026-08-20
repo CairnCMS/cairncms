@@ -1,13 +1,17 @@
 import chalk from 'chalk';
 import inquirer from 'inquirer';
+import type { Knex } from 'knex';
 import getDatabase, { isInstalled, validateDatabaseConnection } from '../../../database/index.js';
 import logger from '../../../logger.js';
-import { applyConfigPlan } from '../../../utils/apply-config-plan.js';
+import { applyConfigPlan, planHasDeletions } from '../../../utils/apply-config-plan.js';
 import { computeConfigPlan, validateConfigPlan } from '../../../utils/compute-config-plan.js';
+import { enrichConfigPlan } from '../../../utils/enrich-config-plan.js';
 import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
+import { getSchema } from '../../../utils/get-schema.js';
 import { readConfigDirectory } from '../../../utils/read-config-directory.js';
+import { serializeConfigPlan } from '../../../utils/serialize-config-plan.js';
 import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
-import type { ConfigPlan } from '../../../types/config.js';
+import type { CairnConfig, ConfigPlan, SerializedConfigPlan } from '../../../types/config.js';
 
 function formatPlanHuman(plan: ConfigPlan, destructive: boolean): string {
 	const lines: string[] = [];
@@ -23,8 +27,8 @@ function formatPlanHuman(plan: ConfigPlan, destructive: boolean): string {
 	if (plan.roles.update.length > 0) {
 		if (lines.length === 0) lines.push(chalk.underline.bold('Roles:'));
 
-		for (const { key, diff } of plan.roles.update) {
-			const fields = Object.keys(diff).join(', ');
+		for (const { key, changes } of plan.roles.update) {
+			const fields = Object.keys(changes).join(', ');
 			lines.push(`  ${chalk.blue('Update')} ${key} (${fields})`);
 		}
 	}
@@ -56,27 +60,37 @@ function formatPlanHuman(plan: ConfigPlan, destructive: boolean): string {
 	return lines.join('\n');
 }
 
-function isPlanEmpty(plan: ConfigPlan, destructive: boolean): boolean {
+function isPlanEmpty(plan: ConfigPlan): boolean {
 	if (plan.roles.create.length > 0) return false;
 	if (plan.roles.update.length > 0) return false;
+	if (plan.roles.delete.length > 0) return false;
 	if (plan.permissions.create.length > 0) return false;
 	if (plan.permissions.update.length > 0) return false;
-
-	if (destructive) {
-		if (plan.roles.delete.length > 0) return false;
-
-		const keptRoleDeletes = plan.permissions.delete.filter((d) => !plan.roles.delete.includes(d.roleKey)).length;
-
-		if (keptRoleDeletes > 0) return false;
-	}
+	if (plan.permissions.delete.length > 0) return false;
 
 	return true;
+}
+
+async function serializePlan(plan: ConfigPlan, desired: CairnConfig, database: Knex): Promise<SerializedConfigPlan> {
+	const schema = await getSchema({ database, bypassCache: true });
+	const enrichment = await enrichConfigPlan(plan, desired, { schema, database });
+
+	return serializeConfigPlan(plan, { enrichment, manifestVersion: desired.manifest.version });
 }
 
 export async function configApply(
 	configPath: string,
 	options?: { yes: boolean; dryRun: boolean; destructive: boolean; format: string }
 ): Promise<void> {
+	const dryRun = options?.dryRun === true;
+	const destructive = options?.destructive === true;
+	const format = options?.format ?? 'human';
+
+	if (format === 'json' && !dryRun) {
+		logger.error('JSON output is only available with --dry-run.');
+		process.exit(2);
+	}
+
 	const database = getDatabase();
 
 	await validateDatabaseConnection(database);
@@ -88,13 +102,8 @@ export async function configApply(
 	}
 
 	try {
-		const dryRun = options?.dryRun === true;
-		const destructive = options?.destructive === true;
-		const format = options?.format ?? 'human';
-
-		// stdout carries the JSON plan, so read-path notices go to the log stream only in human mode.
 		const desired = await readConfigDirectory(configPath, {
-			notice: format === 'json' ? () => undefined : (message) => logger.warn(message),
+			notice: (message) => logger.warn(message),
 		});
 
 		const { config: current, currentRoleKeys } = await readCurrentConfig({
@@ -128,34 +137,34 @@ export async function configApply(
 			process.exit(2);
 		}
 
-		if (isPlanEmpty(plan, destructive)) {
-			if (format === 'json') {
-				process.stdout.write(JSON.stringify({ changes: false, plan: null }) + '\n');
-			} else {
-				logger.info('No changes to apply.');
-			}
+		const empty = isPlanEmpty(plan);
 
+		if (format === 'json') {
+			process.stdout.write(JSON.stringify(await serializePlan(plan, desired, database)) + '\n');
+			database.destroy();
+			process.exit(empty ? 0 : 1);
+		}
+
+		if (empty) {
+			logger.info('No changes to apply.');
 			database.destroy();
 			process.exit(0);
 		}
 
-		if (format === 'json') {
-			const result = await applyConfigPlan(plan, { database, destructive, dryRun: true });
-			process.stdout.write(JSON.stringify({ changes: true, plan: result }) + '\n');
-
-			if (dryRun) {
-				database.destroy();
-				process.exit(1);
-			}
-		} else {
-			const message = formatPlanHuman(plan, destructive);
-			logger.info('Planned changes:\n\n' + message);
-
-			if (dryRun) {
-				database.destroy();
-				process.exit(1);
-			}
+		if (dryRun) {
+			logger.info('Planned changes:\n\n' + formatPlanHuman(plan, destructive));
+			database.destroy();
+			process.exit(1);
 		}
+
+		if (!destructive && planHasDeletions(plan)) {
+			logger.info('Planned changes:\n\n' + formatPlanHuman(plan, true));
+			logger.error('Apply refused: the plan contains deletions. Re-run with --destructive to authorize them.');
+			database.destroy();
+			process.exit(2);
+		}
+
+		logger.info('Planned changes:\n\n' + formatPlanHuman(plan, destructive));
 
 		if (options?.yes !== true) {
 			const { proceed } = await inquirer.prompt([

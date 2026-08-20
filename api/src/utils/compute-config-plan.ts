@@ -75,20 +75,6 @@ function permChanges(current: ConfigPermission, desired: ConfigPermission): Perm
 	return changes;
 }
 
-function roleDiffFromChanges(changes: RoleFieldChanges): Partial<ConfigRole> {
-	const diff: Partial<ConfigRole> = {};
-
-	if (changes.name) diff.name = changes.name.after;
-	if (changes.icon) diff.icon = changes.icon.after;
-	if (changes.description) diff.description = changes.description.after;
-	if (changes.admin_access) diff.admin_access = changes.admin_access.after;
-	if (changes.app_access) diff.app_access = changes.app_access.after;
-	if (changes.enforce_tfa) diff.enforce_tfa = changes.enforce_tfa.after;
-	if (changes.ip_access) diff.ip_access = changes.ip_access.after;
-
-	return diff;
-}
-
 export function computeConfigPlan(current: CairnConfig, desired: CairnConfig): ConfigPlan {
 	const plan: ConfigPlan = {
 		roles: { create: [], update: [], delete: [] },
@@ -110,7 +96,7 @@ export function computeConfigPlan(current: CairnConfig, desired: CairnConfig): C
 				const changes = roleChanges(currentRole, desiredRole);
 
 				if (Object.keys(changes).length > 0) {
-					plan.roles.update.push({ key: desiredRole.key, diff: roleDiffFromChanges(changes), changes });
+					plan.roles.update.push({ key: desiredRole.key, changes });
 				}
 			}
 		}
@@ -146,7 +132,12 @@ export function computeConfigPlan(current: CairnConfig, desired: CairnConfig): C
 					const changes = permChanges(currentPerm, perm);
 
 					if (Object.keys(changes).length > 0) {
-						plan.permissions.update.push({ roleKey: permSet.role, permission: perm, changes });
+						plan.permissions.update.push({
+							roleKey: permSet.role,
+							collection: perm.collection,
+							action: perm.action,
+							changes,
+						});
 					}
 				}
 			}

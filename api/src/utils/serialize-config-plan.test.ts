@@ -128,7 +128,8 @@ describe('serializeConfigPlan', () => {
 
 		plan.permissions.update.push({
 			roleKey: 'editor',
-			permission: perm('articles', 'read'),
+			collection: 'articles',
+			action: 'read',
 			changes: { fields: { before: null, after: ['title'] } },
 		});
 
@@ -286,7 +287,8 @@ describe('serializeConfigPlan', () => {
 
 		plan.permissions.update.push({
 			roleKey: 'beta',
-			permission: perm('pages', 'read'),
+			collection: 'pages',
+			action: 'read',
 			changes: { fields: { before: null, after: ['x'] } },
 		});
 
@@ -367,7 +369,8 @@ describe('serializeConfigPlan', () => {
 
 		plan.permissions.update.push({
 			roleKey: 'a',
-			permission: perm('articles', 'read'),
+			collection: 'articles',
+			action: 'read',
 			changes: { fields: { before: null, after: ['title'] } },
 		});
 

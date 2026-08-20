@@ -14,7 +14,9 @@ import { respond } from '../middleware/respond.js';
 import asyncHandler from '../utils/async-handler.js';
 import { applyConfigPlan } from '../utils/apply-config-plan.js';
 import { computeConfigPlan, validateConfigPlan } from '../utils/compute-config-plan.js';
+import { enrichConfigPlan } from '../utils/enrich-config-plan.js';
 import { getConfigSnapshot, readCurrentConfig } from '../utils/get-config-snapshot.js';
+import { serializeConfigPlan } from '../utils/serialize-config-plan.js';
 import { getSchema } from '../utils/get-schema.js';
 import { assertConfigValueSafe, parseConfigYaml } from '../utils/parse-config-document.js';
 import { isPlaceholder } from '../utils/read-config-directory.js';
@@ -88,7 +90,16 @@ router.post(
 
 		if (planFailures.length > 0) throw planFailures.map(toConfigException);
 
-		const result = await applyConfigPlan(plan, { database, schema, dryRun, destructive });
+		if (dryRun) {
+			const enrichment = await enrichConfigPlan(plan, config, { schema, database });
+			const serialized = serializeConfigPlan(plan, { enrichment, manifestVersion: manifest.version });
+
+			res.locals['payload'] = { data: serialized };
+
+			return next();
+		}
+
+		const result = await applyConfigPlan(plan, { database, schema, destructive });
 
 		res.locals['payload'] = { data: result };
 

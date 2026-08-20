@@ -52,7 +52,7 @@ export function serializeConfigPlan(
 		changes.push({
 			kind: 'permissions',
 			operation: 'update',
-			identity: permissionIdentity(update.roleKey, update.permission),
+			identity: { role: update.roleKey, collection: update.collection, action: update.action },
 			fields: update.changes,
 		});
 	}
