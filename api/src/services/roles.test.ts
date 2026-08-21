@@ -5,6 +5,7 @@ import { createTracker, MockClient, Tracker } from 'knex-mock-client';
 import type { MockedFunction, SpyInstance } from 'vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ForbiddenException, InvalidPayloadException, UnprocessableEntityException } from '../exceptions/index.js';
+import type { MutationOptions } from '../types/index.js';
 import { ItemsService, PermissionsService, PresetsService, RolesService, UsersService } from './index.js';
 
 vi.mock('../../src/database/index', () => {
@@ -1121,6 +1122,145 @@ describe('Integration Tests', () => {
 				vi.spyOn(ItemsService.prototype, 'getKeysByQuery').mockResolvedValueOnce([1]);
 				await service.deleteByQuery({});
 				expect(checkForOtherAdminRolesSpy).toBeCalledTimes(1);
+			});
+		});
+	});
+
+	describe('Services / Roles delete option forwarding', () => {
+		const rolesSchema = {
+			collections: {
+				directus_roles: {
+					collection: 'directus_roles',
+					primary: 'id',
+					singleton: false,
+					sortField: null,
+					note: null,
+					accountability: null,
+					fields: {
+						id: {
+							field: 'id',
+							defaultValue: null,
+							nullable: false,
+							generated: true,
+							type: 'integer',
+							dbType: 'integer',
+							precision: null,
+							scale: null,
+							special: [],
+							note: null,
+							validation: null,
+							alias: false,
+						},
+					},
+				},
+			},
+			relations: [],
+		} as SchemaOverview;
+
+		const roleFilter = { filter: { role: { _in: [1] } } };
+
+		let service: RolesService;
+
+		beforeEach(() => {
+			service = new RolesService({ knex: db, schema: rolesSchema });
+		});
+
+		afterEach(() => {
+			vi.restoreAllMocks();
+		});
+
+		function buildOptions(): MutationOptions {
+			return {
+				onRevisionCreate: vi.fn(),
+				autoPurgeCache: false,
+				autoPurgeSystemCache: false,
+				emitEvents: false,
+				bypassEmitAction: vi.fn(),
+				bypassLimits: false,
+				mutationTracker: { trackMutations: vi.fn(), getCount: vi.fn(() => 0) },
+			};
+		}
+
+		describe('deleteMany', () => {
+			it('forwards the caller options through the cascade, forcing bypassLimits only on the dependent mutations', async () => {
+				vi.spyOn(RolesService.prototype as any, 'checkForOtherAdminRoles').mockResolvedValue(undefined);
+				const permissions = vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				const presets = vi.spyOn(PresetsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				const users = vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValue([]);
+				const roleDeletion = vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
+
+				const opts = buildOptions();
+				await service.deleteMany([1], opts);
+
+				const dependentOptions = { ...opts, bypassLimits: true };
+
+				expect(permissions).toHaveBeenCalledTimes(1);
+				expect(permissions).toHaveBeenCalledWith(roleFilter, dependentOptions);
+				expect(presets).toHaveBeenCalledTimes(1);
+				expect(presets).toHaveBeenCalledWith(roleFilter, dependentOptions);
+				expect(users).toHaveBeenCalledTimes(1);
+				expect(users).toHaveBeenCalledWith(roleFilter, { status: 'suspended', role: null }, dependentOptions);
+				expect(roleDeletion).toHaveBeenCalledTimes(1);
+				expect(roleDeletion).toHaveBeenCalledWith([1], opts);
+				expect(roleDeletion.mock.calls[0]![1]!.bypassLimits).toBe(false);
+			});
+		});
+
+		describe('deleteOne', () => {
+			it('forwards the key and options to deleteMany', async () => {
+				const deleteMany = vi.spyOn(RolesService.prototype, 'deleteMany').mockResolvedValue([1]);
+
+				const opts = buildOptions();
+				await service.deleteOne(1, opts);
+
+				expect(deleteMany).toHaveBeenCalledTimes(1);
+				expect(deleteMany).toHaveBeenCalledWith([1], opts);
+			});
+		});
+
+		describe('deleteByQuery', () => {
+			it('forwards resolved keys and options through the role-deletion cascade', async () => {
+				vi.spyOn(ItemsService.prototype, 'getKeysByQuery').mockResolvedValueOnce([1]);
+				vi.spyOn(RolesService.prototype as any, 'checkForOtherAdminRoles').mockResolvedValue(undefined);
+				const permissions = vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				const presets = vi.spyOn(PresetsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				const users = vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValue([]);
+				const roleDeletion = vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
+
+				const opts = buildOptions();
+				await service.deleteByQuery({ filter: { name: { _eq: 'obsolete' } } }, opts);
+
+				const dependentOptions = { ...opts, bypassLimits: true };
+				expect(permissions).toHaveBeenCalledWith(roleFilter, dependentOptions);
+				expect(presets).toHaveBeenCalledWith(roleFilter, dependentOptions);
+				expect(users).toHaveBeenCalledWith(roleFilter, { status: 'suspended', role: null }, dependentOptions);
+				expect(roleDeletion).toHaveBeenCalledWith([1], opts);
+			});
+		});
+
+		describe('last-administrator guard', () => {
+			it('forwards the deferred guard failure to the first dependent mutation', async () => {
+				const failure = new UnprocessableEntityException(`You can't delete the last admin role.`);
+				vi.spyOn(RolesService.prototype as any, 'checkForOtherAdminRoles').mockRejectedValue(failure);
+				const permissions = vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockRejectedValue(failure);
+				const presets = vi.spyOn(PresetsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				const users = vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValue([]);
+				const roleDeletion = vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
+
+				const opts = buildOptions();
+
+				await expect(service.deleteMany([1], opts)).rejects.toBe(failure);
+
+				expect(opts.preMutationException).toBe(failure);
+
+				expect(permissions).toHaveBeenCalledWith(
+					roleFilter,
+					expect.objectContaining({ preMutationException: failure, bypassLimits: true })
+				);
+
+				expect(presets).not.toHaveBeenCalled();
+				expect(users).not.toHaveBeenCalled();
+				expect(roleDeletion).not.toHaveBeenCalled();
 			});
 		});
 	});

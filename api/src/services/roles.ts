@@ -267,15 +267,13 @@ export class RolesService extends ItemsService {
 		return super.updateMany(keys, data, opts);
 	}
 
-	override async deleteOne(key: PrimaryKey): Promise<PrimaryKey> {
-		await this.deleteMany([key]);
+	override async deleteOne(key: PrimaryKey, opts?: MutationOptions): Promise<PrimaryKey> {
+		await this.deleteMany([key], opts);
 		return key;
 	}
 
-	override async deleteMany(keys: PrimaryKey[]): Promise<PrimaryKey[]> {
+	override async deleteMany(keys: PrimaryKey[], opts: MutationOptions = {}): Promise<PrimaryKey[]> {
 		this.assertSentinelNotDeleted(keys);
-
-		const opts: MutationOptions = {};
 
 		try {
 			await this.checkForOtherAdminRoles(keys);
@@ -307,8 +305,6 @@ export class RolesService extends ItemsService {
 				accountability: this.accountability,
 				schema: this.schema,
 			});
-
-			// Delete permissions/presets for this role, suspend all remaining users in role
 
 			await permissionsService.deleteByQuery(
 				{

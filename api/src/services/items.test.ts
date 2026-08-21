@@ -1551,4 +1551,26 @@ describe('Integration Tests', () => {
 			}
 		});
 	});
+
+	describe('deleteMany', () => {
+		it('throws a supplied preMutationException before running any delete query', async () => {
+			const table = schemas['user'].tables[0];
+			const failure = new InvalidPayloadException('blocked before write');
+
+			const service = new ItemsService(table, {
+				knex: db,
+				accountability: null,
+				schema: schemas['user'].schema,
+			});
+
+			await expect(
+				service.deleteMany(['6107c897-9182-40f7-b22e-4f044d1258d2'], {
+					preMutationException: failure,
+					bypassLimits: true,
+				})
+			).rejects.toBe(failure);
+
+			expect(tracker.history.delete).toHaveLength(0);
+		});
+	});
 });
