@@ -35,12 +35,28 @@ export const httpLoggerOptions: LoggerOptions = {
 	},
 };
 
+function logDestinationOptions(
+	logStyle: string | undefined,
+	toStderr: boolean
+): { transportDestination: number | undefined; rawDestination: number | undefined } {
+	if (logStyle !== 'raw') {
+		return { transportDestination: toStderr ? 2 : undefined, rawDestination: undefined };
+	}
+
+	return { transportDestination: undefined, rawDestination: toStderr ? 2 : undefined };
+}
+
+const logDestination = logDestinationOptions(env['LOG_STYLE'], process.env['CAIRNCMS_LOG_DESTINATION_FD'] === '2');
+
 if (env['LOG_STYLE'] !== 'raw') {
 	pinoOptions.transport = {
 		target: 'pino-pretty',
 		options: {
 			ignore: 'hostname,pid',
 			sync: true,
+			...(logDestination.transportDestination !== undefined
+				? { destination: logDestination.transportDestination }
+				: {}),
 		},
 	};
 
@@ -90,7 +106,10 @@ if (loggerEnvConfig['levels']) {
 	delete loggerEnvConfig['levels'];
 }
 
-const logger = pino(merge(pinoOptions, loggerEnvConfig));
+const logger =
+	logDestination.rawDestination !== undefined
+		? pino(merge(pinoOptions, loggerEnvConfig), pino.destination(logDestination.rawDestination))
+		: pino(merge(pinoOptions, loggerEnvConfig));
 
 const httpLoggerEnvConfig = getConfigFromEnv('LOGGER_HTTP', ['LOGGER_HTTP_LOGGER']);
 

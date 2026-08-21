@@ -110,6 +110,19 @@ If you prefer to run CairnCMS directly on a host:
 
 The Docker image is a packaging convenience, not a hard requirement.
 
+## Image processing
+
+CairnCMS uses native Sharp binaries when a prebuilt matches the platform, including in the official Docker image. Other platforms use a WebAssembly fallback that needs no compiler or system libvips and is slower than native.
+
+The WebAssembly fallback does not support:
+
+- deep-zoom `tile` output
+- text input for `composite`
+
+The asset API exposes these operations only through project transformation presets, never through URL transforms. Presets that use `tile` or text-based `composite` require native Sharp.
+
+Sharp documents [building from source](https://sharp.pixelplumbing.com/install#building-from-source) for platforms without a native prebuilt. CairnCMS does not currently test this path.
+
 ## The bootstrap and start pattern
 
 CairnCMS separates initialization from serving:

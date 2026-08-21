@@ -2,6 +2,21 @@
 
 All notable changes to CairnCMS are documented in this file. Releases are listed in reverse chronological order. Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-08-10
+
+### New Features
+
+- Add configurable query limit defaults and maximums. (#177)
+- Add item create, update, and delete operations to the confined extension host. (#180)
+
+### Fixes & Improvements
+
+- Refuse system and internal collections as top-level targets of confined `host.items`. (#175)
+- Fix empty File Library exports when exporting all items. (#179)
+- Paginate flow logs in the sidebar. (#182)
+- Use the correct endpoints and item routes for system collections, and confirm before deleting a kanban group. (#185)
+- Update dependencies. (#186, #187, #188, #189, #190, #191, #192, #193, #194, #195, #196)
+
 ## [1.3.1] - 2026-07-17
 
 ### Fixes & Improvements

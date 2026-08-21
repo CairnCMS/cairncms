@@ -4,7 +4,7 @@ import Joi from 'joi';
 import { isPlainObject } from 'lodash-es';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import { ConfigUnsupportedVersionException } from '../exceptions/config-unsupported-version.js';
-import { CONFIG_KINDS, type ConfigKind, type ConfigManifest } from '../types/config.js';
+import { CONFIG_KINDS, type ConfigFailure, type ConfigKind, type ConfigManifest } from '../types/config.js';
 import {
 	PERMISSION_COLLECTION_MAX_LENGTH,
 	ROLE_ICON_MAX_LENGTH,
@@ -128,7 +128,15 @@ function envelopeSchema(managed: ReadonlySet<ConfigKind>): Joi.ObjectSchema {
 	return Joi.object({ manifest: Joi.any(), ...kinds });
 }
 
-export function validateDesiredConfig(document: unknown, context: DesiredConfigContext): string[] {
+function invalid(message: string): ConfigFailure {
+	return { code: 'CONFIG_INVALID', message };
+}
+
+function identityConflict(message: string): ConfigFailure {
+	return { code: 'CONFIG_IDENTITY_CONFLICT', message };
+}
+
+export function validateDesiredConfig(document: unknown, context: DesiredConfigContext): ConfigFailure[] {
 	if (!isPlainObject(document)) {
 		throw new ConfigInvalidException(`Config document in ${safeLogFragment(context.label)} must be a mapping.`);
 	}
@@ -138,15 +146,15 @@ export function validateDesiredConfig(document: unknown, context: DesiredConfigC
 	const managed = new Set<ConfigKind>(manifest.resources);
 
 	const fieldErrors = messagesOf(envelopeSchema(managed).validate(body, VALIDATE_OPTIONS).error);
-	if (fieldErrors.length > 0) return fieldErrors;
+	if (fieldErrors.length > 0) return fieldErrors.map(invalid);
 
 	const declaredRoleKeys = new Set<string>();
-	const errors: string[] = [];
+	const failures: ConfigFailure[] = [];
 
 	if (managed.has('roles')) {
 		for (const role of body['roles'] as Array<{ key: string }>) {
 			if (declaredRoleKeys.has(role.key)) {
-				errors.push(`Duplicate role "${safeLogFragment(role.key)}".`);
+				failures.push(identityConflict(`Duplicate role "${safeLogFragment(role.key)}".`));
 			}
 
 			declaredRoleKeys.add(role.key);
@@ -154,28 +162,30 @@ export function validateDesiredConfig(document: unknown, context: DesiredConfigC
 	}
 
 	if (managed.has('permissions')) {
-		errors.push(...permissionErrors(body['permissions'] as PermissionSetShape[], managed, declaredRoleKeys, context));
+		failures.push(
+			...permissionFailures(body['permissions'] as PermissionSetShape[], managed, declaredRoleKeys, context)
+		);
 	}
 
-	return errors;
+	return failures;
 }
 
 type PermissionSetShape = { role: string; permissions: Array<{ collection: string; action: string }> };
 
-function permissionErrors(
+function permissionFailures(
 	sets: PermissionSetShape[],
 	managed: ReadonlySet<ConfigKind>,
 	declaredRoleKeys: ReadonlySet<string>,
 	context: DesiredConfigContext
-): string[] {
-	const errors: string[] = [];
+): ConfigFailure[] {
+	const failures: ConfigFailure[] = [];
 	const subjects = new Set<string>();
 
 	for (const set of sets) {
 		const subject = safeLogFragment(set.role);
 
 		if (subjects.has(set.role)) {
-			errors.push(`Duplicate permission set for role "${subject}".`);
+			failures.push(identityConflict(`Duplicate permission set for role "${subject}".`));
 		}
 
 		subjects.add(set.role);
@@ -183,10 +193,10 @@ function permissionErrors(
 		if (set.role !== PUBLIC_ROLE_KEY) {
 			if (managed.has('roles')) {
 				if (!declaredRoleKeys.has(set.role)) {
-					errors.push(`Permission set references role "${subject}", which no role file declares.`);
+					failures.push(invalid(`Permission set references role "${subject}", which no role file declares.`));
 				}
 			} else if (!context.currentRoleKeys.has(set.role)) {
-				errors.push(`Permission set references role "${subject}", which does not exist in the database.`);
+				failures.push(invalid(`Permission set references role "${subject}", which does not exist in the database.`));
 			}
 		}
 
@@ -196,10 +206,12 @@ function permissionErrors(
 			const tuple = `${permission.collection}:${permission.action}`;
 
 			if (tuples.has(tuple)) {
-				errors.push(
-					`Duplicate permission for role "${subject}": collection "${safeLogFragment(
-						permission.collection
-					)}", action "${safeLogFragment(permission.action)}".`
+				failures.push(
+					identityConflict(
+						`Duplicate permission for role "${subject}": collection "${safeLogFragment(
+							permission.collection
+						)}", action "${safeLogFragment(permission.action)}".`
+					)
 				);
 			}
 
@@ -207,5 +219,5 @@ function permissionErrors(
 		}
 	}
 
-	return errors;
+	return failures;
 }

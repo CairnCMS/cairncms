@@ -20,7 +20,6 @@ const MANIFEST_FILENAME = 'cairncms-config.yaml';
 
 type NoticeSink = (message: string) => void;
 
-/** The default sink logs to stdout, which the CLI also uses for plan output, so a JSON caller must supply its own. */
 export type ConfigReadOptions = { notice?: NoticeSink };
 
 const ENV_VAR_PATTERN = /^\{\{([A-Z_][A-Z0-9_]*)\}\}$/;

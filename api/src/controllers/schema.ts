@@ -3,7 +3,7 @@ import Busboy from 'busboy';
 import type { RequestHandler } from 'express';
 import express from 'express';
 import { load as loadYaml } from 'js-yaml';
-import { InvalidPayloadException, UnsupportedMediaTypeException } from '../exceptions/index.js';
+import { ForbiddenException, InvalidPayloadException, UnsupportedMediaTypeException } from '../exceptions/index.js';
 import logger from '../logger.js';
 import { respond } from '../middleware/respond.js';
 import { SchemaService } from '../services/schema.js';
@@ -25,6 +25,8 @@ router.get(
 );
 
 const schemaMultipartHandler: RequestHandler = (req, res, next) => {
+	if (req.accountability?.admin !== true) throw new ForbiddenException();
+
 	if (req.is('application/json')) {
 		if (Object.keys(req.body).length === 0) {
 			throw new InvalidPayloadException(`No data was included in the body`);

@@ -62,7 +62,7 @@ describe('computeConfigPlan', () => {
 
 		expect(plan.roles.update).toHaveLength(1);
 		expect(plan.roles.update[0]!.key).toBe('editor');
-		expect(plan.roles.update[0]!.diff).toEqual({ name: 'Content Editor' });
+		expect(plan.roles.update[0]!.changes).toEqual({ name: { before: 'Editor', after: 'Content Editor' } });
 	});
 
 	it('does not flag unchanged roles as updates', () => {
@@ -120,7 +120,7 @@ describe('computeConfigPlan', () => {
 			const plan = computeConfigPlan(current, desired);
 
 			expect(plan.roles.update).toHaveLength(1);
-			expect(plan.roles.update[0]!.diff).toEqual({ description: null });
+			expect(plan.roles.update[0]!.changes).toEqual({ description: { before: 'old description', after: null } });
 		});
 
 		it('emits an ip_access change when desired sets a new value', () => {
@@ -135,7 +135,7 @@ describe('computeConfigPlan', () => {
 			const plan = computeConfigPlan(current, desired);
 
 			expect(plan.roles.update).toHaveLength(1);
-			expect(plan.roles.update[0]!.diff).toEqual({ ip_access: ['10.0.0.0/8'] });
+			expect(plan.roles.update[0]!.changes).toEqual({ ip_access: { before: null, after: ['10.0.0.0/8'] } });
 		});
 	});
 
@@ -178,6 +178,32 @@ describe('computeConfigPlan', () => {
 
 		const plan = computeConfigPlan(current, desired);
 		expect(plan.permissions.update).toHaveLength(1);
+		expect(plan.permissions.update[0]!.changes).toEqual({ fields: { before: ['title'], after: ['body', 'title'] } });
+	});
+
+	it('does not emit a role update when ip_access is only reordered', () => {
+		const current = makeConfig({ roles: [makeRole('editor', { ip_access: ['10.0.0.1', '10.0.0.2'] })] });
+		const desired = makeConfig({ roles: [makeRole('editor', { ip_access: ['10.0.0.2', '10.0.0.1'] })] });
+
+		const plan = computeConfigPlan(current, desired);
+
+		expect(plan.roles.update).toEqual([]);
+	});
+
+	it('does not emit a permission update when fields are only reordered', () => {
+		const current = makeConfig({
+			roles: [makeRole('editor')],
+			permissions: [{ role: 'editor', permissions: [{ ...makePerm('articles', 'read'), fields: ['title', 'body'] }] }],
+		});
+
+		const desired = makeConfig({
+			roles: [makeRole('editor')],
+			permissions: [{ role: 'editor', permissions: [{ ...makePerm('articles', 'read'), fields: ['body', 'title'] }] }],
+		});
+
+		const plan = computeConfigPlan(current, desired);
+
+		expect(plan.permissions.update).toEqual([]);
 	});
 
 	it('does not queue permissions for a role the plan deletes, because the cascade removes them', () => {
@@ -237,7 +263,7 @@ describe('validateConfigPlan', () => {
 		const plan = computeConfigPlan(makeConfig(), desired);
 		const result = validateConfigPlan(plan, desired, { currentRoles: new Map() });
 
-		expect(result.errors).toEqual([]);
+		expect(result).toEqual([]);
 	});
 
 	it('checks only plan-dependent invariants, reporting no document-validity error', () => {
@@ -251,7 +277,7 @@ describe('validateConfigPlan', () => {
 		const plan = computeConfigPlan(makeConfig(), desired);
 		const result = validateConfigPlan(plan, desired, { currentRoles: new Map() });
 
-		expect(result.errors).toEqual([]);
+		expect(result).toEqual([]);
 	});
 
 	it('errors when deleting the last admin role', () => {
@@ -264,8 +290,9 @@ describe('validateConfigPlan', () => {
 			currentRoles: new Map([['administrator', { admin_access: true }]]),
 		});
 
-		expect(result.errors).toHaveLength(1);
-		expect(result.errors[0]).toContain('last admin role');
+		expect(result).toHaveLength(1);
+		expect(result[0]!.message).toContain('last admin role');
+		expect(result[0]!.code).toBe('CONFIG_PROTECTED_RECORD');
 	});
 
 	it('allows deleting an admin role when another admin remains', () => {
@@ -286,7 +313,7 @@ describe('validateConfigPlan', () => {
 			]),
 		});
 
-		expect(result.errors).toEqual([]);
+		expect(result).toEqual([]);
 	});
 
 	it('errors when deleting admin role and only non-admin roles remain', () => {
@@ -307,8 +334,9 @@ describe('validateConfigPlan', () => {
 			]),
 		});
 
-		expect(result.errors).toHaveLength(1);
-		expect(result.errors[0]).toContain('last admin role');
+		expect(result).toHaveLength(1);
+		expect(result[0]!.message).toContain('last admin role');
+		expect(result[0]!.code).toBe('CONFIG_PROTECTED_RECORD');
 	});
 });
 
@@ -395,6 +423,6 @@ describe('managed scope', () => {
 		const currentRoles = new Map([['admin', { admin_access: true }]]);
 
 		expect(plan.roles.delete).toEqual([]);
-		expect(validateConfigPlan(plan, desired, { currentRoles }).errors).toEqual([]);
+		expect(validateConfigPlan(plan, desired, { currentRoles })).toEqual([]);
 	});
 });

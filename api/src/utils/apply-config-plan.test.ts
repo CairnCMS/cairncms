@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { clearSystemCache } from '../cache.js';
+import { ConfigApplyFailedException } from '../exceptions/config-apply-failed.js';
+import { ConfigInvalidException } from '../exceptions/config-invalid.js';
+import { DestructiveChangesRequiredException } from '../exceptions/destructive-changes-required.js';
 import { applyConfigPlan } from './apply-config-plan.js';
 import type { ConfigPlan } from '../types/config.js';
+
+const { transactionSpy } = vi.hoisted(() => ({ transactionSpy: vi.fn() }));
 
 const permissionsService = { createOne: vi.fn(), updateOne: vi.fn(), deleteOne: vi.fn(), readByQuery: vi.fn() };
 const rolesService = { createOne: vi.fn(), updateOne: vi.fn(), deleteOne: vi.fn() };
 
 let trxRows: Record<string, Array<Record<string, any>>> = {};
 
-/** Applies `where`, so seeding competing rows proves a query selects by its full tuple. */
 function trxStub(table: string): any {
 	let rows = trxRows[table] ?? [];
 
@@ -24,8 +29,10 @@ function trxStub(table: string): any {
 	return chain;
 }
 
+transactionSpy.mockImplementation(async (cb: any) => cb(trxStub));
+
 vi.mock('../database/index.js', () => ({
-	default: () => ({ transaction: async (cb: any) => cb(trxStub) }),
+	default: () => ({ transaction: transactionSpy }),
 }));
 
 vi.mock('./get-schema.js', () => ({ getSchema: async () => ({ collections: {}, relations: [] }) }));
@@ -40,137 +47,113 @@ function emptyPlan(): ConfigPlan {
 	};
 }
 
-describe('applyConfigPlan — dryRun', () => {
-	it('returns empty result for empty plan', async () => {
-		const result = await applyConfigPlan(emptyPlan(), { dryRun: true });
-
-		expect(result.roles.created).toEqual([]);
-		expect(result.roles.updated).toEqual([]);
-		expect(result.roles.deleted).toEqual([]);
-		expect(result.permissions.created).toBe(0);
-		expect(result.permissions.updated).toBe(0);
-		expect(result.permissions.deleted).toBe(0);
+describe('applyConfigPlan:destructive refusal', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		trxRows = { directus_roles: [], directus_permissions: [] };
 	});
 
-	it('reports planned role creates and updates', async () => {
+	function mixedPlan(): ConfigPlan {
 		const plan = emptyPlan();
+		plan.roles.create.push({ key: 'editor', name: 'Editor', admin_access: false, app_access: true });
+		plan.roles.update.push({ key: 'viewer', changes: { name: { before: 'Viewer', after: 'Read Only' } } });
+		plan.roles.delete.push('old_role');
+		return plan;
+	}
 
-		plan.roles.create.push({
-			key: 'editor',
-			name: 'Editor',
-			admin_access: false,
-			app_access: true,
-		});
+	it('refuses a plan with create, update, and delete work before opening the transaction', async () => {
+		await expect(applyConfigPlan(mixedPlan(), {})).rejects.toBeInstanceOf(DestructiveChangesRequiredException);
 
-		plan.roles.update.push({
-			key: 'viewer',
-			diff: { name: 'Read-Only' },
-		});
-
-		const result = await applyConfigPlan(plan, { dryRun: true });
-
-		expect(result.roles.created).toEqual(['editor']);
-		expect(result.roles.updated).toEqual(['viewer']);
+		expect(transactionSpy).not.toHaveBeenCalled();
+		expect(rolesService.createOne).not.toHaveBeenCalled();
+		expect(rolesService.updateOne).not.toHaveBeenCalled();
+		expect(rolesService.deleteOne).not.toHaveBeenCalled();
 	});
 
-	it('reports planned permission creates and updates', async () => {
+	it('applies every create, update, and delete when destructive is set', async () => {
+		trxRows = {
+			directus_roles: [
+				{ id: 'r-viewer', key: 'viewer' },
+				{ id: 'r-old', key: 'old_role' },
+			],
+			directus_permissions: [],
+		};
+
+		await applyConfigPlan(mixedPlan(), { destructive: true });
+
+		expect(transactionSpy).toHaveBeenCalledTimes(1);
+		expect(rolesService.createOne).toHaveBeenCalledTimes(1);
+		expect(rolesService.updateOne).toHaveBeenCalledWith('r-viewer', { name: 'Read Only' });
+		expect(rolesService.deleteOne).toHaveBeenCalledWith('r-old');
+	});
+
+	it('applies a deletion-free plan identically with and without the destructive flag', async () => {
 		const plan = emptyPlan();
+		plan.roles.create.push({ key: 'editor', name: 'Editor', admin_access: false, app_access: true });
 
-		plan.permissions.create.push({
-			roleKey: 'editor',
-			permission: {
-				collection: 'articles',
-				action: 'read',
-				permissions: null,
-				validation: null,
-				presets: null,
-				fields: null,
-			},
-		});
+		const withoutFlag = await applyConfigPlan(plan, {});
+		const withFlag = await applyConfigPlan(plan, { destructive: true });
 
-		plan.permissions.update.push({
-			roleKey: 'editor',
-			permission: {
-				collection: 'articles',
-				action: 'update',
-				permissions: null,
-				validation: null,
-				presets: null,
-				fields: ['title'],
-			},
-		});
-
-		const result = await applyConfigPlan(plan, { dryRun: true });
-
-		expect(result.permissions.created).toBe(1);
-		expect(result.permissions.updated).toBe(1);
+		expect(withoutFlag).toEqual(withFlag);
+		expect(withoutFlag.roles.created).toEqual(['editor']);
 	});
 
-	it('only reports deletions when destructive is true', async () => {
+	it('reports both role and permission deletions in the refusal extensions', async () => {
 		const plan = emptyPlan();
 		plan.roles.delete.push('old_role');
-		plan.permissions.delete.push({ roleKey: 'editor', collection: 'articles', action: 'delete' });
+		plan.permissions.delete.push({ roleKey: 'editor', collection: 'articles', action: 'read' });
 
-		const nonDestructive = await applyConfigPlan(plan, { dryRun: true });
-		expect(nonDestructive.roles.deleted).toEqual([]);
-		expect(nonDestructive.permissions.deleted).toBe(0);
+		const error = (await applyConfigPlan(plan, {}).catch((thrown) => thrown)) as DestructiveChangesRequiredException;
 
-		const destructive = await applyConfigPlan(plan, { dryRun: true, destructive: true });
-		expect(destructive.roles.deleted).toEqual(['old_role']);
-		expect(destructive.permissions.deleted).toBe(1);
+		expect(error).toBeInstanceOf(DestructiveChangesRequiredException);
+
+		expect(error.extensions).toEqual({
+			deletions: [
+				{ kind: 'roles', identity: { key: 'old_role' } },
+				{ kind: 'permissions', identity: { role: 'editor', collection: 'articles', action: 'read' } },
+			],
+		});
 	});
 
-	it('does not count permission deletes for roles being deleted', async () => {
-		const plan = emptyPlan();
-		plan.roles.delete.push('editor');
+	it('writes canonicalized permission fields on create, matching the serialized plan', async () => {
+		trxRows = { directus_roles: [{ id: 'r-editor', key: 'editor' }], directus_permissions: [] };
 
-		plan.permissions.delete.push(
-			{ roleKey: 'editor', collection: 'articles', action: 'read' },
-			{ roleKey: 'editor', collection: 'articles', action: 'update' },
-			{ roleKey: 'viewer', collection: 'pages', action: 'read' }
-		);
-
-		const result = await applyConfigPlan(plan, { dryRun: true, destructive: true });
-
-		expect(result.roles.deleted).toEqual(['editor']);
-		expect(result.permissions.deleted).toBe(1);
-	});
-
-	it('handles public permission creates in dry run', async () => {
 		const plan = emptyPlan();
 
 		plan.permissions.create.push({
-			roleKey: 'public',
+			roleKey: 'editor',
 			permission: {
 				collection: 'articles',
 				action: 'read',
 				permissions: null,
 				validation: null,
 				presets: null,
-				fields: null,
+				fields: ['title', 'body'],
 			},
 		});
 
-		const result = await applyConfigPlan(plan, { dryRun: true });
-		expect(result.permissions.created).toBe(1);
-	});
+		await applyConfigPlan(plan, {});
 
-	it('handles public permission deletes in destructive dry run', async () => {
-		const plan = emptyPlan();
-
-		plan.permissions.delete.push({ roleKey: 'public', collection: 'articles', action: 'read' });
-
-		const result = await applyConfigPlan(plan, { dryRun: true, destructive: true });
-		expect(result.permissions.deleted).toBe(1);
+		expect(permissionsService.createOne).toHaveBeenCalledWith(
+			{
+				role: 'r-editor',
+				collection: 'articles',
+				action: 'read',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: ['body', 'title'],
+			},
+			{ autoPurgeCache: false }
+		);
 	});
 });
 
-describe('applyConfigPlan — permission identity is resolved in the transaction', () => {
+describe('applyConfigPlan:permission identity is resolved in the transaction', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 
-		// Competing rows differ from the target by exactly one tuple member, so a query missing any part
-		// of (role, collection, action) selects the wrong row.
+		// Each competing row differs in one tuple member, so an incomplete predicate selects the wrong row.
 		trxRows = {
 			directus_roles: [
 				{ id: 'role-1', key: 'editor' },
@@ -190,14 +173,9 @@ describe('applyConfigPlan — permission identity is resolved in the transaction
 
 		plan.permissions.update.push({
 			roleKey: 'editor',
-			permission: {
-				collection: 'articles',
-				action: 'read',
-				permissions: null,
-				validation: null,
-				presets: null,
-				fields: null,
-			},
+			collection: 'articles',
+			action: 'read',
+			changes: { fields: { before: null, after: ['title'] } },
 		});
 
 		return plan;
@@ -209,7 +187,13 @@ describe('applyConfigPlan — permission identity is resolved in the transaction
 		const result = await applyConfigPlan(updatePlan(), {});
 
 		expect(result.permissions.updated).toBe(1);
-		expect(permissionsService.updateOne).toHaveBeenCalledWith('perm-real', expect.anything(), expect.anything());
+
+		expect(permissionsService.updateOne).toHaveBeenCalledWith(
+			'perm-real',
+			{ fields: ['title'] },
+			{ autoPurgeCache: false }
+		);
+
 		expect(permissionsService.readByQuery).not.toHaveBeenCalled();
 	});
 
@@ -218,7 +202,11 @@ describe('applyConfigPlan — permission identity is resolved in the transaction
 
 		await applyConfigPlan(updatePlan(), {});
 
-		expect(permissionsService.updateOne).toHaveBeenCalledWith('perm-real', expect.anything(), expect.anything());
+		expect(permissionsService.updateOne).toHaveBeenCalledWith(
+			'perm-real',
+			{ fields: ['title'] },
+			{ autoPurgeCache: false }
+		);
 
 		expect(permissionsService.updateOne).not.toHaveBeenCalledWith(
 			'perm-attacker',
@@ -243,6 +231,51 @@ describe('applyConfigPlan — permission identity is resolved in the transaction
 	it('still reports a genuinely absent row as a failed update', async () => {
 		trxRows['directus_permissions'] = trxRows['directus_permissions']!.filter((row) => row['id'] !== 'perm-real');
 
-		await expect(applyConfigPlan(updatePlan(), {})).rejects.toThrow('Permission not found for update');
+		await expect(applyConfigPlan(updatePlan(), {})).rejects.toBeInstanceOf(ConfigApplyFailedException);
+	});
+});
+
+describe('applyConfigPlan:transaction failure wrapper', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+
+		trxRows = {
+			directus_roles: [{ id: 'role-1', key: 'editor' }],
+			directus_permissions: [],
+		};
+	});
+
+	function createPlan(): ConfigPlan {
+		const plan = emptyPlan();
+		plan.roles.create.push({ key: 'editor', name: 'Editor', admin_access: false, app_access: true });
+		return plan;
+	}
+
+	it('wraps a non-typed failure inside the transaction as CONFIG_APPLY_FAILED', async () => {
+		rolesService.createOne.mockRejectedValueOnce(new Error('constraint violation'));
+
+		const error = (await applyConfigPlan(createPlan(), {}).catch((thrown) => thrown)) as ConfigApplyFailedException;
+
+		expect(error).toBeInstanceOf(ConfigApplyFailedException);
+		expect(error.code).toBe('CONFIG_APPLY_FAILED');
+		expect(error.status).toBe(500);
+		expect(error.message).toContain('Retry the operation and report the failure if it persists');
+		expect(error.message).not.toContain('constraint violation');
+	});
+
+	it('rethrows a typed failure from inside the transaction unchanged', async () => {
+		const typed = new ConfigInvalidException('service rejected the record');
+		rolesService.createOne.mockRejectedValueOnce(typed);
+
+		await expect(applyConfigPlan(createPlan(), {})).rejects.toBe(typed);
+	});
+
+	it('does not wrap a post-commit cache failure as a rollback', async () => {
+		vi.mocked(clearSystemCache).mockRejectedValueOnce(new Error('cache unavailable'));
+
+		const error = (await applyConfigPlan(createPlan(), {}).catch((thrown) => thrown)) as Error;
+
+		expect(error).not.toBeInstanceOf(ConfigApplyFailedException);
+		expect(error.message).toContain('cache unavailable');
 	});
 });

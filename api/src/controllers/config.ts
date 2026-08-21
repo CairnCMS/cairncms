@@ -1,24 +1,27 @@
+import { BaseException } from '@cairncms/exceptions';
 import express from 'express';
 import { isPlainObject } from 'lodash-es';
 import getDatabase from '../database/index.js';
 import env from '../env.js';
 import {
+	ConfigIdentityConflictException,
 	ConfigInvalidException,
+	ConfigProtectedRecordException,
 	ForbiddenException,
-	InvalidPayloadException,
 	UnsupportedMediaTypeException,
 } from '../exceptions/index.js';
 import { respond } from '../middleware/respond.js';
 import asyncHandler from '../utils/async-handler.js';
 import { applyConfigPlan } from '../utils/apply-config-plan.js';
 import { computeConfigPlan, validateConfigPlan } from '../utils/compute-config-plan.js';
-import { SUPPORTED_MANIFEST_VERSION } from '../utils/config-contract.js';
+import { enrichConfigPlan } from '../utils/enrich-config-plan.js';
 import { getConfigSnapshot, readCurrentConfig } from '../utils/get-config-snapshot.js';
+import { serializeConfigPlan } from '../utils/serialize-config-plan.js';
 import { getSchema } from '../utils/get-schema.js';
 import { assertConfigValueSafe, parseConfigYaml } from '../utils/parse-config-document.js';
 import { isPlaceholder } from '../utils/read-config-directory.js';
 import { validateConfigManifest, validateDesiredConfig } from '../utils/validate-desired-config.js';
-import type { CairnConfig, ConfigKind } from '../types/config.js';
+import type { CairnConfig, ConfigFailure, ConfigKind } from '../types/config.js';
 
 const router = express.Router();
 
@@ -49,25 +52,20 @@ router.post(
 		if (req.accountability?.admin !== true) throw new ForbiddenException();
 
 		const desired = parseDesiredConfig(req);
-		const envelope = assertConfigEnvelope(desired);
+
+		if (!isPlainObject(desired)) {
+			throw new ConfigInvalidException(
+				'Request body must be a CairnConfig object with manifest, roles, and permissions.'
+			);
+		}
+
+		const document = desired as Record<string, unknown>;
 
 		const dryRun = req.query['dry_run'] === 'true';
 		const destructive = req.query['destructive'] === 'true';
 
-		if (envelope.manifest['version'] !== SUPPORTED_MANIFEST_VERSION) {
-			res.status(400).json({
-				errors: [
-					`Unsupported config version: ${envelope.manifest['version']}. This engine supports version ${SUPPORTED_MANIFEST_VERSION}.`,
-				],
-			});
-
-			return;
-		}
-
-		const manifest = validateConfigManifest(envelope.manifest, BODY_LABEL);
+		const manifest = validateConfigManifest(document['manifest'], BODY_LABEL);
 		const managed = new Set<ConfigKind>(manifest.resources);
-
-		assertManagedRecordShapes(envelope, managed);
 
 		const database = getDatabase();
 		const schema = await getSchema({ database, bypassCache: true });
@@ -79,26 +77,29 @@ router.post(
 		});
 
 		const config = desired as CairnConfig;
-		const documentErrors = validateDesiredConfig(config, { label: BODY_LABEL, currentRoleKeys });
+		const failures = validateDesiredConfig(config, { label: BODY_LABEL, currentRoleKeys });
 
-		if (documentErrors.length > 0) {
-			res.status(400).json({ errors: documentErrors });
-			return;
-		}
+		if (failures.length > 0) throw failures.map(toConfigException);
 
 		if (managed.has('roles')) assertNoPlaceholders(config);
 
 		const plan = computeConfigPlan(current, config);
 
 		const currentRoles = new Map(current.roles.map((r) => [r.key, { admin_access: r.admin_access }]));
-		const validation = validateConfigPlan(plan, config, { currentRoles });
+		const planFailures = validateConfigPlan(plan, config, { currentRoles });
 
-		if (validation.errors.length > 0) {
-			res.status(400).json({ errors: validation.errors });
-			return;
+		if (planFailures.length > 0) throw planFailures.map(toConfigException);
+
+		if (dryRun) {
+			const enrichment = await enrichConfigPlan(plan, config, { schema, database });
+			const serialized = serializeConfigPlan(plan, { enrichment, manifestVersion: manifest.version });
+
+			res.locals['payload'] = { data: serialized };
+
+			return next();
 		}
 
-		const result = await applyConfigPlan(plan, { database, schema, dryRun, destructive });
+		const result = await applyConfigPlan(plan, { database, schema, destructive });
 
 		res.locals['payload'] = { data: result };
 
@@ -122,6 +123,17 @@ function parseDesiredConfig(req: express.Request): unknown {
 	throw new UnsupportedMediaTypeException(`Unsupported Content-Type: ${req.headers['content-type'] ?? '(none)'}`);
 }
 
+function toConfigException(failure: ConfigFailure): BaseException {
+	switch (failure.code) {
+		case 'CONFIG_INVALID':
+			return new ConfigInvalidException(failure.message);
+		case 'CONFIG_IDENTITY_CONFLICT':
+			return new ConfigIdentityConflictException(failure.message);
+		case 'CONFIG_PROTECTED_RECORD':
+			return new ConfigProtectedRecordException(failure.message);
+	}
+}
+
 function assertNoPlaceholders(config: CairnConfig): void {
 	config.roles.forEach((role, index) => {
 		for (const field of ['name', 'description'] as const) {
@@ -133,89 +145,6 @@ function assertNoPlaceholders(config: CairnConfig): void {
 			}
 		}
 	});
-}
-
-type ConfigEnvelope = { manifest: Record<string, unknown>; roles: unknown[]; permissions: unknown[] };
-
-/** Preserves INVALID_PAYLOAD for structural HTTP errors. */
-function assertConfigEnvelope(value: unknown): ConfigEnvelope {
-	if (!isPlainObject(value)) {
-		throw new InvalidPayloadException(
-			'Request body must be a CairnConfig object with manifest, roles, and permissions.'
-		);
-	}
-
-	const body = value as Record<string, unknown>;
-
-	if (!isPlainObject(body['manifest'])) {
-		throw new InvalidPayloadException('Request body is missing the required "manifest" object.');
-	}
-
-	if (!Array.isArray(body['roles'])) {
-		throw new InvalidPayloadException('Request body field "roles" must be an array.');
-	}
-
-	if (!Array.isArray(body['permissions'])) {
-		throw new InvalidPayloadException('Request body field "permissions" must be an array.');
-	}
-
-	return {
-		manifest: body['manifest'] as Record<string, unknown>,
-		roles: body['roles'],
-		permissions: body['permissions'],
-	};
-}
-
-function assertManagedRecordShapes(envelope: ConfigEnvelope, managed: ReadonlySet<ConfigKind>): void {
-	if (managed.has('roles')) {
-		envelope.roles.forEach((role: unknown, index: number) => {
-			if (!isPlainObject(role)) {
-				throw new InvalidPayloadException(`roles[${index}] must be an object.`);
-			}
-
-			if (typeof (role as Record<string, unknown>)['key'] !== 'string') {
-				throw new InvalidPayloadException(`roles[${index}] is missing a string "key".`);
-			}
-		});
-	}
-
-	if (managed.has('permissions')) {
-		envelope.permissions.forEach((rawSet: unknown, setIndex: number) => {
-			if (!isPlainObject(rawSet)) {
-				throw new InvalidPayloadException(`permissions[${setIndex}] must be an object.`);
-			}
-
-			const set = rawSet as Record<string, unknown>;
-
-			if (typeof set['role'] !== 'string') {
-				throw new InvalidPayloadException(`permissions[${setIndex}] is missing a string "role".`);
-			}
-
-			if (!Array.isArray(set['permissions'])) {
-				throw new InvalidPayloadException(`permissions[${setIndex}].permissions must be an array.`);
-			}
-
-			set['permissions'].forEach((perm: unknown, permIndex: number) => {
-				if (!isPlainObject(perm)) {
-					throw new InvalidPayloadException(`permissions[${setIndex}].permissions[${permIndex}] must be an object.`);
-				}
-
-				const entry = perm as Record<string, unknown>;
-
-				if (typeof entry['collection'] !== 'string') {
-					throw new InvalidPayloadException(
-						`permissions[${setIndex}].permissions[${permIndex}] is missing a string "collection".`
-					);
-				}
-
-				if (typeof entry['action'] !== 'string') {
-					throw new InvalidPayloadException(
-						`permissions[${setIndex}].permissions[${permIndex}] is missing a string "action".`
-					);
-				}
-			});
-		});
-	}
 }
 
 export default router;

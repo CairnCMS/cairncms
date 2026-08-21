@@ -33,6 +33,12 @@ function document(overrides: Record<string, unknown> = {}): Record<string, unkno
 }
 
 function validate(doc: Record<string, unknown>, currentRoleKeys: string[] = []): string[] {
+	return validateDesiredConfig(doc, { label: 'test', currentRoleKeys: new Set(currentRoleKeys) }).map(
+		(failure) => failure.message
+	);
+}
+
+function validateFull(doc: Record<string, unknown>, currentRoleKeys: string[] = []) {
 	return validateDesiredConfig(doc, { label: 'test', currentRoleKeys: new Set(currentRoleKeys) });
 }
 
@@ -398,5 +404,44 @@ describe('validateConfigRecord', () => {
 
 	it('leaves reference resolution to the document, so an undeclared subject passes', () => {
 		expect(validateConfigRecord('permissions', permissionSet({ role: 'ghost' }))).toEqual([]);
+	});
+});
+
+describe('validateDesiredConfig failure codes', () => {
+	it('labels a duplicate role as an identity conflict', () => {
+		const failures = validateFull(document({ roles: [role({ key: 'editor' }), role({ key: 'editor' })] }));
+
+		expect(failures).toHaveLength(1);
+		expect(failures[0]!.code).toBe('CONFIG_IDENTITY_CONFLICT');
+	});
+
+	it('labels a duplicate permission set as an identity conflict', () => {
+		const failures = validateFull(document({ permissions: [permissionSet(), permissionSet()] }));
+
+		expect(failures).toHaveLength(1);
+		expect(failures[0]!.code).toBe('CONFIG_IDENTITY_CONFLICT');
+	});
+
+	it('labels a duplicate permission tuple as an identity conflict', () => {
+		const failures = validateFull(
+			document({ permissions: [permissionSet({ permissions: [permission(), permission()] })] })
+		);
+
+		expect(failures).toHaveLength(1);
+		expect(failures[0]!.code).toBe('CONFIG_IDENTITY_CONFLICT');
+	});
+
+	it('labels a field-contract violation as invalid', () => {
+		const failures = validateFull(document({ roles: [role({ admin_access: 'false' })] }));
+
+		expect(failures).toHaveLength(1);
+		expect(failures[0]!.code).toBe('CONFIG_INVALID');
+	});
+
+	it('labels an undefined role reference as invalid', () => {
+		const failures = validateFull(document({ permissions: [permissionSet({ role: 'ghost' })] }));
+
+		expect(failures).toHaveLength(1);
+		expect(failures[0]!.code).toBe('CONFIG_INVALID');
 	});
 });

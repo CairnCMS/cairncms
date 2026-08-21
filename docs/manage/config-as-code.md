@@ -93,16 +93,111 @@ The flow:
 2. Read the required current database state.
 3. Validate the desired config.
 4. Compute and validate the plan.
-5. If the plan is empty, log `No changes to apply` and exit.
-6. Print the plan summary, prompt for confirmation, then apply.
+5. If the plan is empty, report any warnings and exit `0`. Human output prints `No changes to apply.` JSON output emits the complete plan document with a zeroed summary.
+6. Print the complete plan. For a mutating apply, refuse the operation without changing anything if the plan contains deletions and `--destructive` was not passed.
+7. Otherwise prompt for confirmation, then apply.
 
 Three flags adjust the flow:
 
-- **`--dry-run`** — compute and print the plan without writing. Pairs with `--format json` for machine-readable output. Exits with code `1` if the plan is non-empty, which makes drift detection clean to gate in CI.
+- **`--dry-run`** — compute and print the plan without writing. Exits `1` when the plan contains changes and `0` when it is empty, which supports CI drift checks. Add `--format json` for the machine-readable plan. JSON is only available with `--dry-run`.
 - **`--yes`** — skip the confirmation prompt.
-- **`--destructive`** — opt in to deleting roles and permissions that exist in the database but are absent from the config directory. Off by default so accidental omissions do not silently delete state.
+- **`--destructive`** — authorize deleting roles and permissions that exist in the database but are absent from the config. Off by default.
 
-The destructive flag is the one that makes orphan removal possible. Without it, an apply only creates and updates while orphans in the database remain. This is the safer default for environments where the config directory might not represent the full intended state.
+Deletions require explicit authorization. Without `--destructive`, a mutating apply whose plan contains deletions is refused and makes no changes, printing the deletions it would have made:
+
+```
+Apply refused: this plan contains 1 deletion.
+Review the item above and run again with --destructive.
+```
+
+Pass `--destructive` to authorize the displayed deletions.
+
+### Plan output
+
+The CLI uses the same human-readable plan for dry runs, refusals, and confirmation. Changes are grouped by kind and operation:
+
+```
+The following changes will be applied:
+
+Roles:
+  - Create content-reviewer
+  - Update editor
+    - Set name to Managing Editor
+
+Permissions:
+  - Delete editor / articles / delete
+
+Plan: 1 to create, 1 to update, 1 to delete.
+```
+
+For each role deletion, the plan lists the cascading permission and preset deletions, the suspended users, and the affected active sessions:
+
+```
+Roles:
+  - Delete editor
+    - Permission removed: articles / read
+    - Bookmark removed: Draft queue
+    - User suspended: 6f2a1b90-c3d4-4e17-9a2b-8f0c1d2e3a4b
+    - 2 active sessions affected
+```
+
+Permissions that target missing collections appear under a `Warnings:` heading. Warnings do not block the apply or change its exit code.
+
+### Machine-readable output
+
+Use `--format json` with `--dry-run` to emit one versioned JSON plan. Standard output contains only the document. Operational logs go to standard error, while plan warnings remain in the document's `warnings` array.
+
+```bash
+cairncms config apply --dry-run --format json ./config
+```
+
+```json
+{
+  "planVersion": 1,
+  "manifestVersion": 1,
+  "changes": [
+    {
+      "kind": "roles",
+      "operation": "update",
+      "identity": { "key": "editor" },
+      "fields": { "name": { "before": "Editor", "after": "Managing Editor" } }
+    },
+    {
+      "kind": "permissions",
+      "operation": "delete",
+      "identity": { "role": "editor", "collection": "articles", "action": "delete" },
+      "impact": []
+    }
+  ],
+  "summary": { "create": 0, "update": 1, "delete": 1 },
+  "warnings": []
+}
+```
+
+`planVersion` identifies the payload format. Each change carries its `kind`, `operation`, and stable `identity`. A create carries the full canonical `values`, an update carries a per-field `before`/`after` map, and a role deletion carries an `impact` array describing the cascade. An empty plan still emits the complete document with a zeroed `summary`.
+
+### Exit codes
+
+Both config commands map their outcome to an exit code, so a pipeline can branch on the result without parsing output:
+
+`config apply`:
+
+| Outcome | Code |
+|---|---|
+| Empty plan, or a successful apply, or a declined confirmation, or `--help` | 0 |
+| Dry run whose plan contains changes | 1 |
+| Validation failure, a deletion requiring `--destructive`, or a usage error (unknown option, missing path, unknown `--format`, JSON without `--dry-run`) | 2 |
+| No database connection, system tables not installed, unreadable state, or an unexpected failure | 3 |
+
+`config snapshot`:
+
+| Outcome | Code |
+|---|---|
+| Snapshot written, a declined overwrite, or `--help` | 0 |
+| Usage error, or an invalid existing tree | 2 |
+| No database connection, system tables not installed, unreadable state, or an unexpected failure | 3 |
+
+Exit `1` indicates drift. Exit `2` indicates invalid input, invalid command usage, or a refused destructive apply. Exit `3` indicates an operational or unexpected runtime failure.
 
 ### Environment variables
 
@@ -140,10 +235,10 @@ The YAML media types support a natural round-trip: fetch as YAML, edit, post the
 
 Two query flags shape the apply:
 
-- **`?dry_run=true`** — compute and return the plan without writing. The response shape is identical to a real apply; only the database is left unchanged.
-- **`?destructive=true`** — required for the apply to delete orphans. Without it, only creates and updates run.
+- **`?dry_run=true`** — compute and return the plan without writing. The response is the plan document, not an apply summary.
+- **`?destructive=true`** — authorize deletions during a mutating apply. Dry runs always return the complete plan.
 
-The response is a summary of what changed (or would have changed for a dry run):
+A mutating apply returns a summary of what changed:
 
 ```json
 {
@@ -162,7 +257,11 @@ The response is a summary of what changed (or would have changed for a dry run):
 }
 ```
 
-Roles are tracked by key in the response; permissions are tracked as counts because per-rule attribution does not produce useful operator output at scale.
+Mutating applies return role keys and permission counts.
+
+A dry run returns the same plan document the CLI prints with `--dry-run --format json`, under the standard `data` envelope.
+
+A mutating apply whose plan contains a deletion without `?destructive=true` is refused with a `400` and the `DESTRUCTIVE_CHANGES_REQUIRED` code. The error's `extensions.deletions` lists the identities that would be deleted, and nothing is applied. Re-send with `?destructive=true` to authorize them.
 
 ### No diff endpoint
 
@@ -199,6 +298,35 @@ After their input-specific checks, both surfaces validate the same config contra
 
 Validation failures are reported without applying changes.
 
+### Error responses
+
+Validation failures and refused destructive applies make no changes. If the apply transaction fails, CairnCMS rolls it back. When a validation pass reports more than one failure, the HTTP API returns one `errors` entry for each reported failure:
+
+```json
+{
+  "errors": [
+    {
+      "message": "Permission set references role \"editor\", which does not exist in the database.",
+      "extensions": { "code": "CONFIG_INVALID" }
+    }
+  ]
+}
+```
+
+Config-specific HTTP codes are:
+
+- **`CONFIG_INVALID`** (400) — invalid document structure, values, fields, role references, reserved keys, or placeholder syntax in HTTP input.
+- **`CONFIG_UNSUPPORTED_VERSION`** (400) — an unsupported manifest version.
+- **`CONFIG_IDENTITY_CONFLICT`** (400) — a duplicate role or permission identity.
+- **`CONFIG_PROTECTED_RECORD`** (400) — a plan that would remove the last `admin_access: true` role.
+- **`DESTRUCTIVE_CHANGES_REQUIRED`** (400) — a plan contains deletions that were not authorized. `extensions.deletions` lists the identities.
+- **`CONFIG_READ_FAILED`** (500) — required database state could not be read.
+- **`CONFIG_APPLY_FAILED`** (500) — the apply transaction failed and was rolled back.
+
+Malformed JSON uses `INVALID_PAYLOAD`. Unsupported content types use `UNSUPPORTED_MEDIA_TYPE`.
+
+The CLI writes failure messages to standard error and uses the [exit codes](#exit-codes) above. An unset `CAIRNCMS_CONFIG_*` placeholder is reported as `CONFIG_PLACEHOLDER_UNRESOLVED`. A placeholder outside that namespace is `CONFIG_INVALID`.
+
 Config-as-code reads current state without running extension query filters, read filters, or read actions.
 
 ## Source-control workflow
@@ -222,9 +350,9 @@ cairncms schema apply ./schema.yaml
 cairncms config apply ./config
 ```
 
-The order matters: permissions reference collections, so the collections have to exist before the permissions that gate them can be applied. Reversing the order produces undefined-collection validation failures.
+Apply schema before config so referenced collections exist when permissions are installed. Config apply does not reject permissions for missing collections, but the plan reports them as warnings.
 
-Both surfaces tolerate empty diffs gracefully by applying an unchanged schema or config is a no-op that exits cleanly. Running both in a deploy pipeline as a matter of course, even when only one has changed, is safe and removes the cognitive load of remembering which one to run when.
+Applying an unchanged schema or config is a no-op, so both commands can run on every deployment.
 
 ## Where to go next
 
