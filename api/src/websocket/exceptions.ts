@@ -12,6 +12,7 @@ export type WebSocketErrorCode =
 	| 'UNSUPPORTED_MESSAGE_TYPE'
 	| 'TOO_MANY_PENDING'
 	| 'SUBSCRIPTION_LIMIT'
+	| 'DELETE_FEED_FORBIDDEN'
 	| 'INTERNAL_ERROR';
 
 const ERROR_MESSAGES: Record<WebSocketErrorCode, string> = {
@@ -23,6 +24,7 @@ const ERROR_MESSAGES: Record<WebSocketErrorCode, string> = {
 	UNSUPPORTED_MESSAGE_TYPE: 'Unsupported message type.',
 	TOO_MANY_PENDING: 'Too many pending commands.',
 	SUBSCRIPTION_LIMIT: 'Too many subscriptions.',
+	DELETE_FEED_FORBIDDEN: 'Delete notifications are not available for this subscription.',
 	INTERNAL_ERROR: 'Request failed.',
 };
 

@@ -21,6 +21,16 @@ const CONTEXT: CommandContext = {
 	accountability: { user: 'u', role: 'r', admin: false, app: true, ip: '1.1.1.1' } as never,
 };
 
+const DELETE_FEED_CONTEXT: CommandContext = {
+	schema: { collections: { articles: { primary: 'id' } } } as unknown as SchemaOverview,
+	accountability: { user: 'a', role: 'a', admin: true, app: false } as never,
+};
+
+const DENIED_FEED_CONTEXT: CommandContext = {
+	schema: { collections: { articles: { primary: 'id' } } } as unknown as SchemaOverview,
+	accountability: { user: 'e', role: 'e', admin: false, app: true, permissions: [] } as never,
+};
+
 let registry: InstanceType<typeof SubscriptionRegistry>;
 let close: ReturnType<typeof vi.fn>;
 
@@ -126,6 +136,78 @@ describe('handleSubscription subscribe', () => {
 		expect(close).toHaveBeenCalledWith(1013);
 		expect(send).not.toHaveBeenCalled();
 		expect(registry.getSubscribedOwners()).toHaveLength(0);
+	});
+});
+
+describe('handleSubscription delete feed', () => {
+	function runFeed(context: CommandContext, message: Record<string, unknown>, send: ReturnType<typeof makeSend>) {
+		return handleSubscription(makeClient(), message as WebSocketMessage, context, send, registry, close);
+	}
+
+	async function rejectFeed(
+		context: CommandContext,
+		message: Record<string, unknown>,
+		send: ReturnType<typeof makeSend>
+	) {
+		const error = await runFeed(context, message, send).then(
+			() => null,
+			(caught) => caught
+		);
+
+		expect(error).toBeInstanceOf(WebSocketException);
+		return error;
+	}
+
+	it('rejects a delete feed lacking unconditional read with DELETE_FEED_FORBIDDEN and registers nothing', async () => {
+		const send = makeSend();
+
+		const error = await rejectFeed(
+			DENIED_FEED_CONTEXT,
+			{ type: 'subscribe', collection: 'articles', event: 'delete', uid: 1 },
+			send
+		);
+
+		expect(error).toMatchObject({ type: 'subscribe', code: 'DELETE_FEED_FORBIDDEN', uid: '1' });
+
+		expect(error.toResponse()).toMatchObject({
+			type: 'subscribe',
+			status: 'error',
+			error: {
+				code: 'DELETE_FEED_FORBIDDEN',
+				message: 'Delete notifications are not available for this subscription.',
+			},
+		});
+
+		expect(registry.getSubscribedOwners()).toHaveLength(0);
+		expect(send).not.toHaveBeenCalled();
+	});
+
+	it('rejects a query-bearing delete feed even for an eligible subscriber', async () => {
+		const send = makeSend();
+
+		const error = await rejectFeed(
+			DELETE_FEED_CONTEXT,
+			{ type: 'subscribe', collection: 'articles', event: 'delete', query: { filter: { id: { _eq: 1 } } }, uid: 2 },
+			send
+		);
+
+		expect(error).toMatchObject({ code: 'DELETE_FEED_FORBIDDEN' });
+		expect(registry.getSubscribedOwners()).toHaveLength(0);
+		expect(send).not.toHaveBeenCalled();
+	});
+
+	it('registers an eligible, query-free delete feed and sends init', async () => {
+		const send = makeSend();
+		await runFeed(DELETE_FEED_CONTEXT, { type: 'subscribe', collection: 'articles', event: 'delete', uid: 3 }, send);
+
+		expect(registry.getActiveByCollection('articles', 999)).toHaveLength(1);
+		expect(initialPayload).not.toHaveBeenCalled();
+
+		expect(JSON.parse(send.mock.calls[0]![0] as string)).toMatchObject({
+			type: 'subscription',
+			event: 'init',
+			uid: '3',
+		});
 	});
 });
 

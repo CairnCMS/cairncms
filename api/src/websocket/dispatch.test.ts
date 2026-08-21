@@ -95,6 +95,15 @@ function client(): SocketClient {
 	} as unknown as SocketClient;
 }
 
+function clientWith(accountability: Record<string, unknown> | null): SocketClient {
+	return {
+		stopping: false,
+		auth: { snapshotAccountability: vi.fn().mockResolvedValue(accountability) },
+	} as unknown as SocketClient;
+}
+
+const ARTICLES_SCHEMA = async () => ({ collections: { articles: { primary: 'id' } } } as never);
+
 function subscribe(c: SocketClient, collection: string, extra: Record<string, unknown> = {}) {
 	const result = registry.reserve({ client: c, collection, query: {} as Query, ...extra });
 	if (!result.ok) throw new Error('reserve refused');
@@ -169,9 +178,10 @@ describe('DispatchCoordinator delivery', () => {
 		expect(sentFrames()[0]).toMatchObject({ data: [{ id: 2 }] });
 	});
 
-	it('suppresses a delete event in 8b', async () => {
-		build();
-		subscribe(client(), 'articles');
+	it('delivers no delete to a subscription that did not opt in', async () => {
+		build(5, ARTICLES_SCHEMA);
+		subscribe(clientWith({ admin: true }), 'articles');
+		subscribe(clientWith({ admin: true }), 'articles', { event: 'create' });
 
 		emit({ action: 'delete', collection: 'articles', keys: [1] });
 		await flush();
@@ -276,6 +286,62 @@ describe('DispatchCoordinator delivery', () => {
 
 		emit({ action: 'create', collection: 'articles', key: 1 });
 		await vi.waitFor(() => expect(closeConnection).toHaveBeenCalledWith(c, 1009));
+	});
+});
+
+describe('DispatchCoordinator delete feed', () => {
+	it('delivers a collection delete feed to an unconditional subscriber without a read', async () => {
+		build(5, ARTICLES_SCHEMA);
+		subscribe(clientWith({ admin: true }), 'articles', { event: 'delete' });
+
+		emit({ action: 'delete', collection: 'articles', keys: [1, 2] });
+		await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+
+		expect(sentFrames()[0]).toMatchObject({ event: 'delete', data: [1, 2] });
+		expect(eventPayload).not.toHaveBeenCalled();
+	});
+
+	it('delivers only the subscribed key to an exact-item delete feed', async () => {
+		build(5, ARTICLES_SCHEMA);
+		subscribe(clientWith({ admin: true }), 'articles', { event: 'delete', item: '1' });
+
+		emit({ action: 'delete', collection: 'articles', keys: [1, 2] });
+		await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+
+		expect(sentFrames()[0]).toMatchObject({ event: 'delete', data: [1] });
+	});
+
+	it('sends nothing to a delete feed whose subscriber is not eligible at dispatch', async () => {
+		build(5, ARTICLES_SCHEMA);
+		subscribe(clientWith({ admin: false, permissions: [] }), 'articles', { event: 'delete' });
+
+		emit({ action: 'delete', collection: 'articles', keys: [1] });
+		await flush();
+		await flush();
+
+		expect(send).not.toHaveBeenCalled();
+	});
+
+	it('silently removes a delete feed whose eligibility was lost, delivering only to the eligible peer', async () => {
+		build(5, ARTICLES_SCHEMA);
+		const revoked = clientWith({ admin: true });
+		const peer = clientWith({ admin: true });
+		const reservation = subscribe(revoked, 'articles', { event: 'delete' });
+		subscribe(peer, 'articles', { event: 'delete' });
+
+		(revoked.auth.snapshotAccountability as ReturnType<typeof vi.fn>).mockResolvedValue({
+			admin: false,
+			permissions: [],
+		});
+
+		emit({ action: 'delete', collection: 'articles', keys: [1] });
+		await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+
+		expect(reservation.isActive()).toBe(false);
+		expect(closeConnection).not.toHaveBeenCalled();
+		expect(send.mock.calls[0]![0]).toBe(peer);
+		expect(send.mock.calls.some((call) => call[0] === revoked)).toBe(false);
+		expect(sentFrames()[0]).toMatchObject({ event: 'delete', data: [1] });
 	});
 });
 

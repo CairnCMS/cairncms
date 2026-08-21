@@ -36,12 +36,15 @@ const CONTEXT = { database: {}, schema: null, accountability: null } as unknown 
 
 let producer: InstanceType<typeof HookEventProducer> | null = null;
 let coordinator: InstanceType<typeof DispatchCoordinator> | null = null;
+let readHook: ReturnType<typeof vi.fn> | null = null;
 
 afterEach(async () => {
 	producer?.destroy();
 	await coordinator?.stop();
+	if (readHook) emitter.offFilter('items.read', readHook as never);
 	producer = null;
 	coordinator = null;
+	readHook = null;
 	send.mockClear();
 });
 
@@ -49,6 +52,13 @@ function client(): SocketClient {
 	return {
 		stopping: false,
 		auth: { snapshotAccountability: vi.fn().mockResolvedValue({ user: 'u', role: 'r', admin: false, app: true }) },
+	} as unknown as SocketClient;
+}
+
+function adminClient(): SocketClient {
+	return {
+		stopping: false,
+		auth: { snapshotAccountability: vi.fn().mockResolvedValue({ admin: true }) },
 	} as unknown as SocketClient;
 }
 
@@ -77,5 +87,47 @@ describe('realtime dispatch wired through the messenger', () => {
 
 		await vi.waitFor(() => expect(send).toHaveBeenCalled());
 		expect(JSON.parse(send.mock.calls[0]![1] as string)).toMatchObject({ type: 'subscription', event: 'create' });
+	});
+
+	it('delivers an eligible delete feed and never invokes an items.read hook', async () => {
+		const messenger = getMessenger();
+		const registry = new SubscriptionRegistry();
+
+		readHook = vi.fn(async (payload) => payload);
+		emitter.onFilter('items.read', readHook as never);
+
+		producer = new HookEventProducer(messenger);
+		producer.register();
+
+		coordinator = new DispatchCoordinator({
+			registry,
+			getSchema: async () => ({ collections: { articles: { primary: 'id' } } } as never),
+			messenger,
+			closeConnection: vi.fn(),
+			deliveryConcurrency: 5,
+		});
+
+		coordinator.start();
+
+		const reservation = registry.reserve({
+			client: adminClient(),
+			collection: 'articles',
+			query: {} as Query,
+			event: 'delete',
+		});
+
+		if (reservation.ok) reservation.reservation.activate();
+
+		emitter.emitAction('items.delete', { collection: 'articles', keys: [1] }, CONTEXT);
+
+		await vi.waitFor(() => expect(send).toHaveBeenCalled());
+
+		expect(JSON.parse(send.mock.calls[0]![1] as string)).toMatchObject({
+			type: 'subscription',
+			event: 'delete',
+			data: [1],
+		});
+
+		expect(readHook).not.toHaveBeenCalled();
 	});
 });

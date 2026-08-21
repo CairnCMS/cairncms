@@ -21,6 +21,7 @@ import {
 } from './subscriptions.js';
 import { resolveTargetService } from './target.js';
 import { getEventPayload } from './utils/items.js';
+import { deletableKeys, isDeleteFeedEligible } from './utils/removal.js';
 import { fmtMessage, safeSend, type OutboundLimits } from './utils/message.js';
 
 const OUTBOUND_LIMITS: OutboundLimits = { frameCap: OUTBOUND_FRAME_CAP, queueByteBound: OUTBOUND_QUEUE_BYTES };
@@ -236,8 +237,8 @@ export class DispatchCoordinator {
 
 			const { subscription } = reservation;
 			if (subscription.event !== undefined && subscription.event !== event.action) continue;
+			if (event.action === 'delete' && subscription.event !== 'delete') continue;
 			if (subscription.item !== undefined && !this.matchesItem(event, subscription.item)) continue;
-			if (event.action === 'delete') continue;
 
 			const acquired = await this.semaphore.acquire(entry.token.signal);
 			if (!acquired) return;
@@ -258,7 +259,11 @@ export class DispatchCoordinator {
 
 				if (schema === null) return;
 
-				await this.deliver(reservation, event, schema);
+				if (event.action === 'delete') {
+					await this.deliverRemoval(reservation, event, schema);
+				} else {
+					await this.deliver(reservation, event, schema);
+				}
 			} catch {
 				// A single subscriber's failure never stops the others.
 			} finally {
@@ -286,6 +291,34 @@ export class DispatchCoordinator {
 
 		safeSend(client, fmtMessage('subscription', payload, subscription.uid), OUTBOUND_LIMITS, (code) =>
 			this.closeConnection(client, code)
+		);
+	}
+
+	private async deliverRemoval(
+		reservation: Reservation,
+		event: Extract<WebSocketEvent, { action: 'delete' }>,
+		schema: SchemaOverview
+	): Promise<void> {
+		const { subscription } = reservation;
+		const { client } = subscription;
+
+		const accountability = await client.auth.snapshotAccountability(schema);
+		if (accountability === null) return;
+
+		if (!isDeleteFeedEligible(subscription.collection, accountability, schema)) {
+			if (reservation.isActive()) reservation.remove();
+			return;
+		}
+
+		const keys = deletableKeys(subscription.item, event);
+		if (keys.length === 0) return;
+		if (!reservation.isActive()) return;
+
+		safeSend(
+			client,
+			fmtMessage('subscription', { event: 'delete', data: keys }, subscription.uid),
+			OUTBOUND_LIMITS,
+			(code) => this.closeConnection(client, code)
 		);
 	}
 
