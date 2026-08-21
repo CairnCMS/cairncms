@@ -1230,7 +1230,9 @@ describe('Config-as-Code deletion impact', () => {
 				await db('directus_users').insert({ id: userId, email: `${roleKey}@example.invalid`, role: roleId });
 				userInserted = true;
 
-				await db('directus_sessions').insert({ token, user: userId, expires: new Date(Date.now() + 3600 * 1000) });
+				const expiresAt = Date.now() + 3600 * 1000;
+				const expires = vendor === 'sqlite3' ? expiresAt : new Date(expiresAt);
+				await db('directus_sessions').insert({ token, user: userId, expires });
 
 				const httpDry = await applyConfig(vendor, baseline, { dryRun: true });
 				expect(httpDry.statusCode).toBe(200);
@@ -1268,6 +1270,16 @@ describe('Config-as-Code deletion impact', () => {
 		});
 	});
 });
+
+function unreachableDbEnv(vendor: string): NodeJS.ProcessEnv {
+	const base = config.envs[vendor as keyof typeof config.envs];
+
+	if (vendor === 'sqlite3') {
+		return { ...base, DB_FILENAME: path.join(os.tmpdir(), `cairncms-unreachable-${randomUUID()}`, 'db.sqlite') };
+	}
+
+	return { ...base, DB_HOST: '127.0.0.1', DB_PORT: '1' };
+}
 
 describe('cairncms config apply exit codes and machine output', () => {
 	let fixtureRoot: string;
@@ -1410,8 +1422,9 @@ describe('cairncms config apply exit codes and machine output', () => {
 	describe('exits 3 when the database is unreachable', () => {
 		it.each(vendors)('%s', async (vendor) => {
 			await snapshotBaseline(vendor);
-			const env = { ...config.envs[vendor as keyof typeof config.envs], DB_HOST: '127.0.0.1', DB_PORT: '1' };
-			expect(runApply(vendor, [fixtureRoot, '--yes'], env).status).toBe(3);
+			const result = runApply(vendor, [fixtureRoot, '--yes'], unreachableDbEnv(vendor));
+			expect(result.status).toBe(3);
+			expect(`${result.stdout ?? ''}${result.stderr ?? ''}`).toContain(`Can't connect to the database.`);
 		});
 	});
 });
@@ -1466,8 +1479,9 @@ describe('cairncms config snapshot exit codes', () => {
 
 	describe('exits 3 when the database is unreachable', () => {
 		it.each(vendors)('%s', (vendor) => {
-			const env = { ...config.envs[vendor as keyof typeof config.envs], DB_HOST: '127.0.0.1', DB_PORT: '1' };
-			expect(runSnapshot(vendor, [fixtureRoot, '--yes'], env).status).toBe(3);
+			const result = runSnapshot(vendor, [fixtureRoot, '--yes'], unreachableDbEnv(vendor));
+			expect(result.status).toBe(3);
+			expect(`${result.stdout ?? ''}${result.stderr ?? ''}`).toContain(`Can't connect to the database.`);
 		});
 	});
 });
