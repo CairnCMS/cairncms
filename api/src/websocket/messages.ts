@@ -74,3 +74,18 @@ export const WebSocketItemsMessage = z.union([
 ]);
 
 export type WebSocketItemsMessage = z.infer<typeof WebSocketItemsMessage>;
+
+export const WebSocketSubscribeMessage = z.discriminatedUnion('type', [
+	WebSocketMessage.extend({
+		type: z.literal('subscribe'),
+		collection: z.string(),
+		event: z.enum(['create', 'update', 'delete']).optional(),
+		item: zodStringOrNumber.optional(),
+		query: ZodQuery.optional(),
+	}),
+	WebSocketMessage.extend({
+		type: z.literal('unsubscribe'),
+	}),
+]);
+
+export type WebSocketSubscribeMessage = z.infer<typeof WebSocketSubscribeMessage>;

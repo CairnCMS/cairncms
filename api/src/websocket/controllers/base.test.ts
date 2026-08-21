@@ -14,6 +14,7 @@ import type { RateLimitConsumption } from '../../middleware/rate-limiter-ip.js';
 import { Admission } from '../admission.js';
 import { PENDING_COMMAND_LIMIT, TIMER_MAX_MS, type AuthMode } from '../config.js';
 import { WebSocketException } from '../exceptions.js';
+import { SubscriptionRegistry } from '../subscriptions.js';
 import type { CommandContext, SocketClient, SocketControllerOptions } from './base.js';
 import { WebSocketController } from './rest.js';
 
@@ -90,11 +91,13 @@ interface HarnessOptions {
 	consumeGlobalRateLimit?: () => Promise<RateLimitConsumption>;
 	database?: Knex;
 	getSchema?: () => Promise<SchemaOverview>;
+	subscriptions?: SubscriptionRegistry;
 	controllerClass?: new (options: SocketControllerOptions) => WebSocketController;
 }
 
 interface Harness {
 	admission: Admission;
+	subscriptions: SubscriptionRegistry;
 	controller: WebSocketController;
 	server: Server;
 	port: number;
@@ -117,6 +120,7 @@ let emitActionBounded: ReturnType<typeof vi.spyOn>;
 
 async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
 	const admission = options.admission ?? new Admission({ process: 100, ip: 100, user: 100, transports: { rest: 100 } });
+	const subscriptions = options.subscriptions ?? new SubscriptionRegistry();
 
 	const ControllerClass = options.controllerClass ?? WebSocketController;
 
@@ -134,6 +138,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
 		app: express(),
 		database: options.database ?? ({} as Knex),
 		getSchema: options.getSchema ?? (async () => SCHEMA),
+		subscriptions,
 	});
 
 	const server = createServer();
@@ -195,7 +200,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
 		await new Promise<void>((resolve) => server.close(() => resolve()));
 	};
 
-	return { admission, controller, server, port, sockets, nextRawSocket, connect, teardown };
+	return { admission, subscriptions, controller, server, port, sockets, nextRawSocket, connect, teardown };
 }
 
 function callsFor(event: string): unknown[][] {
@@ -319,6 +324,7 @@ describe('upgrade rejection contract', () => {
 			app: express(),
 			database: {} as Knex,
 			getSchema: async () => SCHEMA,
+			subscriptions: new SubscriptionRegistry(),
 		});
 
 		const server = createServer();
@@ -1365,5 +1371,39 @@ describe('commit-7 drain additions', () => {
 
 		expect(callsFor('websocket.message')).toHaveLength(0);
 		expect(ws.readyState).toBe(WebSocket.OPEN);
+	});
+});
+
+describe('commit-8a subscription wiring', () => {
+	it('answers a subscribe to an unknown collection with a subscribe INVALID_COLLECTION frame and stays open', async () => {
+		const { ws, frames } = await openClient({ controllerClass: TestController });
+
+		sendJson(ws, { type: 'subscribe', collection: 'articles', uid: 5 });
+		await vi.waitFor(() => expect(frames).toHaveLength(1));
+
+		expect(frames[0]).toMatchObject({
+			type: 'subscribe',
+			status: 'error',
+			uid: '5',
+			error: { code: 'INVALID_COLLECTION' },
+		});
+
+		expect(ws.readyState).toBe(WebSocket.OPEN);
+	});
+
+	it('removes a connection active subscriptions on close through the production finalizeClient', async () => {
+		const { ws } = await openClient({ controllerClass: TestController });
+		const registry = harness!.subscriptions;
+		const serverWs = (callsFor('websocket.connect')[0]![1] as { client: SocketClient }).client;
+
+		registry.reserve({ client: serverWs, collection: 'articles', query: {} })!.activate();
+		registry.reserve({ client: serverWs, collection: 'posts', query: {} })!.activate();
+		expect(registry.getSubscribedOwners()).toContain(serverWs);
+
+		const closed = new Promise<void>((resolve) => ws.on('close', () => resolve()));
+		ws.close();
+		await closed;
+
+		await vi.waitFor(() => expect(registry.getSubscribedOwners()).toHaveLength(0));
 	});
 });

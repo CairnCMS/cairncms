@@ -11,6 +11,7 @@ export type WebSocketErrorCode =
 	| 'REQUESTS_EXCEEDED'
 	| 'UNSUPPORTED_MESSAGE_TYPE'
 	| 'TOO_MANY_PENDING'
+	| 'SUBSCRIPTION_LIMIT'
 	| 'INTERNAL_ERROR';
 
 const ERROR_MESSAGES: Record<WebSocketErrorCode, string> = {
@@ -21,6 +22,7 @@ const ERROR_MESSAGES: Record<WebSocketErrorCode, string> = {
 	REQUESTS_EXCEEDED: 'Too many requests.',
 	UNSUPPORTED_MESSAGE_TYPE: 'Unsupported message type.',
 	TOO_MANY_PENDING: 'Too many pending commands.',
+	SUBSCRIPTION_LIMIT: 'Too many subscriptions.',
 	INTERNAL_ERROR: 'Request failed.',
 };
 

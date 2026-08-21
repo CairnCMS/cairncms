@@ -13,6 +13,7 @@ import type { RequestAccountability, RequestContext } from '../../utils/get-anon
 import { getIPForRequest } from '../../utils/get-ip-from-req.js';
 import type { Admission, Lease, WorkHold } from '../admission.js';
 import { ConnectionAuth, type AuthResult } from '../authenticate.js';
+import type { SubscriptionRegistry } from '../subscriptions.js';
 import {
 	OUTBOUND_FRAME_CAP,
 	OUTBOUND_QUEUE_BYTES,
@@ -80,6 +81,7 @@ export interface SocketControllerOptions {
 	app: Application;
 	database: Knex;
 	getSchema: (options?: { database?: Knex }) => Promise<SchemaOverview>;
+	subscriptions: SubscriptionRegistry;
 }
 
 export type SocketClient = WebSocket & {
@@ -119,6 +121,7 @@ export abstract class SocketController {
 	protected readonly app: Application;
 	protected readonly database: Knex;
 	protected readonly getSchema: (options?: { database?: Knex }) => Promise<SchemaOverview>;
+	protected readonly subscriptions: SubscriptionRegistry;
 
 	constructor(options: SocketControllerOptions) {
 		this.transport = options.transport;
@@ -132,6 +135,7 @@ export abstract class SocketController {
 		this.app = options.app;
 		this.database = options.database;
 		this.getSchema = options.getSchema;
+		this.subscriptions = options.subscriptions;
 		this.server = new WebSocketServer({ noServer: true, maxPayload: options.maxPayload });
 	}
 
@@ -391,6 +395,7 @@ export abstract class SocketController {
 
 		this.clearTimers(client);
 		this.discardWaiting(client);
+		this.subscriptions.removeAllForClient(client);
 
 		client.auth.close();
 
