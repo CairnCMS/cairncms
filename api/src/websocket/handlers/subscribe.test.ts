@@ -22,9 +22,11 @@ const CONTEXT: CommandContext = {
 };
 
 let registry: InstanceType<typeof SubscriptionRegistry>;
+let close: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
 	registry = new SubscriptionRegistry();
+	close = vi.fn();
 	resolveTarget.mockReset();
 	resolveTarget.mockReturnValue({} as never);
 	initialPayload.mockReset();
@@ -40,7 +42,7 @@ function makeSend(accepted = true) {
 }
 
 function run(client: SocketClient, message: Record<string, unknown>, send: ReturnType<typeof makeSend>) {
-	return handleSubscription(client, message as WebSocketMessage, CONTEXT, send, registry);
+	return handleSubscription(client, message as WebSocketMessage, CONTEXT, send, registry, close);
 }
 
 async function reject(client: SocketClient, message: Record<string, unknown>, send: ReturnType<typeof makeSend>) {
@@ -114,6 +116,16 @@ describe('handleSubscription subscribe', () => {
 
 		expect(error.code).toBe('SUBSCRIPTION_LIMIT');
 		expect(registry.getActiveByCollection('articles', 999)).toHaveLength(2);
+	});
+
+	it('closes the connection with 1013 when the registry is unavailable, registering nothing', async () => {
+		registry.enterOverload();
+		const send = makeSend();
+		await run(makeClient(), { type: 'subscribe', collection: 'articles', uid: 1 }, send);
+
+		expect(close).toHaveBeenCalledWith(1013);
+		expect(send).not.toHaveBeenCalled();
+		expect(registry.getSubscribedOwners()).toHaveLength(0);
 	});
 });
 

@@ -9,13 +9,17 @@ import { getInitialPayload } from '../utils/items.js';
 import { fmtMessage } from '../utils/message.js';
 
 type GuardedSend = (frame: string) => { accepted: boolean };
+type Close = (code: number) => void;
+
+const CLOSE_TRY_AGAIN_LATER = 1013;
 
 export async function handleSubscription(
 	client: SocketClient,
 	message: WebSocketMessage,
 	context: CommandContext,
 	send: GuardedSend,
-	registry: SubscriptionRegistry
+	registry: SubscriptionRegistry,
+	close: Close
 ): Promise<void> {
 	const uid = message.uid !== undefined ? String(message.uid) : undefined;
 
@@ -45,8 +49,14 @@ export async function handleSubscription(
 
 		if (uid !== undefined) registry.removeByUid(client, uid);
 
-		const reservation = registry.reserve(subscription);
-		if (reservation === null) throw new WebSocketException('subscribe', 'SUBSCRIPTION_LIMIT', uid);
+		const result = registry.reserve(subscription);
+
+		if (!result.ok) {
+			if (result.reason === 'unavailable') return void close(CLOSE_TRY_AGAIN_LATER);
+			throw new WebSocketException('subscribe', 'SUBSCRIPTION_LIMIT', uid);
+		}
+
+		const reservation = result.reservation;
 
 		try {
 			const data =

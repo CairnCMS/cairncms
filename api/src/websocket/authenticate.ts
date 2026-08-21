@@ -122,6 +122,25 @@ export class ConnectionAuth {
 		}
 	}
 
+	async snapshotAccountability(schema: SchemaOverview): Promise<RequestAccountability | null> {
+		if (this.closed) return null;
+
+		const hold = this.lease.beginWorkHold();
+		if (hold === null) return null;
+
+		const current = this.accountabilityValue;
+
+		try {
+			const permissions = await getPermissions(current, schema);
+
+			if (this.closed || this.accountabilityValue !== current) return null;
+
+			return { ...current, permissions };
+		} finally {
+			hold.clear();
+		}
+	}
+
 	revertToAnonymous(): RevertResult {
 		if (!this.lease.transitionToAnonymous()) return { status: 'capacity' };
 

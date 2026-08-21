@@ -11,11 +11,25 @@ export class WebSocketController extends SocketController {
 		);
 
 		this.handlers.set('subscribe', (client, message, context) =>
-			handleSubscription(client, message, context, (frame) => this.send(client, frame), this.subscriptions)
+			handleSubscription(
+				client,
+				message,
+				context,
+				(frame) => this.send(client, frame),
+				this.subscriptions,
+				(code) => this.stop(client, { code })
+			)
 		);
 
 		this.handlers.set('unsubscribe', (client, message, context) =>
-			handleSubscription(client, message, context, (frame) => this.send(client, frame), this.subscriptions)
+			handleSubscription(
+				client,
+				message,
+				context,
+				(frame) => this.send(client, frame),
+				this.subscriptions,
+				(code) => this.stop(client, { code })
+			)
 		);
 	}
 

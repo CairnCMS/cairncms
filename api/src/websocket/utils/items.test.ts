@@ -14,7 +14,7 @@ vi.mock('../../services/index.js', () => ({
 	},
 }));
 
-const { getInitialPayload } = await import('./items.js');
+const { getInitialPayload, getEventPayload } = await import('./items.js');
 
 const ACCOUNTABILITY = {
 	user: 'u',
@@ -30,6 +30,7 @@ function serviceSpy() {
 	return {
 		readOne: vi.fn().mockResolvedValue({ id: 'k1' }),
 		readByQuery: vi.fn().mockResolvedValue([{ id: 'k1' }]),
+		readMany: vi.fn().mockResolvedValue([{ id: 'k1' }]),
 	};
 }
 
@@ -75,5 +76,60 @@ describe('getInitialPayload', () => {
 
 		const withoutMeta = await getInitialPayload(service as never, sub('articles'), ACCOUNTABILITY, SCHEMA);
 		expect(withoutMeta['meta']).toBeUndefined();
+	});
+});
+
+describe('getEventPayload', () => {
+	it('reads the created key for a create event', async () => {
+		const service = serviceSpy();
+
+		const result = await getEventPayload(service as never, sub('articles'), ACCOUNTABILITY, SCHEMA, {
+			action: 'create',
+			collection: 'articles',
+			key: 'k1',
+		});
+
+		expect(service.readMany).toHaveBeenCalledWith(['k1'], {});
+		expect(result).toMatchObject({ event: 'create', data: [{ id: 'k1' }] });
+		expect(result['meta']).toBeUndefined();
+	});
+
+	it('reads the updated keys for an update event, with meta when requested', async () => {
+		const service = serviceSpy();
+
+		const result = await getEventPayload(
+			service as never,
+			sub('articles', { query: { meta: ['total_count'] } as unknown as Query }),
+			ACCOUNTABILITY,
+			SCHEMA,
+			{ action: 'update', collection: 'articles', keys: ['k1', 'k2'] }
+		);
+
+		expect(service.readMany).toHaveBeenCalledWith(['k1', 'k2'], { meta: ['total_count'] });
+		expect(result).toMatchObject({ event: 'update', data: [{ id: 'k1' }], meta: META });
+	});
+
+	it('narrows a batch update to the subscribed numeric item, preserving key type', async () => {
+		const service = serviceSpy();
+
+		await getEventPayload(service as never, sub('articles', { item: '1' }), ACCOUNTABILITY, SCHEMA, {
+			action: 'update',
+			collection: 'articles',
+			keys: [1, 2],
+		});
+
+		expect(service.readMany).toHaveBeenCalledWith([1], {});
+	});
+
+	it('narrows a batch update to the subscribed string item, preserving key type', async () => {
+		const service = serviceSpy();
+
+		await getEventPayload(service as never, sub('articles', { item: '2' }), ACCOUNTABILITY, SCHEMA, {
+			action: 'update',
+			collection: 'articles',
+			keys: ['1', '2'],
+		});
+
+		expect(service.readMany).toHaveBeenCalledWith(['2'], {});
 	});
 });

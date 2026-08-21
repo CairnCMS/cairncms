@@ -319,3 +319,48 @@ describe('ConnectionAuth.refreshPermissions', () => {
 		expect(permissions).not.toHaveBeenCalled();
 	});
 });
+
+describe('ConnectionAuth.snapshotAccountability', () => {
+	it('returns an immutable snapshot without mutating the connection accountability', async () => {
+		resolver.mockResolvedValue(userIdentity('alice'));
+		const { auth } = makeAuth();
+		await auth.authenticate('token');
+		const before = auth.accountability;
+
+		permissions.mockResolvedValue([permission('articles')]);
+		const snapshot = await auth.snapshotAccountability(SCHEMA);
+
+		expect(snapshot).toMatchObject({ user: 'alice', permissions: [permission('articles')] });
+		expect(auth.accountability).toBe(before);
+		expect(auth.accountability.permissions).toBeUndefined();
+	});
+
+	it('discards the snapshot and does not mutate when the accountability is replaced during the await', async () => {
+		resolver.mockResolvedValue(userIdentity('alice'));
+		const { auth } = makeAuth();
+		await auth.authenticate('token');
+
+		const gate = deferred<Permission[]>();
+		permissions.mockReturnValue(gate.promise);
+		const pending = auth.snapshotAccountability(SCHEMA);
+
+		auth.supersedeToAnonymous();
+		gate.resolve([permission('articles')]);
+
+		expect(await pending).toBeNull();
+		expect(auth.accountability.user).toBeNull();
+		expect(auth.accountability.permissions).toBeUndefined();
+	});
+
+	it('reclaims the work hold when the permission lookup rejects', async () => {
+		permissions.mockRejectedValue(new Error('lookup failed'));
+		const admission = new Admission({ process: 100, ip: 100, user: 100, transports: { rest: 1 } });
+		const lease = admission.reserve('rest', CONTEXT.ip)!;
+		const auth = new ConnectionAuth(CONTEXT, lease, DEPS);
+
+		await expect(auth.snapshotAccountability(SCHEMA)).rejects.toThrow('lookup failed');
+
+		auth.close();
+		expect(admission.reserve('rest', '2.2.2.2')).not.toBeNull();
+	});
+});

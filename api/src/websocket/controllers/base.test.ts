@@ -1396,8 +1396,10 @@ describe('commit-8a subscription wiring', () => {
 		const registry = harness!.subscriptions;
 		const serverWs = (callsFor('websocket.connect')[0]![1] as { client: SocketClient }).client;
 
-		registry.reserve({ client: serverWs, collection: 'articles', query: {} })!.activate();
-		registry.reserve({ client: serverWs, collection: 'posts', query: {} })!.activate();
+		const first = registry.reserve({ client: serverWs, collection: 'articles', query: {} });
+		const second = registry.reserve({ client: serverWs, collection: 'posts', query: {} });
+		if (first.ok) first.reservation.activate();
+		if (second.ok) second.reservation.activate();
 		expect(registry.getSubscribedOwners()).toContain(serverWs);
 
 		const closed = new Promise<void>((resolve) => ws.on('close', () => resolve()));

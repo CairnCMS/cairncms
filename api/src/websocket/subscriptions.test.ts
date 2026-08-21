@@ -25,6 +25,12 @@ beforeEach(() => {
 	registry = new SubscriptionRegistry();
 });
 
+function reserve(subscription: Subscription): Reservation {
+	const result = registry.reserve(subscription);
+	if (!result.ok) throw new Error(`reserve refused: ${result.reason}`);
+	return result.reservation;
+}
+
 describe('canonicalItemKey', () => {
 	it('maps equivalent numeric and string keys to the same string, honoring 0', () => {
 		expect(canonicalItemKey(1)).toBe('1');
@@ -34,48 +40,72 @@ describe('canonicalItemKey', () => {
 });
 
 describe('SubscriptionRegistry bounds', () => {
-	it('reserves up to the per-connection bound and rejects the next', () => {
+	it('reserves up to the per-connection bound and refuses the next with a limit reason', () => {
 		const c = client();
-		expect(registry.reserve(sub(c, 'articles'))).not.toBeNull();
-		expect(registry.reserve(sub(c, 'articles'))).not.toBeNull();
-		expect(registry.reserve(sub(c, 'articles'))).not.toBeNull();
-		expect(registry.reserve(sub(c, 'articles'))).toBeNull();
+		expect(registry.reserve(sub(c, 'articles')).ok).toBe(true);
+		expect(registry.reserve(sub(c, 'articles')).ok).toBe(true);
+		expect(registry.reserve(sub(c, 'articles')).ok).toBe(true);
+		expect(registry.reserve(sub(c, 'articles'))).toEqual({ ok: false, reason: 'limit' });
 	});
 
-	it('rejects at the per-process bound across connections and stores nothing on rejection', () => {
+	it('refuses at the per-process bound across connections and stores nothing on refusal', () => {
 		const a = client();
 		const b = client();
-		for (let i = 0; i < 3; i++) registry.reserve(sub(a, 'articles'));
-		registry.reserve(sub(b, 'articles'));
-		const last = registry.reserve(sub(b, 'articles'))!;
+		for (let i = 0; i < 3; i++) reserve(sub(a, 'articles'));
+		reserve(sub(b, 'articles'));
+		const last = reserve(sub(b, 'articles'));
 
-		expect(registry.reserve(sub(b, 'articles'))).toBeNull();
+		expect(registry.reserve(sub(b, 'articles'))).toEqual({ ok: false, reason: 'limit' });
 
 		last.remove();
-		expect(registry.reserve(sub(b, 'articles'))).not.toBeNull();
+		expect(registry.reserve(sub(b, 'articles')).ok).toBe(true);
+	});
+});
+
+describe('SubscriptionRegistry availability', () => {
+	it('refuses with an unavailable reason while overloaded and recovers on exit', () => {
+		registry.enterOverload();
+		expect(registry.reserve(sub(client(), 'articles'))).toEqual({ ok: false, reason: 'unavailable' });
+
+		registry.exitOverload();
+		expect(registry.reserve(sub(client(), 'articles')).ok).toBe(true);
+	});
+
+	it('refuses terminally after markUnavailable, which exitOverload does not clear', () => {
+		registry.markUnavailable();
+		registry.exitOverload();
+		expect(registry.reserve(sub(client(), 'articles'))).toEqual({ ok: false, reason: 'unavailable' });
+	});
+
+	it('lets availability win over capacity when both would refuse', () => {
+		const c = client();
+		for (let i = 0; i < 3; i++) reserve(sub(c, 'articles'));
+		registry.enterOverload();
+
+		expect(registry.reserve(sub(c, 'articles'))).toEqual({ ok: false, reason: 'unavailable' });
 	});
 });
 
 describe('SubscriptionRegistry state machine', () => {
 	it('keeps a reservation out of the active snapshot until activate', () => {
-		const reservation = registry.reserve(sub(client(), 'articles'))!;
+		const reservation = reserve(sub(client(), 'articles'));
 		expect(registry.getActiveByCollection('articles', 999)).toHaveLength(0);
 		reservation.activate();
 		expect(registry.getActiveByCollection('articles', 999)).toEqual([reservation]);
 	});
 
 	it('resolves settled on activate and on remove', async () => {
-		const activated = registry.reserve(sub(client(), 'articles'))!;
+		const activated = reserve(sub(client(), 'articles'));
 		activated.activate();
 		await expect(activated.settled).resolves.toBeUndefined();
 
-		const removed = registry.reserve(sub(client(), 'articles'))!;
+		const removed = reserve(sub(client(), 'articles'));
 		removed.remove();
 		await expect(removed.settled).resolves.toBeUndefined();
 	});
 
 	it('is a no-op to activate after remove', () => {
-		const reservation = registry.reserve(sub(client(), 'articles'))!;
+		const reservation = reserve(sub(client(), 'articles'));
 		reservation.remove();
 		reservation.activate();
 		expect(reservation.isActive()).toBe(false);
@@ -83,7 +113,7 @@ describe('SubscriptionRegistry state machine', () => {
 	});
 
 	it('is a no-op to activate twice', () => {
-		const reservation = registry.reserve(sub(client(), 'articles'))!;
+		const reservation = reserve(sub(client(), 'articles'));
 		reservation.activate();
 		reservation.activate();
 		expect(registry.getActiveByCollection('articles', 999)).toEqual([reservation]);
@@ -91,23 +121,23 @@ describe('SubscriptionRegistry state machine', () => {
 
 	it('does not double-decrement capacity on a duplicate remove', () => {
 		const c = client();
-		const first = registry.reserve(sub(c, 'articles'))!;
-		registry.reserve(sub(c, 'articles'));
-		registry.reserve(sub(c, 'articles'));
+		const first = reserve(sub(c, 'articles'));
+		reserve(sub(c, 'articles'));
+		reserve(sub(c, 'articles'));
 
 		first.remove();
 		first.remove();
 
-		expect(registry.reserve(sub(c, 'articles'))).not.toBeNull();
-		expect(registry.reserve(sub(c, 'articles'))).toBeNull();
+		expect(registry.reserve(sub(c, 'articles')).ok).toBe(true);
+		expect(registry.reserve(sub(c, 'articles'))).toEqual({ ok: false, reason: 'limit' });
 	});
 });
 
 describe('SubscriptionRegistry removal', () => {
 	it('removeByUid removes exactly the matching reservation', () => {
 		const c = client();
-		registry.reserve(sub(c, 'articles', { uid: '1' }))!.activate();
-		const kept = registry.reserve(sub(c, 'articles', { uid: '2' }))!;
+		reserve(sub(c, 'articles', { uid: '1' })).activate();
+		const kept = reserve(sub(c, 'articles', { uid: '2' }));
 		kept.activate();
 
 		registry.removeByUid(c, '1');
@@ -116,8 +146,8 @@ describe('SubscriptionRegistry removal', () => {
 
 	it('removeAllForClient releases every reservation, initializing or active', () => {
 		const c = client();
-		registry.reserve(sub(c, 'articles'))!.activate();
-		registry.reserve(sub(c, 'posts'));
+		reserve(sub(c, 'articles')).activate();
+		reserve(sub(c, 'posts'));
 
 		registry.removeAllForClient(c);
 		expect(registry.getActiveByCollection('articles', 999)).toHaveLength(0);
@@ -128,9 +158,9 @@ describe('SubscriptionRegistry removal', () => {
 describe('SubscriptionRegistry snapshots', () => {
 	it('getActiveByCollection returns a stable snapshot', () => {
 		const c = client();
-		registry.reserve(sub(c, 'articles'))!.activate();
+		reserve(sub(c, 'articles')).activate();
 		const snapshot = registry.getActiveByCollection('articles', 999);
-		registry.reserve(sub(c, 'articles'))!.activate();
+		reserve(sub(c, 'articles')).activate();
 
 		expect(snapshot).toHaveLength(1);
 		(snapshot as Reservation[]).pop();
@@ -140,9 +170,9 @@ describe('SubscriptionRegistry snapshots', () => {
 	it('getSubscribedOwners deduplicates and includes initializing-only owners', () => {
 		const a = client();
 		const b = client();
-		registry.reserve(sub(a, 'articles'))!.activate();
-		registry.reserve(sub(a, 'posts'))!.activate();
-		registry.reserve(sub(b, 'articles'));
+		reserve(sub(a, 'articles')).activate();
+		reserve(sub(a, 'posts')).activate();
+		reserve(sub(b, 'articles'));
 
 		const owners = registry.getSubscribedOwners();
 		expect(owners).toHaveLength(2);
@@ -153,12 +183,13 @@ describe('SubscriptionRegistry snapshots', () => {
 
 describe('SubscriptionRegistry dispatch context', () => {
 	it('resolves the barrier when a captured initializing reservation activates', async () => {
-		const reservation = registry.reserve(sub(client(), 'articles'))!;
+		const reservation = reserve(sub(client(), 'articles'));
 		const context = registry.captureDispatchContext('articles');
+		const wait = context.barrier.wait(new AbortController().signal);
 
 		let settled = false;
 
-		void context.barrier.settled.then(() => {
+		void wait.then(() => {
 			settled = true;
 		});
 
@@ -166,41 +197,64 @@ describe('SubscriptionRegistry dispatch context', () => {
 		expect(settled).toBe(false);
 
 		reservation.activate();
-		await expect(context.barrier.settled).resolves.toBeUndefined();
+		await expect(wait).resolves.toBeUndefined();
 	});
 
 	it('resolves the barrier when a captured initializing reservation is removed', async () => {
-		const reservation = registry.reserve(sub(client(), 'articles'))!;
+		const reservation = reserve(sub(client(), 'articles'));
 		const context = registry.captureDispatchContext('articles');
+		const wait = context.barrier.wait(new AbortController().signal);
 		reservation.remove();
-		await expect(context.barrier.settled).resolves.toBeUndefined();
+		await expect(wait).resolves.toBeUndefined();
 	});
 
 	it('is already resolved when no initialization is in flight', async () => {
 		const context = registry.captureDispatchContext('articles');
-		await expect(context.barrier.settled).resolves.toBeUndefined();
+		await expect(context.barrier.wait(new AbortController().signal)).resolves.toBeUndefined();
 	});
 
 	it('is not delayed by an initialization begun after the capture', async () => {
-		const captured = registry.reserve(sub(client(), 'articles'))!;
+		const captured = reserve(sub(client(), 'articles'));
 		const context = registry.captureDispatchContext('articles');
-		const later = registry.reserve(sub(client(), 'articles'))!;
+		const wait = context.barrier.wait(new AbortController().signal);
+		const later = reserve(sub(client(), 'articles'));
 
 		captured.activate();
-		await expect(context.barrier.settled).resolves.toBeUndefined();
+		await expect(wait).resolves.toBeUndefined();
 		expect(later.isActive()).toBe(false);
+	});
+
+	it('resolves immediately when the wait signal is already aborted', async () => {
+		reserve(sub(client(), 'articles'));
+		const context = registry.captureDispatchContext('articles');
+		const controller = new AbortController();
+		controller.abort();
+		await expect(context.barrier.wait(controller.signal)).resolves.toBeUndefined();
+	});
+
+	it('resolves a canceled wait and leaves the reservation free to settle afterward', async () => {
+		const reservation = reserve(sub(client(), 'articles'));
+		const context = registry.captureDispatchContext('articles');
+		const controller = new AbortController();
+		const wait = context.barrier.wait(controller.signal);
+
+		controller.abort();
+		await expect(wait).resolves.toBeUndefined();
+
+		reservation.activate();
+		expect(reservation.isActive()).toBe(true);
 	});
 
 	it('scopes recipients by the generation cutoff', () => {
 		const c = client();
-		const active = registry.reserve(sub(c, 'articles'))!;
+		const active = reserve(sub(c, 'articles'));
 		active.activate();
-		const initializing = registry.reserve(sub(c, 'articles'))!;
+		const initializing = reserve(sub(c, 'articles'));
 
 		const context = registry.captureDispatchContext('articles');
 
 		initializing.activate();
-		const later = registry.reserve(sub(c, 'articles'))!;
+		const later = reserve(sub(c, 'articles'));
 		later.activate();
 
 		const recipients = registry.getActiveByCollection('articles', context.generation);

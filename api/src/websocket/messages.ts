@@ -89,3 +89,11 @@ export const WebSocketSubscribeMessage = z.discriminatedUnion('type', [
 ]);
 
 export type WebSocketSubscribeMessage = z.infer<typeof WebSocketSubscribeMessage>;
+
+export const WebSocketEvent = z.discriminatedUnion('action', [
+	z.object({ action: z.literal('create'), collection: z.string(), key: zodStringOrNumber }),
+	z.object({ action: z.literal('update'), collection: z.string(), keys: z.array(zodStringOrNumber) }),
+	z.object({ action: z.literal('delete'), collection: z.string(), keys: z.array(zodStringOrNumber) }),
+]);
+
+export type WebSocketEvent = z.infer<typeof WebSocketEvent>;

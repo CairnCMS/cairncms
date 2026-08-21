@@ -25,48 +25,121 @@ export interface Reservation {
 	isActive(): boolean;
 }
 
+export interface DispatchBarrier {
+	wait(signal: AbortSignal): Promise<void>;
+}
+
 export interface DispatchContext {
 	readonly generation: number;
-	readonly barrier: { readonly settled: Promise<void> };
+	readonly barrier: DispatchBarrier;
 }
+
+export type ReserveResult = { ok: true; reservation: Reservation } | { ok: false; reason: 'limit' | 'unavailable' };
 
 interface RegisteredReservation extends Reservation {
 	readonly generation: number;
+	isSettled(): boolean;
+	onSettled(listener: () => void): () => void;
+}
+
+function waitForSettled(reservations: readonly RegisteredReservation[], signal: AbortSignal): Promise<void> {
+	const pending = reservations.filter((reservation) => !reservation.isSettled());
+	if (pending.length === 0 || signal.aborted) return Promise.resolve();
+
+	return new Promise<void>((resolve) => {
+		let remaining = pending.length;
+		const disposers: Array<() => void> = [];
+
+		const finish = () => {
+			for (const dispose of disposers) dispose();
+			resolve();
+		};
+
+		const onAbort = () => finish();
+		signal.addEventListener('abort', onAbort, { once: true });
+		disposers.push(() => signal.removeEventListener('abort', onAbort));
+
+		for (const reservation of pending) {
+			disposers.push(
+				reservation.onSettled(() => {
+					remaining--;
+					if (remaining === 0) finish();
+				})
+			);
+		}
+	});
 }
 
 export class SubscriptionRegistry {
 	private lastGeneration = 0;
 	private totalCount = 0;
+	private overloaded = false;
+	private unavailable = false;
 	private readonly byClient = new Map<SocketClient, Set<RegisteredReservation>>();
 	private readonly activeByCollection = new Map<string, Set<RegisteredReservation>>();
 	private readonly initializingByCollection = new Map<string, Set<RegisteredReservation>>();
 
-	reserve(subscription: Subscription): Reservation | null {
+	enterOverload(): void {
+		this.overloaded = true;
+	}
+
+	exitOverload(): void {
+		this.overloaded = false;
+	}
+
+	markUnavailable(): void {
+		this.unavailable = true;
+	}
+
+	reserve(subscription: Subscription): ReserveResult {
+		if (this.overloaded || this.unavailable) return { ok: false, reason: 'unavailable' };
+
 		const { client, collection } = subscription;
 
-		if ((this.byClient.get(client)?.size ?? 0) >= SUBSCRIPTIONS_PER_CONNECTION) return null;
-		if (this.totalCount >= SUBSCRIPTIONS_PER_PROCESS) return null;
+		if ((this.byClient.get(client)?.size ?? 0) >= SUBSCRIPTIONS_PER_CONNECTION) return { ok: false, reason: 'limit' };
+		if (this.totalCount >= SUBSCRIPTIONS_PER_PROCESS) return { ok: false, reason: 'limit' };
 
 		const generation = ++this.lastGeneration;
 
 		let status: 'initializing' | 'active' | 'removed' = 'initializing';
+		let settledFlag = false;
 		let resolveSettled!: () => void;
 
 		const settled = new Promise<void>((resolve) => {
 			resolveSettled = resolve;
 		});
 
+		const settleListeners = new Set<() => void>();
+
+		const notifySettled = () => {
+			if (settledFlag) return;
+			settledFlag = true;
+			resolveSettled();
+			for (const listener of settleListeners) listener();
+			settleListeners.clear();
+		};
+
 		const reservation: RegisteredReservation = {
 			subscription,
 			settled,
 			generation,
 			isActive: () => status === 'active',
+			isSettled: () => settledFlag,
+			onSettled: (listener) => {
+				if (settledFlag) {
+					listener();
+					return () => undefined;
+				}
+
+				settleListeners.add(listener);
+				return () => settleListeners.delete(listener);
+			},
 			activate: () => {
 				if (status !== 'initializing') return;
 				status = 'active';
 				this.deleteFrom(this.initializingByCollection, collection, reservation);
 				this.addTo(this.activeByCollection, collection, reservation);
-				resolveSettled();
+				notifySettled();
 			},
 			remove: () => {
 				if (status === 'removed') return;
@@ -80,7 +153,7 @@ export class SubscriptionRegistry {
 				status = 'removed';
 				this.deleteFromClient(client, reservation);
 				this.totalCount--;
-				resolveSettled();
+				notifySettled();
 			},
 		};
 
@@ -88,19 +161,15 @@ export class SubscriptionRegistry {
 		this.addTo(this.initializingByCollection, collection, reservation);
 		this.totalCount++;
 
-		return reservation;
+		return { ok: true, reservation };
 	}
 
 	captureDispatchContext(collection: string): DispatchContext {
 		const generation = this.lastGeneration;
 		const initializing = this.initializingByCollection.get(collection);
+		const pending = initializing ? [...initializing] : [];
 
-		const settled =
-			initializing && initializing.size > 0
-				? Promise.all([...initializing].map((reservation) => reservation.settled)).then(() => undefined)
-				: Promise.resolve();
-
-		return { generation, barrier: { settled } };
+		return { generation, barrier: { wait: (signal) => waitForSettled(pending, signal) } };
 	}
 
 	getActiveByCollection(collection: string, maxGeneration: number): readonly Reservation[] {
