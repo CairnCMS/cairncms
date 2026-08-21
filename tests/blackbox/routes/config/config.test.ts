@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { spawnSync } from 'child_process';
+import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
@@ -51,6 +52,15 @@ async function resetToBaseline(vendor: string): Promise<void> {
 	const baseline = await getBaseline(vendor);
 	const response = await applyConfig(vendor, baseline, { destructive: true });
 	expect(response.statusCode).toBe(200);
+}
+
+async function adminSnapshot(vendor: string): Promise<ConfigSnapshot> {
+	const response = await request(getUrl(vendor))
+		.get('/config/snapshot')
+		.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+	expect(response.statusCode).toBe(200);
+	return response.body.data as ConfigSnapshot;
 }
 
 /** Reads validation messages without depending on the transport envelope. */
@@ -209,8 +219,8 @@ describe('Config-as-Code API', () => {
 
 		describe('?dry_run=true does not mutate', () => {
 			it.each(vendors)('%s', async (vendor) => {
-				const baseline = await getBaseline(vendor);
-				const desired = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+				const before = await adminSnapshot(vendor);
+				const desired = JSON.parse(JSON.stringify(before)) as ConfigSnapshot;
 				const probeKey = `dryrun_${vendor.replace(/[^a-z0-9_]/gi, '_')}`;
 
 				desired.roles.push({
@@ -220,47 +230,19 @@ describe('Config-as-Code API', () => {
 					app_access: true,
 				});
 
-				const dry = await applyConfig(vendor, desired, { dryRun: true });
-
-				expect(dry.statusCode).toBe(200);
-				expect(dry.body.data.roles.created).toContain(probeKey);
-
-				const snap = await request(getUrl(vendor))
-					.get('/config/snapshot')
-					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
-
-				expect(snap.body.data.roles.find((r: any) => r.key === probeKey)).toBeUndefined();
-			});
-		});
-
-		describe('non-destructive apply preserves orphan roles', () => {
-			it.each(vendors)('%s', async (vendor) => {
-				const baseline = await getBaseline(vendor);
-				const orphanKey = `orphan_keep_${vendor.replace(/[^a-z0-9_]/gi, '_')}`;
-
-				const desiredCreate = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
-
-				desiredCreate.roles.push({
-					key: orphanKey,
-					name: 'Orphan Keep',
-					admin_access: false,
-					app_access: true,
-				});
-
 				try {
-					const create = await applyConfig(vendor, desiredCreate);
-					expect(create.statusCode).toBe(200);
-					expect(create.body.data.roles.created).toContain(orphanKey);
+					const dry = await applyConfig(vendor, desired, { dryRun: true });
 
-					const nonDestructive = await applyConfig(vendor, baseline);
-					expect(nonDestructive.statusCode).toBe(200);
-					expect(nonDestructive.body.data.roles.deleted).toEqual([]);
+					expect(dry.statusCode).toBe(200);
 
-					const snap = await request(getUrl(vendor))
-						.get('/config/snapshot')
-						.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+					expect(
+						dry.body.data.changes.filter(
+							(change: any) =>
+								change.kind === 'roles' && change.operation === 'create' && change.identity.key === probeKey
+						)
+					).toHaveLength(1);
 
-					expect(snap.body.data.roles.find((r: any) => r.key === orphanKey)).toBeDefined();
+					expect(await adminSnapshot(vendor)).toEqual(before);
 				} finally {
 					await resetToBaseline(vendor);
 				}
@@ -439,7 +421,7 @@ describe('Config-as-Code API', () => {
 					});
 
 				expect(response.statusCode).toBe(400);
-				expect(response.body.errors[0].extensions.code).toBe('INVALID_PAYLOAD');
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
 				expect(response.body.errors[0].message).toContain('roles[0]');
 			});
 
@@ -455,7 +437,7 @@ describe('Config-as-Code API', () => {
 					});
 
 				expect(response.statusCode).toBe(400);
-				expect(response.body.errors[0].extensions.code).toBe('INVALID_PAYLOAD');
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
 				expect(response.body.errors[0].message).toContain('permissions[0].permissions');
 			});
 
@@ -471,13 +453,13 @@ describe('Config-as-Code API', () => {
 					});
 
 				expect(response.statusCode).toBe(400);
-				expect(response.body.errors[0].extensions.code).toBe('INVALID_PAYLOAD');
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
 				expect(response.body.errors[0].message).toContain('roles[0]');
 				expect(response.body.errors[0].message).toContain('key');
 			});
 		});
 
-		describe('returns flat error array for validation failures', () => {
+		describe('rejects an unsupported manifest version with a typed code', () => {
 			it.each(vendors)('%s', async (vendor) => {
 				const response = await request(getUrl(vendor))
 					.post('/config/apply')
@@ -490,9 +472,179 @@ describe('Config-as-Code API', () => {
 					});
 
 				expect(response.statusCode).toBe(400);
-				expect(Array.isArray(response.body.errors)).toBe(true);
-				expect(typeof response.body.errors[0]).toBe('string');
-				expect(response.body.errors.some((e: string) => e.includes('Unsupported config version: 99'))).toBe(true);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_UNSUPPORTED_VERSION');
+				expect(response.body.errors[0].message).toContain('version 99');
+			});
+		});
+
+		describe('rejects a duplicate permission tuple as a typed identity conflict', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const desired = await getBaseline(vendor);
+
+				const duplicate = {
+					collection: 'directus_files',
+					action: 'update',
+					permissions: null,
+					validation: null,
+					presets: null,
+					fields: ['*'],
+				};
+
+				const publicSet = desired.permissions.find((set) => set.role === 'public');
+
+				if (publicSet) {
+					publicSet.permissions.push({ ...duplicate }, { ...duplicate });
+				} else {
+					desired.permissions.push({ role: 'public', permissions: [{ ...duplicate }, { ...duplicate }] });
+				}
+
+				const response = await applyConfig(vendor, desired, { dryRun: true });
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_IDENTITY_CONFLICT');
+				expect(errorMessages(response).some((message) => message.includes('Duplicate permission'))).toBe(true);
+			});
+		});
+
+		describe('refuses to delete the last admin role as a protected record', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const before = await adminSnapshot(vendor);
+
+				const desired = JSON.parse(JSON.stringify(before)) as ConfigSnapshot;
+
+				const adminKeys = desired.roles.filter((role) => role.admin_access === true).map((role) => role.key);
+				expect(adminKeys.length).toBeGreaterThan(0);
+
+				desired.roles = desired.roles.filter((role) => role.admin_access !== true);
+				desired.permissions = desired.permissions.filter((set) => !adminKeys.includes(set.role));
+
+				const response = await applyConfig(vendor, desired, { dryRun: true });
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_PROTECTED_RECORD');
+				expect(errorMessages(response).some((message) => message.includes('admin role'))).toBe(true);
+
+				const after = await adminSnapshot(vendor);
+
+				expect(after).toEqual(before);
+			});
+		});
+
+		describe('a non-destructive mutating apply with deletions is refused', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const baseline = await getBaseline(vendor);
+				const suffix = vendor.replace(/[^a-z0-9_]/gi, '_');
+				const orphanKey = `refuse_orphan_${suffix}`;
+				const updateKey = `refuse_update_${suffix}`;
+				const newKey = `refuse_new_${suffix}`;
+
+				const withProbes = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+
+				withProbes.roles.push(
+					{ key: orphanKey, name: 'Refuse Orphan', admin_access: false, app_access: true },
+					{ key: updateKey, name: 'Refuse Update', description: 'update-before', admin_access: false, app_access: true }
+				);
+
+				try {
+					expect((await applyConfig(vendor, withProbes)).statusCode).toBe(200);
+
+					const afterSetup = await adminSnapshot(vendor);
+
+					const desired = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+
+					desired.roles.push(
+						{ key: newKey, name: 'Refuse New', admin_access: false, app_access: true },
+						{
+							key: updateKey,
+							name: 'Refuse Update',
+							description: 'update-after',
+							admin_access: false,
+							app_access: true,
+						}
+					);
+
+					const response = await applyConfig(vendor, desired);
+
+					expect(response.statusCode).toBe(400);
+					expect(response.body.errors[0].extensions.code).toBe('DESTRUCTIVE_CHANGES_REQUIRED');
+
+					expect(response.body.errors[0].extensions.deletions).toEqual([
+						{ kind: 'roles', identity: { key: orphanKey } },
+					]);
+
+					const after = await adminSnapshot(vendor);
+
+					expect(after).toEqual(afterSetup);
+				} finally {
+					await resetToBaseline(vendor);
+				}
+			});
+		});
+
+		describe('an empty dry run returns the complete plan document', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const baseline = await getBaseline(vendor);
+				const response = await applyConfig(vendor, baseline, { dryRun: true });
+
+				expect(response.statusCode).toBe(200);
+
+				expect(response.body.data).toEqual({
+					planVersion: 1,
+					manifestVersion: 1,
+					changes: [],
+					summary: { create: 0, update: 0, delete: 0 },
+					warnings: [],
+				});
+			});
+		});
+
+		describe('a permission for a missing collection applies and warns', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const baseline = await getBaseline(vendor);
+				const collection = `missing_coll_${vendor.replace(/[^a-z0-9_]/gi, '_')}`;
+				const desired = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+
+				const perm = { collection, action: 'read', permissions: null, validation: null, presets: null, fields: ['*'] };
+				const publicSet = desired.permissions.find((set) => set.role === 'public');
+				if (publicSet) publicSet.permissions.push(perm);
+				else desired.permissions.push({ role: 'public', permissions: [perm] });
+
+				try {
+					const dry = await applyConfig(vendor, desired, { dryRun: true });
+					expect(dry.statusCode).toBe(200);
+
+					expect(dry.body.data.warnings).toEqual([
+						{
+							code: 'COLLECTION_MISSING',
+							kind: 'permissions',
+							identity: { role: 'public', collection, action: 'read' },
+							message: expect.stringContaining(collection),
+						},
+					]);
+
+					const apply = await applyConfig(vendor, desired);
+					expect(apply.statusCode).toBe(200);
+					expect(apply.body.data.permissions.created).toBe(1);
+
+					const snap = await request(getUrl(vendor))
+						.get('/config/snapshot')
+						.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+					expect(snap.statusCode).toBe(200);
+
+					const pub = snap.body.data.permissions.find((set: any) => set.role === 'public');
+
+					expect(pub.permissions.find((p: any) => p.collection === collection)).toEqual({
+						collection,
+						action: 'read',
+						permissions: null,
+						validation: null,
+						presets: null,
+						fields: ['*'],
+					});
+				} finally {
+					await resetToBaseline(vendor);
+				}
 			});
 		});
 
@@ -792,7 +944,7 @@ describe('cairncms config apply refuses a tree it cannot read', () => {
 		return response.body.data as ConfigSnapshot;
 	}
 
-	function expectApplyRefused(vendor: string, diagnostic: string): void {
+	function expectApplyRefused(vendor: string, diagnostic: string, status: number): void {
 		const result = spawnSync('node', ['--no-node-snapshot', paths.cli, 'config', 'apply', fixtureRoot, '--yes'], {
 			cwd: paths.cwd,
 			env: config.envs[vendor as keyof typeof config.envs],
@@ -800,8 +952,7 @@ describe('cairncms config apply refuses a tree it cannot read', () => {
 		});
 
 		expect(result.error).toBeUndefined();
-		expect(typeof result.status).toBe('number');
-		expect(result.status).not.toBe(0);
+		expect(result.status).toBe(status);
 		expect(`${result.stdout ?? ''}${result.stderr ?? ''}`).toContain(diagnostic);
 	}
 
@@ -817,7 +968,7 @@ describe('cairncms config apply refuses a tree it cannot read', () => {
 			const before = await snapshotData(vendor);
 			await writeManifest(99);
 
-			expectApplyRefused(vendor, 'declares version 99');
+			expectApplyRefused(vendor, 'declares version 99', 2);
 			expect(await snapshotData(vendor)).toEqual(before);
 		});
 	});
@@ -828,7 +979,7 @@ describe('cairncms config apply refuses a tree it cannot read', () => {
 			await writeManifest();
 			await fs.symlink(path.join(fixtureRoot, 'never-created'), path.join(fixtureRoot, 'roles'));
 
-			expectApplyRefused(vendor, 'is a link that does not resolve');
+			expectApplyRefused(vendor, 'is a link that does not resolve', 2);
 			expect(await snapshotData(vendor)).toEqual(before);
 		});
 	});
@@ -850,7 +1001,7 @@ describe('cairncms config apply refuses a tree it cannot read', () => {
 			);
 
 			try {
-				expectApplyRefused(vendor, 'outside the CAIRNCMS_CONFIG_ namespace');
+				expectApplyRefused(vendor, 'outside the CAIRNCMS_CONFIG_ namespace', 2);
 
 				const after = await snapshotData(vendor);
 				expect(after).toEqual(before);
@@ -879,7 +1030,7 @@ describe('cairncms config apply refuses a tree it cannot read', () => {
 			);
 
 			try {
-				expectApplyRefused(vendor, 'bogus_field');
+				expectApplyRefused(vendor, 'bogus_field', 2);
 
 				const after = await snapshotData(vendor);
 				expect(after).toEqual(before);
@@ -1011,6 +1162,312 @@ describe('Config-as-Code stored state', () => {
 				.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
 
 			expect(recovered.statusCode).toBe(200);
+		});
+	});
+});
+
+describe('Config-as-Code deletion impact', () => {
+	const databases = new Map<string, Knex>();
+	let fixtureRoot: string;
+
+	beforeAll(() => {
+		for (const vendor of vendors) databases.set(vendor, knex(config.knexConfig[vendor]!));
+	});
+
+	afterAll(async () => {
+		for (const [, db] of databases) await db.destroy();
+	});
+
+	beforeEach(async () => {
+		fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'cairncms-config-impact-'));
+	});
+
+	afterEach(async () => {
+		await fs.rm(fixtureRoot, { recursive: true, force: true });
+	});
+
+	describe('a role deletion reports its cascade impact identically on both surfaces', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const db = databases.get(vendor)!;
+			const suffix = vendor.replace(/[^a-z0-9_]/gi, '_');
+			const rand = randomUUID().replace(/-/g, '').slice(0, 8);
+			const roleKey = `impact_probe_${suffix}_${rand}`;
+			const roleId = randomUUID();
+			const userId = randomUUID();
+			const token = randomUUID().replace(/-/g, '');
+			const collection = 'directus_files';
+			const bookmark = 'Probe Bookmark';
+
+			const baseline = await getBaseline(vendor);
+
+			const snapshot = spawnSync(
+				'node',
+				['--no-node-snapshot', paths.cli, 'config', 'snapshot', fixtureRoot, '--yes'],
+				{ cwd: paths.cwd, env: config.envs[vendor as keyof typeof config.envs], encoding: 'utf8' }
+			);
+
+			expect(snapshot.status).toBe(0);
+
+			let roleInserted = false;
+			let userInserted = false;
+
+			try {
+				await db('directus_roles').insert({ id: roleId, key: roleKey, name: 'Impact Probe', app_access: false });
+				roleInserted = true;
+
+				await db('directus_permissions').insert({
+					role: roleId,
+					collection,
+					action: 'read',
+					permissions: null,
+					validation: null,
+					presets: null,
+					fields: '*',
+				});
+
+				await db('directus_presets').insert({ role: roleId, bookmark });
+
+				await db('directus_users').insert({ id: userId, email: `${roleKey}@example.invalid`, role: roleId });
+				userInserted = true;
+
+				await db('directus_sessions').insert({ token, user: userId, expires: new Date(Date.now() + 3600 * 1000) });
+
+				const httpDry = await applyConfig(vendor, baseline, { dryRun: true });
+				expect(httpDry.statusCode).toBe(200);
+
+				const cli = spawnSync(
+					'node',
+					['--no-node-snapshot', paths.cli, 'config', 'apply', fixtureRoot, '--dry-run', '--format', 'json'],
+					{ cwd: paths.cwd, env: config.envs[vendor as keyof typeof config.envs], encoding: 'utf8' }
+				);
+
+				expect(cli.status).toBe(1);
+
+				const cliDocument = JSON.parse(cli.stdout);
+				expect(cliDocument).toEqual(httpDry.body.data);
+
+				const roleDeletion = httpDry.body.data.changes.find(
+					(change: any) => change.kind === 'roles' && change.operation === 'delete' && change.identity.key === roleKey
+				);
+
+				expect(roleDeletion).toBeDefined();
+
+				expect(roleDeletion.impact).toEqual([
+					{ kind: 'permissions', identity: { role: roleKey, collection, action: 'read' } },
+					{ kind: 'presets', count: 1, bookmarks: [bookmark] },
+					{ kind: 'users', suspended: [userId] },
+					{ kind: 'sessions', active: 1 },
+				]);
+			} finally {
+				await db('directus_sessions').where({ token }).del();
+				if (userInserted) await db('directus_users').where({ id: userId }).del();
+				await db('directus_presets').where({ role: roleId }).del();
+				await db('directus_permissions').where({ role: roleId }).del();
+				if (roleInserted) await db('directus_roles').where({ id: roleId }).del();
+			}
+		});
+	});
+});
+
+describe('cairncms config apply exit codes and machine output', () => {
+	let fixtureRoot: string;
+
+	beforeEach(async () => {
+		fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'cairncms-config-apply-codes-'));
+	});
+
+	afterEach(async () => {
+		await fs.rm(fixtureRoot, { recursive: true, force: true });
+	});
+
+	function runApply(vendor: string, args: string[], env?: NodeJS.ProcessEnv) {
+		return spawnSync('node', ['--no-node-snapshot', paths.cli, 'config', 'apply', ...args], {
+			cwd: paths.cwd,
+			env: env ?? config.envs[vendor as keyof typeof config.envs],
+			encoding: 'utf8',
+		});
+	}
+
+	async function snapshotBaseline(vendor: string): Promise<void> {
+		const result = spawnSync('node', ['--no-node-snapshot', paths.cli, 'config', 'snapshot', fixtureRoot, '--yes'], {
+			cwd: paths.cwd,
+			env: config.envs[vendor as keyof typeof config.envs],
+			encoding: 'utf8',
+		});
+
+		expect(result.status).toBe(0);
+	}
+
+	describe('exits 0 on a mutating apply with no changes', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			await snapshotBaseline(vendor);
+			expect(runApply(vendor, [fixtureRoot, '--yes']).status).toBe(0);
+		});
+	});
+
+	describe('exits 1 on a dry run with drift', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			await snapshotBaseline(vendor);
+			const key = `exit_drift_${vendor.replace(/[^a-z0-9_]/gi, '_')}`;
+
+			await fs.writeFile(
+				path.join(fixtureRoot, 'roles', `${key}.yaml`),
+				dumpYaml({ key, name: 'Exit Drift', admin_access: false, app_access: true })
+			);
+
+			expect(runApply(vendor, [fixtureRoot, '--dry-run']).status).toBe(1);
+		});
+	});
+
+	describe('exits 0 on an empty dry run and emits the full JSON document', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			await snapshotBaseline(vendor);
+			const result = runApply(vendor, [fixtureRoot, '--dry-run', '--format', 'json']);
+
+			expect(result.status).toBe(0);
+
+			const httpDry = await applyConfig(vendor, await getBaseline(vendor), { dryRun: true });
+			expect(httpDry.statusCode).toBe(200);
+			expect(JSON.parse(result.stdout)).toEqual(httpDry.body.data);
+		});
+	});
+
+	describe('exits 2 and refuses a deletion without --destructive', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const baseline = await getBaseline(vendor);
+			const orphanKey = `cli_refuse_${vendor.replace(/[^a-z0-9_]/gi, '_')}`;
+
+			await snapshotBaseline(vendor);
+
+			const withOrphan = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+			withOrphan.roles.push({ key: orphanKey, name: 'CLI Refuse Orphan', admin_access: false, app_access: true });
+
+			try {
+				expect((await applyConfig(vendor, withOrphan)).statusCode).toBe(200);
+
+				const afterSetup = await adminSnapshot(vendor);
+
+				const env = { ...config.envs[vendor as keyof typeof config.envs], LOG_LEVEL: 'info', LOG_STYLE: 'raw' };
+				const result = runApply(vendor, [fixtureRoot, '--yes'], env);
+				const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+
+				expect(result.status).toBe(2);
+				expect(output).toContain('Apply refused');
+				expect(output).toContain(orphanKey);
+
+				const after = await adminSnapshot(vendor);
+
+				expect(after).toEqual(afterSetup);
+			} finally {
+				await resetToBaseline(vendor);
+			}
+		});
+	});
+
+	describe('keeps standard output pure in machine mode', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			await snapshotBaseline(vendor);
+			await fs.writeFile(path.join(fixtureRoot, 'roles', 'Unowned.yaml'), dumpYaml({ note: 'ignored' }));
+
+			const env = { ...config.envs[vendor as keyof typeof config.envs], LOG_LEVEL: 'warn', LOG_STYLE: 'raw' };
+			const result = runApply(vendor, [fixtureRoot, '--dry-run', '--format', 'json'], env);
+
+			expect(result.status).toBe(0);
+			expect(() => JSON.parse(result.stdout)).not.toThrow();
+			expect(result.stderr).toContain('Ignoring');
+			expect(result.stdout).not.toContain('Ignoring');
+		});
+	});
+
+	describe('exits 2 on an unknown --format', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			await snapshotBaseline(vendor);
+			expect(runApply(vendor, [fixtureRoot, '--dry-run', '--format', 'xml']).status).toBe(2);
+		});
+	});
+
+	describe('exits 2 on --format json without --dry-run before reading the config path', () => {
+		it.each(vendors)('%s', (vendor) => {
+			const result = runApply(vendor, [path.join(fixtureRoot, 'does-not-exist'), '--format', 'json']);
+
+			expect(result.status).toBe(2);
+			expect(`${result.stdout ?? ''}${result.stderr ?? ''}`).toContain('only available with --dry-run');
+		});
+	});
+
+	describe('exits 2 on a missing path argument', () => {
+		it.each(vendors)('%s', (vendor) => {
+			expect(runApply(vendor, []).status).toBe(2);
+		});
+	});
+
+	describe('exits 0 on --help', () => {
+		it.each(vendors)('%s', (vendor) => {
+			expect(runApply(vendor, ['--help']).status).toBe(0);
+		});
+	});
+
+	describe('exits 3 when the database is unreachable', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			await snapshotBaseline(vendor);
+			const env = { ...config.envs[vendor as keyof typeof config.envs], DB_HOST: '127.0.0.1', DB_PORT: '1' };
+			expect(runApply(vendor, [fixtureRoot, '--yes'], env).status).toBe(3);
+		});
+	});
+});
+
+describe('cairncms config snapshot exit codes', () => {
+	let fixtureRoot: string;
+
+	beforeEach(async () => {
+		fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'cairncms-config-snap-codes-'));
+	});
+
+	afterEach(async () => {
+		await fs.rm(fixtureRoot, { recursive: true, force: true });
+	});
+
+	function runSnapshot(vendor: string, args: string[], env?: NodeJS.ProcessEnv) {
+		return spawnSync('node', ['--no-node-snapshot', paths.cli, 'config', 'snapshot', ...args], {
+			cwd: paths.cwd,
+			env: env ?? config.envs[vendor as keyof typeof config.envs],
+			encoding: 'utf8',
+		});
+	}
+
+	describe('exits 0 on a successful snapshot', () => {
+		it.each(vendors)('%s', (vendor) => {
+			expect(runSnapshot(vendor, [fixtureRoot, '--yes']).status).toBe(0);
+		});
+	});
+
+	describe('exits 0 on --help', () => {
+		it.each(vendors)('%s', (vendor) => {
+			expect(runSnapshot(vendor, ['--help']).status).toBe(0);
+		});
+	});
+
+	describe('exits 2 on a missing path argument', () => {
+		it.each(vendors)('%s', (vendor) => {
+			expect(runSnapshot(vendor, []).status).toBe(2);
+		});
+	});
+
+	describe('exits 2 on an invalid existing tree', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			await fs.writeFile(
+				path.join(fixtureRoot, 'cairncms-config.yaml'),
+				dumpYaml({ version: 99, resources: ['roles'] })
+			);
+
+			expect(runSnapshot(vendor, [fixtureRoot, '--yes']).status).toBe(2);
+		});
+	});
+
+	describe('exits 3 when the database is unreachable', () => {
+		it.each(vendors)('%s', (vendor) => {
+			const env = { ...config.envs[vendor as keyof typeof config.envs], DB_HOST: '127.0.0.1', DB_PORT: '1' };
+			expect(runSnapshot(vendor, [fixtureRoot, '--yes'], env).status).toBe(3);
 		});
 	});
 });
