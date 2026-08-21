@@ -1,6 +1,7 @@
 import inquirer from 'inquirer';
-import getDatabase, { isInstalled, validateDatabaseConnection } from '../../../database/index.js';
+import getDatabase, { hasDatabaseConnection, isInstalled } from '../../../database/index.js';
 import logger from '../../../logger.js';
+import { configFailureExitCode } from './exit-code.js';
 import { readContainedDirectory, resolveConfigRoot } from '../../../utils/config-path-safety.js';
 import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
 import { readOptionalConfigManifest } from '../../../utils/read-config-directory.js';
@@ -11,12 +12,16 @@ import { writeConfigDirectory } from '../../../utils/write-config-directory.js';
 export async function configSnapshot(targetPath: string, options?: { yes: boolean }): Promise<void> {
 	const database = getDatabase();
 
-	await validateDatabaseConnection(database);
+	if ((await hasDatabaseConnection(database)) === false) {
+		logger.error(`Can't connect to the database.`);
+		database.destroy();
+		process.exit(3);
+	}
 
 	if ((await isInstalled()) === false) {
 		logger.error(`System tables are not installed on this database. Please run "cairncms bootstrap" first.`);
 		database.destroy();
-		process.exit(1);
+		process.exit(3);
 	}
 
 	try {
@@ -63,6 +68,6 @@ export async function configSnapshot(targetPath: string, options?: { yes: boolea
 	} catch (err: any) {
 		logger.error(err);
 		database.destroy();
-		process.exit(1);
+		process.exit(configFailureExitCode(err));
 	}
 }

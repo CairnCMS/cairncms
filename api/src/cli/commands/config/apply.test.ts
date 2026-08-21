@@ -13,7 +13,7 @@ import { configApply } from './apply.js';
 vi.mock('../../../database/index.js', () => ({
 	default: vi.fn(() => ({ destroy: vi.fn() })),
 	isInstalled: vi.fn(async () => true),
-	validateDatabaseConnection: vi.fn(async () => undefined),
+	hasDatabaseConnection: vi.fn(async () => true),
 }));
 
 vi.mock('../../../logger.js', () => ({ default: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));

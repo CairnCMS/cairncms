@@ -119,22 +119,28 @@ export async function createCli(): Promise<Command> {
 
 	const configCommand = program.command('config');
 
-	configCommand
+	const configSnapshotCommand = configCommand
 		.command('snapshot')
 		.description('Snapshot current roles and permissions to a config directory')
 		.argument('<path>', 'Target directory path')
 		.option('-y, --yes', 'Skip confirmation on overwriting non-empty directory', false)
 		.action(configSnapshot);
 
-	configCommand
+	const configApplyCommand = configCommand
 		.command('apply')
 		.description('Apply a config directory to this CairnCMS instance')
 		.argument('<path>', 'Config directory path')
 		.option('-y, --yes', 'Skip confirmation prompt')
 		.option('--dry-run', 'Print planned changes without applying', false)
 		.option('--destructive', 'Delete roles/permissions in DB but not in config', false)
-		.option('--format <format>', 'Output format: human or json', 'human')
+		.addOption(
+			new Option('--format <format>', 'Output format: human or json').choices(['human', 'json']).default('human')
+		)
 		.action(configApply);
+
+	for (const command of [configCommand, configSnapshotCommand, configApplyCommand]) {
+		command.exitOverride();
+	}
 
 	await emitter.emitInit('cli.after', { program });
 

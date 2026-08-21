@@ -44,6 +44,7 @@ vi.mock('../database/index.js', () => ({
 	default: vi.fn(() => ({ destroy: vi.fn() })),
 	isInstalled: vi.fn(async () => true),
 	validateDatabaseConnection: vi.fn(async () => undefined),
+	hasDatabaseConnection: vi.fn(async () => true),
 }));
 
 vi.mock('../logger.js', () => ({ default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));

@@ -1,7 +1,8 @@
 import inquirer from 'inquirer';
 import type { Knex } from 'knex';
-import getDatabase, { isInstalled, validateDatabaseConnection } from '../../../database/index.js';
+import getDatabase, { hasDatabaseConnection, isInstalled } from '../../../database/index.js';
 import logger from '../../../logger.js';
+import { configFailureExitCode } from './exit-code.js';
 import { applyConfigPlan, planHasDeletions } from '../../../utils/apply-config-plan.js';
 import { computeConfigPlan, validateConfigPlan } from '../../../utils/compute-config-plan.js';
 import { enrichConfigPlan } from '../../../utils/enrich-config-plan.js';
@@ -47,12 +48,16 @@ export async function configApply(
 
 	const database = getDatabase();
 
-	await validateDatabaseConnection(database);
+	if ((await hasDatabaseConnection(database)) === false) {
+		logger.error(`Can't connect to the database.`);
+		database.destroy();
+		process.exit(3);
+	}
 
 	if ((await isInstalled()) === false) {
 		logger.error(`System tables are not installed on this database. Please run "cairncms bootstrap" first.`);
 		database.destroy();
-		process.exit(1);
+		process.exit(3);
 	}
 
 	try {
@@ -161,6 +166,6 @@ export async function configApply(
 	} catch (err: any) {
 		logger.error(err);
 		database.destroy();
-		process.exit(1);
+		process.exit(configFailureExitCode(err));
 	}
 }
