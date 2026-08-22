@@ -303,6 +303,23 @@ Messenger messages are not queued while Redis is unavailable. Cache invalidation
 
 If Redis ACLs restrict publishing, allow `PUBLISH` on `<namespace>:messenger-probe`. Without this permission, `/server/health` reports the messenger as degraded.
 
+## Realtime (WebSockets)
+
+The realtime WebSocket transport is off by default. When enabled, clients connect over a single upgrade path, subscribe to collections, and receive permission-checked change notifications. Cross-instance fan-out uses the messenger, so a multi-instance deployment needs the Redis messenger configured.
+
+- **`WEBSOCKETS_ENABLED`** — master switch for the realtime feature. Default `false`.
+- **`WEBSOCKETS_REST_ENABLED`** — REST transport switch; takes effect only when the feature is enabled. Default `true`.
+- **`WEBSOCKETS_REST_PATH`** — the upgrade path clients connect to. Must be a pure URL path with no query or fragment. Default `/websocket`.
+- **`WEBSOCKETS_REST_AUTH`** — authentication mode: `public` (anonymous), `handshake` (authenticate with the first message), or `strict` (bearer token required at upgrade). Default `handshake`.
+- **`WEBSOCKETS_REST_AUTH_TIMEOUT`** — how long, in seconds, an authentication attempt may take. In `strict` mode the attempt is at the upgrade, and a timeout rejects the upgrade; in `handshake` mode a timeout on the first-message attempt closes the connection. A later re-authentication that times out closes a `strict` or `handshake` connection and returns a `public` connection to anonymous access. Accepts a whole number of seconds from `1` to `2147483` (about 24 days).
+- **`WEBSOCKETS_REST_CONN_LIMIT`** — maximum concurrent connections on the REST transport. Accepts a whole number of `1` or greater.
+- **`WEBSOCKETS_HEARTBEAT_PERIOD`** — seconds between server pings; a connection that misses two periods without a pong is closed. Accepts a whole number of seconds from `1` to `1073741` (about 12 days).
+- **`WEBSOCKETS_USER_CONN_LIMIT`** — maximum concurrent connections per authenticated user. Accepts a whole number of `1` or greater.
+- **`WEBSOCKETS_IP_CONN_LIMIT`** — maximum concurrent connections per client IP. Accepts a whole number of `1` or greater.
+- **`WEBSOCKETS_PROCESS_CONN_LIMIT`** — maximum concurrent connections per API process. Accepts a whole number of `1` or greater.
+
+An invalid realtime setting deactivates the affected scope (the whole feature for a shared setting, or just the REST transport for a REST setting) and leaves HTTP serving. The maximum size of an inbound message from a client is bounded by the shared `MAX_PAYLOAD_SIZE` (see [Server](#server)).
+
 ## Email
 
 - **`EMAIL_FROM`** — sender address for all transactional emails. Required for any email feature.

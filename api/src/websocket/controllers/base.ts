@@ -208,6 +208,22 @@ export abstract class SocketController {
 		this.stop(client, code !== undefined ? { code } : {});
 	}
 
+	broadcast(frame: string, filter?: { user?: string; role?: string }): void {
+		for (const client of this.clients) {
+			if (!client.lifecycleStarted || client.stopping || client.finalized) continue;
+
+			const { accountability } = client.auth;
+			if (filter?.user !== undefined && filter.user !== accountability.user) continue;
+			if (filter?.role !== undefined && filter.role !== accountability.role) continue;
+
+			this.send(client, frame);
+		}
+	}
+
+	clientSnapshot(): Set<SocketClient> {
+		return new Set(this.clients);
+	}
+
 	private trackAuth<T>(lookup: Promise<T>): Promise<T> {
 		this.inflightAuth.add(lookup);
 		void lookup.catch(() => undefined).finally(() => this.inflightAuth.delete(lookup));

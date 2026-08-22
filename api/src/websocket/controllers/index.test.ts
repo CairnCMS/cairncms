@@ -7,6 +7,8 @@ const coordinatorStop = vi.fn(async () => undefined);
 const controllerTerminate = vi.fn(async () => undefined);
 const controllerHandleUpgrade = vi.fn();
 const controllerCloseConnection = vi.fn();
+const controllerBroadcast = vi.fn();
+const controllerClientSnapshot = vi.fn(() => new Set());
 
 const admissionLimits: unknown[] = [];
 const coordinatorOptions: any[] = [];
@@ -37,6 +39,8 @@ class MockCoordinator {
 class MockController {
 	handleUpgrade = controllerHandleUpgrade;
 	closeConnection = controllerCloseConnection;
+	broadcast = controllerBroadcast;
+	clientSnapshot = controllerClientSnapshot;
 	terminate = controllerTerminate;
 	constructor(options: unknown) {
 		controllerOptions.push(options);
@@ -58,6 +62,9 @@ vi.mock('../../middleware/rate-limiter-global.js', () => ({ consumeGlobalRateLim
 vi.mock('../../logger.js', () => ({ default: { error: vi.fn(), warn: vi.fn(), debug: vi.fn(), info: vi.fn() } }));
 
 const { activateRealtime } = await import('./index.js');
+const { getActiveRealtime } = await import('./active.js');
+const { WebSocketService } = await import('../../services/websocket.js');
+const { ServiceUnavailableException } = await import('../../exceptions/index.js');
 const logger = (await import('../../logger.js')).default;
 
 const SHARED = {
@@ -90,6 +97,8 @@ beforeEach(() => {
 		controllerTerminate,
 		controllerHandleUpgrade,
 		controllerCloseConnection,
+		controllerBroadcast,
+		controllerClientSnapshot,
 		createUpgradeOriginPredicate,
 		getWebSocketConfig,
 	]) {
@@ -102,6 +111,7 @@ beforeEach(() => {
 
 	coordinatorStop.mockResolvedValue(undefined);
 	controllerTerminate.mockResolvedValue(undefined);
+	controllerClientSnapshot.mockReturnValue(new Set());
 	createUpgradeOriginPredicate.mockReturnValue(() => true);
 	vi.mocked(logger.error).mockClear();
 });
@@ -254,5 +264,109 @@ describe('activateRealtime', () => {
 		expect(await activateRealtime(DEPS)).toBeNull();
 		expect(producerDestroy).toHaveBeenCalledTimes(1);
 		expect(controllerTerminate).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('getActiveRealtime', () => {
+	it('is set on activation, transport-keyed, and cleared on stop', async () => {
+		getWebSocketConfig.mockReturnValue(activeConfig());
+
+		const activation = await activateRealtime(DEPS);
+		if (activation === null) throw new Error('expected activation');
+
+		const access = getActiveRealtime();
+		expect(access).not.toBeNull();
+		expect(access!.transport('rest')).not.toBeNull();
+		expect(access!.transport('graphql')).toBeNull();
+
+		access!.transport('rest')!.broadcast('hi', { user: 'x' });
+		expect(controllerBroadcast).toHaveBeenCalledWith('hi', { user: 'x' });
+
+		expect(access!.transport('rest')!.clients()).toBeInstanceOf(Set);
+		expect(controllerClientSnapshot).toHaveBeenCalledTimes(1);
+
+		await activation.stop();
+		expect(getActiveRealtime()).toBeNull();
+	});
+
+	it('reports the activated settings from info()', async () => {
+		getWebSocketConfig.mockReturnValue(activeConfig());
+
+		const activation = await activateRealtime(DEPS);
+		if (activation === null) throw new Error('expected activation');
+
+		expect(getActiveRealtime()!.info()).toEqual({
+			rest: { authentication: 'public', path: '/websocket' },
+			heartbeat: 30,
+		});
+
+		await activation.stop();
+	});
+
+	it('stays null after an activation that fails to construct', async () => {
+		getWebSocketConfig.mockReturnValue(activeConfig());
+
+		const ok = await activateRealtime(DEPS);
+		await ok!.stop();
+		expect(getActiveRealtime()).toBeNull();
+
+		coordinatorStart.mockImplementation(() => {
+			throw new Error('start boom');
+		});
+
+		expect(await activateRealtime(DEPS)).toBeNull();
+		expect(getActiveRealtime()).toBeNull();
+	});
+
+	it('stopping the first of two activations does not clear the second', async () => {
+		getWebSocketConfig.mockReturnValue(activeConfig());
+
+		const first = await activateRealtime(DEPS);
+		const firstAccess = getActiveRealtime();
+		const second = await activateRealtime(DEPS);
+		const secondAccess = getActiveRealtime();
+
+		expect(secondAccess).not.toBeNull();
+		expect(secondAccess).not.toBe(firstAccess);
+
+		await first!.stop();
+		expect(getActiveRealtime()).toBe(secondAccess);
+
+		await second!.stop();
+		expect(getActiveRealtime()).toBeNull();
+	});
+
+	it('clears synchronously on stop so an existing service cannot reach controllers', async () => {
+		getWebSocketConfig.mockReturnValue(activeConfig());
+
+		let release!: () => void;
+		coordinatorStop.mockReturnValue(new Promise<void>((resolve) => (release = () => resolve())));
+
+		const activation = await activateRealtime(DEPS);
+		if (activation === null) throw new Error('expected activation');
+
+		const service = new WebSocketService();
+
+		void activation.stop();
+
+		expect(getActiveRealtime()).toBeNull();
+		expect(() => service.broadcast('x')).toThrow(ServiceUnavailableException);
+		expect(() => service.clients()).toThrow(ServiceUnavailableException);
+
+		release();
+	});
+
+	it('is usable when constructed before activation, once activation completes', async () => {
+		getWebSocketConfig.mockReturnValue(activeConfig());
+
+		const service = new WebSocketService();
+
+		const activation = await activateRealtime(DEPS);
+		if (activation === null) throw new Error('expected activation');
+
+		service.broadcast('later', { user: 'u' });
+		expect(controllerBroadcast).toHaveBeenCalledWith('later', { user: 'u' });
+
+		await activation.stop();
 	});
 });

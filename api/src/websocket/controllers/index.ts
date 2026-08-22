@@ -12,6 +12,12 @@ import { getWebSocketConfig, type WebSocketRestConfig } from '../config.js';
 import { DispatchCoordinator, resolveDeliveryConcurrency } from '../dispatch.js';
 import { createUpgradeOriginPredicate } from '../origin.js';
 import { SubscriptionRegistry } from '../subscriptions.js';
+import {
+	clearActiveRealtime,
+	setActiveRealtime,
+	type RealtimeAccess,
+	type RealtimeControllerAccess,
+} from './active.js';
 import type { SocketClient, SocketController } from './base.js';
 import { HookEventProducer } from './hooks.js';
 import { WebSocketController } from './rest.js';
@@ -105,10 +111,33 @@ export async function activateRealtime(deps: RealtimeDeps): Promise<RealtimeActi
 		coordinator = activeCoordinator;
 		activeCoordinator.start();
 
+		const byTransport = new Map<string, RealtimeControllerAccess>();
+
+		for (let index = 0; index < transports.length; index++) {
+			const controller = controllers[index]!;
+
+			byTransport.set(transports[index]!.key, {
+				broadcast: (frame, filter) => controller.broadcast(frame, filter),
+				clients: () => controller.clientSnapshot(),
+			});
+		}
+
+		const access: RealtimeAccess = {
+			transport: (key) => byTransport.get(key) ?? null,
+			info: () => ({
+				rest: resolution.rest.active
+					? { authentication: resolution.rest.config.auth, path: resolution.rest.config.path }
+					: false,
+				heartbeat: shared.heartbeatPeriodMs / 1000,
+			}),
+		};
+
 		let stopPromise: Promise<void> | null = null;
 
 		const stop = (): Promise<void> => {
 			if (stopPromise === null) {
+				clearActiveRealtime(access);
+
 				stopPromise = (async () => {
 					activeProducer.destroy();
 					const coordinatorStop = activeCoordinator.stop();
@@ -119,6 +148,8 @@ export async function activateRealtime(deps: RealtimeDeps): Promise<RealtimeActi
 
 			return stopPromise;
 		};
+
+		setActiveRealtime(access);
 
 		return {
 			handleUpgrade: (req: IncomingMessage, socket: Duplex, head: Buffer) => {

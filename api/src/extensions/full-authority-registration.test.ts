@@ -225,6 +225,29 @@ describe('full-authority extension settings threading', () => {
 		expect(await captured.extensionSettings.get('undeclared')).toBeNull();
 	});
 
+	it('exposes a constructible WebSocketService through context.services while realtime is inactive', () => {
+		const instance = new ExtensionManager();
+		seedOwner(instance, SUBJECT);
+
+		let ServiceClass: any;
+		let created: unknown;
+		let threw = false;
+
+		(instance as any).registerHook((_register: any, context: any) => {
+			ServiceClass = context.services.WebSocketService;
+
+			try {
+				created = new context.services.WebSocketService();
+			} catch {
+				threw = true;
+			}
+		}, SUBJECT);
+
+		expect(ServiceClass).toBeTypeOf('function');
+		expect(threw).toBe(false);
+		expect(created).toBeInstanceOf(ServiceClass);
+	});
+
 	it('gives each schedule registration a distinct id derived from the schedule key', async () => {
 		const instance = new ExtensionManager();
 		seedOwner(instance, SUBJECT);

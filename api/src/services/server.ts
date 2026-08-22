@@ -18,6 +18,7 @@ import { SERVER_ONLINE } from '../server.js';
 import { getStorage } from '../storage/index.js';
 import type { AbstractServiceOptions } from '../types/index.js';
 import { version } from '../utils/package.js';
+import { getActiveRealtime } from '../websocket/controllers/active.js';
 import { SettingsService } from './settings.js';
 
 export class ServerService {
@@ -70,6 +71,9 @@ export class ServerService {
 			} else {
 				info['rateLimitGlobal'] = false;
 			}
+
+			const realtime = getActiveRealtime();
+			info['websocket'] = realtime ? realtime.info() : false;
 		}
 
 		if (this.accountability?.user || this.accountability?.share) {

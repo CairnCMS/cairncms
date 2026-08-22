@@ -1638,3 +1638,109 @@ describe('shutdown-complete terminate, closeConnection, and heartbeat wiring', (
 		expect(handled).toEqual(['first']);
 	});
 });
+
+describe('broadcast and client snapshot', () => {
+	it('broadcasts a frame to every open client', async () => {
+		harness = await createHarness();
+		const a = await harness.connect();
+		const b = await harness.connect();
+		expect(a.kind).toBe('open');
+		expect(b.kind).toBe('open');
+		if (a.kind !== 'open' || b.kind !== 'open') return;
+
+		const receivedA: string[] = [];
+		const receivedB: string[] = [];
+		a.ws.on('message', (data) => receivedA.push(data.toString()));
+		b.ws.on('message', (data) => receivedB.push(data.toString()));
+
+		await vi.waitFor(() => expect(callsFor('websocket.connect')).toHaveLength(2));
+
+		harness.controller.broadcast('hello-all');
+
+		await vi.waitFor(() => expect(receivedA).toEqual(['hello-all']));
+		await vi.waitFor(() => expect(receivedB).toEqual(['hello-all']));
+	});
+
+	it('filters broadcast recipients by user and role', async () => {
+		harness = await createHarness({ authMode: 'strict' });
+		const alice = await harness.connect({ headers: { authorization: `Bearer ${signUser('alice')}` } });
+		expect(alice.kind).toBe('open');
+		if (alice.kind !== 'open') return;
+
+		const received: string[] = [];
+		alice.ws.on('message', (data) => received.push(data.toString()));
+		await vi.waitFor(() => expect(callsFor('websocket.connect')).toHaveLength(1));
+
+		harness.controller.broadcast('to-bob', { user: 'bob' });
+		harness.controller.broadcast('to-role-2', { role: 'role-2' });
+		harness.controller.broadcast('to-alice', { user: 'alice' });
+		harness.controller.broadcast('to-role-1', { role: 'role-1' });
+
+		await vi.waitFor(() => expect(received).toEqual(['to-alice', 'to-role-1']));
+	});
+
+	it('skips a stopping or finalized client', async () => {
+		harness = await createHarness();
+		const opened = await harness.connect();
+		expect(opened.kind).toBe('open');
+		if (opened.kind !== 'open') return;
+
+		const received: string[] = [];
+		opened.ws.on('message', (data) => received.push(data.toString()));
+		await vi.waitFor(() => expect(callsFor('websocket.connect')).toHaveLength(1));
+
+		const client = (callsFor('websocket.connect')[0]![1] as { client: SocketClient }).client;
+		client.stopping = true;
+
+		harness.controller.broadcast('nope');
+		await flush();
+		expect(received).toEqual([]);
+	});
+
+	it('closes a client whose broadcast frame exceeds the outbound cap', async () => {
+		harness = await createHarness();
+		const opened = await harness.connect();
+		expect(opened.kind).toBe('open');
+		if (opened.kind !== 'open') return;
+
+		const closed = new Promise<void>((resolve) => opened.ws.on('close', () => resolve()));
+		harness.controller.broadcast('x'.repeat(1_048_577));
+		await closed;
+	});
+
+	it('clientSnapshot returns a copy that does not mutate the controller set', async () => {
+		harness = await createHarness();
+		const opened = await harness.connect();
+		expect(opened.kind).toBe('open');
+		if (opened.kind !== 'open') return;
+
+		await vi.waitFor(() => expect(callsFor('websocket.connect')).toHaveLength(1));
+
+		const snapshot = harness.controller.clientSnapshot();
+		expect(snapshot.size).toBe(1);
+
+		snapshot.clear();
+		expect(harness.controller.clientSnapshot().size).toBe(1);
+	});
+
+	it('does not broadcast to a handshake client before it authenticates', async () => {
+		harness = await createHarness({ authMode: 'handshake' });
+		const opened = await harness.connect();
+		expect(opened.kind).toBe('open');
+		if (opened.kind !== 'open') return;
+
+		const received: string[] = [];
+		opened.ws.on('message', (data) => received.push(data.toString()));
+
+		harness.controller.broadcast('early');
+		await flush();
+		expect(received).toEqual([]);
+
+		opened.ws.send(JSON.stringify({ type: 'auth', access_token: signUser('alice') }));
+		await vi.waitFor(() => expect(callsFor('websocket.connect')).toHaveLength(1));
+
+		harness.controller.broadcast('later');
+		await vi.waitFor(() => expect(received).toContain('later'));
+		expect(received).not.toContain('early');
+	});
+});

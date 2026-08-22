@@ -2,11 +2,16 @@ import type { Accountability, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-const { readSingleton } = vi.hoisted(() => ({ readSingleton: vi.fn() }));
+const { readSingleton, getActiveRealtime } = vi.hoisted(() => ({
+	readSingleton: vi.fn(),
+	getActiveRealtime: vi.fn(),
+}));
 
 vi.mock('./settings.js', () => ({
 	SettingsService: vi.fn().mockImplementation(() => ({ readSingleton })),
 }));
+
+vi.mock('../websocket/controllers/active.js', () => ({ getActiveRealtime }));
 
 import { ServerService } from './server.js';
 
@@ -23,6 +28,13 @@ const projectStub = {
 };
 
 const schema = { collections: {}, relations: [] } satisfies SchemaOverview;
+
+const authenticatedUser = {
+	role: 'role-id',
+	user: 'user-id',
+	admin: false,
+	app: true,
+} satisfies Accountability;
 
 function serverInfoFor(accountability: Accountability | null) {
 	const service = new ServerService({ knex: {} as Knex, schema, accountability });
@@ -71,5 +83,53 @@ describe('ServerService.serverInfo queryLimit exposure', () => {
 		expect(info).not.toHaveProperty('queryLimit');
 		expect(info).not.toHaveProperty('rateLimit');
 		expect(info).not.toHaveProperty('rateLimitGlobal');
+	});
+});
+
+describe('ServerService.serverInfo websocket exposure', () => {
+	beforeEach(() => {
+		readSingleton.mockResolvedValue(projectStub);
+		getActiveRealtime.mockReset();
+	});
+
+	test('reports the running realtime settings to an authenticated user', async () => {
+		getActiveRealtime.mockReturnValue({
+			transport: () => null,
+			info: () => ({ rest: { authentication: 'strict', path: '/ws' }, heartbeat: 30 }),
+		});
+
+		const info = await serverInfoFor(authenticatedUser);
+
+		expect(info['websocket']).toEqual({ rest: { authentication: 'strict', path: '/ws' }, heartbeat: 30 });
+	});
+
+	test('reports websocket false when realtime is not active', async () => {
+		getActiveRealtime.mockReturnValue(null);
+
+		const info = await serverInfoFor(authenticatedUser);
+
+		expect(info['websocket']).toBe(false);
+	});
+
+	test('reports rest false when the REST transport is inactive', async () => {
+		getActiveRealtime.mockReturnValue({
+			transport: () => null,
+			info: () => ({ rest: false, heartbeat: 30 }),
+		});
+
+		const info = await serverInfoFor(authenticatedUser);
+
+		expect(info['websocket']).toEqual({ rest: false, heartbeat: 30 });
+	});
+
+	test('omits websocket for an unauthenticated request', async () => {
+		getActiveRealtime.mockReturnValue({
+			transport: () => null,
+			info: () => ({ rest: false, heartbeat: 30 }),
+		});
+
+		const info = await serverInfoFor(null);
+
+		expect(info).not.toHaveProperty('websocket');
 	});
 });
