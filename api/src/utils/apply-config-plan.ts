@@ -1,14 +1,18 @@
 import { BaseException } from '@cairncms/exceptions';
 import type { SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
-import { clearSystemCache } from '../cache.js';
+import { flushCaches } from '../cache.js';
 import getDatabase from '../database/index.js';
+import emitter from '../emitter.js';
 import { ConfigApplyFailedException } from '../exceptions/config-apply-failed.js';
+import { ConfigPostCommitFailedException } from '../exceptions/config-post-commit-failed.js';
 import { DestructiveChangesRequiredException } from '../exceptions/destructive-changes-required.js';
 import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
+import type { ActionEventParams, MutationOptions } from '../types/index.js';
 import type {
 	ApplyResult,
+	ConfigApplySecurityContext,
 	ConfigPlan,
 	PermissionFieldChanges,
 	PermissionIdentity,
@@ -69,6 +73,7 @@ export async function applyConfigPlan(
 		database?: Knex;
 		schema?: SchemaOverview;
 		destructive?: boolean;
+		context: ConfigApplySecurityContext;
 	}
 ): Promise<ApplyResult> {
 	const result: ApplyResult = {
@@ -95,15 +100,23 @@ export async function applyConfigPlan(
 
 	const database = opts.database ?? getDatabase();
 	const schema = opts.schema ?? (await getSchema({ database, bypassCache: true }));
+	const { accountability } = opts.context;
+	const nestedActionEvents: ActionEventParams[] = [];
 
-	await database.transaction(async (trx) => {
-		try {
-			const rolesService = new RolesService({ knex: trx, schema });
-			const permissionsService = new PermissionsService({ knex: trx, schema });
-			const skipCache = { autoPurgeCache: false as const };
+	const mutationOptions: MutationOptions = {
+		autoPurgeCache: false,
+		autoPurgeSystemCache: false,
+		bypassEmitAction: (params) => nestedActionEvents.push(params),
+		bypassLimits: true,
+	};
+
+	try {
+		await database.transaction(async (trx) => {
+			const rolesService = new RolesService({ knex: trx, schema, accountability });
+			const permissionsService = new PermissionsService({ knex: trx, schema, accountability });
 
 			for (const role of plan.roles.create) {
-				await rolesService.createOne({ key: role.key, ...canonicalizeRole(role) });
+				await rolesService.createOne({ key: role.key, ...canonicalizeRole(role) }, mutationOptions);
 
 				result.roles.created.push(role.key);
 			}
@@ -112,7 +125,7 @@ export async function applyConfigPlan(
 				const existing = await trx('directus_roles').select('id').where({ key }).first();
 				if (!existing) throw new Error(`Role "${key}" not found during apply.`);
 
-				await rolesService.updateOne(existing.id, roleUpdateValues(changes));
+				await rolesService.updateOne(existing.id, roleUpdateValues(changes), mutationOptions);
 				result.roles.updated.push(key);
 			}
 
@@ -138,7 +151,7 @@ export async function applyConfigPlan(
 						action: permission.action,
 						...canonicalizePermission(permission),
 					},
-					skipCache
+					mutationOptions
 				);
 
 				result.permissions.created++;
@@ -162,7 +175,7 @@ export async function applyConfigPlan(
 					);
 				}
 
-				await permissionsService.updateOne(existing['id'], permissionUpdateValues(changes), skipCache);
+				await permissionsService.updateOne(existing['id'], permissionUpdateValues(changes), mutationOptions);
 
 				result.permissions.updated++;
 			}
@@ -171,7 +184,7 @@ export async function applyConfigPlan(
 				const existing = await trx('directus_roles').select('id').where({ key }).first();
 
 				if (existing) {
-					await rolesService.deleteOne(existing.id);
+					await rolesService.deleteOne(existing.id, mutationOptions);
 					result.roles.deleted.push(key);
 				}
 			}
@@ -190,17 +203,30 @@ export async function applyConfigPlan(
 					.first();
 
 				if (existing !== undefined) {
-					await permissionsService.deleteOne(existing['id'], skipCache);
+					await permissionsService.deleteOne(existing['id'], mutationOptions);
 					result.permissions.deleted++;
 				}
 			}
-		} catch (err) {
-			if (err instanceof BaseException) throw err;
-			throw new ConfigApplyFailedException();
-		}
-	});
+		});
+	} catch (err) {
+		if (err instanceof BaseException) throw err;
+		throw new ConfigApplyFailedException();
+	}
 
-	await clearSystemCache();
+	let cacheError: unknown;
+
+	try {
+		await flushCaches();
+	} catch (err) {
+		cacheError = err;
+	}
+
+	// The mutation is committed; still dispatch its action events if cache invalidation fails.
+	for (const actionEvent of nestedActionEvents) {
+		await emitter.emitActionAndWait(actionEvent.event, actionEvent.meta, actionEvent.context);
+	}
+
+	if (cacheError !== undefined) throw new ConfigPostCommitFailedException();
 
 	return result;
 }

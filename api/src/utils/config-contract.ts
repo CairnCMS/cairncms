@@ -15,6 +15,8 @@ export const SUPPORTED_ACTIONS: ReadonlySet<string> = new Set(
 	} satisfies Record<PermissionsAction, true>)
 );
 
+export const CONFIG_APPLY_ORIGIN = 'config-cli';
+
 /** These limits mirror the corresponding database columns. */
 export const ROLE_KEY_MAX_LENGTH = 255;
 export const ROLE_NAME_MAX_LENGTH = 100;

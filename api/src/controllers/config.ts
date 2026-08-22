@@ -99,7 +99,12 @@ router.post(
 			return next();
 		}
 
-		const result = await applyConfigPlan(plan, { database, schema, destructive });
+		const result = await applyConfigPlan(plan, {
+			database,
+			schema,
+			destructive,
+			context: { mode: 'request', accountability: req.accountability },
+		});
 
 		res.locals['payload'] = { data: result };
 

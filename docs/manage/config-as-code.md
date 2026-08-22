@@ -269,6 +269,19 @@ Schema-as-code uses a two-step `/schema/diff` then `/schema/apply` flow with a h
 
 If you need to inspect the plan before applying, use `?dry_run=true` and read the response.
 
+## Audit records and events
+
+A mutating apply records the same audit trail as any other mutation, following each collection's native accountability setting. Creating or updating a role or permission records an activity entry and a revision. Deleting one records an activity entry only. A role deletion's cascade records its own consequences the same way, so suspending a user records activity and a revision, while removing a role-scoped preset records nothing because presets are not accountability-tracked.
+
+Applies are attributed:
+
+- An HTTP apply is attributed to the authenticated administrator who made the request.
+- A local `cairncms config apply` run is attributed to the system actor, recorded with no user and an origin of `config-cli`, so an automated local apply is distinguishable from an administrator's request.
+
+Domain action events such as `roles.create` and `permissions.delete` are emitted once, after the transaction commits, so an extension hook is never told about a change that a rollback later undoes, and no event is emitted for an apply that rolls back.
+
+If cache invalidation fails after the transaction has committed, the apply is not rolled back. The configuration is already applied and its events are delivered. The failure is reported separately as `CONFIG_POST_COMMIT_FAILED` (HTTP `500`, CLI exit `3`). Its `extensions.committed` is `true` and its `extensions.phase` is `cache`, so a client can tell the configuration was applied even though the cache was not cleared. Clear the cache with `POST /utils/cache/clear` to recover, since re-running the apply may produce an empty plan and will not clear the cache on its own.
+
 ## Field semantics
 
 Both CLI and API follow the same omit-versus-null rule:

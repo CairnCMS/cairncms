@@ -1,4 +1,4 @@
-import type { PermissionsAction } from '@cairncms/types';
+import type { Accountability, PermissionsAction } from '@cairncms/types';
 
 export const CONFIG_KINDS = ['roles', 'permissions'] as const;
 export type ConfigKind = (typeof CONFIG_KINDS)[number];
@@ -120,3 +120,7 @@ export interface ApplyResult {
 	roles: { created: string[]; updated: string[]; deleted: string[] };
 	permissions: { created: number; updated: number; deleted: number };
 }
+
+export type ConfigApplySecurityContext =
+	| { mode: 'request'; accountability: Accountability }
+	| { mode: 'system'; reason: 'local config apply'; accountability: Accountability };

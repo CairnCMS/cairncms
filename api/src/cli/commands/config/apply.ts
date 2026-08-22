@@ -6,8 +6,10 @@ import { configFailureExitCode } from './exit-code.js';
 import { applyConfigPlan, planHasDeletions } from '../../../utils/apply-config-plan.js';
 import { computeConfigPlan, validateConfigPlan } from '../../../utils/compute-config-plan.js';
 import { enrichConfigPlan } from '../../../utils/enrich-config-plan.js';
+import { CONFIG_APPLY_ORIGIN } from '../../../utils/config-contract.js';
 import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
 import { getSchema } from '../../../utils/get-schema.js';
+import { getSystemAccountability } from '../../../utils/get-system-accountability.js';
 import { readConfigDirectory } from '../../../utils/read-config-directory.js';
 import { serializeConfigPlan } from '../../../utils/serialize-config-plan.js';
 import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
@@ -148,7 +150,15 @@ export async function configApply(
 			}
 		}
 
-		const result = await applyConfigPlan(plan, { database, destructive });
+		const result = await applyConfigPlan(plan, {
+			database,
+			destructive,
+			context: {
+				mode: 'system',
+				reason: 'local config apply',
+				accountability: { ...getSystemAccountability(), origin: CONFIG_APPLY_ORIGIN },
+			},
+		});
 
 		const parts: string[] = [];
 
