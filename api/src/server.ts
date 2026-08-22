@@ -11,14 +11,44 @@ import getDatabase from './database/index.js';
 import emitter from './emitter.js';
 import env from './env.js';
 import logger from './logger.js';
+import { getMessenger } from './messenger.js';
 import { getConfigFromEnv } from './utils/get-config-from-env.js';
+import { getSchema } from './utils/get-schema.js';
+import { activateRealtime } from './websocket/controllers/index.js';
 
 export let SERVER_ONLINE = true;
 
+const REALTIME_SHUTDOWN_FAILED = 'WebSocket realtime shutdown did not complete in the grace period, forcing exit';
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+	let timer: ReturnType<typeof setTimeout>;
+
+	const timeout = new Promise<never>((_resolve, reject) => {
+		timer = setTimeout(() => reject(new Error('shutdown timeout')), ms);
+	});
+
+	return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 export async function createServer(): Promise<http.Server> {
-	const server = http.createServer(await createApp());
+	const app = await createApp();
+	const server = http.createServer(app);
 
 	Object.assign(server, getConfigFromEnv('SERVER_'));
+
+	const shutdownTimeout =
+		env['SERVER_SHUTDOWN_TIMEOUT'] >= 0 && env['SERVER_SHUTDOWN_TIMEOUT'] < Infinity
+			? env['SERVER_SHUTDOWN_TIMEOUT']
+			: 1000;
+
+	const realtime = await activateRealtime({
+		app,
+		database: getDatabase(),
+		messenger: getMessenger(),
+		getSchema,
+	});
+
+	if (realtime) server.on('upgrade', realtime.handleUpgrade);
 
 	server.on('request', function (req: http.IncomingMessage & Request, res: http.ServerResponse) {
 		const startTime = process.hrtime();
@@ -88,10 +118,7 @@ export async function createServer(): Promise<http.Server> {
 	});
 
 	const terminusOptions: TerminusOptions = {
-		timeout:
-			env['SERVER_SHUTDOWN_TIMEOUT'] >= 0 && env['SERVER_SHUTDOWN_TIMEOUT'] < Infinity
-				? env['SERVER_SHUTDOWN_TIMEOUT']
-				: 1000,
+		timeout: shutdownTimeout,
 		signals: ['SIGINT', 'SIGTERM', 'SIGHUP'],
 		beforeShutdown,
 		onSignal,
@@ -111,6 +138,17 @@ export async function createServer(): Promise<http.Server> {
 	}
 
 	async function onSignal() {
+		if (realtime) {
+			server.off('upgrade', realtime.handleUpgrade);
+
+			try {
+				await withTimeout(realtime.stop(), shutdownTimeout);
+			} catch {
+				logger.error(REALTIME_SHUTDOWN_FAILED);
+				throw new Error('realtime shutdown failed');
+			}
+		}
+
 		const database = getDatabase();
 		await database.destroy();
 

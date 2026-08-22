@@ -22,6 +22,7 @@ import {
 	type AuthMode,
 } from '../config.js';
 import { toWebSocketException, WebSocketException, type WebSocketErrorCode } from '../exceptions.js';
+import { startHeartbeat } from '../handlers/heartbeat.js';
 import { WebSocketAuthMessage, WebSocketMessage } from '../messages.js';
 import { fmtMessage, getMessageType, safeSend, type OutboundLimits } from '../utils/message.js';
 
@@ -95,6 +96,7 @@ export type SocketClient = WebSocket & {
 	stopping: boolean;
 	finalized: boolean;
 	finalizationHold: WorkHold | null;
+	heartbeatStop: (() => void) | null;
 };
 
 type StrictOutcome =
@@ -109,10 +111,16 @@ export abstract class SocketController {
 	protected readonly handlers = new Map<string, CommandHandler>();
 	private readonly connectionState = new WeakMap<SocketClient, ConnectionState>();
 
+	private closing = false;
+	private readonly inflightUpgrades = new Set<Promise<void>>();
+	private readonly inflightDrains = new Set<Promise<void>>();
+	private readonly inflightAuth = new Set<Promise<unknown>>();
+
 	protected readonly transport: string;
 	protected readonly path: string;
 	protected readonly authMode: AuthMode;
 	protected readonly authTimeoutMs: number;
+	protected readonly heartbeatPeriodMs: number;
 
 	protected readonly admission: Admission;
 	protected readonly isOriginAllowed: (app: Application, req: IncomingMessage) => boolean;
@@ -128,6 +136,7 @@ export abstract class SocketController {
 		this.path = options.path;
 		this.authMode = options.authMode;
 		this.authTimeoutMs = options.authTimeoutMs;
+		this.heartbeatPeriodMs = options.heartbeatPeriodMs;
 		this.admission = options.admission;
 		this.isOriginAllowed = options.isOriginAllowed;
 		this.consumeIpRateLimit = options.consumeIpRateLimit;
@@ -141,7 +150,19 @@ export abstract class SocketController {
 
 	handleUpgrade = async (req: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> => {
 		if (!this.matchesPath(req)) return;
+		if (this.closing) return this.reject(socket, 503);
 
+		const upgrade = this.runUpgrade(req, socket, head);
+		this.inflightUpgrades.add(upgrade);
+
+		try {
+			await upgrade;
+		} finally {
+			this.inflightUpgrades.delete(upgrade);
+		}
+	};
+
+	private async runUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
 		let auth: ConnectionAuth | null = null;
 		let lease: Lease | null = null;
 
@@ -170,12 +191,27 @@ export abstract class SocketController {
 			else if (lease !== null) lease.close();
 			this.reject(socket, 503);
 		}
-	};
+	}
 
 	async terminate(): Promise<void> {
+		this.closing = true;
 		for (const client of [...this.clients]) this.stop(client, { terminate: true });
+		await Promise.allSettled([...this.inflightUpgrades]);
 		while (this.clients.size > 0) await new Promise<void>((resolve) => setImmediate(resolve));
-		this.server.close();
+		await Promise.allSettled([...this.inflightDrains]);
+		await Promise.allSettled([...this.inflightAuth]);
+		await new Promise<void>((resolve) => this.server.close(() => resolve()));
+	}
+
+	closeConnection(client: SocketClient, code?: number): void {
+		if (!this.clients.has(client)) return;
+		this.stop(client, code !== undefined ? { code } : {});
+	}
+
+	private trackAuth<T>(lookup: Promise<T>): Promise<T> {
+		this.inflightAuth.add(lookup);
+		void lookup.catch(() => undefined).finally(() => this.inflightAuth.delete(lookup));
+		return lookup;
 	}
 
 	private async authorize(
@@ -217,7 +253,7 @@ export abstract class SocketController {
 			timer = setTimeout(() => resolve({ kind: 'timeout' }), this.authTimeoutMs);
 		});
 
-		const lookup: Promise<StrictOutcome> = auth.authenticate(token).then(
+		const lookup: Promise<StrictOutcome> = this.trackAuth(auth.authenticate(token)).then(
 			(result): StrictOutcome =>
 				result.status === 'busy' || result.status === 'superseded'
 					? { kind: 'error' }
@@ -288,6 +324,12 @@ export abstract class SocketController {
 		}
 
 		this.server.handleUpgrade(req, socket, head, (ws) => {
+			if (this.closing) {
+				auth.close();
+				ws.terminate();
+				return;
+			}
+
 			const client = this.createClient(ws, auth, ip);
 			client.schema = schema;
 			this.clients.add(client);
@@ -295,6 +337,10 @@ export abstract class SocketController {
 			this.emitEvent('websocket.connect', client);
 			client.onExpiry = this.buildOnExpiry(client);
 			this.armExpiryTimer(client);
+
+			client.heartbeatStop = startHeartbeat(client, this.heartbeatPeriodMs, () =>
+				this.stop(client, { terminate: true })
+			);
 		});
 	}
 
@@ -306,9 +352,19 @@ export abstract class SocketController {
 		ip: string
 	): void {
 		this.server.handleUpgrade(req, socket, head, (ws) => {
+			if (this.closing) {
+				auth.close();
+				ws.terminate();
+				return;
+			}
+
 			const client = this.createClient(ws, auth, ip);
 			this.clients.add(client);
 			this.armHandshakeDeadline(client);
+
+			client.heartbeatStop = startHeartbeat(client, this.heartbeatPeriodMs, () =>
+				this.stop(client, { terminate: true })
+			);
 		});
 	}
 
@@ -324,6 +380,7 @@ export abstract class SocketController {
 		client.stopping = false;
 		client.finalized = false;
 		client.finalizationHold = null;
+		client.heartbeatStop = null;
 
 		this.connectionState.set(client, {
 			ip,
@@ -394,6 +451,12 @@ export abstract class SocketController {
 		client.stopping = true;
 
 		this.clearTimers(client);
+
+		if (client.heartbeatStop !== null) {
+			client.heartbeatStop();
+			client.heartbeatStop = null;
+		}
+
 		this.discardWaiting(client);
 		this.subscriptions.removeAllForClient(client);
 
@@ -477,7 +540,7 @@ export abstract class SocketController {
 
 	private admit(client: SocketClient, data: RawData): void {
 		const state = this.connectionState.get(client);
-		if (state === undefined || client.stopping) return;
+		if (state === undefined || client.stopping || this.closing) return;
 
 		if (state.waiting.length >= PENDING_COMMAND_LIMIT) {
 			this.send(client, this.errorFrame('TOO_MANY_PENDING'));
@@ -488,7 +551,10 @@ export abstract class SocketController {
 		const frame = toBuffer(data);
 		state.waiting.push(frame);
 		state.retainedBytes += frame.length;
-		void this.drain(client, state);
+
+		const drain = this.drain(client, state);
+		this.inflightDrains.add(drain);
+		void drain.finally(() => this.inflightDrains.delete(drain));
 	}
 
 	private async drain(client: SocketClient, state: ConnectionState): Promise<void> {
@@ -625,7 +691,7 @@ export abstract class SocketController {
 			timer = setTimeout(() => resolve({ status: 'timeout' }), this.authTimeoutMs);
 		});
 
-		const lookup: Promise<AuthResult> = auth.authenticate(token).then(
+		const lookup: Promise<AuthResult> = this.trackAuth(auth.authenticate(token)).then(
 			(result) => result,
 			(): AuthResult => ({ status: 'rejected', reason: 'auth-failed' })
 		);

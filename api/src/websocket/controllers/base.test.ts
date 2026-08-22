@@ -85,6 +85,7 @@ interface HarnessOptions {
 	authMode?: AuthMode;
 	authTimeoutMs?: number;
 	maxPayload?: number;
+	heartbeatPeriodMs?: number;
 	admission?: Admission;
 	isOriginAllowed?: () => boolean;
 	consumeIpRateLimit?: (ip: string) => Promise<RateLimitConsumption>;
@@ -130,7 +131,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
 		authMode: options.authMode ?? 'public',
 		authTimeoutMs: options.authTimeoutMs ?? 10_000,
 		maxPayload: options.maxPayload ?? 1_048_576,
-		heartbeatPeriodMs: 30_000,
+		heartbeatPeriodMs: options.heartbeatPeriodMs ?? 10_000_000,
 		admission,
 		isOriginAllowed: options.isOriginAllowed ?? (() => true),
 		consumeIpRateLimit: options.consumeIpRateLimit ?? (async () => ({ allowed: true })),
@@ -727,6 +728,7 @@ describe('establishment during schema resolution', () => {
 			ws.terminate();
 			await destroyed;
 		} finally {
+			schema.resolve();
 			await local.teardown();
 		}
 	});
@@ -1407,5 +1409,232 @@ describe('commit-8a subscription wiring', () => {
 		await closed;
 
 		await vi.waitFor(() => expect(registry.getSubscribedOwners()).toHaveLength(0));
+	});
+});
+
+describe('shutdown-complete terminate, closeConnection, and heartbeat wiring', () => {
+	it('awaits an in-flight upgrade, rejects new upgrades with 503, and registers no client while closing', async () => {
+		const schema = deferredSchema();
+		harness = await createHarness({ getSchema: schema.getSchema });
+
+		const connecting = harness.connect();
+		await schema.called;
+
+		let terminated = false;
+
+		const terminate = harness.controller.terminate().then(() => {
+			terminated = true;
+		});
+
+		const rejected = await harness.connect();
+		expect(rejected).toMatchObject({ kind: 'reject', status: 503 });
+
+		await new Promise((resolve) => setImmediate(resolve));
+		expect(terminated).toBe(false);
+
+		schema.resolve();
+		await terminate;
+
+		expect(terminated).toBe(true);
+		expect((harness.controller as unknown as { clients: Set<SocketClient> }).clients.size).toBe(0);
+
+		await connecting.catch(() => undefined);
+	});
+
+	it('awaits an in-flight command drain before resolving', async () => {
+		const started = deferred<void>();
+		let releaseCommand!: () => void;
+
+		const commandGate = new Promise<void>((resolve) => {
+			releaseCommand = resolve;
+		});
+
+		class StallController extends WebSocketController {
+			constructor(options: SocketControllerOptions) {
+				super(options);
+
+				this.handlers.set('subscribe', async () => {
+					started.resolve();
+					await commandGate;
+				});
+			}
+
+			protected override async refreshBeforeCommand(): Promise<boolean> {
+				return true;
+			}
+		}
+
+		harness = await createHarness({ controllerClass: StallController });
+		const opened = await harness.connect();
+		expect(opened.kind).toBe('open');
+		if (opened.kind !== 'open') return;
+
+		opened.ws.send(JSON.stringify({ type: 'subscribe', collection: 'articles' }));
+		await started.promise;
+
+		let terminated = false;
+
+		const terminate = harness.controller.terminate().then(() => {
+			terminated = true;
+		});
+
+		await new Promise((resolve) => setImmediate(resolve));
+		expect(terminated).toBe(false);
+
+		releaseCommand();
+		await terminate;
+		expect(terminated).toBe(true);
+	});
+
+	it('closeConnection closes an owned client and ignores an unowned one', async () => {
+		harness = await createHarness();
+		const opened = await harness.connect();
+		expect(opened.kind).toBe('open');
+		if (opened.kind !== 'open') return;
+
+		await vi.waitFor(() => expect(callsFor('websocket.connect')).toHaveLength(1));
+		const serverWs = (callsFor('websocket.connect')[0]![1] as { client: SocketClient }).client;
+
+		expect(() => harness.controller.closeConnection({} as SocketClient, 1000)).not.toThrow();
+
+		const closed = new Promise<void>((resolve) => opened.ws.on('close', () => resolve()));
+		harness.controller.closeConnection(serverWs, 1000);
+		await closed;
+	});
+
+	it('arms the heartbeat on establishment so the server pings the client', async () => {
+		harness = await createHarness({ heartbeatPeriodMs: 40 });
+		const opened = await harness.connect();
+		expect(opened.kind).toBe('open');
+		if (opened.kind !== 'open') return;
+
+		await new Promise<void>((resolve) => opened.ws.on('ping', () => resolve()));
+	});
+
+	it('stays pending until a deferred strict-upgrade lookup settles after the deadline', async () => {
+		const db = deferredDatabase();
+		harness = await createHarness({ authMode: 'strict', authTimeoutMs: 30, database: db.database });
+
+		const result = await harness.connect({ headers: { authorization: 'Bearer static-token' } });
+		expect(result).toMatchObject({ kind: 'reject', status: 401 });
+		await db.called;
+		await flush();
+
+		let terminated = false;
+
+		const terminate = harness.controller.terminate().then(() => {
+			terminated = true;
+		});
+
+		for (let i = 0; i < 5; i++) await flush();
+		expect(terminated).toBe(false);
+
+		db.resolve();
+		await terminate;
+		expect(terminated).toBe(true);
+	});
+
+	it('stays pending until a deferred reauthentication lookup settles after the deadline', async () => {
+		const db = deferredDatabase();
+		const { ws, frames } = await openClient({ authMode: 'public', authTimeoutMs: 30, database: db.database });
+
+		sendJson(ws, { type: 'auth', access_token: 'static-token' });
+		await db.called;
+		sendJson(ws, { type: 'nope', uid: 'probe' });
+
+		await vi.waitFor(() => expect(frames.some((frame) => frame.uid === 'probe')).toBe(true));
+		await flush();
+
+		let terminated = false;
+
+		const terminate = harness!.controller.terminate().then(() => {
+			terminated = true;
+		});
+
+		for (let i = 0; i < 5; i++) await flush();
+		expect(terminated).toBe(false);
+
+		db.resolve();
+		await terminate;
+		expect(terminated).toBe(true);
+	});
+
+	it('force-terminates a late-upgraded peer socket during establishment and awaits its close', async () => {
+		const schema = deferredSchema();
+		harness = await createHarness({ getSchema: schema.getSchema });
+
+		const ws = new WebSocket(`ws://127.0.0.1:${harness.port}/websocket`);
+		harness.sockets.push(ws);
+		ws.on('error', () => undefined);
+
+		const closeCode = new Promise<number>((resolve) => ws.on('close', (code) => resolve(code)));
+
+		await schema.called;
+
+		let terminated = false;
+
+		const terminate = harness.controller.terminate().then(() => {
+			terminated = true;
+		});
+
+		await flush();
+		expect(terminated).toBe(false);
+
+		schema.resolve();
+		await terminate;
+		expect(terminated).toBe(true);
+
+		expect(await closeCode).toBe(1006);
+		expect(callsFor('websocket.connect')).toHaveLength(0);
+
+		const wss = (harness.controller as unknown as { server: { clients: Set<unknown> } }).server;
+		expect(wss.clients.size).toBe(0);
+	});
+
+	it('does not run a command queued behind an in-flight one once shutdown begins', async () => {
+		const firstStarted = deferred<void>();
+		let releaseFirst!: () => void;
+
+		const firstGate = new Promise<void>((resolve) => {
+			releaseFirst = resolve;
+		});
+
+		const handled: (string | number | undefined)[] = [];
+
+		class QueueController extends WebSocketController {
+			constructor(options: SocketControllerOptions) {
+				super(options);
+
+				this.handlers.set('subscribe', async (_client, message) => {
+					handled.push(message.uid);
+
+					if (message.uid === 'first') {
+						firstStarted.resolve();
+						await firstGate;
+					}
+				});
+			}
+
+			protected override async refreshBeforeCommand(): Promise<boolean> {
+				return true;
+			}
+		}
+
+		harness = await createHarness({ controllerClass: QueueController });
+		const opened = await harness.connect();
+		expect(opened.kind).toBe('open');
+		if (opened.kind !== 'open') return;
+
+		opened.ws.send(JSON.stringify({ type: 'subscribe', collection: 'a', uid: 'first' }));
+		await firstStarted.promise;
+
+		opened.ws.send(JSON.stringify({ type: 'subscribe', collection: 'b', uid: 'second' }));
+		for (let i = 0; i < 20; i++) await flush();
+
+		const terminate = harness.controller.terminate();
+		releaseFirst();
+		await terminate;
+
+		expect(handled).toEqual(['first']);
 	});
 });
