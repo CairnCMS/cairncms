@@ -1271,6 +1271,410 @@ describe('Config-as-Code deletion impact', () => {
 	});
 });
 
+describe('Config-as-Code audit and events', () => {
+	type Id = string | number;
+	type ProbeIds = { roleIds: Set<Id>; permIds: Set<Id>; userIds: Set<Id>; presetIds: Set<Id> };
+
+	const databases = new Map<string, Knex>();
+
+	beforeAll(() => {
+		for (const vendor of vendors) databases.set(vendor, knex(config.knexConfig[vendor]!));
+	});
+
+	afterAll(async () => {
+		for (const [, db] of databases) await db.destroy();
+	});
+
+	function newIds(): ProbeIds {
+		return { roleIds: new Set(), permIds: new Set(), userIds: new Set(), presetIds: new Set() };
+	}
+
+	function probeRole(key: string): Record<string, unknown> {
+		return {
+			key,
+			name: 'Audit Probe',
+			admin_access: false,
+			app_access: false,
+			icon: 'supervised_user_circle',
+			enforce_tfa: false,
+			description: null,
+			ip_access: null,
+		};
+	}
+
+	function probePermissionSet(
+		roleKey: string,
+		collection: string
+	): { role: string; permissions: Array<Record<string, unknown>> } {
+		return {
+			role: roleKey,
+			permissions: [{ collection, action: 'read', permissions: null, validation: null, presets: null, fields: ['*'] }],
+		};
+	}
+
+	async function markerCount(db: Knex, key: string): Promise<number> {
+		return (await db('tests_extensions_log').where({ key })).length;
+	}
+
+	async function expectAudited(
+		db: Knex,
+		collection: string,
+		item: Id,
+		action: 'create' | 'update' | 'delete',
+		expectedUser: Id | null,
+		expectRevision: boolean
+	): Promise<Record<string, unknown>> {
+		const activities = await db('directus_activity').where({ collection, item: String(item), action });
+
+		expect(activities.length).toBe(1);
+		const activity = activities[0]!;
+		expect(activity.user).toBe(expectedUser);
+
+		const revisions = await db('directus_revisions').where({ activity: activity.id });
+
+		if (expectRevision) {
+			expect(revisions.length).toBe(1);
+			expect(revisions[0]!.collection).toBe(collection);
+			expect(String(revisions[0]!.item)).toBe(String(item));
+		} else {
+			expect(revisions.length).toBe(0);
+		}
+
+		return activity;
+	}
+
+	async function idsFor(db: Knex, table: string, where: Record<string, unknown>): Promise<Id[]> {
+		const rows = await db(table).where(where).select('id');
+		return rows.map((row) => row.id as Id);
+	}
+
+	async function purge(db: Knex, roleKey: string, ids: ProbeIds, collections: string[]): Promise<void> {
+		const role = await db('directus_roles').where({ key: roleKey }).first();
+
+		if (role) {
+			ids.roleIds.add(role.id);
+			for (const id of await idsFor(db, 'directus_permissions', { role: role.id })) ids.permIds.add(id);
+			for (const id of await idsFor(db, 'directus_users', { role: role.id })) ids.userIds.add(id);
+			for (const id of await idsFor(db, 'directus_presets', { role: role.id })) ids.presetIds.add(id);
+		}
+
+		const roleIds = [...ids.roleIds];
+		const permIds = [...ids.permIds];
+		const userIds = [...ids.userIds];
+		const presetIds = [...ids.presetIds];
+
+		for (const [collection, items] of [
+			['directus_roles', roleIds],
+			['directus_permissions', permIds],
+			['directus_users', userIds],
+			['directus_presets', presetIds],
+		] as const) {
+			for (const item of items) {
+				await db('directus_revisions')
+					.where({ collection, item: String(item) })
+					.del();
+
+				await db('directus_activity')
+					.where({ collection, item: String(item) })
+					.del();
+			}
+		}
+
+		await db('tests_extensions_log')
+			.where({ key: `config-apply-probe/roles.create/${roleKey}` })
+			.del();
+
+		for (const collection of collections) {
+			await db('tests_extensions_log')
+				.where({ key: `config-apply-probe/permissions.create/${collection}` })
+				.del();
+		}
+
+		for (const id of [...roleIds, ...permIds, ...userIds]) {
+			await db('tests_extensions_log').where('key', 'like', `config-apply-probe/%/${id}`).del();
+		}
+
+		for (const id of presetIds) await db('directus_presets').where({ id }).del();
+		for (const id of userIds) await db('directus_users').where({ id }).del();
+		for (const id of permIds) await db('directus_permissions').where({ id }).del();
+		for (const id of roleIds) await db('directus_permissions').where({ role: id }).del();
+		for (const id of roleIds) await db('directus_roles').where({ id }).del();
+	}
+
+	describe('an HTTP apply attributes create and update audit to the administrator and dispatches their events', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const db = databases.get(vendor)!;
+			const suffix = vendor.replace(/[^a-z0-9_]/gi, '_');
+			const rand = randomUUID().replace(/-/g, '').slice(0, 8);
+			const roleKey = `audit_probe_${suffix}_${rand}`;
+			const probeCollection = `audit_probe_${rand}`;
+			const ids = newIds();
+
+			try {
+				const admin = await db('directus_users').where({ email: 'admin@default.com' }).first();
+				expect(admin).toBeDefined();
+
+				const created = await getBaseline(vendor);
+				created.roles.push(probeRole(roleKey));
+				created.permissions.push(probePermissionSet(roleKey, probeCollection));
+
+				const createResp = await applyConfig(vendor, created);
+				expect(createResp.statusCode).toBe(200);
+
+				expect(createResp.body.data).toEqual({
+					roles: { created: [roleKey], updated: [], deleted: [] },
+					permissions: { created: 1, updated: 0, deleted: 0 },
+				});
+
+				const role = await db('directus_roles').where({ key: roleKey }).first();
+				expect(role).toBeDefined();
+				ids.roleIds.add(role.id);
+
+				const perm = await db('directus_permissions').where({ role: role.id, collection: probeCollection }).first();
+				expect(perm).toBeDefined();
+				ids.permIds.add(perm.id);
+
+				await expectAudited(db, 'directus_roles', role.id, 'create', admin.id, true);
+				await expectAudited(db, 'directus_permissions', perm.id, 'create', admin.id, true);
+
+				expect(await markerCount(db, `config-apply-probe/roles.create/${roleKey}`)).toBe(1);
+				expect(await markerCount(db, `config-apply-probe/permissions.create/${probeCollection}`)).toBe(1);
+
+				const updated = await adminSnapshot(vendor);
+				const roleDoc = updated.roles.find((r) => r['key'] === roleKey);
+				expect(roleDoc).toBeDefined();
+				roleDoc!['name'] = 'Audit Probe Renamed';
+				const permSet = updated.permissions.find((p) => p.role === roleKey);
+				expect(permSet).toBeDefined();
+				permSet!.permissions[0]!['fields'] = ['id'];
+
+				const updateResp = await applyConfig(vendor, updated);
+				expect(updateResp.statusCode).toBe(200);
+
+				expect(updateResp.body.data).toEqual({
+					roles: { created: [], updated: [roleKey], deleted: [] },
+					permissions: { created: 0, updated: 1, deleted: 0 },
+				});
+
+				await expectAudited(db, 'directus_roles', role.id, 'update', admin.id, true);
+				await expectAudited(db, 'directus_permissions', perm.id, 'update', admin.id, true);
+
+				const after = await adminSnapshot(vendor);
+				const afterRole = after.roles.find((r) => r['key'] === roleKey);
+				expect(afterRole).toBeDefined();
+				expect(afterRole!['name']).toBe('Audit Probe Renamed');
+				const afterPermSet = after.permissions.find((p) => p.role === roleKey);
+				expect(afterPermSet).toBeDefined();
+				expect(afterPermSet!.permissions[0]!['fields']).toEqual(['id']);
+
+				expect(await markerCount(db, `config-apply-probe/roles.update/${role.id}`)).toBe(1);
+				expect(await markerCount(db, `config-apply-probe/permissions.update/${perm.id}`)).toBe(1);
+			} finally {
+				await purge(db, roleKey, ids, [probeCollection]);
+			}
+		});
+	});
+
+	describe('a local CLI apply attributes activity to the system actor and awaits its events before exit', () => {
+		let fixtureRoot: string;
+
+		beforeEach(async () => {
+			fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'cairncms-config-audit-'));
+		});
+
+		afterEach(async () => {
+			await fs.rm(fixtureRoot, { recursive: true, force: true });
+		});
+
+		it.each(vendors)('%s', async (vendor) => {
+			const db = databases.get(vendor)!;
+			const suffix = vendor.replace(/[^a-z0-9_]/gi, '_');
+			const rand = randomUUID().replace(/-/g, '').slice(0, 8);
+			const roleKey = `audit_probe_cli_${suffix}_${rand}`;
+			const ids = newIds();
+
+			const snapshot = spawnSync(
+				'node',
+				['--no-node-snapshot', paths.cli, 'config', 'snapshot', fixtureRoot, '--yes'],
+				{ cwd: paths.cwd, env: config.envs[vendor as keyof typeof config.envs], encoding: 'utf8' }
+			);
+
+			expect(snapshot.status).toBe(0);
+
+			await fs.writeFile(path.join(fixtureRoot, 'roles', `${roleKey}.yaml`), dumpYaml(probeRole(roleKey)));
+
+			try {
+				const apply = spawnSync('node', ['--no-node-snapshot', paths.cli, 'config', 'apply', fixtureRoot, '--yes'], {
+					cwd: paths.cwd,
+					env: { ...config.envs[vendor as keyof typeof config.envs], LOG_LEVEL: 'info', LOG_STYLE: 'raw' },
+					encoding: 'utf8',
+				});
+
+				expect(apply.status).toBe(0);
+				expect(`${apply.stdout ?? ''}${apply.stderr ?? ''}`).toContain('1 role(s) created');
+
+				const role = await db('directus_roles').where({ key: roleKey }).first();
+				expect(role).toBeDefined();
+				ids.roleIds.add(role.id);
+
+				const activity = await expectAudited(db, 'directus_roles', role.id, 'create', null, true);
+				expect(activity['origin']).toBe('config-cli');
+
+				expect(await markerCount(db, `config-apply-probe/roles.create/${roleKey}`)).toBe(1);
+			} finally {
+				await purge(db, roleKey, ids, []);
+			}
+		});
+	});
+
+	describe('a rollback commits no role row, audit rows, or events', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const db = databases.get(vendor)!;
+			const suffix = vendor.replace(/[^a-z0-9_]/gi, '_');
+			const rand = randomUUID().replace(/-/g, '').slice(0, 8);
+			const roleKey = `audit_probe_rollback_${suffix}_${rand}`;
+			const ids = newIds();
+
+			const desired = await getBaseline(vendor);
+			desired.roles.push(probeRole(roleKey));
+			desired.permissions.push(probePermissionSet(roleKey, 'audit_probe_rollback'));
+
+			const activityBefore = new Set(await idsFor(db, 'directus_activity', { collection: 'directus_roles' }));
+			const revisionsBefore = new Set(await idsFor(db, 'directus_revisions', { collection: 'directus_roles' }));
+
+			try {
+				const response = await applyConfig(vendor, desired);
+				expect(response.statusCode).toBe(500);
+				expect(response.body.errors?.[0]?.extensions?.code).toBe('CONFIG_APPLY_FAILED');
+
+				const addedActivity = (await idsFor(db, 'directus_activity', { collection: 'directus_roles' })).filter(
+					(id) => !activityBefore.has(id)
+				);
+
+				const addedRevisions = (await idsFor(db, 'directus_revisions', { collection: 'directus_roles' })).filter(
+					(id) => !revisionsBefore.has(id)
+				);
+
+				expect(addedActivity).toEqual([]);
+				expect(addedRevisions).toEqual([]);
+				expect(await db('directus_roles').where({ key: roleKey }).first()).toBeUndefined();
+				expect(await markerCount(db, `config-apply-probe/roles.create/${roleKey}`)).toBe(0);
+			} finally {
+				// Recompute the deltas here so leaked rows are removed even if an assertion above threw first.
+				const leakedRevisions = (await idsFor(db, 'directus_revisions', { collection: 'directus_roles' })).filter(
+					(id) => !revisionsBefore.has(id)
+				);
+
+				for (const id of leakedRevisions) await db('directus_revisions').where({ id }).del();
+
+				const leakedActivity = (await idsFor(db, 'directus_activity', { collection: 'directus_roles' })).filter(
+					(id) => !activityBefore.has(id)
+				);
+
+				for (const id of leakedActivity) await db('directus_activity').where({ id }).del();
+
+				await purge(db, roleKey, ids, ['audit_probe_rollback']);
+			}
+		});
+	});
+
+	describe('a role deletion records delete activity without a revision and cascades to users and presets', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const db = databases.get(vendor)!;
+			const suffix = vendor.replace(/[^a-z0-9_]/gi, '_');
+			const rand = randomUUID().replace(/-/g, '').slice(0, 8);
+			const roleKey = `audit_probe_del_${suffix}_${rand}`;
+			const probeCollection = `audit_probe_del_${rand}`;
+			const userId = randomUUID();
+			const ids = newIds();
+
+			try {
+				const admin = await db('directus_users').where({ email: 'admin@default.com' }).first();
+				expect(admin).toBeDefined();
+
+				const created = await getBaseline(vendor);
+				created.roles.push(probeRole(roleKey));
+				created.permissions.push(probePermissionSet(roleKey, probeCollection));
+
+				const createResp = await applyConfig(vendor, created);
+				expect(createResp.statusCode).toBe(200);
+
+				expect(createResp.body.data).toEqual({
+					roles: { created: [roleKey], updated: [], deleted: [] },
+					permissions: { created: 1, updated: 0, deleted: 0 },
+				});
+
+				const role = await db('directus_roles').where({ key: roleKey }).first();
+				expect(role).toBeDefined();
+				ids.roleIds.add(role.id);
+
+				const perm = await db('directus_permissions').where({ role: role.id, collection: probeCollection }).first();
+				expect(perm).toBeDefined();
+				ids.permIds.add(perm.id);
+
+				await db('directus_users').insert({
+					id: userId,
+					email: `${roleKey}@example.invalid`,
+					role: role.id,
+					status: 'active',
+				});
+
+				ids.userIds.add(userId);
+
+				await db('directus_presets').insert({ role: role.id, bookmark: 'Audit Probe Bookmark' });
+				const preset = await db('directus_presets').where({ role: role.id }).first();
+				expect(preset).toBeDefined();
+				ids.presetIds.add(preset.id);
+
+				const snapshot = await adminSnapshot(vendor);
+				snapshot.roles = snapshot.roles.filter((r) => r['key'] !== roleKey);
+				snapshot.permissions = snapshot.permissions.filter((p) => p.role !== roleKey);
+
+				const deleteResp = await applyConfig(vendor, snapshot, { destructive: true });
+				expect(deleteResp.statusCode).toBe(200);
+
+				expect(deleteResp.body.data).toEqual({
+					roles: { created: [], updated: [], deleted: [roleKey] },
+					permissions: { created: 0, updated: 0, deleted: 0 },
+				});
+
+				expect(await db('directus_roles').where({ id: role.id }).first()).toBeUndefined();
+				expect(await db('directus_permissions').where({ id: perm.id }).first()).toBeUndefined();
+				expect(await db('directus_presets').where({ id: preset.id }).first()).toBeUndefined();
+
+				await expectAudited(db, 'directus_roles', role.id, 'delete', admin.id, false);
+				await expectAudited(db, 'directus_permissions', perm.id, 'delete', admin.id, false);
+				await expectAudited(db, 'directus_users', userId, 'update', admin.id, true);
+
+				expect(
+					await db('directus_activity')
+						.where({ collection: 'directus_presets', item: String(preset.id) })
+						.first()
+				).toBeUndefined();
+
+				expect(
+					await db('directus_revisions')
+						.where({ collection: 'directus_presets', item: String(preset.id) })
+						.first()
+				).toBeUndefined();
+
+				const suspendedUser = await db('directus_users').where({ id: userId }).first();
+				expect(suspendedUser).toBeDefined();
+				expect(suspendedUser.status).toBe('suspended');
+				expect(suspendedUser.role).toBeNull();
+
+				expect(await markerCount(db, `config-apply-probe/roles.create/${roleKey}`)).toBe(1);
+				expect(await markerCount(db, `config-apply-probe/permissions.create/${probeCollection}`)).toBe(1);
+				expect(await markerCount(db, `config-apply-probe/roles.delete/${role.id}`)).toBe(1);
+				expect(await markerCount(db, `config-apply-probe/permissions.delete/${perm.id}`)).toBe(1);
+				expect(await markerCount(db, `config-apply-probe/users.update/${userId}`)).toBe(1);
+			} finally {
+				await purge(db, roleKey, ids, [probeCollection]);
+			}
+		});
+	});
+});
+
 function unreachableDbEnv(vendor: string): NodeJS.ProcessEnv {
 	const base = config.envs[vendor as keyof typeof config.envs];
 
