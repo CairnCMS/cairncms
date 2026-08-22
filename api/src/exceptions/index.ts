@@ -2,6 +2,7 @@ export * from './config-apply-failed.js';
 export * from './config-identity-conflict.js';
 export * from './config-invalid.js';
 export * from './config-placeholder-unresolved.js';
+export * from './config-post-commit-failed.js';
 export * from './config-protected-record.js';
 export * from './config-read-failed.js';
 export * from './config-unsupported-version.js';
