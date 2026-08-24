@@ -17,6 +17,7 @@ import type {
 import { PERMISSION_COLLECTION_MAX_LENGTH, ROLE_KEY_MAX_LENGTH, SUPPORTED_ACTIONS } from '../../config-contract.js';
 import { safeLogFragment } from '../../safe-log-fragment.js';
 import type {
+	ApplyContext,
 	ConfigFieldDescriptor,
 	ConfigResourceDescriptor,
 	EnrichContext,
@@ -29,8 +30,7 @@ import type {
 import { identityConflict, invalid } from '../failures.js';
 import { comparePermissionIdentity } from '../identity-order.js';
 import { UNFILTERED, parseStoredCSV, parseStoredJSON, unreadable } from '../read-parsing.js';
-import { createUnwiredHandler } from '../stub-handler.js';
-import { composeValues, sortedOrNull } from '../values.js';
+import { changesToValues, composeValues, sortedOrNull } from '../values.js';
 import type { RolesKindTypes } from './roles.js';
 
 const NON_SECRET: FieldSensitivity = { secret: false, redact: 'none' };
@@ -368,6 +368,136 @@ function toChanges(plan: KindPlan<PermissionsKindTypes>, _enrichment: ConfigPlan
 	return changes;
 }
 
+function permissionsServiceFor(context: ApplyContext<PermissionsKindTypes>): PermissionsService {
+	return new PermissionsService({
+		knex: context.database,
+		schema: context.schema,
+		accountability: context.securityContext.accountability,
+	});
+}
+
+async function applyCreates(
+	creates: PermissionsKindTypes['Create'][],
+	context: ApplyContext<PermissionsKindTypes>
+): Promise<Extract<PermissionsKindTypes['Outcome'], { op: 'create' }>> {
+	if (creates.length === 0) return { op: 'create', count: 0 };
+
+	const { roleIdByKey } = context.dependency('roles');
+	const permissionsService = permissionsServiceFor(context);
+	let count = 0;
+
+	for (const { roleKey, permission } of creates) {
+		const roleId = roleIdByKey.get(roleKey);
+		if (roleId === undefined) throw new Error(`Cannot create permission: role "${roleKey}" not found.`);
+
+		await permissionsService.createOne(
+			{
+				role: roleId,
+				collection: permission.collection,
+				action: permission.action,
+				...(composeValues(RECORD_FIELDS, VALUE_FIELD_ORDER, {
+					role: roleKey,
+					...permission,
+				} as unknown as Record<string, unknown>) as PermissionValues),
+			},
+			context.mutationOptions
+		);
+
+		count++;
+	}
+
+	return { op: 'create', count };
+}
+
+async function applyUpdates(
+	updates: PermissionsKindTypes['Update'][],
+	context: ApplyContext<PermissionsKindTypes>
+): Promise<Extract<PermissionsKindTypes['Outcome'], { op: 'update' }>> {
+	if (updates.length === 0) return { op: 'update', count: 0 };
+
+	const { roleIdByKey } = context.dependency('roles');
+	const permissionsService = permissionsServiceFor(context);
+	let count = 0;
+
+	for (const { roleKey, collection, action, changes } of updates) {
+		const roleId = roleIdByKey.get(roleKey);
+		if (roleId === undefined) throw new Error(`Cannot update permission: role "${roleKey}" not found.`);
+
+		const existing = await context
+			.database('directus_permissions')
+			.select('id')
+			.where({ collection, action, role: roleId })
+			.first();
+
+		if (existing === undefined) {
+			throw new Error(
+				`Permission not found for update: role="${roleKey}" collection="${collection}" action="${action}".`
+			);
+		}
+
+		await permissionsService.updateOne(
+			existing['id'],
+			changesToValues(changes) as Partial<PermissionValues>,
+			context.mutationOptions
+		);
+
+		count++;
+	}
+
+	return { op: 'update', count };
+}
+
+async function applyDeletes(
+	deletes: PermissionsKindTypes['Delete'][],
+	context: ApplyContext<PermissionsKindTypes>
+): Promise<Extract<PermissionsKindTypes['Outcome'], { op: 'delete' }>> {
+	if (deletes.length === 0) return { op: 'delete', count: 0 };
+
+	const { roleIdByKey } = context.dependency('roles');
+	const permissionsService = permissionsServiceFor(context);
+	let count = 0;
+
+	for (const { roleKey, collection, action } of deletes) {
+		const roleId = roleIdByKey.get(roleKey);
+		if (roleId === undefined) continue;
+
+		const existing = await context
+			.database('directus_permissions')
+			.select('id')
+			.where({ collection, action, role: roleId })
+			.first();
+
+		if (existing !== undefined) {
+			await permissionsService.deleteOne(existing['id'], context.mutationOptions);
+			count++;
+		}
+	}
+
+	return { op: 'delete', count };
+}
+
+async function readApplyDependencyState(): Promise<PermissionsKindTypes['ApplyDependencyState']> {
+	return undefined;
+}
+
+function emptyResult(): PermissionsKindTypes['ResultSlice'] {
+	return { created: 0, updated: 0, deleted: 0 };
+}
+
+function mergeOutcome(
+	slice: PermissionsKindTypes['ResultSlice'],
+	outcome: PermissionsKindTypes['Outcome']
+): PermissionsKindTypes['ResultSlice'] {
+	switch (outcome.op) {
+		case 'create':
+			return { ...slice, created: slice.created + outcome.count };
+		case 'update':
+			return { ...slice, updated: slice.updated + outcome.count };
+		case 'delete':
+			return { ...slice, deleted: slice.deleted + outcome.count };
+	}
+}
+
 export const permissionsDescriptor: ConfigResourceDescriptor<PermissionsKindTypes> = {
 	kind: 'permissions',
 	formatVersion: 1,
@@ -415,12 +545,17 @@ export const permissionsDescriptor: ConfigResourceDescriptor<PermissionsKindType
 	}),
 	toDeleteEntry: (identity) => ({ roleKey: identity.role, collection: identity.collection, action: identity.action }),
 	handler: {
-		...createUnwiredHandler<PermissionsKindTypes>(),
 		readCurrent,
 		validateDesired,
 		postPlan,
 		enrich,
 		emptyEnrichment,
 		toChanges,
+		applyCreates,
+		applyUpdates,
+		applyDeletes,
+		readApplyDependencyState,
+		emptyResult,
+		mergeOutcome,
 	},
 };

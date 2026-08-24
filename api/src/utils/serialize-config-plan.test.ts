@@ -10,7 +10,6 @@ import type {
 	ConfigRole,
 	RoleDeletionImpactEntry,
 } from '../types/config.js';
-import { canonicalizeRole } from './canonicalize-config-record.js';
 import { serializeConfigPlan } from './serialize-config-plan.js';
 
 function emptyPlan(): ConfigPlan {
@@ -85,10 +84,21 @@ describe('serializeConfigPlan', () => {
 		const result = serializeConfigPlan(plan, { enrichment: emptyEnrichment(), manifestVersion: 1 });
 
 		expect(result.changes).toEqual([
-			{ kind: 'roles', operation: 'create', identity: { key: 'author' }, values: canonicalizeRole(created) },
+			{
+				kind: 'roles',
+				operation: 'create',
+				identity: { key: 'author' },
+				values: {
+					name: 'author',
+					icon: 'supervised_user_circle',
+					description: null,
+					admin_access: false,
+					app_access: true,
+					enforce_tfa: false,
+					ip_access: null,
+				},
+			},
 		]);
-
-		expect(canonicalizeRole(created).icon).toBe('supervised_user_circle');
 	});
 
 	it('serializes a role update carrying its field changes', () => {

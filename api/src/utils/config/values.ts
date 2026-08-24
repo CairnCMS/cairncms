@@ -5,6 +5,11 @@ export function sortedOrNull(values: unknown): string[] | null {
 	return [...(values as string[])].sort();
 }
 
+/** The mutation payload for a field-changes map: each field's `after` value. */
+export function changesToValues(changes: Record<string, { before: unknown; after: unknown }>): Record<string, unknown> {
+	return Object.fromEntries(Object.entries(changes).map(([field, change]) => [field, change.after]));
+}
+
 /** Resolves the value field descriptors in canonical output order. Throws if the order names an unknown field. */
 export function orderedValueFields(
 	recordFields: ConfigFieldDescriptor[],

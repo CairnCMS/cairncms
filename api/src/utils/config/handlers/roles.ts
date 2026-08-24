@@ -15,6 +15,7 @@ import type {
 import { ROLE_ICON_MAX_LENGTH, ROLE_KEY_MAX_LENGTH, ROLE_NAME_MAX_LENGTH } from '../../config-contract.js';
 import { safeLogFragment } from '../../safe-log-fragment.js';
 import type {
+	ApplyContext,
 	ConfigFieldDescriptor,
 	ConfigResourceDescriptor,
 	EnrichContext,
@@ -25,8 +26,7 @@ import type {
 } from '../descriptor.js';
 import { identityConflict } from '../failures.js';
 import { UNFILTERED, assertStringArray, parseStoredCSV, unreadable } from '../read-parsing.js';
-import { createUnwiredHandler } from '../stub-handler.js';
-import { composeValues, sortedOrNull } from '../values.js';
+import { changesToValues, composeValues, sortedOrNull } from '../values.js';
 import { normalizeImpact, readRoleDeletionImpact } from './roles-impact.js';
 
 const DEFAULT_ROLE_ICON = 'supervised_user_circle';
@@ -326,6 +326,115 @@ function toChanges(plan: KindPlan<RolesKindTypes>, enrichment: ConfigPlanEnrichm
 	return changes;
 }
 
+async function applyCreates(
+	creates: ConfigRole[],
+	context: ApplyContext<RolesKindTypes>
+): Promise<Extract<RolesKindTypes['Outcome'], { op: 'create' }>> {
+	const created: string[] = [];
+	if (creates.length === 0) return { op: 'create', created };
+
+	const rolesService = new RolesService({
+		knex: context.database,
+		schema: context.schema,
+		accountability: context.securityContext.accountability,
+	});
+
+	for (const role of creates) {
+		await rolesService.createOne(
+			{
+				key: role.key,
+				...(composeValues(RECORD_FIELDS, VALUE_FIELD_ORDER, role as unknown as Record<string, unknown>) as RoleValues),
+			},
+			context.mutationOptions
+		);
+
+		created.push(role.key);
+	}
+
+	return { op: 'create', created };
+}
+
+async function applyUpdates(
+	updates: RolesKindTypes['Update'][],
+	context: ApplyContext<RolesKindTypes>
+): Promise<Extract<RolesKindTypes['Outcome'], { op: 'update' }>> {
+	const updated: string[] = [];
+	if (updates.length === 0) return { op: 'update', updated };
+
+	const rolesService = new RolesService({
+		knex: context.database,
+		schema: context.schema,
+		accountability: context.securityContext.accountability,
+	});
+
+	for (const { key, changes } of updates) {
+		const existing = await context.database('directus_roles').select('id').where({ key }).first();
+		if (!existing) throw new Error(`Role "${key}" not found during apply.`);
+
+		await rolesService.updateOne(
+			existing['id'],
+			changesToValues(changes) as Partial<RoleValues>,
+			context.mutationOptions
+		);
+
+		updated.push(key);
+	}
+
+	return { op: 'update', updated };
+}
+
+async function applyDeletes(
+	deletes: string[],
+	context: ApplyContext<RolesKindTypes>
+): Promise<Extract<RolesKindTypes['Outcome'], { op: 'delete' }>> {
+	const deleted: string[] = [];
+	if (deletes.length === 0) return { op: 'delete', deleted };
+
+	const rolesService = new RolesService({
+		knex: context.database,
+		schema: context.schema,
+		accountability: context.securityContext.accountability,
+	});
+
+	for (const key of deletes) {
+		const existing = await context.database('directus_roles').select('id').where({ key }).first();
+
+		if (existing) {
+			await rolesService.deleteOne(existing['id'], context.mutationOptions);
+			deleted.push(key);
+		}
+	}
+
+	return { op: 'delete', deleted };
+}
+
+async function readApplyDependencyState(
+	context: ApplyContext<RolesKindTypes>
+): Promise<RolesKindTypes['ApplyDependencyState']> {
+	const rows = await context.database('directus_roles').select('id', 'key');
+	const roleIdByKey = new Map<string, string>();
+	for (const row of rows) roleIdByKey.set(row['key'], row['id']);
+	return { roleIdByKey };
+}
+
+function emptyResult(): RolesKindTypes['ResultSlice'] {
+	return { created: [], updated: [], deleted: [] };
+}
+
+function mergeOutcome(
+	slice: RolesKindTypes['ResultSlice'],
+	outcome: RolesKindTypes['Outcome']
+): RolesKindTypes['ResultSlice'] {
+	switch (outcome.op) {
+		case 'create':
+			return { ...slice, created: [...slice.created, ...outcome.created] };
+		case 'update':
+			return { ...slice, updated: [...slice.updated, ...outcome.updated] };
+		case 'delete':
+			return { ...slice, deleted: [...slice.deleted, ...outcome.deleted] };
+	}
+}
+
 export const rolesDescriptor: ConfigResourceDescriptor<RolesKindTypes> = {
 	kind: 'roles',
 	formatVersion: 1,
@@ -355,12 +464,17 @@ export const rolesDescriptor: ConfigResourceDescriptor<RolesKindTypes> = {
 	toUpdateEntry: (identity, changes) => ({ key: identity.key, changes }),
 	toDeleteEntry: (identity) => identity.key,
 	handler: {
-		...createUnwiredHandler<RolesKindTypes>(),
 		readCurrent,
 		validateDesired,
 		postPlan: (plan) => plan,
 		enrich,
 		emptyEnrichment,
 		toChanges,
+		applyCreates,
+		applyUpdates,
+		applyDeletes,
+		readApplyDependencyState,
+		emptyResult,
+		mergeOutcome,
 	},
 };

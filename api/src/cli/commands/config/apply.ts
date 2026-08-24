@@ -5,6 +5,7 @@ import logger from '../../../logger.js';
 import { configFailureExitCode } from './exit-code.js';
 import { applyConfigPlan, planHasDeletions } from '../../../utils/apply-config-plan.js';
 import { computeConfigPlan, validateConfigPlan } from '../../../utils/compute-config-plan.js';
+import { isPlanEmpty } from '../../../utils/config/plan-folds.js';
 import { enrichConfigPlan } from '../../../utils/enrich-config-plan.js';
 import { CONFIG_APPLY_ORIGIN } from '../../../utils/config-contract.js';
 import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
@@ -16,17 +17,6 @@ import { validateDesiredConfig } from '../../../utils/validate-desired-config.js
 import type { CairnConfig, ConfigPlan, SerializedConfigPlan } from '../../../types/config.js';
 import { confirmPrompt } from '../../presentation.js';
 import { renderConfigPlan, renderRefusal, renderWarnings } from './render-config-plan.js';
-
-function isPlanEmpty(plan: ConfigPlan): boolean {
-	if (plan.roles.create.length > 0) return false;
-	if (plan.roles.update.length > 0) return false;
-	if (plan.roles.delete.length > 0) return false;
-	if (plan.permissions.create.length > 0) return false;
-	if (plan.permissions.update.length > 0) return false;
-	if (plan.permissions.delete.length > 0) return false;
-
-	return true;
-}
 
 async function serializePlan(plan: ConfigPlan, desired: CairnConfig, database: Knex): Promise<SerializedConfigPlan> {
 	const schema = await getSchema({ database, bypassCache: true });

@@ -1,15 +1,21 @@
-import type { Accountability } from '@cairncms/types';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Accountability, EventContext, SchemaOverview } from '@cairncms/types';
+import type { Knex } from 'knex';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushCaches } from '../cache.js';
 import emitter from '../emitter.js';
 import { ConfigApplyFailedException } from '../exceptions/config-apply-failed.js';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import { ConfigPostCommitFailedException } from '../exceptions/config-post-commit-failed.js';
 import { DestructiveChangesRequiredException } from '../exceptions/destructive-changes-required.js';
+import getDatabase from '../database/index.js';
 import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
 import { applyConfigPlan } from './apply-config-plan.js';
-import type { ConfigApplySecurityContext, ConfigPlan } from '../types/config.js';
+import type { ApplyContext, ConfigApplyMutationOptions, ConfigKindTypes } from './config/descriptor.js';
+import { getDescriptor } from './config/registry.js';
+import { getSchema } from './get-schema.js';
+import type { ActionEventParams } from '../types/index.js';
+import type { ConfigApplySecurityContext, ConfigKind, ConfigPlan } from '../types/config.js';
 
 const { transactionSpy } = vi.hoisted(() => ({ transactionSpy: vi.fn() }));
 
@@ -37,10 +43,10 @@ function trxStub(table: string): any {
 transactionSpy.mockImplementation(async (cb: any) => cb(trxStub));
 
 vi.mock('../database/index.js', () => ({
-	default: () => ({ transaction: transactionSpy }),
+	default: vi.fn(() => ({ transaction: transactionSpy })),
 }));
 
-vi.mock('./get-schema.js', () => ({ getSchema: async () => ({ collections: {}, relations: [] }) }));
+vi.mock('./get-schema.js', () => ({ getSchema: vi.fn(async () => ({ collections: {}, relations: [] })) }));
 vi.mock('../cache.js', () => ({ clearSystemCache: vi.fn(), flushCaches: vi.fn() }));
 vi.mock('../emitter.js', () => ({ default: { emitActionAndWait: vi.fn() } }));
 vi.mock('../services/permissions.js', () => ({ PermissionsService: vi.fn(() => permissionsService) }));
@@ -68,6 +74,16 @@ const forwardedOptions = () =>
 		bypassEmitAction: expect.any(Function),
 		bypassLimits: true,
 	});
+
+const suppliedSchema: SchemaOverview = { collections: {}, relations: [] };
+
+const eventContext: EventContext = { database: trxStub as unknown as Knex, schema: suppliedSchema, accountability };
+
+const actionEvent = (event: string, meta: Record<string, unknown>): ActionEventParams => ({
+	event,
+	meta,
+	context: eventContext,
+});
 
 function emptyPlan(): ConfigPlan {
 	return {
@@ -117,17 +133,49 @@ describe('applyConfigPlan:destructive refusal', () => {
 		expect(rolesService.deleteOne).toHaveBeenCalledWith('r-old', forwardedOptions());
 	});
 
-	it('constructs both services with the caller accountability', async () => {
+	it('constructs RolesService against the transaction, supplied schema, and caller accountability for role work', async () => {
 		const plan = emptyPlan();
 		plan.roles.create.push({ key: 'editor', name: 'Editor', admin_access: false, app_access: true });
 
-		await applyConfigPlan(plan, { context });
+		await applyConfigPlan(plan, { schema: suppliedSchema, context });
 
-		expect(RolesService).toHaveBeenCalledWith(expect.objectContaining({ accountability: context.accountability }));
+		expect(RolesService).toHaveBeenCalledTimes(1);
 
-		expect(PermissionsService).toHaveBeenCalledWith(
-			expect.objectContaining({ accountability: context.accountability })
-		);
+		const arg = vi.mocked(RolesService).mock.calls[0]![0];
+		expect(arg.knex).toBe(trxStub);
+		expect(arg.schema).toBe(suppliedSchema);
+		expect(arg.accountability).toBe(context.accountability);
+
+		expect(PermissionsService).not.toHaveBeenCalled();
+	});
+
+	it('constructs PermissionsService against the transaction, supplied schema, and caller accountability for permission work', async () => {
+		trxRows = { directus_roles: [{ id: 'r-editor', key: 'editor' }], directus_permissions: [] };
+
+		const plan = emptyPlan();
+
+		plan.permissions.create.push({
+			roleKey: 'editor',
+			permission: {
+				collection: 'articles',
+				action: 'read',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: null,
+			},
+		});
+
+		await applyConfigPlan(plan, { schema: suppliedSchema, context });
+
+		expect(PermissionsService).toHaveBeenCalledTimes(1);
+
+		const arg = vi.mocked(PermissionsService).mock.calls[0]![0];
+		expect(arg.knex).toBe(trxStub);
+		expect(arg.schema).toBe(suppliedSchema);
+		expect(arg.accountability).toBe(context.accountability);
+
+		expect(RolesService).not.toHaveBeenCalled();
 	});
 
 	it('applies a deletion-free plan identically with and without the destructive flag', async () => {
@@ -423,5 +471,674 @@ describe('applyConfigPlan:post-commit ordering', () => {
 		expect(order).toEqual(['mutate']);
 		expect(flushCaches).not.toHaveBeenCalled();
 		expect(emitter.emitActionAndWait).not.toHaveBeenCalled();
+	});
+});
+
+describe('applyConfigPlan:engine schedule', () => {
+	const order: string[] = [];
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		order.length = 0;
+		transactionSpy.mockImplementation(async (cb: any) => cb(trxStub));
+
+		trxRows = {
+			directus_roles: [
+				{ id: 'r-viewer', key: 'viewer' },
+				{ id: 'r-guest', key: 'guest' },
+				{ id: 'r-old1', key: 'old_one' },
+				{ id: 'r-old2', key: 'old_two' },
+				{ id: 'r-writer', key: 'writer' },
+			],
+			directus_permissions: [
+				{ id: 'p-au', role: 'r-writer', collection: 'articles', action: 'update' },
+				{ id: 'p-pu', role: 'r-writer', collection: 'pages', action: 'update' },
+				{ id: 'p-ad', role: 'r-writer', collection: 'articles', action: 'delete' },
+				{ id: 'p-pd', role: 'r-writer', collection: 'pages', action: 'delete' },
+			],
+		};
+
+		rolesService.createOne.mockImplementation(async (data: { key: string }) => {
+			order.push(`role:create:${data.key}`);
+			return data.key;
+		});
+
+		rolesService.updateOne.mockImplementation(async (id: string) => {
+			order.push(`role:update:${id}`);
+			return id;
+		});
+
+		rolesService.deleteOne.mockImplementation(async (id: string) => {
+			order.push(`role:delete:${id}`);
+			return id;
+		});
+
+		permissionsService.createOne.mockImplementation(async (data: { action: string }) => {
+			order.push(`perm:create:${data.action}`);
+			return `new-${data.action}`;
+		});
+
+		permissionsService.updateOne.mockImplementation(async (id: string) => {
+			order.push(`perm:update:${id}`);
+			return id;
+		});
+
+		permissionsService.deleteOne.mockImplementation(async (id: string) => {
+			order.push(`perm:delete:${id}`);
+			return id;
+		});
+	});
+
+	function finalizedMixedPlan(): ConfigPlan {
+		const plan = emptyPlan();
+		plan.roles.create.push({ key: 'editor', name: 'Editor', admin_access: false, app_access: true });
+		plan.roles.create.push({ key: 'author', name: 'Author', admin_access: false, app_access: true });
+		plan.roles.update.push({ key: 'viewer', changes: { name: { before: 'V', after: 'Viewer' } } });
+		plan.roles.update.push({ key: 'guest', changes: { name: { before: 'G', after: 'Guest' } } });
+		plan.roles.delete.push('old_one');
+		plan.roles.delete.push('old_two');
+
+		plan.permissions.create.push({
+			roleKey: 'writer',
+			permission: {
+				collection: 'items',
+				action: 'create',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: null,
+			},
+		});
+
+		plan.permissions.create.push({
+			roleKey: 'writer',
+			permission: {
+				collection: 'items',
+				action: 'read',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: null,
+			},
+		});
+
+		plan.permissions.update.push({
+			roleKey: 'writer',
+			collection: 'articles',
+			action: 'update',
+			changes: { fields: { before: null, after: ['title'] } },
+		});
+
+		plan.permissions.update.push({
+			roleKey: 'writer',
+			collection: 'pages',
+			action: 'update',
+			changes: { fields: { before: null, after: ['body'] } },
+		});
+
+		plan.permissions.delete.push({ roleKey: 'writer', collection: 'articles', action: 'delete' });
+		plan.permissions.delete.push({ roleKey: 'writer', collection: 'pages', action: 'delete' });
+		return plan;
+	}
+
+	it('runs every create then every update across kinds, then every delete, in dependency order', async () => {
+		await applyConfigPlan(finalizedMixedPlan(), { destructive: true, context });
+
+		expect(order).toEqual([
+			'role:create:editor',
+			'role:create:author',
+			'role:update:r-viewer',
+			'role:update:r-guest',
+			'perm:create:create',
+			'perm:create:read',
+			'perm:update:p-au',
+			'perm:update:p-pu',
+			'role:delete:r-old1',
+			'role:delete:r-old2',
+			'perm:delete:p-ad',
+			'perm:delete:p-pd',
+		]);
+	});
+
+	it('returns a result folded from each kind outcome', async () => {
+		const result = await applyConfigPlan(finalizedMixedPlan(), { destructive: true, context });
+
+		expect(result).toEqual({
+			roles: { created: ['editor', 'author'], updated: ['viewer', 'guest'], deleted: ['old_one', 'old_two'] },
+			permissions: { created: 2, updated: 2, deleted: 2 },
+		});
+	});
+});
+
+describe('applyConfigPlan:events and post-commit ordering', () => {
+	const order: string[] = [];
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		order.length = 0;
+
+		trxRows = {
+			directus_roles: [
+				{ id: 'r-viewer', key: 'viewer' },
+				{ id: 'r-old', key: 'old_role' },
+				{ id: 'r-writer', key: 'writer' },
+			],
+			directus_permissions: [
+				{ id: 'p-au', role: 'r-writer', collection: 'articles', action: 'update' },
+				{ id: 'p-pd', role: 'r-writer', collection: 'pages', action: 'read' },
+			],
+		};
+
+		transactionSpy.mockImplementation(async (cb: any) => {
+			const result = await cb(trxStub);
+			order.push('commit');
+			return result;
+		});
+
+		vi.mocked(flushCaches).mockImplementation(async () => {
+			order.push('flush');
+		});
+
+		vi.mocked(emitter.emitActionAndWait).mockImplementation(async (event: string | string[]) => {
+			order.push(`dispatch:${event}`);
+		});
+
+		rolesService.createOne.mockImplementation(async (_data: unknown, opts: ConfigApplyMutationOptions) => {
+			order.push('mutate:role:create');
+			opts.bypassEmitAction(actionEvent('roles.create', { key: 'editor' }));
+			return 'editor';
+		});
+
+		rolesService.updateOne.mockImplementation(async (id: string, _data: unknown, opts: ConfigApplyMutationOptions) => {
+			order.push('mutate:role:update');
+			opts.bypassEmitAction(actionEvent('roles.update', { key: 'viewer' }));
+			return id;
+		});
+
+		permissionsService.createOne.mockImplementation(async (_data: unknown, opts: ConfigApplyMutationOptions) => {
+			order.push('mutate:perm:create');
+			opts.bypassEmitAction(actionEvent('permissions.create', { collection: 'items' }));
+			return 1;
+		});
+
+		permissionsService.updateOne.mockImplementation(
+			async (id: string, _data: unknown, opts: ConfigApplyMutationOptions) => {
+				order.push('mutate:perm:update');
+				opts.bypassEmitAction(actionEvent('permissions.update', { collection: 'articles' }));
+				return id;
+			}
+		);
+
+		rolesService.deleteOne.mockImplementation(async (_id: string, opts: ConfigApplyMutationOptions) => {
+			order.push('mutate:role:delete');
+			opts.bypassEmitAction(actionEvent('permissions.delete', { cascade: true }));
+			opts.bypassEmitAction(actionEvent('roles.delete', { key: 'old_role' }));
+			return 'old_role';
+		});
+
+		permissionsService.deleteOne.mockImplementation(async (_id: string, opts: ConfigApplyMutationOptions) => {
+			order.push('mutate:perm:delete');
+			opts.bypassEmitAction(actionEvent('permissions.delete', { standalone: true }));
+			return 1;
+		});
+	});
+
+	function cascadePlan(): ConfigPlan {
+		const plan = emptyPlan();
+		plan.roles.create.push({ key: 'editor', name: 'Editor', admin_access: false, app_access: true });
+		plan.roles.update.push({ key: 'viewer', changes: { name: { before: 'V', after: 'Viewer' } } });
+		plan.roles.delete.push('old_role');
+
+		plan.permissions.create.push({
+			roleKey: 'writer',
+			permission: {
+				collection: 'items',
+				action: 'read',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: null,
+			},
+		});
+
+		plan.permissions.update.push({
+			roleKey: 'writer',
+			collection: 'articles',
+			action: 'update',
+			changes: { fields: { before: null, after: ['title'] } },
+		});
+
+		plan.permissions.delete.push({ roleKey: 'writer', collection: 'pages', action: 'read' });
+		return plan;
+	}
+
+	it('queues create, update, and delete events across kinds and dispatches them after commit and cache flush', async () => {
+		await applyConfigPlan(cascadePlan(), { destructive: true, context });
+
+		expect(order).toEqual([
+			'mutate:role:create',
+			'mutate:role:update',
+			'mutate:perm:create',
+			'mutate:perm:update',
+			'mutate:role:delete',
+			'mutate:perm:delete',
+			'commit',
+			'flush',
+			'dispatch:roles.create',
+			'dispatch:roles.update',
+			'dispatch:permissions.create',
+			'dispatch:permissions.update',
+			'dispatch:permissions.delete',
+			'dispatch:roles.delete',
+			'dispatch:permissions.delete',
+		]);
+	});
+
+	it('dispatches each queued event with its metadata, nested cascade permission-delete before role-delete', async () => {
+		await applyConfigPlan(cascadePlan(), { destructive: true, context });
+
+		expect(emitter.emitActionAndWait).toHaveBeenNthCalledWith(2, 'roles.update', { key: 'viewer' }, eventContext);
+
+		expect(emitter.emitActionAndWait).toHaveBeenNthCalledWith(
+			4,
+			'permissions.update',
+			{ collection: 'articles' },
+			eventContext
+		);
+
+		expect(emitter.emitActionAndWait).toHaveBeenNthCalledWith(5, 'permissions.delete', { cascade: true }, eventContext);
+		expect(emitter.emitActionAndWait).toHaveBeenNthCalledWith(6, 'roles.delete', { key: 'old_role' }, eventContext);
+
+		expect(emitter.emitActionAndWait).toHaveBeenNthCalledWith(
+			7,
+			'permissions.delete',
+			{ standalone: true },
+			eventContext
+		);
+	});
+});
+
+describe('applyConfigPlan:mutation payloads', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		transactionSpy.mockImplementation(async (cb: any) => cb(trxStub));
+
+		trxRows = {
+			directus_roles: [
+				{ id: 'r-viewer', key: 'viewer' },
+				{ id: 'r-writer', key: 'writer' },
+			],
+			directus_permissions: [{ id: 'p-au', role: 'r-writer', collection: 'articles', action: 'update' }],
+		};
+	});
+
+	it('writes the exact canonical create payload and the exact multi-field update payloads', async () => {
+		const plan = emptyPlan();
+		plan.roles.create.push({ key: 'editor', name: 'Editor', admin_access: false, app_access: true });
+
+		plan.roles.update.push({
+			key: 'viewer',
+			changes: { name: { before: 'V', after: 'Viewer' }, enforce_tfa: { before: false, after: true } },
+		});
+
+		plan.permissions.update.push({
+			roleKey: 'writer',
+			collection: 'articles',
+			action: 'update',
+			changes: {
+				fields: { before: null, after: ['body', 'title'] },
+				presets: { before: null, after: { status: 'draft' } },
+			},
+		});
+
+		await applyConfigPlan(plan, { context });
+
+		expect(rolesService.createOne).toHaveBeenCalledWith(
+			{
+				key: 'editor',
+				name: 'Editor',
+				icon: 'supervised_user_circle',
+				description: null,
+				admin_access: false,
+				app_access: true,
+				enforce_tfa: false,
+				ip_access: null,
+			},
+			expect.anything()
+		);
+
+		expect(rolesService.updateOne).toHaveBeenCalledWith(
+			'r-viewer',
+			{ name: 'Viewer', enforce_tfa: true },
+			expect.anything()
+		);
+
+		expect(permissionsService.updateOne).toHaveBeenCalledWith(
+			'p-au',
+			{ fields: ['body', 'title'], presets: { status: 'draft' } },
+			expect.anything()
+		);
+	});
+});
+
+describe('applyConfigPlan:role-state refresh', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		transactionSpy.mockImplementation(async (cb: any) => cb(trxStub));
+		trxRows = { directus_roles: [], directus_permissions: [] };
+
+		rolesService.createOne.mockImplementation(async (data: { key: string }) => {
+			const id = `r-${data.key}`;
+			trxRows['directus_roles']!.push({ id, key: data.key });
+			return id;
+		});
+	});
+
+	it('reads role state after role creation so a permission can target the newly created role', async () => {
+		const plan = emptyPlan();
+		plan.roles.create.push({ key: 'editor', name: 'Editor', admin_access: false, app_access: true });
+
+		plan.permissions.create.push({
+			roleKey: 'editor',
+			permission: {
+				collection: 'items',
+				action: 'read',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: null,
+			},
+		});
+
+		const result = await applyConfigPlan(plan, { context });
+
+		expect(permissionsService.createOne).toHaveBeenCalledWith(
+			expect.objectContaining({ role: 'r-editor' }),
+			expect.anything()
+		);
+
+		expect(result).toEqual({
+			roles: { created: ['editor'], updated: [], deleted: [] },
+			permissions: { created: 1, updated: 0, deleted: 0 },
+		});
+	});
+});
+
+describe('applyConfigPlan:per-operation handler dispatch', () => {
+	const spies: Array<{ mockRestore: () => void }> = [];
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		transactionSpy.mockImplementation(async (cb: any) => cb(trxStub));
+
+		trxRows = {
+			directus_roles: [
+				{ id: 'r-viewer', key: 'viewer' },
+				{ id: 'r-old', key: 'old_role' },
+			],
+			directus_permissions: [],
+		};
+
+		rolesService.createOne.mockResolvedValue('editor');
+		rolesService.updateOne.mockResolvedValue('r-viewer');
+		rolesService.deleteOne.mockResolvedValue('r-old');
+	});
+
+	afterEach(() => {
+		while (spies.length) spies.pop()!.mockRestore();
+	});
+
+	const cases = [
+		{
+			method: 'applyCreates',
+			destructive: false,
+			build: (plan: ConfigPlan) =>
+				plan.roles.create.push({ key: 'editor', name: 'Editor', admin_access: false, app_access: true }),
+		},
+		{
+			method: 'applyUpdates',
+			destructive: false,
+			build: (plan: ConfigPlan) =>
+				plan.roles.update.push({ key: 'viewer', changes: { name: { before: 'V', after: 'Viewer' } } }),
+		},
+		{
+			method: 'applyDeletes',
+			destructive: true,
+			build: (plan: ConfigPlan) => plan.roles.delete.push('old_role'),
+		},
+	] as const;
+
+	it.each(cases)(
+		'a plan with only $method work invokes only the roles handler.$method',
+		async ({ method, destructive, build }) => {
+			const handler = getDescriptor('roles').handler;
+			const applyCreates = vi.spyOn(handler, 'applyCreates');
+			const applyUpdates = vi.spyOn(handler, 'applyUpdates');
+			const applyDeletes = vi.spyOn(handler, 'applyDeletes');
+			spies.push(applyCreates, applyUpdates, applyDeletes);
+
+			const byMethod = { applyCreates, applyUpdates, applyDeletes };
+
+			const plan = emptyPlan();
+			build(plan);
+
+			await applyConfigPlan(plan, { destructive, context });
+
+			for (const candidate of ['applyCreates', 'applyUpdates', 'applyDeletes'] as const) {
+				if (candidate === method) {
+					expect(byMethod[candidate]).toHaveBeenCalledTimes(1);
+				} else {
+					expect(byMethod[candidate]).not.toHaveBeenCalled();
+				}
+			}
+		}
+	);
+});
+
+describe('applyConfigPlan:empty operations touch nothing', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	function poison<K extends ConfigKindTypes>(): ApplyContext<K> {
+		return {
+			get database(): never {
+				throw new Error('touched database');
+			},
+			get schema(): never {
+				throw new Error('touched schema');
+			},
+			get securityContext(): never {
+				throw new Error('touched securityContext');
+			},
+			get mutationOptions(): never {
+				throw new Error('touched mutationOptions');
+			},
+			dependency: <D extends Extract<keyof K['ApplyDependencies'], ConfigKind>>(_kind: D): never => {
+				throw new Error('touched dependency');
+			},
+		};
+	}
+
+	const cases = [
+		{
+			name: 'roles.applyCreates',
+			run: () => getDescriptor('roles').handler.applyCreates([], poison()),
+			outcome: { op: 'create', created: [] },
+		},
+		{
+			name: 'roles.applyUpdates',
+			run: () => getDescriptor('roles').handler.applyUpdates([], poison()),
+			outcome: { op: 'update', updated: [] },
+		},
+		{
+			name: 'roles.applyDeletes',
+			run: () => getDescriptor('roles').handler.applyDeletes([], poison()),
+			outcome: { op: 'delete', deleted: [] },
+		},
+		{
+			name: 'permissions.applyCreates',
+			run: () => getDescriptor('permissions').handler.applyCreates([], poison()),
+			outcome: { op: 'create', count: 0 },
+		},
+		{
+			name: 'permissions.applyUpdates',
+			run: () => getDescriptor('permissions').handler.applyUpdates([], poison()),
+			outcome: { op: 'update', count: 0 },
+		},
+		{
+			name: 'permissions.applyDeletes',
+			run: () => getDescriptor('permissions').handler.applyDeletes([], poison()),
+			outcome: { op: 'delete', count: 0 },
+		},
+	];
+
+	it.each(cases)(
+		'$name returns its empty outcome for an empty slice without touching context or constructing a service',
+		async ({ run, outcome }) => {
+			const result = await run();
+
+			expect(result).toEqual(outcome);
+			expect(RolesService).not.toHaveBeenCalled();
+			expect(PermissionsService).not.toHaveBeenCalled();
+		}
+	);
+});
+
+describe('applyConfigPlan:mutation options', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		transactionSpy.mockImplementation(async (cb: any) => cb(trxStub));
+
+		trxRows = {
+			directus_roles: [
+				{ id: 'r-viewer', key: 'viewer' },
+				{ id: 'r-old', key: 'old_role' },
+				{ id: 'r-writer', key: 'writer' },
+			],
+			directus_permissions: [
+				{ id: 'p-au', role: 'r-writer', collection: 'articles', action: 'update' },
+				{ id: 'p-del', role: 'r-writer', collection: 'pages', action: 'read' },
+			],
+		};
+
+		rolesService.createOne.mockResolvedValue('editor');
+		rolesService.updateOne.mockResolvedValue('r-viewer');
+		rolesService.deleteOne.mockResolvedValue('r-old');
+		permissionsService.createOne.mockResolvedValue(1);
+		permissionsService.updateOne.mockResolvedValue('p-au');
+		permissionsService.deleteOne.mockResolvedValue('p-del');
+	});
+
+	it('builds one options object with exactly the four intended fields and forwards that reference to every operation method', async () => {
+		const plan = emptyPlan();
+		plan.roles.create.push({ key: 'editor', name: 'Editor', admin_access: false, app_access: true });
+		plan.roles.update.push({ key: 'viewer', changes: { name: { before: 'V', after: 'Viewer' } } });
+		plan.roles.delete.push('old_role');
+
+		plan.permissions.create.push({
+			roleKey: 'writer',
+			permission: {
+				collection: 'items',
+				action: 'read',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: null,
+			},
+		});
+
+		plan.permissions.update.push({
+			roleKey: 'writer',
+			collection: 'articles',
+			action: 'update',
+			changes: { fields: { before: null, after: ['title'] } },
+		});
+
+		plan.permissions.delete.push({ roleKey: 'writer', collection: 'pages', action: 'read' });
+
+		await applyConfigPlan(plan, { destructive: true, context });
+
+		const options = rolesService.createOne.mock.calls[0]![1];
+
+		expect(options).toEqual({
+			autoPurgeCache: false,
+			autoPurgeSystemCache: false,
+			bypassLimits: true,
+			bypassEmitAction: expect.any(Function),
+		});
+
+		expect(Object.keys(options).sort()).toEqual([
+			'autoPurgeCache',
+			'autoPurgeSystemCache',
+			'bypassEmitAction',
+			'bypassLimits',
+		]);
+
+		const forwarded = [
+			rolesService.createOne.mock.calls[0]![1],
+			rolesService.updateOne.mock.calls[0]![2],
+			rolesService.deleteOne.mock.calls[0]![1],
+			permissionsService.createOne.mock.calls[0]![1],
+			permissionsService.updateOne.mock.calls[0]![2],
+			permissionsService.deleteOne.mock.calls[0]![1],
+		];
+
+		for (const call of forwarded) expect(call).toBe(options);
+	});
+});
+
+describe('applyConfigPlan:result assembly and boundaries', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		transactionSpy.mockImplementation(async (cb: any) => cb(trxStub));
+		trxRows = { directus_roles: [], directus_permissions: [] };
+	});
+
+	it('returns each kind empty result and touches neither database nor schema for an empty plan', async () => {
+		const result = await applyConfigPlan(emptyPlan(), { context });
+
+		expect(result).toEqual({
+			roles: { created: [], updated: [], deleted: [] },
+			permissions: { created: 0, updated: 0, deleted: 0 },
+		});
+
+		expect(vi.mocked(getDatabase)).not.toHaveBeenCalled();
+		expect(vi.mocked(getSchema)).not.toHaveBeenCalled();
+		expect(transactionSpy).not.toHaveBeenCalled();
+	});
+
+	it('refuses a deletion plan before touching the database or schema', async () => {
+		const plan = emptyPlan();
+		plan.roles.delete.push('old_role');
+
+		await expect(applyConfigPlan(plan, { context })).rejects.toBeInstanceOf(DestructiveChangesRequiredException);
+
+		expect(vi.mocked(getDatabase)).not.toHaveBeenCalled();
+		expect(vi.mocked(getSchema)).not.toHaveBeenCalled();
+		expect(transactionSpy).not.toHaveBeenCalled();
+	});
+
+	it('fills an inactive kind with its empty result and the active kind with the fresh outcome', async () => {
+		rolesService.createOne.mockResolvedValue('editor');
+
+		const plan = emptyPlan();
+		plan.roles.create.push({ key: 'editor', name: 'Editor', admin_access: false, app_access: true });
+
+		const result = await applyConfigPlan(plan, { context });
+
+		expect(result).toEqual({
+			roles: { created: ['editor'], updated: [], deleted: [] },
+			permissions: { created: 0, updated: 0, deleted: 0 },
+		});
+	});
+
+	it('returns a fresh result object on each apply', async () => {
+		const first = await applyConfigPlan(emptyPlan(), { context });
+		first.roles.created.push('leaked');
+
+		const second = await applyConfigPlan(emptyPlan(), { context });
+
+		expect(second.roles.created).toEqual([]);
 	});
 });

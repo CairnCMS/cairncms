@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG_KINDS, type ConfigPermission, type ConfigRole } from '../../types/config.js';
-import { canonicalizePermission, canonicalizeRole } from '../canonicalize-config-record.js';
 import { CONFIG_REGISTRY, forKind, getDescriptor, listConfigKinds } from './registry.js';
 
 describe('config registry', () => {
@@ -21,34 +20,88 @@ describe('config registry', () => {
 	});
 });
 
-describe('descriptor canonicalization matches the current canonicalizers', () => {
-	const roles: ConfigRole[] = [
-		{ key: 'a', name: 'A', admin_access: true, app_access: true },
-		{
-			key: 'b',
-			name: '',
-			admin_access: false,
-			app_access: false,
-			icon: 'star',
-			enforce_tfa: true,
-			description: 'd',
-			ip_access: ['9.9.9.9', '1.1.1.1'],
-		},
-		{ key: 'c', name: 'C', admin_access: false, app_access: true, description: null, ip_access: null },
-	];
+describe('descriptor canonicalizeValues', () => {
+	it('resolves omitted role optionals to their defaults and drops the key', () => {
+		const role: ConfigRole = { key: 'editor', name: 'Editor', admin_access: false, app_access: true };
 
-	it.each(roles)('role $key', (role) => {
-		expect(getDescriptor('roles').canonicalizeValues(role)).toEqual(canonicalizeRole(role));
+		expect(getDescriptor('roles').canonicalizeValues(role)).toEqual({
+			name: 'Editor',
+			icon: 'supervised_user_circle',
+			description: null,
+			admin_access: false,
+			app_access: true,
+			enforce_tfa: false,
+			ip_access: null,
+		});
 	});
 
-	const permissions: ConfigPermission[] = [
-		{ collection: 'a', action: 'read', permissions: {}, validation: null, presets: null, fields: ['b', 'a'] },
-		{ collection: 'x', action: 'create', permissions: { _and: [] }, validation: {}, presets: { p: 1 }, fields: null },
-	];
+	it('preserves provided role optionals', () => {
+		const role: ConfigRole = {
+			key: 'editor',
+			name: 'Editor',
+			icon: 'edit',
+			description: 'desc',
+			admin_access: true,
+			app_access: true,
+			enforce_tfa: true,
+			ip_access: ['10.0.0.0/8'],
+		};
 
-	it.each(permissions)('permission $collection/$action', (permission) => {
+		expect(getDescriptor('roles').canonicalizeValues(role)).toEqual({
+			name: 'Editor',
+			icon: 'edit',
+			description: 'desc',
+			admin_access: true,
+			app_access: true,
+			enforce_tfa: true,
+			ip_access: ['10.0.0.0/8'],
+		});
+	});
+
+	it('sorts role ip_access without mutating the input', () => {
+		const ip_access = ['10.0.0.2', '10.0.0.1'];
+		const role: ConfigRole = { key: 'editor', name: 'Editor', admin_access: false, app_access: true, ip_access };
+
+		expect(getDescriptor('roles').canonicalizeValues(role).ip_access).toEqual(['10.0.0.1', '10.0.0.2']);
+		expect(ip_access).toEqual(['10.0.0.2', '10.0.0.1']);
+	});
+
+	it('carries the permission value fields and drops identity', () => {
+		const permission: ConfigPermission = {
+			collection: 'articles',
+			action: 'read',
+			permissions: { _and: [] },
+			validation: null,
+			presets: { status: 'draft' },
+			fields: ['title'],
+		};
+
 		const record = { role: 'editor', ...permission };
-		expect(getDescriptor('permissions').canonicalizeValues(record)).toEqual(canonicalizePermission(permission));
+
+		expect(getDescriptor('permissions').canonicalizeValues(record)).toEqual({
+			permissions: { _and: [] },
+			validation: null,
+			presets: { status: 'draft' },
+			fields: ['title'],
+		});
+	});
+
+	it('sorts permission fields without mutating the input', () => {
+		const fields = ['title', 'body'];
+
+		const permission: ConfigPermission = {
+			collection: 'articles',
+			action: 'read',
+			permissions: null,
+			validation: null,
+			presets: null,
+			fields,
+		};
+
+		const record = { role: 'editor', ...permission };
+
+		expect(getDescriptor('permissions').canonicalizeValues(record).fields).toEqual(['body', 'title']);
+		expect(fields).toEqual(['title', 'body']);
 	});
 });
 
