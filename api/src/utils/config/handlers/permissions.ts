@@ -112,6 +112,8 @@ const RECORD_FIELDS: ConfigFieldDescriptor[] = [
 	},
 ];
 
+const VALUE_FIELD_ORDER = ['permissions', 'validation', 'presets', 'fields'] as const;
+
 export const permissionsDescriptor: ConfigResourceDescriptor<PermissionsKindTypes> = {
 	kind: 'permissions',
 	formatVersion: 1,
@@ -124,6 +126,7 @@ export const permissionsDescriptor: ConfigResourceDescriptor<PermissionsKindType
 	},
 	documentIdentityFields: [ROLE_FIELD],
 	recordFields: RECORD_FIELDS,
+	valueFieldOrder: VALUE_FIELD_ORDER,
 	projectDocuments: (documents) => ({
 		records: documents.flatMap((set) => set.permissions.map((permission) => ({ role: set.role, ...permission }))),
 		anchors: documents.map((set) => ({ role: set.role })),
@@ -143,7 +146,7 @@ export const permissionsDescriptor: ConfigResourceDescriptor<PermissionsKindType
 	identityKey: (identity) => JSON.stringify([identity.role, identity.collection, identity.action]),
 	identityOfDelete: (entry) => ({ role: entry.roleKey, collection: entry.collection, action: entry.action }),
 	canonicalizeValues: (record) =>
-		composeValues(RECORD_FIELDS, record as unknown as Record<string, unknown>) as PermissionValues,
+		composeValues(RECORD_FIELDS, VALUE_FIELD_ORDER, record as unknown as Record<string, unknown>) as PermissionValues,
 	toCreateEntry: (record) => {
 		const { role, ...permission } = record;
 		return { roleKey: role, permission };

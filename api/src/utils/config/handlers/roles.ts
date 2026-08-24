@@ -109,7 +109,7 @@ const RECORD_FIELDS: ConfigFieldDescriptor[] = [
 		sensitivity: NON_SECRET,
 		snapshotSafe: true,
 		mutable: true,
-		omissionPreservesCurrent: false,
+		omissionPreservesCurrent: true,
 	},
 	{
 		name: 'enforce_tfa',
@@ -121,7 +121,7 @@ const RECORD_FIELDS: ConfigFieldDescriptor[] = [
 		sensitivity: NON_SECRET,
 		snapshotSafe: true,
 		mutable: true,
-		omissionPreservesCurrent: false,
+		omissionPreservesCurrent: true,
 	},
 	{
 		name: 'description',
@@ -134,7 +134,7 @@ const RECORD_FIELDS: ConfigFieldDescriptor[] = [
 		sensitivity: NON_SECRET,
 		snapshotSafe: true,
 		mutable: true,
-		omissionPreservesCurrent: false,
+		omissionPreservesCurrent: true,
 	},
 	{
 		name: 'ip_access',
@@ -147,9 +147,19 @@ const RECORD_FIELDS: ConfigFieldDescriptor[] = [
 		sensitivity: NON_SECRET,
 		snapshotSafe: true,
 		mutable: true,
-		omissionPreservesCurrent: false,
+		omissionPreservesCurrent: true,
 	},
 ];
+
+const VALUE_FIELD_ORDER = [
+	'name',
+	'icon',
+	'description',
+	'admin_access',
+	'app_access',
+	'enforce_tfa',
+	'ip_access',
+] as const;
 
 export const rolesDescriptor: ConfigResourceDescriptor<RolesKindTypes> = {
 	kind: 'roles',
@@ -163,6 +173,7 @@ export const rolesDescriptor: ConfigResourceDescriptor<RolesKindTypes> = {
 	},
 	documentIdentityFields: [KEY_FIELD],
 	recordFields: RECORD_FIELDS,
+	valueFieldOrder: VALUE_FIELD_ORDER,
 	projectDocuments: (documents) => ({
 		records: documents,
 		anchors: documents.map((document) => ({ key: document.key })),
@@ -172,7 +183,7 @@ export const rolesDescriptor: ConfigResourceDescriptor<RolesKindTypes> = {
 	identityKey: (identity) => JSON.stringify([identity.key]),
 	identityOfDelete: (entry) => ({ key: entry }),
 	canonicalizeValues: (record) =>
-		composeValues(RECORD_FIELDS, record as unknown as Record<string, unknown>) as RoleValues,
+		composeValues(RECORD_FIELDS, VALUE_FIELD_ORDER, record as unknown as Record<string, unknown>) as RoleValues,
 	toCreateEntry: (record) => record,
 	toUpdateEntry: (identity, changes) => ({ key: identity.key, changes }),
 	toDeleteEntry: (identity) => identity.key,

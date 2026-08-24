@@ -93,6 +93,8 @@ export interface ConfigResourceDescriptor<K extends ConfigKindTypes> {
 	};
 	documentIdentityFields: ConfigFieldDescriptor[];
 	recordFields: ConfigFieldDescriptor[];
+	/** Value (non-identityComponent) field names in canonical output order, which may differ from `recordFields` schema order. */
+	valueFieldOrder: readonly string[];
 	projectDocuments(documents: K['Document'][]): { records: K['Record'][]; anchors: K['DocumentIdentity'][] };
 	composeDocuments(records: K['Record'][], anchors: K['DocumentIdentity'][]): K['Document'][];
 	identityOf(record: K['Record']): K['Identity'];
