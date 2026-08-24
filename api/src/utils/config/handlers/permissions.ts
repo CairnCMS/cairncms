@@ -19,6 +19,7 @@ import type {
 	ConfigResourceDescriptor,
 	FieldSensitivity,
 	KindPlan,
+	PlanContext,
 	ReadContext,
 	ValidationContext,
 } from '../descriptor.js';
@@ -287,6 +288,19 @@ function validateDesired(
 	return failures;
 }
 
+function postPlan(
+	plan: KindPlan<PermissionsKindTypes>,
+	context: PlanContext<PermissionsKindTypes>
+): KindPlan<PermissionsKindTypes> {
+	const deletedRoleKeys = new Set(context.dependency('roles').delete);
+
+	return {
+		create: plan.create,
+		update: plan.update,
+		delete: plan.delete.filter((entry) => !deletedRoleKeys.has(entry.roleKey)),
+	};
+}
+
 export const permissionsDescriptor: ConfigResourceDescriptor<PermissionsKindTypes> = {
 	kind: 'permissions',
 	formatVersion: 1,
@@ -332,5 +346,5 @@ export const permissionsDescriptor: ConfigResourceDescriptor<PermissionsKindType
 		changes,
 	}),
 	toDeleteEntry: (identity) => ({ roleKey: identity.role, collection: identity.collection, action: identity.action }),
-	handler: { ...createUnwiredHandler<PermissionsKindTypes>(), readCurrent, validateDesired },
+	handler: { ...createUnwiredHandler<PermissionsKindTypes>(), readCurrent, validateDesired, postPlan },
 };

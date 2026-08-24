@@ -308,5 +308,5 @@ export const rolesDescriptor: ConfigResourceDescriptor<RolesKindTypes> = {
 	toCreateEntry: (record) => record,
 	toUpdateEntry: (identity, changes) => ({ key: identity.key, changes }),
 	toDeleteEntry: (identity) => identity.key,
-	handler: { ...createUnwiredHandler<RolesKindTypes>(), readCurrent, validateDesired },
+	handler: { ...createUnwiredHandler<RolesKindTypes>(), readCurrent, validateDesired, postPlan: (plan) => plan },
 };

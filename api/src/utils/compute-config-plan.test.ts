@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computeConfigPlan, validateConfigPlan } from './compute-config-plan.js';
+import { rolesDescriptor } from './config/handlers/roles.js';
 import type { CairnConfig, ConfigKind } from '../types/config.js';
 
 const emptyManifest = { version: 1 as const, resources: ['roles' as const, 'permissions' as const] };
@@ -341,6 +342,8 @@ describe('validateConfigPlan', () => {
 });
 
 describe('managed scope', () => {
+	afterEach(() => vi.restoreAllMocks());
+
 	it('leaves every permission alone in all directions when the manifest declares only roles', () => {
 		const current = makeConfig({
 			roles: [makeRole('editor'), makeRole('viewer')],
@@ -412,6 +415,65 @@ describe('managed scope', () => {
 		expect(computeConfigPlan(current, desired)).toEqual({
 			roles: { create: [], update: [], delete: [] },
 			permissions: { create: [], update: [], delete: [] },
+		});
+	});
+
+	it('publishes each finalized dependency plan before planning dependents', () => {
+		vi.spyOn(rolesDescriptor.handler, 'postPlan').mockImplementation((plan) => ({
+			...plan,
+			delete: [...plan.delete, 'phantom'],
+		}));
+
+		const current = makeConfig({
+			roles: [makeRole('editor'), makeRole('phantom')],
+			permissions: [{ role: 'phantom', permissions: [makePerm('articles', 'read')] }],
+		});
+
+		const desired = makeConfig({
+			roles: [makeRole('editor'), makeRole('phantom')],
+			permissions: [{ role: 'phantom', permissions: [] }],
+		});
+
+		const plan = computeConfigPlan(current, desired);
+
+		expect(plan.roles.delete).toEqual(['phantom']);
+		expect(plan.permissions.delete).toEqual([]);
+	});
+
+	it('ignores a null permissions entry while planning managed roles', () => {
+		const current = makeConfig({ roles: [makeRole('editor')] });
+
+		const desired = makeConfig({
+			manifest: manifestFor('roles'),
+			roles: [makeRole('viewer')],
+			permissions: [null] as unknown as CairnConfig['permissions'],
+		});
+
+		expect(computeConfigPlan(current, desired)).toEqual({
+			roles: { create: [makeRole('viewer')], update: [], delete: ['editor'] },
+			permissions: { create: [], update: [], delete: [] },
+		});
+	});
+
+	it('ignores a null roles entry while planning managed permissions', () => {
+		const current = makeConfig({
+			roles: [makeRole('editor')],
+			permissions: [{ role: 'editor', permissions: [makePerm('articles', 'read')] }],
+		});
+
+		const desired = makeConfig({
+			manifest: manifestFor('permissions'),
+			roles: [null] as unknown as CairnConfig['roles'],
+			permissions: [{ role: 'editor', permissions: [] }],
+		});
+
+		expect(computeConfigPlan(current, desired)).toEqual({
+			roles: { create: [], update: [], delete: [] },
+			permissions: {
+				create: [],
+				update: [],
+				delete: [{ roleKey: 'editor', collection: 'articles', action: 'read' }],
+			},
 		});
 	});
 
