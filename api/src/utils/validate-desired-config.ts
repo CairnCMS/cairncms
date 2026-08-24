@@ -1,71 +1,21 @@
 import { PUBLIC_ROLE_KEY } from '@cairncms/constants';
-import { normalizeRoleKey } from '@cairncms/utils';
 import Joi from 'joi';
 import { isPlainObject } from 'lodash-es';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import { ConfigUnsupportedVersionException } from '../exceptions/config-unsupported-version.js';
 import { CONFIG_KINDS, type ConfigFailure, type ConfigKind, type ConfigManifest } from '../types/config.js';
-import {
-	PERMISSION_COLLECTION_MAX_LENGTH,
-	ROLE_ICON_MAX_LENGTH,
-	ROLE_KEY_MAX_LENGTH,
-	ROLE_NAME_MAX_LENGTH,
-	SUPPORTED_ACTIONS,
-	SUPPORTED_MANIFEST_VERSION,
-} from './config-contract.js';
+import { buildDocumentSchema } from './config/field-schema.js';
+import { permissionsDescriptor } from './config/handlers/permissions.js';
+import { rolesDescriptor } from './config/handlers/roles.js';
+import { SUPPORTED_MANIFEST_VERSION } from './config-contract.js';
 import { replaceControlCharacters, safeLogFragment } from './safe-log-fragment.js';
 
 /** Callers keep the input object, so coercing "false" would validate while the planner sees a truthy string. */
 const VALIDATE_OPTIONS = { convert: false, abortEarly: false } as const;
 
-const ROLE_KEY_GRAMMAR = Joi.string()
-	.min(1)
-	.max(ROLE_KEY_MAX_LENGTH)
-	.custom((value, helpers) => (normalizeRoleKey(value) === value ? value : helpers.error('roleKey.grammar')))
-	.messages({
-		'roleKey.grammar':
-			'{{#label}} must be lowercase alphanumeric with underscores, and cannot start with a digit or underscore.',
-	});
-
-const ROLE_RECORD_KEY = ROLE_KEY_GRAMMAR.invalid(PUBLIC_ROLE_KEY).messages({
-	'any.invalid': '{{#label}} is reserved for public permissions and cannot name a role.',
-});
-
-/** Operator-authored field names and filter operators live inside, so only the container is checked. */
-const POLICY_OBJECT = Joi.object().unknown().allow(null);
-
-const STRING_LIST = Joi.array().items(Joi.string().allow('')).allow(null);
-
-const ROLE_RECORD = Joi.object({
-	key: ROLE_RECORD_KEY.required(),
-	name: Joi.string().allow('').max(ROLE_NAME_MAX_LENGTH).required(),
-	admin_access: Joi.boolean().required(),
-	app_access: Joi.boolean().required(),
-	icon: Joi.string().allow('').max(ROLE_ICON_MAX_LENGTH),
-	enforce_tfa: Joi.boolean(),
-	description: Joi.string().allow('', null),
-	ip_access: STRING_LIST,
-});
-
-const PERMISSION = Joi.object({
-	collection: Joi.string().min(1).max(PERMISSION_COLLECTION_MAX_LENGTH).required(),
-	action: Joi.string()
-		.valid(...SUPPORTED_ACTIONS)
-		.required(),
-	permissions: POLICY_OBJECT.required(),
-	validation: POLICY_OBJECT.required(),
-	presets: POLICY_OBJECT.required(),
-	fields: STRING_LIST.required(),
-});
-
-const PERMISSION_SET_RECORD = Joi.object({
-	role: ROLE_KEY_GRAMMAR.required(),
-	permissions: Joi.array().items(PERMISSION).required(),
-});
-
 const RECORD_SCHEMA: Record<ConfigKind, Joi.ObjectSchema> = {
-	roles: ROLE_RECORD,
-	permissions: PERMISSION_SET_RECORD,
+	roles: buildDocumentSchema(rolesDescriptor),
+	permissions: buildDocumentSchema(permissionsDescriptor),
 };
 
 const MANIFEST = Joi.object({
