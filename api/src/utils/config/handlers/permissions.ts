@@ -31,6 +31,7 @@ export interface PermissionsKindTypes {
 	Changes: PermissionFieldChanges;
 	ReadDependencyState: undefined;
 	ApplyDependencyState: undefined;
+	ReadDependencies: { roles: RolesKindTypes['ReadDependencyState'] };
 	PlanDependencies: { roles: KindPlan<RolesKindTypes> };
 	ApplyDependencies: { roles: RolesKindTypes['ApplyDependencyState'] };
 	Enrichment: { warnings: ConfigPlanWarning[] };

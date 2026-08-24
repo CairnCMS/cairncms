@@ -1,10 +1,23 @@
 import type { Knex } from 'knex';
 import type { SchemaOverview } from '@cairncms/types';
 import type { ConfigApplySecurityContext, ConfigFailure, ConfigKind, ConfigPlanChange } from '../../types/config.js';
+import type { MutationOptions } from '../../types/index.js';
 
 export type ConfigOperation = 'create' | 'update' | 'delete';
 
 export type ConfigReadMode = 'full' | 'identity';
+
+/**
+ * The four config-controlled mutation options. Each literal is intersected with its MutationOptions source, so a
+ * removed or widened upstream field fails here. Handlers forward one mutable object so nested mutations share the
+ * event sink. Services may add fields such as preMutationException.
+ */
+export interface ConfigApplyMutationOptions {
+	autoPurgeCache: false & NonNullable<MutationOptions['autoPurgeCache']>;
+	autoPurgeSystemCache: false & NonNullable<MutationOptions['autoPurgeSystemCache']>;
+	bypassLimits: true & NonNullable<MutationOptions['bypassLimits']>;
+	bypassEmitAction: NonNullable<MutationOptions['bypassEmitAction']>;
+}
 
 export type FieldSensitivity =
 	| { secret: false; redact: 'none' }
@@ -54,6 +67,7 @@ export interface ConfigKindTypes {
 	Changes: unknown;
 	ReadDependencyState: unknown;
 	ApplyDependencyState: unknown;
+	ReadDependencies: ConfigDependencyMap;
 	PlanDependencies: ConfigDependencyMap;
 	ApplyDependencies: ConfigDependencyMap;
 	Enrichment: unknown;
@@ -91,10 +105,12 @@ export interface ConfigResourceDescriptor<K extends ConfigKindTypes> {
 	handler: ConfigResourceHandler<K>;
 }
 
-export interface ReadContext {
+export interface ReadContext<K extends ConfigKindTypes> {
 	database: Knex;
 	schema: SchemaOverview;
 	readMode: ConfigReadMode;
+	/** Typed access to a declared dependency's read state; the engine throws if that dependency was not published. */
+	dependency<D extends Extract<keyof K['ReadDependencies'], ConfigKind>>(kind: D): K['ReadDependencies'][D];
 }
 
 export interface ValidationContext {
@@ -104,9 +120,8 @@ export interface ValidationContext {
 }
 
 export interface PlanContext<K extends ConfigKindTypes> {
-	/** Typed access to a declared dependency's plan; the engine throws if that dependency was not published. */
+	/** Typed access to a declared dependency's finalized plan; the engine throws if that dependency was not published. */
 	dependency<D extends Extract<keyof K['PlanDependencies'], ConfigKind>>(kind: D): K['PlanDependencies'][D];
-	currentRoleKeys: ReadonlySet<string>;
 }
 
 export interface EnrichContext {
@@ -118,12 +133,13 @@ export interface ApplyContext<K extends ConfigKindTypes> {
 	database: Knex;
 	schema: SchemaOverview;
 	securityContext: ConfigApplySecurityContext;
+	mutationOptions: ConfigApplyMutationOptions;
 	/** Typed access to a declared dependency's apply state; the engine throws if that dependency was not published. */
 	dependency<D extends Extract<keyof K['ApplyDependencies'], ConfigKind>>(kind: D): K['ApplyDependencies'][D];
 }
 
 export interface ConfigResourceHandler<K extends ConfigKindTypes> {
-	readCurrent(context: ReadContext): Promise<{
+	readCurrent(context: ReadContext<K>): Promise<{
 		records: K['Record'][];
 		documentIdentities: K['DocumentIdentity'][];
 		dependencyState: K['ReadDependencyState'];
@@ -131,6 +147,7 @@ export interface ConfigResourceHandler<K extends ConfigKindTypes> {
 	validateDesired(documents: K['Document'][], records: K['Record'][], context: ValidationContext): ConfigFailure[];
 	postPlan(plan: KindPlan<K>, context: PlanContext<K>): KindPlan<K>;
 	enrich(plan: KindPlan<K>, context: EnrichContext): Promise<K['Enrichment']>;
+	emptyEnrichment(): K['Enrichment'];
 	toChanges(plan: KindPlan<K>, enrichment: K['Enrichment']): ConfigPlanChange[];
 	applyCreates(creates: K['Create'][], context: ApplyContext<K>): Promise<Extract<K['Outcome'], { op: 'create' }>>;
 	applyUpdates(updates: K['Update'][], context: ApplyContext<K>): Promise<Extract<K['Outcome'], { op: 'update' }>>;

@@ -14,6 +14,7 @@ export function createUnwiredHandler<K extends ConfigKindTypes>(): ConfigResourc
 		validateDesired: unwired,
 		postPlan: unwired,
 		enrich: unwired,
+		emptyEnrichment: unwired,
 		toChanges: unwired,
 		applyCreates: unwired,
 		applyUpdates: unwired,

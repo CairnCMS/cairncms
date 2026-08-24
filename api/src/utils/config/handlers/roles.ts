@@ -34,6 +34,7 @@ export interface RolesKindTypes {
 	Changes: RoleFieldChanges;
 	ReadDependencyState: { currentRoleKeys: ReadonlySet<string>; roleKeyById: Map<string, string> };
 	ApplyDependencyState: { roleIdByKey: Map<string, string> };
+	ReadDependencies: NoConfigDependencies;
 	PlanDependencies: NoConfigDependencies;
 	ApplyDependencies: NoConfigDependencies;
 	Enrichment: { roleDeletionImpact: Map<string, RoleDeletionImpactEntry[]> };
