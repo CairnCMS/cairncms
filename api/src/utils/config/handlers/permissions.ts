@@ -1,4 +1,6 @@
 import type { PermissionsAction } from '@cairncms/types';
+import logger from '../../../logger.js';
+import { PermissionsService } from '../../../services/permissions.js';
 import type {
 	ApplyResult,
 	ConfigPermission,
@@ -9,7 +11,15 @@ import type {
 	PermissionValues,
 } from '../../../types/config.js';
 import { PERMISSION_COLLECTION_MAX_LENGTH, ROLE_KEY_MAX_LENGTH, SUPPORTED_ACTIONS } from '../../config-contract.js';
-import type { ConfigFieldDescriptor, ConfigResourceDescriptor, FieldSensitivity, KindPlan } from '../descriptor.js';
+import { safeLogFragment } from '../../safe-log-fragment.js';
+import type {
+	ConfigFieldDescriptor,
+	ConfigResourceDescriptor,
+	FieldSensitivity,
+	KindPlan,
+	ReadContext,
+} from '../descriptor.js';
+import { UNFILTERED, parseStoredCSV, parseStoredJSON, unreadable } from '../read-parsing.js';
 import { createUnwiredHandler } from '../stub-handler.js';
 import { composeValues, sortedOrNull } from '../values.js';
 import type { RolesKindTypes } from './roles.js';
@@ -114,6 +124,116 @@ const RECORD_FIELDS: ConfigFieldDescriptor[] = [
 
 const VALUE_FIELD_ORDER = ['permissions', 'validation', 'presets', 'fields'] as const;
 
+function assertPermissionRow(perm: Record<string, any>): void {
+	const id = perm['id'];
+	const subject = `permission id=${safeLogFragment(id)}`;
+
+	if (typeof perm['role'] !== 'string' || perm['role'] === '') {
+		throw unreadable(subject, 'column "role" is not a non-empty string');
+	}
+
+	if (typeof perm['collection'] !== 'string' || perm['collection'] === '') {
+		throw unreadable(subject, 'column "collection" is not a non-empty string');
+	}
+
+	if (typeof perm['action'] !== 'string' || !SUPPORTED_ACTIONS.has(perm['action'])) {
+		throw unreadable(
+			subject,
+			`column "action" holds "${safeLogFragment(perm['action'])}", which is not a supported action`
+		);
+	}
+}
+
+async function readCurrent(context: ReadContext<PermissionsKindTypes>): Promise<{
+	records: FlatPermissionRecord[];
+	documentIdentities: { role: string }[];
+	dependencyState: undefined;
+}> {
+	const { roleKeyById } = context.dependency('roles');
+	const permissionsService = new PermissionsService({ knex: context.database, schema: context.schema });
+	const rows = await permissionsService.readByQuery({ limit: -1 }, UNFILTERED);
+
+	const permissionsByRoleKey = new Map<string, ConfigPermission[]>();
+	const seen = new Set<string>();
+	let orphanedCount = 0;
+
+	for (const perm of rows) {
+		if (perm['system'] === true) continue;
+
+		assertPermissionRow(perm);
+
+		const roleId = perm['role'];
+		const roleKey = roleKeyById.get(roleId);
+
+		if (!roleKey) {
+			orphanedCount++;
+
+			logger.warn(
+				`Permission id=${safeLogFragment(perm['id'])} references non-existent role ${safeLogFragment(
+					roleId
+				)}, skipped in snapshot.`
+			);
+
+			continue;
+		}
+
+		const tupleKey = `${roleKey}::${perm['collection']}::${perm['action']}`;
+
+		if (seen.has(tupleKey)) {
+			throw new Error(
+				`Duplicate permission found: role="${safeLogFragment(roleKey)}" collection="${safeLogFragment(
+					perm['collection']
+				)}" action="${safeLogFragment(perm['action'])}". ` +
+					`Resolve duplicates in the admin UI or database before running config snapshot.`
+			);
+		}
+
+		seen.add(tupleKey);
+
+		if (!permissionsByRoleKey.has(roleKey)) {
+			permissionsByRoleKey.set(roleKey, []);
+		}
+
+		permissionsByRoleKey.get(roleKey)!.push({
+			collection: perm['collection'],
+			action: perm['action'],
+			permissions: parseStoredJSON('permissions', perm['id'], perm['permissions']),
+			validation: parseStoredJSON('validation', perm['id'], perm['validation']),
+			presets: parseStoredJSON('presets', perm['id'], perm['presets']),
+			fields: parseStoredCSV(perm['id'], perm['fields']),
+		});
+	}
+
+	if (orphanedCount > 0) {
+		logger.warn(
+			`Skipped ${orphanedCount} orphaned permission(s) referencing non-existent roles. ` +
+				`This indicates database inconsistency or out-of-band modification. ` +
+				`Clean up these rows directly in the database before relying on this snapshot as authoritative.`
+		);
+	}
+
+	const roleKeys = [...permissionsByRoleKey.keys()].sort((a, b) => a.localeCompare(b));
+	const records: FlatPermissionRecord[] = [];
+
+	for (const roleKey of roleKeys) {
+		const perms = permissionsByRoleKey.get(roleKey)!;
+
+		perms.sort((a, b) => {
+			const byCollection = a.collection.localeCompare(b.collection);
+			if (byCollection !== 0) return byCollection;
+			return a.action.localeCompare(b.action);
+		});
+
+		for (const perm of perms) records.push({ role: roleKey, ...perm });
+	}
+
+	return {
+		records,
+		documentIdentities: roleKeys.map((role) => ({ role })),
+		dependencyState: undefined,
+	};
+}
+
 export const permissionsDescriptor: ConfigResourceDescriptor<PermissionsKindTypes> = {
 	kind: 'permissions',
 	formatVersion: 1,
@@ -127,6 +247,7 @@ export const permissionsDescriptor: ConfigResourceDescriptor<PermissionsKindType
 	documentIdentityFields: [ROLE_FIELD],
 	recordFields: RECORD_FIELDS,
 	valueFieldOrder: VALUE_FIELD_ORDER,
+	emittedDocumentSubject: (identity) => ({ label: 'permissions for role key', value: identity.role }),
 	projectDocuments: (documents) => ({
 		records: documents.flatMap((set) => set.permissions.map((permission) => ({ role: set.role, ...permission }))),
 		anchors: documents.map((set) => ({ role: set.role })),
@@ -158,5 +279,5 @@ export const permissionsDescriptor: ConfigResourceDescriptor<PermissionsKindType
 		changes,
 	}),
 	toDeleteEntry: (identity) => ({ roleKey: identity.role, collection: identity.collection, action: identity.action }),
-	handler: createUnwiredHandler<PermissionsKindTypes>(),
+	handler: { ...createUnwiredHandler<PermissionsKindTypes>(), readCurrent },
 };

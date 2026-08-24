@@ -95,6 +95,8 @@ export interface ConfigResourceDescriptor<K extends ConfigKindTypes> {
 	recordFields: ConfigFieldDescriptor[];
 	/** Value (non-identityComponent) field names in canonical output order, which may differ from `recordFields` schema order. */
 	valueFieldOrder: readonly string[];
+	/** Read-diagnostic label and raw value for a document; the engine applies `safeLogFragment` to the value centrally. */
+	emittedDocumentSubject(identity: K['DocumentIdentity']): { label: string; value: string };
 	projectDocuments(documents: K['Document'][]): { records: K['Record'][]; anchors: K['DocumentIdentity'][] };
 	composeDocuments(records: K['Record'][], anchors: K['DocumentIdentity'][]): K['Document'][];
 	identityOf(record: K['Record']): K['Identity'];
