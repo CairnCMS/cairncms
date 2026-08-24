@@ -1,12 +1,14 @@
-import { PUBLIC_ROLE_KEY } from '@cairncms/constants';
 import Joi from 'joi';
 import { isPlainObject } from 'lodash-es';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import { ConfigUnsupportedVersionException } from '../exceptions/config-unsupported-version.js';
 import { CONFIG_KINDS, type ConfigFailure, type ConfigKind, type ConfigManifest } from '../types/config.js';
+import type { ValidationContext } from './config/descriptor.js';
+import { invalid } from './config/failures.js';
 import { buildDocumentSchema } from './config/field-schema.js';
 import { permissionsDescriptor } from './config/handlers/permissions.js';
 import { rolesDescriptor } from './config/handlers/roles.js';
+import { getDescriptor, listConfigKinds } from './config/registry.js';
 import { SUPPORTED_MANIFEST_VERSION } from './config-contract.js';
 import { replaceControlCharacters, safeLogFragment } from './safe-log-fragment.js';
 
@@ -78,14 +80,6 @@ function envelopeSchema(managed: ReadonlySet<ConfigKind>): Joi.ObjectSchema {
 	return Joi.object({ manifest: Joi.any(), ...kinds });
 }
 
-function invalid(message: string): ConfigFailure {
-	return { code: 'CONFIG_INVALID', message };
-}
-
-function identityConflict(message: string): ConfigFailure {
-	return { code: 'CONFIG_IDENTITY_CONFLICT', message };
-}
-
 export function validateDesiredConfig(document: unknown, context: DesiredConfigContext): ConfigFailure[] {
 	if (!isPlainObject(document)) {
 		throw new ConfigInvalidException(`Config document in ${safeLogFragment(context.label)} must be a mapping.`);
@@ -98,75 +92,28 @@ export function validateDesiredConfig(document: unknown, context: DesiredConfigC
 	const fieldErrors = messagesOf(envelopeSchema(managed).validate(body, VALIDATE_OPTIONS).error);
 	if (fieldErrors.length > 0) return fieldErrors.map(invalid);
 
-	const declaredRoleKeys = new Set<string>();
+	const rolesManaged = managed.has('roles');
+
+	// When roles are managed, permission subjects resolve only against desired role declarations.
+	const declaredRoleKeys = rolesManaged
+		? new Set((body['roles'] as Array<{ key: string }>).map((role) => role.key))
+		: new Set<string>();
+
+	const validationContext: ValidationContext = {
+		rolesManaged,
+		declaredRoleKeys,
+		currentRoleKeys: context.currentRoleKeys,
+	};
+
 	const failures: ConfigFailure[] = [];
 
-	if (managed.has('roles')) {
-		for (const role of body['roles'] as Array<{ key: string }>) {
-			if (declaredRoleKeys.has(role.key)) {
-				failures.push(identityConflict(`Duplicate role "${safeLogFragment(role.key)}".`));
-			}
+	for (const kind of listConfigKinds()) {
+		if (!managed.has(kind)) continue;
 
-			declaredRoleKeys.add(role.key);
-		}
-	}
-
-	if (managed.has('permissions')) {
-		failures.push(
-			...permissionFailures(body['permissions'] as PermissionSetShape[], managed, declaredRoleKeys, context)
-		);
-	}
-
-	return failures;
-}
-
-type PermissionSetShape = { role: string; permissions: Array<{ collection: string; action: string }> };
-
-function permissionFailures(
-	sets: PermissionSetShape[],
-	managed: ReadonlySet<ConfigKind>,
-	declaredRoleKeys: ReadonlySet<string>,
-	context: DesiredConfigContext
-): ConfigFailure[] {
-	const failures: ConfigFailure[] = [];
-	const subjects = new Set<string>();
-
-	for (const set of sets) {
-		const subject = safeLogFragment(set.role);
-
-		if (subjects.has(set.role)) {
-			failures.push(identityConflict(`Duplicate permission set for role "${subject}".`));
-		}
-
-		subjects.add(set.role);
-
-		if (set.role !== PUBLIC_ROLE_KEY) {
-			if (managed.has('roles')) {
-				if (!declaredRoleKeys.has(set.role)) {
-					failures.push(invalid(`Permission set references role "${subject}", which no role file declares.`));
-				}
-			} else if (!context.currentRoleKeys.has(set.role)) {
-				failures.push(invalid(`Permission set references role "${subject}", which does not exist in the database.`));
-			}
-		}
-
-		const tuples = new Set<string>();
-
-		for (const permission of set.permissions) {
-			const tuple = `${permission.collection}:${permission.action}`;
-
-			if (tuples.has(tuple)) {
-				failures.push(
-					identityConflict(
-						`Duplicate permission for role "${subject}": collection "${safeLogFragment(
-							permission.collection
-						)}", action "${safeLogFragment(permission.action)}".`
-					)
-				);
-			}
-
-			tuples.add(tuple);
-		}
+		const descriptor = getDescriptor(kind);
+		const documents = body[kind];
+		const { records } = descriptor.projectDocuments(documents as never);
+		failures.push(...descriptor.handler.validateDesired(documents as never, records as never, validationContext));
 	}
 
 	return failures;

@@ -300,6 +300,22 @@ describe('validateDesiredConfig', () => {
 		expect(validate(doc, ['editor'])).toEqual([]);
 	});
 
+	it('ignores a null entry when roles are unmanaged', () => {
+		const doc = document({
+			manifest: manifest(['permissions']),
+			roles: [null],
+			permissions: [permissionSet({ role: 'public' })],
+		});
+
+		expect(validate(doc)).toEqual([]);
+	});
+
+	it('ignores a null entry when permissions are unmanaged', () => {
+		const doc = document({ manifest: manifest(['roles']), permissions: [null] });
+
+		expect(validate(doc)).toEqual([]);
+	});
+
 	it('ignores duplicate records belonging to an unmanaged kind', () => {
 		const doc = document({ manifest: manifest(['permissions']), roles: [role(), role()] });
 

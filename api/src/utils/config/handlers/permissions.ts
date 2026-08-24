@@ -1,8 +1,10 @@
+import { PUBLIC_ROLE_KEY } from '@cairncms/constants';
 import type { PermissionsAction } from '@cairncms/types';
 import logger from '../../../logger.js';
 import { PermissionsService } from '../../../services/permissions.js';
 import type {
 	ApplyResult,
+	ConfigFailure,
 	ConfigPermission,
 	ConfigPermissionSet,
 	ConfigPlanWarning,
@@ -18,7 +20,9 @@ import type {
 	FieldSensitivity,
 	KindPlan,
 	ReadContext,
+	ValidationContext,
 } from '../descriptor.js';
+import { identityConflict, invalid } from '../failures.js';
 import { UNFILTERED, parseStoredCSV, parseStoredJSON, unreadable } from '../read-parsing.js';
 import { createUnwiredHandler } from '../stub-handler.js';
 import { composeValues, sortedOrNull } from '../values.js';
@@ -234,6 +238,55 @@ async function readCurrent(context: ReadContext<PermissionsKindTypes>): Promise<
 	};
 }
 
+function validateDesired(
+	documents: ConfigPermissionSet[],
+	_records: FlatPermissionRecord[],
+	context: ValidationContext
+): ConfigFailure[] {
+	const failures: ConfigFailure[] = [];
+	const subjects = new Set<string>();
+
+	for (const set of documents) {
+		const subject = safeLogFragment(set.role);
+
+		if (subjects.has(set.role)) {
+			failures.push(identityConflict(`Duplicate permission set for role "${subject}".`));
+		}
+
+		subjects.add(set.role);
+
+		if (set.role !== PUBLIC_ROLE_KEY) {
+			if (context.rolesManaged) {
+				if (!context.declaredRoleKeys.has(set.role)) {
+					failures.push(invalid(`Permission set references role "${subject}", which no role file declares.`));
+				}
+			} else if (!context.currentRoleKeys.has(set.role)) {
+				failures.push(invalid(`Permission set references role "${subject}", which does not exist in the database.`));
+			}
+		}
+
+		const tuples = new Set<string>();
+
+		for (const permission of set.permissions) {
+			const tuple = `${permission.collection}:${permission.action}`;
+
+			if (tuples.has(tuple)) {
+				failures.push(
+					identityConflict(
+						`Duplicate permission for role "${subject}": collection "${safeLogFragment(
+							permission.collection
+						)}", action "${safeLogFragment(permission.action)}".`
+					)
+				);
+			}
+
+			tuples.add(tuple);
+		}
+	}
+
+	return failures;
+}
+
 export const permissionsDescriptor: ConfigResourceDescriptor<PermissionsKindTypes> = {
 	kind: 'permissions',
 	formatVersion: 1,
@@ -279,5 +332,5 @@ export const permissionsDescriptor: ConfigResourceDescriptor<PermissionsKindType
 		changes,
 	}),
 	toDeleteEntry: (identity) => ({ roleKey: identity.role, collection: identity.collection, action: identity.action }),
-	handler: { ...createUnwiredHandler<PermissionsKindTypes>(), readCurrent },
+	handler: { ...createUnwiredHandler<PermissionsKindTypes>(), readCurrent, validateDesired },
 };

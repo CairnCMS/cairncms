@@ -3,6 +3,7 @@ import { normalizeRoleKey } from '@cairncms/utils';
 import { RolesService } from '../../../services/roles.js';
 import type {
 	ApplyResult,
+	ConfigFailure,
 	ConfigRole,
 	RoleDeletionImpactEntry,
 	RoleFieldChanges,
@@ -18,6 +19,7 @@ import type {
 	NoConfigDependencies,
 	ReadContext,
 } from '../descriptor.js';
+import { identityConflict } from '../failures.js';
 import { UNFILTERED, assertStringArray, parseStoredCSV, unreadable } from '../read-parsing.js';
 import { createUnwiredHandler } from '../stub-handler.js';
 import { composeValues, sortedOrNull } from '../values.js';
@@ -264,6 +266,21 @@ async function readCurrent(context: ReadContext<RolesKindTypes>): Promise<{
 	};
 }
 
+function validateDesired(documents: ConfigRole[]): ConfigFailure[] {
+	const failures: ConfigFailure[] = [];
+	const seen = new Set<string>();
+
+	for (const document of documents) {
+		if (seen.has(document.key)) {
+			failures.push(identityConflict(`Duplicate role "${safeLogFragment(document.key)}".`));
+		}
+
+		seen.add(document.key);
+	}
+
+	return failures;
+}
+
 export const rolesDescriptor: ConfigResourceDescriptor<RolesKindTypes> = {
 	kind: 'roles',
 	formatVersion: 1,
@@ -291,5 +308,5 @@ export const rolesDescriptor: ConfigResourceDescriptor<RolesKindTypes> = {
 	toCreateEntry: (record) => record,
 	toUpdateEntry: (identity, changes) => ({ key: identity.key, changes }),
 	toDeleteEntry: (identity) => identity.key,
-	handler: { ...createUnwiredHandler<RolesKindTypes>(), readCurrent },
+	handler: { ...createUnwiredHandler<RolesKindTypes>(), readCurrent, validateDesired },
 };
