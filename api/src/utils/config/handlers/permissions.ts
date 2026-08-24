@@ -7,6 +7,8 @@ import type {
 	ConfigFailure,
 	ConfigPermission,
 	ConfigPermissionSet,
+	ConfigPlanChange,
+	ConfigPlanEnrichment,
 	ConfigPlanWarning,
 	PermissionFieldChanges,
 	PermissionIdentity,
@@ -17,6 +19,7 @@ import { safeLogFragment } from '../../safe-log-fragment.js';
 import type {
 	ConfigFieldDescriptor,
 	ConfigResourceDescriptor,
+	EnrichContext,
 	FieldSensitivity,
 	KindPlan,
 	PlanContext,
@@ -24,6 +27,7 @@ import type {
 	ValidationContext,
 } from '../descriptor.js';
 import { identityConflict, invalid } from '../failures.js';
+import { comparePermissionIdentity } from '../identity-order.js';
 import { UNFILTERED, parseStoredCSV, parseStoredJSON, unreadable } from '../read-parsing.js';
 import { createUnwiredHandler } from '../stub-handler.js';
 import { composeValues, sortedOrNull } from '../values.js';
@@ -301,6 +305,69 @@ function postPlan(
 	};
 }
 
+async function enrich(
+	_plan: KindPlan<PermissionsKindTypes>,
+	records: FlatPermissionRecord[],
+	context: EnrichContext
+): Promise<PermissionsKindTypes['Enrichment']> {
+	const warnings: ConfigPlanWarning[] = [];
+
+	for (const record of records) {
+		if (Object.hasOwn(context.schema.collections, record.collection)) continue;
+
+		warnings.push({
+			code: 'COLLECTION_MISSING',
+			kind: 'permissions',
+			identity: { role: record.role, collection: record.collection, action: record.action },
+			message: `Permission for role "${record.role}" targets collection "${record.collection}", which does not exist in the schema.`,
+		});
+	}
+
+	warnings.sort((a, b) => comparePermissionIdentity(a.identity, b.identity));
+
+	return { warnings };
+}
+
+function emptyEnrichment(): PermissionsKindTypes['Enrichment'] {
+	return { warnings: [] };
+}
+
+function toChanges(plan: KindPlan<PermissionsKindTypes>, _enrichment: ConfigPlanEnrichment): ConfigPlanChange[] {
+	const changes: ConfigPlanChange[] = [];
+
+	for (const create of plan.create) {
+		changes.push({
+			kind: 'permissions',
+			operation: 'create',
+			identity: { role: create.roleKey, collection: create.permission.collection, action: create.permission.action },
+			values: composeValues(RECORD_FIELDS, VALUE_FIELD_ORDER, {
+				role: create.roleKey,
+				...create.permission,
+			} as unknown as Record<string, unknown>) as PermissionValues,
+		});
+	}
+
+	for (const update of plan.update) {
+		changes.push({
+			kind: 'permissions',
+			operation: 'update',
+			identity: { role: update.roleKey, collection: update.collection, action: update.action },
+			fields: update.changes,
+		});
+	}
+
+	for (const del of plan.delete) {
+		changes.push({
+			kind: 'permissions',
+			operation: 'delete',
+			identity: { role: del.roleKey, collection: del.collection, action: del.action },
+			impact: [],
+		});
+	}
+
+	return changes;
+}
+
 export const permissionsDescriptor: ConfigResourceDescriptor<PermissionsKindTypes> = {
 	kind: 'permissions',
 	formatVersion: 1,
@@ -332,6 +399,7 @@ export const permissionsDescriptor: ConfigResourceDescriptor<PermissionsKindType
 	},
 	identityOf: (record) => ({ role: record.role, collection: record.collection, action: record.action }),
 	identityKey: (identity) => JSON.stringify([identity.role, identity.collection, identity.action]),
+	compareIdentity: comparePermissionIdentity,
 	identityOfDelete: (entry) => ({ role: entry.roleKey, collection: entry.collection, action: entry.action }),
 	canonicalizeValues: (record) =>
 		composeValues(RECORD_FIELDS, VALUE_FIELD_ORDER, record as unknown as Record<string, unknown>) as PermissionValues,
@@ -346,5 +414,13 @@ export const permissionsDescriptor: ConfigResourceDescriptor<PermissionsKindType
 		changes,
 	}),
 	toDeleteEntry: (identity) => ({ roleKey: identity.role, collection: identity.collection, action: identity.action }),
-	handler: { ...createUnwiredHandler<PermissionsKindTypes>(), readCurrent, validateDesired, postPlan },
+	handler: {
+		...createUnwiredHandler<PermissionsKindTypes>(),
+		readCurrent,
+		validateDesired,
+		postPlan,
+		enrich,
+		emptyEnrichment,
+		toChanges,
+	},
 };

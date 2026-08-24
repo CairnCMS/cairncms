@@ -4,6 +4,8 @@ import { RolesService } from '../../../services/roles.js';
 import type {
 	ApplyResult,
 	ConfigFailure,
+	ConfigPlanChange,
+	ConfigPlanEnrichment,
 	ConfigRole,
 	RoleDeletionImpactEntry,
 	RoleFieldChanges,
@@ -15,7 +17,9 @@ import { safeLogFragment } from '../../safe-log-fragment.js';
 import type {
 	ConfigFieldDescriptor,
 	ConfigResourceDescriptor,
+	EnrichContext,
 	FieldSensitivity,
+	KindPlan,
 	NoConfigDependencies,
 	ReadContext,
 } from '../descriptor.js';
@@ -23,6 +27,7 @@ import { identityConflict } from '../failures.js';
 import { UNFILTERED, assertStringArray, parseStoredCSV, unreadable } from '../read-parsing.js';
 import { createUnwiredHandler } from '../stub-handler.js';
 import { composeValues, sortedOrNull } from '../values.js';
+import { normalizeImpact, readRoleDeletionImpact } from './roles-impact.js';
 
 const DEFAULT_ROLE_ICON = 'supervised_user_circle';
 
@@ -281,6 +286,46 @@ function validateDesired(documents: ConfigRole[]): ConfigFailure[] {
 	return failures;
 }
 
+async function enrich(
+	plan: KindPlan<RolesKindTypes>,
+	_records: ConfigRole[],
+	context: EnrichContext
+): Promise<RolesKindTypes['Enrichment']> {
+	return { roleDeletionImpact: await readRoleDeletionImpact(plan.delete, context.database) };
+}
+
+function emptyEnrichment(): RolesKindTypes['Enrichment'] {
+	return { roleDeletionImpact: new Map() };
+}
+
+function toChanges(plan: KindPlan<RolesKindTypes>, enrichment: ConfigPlanEnrichment): ConfigPlanChange[] {
+	const changes: ConfigPlanChange[] = [];
+
+	for (const role of plan.create) {
+		changes.push({
+			kind: 'roles',
+			operation: 'create',
+			identity: { key: role.key },
+			values: composeValues(RECORD_FIELDS, VALUE_FIELD_ORDER, role as unknown as Record<string, unknown>) as RoleValues,
+		});
+	}
+
+	for (const update of plan.update) {
+		changes.push({ kind: 'roles', operation: 'update', identity: { key: update.key }, fields: update.changes });
+	}
+
+	for (const key of plan.delete) {
+		changes.push({
+			kind: 'roles',
+			operation: 'delete',
+			identity: { key },
+			impact: normalizeImpact(key, enrichment.roleDeletionImpact.get(key)),
+		});
+	}
+
+	return changes;
+}
+
 export const rolesDescriptor: ConfigResourceDescriptor<RolesKindTypes> = {
 	kind: 'roles',
 	formatVersion: 1,
@@ -302,11 +347,20 @@ export const rolesDescriptor: ConfigResourceDescriptor<RolesKindTypes> = {
 	composeDocuments: (records) => records,
 	identityOf: (record) => ({ key: record.key }),
 	identityKey: (identity) => JSON.stringify([identity.key]),
+	compareIdentity: (a, b) => a.key.localeCompare(b.key),
 	identityOfDelete: (entry) => ({ key: entry }),
 	canonicalizeValues: (record) =>
 		composeValues(RECORD_FIELDS, VALUE_FIELD_ORDER, record as unknown as Record<string, unknown>) as RoleValues,
 	toCreateEntry: (record) => record,
 	toUpdateEntry: (identity, changes) => ({ key: identity.key, changes }),
 	toDeleteEntry: (identity) => identity.key,
-	handler: { ...createUnwiredHandler<RolesKindTypes>(), readCurrent, validateDesired, postPlan: (plan) => plan },
+	handler: {
+		...createUnwiredHandler<RolesKindTypes>(),
+		readCurrent,
+		validateDesired,
+		postPlan: (plan) => plan,
+		enrich,
+		emptyEnrichment,
+		toChanges,
+	},
 };

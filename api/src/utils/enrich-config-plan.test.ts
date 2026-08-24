@@ -6,6 +6,8 @@ import type { MockedFunction } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import type { CairnConfig, ConfigKind, ConfigPermission, ConfigPermissionSet, ConfigPlan } from '../types/config.js';
+import { permissionsDescriptor } from './config/handlers/permissions.js';
+import { rolesDescriptor } from './config/handlers/roles.js';
 import { enrichConfigPlan } from './enrich-config-plan.js';
 
 const FUTURE = '2999-01-01T00:00:00.000Z';
@@ -47,6 +49,7 @@ describe('enrichConfigPlan', () => {
 
 	afterEach(() => {
 		tracker.reset();
+		vi.restoreAllMocks();
 	});
 
 	it('issues no impact queries when the plan deletes no roles', async () => {
@@ -361,5 +364,69 @@ describe('enrichConfigPlan', () => {
 		});
 
 		expect(enrichment.warnings).toEqual([]);
+	});
+
+	it('merges the handler fragments into exactly roleDeletionImpact and warnings', async () => {
+		const enrichment = await enrichConfigPlan(planDeletingRoles(), makeConfig(['roles', 'permissions']), {
+			schema: schemaWith(),
+			database: db,
+		});
+
+		expect(Object.keys(enrichment).sort()).toEqual(['roleDeletionImpact', 'warnings']);
+	});
+
+	it('rejects a duplicate fragment key from the handlers', async () => {
+		vi.spyOn(permissionsDescriptor.handler, 'emptyEnrichment').mockReturnValue({
+			roleDeletionImpact: new Map(),
+		} as never);
+
+		await expect(
+			enrichConfigPlan(planDeletingRoles(), makeConfig(['roles']), { schema: schemaWith(), database: db })
+		).rejects.toThrow(/duplicate fragment key "roleDeletionImpact"/);
+	});
+
+	it('computes deletion impact for an active role-delete slice even when roles are unmanaged', async () => {
+		tracker.on.select('directus_roles').response([{ id: 'r1', key: 'editor' }]);
+		tracker.on.select('directus_permissions').response([]);
+		tracker.on.select('directus_presets').response([]);
+		tracker.on.select('directus_users').response([]);
+
+		const enrichment = await enrichConfigPlan(planDeletingRoles('editor'), makeConfig(['permissions']), {
+			schema: schemaWith(),
+			database: db,
+		});
+
+		expect(enrichment.roleDeletionImpact.has('editor')).toBe(true);
+	});
+
+	it('ignores a null permissions payload when permissions are unmanaged', async () => {
+		const desired: CairnConfig = {
+			manifest: { version: 1, resources: ['roles'] },
+			roles: [],
+			permissions: [null] as unknown as CairnConfig['permissions'],
+		};
+
+		const plan: ConfigPlan = {
+			roles: { create: [], update: [], delete: [] },
+			permissions: { create: [{ roleKey: 'x', permission: perm('articles') }], update: [], delete: [] },
+		};
+
+		const enrichment = await enrichConfigPlan(plan, desired, { schema: schemaWith('articles'), database: db });
+
+		expect(enrichment.warnings).toEqual([]);
+	});
+});
+
+describe('handler emptyEnrichment', () => {
+	it('returns fresh empty values on each call', () => {
+		const a = rolesDescriptor.handler.emptyEnrichment();
+		const b = rolesDescriptor.handler.emptyEnrichment();
+		expect(a).toEqual({ roleDeletionImpact: new Map() });
+		expect(a.roleDeletionImpact).not.toBe(b.roleDeletionImpact);
+
+		const p1 = permissionsDescriptor.handler.emptyEnrichment();
+		const p2 = permissionsDescriptor.handler.emptyEnrichment();
+		expect(p1).toEqual({ warnings: [] });
+		expect(p1.warnings).not.toBe(p2.warnings);
 	});
 });

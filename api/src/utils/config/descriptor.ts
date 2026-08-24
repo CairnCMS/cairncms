@@ -1,6 +1,12 @@
 import type { Knex } from 'knex';
 import type { SchemaOverview } from '@cairncms/types';
-import type { ConfigApplySecurityContext, ConfigFailure, ConfigKind, ConfigPlanChange } from '../../types/config.js';
+import type {
+	ConfigApplySecurityContext,
+	ConfigFailure,
+	ConfigKind,
+	ConfigPlanChange,
+	ConfigPlanEnrichment,
+} from '../../types/config.js';
 import type { MutationOptions } from '../../types/index.js';
 
 export type ConfigOperation = 'create' | 'update' | 'delete';
@@ -70,7 +76,7 @@ export interface ConfigKindTypes {
 	ReadDependencies: ConfigDependencyMap;
 	PlanDependencies: ConfigDependencyMap;
 	ApplyDependencies: ConfigDependencyMap;
-	Enrichment: unknown;
+	Enrichment: Record<string, unknown>;
 	ResultSlice: unknown;
 	Outcome: { op: ConfigOperation };
 }
@@ -101,6 +107,8 @@ export interface ConfigResourceDescriptor<K extends ConfigKindTypes> {
 	composeDocuments(records: K['Record'][], anchors: K['DocumentIdentity'][]): K['Document'][];
 	identityOf(record: K['Record']): K['Identity'];
 	identityKey(identity: K['Identity']): string;
+	/** Locale ordering of two identities of this kind, for deterministic serialized output. */
+	compareIdentity(a: K['Identity'], b: K['Identity']): number;
 	identityOfDelete(entry: K['Delete']): K['Identity'];
 	canonicalizeValues(record: K['Record']): K['Values'];
 	toCreateEntry(record: K['Record']): K['Create'];
@@ -150,9 +158,9 @@ export interface ConfigResourceHandler<K extends ConfigKindTypes> {
 	}>;
 	validateDesired(documents: K['Document'][], records: K['Record'][], context: ValidationContext): ConfigFailure[];
 	postPlan(plan: KindPlan<K>, context: PlanContext<K>): KindPlan<K>;
-	enrich(plan: KindPlan<K>, context: EnrichContext): Promise<K['Enrichment']>;
+	enrich(plan: KindPlan<K>, records: K['Record'][], context: EnrichContext): Promise<K['Enrichment']>;
 	emptyEnrichment(): K['Enrichment'];
-	toChanges(plan: KindPlan<K>, enrichment: K['Enrichment']): ConfigPlanChange[];
+	toChanges(plan: KindPlan<K>, enrichment: ConfigPlanEnrichment): ConfigPlanChange[];
 	applyCreates(creates: K['Create'][], context: ApplyContext<K>): Promise<Extract<K['Outcome'], { op: 'create' }>>;
 	applyUpdates(updates: K['Update'][], context: ApplyContext<K>): Promise<Extract<K['Outcome'], { op: 'update' }>>;
 	applyDeletes(deletes: K['Delete'][], context: ApplyContext<K>): Promise<Extract<K['Outcome'], { op: 'delete' }>>;
