@@ -104,6 +104,7 @@
 		"fs-extra": "11.1.1",
 		"graphql": "16.9.0",
 		"graphql-compose": "9.0.10",
+		"graphql-ws": "5.16.0",
 		"helmet": "6.1.5",
 		"icc": "3.0.0",
 		"inquirer": "9.1.5",

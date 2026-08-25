@@ -30,11 +30,20 @@ const HEARTBEAT_PERIOD_SPEC = {
 	ceiling: Math.floor(TIMER_MAX_MS / (2 * 1000)),
 };
 
-const AUTH_TIMEOUT_SPEC = {
+const AUTH_TIMEOUT_CEILING = Math.floor(TIMER_MAX_MS / 1000);
+
+const REST_AUTH_TIMEOUT_SPEC = {
 	envVar: 'WEBSOCKETS_REST_AUTH_TIMEOUT',
 	defaultValue: 10,
 	floor: 1,
-	ceiling: Math.floor(TIMER_MAX_MS / 1000),
+	ceiling: AUTH_TIMEOUT_CEILING,
+};
+
+const GRAPHQL_AUTH_TIMEOUT_SPEC = {
+	envVar: 'WEBSOCKETS_GRAPHQL_AUTH_TIMEOUT',
+	defaultValue: 10,
+	floor: 1,
+	ceiling: AUTH_TIMEOUT_CEILING,
 };
 
 const CONN_LIMIT_CEILING = Number.MAX_SAFE_INTEGER;
@@ -60,6 +69,13 @@ const REST_CONN_LIMIT_SPEC = {
 	ceiling: CONN_LIMIT_CEILING,
 };
 
+const GRAPHQL_CONN_LIMIT_SPEC = {
+	envVar: 'WEBSOCKETS_GRAPHQL_CONN_LIMIT',
+	defaultValue: 1000,
+	floor: 1,
+	ceiling: CONN_LIMIT_CEILING,
+};
+
 const PROCESS_CONN_LIMIT_SPEC = {
 	envVar: 'WEBSOCKETS_PROCESS_CONN_LIMIT',
 	defaultValue: 1000,
@@ -67,12 +83,15 @@ const PROCESS_CONN_LIMIT_SPEC = {
 	ceiling: CONN_LIMIT_CEILING,
 };
 
-export type WebSocketRestConfig = {
+export type WebSocketTransportConfig = {
 	path: string;
 	connLimit: number;
 	auth: AuthMode;
 	authTimeoutMs: number;
 };
+
+export type WebSocketRestConfig = WebSocketTransportConfig;
+export type WebSocketGraphQLConfig = WebSocketTransportConfig;
 
 export type WebSocketSharedConfig = {
 	maxPayload: number;
@@ -86,7 +105,12 @@ export type TransportResolution<T> = { active: true; config: T } | { active: fal
 
 export type WebSocketResolution =
 	| { active: false; errors: ConfigParseError[] }
-	| { active: true; shared: WebSocketSharedConfig; rest: TransportResolution<WebSocketRestConfig> };
+	| {
+			active: true;
+			shared: WebSocketSharedConfig;
+			rest: TransportResolution<WebSocketRestConfig>;
+			graphql: TransportResolution<WebSocketGraphQLConfig>;
+	  };
 
 type LocalResult<T> = { ok: true; value: T } | { ok: false; error: ConfigParseError };
 
@@ -119,23 +143,30 @@ function parsePath(envVar: string, raw: unknown): LocalResult<string> {
 	return fail;
 }
 
-function resolveRest(env: Record<string, any>): TransportResolution<WebSocketRestConfig> {
-	const enabled = parseBoolean('WEBSOCKETS_REST_ENABLED', env['WEBSOCKETS_REST_ENABLED']);
+type CountSpec = { envVar: string; defaultValue: number; floor: number; ceiling: number };
+
+function resolveTransport(
+	env: Record<string, any>,
+	prefix: 'WEBSOCKETS_REST' | 'WEBSOCKETS_GRAPHQL',
+	connLimitSpec: CountSpec,
+	authTimeoutSpec: CountSpec
+): TransportResolution<WebSocketTransportConfig> {
+	const enabled = parseBoolean(`${prefix}_ENABLED`, env[`${prefix}_ENABLED`]);
 	if (!enabled.ok) return { active: false, errors: [enabled.error] };
 	if (enabled.value === false) return { active: false, errors: [] };
 
 	const errors: ConfigParseError[] = [];
 
-	const path = parsePath('WEBSOCKETS_REST_PATH', env['WEBSOCKETS_REST_PATH']);
+	const path = parsePath(`${prefix}_PATH`, env[`${prefix}_PATH`]);
 	if (!path.ok) errors.push(path.error);
 
-	const connLimit = parseCount(env['WEBSOCKETS_REST_CONN_LIMIT'], REST_CONN_LIMIT_SPEC);
+	const connLimit = parseCount(env[`${prefix}_CONN_LIMIT`], connLimitSpec);
 	if (!connLimit.ok) errors.push(connLimit.error);
 
-	const auth = parseAuthMode('WEBSOCKETS_REST_AUTH', env['WEBSOCKETS_REST_AUTH']);
+	const auth = parseAuthMode(`${prefix}_AUTH`, env[`${prefix}_AUTH`]);
 	if (!auth.ok) errors.push(auth.error);
 
-	const authTimeout = parseCount(env['WEBSOCKETS_REST_AUTH_TIMEOUT'], AUTH_TIMEOUT_SPEC);
+	const authTimeout = parseCount(env[`${prefix}_AUTH_TIMEOUT`], authTimeoutSpec);
 	if (!authTimeout.ok) errors.push(authTimeout.error);
 
 	if (errors.length > 0 || !path.ok || !connLimit.ok || !auth.ok || !authTimeout.ok) return { active: false, errors };
@@ -149,6 +180,33 @@ function resolveRest(env: Record<string, any>): TransportResolution<WebSocketRes
 			authTimeoutMs: authTimeout.value * 1000,
 		},
 	};
+}
+
+function resolveRest(env: Record<string, any>): TransportResolution<WebSocketRestConfig> {
+	return resolveTransport(env, 'WEBSOCKETS_REST', REST_CONN_LIMIT_SPEC, REST_AUTH_TIMEOUT_SPEC);
+}
+
+function resolveGraphQL(env: Record<string, any>): TransportResolution<WebSocketGraphQLConfig> {
+	return resolveTransport(env, 'WEBSOCKETS_GRAPHQL', GRAPHQL_CONN_LIMIT_SPEC, GRAPHQL_AUTH_TIMEOUT_SPEC);
+}
+
+function deconflictGraphQLPath(
+	rest: TransportResolution<WebSocketRestConfig>,
+	graphql: TransportResolution<WebSocketGraphQLConfig>
+): TransportResolution<WebSocketGraphQLConfig> {
+	if (rest.active && graphql.active && graphql.config.path === rest.config.path) {
+		return {
+			active: false,
+			errors: [
+				{
+					envVar: 'WEBSOCKETS_GRAPHQL_PATH',
+					message: 'WEBSOCKETS_GRAPHQL_PATH must differ from the active WEBSOCKETS_REST_PATH',
+				},
+			],
+		};
+	}
+
+	return graphql;
 }
 
 export function getWebSocketConfig(): WebSocketResolution {
@@ -194,5 +252,8 @@ export function getWebSocketConfig(): WebSocketResolution {
 		processConnLimit: processConnLimit.value,
 	};
 
-	return { active: true, shared, rest: resolveRest(env) };
+	const rest = resolveRest(env);
+	const graphql = deconflictGraphQLPath(rest, resolveGraphQL(env));
+
+	return { active: true, shared, rest, graphql };
 }
