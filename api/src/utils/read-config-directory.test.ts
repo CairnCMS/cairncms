@@ -10,6 +10,8 @@ import logger from '../logger.js';
 import { computeConfigPlan } from './compute-config-plan.js';
 import { resolveConfigRoot } from './config-path-safety.js';
 import { readConfigDirectory, readConfigManifest, readOptionalConfigManifest } from './read-config-directory.js';
+import { validateDesiredConfig } from './validate-desired-config.js';
+import { CONFIG_REGISTRY } from './config/registry.js';
 
 vi.mock('../logger.js', () => ({
 	default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
@@ -352,6 +354,93 @@ describe('readConfigDirectory', () => {
 		expect(notices[0]).toContain('edi?tor?[31m.yaml');
 		expect(notices[0]).not.toContain(String.fromCharCode(1));
 		expect(notices[0]).not.toContain(String.fromCharCode(27));
+	});
+
+	it('accepts a boolean key at the shell, and field validation then rejects it', async () => {
+		await writeManifest(['roles']);
+		await fs.mkdir(path.join(tmpDir, 'roles'), { recursive: true });
+
+		await fs.writeFile(
+			path.join(tmpDir, 'roles', 'true.yaml'),
+			toYaml({ key: true, name: 'T', admin_access: false, app_access: true })
+		);
+
+		const config = await readConfigDirectory(tmpDir);
+
+		expect((config as unknown as { roles: Array<Record<string, unknown>> }).roles[0]!['key']).toBe(true);
+
+		const failures = validateDesiredConfig(config, { label: 'true.yaml', currentRoleKeys: new Set() });
+
+		const keyFailure = failures.find(
+			(failure) => failure.code === 'CONFIG_INVALID' && failure.message.includes('roles[0].key')
+		);
+
+		expect(keyFailure).toBeDefined();
+		expect(keyFailure!.message).toContain('must be a string');
+	});
+
+	it('sanitizes the declared role key in a filename-mismatch diagnostic', async () => {
+		await writeManifest(['roles']);
+		await fs.mkdir(path.join(tmpDir, 'roles'), { recursive: true });
+
+		await fs.writeFile(
+			path.join(tmpDir, 'roles', 'editor.yaml'),
+			toYaml({ key: `ev${String.fromCharCode(1)}il`, name: 'E', admin_access: false, app_access: true })
+		);
+
+		const error = await captureRejection(() => readConfigDirectory(tmpDir));
+
+		expect(error).toBeInstanceOf(ConfigInvalidException);
+		expect(error.message).toContain('filename must match key');
+		expect(error.message).toContain('ev?il');
+		expect(error.message).not.toContain(String.fromCharCode(1));
+	});
+
+	it('sanitizes the declared role in a permission filename-mismatch diagnostic', async () => {
+		await writeManifest(['permissions']);
+		await fs.mkdir(path.join(tmpDir, 'permissions'), { recursive: true });
+
+		await fs.writeFile(
+			path.join(tmpDir, 'permissions', 'editor.yaml'),
+			toYaml({ role: `ev${String.fromCharCode(1)}il`, permissions: [] })
+		);
+
+		const error = await captureRejection(() => readConfigDirectory(tmpDir));
+
+		expect(error).toBeInstanceOf(ConfigInvalidException);
+		expect(error.message).toContain('filename must match role');
+		expect(error.message).toContain('ev?il');
+		expect(error.message).not.toContain(String.fromCharCode(1));
+	});
+
+	it('routes role directory reads through the registry descriptor', async () => {
+		const real = CONFIG_REGISTRY.roles;
+
+		CONFIG_REGISTRY.roles = {
+			...real,
+			layout: {
+				...real.layout,
+				parseDocumentFile: () => ({
+					key: 'registry_sentinel',
+					name: 'Sentinel',
+					admin_access: false,
+					app_access: true,
+				}),
+			},
+		};
+
+		try {
+			await writeManifest(['roles']);
+			await writeRole('editor');
+
+			const config = await readConfigDirectory(tmpDir);
+
+			expect(config.roles).toEqual([
+				{ key: 'registry_sentinel', name: 'Sentinel', admin_access: false, app_access: true },
+			]);
+		} finally {
+			CONFIG_REGISTRY.roles = real;
+		}
 	});
 
 	it('sends read-path notices to the caller instead of the log stream when one is supplied', async () => {

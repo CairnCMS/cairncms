@@ -10,7 +10,6 @@ import {
 	assertSafeDirectory,
 	assertSafeFile,
 	classifyConfigEntry,
-	isOwnedConfigFilename,
 	readContainedDirectory,
 	readContainedFile,
 	replaceFileAtomically,
@@ -154,33 +153,6 @@ describe('resolveConfigRoot', () => {
 
 		await expect(resolveConfigRoot(file, 'read')).rejects.toThrow(ConfigInvalidException);
 		await expect(resolveConfigRoot(file, 'write')).rejects.toThrow(ConfigInvalidException);
-	});
-});
-
-describe('isOwnedConfigFilename', () => {
-	it('accepts a name the record set would have generated', () => {
-		expect(isOwnedConfigFilename('content_reviewer.yaml', 'roles')).toBe(true);
-		expect(isOwnedConfigFilename('editor.yaml', 'permissions')).toBe(true);
-	});
-
-	it('rejects a stem the platform would have stored under a different key', () => {
-		expect(isOwnedConfigFilename('2fa_admin.yaml', 'roles')).toBe(false);
-		expect(isOwnedConfigFilename('_tmp.yaml', 'roles')).toBe(false);
-		expect(isOwnedConfigFilename('.yaml', 'roles')).toBe(false);
-		expect(isOwnedConfigFilename('Editor.yaml', 'roles')).toBe(false);
-		expect(isOwnedConfigFilename('editor.backup.yaml', 'roles')).toBe(false);
-		expect(isOwnedConfigFilename(`edi${String.fromCharCode(1)}tor.yaml`, 'roles')).toBe(false);
-		expect(isOwnedConfigFilename(`${'a'.repeat(256)}.yaml`, 'roles')).toBe(false);
-	});
-
-	it('treats the public permission subject as owned only where it can exist', () => {
-		expect(isOwnedConfigFilename('public.yaml', 'permissions')).toBe(true);
-		expect(isOwnedConfigFilename('public.yaml', 'roles')).toBe(false);
-	});
-
-	it('rejects a file the engine does not generate', () => {
-		expect(isOwnedConfigFilename('README.md', 'roles')).toBe(false);
-		expect(isOwnedConfigFilename('editor.yml', 'roles')).toBe(false);
 	});
 });
 

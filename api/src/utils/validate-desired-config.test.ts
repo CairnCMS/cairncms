@@ -3,6 +3,7 @@ import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import { ConfigUnsupportedVersionException } from '../exceptions/config-unsupported-version.js';
 import type { ConfigKind, ConfigManifest } from '../types/config.js';
 import { validateConfigManifest, validateConfigRecord, validateDesiredConfig } from './validate-desired-config.js';
+import { CONFIG_REGISTRY } from './config/registry.js';
 
 function manifest(resources: ConfigKind[] = ['roles', 'permissions']): ConfigManifest {
 	return { version: 1, resources };
@@ -249,6 +250,34 @@ describe('validateDesiredConfig', () => {
 		expect(errors).toEqual(['Duplicate permission set for role "editor".']);
 	});
 
+	it('rejects two empty permission sets for the same role, on the document identity not the records', () => {
+		const failures = validateFull(
+			document({ permissions: [permissionSet({ permissions: [] }), permissionSet({ permissions: [] })] })
+		);
+
+		expect(failures).toEqual([
+			{ code: 'CONFIG_IDENTITY_CONFLICT', message: 'Duplicate permission set for role "editor".' },
+		]);
+	});
+
+	it('routes role validation through the registry descriptor', () => {
+		const real = CONFIG_REGISTRY.roles;
+
+		CONFIG_REGISTRY.roles = {
+			...real,
+			handler: {
+				...real.handler,
+				validateDesired: () => [{ code: 'CONFIG_INVALID' as const, message: 'registry sentinel failure' }],
+			},
+		};
+
+		try {
+			expect(validateFull(document())).toEqual([{ code: 'CONFIG_INVALID', message: 'registry sentinel failure' }]);
+		} finally {
+			CONFIG_REGISTRY.roles = real;
+		}
+	});
+
 	it('rejects the same collection and action twice in one set', () => {
 		const errors = validate(document({ permissions: [permissionSet({ permissions: [permission(), permission()] })] }));
 
@@ -298,6 +327,22 @@ describe('validateDesiredConfig', () => {
 		});
 
 		expect(validate(doc, ['editor'])).toEqual([]);
+	});
+
+	it('ignores a null entry when roles are unmanaged', () => {
+		const doc = document({
+			manifest: manifest(['permissions']),
+			roles: [null],
+			permissions: [permissionSet({ role: 'public' })],
+		});
+
+		expect(validate(doc)).toEqual([]);
+	});
+
+	it('ignores a null entry when permissions are unmanaged', () => {
+		const doc = document({ manifest: manifest(['roles']), permissions: [null] });
+
+		expect(validate(doc)).toEqual([]);
 	});
 
 	it('ignores duplicate records belonging to an unmanaged kind', () => {

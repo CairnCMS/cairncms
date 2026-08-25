@@ -1,11 +1,7 @@
-import { PUBLIC_ROLE_KEY } from '@cairncms/constants';
-import { normalizeRoleKey } from '@cairncms/utils';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
-import type { ConfigKind } from '../types/config.js';
-import { ROLE_KEY_MAX_LENGTH } from './config-contract.js';
 import { safeLogFragment } from './safe-log-fragment.js';
 
 export type ConfigEntry = { kind: 'absent' } | { kind: 'file'; real: string } | { kind: 'directory'; real: string };
@@ -156,22 +152,6 @@ export async function assertSafeDirectory(root: string, target: string): Promise
 	}
 
 	return entry.real;
-}
-
-/**
- * Whether this kind of record set generates the filename, which is what makes it eligible for
- * stale-file cleanup. A stem the platform would have stored under a different key is not ours to delete.
- */
-export function isOwnedConfigFilename(name: string, kind: ConfigKind): boolean {
-	if (!name.endsWith('.yaml')) return false;
-
-	const stem = name.slice(0, -'.yaml'.length);
-
-	if (stem === '' || stem.length > ROLE_KEY_MAX_LENGTH) return false;
-	if (normalizeRoleKey(stem) !== stem) return false;
-	if (kind === 'roles' && stem === PUBLIC_ROLE_KEY) return false;
-
-	return true;
 }
 
 /**

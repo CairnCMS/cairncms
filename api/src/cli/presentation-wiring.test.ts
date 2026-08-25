@@ -84,6 +84,8 @@ vi.mock('../utils/apply-config-plan.js', () => ({
 	planHasDeletions: vi.fn(() => false),
 }));
 
+vi.mock('../utils/config/plan-folds.js', () => ({ isPlanEmpty: vi.fn(() => false) }));
+
 describe('config renderer sources every token from the presentation primitive', () => {
 	it('emits the mocked sentinel tokens rather than hard-coded text', () => {
 		const serialized: SerializedConfigPlan = {
