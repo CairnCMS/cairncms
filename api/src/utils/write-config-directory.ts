@@ -5,19 +5,16 @@ import path from 'path';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import logger from '../logger.js';
-import {
-	CONFIG_KINDS,
-	type CairnConfig,
-	type ConfigKind,
-	type ConfigPermission,
-	type ConfigPermissionSet,
-} from '../types/config.js';
+import { CONFIG_KINDS, type CairnConfig, type ConfigKind } from '../types/config.js';
+import type { ConfigKindTypes, ConfigResourceDescriptor } from './config/descriptor.js';
 import {
 	isOwnedConfigFilename,
-	readContainedDirectory,
-	readContainedFile,
-	replaceFileAtomically,
-} from './config-path-safety.js';
+	normalizeStringListFields,
+	orderedDocuments,
+	orderedRecords,
+} from './config/directory-layout.js';
+import { getDescriptor } from './config/registry.js';
+import { readContainedDirectory, readContainedFile, replaceFileAtomically } from './config-path-safety.js';
 import { assertConfigValueSafe, parseConfigYaml } from './parse-config-document.js';
 import { safeLogFragment } from './safe-log-fragment.js';
 
@@ -25,27 +22,26 @@ const MANIFEST_FILENAME = 'cairncms-config.yaml';
 
 const YAML_SUFFIX = '.yaml';
 
-const IDENTITY_FIELD: Record<ConfigKind, string> = { roles: 'key', permissions: 'role' };
-
 type PendingDocument = { label: string; target: string; document: unknown };
-
-function sortStringArray(arr: string[] | null | undefined): string[] | null {
-	if (!arr) return null;
-	return [...arr].sort();
-}
-
-function sortPermissions(permissions: ConfigPermission[]): ConfigPermission[] {
-	return [...permissions]
-		.sort((a, b) => {
-			const cmp = a.collection.localeCompare(b.collection);
-			if (cmp !== 0) return cmp;
-			return a.action.localeCompare(b.action);
-		})
-		.map((p) => ({ ...p, fields: sortStringArray(p.fields) }));
-}
 
 function dumpYaml(data: unknown): string {
 	return toYaml(data, { indent: 2, sortKeys: true, lineWidth: -1, noRefs: true });
+}
+
+/**
+ * Canonical documents for one kind: `projectDocuments` lifts grouped records to their full identity,
+ * they are ordered and their string-list fields sorted, then `composeDocuments` rebuilds them (empty
+ * sets preserved through anchors) and `orderedDocuments` fixes the on-disk file order.
+ */
+function orderedNormalizedDocuments(
+	descriptor: ConfigResourceDescriptor<ConfigKindTypes>,
+	documents: unknown[]
+): unknown[] {
+	const { records, anchors } = descriptor.projectDocuments(documents);
+	const ordered = orderedRecords(descriptor, records);
+	const normalized = ordered.map((record) => normalizeStringListFields(descriptor.recordFields, record));
+
+	return orderedDocuments(descriptor, descriptor.composeDocuments(normalized, anchors));
 }
 
 function buildDocuments(config: CairnConfig, root: string): { pending: PendingDocument[]; keep: Set<string> } {
@@ -57,37 +53,16 @@ function buildDocuments(config: CairnConfig, root: string): { pending: PendingDo
 
 	const keep = new Set<string>();
 
-	if (managed.has('roles')) {
-		for (const role of [...config.roles].sort((a, b) => a.key.localeCompare(b.key))) {
-			const filename = `${role.key}${YAML_SUFFIX}`;
-			keep.add(`roles/${filename}`);
+	for (const kind of CONFIG_KINDS) {
+		if (!managed.has(kind)) continue;
 
-			const normalized = { ...role };
-			if (normalized.ip_access) normalized.ip_access = sortStringArray(normalized.ip_access);
+		const descriptor = getDescriptor(kind) as ConfigResourceDescriptor<ConfigKindTypes>;
 
-			pending.push({
-				label: `roles/${filename}`,
-				target: path.join(root, 'roles', filename),
-				document: normalized,
-			});
-		}
-	}
-
-	if (managed.has('permissions')) {
-		for (const permSet of [...config.permissions].sort((a, b) => a.role.localeCompare(b.role))) {
-			const filename = `${permSet.role}${YAML_SUFFIX}`;
-			keep.add(`permissions/${filename}`);
-
-			const sorted: ConfigPermissionSet = {
-				role: permSet.role,
-				permissions: sortPermissions(permSet.permissions),
-			};
-
-			pending.push({
-				label: `permissions/${filename}`,
-				target: path.join(root, 'permissions', filename),
-				document: sorted,
-			});
+		for (const document of orderedNormalizedDocuments(descriptor, config[kind])) {
+			const filename = `${descriptor.layout.filenameOf(descriptor.layout.documentIdentityOf(document))}${YAML_SUFFIX}`;
+			const label = `${kind}/${filename}`;
+			keep.add(label);
+			pending.push({ label, target: path.join(root, kind, filename), document });
 		}
 	}
 
@@ -101,6 +76,8 @@ function buildDocuments(config: CairnConfig, root: string): { pending: PendingDo
 async function cleanKindDirectory(root: string, kind: ConfigKind, keep: Set<string>): Promise<void> {
 	const entries = await readContainedDirectory(root, path.join(root, kind));
 	if (entries === null) return;
+
+	const identityField = getDescriptor(kind).documentIdentityFields[0]!.name;
 
 	for (const entry of entries.sort()) {
 		const label = `${kind}/${entry}`;
@@ -126,7 +103,7 @@ async function cleanKindDirectory(root: string, kind: ConfigKind, keep: Set<stri
 			continue;
 		}
 
-		const identity = isPlainObject(declared) ? (declared as Record<string, unknown>)[IDENTITY_FIELD[kind]] : undefined;
+		const identity = isPlainObject(declared) ? (declared as Record<string, unknown>)[identityField] : undefined;
 
 		if (identity !== entry.slice(0, -YAML_SUFFIX.length)) {
 			logger.warn(`Leaving "${label}": it does not declare the identity its filename promises.`);

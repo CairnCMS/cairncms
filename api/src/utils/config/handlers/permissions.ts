@@ -1,5 +1,6 @@
 import { PUBLIC_ROLE_KEY } from '@cairncms/constants';
 import type { PermissionsAction } from '@cairncms/types';
+import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
 import logger from '../../../logger.js';
 import { PermissionsService } from '../../../services/permissions.js';
 import type {
@@ -507,6 +508,27 @@ export const permissionsDescriptor: ConfigResourceDescriptor<PermissionsKindType
 		documentShape: { recordsField: 'permissions' },
 		documentIdentityOf: (document) => ({ role: document.role }),
 		filenameOf: (documentIdentity) => documentIdentity.role,
+		parseDocumentFile: (record, filename) => {
+			if (!record['role']) {
+				throw new ConfigInvalidException(`Invalid permission file: ${filename} — missing "role" field.`);
+			}
+
+			if (!Array.isArray(record['permissions'])) {
+				throw new ConfigInvalidException(`Invalid permission file: ${filename} — "permissions" must be an array.`);
+			}
+
+			const expected = `${record['role']}.yaml`;
+
+			if (filename !== expected) {
+				throw new ConfigInvalidException(
+					`Permission file "${filename}" contains role "${safeLogFragment(
+						record['role']
+					)}" — filename must match role ("${safeLogFragment(expected)}").`
+				);
+			}
+
+			return record as unknown as ConfigPermissionSet;
+		},
 	},
 	documentIdentityFields: [ROLE_FIELD],
 	recordFields: RECORD_FIELDS,

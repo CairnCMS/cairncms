@@ -96,6 +96,10 @@ export interface ConfigResourceDescriptor<K extends ConfigKindTypes> {
 		documentShape: ConfigDocumentShape;
 		documentIdentityOf(document: K['Document']): K['DocumentIdentity'];
 		filenameOf(documentIdentity: K['DocumentIdentity']): string;
+		/** Checks an untrusted mapping's file shell (identity presence, kind shape, filename match) and returns a typed document; full field validation happens later in validateDesiredConfig. */
+		parseDocumentFile(record: Record<string, unknown>, filename: string): K['Document'];
+		/** The rejection message for a reserved filename; required only for a kind whose identity declares reserved stems. */
+		reservedFilenameMessage?(filename: string): string;
 	};
 	documentIdentityFields: ConfigFieldDescriptor[];
 	recordFields: ConfigFieldDescriptor[];

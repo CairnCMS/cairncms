@@ -1,5 +1,6 @@
 import { PUBLIC_ROLE_ID, PUBLIC_ROLE_KEY } from '@cairncms/constants';
 import { normalizeRoleKey } from '@cairncms/utils';
+import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
 import { RolesService } from '../../../services/roles.js';
 import type {
 	ApplyResult,
@@ -25,6 +26,7 @@ import type {
 	ReadContext,
 } from '../descriptor.js';
 import { identityConflict } from '../failures.js';
+import { interpolateEnvVar } from '../placeholder.js';
 import { UNFILTERED, assertStringArray, parseStoredCSV, unreadable } from '../read-parsing.js';
 import { changesToValues, composeValues, sortedOrNull } from '../values.js';
 import { normalizeImpact, readRoleDeletionImpact } from './roles-impact.js';
@@ -444,6 +446,37 @@ export const rolesDescriptor: ConfigResourceDescriptor<RolesKindTypes> = {
 		documentShape: 'flat',
 		documentIdentityOf: (document) => ({ key: document.key }),
 		filenameOf: (documentIdentity) => documentIdentity.key,
+		parseDocumentFile: (record, filename) => {
+			if (!record['key']) {
+				throw new ConfigInvalidException(`Invalid role file: ${filename} — missing "key" field.`);
+			}
+
+			const expected = `${record['key']}.yaml`;
+
+			if (filename !== expected) {
+				throw new ConfigInvalidException(
+					`Role file "${filename}" contains key "${safeLogFragment(
+						record['key']
+					)}" — filename must match key ("${safeLogFragment(expected)}").`
+				);
+			}
+
+			const document: Record<string, unknown> = { ...record };
+			const subject = { label: 'role', value: record['key'] };
+
+			for (const field of RECORD_FIELDS) {
+				const value = document[field.name];
+
+				if (field.acceptsPlaceholder && typeof value === 'string') {
+					document[field.name] = interpolateEnvVar(value, field.name, subject);
+				}
+			}
+
+			return document as unknown as ConfigRole;
+		},
+		reservedFilenameMessage: () =>
+			`Role key "public" is reserved for public permissions. Remove roles/public.yaml. ` +
+			`Public permissions belong in permissions/public.yaml only.`,
 	},
 	documentIdentityFields: [KEY_FIELD],
 	recordFields: RECORD_FIELDS,
