@@ -245,24 +245,29 @@ export class DispatchCoordinator {
 
 			try {
 				if (entry.token.isCancelled) return;
+				if (!reservation.isActive()) continue;
 
-				if (!schemaResolved) {
-					schemaResolved = true;
-
-					try {
-						schema = await this.getSchema();
-					} catch {
-						logger.debug(LOG_SCHEMA_FAILED);
-						schema = null;
-					}
-				}
-
-				if (schema === null) return;
-
-				if (event.action === 'delete') {
-					await this.deliverRemoval(reservation, event, schema);
+				if (subscription.sink !== undefined) {
+					await subscription.sink(event, entry.token.signal);
 				} else {
-					await this.deliver(reservation, event, schema);
+					if (!schemaResolved) {
+						schemaResolved = true;
+
+						try {
+							schema = await this.getSchema();
+						} catch {
+							logger.debug(LOG_SCHEMA_FAILED);
+							schema = null;
+						}
+					}
+
+					if (schema !== null) {
+						if (event.action === 'delete') {
+							await this.deliverRemoval(reservation, event, schema);
+						} else {
+							await this.deliver(reservation, event, schema);
+						}
+					}
 				}
 			} catch {
 				// A single subscriber's failure never stops the others.
