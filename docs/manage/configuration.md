@@ -311,14 +311,14 @@ The realtime WebSocket transport is off by default. When enabled, clients connec
 - **`WEBSOCKETS_REST_ENABLED`** — REST transport switch; takes effect only when the feature is enabled. Default `true`.
 - **`WEBSOCKETS_REST_PATH`** — the upgrade path clients connect to. Must be a pure URL path with no query or fragment. Default `/websocket`.
 - **`WEBSOCKETS_REST_AUTH`** — authentication mode: `public` (anonymous), `handshake` (authenticate with the first message), or `strict` (bearer token required at upgrade). Default `handshake`.
-- **`WEBSOCKETS_REST_AUTH_TIMEOUT`** — how long, in seconds, an authentication attempt may take. In `strict` mode the attempt is at the upgrade, and a timeout rejects the upgrade; in `handshake` mode a timeout on the first-message attempt closes the connection. A later re-authentication that times out closes a `strict` or `handshake` connection and returns a `public` connection to anonymous access. Accepts a whole number of seconds from `1` to `2147483` (about 24 days).
-- **`WEBSOCKETS_REST_CONN_LIMIT`** — maximum concurrent connections on the REST transport. Accepts a whole number of `1` or greater.
-- **`WEBSOCKETS_HEARTBEAT_PERIOD`** — seconds between server pings; a connection that misses two periods without a pong is closed. Accepts a whole number of seconds from `1` to `1073741` (about 12 days).
-- **`WEBSOCKETS_USER_CONN_LIMIT`** — maximum concurrent connections per authenticated user. Accepts a whole number of `1` or greater.
-- **`WEBSOCKETS_IP_CONN_LIMIT`** — maximum concurrent connections per client IP. Accepts a whole number of `1` or greater.
-- **`WEBSOCKETS_PROCESS_CONN_LIMIT`** — maximum concurrent connections per API process. Accepts a whole number of `1` or greater.
+- **`WEBSOCKETS_REST_AUTH_TIMEOUT`** — how long, in seconds, an authentication attempt may take. In `strict` mode the attempt is at the upgrade, and a timeout rejects the upgrade; in `handshake` mode a timeout on the first-message attempt closes the connection. A later re-authentication that times out closes a `strict` or `handshake` connection and returns a `public` connection to anonymous access. Accepts a whole number of seconds from `1` to `2147483` (about 24 days). Default `10`.
+- **`WEBSOCKETS_REST_CONN_LIMIT`** — maximum concurrent connections on the REST transport. Accepts a whole number of `1` or greater. Default `1000`.
+- **`WEBSOCKETS_HEARTBEAT_PERIOD`** — seconds between server pings; a connection that misses two periods without a pong is closed. Accepts a whole number of seconds from `1` to `1073741` (about 12 days). Default `30`.
+- **`WEBSOCKETS_USER_CONN_LIMIT`** — maximum concurrent connections per authenticated user. Accepts a whole number of `1` or greater. Default `10`.
+- **`WEBSOCKETS_IP_CONN_LIMIT`** — maximum concurrent connections per client IP. Accepts a whole number of `1` or greater. Default `50`.
+- **`WEBSOCKETS_PROCESS_CONN_LIMIT`** — maximum concurrent connections per API process. Accepts a whole number of `1` or greater. Default `1000`.
 
-An invalid realtime setting deactivates the affected scope (the whole feature for a shared setting, or just the REST transport for a REST setting) and leaves HTTP serving. The maximum size of an inbound message from a client is bounded by the shared `MAX_PAYLOAD_SIZE` (see [Server](#server)).
+An invalid realtime setting deactivates the affected scope (the whole feature for a shared setting, or just the REST transport for a REST setting) and leaves HTTP serving. The maximum size of an inbound message from a client is bounded by the shared `MAX_PAYLOAD_SIZE` (see [Server](#server)). A single outbound WebSocket frame, including initial subscription results and change notifications, is bounded at 1 MiB: a frame whose encoded size would exceed that (for example a very large or deeply nested result set) closes the affected connection, and the client reconnects and rereads current state. Realtime delivery is best-effort notification to reread authoritative state, not a delivery-latency guarantee. Notification timeliness depends on result-set size, query cost, subscriber count, and available compute.
 
 ## Email
 

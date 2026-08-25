@@ -12,7 +12,7 @@ import { getEnv } from '../../env.js';
 import logger from '../../logger.js';
 import type { RateLimitConsumption } from '../../middleware/rate-limiter-ip.js';
 import { Admission } from '../admission.js';
-import { PENDING_COMMAND_LIMIT, TIMER_MAX_MS, type AuthMode } from '../config.js';
+import { OUTBOUND_FRAME_CAP, PENDING_COMMAND_LIMIT, TIMER_MAX_MS, type AuthMode } from '../config.js';
 import { WebSocketException } from '../exceptions.js';
 import { SubscriptionRegistry } from '../subscriptions.js';
 import type { CommandContext, SocketClient, SocketControllerOptions } from './base.js';
@@ -1697,15 +1697,36 @@ describe('broadcast and client snapshot', () => {
 		expect(received).toEqual([]);
 	});
 
-	it('closes a client whose broadcast frame exceeds the outbound cap', async () => {
+	it('closes a client whose broadcast frame exceeds the outbound cap with 1009', async () => {
 		harness = await createHarness();
 		const opened = await harness.connect();
 		expect(opened.kind).toBe('open');
 		if (opened.kind !== 'open') return;
 
-		const closed = new Promise<void>((resolve) => opened.ws.on('close', () => resolve()));
-		harness.controller.broadcast('x'.repeat(1_048_577));
-		await closed;
+		const closed = new Promise<number>((resolve) => opened.ws.on('close', (code) => resolve(code)));
+		harness.controller.broadcast('x'.repeat(OUTBOUND_FRAME_CAP + 1));
+		expect(await closed).toBe(1009);
+	});
+
+	it('delivers a broadcast frame exactly at the outbound cap', async () => {
+		harness = await createHarness();
+		const opened = await harness.connect();
+		expect(opened.kind).toBe('open');
+		if (opened.kind !== 'open') return;
+
+		let closeCode: number | null = null;
+
+		opened.ws.once('close', (code) => {
+			closeCode = code;
+		});
+
+		const received = new Promise<number>((resolve) =>
+			opened.ws.once('message', (data: Buffer) => resolve(data.length))
+		);
+
+		harness.controller.broadcast('y'.repeat(OUTBOUND_FRAME_CAP));
+		expect(await received).toBe(OUTBOUND_FRAME_CAP);
+		expect(closeCode).toBeNull();
 	});
 
 	it('clientSnapshot returns a copy that does not mutate the controller set', async () => {
