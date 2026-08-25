@@ -12,7 +12,7 @@ import type { RateLimitConsumption } from '../../middleware/rate-limiter-ip.js';
 import type { RequestAccountability, RequestContext } from '../../utils/get-anonymous-accountability.js';
 import { getIPForRequest } from '../../utils/get-ip-from-req.js';
 import type { Admission, Lease, WorkHold } from '../admission.js';
-import { ConnectionAuth, type AuthResult } from '../authenticate.js';
+import { ConnectionAuth, type AuthReject, type AuthResult } from '../authenticate.js';
 import type { SubscriptionRegistry } from '../subscriptions.js';
 import {
 	OUTBOUND_FRAME_CAP,
@@ -104,6 +104,15 @@ type StrictOutcome =
 	| { kind: 'timeout' }
 	| { kind: 'disconnect' }
 	| { kind: 'error' };
+
+export type AuthOutcome =
+	| { status: 'authenticated' }
+	| { status: 'ignored' }
+	| { status: 'timeout' }
+	| { status: 'capacity' }
+	| { status: 'rejected'; reason: AuthReject };
+
+type AuthFailureOutcome = Exclude<AuthOutcome, { status: 'authenticated' } | { status: 'ignored' }>;
 
 export abstract class SocketController {
 	protected readonly server: WebSocketServer;
@@ -621,11 +630,15 @@ export abstract class SocketController {
 			return void this.send(client, this.errorFrame('INVALID_PAYLOAD'));
 		}
 
+		await this.routeMessage(client, message);
+	}
+
+	protected async routeMessage(client: SocketClient, message: WebSocketMessage): Promise<void> {
 		const type = getMessageType(message);
 
-		if (type === 'auth') return this.handleAuth(client, state, message);
+		if (type === 'auth') return this.handleAuth(client, message);
 
-		if (preConnect) return this.failHandshake(client, 'AUTH_FAILED', message.uid);
+		if (!client.lifecycleStarted) return this.failHandshake(client, 'AUTH_FAILED', message.uid);
 
 		const handler = this.handlers.get(type);
 		if (handler === undefined) return void this.send(client, this.errorFrame('UNSUPPORTED_MESSAGE_TYPE', message.uid));
@@ -662,8 +675,7 @@ export abstract class SocketController {
 		if (preConnect) this.stop(client);
 	}
 
-	private async handleAuth(client: SocketClient, state: ConnectionState, message: WebSocketMessage): Promise<void> {
-		const preConnect = !client.lifecycleStarted;
+	private async handleAuth(client: SocketClient, message: WebSocketMessage): Promise<void> {
 		const uid = message.uid;
 
 		let parsed: WebSocketAuthMessage;
@@ -671,29 +683,62 @@ export abstract class SocketController {
 		try {
 			parsed = WebSocketAuthMessage.parse(message);
 		} catch {
-			return this.applyAuthReject(client, state, preConnect, 'AUTH_FAILED', uid);
+			return this.rejectAuth(client, { status: 'rejected', reason: 'auth-failed' }, uid);
 		}
 
-		const result = await this.authenticateWithDeadline(client.auth, parsed.access_token);
+		const outcome = await this.authenticateConnection(client, parsed.access_token, uid);
 
-		if (client.stopping || result.status === 'busy' || result.status === 'superseded') return;
+		if (outcome.status === 'authenticated' || outcome.status === 'ignored') return;
 
-		if (result.status === 'timeout') return this.applyAuthTimeout(client, state, preConnect);
+		return this.rejectAuth(client, outcome, uid);
+	}
 
-		if (result.status === 'authenticated') return this.applyAuthSuccess(client, preConnect, uid);
+	protected async authenticateConnection(
+		client: SocketClient,
+		token: string,
+		uid: string | number | undefined
+	): Promise<AuthOutcome> {
+		const preConnect = !client.lifecycleStarted;
+		const result = await this.authenticateWithDeadline(client.auth, token);
 
-		if (result.status === 'capacity') {
+		if (client.stopping || result.status === 'busy' || result.status === 'superseded') return { status: 'ignored' };
+
+		if (result.status === 'authenticated') {
+			const committed = await this.applyAuthSuccess(client, preConnect, uid);
+			return { status: committed ? 'authenticated' : 'ignored' };
+		}
+
+		if (result.status === 'timeout') return { status: 'timeout' };
+
+		if (result.status === 'capacity') return { status: 'capacity' };
+
+		return { status: 'rejected', reason: result.reason };
+	}
+
+	private async rejectAuth(
+		client: SocketClient,
+		outcome: AuthFailureOutcome,
+		uid: string | number | undefined
+	): Promise<void> {
+		const state = this.connectionState.get(client);
+		if (state === undefined) return;
+
+		const preConnect = !client.lifecycleStarted;
+
+		if (outcome.status === 'timeout') return this.applyAuthTimeout(client, state, preConnect);
+
+		if (outcome.status === 'capacity') {
 			this.stop(client, { code: CLOSE_TRY_AGAIN_LATER });
 			return;
 		}
 
-		if (result.reason === 'different-user') {
+		if (outcome.reason === 'different-user') {
 			this.send(client, this.errorFrame('AUTH_FAILED', uid, 'auth'));
 			this.stop(client);
 			return;
 		}
 
-		const code: WebSocketErrorCode = result.reason === 'token-expired' ? 'TOKEN_EXPIRED' : 'AUTH_FAILED';
+		const code: WebSocketErrorCode = outcome.reason === 'token-expired' ? 'TOKEN_EXPIRED' : 'AUTH_FAILED';
 		return this.applyAuthReject(client, state, preConnect, code, uid);
 	}
 
@@ -721,15 +766,15 @@ export abstract class SocketController {
 		client: SocketClient,
 		preConnect: boolean,
 		uid: string | number | undefined
-	): Promise<void> {
+	): Promise<boolean> {
 		if (preConnect) {
 			const hold = client.auth.beginWorkHold();
-			if (hold === null) return;
+			if (hold === null) return false;
 
 			try {
 				const schema = await this.getSchema({ database: this.database });
-				if (client.stopping) return;
-				if (!this.send(client, this.authSuccessFrame(uid)).accepted) return;
+				if (client.stopping) return false;
+				if (!this.sendAuthSuccess(client, uid).accepted) return false;
 
 				client.schema = schema;
 				client.lifecycleStarted = true;
@@ -741,18 +786,19 @@ export abstract class SocketController {
 					clearTimeout(client.handshakeTimer);
 					client.handshakeTimer = null;
 				}
+
+				return true;
 			} finally {
 				hold.clear();
 			}
-
-			return;
 		}
 
-		if (!this.send(client, this.authSuccessFrame(uid)).accepted) return;
+		if (!this.sendAuthSuccess(client, uid).accepted) return false;
 
 		client.onExpiry = this.buildOnExpiry(client);
 		this.armExpiryTimer(client);
 		await this.emitEventAwaited('websocket.auth.success', client);
+		return true;
 	}
 
 	private async applyAuthReject(
@@ -810,6 +856,10 @@ export abstract class SocketController {
 
 	protected send(client: SocketClient, frame: string): { accepted: boolean } {
 		return safeSend(client, frame, OUTBOUND_LIMITS, (code) => this.stop(client, code === undefined ? {} : { code }));
+	}
+
+	protected sendAuthSuccess(client: SocketClient, uid: string | number | undefined): { accepted: boolean } {
+		return this.send(client, this.authSuccessFrame(uid));
 	}
 
 	protected errorFrame(code: WebSocketErrorCode, uid?: string | number, type = 'server'): string {

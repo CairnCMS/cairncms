@@ -14,7 +14,9 @@ import type { RateLimitConsumption } from '../../middleware/rate-limiter-ip.js';
 import { Admission } from '../admission.js';
 import { OUTBOUND_FRAME_CAP, PENDING_COMMAND_LIMIT, TIMER_MAX_MS, type AuthMode } from '../config.js';
 import { WebSocketException } from '../exceptions.js';
+import type { WebSocketMessage } from '../messages.js';
 import { SubscriptionRegistry } from '../subscriptions.js';
+import { getMessageType } from '../utils/message.js';
 import type { CommandContext, SocketClient, SocketControllerOptions } from './base.js';
 import { WebSocketController } from './rest.js';
 
@@ -51,6 +53,44 @@ class TestController extends WebSocketController {
 
 	protected override async refreshBeforeCommand(): Promise<boolean> {
 		return this.refreshGate ? this.refreshGate() : true;
+	}
+}
+
+class HookStubController extends WebSocketController {
+	public routedTypes: string[] = [];
+	public suppressDispatch = false;
+
+	protected override async routeMessage(client: SocketClient, message: WebSocketMessage): Promise<void> {
+		this.routedTypes.push(getMessageType(message));
+		if (this.suppressDispatch) return;
+		return super.routeMessage(client, message);
+	}
+}
+
+class GraphQLLikeStubController extends WebSocketController {
+	public outcomes: string[] = [];
+	public replacedAcks = 0;
+	public rejectAck = false;
+
+	protected override async routeMessage(client: SocketClient, message: WebSocketMessage): Promise<void> {
+		if (getMessageType(message) !== 'connection_init') return super.routeMessage(client, message);
+
+		const token = (message as { payload?: { access_token?: unknown } }).payload?.access_token;
+
+		if (typeof token !== 'string') {
+			this.outcomes.push('no-token');
+			return;
+		}
+
+		const outcome = await this.authenticateConnection(client, token, message.uid);
+		this.outcomes.push(outcome.status);
+
+		if (outcome.status === 'rejected') client.close(4403, 'Forbidden');
+	}
+
+	protected override sendAuthSuccess(): { accepted: boolean } {
+		this.replacedAcks++;
+		return { accepted: !this.rejectAck };
 	}
 }
 
@@ -1763,5 +1803,74 @@ describe('broadcast and client snapshot', () => {
 		harness.controller.broadcast('later');
 		await vi.waitFor(() => expect(received).toContain('later'));
 		expect(received).not.toContain('early');
+	});
+});
+
+describe('base extension points', () => {
+	it('routes every parsed frame through the overridable routeMessage hook', async () => {
+		harness = await createHarness({ controllerClass: HookStubController });
+		const opened = await harness.connect();
+		if (opened.kind !== 'open') throw new Error('expected open');
+		const controller = harness.controller as HookStubController;
+
+		sendJson(opened.ws, { type: 'auth', access_token: signUser('alice'), uid: 1 });
+		await vi.waitFor(() => expect(controller.routedTypes).toContain('auth'));
+	});
+
+	it('lets a subclass intercept a frame before dispatch', async () => {
+		harness = await createHarness({ controllerClass: HookStubController });
+		const controller = harness.controller as HookStubController;
+		controller.suppressDispatch = true;
+		const opened = await harness.connect();
+		if (opened.kind !== 'open') throw new Error('expected open');
+
+		sendJson(opened.ws, { type: 'auth', access_token: signUser('alice'), uid: 3 });
+		await vi.waitFor(() => expect(controller.routedTypes).toContain('auth'));
+		expect(callsFor('websocket.auth.success')).toHaveLength(0);
+	});
+
+	it('authenticates a pre-establishment connection_init through the primitive with a replaced ack', async () => {
+		harness = await createHarness({ controllerClass: GraphQLLikeStubController, authMode: 'handshake' });
+		const opened = await harness.connect();
+		if (opened.kind !== 'open') throw new Error('expected open');
+		const controller = harness.controller as GraphQLLikeStubController;
+
+		sendJson(opened.ws, { type: 'connection_init', payload: { access_token: signUser('alice') }, uid: 5 });
+		await vi.waitFor(() => expect(controller.outcomes).toContain('authenticated'));
+		expect(controller.replacedAcks).toBe(1);
+		expect(callsFor('websocket.connect')).toHaveLength(1);
+	});
+
+	it('renders a protocol-specific 4403 close on a rejected connection_init with no REST frame', async () => {
+		harness = await createHarness({ controllerClass: GraphQLLikeStubController, authMode: 'handshake' });
+		const opened = await harness.connect();
+		if (opened.kind !== 'open') throw new Error('expected open');
+		const controller = harness.controller as GraphQLLikeStubController;
+		const received: string[] = [];
+		opened.ws.on('message', (data) => received.push(data.toString()));
+
+		const closed = new Promise<{ code: number; reason: string }>((resolve) =>
+			opened.ws.on('close', (code, reason) => resolve({ code, reason: reason.toString() }))
+		);
+
+		sendJson(opened.ws, { type: 'connection_init', payload: { access_token: signInvalid() }, uid: 6 });
+		const close = await closed;
+		expect(close).toEqual({ code: 4403, reason: 'Forbidden' });
+		expect(controller.outcomes).toContain('rejected');
+		expect(callsFor('websocket.connect')).toHaveLength(0);
+		expect(received).toEqual([]);
+	});
+
+	it('does not report authenticated when the acknowledgement is rejected', async () => {
+		harness = await createHarness({ controllerClass: GraphQLLikeStubController, authMode: 'handshake' });
+		const controller = harness.controller as GraphQLLikeStubController;
+		controller.rejectAck = true;
+		const opened = await harness.connect();
+		if (opened.kind !== 'open') throw new Error('expected open');
+
+		sendJson(opened.ws, { type: 'connection_init', payload: { access_token: signUser('alice') }, uid: 8 });
+		await vi.waitFor(() => expect(controller.outcomes).toContain('ignored'));
+		expect(controller.outcomes).not.toContain('authenticated');
+		expect(callsFor('websocket.connect')).toHaveLength(0);
 	});
 });
