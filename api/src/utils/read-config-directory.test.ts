@@ -11,6 +11,7 @@ import { computeConfigPlan } from './compute-config-plan.js';
 import { resolveConfigRoot } from './config-path-safety.js';
 import { readConfigDirectory, readConfigManifest, readOptionalConfigManifest } from './read-config-directory.js';
 import { validateDesiredConfig } from './validate-desired-config.js';
+import { CONFIG_REGISTRY } from './config/registry.js';
 
 vi.mock('../logger.js', () => ({
 	default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
@@ -410,6 +411,36 @@ describe('readConfigDirectory', () => {
 		expect(error.message).toContain('filename must match role');
 		expect(error.message).toContain('ev?il');
 		expect(error.message).not.toContain(String.fromCharCode(1));
+	});
+
+	it('routes role directory reads through the registry descriptor', async () => {
+		const real = CONFIG_REGISTRY.roles;
+
+		CONFIG_REGISTRY.roles = {
+			...real,
+			layout: {
+				...real.layout,
+				parseDocumentFile: () => ({
+					key: 'registry_sentinel',
+					name: 'Sentinel',
+					admin_access: false,
+					app_access: true,
+				}),
+			},
+		};
+
+		try {
+			await writeManifest(['roles']);
+			await writeRole('editor');
+
+			const config = await readConfigDirectory(tmpDir);
+
+			expect(config.roles).toEqual([
+				{ key: 'registry_sentinel', name: 'Sentinel', admin_access: false, app_access: true },
+			]);
+		} finally {
+			CONFIG_REGISTRY.roles = real;
+		}
 	});
 
 	it('sends read-path notices to the caller instead of the log stream when one is supplied', async () => {

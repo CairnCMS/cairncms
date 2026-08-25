@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computeConfigPlan, validateConfigPlan } from './compute-config-plan.js';
+import { CONFIG_REGISTRY } from './config/registry.js';
 import { rolesDescriptor } from './config/handlers/roles.js';
 import type { CairnConfig, ConfigKind } from '../types/config.js';
 
@@ -225,6 +226,54 @@ describe('computeConfigPlan', () => {
 
 		expect(plan.roles.delete).toEqual(['viewer']);
 		expect(plan.permissions.delete).toEqual([]);
+	});
+
+	it('keeps surviving permission deletes in current-state order when a cascaded delete is removed between them', () => {
+		const current = makeConfig({
+			roles: [makeRole('editor'), makeRole('viewer'), makeRole('author')],
+			permissions: [
+				{ role: 'editor', permissions: [makePerm('articles', 'read'), makePerm('pages', 'read')] },
+				{ role: 'viewer', permissions: [makePerm('items', 'read')] },
+				{ role: 'author', permissions: [makePerm('comments', 'read'), makePerm('notes', 'read')] },
+			],
+		});
+
+		const desired = makeConfig({
+			roles: [makeRole('editor'), makeRole('author')],
+			permissions: [
+				{ role: 'editor', permissions: [makePerm('articles', 'read')] },
+				{ role: 'author', permissions: [makePerm('comments', 'read')] },
+			],
+		});
+
+		const plan = computeConfigPlan(current, desired);
+
+		expect(plan.roles.delete).toEqual(['viewer']);
+
+		expect(plan.permissions.delete).toEqual([
+			{ roleKey: 'editor', collection: 'pages', action: 'read' },
+			{ roleKey: 'author', collection: 'notes', action: 'read' },
+		]);
+	});
+
+	it('routes role planning through the registry descriptor', () => {
+		const real = CONFIG_REGISTRY.roles;
+
+		CONFIG_REGISTRY.roles = {
+			...real,
+			handler: {
+				...real.handler,
+				postPlan: (plan) => ({ ...plan, create: [...plan.create, makeRole('registry_sentinel')] }),
+			},
+		};
+
+		try {
+			const config = makeConfig({ roles: [makeRole('editor')] });
+			const plan = computeConfigPlan(config, config);
+			expect(plan.roles).toEqual({ create: [makeRole('registry_sentinel')], update: [], delete: [] });
+		} finally {
+			CONFIG_REGISTRY.roles = real;
+		}
 	});
 
 	it('handles public permissions', () => {

@@ -10,6 +10,7 @@ import logger from '../logger.js';
 import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
 import { rolesDescriptor } from './config/handlers/roles.js';
+import { CONFIG_REGISTRY } from './config/registry.js';
 import { getConfigSnapshot, readCurrentConfig } from './get-config-snapshot.js';
 import * as getSchema from './get-schema.js';
 import { validateDesiredConfig } from './validate-desired-config.js';
@@ -763,6 +764,35 @@ describe('readCurrentConfig', () => {
 		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
 		expect(error.message).toContain('Configuration state could not be assembled');
 		expect(error.message).not.toContain('published');
+	});
+
+	it('routes role reads through the registry descriptor', async () => {
+		const real = CONFIG_REGISTRY.roles;
+		const rolesRead = vi.spyOn(RolesService.prototype, 'readByQuery');
+
+		CONFIG_REGISTRY.roles = {
+			...real,
+			handler: {
+				...real.handler,
+				readCurrent: async () => ({
+					records: [{ key: 'registry_sentinel', name: 'Sentinel', admin_access: false, app_access: true }],
+					documentIdentities: [{ key: 'registry_sentinel' }],
+					dependencyState: { currentRoleKeys: new Set(['registry_sentinel']), roleKeyById: new Map() },
+				}),
+			},
+		};
+
+		try {
+			const { config } = await readCurrentConfig({ database: db, resources: ['roles'] });
+
+			expect(config.roles).toEqual([
+				{ key: 'registry_sentinel', name: 'Sentinel', admin_access: false, app_access: true },
+			]);
+
+			expect(rolesRead).not.toHaveBeenCalled();
+		} finally {
+			CONFIG_REGISTRY.roles = real;
+		}
 	});
 
 	it('produces a document its own validator accepts, including permissions on the public role', async () => {

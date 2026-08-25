@@ -8,6 +8,7 @@ import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import type { CairnConfig, ConfigKind, ConfigPermission, ConfigPermissionSet, ConfigPlan } from '../types/config.js';
 import { permissionsDescriptor } from './config/handlers/permissions.js';
 import { rolesDescriptor } from './config/handlers/roles.js';
+import { CONFIG_REGISTRY } from './config/registry.js';
 import { enrichConfigPlan } from './enrich-config-plan.js';
 
 const FUTURE = '2999-01-01T00:00:00.000Z';
@@ -414,6 +415,27 @@ describe('enrichConfigPlan', () => {
 		const enrichment = await enrichConfigPlan(plan, desired, { schema: schemaWith('articles'), database: db });
 
 		expect(enrichment.warnings).toEqual([]);
+	});
+
+	it('routes role enrichment through the registry descriptor', async () => {
+		const real = CONFIG_REGISTRY.roles;
+
+		CONFIG_REGISTRY.roles = {
+			...real,
+			handler: { ...real.handler, enrich: async () => ({ roleDeletionImpact: new Map([['registry_sentinel', []]]) }) },
+		};
+
+		try {
+			const enrichment = await enrichConfigPlan(planDeletingRoles('editor'), makeConfig(['roles']), {
+				schema: schemaWith(),
+				database: db,
+			});
+
+			expect(enrichment.roleDeletionImpact).toEqual(new Map([['registry_sentinel', []]]));
+			expect(tracker.history.select).toHaveLength(0);
+		} finally {
+			CONFIG_REGISTRY.roles = real;
+		}
 	});
 });
 

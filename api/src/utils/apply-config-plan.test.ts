@@ -12,7 +12,7 @@ import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
 import { applyConfigPlan } from './apply-config-plan.js';
 import type { ApplyContext, ConfigApplyMutationOptions, ConfigKindTypes } from './config/descriptor.js';
-import { getDescriptor } from './config/registry.js';
+import { CONFIG_REGISTRY, getDescriptor } from './config/registry.js';
 import { getSchema } from './get-schema.js';
 import type { ActionEventParams } from '../types/index.js';
 import type { ConfigApplySecurityContext, ConfigKind, ConfigPlan } from '../types/config.js';
@@ -1140,5 +1140,79 @@ describe('applyConfigPlan:result assembly and boundaries', () => {
 		const second = await applyConfigPlan(emptyPlan(), { context });
 
 		expect(second.roles.created).toEqual([]);
+	});
+});
+
+describe('applyConfigPlan:missing-row deletes', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		transactionSpy.mockImplementation(async (cb: any) => cb(trxStub));
+	});
+
+	it('deletes only the present role and reports only it, skipping a vanished row in the same operation', async () => {
+		trxRows = { directus_roles: [{ id: 'r-present', key: 'present_role' }], directus_permissions: [] };
+		rolesService.deleteOne.mockResolvedValue('r-present');
+
+		const plan = emptyPlan();
+		plan.roles.delete.push('present_role');
+		plan.roles.delete.push('vanished_role');
+
+		const result = await applyConfigPlan(plan, { destructive: true, context });
+
+		expect(rolesService.deleteOne).toHaveBeenCalledTimes(1);
+		expect(rolesService.deleteOne).toHaveBeenCalledWith('r-present', expect.anything());
+		expect(result.roles.deleted).toEqual(['present_role']);
+	});
+
+	it('deletes only the present permission and counts only it, skipping a vanished tuple in the same operation', async () => {
+		trxRows = {
+			directus_roles: [{ id: 'r-editor', key: 'editor' }],
+			directus_permissions: [{ id: 'p-present', role: 'r-editor', collection: 'articles', action: 'read' }],
+		};
+
+		permissionsService.deleteOne.mockResolvedValue('p-present');
+
+		const plan = emptyPlan();
+		plan.permissions.delete.push({ roleKey: 'editor', collection: 'articles', action: 'read' });
+		plan.permissions.delete.push({ roleKey: 'editor', collection: 'pages', action: 'read' });
+
+		const result = await applyConfigPlan(plan, { destructive: true, context });
+
+		expect(permissionsService.deleteOne).toHaveBeenCalledTimes(1);
+		expect(permissionsService.deleteOne).toHaveBeenCalledWith('p-present', expect.anything());
+		expect(result.permissions.deleted).toBe(1);
+	});
+});
+
+describe('applyConfigPlan:registry routing', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		transactionSpy.mockImplementation(async (cb: any) => cb(trxStub));
+		trxRows = { directus_roles: [], directus_permissions: [] };
+	});
+
+	it('routes role apply through the registry descriptor', async () => {
+		const real = CONFIG_REGISTRY.roles;
+
+		CONFIG_REGISTRY.roles = {
+			...real,
+			handler: { ...real.handler, applyCreates: async () => ({ op: 'create', created: ['registry_sentinel'] }) },
+		};
+
+		try {
+			const plan = emptyPlan();
+			plan.roles.create.push({ key: 'editor', name: 'Editor', admin_access: false, app_access: true });
+
+			const result = await applyConfigPlan(plan, { context });
+
+			expect(result).toEqual({
+				roles: { created: ['registry_sentinel'], updated: [], deleted: [] },
+				permissions: { created: 0, updated: 0, deleted: 0 },
+			});
+
+			expect(rolesService.createOne).not.toHaveBeenCalled();
+		} finally {
+			CONFIG_REGISTRY.roles = real;
+		}
 	});
 });

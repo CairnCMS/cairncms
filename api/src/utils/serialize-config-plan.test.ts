@@ -11,6 +11,7 @@ import type {
 	RoleDeletionImpactEntry,
 } from '../types/config.js';
 import { serializeConfigPlan } from './serialize-config-plan.js';
+import { CONFIG_REGISTRY } from './config/registry.js';
 
 function emptyPlan(): ConfigPlan {
 	return {
@@ -103,7 +104,7 @@ describe('serializeConfigPlan', () => {
 
 	it('serializes a role update carrying its field changes', () => {
 		const plan = emptyPlan();
-		plan.roles.update.push({ key: 'editor', diff: { name: 'X' }, changes: { name: { before: 'Editor', after: 'X' } } });
+		plan.roles.update.push({ key: 'editor', changes: { name: { before: 'Editor', after: 'X' } } });
 
 		const result = serializeConfigPlan(plan, { enrichment: emptyEnrichment(), manifestVersion: 1 });
 
@@ -288,7 +289,7 @@ describe('serializeConfigPlan', () => {
 		plan.permissions.delete.push({ roleKey: 'zeta', collection: 'z', action: 'read' });
 		plan.roles.delete.push('zebra');
 		plan.roles.create.push(role('beta'), role('alpha'));
-		plan.roles.update.push({ key: 'gamma', diff: { name: 'G' }, changes: { name: { before: 'x', after: 'G' } } });
+		plan.roles.update.push({ key: 'gamma', changes: { name: { before: 'x', after: 'G' } } });
 
 		plan.permissions.create.push(
 			{ roleKey: 'alpha', permission: perm('articles', 'read') },
@@ -354,7 +355,7 @@ describe('serializeConfigPlan', () => {
 	it('summary counts match the changes array', () => {
 		const plan = emptyPlan();
 		plan.roles.create.push(role('a'));
-		plan.roles.update.push({ key: 'b', diff: { name: 'B' }, changes: { name: { before: 'x', after: 'B' } } });
+		plan.roles.update.push({ key: 'b', changes: { name: { before: 'x', after: 'B' } } });
 		plan.permissions.delete.push({ roleKey: 'c', collection: 'x', action: 'read' });
 
 		const result = serializeConfigPlan(plan, { enrichment: emptyEnrichment(), manifestVersion: 1 });
@@ -392,5 +393,34 @@ describe('serializeConfigPlan', () => {
 		const result = serializeConfigPlan(plan, { enrichment, manifestVersion: 1 });
 
 		expect(JSON.parse(JSON.stringify(result))).toEqual(result);
+	});
+
+	it('routes role serialization through the registry descriptor', () => {
+		const real = CONFIG_REGISTRY.roles;
+
+		const markerChange: ConfigPlanChange = {
+			kind: 'roles',
+			operation: 'create',
+			identity: { key: 'registry_sentinel' },
+			values: {
+				name: 'Sentinel',
+				icon: 'x',
+				description: null,
+				admin_access: false,
+				app_access: true,
+				enforce_tfa: false,
+				ip_access: null,
+			},
+		};
+
+		CONFIG_REGISTRY.roles = { ...real, handler: { ...real.handler, toChanges: () => [markerChange] } };
+
+		try {
+			const result = serializeConfigPlan(emptyPlan(), { enrichment: emptyEnrichment(), manifestVersion: 1 });
+
+			expect(result.changes).toEqual([markerChange]);
+		} finally {
+			CONFIG_REGISTRY.roles = real;
+		}
 	});
 });

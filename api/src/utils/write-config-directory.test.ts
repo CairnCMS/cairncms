@@ -6,6 +6,7 @@ import { dump as dumpYaml, load as loadYaml } from 'js-yaml';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import { writeConfigDirectory } from './write-config-directory.js';
+import { CONFIG_REGISTRY } from './config/registry.js';
 import logger from '../logger.js';
 import type { CairnConfig } from '../types/config.js';
 
@@ -572,5 +573,23 @@ describe('writeConfigDirectory', () => {
 		await writeConfigDirectory(config, tmpDir);
 
 		expect(await fs.readdir(tmpDir)).toEqual(['cairncms-config.yaml', 'roles']);
+	});
+
+	it('routes role directory writes through the registry descriptor', async () => {
+		const real = CONFIG_REGISTRY.roles;
+
+		CONFIG_REGISTRY.roles = { ...real, layout: { ...real.layout, filenameOf: () => 'registry_sentinel' } };
+
+		try {
+			await writeConfigDirectory(
+				makeConfig({ roles: [{ key: 'editor', name: 'Editor', admin_access: false, app_access: true }] }),
+				tmpDir
+			);
+
+			expect(await fs.readdir(path.join(tmpDir, 'roles'))).toEqual(['registry_sentinel.yaml']);
+			expect(await fs.readFile(path.join(tmpDir, 'roles', 'registry_sentinel.yaml'), 'utf8')).toContain('key: editor');
+		} finally {
+			CONFIG_REGISTRY.roles = real;
+		}
 	});
 });
