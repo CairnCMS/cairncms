@@ -583,6 +583,24 @@ describe('lifecycle events', () => {
 		expect(callsFor('websocket.error')).toHaveLength(0);
 	});
 
+	it('terminates the socket when a graceful close throws', async () => {
+		harness = await createHarness({ authMode: 'public', controllerClass: TestController });
+		await harness.connect();
+
+		const controller = harness.controller as TestController;
+		await vi.waitFor(() => expect(controller.clientCount).toBe(1));
+
+		const client = [...controller.clientSnapshot()][0]!;
+		const terminate = vi.spyOn(client, 'terminate');
+
+		client.close = () => {
+			throw new Error('close failed');
+		};
+
+		controller.stopClient(client, { code: 4000 });
+		expect(terminate).toHaveBeenCalled();
+	});
+
 	it('carries the last-valid accountability, database, and close code on the strict close event', async () => {
 		const database = {} as Knex;
 		harness = await createHarness({ authMode: 'strict', database });

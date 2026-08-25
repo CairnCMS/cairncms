@@ -154,7 +154,19 @@ export abstract class SocketController {
 		this.database = options.database;
 		this.getSchema = options.getSchema;
 		this.subscriptions = options.subscriptions;
-		this.server = new WebSocketServer({ noServer: true, maxPayload: options.maxPayload });
+		const subprotocol = this.acceptedSubprotocol();
+
+		this.server = new WebSocketServer({
+			noServer: true,
+			maxPayload: options.maxPayload,
+			...(subprotocol !== undefined && {
+				handleProtocols: (protocols: Set<string>) => (protocols.has(subprotocol) ? subprotocol : false),
+			}),
+		});
+	}
+
+	protected acceptedSubprotocol(): string | undefined {
+		return undefined;
 	}
 
 	handleUpgrade = async (req: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> => {
@@ -450,7 +462,7 @@ export abstract class SocketController {
 		}
 	}
 
-	protected stop(client: SocketClient, options: { code?: number; terminate?: boolean } = {}): void {
+	protected stop(client: SocketClient, options: { code?: number; reason?: string; terminate?: boolean } = {}): void {
 		if (client.stopping) {
 			if (options.terminate) client.terminate();
 			return;
@@ -465,9 +477,13 @@ export abstract class SocketController {
 		this.clearTimers(client);
 		this.discardWaiting(client);
 
-		if (options.terminate) client.terminate();
-		else if (options.code !== undefined) client.close(options.code);
-		else client.close();
+		try {
+			if (options.terminate) client.terminate();
+			else if (options.code !== undefined) client.close(options.code, options.reason);
+			else client.close();
+		} catch {
+			client.terminate();
+		}
 	}
 
 	private finalizeClient(client: SocketClient, code?: number, reason?: string): void {
@@ -626,8 +642,7 @@ export abstract class SocketController {
 		try {
 			message = WebSocketMessage.parse(parseJSON(frame.toString()));
 		} catch {
-			if (preConnect) return this.failHandshake(client, 'AUTH_FAILED');
-			return void this.send(client, this.errorFrame('INVALID_PAYLOAD'));
+			return this.rejectMalformedFrame(client, preConnect);
 		}
 
 		await this.routeMessage(client, message);
@@ -670,9 +685,14 @@ export abstract class SocketController {
 		return client.auth.refreshPermissions(schema);
 	}
 
-	private rejectRateLimitedMessage(client: SocketClient, preConnect: boolean): void {
+	protected rejectRateLimitedMessage(client: SocketClient, preConnect: boolean): void {
 		this.send(client, this.errorFrame('REQUESTS_EXCEEDED'));
 		if (preConnect) this.stop(client);
+	}
+
+	protected rejectMalformedFrame(client: SocketClient, preConnect: boolean): void {
+		if (preConnect) return this.failHandshake(client, 'AUTH_FAILED');
+		this.send(client, this.errorFrame('INVALID_PAYLOAD'));
 	}
 
 	private async handleAuth(client: SocketClient, message: WebSocketMessage): Promise<void> {
