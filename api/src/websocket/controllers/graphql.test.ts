@@ -1,6 +1,6 @@
 import type { SchemaOverview } from '@cairncms/types';
 import express from 'express';
-import { GraphQLBoolean, GraphQLObjectType, GraphQLSchema } from 'graphql';
+import { GraphQLBoolean, GraphQLEnumType, GraphQLObjectType, GraphQLSchema } from 'graphql';
 import jwt from 'jsonwebtoken';
 import type { Knex } from 'knex';
 import { createServer, type Server } from 'node:http';
@@ -12,7 +12,6 @@ import type { RateLimitConsumption } from '../../middleware/rate-limiter-ip.js';
 import { Admission } from '../admission.js';
 import { SubscriptionRegistry } from '../subscriptions.js';
 
-const NEXT_SECRET = 'seeded-next-secret';
 const REDACTED_MESSAGE = 'An unexpected error occurred.';
 
 let onStreamReturn: (() => Promise<void>) | null = null;
@@ -45,36 +44,20 @@ function pendingStream(): AsyncIterableIterator<unknown> {
 	};
 }
 
-function onceStream(): AsyncIterableIterator<unknown> {
-	let yielded = false;
-
-	return {
-		[Symbol.asyncIterator]() {
-			return this;
-		},
-		next() {
-			if (yielded) return Promise.resolve({ value: undefined, done: true });
-			yielded = true;
-			return Promise.resolve({ value: true, done: false });
-		},
-		return() {
-			return Promise.resolve({ value: undefined, done: true });
-		},
-	};
-}
+const EventEnum = new GraphQLEnumType({
+	name: 'EventEnum',
+	values: { create: {}, update: {}, delete: {} },
+});
 
 const TEST_SCHEMA = new GraphQLSchema({
 	query: new GraphQLObjectType({ name: 'Query', fields: { ok: { type: GraphQLBoolean } } }),
 	subscription: new GraphQLObjectType({
 		name: 'Subscription',
 		fields: {
-			stream: { type: GraphQLBoolean, subscribe: () => pendingStream() },
-			secretField: {
+			articles_mutated: {
 				type: GraphQLBoolean,
-				subscribe: () => onceStream(),
-				resolve: () => {
-					throw new Error(NEXT_SECRET);
-				},
+				args: { event: { type: EventEnum } },
+				subscribe: () => pendingStream(),
 			},
 		},
 	}),
@@ -375,7 +358,7 @@ describe('GraphQL connection_init lifecycle', () => {
 		const client = [...controller.clientSnapshot()][0]!;
 		expect(client.auth.accountability.user).toBe('alice');
 
-		send(second.ws, { type: 'subscribe', id: 's2', payload: { query: 'subscription { stream }' } });
+		send(second.ws, { type: 'subscribe', id: 's2', payload: { query: 'subscription { articles_mutated }' } });
 		await waitForId(second.frames, 'next', 's2');
 	});
 
@@ -460,6 +443,16 @@ describe('GraphQL onSubscribe gate', () => {
 		await waitForId(frames, 'error', 'q');
 	});
 
+	it('rejects an explicit delete-event subscription', async () => {
+		harness = await createHarness({ authMode: 'public' });
+		const { ws, frames } = await connect(harness);
+		send(ws, { type: 'connection_init' });
+		await waitForAck(frames);
+
+		send(ws, { type: 'subscribe', id: 'del', payload: { query: 'subscription { articles_mutated(event: delete) }' } });
+		await waitForId(frames, 'error', 'del');
+	});
+
 	it('rejects an over-token-limit document at onSubscribe', async () => {
 		env()['GRAPHQL_QUERY_TOKEN_LIMIT'] = 2;
 		harness = await createHarness({ authMode: 'public' });
@@ -467,7 +460,7 @@ describe('GraphQL onSubscribe gate', () => {
 		send(ws, { type: 'connection_init', payload: { access_token: signAdmin('root') } });
 		await waitForAck(frames);
 
-		send(ws, { type: 'subscribe', id: 'big', payload: { query: 'subscription { stream }' } });
+		send(ws, { type: 'subscribe', id: 'big', payload: { query: 'subscription { articles_mutated }' } });
 		await waitForId(frames, 'error', 'big');
 		const errFrame = frames.find((frame) => frame['type'] === 'error' && frame['id'] === 'big');
 		expect(JSON.stringify(errFrame)).toMatch(/token/i);
@@ -494,24 +487,31 @@ describe('GraphQL error redaction', () => {
 		send(ws, { type: 'connection_init' });
 		await waitForAck(frames);
 
-		send(ws, { type: 'subscribe', id: 'e1', payload: { query: 'subscription { secretFiel }' } });
+		send(ws, { type: 'subscribe', id: 'e1', payload: { query: 'subscription { articles_mutate }' } });
 		await waitForId(frames, 'error', 'e1');
 		const errFrame = frames.find((frame) => frame['type'] === 'error' && frame['id'] === 'e1');
-		expect(JSON.stringify(errFrame)).not.toContain('secretField');
+		expect(JSON.stringify(errFrame)).not.toContain('articles_mutated');
 		expect(errFrame!['payload'][0]['message']).toBe(REDACTED_MESSAGE);
 	});
 
-	it('redacts a resolver error at onNext for a non-admin', async () => {
+	it('redacts a subscription variable value from a coercion error at onError', async () => {
 		harness = await createHarness({ authMode: 'public' });
 		const { ws, frames } = await connect(harness);
-		send(ws, { type: 'connection_init' });
+		send(ws, { type: 'connection_init', payload: { access_token: signAdmin('root') } });
 		await waitForAck(frames);
 
-		send(ws, { type: 'subscribe', id: 'n1', payload: { query: 'subscription { secretField }' } });
-		await waitForId(frames, 'next', 'n1');
-		const nextFrame = frames.find((frame) => frame['type'] === 'next' && frame['id'] === 'n1');
-		expect(JSON.stringify(nextFrame)).not.toContain(NEXT_SECRET);
-		expect(nextFrame!['payload']['errors'][0]['message']).toBe(REDACTED_MESSAGE);
+		send(ws, {
+			type: 'subscribe',
+			id: 'v1',
+			payload: {
+				query: 'subscription ($access_token: EventEnum!) { articles_mutated(event: $access_token) }',
+				variables: { access_token: 'seeded-variable-secret' },
+			},
+		});
+
+		await waitForId(frames, 'error', 'v1');
+		const errFrame = frames.find((frame) => frame['type'] === 'error' && frame['id'] === 'v1');
+		expect(JSON.stringify(errFrame)).not.toContain('seeded-variable-secret');
 	});
 });
 
@@ -522,7 +522,7 @@ describe('GraphQL subscribe', () => {
 		send(ws, { type: 'connection_init' });
 		await waitForAck(frames);
 
-		send(ws, { type: 'subscribe', id: 'sub', payload: { query: 'subscription { stream }' } });
+		send(ws, { type: 'subscribe', id: 'sub', payload: { query: 'subscription { articles_mutated }' } });
 		await waitForId(frames, 'next', 'sub');
 
 		send(ws, { type: 'complete', id: 'sub' });
@@ -540,7 +540,7 @@ describe('GraphQL subscribe', () => {
 
 		harness.getSchema.mockClear();
 
-		send(ws, { type: 'subscribe', id: 'sub', payload: { query: 'subscription { stream }' } });
+		send(ws, { type: 'subscribe', id: 'sub', payload: { query: 'subscription { articles_mutated }' } });
 		await waitForId(frames, 'next', 'sub');
 
 		expect(harness.getSchema).toHaveBeenCalledTimes(1);
@@ -557,9 +557,9 @@ describe('GraphQL resource safety', () => {
 		await waitForAck(frames);
 
 		const id = 'x'.repeat(200);
-		send(ws, { type: 'subscribe', id, payload: { query: 'subscription { stream }' } });
+		send(ws, { type: 'subscribe', id, payload: { query: 'subscription { articles_mutated }' } });
 		await waitForId(frames, 'next', id);
-		send(ws, { type: 'subscribe', id, payload: { query: 'subscription { stream }' } });
+		send(ws, { type: 'subscribe', id, payload: { query: 'subscription { articles_mutated }' } });
 
 		expect((await closed).code).toBe(4409);
 		await vi.waitFor(() => expect(admission.reserve('graphql', '2.2.2.2')).not.toBeNull());
@@ -582,7 +582,7 @@ describe('GraphQL resource safety', () => {
 		send(ws, { type: 'connection_init' });
 		await waitForAck(frames);
 
-		send(ws, { type: 'subscribe', id: 'sub', payload: { query: 'subscription { stream }' } });
+		send(ws, { type: 'subscribe', id: 'sub', payload: { query: 'subscription { articles_mutated }' } });
 		await waitForId(frames, 'next', 'sub');
 
 		const terminated = harness.controller.terminate();

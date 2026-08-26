@@ -1,12 +1,19 @@
-import type { ConnectionInitMessage } from 'graphql-ws';
+import type { CompleteMessage, ConnectionInitMessage, ErrorMessage } from 'graphql-ws';
 import { CloseCode, makeServer, type Context, type Server, type SubscribeMessage } from 'graphql-ws';
 import { getOperationAST, GraphQLError, type ExecutionArgs, type ExecutionResult } from 'graphql';
 import type { Buffer } from 'node:buffer';
 import { GraphQLService } from '../../services/graphql/index.js';
 import { parseGraphQLQuery, validateGraphQLDocument } from '../../services/graphql/query-gate.js';
+import {
+	Rendezvous,
+	resolveSubscriptionTarget,
+	type SubscriptionOperation,
+} from '../../services/graphql/subscription.js';
 import formatGraphqlErrors from '../../services/graphql/utils/process-error.js';
 import { ConnectionParams, type WebSocketMessage } from '../messages.js';
+import type { Subscription } from '../subscriptions.js';
 import { SocketController, type SocketClient, type SocketControllerOptions } from './base.js';
+import { OperationSequencer } from './operation-sequencer.js';
 
 const CLOSE_TRY_AGAIN_LATER = 1013;
 const CLOSE_REASON_MAX_BYTES = 123;
@@ -16,6 +23,9 @@ type GraphQLExtra = { client: SocketClient };
 interface ConnectionAdapter {
 	onMessage: ((data: string) => Promise<void>) | null;
 	closed: ((code?: number, reason?: string) => Promise<void>) | null;
+	readonly operations: Map<string, SubscriptionOperation>;
+	readonly variables: Map<string, unknown>;
+	readonly sequencer: OperationSequencer;
 }
 
 function fitCloseReason(reason: string): string {
@@ -33,9 +43,20 @@ export class GraphQLController extends SocketController {
 		this.gql = makeServer<ConnectionInitMessage['payload'], GraphQLExtra>({
 			connectionInitWaitTimeout: this.authMode === 'handshake' ? 0 : this.authTimeoutMs,
 			onConnect: (ctx) => this.handleConnect(ctx.extra.client, ctx.connectionParams),
-			onSubscribe: (ctx, message) => this.handleSubscribe(ctx.extra.client, message),
+			onSubscribe: async (ctx, message) => {
+				const result = await this.handleSubscribe(ctx.extra.client, message);
+
+				// A subscribe that resolves to errors after the operation was canceled (a `complete` arriving
+				// during the schema lookup) reaches neither onError nor onComplete, so clean its variables here.
+				if (Array.isArray(result) && !(message.id in ctx.subscriptions)) {
+					this.adapters.get(ctx.extra.client)?.variables.delete(message.id);
+				}
+
+				return result;
+			},
 			onNext: (ctx, _message, args, result) => this.redactNext(ctx.extra.client, args, result as ExecutionResult),
-			onError: (ctx, _message, errors) => this.redactErrors(ctx.extra.client, errors),
+			onError: (ctx, message, errors) => this.redactErrors(ctx.extra.client, message, errors),
+			onComplete: (ctx, message) => this.handleComplete(ctx.extra.client, message),
 		});
 	}
 
@@ -46,7 +67,17 @@ export class GraphQLController extends SocketController {
 	protected override createClient(ws: SocketClient, auth: SocketClient['auth'], ip: string): SocketClient {
 		const client = super.createClient(ws, auth, ip);
 
-		const adapter: ConnectionAdapter = { onMessage: null, closed: null };
+		const adapter: ConnectionAdapter = {
+			onMessage: null,
+			closed: null,
+			operations: new Map(),
+			variables: new Map(),
+			sequencer: new OperationSequencer(
+				(frame) => this.deliverFrame(client, frame),
+				(work) => this.track(work)
+			),
+		};
+
 		this.adapters.set(client, adapter);
 
 		adapter.closed = this.gql.opened(
@@ -64,6 +95,7 @@ export class GraphQLController extends SocketController {
 		);
 
 		client.once('close', (code: number, reason: Buffer) => {
+			adapter.sequencer.cancel();
 			const settled = adapter.closed?.(code, reason.toString());
 			if (settled !== undefined) this.track(settled);
 		});
@@ -75,11 +107,26 @@ export class GraphQLController extends SocketController {
 		const adapter = this.adapters.get(client);
 		if (adapter === undefined || adapter.onMessage === null) return;
 
-		// The library promise stays pending for a subscription's lifetime, so it is started concurrently and
-		// tracked for rejection and shutdown rather than awaited, which would block later frames.
-		const pending = adapter.onMessage(JSON.stringify(message));
-		this.track(pending);
+		const frame = JSON.stringify(message);
+		const id = (message as { id?: unknown }).id;
+
+		if ((message.type === 'subscribe' || message.type === 'complete') && typeof id === 'string') {
+			adapter.sequencer.route(id, message.type, frame);
+			return;
+		}
+
+		this.track(this.deliverFrame(client, frame));
+	}
+
+	private deliverFrame(client: SocketClient, frame: string): Promise<void> {
+		const adapter = this.adapters.get(client);
+		if (adapter === undefined || adapter.onMessage === null) return Promise.resolve();
+
+		// The library promise stays pending for a subscription's lifetime, so it is tracked for rejection and
+		// shutdown rather than awaited by the caller, which would block later frames.
+		const pending = adapter.onMessage(frame);
 		void pending.catch(() => this.stop(client, { code: CloseCode.InternalServerError }));
+		return pending;
 	}
 
 	override async terminate(): Promise<void> {
@@ -94,6 +141,16 @@ export class GraphQLController extends SocketController {
 
 	protected override sendAuthSuccess(): { accepted: boolean } {
 		return { accepted: true };
+	}
+
+	protected override stop(
+		client: SocketClient,
+		options: { code?: number; reason?: string; terminate?: boolean } = {}
+	): void {
+		// stop() marks the client stopping before the asynchronous close handshake, so cancel queued frames at the
+		// stopping boundary rather than waiting for the close event that would otherwise let them reserve mid-teardown.
+		this.adapters.get(client)?.sequencer.cancel();
+		super.stop(client, options);
 	}
 
 	protected override rejectRateLimitedMessage(client: SocketClient): void {
@@ -154,6 +211,8 @@ export class GraphQLController extends SocketController {
 		message: SubscribeMessage
 	): Promise<readonly GraphQLError[] | ExecutionArgs> {
 		const { query, variables, operationName } = message.payload;
+		const adapter = this.adapters.get(client);
+		adapter?.variables.set(message.id, variables);
 
 		let document;
 
@@ -180,13 +239,84 @@ export class GraphQLController extends SocketController {
 			return [new GraphQLError('Only subscription operations are supported over the WebSocket transport.')];
 		}
 
+		const target = resolveSubscriptionTarget(schema, operation, document, variables ?? {});
+
+		if (target.errors !== undefined) {
+			return target.errors;
+		}
+
+		if (target.collection === '') {
+			return [new GraphQLError('Only subscription operations are supported over the WebSocket transport.')];
+		}
+
+		if (target.event === 'delete') {
+			return [new GraphQLError('Delete-event subscriptions are not supported over the WebSocket transport.')];
+		}
+
+		if (adapter === undefined) {
+			return [new GraphQLError('The subscription transport is unavailable.')];
+		}
+
+		const channel = new Rendezvous();
+
+		const subscription: Subscription = {
+			client,
+			collection: target.collection,
+			query: {},
+			sink: (event, signal) => channel.push(event, signal),
+			...(target.event !== undefined && { event: target.event }),
+		};
+
+		const reserved = this.subscriptions.reserve(subscription);
+
+		if (!reserved.ok) {
+			channel.close();
+
+			return [
+				new GraphQLError(
+					reserved.reason === 'limit'
+						? 'The subscription limit has been reached.'
+						: 'Subscriptions are currently unavailable.'
+				),
+			];
+		}
+
+		const { reservation } = reserved;
+
+		let finalized = false;
+
+		const finalize = (): void => {
+			if (finalized) return;
+			finalized = true;
+			channel.close();
+			reservation.remove();
+			adapter.operations.delete(message.id);
+			adapter.variables.delete(message.id);
+		};
+
+		const subscriptionOperation: SubscriptionOperation = {
+			client,
+			channel,
+			reservation,
+			loadSchema: () => this.getSchema({ database: this.database }),
+			finalize,
+		};
+
+		adapter.operations.set(message.id, subscriptionOperation);
+
 		return {
 			schema,
 			document,
 			variableValues: variables,
 			operationName,
-			contextValue: { accountability: client.auth.accountability },
+			contextValue: { accountability: client.auth.accountability, operation: subscriptionOperation },
 		};
+	}
+
+	private handleComplete(client: SocketClient, message: CompleteMessage): void {
+		const adapter = this.adapters.get(client);
+		adapter?.operations.get(message.id)?.finalize();
+		adapter?.variables.delete(message.id);
 	}
 
 	private redactNext(client: SocketClient, args: ExecutionArgs, result: ExecutionResult): ExecutionResult {
@@ -202,7 +332,15 @@ export class GraphQLController extends SocketController {
 		};
 	}
 
-	private redactErrors(client: SocketClient, errors: readonly GraphQLError[]): readonly GraphQLError[] {
-		return formatGraphqlErrors(errors, undefined, client.auth.accountability) as unknown as readonly GraphQLError[];
+	private redactErrors(
+		client: SocketClient,
+		message: ErrorMessage,
+		errors: readonly GraphQLError[]
+	): readonly GraphQLError[] {
+		const adapter = this.adapters.get(client);
+		const variables = adapter?.variables.get(message.id);
+		adapter?.variables.delete(message.id);
+
+		return formatGraphqlErrors(errors, variables, client.auth.accountability) as unknown as readonly GraphQLError[];
 	}
 }
