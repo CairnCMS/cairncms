@@ -21,6 +21,7 @@ import {
 } from '../../websocket/subscriptions.js';
 import { resolveTargetService } from '../../websocket/target.js';
 import { getEventPayload } from '../../websocket/utils/items.js';
+import { isDeleteFeedEligible } from '../../websocket/utils/removal.js';
 import type { GraphQLService } from './index.js';
 
 const MUTATED_SUFFIX = '_mutated';
@@ -106,6 +107,7 @@ export interface SubscriptionOperation {
 	readonly reservation: Reservation;
 	loadSchema: () => Promise<SchemaOverview>;
 	finalize: () => void;
+	retire: () => void;
 }
 
 export interface SubscriptionExecutionContext {
@@ -251,14 +253,17 @@ export function parseFields(service: GraphQLService, request: GraphQLResolveInfo
 	return fields ?? [];
 }
 
-interface ActiveEvent {
-	mutation: WebSocketEvent;
-	keys: readonly (string | number)[];
-	index: number;
-	accountability: RequestAccountability;
-	service: NonNullable<ReturnType<typeof resolveTargetService>>;
-	schema: SchemaOverview;
-}
+type ActiveEvent =
+	| { action: 'delete'; keys: readonly (string | number)[]; index: number }
+	| {
+			action: 'create' | 'update';
+			mutation: Extract<WebSocketEvent, { action: 'create' | 'update' }>;
+			keys: readonly (string | number)[];
+			index: number;
+			accountability: RequestAccountability;
+			service: NonNullable<ReturnType<typeof resolveTargetService>>;
+			schema: SchemaOverview;
+	  };
 
 export function createSubscriptionGenerator(self: GraphQLService, event: string) {
 	const collection = event.slice(0, -MUTATED_SUFFIX.length);
@@ -282,11 +287,16 @@ export function createSubscriptionGenerator(self: GraphQLService, event: string)
 
 		let activated = false;
 		let active: ActiveEvent | null = null;
+		let retired = false;
 
 		const readKey = async (
 			current: ActiveEvent,
 			key: string | number
 		): Promise<Record<string, unknown> | undefined> => {
+			if (current.action === 'delete') {
+				return { [event]: { key, data: null, event: 'delete' } };
+			}
+
 			const readSubscription: Subscription = {
 				client: operation.client,
 				collection,
@@ -313,16 +323,25 @@ export function createSubscriptionGenerator(self: GraphQLService, event: string)
 		};
 
 		const beginEvent = async (mutation: WebSocketEvent): Promise<void> => {
-			if (mutation.action === 'delete') return;
-
 			const schema = await operation.loadSchema();
 			const accountability = await operation.client.auth.snapshotAccountability(schema);
 			if (accountability === null) return;
+
+			if (mutation.action === 'delete') {
+				if (!isDeleteFeedEligible(collection, accountability, schema)) {
+					retired = true;
+					return;
+				}
+
+				active = { action: 'delete', keys: mutation.keys, index: 0 };
+				return;
+			}
 
 			const service = resolveTargetService(collection, { schema, accountability });
 			if (service === null) return;
 
 			active = {
+				action: mutation.action,
 				mutation,
 				keys: mutation.action === 'create' ? [mutation.key] : mutation.keys,
 				index: 0,
@@ -357,6 +376,7 @@ export function createSubscriptionGenerator(self: GraphQLService, event: string)
 						if (pulled.done) return { value: undefined, done: true };
 
 						await beginEvent(pulled.event);
+						if (retired) operation.retire();
 					}
 				} catch (error) {
 					operation.finalize();

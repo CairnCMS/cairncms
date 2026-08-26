@@ -448,16 +448,6 @@ describe('GraphQL onSubscribe gate', () => {
 		await waitForId(frames, 'error', 'q');
 	});
 
-	it('rejects an explicit delete-event subscription', async () => {
-		harness = await createHarness({ authMode: 'public' });
-		const { ws, frames } = await connect(harness);
-		send(ws, { type: 'connection_init' });
-		await waitForAck(frames);
-
-		send(ws, { type: 'subscribe', id: 'del', payload: { query: 'subscription { articles_mutated(event: delete) }' } });
-		await waitForId(frames, 'error', 'del');
-	});
-
 	it('rejects an over-token-limit document at onSubscribe', async () => {
 		env()['GRAPHQL_QUERY_TOKEN_LIMIT'] = 2;
 		harness = await createHarness({ authMode: 'public' });

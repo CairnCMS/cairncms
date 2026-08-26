@@ -36,6 +36,10 @@ let readAccountability: { user: string | null } | null;
 let stallWhen: ((subscription: { collection: string; item?: string }) => boolean) | null;
 let stallGate: Promise<void>;
 let permissionsError: Error | null;
+let permissionsResult: Record<string, unknown>[];
+let targetUnavailable: boolean;
+let eligibilityCalls: number;
+let getEventPayloadCalls: number;
 let getQueryError: Error | null;
 let getSchemaImpl: () => Promise<SchemaOverview>;
 
@@ -65,16 +69,29 @@ vi.mock('../../utils/error-log.js', async (importOriginal) => {
 vi.mock('../../utils/get-permissions.js', () => ({
 	getPermissions: async () => {
 		if (permissionsError !== null) throw permissionsError;
-		return [];
+		return permissionsResult;
 	},
 }));
 
 vi.mock('../../websocket/target.js', () => ({
-	resolveTargetService: () => ({}),
+	resolveTargetService: () => (targetUnavailable ? null : {}),
 }));
+
+vi.mock('../../websocket/utils/removal.js', async (importOriginal) => {
+	const actual = (await importOriginal()) as typeof import('../../websocket/utils/removal.js');
+
+	return {
+		...actual,
+		isDeleteFeedEligible: (...args: Parameters<typeof actual.isDeleteFeedEligible>) => {
+			eligibilityCalls++;
+			return actual.isDeleteFeedEligible(...args);
+		},
+	};
+});
 
 vi.mock('../../websocket/utils/items.js', () => ({
 	getEventPayload: async (service: unknown, subscription: any, accountability: any, _schema: unknown, event: any) => {
+		getEventPayloadCalls++;
 		readFields = subscription.query.fields;
 		readAccountability = accountability;
 		if (stallWhen !== null && stallWhen(subscription)) await stallGate;
@@ -159,7 +176,14 @@ vi.mock('./index.js', () => ({
 	},
 }));
 
-const SCHEMA = { collections: {}, relations: [] } as unknown as SchemaOverview;
+function schemaCollection(name: string): Record<string, unknown> {
+	return { collection: name, primary: 'id', fields: {} };
+}
+
+const SCHEMA = {
+	collections: { articles: schemaCollection('articles'), posts: schemaCollection('posts') },
+	relations: [],
+} as unknown as SchemaOverview;
 
 function secret(): string {
 	return String(getEnv()['SECRET']);
@@ -317,6 +341,10 @@ beforeEach(() => {
 	stallWhen = null;
 	stallGate = Promise.resolve();
 	permissionsError = null;
+	permissionsResult = [];
+	targetUnavailable = false;
+	eligibilityCalls = 0;
+	getEventPayloadCalls = 0;
 	getQueryError = null;
 	getSchemaImpl = async () => SCHEMA;
 	loggedPayloads.length = 0;
@@ -1087,5 +1115,193 @@ describe('GraphQL subscription delivery', () => {
 		harness.messenger.publish('websocket.event', { action: 'create', collection: 'articles', key: 'public-1' });
 		await settleUntil(() => nextFrames(connection.frames).length === 2);
 		expect(nextFrames(connection.frames)).toHaveLength(2);
+	});
+});
+
+describe('GraphQL delete feed', () => {
+	const UNCONDITIONAL_READ = [{ collection: 'articles', action: 'read', permissions: {}, fields: ['*'] }];
+
+	const CONDITIONAL_READ = [
+		{ collection: 'articles', action: 'read', permissions: { status: { _eq: 'published' } }, fields: ['*'] },
+	];
+
+	const DELETE_QUERY = 'subscription { articles_mutated(event: delete) { key event } }';
+
+	async function ack(connection: Connected, token: string): Promise<void> {
+		send(connection.ws, { type: 'connection_init', payload: { access_token: token } });
+		await vi.waitFor(() => expect(connection.frames.some((frame) => frame['type'] === 'connection_ack')).toBe(true));
+	}
+
+	function framesFor(connection: Connected, id: string): Record<string, any>[] {
+		return connection.frames.filter((frame) => frame['id'] === id);
+	}
+
+	it('delivers a per-key delete notification to an eligible reader without a row read', async () => {
+		harness = await createHarness();
+		permissionsResult = UNCONDITIONAL_READ;
+
+		const { frames } = await subscribed(harness, DELETE_QUERY, signUser('alice'));
+
+		harness.messenger.publish('websocket.event', { action: 'delete', collection: 'articles', keys: ['10', '20'] });
+		await settleUntil(() => nextFrames(frames).length === 2);
+
+		expect(nextFrames(frames).map((frame) => frame['payload']['data']['articles_mutated'])).toEqual([
+			{ key: '10', event: 'delete' },
+			{ key: '20', event: 'delete' },
+		]);
+
+		expect(getEventPayloadCalls).toBe(0);
+	});
+
+	it('accepts an eligible delete subscription carrying a normal data selection', async () => {
+		harness = await createHarness();
+		permissionsResult = UNCONDITIONAL_READ;
+
+		const { frames } = await subscribed(
+			harness,
+			'subscription { articles_mutated(event: delete) { key data { id title } } }',
+			signUser('alice')
+		);
+
+		harness.messenger.publish('websocket.event', { action: 'delete', collection: 'articles', keys: ['10'] });
+		await settleUntil(() => nextFrames(frames).length === 1);
+
+		expect(nextFrames(frames)[0]!['payload']['data']['articles_mutated']).toEqual({ key: '10', data: null });
+	});
+
+	it('never delivers a delete to an event-unset subscription but keeps it active for a later create', async () => {
+		harness = await createHarness();
+
+		const { frames } = await subscribed(harness, 'subscription { articles_mutated { key event } }', signUser('alice'));
+
+		harness.messenger.publish('websocket.event', { action: 'delete', collection: 'articles', keys: ['10'] });
+		await settleUntil(() => false, 15);
+		expect(nextFrames(frames)).toHaveLength(0);
+
+		harness.messenger.publish('websocket.event', { action: 'create', collection: 'articles', key: '99' });
+		await settleUntil(() => nextFrames(frames).length === 1);
+		expect(nextFrames(frames)).toHaveLength(1);
+	});
+
+	it('rejects a delete subscription from a conditional reader with a fixed forbidden error and no reservation', async () => {
+		harness = await createHarness();
+		permissionsResult = CONDITIONAL_READ;
+
+		const connection = await connect(harness);
+		await ack(connection, signUser('alice'));
+
+		send(connection.ws, { type: 'subscribe', id: 'del', payload: { query: DELETE_QUERY } });
+
+		await vi.waitFor(() =>
+			expect(connection.frames.some((frame) => frame['type'] === 'error' && frame['id'] === 'del')).toBe(true)
+		);
+
+		const errFrame = connection.frames.find((frame) => frame['type'] === 'error' && frame['id'] === 'del');
+		expect(errFrame!['payload'][0]['extensions']['code']).toBe('FORBIDDEN');
+		expect(harness.registry.getSubscribedOwners()).toHaveLength(0);
+	});
+
+	it('rejects a delete subscription with an unavailable target before the eligibility helper and creates no reservation', async () => {
+		harness = await createHarness();
+		permissionsResult = UNCONDITIONAL_READ;
+		targetUnavailable = true;
+
+		const connection = await connect(harness);
+		await ack(connection, signUser('alice'));
+
+		send(connection.ws, { type: 'subscribe', id: 'del', payload: { query: DELETE_QUERY } });
+
+		await vi.waitFor(() =>
+			expect(connection.frames.some((frame) => frame['type'] === 'error' && frame['id'] === 'del')).toBe(true)
+		);
+
+		const errFrame = connection.frames.find((frame) => frame['type'] === 'error' && frame['id'] === 'del');
+		expect(errFrame!['payload'][0]['extensions']['code']).toBe('FORBIDDEN');
+		expect(eligibilityCalls).toBe(0);
+		expect(harness.registry.getSubscribedOwners()).toHaveLength(0);
+	});
+
+	it('silently retires a delete subscription on eligibility loss, keeping the connection and other operations alive', async () => {
+		harness = await createHarness();
+		permissionsResult = UNCONDITIONAL_READ;
+
+		const connection = await connect(harness);
+		await ack(connection, signUser('alice'));
+
+		send(connection.ws, {
+			type: 'subscribe',
+			id: 'keep',
+			payload: { query: 'subscription { articles_mutated { key } }' },
+		});
+
+		send(connection.ws, { type: 'subscribe', id: 'del', payload: { query: DELETE_QUERY } });
+
+		await vi.waitFor(() =>
+			expect(harness!.registry.getActiveByCollection('articles', Number.MAX_SAFE_INTEGER)).toHaveLength(2)
+		);
+
+		permissionsResult = CONDITIONAL_READ;
+		harness.messenger.publish('websocket.event', { action: 'delete', collection: 'articles', keys: ['10'] });
+
+		await vi.waitFor(() =>
+			expect(harness!.registry.getActiveByCollection('articles', Number.MAX_SAFE_INTEGER)).toHaveLength(1)
+		);
+
+		expect(framesFor(connection, 'del')).toHaveLength(0);
+
+		// Same-lane settlement: the sequencer cannot activate a replacement on id `del` until the retired predecessor's
+		// lifetime settles (past graphql-ws's emit.complete), so any terminal frame the predecessor might have emitted is
+		// already queued server side by the time the replacement activates. The client-receipt guarantee comes from the
+		// keep watermark below.
+		send(connection.ws, {
+			type: 'subscribe',
+			id: 'del',
+			payload: { query: 'subscription { articles_mutated { key } }' },
+		});
+
+		await vi.waitFor(() =>
+			expect(harness!.registry.getActiveByCollection('articles', Number.MAX_SAFE_INTEGER)).toHaveLength(2)
+		);
+
+		expect(framesFor(connection, 'del')).toHaveLength(0);
+
+		send(connection.ws, { type: 'complete', id: 'del' });
+
+		await vi.waitFor(() =>
+			expect(harness!.registry.getActiveByCollection('articles', Number.MAX_SAFE_INTEGER)).toHaveLength(1)
+		);
+
+		harness.messenger.publish('websocket.event', { action: 'create', collection: 'articles', key: '99' });
+
+		await vi.waitFor(() =>
+			expect(connection.frames.some((frame) => frame['type'] === 'next' && frame['id'] === 'keep')).toBe(true)
+		);
+
+		// `keep`'s next is queued only after the predecessor settled, and WebSocket preserves outbound frame order, so its
+		// arrival on the client is a receipt watermark past which any terminal frame the predecessor queued would already
+		// be present. `send` only enqueues server side, so this is the assertion that proves nothing reached the client.
+		expect(framesFor(connection, 'del')).toHaveLength(0);
+		expect(connection.ws.readyState).toBe(WebSocket.OPEN);
+	});
+
+	it('releases the delivery permit when a delete subscription retires so another collection progresses', async () => {
+		harness = await createHarness({ deliveryConcurrency: 1 });
+		permissionsResult = UNCONDITIONAL_READ;
+
+		await subscribed(harness, DELETE_QUERY, signUser('alice'));
+		const posts = await subscribed(harness, 'subscription { posts_mutated { key } }', signUser('alice'));
+
+		permissionsResult = CONDITIONAL_READ;
+		harness.messenger.publish('websocket.event', { action: 'delete', collection: 'articles', keys: ['10'] });
+
+		await vi.waitFor(() =>
+			expect(harness!.registry.getActiveByCollection('articles', Number.MAX_SAFE_INTEGER)).toHaveLength(0)
+		);
+
+		harness.messenger.publish('websocket.event', { action: 'create', collection: 'posts', key: '5' });
+
+		await vi.waitFor(() =>
+			expect(posts.frames.some((frame) => frame['type'] === 'next' && frame['id'] === 'sub')).toBe(true)
+		);
 	});
 });

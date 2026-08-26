@@ -2,6 +2,7 @@ import type { CompleteMessage, ConnectionInitMessage, ErrorMessage } from 'graph
 import { CloseCode, makeServer, type Context, type Server, type SubscribeMessage } from 'graphql-ws';
 import { getOperationAST, GraphQLError, type ExecutionArgs, type ExecutionResult } from 'graphql';
 import type { Buffer } from 'node:buffer';
+import { ForbiddenException } from '../../exceptions/index.js';
 import { GraphQLService } from '../../services/graphql/index.js';
 import { parseGraphQLQuery, validateGraphQLDocument } from '../../services/graphql/query-gate.js';
 import {
@@ -12,6 +13,8 @@ import {
 import formatGraphqlErrors from '../../services/graphql/utils/process-error.js';
 import { ConnectionParams, type WebSocketMessage } from '../messages.js';
 import type { Subscription } from '../subscriptions.js';
+import { resolveTargetService } from '../target.js';
+import { isDeleteFeedEligible, isDeleteFeedQueryAllowed } from '../utils/removal.js';
 import { SocketController, type SocketClient, type SocketControllerOptions } from './base.js';
 import { OperationSequencer } from './operation-sequencer.js';
 
@@ -118,6 +121,13 @@ export class GraphQLController extends SocketController {
 		this.track(this.deliverFrame(client, frame));
 	}
 
+	// Let graphql-ws release the operation without sending a completion frame.
+	private retireOperation(client: SocketClient, id: string): void {
+		const adapter = this.adapters.get(client);
+		if (adapter === undefined || adapter.onMessage === null) return;
+		adapter.sequencer.route(id, 'complete', JSON.stringify({ id, type: 'complete' }));
+	}
+
 	private deliverFrame(client: SocketClient, frame: string): Promise<void> {
 		const adapter = this.adapters.get(client);
 		if (adapter === undefined || adapter.onMessage === null) return Promise.resolve();
@@ -222,8 +232,10 @@ export class GraphQLController extends SocketController {
 			return [error as GraphQLError];
 		}
 
+		const rawSchema = await this.getSchema({ database: this.database });
+
 		const service = new GraphQLService({
-			schema: await this.getSchema({ database: this.database }),
+			schema: rawSchema,
 			accountability: client.auth.accountability,
 			scope: 'items',
 		});
@@ -249,8 +261,22 @@ export class GraphQLController extends SocketController {
 			return [new GraphQLError('Only subscription operations are supported over the WebSocket transport.')];
 		}
 
+		// The GraphQL selection set is the response shape, never a row query, so the delete feed's query gate always
+		// sees the same empty row query the subscription registers with.
+		const rowQuery = {};
+
 		if (target.event === 'delete') {
-			return [new GraphQLError('Delete-event subscriptions are not supported over the WebSocket transport.')];
+			const accountability = await client.auth.snapshotAccountability(rawSchema);
+
+			if (
+				accountability === null ||
+				resolveTargetService(target.collection, { schema: rawSchema, accountability }) === null ||
+				!isDeleteFeedQueryAllowed(rowQuery) ||
+				!isDeleteFeedEligible(target.collection, accountability, rawSchema)
+			) {
+				const forbidden = new ForbiddenException();
+				return [new GraphQLError(forbidden.message, undefined, undefined, undefined, undefined, forbidden)];
+			}
 		}
 
 		if (adapter === undefined) {
@@ -262,7 +288,7 @@ export class GraphQLController extends SocketController {
 		const subscription: Subscription = {
 			client,
 			collection: target.collection,
-			query: {},
+			query: rowQuery,
 			sink: (event, signal) => channel.push(event, signal),
 			...(target.event !== undefined && { event: target.event }),
 		};
@@ -300,6 +326,7 @@ export class GraphQLController extends SocketController {
 			reservation,
 			loadSchema: () => this.getSchema({ database: this.database }),
 			finalize,
+			retire: () => this.retireOperation(client, message.id),
 		};
 
 		adapter.operations.set(message.id, subscriptionOperation);
