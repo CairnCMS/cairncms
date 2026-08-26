@@ -92,15 +92,53 @@ describe('ServerService.serverInfo websocket exposure', () => {
 		getActiveRealtime.mockReset();
 	});
 
-	test('reports the running realtime settings to an authenticated user', async () => {
+	test('reports both transports to an authenticated user when both are active', async () => {
 		getActiveRealtime.mockReturnValue({
 			transport: () => null,
-			info: () => ({ rest: { authentication: 'strict', path: '/ws' }, heartbeat: 30 }),
+			info: () => ({
+				rest: { authentication: 'strict', path: '/ws' },
+				graphql: { authentication: 'handshake', path: '/graphql' },
+				heartbeat: 30,
+			}),
 		});
 
 		const info = await serverInfoFor(authenticatedUser);
 
-		expect(info['websocket']).toEqual({ rest: { authentication: 'strict', path: '/ws' }, heartbeat: 30 });
+		expect(info['websocket']).toEqual({
+			rest: { authentication: 'strict', path: '/ws' },
+			graphql: { authentication: 'handshake', path: '/graphql' },
+			heartbeat: 30,
+		});
+	});
+
+	test('reports the REST transport with the GraphQL transport inactive', async () => {
+		getActiveRealtime.mockReturnValue({
+			transport: () => null,
+			info: () => ({ rest: { authentication: 'public', path: '/ws' }, graphql: false, heartbeat: 30 }),
+		});
+
+		const info = await serverInfoFor(authenticatedUser);
+
+		expect(info['websocket']).toEqual({
+			rest: { authentication: 'public', path: '/ws' },
+			graphql: false,
+			heartbeat: 30,
+		});
+	});
+
+	test('reports the GraphQL transport with the REST transport inactive', async () => {
+		getActiveRealtime.mockReturnValue({
+			transport: () => null,
+			info: () => ({ rest: false, graphql: { authentication: 'handshake', path: '/graphql' }, heartbeat: 30 }),
+		});
+
+		const info = await serverInfoFor(authenticatedUser);
+
+		expect(info['websocket']).toEqual({
+			rest: false,
+			graphql: { authentication: 'handshake', path: '/graphql' },
+			heartbeat: 30,
+		});
 	});
 
 	test('reports websocket false when realtime is not active', async () => {
@@ -111,21 +149,10 @@ describe('ServerService.serverInfo websocket exposure', () => {
 		expect(info['websocket']).toBe(false);
 	});
 
-	test('reports rest false when the REST transport is inactive', async () => {
-		getActiveRealtime.mockReturnValue({
-			transport: () => null,
-			info: () => ({ rest: false, heartbeat: 30 }),
-		});
-
-		const info = await serverInfoFor(authenticatedUser);
-
-		expect(info['websocket']).toEqual({ rest: false, heartbeat: 30 });
-	});
-
 	test('omits websocket for an unauthenticated request', async () => {
 		getActiveRealtime.mockReturnValue({
 			transport: () => null,
-			info: () => ({ rest: false, heartbeat: 30 }),
+			info: () => ({ rest: false, graphql: false, heartbeat: 30 }),
 		});
 
 		const info = await serverInfoFor(null);

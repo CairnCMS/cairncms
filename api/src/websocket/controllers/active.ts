@@ -8,7 +8,11 @@ export interface RealtimeControllerAccess {
 
 export interface RealtimeAccess {
 	transport: (key: string) => RealtimeControllerAccess | null;
-	info: () => { rest: { authentication: AuthMode; path: string } | false; heartbeat: number };
+	info: () => {
+		rest: { authentication: AuthMode; path: string } | false;
+		graphql: { authentication: AuthMode; path: string } | false;
+		heartbeat: number;
+	};
 }
 
 let activeAccess: RealtimeAccess | null = null;

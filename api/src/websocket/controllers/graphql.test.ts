@@ -141,6 +141,7 @@ function flush(): Promise<void> {
 interface HarnessOptions {
 	authMode?: 'public' | 'handshake' | 'strict';
 	authTimeoutMs?: number;
+	heartbeatPeriodMs?: number;
 	admission?: Admission;
 	database?: Knex;
 	consumeIpRateLimit?: (ip: string) => Promise<RateLimitConsumption>;
@@ -169,7 +170,7 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
 		authMode: options.authMode ?? 'public',
 		authTimeoutMs: options.authTimeoutMs ?? 10_000,
 		maxPayload: 1_048_576,
-		heartbeatPeriodMs: 10_000_000,
+		heartbeatPeriodMs: options.heartbeatPeriodMs ?? 10_000_000,
 		admission,
 		isOriginAllowed: () => true,
 		consumeIpRateLimit: options.consumeIpRateLimit ?? (async () => ({ allowed: true })),
@@ -202,8 +203,12 @@ interface Connected {
 	closed: Promise<{ code: number; reason: string }>;
 }
 
-function connect(harness: Harness, headers?: Record<string, string>): Promise<Connected> {
-	const ws = new WebSocket(`ws://127.0.0.1:${harness.port}/graphql`, 'graphql-transport-ws', { headers });
+function connect(
+	harness: Harness,
+	headers?: Record<string, string>,
+	wsOptions?: { autoPong?: boolean }
+): Promise<Connected> {
+	const ws = new WebSocket(`ws://127.0.0.1:${harness.port}/graphql`, 'graphql-transport-ws', { headers, ...wsOptions });
 	harness.sockets.push(ws);
 
 	const frames: Record<string, any>[] = [];
@@ -622,5 +627,27 @@ describe('GraphQL resource safety', () => {
 		db.resolve();
 		await terminated;
 		expect(settled).toBe(true);
+	});
+});
+
+describe('GraphQL heartbeat', () => {
+	it('closes a peer that stops answering pings and releases its admission', async () => {
+		const admission = new Admission({ process: 1, ip: 100, user: 100, transports: { graphql: 100 } });
+		harness = await createHarness({ authMode: 'public', heartbeatPeriodMs: 40, admission });
+
+		const { ws, frames, closed } = await connect(harness, undefined, { autoPong: false });
+		const pinged = new Promise<void>((resolve) => ws.on('ping', () => resolve()));
+
+		send(ws, { type: 'connection_init' });
+		await waitForAck(frames);
+
+		expect(admission.reserve('graphql', '9.9.9.9')).toBeNull();
+
+		await pinged;
+		await closed;
+
+		await vi.waitFor(() => expect(admission.reserve('graphql', '9.9.9.9')).not.toBeNull());
+
+		await harness.controller.terminate();
 	});
 });

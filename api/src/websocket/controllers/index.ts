@@ -8,7 +8,7 @@ import { consumeGlobalRateLimit } from '../../middleware/rate-limiter-global.js'
 import { consumeIpRateLimit } from '../../middleware/rate-limiter-ip.js';
 import type { Messenger } from '../../messenger.js';
 import { Admission } from '../admission.js';
-import { getWebSocketConfig, type WebSocketRestConfig } from '../config.js';
+import { getWebSocketConfig, type WebSocketTransportConfig } from '../config.js';
 import { DispatchCoordinator, resolveDeliveryConcurrency } from '../dispatch.js';
 import { createUpgradeOriginPredicate } from '../origin.js';
 import { SubscriptionRegistry } from '../subscriptions.js';
@@ -18,9 +18,12 @@ import {
 	type RealtimeAccess,
 	type RealtimeControllerAccess,
 } from './active.js';
-import type { SocketClient, SocketController } from './base.js';
+import type { SocketClient, SocketController, SocketControllerOptions } from './base.js';
+import { GraphQLController } from './graphql.js';
 import { HookEventProducer } from './hooks.js';
 import { WebSocketController } from './rest.js';
+
+type TransportKey = 'rest' | 'graphql';
 
 const LOG_ACTIVATION_FAILED = 'WebSocket realtime could not start; the realtime capability is unavailable';
 
@@ -48,10 +51,13 @@ export async function activateRealtime(deps: RealtimeDeps): Promise<RealtimeActi
 		return null;
 	}
 
-	const transports: { key: string; config: WebSocketRestConfig }[] = [];
+	const transports: { key: TransportKey; config: WebSocketTransportConfig }[] = [];
 
 	if (resolution.rest.active) transports.push({ key: 'rest', config: resolution.rest.config });
 	else logConfigErrors(resolution.rest.errors);
+
+	if (resolution.graphql.active) transports.push({ key: 'graphql', config: resolution.graphql.config });
+	else logConfigErrors(resolution.graphql.errors);
 
 	if (transports.length === 0) return null;
 
@@ -74,24 +80,36 @@ export async function activateRealtime(deps: RealtimeDeps): Promise<RealtimeActi
 		const subscriptions = new SubscriptionRegistry();
 
 		for (const transport of transports) {
-			controllers.push(
-				new WebSocketController({
-					transport: transport.key,
-					path: transport.config.path,
-					authMode: transport.config.auth,
-					authTimeoutMs: transport.config.authTimeoutMs,
-					maxPayload: shared.maxPayload,
-					heartbeatPeriodMs: shared.heartbeatPeriodMs,
-					admission,
-					isOriginAllowed,
-					consumeIpRateLimit,
-					consumeGlobalRateLimit,
-					app: deps.app,
-					database: deps.database,
-					getSchema: deps.getSchema,
-					subscriptions,
-				})
-			);
+			const options: SocketControllerOptions = {
+				transport: transport.key,
+				path: transport.config.path,
+				authMode: transport.config.auth,
+				authTimeoutMs: transport.config.authTimeoutMs,
+				maxPayload: shared.maxPayload,
+				heartbeatPeriodMs: shared.heartbeatPeriodMs,
+				admission,
+				isOriginAllowed,
+				consumeIpRateLimit,
+				consumeGlobalRateLimit,
+				app: deps.app,
+				database: deps.database,
+				getSchema: deps.getSchema,
+				subscriptions,
+			};
+
+			switch (transport.key) {
+				case 'rest':
+					controllers.push(new WebSocketController(options));
+					break;
+				case 'graphql':
+					controllers.push(new GraphQLController(options));
+					break;
+
+				default: {
+					const unreachable: never = transport.key;
+					throw new Error(`Unknown WebSocket transport: ${String(unreachable)}`);
+				}
+			}
 		}
 
 		const activeProducer = new HookEventProducer(deps.messenger);
@@ -127,6 +145,9 @@ export async function activateRealtime(deps: RealtimeDeps): Promise<RealtimeActi
 			info: () => ({
 				rest: resolution.rest.active
 					? { authentication: resolution.rest.config.auth, path: resolution.rest.config.path }
+					: false,
+				graphql: resolution.graphql.active
+					? { authentication: resolution.graphql.config.auth, path: resolution.graphql.config.path }
 					: false,
 				heartbeat: shared.heartbeatPeriodMs / 1000,
 			}),
