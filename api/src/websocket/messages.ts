@@ -37,6 +37,10 @@ export const WebSocketAuthMessage = WebSocketMessage.extend({
 
 export type WebSocketAuthMessage = z.infer<typeof WebSocketAuthMessage>;
 
+export const ConnectionParams = z.object({ access_token: z.string().optional() });
+
+export type ConnectionParams = z.infer<typeof ConnectionParams>;
+
 const ZodItem = z.custom<Partial<Item>>((value) => isPlainObject(value));
 const ZodQuery = z.custom<Query>((value) => isPlainObject(value));
 

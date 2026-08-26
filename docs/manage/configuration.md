@@ -305,7 +305,7 @@ If Redis ACLs restrict publishing, allow `PUBLISH` on `<namespace>:messenger-pro
 
 ## Realtime (WebSockets)
 
-The realtime WebSocket transport is off by default. When enabled, clients connect over a single upgrade path, subscribe to collections, and receive permission-checked change notifications. Cross-instance fan-out uses the messenger, so a multi-instance deployment needs the Redis messenger configured.
+The realtime WebSocket feature is off by default. When enabled it serves two transports, REST and GraphQL, each on its own upgrade path. Clients subscribe to collections and receive permission-checked change notifications. Cross-instance fan-out uses the messenger, so a multi-instance deployment needs the Redis messenger configured.
 
 - **`WEBSOCKETS_ENABLED`** — master switch for the realtime feature. Default `false`.
 - **`WEBSOCKETS_REST_ENABLED`** — REST transport switch; takes effect only when the feature is enabled. Default `true`.
@@ -313,12 +313,17 @@ The realtime WebSocket transport is off by default. When enabled, clients connec
 - **`WEBSOCKETS_REST_AUTH`** — authentication mode: `public` (anonymous), `handshake` (authenticate with the first message), or `strict` (bearer token required at upgrade). Default `handshake`.
 - **`WEBSOCKETS_REST_AUTH_TIMEOUT`** — how long, in seconds, an authentication attempt may take. In `strict` mode the attempt is at the upgrade, and a timeout rejects the upgrade; in `handshake` mode a timeout on the first-message attempt closes the connection. A later re-authentication that times out closes a `strict` or `handshake` connection and returns a `public` connection to anonymous access. Accepts a whole number of seconds from `1` to `2147483` (about 24 days). Default `10`.
 - **`WEBSOCKETS_REST_CONN_LIMIT`** — maximum concurrent connections on the REST transport. Accepts a whole number of `1` or greater. Default `1000`.
+- **`WEBSOCKETS_GRAPHQL_ENABLED`** — GraphQL transport switch, effective only when the feature is enabled. Default `true`.
+- **`WEBSOCKETS_GRAPHQL_PATH`** — the upgrade path GraphQL clients connect to. Must be a pure URL path with no query or fragment, and must differ from the active REST path. An equal path deactivates the GraphQL transport and leaves REST serving. Default `/graphql`.
+- **`WEBSOCKETS_GRAPHQL_AUTH`** — authentication mode: `public` (anonymous), `handshake` (authenticate with the `connection_init` message), or `strict` (bearer token required at upgrade). Default `handshake`.
+- **`WEBSOCKETS_GRAPHQL_AUTH_TIMEOUT`** — the authentication timeout, in seconds. It bounds each authentication checkpoint independently rather than as one end-to-end deadline. The `connection_init` frame must be received within it, and the credential check is separately bounded by it (a `strict` bearer token at the upgrade, a `public` token supplied in the init message). There is no later in-band re-authentication. Accepts a whole number of seconds from `1` to `2147483` (about 24 days). Default `10`.
+- **`WEBSOCKETS_GRAPHQL_CONN_LIMIT`** — maximum concurrent connections on the GraphQL transport. Accepts a whole number of `1` or greater. Default `1000`.
 - **`WEBSOCKETS_HEARTBEAT_PERIOD`** — seconds between server pings; a connection that misses two periods without a pong is closed. Accepts a whole number of seconds from `1` to `1073741` (about 12 days). Default `30`.
 - **`WEBSOCKETS_USER_CONN_LIMIT`** — maximum concurrent connections per authenticated user. Accepts a whole number of `1` or greater. Default `10`.
 - **`WEBSOCKETS_IP_CONN_LIMIT`** — maximum concurrent connections per client IP. Accepts a whole number of `1` or greater. Default `50`.
 - **`WEBSOCKETS_PROCESS_CONN_LIMIT`** — maximum concurrent connections per API process. Accepts a whole number of `1` or greater. Default `1000`.
 
-An invalid realtime setting deactivates the affected scope (the whole feature for a shared setting, or just the REST transport for a REST setting) and leaves HTTP serving. The maximum size of an inbound message from a client is bounded by the shared `MAX_PAYLOAD_SIZE` (see [Server](#server)). A single outbound WebSocket frame, including initial subscription results and change notifications, is bounded at 1 MiB: a frame whose encoded size would exceed that (for example a very large or deeply nested result set) closes the affected connection, and the client reconnects and rereads current state. Realtime delivery is best-effort notification to reread authoritative state, not a delivery-latency guarantee. Notification timeliness depends on result-set size, query cost, subscriber count, and available compute.
+An invalid realtime setting deactivates the affected scope (the whole feature for a shared setting, or a single transport for a REST or GraphQL setting) and leaves HTTP serving. The maximum size of an inbound message from a client is bounded by the shared `MAX_PAYLOAD_SIZE` (see [Server](#server)). A single outbound WebSocket frame, including initial subscription results and change notifications, is bounded at 1 MiB: a frame whose encoded size would exceed that (for example a very large or deeply nested result set) closes the affected connection, and the client reconnects and rereads current state. Realtime delivery is best-effort notification to reread authoritative state, not a delivery-latency guarantee. Notification timeliness depends on result-set size, query cost, subscriber count, and available compute.
 
 ## Email
 

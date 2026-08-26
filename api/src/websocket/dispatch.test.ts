@@ -1,6 +1,7 @@
 import type { Query } from '@cairncms/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SocketClient } from './controllers/base.js';
+import type { WebSocketEvent } from './messages.js';
 
 vi.mock('./config.js', () => ({
 	SUBSCRIPTIONS_PER_CONNECTION: 100,
@@ -162,6 +163,73 @@ describe('DispatchCoordinator delivery', () => {
 		await vi.waitFor(() => expect(send).toHaveBeenCalled());
 
 		expect(sentFrames()[0]).toMatchObject({ type: 'subscription', event: 'create', data: [{ id: 1 }] });
+	});
+
+	it('delivers the event to a subscription sink instead of the REST send path', async () => {
+		build();
+		const events: WebSocketEvent[] = [];
+
+		subscribe(client(), 'articles', {
+			sink: async (event: WebSocketEvent) => {
+				events.push(event);
+			},
+		});
+
+		emit({ action: 'create', collection: 'articles', key: 1 });
+		await vi.waitFor(() => expect(events).toHaveLength(1));
+
+		expect(events[0]).toMatchObject({ action: 'create', collection: 'articles', key: 1 });
+		expect(send).not.toHaveBeenCalled();
+	});
+
+	it('delivers to a sink registered after a REST recipient even when schema resolution fails', async () => {
+		const getSchema = vi.fn().mockRejectedValue(new Error('schema down'));
+		build(5, getSchema);
+
+		subscribe(client(), 'articles');
+
+		const events: WebSocketEvent[] = [];
+
+		subscribe(client(), 'articles', {
+			sink: async (event: WebSocketEvent) => {
+				events.push(event);
+			},
+		});
+
+		emit({ action: 'create', collection: 'articles', key: 1 });
+		await vi.waitFor(() => expect(events).toHaveLength(1));
+
+		expect(events[0]).toMatchObject({ action: 'create', collection: 'articles', key: 1 });
+		expect(send).not.toHaveBeenCalled();
+	});
+
+	it('does not invoke a sink whose reservation was removed while it waited for a permit', async () => {
+		build(1);
+
+		const gate = deferred<void>();
+		subscribe(client(), 'other', { sink: async () => gate.promise });
+
+		const events: WebSocketEvent[] = [];
+
+		const removed = subscribe(client(), 'articles', {
+			sink: async (event: WebSocketEvent) => {
+				events.push(event);
+			},
+		});
+
+		emit({ action: 'create', collection: 'other', key: 1 });
+		await flush();
+
+		emit({ action: 'create', collection: 'articles', key: 1 });
+		await flush();
+
+		removed.remove();
+
+		gate.resolve(undefined);
+		await flush();
+		await flush();
+
+		expect(events).toEqual([]);
 	});
 
 	it('iterates all subscribers and continues past an empty result', async () => {
@@ -489,6 +557,25 @@ describe('DispatchCoordinator overload', () => {
 		});
 
 		gate.resolve({ event: 'create', data: [{ id: 1 }] });
+		await waitForRecovery();
+	});
+
+	it('closes a sink subscriber owner on overload with 1013', async () => {
+		build();
+		const owner = client();
+		const gate = deferred<void>();
+		subscribe(owner, 'articles', { sink: async () => gate.promise });
+
+		emit({ action: 'create', collection: 'articles', key: 1 });
+		await flush();
+		emit({ action: 'create', collection: 'articles', key: 2 });
+		emit({ action: 'create', collection: 'articles', key: 3 });
+		expect(closeConnection).not.toHaveBeenCalled();
+
+		emit({ action: 'create', collection: 'articles', key: 4 });
+		expect(closeConnection).toHaveBeenCalledWith(owner, 1013);
+
+		gate.resolve(undefined);
 		await waitForRecovery();
 	});
 

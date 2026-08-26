@@ -1,6 +1,7 @@
 import type { EventContext, Query } from '@cairncms/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SocketClient } from './controllers/base.js';
+import type { WebSocketEvent } from './messages.js';
 
 vi.mock('./config.js', () => ({
 	SUBSCRIPTIONS_PER_CONNECTION: 100,
@@ -87,6 +88,43 @@ describe('realtime dispatch wired through the messenger', () => {
 
 		await vi.waitFor(() => expect(send).toHaveBeenCalled());
 		expect(JSON.parse(send.mock.calls[0]![1] as string)).toMatchObject({ type: 'subscription', event: 'create' });
+	});
+
+	it('delivers the event to a subscription sink and bypasses the REST send path', async () => {
+		const messenger = getMessenger();
+		const registry = new SubscriptionRegistry();
+
+		producer = new HookEventProducer(messenger);
+		producer.register();
+
+		coordinator = new DispatchCoordinator({
+			registry,
+			getSchema: async () => ({ collections: {} } as never),
+			messenger,
+			closeConnection: vi.fn(),
+			deliveryConcurrency: 5,
+		});
+
+		coordinator.start();
+
+		const events: WebSocketEvent[] = [];
+
+		const reservation = registry.reserve({
+			client: client(),
+			collection: 'articles',
+			query: {} as Query,
+			sink: async (event) => {
+				events.push(event);
+			},
+		});
+
+		if (reservation.ok) reservation.reservation.activate();
+
+		emitter.emitAction('items.create', { collection: 'articles', key: 1 }, CONTEXT);
+
+		await vi.waitFor(() => expect(events).toHaveLength(1));
+		expect(events[0]).toMatchObject({ action: 'create', collection: 'articles', key: 1 });
+		expect(send).not.toHaveBeenCalled();
 	});
 
 	it('delivers an eligible delete feed and never invokes an items.read hook', async () => {

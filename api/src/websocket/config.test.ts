@@ -27,6 +27,16 @@ function restErrors(resolution: WebSocketResolution): string[] {
 	return resolution.rest.errors.map((error) => error.envVar);
 }
 
+function graphqlErrors(resolution: WebSocketResolution): string[] {
+	if (!resolution.active || resolution.graphql.active) return [];
+	return resolution.graphql.errors.map((error) => error.envVar);
+}
+
+function graphqlErrorMessages(resolution: WebSocketResolution): string[] {
+	if (!resolution.active || resolution.graphql.active) return [];
+	return resolution.graphql.errors.map((error) => error.message);
+}
+
 afterEach(() => {
 	process.env = { ...BASE_ENV };
 	refreshEnv();
@@ -58,6 +68,7 @@ describe('getWebSocketConfig', () => {
 				processConnLimit: 1000,
 			},
 			rest: { active: true, config: { path: '/websocket', connLimit: 1000, auth: 'handshake', authTimeoutMs: 10000 } },
+			graphql: { active: true, config: { path: '/graphql', connLimit: 1000, auth: 'handshake', authTimeoutMs: 10000 } },
 		});
 	});
 
@@ -132,6 +143,65 @@ describe('getWebSocketConfig', () => {
 		});
 	});
 
+	describe('GraphQL scope isolation', () => {
+		it('keeps realtime active but deactivates GraphQL when a GraphQL setting is invalid', () => {
+			setEnv({ ...enabled, WEBSOCKETS_GRAPHQL_AUTH: 'basic' });
+			const resolution = getWebSocketConfig();
+			expect(resolution.active).toBe(true);
+			expect(graphqlErrors(resolution)).toEqual(['WEBSOCKETS_GRAPHQL_AUTH']);
+		});
+
+		it('resolves GraphQL inactive without errors when GraphQL is disabled', () => {
+			setEnv({ ...enabled, WEBSOCKETS_GRAPHQL_ENABLED: 'false', WEBSOCKETS_GRAPHQL_AUTH: 'basic' });
+			expect(getWebSocketConfig()).toMatchObject({ active: true, graphql: { active: false, errors: [] } });
+		});
+
+		it('rejects a non-boolean WEBSOCKETS_GRAPHQL_ENABLED', () => {
+			setEnv({ ...enabled, WEBSOCKETS_GRAPHQL_ENABLED: 'garbage' });
+			expect(graphqlErrors(getWebSocketConfig())).toEqual(['WEBSOCKETS_GRAPHQL_ENABLED']);
+		});
+
+		it('deactivates only GraphQL and leaves REST active when a GraphQL setting is invalid', () => {
+			setEnv({ ...enabled, WEBSOCKETS_GRAPHQL_PATH: 'no-slash' });
+			const resolution = getWebSocketConfig();
+			expect(resolution).toMatchObject({ active: true, rest: { active: true } });
+			expect(graphqlErrors(resolution)).toEqual(['WEBSOCKETS_GRAPHQL_PATH']);
+		});
+	});
+
+	describe('path collision', () => {
+		it('deactivates only GraphQL with a named diagnostic when it shares the active REST path', () => {
+			setEnv({ ...enabled, WEBSOCKETS_GRAPHQL_PATH: '/websocket' });
+			const resolution = getWebSocketConfig();
+			expect(resolution).toMatchObject({ active: true, rest: { active: true, config: { path: '/websocket' } } });
+			expect(graphqlErrors(resolution)).toEqual(['WEBSOCKETS_GRAPHQL_PATH']);
+
+			expect(graphqlErrorMessages(resolution)).toEqual([
+				'WEBSOCKETS_GRAPHQL_PATH must differ from the active WEBSOCKETS_REST_PATH',
+			]);
+		});
+
+		it('allows a shared path when REST is inactive', () => {
+			setEnv({ ...enabled, WEBSOCKETS_REST_ENABLED: 'false', WEBSOCKETS_GRAPHQL_PATH: '/websocket' });
+
+			expect(getWebSocketConfig()).toMatchObject({
+				active: true,
+				rest: { active: false },
+				graphql: { active: true, config: { path: '/websocket' } },
+			});
+		});
+
+		it('keeps both transports active when their paths differ', () => {
+			setEnv(enabled);
+
+			expect(getWebSocketConfig()).toMatchObject({
+				active: true,
+				rest: { active: true, config: { path: '/websocket' } },
+				graphql: { active: true, config: { path: '/graphql' } },
+			});
+		});
+	});
+
 	describe('path validation', () => {
 		for (const path of ['no-slash', '/websocket?x', '/websocket#x', '/web socket']) {
 			it(`rejects ${JSON.stringify(path)}`, () => {
@@ -152,6 +222,11 @@ describe('getWebSocketConfig', () => {
 				variable: 'WEBSOCKETS_REST_CONN_LIMIT',
 				scope: restErrors,
 				accepts: (n: number) => ({ rest: { active: true, config: { connLimit: n } } }),
+			},
+			{
+				variable: 'WEBSOCKETS_GRAPHQL_CONN_LIMIT',
+				scope: graphqlErrors,
+				accepts: (n: number) => ({ graphql: { active: true, config: { connLimit: n } } }),
 			},
 			{
 				variable: 'WEBSOCKETS_USER_CONN_LIMIT',
@@ -221,6 +296,26 @@ describe('getWebSocketConfig', () => {
 
 			setEnv({ ...enabled, WEBSOCKETS_REST_AUTH_TIMEOUT: '2147484' });
 			expect(restErrors(getWebSocketConfig())).toEqual(['WEBSOCKETS_REST_AUTH_TIMEOUT']);
+		});
+
+		it('bounds WEBSOCKETS_GRAPHQL_AUTH_TIMEOUT from 1 to the timer boundary and converts to milliseconds', () => {
+			setEnv({ ...enabled, WEBSOCKETS_GRAPHQL_AUTH_TIMEOUT: '15' });
+			expect(getWebSocketConfig()).toMatchObject({ graphql: { active: true, config: { authTimeoutMs: 15000 } } });
+
+			setEnv({ ...enabled, WEBSOCKETS_GRAPHQL_AUTH_TIMEOUT: '1' });
+			expect(getWebSocketConfig()).toMatchObject({ graphql: { active: true, config: { authTimeoutMs: 1000 } } });
+
+			setEnv({ ...enabled, WEBSOCKETS_GRAPHQL_AUTH_TIMEOUT: '2147483' });
+			expect(getWebSocketConfig()).toMatchObject({ graphql: { active: true, config: { authTimeoutMs: 2147483000 } } });
+
+			setEnv({ ...enabled, WEBSOCKETS_GRAPHQL_AUTH_TIMEOUT: '0' });
+			expect(graphqlErrors(getWebSocketConfig())).toEqual(['WEBSOCKETS_GRAPHQL_AUTH_TIMEOUT']);
+
+			setEnv({ ...enabled, WEBSOCKETS_GRAPHQL_AUTH_TIMEOUT: '2147484' });
+			expect(graphqlErrors(getWebSocketConfig())).toEqual(['WEBSOCKETS_GRAPHQL_AUTH_TIMEOUT']);
+
+			setEnv({ ...enabled, WEBSOCKETS_GRAPHQL_AUTH_TIMEOUT: 'garbage' });
+			expect(graphqlErrors(getWebSocketConfig())).toEqual(['WEBSOCKETS_GRAPHQL_AUTH_TIMEOUT']);
 		});
 	});
 

@@ -1,8 +1,11 @@
 import type { Query } from '@cairncms/types';
 import { SUBSCRIPTIONS_PER_CONNECTION, SUBSCRIPTIONS_PER_PROCESS } from './config.js';
 import type { SocketClient } from './controllers/base.js';
+import type { WebSocketEvent } from './messages.js';
 
 export type SubscriptionEvent = 'create' | 'update' | 'delete';
+
+export type DeliverySink = (event: WebSocketEvent, signal: AbortSignal) => Promise<void>;
 
 export function canonicalItemKey(key: string | number): string {
 	return String(key);
@@ -15,6 +18,7 @@ export interface Subscription {
 	uid?: string;
 	event?: SubscriptionEvent;
 	item?: string;
+	sink?: DeliverySink;
 }
 
 export interface Reservation {

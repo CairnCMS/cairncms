@@ -13,6 +13,8 @@ const controllerClientSnapshot = vi.fn(() => new Set());
 const admissionLimits: unknown[] = [];
 const coordinatorOptions: any[] = [];
 const controllerOptions: any[] = [];
+const graphqlControllerOptions: any[] = [];
+let graphqlConstructError: Error | null = null;
 
 class MockAdmission {
 	constructor(limits: unknown) {
@@ -47,6 +49,18 @@ class MockController {
 	}
 }
 
+class MockGraphQLController {
+	handleUpgrade = controllerHandleUpgrade;
+	closeConnection = controllerCloseConnection;
+	broadcast = controllerBroadcast;
+	clientSnapshot = controllerClientSnapshot;
+	terminate = controllerTerminate;
+	constructor(options: unknown) {
+		if (graphqlConstructError !== null) throw graphqlConstructError;
+		graphqlControllerOptions.push(options);
+	}
+}
+
 const createUpgradeOriginPredicate = vi.fn(() => () => true);
 const getWebSocketConfig = vi.fn();
 
@@ -55,6 +69,7 @@ vi.mock('../subscriptions.js', () => ({ SubscriptionRegistry: MockRegistry }));
 vi.mock('./hooks.js', () => ({ HookEventProducer: MockProducer }));
 vi.mock('../dispatch.js', () => ({ DispatchCoordinator: MockCoordinator, resolveDeliveryConcurrency: vi.fn(() => 7) }));
 vi.mock('./rest.js', () => ({ WebSocketController: MockController }));
+vi.mock('./graphql.js', () => ({ GraphQLController: MockGraphQLController }));
 vi.mock('../origin.js', () => ({ createUpgradeOriginPredicate }));
 vi.mock('../config.js', () => ({ getWebSocketConfig }));
 vi.mock('../../middleware/rate-limiter-ip.js', () => ({ consumeIpRateLimit: vi.fn() }));
@@ -76,9 +91,13 @@ const SHARED = {
 };
 
 const REST_CONFIG = { path: '/websocket', connLimit: 1000, auth: 'public', authTimeoutMs: 10_000 };
+const GRAPHQL_CONFIG = { path: '/graphql', connLimit: 500, auth: 'handshake', authTimeoutMs: 10_000 };
 
-function activeConfig(rest: unknown = { active: true, config: REST_CONFIG }) {
-	return { active: true, shared: SHARED, rest };
+function activeConfig(
+	rest: unknown = { active: true, config: REST_CONFIG },
+	graphql: unknown = { active: false, errors: [] }
+) {
+	return { active: true, shared: SHARED, rest, graphql };
 }
 
 const DEPS = {
@@ -108,6 +127,8 @@ beforeEach(() => {
 	admissionLimits.length = 0;
 	coordinatorOptions.length = 0;
 	controllerOptions.length = 0;
+	graphqlControllerOptions.length = 0;
+	graphqlConstructError = null;
 
 	coordinatorStop.mockResolvedValue(undefined);
 	controllerTerminate.mockResolvedValue(undefined);
@@ -267,6 +288,114 @@ describe('activateRealtime', () => {
 	});
 });
 
+describe('activateRealtime with the GraphQL transport', () => {
+	const bothConfig = () =>
+		activeConfig({ active: true, config: REST_CONFIG }, { active: true, config: GRAPHQL_CONFIG });
+
+	it('builds a GraphQL controller for a GraphQL-only config', async () => {
+		getWebSocketConfig.mockReturnValue(
+			activeConfig({ active: false, errors: [] }, { active: true, config: GRAPHQL_CONFIG })
+		);
+
+		const activation = await activateRealtime(DEPS);
+
+		expect(activation).not.toBeNull();
+		expect(controllerOptions).toHaveLength(0);
+		expect(graphqlControllerOptions).toHaveLength(1);
+
+		expect(graphqlControllerOptions[0]).toMatchObject({
+			transport: 'graphql',
+			path: '/graphql',
+			authMode: 'handshake',
+		});
+
+		expect(admissionLimits[0]).toEqual({ process: 1000, ip: 50, user: 10, transports: { graphql: 500 } });
+	});
+
+	it('builds one controller per transport sharing a single admission, with a singleton producer and coordinator', async () => {
+		getWebSocketConfig.mockReturnValue(bothConfig());
+
+		const activation = await activateRealtime(DEPS);
+
+		expect(activation).not.toBeNull();
+		expect(controllerOptions).toHaveLength(1);
+		expect(graphqlControllerOptions).toHaveLength(1);
+		expect(controllerOptions[0].transport).toBe('rest');
+		expect(graphqlControllerOptions[0].transport).toBe('graphql');
+		expect(controllerOptions[0].admission).toBe(graphqlControllerOptions[0].admission);
+		expect(admissionLimits[0]).toEqual({ process: 1000, ip: 50, user: 10, transports: { rest: 1000, graphql: 500 } });
+		expect(producerRegister).toHaveBeenCalledTimes(1);
+		expect(coordinatorStart).toHaveBeenCalledTimes(1);
+	});
+
+	it('fans the upgrade and the close to both transports and reports each from info()', async () => {
+		getWebSocketConfig.mockReturnValue(bothConfig());
+		const activation = await activateRealtime(DEPS);
+		if (activation === null) throw new Error('expected activation');
+
+		activation.handleUpgrade({} as never, {} as never, Buffer.alloc(0));
+		expect(controllerHandleUpgrade).toHaveBeenCalledTimes(2);
+
+		coordinatorOptions[0].closeConnection({ uid: 'x' } as never, 1013);
+		expect(controllerCloseConnection).toHaveBeenCalledTimes(2);
+
+		const access = getActiveRealtime();
+		expect(access!.transport('rest')).not.toBeNull();
+		expect(access!.transport('graphql')).not.toBeNull();
+
+		expect(access!.info()).toEqual({
+			rest: { authentication: 'public', path: '/websocket' },
+			graphql: { authentication: 'handshake', path: '/graphql' },
+			heartbeat: 30,
+		});
+
+		await activation.stop();
+	});
+
+	it('rolls back a throw while constructing the GraphQL controller, terminating REST without starting the producer or coordinator', async () => {
+		getWebSocketConfig.mockReturnValue(bothConfig());
+		graphqlConstructError = new Error('graphql construct boom');
+
+		expect(await activateRealtime(DEPS)).toBeNull();
+		expect(controllerOptions).toHaveLength(1);
+		expect(controllerTerminate).toHaveBeenCalledTimes(1);
+		expect(producerRegister).not.toHaveBeenCalled();
+		expect(coordinatorStart).not.toHaveBeenCalled();
+		expect(logger.error).toHaveBeenCalledTimes(1);
+	});
+
+	it('activates REST and logs the GraphQL error once for an invalid GraphQL setting', async () => {
+		getWebSocketConfig.mockReturnValue(
+			activeConfig(
+				{ active: true, config: REST_CONFIG },
+				{
+					active: false,
+					errors: [{ envVar: 'WEBSOCKETS_GRAPHQL_PATH', message: 'WEBSOCKETS_GRAPHQL_PATH must be a URL path' }],
+				}
+			)
+		);
+
+		const activation = await activateRealtime(DEPS);
+
+		expect(activation).not.toBeNull();
+		expect(controllerOptions).toHaveLength(1);
+		expect(graphqlControllerOptions).toHaveLength(0);
+		expect(logger.error).toHaveBeenCalledWith('WEBSOCKETS_GRAPHQL_PATH must be a URL path');
+	});
+
+	it('stays silent for an intentional GraphQL disable while REST activates', async () => {
+		getWebSocketConfig.mockReturnValue(
+			activeConfig({ active: true, config: REST_CONFIG }, { active: false, errors: [] })
+		);
+
+		const activation = await activateRealtime(DEPS);
+
+		expect(activation).not.toBeNull();
+		expect(graphqlControllerOptions).toHaveLength(0);
+		expect(logger.error).not.toHaveBeenCalled();
+	});
+});
+
 describe('getActiveRealtime', () => {
 	it('is set on activation, transport-keyed, and cleared on stop', async () => {
 		getWebSocketConfig.mockReturnValue(activeConfig());
@@ -297,6 +426,7 @@ describe('getActiveRealtime', () => {
 
 		expect(getActiveRealtime()!.info()).toEqual({
 			rest: { authentication: 'public', path: '/websocket' },
+			graphql: false,
 			heartbeat: 30,
 		});
 
