@@ -98,6 +98,8 @@ Singleton collections drop the `_by_id` and per-item mutations and gain an `upda
 
 Field types in the generated schema match the field types in your data model. Relations resolve as nested object types so deep selections work natively.
 
+GraphQL subscriptions are served separately, over a WebSocket rather than the HTTP endpoint. See [GraphQL subscriptions](/docs/api/realtime/graphql/).
+
 ## What `/graphql/system` exposes
 
 The system endpoint covers most of the same `directus_*` system collections that REST exposes through top-level paths (`/users`, `/files`, `/roles`, `/permissions`, `/settings`, and so on), with the same generated `users`, `files`, `roles`, etc. operations the user endpoint generates for user collections.

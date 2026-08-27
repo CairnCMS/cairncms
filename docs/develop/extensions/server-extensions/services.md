@@ -53,6 +53,7 @@ The same `services` object exposes the rest of the platform's service layer, con
 - **`RelationsService`** — manage relations between collections.
 - **`FilesService`** — import and upload files (`importOne`, `uploadOne`), plus the standard item methods.
 - **`UsersService`** — manage users.
+- **`WebSocketService`** — observe realtime connections and broadcast to them. See [Realtime for extensions](/docs/api/realtime/extensions/).
 
 The registry holds more (activity, notifications, revisions, settings, shares, and so on). The `services` object is the current catalog. Construct most of them with `{ schema, accountability }`, and check the class for the specialized ones.
 
