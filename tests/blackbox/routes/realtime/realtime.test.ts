@@ -7,6 +7,7 @@ import { cloneDeep } from 'lodash';
 import { v4 as uuid } from 'uuid';
 import request from 'supertest';
 import { WebSocket as WsImpl } from 'ws';
+import { createCairnCMS, realtime, staticToken } from '@cairncms/sdk';
 import { collectionFirst, collectionScoped, realtimeUsers, TENANT_A, TENANT_B } from './realtime.seed';
 
 // Cross-instance tests require a database shared by multiple processes.
@@ -115,6 +116,20 @@ async function waitUntil(predicate: () => boolean, timeoutMs = 5000): Promise<vo
 	while (!predicate()) {
 		if (Date.now() - start > timeoutMs) throw new Error('Condition not met within timeout');
 		await new Promise((resolve) => setTimeout(resolve, 10));
+	}
+}
+
+async function withDeadline<T>(work: Promise<T>, label: string, timeoutMs = 5000): Promise<T> {
+	let timer: ReturnType<typeof setTimeout>;
+
+	const deadline = new Promise<never>((_resolve, reject) => {
+		timer = setTimeout(() => reject(new Error(`Timed out waiting for ${label}`)), timeoutMs);
+	});
+
+	try {
+		return await Promise.race([work, deadline]);
+	} finally {
+		clearTimeout(timer!);
 	}
 }
 
@@ -979,6 +994,117 @@ describeFn('WebSocket realtime', () => {
 				expect(cookieOnly.opened).toBe(false);
 				expect(cookieOnly.status).toBe(401);
 				expect(cookieOnly.body).toBe('');
+			},
+			120000
+		);
+	});
+
+	describe('SDK realtime workflow', () => {
+		it.each(supportedVendors)(
+			'%s',
+			async (vendor) => {
+				const collection = `${collectionFirst}_integer`;
+				const url = urlOf(vendor, envs[vendor]!.main);
+
+				const client = createCairnCMS(url, { globals: { WebSocket: WsImpl as any } })
+					.with(staticToken(TOKEN))
+					.with(realtime({ authMode: 'handshake' }));
+
+				const nextClose = () =>
+					new Promise<void>((resolve, reject) => {
+						let settled = false;
+						let off: () => void = () => undefined;
+
+						const timer = setTimeout(() => {
+							if (settled) return;
+							settled = true;
+							off();
+							reject(new Error('Timed out waiting for close'));
+						}, 5000);
+
+						off = client.onWebSocket('close', () => {
+							if (settled) return;
+							settled = true;
+							clearTimeout(timer);
+							off();
+							resolve();
+						});
+					});
+
+				const watermark = common.createWebSocketConn(url, HANDSHAKE);
+				let active: { unsubscribe(): void } | undefined;
+
+				try {
+					await client.connect();
+
+					const first = await client.subscribe(collection as never);
+					active = first;
+
+					const init1 = await withDeadline(first.subscription.next(), 'first init');
+					expect(init1.done).toBe(false);
+					expect(init1.value).toMatchObject({ type: 'subscription', event: 'init' });
+
+					const name1 = uuid();
+					const id1 = await insertItem(url, collection, name1, 'integer');
+
+					expect((await withDeadline(first.subscription.next(), 'first create')).value).toMatchObject({
+						event: 'create',
+						data: [{ id: id1, name: name1 }],
+					});
+
+					first.unsubscribe();
+					active = undefined;
+					const closed1 = nextClose();
+					client.disconnect();
+					await closed1;
+					expect(await client.isConnected()).toBe(false);
+
+					await client.connect();
+
+					const second = await client.subscribe(collection as never);
+					active = second;
+
+					const init2 = await withDeadline(second.subscription.next(), 'second init');
+					expect(init2.done).toBe(false);
+					expect(init2.value).toMatchObject({ type: 'subscription', event: 'init' });
+
+					const name2 = uuid();
+					const id2 = await insertItem(url, collection, name2, 'integer');
+
+					expect((await withDeadline(second.subscription.next(), 'second create')).value).toMatchObject({
+						event: 'create',
+						data: [{ id: id2, name: name2 }],
+					});
+
+					await watermark.subscribe({ collection, uid: 'wm' });
+
+					let sdkMessages = 0;
+
+					const offMessage = client.onWebSocket('message', () => {
+						sdkMessages++;
+					});
+
+					const baseline = sdkMessages;
+					const closed2 = nextClose();
+					client.disconnect();
+					await closed2;
+
+					const id3 = await insertItem(url, collection, uuid(), 'integer');
+
+					expect((await watermark.getMessages(1, { uid: 'wm' }))![0]).toMatchObject({
+						type: 'subscription',
+						event: 'create',
+						data: [{ id: id3 }],
+					});
+
+					expect(sdkMessages).toBe(baseline);
+					expect(await client.isConnected()).toBe(false);
+					offMessage();
+				} finally {
+					active?.unsubscribe();
+					client.disconnect();
+					watermark.conn.close();
+				}
 			},
 			120000
 		);

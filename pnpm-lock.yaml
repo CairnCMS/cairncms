@@ -1394,6 +1394,9 @@ importers:
 
   tests/blackbox:
     devDependencies:
+      '@cairncms/sdk':
+        specifier: workspace:*
+        version: link:../../sdk
       '@cairncms/types':
         specifier: workspace:*
         version: link:../../packages/types
