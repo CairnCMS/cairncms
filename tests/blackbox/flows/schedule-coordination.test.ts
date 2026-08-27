@@ -35,6 +35,7 @@ const CRON = '*/2 * * * * *';
 const WINDOW_MS = 12000;
 const OUTAGE_MS = 8000;
 const SETTLE_MS = 3000;
+const MAX_PROXY_ERROR_CHARS = 16 * 1024;
 
 const REDIS6 = 'redis://127.0.0.1:6108/5';
 const REDIS7_PORT = 6109;
@@ -147,13 +148,46 @@ function spawnProxy(listenPort: number, upstreamPort: number): Promise<ChildProc
 
 	return new Promise<ChildProcess>((resolve, reject) => {
 		let settled = false;
+		let stderr = '';
+
+		const captureStderr = (chunk: unknown) => {
+			stderr += String(chunk);
+			if (stderr.length > MAX_PROXY_ERROR_CHARS) stderr = stderr.slice(-MAX_PROXY_ERROR_CHARS);
+		};
+
+		const fail = (reason: string, code = proxy.exitCode, signal = proxy.signalCode) => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timer);
+			const output = stderr.trim() || 'no stderr';
+
+			reject(
+				new Error(`redis proxy ${reason} (code=${code} signal=${signal})\n--- captured stderr (tail) ---\n${output}`)
+			);
+		};
 
 		const timer = setTimeout(() => {
 			if (settled) return;
 			settled = true;
 			proxy.kill();
-			awaitExit(proxy).then(() => reject(new Error('redis proxy readiness timeout')));
+
+			awaitExit(proxy).then(() => {
+				const output = stderr.trim() || 'no stderr';
+
+				reject(
+					new Error(
+						`redis proxy readiness timeout (code=${proxy.exitCode} signal=${proxy.signalCode})\n--- captured stderr (tail) ---\n${output}`
+					)
+				);
+			});
 		}, 10000);
+
+		proxy.stderr?.on('data', captureStderr);
+
+		proxy.once('error', (error) => {
+			stderr = `${stderr}${error.message}`.slice(-MAX_PROXY_ERROR_CHARS);
+			fail('failed to start');
+		});
 
 		proxy.stdout?.on('data', (chunk: unknown) => {
 			if (settled) return;
@@ -165,12 +199,7 @@ function spawnProxy(listenPort: number, upstreamPort: number): Promise<ChildProc
 			}
 		});
 
-		proxy.once('exit', () => {
-			if (settled) return;
-			settled = true;
-			clearTimeout(timer);
-			reject(new Error('redis proxy exited before ready'));
-		});
+		proxy.once('exit', (code, signal) => fail('exited before ready', code, signal));
 	});
 }
 
