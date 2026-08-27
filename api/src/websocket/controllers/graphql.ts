@@ -234,6 +234,10 @@ export class GraphQLController extends SocketController {
 
 		const rawSchema = await this.getSchema({ database: this.database });
 
+		if (!(await this.refreshBeforeCommand(client, rawSchema)) || client.stopping) {
+			return [new GraphQLError('The subscription could not be authorized.')];
+		}
+
 		const service = new GraphQLService({
 			schema: rawSchema,
 			accountability: client.auth.accountability,
