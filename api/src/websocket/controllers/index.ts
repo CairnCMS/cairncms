@@ -174,7 +174,15 @@ export async function activateRealtime(deps: RealtimeDeps): Promise<RealtimeActi
 
 		return {
 			handleUpgrade: (req: IncomingMessage, socket: Duplex, head: Buffer) => {
-				for (const controller of controllers) void controller.handleUpgrade(req, socket, head);
+				const target = controllers.find((controller) => controller.ownsUpgrade(req));
+
+				if (target === undefined) {
+					if (socket.writable) socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+					socket.destroy();
+					return;
+				}
+
+				void target.handleUpgrade(req, socket, head);
 			},
 			stop,
 		};

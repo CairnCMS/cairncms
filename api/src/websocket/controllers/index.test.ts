@@ -6,6 +6,7 @@ const coordinatorStart = vi.fn();
 const coordinatorStop = vi.fn(async () => undefined);
 const controllerTerminate = vi.fn(async () => undefined);
 const controllerHandleUpgrade = vi.fn();
+const graphqlHandleUpgrade = vi.fn();
 const controllerCloseConnection = vi.fn();
 const controllerBroadcast = vi.fn();
 const controllerClientSnapshot = vi.fn(() => new Set());
@@ -44,20 +45,32 @@ class MockController {
 	broadcast = controllerBroadcast;
 	clientSnapshot = controllerClientSnapshot;
 	terminate = controllerTerminate;
-	constructor(options: unknown) {
+	readonly path: string;
+	constructor(options: { path: string }) {
 		controllerOptions.push(options);
+		this.path = options.path;
+	}
+
+	ownsUpgrade(req: { url?: string }): boolean {
+		return new URL(req.url ?? '', 'http://localhost').pathname === this.path;
 	}
 }
 
 class MockGraphQLController {
-	handleUpgrade = controllerHandleUpgrade;
+	handleUpgrade = graphqlHandleUpgrade;
 	closeConnection = controllerCloseConnection;
 	broadcast = controllerBroadcast;
 	clientSnapshot = controllerClientSnapshot;
 	terminate = controllerTerminate;
-	constructor(options: unknown) {
+	readonly path: string;
+	constructor(options: { path: string }) {
 		if (graphqlConstructError !== null) throw graphqlConstructError;
 		graphqlControllerOptions.push(options);
+		this.path = options.path;
+	}
+
+	ownsUpgrade(req: { url?: string }): boolean {
+		return new URL(req.url ?? '', 'http://localhost').pathname === this.path;
 	}
 }
 
@@ -115,6 +128,7 @@ beforeEach(() => {
 		coordinatorStop,
 		controllerTerminate,
 		controllerHandleUpgrade,
+		graphqlHandleUpgrade,
 		controllerCloseConnection,
 		controllerBroadcast,
 		controllerClientSnapshot,
@@ -152,19 +166,58 @@ describe('activateRealtime', () => {
 		expect(coordinatorOptions[0].deliveryConcurrency).toBe(7);
 	});
 
-	it('fans the upgrade and the close to every controller', async () => {
+	it('routes the upgrade to the owning controller and fans the close to every controller', async () => {
 		getWebSocketConfig.mockReturnValue(activeConfig());
 		const activation = await activateRealtime(DEPS);
 		if (activation === null) throw new Error('expected activation');
 
-		const req = {} as never;
-		const socket = {} as never;
+		const req = { url: '/websocket' } as never;
+		const socket = { writable: true, write: vi.fn(), destroy: vi.fn() } as never;
 		const head = Buffer.alloc(0);
 		activation.handleUpgrade(req, socket, head);
+		expect(controllerHandleUpgrade).toHaveBeenCalledTimes(1);
 		expect(controllerHandleUpgrade).toHaveBeenCalledWith(req, socket, head);
 
 		coordinatorOptions[0].closeConnection({ uid: 'x' } as never, 1013);
 		expect(controllerCloseConnection).toHaveBeenCalledWith({ uid: 'x' }, 1013);
+	});
+
+	it('writes 404 and destroys the socket for an unowned upgrade path, reaching no controller', async () => {
+		getWebSocketConfig.mockReturnValue(activeConfig());
+		const activation = await activateRealtime(DEPS);
+		if (activation === null) throw new Error('expected activation');
+
+		const write = vi.fn();
+		const destroy = vi.fn();
+
+		activation.handleUpgrade(
+			{ url: '/nowhere' } as never,
+			{ writable: true, write, destroy } as never,
+			Buffer.alloc(0)
+		);
+
+		expect(controllerHandleUpgrade).not.toHaveBeenCalled();
+		expect(write).toHaveBeenCalledWith('HTTP/1.1 404 Not Found\r\n\r\n');
+		expect(destroy).toHaveBeenCalledTimes(1);
+	});
+
+	it('destroys a non-writable unowned socket without writing', async () => {
+		getWebSocketConfig.mockReturnValue(activeConfig());
+		const activation = await activateRealtime(DEPS);
+		if (activation === null) throw new Error('expected activation');
+
+		const write = vi.fn();
+		const destroy = vi.fn();
+
+		activation.handleUpgrade(
+			{ url: '/nowhere' } as never,
+			{ writable: false, write, destroy } as never,
+			Buffer.alloc(0)
+		);
+
+		expect(write).not.toHaveBeenCalled();
+		expect(destroy).toHaveBeenCalledTimes(1);
+		expect(controllerHandleUpgrade).not.toHaveBeenCalled();
 	});
 
 	it('stop tears down producer, coordinator, and controllers, and shares one promise', async () => {
@@ -328,13 +381,21 @@ describe('activateRealtime with the GraphQL transport', () => {
 		expect(coordinatorStart).toHaveBeenCalledTimes(1);
 	});
 
-	it('fans the upgrade and the close to both transports and reports each from info()', async () => {
+	it('routes each transport upgrade to its owner, fans the close to both, and reports each from info()', async () => {
 		getWebSocketConfig.mockReturnValue(bothConfig());
 		const activation = await activateRealtime(DEPS);
 		if (activation === null) throw new Error('expected activation');
 
-		activation.handleUpgrade({} as never, {} as never, Buffer.alloc(0));
-		expect(controllerHandleUpgrade).toHaveBeenCalledTimes(2);
+		const socket = { writable: true, write: vi.fn(), destroy: vi.fn() } as never;
+		const restReq = { url: '/websocket' } as never;
+		const graphqlReq = { url: '/graphql' } as never;
+		activation.handleUpgrade(restReq, socket, Buffer.alloc(0));
+		activation.handleUpgrade(graphqlReq, socket, Buffer.alloc(0));
+
+		expect(controllerHandleUpgrade).toHaveBeenCalledTimes(1);
+		expect(controllerHandleUpgrade).toHaveBeenCalledWith(restReq, socket, Buffer.alloc(0));
+		expect(graphqlHandleUpgrade).toHaveBeenCalledTimes(1);
+		expect(graphqlHandleUpgrade).toHaveBeenCalledWith(graphqlReq, socket, Buffer.alloc(0));
 
 		coordinatorOptions[0].closeConnection({ uid: 'x' } as never, 1013);
 		expect(controllerCloseConnection).toHaveBeenCalledTimes(2);

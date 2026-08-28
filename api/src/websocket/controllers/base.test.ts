@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import type { Knex } from 'knex';
 import { createServer, type IncomingHttpHeaders, type Server } from 'node:http';
 import type { Duplex } from 'node:stream';
-import type { AddressInfo } from 'node:net';
+import { connect as netConnect, type AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 import emitter from '../../emitter.js';
@@ -504,6 +504,86 @@ describe('upgrade rejection contract', () => {
 				await local.teardown();
 			}
 		}
+	});
+});
+
+const MISSING_KEY_UPGRADE =
+	'GET /websocket HTTP/1.1\r\n' +
+	'Host: 127.0.0.1\r\n' +
+	'Connection: Upgrade\r\n' +
+	'Upgrade: websocket\r\n' +
+	'Sec-WebSocket-Version: 13\r\n\r\n';
+
+const NON_GET_UPGRADE =
+	'POST /websocket HTTP/1.1\r\n' +
+	'Host: 127.0.0.1\r\n' +
+	'Connection: Upgrade\r\n' +
+	'Upgrade: websocket\r\n' +
+	'Sec-WebSocket-Version: 13\r\n' +
+	'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n';
+
+function sendRawUpgrade(port: number, raw: string): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const socket = netConnect(port, '127.0.0.1', () => socket.write(raw));
+		socket.setEncoding('utf8');
+
+		let settled = false;
+		let buffer = '';
+
+		const timer = setTimeout(() => {
+			if (settled) return;
+			settled = true;
+			socket.destroy();
+			reject(new Error('raw upgrade timed out'));
+		}, 2000);
+
+		const finish = (action: () => void) => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timer);
+			socket.destroy();
+			action();
+		};
+
+		socket.on('data', (chunk: string) => {
+			buffer += chunk;
+			if (buffer.includes('\r\n')) finish(() => resolve(buffer.split('\r\n')[0]!));
+		});
+
+		socket.on('error', (error) => finish(() => reject(error)));
+		socket.on('close', () => finish(() => reject(new Error('raw upgrade closed before a status line'))));
+	});
+}
+
+describe('aborted-handshake admission release', () => {
+	it('releases the lease when ws aborts a malformed public upgrade', async () => {
+		const admission = new Admission({ process: 100, ip: 1, user: 100, transports: { rest: 100 } });
+		const active = (harness = await createHarness({ admission }));
+
+		expect(await sendRawUpgrade(active.port, MISSING_KEY_UPGRADE)).toBe('HTTP/1.1 400 Bad Request');
+		await flush();
+
+		expect((await active.connect()).kind).toBe('open');
+	});
+
+	it('releases the lease when ws aborts a malformed handshake upgrade', async () => {
+		const admission = new Admission({ process: 100, ip: 1, user: 100, transports: { rest: 100 } });
+		const active = (harness = await createHarness({ admission, authMode: 'handshake' }));
+
+		expect(await sendRawUpgrade(active.port, MISSING_KEY_UPGRADE)).toBe('HTTP/1.1 400 Bad Request');
+		await flush();
+
+		expect((await active.connect()).kind).toBe('open');
+	});
+
+	it('releases the lease when ws aborts a non-GET upgrade', async () => {
+		const admission = new Admission({ process: 100, ip: 1, user: 100, transports: { rest: 100 } });
+		const active = (harness = await createHarness({ admission }));
+
+		expect(await sendRawUpgrade(active.port, NON_GET_UPGRADE)).toBe('HTTP/1.1 405 Method Not Allowed');
+		await flush();
+
+		expect((await active.connect()).kind).toBe('open');
 	});
 });
 

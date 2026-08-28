@@ -183,6 +183,10 @@ export abstract class SocketController {
 		}
 	};
 
+	ownsUpgrade(req: IncomingMessage): boolean {
+		return this.matchesPath(req);
+	}
+
 	private async runUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
 		let auth: ConnectionAuth | null = null;
 		let lease: Lease | null = null;
@@ -360,7 +364,11 @@ export abstract class SocketController {
 			return;
 		}
 
+		let established = false;
+
 		this.server.handleUpgrade(req, socket, head, (ws) => {
+			established = true;
+
 			if (this.closing) {
 				auth.close();
 				ws.terminate();
@@ -379,6 +387,8 @@ export abstract class SocketController {
 				this.stop(client, { terminate: true })
 			);
 		});
+
+		if (!established) auth.close();
 	}
 
 	private establishForHandshake(
@@ -388,7 +398,11 @@ export abstract class SocketController {
 		auth: ConnectionAuth,
 		ip: string
 	): void {
+		let established = false;
+
 		this.server.handleUpgrade(req, socket, head, (ws) => {
+			established = true;
+
 			if (this.closing) {
 				auth.close();
 				ws.terminate();
@@ -403,6 +417,8 @@ export abstract class SocketController {
 				this.stop(client, { terminate: true })
 			);
 		});
+
+		if (!established) auth.close();
 	}
 
 	protected createClient(ws: WebSocket, auth: ConnectionAuth, ip: string): SocketClient {
