@@ -7,7 +7,7 @@ export type WebSocketErrorCode =
 	| 'AUTH_FAILED'
 	| 'TOKEN_EXPIRED'
 	| 'INVALID_PAYLOAD'
-	| 'INVALID_COLLECTION'
+	| 'FORBIDDEN'
 	| 'REQUESTS_EXCEEDED'
 	| 'UNSUPPORTED_MESSAGE_TYPE'
 	| 'TOO_MANY_PENDING'
@@ -19,7 +19,7 @@ const ERROR_MESSAGES: Record<WebSocketErrorCode, string> = {
 	AUTH_FAILED: 'Authentication failed.',
 	TOKEN_EXPIRED: 'Token expired.',
 	INVALID_PAYLOAD: 'Invalid message.',
-	INVALID_COLLECTION: 'The requested collection is not accessible.',
+	FORBIDDEN: 'You do not have permission to access this.',
 	REQUESTS_EXCEEDED: 'Too many requests.',
 	UNSUPPORTED_MESSAGE_TYPE: 'Unsupported message type.',
 	TOO_MANY_PENDING: 'Too many pending commands.',

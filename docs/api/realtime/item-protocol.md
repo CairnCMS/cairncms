@@ -125,7 +125,7 @@ The error codes:
 | `AUTH_FAILED` | The supplied token was rejected. |
 | `TOKEN_EXPIRED` | The supplied token has expired. |
 | `INVALID_PAYLOAD` | The message could not be parsed or failed validation. |
-| `INVALID_COLLECTION` | The collection is not accessible to this connection. |
+| `FORBIDDEN` | The request is not permitted. This response does not distinguish an unknown collection from one the connection cannot access. |
 | `UNSUPPORTED_MESSAGE_TYPE` | The `type` is not a recognized message type. |
 | `REQUESTS_EXCEEDED` | The connection exceeded its message rate limit. |
 | `TOO_MANY_PENDING` | Too many commands are in flight on the connection. |

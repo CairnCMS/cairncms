@@ -298,7 +298,7 @@ describe('handleItems delete', () => {
 });
 
 describe('handleItems target and error envelopes', () => {
-	it('rejects a denied target with an INVALID_COLLECTION items envelope carrying the uid', async () => {
+	it('rejects an inaccessible target with a FORBIDDEN items envelope carrying the uid', async () => {
 		resolveTarget.mockReturnValue(null);
 
 		const error = await reject(
@@ -307,7 +307,7 @@ describe('handleItems target and error envelopes', () => {
 		);
 
 		expect(error.type).toBe('items');
-		expect(error.code).toBe('INVALID_COLLECTION');
+		expect(error.code).toBe('FORBIDDEN');
 		expect(error.uid).toBe(7);
 	});
 
@@ -316,7 +316,22 @@ describe('handleItems target and error envelopes', () => {
 		const error = await reject({ type: 'items', action: 'read', collection: 'articles', uid: 8 }, ctx('articles'));
 
 		expect(error).toMatchObject({ type: 'items', code: 'FORBIDDEN', uid: 8 });
-		expect(error.message).toBe('The request could not be completed.');
+		expect(error.message).toBe('You do not have permission to access this.');
+	});
+
+	it('serializes an unresolved target and a service denial to the same FORBIDDEN frame', async () => {
+		resolveTarget.mockReturnValue(null);
+
+		const unresolved = await reject(
+			{ type: 'items', action: 'read', collection: 'directus_users', uid: 8 },
+			ctx('directus_users')
+		);
+
+		resolveTarget.mockReturnValue(service as never);
+		service.readByQuery.mockRejectedValue(new ForbiddenException());
+		const denied = await reject({ type: 'items', action: 'read', collection: 'articles', uid: 8 }, ctx('articles'));
+
+		expect(unresolved.toMessage()).toBe(denied.toMessage());
 	});
 
 	it('never leaks a secret carried in a service error message', async () => {

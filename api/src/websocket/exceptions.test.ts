@@ -49,7 +49,7 @@ describe('toWebSocketException', () => {
 		const result = toWebSocketException(new BaseException('denied: token=secret-value', 403, 'FORBIDDEN'), 'items', 4);
 
 		expect(result.code).toBe('FORBIDDEN');
-		expect(result.message).toBe('The request could not be completed.');
+		expect(result.message).toBe('You do not have permission to access this.');
 		expect(result.toMessage()).not.toContain('secret-value');
 		const frame = JSON.parse(result.toMessage());
 		expect(frame).toMatchObject({ type: 'items', uid: 4, error: { code: 'FORBIDDEN' } });
@@ -72,9 +72,7 @@ describe('toWebSocketException', () => {
 		debug.mockRestore();
 	});
 
-	it('gives INVALID_COLLECTION a fixed message', () => {
-		expect(new WebSocketException('items', 'INVALID_COLLECTION').message).toBe(
-			'The requested collection is not accessible.'
-		);
+	it('gives FORBIDDEN a fixed message', () => {
+		expect(new WebSocketException('items', 'FORBIDDEN').message).toBe('You do not have permission to access this.');
 	});
 });

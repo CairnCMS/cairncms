@@ -1,5 +1,6 @@
 import type { SchemaOverview } from '@cairncms/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ForbiddenException } from '../../exceptions/index.js';
 import type { CommandContext, SocketClient } from '../controllers/base.js';
 import { WebSocketException } from '../exceptions.js';
 import type { WebSocketMessage } from '../messages.js';
@@ -18,7 +19,14 @@ const initialPayload = vi.mocked(getInitialPayload);
 
 const CONTEXT: CommandContext = {
 	schema: { collections: {} } as unknown as SchemaOverview,
-	accountability: { user: 'u', role: 'r', admin: false, app: true, ip: '1.1.1.1' } as never,
+	accountability: {
+		user: 'u',
+		role: 'r',
+		admin: false,
+		app: true,
+		ip: '1.1.1.1',
+		permissions: [{ collection: 'articles', action: 'read' }],
+	} as never,
 };
 
 const DELETE_FEED_CONTEXT: CommandContext = {
@@ -28,7 +36,13 @@ const DELETE_FEED_CONTEXT: CommandContext = {
 
 const DENIED_FEED_CONTEXT: CommandContext = {
 	schema: { collections: { articles: { primary: 'id' } } } as unknown as SchemaOverview,
-	accountability: { user: 'e', role: 'e', admin: false, app: true, permissions: [] } as never,
+	accountability: {
+		user: 'e',
+		role: 'e',
+		admin: false,
+		app: true,
+		permissions: [{ collection: 'articles', action: 'read', permissions: { status: { _eq: 'published' } } }],
+	} as never,
 };
 
 let registry: InstanceType<typeof SubscriptionRegistry>;
@@ -108,12 +122,12 @@ describe('handleSubscription subscribe', () => {
 		expect(registry.getActiveByCollection('articles', 999)).toHaveLength(1);
 	});
 
-	it('rejects a denied collection with INVALID_COLLECTION and registers nothing', async () => {
+	it('rejects an inaccessible collection with FORBIDDEN and registers nothing', async () => {
 		resolveTarget.mockReturnValue(null);
 		const send = makeSend();
 		const error = await reject(makeClient(), { type: 'subscribe', collection: 'directus_users', uid: 7 }, send);
 
-		expect(error).toMatchObject({ type: 'subscribe', code: 'INVALID_COLLECTION', uid: '7' });
+		expect(error).toMatchObject({ type: 'subscribe', code: 'FORBIDDEN', uid: '7' });
 		expect(registry.getSubscribedOwners()).toHaveLength(0);
 		expect(send).not.toHaveBeenCalled();
 	});
@@ -276,6 +290,65 @@ describe('handleSubscription unsubscribe', () => {
 		await run(client, { type: 'subscribe', collection: 'posts', uid: 2 }, makeSend());
 
 		await run(client, { type: 'unsubscribe' }, makeSend());
+		expect(registry.getSubscribedOwners()).toHaveLength(0);
+	});
+});
+
+describe('handleSubscription collection non-disclosure', () => {
+	const NO_READ: CommandContext = {
+		schema: { collections: {} } as unknown as SchemaOverview,
+		accountability: { user: 'n', role: 'n', admin: false, app: true, permissions: [] } as never,
+	};
+
+	function subscribeError(context: CommandContext, message: Record<string, unknown>) {
+		return handleSubscription(makeClient(), message as WebSocketMessage, context, makeSend(), registry, close).then(
+			() => null,
+			(caught) => caught as WebSocketException
+		);
+	}
+
+	it('returns a byte-identical FORBIDDEN frame for unknown, internal, and existing-unreadable targets, with and without an event', async () => {
+		const frames: string[] = [];
+
+		resolveTarget.mockReturnValue(null);
+
+		for (const collection of ['does_not_exist', 'directus_users']) {
+			for (const event of [undefined, 'create'] as const) {
+				const error = await subscribeError(NO_READ, {
+					type: 'subscribe',
+					collection,
+					uid: 1,
+					...(event !== undefined ? { event } : {}),
+				});
+
+				frames.push(error!.toMessage());
+			}
+		}
+
+		resolveTarget.mockReturnValue({} as never);
+		initialPayload.mockRejectedValue(new ForbiddenException());
+
+		const unset = await subscribeError(NO_READ, { type: 'subscribe', collection: 'articles', uid: 1 });
+		frames.push(unset!.toMessage());
+
+		const withEvent = await subscribeError(NO_READ, {
+			type: 'subscribe',
+			collection: 'articles',
+			event: 'create',
+			uid: 1,
+		});
+
+		frames.push(withEvent!.toMessage());
+
+		expect(new Set(frames).size).toBe(1);
+
+		expect(JSON.parse(frames[0]!)).toMatchObject({
+			type: 'subscribe',
+			status: 'error',
+			uid: '1',
+			error: { code: 'FORBIDDEN', message: 'You do not have permission to access this.' },
+		});
+
 		expect(registry.getSubscribedOwners()).toHaveLength(0);
 	});
 });

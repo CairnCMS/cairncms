@@ -6,7 +6,7 @@ import { WebSocketSubscribeMessage, type WebSocketMessage } from '../messages.js
 import { canonicalItemKey, type Subscription, type SubscriptionRegistry } from '../subscriptions.js';
 import { resolveTargetService } from '../target.js';
 import { getInitialPayload } from '../utils/items.js';
-import { isDeleteFeedEligible, isDeleteFeedQueryAllowed } from '../utils/removal.js';
+import { hasCollectionReadAccess, isDeleteFeedEligible, isDeleteFeedQueryAllowed } from '../utils/removal.js';
 import { fmtMessage } from '../utils/message.js';
 
 type GuardedSend = (frame: string) => { accepted: boolean };
@@ -37,7 +37,11 @@ export async function handleSubscription(
 		const { schema, accountability } = context;
 
 		const service = resolveTargetService(parsed.collection, { schema, accountability });
-		if (service === null) throw new WebSocketException('subscribe', 'INVALID_COLLECTION', uid);
+		if (service === null) throw new WebSocketException('subscribe', 'FORBIDDEN', uid);
+
+		if (parsed.event !== undefined && !hasCollectionReadAccess(parsed.collection, accountability)) {
+			throw new WebSocketException('subscribe', 'FORBIDDEN', uid);
+		}
 
 		if (parsed.event === 'delete') {
 			const allowed =

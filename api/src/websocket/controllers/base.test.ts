@@ -1506,7 +1506,7 @@ describe('commit-7 drain additions', () => {
 			type: 'items',
 			status: 'error',
 			uid: 3,
-			error: { code: 'FORBIDDEN', message: 'The request could not be completed.' },
+			error: { code: 'FORBIDDEN', message: 'You do not have permission to access this.' },
 		});
 
 		expect(callsFor('websocket.message')).toHaveLength(0);
@@ -1515,7 +1515,7 @@ describe('commit-7 drain additions', () => {
 });
 
 describe('commit-8a subscription wiring', () => {
-	it('answers a subscribe to an unknown collection with a subscribe INVALID_COLLECTION frame and stays open', async () => {
+	it('answers a subscribe to an inaccessible collection with a subscribe FORBIDDEN frame and stays open', async () => {
 		const { ws, frames } = await openClient({ controllerClass: TestController });
 
 		sendJson(ws, { type: 'subscribe', collection: 'articles', uid: 5 });
@@ -1525,7 +1525,7 @@ describe('commit-8a subscription wiring', () => {
 			type: 'subscribe',
 			status: 'error',
 			uid: '5',
-			error: { code: 'INVALID_COLLECTION' },
+			error: { code: 'FORBIDDEN' },
 		});
 
 		expect(ws.readyState).toBe(WebSocket.OPEN);

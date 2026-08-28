@@ -24,6 +24,16 @@ export function isDeleteFeedEligible(
 	return fields.includes('*') || fields.includes(primary) || fields.length === 0;
 }
 
+export function hasCollectionReadAccess(collection: string, accountability: RequestAccountability): boolean {
+	if (accountability.admin === true) return true;
+
+	return (
+		accountability.permissions?.some(
+			(permission) => permission.collection === collection && permission.action === 'read'
+		) ?? false
+	);
+}
+
 export function isDeleteFeedQueryAllowed(rawQuery: Record<string, unknown> | undefined): boolean {
 	return rawQuery === undefined || Object.keys(rawQuery).length === 0;
 }

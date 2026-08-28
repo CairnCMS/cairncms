@@ -31,7 +31,7 @@ export async function handleItems(
 		const { schema, accountability } = context;
 
 		const service = resolveTargetService(parsed.collection, { schema, accountability });
-		if (service === null) throw new WebSocketException('items', 'INVALID_COLLECTION', uid);
+		if (service === null) throw new WebSocketException('items', 'FORBIDDEN', uid);
 
 		const isSingleton = schema.collections[parsed.collection]?.singleton === true;
 		const metaService = new MetaService({ schema, accountability });

@@ -6,6 +6,7 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 import { Admission } from '../admission.js';
+import type { SocketClient } from '../controllers/base.js';
 import { resolveTargetService } from '../target.js';
 import { getInitialPayload } from '../utils/items.js';
 
@@ -21,7 +22,8 @@ const initialPayload = vi.mocked(getInitialPayload);
 const SCHEMA = { collections: {}, relations: [] } as unknown as SchemaOverview;
 
 const WiredController = class extends WebSocketController {
-	protected override async refreshBeforeCommand(): Promise<boolean> {
+	protected override async refreshBeforeCommand(client: SocketClient): Promise<boolean> {
+		Object.assign(client.auth.accountability, { permissions: [{ collection: 'articles', action: 'read' }] });
 		return true;
 	}
 };

@@ -597,7 +597,7 @@ describe('realtime composable lifecycle', () => {
 		const bNext = b.subscription[Symbol.asyncIterator]().next();
 		await flush();
 
-		ws1.message({ type: 'subscribe', status: 'error', uid: 'A', error: { code: 'INVALID_COLLECTION', message: 'no' } });
+		ws1.message({ type: 'subscribe', status: 'error', uid: 'A', error: { code: 'FORBIDDEN', message: 'no' } });
 		await expect(aNext).rejects.toMatchObject({ status: 'error', uid: 'A' });
 
 		ws1.message({ type: 'subscription', uid: 'B', event: 'create', data: [{ id: 1 }] });
