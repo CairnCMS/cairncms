@@ -327,32 +327,6 @@ describe('realtime composable lifecycle', () => {
 		rejections.stop();
 	});
 
-	it('replies to a ping with a pong while open', async () => {
-		const client = makeClient({ authMode: 'public' });
-		const ws = await openPublic(client);
-
-		ws.message({ type: 'ping' });
-		await flush();
-
-		expect(ws.messages().some((m) => m.type === 'pong')).toBe(true);
-	});
-
-	it('does not pong or throw for a ping delivered after the connection has closed', async () => {
-		const client = makeClient({ authMode: 'public' });
-		const ws = await openPublic(client);
-
-		const rejections = trackUnhandledRejections();
-
-		ws.serverClose(1000);
-		await flush();
-		ws.message({ type: 'ping' });
-		await wait(20);
-
-		expect(ws.messages().some((m) => m.type === 'pong')).toBe(false);
-		expect(rejections.seen).toEqual([]);
-		rejections.stop();
-	});
-
 	it('does not reconnect by default when the connection closes', async () => {
 		const client = makeClient({ authMode: 'public' });
 		const ws = await openPublic(client);
@@ -728,7 +702,7 @@ describe('realtime composable lifecycle', () => {
 
 		const wsA = await openPublic(clientA);
 		// a public-mode auth failure disables reconnect, but only for client A
-		wsA.message({ type: 'auth', status: 'error', error: { code: 'AUTH_TIMEOUT', message: 'x' } });
+		wsA.message({ type: 'auth', status: 'error', error: { code: 'AUTH_FAILED', message: 'x' } });
 		await flush();
 
 		const wsB = await openPublic(clientB);
@@ -747,6 +721,25 @@ describe('realtime composable lifecycle', () => {
 		expect(() => makeClient({ reconnect: { delay: MAX_RECONNECT_DELAY + 1, retries: 2 } })).toThrow(/reconnect/);
 		expect(() => makeClient({ connect: { timeout: Number.NaN } })).toThrow(/connect/);
 		expect(() => makeClient({ connect: { timeout: MAX_TIMER_DELAY + 1 } })).toThrow(/connect/);
+	});
+
+	it('rejects an invalid authMode configuration', () => {
+		expect(() => makeClient({ authMode: 'bogus' as never })).toThrow(/authMode/);
+	});
+
+	it('assigns a generated uid on the wire without mutating a caller-owned message', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const message = { type: 'custom' } as Record<string, unknown>;
+		client.sendMessage(message);
+
+		expect('uid' in message).toBe(false);
+
+		const sent = ws.messages().find((m) => m.type === 'custom');
+		expect(sent).toBeTruthy();
+		expect(typeof sent.uid).toBe('string');
+		expect(sent.uid.length).toBeGreaterThan(0);
 	});
 
 	it('accepts the maximum supported reconnect delay and connect timeout', () => {

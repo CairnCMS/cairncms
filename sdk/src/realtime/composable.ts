@@ -3,7 +3,6 @@ import type { ConsoleInterface, WebSocketInterface } from '../index.js';
 import type { CairnCMSClient } from '../types/client.js';
 import { queryToParams, type ExtendedQuery } from '../rest/utils/query-to-params.js';
 import { auth } from './commands/auth.js';
-import { pong } from './commands/pong.js';
 import type {
 	ConnectionState,
 	ReconnectState,
@@ -22,7 +21,6 @@ type AuthWSClient<Schema> = WebSocketClient<Schema> & AuthenticationClient<Schem
 
 const defaultRealTimeConfig: WebSocketConfig = {
 	authMode: 'handshake',
-	heartbeat: true,
 	debug: false,
 	connect: {
 		timeout: 10000, // 10 seconds
@@ -50,6 +48,10 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 		const config = { ...defaultRealTimeConfig, ...userConfig };
 		if (config.reconnect) config.reconnect = { ...config.reconnect };
 		if (config.connect) config.connect = { ...config.connect };
+
+		if (config.authMode !== 'public' && config.authMode !== 'handshake') {
+			throw new Error(`Invalid authMode configuration: expected "public" or "handshake".`);
+		}
 
 		if (config.reconnect) {
 			const { retries, delay } = config.reconnect;
@@ -324,18 +326,6 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 				}
 			}
 
-			if (message.error.code === 'AUTH_TIMEOUT') {
-				if (state.firstMessage && config.authMode === 'public') {
-					// detected likely misconfigured authMode
-					debug('warn', 'Authentication failed! Currently the "authMode" is "public" try using "handshake" instead');
-					config.reconnect = false;
-				} else {
-					debug('warn', 'Authentication timed out!');
-				}
-
-				return state.connection.close();
-			}
-
 			if (message.error.code === 'AUTH_FAILED') {
 				if (state.firstMessage && config.authMode === 'public') {
 					// detected likely misconfigured authMode
@@ -350,7 +340,7 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 
 		/**
 		 * One continuously attached ingress router per open socket. Parses each frame once and routes it to the
-		 * auth waiter, the auth-error handler, the heartbeat, the owning uid channel, and the generic callbacks.
+		 * auth waiter, the auth-error handler, the owning uid channel, and the generic message callbacks.
 		 */
 		const routeMessage = (self: AuthWSClient<Schema>, socket: WebSocketInterface, event: MessageEvent<any>) => {
 			try {
@@ -388,12 +378,6 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 						void handleAuthError(message, self).catch((error) =>
 							debug('warn', 'Failed to handle an authentication error.', error)
 						);
-					}
-				} else if (config.heartbeat && message['type'] === 'ping') {
-					try {
-						socket.send(pong());
-					} catch {
-						/* the socket may already be closing */
 					}
 				} else if (
 					'uid' in message &&
@@ -679,11 +663,8 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 					return state.connection.send(message);
 				}
 
-				if ('uid' in message === false) {
-					message['uid'] = registry.allocateUid();
-				}
-
-				state.connection.send(JSON.stringify(message));
+				const outgoing = 'uid' in message ? message : { ...message, uid: registry.allocateUid() };
+				state.connection.send(JSON.stringify(outgoing));
 			},
 			async subscribe<Collection extends keyof Schema, const Options extends SubscribeOptions<Schema, Collection>>(
 				collection: Collection,
