@@ -1972,3 +1972,63 @@ describe('base extension points', () => {
 		expect(callsFor('websocket.connect')).toHaveLength(0);
 	});
 });
+
+function sequencedDatabase(rows: unknown[]): Knex {
+	let index = 0;
+
+	const chain: Record<string, unknown> = {
+		select: () => chain,
+		from: () => chain,
+		leftJoin: () => chain,
+		where: () => chain,
+		first: async () => rows[Math.min(index++, rows.length - 1)],
+	};
+
+	return chain as unknown as Knex;
+}
+
+describe('static-token identity revalidation', () => {
+	it('closes a strict static-token connection when the user is suspended', async () => {
+		const database = sequencedDatabase([
+			{ id: 'svc', role: 'role-1', admin_access: false, app_access: true },
+			{ status: 'suspended', token: 'static-service-token', role: 'role-1', admin_access: false, app_access: true },
+		]);
+
+		const active = (harness = await createHarness({ authMode: 'strict', database }));
+
+		const result = await active.connect({ headers: { authorization: 'Bearer static-service-token' } });
+		expect(result.kind).toBe('open');
+		if (result.kind !== 'open') return;
+
+		const closed = new Promise<number>((resolve) => result.ws.once('close', resolve));
+		sendJson(result.ws, { type: 'subscribe', collection: 'articles' });
+
+		expect(await closed).toBeGreaterThanOrEqual(1000);
+	});
+
+	it('reverts a public static-token connection to anonymous when the user is suspended', async () => {
+		const database = sequencedDatabase([
+			{ id: 'svc', role: 'role-1', admin_access: false, app_access: true },
+			{ status: 'suspended', token: 'static-service-token', role: 'role-1', admin_access: false, app_access: true },
+		]);
+
+		const active = (harness = await createHarness({ authMode: 'public', database }));
+
+		const result = await active.connect();
+		expect(result.kind).toBe('open');
+		if (result.kind !== 'open') return;
+
+		const frames = collect(result.ws);
+		sendJson(result.ws, { type: 'auth', access_token: 'static-service-token' });
+		await waitFrames(() => frames.some((frame) => frame.type === 'auth' && frame.status === 'ok'));
+
+		const [serverClient] = [...active.controller.clientSnapshot()];
+		expect(serverClient!.auth.accountability.user).toBe('svc');
+
+		sendJson(result.ws, { type: 'subscribe', collection: 'articles' });
+		await waitFrames(() => serverClient!.auth.accountability.user === null);
+
+		expect(serverClient!.auth.accountability.user).toBeNull();
+		expect(result.ws.readyState).toBe(WebSocket.OPEN);
+	});
+});

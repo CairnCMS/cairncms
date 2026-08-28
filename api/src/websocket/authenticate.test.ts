@@ -10,14 +10,20 @@ import { ConnectionAuth } from './authenticate.js';
 vi.mock('../utils/get-token-identity.js', () => ({ getTokenIdentity: vi.fn() }));
 vi.mock('./utils/get-token-expiry.js', () => ({ getTokenExpiry: vi.fn(() => null) }));
 vi.mock('../utils/get-permissions.js', () => ({ getPermissions: vi.fn() }));
+vi.mock('../utils/get-static-identity.js', () => ({ getStaticIdentityById: vi.fn() }));
+vi.mock('../utils/is-cairncms-jwt.js', () => ({ default: vi.fn(() => false) }));
 
 const { getTokenIdentity } = await import('../utils/get-token-identity.js');
 const { getTokenExpiry } = await import('./utils/get-token-expiry.js');
 const { getPermissions } = await import('../utils/get-permissions.js');
+const { getStaticIdentityById } = await import('../utils/get-static-identity.js');
+const { default: isCairnJWT } = await import('../utils/is-cairncms-jwt.js');
 
 const resolver = vi.mocked(getTokenIdentity);
 const expiry = vi.mocked(getTokenExpiry);
 const permissions = vi.mocked(getPermissions);
+const staticLookup = vi.mocked(getStaticIdentityById);
+const jwtCheck = vi.mocked(isCairnJWT);
 
 const CONTEXT: RequestContext = { ip: '1.1.1.1', userAgent: 'agent', origin: null };
 const DEPS = { database: {} as Knex };
@@ -60,6 +66,10 @@ beforeEach(() => {
 	expiry.mockReset();
 	expiry.mockReturnValue(null);
 	permissions.mockReset();
+	staticLookup.mockReset();
+	staticLookup.mockResolvedValue({ status: 'active', token: 'token', role: 'role-1', admin: false, app: true });
+	jwtCheck.mockReset();
+	jwtCheck.mockReturnValue(false);
 });
 
 afterEach(() => {
@@ -425,5 +435,86 @@ describe('ConnectionAuth.snapshotAccountability', () => {
 
 		auth.close();
 		expect(admission.reserve('rest', '2.2.2.2')).not.toBeNull();
+	});
+});
+
+describe('ConnectionAuth static-token revalidation', () => {
+	it('adopts a changed role and admin for the same active token on refresh', async () => {
+		resolver.mockResolvedValue(userIdentity('alice'));
+		const { auth } = makeAuth();
+		await auth.authenticate('token');
+
+		staticLookup.mockResolvedValue({ status: 'active', token: 'token', role: 'role-2', admin: true, app: true });
+		permissions.mockResolvedValue([permission('articles')]);
+
+		expect(await auth.refreshPermissions(SCHEMA)).toBe(true);
+		expect(auth.accountability.role).toBe('role-2');
+		expect(auth.accountability.admin).toBe(true);
+	});
+
+	it('invalidates and drops the command when the static token is rotated', async () => {
+		resolver.mockResolvedValue(userIdentity('alice'));
+		const { auth } = makeAuth();
+		await auth.authenticate('token');
+
+		const onInvalidated = vi.fn();
+		auth.setInvalidationHandler(onInvalidated);
+		staticLookup.mockResolvedValue({ status: 'active', token: 'rotated', role: 'role-1', admin: false, app: true });
+
+		expect(await auth.refreshPermissions(SCHEMA)).toBe(false);
+		expect(onInvalidated).toHaveBeenCalledTimes(1);
+		expect(permissions).not.toHaveBeenCalled();
+	});
+
+	it('invalidates and drops the delivery when the user is suspended', async () => {
+		resolver.mockResolvedValue(userIdentity('alice'));
+		const { auth } = makeAuth();
+		await auth.authenticate('token');
+
+		const onInvalidated = vi.fn();
+		auth.setInvalidationHandler(onInvalidated);
+		staticLookup.mockResolvedValue({ status: 'suspended', token: 'token', role: 'role-1', admin: false, app: true });
+
+		expect(await auth.snapshotAccountability(SCHEMA)).toBeNull();
+		expect(onInvalidated).toHaveBeenCalledTimes(1);
+	});
+
+	it('invalidates when the user is deleted', async () => {
+		resolver.mockResolvedValue(userIdentity('alice'));
+		const { auth } = makeAuth();
+		await auth.authenticate('token');
+
+		const onInvalidated = vi.fn();
+		auth.setInvalidationHandler(onInvalidated);
+		staticLookup.mockResolvedValue(null);
+
+		expect(await auth.snapshotAccountability(SCHEMA)).toBeNull();
+		expect(onInvalidated).toHaveBeenCalledTimes(1);
+	});
+
+	it('fires the invalidation handler only once across repeated rejections', async () => {
+		resolver.mockResolvedValue(userIdentity('alice'));
+		const { auth } = makeAuth();
+		await auth.authenticate('token');
+
+		const onInvalidated = vi.fn();
+		auth.setInvalidationHandler(onInvalidated);
+		staticLookup.mockResolvedValue(null);
+
+		await auth.snapshotAccountability(SCHEMA);
+		await auth.refreshPermissions(SCHEMA);
+
+		expect(onInvalidated).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not revalidate a JWT identity', async () => {
+		jwtCheck.mockReturnValue(true);
+		resolver.mockResolvedValue(userIdentity('alice'));
+		const { auth } = makeAuth();
+		await auth.authenticate('jwt');
+
+		permissions.mockResolvedValue([]);
+		expect(await auth.refreshPermissions(SCHEMA)).toBe(true);
+		expect(staticLookup).not.toHaveBeenCalled();
 	});
 });

@@ -455,6 +455,8 @@ export abstract class SocketController {
 
 		ws.on('close', (code: number, reason: Buffer) => this.finalizeClient(client, code, reason.toString()));
 
+		auth.setInvalidationHandler(() => this.handleExpiry(client));
+
 		return client;
 	}
 

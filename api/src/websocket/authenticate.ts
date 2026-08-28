@@ -1,4 +1,5 @@
 import type { SchemaOverview } from '@cairncms/types';
+import { createHash } from 'node:crypto';
 import type { Knex } from 'knex';
 import { TokenExpiredException } from '../exceptions/index.js';
 import {
@@ -6,7 +7,9 @@ import {
 	type RequestAccountability,
 	type RequestContext,
 } from '../utils/get-anonymous-accountability.js';
+import isCairnJWT from '../utils/is-cairncms-jwt.js';
 import { getPermissions } from '../utils/get-permissions.js';
+import { getStaticIdentityById } from '../utils/get-static-identity.js';
 import { getTokenIdentity, type TokenIdentity } from '../utils/get-token-identity.js';
 import type { Lease, WorkHold } from './admission.js';
 import { getTokenExpiry } from './utils/get-token-expiry.js';
@@ -22,6 +25,15 @@ export type AuthResult =
 
 export type RevertResult = { status: 'anonymous' } | { status: 'capacity' };
 
+type StaticRevalidation =
+	| { status: 'not-static' }
+	| { status: 'valid'; identity: TokenIdentity }
+	| { status: 'invalid' };
+
+function digestToken(token: string): string {
+	return createHash('sha256').update(token).digest('hex');
+}
+
 export class ConnectionAuth {
 	private readonly context: RequestContext;
 	private readonly lease: Lease;
@@ -30,6 +42,10 @@ export class ConnectionAuth {
 	private accountabilityValue: RequestAccountability;
 	private expiryValue: number | null = null;
 	private pinnedUser: string | null = null;
+
+	private staticIdentity: { user: string; tokenDigest: string } | null = null;
+	private invalidationHandler: (() => void) | null = null;
+	private invalidationFired = false;
 
 	private identityEpoch = 0;
 	private lookupInFlight = false;
@@ -52,6 +68,10 @@ export class ConnectionAuth {
 
 	get pinned(): boolean {
 		return this.pinnedUser !== null;
+	}
+
+	setInvalidationHandler(handler: () => void): void {
+		this.invalidationHandler = handler;
 	}
 
 	async authenticate(token: string): Promise<AuthResult> {
@@ -94,6 +114,8 @@ export class ConnectionAuth {
 			if (this.pinnedUser === null) this.pinnedUser = user;
 			this.accountabilityValue = this.buildAccountability(identity);
 			this.expiryValue = expiry;
+			this.staticIdentity = isCairnJWT(token) ? null : { user, tokenDigest: digestToken(token) };
+			this.invalidationFired = false;
 			this.identityEpoch++;
 			return { status: 'authenticated', user };
 		} finally {
@@ -111,12 +133,21 @@ export class ConnectionAuth {
 		const epoch = this.identityEpoch;
 
 		try {
+			const reval = await this.revalidateStaticIdentity();
+			if (this.closed || this.identityEpoch !== epoch) return false;
+
+			if (reval.status === 'invalid') {
+				this.fireInvalidation();
+				return false;
+			}
+
 			const current = this.accountabilityValue;
-			const permissions = await getPermissions(current, schema);
+			const base = reval.status === 'valid' ? this.applyIdentity(current, reval.identity) : current;
+			const permissions = await getPermissions(base, schema);
 
 			if (this.closed || this.identityEpoch !== epoch) return false;
 
-			this.accountabilityValue = { ...current, permissions };
+			this.accountabilityValue = { ...base, permissions };
 			return true;
 		} finally {
 			hold.clear();
@@ -130,14 +161,23 @@ export class ConnectionAuth {
 		if (hold === null) return null;
 
 		const epoch = this.identityEpoch;
-		const current = this.accountabilityValue;
 
 		try {
-			const permissions = await getPermissions(current, schema);
+			const reval = await this.revalidateStaticIdentity();
+			if (this.closed || this.identityEpoch !== epoch) return null;
+
+			if (reval.status === 'invalid') {
+				this.fireInvalidation();
+				return null;
+			}
+
+			const current = this.accountabilityValue;
+			const base = reval.status === 'valid' ? this.applyIdentity(current, reval.identity) : current;
+			const permissions = await getPermissions(base, schema);
 
 			if (this.closed || this.identityEpoch !== epoch) return null;
 
-			return { ...current, permissions };
+			return { ...base, permissions };
 		} finally {
 			hold.clear();
 		}
@@ -148,6 +188,7 @@ export class ConnectionAuth {
 
 		this.accountabilityValue = getAnonymousAccountability(this.context);
 		this.expiryValue = null;
+		this.staticIdentity = null;
 		this.identityEpoch++;
 		return { status: 'anonymous' };
 	}
@@ -172,5 +213,36 @@ export class ConnectionAuth {
 		const accountability = getAnonymousAccountability(this.context);
 		Object.assign(accountability, identity);
 		return accountability;
+	}
+
+	private fireInvalidation(): void {
+		if (this.invalidationFired) return;
+		this.invalidationFired = true;
+		this.invalidationHandler?.();
+	}
+
+	private async revalidateStaticIdentity(): Promise<StaticRevalidation> {
+		const staticIdentity = this.staticIdentity;
+		if (staticIdentity === null) return { status: 'not-static' };
+
+		const row = await getStaticIdentityById(staticIdentity.user, this.deps);
+
+		if (
+			row === null ||
+			row.status !== 'active' ||
+			row.token === null ||
+			digestToken(row.token) !== staticIdentity.tokenDigest
+		) {
+			return { status: 'invalid' };
+		}
+
+		return {
+			status: 'valid',
+			identity: { user: staticIdentity.user, role: row.role, admin: row.admin, app: row.app },
+		};
+	}
+
+	private applyIdentity(accountability: RequestAccountability, identity: TokenIdentity): RequestAccountability {
+		return { ...accountability, role: identity.role, admin: identity.admin, app: identity.app };
 	}
 }
