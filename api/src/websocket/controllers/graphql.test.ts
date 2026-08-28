@@ -71,6 +71,11 @@ vi.mock('../../services/graphql/index.js', () => ({
 	},
 }));
 
+vi.mock('../../utils/get-permissions.js', () => ({
+	default: async () => [],
+	getPermissions: async () => [],
+}));
+
 const { GraphQLController } = await import('./graphql.js');
 
 const SCHEMA = { collections: {}, relations: [] } as unknown as SchemaOverview;
@@ -540,6 +545,42 @@ describe('GraphQL subscribe', () => {
 
 		expect(harness.getSchema).toHaveBeenCalledTimes(1);
 		expect(harness.getSchema).toHaveBeenCalledWith({ database: harness.database });
+	});
+
+	it('refreshes permissions with the resolved schema before building the subscription', async () => {
+		harness = await createHarness({ authMode: 'public' });
+
+		const refresh = vi.spyOn(
+			harness.controller as unknown as { refreshBeforeCommand: () => Promise<boolean> },
+			'refreshBeforeCommand'
+		);
+
+		const { ws, frames } = await connect(harness);
+		send(ws, { type: 'connection_init' });
+		await waitForAck(frames);
+
+		send(ws, { type: 'subscribe', id: 'sub', payload: { query: 'subscription { articles_mutated }' } });
+		await waitForId(frames, 'next', 'sub');
+
+		expect(refresh).toHaveBeenCalledWith(expect.anything(), SCHEMA);
+	});
+
+	it('rejects the subscription and delivers nothing when permissions cannot be refreshed', async () => {
+		harness = await createHarness({ authMode: 'public' });
+
+		vi.spyOn(
+			harness.controller as unknown as { refreshBeforeCommand: () => Promise<boolean> },
+			'refreshBeforeCommand'
+		).mockResolvedValue(false);
+
+		const { ws, frames } = await connect(harness);
+		send(ws, { type: 'connection_init' });
+		await waitForAck(frames);
+
+		send(ws, { type: 'subscribe', id: 'sub', payload: { query: 'subscription { articles_mutated }' } });
+		await waitForId(frames, 'error', 'sub');
+
+		expect(frames.some((frame) => frame['type'] === 'next' && frame['id'] === 'sub')).toBe(false);
 	});
 });
 

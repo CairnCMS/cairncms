@@ -1394,6 +1394,9 @@ importers:
 
   tests/blackbox:
     devDependencies:
+      '@cairncms/sdk':
+        specifier: workspace:*
+        version: link:../../sdk
       '@cairncms/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -1412,6 +1415,9 @@ importers:
       '@types/supertest':
         specifier: 2.0.12
         version: 2.0.12
+      '@types/ws':
+        specifier: 8.18.1
+        version: 8.18.1
       autocannon:
         specifier: 7.10.0
         version: 7.10.0
@@ -1421,6 +1427,9 @@ importers:
       globby:
         specifier: 11.1.0
         version: 11.1.0
+      graphql-ws:
+        specifier: 5.16.0
+        version: 5.16.0(graphql@16.9.0)
       jest:
         specifier: 29.5.0
         version: 29.5.0(@types/node@22.19.17)
@@ -1457,6 +1466,9 @@ importers:
       uuid:
         specifier: 11.1.1
         version: 11.1.1
+      ws:
+        specifier: 8.21.0
+        version: 8.21.0
 
 packages:
 

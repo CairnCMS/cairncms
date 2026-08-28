@@ -1,6 +1,6 @@
 import type { AggregationTypes, GroupByFields, Query } from '../../types/index.js';
 
-type ExtendedQuery<Schema, Item> = Query<Schema, Item> & {
+export type ExtendedQuery<Schema, Item> = Query<Schema, Item> & {
 	aggregate?: Record<keyof AggregationTypes, string>;
 	groupBy?: (string | GroupByFields<Schema, Item>)[];
 };

@@ -71,7 +71,6 @@ The full set of commands lives under `@cairncms/sdk` as named exports. They cove
 A few API surfaces deliberately have no SDK command in v1:
 
 - **Config-as-code endpoints** (`/config/snapshot`, `/config/apply`). Use `customEndpoint` from [Helpers](#helpers) below, or call the endpoints directly with `fetch`.
-- **Realtime / WebSocket subscriptions** (`realtime()`). Not implemented.
 - **Translation strings CRUD** and the **read-only extension endpoints** (`/extensions`, inventory and the app-side loader). Use `customEndpoint`, or hit the REST endpoints directly.
 - **Content versioning**. Not implemented in v1, so there is no endpoint to call.
 
@@ -113,6 +112,10 @@ const result = await client.query<{ articles: Article[] }>(`
 - **`'system'`** — posts to `/graphql/system`, the system-collection endpoint with the auth and TFA mutations.
 
 The same authentication composable works for GraphQL and REST. Compose `authentication()` (or `staticToken()`) before `graphql()` to get automatic `Authorization` header attachment on every query.
+
+## Realtime
+
+The `realtime()` composable adds a WebSocket client for subscribing to collection changes: `connect`, `subscribe`, `disconnect`, and an async-generator message stream. It supports the `public` and `handshake` authentication modes. See [Realtime SDK](/docs/api/realtime/sdk/) for setup, the subscription stream, configuration, and the type-safe delete feed, and the [Realtime](/docs/api/realtime/) section for the underlying protocol.
 
 ## Authentication
 

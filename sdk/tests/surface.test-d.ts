@@ -14,8 +14,6 @@ import * as sdk from '../src/index.js';
  */
 
 const UNSUPPORTED_EXPORTS = [
-	// realtime: WebSocket client (no /websocket endpoint in CairnCMS)
-	'realtime',
 	// directus_versions: content versioning not implemented
 	'readContentVersions',
 	'readContentVersion',
@@ -40,11 +38,7 @@ describe('public export surface', () => {
 		assertType<typeof sdk.graphql>(sdk.graphql);
 		assertType<typeof sdk.authentication>(sdk.authentication);
 		assertType<typeof sdk.staticToken>(sdk.staticToken);
-	});
-
-	it('does NOT export realtime at type-check time (removed in v1)', () => {
-		// @ts-expect-error — `realtime` is intentionally absent in v1
-		const _ = sdk.realtime;
+		assertType<typeof sdk.realtime>(sdk.realtime);
 	});
 
 	it('does NOT export helpers for unsupported collections at type-check time', () => {
