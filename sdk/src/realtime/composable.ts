@@ -3,7 +3,6 @@ import type { ConsoleInterface, WebSocketInterface } from '../index.js';
 import type { CairnCMSClient } from '../types/client.js';
 import { queryToParams, type ExtendedQuery } from '../rest/utils/query-to-params.js';
 import { auth } from './commands/auth.js';
-import { pong } from './commands/pong.js';
 import type {
 	ConnectionState,
 	ReconnectState,
@@ -16,14 +15,12 @@ import type {
 	WebSocketEventHandler,
 	WebSocketEvents,
 } from './types.js';
-import { generateUid } from './utils/generate-uid.js';
-import { messageCallback } from './utils/message-callback.js';
+import { ChannelRegistry } from './utils/channel-registry.js';
 
 type AuthWSClient<Schema> = WebSocketClient<Schema> & AuthenticationClient<Schema>;
 
 const defaultRealTimeConfig: WebSocketConfig = {
 	authMode: 'handshake',
-	heartbeat: true,
 	debug: false,
 	connect: {
 		timeout: 10000, // 10 seconds
@@ -52,6 +49,10 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 		if (config.reconnect) config.reconnect = { ...config.reconnect };
 		if (config.connect) config.connect = { ...config.connect };
 
+		if (config.authMode !== 'public' && config.authMode !== 'handshake') {
+			throw new Error(`Invalid authMode configuration: expected "public" or "handshake".`);
+		}
+
 		if (config.reconnect) {
 			const { retries, delay } = config.reconnect;
 
@@ -79,8 +80,6 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 			);
 		}
 
-		const uid = generateUid();
-
 		let state: ConnectionState = {
 			code: 'closed',
 		};
@@ -92,7 +91,10 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 		let wasManuallyDisconnected = false;
 
 		// The teardown of the connection attempt currently in setup, so a manual disconnect can cancel it.
-		let pendingConnect: { teardown: (reason: unknown) => void } | null = null;
+		let pendingConnect: { teardown: (reason: unknown) => void; promise: Promise<WebSocketInterface> } | null = null;
+
+		// Late events may mutate state only for the current connection attempt.
+		let currentAttempt: object | null = null;
 
 		// Cancels a pending reconnect backoff so a manual disconnect stops recovery without waiting out the delay.
 		const noReconnectDelay = () => {
@@ -103,6 +105,40 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 
 		// Active subscriptions keyed by their canonical uid so replay and targeting stay unique across a reconnect.
 		const subscriptions = new Map<string, Record<string, any>>();
+
+		let receiveBufferFailed = false;
+
+		// Initial authentication does not consume the TOKEN_EXPIRED retry budget.
+		let lastRetriedToken: string | null = null;
+		let warnedSameToken = false;
+		let refreshingSocket: WebSocketInterface | null = null;
+
+		const onOverflow = (error: Error) => {
+			receiveBufferFailed = true;
+			lastRetriedToken = null;
+			warnedSameToken = false;
+			subscriptions.clear();
+			debug('warn', error.message);
+
+			if (state.code === 'open') {
+				try {
+					state.connection.close();
+				} catch {
+					/* the socket may already be closing */
+				}
+			}
+		};
+
+		const registry = new ChannelRegistry(onOverflow);
+
+		let resolveAuthAck: ((message: Record<string, any>) => void) | null = null;
+
+		const finalizeSubscriptions = (settle: () => void) => {
+			lastRetriedToken = null;
+			warnedSameToken = false;
+			settle();
+			subscriptions.clear();
+		};
 
 		const hasAuth = (client: AuthWSClient<Schema>) => 'getToken' in client;
 
@@ -185,6 +221,10 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 					} catch (error) {
 						debug('warn', 'Replay after reconnect failed; aborting recovery.', error);
 
+						finalizeSubscriptions(() =>
+							registry.failAll(new Error('Realtime subscription replay failed after reconnect.'))
+						);
+
 						if (state.code === 'open') {
 							try {
 								state.connection.close();
@@ -198,6 +238,7 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 				}
 
 				debug('warn', 'Reconnect retries exhausted.');
+				finalizeSubscriptions(() => registry.failAll(new Error('Realtime reconnect attempts were exhausted.')));
 			})();
 
 			reconnectState.active = run.finally(() => {
@@ -249,30 +290,40 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 		async function handleAuthError(message: WebSocketAuthError, currentClient: AuthWSClient<Schema>) {
 			if (state.code !== 'open') return;
 
+			// Re-authentication may finish after this socket has been replaced.
+			const socket = state.connection;
+
 			if (message.error.code === 'TOKEN_EXPIRED') {
 				debug('warn', 'Authentication token expired!');
 
-				if (hasAuth(currentClient)) {
-					const access_token = await currentClient.getToken();
+				if (hasAuth(currentClient) && refreshingSocket !== socket) {
+					refreshingSocket = socket;
 
-					if (!access_token) {
-						throw Error('No token for re-authenticating the websocket');
+					try {
+						const access_token = await currentClient.getToken();
+
+						if (!access_token) {
+							throw Error('No token for re-authenticating the websocket');
+						}
+
+						if (access_token === lastRetriedToken) {
+							if (!warnedSameToken) {
+								debug('warn', 'The refreshed token matches the expired one, keeping the current identity.');
+								warnedSameToken = true;
+							}
+
+							return;
+						}
+
+						if (state.code === 'open' && state.connection === socket) {
+							socket.send(auth({ access_token }));
+							lastRetriedToken = access_token;
+							warnedSameToken = false;
+						}
+					} finally {
+						if (refreshingSocket === socket) refreshingSocket = null;
 					}
-
-					if (state.code === 'open') state.connection.send(auth({ access_token }));
 				}
-			}
-
-			if (message.error.code === 'AUTH_TIMEOUT') {
-				if (state.firstMessage && config.authMode === 'public') {
-					// detected likely misconfigured authMode
-					debug('warn', 'Authentication failed! Currently the "authMode" is "public" try using "handshake" instead');
-					config.reconnect = false;
-				} else {
-					debug('warn', 'Authentication timed out!');
-				}
-
-				return state.connection.close();
 			}
 
 			if (message.error.code === 'AUTH_FAILED') {
@@ -287,35 +338,65 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 			}
 		}
 
-		const handleMessages = async (currentClient: AuthWSClient<Schema>) => {
-			while (state.code === 'open') {
-				const message = await messageCallback(state.connection).catch(() => {
-					/* ignore invalid messages */
-				});
+		/**
+		 * One continuously attached ingress router per open socket. Parses each frame once and routes it to the
+		 * auth waiter, the auth-error handler, the owning uid channel, and the generic message callbacks.
+		 */
+		const routeMessage = (self: AuthWSClient<Schema>, socket: WebSocketInterface, event: MessageEvent<any>) => {
+			try {
+				if (state.code !== 'open' || state.connection !== socket) return;
 
-				if (!message) continue;
+				const data = event.data;
 
-				if (isAuthError(message)) {
-					try {
-						await handleAuthError(message, currentClient);
-					} catch (error) {
-						debug('warn', 'Failed to handle an authentication error.', error);
+				if (typeof data !== 'string') {
+					dispatchEvent(eventHandlers['message'], socket, event);
+					return;
+				}
+
+				const bytes = new TextEncoder().encode(data).byteLength;
+
+				let message: Record<string, any>;
+
+				try {
+					message = JSON.parse(data);
+				} catch {
+					dispatchEvent(eventHandlers['message'], socket, event);
+					return;
+				}
+
+				if (message === null || typeof message !== 'object' || Array.isArray(message)) {
+					dispatchEvent(eventHandlers['message'], socket, message);
+					return;
+				}
+
+				if (message['type'] === 'auth' && (message['status'] === 'ok' || message['status'] === 'error')) {
+					if (resolveAuthAck !== null) {
+						const resolve = resolveAuthAck;
+						resolveAuthAck = null;
+						resolve(message);
+					} else if (isAuthError(message)) {
+						void handleAuthError(message, self).catch((error) =>
+							debug('warn', 'Failed to handle an authentication error.', error)
+						);
 					}
+				} else if (
+					'uid' in message &&
+					(message['type'] === 'subscription' || (message['type'] === 'subscribe' && message['status'] === 'error'))
+				) {
+					const subscriptionUid = String(message['uid']);
 
-					if (state.code === 'open') state.firstMessage = false;
-					continue;
+					if (message['type'] === 'subscribe') {
+						registry.fail(subscriptionUid, message);
+						subscriptions.delete(subscriptionUid);
+					} else {
+						registry.route(subscriptionUid, message, bytes);
+					}
 				}
 
-				if (config.heartbeat && message['type'] === 'ping') {
-					if (state.code !== 'open') continue;
-					state.connection.send(pong());
-					state.firstMessage = false;
-					continue;
-				}
-
-				if (state.code === 'open') dispatchEvent(eventHandlers['message'], state.connection, message);
-
+				dispatchEvent(eventHandlers['message'], socket, message);
 				state.firstMessage = false;
+			} catch (error) {
+				debug('warn', 'Failed to route a websocket message.', error);
 			}
 		};
 
@@ -338,15 +419,20 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 			async connect() {
 				wasManuallyDisconnected = false;
 
-				if (state.code === 'connecting') {
-					// wait for the current connection to open
-					return await state.connection;
-				} else if (state.code !== 'closed') {
-					// error state
+				// Join the in-flight attempt, including the handshake window where the state already reads "open".
+				if (pendingConnect) return pendingConnect.promise;
+
+				if (state.code === 'open') return state.connection;
+
+				if (state.code !== 'closed') {
 					throw new Error(`Cannot connect when state is "${state.code}"`);
 				}
 
-				// we need to use THIS here instead of client to access overridden functions
+				// Supersede late events even when socket construction fails.
+				const attempt = {};
+				currentAttempt = attempt;
+
+				// Use the composed client so overridden authentication methods remain available.
 				const self = this as AuthWSClient<Schema>;
 				let ws: WebSocketInterface;
 
@@ -356,7 +442,6 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 
 					ws = new client.globals.WebSocket(url);
 				} catch (error) {
-					// nothing was registered yet, so surface the failure without leaving a pending attempt behind
 					return Promise.reject(error);
 				}
 
@@ -376,9 +461,17 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 
 				// `settled` marks the connect attempt as resolved or torn down, so a late event is ignored.
 				let settled = false;
-				// `didOpen` records whether the socket ever reached the open state, which gates automatic reconnection.
-				let didOpen = false;
+				// `established` records a fully settled setup (post-ack in handshake mode), which gates reconnection.
+				let established = false;
 				let connectTimeout: ReturnType<typeof setTimeout> | undefined;
+				let detachRouter: (() => void) | null = null;
+
+				const settleAuthAck = () => {
+					if (resolveAuthAck === null) return;
+					const resolveAck = resolveAuthAck;
+					resolveAuthAck = null;
+					resolveAck({});
+				};
 
 				const removeConnectListeners = () => {
 					ws.removeEventListener('open', onOpen);
@@ -394,6 +487,8 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 					settled = true;
 					clearTimeout(connectTimeout);
 					removeConnectListeners();
+					detachRouter?.();
+					settleAuthAck();
 					pendingConnect = null;
 
 					try {
@@ -410,10 +505,12 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 					if (settled) return;
 					debug('info', `Connection open.`);
 
-					clearTimeout(connectTimeout);
-					didOpen = true;
+					receiveBufferFailed = false;
 					state = { code: 'open', connection: ws, firstMessage: true };
-					handleMessages(self);
+
+					const onMessage = (event: MessageEvent<any>) => routeMessage(self, ws, event);
+					ws.addEventListener('message', onMessage);
+					detachRouter = () => ws.removeEventListener('message', onMessage);
 
 					if (config.authMode === 'handshake') {
 						if (!hasAuth(self)) {
@@ -439,27 +536,24 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 							);
 						}
 
+						// Install the ack waiter before sending so a synchronous auth response already has an owner. The
+						// connect deadline stays armed across the send and this await, so the ack has no separate cutoff.
+						const ack = new Promise<Record<string, any>>((resolveAck) => {
+							resolveAuthAck = resolveAck;
+						});
+
 						try {
 							ws.send(auth({ access_token }));
 						} catch (error) {
+							settleAuthAck();
 							return teardown(error);
 						}
 
-						const confirm = await messageCallback(ws).catch(() => {
-							/* the error/close listeners already rejected the connect */
-						});
+						const confirm = await ack;
 
 						if (settled) return;
 
-						if (
-							!(
-								confirm &&
-								'type' in confirm &&
-								'status' in confirm &&
-								confirm['type'] === 'auth' &&
-								confirm['status'] === 'ok'
-							)
-						) {
+						if (!(confirm['type'] === 'auth' && confirm['status'] === 'ok')) {
 							return teardown('Authentication failed while opening the websocket connection.');
 						}
 
@@ -468,6 +562,8 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 
 					if (settled) return;
 					settled = true;
+					established = true;
+					clearTimeout(connectTimeout);
 					pendingConnect = null;
 					dispatchEvent(eventHandlers['open'], ws, evt);
 					resolve(ws);
@@ -485,10 +581,19 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 				};
 
 				const onClose = (evt: CloseEvent) => {
+					// A superseded socket may clean up only its own listeners.
+					if (currentAttempt !== attempt) {
+						removeConnectListeners();
+						detachRouter?.();
+						return;
+					}
+
 					debug('info', `Connection closed.`);
 					dispatchEvent(eventHandlers['close'], ws, evt);
 					clearTimeout(connectTimeout);
 					removeConnectListeners();
+					detachRouter?.();
+					settleAuthAck();
 					pendingConnect = null;
 
 					const wasSettled = settled;
@@ -496,12 +601,19 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 					state = { code: 'closed' };
 					if (!wasSettled) reject(evt);
 
-					// Only an established connection that drops unexpectedly triggers recovery; a failed setup is surfaced
-					// to the caller instead, and reconnect attempts drive their own retries through the loop above.
-					if (didOpen && !wasManuallyDisconnected) reconnect(self);
+					// Recovery retains channels until replay succeeds or the reconnect loop terminates.
+					if (established && !wasManuallyDisconnected && !receiveBufferFailed && config.reconnect) {
+						reconnect(self);
+					} else if (wasManuallyDisconnected || !reconnectState.active) {
+						finalizeSubscriptions(
+							wasManuallyDisconnected
+								? () => registry.closeAll()
+								: () => registry.failAll(new Error('The realtime connection closed.'))
+						);
+					}
 				};
 
-				pendingConnect = { teardown };
+				pendingConnect = { teardown, promise: connectPromise };
 
 				if (config.connect) {
 					connectTimeout = setTimeout(() => {
@@ -518,6 +630,8 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 			disconnect() {
 				wasManuallyDisconnected = true;
 				cancelReconnectDelay();
+				lastRetriedToken = null;
+				warnedSameToken = false;
 
 				// Prioritize an in-progress attempt: during the handshake the state is already open, so a plain close
 				// would race the pending setup instead of tearing it down.
@@ -525,25 +639,16 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 					pendingConnect.teardown('Disconnected during connection setup.');
 				} else if (state.code === 'open') {
 					state.connection.close();
+					// A fresh connect must not reuse a socket already closing asynchronously.
+					state = { code: 'closed' };
 				}
+
+				// Settle subscriptions before a late close can be superseded by a new attempt.
+				registry.closeAll();
+				subscriptions.clear();
 			},
 			onWebSocket(event: WebSocketEvents, callback: (this: WebSocketInterface, ev: Event | CloseEvent | any) => any) {
-				if (event === 'message') {
-					// add some message parsing
-					const updatedCallback = function (this: WebSocketInterface, event: MessageEvent<any>) {
-						if (typeof event.data !== 'string') return callback.call(this, event);
-
-						try {
-							return callback.call(this, JSON.parse(event.data));
-						} catch {
-							return callback.call(this, event);
-						}
-					};
-
-					eventHandlers[event].add(updatedCallback);
-					return () => eventHandlers[event].delete(updatedCallback);
-				}
-
+				// The router hands message callbacks the already-parsed frame, so there is no second parse here.
 				eventHandlers[event].add(callback);
 				return () => eventHandlers[event].delete(callback);
 			},
@@ -558,100 +663,94 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 					return state.connection.send(message);
 				}
 
-				if ('uid' in message === false) {
-					message['uid'] = uid.next().value;
-				}
-
-				state.connection.send(JSON.stringify(message));
+				const outgoing = 'uid' in message ? message : { ...message, uid: registry.allocateUid() };
+				state.connection.send(JSON.stringify(outgoing));
 			},
 			async subscribe<Collection extends keyof Schema, const Options extends SubscribeOptions<Schema, Collection>>(
 				collection: Collection,
 				options = {} as Options
 			) {
-				if ('uid' in options === false) options.uid = uid.next().value;
+				const self = this as AuthWSClient<Schema>;
+				const cloned = { ...(options as Record<string, any>) };
 
-				const subscriptionUid = String(options.uid);
+				let subscriptionUid: string;
 
-				if (subscriptions.has(subscriptionUid)) {
+				if (!('uid' in cloned) || cloned['uid'] === undefined) {
+					subscriptionUid = registry.allocateUid();
+				} else if (typeof cloned['uid'] !== 'string' || cloned['uid'].length === 0) {
+					throw new Error('A subscription uid must be a non-empty string.');
+				} else {
+					subscriptionUid = cloned['uid'];
+				}
+
+				cloned['uid'] = subscriptionUid;
+
+				if (subscriptions.has(subscriptionUid) || registry.has(subscriptionUid)) {
 					throw new Error(`A subscription with uid "${subscriptionUid}" already exists.`);
 				}
 
-				if (options.query) {
-					options.query = queryToParams(options.query as ExtendedQuery<Schema, Schema[Collection]>);
+				if (cloned['query']) {
+					cloned['query'] = queryToParams(cloned['query'] as ExtendedQuery<Schema, Schema[Collection]>);
 				}
 
-				const subscription = { ...options, collection, type: 'subscribe' };
+				const subscription = { ...cloned, collection, type: 'subscribe' };
 
 				if (state.code !== 'open') {
 					debug('info', 'No connection available for subscribing!');
-					await this.connect();
+					await self.connect();
 				}
 
-				// Register only once the subscribe frame is on the wire, so a failed setup leaves nothing to replay.
-				this.sendMessage(subscription);
+				const channel = registry.create(subscriptionUid);
 				subscriptions.set(subscriptionUid, subscription);
-				let subscribed = true;
 
-				const finalize = () => {
-					subscribed = false;
-
-					if (subscriptions.get(subscriptionUid) === subscription) {
-						subscriptions.delete(subscriptionUid);
-					}
-				};
-
-				async function* subscriptionGenerator(): AsyncGenerator<
-					SubscriptionOutput<Schema, Collection, Options['query'], SubscriptionEvents>,
-					void,
-					unknown
-				> {
-					while (subscribed && state.code === 'open') {
-						const message = await messageCallback(state.connection).catch(() => {
-							/* let the loop continue */
-						});
-
-						if (!message) continue;
-
-						if (
-							'type' in message &&
-							'status' in message &&
-							'uid' in message &&
-							message['type'] === 'subscribe' &&
-							message['status'] === 'error' &&
-							String(message['uid']) === subscriptionUid
-						) {
-							// finalize this operation only; sibling subscriptions keep running and are not replayed
-							finalize();
-							throw message;
-						}
-
-						if (
-							'type' in message &&
-							'uid' in message &&
-							message['type'] === 'subscription' &&
-							String(message['uid']) === subscriptionUid
-						) {
-							yield message as SubscriptionOutput<Schema, Collection, Options['query'], SubscriptionEvents>;
-						}
-					}
-
-					// The reconnect loop is the sole replay owner, so resume consuming without resending the subscribe.
-					if (subscribed && config.reconnect && reconnectState.active) {
-						await reconnectState.active;
-
-						if (subscribed && state.code === 'open') {
-							yield* subscriptionGenerator();
-						}
-					}
+				try {
+					self.sendMessage(subscription);
+				} catch (error) {
+					registry.delete(subscriptionUid, channel);
+					subscriptions.delete(subscriptionUid);
+					throw error;
 				}
 
-				const unsubscribe = () => {
-					finalize();
-					if (state.code === 'open') this.sendMessage({ uid: options.uid, type: 'unsubscribe' });
+				let finalized = false;
+
+				const finalize = (settle: () => void, notifyServer: boolean) => {
+					if (finalized) return;
+					finalized = true;
+					settle();
+					registry.delete(subscriptionUid, channel);
+					const wasRegistered = subscriptions.get(subscriptionUid) === subscription;
+					if (wasRegistered) subscriptions.delete(subscriptionUid);
+
+					if (notifyServer && wasRegistered && state.code === 'open') {
+						try {
+							self.sendMessage({ uid: subscriptionUid, type: 'unsubscribe' });
+						} catch {
+							/* the socket may already be closing */
+						}
+					}
 				};
+
+				type Output = SubscriptionOutput<Schema, Collection, Options['query'], SubscriptionEvents>;
+
+				const iterator: AsyncGenerator<Output, void, unknown> = {
+					[Symbol.asyncIterator]() {
+						return this;
+					},
+					next: () => channel.next() as Promise<IteratorResult<Output, void>>,
+					return: async () => {
+						finalize(() => channel.close(), true);
+						return { value: undefined, done: true };
+					},
+					throw: async (error?: unknown) => {
+						finalize(() => channel.fail(error), true);
+						return Promise.reject(error);
+					},
+				};
+
+				const unsubscribe = () => finalize(() => channel.close(), true);
 
 				return {
-					subscription: subscriptionGenerator(),
+					subscription: iterator,
 					unsubscribe,
 				};
 			},

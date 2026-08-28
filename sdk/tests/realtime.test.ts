@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCairnCMS } from '../src/client.js';
 import { realtime } from '../src/realtime/composable.js';
-import { messageCallback } from '../src/realtime/utils/message-callback.js';
+import { Channel } from '../src/realtime/utils/channel.js';
+import { ChannelRegistry } from '../src/realtime/utils/channel-registry.js';
 
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -72,6 +73,10 @@ class MockWebSocket {
 
 	message(payload: unknown): void {
 		this.emit('message', { data: typeof payload === 'string' ? payload : JSON.stringify(payload) });
+	}
+
+	messageRaw(data: unknown): void {
+		this.emit('message', { data });
 	}
 
 	serverClose(code: number, reason = ''): void {
@@ -318,32 +323,6 @@ describe('realtime composable lifecycle', () => {
 		expect(await client.isConnected()).toBe(false);
 
 		await wait(20);
-		expect(rejections.seen).toEqual([]);
-		rejections.stop();
-	});
-
-	it('replies to a ping with a pong while open', async () => {
-		const client = makeClient({ authMode: 'public' });
-		const ws = await openPublic(client);
-
-		ws.message({ type: 'ping' });
-		await flush();
-
-		expect(ws.messages().some((m) => m.type === 'pong')).toBe(true);
-	});
-
-	it('does not pong or throw for a ping delivered after the connection has closed', async () => {
-		const client = makeClient({ authMode: 'public' });
-		const ws = await openPublic(client);
-
-		const rejections = trackUnhandledRejections();
-
-		// deliver a ping and close in the same tick, before the message loop processes the ping
-		ws.message({ type: 'ping' });
-		ws.serverClose(1000);
-		await wait(20);
-
-		expect(ws.messages().some((m) => m.type === 'pong')).toBe(false);
 		expect(rejections.seen).toEqual([]);
 		rejections.stop();
 	});
@@ -615,18 +594,16 @@ describe('realtime composable lifecycle', () => {
 		expect(replayed.some((m) => m.uid === 'A')).toBe(false);
 	});
 
-	it('removes messageCallback listeners when the socket closes during a pending wait', async () => {
-		const ws = new MockWebSocket('ws://localhost');
-		const pending = messageCallback(ws as any);
+	it('attaches exactly one router message listener while open and detaches it on close', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
 
 		expect(ws.listenerCount('message')).toBe(1);
 
 		ws.serverClose(1000);
-		await expect(pending).rejects.toBeUndefined();
+		await wait(20);
 
 		expect(ws.listenerCount('message')).toBe(0);
-		expect(ws.listenerCount('close')).toBe(0);
-		expect(ws.listenerCount('error')).toBe(0);
 	});
 
 	it('keeps the message pump alive after a malformed auth-shaped frame', async () => {
@@ -725,7 +702,7 @@ describe('realtime composable lifecycle', () => {
 
 		const wsA = await openPublic(clientA);
 		// a public-mode auth failure disables reconnect, but only for client A
-		wsA.message({ type: 'auth', status: 'error', error: { code: 'AUTH_TIMEOUT', message: 'x' } });
+		wsA.message({ type: 'auth', status: 'error', error: { code: 'AUTH_FAILED', message: 'x' } });
 		await flush();
 
 		const wsB = await openPublic(clientB);
@@ -744,6 +721,25 @@ describe('realtime composable lifecycle', () => {
 		expect(() => makeClient({ reconnect: { delay: MAX_RECONNECT_DELAY + 1, retries: 2 } })).toThrow(/reconnect/);
 		expect(() => makeClient({ connect: { timeout: Number.NaN } })).toThrow(/connect/);
 		expect(() => makeClient({ connect: { timeout: MAX_TIMER_DELAY + 1 } })).toThrow(/connect/);
+	});
+
+	it('rejects an invalid authMode configuration', () => {
+		expect(() => makeClient({ authMode: 'bogus' as never })).toThrow(/authMode/);
+	});
+
+	it('assigns a generated uid on the wire without mutating a caller-owned message', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const message = { type: 'custom' } as Record<string, unknown>;
+		client.sendMessage(message);
+
+		expect('uid' in message).toBe(false);
+
+		const sent = ws.messages().find((m) => m.type === 'custom');
+		expect(sent).toBeTruthy();
+		expect(typeof sent.uid).toBe('string');
+		expect(sent.uid.length).toBeGreaterThan(0);
 	});
 
 	it('accepts the maximum supported reconnect delay and connect timeout', () => {
@@ -889,5 +885,956 @@ describe('realtime composable lifecycle', () => {
 		await wait(50);
 
 		expect(backoffTimers).toBe(0);
+	});
+});
+
+describe('realtime channel primitive', () => {
+	it('delivers queued frames in FIFO order', async () => {
+		const channel = new Channel(() => undefined);
+		channel.enqueue({ n: 1 }, 1);
+		channel.enqueue({ n: 2 }, 1);
+
+		expect((await channel.next()).value).toEqual({ n: 1 });
+		expect((await channel.next()).value).toEqual({ n: 2 });
+	});
+
+	it('resolves concurrent pulls in call order', async () => {
+		const channel = new Channel(() => undefined);
+		const first = channel.next();
+		const second = channel.next();
+
+		channel.tryHandoff({ n: 1 });
+		channel.tryHandoff({ n: 2 });
+
+		expect((await first).value).toEqual({ n: 1 });
+		expect((await second).value).toEqual({ n: 2 });
+	});
+
+	it('closes to a done result for pending and future pulls', async () => {
+		const channel = new Channel(() => undefined);
+		const pending = channel.next();
+		channel.close();
+
+		expect(await pending).toEqual({ value: undefined, done: true });
+		expect(await channel.next()).toEqual({ value: undefined, done: true });
+	});
+
+	it('fails to a rejection for pending and future pulls', async () => {
+		const channel = new Channel(() => undefined);
+		const pending = channel.next();
+		const error = new Error('boom');
+		channel.fail(error);
+
+		await expect(pending).rejects.toBe(error);
+		await expect(channel.next()).rejects.toBe(error);
+	});
+
+	it('settles terminally only once', async () => {
+		const channel = new Channel(() => undefined);
+		const error = new Error('boom');
+		channel.fail(error);
+		channel.close();
+
+		await expect(channel.next()).rejects.toBe(error);
+	});
+});
+
+describe('realtime channel registry', () => {
+	it('does not count a frame handed directly to a waiting pull', async () => {
+		let overflowed = false;
+		const registry = new ChannelRegistry(() => (overflowed = true), 1, 1_000_000);
+		const channel = registry.create('a');
+
+		const pull = channel.next();
+		registry.route('a', { n: 1 }, 10);
+		await pull;
+
+		registry.route('a', { n: 2 }, 10);
+		expect(overflowed).toBe(false);
+	});
+
+	it('releases a drained frame so the budget frees up', async () => {
+		let overflowed = false;
+		const registry = new ChannelRegistry(() => (overflowed = true), 1, 1_000_000);
+		const channel = registry.create('a');
+
+		registry.route('a', { n: 1 }, 10);
+		await channel.next();
+		registry.route('a', { n: 2 }, 10);
+
+		expect(overflowed).toBe(false);
+	});
+
+	it('consumes nothing when routing to an unknown uid', () => {
+		let overflowed = false;
+		const registry = new ChannelRegistry(() => (overflowed = true), 1, 1_000_000);
+		registry.create('a');
+
+		registry.route('missing', { n: 1 }, 10);
+		registry.route('a', { n: 1 }, 10);
+
+		expect(overflowed).toBe(false);
+	});
+
+	it('overflows on the frame after the count bound and fails every channel', async () => {
+		let overflow: Error | null = null;
+		const registry = new ChannelRegistry((error) => (overflow = error), 2, 1_000_000);
+		const a = registry.create('a');
+		const b = registry.create('b');
+
+		registry.route('a', { n: 1 }, 10);
+		registry.route('a', { n: 2 }, 10);
+		expect(overflow).toBeNull();
+
+		registry.route('b', { n: 3 }, 10);
+		expect(overflow).toBeInstanceOf(Error);
+		await expect(a.next()).rejects.toBe(overflow);
+		await expect(b.next()).rejects.toBe(overflow);
+	});
+
+	it('bounds the byte budget using the serialized byte size of a non-ASCII frame', () => {
+		let overflow: Error | null = null;
+		const size = new TextEncoder().encode(JSON.stringify({ title: 'cafe mañana' })).byteLength;
+		const registry = new ChannelRegistry((error) => (overflow = error), 1000, size);
+		registry.create('a');
+
+		registry.route('a', { n: 1 }, size);
+		expect(overflow).toBeNull();
+
+		registry.route('a', { n: 2 }, 1);
+		expect(overflow).toBeInstanceOf(Error);
+	});
+
+	it('releases retained frames when a channel is deleted so the budget recovers', () => {
+		let overflow: Error | null = null;
+		const registry = new ChannelRegistry((error) => (overflow = error), 2, 1_000_000);
+		const a = registry.create('a');
+		registry.route('a', { n: 1 }, 10);
+		registry.route('a', { n: 2 }, 10);
+
+		registry.delete('a', a);
+
+		registry.create('b');
+		registry.route('b', { n: 3 }, 10);
+		registry.route('b', { n: 4 }, 10);
+		expect(overflow).toBeNull();
+	});
+
+	it('rejects a duplicate uid at the registry boundary', () => {
+		const registry = new ChannelRegistry(() => undefined);
+		registry.create('a');
+		expect(() => registry.create('a')).toThrow();
+	});
+});
+
+describe('realtime SDK channel ingress', () => {
+	function subscribeFrame(ws: MockWebSocket) {
+		return ws
+			.messages()
+			.filter((m) => m.type === 'subscribe')
+			.pop();
+	}
+
+	it('delivers an init frame that arrives before the first next()', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never);
+		const sub = subscribeFrame(ws);
+
+		ws.message({ type: 'subscription', uid: sub.uid, event: 'init', data: [{ id: 1 }] });
+
+		const result = await subscription[Symbol.asyncIterator]().next();
+		expect(result.value).toMatchObject({ type: 'subscription', event: 'init' });
+	});
+
+	it('retains events delivered while the consumer is paused, in order', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never);
+		const sub = subscribeFrame(ws);
+		const it = subscription[Symbol.asyncIterator]();
+
+		ws.message({ type: 'subscription', uid: sub.uid, event: 'create', data: [{ id: 1 }] });
+		ws.message({ type: 'subscription', uid: sub.uid, event: 'update', data: [{ id: 1 }] });
+
+		expect((await it.next()).value).toMatchObject({ event: 'create' });
+		expect((await it.next()).value).toMatchObject({ event: 'update' });
+	});
+
+	it('rejects a subscription whose targeted error arrives before any pull', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never);
+		const sub = subscribeFrame(ws);
+
+		ws.message({ type: 'subscribe', status: 'error', uid: sub.uid, error: { code: 'X', message: 'nope' } });
+
+		await expect(subscription[Symbol.asyncIterator]().next()).rejects.toMatchObject({ status: 'error' });
+	});
+
+	it('isolates delivery between two simultaneous subscriptions', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const a = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const b = await client.subscribe('articles' as never, { uid: 'b' } as never);
+
+		ws.message({ type: 'subscription', uid: 'b', event: 'create', data: [{ id: 2 }] });
+		ws.message({ type: 'subscription', uid: 'a', event: 'create', data: [{ id: 1 }] });
+
+		expect((await a.subscription[Symbol.asyncIterator]().next()).value).toMatchObject({ data: [{ id: 1 }] });
+		expect((await b.subscription[Symbol.asyncIterator]().next()).value).toMatchObject({ data: [{ id: 2 }] });
+	});
+
+	it('resolves two concurrent pulls in frame order', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never);
+		const sub = subscribeFrame(ws);
+		const it = subscription[Symbol.asyncIterator]();
+
+		const first = it.next();
+		const second = it.next();
+
+		ws.message({ type: 'subscription', uid: sub.uid, event: 'create', data: [{ id: 1 }] });
+		ws.message({ type: 'subscription', uid: sub.uid, event: 'update', data: [{ id: 2 }] });
+
+		expect((await first).value).toMatchObject({ event: 'create' });
+		expect((await second).value).toMatchObject({ event: 'update' });
+	});
+
+	it('sends exactly one unsubscribe on return() and leaves a sibling running', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const a = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const b = await client.subscribe('articles' as never, { uid: 'b' } as never);
+
+		await a.subscription[Symbol.asyncIterator]().return();
+
+		const unsubs = ws.messages().filter((m) => m.type === 'unsubscribe' && m.uid === 'a');
+		expect(unsubs).toHaveLength(1);
+
+		ws.message({ type: 'subscription', uid: 'b', event: 'create', data: [{ id: 2 }] });
+		expect((await b.subscription[Symbol.asyncIterator]().next()).value).toMatchObject({ event: 'create' });
+	});
+
+	it('rejects with the injected error on throw() and unblocks a pending pull', async () => {
+		const client = makeClient({ authMode: 'public' });
+		await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const it = subscription[Symbol.asyncIterator]();
+		const pending = it.next();
+
+		const error = new Error('consumer abort');
+		await expect(it.throw(error)).rejects.toBe(error);
+		await expect(pending).rejects.toBe(error);
+	});
+
+	it('routes a synchronous subscribe response to the owning channel', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const realSend = ws.send.bind(ws);
+
+		vi.spyOn(ws, 'send').mockImplementation((raw: string) => {
+			realSend(raw);
+			const parsed = JSON.parse(raw);
+
+			if (parsed.type === 'subscribe') {
+				ws.message({ type: 'subscription', uid: parsed.uid, event: 'init', data: [{ id: 9 }] });
+			}
+		});
+
+		const { subscription } = await client.subscribe('articles' as never);
+		const result = await subscription[Symbol.asyncIterator]().next();
+		expect(result.value).toMatchObject({ event: 'init', data: [{ id: 9 }] });
+	});
+
+	it('normalizes omitted and explicit-undefined uids and rejects empty or non-string ones', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		await client.subscribe('articles' as never);
+		expect(typeof subscribeFrame(ws).uid).toBe('string');
+
+		await client.subscribe('articles' as never, { uid: undefined } as never);
+		expect(subscribeFrame(ws).uid).not.toBe('undefined');
+
+		await expect(client.subscribe('articles' as never, { uid: '' } as never)).rejects.toThrow();
+		await expect(client.subscribe('articles' as never, { uid: 5 } as never)).rejects.toThrow();
+	});
+
+	it('skips an active explicit uid when generating', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		await client.subscribe('articles' as never, { uid: '1' } as never);
+		await client.subscribe('articles' as never);
+
+		const uids = ws
+			.messages()
+			.filter((m) => m.type === 'subscribe')
+			.map((m) => m.uid);
+
+		expect(uids).toContain('1');
+		expect(new Set(uids).size).toBe(uids.length);
+	});
+
+	it('does not mutate the caller-supplied options object', async () => {
+		const client = makeClient({ authMode: 'public' });
+		await openPublic(client);
+
+		const options = { query: { fields: ['id'] } } as any;
+		await client.subscribe('articles' as never, options);
+
+		expect('uid' in options).toBe(false);
+		expect(options.query).toEqual({ fields: ['id'] });
+	});
+
+	it('routes non-object and malformed frames to generic callbacks without shape routing', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const received: any[] = [];
+		client.onWebSocket('message', (m) => received.push(m));
+
+		ws.message('null');
+		ws.message('[1,2,3]');
+		ws.message('42');
+		ws.message('not json{');
+		await flush();
+
+		expect(received).toContainEqual([1, 2, 3]);
+		expect(received).toContain(42);
+	});
+
+	it('completes the handshake when the auth ack arrives synchronously during send', async () => {
+		const client = makeClient({ authMode: 'handshake' }, 'token-1');
+		const connecting = client.connect();
+		await flush();
+		const ws = MockWebSocket.last();
+
+		const realSend = ws.send.bind(ws);
+
+		vi.spyOn(ws, 'send').mockImplementation((raw: string) => {
+			realSend(raw);
+			if (JSON.parse(raw).type === 'auth') ws.message({ type: 'auth', status: 'ok' });
+		});
+
+		ws.open();
+		await connecting;
+		expect(await client.isConnected()).toBe(true);
+	});
+
+	it('fails every subscription and tears down the socket on receive-buffer overflow', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const it = subscription[Symbol.asyncIterator]();
+
+		for (let i = 0; i <= 1000; i++) {
+			ws.message({ type: 'subscription', uid: 'a', event: 'create', data: [{ id: i }] });
+		}
+
+		await flush();
+
+		await expect(it.next()).rejects.toBeInstanceOf(Error);
+		expect(ws.closed).toBe(true);
+
+		const reconnecting = client.connect();
+		await flush();
+		MockWebSocket.last().open();
+		await reconnecting;
+		expect(await client.isConnected()).toBe(true);
+	});
+
+	it('rejects one of two subscriptions that reserve the same explicit uid before open', async () => {
+		const client = makeClient({ authMode: 'public' });
+
+		const first = client.subscribe('articles' as never, { uid: 'dup' } as never);
+		const second = client.subscribe('articles' as never, { uid: 'dup' } as never);
+
+		await flush();
+		MockWebSocket.last().open();
+
+		const results = await Promise.allSettled([first, second]);
+		expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+		expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+	});
+
+	it('forwards a successful auth acknowledgement to generic message callbacks', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const received: any[] = [];
+		client.onWebSocket('message', (m) => received.push(m));
+
+		ws.message({ type: 'auth', status: 'ok' });
+		await flush();
+
+		expect(received).toContainEqual({ type: 'auth', status: 'ok' });
+	});
+
+	it('does not route a non-string subscription-shaped frame to its channel', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const it = subscription[Symbol.asyncIterator]();
+
+		ws.messageRaw({ type: 'subscription', uid: 'a', event: 'create', data: [{ id: 99 }] });
+		ws.message({ type: 'subscription', uid: 'a', event: 'create', data: [{ id: 1 }] });
+
+		const result = await it.next();
+		expect(result.value).toMatchObject({ data: [{ id: 1 }] });
+	});
+
+	it('does not let a stale iterator delete a successor that reused its uid', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const old = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const oldIt = old.subscription[Symbol.asyncIterator]();
+
+		ws.message({ type: 'subscribe', status: 'error', uid: 'a', error: { code: 'X', message: 'nope' } });
+		await expect(oldIt.next()).rejects.toMatchObject({ status: 'error' });
+
+		const successor = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const successorIt = successor.subscription[Symbol.asyncIterator]();
+
+		const before = ws.messages().filter((m) => m.type === 'unsubscribe' && m.uid === 'a').length;
+
+		await oldIt.return();
+		old.unsubscribe();
+
+		const after = ws.messages().filter((m) => m.type === 'unsubscribe' && m.uid === 'a').length;
+		expect(after).toBe(before);
+
+		ws.message({ type: 'subscription', uid: 'a', event: 'create', data: [{ id: 7 }] });
+		expect((await successorIt.next()).value).toMatchObject({ data: [{ id: 7 }] });
+	});
+});
+
+describe('realtime connection attempt', () => {
+	function hangingTokenClient(config: Parameters<typeof realtime>[0], token: Promise<string>) {
+		return track(
+			createCairnCMS('http://localhost:8055', { globals: { WebSocket: MockWebSocket as any } })
+				.with(() => ({ getToken: () => token }))
+				.with(realtime(config))
+		);
+	}
+
+	it('tears down a handshake stuck on token retrieval when the deadline fires, and a late token sends nothing', async () => {
+		let releaseToken!: (value: string) => void;
+
+		const pendingToken = new Promise<string>((resolve) => {
+			releaseToken = resolve;
+		});
+
+		const client = hangingTokenClient({ authMode: 'handshake', connect: { timeout: 20 } }, pendingToken);
+
+		const connecting = client.connect();
+		await flush();
+		const ws = MockWebSocket.last();
+		ws.open();
+
+		await expect(connecting).rejects.toBeDefined();
+		expect(ws.messages().some((m) => m.type === 'auth')).toBe(false);
+
+		releaseToken('late-token');
+		await flush();
+		expect(ws.messages().some((m) => m.type === 'auth')).toBe(false);
+	});
+
+	it('shares one attempt across concurrent connect() calls during the handshake', async () => {
+		let releaseToken!: (value: string) => void;
+
+		const pendingToken = new Promise<string>((resolve) => {
+			releaseToken = resolve;
+		});
+
+		const client = hangingTokenClient({ authMode: 'handshake' }, pendingToken);
+
+		const first = client.connect();
+		await flush();
+		const ws = MockWebSocket.last();
+		ws.open();
+		await flush();
+
+		const second = client.connect();
+		releaseToken('token');
+		await flush();
+		ws.message({ type: 'auth', status: 'ok' });
+
+		const [a, b] = await Promise.all([first, second]);
+		expect(a).toBe(b);
+		expect(MockWebSocket.instances.length).toBe(1);
+	});
+
+	it('arms only the connect deadline during the handshake, with no separate acknowledgement timer', async () => {
+		const delays: number[] = [];
+		const realSetTimeout = globalThis.setTimeout;
+
+		vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: any, ms?: number) => {
+			if (typeof ms === 'number') delays.push(ms);
+			return realSetTimeout(fn, ms);
+		}) as any);
+
+		const client = makeClient({ authMode: 'handshake', connect: { timeout: 7000 } }, 'token');
+		const connecting = client.connect();
+		await flush();
+		const ws = MockWebSocket.last();
+		ws.open();
+		await flush();
+		ws.message({ type: 'auth', status: 'ok' });
+		await connecting;
+
+		expect(delays).toContain(7000);
+		expect(delays).not.toContain(1000);
+	});
+
+	it('does not reconnect when the socket closes during an incomplete handshake setup', async () => {
+		let releaseToken!: (value: string) => void;
+
+		const pendingToken = new Promise<string>((resolve) => {
+			releaseToken = resolve;
+		});
+
+		const client = hangingTokenClient({ authMode: 'handshake', reconnect: { retries: 3, delay: 10 } }, pendingToken);
+
+		const connecting = client.connect();
+		await flush();
+		const ws = MockWebSocket.last();
+		ws.open();
+		await flush();
+
+		const backoffDelays: number[] = [];
+		const realSetTimeout = globalThis.setTimeout;
+
+		vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: any, ms?: number) => {
+			if (typeof ms === 'number' && ms >= 100 && ms < 1000) backoffDelays.push(ms);
+			return realSetTimeout(fn, ms);
+		}) as any);
+
+		ws.serverClose(1000);
+
+		await expect(connecting).rejects.toBeDefined();
+		await wait(50);
+
+		expect(backoffDelays).toHaveLength(0);
+		expect(MockWebSocket.instances.length).toBe(1);
+
+		releaseToken('token');
+	});
+});
+
+describe('realtime auth and reconnect ownership', () => {
+	it('re-authenticates at most once for an unchanged token after TOKEN_EXPIRED', async () => {
+		const client = makeClient({ authMode: 'handshake' }, 'expired-token');
+		const ws = await openHandshake(client);
+
+		ws.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'expired' } });
+		await flush();
+		ws.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'expired' } });
+		await flush();
+
+		expect(ws.messages().filter((m) => m.type === 'auth')).toHaveLength(2);
+	});
+
+	it('re-authenticates again when the refreshed token changes after expiry', async () => {
+		let currentToken = 'token-1';
+
+		const client = track(
+			createCairnCMS('http://localhost:8055', { globals: { WebSocket: MockWebSocket as any } })
+				.with(() => ({ getToken: async () => currentToken }))
+				.with(realtime({ authMode: 'handshake' }))
+		);
+
+		const connecting = client.connect();
+		await flush();
+		const ws = MockWebSocket.last();
+		ws.open();
+		await flush();
+		ws.message({ type: 'auth', status: 'ok' });
+		await connecting;
+
+		ws.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'x' } });
+		await flush();
+		currentToken = 'token-2';
+		ws.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'x' } });
+		await flush();
+
+		const tokens = ws
+			.messages()
+			.filter((m) => m.type === 'auth')
+			.map((m) => m.access_token);
+
+		expect(tokens).toContain('token-1');
+		expect(tokens).toContain('token-2');
+	});
+
+	it('closes active subscriptions cleanly on manual disconnect', async () => {
+		const client = makeClient({ authMode: 'public' });
+		await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const it = subscription[Symbol.asyncIterator]();
+
+		client.disconnect();
+		await flush();
+
+		expect(await it.next()).toEqual({ value: undefined, done: true });
+	});
+
+	it('fails active subscriptions when the connection drops with reconnect disabled', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const it = subscription[Symbol.asyncIterator]();
+
+		ws.serverClose(1006);
+
+		await expect(it.next()).rejects.toBeInstanceOf(Error);
+	});
+
+	it('fails active subscriptions when reconnect attempts are exhausted', async () => {
+		const client = makeClient(
+			{ authMode: 'public', connect: { timeout: 20 }, reconnect: { retries: 2, delay: 10 } },
+			'token'
+		);
+
+		const ws = await openPublic(client);
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const it = subscription[Symbol.asyncIterator]();
+
+		ws.serverClose(1006);
+
+		await expect(it.next()).rejects.toBeInstanceOf(Error);
+	});
+
+	it('joins a manually re-established connection during reconnect and replays each subscription once', async () => {
+		const client = makeClient({ authMode: 'public', reconnect: { retries: 5, delay: 10 } }, 'token');
+		const ws1 = await openPublic(client);
+		await client.subscribe('articles' as never, { uid: 'a' } as never);
+
+		ws1.serverClose(1000);
+		await flush();
+
+		const reconnecting = client.connect();
+		await flush();
+		const ws2 = MockWebSocket.last();
+		ws2.open();
+		await reconnecting;
+
+		await wait(300);
+
+		expect(ws2.messages().filter((m) => m.type === 'subscribe' && m.uid === 'a')).toHaveLength(1);
+		expect(MockWebSocket.instances.length).toBe(2);
+	});
+
+	it('does not authenticate a replacement socket with a delayed token refresh', async () => {
+		let getTokenCalls = 0;
+		let releaseRefresh!: (value: string) => void;
+
+		const client = track(
+			createCairnCMS('http://localhost:8055', { globals: { WebSocket: MockWebSocket as any } })
+				.with(() => ({
+					getToken: () => {
+						getTokenCalls += 1;
+						if (getTokenCalls === 2) return new Promise<string>((resolve) => (releaseRefresh = resolve));
+						return Promise.resolve('token-1');
+					},
+				}))
+				.with(realtime({ authMode: 'handshake' }))
+		);
+
+		const connectingA = client.connect();
+		await flush();
+		const a = MockWebSocket.last();
+		a.open();
+		await flush();
+		a.message({ type: 'auth', status: 'ok' });
+		await connectingA;
+
+		a.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'x' } });
+		await flush();
+
+		a.serverClose(1006);
+		await flush();
+
+		const connectingB = client.connect();
+		await flush();
+		const b = MockWebSocket.last();
+		b.open();
+		await flush();
+		b.message({ type: 'auth', status: 'ok' });
+		await connectingB;
+
+		releaseRefresh('token-2');
+		await flush();
+
+		expect(
+			b
+				.messages()
+				.filter((m) => m.type === 'auth')
+				.every((m) => m.access_token !== 'token-2')
+		).toBe(true);
+	});
+
+	it('serializes concurrent token refreshes so only one runs', async () => {
+		let getTokenCalls = 0;
+		let releaseRefresh!: (value: string) => void;
+
+		const client = track(
+			createCairnCMS('http://localhost:8055', { globals: { WebSocket: MockWebSocket as any } })
+				.with(() => ({
+					getToken: () => {
+						getTokenCalls += 1;
+						if (getTokenCalls === 2) return new Promise<string>((resolve) => (releaseRefresh = resolve));
+						return Promise.resolve('token-1');
+					},
+				}))
+				.with(realtime({ authMode: 'handshake' }))
+		);
+
+		const connecting = client.connect();
+		await flush();
+		const ws = MockWebSocket.last();
+		ws.open();
+		await flush();
+		ws.message({ type: 'auth', status: 'ok' });
+		await connecting;
+
+		ws.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'x' } });
+		await flush();
+		ws.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'x' } });
+		await flush();
+
+		expect(getTokenCalls).toBe(2);
+
+		releaseRefresh('token-2');
+		await flush();
+	});
+
+	it('ignores a superseded socket late close after a manual disconnect and reconnect', async () => {
+		class ManualCloseWebSocket extends MockWebSocket {
+			override close(): void {
+				/* close is triggered explicitly */
+			}
+		}
+
+		const client = track(
+			createCairnCMS('http://localhost:8055', { globals: { WebSocket: ManualCloseWebSocket as any } })
+				.with(() => ({ getToken: async () => 'token' }))
+				.with(realtime({ authMode: 'public', reconnect: { retries: 3, delay: 10 } }))
+		);
+
+		const connectingA = client.connect();
+		await flush();
+		const a = MockWebSocket.last();
+		a.open();
+		await connectingA;
+		await client.subscribe('articles' as never, { uid: 'x' } as never);
+
+		client.disconnect();
+		const reconnecting = client.connect();
+		await flush();
+		const b = MockWebSocket.last();
+		b.open();
+		await reconnecting;
+
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'y' } as never);
+
+		a.serverClose(1006);
+		await flush();
+
+		b.message({ type: 'subscription', uid: 'y', event: 'create', data: [{ id: 1 }] });
+		expect((await subscription[Symbol.asyncIterator]().next()).value).toMatchObject({ data: [{ id: 1 }] });
+		expect(MockWebSocket.instances.length).toBe(2);
+	});
+
+	it('fails iterators and closes the replacement socket when replay fails after reconnect', async () => {
+		const client = makeClient({ authMode: 'public', reconnect: { retries: 3, delay: 10 } }, 'token');
+		const a = await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'x' } as never);
+		const pending = subscription[Symbol.asyncIterator]().next();
+
+		a.serverClose(1006);
+		const b = await waitForSocketCount(2);
+
+		vi.spyOn(b, 'send').mockImplementation(() => {
+			throw new Error('send failed');
+		});
+
+		b.open();
+
+		await expect(pending).rejects.toBeInstanceOf(Error);
+
+		await wait(20);
+		expect(b.closed).toBe(true);
+	});
+
+	it('preserves subscriptions when a reconnect attempt fails before a later attempt succeeds', async () => {
+		const client = makeClient({ authMode: 'public', reconnect: { retries: 5, delay: 10 } }, 'token');
+		const a = await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'x' } as never);
+		const pending = subscription[Symbol.asyncIterator]().next();
+
+		a.serverClose(1006);
+
+		const b1 = await waitForSocketCount(2);
+		b1.serverClose(1006);
+
+		const b2 = await waitForSocketCount(3);
+		b2.open();
+
+		await vi.waitFor(() => expect(b2.messages().some((m) => m.type === 'subscribe' && m.uid === 'x')).toBe(true));
+		b2.message({ type: 'subscription', uid: 'x', event: 'create', data: [{ id: 1 }] });
+
+		expect((await pending).value).toMatchObject({ data: [{ id: 1 }] });
+	});
+
+	it('refreshes the replacement socket while an old socket refresh is still pending', async () => {
+		let getTokenCalls = 0;
+		let releaseRefresh!: (value: string) => void;
+
+		const client = track(
+			createCairnCMS('http://localhost:8055', { globals: { WebSocket: MockWebSocket as any } })
+				.with(() => ({
+					getToken: () => {
+						getTokenCalls += 1;
+						if (getTokenCalls === 2) return new Promise<string>((resolve) => (releaseRefresh = resolve));
+						return Promise.resolve('token-1');
+					},
+				}))
+				.with(realtime({ authMode: 'handshake' }))
+		);
+
+		const connectingA = client.connect();
+		await flush();
+		const a = MockWebSocket.last();
+		a.open();
+		await flush();
+		a.message({ type: 'auth', status: 'ok' });
+		await connectingA;
+
+		a.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'x' } });
+		await flush();
+
+		a.serverClose(1006);
+		await flush();
+
+		const connectingB = client.connect();
+		await flush();
+		const b = MockWebSocket.last();
+		b.open();
+		await flush();
+		b.message({ type: 'auth', status: 'ok' });
+		await connectingB;
+
+		b.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'x' } });
+		await flush();
+
+		expect(b.messages().filter((m) => m.type === 'auth')).toHaveLength(2);
+
+		releaseRefresh('token-2');
+		await flush();
+
+		expect(
+			b
+				.messages()
+				.filter((m) => m.type === 'auth')
+				.every((m) => m.access_token !== 'token-2')
+		).toBe(true);
+	});
+
+	it('does not restart recovery when a reconnect constructor throws and the old close arrives late', async () => {
+		let throwOnConstruct = false;
+
+		class MaybeThrowingSocket extends MockWebSocket {
+			constructor(url: string) {
+				super(url);
+				if (throwOnConstruct) throw new Error('constructor boom');
+			}
+
+			override close(): void {
+				/* close is triggered explicitly */
+			}
+		}
+
+		const client = track(
+			createCairnCMS('http://localhost:8055', { globals: { WebSocket: MaybeThrowingSocket as any } })
+				.with(() => ({ getToken: async () => 'token' }))
+				.with(realtime({ authMode: 'public', reconnect: { retries: 3, delay: 10 } }))
+		);
+
+		const connectingA = client.connect();
+		await flush();
+		const a = MockWebSocket.last();
+		a.open();
+		await connectingA;
+		await client.subscribe('articles' as never, { uid: 'x' } as never);
+
+		client.disconnect();
+
+		throwOnConstruct = true;
+		await expect(client.connect()).rejects.toBeDefined();
+		throwOnConstruct = false;
+
+		const backoffDelays: number[] = [];
+		const realSetTimeout = globalThis.setTimeout;
+
+		vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: any, ms?: number) => {
+			if (typeof ms === 'number' && ms >= 100 && ms < 1000) backoffDelays.push(ms);
+			return realSetTimeout(fn, ms);
+		}) as any);
+
+		a.serverClose(1006);
+		await wait(50);
+
+		expect(backoffDelays).toHaveLength(0);
+	});
+
+	it('grants a fresh connection a new token retry after reconnect exhaustion', async () => {
+		const client = makeClient(
+			{ authMode: 'handshake', connect: { timeout: 20 }, reconnect: { retries: 2, delay: 10 } },
+			'T'
+		);
+
+		const a = await openHandshake(client);
+
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'x' } as never);
+		const pending = subscription[Symbol.asyncIterator]().next();
+
+		a.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'x' } });
+		await flush();
+		expect(a.messages().filter((m) => m.type === 'auth')).toHaveLength(2);
+
+		a.serverClose(1006);
+
+		await expect(pending).rejects.toBeInstanceOf(Error);
+
+		const connectingB = client.connect();
+		await flush();
+		const b = MockWebSocket.last();
+		b.open();
+		await flush();
+		b.message({ type: 'auth', status: 'ok' });
+		await connectingB;
+
+		b.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'x' } });
+		await flush();
+
+		expect(b.messages().filter((m) => m.type === 'auth')).toHaveLength(2);
 	});
 });

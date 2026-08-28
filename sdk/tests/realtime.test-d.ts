@@ -37,6 +37,8 @@ describe('realtime delete-feed contract', () => {
 		assertType<Event>('init');
 		assertType<Event>('create');
 		assertType<Event>('update');
+
+		// @ts-expect-error - the impossible error variant is no longer part of the output union
 		assertType<Event>('error');
 
 		// @ts-expect-error - delete is not delivered when the event is unset

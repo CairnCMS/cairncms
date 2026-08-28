@@ -16,7 +16,6 @@ export interface WebSocketConfig {
 				timeout: number; // in ms
 		  }
 		| false;
-	heartbeat?: boolean;
 	debug?: boolean;
 	url?: string;
 }
@@ -67,7 +66,6 @@ export interface WebSocketClient<Schema> {
 export type ConnectionState =
 	| { code: 'open'; connection: WebSocketInterface; firstMessage: boolean }
 	| { code: 'connecting'; connection: Promise<WebSocketInterface> }
-	| { code: 'error' }
 	| { code: 'closed' };
 
 export type ReconnectState = {
@@ -92,12 +90,9 @@ export type SubscriptionOutput<
 	TItem = TQuery extends Query<Schema, Schema[Collection]>
 		? ApplyQueryFields<Schema, CollectionType<Schema, Collection>, TQuery['fields']>
 		: Partial<Schema[Collection]>
-> = { type: 'subscription'; uid?: string } & (
-	| {
-			[Event in Events]: { event: Event; data: SubscriptionPayload<TItem>[Event] };
-	  }[Events]
-	| { event: 'error'; error: { code: string; message: string } }
-);
+> = { type: 'subscription'; uid?: string } & {
+	[Event in Events]: { event: Event; data: SubscriptionPayload<TItem>[Event] };
+}[Events];
 
 export type SubscriptionPayload<Item> = {
 	init: Item[];
