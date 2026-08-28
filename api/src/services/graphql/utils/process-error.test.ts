@@ -90,11 +90,18 @@ describe('formatGraphqlErrors', () => {
 		expect(loggedPayloads[0]!.err['message']).toBe(`context ${REDACT_TEXT}`);
 	});
 
-	test('logs each error at error level', () => {
+	test('logs each unexpected error at error level', () => {
 		formatGraphqlErrors([new GraphQLError('a'), new GraphQLError('b')], undefined, null);
 
 		expect(logSpy).toHaveBeenCalledTimes(2);
 		expect(logSpy).toHaveBeenCalledWith('error', expect.any(Object), expect.any(Set));
+	});
+
+	test('logs an expected BaseException-originated error at debug level', () => {
+		formatGraphqlErrors([new GraphQLError('wrap', { originalError: new InvalidPayloadException('x') })], undefined, null);
+
+		expect(logSpy).toHaveBeenCalledWith('debug', expect.any(Object), expect.any(Set));
+		expect(logSpy).not.toHaveBeenCalledWith('error', expect.any(Object), expect.any(Set));
 	});
 
 	test('reads originalError exactly once and does not leak a stateful value to a non-admin', () => {

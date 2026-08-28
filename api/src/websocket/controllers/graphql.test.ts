@@ -15,8 +15,6 @@ import type { WebSocketMessage } from '../messages.js';
 import { SubscriptionRegistry } from '../subscriptions.js';
 import type { SocketClient } from './base.js';
 
-const REDACTED_MESSAGE = 'An unexpected error occurred.';
-
 let onStreamReturn: (() => Promise<void>) | null = null;
 let releaseFinalizer: (() => void) | null = null;
 
@@ -494,27 +492,17 @@ describe('GraphQL onSubscribe gate', () => {
 		env()['GRAPHQL_INTROSPECTION'] = originalIntrospection;
 	});
 
-	it('rejects a non-subscription operation', async () => {
+	it('rejects an over-token-limit document as INVALID_PAYLOAD for a non-admin', async () => {
+		env()['GRAPHQL_QUERY_TOKEN_LIMIT'] = 2;
 		harness = await createHarness({ authMode: 'public' });
 		const { ws, frames } = await connect(harness);
 		send(ws, { type: 'connection_init' });
 		await waitForAck(frames);
 
-		send(ws, { type: 'subscribe', id: 'q', payload: { query: '{ ok }' } });
-		await waitForId(frames, 'error', 'q');
-	});
-
-	it('rejects an over-token-limit document at onSubscribe', async () => {
-		env()['GRAPHQL_QUERY_TOKEN_LIMIT'] = 2;
-		harness = await createHarness({ authMode: 'public' });
-		const { ws, frames } = await connect(harness);
-		send(ws, { type: 'connection_init', payload: { access_token: signAdmin('root') } });
-		await waitForAck(frames);
-
 		send(ws, { type: 'subscribe', id: 'big', payload: { query: 'subscription { articles_mutated }' } });
 		await waitForId(frames, 'error', 'big');
 		const errFrame = frames.find((frame) => frame['type'] === 'error' && frame['id'] === 'big');
-		expect(JSON.stringify(errFrame)).toMatch(/token/i);
+		expect(errFrame!['payload'][0]['extensions']['code']).toBe('INVALID_PAYLOAD');
 	});
 
 	it('rejects an introspecting document at onSubscribe when introspection is disabled', async () => {
@@ -527,12 +515,55 @@ describe('GraphQL onSubscribe gate', () => {
 		send(ws, { type: 'subscribe', id: 'meta', payload: { query: 'query { __schema { queryType { name } } }' } });
 		await waitForId(frames, 'error', 'meta');
 		const errFrame = frames.find((frame) => frame['type'] === 'error' && frame['id'] === 'meta');
-		expect(JSON.stringify(errFrame)).toMatch(/introspection/i);
+		expect(errFrame!['payload'][0]['extensions']['code']).toBe('GRAPHQL_VALIDATION_EXCEPTION');
+	});
+
+	it('classifies a malformed parse as INVALID_PAYLOAD for a non-admin', async () => {
+		harness = await createHarness({ authMode: 'public' });
+		const { ws, frames } = await connect(harness);
+		send(ws, { type: 'connection_init' });
+		await waitForAck(frames);
+
+		send(ws, { type: 'subscribe', id: 'bad', payload: { query: 'subscription {' } });
+		await waitForId(frames, 'error', 'bad');
+		const errFrame = frames.find((frame) => frame['type'] === 'error' && frame['id'] === 'bad');
+		expect(errFrame!['payload'][0]['extensions']['code']).toBe('INVALID_PAYLOAD');
+	});
+
+	it('classifies a non-subscription operation as INVALID_PAYLOAD for a non-admin', async () => {
+		harness = await createHarness({ authMode: 'public' });
+		const { ws, frames } = await connect(harness);
+		send(ws, { type: 'connection_init' });
+		await waitForAck(frames);
+
+		send(ws, { type: 'subscribe', id: 'op', payload: { query: '{ ok }' } });
+		await waitForId(frames, 'error', 'op');
+		const errFrame = frames.find((frame) => frame['type'] === 'error' && frame['id'] === 'op');
+		expect(errFrame!['payload'][0]['extensions']['code']).toBe('INVALID_PAYLOAD');
+	});
+
+	it('classifies a failed authorization refresh as FORBIDDEN for a non-admin', async () => {
+		class RefreshFailController extends GraphQLController {
+			protected override async refreshBeforeCommand(): Promise<boolean> {
+				return false;
+			}
+		}
+
+		harness = await createHarness({ authMode: 'public', controllerClass: RefreshFailController });
+		const { ws, frames } = await connect(harness);
+		send(ws, { type: 'connection_init' });
+		await waitForAck(frames);
+
+		send(ws, { type: 'subscribe', id: 'auth', payload: { query: 'subscription { articles_mutated }' } });
+		await waitForId(frames, 'error', 'auth');
+		const errFrame = frames.find((frame) => frame['type'] === 'error' && frame['id'] === 'auth');
+		expect(errFrame!['payload'][0]['extensions']['code']).toBe('FORBIDDEN');
 	});
 });
 
 describe('GraphQL error redaction', () => {
-	it('redacts a server field name from a gate suggestion at onError for a non-admin', async () => {
+	it('strips a schema field-name suggestion from a validation error when introspection is disabled', async () => {
+		env()['GRAPHQL_INTROSPECTION'] = false;
 		harness = await createHarness({ authMode: 'public' });
 		const { ws, frames } = await connect(harness);
 		send(ws, { type: 'connection_init' });
@@ -542,13 +573,14 @@ describe('GraphQL error redaction', () => {
 		await waitForId(frames, 'error', 'e1');
 		const errFrame = frames.find((frame) => frame['type'] === 'error' && frame['id'] === 'e1');
 		expect(JSON.stringify(errFrame)).not.toContain('articles_mutated');
-		expect(errFrame!['payload'][0]['message']).toBe(REDACTED_MESSAGE);
+		expect(JSON.stringify(errFrame)).not.toContain('Did you mean');
+		expect(errFrame!['payload'][0]['extensions']['code']).toBe('GRAPHQL_VALIDATION_EXCEPTION');
 	});
 
-	it('redacts a subscription variable value from a coercion error at onError', async () => {
+	it('classifies a coercion error as GRAPHQL_VALIDATION_EXCEPTION and redacts its variable value for a non-admin', async () => {
 		harness = await createHarness({ authMode: 'public' });
 		const { ws, frames } = await connect(harness);
-		send(ws, { type: 'connection_init', payload: { access_token: signAdmin('root') } });
+		send(ws, { type: 'connection_init' });
 		await waitForAck(frames);
 
 		send(ws, {
@@ -563,6 +595,7 @@ describe('GraphQL error redaction', () => {
 		await waitForId(frames, 'error', 'v1');
 		const errFrame = frames.find((frame) => frame['type'] === 'error' && frame['id'] === 'v1');
 		expect(JSON.stringify(errFrame)).not.toContain('seeded-variable-secret');
+		expect(errFrame!['payload'][0]['extensions']['code']).toBe('GRAPHQL_VALIDATION_EXCEPTION');
 	});
 });
 

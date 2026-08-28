@@ -2,7 +2,13 @@ import type { CompleteMessage, ConnectionInitMessage, ErrorMessage } from 'graph
 import { CloseCode, makeServer, type Context, type Server, type SubscribeMessage } from 'graphql-ws';
 import { getOperationAST, GraphQLError, type ExecutionArgs, type ExecutionResult } from 'graphql';
 import type { Buffer } from 'node:buffer';
-import { ForbiddenException } from '../../exceptions/index.js';
+import { BaseException } from '@cairncms/exceptions';
+import {
+	ForbiddenException,
+	GraphQLValidationException,
+	InvalidPayloadException,
+	ServiceUnavailableException,
+} from '../../exceptions/index.js';
 import { GraphQLService } from '../../services/graphql/index.js';
 import { parseGraphQLQuery, validateGraphQLDocument } from '../../services/graphql/query-gate.js';
 import {
@@ -33,6 +39,10 @@ interface ConnectionAdapter {
 
 function fitCloseReason(reason: string): string {
 	return new TextEncoder().encode(reason).length <= CLOSE_REASON_MAX_BYTES ? reason : 'Connection closed';
+}
+
+function expectedError(exception: BaseException): GraphQLError {
+	return new GraphQLError(exception.message, undefined, undefined, undefined, undefined, exception);
 }
 
 export class GraphQLController extends SocketController {
@@ -233,13 +243,19 @@ export class GraphQLController extends SocketController {
 		try {
 			document = parseGraphQLQuery(query);
 		} catch (error) {
-			return [error as GraphQLError];
+			return [
+				expectedError(
+					new InvalidPayloadException('GraphQL schema validation error.', {
+						graphqlErrors: [(error as GraphQLError).message],
+					})
+				),
+			];
 		}
 
 		const rawSchema = await this.getSchema({ database: this.database });
 
 		if (!(await this.refreshBeforeCommand(client, rawSchema)) || client.stopping) {
-			return [new GraphQLError('The subscription could not be authorized.')];
+			return [expectedError(new ForbiddenException())];
 		}
 
 		const service = new GraphQLService({
@@ -251,22 +267,35 @@ export class GraphQLController extends SocketController {
 		const schema = service.getSchema();
 
 		const errors = validateGraphQLDocument(schema, document);
-		if (errors.length > 0) return errors;
+
+		if (errors.length > 0) {
+			return [expectedError(new GraphQLValidationException({ graphqlErrors: errors.map((error) => error.message) }))];
+		}
 
 		const operation = getOperationAST(document, operationName ?? undefined);
 
 		if (operation?.operation !== 'subscription') {
-			return [new GraphQLError('Only subscription operations are supported over the WebSocket transport.')];
+			return [
+				expectedError(
+					new InvalidPayloadException('Only subscription operations are supported over the WebSocket transport.')
+				),
+			];
 		}
 
 		const target = resolveSubscriptionTarget(schema, operation, document, variables ?? {});
 
 		if (target.errors !== undefined) {
-			return target.errors;
+			return [
+				expectedError(new GraphQLValidationException({ graphqlErrors: target.errors.map((error) => error.message) })),
+			];
 		}
 
 		if (target.collection === '') {
-			return [new GraphQLError('Only subscription operations are supported over the WebSocket transport.')];
+			return [
+				expectedError(
+					new InvalidPayloadException('Only subscription operations are supported over the WebSocket transport.')
+				),
+			];
 		}
 
 		// The GraphQL selection set is the response shape, never a row query, so the delete feed's query gate always
@@ -282,13 +311,16 @@ export class GraphQLController extends SocketController {
 				!isDeleteFeedQueryAllowed(rowQuery) ||
 				!isDeleteFeedEligible(target.collection, accountability, rawSchema)
 			) {
-				const forbidden = new ForbiddenException();
-				return [new GraphQLError(forbidden.message, undefined, undefined, undefined, undefined, forbidden)];
+				return [expectedError(new ForbiddenException())];
 			}
 		}
 
 		if (adapter === undefined) {
-			return [new GraphQLError('The subscription transport is unavailable.')];
+			return [
+				expectedError(
+					new ServiceUnavailableException('The subscription transport is unavailable.', { service: 'graphql' })
+				),
+			];
 		}
 
 		const channel = new Rendezvous();
@@ -307,10 +339,13 @@ export class GraphQLController extends SocketController {
 			channel.close();
 
 			return [
-				new GraphQLError(
-					reserved.reason === 'limit'
-						? 'The subscription limit has been reached.'
-						: 'Subscriptions are currently unavailable.'
+				expectedError(
+					new ServiceUnavailableException(
+						reserved.reason === 'limit'
+							? 'The subscription limit has been reached.'
+							: 'Subscriptions are currently unavailable.',
+						{ service: 'graphql' }
+					)
 				),
 			];
 		}

@@ -32,6 +32,8 @@ let readImpl: (
 ) => Record<string, unknown>[];
 
 let readFields: unknown;
+let readDeep: unknown;
+let subscriptionDeep: unknown;
 let readAccountability: { user: string | null } | null;
 let stallWhen: ((subscription: { collection: string; item?: string }) => boolean) | null;
 let stallGate: Promise<void>;
@@ -93,6 +95,7 @@ vi.mock('../../websocket/utils/items.js', () => ({
 	getEventPayload: async (service: unknown, subscription: any, accountability: any, _schema: unknown, event: any) => {
 		getEventPayloadCalls++;
 		readFields = subscription.query.fields;
+		readDeep = subscription.query.deep;
 		readAccountability = accountability;
 		if (stallWhen !== null && stallWhen(subscription)) await stallGate;
 		return { data: readImpl(accountability, event, subscription.item) };
@@ -144,7 +147,7 @@ const PostType = new GraphQLObjectType({
 const fieldService = {
 	getQuery: () => {
 		if (getQueryError !== null) throw getQueryError;
-		return { fields: ['id', 'title'] };
+		return { fields: ['id', 'title'], ...(subscriptionDeep !== undefined && { deep: subscriptionDeep }) };
 	},
 	accountability: null,
 } as unknown as Parameters<typeof createSubscriptionGenerator>[0];
@@ -346,6 +349,8 @@ beforeEach(() => {
 	eligibilityCalls = 0;
 	getEventPayloadCalls = 0;
 	getQueryError = null;
+	readDeep = undefined;
+	subscriptionDeep = undefined;
 	getSchemaImpl = async () => SCHEMA;
 	loggedPayloads.length = 0;
 });
@@ -510,9 +515,9 @@ describe('parseFields', () => {
 	it('maps the data sub-selection to query fields', () => {
 		const { service, captured } = capturingService();
 
-		expect(parseFields(service, resolveInfo('subscription { articles_mutated { data { id title } } }'))).toEqual([
-			'id',
-		]);
+		expect(parseFields(service, resolveInfo('subscription { articles_mutated { data { id title } } }'))).toEqual({
+			fields: ['id'],
+		});
 
 		expect((captured[0] as unknown[]).length).toBe(2);
 	});
@@ -539,6 +544,20 @@ describe('parseFields', () => {
 		);
 
 		expect((captured[0] as unknown[]).length).toBe(2);
+	});
+
+	it('carries the deep query returned by getQuery', () => {
+		const deep = { author: { _limit: 1 } };
+
+		const service = {
+			getQuery: () => ({ fields: ['id'], deep }),
+			accountability: null,
+		} as unknown as Parameters<typeof parseFields>[0];
+
+		expect(parseFields(service, resolveInfo('subscription { articles_mutated { data { id } } }'))).toEqual({
+			fields: ['id'],
+			deep,
+		});
 	});
 });
 
@@ -609,6 +628,17 @@ describe('GraphQL subscription delivery', () => {
 
 		await vi.waitFor(() => expect(nextFrames(frames)).toHaveLength(1));
 		expect(readFields).toEqual(['id', 'title']);
+	});
+
+	it('carries the parsed deep query into the delivery read', async () => {
+		subscriptionDeep = { author: { _limit: 1 } };
+		harness = await createHarness();
+		const { frames } = await subscribed(harness, QUERY);
+
+		harness.messenger.publish('websocket.event', { action: 'create', collection: 'articles', key: '20' });
+
+		await vi.waitFor(() => expect(nextFrames(frames)).toHaveLength(1));
+		expect(readDeep).toEqual({ author: { _limit: 1 } });
 	});
 
 	it('yields once per key for a batch update', async () => {
@@ -759,6 +789,107 @@ describe('GraphQL subscription delivery', () => {
 		expect(nextFrames(frames)[1]!['payload']['data']['articles_mutated']['key']).toBe('71');
 	});
 
+	it('stops delivering a stalled batch when the subscription is completed mid-batch', async () => {
+		harness = await createHarness();
+
+		let releaseSecond: () => void = () => undefined;
+
+		stallGate = new Promise<void>((resolve) => {
+			releaseSecond = resolve;
+		});
+
+		stallWhen = (subscription) => subscription.item === '71';
+
+		const { ws, frames } = await subscribed(harness, QUERY);
+
+		try {
+			harness.messenger.publish('websocket.event', { action: 'update', collection: 'articles', keys: ['70', '71'] });
+
+			await vi.waitFor(() => expect(nextFrames(frames)).toHaveLength(1));
+			expect(nextFrames(frames)[0]!['payload']['data']['articles_mutated']['key']).toBe('70');
+
+			send(ws, { type: 'complete', id: 'sub' });
+			await vi.waitFor(() => expect(harness!.registry.getSubscribedOwners()).toHaveLength(0));
+
+			stallWhen = null;
+			send(ws, { type: 'subscribe', id: 'sub', payload: { query: QUERY } });
+			releaseSecond();
+
+			await vi.waitFor(() =>
+				expect(harness!.registry.getActiveByCollection('articles', Number.MAX_SAFE_INTEGER)).toHaveLength(1)
+			);
+
+			harness.messenger.publish('websocket.event', { action: 'create', collection: 'articles', key: '80' });
+
+			await vi.waitFor(() =>
+				expect(nextFrames(frames).some((frame) => frame['payload']['data']['articles_mutated']['key'] === '80')).toBe(
+					true
+				)
+			);
+		} finally {
+			releaseSecond();
+		}
+
+		expect(nextFrames(frames).some((frame) => frame['payload']['data']['articles_mutated']['key'] === '71')).toBe(
+			false
+		);
+	});
+
+	it('does not error or close the connection when a stalled delivery schema load rejects after completion', async () => {
+		harness = await createHarness();
+		const { ws, frames, closed } = await subscribed(harness, QUERY);
+
+		let rejectSchema: (error: Error) => void = () => undefined;
+		let loadReached: () => void = () => undefined;
+
+		const loadEntered = new Promise<void>((resolve) => {
+			loadReached = resolve;
+		});
+
+		getSchemaImpl = () => {
+			loadReached();
+			return new Promise<SchemaOverview>((_resolve, reject) => {
+				rejectSchema = reject;
+			});
+		};
+
+		let closedEarly = false;
+
+		void closed.then(() => {
+			closedEarly = true;
+		});
+
+		try {
+			harness.messenger.publish('websocket.event', { action: 'create', collection: 'articles', key: '30' });
+			await loadEntered;
+
+			send(ws, { type: 'complete', id: 'sub' });
+			await vi.waitFor(() => expect(harness!.registry.getSubscribedOwners()).toHaveLength(0));
+
+			rejectSchema(new Error('schema load failed'));
+
+			getSchemaImpl = async () => SCHEMA;
+			send(ws, { type: 'subscribe', id: 'sub', payload: { query: QUERY } });
+
+			await vi.waitFor(() =>
+				expect(harness!.registry.getActiveByCollection('articles', Number.MAX_SAFE_INTEGER)).toHaveLength(1)
+			);
+
+			harness.messenger.publish('websocket.event', { action: 'create', collection: 'articles', key: '31' });
+
+			await vi.waitFor(() =>
+				expect(nextFrames(frames).some((frame) => frame['payload']['data']['articles_mutated']['key'] === '31')).toBe(
+					true
+				)
+			);
+		} finally {
+			rejectSchema(new Error('cleanup'));
+		}
+
+		expect(frames.some((frame) => frame['type'] === 'error' && frame['id'] === 'sub')).toBe(false);
+		expect(closedEarly).toBe(false);
+	});
+
 	it('reads under the freshly snapshotted accountability for each event', async () => {
 		harness = await createHarness();
 		const { frames } = await subscribed(harness, QUERY, signUser('alice'));
@@ -785,6 +916,8 @@ describe('GraphQL subscription delivery', () => {
 			expect(frames.some((frame) => frame['type'] === 'error' && frame['id'] === 'sub3')).toBe(true)
 		);
 
+		const errFrame = frames.find((frame) => frame['type'] === 'error' && frame['id'] === 'sub3');
+		expect(errFrame!['payload'][0]['extensions']['code']).toBe('SERVICE_UNAVAILABLE');
 		expect(harness.registry.getActiveByCollection('articles', Number.MAX_SAFE_INTEGER)).toHaveLength(2);
 	});
 

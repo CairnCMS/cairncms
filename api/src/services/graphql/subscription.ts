@@ -1,4 +1,4 @@
-import type { Accountability, SchemaOverview } from '@cairncms/types';
+import type { Accountability, NestedDeepQuery, Query, SchemaOverview } from '@cairncms/types';
 import { getArgumentValues, getVariableValues } from 'graphql';
 import type {
 	DocumentNode,
@@ -241,7 +241,12 @@ function inlineFragments(
 	return inlined;
 }
 
-export function parseFields(service: GraphQLService, request: GraphQLResolveInfo): string[] {
+export interface SubscriptionSelection {
+	fields: string[];
+	deep?: NestedDeepQuery;
+}
+
+export function parseFields(service: GraphQLService, request: GraphQLResolveInfo): SubscriptionSelection {
 	const dataSelections: SelectionNode[] = [];
 
 	for (const fieldNode of request.fieldNodes) {
@@ -249,8 +254,11 @@ export function parseFields(service: GraphQLService, request: GraphQLResolveInfo
 	}
 
 	const inlined = inlineFragments(dataSelections, request.fragments);
-	const { fields } = service.getQuery({}, inlined, request.variableValues);
-	return fields ?? [];
+	const { fields, deep } = service.getQuery({}, inlined, request.variableValues);
+
+	const selection: SubscriptionSelection = { fields: fields ?? [] };
+	if (deep != null) selection.deep = deep;
+	return selection;
 }
 
 type ActiveEvent =
@@ -276,10 +284,10 @@ export function createSubscriptionGenerator(self: GraphQLService, event: string)
 	): AsyncIterableIterator<Record<string, unknown>> {
 		const { operation } = context;
 
-		let fields: string[];
+		let selection: SubscriptionSelection;
 
 		try {
-			fields = parseFields(self, request);
+			selection = parseFields(self, request);
 		} catch (error) {
 			operation.finalize();
 			throw error;
@@ -288,6 +296,7 @@ export function createSubscriptionGenerator(self: GraphQLService, event: string)
 		let activated = false;
 		let active: ActiveEvent | null = null;
 		let retired = false;
+		let closed = false;
 
 		const readKey = async (
 			current: ActiveEvent,
@@ -297,10 +306,13 @@ export function createSubscriptionGenerator(self: GraphQLService, event: string)
 				return { [event]: { key, data: null, event: 'delete' } };
 			}
 
+			const query: Query = { fields: selection.fields };
+			if (selection.deep !== undefined) query.deep = selection.deep;
+
 			const readSubscription: Subscription = {
 				client: operation.client,
 				collection,
-				query: { fields },
+				query,
 				item: canonicalItemKey(key),
 			};
 
@@ -357,6 +369,8 @@ export function createSubscriptionGenerator(self: GraphQLService, event: string)
 			},
 			async next(): Promise<IteratorResult<Record<string, unknown>>> {
 				try {
+					if (closed) return { value: undefined, done: true };
+
 					if (!activated) {
 						activated = true;
 						operation.reservation.activate();
@@ -366,6 +380,7 @@ export function createSubscriptionGenerator(self: GraphQLService, event: string)
 						if (active !== null && active.index < active.keys.length) {
 							const current = active;
 							const value = await readKey(current, current.keys[current.index++]!);
+							if (closed) return { value: undefined, done: true };
 							if (value === undefined) continue;
 							return { value, done: false };
 						}
@@ -373,22 +388,28 @@ export function createSubscriptionGenerator(self: GraphQLService, event: string)
 						active = null;
 
 						const pulled = await operation.channel.pull();
-						if (pulled.done) return { value: undefined, done: true };
+						if (closed || pulled.done) return { value: undefined, done: true };
 
 						await beginEvent(pulled.event);
+						if (closed) return { value: undefined, done: true };
 						if (retired) operation.retire();
 					}
 				} catch (error) {
+					if (closed) return { value: undefined, done: true };
 					operation.finalize();
 					throw error;
 				}
 			},
 			return(): Promise<IteratorResult<Record<string, unknown>>> {
+				closed = true;
+				active = null;
 				operation.channel.close();
 				operation.finalize();
 				return Promise.resolve({ value: undefined, done: true });
 			},
 			throw(error?: unknown): Promise<IteratorResult<Record<string, unknown>>> {
+				closed = true;
+				active = null;
 				operation.channel.close();
 				operation.finalize();
 				return Promise.reject(error);
