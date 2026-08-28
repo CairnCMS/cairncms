@@ -31,7 +31,7 @@ export class ConnectionAuth {
 	private expiryValue: number | null = null;
 	private pinnedUser: string | null = null;
 
-	private generation = 0;
+	private identityEpoch = 0;
 	private lookupInFlight = false;
 	private closed = false;
 
@@ -62,7 +62,7 @@ export class ConnectionAuth {
 		if (hold === null) throw new Error('WebSocket work hold unavailable for an open connection');
 
 		this.lookupInFlight = true;
-		const generation = this.generation;
+		const epoch = this.identityEpoch;
 
 		try {
 			let identity: TokenIdentity | null = null;
@@ -76,7 +76,7 @@ export class ConnectionAuth {
 				expired = error instanceof TokenExpiredException;
 			}
 
-			if (this.closed || this.generation !== generation) return { status: 'superseded' };
+			if (this.closed || this.identityEpoch !== epoch) return { status: 'superseded' };
 
 			if (identity === null || identity.user === undefined) {
 				const reason: AuthReject = this.pinned && expired ? 'token-expired' : 'auth-failed';
@@ -94,6 +94,7 @@ export class ConnectionAuth {
 			if (this.pinnedUser === null) this.pinnedUser = user;
 			this.accountabilityValue = this.buildAccountability(identity);
 			this.expiryValue = expiry;
+			this.identityEpoch++;
 			return { status: 'authenticated', user };
 		} finally {
 			this.lookupInFlight = false;
@@ -107,13 +108,13 @@ export class ConnectionAuth {
 		const hold = this.lease.beginWorkHold();
 		if (hold === null) return false;
 
-		const generation = this.generation;
+		const epoch = this.identityEpoch;
 
 		try {
 			const current = this.accountabilityValue;
 			const permissions = await getPermissions(current, schema);
 
-			if (this.closed || this.generation !== generation) return false;
+			if (this.closed || this.identityEpoch !== epoch) return false;
 
 			this.accountabilityValue = { ...current, permissions };
 			return true;
@@ -128,12 +129,13 @@ export class ConnectionAuth {
 		const hold = this.lease.beginWorkHold();
 		if (hold === null) return null;
 
+		const epoch = this.identityEpoch;
 		const current = this.accountabilityValue;
 
 		try {
 			const permissions = await getPermissions(current, schema);
 
-			if (this.closed || this.accountabilityValue !== current) return null;
+			if (this.closed || this.identityEpoch !== epoch) return null;
 
 			return { ...current, permissions };
 		} finally {
@@ -146,18 +148,19 @@ export class ConnectionAuth {
 
 		this.accountabilityValue = getAnonymousAccountability(this.context);
 		this.expiryValue = null;
+		this.identityEpoch++;
 		return { status: 'anonymous' };
 	}
 
 	supersedeToAnonymous(): RevertResult {
-		this.generation++;
+		this.identityEpoch++;
 		return this.revertToAnonymous();
 	}
 
 	close(): void {
 		if (this.closed) return;
 		this.closed = true;
-		this.generation++;
+		this.identityEpoch++;
 		this.lease.close();
 	}
 

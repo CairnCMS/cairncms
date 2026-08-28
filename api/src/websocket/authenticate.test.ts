@@ -159,7 +159,7 @@ describe('ConnectionAuth revert', () => {
 	});
 });
 
-describe('ConnectionAuth concurrency and generation', () => {
+describe('ConnectionAuth concurrency and identity epoch', () => {
 	it('returns busy for a concurrent call and starts no second lookup', async () => {
 		const gate = deferred<TokenIdentity>();
 		resolver.mockReturnValue(gate.promise);
@@ -298,7 +298,7 @@ describe('ConnectionAuth.refreshPermissions', () => {
 		);
 	});
 
-	it('discards the result when the generation changes during the await', async () => {
+	it('discards the result when the identity epoch changes during the await', async () => {
 		const gate = deferred<Permission[]>();
 		permissions.mockReturnValue(gate.promise);
 		const { auth } = makeAuth();
@@ -350,6 +350,69 @@ describe('ConnectionAuth.snapshotAccountability', () => {
 		expect(await pending).toBeNull();
 		expect(auth.accountability.user).toBeNull();
 		expect(auth.accountability.permissions).toBeUndefined();
+	});
+
+	it('keeps the snapshot when a permission-only refresh runs during the await', async () => {
+		resolver.mockResolvedValue(userIdentity('alice'));
+		const { auth } = makeAuth();
+		await auth.authenticate('token');
+
+		const gate = deferred<Permission[]>();
+		permissions.mockReturnValueOnce(gate.promise).mockResolvedValueOnce([permission('articles')]);
+
+		const pending = auth.snapshotAccountability(SCHEMA);
+		await auth.refreshPermissions(SCHEMA);
+		gate.resolve([permission('articles')]);
+
+		expect(await pending).toMatchObject({ user: 'alice', permissions: [permission('articles')] });
+	});
+
+	it('discards the snapshot when a revert to anonymous runs during the await', async () => {
+		resolver.mockResolvedValue(userIdentity('alice'));
+		const { auth } = makeAuth();
+		await auth.authenticate('token');
+
+		const gate = deferred<Permission[]>();
+		permissions.mockReturnValue(gate.promise);
+		const pending = auth.snapshotAccountability(SCHEMA);
+
+		auth.revertToAnonymous();
+		gate.resolve([permission('articles')]);
+
+		expect(await pending).toBeNull();
+	});
+
+	it('discards the snapshot when a same-user reauthentication commits during the await', async () => {
+		resolver.mockResolvedValue(userIdentity('alice'));
+		const { auth } = makeAuth();
+		await auth.authenticate('token');
+
+		const gate = deferred<Permission[]>();
+		permissions.mockReturnValue(gate.promise);
+		const pending = auth.snapshotAccountability(SCHEMA);
+
+		await auth.authenticate('token');
+		gate.resolve([permission('articles')]);
+
+		expect(await pending).toBeNull();
+	});
+
+	it('rejects stale work but preserves authority when supersede fails on capacity', async () => {
+		resolver.mockResolvedValue(userIdentity('alice'));
+		const { admission, auth } = makeAuth({ ip: 1 });
+		await auth.authenticate('token');
+
+		admission.reserve('rest', CONTEXT.ip);
+
+		const gate = deferred<Permission[]>();
+		permissions.mockReturnValue(gate.promise);
+		const pending = auth.snapshotAccountability(SCHEMA);
+
+		expect(auth.supersedeToAnonymous()).toEqual({ status: 'capacity' });
+		gate.resolve([permission('articles')]);
+
+		expect(await pending).toBeNull();
+		expect(auth.accountability.user).toBe('alice');
 	});
 
 	it('reclaims the work hold when the permission lookup rejects', async () => {
