@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCairnCMS } from '../src/client.js';
 import { realtime } from '../src/realtime/composable.js';
-import { messageCallback } from '../src/realtime/utils/message-callback.js';
+import { Channel } from '../src/realtime/utils/channel.js';
+import { ChannelRegistry } from '../src/realtime/utils/channel-registry.js';
 
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -72,6 +73,10 @@ class MockWebSocket {
 
 	message(payload: unknown): void {
 		this.emit('message', { data: typeof payload === 'string' ? payload : JSON.stringify(payload) });
+	}
+
+	messageRaw(data: unknown): void {
+		this.emit('message', { data });
 	}
 
 	serverClose(code: number, reason = ''): void {
@@ -338,9 +343,9 @@ describe('realtime composable lifecycle', () => {
 
 		const rejections = trackUnhandledRejections();
 
-		// deliver a ping and close in the same tick, before the message loop processes the ping
-		ws.message({ type: 'ping' });
 		ws.serverClose(1000);
+		await flush();
+		ws.message({ type: 'ping' });
 		await wait(20);
 
 		expect(ws.messages().some((m) => m.type === 'pong')).toBe(false);
@@ -615,18 +620,16 @@ describe('realtime composable lifecycle', () => {
 		expect(replayed.some((m) => m.uid === 'A')).toBe(false);
 	});
 
-	it('removes messageCallback listeners when the socket closes during a pending wait', async () => {
-		const ws = new MockWebSocket('ws://localhost');
-		const pending = messageCallback(ws as any);
+	it('attaches exactly one router message listener while open and detaches it on close', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
 
 		expect(ws.listenerCount('message')).toBe(1);
 
 		ws.serverClose(1000);
-		await expect(pending).rejects.toBeUndefined();
+		await wait(20);
 
 		expect(ws.listenerCount('message')).toBe(0);
-		expect(ws.listenerCount('close')).toBe(0);
-		expect(ws.listenerCount('error')).toBe(0);
 	});
 
 	it('keeps the message pump alive after a malformed auth-shaped frame', async () => {
@@ -889,5 +892,439 @@ describe('realtime composable lifecycle', () => {
 		await wait(50);
 
 		expect(backoffTimers).toBe(0);
+	});
+});
+
+describe('realtime channel primitive', () => {
+	it('delivers queued frames in FIFO order', async () => {
+		const channel = new Channel(() => undefined);
+		channel.enqueue({ n: 1 }, 1);
+		channel.enqueue({ n: 2 }, 1);
+
+		expect((await channel.next()).value).toEqual({ n: 1 });
+		expect((await channel.next()).value).toEqual({ n: 2 });
+	});
+
+	it('resolves concurrent pulls in call order', async () => {
+		const channel = new Channel(() => undefined);
+		const first = channel.next();
+		const second = channel.next();
+
+		channel.tryHandoff({ n: 1 });
+		channel.tryHandoff({ n: 2 });
+
+		expect((await first).value).toEqual({ n: 1 });
+		expect((await second).value).toEqual({ n: 2 });
+	});
+
+	it('closes to a done result for pending and future pulls', async () => {
+		const channel = new Channel(() => undefined);
+		const pending = channel.next();
+		channel.close();
+
+		expect(await pending).toEqual({ value: undefined, done: true });
+		expect(await channel.next()).toEqual({ value: undefined, done: true });
+	});
+
+	it('fails to a rejection for pending and future pulls', async () => {
+		const channel = new Channel(() => undefined);
+		const pending = channel.next();
+		const error = new Error('boom');
+		channel.fail(error);
+
+		await expect(pending).rejects.toBe(error);
+		await expect(channel.next()).rejects.toBe(error);
+	});
+
+	it('settles terminally only once', async () => {
+		const channel = new Channel(() => undefined);
+		const error = new Error('boom');
+		channel.fail(error);
+		channel.close();
+
+		await expect(channel.next()).rejects.toBe(error);
+	});
+});
+
+describe('realtime channel registry', () => {
+	it('does not count a frame handed directly to a waiting pull', async () => {
+		let overflowed = false;
+		const registry = new ChannelRegistry(() => (overflowed = true), 1, 1_000_000);
+		const channel = registry.create('a');
+
+		const pull = channel.next();
+		registry.route('a', { n: 1 }, 10);
+		await pull;
+
+		registry.route('a', { n: 2 }, 10);
+		expect(overflowed).toBe(false);
+	});
+
+	it('releases a drained frame so the budget frees up', async () => {
+		let overflowed = false;
+		const registry = new ChannelRegistry(() => (overflowed = true), 1, 1_000_000);
+		const channel = registry.create('a');
+
+		registry.route('a', { n: 1 }, 10);
+		await channel.next();
+		registry.route('a', { n: 2 }, 10);
+
+		expect(overflowed).toBe(false);
+	});
+
+	it('consumes nothing when routing to an unknown uid', () => {
+		let overflowed = false;
+		const registry = new ChannelRegistry(() => (overflowed = true), 1, 1_000_000);
+		registry.create('a');
+
+		registry.route('missing', { n: 1 }, 10);
+		registry.route('a', { n: 1 }, 10);
+
+		expect(overflowed).toBe(false);
+	});
+
+	it('overflows on the frame after the count bound and fails every channel', async () => {
+		let overflow: Error | null = null;
+		const registry = new ChannelRegistry((error) => (overflow = error), 2, 1_000_000);
+		const a = registry.create('a');
+		const b = registry.create('b');
+
+		registry.route('a', { n: 1 }, 10);
+		registry.route('a', { n: 2 }, 10);
+		expect(overflow).toBeNull();
+
+		registry.route('b', { n: 3 }, 10);
+		expect(overflow).toBeInstanceOf(Error);
+		await expect(a.next()).rejects.toBe(overflow);
+		await expect(b.next()).rejects.toBe(overflow);
+	});
+
+	it('bounds the byte budget using the serialized byte size of a non-ASCII frame', () => {
+		let overflow: Error | null = null;
+		const size = new TextEncoder().encode(JSON.stringify({ title: 'cafe mañana' })).byteLength;
+		const registry = new ChannelRegistry((error) => (overflow = error), 1000, size);
+		registry.create('a');
+
+		registry.route('a', { n: 1 }, size);
+		expect(overflow).toBeNull();
+
+		registry.route('a', { n: 2 }, 1);
+		expect(overflow).toBeInstanceOf(Error);
+	});
+
+	it('releases retained frames when a channel is deleted so the budget recovers', () => {
+		let overflow: Error | null = null;
+		const registry = new ChannelRegistry((error) => (overflow = error), 2, 1_000_000);
+		const a = registry.create('a');
+		registry.route('a', { n: 1 }, 10);
+		registry.route('a', { n: 2 }, 10);
+
+		registry.delete('a', a);
+
+		registry.create('b');
+		registry.route('b', { n: 3 }, 10);
+		registry.route('b', { n: 4 }, 10);
+		expect(overflow).toBeNull();
+	});
+
+	it('rejects a duplicate uid at the registry boundary', () => {
+		const registry = new ChannelRegistry(() => undefined);
+		registry.create('a');
+		expect(() => registry.create('a')).toThrow();
+	});
+});
+
+describe('realtime SDK channel ingress', () => {
+	function subscribeFrame(ws: MockWebSocket) {
+		return ws
+			.messages()
+			.filter((m) => m.type === 'subscribe')
+			.pop();
+	}
+
+	it('delivers an init frame that arrives before the first next()', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never);
+		const sub = subscribeFrame(ws);
+
+		ws.message({ type: 'subscription', uid: sub.uid, event: 'init', data: [{ id: 1 }] });
+
+		const result = await subscription[Symbol.asyncIterator]().next();
+		expect(result.value).toMatchObject({ type: 'subscription', event: 'init' });
+	});
+
+	it('retains events delivered while the consumer is paused, in order', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never);
+		const sub = subscribeFrame(ws);
+		const it = subscription[Symbol.asyncIterator]();
+
+		ws.message({ type: 'subscription', uid: sub.uid, event: 'create', data: [{ id: 1 }] });
+		ws.message({ type: 'subscription', uid: sub.uid, event: 'update', data: [{ id: 1 }] });
+
+		expect((await it.next()).value).toMatchObject({ event: 'create' });
+		expect((await it.next()).value).toMatchObject({ event: 'update' });
+	});
+
+	it('rejects a subscription whose targeted error arrives before any pull', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never);
+		const sub = subscribeFrame(ws);
+
+		ws.message({ type: 'subscribe', status: 'error', uid: sub.uid, error: { code: 'X', message: 'nope' } });
+
+		await expect(subscription[Symbol.asyncIterator]().next()).rejects.toMatchObject({ status: 'error' });
+	});
+
+	it('isolates delivery between two simultaneous subscriptions', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const a = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const b = await client.subscribe('articles' as never, { uid: 'b' } as never);
+
+		ws.message({ type: 'subscription', uid: 'b', event: 'create', data: [{ id: 2 }] });
+		ws.message({ type: 'subscription', uid: 'a', event: 'create', data: [{ id: 1 }] });
+
+		expect((await a.subscription[Symbol.asyncIterator]().next()).value).toMatchObject({ data: [{ id: 1 }] });
+		expect((await b.subscription[Symbol.asyncIterator]().next()).value).toMatchObject({ data: [{ id: 2 }] });
+	});
+
+	it('resolves two concurrent pulls in frame order', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never);
+		const sub = subscribeFrame(ws);
+		const it = subscription[Symbol.asyncIterator]();
+
+		const first = it.next();
+		const second = it.next();
+
+		ws.message({ type: 'subscription', uid: sub.uid, event: 'create', data: [{ id: 1 }] });
+		ws.message({ type: 'subscription', uid: sub.uid, event: 'update', data: [{ id: 2 }] });
+
+		expect((await first).value).toMatchObject({ event: 'create' });
+		expect((await second).value).toMatchObject({ event: 'update' });
+	});
+
+	it('sends exactly one unsubscribe on return() and leaves a sibling running', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const a = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const b = await client.subscribe('articles' as never, { uid: 'b' } as never);
+
+		await a.subscription[Symbol.asyncIterator]().return();
+
+		const unsubs = ws.messages().filter((m) => m.type === 'unsubscribe' && m.uid === 'a');
+		expect(unsubs).toHaveLength(1);
+
+		ws.message({ type: 'subscription', uid: 'b', event: 'create', data: [{ id: 2 }] });
+		expect((await b.subscription[Symbol.asyncIterator]().next()).value).toMatchObject({ event: 'create' });
+	});
+
+	it('rejects with the injected error on throw() and unblocks a pending pull', async () => {
+		const client = makeClient({ authMode: 'public' });
+		await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const it = subscription[Symbol.asyncIterator]();
+		const pending = it.next();
+
+		const error = new Error('consumer abort');
+		await expect(it.throw(error)).rejects.toBe(error);
+		await expect(pending).rejects.toBe(error);
+	});
+
+	it('routes a synchronous subscribe response to the owning channel', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const realSend = ws.send.bind(ws);
+
+		vi.spyOn(ws, 'send').mockImplementation((raw: string) => {
+			realSend(raw);
+			const parsed = JSON.parse(raw);
+
+			if (parsed.type === 'subscribe') {
+				ws.message({ type: 'subscription', uid: parsed.uid, event: 'init', data: [{ id: 9 }] });
+			}
+		});
+
+		const { subscription } = await client.subscribe('articles' as never);
+		const result = await subscription[Symbol.asyncIterator]().next();
+		expect(result.value).toMatchObject({ event: 'init', data: [{ id: 9 }] });
+	});
+
+	it('normalizes omitted and explicit-undefined uids and rejects empty or non-string ones', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		await client.subscribe('articles' as never);
+		expect(typeof subscribeFrame(ws).uid).toBe('string');
+
+		await client.subscribe('articles' as never, { uid: undefined } as never);
+		expect(subscribeFrame(ws).uid).not.toBe('undefined');
+
+		await expect(client.subscribe('articles' as never, { uid: '' } as never)).rejects.toThrow();
+		await expect(client.subscribe('articles' as never, { uid: 5 } as never)).rejects.toThrow();
+	});
+
+	it('skips an active explicit uid when generating', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		await client.subscribe('articles' as never, { uid: '1' } as never);
+		await client.subscribe('articles' as never);
+
+		const uids = ws
+			.messages()
+			.filter((m) => m.type === 'subscribe')
+			.map((m) => m.uid);
+
+		expect(uids).toContain('1');
+		expect(new Set(uids).size).toBe(uids.length);
+	});
+
+	it('does not mutate the caller-supplied options object', async () => {
+		const client = makeClient({ authMode: 'public' });
+		await openPublic(client);
+
+		const options = { query: { fields: ['id'] } } as any;
+		await client.subscribe('articles' as never, options);
+
+		expect('uid' in options).toBe(false);
+		expect(options.query).toEqual({ fields: ['id'] });
+	});
+
+	it('routes non-object and malformed frames to generic callbacks without shape routing', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const received: any[] = [];
+		client.onWebSocket('message', (m) => received.push(m));
+
+		ws.message('null');
+		ws.message('[1,2,3]');
+		ws.message('42');
+		ws.message('not json{');
+		await flush();
+
+		expect(received).toContainEqual([1, 2, 3]);
+		expect(received).toContain(42);
+	});
+
+	it('completes the handshake when the auth ack arrives synchronously during send', async () => {
+		const client = makeClient({ authMode: 'handshake' }, 'token-1');
+		const connecting = client.connect();
+		await flush();
+		const ws = MockWebSocket.last();
+
+		const realSend = ws.send.bind(ws);
+
+		vi.spyOn(ws, 'send').mockImplementation((raw: string) => {
+			realSend(raw);
+			if (JSON.parse(raw).type === 'auth') ws.message({ type: 'auth', status: 'ok' });
+		});
+
+		ws.open();
+		await connecting;
+		expect(await client.isConnected()).toBe(true);
+	});
+
+	it('fails every subscription and tears down the socket on receive-buffer overflow', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const it = subscription[Symbol.asyncIterator]();
+
+		for (let i = 0; i <= 1000; i++) {
+			ws.message({ type: 'subscription', uid: 'a', event: 'create', data: [{ id: i }] });
+		}
+
+		await flush();
+
+		await expect(it.next()).rejects.toBeInstanceOf(Error);
+		expect(ws.closed).toBe(true);
+
+		const reconnecting = client.connect();
+		await flush();
+		MockWebSocket.last().open();
+		await reconnecting;
+		expect(await client.isConnected()).toBe(true);
+	});
+
+	it('rejects one of two subscriptions that reserve the same explicit uid before open', async () => {
+		const client = makeClient({ authMode: 'public' });
+
+		const first = client.subscribe('articles' as never, { uid: 'dup' } as never);
+		const second = client.subscribe('articles' as never, { uid: 'dup' } as never);
+
+		await flush();
+		MockWebSocket.last().open();
+
+		const results = await Promise.allSettled([first, second]);
+		expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+		expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+	});
+
+	it('forwards a successful auth acknowledgement to generic message callbacks', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const received: any[] = [];
+		client.onWebSocket('message', (m) => received.push(m));
+
+		ws.message({ type: 'auth', status: 'ok' });
+		await flush();
+
+		expect(received).toContainEqual({ type: 'auth', status: 'ok' });
+	});
+
+	it('does not route a non-string subscription-shaped frame to its channel', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const it = subscription[Symbol.asyncIterator]();
+
+		ws.messageRaw({ type: 'subscription', uid: 'a', event: 'create', data: [{ id: 99 }] });
+		ws.message({ type: 'subscription', uid: 'a', event: 'create', data: [{ id: 1 }] });
+
+		const result = await it.next();
+		expect(result.value).toMatchObject({ data: [{ id: 1 }] });
+	});
+
+	it('does not let a stale iterator delete a successor that reused its uid', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const old = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const oldIt = old.subscription[Symbol.asyncIterator]();
+
+		ws.message({ type: 'subscribe', status: 'error', uid: 'a', error: { code: 'X', message: 'nope' } });
+		await expect(oldIt.next()).rejects.toMatchObject({ status: 'error' });
+
+		const successor = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const successorIt = successor.subscription[Symbol.asyncIterator]();
+
+		const before = ws.messages().filter((m) => m.type === 'unsubscribe' && m.uid === 'a').length;
+
+		await oldIt.return();
+		old.unsubscribe();
+
+		const after = ws.messages().filter((m) => m.type === 'unsubscribe' && m.uid === 'a').length;
+		expect(after).toBe(before);
+
+		ws.message({ type: 'subscription', uid: 'a', event: 'create', data: [{ id: 7 }] });
+		expect((await successorIt.next()).value).toMatchObject({ data: [{ id: 7 }] });
 	});
 });
