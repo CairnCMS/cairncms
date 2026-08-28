@@ -156,4 +156,79 @@ describe('OperationSequencer', () => {
 
 		expect(delivered).toEqual(['A', 'cA', 'B', 'B2']);
 	});
+
+	it('resolves the route promise when a fresh subscribe is handed off', async () => {
+		const { sequencer } = harness();
+		await expect(sequencer.route('x', 'subscribe', 'A')).resolves.toBeUndefined();
+	});
+
+	it('holds a reused subscribe route until the predecessor lifetime settles, then resolves', async () => {
+		const { sequencer, deliveries } = harness();
+
+		sequencer.route('x', 'subscribe', 'A');
+		await settle();
+		sequencer.route('x', 'complete', 'cA');
+		await settle();
+
+		const reuse = sequencer.route('x', 'subscribe', 'B');
+		let resolved = false;
+
+		void reuse.then(() => {
+			resolved = true;
+		});
+
+		await settle();
+		expect(resolved).toBe(false);
+
+		deliveries.get('A')!.resolve();
+		await settle();
+		expect(resolved).toBe(true);
+	});
+
+	it('resolves a route promise still waiting on its predecessor when the sequencer cancels', async () => {
+		const { sequencer } = harness();
+
+		sequencer.route('x', 'subscribe', 'A');
+		await settle();
+		sequencer.route('x', 'complete', 'cA');
+		await settle();
+
+		const reuse = sequencer.route('x', 'subscribe', 'B');
+		sequencer.cancel();
+
+		await expect(reuse).resolves.toBeUndefined();
+	});
+
+	it('settles a subscribe route and releases its lane when delivery throws synchronously', async () => {
+		const tracked: Promise<unknown>[] = [];
+
+		const sequencer = new OperationSequencer(
+			() => {
+				throw new Error('deliver failed');
+			},
+			(work) => tracked.push(work)
+		);
+
+		await expect(sequencer.route('x', 'subscribe', 'A')).resolves.toBeUndefined();
+		await settle();
+
+		expect(sequencer.size).toBe(0);
+	});
+
+	it('settles a complete route when its delivery throws synchronously', async () => {
+		const tracked: Promise<unknown>[] = [];
+
+		const sequencer = new OperationSequencer(
+			(frame) => {
+				if (frame === 'cA') throw new Error('deliver failed');
+				return new Promise<void>(() => undefined);
+			},
+			(work) => tracked.push(work)
+		);
+
+		sequencer.route('x', 'subscribe', 'A');
+		await settle();
+
+		await expect(sequencer.route('x', 'complete', 'cA')).resolves.toBeUndefined();
+	});
 });

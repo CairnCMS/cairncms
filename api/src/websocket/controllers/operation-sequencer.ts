@@ -32,15 +32,15 @@ export class OperationSequencer {
 		this.resolveStop();
 	}
 
-	route(id: string, type: 'subscribe' | 'complete', frame: string): void {
+	route(id: string, type: 'subscribe' | 'complete', frame: string): Promise<void> {
 		if (type === 'complete') {
-			this.routeComplete(id, frame);
-		} else {
-			this.routeSubscribe(id, frame);
+			return this.routeComplete(id, frame);
 		}
+
+		return this.routeSubscribe(id, frame);
 	}
 
-	private routeSubscribe(id: string, frame: string): void {
+	private routeSubscribe(id: string, frame: string): Promise<void> {
 		const lane = this.lanes.get(id) ?? { tail: Promise.resolve(), pending: 0, current: null };
 		this.lanes.set(id, lane);
 
@@ -74,6 +74,12 @@ export class OperationSequencer {
 			lane.current = generation;
 		}
 
+		let markHandedOff!: () => void;
+
+		const handoff = new Promise<void>((resolve) => {
+			markHandedOff = resolve;
+		});
+
 		const step = (async () => {
 			await Promise.race([priorTail, this.stopSignal]);
 			if (reuse && predecessor !== null) await Promise.race([predecessor.settled, this.stopSignal]);
@@ -81,32 +87,45 @@ export class OperationSequencer {
 			if (this.stopped) {
 				this.settleStart(lane, id, markStarted);
 				if (generation !== null && markSettled !== null) this.settleGeneration(lane, id, generation, markSettled);
+				markHandedOff();
 				return;
 			}
 
-			const lifetime = this.deliver(frame);
-			this.track(lifetime);
-			this.settleStart(lane, id, markStarted);
+			let lifetime: Promise<void> | null = null;
 
-			if (generation !== null && markSettled !== null) {
-				const boundGeneration = generation;
-				const boundSettle = markSettled;
+			try {
+				lifetime = this.deliver(frame);
+				this.track(lifetime);
+			} finally {
+				this.settleStart(lane, id, markStarted);
 
-				void lifetime
-					.catch(() => undefined)
-					.finally(() => this.settleGeneration(lane, id, boundGeneration, boundSettle));
+				if (generation !== null && markSettled !== null) {
+					if (lifetime === null) {
+						this.settleGeneration(lane, id, generation, markSettled);
+					} else {
+						const boundGeneration = generation;
+						const boundSettle = markSettled;
+
+						void lifetime
+							.catch(() => undefined)
+							.finally(() => this.settleGeneration(lane, id, boundGeneration, boundSettle));
+					}
+				}
+
+				markHandedOff();
 			}
 		})();
 
 		this.track(step.catch(() => undefined));
+		return handoff;
 	}
 
-	private routeComplete(id: string, frame: string): void {
+	private routeComplete(id: string, frame: string): Promise<void> {
 		const lane = this.lanes.get(id);
 
 		if (lane === undefined) {
 			this.track(this.deliver(frame));
-			return;
+			return Promise.resolve();
 		}
 
 		const priorTail = lane.tail;
@@ -122,19 +141,31 @@ export class OperationSequencer {
 
 		lane.tail = started;
 
+		let markHandedOff!: () => void;
+
+		const handoff = new Promise<void>((resolve) => {
+			markHandedOff = resolve;
+		});
+
 		const step = (async () => {
 			await Promise.race([priorTail, this.stopSignal]);
 
 			if (this.stopped) {
 				this.settleStart(lane, id, markStarted);
+				markHandedOff();
 				return;
 			}
 
-			this.track(this.deliver(frame));
-			this.settleStart(lane, id, markStarted);
+			try {
+				this.track(this.deliver(frame));
+			} finally {
+				this.settleStart(lane, id, markStarted);
+				markHandedOff();
+			}
 		})();
 
 		this.track(step.catch(() => undefined));
+		return handoff;
 	}
 
 	private settleStart(lane: OperationLane, id: string, markStarted: () => void): void {

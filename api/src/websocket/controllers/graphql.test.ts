@@ -6,11 +6,14 @@ import type { Knex } from 'knex';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { WebSocket } from 'ws';
+import { WebSocket, type RawData } from 'ws';
 import { getEnv } from '../../env.js';
 import type { RateLimitConsumption } from '../../middleware/rate-limiter-ip.js';
 import { Admission } from '../admission.js';
+import { PENDING_COMMAND_LIMIT } from '../config.js';
+import type { WebSocketMessage } from '../messages.js';
 import { SubscriptionRegistry } from '../subscriptions.js';
+import type { SocketClient } from './base.js';
 
 const REDACTED_MESSAGE = 'An unexpected error occurred.';
 
@@ -79,6 +82,51 @@ vi.mock('../../utils/get-permissions.js', () => ({
 const { GraphQLController } = await import('./graphql.js');
 
 const SCHEMA = { collections: {}, relations: [] } as unknown as SchemaOverview;
+
+class GatedGraphQLController extends GraphQLController {
+	public setupGate: (() => Promise<void>) | null = null;
+	public readonly gateEntered = deferred<void>();
+	public readonly completeRouted = deferred<void>();
+	public readonly reuseEntering = deferred<void>();
+	public pingsReceived = 0;
+	private subscribeCount = 0;
+
+	protected override createClient(ws: SocketClient, auth: SocketClient['auth'], ip: string): SocketClient {
+		const client = super.createClient(ws, auth, ip);
+
+		ws.on('message', (data: RawData) => {
+			try {
+				if ((JSON.parse(data.toString()) as { type?: string }).type === 'ping') this.pingsReceived++;
+			} catch {
+				// Non-JSON frames are irrelevant to the ping accounting.
+			}
+		});
+
+		return client;
+	}
+
+	protected override async refreshBeforeCommand(client: SocketClient, schema: SchemaOverview): Promise<boolean> {
+		const gate = this.setupGate;
+
+		if (gate !== null) {
+			this.setupGate = null;
+			this.gateEntered.resolve();
+			await gate();
+		}
+
+		return super.refreshBeforeCommand(client, schema);
+	}
+
+	protected override async routeMessage(client: SocketClient, message: WebSocketMessage): Promise<void> {
+		const type = (message as { type?: string }).type;
+
+		if (type === 'subscribe' && ++this.subscribeCount === 2) this.reuseEntering.resolve();
+
+		await super.routeMessage(client, message);
+
+		if (type === 'complete') this.completeRouted.resolve();
+	}
+}
 
 const env = () => getEnv() as Record<string, unknown>;
 
@@ -150,6 +198,7 @@ interface HarnessOptions {
 	admission?: Admission;
 	database?: Knex;
 	consumeIpRateLimit?: (ip: string) => Promise<RateLimitConsumption>;
+	controllerClass?: typeof GraphQLController;
 }
 
 interface Harness {
@@ -169,7 +218,9 @@ async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
 	const database = options.database ?? ({} as Knex);
 	const getSchema = vi.fn(async (_options?: { database?: Knex }) => SCHEMA);
 
-	const controller = new GraphQLController({
+	const ControllerClass = options.controllerClass ?? GraphQLController;
+
+	const controller = new ControllerClass({
 		transport: 'graphql',
 		path: '/graphql',
 		authMode: options.authMode ?? 'public',
@@ -680,5 +731,40 @@ describe('GraphQL heartbeat', () => {
 		await vi.waitFor(() => expect(admission.reserve('graphql', '9.9.9.9')).not.toBeNull());
 
 		await harness.controller.terminate();
+	});
+});
+
+describe('GraphQL operation backpressure', () => {
+	it('holds same-id backlog in the base queue, then closes 1013 with no item frame on overflow', async () => {
+		harness = await createHarness({ authMode: 'public', controllerClass: GatedGraphQLController });
+		const controller = harness.controller as GatedGraphQLController;
+
+		const stall = deferred<void>();
+		controller.setupGate = () => stall.promise;
+
+		try {
+			const { ws, frames, closed } = await connect(harness);
+			send(ws, { type: 'connection_init' });
+			await waitForAck(frames);
+
+			send(ws, { type: 'subscribe', id: 'X', payload: { query: 'subscription { articles_mutated }' } });
+			await controller.gateEntered.promise;
+
+			send(ws, { type: 'complete', id: 'X' });
+			await controller.completeRouted.promise;
+
+			send(ws, { type: 'subscribe', id: 'X', payload: { query: 'subscription { articles_mutated }' } });
+			await controller.reuseEntering.promise;
+
+			for (let index = 0; index < PENDING_COMMAND_LIMIT; index++) send(ws, { type: 'ping' });
+			await vi.waitFor(() => expect(controller.pingsReceived).toBe(PENDING_COMMAND_LIMIT));
+			expect(ws.readyState).toBe(WebSocket.OPEN);
+
+			send(ws, { type: 'ping' });
+			expect((await closed).code).toBe(1013);
+			expect(frames.some((frame) => frame['error']?.code === 'TOO_MANY_PENDING')).toBe(false);
+		} finally {
+			stall.resolve();
+		}
 	});
 });

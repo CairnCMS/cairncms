@@ -114,7 +114,7 @@ export class GraphQLController extends SocketController {
 		const id = (message as { id?: unknown }).id;
 
 		if ((message.type === 'subscribe' || message.type === 'complete') && typeof id === 'string') {
-			adapter.sequencer.route(id, message.type, frame);
+			await adapter.sequencer.route(id, message.type, frame);
 			return;
 		}
 
@@ -125,7 +125,7 @@ export class GraphQLController extends SocketController {
 	private retireOperation(client: SocketClient, id: string): void {
 		const adapter = this.adapters.get(client);
 		if (adapter === undefined || adapter.onMessage === null) return;
-		adapter.sequencer.route(id, 'complete', JSON.stringify({ id, type: 'complete' }));
+		void adapter.sequencer.route(id, 'complete', JSON.stringify({ id, type: 'complete' }));
 	}
 
 	private deliverFrame(client: SocketClient, frame: string): Promise<void> {
@@ -164,6 +164,10 @@ export class GraphQLController extends SocketController {
 	}
 
 	protected override rejectRateLimitedMessage(client: SocketClient): void {
+		this.stop(client, { code: CLOSE_TRY_AGAIN_LATER });
+	}
+
+	protected override rejectPendingOverflow(client: SocketClient): void {
 		this.stop(client, { code: CLOSE_TRY_AGAIN_LATER });
 	}
 

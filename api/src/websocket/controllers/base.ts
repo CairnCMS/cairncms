@@ -602,8 +602,7 @@ export abstract class SocketController {
 		if (state === undefined || client.stopping || this.closing) return;
 
 		if (state.waiting.length >= PENDING_COMMAND_LIMIT) {
-			this.send(client, this.errorFrame('TOO_MANY_PENDING'));
-			this.stop(client, { code: CLOSE_TRY_AGAIN_LATER });
+			this.rejectPendingOverflow(client);
 			return;
 		}
 
@@ -706,6 +705,11 @@ export abstract class SocketController {
 	protected rejectRateLimitedMessage(client: SocketClient, preConnect: boolean): void {
 		this.send(client, this.errorFrame('REQUESTS_EXCEEDED'));
 		if (preConnect) this.stop(client);
+	}
+
+	protected rejectPendingOverflow(client: SocketClient): void {
+		this.send(client, this.errorFrame('TOO_MANY_PENDING'));
+		this.stop(client, { code: CLOSE_TRY_AGAIN_LATER });
 	}
 
 	protected rejectMalformedFrame(client: SocketClient, preConnect: boolean): void {
