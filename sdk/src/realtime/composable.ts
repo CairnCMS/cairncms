@@ -91,6 +91,9 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 		// The teardown of the connection attempt currently in setup, so a manual disconnect can cancel it.
 		let pendingConnect: { teardown: (reason: unknown) => void; promise: Promise<WebSocketInterface> } | null = null;
 
+		// Late events may mutate state only for the current connection attempt.
+		let currentAttempt: object | null = null;
+
 		// Cancels a pending reconnect backoff so a manual disconnect stops recovery without waiting out the delay.
 		const noReconnectDelay = () => {
 			/* no backoff is currently pending */
@@ -103,8 +106,15 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 
 		let receiveBufferFailed = false;
 
+		// Initial authentication does not consume the TOKEN_EXPIRED retry budget.
+		let lastRetriedToken: string | null = null;
+		let warnedSameToken = false;
+		let refreshingSocket: WebSocketInterface | null = null;
+
 		const onOverflow = (error: Error) => {
 			receiveBufferFailed = true;
+			lastRetriedToken = null;
+			warnedSameToken = false;
 			subscriptions.clear();
 			debug('warn', error.message);
 
@@ -120,6 +130,13 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 		const registry = new ChannelRegistry(onOverflow);
 
 		let resolveAuthAck: ((message: Record<string, any>) => void) | null = null;
+
+		const finalizeSubscriptions = (settle: () => void) => {
+			lastRetriedToken = null;
+			warnedSameToken = false;
+			settle();
+			subscriptions.clear();
+		};
 
 		const hasAuth = (client: AuthWSClient<Schema>) => 'getToken' in client;
 
@@ -201,8 +218,10 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 						return;
 					} catch (error) {
 						debug('warn', 'Replay after reconnect failed; aborting recovery.', error);
-						registry.closeAll();
-						subscriptions.clear();
+
+						finalizeSubscriptions(() =>
+							registry.failAll(new Error('Realtime subscription replay failed after reconnect.'))
+						);
 
 						if (state.code === 'open') {
 							try {
@@ -217,8 +236,7 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 				}
 
 				debug('warn', 'Reconnect retries exhausted.');
-				registry.closeAll();
-				subscriptions.clear();
+				finalizeSubscriptions(() => registry.failAll(new Error('Realtime reconnect attempts were exhausted.')));
 			})();
 
 			reconnectState.active = run.finally(() => {
@@ -270,17 +288,39 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 		async function handleAuthError(message: WebSocketAuthError, currentClient: AuthWSClient<Schema>) {
 			if (state.code !== 'open') return;
 
+			// Re-authentication may finish after this socket has been replaced.
+			const socket = state.connection;
+
 			if (message.error.code === 'TOKEN_EXPIRED') {
 				debug('warn', 'Authentication token expired!');
 
-				if (hasAuth(currentClient)) {
-					const access_token = await currentClient.getToken();
+				if (hasAuth(currentClient) && refreshingSocket !== socket) {
+					refreshingSocket = socket;
 
-					if (!access_token) {
-						throw Error('No token for re-authenticating the websocket');
+					try {
+						const access_token = await currentClient.getToken();
+
+						if (!access_token) {
+							throw Error('No token for re-authenticating the websocket');
+						}
+
+						if (access_token === lastRetriedToken) {
+							if (!warnedSameToken) {
+								debug('warn', 'The refreshed token matches the expired one, keeping the current identity.');
+								warnedSameToken = true;
+							}
+
+							return;
+						}
+
+						if (state.code === 'open' && state.connection === socket) {
+							socket.send(auth({ access_token }));
+							lastRetriedToken = access_token;
+							warnedSameToken = false;
+						}
+					} finally {
+						if (refreshingSocket === socket) refreshingSocket = null;
 					}
-
-					if (state.code === 'open') state.connection.send(auth({ access_token }));
 				}
 			}
 
@@ -398,11 +438,17 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 				// Join the in-flight attempt, including the handshake window where the state already reads "open".
 				if (pendingConnect) return pendingConnect.promise;
 
+				if (state.code === 'open') return state.connection;
+
 				if (state.code !== 'closed') {
 					throw new Error(`Cannot connect when state is "${state.code}"`);
 				}
 
-				// we need to use THIS here instead of client to access overridden functions
+				// Supersede late events even when socket construction fails.
+				const attempt = {};
+				currentAttempt = attempt;
+
+				// Use the composed client so overridden authentication methods remain available.
 				const self = this as AuthWSClient<Schema>;
 				let ws: WebSocketInterface;
 
@@ -412,7 +458,6 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 
 					ws = new client.globals.WebSocket(url);
 				} catch (error) {
-					// nothing was registered yet, so surface the failure without leaving a pending attempt behind
 					return Promise.reject(error);
 				}
 
@@ -552,6 +597,13 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 				};
 
 				const onClose = (evt: CloseEvent) => {
+					// A superseded socket may clean up only its own listeners.
+					if (currentAttempt !== attempt) {
+						removeConnectListeners();
+						detachRouter?.();
+						return;
+					}
+
 					debug('info', `Connection closed.`);
 					dispatchEvent(eventHandlers['close'], ws, evt);
 					clearTimeout(connectTimeout);
@@ -565,13 +617,15 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 					state = { code: 'closed' };
 					if (!wasSettled) reject(evt);
 
-					// Only an established connection that drops unexpectedly triggers recovery, and it retains the channels
-					// for replay. Any terminal close instead releases every channel so its iterator completes.
+					// Recovery retains channels until replay succeeds or the reconnect loop terminates.
 					if (established && !wasManuallyDisconnected && !receiveBufferFailed && config.reconnect) {
 						reconnect(self);
-					} else {
-						registry.closeAll();
-						subscriptions.clear();
+					} else if (wasManuallyDisconnected || !reconnectState.active) {
+						finalizeSubscriptions(
+							wasManuallyDisconnected
+								? () => registry.closeAll()
+								: () => registry.failAll(new Error('The realtime connection closed.'))
+						);
 					}
 				};
 
@@ -592,6 +646,8 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 			disconnect() {
 				wasManuallyDisconnected = true;
 				cancelReconnectDelay();
+				lastRetriedToken = null;
+				warnedSameToken = false;
 
 				// Prioritize an in-progress attempt: during the handshake the state is already open, so a plain close
 				// would race the pending setup instead of tearing it down.
@@ -599,7 +655,13 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 					pendingConnect.teardown('Disconnected during connection setup.');
 				} else if (state.code === 'open') {
 					state.connection.close();
+					// A fresh connect must not reuse a socket already closing asynchronously.
+					state = { code: 'closed' };
 				}
+
+				// Settle subscriptions before a late close can be superseded by a new attempt.
+				registry.closeAll();
+				subscriptions.clear();
 			},
 			onWebSocket(event: WebSocketEvents, callback: (this: WebSocketInterface, ev: Event | CloseEvent | any) => any) {
 				// The router hands message callbacks the already-parsed frame, so there is no second parse here.

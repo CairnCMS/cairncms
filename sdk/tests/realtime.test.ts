@@ -1441,3 +1441,407 @@ describe('realtime connection attempt', () => {
 		releaseToken('token');
 	});
 });
+
+describe('realtime auth and reconnect ownership', () => {
+	it('re-authenticates at most once for an unchanged token after TOKEN_EXPIRED', async () => {
+		const client = makeClient({ authMode: 'handshake' }, 'expired-token');
+		const ws = await openHandshake(client);
+
+		ws.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'expired' } });
+		await flush();
+		ws.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'expired' } });
+		await flush();
+
+		expect(ws.messages().filter((m) => m.type === 'auth')).toHaveLength(2);
+	});
+
+	it('re-authenticates again when the refreshed token changes after expiry', async () => {
+		let currentToken = 'token-1';
+
+		const client = track(
+			createCairnCMS('http://localhost:8055', { globals: { WebSocket: MockWebSocket as any } })
+				.with(() => ({ getToken: async () => currentToken }))
+				.with(realtime({ authMode: 'handshake' }))
+		);
+
+		const connecting = client.connect();
+		await flush();
+		const ws = MockWebSocket.last();
+		ws.open();
+		await flush();
+		ws.message({ type: 'auth', status: 'ok' });
+		await connecting;
+
+		ws.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'x' } });
+		await flush();
+		currentToken = 'token-2';
+		ws.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'x' } });
+		await flush();
+
+		const tokens = ws
+			.messages()
+			.filter((m) => m.type === 'auth')
+			.map((m) => m.access_token);
+
+		expect(tokens).toContain('token-1');
+		expect(tokens).toContain('token-2');
+	});
+
+	it('closes active subscriptions cleanly on manual disconnect', async () => {
+		const client = makeClient({ authMode: 'public' });
+		await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const it = subscription[Symbol.asyncIterator]();
+
+		client.disconnect();
+		await flush();
+
+		expect(await it.next()).toEqual({ value: undefined, done: true });
+	});
+
+	it('fails active subscriptions when the connection drops with reconnect disabled', async () => {
+		const client = makeClient({ authMode: 'public' });
+		const ws = await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const it = subscription[Symbol.asyncIterator]();
+
+		ws.serverClose(1006);
+
+		await expect(it.next()).rejects.toBeInstanceOf(Error);
+	});
+
+	it('fails active subscriptions when reconnect attempts are exhausted', async () => {
+		const client = makeClient(
+			{ authMode: 'public', connect: { timeout: 20 }, reconnect: { retries: 2, delay: 10 } },
+			'token'
+		);
+
+		const ws = await openPublic(client);
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'a' } as never);
+		const it = subscription[Symbol.asyncIterator]();
+
+		ws.serverClose(1006);
+
+		await expect(it.next()).rejects.toBeInstanceOf(Error);
+	});
+
+	it('joins a manually re-established connection during reconnect and replays each subscription once', async () => {
+		const client = makeClient({ authMode: 'public', reconnect: { retries: 5, delay: 10 } }, 'token');
+		const ws1 = await openPublic(client);
+		await client.subscribe('articles' as never, { uid: 'a' } as never);
+
+		ws1.serverClose(1000);
+		await flush();
+
+		const reconnecting = client.connect();
+		await flush();
+		const ws2 = MockWebSocket.last();
+		ws2.open();
+		await reconnecting;
+
+		await wait(300);
+
+		expect(ws2.messages().filter((m) => m.type === 'subscribe' && m.uid === 'a')).toHaveLength(1);
+		expect(MockWebSocket.instances.length).toBe(2);
+	});
+
+	it('does not authenticate a replacement socket with a delayed token refresh', async () => {
+		let getTokenCalls = 0;
+		let releaseRefresh!: (value: string) => void;
+
+		const client = track(
+			createCairnCMS('http://localhost:8055', { globals: { WebSocket: MockWebSocket as any } })
+				.with(() => ({
+					getToken: () => {
+						getTokenCalls += 1;
+						if (getTokenCalls === 2) return new Promise<string>((resolve) => (releaseRefresh = resolve));
+						return Promise.resolve('token-1');
+					},
+				}))
+				.with(realtime({ authMode: 'handshake' }))
+		);
+
+		const connectingA = client.connect();
+		await flush();
+		const a = MockWebSocket.last();
+		a.open();
+		await flush();
+		a.message({ type: 'auth', status: 'ok' });
+		await connectingA;
+
+		a.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'x' } });
+		await flush();
+
+		a.serverClose(1006);
+		await flush();
+
+		const connectingB = client.connect();
+		await flush();
+		const b = MockWebSocket.last();
+		b.open();
+		await flush();
+		b.message({ type: 'auth', status: 'ok' });
+		await connectingB;
+
+		releaseRefresh('token-2');
+		await flush();
+
+		expect(
+			b
+				.messages()
+				.filter((m) => m.type === 'auth')
+				.every((m) => m.access_token !== 'token-2')
+		).toBe(true);
+	});
+
+	it('serializes concurrent token refreshes so only one runs', async () => {
+		let getTokenCalls = 0;
+		let releaseRefresh!: (value: string) => void;
+
+		const client = track(
+			createCairnCMS('http://localhost:8055', { globals: { WebSocket: MockWebSocket as any } })
+				.with(() => ({
+					getToken: () => {
+						getTokenCalls += 1;
+						if (getTokenCalls === 2) return new Promise<string>((resolve) => (releaseRefresh = resolve));
+						return Promise.resolve('token-1');
+					},
+				}))
+				.with(realtime({ authMode: 'handshake' }))
+		);
+
+		const connecting = client.connect();
+		await flush();
+		const ws = MockWebSocket.last();
+		ws.open();
+		await flush();
+		ws.message({ type: 'auth', status: 'ok' });
+		await connecting;
+
+		ws.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'x' } });
+		await flush();
+		ws.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'x' } });
+		await flush();
+
+		expect(getTokenCalls).toBe(2);
+
+		releaseRefresh('token-2');
+		await flush();
+	});
+
+	it('ignores a superseded socket late close after a manual disconnect and reconnect', async () => {
+		class ManualCloseWebSocket extends MockWebSocket {
+			override close(): void {
+				/* close is triggered explicitly */
+			}
+		}
+
+		const client = track(
+			createCairnCMS('http://localhost:8055', { globals: { WebSocket: ManualCloseWebSocket as any } })
+				.with(() => ({ getToken: async () => 'token' }))
+				.with(realtime({ authMode: 'public', reconnect: { retries: 3, delay: 10 } }))
+		);
+
+		const connectingA = client.connect();
+		await flush();
+		const a = MockWebSocket.last();
+		a.open();
+		await connectingA;
+		await client.subscribe('articles' as never, { uid: 'x' } as never);
+
+		client.disconnect();
+		const reconnecting = client.connect();
+		await flush();
+		const b = MockWebSocket.last();
+		b.open();
+		await reconnecting;
+
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'y' } as never);
+
+		a.serverClose(1006);
+		await flush();
+
+		b.message({ type: 'subscription', uid: 'y', event: 'create', data: [{ id: 1 }] });
+		expect((await subscription[Symbol.asyncIterator]().next()).value).toMatchObject({ data: [{ id: 1 }] });
+		expect(MockWebSocket.instances.length).toBe(2);
+	});
+
+	it('fails iterators and closes the replacement socket when replay fails after reconnect', async () => {
+		const client = makeClient({ authMode: 'public', reconnect: { retries: 3, delay: 10 } }, 'token');
+		const a = await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'x' } as never);
+		const pending = subscription[Symbol.asyncIterator]().next();
+
+		a.serverClose(1006);
+		const b = await waitForSocketCount(2);
+
+		vi.spyOn(b, 'send').mockImplementation(() => {
+			throw new Error('send failed');
+		});
+
+		b.open();
+
+		await expect(pending).rejects.toBeInstanceOf(Error);
+
+		await wait(20);
+		expect(b.closed).toBe(true);
+	});
+
+	it('preserves subscriptions when a reconnect attempt fails before a later attempt succeeds', async () => {
+		const client = makeClient({ authMode: 'public', reconnect: { retries: 5, delay: 10 } }, 'token');
+		const a = await openPublic(client);
+
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'x' } as never);
+		const pending = subscription[Symbol.asyncIterator]().next();
+
+		a.serverClose(1006);
+
+		const b1 = await waitForSocketCount(2);
+		b1.serverClose(1006);
+
+		const b2 = await waitForSocketCount(3);
+		b2.open();
+
+		await vi.waitFor(() => expect(b2.messages().some((m) => m.type === 'subscribe' && m.uid === 'x')).toBe(true));
+		b2.message({ type: 'subscription', uid: 'x', event: 'create', data: [{ id: 1 }] });
+
+		expect((await pending).value).toMatchObject({ data: [{ id: 1 }] });
+	});
+
+	it('refreshes the replacement socket while an old socket refresh is still pending', async () => {
+		let getTokenCalls = 0;
+		let releaseRefresh!: (value: string) => void;
+
+		const client = track(
+			createCairnCMS('http://localhost:8055', { globals: { WebSocket: MockWebSocket as any } })
+				.with(() => ({
+					getToken: () => {
+						getTokenCalls += 1;
+						if (getTokenCalls === 2) return new Promise<string>((resolve) => (releaseRefresh = resolve));
+						return Promise.resolve('token-1');
+					},
+				}))
+				.with(realtime({ authMode: 'handshake' }))
+		);
+
+		const connectingA = client.connect();
+		await flush();
+		const a = MockWebSocket.last();
+		a.open();
+		await flush();
+		a.message({ type: 'auth', status: 'ok' });
+		await connectingA;
+
+		a.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'x' } });
+		await flush();
+
+		a.serverClose(1006);
+		await flush();
+
+		const connectingB = client.connect();
+		await flush();
+		const b = MockWebSocket.last();
+		b.open();
+		await flush();
+		b.message({ type: 'auth', status: 'ok' });
+		await connectingB;
+
+		b.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'x' } });
+		await flush();
+
+		expect(b.messages().filter((m) => m.type === 'auth')).toHaveLength(2);
+
+		releaseRefresh('token-2');
+		await flush();
+
+		expect(
+			b
+				.messages()
+				.filter((m) => m.type === 'auth')
+				.every((m) => m.access_token !== 'token-2')
+		).toBe(true);
+	});
+
+	it('does not restart recovery when a reconnect constructor throws and the old close arrives late', async () => {
+		let throwOnConstruct = false;
+
+		class MaybeThrowingSocket extends MockWebSocket {
+			constructor(url: string) {
+				super(url);
+				if (throwOnConstruct) throw new Error('constructor boom');
+			}
+
+			override close(): void {
+				/* close is triggered explicitly */
+			}
+		}
+
+		const client = track(
+			createCairnCMS('http://localhost:8055', { globals: { WebSocket: MaybeThrowingSocket as any } })
+				.with(() => ({ getToken: async () => 'token' }))
+				.with(realtime({ authMode: 'public', reconnect: { retries: 3, delay: 10 } }))
+		);
+
+		const connectingA = client.connect();
+		await flush();
+		const a = MockWebSocket.last();
+		a.open();
+		await connectingA;
+		await client.subscribe('articles' as never, { uid: 'x' } as never);
+
+		client.disconnect();
+
+		throwOnConstruct = true;
+		await expect(client.connect()).rejects.toBeDefined();
+		throwOnConstruct = false;
+
+		const backoffDelays: number[] = [];
+		const realSetTimeout = globalThis.setTimeout;
+
+		vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: any, ms?: number) => {
+			if (typeof ms === 'number' && ms >= 100 && ms < 1000) backoffDelays.push(ms);
+			return realSetTimeout(fn, ms);
+		}) as any);
+
+		a.serverClose(1006);
+		await wait(50);
+
+		expect(backoffDelays).toHaveLength(0);
+	});
+
+	it('grants a fresh connection a new token retry after reconnect exhaustion', async () => {
+		const client = makeClient(
+			{ authMode: 'handshake', connect: { timeout: 20 }, reconnect: { retries: 2, delay: 10 } },
+			'T'
+		);
+
+		const a = await openHandshake(client);
+
+		const { subscription } = await client.subscribe('articles' as never, { uid: 'x' } as never);
+		const pending = subscription[Symbol.asyncIterator]().next();
+
+		a.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'x' } });
+		await flush();
+		expect(a.messages().filter((m) => m.type === 'auth')).toHaveLength(2);
+
+		a.serverClose(1006);
+
+		await expect(pending).rejects.toBeInstanceOf(Error);
+
+		const connectingB = client.connect();
+		await flush();
+		const b = MockWebSocket.last();
+		b.open();
+		await flush();
+		b.message({ type: 'auth', status: 'ok' });
+		await connectingB;
+
+		b.message({ type: 'auth', status: 'error', error: { code: 'TOKEN_EXPIRED', message: 'x' } });
+		await flush();
+
+		expect(b.messages().filter((m) => m.type === 'auth')).toHaveLength(2);
+	});
+});
