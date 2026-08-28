@@ -1328,3 +1328,116 @@ describe('realtime SDK channel ingress', () => {
 		expect((await successorIt.next()).value).toMatchObject({ data: [{ id: 7 }] });
 	});
 });
+
+describe('realtime connection attempt', () => {
+	function hangingTokenClient(config: Parameters<typeof realtime>[0], token: Promise<string>) {
+		return track(
+			createCairnCMS('http://localhost:8055', { globals: { WebSocket: MockWebSocket as any } })
+				.with(() => ({ getToken: () => token }))
+				.with(realtime(config))
+		);
+	}
+
+	it('tears down a handshake stuck on token retrieval when the deadline fires, and a late token sends nothing', async () => {
+		let releaseToken!: (value: string) => void;
+
+		const pendingToken = new Promise<string>((resolve) => {
+			releaseToken = resolve;
+		});
+
+		const client = hangingTokenClient({ authMode: 'handshake', connect: { timeout: 20 } }, pendingToken);
+
+		const connecting = client.connect();
+		await flush();
+		const ws = MockWebSocket.last();
+		ws.open();
+
+		await expect(connecting).rejects.toBeDefined();
+		expect(ws.messages().some((m) => m.type === 'auth')).toBe(false);
+
+		releaseToken('late-token');
+		await flush();
+		expect(ws.messages().some((m) => m.type === 'auth')).toBe(false);
+	});
+
+	it('shares one attempt across concurrent connect() calls during the handshake', async () => {
+		let releaseToken!: (value: string) => void;
+
+		const pendingToken = new Promise<string>((resolve) => {
+			releaseToken = resolve;
+		});
+
+		const client = hangingTokenClient({ authMode: 'handshake' }, pendingToken);
+
+		const first = client.connect();
+		await flush();
+		const ws = MockWebSocket.last();
+		ws.open();
+		await flush();
+
+		const second = client.connect();
+		releaseToken('token');
+		await flush();
+		ws.message({ type: 'auth', status: 'ok' });
+
+		const [a, b] = await Promise.all([first, second]);
+		expect(a).toBe(b);
+		expect(MockWebSocket.instances.length).toBe(1);
+	});
+
+	it('arms only the connect deadline during the handshake, with no separate acknowledgement timer', async () => {
+		const delays: number[] = [];
+		const realSetTimeout = globalThis.setTimeout;
+
+		vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: any, ms?: number) => {
+			if (typeof ms === 'number') delays.push(ms);
+			return realSetTimeout(fn, ms);
+		}) as any);
+
+		const client = makeClient({ authMode: 'handshake', connect: { timeout: 7000 } }, 'token');
+		const connecting = client.connect();
+		await flush();
+		const ws = MockWebSocket.last();
+		ws.open();
+		await flush();
+		ws.message({ type: 'auth', status: 'ok' });
+		await connecting;
+
+		expect(delays).toContain(7000);
+		expect(delays).not.toContain(1000);
+	});
+
+	it('does not reconnect when the socket closes during an incomplete handshake setup', async () => {
+		let releaseToken!: (value: string) => void;
+
+		const pendingToken = new Promise<string>((resolve) => {
+			releaseToken = resolve;
+		});
+
+		const client = hangingTokenClient({ authMode: 'handshake', reconnect: { retries: 3, delay: 10 } }, pendingToken);
+
+		const connecting = client.connect();
+		await flush();
+		const ws = MockWebSocket.last();
+		ws.open();
+		await flush();
+
+		const backoffDelays: number[] = [];
+		const realSetTimeout = globalThis.setTimeout;
+
+		vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: any, ms?: number) => {
+			if (typeof ms === 'number' && ms >= 100 && ms < 1000) backoffDelays.push(ms);
+			return realSetTimeout(fn, ms);
+		}) as any);
+
+		ws.serverClose(1000);
+
+		await expect(connecting).rejects.toBeDefined();
+		await wait(50);
+
+		expect(backoffDelays).toHaveLength(0);
+		expect(MockWebSocket.instances.length).toBe(1);
+
+		releaseToken('token');
+	});
+});

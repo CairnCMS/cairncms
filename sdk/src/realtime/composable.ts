@@ -89,7 +89,7 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 		let wasManuallyDisconnected = false;
 
 		// The teardown of the connection attempt currently in setup, so a manual disconnect can cancel it.
-		let pendingConnect: { teardown: (reason: unknown) => void } | null = null;
+		let pendingConnect: { teardown: (reason: unknown) => void; promise: Promise<WebSocketInterface> } | null = null;
 
 		// Cancels a pending reconnect backoff so a manual disconnect stops recovery without waiting out the delay.
 		const noReconnectDelay = () => {
@@ -395,11 +395,10 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 			async connect() {
 				wasManuallyDisconnected = false;
 
-				if (state.code === 'connecting') {
-					// wait for the current connection to open
-					return await state.connection;
-				} else if (state.code !== 'closed') {
-					// error state
+				// Join the in-flight attempt, including the handshake window where the state already reads "open".
+				if (pendingConnect) return pendingConnect.promise;
+
+				if (state.code !== 'closed') {
 					throw new Error(`Cannot connect when state is "${state.code}"`);
 				}
 
@@ -433,8 +432,8 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 
 				// `settled` marks the connect attempt as resolved or torn down, so a late event is ignored.
 				let settled = false;
-				// `didOpen` records whether the socket ever reached the open state, which gates automatic reconnection.
-				let didOpen = false;
+				// `established` records a fully settled setup (post-ack in handshake mode), which gates reconnection.
+				let established = false;
 				let connectTimeout: ReturnType<typeof setTimeout> | undefined;
 				let detachRouter: (() => void) | null = null;
 
@@ -477,7 +476,6 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 					if (settled) return;
 					debug('info', `Connection open.`);
 
-					didOpen = true;
 					receiveBufferFailed = false;
 					state = { code: 'open', connection: ws, firstMessage: true };
 
@@ -535,6 +533,7 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 
 					if (settled) return;
 					settled = true;
+					established = true;
 					clearTimeout(connectTimeout);
 					pendingConnect = null;
 					dispatchEvent(eventHandlers['open'], ws, evt);
@@ -568,7 +567,7 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 
 					// Only an established connection that drops unexpectedly triggers recovery, and it retains the channels
 					// for replay. Any terminal close instead releases every channel so its iterator completes.
-					if (didOpen && !wasManuallyDisconnected && !receiveBufferFailed && config.reconnect) {
+					if (established && !wasManuallyDisconnected && !receiveBufferFailed && config.reconnect) {
 						reconnect(self);
 					} else {
 						registry.closeAll();
@@ -576,7 +575,7 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 					}
 				};
 
-				pendingConnect = { teardown };
+				pendingConnect = { teardown, promise: connectPromise };
 
 				if (config.connect) {
 					connectTimeout = setTimeout(() => {
