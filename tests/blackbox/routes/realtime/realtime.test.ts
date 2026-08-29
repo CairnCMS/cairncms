@@ -8,7 +8,7 @@ import { v4 as uuid } from 'uuid';
 import request from 'supertest';
 import { WebSocket as WsImpl } from 'ws';
 import { createCairnCMS, realtime, staticToken } from '@cairncms/sdk';
-import { collectionFirst, collectionScoped, realtimeUsers, TENANT_A, TENANT_B } from './realtime.seed';
+import { collectionChild, collectionFirst, collectionScoped, realtimeUsers, TENANT_A, TENANT_B } from './realtime.seed';
 
 // Cross-instance tests require a database shared by multiple processes.
 const supportedVendors = vendors.filter((vendor) => vendor !== 'sqlite3');
@@ -20,6 +20,10 @@ const HANDSHAKE = { authMode: 'handshake' as const, auth: { access_token: TOKEN 
 const STRICT = { authMode: 'strict' as const, auth: { access_token: TOKEN } };
 const GQL_DATA = { event: true, data: { id: true, name: true } };
 const GQL_DELETE = { event: true, key: true, data: { id: true, name: true } };
+
+const MAIN_OFFSET = 600;
+const PEER_OFFSET = 650;
+const GATE_OFFSET = 700;
 
 function clearMessenger(block: Record<string, string>): void {
 	for (const key of Object.keys(block)) {
@@ -106,6 +110,224 @@ async function deleteItem(url: string, collection: string, id: any): Promise<voi
 	expect(response.statusCode).toBe(204);
 }
 
+type PrimeConn = {
+	getMessageCount(uid?: string | number): number;
+	getMessages(count: number, options?: { uid?: string | number; waitTimeout?: number }): Promise<any[] | undefined>;
+};
+
+type PrimeTarget = { conn: PrimeConn; uid?: string | number; event?: 'create' | 'update' | 'delete' };
+
+type PrimeMutation = { matches: (frame: any, target: PrimeTarget) => boolean; cleanup: () => Promise<void> };
+
+async function drainUntilMatch(
+	target: PrimeTarget,
+	matches: (frame: any, target: PrimeTarget) => boolean,
+	reject: ((frame: any) => boolean) | undefined,
+	base: Map<PrimeTarget, number>,
+	drained: Map<PrimeTarget, number>,
+	deadline: number
+): Promise<boolean> {
+	while (Date.now() < deadline) {
+		const available = target.conn.getMessageCount(target.uid) - base.get(target)! - drained.get(target)!;
+
+		if (available > 0) {
+			const frames = await target.conn.getMessages(1, { uid: target.uid });
+			drained.set(target, drained.get(target)! + 1);
+			const frame = frames?.[0];
+
+			if (frame !== undefined && reject?.(frame)) {
+				throw new Error(`Prime observed a forbidden frame: ${JSON.stringify(frame)}`);
+			}
+
+			if (frame !== undefined && matches(frame, target)) return true;
+		} else {
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+	}
+
+	return false;
+}
+
+function combineErrors(errors: unknown[]): Error {
+	const combined = new Error(
+		errors.map((error) => (error instanceof Error ? error.message : String(error))).join(' | ')
+	);
+	(combined as Error & { errors: unknown[] }).errors = errors;
+
+	return combined;
+}
+
+async function runCleanups(cleanups: Array<() => Promise<void>>, primaryError: unknown): Promise<void> {
+	const cleanupErrors: unknown[] = [];
+
+	for (const cleanup of cleanups) {
+		try {
+			await cleanup();
+		} catch (err) {
+			cleanupErrors.push(err);
+		}
+	}
+
+	const failures = primaryError !== undefined ? [primaryError, ...cleanupErrors] : cleanupErrors;
+
+	if (failures.length === 1) throw failures[0];
+	if (failures.length > 1) throw combineErrors(failures);
+}
+
+async function withRowCleanup<T>(url: string, collection: string, id: any, work: () => Promise<T>): Promise<T> {
+	try {
+		return await work();
+	} catch (err) {
+		try {
+			await deleteItem(url, collection, id);
+		} catch (cleanupErr) {
+			throw combineErrors([err, cleanupErr]);
+		}
+
+		throw err;
+	}
+}
+
+async function primeUntilLive(
+	targets: PrimeTarget[],
+	mutate: () => Promise<PrimeMutation>,
+	options?: { attempts?: number; windowMs?: number }
+): Promise<void> {
+	const attempts = options?.attempts ?? 20;
+	const windowMs = options?.windowMs ?? 500;
+	const base = new Map(targets.map((target) => [target, target.conn.getMessageCount(target.uid)]));
+	const drained = new Map(targets.map((target) => [target, 0]));
+	const cleanups: Array<() => Promise<void>> = [];
+	let primaryError: unknown;
+
+	try {
+		let live = false;
+
+		for (let attempt = 0; attempt < attempts && !live; attempt++) {
+			const { matches, cleanup } = await mutate();
+			cleanups.push(cleanup);
+			const deadline = Date.now() + windowMs;
+			live = true;
+
+			for (const target of targets) {
+				if (!(await drainUntilMatch(target, matches, undefined, base, drained, deadline))) {
+					live = false;
+					break;
+				}
+			}
+		}
+
+		if (!live) throw new Error('Prime did not reach every target within the attempt budget');
+	} catch (err) {
+		primaryError = err;
+	}
+
+	await runCleanups(cleanups, primaryError);
+}
+
+function createPrime(url: string, collection: string, pkType: common.PrimaryKeyType, fields?: ItemFields) {
+	return async (): Promise<PrimeMutation> => {
+		const name = uuid();
+		const id = await insertItem(url, collection, name, pkType, fields);
+
+		return {
+			matches: (frame) => JSON.stringify(frame).includes(name),
+			cleanup: () => deleteItem(url, collection, id),
+		};
+	};
+}
+
+async function primeTenants(
+	url: string,
+	collection: string,
+	groupA: PrimeTarget[],
+	groupB: PrimeTarget[],
+	options?: { attempts?: number; windowMs?: number }
+): Promise<void> {
+	const attempts = options?.attempts ?? 20;
+	const windowMs = options?.windowMs ?? 500;
+	const all = [...groupA, ...groupB];
+	const base = new Map(all.map((target) => [target, target.conn.getMessageCount(target.uid)]));
+	const drained = new Map(all.map((target) => [target, 0]));
+	const aMarkers: string[] = [];
+	const bMarkers: string[] = [];
+	const cleanupIds: any[] = [];
+
+	const containsAny = (frame: any, markers: string[]) =>
+		markers.some((marker) => JSON.stringify(frame).includes(marker));
+
+	const primeGroup = async (group: PrimeTarget[], own: string, foreign: string[]) => {
+		for (const target of group) {
+			const deadline = Date.now() + windowMs;
+
+			const live = await drainUntilMatch(
+				target,
+				(frame) => JSON.stringify(frame).includes(own),
+				(frame) => containsAny(frame, foreign),
+				base,
+				drained,
+				deadline
+			);
+
+			if (!live) return false;
+		}
+
+		return true;
+	};
+
+	let primaryError: unknown;
+
+	try {
+		let live = false;
+
+		for (let attempt = 0; attempt < attempts && !live; attempt++) {
+			const aName = uuid();
+			const bName = uuid();
+			aMarkers.push(aName);
+			bMarkers.push(bName);
+			cleanupIds.push(await insertItem(url, collection, aName, 'integer', { tenant: TENANT_A }));
+			cleanupIds.push(await insertItem(url, collection, bName, 'integer', { tenant: TENANT_B }));
+
+			live = (await primeGroup(groupA, aName, bMarkers)) && (await primeGroup(groupB, bName, aMarkers));
+		}
+
+		if (!live) throw new Error('Tenant prime did not reach every target within the attempt budget');
+	} catch (err) {
+		primaryError = err;
+	}
+
+	await runCleanups(
+		cleanupIds.map((id) => () => deleteItem(url, collection, id)),
+		primaryError
+	);
+}
+
+function lifecyclePrime(url: string, collection: string, pkType: common.PrimaryKeyType) {
+	return async (): Promise<PrimeMutation> => {
+		const createName = uuid();
+		const updateName = `updated_${uuid()}`;
+		const id = await insertItem(url, collection, createName, pkType);
+
+		await withRowCleanup(url, collection, id, async () => {
+			await updateItem(url, collection, id, updateName);
+			await deleteItem(url, collection, id);
+		});
+
+		return {
+			matches: (frame, target) => {
+				if (target.event === 'create') return JSON.stringify(frame).includes(createName);
+				if (target.event === 'update') return JSON.stringify(frame).includes(updateName);
+
+				return (
+					(Array.isArray(frame?.data) && frame.data.some((keyValue: any) => String(keyValue) === String(id))) ||
+					Object.values(frame?.data ?? {}).some((value: any) => value?.key === String(id))
+				);
+			},
+			cleanup: async () => undefined,
+		};
+	};
+}
+
 function handshakeAs(token: string) {
 	return { authMode: 'handshake' as const, auth: { access_token: token } };
 }
@@ -166,9 +388,9 @@ describeFn('WebSocket realtime', () => {
 
 		for (const vendor of supportedVendors) {
 			const namespace = `realtime-${vendor}-${runId}`;
-			const main = realtimeEnv(vendor, 250, 'handshake', namespace);
-			const peer = realtimeEnv(vendor, 300, 'strict', namespace);
-			const gate = gateEnv(vendor, 350, `${namespace}-gate`);
+			const main = realtimeEnv(vendor, MAIN_OFFSET, 'handshake', namespace);
+			const peer = realtimeEnv(vendor, PEER_OFFSET, 'strict', namespace);
+			const gate = gateEnv(vendor, GATE_OFFSET, `${namespace}-gate`);
 			envs[vendor] = { main, peer, gate };
 
 			const serverMain = spawnInstance(main, vendor);
@@ -224,12 +446,10 @@ describeFn('WebSocket realtime', () => {
 					const key = await wsGql.subscribe({ collection, jsonQuery: GQL_DATA });
 					await wsGqlPeer.subscribe({ collection, jsonQuery: GQL_DATA });
 
-					// connection_ack precedes registration, so delivery is the subscription barrier.
-					await insertItem(mainUrl, collection, uuid(), 'integer');
-					await ws.getMessages(1);
-					await wsPeer.getMessages(1);
-					await wsGql.getMessages(1);
-					await wsGqlPeer.getMessages(1);
+					await primeUntilLive(
+						[{ conn: ws }, { conn: wsPeer }, { conn: wsGql }, { conn: wsGqlPeer }],
+						createPrime(mainUrl, collection, 'integer')
+					);
 
 					const insertedName = uuid();
 					const insertedId = await insertItem(mainUrl, collection, insertedName, 'integer');
@@ -282,12 +502,15 @@ describeFn('WebSocket realtime', () => {
 					const key = await wsGql.subscribe({ collection, uid: 'goneGql', jsonQuery: GQL_DATA, protocolId: 'gone-op' });
 					await wsGql.subscribe({ collection, uid: 0, jsonQuery: GQL_DATA });
 
-					// Delivery confirms all four subscriptions are registered.
-					await insertItem(mainUrl, collection, uuid(), 'integer');
-					await ws.getMessages(1, { uid: 'gone' });
-					await ws.getMessages(1, { uid: 0 });
-					await wsGql.getMessages(1, { uid: 'goneGql' });
-					await wsGql.getMessages(1, { uid: 0 });
+					await primeUntilLive(
+						[
+							{ conn: ws, uid: 'gone' },
+							{ conn: ws, uid: 0 },
+							{ conn: wsGql, uid: 'goneGql' },
+							{ conn: wsGql, uid: 0 },
+						],
+						createPrime(mainUrl, collection, 'integer')
+					);
 
 					// The acknowledgement and live uid 0 feed bracket delivery without a timing assertion.
 					await ws.unsubscribe('gone');
@@ -347,18 +570,19 @@ describeFn('WebSocket realtime', () => {
 					await wsGql.subscribe({ collection, uid: 'updateGql', event: 'update', jsonQuery: GQL_DATA });
 					await wsGql.subscribe({ collection, uid: 'deleteGql', event: 'delete', jsonQuery: GQL_DELETE });
 
-					// Delivered prime events establish every filter before the measured lifecycle.
-					const primeId = await insertItem(url, collection, uuid(), pkType);
-					await updateItem(url, collection, primeId, `updated_${uuid()}`);
-					await deleteItem(url, collection, primeId);
-					await ws.getMessages(2, { uid: 'all' });
-					await ws.getMessages(1, { uid: 'create' });
-					await ws.getMessages(1, { uid: 'update' });
-					await ws.getMessages(1, { uid: 'delete' });
-					await wsGql.getMessages(2, { uid: 'allGql' });
-					await wsGql.getMessages(1, { uid: 'createGql' });
-					await wsGql.getMessages(1, { uid: 'updateGql' });
-					await wsGql.getMessages(1, { uid: 'deleteGql' });
+					await primeUntilLive(
+						[
+							{ conn: ws, uid: 'all', event: 'update' },
+							{ conn: ws, uid: 'create', event: 'create' },
+							{ conn: ws, uid: 'update', event: 'update' },
+							{ conn: ws, uid: 'delete', event: 'delete' },
+							{ conn: wsGql, uid: 'allGql', event: 'update' },
+							{ conn: wsGql, uid: 'createGql', event: 'create' },
+							{ conn: wsGql, uid: 'updateGql', event: 'update' },
+							{ conn: wsGql, uid: 'deleteGql', event: 'delete' },
+						],
+						lifecyclePrime(url, collection, pkType)
+					);
 
 					const insertedName = uuid();
 					const updatedName = `updated_${uuid()}`;
@@ -462,6 +686,9 @@ describeFn('WebSocket realtime', () => {
 
 				try {
 					await wsGql.subscribe({ collection, jsonQuery: GQL_DATA });
+
+					await primeUntilLive([{ conn: wsGql }], createPrime(mainUrl, collection, 'integer'));
+
 					await insertItem(mainUrl, collection, uuid(), 'integer');
 					await wsGql.getMessages(1);
 
@@ -493,6 +720,9 @@ describeFn('WebSocket realtime', () => {
 					).rejects.toBeDefined();
 
 					await wsGql.subscribe({ collection, jsonQuery: GQL_DATA });
+
+					await primeUntilLive([{ conn: wsGql }], createPrime(mainUrl, collection, 'integer'));
+
 					await insertItem(mainUrl, collection, uuid(), 'integer');
 					await wsGql.getMessages(1);
 
@@ -524,6 +754,8 @@ describeFn('WebSocket realtime', () => {
 					await bRest.subscribe({ collection });
 					const aKey = await aGql.subscribe({ collection, jsonQuery: GQL_DATA });
 					const bKey = await bGql.subscribe({ collection, jsonQuery: GQL_DATA });
+
+					await primeTenants(url, collection, [{ conn: aRest }, { conn: aGql }], [{ conn: bRest }, { conn: bGql }]);
 
 					const restId = (message: any) => message.data[0].id;
 					const gqlId = (key: string, message: any) => message.data[key].data.id;
@@ -604,7 +836,13 @@ describeFn('WebSocket realtime', () => {
 					});
 
 					await filteredGql.subscribe({ collection, event: 'delete', uid: 'delGql', jsonQuery: GQL_DELETE });
-					expect(String(JSON.stringify(await filteredGql.waitForError({ uid: 'delGql' })))).toMatch(/forbidden/i);
+
+					expect(await filteredGql.waitForError({ uid: 'delGql' })).toEqual([
+						{
+							message: "You don't have permission to access this.",
+							extensions: { code: 'FORBIDDEN' },
+						},
+					]);
 
 					await readerRest.subscribe({ collection, event: 'delete', uid: 'reader' });
 					const targetId = await insertItem(url, collection, uuid(), 'integer', { tenant: TENANT_A });
@@ -710,9 +948,10 @@ describeFn('WebSocket realtime', () => {
 					await ownerRest.subscribe({ collection });
 					const ownerKey = await ownerGql.subscribe({ collection, jsonQuery: GQL_DATA });
 
-					await insertItem(url, collection, uuid(), 'integer', { owner: ownerId });
-					await ownerRest.getMessages(1);
-					await ownerGql.getMessages(1);
+					await primeUntilLive(
+						[{ conn: ownerRest }, { conn: ownerGql }],
+						createPrime(url, collection, 'integer', { owner: ownerId })
+					);
 
 					const restBase = ownerRest.getMessageCount();
 					const gqlBase = ownerGql.getMessageCount();
@@ -765,9 +1004,13 @@ describeFn('WebSocket realtime', () => {
 					await gql.subscribe({ collection, jsonQuery: { event: true }, uid: 'valid' });
 					await insertItem(url, collection, uuid(), 'integer');
 
-					expect((await gql.getMessages(1, { uid: 'valid' }))![0]).toMatchObject({
+					const firstValid = (await gql.getMessages(1, { uid: 'valid' }))![0];
+
+					expect(firstValid).toMatchObject({
 						data: { [`${collection}_mutated`]: { event: 'create' } },
 					});
+
+					expect((await gql.getMessages(1, { uid: 'valid', startIndex: 0 }))![0]).toEqual(firstValid);
 
 					await gql.sendRaw({
 						id: 'introspection',
@@ -812,9 +1055,16 @@ describeFn('WebSocket realtime', () => {
 				try {
 					const key = await wsGql.subscribe({ collection, event: 'delete', jsonQuery: GQL_DELETE });
 
-					const primeId = await insertItem(mainUrl, collection, uuid(), 'integer');
-					await deleteItem(mainUrl, collection, primeId);
-					await wsGql.getMessages(1);
+					await primeUntilLive([{ conn: wsGql }], async () => {
+						const id = await insertItem(mainUrl, collection, uuid(), 'integer');
+
+						await withRowCleanup(mainUrl, collection, id, () => deleteItem(mainUrl, collection, id));
+
+						return {
+							matches: (frame) => frame?.data?.[key]?.key === String(id),
+							cleanup: async () => undefined,
+						};
+					});
 
 					const targetId = await insertItem(mainUrl, collection, uuid(), 'integer');
 					await deleteItem(mainUrl, collection, targetId);
@@ -999,6 +1249,70 @@ describeFn('WebSocket realtime', () => {
 		);
 	});
 
+	describe('Nested deep argument threading over GraphQL', () => {
+		it.each(supportedVendors)(
+			'%s',
+			async (vendor) => {
+				const url = urlOf(vendor, envs[vendor]!.main);
+				const wsGql = common.createWebSocketGql(url, HANDSHAKE);
+
+				const insertChild = async (parent: any) => {
+					const response = await request(url)
+						.post(`/items/${collectionChild}`)
+						.send({ parent })
+						.set('Authorization', `Bearer ${TOKEN}`);
+
+					expect(response.statusCode).toBe(200);
+					expect(response.body.data.id).toBeDefined();
+
+					return response.body.data.id;
+				};
+
+				let parentId: any;
+				const childIds: any[] = [];
+				let primaryError: unknown;
+
+				try {
+					parentId = await insertItem(url, collectionScoped, uuid(), 'integer');
+					childIds.push(await insertChild(parentId));
+					childIds.push(await insertChild(parentId));
+
+					const key = await wsGql.subscribe({
+						collection: collectionScoped,
+						jsonQuery: {
+							event: true,
+							data: { id: true, name: true, children: { __args: { limit: 1 }, id: true } },
+						},
+					});
+
+					await primeUntilLive([{ conn: wsGql }], createPrime(url, collectionScoped, 'integer'));
+
+					await updateItem(url, collectionScoped, parentId, `updated_${uuid()}`);
+
+					const delivered = (await wsGql.getMessages(1))![0].data[key];
+					expect(delivered.event).toBe('update');
+					expect(String(delivered.data.id)).toBe(String(parentId));
+					expect(delivered.data.children).toHaveLength(1);
+					expect(childIds.map(String)).toContain(String(delivered.data.children[0].id));
+				} catch (err) {
+					primaryError = err;
+				}
+
+				await runCleanups(
+					[
+						async () => {
+							await wsGql.client.dispose();
+						},
+						...childIds.map((childId) => () => deleteItem(url, collectionChild, childId)),
+						...(parentId !== undefined ? [() => deleteItem(url, collectionScoped, parentId)] : []),
+					],
+					primaryError
+				);
+			},
+			100000
+		);
+	});
+
 	describe('SDK realtime workflow', () => {
 		it.each(supportedVendors)(
 			'%s',
@@ -1033,6 +1347,7 @@ describeFn('WebSocket realtime', () => {
 
 				const watermark = common.createWebSocketConn(url, HANDSHAKE);
 				let active: { unsubscribe(): void } | undefined;
+				let offPreMessage: (() => void) | undefined;
 
 				try {
 					await client.connect();
@@ -1076,6 +1391,53 @@ describeFn('WebSocket realtime', () => {
 						data: [{ id: id2, name: name2 }],
 					});
 
+					second.unsubscribe();
+					active = undefined;
+
+					const preFrames: any[] = [];
+					offPreMessage = client.onWebSocket('message', (frame: any) => preFrames.push(frame));
+					const sawPre = (event: string, id?: number | string) =>
+						preFrames.some(
+							(frame) =>
+								frame?.uid === 'pre-pull' && frame?.event === event && (id === undefined || frame?.data?.[0]?.id === id)
+						);
+
+					const prePull = await client.subscribe(collection as never, { uid: 'pre-pull' } as never);
+					active = prePull;
+
+					await withDeadline(
+						waitUntil(() => sawPre('init')),
+						'pre-pull init frame'
+					);
+
+					const nameA = uuid();
+					const idA = await insertItem(url, collection, nameA, 'integer');
+					const nameB = uuid();
+					const idB = await insertItem(url, collection, nameB, 'integer');
+
+					await withDeadline(
+						waitUntil(() => sawPre('create', idA) && sawPre('create', idB)),
+						'pre-pull create frames'
+					);
+					offPreMessage?.();
+					offPreMessage = undefined;
+
+					const preInit = await withDeadline(prePull.subscription.next(), 'pre-pull init pull');
+					expect(preInit.value).toMatchObject({ type: 'subscription', event: 'init' });
+
+					expect((await withDeadline(prePull.subscription.next(), 'pre-pull create A')).value).toMatchObject({
+						event: 'create',
+						data: [{ id: idA, name: nameA }],
+					});
+
+					expect((await withDeadline(prePull.subscription.next(), 'pre-pull create B')).value).toMatchObject({
+						event: 'create',
+						data: [{ id: idB, name: nameB }],
+					});
+
+					prePull.unsubscribe();
+					active = undefined;
+
 					await watermark.subscribe({ collection, uid: 'wm' });
 
 					let sdkMessages = 0;
@@ -1101,6 +1463,7 @@ describeFn('WebSocket realtime', () => {
 					expect(await client.isConnected()).toBe(false);
 					offMessage();
 				} finally {
+					offPreMessage?.();
 					active?.unsubscribe();
 					client.disconnect();
 					watermark.conn.close();

@@ -50,6 +50,8 @@ const stateName = (state: number): string => {
 	}
 };
 
+const bounded = (value: string) => (value.length > 500 ? `${value.slice(0, 500)}...` : value);
+
 // Strict mode authenticates during the HTTP upgrade, before connection_init.
 const bearerWebSocket = (token: string) =>
 	class extends WebSocket {
@@ -81,6 +83,10 @@ export function createWebSocketConn(host: string, config?: WebSocketOptions) {
 	const messagesDefault: WebSocketResponse[] = [];
 	let readIndexDefault = 0;
 	const readIndexes: Record<WebSocketUID, number> = {};
+	let socketError: unknown;
+
+	const describeError = (err: unknown) => bounded(err instanceof Error ? err.message : JSON.stringify(err));
+	const socketErrorSuffix = () => (socketError !== undefined ? ` [socket error: ${describeError(socketError)}]` : '');
 
 	const waitForState = (state: WebSocket['readyState'], options?: { waitTimeout?: number }) => {
 		const startMs = Date.now();
@@ -99,7 +105,7 @@ export function createWebSocketConn(host: string, config?: WebSocketOptions) {
 						return promise().then(resolve, reject);
 					} else {
 						conn.terminate();
-						return reject(new Error(`WebSocket failed to achieve the ${stateName(state)} state`));
+						return reject(new Error(`WebSocket failed to achieve the ${stateName(state)} state${socketErrorSuffix()}`));
 					}
 				}, 5);
 			});
@@ -119,7 +125,7 @@ export function createWebSocketConn(host: string, config?: WebSocketOptions) {
 
 		let startMessageIndex: number;
 
-		if (options?.startIndex) {
+		if (options?.startIndex !== undefined) {
 			startMessageIndex = options.startIndex;
 		} else if (options?.uid !== undefined) {
 			startMessageIndex = readIndexes[String(options.uid)] ?? 0;
@@ -152,7 +158,7 @@ export function createWebSocketConn(host: string, config?: WebSocketOptions) {
 							new Error(
 								`Missing message${options?.uid !== undefined ? ` for "${String(options.uid)}"` : ''} (received ${
 									targetMessages.length - startMessageIndex
-								}/${messageCount})`
+								}/${messageCount})${socketErrorSuffix()}`
 							)
 						);
 					}
@@ -187,7 +193,10 @@ export function createWebSocketConn(host: string, config?: WebSocketOptions) {
 
 		if (error || !response || response[0]!.status === 'error') {
 			throw new Error(
-				`Unable to subscribe to "${options.collection}"${options.uid !== undefined ? ` for "${options.uid}"` : ''}`
+				`Unable to subscribe to "${options.collection}"${options.uid !== undefined ? ` for "${options.uid}"` : ''}` +
+					`${response?.[0] !== undefined ? ` (frame: ${bounded(JSON.stringify(response[0]))})` : ''}` +
+					`${error !== undefined ? ` (error: ${describeError(error)})` : ''}` +
+					socketErrorSuffix()
 			);
 		}
 
@@ -206,7 +215,12 @@ export function createWebSocketConn(host: string, config?: WebSocketOptions) {
 		}
 
 		if (error || !response || response[0]!.status === 'error') {
-			throw new Error(`Unable to unsubscribe${uid !== undefined ? ` to "${uid}"` : ''}`);
+			throw new Error(
+				`Unable to unsubscribe${uid !== undefined ? ` to "${uid}"` : ''}` +
+					`${response?.[0] !== undefined ? ` (frame: ${bounded(JSON.stringify(response[0]))})` : ''}` +
+					`${error !== undefined ? ` (error: ${describeError(error)})` : ''}` +
+					socketErrorSuffix()
+			);
 		}
 	};
 
@@ -217,11 +231,6 @@ export function createWebSocketConn(host: string, config?: WebSocketOptions) {
 
 		conn.on('message', (data) => {
 			const message: WebSocketResponse = JSON.parse(data.toString());
-
-			if (config?.respondToPing !== false && message.type === 'ping') {
-				conn.send(JSON.stringify({ type: 'pong' }));
-				return;
-			}
 
 			if (!connectionAuthCompleted && message.type === 'auth') {
 				if (message.status === 'ok') {
@@ -242,7 +251,9 @@ export function createWebSocketConn(host: string, config?: WebSocketOptions) {
 		});
 	});
 
-	conn.on('error', () => undefined);
+	conn.on('error', (err) => {
+		socketError = err;
+	});
 
 	return { conn, waitForState, getMessages, getMessageCount, sendMessage, subscribe, unsubscribe };
 }
@@ -270,7 +281,6 @@ export function createWebSocketGql(host: string, config?: WebSocketOptionsGql) {
 		webSocketImpl,
 		connectionParams,
 		generateID: (payload) => pendingProtocolId ?? config?.client?.generateID?.(payload) ?? `auto-${autoProtocolId++}`,
-		disablePong: !config?.respondToPing,
 		url: `ws://${parsedHost}/${config?.path ?? 'graphql'}${config?.queryString ? `?${config.queryString}` : ''}`,
 		on: {
 			...config?.client?.on,
@@ -288,11 +298,6 @@ export function createWebSocketGql(host: string, config?: WebSocketOptionsGql) {
 
 					if (message.type === 'connection_ack') {
 						isConnReady = true;
-					}
-
-					if (config?.respondToPing !== false && message.type === 'ping') {
-						conn?.send(JSON.stringify({ type: 'pong' }));
-						return;
 					}
 				});
 			},
@@ -342,7 +347,7 @@ export function createWebSocketGql(host: string, config?: WebSocketOptionsGql) {
 
 		let startMessageIndex: number;
 
-		if (options?.startIndex) {
+		if (options?.startIndex !== undefined) {
 			startMessageIndex = options.startIndex;
 		} else if (options?.uid !== undefined) {
 			startMessageIndex = readIndexes[String(options.uid)] ?? 0;

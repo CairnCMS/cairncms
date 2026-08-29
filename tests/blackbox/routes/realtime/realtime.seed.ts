@@ -3,6 +3,7 @@ import {
 	CreateCollection,
 	CreateField,
 	CreateFieldM2O,
+	CreateFieldO2M,
 	CreateRole,
 	CreateUser,
 	DeleteCollection,
@@ -14,6 +15,7 @@ import request from 'supertest';
 
 export const collectionFirst = 'test_ws_realtime_first';
 export const collectionScoped = 'test_ws_realtime_scoped';
+export const collectionChild = 'test_ws_realtime_child';
 
 export type First = {
 	id?: number | string;
@@ -67,22 +69,23 @@ export const seedDBStructure = () => {
 				await DeleteCollection(vendor, { collection: localCollection });
 
 				const created = await CreateCollection(vendor, { collection: localCollection, primaryKeyType: pkType });
-				expect(created.collection).toBe(localCollection);
+				expect(created?.collection).toBe(localCollection);
 
 				const nameField = await CreateField(vendor, { collection: localCollection, field: 'name', type: 'string' });
-				expect(nameField.field).toBe('name');
+				expect(nameField?.field).toBe('name');
 			}
 
+			await DeleteCollection(vendor, { collection: collectionChild });
 			await DeleteCollection(vendor, { collection: collectionScoped });
 
 			const scoped = await CreateCollection(vendor, { collection: collectionScoped, primaryKeyType: 'integer' });
-			expect(scoped.collection).toBe(collectionScoped);
+			expect(scoped?.collection).toBe(collectionScoped);
 
 			const scopedName = await CreateField(vendor, { collection: collectionScoped, field: 'name', type: 'string' });
-			expect(scopedName.field).toBe('name');
+			expect(scopedName?.field).toBe('name');
 
 			const scopedTenant = await CreateField(vendor, { collection: collectionScoped, field: 'tenant', type: 'string' });
-			expect(scopedTenant.field).toBe('tenant');
+			expect(scopedTenant?.field).toBe('tenant');
 
 			const scopedOwner = await CreateFieldM2O(vendor, {
 				collection: collectionScoped,
@@ -91,8 +94,22 @@ export const seedDBStructure = () => {
 				otherCollection: 'directus_users',
 			});
 
-			expect(scopedOwner.field.field).toBe('owner');
-			expect(scopedOwner.relation.related_collection).toBe('directus_users');
+			expect(scopedOwner?.field?.field).toBe('owner');
+			expect(scopedOwner?.relation?.related_collection).toBe('directus_users');
+
+			const child = await CreateCollection(vendor, { collection: collectionChild, primaryKeyType: 'integer' });
+			expect(child?.collection).toBe(collectionChild);
+
+			const children = await CreateFieldO2M(vendor, {
+				collection: collectionScoped,
+				field: 'children',
+				otherCollection: collectionChild,
+				otherField: 'parent',
+			});
+
+			expect(children?.field?.field).toBe('children');
+			expect(children?.otherField?.field).toBe('parent');
+			expect(children?.relation?.related_collection).toBe(collectionScoped);
 
 			const roleId: Record<string, string> = {};
 
@@ -103,7 +120,7 @@ export const seedDBStructure = () => {
 					adminAccessEnabled: false,
 				});
 
-				expect(role.id).toBeDefined();
+				expect(role?.id).toBeDefined();
 				roleId[spec.role] = role.id;
 
 				await deleteExistingUser(vendor, spec.email);
@@ -114,7 +131,7 @@ export const seedDBStructure = () => {
 					roleName: spec.role,
 				});
 
-				expect(user.id).toBeDefined();
+				expect(user?.id).toBeDefined();
 			}
 
 			await createPermission(vendor, roleId[realtimeUsers.tenantA.role]!, collectionScoped, {

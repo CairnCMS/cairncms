@@ -21,7 +21,6 @@ export type WebSocketDefaultOptions = {
 	auth?: { access_token: string };
 	path?: string;
 	queryString?: string;
-	respondToPing?: boolean;
 	waitTimeout?: number;
 };
 
