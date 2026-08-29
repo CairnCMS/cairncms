@@ -1,3 +1,4 @@
+import type { Knex } from 'knex';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
@@ -42,12 +43,13 @@ function schemaOf(...names: string[]): Record<string, unknown> {
 }
 
 const accountability = { role: null, admin: true };
+const knex = {} as Knex;
 
 describeIfBuilt('GraphQL subscription schema generation (production-realm dist probe)', () => {
 	const { GraphQLService } = require(distPath);
 
 	it('generates a _mutated subscription field, EventEnum, and Subscription root for an items collection', () => {
-		const service = new GraphQLService({ accountability, schema: schemaOf('articles'), scope: 'items' });
+		const service = new GraphQLService({ accountability, knex, schema: schemaOf('articles'), scope: 'items' });
 		const sdl = service.getSchema('sdl') as string;
 
 		expect(sdl).toContain('type Subscription');
@@ -58,6 +60,7 @@ describeIfBuilt('GraphQL subscription schema generation (production-realm dist p
 	it('never drops a subscription field when a collection collides with a _mutated type name', () => {
 		const service = new GraphQLService({
 			accountability,
+			knex,
 			schema: schemaOf('articles', 'articles_mutated'),
 			scope: 'items',
 		});
@@ -69,13 +72,13 @@ describeIfBuilt('GraphQL subscription schema generation (production-realm dist p
 	});
 
 	it('does not throw when a collection is named EventEnum', () => {
-		const service = new GraphQLService({ accountability, schema: schemaOf('EventEnum'), scope: 'items' });
+		const service = new GraphQLService({ accountability, knex, schema: schemaOf('EventEnum'), scope: 'items' });
 
 		expect(() => service.getSchema('sdl')).not.toThrow();
 	});
 
 	it('omits subscriptions from the system scope', () => {
-		const service = new GraphQLService({ accountability, schema: schemaOf('articles'), scope: 'system' });
+		const service = new GraphQLService({ accountability, knex, schema: schemaOf('articles'), scope: 'system' });
 		const sdl = service.getSchema('sdl') as string;
 
 		expect(sdl).not.toContain('articles_mutated');
