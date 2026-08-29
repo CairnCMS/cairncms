@@ -4,6 +4,8 @@ import {
 	HYBRID_EXTENSION_TYPES,
 	NESTED_EXTENSION_TYPES,
 	ExtensionManifest,
+	RESERVED_EVENT_NAMESPACE_ERROR,
+	isReservedEventNamespaceError,
 } from '@cairncms/constants';
 import type { ApiExtensionType, AppExtensionType, Extension } from '@cairncms/types';
 import fse from 'fs-extra';
@@ -35,6 +37,10 @@ async function parsePackageExtension(extensionName: string, extensionPath: strin
 	try {
 		parsedManifest = ExtensionManifest.parse(extensionManifest);
 	} catch (error) {
+		if (isReservedEventNamespaceError(error)) {
+			throw new Error(RESERVED_EVENT_NAMESPACE_ERROR);
+		}
+
 		throw new Error(`The extension manifest of "${extensionName}" is not valid.\n${error}`);
 	}
 

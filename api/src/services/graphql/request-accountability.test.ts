@@ -13,32 +13,33 @@ function makeReq(headers: Record<string, string> = {}): Request {
 }
 
 describe('authenticationAccountabilityFromRequest', () => {
-	it('attributes the resolved client IP when a request is present', () => {
-		expect(authenticationAccountabilityFromRequest(makeReq()).ip).toBe(SENTINEL);
-	});
-
 	it('throws when request context is absent', () => {
 		expect(() => authenticationAccountabilityFromRequest(undefined)).toThrow(
 			'GraphQL authentication requires request context'
 		);
 	});
 
-	it('defaults role to null', () => {
-		expect(authenticationAccountabilityFromRequest(makeReq()).role).toBeNull();
+	it('returns the canonical anonymous shape with user-agent and origin when present', () => {
+		expect(
+			authenticationAccountabilityFromRequest(makeReq({ 'user-agent': 'a-user-agent', origin: 'an-origin' }))
+		).toEqual({
+			user: null,
+			role: null,
+			admin: false,
+			app: false,
+			ip: SENTINEL,
+			userAgent: 'a-user-agent',
+			origin: 'an-origin',
+		});
 	});
 
-	it('captures user-agent and origin when present', () => {
-		const accountability = authenticationAccountabilityFromRequest(
-			makeReq({ 'user-agent': 'a-user-agent', origin: 'an-origin' })
-		);
-
-		expect(accountability.userAgent).toBe('a-user-agent');
-		expect(accountability.origin).toBe('an-origin');
-	});
-
-	it('omits user-agent and origin when absent', () => {
-		const accountability = authenticationAccountabilityFromRequest(makeReq());
-		expect(accountability.userAgent).toBeUndefined();
-		expect(accountability.origin).toBeUndefined();
+	it('returns the canonical anonymous shape without user-agent and origin when absent', () => {
+		expect(authenticationAccountabilityFromRequest(makeReq())).toEqual({
+			user: null,
+			role: null,
+			admin: false,
+			app: false,
+			ip: SENTINEL,
+		});
 	});
 });

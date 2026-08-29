@@ -303,6 +303,34 @@ Messenger messages are not queued while Redis is unavailable. Cache invalidation
 
 If Redis ACLs restrict publishing, allow `PUBLISH` on `<namespace>:messenger-probe`. Without this permission, `/server/health` reports the messenger as degraded.
 
+## Realtime (WebSockets)
+
+Realtime WebSockets are off by default. When enabled, CairnCMS serves the item protocol at `/websocket` and GraphQL subscriptions at `/graphql`. The item protocol uses the `WEBSOCKETS_REST_*` settings. GraphQL uses the `WEBSOCKETS_GRAPHQL_*` settings.
+
+Both transports deliver permission-checked collection changes. Deployments with multiple API instances need the Redis messenger so changes reach subscribers on every instance. See [Realtime](/docs/api/realtime/) for the protocols, authentication modes, subscriptions, and SDK.
+
+- **`WEBSOCKETS_ENABLED`** — master switch for the realtime feature. Default `false`.
+- **`WEBSOCKETS_REST_ENABLED`** — item transport switch. Takes effect only when the feature is enabled. Default `true`.
+- **`WEBSOCKETS_REST_PATH`** — the upgrade path clients connect to. Must be a pure URL path with no query or fragment. Default `/websocket`.
+- **`WEBSOCKETS_REST_AUTH`** — authentication mode: `public` (anonymous), `handshake` (authenticate with the first message), or `strict` (bearer token required at upgrade). Default `handshake`.
+- **`WEBSOCKETS_REST_AUTH_TIMEOUT`** — how long, in seconds, an authentication attempt may take. In `strict` mode the attempt is at the upgrade, and a timeout rejects the upgrade; in `handshake` mode a timeout on the first-message attempt closes the connection. A later re-authentication that times out closes a `strict` or `handshake` connection and returns a `public` connection to anonymous access. Accepts a whole number of seconds from `1` to `2147483` (about 24 days). Default `10`.
+- **`WEBSOCKETS_REST_CONN_LIMIT`** — maximum concurrent connections on the item transport. Accepts a whole number of `1` or greater. Default `1000`.
+- **`WEBSOCKETS_GRAPHQL_ENABLED`** — GraphQL transport switch, effective only when the feature is enabled. Default `true`.
+- **`WEBSOCKETS_GRAPHQL_PATH`** — the upgrade path GraphQL clients connect to. Must be a pure URL path with no query or fragment, and must differ from the active item-protocol path. An equal path deactivates the GraphQL transport and leaves the item protocol serving. Default `/graphql`.
+- **`WEBSOCKETS_GRAPHQL_AUTH`** — authentication mode: `public` (anonymous), `handshake` (authenticate with the `connection_init` message), or `strict` (bearer token required at upgrade). Default `handshake`.
+- **`WEBSOCKETS_GRAPHQL_AUTH_TIMEOUT`** — the authentication timeout, in seconds. It bounds each authentication checkpoint independently rather than as one end-to-end deadline. The `connection_init` frame must be received within it, and the credential check is separately bounded by it (a `strict` bearer token at the upgrade, a `public` token supplied in the init message). There is no later in-band re-authentication. Accepts a whole number of seconds from `1` to `2147483` (about 24 days). Default `10`.
+- **`WEBSOCKETS_GRAPHQL_CONN_LIMIT`** — maximum concurrent connections on the GraphQL transport. Accepts a whole number of `1` or greater. Default `1000`.
+- **`WEBSOCKETS_HEARTBEAT_PERIOD`** — seconds between server pings; a connection that misses two periods without a pong is closed. Accepts a whole number of seconds from `1` to `1073741` (about 12 days). Default `30`.
+- **`WEBSOCKETS_USER_CONN_LIMIT`** — maximum concurrent connections per authenticated user. Accepts a whole number of `1` or greater. Default `10`.
+- **`WEBSOCKETS_IP_CONN_LIMIT`** — maximum concurrent connections per client IP. It gates anonymous and pre-authentication connections. Once a connection authenticates, it counts against `WEBSOCKETS_USER_CONN_LIMIT` instead. Accepts a whole number of `1` or greater. Default `50`.
+- **`WEBSOCKETS_PROCESS_CONN_LIMIT`** — maximum concurrent connections per API process. Accepts a whole number of `1` or greater. Default `1000`.
+
+An invalid shared setting disables realtime. An invalid item-protocol or GraphQL setting disables only that transport. HTTP remains available.
+
+The shared `MAX_PAYLOAD_SIZE` bounds inbound WebSocket frames (see [Server](#server)). Realtime requires it to resolve to a positive whole number of bytes. Outbound WebSocket frames are limited to 1 MiB, including initial subscription results and change notifications. An oversized frame closes the affected connection. The client must reconnect and reread current state.
+
+Realtime is a best-effort notification channel whose latency reflects the deployment's workload and available capacity. Operators should size infrastructure for expected result sets, query cost, and subscriber load. Applications that require current state should reconcile through API reads rather than depend on notification timing.
+
 ## Email
 
 - **`EMAIL_FROM`** — sender address for all transactional emails. Required for any email feature.

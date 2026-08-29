@@ -14,6 +14,6 @@ export default defineConfig({
 		__SYSTEM_COLLECTION_NAMES__: JSON.stringify(systemCollectionNames),
 	},
 	test: {
-		include: ['tests/*.test-d.ts'],
+		include: ['tests/*.test-d.ts', 'tests/*.test.ts'],
 	},
 });

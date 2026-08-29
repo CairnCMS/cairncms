@@ -23,6 +23,13 @@ export type ServerInfoOutput = {
 		default: number;
 		max: number;
 	};
+	websocket?:
+		| {
+				rest: { authentication: 'public' | 'handshake' | 'strict'; path: string } | false;
+				graphql: { authentication: 'public' | 'handshake' | 'strict'; path: string } | false;
+				heartbeat: number;
+		  }
+		| false;
 };
 
 /**

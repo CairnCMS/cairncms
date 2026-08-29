@@ -281,3 +281,54 @@ test('Sets accountability to user information when static token is used', async 
 	expect(req.accountability).toEqual(expectedAccountability);
 	expect(next).toHaveBeenCalledTimes(1);
 });
+
+test('Retains a share_scope the authenticate hook adds in place when the token carries none', async () => {
+	const userID = '3fac3c02-607f-4438-8d6e-6b8b25109b52';
+	const roleID = '38269fc6-6eb6-475a-93cb-479d97f73039';
+	const shareScope = { collection: 'articles', item: 7 };
+
+	vi.spyOn(emitter, 'emitFilter').mockImplementation(async (_event, payload) => {
+		(payload as { share_scope?: typeof shareScope }).share_scope = shareScope;
+		return payload;
+	});
+
+	const token = jwt.sign({ id: userID, role: roleID, app_access: true, admin_access: false }, env['SECRET'], {
+		issuer: 'cairncms',
+	});
+
+	const req = {
+		ip: '127.0.0.1',
+		app: { get: () => () => false },
+		socket: { remoteAddress: '127.0.0.1' },
+		headers: {},
+		get: vi.fn((string) => {
+			switch (string) {
+				case 'user-agent':
+					return 'fake-user-agent';
+				case 'origin':
+					return 'fake-origin';
+				default:
+					return null;
+			}
+		}),
+		token,
+	} as unknown as Request;
+
+	const res = {} as Response;
+	const next = vi.fn();
+
+	await handler(req, res, next);
+
+	expect(req.accountability).toEqual({
+		user: userID,
+		role: roleID,
+		app: true,
+		admin: false,
+		share_scope: shareScope,
+		ip: '127.0.0.1',
+		userAgent: 'fake-user-agent',
+		origin: 'fake-origin',
+	});
+
+	expect(next).toHaveBeenCalledTimes(1);
+});

@@ -104,6 +104,7 @@
 		"fs-extra": "11.1.1",
 		"graphql": "16.9.0",
 		"graphql-compose": "9.0.10",
+		"graphql-ws": "5.16.0",
 		"helmet": "6.1.5",
 		"icc": "3.0.0",
 		"inquirer": "9.1.5",
@@ -152,7 +153,9 @@
 		"tsx": "4.20.6",
 		"uuid": "11.1.1",
 		"uuid-validate": "0.0.3",
-		"wellknown": "0.5.0"
+		"wellknown": "0.5.0",
+		"ws": "8.21.0",
+		"zod": "3.23.8"
 	},
 	"devDependencies": {
 		"@cairncms/types": "workspace:*",
@@ -191,6 +194,7 @@
 		"@types/supertest": "2.0.12",
 		"@types/uuid-validate": "0.0.1",
 		"@types/wellknown": "0.5.4",
+		"@types/ws": "8.18.1",
 		"@vitest/coverage-v8": "3.2.6",
 		"copyfiles": "2.4.1",
 		"esbuild": "0.25.12",

@@ -296,6 +296,15 @@ describe('createConfinedHostBroker dispatch', () => {
 		expect(reply).toMatchObject({ ok: false, error: { code: 'unsupported' } });
 	});
 
+	it('does not expose any realtime method to confined extensions', async () => {
+		const { dispatch } = makeBroker({ capabilities: { log: true } });
+
+		for (const method of ['websocket.broadcast', 'websocket.clients', 'broadcast']) {
+			const reply = await dispatch({ method, args: {} }, context, liveSignal);
+			expect(reply).toMatchObject({ ok: false, error: { code: 'unsupported' } });
+		}
+	});
+
 	it('answers an aborted call with a timeout', async () => {
 		const controller = new AbortController();
 		controller.abort();

@@ -1,10 +1,10 @@
 import express from 'express';
-import type { Server } from 'node:http';
+import type { IncomingMessage, Server } from 'node:http';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { getEnv } from '../env.js';
 import logger from '../logger.js';
-import { getIPFromReq } from './get-ip-from-req.js';
+import { getIPForRequest, getIPFromReq } from './get-ip-from-req.js';
 import { getTrustProxyFn } from './resolve-client-ip.js';
 
 const trustAll = () => true;
@@ -128,6 +128,37 @@ describe('getIPFromReq', () => {
 		getEnv()['IP_CUSTOM_HEADER'] = false;
 		const req = makeReq({ peer: '10.0.0.1', trust: 'nope' });
 		expect(() => getIPFromReq(req)).toThrow();
+	});
+});
+
+describe('getIPForRequest', () => {
+	let original: unknown;
+
+	beforeEach(() => {
+		original = getEnv()['IP_CUSTOM_HEADER'];
+		getEnv()['IP_CUSTOM_HEADER'] = false;
+	});
+
+	afterEach(() => {
+		getEnv()['IP_CUSTOM_HEADER'] = original;
+	});
+
+	function rawReq(peer: string, xff?: string): IncomingMessage {
+		const headers: Record<string, string> = {};
+		if (xff !== undefined) headers['x-forwarded-for'] = xff;
+		return { socket: { remoteAddress: peer }, headers } as unknown as IncomingMessage;
+	}
+
+	test('resolves a raw IncomingMessage that has no app property', () => {
+		const app = express();
+		app.set('trust proxy', true);
+		expect(getIPForRequest(app, rawReq('10.0.0.1', '198.51.100.7'))).toBe('198.51.100.7');
+	});
+
+	test('an untrusted peer on a raw request cannot inject a forwarded address', () => {
+		const app = express();
+		app.set('trust proxy', false);
+		expect(getIPForRequest(app, rawReq('203.0.113.5', '198.51.100.7'))).toBe('203.0.113.5');
 	});
 });
 

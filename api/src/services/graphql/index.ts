@@ -84,6 +84,7 @@ import { GraphQLStringOrFloat } from './types/string-or-float.js';
 import { GraphQLVoid } from './types/void.js';
 import { validateGraphQLDocument } from './query-gate.js';
 import { authenticationAccountabilityFromRequest } from './request-accountability.js';
+import { createSubscriptionGenerator } from './subscription.js';
 import { addPathToValidationError } from './utils/add-path-to-validation-error.js';
 import formatGraphqlErrors from './utils/process-error.js';
 
@@ -423,6 +424,54 @@ export class GraphQLService {
 					description: "There's no data to query.",
 				},
 			});
+		}
+
+		if (this.scope === 'items' && readableCollections.length > 0) {
+			const uniqueTypeName = (base: string): string => {
+				let name = base;
+				let index = 1;
+
+				while (schemaComposer.has(name)) {
+					name = `${base}_gql${index}`;
+					index++;
+				}
+
+				return name;
+			};
+
+			const subscriptionEventType = schemaComposer.createEnumTC({
+				name: uniqueTypeName('EventEnum'),
+				values: {
+					create: { value: 'create' },
+					update: { value: 'update' },
+					delete: { value: 'delete' },
+				},
+			});
+
+			schemaComposer.Subscription.addFields(
+				readableCollections.reduce((acc, collection) => {
+					const eventName = `${collection.collection}_mutated`;
+
+					const subscriptionType = schemaComposer.createObjectTC({
+						name: uniqueTypeName(eventName),
+						fields: {
+							key: new GraphQLNonNull(GraphQLID),
+							event: subscriptionEventType,
+							data: ReadCollectionTypes[collection.collection]!,
+						},
+					});
+
+					acc[eventName] = {
+						type: subscriptionType,
+						args: {
+							event: subscriptionEventType,
+						},
+						subscribe: createSubscriptionGenerator(self, eventName),
+					};
+
+					return acc;
+				}, {} as ObjectTypeComposerFieldConfigMapDefinition<any, any>)
+			);
 		}
 
 		if (Object.keys(schema.create.collections).length > 0) {

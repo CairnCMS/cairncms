@@ -15,6 +15,8 @@ export const MESSENGER_RECOVERED = 'The messenger connection recovered.';
 export const MESSENGER_CONFIG_INVALID =
 	'The messenger Redis configuration is invalid, so cross-instance cache and flow changes will not propagate. Correct the configuration and restart the API.';
 
+export const MESSENGER_CALLBACK_FAILED = 'A messenger subscription callback failed.';
+
 const FAIL_CLOSED_OPTIONS: RedisOptions = {
 	enableOfflineQueue: false,
 	autoResendUnfulfilledCommands: false,
@@ -24,13 +26,33 @@ const FAIL_CLOSED_OPTIONS: RedisOptions = {
 
 export type MessengerStatus = 'available' | 'unavailable';
 
-export type MessengerSubscriptionCallback = (payload: Record<string, any>) => void;
+export type MessengerSubscriptionCallback = (payload: Record<string, any>) => void | Promise<void>;
 
 export interface Messenger {
 	publish: (channel: string, payload: Record<string, any>) => void;
 	subscribe: (channel: string, callback: MessengerSubscriptionCallback) => void;
-	unsubscribe: (channel: string) => void;
+	unsubscribe: (channel: string, callback: MessengerSubscriptionCallback) => void;
 	getStatus: () => MessengerStatus;
+}
+
+/** One failing callback must not stop the others, and an async callback's rejection must not go unhandled. */
+function dispatchToCallbacks(
+	callbacks: Set<MessengerSubscriptionCallback> | undefined,
+	payload: Record<string, any>
+): void {
+	if (!callbacks) return;
+
+	for (const callback of [...callbacks]) {
+		try {
+			const result = callback(payload);
+
+			if (result instanceof Promise) {
+				result.catch(() => logger.warn(MESSENGER_CALLBACK_FAILED));
+			}
+		} catch {
+			logger.warn(MESSENGER_CALLBACK_FAILED);
+		}
+	}
 }
 
 function buildClient(): Redis {
@@ -48,22 +70,33 @@ function buildClient(): Redis {
 }
 
 export class MessengerMemory implements Messenger {
-	handlers: Record<string, MessengerSubscriptionCallback>;
+	handlers: Map<string, Set<MessengerSubscriptionCallback>>;
 
 	constructor() {
-		this.handlers = {};
+		this.handlers = new Map();
 	}
 
 	publish(channel: string, payload: Record<string, any>) {
-		this.handlers[channel]?.(payload);
+		dispatchToCallbacks(this.handlers.get(channel), payload);
 	}
 
 	subscribe(channel: string, callback: MessengerSubscriptionCallback) {
-		this.handlers[channel] = callback;
+		let callbacks = this.handlers.get(channel);
+
+		if (!callbacks) {
+			callbacks = new Set();
+			this.handlers.set(channel, callbacks);
+		}
+
+		callbacks.add(callback);
 	}
 
-	unsubscribe(channel: string) {
-		delete this.handlers[channel];
+	unsubscribe(channel: string, callback: MessengerSubscriptionCallback) {
+		const callbacks = this.handlers.get(channel);
+		if (!callbacks) return;
+
+		callbacks.delete(callback);
+		if (callbacks.size === 0) this.handlers.delete(channel);
 	}
 
 	getStatus(): MessengerStatus {
@@ -77,7 +110,7 @@ export class MessengerRedis implements Messenger {
 	sub!: Redis;
 
 	private failed = false;
-	private desired = new Map<string, MessengerSubscriptionCallback>();
+	private desired = new Map<string, Set<MessengerSubscriptionCallback>>();
 	private acked = new Set<string>();
 	private pendingUnsub = new Set<string>();
 	private subGeneration = 0;
@@ -122,7 +155,7 @@ export class MessengerRedis implements Messenger {
 		this.sub = sub;
 
 		this.sub.on('message', (channel: string, payloadString: string) => {
-			this.desired.get(channel)?.(parseJSON(payloadString));
+			dispatchToCallbacks(this.desired.get(channel), parseJSON(payloadString));
 		});
 
 		// Raw errors stay suppressed; this listener updates health and transition state.
@@ -161,36 +194,56 @@ export class MessengerRedis implements Messenger {
 		if (this.failed) return;
 
 		const full = `${this.namespace}:${channel}`;
-		this.desired.set(full, callback);
-		this.pendingUnsub.delete(full);
-		this.acked.delete(full);
+		let callbacks = this.desired.get(full);
+		const firstForChannel = callbacks === undefined;
 
-		if (this.subReady) {
-			const generation = this.subGeneration;
+		if (!callbacks) {
+			callbacks = new Set();
+			this.desired.set(full, callbacks);
+		}
 
-			this.runOn('sub', this.sub.subscribe(full)).then(
-				() => {
-					if (generation === this.subGeneration && this.desired.has(full)) {
-						this.acked.add(full);
-						this.updateStatus();
+		callbacks.add(callback);
+
+		// One Redis subscription per channel: only the first callback drives the subscribe.
+		if (firstForChannel) {
+			this.pendingUnsub.delete(full);
+			this.acked.delete(full);
+
+			if (this.subReady) {
+				const generation = this.subGeneration;
+
+				this.runOn('sub', this.sub.subscribe(full)).then(
+					() => {
+						if (generation === this.subGeneration && this.desired.has(full)) {
+							this.acked.add(full);
+							this.updateStatus();
+						}
+					},
+					() => {
+						if (generation === this.subGeneration) {
+							this.sawFailure = true;
+							this.updateStatus();
+						}
 					}
-				},
-				() => {
-					if (generation === this.subGeneration) {
-						this.sawFailure = true;
-						this.updateStatus();
-					}
-				}
-			);
+				);
+			}
 		}
 
 		this.updateStatus();
 	}
 
-	unsubscribe(channel: string) {
+	unsubscribe(channel: string, callback: MessengerSubscriptionCallback) {
 		if (this.failed) return;
 
 		const full = `${this.namespace}:${channel}`;
+		const callbacks = this.desired.get(full);
+		if (!callbacks) return;
+
+		callbacks.delete(callback);
+
+		// Keep the Redis subscription while any callback for this channel remains.
+		if (callbacks.size > 0) return;
+
 		this.desired.delete(full);
 		this.acked.delete(full);
 

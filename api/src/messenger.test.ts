@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MESSENGER_CONFIG_INVALID, MESSENGER_RECOVERED, MESSENGER_UNAVAILABLE } from './messenger.js';
+import {
+	MESSENGER_CALLBACK_FAILED,
+	MESSENGER_CONFIG_INVALID,
+	MESSENGER_RECOVERED,
+	MESSENGER_UNAVAILABLE,
+} from './messenger.js';
 
 type Listener = (...args: unknown[]) => void;
 
@@ -189,7 +194,7 @@ describe('construction', () => {
 
 		expect(() => messenger.publish('flows', {})).not.toThrow();
 		expect(() => messenger.subscribe('flows', () => undefined)).not.toThrow();
-		expect(() => messenger.unsubscribe('flows')).not.toThrow();
+		expect(() => messenger.unsubscribe('flows', () => undefined)).not.toThrow();
 	});
 
 	it('disconnects a partially constructed client when the second fails', async () => {
@@ -262,8 +267,9 @@ describe('subscription registry', () => {
 		const { getMessenger } = await import('./messenger.js');
 		const messenger = getMessenger();
 
-		messenger.subscribe('flows', () => undefined);
-		messenger.unsubscribe('flows');
+		const callback = () => undefined;
+		messenger.subscribe('flows', callback);
+		messenger.unsubscribe('flows', callback);
 
 		subClient().emit('ready');
 		await flush();
@@ -325,6 +331,118 @@ describe('subscription registry', () => {
 		expect(messenger.getStatus()).toBe('available');
 		expect(hoisted.logger.warn).not.toHaveBeenCalled();
 		expect(hoisted.logger.info).not.toHaveBeenCalled();
+	});
+});
+
+describe('multiple callbacks per channel', () => {
+	it('dispatches an incoming message to every callback and isolates failures without leaking error content', async () => {
+		enableRedis();
+		const { getMessenger } = await import('./messenger.js');
+		const messenger = getMessenger();
+		const received: Array<Record<string, any>> = [];
+		const secret = 'sup3r-secret-token';
+
+		messenger.subscribe('flows', () => {
+			throw new Error(`sync failure exposing ${secret}`);
+		});
+
+		messenger.subscribe('flows', () => Promise.reject(new Error(`async failure exposing ${secret}`)));
+		messenger.subscribe('flows', (payload) => received.push(payload));
+
+		hoisted.logger.warn.mockClear();
+		subClient().emit('message', 'cairncms:flows', JSON.stringify({ type: 'reload' }));
+		await flush();
+
+		expect(received).toEqual([{ type: 'reload' }]);
+		expect(hoisted.logger.warn).toHaveBeenCalledTimes(2);
+		expect(hoisted.logger.warn).toHaveBeenCalledWith(MESSENGER_CALLBACK_FAILED);
+
+		const warned = hoisted.logger.warn.mock.calls.flat().join(' ');
+		expect(warned).not.toContain(secret);
+	});
+
+	it('creates a single redis subscription for many callbacks on one channel', async () => {
+		enableRedis();
+		const { getMessenger } = await import('./messenger.js');
+		const messenger = getMessenger();
+
+		await bringUp();
+		subClient().subscribe.mockClear();
+
+		messenger.subscribe('flows', () => undefined);
+		messenger.subscribe('flows', () => undefined);
+		messenger.subscribe('flows', () => undefined);
+		await flush();
+
+		const flowsSubs = subClient().subscribe.mock.calls.filter(([channel]) => channel === 'cairncms:flows');
+		expect(flowsSubs).toHaveLength(1);
+	});
+
+	it('keeps delivering to remaining callbacks and retains the redis subscription after one is removed', async () => {
+		enableRedis();
+		const { getMessenger } = await import('./messenger.js');
+		const messenger = getMessenger();
+
+		await bringUp();
+		const kept = vi.fn();
+		const removed = vi.fn();
+		messenger.subscribe('flows', kept);
+		messenger.subscribe('flows', removed);
+		await flush();
+		subClient().unsubscribe.mockClear();
+
+		messenger.unsubscribe('flows', removed);
+
+		subClient().emit('message', 'cairncms:flows', JSON.stringify({ x: 1 }));
+		expect(kept).toHaveBeenCalledWith({ x: 1 });
+		expect(removed).not.toHaveBeenCalled();
+		expect(subClient().unsubscribe).not.toHaveBeenCalled();
+	});
+
+	it('unsubscribes from redis only when the last callback is removed', async () => {
+		enableRedis();
+		const { getMessenger } = await import('./messenger.js');
+		const messenger = getMessenger();
+
+		await bringUp();
+		const first = () => undefined;
+		const second = () => undefined;
+		messenger.subscribe('flows', first);
+		messenger.subscribe('flows', second);
+		await flush();
+		subClient().unsubscribe.mockClear();
+
+		messenger.unsubscribe('flows', first);
+		expect(subClient().unsubscribe).not.toHaveBeenCalled();
+
+		messenger.unsubscribe('flows', second);
+		await flush();
+		expect(subClient().unsubscribe).toHaveBeenCalledWith('cairncms:flows');
+	});
+
+	it('restores delivery to every callback after recovering a rejected subscribe', async () => {
+		enableRedis();
+		const { getMessenger } = await import('./messenger.js');
+		const messenger = getMessenger();
+
+		await bringUp();
+		const a = vi.fn();
+		const b = vi.fn();
+
+		let calls = 0;
+		hoisted.subscribeImpl = () => (++calls === 1 ? Promise.reject(new Error('transient')) : Promise.resolve(1));
+
+		messenger.subscribe('flows', a);
+		messenger.subscribe('flows', b);
+		await flush();
+		expect(messenger.getStatus()).toBe('unavailable');
+
+		await vi.advanceTimersByTimeAsync(100);
+		expect(messenger.getStatus()).toBe('available');
+
+		subClient().emit('message', 'cairncms:flows', JSON.stringify({ x: 2 }));
+		expect(a).toHaveBeenCalledWith({ x: 2 });
+		expect(b).toHaveBeenCalledWith({ x: 2 });
 	});
 });
 
@@ -651,11 +769,12 @@ describe('socket-ready command rejection recovery', () => {
 		const { getMessenger } = await import('./messenger.js');
 		const messenger = getMessenger();
 
-		messenger.subscribe('flows', () => undefined);
+		const callback = () => undefined;
+		messenger.subscribe('flows', callback);
 		await bringUp();
 
 		hoisted.unsubscribeImpl = () => Promise.reject(new Error('transient'));
-		messenger.unsubscribe('flows');
+		messenger.unsubscribe('flows', callback);
 		await flush();
 		expect(messenger.getStatus()).toBe('unavailable');
 
@@ -673,11 +792,12 @@ describe('socket-ready command rejection recovery', () => {
 		const { getMessenger } = await import('./messenger.js');
 		const messenger = getMessenger();
 
-		messenger.subscribe('flows', () => undefined);
+		const firstCallback = () => undefined;
+		messenger.subscribe('flows', firstCallback);
 		await bringUp();
 
 		hoisted.unsubscribeImpl = () => Promise.reject(new Error('transient'));
-		messenger.unsubscribe('flows');
+		messenger.unsubscribe('flows', firstCallback);
 		await flush();
 		expect(messenger.getStatus()).toBe('unavailable');
 
@@ -700,14 +820,15 @@ describe('socket-ready command rejection recovery', () => {
 		const { getMessenger } = await import('./messenger.js');
 		const messenger = getMessenger();
 
-		messenger.subscribe('a', () => undefined);
+		const callbackA = () => undefined;
+		messenger.subscribe('a', callbackA);
 		const callbackB = vi.fn();
 		messenger.subscribe('b', callbackB);
 		await bringUp();
 
 		hoisted.unsubscribeImpl = () => Promise.reject(new Error('transient'));
-		messenger.unsubscribe('a');
-		messenger.unsubscribe('b');
+		messenger.unsubscribe('a', callbackA);
+		messenger.unsubscribe('b', callbackB);
 		await flush();
 		expect(messenger.getStatus()).toBe('unavailable');
 
@@ -829,6 +950,41 @@ describe('memory messenger', () => {
 
 		expect(getMessenger().getStatus()).toBe('available');
 		expect(getMessengerStatus()).toBe('available');
+	});
+
+	it('fans out to every callback, isolates failures, and removes only the unsubscribed callback', async () => {
+		hoisted.env['MESSENGER_STORE'] = 'local';
+		const { getMessenger } = await import('./messenger.js');
+		const messenger = getMessenger();
+
+		const received: Array<Record<string, any>> = [];
+		const kept = vi.fn();
+		const removed = vi.fn();
+
+		messenger.subscribe('flows', () => {
+			throw new Error('boom');
+		});
+
+		messenger.subscribe('flows', kept);
+		messenger.subscribe('flows', removed);
+		messenger.subscribe('flows', (payload) => received.push(payload));
+
+		hoisted.logger.warn.mockClear();
+		messenger.publish('flows', { type: 'reload' });
+		await flush();
+
+		expect(received).toEqual([{ type: 'reload' }]);
+		expect(kept).toHaveBeenCalledWith({ type: 'reload' });
+		expect(removed).toHaveBeenCalledWith({ type: 'reload' });
+		expect(hoisted.logger.warn).toHaveBeenCalledTimes(1);
+		expect(hoisted.logger.warn).toHaveBeenCalledWith(MESSENGER_CALLBACK_FAILED);
+
+		messenger.unsubscribe('flows', removed);
+		messenger.publish('flows', { type: 'again' });
+		await flush();
+
+		expect(kept).toHaveBeenCalledTimes(2);
+		expect(removed).toHaveBeenCalledTimes(1);
 	});
 
 	it('exposes the live redis status through getMessengerStatus', async () => {

@@ -214,6 +214,7 @@ const config: Config = {
 		sqlite3: 'SQLite 3',
 	},
 	envs: {
+		// Keep API listeners and their test-specific offsets below Linux's default ephemeral range.
 		postgres: {
 			...directusConfig,
 			DB_CLIENT: 'pg',
@@ -222,7 +223,7 @@ const config: Config = {
 			DB_PASSWORD: 'secret',
 			DB_PORT: '6100',
 			DB_DATABASE: 'directus',
-			PORT: '59152',
+			PORT: '30000',
 		},
 		postgres10: {
 			...directusConfig,
@@ -232,7 +233,7 @@ const config: Config = {
 			DB_PASSWORD: 'secret',
 			DB_PORT: '6101',
 			DB_DATABASE: 'directus',
-			PORT: '59153',
+			PORT: '30001',
 		},
 		mysql: {
 			...directusConfig,
@@ -242,7 +243,7 @@ const config: Config = {
 			DB_USER: 'root',
 			DB_PASSWORD: 'secret',
 			DB_DATABASE: 'directus',
-			PORT: '59154',
+			PORT: '30002',
 		},
 		mysql5: {
 			...directusConfig,
@@ -252,7 +253,7 @@ const config: Config = {
 			DB_USER: 'root',
 			DB_PASSWORD: 'secret',
 			DB_DATABASE: 'directus',
-			PORT: '59155',
+			PORT: '30003',
 		},
 		maria: {
 			...directusConfig,
@@ -262,7 +263,7 @@ const config: Config = {
 			DB_USER: 'root',
 			DB_PASSWORD: 'secret',
 			DB_DATABASE: 'directus',
-			PORT: '59156',
+			PORT: '30004',
 		},
 		mssql: {
 			...directusConfig,
@@ -272,7 +273,7 @@ const config: Config = {
 			DB_USER: 'sa',
 			DB_PASSWORD: 'Test@123',
 			DB_DATABASE: 'model',
-			PORT: '59157',
+			PORT: '30005',
 		},
 		oracle: {
 			...directusConfig,
@@ -280,7 +281,7 @@ const config: Config = {
 			DB_USER: 'secretsysuser',
 			DB_PASSWORD: 'secretpassword',
 			DB_CONNECT_STRING: `127.0.0.1:6106/XE`,
-			PORT: '59158',
+			PORT: '30006',
 		},
 		cockroachdb: {
 			...directusConfig,
@@ -290,13 +291,13 @@ const config: Config = {
 			DB_PASSWORD: '',
 			DB_PORT: '6107',
 			DB_DATABASE: 'defaultdb',
-			PORT: '59159',
+			PORT: '30007',
 		},
 		sqlite3: {
 			...directusConfig,
 			DB_CLIENT: 'sqlite3',
 			DB_FILENAME: './test.db',
-			PORT: '59160',
+			PORT: '30008',
 		},
 	},
 };
