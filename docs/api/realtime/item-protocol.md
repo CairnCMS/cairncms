@@ -32,7 +32,7 @@ The server replies:
 { "type": "auth", "status": "ok" }
 ```
 
-A failed authentication returns an [error frame](#responses-and-errors) with code `AUTH_FAILED`, and an expired token returns `TOKEN_EXPIRED`. Re-authenticate at any time by sending another `auth` frame with a fresh token.
+A failed authentication returns an [error frame](#responses-and-errors) with code `AUTH_FAILED`. Before the connection has authenticated successfully, every rejected credential uses `AUTH_FAILED`, including an expired one. After the connection has authenticated as a user, an expired token uses `TOKEN_EXPIRED`, and any other invalid credential still uses `AUTH_FAILED`. See [Authentication](/docs/api/realtime/authentication/#connection-behavior-by-mode) for the full per-mode outcomes. Re-authenticate at any time by sending another `auth` frame with a fresh token.
 
 ## Subscriptions
 
@@ -53,6 +53,8 @@ The server sends each subscription message as a separate frame. A subscription w
 ```json
 { "type": "subscription", "event": "init", "data": [{ "id": 41, "title": "Existing" }], "uid": "a1" }
 ```
+
+The snapshot `data` is an array for a collection subscription. For an item-scoped subscription, one that sets `item`, `data` is the single item object instead. When the subscription's `query` requests `meta`, the `init` frame also carries a `meta` object with the standard query metadata.
 
 Later changes arrive in their own frames:
 
@@ -75,6 +77,8 @@ Unsubscribe with the same `uid`:
 ```json
 { "type": "unsubscribe", "uid": "a1" }
 ```
+
+An `unsubscribe` with a `uid` ends that one subscription. An `unsubscribe` with no `uid` ends every subscription on the connection. Either way the server acknowledges with `{ "type": "subscription", "event": "unsubscribe" }`, echoing the `uid` when one was sent.
 
 ## Item operations
 
@@ -108,15 +112,15 @@ Item operations are permission-checked exactly as the HTTP API is, under the con
 
 ## Responses and errors
 
-Not every message carries a `status`. An authentication acknowledgement is `{ "type": "auth", "status": "ok" }`. Item results and subscription messages have no `status` field and carry their `data` directly. An error is a message with `status: "error"` and a code:
+Not every message carries a `status`. An authentication acknowledgement is `{ "type": "auth", "status": "ok" }`. Item results and subscription messages have no `status` field and carry their `data` directly. A read result, or a multi-item update, also carries a `meta` object when the request's `query` asks for it. An error is a message with `status: "error"` and a code:
 
 ```json
 { "type": "subscribe", "status": "error", "error": { "code": "DELETE_FEED_FORBIDDEN", "message": "Delete notifications are not available for this subscription." }, "uid": "d1" }
 ```
 
-The `type` on an error is the type of the message that failed, so a client can route it by `type` and `uid`.
+The `type` on an error is the type of the message that failed, so a client can route it by `type` and `uid`. A failure that is not tied to a routable command, such as a malformed frame, an unrecognized message type, or a rate or pending-command rejection, uses the type `server`.
 
-Most errors are informational and leave the connection open. A malformed frame, for example, returns `INVALID_PAYLOAD` and the connection keeps serving. A few conditions close the connection: an authentication failure during the handshake, and `TOO_MANY_PENDING`.
+Most errors are informational and leave the connection open. A malformed frame, for example, returns `INVALID_PAYLOAD` and the connection keeps serving. The conditions that end the connection are listed under [Close codes](#close-codes).
 
 The error codes:
 
@@ -128,7 +132,7 @@ The error codes:
 | `FORBIDDEN` | The request is not permitted. This response does not distinguish an unknown collection from one the connection cannot access. |
 | `UNSUPPORTED_MESSAGE_TYPE` | The `type` is not a recognized message type. |
 | `REQUESTS_EXCEEDED` | The connection exceeded its message rate limit. |
-| `TOO_MANY_PENDING` | Too many commands are in flight on the connection. |
+| `TOO_MANY_PENDING` | A command arrived while 10 others were already waiting. The connection then closes with `1013`. |
 | `SUBSCRIPTION_LIMIT` | The subscription limit for the connection was reached. |
 | `DELETE_FEED_FORBIDDEN` | The subscription is not eligible for delete notifications. |
 | `INTERNAL_ERROR` | The request failed for an unexpected reason. |
@@ -139,12 +143,15 @@ The server sends WebSocket ping control frames at the interval set by `WEBSOCKET
 
 ## Close codes
 
-The item transport reports recoverable errors as error frames and keeps the connection open. It closes the connection in a few cases:
+Admission happens at the HTTP upgrade, before the socket opens, so a connection refused for a disallowed origin, a query-string token, an exhausted rate-limit budget, or unavailable transport, process, or IP capacity is rejected with an HTTP status, not a close code. See [upgrade rejection rules](/docs/api/realtime/authentication/#upgrade-rejection-rules).
 
-- **`1013`** (try again later) — a connection-capacity limit is exceeded, or the server enters overload. An exceeded per-message rate limit does not close the connection: it returns a `REQUESTS_EXCEEDED` error frame instead.
+Once the socket is open, the item transport reports recoverable errors as error frames and keeps the connection open. It closes the connection in these cases:
+
+- **`1013`** (try again later) — the server sheds the connection under pressure. This covers pending-command overflow, which sends a `TOO_MANY_PENDING` frame first, an outbound queue that fills for a slow consumer, source-event overload on the process, a full authenticated-user bucket during `public` or `handshake` authentication, and a full client-IP bucket when a `public` connection falls back to anonymous access. After authentication, an exceeded per-message rate limit returns a `REQUESTS_EXCEEDED` error frame and leaves the connection open. During the `handshake` authentication, the same error closes the connection.
 - **`1009`** (message too big) — an outbound frame would exceed the 1 MiB frame bound, for example a very large initial snapshot.
+- **Authentication close** — under `handshake` and `strict`, a failed or timed-out authentication closes the connection, and a credential for a different user closes in every mode. See [Authentication](/docs/api/realtime/authentication/#connection-behavior-by-mode) for the per-mode outcomes.
 
-A client that is closed should reconnect, resubscribe, and reread current state.
+See [Reliability](/docs/api/realtime/reliability/#plan-capacity) for deployment and recovery guidance. A client that is closed should reconnect, resubscribe, and reread current state.
 
 ## Where to go next
 

@@ -14,25 +14,27 @@ Realtime is off by default. Set `WEBSOCKETS_ENABLED=true` to enable it. The item
 
 The paths must differ. If they match, CairnCMS disables GraphQL and keeps the item transport available. An invalid shared setting disables realtime, while an invalid transport setting disables only that transport. HTTP remains available in either case.
 
+Enabling `WEBSOCKETS_ENABLED` while disabling both transports serves no realtime path. Leave at least one transport enabled.
+
 ## Run multiple API instances
 
 Configure the Redis messenger when running more than one API instance. It distributes each change to subscribers connected to every instance. Without Redis, an instance can deliver only the changes produced on that same instance.
 
-Redis distributes notifications but does not combine resource counters. Every API process enforces its own connection, subscription, queue, and dispatch limits. Total capacity therefore grows with the number of instances, and a user or client IP can reach the admission limit separately on each instance. Use a reverse proxy when you also need a cluster-wide connection limit.
+Redis distributes notifications but does not combine resource counters. Every API process enforces its own connection and subscription capacity. Total capacity therefore grows with the number of instances, and a user or client IP can reach the admission limit separately on each instance. Use a reverse proxy when you also need a cluster-wide connection limit.
 
-## Understand the limits
+## Plan capacity
 
-Realtime uses finite limits to protect each API process:
+Each API process enforces its own realtime limits. Connection limits and `MAX_PAYLOAD_SIZE` are configurable. See [Manage configuration](/docs/manage/configuration/#realtime-websockets) for their settings and defaults.
 
-- **Connections** are capped per transport and API process. Anonymous and pre-authentication connections use the client IP limit. Authenticated connections use the stable user limit.
-- **Subscriptions** are capped per connection and API process.
-- **Inbound messages** use the shared `MAX_PAYLOAD_SIZE`.
-- **Outbound frames** are limited to 1 MiB. An oversized frame closes the affected connection with `1009` before the frame is sent.
-- **Outbound queues** are bounded per connection. A slow consumer whose queue fills is closed with `1013`.
+- A connection can hold up to 100 subscriptions, and an API process can hold up to 10,000.
+- Outbound frames are limited to 1 MiB. An oversized frame closes the connection with `1009` before sending the frame.
+- CairnCMS bounds queued work to protect the API process. A slow consumer or local overload can close an affected connection with `1013`.
 
-When a connection limit is reached, CairnCMS refuses the new connection. Message-rate behavior differs by transport: an established item-protocol connection receives `REQUESTS_EXCEEDED` and stays open, while a GraphQL connection closes with `1013`.
+When CairnCMS cannot admit a connection because capacity is unavailable, it refuses the HTTP upgrade with `503`. Capacity reached after the socket opens can close it with `1013`. See [Authentication](/docs/api/realtime/authentication/#connection-behavior-by-mode) for how this applies to each mode.
 
-Connection limits and the shared `MAX_PAYLOAD_SIZE` are operator-configurable. Subscription, outbound-frame, and outbound-queue bounds are fixed. Raising a configurable limit permits more concurrent or per-message work, so account for the instance's memory, file descriptors, and database capacity. See [Manage configuration](/docs/manage/configuration/#realtime-websockets) for the settings and defaults.
+Realtime uses the same `RATE_LIMITER_*` budget as HTTP. An exhausted budget can reject an upgrade with `429`. Once connected, the item protocol reports `REQUESTS_EXCEEDED`, while GraphQL closes with `1013`.
+
+Raising a configurable limit permits more concurrent or per-message work. Account for the instance's memory, file descriptors, and database capacity.
 
 ## Configure a reverse proxy
 
@@ -42,13 +44,14 @@ A WebSocket connection starts as an HTTP upgrade request. Configure the reverse 
 - Disable response buffering for WebSocket connections.
 - Set the idle or read timeout longer than `WEBSOCKETS_HEARTBEAT_PERIOD`.
 - Preserve the `Authorization` and `Origin` headers when using `strict` authentication or origin checks.
+- If `PUBLIC_URL` does not provide an absolute server origin, forward `X-Forwarded-Proto` and configure `IP_TRUST_PROXY` so CairnCMS can derive the external request scheme. Without that trusted header, a TLS-terminating proxy appears as `http` to CairnCMS and can cause a legitimate `https` origin to be rejected.
 
 ## Plan recovery
 
 CairnCMS treats the database as authoritative, so realtime does not store or replay notifications. Applications maintain current state through API reads and choose when to reconnect or reconcile.
 
 - **Restart or deployment** closes existing connections. The server does not queue missed notifications for later delivery.
-- **Local overload** closes every subscribed connection on the affected process with `1013` when its source-event queue fills. That process refuses new events and subscriptions until it recovers.
+- **Local overload** closes subscribed connections on the affected process with `1013`. That process refuses new events and subscriptions until it recovers.
 - **Messenger interruption** can drop a notification without closing the client connection. Check `/server/health` and the API logs when cross-instance delivery is degraded.
 - **Connection failure** from a network interruption, resource limit, or oversized frame ends the active subscriptions on that socket.
 

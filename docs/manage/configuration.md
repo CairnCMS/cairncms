@@ -322,12 +322,12 @@ Both transports deliver permission-checked collection changes. Deployments with 
 - **`WEBSOCKETS_GRAPHQL_CONN_LIMIT`** — maximum concurrent connections on the GraphQL transport. Accepts a whole number of `1` or greater. Default `1000`.
 - **`WEBSOCKETS_HEARTBEAT_PERIOD`** — seconds between server pings; a connection that misses two periods without a pong is closed. Accepts a whole number of seconds from `1` to `1073741` (about 12 days). Default `30`.
 - **`WEBSOCKETS_USER_CONN_LIMIT`** — maximum concurrent connections per authenticated user. Accepts a whole number of `1` or greater. Default `10`.
-- **`WEBSOCKETS_IP_CONN_LIMIT`** — maximum concurrent connections per client IP. Accepts a whole number of `1` or greater. Default `50`.
+- **`WEBSOCKETS_IP_CONN_LIMIT`** — maximum concurrent connections per client IP. It gates anonymous and pre-authentication connections. Once a connection authenticates, it counts against `WEBSOCKETS_USER_CONN_LIMIT` instead. Accepts a whole number of `1` or greater. Default `50`.
 - **`WEBSOCKETS_PROCESS_CONN_LIMIT`** — maximum concurrent connections per API process. Accepts a whole number of `1` or greater. Default `1000`.
 
 An invalid shared setting disables realtime. An invalid item-protocol or GraphQL setting disables only that transport. HTTP remains available.
 
-The shared `MAX_PAYLOAD_SIZE` bounds inbound messages (see [Server](#server)). Outbound WebSocket frames are limited to 1 MiB, including initial subscription results and change notifications. An oversized frame closes the affected connection. The client must reconnect and reread current state.
+The shared `MAX_PAYLOAD_SIZE` bounds inbound WebSocket frames (see [Server](#server)). Realtime requires it to resolve to a positive whole number of bytes. Outbound WebSocket frames are limited to 1 MiB, including initial subscription results and change notifications. An oversized frame closes the affected connection. The client must reconnect and reread current state.
 
 Realtime is a best-effort notification channel whose latency reflects the deployment's workload and available capacity. Operators should size infrastructure for expected result sets, query cost, and subscriber load. Applications that require current state should reconcile through API reads rather than depend on notification timing.
 

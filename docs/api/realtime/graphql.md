@@ -72,16 +72,23 @@ The GraphQL WebSocket surface enforces the same guards as the GraphQL HTTP endpo
 
 ## Renewal
 
-There is no in-band re-authentication on the GraphQL transport. When the access token expires, reconnect with a fresh token and resubscribe. This differs from the item protocol, which re-authenticates in-band.
+GraphQL has no in-band reauthentication. In `public` mode, expiry drops the connection to anonymous access without a notice frame. Reconnect with a fresh token and resubscribe to restore authenticated access. In `handshake` and `strict`, expiry closes the connection and requires a reconnect. See the [authentication table](/docs/api/realtime/authentication/#connection-behavior-by-mode) for the full mode-specific outcomes.
 
 ## Close codes
 
 The GraphQL transport uses the `graphql-transport-ws` close codes. The ones to expect:
 
 - **`4400`** — a malformed frame, or a frame that is not valid for the protocol state.
+- **`4401`** — a `subscribe` was sent before the connection was acknowledged.
 - **`4403`** — forbidden: an authentication failure at `connection_init`, or a token supplied under `strict`.
 - **`4408`** — connection-initialisation timeout: no `connection_init` arrived within the deadline. This applies under `public` and `strict`. Under `handshake` the `graphql-transport-ws` init timer is disabled and the base authentication deadline applies instead, so a handshake connection that never authenticates closes on that deadline without this protocol code.
-- **`1013`** — try again later, when a capacity or rate limit is exceeded.
+- **`4409`** — a `subscribe` reused an operation `id` that is already active on the connection.
+- **`4429`** — more than one `connection_init` was sent.
+- **`1009`** — an outbound frame would exceed the 1 MiB frame bound.
+- **`1013`** — try again later, when capacity, a rate limit, or the pending-command limit is exceeded.
+- **`4500`** — an internal error while delivering a subscription.
+
+The `4400`, `4403`, `1013`, and `4500` closes come from CairnCMS. The `4401`, `4408`, `4409`, and `4429` closes come from the `graphql-transport-ws` protocol layer, and `1009` from the shared outbound-frame guard.
 
 On any close, reconnect and resubscribe, then reread current state. A subscription is ended cleanly with the protocol's `complete` message.
 

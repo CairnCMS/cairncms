@@ -20,7 +20,7 @@ const client = createCairnCMS('https://example.com')
   .with(realtime({ authMode: 'handshake' }));
 ```
 
-Use `staticToken` for a fixed token, or the `authentication` composable when the client also manages a login and refresh lifecycle. The realtime client reads the token from whichever authentication composable is present.
+Use `staticToken` for a fixed token, or the `authentication` composable when the client also manages a login and refresh lifecycle. The realtime client reads the token from whichever authentication composable is present. When the server sends `TOKEN_EXPIRED`, the client asks that composable for its current token and attempts at most one in-place reauthentication for each returned token while the socket remains open. In `public` mode the connection first returns to anonymous access, and a refreshed token can restore authenticated access. In `handshake` mode the server closes the connection, so recovery requires reconnecting. A `staticToken` cannot restore authority because it keeps returning the rejected token, so on expiry it follows the mode-specific outcome described under [static tokens](/docs/api/realtime/authentication/#static-tokens): anonymous under `public`, closed under `handshake`.
 
 ### Node
 
@@ -50,11 +50,11 @@ for await (const message of subscription) {
 
 The methods:
 
-- **`connect()`** — open the connection and authenticate.
+- **`connect()`** — open the socket. In `handshake` mode it also obtains a token and waits for the authentication acknowledgement.
 - **`disconnect()`** — close the connection. It stays closed until the next `connect()`.
-- **`isConnected()`** — whether the connection is currently open.
+- **`isConnected()`** — resolves to whether the connection is currently open. It is asynchronous, so await it, and it reports only whether the socket is open, not whether authentication has succeeded.
 - **`subscribe(collection, options?)`** — start a subscription. Returns `{ subscription, unsubscribe }`.
-- **`onWebSocket(event, handler)`** — attach a handler for a raw socket event (`open`, `close`, `error`, `message`). Returns a function that removes the handler.
+- **`onWebSocket(event, handler)`** — attach a handler for a raw socket event (`open`, `close`, `error`, `message`). Valid JSON message data is delivered parsed, and malformed or non-string data is forwarded as received. Returns a function that removes the handler.
 - **`sendMessage(message)`** — send a raw item-protocol frame.
 
 ## Subscription options
@@ -83,10 +83,10 @@ Delete-feed eligibility comes from an unconditional read permission, not from `i
 `realtime()` takes a config object:
 
 - **`authMode`** — `public` or `handshake`. Default `handshake`.
-- **`reconnect`** — `{ delay, retries }` to enable automatic reconnect, or `false`. Default `false`.
-- **`connect`** — `{ timeout }` in milliseconds for the connect attempt, or `false`.
-- **`heartbeat`** — whether the client answers application-level ping messages. Default on. The server's own heartbeat uses WebSocket control frames, which the underlying WebSocket answers automatically, independently of this option.
+- **`reconnect`** — `{ delay, retries }` to enable automatic reconnect, or `false`. Default `false`. The `delay` is the base backoff in milliseconds. It is applied with a 100 ms floor and a random jitter, so the shortest wait between attempts is 100 ms.
+- **`connect`** — `{ timeout }` in milliseconds for the connect attempt, or `false`. Default `{ timeout: 10000 }`, a 10-second connect deadline. Setting `connect: false` removes the deadline, so a connect attempt waits without a timeout.
 - **`debug`** — enable diagnostic logging.
+- **`url`** — an absolute WebSocket endpoint override. When omitted, the SDK derives the endpoint from the client URL.
 
 Only enable `public` when the public role's read access is meant to be world-readable in real time. `handshake` is the default because it requires a credential before the connection is usable.
 
@@ -95,6 +95,8 @@ Only enable `public` when the public role's read access is meant to be world-rea
 Automatic reconnect is off by default. When enabled, the client makes a single bounded series of attempts after an unexpected close, with a jittered backoff, and replays its active subscriptions on success. A manual `disconnect()` does not reconnect.
 
 Reconnect replays subscriptions, not missed events. The client does not receive changes that occurred while it was disconnected. On reconnect, reread current state. This is the [delivery model](/docs/api/realtime/#delivery-model): the notification stream is a prompt to reread, not a durable log.
+
+The client holds delivered frames that a consumer has not yet read in a receive buffer, bounded across the whole client at 1000 retained frames or 8 MiB, whichever it reaches first. Only frames still waiting for a slow or absent consumer count toward the bound. A frame handed straight to a waiting iterator does not. If the buffer overflows, the client fails its active subscription iterators with an error, drops the subscriptions it would replay, and closes the socket without reconnecting even when `reconnect` is enabled. The client stays usable: call `connect()` again to open a fresh connection and resubscribe.
 
 ## Where to go next
 
