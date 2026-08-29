@@ -397,6 +397,37 @@ describe('realtime composable lifecycle', () => {
 		void pending;
 	});
 
+	it('replays only owned subscriptions when an open handler swaps a uid during reconnect', async () => {
+		vi.spyOn(Math, 'random').mockReturnValue(0);
+		const client = makeClient({ authMode: 'public', reconnect: { delay: 10, retries: 3 } });
+		const ws1 = await openPublic(client);
+
+		await client.subscribe('articles' as never, { uid: 'keep' } as never);
+		const { unsubscribe: unsubReplace } = await client.subscribe('articles' as never, { uid: 'replace' } as never);
+
+		let swapped = false;
+		let successor: Promise<unknown> | undefined;
+
+		client.onWebSocket('open', () => {
+			if (swapped) return;
+			swapped = true;
+			unsubReplace();
+			successor = client.subscribe('articles' as never, { uid: 'replace' } as never);
+		});
+
+		ws1.serverClose(1000);
+		const ws2 = await waitForSocketCount(2);
+		ws2.open();
+		expect(successor).toBeDefined();
+		await successor;
+
+		await vi.waitFor(() => {
+			const subs = ws2.messages().filter((m) => m.type === 'subscribe');
+			expect(subs.filter((m) => m.uid === 'keep')).toHaveLength(1);
+			expect(subs.filter((m) => m.uid === 'replace')).toHaveLength(1);
+		});
+	});
+
 	it('exhausts a bounded number of reconnect attempts under repeated authentication failure', async () => {
 		vi.spyOn(Math, 'random').mockReturnValue(0);
 		const client = makeClient({ authMode: 'handshake', reconnect: { delay: 10, retries: 2 } });
@@ -1156,7 +1187,7 @@ describe('realtime SDK channel ingress', () => {
 		expect(result.value).toMatchObject({ event: 'init', data: [{ id: 9 }] });
 	});
 
-	it('normalizes omitted and explicit-undefined uids and rejects empty or non-string ones', async () => {
+	it('normalizes omitted and explicit-undefined uids, accepts an empty string, and rejects non-string ones', async () => {
 		const client = makeClient({ authMode: 'public' });
 		const ws = await openPublic(client);
 
@@ -1166,7 +1197,15 @@ describe('realtime SDK channel ingress', () => {
 		await client.subscribe('articles' as never, { uid: undefined } as never);
 		expect(subscribeFrame(ws).uid).not.toBe('undefined');
 
-		await expect(client.subscribe('articles' as never, { uid: '' } as never)).rejects.toThrow();
+		const empty = await client.subscribe('articles' as never, { uid: '' } as never);
+		expect(subscribeFrame(ws).uid).toBe('');
+		ws.message({ type: 'subscription', uid: '', event: 'init', data: [{ id: 7 }] });
+
+		expect((await empty.subscription[Symbol.asyncIterator]().next()).value).toMatchObject({
+			event: 'init',
+			data: [{ id: 7 }],
+		});
+
 		await expect(client.subscribe('articles' as never, { uid: 5 } as never)).rejects.toThrow();
 	});
 
@@ -1255,16 +1294,40 @@ describe('realtime SDK channel ingress', () => {
 		expect(await client.isConnected()).toBe(true);
 	});
 
-	it('rejects one of two subscriptions that reserve the same explicit uid before open', async () => {
+	it('reserves an explicit uid before open so a concurrent generated uid does not collide', async () => {
 		const client = makeClient({ authMode: 'public' });
 
-		const first = client.subscribe('articles' as never, { uid: 'dup' } as never);
-		const second = client.subscribe('articles' as never, { uid: 'dup' } as never);
+		const explicit = client.subscribe('articles' as never, { uid: '1' } as never);
+		const generated = client.subscribe('articles' as never);
 
 		await flush();
 		MockWebSocket.last().open();
 
-		const results = await Promise.allSettled([first, second]);
+		const results = await Promise.allSettled([explicit, generated]);
+		expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
+
+		const uids = MockWebSocket.last()
+			.messages()
+			.filter((m) => m.type === 'subscribe')
+			.map((m) => m.uid);
+
+		expect(uids).toHaveLength(2);
+		expect(uids).toContain('1');
+		expect(new Set(uids).size).toBe(uids.length);
+	});
+
+	it('rejects one of two subscriptions that reserve the same explicit uid before open', async () => {
+		const client = makeClient({ authMode: 'public' });
+
+		const settled = Promise.allSettled([
+			client.subscribe('articles' as never, { uid: 'dup' } as never),
+			client.subscribe('articles' as never, { uid: 'dup' } as never),
+		]);
+
+		await flush();
+		MockWebSocket.last().open();
+
+		const results = await settled;
 		expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
 		expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
 	});
@@ -1534,9 +1597,13 @@ describe('realtime auth and reconnect ownership', () => {
 		ws2.open();
 		await reconnecting;
 
-		await wait(300);
+		await client.subscribe('articles' as never, { uid: 'b' } as never);
 
-		expect(ws2.messages().filter((m) => m.type === 'subscribe' && m.uid === 'a')).toHaveLength(1);
+		await vi.waitFor(() => {
+			expect(ws2.messages().filter((m) => m.type === 'subscribe' && m.uid === 'a')).toHaveLength(1);
+		});
+
+		expect(ws2.messages().filter((m) => m.type === 'subscribe' && m.uid === 'b')).toHaveLength(1);
 		expect(MockWebSocket.instances.length).toBe(2);
 	});
 

@@ -200,6 +200,8 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 			const floor = Math.max(100, delay);
 
 			const run = (async () => {
+				const replayTargets = Array.from(subscriptions.entries());
+
 				for (let attempt = 1; attempt <= retries; attempt++) {
 					// check cancellation before scheduling each attempt, so a disconnect ends recovery promptly
 					if (wasManuallyDisconnected) return;
@@ -216,7 +218,10 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 					}
 
 					try {
-						subscriptions.forEach((sub) => self.sendMessage(sub));
+						for (const [uid, sub] of replayTargets) {
+							if (subscriptions.get(uid) === sub) self.sendMessage(sub);
+						}
+
 						return;
 					} catch (error) {
 						debug('warn', 'Replay after reconnect failed; aborting recovery.', error);
@@ -677,8 +682,8 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 
 				if (!('uid' in cloned) || cloned['uid'] === undefined) {
 					subscriptionUid = registry.allocateUid();
-				} else if (typeof cloned['uid'] !== 'string' || cloned['uid'].length === 0) {
-					throw new Error('A subscription uid must be a non-empty string.');
+				} else if (typeof cloned['uid'] !== 'string') {
+					throw new Error('A subscription uid must be a string.');
 				} else {
 					subscriptionUid = cloned['uid'];
 				}
@@ -695,19 +700,19 @@ export function realtime(userConfig: WebSocketConfig = {}) {
 
 				const subscription = { ...cloned, collection, type: 'subscribe' };
 
-				if (state.code !== 'open') {
-					debug('info', 'No connection available for subscribing!');
-					await self.connect();
-				}
-
 				const channel = registry.create(subscriptionUid);
 				subscriptions.set(subscriptionUid, subscription);
 
 				try {
+					if (state.code !== 'open') {
+						debug('info', 'No connection available for subscribing!');
+						await self.connect();
+					}
+
 					self.sendMessage(subscription);
 				} catch (error) {
 					registry.delete(subscriptionUid, channel);
-					subscriptions.delete(subscriptionUid);
+					if (subscriptions.get(subscriptionUid) === subscription) subscriptions.delete(subscriptionUid);
 					throw error;
 				}
 
