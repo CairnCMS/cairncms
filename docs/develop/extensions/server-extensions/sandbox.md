@@ -215,6 +215,8 @@ A confined endpoint declares `endpoint: { access: ... }`. The endpoint runner en
 
 A confined hook declares the events it subscribes to in `events`, as `{ filter?: string[], action?: string[] }`, with at least one list. Each list holds up to sixteen exact platform event names. The declared events are the operator-reviewable subscription surface, and an entry whose handlers do not match its declared events fails to load. Confined hooks subscribe to filter and action events only.
 
+At this time, the `websocket` event namespace is reserved for full-authority extensions. A confined hook cannot declare `websocket` or any `websocket.*` event, and one that does fails to load.
+
 ### Secret operation options
 
 An operation can mark secret option fields with `optionDelivery`, a record of `{ <optionKey>: { delivery: 'reference' } }`. A field marked this way is stored encrypted at rest, masked on external reads, and delivered to the handler as a reference the broker resolves on the host, so the secret value is never serialized into the guest. Saving a flow whose masked value is unchanged preserves the stored secret. The handler can pass the reference to `host.request.send` as `auth`, so a confined operation can call a secret-protected external API without the secret ever entering the guest.

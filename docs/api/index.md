@@ -19,6 +19,7 @@ For running a CairnCMS deployment, see [Manage](/docs/manage/). For building app
 - **[Filters and queries](/docs/api/filters-and-queries/)** — the query DSL shared by REST and GraphQL: field selection, filtering, sorting, pagination, aggregation, deep queries.
 - **[GraphQL](/docs/api/graphql/)** — the two GraphQL endpoints, the request format, schema introspection, and the surfaces that are intentionally REST-only.
 - **[SDK](/docs/api/sdk/)** — `@cairncms/sdk`, the official JavaScript client. Composition pattern, REST and GraphQL composables, authentication, and schema-typed queries.
+- **[Realtime](/docs/api/realtime/)** — subscribe to collection changes over a WebSocket. The two transports, the three authentication modes, the subscription and delete-feed model, the SDK client, the extension surface, and the recovery contract.
 - **[System collections](/docs/api/system-collections/)** — the platform-owned `directus_*` tables and the operator endpoints that pair with them. Split into seven topical pages plus a hub.
 
 ## Where to go after this section

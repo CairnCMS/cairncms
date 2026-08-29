@@ -39,10 +39,16 @@ vi.mock('./env', async () => {
 const mockGetEndpointRouter = vi.fn().mockReturnValue(Router());
 const mockGetEmbeds = vi.fn().mockReturnValue({ head: '', body: '' });
 
+const { mockExtensionInitialize, mockFlowInitialize, mockInitScheduleCoordination } = vi.hoisted(() => ({
+	mockExtensionInitialize: vi.fn(),
+	mockFlowInitialize: vi.fn(),
+	mockInitScheduleCoordination: vi.fn().mockResolvedValue('ready'),
+}));
+
 vi.mock('./extensions', () => ({
 	getExtensionManager: vi.fn().mockImplementation(() => {
 		return {
-			initialize: vi.fn(),
+			initialize: mockExtensionInitialize,
 			getEndpointRouter: mockGetEndpointRouter,
 			getEmbeds: mockGetEmbeds,
 		};
@@ -52,9 +58,13 @@ vi.mock('./extensions', () => ({
 vi.mock('./flows', () => ({
 	getFlowManager: vi.fn().mockImplementation(() => {
 		return {
-			initialize: vi.fn(),
+			initialize: mockFlowInitialize,
 		};
 	}),
+}));
+
+vi.mock('./schedule-coordination.js', () => ({
+	initScheduleCoordination: mockInitScheduleCoordination,
 }));
 
 vi.mock('./middleware/check-ip', () => ({
@@ -375,6 +385,157 @@ describe('createApp', async () => {
 			} finally {
 				exitSpy.mockRestore();
 			}
+		});
+	});
+
+	describe('GraphQL query token limit validation', () => {
+		afterEach(async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			delete env['GRAPHQL_QUERY_TOKEN_LIMIT'];
+		});
+
+		async function expectStartupFailure(value: unknown) {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['GRAPHQL_QUERY_TOKEN_LIMIT'] = value;
+
+			const logger = (await import('./logger.js')).default;
+
+			const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+				throw new Error('process.exit called');
+			}) as typeof process.exit);
+
+			const errorSpy = vi.spyOn(logger, 'error').mockImplementation((() => logger) as never);
+
+			try {
+				await expect(createApp()).rejects.toThrow('process.exit called');
+				expect(exitSpy).toHaveBeenCalledWith(1);
+
+				expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('GRAPHQL_QUERY_TOKEN_LIMIT'));
+			} finally {
+				errorSpy.mockRestore();
+				exitSpy.mockRestore();
+			}
+		}
+
+		test('logs and exits when GRAPHQL_QUERY_TOKEN_LIMIT is not a number', async () => {
+			await expectStartupFailure('not-a-number');
+		});
+
+		test('logs and exits when GRAPHQL_QUERY_TOKEN_LIMIT is zero', async () => {
+			await expectStartupFailure(0);
+		});
+
+		test('logs and exits when GRAPHQL_QUERY_TOKEN_LIMIT is not representable as a whole number', async () => {
+			await expectStartupFailure(2 ** 53);
+		});
+	});
+
+	describe('IP proxy config validation', () => {
+		afterEach(async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['IP_TRUST_PROXY'] = false;
+			env['IP_CUSTOM_HEADER'] = false;
+		});
+
+		async function expectStartupFailure(key: string, value: unknown, variable: string) {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env[key] = value;
+
+			const logger = (await import('./logger.js')).default;
+
+			const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+				throw new Error('process.exit called');
+			}) as typeof process.exit);
+
+			const errorSpy = vi.spyOn(logger, 'error').mockImplementation((() => logger) as never);
+
+			try {
+				await expect(createApp()).rejects.toThrow('process.exit called');
+				expect(exitSpy).toHaveBeenCalledWith(1);
+				expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining(variable));
+			} finally {
+				errorSpy.mockRestore();
+				exitSpy.mockRestore();
+			}
+		}
+
+		test('logs and exits when IP_TRUST_PROXY is an invalid trust value', async () => {
+			await expectStartupFailure('IP_TRUST_PROXY', 'not-a-cidr', 'IP_TRUST_PROXY');
+		});
+
+		test('logs and exits when IP_CUSTOM_HEADER is not a valid header name', async () => {
+			await expectStartupFailure('IP_CUSTOM_HEADER', 'X Real IP', 'IP_CUSTOM_HEADER');
+		});
+
+		test('starts and trims a spaced comma-separated IP_TRUST_PROXY list', async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['IP_TRUST_PROXY'] = ['127.0.0.1', ' 10.0.0.5'];
+
+			const app = await createApp();
+			const trust = app.get('trust proxy fn') as (addr: string, hop: number) => boolean;
+
+			expect(trust('10.0.0.5', 0)).toBe(true);
+		});
+	});
+
+	describe('Schedule coordination readiness gate', () => {
+		beforeEach(() => {
+			mockInitScheduleCoordination.mockReset();
+			mockInitScheduleCoordination.mockResolvedValue('ready');
+			mockExtensionInitialize.mockReset();
+			mockFlowInitialize.mockReset();
+		});
+
+		test('awaits schedule coordination before initializing the extension and flow managers', async () => {
+			const order: string[] = [];
+			let releaseCoordination!: (status: 'ready') => void;
+			let signalReached!: () => void;
+
+			const coordinationGate = new Promise<'ready'>((resolve) => {
+				releaseCoordination = resolve;
+			});
+
+			const reached = new Promise<void>((resolve) => {
+				signalReached = resolve;
+			});
+
+			mockInitScheduleCoordination.mockImplementation(() => {
+				order.push('coordination');
+				signalReached();
+				return coordinationGate;
+			});
+
+			mockExtensionInitialize.mockImplementation(async () => {
+				order.push('extension');
+			});
+
+			mockFlowInitialize.mockImplementation(async () => {
+				order.push('flow');
+			});
+
+			const appPromise = createApp();
+
+			try {
+				await reached;
+
+				expect(order).toEqual(['coordination']);
+				expect(mockExtensionInitialize).not.toHaveBeenCalled();
+				expect(mockFlowInitialize).not.toHaveBeenCalled();
+			} finally {
+				releaseCoordination('ready');
+			}
+
+			await appPromise;
+
+			expect(order).toEqual(['coordination', 'extension', 'flow']);
+		});
+
+		test('continues startup and still initializes the managers when coordination is unavailable', async () => {
+			mockInitScheduleCoordination.mockResolvedValue('unavailable');
+
+			await expect(createApp()).resolves.toBeDefined();
+			expect(mockExtensionInitialize).toHaveBeenCalled();
+			expect(mockFlowInitialize).toHaveBeenCalled();
 		});
 	});
 });

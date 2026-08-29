@@ -7,6 +7,7 @@ import logger from '../logger.js';
 import { createRateLimiter } from '../rate-limiter.js';
 import asyncHandler from '../utils/async-handler.js';
 import { validateEnv } from '../utils/validate-env.js';
+import type { RateLimitConsumption } from './rate-limiter-ip.js';
 
 const RATE_LIMITER_GLOBAL_KEY = 'global-rate-limit';
 
@@ -38,6 +39,18 @@ if (env['RATE_LIMITER_GLOBAL_ENABLED'] === true) {
 }
 
 export default checkRateLimit;
+
+export async function consumeGlobalRateLimit(): Promise<RateLimitConsumption> {
+	if (!rateLimiterGlobal) return { allowed: true };
+
+	try {
+		await rateLimiterGlobal.consume(RATE_LIMITER_GLOBAL_KEY, 1);
+		return { allowed: true };
+	} catch (rateLimiterRes: any) {
+		if (rateLimiterRes instanceof Error) throw rateLimiterRes;
+		return { allowed: false, retryAfterMs: rateLimiterRes.msBeforeNext };
+	}
+}
 
 function validateConfiguration() {
 	if (env['RATE_LIMITER_ENABLED'] !== true) {

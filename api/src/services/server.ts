@@ -8,6 +8,8 @@ import { getCache } from '../cache.js';
 import getDatabase, { hasDatabaseConnection } from '../database/index.js';
 import env from '../env.js';
 import logger from '../logger.js';
+import { getMessengerStatus } from '../messenger.js';
+import { getScheduleCoordinationStatus, isCoordinationEnabled } from '../schedule-coordination.js';
 import { getQueryLimitConfig } from '../utils/query-limit.js';
 import getMailer from '../mailer.js';
 import { rateLimiterGlobal } from '../middleware/rate-limiter-global.js';
@@ -16,6 +18,7 @@ import { SERVER_ONLINE } from '../server.js';
 import { getStorage } from '../storage/index.js';
 import type { AbstractServiceOptions } from '../types/index.js';
 import { version } from '../utils/package.js';
+import { getActiveRealtime } from '../websocket/controllers/active.js';
 import { SettingsService } from './settings.js';
 
 export class ServerService {
@@ -68,6 +71,9 @@ export class ServerService {
 			} else {
 				info['rateLimitGlobal'] = false;
 			}
+
+			const realtime = getActiveRealtime();
+			info['websocket'] = realtime ? realtime.info() : false;
 		}
 
 		if (this.accountability?.user || this.accountability?.share) {
@@ -104,7 +110,15 @@ export class ServerService {
 		};
 
 		type HealthCheck = {
-			componentType: 'system' | 'datastore' | 'objectstore' | 'email' | 'cache' | 'ratelimiter';
+			componentType:
+				| 'system'
+				| 'datastore'
+				| 'objectstore'
+				| 'email'
+				| 'cache'
+				| 'ratelimiter'
+				| 'messenger'
+				| 'coordination';
 			observedValue?: number | string | boolean;
 			observedUnit?: string;
 			status: 'ok' | 'warn' | 'error';
@@ -124,6 +138,8 @@ export class ServerService {
 					testRateLimiterGlobal(),
 					testStorage(),
 					testEmail(),
+					testMessenger(),
+					testScheduleCoordination(),
 				]))
 			),
 		};
@@ -135,9 +151,12 @@ export class ServerService {
 		for (const [service, healthData] of Object.entries(data.checks)) {
 			for (const healthCheck of healthData) {
 				if (healthCheck.status === 'warn' && data.status === 'ok') {
-					logger.warn(
-						`${service} in WARN state, the observed value ${healthCheck.observedValue} is above the threshold of ${healthCheck.threshold}${healthCheck.observedUnit}`
-					);
+					// Status checks own their transition logs; only threshold checks log here.
+					if (healthCheck.threshold !== undefined) {
+						logger.warn(
+							`${service} in WARN state, the observed value ${healthCheck.observedValue} is above the threshold of ${healthCheck.threshold}${healthCheck.observedUnit}`
+						);
+					}
 
 					data.status = 'warn';
 					continue;
@@ -411,6 +430,42 @@ export class ServerService {
 			}
 
 			return checks;
+		}
+
+		async function testMessenger(): Promise<Record<string, HealthCheck[]>> {
+			if (env['MESSENGER_STORE'] !== 'redis') {
+				return {};
+			}
+
+			return {
+				'messenger:status': [
+					{
+						status: getMessengerStatus() === 'available' ? 'ok' : 'warn',
+						componentType: 'messenger',
+					},
+				],
+			};
+		}
+
+		async function testScheduleCoordination(): Promise<Record<string, HealthCheck[]>> {
+			if (!isCoordinationEnabled()) {
+				return {};
+			}
+
+			const status = getScheduleCoordinationStatus();
+
+			if (status === 'inactive') {
+				return {};
+			}
+
+			return {
+				'scheduleCoordination:status': [
+					{
+						status: status === 'ready' ? 'ok' : 'warn',
+						componentType: 'coordination',
+					},
+				],
+			};
 		}
 	}
 }

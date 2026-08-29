@@ -59,6 +59,7 @@ Returns a `data` envelope whose contents depend on the caller's accountability:
 
 - **Unauthenticated callers** receive only the public branding subset: `project.project_name`, `project_descriptor`, `project_logo`, `project_color`, `default_language`, `public_foreground`, `public_background`, `public_note`, and `custom_css`. This is what the admin app reads on the login screen before the user has authenticated.
 - **Authenticated users** additionally receive `rateLimit` and `rateLimitGlobal` blocks describing the configured rate-limiter policy.
+- **Authenticated users** also receive a `websocket` block describing the realtime surface. It is `false` when realtime is inactive. When active, it is an object with `rest`, `graphql`, and `heartbeat`. Each transport, `rest` and `graphql`, is `false` when that transport is inactive or `{ authentication, path }` when it is active, where `authentication` is `public`, `handshake`, or `strict`. `heartbeat` is the heartbeat interval in seconds.
 - **Authenticated users and share sessions** receive a `queryLimit` block with `default` and `max`, the configured query-limit policy. The admin app reads it to size its paginated requests. A `max` of `-1` means no ceiling.
 - **Admins** additionally receive `cairncms.version`.
 
@@ -414,7 +415,7 @@ The collections and endpoints on this page span the permission model:
 
 The settings collection appears on `/graphql/system` with singleton-shaped resolvers: a `settings` query that calls `readSingleton` and an `update_settings` mutation that calls `upsertSingleton`. There is no `settings_by_id` or batch-create / batch-delete; the GraphQL surface mirrors the REST `GET /settings` and `PATCH /settings` shape.
 
-The server queries (`server_info`, `server_health`, `server_ping`, `server_specs_oas`, `server_specs_graphql`) live on `/graphql/system` as ordinary queries. See [GraphQL / What `/graphql/system` exposes](/docs/api/graphql/#what-graphql-system-exposes) for the full list.
+The server queries (`server_info`, `server_health`, `server_ping`, `server_specs_oas`, `server_specs_graphql`) live on `/graphql/system` as ordinary queries. See [GraphQL / What `/graphql/system` exposes](/docs/api/graphql/#what-graphqlsystem-exposes) for the full list.
 
 `/graphql/system` also exposes an `extensions` query that returns the installed app-side extensions (`interfaces`, `displays`, `layouts`, `modules`) as nested string arrays. It does not cover hooks, endpoints, operations, or bundles, and there is no GraphQL equivalent of `/extensions/sources/<chunk>` (the bundled-JS loader is REST-only by necessity). The extension-settings surface is REST-only too: none of the `/extension-settings` routes have a GraphQL equivalent.
 

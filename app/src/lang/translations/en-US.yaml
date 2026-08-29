@@ -77,14 +77,10 @@ create_role: Create Role
 create_user: Create User
 message: Message
 delete_panel: Delete Panel
-create_translation_string: Create Translation String
-no_translation_string: No Translation Strings
-no_translation_string_copy: There are no translation strings yet.
-translation_string_key_placeholder: Translation string key...
-translation_string_translations_placeholder: Add a new translation
-edit_translation_string: Edit Translation String
-delete_translation_string_copy: >-
-  Are you sure you want to delete the translation string "{key}"? This action can not be undone.
+create_custom_translation: Create Custom Translation
+edit_custom_translation: Edit Custom Translation
+no_custom_translations:  No Custom Translations
+no_custom_translations_copy: There are no custom translations yet.
 invite_users: Invite Users
 invite: Invite
 email_already_invited: Email "{email}" has already been invited
@@ -231,6 +227,7 @@ bigInteger: Big Integer
 boolean: Boolean
 date: Date
 date_range: Date Range
+translation_key_placeholder: Enter a key...
 datetime: DateTime
 dateTime: DateTime
 precision: Precision
@@ -959,7 +956,7 @@ settings_permissions: Roles & Permissions
 settings_project: Project Settings
 settings_flows: Flows
 settings_presets: Presets & Bookmarks
-settings_translation_strings: Translation Strings
+settings_translations: Custom Translations
 settings_extensions: Extensions
 one_or_more_options_are_missing: One or more options are missing
 scope: Scope
@@ -1053,8 +1050,8 @@ extension_type_group_other: Other
 no_extensions: No Extensions
 no_extensions_copy: No extensions were discovered in the configured extensions path.
 extensions_load_failed: Could not load the extensions inventory.
-page_help_settings_translation_strings_collection:
-  '**Browse Translation Strings** — Lists all translation strings within the project.'
+page_help_settings_translations_collection: '**Browse Custom Translations** — Lists all custom translations within the project.'
+page_help_settings_translations_item: '**Custom Translations Detail** — A form for viewing and managing this item.'
 page_help_users_collection: '**User Directory** — Lists all system users within this project.'
 page_help_users_item: >-
   **User Detail** — Manage your account information, or view the details of other users.
@@ -1098,6 +1095,7 @@ directus_collection:
   directus_settings: Project configuration options
   directus_shares: Tracks externally shared items
   directus_users: System users for the platform
+  directus_translations: Custom translations
 fields:
   directus_activity:
     item: Item Primary Key
@@ -1726,9 +1724,9 @@ interfaces:
     description: Enter multiline plain-text
   input-translated-string:
     input-translated-string: Translated Strings
-    description: Select or add translation string
+    description: Select or add custom translation
     search_placeholder: Search...
-    new_translation_string: New Translation String
+    new_custom_translation: New Custom Translation
   boolean:
     toggle: Toggle
     description: Switch between on and off

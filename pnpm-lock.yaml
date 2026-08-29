@@ -127,9 +127,6 @@ importers:
       '@cairncms/storage-driver-s3':
         specifier: workspace:*
         version: link:../packages/storage-driver-s3
-      '@cairncms/update-check':
-        specifier: workspace:*
-        version: link:../packages/update-check
       '@cairncms/utils':
         specifier: workspace:*
         version: link:../packages/utils
@@ -232,6 +229,9 @@ importers:
       graphql-compose:
         specifier: 9.0.10
         version: 9.0.10(graphql@16.9.0)
+      graphql-ws:
+        specifier: 5.16.0
+        version: 5.16.0(graphql@16.9.0)
       helmet:
         specifier: 6.1.5
         version: 6.1.5
@@ -299,8 +299,8 @@ importers:
         specifier: 5.0.9
         version: 5.0.9
       node-cron:
-        specifier: 3.0.2
-        version: 3.0.2
+        specifier: 4.6.0
+        version: 4.6.0
       nodemailer:
         specifier: 9.0.1
         version: 9.0.1
@@ -308,8 +308,8 @@ importers:
         specifier: 3.0.0
         version: 3.0.0
       openapi3-ts:
-        specifier: 3.2.0
-        version: 3.2.0
+        specifier: 4.3.3
+        version: 4.3.3
       openid-client:
         specifier: 5.4.0
         version: 5.4.0
@@ -331,6 +331,9 @@ importers:
       pino-pretty:
         specifier: 10.0.0
         version: 10.0.0
+      proxy-addr:
+        specifier: 2.0.7
+        version: 2.0.7
       qs:
         specifier: 6.15.2
         version: 6.15.2
@@ -376,6 +379,12 @@ importers:
       wellknown:
         specifier: 0.5.0
         version: 0.5.0
+      ws:
+        specifier: 8.21.0
+        version: 8.21.0
+      zod:
+        specifier: 3.23.8
+        version: 3.23.8
     devDependencies:
       '@cairncms/types':
         specifier: workspace:*
@@ -458,15 +467,15 @@ importers:
       '@types/node':
         specifier: 22.19.17
         version: 22.19.17
-      '@types/node-cron':
-        specifier: 3.0.7
-        version: 3.0.7
       '@types/nodemailer':
         specifier: 6.4.7
         version: 6.4.7
       '@types/object-hash':
         specifier: 3.0.2
         version: 3.0.2
+      '@types/proxy-addr':
+        specifier: 2.0.3
+        version: 2.0.3
       '@types/qs':
         specifier: 6.9.7
         version: 6.9.7
@@ -485,6 +494,9 @@ importers:
       '@types/wellknown':
         specifier: 0.5.4
         version: 0.5.4
+      '@types/ws':
+        specifier: 8.18.1
+        version: 8.18.1
       '@vitest/coverage-v8':
         specifier: 3.2.6
         version: 3.2.6(vitest@3.2.6(@types/node@22.19.17)(happy-dom@20.10.6)(jsdom@26.1.0)(sass@1.62.0)(terser@5.46.1)(tsx@4.20.6)(yaml@2.8.3))
@@ -539,11 +551,10 @@ importers:
         version: 16.0.0(@azure/core-client@1.10.1)
 
   app:
-    dependencies:
+    devDependencies:
       '@cairncms/composables':
         specifier: workspace:*
         version: link:../packages/composables
-    devDependencies:
       '@cairncms/constants':
         specifier: workspace:*
         version: link:../packages/constants
@@ -820,6 +831,9 @@ importers:
       '@cairncms/api':
         specifier: workspace:*
         version: link:../api
+      '@cairncms/update-check':
+        specifier: workspace:*
+        version: link:../packages/update-check
 
   packages/composables:
     dependencies:
@@ -1073,8 +1087,8 @@ importers:
   packages/specs:
     dependencies:
       openapi3-ts:
-        specifier: 3.2.0
-        version: 3.2.0
+        specifier: 4.3.3
+        version: 4.3.3
     devDependencies:
       npm-watch:
         specifier: 0.11.0
@@ -1380,6 +1394,9 @@ importers:
 
   tests/blackbox:
     devDependencies:
+      '@cairncms/sdk':
+        specifier: workspace:*
+        version: link:../../sdk
       '@cairncms/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -1398,6 +1415,9 @@ importers:
       '@types/supertest':
         specifier: 2.0.12
         version: 2.0.12
+      '@types/ws':
+        specifier: 8.18.1
+        version: 8.18.1
       autocannon:
         specifier: 7.10.0
         version: 7.10.0
@@ -1407,6 +1427,9 @@ importers:
       globby:
         specifier: 11.1.0
         version: 11.1.0
+      graphql-ws:
+        specifier: 5.16.0
+        version: 5.16.0(graphql@16.9.0)
       jest:
         specifier: 29.5.0
         version: 29.5.0(@types/node@22.19.17)
@@ -1443,6 +1466,9 @@ importers:
       uuid:
         specifier: 11.1.1
         version: 11.1.1
+      ws:
+        specifier: 8.21.0
+        version: 8.21.0
 
 packages:
 
@@ -3691,9 +3717,6 @@ packages:
   '@types/ms@0.7.31':
     resolution: {integrity: sha512-iiUgKzV9AuaEkZqkOLDIvlQiL6ltuZd9tGcW3gwpnX8JbuiuhFlEGmmFXEXkN50Cvq7Os88IY2v0dkDqXYWVgA==}
 
-  '@types/node-cron@3.0.7':
-    resolution: {integrity: sha512-9PuLtBboc/+JJ7FshmJWv769gDonTpItN0Ol5TMwclpSQNjVyB2SRxSKBcTtbSysSL5R7Oea06kTTFNciCoYwA==}
-
   '@types/node-fetch@2.6.11':
     resolution: {integrity: sha512-24xFj9R5+rfQJLRyM56qh+wnVSYhyXC2tkoBndtY0U+vubqNsYXGjufB2nn8Q6gt0LrARwL6UBtMCSVCwl4B1g==}
 
@@ -3711,6 +3734,9 @@ packages:
 
   '@types/parse-json@4.0.2':
     resolution: {integrity: sha512-dISoDXWWQwUquiKsyZ4Ng+HX2KsPL7LyHKHQwgGFEA3IaKac4Obd+h2a/a6waisAoepJlBcx9paWqjA8/HVjCw==}
+
+  '@types/proxy-addr@2.0.3':
+    resolution: {integrity: sha512-TgAHHO4tNG3HgLTUhB+hM4iwW6JUNeQHCLnF1DjaDA9c69PN+IasoFu2MYDhubFc+ZIw5c5t9DMtjvrD6R3Egg==}
 
   '@types/qrcode@1.5.0':
     resolution: {integrity: sha512-x5ilHXRxUPIMfjtM+1vf/GPTRWZ81nqscursm5gMznJeK9M0YnZ1c3bEvRLQ0zSSgedLx1J6MGL231ObQGGhaA==}
@@ -5779,6 +5805,12 @@ packages:
     peerDependencies:
       graphql: '>=0.8.0'
 
+  graphql-ws@5.16.0:
+    resolution: {integrity: sha512-Ju2RCU2dQMgSKtArPbEtsK5gNLnsQyTNIo/T7cZNp96niC1x0KdJNZV0TIoilceBPQwfb5itrGl8pkFeOUMl4A==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      graphql: '>=0.11 <=16'
+
   graphql@16.9.0:
     resolution: {integrity: sha512-GGTKBX4SD7Wdb8mqeDLni2oaRGYQWjWHGKPQ24ZMnUtKfcsVoiv4uX8+LJr1K6U5VW2Lu1BwJnj7uiori0YtRw==}
     engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
@@ -7029,9 +7061,9 @@ packages:
     resolution: {integrity: sha512-9MdFxmkKaOYVTV+XVRG8ArDwwQ77XIgIPyKASB1k3JPq3M8fGQQQE3YpMOrKm6g//Ktx8ivZr8xo1Qmtqub+GA==}
     engines: {node: ^18 || ^20 || >= 21}
 
-  node-cron@3.0.2:
-    resolution: {integrity: sha512-iP8l0yGlNpE0e6q1o185yOApANRe47UPbLf4YxfbiNHt/RU5eBcGB/e0oudruheSf+LQeDMezqC5BVAb5wwRcQ==}
-    engines: {node: '>=6.0.0'}
+  node-cron@4.6.0:
+    resolution: {integrity: sha512-Si/bzYiKRHOB8/a99T2+SDGN582ONDMSTlJr5oCkT6GtnqPjZ2s10eoQRYkW9ZHwjVxONL+W8Fb+qR0AHMQsdg==}
+    engines: {node: '>=20'}
 
   node-fetch@2.7.0:
     resolution: {integrity: sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A==}
@@ -7202,8 +7234,8 @@ packages:
   openapi-types@12.1.0:
     resolution: {integrity: sha512-XpeCy01X6L5EpP+6Hc3jWN7rMZJ+/k1lwki/kTmWzbVhdPie3jd5O2ZtedEx8Yp58icJ0osVldLMrTB/zslQXA==}
 
-  openapi3-ts@3.2.0:
-    resolution: {integrity: sha512-/ykNWRV5Qs0Nwq7Pc0nJ78fgILvOT/60OxEmB3v7yQ8a8Bwcm43D4diaYazG/KBn6czA+52XYy931WFLMCUeSg==}
+  openapi3-ts@4.3.3:
+    resolution: {integrity: sha512-LKkzBGJcZ6wdvkKGMoSvpK+0cbN5Xc3XuYkJskO+vjEQWJgs1kgtyUk0pjf8KwPuysv323Er62F5P17XQl96Qg==}
 
   openid-client@5.4.0:
     resolution: {integrity: sha512-hgJa2aQKcM2hn3eyVtN12tEA45ECjTJPXCgUh5YzTzy9qwapCvmDTVPWOcWVL0d34zeQoQ/hbG9lJhl3AYxJlQ==}
@@ -12024,8 +12056,6 @@ snapshots:
 
   '@types/ms@0.7.31': {}
 
-  '@types/node-cron@3.0.7': {}
-
   '@types/node-fetch@2.6.11':
     dependencies:
       '@types/node': 22.19.17
@@ -12044,6 +12074,10 @@ snapshots:
   '@types/object-hash@3.0.2': {}
 
   '@types/parse-json@4.0.2': {}
+
+  '@types/proxy-addr@2.0.3':
+    dependencies:
+      '@types/node': 22.19.17
 
   '@types/qrcode@1.5.0':
     dependencies:
@@ -14354,6 +14388,10 @@ snapshots:
     dependencies:
       graphql: 16.9.0
 
+  graphql-ws@5.16.0(graphql@16.9.0):
+    dependencies:
+      graphql: 16.9.0
+
   graphql@16.9.0: {}
 
   grid-index@1.1.0: {}
@@ -15887,9 +15925,7 @@ snapshots:
 
   node-addon-api@8.7.0: {}
 
-  node-cron@3.0.2:
-    dependencies:
-      uuid: 11.1.1
+  node-cron@4.6.0: {}
 
   node-fetch@2.7.0(encoding@0.1.13):
     dependencies:
@@ -16136,7 +16172,7 @@ snapshots:
 
   openapi-types@12.1.0: {}
 
-  openapi3-ts@3.2.0:
+  openapi3-ts@4.3.3:
     dependencies:
       yaml: 2.8.3
 

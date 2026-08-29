@@ -9,7 +9,7 @@ import type {
 	ReferenceObject,
 	SchemaObject,
 	TagObject,
-} from 'openapi3-ts';
+} from 'openapi3-ts/oas30';
 import type { Accountability, Field, Permission, Relation, SchemaOverview, Type } from '@cairncms/types';
 import { OAS_REQUIRED_SCHEMAS } from '../constants.js';
 import getDatabase from '../database/index.js';
@@ -193,12 +193,12 @@ class OASSpecsService implements SpecificationSubService {
 
 							if (hasPermission) {
 								if ('parameters' in pathItem) {
-									paths[path][method] = {
+									paths[path]![method as keyof PathItemObject] = {
 										...operation,
 										parameters: [...(pathItem.parameters ?? []), ...(operation?.parameters ?? [])],
 									};
 								} else {
-									paths[path][method] = operation;
+									paths[path]![method as keyof PathItemObject] = operation;
 								}
 							}
 						}
@@ -209,7 +209,9 @@ class OASSpecsService implements SpecificationSubService {
 				const detailBase = cloneDeep(spec.paths['/items/{collection}/{id}']);
 				const collection = tag['x-collection'];
 
-				for (const method of ['post', 'get', 'patch', 'delete']) {
+				const methods: (keyof PathItemObject)[] = ['post', 'get', 'patch', 'delete'];
+
+				for (const method of methods) {
 					const hasPermission =
 						this.accountability?.admin === true ||
 						!!permissions.find(
@@ -221,8 +223,8 @@ class OASSpecsService implements SpecificationSubService {
 						if (!paths[`/items/${collection}`]) paths[`/items/${collection}`] = {};
 						if (!paths[`/items/${collection}/{id}`]) paths[`/items/${collection}/{id}`] = {};
 
-						if (listBase[method]) {
-							paths[`/items/${collection}`][method] = mergeWith(
+						if (listBase?.[method]) {
+							paths[`/items/${collection}`]![method] = mergeWith(
 								cloneDeep(listBase[method]),
 								{
 									description: listBase[method].description.replace('item', collection + ' item'),
@@ -278,8 +280,8 @@ class OASSpecsService implements SpecificationSubService {
 							);
 						}
 
-						if (detailBase[method]) {
-							paths[`/items/${collection}/{id}`][method] = mergeWith(
+						if (detailBase?.[method]) {
+							paths[`/items/${collection}/{id}`]![method] = mergeWith(
 								cloneDeep(detailBase[method]),
 								{
 									description: detailBase[method].description.replace('item', collection + ' item'),

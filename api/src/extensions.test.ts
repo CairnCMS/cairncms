@@ -290,6 +290,68 @@ describe('the confined load gate in the loader', () => {
 		expect((instance as any).confinedEligible.size).toBe(0);
 	});
 
+	it('awaits each schedule hook teardown before unregistering completes', async () => {
+		const instance = new ExtensionManager();
+
+		let resolveStop!: () => void;
+		let stopStarted = false;
+
+		(instance as any).hookEvents = [
+			{
+				type: 'schedule',
+				job: {
+					stop: () => {
+						stopStarted = true;
+						return new Promise<void>((resolve) => {
+							resolveStop = resolve;
+						});
+					},
+				},
+			},
+		];
+
+		let done = false;
+
+		const pending = (instance as any).unregisterApiExtensions().then(() => {
+			done = true;
+		});
+
+		await Promise.resolve();
+
+		expect(stopStarted).toBe(true);
+		expect(done).toBe(false);
+
+		resolveStop();
+		await pending;
+
+		expect(done).toBe(true);
+		expect((instance as any).hookEvents).toEqual([]);
+	});
+
+	it('skips and logs an invalid schedule hook with its identity, recording no job', () => {
+		const instance = new ExtensionManager();
+		const error = vi.spyOn(logger, 'error');
+
+		(instance as any).registerHook(
+			(register: any) => {
+				register.schedule('INVALID-EXPR-MARKER', async () => undefined);
+			},
+			'cairncms-extension-subject',
+			'my-hook'
+		);
+
+		expect((instance as any).hookEvents).toHaveLength(0);
+
+		const call = error.mock.calls.find(([fields]) => (fields as { scheduleId?: string })?.scheduleId === 'my-hook:0');
+
+		expect(call).toBeDefined();
+		expect(call![0]).toEqual({ scheduleId: 'my-hook:0' });
+		expect(call![1]).toBe('Skipping schedule trigger with an invalid cron expression');
+		expect(JSON.stringify(call)).not.toContain('INVALID-EXPR-MARKER');
+
+		error.mockRestore();
+	});
+
 	it('probes confined operations sequentially and carries the probed bytes into the eligible set', async () => {
 		writeConfinedOperationPackage('op-one');
 		writeConfinedOperationPackage('op-two');

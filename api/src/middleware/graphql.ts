@@ -1,8 +1,9 @@
 import { parseJSON } from '@cairncms/utils';
 import type { RequestHandler } from 'express';
 import type { DocumentNode } from 'graphql';
-import { getOperationAST, parse, Source } from 'graphql';
+import { getOperationAST } from 'graphql';
 import { InvalidPayloadException, InvalidQueryException, MethodNotAllowedException } from '../exceptions/index.js';
+import { parseGraphQLQuery } from '../services/graphql/query-gate.js';
 import type { GraphQLParams } from '../types/index.js';
 import asyncHandler from '../utils/async-handler.js';
 
@@ -41,7 +42,7 @@ export const parseGraphQL: RequestHandler = asyncHandler(async (req, res, next) 
 	}
 
 	try {
-		document = parse(new Source(query));
+		document = parseGraphQLQuery(query);
 	} catch (err: any) {
 		throw new InvalidPayloadException(`GraphQL schema validation error.`, {
 			graphqlErrors: [err],
