@@ -152,6 +152,7 @@ function combineErrors(errors: unknown[]): Error {
 	const combined = new Error(
 		errors.map((error) => (error instanceof Error ? error.message : String(error))).join(' | ')
 	);
+
 	(combined as Error & { errors: unknown[] }).errors = errors;
 
 	return combined;
@@ -1148,10 +1149,109 @@ describeFn('WebSocket realtime', () => {
 		);
 	});
 
+	describe('Static-token rotation stops delivery on both transports', () => {
+		it.each(supportedVendors)(
+			'%s',
+			async (vendor) => {
+				const url = urlOf(vendor, envs[vendor]!.main);
+				const oldToken = realtimeUsers.readerAll.token;
+				const newToken = `WsReaderAllRotated-${uuid().slice(0, 8)}`;
+				const userId = await resolveUserId(url, realtimeUsers.readerAll.email);
+
+				let resolveGqlClosed!: (code: number) => void;
+
+				const gqlClosed = new Promise<number>((resolve) => {
+					resolveGqlClosed = resolve;
+				});
+
+				const ws = common.createWebSocketConn(url, handshakeAs(oldToken));
+
+				const wsGql = common.createWebSocketGql(url, {
+					...handshakeAs(oldToken),
+					client: {
+						url: `ws://${url.split('//')[1]}/graphql`,
+						on: {
+							closed: (...args: any[]) => {
+								const event = args[0];
+								resolveGqlClosed(typeof event === 'number' ? event : event?.code);
+							},
+						},
+					},
+				});
+
+				let primaryError: unknown;
+
+				try {
+					const before = await request(url)
+						.get(`/items/${collectionScoped}`)
+						.set('Authorization', `Bearer ${oldToken}`);
+
+					expect(before.statusCode).toBe(200);
+
+					await ws.subscribe({ collection: collectionScoped });
+					await wsGql.subscribe({ collection: collectionScoped, jsonQuery: GQL_DATA });
+
+					await primeUntilLive([{ conn: ws }, { conn: wsGql }], createPrime(url, collectionScoped, 'integer'));
+
+					const rotate = await request(url)
+						.patch(`/users/${userId}`)
+						.send({ token: newToken })
+						.set('Authorization', `Bearer ${TOKEN}`);
+
+					expect(rotate.statusCode).toBe(200);
+
+					const after = await request(url).get(`/items/${collectionScoped}`).set('Authorization', `Bearer ${oldToken}`);
+
+					expect(after.statusCode).toBe(401);
+
+					const poison = uuid();
+					const baseline = ws.getMessageCount();
+					const gqlBaseline = wsGql.getMessageCount();
+					await insertItem(url, collectionScoped, poison, 'integer');
+
+					await ws.waitForState(ws.conn.CLOSED);
+					expect(await withDeadline(gqlClosed, 'graphql close')).toBeGreaterThan(0);
+
+					const delivered =
+						ws.getMessageCount() > baseline
+							? await ws.getMessages(ws.getMessageCount() - baseline, {
+									startIndex: baseline,
+									targetState: ws.conn.CLOSED,
+							  })
+							: [];
+
+					expect((delivered ?? []).some((frame: any) => JSON.stringify(frame).includes(poison))).toBe(false);
+					expect(wsGql.getMessageCount()).toBe(gqlBaseline);
+				} catch (err) {
+					primaryError = err;
+				}
+
+				await runCleanups(
+					[
+						async () => {
+							const restore = await request(url)
+								.patch(`/users/${userId}`)
+								.send({ token: oldToken })
+								.set('Authorization', `Bearer ${TOKEN}`);
+
+							expect(restore.statusCode).toBe(200);
+						},
+						async () => ws.conn.close(),
+						async () => {
+							await wsGql.client.dispose();
+						},
+					],
+					primaryError
+				);
+			},
+			100000
+		);
+	});
+
 	describe('Strict upgrade contract', () => {
 		function rawUpgrade(
 			peerUrl: string,
-			options: { headers?: Record<string, string>; origin?: string; queryToken?: string }
+			options: { headers?: Record<string, string>; origin?: string; queryToken?: string; path?: string }
 		): Promise<{ opened: boolean; status?: number; body: string }> {
 			const query = options.queryToken ? `?access_token=${options.queryToken}` : '';
 
@@ -1159,7 +1259,7 @@ describeFn('WebSocket realtime', () => {
 				let settled = false;
 				let responseStatus: number | undefined;
 
-				const socket = new WsImpl(`ws://${peerUrl.split('//')[1]}/websocket${query}`, {
+				const socket = new WsImpl(`ws://${peerUrl.split('//')[1]}${options.path ?? '/websocket'}${query}`, {
 					headers: options.headers,
 					origin: options.origin,
 				});
@@ -1220,6 +1320,8 @@ describeFn('WebSocket realtime', () => {
 					{ options: { headers: { Authorization: 'Bearer wrong' }, origin }, status: 401 },
 					{ options: { queryToken: TOKEN, origin }, status: 400 },
 					{ options: { headers: bearer, origin: 'http://disallowed.invalid' }, status: 403 },
+					{ options: { headers: bearer, queryToken: TOKEN, origin }, status: 400 },
+					{ options: { headers: bearer, origin, path: '/does-not-exist' }, status: 404 },
 				];
 
 				for (const rejection of rejections) {
@@ -1396,6 +1498,7 @@ describeFn('WebSocket realtime', () => {
 
 					const preFrames: any[] = [];
 					offPreMessage = client.onWebSocket('message', (frame: any) => preFrames.push(frame));
+
 					const sawPre = (event: string, id?: number | string) =>
 						preFrames.some(
 							(frame) =>
@@ -1419,6 +1522,7 @@ describeFn('WebSocket realtime', () => {
 						waitUntil(() => sawPre('create', idA) && sawPre('create', idB)),
 						'pre-pull create frames'
 					);
+
 					offPreMessage?.();
 					offPreMessage = undefined;
 
