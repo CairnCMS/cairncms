@@ -24,6 +24,8 @@ import type { WebSocketEvent } from '../../websocket/messages.js';
 import { SubscriptionRegistry } from '../../websocket/subscriptions.js';
 
 const READ_SECRET = 'top-secret-value';
+const TEST_SECRET = 'realtime-test-secret';
+const originalSecret = getEnv()['SECRET'];
 
 let readImpl: (
 	accountability: { user: string | null },
@@ -189,7 +191,7 @@ const SCHEMA = {
 } as unknown as SchemaOverview;
 
 function secret(): string {
-	return String(getEnv()['SECRET']);
+	return TEST_SECRET;
 }
 
 function signUser(user: string): string {
@@ -339,6 +341,7 @@ async function settleUntil(condition: () => boolean, max = 100): Promise<void> {
 let harness: Harness | null = null;
 
 beforeEach(() => {
+	getEnv()['SECRET'] = TEST_SECRET;
 	readImpl = (_accountability, _event, key) => [{ id: key, title: `title-${key}` }];
 	readAccountability = null;
 	stallWhen = null;
@@ -359,6 +362,7 @@ afterEach(async () => {
 	if (harness) await harness.teardown();
 	harness = null;
 	vi.useRealTimers();
+	getEnv()['SECRET'] = originalSecret;
 });
 
 describe('Rendezvous', () => {

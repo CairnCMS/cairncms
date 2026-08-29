@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import type { Knex } from 'knex';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { getEnv } from '../../env.js';
 import { Admission } from '../admission.js';
@@ -13,9 +13,11 @@ import { GraphQLController } from './graphql.js';
 import { WebSocketController } from './rest.js';
 
 const SCHEMA = { collections: {}, relations: [] } as unknown as SchemaOverview;
+const TEST_SECRET = 'realtime-test-secret';
+const originalSecret = getEnv()['SECRET'];
 
 function signUser(user: string): string {
-	return jwt.sign({ id: user, role: 'role-1', app_access: true, admin_access: false }, String(getEnv()['SECRET']), {
+	return jwt.sign({ id: user, role: 'role-1', app_access: true, admin_access: false }, TEST_SECRET, {
 		issuer: 'cairncms',
 		expiresIn: '1h',
 	});
@@ -102,9 +104,14 @@ function connect(
 
 let harness: Harness | null = null;
 
+beforeEach(() => {
+	getEnv()['SECRET'] = TEST_SECRET;
+});
+
 afterEach(async () => {
 	if (harness) await harness.teardown();
 	harness = null;
+	getEnv()['SECRET'] = originalSecret;
 });
 
 describe('cross-transport shared admission', () => {

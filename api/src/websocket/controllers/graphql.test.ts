@@ -127,9 +127,11 @@ class GatedGraphQLController extends GraphQLController {
 }
 
 const env = () => getEnv() as Record<string, unknown>;
+const TEST_SECRET = 'realtime-test-secret';
+const originalSecret = getEnv()['SECRET'];
 
 function secret(): string {
-	return String(getEnv()['SECRET']);
+	return TEST_SECRET;
 }
 
 function signUser(user: string, options: jwt.SignOptions = {}): string {
@@ -297,6 +299,10 @@ function waitForId(frames: Record<string, any>[], type: string, id: string): Pro
 
 let harness: Harness | null = null;
 
+beforeEach(() => {
+	getEnv()['SECRET'] = TEST_SECRET;
+});
+
 afterEach(async () => {
 	releaseFinalizer?.();
 	releaseFinalizer = null;
@@ -304,6 +310,7 @@ afterEach(async () => {
 	if (harness) await harness.teardown();
 	harness = null;
 	vi.useRealTimers();
+	getEnv()['SECRET'] = originalSecret;
 });
 
 describe('GraphQL connection_init authentication', () => {

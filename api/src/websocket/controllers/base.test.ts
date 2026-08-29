@@ -95,9 +95,11 @@ class GraphQLLikeStubController extends WebSocketController {
 }
 
 const SCHEMA = { collections: {}, relations: [] } as unknown as SchemaOverview;
+const TEST_SECRET = 'realtime-test-secret';
+const originalSecret = getEnv()['SECRET'];
 
 function secret(): string {
-	return String(getEnv()['SECRET']);
+	return TEST_SECRET;
 }
 
 function signUser(user: string, options: jwt.SignOptions = {}): string {
@@ -333,6 +335,7 @@ async function waitFrames(predicate: () => boolean): Promise<void> {
 let harness: Harness | null = null;
 
 beforeEach(() => {
+	getEnv()['SECRET'] = TEST_SECRET;
 	emitActionBounded = vi.spyOn(emitter, 'emitActionBounded');
 });
 
@@ -341,6 +344,7 @@ afterEach(async () => {
 	harness = null;
 	emitActionBounded.mockRestore();
 	vi.useRealTimers();
+	getEnv()['SECRET'] = originalSecret;
 });
 
 describe('upgrade rejection contract', () => {
