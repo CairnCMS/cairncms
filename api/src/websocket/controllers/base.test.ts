@@ -631,6 +631,29 @@ describe('strict authentication', () => {
 		const result = await harness.connect({ headers: { authorization: `Bearer ${signUser('alice')}` } });
 		expect(result).toMatchObject({ kind: 'reject', status: 503 });
 	});
+
+	it('keeps the connection open on a same-user refresh', async () => {
+		harness = await createHarness({ authMode: 'strict' });
+		const opened = await harness.connect({ headers: { authorization: `Bearer ${signUser('alice')}` } });
+		if (opened.kind !== 'open') throw new Error('expected an open connection');
+		const { ws } = opened;
+
+		sendJson(ws, { type: 'auth', access_token: signUser('alice', { expiresIn: '300s' }) });
+		await vi.waitFor(() => expect(callsFor('websocket.auth.success')).toHaveLength(1));
+
+		expect(ws.readyState).toBe(WebSocket.OPEN);
+	});
+
+	it('closes on a different-user refresh', async () => {
+		harness = await createHarness({ authMode: 'strict' });
+		const opened = await harness.connect({ headers: { authorization: `Bearer ${signUser('alice')}` } });
+		if (opened.kind !== 'open') throw new Error('expected an open connection');
+		const { ws } = opened;
+		const closed = new Promise<void>((resolve) => ws.on('close', () => resolve()));
+
+		sendJson(ws, { type: 'auth', access_token: signUser('bob') });
+		await closed;
+	});
 });
 
 describe('lifecycle events', () => {
@@ -1267,7 +1290,7 @@ describe('public auth-message path', () => {
 	});
 });
 
-describe('commit-6 review additions', () => {
+describe('Authentication lifecycle and command admission', () => {
 	it('discards a queued command when a failed reauthentication initiates close', async () => {
 		const db = deferredDatabase();
 		harness = await createHarness({ authMode: 'strict', database: db.database, controllerClass: TestController });
@@ -1458,7 +1481,7 @@ describe('commit-6 review additions', () => {
 	});
 });
 
-describe('commit-7 drain additions', () => {
+describe('Command handler execution', () => {
 	it('skips the handler and the success action when the refresh does not proceed', async () => {
 		const { ws } = await openClient({ controllerClass: TestController });
 		const controller = harness!.controller as TestController;
@@ -1514,7 +1537,7 @@ describe('commit-7 drain additions', () => {
 	});
 });
 
-describe('commit-8a subscription wiring', () => {
+describe('Subscription wiring and connection lifecycle', () => {
 	it('answers a subscribe to an inaccessible collection with a subscribe FORBIDDEN frame and stays open', async () => {
 		const { ws, frames } = await openClient({ controllerClass: TestController });
 

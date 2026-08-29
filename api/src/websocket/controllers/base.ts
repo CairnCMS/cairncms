@@ -50,7 +50,6 @@ interface ConnectionState {
 	readonly ip: string;
 	readonly origin: AuthMode;
 	readonly waiting: Buffer[];
-	retainedBytes: number;
 	draining: boolean;
 }
 
@@ -439,7 +438,6 @@ export abstract class SocketController {
 			ip,
 			origin: this.authMode,
 			waiting: [],
-			retainedBytes: 0,
 			draining: false,
 		});
 
@@ -464,7 +462,6 @@ export abstract class SocketController {
 		const state = this.connectionState.get(client);
 		if (state === undefined) return;
 
-		for (const frame of state.waiting) state.retainedBytes -= frame.length;
 		state.waiting.length = 0;
 	}
 
@@ -608,7 +605,6 @@ export abstract class SocketController {
 
 		const frame = toBuffer(data);
 		state.waiting.push(frame);
-		state.retainedBytes += frame.length;
 
 		const drain = this.drain(client, state);
 		this.inflightDrains.add(drain);
@@ -625,7 +621,6 @@ export abstract class SocketController {
 				const hold = client.auth.beginWorkHold();
 
 				if (hold === null) {
-					state.retainedBytes -= frame.length;
 					break;
 				}
 
@@ -635,7 +630,6 @@ export abstract class SocketController {
 					if (!client.stopping) this.send(client, toWebSocketException(error, 'server').toMessage());
 				} finally {
 					hold.clear();
-					state.retainedBytes -= frame.length;
 				}
 			}
 		} finally {

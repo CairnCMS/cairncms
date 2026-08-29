@@ -29,6 +29,7 @@ const OUTBOUND_LIMITS: OutboundLimits = { frameCap: OUTBOUND_FRAME_CAP, queueByt
 const LOG_OVERLOAD_ENTER = 'WebSocket dispatch entered an overload episode';
 const LOG_OVERLOAD_RECOVER = 'WebSocket dispatch recovered from an overload episode';
 const LOG_SCHEMA_FAILED = 'WebSocket dispatch could not resolve the schema for an event';
+const LOG_ENTRY_FAILED = 'WebSocket dispatch contained a failed entry';
 
 export function resolveDeliveryConcurrency(database?: Knex): number {
 	return getDatabaseClient(database) === 'sqlite' ? 1 : DELIVERY_CONCURRENCY;
@@ -202,20 +203,26 @@ export class DispatchCoordinator {
 	}
 
 	private async runWorker(collection: string, queue: QueueEntry[]): Promise<void> {
-		while (queue.length > 0) {
-			const entry = queue[0]!;
+		try {
+			while (queue.length > 0) {
+				const entry = queue[0]!;
 
-			await entry.barrier.wait(entry.token.signal);
+				try {
+					await entry.barrier.wait(entry.token.signal);
 
-			if (!entry.token.isCancelled) {
-				await this.fanOut(collection, entry);
+					if (!entry.token.isCancelled) {
+						await this.fanOut(collection, entry);
+					}
+				} catch {
+					logger.warn(LOG_ENTRY_FAILED);
+				} finally {
+					this.releaseEntry(entry);
+					queue.shift();
+				}
 			}
-
-			this.releaseEntry(entry);
-			queue.shift();
+		} finally {
+			this.queues.delete(collection);
 		}
-
-		this.queues.delete(collection);
 	}
 
 	private async fanOut(collection: string, entry: QueueEntry): Promise<void> {

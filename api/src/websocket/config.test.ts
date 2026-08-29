@@ -1,9 +1,13 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { refreshEnv } from '../env.js';
 import { getWebSocketConfig, type WebSocketResolution } from './config.js';
+
+const CONFIG_DIR = mkdtempSync(join(tmpdir(), 'cairncms-ws-config-'));
+const EMPTY_CONFIG = join(CONFIG_DIR, '.env');
+writeFileSync(EMPTY_CONFIG, '');
 
 const BASE_ENV = { ...process.env };
 
@@ -14,7 +18,7 @@ const enabled = {
 };
 
 function setEnv(overrides: Record<string, string>): void {
-	process.env = { ...BASE_ENV, ...overrides };
+	process.env = { ...BASE_ENV, CONFIG_PATH: EMPTY_CONFIG, ...overrides };
 	refreshEnv();
 }
 
@@ -40,6 +44,10 @@ function graphqlErrorMessages(resolution: WebSocketResolution): string[] {
 afterEach(() => {
 	process.env = { ...BASE_ENV };
 	refreshEnv();
+});
+
+afterAll(() => {
+	rmSync(CONFIG_DIR, { recursive: true, force: true });
 });
 
 describe('getWebSocketConfig', () => {

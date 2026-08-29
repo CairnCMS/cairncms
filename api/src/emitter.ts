@@ -76,7 +76,7 @@ export class Emitter {
 		const results = await Promise.allSettled(pending);
 
 		if (results.some((result) => result.status === 'rejected')) {
-			logger.warn('A websocket action listener threw and was contained');
+			logger.warn('An action listener threw and was contained');
 		}
 	}
 

@@ -54,7 +54,7 @@ function renderEnv(secrets: GeneratedSecrets, cairncmsPort: number): string {
 		'# API Limits',
 		'GRAPHQL_QUERY_TOKEN_LIMIT=5000',
 		'',
-		'# Realtime (WebSockets) Configuration (off by default; set WEBSOCKETS_ENABLED=true to enable)',
+		'# Realtime Configuration',
 		'WEBSOCKETS_ENABLED=false',
 		'WEBSOCKETS_REST_ENABLED=true',
 		'WEBSOCKETS_REST_PATH=/websocket',

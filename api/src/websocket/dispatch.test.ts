@@ -165,6 +165,41 @@ describe('DispatchCoordinator delivery', () => {
 		expect(sentFrames()[0]).toMatchObject({ type: 'subscription', event: 'create', data: [{ id: 1 }] });
 	});
 
+	it('contains a failed entry and still dispatches the entries queued behind it', async () => {
+		build();
+
+		const events: WebSocketEvent[] = [];
+
+		subscribe(client(), 'articles', {
+			sink: async (event: WebSocketEvent) => {
+				events.push(event);
+			},
+		});
+
+		vi.spyOn(registry, 'getActiveByCollection').mockImplementationOnce(() => {
+			throw new Error('fan-out boom');
+		});
+
+		emit({ action: 'create', collection: 'articles', key: 1 });
+		emit({ action: 'create', collection: 'articles', key: 2 });
+
+		await vi.waitFor(() => expect(events).toHaveLength(1));
+
+		expect(events[0]).toMatchObject({ key: 2 });
+		expect(logger.warn).toHaveBeenCalledWith('WebSocket dispatch contained a failed entry');
+
+		await vi.waitFor(() => {
+			expect(coordinator!['queueCount']).toBe(0);
+			expect(coordinator!['queueBytes']).toBe(0);
+			expect(coordinator!['queues'].has('articles')).toBe(false);
+		});
+
+		emit({ action: 'create', collection: 'articles', key: 3 });
+		await vi.waitFor(() => expect(events).toHaveLength(2));
+
+		expect(events[1]).toMatchObject({ key: 3 });
+	});
+
 	it('delivers the event to a subscription sink instead of the REST send path', async () => {
 		build();
 		const events: WebSocketEvent[] = [];

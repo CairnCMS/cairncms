@@ -60,7 +60,7 @@ describe('emitActionBounded', () => {
 
 		await expect(emitter.emitActionBounded('websocket.message', {}, CONTEXT)).resolves.toBeUndefined();
 		expect(warn).toHaveBeenCalledTimes(1);
-		expect(warn).toHaveBeenCalledWith('A websocket action listener threw and was contained');
+		expect(warn).toHaveBeenCalledWith('An action listener threw and was contained');
 		expect(warn.mock.calls.flat().map(String).join(' ')).not.toContain('secret-boom');
 	});
 
