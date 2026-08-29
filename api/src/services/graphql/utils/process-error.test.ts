@@ -98,7 +98,11 @@ describe('formatGraphqlErrors', () => {
 	});
 
 	test('logs an expected BaseException-originated error at debug level', () => {
-		formatGraphqlErrors([new GraphQLError('wrap', { originalError: new InvalidPayloadException('x') })], undefined, null);
+		formatGraphqlErrors(
+			[new GraphQLError('wrap', { originalError: new InvalidPayloadException('x') })],
+			undefined,
+			null
+		);
 
 		expect(logSpy).toHaveBeenCalledWith('debug', expect.any(Object), expect.any(Set));
 		expect(logSpy).not.toHaveBeenCalledWith('error', expect.any(Object), expect.any(Set));
