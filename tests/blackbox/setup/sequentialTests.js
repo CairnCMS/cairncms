@@ -33,6 +33,7 @@ exports.list = {
 		{ testFilePath: '/routes/security/trusted-ip.test.ts' },
 		{ testFilePath: '/routes/items/relational-presets.test.ts' },
 		{ testFilePath: '/routes/items/query-limit.test.ts' },
+		{ testFilePath: '/routes/items/flag-operator-filter.test.ts' },
 		{ testFilePath: '/routes/assets/format.test.ts' },
 		{ testFilePath: '/routes/assets/system-preset-format-isolation.test.ts' },
 		{ testFilePath: '/routes/assets/read.test.ts' },

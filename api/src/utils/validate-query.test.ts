@@ -136,3 +136,23 @@ describe('export', async () => {
 		expect(() => validateQuery({ export: 'invalid-format' } as any)).toThrowError('"export" must be one of');
 	});
 });
+
+describe('boolean and geometry flag validation', async () => {
+	const validateQuery = await getValidateQuery();
+
+	test.each(['_null', '_nnull', '_empty', '_nempty'])('accepts an empty-string %s flag', (operator) => {
+		expect(() => validateQuery({ filter: { title: { [operator]: '' } } } as any)).not.toThrowError();
+	});
+
+	test.each([true, false, null])('accepts the boolean flag value %s', (value) => {
+		expect(() => validateQuery({ filter: { title: { _null: value } } } as any)).not.toThrowError();
+	});
+
+	test.each(['wrong', undefined])('rejects the non-boolean flag value %s', (value) => {
+		expect(() => validateQuery({ filter: { title: { _null: value } } } as any)).toThrowError('has to be a boolean');
+	});
+
+	test('still rejects an empty-string geometry flag', () => {
+		expect(() => validateQuery({ filter: { location: { _intersects: '' } } } as any)).toThrowError('valid GeoJSON');
+	});
+});
