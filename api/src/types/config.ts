@@ -63,6 +63,14 @@ export type PermissionValues = {
 export type RoleFieldChanges = { [K in keyof RoleValues]?: FieldChange<RoleValues[K]> };
 export type PermissionFieldChanges = { [K in keyof PermissionValues]?: FieldChange<PermissionValues[K]> };
 
+export type ProtectionContributor = { kind: 'roles'; operation: 'update' | 'delete'; identity: RoleIdentity };
+
+export type ConfigProtection = {
+	code: 'ADMIN_CONTINUITY_REQUIRED';
+	message: string;
+	contributors: ProtectionContributor[];
+};
+
 export interface ConfigPlan {
 	roles: {
 		create: ConfigRole[];
@@ -74,6 +82,7 @@ export interface ConfigPlan {
 		update: Array<{ roleKey: string; collection: string; action: PermissionsAction; changes: PermissionFieldChanges }>;
 		delete: Array<{ roleKey: string; collection: string; action: PermissionsAction }>;
 	};
+	protections: ConfigProtection[];
 }
 
 export type PermissionIdentity = { role: string; collection: string; action: PermissionsAction };
@@ -105,14 +114,15 @@ export type ConfigPlanChange =
 	| { kind: 'permissions'; operation: 'delete'; identity: PermissionIdentity; impact: [] };
 
 export type SerializedConfigPlan = {
-	planVersion: 1;
+	planVersion: 2;
 	manifestVersion: number;
 	changes: ConfigPlanChange[];
 	summary: { create: number; update: number; delete: number };
 	warnings: ConfigPlanWarning[];
+	protections: ConfigProtection[];
 };
 
-export type ConfigFailureCode = 'CONFIG_INVALID' | 'CONFIG_IDENTITY_CONFLICT' | 'CONFIG_PROTECTED_RECORD';
+export type ConfigFailureCode = 'CONFIG_INVALID' | 'CONFIG_IDENTITY_CONFLICT';
 
 export type ConfigFailure = { code: ConfigFailureCode; message: string };
 

@@ -502,27 +502,279 @@ describe('Config-as-Code API', () => {
 			});
 		});
 
-		describe('refuses to delete the last admin role as a protected record', () => {
-			it.each(vendors)('%s', async (vendor) => {
-				const before = await adminSnapshot(vendor);
+		describe('administrator continuity protection', () => {
+			const databases = new Map<string, Knex>();
 
-				const desired = JSON.parse(JSON.stringify(before)) as ConfigSnapshot;
+			beforeAll(() => {
+				for (const vendor of vendors) databases.set(vendor, knex(config.knexConfig[vendor]!));
+			});
 
-				const adminKeys = desired.roles.filter((role) => role.admin_access === true).map((role) => role.key);
-				expect(adminKeys.length).toBeGreaterThan(0);
+			afterAll(async () => {
+				for (const [, db] of databases) await db.destroy();
+			});
 
+			function adminKeysOf(snapshot: ConfigSnapshot): string[] {
+				return snapshot.roles.filter((role) => role.admin_access === true).map((role) => role.key);
+			}
+
+			function withoutAdministrators(snapshot: ConfigSnapshot): ConfigSnapshot {
+				const desired = JSON.parse(JSON.stringify(snapshot)) as ConfigSnapshot;
+				const adminKeys = adminKeysOf(desired);
 				desired.roles = desired.roles.filter((role) => role.admin_access !== true);
 				desired.permissions = desired.permissions.filter((set) => !adminKeys.includes(set.role));
+				return desired;
+			}
 
-				const response = await applyConfig(vendor, desired, { dryRun: true });
+			function deleteContributor(key: string) {
+				return { kind: 'roles', operation: 'delete', identity: { key } };
+			}
 
-				expect(response.statusCode).toBe(400);
-				expect(response.body.errors[0].extensions.code).toBe('CONFIG_PROTECTED_RECORD');
-				expect(errorMessages(response).some((message) => message.includes('admin role'))).toBe(true);
+			async function roleForEmail(db: Knex, email: string): Promise<{ key: string; id: unknown; admin: boolean }> {
+				const user = await db('directus_users').where({ email }).first();
+				expect(user).toBeTruthy();
+				const role = await db('directus_roles').where({ id: user.role }).first();
+				expect(role).toBeTruthy();
+				return { key: role.key, id: role.id, admin: role.admin_access === true || role.admin_access === 1 };
+			}
 
-				const after = await adminSnapshot(vendor);
+			async function withSoleAdmin(
+				vendor: string,
+				fn: (ctx: { db: Knex; original: ConfigSnapshot; adminKey: string }) => Promise<void>
+			): Promise<void> {
+				const db = databases.get(vendor)!;
+				const original = await adminSnapshot(vendor);
+				const admin = await roleForEmail(db, common.USER.ADMIN!.EMAIL);
+				expect(admin.admin).toBe(true);
 
-				expect(after).toEqual(before);
+				const soleAdmin = JSON.parse(JSON.stringify(original)) as ConfigSnapshot;
+
+				for (const role of soleAdmin.roles) {
+					if (role.admin_access === true && role.key !== admin.key) role.admin_access = false;
+				}
+
+				try {
+					expect((await applyConfig(vendor, soleAdmin, { destructive: true })).statusCode).toBe(200);
+					expect(adminKeysOf(await adminSnapshot(vendor))).toEqual([admin.key]);
+
+					await fn({ db, original, adminKey: admin.key });
+				} finally {
+					expect((await applyConfig(vendor, original, { destructive: true })).statusCode).toBe(200);
+					expect(await adminSnapshot(vendor)).toEqual(original);
+				}
+			}
+
+			async function applyAs(vendor: string, token: string, desired: unknown, options: { destructive?: boolean } = {}) {
+				const req = request(getUrl(vendor))
+					.post('/config/apply')
+					.set('Authorization', `Bearer ${token}`)
+					.set('Content-Type', 'application/json');
+
+				if (options.destructive) req.query({ destructive: 'true' });
+
+				return req.send(desired as object);
+			}
+
+			async function snapshotAs(vendor: string, token: string): Promise<ConfigSnapshot> {
+				const response = await request(getUrl(vendor)).get('/config/snapshot').set('Authorization', `Bearer ${token}`);
+
+				expect(response.statusCode).toBe(200);
+				return response.body.data as ConfigSnapshot;
+			}
+
+			async function roleAuditIds(db: Knex): Promise<{ activity: Set<unknown>; revisions: Set<unknown> }> {
+				const activity = await db('directus_activity').where({ collection: 'directus_roles' }).select('id');
+				const revisions = await db('directus_revisions').where({ collection: 'directus_roles' }).select('id');
+				return {
+					activity: new Set(activity.map((row) => row.id)),
+					revisions: new Set(revisions.map((row) => row.id)),
+				};
+			}
+
+			describe('a dry run of a plan that removes the last administrator returns the protection at 200', () => {
+				it.each(vendors)('%s', async (vendor) => {
+					await withSoleAdmin(vendor, async ({ adminKey }) => {
+						const before = await adminSnapshot(vendor);
+						const response = await applyConfig(vendor, withoutAdministrators(before), { dryRun: true });
+
+						expect(response.statusCode).toBe(200);
+
+						const { protections } = response.body.data;
+						expect(protections).toHaveLength(1);
+						expect(Object.keys(protections[0]).sort()).toEqual(['code', 'contributors', 'message']);
+						expect(protections[0].code).toBe('ADMIN_CONTINUITY_REQUIRED');
+						expect(typeof protections[0].message).toBe('string');
+						expect(protections[0].contributors).toEqual([deleteContributor(adminKey)]);
+
+						expect(await adminSnapshot(vendor)).toEqual(before);
+					});
+				});
+			});
+
+			describe('a JSON and a YAML dry run of the same plan return an identical protection', () => {
+				it.each(vendors)('%s', async (vendor) => {
+					await withSoleAdmin(vendor, async ({ adminKey }) => {
+						const desired = withoutAdministrators(await adminSnapshot(vendor));
+
+						const json = await applyConfig(vendor, desired, { dryRun: true });
+
+						const yaml = await request(getUrl(vendor))
+							.post('/config/apply')
+							.query({ dry_run: 'true' })
+							.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+							.set('Content-Type', 'text/yaml')
+							.send(dumpYaml(desired));
+
+						expect(json.statusCode).toBe(200);
+						expect(yaml.statusCode).toBe(200);
+
+						expect(json.body.data.protections).toEqual([
+							{
+								code: 'ADMIN_CONTINUITY_REQUIRED',
+								message: expect.any(String),
+								contributors: [deleteContributor(adminKey)],
+							},
+						]);
+
+						expect(yaml.body.data.protections).toEqual(json.body.data.protections);
+					});
+				});
+			});
+
+			describe('a mutating apply that removes the last administrator is refused and changes nothing', () => {
+				it.each(vendors)('%s', async (vendor) => {
+					await withSoleAdmin(vendor, async ({ db, adminKey }) => {
+						const before = await adminSnapshot(vendor);
+						const auditBefore = await roleAuditIds(db);
+
+						const response = await applyConfig(vendor, withoutAdministrators(before), { destructive: true });
+
+						expect(response.statusCode).toBe(400);
+
+						const extensions = response.body.errors[0].extensions;
+						expect(Object.keys(extensions).sort()).toEqual(['code', 'contributors', 'protection']);
+						expect(extensions.code).toBe('CONFIG_PROTECTED_RECORD');
+						expect(extensions.protection).toEqual({ code: 'ADMIN_CONTINUITY_REQUIRED' });
+						expect(extensions.contributors).toEqual([deleteContributor(adminKey)]);
+
+						expect(await adminSnapshot(vendor)).toEqual(before);
+
+						const auditAfter = await roleAuditIds(db);
+						expect([...auditAfter.activity].filter((id) => !auditBefore.activity.has(id))).toEqual([]);
+						expect([...auditAfter.revisions].filter((id) => !auditBefore.revisions.has(id))).toEqual([]);
+					});
+				});
+			});
+
+			describe('the platform service rejects demoting the sole administrator directly', () => {
+				it.each(vendors)('%s', async (vendor) => {
+					await withSoleAdmin(vendor, async ({ db, adminKey }) => {
+						const adminRole = await db('directus_roles').where({ key: adminKey }).first();
+
+						const response = await request(getUrl(vendor))
+							.patch(`/roles/${adminRole.id}`)
+							.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+							.set('Content-Type', 'application/json')
+							.send({ admin_access: false });
+
+						expect(response.statusCode).toBe(422);
+						expect(response.body.errors[0].extensions.code).toBe('UNPROCESSABLE_ENTITY');
+						expect(response.body.errors[0].message).toContain('last admin role');
+
+						const after = await db('directus_roles').where({ id: adminRole.id }).first();
+						expect(after.admin_access === true || after.admin_access === 1).toBe(true);
+					});
+				});
+			});
+
+			describe('a promotion ordered before the administrator demotion applies through the real service', () => {
+				it.each(vendors)('%s', async (vendor) => {
+					const db = databases.get(vendor)!;
+					const original = await adminSnapshot(vendor);
+					const adminRole = await roleForEmail(db, common.USER.ADMIN!.EMAIL);
+					const appRole = await roleForEmail(db, common.USER.APP_ACCESS!.EMAIL);
+
+					expect(adminRole.admin).toBe(true);
+					expect(appRole.admin).toBe(false);
+
+					const soleAdmin = JSON.parse(JSON.stringify(original)) as ConfigSnapshot;
+
+					for (const role of soleAdmin.roles) {
+						if (role.admin_access === true && role.key !== adminRole.key) role.admin_access = false;
+					}
+
+					let handoffCommitted = false;
+
+					try {
+						expect((await applyConfig(vendor, soleAdmin, { destructive: true })).statusCode).toBe(200);
+						expect(adminKeysOf(await adminSnapshot(vendor))).toEqual([adminRole.key]);
+
+						const handoff = JSON.parse(JSON.stringify(await adminSnapshot(vendor))) as ConfigSnapshot;
+						const adminEntry = handoff.roles.find((role) => role.key === adminRole.key)!;
+						const appEntry = handoff.roles.find((role) => role.key === appRole.key)!;
+						adminEntry.admin_access = false;
+						appEntry.admin_access = true;
+
+						handoff.roles = [
+							appEntry,
+							...handoff.roles.filter((role) => role.key !== adminRole.key && role.key !== appRole.key),
+							adminEntry,
+						];
+
+						const applied = await applyAs(vendor, common.USER.ADMIN!.TOKEN, handoff, { destructive: true });
+						expect(applied.statusCode).toBe(200);
+						handoffCommitted = true;
+
+						const promoted = await snapshotAs(vendor, common.USER.APP_ACCESS!.TOKEN);
+						const byKey = new Map(promoted.roles.map((role) => [role.key, role]));
+						expect(byKey.get(appRole.key)!.admin_access).toBe(true);
+						expect(byKey.get(adminRole.key)!.admin_access).toBe(false);
+					} finally {
+						const token = handoffCommitted ? common.USER.APP_ACCESS!.TOKEN : common.USER.ADMIN!.TOKEN;
+
+						const restore = JSON.parse(JSON.stringify(original)) as ConfigSnapshot;
+						const adminEntry = restore.roles.find((role) => role.key === adminRole.key)!;
+						const appEntry = restore.roles.find((role) => role.key === appRole.key)!;
+
+						restore.roles = [
+							adminEntry,
+							...restore.roles.filter((role) => role.key !== adminRole.key && role.key !== appRole.key),
+							appEntry,
+						];
+
+						expect((await applyAs(vendor, token, restore, { destructive: true })).statusCode).toBe(200);
+						expect(await adminSnapshot(vendor)).toEqual(original);
+					}
+				});
+			});
+
+			describe('a demotion ordered before its replacement promotion is refused', () => {
+				it.each(vendors)('%s', async (vendor) => {
+					await withSoleAdmin(vendor, async ({ db, adminKey }) => {
+						const app = await roleForEmail(db, common.USER.APP_ACCESS!.EMAIL);
+						expect(app.admin).toBe(false);
+
+						const desired = JSON.parse(JSON.stringify(await adminSnapshot(vendor))) as ConfigSnapshot;
+						const adminEntry = desired.roles.find((role) => role.key === adminKey)!;
+						const appEntry = desired.roles.find((role) => role.key === app.key)!;
+						adminEntry.admin_access = false;
+						appEntry.admin_access = true;
+
+						desired.roles = [
+							adminEntry,
+							...desired.roles.filter((role) => role.key !== adminKey && role.key !== app.key),
+							appEntry,
+						];
+
+						const response = await applyConfig(vendor, desired, { destructive: true });
+
+						expect(response.statusCode).toBe(400);
+						expect(response.body.errors[0].extensions.protection.code).toBe('ADMIN_CONTINUITY_REQUIRED');
+
+						expect(response.body.errors[0].extensions.contributors).toEqual([
+							{ kind: 'roles', operation: 'update', identity: { key: adminKey } },
+						]);
+					});
+				});
 			});
 		});
 
@@ -585,11 +837,12 @@ describe('Config-as-Code API', () => {
 				expect(response.statusCode).toBe(200);
 
 				expect(response.body.data).toEqual({
-					planVersion: 1,
+					planVersion: 2,
 					manifestVersion: 1,
 					changes: [],
 					summary: { create: 0, update: 0, delete: 0 },
 					warnings: [],
+					protections: [],
 				});
 			});
 		});

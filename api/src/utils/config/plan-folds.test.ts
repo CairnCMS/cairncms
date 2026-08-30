@@ -6,6 +6,7 @@ function emptyPlan(): ConfigPlan {
 	return {
 		roles: { create: [], update: [], delete: [] },
 		permissions: { create: [], update: [], delete: [] },
+		protections: [],
 	};
 }
 

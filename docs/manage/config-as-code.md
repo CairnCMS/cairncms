@@ -153,7 +153,7 @@ cairncms config apply --dry-run --format json ./config
 
 ```json
 {
-  "planVersion": 1,
+  "planVersion": 2,
   "manifestVersion": 1,
   "changes": [
     {
@@ -170,11 +170,18 @@ cairncms config apply --dry-run --format json ./config
     }
   ],
   "summary": { "create": 0, "update": 1, "delete": 1 },
-  "warnings": []
+  "warnings": [],
+  "protections": []
 }
 ```
 
 `planVersion` identifies the payload format. Each change carries its `kind`, `operation`, and stable `identity`. A create carries the full canonical `values`, an update carries a per-field `before`/`after` map, and a role deletion carries an `impact` array describing the cascade. An empty plan still emits the complete document with a zeroed `summary`.
+
+`protections` identifies valid plans that CairnCMS cannot apply safely. Each entry includes a stable `code` for automation, a human-readable `message`, and the contributing changes (`kind`, `operation`, and `identity`). If the array is not empty, CairnCMS refuses the apply even with `--destructive`. Automation should branch on `code`, not `message`.
+
+The only protection currently defined is `ADMIN_CONTINUITY_REQUIRED`. CairnCMS applies creates first, role updates in config order, and deletions last. Every step must leave at least one role with `admin_access: true`. Create a replacement administrator or place its promotion before the demotion that would otherwise remove the final administrator.
+
+Consumers of `planVersion: 2` must ignore unknown properties, but reject an unknown `planVersion`, `kind`, or `operation`. An unfamiliar protection still blocks the apply, and an unfamiliar warning remains a warning. Additive fields do not change `planVersion`; breaking changes do. The input format's strictly validated `manifest.version` is independent of the plan version.
 
 ### Exit codes
 
@@ -186,7 +193,7 @@ Both config commands map their outcome to an exit code, so a pipeline can branch
 |---|---|
 | Empty plan, or a successful apply, or a declined confirmation, or `--help` | 0 |
 | Dry run whose plan contains changes | 1 |
-| Validation failure, a deletion requiring `--destructive`, or a usage error (unknown option, missing path, unknown `--format`, JSON without `--dry-run`) | 2 |
+| Validation failure, a deletion requiring `--destructive`, a protected apply (administrator continuity), or a usage error (unknown option, missing path, unknown `--format`, JSON without `--dry-run`) | 2 |
 | No database connection, system tables not installed, unreadable state, or an unexpected failure | 3 |
 
 `config snapshot`:
@@ -263,6 +270,8 @@ A dry run returns the same plan document the CLI prints with `--dry-run --format
 
 A mutating apply whose plan contains a deletion without `?destructive=true` is refused with a `400` and the `DESTRUCTIVE_CHANGES_REQUIRED` code. The error's `extensions.deletions` lists the identities that would be deleted, and nothing is applied. Re-send with `?destructive=true` to authorize them.
 
+A mutating apply is refused if any create, role update, or deletion step would remove the final role with `admin_access: true`. The response is a `400` with the `CONFIG_PROTECTED_RECORD` code, even when `?destructive=true`. Its `extensions.protection.code` is `ADMIN_CONTINUITY_REQUIRED`, and `extensions.contributors` identifies the role removals by `kind`, `operation`, and `identity`. A dry run returns `200` with the same entry in `protections`, allowing a pipeline to detect the block before applying.
+
 ### No diff endpoint
 
 Schema-as-code uses a two-step `/schema/diff` then `/schema/apply` flow with a hash handoff to detect concurrent changes. Config-as-code does not. The apply endpoint computes the plan internally on every call because the config payload is much smaller than a typical schema, the engine is fast enough that the plan/apply round-trip in a single call is comfortable, and the dry-run flag covers the same "what would change?" use case without requiring a stateful client.
@@ -304,7 +313,7 @@ After their input-specific checks, both surfaces validate the same config contra
 - **Readable state** — an unreadable manifest, managed directory, config record, or current database value stops the run before a plan is created.
 - **Supported document values** — config values must round-trip without changing meaning. Binary YAML values and non-finite numbers are rejected. Dates remain supported and normalize to ISO 8601 strings. Documents nested deeper than 100 levels or using more than 50 YAML aliases to mappings or sequences are outside the supported range.
 - **Manifest version** — only versions the engine recognizes are accepted. Future-format payloads are rejected rather than partially applied.
-- **Last admin role protection** — an apply that would leave the deployment with no role flagged as `admin_access: true` is rejected. There is no override and no special "Administrator" entity. The protection is purely about the flag, on whatever roles carry it.
+- **Administrator continuity:** Every create, role update, and deletion step must leave at least one role with `admin_access: true`. Unsafe plans report `ADMIN_CONTINUITY_REQUIRED`, and `--destructive` cannot override the protection.
 - **Undefined role references** — a permission set whose `role` cannot be resolved is rejected, identically on both surfaces. When the config manages roles, the role must be declared in the config. When it does not, the role must already exist in the database (see [Managed scope](#managed-scope)).
 - **Duplicate permission tuples** — two rules in the same role's set targeting the same `(collection, action)` are rejected. Permissions must be unique on that tuple.
 - **Reserved key misuse** — the `public` key in `roles[]` is rejected. The Public role record is platform-managed and cannot be created or updated as a role definition. The same `public` key in `permissions[]` is the supported way to manage Public access.

@@ -39,7 +39,14 @@ export function serializeConfigPlan(
 
 	const warnings = [...options.enrichment.warnings].sort(compareWarnings);
 
-	return { planVersion: 1, manifestVersion: options.manifestVersion, changes, summary, warnings };
+	return {
+		planVersion: 2,
+		manifestVersion: options.manifestVersion,
+		changes,
+		summary,
+		warnings,
+		protections: plan.protections,
+	};
 }
 
 function compareChanges(a: ConfigPlanChange, b: ConfigPlanChange): number {

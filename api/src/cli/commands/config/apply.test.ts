@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import inquirer from 'inquirer';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import getDatabase from '../../../database/index.js';
 import logger from '../../../logger.js';
 import type { CairnConfig, ConfigPermission, ConfigPlan, SerializedConfigPlan } from '../../../types/config.js';
@@ -8,6 +9,7 @@ import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
 import { getSchema } from '../../../utils/get-schema.js';
 import { readConfigDirectory } from '../../../utils/read-config-directory.js';
 import { serializeConfigPlan } from '../../../utils/serialize-config-plan.js';
+import { applyConfigPlan } from '../../../utils/apply-config-plan.js';
 import { configApply } from './apply.js';
 
 vi.mock('../../../database/index.js', () => ({
@@ -29,7 +31,6 @@ vi.mock('../../../utils/validate-desired-config.js', () => ({ validateDesiredCon
 
 vi.mock('../../../utils/compute-config-plan.js', () => ({
 	computeConfigPlan: vi.fn(),
-	validateConfigPlan: vi.fn(() => []),
 }));
 
 vi.mock('../../../utils/get-schema.js', () => ({ getSchema: vi.fn(async () => ({})) }));
@@ -43,9 +44,12 @@ vi.mock('../../../utils/apply-config-plan.js', () => ({
 	planHasDeletions: vi.fn(() => false),
 }));
 
+vi.mock('inquirer', () => ({ default: { prompt: vi.fn(async () => ({ proceed: false })) } }));
+
 const EMPTY_PLAN: ConfigPlan = {
 	roles: { create: [], update: [], delete: [] },
 	permissions: { create: [], update: [], delete: [] },
+	protections: [],
 };
 
 const MISSING_COLLECTION_PERMISSION: ConfigPermission = {
@@ -102,7 +106,7 @@ describe('configApply empty plan warnings', () => {
 		vi.mocked(computeConfigPlan).mockReturnValue(EMPTY_PLAN);
 
 		const serialized: SerializedConfigPlan = {
-			planVersion: 1,
+			planVersion: 2,
 			manifestVersion: 1,
 			changes: [],
 			summary: { create: 0, update: 0, delete: 0 },
@@ -114,6 +118,7 @@ describe('configApply empty plan warnings', () => {
 					message: 'Permission for role "editor" targets collection "articles", which does not exist in the schema.',
 				},
 			],
+			protections: [],
 		};
 
 		vi.mocked(serializeConfigPlan).mockReturnValue(serialized);
@@ -164,5 +169,77 @@ describe('configApply empty plan with unmanaged permissions', () => {
 		expect(getSchema).not.toHaveBeenCalled();
 		expect(enrichConfigPlan).not.toHaveBeenCalled();
 		expect(serializeConfigPlan).not.toHaveBeenCalled();
+	});
+});
+
+describe('configApply protected plan', () => {
+	const PROTECTED_PLAN: ConfigPlan = {
+		roles: { create: [], update: [], delete: ['administrator'] },
+		permissions: { create: [], update: [], delete: [] },
+		protections: [
+			{
+				code: 'ADMIN_CONTINUITY_REQUIRED',
+				message: 'Configuration must retain at least one role with administrator access.',
+				contributors: [{ kind: 'roles', operation: 'delete', identity: { key: 'administrator' } }],
+			},
+		],
+	};
+
+	const PROTECTED_SERIALIZED: SerializedConfigPlan = {
+		planVersion: 2,
+		manifestVersion: 1,
+		changes: [{ kind: 'roles', operation: 'delete', identity: { key: 'administrator' }, impact: [] }],
+		summary: { create: 0, update: 0, delete: 1 },
+		warnings: [],
+		protections: PROTECTED_PLAN.protections,
+	};
+
+	beforeEach(() => {
+		vi.spyOn(process, 'exit').mockImplementation((code) => {
+			throw new Error(`exit:${code}`);
+		});
+
+		const rolesOnly: CairnConfig = { manifest: { version: 1, resources: ['roles'] }, roles: [], permissions: [] };
+		vi.mocked(readConfigDirectory).mockResolvedValue(rolesOnly);
+		vi.mocked(readCurrentConfig).mockResolvedValue({ config: rolesOnly, currentRoleKeys: new Set<string>() });
+		vi.mocked(computeConfigPlan).mockReturnValue(PROTECTED_PLAN);
+		vi.mocked(serializeConfigPlan).mockReturnValue(PROTECTED_SERIALIZED);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+		vi.clearAllMocks();
+	});
+
+	it('exits 2 on a mutating apply without prompting or calling the engine', async () => {
+		await expect(
+			configApply('./config', { format: 'human', dryRun: false, destructive: false, yes: false })
+		).rejects.toThrow();
+
+		expect(process.exit).toHaveBeenCalledWith(2);
+		expect(inquirer.prompt).not.toHaveBeenCalled();
+		expect(applyConfigPlan).not.toHaveBeenCalled();
+	});
+
+	it('emits the annotated plan and exits 1 for --format json without prompting or calling the engine', async () => {
+		await expect(
+			configApply('./config', { format: 'json', dryRun: true, destructive: false, yes: false })
+		).rejects.toThrow();
+
+		expect(process.exit).toHaveBeenCalledWith(1);
+		expect(inquirer.prompt).not.toHaveBeenCalled();
+		expect(applyConfigPlan).not.toHaveBeenCalled();
+	});
+
+	it('refuses from the internal plan even when the serialized projection drops protections, with destructive set', async () => {
+		vi.mocked(serializeConfigPlan).mockReturnValue({ ...PROTECTED_SERIALIZED, protections: [] });
+
+		await expect(
+			configApply('./config', { format: 'human', dryRun: false, destructive: true, yes: false })
+		).rejects.toThrow();
+
+		expect(process.exit).toHaveBeenCalledWith(2);
+		expect(inquirer.prompt).not.toHaveBeenCalled();
+		expect(applyConfigPlan).not.toHaveBeenCalled();
 	});
 });

@@ -18,6 +18,7 @@ function planDeletingRoles(...keys: string[]): ConfigPlan {
 	return {
 		roles: { create: [], update: [], delete: keys },
 		permissions: { create: [], update: [], delete: [] },
+		protections: [],
 	};
 }
 
@@ -410,6 +411,7 @@ describe('enrichConfigPlan', () => {
 		const plan: ConfigPlan = {
 			roles: { create: [], update: [], delete: [] },
 			permissions: { create: [{ roleKey: 'x', permission: perm('articles') }], update: [], delete: [] },
+			protections: [],
 		};
 
 		const enrichment = await enrichConfigPlan(plan, desired, { schema: schemaWith('articles'), database: db });

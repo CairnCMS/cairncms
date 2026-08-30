@@ -6,6 +6,7 @@ import emitter from '../emitter.js';
 import { ConfigApplyFailedException } from '../exceptions/config-apply-failed.js';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import { ConfigPostCommitFailedException } from '../exceptions/config-post-commit-failed.js';
+import { ConfigProtectedRecordException } from '../exceptions/config-protected-record.js';
 import { DestructiveChangesRequiredException } from '../exceptions/destructive-changes-required.js';
 import getDatabase from '../database/index.js';
 import { PermissionsService } from '../services/permissions.js';
@@ -89,6 +90,7 @@ function emptyPlan(): ConfigPlan {
 	return {
 		roles: { create: [], update: [], delete: [] },
 		permissions: { create: [], update: [], delete: [] },
+		protections: [],
 	};
 }
 
@@ -752,6 +754,7 @@ describe('applyConfigPlan:events and post-commit ordering', () => {
 			{ standalone: true },
 			eventContext
 		);
+
 		expect(emitter.emitActionAndWait).toHaveBeenNthCalledWith(6, 'permissions.delete', { cascade: true }, eventContext);
 		expect(emitter.emitActionAndWait).toHaveBeenNthCalledWith(7, 'roles.delete', { key: 'old_role' }, eventContext);
 	});
@@ -1213,5 +1216,56 @@ describe('applyConfigPlan:registry routing', () => {
 		} finally {
 			CONFIG_REGISTRY.roles = real;
 		}
+	});
+});
+
+describe('applyConfigPlan:admin-continuity protection', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		trxRows = { directus_roles: [], directus_permissions: [] };
+	});
+
+	function protectedPlan(): ConfigPlan {
+		const plan = emptyPlan();
+		plan.roles.delete.push('administrator');
+
+		plan.protections = [
+			{
+				code: 'ADMIN_CONTINUITY_REQUIRED',
+				message: 'Configuration must retain at least one role with administrator access.',
+				contributors: [{ kind: 'roles', operation: 'delete', identity: { key: 'administrator' } }],
+			},
+		];
+
+		return plan;
+	}
+
+	it('refuses a protected plan before the database, schema, or services, even with destructive set', async () => {
+		await expect(applyConfigPlan(protectedPlan(), { destructive: true, context })).rejects.toBeInstanceOf(
+			ConfigProtectedRecordException
+		);
+
+		expect(getSchema).not.toHaveBeenCalled();
+		expect(transactionSpy).not.toHaveBeenCalled();
+		expect(rolesService.deleteOne).not.toHaveBeenCalled();
+	});
+
+	it('carries the pinned refusal extensions with inline contributors and no payload fields', async () => {
+		const error = (await applyConfigPlan(protectedPlan(), { context }).catch(
+			(thrown) => thrown
+		)) as ConfigProtectedRecordException;
+
+		expect(error).toBeInstanceOf(ConfigProtectedRecordException);
+		expect(error.code).toBe('CONFIG_PROTECTED_RECORD');
+		expect(error.status).toBe(400);
+
+		expect(error.extensions).toEqual({
+			protection: { code: 'ADMIN_CONTINUITY_REQUIRED' },
+			contributors: [{ kind: 'roles', operation: 'delete', identity: { key: 'administrator' } }],
+		});
+
+		expect(error.extensions).not.toHaveProperty('code');
+		expect(JSON.stringify(error.extensions)).not.toContain('impact');
+		expect(JSON.stringify(error.extensions)).not.toContain('values');
 	});
 });
