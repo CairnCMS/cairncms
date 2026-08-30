@@ -581,7 +581,7 @@ describe('applyConfigPlan:engine schedule', () => {
 		return plan;
 	}
 
-	it('runs every create then every update across kinds, then every delete, in dependency order', async () => {
+	it('runs every create then every update in dependency order, then every delete in reverse dependency order', async () => {
 		await applyConfigPlan(finalizedMixedPlan(), { destructive: true, context });
 
 		expect(order).toEqual([
@@ -593,10 +593,10 @@ describe('applyConfigPlan:engine schedule', () => {
 			'perm:create:read',
 			'perm:update:p-au',
 			'perm:update:p-pu',
-			'role:delete:r-old1',
-			'role:delete:r-old2',
 			'perm:delete:p-ad',
 			'perm:delete:p-pd',
+			'role:delete:r-old1',
+			'role:delete:r-old2',
 		]);
 	});
 
@@ -720,8 +720,8 @@ describe('applyConfigPlan:events and post-commit ordering', () => {
 			'mutate:role:update',
 			'mutate:perm:create',
 			'mutate:perm:update',
-			'mutate:role:delete',
 			'mutate:perm:delete',
+			'mutate:role:delete',
 			'commit',
 			'flush',
 			'dispatch:roles.create',
@@ -729,12 +729,12 @@ describe('applyConfigPlan:events and post-commit ordering', () => {
 			'dispatch:permissions.create',
 			'dispatch:permissions.update',
 			'dispatch:permissions.delete',
-			'dispatch:roles.delete',
 			'dispatch:permissions.delete',
+			'dispatch:roles.delete',
 		]);
 	});
 
-	it('dispatches each queued event with its metadata, nested cascade permission-delete before role-delete', async () => {
+	it('dispatches each queued event with its metadata, standalone permission-delete before the role-delete and its cascade', async () => {
 		await applyConfigPlan(cascadePlan(), { destructive: true, context });
 
 		expect(emitter.emitActionAndWait).toHaveBeenNthCalledWith(2, 'roles.update', { key: 'viewer' }, eventContext);
@@ -746,15 +746,14 @@ describe('applyConfigPlan:events and post-commit ordering', () => {
 			eventContext
 		);
 
-		expect(emitter.emitActionAndWait).toHaveBeenNthCalledWith(5, 'permissions.delete', { cascade: true }, eventContext);
-		expect(emitter.emitActionAndWait).toHaveBeenNthCalledWith(6, 'roles.delete', { key: 'old_role' }, eventContext);
-
 		expect(emitter.emitActionAndWait).toHaveBeenNthCalledWith(
-			7,
+			5,
 			'permissions.delete',
 			{ standalone: true },
 			eventContext
 		);
+		expect(emitter.emitActionAndWait).toHaveBeenNthCalledWith(6, 'permissions.delete', { cascade: true }, eventContext);
+		expect(emitter.emitActionAndWait).toHaveBeenNthCalledWith(7, 'roles.delete', { key: 'old_role' }, eventContext);
 	});
 });
 
