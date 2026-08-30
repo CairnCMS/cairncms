@@ -70,7 +70,6 @@ vi.mock('../utils/validate-desired-config.js', () => ({ validateDesiredConfig: v
 
 vi.mock('../utils/compute-config-plan.js', () => ({
 	computeConfigPlan: vi.fn(),
-	validateConfigPlan: vi.fn(() => []),
 }));
 
 vi.mock('../utils/get-schema.js', () => ({ getSchema: vi.fn(async () => ({})) }));
@@ -89,7 +88,7 @@ vi.mock('../utils/config/plan-folds.js', () => ({ isPlanEmpty: vi.fn(() => false
 describe('config renderer sources every token from the presentation primitive', () => {
 	it('emits the mocked sentinel tokens rather than hard-coded text', () => {
 		const serialized: SerializedConfigPlan = {
-			planVersion: 1,
+			planVersion: 2,
 			manifestVersion: 1,
 			changes: [
 				{
@@ -128,6 +127,7 @@ describe('config renderer sources every token from the presentation primitive', 
 					message: 'articles is not a known collection',
 				},
 			],
+			protections: [],
 		};
 
 		const output = renderConfigPlan(serialized);
@@ -198,10 +198,11 @@ describe('config apply sources the confirmation token from the presentation prim
 				delete: [],
 			},
 			permissions: { create: [], update: [], delete: [] },
+			protections: [],
 		});
 
 		vi.mocked(serializeConfigPlan).mockReturnValue({
-			planVersion: 1,
+			planVersion: 2,
 			manifestVersion: 1,
 			changes: [
 				{
@@ -221,6 +222,7 @@ describe('config apply sources the confirmation token from the presentation prim
 			],
 			summary: { create: 1, update: 0, delete: 0 },
 			warnings: [],
+			protections: [],
 		});
 	});
 

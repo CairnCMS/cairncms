@@ -17,6 +17,7 @@ function emptyPlan(): ConfigPlan {
 	return {
 		roles: { create: [], update: [], delete: [] },
 		permissions: { create: [], update: [], delete: [] },
+		protections: [],
 	};
 }
 
@@ -59,11 +60,12 @@ describe('serializeConfigPlan', () => {
 		const result = serializeConfigPlan(emptyPlan(), { enrichment: emptyEnrichment(), manifestVersion: 1 });
 
 		expect(result).toEqual({
-			planVersion: 1,
+			planVersion: 2,
 			manifestVersion: 1,
 			changes: [],
 			summary: { create: 0, update: 0, delete: 0 },
 			warnings: [],
+			protections: [],
 		});
 	});
 
@@ -187,11 +189,12 @@ describe('serializeConfigPlan', () => {
 		const result = serializeConfigPlan(plan, { enrichment, manifestVersion: 1 });
 
 		expect(result).toEqual({
-			planVersion: 1,
+			planVersion: 2,
 			manifestVersion: 1,
 			changes: [{ kind: 'roles', operation: 'delete', identity: { key: 'editor' }, impact }],
 			summary: { create: 0, update: 0, delete: 1 },
 			warnings: [],
+			protections: [],
 		});
 	});
 
@@ -369,8 +372,24 @@ describe('serializeConfigPlan', () => {
 	it('echoes the manifest version and the plan version', () => {
 		const result = serializeConfigPlan(emptyPlan(), { enrichment: emptyEnrichment(), manifestVersion: 1 });
 
-		expect(result.planVersion).toBe(1);
+		expect(result.planVersion).toBe(2);
 		expect(result.manifestVersion).toBe(1);
+	});
+
+	it('copies the plan protections into the serialized envelope', () => {
+		const plan = emptyPlan();
+
+		const protection = {
+			code: 'ADMIN_CONTINUITY_REQUIRED' as const,
+			message: 'Configuration must retain at least one role with administrator access.',
+			contributors: [{ kind: 'roles' as const, operation: 'delete' as const, identity: { key: 'administrator' } }],
+		};
+
+		plan.protections = [protection];
+
+		const result = serializeConfigPlan(plan, { enrichment: emptyEnrichment(), manifestVersion: 1 });
+
+		expect(result.protections).toEqual([protection]);
 	});
 
 	it('round-trips through JSON unchanged', () => {

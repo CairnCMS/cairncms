@@ -6,6 +6,7 @@ import getDatabase from '../database/index.js';
 import emitter from '../emitter.js';
 import { ConfigApplyFailedException } from '../exceptions/config-apply-failed.js';
 import { ConfigPostCommitFailedException } from '../exceptions/config-post-commit-failed.js';
+import { ConfigProtectedRecordException } from '../exceptions/config-protected-record.js';
 import { DestructiveChangesRequiredException } from '../exceptions/destructive-changes-required.js';
 import type { ActionEventParams } from '../types/index.js';
 import type { ApplyResult, ConfigApplySecurityContext, ConfigKind, ConfigPlan } from '../types/config.js';
@@ -34,6 +35,15 @@ function assembleResult(slices: Map<ConfigKind, unknown>): ApplyResult {
 }
 
 export async function applyConfigPlan(plan: ConfigPlan, opts: ApplyOptions): Promise<ApplyResult> {
+	const protection = plan.protections[0];
+
+	if (protection) {
+		throw new ConfigProtectedRecordException(protection.message, {
+			protection: { code: protection.code },
+			contributors: protection.contributors,
+		});
+	}
+
 	const active = listConfigKinds().filter((kind) => sliceActive(plan[kind]));
 
 	if (active.length === 0) return assembleResult(new Map());

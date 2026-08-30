@@ -18,8 +18,28 @@ export function renderConfigPlan(serialized: SerializedConfigPlan): string {
 	const { create, update, delete: remove } = serialized.summary;
 	lines.push('', `Plan: ${create} to create, ${update} to update, ${remove} to delete.`);
 
+	const protections = renderProtections(serialized);
+	if (protections) lines.push('', protections);
+
 	const warnings = renderWarnings(serialized);
 	if (warnings) lines.push('', warnings);
+
+	return lines.join('\n');
+}
+
+export function renderProtections(serialized: SerializedConfigPlan): string {
+	if (serialized.protections.length === 0) return '';
+
+	const lines = [heading('Protected changes')];
+
+	for (const protection of serialized.protections) {
+		lines.push(`  - ${replaceControlCharacters(protection.message)}`);
+
+		for (const contributor of protection.contributors) {
+			const verb = contributor.operation === 'delete' ? 'Deletes' : 'Removes administrator access from';
+			lines.push(`    - ${verb} ${replaceControlCharacters(contributor.identity.key)}`);
+		}
+	}
 
 	return lines.join('\n');
 }
@@ -36,7 +56,7 @@ export function renderWarnings(serialized: SerializedConfigPlan): string {
 	return lines.join('\n');
 }
 
-export function renderRefusal(serialized: SerializedConfigPlan): string {
+export function renderDestructiveRefusal(serialized: SerializedConfigPlan): string {
 	const count = serialized.summary.delete;
 	const noun = count === 1 ? 'deletion' : 'deletions';
 	const subject = count === 1 ? 'item' : 'items';

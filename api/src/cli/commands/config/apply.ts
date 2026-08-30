@@ -4,7 +4,7 @@ import getDatabase, { hasDatabaseConnection, isInstalled } from '../../../databa
 import logger from '../../../logger.js';
 import { configFailureExitCode } from './exit-code.js';
 import { applyConfigPlan, planHasDeletions } from '../../../utils/apply-config-plan.js';
-import { computeConfigPlan, validateConfigPlan } from '../../../utils/compute-config-plan.js';
+import { computeConfigPlan } from '../../../utils/compute-config-plan.js';
 import { isPlanEmpty } from '../../../utils/config/plan-folds.js';
 import { enrichConfigPlan } from '../../../utils/enrich-config-plan.js';
 import { CONFIG_APPLY_ORIGIN } from '../../../utils/config-contract.js';
@@ -16,7 +16,7 @@ import { serializeConfigPlan } from '../../../utils/serialize-config-plan.js';
 import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
 import type { CairnConfig, ConfigPlan, SerializedConfigPlan } from '../../../types/config.js';
 import { confirmPrompt } from '../../presentation.js';
-import { renderConfigPlan, renderRefusal, renderWarnings } from './render-config-plan.js';
+import { renderConfigPlan, renderDestructiveRefusal, renderWarnings } from './render-config-plan.js';
 
 async function serializePlan(plan: ConfigPlan, desired: CairnConfig, database: Knex): Promise<SerializedConfigPlan> {
 	const schema = await getSchema({ database, bypassCache: true });
@@ -75,19 +75,6 @@ export async function configApply(
 
 		const plan = computeConfigPlan(current, desired);
 
-		const currentRoles = new Map(current.roles.map((r) => [r.key, { admin_access: r.admin_access }]));
-
-		const planFailures = validateConfigPlan(plan, desired, { currentRoles });
-
-		if (planFailures.length > 0) {
-			for (const failure of planFailures) {
-				logger.error(failure.message);
-			}
-
-			database.destroy();
-			process.exit(2);
-		}
-
 		const empty = isPlanEmpty(plan);
 
 		if (format === 'json') {
@@ -116,9 +103,15 @@ export async function configApply(
 			process.exit(1);
 		}
 
+		if (plan.protections.length > 0) {
+			logger.info(renderConfigPlan(serialized));
+			database.destroy();
+			process.exit(2);
+		}
+
 		if (!destructive && planHasDeletions(plan)) {
 			logger.info(renderConfigPlan(serialized));
-			logger.error(renderRefusal(serialized));
+			logger.error(renderDestructiveRefusal(serialized));
 			database.destroy();
 			process.exit(2);
 		}

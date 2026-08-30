@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { computeConfigPlan, validateConfigPlan } from './compute-config-plan.js';
+import { computeConfigPlan } from './compute-config-plan.js';
 import { CONFIG_REGISTRY } from './config/registry.js';
 import { rolesDescriptor } from './config/handlers/roles.js';
 import type { CairnConfig, ConfigKind } from '../types/config.js';
@@ -303,90 +303,138 @@ describe('computeConfigPlan', () => {
 	});
 });
 
-describe('validateConfigPlan', () => {
-	it('returns no errors for a valid plan', () => {
-		const desired = makeConfig({
-			roles: [makeRole('editor')],
-			permissions: [{ role: 'editor', permissions: [makePerm('articles', 'read')] }],
-		});
+describe('admin-continuity protection', () => {
+	function contributorKeys(plan: ReturnType<typeof computeConfigPlan>): string[] {
+		return (plan.protections[0]?.contributors ?? []).map((c) => c.identity.key);
+	}
 
-		const plan = computeConfigPlan(makeConfig(), desired);
-		const result = validateConfigPlan(plan, desired, { currentRoles: new Map() });
-
-		expect(result).toEqual([]);
-	});
-
-	it('checks only plan-dependent invariants, reporting no document-validity error', () => {
-		const desired = makeConfig({
-			roles: [makeRole('public')],
-			permissions: [{ role: 'ghost', permissions: [makePerm('articles', 'read'), makePerm('articles', 'read')] }],
-		});
-
-		(desired.manifest as any).version = 2;
-
-		const plan = computeConfigPlan(makeConfig(), desired);
-		const result = validateConfigPlan(plan, desired, { currentRoles: new Map() });
-
-		expect(result).toEqual([]);
-	});
-
-	it('errors when deleting the last admin role', () => {
+	it('computes no protection for a plan that keeps an administrator', () => {
 		const current = makeConfig({ roles: [makeRole('administrator', { admin_access: true })] });
+
+		const desired = makeConfig({
+			roles: [makeRole('administrator', { admin_access: true }), makeRole('editor')],
+		});
+
+		expect(computeConfigPlan(current, desired).protections).toEqual([]);
+	});
+
+	it('protects deleting the final administrator with no replacement', () => {
+		const current = makeConfig({ roles: [makeRole('administrator', { admin_access: true })] });
+		const desired = makeConfig();
+
+		const [protection] = computeConfigPlan(current, desired).protections;
+
+		expect(protection?.code).toBe('ADMIN_CONTINUITY_REQUIRED');
+		expect(protection?.message).toContain('administrator access');
+
+		expect(protection?.contributors).toEqual([
+			{ kind: 'roles', operation: 'delete', identity: { key: 'administrator' } },
+		]);
+	});
+
+	it('allows deleting the final administrator when a replacement is created', () => {
+		const current = makeConfig({ roles: [makeRole('administrator', { admin_access: true })] });
+		const desired = makeConfig({ roles: [makeRole('super_admin', { admin_access: true })] });
+
+		expect(computeConfigPlan(current, desired).protections).toEqual([]);
+	});
+
+	it('allows deleting the final administrator when another role is promoted', () => {
+		const current = makeConfig({
+			roles: [makeRole('administrator', { admin_access: true }), makeRole('editor')],
+		});
+
+		const desired = makeConfig({ roles: [makeRole('editor', { admin_access: true })] });
+
+		expect(computeConfigPlan(current, desired).protections).toEqual([]);
+	});
+
+	it('protects when a final-administrator demotion is ordered before the replacement promotion', () => {
+		const current = makeConfig({
+			roles: [makeRole('administrator', { admin_access: true }), makeRole('editor')],
+		});
+
+		const desired = makeConfig({
+			roles: [makeRole('administrator', { admin_access: false }), makeRole('editor', { admin_access: true })],
+		});
+
+		const [protection] = computeConfigPlan(current, desired).protections;
+
+		expect(protection?.contributors).toEqual([
+			{ kind: 'roles', operation: 'update', identity: { key: 'administrator' } },
+		]);
+	});
+
+	it('allows the same demotion when the replacement promotion is ordered first', () => {
+		const current = makeConfig({
+			roles: [makeRole('administrator', { admin_access: true }), makeRole('editor')],
+		});
+
+		const desired = makeConfig({
+			roles: [makeRole('editor', { admin_access: true }), makeRole('administrator', { admin_access: false })],
+		});
+
+		expect(computeConfigPlan(current, desired).protections).toEqual([]);
+	});
+
+	it('protects demoting the final administrator with no replacement', () => {
+		const current = makeConfig({ roles: [makeRole('administrator', { admin_access: true })] });
+		const desired = makeConfig({ roles: [makeRole('administrator', { admin_access: false })] });
+
+		const [protection] = computeConfigPlan(current, desired).protections;
+
+		expect(protection?.contributors).toEqual([
+			{ kind: 'roles', operation: 'update', identity: { key: 'administrator' } },
+		]);
+	});
+
+	it('allows demoting the final administrator when a replacement is created', () => {
+		const current = makeConfig({ roles: [makeRole('administrator', { admin_access: true })] });
+
+		const desired = makeConfig({
+			roles: [makeRole('administrator', { admin_access: false }), makeRole('super_admin', { admin_access: true })],
+		});
+
+		expect(computeConfigPlan(current, desired).protections).toEqual([]);
+	});
+
+	it('protects a multi-administrator deletion that is jointly unsafe, reporting contributors in execution order', () => {
+		const current = makeConfig({
+			roles: [makeRole('super_admin', { admin_access: true }), makeRole('administrator', { admin_access: true })],
+		});
+
 		const desired = makeConfig();
 
 		const plan = computeConfigPlan(current, desired);
 
-		const result = validateConfigPlan(plan, desired, {
-			currentRoles: new Map([['administrator', { admin_access: true }]]),
-		});
-
-		expect(result).toHaveLength(1);
-		expect(result[0]!.message).toContain('last admin role');
-		expect(result[0]!.code).toBe('CONFIG_PROTECTED_RECORD');
+		expect(plan.protections[0]?.code).toBe('ADMIN_CONTINUITY_REQUIRED');
+		expect(plan.protections[0]?.contributors).toEqual([
+			{ kind: 'roles', operation: 'delete', identity: { key: 'super_admin' } },
+			{ kind: 'roles', operation: 'delete', identity: { key: 'administrator' } },
+		]);
 	});
 
-	it('allows deleting an admin role when another admin remains', () => {
+	it('reports only administrator removals when an unrelated non-admin is also deleted', () => {
 		const current = makeConfig({
-			roles: [makeRole('administrator', { admin_access: true }), makeRole('super_admin', { admin_access: true })],
+			roles: [makeRole('administrator', { admin_access: true }), makeRole('editor')],
 		});
 
-		const desired = makeConfig({
-			roles: [makeRole('super_admin', { admin_access: true })],
-		});
+		const desired = makeConfig();
 
 		const plan = computeConfigPlan(current, desired);
 
-		const result = validateConfigPlan(plan, desired, {
-			currentRoles: new Map([
-				['administrator', { admin_access: true }],
-				['super_admin', { admin_access: true }],
-			]),
-		});
-
-		expect(result).toEqual([]);
+		expect(contributorKeys(plan)).toEqual(['administrator']);
 	});
 
-	it('errors when deleting admin role and only non-admin roles remain', () => {
-		const current = makeConfig({
-			roles: [makeRole('administrator', { admin_access: true }), makeRole('editor', { admin_access: false })],
-		});
+	it('computes no protection and does not crash for a permissions-only manifest with a malformed desired roles list', () => {
+		const current = makeConfig({ roles: [makeRole('administrator', { admin_access: true })] });
 
 		const desired = makeConfig({
-			roles: [makeRole('editor', { admin_access: false })],
+			manifest: manifestFor('permissions'),
+			roles: [null] as unknown as CairnConfig['roles'],
 		});
 
-		const plan = computeConfigPlan(current, desired);
-
-		const result = validateConfigPlan(plan, desired, {
-			currentRoles: new Map([
-				['administrator', { admin_access: true }],
-				['editor', { admin_access: false }],
-			]),
-		});
-
-		expect(result).toHaveLength(1);
-		expect(result[0]!.message).toContain('last admin role');
-		expect(result[0]!.code).toBe('CONFIG_PROTECTED_RECORD');
+		expect(computeConfigPlan(current, desired).protections).toEqual([]);
 	});
 });
 
@@ -464,6 +512,7 @@ describe('managed scope', () => {
 		expect(computeConfigPlan(current, desired)).toEqual({
 			roles: { create: [], update: [], delete: [] },
 			permissions: { create: [], update: [], delete: [] },
+			protections: [],
 		});
 	});
 
@@ -501,6 +550,7 @@ describe('managed scope', () => {
 		expect(computeConfigPlan(current, desired)).toEqual({
 			roles: { create: [makeRole('viewer')], update: [], delete: ['editor'] },
 			permissions: { create: [], update: [], delete: [] },
+			protections: [],
 		});
 	});
 
@@ -523,17 +573,17 @@ describe('managed scope', () => {
 				update: [],
 				delete: [{ roleKey: 'editor', collection: 'articles', action: 'read' }],
 			},
+			protections: [],
 		});
 	});
 
-	it('does not report a last-administrator error when roles are unmanaged', () => {
+	it('does not report a last-administrator protection when roles are unmanaged', () => {
 		const current = makeConfig({ roles: [makeRole('admin', { admin_access: true })] });
 		const desired = makeConfig({ manifest: manifestFor('permissions'), roles: [] });
 
 		const plan = computeConfigPlan(current, desired);
-		const currentRoles = new Map([['admin', { admin_access: true }]]);
 
 		expect(plan.roles.delete).toEqual([]);
-		expect(validateConfigPlan(plan, desired, { currentRoles })).toEqual([]);
+		expect(plan.protections).toEqual([]);
 	});
 });

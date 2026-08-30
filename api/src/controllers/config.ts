@@ -6,14 +6,13 @@ import env from '../env.js';
 import {
 	ConfigIdentityConflictException,
 	ConfigInvalidException,
-	ConfigProtectedRecordException,
 	ForbiddenException,
 	UnsupportedMediaTypeException,
 } from '../exceptions/index.js';
 import { respond } from '../middleware/respond.js';
 import asyncHandler from '../utils/async-handler.js';
 import { applyConfigPlan } from '../utils/apply-config-plan.js';
-import { computeConfigPlan, validateConfigPlan } from '../utils/compute-config-plan.js';
+import { computeConfigPlan } from '../utils/compute-config-plan.js';
 import { enrichConfigPlan } from '../utils/enrich-config-plan.js';
 import { getConfigSnapshot, readCurrentConfig } from '../utils/get-config-snapshot.js';
 import { serializeConfigPlan } from '../utils/serialize-config-plan.js';
@@ -85,11 +84,6 @@ router.post(
 
 		const plan = computeConfigPlan(current, config);
 
-		const currentRoles = new Map(current.roles.map((r) => [r.key, { admin_access: r.admin_access }]));
-		const planFailures = validateConfigPlan(plan, config, { currentRoles });
-
-		if (planFailures.length > 0) throw planFailures.map(toConfigException);
-
 		if (dryRun) {
 			const enrichment = await enrichConfigPlan(plan, config, { schema, database });
 			const serialized = serializeConfigPlan(plan, { enrichment, manifestVersion: manifest.version });
@@ -134,8 +128,6 @@ function toConfigException(failure: ConfigFailure): BaseException {
 			return new ConfigInvalidException(failure.message);
 		case 'CONFIG_IDENTITY_CONFLICT':
 			return new ConfigIdentityConflictException(failure.message);
-		case 'CONFIG_PROTECTED_RECORD':
-			return new ConfigProtectedRecordException(failure.message);
 	}
 }
 

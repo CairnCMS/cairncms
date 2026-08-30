@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RoleDeletionImpactEntry, RoleValues, SerializedConfigPlan } from '../../../types/config.js';
 import { createVerb, deleteVerb, heading, planIntro, updateVerb } from '../../presentation.js';
-import { renderConfigPlan, renderRefusal } from './render-config-plan.js';
+import { renderConfigPlan, renderDestructiveRefusal, renderProtections } from './render-config-plan.js';
 
 function roleValues(over: Partial<RoleValues> = {}): RoleValues {
 	return {
@@ -26,11 +26,12 @@ function emptyAggregates(): RoleDeletionImpactEntry[] {
 
 function plan(over: Partial<SerializedConfigPlan> = {}): SerializedConfigPlan {
 	return {
-		planVersion: 1,
+		planVersion: 2,
 		manifestVersion: 1,
 		changes: [],
 		summary: { create: 0, update: 0, delete: 0 },
 		warnings: [],
+		protections: [],
 		...over,
 	};
 }
@@ -278,16 +279,79 @@ describe('renderConfigPlan', () => {
 	});
 });
 
-describe('renderRefusal', () => {
+describe('renderDestructiveRefusal', () => {
 	it('uses singular wording for a single deletion', () => {
-		expect(renderRefusal(plan({ summary: { create: 0, update: 0, delete: 1 } }))).toBe(
+		expect(renderDestructiveRefusal(plan({ summary: { create: 0, update: 0, delete: 1 } }))).toBe(
 			'Apply refused: this plan contains 1 deletion.\nReview the item above and run again with --destructive.'
 		);
 	});
 
 	it('uses plural wording for multiple deletions', () => {
-		expect(renderRefusal(plan({ summary: { create: 0, update: 0, delete: 3 } }))).toBe(
+		expect(renderDestructiveRefusal(plan({ summary: { create: 0, update: 0, delete: 3 } }))).toBe(
 			'Apply refused: this plan contains 3 deletions.\nReview the items above and run again with --destructive.'
 		);
+	});
+});
+
+describe('renderProtections', () => {
+	function adminContinuity(contributors: SerializedConfigPlan['protections'][number]['contributors']) {
+		return {
+			code: 'ADMIN_CONTINUITY_REQUIRED' as const,
+			message: 'Configuration must retain at least one role with administrator access.',
+			contributors,
+		};
+	}
+
+	it('renders one plan-wide section listing contributors and never suggests --destructive', () => {
+		const output = renderProtections(
+			plan({
+				protections: [
+					adminContinuity([
+						{ kind: 'roles', operation: 'delete', identity: { key: 'administrator' } },
+						{ kind: 'roles', operation: 'update', identity: { key: 'super_admin' } },
+					]),
+				],
+			})
+		);
+
+		expect(output).toBe(
+			[
+				heading('Protected changes'),
+				'  - Configuration must retain at least one role with administrator access.',
+				'    - Deletes administrator',
+				'    - Removes administrator access from super_admin',
+			].join('\n')
+		);
+
+		expect(output).not.toContain('--destructive');
+	});
+
+	it('is included in the full plan output, and that output never suggests --destructive for the protection', () => {
+		const output = renderConfigPlan(
+			plan({
+				changes: [
+					{ kind: 'roles', operation: 'delete', identity: { key: 'administrator' }, impact: emptyAggregates() },
+				],
+				summary: { create: 0, update: 0, delete: 1 },
+				protections: [adminContinuity([{ kind: 'roles', operation: 'delete', identity: { key: 'administrator' } }])],
+			})
+		);
+
+		expect(output).toContain(heading('Protected changes'));
+		expect(output).toContain('    - Deletes administrator');
+		expect(output).not.toContain('--destructive');
+	});
+
+	it('sanitizes control characters in a contributor identity', () => {
+		const bel = String.fromCharCode(7);
+
+		const output = renderProtections(
+			plan({
+				protections: [adminContinuity([{ kind: 'roles', operation: 'delete', identity: { key: `admin${bel}role` } }])],
+			})
+		);
+
+		expect(output).toContain('    - Deletes admin?role');
+		expect(output).not.toContain(bel);
 	});
 });
