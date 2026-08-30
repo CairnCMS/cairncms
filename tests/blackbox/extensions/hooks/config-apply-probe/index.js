@@ -2,6 +2,7 @@ module.exports = function registerHooks({ filter, action }) {
 	const logsCollection = 'tests_extensions_log';
 	const probeRoleIds = new Set();
 	const probePermIds = new Set();
+	const rollbackRoleIds = new Set();
 
 	async function mark(database, key) {
 		await database(logsCollection).insert({ key: `config-apply-probe/${key}`, value: '1' });
@@ -15,11 +16,32 @@ module.exports = function registerHooks({ filter, action }) {
 		return payload;
 	});
 
+	filter('permissions.delete', async (keys, _meta, { database }) => {
+		for (const id of keys || []) {
+			if (probePermIds.has(id)) await mark(database, `permissions.delete.filter/${id}`);
+		}
+
+		return keys;
+	});
+
+	filter('roles.delete', async (keys, _meta, { database }) => {
+		for (const id of keys || []) {
+			if (probeRoleIds.has(id)) await mark(database, `roles.delete.filter/${id}`);
+		}
+
+		for (const id of keys || []) {
+			if (rollbackRoleIds.has(id)) throw new Error('config apply probe forced delete rollback');
+		}
+
+		return keys;
+	});
+
 	action('roles.create', async (data, { database }) => {
 		const key = data && data.payload && data.payload.key;
 		if (typeof key !== 'string' || !key.startsWith('audit_probe')) return;
 
 		probeRoleIds.add(data.key);
+		if (key.includes('delrollback')) rollbackRoleIds.add(data.key);
 		await mark(database, `roles.create/${key}`);
 	});
 

@@ -11,7 +11,7 @@ import type { ActionEventParams } from '../types/index.js';
 import type { ApplyResult, ConfigApplySecurityContext, ConfigKind, ConfigPlan } from '../types/config.js';
 import { makeDependencyAccessor } from './config/dependency-context.js';
 import type { ConfigApplyMutationOptions } from './config/descriptor.js';
-import { dependencyClosure, dependencyOrder } from './config/graph.js';
+import { dependencyClosure, dependencyOrder, reverseDependencyOrder } from './config/graph.js';
 import { planDeletions, planHasDeletions } from './config/plan-folds.js';
 import { getDescriptor, listConfigKinds } from './config/registry.js';
 import { getSchema } from './get-schema.js';
@@ -91,7 +91,7 @@ export async function applyConfigPlan(plan: ConfigPlan, opts: ApplyOptions): Pro
 				published.set(kind, await handler.readApplyDependencyState(contextFor(kind) as never));
 			}
 
-			for (const kind of closure) {
+			for (const kind of reverseDependencyOrder([...closure])) {
 				const { handler } = getDescriptor(kind);
 
 				if (active.includes(kind) && plan[kind].delete.length > 0) {

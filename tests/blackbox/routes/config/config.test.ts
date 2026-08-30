@@ -63,7 +63,6 @@ async function adminSnapshot(vendor: string): Promise<ConfigSnapshot> {
 	return response.body.data as ConfigSnapshot;
 }
 
-/** Reads validation messages without depending on the transport envelope. */
 function errorMessages(response: { body: { errors?: unknown } }): string[] {
 	const errors = response.body.errors;
 	if (!Array.isArray(errors)) return [];
@@ -72,10 +71,7 @@ function errorMessages(response: { body: { errors?: unknown } }): string[] {
 	);
 }
 
-/**
- * Places a filter on a public permission. The filter uses canonical grammar against a real field, so a
- * rejection can only come from the guard under test rather than from later filter validation.
- */
+/** Uses canonical filter grammar so only the guard under test can reject the fixture. */
 function setPublicFilter(snapshot: ConfigSnapshot, filter: Filter): void {
 	const permission = {
 		collection: 'directus_files',
@@ -1127,8 +1123,7 @@ describe('Config-as-Code stored state', () => {
 			const role = await db('directus_roles').select('id').first();
 			expect(role).toBeDefined();
 
-			// A JSON array is valid JSON on every vendor, so the column accepts it and the read path is what
-			// rejects it. Syntactically broken text would be refused by Postgres before reaching the engine.
+			// Valid JSON reaches the read path on every vendor; malformed text can fail at the database boundary.
 			await db('directus_permissions').insert({
 				role: role.id,
 				collection: PROBE_COLLECTION,
@@ -1560,7 +1555,7 @@ describe('Config-as-Code audit and events', () => {
 				expect(await db('directus_roles').where({ key: roleKey }).first()).toBeUndefined();
 				expect(await markerCount(db, `config-apply-probe/roles.create/${roleKey}`)).toBe(0);
 			} finally {
-				// Recompute the deltas here so leaked rows are removed even if an assertion above threw first.
+				// Recompute during teardown so assertion failures cannot leak audit rows.
 				const leakedRevisions = (await idsFor(db, 'directus_revisions', { collection: 'directus_roles' })).filter(
 					(id) => !revisionsBefore.has(id)
 				);
@@ -1670,6 +1665,182 @@ describe('Config-as-Code audit and events', () => {
 				expect(await markerCount(db, `config-apply-probe/users.update/${userId}`)).toBe(1);
 			} finally {
 				await purge(db, roleKey, ids, [probeCollection]);
+			}
+		});
+	});
+
+	describe('an HTTP apply runs deletions in reverse dependency order, deleting permissions before roles', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const db = databases.get(vendor)!;
+			const suffix = vendor.replace(/[^a-z0-9_]/gi, '_');
+			const rand = randomUUID().replace(/-/g, '').slice(0, 8);
+			const survivorKey = `audit_probe_survivor_${suffix}_${rand}`;
+			const removedKey = `audit_probe_removed_${suffix}_${rand}`;
+			const survivorCollection = `audit_probe_surv_${rand}`;
+			const removedCollection = `audit_probe_rem_${rand}`;
+			const ids = newIds();
+
+			try {
+				const created = await getBaseline(vendor);
+				created.roles.push(probeRole(survivorKey));
+				created.roles.push(probeRole(removedKey));
+				created.permissions.push(probePermissionSet(survivorKey, survivorCollection));
+				created.permissions.push(probePermissionSet(removedKey, removedCollection));
+
+				const createResp = await applyConfig(vendor, created);
+				expect(createResp.statusCode).toBe(200);
+				expect([...createResp.body.data.roles.created].sort()).toEqual([removedKey, survivorKey].sort());
+				expect(createResp.body.data.roles.updated).toEqual([]);
+				expect(createResp.body.data.roles.deleted).toEqual([]);
+				expect(createResp.body.data.permissions).toEqual({ created: 2, updated: 0, deleted: 0 });
+
+				const survivorRole = await db('directus_roles').where({ key: survivorKey }).first();
+				const removedRole = await db('directus_roles').where({ key: removedKey }).first();
+				expect(survivorRole).toBeDefined();
+				expect(removedRole).toBeDefined();
+				ids.roleIds.add(survivorRole.id);
+				ids.roleIds.add(removedRole.id);
+
+				const survivorPerm = await db('directus_permissions')
+					.where({ role: survivorRole.id, collection: survivorCollection })
+					.first();
+
+				const removedPerm = await db('directus_permissions')
+					.where({ role: removedRole.id, collection: removedCollection })
+					.first();
+
+				expect(survivorPerm).toBeDefined();
+				expect(removedPerm).toBeDefined();
+				ids.permIds.add(survivorPerm.id);
+				ids.permIds.add(removedPerm.id);
+
+				// The survivor's permission is standalone; the removed role's permission is cascade-subsumed.
+				const desired = await adminSnapshot(vendor);
+				desired.roles = desired.roles.filter((r) => r['key'] !== removedKey);
+				desired.permissions = desired.permissions.filter((p) => p.role !== removedKey && p.role !== survivorKey);
+
+				const deleteResp = await applyConfig(vendor, desired, { destructive: true });
+				expect(deleteResp.statusCode).toBe(200);
+
+				expect(deleteResp.body.data).toEqual({
+					roles: { created: [], updated: [], deleted: [removedKey] },
+					permissions: { created: 0, updated: 0, deleted: 1 },
+				});
+
+				const after = await adminSnapshot(vendor);
+				expect(after).toEqual(desired);
+
+				const permFilter = await db('tests_extensions_log')
+					.where({ key: `config-apply-probe/permissions.delete.filter/${survivorPerm.id}` })
+					.first();
+
+				const roleFilter = await db('tests_extensions_log')
+					.where({ key: `config-apply-probe/roles.delete.filter/${removedRole.id}` })
+					.first();
+
+				expect(permFilter).toBeDefined();
+				expect(roleFilter).toBeDefined();
+				expect(Number(permFilter.id)).toBeLessThan(Number(roleFilter.id));
+
+				const permAction = await db('tests_extensions_log')
+					.where({ key: `config-apply-probe/permissions.delete/${survivorPerm.id}` })
+					.first();
+
+				const roleAction = await db('tests_extensions_log')
+					.where({ key: `config-apply-probe/roles.delete/${removedRole.id}` })
+					.first();
+
+				expect(permAction).toBeDefined();
+				expect(roleAction).toBeDefined();
+				expect(Number(permAction.id)).toBeLessThan(Number(roleAction.id));
+
+				expect(await markerCount(db, `config-apply-probe/permissions.delete/${survivorPerm.id}`)).toBe(1);
+				expect(await markerCount(db, `config-apply-probe/roles.delete/${removedRole.id}`)).toBe(1);
+				expect(await markerCount(db, `config-apply-probe/permissions.delete.filter/${survivorPerm.id}`)).toBe(1);
+				expect(await markerCount(db, `config-apply-probe/roles.delete.filter/${removedRole.id}`)).toBe(1);
+
+				const permActivity = await db('directus_activity')
+					.where({ collection: 'directus_permissions', item: String(survivorPerm.id), action: 'delete' })
+					.first();
+
+				const roleActivity = await db('directus_activity')
+					.where({ collection: 'directus_roles', item: String(removedRole.id), action: 'delete' })
+					.first();
+
+				expect(permActivity).toBeDefined();
+				expect(roleActivity).toBeDefined();
+				expect(Number(permActivity.id)).toBeLessThan(Number(roleActivity.id));
+			} finally {
+				await purge(db, survivorKey, ids, [survivorCollection]);
+				await purge(db, removedKey, ids, [removedCollection]);
+			}
+		});
+	});
+
+	describe('a failed role deletion rolls back the whole apply, restoring records and leaving no audit or event rows', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const db = databases.get(vendor)!;
+			const suffix = vendor.replace(/[^a-z0-9_]/gi, '_');
+			const rand = randomUUID().replace(/-/g, '').slice(0, 8);
+			const survivorKey = `audit_probe_survivor_${suffix}_${rand}`;
+			const rollbackKey = `audit_probe_delrollback_${suffix}_${rand}`;
+			const survivorCollection = `audit_probe_surv_${rand}`;
+			const ids = newIds();
+
+			try {
+				const created = await getBaseline(vendor);
+				created.roles.push(probeRole(survivorKey));
+				created.roles.push(probeRole(rollbackKey));
+				created.permissions.push(probePermissionSet(survivorKey, survivorCollection));
+
+				const createResp = await applyConfig(vendor, created);
+				expect(createResp.statusCode).toBe(200);
+
+				const survivorRole = await db('directus_roles').where({ key: survivorKey }).first();
+				const rollbackRole = await db('directus_roles').where({ key: rollbackKey }).first();
+				expect(survivorRole).toBeDefined();
+				expect(rollbackRole).toBeDefined();
+				ids.roleIds.add(survivorRole.id);
+				ids.roleIds.add(rollbackRole.id);
+
+				const survivorPerm = await db('directus_permissions')
+					.where({ role: survivorRole.id, collection: survivorCollection })
+					.first();
+
+				expect(survivorPerm).toBeDefined();
+				ids.permIds.add(survivorPerm.id);
+
+				const desired = await adminSnapshot(vendor);
+				desired.roles = desired.roles.filter((r) => r['key'] !== rollbackKey);
+				desired.permissions = desired.permissions.filter((p) => p.role !== survivorKey);
+
+				const deleteResp = await applyConfig(vendor, desired, { destructive: true });
+				expect(deleteResp.statusCode).toBe(500);
+				expect(deleteResp.body.errors?.[0]?.extensions?.code).toBe('CONFIG_APPLY_FAILED');
+
+				expect(await db('directus_permissions').where({ id: survivorPerm.id }).first()).toBeDefined();
+				expect(await db('directus_roles').where({ id: rollbackRole.id }).first()).toBeDefined();
+				expect(await db('directus_roles').where({ id: survivorRole.id }).first()).toBeDefined();
+
+				expect(
+					await db('directus_activity')
+						.where({ collection: 'directus_permissions', item: String(survivorPerm.id), action: 'delete' })
+						.first()
+				).toBeUndefined();
+
+				expect(
+					await db('directus_activity')
+						.where({ collection: 'directus_roles', item: String(rollbackRole.id), action: 'delete' })
+						.first()
+				).toBeUndefined();
+
+				expect(await markerCount(db, `config-apply-probe/permissions.delete/${survivorPerm.id}`)).toBe(0);
+				expect(await markerCount(db, `config-apply-probe/roles.delete/${rollbackRole.id}`)).toBe(0);
+				expect(await markerCount(db, `config-apply-probe/permissions.delete.filter/${survivorPerm.id}`)).toBe(0);
+				expect(await markerCount(db, `config-apply-probe/roles.delete.filter/${rollbackRole.id}`)).toBe(0);
+			} finally {
+				await purge(db, survivorKey, ids, [survivorCollection]);
+				await purge(db, rollbackKey, ids, []);
 			}
 		});
 	});
