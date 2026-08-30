@@ -40,4 +40,16 @@ describe('flag operator filter semantics', () => {
 			expect(response.body.data.every((row: { label: string | null }) => row.label !== null)).toBe(true);
 		});
 	});
+
+	describe('caller filter with an empty _null value is accepted and returns the null rows', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const response = await request(getUrl(vendor))
+				.get(`/items/${collection}?filter[label][_null]=&fields=label`)
+				.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`);
+
+			expect(response.statusCode).toEqual(200);
+			expect(response.body.data.length).toBe(1);
+			expect(response.body.data[0].label).toBeNull();
+		});
+	});
 });
