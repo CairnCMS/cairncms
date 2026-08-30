@@ -29,6 +29,8 @@ Same-origin browser clients accessing `/assets/*` do not need to attach a token 
 
 Endpoints that map to permissions configured for the Public role can be reached without a token. Anything outside the Public role's permitted set returns `403 FORBIDDEN`.
 
+WebSocket connections authenticate with an access token as well, through their own upgrade or handshake flow rather than a normal request. See [Realtime authentication](/docs/api/realtime/authentication/).
+
 ## Login
 
 Exchange credentials for a JWT.

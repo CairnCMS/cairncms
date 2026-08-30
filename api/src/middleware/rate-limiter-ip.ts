@@ -35,3 +35,17 @@ if (env['RATE_LIMITER_ENABLED'] === true) {
 }
 
 export default checkRateLimit;
+
+export type RateLimitConsumption = { allowed: true } | { allowed: false; retryAfterMs: number };
+
+export async function consumeIpRateLimit(ip: string): Promise<RateLimitConsumption> {
+	if (!rateLimiter) return { allowed: true };
+
+	try {
+		await rateLimiter.consume(ip, 1);
+		return { allowed: true };
+	} catch (rateLimiterRes: any) {
+		if (rateLimiterRes instanceof Error) throw rateLimiterRes;
+		return { allowed: false, retryAfterMs: rateLimiterRes.msBeforeNext };
+	}
+}

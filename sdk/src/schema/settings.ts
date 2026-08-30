@@ -34,7 +34,6 @@ export type DirectusSettings<Schema = any> = MergeCoreCollection<
 		module_bar: 'json' | null;
 		project_descriptor: string | null;
 		default_language: string;
-		translation_strings: Record<string, any>[] | null;
 		custom_aspect_ratios: Record<string, any> | null;
 	}
 >;

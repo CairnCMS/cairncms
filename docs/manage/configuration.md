@@ -45,6 +45,7 @@ Variables that control how CairnCMS listens for requests:
 - **`PUBLIC_URL`** — the externally-reachable URL of the instance. Used to construct asset URLs, redirect targets, and email links. Set this whenever the instance is reachable through a hostname or path that isn't `http://localhost:8055`.
 - **`SERVE_APP`** — whether to serve the admin app at `/admin`. Default `true`. Set to `false` for headless API deployments where no operator UI is needed.
 - **`GRAPHQL_INTROSPECTION`** — whether the GraphQL schema is introspectable. Default `true`. Disable in production if you do not want unauthenticated clients to enumerate the schema.
+- **`GRAPHQL_QUERY_TOKEN_LIMIT`** — maximum tokens allowed in one GraphQL document. Default `5000`. CairnCMS rejects larger documents before validation or execution. Accepts a whole number of `1` or greater; invalid or imprecise values prevent startup. Higher limits allow larger documents but increase parser resource use. CairnCMS does not define a universally safe maximum.
 - **`MAX_PAYLOAD_SIZE`** — the maximum request body size. Default `1mb`. Increase when receiving large uploads or imports. For a per-file upload cap, see `FILES_MAX_UPLOAD_SIZE` under Files and batch operations.
 - **`MAX_RELATIONAL_DEPTH`** — how deeply nested a single query can fetch related data. Default `10`.
 - **`MAX_BATCH_MUTATION`** — limit on items in a batch create/update/delete. Default unlimited.
@@ -53,8 +54,10 @@ Variables that control how CairnCMS listens for requests:
 - **`ROBOTS_TXT`** — the body served at `/robots.txt`. Default disallows all crawlers.
 - **`ROOT_REDIRECT`** — where requests to `/` redirect. Default `./admin`.
 - **`SERVER_SHUTDOWN_TIMEOUT`** — milliseconds to wait for in-flight requests during shutdown. Default `1000`.
-- **`IP_TRUST_PROXY`** — whether Express should trust `X-Forwarded-For` headers. Default `true` (assumes a reverse proxy in front).
-- **`IP_CUSTOM_HEADER`** — alternative header to read the client IP from, when not using `X-Forwarded-For`.
+- **`IP_TRUST_PROXY`** — proxy addresses trusted to supply forwarded client IPs. Default `false`. Set an exact IP or CIDR, a comma-separated list, or `loopback`. Without it, proxied requests use the proxy's IP. Use `true` only when every ingress sanitizes forwarded headers; see [Trusted proxies and client IP](security-hardening.md#trusted-proxies-and-client-ip).
+- **`IP_CUSTOM_HEADER`** — a header CairnCMS reads the client IP from instead of `X-Forwarded-For`. Honored only when the immediate peer is a trusted proxy per `IP_TRUST_PROXY`. Default `false` (disabled).
+
+Limits below about `200` tokens can prevent GraphiQL or Apollo Studio from loading the schema. Large Insights dashboards may also require a higher limit because the admin app sends all panel queries in one GraphQL document.
 
 ## Query limits
 
@@ -253,6 +256,7 @@ Variables for the response cache:
 - **`CACHE_STORE`** — `memory`, `redis`, or `memcache`.
 - **`CACHE_TTL`** — default cache duration. Default `5m`.
 - **`CACHE_AUTO_PURGE`** — when `true`, the cache invalidates automatically on writes to relevant collections.
+- **`CACHE_AUTO_PURGE_IGNORE_LIST`** — comma-separated collections whose writes do not purge the response cache when `CACHE_AUTO_PURGE` is `true`. Default `directus_activity,directus_presets`. Cached responses may remain until `CACHE_TTL` expires. Remove a collection from the list if its writes must invalidate cached responses.
 - **`CACHE_CONTROL_S_MAXAGE`** — value for the `Cache-Control: s-maxage` directive on cached responses, in seconds. Default `0`.
 - **`CACHE_STATUS_HEADER`** — name of the response header indicating cache hit/miss. Unset by default (no header emitted).
 - **`CACHE_VALUE_MAX_SIZE`** — maximum size in bytes for a cacheable response. Larger responses bypass the cache. Default `false` (no limit).
@@ -282,6 +286,50 @@ The messenger is the inter-process communication layer that broadcasts events li
 - **`MESSENGER_NAMESPACE`** — Redis pub/sub channel prefix. Default `cairncms`.
 - **`MESSENGER_REDIS`** — connection string for the messenger Redis.
 - **`MESSENGER_REDIS_HOST` / `MESSENGER_REDIS_PORT` / `MESSENGER_REDIS_PASSWORD`** — broken-out fields, used as an alternative to `MESSENGER_REDIS`.
+
+### Schedule coordination
+
+When `MESSENGER_STORE` is `redis`, CairnCMS coordinates scheduled flows and extension hooks across instances. Each occurrence can run on at most one instance. With the default `local` store, every instance runs its schedules independently. Coordination uses the messenger Redis configuration automatically and has no separate setting.
+
+For a multi-instance deployment:
+
+- Use a currently supported Redis release with Redis 6.2 protocol support, or a compatible Valkey release.
+- Configure every instance to use the same Redis deployment, `MESSENGER_NAMESPACE`, and system timezone (`TZ`).
+- Assign a different `MESSENGER_NAMESPACE` to each CairnCMS deployment that shares a Redis server. Reusing a namespace can cause one deployment to suppress schedules in another.
+
+If Redis is unavailable or does not support coordination, the API starts but scheduled flows and extension hooks remain disabled. CairnCMS resumes scheduling automatically after Redis recovers. Occurrences missed during the outage are not replayed. Check `/server/health` for the current messenger and coordination status.
+
+Messenger messages are not queued while Redis is unavailable. Cache invalidations and flow reloads sent during an outage are lost, so instances can remain out of sync until a later update, reload, or restart.
+
+If Redis ACLs restrict publishing, allow `PUBLISH` on `<namespace>:messenger-probe`. Without this permission, `/server/health` reports the messenger as degraded.
+
+## Realtime (WebSockets)
+
+Realtime WebSockets are off by default. When enabled, CairnCMS serves the item protocol at `/websocket` and GraphQL subscriptions at `/graphql`. The item protocol uses the `WEBSOCKETS_REST_*` settings. GraphQL uses the `WEBSOCKETS_GRAPHQL_*` settings.
+
+Both transports deliver permission-checked collection changes. Deployments with multiple API instances need the Redis messenger so changes reach subscribers on every instance. See [Realtime](/docs/api/realtime/) for the protocols, authentication modes, subscriptions, and SDK.
+
+- **`WEBSOCKETS_ENABLED`** — master switch for the realtime feature. Default `false`.
+- **`WEBSOCKETS_REST_ENABLED`** — item transport switch. Takes effect only when the feature is enabled. Default `true`.
+- **`WEBSOCKETS_REST_PATH`** — the upgrade path clients connect to. Must be a pure URL path with no query or fragment. Default `/websocket`.
+- **`WEBSOCKETS_REST_AUTH`** — authentication mode: `public` (anonymous), `handshake` (authenticate with the first message), or `strict` (bearer token required at upgrade). Default `handshake`.
+- **`WEBSOCKETS_REST_AUTH_TIMEOUT`** — how long, in seconds, an authentication attempt may take. In `strict` mode the attempt is at the upgrade, and a timeout rejects the upgrade; in `handshake` mode a timeout on the first-message attempt closes the connection. A later re-authentication that times out closes a `strict` or `handshake` connection and returns a `public` connection to anonymous access. Accepts a whole number of seconds from `1` to `2147483` (about 24 days). Default `10`.
+- **`WEBSOCKETS_REST_CONN_LIMIT`** — maximum concurrent connections on the item transport. Accepts a whole number of `1` or greater. Default `1000`.
+- **`WEBSOCKETS_GRAPHQL_ENABLED`** — GraphQL transport switch, effective only when the feature is enabled. Default `true`.
+- **`WEBSOCKETS_GRAPHQL_PATH`** — the upgrade path GraphQL clients connect to. Must be a pure URL path with no query or fragment, and must differ from the active item-protocol path. An equal path deactivates the GraphQL transport and leaves the item protocol serving. Default `/graphql`.
+- **`WEBSOCKETS_GRAPHQL_AUTH`** — authentication mode: `public` (anonymous), `handshake` (authenticate with the `connection_init` message), or `strict` (bearer token required at upgrade). Default `handshake`.
+- **`WEBSOCKETS_GRAPHQL_AUTH_TIMEOUT`** — the authentication timeout, in seconds. It bounds each authentication checkpoint independently rather than as one end-to-end deadline. The `connection_init` frame must be received within it, and the credential check is separately bounded by it (a `strict` bearer token at the upgrade, a `public` token supplied in the init message). There is no later in-band re-authentication. Accepts a whole number of seconds from `1` to `2147483` (about 24 days). Default `10`.
+- **`WEBSOCKETS_GRAPHQL_CONN_LIMIT`** — maximum concurrent connections on the GraphQL transport. Accepts a whole number of `1` or greater. Default `1000`.
+- **`WEBSOCKETS_HEARTBEAT_PERIOD`** — seconds between server pings; a connection that misses two periods without a pong is closed. Accepts a whole number of seconds from `1` to `1073741` (about 12 days). Default `30`.
+- **`WEBSOCKETS_USER_CONN_LIMIT`** — maximum concurrent connections per authenticated user. Accepts a whole number of `1` or greater. Default `10`.
+- **`WEBSOCKETS_IP_CONN_LIMIT`** — maximum concurrent connections per client IP. It gates anonymous and pre-authentication connections. Once a connection authenticates, it counts against `WEBSOCKETS_USER_CONN_LIMIT` instead. Accepts a whole number of `1` or greater. Default `50`.
+- **`WEBSOCKETS_PROCESS_CONN_LIMIT`** — maximum concurrent connections per API process. Accepts a whole number of `1` or greater. Default `1000`.
+
+An invalid shared setting disables realtime. An invalid item-protocol or GraphQL setting disables only that transport. HTTP remains available.
+
+The shared `MAX_PAYLOAD_SIZE` bounds inbound WebSocket frames (see [Server](#server)). Realtime requires it to resolve to a positive whole number of bytes. Outbound WebSocket frames are limited to 1 MiB, including initial subscription results and change notifications. An oversized frame closes the affected connection. The client must reconnect and reread current state.
+
+Realtime is a best-effort notification channel whose latency reflects the deployment's workload and available capacity. Operators should size infrastructure for expected result sets, query cost, and subscriber load. Applications that require current state should reconcile through API reads rather than depend on notification timing.
 
 ## Email
 

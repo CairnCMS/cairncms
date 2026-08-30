@@ -7,6 +7,7 @@ const defaultGlobals: ClientGlobals = {
 	fetch: globalThis.fetch,
 	URL: globalThis.URL,
 	logger: globalThis.console,
+	WebSocket: globalThis.WebSocket,
 };
 
 /**

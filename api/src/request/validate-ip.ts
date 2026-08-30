@@ -1,20 +1,7 @@
 import ipaddr from 'ipaddr.js';
 import os from 'node:os';
 import { getEnv } from '../env.js';
-
-function canonicalize(ip: string): string {
-	try {
-		const parsed = ipaddr.parse(ip);
-
-		if (parsed.kind() === 'ipv6' && (parsed as ipaddr.IPv6).isIPv4MappedAddress()) {
-			return (parsed as ipaddr.IPv6).toIPv4Address().toString();
-		}
-
-		return ip;
-	} catch {
-		return ip;
-	}
-}
+import { canonicalizeIp } from '../utils/canonicalize-ip.js';
 
 function isLoopback(ip: string): boolean {
 	try {
@@ -35,7 +22,7 @@ function isIPv6Unspecified(ip: string): boolean {
 
 export function validateIPSync(ip: string, url: string): void {
 	const env = getEnv();
-	const canonical = canonicalize(ip);
+	const canonical = canonicalizeIp(ip);
 
 	if (env['IMPORT_IP_DENY_LIST'].includes(canonical)) {
 		throw new Error(`Requested URL "${url}" resolves to a denied IP address`);

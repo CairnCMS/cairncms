@@ -140,7 +140,11 @@ Cron expressions:
 
 The schedule register function takes the cron expression as the first argument and the handler as the second. The handler receives no arguments.
 
+If both the day-of-month and day-of-week fields are restricted, both must match. For example, `0 0 13 * 5` runs only at midnight on Friday the 13th.
+
 Schedule hooks run whenever the extension manager is initialized with `schedule: true`, which is the default. The API server uses the default, so schedule hooks run there. The CLI explicitly opts out (`{ schedule: false, watch: false }`), so commands like database migrations and schema snapshots do not trip schedule handlers.
+
+With Redis messaging, [schedule coordination](/docs/manage/configuration/#schedule-coordination) allows at most one instance to run each occurrence. Missed occurrences are not retried. Keep `schedule()` calls in the same order across releases because changing their order changes the identity used for coordination.
 
 ## Embed hooks
 
@@ -210,6 +214,8 @@ CairnCMS events follow a `<type>.<event>` or `<collection>.items.<event>` naming
 | `<system-collection>.update` | the updated item | `keys`, `collection` |
 | `<system-collection>.delete` | the keys of the item | `collection` |
 
+The `authenticate` filter runs on HTTP requests only. It does not run for realtime WebSocket connections, which authenticate access tokens directly. See [Realtime events](#realtime-events) for the events realtime connections emit.
+
 The auth events carry credentials. The `auth.jwt` payload is the session token. For `auth.create` and `auth.update`, the payload can include `auth_data` (a stored refresh token), and the `providerPayload` meta holds the identity provider's access token, SAML assertion, or raw user info. A hook on these events must not log or persist those values unless it is deliberately handling credentials.
 
 ### Action events
@@ -229,6 +235,10 @@ The auth events carry credentials. The `auth.jwt` payload is the session token. 
 | `<system-collection>.create` | `payload`, `key`, `collection` |
 | `<system-collection>.update` | `payload`, `keys`, `collection` |
 | `<system-collection>.delete` | `keys`, `collection` |
+
+### Realtime events
+
+Realtime WebSocket connections emit action events that a full-authority hook can handle: `websocket.connect`, `websocket.message`, `websocket.error`, `websocket.close`, `websocket.auth.success`, and `websocket.auth.failure`. Each carries the connection's `client`, with `websocket.error` adding the `error`, `websocket.close` adding the `code` and `reason`, and `websocket.message` adding the parsed `message`. `websocket.message` is also emitted as a filter before the message is handled. These belong to the reserved `websocket` namespace, so a confined hook cannot subscribe to them. The [Realtime for extensions](/docs/api/realtime/extensions/) page covers the connection lifecycle and the `WebSocketService` surface.
 
 ### Init events
 

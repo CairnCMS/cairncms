@@ -1,11 +1,11 @@
 ---
 title: Insights and UI
-description: REST and GraphQL surfaces for dashboards, panels, and notifications. The dashboard composition surface plus the user-facing notification feed.
+description: REST and GraphQL surfaces for dashboards, panels, notifications, and translations.
 sidebar:
   order: 4
 ---
 
-Three system collections handle user-facing UI state in CairnCMS: **dashboards** are the top-level Insights views, **panels** are the visualizations placed on a dashboard, and **notifications** are the messages that show up in the user's notification feed (and trigger emails). All three follow the standard CRUD shape with no bespoke endpoints.
+This page covers four system collections used by the app: dashboards, panels, notifications, and translations. Each uses standard CRUD endpoints.
 
 ## Dashboards (`/dashboards`)
 
@@ -102,6 +102,12 @@ The email is sent synchronously inline with the create, so a slow SMTP provider 
 
 For bulk notifications, an array body to `POST /notifications` creates each row and sends the corresponding email per row in sequence. To send the same notification to many recipients, expect the request to take roughly proportional time to the recipient count.
 
+## Translations (`/translations`)
+
+`directus_translations` stores custom labels and other interface text. Each row contains a key, a language code such as `en-US`, and the translated value. Manage translations in Settings > Translations or through `/translations`.
+
+A key can have one value per language. Duplicate key and language pairs are rejected. Database collation determines whether keys or language codes that differ only by case count as duplicates.
+
 ## Permission semantics
 
 Dashboards and panels are open to app-access roles by default. The platform's app-access minimum permissions include create, read, update, and delete on both `directus_dashboards` and `directus_panels`, so app users can create and arrange their own dashboards without explicit operator setup. Operators who want to scope dashboards more tightly (organization-wide dashboards everyone reads but only admins write, for example) need explicit permission rows that override the defaults.
@@ -110,9 +116,11 @@ Notifications are open to app-access roles by default for the parts of the workf
 
 Create access on `directus_notifications` is admin-only by default. Notifications are usually created by flows or by admin tooling rather than by users directly. Operators who need to let app-access users send notifications to each other must grant create permission explicitly, ideally with a validation rule that constrains `sender` to the calling user.
 
+App users can read translations by default. Only admins can create, update, or delete them.
+
 ## GraphQL
 
-All three collections are exposed on `/graphql/system` with the standard generated CRUD shape (`dashboards`, `dashboards_by_id`, `create_dashboards_item`, etc.; same for `panels` and `notifications`). The query DSL options work the same way as in REST; see [Filters and queries / GraphQL](/docs/api/filters-and-queries/#graphql).
+All four collections are exposed on `/graphql/system` with the standard generated CRUD shape (`dashboards`, `dashboards_by_id`, `create_dashboards_item`, etc.; same for `panels`, `notifications`, and `translations`). The query DSL options work the same way as in REST; see [Filters and queries / GraphQL](/docs/api/filters-and-queries/#graphql).
 
 The notification email side effect fires on the GraphQL mutation just as it does on the REST `POST`.
 

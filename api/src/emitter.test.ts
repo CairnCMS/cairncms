@@ -1,11 +1,12 @@
 import type { EventContext } from '@cairncms/types';
+import type { Knex } from 'knex';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Emitter } from './emitter.js';
 import logger from './logger.js';
 
 vi.mock('./logger.js', () => ({ default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
-const context = { database: {}, schema: null, accountability: null } as unknown as EventContext;
+const context = { database: {} as Knex, schema: null, accountability: null } satisfies EventContext;
 
 function deferred() {
 	let resolve!: () => void;
@@ -268,5 +269,63 @@ describe('Emitter.emitAction', () => {
 
 		expect(logger.warn).toHaveBeenCalled();
 		expect(loggedText()).not.toContain('xyz789');
+	});
+});
+
+describe('Emitter.emitActionBounded', () => {
+	it('runs every matched listener including wildcards and waits for all to settle', async () => {
+		const emitter = new Emitter();
+		const gate = deferred();
+		let wildcardRan = false;
+
+		emitter.onAction('websocket.message', () => {
+			throw new Error('synchronous boom');
+		});
+
+		emitter.onAction('websocket.*', async () => {
+			await gate.promise;
+			wildcardRan = true;
+		});
+
+		let settled = false;
+
+		const done = emitter.emitActionBounded('websocket.message', {}, context).then(() => {
+			settled = true;
+		});
+
+		await Promise.resolve();
+		expect(settled).toBe(false);
+		expect(wildcardRan).toBe(false);
+
+		gate.resolve();
+		await done;
+		expect(wildcardRan).toBe(true);
+		expect(settled).toBe(true);
+	});
+
+	it('contains a rejecting listener, resolving and logging one fixed diagnostic without the raw error', async () => {
+		const warn = vi.mocked(logger.warn);
+		const emitter = new Emitter();
+
+		emitter.onAction('websocket.message', async () => {
+			throw new Error('secret-boom');
+		});
+
+		await expect(emitter.emitActionBounded('websocket.message', {}, context)).resolves.toBeUndefined();
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(warn).toHaveBeenCalledWith('An action listener threw and was contained');
+		expect(warn.mock.calls.flat().map(String).join(' ')).not.toContain('secret-boom');
+	});
+
+	it('invokes listeners synchronously so a lifecycle listener runs before the caller continues', () => {
+		const emitter = new Emitter();
+		let ran = false;
+
+		emitter.onAction('websocket.close', () => {
+			ran = true;
+		});
+
+		void emitter.emitActionBounded('websocket.close', {}, context);
+		expect(ran).toBe(true);
 	});
 });

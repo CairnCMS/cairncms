@@ -73,7 +73,9 @@ query {
 }
 ```
 
-Set `GRAPHQL_INTROSPECTION=false` to disable introspection across both endpoints. With introspection off, the server rejects any query that touches `__schema` or `__type`, and also disables the SDL export endpoints (`GET /server/specs/graphql/<scope>` and the `server_specs_graphql` system query) so the schema shape cannot be retrieved through a parallel surface. This is sometimes used as a hardening step on public-facing deployments where the schema shape itself is treated as sensitive.
+Set `GRAPHQL_INTROSPECTION=false` to disable introspection on both GraphQL endpoints and the SDL export surfaces (`GET /server/specs/graphql/<scope>` and the `server_specs_graphql` system query). CairnCMS then rejects queries using `__schema` or `__type` and removes "Did you mean" suggestions for unknown fields, arguments, types, and enum values.
+
+Schema confidentiality still depends on permissions. Successful queries and ordinary validation errors can reveal field and type names even when introspection is disabled.
 
 Disabling introspection breaks Apollo Studio, GraphiQL, and other GraphQL-aware tooling that depend on it. The platform's own admin app does not require introspection on the server side, so disabling it does not affect the app's GraphQL features.
 
@@ -95,6 +97,8 @@ For every user-defined collection, the platform generates:
 Singleton collections drop the `_by_id` and per-item mutations and gain an `update_<collection>` mutation that upserts.
 
 Field types in the generated schema match the field types in your data model. Relations resolve as nested object types so deep selections work natively.
+
+GraphQL subscriptions are served separately, over a WebSocket rather than the HTTP endpoint. See [GraphQL subscriptions](/docs/api/realtime/graphql/).
 
 ## What `/graphql/system` exposes
 

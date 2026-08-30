@@ -49,7 +49,7 @@ function processError(
 	accountability: Accountability | null,
 	sensitiveValues: ReadonlySet<string>
 ): GraphQLFormattedError {
-	logRedactedError('error', snapshot, sensitiveValues);
+	logRedactedError(originalErrorIsBaseException ? 'debug' : 'error', snapshot, sensitiveValues);
 
 	const formatted = originalErrorIsBaseException
 		? baseExceptionError(snapshot)

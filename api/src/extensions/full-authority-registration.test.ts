@@ -19,6 +19,20 @@ vi.mock('../env.js', () => ({ default: envState, getEnv: () => envState, refresh
 // real getDatabase exits the process when the test env declares no database.
 vi.mock('../database/index.js', () => ({ default: () => ({}) }));
 
+const scheduleCapture = vi.hoisted(() => ({
+	ids: [] as string[],
+	enabled: [] as Array<(() => boolean) | undefined>,
+}));
+
+vi.mock('../utils/schedule.js', () => ({
+	scheduleSynchronizedJob: (id: string, rule: string, _cb: unknown, enabled?: () => boolean) => {
+		scheduleCapture.ids.push(id);
+		scheduleCapture.enabled.push(enabled);
+		if (rule === 'INVALID') return null;
+		return { stop: () => Promise.resolve() };
+	},
+}));
+
 vi.mock('./confined/supervisor.js', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('./confined/supervisor.js')>();
 
@@ -209,6 +223,131 @@ describe('full-authority extension settings threading', () => {
 
 		expect(await captured.extensionSettings.get('billing_key')).toBe('hook-secret');
 		expect(await captured.extensionSettings.get('undeclared')).toBeNull();
+	});
+
+	it('exposes a constructible WebSocketService through context.services while realtime is inactive', () => {
+		const instance = new ExtensionManager();
+		seedOwner(instance, SUBJECT);
+
+		let ServiceClass: any;
+		let created: unknown;
+		let threw = false;
+
+		(instance as any).registerHook((_register: any, context: any) => {
+			ServiceClass = context.services.WebSocketService;
+
+			try {
+				created = new context.services.WebSocketService();
+			} catch {
+				threw = true;
+			}
+		}, SUBJECT);
+
+		expect(ServiceClass).toBeTypeOf('function');
+		expect(threw).toBe(false);
+		expect(created).toBeInstanceOf(ServiceClass);
+	});
+
+	it('gives each schedule registration a distinct id derived from the schedule key', async () => {
+		const instance = new ExtensionManager();
+		seedOwner(instance, SUBJECT);
+		scheduleCapture.ids.length = 0;
+
+		(instance as any).registerHook(
+			(register: any) => {
+				register.schedule('* * * * *', async () => undefined);
+				register.schedule('0 0 * * *', async () => undefined);
+			},
+			SUBJECT,
+			'bundle-x:hook-a'
+		);
+
+		expect(scheduleCapture.ids).toEqual(['bundle-x:hook-a:0', 'bundle-x:hook-a:1']);
+	});
+
+	it('threads the live schedule-enabled gate into each registration, tracking the manager option without re-registering', () => {
+		const instance = new ExtensionManager();
+		(instance as any).options = { ...(instance as any).options, schedule: false };
+		seedOwner(instance, SUBJECT);
+		scheduleCapture.ids.length = 0;
+		scheduleCapture.enabled.length = 0;
+
+		(instance as any).registerHook(
+			(register: any) => {
+				register.schedule('* * * * *', async () => undefined);
+			},
+			SUBJECT,
+			'bundle-x:hook-gate'
+		);
+
+		const gate = scheduleCapture.enabled[0];
+		expect(typeof gate).toBe('function');
+		expect(gate!()).toBe(false);
+
+		(instance as any).options.schedule = true;
+		expect(gate!()).toBe(true);
+	});
+
+	it('advances the schedule index even when a registration is invalid, so a correction does not renumber later hooks', async () => {
+		const instance = new ExtensionManager();
+		seedOwner(instance, SUBJECT);
+		scheduleCapture.ids.length = 0;
+
+		(instance as any).registerHook(
+			(register: any) => {
+				register.schedule('INVALID', async () => undefined);
+				register.schedule('0 0 * * *', async () => undefined);
+			},
+			SUBJECT,
+			'bundle-x:hook-a'
+		);
+
+		expect(scheduleCapture.ids).toEqual(['bundle-x:hook-a:0', 'bundle-x:hook-a:1']);
+	});
+
+	it('derives a qualified schedule identity for a bundle hook through registerBundles', async () => {
+		const dir = path.join(root, 'schedule-bundle');
+		mkdirSync(dir, { recursive: true });
+
+		writeFileSync(
+			path.join(dir, 'api.js'),
+			"export default { hooks: [{ name: 'ticker', config: (register) => { register.schedule('* * * * *', async () => undefined); } }], endpoints: [], operations: [] };\n"
+		);
+
+		scheduleCapture.ids.length = 0;
+
+		const bundle = bundleExtension('schedule-bundle', 'cairncms-schedule-bundle', false);
+		const instance = manager([bundle]);
+
+		await (instance as any).registerBundles();
+
+		expect(scheduleCapture.ids).toEqual(['cairncms-schedule-bundle:ticker:0']);
+	});
+
+	it('rejects a bundle with two hook entries sharing a name, registering neither schedule', async () => {
+		const dir = path.join(root, 'dup-hook-bundle');
+		mkdirSync(dir, { recursive: true });
+
+		writeFileSync(
+			path.join(dir, 'api.js'),
+			'export default { hooks: [' +
+				"{ name: 'ticker', config: (register) => { register.schedule('* * * * *', async () => undefined); } }, " +
+				"{ name: 'ticker', config: (register) => { register.schedule('0 0 * * *', async () => undefined); } }" +
+				'], endpoints: [], operations: [] };\n'
+		);
+
+		scheduleCapture.ids.length = 0;
+
+		const bundle = bundleExtension('dup-hook-bundle', 'cairncms-dup-hook-bundle', false);
+		const instance = manager([bundle]);
+
+		await (instance as any).registerBundles();
+
+		expect(scheduleCapture.ids).toEqual([]);
+
+		expect(
+			(instance as any).getDiagnostics().find((entry: any) => entry.name === 'cairncms-dup-hook-bundle')?.status
+		).toBe('failed');
 	});
 
 	it('binds an endpoint context reader to the registering subject', async () => {

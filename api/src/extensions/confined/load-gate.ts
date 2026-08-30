@@ -4,6 +4,8 @@ import {
 	EXTENSION_PKG_KEY,
 	ExtensionManifest,
 	HYBRID_EXTENSION_TYPES,
+	RESERVED_EVENT_NAMESPACE_ERROR,
+	isReservedEventNamespaceError,
 } from '@cairncms/constants';
 import type { ExtensionValidationReason, ExtensionValidationReasonCode } from '@cairncms/extensions';
 import { scanCandidateSource } from '@cairncms/extensions/node';
@@ -261,6 +263,10 @@ export async function gateConfinedExtension(
 	const manifest = ExtensionManifest.safeParse(manifestJson);
 
 	if (!manifest.success) {
+		if (isReservedEventNamespaceError(manifest.error)) {
+			return refuse('manifest-invalid', RESERVED_EVENT_NAMESPACE_ERROR);
+		}
+
 		return refuse('manifest-invalid', 'the extension manifest failed validation');
 	}
 

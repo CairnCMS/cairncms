@@ -13,7 +13,7 @@ import { applyOptionsData, isValidJSON, parseJSON, toArray } from '@cairncms/uti
 import type { Knex } from 'knex';
 import { isPlainObject, omit, pick } from 'lodash-es';
 import { get } from 'micromustache';
-import { schedule, validate } from 'node-cron';
+import { scheduleSynchronizedJob } from './utils/schedule.js';
 import getDatabase from './database/index.js';
 import emitter from './emitter.js';
 import env from './env.js';
@@ -369,18 +369,12 @@ class FlowManager {
 					});
 				}
 			} else if (flow.trigger === 'schedule') {
-				if (validate(flow.options['cron'])) {
-					const task = schedule(flow.options['cron'], async () => {
-						try {
-							await this.executeFlow(flow);
-						} catch (error: any) {
-							logger.error(error);
-						}
-					});
+				const job = scheduleSynchronizedJob(flow.id, flow.options['cron'], async () => {
+					await this.executeFlow(flow);
+				});
 
-					this.triggerHandlers.push({ id: flow.id, events: [{ type: flow.trigger, task }] });
-				} else {
-					logger.warn(`Couldn't register cron trigger. Provided cron is invalid: ${flow.options['cron']}`);
+				if (job) {
+					this.triggerHandlers.push({ id: flow.id, events: [{ type: flow.trigger, job }] });
 				}
 			} else if (flow.trigger === 'operation') {
 				const handler = (data: unknown, context: Record<string, unknown>) => this.executeFlow(flow, data, context);
@@ -426,7 +420,7 @@ class FlowManager {
 
 	private async unload(): Promise<void> {
 		for (const trigger of this.triggerHandlers) {
-			trigger.events.forEach((event) => {
+			for (const event of trigger.events) {
 				switch (event.type) {
 					case 'filter':
 						emitter.offFilter(event.name, event.handler);
@@ -435,10 +429,10 @@ class FlowManager {
 						emitter.offAction(event.name, event.handler);
 						break;
 					case 'schedule':
-						event.task.stop();
+						await event.job.stop();
 						break;
 				}
-			});
+			}
 		}
 
 		this.triggerHandlers = [];

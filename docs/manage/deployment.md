@@ -70,7 +70,7 @@ The scaffold defaults `PUBLIC_URL` to `http://localhost:<port>`. Set it to the e
 
 ### TLS
 
-The image does not terminate TLS. Run a reverse proxy (Caddy, Traefik, nginx) or a managed load balancer in front of CairnCMS to handle HTTPS. Set `IP_TRUST_PROXY=true` (the default) so CairnCMS reads `X-Forwarded-For` for the real client IP.
+The image does not terminate TLS. Run a reverse proxy or managed load balancer in front of CairnCMS. See [Trusted proxies and client IP](security-hardening.md#trusted-proxies-and-client-ip) for client IP configuration.
 
 ### Cookie security
 
@@ -140,6 +140,7 @@ A typical proxy configuration:
 
 - Forward `/admin` and the API endpoints (`/items`, `/files`, `/auth`, etc.) to CairnCMS.
 - Set `Host`, `X-Forwarded-Proto`, and `X-Forwarded-For` headers.
+- Set `IP_TRUST_PROXY` to the proxy's address or subnet so CairnCMS reads the real client IP. Without it, every request is attributed to the proxy.
 - Cache static asset routes (`/admin/assets/*`) aggressively at the proxy.
 
 Sample Caddy snippet:

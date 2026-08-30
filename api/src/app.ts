@@ -36,6 +36,7 @@ import schemaRouter from './controllers/schema.js';
 import serverRouter from './controllers/server.js';
 import settingsRouter from './controllers/settings.js';
 import sharesRouter from './controllers/shares.js';
+import translationsRouter from './controllers/translations.js';
 import usersRouter from './controllers/users.js';
 import utilsRouter from './controllers/utils.js';
 import {
@@ -62,7 +63,10 @@ import rateLimiterGlobal from './middleware/rate-limiter-global.js';
 import rateLimiter from './middleware/rate-limiter-ip.js';
 import sanitizeQuery from './middleware/sanitize-query.js';
 import schema from './middleware/schema.js';
+import { initScheduleCoordination } from './schedule-coordination.js';
+import { validateGraphQLQueryTokenLimit } from './services/graphql/query-gate.js';
 import { validateSecretsEncryptionKey } from './utils/encrypt-secret.js';
+import { normalizeTrustProxy, validateIpProxyConfig } from './utils/validate-ip-proxy-config.js';
 import { validateQueryLimitConfig } from './utils/query-limit.js';
 import { getConfigFromEnv } from './utils/get-config-from-env.js';
 import { getMaxUploadSize } from './utils/get-max-upload-size.js';
@@ -86,6 +90,20 @@ export default async function createApp(): Promise<express.Application> {
 
 	try {
 		validateQueryLimitConfig();
+	} catch (error) {
+		logger.error((error as Error).message);
+		process.exit(1);
+	}
+
+	try {
+		validateIpProxyConfig();
+	} catch (error) {
+		logger.error((error as Error).message);
+		process.exit(1);
+	}
+
+	try {
+		validateGraphQLQueryTokenLimit();
 	} catch (error) {
 		logger.error((error as Error).message);
 		process.exit(1);
@@ -117,13 +135,15 @@ export default async function createApp(): Promise<express.Application> {
 	const extensionManager = getExtensionManager();
 	const flowManager = getFlowManager();
 
+	await initScheduleCoordination();
+
 	await extensionManager.initialize();
 	await flowManager.initialize();
 
 	const app = express();
 
 	app.disable('x-powered-by');
-	app.set('trust proxy', env['IP_TRUST_PROXY']);
+	app.set('trust proxy', normalizeTrustProxy(env['IP_TRUST_PROXY']));
 
 	app.set('query parser', (str: string) =>
 		qs.parse(str, {
@@ -337,6 +357,7 @@ export default async function createApp(): Promise<express.Application> {
 	app.use('/server', serverRouter);
 	app.use('/settings', settingsRouter);
 	app.use('/shares', sharesRouter);
+	app.use('/translations', translationsRouter);
 	app.use('/users', usersRouter);
 	app.use('/utils', utilsRouter);
 

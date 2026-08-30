@@ -4,10 +4,14 @@ import {
 	authentication,
 	createCairnCMS,
 	createItem,
+	createTranslation,
 	deleteItem,
+	deleteTranslation,
 	readItems,
+	readTranslations,
 	rest,
 	updateItem,
+	updateTranslation,
 	type CairnCMSClient,
 	type RestClient,
 	type AuthenticationClient,
@@ -103,6 +107,32 @@ describe('REST write round-trip', () => {
 		await admin.request(deleteItem(COLLECTIONS.items, created.id));
 
 		const afterDelete = await admin.request(readItems(COLLECTIONS.items, { filter: { id: { _eq: created.id } } }));
+
+		expect(afterDelete).toHaveLength(0);
+	});
+});
+
+describe('REST translations round-trip', () => {
+	it('creates, reads, updates, and deletes a translation via the dedicated commands', async () => {
+		const created = await admin.request(
+			createTranslation({ key: 'sdk_integration_translation', language: 'en-US', value: 'hello' })
+		);
+
+		expect(created.key).toBe('sdk_integration_translation');
+		expect(created.id).toBeTypeOf('string');
+
+		const read = await admin.request(readTranslations({ filter: { id: { _eq: created.id } } }));
+
+		expect(read).toHaveLength(1);
+		expect(read[0]?.value).toBe('hello');
+
+		const updated = await admin.request(updateTranslation(created.id, { value: 'updated' }));
+
+		expect(updated.value).toBe('updated');
+
+		await admin.request(deleteTranslation(created.id));
+
+		const afterDelete = await admin.request(readTranslations({ filter: { id: { _eq: created.id } } }));
 
 		expect(afterDelete).toHaveLength(0);
 	});

@@ -27,7 +27,10 @@ exports.list = {
 		{ testFilePath: '/routes/collections/schema-cache.test.ts' },
 		{ testFilePath: '/routes/permissions/cache-purge.test.ts' },
 		{ testFilePath: '/routes/permissions/cache-share-segmentation.test.ts' },
+		{ testFilePath: '/routes/permissions/cache-data-studio.test.ts' },
+		{ testFilePath: '/routes/translations/translations.test.ts' },
 		{ testFilePath: '/routes/files/upload-limits.test.ts' },
+		{ testFilePath: '/routes/security/trusted-ip.test.ts' },
 		{ testFilePath: '/routes/items/relational-presets.test.ts' },
 		{ testFilePath: '/routes/items/query-limit.test.ts' },
 		{ testFilePath: '/routes/assets/format.test.ts' },
@@ -35,6 +38,9 @@ exports.list = {
 		{ testFilePath: '/routes/assets/read.test.ts' },
 		{ testFilePath: '/routes/assets/limit.test.ts' },
 		{ testFilePath: '/routes/assets/concurrency.test.ts' },
+		{ testFilePath: '/flows/schedule-coordination.test.ts' },
+		{ testFilePath: '/routes/realtime/realtime.test.ts' },
+		{ testFilePath: '/utils/await-connection.test.ts' },
 	],
 	// If specified, only run these tests sequentially
 	only: [

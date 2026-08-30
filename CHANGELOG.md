@@ -2,6 +2,33 @@
 
 All notable changes to CairnCMS are documented in this file. Releases are listed in reverse chronological order. Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0]
+
+### Potential Breaking Changes
+
+- Added cross-instance coordination for scheduled flows and extension hooks. When `MESSENGER_STORE` is `redis`, CairnCMS now admits at most one replica for each scheduled occurrence. This change upgrades node-cron from 3 to 4. Node-cron 3 normalized some day and month steps from the wrong starting value, expanded wrapping weekday ranges incorrectly, and ignored the intended behavior of `W` and `#`. CairnCMS does not rewrite stored schedules, so review and correct affected expressions before upgrading. Redis messaging deployments require Redis 6.2 or a compatible server for scheduling. The API remains available with an older server, but scheduled flows and extension hooks are disabled until the server supports coordination. Do not run old and upgraded replicas together because old replicas do not participate in coordination and can duplicate scheduled work. Stop every old replica before starting the upgraded fleet. (#200)
+- Moved custom translation strings to a first-class collection. The `directus_settings.translation_strings` field is removed and the app screen moves to Settings > Translations. The migration copies existing strings automatically. API, SDK, and extension code that reads or writes `settings.translation_strings` must switch to the collection, and bookmarks to `/settings/translation-strings` move to `/settings/translations`. If the legacy data holds entries the new collection cannot represent, or key/language pairs the database collation treats as equal, the migration stops without changing the source data so those entries can be reconciled first. (#205)
+- Enforced GraphQL query limits and introspection controls. Operators whose clients send GraphQL documents above `5000` tokens must raise `GRAPHQL_QUERY_TOKEN_LIMIT` before upgrading. When `GRAPHQL_INTROSPECTION=false`, clients that depend on `Did you mean` validation suggestions must handle errors without them. (#209)
+- Resolved the client IP only from trusted proxies. Operators behind a reverse proxy who have not set `IP_TRUST_PROXY`, or who use `IP_CUSTOM_HEADER` without trusting that proxy, must set `IP_TRUST_PROXY` to the proxy's exact address or subnet before upgrading. Use a comma-separated list for multiple proxies or `loopback` for a same-host proxy. (#210)
+
+### New Features
+
+- Added cross-instance coordination for scheduled flows and extension hooks. (#200)
+- Cached Data Studio requests with automatic purging. (#203)
+- Moved custom translation strings to a first-class collection. (#205)
+- Added realtime WebSocket support, including:
+	- Item-protocol subscriptions, authentication, and cross-instance delivery. (#214)
+	- GraphQL subscriptions. (#216)
+	- The realtime JavaScript SDK and documentation. (#217)
+	- Bounded SDK message buffering and resilient reconnection. (#218)
+
+### Fixes & Improvements
+
+- Moved the update check from API startup to `cairncms start`. (#204)
+- Fixed the OpenAPI request body schema for item creation. (#207)
+- Enforced GraphQL query limits and introspection controls. (#209)
+- Resolved the client IP only from trusted proxies. (#210)
+
 ## [1.4.0] - 2026-08-10
 
 ### New Features

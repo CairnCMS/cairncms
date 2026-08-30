@@ -29,10 +29,7 @@ import {
 	GraphQLSchema,
 	GraphQLString,
 	GraphQLUnionType,
-	NoSchemaIntrospectionCustomRule,
 	execute,
-	specifiedRules,
-	validate,
 } from 'graphql';
 import type {
 	InputTypeComposerFieldConfigMapDefinition,
@@ -85,14 +82,11 @@ import { GraphQLGeoJSON } from './types/geojson.js';
 import { GraphQLHash } from './types/hash.js';
 import { GraphQLStringOrFloat } from './types/string-or-float.js';
 import { GraphQLVoid } from './types/void.js';
+import { validateGraphQLDocument } from './query-gate.js';
+import { authenticationAccountabilityFromRequest } from './request-accountability.js';
+import { createSubscriptionGenerator } from './subscription.js';
 import { addPathToValidationError } from './utils/add-path-to-validation-error.js';
 import formatGraphqlErrors from './utils/process-error.js';
-
-const validationRules = Array.from(specifiedRules);
-
-if (env['GRAPHQL_INTROSPECTION'] === false) {
-	validationRules.push(NoSchemaIntrospectionCustomRule);
-}
 
 /**
  * These should be ignored in the context of GraphQL, and/or are replaced by a custom resolver (for non-standard structures)
@@ -305,7 +299,7 @@ export class GraphQLService {
 	}: GraphQLParams): Promise<FormattedExecutionResult> {
 		const schema = this.getSchema();
 
-		const validationErrors = validate(schema, document, validationRules).map((validationError) =>
+		const validationErrors = validateGraphQLDocument(schema, document).map((validationError) =>
 			addPathToValidationError(validationError)
 		);
 
@@ -430,6 +424,54 @@ export class GraphQLService {
 					description: "There's no data to query.",
 				},
 			});
+		}
+
+		if (this.scope === 'items' && readableCollections.length > 0) {
+			const uniqueTypeName = (base: string): string => {
+				let name = base;
+				let index = 1;
+
+				while (schemaComposer.has(name)) {
+					name = `${base}_gql${index}`;
+					index++;
+				}
+
+				return name;
+			};
+
+			const subscriptionEventType = schemaComposer.createEnumTC({
+				name: uniqueTypeName('EventEnum'),
+				values: {
+					create: { value: 'create' },
+					update: { value: 'update' },
+					delete: { value: 'delete' },
+				},
+			});
+
+			schemaComposer.Subscription.addFields(
+				readableCollections.reduce((acc, collection) => {
+					const eventName = `${collection.collection}_mutated`;
+
+					const subscriptionType = schemaComposer.createObjectTC({
+						name: uniqueTypeName(eventName),
+						fields: {
+							key: new GraphQLNonNull(GraphQLID),
+							event: subscriptionEventType,
+							data: ReadCollectionTypes[collection.collection]!,
+						},
+					});
+
+					acc[eventName] = {
+						type: subscriptionType,
+						args: {
+							event: subscriptionEventType,
+						},
+						subscribe: createSubscriptionGenerator(self, eventName),
+					};
+
+					return acc;
+				}, {} as ObjectTypeComposerFieldConfigMapDefinition<any, any>)
+			);
 		}
 
 		if (Object.keys(schema.create.collections).length > 0) {
@@ -2186,15 +2228,7 @@ export class GraphQLService {
 					otp: GraphQLString,
 				},
 				resolve: async (_, args, { req, res }) => {
-					const accountability: Accountability = { role: null };
-
-					if (req?.ip) accountability.ip = req.ip;
-
-					const userAgent = req?.get('user-agent');
-					if (userAgent) accountability.userAgent = userAgent;
-
-					const origin = req?.get('origin');
-					if (origin) accountability.origin = origin;
+					const accountability = authenticationAccountabilityFromRequest(req);
 
 					const authenticationService = new AuthenticationService({
 						accountability: accountability,
@@ -2227,15 +2261,7 @@ export class GraphQLService {
 					mode: AuthMode,
 				},
 				resolve: async (_, args, { req, res }) => {
-					const accountability: Accountability = { role: null };
-
-					if (req?.ip) accountability.ip = req.ip;
-
-					const userAgent = req?.get('user-agent');
-					if (userAgent) accountability.userAgent = userAgent;
-
-					const origin = req?.get('origin');
-					if (origin) accountability.origin = origin;
+					const accountability = authenticationAccountabilityFromRequest(req);
 
 					const authenticationService = new AuthenticationService({
 						accountability: accountability,
@@ -2273,15 +2299,7 @@ export class GraphQLService {
 					refresh_token: GraphQLString,
 				},
 				resolve: async (_, args, { req }) => {
-					const accountability: Accountability = { role: null };
-
-					if (req?.ip) accountability.ip = req.ip;
-
-					const userAgent = req?.get('user-agent');
-					if (userAgent) accountability.userAgent = userAgent;
-
-					const origin = req?.get('origin');
-					if (origin) accountability.origin = origin;
+					const accountability = authenticationAccountabilityFromRequest(req);
 
 					const authenticationService = new AuthenticationService({
 						accountability: accountability,
@@ -2305,15 +2323,7 @@ export class GraphQLService {
 					reset_url: GraphQLString,
 				},
 				resolve: async (_, args, { req }) => {
-					const accountability: Accountability = { role: null };
-
-					if (req?.ip) accountability.ip = req.ip;
-
-					const userAgent = req?.get('user-agent');
-					if (userAgent) accountability.userAgent = userAgent;
-
-					const origin = req?.get('origin');
-					if (origin) accountability.origin = origin;
+					const accountability = authenticationAccountabilityFromRequest(req);
 					const service = new UsersService({ accountability, schema: this.schema });
 
 					try {
@@ -2334,15 +2344,7 @@ export class GraphQLService {
 					password: new GraphQLNonNull(GraphQLString),
 				},
 				resolve: async (_, args, { req }) => {
-					const accountability: Accountability = { role: null };
-
-					if (req?.ip) accountability.ip = req.ip;
-
-					const userAgent = req?.get('user-agent');
-					if (userAgent) accountability.userAgent = userAgent;
-
-					const origin = req?.get('origin');
-					if (origin) accountability.origin = origin;
+					const accountability = authenticationAccountabilityFromRequest(req);
 
 					const service = new UsersService({ accountability, schema: this.schema });
 					await service.resetPassword(args['token'], args['password']);

@@ -98,6 +98,25 @@ export class Emitter {
 		logger.warn(`An error was thrown while executing action "${safeLogFragment(event)}"`);
 	}
 
+	public async emitActionBounded(event: string, meta: Record<string, any>, context: EventContext): Promise<void> {
+		const listeners = this.actionEmitter.listeners(event) as ActionHandler[];
+		const payload = { event, ...meta };
+
+		const pending = listeners.map((listener) => {
+			try {
+				return Promise.resolve(listener(payload, context));
+			} catch (error) {
+				return Promise.reject(error);
+			}
+		});
+
+		const results = await Promise.allSettled(pending);
+
+		if (results.some((result) => result.status === 'rejected')) {
+			logger.warn('An action listener threw and was contained');
+		}
+	}
+
 	public async emitInit(event: string, meta: Record<string, any>): Promise<void> {
 		try {
 			await this.initEmitter.emitAsync(event, { event, ...meta });
