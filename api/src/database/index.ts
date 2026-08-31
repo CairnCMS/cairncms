@@ -104,6 +104,7 @@ export default function getDatabase(): Knex {
 
 			const run = promisify(conn.run.bind(conn));
 			await run('PRAGMA foreign_keys = ON');
+			await run('PRAGMA busy_timeout = 5000');
 
 			callback(null, conn);
 		};

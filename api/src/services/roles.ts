@@ -1,12 +1,56 @@
 import { PUBLIC_ROLE_ID, PUBLIC_ROLE_KEY } from '@cairncms/constants';
 import type { Query } from '@cairncms/types';
 import { normalizeRoleKey } from '@cairncms/utils';
-import { ForbiddenException, InvalidPayloadException, UnprocessableEntityException } from '../exceptions/index.js';
+import type { Knex } from 'knex';
+import { clearSystemCache } from '../cache.js';
+import {
+	runInBoundSerializable,
+	isBoundSerializable,
+	lifecycleContextFor,
+	type LifecycleContext,
+} from '../database/bound-transaction.js';
+import { type MutationGuard, withMutationGuard } from '../database/mutation-guard.js';
+import { isSerializationConflict } from '../database/serialization-error.js';
+import emitter from '../emitter.js';
+import {
+	AdminMutationUnverifiedTransactionException,
+	ConcurrencyConflictException,
+	ForbiddenException,
+	InvalidPayloadException,
+	UnprocessableEntityException,
+} from '../exceptions/index.js';
 import type { AbstractServiceOptions, Alterations, Item, MutationOptions, PrimaryKey } from '../types/index.js';
+import { leavesAtLeastOneAdmin } from '../utils/admin-continuity.js';
 import { ItemsService } from './items.js';
 import { PermissionsService } from './permissions.js';
 import { PresetsService } from './presets.js';
 import { UsersService } from './users.js';
+
+type ContinuityMode = 'enforce' | 'failClosed';
+
+const EMPTY: ReadonlySet<PrimaryKey> = new Set();
+const LAST_ADMIN_ROLE_MESSAGE = `You can't delete the last admin role.`;
+
+class AdminContinuityGuard implements MutationGuard {
+	private readonly demoted = new Set<PrimaryKey>();
+
+	constructor(private readonly mode: ContinuityMode, private readonly snapshot: ReadonlySet<PrimaryKey>) {}
+
+	async beforeUpdate(effectivePayload: Readonly<Record<string, unknown>>, keys: PrimaryKey[]): Promise<void> {
+		if (!('admin_access' in effectivePayload)) return;
+		if (effectivePayload['admin_access']) return;
+
+		if (this.mode === 'failClosed') throw new AdminMutationUnverifiedTransactionException();
+
+		for (const key of keys) {
+			if (this.snapshot.has(key)) this.demoted.add(key);
+		}
+
+		if (!leavesAtLeastOneAdmin({ currentAdmins: this.snapshot, removing: this.demoted, adding: EMPTY })) {
+			throw new UnprocessableEntityException(LAST_ADMIN_ROLE_MESSAGE);
+		}
+	}
+}
 
 export class RolesService extends ItemsService {
 	constructor(options: AbstractServiceOptions) {
@@ -126,19 +170,6 @@ export class RolesService extends ItemsService {
 		return super.createMany(data, opts);
 	}
 
-	private async checkForOtherAdminRoles(excludeKeys: PrimaryKey[]): Promise<void> {
-		// Make sure there's at least one admin role left after this deletion is done
-		const otherAdminRoles = await this.knex
-			.count('*', { as: 'count' })
-			.from('directus_roles')
-			.whereNotIn('id', excludeKeys)
-			.andWhere({ admin_access: true })
-			.first();
-
-		const otherAdminRolesCount = +(otherAdminRoles?.count || 0);
-		if (otherAdminRolesCount === 0) throw new UnprocessableEntityException(`You can't delete the last admin role.`);
-	}
-
 	private async checkForOtherAdminUsers(key: PrimaryKey, users: Alterations | Item[]): Promise<void> {
 		const role = await this.knex.select('admin_access').from('directus_roles').where('id', '=', key).first();
 
@@ -185,6 +216,81 @@ export class RolesService extends ItemsService {
 		return;
 	}
 
+	private itemsServiceOn(trx: Knex): ItemsService {
+		return new ItemsService('directus_roles', {
+			knex: trx,
+			accountability: this.accountability,
+			schema: this.schema,
+		});
+	}
+
+	private async readAdminRoleIds(trx: Knex): Promise<Set<PrimaryKey>> {
+		const rows = await trx('directus_roles').select('id').where({ admin_access: true });
+		return new Set(rows.map((row: { id: PrimaryKey }) => row.id));
+	}
+
+	private async withBoundContext<T>(
+		opts: MutationOptions,
+		clearSystemCacheOnFlush: boolean,
+		run: (trx: Knex, mode: ContinuityMode, mutationOpts: MutationOptions) => Promise<T>
+	): Promise<T> {
+		// Joining a transaction another owner opened: queue our effects into its lifecycle
+		// context so that owner flushes them once after the real commit.
+		if (isBoundSerializable(this.knex)) {
+			const context = lifecycleContextFor(this.knex);
+			if (!context) throw new AdminMutationUnverifiedTransactionException();
+			return run(this.knex, 'enforce', this.deferInto(context, opts, clearSystemCacheOnFlush));
+		}
+
+		if ((this.knex as Knex & { isTransaction?: boolean }).isTransaction) {
+			return run(this.knex, 'failClosed', opts);
+		}
+
+		try {
+			return await runInBoundSerializable(
+				this.knex,
+				(trx) => run(trx, 'enforce', this.deferInto(lifecycleContextFor(trx)!, opts, clearSystemCacheOnFlush)),
+				(context) => this.flushContext(context, opts)
+			);
+		} catch (err) {
+			if (isSerializationConflict(err)) throw new ConcurrencyConflictException();
+			throw err;
+		}
+	}
+
+	private deferInto(
+		context: LifecycleContext,
+		opts: MutationOptions,
+		clearSystemCacheOnFlush: boolean
+	): MutationOptions {
+		context.responseCacheDirty = true;
+		if (clearSystemCacheOnFlush) context.systemCacheDirty = true;
+
+		return {
+			...opts,
+			autoPurgeCache: false,
+			autoPurgeSystemCache: false,
+			bypassEmitAction: (params) => context.events.push(params),
+		};
+	}
+
+	private async flushContext(context: LifecycleContext, opts: MutationOptions): Promise<void> {
+		if (context.systemCacheDirty && opts.autoPurgeSystemCache !== false) {
+			await clearSystemCache({ autoPurgeCache: opts.autoPurgeCache });
+		}
+
+		if (context.responseCacheDirty && this.cache && opts.autoPurgeCache !== false) {
+			await this.cache.clear();
+		}
+
+		if (opts.emitEvents !== false) {
+			for (const event of context.events) {
+				if (opts.bypassEmitAction) opts.bypassEmitAction(event);
+				else emitter.emitAction(event.event, event.meta, event.context);
+			}
+		}
+	}
+
 	override async updateOne(key: PrimaryKey, data: Record<string, any>, opts?: MutationOptions): Promise<PrimaryKey> {
 		this.assertSentinelUpdateAllowed([key], data);
 
@@ -207,7 +313,7 @@ export class RolesService extends ItemsService {
 		return super.updateOne(key, data, opts);
 	}
 
-	override async updateBatch(data: Record<string, any>[], opts?: MutationOptions): Promise<PrimaryKey[]> {
+	override async updateBatch(data: Record<string, any>[], opts: MutationOptions = {}): Promise<PrimaryKey[]> {
 		const primaryKeyField = this.schema.collections[this.collection]!.primary;
 
 		for (const item of data) {
@@ -222,24 +328,17 @@ export class RolesService extends ItemsService {
 			}
 		}
 
-		const keys = data.map((item) => item[primaryKeyField]);
-		const setsToNoAdmin = data.some((item) => item['admin_access'] === false);
-
-		try {
-			if (setsToNoAdmin) {
-				await this.checkForOtherAdminRoles(keys);
-			}
-		} catch (err: any) {
-			(opts || (opts = {})).preMutationException = err;
-		}
-
-		return super.updateBatch(data, opts);
+		return this.withBoundContext(opts, false, async (trx, mode, mutationOpts) => {
+			const snapshot = await this.readAdminRoleIds(trx);
+			const guarded = withMutationGuard(mutationOpts, new AdminContinuityGuard(mode, snapshot));
+			return this.itemsServiceOn(trx).updateBatch(data, guarded);
+		});
 	}
 
 	override async updateMany(
 		keys: PrimaryKey[],
 		data: Record<string, any>,
-		opts?: MutationOptions
+		opts: MutationOptions = {}
 	): Promise<PrimaryKey[]> {
 		this.assertSentinelUpdateAllowed(keys, data);
 
@@ -256,15 +355,19 @@ export class RolesService extends ItemsService {
 			}
 		}
 
-		try {
-			if ('admin_access' in data && data['admin_access'] === false) {
-				await this.checkForOtherAdminRoles(keys);
-			}
-		} catch (err: any) {
-			(opts || (opts = {})).preMutationException = err;
-		}
+		return this.withBoundContext(opts, false, async (trx, mode, mutationOpts) => {
+			const snapshot = await this.readAdminRoleIds(trx);
+			const guarded = withMutationGuard(mutationOpts, new AdminContinuityGuard(mode, snapshot));
+			return this.itemsServiceOn(trx).updateMany(keys, data, guarded);
+		});
+	}
 
-		return super.updateMany(keys, data, opts);
+	override async upsertMany(payloads: Partial<Item>[], opts: MutationOptions = {}): Promise<PrimaryKey[]> {
+		return this.withBoundContext(opts, false, async (trx, mode, mutationOpts) => {
+			const snapshot = await this.readAdminRoleIds(trx);
+			const guarded = withMutationGuard(mutationOpts, new AdminContinuityGuard(mode, snapshot));
+			return this.itemsServiceOn(trx).upsertMany(payloads, guarded);
+		});
 	}
 
 	override async deleteOne(key: PrimaryKey, opts?: MutationOptions): Promise<PrimaryKey> {
@@ -275,18 +378,14 @@ export class RolesService extends ItemsService {
 	override async deleteMany(keys: PrimaryKey[], opts: MutationOptions = {}): Promise<PrimaryKey[]> {
 		this.assertSentinelNotDeleted(keys);
 
-		try {
-			await this.checkForOtherAdminRoles(keys);
-		} catch (err: any) {
-			opts.preMutationException = err;
-		}
+		return this.withBoundContext(opts, true, async (trx, mode, mutationOpts) => {
+			if (mode === 'failClosed') throw new AdminMutationUnverifiedTransactionException();
 
-		await this.knex.transaction(async (trx) => {
-			const itemsService = new ItemsService('directus_roles', {
-				knex: trx,
-				accountability: this.accountability,
-				schema: this.schema,
-			});
+			const snapshot = await this.readAdminRoleIds(trx);
+
+			if (!leavesAtLeastOneAdmin({ currentAdmins: snapshot, removing: new Set(keys), adding: EMPTY })) {
+				throw new UnprocessableEntityException(LAST_ADMIN_ROLE_MESSAGE);
+			}
 
 			const permissionsService = new PermissionsService({
 				knex: trx,
@@ -310,14 +409,14 @@ export class RolesService extends ItemsService {
 				{
 					filter: { role: { _in: keys } },
 				},
-				{ ...opts, bypassLimits: true }
+				{ ...mutationOpts, bypassLimits: true }
 			);
 
 			await presetsService.deleteByQuery(
 				{
 					filter: { role: { _in: keys } },
 				},
-				{ ...opts, bypassLimits: true }
+				{ ...mutationOpts, bypassLimits: true }
 			);
 
 			await usersService.updateByQuery(
@@ -328,13 +427,13 @@ export class RolesService extends ItemsService {
 					status: 'suspended',
 					role: null,
 				},
-				{ ...opts, bypassLimits: true }
+				{ ...mutationOpts, bypassLimits: true }
 			);
 
-			await itemsService.deleteMany(keys, opts);
-		});
+			await this.itemsServiceOn(trx).deleteMany(keys, mutationOpts);
 
-		return keys;
+			return keys;
+		});
 	}
 
 	override deleteByQuery(query: Query, opts?: MutationOptions): Promise<PrimaryKey[]> {
