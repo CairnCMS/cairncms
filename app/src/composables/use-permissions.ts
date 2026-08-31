@@ -1,9 +1,9 @@
 import { usePermissionsStore } from '@/stores/permissions';
 import { useUserStore } from '@/stores/user';
-import { Field } from '@cairncms/types';
+import { Field, Permission } from '@cairncms/types';
 import { computed, ComputedRef, Ref } from 'vue';
-import { cloneDeep } from 'lodash';
-import { isAllowed } from '../utils/is-allowed';
+import { useFieldPermissions } from './use-field-permissions';
+import { hasConditionalItemPermission, itemActionAllowed, useItemPermissions } from './use-item-permissions';
 import { useCollection } from '@cairncms/composables';
 
 type UsablePermissions = {
@@ -17,84 +17,103 @@ type UsablePermissions = {
 	revisionsAllowed: ComputedRef<boolean>;
 };
 
-export function usePermissions(collection: Ref<string>, item: Ref<any>, isNew: Ref<boolean>): UsablePermissions {
+type ItemContext = {
+	primaryKey: Ref<string | number | null>;
+	loading: Ref<boolean>;
+	error: Ref<unknown>;
+};
+
+export function usePermissions(
+	collection: Ref<string>,
+	item: Ref<any>,
+	isNew: Ref<boolean>,
+	context: ItemContext
+): UsablePermissions {
 	const userStore = useUserStore();
 	const permissionsStore = usePermissionsStore();
 
-	const { info: collectionInfo, fields: rawFields } = useCollection(collection);
+	const { info: collectionInfo, primaryKeyField } = useCollection(collection);
 
-	const createAllowed = computed(() => isAllowed(collection.value, 'create', item.value));
+	const { fields } = useFieldPermissions(collection, isNew);
 
-	const deleteAllowed = computed(() => isAllowed(collection.value, 'delete', item.value));
+	const isAdmin = computed(() => userStore.currentUser?.role?.admin_access === true);
+
+	const loadedKey = computed<string | number | null>(() => {
+		const keyField = primaryKeyField.value?.field;
+		if (!keyField) return null;
+
+		return item.value?.[keyField] ?? null;
+	});
+
+	const itemReady = computed(() => {
+		if (isNew.value) return false;
+		if (context.loading.value === true) return false;
+		if (context.error.value != null) return false;
+		if (item.value == null || loadedKey.value === null) return false;
+
+		const requested = context.primaryKey.value ?? null;
+
+		if (collectionInfo.value?.meta?.singleton === true) return requested === null;
+
+		if (requested === null) return false;
+
+		return String(loadedKey.value) === String(requested);
+	});
+
+	const needsServerCheck = computed(
+		() => itemReady.value && hasConditionalItemPermission(collection.value, ['update', 'delete', 'share'])
+	);
+
+	const primaryKey = computed<string | number | null>(() => (itemReady.value ? loadedKey.value : null));
+
+	const { itemPermissions } = useItemPermissions(collection, primaryKey, needsServerCheck, item);
+
+	function isUnconditional(permission: Permission): boolean {
+		return !permission.permissions || Object.keys(permission.permissions).length === 0;
+	}
+
+	function fieldEditable(fields: string[] | null | undefined, field: string): boolean {
+		if (!fields || fields.length === 0) return false;
+		return fields.includes('*') || fields.includes(field);
+	}
+
+	const createAllowed = computed(() => {
+		if (isAdmin.value) return true;
+		return !!permissionsStore.getPermissionsForUser(collection.value, 'create');
+	});
+
+	const deleteAllowed = computed(() =>
+		itemActionAllowed(collection.value, 'delete', itemPermissions.value, itemReady.value)
+	);
 
 	const saveAllowed = computed(() => {
-		if (isNew.value) {
-			return true;
-		}
-
-		return isAllowed(collection.value, 'update', item.value);
+		if (isNew.value) return true;
+		return itemActionAllowed(collection.value, 'update', itemPermissions.value, itemReady.value);
 	});
 
-	const updateAllowed = computed(() => isAllowed(collection.value, 'update', item.value));
+	const updateAllowed = computed(() =>
+		itemActionAllowed(collection.value, 'update', itemPermissions.value, itemReady.value)
+	);
 
-	const shareAllowed = computed(() => isAllowed(collection.value, 'share', item.value));
+	const shareAllowed = computed(() =>
+		itemActionAllowed(collection.value, 'share', itemPermissions.value, itemReady.value)
+	);
 
 	const archiveAllowed = computed(() => {
-		if (!collectionInfo.value?.meta?.archive_field) return false;
+		const archiveField = collectionInfo.value?.meta?.archive_field;
+		if (!archiveField) return false;
+		if (!itemReady.value) return false;
+		if (isAdmin.value) return true;
 
-		return isAllowed(
-			collection.value,
-			'update',
-			{
-				[collectionInfo.value.meta.archive_field]: collectionInfo.value.meta.archive_value,
-			},
-			true
-		);
-	});
+		const permission = permissionsStore.getPermissionsForUser(collection.value, 'update');
+		if (!permission) return false;
 
-	const fields = computed(() => {
-		let fields = cloneDeep(rawFields.value);
-
-		if (userStore.currentUser?.role?.admin_access === true) return fields;
-
-		const permissions = permissionsStore.getPermissionsForUser(collection.value, isNew.value ? 'create' : 'update');
-
-		// remove fields without read permissions so they don't show up in the DOM
-		const readableFields = permissionsStore.getPermissionsForUser(collection.value, 'read')?.fields;
-
-		if (readableFields && readableFields.includes('*') === false) {
-			fields = fields.filter((field) => readableFields.includes(field.field));
+		if (isUnconditional(permission)) {
+			return fieldEditable(permission.fields, archiveField);
 		}
 
-		if (!permissions) return fields;
-
-		if (permissions.fields?.includes('*') === false) {
-			fields = fields.map((field: Field) => {
-				if (permissions.fields?.includes(field.field) === false) {
-					field.meta = {
-						...(field.meta || {}),
-						readonly: true,
-					} as any;
-				}
-
-				return field;
-			});
-		}
-
-		if (permissions.presets) {
-			fields = fields.map((field: Field) => {
-				if (field.field in permissions.presets!) {
-					field.schema = {
-						...(field.schema || {}),
-						default_value: permissions.presets![field.field],
-					} as any;
-				}
-
-				return field;
-			});
-		}
-
-		return fields;
+		if (itemPermissions.value?.update.access !== true) return false;
+		return fieldEditable(itemPermissions.value.update.fields, archiveField);
 	});
 
 	const revisionsAllowed = computed(() => {

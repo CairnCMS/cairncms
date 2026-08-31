@@ -80,7 +80,7 @@
 <script setup lang="ts">
 import api from '@/api';
 import { useEditsGuard } from '@/composables/use-edits-guard';
-import { usePermissions } from '@/composables/use-permissions';
+import { useFieldPermissions } from '@/composables/use-field-permissions';
 import { useTemplateData } from '@/composables/use-template-data';
 import { useFieldsStore } from '@/stores/fields';
 import { useRelationsStore } from '@/stores/relations';
@@ -180,15 +180,13 @@ const title = computed(() => {
 		: t('editing_in', { collection: collection.name });
 });
 
-const { fields: relatedCollectionFields } = usePermissions(
+const { fields: relatedCollectionFields } = useFieldPermissions(
 	relatedCollection as any,
-	computed(() => initialValues.value && initialValues.value[props.junctionField as any]),
 	computed(() => props.primaryKey === '+')
 );
 
-const { fields: fieldsWithPermissions } = usePermissions(
+const { fields: fieldsWithPermissions } = useFieldPermissions(
 	collection,
-	initialValues,
 	computed(() => props.primaryKey === '+')
 );
 

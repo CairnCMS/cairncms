@@ -13,7 +13,7 @@ import { getEndpoint } from '@cairncms/utils';
 import { AxiosResponse } from 'axios';
 import { mergeWith } from 'lodash';
 import { computed, ComputedRef, isRef, Ref, ref, unref, watch } from 'vue';
-import { usePermissions } from './use-permissions';
+import { useFieldPermissions } from './use-field-permissions';
 import { Field, Query, Relation } from '@cairncms/types';
 import { getDefaultValuesFromFields } from '@/utils/get-default-values-from-fields';
 
@@ -67,7 +67,7 @@ export function useItem(
 		return item.value?.[collectionInfo.value.meta.archive_field] === collectionInfo.value.meta.archive_value;
 	});
 
-	const { fields: fieldsWithPermissions } = usePermissions(collection, item, isNew);
+	const { fields: fieldsWithPermissions } = useFieldPermissions(collection, isNew);
 
 	const itemEndpoint = computed(() => {
 		if (isSingle.value) {

@@ -222,6 +222,7 @@ const {
 	item,
 	saving,
 	loading,
+	error,
 	save,
 	remove,
 	deleting,
@@ -275,7 +276,8 @@ useShortcut('meta+s', saveAndStay, form);
 const { createAllowed, deleteAllowed, saveAllowed, updateAllowed, fields, revisionsAllowed } = usePermissions(
 	ref('directus_files'),
 	item,
-	isNew
+	isNew,
+	{ primaryKey, loading, error }
 );
 
 const fieldsFiltered = computed(() => {

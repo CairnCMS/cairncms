@@ -381,7 +381,7 @@ const {
 	shareAllowed,
 	fields,
 	revisionsAllowed,
-} = usePermissions(collection, item, isNew);
+} = usePermissions(collection, item, isNew, { primaryKey, loading, error });
 
 const internalPrimaryKey = computed(() => {
 	if (unref(loading)) return '+';
