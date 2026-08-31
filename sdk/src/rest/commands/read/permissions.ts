@@ -66,7 +66,11 @@ export const readItemPermissions =
 	() => {
 		throwIfEmpty(String(collection), 'Collection cannot be empty');
 
-		const item = key ? `${collection as string}/${key}` : `${collection as string}`;
+		if (key !== undefined) {
+			throwIfEmpty(String(key), 'Key cannot be empty');
+		}
+
+		const item = key !== undefined ? `${collection as string}/${key}` : `${collection as string}`;
 
 		return {
 			path: `/permissions/me/${item}`,
