@@ -4,21 +4,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushCaches } from '../cache.js';
 import emitter from '../emitter.js';
 import { ConfigApplyFailedException } from '../exceptions/config-apply-failed.js';
+import { ConfigApplyScopeMismatchException } from '../exceptions/config-apply-scope-mismatch.js';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import { ConfigPostCommitFailedException } from '../exceptions/config-post-commit-failed.js';
 import { ConfigProtectedRecordException } from '../exceptions/config-protected-record.js';
+import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
+import { ConfigStateChangedException } from '../exceptions/config-state-changed.js';
 import { DestructiveChangesRequiredException } from '../exceptions/destructive-changes-required.js';
 import getDatabase from '../database/index.js';
 import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
-import { applyConfigPlan } from './apply-config-plan.js';
+import { applyConfigPlan as runApplyConfigPlan } from './apply-config-plan.js';
 import type { ApplyContext, ConfigApplyMutationOptions, ConfigKindTypes } from './config/descriptor.js';
 import { CONFIG_REGISTRY, getDescriptor } from './config/registry.js';
 import { getSchema } from './get-schema.js';
 import type { ActionEventParams } from '../types/index.js';
-import type { ConfigApplySecurityContext, ConfigKind, ConfigPlan } from '../types/config.js';
+import type { ConfigApplySecurityContext, ConfigKind, ConfigPlan, ConfigStateToken } from '../types/config.js';
 
-const { transactionSpy } = vi.hoisted(() => ({ transactionSpy: vi.fn() }));
+const { transactionSpy, readCurrentConfigMock } = vi.hoisted(() => ({
+	transactionSpy: vi.fn(),
+	readCurrentConfigMock: vi.fn(),
+}));
 
 const permissionsService = { createOne: vi.fn(), updateOne: vi.fn(), deleteOne: vi.fn(), readByQuery: vi.fn() };
 const rolesService = { createOne: vi.fn(), updateOne: vi.fn(), deleteOne: vi.fn() };
@@ -49,10 +55,26 @@ vi.mock('../database/index.js', () => ({
 }));
 
 vi.mock('./get-schema.js', () => ({ getSchema: vi.fn(async () => ({ collections: {}, relations: [] })) }));
+vi.mock('./get-config-snapshot.js', () => ({ readCurrentConfig: readCurrentConfigMock }));
 vi.mock('../cache.js', () => ({ clearSystemCache: vi.fn(), flushCaches: vi.fn() }));
 vi.mock('../emitter.js', () => ({ default: { emitActionAndWait: vi.fn() } }));
 vi.mock('../services/permissions.js', () => ({ PermissionsService: vi.fn(() => permissionsService) }));
 vi.mock('../services/roles.js', () => ({ RolesService: vi.fn(() => rolesService) }));
+
+const STATE_TOKEN: ConfigStateToken = { resources: ['permissions', 'roles'], digest: 'digest-current' };
+
+readCurrentConfigMock.mockImplementation(async () => ({
+	config: { manifest: { version: 1, resources: ['permissions', 'roles'] }, roles: [], permissions: [] },
+	currentRoleKeys: new Set<string>(),
+	stateToken: STATE_TOKEN,
+}));
+
+function applyConfigPlan(
+	plan: ConfigPlan,
+	opts: Omit<Parameters<typeof runApplyConfigPlan>[1], 'expectedStateToken'> & { expectedStateToken?: ConfigStateToken }
+): Promise<Awaited<ReturnType<typeof runApplyConfigPlan>>> {
+	return runApplyConfigPlan(plan, { expectedStateToken: STATE_TOKEN, ...opts });
+}
 
 const accountability = {
 	user: null,
@@ -89,6 +111,7 @@ const actionEvent = (event: string, meta: Record<string, unknown>): ActionEventP
 
 function emptyPlan(): ConfigPlan {
 	return {
+		managedResources: ['permissions', 'roles'],
 		roles: { create: [], update: [], delete: [] },
 		permissions: { create: [], update: [], delete: [] },
 		protections: [],
@@ -1268,5 +1291,84 @@ describe('applyConfigPlan:admin-continuity protection', () => {
 		expect(error.extensions).not.toHaveProperty('code');
 		expect(JSON.stringify(error.extensions)).not.toContain('impact');
 		expect(JSON.stringify(error.extensions)).not.toContain('values');
+	});
+});
+
+describe('applyConfigPlan:state-token recheck and scope binding', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		trxRows = { directus_roles: [], directus_permissions: [] };
+
+		readCurrentConfigMock.mockImplementation(async () => ({
+			config: { manifest: { version: 1, resources: ['permissions', 'roles'] }, roles: [], permissions: [] },
+			currentRoleKeys: new Set<string>(),
+			stateToken: STATE_TOKEN,
+		}));
+	});
+
+	function roleWorkPlan(): ConfigPlan {
+		const plan = emptyPlan();
+		plan.roles.create.push({ key: 'editor', name: 'Editor', admin_access: false, app_access: true } as never);
+		return plan;
+	}
+
+	it('refuses a plan whose managed resources differ from the token before any database work', async () => {
+		const error = (await applyConfigPlan(roleWorkPlan(), {
+			context,
+			expectedStateToken: { resources: ['permissions'], digest: 'digest-current' },
+		}).catch((thrown) => thrown)) as Error;
+
+		expect(error).toBeInstanceOf(ConfigApplyScopeMismatchException);
+		expect(transactionSpy).not.toHaveBeenCalled();
+		expect(readCurrentConfigMock).not.toHaveBeenCalled();
+		expect(rolesService.createOne).not.toHaveBeenCalled();
+	});
+
+	it('refuses a token whose duplicate resources fake the plan scope', async () => {
+		const error = (await applyConfigPlan(roleWorkPlan(), {
+			context,
+			expectedStateToken: { resources: ['roles', 'roles'], digest: 'digest-current' },
+		}).catch((thrown) => thrown)) as Error;
+
+		expect(error).toBeInstanceOf(ConfigApplyScopeMismatchException);
+		expect(transactionSpy).not.toHaveBeenCalled();
+	});
+
+	it('refuses with CONFIG_STATE_CHANGED when the in-transaction digest differs, before any handler', async () => {
+		readCurrentConfigMock.mockResolvedValue({
+			config: { manifest: { version: 1, resources: ['permissions', 'roles'] }, roles: [], permissions: [] },
+			currentRoleKeys: new Set<string>(),
+			stateToken: { resources: ['permissions', 'roles'], digest: 'digest-changed' },
+		});
+
+		const error = (await applyConfigPlan(roleWorkPlan(), { context }).catch((thrown) => thrown)) as Error;
+
+		expect(error).toBeInstanceOf(ConfigStateChangedException);
+		expect(rolesService.createOne).not.toHaveBeenCalled();
+	});
+
+	it('rechecks against the transaction-bound database and applies on a matching digest', async () => {
+		await applyConfigPlan(roleWorkPlan(), { context });
+
+		expect(readCurrentConfigMock).toHaveBeenCalledTimes(1);
+		expect(readCurrentConfigMock.mock.calls[0]![0].database).toBe(trxStub);
+		expect(readCurrentConfigMock.mock.calls[0]![0].resources).toEqual(['permissions', 'roles']);
+		expect(rolesService.createOne).toHaveBeenCalledTimes(1);
+	});
+
+	it('maps an in-transaction read failure to CONFIG_STATE_CHANGED', async () => {
+		readCurrentConfigMock.mockRejectedValue(new ConfigReadFailedException('state unavailable'));
+
+		const error = (await applyConfigPlan(roleWorkPlan(), { context }).catch((thrown) => thrown)) as Error;
+
+		expect(error).toBeInstanceOf(ConfigStateChangedException);
+		expect(rolesService.createOne).not.toHaveBeenCalled();
+	});
+
+	it('applies an empty plan without opening a transaction or rechecking', async () => {
+		await applyConfigPlan(emptyPlan(), { context });
+
+		expect(transactionSpy).not.toHaveBeenCalled();
+		expect(readCurrentConfigMock).not.toHaveBeenCalled();
 	});
 });

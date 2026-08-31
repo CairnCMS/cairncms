@@ -154,12 +154,21 @@ export interface ApplyContext<K extends ConfigKindTypes> {
 	dependency<D extends Extract<keyof K['ApplyDependencies'], ConfigKind>>(kind: D): K['ApplyDependencies'][D];
 }
 
+export type ReadCurrentResult<K extends ConfigKindTypes> = {
+	records: K['Record'][];
+	documentIdentities: K['DocumentIdentity'][];
+	dependencyState: K['ReadDependencyState'];
+};
+
+/** A read-state projection for the config state digest: identities in either mode, values only in `full`. */
+export type ReadStateProjection =
+	| { mode: 'full'; identities: string[]; values: Array<[string, unknown]> }
+	| { mode: 'identity'; identities: string[] };
+
 export interface ConfigResourceHandler<K extends ConfigKindTypes> {
-	readCurrent(context: ReadContext<K>): Promise<{
-		records: K['Record'][];
-		documentIdentities: K['DocumentIdentity'][];
-		dependencyState: K['ReadDependencyState'];
-	}>;
+	readCurrent(context: ReadContext<K>): Promise<ReadCurrentResult<K>>;
+	/** Projects the read result into the mode-appropriate digest contribution; `full` must carry values. */
+	projectReadState(result: ReadCurrentResult<K>, mode: ConfigReadMode): ReadStateProjection;
 	validateDesired(documents: K['Document'][], records: K['Record'][], context: ValidationContext): ConfigFailure[];
 	postPlan(plan: KindPlan<K>, context: PlanContext<K>): KindPlan<K>;
 	enrich(plan: KindPlan<K>, records: K['Record'][], context: EnrichContext): Promise<K['Enrichment']>;

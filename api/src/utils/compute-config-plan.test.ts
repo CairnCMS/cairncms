@@ -408,6 +408,7 @@ describe('admin-continuity protection', () => {
 		const plan = computeConfigPlan(current, desired);
 
 		expect(plan.protections[0]?.code).toBe('ADMIN_CONTINUITY_REQUIRED');
+
 		expect(plan.protections[0]?.contributors).toEqual([
 			{ kind: 'roles', operation: 'delete', identity: { key: 'super_admin' } },
 			{ kind: 'roles', operation: 'delete', identity: { key: 'administrator' } },
@@ -510,6 +511,7 @@ describe('managed scope', () => {
 		});
 
 		expect(computeConfigPlan(current, desired)).toEqual({
+			managedResources: [],
 			roles: { create: [], update: [], delete: [] },
 			permissions: { create: [], update: [], delete: [] },
 			protections: [],
@@ -548,6 +550,7 @@ describe('managed scope', () => {
 		});
 
 		expect(computeConfigPlan(current, desired)).toEqual({
+			managedResources: ['roles'],
 			roles: { create: [makeRole('viewer')], update: [], delete: ['editor'] },
 			permissions: { create: [], update: [], delete: [] },
 			protections: [],
@@ -567,6 +570,7 @@ describe('managed scope', () => {
 		});
 
 		expect(computeConfigPlan(current, desired)).toEqual({
+			managedResources: ['permissions'],
 			roles: { create: [], update: [], delete: [] },
 			permissions: {
 				create: [],

@@ -274,7 +274,9 @@ A mutating apply is refused if any create, role update, or deletion step would r
 
 ### No diff endpoint
 
-Schema-as-code uses a two-step `/schema/diff` then `/schema/apply` flow with a hash handoff to detect concurrent changes. Config-as-code does not. The apply endpoint computes the plan internally on every call because the config payload is much smaller than a typical schema, the engine is fast enough that the plan/apply round-trip in a single call is comfortable, and the dry-run flag covers the same "what would change?" use case without requiring a stateful client.
+Schema-as-code uses a two-step `/schema/diff` then `/schema/apply` flow with a client-held hash handoff. Config-as-code keeps a single-call apply. The config payload is much smaller than a typical schema, the engine computes the plan internally on every call, and the dry-run flag covers the same "what would change?" use case without a stateful client.
+
+A single-call apply is still protected against a concurrent change. The apply hashes the current state its plan was read from, then re-reads and re-hashes that state inside the apply transaction before making any change. If the managed records or the role identities the plan depends on changed in between, the apply makes no change and returns `CONFIG_STATE_CHANGED` (409). Recompute the plan and re-apply. A plan with no changes has nothing to write, so it applies without the recheck.
 
 If you need to inspect the plan before applying, use `?dry_run=true` and read the response.
 
@@ -342,6 +344,7 @@ Config-specific HTTP codes are:
 - **`CONFIG_IDENTITY_CONFLICT`** (400) — a duplicate role or permission identity.
 - **`CONFIG_PROTECTED_RECORD`** (400) — a plan that would remove the last `admin_access: true` role.
 - **`DESTRUCTIVE_CHANGES_REQUIRED`** (400) — a plan contains deletions that were not authorized. `extensions.deletions` lists the identities.
+- **`CONFIG_STATE_CHANGED`** (409) — the managed state or a role identity the plan depended on changed between plan and apply, or a concurrent write forced a serialization conflict. The apply made no change. Recompute the plan and re-apply.
 - **`CONFIG_READ_FAILED`** (500) — required database state could not be read.
 - **`CONFIG_APPLY_FAILED`** (500) — the apply transaction failed and was rolled back.
 

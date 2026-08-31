@@ -703,6 +703,85 @@ describe('readCurrentConfig', () => {
 		expect(currentRoleKeys.has('editor')).toBe(true);
 	});
 
+	it('returns a stable state token digest for an unchanged managed read closure', async () => {
+		mockRole();
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const first = await readCurrentConfig({ database: db, resources: ['roles'] });
+		const second = await readCurrentConfig({ database: db, resources: ['roles'] });
+
+		expect(first.stateToken.resources).toEqual(['roles']);
+		expect(second.stateToken.digest).toBe(first.stateToken.digest);
+	});
+
+	it('changes the state token digest when a managed role value changes', async () => {
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+		const roles = vi.spyOn(RolesService.prototype, 'readByQuery');
+
+		roles.mockResolvedValueOnce([roleRow({ admin_access: false })]);
+		const before = await readCurrentConfig({ database: db, resources: ['roles'] });
+
+		roles.mockResolvedValueOnce([roleRow({ admin_access: true })]);
+		const after = await readCurrentConfig({ database: db, resources: ['roles'] });
+
+		expect(after.stateToken.digest).not.toBe(before.stateToken.digest);
+	});
+
+	it('changes the state token digest when a dependency role identity is removed even though managed permissions are unchanged', async () => {
+		const permission = {
+			id: 42,
+			role: 'uuid-view',
+			collection: 'articles',
+			action: 'read',
+			permissions: null,
+			validation: null,
+			presets: null,
+			fields: null,
+		};
+
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([permission]);
+		const roles = vi.spyOn(RolesService.prototype, 'readByQuery');
+
+		roles.mockResolvedValueOnce([
+			{ id: 'uuid-1', key: 'editor' },
+			{ id: 'uuid-view', key: 'viewer' },
+		]);
+
+		const withEditor = await readCurrentConfig({ database: db, resources: ['permissions'] });
+
+		roles.mockResolvedValueOnce([{ id: 'uuid-view', key: 'viewer' }]);
+
+		const withoutEditor = await readCurrentConfig({ database: db, resources: ['permissions'] });
+
+		expect(withEditor.config.permissions[0]!.role).toBe('viewer');
+		expect(withoutEditor.config.permissions).toEqual(withEditor.config.permissions);
+		expect(withoutEditor.stateToken.digest).not.toBe(withEditor.stateToken.digest);
+	});
+
+	it('changes the state token digest when a stored permission policy changes', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([{ id: 'uuid-1', key: 'editor' } as never]);
+		const perms = vi.spyOn(PermissionsService.prototype, 'readByQuery');
+
+		const row = (permissions: Record<string, unknown>) => ({
+			id: 42,
+			role: 'uuid-1',
+			collection: 'articles',
+			action: 'read',
+			permissions,
+			validation: { status: { _eq: 'published' } },
+			presets: { status: 'published' },
+			fields: 'title,body',
+		});
+
+		perms.mockResolvedValueOnce([row({ status: { _eq: 'published' } })]);
+		const before = await readCurrentConfig({ database: db, resources: ['permissions'] });
+
+		perms.mockResolvedValueOnce([row({ status: { _eq: 'draft' } })]);
+		const after = await readCurrentConfig({ database: db, resources: ['permissions'] });
+
+		expect(after.stateToken.digest).not.toBe(before.stateToken.digest);
+	});
+
 	it('reads an unrelated role that cannot be exported, because only its identity is needed', async () => {
 		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
 			roleRow(),

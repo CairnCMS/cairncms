@@ -20,17 +20,21 @@ import { safeLogFragment } from '../../safe-log-fragment.js';
 import type {
 	ApplyContext,
 	ConfigFieldDescriptor,
+	ConfigReadMode,
 	ConfigResourceDescriptor,
 	EnrichContext,
 	FieldSensitivity,
 	KindPlan,
 	PlanContext,
 	ReadContext,
+	ReadCurrentResult,
+	ReadStateProjection,
 	ValidationContext,
 } from '../descriptor.js';
 import { identityConflict, invalid } from '../failures.js';
 import { comparePermissionIdentity } from '../identity-order.js';
 import { UNFILTERED, parseStoredCSV, parseStoredJSON, unreadable } from '../read-parsing.js';
+import { compareCodeUnits } from '../canonical-encode.js';
 import { changesToValues, composeValues, sortedOrNull } from '../values.js';
 import type { RolesKindTypes } from './roles.js';
 
@@ -242,6 +246,25 @@ async function readCurrent(context: ReadContext<PermissionsKindTypes>): Promise<
 		documentIdentities: roleKeys.map((role) => ({ role })),
 		dependencyState: undefined,
 	};
+}
+
+function permissionIdentity(record: FlatPermissionRecord): string {
+	return JSON.stringify([record.role, record.collection, record.action]);
+}
+
+function projectReadState(result: ReadCurrentResult<PermissionsKindTypes>, mode: ConfigReadMode): ReadStateProjection {
+	if (mode === 'identity') {
+		return { mode, identities: result.records.map(permissionIdentity).sort(compareCodeUnits) };
+	}
+
+	const values = result.records
+		.map((record): [string, unknown] => [
+			permissionIdentity(record),
+			composeValues(RECORD_FIELDS, VALUE_FIELD_ORDER, record as unknown as Record<string, unknown>),
+		])
+		.sort((a, b) => compareCodeUnits(a[0], b[0]));
+
+	return { mode, identities: values.map(([key]) => key), values };
 }
 
 function validateDesired(
@@ -568,6 +591,7 @@ export const permissionsDescriptor: ConfigResourceDescriptor<PermissionsKindType
 	toDeleteEntry: (identity) => ({ roleKey: identity.role, collection: identity.collection, action: identity.action }),
 	handler: {
 		readCurrent,
+		projectReadState,
 		validateDesired,
 		postPlan,
 		enrich,

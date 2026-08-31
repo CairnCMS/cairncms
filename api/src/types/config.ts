@@ -71,7 +71,11 @@ export type ConfigProtection = {
 	contributors: ProtectionContributor[];
 };
 
+/** The precondition value binding a plan or apply to the state its read closure was computed from. */
+export type ConfigStateToken = Readonly<{ resources: readonly ConfigKind[]; digest: string }>;
+
 export interface ConfigPlan {
+	managedResources: readonly ConfigKind[];
 	roles: {
 		create: ConfigRole[];
 		update: Array<{ key: string; changes: RoleFieldChanges }>;
