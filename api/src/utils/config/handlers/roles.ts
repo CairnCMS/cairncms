@@ -18,16 +18,20 @@ import { safeLogFragment } from '../../safe-log-fragment.js';
 import type {
 	ApplyContext,
 	ConfigFieldDescriptor,
+	ConfigReadMode,
 	ConfigResourceDescriptor,
 	EnrichContext,
 	FieldSensitivity,
 	KindPlan,
 	NoConfigDependencies,
 	ReadContext,
+	ReadCurrentResult,
+	ReadStateProjection,
 } from '../descriptor.js';
 import { identityConflict } from '../failures.js';
 import { interpolateEnvVar } from '../placeholder.js';
 import { UNFILTERED, assertStringArray, parseStoredCSV, unreadable } from '../read-parsing.js';
+import { compareCodeUnits } from '../canonical-encode.js';
 import { changesToValues, composeValues, sortedOrNull } from '../values.js';
 import { normalizeImpact, readRoleDeletionImpact } from './roles-impact.js';
 
@@ -273,6 +277,21 @@ async function readCurrent(context: ReadContext<RolesKindTypes>): Promise<{
 	};
 }
 
+function projectReadState(result: ReadCurrentResult<RolesKindTypes>, mode: ConfigReadMode): ReadStateProjection {
+	if (mode === 'identity') {
+		return { mode, identities: [...result.dependencyState.currentRoleKeys].sort(compareCodeUnits) };
+	}
+
+	const values = result.records
+		.map((record): [string, unknown] => [
+			record.key,
+			composeValues(RECORD_FIELDS, VALUE_FIELD_ORDER, record as unknown as Record<string, unknown>),
+		])
+		.sort((a, b) => compareCodeUnits(a[0], b[0]));
+
+	return { mode, identities: values.map(([key]) => key), values };
+}
+
 function validateDesired(documents: ConfigRole[]): ConfigFailure[] {
 	const failures: ConfigFailure[] = [];
 	const seen = new Set<string>();
@@ -498,6 +517,7 @@ export const rolesDescriptor: ConfigResourceDescriptor<RolesKindTypes> = {
 	toDeleteEntry: (identity) => identity.key,
 	handler: {
 		readCurrent,
+		projectReadState,
 		validateDesired,
 		postPlan: (plan) => plan,
 		enrich,

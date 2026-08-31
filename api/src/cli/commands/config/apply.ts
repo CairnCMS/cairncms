@@ -57,7 +57,11 @@ export async function configApply(
 			notice: (message) => logger.warn(message),
 		});
 
-		const { config: current, currentRoleKeys } = await readCurrentConfig({
+		const {
+			config: current,
+			currentRoleKeys,
+			stateToken,
+		} = await readCurrentConfig({
 			database,
 			resources: desired.manifest.resources,
 		});
@@ -141,6 +145,7 @@ export async function configApply(
 				reason: 'local config apply',
 				accountability: { ...getSystemAccountability(), origin: CONFIG_APPLY_ORIGIN },
 			},
+			expectedStateToken: stateToken,
 		});
 
 		const parts: string[] = [];

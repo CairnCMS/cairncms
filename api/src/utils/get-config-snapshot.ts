@@ -8,8 +8,11 @@ import {
 	type ConfigKind,
 	type ConfigPermissionSet,
 	type ConfigRole,
+	type ConfigStateToken,
 } from '../types/config.js';
+import { computeConfigStateDigest, toStateDigestEntry, type StateDigestEntry } from './config/config-state-digest.js';
 import { makeDependencyAccessor } from './config/dependency-context.js';
+import type { ConfigReadMode } from './config/descriptor.js';
 import type { RolesKindTypes } from './config/handlers/roles.js';
 import { getDescriptor } from './config/registry.js';
 import { resolveReadClosure } from './config/scope.js';
@@ -20,6 +23,7 @@ import { validateConfigRecord } from './validate-desired-config.js';
 export type CurrentConfigRead = {
 	config: CairnConfig;
 	currentRoleKeys: ReadonlySet<string>;
+	stateToken: ConfigStateToken;
 };
 
 export type CurrentConfigOptions = {
@@ -58,12 +62,17 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 	const closure = resolveReadClosure(manifest);
 
 	if (closure.length === 0) {
-		return { config: { manifest, roles: [], permissions: [] }, currentRoleKeys: new Set() };
+		return {
+			config: { manifest, roles: [], permissions: [] },
+			currentRoleKeys: new Set(),
+			stateToken: Object.freeze({ resources: Object.freeze([]), digest: computeConfigStateDigest([]) }),
+		};
 	}
 
 	const schema = options.schema ?? (await getSchema({ database, bypassCache: true }));
 	const published = new Map<ConfigKind, unknown>();
 	const documentsByKind = new Map<ConfigKind, unknown[]>();
+	const projectionInputs: Array<{ kind: ConfigKind; mode: ConfigReadMode; result: unknown }> = [];
 
 	for (const { kind, mode } of closure) {
 		const descriptor = getDescriptor(kind);
@@ -77,6 +86,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 
 		const result = await descriptor.handler.readCurrent(context as never);
 		published.set(kind, result.dependencyState);
+		projectionInputs.push({ kind, mode, result });
 
 		if (!managed.has(kind)) continue;
 
@@ -112,7 +122,29 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		currentRoleKeys = rolesState.currentRoleKeys;
 	}
 
-	return { config, currentRoleKeys };
+	let stateToken: ConfigStateToken;
+
+	try {
+		const entries: StateDigestEntry[] = projectionInputs.map(({ kind, mode, result }) =>
+			toStateDigestEntry(kind, mode, getDescriptor(kind).handler.projectReadState(result as never, mode))
+		);
+
+		stateToken = Object.freeze({
+			resources: Object.freeze(
+				closure
+					.filter((entry) => entry.mode === 'full')
+					.map((entry) => entry.kind)
+					.sort()
+			),
+			digest: computeConfigStateDigest(entries),
+		});
+	} catch {
+		throw new ConfigReadFailedException(
+			'Configuration state could not be represented as a state digest. Retry the operation and report the failure if it persists.'
+		);
+	}
+
+	return { config, currentRoleKeys, stateToken };
 }
 
 export async function getConfigSnapshot(options?: { database?: Knex; schema?: SchemaOverview }): Promise<CairnConfig> {

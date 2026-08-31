@@ -7,12 +7,21 @@ import getDatabase from '../database/index.js';
 import { isSerializationConflict } from '../database/serialization-error.js';
 import emitter from '../emitter.js';
 import { ConfigApplyFailedException } from '../exceptions/config-apply-failed.js';
+import { ConfigApplyScopeMismatchException } from '../exceptions/config-apply-scope-mismatch.js';
 import { ConfigPostCommitFailedException } from '../exceptions/config-post-commit-failed.js';
+import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import { ConfigStateChangedException } from '../exceptions/config-state-changed.js';
 import { ConfigProtectedRecordException } from '../exceptions/config-protected-record.js';
 import { DestructiveChangesRequiredException } from '../exceptions/destructive-changes-required.js';
-import type { ApplyResult, ConfigApplySecurityContext, ConfigKind, ConfigPlan } from '../types/config.js';
+import type {
+	ApplyResult,
+	ConfigApplySecurityContext,
+	ConfigKind,
+	ConfigPlan,
+	ConfigStateToken,
+} from '../types/config.js';
 import { makeDependencyAccessor } from './config/dependency-context.js';
+import { readCurrentConfig } from './get-config-snapshot.js';
 import type { ConfigApplyMutationOptions } from './config/descriptor.js';
 import { dependencyClosure, dependencyOrder, reverseDependencyOrder } from './config/graph.js';
 import { planDeletions, planHasDeletions } from './config/plan-folds.js';
@@ -24,7 +33,35 @@ type ApplyOptions = {
 	schema?: SchemaOverview;
 	destructive?: boolean;
 	context: ConfigApplySecurityContext;
+	expectedStateToken: ConfigStateToken;
 };
+
+function sameResourceSet(a: readonly ConfigKind[], b: readonly ConfigKind[]): boolean {
+	const setA = new Set(a);
+	const setB = new Set(b);
+
+	if (setA.size !== a.length || setB.size !== b.length) return false;
+	if (setA.size !== setB.size) return false;
+
+	for (const kind of setA) {
+		if (!setB.has(kind)) return false;
+	}
+
+	return true;
+}
+
+async function assertStateUnchanged(trx: Knex, schema: SchemaOverview, expected: ConfigStateToken): Promise<void> {
+	let current;
+
+	try {
+		current = await readCurrentConfig({ database: trx, schema, resources: expected.resources });
+	} catch (err) {
+		if (err instanceof ConfigReadFailedException) throw new ConfigStateChangedException();
+		throw err;
+	}
+
+	if (current.stateToken.digest !== expected.digest) throw new ConfigStateChangedException();
+}
 
 function sliceActive(slice: { create: unknown[]; update: unknown[]; delete: unknown[] }): boolean {
 	return slice.create.length > 0 || slice.update.length > 0 || slice.delete.length > 0;
@@ -37,6 +74,10 @@ function assembleResult(slices: Map<ConfigKind, unknown>): ApplyResult {
 }
 
 export async function applyConfigPlan(plan: ConfigPlan, opts: ApplyOptions): Promise<ApplyResult> {
+	if (!sameResourceSet(plan.managedResources, opts.expectedStateToken.resources)) {
+		throw new ConfigApplyScopeMismatchException();
+	}
+
 	const protection = plan.protections[0];
 
 	if (protection) {
@@ -67,6 +108,8 @@ export async function applyConfigPlan(plan: ConfigPlan, opts: ApplyOptions): Pro
 			database,
 			async (trx) => {
 				const context = lifecycleContextFor(trx)!;
+
+				await assertStateUnchanged(trx, schema, opts.expectedStateToken);
 
 				const mutationOptions: ConfigApplyMutationOptions = {
 					autoPurgeCache: false,

@@ -69,7 +69,11 @@ router.post(
 		const database = getDatabase();
 		const schema = await getSchema({ database, bypassCache: true });
 
-		const { config: current, currentRoleKeys } = await readCurrentConfig({
+		const {
+			config: current,
+			currentRoleKeys,
+			stateToken,
+		} = await readCurrentConfig({
 			database,
 			schema,
 			resources: manifest.resources,
@@ -98,6 +102,7 @@ router.post(
 			schema,
 			destructive,
 			context: { mode: 'request', accountability: req.accountability },
+			expectedStateToken: stateToken,
 		});
 
 		res.locals['payload'] = { data: result };

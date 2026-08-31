@@ -38,8 +38,9 @@ export function computeConfigPlan(current: CairnConfig, desired: CairnConfig): C
 	) as unknown as Pick<ConfigPlan, ConfigKind>;
 
 	const protections = computeAdminContinuityProtections(current, slices, managed);
+	const managedResources = Object.freeze([...managed].sort());
 
-	return { ...slices, protections };
+	return { ...slices, managedResources, protections };
 }
 
 /**

@@ -2,7 +2,13 @@ import inquirer from 'inquirer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import getDatabase from '../../../database/index.js';
 import logger from '../../../logger.js';
-import type { CairnConfig, ConfigPermission, ConfigPlan, SerializedConfigPlan } from '../../../types/config.js';
+import type {
+	CairnConfig,
+	ConfigPermission,
+	ConfigPlan,
+	ConfigStateToken,
+	SerializedConfigPlan,
+} from '../../../types/config.js';
 import { computeConfigPlan } from '../../../utils/compute-config-plan.js';
 import { enrichConfigPlan } from '../../../utils/enrich-config-plan.js';
 import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
@@ -47,9 +53,58 @@ vi.mock('../../../utils/apply-config-plan.js', () => ({
 vi.mock('inquirer', () => ({ default: { prompt: vi.fn(async () => ({ proceed: false })) } }));
 
 const EMPTY_PLAN: ConfigPlan = {
+	managedResources: ['permissions'],
 	roles: { create: [], update: [], delete: [] },
 	permissions: { create: [], update: [], delete: [] },
 	protections: [],
+};
+
+const STATE_TOKEN: ConfigStateToken = { resources: ['roles'], digest: 'cli-digest' };
+
+const CREATE_PLAN: ConfigPlan = {
+	managedResources: ['roles'],
+	roles: {
+		create: [
+			{
+				key: 'editor',
+				name: 'Editor',
+				admin_access: false,
+				app_access: true,
+				icon: null,
+				enforce_tfa: false,
+				description: null,
+				ip_access: null,
+			},
+		],
+		update: [],
+		delete: [],
+	},
+	permissions: { create: [], update: [], delete: [] },
+	protections: [],
+};
+
+const CREATE_SERIALIZED: SerializedConfigPlan = {
+	planVersion: 2,
+	manifestVersion: 1,
+	changes: [
+		{
+			kind: 'roles',
+			operation: 'create',
+			identity: { key: 'editor' },
+			values: {
+				name: 'Editor',
+				admin_access: false,
+				app_access: true,
+				icon: null,
+				enforce_tfa: false,
+				description: null,
+				ip_access: null,
+			},
+		},
+	],
+	summary: { create: 1, update: 0, delete: 0 },
+	protections: [],
+	warnings: [],
 };
 
 const MISSING_COLLECTION_PERMISSION: ConfigPermission = {
@@ -241,5 +296,44 @@ describe('configApply protected plan', () => {
 		expect(process.exit).toHaveBeenCalledWith(2);
 		expect(inquirer.prompt).not.toHaveBeenCalled();
 		expect(applyConfigPlan).not.toHaveBeenCalled();
+	});
+});
+
+describe('configApply state token forwarding', () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+		vi.clearAllMocks();
+	});
+
+	it('forwards the plan-time state token to the apply engine', async () => {
+		vi.spyOn(process, 'exit').mockImplementation((code) => {
+			throw new Error(`exit:${code}`);
+		});
+
+		const managed: CairnConfig = { manifest: { version: 1, resources: ['roles'] }, roles: [], permissions: [] };
+
+		vi.mocked(readConfigDirectory).mockResolvedValue(managed);
+
+		vi.mocked(readCurrentConfig).mockResolvedValue({
+			config: managed,
+			currentRoleKeys: new Set<string>(),
+			stateToken: STATE_TOKEN,
+		});
+
+		vi.mocked(computeConfigPlan).mockReturnValue(CREATE_PLAN);
+		vi.mocked(serializeConfigPlan).mockReturnValue(CREATE_SERIALIZED);
+
+		vi.mocked(applyConfigPlan).mockResolvedValue({
+			roles: { created: [], updated: [], deleted: [] },
+			permissions: { created: 0, updated: 0, deleted: 0 },
+		} as never);
+
+		await configApply('./config', { format: 'human', dryRun: false, destructive: false, yes: true }).catch(
+			() => undefined
+		);
+
+		expect(process.exit).toHaveBeenCalledWith(0);
+		expect(applyConfigPlan).toHaveBeenCalledTimes(1);
+		expect(vi.mocked(applyConfigPlan).mock.calls[0]![1]).toMatchObject({ expectedStateToken: STATE_TOKEN });
 	});
 });

@@ -146,3 +146,77 @@ const RUNNERS = {
 describe.each(listConfigKinds())('descriptor conformance: %s', (kind) => {
 	RUNNERS[kind]();
 });
+
+describe('projectReadState mode invariant', () => {
+	it('roles binds record identities and values in full mode and currentRoleKeys in identity mode', () => {
+		const descriptor = getDescriptor('roles');
+
+		const result = {
+			records: [role({ key: 'editor', name: 'Editor' })],
+			documentIdentities: [{ key: 'editor' }],
+			dependencyState: { currentRoleKeys: new Set(['editor', 'viewer']), roleKeyById: new Map() },
+		};
+
+		const full = descriptor.handler.projectReadState(result as never, 'full');
+		expect(full.mode).toBe('full');
+		expect(full).toHaveProperty('values');
+		expect(full.identities).toEqual(['editor']);
+
+		const identity = descriptor.handler.projectReadState(result as never, 'identity');
+		expect(identity.mode).toBe('identity');
+		expect(identity).not.toHaveProperty('values');
+		expect(identity.identities).toEqual(['editor', 'viewer']);
+	});
+
+	it('permissions carries record identities and values in full mode', () => {
+		const descriptor = getDescriptor('permissions');
+
+		const result = {
+			records: [permission({ role: 'editor', collection: 'articles', action: 'read' })],
+			documentIdentities: [{ role: 'editor' }],
+			dependencyState: undefined,
+		};
+
+		const full = descriptor.handler.projectReadState(result as never, 'full');
+		expect(full.mode).toBe('full');
+		expect(full).toHaveProperty('values');
+		expect(full.identities).toEqual([JSON.stringify(['editor', 'articles', 'read'])]);
+	});
+
+	it('permissions projection carries the full executable policy in its values', () => {
+		const descriptor = getDescriptor('permissions');
+
+		const full = descriptor.handler.projectReadState(
+			{
+				records: [
+					permission({
+						role: 'editor',
+						collection: 'articles',
+						action: 'read',
+						permissions: { status: { _eq: 'published' } },
+						validation: { owner: { _eq: '$CURRENT_USER' } },
+						presets: { status: 'published' },
+						fields: ['title', 'body'],
+					}),
+				],
+				documentIdentities: [{ role: 'editor' }],
+				dependencyState: undefined,
+			} as never,
+			'full'
+		);
+
+		expect(full.mode).toBe('full');
+
+		expect((full as { values: Array<[string, unknown]> }).values).toEqual([
+			[
+				JSON.stringify(['editor', 'articles', 'read']),
+				{
+					permissions: { status: { _eq: 'published' } },
+					validation: { owner: { _eq: '$CURRENT_USER' } },
+					presets: { status: 'published' },
+					fields: ['body', 'title'],
+				},
+			],
+		]);
+	});
+});
