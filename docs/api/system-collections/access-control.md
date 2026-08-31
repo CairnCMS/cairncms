@@ -143,6 +143,7 @@ A permission row is a tuple of role, collection, and action plus the rules that 
 | `PATCH` | `/permissions/<id>` | Update a single permission. |
 | `DELETE` | `/permissions` | Delete many permissions. |
 | `DELETE` | `/permissions/<id>` | Delete a single permission. |
+| `GET` | `/permissions/me/<collection>[/<key>]` | The current user's update, delete, and share access on one item. |
 
 ### Permission record fields
 
@@ -158,6 +159,37 @@ A permission row is a tuple of role, collection, and action plus the rules that 
 A read or write that matches no permission row for a non-admin role is denied. The `permissions`, `validation`, and `presets` filters can reference filter variables (`$NOW`, `$CURRENT_USER`, `$CURRENT_ROLE`) to scope rules per caller.
 
 Permissions on system collections work the same way as permissions on user collections, with one caveat: the platform-managed minimum permissions for app-access roles are projected at read time rather than stored as rows, so they are invisible to `/permissions` queries. See [Config as code / What a config snapshot captures](/docs/manage/config-as-code/#what-a-config-snapshot-captures) for the full picture.
+
+### `GET /permissions/me/<collection>[/<key>]`
+
+Use this endpoint to decide whether to show update, delete, or share controls for a stored item. CairnCMS evaluates conditional permission filters against the stored row and returns the current result. The API checks authorization again when the client submits the action.
+
+The endpoint requires an authenticated user. Unauthenticated callers, including the Public role and share visitors, receive `401`.
+
+```http
+GET /permissions/me/articles/42
+```
+
+The response carries an `ItemPermissions` object:
+
+```json
+{
+  "data": {
+    "update": { "access": true, "fields": ["*"] },
+    "delete": { "access": false },
+    "share": { "access": false }
+  }
+}
+```
+
+- **`update.access`**, **`delete.access`**, **`share.access`** — whether the caller may perform each action on this item, after the row's field values are checked against any permission filter.
+- **`update.fields`** — the fields the caller may modify: `["*"]` for all fields, a non-empty list for a restricted field set, `[]` when no fields are editable, and `null` when update is denied. `delete` and `share` carry only `access`.
+
+For a singleton collection, which stores one row, omit the key. An empty singleton returns `access: false` for every action. Ordinary collections require a key. Requests without one return `400`.
+
+When a key is supplied, the API returns the fully denied response for a nonexistent item, an unknown collection, a malformed key, or an existing item for which all three actions are denied. In this response, every `access` value is `false` and `update.fields` is `null`. This prevents a denied response from revealing whether the row exists.
+
+The SDK exposes this endpoint as `readItemPermissions(collection, key?)`, which returns the same `ItemPermissions` shape.
 
 ## Shares (`/shares`)
 
