@@ -45,6 +45,7 @@ transactionSpy.mockImplementation(async (cb: any) => cb(trxStub));
 
 vi.mock('../database/index.js', () => ({
 	default: vi.fn(() => ({ transaction: transactionSpy })),
+	getDatabaseClient: vi.fn(() => 'postgres'),
 }));
 
 vi.mock('./get-schema.js', () => ({ getSchema: vi.fn(async () => ({ collections: {}, relations: [] })) }));

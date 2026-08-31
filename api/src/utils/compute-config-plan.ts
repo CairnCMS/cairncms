@@ -1,10 +1,13 @@
 import type { CairnConfig, ConfigKind, ConfigPlan, ConfigProtection, ProtectionContributor } from '../types/config.js';
+import { leavesAtLeastOneAdmin } from './admin-continuity.js';
 import { makeDependencyAccessor } from './config/dependency-context.js';
 import { computeKindPlan } from './config/diff.js';
 import { dependencyClosure, dependencyOrder } from './config/graph.js';
 import { getDescriptor, listConfigKinds } from './config/registry.js';
 
 const ADMIN_CONTINUITY_MESSAGE = 'Configuration must retain at least one role with administrator access.';
+
+const EMPTY: ReadonlySet<string> = new Set();
 
 function emptyKindPlan(): { create: never[]; update: never[]; delete: never[] } {
 	return { create: [], update: [], delete: [] };
@@ -77,10 +80,9 @@ function computeAdminContinuityProtections(
 		if (change.before === true && change.after === false) {
 			removals.push({ kind: 'roles', operation: 'update', identity: { key: update.key } });
 
-			const others = new Set(admins);
-			others.delete(update.key);
-
-			if (others.size === 0) return [protection(removals)];
+			if (!leavesAtLeastOneAdmin({ currentAdmins: admins, removing: new Set([update.key]), adding: EMPTY })) {
+				return [protection(removals)];
+			}
 
 			admins.delete(update.key);
 		}
@@ -90,9 +92,12 @@ function computeAdminContinuityProtections(
 		if (!admins.has(key)) continue;
 
 		removals.push({ kind: 'roles', operation: 'delete', identity: { key } });
-		admins.delete(key);
 
-		if (admins.size === 0) return [protection(removals)];
+		if (!leavesAtLeastOneAdmin({ currentAdmins: admins, removing: new Set([key]), adding: EMPTY })) {
+			return [protection(removals)];
+		}
+
+		admins.delete(key);
 	}
 
 	return [];

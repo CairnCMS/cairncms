@@ -2,13 +2,15 @@ import { BaseException } from '@cairncms/exceptions';
 import type { SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import { flushCaches } from '../cache.js';
+import { runInBoundSerializable, lifecycleContextFor } from '../database/bound-transaction.js';
 import getDatabase from '../database/index.js';
+import { isSerializationConflict } from '../database/serialization-error.js';
 import emitter from '../emitter.js';
 import { ConfigApplyFailedException } from '../exceptions/config-apply-failed.js';
 import { ConfigPostCommitFailedException } from '../exceptions/config-post-commit-failed.js';
+import { ConfigStateChangedException } from '../exceptions/config-state-changed.js';
 import { ConfigProtectedRecordException } from '../exceptions/config-protected-record.js';
 import { DestructiveChangesRequiredException } from '../exceptions/destructive-changes-required.js';
-import type { ActionEventParams } from '../types/index.js';
 import type { ApplyResult, ConfigApplySecurityContext, ConfigKind, ConfigPlan } from '../types/config.js';
 import { makeDependencyAccessor } from './config/dependency-context.js';
 import type { ConfigApplyMutationOptions } from './config/descriptor.js';
@@ -57,78 +59,83 @@ export async function applyConfigPlan(plan: ConfigPlan, opts: ApplyOptions): Pro
 
 	const database = opts.database ?? getDatabase();
 	const schema = opts.schema ?? (await getSchema({ database, bypassCache: true }));
-	const nestedActionEvents: ActionEventParams[] = [];
-
-	const mutationOptions: ConfigApplyMutationOptions = {
-		autoPurgeCache: false,
-		autoPurgeSystemCache: false,
-		bypassLimits: true,
-		bypassEmitAction: (params) => nestedActionEvents.push(params),
-	};
-
 	const closure = dependencyOrder([...dependencyClosure(active, (kind) => getDescriptor(kind).dependencies)]);
 	const slices = new Map<ConfigKind, unknown>();
 
 	try {
-		await database.transaction(async (trx) => {
-			const published = new Map<ConfigKind, unknown>();
+		await runInBoundSerializable(
+			database,
+			async (trx) => {
+				const context = lifecycleContextFor(trx)!;
 
-			for (const kind of active) slices.set(kind, getDescriptor(kind).handler.emptyResult());
+				const mutationOptions: ConfigApplyMutationOptions = {
+					autoPurgeCache: false,
+					autoPurgeSystemCache: false,
+					bypassLimits: true,
+					bypassEmitAction: (params) => context.events.push(params),
+				};
 
-			const contextFor = (kind: ConfigKind) => ({
-				database: trx,
-				schema,
-				securityContext: opts.context,
-				mutationOptions,
-				dependency: makeDependencyAccessor(getDescriptor(kind).dependencies, published),
-			});
+				const published = new Map<ConfigKind, unknown>();
 
-			for (const kind of closure) {
-				const { handler } = getDescriptor(kind);
+				for (const kind of active) slices.set(kind, getDescriptor(kind).handler.emptyResult());
 
-				if (active.includes(kind)) {
-					if (plan[kind].create.length > 0) {
-						const outcome = await handler.applyCreates(plan[kind].create as never, contextFor(kind) as never);
-						slices.set(kind, handler.mergeOutcome(slices.get(kind) as never, outcome as never));
+				const contextFor = (kind: ConfigKind) => ({
+					database: trx,
+					schema,
+					securityContext: opts.context,
+					mutationOptions,
+					dependency: makeDependencyAccessor(getDescriptor(kind).dependencies, published),
+				});
+
+				for (const kind of closure) {
+					const { handler } = getDescriptor(kind);
+
+					if (active.includes(kind)) {
+						if (plan[kind].create.length > 0) {
+							const outcome = await handler.applyCreates(plan[kind].create as never, contextFor(kind) as never);
+							slices.set(kind, handler.mergeOutcome(slices.get(kind) as never, outcome as never));
+						}
+
+						if (plan[kind].update.length > 0) {
+							const outcome = await handler.applyUpdates(plan[kind].update as never, contextFor(kind) as never);
+							slices.set(kind, handler.mergeOutcome(slices.get(kind) as never, outcome as never));
+						}
 					}
 
-					if (plan[kind].update.length > 0) {
-						const outcome = await handler.applyUpdates(plan[kind].update as never, contextFor(kind) as never);
+					published.set(kind, await handler.readApplyDependencyState(contextFor(kind) as never));
+				}
+
+				for (const kind of reverseDependencyOrder([...closure])) {
+					const { handler } = getDescriptor(kind);
+
+					if (active.includes(kind) && plan[kind].delete.length > 0) {
+						const outcome = await handler.applyDeletes(plan[kind].delete as never, contextFor(kind) as never);
 						slices.set(kind, handler.mergeOutcome(slices.get(kind) as never, outcome as never));
 					}
 				}
+			},
+			async (context) => {
+				let cacheError: unknown;
 
-				published.set(kind, await handler.readApplyDependencyState(contextFor(kind) as never));
-			}
-
-			for (const kind of reverseDependencyOrder([...closure])) {
-				const { handler } = getDescriptor(kind);
-
-				if (active.includes(kind) && plan[kind].delete.length > 0) {
-					const outcome = await handler.applyDeletes(plan[kind].delete as never, contextFor(kind) as never);
-					slices.set(kind, handler.mergeOutcome(slices.get(kind) as never, outcome as never));
+				try {
+					await flushCaches();
+				} catch (err) {
+					cacheError = err;
 				}
+
+				// The mutation is committed; still dispatch its action events if cache invalidation fails.
+				for (const actionEvent of context.events) {
+					await emitter.emitActionAndWait(actionEvent.event, actionEvent.meta, actionEvent.context);
+				}
+
+				if (cacheError !== undefined) throw new ConfigPostCommitFailedException();
 			}
-		});
+		);
 	} catch (err) {
+		if (isSerializationConflict(err)) throw new ConfigStateChangedException();
 		if (err instanceof BaseException) throw err;
 		throw new ConfigApplyFailedException();
 	}
-
-	let cacheError: unknown;
-
-	try {
-		await flushCaches();
-	} catch (err) {
-		cacheError = err;
-	}
-
-	// The mutation is committed; still dispatch its action events if cache invalidation fails.
-	for (const actionEvent of nestedActionEvents) {
-		await emitter.emitActionAndWait(actionEvent.event, actionEvent.meta, actionEvent.context);
-	}
-
-	if (cacheError !== undefined) throw new ConfigPostCommitFailedException();
 
 	return assembleResult(slices);
 }
