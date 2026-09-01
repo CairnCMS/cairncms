@@ -217,6 +217,7 @@ const revisionsDrawerDetailRef = ref<InstanceType<typeof RevisionsDrawerDetail> 
 
 const {
 	isNew,
+	isNewOrEmptySingleton,
 	edits,
 	hasEdits,
 	item,
@@ -277,7 +278,7 @@ const { createAllowed, deleteAllowed, saveAllowed, updateAllowed, fields, revisi
 	ref('directus_files'),
 	item,
 	isNew,
-	{ primaryKey, loading, error }
+	{ primaryKey, loading, error, isNewOrEmptySingleton, isBatch }
 );
 
 const fieldsFiltered = computed(() => {

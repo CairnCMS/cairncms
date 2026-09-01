@@ -21,6 +21,8 @@ type ItemContext = {
 	primaryKey: Ref<string | number | null>;
 	loading: Ref<boolean>;
 	error: Ref<unknown>;
+	isNewOrEmptySingleton: Ref<boolean>;
+	isBatch: Ref<boolean>;
 };
 
 export function usePermissions(
@@ -34,7 +36,7 @@ export function usePermissions(
 
 	const { info: collectionInfo, primaryKeyField } = useCollection(collection);
 
-	const { fields } = useFieldPermissions(collection, isNew);
+	const { fields } = useFieldPermissions(collection, context.isNewOrEmptySingleton);
 
 	const isAdmin = computed(() => userStore.currentUser?.role?.admin_access === true);
 
@@ -45,26 +47,44 @@ export function usePermissions(
 		return item.value?.[keyField] ?? null;
 	});
 
-	const itemReady = computed(() => {
+	const isSingleton = computed(() => collectionInfo.value?.meta?.singleton === true);
+	const isEmptySingleton = computed(() => context.isNewOrEmptySingleton.value && isNew.value === false);
+
+	const loadCurrent = computed(() => {
 		if (isNew.value) return false;
 		if (context.loading.value === true) return false;
 		if (context.error.value != null) return false;
-		if (item.value == null || loadedKey.value === null) return false;
+		return item.value != null;
+	});
+
+	const capabilityReady = computed(() => {
+		if (loadCurrent.value === false) return false;
+		if (context.isBatch.value === true) return false;
+		if (isEmptySingleton.value === true) return false;
+		if (loadedKey.value === null) return false;
 
 		const requested = context.primaryKey.value ?? null;
 
-		if (collectionInfo.value?.meta?.singleton === true) return requested === null;
+		if (isSingleton.value === true) return requested === null;
 
 		if (requested === null) return false;
 
 		return String(loadedKey.value) === String(requested);
 	});
 
+	const localReady = computed(() => {
+		if (loadCurrent.value === false) return false;
+		if (isEmptySingleton.value === true) return false;
+		if (context.isBatch.value === true) return true;
+
+		return capabilityReady.value;
+	});
+
 	const needsServerCheck = computed(
-		() => itemReady.value && hasConditionalItemPermission(collection.value, ['update', 'delete', 'share'])
+		() => capabilityReady.value && hasConditionalItemPermission(collection.value, ['update', 'delete', 'share'])
 	);
 
-	const primaryKey = computed<string | number | null>(() => (itemReady.value ? loadedKey.value : null));
+	const primaryKey = computed<string | number | null>(() => (capabilityReady.value ? loadedKey.value : null));
 
 	const { itemPermissions } = useItemPermissions(collection, primaryKey, needsServerCheck, item);
 
@@ -83,26 +103,33 @@ export function usePermissions(
 	});
 
 	const deleteAllowed = computed(() =>
-		itemActionAllowed(collection.value, 'delete', itemPermissions.value, itemReady.value)
+		itemActionAllowed(collection.value, 'delete', itemPermissions.value, localReady.value, capabilityReady.value)
 	);
+
+	const updateAllowed = computed(() => {
+		if (isEmptySingleton.value) return createAllowed.value;
+		return itemActionAllowed(
+			collection.value,
+			'update',
+			itemPermissions.value,
+			localReady.value,
+			capabilityReady.value
+		);
+	});
 
 	const saveAllowed = computed(() => {
 		if (isNew.value) return true;
-		return itemActionAllowed(collection.value, 'update', itemPermissions.value, itemReady.value);
+		return updateAllowed.value;
 	});
 
-	const updateAllowed = computed(() =>
-		itemActionAllowed(collection.value, 'update', itemPermissions.value, itemReady.value)
-	);
-
 	const shareAllowed = computed(() =>
-		itemActionAllowed(collection.value, 'share', itemPermissions.value, itemReady.value)
+		itemActionAllowed(collection.value, 'share', itemPermissions.value, localReady.value, capabilityReady.value)
 	);
 
 	const archiveAllowed = computed(() => {
 		const archiveField = collectionInfo.value?.meta?.archive_field;
 		if (!archiveField) return false;
-		if (!itemReady.value) return false;
+		if (localReady.value === false) return false;
 		if (isAdmin.value) return true;
 
 		const permission = permissionsStore.getPermissionsForUser(collection.value, 'update');
@@ -112,6 +139,7 @@ export function usePermissions(
 			return fieldEditable(permission.fields, archiveField);
 		}
 
+		if (capabilityReady.value === false) return false;
 		if (itemPermissions.value?.update.access !== true) return false;
 		return fieldEditable(itemPermissions.value.update.fields, archiveField);
 	});

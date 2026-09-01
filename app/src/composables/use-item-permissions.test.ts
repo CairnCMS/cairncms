@@ -45,43 +45,57 @@ describe('itemActionAllowed', () => {
 		setUser(true);
 		setPermissions([]);
 
-		expect(itemActionAllowed('articles', 'update', null, false)).toBe(false);
+		expect(itemActionAllowed('articles', 'update', null, false, false)).toBe(false);
 	});
 
 	it('allows any action for an admin once the item is ready', () => {
 		setUser(true);
 		setPermissions([]);
 
-		expect(itemActionAllowed('articles', 'update', null, true)).toBe(true);
+		expect(itemActionAllowed('articles', 'update', null, true, true)).toBe(true);
 	});
 
 	it('denies when there is no matching permission', () => {
 		setUser(false);
 		setPermissions([]);
 
-		expect(itemActionAllowed('articles', 'update', null, true)).toBe(false);
+		expect(itemActionAllowed('articles', 'update', null, true, true)).toBe(false);
 	});
 
 	it('allows an unconditional permission without the server result', () => {
 		setUser(false);
 		setPermissions([permission('update', null)]);
 
-		expect(itemActionAllowed('articles', 'update', null, true)).toBe(true);
+		expect(itemActionAllowed('articles', 'update', null, true, true)).toBe(true);
 	});
 
 	it('defers a conditional permission to the server access result', () => {
 		setUser(false);
 		setPermissions([permission('update', { status: { _eq: 'published' } })]);
 
-		expect(itemActionAllowed('articles', 'update', allowed, true)).toBe(true);
-		expect(itemActionAllowed('articles', 'update', denied, true)).toBe(false);
+		expect(itemActionAllowed('articles', 'update', allowed, true, true)).toBe(true);
+		expect(itemActionAllowed('articles', 'update', denied, true, true)).toBe(false);
 	});
 
 	it('is unavailable for a conditional permission when the server result is missing', () => {
 		setUser(false);
 		setPermissions([permission('update', { status: { _eq: 'x' } })]);
 
-		expect(itemActionAllowed('articles', 'update', null, true)).toBe(false);
+		expect(itemActionAllowed('articles', 'update', null, true, true)).toBe(false);
+	});
+
+	it('fails a conditional permission closed when locally ready but not capability ready', () => {
+		setUser(false);
+		setPermissions([permission('update', { status: { _eq: 'published' } })]);
+
+		expect(itemActionAllowed('articles', 'update', allowed, true, false)).toBe(false);
+	});
+
+	it('allows an unconditional permission when locally ready without capability readiness', () => {
+		setUser(false);
+		setPermissions([permission('update', null)]);
+
+		expect(itemActionAllowed('articles', 'update', null, true, false)).toBe(true);
 	});
 });
 

@@ -86,11 +86,11 @@ const { itemPermissions } = useItemPermissions(
 );
 
 const editAllowed = computed(() =>
-	itemActionAllowed('directus_shares', 'update', itemPermissions.value, itemReady.value)
+	itemActionAllowed('directus_shares', 'update', itemPermissions.value, itemReady.value, itemReady.value)
 );
 
 const deleteAllowed = computed(() =>
-	itemActionAllowed('directus_shares', 'delete', itemPermissions.value, itemReady.value)
+	itemActionAllowed('directus_shares', 'delete', itemPermissions.value, itemReady.value, itemReady.value)
 );
 
 const usesLeft = computed(() => {

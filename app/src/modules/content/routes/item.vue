@@ -289,6 +289,8 @@ const { info: collectionInfo, defaults, primaryKeyField, isSingleton, accountabi
 
 const {
 	isNew,
+	isNewOrEmptySingleton,
+	isBatch,
 	edits,
 	hasEdits,
 	item,
@@ -381,7 +383,7 @@ const {
 	shareAllowed,
 	fields,
 	revisionsAllowed,
-} = usePermissions(collection, item, isNew, { primaryKey, loading, error });
+} = usePermissions(collection, item, isNew, { primaryKey, loading, error, isNewOrEmptySingleton, isBatch });
 
 const internalPrimaryKey = computed(() => {
 	if (unref(loading)) return '+';

@@ -15,9 +15,10 @@ export function itemActionAllowed(
 	collection: string,
 	action: ItemAction,
 	itemPermissions: ItemPermissions | null,
-	itemReady: boolean
+	localReady: boolean,
+	capabilityReady: boolean
 ): boolean {
-	if (!itemReady) return false;
+	if (!localReady) return false;
 
 	const userStore = useUserStore();
 	const permissionsStore = usePermissionsStore();
@@ -27,6 +28,8 @@ export function itemActionAllowed(
 	const permission = permissionsStore.getPermissionsForUser(collection, action);
 	if (!permission) return false;
 	if (isUnconditional(permission)) return true;
+
+	if (!capabilityReady) return false;
 
 	return itemPermissions?.[action].access === true;
 }

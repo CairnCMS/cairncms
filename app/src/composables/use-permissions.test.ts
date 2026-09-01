@@ -92,6 +92,8 @@ describe('usePermissions item actions', () => {
 		loading?: boolean;
 		error?: unknown;
 		isNew?: boolean;
+		isNewOrEmptySingleton?: boolean;
+		isBatch?: boolean;
 		archiveField?: string;
 		singleton?: boolean;
 	}) {
@@ -103,6 +105,8 @@ describe('usePermissions item actions', () => {
 			primaryKey: ref(options.requestedKey ?? null),
 			loading: ref(options.loading ?? false),
 			error: ref(options.error ?? null),
+			isNewOrEmptySingleton: ref(options.isNewOrEmptySingleton ?? false),
+			isBatch: ref(options.isBatch ?? false),
 		});
 	}
 
@@ -273,7 +277,14 @@ describe('usePermissions item actions', () => {
 		const primaryKey = ref<string | null>('5');
 		const error = ref<unknown>(null);
 
-		usePermissions(ref('test'), item, ref(false), { primaryKey, loading, error });
+		usePermissions(ref('test'), item, ref(false), {
+			primaryKey,
+			loading,
+			error,
+			isNewOrEmptySingleton: ref(false),
+			isBatch: ref(false),
+		});
+
 		await flushPromises();
 
 		expect(me.paths).toEqual([]);
@@ -296,7 +307,14 @@ describe('usePermissions item actions', () => {
 		const primaryKey = ref<string | null>('5');
 		const error = ref<unknown>(null);
 
-		usePermissions(ref('test'), item, ref(false), { primaryKey, loading, error });
+		usePermissions(ref('test'), item, ref(false), {
+			primaryKey,
+			loading,
+			error,
+			isNewOrEmptySingleton: ref(false),
+			isBatch: ref(false),
+		});
+
 		await flushPromises();
 
 		expect(me.paths).toEqual(['/permissions/me/test/5']);
@@ -312,6 +330,131 @@ describe('usePermissions item actions', () => {
 		await flushPromises();
 
 		expect(updateAllowed.value).toBe(true);
+		expect(me.paths).toEqual([]);
+	});
+
+	function createPermission(filter: Record<string, any> | null = null) {
+		return { collection: 'test', action: 'create', role: 'role-1', permissions: filter };
+	}
+
+	test('enables save and edit on an empty singleton through create authority for an admin', async () => {
+		const { saveAllowed, updateAllowed, deleteAllowed, shareAllowed, archiveAllowed } = setup({
+			admin: true,
+			item: { id: null },
+			requestedKey: null,
+			singleton: true,
+			isNewOrEmptySingleton: true,
+			archiveField: 'status',
+		});
+
+		await flushPromises();
+
+		expect(saveAllowed.value).toBe(true);
+		expect(updateAllowed.value).toBe(true);
+		expect(deleteAllowed.value).toBe(false);
+		expect(shareAllowed.value).toBe(false);
+		expect(archiveAllowed.value).toBe(false);
+		expect(me.paths).toEqual([]);
+	});
+
+	test('enables an empty singleton for a non-admin with create permission and denies one without', async () => {
+		const withCreate = setup({
+			admin: false,
+			permissions: [createPermission()],
+			item: { id: null },
+			requestedKey: null,
+			singleton: true,
+			isNewOrEmptySingleton: true,
+		});
+
+		await flushPromises();
+
+		expect(withCreate.saveAllowed.value).toBe(true);
+		expect(withCreate.updateAllowed.value).toBe(true);
+		expect(me.paths).toEqual([]);
+
+		const withoutCreate = setup({
+			admin: false,
+			permissions: [],
+			item: { id: null },
+			requestedKey: null,
+			singleton: true,
+			isNewOrEmptySingleton: true,
+		});
+
+		await flushPromises();
+
+		expect(withoutCreate.saveAllowed.value).toBe(false);
+		expect(withoutCreate.updateAllowed.value).toBe(false);
+		expect(me.paths).toEqual([]);
+	});
+
+	test('applies create field restrictions to an empty singleton form', async () => {
+		const { fields } = setup({
+			admin: false,
+			permissions: [
+				{ collection: 'test', action: 'read', role: 'role-1', fields: ['*'] },
+				{ collection: 'test', action: 'create', role: 'role-1', permissions: null, fields: ['name'] },
+				{ collection: 'test', action: 'update', role: 'role-1', permissions: null, fields: ['start_date'] },
+			],
+			item: { id: null },
+			requestedKey: null,
+			singleton: true,
+			isNewOrEmptySingleton: true,
+		});
+
+		await flushPromises();
+
+		const name = fields.value.find((field) => field.field === 'name');
+		const startDate = fields.value.find((field) => field.field === 'start_date');
+
+		expect((name?.meta as any)?.readonly).not.toBe(true);
+		expect((startDate?.meta as any)?.readonly).toBe(true);
+	});
+
+	test('resolves batch actions locally for an admin without a capability request', async () => {
+		const { updateAllowed, deleteAllowed, saveAllowed } = setup({
+			admin: true,
+			item: {},
+			requestedKey: '1,2,3',
+			isBatch: true,
+		});
+
+		await flushPromises();
+
+		expect(updateAllowed.value).toBe(true);
+		expect(deleteAllowed.value).toBe(true);
+		expect(saveAllowed.value).toBe(true);
+		expect(me.paths).toEqual([]);
+	});
+
+	test('allows a batch through an unconditional permission without a capability request', async () => {
+		const { updateAllowed } = setup({
+			admin: false,
+			permissions: [updatePermission(null, ['*'])],
+			item: {},
+			requestedKey: '1,2',
+			isBatch: true,
+		});
+
+		await flushPromises();
+
+		expect(updateAllowed.value).toBe(true);
+		expect(me.paths).toEqual([]);
+	});
+
+	test('fails a batch closed for a conditional permission and issues no capability request', async () => {
+		const { updateAllowed } = setup({
+			admin: false,
+			permissions: [updatePermission({ status: { _eq: 'x' } }, ['*'])],
+			item: {},
+			requestedKey: '1,2',
+			isBatch: true,
+		});
+
+		await flushPromises();
+
+		expect(updateAllowed.value).toBe(false);
 		expect(me.paths).toEqual([]);
 	});
 });

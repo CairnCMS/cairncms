@@ -2,6 +2,7 @@ import api from '@/api';
 import { useCollection } from '@cairncms/composables';
 import { AppCollection, Field } from '@cairncms/types';
 import { createTestingPinia } from '@pinia/testing';
+import { flushPromises } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { computed, ref } from 'vue';
@@ -17,11 +18,15 @@ vi.mock('@/api', () => {
 		default: {
 			get: vi.fn(),
 			post: vi.fn(),
+			patch: vi.fn(),
 		},
 	};
 });
 
 vi.mock('@cairncms/composables');
+
+const { validateItemMock } = vi.hoisted(() => ({ validateItemMock: vi.fn(() => [] as any[]) }));
+vi.mock('@/utils/validate-item', () => ({ validateItem: (...args: any[]) => validateItemMock(...args) }));
 
 beforeEach(() => {
 	setActivePinia(
@@ -223,5 +228,121 @@ describe('Save As Copy', () => {
 		await saveAsCopy();
 
 		expect(apiPostSpy.mock.lastCall![1]).not.toHaveProperty(mockPrimaryKeyFieldName);
+	});
+});
+
+describe('empty singleton state', () => {
+	const apiGetSpy = vi.mocked(api.get);
+	const apiPatchSpy = vi.mocked(api.patch);
+
+	const idField = {
+		collection: 'test',
+		field: 'id',
+		type: 'string',
+		schema: { is_primary_key: true, is_generated: false },
+		meta: { collection: 'test', field: 'id', special: null },
+	} as unknown as Field;
+
+	function mockSingleton() {
+		vi.mocked(useCollection).mockReturnValue({
+			info: computed(
+				() => ({ collection: 'test', name: 'test', meta: { singleton: true }, schema: {} } as AppCollection)
+			),
+			primaryKeyField: computed(() => idField),
+			fields: computed(() => [idField]),
+		} as any);
+	}
+
+	test('derives create state from a loaded empty singleton', async () => {
+		mockSingleton();
+		apiGetSpy.mockResolvedValue({ data: { data: { id: null } } });
+
+		const { isNew, isNewOrEmptySingleton } = useItem(ref('test'), ref(null));
+		await flushPromises();
+
+		expect(isNew.value).toBe(false);
+		expect(isNewOrEmptySingleton.value).toBe(true);
+	});
+
+	test('treats a populated singleton as not create', async () => {
+		mockSingleton();
+		apiGetSpy.mockResolvedValue({ data: { data: { id: 1 } } });
+
+		const { isNewOrEmptySingleton } = useItem(ref('test'), ref(null));
+		await flushPromises();
+
+		expect(isNewOrEmptySingleton.value).toBe(false);
+	});
+
+	test('treats a singleton loaded without its key property as not create', async () => {
+		mockSingleton();
+		apiGetSpy.mockResolvedValue({ data: { data: { name: 'loaded' } } });
+
+		const { isNewOrEmptySingleton } = useItem(ref('test'), ref(null));
+		await flushPromises();
+
+		expect(isNewOrEmptySingleton.value).toBe(false);
+	});
+
+	test('treats a failed singleton load as not create', async () => {
+		mockSingleton();
+		apiGetSpy.mockRejectedValue(new Error('nope'));
+
+		const { isNewOrEmptySingleton } = useItem(ref('test'), ref(null));
+		await flushPromises();
+
+		expect(isNewOrEmptySingleton.value).toBe(false);
+	});
+
+	test('treats the new-item route as create', async () => {
+		mockSingleton();
+
+		const { isNew, isNewOrEmptySingleton } = useItem(ref('test'), ref('+'));
+		await flushPromises();
+
+		expect(isNew.value).toBe(true);
+		expect(isNewOrEmptySingleton.value).toBe(true);
+	});
+
+	test('runs create-mode validation when saving an empty singleton', async () => {
+		mockSingleton();
+		apiGetSpy.mockResolvedValue({ data: { data: { id: null } } });
+		apiPatchSpy.mockResolvedValue({ data: { data: { id: 1 } } });
+
+		const { save } = useItem(ref('test'), ref(null));
+		await flushPromises();
+
+		await save();
+
+		expect(validateItemMock.mock.calls.at(-1)?.[2]).toBe(true);
+	});
+
+	test('blocks an empty singleton save when validation fails and does not patch', async () => {
+		mockSingleton();
+		apiGetSpy.mockResolvedValue({ data: { data: { id: null } } });
+		validateItemMock.mockReturnValueOnce([{ field: 'name', type: 'required' }] as any);
+
+		const { save } = useItem(ref('test'), ref(null));
+		await flushPromises();
+
+		await expect(save()).rejects.toBeDefined();
+		expect(apiPatchSpy).not.toHaveBeenCalled();
+	});
+
+	test('saves an empty singleton through patch and returns to populated state', async () => {
+		mockSingleton();
+		apiGetSpy.mockResolvedValue({ data: { data: { id: null } } });
+		apiPatchSpy.mockResolvedValue({ data: { data: { id: 1 } } });
+
+		const { save, isNewOrEmptySingleton } = useItem(ref('test'), ref(null));
+		await flushPromises();
+
+		expect(isNewOrEmptySingleton.value).toBe(true);
+
+		await save();
+		await flushPromises();
+
+		expect(apiPatchSpy).toHaveBeenCalled();
+		expect(isNewOrEmptySingleton.value).toBe(false);
 	});
 });
