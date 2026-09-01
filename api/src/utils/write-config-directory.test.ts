@@ -73,6 +73,31 @@ describe('writeConfigDirectory', () => {
 		expect(perms.permissions).toHaveLength(1);
 	});
 
+	it('refuses a role key that would escape the config directory and writes nothing', async () => {
+		const manifestPath = path.join(tmpDir, 'cairncms-config.yaml');
+		await fs.writeFile(manifestPath, dumpYaml({ version: 1, resources: [], sentinel: 'original' }));
+
+		const config = makeConfig({
+			roles: [{ key: '../cairncms-config', name: 'Evil', admin_access: true, app_access: true }],
+		});
+
+		await expect(writeConfigDirectory(config, tmpDir)).rejects.toBeInstanceOf(ConfigInvalidException);
+
+		expect((await readYaml(manifestPath)).sentinel).toBe('original');
+		await expect(fs.access(path.join(tmpDir, 'roles'))).rejects.toThrow();
+	});
+
+	it('refuses a duplicate role identity', async () => {
+		const config = makeConfig({
+			roles: [
+				{ key: 'editor', name: 'Editor', admin_access: false, app_access: true },
+				{ key: 'editor', name: 'Editor Again', admin_access: false, app_access: true },
+			],
+		});
+
+		await expect(writeConfigDirectory(config, tmpDir)).rejects.toBeInstanceOf(ConfigInvalidException);
+	});
+
 	it('sorts roles by key', async () => {
 		const config = makeConfig({
 			roles: [

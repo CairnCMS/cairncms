@@ -6,6 +6,7 @@ import env from '../env.js';
 import {
 	ConfigIdentityConflictException,
 	ConfigInvalidException,
+	ConfigUnsupportedVersionException,
 	ForbiddenException,
 	UnsupportedMediaTypeException,
 } from '../exceptions/index.js';
@@ -13,14 +14,16 @@ import { respond } from '../middleware/respond.js';
 import asyncHandler from '../utils/async-handler.js';
 import { applyConfigPlan } from '../utils/apply-config-plan.js';
 import { computeConfigPlan } from '../utils/compute-config-plan.js';
+import { SUPPORTED_MANIFEST_VERSION } from '../utils/config-contract.js';
 import { enrichConfigPlan } from '../utils/enrich-config-plan.js';
-import { getConfigSnapshot, readCurrentConfig } from '../utils/get-config-snapshot.js';
+import { readCurrentConfig } from '../utils/get-config-snapshot.js';
 import { serializeConfigPlan } from '../utils/serialize-config-plan.js';
 import { getSchema } from '../utils/get-schema.js';
 import { assertConfigValueSafe, parseConfigYaml } from '../utils/parse-config-document.js';
 import { isPlaceholder } from '../utils/read-config-directory.js';
+import { safeLogFragment } from '../utils/safe-log-fragment.js';
 import { validateConfigManifest, validateDesiredConfig } from '../utils/validate-desired-config.js';
-import type { CairnConfig, ConfigFailure, ConfigKind } from '../types/config.js';
+import { CONFIG_KINDS, type CairnConfig, type ConfigFailure, type ConfigKind } from '../types/config.js';
 
 const router = express.Router();
 
@@ -29,7 +32,8 @@ router.get(
 	asyncHandler(async (req, res, next) => {
 		if (req.accountability?.admin !== true) throw new ForbiddenException();
 
-		const config = await getConfigSnapshot();
+		const resources = parseSnapshotScope(req.query);
+		const { config } = await readCurrentConfig({ resources });
 
 		res.locals['payload'] = { data: config };
 		res.locals['cache'] = false;
@@ -88,10 +92,10 @@ router.post(
 
 		const plan = computeConfigPlan(current, config);
 
-		if (dryRun) {
-			const enrichment = await enrichConfigPlan(plan, config, { schema, database });
-			const serialized = serializeConfigPlan(plan, { enrichment, manifestVersion: manifest.version });
+		const enrichment = await enrichConfigPlan(plan, config, { schema, database });
+		const serialized = serializeConfigPlan(plan, { enrichment, manifestVersion: manifest.version });
 
+		if (dryRun) {
 			res.locals['payload'] = { data: serialized };
 
 			return next();
@@ -105,7 +109,7 @@ router.post(
 			expectedStateToken: stateToken,
 		});
 
-		res.locals['payload'] = { data: result };
+		res.locals['payload'] = { data: result, meta: { plan: serialized } };
 
 		return next();
 	}),
@@ -113,6 +117,38 @@ router.post(
 );
 
 const BODY_LABEL = 'request body';
+
+function parseSnapshotScope(query: Record<string, unknown>): ConfigKind[] {
+	const version = query['manifest_version'];
+
+	if (version !== undefined && (typeof version !== 'string' || version !== String(SUPPORTED_MANIFEST_VERSION))) {
+		throw new ConfigUnsupportedVersionException(
+			`Requested manifest version ${safeLogFragment(String(version))} is not supported. ` +
+				`This engine supports version ${SUPPORTED_MANIFEST_VERSION}.`
+		);
+	}
+
+	const requested = query['resources'];
+	let resources: string[];
+
+	if (requested === undefined) {
+		resources = [...CONFIG_KINDS];
+	} else if (typeof requested !== 'string') {
+		throw new ConfigInvalidException('The "resources" query parameter must be a single comma-separated value.');
+	} else if (requested === '') {
+		resources = [];
+	} else {
+		resources = requested.split(',');
+
+		if (resources.some((kind) => kind.length === 0)) {
+			throw new ConfigInvalidException('The "resources" query parameter has an empty member.');
+		}
+	}
+
+	const manifest = validateConfigManifest({ version: SUPPORTED_MANIFEST_VERSION, resources }, 'snapshot query');
+
+	return [...manifest.resources];
+}
 
 function parseDesiredConfig(req: express.Request): unknown {
 	if (req.is('application/json')) {

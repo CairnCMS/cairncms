@@ -46,7 +46,7 @@ The CLI and the HTTP API share the same plan/apply engine but differ in how they
 | Invocation | Local `cairncms` binary | Bearer-authed HTTP |
 | Safety | Interactive confirmation | Opt-in query flags |
 
-The CLI suits local development and GitOps pipelines where the directory tree is committed to source control and applied by a runner that has container access. The HTTP API suits remote instances behind a load balancer, automation that lives outside the container, and tooling in any language.
+The CLI suits local development and GitOps pipelines where the directory tree is committed to source control and applied by a runner that has container access. The HTTP API suits remote instances behind a load balancer, automation that lives outside the container, and tooling in any language. The CLI can also drive a remote instance's HTTP surface directly with `--url`, keeping the directory workflow while targeting a server it does not share a container with (see [Applying to a remote instance](#applying-to-a-remote-instance)).
 
 After loading input, both surfaces interpret managed scope and compute and apply changes the same way. The CLI also checks that each filename matches the identity declared by its record. For example, `roles/editor.yaml` must declare `key: editor`. HTTP payloads have no filenames, so this check does not apply.
 
@@ -183,6 +183,31 @@ The only protection currently defined is `ADMIN_CONTINUITY_REQUIRED`. CairnCMS a
 
 Consumers of `planVersion: 2` must ignore unknown properties, but reject an unknown `planVersion`, `kind`, or `operation`. An unfamiliar protection still blocks the apply, and an unfamiliar warning remains a warning. Additive fields do not change `planVersion`; breaking changes do. The input format's strictly validated `manifest.version` is independent of the plan version.
 
+### Applying to a remote instance
+
+Pass `--url` to run `config apply` or `config snapshot` against a CairnCMS server instead of a local database:
+
+```bash
+cairncms config apply --url https://cms.example.com --yes ./config
+cairncms config snapshot --url https://cms.example.com ./config
+```
+
+Remote mode uses the same directory and plan formats as local mode. It does not open a local database or require `DB_*` settings.
+
+Provide an administrator's static token through exactly one source:
+
+- **`CAIRNCMS_TOKEN`** for a CI secret or environment variable.
+- **`CAIRNCMS_TOKEN_FILE`** for a mounted secret file. On Unix, the file must be owner-only.
+- **`--token-stdin`** for a pipe or password-manager command.
+
+The token is never accepted as a command-line value. Supplying zero or multiple sources is a usage error.
+
+Use an absolute `http` or `https` URL without credentials, a query, or a fragment. Prefer `https`. The CLI warns before sending a token over unencrypted `http`, does not follow redirects or environment proxy settings, and blocks explicitly denied addresses.
+
+A mutating remote apply requires `--yes`; a dry run does not. The target must run CairnCMS 1.6.0 or newer.
+
+Remote protections, destructive-change checks, output, and exit codes match local mode. Requests time out after 30 seconds by default; set `CAIRNCMS_REMOTE_CONFIG_TIMEOUT` to a duration such as `60s` for slower deployments. After a mutating timeout, run `config snapshot` before retrying because the server may have committed the apply.
+
 ### Exit codes
 
 Both config commands map their outcome to an exit code, so a pipeline can branch on the result without parsing output:
@@ -206,11 +231,15 @@ Both config commands map their outcome to an exit code, so a pipeline can branch
 
 Exit `1` indicates drift. Exit `2` indicates invalid input, invalid command usage, or a refused destructive apply. Exit `3` indicates an operational or unexpected runtime failure.
 
+Remote mode (`--url`) maps onto the same scheme. A server below the required version, a `4xx` response, or a missing `--yes` on a mutating apply exits `2`. A transport failure, a `5xx` response, an unrecognized server version, or a malformed response exits `3`. If a mutating remote request fails after the server may already have committed, the message says so and re-running `config snapshot` shows the current state.
+
 ### Environment variables
 
 Fields that support interpolation accept a placeholder in the form `{{CAIRNCMS_CONFIG_<NAME>}}`. The placeholder must occupy the entire field value. The CLI reads the value from its environment before it builds a plan. A variable outside the `CAIRNCMS_CONFIG_` namespace or a variable that is not set stops the command.
 
 The HTTP API does not resolve placeholders. Send resolved values in the request body.
+
+Remote mode reads three further variables, none of which are interpolated into config records: `CAIRNCMS_TOKEN` or `CAIRNCMS_TOKEN_FILE` supplies the administrator token (see [Applying to a remote instance](#applying-to-a-remote-instance)), and `CAIRNCMS_REMOTE_CONFIG_TIMEOUT` overrides the 30-second per-request timeout.
 
 ## The HTTP API
 
@@ -221,9 +250,12 @@ The same workflow over HTTP, restricted to admin tokens.
 ```
 GET /config/snapshot
 GET /config/snapshot?export=yaml
+GET /config/snapshot?manifest_version=1&resources=roles,permissions
 ```
 
 Returns the current roles and permissions as a JSON payload, or as a YAML attachment when `?export=yaml` is set. The `data` envelope wraps the payload the same way every other CairnCMS API response does. The endpoint opts out of response caching, so subsequent calls always reflect the current database state.
+
+A snapshot request has no manifest body, so `manifest_version` and `resources` select the manifest written into the response. Omit them for the current version and all supported kinds. Use `resources=` for an explicitly empty scope. The remote CLI sends these values automatically from an existing local manifest, or uses its supported version and kinds for a new directory.
 
 ### Apply
 
@@ -245,26 +277,24 @@ Two query flags shape the apply:
 - **`?dry_run=true`** — compute and return the plan without writing. The response is the plan document, not an apply summary.
 - **`?destructive=true`** — authorize deletions during a mutating apply. Dry runs always return the complete plan.
 
-A mutating apply returns a summary of what changed:
+A mutating apply returns a summary like this under `data`:
 
 ```json
 {
-  "data": {
-    "roles": {
-      "created": ["editor"],
-      "updated": ["administrator"],
-      "deleted": []
-    },
-    "permissions": {
-      "created": 5,
-      "updated": 3,
-      "deleted": 0
-    }
+  "roles": {
+    "created": ["editor"],
+    "updated": ["administrator"],
+    "deleted": []
+  },
+  "permissions": {
+    "created": 5,
+    "updated": 3,
+    "deleted": 0
   }
 }
 ```
 
-Mutating applies return role keys and permission counts.
+The response also includes the plan computed before the mutation under `meta.plan`.
 
 A dry run returns the same plan document the CLI prints with `--dry-run --format json`, under the standard `data` envelope.
 

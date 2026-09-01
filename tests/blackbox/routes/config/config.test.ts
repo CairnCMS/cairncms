@@ -147,6 +147,129 @@ describe('Config-as-Code API', () => {
 				expect(Array.isArray(parsed.permissions)).toBe(true);
 			});
 		});
+
+		describe('scopes the snapshot to the requested resources', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const response = await request(getUrl(vendor))
+					.get('/config/snapshot')
+					.query({ resources: 'roles' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.manifest.resources).toEqual(['roles']);
+				expect(response.body.data.permissions).toEqual([]);
+			});
+		});
+
+		describe('treats an empty resources query as an explicitly empty scope', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const response = await request(getUrl(vendor))
+					.get('/config/snapshot')
+					.query({ resources: '' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.manifest.resources).toEqual([]);
+				expect(response.body.data.roles).toEqual([]);
+				expect(response.body.data.permissions).toEqual([]);
+			});
+		});
+
+		describe('rejects an unsupported manifest version', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const response = await request(getUrl(vendor))
+					.get('/config/snapshot')
+					.query({ manifest_version: '2' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_UNSUPPORTED_VERSION');
+			});
+		});
+
+		describe('rejects a non-canonical manifest version form', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const response = await request(getUrl(vendor))
+					.get('/config/snapshot')
+					.query({ manifest_version: '1e0' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_UNSUPPORTED_VERSION');
+			});
+		});
+
+		describe('rejects a repeated manifest_version parameter', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const response = await request(getUrl(vendor))
+					.get('/config/snapshot')
+					.query({ manifest_version: ['1', '1'] })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_UNSUPPORTED_VERSION');
+			});
+		});
+
+		describe('accepts the exact supported manifest version', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const response = await request(getUrl(vendor))
+					.get('/config/snapshot')
+					.query({ manifest_version: '1' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.manifest.version).toBe(1);
+			});
+		});
+
+		describe('rejects an unknown resource kind', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const response = await request(getUrl(vendor))
+					.get('/config/snapshot')
+					.query({ resources: 'bogus' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+			});
+		});
+
+		describe('rejects a duplicate resource kind', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const response = await request(getUrl(vendor))
+					.get('/config/snapshot')
+					.query({ resources: 'roles,roles' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+			});
+		});
+
+		describe('rejects an empty resource member', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const response = await request(getUrl(vendor))
+					.get('/config/snapshot')
+					.query({ resources: 'roles,,permissions' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+			});
+		});
+
+		describe('rejects a repeated resources parameter', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const response = await request(getUrl(vendor))
+					.get('/config/snapshot')
+					.query({ resources: ['roles', 'permissions'] })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+			});
+		});
 	});
 
 	describe('POST /config/apply', () => {
@@ -193,6 +316,8 @@ describe('Config-as-Code API', () => {
 				expect(response.body.data.permissions.created).toBe(0);
 				expect(response.body.data.permissions.updated).toBe(0);
 				expect(response.body.data.permissions.deleted).toBe(0);
+				expect(response.body.meta.plan.planVersion).toBe(2);
+				expect(response.body.meta.plan.changes).toEqual([]);
 			});
 		});
 
@@ -1508,6 +1633,12 @@ describe('Config-as-Code deletion impact', () => {
 					{ kind: 'users', suspended: [userId] },
 					{ kind: 'sessions', active: 1 },
 				]);
+
+				const mutating = await applyConfig(vendor, baseline, { destructive: true });
+
+				expect(mutating.statusCode).toBe(200);
+				expect(mutating.body.data.roles.deleted).toContain(roleKey);
+				expect(mutating.body.meta.plan).toEqual(httpDry.body.data);
 			} finally {
 				await db('directus_sessions').where({ token }).del();
 				if (userInserted) await db('directus_users').where({ id: userId }).del();

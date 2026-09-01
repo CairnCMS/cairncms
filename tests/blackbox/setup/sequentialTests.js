@@ -6,6 +6,7 @@ exports.list = {
 		{ testFilePath: '/routes/schema/schema.test.ts' },
 		{ testFilePath: '/routes/schema/apply-nested-meta.test.ts' },
 		{ testFilePath: '/routes/config/config.test.ts' },
+		{ testFilePath: '/routes/config/remote-cli.test.ts' },
 		{ testFilePath: '/routes/collections/crud.test.ts' },
 		{ testFilePath: '/routes/fields/change-fields.test.ts' },
 		{ testFilePath: '/routes/fields/crud.test.ts' },
