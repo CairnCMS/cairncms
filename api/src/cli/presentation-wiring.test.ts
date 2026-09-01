@@ -57,7 +57,10 @@ vi.mock('../utils/apply-snapshot.js', () => ({ applySnapshot: vi.fn(async () => 
 
 vi.mock('inquirer', () => ({ default: { prompt: vi.fn(async () => ({ proceed: false })) } }));
 
-vi.mock('fs', () => ({ promises: { readFile: vi.fn(async () => '{}') } }));
+vi.mock('fs', () => {
+	const promises = { readFile: vi.fn(async () => '{}') };
+	return { default: { existsSync: () => false, promises }, existsSync: () => false, promises };
+});
 
 vi.mock('../utils/read-config-directory.js', () => ({
 	readConfigDirectory: vi.fn(),

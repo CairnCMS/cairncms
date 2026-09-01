@@ -14,7 +14,12 @@ import {
 	orderedRecords,
 } from './config/directory-layout.js';
 import { getDescriptor } from './config/registry.js';
-import { readContainedDirectory, readContainedFile, replaceFileAtomically } from './config-path-safety.js';
+import {
+	assertContained,
+	readContainedDirectory,
+	readContainedFile,
+	replaceFileAtomically,
+} from './config-path-safety.js';
 import { assertConfigValueSafe, parseConfigYaml } from './parse-config-document.js';
 import { safeLogFragment } from './safe-log-fragment.js';
 
@@ -61,8 +66,26 @@ function buildDocuments(config: CairnConfig, root: string): { pending: PendingDo
 		for (const document of orderedNormalizedDocuments(descriptor, config[kind])) {
 			const filename = `${descriptor.layout.filenameOf(descriptor.layout.documentIdentityOf(document))}${YAML_SUFFIX}`;
 			const label = `${kind}/${filename}`;
+
+			if (!isOwnedConfigFilename(filename, kind)) {
+				throw new ConfigInvalidException(
+					`Config ${kind} document resolves to "${safeLogFragment(
+						filename
+					)}", which is not a filename this config engine generates.`
+				);
+			}
+
+			if (keep.has(label)) {
+				throw new ConfigInvalidException(
+					`Config declares a duplicate ${kind} identity "${safeLogFragment(filename)}".`
+				);
+			}
+
+			const target = path.join(root, kind, filename);
+			assertContained(path.join(root, kind), target, label);
+
 			keep.add(label);
-			pending.push({ label, target: path.join(root, kind, filename), document });
+			pending.push({ label, target, document });
 		}
 	}
 

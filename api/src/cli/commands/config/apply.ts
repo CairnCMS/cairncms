@@ -14,8 +14,18 @@ import { getSystemAccountability } from '../../../utils/get-system-accountabilit
 import { readConfigDirectory } from '../../../utils/read-config-directory.js';
 import { serializeConfigPlan } from '../../../utils/serialize-config-plan.js';
 import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
-import type { CairnConfig, ConfigPlan, SerializedConfigPlan } from '../../../types/config.js';
+import type { ApplyResult, CairnConfig, ConfigPlan, SerializedConfigPlan } from '../../../types/config.js';
 import { confirmPrompt } from '../../presentation.js';
+import { isHttpTarget, parseOperatorRemoteTarget } from './operator-remote-target.js';
+import { createOperatorRemoteTransport } from './operator-remote-transport.js';
+import {
+	applyRemote,
+	assertServerSupportsRemoteConfig,
+	fetchServerVersion,
+	type RemoteSession,
+} from './remote-client.js';
+import { resolveRemoteToken } from './remote-token.js';
+import { readFileSync } from 'node:fs';
 import { renderConfigPlan, renderDestructiveRefusal, renderWarnings } from './render-config-plan.js';
 
 async function serializePlan(plan: ConfigPlan, desired: CairnConfig, database: Knex): Promise<SerializedConfigPlan> {
@@ -27,7 +37,7 @@ async function serializePlan(plan: ConfigPlan, desired: CairnConfig, database: K
 
 export async function configApply(
 	configPath: string,
-	options?: { yes: boolean; dryRun: boolean; destructive: boolean; format: string }
+	options?: { yes: boolean; dryRun: boolean; destructive: boolean; format: string; url?: string; tokenStdin?: boolean }
 ): Promise<void> {
 	const dryRun = options?.dryRun === true;
 	const destructive = options?.destructive === true;
@@ -36,6 +46,10 @@ export async function configApply(
 	if (format === 'json' && !dryRun) {
 		logger.error('JSON output is only available with --dry-run.');
 		process.exit(2);
+	}
+
+	if (options?.url !== undefined) {
+		return configApplyRemote(configPath, options.url, { dryRun, destructive, format, options });
 	}
 
 	const database = getDatabase();
@@ -166,4 +180,87 @@ export async function configApply(
 		database.destroy();
 		process.exit(configFailureExitCode(err));
 	}
+}
+
+async function configApplyRemote(
+	configPath: string,
+	url: string,
+	ctx: { dryRun: boolean; destructive: boolean; format: string; options: { yes?: boolean; tokenStdin?: boolean } }
+): Promise<void> {
+	const { dryRun, destructive, format } = ctx;
+
+	if (!dryRun && ctx.options.yes !== true) {
+		logger.error(
+			'A remote mutating apply requires --yes; there is no interactive confirmation against a remote server.'
+		);
+
+		process.exit(2);
+	}
+
+	try {
+		const target = parseOperatorRemoteTarget(url);
+
+		const token = resolveRemoteToken({
+			envToken: process.env['CAIRNCMS_TOKEN'],
+			tokenFile: process.env['CAIRNCMS_TOKEN_FILE'],
+			tokenStdin: ctx.options.tokenStdin === true,
+			readStdin: () => readFileSync(0, 'utf8'),
+		});
+
+		if (isHttpTarget(target)) {
+			logger.warn('The admin token will be sent over http:// without transport encryption. Prefer https://.');
+		}
+
+		const transport = await createOperatorRemoteTransport();
+		const session: RemoteSession = { transport, target, token };
+
+		assertServerSupportsRemoteConfig(await fetchServerVersion(session), session.token);
+
+		const desired = await readConfigDirectory(configPath, { notice: (message) => logger.warn(message) });
+		const outcome = await applyRemote(session, desired, { dryRun, destructive });
+		const plan = outcome.plan as SerializedConfigPlan;
+		const clean = plan.changes.length === 0 && plan.protections.length === 0;
+
+		if (format === 'json') {
+			process.stdout.write(`${JSON.stringify(plan)}\n`);
+			process.exit(clean ? 0 : 1);
+		}
+
+		if (dryRun) {
+			if (clean) {
+				const warnings = renderWarnings(plan);
+				logger.info(warnings ? `No changes to apply.\n\n${warnings}` : 'No changes to apply.');
+			} else {
+				logger.info(renderConfigPlan(plan));
+			}
+
+			process.exit(clean ? 0 : 1);
+		}
+
+		logger.info(renderConfigPlan(plan));
+		logger.info(remoteResultSummary(outcome.result as ApplyResult));
+		process.exit(0);
+	} catch (err) {
+		logger.error(err instanceof Error ? err.message : String(err));
+
+		const exitCode =
+			typeof (err as { exitCode?: unknown }).exitCode === 'number'
+				? (err as { exitCode: number }).exitCode
+				: configFailureExitCode(err);
+
+		process.exit(exitCode);
+	}
+}
+
+function remoteResultSummary(result: ApplyResult): string {
+	const parts: string[] = [];
+
+	if (result.roles.created.length > 0) parts.push(`${result.roles.created.length} role(s) created`);
+	if (result.roles.updated.length > 0) parts.push(`${result.roles.updated.length} role(s) updated`);
+	if (result.roles.deleted.length > 0) parts.push(`${result.roles.deleted.length} role(s) deleted`);
+	if (result.permissions.created > 0) parts.push(`${result.permissions.created} permission(s) created`);
+	if (result.permissions.updated > 0) parts.push(`${result.permissions.updated} permission(s) updated`);
+	if (result.permissions.deleted > 0) parts.push(`${result.permissions.deleted} permission(s) deleted`);
+
+	return `Config applied: ${parts.join(', ')}`;
 }

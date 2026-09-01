@@ -236,14 +236,16 @@ Two endpoints snapshot and apply role and permission state across deployments:
 | `GET` | `/config/snapshot` | Return the current roles and permissions as a `CairnConfig` payload. |
 | `POST` | `/config/apply` | Apply a `CairnConfig` payload, with optional dry-run and destructive flags. |
 
-These are admin-only and operator-facing rather than collection-CRUD. They wrap the same engine that powers `cairncms config snapshot` and `cairncms config apply`. See [Config as code](/docs/manage/config-as-code/) for the full reference, including the payload shape, the dry-run and destructive flags, the field-level omit-vs-null semantics, and the validation surface.
+These admin-only endpoints back remote CLI mode and custom HTTP automation. CLI users do not need to construct the requests themselves. See [Config as code](/docs/manage/config-as-code/) for the full reference.
 
 In short:
 
-- `GET /config/snapshot` returns JSON by default. Pass `?export=yaml` to get a YAML attachment instead.
-- `POST /config/apply` accepts JSON or any of three YAML media types. Pass `?dry_run=true` to preview the plan without writing; pass `?destructive=true` to allow deletion of orphan roles and permissions.
+- `GET /config/snapshot` has no manifest request body. Optional `manifest_version` and comma-separated `resources` parameters select the manifest in the response. Omission means the current version and all kinds; `resources=` means an empty managed scope. The remote CLI derives these values from the local manifest automatically. Pass `?export=yaml` for a YAML attachment.
+- `POST /config/apply` takes a manifest in its JSON or YAML body, so that manifest defines managed scope. Pass `?dry_run=true` to preview without writing or `?destructive=true` to authorize deletions. A dry run returns the plan as `data`; a mutating apply returns the result as `data` and the plan under `meta.plan`.
 
 There is no `/config/diff` endpoint. The apply endpoint computes the plan internally on every call.
+
+The `cairncms` CLI can call these endpoints on a remote instance with `cairncms config apply --url` and `cairncms config snapshot --url`, authenticating with an administrator token. See [Config as code / Applying to a remote instance](/docs/manage/config-as-code/#applying-to-a-remote-instance).
 
 ## GraphQL
 

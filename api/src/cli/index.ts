@@ -4,6 +4,7 @@ import { getExtensionManager } from '../extensions.js';
 import { startServer } from '../server.js';
 import bootstrap from './commands/bootstrap/index.js';
 import { configApply } from './commands/config/apply.js';
+import { detectRemoteConfigCommand } from './commands/config/detect-remote.js';
 import { configSnapshot } from './commands/config/snapshot.js';
 import count from './commands/count/index.js';
 import dbInstall from './commands/database/install.js';
@@ -21,9 +22,10 @@ import * as pkg from '../utils/package.js';
 export async function createCli(): Promise<Command> {
 	const program = new Command();
 
-	const requestedCommand = process.argv.slice(2).find((arg) => !arg.startsWith('-'));
+	const args = process.argv.slice(2);
+	const requestedCommand = args.find((arg) => !arg.startsWith('-'));
 
-	if (requestedCommand !== 'init') {
+	if (requestedCommand !== 'init' && !detectRemoteConfigCommand(args)) {
 		const extensionManager = getExtensionManager();
 		await extensionManager.initialize({ schedule: false, watch: false });
 	}
@@ -124,6 +126,8 @@ export async function createCli(): Promise<Command> {
 		.description('Snapshot current roles and permissions to a config directory')
 		.argument('<path>', 'Target directory path')
 		.option('-y, --yes', 'Skip confirmation on overwriting non-empty directory', false)
+		.option('--url <url>', 'Snapshot from a remote CairnCMS server at this absolute http(s) URL')
+		.option('--token-stdin', 'Read the remote admin token from stdin', false)
 		.action(configSnapshot);
 
 	const configApplyCommand = configCommand
@@ -133,6 +137,8 @@ export async function createCli(): Promise<Command> {
 		.option('-y, --yes', 'Skip confirmation prompt')
 		.option('--dry-run', 'Print planned changes without applying', false)
 		.option('--destructive', 'Delete roles/permissions in DB but not in config', false)
+		.option('--url <url>', 'Apply to a remote CairnCMS server at this absolute http(s) URL')
+		.option('--token-stdin', 'Read the remote admin token from stdin', false)
 		.addOption(
 			new Option('--format <format>', 'Output format: human or json').choices(['human', 'json']).default('human')
 		)
