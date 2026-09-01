@@ -58,6 +58,7 @@ router.get(
 
 		const data = await service.serverInfo();
 		res.locals['payload'] = { data };
+		res.locals['cache'] = false;
 		return next();
 	}),
 	respond
