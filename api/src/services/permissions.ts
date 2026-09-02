@@ -55,6 +55,13 @@ export class PermissionsService extends ItemsService {
 			share: { access: false },
 		};
 
+		const isAdmin = this.accountability?.admin === true;
+
+		if (isAdmin === false && this.hasRelevantItemPermission(collection) === false) {
+			if (pk === undefined) throw new InvalidPayloadException('A primary key is required');
+			return denied;
+		}
+
 		if (Object.prototype.hasOwnProperty.call(this.schema.collections, collection) === false) {
 			if (pk === undefined) throw new InvalidPayloadException('A primary key is required');
 			return denied;
@@ -80,8 +87,11 @@ export class PermissionsService extends ItemsService {
 				throw error;
 			}
 
-			const row = await this.knex.select(primaryKeyField).from(collection).where(primaryKeyField, targetKey).first();
-			if (!row) return denied;
+			if (isAdmin) {
+				const row = await this.knex.select(primaryKeyField).from(collection).where(primaryKeyField, targetKey).first();
+
+				if (!row) return denied;
+			}
 		}
 
 		const authorizationService = new AuthorizationService({
@@ -101,6 +111,16 @@ export class PermissionsService extends ItemsService {
 			delete: { access: remove },
 			share: { access: share },
 		};
+	}
+
+	private hasRelevantItemPermission(collection: string): boolean {
+		return (
+			this.accountability?.permissions?.some(
+				(permission) =>
+					permission.collection === collection &&
+					(permission.action === 'update' || permission.action === 'delete' || permission.action === 'share')
+			) ?? false
+		);
 	}
 
 	private async hasItemAccess(

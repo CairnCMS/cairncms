@@ -82,6 +82,7 @@ describe('PermissionsService response cache invalidation', () => {
 describe('PermissionsService getItemPermissions', () => {
 	const stringField = { field: 'id', type: 'string' } as any;
 	const uuidField = { field: 'id', type: 'uuid' } as any;
+	const integerField = { field: 'id', type: 'integer' } as any;
 
 	function makeSchema(): SchemaOverview {
 		return {
@@ -89,6 +90,7 @@ describe('PermissionsService getItemPermissions', () => {
 				articles: { collection: 'articles', primary: 'id', singleton: false, fields: { id: stringField } },
 				site_config: { collection: 'site_config', primary: 'id', singleton: true, fields: { id: stringField } },
 				docs: { collection: 'docs', primary: 'id', singleton: false, fields: { id: uuidField } },
+				metrics: { collection: 'metrics', primary: 'id', singleton: false, fields: { id: integerField } },
 				directus_shares: {
 					collection: 'directus_shares',
 					primary: 'id',
@@ -190,15 +192,19 @@ describe('PermissionsService getItemPermissions', () => {
 		});
 	});
 
-	it('returns the denied shape when no action is allowed', async () => {
+	it('returns the denied shape when a granted caller is denied every action', async () => {
 		allowActions();
 
-		const result = await makeService({ id: '5' }, { user: 'u', admin: false, permissions: [] }).getItemPermissions(
-			'articles',
-			'5'
-		);
+		const accountability = {
+			user: 'u',
+			admin: false,
+			permissions: [{ collection: 'articles', action: 'update', fields: ['*'] }],
+		};
+
+		const result = await makeService({ id: '5' }, accountability).getItemPermissions('articles', '5');
 
 		expect(result).toEqual(DENIED);
+		expect(checkAccessMock).toHaveBeenCalled();
 	});
 
 	it('returns the denied shape for a nonexistent item without checking access', async () => {
@@ -258,10 +264,13 @@ describe('PermissionsService getItemPermissions', () => {
 	it('grants share on directus_shares to a permitted caller', async () => {
 		allowActions('share');
 
-		const result = await makeService({ id: '5' }, { user: 'u', admin: false, permissions: [] }).getItemPermissions(
-			'directus_shares',
-			'5'
-		);
+		const accountability = {
+			user: 'u',
+			admin: false,
+			permissions: [{ collection: 'directus_shares', action: 'share', fields: ['*'] }],
+		};
+
+		const result = await makeService({ id: '5' }, accountability).getItemPermissions('directus_shares', '5');
 
 		expect(result.share.access).toBe(true);
 		expect(result.update.access).toBe(false);
@@ -270,7 +279,13 @@ describe('PermissionsService getItemPermissions', () => {
 	it('propagates an operational failure instead of returning denied', async () => {
 		checkAccessMock.mockRejectedValue(new Error('db down'));
 
-		const service = makeService({ id: '5' }, { user: 'u', admin: false, permissions: [] });
+		const accountability = {
+			user: 'u',
+			admin: false,
+			permissions: [{ collection: 'articles', action: 'update', fields: ['*'] }],
+		};
+
+		const service = makeService({ id: '5' }, accountability);
 
 		await expect(service.getItemPermissions('articles', '5')).rejects.toThrow('db down');
 	});
@@ -298,5 +313,58 @@ describe('PermissionsService getItemPermissions', () => {
 		expect(await service.getItemPermissions('docs', 'not-a-uuid')).toEqual(DENIED);
 		expect(knex.select).not.toHaveBeenCalled();
 		expect(checkAccessMock).not.toHaveBeenCalled();
+	});
+
+	it('denies a non-admin whose only grants are the wrong action or the wrong collection, without any query or access check', async () => {
+		const accountability = {
+			user: 'u',
+			admin: false,
+			permissions: [
+				{ collection: 'metrics', action: 'read', fields: ['*'] },
+				{ collection: 'articles', action: 'update', fields: ['*'] },
+			],
+		};
+
+		const { service, knex } = makeServiceWithKnex({ id: 1 }, accountability);
+
+		expect(await service.getItemPermissions('metrics', '1e3')).toEqual(DENIED);
+		expect(knex.select).not.toHaveBeenCalled();
+		expect(checkAccessMock).not.toHaveBeenCalled();
+	});
+
+	it('gives a no-grant non-admin the same keyless outcome for a known and an unknown collection', async () => {
+		const { service, knex } = makeServiceWithKnex({ id: '1' }, { user: 'u', admin: false, permissions: [] });
+
+		await expect(service.getItemPermissions('site_config')).rejects.toThrow(InvalidPayloadException);
+		await expect(service.getItemPermissions('nonexistent')).rejects.toThrow(InvalidPayloadException);
+		expect(knex.select).not.toHaveBeenCalled();
+		expect(checkAccessMock).not.toHaveBeenCalled();
+	});
+
+	it('gives a no-grant non-admin the same keyed denied shape for a known and an unknown collection', async () => {
+		const { service, knex } = makeServiceWithKnex({ id: '5' }, { user: 'u', admin: false, permissions: [] });
+
+		expect(await service.getItemPermissions('articles', '5')).toEqual(DENIED);
+		expect(await service.getItemPermissions('nonexistent', '5')).toEqual(DENIED);
+		expect(knex.select).not.toHaveBeenCalled();
+		expect(checkAccessMock).not.toHaveBeenCalled();
+	});
+
+	it('resolves a non-admin keyed item through checkAccess without an existence query', async () => {
+		allowActions('update');
+
+		const accountability = {
+			user: 'u',
+			admin: false,
+			permissions: [{ collection: 'articles', action: 'update', fields: ['*'] }],
+		};
+
+		const { service, knex } = makeServiceWithKnex({ id: '5' }, accountability);
+
+		const result = await service.getItemPermissions('articles', '5');
+
+		expect(result.update.access).toBe(true);
+		expect(knex.select).not.toHaveBeenCalled();
+		expect(checkAccessMock).toHaveBeenCalledWith('update', 'articles', '5');
 	});
 });

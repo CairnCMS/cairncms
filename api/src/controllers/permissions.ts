@@ -28,6 +28,7 @@ router.get(
 		const result = await service.getItemPermissions(req.params['collection']!, req.params['pk']);
 
 		res.locals['payload'] = { data: result };
+		res.locals['cache'] = false;
 		return next();
 	}),
 	respond
