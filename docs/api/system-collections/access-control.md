@@ -185,9 +185,11 @@ The response carries an `ItemPermissions` object:
 - **`update.access`**, **`delete.access`**, **`share.access`** — whether the caller may perform each action on this item, after the row's field values are checked against any permission filter.
 - **`update.fields`** — the fields the caller may modify: `["*"]` for all fields, a non-empty list for a restricted field set, `[]` when no fields are editable, and `null` when update is denied. `delete` and `share` carry only `access`.
 
-For a singleton collection, which stores one row, omit the key. An empty singleton returns `access: false` for every action. Ordinary collections require a key. Requests without one return `400`.
+For a singleton collection, omit the key when the caller is an admin or has update, delete, or share permission on that collection. If the singleton has no stored row, the response denies all three item actions. The admin app uses collection-level create authority for the first save. Ordinary collections require a key. Requests without one return `400`.
 
-When a key is supplied, the API returns the fully denied response for a nonexistent item, an unknown collection, a malformed key, or an existing item for which all three actions are denied. In this response, every `access` value is `false` and `update.fields` is `null`. This prevents a denied response from revealing whether the row exists.
+When a key is supplied, the API returns the fully denied response for a nonexistent item, an unknown collection, a key rejected by validation, or an existing item for which all three actions are denied. In this response, every `access` value is `false` and `update.fields` is `null`. This prevents a denied response from revealing whether the row exists.
+
+A caller with no update, delete, or share permission on the named collection cannot use this endpoint to tell a known collection from an unknown one. Such a caller receives the same denied response for a supplied key, and the same `400` for a keyless request, whether or not the collection exists.
 
 The SDK exposes this endpoint as `readItemPermissions(collection, key?)`, which returns the same `ItemPermissions` shape.
 

@@ -66,7 +66,7 @@ afterEach(() => {
 });
 
 describe('useFieldPermissions', () => {
-	test('Remove fields without read permissions #16732', async () => {
+	test('removes fields the caller has no read permission for', async () => {
 		const userStore = useUserStore();
 		userStore.currentUser = mockUser as any;
 

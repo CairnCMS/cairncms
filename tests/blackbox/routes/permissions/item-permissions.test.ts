@@ -328,4 +328,30 @@ describe('/permissions/me item permissions', () => {
 		expect(response.statusCode).toBe(200);
 		expect(response.body.data).toEqual(grantedAll);
 	});
+
+	it.each(vendors)(
+		'%s gives a keyless known singleton and an unknown collection the same response without a relevant permission',
+		async (vendor) => {
+			const known = await me(vendor, `${singletonCollection}`, alphaToken);
+			const unknown = await me(vendor, `${unknownCollection}`, alphaToken);
+
+			expect(known.statusCode).toBe(400);
+			expect(unknown.statusCode).toBe(400);
+			expect(known.body.errors[0].extensions.code).toBe('INVALID_PAYLOAD');
+			expect(known.text).toBe(unknown.text);
+		}
+	);
+
+	it.each(vendors)(
+		'%s gives a keyed known collection and an unknown collection the same response without a relevant permission',
+		async (vendor) => {
+			const known = await me(vendor, `${collection}/1e3`, sharesToken);
+			const unknown = await me(vendor, `${unknownCollection}/1e3`, sharesToken);
+
+			expect(known.statusCode).toBe(200);
+			expect(unknown.statusCode).toBe(200);
+			expect(known.body.data).toEqual(denied);
+			expect(known.text).toBe(unknown.text);
+		}
+	);
 });
