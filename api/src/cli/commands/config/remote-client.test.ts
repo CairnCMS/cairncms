@@ -207,6 +207,81 @@ describe('applyRemote', () => {
 		expect(error.message).not.toContain('re-snapshot');
 	});
 
+	describe('run id header', () => {
+		const RUN_ID = '3f6c1b0e-9b2c-4a1d-8f2e-0a7d5c4b3e21';
+
+		function sessionWithHeader(header: unknown, status = 200, data: unknown = { data: OK_PLAN }) {
+			return session(() => ({ status, data, headers: { 'x-config-run-id': header } } as never));
+		}
+
+		it('returns a UUID run id from the response header', async () => {
+			const { remote } = sessionWithHeader(RUN_ID);
+
+			const outcome = await applyRemote(remote, {}, { dryRun: true, destructive: false });
+
+			expect(outcome).toEqual({ plan: OK_PLAN, runId: RUN_ID });
+		});
+
+		it('returns the run id on a mutating apply', async () => {
+			const { remote } = sessionWithHeader(RUN_ID, 200, { data: OK_RESULT, meta: { plan: OK_PLAN } });
+
+			const outcome = await applyRemote(remote, {}, { dryRun: false, destructive: false });
+
+			expect(outcome).toEqual({ plan: OK_PLAN, result: OK_RESULT, runId: RUN_ID });
+		});
+
+		it('omits the run id when the header is absent', async () => {
+			const { remote } = session(() => ({ status: 200, data: { data: OK_PLAN } }));
+
+			const outcome = await applyRemote(remote, {}, { dryRun: true, destructive: false });
+
+			expect(outcome).not.toHaveProperty('runId');
+		});
+
+		it.each([
+			['a non-UUID', 'run-123'],
+			['control characters', `${RUN_ID}${BEL}`],
+			['the token', TOKEN],
+			['an array', [RUN_ID]],
+			['an empty string', ''],
+		])('ignores a header carrying %s', async (_label, header) => {
+			const { remote } = sessionWithHeader(header);
+
+			const outcome = await applyRemote(remote, {}, { dryRun: true, destructive: false });
+
+			expect(outcome).not.toHaveProperty('runId');
+		});
+
+		it('carries the run id on a server refusal', async () => {
+			const { remote } = sessionWithHeader(RUN_ID, 400, { errors: [{ message: 'refused' }] });
+
+			const error = await caught(() => applyRemote(remote, {}, { dryRun: false, destructive: false }));
+
+			expect(error.exitCode).toBe(2);
+			expect(error.runId).toBe(RUN_ID);
+		});
+
+		it('carries the run id on a malformed mutating response with the unknown-outcome note', async () => {
+			const { remote } = sessionWithHeader(RUN_ID, 200, { data: OK_RESULT });
+
+			const error = await caught(() => applyRemote(remote, {}, { dryRun: false, destructive: false }));
+
+			expect(error.exitCode).toBe(3);
+			expect(error.runId).toBe(RUN_ID);
+			expect(error.message).toContain('re-snapshot');
+		});
+
+		it('carries the run id on a malformed dry-run plan without the unknown-outcome note', async () => {
+			const { remote } = sessionWithHeader(RUN_ID, 200, { data: { planVersion: 2 } });
+
+			const error = await caught(() => applyRemote(remote, {}, { dryRun: true, destructive: false }));
+
+			expect(error.exitCode).toBe(3);
+			expect(error.runId).toBe(RUN_ID);
+			expect(error.message).not.toContain('re-snapshot');
+		});
+	});
+
 	it('maps a 5xx to exit 3', async () => {
 		const { remote } = session(() => ({ status: 503, data: { errors: [{ message: 'unavailable' }] } }));
 		expect((await caught(() => applyRemote(remote, {}, { dryRun: false, destructive: false }))).exitCode).toBe(3);

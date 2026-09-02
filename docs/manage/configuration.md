@@ -211,7 +211,7 @@ Disabled by default. Enable when a frontend on a different origin needs to call 
 - **`CORS_ORIGIN`** — `true` to reflect the request origin, `false` to disable, or a comma-separated list of allowed origins.
 - **`CORS_METHODS`** — allowed methods. Default `GET,POST,PATCH,DELETE`.
 - **`CORS_ALLOWED_HEADERS`** — allowed request headers. Default `Content-Type,Authorization`.
-- **`CORS_EXPOSED_HEADERS`** — response headers exposed to the browser. Default `Content-Range`.
+- **`CORS_EXPOSED_HEADERS`** — response headers exposed to the browser. Default `Content-Range,X-Config-Run-Id`. An override replaces the default, so keep `X-Config-Run-Id` in the list if browser clients need to read the config run id.
 - **`CORS_CREDENTIALS`** — whether credentials (cookies, auth headers) can be included on cross-origin requests. Default `true`.
 - **`CORS_MAX_AGE`** — preflight cache duration in seconds. Default `18000`.
 

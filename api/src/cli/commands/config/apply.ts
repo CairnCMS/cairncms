@@ -5,12 +5,20 @@ import logger from '../../../logger.js';
 import { configFailureExitCode } from './exit-code.js';
 import { applyConfigPlan, planHasDeletions } from '../../../utils/apply-config-plan.js';
 import { computeConfigPlan } from '../../../utils/compute-config-plan.js';
-import { isPlanEmpty } from '../../../utils/config/plan-folds.js';
+import { isPlanEmpty, planSummary } from '../../../utils/config/plan-folds.js';
+import {
+	classifyConfigError,
+	systemCaller,
+	withConfigRun,
+	type ConfigRun,
+	type ConfigRunFinished,
+} from '../../../utils/config/run-record.js';
 import { enrichConfigPlan } from '../../../utils/enrich-config-plan.js';
 import { CONFIG_APPLY_ORIGIN } from '../../../utils/config-contract.js';
 import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
 import { getSchema } from '../../../utils/get-schema.js';
 import { getSystemAccountability } from '../../../utils/get-system-accountability.js';
+import { isValidUuid } from '../../../utils/is-valid-uuid.js';
 import { readConfigDirectory } from '../../../utils/read-config-directory.js';
 import { serializeConfigPlan } from '../../../utils/serialize-config-plan.js';
 import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
@@ -66,11 +74,63 @@ export async function configApply(
 		process.exit(3);
 	}
 
+	const { exitCode } = await runLocalApply(configPath, database, {
+		dryRun,
+		destructive,
+		format,
+		yes: options?.yes === true,
+	});
+
+	database.destroy();
+	process.exit(exitCode);
+}
+
+type ExitCode = 0 | 1 | 2 | 3;
+
+type LocalApplyOptions = { dryRun: boolean; destructive: boolean; format: string; yes: boolean };
+
+type LocalApplyOutcome = ConfigRunFinished & { exitCode: ExitCode };
+
+async function runLocalApply(
+	configPath: string,
+	database: Knex,
+	opts: LocalApplyOptions
+): Promise<{ exitCode: ExitCode }> {
+	let desired: CairnConfig;
+
 	try {
-		const desired = await readConfigDirectory(configPath, {
+		desired = await readConfigDirectory(configPath, {
 			notice: (message) => logger.warn(message),
 		});
+	} catch (err) {
+		logger.error(err);
+		return { exitCode: configFailureExitCode(err) };
+	}
 
+	return withConfigRun(
+		{
+			source: 'cli',
+			caller: systemCaller(),
+			dryRun: opts.dryRun,
+			destructive: opts.destructive,
+			manifestVersion: desired.manifest.version,
+			managedKinds: desired.manifest.resources,
+			emit: 'raw-only',
+		},
+		(run) => runLocalEngine(configPath, desired, database, opts, run)
+	);
+}
+
+async function runLocalEngine(
+	configPath: string,
+	desired: CairnConfig,
+	database: Knex,
+	opts: LocalApplyOptions,
+	run: ConfigRun
+): Promise<LocalApplyOutcome> {
+	const { dryRun, destructive, format, yes } = opts;
+
+	try {
 		const {
 			config: current,
 			currentRoleKeys,
@@ -87,18 +147,18 @@ export async function configApply(
 				logger.error(failure.message);
 			}
 
-			database.destroy();
-			process.exit(2);
+			return { result: 'invalid', errorCode: documentErrors[0]!.code, exitCode: 2 };
 		}
 
 		const plan = computeConfigPlan(current, desired);
 
 		const empty = isPlanEmpty(plan);
 
+		run.planned(planSummary(plan));
+
 		if (format === 'json') {
 			process.stdout.write(JSON.stringify(await serializePlan(plan, desired, database)) + '\n');
-			database.destroy();
-			process.exit(empty ? 0 : 1);
+			return { result: empty ? 'no_changes' : 'planned', exitCode: empty ? 0 : 1 };
 		}
 
 		if (empty) {
@@ -109,34 +169,30 @@ export async function configApply(
 				logger.info('No changes to apply.');
 			}
 
-			database.destroy();
-			process.exit(0);
+			return { result: 'no_changes', exitCode: 0 };
 		}
 
 		const serialized = await serializePlan(plan, desired, database);
 
 		if (dryRun) {
 			logger.info(renderConfigPlan(serialized));
-			database.destroy();
-			process.exit(1);
+			return { result: 'planned', exitCode: 1 };
 		}
 
 		if (plan.protections.length > 0) {
 			logger.info(renderConfigPlan(serialized));
-			database.destroy();
-			process.exit(2);
+			return { result: 'refused', errorCode: 'CONFIG_PROTECTED_RECORD', exitCode: 2 };
 		}
 
 		if (!destructive && planHasDeletions(plan)) {
 			logger.info(renderConfigPlan(serialized));
 			logger.error(renderDestructiveRefusal(serialized));
-			database.destroy();
-			process.exit(2);
+			return { result: 'refused', errorCode: 'DESTRUCTIVE_CHANGES_REQUIRED', exitCode: 2 };
 		}
 
 		logger.info(renderConfigPlan(serialized));
 
-		if (options?.yes !== true) {
+		if (!yes) {
 			const { proceed } = await inquirer.prompt([
 				{
 					type: 'confirm',
@@ -145,10 +201,7 @@ export async function configApply(
 				},
 			]);
 
-			if (proceed === false) {
-				database.destroy();
-				process.exit(0);
-			}
+			if (proceed === false) return { result: 'discarded', exitCode: 0 };
 		}
 
 		const result = await applyConfigPlan(plan, {
@@ -162,23 +215,12 @@ export async function configApply(
 			expectedStateToken: stateToken,
 		});
 
-		const parts: string[] = [];
+		logger.info(applyResultSummary(result));
 
-		if (result.roles.created.length > 0) parts.push(`${result.roles.created.length} role(s) created`);
-		if (result.roles.updated.length > 0) parts.push(`${result.roles.updated.length} role(s) updated`);
-		if (result.roles.deleted.length > 0) parts.push(`${result.roles.deleted.length} role(s) deleted`);
-		if (result.permissions.created > 0) parts.push(`${result.permissions.created} permission(s) created`);
-		if (result.permissions.updated > 0) parts.push(`${result.permissions.updated} permission(s) updated`);
-		if (result.permissions.deleted > 0) parts.push(`${result.permissions.deleted} permission(s) deleted`);
-
-		logger.info(`Config applied: ${parts.join(', ')}`);
-
-		database.destroy();
-		process.exit(0);
-	} catch (err: any) {
+		return { result: 'applied', exitCode: 0 };
+	} catch (err) {
 		logger.error(err);
-		database.destroy();
-		process.exit(configFailureExitCode(err));
+		return { ...classifyConfigError(err), exitCode: configFailureExitCode(err) };
 	}
 }
 
@@ -223,6 +265,7 @@ async function configApplyRemote(
 
 		if (format === 'json') {
 			process.stdout.write(`${JSON.stringify(plan)}\n`);
+			printRemoteRun(outcome.runId);
 			process.exit(clean ? 0 : 1);
 		}
 
@@ -234,14 +277,17 @@ async function configApplyRemote(
 				logger.info(renderConfigPlan(plan));
 			}
 
+			printRemoteRun(outcome.runId);
 			process.exit(clean ? 0 : 1);
 		}
 
 		logger.info(renderConfigPlan(plan));
-		logger.info(remoteResultSummary(outcome.result as ApplyResult));
+		logger.info(applyResultSummary(outcome.result as ApplyResult));
+		printRemoteRun(outcome.runId);
 		process.exit(0);
 	} catch (err) {
 		logger.error(err instanceof Error ? err.message : String(err));
+		printRemoteRun((err as { runId?: unknown }).runId);
 
 		const exitCode =
 			typeof (err as { exitCode?: unknown }).exitCode === 'number'
@@ -252,7 +298,11 @@ async function configApplyRemote(
 	}
 }
 
-function remoteResultSummary(result: ApplyResult): string {
+function printRemoteRun(runId: unknown): void {
+	if (typeof runId === 'string' && isValidUuid(runId)) logger.info(`Run ${runId}`);
+}
+
+function applyResultSummary(result: ApplyResult): string {
 	const parts: string[] = [];
 
 	if (result.roles.created.length > 0) parts.push(`${result.roles.created.length} role(s) created`);

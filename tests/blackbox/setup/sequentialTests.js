@@ -18,6 +18,7 @@ exports.list = {
 		{ testFilePath: '/schema/timezone/timezone-changed-node-tz-america.test.ts' },
 		{ testFilePath: '/schema/timezone/timezone-changed-node-tz-asia.test.ts' },
 		{ testFilePath: '/logger/redact.test.ts' },
+		{ testFilePath: '/logger/config-run-record.test.ts' },
 		{ testFilePath: '/routes/flows/webhook.test.ts' },
 		{ testFilePath: '/routes/extensions/confined-items.test.ts' },
 		{ testFilePath: '/routes/extensions/confined-endpoints.test.ts' },

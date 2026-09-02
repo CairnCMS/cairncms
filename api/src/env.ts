@@ -251,7 +251,7 @@ const defaults: Record<string, any> = {
 	CORS_ORIGIN: false,
 	CORS_METHODS: 'GET,POST,PATCH,DELETE',
 	CORS_ALLOWED_HEADERS: 'Content-Type,Authorization',
-	CORS_EXPOSED_HEADERS: 'Content-Range',
+	CORS_EXPOSED_HEADERS: 'Content-Range,X-Config-Run-Id',
 	CORS_CREDENTIALS: true,
 	CORS_MAX_AGE: 18000,
 

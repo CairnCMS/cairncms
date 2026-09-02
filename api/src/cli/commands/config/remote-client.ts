@@ -1,6 +1,8 @@
 import type { AxiosInstance, Method } from 'axios';
 import { isPlainObject } from 'lodash-es';
 import type { CairnConfig, ConfigKind } from '../../../types/config.js';
+import { CONFIG_RUN_ID_HEADER } from '../../../utils/config/run-record.js';
+import { isValidUuid } from '../../../utils/is-valid-uuid.js';
 import { replaceControlCharacters } from '../../../utils/safe-log-fragment.js';
 import { resolveEndpoint, type OperatorRemoteTarget } from './operator-remote-target.js';
 import { RemoteApplyResult, RemoteConfigPlan, RemoteSnapshot } from './remote-response-schema.js';
@@ -9,15 +11,19 @@ export const REMOTE_CONFIG_MIN_VERSION = '1.6.0';
 
 const PLAN_VERSION = 2;
 
+const RUN_ID_HEADER = CONFIG_RUN_ID_HEADER.toLowerCase();
+
 const UNKNOWN_OUTCOME_NOTE =
 	' The server may have already applied the change; re-snapshot to verify the current state.';
 
 export class RemoteClientError extends Error {
 	readonly exitCode: 2 | 3;
+	readonly runId: string | undefined;
 
-	constructor(message: string, exitCode: 2 | 3) {
+	constructor(message: string, exitCode: 2 | 3, runId?: string) {
 		super(message);
 		this.exitCode = exitCode;
+		this.runId = runId;
 	}
 }
 
@@ -27,7 +33,26 @@ export type RemoteSession = {
 	token: string;
 };
 
-type Envelope = { data: unknown; meta: unknown };
+type Envelope = { data: unknown; meta: unknown; runId: string | undefined };
+
+function runIdFrom(headers: unknown): string | undefined {
+	if (headers === null || typeof headers !== 'object') return undefined;
+
+	const value = (headers as Record<string, unknown>)[RUN_ID_HEADER];
+
+	return typeof value === 'string' && isValidUuid(value) ? value : undefined;
+}
+
+function withRunId<T extends object>(value: T, runId: string | undefined): T & { runId?: string } {
+	return runId === undefined ? value : { ...value, runId };
+}
+
+function attachRunId(err: unknown, runId: string | undefined, note = ''): unknown {
+	if (!(err instanceof RemoteClientError)) return err;
+	if (runId === undefined && note === '') return err;
+
+	return new RemoteClientError(`${err.message}${note}`, err.exitCode, runId);
+}
 
 async function request(
 	session: RemoteSession,
@@ -57,6 +82,8 @@ async function request(
 		);
 	}
 
+	const runId = runIdFrom(response.headers);
+
 	if (response.status < 200 || response.status >= 300) {
 		const preCommitRefusal = response.status >= 400 && response.status < 500;
 		const label = response.status >= 400 ? 'rejected the request' : 'returned an unexpected redirect';
@@ -65,17 +92,19 @@ async function request(
 			`The server ${label} (${response.status}): ${sanitize(serverErrorMessage(response.data), session.token)}${
 				preCommitRefusal ? '' : outcome
 			}`,
-			preCommitRefusal ? 2 : 3
+			preCommitRefusal ? 2 : 3,
+			runId
 		);
 	}
 
 	if (!isPlainObject(response.data)) {
-		throw new RemoteClientError(`The server returned a response that was not valid JSON.${outcome}`, 3);
+		throw new RemoteClientError(`The server returned a response that was not valid JSON.${outcome}`, 3, runId);
 	}
 
 	return {
 		data: (response.data as Record<string, unknown>)['data'],
 		meta: (response.data as Record<string, unknown>)['meta'],
+		runId,
 	};
 }
 
@@ -127,16 +156,25 @@ export async function applyRemote(
 	session: RemoteSession,
 	body: unknown,
 	options: { dryRun: boolean; destructive: boolean }
-): Promise<{ plan: unknown; result?: unknown }> {
+): Promise<{ plan: unknown; result?: unknown; runId?: string }> {
 	const query: Record<string, string> = {};
 	if (options.dryRun) query['dry_run'] = 'true';
 	if (options.destructive) query['destructive'] = 'true';
 
-	const { data, meta } = await request(session, 'POST', 'config/apply', { query, body, mutating: !options.dryRun });
+	const { data, meta, runId } = await request(session, 'POST', 'config/apply', {
+		query,
+		body,
+		mutating: !options.dryRun,
+	});
 
 	if (options.dryRun) {
-		assertPlanShape(data);
-		return { plan: data };
+		try {
+			assertPlanShape(data);
+		} catch (err) {
+			throw attachRunId(err, runId);
+		}
+
+		return withRunId({ plan: data }, runId);
 	}
 
 	try {
@@ -144,11 +182,9 @@ export async function applyRemote(
 		const plan = isPlainObject(meta) ? (meta as Record<string, unknown>)['plan'] : undefined;
 		assertPlanShape(plan);
 
-		return { plan, result: data };
+		return withRunId({ plan, result: data }, runId);
 	} catch (err) {
-		if (err instanceof RemoteClientError)
-			throw new RemoteClientError(`${err.message}${UNKNOWN_OUTCOME_NOTE}`, err.exitCode);
-		throw err;
+		throw attachRunId(err, runId, UNKNOWN_OUTCOME_NOTE);
 	}
 }
 

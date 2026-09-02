@@ -86,7 +86,10 @@ vi.mock('../utils/apply-config-plan.js', () => ({
 	planHasDeletions: vi.fn(() => false),
 }));
 
-vi.mock('../utils/config/plan-folds.js', () => ({ isPlanEmpty: vi.fn(() => false) }));
+vi.mock('../utils/config/plan-folds.js', () => ({
+	isPlanEmpty: vi.fn(() => false),
+	planSummary: vi.fn(() => ({ create: 1, update: 0, delete: 0 })),
+}));
 
 describe('config renderer sources every token from the presentation primitive', () => {
 	it('emits the mocked sentinel tokens rather than hard-coded text', () => {

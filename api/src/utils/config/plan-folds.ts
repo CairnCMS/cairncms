@@ -12,6 +12,18 @@ export function isPlanEmpty(plan: ConfigPlan): boolean {
 	});
 }
 
+export function planSummary(plan: ConfigPlan): { create: number; update: number; delete: number } {
+	const summary = { create: 0, update: 0, delete: 0 };
+
+	for (const kind of listConfigKinds()) {
+		summary.create += plan[kind].create.length;
+		summary.update += plan[kind].update.length;
+		summary.delete += plan[kind].delete.length;
+	}
+
+	return summary;
+}
+
 export function planHasDeletions(plan: ConfigPlan): boolean {
 	return listConfigKinds().some((kind) => plan[kind].delete.length > 0);
 }

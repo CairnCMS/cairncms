@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ConfigPermission, ConfigPlan, ConfigRole } from '../../types/config.js';
-import { isPlanEmpty, planDeletions, planHasDeletions } from './plan-folds.js';
+import { isPlanEmpty, planDeletions, planHasDeletions, planSummary } from './plan-folds.js';
 
 function emptyPlan(): ConfigPlan {
 	return {
@@ -42,6 +42,18 @@ describe('plan folds', () => {
 		const plan = emptyPlan();
 		mutate(plan);
 		expect(isPlanEmpty(plan)).toBe(false);
+	});
+
+	it('summarizes an empty plan as zero counts', () => {
+		expect(planSummary(emptyPlan())).toEqual({ create: 0, update: 0, delete: 0 });
+	});
+
+	it('counts create, update, and delete entries across every kind', () => {
+		const plan = emptyPlan();
+		for (const [, mutate] of SLICE_MUTATIONS) mutate(plan);
+		plan.roles.delete.push('y');
+
+		expect(planSummary(plan)).toEqual({ create: 2, update: 2, delete: 3 });
 	});
 
 	it('detects deletions in any kind', () => {
