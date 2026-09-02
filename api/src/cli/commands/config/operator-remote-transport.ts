@@ -41,6 +41,7 @@ export function validateOperatorTargetIp(ip: string, url: string): void {
 
 export async function createOperatorRemoteTransport(): Promise<AxiosInstance> {
 	const axios = (await import('axios')).default;
+	const { version } = await import('../../../utils/package.js');
 
 	return axios.create({
 		httpAgent: new ValidatingHttpAgent({}, validateOperatorTargetIp),
@@ -48,5 +49,6 @@ export async function createOperatorRemoteTransport(): Promise<AxiosInstance> {
 		maxRedirects: 0,
 		timeout: resolveTimeout(),
 		proxy: false,
+		headers: { 'User-Agent': `cairncms-cli/${version}` },
 	});
 }

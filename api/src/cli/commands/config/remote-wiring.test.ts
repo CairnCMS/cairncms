@@ -167,6 +167,165 @@ describe('remote configApply wiring', () => {
 	});
 });
 
+describe('remote configApply run id', () => {
+	const RUN_ID = '3f6c1b0e-9b2c-4a1d-8f2e-0a7d5c4b3e21';
+
+	function runLine(): unknown[] {
+		return vi
+			.mocked(logger.info)
+			.mock.calls.map((call) => call[0])
+			.filter((message) => message === `Run ${RUN_ID}`);
+	}
+
+	function clientRecords(): unknown[] {
+		return [...vi.mocked(logger.info).mock.calls, ...vi.mocked(logger.error).mock.calls]
+			.map((call) => call[0])
+			.filter((payload) => typeof payload === 'object' && payload !== null && 'event' in payload);
+	}
+
+	it('prints the run id after a human dry run', async () => {
+		applyRemoteMock.mockResolvedValue({ plan: EMPTY_PLAN, runId: RUN_ID });
+
+		await configApply('./cfg', {
+			yes: false,
+			dryRun: true,
+			destructive: false,
+			format: 'human',
+			url: 'https://cms.example',
+		}).catch(() => undefined);
+
+		expect(runLine()).toHaveLength(1);
+		expect(clientRecords()).toHaveLength(0);
+		expect(process.exit).toHaveBeenCalledWith(0);
+	});
+
+	it('prints the run id after a mutating apply', async () => {
+		applyRemoteMock.mockResolvedValue({
+			plan: EMPTY_PLAN,
+			result: { roles: { created: [], updated: [], deleted: [] }, permissions: { created: 0, updated: 0, deleted: 0 } },
+			runId: RUN_ID,
+		});
+
+		await configApply('./cfg', {
+			yes: true,
+			dryRun: false,
+			destructive: false,
+			format: 'human',
+			url: 'https://cms.example',
+		}).catch(() => undefined);
+
+		expect(runLine()).toHaveLength(1);
+		expect(clientRecords()).toHaveLength(0);
+	});
+
+	it('leaves output byte-identical when the server sent no run id', async () => {
+		applyRemoteMock.mockResolvedValue({ plan: EMPTY_PLAN });
+
+		await configApply('./cfg', {
+			yes: false,
+			dryRun: true,
+			destructive: false,
+			format: 'human',
+			url: 'https://cms.example',
+		}).catch(() => undefined);
+
+		const messages = vi.mocked(logger.info).mock.calls.map((call) => call[0]);
+		expect(messages).toEqual(['No changes to apply.']);
+		expect(clientRecords()).toHaveLength(0);
+	});
+
+	it('keeps stdout to exactly one plan document under --dry-run --format json and prints the run id through the logger', async () => {
+		applyRemoteMock.mockResolvedValue({ plan: EMPTY_PLAN, runId: RUN_ID });
+		const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+		await configApply('./cfg', {
+			yes: false,
+			dryRun: true,
+			destructive: false,
+			format: 'json',
+			url: 'https://cms.example',
+		}).catch(() => undefined);
+
+		expect(stdout).toHaveBeenCalledTimes(1);
+		expect(JSON.parse(String(stdout.mock.calls[0]![0]))).toEqual(EMPTY_PLAN);
+		expect(runLine()).toHaveLength(1);
+	});
+
+	it('prints the run id after a failure that carried one', async () => {
+		applyRemoteMock.mockRejectedValue(
+			Object.assign(new Error('The server rejected the request (400): refused'), {
+				exitCode: 2,
+				runId: RUN_ID,
+			})
+		);
+
+		await configApply('./cfg', {
+			yes: true,
+			dryRun: false,
+			destructive: false,
+			format: 'human',
+			url: 'https://cms.example',
+		}).catch(() => undefined);
+
+		expect(vi.mocked(logger.error)).toHaveBeenCalledWith(expect.stringContaining('rejected the request'));
+		expect(runLine()).toHaveLength(1);
+		expect(process.exit).toHaveBeenCalledWith(2);
+	});
+
+	it('prints nothing for a failure without a run id', async () => {
+		applyRemoteMock.mockRejectedValue(Object.assign(new Error('Could not reach the server'), { exitCode: 3 }));
+
+		await configApply('./cfg', {
+			yes: true,
+			dryRun: false,
+			destructive: false,
+			format: 'human',
+			url: 'https://cms.example',
+		}).catch(() => undefined);
+
+		expect(vi.mocked(logger.info)).not.toHaveBeenCalled();
+		expect(process.exit).toHaveBeenCalledWith(3);
+	});
+
+	it.each([
+		['a non-UUID', 'run-123'],
+		['control characters', `${RUN_ID}${String.fromCharCode(7)}`],
+		['a non-string', 42],
+	])('prints nothing when a caught error carries %s as its run id', async (_label, runId) => {
+		applyRemoteMock.mockRejectedValue(
+			Object.assign(new Error('The server rejected the request (400): refused'), {
+				exitCode: 2,
+				runId,
+			})
+		);
+
+		await configApply('./cfg', {
+			yes: true,
+			dryRun: false,
+			destructive: false,
+			format: 'human',
+			url: 'https://cms.example',
+		}).catch(() => undefined);
+
+		expect(vi.mocked(logger.info)).not.toHaveBeenCalled();
+		expect(process.exit).toHaveBeenCalledWith(2);
+	});
+
+	it('prints nothing when a successful outcome carries a malformed run id', async () => {
+		applyRemoteMock.mockResolvedValue({ plan: EMPTY_PLAN, runId: 'run-123' });
+
+		await configApply('./cfg', {
+			yes: false,
+			dryRun: true,
+			destructive: false,
+			format: 'human',
+			url: 'https://cms.example',
+		}).catch(() => undefined);
+
+		expect(vi.mocked(logger.info).mock.calls.map((call) => call[0])).toEqual(['No changes to apply.']);
+	});
+});
+
 describe('remote configSnapshot wiring', () => {
 	it('runs the remote path without touching the local database', async () => {
 		await configSnapshot('./cfg', { yes: false, url: 'https://cms.example' }).catch(() => undefined);

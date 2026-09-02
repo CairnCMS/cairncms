@@ -1,6 +1,7 @@
 import { BaseException } from '@cairncms/exceptions';
 import express from 'express';
 import { isPlainObject } from 'lodash-es';
+import { randomUUID } from 'node:crypto';
 import getDatabase from '../database/index.js';
 import env from '../env.js';
 import {
@@ -15,6 +16,13 @@ import asyncHandler from '../utils/async-handler.js';
 import { applyConfigPlan } from '../utils/apply-config-plan.js';
 import { computeConfigPlan } from '../utils/compute-config-plan.js';
 import { SUPPORTED_MANIFEST_VERSION } from '../utils/config-contract.js';
+import { isPlanEmpty, planSummary } from '../utils/config/plan-folds.js';
+import {
+	CONFIG_RUN_ID_HEADER,
+	callerFromAccountability,
+	userAgentFrom,
+	withConfigRun,
+} from '../utils/config/run-record.js';
 import { enrichConfigPlan } from '../utils/enrich-config-plan.js';
 import { readCurrentConfig } from '../utils/get-config-snapshot.js';
 import { serializeConfigPlan } from '../utils/serialize-config-plan.js';
@@ -54,6 +62,7 @@ router.post(
 	asyncHandler(async (req, res, next) => {
 		if (req.accountability?.admin !== true) throw new ForbiddenException();
 
+		const accountability = req.accountability;
 		const desired = parseDesiredConfig(req);
 
 		if (!isPlainObject(desired)) {
@@ -70,46 +79,69 @@ router.post(
 		const manifest = validateConfigManifest(document['manifest'], BODY_LABEL);
 		const managed = new Set<ConfigKind>(manifest.resources);
 
-		const database = getDatabase();
-		const schema = await getSchema({ database, bypassCache: true });
+		const runId = randomUUID();
+		res.setHeader(CONFIG_RUN_ID_HEADER, runId);
 
-		const {
-			config: current,
-			currentRoleKeys,
-			stateToken,
-		} = await readCurrentConfig({
-			database,
-			schema,
-			resources: manifest.resources,
-		});
+		await withConfigRun(
+			{
+				source: 'http',
+				caller: callerFromAccountability(accountability),
+				userAgent: userAgentFrom(req.headers['user-agent']),
+				runId,
+				dryRun,
+				destructive,
+				manifestVersion: manifest.version,
+				managedKinds: manifest.resources,
+				emit: 'always',
+			},
+			async (run) => {
+				const database = getDatabase();
+				const schema = await getSchema({ database, bypassCache: true });
 
-		const config = desired as CairnConfig;
-		const failures = validateDesiredConfig(config, { label: BODY_LABEL, currentRoleKeys });
+				const {
+					config: current,
+					currentRoleKeys,
+					stateToken,
+				} = await readCurrentConfig({
+					database,
+					schema,
+					resources: manifest.resources,
+				});
 
-		if (failures.length > 0) throw failures.map(toConfigException);
+				const config = desired as CairnConfig;
+				const failures = validateDesiredConfig(config, { label: BODY_LABEL, currentRoleKeys });
 
-		if (managed.has('roles')) assertNoPlaceholders(config);
+				if (failures.length > 0) throw failures.map(toConfigException);
 
-		const plan = computeConfigPlan(current, config);
+				if (managed.has('roles')) assertNoPlaceholders(config);
 
-		const enrichment = await enrichConfigPlan(plan, config, { schema, database });
-		const serialized = serializeConfigPlan(plan, { enrichment, manifestVersion: manifest.version });
+				const plan = computeConfigPlan(current, config);
 
-		if (dryRun) {
-			res.locals['payload'] = { data: serialized };
+				run.planned(planSummary(plan));
 
-			return next();
-		}
+				const enrichment = await enrichConfigPlan(plan, config, { schema, database });
+				const serialized = serializeConfigPlan(plan, { enrichment, manifestVersion: manifest.version });
+				const empty = isPlanEmpty(plan);
 
-		const result = await applyConfigPlan(plan, {
-			database,
-			schema,
-			destructive,
-			context: { mode: 'request', accountability: req.accountability },
-			expectedStateToken: stateToken,
-		});
+				if (dryRun) {
+					res.locals['payload'] = { data: serialized };
 
-		res.locals['payload'] = { data: result, meta: { plan: serialized } };
+					return { result: empty ? ('no_changes' as const) : ('planned' as const) };
+				}
+
+				const result = await applyConfigPlan(plan, {
+					database,
+					schema,
+					destructive,
+					context: { mode: 'request', accountability },
+					expectedStateToken: stateToken,
+				});
+
+				res.locals['payload'] = { data: result, meta: { plan: serialized } };
+
+				return { result: empty ? ('no_changes' as const) : ('applied' as const) };
+			}
+		);
 
 		return next();
 	}),

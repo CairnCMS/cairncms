@@ -208,6 +208,8 @@ A mutating remote apply requires `--yes`; a dry run does not. The target must ru
 
 Remote protections, destructive-change checks, output, and exit codes match local mode. Requests time out after 30 seconds by default; set `CAIRNCMS_REMOTE_CONFIG_TIMEOUT` to a duration such as `60s` for slower deployments. After a mutating timeout, run `config snapshot` before retrying because the server may have committed the apply.
 
+After a timeout, the server's [run record](#run-record) around the failure time, if present, shows what the run did. Its `userAgent` starts with `cairncms-cli/`. The record is best-effort, so its absence is inconclusive and `config snapshot` remains the way to verify the current state. Read its `durationMs` as a hint: an engine time near the timeout means raise `CAIRNCMS_REMOTE_CONFIG_TIMEOUT`, and a short one means the delay was in transport.
+
 ### Exit codes
 
 Both config commands map their outcome to an exit code, so a pipeline can branch on the result without parsing output:
@@ -229,7 +231,7 @@ Both config commands map their outcome to an exit code, so a pipeline can branch
 | Usage error, or an invalid existing tree | 2 |
 | No database connection, system tables not installed, unreadable state, or an unexpected failure | 3 |
 
-Exit `1` indicates drift. Exit `2` indicates invalid input, invalid command usage, or a refused destructive apply. Exit `3` indicates an operational or unexpected runtime failure.
+Exit `1` indicates drift. Exit `2` indicates invalid input, invalid command usage, or a refused destructive apply. Exit `3` indicates an operational or unexpected runtime failure. A `CONFIG_STATE_CHANGED` conflict also exits `2`. The [run record](#run-record) distinguishes it from a refusal through its `result`.
 
 Remote mode (`--url`) maps onto the same scheme. A server below the required version, a `4xx` response, or a missing `--yes` on a mutating apply exits `2`. A transport failure, a `5xx` response, an unrecognized server version, or a malformed response exits `3`. If a mutating remote request fails after the server may already have committed, the message says so and re-running `config snapshot` shows the current state.
 
@@ -322,6 +324,25 @@ Applies are attributed:
 Domain action events such as `roles.create` and `permissions.delete` are emitted once, after the transaction commits, so an extension hook is never told about a change that a rollback later undoes, and no event is emitted for an apply that rolls back.
 
 If cache invalidation fails after the transaction has committed, the apply is not rolled back. The configuration is already applied and its events are delivered. The failure is reported separately as `CONFIG_POST_COMMIT_FAILED` (HTTP `500`, CLI exit `3`). Its `extensions.committed` is `true` and its `extensions.phase` is `cache`, so a client can tell the configuration was applied even though the cache was not cleared. Clear the cache with `POST /utils/cache/clear` to recover, since re-running the apply may produce an empty plan and will not clear the cache on its own.
+
+### Run record
+
+Every engine run on either surface attempts to write one structured log record when it finishes, so an operator can see what each plan or apply did without reading activity rows. Dry runs and refusals are recorded too, since they mutate nothing and would otherwise leave no trace. The record is best-effort: a logging failure never changes the run's outcome, so a present record is authoritative while an absent one proves nothing. Alongside pino's standard `level` and `time` fields, the record carries:
+
+```json
+{"event":"config.run.finished","runId":"3f6c1b0e-9b2c-4a1d-8f2e-0a7d5c4b3e21","source":"http","caller":{"kind":"user","user":"<uuid>","role":"<uuid>"},"userAgent":"cairncms-cli/1.6.0","dryRun":false,"destructive":true,"manifestVersion":1,"managedKinds":["roles","permissions"],"changes":{"create":1,"update":2,"delete":1},"result":"applied","durationMs":184,"msg":"Config run finished"}
+```
+
+- **`result`** — `no_changes`, `planned`, `discarded`, `refused`, `invalid`, `state_changed`, `applied`, `post_apply_failed`, or `failed`. `planned` is a dry run whose plan holds changes. `discarded` is a plan the operator declined at the prompt. `post_apply_failed` means the database changes were applied and only the post-apply cache maintenance failed.
+- **`errorCode`** — present for `refused`, `invalid`, `state_changed`, `failed`, and `post_apply_failed`: the typed error code, such as `DESTRUCTIVE_CHANGES_REQUIRED`, or `UNEXPECTED` for an error outside the config error set.
+- **`source`** — `cli` for a local `config apply`, `http` for `POST /config/apply`, including runs driven by the remote CLI, whose `userAgent` starts with `cairncms-cli/`.
+- **`caller`** — the administrator's user and role ids on an HTTP run, or the system actor with origin `config-cli` on a local run.
+- **`changes`** — the plan's create, update, and delete counts, never the changes themselves.
+- **`durationMs`** — engine time, from the moment the request or command has been parsed and validated to the record.
+
+The server writes the record at `info` level under both log styles. The local CLI writes it only under `LOG_STYLE=raw`, so interactive output is unchanged and a CI runner that sets raw gets one JSON line per run. Failures before the engine starts, such as a bad flag, an unreadable config directory, an unreachable database, or an unparseable request body, produce no record because the command or the request already reports them.
+
+Every response from a `POST /config/apply` run that reached the engine carries the run id in `X-Config-Run-Id`: on success and on every error the run produces, such as a refusal, a state conflict, or a failure. A request rejected before a run starts, by authentication, an unsupported media type, or an invalid manifest, carries no run id and produces no record, so a run id identifies exactly one record when emission succeeds. The header is exposed to browser clients through the default `CORS_EXPOSED_HEADERS`. The remote CLI prints it as `Run <id>`, on standard error under `--format json`. A local run has no run id because nothing else on the machine could correlate it. The record complements the per-record activity and revisions above rather than replacing them.
 
 ## Field semantics
 

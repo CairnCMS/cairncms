@@ -115,6 +115,12 @@ describe('createOperatorRemoteTransport', () => {
 		expect(transport.defaults.timeout).toBe(DEFAULT_REMOTE_TIMEOUT_MS);
 	});
 
+	it('identifies itself with the CLI product token', async () => {
+		const transport = await createOperatorRemoteTransport();
+
+		expect(transport.defaults.headers['User-Agent']).toMatch(/^cairncms-cli\/\d+\.\d+\.\d+/);
+	});
+
 	it('honors a positive numeric timeout override from the environment', async () => {
 		process.env['CAIRNCMS_REMOTE_CONFIG_TIMEOUT'] = '5000';
 
