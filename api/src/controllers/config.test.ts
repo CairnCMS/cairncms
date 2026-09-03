@@ -60,6 +60,7 @@ vi.mock('../middleware/respond.js', () => ({
 import {
 	ConfigPostCommitFailedException,
 	ConfigProtectedRecordException,
+	ConfigReadFailedException,
 	ConfigStateChangedException,
 	DestructiveChangesRequiredException,
 } from '../exceptions/index.js';
@@ -460,5 +461,33 @@ describe('POST /config/apply flag parsing', () => {
 		expect(res.status).toBe(200);
 		expect(applyConfigPlan).not.toHaveBeenCalled();
 		expectOneRecord({ result: 'planned', dryRun: true, destructive: true });
+	});
+});
+
+describe('current-state read failures', () => {
+	const ORPHAN_MESSAGE =
+		'Config snapshot could not read the permissions table: one or more permission rows reference a role that does not exist, so the database needs repair before the current state can be read.';
+
+	beforeEach(() => {
+		vi.mocked(readCurrentConfig).mockRejectedValue(new ConfigReadFailedException(ORPHAN_MESSAGE));
+	});
+
+	it('returns CONFIG_READ_FAILED from GET /config/snapshot with the non-identifying message', async () => {
+		const res = await request(makeApp(ADMIN)).get('/config/snapshot');
+
+		expect(res.status).toBe(500);
+		expect(res.body.errors).toHaveLength(1);
+		expect(res.body.errors[0]).toMatchObject({ message: ORPHAN_MESSAGE, extensions: { code: 'CONFIG_READ_FAILED' } });
+	});
+
+	it('returns CONFIG_READ_FAILED from POST /config/apply without planning or applying', async () => {
+		const res = await apply();
+
+		expect(res.status).toBe(500);
+		expect(res.body.errors).toHaveLength(1);
+		expect(res.body.errors[0]).toMatchObject({ message: ORPHAN_MESSAGE, extensions: { code: 'CONFIG_READ_FAILED' } });
+		expect(computeConfigPlan).not.toHaveBeenCalled();
+		expect(applyConfigPlan).not.toHaveBeenCalled();
+		expectOneRecord({ result: 'failed', errorCode: 'CONFIG_READ_FAILED' });
 	});
 });

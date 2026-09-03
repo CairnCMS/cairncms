@@ -398,7 +398,7 @@ Config-specific HTTP codes are:
 - **`CONFIG_PROTECTED_RECORD`** (400) — a plan that would remove the last `admin_access: true` role.
 - **`DESTRUCTIVE_CHANGES_REQUIRED`** (400) — a plan contains deletions that were not authorized. `extensions.deletions` lists the identities.
 - **`CONFIG_STATE_CHANGED`** (409) — the managed state or a role identity the plan depended on changed between plan and apply, or a concurrent write forced a serialization conflict. The apply made no change. Recompute the plan and re-apply.
-- **`CONFIG_READ_FAILED`** (500) — required database state could not be read.
+- **`CONFIG_READ_FAILED`** (500) — required database state is unreadable, such as an orphaned or duplicate permission row.
 - **`CONFIG_APPLY_FAILED`** (500) — the apply transaction failed and was rolled back.
 
 Malformed JSON uses `INVALID_PAYLOAD`. Unsupported content types use `UNSUPPORTED_MEDIA_TYPE`.

@@ -264,7 +264,7 @@ describe('getConfigSnapshot', () => {
 		expect(config.permissions[0]!.permissions).toHaveLength(1);
 	});
 
-	it('skips orphaned permissions referencing non-existent roles and warns', async () => {
+	it('refuses a permission row whose role does not exist, without naming the row or the role', async () => {
 		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
@@ -279,7 +279,7 @@ describe('getConfigSnapshot', () => {
 				fields: null,
 			},
 			{
-				id: 2,
+				id: 'orphan-row-77',
 				role: 'ghost-uuid',
 				collection: 'articles',
 				action: 'read',
@@ -290,13 +290,18 @@ describe('getConfigSnapshot', () => {
 			},
 		]);
 
-		const config = await getConfigSnapshot({ database: db });
+		const error = await getConfigSnapshot({ database: db }).catch((err) => err);
 
-		expect(config.permissions).toHaveLength(1);
-		expect(config.permissions[0]!.role).toBe('editor');
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
 
-		expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('non-existent role'));
-		expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('orphaned permission'));
+		expect(error.message).toBe(
+			'Config snapshot could not read the permissions table: one or more permission rows reference a role that does not exist, so the database needs repair before the current state can be read.'
+		);
+
+		expect(error.message).not.toContain('orphan-row-77');
+		expect(error.message).not.toContain('ghost-uuid');
+		expect(logger.warn).not.toHaveBeenCalled();
 	});
 
 	it('aborts on a malformed JSON payload field rather than exporting it as no policy', async () => {
@@ -511,10 +516,17 @@ describe('getConfigSnapshot', () => {
 			},
 		]);
 
-		await expect(getConfigSnapshot({ database: db })).rejects.toThrow('Duplicate permission');
+		const error = await getConfigSnapshot({ database: db }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+
+		expect(error.message).toBe(
+			'Config snapshot could not read permissions for role key=editor: collection "articles" with action "read" is stored more than once, so the rows must be deduplicated before the current state can be read.'
+		);
 	});
 
-	it('sanitizes control characters in both dynamic values of the orphan warning', async () => {
+	it('keeps the orphan refusal free of identifiers even when they carry control characters', async () => {
 		mockRole();
 		const idControl = String.fromCharCode(1);
 		const roleControl = String.fromCharCode(2);
@@ -532,11 +544,14 @@ describe('getConfigSnapshot', () => {
 			},
 		]);
 
-		await getConfigSnapshot({ database: db });
+		const error = await getConfigSnapshot({ database: db }).catch((err) => err);
 
-		expect(logger.warn).toHaveBeenCalledWith(
-			'Permission id=7? references non-existent role ghost?, skipped in snapshot.'
-		);
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+		expect(error.message).not.toContain('7');
+		expect(error.message).not.toContain('ghost');
+		expect(error.message).not.toContain(idControl);
+		expect(error.message).not.toContain(roleControl);
+		expect(logger.warn).not.toHaveBeenCalled();
 	});
 
 	it('sanitizes control characters in the duplicate permission error', async () => {
@@ -560,7 +575,9 @@ describe('getConfigSnapshot', () => {
 
 		const error = await getConfigSnapshot({ database: db }).catch((err) => err);
 
-		expect(error.message).toContain('Duplicate permission found');
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error.message).toContain('is stored more than once');
+		expect(error.message).toContain('arti?cles');
 		expect(error.message).not.toContain(control);
 	});
 
@@ -843,6 +860,52 @@ describe('readCurrentConfig', () => {
 		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
 		expect(error.message).toContain('Configuration state could not be assembled');
 		expect(error.message).not.toContain('published');
+	});
+
+	it('mints no state token when a permission row references a role that does not exist', async () => {
+		mockRole();
+		mockPermission({ id: 'orphan-row-77', role: 'ghost-uuid' });
+
+		const error = await readCurrentConfig({ database: db, resources: ['permissions'] }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+		expect(error).not.toHaveProperty('stateToken');
+		expect(error.message).not.toContain('orphan-row-77');
+		expect(error.message).not.toContain('ghost-uuid');
+	});
+
+	it('mints no state token when a permission tuple is stored twice', async () => {
+		mockRole();
+
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
+			{
+				id: 1,
+				role: 'uuid-1',
+				collection: 'articles',
+				action: 'read',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: null,
+			},
+			{
+				id: 2,
+				role: 'uuid-1',
+				collection: 'articles',
+				action: 'read',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: null,
+			},
+		]);
+
+		const error = await readCurrentConfig({ database: db, resources: ['permissions'] }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+		expect(error).not.toHaveProperty('stateToken');
 	});
 
 	it('routes role reads through the registry descriptor', async () => {

@@ -1,7 +1,6 @@
 import { PUBLIC_ROLE_KEY } from '@cairncms/constants';
 import type { PermissionsAction } from '@cairncms/types';
 import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
-import logger from '../../../logger.js';
 import { PermissionsService } from '../../../services/permissions.js';
 import type {
 	ApplyResult,
@@ -169,36 +168,29 @@ async function readCurrent(context: ReadContext<PermissionsKindTypes>): Promise<
 
 	const permissionsByRoleKey = new Map<string, ConfigPermission[]>();
 	const seen = new Set<string>();
-	let orphanedCount = 0;
 
 	for (const perm of rows) {
 		if (perm['system'] === true) continue;
 
 		assertPermissionRow(perm);
 
-		const roleId = perm['role'];
-		const roleKey = roleKeyById.get(roleId);
+		const roleKey = roleKeyById.get(perm['role']);
 
 		if (!roleKey) {
-			orphanedCount++;
-
-			logger.warn(
-				`Permission id=${safeLogFragment(perm['id'])} references non-existent role ${safeLogFragment(
-					roleId
-				)}, skipped in snapshot.`
+			throw unreadable(
+				'the permissions table',
+				'one or more permission rows reference a role that does not exist, so the database needs repair before the current state can be read'
 			);
-
-			continue;
 		}
 
 		const tupleKey = `${roleKey}::${perm['collection']}::${perm['action']}`;
 
 		if (seen.has(tupleKey)) {
-			throw new Error(
-				`Duplicate permission found: role="${safeLogFragment(roleKey)}" collection="${safeLogFragment(
-					perm['collection']
-				)}" action="${safeLogFragment(perm['action'])}". ` +
-					`Resolve duplicates in the admin UI or database before running config snapshot.`
+			throw unreadable(
+				`permissions for role key=${safeLogFragment(roleKey)}`,
+				`collection "${safeLogFragment(perm['collection'])}" with action "${safeLogFragment(
+					perm['action']
+				)}" is stored more than once, so the rows must be deduplicated before the current state can be read`
 			);
 		}
 
@@ -216,14 +208,6 @@ async function readCurrent(context: ReadContext<PermissionsKindTypes>): Promise<
 			presets: parseStoredJSON('presets', perm['id'], perm['presets']),
 			fields: parseStoredCSV(perm['id'], perm['fields']),
 		});
-	}
-
-	if (orphanedCount > 0) {
-		logger.warn(
-			`Skipped ${orphanedCount} orphaned permission(s) referencing non-existent roles. ` +
-				`This indicates database inconsistency or out-of-band modification. ` +
-				`Clean up these rows directly in the database before relying on this snapshot as authoritative.`
-		);
 	}
 
 	const roleKeys = [...permissionsByRoleKey.keys()].sort((a, b) => a.localeCompare(b));
