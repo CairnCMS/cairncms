@@ -918,6 +918,75 @@ describe('Integration Tests', () => {
 			});
 		});
 
+		describe('upsertMany', () => {
+			beforeEach(() => {
+				tracker.on.select(/select "key" from "directus_roles"$/).response([{ key: 'editor' }]);
+			});
+
+			it('creates a missing role with a generated key through the shared deferred options', async () => {
+				const createOne = vi.spyOn(ItemsService.prototype, 'createOne').mockResolvedValueOnce(7);
+
+				await expect(service.upsertMany([{ name: 'Supreme Editor' }])).resolves.toEqual([7]);
+
+				expect(createOne).toHaveBeenCalledWith(
+					expect.objectContaining({ name: 'Supreme Editor', key: 'supreme_editor' }),
+					expect.objectContaining({ autoPurgeCache: false, autoPurgeSystemCache: false })
+				);
+
+				createOne.mockRestore();
+			});
+
+			it('rejects an invalid, reserved, or already-used caller-supplied key on create', async () => {
+				for (const key of ['Bad Key', 'public', 'editor']) {
+					await expect(service.upsertMany([{ key, name: 'Test' }])).rejects.toBeInstanceOf(InvalidPayloadException);
+				}
+			});
+
+			it('rejects a missing name and key on create', async () => {
+				await expect(service.upsertMany([{ description: 'x' }])).rejects.toBeInstanceOf(InvalidPayloadException);
+			});
+
+			it('rejects changing an existing role key on update', async () => {
+				tracker.on.select('select "key" from "directus_roles" where "id" = ?').responseOnce({ key: 'editor' });
+
+				await expect(service.upsertMany([{ id: 1, key: 'different_key' }])).rejects.toBeInstanceOf(
+					InvalidPayloadException
+				);
+			});
+
+			it.each(['admin_access', 'app_access', 'enforce_tfa', 'ip_access', 'users'])(
+				'rejects the protected field %s on the sentinel role',
+				async (field) => {
+					const schema = JSON.parse(JSON.stringify(service.schema)) as typeof service.schema;
+					schema.collections['directus_roles']!.fields['id']!.type = 'uuid';
+					schema.collections['directus_roles']!.fields['id']!.dbType = 'uuid';
+					const sentinelService = new RolesService({ knex: db, schema });
+					const updateOne = vi.spyOn(ItemsService.prototype, 'updateOne');
+
+					await expect(
+						sentinelService.upsertMany([{ id: '00000000-0000-0000-0000-000000000000', [field]: true }])
+					).rejects.toBeInstanceOf(InvalidPayloadException);
+
+					expect(updateOne).not.toHaveBeenCalled();
+					updateOne.mockRestore();
+				}
+			);
+
+			it('allows a display-only field on the sentinel role', async () => {
+				const schema = JSON.parse(JSON.stringify(service.schema)) as typeof service.schema;
+				schema.collections['directus_roles']!.fields['id']!.type = 'uuid';
+				schema.collections['directus_roles']!.fields['id']!.dbType = 'uuid';
+				const sentinelService = new RolesService({ knex: db, schema });
+				const updateOne = vi.spyOn(ItemsService.prototype, 'updateOne').mockResolvedValueOnce('public');
+
+				await expect(
+					sentinelService.upsertMany([{ id: '00000000-0000-0000-0000-000000000000', name: 'Public' }])
+				).resolves.toEqual(['public']);
+
+				updateOne.mockRestore();
+			});
+		});
+
 		describe('sentinel role guards', () => {
 			// Real directus_roles.id is a UUID; the shared service above uses an integer
 			// schema for test-simplicity. These tests need UUID-typed keys so that
@@ -1306,6 +1375,7 @@ describe('Integration Tests', () => {
 
 		beforeEach(() => {
 			service = new RolesService({ knex: db, schema: continuitySchema });
+			tracker.on.select(/select "key" from "directus_roles"$/).response([]);
 		});
 
 		it('allows demoting an administrator while another remains', async () => {
@@ -1343,9 +1413,15 @@ describe('Integration Tests', () => {
 			).resolves.toEqual([1, 2]);
 		});
 
+		function rolesExist(...ids: number[]): void {
+			tracker.on
+				.select(/select "id" from "directus_roles" where "id" = /)
+				.response((query) => (ids.includes(Number(query.bindings[0])) ? [{ id: query.bindings[0] }] : []));
+		}
+
 		it('reaches continuity enforcement through upsertMany for an existing administrator role', async () => {
 			adminSnapshotRows = [{ id: 1 }];
-			tracker.on.select(/select "id" from "directus_roles" where "id" = /).response([{ id: 1 }]);
+			rolesExist(1);
 			const createOne = vi.spyOn(ItemsService.prototype, 'createOne');
 
 			await expect(service.upsertMany([{ id: 1, admin_access: false }])).rejects.toBeInstanceOf(
@@ -1357,10 +1433,46 @@ describe('Integration Tests', () => {
 			createOne.mockRestore();
 		});
 
+		it('does not credit a promotion made earlier in the same upsertMany call', async () => {
+			adminSnapshotRows = [{ id: 1 }];
+			rolesExist(1, 2);
+
+			await expect(
+				service.upsertMany([
+					{ id: 2, admin_access: true },
+					{ id: 1, admin_access: false },
+				])
+			).rejects.toBeInstanceOf(UnprocessableEntityException);
+		});
+
+		it('creates and updates through upsertMany under one deferred lifecycle', async () => {
+			adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+			rolesExist(1);
+			const createOne = vi.spyOn(ItemsService.prototype, 'createOne').mockResolvedValueOnce(9);
+
+			await expect(service.upsertMany([{ name: 'Fresh' }, { id: 1, admin_access: false }])).resolves.toEqual([9, 1]);
+
+			expect(createOne).toHaveBeenCalledWith(
+				expect.objectContaining({ key: 'fresh' }),
+				expect.objectContaining({ autoPurgeCache: false, autoPurgeSystemCache: false })
+			);
+
+			createOne.mockRestore();
+		});
+
 		it('does not mutate the caller-supplied options object', async () => {
 			adminSnapshotRows = [{ id: 1 }, { id: 2 }];
 			const opts: MutationOptions = {};
 			await service.updateMany([1], { admin_access: false }, opts);
+			expect(opts).toEqual({});
+		});
+
+		it('does not mutate frozen caller-supplied options through upsertMany', async () => {
+			adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+			rolesExist(1);
+			const opts = Object.freeze({}) as MutationOptions;
+
+			await expect(service.upsertMany([{ id: 1, admin_access: false }], opts)).resolves.toEqual([1]);
 			expect(opts).toEqual({});
 		});
 	});

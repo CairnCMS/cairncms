@@ -119,15 +119,49 @@ export class RolesService extends ItemsService {
 		}
 	}
 
-	private async assertKeyUnchanged(id: PrimaryKey, newKey: unknown): Promise<void> {
+	private async assertKeyUnchanged(id: PrimaryKey, newKey: unknown, knex: Knex = this.knex): Promise<void> {
 		if (newKey === undefined) return;
 
-		const row = await this.knex('directus_roles').select('key').where({ id }).first();
+		const row = await knex('directus_roles').select('key').where({ id }).first();
 
 		if (row && row.key !== newKey) {
 			throw new InvalidPayloadException(
 				`Role key cannot be changed after creation. Delete and recreate the role instead.`
 			);
+		}
+	}
+
+	private prepareCreatePayload(item: Partial<Item>, usedKeys: Set<string>): void {
+		if (item['key']) {
+			this.validateKey(item['key']);
+
+			if (usedKeys.has(item['key'])) {
+				throw new InvalidPayloadException(`Duplicate role key "${item['key']}".`);
+			}
+
+			usedKeys.add(item['key']);
+		} else {
+			if (!item['name']) {
+				throw new InvalidPayloadException('Role must have a name or a key.');
+			}
+
+			item['key'] = this.resolveKey(item['name'], usedKeys);
+		}
+	}
+
+	private async assertUpdateInvariants(
+		key: PrimaryKey,
+		data: Record<string, any>,
+		knex: Knex = this.knex
+	): Promise<void> {
+		this.assertSentinelUpdateAllowed([key], data);
+
+		if ('key' in data && data['key'] != null) {
+			if (!this.isSentinel(key)) {
+				this.validateKey(data['key']);
+			}
+
+			await this.assertKeyUnchanged(key, data['key'], knex);
 		}
 	}
 
@@ -167,28 +201,18 @@ export class RolesService extends ItemsService {
 		const usedKeys = new Set(existing.map((r: any) => r.key as string));
 
 		for (const item of data) {
-			if (item['key']) {
-				this.validateKey(item['key']);
-
-				if (usedKeys.has(item['key'])) {
-					throw new InvalidPayloadException(`Duplicate role key "${item['key']}".`);
-				}
-
-				usedKeys.add(item['key']);
-			} else {
-				if (!item['name']) {
-					throw new InvalidPayloadException('Role must have a name or a key.');
-				}
-
-				item['key'] = this.resolveKey(item['name'], usedKeys);
-			}
+			this.prepareCreatePayload(item, usedKeys);
 		}
 
 		return super.createMany(data, opts);
 	}
 
-	private async checkForOtherAdminUsers(key: PrimaryKey, users: Alterations | Item[]): Promise<void> {
-		const role = await this.knex.select('admin_access').from('directus_roles').where('id', '=', key).first();
+	private async checkForOtherAdminUsers(
+		key: PrimaryKey,
+		users: Alterations | Item[],
+		knex: Knex = this.knex
+	): Promise<void> {
+		const role = await knex.select('admin_access').from('directus_roles').where('id', '=', key).first();
 
 		if (!role) throw new ForbiddenException();
 
@@ -201,7 +225,7 @@ export class RolesService extends ItemsService {
 			userKeys = users.update.map((user) => user['id']).filter((id) => id);
 		}
 
-		const usersThatWereInRoleBefore = (await this.knex.select('id').from('directus_users').where('role', '=', key)).map(
+		const usersThatWereInRoleBefore = (await knex.select('id').from('directus_users').where('role', '=', key)).map(
 			(user) => user.id
 		);
 
@@ -216,7 +240,7 @@ export class RolesService extends ItemsService {
 		// users
 		if ((role.admin_access === true || role.admin_access === 1) && usersThatAreAdded.length > 0) return;
 
-		const otherAdminUsers = await this.knex
+		const otherAdminUsers = await knex
 			.count('*', { as: 'count' })
 			.from('directus_users')
 			.whereNotIn('directus_users.id', [...userKeys, ...usersThatAreRemoved])
@@ -334,15 +358,7 @@ export class RolesService extends ItemsService {
 		const primaryKeyField = this.schema.collections[this.collection]!.primary;
 
 		for (const item of data) {
-			this.assertSentinelUpdateAllowed([item[primaryKeyField]], item);
-
-			if ('key' in item && item['key'] != null) {
-				if (!this.isSentinel(item[primaryKeyField])) {
-					this.validateKey(item['key']);
-				}
-
-				await this.assertKeyUnchanged(item[primaryKeyField], item['key']);
-			}
+			await this.assertUpdateInvariants(item[primaryKeyField], item);
 		}
 
 		return this.withBoundContext(opts, false, async (trx, mode, mutationOpts) => {
@@ -380,10 +396,55 @@ export class RolesService extends ItemsService {
 	}
 
 	override async upsertMany(payloads: Partial<Item>[], opts: MutationOptions = {}): Promise<PrimaryKey[]> {
-		return this.withBoundContext(opts, false, async (trx, mode, mutationOpts) => {
+		const options: MutationOptions = { ...opts };
+		if (!options.mutationTracker) options.mutationTracker = this.createMutationTracker();
+
+		const primaryKeyField = this.schema.collections[this.collection]!.primary;
+
+		return this.withBoundContext(options, false, async (trx, mode, mutationOpts) => {
 			const snapshot = await this.readAdminRoleIds(trx);
 			const guarded = withMutationGuard(mutationOpts, new AdminContinuityGuard(mode, snapshot));
-			return this.itemsServiceOn(trx).upsertMany(payloads, guarded);
+			const service = this.itemsServiceOn(trx);
+			const existing = await trx('directus_roles').select('key');
+			const usedKeys = new Set(existing.map((row: { key: string }) => row.key));
+			const primaryKeys: PrimaryKey[] = [];
+
+			for (const payload of payloads) {
+				const primaryKey: PrimaryKey | undefined = payload[primaryKeyField];
+
+				if (primaryKey) {
+					validateKeys(this.schema, this.collection, primaryKeyField, primaryKey);
+				}
+
+				const exists =
+					!!primaryKey &&
+					!!(await trx
+						.select(primaryKeyField)
+						.from(this.collection)
+						.where({ [primaryKeyField]: primaryKey })
+						.first());
+
+				if (exists) {
+					await this.assertUpdateInvariants(primaryKey as PrimaryKey, payload, trx);
+
+					const itemOpts: MutationOptions = { ...guarded };
+
+					try {
+						if ('users' in payload) {
+							await this.checkForOtherAdminUsers(primaryKey as PrimaryKey, payload['users'], trx);
+						}
+					} catch (err: any) {
+						itemOpts.preMutationException = err;
+					}
+
+					primaryKeys.push(await service.updateOne(primaryKey as PrimaryKey, payload, itemOpts));
+				} else {
+					this.prepareCreatePayload(payload, usedKeys);
+					primaryKeys.push(await service.createOne(payload, guarded));
+				}
+			}
+
+			return primaryKeys;
 		});
 	}
 
