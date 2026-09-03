@@ -19,6 +19,39 @@ const runsPostgres = vendors.includes(VENDOR);
 
 type CliResult = { status: number | null; stdout: string; stderr: string };
 
+let corruptNextMutatingApply = false;
+
+function rewriteUpstreamPayload(req: http.IncomingMessage, status: number, payload: Buffer): Buffer {
+	const url = req.url ?? '';
+	const pathname = url.split('?')[0];
+
+	if (pathname === '/server/info' && req.method === 'GET') {
+		try {
+			const parsed = JSON.parse(payload.toString('utf8'));
+			if (parsed?.data?.cairncms) parsed.data.cairncms.version = MIN_VERSION;
+			return Buffer.from(JSON.stringify(parsed));
+		} catch {
+			return payload;
+		}
+	}
+
+	const mutatingApply = pathname === '/config/apply' && req.method === 'POST' && !url.includes('dry_run=true');
+
+	if (mutatingApply && corruptNextMutatingApply && status >= 200 && status < 300) {
+		corruptNextMutatingApply = false;
+
+		try {
+			const parsed = JSON.parse(payload.toString('utf8'));
+			if (Array.isArray(parsed?.data?.roles?.updated)) parsed.data.roles.updated.push('phantom');
+			return Buffer.from(JSON.stringify(parsed));
+		} catch {
+			return payload;
+		}
+	}
+
+	return payload;
+}
+
 function generateCert(dir: string): { certPath: string; keyPath: string } {
 	const certPath = path.join(dir, 'cert.pem');
 	const keyPath = path.join(dir, 'key.pem');
@@ -72,21 +105,12 @@ function startProxy(cert: Buffer, key: Buffer, upstream: string): Promise<https.
 					upstreamRes.on('data', (chunk) => responseChunks.push(chunk));
 
 					upstreamRes.on('end', () => {
-						let payload = Buffer.concat(responseChunks);
+						const status = upstreamRes.statusCode ?? 502;
+						const payload = rewriteUpstreamPayload(req, status, Buffer.concat(responseChunks));
 						const responseHeaders = { ...upstreamRes.headers };
 						delete responseHeaders['content-length'];
 
-						if ((req.url ?? '').split('?')[0] === '/server/info' && req.method === 'GET') {
-							try {
-								const parsed = JSON.parse(payload.toString('utf8'));
-								if (parsed?.data?.cairncms) parsed.data.cairncms.version = MIN_VERSION;
-								payload = Buffer.from(JSON.stringify(parsed));
-							} catch {
-								// forward a non-JSON body untouched
-							}
-						}
-
-						res.writeHead(upstreamRes.statusCode ?? 502, responseHeaders);
+						res.writeHead(status, responseHeaders);
 						res.end(payload);
 					});
 				}
@@ -175,6 +199,7 @@ describe('Config-as-Code remote CLI', () => {
 			LOG_LEVEL: 'info',
 			LOG_STYLE: 'raw',
 		};
+
 		delete untrustedEnv['NODE_EXTRA_CA_CERTS'];
 		trustedEnv = { ...untrustedEnv, NODE_EXTRA_CA_CERTS: certPath };
 	});
@@ -243,7 +268,24 @@ describe('Config-as-Code remote CLI', () => {
 			const created = await findRole(roleKey);
 			expect(created).toBeDefined();
 			expect(created!.name).toBe('Remote CLI Test');
+
+			await fs.writeFile(
+				path.join(configDir, 'roles', `${roleKey}.yaml`),
+				dumpYaml({ key: roleKey, name: 'Remote CLI Renamed', admin_access: false, app_access: false })
+			);
+
+			corruptNextMutatingApply = true;
+			const corrupted = await runCli(['config', 'apply', configDir, '--url', proxyUrl, '--yes'], trustedEnv);
+			const corruptedOutput = corrupted.stdout + corrupted.stderr;
+
+			expect(corruptNextMutatingApply).toBe(false);
+			expect(corrupted.status).toBe(3);
+			expect(corruptedOutput).toContain('a result that does not match its plan');
+			expect(corruptedOutput).toContain('re-snapshot to verify the current state');
+			expect(corruptedOutput).toMatch(/Run [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
+			expect(corruptedOutput).not.toContain('Config applied');
+			expect((await findRole(roleKey))!.name).toBe('Remote CLI Renamed');
 		},
-		90000
+		120000
 	);
 });

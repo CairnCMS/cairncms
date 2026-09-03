@@ -468,6 +468,31 @@ describe('getConfigSnapshot', () => {
 		expect(error.message).toContain('less than or equal to 64');
 	});
 
+	it.each(['name', 'description'])('refuses a role whose %s is written in placeholder form', async (field) => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
+			roleRow({ [field]: '{{CAIRNCMS_CONFIG_SECRET}}' }),
+		]);
+
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const error = await getConfigSnapshot({ database: db }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error.message).toContain(`field "${field}" holds placeholder syntax`);
+		expect(error.message).toContain('editor');
+		expect(error.message).toContain('rename the stored value');
+		expect(error.message).not.toContain('CAIRNCMS_CONFIG_SECRET');
+	});
+
+	it('still exports a value that merely contains braces', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow({ name: 'Team {{alpha}}' })]);
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const config = await getConfigSnapshot({ database: db });
+
+		expect(config.roles[0]!.name).toBe('Team {{alpha}}');
+	});
+
 	it('skips synthetic system permissions', async () => {
 		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
 
@@ -982,7 +1007,10 @@ describe('readCurrentConfig', () => {
 		});
 
 		expect(config.permissions.map((set) => set.role)).toEqual(['editor', 'public']);
-		expect(validateDesiredConfig(config, { label: 'snapshot', currentRoleKeys })).toEqual([]);
+
+		expect(validateDesiredConfig(config, { label: 'snapshot', references: 'current-state', currentRoleKeys })).toEqual(
+			[]
+		);
 	});
 });
 

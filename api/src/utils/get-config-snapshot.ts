@@ -18,7 +18,7 @@ import { getDescriptor } from './config/registry.js';
 import { resolveReadClosure } from './config/scope.js';
 import { getSchema } from './get-schema.js';
 import { safeLogFragment } from './safe-log-fragment.js';
-import { validateConfigRecord } from './validate-desired-config.js';
+import { findPlaceholderSyntax, validateConfigRecord } from './validate-desired-config.js';
 
 export type CurrentConfigRead = {
 	config: CairnConfig;
@@ -106,6 +106,16 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		roles: (documentsByKind.get('roles') ?? []) as ConfigRole[],
 		permissions: (documentsByKind.get('permissions') ?? []) as ConfigPermissionSet[],
 	};
+
+	const placeholders = findPlaceholderSyntax(config);
+
+	if (placeholders.length > 0) {
+		throw new ConfigReadFailedException(
+			`Config snapshot could not represent the current state: ${placeholders.join(
+				'; '
+			)}. The config format substitutes that form on read, so rename the stored value, then retry.`
+		);
+	}
 
 	const readsRoles = closure.some((entry) => entry.kind === 'roles');
 	let currentRoleKeys: ReadonlySet<string> = new Set<string>();

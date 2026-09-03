@@ -34,13 +34,19 @@ function document(overrides: Record<string, unknown> = {}): Record<string, unkno
 }
 
 function validate(doc: Record<string, unknown>, currentRoleKeys: string[] = []): string[] {
-	return validateDesiredConfig(doc, { label: 'test', currentRoleKeys: new Set(currentRoleKeys) }).map(
-		(failure) => failure.message
-	);
+	return validateFull(doc, currentRoleKeys).map((failure) => failure.message);
 }
 
 function validateFull(doc: Record<string, unknown>, currentRoleKeys: string[] = []) {
-	return validateDesiredConfig(doc, { label: 'test', currentRoleKeys: new Set(currentRoleKeys) });
+	return validateDesiredConfig(doc, {
+		label: 'test',
+		references: 'current-state',
+		currentRoleKeys: new Set(currentRoleKeys),
+	});
+}
+
+function validateSnapshot(doc: Record<string, unknown>): string[] {
+	return validateDesiredConfig(doc, { label: 'test', references: 'server-snapshot' }).map((failure) => failure.message);
 }
 
 describe('validateConfigManifest', () => {
@@ -301,6 +307,59 @@ describe('validateDesiredConfig', () => {
 		const doc = document({ manifest: manifest(['permissions']), roles: [], permissions: [permissionSet()] });
 
 		expect(validate(doc)).toEqual(['Permission set references role "editor", which does not exist in the database.']);
+	});
+
+	it('accepts a permissions-only server snapshot whose subjects are unknown locally', () => {
+		const doc = document({ manifest: manifest(['permissions']), roles: [], permissions: [permissionSet()] });
+
+		expect(validateSnapshot(doc)).toEqual([]);
+	});
+
+	it('still resolves a permission subject against the snapshot itself when the snapshot manages roles', () => {
+		const doc = document({ roles: [], permissions: [permissionSet()] });
+
+		expect(validateSnapshot(doc)).toEqual(['Permission set references role "editor", which no role file declares.']);
+	});
+
+	it('keeps the structural rules in server-snapshot mode', () => {
+		const unknownField = document({
+			manifest: manifest(['permissions']),
+			roles: [],
+			permissions: [permissionSet({ collection: 'articles' })],
+		});
+
+		const duplicateTuple = document({
+			manifest: manifest(['permissions']),
+			roles: [],
+			permissions: [permissionSet({ permissions: [permission(), permission()] })],
+		});
+
+		expect(validateSnapshot(unknownField)).toHaveLength(1);
+		expect(validateSnapshot(duplicateTuple)).toHaveLength(1);
+	});
+
+	it.each(['name', 'description'])('rejects a role %s written in placeholder form in both modes', (field) => {
+		const doc = document({ roles: [role({ [field]: '{{CAIRNCMS_CONFIG_SECRET}}' })] });
+
+		const expected = `roles record "editor" field "${field}" holds placeholder syntax, which cannot be stored because the reader would substitute it. Send a resolved value.`;
+
+		expect(validate(doc)).toEqual([expected]);
+		expect(validateSnapshot(doc)).toEqual([expected]);
+		expect(validateFull(doc)[0]!.code).toBe('CONFIG_INVALID');
+	});
+
+	it('accepts a value that merely contains braces or an out-of-form placeholder', () => {
+		expect(validate(document({ roles: [role({ name: 'Team {{alpha}}', description: '{{lower}}' })] }))).toEqual([]);
+	});
+
+	it('ignores placeholder-shaped values under an unmanaged kind', () => {
+		const doc = document({
+			manifest: manifest(['permissions']),
+			roles: [role({ name: '{{CAIRNCMS_CONFIG_SECRET}}' })],
+			permissions: [permissionSet()],
+		});
+
+		expect(validate(doc, ['editor'])).toEqual([]);
 	});
 
 	it('takes scope from the document, so a declared kind is the only thing validation follows', () => {

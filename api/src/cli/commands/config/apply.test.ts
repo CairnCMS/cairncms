@@ -642,3 +642,45 @@ describe('configApply run record', () => {
 		expect(process.exit).toHaveBeenCalledWith(0);
 	});
 });
+
+describe('configApply placeholder-shaped desired values', () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+		vi.clearAllMocks();
+		vi.mocked(validateDesiredConfig).mockImplementation(() => []);
+	});
+
+	it('refuses a resolved value in placeholder form before planning or applying', async () => {
+		vi.spyOn(process, 'exit').mockImplementation((code) => {
+			throw new Error(`exit:${code}`);
+		});
+
+		const actual = await vi.importActual<typeof import('../../../utils/validate-desired-config.js')>(
+			'../../../utils/validate-desired-config.js'
+		);
+
+		vi.mocked(validateDesiredConfig).mockImplementation(actual.validateDesiredConfig);
+
+		const desired: CairnConfig = {
+			manifest: { version: 1, resources: ['roles'] },
+			roles: [{ key: 'editor', name: '{{CAIRNCMS_CONFIG_OTHER}}', admin_access: false, app_access: true }],
+			permissions: [],
+		};
+
+		vi.mocked(readConfigDirectory).mockResolvedValue(desired);
+
+		vi.mocked(readCurrentConfig).mockResolvedValue({
+			config: { ...desired, roles: [] },
+			currentRoleKeys: new Set<string>(),
+			stateToken: STATE_TOKEN,
+		});
+
+		await expect(
+			configApply('./config', { format: 'human', dryRun: false, destructive: false, yes: true })
+		).rejects.toThrow('exit:2');
+
+		expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('field "name" holds placeholder syntax'));
+		expect(computeConfigPlan).not.toHaveBeenCalled();
+		expect(applyConfigPlan).not.toHaveBeenCalled();
+	});
+});

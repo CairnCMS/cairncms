@@ -273,8 +273,24 @@ function validateDesired(
 				if (!context.declaredRoleKeys.has(set.role)) {
 					failures.push(invalid(`Permission set references role "${subject}", which no role file declares.`));
 				}
-			} else if (!context.currentRoleKeys.has(set.role)) {
-				failures.push(invalid(`Permission set references role "${subject}", which does not exist in the database.`));
+			} else {
+				switch (context.references) {
+					case 'current-state':
+						if (!context.currentRoleKeys.has(set.role)) {
+							failures.push(
+								invalid(`Permission set references role "${subject}", which does not exist in the database.`)
+							);
+						}
+
+						break;
+					case 'server-snapshot':
+						break;
+
+					default: {
+						const unsupported: never = context;
+						throw new Error(`Unsupported role reference source: ${JSON.stringify(unsupported)}`);
+					}
+				}
 			}
 		}
 

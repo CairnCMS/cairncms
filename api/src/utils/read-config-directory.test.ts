@@ -369,7 +369,11 @@ describe('readConfigDirectory', () => {
 
 		expect((config as unknown as { roles: Array<Record<string, unknown>> }).roles[0]!['key']).toBe(true);
 
-		const failures = validateDesiredConfig(config, { label: 'true.yaml', currentRoleKeys: new Set() });
+		const failures = validateDesiredConfig(config, {
+			label: 'true.yaml',
+			references: 'current-state',
+			currentRoleKeys: new Set(),
+		});
 
 		const keyFailure = failures.find(
 			(failure) => failure.code === 'CONFIG_INVALID' && failure.message.includes('roles[0].key')

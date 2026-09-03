@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { CairnConfig } from '../../../types/config.js';
 import { parseOperatorRemoteTarget } from './operator-remote-target.js';
 import {
 	applyRemote,
@@ -11,6 +12,32 @@ import {
 
 const TOKEN = 'secret-token-123';
 const BEL = String.fromCharCode(7);
+
+const BODY: CairnConfig = { manifest: { version: 1, resources: ['roles', 'permissions'] }, roles: [], permissions: [] };
+
+const ROLES_ONLY_BODY: CairnConfig = { manifest: { version: 1, resources: ['roles'] }, roles: [], permissions: [] };
+
+const ROLE_CREATE = {
+	kind: 'roles',
+	operation: 'create',
+	identity: { key: 'editor' },
+	values: {
+		name: 'Editor',
+		icon: 'badge',
+		description: null,
+		admin_access: false,
+		app_access: true,
+		enforce_tfa: false,
+		ip_access: null,
+	},
+};
+
+const PERMISSION_CREATE = {
+	kind: 'permissions',
+	operation: 'create',
+	identity: { role: 'editor', collection: 'articles', action: 'read' },
+	values: { permissions: null, validation: null, presets: null, fields: null },
+};
 
 function session(responder: (config: any) => { status: number; data: unknown }): {
 	remote: RemoteSession;
@@ -98,7 +125,7 @@ const OK_RESULT = {
 
 function dryRun(plan: unknown): Promise<RemoteClientError> {
 	const { remote } = session(() => ({ status: 200, data: { data: plan } }));
-	return caught(() => applyRemote(remote, {}, { dryRun: true, destructive: false }));
+	return caught(() => applyRemote(remote, BODY, { dryRun: true, destructive: false }));
 }
 
 describe('fetchServerVersion', () => {
@@ -159,7 +186,7 @@ describe('applyRemote', () => {
 	it('returns the plan for a dry run', async () => {
 		const { remote, requests } = session(() => ({ status: 200, data: { data: OK_PLAN } }));
 
-		const outcome = await applyRemote(remote, { manifest: {} }, { dryRun: true, destructive: false });
+		const outcome = await applyRemote(remote, BODY, { dryRun: true, destructive: false });
 
 		expect(outcome).toEqual({ plan: OK_PLAN });
 		expect(requests[0].params).toEqual({ dry_run: 'true' });
@@ -168,7 +195,7 @@ describe('applyRemote', () => {
 	it('accepts a fully populated plan with protections and role-deletion impact', async () => {
 		const { remote } = session(() => ({ status: 200, data: { data: DEEP_PLAN } }));
 
-		const outcome = await applyRemote(remote, {}, { dryRun: true, destructive: false });
+		const outcome = await applyRemote(remote, BODY, { dryRun: true, destructive: false });
 
 		expect(outcome.plan).toEqual(DEEP_PLAN);
 	});
@@ -176,14 +203,120 @@ describe('applyRemote', () => {
 	it('returns plan and result for a mutating apply', async () => {
 		const { remote } = session(() => ({ status: 200, data: { data: OK_RESULT, meta: { plan: OK_PLAN } } }));
 
-		const outcome = await applyRemote(remote, { manifest: {} }, { dryRun: false, destructive: true });
+		const outcome = await applyRemote(remote, BODY, { dryRun: false, destructive: true });
 
 		expect(outcome).toEqual({ plan: OK_PLAN, result: OK_RESULT });
 	});
 
+	it('refuses a plan for a different manifest version than the one submitted', async () => {
+		const { remote } = session(() => ({ status: 200, data: { data: { ...OK_PLAN, manifestVersion: 2 } } }));
+
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: true, destructive: false }));
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toBe('The server returned a plan for a different manifest than the one submitted.');
+	});
+
+	it('refuses a plan carrying a change for a kind the submitted manifest does not manage', async () => {
+		const plan = { ...OK_PLAN, summary: { create: 1, update: 0, delete: 0 }, changes: [PERMISSION_CREATE] };
+		const result = { ...OK_RESULT, permissions: { created: 1, updated: 0, deleted: 0 } };
+
+		const dry = session(() => ({ status: 200, data: { data: plan } }));
+		const dryError = await caught(() => applyRemote(dry.remote, ROLES_ONLY_BODY, { dryRun: true, destructive: false }));
+
+		expect(dryError.exitCode).toBe(3);
+		expect(dryError.message).toBe('The server returned a plan for a different manifest than the one submitted.');
+
+		const mutating = session(() => ({ status: 200, data: { data: result, meta: { plan } } }));
+
+		const mutatingError = await caught(() =>
+			applyRemote(mutating.remote, ROLES_ONLY_BODY, { dryRun: false, destructive: false })
+		);
+
+		expect(mutatingError.exitCode).toBe(3);
+		expect(mutatingError.message).toContain('a different manifest than the one submitted');
+		expect(mutatingError.message).toContain('re-snapshot to verify the current state');
+
+		const accepted = session(() => ({ status: 200, data: { data: result, meta: { plan } } }));
+
+		await expect(applyRemote(accepted.remote, BODY, { dryRun: false, destructive: false })).resolves.toEqual({
+			plan,
+			result,
+		});
+	});
+
+	it('refuses a plan whose summary does not match its changes', async () => {
+		const plan = { ...OK_PLAN, summary: { create: 1, update: 0, delete: 0 } };
+
+		const dry = session(() => ({ status: 200, data: { data: plan } }));
+		const dryError = await caught(() => applyRemote(dry.remote, BODY, { dryRun: true, destructive: false }));
+
+		expect(dryError.exitCode).toBe(3);
+		expect(dryError.message).toBe('The server returned a plan whose summary does not match its changes.');
+
+		const mutating = session(() => ({ status: 200, data: { data: OK_RESULT, meta: { plan } } }));
+		const mutatingError = await caught(() => applyRemote(mutating.remote, BODY, { dryRun: false, destructive: false }));
+
+		expect(mutatingError.exitCode).toBe(3);
+		expect(mutatingError.message).toContain('summary does not match its changes');
+		expect(mutatingError.message).toContain('re-snapshot to verify the current state');
+	});
+
+	it('refuses a mutating success whose plan still lists protected changes, with the unknown-outcome note', async () => {
+		const plan = { ...OK_PLAN, protections: DEEP_PLAN.protections };
+		const { remote } = session(() => ({ status: 200, data: { data: OK_RESULT, meta: { plan } } }));
+
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }));
+
+		expect(error.exitCode).toBe(3);
+
+		expect(error.message).toBe(
+			'The server reported a successful apply but its plan still lists protected changes. The server may have already applied the change; re-snapshot to verify the current state.'
+		);
+	});
+
+	it('refuses a mutating result whose counts do not match the plan, and accepts one that does', async () => {
+		const plan = {
+			...OK_PLAN,
+			summary: { create: 2, update: 0, delete: 0 },
+			changes: [ROLE_CREATE, PERMISSION_CREATE],
+		};
+
+		const short = session(() => ({ status: 200, data: { data: OK_RESULT, meta: { plan } } }));
+		const shortError = await caught(() => applyRemote(short.remote, BODY, { dryRun: false, destructive: false }));
+
+		expect(shortError.exitCode).toBe(3);
+
+		expect(shortError.message).toBe(
+			'The server reported a result that does not match its plan. The server may have already applied the change; re-snapshot to verify the current state.'
+		);
+
+		const wrongKind = {
+			roles: { created: ['a', 'b'], updated: [], deleted: [] },
+			permissions: { created: 0, updated: 0, deleted: 0 },
+		};
+
+		const swapped = session(() => ({ status: 200, data: { data: wrongKind, meta: { plan } } }));
+		const swappedError = await caught(() => applyRemote(swapped.remote, BODY, { dryRun: false, destructive: false }));
+
+		expect(swappedError.message).toContain('a result that does not match its plan');
+
+		const result = {
+			roles: { created: ['4a3b'], updated: [], deleted: [] },
+			permissions: { created: 1, updated: 0, deleted: 0 },
+		};
+
+		const matching = session(() => ({ status: 200, data: { data: result, meta: { plan } } }));
+
+		await expect(applyRemote(matching.remote, BODY, { dryRun: false, destructive: false })).resolves.toEqual({
+			plan,
+			result,
+		});
+	});
+
 	it('fails at exit 3 when a mutating apply omits meta.plan', async () => {
 		const { remote } = session(() => ({ status: 200, data: { data: OK_RESULT } }));
-		expect((await caught(() => applyRemote(remote, {}, { dryRun: false, destructive: false }))).exitCode).toBe(3);
+		expect((await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }))).exitCode).toBe(3);
 	});
 
 	it('maps a 4xx to exit 2 with the server message and without the token', async () => {
@@ -192,7 +325,7 @@ describe('applyRemote', () => {
 			data: { errors: [{ message: 'invalid config', extensions: { code: 'CONFIG_INVALID' } }] },
 		}));
 
-		const error = await caught(() => applyRemote(remote, {}, { dryRun: false, destructive: false }));
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }));
 
 		expect(error.exitCode).toBe(2);
 		expect(error.message).toContain('invalid config');
@@ -202,7 +335,7 @@ describe('applyRemote', () => {
 	it('does not warn of an unknown outcome on a 4xx, which is refused before commit', async () => {
 		const { remote } = session(() => ({ status: 422, data: { errors: [{ message: 'invalid config' }] } }));
 
-		const error = await caught(() => applyRemote(remote, {}, { dryRun: false, destructive: false }));
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }));
 
 		expect(error.message).not.toContain('re-snapshot');
 	});
@@ -217,7 +350,7 @@ describe('applyRemote', () => {
 		it('returns a UUID run id from the response header', async () => {
 			const { remote } = sessionWithHeader(RUN_ID);
 
-			const outcome = await applyRemote(remote, {}, { dryRun: true, destructive: false });
+			const outcome = await applyRemote(remote, BODY, { dryRun: true, destructive: false });
 
 			expect(outcome).toEqual({ plan: OK_PLAN, runId: RUN_ID });
 		});
@@ -225,7 +358,7 @@ describe('applyRemote', () => {
 		it('returns the run id on a mutating apply', async () => {
 			const { remote } = sessionWithHeader(RUN_ID, 200, { data: OK_RESULT, meta: { plan: OK_PLAN } });
 
-			const outcome = await applyRemote(remote, {}, { dryRun: false, destructive: false });
+			const outcome = await applyRemote(remote, BODY, { dryRun: false, destructive: false });
 
 			expect(outcome).toEqual({ plan: OK_PLAN, result: OK_RESULT, runId: RUN_ID });
 		});
@@ -233,7 +366,7 @@ describe('applyRemote', () => {
 		it('omits the run id when the header is absent', async () => {
 			const { remote } = session(() => ({ status: 200, data: { data: OK_PLAN } }));
 
-			const outcome = await applyRemote(remote, {}, { dryRun: true, destructive: false });
+			const outcome = await applyRemote(remote, BODY, { dryRun: true, destructive: false });
 
 			expect(outcome).not.toHaveProperty('runId');
 		});
@@ -247,7 +380,7 @@ describe('applyRemote', () => {
 		])('ignores a header carrying %s', async (_label, header) => {
 			const { remote } = sessionWithHeader(header);
 
-			const outcome = await applyRemote(remote, {}, { dryRun: true, destructive: false });
+			const outcome = await applyRemote(remote, BODY, { dryRun: true, destructive: false });
 
 			expect(outcome).not.toHaveProperty('runId');
 		});
@@ -255,7 +388,7 @@ describe('applyRemote', () => {
 		it('carries the run id on a server refusal', async () => {
 			const { remote } = sessionWithHeader(RUN_ID, 400, { errors: [{ message: 'refused' }] });
 
-			const error = await caught(() => applyRemote(remote, {}, { dryRun: false, destructive: false }));
+			const error = await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }));
 
 			expect(error.exitCode).toBe(2);
 			expect(error.runId).toBe(RUN_ID);
@@ -264,7 +397,7 @@ describe('applyRemote', () => {
 		it('carries the run id on a malformed mutating response with the unknown-outcome note', async () => {
 			const { remote } = sessionWithHeader(RUN_ID, 200, { data: OK_RESULT });
 
-			const error = await caught(() => applyRemote(remote, {}, { dryRun: false, destructive: false }));
+			const error = await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }));
 
 			expect(error.exitCode).toBe(3);
 			expect(error.runId).toBe(RUN_ID);
@@ -274,7 +407,7 @@ describe('applyRemote', () => {
 		it('carries the run id on a malformed dry-run plan without the unknown-outcome note', async () => {
 			const { remote } = sessionWithHeader(RUN_ID, 200, { data: { planVersion: 2 } });
 
-			const error = await caught(() => applyRemote(remote, {}, { dryRun: true, destructive: false }));
+			const error = await caught(() => applyRemote(remote, BODY, { dryRun: true, destructive: false }));
 
 			expect(error.exitCode).toBe(3);
 			expect(error.runId).toBe(RUN_ID);
@@ -284,13 +417,13 @@ describe('applyRemote', () => {
 
 	it('maps a 5xx to exit 3', async () => {
 		const { remote } = session(() => ({ status: 503, data: { errors: [{ message: 'unavailable' }] } }));
-		expect((await caught(() => applyRemote(remote, {}, { dryRun: false, destructive: false }))).exitCode).toBe(3);
+		expect((await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }))).exitCode).toBe(3);
 	});
 
 	it('warns that a mutating 5xx may have committed', async () => {
 		const { remote } = session(() => ({ status: 500, data: { errors: [{ message: 'boom' }] } }));
 
-		const error = await caught(() => applyRemote(remote, {}, { dryRun: false, destructive: false }));
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }));
 
 		expect(error.message).toContain('re-snapshot');
 	});
@@ -298,7 +431,7 @@ describe('applyRemote', () => {
 	it('does not warn of an unknown outcome on a dry-run 5xx', async () => {
 		const { remote } = session(() => ({ status: 500, data: { errors: [{ message: 'boom' }] } }));
 
-		const error = await caught(() => applyRemote(remote, {}, { dryRun: true, destructive: false }));
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: true, destructive: false }));
 
 		expect(error.message).not.toContain('re-snapshot');
 	});
@@ -309,7 +442,7 @@ describe('applyRemote', () => {
 			data: { data: { roles: {}, permissions: {} }, meta: { plan: OK_PLAN } },
 		}));
 
-		const error = await caught(() => applyRemote(remote, {}, { dryRun: false, destructive: false }));
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }));
 
 		expect(error.exitCode).toBe(3);
 		expect(error.message).toContain('re-snapshot');
@@ -318,7 +451,7 @@ describe('applyRemote', () => {
 	it('rejects a 3xx redirect response at exit 3 without an unknown-outcome note on a dry run', async () => {
 		const { remote } = session(() => ({ status: 302, data: OK_PLAN }));
 
-		const error = await caught(() => applyRemote(remote, {}, { dryRun: true, destructive: false }));
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: true, destructive: false }));
 
 		expect(error.exitCode).toBe(3);
 		expect(error.message).toContain('redirect');
@@ -328,7 +461,7 @@ describe('applyRemote', () => {
 	it('warns that a mutating 3xx redirect may have committed', async () => {
 		const { remote } = session(() => ({ status: 302, data: OK_RESULT }));
 
-		const error = await caught(() => applyRemote(remote, {}, { dryRun: false, destructive: false }));
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }));
 
 		expect(error.exitCode).toBe(3);
 		expect(error.message).toContain('re-snapshot');
@@ -345,7 +478,7 @@ describe('applyRemote', () => {
 			token: TOKEN,
 		};
 
-		const error = await caught(() => applyRemote(remote, {}, { dryRun: true, destructive: false }));
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: true, destructive: false }));
 
 		expect(error.exitCode).toBe(3);
 		expect(error.message).not.toContain(TOKEN);
@@ -354,7 +487,7 @@ describe('applyRemote', () => {
 
 	it('rejects a non-JSON response at exit 3', async () => {
 		const { remote } = session(() => ({ status: 200, data: '<html>proxy error</html>' }));
-		expect((await caught(() => applyRemote(remote, {}, { dryRun: true, destructive: false }))).exitCode).toBe(3);
+		expect((await caught(() => applyRemote(remote, BODY, { dryRun: true, destructive: false }))).exitCode).toBe(3);
 	});
 
 	it('rejects a dry-run plan missing manifestVersion at exit 3', async () => {
@@ -440,7 +573,7 @@ describe('applyRemote', () => {
 			},
 		}));
 
-		expect((await caught(() => applyRemote(remote, {}, { dryRun: false, destructive: false }))).exitCode).toBe(3);
+		expect((await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }))).exitCode).toBe(3);
 	});
 
 	it('rejects a create change whose values have the wrong shape at exit 3', async () => {
@@ -532,7 +665,7 @@ describe('applyRemote', () => {
 			data: { data: { roles: {}, permissions: {} }, meta: { plan: OK_PLAN } },
 		}));
 
-		expect((await caught(() => applyRemote(remote, {}, { dryRun: false, destructive: false }))).exitCode).toBe(3);
+		expect((await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }))).exitCode).toBe(3);
 	});
 
 	it('preserves an unknown protection or warning code in a plan', async () => {
@@ -543,13 +676,13 @@ describe('applyRemote', () => {
 		};
 
 		const { remote } = session(() => ({ status: 200, data: { data: plan } }));
-		expect((await applyRemote(remote, {}, { dryRun: true, destructive: false })).plan).toEqual(plan);
+		expect((await applyRemote(remote, BODY, { dryRun: true, destructive: false })).plan).toEqual(plan);
 	});
 
 	it('redacts the token and strips control bytes from a server error', async () => {
 		const { remote } = session(() => ({ status: 400, data: { errors: [{ message: `bad ${TOKEN}${BEL} config` }] } }));
 
-		const error = await caught(() => applyRemote(remote, {}, { dryRun: false, destructive: false }));
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }));
 
 		expect(error.message).not.toContain(TOKEN);
 		expect(error.message).not.toContain(BEL);
@@ -572,9 +705,144 @@ describe('fetchRemoteSnapshot', () => {
 		],
 	};
 
-	it('returns a fully validated snapshot', async () => {
+	it('returns a fully validated snapshot as a fresh envelope, not the response object', async () => {
 		const { remote } = session(() => ({ status: 200, data: { data: VALID_SNAPSHOT } }));
-		expect(await fetchRemoteSnapshot(remote, scope)).toEqual(VALID_SNAPSHOT);
+
+		const snapshot = await fetchRemoteSnapshot(remote, scope);
+
+		expect(snapshot).toEqual(VALID_SNAPSHOT);
+		expect(snapshot).not.toBe(VALID_SNAPSHOT);
+	});
+
+	it('accepts a permissions-only snapshot whose subjects are unknown locally', async () => {
+		const permissionsOnly = {
+			manifest: { version: 1, resources: ['permissions'] },
+			roles: [],
+			permissions: VALID_SNAPSHOT.permissions,
+		};
+
+		const { remote } = session(() => ({ status: 200, data: { data: permissionsOnly } }));
+
+		await expect(fetchRemoteSnapshot(remote, { manifestVersion: 1, resources: ['permissions'] })).resolves.toEqual(
+			permissionsOnly
+		);
+	});
+
+	it('ignores records under an unmanaged kind and returns that kind empty', async () => {
+		const rolesOnly = {
+			manifest: { version: 1, resources: ['roles'] },
+			roles: VALID_SNAPSHOT.roles,
+			permissions: VALID_SNAPSHOT.permissions,
+		};
+
+		const { remote } = session(() => ({ status: 200, data: { data: rolesOnly } }));
+
+		await expect(fetchRemoteSnapshot(remote, { manifestVersion: 1, resources: ['roles'] })).resolves.toEqual({
+			manifest: { version: 1, resources: ['roles'] },
+			roles: VALID_SNAPSHOT.roles,
+			permissions: [],
+		});
+	});
+
+	it('names the failing field in a refused snapshot', async () => {
+		const { remote } = session(() => ({
+			status: 200,
+			data: { data: { ...VALID_SNAPSHOT, roles: [{ ...VALID_SNAPSHOT.roles[0], external_id: 'sso-7' }] } },
+		}));
+
+		const error = await caught(() => fetchRemoteSnapshot(remote, scope));
+
+		expect(error.exitCode).toBe(3);
+
+		expect(error.message).toBe(
+			'The server returned a malformed snapshot response ("roles[0].external_id" is not allowed).'
+		);
+	});
+
+	it('scrubs a token longer than the diagnostic bound before truncating', async () => {
+		const longToken = 't'.repeat(300);
+
+		const { remote } = session(() => ({
+			status: 200,
+			data: { data: { ...VALID_SNAPSHOT, roles: [{ ...VALID_SNAPSHOT.roles[0], [longToken]: true }] } },
+		}));
+
+		const error = await caught(() => fetchRemoteSnapshot({ ...remote, token: longToken }, scope));
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('[redacted]');
+		expect(error.message).not.toContain('tttttttt');
+	});
+
+	it('redacts a control-bearing token from a refused snapshot diagnostic', async () => {
+		const token = `sec${BEL}ret`;
+
+		const { remote } = session(() => ({
+			status: 200,
+			data: { data: { ...VALID_SNAPSHOT, roles: [{ ...VALID_SNAPSHOT.roles[0], [token]: true }] } },
+		}));
+
+		const error = await caught(() => fetchRemoteSnapshot({ ...remote, token }, scope));
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('[redacted]');
+		expect(error.message).not.toContain('sec?ret');
+		expect(error.message).not.toContain(BEL);
+	});
+
+	it('names the placeholder-bearing field in a refused snapshot', async () => {
+		const { remote } = session(() => ({
+			status: 200,
+			data: {
+				data: { ...VALID_SNAPSHOT, roles: [{ ...VALID_SNAPSHOT.roles[0], name: '{{CAIRNCMS_CONFIG_SECRET}}' }] },
+			},
+		}));
+
+		const error = await caught(() => fetchRemoteSnapshot(remote, scope));
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('malformed snapshot response');
+		expect(error.message).toContain('field "name" holds placeholder syntax');
+		expect(error.message).not.toContain('CAIRNCMS_CONFIG_SECRET');
+	});
+
+	const editor = VALID_SNAPSHOT.roles[0]!;
+	const editorSet = VALID_SNAPSHOT.permissions[0]!;
+	const rule = editorSet.permissions[0]!;
+
+	it.each([
+		['an unknown role field', { roles: [{ ...editor, external_id: 'x' }] }],
+		['an unknown permission field', { permissions: [{ ...editorSet, permissions: [{ ...rule, extra: true }] }] }],
+		['an unknown permission-set field', { permissions: [{ ...editorSet, note: 'x' }] }],
+		['an unknown top-level key', { meta: {} }],
+		['a role name over the column length', { roles: [{ ...editor, name: 'n'.repeat(101) }] }],
+		['a role key over the column length', { roles: [{ ...editor, key: 'k'.repeat(256) }] }],
+		['an empty role key', { roles: [{ ...editor, key: '' }] }],
+		['a role key failing the grammar', { roles: [{ ...editor, key: 'Editor Role' }] }],
+		['the reserved public role key', { roles: [{ ...editor, key: 'public' }] }],
+		['a null role name', { roles: [{ ...editor, name: null }] }],
+		['a null icon', { roles: [{ ...editor, icon: null }] }],
+		['a role name in placeholder form', { roles: [{ ...editor, name: '{{CAIRNCMS_CONFIG_SECRET}}' }] }],
+		['a role description in placeholder form', { roles: [{ ...editor, description: '{{DB_PASSWORD}}' }] }],
+		['a duplicate role identity', { roles: [editor, editor] }],
+		['two permission sets for one role', { permissions: [editorSet, editorSet] }],
+		['a duplicate collection and action in one set', { permissions: [{ ...editorSet, permissions: [rule, rule] }] }],
+		[
+			'a permission set naming a role the snapshot does not declare',
+			{ permissions: [{ ...editorSet, role: 'ghost' }] },
+		],
+		[
+			'a manifest version differing from the request',
+			{ manifest: { version: 2, resources: ['roles', 'permissions'] } },
+		],
+	])('rejects a snapshot with %s at exit 3 before returning', async (_label, overrides) => {
+		const { remote } = session(() => ({ status: 200, data: { data: { ...VALID_SNAPSHOT, ...overrides } } }));
+
+		const error = await caught(() => fetchRemoteSnapshot(remote, scope));
+
+		expect(error).toBeInstanceOf(RemoteClientError);
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('malformed snapshot');
 	});
 
 	it('rejects a snapshot missing its roles and permissions at exit 3 before returning', async () => {

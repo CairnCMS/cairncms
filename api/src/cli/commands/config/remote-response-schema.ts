@@ -1,4 +1,3 @@
-import { normalizeRoleKey } from '@cairncms/utils';
 import { isPlainObject } from 'lodash-es';
 import { z } from 'zod';
 import { SUPPORTED_ACTIONS } from '../../../utils/config-contract.js';
@@ -7,7 +6,6 @@ const count = z.number().int().nonnegative();
 const nullableRecord = z.record(z.unknown()).nullable();
 const nullableStringArray = z.array(z.string()).nullable();
 const action = z.string().refine((value) => SUPPORTED_ACTIONS.has(value));
-const roleKey = z.string().refine((value) => normalizeRoleKey(value) === value);
 
 const roleIdentity = z.object({ key: z.string() }).passthrough();
 const permissionIdentity = z.object({ role: z.string(), collection: z.string(), action }).passthrough();
@@ -135,36 +133,6 @@ export const RemoteApplyResult = z
 	})
 	.passthrough();
 
-const snapshotPermission = z
-	.object({
-		collection: z.string(),
-		action,
-		permissions: nullableRecord,
-		validation: nullableRecord,
-		presets: nullableRecord,
-		fields: nullableStringArray,
-	})
-	.passthrough();
+export type RemoteWirePlan = z.infer<typeof RemoteConfigPlan>;
 
-const snapshotPermissionSet = z.object({ role: roleKey, permissions: z.array(snapshotPermission) }).passthrough();
-
-const snapshotRole = z
-	.object({
-		key: roleKey,
-		name: z.string(),
-		icon: z.string().optional(),
-		description: z.string().nullable().optional(),
-		admin_access: z.boolean(),
-		app_access: z.boolean(),
-		enforce_tfa: z.boolean().optional(),
-		ip_access: nullableStringArray.optional(),
-	})
-	.passthrough();
-
-export const RemoteSnapshot = z
-	.object({
-		manifest: z.object({ version: z.number(), resources: z.array(z.string()) }).passthrough(),
-		roles: z.array(snapshotRole),
-		permissions: z.array(snapshotPermissionSet),
-	})
-	.passthrough();
+export type RemoteWireResult = z.infer<typeof RemoteApplyResult>;

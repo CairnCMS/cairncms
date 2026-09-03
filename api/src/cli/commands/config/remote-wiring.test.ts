@@ -165,6 +165,29 @@ describe('remote configApply wiring', () => {
 		expect(process.exit).toHaveBeenCalledWith(1);
 		expect(vi.mocked(logger.info)).toHaveBeenCalledWith(expect.stringContaining('Would remove the last administrator'));
 	});
+
+	it('never reports success when the client refuses a mutating response as inconsistent', async () => {
+		applyRemoteMock.mockRejectedValue(
+			Object.assign(
+				new Error(
+					'The server reported a result that does not match its plan. The server may have already applied the change; re-snapshot to verify the current state.'
+				),
+				{ exitCode: 3 }
+			)
+		);
+
+		await configApply('./cfg', {
+			yes: true,
+			dryRun: false,
+			destructive: false,
+			format: 'human',
+			url: 'https://cms.example',
+		}).catch(() => undefined);
+
+		expect(process.exit).toHaveBeenCalledWith(3);
+		expect(vi.mocked(logger.error)).toHaveBeenCalledWith(expect.stringContaining('re-snapshot to verify'));
+		expect(vi.mocked(logger.info)).not.toHaveBeenCalledWith(expect.stringContaining('Config applied'));
+	});
 });
 
 describe('remote configApply run id', () => {

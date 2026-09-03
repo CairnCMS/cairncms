@@ -208,6 +208,8 @@ A mutating remote apply requires `--yes`; a dry run does not. The target must ru
 
 Remote protections, destructive-change checks, output, and exit codes match local mode. Requests time out after 30 seconds by default; set `CAIRNCMS_REMOTE_CONFIG_TIMEOUT` to a duration such as `60s` for slower deployments. After a mutating timeout, run `config snapshot` before retrying because the server may have committed the apply.
 
+A remote snapshot is validated against the local config format before anything is written. Unknown fields in the envelope or a managed document stop the snapshot with exit `3` and leave the directory unchanged; records under unmanaged kinds are ignored. After a mutating apply, the CLI also checks the server's plan and result against the submitted manifest. If they disagree, it exits `3` and asks for a snapshot rather than reporting success because the change may have been applied.
+
 After a timeout, the server's [run record](#run-record) around the failure time, if present, shows what the run did. Its `userAgent` starts with `cairncms-cli/`. The record is best-effort, so its absence is inconclusive and `config snapshot` remains the way to verify the current state. Read its `durationMs` as a hint: an engine time near the timeout means raise `CAIRNCMS_REMOTE_CONFIG_TIMEOUT`, and a short one means the delay was in transport.
 
 ### Exit codes
@@ -240,6 +242,8 @@ Remote mode (`--url`) maps onto the same scheme. A server below the required ver
 Fields that support interpolation accept a placeholder in the form `{{CAIRNCMS_CONFIG_<NAME>}}`. The placeholder must occupy the entire field value. The CLI reads the value from its environment before it builds a plan. A variable outside the `CAIRNCMS_CONFIG_` namespace or a variable that is not set stops the command.
 
 The HTTP API does not resolve placeholders. Send resolved values in the request body.
+
+Whole-string placeholder syntax cannot be stored as a role name or description because a later read would substitute it. Both surfaces reject a desired value of the form `{{NAME}}` as `CONFIG_INVALID`, including an environment value that resolves to that form. Existing database values in that form stop snapshot and apply with `CONFIG_READ_FAILED`; a remote snapshot containing one is refused before anything is written. Rename the value, then retry.
 
 Remote mode reads three further variables, none of which are interpolated into config records: `CAIRNCMS_TOKEN` or `CAIRNCMS_TOKEN_FILE` supplies the administrator token (see [Applying to a remote instance](#applying-to-a-remote-instance)), and `CAIRNCMS_REMOTE_CONFIG_TIMEOUT` overrides the 30-second per-request timeout.
 

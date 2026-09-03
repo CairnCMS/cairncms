@@ -314,6 +314,15 @@ describe('writeConfigDirectory', () => {
 		await expect(fs.readdir(tmpDir)).resolves.toEqual([]);
 	});
 
+	it('refuses a role name written in placeholder form before writing anything', async () => {
+		const config = makeConfig({
+			roles: [{ key: 'editor', name: '{{CAIRNCMS_CONFIG_SECRET}}', admin_access: false, app_access: true }],
+		});
+
+		await expect(writeConfigDirectory(config, tmpDir)).rejects.toThrow(ConfigReadFailedException);
+		await expect(fs.readdir(tmpDir)).resolves.toEqual([]);
+	});
+
 	it('leaves a previous tree intact when a later document fails the structural checks', async () => {
 		const good = makeConfig({ roles: [{ key: 'editor', name: 'Editor', admin_access: false, app_access: true }] });
 		await writeConfigDirectory(good, tmpDir);

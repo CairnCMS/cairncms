@@ -28,7 +28,6 @@ import { readCurrentConfig } from '../utils/get-config-snapshot.js';
 import { serializeConfigPlan } from '../utils/serialize-config-plan.js';
 import { getSchema } from '../utils/get-schema.js';
 import { assertConfigValueSafe, parseConfigYaml } from '../utils/parse-config-document.js';
-import { isPlaceholder } from '../utils/read-config-directory.js';
 import { safeLogFragment } from '../utils/safe-log-fragment.js';
 import { validateConfigManifest, validateDesiredConfig } from '../utils/validate-desired-config.js';
 import { CONFIG_KINDS, type CairnConfig, type ConfigFailure, type ConfigKind } from '../types/config.js';
@@ -77,7 +76,6 @@ router.post(
 		const destructive = parseApplyFlag(req.query, 'destructive');
 
 		const manifest = validateConfigManifest(document['manifest'], BODY_LABEL);
-		const managed = new Set<ConfigKind>(manifest.resources);
 
 		const runId = randomUUID();
 		res.setHeader(CONFIG_RUN_ID_HEADER, runId);
@@ -109,11 +107,14 @@ router.post(
 				});
 
 				const config = desired as CairnConfig;
-				const failures = validateDesiredConfig(config, { label: BODY_LABEL, currentRoleKeys });
+
+				const failures = validateDesiredConfig(config, {
+					label: BODY_LABEL,
+					references: 'current-state',
+					currentRoleKeys,
+				});
 
 				if (failures.length > 0) throw failures.map(toConfigException);
-
-				if (managed.has('roles')) assertNoPlaceholders(config);
 
 				const plan = computeConfigPlan(current, config);
 
@@ -212,19 +213,6 @@ function toConfigException(failure: ConfigFailure): BaseException {
 		case 'CONFIG_IDENTITY_CONFLICT':
 			return new ConfigIdentityConflictException(failure.message);
 	}
-}
-
-function assertNoPlaceholders(config: CairnConfig): void {
-	config.roles.forEach((role, index) => {
-		for (const field of ['name', 'description'] as const) {
-			if (isPlaceholder(role[field])) {
-				throw new ConfigInvalidException(
-					`roles[${index}].${field} carries placeholder syntax, which this endpoint does not substitute. ` +
-						`Send a resolved value.`
-				);
-			}
-		}
-	});
 }
 
 export default router;

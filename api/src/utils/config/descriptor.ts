@@ -129,11 +129,18 @@ export interface ReadContext<K extends ConfigKindTypes> {
 	dependency<D extends Extract<keyof K['ReadDependencies'], ConfigKind>>(kind: D): K['ReadDependencies'][D];
 }
 
-export interface ValidationContext {
+/**
+ * Where role references outside the document resolve. A server-produced snapshot was already resolved against the
+ * server's own state, so it is the only document that may skip the current-state check, and it must say so explicitly.
+ */
+export type RoleReferenceSource =
+	| { references: 'current-state'; currentRoleKeys: ReadonlySet<string> }
+	| { references: 'server-snapshot' };
+
+export type ValidationContext = {
 	rolesManaged: boolean;
 	declaredRoleKeys: ReadonlySet<string>;
-	currentRoleKeys: ReadonlySet<string>;
-}
+} & RoleReferenceSource;
 
 export interface PlanContext<K extends ConfigKindTypes> {
 	/** Typed access to a declared dependency's finalized plan; the engine throws if that dependency was not published. */

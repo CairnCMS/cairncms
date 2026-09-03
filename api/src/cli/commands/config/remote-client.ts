@@ -1,15 +1,25 @@
 import type { AxiosInstance, Method } from 'axios';
 import { isPlainObject } from 'lodash-es';
+import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
+import { ConfigUnsupportedVersionException } from '../../../exceptions/config-unsupported-version.js';
 import type { CairnConfig, ConfigKind } from '../../../types/config.js';
 import { CONFIG_RUN_ID_HEADER } from '../../../utils/config/run-record.js';
 import { isValidUuid } from '../../../utils/is-valid-uuid.js';
-import { replaceControlCharacters } from '../../../utils/safe-log-fragment.js';
+import { replaceControlCharacters, safeLogFragment } from '../../../utils/safe-log-fragment.js';
+import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
 import { resolveEndpoint, type OperatorRemoteTarget } from './operator-remote-target.js';
-import { RemoteApplyResult, RemoteConfigPlan, RemoteSnapshot } from './remote-response-schema.js';
+import {
+	RemoteApplyResult,
+	RemoteConfigPlan,
+	type RemoteWirePlan,
+	type RemoteWireResult,
+} from './remote-response-schema.js';
 
 export const REMOTE_CONFIG_MIN_VERSION = '1.6.0';
 
 const PLAN_VERSION = 2;
+
+const SNAPSHOT_LABEL = 'the snapshot response';
 
 const RUN_ID_HEADER = CONFIG_RUN_ID_HEADER.toLowerCase();
 
@@ -145,18 +155,35 @@ export async function fetchRemoteSnapshot(
 		query: { manifest_version: String(scope.manifestVersion), resources: scope.resources.join(',') },
 	});
 
-	if (!RemoteSnapshot.safeParse(data).success) throw malformed('snapshot');
-
 	assertSnapshotShape(data, scope);
 
-	return data as CairnConfig;
+	return validatedSnapshot(data, session.token);
 }
+
+export type RemotePlanOutcome = { plan: RemoteWirePlan; runId?: string };
+
+export type RemoteApplyOutcome = { plan: RemoteWirePlan; result: RemoteWireResult; runId?: string };
 
 export async function applyRemote(
 	session: RemoteSession,
-	body: unknown,
+	body: CairnConfig,
+	options: { dryRun: true; destructive: boolean }
+): Promise<RemotePlanOutcome>;
+export async function applyRemote(
+	session: RemoteSession,
+	body: CairnConfig,
+	options: { dryRun: false; destructive: boolean }
+): Promise<RemoteApplyOutcome>;
+export async function applyRemote(
+	session: RemoteSession,
+	body: CairnConfig,
 	options: { dryRun: boolean; destructive: boolean }
-): Promise<{ plan: unknown; result?: unknown; runId?: string }> {
+): Promise<RemotePlanOutcome | RemoteApplyOutcome>;
+export async function applyRemote(
+	session: RemoteSession,
+	body: CairnConfig,
+	options: { dryRun: boolean; destructive: boolean }
+): Promise<RemotePlanOutcome | RemoteApplyOutcome> {
 	const query: Record<string, string> = {};
 	if (options.dryRun) query['dry_run'] = 'true';
 	if (options.destructive) query['destructive'] = 'true';
@@ -168,27 +195,29 @@ export async function applyRemote(
 	});
 
 	if (options.dryRun) {
+		let plan: RemoteWirePlan;
+
 		try {
-			assertPlanShape(data);
+			plan = validatedPlan(data, body);
 		} catch (err) {
 			throw attachRunId(err, runId);
 		}
 
-		return withRunId({ plan: data }, runId);
+		return withRunId({ plan }, runId);
 	}
 
 	try {
-		assertResultShape(data);
-		const plan = isPlainObject(meta) ? (meta as Record<string, unknown>)['plan'] : undefined;
-		assertPlanShape(plan);
+		const result = validatedResult(data);
+		const plan = validatedPlan(isPlainObject(meta) ? (meta as Record<string, unknown>)['plan'] : undefined, body);
+		assertResultMatchesPlan(plan, result);
 
-		return withRunId({ plan, result: data }, runId);
+		return withRunId({ plan, result }, runId);
 	} catch (err) {
 		throw attachRunId(err, runId, UNKNOWN_OUTCOME_NOTE);
 	}
 }
 
-function assertPlanShape(plan: unknown): void {
+function validatedPlan(plan: unknown, submitted: CairnConfig): RemoteWirePlan {
 	if (isPlainObject(plan)) {
 		const declared = (plan as Record<string, unknown>)['planVersion'];
 
@@ -197,11 +226,97 @@ function assertPlanShape(plan: unknown): void {
 		}
 	}
 
-	if (!RemoteConfigPlan.safeParse(plan).success) throw malformed('plan');
+	const parsed = RemoteConfigPlan.safeParse(plan);
+	if (!parsed.success) throw malformed('plan');
+
+	const wire = parsed.data;
+	const managed = new Set<string>(submitted.manifest.resources);
+
+	if (wire.manifestVersion !== submitted.manifest.version || wire.changes.some((change) => !managed.has(change.kind))) {
+		throw new RemoteClientError('The server returned a plan for a different manifest than the one submitted.', 3);
+	}
+
+	const counted = countOperations(wire.changes);
+
+	if (
+		counted.create !== wire.summary.create ||
+		counted.update !== wire.summary.update ||
+		counted.delete !== wire.summary.delete
+	) {
+		throw new RemoteClientError('The server returned a plan whose summary does not match its changes.', 3);
+	}
+
+	return wire;
 }
 
-function assertResultShape(result: unknown): void {
-	if (!RemoteApplyResult.safeParse(result).success) throw malformed('result');
+function validatedResult(result: unknown): RemoteWireResult {
+	const parsed = RemoteApplyResult.safeParse(result);
+	if (!parsed.success) throw malformed('result');
+
+	return parsed.data;
+}
+
+function assertResultMatchesPlan(plan: RemoteWirePlan, result: RemoteWireResult): void {
+	if (plan.protections.length > 0) {
+		throw new RemoteClientError(
+			'The server reported a successful apply but its plan still lists protected changes.',
+			3
+		);
+	}
+
+	const roles = countOperations(plan.changes, 'roles');
+	const permissions = countOperations(plan.changes, 'permissions');
+
+	const consistent =
+		result.roles.created.length === roles.create &&
+		result.roles.updated.length === roles.update &&
+		result.roles.deleted.length === roles.delete &&
+		result.permissions.created === permissions.create &&
+		result.permissions.updated === permissions.update &&
+		result.permissions.deleted === permissions.delete;
+
+	if (!consistent) throw new RemoteClientError('The server reported a result that does not match its plan.', 3);
+}
+
+function countOperations(
+	changes: RemoteWirePlan['changes'],
+	kind?: ConfigKind
+): Record<'create' | 'update' | 'delete', number> {
+	const counted = { create: 0, update: 0, delete: 0 };
+
+	for (const change of changes) {
+		if (kind === undefined || change.kind === kind) counted[change.operation]++;
+	}
+
+	return counted;
+}
+
+function validatedSnapshot(data: unknown, token: string): CairnConfig {
+	let failures: string[];
+
+	try {
+		failures = validateDesiredConfig(data, { label: SNAPSHOT_LABEL, references: 'server-snapshot' }).map(
+			(failure) => failure.message
+		);
+	} catch (err) {
+		if (!(err instanceof ConfigInvalidException) && !(err instanceof ConfigUnsupportedVersionException)) throw err;
+		failures = [err.message];
+	}
+
+	if (failures.length > 0) throw malformed('snapshot', diagnostic(failures[0]!, token));
+
+	const snapshot = data as CairnConfig;
+	const managed = new Set<ConfigKind>(snapshot.manifest.resources);
+
+	return {
+		manifest: { version: snapshot.manifest.version, resources: [...snapshot.manifest.resources] },
+		roles: managed.has('roles') ? snapshot.roles : [],
+		permissions: managed.has('permissions') ? snapshot.permissions : [],
+	};
+}
+
+function diagnostic(text: string, token: string): string {
+	return safeLogFragment(sanitize(text, token));
 }
 
 function assertSnapshotShape(
@@ -229,13 +344,23 @@ function sameKinds(returned: unknown[], requested: readonly ConfigKind[]): boole
 	return requested.every((kind) => set.has(kind));
 }
 
-function malformed(what: string): RemoteClientError {
-	return new RemoteClientError(`The server returned a malformed ${what} response.`, 3);
+function malformed(what: string, detail?: string): RemoteClientError {
+	const suffix = detail === undefined ? '' : ` (${detail})`;
+	return new RemoteClientError(`The server returned a malformed ${what} response${suffix}.`, 3);
+}
+
+function redactToken(text: string, token: string): string {
+	if (token.length === 0) return text;
+
+	const neutralized = replaceControlCharacters(token);
+	let redacted = text.split(token).join('[redacted]');
+	if (neutralized !== token) redacted = redacted.split(neutralized).join('[redacted]');
+
+	return redacted;
 }
 
 function sanitize(text: string, token: string): string {
-	const redacted = token.length > 0 ? text.split(token).join('[redacted]') : text;
-	return replaceControlCharacters(redacted);
+	return replaceControlCharacters(redactToken(text, token));
 }
 
 function serverErrorMessage(data: unknown): string {

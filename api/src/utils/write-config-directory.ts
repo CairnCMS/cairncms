@@ -22,6 +22,7 @@ import {
 } from './config-path-safety.js';
 import { assertConfigValueSafe, parseConfigYaml } from './parse-config-document.js';
 import { safeLogFragment } from './safe-log-fragment.js';
+import { findPlaceholderSyntax } from './validate-desired-config.js';
 
 const MANIFEST_FILENAME = 'cairncms-config.yaml';
 
@@ -139,6 +140,14 @@ async function cleanKindDirectory(root: string, kind: ConfigKind, keep: Set<stri
 
 export async function writeConfigDirectory(config: CairnConfig, root: string): Promise<void> {
 	const { pending, keep } = buildDocuments(config, root);
+
+	const placeholders = findPlaceholderSyntax(config);
+
+	if (placeholders.length > 0) {
+		throw new ConfigReadFailedException(
+			`Config could not be written: ${placeholders.join('; ')}. The config format substitutes that form on read.`
+		);
+	}
 
 	// The checks protect the serializer, so every document is validated before any is serialized or written.
 	for (const { label, document } of pending) {

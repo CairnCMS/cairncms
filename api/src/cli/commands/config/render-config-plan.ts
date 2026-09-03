@@ -1,8 +1,51 @@
-import type { ConfigPlanChange, RoleDeletionImpactEntry, SerializedConfigPlan } from '../../../types/config.js';
 import { replaceControlCharacters } from '../../../utils/safe-log-fragment.js';
 import { createVerb, deleteVerb, heading, planIntro, updateVerb } from '../../presentation.js';
 
-export function renderConfigPlan(serialized: SerializedConfigPlan): string {
+type RoleIdentityView = { key: string };
+
+type PermissionIdentityView = { role: string; collection: string; action: string };
+
+type FieldChangeView = { before: unknown; after: unknown };
+
+export type RenderableImpactEntry =
+	| { kind: 'permissions'; identity: PermissionIdentityView }
+	| { kind: 'presets'; count: number; bookmarks: string[] }
+	| { kind: 'users'; suspended: string[] }
+	| { kind: 'sessions'; active: number }
+	| { kind: string };
+
+export type RenderableChange =
+	| { kind: 'roles'; operation: 'create'; identity: RoleIdentityView }
+	| {
+			kind: 'roles';
+			operation: 'update';
+			identity: RoleIdentityView;
+			fields: Record<string, FieldChangeView | undefined>;
+	  }
+	| { kind: 'roles'; operation: 'delete'; identity: RoleIdentityView; impact: RenderableImpactEntry[] }
+	| { kind: 'permissions'; operation: 'create'; identity: PermissionIdentityView }
+	| {
+			kind: 'permissions';
+			operation: 'update';
+			identity: PermissionIdentityView;
+			fields: Record<string, FieldChangeView | undefined>;
+	  }
+	| { kind: 'permissions'; operation: 'delete'; identity: PermissionIdentityView };
+
+/** The structural view the renderers read, satisfied by the server's serialized plan and by the remote wire plan. */
+export type RenderablePlan = {
+	changes: RenderableChange[];
+	summary: { create: number; update: number; delete: number };
+	protections: Array<{ message: string; contributors: Array<{ operation: string; identity: RoleIdentityView }> }>;
+	warnings: Array<{ message: string }>;
+};
+
+export type RenderableResult = {
+	roles: { created: unknown[]; updated: unknown[]; deleted: unknown[] };
+	permissions: { created: number; updated: number; deleted: number };
+};
+
+export function renderConfigPlan(serialized: RenderablePlan): string {
 	const lines: string[] = [planIntro];
 	let currentKind: 'roles' | 'permissions' | null = null;
 
@@ -27,7 +70,7 @@ export function renderConfigPlan(serialized: SerializedConfigPlan): string {
 	return lines.join('\n');
 }
 
-export function renderProtections(serialized: SerializedConfigPlan): string {
+export function renderProtections(serialized: Pick<RenderablePlan, 'protections'>): string {
 	if (serialized.protections.length === 0) return '';
 
 	const lines = [heading('Protected changes')];
@@ -44,7 +87,7 @@ export function renderProtections(serialized: SerializedConfigPlan): string {
 	return lines.join('\n');
 }
 
-export function renderWarnings(serialized: SerializedConfigPlan): string {
+export function renderWarnings(serialized: Pick<RenderablePlan, 'warnings'>): string {
 	if (serialized.warnings.length === 0) return '';
 
 	const lines = [heading('Warnings')];
@@ -56,7 +99,7 @@ export function renderWarnings(serialized: SerializedConfigPlan): string {
 	return lines.join('\n');
 }
 
-export function renderDestructiveRefusal(serialized: SerializedConfigPlan): string {
+export function renderDestructiveRefusal(serialized: Pick<RenderablePlan, 'summary'>): string {
 	const count = serialized.summary.delete;
 	const noun = count === 1 ? 'deletion' : 'deletions';
 	const subject = count === 1 ? 'item' : 'items';
@@ -64,7 +107,7 @@ export function renderDestructiveRefusal(serialized: SerializedConfigPlan): stri
 	return `Apply refused: this plan contains ${count} ${noun}.\nReview the ${subject} above and run again with --destructive.`;
 }
 
-function renderChange(change: ConfigPlanChange): string[] {
+function renderChange(change: RenderableChange): string[] {
 	const identity = renderIdentity(change);
 
 	if (change.operation === 'create') {
@@ -90,7 +133,7 @@ function renderChange(change: ConfigPlanChange): string[] {
 	return lines;
 }
 
-function renderIdentity(change: ConfigPlanChange): string {
+function renderIdentity(change: RenderableChange): string {
 	if (change.kind === 'roles') {
 		return replaceControlCharacters(change.identity.key);
 	}
@@ -110,21 +153,23 @@ function displayString(value: string): string {
 	return value === '' ? '""' : replaceControlCharacters(value);
 }
 
-function renderImpact(impact: RoleDeletionImpactEntry[]): string[] {
+function renderImpact(impact: RenderableImpactEntry[]): string[] {
 	const lines: string[] = [];
 
-	for (const entry of impact) {
-		if (entry.kind === 'permissions') {
-			const { collection, action } = entry.identity;
+	const permissions = impact.filter(
+		(entry): entry is Extract<RenderableImpactEntry, { kind: 'permissions' }> => entry.kind === 'permissions'
+	);
 
-			lines.push(
-				`    - Permission removed: ${replaceControlCharacters(collection)} / ${replaceControlCharacters(action)}`
-			);
-		}
+	for (const { identity } of permissions) {
+		lines.push(
+			`    - Permission removed: ${replaceControlCharacters(identity.collection)} / ${replaceControlCharacters(
+				identity.action
+			)}`
+		);
 	}
 
 	const presets = impact.find(
-		(entry): entry is Extract<RoleDeletionImpactEntry, { kind: 'presets' }> => entry.kind === 'presets'
+		(entry): entry is Extract<RenderableImpactEntry, { kind: 'presets' }> => entry.kind === 'presets'
 	);
 
 	if (presets) {
@@ -140,7 +185,7 @@ function renderImpact(impact: RoleDeletionImpactEntry[]): string[] {
 	}
 
 	const users = impact.find(
-		(entry): entry is Extract<RoleDeletionImpactEntry, { kind: 'users' }> => entry.kind === 'users'
+		(entry): entry is Extract<RenderableImpactEntry, { kind: 'users' }> => entry.kind === 'users'
 	);
 
 	if (users) {
@@ -150,7 +195,7 @@ function renderImpact(impact: RoleDeletionImpactEntry[]): string[] {
 	}
 
 	const sessions = impact.find(
-		(entry): entry is Extract<RoleDeletionImpactEntry, { kind: 'sessions' }> => entry.kind === 'sessions'
+		(entry): entry is Extract<RenderableImpactEntry, { kind: 'sessions' }> => entry.kind === 'sessions'
 	);
 
 	if (sessions && sessions.active > 0) {

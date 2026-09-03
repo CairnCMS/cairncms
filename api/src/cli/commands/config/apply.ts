@@ -22,7 +22,7 @@ import { isValidUuid } from '../../../utils/is-valid-uuid.js';
 import { readConfigDirectory } from '../../../utils/read-config-directory.js';
 import { serializeConfigPlan } from '../../../utils/serialize-config-plan.js';
 import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
-import type { ApplyResult, CairnConfig, ConfigPlan, SerializedConfigPlan } from '../../../types/config.js';
+import type { CairnConfig, ConfigPlan, SerializedConfigPlan } from '../../../types/config.js';
 import { confirmPrompt } from '../../presentation.js';
 import { isHttpTarget, parseOperatorRemoteTarget } from './operator-remote-target.js';
 import { createOperatorRemoteTransport } from './operator-remote-transport.js';
@@ -34,7 +34,12 @@ import {
 } from './remote-client.js';
 import { resolveRemoteToken } from './remote-token.js';
 import { readFileSync } from 'node:fs';
-import { renderConfigPlan, renderDestructiveRefusal, renderWarnings } from './render-config-plan.js';
+import {
+	renderConfigPlan,
+	renderDestructiveRefusal,
+	renderWarnings,
+	type RenderableResult,
+} from './render-config-plan.js';
 
 async function serializePlan(plan: ConfigPlan, desired: CairnConfig, database: Knex): Promise<SerializedConfigPlan> {
 	const schema = await getSchema({ database, bypassCache: true });
@@ -140,7 +145,11 @@ async function runLocalEngine(
 			resources: desired.manifest.resources,
 		});
 
-		const documentErrors = validateDesiredConfig(desired, { label: configPath, currentRoleKeys });
+		const documentErrors = validateDesiredConfig(desired, {
+			label: configPath,
+			references: 'current-state',
+			currentRoleKeys,
+		});
 
 		if (documentErrors.length > 0) {
 			for (const failure of documentErrors) {
@@ -259,31 +268,30 @@ async function configApplyRemote(
 		assertServerSupportsRemoteConfig(await fetchServerVersion(session), session.token);
 
 		const desired = await readConfigDirectory(configPath, { notice: (message) => logger.warn(message) });
-		const outcome = await applyRemote(session, desired, { dryRun, destructive });
-		const plan = outcome.plan as SerializedConfigPlan;
-		const clean = plan.changes.length === 0 && plan.protections.length === 0;
-
-		if (format === 'json') {
-			process.stdout.write(`${JSON.stringify(plan)}\n`);
-			printRemoteRun(outcome.runId);
-			process.exit(clean ? 0 : 1);
-		}
 
 		if (dryRun) {
-			if (clean) {
+			const { plan, runId } = await applyRemote(session, desired, { dryRun: true, destructive });
+			const clean = plan.changes.length === 0 && plan.protections.length === 0;
+
+			if (format === 'json') {
+				process.stdout.write(`${JSON.stringify(plan)}\n`);
+			} else if (clean) {
 				const warnings = renderWarnings(plan);
 				logger.info(warnings ? `No changes to apply.\n\n${warnings}` : 'No changes to apply.');
 			} else {
 				logger.info(renderConfigPlan(plan));
 			}
 
-			printRemoteRun(outcome.runId);
+			printRemoteRun(runId);
 			process.exit(clean ? 0 : 1);
 		}
 
+		const { plan, result, runId } = await applyRemote(session, desired, { dryRun: false, destructive });
+
 		logger.info(renderConfigPlan(plan));
-		logger.info(applyResultSummary(outcome.result as ApplyResult));
-		printRemoteRun(outcome.runId);
+		logger.info(applyResultSummary(result));
+
+		printRemoteRun(runId);
 		process.exit(0);
 	} catch (err) {
 		logger.error(err instanceof Error ? err.message : String(err));
@@ -302,7 +310,7 @@ function printRemoteRun(runId: unknown): void {
 	if (typeof runId === 'string' && isValidUuid(runId)) logger.info(`Run ${runId}`);
 }
 
-function applyResultSummary(result: ApplyResult): string {
+function applyResultSummary(result: RenderableResult): string {
 	const parts: string[] = [];
 
 	if (result.roles.created.length > 0) parts.push(`${result.roles.created.length} role(s) created`);
