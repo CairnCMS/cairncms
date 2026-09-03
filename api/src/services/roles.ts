@@ -21,6 +21,8 @@ import {
 } from '../exceptions/index.js';
 import type { AbstractServiceOptions, Alterations, Item, MutationOptions, PrimaryKey } from '../types/index.js';
 import { leavesAtLeastOneAdmin } from '../utils/admin-continuity.js';
+import { validateKeys } from '../utils/validate-keys.js';
+import { AuthorizationService } from './authorization.js';
 import { ItemsService } from './items.js';
 import { PermissionsService } from './permissions.js';
 import { PresetsService } from './presets.js';
@@ -127,6 +129,21 @@ export class RolesService extends ItemsService {
 				`Role key cannot be changed after creation. Delete and recreate the role instead.`
 			);
 		}
+	}
+
+	private async authorizeDelete(keys: PrimaryKey[]): Promise<void> {
+		if (!this.accountability || this.accountability.admin === true) return;
+
+		const primaryKeyField = this.schema.collections[this.collection]!.primary;
+		validateKeys(this.schema, this.collection, primaryKeyField, keys);
+
+		const authorizationService = new AuthorizationService({
+			accountability: this.accountability,
+			schema: this.schema,
+			knex: this.knex,
+		});
+
+		await authorizationService.checkAccess('delete', this.collection, keys);
 	}
 
 	override async createOne(data: Partial<Item>, opts?: MutationOptions): Promise<PrimaryKey> {
@@ -376,6 +393,7 @@ export class RolesService extends ItemsService {
 	}
 
 	override async deleteMany(keys: PrimaryKey[], opts: MutationOptions = {}): Promise<PrimaryKey[]> {
+		await this.authorizeDelete(keys);
 		this.assertSentinelNotDeleted(keys);
 
 		return this.withBoundContext(opts, true, async (trx, mode, mutationOpts) => {

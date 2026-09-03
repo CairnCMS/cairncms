@@ -156,4 +156,37 @@ describe('Roles administrator continuity', () => {
 			}
 		});
 	});
+
+	describe('an unauthorized role deletion is refused before any sentinel or continuity inspection', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			const db = databases.get(vendor)!;
+			const adminUser = await db('directus_users').where({ email: common.USER.ADMIN!.EMAIL }).first();
+			const appUser = await db('directus_users').where({ email: common.USER.APP_ACCESS!.EMAIL }).first();
+			const publicRole = await db('directus_roles').where({ key: 'public' }).first();
+
+			expect(adminUser).toBeTruthy();
+			expect(appUser).toBeTruthy();
+			expect(publicRole).toBeTruthy();
+
+			const before = await db('directus_roles').select('id', 'admin_access').orderBy('id');
+			const targets = [adminUser.role, appUser.role, publicRole.id, randomUUID()];
+			const bodies = new Set<string>();
+
+			for (const target of targets) {
+				for (const bearer of [common.USER.APP_ACCESS!.TOKEN, undefined]) {
+					const req = request(getUrl(vendor)).delete(`/roles/${target}`);
+					if (bearer) req.set('Authorization', `Bearer ${bearer}`);
+
+					const response = await req;
+
+					expect(response.statusCode).toBe(403);
+					expect(response.body.errors[0].extensions.code).toBe('FORBIDDEN');
+					bodies.add(JSON.stringify(response.body));
+				}
+			}
+
+			expect(bodies.size).toBe(1);
+			expect(await db('directus_roles').select('id', 'admin_access').orderBy('id')).toEqual(before);
+		});
+	});
 });

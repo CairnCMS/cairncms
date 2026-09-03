@@ -7,7 +7,14 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { ForbiddenException, InvalidPayloadException, UnprocessableEntityException } from '../exceptions/index.js';
 import type { MutationOptions } from '../types/index.js';
 import { getDatabaseClient } from '../database/index.js';
-import { ItemsService, PermissionsService, PresetsService, RolesService, UsersService } from './index.js';
+import {
+	AuthorizationService,
+	ItemsService,
+	PermissionsService,
+	PresetsService,
+	RolesService,
+	UsersService,
+} from './index.js';
 
 vi.mock('../../src/database/index', () => {
 	return { __esModule: true, default: vi.fn(), getDatabaseClient: vi.fn().mockReturnValue('postgres') };
@@ -1172,6 +1179,80 @@ describe('Integration Tests', () => {
 				vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
 
 				await expect(service.deleteMany([1], buildOptions())).resolves.toEqual([1]);
+			});
+		});
+
+		describe('deleteMany authorization ordering', () => {
+			const nonAdmin = { admin: false, app: true, role: 'r', user: 'u', permissions: [] } as never;
+
+			function unauthorizedService(): RolesService {
+				return new RolesService({ knex: db, schema: service.schema, accountability: nonAdmin });
+			}
+
+			function sentinelCapableService(): RolesService {
+				const schema = JSON.parse(JSON.stringify(service.schema)) as typeof service.schema;
+				schema.collections['directus_roles']!.fields['id']!.type = 'uuid';
+				schema.collections['directus_roles']!.fields['id']!.dbType = 'uuid';
+				return new RolesService({ knex: db, schema, accountability: nonAdmin });
+			}
+
+			it('refuses an unauthorized deletion before reading the administrator set or starting the cascade', async () => {
+				adminSnapshotRows = [{ id: 1 }];
+
+				const checkAccess = vi
+					.spyOn(AuthorizationService.prototype, 'checkAccess')
+					.mockRejectedValue(new ForbiddenException());
+
+				const permissions = vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				const roleDeletion = vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
+
+				await expect(unauthorizedService().deleteMany([1], buildOptions())).rejects.toBeInstanceOf(ForbiddenException);
+
+				expect(checkAccess).toHaveBeenCalledWith('delete', 'directus_roles', [1]);
+				expect(tracker.history.select.some((query) => /admin_access/.test(query.sql))).toBe(false);
+				expect(permissions).not.toHaveBeenCalled();
+				expect(roleDeletion).not.toHaveBeenCalled();
+			});
+
+			it('conceals the sentinel refusal from an unauthorized caller', async () => {
+				vi.spyOn(AuthorizationService.prototype, 'checkAccess').mockRejectedValue(new ForbiddenException());
+
+				await expect(
+					sentinelCapableService().deleteMany(['00000000-0000-0000-0000-000000000000'], buildOptions())
+				).rejects.toBeInstanceOf(ForbiddenException);
+			});
+
+			it('still refuses the sentinel for an authorized caller', async () => {
+				vi.spyOn(AuthorizationService.prototype, 'checkAccess').mockResolvedValue(undefined);
+
+				await expect(
+					sentinelCapableService().deleteMany(['00000000-0000-0000-0000-000000000000'], buildOptions())
+				).rejects.toBeInstanceOf(InvalidPayloadException);
+			});
+
+			it('lets an authorized caller reach the continuity check', async () => {
+				adminSnapshotRows = [{ id: 1 }];
+				vi.spyOn(AuthorizationService.prototype, 'checkAccess').mockResolvedValue(undefined);
+				vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				vi.spyOn(PresetsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValue([]);
+				vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
+
+				await expect(unauthorizedService().deleteMany([1], buildOptions())).rejects.toBeInstanceOf(
+					UnprocessableEntityException
+				);
+			});
+
+			it('skips the authorization check for a service without accountability', async () => {
+				adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+				const checkAccess = vi.spyOn(AuthorizationService.prototype, 'checkAccess');
+				vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				vi.spyOn(PresetsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValue([]);
+				vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
+
+				await expect(service.deleteMany([1], buildOptions())).resolves.toEqual([1]);
+				expect(checkAccess).not.toHaveBeenCalled();
 			});
 		});
 	});
