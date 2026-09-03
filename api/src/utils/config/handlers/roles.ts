@@ -375,6 +375,15 @@ async function applyCreates(
 	return { op: 'create', created };
 }
 
+function grantsAdministrator(update: RolesKindTypes['Update']): boolean {
+	const change = update.changes.admin_access;
+	return change !== undefined && change.before === false && change.after === true;
+}
+
+function administratorGrantsFirst(updates: RolesKindTypes['Update'][]): RolesKindTypes['Update'][] {
+	return [...updates.filter(grantsAdministrator), ...updates.filter((update) => !grantsAdministrator(update))];
+}
+
 async function applyUpdates(
 	updates: RolesKindTypes['Update'][],
 	context: ApplyContext<RolesKindTypes>
@@ -519,7 +528,7 @@ export const rolesDescriptor: ConfigResourceDescriptor<RolesKindTypes> = {
 		readCurrent,
 		projectReadState,
 		validateDesired,
-		postPlan: (plan) => plan,
+		postPlan: (plan) => ({ ...plan, update: administratorGrantsFirst(plan.update) }),
 		enrich,
 		emptyEnrichment,
 		toChanges,

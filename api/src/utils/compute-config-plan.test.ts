@@ -349,7 +349,7 @@ describe('admin-continuity protection', () => {
 		expect(computeConfigPlan(current, desired).protections).toEqual([]);
 	});
 
-	it('protects when a final-administrator demotion is ordered before the replacement promotion', () => {
+	it('orders the replacement promotion ahead of a final-administrator demotion that the documents list first', () => {
 		const current = makeConfig({
 			roles: [makeRole('administrator', { admin_access: true }), makeRole('editor')],
 		});
@@ -358,11 +358,10 @@ describe('admin-continuity protection', () => {
 			roles: [makeRole('administrator', { admin_access: false }), makeRole('editor', { admin_access: true })],
 		});
 
-		const [protection] = computeConfigPlan(current, desired).protections;
+		const plan = computeConfigPlan(current, desired);
 
-		expect(protection?.contributors).toEqual([
-			{ kind: 'roles', operation: 'update', identity: { key: 'administrator' } },
-		]);
+		expect(plan.protections).toEqual([]);
+		expect(plan.roles.update.map((update) => update.key)).toEqual(['editor', 'administrator']);
 	});
 
 	it('allows the same demotion when the replacement promotion is ordered first', () => {
@@ -374,7 +373,55 @@ describe('admin-continuity protection', () => {
 			roles: [makeRole('editor', { admin_access: true }), makeRole('administrator', { admin_access: false })],
 		});
 
-		expect(computeConfigPlan(current, desired).protections).toEqual([]);
+		const plan = computeConfigPlan(current, desired);
+
+		expect(plan.protections).toEqual([]);
+		expect(plan.roles.update.map((update) => update.key)).toEqual(['editor', 'administrator']);
+	});
+
+	it('keeps the relative order of grants and of the remaining updates', () => {
+		const current = makeConfig({
+			roles: [
+				makeRole('administrator', { admin_access: true }),
+				makeRole('alpha'),
+				makeRole('beta'),
+				makeRole('gamma'),
+				makeRole('delta'),
+			],
+		});
+
+		const desired = makeConfig({
+			roles: [
+				makeRole('administrator', { admin_access: true }),
+				makeRole('alpha', { name: 'Alpha renamed' }),
+				makeRole('beta', { admin_access: true }),
+				makeRole('gamma', { name: 'Gamma renamed' }),
+				makeRole('delta', { admin_access: true }),
+			],
+		});
+
+		const plan = computeConfigPlan(current, desired);
+
+		expect(plan.protections).toEqual([]);
+		expect(plan.roles.update.map((update) => update.key)).toEqual(['beta', 'delta', 'alpha', 'gamma']);
+	});
+
+	it('does not treat a demotion or an unchanged administrator flag as a grant', () => {
+		const current = makeConfig({
+			roles: [makeRole('administrator', { admin_access: true }), makeRole('alpha', { admin_access: true })],
+		});
+
+		const desired = makeConfig({
+			roles: [
+				makeRole('administrator', { admin_access: true, name: 'Renamed' }),
+				makeRole('alpha', { admin_access: false }),
+			],
+		});
+
+		expect(computeConfigPlan(current, desired).roles.update.map((update) => update.key)).toEqual([
+			'administrator',
+			'alpha',
+		]);
 	});
 
 	it('protects demoting the final administrator with no replacement', () => {

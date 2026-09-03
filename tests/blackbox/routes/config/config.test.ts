@@ -905,7 +905,7 @@ describe('Config-as-Code API', () => {
 				});
 			});
 
-			describe('a demotion ordered before its replacement promotion is refused', () => {
+			describe('a demotion ordered before its replacement promotion is reordered and applies in one run', () => {
 				it.each(vendors)('%s', async (vendor) => {
 					await withSoleAdmin(vendor, async ({ db, adminKey }) => {
 						const app = await roleForEmail(db, common.USER.APP_ACCESS!.EMAIL);
@@ -923,14 +923,56 @@ describe('Config-as-Code API', () => {
 							appEntry,
 						];
 
+						const dry = await applyConfig(vendor, desired, { destructive: true, dryRun: true });
+						expect(dry.statusCode).toBe(200);
+						expect(dry.body.data.protections).toEqual([]);
+
+						const response = await applyConfig(vendor, desired, { destructive: true });
+						expect(response.statusCode).toBe(200);
+
+						try {
+							const promoted = await snapshotAs(vendor, common.USER.APP_ACCESS!.TOKEN);
+							const byKey = new Map(promoted.roles.map((role) => [role.key, role]));
+							expect(byKey.get(app.key)!.admin_access).toBe(true);
+							expect(byKey.get(adminKey)!.admin_access).toBe(false);
+						} finally {
+							const restore = JSON.parse(
+								JSON.stringify(await snapshotAs(vendor, common.USER.APP_ACCESS!.TOKEN))
+							) as ConfigSnapshot;
+
+							restore.roles.find((role) => role.key === adminKey)!.admin_access = true;
+							restore.roles.find((role) => role.key === app.key)!.admin_access = false;
+
+							const handedBack = await applyAs(vendor, common.USER.APP_ACCESS!.TOKEN, restore, { destructive: true });
+							expect(handedBack.statusCode).toBe(200);
+						}
+					});
+				});
+			});
+
+			describe('a filter that strips the promotion leaves the demotion refused and rolls everything back', () => {
+				it.each(vendors)('%s', async (vendor) => {
+					await withSoleAdmin(vendor, async ({ db, adminKey }) => {
+						const app = await roleForEmail(db, common.USER.APP_ACCESS!.EMAIL);
+						expect(app.admin).toBe(false);
+
+						const appBefore = await db('directus_roles').where({ id: app.id }).first();
+						const adminBefore = await db('directus_roles').where({ key: adminKey }).first();
+
+						const desired = JSON.parse(JSON.stringify(await adminSnapshot(vendor))) as ConfigSnapshot;
+						const adminEntry = desired.roles.find((role) => role.key === adminKey)!;
+						const appEntry = desired.roles.find((role) => role.key === app.key)!;
+						adminEntry.admin_access = false;
+						appEntry.admin_access = true;
+						appEntry.name = 'strip-promotion-probe';
+
 						const response = await applyConfig(vendor, desired, { destructive: true });
 
-						expect(response.statusCode).toBe(400);
-						expect(response.body.errors[0].extensions.protection.code).toBe('ADMIN_CONTINUITY_REQUIRED');
+						expect(response.statusCode).toBe(422);
+						expect(response.body.errors[0].extensions.code).toBe('UNPROCESSABLE_ENTITY');
 
-						expect(response.body.errors[0].extensions.contributors).toEqual([
-							{ kind: 'roles', operation: 'update', identity: { key: adminKey } },
-						]);
+						expect(await db('directus_roles').where({ id: app.id }).first()).toEqual(appBefore);
+						expect(await db('directus_roles').where({ key: adminKey }).first()).toEqual(adminBefore);
 					});
 				});
 			});

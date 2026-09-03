@@ -179,7 +179,7 @@ cairncms config apply --dry-run --format json ./config
 
 `protections` identifies valid plans that CairnCMS cannot apply safely. Each entry includes a stable `code` for automation, a human-readable `message`, and the contributing changes (`kind`, `operation`, and `identity`). If the array is not empty, CairnCMS refuses the apply even with `--destructive`. Automation should branch on `code`, not `message`.
 
-The only protection currently defined is `ADMIN_CONTINUITY_REQUIRED`. CairnCMS applies creates first, role updates in config order, and deletions last. Every step must leave at least one role with `admin_access: true`. Create a replacement administrator or place its promotion before the demotion that would otherwise remove the final administrator.
+The only protection currently defined is `ADMIN_CONTINUITY_REQUIRED`. CairnCMS applies creates first, then role updates with administrator grants ahead of the rest, and deletions last. Every step must leave at least one role with `admin_access: true`. Because grants run first, handing administrator access from one role to another applies in a single run regardless of the order of the role files or the request body. A demotion that leaves no administrator at all is refused.
 
 Consumers of `planVersion: 2` must ignore unknown properties, but reject an unknown `planVersion`, `kind`, or `operation`. An unfamiliar protection still blocks the apply, and an unfamiliar warning remains a warning. Additive fields do not change `planVersion`; breaking changes do. The input format's strictly validated `manifest.version` is independent of the plan version.
 

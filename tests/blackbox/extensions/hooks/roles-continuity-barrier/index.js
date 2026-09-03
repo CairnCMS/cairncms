@@ -9,6 +9,11 @@ module.exports = function registerHooks({ filter, action }) {
 			return { ...rest, admin_access: false };
 		}
 
+		if (payload.name === 'strip-promotion-probe' && 'admin_access' in payload) {
+			const { admin_access, ...rest } = payload;
+			return rest;
+		}
+
 		const key = payload._raceBarrier;
 
 		if (typeof key === 'string' && key.length > 0) {
