@@ -206,7 +206,7 @@ Use an absolute `http` or `https` URL without credentials, a query, or a fragmen
 
 A mutating remote apply requires `--yes`; a dry run does not. The target must run CairnCMS 1.6.0 or newer.
 
-Remote protections, destructive-change checks, output, and exit codes match local mode. Requests time out after 30 seconds by default; set `CAIRNCMS_REMOTE_CONFIG_TIMEOUT` to a duration such as `60s` for slower deployments. After a mutating timeout, run `config snapshot` before retrying because the server may have committed the apply.
+Remote protections, destructive-change checks, and exit codes match local mode, as do dry-run and no-change output. A refusal prints every server error, including named deletions or protected changes, but not the local plan; run a dry run to see it. Requests time out after 30 seconds by default; set `CAIRNCMS_REMOTE_CONFIG_TIMEOUT` to a duration such as `60s` for slower deployments. After a mutating timeout, run `config snapshot` before retrying because the server may have committed the apply.
 
 A remote snapshot is validated against the local config format before anything is written. Unknown fields in the envelope or a managed document stop the snapshot with exit `3` and leave the directory unchanged; records under unmanaged kinds are ignored. After a mutating apply, the CLI also checks the server's plan and result against the submitted manifest. If they disagree, it exits `3` and asks for a snapshot rather than reporting success because the change may have been applied.
 

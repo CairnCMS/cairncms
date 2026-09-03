@@ -37,7 +37,7 @@ import { readFileSync } from 'node:fs';
 import {
 	renderConfigPlan,
 	renderDestructiveRefusal,
-	renderWarnings,
+	renderNoChanges,
 	type RenderableResult,
 } from './render-config-plan.js';
 
@@ -172,10 +172,9 @@ async function runLocalEngine(
 
 		if (empty) {
 			if (desired.manifest.resources.includes('permissions')) {
-				const warnings = renderWarnings(await serializePlan(plan, desired, database));
-				logger.info(warnings ? `No changes to apply.\n\n${warnings}` : 'No changes to apply.');
+				logger.info(renderNoChanges(await serializePlan(plan, desired, database)));
 			} else {
-				logger.info('No changes to apply.');
+				logger.info(renderNoChanges());
 			}
 
 			return { result: 'no_changes', exitCode: 0 };
@@ -276,8 +275,7 @@ async function configApplyRemote(
 			if (format === 'json') {
 				process.stdout.write(`${JSON.stringify(plan)}\n`);
 			} else if (clean) {
-				const warnings = renderWarnings(plan);
-				logger.info(warnings ? `No changes to apply.\n\n${warnings}` : 'No changes to apply.');
+				logger.info(renderNoChanges(plan));
 			} else {
 				logger.info(renderConfigPlan(plan));
 			}
@@ -288,8 +286,12 @@ async function configApplyRemote(
 
 		const { plan, result, runId } = await applyRemote(session, desired, { dryRun: false, destructive });
 
-		logger.info(renderConfigPlan(plan));
-		logger.info(applyResultSummary(result));
+		if (plan.changes.length === 0) {
+			logger.info(renderNoChanges(plan));
+		} else {
+			logger.info(renderConfigPlan(plan));
+			logger.info(applyResultSummary(result));
+		}
 
 		printRemoteRun(runId);
 		process.exit(0);

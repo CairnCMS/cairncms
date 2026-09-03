@@ -11,9 +11,13 @@ import { resolveEndpoint, type OperatorRemoteTarget } from './operator-remote-ta
 import {
 	RemoteApplyResult,
 	RemoteConfigPlan,
+	RemoteErrorEntry,
+	RemoteErrorEnvelope,
+	RemoteErrorExtensions,
 	type RemoteWirePlan,
 	type RemoteWireResult,
 } from './remote-response-schema.js';
+import { renderDeletions, renderProtectionContributors, type RenderableDeletion } from './render-config-plan.js';
 
 export const REMOTE_CONFIG_MIN_VERSION = '1.6.0';
 
@@ -99,7 +103,7 @@ async function request(
 		const label = response.status >= 400 ? 'rejected the request' : 'returned an unexpected redirect';
 
 		throw new RemoteClientError(
-			`The server ${label} (${response.status}): ${sanitize(serverErrorMessage(response.data), session.token)}${
+			`The server ${label} (${response.status}): ${serverErrorMessage(response.data, session.token)}${
 				preCommitRefusal ? '' : outcome
 			}`,
 			preCommitRefusal ? 2 : 3,
@@ -359,18 +363,57 @@ function redactToken(text: string, token: string): string {
 	return redacted;
 }
 
+function redactedDeletion(deletion: RenderableDeletion, token: string): RenderableDeletion {
+	if (deletion.kind === 'roles') {
+		return { kind: 'roles', identity: { key: redactToken(deletion.identity.key, token) } };
+	}
+
+	const { role, collection, action } = deletion.identity;
+
+	return {
+		kind: 'permissions',
+		identity: {
+			role: redactToken(role, token),
+			collection: redactToken(collection, token),
+			action: redactToken(action, token),
+		},
+	};
+}
+
 function sanitize(text: string, token: string): string {
 	return replaceControlCharacters(redactToken(text, token));
 }
 
-function serverErrorMessage(data: unknown): string {
-	if (isPlainObject(data) && Array.isArray((data as Record<string, unknown>)['errors'])) {
-		const errors = (data as { errors: Array<{ message?: unknown }> }).errors;
-		const message = errors[0]?.message;
-		if (typeof message === 'string' && message.length > 0) return message;
+function serverErrorMessage(data: unknown, token: string): string {
+	const envelope = RemoteErrorEnvelope.safeParse(data);
+	if (!envelope.success) return 'no error detail was provided.';
+
+	const lines: string[] = [];
+
+	for (const raw of envelope.data.errors) {
+		const entry = RemoteErrorEntry.safeParse(raw);
+		if (!entry.success) continue;
+
+		lines.push(sanitize(entry.data.message, token));
+
+		const extensions = RemoteErrorExtensions.safeParse(entry.data['extensions']);
+		if (!extensions.success) continue;
+
+		if (extensions.data.code === 'DESTRUCTIVE_CHANGES_REQUIRED') {
+			lines.push(...renderDeletions(extensions.data.deletions.map((deletion) => redactedDeletion(deletion, token))));
+		} else {
+			lines.push(
+				...renderProtectionContributors(
+					extensions.data.contributors.map((contributor) => ({
+						...contributor,
+						identity: { ...contributor.identity, key: redactToken(contributor.identity.key, token) },
+					}))
+				)
+			);
+		}
 	}
 
-	return 'no error detail was provided.';
+	return lines.length > 0 ? lines.join('\n') : 'no error detail was provided.';
 }
 
 function transportMessage(err: unknown): string {

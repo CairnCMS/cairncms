@@ -264,10 +264,16 @@ describe('Config-as-Code remote CLI', () => {
 
 			const apply = await runCli(['config', 'apply', configDir, '--url', proxyUrl, '--yes'], trustedEnv);
 			expect(apply.status).toBe(0);
+			expect(apply.stdout + apply.stderr).toContain('Config applied: 1 role(s) created');
 
 			const created = await findRole(roleKey);
 			expect(created).toBeDefined();
 			expect(created!.name).toBe('Remote CLI Test');
+
+			const noop = await runCli(['config', 'apply', configDir, '--url', proxyUrl, '--yes'], trustedEnv);
+			expect(noop.status).toBe(0);
+			expect(noop.stdout + noop.stderr).toContain('No changes to apply.');
+			expect(noop.stdout + noop.stderr).not.toContain('Config applied');
 
 			await fs.writeFile(
 				path.join(configDir, 'roles', `${roleKey}.yaml`),
@@ -285,6 +291,17 @@ describe('Config-as-Code remote CLI', () => {
 			expect(corruptedOutput).toMatch(/Run [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
 			expect(corruptedOutput).not.toContain('Config applied');
 			expect((await findRole(roleKey))!.name).toBe('Remote CLI Renamed');
+
+			await fs.unlink(path.join(configDir, 'roles', `${roleKey}.yaml`));
+
+			const refused = await runCli(['config', 'apply', configDir, '--url', proxyUrl, '--yes'], trustedEnv);
+			const refusedOutput = refused.stdout + refused.stderr;
+
+			expect(refused.status).toBe(2);
+			expect(refusedOutput).toContain('rejected the request (400)');
+			expect(refusedOutput).toContain('deletions');
+			expect(refusedOutput).toContain(`Delete ${roleKey}`);
+			expect(await findRole(roleKey)).toBeDefined();
 		},
 		120000
 	);

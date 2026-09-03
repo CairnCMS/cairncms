@@ -133,6 +133,20 @@ export const RemoteApplyResult = z
 	})
 	.passthrough();
 
+const deletion = z.union([
+	z.object({ kind: z.literal('roles'), identity: roleIdentity }).passthrough(),
+	z.object({ kind: z.literal('permissions'), identity: permissionIdentity }).passthrough(),
+]);
+
+export const RemoteErrorEnvelope = z.object({ errors: z.array(z.unknown()) }).passthrough();
+
+export const RemoteErrorEntry = z.object({ message: z.string().min(1) }).passthrough();
+
+export const RemoteErrorExtensions = z.union([
+	z.object({ code: z.literal('DESTRUCTIVE_CHANGES_REQUIRED'), deletions: z.array(deletion) }).passthrough(),
+	z.object({ code: z.literal('CONFIG_PROTECTED_RECORD'), contributors: z.array(contributor) }).passthrough(),
+]);
+
 export type RemoteWirePlan = z.infer<typeof RemoteConfigPlan>;
 
 export type RemoteWireResult = z.infer<typeof RemoteApplyResult>;

@@ -70,6 +70,12 @@ export function renderConfigPlan(serialized: RenderablePlan): string {
 	return lines.join('\n');
 }
 
+export function renderNoChanges(view?: Pick<RenderablePlan, 'warnings'>): string {
+	const warnings = view === undefined ? '' : renderWarnings(view);
+
+	return warnings ? `No changes to apply.\n\n${warnings}` : 'No changes to apply.';
+}
+
 export function renderProtections(serialized: Pick<RenderablePlan, 'protections'>): string {
 	if (serialized.protections.length === 0) return '';
 
@@ -77,14 +83,27 @@ export function renderProtections(serialized: Pick<RenderablePlan, 'protections'
 
 	for (const protection of serialized.protections) {
 		lines.push(`  - ${replaceControlCharacters(protection.message)}`);
-
-		for (const contributor of protection.contributors) {
-			const verb = contributor.operation === 'delete' ? 'Deletes' : 'Removes administrator access from';
-			lines.push(`    - ${verb} ${replaceControlCharacters(contributor.identity.key)}`);
-		}
+		lines.push(...renderProtectionContributors(protection.contributors));
 	}
 
 	return lines.join('\n');
+}
+
+export function renderProtectionContributors(
+	contributors: RenderablePlan['protections'][number]['contributors']
+): string[] {
+	return contributors.map((contributor) => {
+		const verb = contributor.operation === 'delete' ? 'Deletes' : 'Removes administrator access from';
+		return `    - ${verb} ${replaceControlCharacters(contributor.identity.key)}`;
+	});
+}
+
+export type RenderableDeletion =
+	| { kind: 'roles'; identity: RoleIdentityView }
+	| { kind: 'permissions'; identity: PermissionIdentityView };
+
+export function renderDeletions(deletions: RenderableDeletion[]): string[] {
+	return deletions.map((deletion) => `    - ${deleteVerb()} ${renderIdentity(deletion)}`);
 }
 
 export function renderWarnings(serialized: Pick<RenderablePlan, 'warnings'>): string {
@@ -133,7 +152,7 @@ function renderChange(change: RenderableChange): string[] {
 	return lines;
 }
 
-function renderIdentity(change: RenderableChange): string {
+function renderIdentity(change: RenderableChange | RenderableDeletion): string {
 	if (change.kind === 'roles') {
 		return replaceControlCharacters(change.identity.key);
 	}

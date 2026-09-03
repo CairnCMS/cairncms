@@ -54,14 +54,15 @@ vi.mock('./remote-token.js', () => ({
 
 vi.mock('./operator-remote-transport.js', () => ({ createOperatorRemoteTransport: vi.fn(async () => ({})) }));
 
-vi.mock('./remote-client.js', () => ({
+vi.mock('./remote-client.js', async (importOriginal) => ({
+	...(await importOriginal<typeof import('./remote-client.js')>()),
 	fetchServerVersion: fetchServerVersionMock,
-	assertServerSupportsRemoteConfig: vi.fn(),
 	applyRemote: applyRemoteMock,
 	fetchRemoteSnapshot: fetchRemoteSnapshotMock,
 }));
 
 import logger from '../../../logger.js';
+import { readConfigDirectory } from '../../../utils/read-config-directory.js';
 import { configApply } from './apply.js';
 import { configSnapshot } from './snapshot.js';
 
@@ -377,5 +378,107 @@ describe('remote configSnapshot wiring', () => {
 
 		expect(process.exit).toHaveBeenCalledWith(3);
 		expect(writeConfigDirectoryMock).not.toHaveBeenCalled();
+	});
+});
+
+describe('remote version gate as wired', () => {
+	it('refuses a below-floor server on apply before reading the tree or sending a config request', async () => {
+		fetchServerVersionMock.mockResolvedValue('1.5.9');
+
+		await configApply('./cfg', {
+			yes: true,
+			dryRun: false,
+			destructive: false,
+			format: 'human',
+			url: 'https://cms.example',
+		}).catch(() => undefined);
+
+		expect(process.exit).toHaveBeenCalledWith(2);
+		expect(vi.mocked(logger.error)).toHaveBeenCalledWith(expect.stringContaining('requires 1.6.0 or newer'));
+		expect(vi.mocked(readConfigDirectory)).not.toHaveBeenCalled();
+		expect(applyRemoteMock).not.toHaveBeenCalled();
+	});
+
+	it('refuses a below-floor server on snapshot before fetching or writing anything', async () => {
+		fetchServerVersionMock.mockResolvedValue('1.5.9');
+
+		await configSnapshot('./cfg', { yes: true, url: 'https://cms.example' }).catch(() => undefined);
+
+		expect(process.exit).toHaveBeenCalledWith(2);
+		expect(vi.mocked(logger.error)).toHaveBeenCalledWith(expect.stringContaining('requires 1.6.0 or newer'));
+		expect(fetchRemoteSnapshotMock).not.toHaveBeenCalled();
+		expect(writeConfigDirectoryMock).not.toHaveBeenCalled();
+	});
+
+	it('refuses an unrecognized server version at exit 3', async () => {
+		fetchServerVersionMock.mockResolvedValue('main');
+
+		await configApply('./cfg', {
+			yes: false,
+			dryRun: true,
+			destructive: false,
+			format: 'human',
+			url: 'https://cms.example',
+		}).catch(() => undefined);
+
+		expect(process.exit).toHaveBeenCalledWith(3);
+		expect(applyRemoteMock).not.toHaveBeenCalled();
+	});
+});
+
+describe('remote mutating no-op', () => {
+	const RESULT = {
+		roles: { created: [], updated: [], deleted: [] },
+		permissions: { created: 0, updated: 0, deleted: 0 },
+	};
+
+	function messages(): unknown[] {
+		return vi.mocked(logger.info).mock.calls.map((call) => call[0]);
+	}
+
+	it('prints exactly the local no-change message at exit 0', async () => {
+		applyRemoteMock.mockResolvedValue({ plan: EMPTY_PLAN, result: RESULT });
+
+		await configApply('./cfg', {
+			yes: true,
+			dryRun: false,
+			destructive: false,
+			format: 'human',
+			url: 'https://cms.example',
+		}).catch(() => undefined);
+
+		expect(process.exit).toHaveBeenCalledWith(0);
+		expect(messages()).toEqual(['No changes to apply.']);
+	});
+
+	it('prints warnings under the no-change message and never a blank applied summary', async () => {
+		applyRemoteMock.mockResolvedValue({
+			plan: {
+				...EMPTY_PLAN,
+				warnings: [
+					{
+						code: 'COLLECTION_MISSING',
+						kind: 'permissions',
+						identity: { role: 'editor', collection: 'ghost', action: 'read' },
+						message: 'Permission for role "editor" targets collection "ghost", which does not exist in the schema.',
+					},
+				],
+			},
+			result: RESULT,
+		});
+
+		await configApply('./cfg', {
+			yes: true,
+			dryRun: false,
+			destructive: false,
+			format: 'human',
+			url: 'https://cms.example',
+		}).catch(() => undefined);
+
+		expect(process.exit).toHaveBeenCalledWith(0);
+		expect(messages()).toHaveLength(1);
+		expect(messages()[0]).toContain('No changes to apply.');
+		expect(messages()[0]).toContain('does not exist in the schema');
+		expect(messages()[0]).not.toContain('Config applied');
 	});
 });

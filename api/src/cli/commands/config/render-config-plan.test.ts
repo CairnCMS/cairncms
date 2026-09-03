@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { RoleDeletionImpactEntry, RoleValues, SerializedConfigPlan } from '../../../types/config.js';
 import { createVerb, deleteVerb, heading, planIntro, updateVerb } from '../../presentation.js';
-import { renderConfigPlan, renderDestructiveRefusal, renderProtections } from './render-config-plan.js';
+import {
+	renderConfigPlan,
+	renderDeletions,
+	renderDestructiveRefusal,
+	renderNoChanges,
+	renderProtections,
+} from './render-config-plan.js';
 
 function roleValues(over: Partial<RoleValues> = {}): RoleValues {
 	return {
@@ -353,5 +359,53 @@ describe('renderProtections', () => {
 
 		expect(output).toContain('    - Deletes admin?role');
 		expect(output).not.toContain(bel);
+	});
+});
+
+describe('renderNoChanges', () => {
+	it('prints the bare message without a view', () => {
+		expect(renderNoChanges()).toBe('No changes to apply.');
+	});
+
+	it('prints the bare message for a view without warnings', () => {
+		expect(renderNoChanges(plan())).toBe('No changes to apply.');
+	});
+
+	it('appends the warnings section under the message', () => {
+		const output = renderNoChanges(
+			plan({
+				warnings: [
+					{
+						code: 'COLLECTION_MISSING',
+						kind: 'permissions',
+						identity: { role: 'editor', collection: 'articles', action: 'read' },
+						message: 'articles is not a known collection',
+					},
+				],
+			})
+		);
+
+		expect(output).toBe(
+			['No changes to apply.', '', heading('Warnings'), '  - articles is not a known collection'].join('\n')
+		);
+	});
+});
+
+describe('renderDeletions', () => {
+	it('renders role and permission identities with the delete verb', () => {
+		expect(
+			renderDeletions([
+				{ kind: 'roles', identity: { key: 'legacy' } },
+				{ kind: 'permissions', identity: { role: 'editor', collection: 'articles', action: 'read' } },
+			])
+		).toEqual([`    - ${deleteVerb()} legacy`, `    - ${deleteVerb()} editor / articles / read`]);
+	});
+
+	it('sanitizes control characters in a deletion identity', () => {
+		const bel = String.fromCharCode(7);
+
+		const [line] = renderDeletions([{ kind: 'roles', identity: { key: `legacy${bel}` } }]);
+
+		expect(line).toBe(`    - ${deleteVerb()} legacy?`);
 	});
 });

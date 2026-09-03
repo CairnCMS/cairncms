@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CairnConfig } from '../../../types/config.js';
+import { deleteVerb } from '../../presentation.js';
 import { parseOperatorRemoteTarget } from './operator-remote-target.js';
 import {
 	applyRemote,
@@ -686,6 +687,196 @@ describe('applyRemote', () => {
 
 		expect(error.message).not.toContain(TOKEN);
 		expect(error.message).not.toContain(BEL);
+	});
+
+	it('prints every error entry the server returned', async () => {
+		const { remote } = session(() => ({
+			status: 400,
+			data: {
+				errors: [
+					{ message: 'first failure', extensions: { code: 'CONFIG_INVALID' } },
+					{ message: `second ${BEL}failure`, extensions: { code: 'CONFIG_IDENTITY_CONFLICT' } },
+				],
+			},
+		}));
+
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }));
+
+		expect(error.exitCode).toBe(2);
+		expect(error.message).toBe('The server rejected the request (400): first failure\nsecond ?failure');
+	});
+
+	it('renders the deletions a destructive refusal names', async () => {
+		const { remote } = session(() => ({
+			status: 400,
+			data: {
+				errors: [
+					{
+						message: 'The configuration plan contains deletions. Re-run with the destructive option to authorize them.',
+						extensions: {
+							code: 'DESTRUCTIVE_CHANGES_REQUIRED',
+							deletions: [
+								{ kind: 'roles', identity: { key: 'legacy' } },
+								{ kind: 'permissions', identity: { role: 'editor', collection: 'articles', action: 'read' } },
+							],
+						},
+					},
+				],
+			},
+		}));
+
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }));
+
+		expect(error.exitCode).toBe(2);
+
+		expect(error.message).toBe(
+			`The server rejected the request (400): The configuration plan contains deletions. Re-run with the destructive option to authorize them.\n    - ${deleteVerb()} legacy\n    - ${deleteVerb()} editor / articles / read`
+		);
+	});
+
+	it('renders the contributors a protected refusal names with the local verbs', async () => {
+		const { remote } = session(() => ({
+			status: 400,
+			data: {
+				errors: [
+					{
+						message: 'Would remove the last administrator',
+						extensions: {
+							code: 'CONFIG_PROTECTED_RECORD',
+							protection: { code: 'ADMIN_CONTINUITY_REQUIRED' },
+							contributors: [
+								{ kind: 'roles', operation: 'delete', identity: { key: 'admin' } },
+								{ kind: 'roles', operation: 'update', identity: { key: `ops${BEL}` } },
+							],
+						},
+					},
+				],
+			},
+		}));
+
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }));
+
+		expect(error.message).toBe(
+			'The server rejected the request (400): Would remove the last administrator\n    - Deletes admin\n    - Removes administrator access from ops?'
+		);
+	});
+
+	it('falls back to the message alone when an extension shape is unrecognized', async () => {
+		const { remote } = session(() => ({
+			status: 400,
+			data: {
+				errors: [
+					{
+						message: 'refused',
+						extensions: {
+							code: 'DESTRUCTIVE_CHANGES_REQUIRED',
+							deletions: [{ kind: 'flows', identity: { key: 'x' } }],
+						},
+					},
+					{ extensions: { code: 'NO_MESSAGE' } },
+				],
+			},
+		}));
+
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }));
+
+		expect(error.message).toBe('The server rejected the request (400): refused');
+	});
+
+	it('renders extension detail only under the error code that defines it', async () => {
+		const { remote } = session(() => ({
+			status: 400,
+			data: {
+				errors: [
+					{
+						message: 'invalid document',
+						extensions: {
+							code: 'CONFIG_INVALID',
+							deletions: [{ kind: 'roles', identity: { key: 'legacy' } }],
+							contributors: [{ kind: 'roles', operation: 'delete', identity: { key: 'admin' } }],
+						},
+					},
+					{
+						message: 'wrong code for contributors',
+						extensions: {
+							code: 'DESTRUCTIVE_CHANGES_REQUIRED',
+							contributors: [{ kind: 'roles', operation: 'delete', identity: { key: 'admin' } }],
+						},
+					},
+				],
+			},
+		}));
+
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }));
+
+		expect(error.message).toBe('The server rejected the request (400): invalid document\nwrong code for contributors');
+	});
+
+	it('redacts the token from deletion and contributor identities', async () => {
+		const { remote } = session(() => ({
+			status: 400,
+			data: {
+				errors: [
+					{
+						message: 'deletions',
+						extensions: {
+							code: 'DESTRUCTIVE_CHANGES_REQUIRED',
+							deletions: [
+								{ kind: 'roles', identity: { key: `role_${TOKEN}` } },
+								{ kind: 'permissions', identity: { role: 'editor', collection: TOKEN, action: 'read' } },
+							],
+						},
+					},
+					{
+						message: 'protected',
+						extensions: {
+							code: 'CONFIG_PROTECTED_RECORD',
+							contributors: [{ kind: 'roles', operation: 'delete', identity: { key: TOKEN } }],
+						},
+					},
+				],
+			},
+		}));
+
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }));
+
+		expect(error.message).not.toContain(TOKEN);
+		expect(error.message).toContain(`${deleteVerb()} role_[redacted]`);
+		expect(error.message).toContain(`${deleteVerb()} editor / [redacted] / read`);
+		expect(error.message).toContain('Deletes [redacted]');
+	});
+
+	it('redacts a token that carries a control byte from identities the renderer neutralizes', async () => {
+		const token = `sec${BEL}ret`;
+
+		const { remote } = session(() => ({
+			status: 400,
+			data: {
+				errors: [
+					{
+						message: 'protected',
+						extensions: {
+							code: 'CONFIG_PROTECTED_RECORD',
+							contributors: [{ kind: 'roles', operation: 'delete', identity: { key: `admin_${token}` } }],
+						},
+					},
+					{
+						message: 'deletions',
+						extensions: {
+							code: 'DESTRUCTIVE_CHANGES_REQUIRED',
+							deletions: [{ kind: 'permissions', identity: { role: 'editor', collection: token, action: 'read' } }],
+						},
+					},
+				],
+			},
+		}));
+
+		const error = await caught(() => applyRemote({ ...remote, token }, BODY, { dryRun: false, destructive: false }));
+
+		expect(error.message).not.toContain('sec?ret');
+		expect(error.message).not.toContain(BEL);
+		expect(error.message).toContain('Deletes admin_[redacted]');
+		expect(error.message).toContain(`${deleteVerb()} editor / [redacted] / read`);
 	});
 });
 
