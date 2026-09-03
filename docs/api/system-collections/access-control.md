@@ -241,7 +241,7 @@ These admin-only endpoints back remote CLI mode and custom HTTP automation. CLI 
 In short:
 
 - `GET /config/snapshot` has no manifest request body. Optional `manifest_version` and comma-separated `resources` parameters select the manifest in the response. Omission means the current version and all kinds; `resources=` means an empty managed scope. The remote CLI derives these values from the local manifest automatically. Pass `?export=yaml` for a YAML attachment.
-- `POST /config/apply` takes a manifest in its JSON or YAML body, so that manifest defines managed scope. Pass `?dry_run=true` to preview without writing or `?destructive=true` to authorize deletions. A dry run returns the plan as `data`; a mutating apply returns the result as `data` and the plan under `meta.plan`.
+- `POST /config/apply` takes a manifest in its JSON or YAML body, so that manifest defines managed scope. Pass `?dry_run=true` to preview without writing or `?destructive=true` to authorize deletions. Each flag must be exactly `true` or `false`, and any other value is rejected with `CONFIG_INVALID` before any state is read. A dry run returns the plan as `data`; a mutating apply returns the result as `data` and the plan under `meta.plan`.
 
 There is no `/config/diff` endpoint. The apply endpoint computes the plan internally on every call.
 

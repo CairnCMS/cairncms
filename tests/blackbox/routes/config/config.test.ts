@@ -370,6 +370,39 @@ describe('Config-as-Code API', () => {
 			});
 		});
 
+		describe('a malformed apply flag is refused before any state is read', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const before = await adminSnapshot(vendor);
+				const desired = JSON.parse(JSON.stringify(before)) as ConfigSnapshot;
+				const probeKey = `badflag_${vendor.replace(/[^a-z0-9_]/gi, '_')}`;
+
+				desired.roles.push({
+					key: probeKey,
+					name: 'Bad Flag Probe',
+					admin_access: false,
+					app_access: true,
+				});
+
+				try {
+					for (const query of ['dry_run=1', 'dry_run=True', 'dry_run=true&dry_run=true', 'destructive=1']) {
+						const response = await request(getUrl(vendor))
+							.post(`/config/apply?${query}`)
+							.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+							.set('Content-Type', 'application/json')
+							.send(desired);
+
+						expect(response.statusCode).toBe(400);
+						expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+						expect(response.headers['x-config-run-id']).toBeUndefined();
+					}
+
+					expect(await adminSnapshot(vendor)).toEqual(before);
+				} finally {
+					await resetToBaseline(vendor);
+				}
+			});
+		});
+
 		describe('?destructive=true removes orphan roles', () => {
 			it.each(vendors)('%s', async (vendor) => {
 				const baseline = await getBaseline(vendor);

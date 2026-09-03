@@ -406,3 +406,59 @@ describe('POST /config/apply run record', () => {
 		expect(res.body).toEqual({ data: APPLY_RESULT, meta: { plan: SERIALIZED } });
 	});
 });
+
+describe('POST /config/apply flag parsing', () => {
+	function applyWithQuery(query: string) {
+		return request(makeApp(ADMIN)).post(`/config/apply?${query}`).set('User-Agent', 'cairncms-cli/1.6.0').send(BODY);
+	}
+
+	it.each([
+		['a numeric value', 'dry_run=1'],
+		['a capitalized value', 'dry_run=True'],
+		['an empty value', 'dry_run='],
+		['an object value', 'dry_run[x]=true'],
+		['a repeated value', 'dry_run=true&dry_run=true'],
+		['an unknown word', 'dry_run=yes'],
+	])('rejects %s for dry_run before any state is read', async (_label, query) => {
+		const res = await applyWithQuery(query);
+
+		expect(res.status).toBe(400);
+		expect(res.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+		expect(readCurrentConfig).not.toHaveBeenCalled();
+		expect(applyConfigPlan).not.toHaveBeenCalled();
+		expect(records()).toHaveLength(0);
+		expect(res.headers[HEADER]).toBeUndefined();
+	});
+
+	it.each([
+		['a numeric value', 'destructive=1'],
+		['a capitalized value', 'destructive=True'],
+		['an empty value', 'destructive='],
+		['a repeated value', 'destructive=true&destructive=false'],
+	])('rejects %s for destructive before any state is read', async (_label, query) => {
+		const res = await applyWithQuery(query);
+
+		expect(res.status).toBe(400);
+		expect(res.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+		expect(readCurrentConfig).not.toHaveBeenCalled();
+		expect(applyConfigPlan).not.toHaveBeenCalled();
+		expect(records()).toHaveLength(0);
+		expect(res.headers[HEADER]).toBeUndefined();
+	});
+
+	it('treats an exact false as a mutating apply', async () => {
+		const res = await applyWithQuery('dry_run=false&destructive=false');
+
+		expect(res.status).toBe(200);
+		expect(applyConfigPlan).toHaveBeenCalledTimes(1);
+		expectOneRecord({ result: 'applied', dryRun: false, destructive: false });
+	});
+
+	it('treats an exact true as a dry run', async () => {
+		const res = await applyWithQuery('dry_run=true&destructive=true');
+
+		expect(res.status).toBe(200);
+		expect(applyConfigPlan).not.toHaveBeenCalled();
+		expectOneRecord({ result: 'planned', dryRun: true, destructive: true });
+	});
+});

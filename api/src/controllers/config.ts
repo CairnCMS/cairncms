@@ -73,8 +73,8 @@ router.post(
 
 		const document = desired as Record<string, unknown>;
 
-		const dryRun = req.query['dry_run'] === 'true';
-		const destructive = req.query['destructive'] === 'true';
+		const dryRun = parseApplyFlag(req.query, 'dry_run');
+		const destructive = parseApplyFlag(req.query, 'destructive');
 
 		const manifest = validateConfigManifest(document['manifest'], BODY_LABEL);
 		const managed = new Set<ConfigKind>(manifest.resources);
@@ -149,6 +149,16 @@ router.post(
 );
 
 const BODY_LABEL = 'request body';
+
+function parseApplyFlag(query: Record<string, unknown>, name: 'dry_run' | 'destructive'): boolean {
+	const value = query[name];
+
+	if (value === undefined) return false;
+	if (value === 'true') return true;
+	if (value === 'false') return false;
+
+	throw new ConfigInvalidException(`The "${name}" query parameter must be exactly "true" or "false" when present.`);
+}
 
 function parseSnapshotScope(query: Record<string, unknown>): ConfigKind[] {
 	const version = query['manifest_version'];

@@ -279,6 +279,8 @@ Two query flags shape the apply:
 - **`?dry_run=true`** — compute and return the plan without writing. The response is the plan document, not an apply summary.
 - **`?destructive=true`** — authorize deletions during a mutating apply. Dry runs always return the complete plan.
 
+Each flag accepts exactly `true` or `false`. Any other value, such as `1`, `True`, an empty value, or a repeated parameter, is rejected with `400` and the `CONFIG_INVALID` code before the server reads any state, so a malformed preview flag can never turn into a mutating apply.
+
 A mutating apply returns a summary like this under `data`:
 
 ```json
