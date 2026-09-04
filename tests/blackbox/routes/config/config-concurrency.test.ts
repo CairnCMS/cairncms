@@ -8,6 +8,7 @@ import config, { getUrl, paths } from '@common/config';
 import vendors from '@common/get-dbs-to-test';
 import * as common from '@common/index';
 import { dump as dumpYaml } from 'js-yaml';
+import knex, { type Knex } from 'knex';
 
 const CONFIRM_PROMPT = 'Would you like to continue?';
 const RUN_EVENT = 'config.run.finished';
@@ -205,5 +206,143 @@ describe('Config-as-Code local confirmation-window concurrency', () => {
 			}
 		},
 		90000
+	);
+});
+
+type ConfigSnapshot = {
+	manifest: { version: number; resources: string[] };
+	roles: Array<{ key: string; name?: string }>;
+	permissions: Array<{ role: string; permissions: Array<Record<string, unknown>> }>;
+};
+
+// The single-connection SQLite deadlock is vendor-specific, so the hook proof runs on SQLite only.
+const sqliteVendors = vendors.filter((vendor) => vendor === 'sqlite3');
+const hookDescribe = sqliteVendors.length > 0 ? describe : describe.skip;
+
+hookDescribe('Config-as-Code transaction-bound role hook uses the supplied database', () => {
+	const databases = new Map<string, Knex>();
+
+	beforeAll(() => {
+		for (const vendor of sqliteVendors) databases.set(vendor, knex(config.knexConfig[vendor]!));
+	});
+
+	afterAll(async () => {
+		for (const [, db] of databases) await db.destroy();
+	});
+
+	function markerKey(kind: string, roleId: string): string {
+		return `config-apply-probe/roles.update.${kind}/${roleId}`;
+	}
+
+	async function markerCount(vendor: string, kind: string, roleId: string): Promise<number> {
+		const rows = await databases.get(vendor)!('tests_extensions_log')
+			.where({ key: markerKey(kind, roleId) })
+			.select('id');
+
+		return rows.length;
+	}
+
+	async function clearMarkers(vendor: string, roleId: string): Promise<void> {
+		await databases.get(vendor)!('tests_extensions_log')
+			.where('key', 'like', `config-apply-probe/roles.update.%/${roleId}`)
+			.delete();
+	}
+
+	async function createProbeRole(vendor: string): Promise<{ id: string; key: string }> {
+		const key = `hookprobe_${vendor.replace(/[^a-z0-9]/gi, '')}_${randomUUID().slice(0, 8)}`;
+
+		const created = await adminAuth(
+			request(getUrl(vendor)).post('/roles').send({ key, name: 'Hook Probe', admin_access: false, app_access: false })
+		);
+
+		expect(created.statusCode).toBe(200);
+		return { id: created.body.data.id as string, key };
+	}
+
+	it.each(sqliteVendors)(
+		'%s: a role update whose filter reads through the supplied database completes and writes both markers',
+		async (vendor) => {
+			const role = await createProbeRole(vendor);
+
+			try {
+				const update = await adminAuth(
+					request(getUrl(vendor)).patch(`/roles/${role.id}`).send({ name: 'Hook Probed' })
+				);
+
+				expect(update.statusCode).toBe(200);
+				expect(await markerCount(vendor, 'dbfilter', role.id)).toBe(1);
+				expect(await markerCount(vendor, 'dbaction', role.id)).toBe(1);
+
+				const stored = await databases.get(vendor)!('directus_roles').where({ id: role.id }).first();
+				expect(stored.name).toBe('Hook Probed');
+			} finally {
+				await clearMarkers(vendor, role.id);
+				await adminAuth(request(getUrl(vendor)).delete(`/roles/${role.id}`));
+			}
+		},
+		60000
+	);
+
+	it.each(sqliteVendors)(
+		'%s: a config apply that fails after the role-update filter ran rolls back the role, the filter marker, and the action',
+		async (vendor) => {
+			const role = await createProbeRole(vendor);
+
+			try {
+				const snapshotResponse = await adminAuth(request(getUrl(vendor)).get('/config/snapshot'));
+				expect(snapshotResponse.statusCode).toBe(200);
+				const baseline = snapshotResponse.body.data as ConfigSnapshot;
+
+				const desired = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+				const target = desired.roles.find((entry) => entry.key === role.key);
+				expect(target).toBeDefined();
+				target!.name = 'Renamed By Apply';
+
+				let permissionSet = desired.permissions.find((entry) => entry.role === role.key);
+
+				if (!permissionSet) {
+					permissionSet = { role: role.key, permissions: [] };
+					desired.permissions.push(permissionSet);
+				}
+
+				permissionSet.permissions.push({
+					collection: 'hookprobe_rollback',
+					action: 'read',
+					permissions: {},
+					validation: null,
+					presets: null,
+					fields: ['*'],
+				});
+
+				const dryRun = await adminAuth(request(getUrl(vendor)).post('/config/apply?dry_run=true').send(desired));
+				expect(dryRun.statusCode).toBe(200);
+				const changes = dryRun.body.data.changes as Array<Record<string, any>>;
+
+				expect(changes.some((c) => c.kind === 'roles' && c.operation === 'update' && c.identity.key === role.key)).toBe(
+					true
+				);
+
+				expect(
+					changes.some((c) => c.kind === 'permissions' && c.operation === 'create' && c.identity.role === role.key)
+				).toBe(true);
+
+				// The later permission-phase filter throws a typed exception, so a role-phase failure of the
+				// hook under test would surface differently and fail this assertion rather than pass vacuously.
+				const apply = await adminAuth(request(getUrl(vendor)).post('/config/apply').send(desired));
+				expect(apply.statusCode).toBe(400);
+				expect(apply.body.errors[0].extensions.code).toBe('INVALID_PAYLOAD');
+				expect(apply.body.errors[0].message).toContain('forced permission-phase rollback');
+
+				const stored = await databases.get(vendor)!('directus_roles').where({ id: role.id }).first();
+				expect(stored.name).toBe('Hook Probe');
+
+				expect(await markerCount(vendor, 'dbfilter', role.id)).toBe(0);
+				expect(await markerCount(vendor, 'dbaction', role.id)).toBe(0);
+			} finally {
+				await clearMarkers(vendor, role.id);
+				await adminAuth(request(getUrl(vendor)).delete(`/roles/${role.id}`));
+			}
+		},
+		60000
 	);
 });

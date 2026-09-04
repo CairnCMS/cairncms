@@ -1,16 +1,40 @@
-module.exports = function registerHooks({ filter, action }) {
+module.exports = function registerHooks({ filter, action }, { exceptions }) {
 	const logsCollection = 'tests_extensions_log';
+	const hookRollbackMessage = 'config-apply-probe: forced permission-phase rollback';
+	const hookProbePrefix = 'hookprobe_';
 	const probeRoleIds = new Set();
 	const probePermIds = new Set();
 	const rollbackRoleIds = new Set();
+	const dbProbeRoleIds = new Set();
 
 	async function mark(database, key) {
 		await database(logsCollection).insert({ key: `config-apply-probe/${key}`, value: '1' });
 	}
 
+	// Reads the role key through the supplied EventContext.database rather than getDatabase(). On a
+	// single-connection SQLite deployment this only completes because it uses the transaction connection.
+	filter('roles.update', async (payload, meta, { database }) => {
+		for (const id of (meta && meta.keys) || []) {
+			const row = await database('directus_roles').select('key').where({ id }).first();
+
+			if (row && typeof row.key === 'string' && row.key.startsWith(hookProbePrefix)) {
+				dbProbeRoleIds.add(id);
+				await mark(database, `roles.update.dbfilter/${id}`);
+			}
+		}
+
+		return payload;
+	});
+
 	filter('permissions.create', (payload) => {
 		if (payload && payload.collection === 'audit_probe_rollback') {
 			throw new Error('config apply probe forced rollback');
+		}
+
+		// A typed exception so a config-apply failure at the permission phase is distinguishable from a
+		// role-phase failure, which would surface as CONFIG_APPLY_FAILED.
+		if (payload && payload.collection === 'hookprobe_rollback') {
+			throw new exceptions.InvalidPayloadException(hookRollbackMessage);
 		}
 
 		return payload;
@@ -48,11 +72,18 @@ module.exports = function registerHooks({ filter, action }) {
 	action('roles.update', async (data, { database }) => {
 		for (const id of data.keys || []) {
 			if (probeRoleIds.has(id)) await mark(database, `roles.update/${id}`);
+
+			if (dbProbeRoleIds.has(id)) {
+				await mark(database, `roles.update.dbaction/${id}`);
+				dbProbeRoleIds.delete(id);
+			}
 		}
 	});
 
 	action('roles.delete', async (data, { database }) => {
 		for (const id of data.keys || []) {
+			dbProbeRoleIds.delete(id);
+
 			if (probeRoleIds.has(id)) {
 				await mark(database, `roles.delete/${id}`);
 				probeRoleIds.delete(id);
