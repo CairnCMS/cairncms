@@ -127,6 +127,8 @@ A reserved role with the sentinel UUID `00000000-0000-0000-0000-000000000000` an
 
 The "no admin role left after this delete" guard at the engine level enforces that at least one role with `admin_access: true` always exists. There is no override.
 
+`/roles` writes that change administrator access use a serializable transaction. A conflicting write returns `409 CONCURRENCY_CONFLICT` without changes; re-read the role and retry manually.
+
 ## Permissions (`/permissions`)
 
 A permission row is a tuple of role, collection, and action plus the rules that gate that action. Every read, create, update, and delete the platform performs is filtered by the calling role's permissions on the targeted collection.

@@ -187,7 +187,9 @@ The context object passed as the second argument to the registration function ha
 
 When you use the emitter, never emit an event that your own hook handles. Direct or indirect self-emission produces an infinite loop with no useful exit.
 
-The handler-level context (the third argument to filter callbacks, the second to action callbacks) is different from this top-level context. The handler context contains `database`, `schema`, and `accountability` for the *current request*. The top-level context contains *platform-wide* services and helpers. Use the handler context for permission-aware data work; use the top-level context for everything else.
+Use the handler `database` for all callback database work and for services the callback creates. Reserve the top-level context for work outside the request or transaction.
+
+Filters may run inside the triggering transaction. During role writes and config applies, opening another connection can deadlock single-connection SQLite. Action connection and timing vary by emitter; config apply and role-continuity actions wait until the whole operation commits.
 
 ## Event reference
 

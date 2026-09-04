@@ -327,9 +327,9 @@ Applies are attributed:
 - An HTTP apply is attributed to the authenticated administrator who made the request.
 - A local `cairncms config apply` run is attributed to the system actor, recorded with no user and an origin of `config-cli`, so an automated local apply is distinguishable from an administrator's request.
 
-Domain action events such as `roles.create` and `permissions.delete` are emitted once, after the transaction commits, so an extension hook is never told about a change that a rollback later undoes, and no event is emitted for an apply that rolls back.
+Domain action events such as `roles.create` and `permissions.delete` are emitted after commit and not emitted after rollback. Filter hooks must use their supplied handler `database`; see [Handler context](/docs/develop/extensions/server-extensions/hooks/#the-context).
 
-A config apply replaces policy, so its post-commit cache clear is forced rather than debounced. It clears the system cache even when another cache clear is in flight, so a revoked permission stops being served from cache on the next request.
+A mutating apply forcibly clears the system and response caches regardless of `CACHE_AUTO_PURGE`, so revoked permissions take effect on the next request.
 
 If a post-commit step fails, the configuration remains applied. `CONFIG_POST_COMMIT_FAILED` (HTTP `500`, CLI exit `3`) returns `extensions.committed: true` and identifies the failed step in `extensions.phase`:
 
