@@ -548,7 +548,7 @@ describe('configApply run record', () => {
 	});
 
 	it('records post_apply_failed at exit 3 when only the post-apply maintenance failed', async () => {
-		vi.mocked(applyConfigPlan).mockRejectedValue(new ConfigPostCommitFailedException());
+		vi.mocked(applyConfigPlan).mockRejectedValue(new ConfigPostCommitFailedException('cache'));
 
 		await run();
 

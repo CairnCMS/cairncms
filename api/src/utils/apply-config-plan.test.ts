@@ -395,7 +395,11 @@ describe('applyConfigPlan:transaction failure wrapper', () => {
 		expect(error.status).toBe(500);
 		expect(error.code).toBe('CONFIG_POST_COMMIT_FAILED');
 		expect(error.extensions).toEqual({ committed: true, phase: 'cache' });
-		expect(error.message).toContain('/utils/cache/clear');
+
+		expect(error.message).toBe(
+			'The configuration was committed, but cache invalidation failed afterward. Clear the cache with POST /utils/cache/clear to recover.'
+		);
+
 		expect(error.message).not.toContain('cache unavailable');
 	});
 
@@ -532,6 +536,77 @@ describe('applyConfigPlan:post-commit ordering', () => {
 		expect(order).toEqual(['mutate', 'commit', 'flush', 'dispatch']);
 		expect(emitter.emitActionAndWait).toHaveBeenCalledTimes(1);
 		expect(error).toBeInstanceOf(ConfigPostCommitFailedException);
+	});
+
+	it('classifies a post-commit action-dispatch failure as the actions phase, not a rollback', async () => {
+		vi.mocked(emitter.emitActionAndWait).mockImplementation(async () => {
+			order.push('dispatch');
+			throw new Error('listener exploded');
+		});
+
+		const error = (await applyConfigPlan(createPlan(), { context }).catch(
+			(thrown) => thrown
+		)) as ConfigPostCommitFailedException;
+
+		expect(order).toEqual(['mutate', 'commit', 'flush', 'dispatch']);
+		expect(error).toBeInstanceOf(ConfigPostCommitFailedException);
+		expect(error).not.toBeInstanceOf(ConfigApplyFailedException);
+		expect(error.extensions).toEqual({ committed: true, phase: 'actions' });
+
+		expect(error.message).toBe(
+			'The configuration was committed, but delivering post-commit events failed afterward. Some hooks or flows bound to these events may not have run. No cache action is required.'
+		);
+
+		expect(error.message).not.toContain('listener exploded');
+	});
+
+	it('classifies a simultaneous cache and action failure as the cache_and_actions phase', async () => {
+		vi.mocked(flushCaches).mockImplementation(async () => {
+			order.push('flush');
+			throw new Error('cache down');
+		});
+
+		vi.mocked(emitter.emitActionAndWait).mockImplementation(async () => {
+			order.push('dispatch');
+			throw new Error('listener exploded');
+		});
+
+		const error = (await applyConfigPlan(createPlan(), { context }).catch(
+			(thrown) => thrown
+		)) as ConfigPostCommitFailedException;
+
+		expect(error).toBeInstanceOf(ConfigPostCommitFailedException);
+		expect(error).not.toBeInstanceOf(ConfigApplyFailedException);
+		expect(error.extensions).toEqual({ committed: true, phase: 'cache_and_actions' });
+
+		expect(error.message).toBe(
+			'The configuration was committed, but post-commit steps failed afterward. Clear the cache with POST /utils/cache/clear to recover, and note that some hooks or flows bound to post-commit events may not have run.'
+		);
+
+		expect(error.message).not.toContain('cache down');
+		expect(error.message).not.toContain('listener exploded');
+	});
+
+	it('treats an undefined cache-flush rejection as a failure, not success', async () => {
+		vi.mocked(flushCaches).mockRejectedValue(undefined);
+
+		const error = (await applyConfigPlan(createPlan(), { context }).catch(
+			(thrown) => thrown
+		)) as ConfigPostCommitFailedException;
+
+		expect(error).toBeInstanceOf(ConfigPostCommitFailedException);
+		expect(error.extensions).toEqual({ committed: true, phase: 'cache' });
+	});
+
+	it('treats an undefined action-dispatch rejection as a failure, not success', async () => {
+		vi.mocked(emitter.emitActionAndWait).mockRejectedValue(undefined);
+
+		const error = (await applyConfigPlan(createPlan(), { context }).catch(
+			(thrown) => thrown
+		)) as ConfigPostCommitFailedException;
+
+		expect(error).toBeInstanceOf(ConfigPostCommitFailedException);
+		expect(error.extensions).toEqual({ committed: true, phase: 'actions' });
 	});
 
 	it('discards queued events and neither commits, flushes, nor dispatches when a later mutation fails', async () => {

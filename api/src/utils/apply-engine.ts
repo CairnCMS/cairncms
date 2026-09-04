@@ -8,7 +8,10 @@ import { isSerializationConflict } from '../database/serialization-error.js';
 import emitter from '../emitter.js';
 import { ConfigApplyFailedException } from '../exceptions/config-apply-failed.js';
 import { ConfigApplyScopeMismatchException } from '../exceptions/config-apply-scope-mismatch.js';
-import { ConfigPostCommitFailedException } from '../exceptions/config-post-commit-failed.js';
+import {
+	ConfigPostCommitFailedException,
+	type ConfigPostCommitPhase,
+} from '../exceptions/config-post-commit-failed.js';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import { ConfigStateChangedException } from '../exceptions/config-state-changed.js';
 import { ConfigProtectedRecordException } from '../exceptions/config-protected-record.js';
@@ -71,6 +74,12 @@ function assembleResult(slices: Map<ConfigKind, unknown>): ApplyResult {
 	return Object.fromEntries(
 		listConfigKinds().map((kind) => [kind, slices.get(kind) ?? getDescriptor(kind).handler.emptyResult()])
 	) as unknown as ApplyResult;
+}
+
+function postCommitPhase(cacheFailed: boolean, actionFailed: boolean): ConfigPostCommitPhase {
+	if (cacheFailed && actionFailed) return 'cache_and_actions';
+	if (cacheFailed) return 'cache';
+	return 'actions';
 }
 
 export async function applyConfigPlan(plan: ConfigPlan, opts: ApplyOptions): Promise<ApplyResult> {
@@ -158,20 +167,27 @@ export async function applyConfigPlan(plan: ConfigPlan, opts: ApplyOptions): Pro
 				}
 			},
 			async (context) => {
-				let cacheError: unknown;
+				let cacheFailed = false;
+				let actionFailed = false;
 
 				try {
 					await flushCaches(true);
-				} catch (err) {
-					cacheError = err;
+				} catch {
+					cacheFailed = true;
 				}
 
 				// The mutation is committed; still dispatch its action events if cache invalidation fails.
-				for (const actionEvent of context.events) {
-					await emitter.emitActionAndWait(actionEvent.event, actionEvent.meta, actionEvent.context);
+				try {
+					for (const actionEvent of context.events) {
+						await emitter.emitActionAndWait(actionEvent.event, actionEvent.meta, actionEvent.context);
+					}
+				} catch {
+					actionFailed = true;
 				}
 
-				if (cacheError !== undefined) throw new ConfigPostCommitFailedException();
+				if (cacheFailed || actionFailed) {
+					throw new ConfigPostCommitFailedException(postCommitPhase(cacheFailed, actionFailed));
+				}
 			}
 		);
 	} catch (err) {

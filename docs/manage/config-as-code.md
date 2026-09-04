@@ -331,7 +331,11 @@ Domain action events such as `roles.create` and `permissions.delete` are emitted
 
 A config apply replaces policy, so its post-commit cache clear is forced rather than debounced. It clears the system cache even when another cache clear is in flight, so a revoked permission stops being served from cache on the next request.
 
-If cache invalidation fails after the transaction has committed, the apply is not rolled back. The configuration is already applied and its events are delivered. The failure is reported separately as `CONFIG_POST_COMMIT_FAILED` (HTTP `500`, CLI exit `3`). Its `extensions.committed` is `true` and its `extensions.phase` is `cache`, so a client can tell the configuration was applied even though the cache was not cleared. Clear the cache with `POST /utils/cache/clear` to recover, since re-running the apply may produce an empty plan and will not clear the cache on its own.
+If a post-commit step fails, the configuration remains applied. `CONFIG_POST_COMMIT_FAILED` (HTTP `500`, CLI exit `3`) returns `extensions.committed: true` and identifies the failed step in `extensions.phase`:
+
+- **`cache`** — clear the cache with `POST /utils/cache/clear`; re-running a now-empty apply will not clear it.
+- **`actions`** — some post-commit hooks or flows may not have run; no cache action is needed.
+- **`cache_and_actions`** — clear the cache and treat the events as possibly undelivered.
 
 ### Run record
 
@@ -341,7 +345,7 @@ Every engine run on either surface attempts to write one structured log record w
 {"event":"config.run.finished","runId":"3f6c1b0e-9b2c-4a1d-8f2e-0a7d5c4b3e21","source":"http","caller":{"kind":"user","user":"<uuid>","role":"<uuid>"},"userAgent":"cairncms-cli/1.6.0","dryRun":false,"destructive":true,"manifestVersion":1,"managedKinds":["roles","permissions"],"changes":{"create":1,"update":2,"delete":1},"result":"applied","durationMs":184,"msg":"Config run finished"}
 ```
 
-- **`result`** — `no_changes`, `planned`, `discarded`, `refused`, `invalid`, `state_changed`, `applied`, `post_apply_failed`, or `failed`. `planned` is a dry run whose plan holds changes. `discarded` is a plan the operator declined at the prompt. `post_apply_failed` means the database changes were applied and only the post-apply cache maintenance failed.
+- **`result`** — `no_changes`, `planned`, `discarded`, `refused`, `invalid`, `state_changed`, `applied`, `post_apply_failed`, or `failed`. `planned` has dry-run changes, `discarded` was declined at the prompt, and `post_apply_failed` means the configuration was applied before cache invalidation or event delivery failed.
 - **`errorCode`** — present for `refused`, `invalid`, `state_changed`, `failed`, and `post_apply_failed`: the typed error code, such as `DESTRUCTIVE_CHANGES_REQUIRED`, or `UNEXPECTED` for an error outside the config error set.
 - **`source`** — `cli` for a local `config apply`, `http` for `POST /config/apply`, including runs driven by the remote CLI, whose `userAgent` starts with `cairncms-cli/`.
 - **`caller`** — the administrator's user and role ids on an HTTP run, or the system actor with origin `config-cli` on a local run.

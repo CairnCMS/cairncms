@@ -298,7 +298,7 @@ describe('POST /config/apply run record', () => {
 	});
 
 	it('records post_apply_failed on a post-commit failure', async () => {
-		vi.mocked(applyConfigPlan).mockRejectedValue(new ConfigPostCommitFailedException());
+		vi.mocked(applyConfigPlan).mockRejectedValue(new ConfigPostCommitFailedException('cache'));
 
 		const res = await apply();
 
