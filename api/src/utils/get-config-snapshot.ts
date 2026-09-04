@@ -1,164 +1,164 @@
-import { PUBLIC_ROLE_ID } from '@cairncms/constants';
 import type { SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import getDatabase from '../database/index.js';
-import logger from '../logger.js';
-import { PermissionsService } from '../services/permissions.js';
-import { RolesService } from '../services/roles.js';
-import type { ConfigPermission, ConfigPermissionSet, ConfigRole, CairnConfig } from '../types/config.js';
+import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
+import {
+	CONFIG_KINDS,
+	type CairnConfig,
+	type ConfigKind,
+	type ConfigPermissionSet,
+	type ConfigRole,
+	type ConfigStateToken,
+} from '../types/config.js';
+import { computeConfigStateDigest, toStateDigestEntry, type StateDigestEntry } from './config/config-state-digest.js';
+import { makeDependencyAccessor } from './config/dependency-context.js';
+import type { ConfigReadMode } from './config/descriptor.js';
+import type { RolesKindTypes } from './config/handlers/roles.js';
+import { getDescriptor } from './config/registry.js';
+import { resolveReadClosure } from './config/scope.js';
 import { getSchema } from './get-schema.js';
+import { safeLogFragment } from './safe-log-fragment.js';
+import { findPlaceholderSyntax, validateConfigRecord } from './validate-desired-config.js';
 
-function parseJSON(field: string, permId: unknown, value: unknown): Record<string, any> | null {
-	if (value === null || value === undefined) return null;
-	if (typeof value === 'object') return value as Record<string, any>;
+export type CurrentConfigRead = {
+	config: CairnConfig;
+	currentRoleKeys: ReadonlySet<string>;
+	stateToken: ConfigStateToken;
+};
 
-	if (typeof value === 'string') {
-		try {
-			return JSON.parse(value);
-		} catch {
-			logger.warn(`Permission id=${permId}: failed to parse ${field} as JSON — treating as null.`);
-			return null;
-		}
+export type CurrentConfigOptions = {
+	database?: Knex;
+	schema?: SchemaOverview;
+	resources: readonly ConfigKind[];
+};
+
+/** Formats a read-diagnostic subject, applying safeLogFragment to the descriptor-supplied value centrally. */
+function readSubjectOf<Identity>(
+	subjectOf: (identity: Identity) => { label: string; value: string },
+	identity: Identity
+): string {
+	const { label, value } = subjectOf(identity);
+	return `${label}=${safeLogFragment(value)}`;
+}
+
+/** A composed document that cannot be represented in the config format is a current-state failure, not caller input. */
+function assertEmittedDocument(kind: ConfigKind, subject: string, document: unknown): void {
+	const problems = validateConfigRecord(kind, document);
+
+	if (problems.length > 0) {
+		throw new ConfigReadFailedException(
+			`Config snapshot could not read ${subject}: it cannot be represented in the config format (${problems.join(
+				'; '
+			)}).`
+		);
+	}
+}
+
+export async function readCurrentConfig(options: CurrentConfigOptions): Promise<CurrentConfigRead> {
+	const database = options.database ?? getDatabase();
+	const manifest = { version: 1 as const, resources: [...options.resources] };
+	const managed = new Set<ConfigKind>(options.resources);
+
+	const closure = resolveReadClosure(manifest);
+
+	if (closure.length === 0) {
+		return {
+			config: { manifest, roles: [], permissions: [] },
+			currentRoleKeys: new Set(),
+			stateToken: Object.freeze({ resources: Object.freeze([]), digest: computeConfigStateDigest([]) }),
+		};
 	}
 
-	return null;
-}
+	const schema = options.schema ?? (await getSchema({ database, bypassCache: true }));
+	const published = new Map<ConfigKind, unknown>();
+	const documentsByKind = new Map<ConfigKind, unknown[]>();
+	const projectionInputs: Array<{ kind: ConfigKind; mode: ConfigReadMode; result: unknown }> = [];
 
-function parseCSV(value: unknown): string[] | null {
-	if (value === null || value === undefined) return null;
+	for (const { kind, mode } of closure) {
+		const descriptor = getDescriptor(kind);
 
-	let arr: string[];
-
-	if (Array.isArray(value)) {
-		arr = value;
-	} else if (typeof value === 'string') {
-		const trimmed = value.trim();
-		if (trimmed === '') return null;
-		arr = trimmed.split(',').map((s) => s.trim());
-	} else {
-		return null;
-	}
-
-	return [...arr].sort();
-}
-
-function sortStringArray(value: unknown): string[] | null {
-	if (value === null || value === undefined) return null;
-	if (Array.isArray(value)) return [...value].sort();
-	return null;
-}
-
-export async function getConfigSnapshot(options?: { database?: Knex; schema?: SchemaOverview }): Promise<CairnConfig> {
-	const database = options?.database ?? getDatabase();
-	const schema = options?.schema ?? (await getSchema({ database, bypassCache: true }));
-
-	const rolesService = new RolesService({ knex: database, schema });
-	const permissionsService = new PermissionsService({ knex: database, schema });
-
-	const rolesRaw = await rolesService.readByQuery({ limit: -1 });
-
-	const roleKeyById = new Map<string, string>();
-	const roles: ConfigRole[] = [];
-
-	for (const role of rolesRaw) {
-		roleKeyById.set(role['id'], role['key']);
-
-		// Sentinel is a system-managed row representing unauthenticated access;
-		// its UUID→key mapping stays in roleKeyById so permissions on it group
-		// under the "public" key, but the role itself has no configurable
-		// surface and doesn't belong in config.roles.
-		if (role['id'] === PUBLIC_ROLE_ID) continue;
-
-		const configRole: ConfigRole = {
-			key: role['key'],
-			name: role['name'],
-			admin_access: role['admin_access'],
-			app_access: role['app_access'],
+		const context = {
+			database,
+			schema,
+			readMode: mode,
+			dependency: makeDependencyAccessor(descriptor.dependencies, published),
 		};
 
-		if (role['icon'] != null) configRole.icon = role['icon'];
-		if (role['description'] != null) configRole.description = role['description'];
-		if (role['enforce_tfa'] != null) configRole.enforce_tfa = role['enforce_tfa'];
-		if (role['ip_access'] != null) configRole.ip_access = sortStringArray(role['ip_access']);
+		const result = await descriptor.handler.readCurrent(context as never);
+		published.set(kind, result.dependencyState);
+		projectionInputs.push({ kind, mode, result });
 
-		roles.push(configRole);
+		if (!managed.has(kind)) continue;
+
+		const documents = descriptor.composeDocuments(result.records as never, result.documentIdentities as never);
+
+		for (const document of documents) {
+			const identity = descriptor.layout.documentIdentityOf(document as never);
+			const subjectOf = descriptor.emittedDocumentSubject as (identity: unknown) => { label: string; value: string };
+			assertEmittedDocument(kind, readSubjectOf(subjectOf, identity), document);
+		}
+
+		documentsByKind.set(kind, documents as unknown[]);
 	}
 
-	const permissionsRaw = await permissionsService.readByQuery({ limit: -1 });
+	const config: CairnConfig = {
+		manifest,
+		roles: (documentsByKind.get('roles') ?? []) as ConfigRole[],
+		permissions: (documentsByKind.get('permissions') ?? []) as ConfigPermissionSet[],
+	};
 
-	const permissionsByRoleKey = new Map<string, ConfigPermission[]>();
-	const seen = new Set<string>();
-	let orphanedCount = 0;
+	const placeholders = findPlaceholderSyntax(config);
 
-	for (const perm of permissionsRaw) {
-		if (perm['system'] === true) continue;
-
-		const roleId = perm['role'];
-		const roleKey = roleKeyById.get(roleId);
-
-		if (!roleKey) {
-			// role column is NOT NULL post-sentinel-refactor. If a permission
-			// row doesn't resolve to a known role (including the sentinel),
-			// treat it as orphaned and warn the operator.
-			orphanedCount++;
-			logger.warn(`Permission id=${perm['id']} references non-existent role ${roleId} — skipped in snapshot.`);
-			continue;
-		}
-
-		const tupleKey = `${roleKey}::${perm['collection']}::${perm['action']}`;
-
-		if (seen.has(tupleKey)) {
-			throw new Error(
-				`Duplicate permission found: role="${roleKey}" collection="${perm['collection']}" action="${perm['action']}". ` +
-					`Resolve duplicates in the admin UI or database before running config snapshot.`
-			);
-		}
-
-		seen.add(tupleKey);
-
-		if (!permissionsByRoleKey.has(roleKey)) {
-			permissionsByRoleKey.set(roleKey, []);
-		}
-
-		permissionsByRoleKey.get(roleKey)!.push({
-			collection: perm['collection'],
-			action: perm['action'],
-			permissions: parseJSON('permissions', perm['id'], perm['permissions']),
-			validation: parseJSON('validation', perm['id'], perm['validation']),
-			presets: parseJSON('presets', perm['id'], perm['presets']),
-			fields: parseCSV(perm['fields']),
-		});
-	}
-
-	if (orphanedCount > 0) {
-		logger.warn(
-			`Skipped ${orphanedCount} orphaned permission(s) referencing non-existent roles. ` +
-				`This indicates database inconsistency or out-of-band modification. ` +
-				`Clean up these rows directly in the database before relying on this snapshot as authoritative.`
+	if (placeholders.length > 0) {
+		throw new ConfigReadFailedException(
+			`Config snapshot could not represent the current state: ${placeholders.join(
+				'; '
+			)}. The config format substitutes that form on read, so rename the stored value, then retry.`
 		);
 	}
 
-	const permissions: ConfigPermissionSet[] = [];
+	const readsRoles = closure.some((entry) => entry.kind === 'roles');
+	let currentRoleKeys: ReadonlySet<string> = new Set<string>();
 
-	for (const [roleKey, perms] of permissionsByRoleKey) {
-		perms.sort((a, b) => {
-			const cmp = a.collection.localeCompare(b.collection);
-			if (cmp !== 0) return cmp;
-			return a.action.localeCompare(b.action);
-		});
+	if (readsRoles) {
+		const rolesState = published.get('roles') as RolesKindTypes['ReadDependencyState'] | undefined;
 
-		permissions.push({ role: roleKey, permissions: perms });
+		if (!rolesState) {
+			throw new ConfigReadFailedException(
+				'Configuration state could not be assembled. Retry the operation and report the failure if it persists.'
+			);
+		}
+
+		currentRoleKeys = rolesState.currentRoleKeys;
 	}
 
-	permissions.sort((a, b) => a.role.localeCompare(b.role));
-	roles.sort((a, b) => a.key.localeCompare(b.key));
+	let stateToken: ConfigStateToken;
 
-	return {
-		manifest: {
-			version: 1,
-			resources: ['roles', 'permissions'],
-		},
-		roles,
-		permissions,
-	};
+	try {
+		const entries: StateDigestEntry[] = projectionInputs.map(({ kind, mode, result }) =>
+			toStateDigestEntry(kind, mode, getDescriptor(kind).handler.projectReadState(result as never, mode))
+		);
+
+		stateToken = Object.freeze({
+			resources: Object.freeze(
+				closure
+					.filter((entry) => entry.mode === 'full')
+					.map((entry) => entry.kind)
+					.sort()
+			),
+			digest: computeConfigStateDigest(entries),
+		});
+	} catch {
+		throw new ConfigReadFailedException(
+			'Configuration state could not be represented as a state digest. Retry the operation and report the failure if it persists.'
+		);
+	}
+
+	return { config, currentRoleKeys, stateToken };
+}
+
+export async function getConfigSnapshot(options?: { database?: Knex; schema?: SchemaOverview }): Promise<CairnConfig> {
+	const { config } = await readCurrentConfig({ ...options, resources: CONFIG_KINDS });
+
+	return config;
 }

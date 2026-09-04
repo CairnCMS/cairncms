@@ -1,4 +1,4 @@
-import type { CollectionsOverview, NestedDeepQuery } from '@cairncms/types';
+import type { ActionHandler, CollectionsOverview, FilterHandler, NestedDeepQuery } from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';
 import { MockClient, Tracker, createTracker } from 'knex-mock-client';
@@ -9,6 +9,7 @@ import { getDatabaseClient } from '../../src/database/index.js';
 import { ItemsService } from '../../src/services/index.js';
 import { sqlFieldFormatter, sqlFieldList } from '../__utils__/items-utils.js';
 import { systemSchema, userSchema } from '../__utils__/schemas.js';
+import emitter from '../emitter.js';
 import env from '../env.js';
 import { InvalidPayloadException } from '../exceptions/index.js';
 
@@ -1493,6 +1494,83 @@ describe('Integration Tests', () => {
 
 			expect(tracker.history.select.length).toBe(1);
 			expect(response).toStrictEqual(testDefaultValues);
+		});
+	});
+
+	describe('read event suppression', () => {
+		const rows = [{ id: '6107c897-9182-40f7-b22e-4f044d1258d2' }];
+
+		it('leaves a registered query filter, read filter, and read action inert when emitEvents is false', async () => {
+			const table = schemas['user'].tables[0];
+			const fired: string[] = [];
+
+			const queryFilter: FilterHandler = (payload) => {
+				fired.push('query');
+				return payload;
+			};
+
+			const readFilter: FilterHandler = (payload) => {
+				fired.push('read-filter');
+				return payload;
+			};
+
+			const readAction: ActionHandler = () => {
+				fired.push('read-action');
+			};
+
+			emitter.onFilter(`${table}.items.query`, queryFilter);
+			emitter.onFilter(`${table}.items.read`, readFilter);
+			emitter.onAction(`${table}.items.read`, readAction);
+
+			const service = () =>
+				new ItemsService(table, {
+					knex: db,
+					accountability: { role: 'admin', admin: true },
+					schema: schemas['user'].schema,
+				});
+
+			try {
+				tracker.on.select(table).responseOnce(rows);
+				await service().readByQuery({ fields: ['id'] });
+
+				// Control: the same read reaches all three sites when events are not suppressed, so the
+				// assertion below cannot pass merely because the read never got that far.
+				expect(fired).toEqual(['query', 'read-filter', 'read-action']);
+
+				fired.length = 0;
+
+				tracker.on.select(table).responseOnce(rows);
+				const suppressed = await service().readByQuery({ fields: ['id'] }, { emitEvents: false });
+
+				expect(suppressed).toStrictEqual(rows);
+				expect(fired).toEqual([]);
+			} finally {
+				emitter.offFilter(`${table}.items.query`, queryFilter);
+				emitter.offFilter(`${table}.items.read`, readFilter);
+				emitter.offAction(`${table}.items.read`, readAction);
+			}
+		});
+	});
+
+	describe('deleteMany', () => {
+		it('throws a supplied preMutationException before running any delete query', async () => {
+			const table = schemas['user'].tables[0];
+			const failure = new InvalidPayloadException('blocked before write');
+
+			const service = new ItemsService(table, {
+				knex: db,
+				accountability: null,
+				schema: schemas['user'].schema,
+			});
+
+			await expect(
+				service.deleteMany(['6107c897-9182-40f7-b22e-4f044d1258d2'], {
+					preMutationException: failure,
+					bypassLimits: true,
+				})
+			).rejects.toBe(failure);
+
+			expect(tracker.history.delete).toHaveLength(0);
 		});
 	});
 });

@@ -1,5 +1,6 @@
 import type { SchemaOverview } from '@cairncms/types';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { clearSystemCache } from '../cache.js';
 import { systemSchema } from '../__utils__/schemas.js';
 import { ItemsService } from './items.js';
 import { PermissionsService } from './permissions.js';
@@ -69,5 +70,41 @@ describe('PermissionsService response cache invalidation', () => {
 		await run(service, { autoPurgeCache: false });
 
 		expect(service.cache!.clear).not.toHaveBeenCalled();
+	});
+});
+
+describe('PermissionsService system cache invalidation', () => {
+	beforeAll(() => {
+		for (const { name } of mutations) {
+			vi.spyOn(ItemsService.prototype, name as any).mockResolvedValue(undefined as any);
+		}
+	});
+
+	afterEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it.each(mutations)('$name clears the system cache when autoPurgeSystemCache is not disabled', async ({ run }) => {
+		const service = createService();
+
+		await run(service, undefined);
+
+		expect(clearSystemCache).toHaveBeenCalledTimes(1);
+	});
+
+	it.each(mutations)('$name does not clear the system cache when autoPurgeSystemCache is false', async ({ run }) => {
+		const service = createService();
+
+		await run(service, { autoPurgeSystemCache: false });
+
+		expect(clearSystemCache).not.toHaveBeenCalled();
+	});
+
+	it.each(mutations)('$name forwards autoPurgeCache to the system cache clear', async ({ run }) => {
+		const service = createService();
+
+		await run(service, { autoPurgeCache: false });
+
+		expect(clearSystemCache).toHaveBeenCalledWith({ autoPurgeCache: false });
 	});
 });

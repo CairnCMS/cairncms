@@ -9,6 +9,10 @@ Operations are the individual steps inside a flow. CairnCMS ships with a built-i
 
 Every operation appends a value to the [data chain](/docs/guides/flows/#the-data-chain) under its own key. Operations that do not produce data still append `null` so that downstream operations can reference them predictably.
 
+Event-triggered operations use the trigger's database connection. A Filter (blocking) flow runs inside the event transaction, so its writes and failures participate in the same commit or rollback. A non-blocking flow runs after commit on a fresh connection.
+
+Exception: a data operation that resolves **Permissions** for `$public` or a specific role reads through a root connection. On single-connection SQLite, use a non-blocking Event trigger for that operation during a role write to avoid deadlock.
+
 ## Condition
 
 Routes execution to the success or failure path based on a filter rule.

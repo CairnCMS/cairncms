@@ -6,6 +6,7 @@ import { assign, clone, cloneDeep, omit, pick, without } from 'lodash-es';
 import { getCache } from '../cache.js';
 import { getHelpers } from '../database/helpers/index.js';
 import getDatabase from '../database/index.js';
+import { getMutationGuard } from '../database/mutation-guard.js';
 import runAST from '../database/run-ast.js';
 import emitter from '../emitter.js';
 import env from '../env.js';
@@ -642,6 +643,9 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 			const payloadWithTypeCasting = await payloadService.processValues('update', payloadWithoutAliasAndPK);
 
 			if (Object.keys(payloadWithTypeCasting).length > 0) {
+				const mutationGuard = getMutationGuard(opts);
+				if (mutationGuard) await mutationGuard.beforeUpdate(payloadWithTypeCasting, keys);
+
 				try {
 					await trx(this.collection).update(payloadWithTypeCasting).whereIn(primaryKeyField, keys);
 				} catch (err: any) {

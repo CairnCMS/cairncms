@@ -1,14 +1,23 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
-import { load as loadYaml } from 'js-yaml';
+import { dump as dumpYaml, load as loadYaml } from 'js-yaml';
+import { ConfigInvalidException } from '../exceptions/config-invalid.js';
+import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import { writeConfigDirectory } from './write-config-directory.js';
+import { CONFIG_REGISTRY } from './config/registry.js';
+import logger from '../logger.js';
 import type { CairnConfig } from '../types/config.js';
+
+vi.mock('../logger.js', () => ({
+	default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
+}));
 
 let tmpDir: string;
 
 beforeEach(async () => {
+	vi.clearAllMocks();
 	tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cairncms-test-'));
 });
 
@@ -62,6 +71,31 @@ describe('writeConfigDirectory', () => {
 		const perms = await readYaml(path.join(tmpDir, 'permissions', 'editor.yaml'));
 		expect(perms.role).toBe('editor');
 		expect(perms.permissions).toHaveLength(1);
+	});
+
+	it('refuses a role key that would escape the config directory and writes nothing', async () => {
+		const manifestPath = path.join(tmpDir, 'cairncms-config.yaml');
+		await fs.writeFile(manifestPath, dumpYaml({ version: 1, resources: [], sentinel: 'original' }));
+
+		const config = makeConfig({
+			roles: [{ key: '../cairncms-config', name: 'Evil', admin_access: true, app_access: true }],
+		});
+
+		await expect(writeConfigDirectory(config, tmpDir)).rejects.toBeInstanceOf(ConfigInvalidException);
+
+		expect((await readYaml(manifestPath)).sentinel).toBe('original');
+		await expect(fs.access(path.join(tmpDir, 'roles'))).rejects.toThrow();
+	});
+
+	it('refuses a duplicate role identity', async () => {
+		const config = makeConfig({
+			roles: [
+				{ key: 'editor', name: 'Editor', admin_access: false, app_access: true },
+				{ key: 'editor', name: 'Editor Again', admin_access: false, app_access: true },
+			],
+		});
+
+		await expect(writeConfigDirectory(config, tmpDir)).rejects.toBeInstanceOf(ConfigInvalidException);
 	});
 
 	it('sorts roles by key', async () => {
@@ -175,14 +209,15 @@ describe('writeConfigDirectory', () => {
 		expect(role.ip_access).toEqual(['10.0.0.1', '10.0.0.2', '192.168.1.1']);
 	});
 
-	it('removes stale .yaml files', async () => {
+	it('removes a stale record that declares the identity its filename promises', async () => {
 		const rolesDir = path.join(tmpDir, 'roles');
 		const permDir = path.join(tmpDir, 'permissions');
 		await fs.mkdir(rolesDir, { recursive: true });
 		await fs.mkdir(permDir, { recursive: true });
 
-		await fs.writeFile(path.join(rolesDir, 'old_role.yaml'), 'stale');
-		await fs.writeFile(path.join(permDir, 'old_role.yaml'), 'stale');
+		// A valid record is engine-owned regardless of its author, because snapshots do not track provenance.
+		await fs.writeFile(path.join(rolesDir, 'old_role.yaml'), dumpYaml({ key: 'old_role', name: 'Old' }));
+		await fs.writeFile(path.join(permDir, 'old_role.yaml'), dumpYaml({ role: 'old_role', permissions: [] }));
 
 		const config = makeConfig({
 			roles: [{ key: 'editor', name: 'Editor', admin_access: false, app_access: true }],
@@ -237,5 +272,358 @@ describe('writeConfigDirectory', () => {
 		expect(perms.role).toBe('public');
 		expect(perms.permissions).toHaveLength(1);
 		expect(perms.permissions[0].collection).toBe('articles');
+	});
+
+	it('leaves an owned filename that does not read as a config record', async () => {
+		const rolesDir = path.join(tmpDir, 'roles');
+		await fs.mkdir(rolesDir, { recursive: true });
+		await fs.writeFile(path.join(rolesDir, 'notes.yaml'), 'this: [is, not, valid\n  yaml: {{{\n');
+
+		await writeConfigDirectory(makeConfig(), tmpDir);
+
+		expect(await fs.readdir(rolesDir)).toEqual(['notes.yaml']);
+		expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('does not read as a config record'));
+	});
+
+	it('leaves a record whose declared identity does not match its filename', async () => {
+		const rolesDir = path.join(tmpDir, 'roles');
+		await fs.mkdir(rolesDir, { recursive: true });
+		await fs.writeFile(path.join(rolesDir, 'notes.yaml'), dumpYaml({ key: 'something_else', name: 'Other' }));
+
+		await writeConfigDirectory(makeConfig(), tmpDir);
+
+		expect(await fs.readdir(rolesDir)).toEqual(['notes.yaml']);
+
+		expect(logger.warn).toHaveBeenCalledWith(
+			expect.stringContaining('does not declare the identity its filename promises')
+		);
+	});
+
+	it('aborts before writing anything when a document fails the structural checks', async () => {
+		const config = makeConfig({
+			roles: [{ key: 'editor', name: 'Editor', admin_access: false, app_access: true }],
+		});
+
+		const cyclic: Record<string, unknown> = {};
+		cyclic['self'] = cyclic;
+		(config.permissions as unknown[]).push({ role: 'editor', permissions: [{ permissions: cyclic }] });
+
+		await expect(writeConfigDirectory(config, tmpDir)).rejects.toThrow(ConfigReadFailedException);
+
+		await expect(fs.stat(path.join(tmpDir, 'cairncms-config.yaml'))).rejects.toThrow();
+		await expect(fs.readdir(tmpDir)).resolves.toEqual([]);
+	});
+
+	it('refuses a role name written in placeholder form before writing anything', async () => {
+		const config = makeConfig({
+			roles: [{ key: 'editor', name: '{{CAIRNCMS_CONFIG_SECRET}}', admin_access: false, app_access: true }],
+		});
+
+		await expect(writeConfigDirectory(config, tmpDir)).rejects.toThrow(ConfigReadFailedException);
+		await expect(fs.readdir(tmpDir)).resolves.toEqual([]);
+	});
+
+	it('leaves a previous tree intact when a later document fails the structural checks', async () => {
+		const good = makeConfig({ roles: [{ key: 'editor', name: 'Editor', admin_access: false, app_access: true }] });
+		await writeConfigDirectory(good, tmpDir);
+
+		const before = await readYaml(path.join(tmpDir, 'roles', 'editor.yaml'));
+
+		const broken = makeConfig({
+			roles: [{ key: 'editor', name: 'Renamed', admin_access: false, app_access: true }],
+		});
+
+		(broken.permissions as unknown[]).push({
+			role: 'editor',
+			permissions: [{ permissions: { score: Number.POSITIVE_INFINITY } }],
+		});
+
+		await expect(writeConfigDirectory(broken, tmpDir)).rejects.toThrow(ConfigReadFailedException);
+
+		expect(await readYaml(path.join(tmpDir, 'roles', 'editor.yaml'))).toEqual(before);
+		await expect(fs.stat(path.join(tmpDir, 'permissions', 'editor.yaml'))).rejects.toThrow();
+	});
+
+	it('writes through a contained symlink to its target and leaves the link in place', async () => {
+		const rolesDir = path.join(tmpDir, 'roles');
+		await fs.mkdir(rolesDir, { recursive: true });
+
+		const real = path.join(tmpDir, 'shared-editor.yaml');
+		await fs.writeFile(real, 'placeholder\n');
+		await fs.symlink(real, path.join(rolesDir, 'editor.yaml'));
+
+		const config = makeConfig({
+			roles: [{ key: 'editor', name: 'Editor', admin_access: false, app_access: true }],
+		});
+
+		await writeConfigDirectory(config, tmpDir);
+
+		expect((await fs.lstat(path.join(rolesDir, 'editor.yaml'))).isSymbolicLink()).toBe(true);
+		expect((await readYaml(real)).name).toBe('Editor');
+	});
+
+	it('refuses a destination whose link leaves the config directory', async () => {
+		const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'cairncms-outside-'));
+
+		try {
+			const escape = path.join(outside, 'editor.yaml');
+			await fs.writeFile(escape, 'untouched\n');
+			await fs.mkdir(path.join(tmpDir, 'roles'), { recursive: true });
+			await fs.symlink(escape, path.join(tmpDir, 'roles', 'editor.yaml'));
+
+			const config = makeConfig({
+				roles: [{ key: 'editor', name: 'Editor', admin_access: false, app_access: true }],
+			});
+
+			await expect(writeConfigDirectory(config, tmpDir)).rejects.toThrow(ConfigInvalidException);
+			await expect(fs.readFile(escape, 'utf8')).resolves.toBe('untouched\n');
+		} finally {
+			await fs.rm(outside, { recursive: true, force: true });
+		}
+	});
+
+	it('removes a stale symlinked record without touching its target', async () => {
+		const rolesDir = path.join(tmpDir, 'roles');
+		await fs.mkdir(rolesDir, { recursive: true });
+
+		const real = path.join(tmpDir, 'shared-old.yaml');
+		const original = dumpYaml({ key: 'old_role', name: 'Old' });
+		await fs.writeFile(real, original);
+		await fs.symlink(real, path.join(rolesDir, 'old_role.yaml'));
+
+		await writeConfigDirectory(makeConfig(), tmpDir);
+
+		expect(await fs.readdir(rolesDir)).toEqual([]);
+		await expect(fs.readFile(real, 'utf8')).resolves.toBe(original);
+	});
+
+	it('produces byte-identical output when run twice', async () => {
+		const config = makeConfig({
+			roles: [
+				{ key: 'editor', name: 'Editor', admin_access: false, app_access: true, ip_access: ['10.0.0.2', '10.0.0.1'] },
+			],
+			permissions: [
+				{
+					role: 'editor',
+					permissions: [
+						{
+							collection: 'posts',
+							action: 'read',
+							permissions: null,
+							validation: null,
+							presets: null,
+							fields: ['b', 'a'],
+						},
+					],
+				},
+			],
+		});
+
+		await writeConfigDirectory(config, tmpDir);
+		const first = await fs.readFile(path.join(tmpDir, 'permissions', 'editor.yaml'), 'utf8');
+		const firstRole = await fs.readFile(path.join(tmpDir, 'roles', 'editor.yaml'), 'utf8');
+
+		await writeConfigDirectory(config, tmpDir);
+
+		expect(await fs.readFile(path.join(tmpDir, 'permissions', 'editor.yaml'), 'utf8')).toBe(first);
+		expect(await fs.readFile(path.join(tmpDir, 'roles', 'editor.yaml'), 'utf8')).toBe(firstRole);
+	});
+
+	it('writes output matching the captured oracle for roles and permissions, including an empty set', async () => {
+		const config = makeConfig({
+			roles: [
+				{ key: 'editor', name: 'Editor', admin_access: false, app_access: true, ip_access: ['10.0.0.2', '10.0.0.1'] },
+				{ key: 'reader', name: 'Reader', admin_access: false, app_access: true },
+			],
+			permissions: [
+				{
+					role: 'author',
+					permissions: [
+						{
+							collection: 'pages',
+							action: 'update',
+							permissions: { role: { _eq: '$CURRENT_ROLE' } },
+							validation: null,
+							presets: { layout: 'wide' },
+							fields: null,
+						},
+						{
+							collection: 'articles',
+							action: 'read',
+							permissions: { _and: [{ status: { _eq: 'published' } }] },
+							validation: { title: { _nnull: true } },
+							presets: { status: 'draft' },
+							fields: ['title', 'body'],
+						},
+					],
+				},
+				{ role: 'guest', permissions: [] },
+			],
+		});
+
+		await writeConfigDirectory(config, tmpDir);
+
+		expect(await fs.readFile(path.join(tmpDir, 'roles', 'editor.yaml'), 'utf8')).toBe(
+			'admin_access: false\napp_access: true\nip_access:\n  - 10.0.0.1\n  - 10.0.0.2\nkey: editor\nname: Editor\n'
+		);
+
+		expect(await fs.readFile(path.join(tmpDir, 'roles', 'reader.yaml'), 'utf8')).toBe(
+			'admin_access: false\napp_access: true\nkey: reader\nname: Reader\n'
+		);
+
+		expect(await fs.readFile(path.join(tmpDir, 'permissions', 'author.yaml'), 'utf8')).toBe(
+			'permissions:\n  - action: read\n    collection: articles\n    fields:\n      - body\n      - title\n    permissions:\n      _and:\n        - status:\n            _eq: published\n    presets:\n      status: draft\n    validation:\n      title:\n        _nnull: true\n  - action: update\n    collection: pages\n    fields: null\n    permissions:\n      role:\n        _eq: $CURRENT_ROLE\n    presets:\n      layout: wide\n    validation: null\nrole: author\n'
+		);
+
+		expect(await fs.readFile(path.join(tmpDir, 'permissions', 'guest.yaml'), 'utf8')).toBe(
+			'permissions: []\nrole: guest\n'
+		);
+	});
+
+	it('does not mutate its input config', async () => {
+		const config = makeConfig({
+			roles: [
+				{ key: 'editor', name: 'Editor', admin_access: false, app_access: true, ip_access: ['10.0.0.2', '10.0.0.1'] },
+			],
+			permissions: [
+				{
+					role: 'author',
+					permissions: [
+						{
+							collection: 'pages',
+							action: 'update',
+							permissions: { role: { _eq: '$CURRENT_ROLE' } },
+							validation: null,
+							presets: { layout: 'wide' },
+							fields: ['x', 'a'],
+						},
+						{
+							collection: 'articles',
+							action: 'read',
+							permissions: { _and: [{ status: { _eq: 'published' } }] },
+							validation: { title: { _nnull: true } },
+							presets: { status: 'draft' },
+							fields: ['title', 'body'],
+						},
+					],
+				},
+			],
+		});
+
+		const before = structuredClone(config);
+
+		await writeConfigDirectory(config, tmpDir);
+
+		expect(config).toEqual(before);
+	});
+
+	it('leaves a reserved roles/public.yaml untouched during cleanup', async () => {
+		const rolesDir = path.join(tmpDir, 'roles');
+		await fs.mkdir(rolesDir, { recursive: true });
+		const publicContents = dumpYaml({ key: 'public', name: 'Public' });
+		await fs.writeFile(path.join(rolesDir, 'public.yaml'), publicContents);
+
+		await writeConfigDirectory(
+			makeConfig({ roles: [{ key: 'editor', name: 'Editor', admin_access: false, app_access: true }] }),
+			tmpDir
+		);
+
+		expect(await fs.readFile(path.join(rolesDir, 'public.yaml'), 'utf8')).toBe(publicContents);
+	});
+
+	it('aborts cleanup when a stale entry resolves outside the config directory', async () => {
+		const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'cairncms-outside-'));
+
+		try {
+			const escape = path.join(outside, 'old_role.yaml');
+			const original = dumpYaml({ key: 'old_role', name: 'Old' });
+			await fs.writeFile(escape, original);
+			await fs.mkdir(path.join(tmpDir, 'roles'), { recursive: true });
+			await fs.symlink(escape, path.join(tmpDir, 'roles', 'old_role.yaml'));
+
+			await expect(writeConfigDirectory(makeConfig(), tmpDir)).rejects.toThrow(ConfigInvalidException);
+			await expect(fs.readFile(escape, 'utf8')).resolves.toBe(original);
+		} finally {
+			await fs.rm(outside, { recursive: true, force: true });
+		}
+	});
+
+	it('aborts cleanup when a stale entry cannot be read', async () => {
+		await fs.mkdir(path.join(tmpDir, 'roles'), { recursive: true });
+		await fs.writeFile(path.join(tmpDir, 'roles', 'old_role.yaml'), dumpYaml({ key: 'old_role' }));
+
+		const denied = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+		const readFile = vi.spyOn(fs, 'readFile').mockRejectedValueOnce(denied);
+
+		try {
+			await expect(writeConfigDirectory(makeConfig(), tmpDir)).rejects.toThrow(ConfigReadFailedException);
+		} finally {
+			readFile.mockRestore();
+		}
+	});
+
+	it('aborts cleanup when a stale entry does not resolve', async () => {
+		await fs.mkdir(path.join(tmpDir, 'roles'), { recursive: true });
+		await fs.symlink(path.join(tmpDir, 'never-created.yaml'), path.join(tmpDir, 'roles', 'old_role.yaml'));
+
+		await expect(writeConfigDirectory(makeConfig(), tmpDir)).rejects.toThrow(ConfigInvalidException);
+	});
+
+	it('leaves an unmanaged kind on disk untouched, even when the config carries records for it', async () => {
+		await fs.mkdir(path.join(tmpDir, 'permissions'), { recursive: true });
+
+		const survivor = path.join(tmpDir, 'permissions', 'editor.yaml');
+		const contents = dumpYaml({ role: 'editor', permissions: [] });
+		await fs.writeFile(survivor, contents);
+
+		const config = makeConfig({
+			manifest: { version: 1, resources: ['roles'] },
+			roles: [{ key: 'editor', name: 'Editor', admin_access: false, app_access: true }],
+			permissions: [
+				{
+					role: 'editor',
+					permissions: [
+						{
+							collection: 'articles',
+							action: 'read',
+							permissions: null,
+							validation: null,
+							presets: null,
+							fields: null,
+						},
+					],
+				},
+			],
+		});
+
+		await writeConfigDirectory(config, tmpDir);
+
+		expect(await fs.readFile(survivor, 'utf8')).toBe(contents);
+	});
+
+	it('does not create a directory for an unmanaged kind', async () => {
+		const config = makeConfig({ manifest: { version: 1, resources: ['roles'] } });
+
+		await writeConfigDirectory(config, tmpDir);
+
+		expect(await fs.readdir(tmpDir)).toEqual(['cairncms-config.yaml', 'roles']);
+	});
+
+	it('routes role directory writes through the registry descriptor', async () => {
+		const real = CONFIG_REGISTRY.roles;
+
+		CONFIG_REGISTRY.roles = { ...real, layout: { ...real.layout, filenameOf: () => 'registry_sentinel' } };
+
+		try {
+			await writeConfigDirectory(
+				makeConfig({ roles: [{ key: 'editor', name: 'Editor', admin_access: false, app_access: true }] }),
+				tmpDir
+			);
+
+			expect(await fs.readdir(path.join(tmpDir, 'roles'))).toEqual(['registry_sentinel.yaml']);
+			expect(await fs.readFile(path.join(tmpDir, 'roles', 'registry_sentinel.yaml'), 'utf8')).toContain('key: editor');
+		} finally {
+			CONFIG_REGISTRY.roles = real;
+		}
 	});
 });

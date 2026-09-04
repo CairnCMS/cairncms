@@ -10,46 +10,55 @@ type LookupCallback = (err: NodeJS.ErrnoException | null, address?: string, fami
 
 type LookupOptions = Parameters<typeof dnsLookup>[1];
 
-export function validatingLookup(
-	hostname: string,
-	optionsOrCallback: LookupOptions | LookupCallback,
-	maybeCallback?: LookupCallback
-) {
-	const callback = (typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback) as any;
-	const lookupOpts = (typeof optionsOrCallback === 'function' ? {} : optionsOrCallback) as LookupOptions;
-	const wantsAll = (lookupOpts as { all?: boolean })?.all === true;
+export type IpValidator = (ip: string, url: string) => void;
 
-	(dnsLookup as any)(hostname, lookupOpts, (err: NodeJS.ErrnoException | null, address: any, family?: number) => {
-		if (err) return callback(err);
+export function makeValidatingLookup(validate: IpValidator = validateIPSync) {
+	return function validatingLookup(
+		hostname: string,
+		optionsOrCallback: LookupOptions | LookupCallback,
+		maybeCallback?: LookupCallback
+	) {
+		const callback = (typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback) as any;
+		const lookupOpts = (typeof optionsOrCallback === 'function' ? {} : optionsOrCallback) as LookupOptions;
+		const wantsAll = (lookupOpts as { all?: boolean })?.all === true;
 
-		try {
-			if (wantsAll) {
-				const list = Array.isArray(address) ? address : [{ address, family }];
+		(dnsLookup as any)(hostname, lookupOpts, (err: NodeJS.ErrnoException | null, address: any, family?: number) => {
+			if (err) return callback(err);
 
-				for (const entry of list) {
-					validateIPSync(entry.address, hostname);
+			try {
+				if (wantsAll) {
+					const list = Array.isArray(address) ? address : [{ address, family }];
+
+					for (const entry of list) {
+						validate(entry.address, hostname);
+					}
+
+					callback(null, list);
+				} else {
+					validate(address, hostname);
+					callback(null, address, family);
 				}
-
-				callback(null, list);
-			} else {
-				validateIPSync(address, hostname);
-				callback(null, address, family);
+			} catch (validationErr) {
+				callback(validationErr as NodeJS.ErrnoException);
 			}
-		} catch (validationErr) {
-			callback(validationErr as NodeJS.ErrnoException);
-		}
-	});
+		});
+	};
 }
 
+export const validatingLookup = makeValidatingLookup();
+
 // Sync is load-bearing: async validation would let connect(2) fire before the deny check.
-export function preValidateIpLiteral(options: { host?: string; hostname?: string; href?: string }): Error | null {
+export function preValidateIpLiteral(
+	options: { host?: string; hostname?: string; href?: string },
+	validate: IpValidator = validateIPSync
+): Error | null {
 	const host = options.host ?? options.hostname;
 	if (typeof host !== 'string' || isIP(host) === 0) return null;
 
 	const url = (options.href as string | undefined) ?? String(host);
 
 	try {
-		validateIPSync(host, url);
+		validate(host, url);
 		return null;
 	} catch (err) {
 		return err as Error;
@@ -57,12 +66,16 @@ export function preValidateIpLiteral(options: { host?: string; hostname?: string
 }
 
 export class ValidatingHttpAgent extends HttpAgent {
-	constructor(options: HttpAgentOptions = {}) {
-		super({ ...options, lookup: validatingLookup as HttpAgentOptions['lookup'] });
+	private readonly validate: IpValidator;
+
+	constructor(options: HttpAgentOptions = {}, validate: IpValidator = validateIPSync) {
+		const lookup = validate === validateIPSync ? validatingLookup : makeValidatingLookup(validate);
+		super({ ...options, lookup: lookup as HttpAgentOptions['lookup'] });
+		this.validate = validate;
 	}
 
 	override createConnection(options: any, callback: any): any {
-		const err = preValidateIpLiteral(options);
+		const err = preValidateIpLiteral(options, this.validate);
 
 		if (err) {
 			process.nextTick(() => callback(err));
@@ -74,12 +87,16 @@ export class ValidatingHttpAgent extends HttpAgent {
 }
 
 export class ValidatingHttpsAgent extends HttpsAgent {
-	constructor(options: HttpsAgentOptions = {}) {
-		super({ ...options, lookup: validatingLookup as HttpsAgentOptions['lookup'] });
+	private readonly validate: IpValidator;
+
+	constructor(options: HttpsAgentOptions = {}, validate: IpValidator = validateIPSync) {
+		const lookup = validate === validateIPSync ? validatingLookup : makeValidatingLookup(validate);
+		super({ ...options, lookup: lookup as HttpsAgentOptions['lookup'] });
+		this.validate = validate;
 	}
 
 	override createConnection(options: any, callback: any): any {
-		const err = preValidateIpLiteral(options);
+		const err = preValidateIpLiteral(options, this.validate);
 
 		if (err) {
 			process.nextTick(() => callback(err));

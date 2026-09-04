@@ -4,8 +4,23 @@ import knex from 'knex';
 import { createTracker, MockClient, Tracker } from 'knex-mock-client';
 import type { MockedFunction, SpyInstance } from 'vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ForbiddenException, InvalidPayloadException, UnprocessableEntityException } from '../exceptions/index.js';
-import { ItemsService, PermissionsService, PresetsService, RolesService, UsersService } from './index.js';
+import {
+	ConcurrencyConflictException,
+	ForbiddenException,
+	InvalidPayloadException,
+	UnprocessableEntityException,
+} from '../exceptions/index.js';
+import type { MutationOptions } from '../types/index.js';
+import { getDatabaseClient } from '../database/index.js';
+import emitter from '../emitter.js';
+import {
+	AuthorizationService,
+	ItemsService,
+	PermissionsService,
+	PresetsService,
+	RolesService,
+	UsersService,
+} from './index.js';
 
 vi.mock('../../src/database/index', () => {
 	return { __esModule: true, default: vi.fn(), getDatabaseClient: vi.fn().mockReturnValue('postgres') };
@@ -44,6 +59,7 @@ const testSchema = {
 describe('Integration Tests', () => {
 	let db: MockedFunction<Knex>;
 	let tracker: Tracker;
+	let adminSnapshotRows: { id: unknown }[] = [];
 
 	beforeAll(async () => {
 		db = vi.mocked(knex.default({ client: MockClient }));
@@ -51,6 +67,10 @@ describe('Integration Tests', () => {
 	});
 
 	beforeEach(() => {
+		vi.mocked(getDatabaseClient).mockReturnValue('postgres');
+		adminSnapshotRows = [];
+		tracker.on.any(/set transaction isolation level/i).response([]);
+		tracker.on.select(/select "id" from "directus_roles" where "admin_access"/).response(() => adminSnapshotRows);
 		tracker.on.any('directus_roles').response({});
 
 		tracker.on
@@ -783,7 +803,6 @@ describe('Integration Tests', () => {
 
 	describe('Services / Roles', () => {
 		let service: RolesService;
-		let checkForOtherAdminRolesSpy: SpyInstance;
 		let checkForOtherAdminUsersSpy: SpyInstance;
 
 		beforeEach(() => {
@@ -825,27 +844,17 @@ describe('Integration Tests', () => {
 			vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValueOnce([]);
 			vi.spyOn(UsersService.prototype, 'deleteByQuery').mockResolvedValueOnce([]);
 
-			// "as any" are needed since these are private methods
-			checkForOtherAdminRolesSpy = vi
-				.spyOn(RolesService.prototype as any, 'checkForOtherAdminRoles')
-				.mockResolvedValueOnce(true);
-
+			// "as any" is needed since this is a private method
 			checkForOtherAdminUsersSpy = vi
 				.spyOn(RolesService.prototype as any, 'checkForOtherAdminUsers')
 				.mockResolvedValueOnce(true);
 		});
 
 		afterEach(() => {
-			checkForOtherAdminRolesSpy.mockRestore();
 			checkForOtherAdminUsersSpy.mockRestore();
 		});
 
 		describe('createOne', () => {
-			it('should not checkForOtherAdminRoles', async () => {
-				await service.createOne({ name: 'Test', key: 'test' });
-				expect(checkForOtherAdminRolesSpy).not.toBeCalled();
-			});
-
 			it('should auto-generate key from name', async () => {
 				tracker.on.select('select "key" from "directus_roles"').responseOnce([]);
 
@@ -872,12 +881,6 @@ describe('Integration Tests', () => {
 		});
 
 		describe('createMany', () => {
-			it('should not checkForOtherAdminRoles', async () => {
-				tracker.on.select('select "key" from "directus_roles"').responseOnce([]);
-				await service.createMany([{ name: 'Test', key: 'test' }]);
-				expect(checkForOtherAdminRolesSpy).not.toBeCalled();
-			});
-
 			it('should generate unique keys for duplicate names in batch', async () => {
 				tracker.on.select('select "key" from "directus_roles"').responseOnce([]);
 
@@ -908,23 +911,6 @@ describe('Integration Tests', () => {
 		});
 
 		describe('updateOne', () => {
-			it('should not checkForOtherAdminRoles', async () => {
-				await service.updateOne(1, {});
-				expect(checkForOtherAdminRolesSpy).not.toBeCalled();
-			});
-
-			it('should checkForOtherAdminRoles once and not checkForOtherAdminUsersSpy', async () => {
-				await service.updateOne(1, { admin_access: false });
-				expect(checkForOtherAdminRolesSpy).toBeCalledTimes(1);
-				expect(checkForOtherAdminUsersSpy).not.toBeCalled();
-			});
-
-			it('should checkForOtherAdminRoles and checkForOtherAdminUsersSpy once', async () => {
-				await service.updateOne(1, { admin_access: false, users: [1] });
-				expect(checkForOtherAdminRolesSpy).toBeCalledTimes(1);
-				expect(checkForOtherAdminUsersSpy).toBeCalledTimes(1);
-			});
-
 			it('should reject changing key to a different value', async () => {
 				tracker.on.select('select "key" from "directus_roles" where "id" = ?').responseOnce({ key: 'editor' });
 
@@ -935,6 +921,75 @@ describe('Integration Tests', () => {
 				tracker.on.select('select "key" from "directus_roles" where "id" = ?').responseOnce({ key: 'editor' });
 
 				await expect(service.updateOne(1, { key: 'editor', name: 'New Name' })).resolves.not.toThrow();
+			});
+		});
+
+		describe('upsertMany', () => {
+			beforeEach(() => {
+				tracker.on.select(/select "key" from "directus_roles"$/).response([{ key: 'editor' }]);
+			});
+
+			it('creates a missing role with a generated key through the shared deferred options', async () => {
+				const createOne = vi.spyOn(ItemsService.prototype, 'createOne').mockResolvedValueOnce(7);
+
+				await expect(service.upsertMany([{ name: 'Supreme Editor' }])).resolves.toEqual([7]);
+
+				expect(createOne).toHaveBeenCalledWith(
+					expect.objectContaining({ name: 'Supreme Editor', key: 'supreme_editor' }),
+					expect.objectContaining({ autoPurgeCache: false, autoPurgeSystemCache: false })
+				);
+
+				createOne.mockRestore();
+			});
+
+			it('rejects an invalid, reserved, or already-used caller-supplied key on create', async () => {
+				for (const key of ['Bad Key', 'public', 'editor']) {
+					await expect(service.upsertMany([{ key, name: 'Test' }])).rejects.toBeInstanceOf(InvalidPayloadException);
+				}
+			});
+
+			it('rejects a missing name and key on create', async () => {
+				await expect(service.upsertMany([{ description: 'x' }])).rejects.toBeInstanceOf(InvalidPayloadException);
+			});
+
+			it('rejects changing an existing role key on update', async () => {
+				tracker.on.select('select "key" from "directus_roles" where "id" = ?').responseOnce({ key: 'editor' });
+
+				await expect(service.upsertMany([{ id: 1, key: 'different_key' }])).rejects.toBeInstanceOf(
+					InvalidPayloadException
+				);
+			});
+
+			it.each(['admin_access', 'app_access', 'enforce_tfa', 'ip_access', 'users'])(
+				'rejects the protected field %s on the sentinel role',
+				async (field) => {
+					const schema = JSON.parse(JSON.stringify(service.schema)) as typeof service.schema;
+					schema.collections['directus_roles']!.fields['id']!.type = 'uuid';
+					schema.collections['directus_roles']!.fields['id']!.dbType = 'uuid';
+					const sentinelService = new RolesService({ knex: db, schema });
+					const updateOne = vi.spyOn(ItemsService.prototype, 'updateOne');
+
+					await expect(
+						sentinelService.upsertMany([{ id: '00000000-0000-0000-0000-000000000000', [field]: true }])
+					).rejects.toBeInstanceOf(InvalidPayloadException);
+
+					expect(updateOne).not.toHaveBeenCalled();
+					updateOne.mockRestore();
+				}
+			);
+
+			it('allows a display-only field on the sentinel role', async () => {
+				const schema = JSON.parse(JSON.stringify(service.schema)) as typeof service.schema;
+				schema.collections['directus_roles']!.fields['id']!.type = 'uuid';
+				schema.collections['directus_roles']!.fields['id']!.dbType = 'uuid';
+				const sentinelService = new RolesService({ knex: db, schema });
+				const updateOne = vi.spyOn(ItemsService.prototype, 'updateOne').mockResolvedValueOnce('public');
+
+				await expect(
+					sentinelService.upsertMany([{ id: '00000000-0000-0000-0000-000000000000', name: 'Public' }])
+				).resolves.toEqual(['public']);
+
+				updateOne.mockRestore();
 			});
 		});
 
@@ -1060,68 +1115,425 @@ describe('Integration Tests', () => {
 				).rejects.toBeInstanceOf(InvalidPayloadException);
 			});
 		});
+	});
 
-		describe('updateMany', () => {
-			it('should not checkForOtherAdminRoles', async () => {
-				await service.updateMany([1], {});
-				expect(checkForOtherAdminRolesSpy).not.toBeCalled();
-			});
+	describe('Services / Roles delete option forwarding', () => {
+		const rolesSchema = {
+			collections: {
+				directus_roles: {
+					collection: 'directus_roles',
+					primary: 'id',
+					singleton: false,
+					sortField: null,
+					note: null,
+					accountability: null,
+					fields: {
+						id: {
+							field: 'id',
+							defaultValue: null,
+							nullable: false,
+							generated: true,
+							type: 'integer',
+							dbType: 'integer',
+							precision: null,
+							scale: null,
+							special: [],
+							note: null,
+							validation: null,
+							alias: false,
+						},
+					},
+				},
+			},
+			relations: [],
+		} as SchemaOverview;
 
-			it('should checkForOtherAdminRoles once', async () => {
-				await service.updateMany([1], { admin_access: false });
-				expect(checkForOtherAdminRolesSpy).toBeCalledTimes(1);
-			});
+		const roleFilter = { filter: { role: { _in: [1] } } };
+
+		let service: RolesService;
+
+		beforeEach(() => {
+			service = new RolesService({ knex: db, schema: rolesSchema });
 		});
 
-		describe('updateBatch', () => {
-			it('should not checkForOtherAdminRoles', async () => {
-				await service.updateBatch([{ id: 1 }]);
-				expect(checkForOtherAdminRolesSpy).not.toBeCalled();
-			});
-
-			it('should checkForOtherAdminRoles once', async () => {
-				await service.updateBatch([{ id: 1, admin_access: false }]);
-				expect(checkForOtherAdminRolesSpy).toBeCalledTimes(1);
-			});
+		afterEach(() => {
+			vi.restoreAllMocks();
 		});
 
-		describe('updateByQuery', () => {
-			it('should not checkForOtherAdminRoles', async () => {
-				// mock return value for the following empty query
-				vi.spyOn(ItemsService.prototype, 'getKeysByQuery').mockResolvedValueOnce([1]);
-				await service.updateByQuery({}, {});
-				expect(checkForOtherAdminRolesSpy).not.toBeCalled();
-			});
+		function buildOptions(): MutationOptions {
+			return {
+				onRevisionCreate: vi.fn(),
+				autoPurgeCache: false,
+				autoPurgeSystemCache: false,
+				emitEvents: false,
+				bypassEmitAction: vi.fn(),
+				bypassLimits: false,
+				mutationTracker: { trackMutations: vi.fn(), getCount: vi.fn(() => 0) },
+			};
+		}
 
-			it('should checkForOtherAdminRoles once', async () => {
-				// mock return value for the following empty query
-				vi.spyOn(ItemsService.prototype, 'getKeysByQuery').mockResolvedValueOnce([1]);
-				await service.updateByQuery({}, { admin_access: false });
-				expect(checkForOtherAdminRolesSpy).toBeCalledTimes(1);
+		describe('deleteMany', () => {
+			it('forwards options through the cascade, forcing bypassLimits only on the dependent mutations', async () => {
+				adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+				const permissions = vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				const presets = vi.spyOn(PresetsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				const users = vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValue([]);
+				const roleDeletion = vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
+
+				await service.deleteMany([1], buildOptions());
+
+				const dependent = expect.objectContaining({
+					bypassLimits: true,
+					autoPurgeCache: false,
+					autoPurgeSystemCache: false,
+				});
+
+				expect(permissions).toHaveBeenCalledTimes(1);
+				expect(permissions).toHaveBeenCalledWith(roleFilter, dependent);
+				expect(presets).toHaveBeenCalledTimes(1);
+				expect(presets).toHaveBeenCalledWith(roleFilter, dependent);
+				expect(users).toHaveBeenCalledTimes(1);
+				expect(users).toHaveBeenCalledWith(roleFilter, { status: 'suspended', role: null }, dependent);
+				expect(roleDeletion).toHaveBeenCalledTimes(1);
+				expect(roleDeletion.mock.calls[0]![1]!.bypassLimits).toBe(false);
 			});
 		});
 
 		describe('deleteOne', () => {
-			it('should checkForOtherAdminRoles once', async () => {
-				await service.deleteOne(1);
-				expect(checkForOtherAdminRolesSpy).toBeCalledTimes(1);
-			});
-		});
+			it('forwards the key and options to deleteMany', async () => {
+				const deleteMany = vi.spyOn(RolesService.prototype, 'deleteMany').mockResolvedValue([1]);
 
-		describe('deleteMany', () => {
-			it('should checkForOtherAdminRoles once', async () => {
-				await service.deleteMany([1]);
-				expect(checkForOtherAdminRolesSpy).toBeCalledTimes(1);
+				const opts = buildOptions();
+				await service.deleteOne(1, opts);
+
+				expect(deleteMany).toHaveBeenCalledTimes(1);
+				expect(deleteMany).toHaveBeenCalledWith([1], opts);
 			});
 		});
 
 		describe('deleteByQuery', () => {
-			it('should checkForOtherAdminRoles once', async () => {
-				// mock return value for the following empty query
+			it('forwards resolved keys and options through the role-deletion cascade', async () => {
 				vi.spyOn(ItemsService.prototype, 'getKeysByQuery').mockResolvedValueOnce([1]);
-				await service.deleteByQuery({});
-				expect(checkForOtherAdminRolesSpy).toBeCalledTimes(1);
+				adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+				const permissions = vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				const presets = vi.spyOn(PresetsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				const users = vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValue([]);
+				const roleDeletion = vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
+
+				await service.deleteByQuery({ filter: { name: { _eq: 'obsolete' } } }, buildOptions());
+
+				const dependent = expect.objectContaining({ bypassLimits: true });
+				expect(permissions).toHaveBeenCalledWith(roleFilter, dependent);
+				expect(presets).toHaveBeenCalledWith(roleFilter, dependent);
+				expect(users).toHaveBeenCalledWith(roleFilter, { status: 'suspended', role: null }, dependent);
+				expect(roleDeletion).toHaveBeenCalledWith([1], expect.objectContaining({ bypassLimits: false }));
 			});
+		});
+
+		describe('last-administrator guard', () => {
+			it('rejects deleting the last administrator role before entering the cascade', async () => {
+				adminSnapshotRows = [{ id: 1 }];
+				const permissions = vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				const presets = vi.spyOn(PresetsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				const users = vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValue([]);
+				const roleDeletion = vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
+
+				await expect(service.deleteMany([1], buildOptions())).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+				expect(permissions).not.toHaveBeenCalled();
+				expect(presets).not.toHaveBeenCalled();
+				expect(users).not.toHaveBeenCalled();
+				expect(roleDeletion).not.toHaveBeenCalled();
+			});
+
+			it('allows deleting an administrator role while another remains', async () => {
+				adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+				vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				vi.spyOn(PresetsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValue([]);
+				vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
+
+				await expect(service.deleteMany([1], buildOptions())).resolves.toEqual([1]);
+			});
+		});
+
+		describe('deleteMany authorization ordering', () => {
+			const nonAdmin = { admin: false, app: true, role: 'r', user: 'u', permissions: [] } as never;
+
+			function unauthorizedService(): RolesService {
+				return new RolesService({ knex: db, schema: service.schema, accountability: nonAdmin });
+			}
+
+			function sentinelCapableService(): RolesService {
+				const schema = JSON.parse(JSON.stringify(service.schema)) as typeof service.schema;
+				schema.collections['directus_roles']!.fields['id']!.type = 'uuid';
+				schema.collections['directus_roles']!.fields['id']!.dbType = 'uuid';
+				return new RolesService({ knex: db, schema, accountability: nonAdmin });
+			}
+
+			it('refuses an unauthorized deletion before reading the administrator set or starting the cascade', async () => {
+				adminSnapshotRows = [{ id: 1 }];
+
+				const checkAccess = vi
+					.spyOn(AuthorizationService.prototype, 'checkAccess')
+					.mockRejectedValue(new ForbiddenException());
+
+				const permissions = vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				const roleDeletion = vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
+
+				await expect(unauthorizedService().deleteMany([1], buildOptions())).rejects.toBeInstanceOf(ForbiddenException);
+
+				expect(checkAccess).toHaveBeenCalledWith('delete', 'directus_roles', [1]);
+				expect(tracker.history.select.some((query) => /admin_access/.test(query.sql))).toBe(false);
+				expect(permissions).not.toHaveBeenCalled();
+				expect(roleDeletion).not.toHaveBeenCalled();
+			});
+
+			it('conceals the sentinel refusal from an unauthorized caller', async () => {
+				vi.spyOn(AuthorizationService.prototype, 'checkAccess').mockRejectedValue(new ForbiddenException());
+
+				await expect(
+					sentinelCapableService().deleteMany(['00000000-0000-0000-0000-000000000000'], buildOptions())
+				).rejects.toBeInstanceOf(ForbiddenException);
+			});
+
+			it('still refuses the sentinel for an authorized caller', async () => {
+				vi.spyOn(AuthorizationService.prototype, 'checkAccess').mockResolvedValue(undefined);
+
+				await expect(
+					sentinelCapableService().deleteMany(['00000000-0000-0000-0000-000000000000'], buildOptions())
+				).rejects.toBeInstanceOf(InvalidPayloadException);
+			});
+
+			it('lets an authorized caller reach the continuity check', async () => {
+				adminSnapshotRows = [{ id: 1 }];
+				vi.spyOn(AuthorizationService.prototype, 'checkAccess').mockResolvedValue(undefined);
+				vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				vi.spyOn(PresetsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValue([]);
+				vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
+
+				await expect(unauthorizedService().deleteMany([1], buildOptions())).rejects.toBeInstanceOf(
+					UnprocessableEntityException
+				);
+			});
+
+			it('skips the authorization check for a service without accountability', async () => {
+				adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+				const checkAccess = vi.spyOn(AuthorizationService.prototype, 'checkAccess');
+				vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				vi.spyOn(PresetsService.prototype, 'deleteByQuery').mockResolvedValue([]);
+				vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValue([]);
+				vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
+
+				await expect(service.deleteMany([1], buildOptions())).resolves.toEqual([1]);
+				expect(checkAccess).not.toHaveBeenCalled();
+			});
+		});
+	});
+
+	describe('Services / Roles administrator continuity on update', () => {
+		const continuitySchema = {
+			collections: {
+				directus_roles: {
+					collection: 'directus_roles',
+					primary: 'id',
+					singleton: false,
+					sortField: null,
+					note: null,
+					accountability: null,
+					fields: {
+						id: {
+							field: 'id',
+							defaultValue: null,
+							nullable: false,
+							generated: true,
+							type: 'integer',
+							dbType: 'integer',
+							precision: null,
+							scale: null,
+							special: [],
+							note: null,
+							validation: null,
+							alias: false,
+						},
+						admin_access: {
+							field: 'admin_access',
+							defaultValue: false,
+							nullable: false,
+							generated: false,
+							type: 'boolean',
+							dbType: 'boolean',
+							precision: null,
+							scale: null,
+							special: [],
+							note: null,
+							validation: null,
+							alias: false,
+						},
+					},
+				},
+			},
+			relations: [],
+		} as SchemaOverview;
+
+		let service: RolesService;
+
+		beforeEach(() => {
+			service = new RolesService({ knex: db, schema: continuitySchema });
+			tracker.on.select(/select "key" from "directus_roles"$/).response([]);
+		});
+
+		it('allows demoting an administrator while another remains', async () => {
+			adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+			await expect(service.updateMany([1], { admin_access: false })).resolves.toEqual([1]);
+		});
+
+		it('rejects demoting the last administrator role', async () => {
+			adminSnapshotRows = [{ id: 1 }];
+
+			await expect(service.updateMany([1], { admin_access: false })).rejects.toBeInstanceOf(
+				UnprocessableEntityException
+			);
+		});
+
+		it('rejects a batch that demotes the last administrator even when it promotes another', async () => {
+			adminSnapshotRows = [{ id: 2 }];
+
+			await expect(
+				service.updateBatch([
+					{ id: 1, admin_access: true },
+					{ id: 2, admin_access: false },
+				])
+			).rejects.toBeInstanceOf(UnprocessableEntityException);
+		});
+
+		it('allows a batch that demotes one administrator while another stays an administrator', async () => {
+			adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+
+			await expect(
+				service.updateBatch([
+					{ id: 1, admin_access: false },
+					{ id: 2, admin_access: true },
+				])
+			).resolves.toEqual([1, 2]);
+		});
+
+		const driverConflicts: Array<[string, Error]> = [
+			['PostgreSQL serialization_failure', Object.assign(new Error('serialization failure'), { code: '40001' })],
+			['PostgreSQL deadlock_detected', Object.assign(new Error('deadlock detected'), { code: '40P01' })],
+			['InnoDB deadlock', Object.assign(new Error('Deadlock found'), { errno: 1213, sqlState: '40001' })],
+		];
+
+		it('dispatches the role update action after a successful commit', async () => {
+			adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+			const dispatch = vi.spyOn(emitter, 'emitAction').mockImplementation(() => undefined);
+
+			try {
+				await service.updateMany([1], { admin_access: false });
+
+				expect(dispatch).toHaveBeenCalledWith('roles.update', expect.anything(), expect.anything());
+			} finally {
+				dispatch.mockRestore();
+			}
+		});
+
+		it.each(driverConflicts)(
+			'maps a %s at commit to CONCURRENCY_CONFLICT after the update queued its action, without dispatching it',
+			async (_label, driverError) => {
+				adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+				const dispatch = vi.spyOn(emitter, 'emitAction').mockImplementation(() => undefined);
+				const realTransaction = db.transaction.bind(db);
+
+				const transaction = vi.spyOn(db, 'transaction').mockImplementationOnce(async (...args: unknown[]) => {
+					await (realTransaction as (...a: unknown[]) => Promise<unknown>)(...args);
+					throw driverError;
+				});
+
+				try {
+					await expect(service.updateMany([1], { admin_access: false })).rejects.toBeInstanceOf(
+						ConcurrencyConflictException
+					);
+
+					expect(dispatch).not.toHaveBeenCalled();
+				} finally {
+					transaction.mockRestore();
+					dispatch.mockRestore();
+				}
+			}
+		);
+
+		it('opens the role mutation transaction at the serializable isolation level', async () => {
+			adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+
+			await service.updateMany([1], { admin_access: false });
+
+			expect(tracker.history.all.some((query) => /set transaction isolation level serializable/i.test(query.sql))).toBe(
+				true
+			);
+		});
+
+		function rolesExist(...ids: number[]): void {
+			tracker.on
+				.select(/select "id" from "directus_roles" where "id" = /)
+				.response((query) => (ids.includes(Number(query.bindings[0])) ? [{ id: query.bindings[0] }] : []));
+		}
+
+		it('reaches continuity enforcement through upsertMany for an existing administrator role', async () => {
+			adminSnapshotRows = [{ id: 1 }];
+			rolesExist(1);
+			const createOne = vi.spyOn(ItemsService.prototype, 'createOne');
+
+			await expect(service.upsertMany([{ id: 1, admin_access: false }])).rejects.toBeInstanceOf(
+				UnprocessableEntityException
+			);
+
+			expect(createOne).not.toHaveBeenCalled();
+
+			createOne.mockRestore();
+		});
+
+		it('does not credit a promotion made earlier in the same upsertMany call', async () => {
+			adminSnapshotRows = [{ id: 1 }];
+			rolesExist(1, 2);
+
+			await expect(
+				service.upsertMany([
+					{ id: 2, admin_access: true },
+					{ id: 1, admin_access: false },
+				])
+			).rejects.toBeInstanceOf(UnprocessableEntityException);
+		});
+
+		it('creates and updates through upsertMany under one deferred lifecycle', async () => {
+			adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+			rolesExist(1);
+			const createOne = vi.spyOn(ItemsService.prototype, 'createOne').mockResolvedValueOnce(9);
+
+			await expect(service.upsertMany([{ name: 'Fresh' }, { id: 1, admin_access: false }])).resolves.toEqual([9, 1]);
+
+			expect(createOne).toHaveBeenCalledWith(
+				expect.objectContaining({ key: 'fresh' }),
+				expect.objectContaining({ autoPurgeCache: false, autoPurgeSystemCache: false })
+			);
+
+			createOne.mockRestore();
+		});
+
+		it('does not mutate the caller-supplied options object', async () => {
+			adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+			const opts: MutationOptions = {};
+			await service.updateMany([1], { admin_access: false }, opts);
+			expect(opts).toEqual({});
+		});
+
+		it('does not mutate frozen caller-supplied options through upsertMany', async () => {
+			adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+			rolesExist(1);
+			const opts = Object.freeze({}) as MutationOptions;
+
+			await expect(service.upsertMany([{ id: 1, admin_access: false }], opts)).resolves.toEqual([1]);
+			expect(opts).toEqual({});
 		});
 	});
 });
