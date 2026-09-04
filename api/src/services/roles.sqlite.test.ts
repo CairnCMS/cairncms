@@ -1,7 +1,12 @@
 import type { SchemaOverview } from '@cairncms/types';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InvalidPayloadException, UnprocessableEntityException } from '../exceptions/index.js';
+import { runInBoundSerializable } from '../database/bound-transaction.js';
+import {
+	AdminMutationUnverifiedTransactionException,
+	InvalidPayloadException,
+	UnprocessableEntityException,
+} from '../exceptions/index.js';
 import { RolesService } from './roles.js';
 
 vi.mock('../database/index', () => ({
@@ -198,5 +203,88 @@ describe('RolesService.upsertMany on a real single-connection SQLite database', 
 		expect(updated).toBe(EDITOR_ROLE_ID);
 		expect(await role(String(created))).toMatchObject({ key: 'reviewers', name: 'Reviewers' });
 		expect(await role(EDITOR_ROLE_ID)).toMatchObject({ description: 'Edits content', key: 'editor' });
+	});
+
+	describe('on an unbranded transaction the platform did not open', () => {
+		function serviceOn(trx: Knex): RolesService {
+			return new RolesService({ knex: trx, schema });
+		}
+
+		it('allows a name-only update', async () => {
+			await db.transaction(async (trx) => {
+				await expect(serviceOn(trx).updateMany([EDITOR_ROLE_ID], { name: 'Editors' })).resolves.toEqual([
+					EDITOR_ROLE_ID,
+				]);
+			});
+
+			expect(await role(EDITOR_ROLE_ID)).toMatchObject({ name: 'Editors' });
+		});
+
+		it('refuses an administrator demotion', async () => {
+			await db.transaction(async (trx) => {
+				await expect(serviceOn(trx).updateMany([ADMIN_ROLE_ID], { admin_access: false })).rejects.toBeInstanceOf(
+					AdminMutationUnverifiedTransactionException
+				);
+			});
+
+			expect(await role(ADMIN_ROLE_ID)).toMatchObject({ admin_access: 1 });
+		});
+
+		it('refuses a role deletion before any cascade runs', async () => {
+			await db.transaction(async (trx) => {
+				await expect(serviceOn(trx).deleteMany([EDITOR_ROLE_ID])).rejects.toBeInstanceOf(
+					AdminMutationUnverifiedTransactionException
+				);
+			});
+
+			expect(await role(EDITOR_ROLE_ID)).toBeDefined();
+		});
+	});
+
+	describe('on a branded serializable transaction the platform opened', () => {
+		const noopFlush = () => Promise.resolve();
+
+		it('enforces continuity rather than failing closed, refusing the sole-administrator demotion', async () => {
+			await expect(
+				runInBoundSerializable(
+					db,
+					(trx) => new RolesService({ knex: trx, schema }).updateMany([ADMIN_ROLE_ID], { admin_access: false }),
+					noopFlush
+				)
+			).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+			expect(await role(ADMIN_ROLE_ID)).toMatchObject({ admin_access: 1 });
+		});
+
+		it('allows a non-demoting update', async () => {
+			await runInBoundSerializable(
+				db,
+				(trx) => new RolesService({ knex: trx, schema }).updateMany([EDITOR_ROLE_ID], { name: 'Content Editors' }),
+				noopFlush
+			);
+
+			expect(await role(EDITOR_ROLE_ID)).toMatchObject({ name: 'Content Editors' });
+		});
+
+		it('allows demoting one administrator while another remains, and persists it', async () => {
+			const secondAdminId = '44444444-4444-4444-8444-444444444444';
+
+			await db('directus_roles').insert({
+				id: secondAdminId,
+				key: 'administrator_two',
+				name: 'Second Administrator',
+				admin_access: true,
+				app_access: true,
+			});
+
+			await runInBoundSerializable(
+				db,
+				(trx) => new RolesService({ knex: trx, schema }).updateMany([secondAdminId], { admin_access: false }),
+				noopFlush
+			);
+
+			expect(await role(secondAdminId)).toMatchObject({ admin_access: 0 });
+			expect(await role(ADMIN_ROLE_ID)).toMatchObject({ admin_access: 1 });
+		});
 	});
 });
