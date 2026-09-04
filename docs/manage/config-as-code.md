@@ -329,6 +329,8 @@ Applies are attributed:
 
 Domain action events such as `roles.create` and `permissions.delete` are emitted once, after the transaction commits, so an extension hook is never told about a change that a rollback later undoes, and no event is emitted for an apply that rolls back.
 
+A config apply replaces policy, so its post-commit cache clear is forced rather than debounced. It clears the system cache even when another cache clear is in flight, so a revoked permission stops being served from cache on the next request.
+
 If cache invalidation fails after the transaction has committed, the apply is not rolled back. The configuration is already applied and its events are delivered. The failure is reported separately as `CONFIG_POST_COMMIT_FAILED` (HTTP `500`, CLI exit `3`). Its `extensions.committed` is `true` and its `extensions.phase` is `cache`, so a client can tell the configuration was applied even though the cache was not cleared. Clear the cache with `POST /utils/cache/clear` to recover, since re-running the apply may produce an empty plan and will not clear the cache on its own.
 
 ### Run record

@@ -161,7 +161,7 @@ export async function applyConfigPlan(plan: ConfigPlan, opts: ApplyOptions): Pro
 				let cacheError: unknown;
 
 				try {
-					await flushCaches();
+					await flushCaches(true);
 				} catch (err) {
 					cacheError = err;
 				}

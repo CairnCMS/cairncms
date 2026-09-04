@@ -458,6 +458,12 @@ describe('applyConfigPlan:post-commit ordering', () => {
 		expect(flushCaches).toHaveBeenCalledTimes(1);
 	});
 
+	it('forces the post-commit system cache clear so the debounce lock cannot skip it', async () => {
+		await applyConfigPlan(createPlan(), { context });
+
+		expect(flushCaches).toHaveBeenCalledWith(true);
+	});
+
 	it('passes the queued event metadata to emitActionAndWait unchanged', async () => {
 		await applyConfigPlan(createPlan(), { context });
 
