@@ -8,6 +8,8 @@ import knex, { type Knex } from 'knex';
 
 const DRIVER_LEAK = /40001|40P01|1213|1205|deadlock|serialize|SQLITE_BUSY|ER_LOCK/i;
 
+const SERVER_VENDORS = ['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'];
+
 describe('Roles administrator continuity', () => {
 	const databases = new Map<string, Knex>();
 	const token = common.USER.ADMIN!.TOKEN;
@@ -31,8 +33,8 @@ describe('Roles administrator continuity', () => {
 		return { id: response.body.data.id };
 	}
 
-	describe('two concurrent PostgreSQL administrator demotions resolve to one success and one conflict', () => {
-		it.each(vendors.filter((vendor) => vendor === 'postgres'))('%s', async (vendor) => {
+	describe('two concurrent server-vendor administrator demotions resolve to one success and one conflict', () => {
+		it.each(vendors.filter((vendor) => SERVER_VENDORS.includes(vendor)))('%s', async (vendor) => {
 			const db = databases.get(vendor)!;
 			const marker = randomUUID();
 			const committedKey = `roles-continuity-barrier/committed/${marker}`;
