@@ -4,9 +4,15 @@ import knex from 'knex';
 import { createTracker, MockClient, Tracker } from 'knex-mock-client';
 import type { MockedFunction, SpyInstance } from 'vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ForbiddenException, InvalidPayloadException, UnprocessableEntityException } from '../exceptions/index.js';
+import {
+	ConcurrencyConflictException,
+	ForbiddenException,
+	InvalidPayloadException,
+	UnprocessableEntityException,
+} from '../exceptions/index.js';
 import type { MutationOptions } from '../types/index.js';
 import { getDatabaseClient } from '../database/index.js';
+import emitter from '../emitter.js';
 import {
 	AuthorizationService,
 	ItemsService,
@@ -1411,6 +1417,60 @@ describe('Integration Tests', () => {
 					{ id: 2, admin_access: true },
 				])
 			).resolves.toEqual([1, 2]);
+		});
+
+		const driverConflicts: Array<[string, Error]> = [
+			['PostgreSQL serialization_failure', Object.assign(new Error('serialization failure'), { code: '40001' })],
+			['PostgreSQL deadlock_detected', Object.assign(new Error('deadlock detected'), { code: '40P01' })],
+			['InnoDB deadlock', Object.assign(new Error('Deadlock found'), { errno: 1213, sqlState: '40001' })],
+		];
+
+		it('dispatches the role update action after a successful commit', async () => {
+			adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+			const dispatch = vi.spyOn(emitter, 'emitAction').mockImplementation(() => undefined);
+
+			try {
+				await service.updateMany([1], { admin_access: false });
+
+				expect(dispatch).toHaveBeenCalledWith('roles.update', expect.anything(), expect.anything());
+			} finally {
+				dispatch.mockRestore();
+			}
+		});
+
+		it.each(driverConflicts)(
+			'maps a %s at commit to CONCURRENCY_CONFLICT after the update queued its action, without dispatching it',
+			async (_label, driverError) => {
+				adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+				const dispatch = vi.spyOn(emitter, 'emitAction').mockImplementation(() => undefined);
+				const realTransaction = db.transaction.bind(db);
+
+				const transaction = vi.spyOn(db, 'transaction').mockImplementationOnce(async (...args: unknown[]) => {
+					await (realTransaction as (...a: unknown[]) => Promise<unknown>)(...args);
+					throw driverError;
+				});
+
+				try {
+					await expect(service.updateMany([1], { admin_access: false })).rejects.toBeInstanceOf(
+						ConcurrencyConflictException
+					);
+
+					expect(dispatch).not.toHaveBeenCalled();
+				} finally {
+					transaction.mockRestore();
+					dispatch.mockRestore();
+				}
+			}
+		);
+
+		it('opens the role mutation transaction at the serializable isolation level', async () => {
+			adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+
+			await service.updateMany([1], { admin_access: false });
+
+			expect(tracker.history.all.some((query) => /set transaction isolation level serializable/i.test(query.sql))).toBe(
+				true
+			);
 		});
 
 		function rolesExist(...ids: number[]): void {

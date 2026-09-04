@@ -416,6 +416,57 @@ describe('applyConfigPlan:transaction failure wrapper', () => {
 	});
 });
 
+describe('applyConfigPlan:serialization conflict mapping', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+
+		trxRows = {
+			directus_roles: [{ id: 'role-1', key: 'editor' }],
+			directus_permissions: [],
+		};
+	});
+
+	function createPlan(): ConfigPlan {
+		const plan = emptyPlan();
+		plan.roles.create.push({ key: 'editor', name: 'Editor', admin_access: false, app_access: true });
+		return plan;
+	}
+
+	const driverConflicts: Array<[string, Record<string, unknown>]> = [
+		['PostgreSQL serialization_failure', { code: '40001' }],
+		['PostgreSQL deadlock_detected', { code: '40P01' }],
+		['InnoDB deadlock', { errno: 1213, sqlState: '40001' }],
+	];
+
+	it.each(driverConflicts)(
+		'maps a %s at commit to CONFIG_STATE_CHANGED after the callback queued an effect, with no flush or dispatch',
+		async (_label, driverProps) => {
+			rolesService.createOne.mockImplementationOnce(async (_data: unknown, opts: any) => {
+				opts?.bypassEmitAction?.({ event: 'roles.create', meta: {}, context: {} });
+				return 'role-1';
+			});
+
+			transactionSpy.mockImplementationOnce(async (cb: any) => {
+				await cb(trxStub);
+				throw Object.assign(new Error('driver serialization failure'), driverProps);
+			});
+
+			const error = (await applyConfigPlan(createPlan(), { context }).catch((thrown) => thrown)) as Error;
+
+			expect(error).toBeInstanceOf(ConfigStateChangedException);
+			expect(rolesService.createOne).toHaveBeenCalledTimes(1);
+			expect(flushCaches).not.toHaveBeenCalled();
+			expect(emitter.emitActionAndWait).not.toHaveBeenCalled();
+		}
+	);
+
+	it('opens the apply transaction at the serializable isolation level', async () => {
+		await applyConfigPlan(createPlan(), { context });
+
+		expect(transactionSpy).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'serializable' });
+	});
+});
+
 describe('applyConfigPlan:post-commit ordering', () => {
 	const order: string[] = [];
 
