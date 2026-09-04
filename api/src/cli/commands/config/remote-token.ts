@@ -1,4 +1,4 @@
-import { closeSync, fstatSync, openSync, readFileSync } from 'node:fs';
+import { closeSync, constants, fstatSync, openSync, readFileSync } from 'node:fs';
 
 export class RemoteTokenError extends Error {
 	readonly exitCode = 2;
@@ -47,10 +47,12 @@ function parseToken(raw: string): string {
 }
 
 function readTokenFile(path: string): string {
+	// O_NONBLOCK so a FIFO named as the token file cannot block the open on a missing writer.
+	const flags = constants.O_RDONLY | constants.O_NONBLOCK;
 	let fd: number;
 
 	try {
-		fd = openSync(path, 'r');
+		fd = openSync(path, flags);
 	} catch {
 		throw new RemoteTokenError('The token file could not be opened.');
 	}
