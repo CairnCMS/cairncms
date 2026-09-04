@@ -19,17 +19,16 @@ export const CONFIG_MAX_DEPTH = 100;
  */
 export const CONFIG_MAX_COLLECTION_ALIASES = 50;
 
-/** The installed `@types/js-yaml` predates both options. */
-type ConfigLoadOptions = LoadOptions & { maxDepth: number; maxMergeSeqLength: number };
+/** The installed `@types/js-yaml` predates the `maxDepth` option. */
+type ConfigLoadOptions = LoadOptions & { maxDepth: number };
 
 /**
- * Both parser limits are raised above the engine's own so the diagnostics an operator sees name the
- * bounds above. `maxDepth` defaults to 100 but counts two levels more than `CONFIG_MAX_DEPTH` for
- * the same document. The parser keeps its guards and loads a thousand levels safely when raised.
+ * The parser's `maxDepth` is raised above the engine's own `CONFIG_MAX_DEPTH` so the diagnostic an
+ * operator sees names the engine bound. `maxDepth` counts two levels more than `CONFIG_MAX_DEPTH` for
+ * the same document.
  */
 const LOADER_OPTIONS: ConfigLoadOptions = {
 	maxDepth: CONFIG_MAX_DEPTH * 2,
-	maxMergeSeqLength: CONFIG_MAX_COLLECTION_ALIASES * 2,
 };
 
 /**

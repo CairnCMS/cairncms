@@ -186,6 +186,19 @@ describe('parseConfigYaml', () => {
 		expect(message).toContain(String(CONFIG_MAX_DEPTH));
 	});
 
+	it('wraps the parser depth guard for a document deeper than the raised parser bound', () => {
+		let error: unknown;
+
+		try {
+			parseConfigYaml(yamlNest(CONFIG_MAX_DEPTH * 2 + 10), 'roles/editor.yaml');
+		} catch (err) {
+			error = err;
+		}
+
+		expect(error).toBeInstanceOf(ConfigInvalidException);
+		expect((error as Error).message).toContain('could not be parsed');
+	});
+
 	it('bounds a merge sequence at the alias limit, above the stricter parser default', () => {
 		const mergeDocument = (count: number) => {
 			const anchors = Array.from({ length: count }, (_, index) => `d${index}: &a${index} {x${index}: ${index}}`);
