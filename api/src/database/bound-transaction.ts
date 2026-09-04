@@ -5,14 +5,41 @@ import { getDatabaseClient } from './index.js';
 
 const require = createRequire(import.meta.url);
 
-const SqliteTransaction = require('knex/lib/dialects/sqlite3/execution/sqlite-transaction.js') as {
-	new (...args: unknown[]): {
-		query(connection: unknown, sql: string): unknown;
-		begin(connection: unknown): unknown;
-	};
-};
-
 const CAIRN_IMMEDIATE = Symbol('cairnBeginImmediate');
+
+type ImmediateTransactionClass = { new (...args: unknown[]): { begin(connection: unknown): unknown } };
+
+let immediateTransactionClass: ImmediateTransactionClass | undefined;
+
+// The knex internal is required lazily and only for SQLite, so a knex layout change cannot break
+// API boot on other vendors.
+function getImmediateTransactionClass(): ImmediateTransactionClass {
+	if (immediateTransactionClass) return immediateTransactionClass;
+
+	const SqliteTransaction = require('knex/lib/dialects/sqlite3/execution/sqlite-transaction.js') as {
+		new (...args: unknown[]): {
+			query(connection: unknown, sql: string): unknown;
+			begin(connection: unknown): unknown;
+		};
+	};
+
+	immediateTransactionClass = class CairnImmediateTransaction extends SqliteTransaction {
+		private readonly cairnImmediate: boolean;
+
+		constructor(...args: unknown[]) {
+			super(...args);
+			const config = args[2] as Record<PropertyKey, unknown> | undefined;
+			this.cairnImmediate = config?.[CAIRN_IMMEDIATE] === true;
+		}
+
+		override begin(connection: unknown): unknown {
+			if (!this.cairnImmediate) return super.begin(connection);
+			return this.query(connection, 'BEGIN IMMEDIATE;');
+		}
+	};
+
+	return immediateTransactionClass;
+}
 
 const bound = new WeakSet<object>();
 const adapted = new WeakSet<object>();
@@ -24,27 +51,14 @@ export interface LifecycleContext {
 	systemCacheDirty: boolean;
 }
 
-class CairnImmediateTransaction extends SqliteTransaction {
-	private readonly cairnImmediate: boolean;
-
-	constructor(...args: unknown[]) {
-		super(...args);
-		const config = args[2] as Record<PropertyKey, unknown> | undefined;
-		this.cairnImmediate = config?.[CAIRN_IMMEDIATE] === true;
-	}
-
-	override begin(connection: unknown): unknown {
-		if (!this.cairnImmediate) return super.begin(connection);
-		return this.query(connection, 'BEGIN IMMEDIATE;');
-	}
-}
-
 function ensureImmediateAdapter(database: Knex): void {
 	const client = (database as unknown as { client: { transaction: (...args: unknown[]) => unknown } }).client;
 	if (adapted.has(client)) return;
 
+	const ImmediateTransaction = getImmediateTransactionClass();
+
 	client.transaction = function (this: unknown, ...args: unknown[]) {
-		return new CairnImmediateTransaction(this, ...args);
+		return new ImmediateTransaction(this, ...args);
 	};
 
 	adapted.add(client);
