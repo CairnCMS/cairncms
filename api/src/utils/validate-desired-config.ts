@@ -12,8 +12,6 @@ import {
 import type { RoleReferenceSource, ValidationContext } from './config/descriptor.js';
 import { invalid } from './config/failures.js';
 import { buildDocumentSchema } from './config/field-schema.js';
-import { permissionsDescriptor } from './config/handlers/permissions.js';
-import { rolesDescriptor } from './config/handlers/roles.js';
 import { isPlaceholder } from './config/placeholder.js';
 import { getDescriptor, listConfigKinds } from './config/registry.js';
 import { SUPPORTED_MANIFEST_VERSION } from './config-contract.js';
@@ -22,10 +20,13 @@ import { replaceControlCharacters, safeLogFragment } from './safe-log-fragment.j
 /** Callers keep the input object, so coercing "false" would validate while the planner sees a truthy string. */
 const VALIDATE_OPTIONS = { convert: false, abortEarly: false } as const;
 
-const RECORD_SCHEMA: Record<ConfigKind, Joi.ObjectSchema> = {
-	roles: buildDocumentSchema(rolesDescriptor),
-	permissions: buildDocumentSchema(permissionsDescriptor),
-};
+export function buildRecordSchemas(): Record<ConfigKind, Joi.ObjectSchema> {
+	return Object.fromEntries(
+		listConfigKinds().map((kind) => [kind, buildDocumentSchema(getDescriptor(kind))])
+	) as Record<ConfigKind, Joi.ObjectSchema>;
+}
+
+const RECORD_SCHEMA: Record<ConfigKind, Joi.ObjectSchema> = buildRecordSchemas();
 
 const MANIFEST = Joi.object({
 	version: Joi.valid(SUPPORTED_MANIFEST_VERSION).required(),

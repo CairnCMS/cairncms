@@ -4,6 +4,7 @@ import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
 import { ConfigUnsupportedVersionException } from '../../../exceptions/config-unsupported-version.js';
 import type { CairnConfig, ConfigKind } from '../../../types/config.js';
 import { CONFIG_RUN_ID_HEADER } from '../../../utils/config/run-record.js';
+import { listConfigKinds } from '../../../utils/config/registry.js';
 import { isValidUuid } from '../../../utils/is-valid-uuid.js';
 import { replaceControlCharacters, safeLogFragment } from '../../../utils/safe-log-fragment.js';
 import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
@@ -260,6 +261,29 @@ function validatedResult(result: unknown): RemoteWireResult {
 	return parsed.data;
 }
 
+function resultCardinality(kind: ConfigKind, result: RemoteWireResult): Record<'create' | 'update' | 'delete', number> {
+	switch (kind) {
+		case 'roles':
+			return {
+				create: result.roles.created.length,
+				update: result.roles.updated.length,
+				delete: result.roles.deleted.length,
+			};
+
+		case 'permissions':
+			return {
+				create: result.permissions.created,
+				update: result.permissions.updated,
+				delete: result.permissions.deleted,
+			};
+
+		default: {
+			const unhandled: never = kind;
+			throw new Error(`Unhandled config kind: ${JSON.stringify(unhandled)}`);
+		}
+	}
+}
+
 function assertResultMatchesPlan(plan: RemoteWirePlan, result: RemoteWireResult): void {
 	if (plan.protections.length > 0) {
 		throw new RemoteClientError(
@@ -268,18 +292,14 @@ function assertResultMatchesPlan(plan: RemoteWirePlan, result: RemoteWireResult)
 		);
 	}
 
-	const roles = countOperations(plan.changes, 'roles');
-	const permissions = countOperations(plan.changes, 'permissions');
+	for (const kind of listConfigKinds()) {
+		const planned = countOperations(plan.changes, kind);
+		const actual = resultCardinality(kind, result);
 
-	const consistent =
-		result.roles.created.length === roles.create &&
-		result.roles.updated.length === roles.update &&
-		result.roles.deleted.length === roles.delete &&
-		result.permissions.created === permissions.create &&
-		result.permissions.updated === permissions.update &&
-		result.permissions.deleted === permissions.delete;
-
-	if (!consistent) throw new RemoteClientError('The server reported a result that does not match its plan.', 3);
+		if (actual.create !== planned.create || actual.update !== planned.update || actual.delete !== planned.delete) {
+			throw new RemoteClientError('The server reported a result that does not match its plan.', 3);
+		}
+	}
 }
 
 function countOperations(
@@ -368,16 +388,21 @@ function redactedDeletion(deletion: RenderableDeletion, token: string): Renderab
 		return { kind: 'roles', identity: { key: redactToken(deletion.identity.key, token) } };
 	}
 
-	const { role, collection, action } = deletion.identity;
+	if (deletion.kind === 'permissions') {
+		const { role, collection, action } = deletion.identity;
 
-	return {
-		kind: 'permissions',
-		identity: {
-			role: redactToken(role, token),
-			collection: redactToken(collection, token),
-			action: redactToken(action, token),
-		},
-	};
+		return {
+			kind: 'permissions',
+			identity: {
+				role: redactToken(role, token),
+				collection: redactToken(collection, token),
+				action: redactToken(action, token),
+			},
+		};
+	}
+
+	const unhandled: never = deletion;
+	throw new Error(`Unhandled config kind: ${JSON.stringify(unhandled)}`);
 }
 
 function sanitize(text: string, token: string): string {

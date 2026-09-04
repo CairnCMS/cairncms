@@ -7,6 +7,7 @@ import {
 	renderDestructiveRefusal,
 	renderNoChanges,
 	renderProtections,
+	renderResultSummary,
 } from './render-config-plan.js';
 
 function roleValues(over: Partial<RoleValues> = {}): RoleValues {
@@ -407,5 +408,24 @@ describe('renderDeletions', () => {
 		const [line] = renderDeletions([{ kind: 'roles', identity: { key: `legacy${bel}` } }]);
 
 		expect(line).toBe(`    - ${deleteVerb()} legacy?`);
+	});
+
+	it('throws on a deletion whose kind is not managed', () => {
+		expect(() => renderDeletions([{ kind: 'notakind', identity: { key: 'legacy' } } as never])).toThrow(
+			/Unhandled config kind/
+		);
+	});
+});
+
+describe('renderResultSummary', () => {
+	it('summarizes every managed kind in one line', () => {
+		const summary = renderResultSummary({
+			roles: { created: ['a', 'b'], updated: ['c'], deleted: [] },
+			permissions: { created: 3, updated: 0, deleted: 1 },
+		});
+
+		expect(summary).toBe(
+			'Config applied: 2 role(s) created, 1 role(s) updated, 3 permission(s) created, 1 permission(s) deleted'
+		);
 	});
 });

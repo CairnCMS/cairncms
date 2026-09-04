@@ -1,3 +1,5 @@
+import type { ConfigKind } from '../../../types/config.js';
+import { listConfigKinds } from '../../../utils/config/registry.js';
 import { replaceControlCharacters } from '../../../utils/safe-log-fragment.js';
 import { createVerb, deleteVerb, heading, planIntro, updateVerb } from '../../presentation.js';
 
@@ -40,19 +42,65 @@ export type RenderablePlan = {
 	warnings: Array<{ message: string }>;
 };
 
-export type RenderableResult = {
+type RenderableResultSlice = {
 	roles: { created: unknown[]; updated: unknown[]; deleted: unknown[] };
 	permissions: { created: number; updated: number; deleted: number };
 };
 
+export type RenderableResult = { [C in ConfigKind]: RenderableResultSlice[C] };
+
+function summarizeResultSlice(kind: ConfigKind, result: RenderableResult): string[] {
+	switch (kind) {
+		case 'roles': {
+			const parts: string[] = [];
+			if (result.roles.created.length > 0) parts.push(`${result.roles.created.length} role(s) created`);
+			if (result.roles.updated.length > 0) parts.push(`${result.roles.updated.length} role(s) updated`);
+			if (result.roles.deleted.length > 0) parts.push(`${result.roles.deleted.length} role(s) deleted`);
+			return parts;
+		}
+
+		case 'permissions': {
+			const parts: string[] = [];
+			if (result.permissions.created > 0) parts.push(`${result.permissions.created} permission(s) created`);
+			if (result.permissions.updated > 0) parts.push(`${result.permissions.updated} permission(s) updated`);
+			if (result.permissions.deleted > 0) parts.push(`${result.permissions.deleted} permission(s) deleted`);
+			return parts;
+		}
+
+		default: {
+			const unhandled: never = kind;
+			throw new Error(`Unhandled config kind: ${JSON.stringify(unhandled)}`);
+		}
+	}
+}
+
+export function renderResultSummary(result: RenderableResult): string {
+	const parts = listConfigKinds().flatMap((kind) => summarizeResultSlice(kind, result));
+	return `Config applied: ${parts.join(', ')}`;
+}
+
+function kindHeading(kind: RenderableChange['kind']): string {
+	switch (kind) {
+		case 'roles':
+			return 'Roles';
+		case 'permissions':
+			return 'Permissions';
+
+		default: {
+			const unhandled: never = kind;
+			throw new Error(`Unhandled config kind: ${JSON.stringify(unhandled)}`);
+		}
+	}
+}
+
 export function renderConfigPlan(serialized: RenderablePlan): string {
 	const lines: string[] = [planIntro];
-	let currentKind: 'roles' | 'permissions' | null = null;
+	let currentKind: RenderableChange['kind'] | null = null;
 
 	for (const change of serialized.changes) {
 		if (change.kind !== currentKind) {
 			currentKind = change.kind;
-			lines.push('', heading(change.kind === 'roles' ? 'Roles' : 'Permissions'));
+			lines.push('', heading(kindHeading(change.kind)));
 		}
 
 		lines.push(...renderChange(change));
@@ -157,10 +205,15 @@ function renderIdentity(change: RenderableChange | RenderableDeletion): string {
 		return replaceControlCharacters(change.identity.key);
 	}
 
-	const { role, collection, action } = change.identity;
-	return `${replaceControlCharacters(role)} / ${replaceControlCharacters(collection)} / ${replaceControlCharacters(
-		action
-	)}`;
+	if (change.kind === 'permissions') {
+		const { role, collection, action } = change.identity;
+		return `${replaceControlCharacters(role)} / ${replaceControlCharacters(collection)} / ${replaceControlCharacters(
+			action
+		)}`;
+	}
+
+	const unhandled: never = change;
+	throw new Error(`Unhandled config kind: ${JSON.stringify(unhandled)}`);
 }
 
 function renderValue(value: unknown): string {

@@ -56,7 +56,7 @@ const impact = z.array(
 
 const emptyImpact = z.array(z.unknown()).max(0);
 
-const change = z.union([
+export const RemoteConfigPlanChange = z.union([
 	z
 		.object({ kind: z.literal('roles'), operation: z.literal('create'), identity: roleIdentity, values: roleValues })
 		.passthrough(),
@@ -118,7 +118,7 @@ export const RemoteConfigPlan = z
 		planVersion: z.literal(2),
 		manifestVersion: z.number(),
 		summary: z.object({ create: count, update: count, delete: count }).passthrough(),
-		changes: z.array(change),
+		changes: z.array(RemoteConfigPlanChange),
 		protections: z.array(protection),
 		warnings: z.array(warning),
 	})

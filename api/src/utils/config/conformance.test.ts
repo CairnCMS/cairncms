@@ -1,6 +1,12 @@
 import type { PermissionsAction } from '@cairncms/types';
 import { describe, expect, it } from 'vitest';
-import type { ConfigKind, ConfigPermission, ConfigRole } from '../../types/config.js';
+import { CONFIG_KINDS, type ConfigKind, type ConfigPermission, type ConfigRole } from '../../types/config.js';
+import {
+	RemoteApplyResult,
+	RemoteConfigPlanChange,
+	RemoteErrorExtensions,
+} from '../../cli/commands/config/remote-response-schema.js';
+import { buildRecordSchemas } from '../validate-desired-config.js';
 import { computeKindPlan } from './diff.js';
 import type { ConfigKindTypes, ConfigResourceDescriptor, KindPlan } from './descriptor.js';
 import type { PermissionsKindTypes } from './handlers/permissions.js';
@@ -145,6 +151,80 @@ const RUNNERS = {
 
 describe.each(listConfigKinds())('descriptor conformance: %s', (kind) => {
 	RUNNERS[kind]();
+});
+
+const REPRESENTATIVE_CHANGE: Record<ConfigKind, unknown> = {
+	roles: {
+		kind: 'roles',
+		operation: 'create',
+		identity: { key: 'sample' },
+		values: {
+			name: 'Sample',
+			icon: 'badge',
+			description: null,
+			admin_access: false,
+			app_access: true,
+			enforce_tfa: false,
+			ip_access: null,
+		},
+	},
+	permissions: {
+		kind: 'permissions',
+		operation: 'create',
+		identity: { role: 'sample', collection: 'articles', action: 'read' },
+		values: { permissions: null, validation: null, presets: null, fields: null },
+	},
+};
+
+const REPRESENTATIVE_DELETION: Record<ConfigKind, unknown> = {
+	roles: { kind: 'roles', identity: { key: 'sample' } },
+	permissions: { kind: 'permissions', identity: { role: 'sample', collection: 'articles', action: 'read' } },
+};
+
+function destructiveExtension(deletion: unknown): unknown {
+	return { code: 'DESTRUCTIVE_CHANGES_REQUIRED', deletions: [deletion] };
+}
+
+describe('config kind wiring conformance', () => {
+	const kinds = [...CONFIG_KINDS].sort();
+
+	it('derives a record schema for exactly every managed kind', () => {
+		expect(Object.keys(buildRecordSchemas()).sort()).toEqual(kinds);
+	});
+
+	it('declares a remote apply-result slice for exactly every managed kind', () => {
+		expect(Object.keys(RemoteApplyResult.shape).sort()).toEqual(kinds);
+	});
+
+	it('parses a representative change for every managed kind through the remote change union', () => {
+		for (const kind of listConfigKinds()) {
+			expect(RemoteConfigPlanChange.safeParse(REPRESENTATIVE_CHANGE[kind]).success).toBe(true);
+		}
+	});
+
+	it('rejects a change whose kind is not managed', () => {
+		const result = RemoteConfigPlanChange.safeParse({
+			kind: 'notakind',
+			operation: 'create',
+			identity: { key: 'sample' },
+		});
+
+		expect(result.success).toBe(false);
+	});
+
+	it('parses a representative destructive-refusal deletion for every managed kind', () => {
+		for (const kind of listConfigKinds()) {
+			expect(RemoteErrorExtensions.safeParse(destructiveExtension(REPRESENTATIVE_DELETION[kind])).success).toBe(true);
+		}
+	});
+
+	it('rejects a destructive-refusal deletion whose kind is not managed', () => {
+		const result = RemoteErrorExtensions.safeParse(
+			destructiveExtension({ kind: 'notakind', identity: { key: 'sample' } })
+		);
+
+		expect(result.success).toBe(false);
+	});
 });
 
 describe('projectReadState mode invariant', () => {

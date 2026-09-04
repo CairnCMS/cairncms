@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import { ConfigUnsupportedVersionException } from '../exceptions/config-unsupported-version.js';
 import type { ConfigKind, ConfigManifest } from '../types/config.js';
-import { validateConfigManifest, validateConfigRecord, validateDesiredConfig } from './validate-desired-config.js';
+import {
+	buildRecordSchemas,
+	validateConfigManifest,
+	validateConfigRecord,
+	validateDesiredConfig,
+} from './validate-desired-config.js';
 import { CONFIG_REGISTRY } from './config/registry.js';
 
 function manifest(resources: ConfigKind[] = ['roles', 'permissions']): ConfigManifest {
@@ -547,5 +552,25 @@ describe('validateDesiredConfig failure codes', () => {
 
 		expect(failures).toHaveLength(1);
 		expect(failures[0]!.code).toBe('CONFIG_INVALID');
+	});
+});
+
+describe('buildRecordSchemas', () => {
+	it('builds each kind schema from its registry descriptor at call time', () => {
+		const real = CONFIG_REGISTRY.roles;
+		const sentinel = { ...real.recordFields[0]!, name: 'sentinel_field', required: true, nullable: false };
+
+		CONFIG_REGISTRY.roles = { ...real, recordFields: [...real.recordFields, sentinel] };
+
+		try {
+			const withSentinel = buildRecordSchemas().roles.validate(role(), { convert: false, abortEarly: false });
+			expect(withSentinel.error).toBeDefined();
+			expect(withSentinel.error!.message).toContain('sentinel_field');
+		} finally {
+			CONFIG_REGISTRY.roles = real;
+		}
+
+		const restored = buildRecordSchemas().roles.validate(role(), { convert: false, abortEarly: false });
+		expect(restored.error).toBeUndefined();
 	});
 });

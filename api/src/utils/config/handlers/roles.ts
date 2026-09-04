@@ -3,7 +3,6 @@ import { normalizeRoleKey } from '@cairncms/utils';
 import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
 import { RolesService } from '../../../services/roles.js';
 import type {
-	ApplyResult,
 	ConfigFailure,
 	ConfigPlanChange,
 	ConfigPlanEnrichment,
@@ -56,7 +55,7 @@ export interface RolesKindTypes {
 	PlanDependencies: NoConfigDependencies;
 	ApplyDependencies: NoConfigDependencies;
 	Enrichment: { roleDeletionImpact: Map<string, RoleDeletionImpactEntry[]> };
-	ResultSlice: ApplyResult['roles'];
+	ResultSlice: { created: string[]; updated: string[]; deleted: string[] };
 	Outcome:
 		| { op: 'create'; created: string[] }
 		| { op: 'update'; updated: string[] }

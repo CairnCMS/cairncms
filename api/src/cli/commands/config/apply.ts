@@ -38,7 +38,7 @@ import {
 	renderConfigPlan,
 	renderDestructiveRefusal,
 	renderNoChanges,
-	type RenderableResult,
+	renderResultSummary,
 } from './render-config-plan.js';
 
 async function serializePlan(plan: ConfigPlan, desired: CairnConfig, database: Knex): Promise<SerializedConfigPlan> {
@@ -223,7 +223,7 @@ async function runLocalEngine(
 			expectedStateToken: stateToken,
 		});
 
-		logger.info(applyResultSummary(result));
+		logger.info(renderResultSummary(result));
 
 		return { result: 'applied', exitCode: 0 };
 	} catch (err) {
@@ -290,7 +290,7 @@ async function configApplyRemote(
 			logger.info(renderNoChanges(plan));
 		} else {
 			logger.info(renderConfigPlan(plan));
-			logger.info(applyResultSummary(result));
+			logger.info(renderResultSummary(result));
 		}
 
 		printRemoteRun(runId);
@@ -310,17 +310,4 @@ async function configApplyRemote(
 
 function printRemoteRun(runId: unknown): void {
 	if (typeof runId === 'string' && isValidUuid(runId)) logger.info(`Run ${runId}`);
-}
-
-function applyResultSummary(result: RenderableResult): string {
-	const parts: string[] = [];
-
-	if (result.roles.created.length > 0) parts.push(`${result.roles.created.length} role(s) created`);
-	if (result.roles.updated.length > 0) parts.push(`${result.roles.updated.length} role(s) updated`);
-	if (result.roles.deleted.length > 0) parts.push(`${result.roles.deleted.length} role(s) deleted`);
-	if (result.permissions.created > 0) parts.push(`${result.permissions.created} permission(s) created`);
-	if (result.permissions.updated > 0) parts.push(`${result.permissions.updated} permission(s) updated`);
-	if (result.permissions.deleted > 0) parts.push(`${result.permissions.deleted} permission(s) deleted`);
-
-	return `Config applied: ${parts.join(', ')}`;
 }

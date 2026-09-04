@@ -1,4 +1,5 @@
 import type { Accountability, PermissionsAction } from '@cairncms/types';
+import type { ConfigKindTypeMap } from '../utils/config/registry.js';
 
 export const CONFIG_KINDS = ['roles', 'permissions'] as const;
 export type ConfigKind = (typeof CONFIG_KINDS)[number];
@@ -130,10 +131,7 @@ export type ConfigFailureCode = 'CONFIG_INVALID' | 'CONFIG_IDENTITY_CONFLICT';
 
 export type ConfigFailure = { code: ConfigFailureCode; message: string };
 
-export interface ApplyResult {
-	roles: { created: string[]; updated: string[]; deleted: string[] };
-	permissions: { created: number; updated: number; deleted: number };
-}
+export type ApplyResult = { [C in ConfigKind]: ConfigKindTypeMap[C]['ResultSlice'] };
 
 export type ConfigApplySecurityContext =
 	| { mode: 'request'; accountability: Accountability }

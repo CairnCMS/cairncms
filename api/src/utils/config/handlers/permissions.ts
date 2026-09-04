@@ -3,7 +3,6 @@ import type { PermissionsAction } from '@cairncms/types';
 import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
 import { PermissionsService } from '../../../services/permissions.js';
 import type {
-	ApplyResult,
 	ConfigFailure,
 	ConfigPermission,
 	ConfigPermissionSet,
@@ -58,7 +57,7 @@ export interface PermissionsKindTypes {
 	PlanDependencies: { roles: KindPlan<RolesKindTypes> };
 	ApplyDependencies: { roles: RolesKindTypes['ApplyDependencyState'] };
 	Enrichment: { warnings: ConfigPlanWarning[] };
-	ResultSlice: ApplyResult['permissions'];
+	ResultSlice: { created: number; updated: number; deleted: number };
 	Outcome: { op: 'create'; count: number } | { op: 'update'; count: number } | { op: 'delete'; count: number };
 }
 
