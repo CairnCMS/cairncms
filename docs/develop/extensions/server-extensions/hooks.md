@@ -36,13 +36,13 @@ The function receives a `register` object with five typed register functions and
 
 There are five hook types. Each runs at a different point and receives different arguments:
 
-- **Filter** — runs *before* an event commits. Can transform the payload or veto the event.
-- **Action** — runs *after* an event commits. Cannot change the outcome.
+- **Filter** — runs *before* an event's change is applied. Can transform the payload or veto the event.
+- **Action** — reacts to an event without vetoing or changing its outcome. Its timing relative to the triggering operation's transaction depends on the emitter.
 - **Init** — runs once at specific lifecycle points (server startup, route registration, and so on).
 - **Schedule** — runs on a cron schedule, independent of any platform event.
 - **Embed** — injects custom HTML, CSS, or JavaScript into the admin app's `<head>` or `<body>`.
 
-Choose Filter when you need to validate, transform, or block. Choose Action for fire-and-forget work that should not delay the response.
+Choose Filter when you need to validate, transform, or block. Choose Action for follow-up work that reacts to a completed change. Actions are usually fire-and-forget and do not delay the response, though some platform operations such as a config apply await their actions before finishing.
 
 ## Filter hooks
 
@@ -75,7 +75,7 @@ Filters are blocking. They run inline with the request and add to its latency. B
 
 ## Action hooks
 
-Action hooks fire after the event commits. The original operation has already happened by the time your handler runs; throwing does not roll anything back.
+Action hooks fire after the emitting operation completes its own write, and throwing does not roll that write back. When that operation runs inside a transaction another component opened, its write may not be committed yet, so the action can run before the outer transaction commits and could act on a change the outer owner later rolls back.
 
 ```js
 export default defineHook(({ action }, { services, getSchema }) => {
