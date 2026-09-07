@@ -13,7 +13,11 @@ import type {
 	PermissionIdentity,
 	PermissionValues,
 } from '../../../types/config.js';
-import { PERMISSION_COLLECTION_MAX_LENGTH, ROLE_KEY_MAX_LENGTH, SUPPORTED_ACTIONS } from '../../config-contract.js';
+import {
+	CONFIG_FILENAME_STEM_MAX_LENGTH,
+	PERMISSION_COLLECTION_MAX_LENGTH,
+	SUPPORTED_ACTIONS,
+} from '../../config-contract.js';
 import { safeLogFragment } from '../../safe-log-fragment.js';
 import type {
 	ApplyContext,
@@ -67,7 +71,7 @@ const ROLE_FIELD: ConfigFieldDescriptor = {
 	required: true,
 	nullable: false,
 	minLength: 1,
-	maxLength: ROLE_KEY_MAX_LENGTH,
+	maxLength: CONFIG_FILENAME_STEM_MAX_LENGTH,
 	grammar: 'role-key',
 	acceptsPlaceholder: false,
 	sensitivity: NON_SECRET,

@@ -4,9 +4,9 @@ import Joi from 'joi';
 import { describe, expect, it } from 'vitest';
 import type { ConfigKind } from '../../types/config.js';
 import {
+	CONFIG_FILENAME_STEM_MAX_LENGTH,
 	PERMISSION_COLLECTION_MAX_LENGTH,
 	ROLE_ICON_MAX_LENGTH,
-	ROLE_KEY_MAX_LENGTH,
 	ROLE_NAME_MAX_LENGTH,
 	SUPPORTED_ACTIONS,
 } from '../config-contract.js';
@@ -21,7 +21,7 @@ const VALIDATE_OPTIONS = { convert: false, abortEarly: false } as const;
 // Keep this oracle independent of descriptor metadata so schema-contract drift remains detectable.
 const EXPECTED_ROLE_KEY_SCHEMA = Joi.string()
 	.min(1)
-	.max(ROLE_KEY_MAX_LENGTH)
+	.max(CONFIG_FILENAME_STEM_MAX_LENGTH)
 	.custom((value, helpers) => (normalizeRoleKey(value) === value ? value : helpers.error('roleKey.grammar')))
 	.messages({
 		'roleKey.grammar':
@@ -118,6 +118,8 @@ const CASES: Case[] = [
 	},
 	{ name: 'role reserved public key', kind: 'roles', input: role({ key: 'public' }), valid: false },
 	{ name: 'role bad-grammar key', kind: 'roles', input: role({ key: 'Editor' }), valid: false },
+	{ name: 'role key at filename-stem limit', kind: 'roles', input: role({ key: 'a'.repeat(246) }), valid: true },
+	{ name: 'role key over filename-stem limit', kind: 'roles', input: role({ key: 'a'.repeat(247) }), valid: false },
 	{
 		name: 'role missing admin_access',
 		kind: 'roles',
@@ -179,6 +181,18 @@ const CASES: Case[] = [
 		name: 'permission bad-grammar subject',
 		kind: 'permissions',
 		input: permissionSet({ role: 'Editor' }),
+		valid: false,
+	},
+	{
+		name: 'permission subject at filename-stem limit',
+		kind: 'permissions',
+		input: permissionSet({ role: 'a'.repeat(246), permissions: [] }),
+		valid: true,
+	},
+	{
+		name: 'permission subject over filename-stem limit',
+		kind: 'permissions',
+		input: permissionSet({ role: 'a'.repeat(247), permissions: [] }),
 		valid: false,
 	},
 	{ name: 'permission set missing permissions array', kind: 'permissions', input: { role: 'editor' }, valid: false },
