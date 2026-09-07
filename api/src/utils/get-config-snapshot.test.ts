@@ -9,6 +9,7 @@ import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import logger from '../logger.js';
 import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
+import { CONFIG_FILENAME_STEM_MAX_LENGTH } from './config-contract.js';
 import { rolesDescriptor } from './config/handlers/roles.js';
 import { CONFIG_REGISTRY } from './config/registry.js';
 import { getConfigSnapshot, readCurrentConfig } from './get-config-snapshot.js';
@@ -1011,6 +1012,55 @@ describe('readCurrentConfig', () => {
 		expect(validateDesiredConfig(config, { label: 'snapshot', references: 'current-state', currentRoleKeys })).toEqual(
 			[]
 		);
+	});
+
+	describe('refuses an existing overlong key', () => {
+		const overlong = 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1);
+
+		it('fails when a managed role key exceeds the filename-stem bound', async () => {
+			mockRole({ key: overlong });
+			vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+			const error = await readCurrentConfig({ database: db, resources: ['roles'] }).catch((err) => err);
+
+			expect(error).toBeInstanceOf(ConfigReadFailedException);
+			expect(error.code).toBe('CONFIG_READ_FAILED');
+			expect(error.message).toContain(String(CONFIG_FILENAME_STEM_MAX_LENGTH));
+		});
+
+		it('fails when a managed permission references a role key over the bound', async () => {
+			vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([{ id: 'uuid-1', key: overlong } as never]);
+			mockPermission();
+
+			const error = await readCurrentConfig({ database: db, resources: ['permissions'] }).catch((err) => err);
+
+			expect(error).toBeInstanceOf(ConfigReadFailedException);
+			expect(error.code).toBe('CONFIG_READ_FAILED');
+		});
+
+		it('fails when both kinds are managed and a role key is over the bound', async () => {
+			mockRole({ key: overlong });
+			mockPermission();
+
+			const error = await readCurrentConfig({ database: db, resources: ['roles', 'permissions'] }).catch((err) => err);
+
+			expect(error).toBeInstanceOf(ConfigReadFailedException);
+			expect(error.code).toBe('CONFIG_READ_FAILED');
+		});
+
+		it('does not length-check a role read only as a permissions dependency', async () => {
+			vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
+				{ id: 'uuid-1', key: 'editor' },
+				{ id: 'uuid-2', key: overlong },
+			] as never);
+
+			mockPermission({ role: 'uuid-1' });
+
+			const { config, currentRoleKeys } = await readCurrentConfig({ database: db, resources: ['permissions'] });
+
+			expect(config.permissions[0]!.role).toBe('editor');
+			expect(currentRoleKeys.has(overlong)).toBe(true);
+		});
 	});
 });
 
