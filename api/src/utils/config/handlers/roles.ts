@@ -12,7 +12,7 @@ import type {
 	RoleIdentity,
 	RoleValues,
 } from '../../../types/config.js';
-import { ROLE_ICON_MAX_LENGTH, ROLE_KEY_MAX_LENGTH, ROLE_NAME_MAX_LENGTH } from '../../config-contract.js';
+import { CONFIG_FILENAME_STEM_MAX_LENGTH, ROLE_ICON_MAX_LENGTH, ROLE_NAME_MAX_LENGTH } from '../../config-contract.js';
 import { safeLogFragment } from '../../safe-log-fragment.js';
 import type {
 	ApplyContext,
@@ -68,7 +68,7 @@ const KEY_FIELD: ConfigFieldDescriptor = {
 	required: true,
 	nullable: false,
 	minLength: 1,
-	maxLength: ROLE_KEY_MAX_LENGTH,
+	maxLength: CONFIG_FILENAME_STEM_MAX_LENGTH,
 	grammar: 'role-key',
 	reserved: [PUBLIC_ROLE_KEY],
 	acceptsPlaceholder: false,

@@ -9,7 +9,7 @@ import {
 	lifecycleContextFor,
 	type LifecycleContext,
 } from '../database/bound-transaction.js';
-import { type MutationGuard, withMutationGuard } from '../database/mutation-guard.js';
+import { type MutationGuard, composeMutationGuards, withMutationGuard } from '../database/mutation-guard.js';
 import { isSerializationConflict } from '../database/serialization-error.js';
 import emitter from '../emitter.js';
 import {
@@ -21,6 +21,7 @@ import {
 } from '../exceptions/index.js';
 import type { AbstractServiceOptions, Alterations, Item, MutationOptions, PrimaryKey } from '../types/index.js';
 import { leavesAtLeastOneAdmin } from '../utils/admin-continuity.js';
+import { CONFIG_FILENAME_STEM_MAX_LENGTH } from '../utils/config-contract.js';
 import { validateKeys } from '../utils/validate-keys.js';
 import { AuthorizationService } from './authorization.js';
 import { ItemsService } from './items.js';
@@ -54,6 +55,23 @@ class AdminContinuityGuard implements MutationGuard {
 	}
 }
 
+function assertKeyWithinFilenameBound(key: string): void {
+	if (key.length > CONFIG_FILENAME_STEM_MAX_LENGTH) {
+		throw new InvalidPayloadException(
+			`Role key is too long (${key.length} characters). The maximum is ${CONFIG_FILENAME_STEM_MAX_LENGTH}.`
+		);
+	}
+}
+
+class RoleKeyLengthGuard implements MutationGuard {
+	async beforeCreate(effectivePayload: Readonly<Record<string, unknown>>): Promise<void> {
+		const key = effectivePayload['key'];
+		if (typeof key === 'string') assertKeyWithinFilenameBound(key);
+	}
+}
+
+const ROLE_KEY_LENGTH_GUARD = new RoleKeyLengthGuard();
+
 export class RolesService extends ItemsService {
 	constructor(options: AbstractServiceOptions) {
 		super('directus_roles', options);
@@ -63,16 +81,27 @@ export class RolesService extends ItemsService {
 		let candidate = normalizeRoleKey(name);
 		if (candidate === '') candidate = 'role';
 
-		let key = candidate;
+		let key = RolesService.boundStem(candidate);
 		let suffix = 2;
 
 		while (usedKeys.has(key) || RolesService.RESERVED_KEYS.has(key)) {
-			key = `${candidate}_${suffix}`;
+			key = RolesService.boundStem(candidate, suffix);
 			suffix++;
 		}
 
 		usedKeys.add(key);
 		return key;
+	}
+
+	private static boundStem(candidate: string, suffix?: number): string {
+		if (suffix === undefined) {
+			return candidate.slice(0, CONFIG_FILENAME_STEM_MAX_LENGTH);
+		}
+
+		const suffixPart = `_${suffix}`;
+		const room = Math.max(CONFIG_FILENAME_STEM_MAX_LENGTH - suffixPart.length, 1);
+		const base = candidate.slice(0, room).replace(/_+$/, '') || 'role';
+		return `${base}${suffixPart}`;
 	}
 
 	private static readonly RESERVED_KEYS = new Set([PUBLIC_ROLE_KEY]);
@@ -113,6 +142,8 @@ export class RolesService extends ItemsService {
 				`Invalid role key "${key}". Keys must be lowercase alphanumeric with underscores, and cannot start with a digit.`
 			);
 		}
+
+		assertKeyWithinFilenameBound(key);
 
 		if (RolesService.RESERVED_KEYS.has(key)) {
 			throw new InvalidPayloadException(`Role key "${key}" is reserved for config-as-code. Choose a different name.`);
@@ -180,7 +211,7 @@ export class RolesService extends ItemsService {
 		await authorizationService.checkAccess('delete', this.collection, keys);
 	}
 
-	override async createOne(data: Partial<Item>, opts?: MutationOptions): Promise<PrimaryKey> {
+	override async createOne(data: Partial<Item>, opts: MutationOptions = {}): Promise<PrimaryKey> {
 		if (data['key']) {
 			this.validateKey(data['key']);
 		} else {
@@ -193,10 +224,10 @@ export class RolesService extends ItemsService {
 			data['key'] = this.resolveKey(data['name'], usedKeys);
 		}
 
-		return super.createOne(data, opts);
+		return super.createOne(data, withMutationGuard(opts, ROLE_KEY_LENGTH_GUARD));
 	}
 
-	override async createMany(data: Partial<Item>[], opts?: MutationOptions): Promise<PrimaryKey[]> {
+	override async createMany(data: Partial<Item>[], opts: MutationOptions = {}): Promise<PrimaryKey[]> {
 		const existing = await this.knex('directus_roles').select('key');
 		const usedKeys = new Set(existing.map((r: any) => r.key as string));
 
@@ -204,7 +235,7 @@ export class RolesService extends ItemsService {
 			this.prepareCreatePayload(item, usedKeys);
 		}
 
-		return super.createMany(data, opts);
+		return super.createMany(data, withMutationGuard(opts, ROLE_KEY_LENGTH_GUARD));
 	}
 
 	private async checkForOtherAdminUsers(
@@ -403,7 +434,12 @@ export class RolesService extends ItemsService {
 
 		return this.withBoundContext(options, false, async (trx, mode, mutationOpts) => {
 			const snapshot = await this.readAdminRoleIds(trx);
-			const guarded = withMutationGuard(mutationOpts, new AdminContinuityGuard(mode, snapshot));
+
+			const guarded = withMutationGuard(
+				mutationOpts,
+				composeMutationGuards([new AdminContinuityGuard(mode, snapshot), ROLE_KEY_LENGTH_GUARD])
+			);
+
 			const service = this.itemsServiceOn(trx);
 			const existing = await trx('directus_roles').select('key');
 			const usedKeys = new Set(existing.map((row: { key: string }) => row.key));

@@ -1,4 +1,5 @@
 import type { SchemaOverview } from '@cairncms/types';
+import { normalizeRoleKey } from '@cairncms/utils';
 import type { Knex } from 'knex';
 import knex from 'knex';
 import { createTracker, MockClient, Tracker } from 'knex-mock-client';
@@ -12,6 +13,8 @@ import {
 } from '../exceptions/index.js';
 import type { MutationOptions } from '../types/index.js';
 import { getDatabaseClient } from '../database/index.js';
+import { getMutationGuard } from '../database/mutation-guard.js';
+import { CONFIG_FILENAME_STEM_MAX_LENGTH } from '../utils/config-contract.js';
 import emitter from '../emitter.js';
 import {
 	AuthorizationService,
@@ -861,10 +864,9 @@ describe('Integration Tests', () => {
 				const createOneSpy = vi.spyOn(ItemsService.prototype, 'createOne').mockResolvedValueOnce('uuid');
 				await service.createOne({ name: 'Supreme Editor' });
 
-				expect(createOneSpy).toHaveBeenCalledWith(
-					expect.objectContaining({ name: 'Supreme Editor', key: 'supreme_editor' }),
-					undefined
-				);
+				const [payload, opts] = createOneSpy.mock.calls[0]!;
+				expect(payload).toEqual(expect.objectContaining({ name: 'Supreme Editor', key: 'supreme_editor' }));
+				expect(getMutationGuard(opts)).toBeDefined();
 
 				createOneSpy.mockRestore();
 			});
@@ -887,13 +889,16 @@ describe('Integration Tests', () => {
 				const createManySpy = vi.spyOn(ItemsService.prototype, 'createMany').mockResolvedValueOnce(['uuid1', 'uuid2']);
 				await service.createMany([{ name: 'Editor' }, { name: 'Editor' }]);
 
-				expect(createManySpy).toHaveBeenCalledWith(
+				const [payload, opts] = createManySpy.mock.calls[0]!;
+
+				expect(payload).toEqual(
 					expect.arrayContaining([
 						expect.objectContaining({ name: 'Editor', key: 'editor' }),
 						expect.objectContaining({ name: 'Editor', key: 'editor_2' }),
-					]),
-					undefined
+					])
 				);
+
+				expect(getMutationGuard(opts)).toBeDefined();
 
 				createManySpy.mockRestore();
 			});
@@ -907,6 +912,221 @@ describe('Integration Tests', () => {
 						{ key: 'editor', name: 'B' },
 					])
 				).rejects.toBeInstanceOf(InvalidPayloadException);
+			});
+		});
+
+		describe('filename-stem key length', () => {
+			afterEach(() => {
+				vi.restoreAllMocks();
+			});
+
+			it('bounds a name whose normalization expands past the limit', async () => {
+				tracker.on.select('select "key" from "directus_roles"').responseOnce([]);
+
+				const createOneSpy = vi.spyOn(ItemsService.prototype, 'createOne').mockResolvedValueOnce('uuid');
+				await service.createOne({ name: '\uFB03'.repeat(83) });
+
+				const generatedKey = createOneSpy.mock.calls[0]![0]['key'] as string;
+				expect(generatedKey.length).toBeLessThanOrEqual(CONFIG_FILENAME_STEM_MAX_LENGTH);
+				expect(normalizeRoleKey(generatedKey)).toBe(generatedKey);
+
+				createOneSpy.mockRestore();
+			});
+
+			it('refuses a supplied overlong key before filters run on createOne', async () => {
+				const createOneSpy = vi.spyOn(ItemsService.prototype, 'createOne').mockResolvedValueOnce('uuid');
+
+				await expect(
+					service.createOne({ key: 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1), name: 'X' })
+				).rejects.toBeInstanceOf(InvalidPayloadException);
+
+				expect(createOneSpy).not.toHaveBeenCalled();
+				createOneSpy.mockRestore();
+			});
+
+			it('refuses a supplied overlong key before filters run on createMany', async () => {
+				tracker.on.select('select "key" from "directus_roles"').responseOnce([]);
+				const createManySpy = vi.spyOn(ItemsService.prototype, 'createMany').mockResolvedValueOnce(['uuid']);
+
+				await expect(
+					service.createMany([{ key: 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1), name: 'X' }])
+				).rejects.toBeInstanceOf(InvalidPayloadException);
+
+				expect(createManySpy).not.toHaveBeenCalled();
+				createManySpy.mockRestore();
+			});
+
+			it('refuses a supplied overlong key before filters run on upsert create', async () => {
+				tracker.on.select(/select "key" from "directus_roles"$/).response([]);
+				const createOneSpy = vi.spyOn(ItemsService.prototype, 'createOne');
+
+				await expect(
+					service.upsertMany([{ key: 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1), name: 'X' }])
+				).rejects.toBeInstanceOf(InvalidPayloadException);
+
+				expect(createOneSpy).not.toHaveBeenCalled();
+				createOneSpy.mockRestore();
+			});
+
+			it('installs a guard rejecting an overlong effective key on createOne', async () => {
+				tracker.on.select('select "key" from "directus_roles"').responseOnce([]);
+
+				const createOneSpy = vi.spyOn(ItemsService.prototype, 'createOne').mockResolvedValueOnce('uuid');
+				await service.createOne({ name: 'Editor' });
+				const guard = getMutationGuard(createOneSpy.mock.calls[0]![1]);
+				createOneSpy.mockRestore();
+
+				await expect(
+					guard!.beforeCreate!({ key: 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1) })
+				).rejects.toBeInstanceOf(InvalidPayloadException);
+
+				await expect(
+					guard!.beforeCreate!({ key: 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH) })
+				).resolves.toBeUndefined();
+			});
+
+			it('installs a guard rejecting an overlong effective key on createMany', async () => {
+				tracker.on.select('select "key" from "directus_roles"').responseOnce([]);
+
+				const createManySpy = vi.spyOn(ItemsService.prototype, 'createMany').mockResolvedValueOnce(['uuid']);
+				await service.createMany([{ name: 'Editor' }]);
+				const guard = getMutationGuard(createManySpy.mock.calls[0]![1]);
+				createManySpy.mockRestore();
+
+				await expect(
+					guard!.beforeCreate!({ key: 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1) })
+				).rejects.toBeInstanceOf(InvalidPayloadException);
+			});
+
+			it('composes the length guard with continuity on the upsert create path', async () => {
+				tracker.on.select(/select "key" from "directus_roles"$/).response([]);
+
+				const createOneSpy = vi.spyOn(ItemsService.prototype, 'createOne').mockResolvedValueOnce(7);
+				await service.upsertMany([{ name: 'Supreme Editor' }]);
+				const guard = getMutationGuard(createOneSpy.mock.calls[0]![1]);
+				createOneSpy.mockRestore();
+
+				expect(typeof guard!.beforeUpdate).toBe('function');
+
+				await expect(
+					guard!.beforeCreate!({ key: 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1) })
+				).rejects.toBeInstanceOf(InvalidPayloadException);
+			});
+
+			it('persists nothing when a roles.create filter grows the key past the limit', async () => {
+				const scalar = (name: string, type: string) => ({
+					field: name,
+					defaultValue: null,
+					nullable: false,
+					generated: name === 'id',
+					type,
+					dbType: type,
+					precision: null,
+					scale: null,
+					special: [],
+					note: null,
+					validation: null,
+					alias: false,
+				});
+
+				const richService = new RolesService({
+					knex: db,
+					schema: {
+						collections: {
+							directus_roles: {
+								collection: 'directus_roles',
+								primary: 'id',
+								singleton: false,
+								sortField: null,
+								note: null,
+								accountability: null,
+								fields: { id: scalar('id', 'uuid'), key: scalar('key', 'string') },
+							},
+						},
+						relations: [],
+					} as unknown as SchemaOverview,
+				});
+
+				const overlong = 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1);
+				const grow = (payload: Record<string, unknown>) => ({ ...payload, key: overlong });
+				emitter.onFilter('roles.create', grow);
+
+				try {
+					await expect(richService.createOne({ key: 'valid_key' })).rejects.toBeInstanceOf(InvalidPayloadException);
+					expect(tracker.history.insert.length).toBe(0);
+				} finally {
+					emitter.offFilter('roles.create', grow);
+				}
+			});
+
+			it('generates distinct bounded keys for colliding names that expand past the limit', async () => {
+				tracker.on.select('select "key" from "directus_roles"').responseOnce([]);
+
+				const createManySpy = vi.spyOn(ItemsService.prototype, 'createMany').mockResolvedValueOnce(['a', 'b']);
+				const name = '\uFB03'.repeat(83);
+				await service.createMany([{ name }, { name }]);
+
+				const payload = createManySpy.mock.calls[0]![0] as Array<{ key: string }>;
+				const first = payload[0]!.key;
+				const second = payload[1]!.key;
+
+				expect(first).toBe('ffi'.repeat(82));
+				expect(second).toBe('ffi'.repeat(81) + 'f_2');
+				expect(first.length).toBe(CONFIG_FILENAME_STEM_MAX_LENGTH);
+				expect(second.length).toBe(CONFIG_FILENAME_STEM_MAX_LENGTH);
+				expect(normalizeRoleKey(first)).toBe(first);
+				expect(normalizeRoleKey(second)).toBe(second);
+			});
+
+			it('suffixes a colliding name that ends in an underscore without doubling it', async () => {
+				tracker.on.select('select "key" from "directus_roles"').responseOnce([]);
+
+				const createManySpy = vi.spyOn(ItemsService.prototype, 'createMany').mockResolvedValueOnce(['a', 'b']);
+				await service.createMany([{ name: 'Editor_' }, { name: 'Editor_' }]);
+
+				const payload = createManySpy.mock.calls[0]![0] as Array<{ key: string }>;
+
+				expect(payload[0]!.key).toBe('editor_');
+				expect(payload[1]!.key).toBe('editor_2');
+			});
+
+			describe('boundStem generation', () => {
+				const MAX = CONFIG_FILENAME_STEM_MAX_LENGTH;
+
+				const boundStem = (candidate: string, suffix?: number): string =>
+					(RolesService as unknown as { boundStem(candidate: string, suffix?: number): string }).boundStem(
+						candidate,
+						suffix
+					);
+
+				it('leaves ordinary short keys unchanged', () => {
+					expect(boundStem('editor')).toBe('editor');
+					expect(boundStem('editor', 2)).toBe('editor_2');
+				});
+
+				it('truncates an overlong candidate to the bound with no suffix', () => {
+					expect(boundStem('a'.repeat(MAX + 4))).toBe('a'.repeat(MAX));
+				});
+
+				it('reserves suffix room so a suffixed truncation stays within the bound', () => {
+					const nine = boundStem('a'.repeat(MAX + 4), 9);
+					const ten = boundStem('a'.repeat(MAX + 4), 10);
+
+					expect(nine).toBe('a'.repeat(MAX - 2) + '_9');
+					expect(ten).toBe('a'.repeat(MAX - 3) + '_10');
+					expect(nine.length).toBe(MAX);
+					expect(ten.length).toBe(MAX);
+					expect(nine).not.toBe(ten);
+				});
+
+				it('strips a trailing underscore at the truncation junction so no double underscore forms', () => {
+					const candidate = 'a'.repeat(MAX - 3) + '_' + 'b'.repeat(10);
+					const result = boundStem(candidate, 2);
+
+					expect(result).toBe('a'.repeat(MAX - 3) + '_2');
+					expect(result).not.toContain('__');
+					expect(normalizeRoleKey(result)).toBe(result);
+				});
 			});
 		});
 

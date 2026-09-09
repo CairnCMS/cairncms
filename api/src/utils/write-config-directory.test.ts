@@ -6,6 +6,7 @@ import { dump as dumpYaml, load as loadYaml } from 'js-yaml';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import { writeConfigDirectory } from './write-config-directory.js';
+import { CONFIG_FILENAME_STEM_MAX_LENGTH } from './config-contract.js';
 import { CONFIG_REGISTRY } from './config/registry.js';
 import logger from '../logger.js';
 import type { CairnConfig } from '../types/config.js';
@@ -85,6 +86,56 @@ describe('writeConfigDirectory', () => {
 
 		expect((await readYaml(manifestPath)).sentinel).toBe('original');
 		await expect(fs.access(path.join(tmpDir, 'roles'))).rejects.toThrow();
+	});
+
+	describe('filename-stem length boundary', () => {
+		it('writes a role and permission key at the 246-character limit', async () => {
+			const key = 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH);
+
+			const config = makeConfig({
+				roles: [{ key, name: 'Max', admin_access: false, app_access: true }],
+				permissions: [{ role: key, permissions: [] }],
+			});
+
+			await writeConfigDirectory(config, tmpDir);
+
+			expect((await readYaml(path.join(tmpDir, 'roles', `${key}.yaml`))).key).toBe(key);
+			expect((await readYaml(path.join(tmpDir, 'permissions', `${key}.yaml`))).role).toBe(key);
+		});
+
+		it('refuses a role key one character over the limit and writes nothing', async () => {
+			const manifestPath = path.join(tmpDir, 'cairncms-config.yaml');
+			await fs.writeFile(manifestPath, dumpYaml({ version: 1, resources: [], sentinel: 'original' }));
+			const before = await fs.readFile(manifestPath, 'utf-8');
+
+			const key = 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1);
+
+			const config = makeConfig({
+				roles: [{ key, name: 'Over', admin_access: false, app_access: true }],
+			});
+
+			await expect(writeConfigDirectory(config, tmpDir)).rejects.toBeInstanceOf(ConfigInvalidException);
+
+			expect(await fs.readFile(manifestPath, 'utf-8')).toBe(before);
+			expect(await fs.readdir(tmpDir)).toEqual(['cairncms-config.yaml']);
+		});
+
+		it('refuses a permission role one character over the limit and writes nothing', async () => {
+			const manifestPath = path.join(tmpDir, 'cairncms-config.yaml');
+			await fs.writeFile(manifestPath, dumpYaml({ version: 1, resources: [], sentinel: 'original' }));
+			const before = await fs.readFile(manifestPath, 'utf-8');
+
+			const key = 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1);
+
+			const config = makeConfig({
+				permissions: [{ role: key, permissions: [] }],
+			});
+
+			await expect(writeConfigDirectory(config, tmpDir)).rejects.toBeInstanceOf(ConfigInvalidException);
+
+			expect(await fs.readFile(manifestPath, 'utf-8')).toBe(before);
+			expect(await fs.readdir(tmpDir)).toEqual(['cairncms-config.yaml']);
+		});
 	});
 
 	it('refuses a duplicate role identity', async () => {

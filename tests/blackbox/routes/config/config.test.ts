@@ -1558,6 +1558,111 @@ describe('cairncms config snapshot preserves managed scope', () => {
 	});
 });
 
+describe('config-as-code refuses a role key over the filename-stem limit', () => {
+	const databases = new Map<string, Knex>();
+	let fixtureRoot: string;
+
+	beforeAll(() => {
+		for (const vendor of vendors) databases.set(vendor, knex(config.knexConfig[vendor]!));
+	});
+
+	afterAll(async () => {
+		for (const [, db] of databases) await db.destroy();
+	});
+
+	beforeEach(async () => {
+		fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'cairncms-config-overlong-'));
+	});
+
+	afterEach(async () => {
+		await fs.rm(fixtureRoot, { recursive: true, force: true });
+	});
+
+	function overlongKey(): string {
+		return `overlong_${randomUUID().replace(/-/g, '')}`.padEnd(247, 'a').slice(0, 247);
+	}
+
+	async function removeRoleByKey(db: Knex, key: string): Promise<void> {
+		for (const { id } of await db('directus_roles').where({ key }).select('id')) {
+			await db('directus_revisions')
+				.where({ collection: 'directus_roles', item: String(id) })
+				.del();
+
+			await db('directus_activity')
+				.where({ collection: 'directus_roles', item: String(id) })
+				.del();
+		}
+
+		await db('directus_roles').where({ key }).del();
+	}
+
+	it.each(vendors)('an HTTP apply is refused CONFIG_INVALID and stores nothing (%s)', async (vendor) => {
+		const db = databases.get(vendor)!;
+		const key = overlongKey();
+		const desired = await getBaseline(vendor);
+		desired.roles.push({ key, name: 'Overlong', admin_access: false, app_access: true });
+
+		try {
+			const response = await applyConfig(vendor, desired);
+
+			expect(response.statusCode).toBe(400);
+			expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+			expect(errorMessages(response).some((message) => message.includes('246'))).toBe(true);
+
+			expect((await adminSnapshot(vendor)).roles.find((role) => role.key === key)).toBeUndefined();
+		} finally {
+			await removeRoleByKey(db, key);
+		}
+	});
+
+	it.each(vendors)(
+		'a CLI snapshot of a directly-seeded overlong role fails exit 3 and writes nothing (%s)',
+		async (vendor) => {
+			const db = databases.get(vendor)!;
+			const key = overlongKey();
+
+			try {
+				await db('directus_roles').insert({
+					id: randomUUID(),
+					key,
+					name: 'Overlong',
+					admin_access: false,
+					app_access: true,
+				});
+
+				const result = spawnSync(
+					'node',
+					['--no-node-snapshot', paths.cli, 'config', 'snapshot', fixtureRoot, '--yes'],
+					{
+						cwd: paths.cwd,
+						env: {
+							...config.envs[vendor as keyof typeof config.envs],
+							LOG_LEVEL: 'info',
+							LOG_STYLE: 'raw',
+						},
+						encoding: 'utf8',
+						timeout: 20000,
+						killSignal: 'SIGKILL',
+					}
+				);
+
+				expect(result.error).toBeUndefined();
+				expect(result.signal).toBeNull();
+				expect(result.status).toBe(3);
+
+				const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+				expect(output).toContain('cannot be represented in the config format');
+				expect(output).toContain('246');
+
+				expect(await fs.readdir(fixtureRoot)).toEqual([]);
+			} finally {
+				await removeRoleByKey(db, key);
+			}
+		},
+		30000
+	);
+});
+
 describe('Config-as-Code stored state', () => {
 	const databases = new Map<string, Knex>();
 	const PROBE_COLLECTION = 'cairncms_config_stored_state_probe';

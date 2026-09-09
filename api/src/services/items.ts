@@ -184,6 +184,9 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 			// In case of manual string / UUID primary keys, the PK already exists in the object we're saving.
 			let primaryKey = payloadWithTypeCasting[primaryKeyField];
 
+			const mutationGuard = getMutationGuard(opts);
+			if (mutationGuard) await mutationGuard.beforeCreate?.(payloadWithoutAliases);
+
 			try {
 				const result = await trx
 					.insert(payloadWithoutAliases)
@@ -644,7 +647,7 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 
 			if (Object.keys(payloadWithTypeCasting).length > 0) {
 				const mutationGuard = getMutationGuard(opts);
-				if (mutationGuard) await mutationGuard.beforeUpdate(payloadWithTypeCasting, keys);
+				if (mutationGuard) await mutationGuard.beforeUpdate?.(payloadWithTypeCasting, keys);
 
 				try {
 					await trx(this.collection).update(payloadWithTypeCasting).whereIn(primaryKeyField, keys);
