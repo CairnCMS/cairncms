@@ -1,4 +1,5 @@
 import type { Accountability, PermissionsAction } from '@cairncms/types';
+import type { ManifestVersion } from '../utils/config-contract.js';
 import type { ConfigKindTypeMap } from '../utils/config/registry.js';
 
 export const CONFIG_KINDS = ['roles', 'permissions'] as const;
@@ -30,7 +31,7 @@ export interface ConfigPermission {
 }
 
 export interface ConfigManifest {
-	version: 1;
+	version: ManifestVersion;
 	resources: ConfigKind[];
 }
 

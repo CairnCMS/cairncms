@@ -66,8 +66,15 @@ describe('validateConfigManifest', () => {
 		expect(validateConfigManifest({ version: 1, resources: [] }, 'test')).toEqual({ version: 1, resources: [] });
 	});
 
+	it('accepts manifest version 2', () => {
+		expect(validateConfigManifest({ version: 2, resources: ['roles'] }, 'test')).toEqual({
+			version: 2,
+			resources: ['roles'],
+		});
+	});
+
 	it('raises the unsupported-version code for a newer version', () => {
-		expect(() => validateConfigManifest({ version: 2, resources: [] }, 'test')).toThrow(
+		expect(() => validateConfigManifest({ version: 3, resources: [] }, 'test')).toThrow(
 			ConfigUnsupportedVersionException
 		);
 	});

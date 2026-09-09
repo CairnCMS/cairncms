@@ -7,7 +7,7 @@ import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
 import { readOptionalConfigManifest } from '../../../utils/read-config-directory.js';
 import { replaceControlCharacters } from '../../../utils/safe-log-fragment.js';
 import { CONFIG_KINDS } from '../../../types/config.js';
-import { SUPPORTED_MANIFEST_VERSION } from '../../../utils/config-contract.js';
+import { LATEST_MANIFEST_VERSION } from '../../../utils/config-contract.js';
 import { writeConfigDirectory } from '../../../utils/write-config-directory.js';
 import { isHttpTarget, parseOperatorRemoteTarget } from './operator-remote-target.js';
 import { createOperatorRemoteTransport } from './operator-remote-transport.js';
@@ -65,7 +65,11 @@ export async function configSnapshot(
 		const declared = await readOptionalConfigManifest(resolved);
 		const resources = declared?.resources ?? CONFIG_KINDS;
 
-		const { config } = await readCurrentConfig({ database, resources });
+		const { config } = await readCurrentConfig({
+			database,
+			resources,
+			manifestVersion: declared?.version ?? LATEST_MANIFEST_VERSION,
+		});
 
 		await writeConfigDirectory(config, resolved);
 
@@ -118,7 +122,7 @@ async function configSnapshotRemote(
 		}
 
 		const declared = await readOptionalConfigManifest(resolved);
-		const manifestVersion = declared?.version ?? SUPPORTED_MANIFEST_VERSION;
+		const manifestVersion = declared?.version ?? LATEST_MANIFEST_VERSION;
 		const resources = declared?.resources ?? [...CONFIG_KINDS];
 
 		const token = resolveRemoteToken({

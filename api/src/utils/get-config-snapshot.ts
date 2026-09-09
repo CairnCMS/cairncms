@@ -10,6 +10,7 @@ import {
 	type ConfigRole,
 	type ConfigStateToken,
 } from '../types/config.js';
+import { LATEST_MANIFEST_VERSION, type ManifestVersion } from './config-contract.js';
 import { computeConfigStateDigest, toStateDigestEntry, type StateDigestEntry } from './config/config-state-digest.js';
 import { makeDependencyAccessor } from './config/dependency-context.js';
 import type { ConfigReadMode } from './config/descriptor.js';
@@ -30,6 +31,7 @@ export type CurrentConfigOptions = {
 	database?: Knex;
 	schema?: SchemaOverview;
 	resources: readonly ConfigKind[];
+	manifestVersion?: ManifestVersion;
 };
 
 /** Formats a read-diagnostic subject, applying safeLogFragment to the descriptor-supplied value centrally. */
@@ -56,7 +58,7 @@ function assertEmittedDocument(kind: ConfigKind, subject: string, document: unkn
 
 export async function readCurrentConfig(options: CurrentConfigOptions): Promise<CurrentConfigRead> {
 	const database = options.database ?? getDatabase();
-	const manifest = { version: 1 as const, resources: [...options.resources] };
+	const manifest = { version: options.manifestVersion ?? LATEST_MANIFEST_VERSION, resources: [...options.resources] };
 	const managed = new Set<ConfigKind>(options.resources);
 
 	const closure = resolveReadClosure(manifest);

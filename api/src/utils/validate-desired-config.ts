@@ -14,7 +14,7 @@ import { invalid } from './config/failures.js';
 import { buildDocumentSchema } from './config/field-schema.js';
 import { isPlaceholder } from './config/placeholder.js';
 import { getDescriptor, listConfigKinds } from './config/registry.js';
-import { SUPPORTED_MANIFEST_VERSION } from './config-contract.js';
+import { SUPPORTED_MANIFEST_VERSIONS } from './config-contract.js';
 import { replaceControlCharacters, safeLogFragment } from './safe-log-fragment.js';
 
 /** Callers keep the input object, so coercing "false" would validate while the planner sees a truthy string. */
@@ -29,7 +29,7 @@ export function buildRecordSchemas(): Record<ConfigKind, Joi.ObjectSchema> {
 const RECORD_SCHEMA: Record<ConfigKind, Joi.ObjectSchema> = buildRecordSchemas();
 
 const MANIFEST = Joi.object({
-	version: Joi.valid(SUPPORTED_MANIFEST_VERSION).required(),
+	version: Joi.valid(...SUPPORTED_MANIFEST_VERSIONS).required(),
 	resources: Joi.array()
 		.items(Joi.string().valid(...CONFIG_KINDS))
 		.unique()
@@ -51,11 +51,11 @@ export function validateConfigManifest(value: unknown, label: string): ConfigMan
 
 	const declared = value as Record<string, unknown>;
 
-	if (declared['version'] !== SUPPORTED_MANIFEST_VERSION) {
+	if (!(SUPPORTED_MANIFEST_VERSIONS as readonly unknown[]).includes(declared['version'])) {
 		throw new ConfigUnsupportedVersionException(
 			`Config manifest in ${where} declares version ${
 				declared['version'] === undefined ? 'none' : safeLogFragment(declared['version'])
-			}. This engine supports version ${SUPPORTED_MANIFEST_VERSION}.`
+			}. This engine supports versions ${SUPPORTED_MANIFEST_VERSIONS.join(', ')}.`
 		);
 	}
 

@@ -389,7 +389,7 @@ describe('POST /config/apply run record', () => {
 	it('emits no record and no run id for an unsupported manifest version', async () => {
 		const res = await request(makeApp(ADMIN))
 			.post('/config/apply')
-			.send({ ...BODY, manifest: { version: 2, resources: ['roles'] } });
+			.send({ ...BODY, manifest: { version: 3, resources: ['roles'] } });
 
 		expect(res.status).toBe(400);
 		expect(records()).toHaveLength(0);
@@ -489,5 +489,50 @@ describe('current-state read failures', () => {
 		expect(computeConfigPlan).not.toHaveBeenCalled();
 		expect(applyConfigPlan).not.toHaveBeenCalled();
 		expectOneRecord({ result: 'failed', errorCode: 'CONFIG_READ_FAILED' });
+	});
+});
+
+describe('GET /config/snapshot manifest version', () => {
+	beforeEach(() => {
+		vi.mocked(readCurrentConfig).mockImplementation(
+			async (options) =>
+				({
+					config: { manifest: { version: options.manifestVersion ?? 2, resources: [] }, roles: [], permissions: [] },
+					currentRoleKeys: new Set<string>(),
+					stateToken: { resources: [], digest: 'digest' },
+				} as never)
+		);
+	});
+
+	it('defaults an unversioned request to the latest version', async () => {
+		const res = await request(makeApp(ADMIN)).get('/config/snapshot');
+
+		expect(res.status).toBe(200);
+		expect(readCurrentConfig).toHaveBeenCalledWith(expect.objectContaining({ manifestVersion: 2 }));
+		expect(res.body.data.manifest.version).toBe(2);
+	});
+
+	it('honors an explicit v1 request rather than the default', async () => {
+		const res = await request(makeApp(ADMIN)).get('/config/snapshot?manifest_version=1');
+
+		expect(res.status).toBe(200);
+		expect(readCurrentConfig).toHaveBeenCalledWith(expect.objectContaining({ manifestVersion: 1 }));
+		expect(res.body.data.manifest.version).toBe(1);
+	});
+
+	it('honors an explicit v2 request', async () => {
+		const res = await request(makeApp(ADMIN)).get('/config/snapshot?manifest_version=2');
+
+		expect(res.status).toBe(200);
+		expect(readCurrentConfig).toHaveBeenCalledWith(expect.objectContaining({ manifestVersion: 2 }));
+		expect(res.body.data.manifest.version).toBe(2);
+	});
+
+	it('refuses an unsupported version without reading current state', async () => {
+		const res = await request(makeApp(ADMIN)).get('/config/snapshot?manifest_version=3');
+
+		expect(res.status).toBe(400);
+		expect(res.body.errors[0].extensions.code).toBe('CONFIG_UNSUPPORTED_VERSION');
+		expect(readCurrentConfig).not.toHaveBeenCalled();
 	});
 });

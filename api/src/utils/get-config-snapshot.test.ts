@@ -69,13 +69,13 @@ describe('getConfigSnapshot', () => {
 		vi.restoreAllMocks();
 	});
 
-	it('returns manifest with version 1 and declared resources', async () => {
+	it('returns manifest with the latest version and declared resources', async () => {
 		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([]);
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
 
 		const config = await getConfigSnapshot({ database: db });
 
-		expect(config.manifest).toEqual({ version: 1, resources: ['roles', 'permissions'] });
+		expect(config.manifest).toEqual({ version: 2, resources: ['roles', 'permissions'] });
 	});
 
 	it('builds ConfigRole entries with v1 allowlist only', async () => {
@@ -757,6 +757,29 @@ describe('readCurrentConfig', () => {
 		expect(second.stateToken.digest).toBe(first.stateToken.digest);
 	});
 
+	it('honors an explicit manifest version and defaults a fresh read to the latest', async () => {
+		mockRole();
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const v1 = await readCurrentConfig({ database: db, resources: ['roles'], manifestVersion: 1 });
+		const v2 = await readCurrentConfig({ database: db, resources: ['roles'], manifestVersion: 2 });
+		const fresh = await readCurrentConfig({ database: db, resources: ['roles'] });
+
+		expect(v1.config.manifest.version).toBe(1);
+		expect(v2.config.manifest.version).toBe(2);
+		expect(fresh.config.manifest.version).toBe(2);
+	});
+
+	it('computes the same state token digest regardless of manifest version', async () => {
+		mockRole();
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const v1 = await readCurrentConfig({ database: db, resources: ['roles'], manifestVersion: 1 });
+		const v2 = await readCurrentConfig({ database: db, resources: ['roles'], manifestVersion: 2 });
+
+		expect(v2.stateToken.digest).toBe(v1.stateToken.digest);
+	});
+
 	it('changes the state token digest when a managed role value changes', async () => {
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
 		const roles = vi.spyOn(RolesService.prototype, 'readByQuery');
@@ -870,7 +893,7 @@ describe('readCurrentConfig', () => {
 		expect(roles).not.toHaveBeenCalled();
 		expect(perms).not.toHaveBeenCalled();
 		expect(getSchema.getSchema).not.toHaveBeenCalled();
-		expect(config).toEqual({ manifest: { version: 1, resources: [] }, roles: [], permissions: [] });
+		expect(config).toEqual({ manifest: { version: 2, resources: [] }, roles: [], permissions: [] });
 		expect(currentRoleKeys.size).toBe(0);
 	});
 

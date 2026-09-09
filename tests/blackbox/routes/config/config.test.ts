@@ -125,7 +125,7 @@ describe('Config-as-Code API', () => {
 				expect(response.body.data).toHaveProperty('manifest');
 				expect(response.body.data).toHaveProperty('roles');
 				expect(response.body.data).toHaveProperty('permissions');
-				expect(response.body.data.manifest.version).toBe(1);
+				expect(response.body.data.manifest.version).toBe(2);
 				expect(Array.isArray(response.body.data.roles)).toBe(true);
 				expect(Array.isArray(response.body.data.permissions)).toBe(true);
 			});
@@ -142,7 +142,7 @@ describe('Config-as-Code API', () => {
 				expect(response.headers['content-type']).toContain('text/yaml');
 
 				const parsed = loadYaml(response.text) as ConfigSnapshot;
-				expect(parsed.manifest.version).toBe(1);
+				expect(parsed.manifest.version).toBe(2);
 				expect(Array.isArray(parsed.roles)).toBe(true);
 				expect(Array.isArray(parsed.permissions)).toBe(true);
 			});
@@ -179,7 +179,7 @@ describe('Config-as-Code API', () => {
 			it.each(vendors)('%s', async (vendor) => {
 				const response = await request(getUrl(vendor))
 					.get('/config/snapshot')
-					.query({ manifest_version: '2' })
+					.query({ manifest_version: '3' })
 					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
 
 				expect(response.statusCode).toBe(400);
@@ -211,7 +211,7 @@ describe('Config-as-Code API', () => {
 			});
 		});
 
-		describe('accepts the exact supported manifest version', () => {
+		describe('accepts an explicit v1 manifest version', () => {
 			it.each(vendors)('%s', async (vendor) => {
 				const response = await request(getUrl(vendor))
 					.get('/config/snapshot')
@@ -220,6 +220,18 @@ describe('Config-as-Code API', () => {
 
 				expect(response.statusCode).toBe(200);
 				expect(response.body.data.manifest.version).toBe(1);
+			});
+		});
+
+		describe('accepts an explicit v2 manifest version', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const response = await request(getUrl(vendor))
+					.get('/config/snapshot')
+					.query({ manifest_version: '2' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.manifest.version).toBe(2);
 			});
 		});
 
@@ -628,6 +640,17 @@ describe('Config-as-Code API', () => {
 				expect(response.statusCode).toBe(400);
 				expect(response.body.errors[0].extensions.code).toBe('CONFIG_UNSUPPORTED_VERSION');
 				expect(response.body.errors[0].message).toContain('version 99');
+			});
+		});
+
+		describe('accepts a v2 manifest', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const desired = await getBaseline(vendor);
+				desired.manifest.version = 2;
+
+				const response = await applyConfig(vendor, desired, { dryRun: true });
+
+				expect(response.statusCode).toBe(200);
 			});
 		});
 
