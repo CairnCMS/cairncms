@@ -2,11 +2,13 @@ import type { SchemaOverview } from '@cairncms/types';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runInBoundSerializable } from '../database/bound-transaction.js';
+import emitter from '../emitter.js';
 import {
 	AdminMutationUnverifiedTransactionException,
 	InvalidPayloadException,
 	UnprocessableEntityException,
 } from '../exceptions/index.js';
+import { CONFIG_FILENAME_STEM_MAX_LENGTH } from '../utils/config-contract.js';
 import { RolesService } from './roles.js';
 
 vi.mock('../database/index', () => ({
@@ -203,6 +205,44 @@ describe('RolesService.upsertMany on a real single-connection SQLite database', 
 		expect(updated).toBe(EDITOR_ROLE_ID);
 		expect(await role(String(created))).toMatchObject({ key: 'reviewers', name: 'Reviewers' });
 		expect(await role(EDITOR_ROLE_ID)).toMatchObject({ description: 'Edits content', key: 'editor' });
+	});
+
+	describe('rolls back the whole batch when a roles.create filter grows a later key past the limit', () => {
+		const grow = (payload: Record<string, unknown>): Record<string, unknown> =>
+			typeof payload['key'] === 'string' && (payload['key'] as string).startsWith('lengthen_')
+				? { ...payload, key: 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1) }
+				: payload;
+
+		beforeEach(() => emitter.onFilter('roles.create', grow));
+		afterEach(() => emitter.offFilter('roles.create', grow));
+
+		async function expectRolledBack(run: () => Promise<unknown>): Promise<void> {
+			const error = await run().catch((err) => err);
+
+			expect(error).toBeInstanceOf(InvalidPayloadException);
+			expect(error.message).toContain(String(CONFIG_FILENAME_STEM_MAX_LENGTH));
+
+			expect(await db('directus_roles').where({ key: 'reviewers' }).first()).toBeUndefined();
+			expect(await db('directus_roles').select('id')).toHaveLength(3);
+		}
+
+		it('through createMany', async () => {
+			await expectRolledBack(() =>
+				service().createMany([
+					{ key: 'reviewers', name: 'Reviewers', admin_access: false, app_access: true },
+					{ key: 'lengthen_me', name: 'Grown', admin_access: false, app_access: true },
+				])
+			);
+		});
+
+		it('through upsertMany', async () => {
+			await expectRolledBack(() =>
+				service().upsertMany([
+					{ name: 'Reviewers', admin_access: false, app_access: true },
+					{ key: 'lengthen_me', name: 'Grown', admin_access: false, app_access: true },
+				])
+			);
+		});
 	});
 
 	describe('on an unbranded transaction the platform did not open', () => {
