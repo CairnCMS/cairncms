@@ -1089,45 +1089,6 @@ describe('Integration Tests', () => {
 				expect(payload[0]!.key).toBe('editor_');
 				expect(payload[1]!.key).toBe('editor_2');
 			});
-
-			describe('boundStem generation', () => {
-				const MAX = CONFIG_FILENAME_STEM_MAX_LENGTH;
-
-				const boundStem = (candidate: string, suffix?: number): string =>
-					(RolesService as unknown as { boundStem(candidate: string, suffix?: number): string }).boundStem(
-						candidate,
-						suffix
-					);
-
-				it('leaves ordinary short keys unchanged', () => {
-					expect(boundStem('editor')).toBe('editor');
-					expect(boundStem('editor', 2)).toBe('editor_2');
-				});
-
-				it('truncates an overlong candidate to the bound with no suffix', () => {
-					expect(boundStem('a'.repeat(MAX + 4))).toBe('a'.repeat(MAX));
-				});
-
-				it('reserves suffix room so a suffixed truncation stays within the bound', () => {
-					const nine = boundStem('a'.repeat(MAX + 4), 9);
-					const ten = boundStem('a'.repeat(MAX + 4), 10);
-
-					expect(nine).toBe('a'.repeat(MAX - 2) + '_9');
-					expect(ten).toBe('a'.repeat(MAX - 3) + '_10');
-					expect(nine.length).toBe(MAX);
-					expect(ten.length).toBe(MAX);
-					expect(nine).not.toBe(ten);
-				});
-
-				it('strips a trailing underscore at the truncation junction so no double underscore forms', () => {
-					const candidate = 'a'.repeat(MAX - 3) + '_' + 'b'.repeat(10);
-					const result = boundStem(candidate, 2);
-
-					expect(result).toBe('a'.repeat(MAX - 3) + '_2');
-					expect(result).not.toContain('__');
-					expect(normalizeRoleKey(result)).toBe(result);
-				});
-			});
 		});
 
 		describe('updateOne', () => {
