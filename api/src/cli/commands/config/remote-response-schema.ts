@@ -8,6 +8,7 @@ const nullableStringArray = z.array(z.string()).nullable();
 const action = z.string().refine((value) => SUPPORTED_ACTIONS.has(value));
 
 const roleIdentity = z.object({ key: z.string() }).passthrough();
+const folderIdentity = z.object({ key: z.string() }).passthrough();
 const permissionIdentity = z.object({ role: z.string(), collection: z.string(), action }).passthrough();
 
 const fieldChange = z.custom<{ before: unknown; after: unknown }>(
@@ -36,6 +37,8 @@ const permissionValues = z
 		fields: nullableStringArray,
 	})
 	.passthrough();
+
+const folderValues = z.object({ name: z.string(), parent: z.string().nullable() }).passthrough();
 
 const permissionsImpact = z.object({ kind: z.literal('permissions'), identity: permissionIdentity }).passthrough();
 const presetsImpact = z.object({ kind: z.literal('presets'), count, bookmarks: z.array(z.string()) }).passthrough();
@@ -88,6 +91,30 @@ export const RemoteConfigPlanChange = z.union([
 			impact: emptyImpact,
 		})
 		.passthrough(),
+	z
+		.object({
+			kind: z.literal('folders'),
+			operation: z.literal('create'),
+			identity: folderIdentity,
+			values: folderValues,
+		})
+		.passthrough(),
+	z
+		.object({
+			kind: z.literal('folders'),
+			operation: z.literal('update'),
+			identity: folderIdentity,
+			fields: fieldChanges,
+		})
+		.passthrough(),
+	z
+		.object({
+			kind: z.literal('folders'),
+			operation: z.literal('delete'),
+			identity: folderIdentity,
+			impact: emptyImpact,
+		})
+		.passthrough(),
 ]);
 
 const contributor = z
@@ -130,12 +157,16 @@ export const RemoteApplyResult = z
 			.object({ created: z.array(z.string()), updated: z.array(z.string()), deleted: z.array(z.string()) })
 			.passthrough(),
 		permissions: z.object({ created: count, updated: count, deleted: count }).passthrough(),
+		folders: z
+			.object({ created: z.array(z.string()), updated: z.array(z.string()), deleted: z.array(z.string()) })
+			.passthrough(),
 	})
 	.passthrough();
 
 const deletion = z.union([
 	z.object({ kind: z.literal('roles'), identity: roleIdentity }).passthrough(),
 	z.object({ kind: z.literal('permissions'), identity: permissionIdentity }).passthrough(),
+	z.object({ kind: z.literal('folders'), identity: folderIdentity }).passthrough(),
 ]);
 
 export const RemoteErrorEnvelope = z.object({ errors: z.array(z.unknown()) }).passthrough();

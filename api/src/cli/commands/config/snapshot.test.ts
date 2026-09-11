@@ -163,10 +163,13 @@ describe('configSnapshot manifest version preservation', () => {
 		])('sends and writes the expected version for %s', async (_label, seeded, expected) => {
 			if (seeded !== undefined) await seedManifest(seeded);
 
+			const respondedResources = seeded === undefined ? ['roles', 'permissions', 'folders'] : ['roles', 'permissions'];
+
 			respondWith({
-				manifest: { version: expected, resources: ['roles', 'permissions'] },
+				manifest: { version: expected, resources: respondedResources },
 				roles: [],
 				permissions: [],
+				...(expected >= 2 ? { folders: [] } : {}),
 			});
 
 			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
@@ -196,6 +199,7 @@ describe('configSnapshot manifest version preservation', () => {
 							manifest: { version: options.manifestVersion ?? 2, resources: [...options.resources] },
 							roles: [],
 							permissions: [],
+							folders: [],
 						},
 						currentRoleKeys: new Set<string>(),
 						stateToken: { resources: [...options.resources], digest: 'digest' },

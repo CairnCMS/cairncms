@@ -13,8 +13,8 @@ import type { RoleReferenceSource, ValidationContext } from './config/descriptor
 import { invalid } from './config/failures.js';
 import { buildDocumentSchema } from './config/field-schema.js';
 import { isPlaceholder } from './config/placeholder.js';
-import { getDescriptor, listConfigKinds } from './config/registry.js';
-import { SUPPORTED_MANIFEST_VERSIONS } from './config-contract.js';
+import { getDescriptor, kindsForVersion, listConfigKinds } from './config/registry.js';
+import { SUPPORTED_MANIFEST_VERSIONS, type ManifestVersion } from './config-contract.js';
 import { replaceControlCharacters, safeLogFragment } from './safe-log-fragment.js';
 
 /** Callers keep the input object, so coercing "false" would validate while the planner sees a truthy string. */
@@ -65,7 +65,19 @@ export function validateConfigManifest(value: unknown, label: string): ConfigMan
 		throw new ConfigInvalidException(`Config manifest in ${where} is invalid: ${messagesOf(error).join('; ')}`);
 	}
 
-	return declared as unknown as ConfigManifest;
+	const manifest = declared as unknown as ConfigManifest;
+	const allowed = new Set<ConfigKind>(kindsForVersion(manifest.version));
+	const tooNew = manifest.resources.filter((kind) => !allowed.has(kind));
+
+	if (tooNew.length > 0) {
+		throw new ConfigUnsupportedVersionException(
+			`Config manifest in ${where} declares version ${manifest.version} but names ${tooNew
+				.map((kind) => safeLogFragment(kind))
+				.join(', ')}, which require a newer manifest version.`
+		);
+	}
+
+	return manifest;
 }
 
 export function validateConfigRecord(kind: ConfigKind, record: unknown): string[] {
@@ -112,9 +124,9 @@ export function findPlaceholderSyntax(config: CairnConfig): string[] {
 	return problems;
 }
 
-function envelopeSchema(managed: ReadonlySet<ConfigKind>): Joi.ObjectSchema {
+function envelopeSchema(managed: ReadonlySet<ConfigKind>, version: ManifestVersion): Joi.ObjectSchema {
 	const kinds = Object.fromEntries(
-		CONFIG_KINDS.map((kind) => [
+		kindsForVersion(version).map((kind) => [
 			kind,
 			managed.has(kind) ? Joi.array().items(RECORD_SCHEMA[kind]).required() : Joi.array().required(),
 		])
@@ -146,7 +158,7 @@ export function validateDesiredConfig(document: unknown, context: DesiredConfigC
 	const manifest = validateConfigManifest(body['manifest'], context.label);
 	const managed = new Set<ConfigKind>(manifest.resources);
 
-	const fieldErrors = messagesOf(envelopeSchema(managed).validate(body, VALIDATE_OPTIONS).error);
+	const fieldErrors = messagesOf(envelopeSchema(managed, manifest.version).validate(body, VALIDATE_OPTIONS).error);
 	if (fieldErrors.length > 0) return fieldErrors.map(invalid);
 
 	const rolesManaged = managed.has('roles');
@@ -162,6 +174,7 @@ export function validateDesiredConfig(document: unknown, context: DesiredConfigC
 		manifest,
 		roles: (body['roles'] ?? []) as CairnConfig['roles'],
 		permissions: (body['permissions'] ?? []) as CairnConfig['permissions'],
+		folders: (body['folders'] ?? []) as CairnConfig['folders'],
 	}).map((problem) =>
 		invalid(`${problem}, which cannot be stored because the reader would substitute it. Send a resolved value.`)
 	);

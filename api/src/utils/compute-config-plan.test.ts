@@ -15,6 +15,7 @@ function makeConfig(overrides?: Partial<CairnConfig>): CairnConfig {
 		manifest: emptyManifest,
 		roles: [],
 		permissions: [],
+		folders: [],
 		...overrides,
 	};
 }
@@ -561,6 +562,7 @@ describe('managed scope', () => {
 			managedResources: [],
 			roles: { create: [], update: [], delete: [] },
 			permissions: { create: [], update: [], delete: [] },
+			folders: { create: [], update: [], delete: [] },
 			protections: [],
 		});
 	});
@@ -600,6 +602,7 @@ describe('managed scope', () => {
 			managedResources: ['roles'],
 			roles: { create: [makeRole('viewer')], update: [], delete: ['editor'] },
 			permissions: { create: [], update: [], delete: [] },
+			folders: { create: [], update: [], delete: [] },
 			protections: [],
 		});
 	});
@@ -624,6 +627,7 @@ describe('managed scope', () => {
 				update: [],
 				delete: [{ roleKey: 'editor', collection: 'articles', action: 'read' }],
 			},
+			folders: { create: [], update: [], delete: [] },
 			protections: [],
 		});
 	});

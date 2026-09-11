@@ -7,6 +7,7 @@ import type { MockedFunction } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import logger from '../logger.js';
+import { FoldersService } from '../services/folders.js';
 import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
 import { CONFIG_FILENAME_STEM_MAX_LENGTH } from './config-contract.js';
@@ -63,6 +64,7 @@ describe('getConfigSnapshot', () => {
 	beforeEach(() => {
 		db = vi.mocked(knex.default({ client: MockClient }));
 		vi.spyOn(getSchema, 'getSchema').mockResolvedValue(testSchema);
+		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([]);
 	});
 
 	afterEach(() => {
@@ -75,7 +77,7 @@ describe('getConfigSnapshot', () => {
 
 		const config = await getConfigSnapshot({ database: db });
 
-		expect(config.manifest).toEqual({ version: 2, resources: ['roles', 'permissions'] });
+		expect(config.manifest).toEqual({ version: 2, resources: ['roles', 'permissions', 'folders'] });
 	});
 
 	it('builds ConfigRole entries with v1 allowlist only', async () => {
@@ -727,6 +729,7 @@ describe('readCurrentConfig', () => {
 	beforeEach(() => {
 		db = vi.mocked(knex.default({ client: MockClient }));
 		vi.spyOn(getSchema, 'getSchema').mockResolvedValue(testSchema);
+		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([]);
 	});
 
 	afterEach(() => {
@@ -893,7 +896,7 @@ describe('readCurrentConfig', () => {
 		expect(roles).not.toHaveBeenCalled();
 		expect(perms).not.toHaveBeenCalled();
 		expect(getSchema.getSchema).not.toHaveBeenCalled();
-		expect(config).toEqual({ manifest: { version: 2, resources: [] }, roles: [], permissions: [] });
+		expect(config).toEqual({ manifest: { version: 2, resources: [] }, roles: [], permissions: [], folders: [] });
 		expect(currentRoleKeys.size).toBe(0);
 	});
 
@@ -1093,6 +1096,7 @@ describe('central subject sanitization', () => {
 	beforeEach(() => {
 		db = vi.mocked(knex.default({ client: MockClient }));
 		vi.spyOn(getSchema, 'getSchema').mockResolvedValue(testSchema);
+		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([]);
 	});
 
 	afterEach(() => {

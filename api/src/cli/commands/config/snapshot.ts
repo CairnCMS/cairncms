@@ -8,6 +8,7 @@ import { readOptionalConfigManifest } from '../../../utils/read-config-directory
 import { replaceControlCharacters } from '../../../utils/safe-log-fragment.js';
 import { CONFIG_KINDS } from '../../../types/config.js';
 import { LATEST_MANIFEST_VERSION } from '../../../utils/config-contract.js';
+import { kindsForVersion } from '../../../utils/config/registry.js';
 import { writeConfigDirectory } from '../../../utils/write-config-directory.js';
 import { isHttpTarget, parseOperatorRemoteTarget } from './operator-remote-target.js';
 import { createOperatorRemoteTransport } from './operator-remote-transport.js';
@@ -63,12 +64,13 @@ export async function configSnapshot(
 		}
 
 		const declared = await readOptionalConfigManifest(resolved);
-		const resources = declared?.resources ?? CONFIG_KINDS;
+		const manifestVersion = declared?.version ?? LATEST_MANIFEST_VERSION;
+		const resources = declared?.resources ?? kindsForVersion(manifestVersion);
 
 		const { config } = await readCurrentConfig({
 			database,
 			resources,
-			manifestVersion: declared?.version ?? LATEST_MANIFEST_VERSION,
+			manifestVersion,
 		});
 
 		await writeConfigDirectory(config, resolved);
@@ -82,7 +84,7 @@ export async function configSnapshot(
 		}
 
 		logger.info(
-			`Snapshot: ${config.roles.length} role(s), ${config.permissions.length} permission set(s) written to ${where}`
+			`Snapshot: ${config.roles.length} role(s), ${config.permissions.length} permission set(s), ${config.folders.length} folder(s) written to ${where}`
 		);
 
 		database.destroy();
@@ -123,7 +125,7 @@ async function configSnapshotRemote(
 
 		const declared = await readOptionalConfigManifest(resolved);
 		const manifestVersion = declared?.version ?? LATEST_MANIFEST_VERSION;
-		const resources = declared?.resources ?? [...CONFIG_KINDS];
+		const resources = declared?.resources ?? [...kindsForVersion(manifestVersion)];
 
 		const token = resolveRemoteToken({
 			envToken: process.env['CAIRNCMS_TOKEN'],
@@ -148,7 +150,7 @@ async function configSnapshotRemote(
 		const where = replaceControlCharacters(resolved);
 
 		logger.info(
-			`Snapshot: ${config.roles.length} role(s), ${config.permissions.length} permission set(s) written to ${where}`
+			`Snapshot: ${config.roles.length} role(s), ${config.permissions.length} permission set(s), ${config.folders.length} folder(s) written to ${where}`
 		);
 
 		process.exit(0);

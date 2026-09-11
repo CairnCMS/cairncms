@@ -16,8 +16,10 @@ const PAST = '2000-01-01T00:00:00.000Z';
 
 function planDeletingRoles(...keys: string[]): ConfigPlan {
 	return {
+		managedResources: [],
 		roles: { create: [], update: [], delete: keys },
 		permissions: { create: [], update: [], delete: [] },
+		folders: { create: [], update: [], delete: [] },
 		protections: [],
 	};
 }
@@ -27,6 +29,7 @@ function makeConfig(resources: ConfigKind[], permissions: ConfigPermissionSet[] 
 		manifest: { version: 1, resources },
 		roles: [],
 		permissions,
+		folders: [],
 	};
 }
 
@@ -406,11 +409,14 @@ describe('enrichConfigPlan', () => {
 			manifest: { version: 1, resources: ['roles'] },
 			roles: [],
 			permissions: [null] as unknown as CairnConfig['permissions'],
+			folders: [],
 		};
 
 		const plan: ConfigPlan = {
+			managedResources: ['roles'],
 			roles: { create: [], update: [], delete: [] },
 			permissions: { create: [{ roleKey: 'x', permission: perm('articles') }], update: [], delete: [] },
+			folders: { create: [], update: [], delete: [] },
 			protections: [],
 		};
 

@@ -1,7 +1,7 @@
 import { BaseException } from '@cairncms/exceptions';
 import express from 'express';
 import request from 'supertest';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CairnConfig, ConfigPlan, SerializedConfigPlan } from '../types/config.js';
 
 const { envOverrides } = vi.hoisted(() => ({ envOverrides: { LOG_STYLE: 'pretty' } as Record<string, unknown> }));
@@ -81,7 +81,14 @@ const HEADER = CONFIG_RUN_ID_HEADER.toLowerCase();
 const MARKER = 'HOSTILE_MARKER_7f3a';
 const BEL = String.fromCharCode(7);
 
-const BODY: CairnConfig = { manifest: { version: 1, resources: ['roles'] }, roles: [], permissions: [] };
+const WIRE_BODY = { manifest: { version: 1, resources: ['roles'] }, roles: [], permissions: [] };
+
+const CURRENT_CONFIG: CairnConfig = {
+	manifest: { version: 1, resources: ['roles'] },
+	roles: [],
+	permissions: [],
+	folders: [],
+};
 
 const ADMIN = { admin: true, app: true, user: USER, role: ROLE, ip: '10.0.0.1' };
 
@@ -89,6 +96,7 @@ const EMPTY_PLAN: ConfigPlan = {
 	managedResources: ['roles'],
 	roles: { create: [], update: [], delete: [] },
 	permissions: { create: [], update: [], delete: [] },
+	folders: { create: [], update: [], delete: [] },
 	protections: [],
 };
 
@@ -111,6 +119,7 @@ const CREATE_PLAN: ConfigPlan = {
 		delete: [],
 	},
 	permissions: { create: [], update: [], delete: [] },
+	folders: { create: [], update: [], delete: [] },
 	protections: [],
 };
 
@@ -160,7 +169,7 @@ function apply(
 	return request(makeApp(options.accountability === undefined ? ADMIN : options.accountability))
 		.post(`/config/apply${suffix}`)
 		.set('User-Agent', options.userAgent ?? 'cairncms-cli/1.6.0')
-		.send(BODY);
+		.send(WIRE_BODY);
 }
 
 function records(): ConfigRunRecord[] {
@@ -195,7 +204,7 @@ beforeEach(() => {
 	vi.mocked(validateDesiredConfig).mockReturnValue([]);
 
 	vi.mocked(readCurrentConfig).mockResolvedValue({
-		config: BODY,
+		config: CURRENT_CONFIG,
 		currentRoleKeys: new Set<string>(),
 		stateToken: { resources: ['roles'], digest: 'digest' },
 	});
@@ -389,7 +398,7 @@ describe('POST /config/apply run record', () => {
 	it('emits no record and no run id for an unsupported manifest version', async () => {
 		const res = await request(makeApp(ADMIN))
 			.post('/config/apply')
-			.send({ ...BODY, manifest: { version: 3, resources: ['roles'] } });
+			.send({ ...WIRE_BODY, manifest: { version: 3, resources: ['roles'] } });
 
 		expect(res.status).toBe(400);
 		expect(records()).toHaveLength(0);
@@ -410,7 +419,10 @@ describe('POST /config/apply run record', () => {
 
 describe('POST /config/apply flag parsing', () => {
 	function applyWithQuery(query: string) {
-		return request(makeApp(ADMIN)).post(`/config/apply?${query}`).set('User-Agent', 'cairncms-cli/1.6.0').send(BODY);
+		return request(makeApp(ADMIN))
+			.post(`/config/apply?${query}`)
+			.set('User-Agent', 'cairncms-cli/1.6.0')
+			.send(WIRE_BODY);
 	}
 
 	it.each([
@@ -461,6 +473,56 @@ describe('POST /config/apply flag parsing', () => {
 		expect(res.status).toBe(200);
 		expect(applyConfigPlan).not.toHaveBeenCalled();
 		expectOneRecord({ result: 'planned', dryRun: true, destructive: true });
+	});
+});
+
+describe('POST /config/apply wire-contract validation', () => {
+	let realValidate: typeof validateDesiredConfig;
+
+	beforeAll(async () => {
+		const actual = await vi.importActual<typeof import('../utils/validate-desired-config.js')>(
+			'../utils/validate-desired-config.js'
+		);
+
+		realValidate = actual.validateDesiredConfig;
+	});
+
+	beforeEach(() => {
+		vi.mocked(validateDesiredConfig).mockImplementation(realValidate);
+	});
+
+	function post(body: unknown) {
+		return request(makeApp(ADMIN))
+			.post('/config/apply?dry_run=true')
+			.set('User-Agent', 'cairncms-cli/1.6.0')
+			.send(body as never);
+	}
+
+	it('accepts a v1 body that omits the out-of-version folders key', async () => {
+		const res = await post(WIRE_BODY);
+
+		expect(res.status).toBe(200);
+		expect(computeConfigPlan).toHaveBeenCalledTimes(1);
+	});
+
+	it('rejects a v1 body that carries a folders key before planning', async () => {
+		const res = await post({ ...WIRE_BODY, folders: [] });
+
+		expect(res.status).toBe(400);
+		expect(res.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+		expect(computeConfigPlan).not.toHaveBeenCalled();
+	});
+
+	it('empties unmanaged folder records before planning at v2', async () => {
+		const res = await post({
+			manifest: { version: 2, resources: ['roles'] },
+			roles: [],
+			permissions: [],
+			folders: [{ key: 'ghost', name: 'Ghost', parent: null }],
+		});
+
+		expect(res.status).toBe(200);
+		expect(vi.mocked(computeConfigPlan).mock.calls[0]![1]!.folders).toEqual([]);
 	});
 });
 

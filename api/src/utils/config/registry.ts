@@ -1,11 +1,14 @@
 import { CONFIG_KINDS, type ConfigKind } from '../../types/config.js';
+import type { ManifestVersion } from '../config-contract.js';
 import type { ConfigResourceDescriptor } from './descriptor.js';
+import { foldersDescriptor, type FoldersKindTypes } from './handlers/folders.js';
 import { permissionsDescriptor, type PermissionsKindTypes } from './handlers/permissions.js';
 import { rolesDescriptor, type RolesKindTypes } from './handlers/roles.js';
 
 export type ConfigKindTypeMap = {
 	roles: RolesKindTypes;
 	permissions: PermissionsKindTypes;
+	folders: FoldersKindTypes;
 };
 
 export type ConfigRegistry = {
@@ -15,6 +18,7 @@ export type ConfigRegistry = {
 export const CONFIG_REGISTRY = {
 	roles: rolesDescriptor,
 	permissions: permissionsDescriptor,
+	folders: foldersDescriptor,
 } satisfies ConfigRegistry;
 
 export function getDescriptor<C extends ConfigKind>(kind: C): (typeof CONFIG_REGISTRY)[C] {
@@ -23,6 +27,11 @@ export function getDescriptor<C extends ConfigKind>(kind: C): (typeof CONFIG_REG
 
 export function listConfigKinds(): ConfigKind[] {
 	return [...CONFIG_KINDS];
+}
+
+/** The kinds legal at a manifest version: those whose descriptor requires that version or older. */
+export function kindsForVersion(version: ManifestVersion): ConfigKind[] {
+	return CONFIG_KINDS.filter((kind) => getDescriptor(kind).formatVersion <= version);
 }
 
 /** Runs kind-specific work while preserving the correlation between a kind and its descriptor bundle. */

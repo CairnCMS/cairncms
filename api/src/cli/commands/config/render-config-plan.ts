@@ -5,6 +5,8 @@ import { createVerb, deleteVerb, heading, planIntro, updateVerb } from '../../pr
 
 type RoleIdentityView = { key: string };
 
+type FolderIdentityView = { key: string };
+
 type PermissionIdentityView = { role: string; collection: string; action: string };
 
 type FieldChangeView = { before: unknown; after: unknown };
@@ -32,7 +34,15 @@ export type RenderableChange =
 			identity: PermissionIdentityView;
 			fields: Record<string, FieldChangeView | undefined>;
 	  }
-	| { kind: 'permissions'; operation: 'delete'; identity: PermissionIdentityView };
+	| { kind: 'permissions'; operation: 'delete'; identity: PermissionIdentityView }
+	| { kind: 'folders'; operation: 'create'; identity: FolderIdentityView }
+	| {
+			kind: 'folders';
+			operation: 'update';
+			identity: FolderIdentityView;
+			fields: Record<string, FieldChangeView | undefined>;
+	  }
+	| { kind: 'folders'; operation: 'delete'; identity: FolderIdentityView };
 
 /** The structural view the renderers read, satisfied by the server's serialized plan and by the remote wire plan. */
 export type RenderablePlan = {
@@ -45,6 +55,7 @@ export type RenderablePlan = {
 type RenderableResultSlice = {
 	roles: { created: unknown[]; updated: unknown[]; deleted: unknown[] };
 	permissions: { created: number; updated: number; deleted: number };
+	folders: { created: unknown[]; updated: unknown[]; deleted: unknown[] };
 };
 
 export type RenderableResult = { [C in ConfigKind]: RenderableResultSlice[C] };
@@ -67,6 +78,14 @@ function summarizeResultSlice(kind: ConfigKind, result: RenderableResult): strin
 			return parts;
 		}
 
+		case 'folders': {
+			const parts: string[] = [];
+			if (result.folders.created.length > 0) parts.push(`${result.folders.created.length} folder(s) created`);
+			if (result.folders.updated.length > 0) parts.push(`${result.folders.updated.length} folder(s) updated`);
+			if (result.folders.deleted.length > 0) parts.push(`${result.folders.deleted.length} folder(s) deleted`);
+			return parts;
+		}
+
 		default: {
 			const unhandled: never = kind;
 			throw new Error(`Unhandled config kind: ${JSON.stringify(unhandled)}`);
@@ -85,6 +104,8 @@ function kindHeading(kind: RenderableChange['kind']): string {
 			return 'Roles';
 		case 'permissions':
 			return 'Permissions';
+		case 'folders':
+			return 'Folders';
 
 		default: {
 			const unhandled: never = kind;
@@ -148,7 +169,8 @@ export function renderProtectionContributors(
 
 export type RenderableDeletion =
 	| { kind: 'roles'; identity: RoleIdentityView }
-	| { kind: 'permissions'; identity: PermissionIdentityView };
+	| { kind: 'permissions'; identity: PermissionIdentityView }
+	| { kind: 'folders'; identity: FolderIdentityView };
 
 export function renderDeletions(deletions: RenderableDeletion[]): string[] {
 	return deletions.map((deletion) => `    - ${deleteVerb()} ${renderIdentity(deletion)}`);
@@ -210,6 +232,10 @@ function renderIdentity(change: RenderableChange | RenderableDeletion): string {
 		return `${replaceControlCharacters(role)} / ${replaceControlCharacters(collection)} / ${replaceControlCharacters(
 			action
 		)}`;
+	}
+
+	if (change.kind === 'folders') {
+		return replaceControlCharacters(change.identity.key);
 	}
 
 	const unhandled: never = change;

@@ -15,8 +15,14 @@ import { respond } from '../middleware/respond.js';
 import asyncHandler from '../utils/async-handler.js';
 import { applyConfigPlan } from '../utils/apply-config-plan.js';
 import { computeConfigPlan } from '../utils/compute-config-plan.js';
-import { LATEST_MANIFEST_VERSION, SUPPORTED_MANIFEST_VERSIONS } from '../utils/config-contract.js';
+import {
+	LATEST_MANIFEST_VERSION,
+	SUPPORTED_MANIFEST_VERSIONS,
+	type ManifestVersion,
+} from '../utils/config-contract.js';
 import { isPlanEmpty, planSummary } from '../utils/config/plan-folds.js';
+import { kindsForVersion } from '../utils/config/registry.js';
+import { normalizeToInternal, serializeToWire } from '../utils/config/wire.js';
 import {
 	CONFIG_RUN_ID_HEADER,
 	callerFromAccountability,
@@ -30,7 +36,7 @@ import { getSchema } from '../utils/get-schema.js';
 import { assertConfigValueSafe, parseConfigYaml } from '../utils/parse-config-document.js';
 import { safeLogFragment } from '../utils/safe-log-fragment.js';
 import { validateConfigManifest, validateDesiredConfig } from '../utils/validate-desired-config.js';
-import { CONFIG_KINDS, type CairnConfig, type ConfigFailure, type ConfigManifest } from '../types/config.js';
+import type { ConfigFailure, ConfigManifest } from '../types/config.js';
 
 const router = express.Router();
 
@@ -42,7 +48,7 @@ router.get(
 		const { version, resources } = parseSnapshotScope(req.query);
 		const { config } = await readCurrentConfig({ resources, manifestVersion: version });
 
-		res.locals['payload'] = { data: config };
+		res.locals['payload'] = { data: serializeToWire(config, version) };
 		res.locals['cache'] = false;
 
 		return next();
@@ -106,15 +112,15 @@ router.post(
 					resources: manifest.resources,
 				});
 
-				const config = desired as CairnConfig;
-
-				const failures = validateDesiredConfig(config, {
+				const failures = validateDesiredConfig(document, {
 					label: BODY_LABEL,
 					references: 'current-state',
 					currentRoleKeys,
 				});
 
 				if (failures.length > 0) throw failures.map(toConfigException);
+
+				const config = normalizeToInternal(manifest, document);
 
 				const plan = computeConfigPlan(current, config);
 
@@ -181,7 +187,7 @@ function parseSnapshotScope(query: Record<string, unknown>): ConfigManifest {
 	let resources: string[];
 
 	if (requested === undefined) {
-		resources = [...CONFIG_KINDS];
+		resources = [...kindsForVersion(version as ManifestVersion)];
 	} else if (typeof requested !== 'string') {
 		throw new ConfigInvalidException('The "resources" query parameter must be a single comma-separated value.');
 	} else if (requested === '') {

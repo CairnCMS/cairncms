@@ -1,16 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import type { ConfigPermission, ConfigPlan, ConfigRole } from '../../types/config.js';
+import type { ConfigFolder, ConfigPermission, ConfigPlan, ConfigRole } from '../../types/config.js';
 import { isPlanEmpty, planDeletions, planHasDeletions, planSummary } from './plan-folds.js';
 
 function emptyPlan(): ConfigPlan {
 	return {
+		managedResources: [],
 		roles: { create: [], update: [], delete: [] },
 		permissions: { create: [], update: [], delete: [] },
+		folders: { create: [], update: [], delete: [] },
 		protections: [],
 	};
 }
 
 const A_ROLE: ConfigRole = { key: 'x', name: 'X', admin_access: false, app_access: true };
+
+const A_FOLDER: ConfigFolder = { key: 'x', name: 'X', parent: null };
 
 const A_PERMISSION: ConfigPermission = {
 	collection: 'c',
@@ -31,6 +35,9 @@ const SLICE_MUTATIONS: Array<[string, (plan: ConfigPlan) => void]> = [
 		(plan) => plan.permissions.update.push({ roleKey: 'r', collection: 'c', action: 'read', changes: {} }),
 	],
 	['permissions.delete', (plan) => plan.permissions.delete.push({ roleKey: 'r', collection: 'c', action: 'read' })],
+	['folders.create', (plan) => plan.folders.create.push(A_FOLDER)],
+	['folders.update', (plan) => plan.folders.update.push({ key: 'x', changes: {} })],
+	['folders.delete', (plan) => plan.folders.delete.push('x')],
 ];
 
 describe('plan folds', () => {
@@ -53,7 +60,7 @@ describe('plan folds', () => {
 		for (const [, mutate] of SLICE_MUTATIONS) mutate(plan);
 		plan.roles.delete.push('y');
 
-		expect(planSummary(plan)).toEqual({ create: 2, update: 2, delete: 3 });
+		expect(planSummary(plan)).toEqual({ create: 3, update: 3, delete: 4 });
 	});
 
 	it('detects deletions in any kind', () => {
@@ -66,16 +73,22 @@ describe('plan folds', () => {
 		const withPermission = emptyPlan();
 		withPermission.permissions.delete.push({ roleKey: 'editor', collection: 'articles', action: 'read' });
 		expect(planHasDeletions(withPermission)).toBe(true);
+
+		const withFolder = emptyPlan();
+		withFolder.folders.delete.push('old');
+		expect(planHasDeletions(withFolder)).toBe(true);
 	});
 
-	it('projects each deletion to its identity, roles before permissions', () => {
+	it('projects each deletion to its identity, in kind order', () => {
 		const plan = emptyPlan();
 		plan.roles.delete.push('old');
 		plan.permissions.delete.push({ roleKey: 'editor', collection: 'articles', action: 'read' });
+		plan.folders.delete.push('archive');
 
 		expect(planDeletions(plan)).toEqual([
 			{ kind: 'roles', identity: { key: 'old' } },
 			{ kind: 'permissions', identity: { role: 'editor', collection: 'articles', action: 'read' } },
+			{ kind: 'folders', identity: { key: 'archive' } },
 		]);
 	});
 });

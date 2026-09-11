@@ -6,6 +6,7 @@ import {
 	CONFIG_KINDS,
 	type CairnConfig,
 	type ConfigKind,
+	type ConfigFolder,
 	type ConfigPermissionSet,
 	type ConfigRole,
 	type ConfigStateToken,
@@ -65,7 +66,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 
 	if (closure.length === 0) {
 		return {
-			config: { manifest, roles: [], permissions: [] },
+			config: { manifest, roles: [], permissions: [], folders: [] },
 			currentRoleKeys: new Set(),
 			stateToken: Object.freeze({ resources: Object.freeze([]), digest: computeConfigStateDigest([]) }),
 		};
@@ -107,6 +108,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		manifest,
 		roles: (documentsByKind.get('roles') ?? []) as ConfigRole[],
 		permissions: (documentsByKind.get('permissions') ?? []) as ConfigPermissionSet[],
+		folders: (documentsByKind.get('folders') ?? []) as ConfigFolder[],
 	};
 
 	const placeholders = findPlaceholderSyntax(config);

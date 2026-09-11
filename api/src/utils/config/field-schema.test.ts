@@ -241,7 +241,7 @@ describe('generator honors metadata for field-type/nullable combinations the pro
 
 	it('applies nullable to a role-key grammar field', () => {
 		const schema = syntheticSchema([
-			{ ...base, name: 'rk', type: 'string', nullable: true, grammar: 'role-key', minLength: 1, maxLength: 10 },
+			{ ...base, name: 'rk', type: 'string', nullable: true, grammar: 'config-key', minLength: 1, maxLength: 10 },
 		]);
 
 		expect(messagesOf(schema, { rk: null })).toEqual([]);

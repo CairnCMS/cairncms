@@ -1,23 +1,23 @@
-import { normalizeRoleKey } from '@cairncms/utils';
+import { normalizeConfigKey } from '@cairncms/utils';
 import Joi from 'joi';
 import type { ConfigDocumentShape, ConfigFieldDescriptor } from './descriptor.js';
 
-const ROLE_KEY_GRAMMAR_MESSAGE =
+const CONFIG_KEY_GRAMMAR_MESSAGE =
 	'{{#label}} must be lowercase alphanumeric with underscores, and cannot start with a digit or underscore.';
 
-const ROLE_KEY_RESERVED_MESSAGE = '{{#label}} is reserved for public permissions and cannot name a role.';
+const CONFIG_KEY_RESERVED_MESSAGE = '{{#label}} is reserved for public permissions and cannot name a role.';
 
-function buildRoleKeyBase(field: ConfigFieldDescriptor): Joi.Schema {
+function buildConfigKeyBase(field: ConfigFieldDescriptor): Joi.Schema {
 	let schema = Joi.string();
 	if (field.minLength !== undefined) schema = schema.min(field.minLength);
 	if (field.maxLength !== undefined) schema = schema.max(field.maxLength);
 
 	schema = schema
-		.custom((value, helpers) => (normalizeRoleKey(value) === value ? value : helpers.error('roleKey.grammar')))
-		.messages({ 'roleKey.grammar': ROLE_KEY_GRAMMAR_MESSAGE });
+		.custom((value, helpers) => (normalizeConfigKey(value) === value ? value : helpers.error('configKey.grammar')))
+		.messages({ 'configKey.grammar': CONFIG_KEY_GRAMMAR_MESSAGE });
 
 	if (field.reserved && field.reserved.length > 0) {
-		schema = schema.invalid(...field.reserved).messages({ 'any.invalid': ROLE_KEY_RESERVED_MESSAGE });
+		schema = schema.invalid(...field.reserved).messages({ 'any.invalid': CONFIG_KEY_RESERVED_MESSAGE });
 	}
 
 	return schema;
@@ -34,7 +34,7 @@ function buildStringBase(field: ConfigFieldDescriptor): Joi.Schema {
 }
 
 function buildBase(field: ConfigFieldDescriptor): Joi.Schema {
-	if (field.grammar === 'role-key') return buildRoleKeyBase(field);
+	if (field.grammar === 'config-key') return buildConfigKeyBase(field);
 
 	switch (field.type) {
 		case 'boolean':

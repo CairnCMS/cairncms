@@ -69,18 +69,18 @@ describe('isOwnedConfigFilename', () => {
 
 describe('classifyIdentityStem', () => {
 	it('reserves before grammar, so a reserved stem that fails the grammar is still reserved', () => {
-		const field = identityField({ reserved: ['Bad Key'], grammar: 'role-key', maxLength: 255 });
+		const field = identityField({ reserved: ['Bad Key'], grammar: 'config-key', maxLength: 255 });
 		expect(classifyIdentityStem('Bad Key', field)).toBe('reserved');
 	});
 
 	it('never owns a stem when ownership metadata is absent', () => {
-		expect(classifyIdentityStem('editor', identityField({ grammar: 'role-key' }))).toBe('unowned');
+		expect(classifyIdentityStem('editor', identityField({ grammar: 'config-key' }))).toBe('unowned');
 		expect(classifyIdentityStem('editor', identityField({ maxLength: 255 }))).toBe('unowned');
-		expect(classifyIdentityStem('editor', identityField({ grammar: 'role-key', maxLength: 0 }))).toBe('unowned');
+		expect(classifyIdentityStem('editor', identityField({ grammar: 'config-key', maxLength: 0 }))).toBe('unowned');
 	});
 
 	it('owns a valid stem when the field declares grammar and a bounded length', () => {
-		expect(classifyIdentityStem('editor', identityField({ grammar: 'role-key', maxLength: 255 }))).toBe('owned');
+		expect(classifyIdentityStem('editor', identityField({ grammar: 'config-key', maxLength: 255 }))).toBe('owned');
 	});
 });
 
@@ -92,7 +92,7 @@ describe('descriptor directory conformance', () => {
 
 			const field = descriptor.documentIdentityFields[0]!;
 			expect(field.type).toBe('string');
-			expect(field.grammar).toBe('role-key');
+			expect(field.grammar).toBe('config-key');
 			expect(typeof field.maxLength).toBe('number');
 			expect(field.maxLength).toBeGreaterThan(0);
 
