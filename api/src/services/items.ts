@@ -20,6 +20,7 @@ import type {
 	MutationOptions,
 	PrimaryKey,
 } from '../types/index.js';
+import { assertWriteProtectedFieldsUnchanged } from '../utils/assert-write-protected-fields-unchanged.js';
 import getASTFromQuery from '../utils/get-ast-from-query.js';
 import { shouldClearCache } from '../utils/should-clear-cache.js';
 import { validateKeys } from '../utils/validate-keys.js';
@@ -646,6 +647,8 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 			const payloadWithTypeCasting = await payloadService.processValues('update', payloadWithoutAliasAndPK);
 
 			if (Object.keys(payloadWithTypeCasting).length > 0) {
+				await assertWriteProtectedFieldsUnchanged(trx, this.collection, primaryKeyField, keys, payloadWithTypeCasting);
+
 				const mutationGuard = getMutationGuard(opts);
 				if (mutationGuard) await mutationGuard.beforeUpdate?.(payloadWithTypeCasting, keys);
 
