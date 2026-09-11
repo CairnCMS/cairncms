@@ -1061,7 +1061,7 @@ describe('Config-as-Code API', () => {
 
 				expect(response.body.data).toEqual({
 					planVersion: 2,
-					manifestVersion: 1,
+					manifestVersion: 2,
 					changes: [],
 					summary: { create: 0, update: 0, delete: 0 },
 					warnings: [],
