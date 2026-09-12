@@ -1,13 +1,11 @@
 ---
 title: Config as code
-description: Capture roles and permissions to versioned files, review them as a diff, and apply them across environments — through the CLI or the HTTP API.
+description: Capture roles, permissions, and folders to versioned files, review changes, and apply them across environments.
 sidebar:
   order: 8
 ---
 
-CairnCMS treats project configuration, including roles and permissions, as state that can be captured in files, reviewed as a diff, and applied to another instance. The CLI reads a directory tree, while the HTTP API reads a single JSON or YAML document. Both feed the same planning and apply engine.
-
-This page covers what config-as-code captures, the CLI workflow, the HTTP equivalent, and the operator practices that make the two work together.
+Use config-as-code to capture roles, permissions, and folders, review changes in source control, and apply them across environments. Use the CLI for a directory of YAML files or the HTTP API for a single JSON or YAML document.
 
 ## What a config snapshot captures
 
@@ -15,46 +13,56 @@ A snapshot contains:
 
 - **Roles** — every operator-managed role with its key, name, icon, description, access flags, and `enforce_tfa` setting.
 - **Permissions** — the operator-defined rules attached to each role, grouped by role. Each permission rule includes the collection, action, field allow-list, item-level filter, validation, and presets.
+- **Folders** — the file-library folder names and hierarchy. File contents are not included.
 
 It does not contain:
 
 - **Schema.** Collections, fields, and relations belong to [schema-as-code](/docs/manage/schema-as-code/) and ship in a separate snapshot.
-- **Users.** Account records, passwords, and personal data are intentionally out of scope.
-- **The Public role record.** The platform-managed Public role is not exported as a role definition in that there is no `roles/public.yaml` and the role row itself is excluded from the snapshot's `roles[]`. Its permissions are still captured and applied through `permissions/public.yaml` (under the reserved key `public`), so editing Public access in the app and re-snapshotting produces the expected diff.
-- **System-managed permissions.** Some permissions are platform-managed and flagged as system-owned (the app-access minimum and recommended permissions that surface for any role with `app_access: true`, for example). These are projected from in-memory constants at read time rather than stored as ordinary rows, and the snapshot deliberately skips them. They are managed by the platform, not by config-as-code, and reappear automatically wherever a role's access flags require them.
-
-Roles with `admin_access: true` are captured like any other role, but the engine refuses applies that would leave the deployment with no role flagged as `admin_access: true` — see [Validation](#validation) below.
-
-Use schema-as-code for collections, fields, and relations. Use database backups for content and user data.
+- **Users and content.** Account records, collection items, uploaded files, and their metadata require a separate migration or backup.
+- **The Public role record.** Public access is managed through `permissions/public.yaml`. There is no `roles/public.yaml`.
+- **System-managed permissions.** Built-in rules, such as those supplied by `app_access: true`, are provided automatically by CairnCMS.
 
 ## Managed scope
 
-The `resources` list in `cairncms-config.yaml` defines which resource kinds the config manages. CairnCMS reconciles only the listed kinds. An empty list manages nothing. When snapshotting into an existing directory, the CLI preserves the manifest's scope. Change the manifest explicitly to start or stop managing a kind.
+The `resources` list in `cairncms-config.yaml` selects what to manage:
+
+```yaml
+version: 2
+resources:
+  - roles
+  - permissions
+  - folders
+```
+
+Within each listed kind, the files describe the complete desired set. Records absent from that set are planned for deletion. Omitted kinds are left alone, and `resources: []` manages nothing.
+
+Re-snapshotting an existing directory preserves its version and scope. Version 1 supports roles and permissions. Version 2 adds folders. To adopt folders in an existing project, set `version: 2`, add `folders` to `resources`, then re-snapshot the source instance and review the files before applying elsewhere.
 
 Roles and permissions can be managed independently. When both are managed, each permission set must reference a role declared in the config. When only permissions are managed, role references resolve against roles already in the target database.
 
-Deleting a managed role still runs the platform's normal role-deletion cascade. Its permissions and presets are deleted, and users assigned to it are suspended and unassigned, even when those related resources are not managed by the manifest. Review the dry-run output before applying a deletion.
+Roles and folders are matched across environments by their keys. Keys remain unchanged when records are renamed or folders are moved. Preserve the keys in your snapshots so subsequent applies update the existing records.
+
+Deleting a role also deletes its permissions and presets, and suspends and unassigns its users, even when those resources are outside the manifest's scope. Review the dry-run output before authorizing deletions.
+
+Unlike [deleting a folder in the app](/docs/guides/files/#renaming-moving-and-deleting-folders), config apply does not relocate its contents. Before deleting a folder, move its files and clear or replace any settings or field references to it. Child folders must be moved or deleted, which can be part of the same config apply. If any of these remain at deletion time, the entire apply is refused with `CONFIG_FOLDER_IN_USE`.
 
 ## Two surfaces, one engine
 
-The CLI and the HTTP API share the same plan/apply engine but differ in how they consume input:
+Choose the surface that fits your deployment:
 
 | | CLI | HTTP API |
 |---|---|---|
-| Format | Directory tree | Single document |
-| Source format | YAML files | YAML or JSON |
-| Invocation | Local `cairncms` binary | Bearer-authed HTTP |
+| Input | Directory of YAML files | Single YAML or JSON document |
+| Target | Local database or remote server with `--url` | Remote server with an admin token |
 | Safety | Interactive confirmation | Opt-in query flags |
 
-The CLI suits local development and GitOps pipelines where the directory tree is committed to source control and applied by a runner that has container access. The HTTP API suits remote instances behind a load balancer, automation that lives outside the container, and tooling in any language. The CLI can also drive a remote instance's HTTP surface directly with `--url`, keeping the directory workflow while targeting a server it does not share a container with (see [Applying to a remote instance](#applying-to-a-remote-instance)).
-
-After loading input, both surfaces interpret managed scope and compute and apply changes the same way. The CLI also checks that each filename matches the identity declared by its record. For example, `roles/editor.yaml` must declare `key: editor`. HTTP payloads have no filenames, so this check does not apply.
+Both produce the same plans and apply the same scope rules. The CLI also requires filenames to match record identities: `roles/editor.yaml` must declare `key: editor`, and `folders/reports.yaml` must declare `key: reports`.
 
 ## The CLI
 
 ### Snapshot
 
-Read the current roles and permissions and write them as a directory tree:
+Write the current configuration as a directory tree:
 
 ```bash
 cairncms config snapshot ./config
@@ -70,14 +78,25 @@ config/
 ├── roles/
 │   ├── administrator.yaml        # one file per role, named after role.key
 │   └── editor.yaml
-└── permissions/
-    ├── editor.yaml               # one file per role's permissions
-    └── public.yaml               # public role's permissions (no roles/public.yaml)
+├── permissions/
+│   ├── editor.yaml               # one file per role's permissions
+│   └── public.yaml               # public role's permissions (no roles/public.yaml)
+└── folders/
+    ├── documents.yaml           # one file per folder, named after folder.key
+    └── reports.yaml
+```
+
+For example, `folders/reports.yaml` places Reports under the folder whose key is `documents`:
+
+```yaml
+key: reports
+name: Reports
+parent: documents
 ```
 
 Snapshot treats any record file whose filename and declared identity match as managed, including hand-authored files. It leaves other files unchanged during cleanup.
 
-Files and directories that CairnCMS reads or writes may use symlinks whose targets remain inside the config directory. Snapshot writes through contained symlinks and preserves them. When a stale record is a symlink, snapshot removes the link without deleting its target. Dangling links, targets outside the config directory, and targets that are not regular files or directories stop the command.
+Symlinks must resolve to files or directories inside the config directory. Snapshot preserves valid links and removes only the link when cleaning up a stale record. Invalid or escaping links stop the command.
 
 ### Apply
 
@@ -87,30 +106,20 @@ Read a config directory and reconcile the database to it:
 cairncms config apply ./config
 ```
 
-The flow:
-
-1. Load the directory tree.
-2. Read the required current database state.
-3. Validate the desired config.
-4. Compute and validate the plan.
-5. If the plan is empty, report any warnings and exit `0`. Human output prints `No changes to apply.` JSON output emits the complete plan document with a zeroed summary.
-6. Print the complete plan. For a mutating apply, refuse the operation without changing anything if the plan contains deletions and `--destructive` was not passed.
-7. Otherwise prompt for confirmation, then apply.
+The command compares the files with the database, prints the plan, and prompts before applying changes. If nothing has changed, it reports `No changes to apply.` and exits `0`.
 
 Three flags adjust the flow:
 
 - **`--dry-run`** — compute and print the plan without writing. Exits `1` when the plan contains changes and `0` when it is empty, which supports CI drift checks. Add `--format json` for the machine-readable plan. JSON is only available with `--dry-run`.
 - **`--yes`** — skip the confirmation prompt.
-- **`--destructive`** — authorize deleting roles and permissions that exist in the database but are absent from the config. Off by default.
+- **`--destructive`** — authorize deleting managed roles, permissions, or folders that are absent from the config. Off by default.
 
-Deletions require explicit authorization. Without `--destructive`, a mutating apply whose plan contains deletions is refused and makes no changes, printing the deletions it would have made:
+Without `--destructive`, a plan containing deletions is displayed but not applied:
 
 ```
 Apply refused: this plan contains 1 deletion.
 Review the item above and run again with --destructive.
 ```
-
-Pass `--destructive` to authorize the displayed deletions.
 
 ### Plan output
 
@@ -154,7 +163,7 @@ cairncms config apply --dry-run --format json ./config
 ```json
 {
   "planVersion": 2,
-  "manifestVersion": 1,
+  "manifestVersion": 2,
   "changes": [
     {
       "kind": "roles",
@@ -175,13 +184,13 @@ cairncms config apply --dry-run --format json ./config
 }
 ```
 
-`planVersion` identifies the payload format. Each change carries its `kind`, `operation`, and stable `identity`. A create carries the full canonical `values`, an update carries a per-field `before`/`after` map, and a role deletion carries an `impact` array describing the cascade. An empty plan still emits the complete document with a zeroed `summary`.
+`planVersion` identifies the output format, independently of the input's `manifestVersion`. Each change has a `kind`, `operation`, and `identity`. Creates include `values`, updates include `before`/`after` fields, and role deletions include their cascading `impact`. An empty plan has a zeroed `summary`.
 
-`protections` identifies valid plans that CairnCMS cannot apply safely. Each entry includes a stable `code` for automation, a human-readable `message`, and the contributing changes (`kind`, `operation`, and `identity`). If the array is not empty, CairnCMS refuses the apply even with `--destructive`. Automation should branch on `code`, not `message`.
+`protections` lists reasons a plan cannot be applied, even with `--destructive`. Each entry includes a `code`, `message`, and contributing changes. Automation should branch on `code`, not message text.
 
-The only protection currently defined is `ADMIN_CONTINUITY_REQUIRED`. CairnCMS applies creates first, then role updates with administrator grants ahead of the rest, and deletions last. Every step must leave at least one role with `admin_access: true`. Because grants run first, handing administrator access from one role to another applies in a single run regardless of the order of the role files or the request body. A demotion that leaves no administrator at all is refused.
+`ADMIN_CONTINUITY_REQUIRED` prevents an apply from leaving the instance without an administrator role. You can transfer administrator access between roles in one apply. CairnCMS grants the new access before removing the old access.
 
-Consumers of `planVersion: 2` must ignore unknown properties, but reject an unknown `planVersion`, `kind`, or `operation`. An unfamiliar protection still blocks the apply, and an unfamiliar warning remains a warning. Additive fields do not change `planVersion`; breaking changes do. The input format's strictly validated `manifest.version` is independent of the plan version.
+Consumers must ignore unknown properties but reject an unknown `planVersion`, `kind`, or `operation`. An unfamiliar protection blocks the apply; an unfamiliar warning does not. Additive fields do not change `planVersion`.
 
 ### Applying to a remote instance
 
@@ -206,11 +215,11 @@ Use an absolute `http` or `https` URL without credentials, a query, or a fragmen
 
 A mutating remote apply requires `--yes`; a dry run does not. The target must run CairnCMS 1.6.0 or newer.
 
-Remote protections, destructive-change checks, and exit codes match local mode, as do dry-run and no-change output. A refusal prints every server error, including named deletions or protected changes, but not the local plan; run a dry run to see it. Requests time out after 30 seconds by default; set `CAIRNCMS_REMOTE_CONFIG_TIMEOUT` to a duration such as `60s` for slower deployments. After a mutating timeout, run `config snapshot` before retrying because the server may have committed the apply.
+Remote mode uses the same dry-run, deletion, and exit-code rules as local mode. Perform a dry run to review the plan before applying. Requests time out after 30 seconds; set `CAIRNCMS_REMOTE_CONFIG_TIMEOUT` to a duration such as `60s` for slower deployments. After a mutating timeout, run `config snapshot` before retrying because the server may have committed the apply.
 
-A remote snapshot is validated against the local config format before anything is written. Unknown fields in the envelope or a managed document stop the snapshot with exit `3` and leave the directory unchanged; records under unmanaged kinds are ignored. After a mutating apply, the CLI also checks the server's plan and result against the submitted manifest. If they disagree, it exits `3` and asks for a snapshot rather than reporting success because the change may have been applied.
+A remote snapshot is validated before writing to the directory. An incompatible response exits `3` and leaves the directory unchanged. If an apply response cannot be verified, the CLI also exits `3` and asks you to snapshot the current state before retrying.
 
-After a timeout, the server's [run record](#run-record) around the failure time, if present, shows what the run did. Its `userAgent` starts with `cairncms-cli/`. The record is best-effort, so its absence is inconclusive and `config snapshot` remains the way to verify the current state. Read its `durationMs` as a hint: an engine time near the timeout means raise `CAIRNCMS_REMOTE_CONFIG_TIMEOUT`, and a short one means the delay was in transport.
+The server's [run record](#run-record) can help diagnose a failed or timed-out apply. Its absence does not prove that nothing changed.
 
 ### Exit codes
 
@@ -222,7 +231,7 @@ Both config commands map their outcome to an exit code, so a pipeline can branch
 |---|---|
 | Empty plan, or a successful apply, or a declined confirmation, or `--help` | 0 |
 | Dry run whose plan contains changes | 1 |
-| Validation failure, a deletion requiring `--destructive`, a protected apply (administrator continuity), or a usage error (unknown option, missing path, unknown `--format`, JSON without `--dry-run`) | 2 |
+| Invalid configuration or command usage, or a refused apply | 2 |
 | No database connection, system tables not installed, unreadable state, or an unexpected failure | 3 |
 
 `config snapshot`:
@@ -233,23 +242,21 @@ Both config commands map their outcome to an exit code, so a pipeline can branch
 | Usage error, or an invalid existing tree | 2 |
 | No database connection, system tables not installed, unreadable state, or an unexpected failure | 3 |
 
-Exit `1` indicates drift. Exit `2` indicates invalid input, invalid command usage, or a refused destructive apply. Exit `3` indicates an operational or unexpected runtime failure. A `CONFIG_STATE_CHANGED` conflict also exits `2`. The [run record](#run-record) distinguishes it from a refusal through its `result`.
+A `CONFIG_STATE_CHANGED` conflict exits `2`. Review a fresh plan before retrying.
 
-Remote mode (`--url`) maps onto the same scheme. A server below the required version, a `4xx` response, or a missing `--yes` on a mutating apply exits `2`. A transport failure, a `5xx` response, an unrecognized server version, or a malformed response exits `3`. If a mutating remote request fails after the server may already have committed, the message says so and re-running `config snapshot` shows the current state.
+In remote mode, server refusals (`4xx`), a server below version 1.6.0, and missing `--yes` exit `2`. Transport failures, server failures (`5xx`), and unrecognized or malformed responses exit `3`.
 
 ### Environment variables
 
-Fields that support interpolation accept a placeholder in the form `{{CAIRNCMS_CONFIG_<NAME>}}`. The placeholder must occupy the entire field value. The CLI reads the value from its environment before it builds a plan. A variable outside the `CAIRNCMS_CONFIG_` namespace or a variable that is not set stops the command.
+Role names and descriptions accept environment placeholders such as `{{CAIRNCMS_CONFIG_EDITOR_NAME}}`. The placeholder must occupy the entire field value. The CLI resolves it before planning. Unset variables or names outside the `CAIRNCMS_CONFIG_` namespace stop the command. Folder fields do not support interpolation.
 
 The HTTP API does not resolve placeholders. Send resolved values in the request body.
 
-Whole-string placeholder syntax cannot be stored as a role name or description because a later read would substitute it. Both surfaces reject a desired value of the form `{{NAME}}` as `CONFIG_INVALID`, including an environment value that resolves to that form. Existing database values in that form stop snapshot and apply with `CONFIG_READ_FAILED`; a remote snapshot containing one is refused before anything is written. Rename the value, then retry.
-
-Remote mode reads three further variables, none of which are interpolated into config records: `CAIRNCMS_TOKEN` or `CAIRNCMS_TOKEN_FILE` supplies the administrator token (see [Applying to a remote instance](#applying-to-a-remote-instance)), and `CAIRNCMS_REMOTE_CONFIG_TIMEOUT` overrides the 30-second per-request timeout.
+To store a literal role name or description, avoid whole-value placeholder syntax such as `{{NAME}}`.
 
 ## The HTTP API
 
-The same workflow over HTTP, restricted to admin tokens.
+The HTTP endpoints require an administrator token.
 
 ### Retrieve a snapshot
 
@@ -259,9 +266,9 @@ GET /config/snapshot?export=yaml
 GET /config/snapshot?manifest_version=1&resources=roles,permissions
 ```
 
-Returns the current roles and permissions as a JSON payload, or as a YAML attachment when `?export=yaml` is set. The `data` envelope wraps the payload the same way every other CairnCMS API response does. The endpoint opts out of response caching, so subsequent calls always reflect the current database state.
+Returns a current snapshot under `data`, or as a YAML attachment with `?export=yaml`.
 
-A snapshot request has no manifest body, so `manifest_version` and `resources` select the manifest written into the response. Omit them for the current version and all supported kinds. Use `resources=` for an explicitly empty scope. The remote CLI sends these values automatically from an existing local manifest, or uses its supported version and kinds for a new directory.
+Use `manifest_version` and `resources` to select the format and scope. The defaults are version 2 and all kinds supported by the selected version. Use `resources=` for an empty scope. The remote CLI supplies these parameters from your local manifest.
 
 ### Apply
 
@@ -271,19 +278,17 @@ POST /config/apply?dry_run=true
 POST /config/apply?destructive=true
 ```
 
-Send a `CairnConfig` payload — the same shape as the `data` field returned by `/config/snapshot`, without the outer envelope. The server accepts:
+Send the snapshot's `data` object without the outer envelope, or the exported YAML document. The server accepts:
 
 - `application/json`
 - `application/yaml`, `application/x-yaml`, or `text/yaml`
-
-The YAML media types support a natural round-trip: fetch as YAML, edit, post the same YAML back.
 
 Two query flags shape the apply:
 
 - **`?dry_run=true`** — compute and return the plan without writing. The response is the plan document, not an apply summary.
 - **`?destructive=true`** — authorize deletions during a mutating apply. Dry runs always return the complete plan.
 
-Each flag accepts exactly `true` or `false`. Any other value, such as `1`, `True`, an empty value, or a repeated parameter, is rejected with `400` and the `CONFIG_INVALID` code before the server reads any state, so a malformed preview flag can never turn into a mutating apply.
+Use `true` or `false` for these flags. Other values and repeated flags return `400 CONFIG_INVALID`.
 
 A mutating apply returns a summary like this under `data`:
 
@@ -298,38 +303,37 @@ A mutating apply returns a summary like this under `data`:
     "created": 5,
     "updated": 3,
     "deleted": 0
+  },
+  "folders": {
+    "created": ["reports"],
+    "updated": [],
+    "deleted": []
   }
 }
 ```
 
-The response also includes the plan computed before the mutation under `meta.plan`.
+The response includes the plan under `meta.plan`. A dry run instead returns the [plan document](#machine-readable-output) under `data`.
 
-A dry run returns the same plan document the CLI prints with `--dry-run --format json`, under the standard `data` envelope.
+A plan containing deletions requires `?destructive=true`. Otherwise, nothing is applied and the response is `400 DESTRUCTIVE_CHANGES_REQUIRED`, with the planned deletions in `extensions.deletions`.
 
-A mutating apply whose plan contains a deletion without `?destructive=true` is refused with a `400` and the `DESTRUCTIVE_CHANGES_REQUIRED` code. The error's `extensions.deletions` lists the identities that would be deleted, and nothing is applied. Re-send with `?destructive=true` to authorize them.
-
-A mutating apply is refused if any create, role update, or deletion step would remove the final role with `admin_access: true`. The response is a `400` with the `CONFIG_PROTECTED_RECORD` code, even when `?destructive=true`. Its `extensions.protection.code` is `ADMIN_CONTINUITY_REQUIRED`, and `extensions.contributors` identifies the role removals by `kind`, `operation`, and `identity`. A dry run returns `200` with the same entry in `protections`, allowing a pipeline to detect the block before applying.
+Administrator-continuity protection returns `400 CONFIG_PROTECTED_RECORD`, even with `?destructive=true`. Its `extensions.protection.code` is `ADMIN_CONTINUITY_REQUIRED`. A dry run returns `200` with this entry in `protections` so automation can detect it before applying.
 
 ### No diff endpoint
 
-Schema-as-code uses a two-step `/schema/diff` then `/schema/apply` flow with a client-held hash handoff. Config-as-code keeps a single-call apply. The config payload is much smaller than a typical schema, the engine computes the plan internally on every call, and the dry-run flag covers the same "what would change?" use case without a stateful client.
-
-A single-call apply is still protected against a concurrent change. The apply hashes the current state its plan was read from, then re-reads and re-hashes that state inside the apply transaction before making any change. If the managed records or the role identities the plan depends on changed in between, the apply makes no change and returns `CONFIG_STATE_CHANGED` (409). Recompute the plan and re-apply. A plan with no changes has nothing to write, so it applies without the recheck.
-
-If you need to inspect the plan before applying, use `?dry_run=true` and read the response.
+Use `POST /config/apply?dry_run=true` to preview changes. Each apply computes a fresh plan; it does not reuse a previous dry run. If required state changes between planning and the pre-write check, the apply is refused with `409 CONFIG_STATE_CHANGED`. Review a fresh plan before retrying.
 
 ## Audit records and events
 
-A mutating apply records the same audit trail as any other mutation, following each collection's native accountability setting. Creating or updating a role or permission records an activity entry and a revision. Deleting one records an activity entry only. A role deletion's cascade records its own consequences the same way, so suspending a user records activity and a revision, while removing a role-scoped preset records nothing because presets are not accountability-tracked.
+Config applies use the normal activity and revision tracking for each affected collection, including changes caused by a role deletion.
 
 Applies are attributed:
 
 - An HTTP apply is attributed to the authenticated administrator who made the request.
-- A local `cairncms config apply` run is attributed to the system actor, recorded with no user and an origin of `config-cli`, so an automated local apply is distinguishable from an administrator's request.
+- A local `cairncms config apply` run is attributed to the system, with no user and an origin of `config-cli`.
 
-Domain action events such as `roles.create` and `permissions.delete` are emitted after commit and not emitted after rollback. Filter hooks must use their supplied handler `database`; see [Handler context](/docs/develop/extensions/server-extensions/hooks/#the-context).
+Apply action hooks run after commit. Extension authors should follow the [handler context rules](/docs/develop/extensions/server-extensions/hooks/#the-context).
 
-A mutating apply forcibly clears the system and response caches regardless of `CACHE_AUTO_PURGE`, so revoked permissions take effect on the next request.
+A mutating apply clears the system and response caches regardless of `CACHE_AUTO_PURGE`.
 
 If a post-commit step fails, the configuration remains applied. `CONFIG_POST_COMMIT_FAILED` (HTTP `500`, CLI exit `3`) returns `extensions.committed: true` and identifies the failed step in `extensions.phase`:
 
@@ -339,55 +343,46 @@ If a post-commit step fails, the configuration remains applied. `CONFIG_POST_COM
 
 ### Run record
 
-Every engine run on either surface attempts to write one structured log record when it finishes, so an operator can see what each plan or apply did without reading activity rows. Dry runs and refusals are recorded too, since they mutate nothing and would otherwise leave no trace. The record is best-effort: a logging failure never changes the run's outcome, so a present record is authoritative while an absent one proves nothing. Alongside pino's standard `level` and `time` fields, the record carries:
+Plans and applies produce a structured `config.run.finished` log record, including dry runs and refusals. Logging is best-effort, so a missing record does not prove the apply never ran. For example:
 
 ```json
-{"event":"config.run.finished","runId":"3f6c1b0e-9b2c-4a1d-8f2e-0a7d5c4b3e21","source":"http","caller":{"kind":"user","user":"<uuid>","role":"<uuid>"},"userAgent":"cairncms-cli/1.6.0","dryRun":false,"destructive":true,"manifestVersion":1,"managedKinds":["roles","permissions"],"changes":{"create":1,"update":2,"delete":1},"result":"applied","durationMs":184,"msg":"Config run finished"}
+{"event":"config.run.finished","runId":"3f6c1b0e-9b2c-4a1d-8f2e-0a7d5c4b3e21","source":"http","caller":{"kind":"user","user":"<uuid>","role":"<uuid>"},"userAgent":"cairncms-cli/1.6.0","dryRun":false,"destructive":true,"manifestVersion":2,"managedKinds":["roles","permissions","folders"],"changes":{"create":1,"update":2,"delete":1},"result":"applied","durationMs":184,"msg":"Config run finished"}
 ```
 
 - **`result`** — `no_changes`, `planned`, `discarded`, `refused`, `invalid`, `state_changed`, `applied`, `post_apply_failed`, or `failed`. `planned` has dry-run changes, `discarded` was declined at the prompt, and `post_apply_failed` means the configuration was applied before cache invalidation or event delivery failed.
 - **`errorCode`** — present for `refused`, `invalid`, `state_changed`, `failed`, and `post_apply_failed`: the typed error code, such as `DESTRUCTIVE_CHANGES_REQUIRED`, or `UNEXPECTED` for an error outside the config error set.
 - **`source`** — `cli` for a local `config apply`, `http` for `POST /config/apply`, including runs driven by the remote CLI, whose `userAgent` starts with `cairncms-cli/`.
 - **`caller`** — the administrator's user and role ids on an HTTP run, or the system actor with origin `config-cli` on a local run.
-- **`changes`** — the plan's create, update, and delete counts, never the changes themselves.
-- **`durationMs`** — engine time, from the moment the request or command has been parsed and validated to the record.
+- **`changes`** — the plan's create, update, and delete counts.
+- **`durationMs`** — time spent planning and applying, excluding transport time.
 
-The server writes the record at `info` level under both log styles. The local CLI writes it only under `LOG_STYLE=raw`, so interactive output is unchanged and a CI runner that sets raw gets one JSON line per run. Failures before the engine starts, such as a bad flag, an unreadable config directory, an unreachable database, or an unparseable request body, produce no record because the command or the request already reports them.
+The server writes these records at `info` level. For local CLI runs in CI, set `LOG_STYLE=raw` to receive them as JSON lines. Failures before planning starts may produce no run record.
 
-Every response from a `POST /config/apply` run that reached the engine carries the run id in `X-Config-Run-Id`: on success and on every error the run produces, such as a refusal, a state conflict, or a failure. A request rejected before a run starts, by authentication, an unsupported media type, or an invalid manifest, carries no run id and produces no record, so a run id identifies exactly one record when emission succeeds. The header is exposed to browser clients through the default `CORS_EXPOSED_HEADERS`. The remote CLI prints it as `Run <id>`, on standard error under `--format json`. A local run has no run id because nothing else on the machine could correlate it. The record complements the per-record activity and revisions above rather than replacing them.
+Use the HTTP response's `X-Config-Run-Id` header to find the matching server record. The remote CLI prints it as `Run <id>`. Requests rejected before a run starts have no run id. Local CLI runs have no run id either.
 
 ## Field semantics
 
-Both CLI and API follow the same omit-versus-null rule:
+When editing the files or an HTTP snapshot:
 
 - **Omitted optional role fields are preserved.** If a role payload omits `icon`, `description`, `enforce_tfa`, or `ip_access`, the database value is left unchanged.
-- **Explicitly null fields are cleared.** Only `description` and `ip_access` accept `null`.
+- **Clear a role's `description` or `ip_access` with `null`.** Other role fields do not accept `null`.
+- **Folder parents use keys.** Set `parent` to another folder's key from the same config. Set it to `null`, or omit it, to place the folder at the top level. Include `key` and `name` in every folder document.
 
-An apply changes only the fields present in the declaration. Generated snapshots include the complete supported field set for reproducibility.
+To rename or move a folder, edit its `name` or `parent` and keep its `key`. Generated snapshots include all supported fields.
 
 ### Supported fields
 
-Each resource kind accepts only the fields defined by its config format. Unknown fields stop the apply instead of being ignored.
-
-Fields outside this contract are not exported or updated by config-as-code. They remain part of the database record and are removed if that record is deleted.
+Unknown fields stop the apply. Fields outside the config format are not exported or updated, but are removed with their record if it is deleted.
 
 ## Validation
 
-After their input-specific checks, both surfaces validate the same config contract. The engine rejects the entire apply if either the desired config or the resulting plan fails validation. Validation includes:
+Both surfaces validate the configuration and plan before applying changes. Role and folder references must resolve as described in [Managed scope](#managed-scope) and [Field semantics](#field-semantics). Each role can have only one permission rule per collection and action.
 
-- **Readable state** — an unreadable manifest, managed directory, config record, or current database value stops the run before a plan is created.
-- **Supported document values** — config values must round-trip without changing meaning. Binary YAML values and non-finite numbers are rejected. Dates remain supported and normalize to ISO 8601 strings. Documents nested deeper than 100 levels or using more than 50 YAML aliases to mappings or sequences are outside the supported range.
-- **Manifest version** — only versions the engine recognizes are accepted. Future-format payloads are rejected rather than partially applied.
-- **Administrator continuity:** Every create, role update, and deletion step must leave at least one role with `admin_access: true`. Unsafe plans report `ADMIN_CONTINUITY_REQUIRED`, and `--destructive` cannot override the protection.
-- **Undefined role references** — a permission set whose `role` cannot be resolved is rejected, identically on both surfaces. When the config manages roles, the role must be declared in the config. When it does not, the role must already exist in the database (see [Managed scope](#managed-scope)).
-- **Duplicate permission tuples** — two rules in the same role's set targeting the same `(collection, action)` are rejected. Permissions must be unique on that tuple.
-- **Reserved key misuse** — the `public` key in `roles[]` is rejected. The Public role record is platform-managed and cannot be created or updated as a role definition. The same `public` key in `permissions[]` is the supported way to manage Public access.
-
-Validation failures are reported without applying changes.
+Every step must retain at least one role with `admin_access: true`. Plans that cannot do so report `ADMIN_CONTINUITY_REQUIRED`; `--destructive` does not override this protection.
 
 ### Error responses
 
-Validation failures and refused destructive applies make no changes. If the apply transaction fails, CairnCMS rolls it back. When a validation pass reports more than one failure, the HTTP API returns one `errors` entry for each reported failure:
+Validation failures and refusals make no changes. A failed apply transaction is rolled back. The HTTP API reports errors in an `errors` array:
 
 ```json
 {
@@ -402,12 +397,13 @@ Validation failures and refused destructive applies make no changes. If the appl
 
 Config-specific HTTP codes are:
 
-- **`CONFIG_INVALID`** (400) — invalid document structure, values, fields, role references, reserved keys, or placeholder syntax in HTTP input.
-- **`CONFIG_UNSUPPORTED_VERSION`** (400) — an unsupported manifest version.
-- **`CONFIG_IDENTITY_CONFLICT`** (400) — a duplicate role or permission identity.
-- **`CONFIG_PROTECTED_RECORD`** (400) — a plan that would remove the last `admin_access: true` role.
+- **`CONFIG_INVALID`** (400) — invalid configuration. The message identifies the field or reference to correct.
+- **`CONFIG_UNSUPPORTED_VERSION`** (400) — the manifest version is unsupported or does not support a listed kind.
+- **`CONFIG_IDENTITY_CONFLICT`** (400) — a duplicate role key, folder key, or permission identity.
+- **`CONFIG_PROTECTED_RECORD`** (400) — the plan would break administrator continuity.
 - **`DESTRUCTIVE_CHANGES_REQUIRED`** (400) — a plan contains deletions that were not authorized. `extensions.deletions` lists the identities.
-- **`CONFIG_STATE_CHANGED`** (409) — the managed state or a role identity the plan depended on changed between plan and apply, or a concurrent write forced a serialization conflict. The apply made no change. Recompute the plan and re-apply.
+- **`CONFIG_FOLDER_IN_USE`** (400) — a folder still has contents or references. `extensions.blockedBy` identifies what must be moved or cleared before deletion.
+- **`CONFIG_STATE_CHANGED`** (409) — required state changed or a conflicting write prevented the apply. Review a fresh plan and retry.
 - **`CONFIG_READ_FAILED`** (500) — required database state is unreadable, such as an orphaned or duplicate permission row.
 - **`CONFIG_APPLY_FAILED`** (500) — the apply transaction failed and was rolled back.
 
@@ -415,19 +411,17 @@ Malformed JSON uses `INVALID_PAYLOAD`. Unsupported content types use `UNSUPPORTE
 
 The CLI writes failure messages to standard error and uses the [exit codes](#exit-codes) above. An unset `CAIRNCMS_CONFIG_*` placeholder is reported as `CONFIG_PLACEHOLDER_UNRESOLVED`. A placeholder outside that namespace is `CONFIG_INVALID`.
 
-Config-as-code reads current state without running extension query filters, read filters, or read actions.
-
 ## Source-control workflow
 
-The intended pattern for a multi-environment project mirrors schema-as-code:
+For a multi-environment project:
 
-1. Make role and permission changes in your dev instance (the app's Settings → Access Control surface is the easiest editor).
+1. Make role, permission, or folder changes in your development instance using Settings → Access Control or the File library.
 2. Run `cairncms config snapshot ./config` to write the directory tree.
-3. Commit. The diff in the pull request shows scoped per-role changes.
-4. CI runs `cairncms config apply --dry-run --format json ./config` against staging; if the exit code is `1`, the deploy step proceeds with `cairncms config apply --yes ./config`.
+3. Review and commit the snapshot diff.
+4. Run `cairncms config apply --dry-run --format json ./config` against staging. Exit `1` means changes are planned. After review, apply them with `cairncms config apply --yes ./config`.
 5. Production deploys the same way, after staging verification.
 
-For destructive changes — removing a role, dropping permissions — pass `--destructive` and review the dry-run output carefully before merge. The destructive flag is intentionally a per-apply opt-in rather than a setting somewhere; cumulative defaults that quietly become destructive are how state gets deleted by accident.
+For deletions, review the dry-run output before merging and add `--destructive` to the apply command.
 
 ## Pairing with schema-as-code
 
