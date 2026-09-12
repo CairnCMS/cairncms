@@ -140,3 +140,110 @@ describe('directus_folders key enforcement on a real SQLite database', () => {
 		expect(await allFolders()).toEqual(before);
 	});
 });
+
+describe('directus_folders parent-cycle guard on a real SQLite database', () => {
+	const A = '11111111-1111-4111-8111-111111111111';
+	const B = '22222222-2222-4222-8222-222222222222';
+	const C = '33333333-3333-4333-8333-333333333333';
+	const D = '44444444-4444-4444-8444-444444444444';
+
+	let db: Knex;
+
+	beforeEach(async () => {
+		db = knex.default({
+			client: 'sqlite3',
+			connection: { filename: ':memory:' },
+			useNullAsDefault: true,
+			pool: { min: 1, max: 1 },
+			acquireConnectionTimeout: 500,
+		});
+
+		await db.schema.createTable('directus_folders', (table) => {
+			table.uuid('id').primary();
+			table.string('name');
+			table.uuid('parent');
+			table.string('key').unique();
+		});
+
+		await db('directus_folders').insert([
+			{ id: A, name: 'A', key: 'a', parent: null },
+			{ id: B, name: 'B', key: 'b', parent: A },
+			{ id: C, name: 'C', key: 'c', parent: B },
+			{ id: D, name: 'D', key: 'd', parent: null },
+		]);
+	});
+
+	afterEach(async () => {
+		await db.destroy();
+	});
+
+	function service(): ItemsService {
+		return new ItemsService('directus_folders', { knex: db, schema });
+	}
+
+	async function parentOf(id: string): Promise<string | null> {
+		return (await db('directus_folders').where({ id }).first())!['parent'];
+	}
+
+	it('creates a folder under an existing parent', async () => {
+		const id = await service().createOne({ name: 'Child', parent: A });
+		expect(await parentOf(id as string)).toBe(A);
+	});
+
+	it('refuses a self-parent create and persists nothing', async () => {
+		const self = '55555555-5555-4555-8555-555555555555';
+		const before = await db('directus_folders').select('id');
+
+		const error = await service()
+			.createOne({ id: self, name: 'Self', parent: self })
+			.catch((err) => err);
+
+		expect(error).toBeInstanceOf(InvalidPayloadException);
+		expect(await db('directus_folders').select('id')).toEqual(before);
+	});
+
+	it('refuses moving a folder under its own descendant', async () => {
+		const error = await service()
+			.updateOne(A, { parent: C })
+			.catch((err) => err);
+
+		expect(error).toBeInstanceOf(InvalidPayloadException);
+		expect(await parentOf(A)).toBeNull();
+	});
+
+	it('refuses a self-parent update', async () => {
+		const error = await service()
+			.updateOne(B, { parent: B })
+			.catch((err) => err);
+
+		expect(error).toBeInstanceOf(InvalidPayloadException);
+		expect(await parentOf(B)).toBe(A);
+	});
+
+	it('allows a valid move', async () => {
+		await service().updateOne(C, { parent: D });
+		expect(await parentOf(C)).toBe(D);
+	});
+
+	it('leaves a name-only update on the cheap path', async () => {
+		await service().updateOne(B, { name: 'Renamed' });
+
+		expect(await db('directus_folders').where({ id: B }).first()).toMatchObject({
+			name: 'Renamed',
+			key: 'b',
+			parent: A,
+		});
+	});
+
+	it('refuses the second of two sequential opposing moves at the runtime guard', async () => {
+		await service().updateOne(A, { parent: D });
+
+		const error = await service()
+			.updateOne(D, { parent: A })
+			.catch((err) => err);
+
+		expect(error).toBeInstanceOf(InvalidPayloadException);
+		expect(await parentOf(A)).toBe(D);
+		expect(await parentOf(D)).toBeNull();
+	});
+});

@@ -1,6 +1,8 @@
 import { normalizeConfigKey } from '@cairncms/utils';
+import { withMutationGuard } from '../../../database/mutation-guard.js';
 import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
 import { FoldersService } from '../../../services/folders.js';
+import { FolderDeletionGuard } from '../folder-deletion-guard.js';
 import type {
 	ConfigFailure,
 	ConfigFolder,
@@ -320,7 +322,7 @@ async function applyCreates(
 
 	for (const folder of topoSortCreates(creates)) {
 		const parentKey = folder.parent ?? null;
-		const parentId = parentKey === null ? null : (folderIdByKey.get(parentKey) ?? null);
+		const parentId = parentKey === null ? null : folderIdByKey.get(parentKey) ?? null;
 
 		if (parentKey !== null && parentId === null) {
 			throw new Error(`Parent folder "${parentKey}" not found during apply of "${folder.key}".`);
@@ -391,7 +393,7 @@ async function applyUpdates(
 	}
 
 	const desiredParentByKey = new Map<string, string | null>(
-		rows.map((row) => [row['key'], row['parent'] === null ? null : (keyById.get(row['parent']) ?? null)])
+		rows.map((row) => [row['key'], row['parent'] === null ? null : keyById.get(row['parent']) ?? null])
 	);
 
 	for (const update of reparents) desiredParentByKey.set(update.key, update.changes.parent!.after);
@@ -454,10 +456,12 @@ async function applyDeletes(
 
 	for (const key of deletes) visit(key);
 
+	const guardedOptions = withMutationGuard(context.mutationOptions, new FolderDeletionGuard());
+
 	for (const key of ordered) {
 		const id = folderIdByKey.get(key);
 		if (!id) continue;
-		await foldersService.deleteOne(id, context.mutationOptions);
+		await foldersService.deleteOne(id, guardedOptions);
 		deleted.push(key);
 	}
 

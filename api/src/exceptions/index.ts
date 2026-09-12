@@ -2,6 +2,7 @@ export * from './admin-mutation-unverified-transaction.js';
 export * from './concurrency-conflict.js';
 export * from './config-apply-failed.js';
 export * from './config-apply-scope-mismatch.js';
+export * from './config-folder-in-use.js';
 export * from './config-identity-conflict.js';
 export * from './config-invalid.js';
 export * from './config-placeholder-unresolved.js';

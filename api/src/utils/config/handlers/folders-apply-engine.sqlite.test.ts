@@ -1,8 +1,11 @@
 import type { SchemaOverview } from '@cairncms/types';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import emitter from '../../../emitter.js';
 import { ConfigApplyFailedException } from '../../../exceptions/config-apply-failed.js';
+import { ConfigFolderInUseException } from '../../../exceptions/config-folder-in-use.js';
 import { ConfigStateChangedException } from '../../../exceptions/config-state-changed.js';
+import { InvalidPayloadException } from '../../../exceptions/index.js';
 import { FoldersService } from '../../../services/folders.js';
 import type { CairnConfig, ConfigApplySecurityContext } from '../../../types/config.js';
 import { applyConfigPlan } from '../../apply-config-plan.js';
@@ -97,6 +100,21 @@ describe('folders through the real apply engine on SQLite', () => {
 			table.string('name');
 			table.uuid('parent');
 			table.string('key').unique();
+		});
+
+		await db.schema.createTable('directus_files', (table) => {
+			table.uuid('id').primary();
+			table.uuid('folder');
+		});
+
+		await db.schema.createTable('directus_settings', (table) => {
+			table.increments('id');
+			table.uuid('storage_default_folder');
+		});
+
+		await db.schema.createTable('directus_fields', (table) => {
+			table.increments('id');
+			table.text('options');
 		});
 	});
 
@@ -239,5 +257,142 @@ describe('folders through the real apply engine on SQLite', () => {
 
 		expect(await tree()).toEqual({ root: null, child: 'root', extra: 'root' });
 		expect(result.folders.created).toEqual(['extra']);
+	});
+
+	it('refuses a config delete of a folder that still holds a file, and rolls back', async () => {
+		await seed([{ key: 'root', parent: null }]);
+		await db('directus_files').insert({ id: '00000000-0000-4000-8000-0000000000f1', folder: idFor('root') });
+
+		const { config: current, stateToken } = await snapshot();
+		const plan = computeConfigPlan(current, { ...current, folders: [] });
+
+		await expect(
+			applyConfigPlan(plan, {
+				database: db,
+				schema,
+				destructive: true,
+				context: securityContext,
+				expectedStateToken: stateToken,
+			})
+		).rejects.toBeInstanceOf(ConfigFolderInUseException);
+
+		expect(await tree()).toEqual({ root: null });
+	});
+
+	it('allows a reparent-then-delete in the same apply', async () => {
+		await seed([
+			{ key: 'root', parent: null },
+			{ key: 'child', parent: 'root' },
+			{ key: 'other', parent: null },
+		]);
+
+		const { config: current, stateToken } = await snapshot();
+
+		const desired: CairnConfig = {
+			...current,
+			folders: [
+				{ key: 'child', name: 'child', parent: 'other' },
+				{ key: 'other', name: 'other', parent: null },
+			],
+		};
+
+		const result = await applyConfigPlan(computeConfigPlan(current, desired), {
+			database: db,
+			schema,
+			destructive: true,
+			context: securityContext,
+			expectedStateToken: stateToken,
+		});
+
+		expect(await tree()).toEqual({ child: 'other', other: null });
+		expect(result.folders.deleted).toEqual(['root']);
+	});
+
+	it('refuses a filter-injected parent cycle through the apply engine and rolls back', async () => {
+		await seed([
+			{ key: 'a', parent: null },
+			{ key: 'b', parent: 'a' },
+			{ key: 'c', parent: 'b' },
+		]);
+
+		const { config: current, stateToken } = await snapshot();
+
+		const desired: CairnConfig = {
+			...current,
+			folders: [
+				{ key: 'a', name: 'A-renamed', parent: null },
+				{ key: 'b', name: 'b', parent: 'a' },
+				{ key: 'c', name: 'c', parent: 'b' },
+			],
+		};
+
+		const inject = (payload: Record<string, unknown>): Record<string, unknown> => ({ ...payload, parent: idFor('c') });
+		emitter.onFilter('folders.update', inject as never);
+
+		try {
+			await expect(
+				applyConfigPlan(computeConfigPlan(current, desired), {
+					database: db,
+					schema,
+					destructive: false,
+					context: securityContext,
+					expectedStateToken: stateToken,
+				})
+			).rejects.toBeInstanceOf(InvalidPayloadException);
+		} finally {
+			emitter.offFilter('folders.update', inject as never);
+		}
+
+		expect(await tree()).toEqual({ a: null, b: 'a', c: 'b' });
+		expect(await db('directus_folders').where({ key: 'a' }).first()).toMatchObject({ name: 'a' });
+	});
+
+	it('rolls back the whole apply when a delete filter re-attaches a file after the pre-check', async () => {
+		await seed([
+			{ key: 'keep', parent: null },
+			{ key: 'doomed', parent: null },
+		]);
+
+		const { config: current, stateToken } = await snapshot();
+
+		const desired: CairnConfig = {
+			...current,
+			folders: [
+				{ key: 'keep', name: 'keep-renamed', parent: null },
+				{ key: 'fresh', name: 'fresh', parent: null },
+			],
+		};
+
+		const attach = async (keys: unknown, _meta: unknown, context: { database: Knex }): Promise<unknown> => {
+			await context
+				.database('directus_files')
+				.insert({ id: '00000000-0000-4000-8000-0000000000fa', folder: idFor('doomed') });
+
+			return keys;
+		};
+
+		emitter.onFilter('folders.delete', attach as never);
+		const dispatched = vi.spyOn(emitter, 'emitActionAndWait');
+		spies.push(dispatched);
+
+		try {
+			await expect(
+				applyConfigPlan(computeConfigPlan(current, desired), {
+					database: db,
+					schema,
+					destructive: true,
+					context: securityContext,
+					expectedStateToken: stateToken,
+				})
+			).rejects.toBeInstanceOf(ConfigFolderInUseException);
+		} finally {
+			emitter.offFilter('folders.delete', attach as never);
+		}
+
+		expect(await tree()).toEqual({ keep: null, doomed: null });
+		expect(await db('directus_folders').where({ key: 'keep' }).first()).toMatchObject({ name: 'keep' });
+		expect(await db('directus_folders').where({ key: 'fresh' }).first()).toBeUndefined();
+		expect(await db('directus_files').count({ n: '*' }).first()).toMatchObject({ n: 0 });
+		expect(dispatched).not.toHaveBeenCalled();
 	});
 });

@@ -36,6 +36,7 @@ exports.list = {
 		{ testFilePath: '/routes/translations/translations.test.ts' },
 		{ testFilePath: '/routes/files/upload-limits.test.ts' },
 		{ testFilePath: '/routes/folders/key-enforcement.test.ts' },
+		{ testFilePath: '/routes/folders/cycle-guard.test.ts' },
 		{ testFilePath: '/routes/security/trusted-ip.test.ts' },
 		{ testFilePath: '/routes/items/relational-presets.test.ts' },
 		{ testFilePath: '/routes/items/query-limit.test.ts' },

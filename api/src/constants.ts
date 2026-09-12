@@ -59,6 +59,8 @@ export const GENERATE_SPECIAL = ['uuid', 'date-created', 'role-created', 'user-c
 
 export const WRITE_PROTECTED_FIELDS = new Map<string, readonly string[]>([['directus_folders', ['key']]]);
 
+export const PARENT_CYCLE_GUARDED_COLLECTIONS = new Map<string, string>([['directus_folders', 'parent']]);
+
 export { UUID_REGEX } from './utils/is-valid-uuid.js';
 
 export const COOKIE_OPTIONS: CookieOptions = {

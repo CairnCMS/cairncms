@@ -20,6 +20,7 @@ import type {
 	MutationOptions,
 	PrimaryKey,
 } from '../types/index.js';
+import { assertNoParentCycle } from '../utils/assert-no-parent-cycle.js';
 import { assertWriteProtectedFieldsUnchanged } from '../utils/assert-write-protected-fields-unchanged.js';
 import getASTFromQuery from '../utils/get-ast-from-query.js';
 import { shouldClearCache } from '../utils/should-clear-cache.js';
@@ -185,8 +186,10 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 			// In case of manual string / UUID primary keys, the PK already exists in the object we're saving.
 			let primaryKey = payloadWithTypeCasting[primaryKeyField];
 
+			await assertNoParentCycle(trx, this.collection, primaryKeyField, [primaryKey], payloadWithTypeCasting);
+
 			const mutationGuard = getMutationGuard(opts);
-			if (mutationGuard) await mutationGuard.beforeCreate?.(payloadWithoutAliases);
+			if (mutationGuard) await mutationGuard.beforeCreate?.(payloadWithoutAliases, trx);
 
 			try {
 				const result = await trx
@@ -648,9 +651,10 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 
 			if (Object.keys(payloadWithTypeCasting).length > 0) {
 				await assertWriteProtectedFieldsUnchanged(trx, this.collection, primaryKeyField, keys, payloadWithTypeCasting);
+				await assertNoParentCycle(trx, this.collection, primaryKeyField, keys, payloadWithTypeCasting);
 
 				const mutationGuard = getMutationGuard(opts);
-				if (mutationGuard) await mutationGuard.beforeUpdate?.(payloadWithTypeCasting, keys);
+				if (mutationGuard) await mutationGuard.beforeUpdate?.(payloadWithTypeCasting, keys, trx);
 
 				try {
 					await trx(this.collection).update(payloadWithTypeCasting).whereIn(primaryKeyField, keys);
@@ -908,6 +912,9 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 		}
 
 		await this.knex.transaction(async (trx) => {
+			const mutationGuard = getMutationGuard(opts);
+			if (mutationGuard) await mutationGuard.beforeDelete?.(keys, trx);
+
 			await trx(this.collection).whereIn(primaryKeyField, keys).delete();
 
 			if (this.accountability && this.schema.collections[this.collection]!.accountability !== null) {

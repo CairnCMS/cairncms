@@ -101,6 +101,21 @@ describe('folders handler against a real SQLite database', () => {
 			table.uuid('parent');
 			table.string('key').unique();
 		});
+
+		await db.schema.createTable('directus_files', (table) => {
+			table.uuid('id').primary();
+			table.uuid('folder');
+		});
+
+		await db.schema.createTable('directus_settings', (table) => {
+			table.increments('id');
+			table.uuid('storage_default_folder');
+		});
+
+		await db.schema.createTable('directus_fields', (table) => {
+			table.increments('id');
+			table.text('options');
+		});
 	});
 
 	afterEach(async () => {
