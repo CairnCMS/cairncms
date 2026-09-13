@@ -15,6 +15,14 @@ type ConfigSnapshot = {
 	manifest: { version: number; resources: string[] };
 	roles: Array<Record<string, any>>;
 	permissions: Array<{ role: string; permissions: Array<Record<string, any>> }>;
+	folders?: Array<Record<string, any>>;
+};
+
+const serverVendors = vendors.filter((vendor) => vendor !== 'sqlite3');
+
+const eachServerVendor = (name: string, fn: (vendor: string) => Promise<void>): void => {
+	if (serverVendors.length > 0) it.each(serverVendors)(name, fn);
+	else it.skip(name, () => undefined);
 };
 
 const baselineCache: Record<string, ConfigSnapshot> = {};
@@ -125,7 +133,7 @@ describe('Config-as-Code API', () => {
 				expect(response.body.data).toHaveProperty('manifest');
 				expect(response.body.data).toHaveProperty('roles');
 				expect(response.body.data).toHaveProperty('permissions');
-				expect(response.body.data.manifest.version).toBe(1);
+				expect(response.body.data.manifest.version).toBe(2);
 				expect(Array.isArray(response.body.data.roles)).toBe(true);
 				expect(Array.isArray(response.body.data.permissions)).toBe(true);
 			});
@@ -142,7 +150,7 @@ describe('Config-as-Code API', () => {
 				expect(response.headers['content-type']).toContain('text/yaml');
 
 				const parsed = loadYaml(response.text) as ConfigSnapshot;
-				expect(parsed.manifest.version).toBe(1);
+				expect(parsed.manifest.version).toBe(2);
 				expect(Array.isArray(parsed.roles)).toBe(true);
 				expect(Array.isArray(parsed.permissions)).toBe(true);
 			});
@@ -179,7 +187,7 @@ describe('Config-as-Code API', () => {
 			it.each(vendors)('%s', async (vendor) => {
 				const response = await request(getUrl(vendor))
 					.get('/config/snapshot')
-					.query({ manifest_version: '2' })
+					.query({ manifest_version: '3' })
 					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
 
 				expect(response.statusCode).toBe(400);
@@ -211,7 +219,7 @@ describe('Config-as-Code API', () => {
 			});
 		});
 
-		describe('accepts the exact supported manifest version', () => {
+		describe('accepts an explicit v1 manifest version', () => {
 			it.each(vendors)('%s', async (vendor) => {
 				const response = await request(getUrl(vendor))
 					.get('/config/snapshot')
@@ -220,6 +228,18 @@ describe('Config-as-Code API', () => {
 
 				expect(response.statusCode).toBe(200);
 				expect(response.body.data.manifest.version).toBe(1);
+			});
+		});
+
+		describe('accepts an explicit v2 manifest version', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const response = await request(getUrl(vendor))
+					.get('/config/snapshot')
+					.query({ manifest_version: '2' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.manifest.version).toBe(2);
 			});
 		});
 
@@ -631,6 +651,17 @@ describe('Config-as-Code API', () => {
 			});
 		});
 
+		describe('accepts a v2 manifest', () => {
+			it.each(vendors)('%s', async (vendor) => {
+				const desired = await getBaseline(vendor);
+				desired.manifest.version = 2;
+
+				const response = await applyConfig(vendor, desired, { dryRun: true });
+
+				expect(response.statusCode).toBe(200);
+			});
+		});
+
 		describe('rejects a duplicate permission tuple as a typed identity conflict', () => {
 			it.each(vendors)('%s', async (vendor) => {
 				const desired = await getBaseline(vendor);
@@ -1038,7 +1069,7 @@ describe('Config-as-Code API', () => {
 
 				expect(response.body.data).toEqual({
 					planVersion: 2,
-					manifestVersion: 1,
+					manifestVersion: 2,
 					changes: [],
 					summary: { create: 0, update: 0, delete: 0 },
 					warnings: [],
@@ -1175,6 +1206,378 @@ describe('Config-as-Code API', () => {
 	});
 });
 
+describe('Config-as-Code folders lifecycle', () => {
+	const run = randomUUID().replace(/-/g, '').slice(0, 10);
+	const rootKey = `lifecycle_${run}_root`;
+	const branchKey = `lifecycle_${run}_branch`;
+	const leafKey = `lifecycle_${run}_leaf`;
+	const otherKey = `lifecycle_${run}_other`;
+
+	function managedWithFolders(
+		base: ConfigSnapshot,
+		folders: Array<{ key: string; name: string; parent: string | null }>
+	): ConfigSnapshot {
+		const snapshot = JSON.parse(JSON.stringify(base)) as ConfigSnapshot;
+		snapshot.manifest.version = 2;
+		if (!snapshot.manifest.resources.includes('folders')) snapshot.manifest.resources.push('folders');
+		snapshot.folders = [...(snapshot.folders ?? []), ...folders];
+		return snapshot;
+	}
+
+	function foldersByKey(snapshot: ConfigSnapshot): Map<string, Record<string, any>> {
+		return new Map((snapshot.folders ?? []).map((folder) => [folder.key, folder]));
+	}
+
+	async function folderIdByKey(vendor: string, key: string): Promise<string> {
+		const response = await request(getUrl(vendor))
+			.get('/folders')
+			.query({ filter: JSON.stringify({ key: { _eq: key } }), fields: 'id' })
+			.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+		expect(response.statusCode).toBe(200);
+		expect(response.body.data).toHaveLength(1);
+		return response.body.data[0].id as string;
+	}
+
+	async function attemptCleanup(failures: string[], label: string, run: () => Promise<void>): Promise<void> {
+		try {
+			await run();
+		} catch (error) {
+			failures.push(`${label}: ${(error as Error).message}`);
+		}
+	}
+
+	function reportOutcome(testError: unknown, failures: string[]): void {
+		if (testError !== undefined) {
+			if (failures.length > 0) {
+				throw new Error(
+					`${(testError as Error)?.message ?? String(testError)} (cleanup also failed: ${failures.join('; ')})`
+				);
+			}
+
+			throw testError;
+		}
+
+		if (failures.length > 0) throw new Error(failures.join('; '));
+	}
+
+	async function deleteFolderByKey(vendor: string, key: string): Promise<void> {
+		const token = `Bearer ${common.USER.ADMIN!.TOKEN}`;
+
+		const found = await request(getUrl(vendor))
+			.get('/folders')
+			.query({ filter: JSON.stringify({ key: { _eq: key } }), fields: 'id' })
+			.set('Authorization', token);
+
+		if (found.statusCode !== 200) throw new Error(`lookup returned ${found.statusCode}`);
+
+		for (const row of found.body.data ?? []) {
+			const del = await request(getUrl(vendor)).delete(`/folders/${row.id}`).set('Authorization', token);
+			if (del.statusCode !== 200 && del.statusCode !== 204) throw new Error(`delete returned ${del.statusCode}`);
+		}
+	}
+
+	async function deleteCollection(vendor: string, name: string): Promise<void> {
+		const del = await request(getUrl(vendor))
+			.delete(`/collections/${name}`)
+			.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+		if (del.statusCode !== 200 && del.statusCode !== 204) throw new Error(`delete returned ${del.statusCode}`);
+	}
+
+	describe('creates, snapshots, reparents, deletes, and stays idempotent', () => {
+		it.each(vendors)('%s', async (vendor) => {
+			try {
+				const baseline = await getBaseline(vendor);
+
+				const created = await applyConfig(
+					vendor,
+					managedWithFolders(baseline, [
+						{ key: rootKey, name: 'Lifecycle Root', parent: null },
+						{ key: branchKey, name: 'Lifecycle Branch', parent: rootKey },
+						{ key: leafKey, name: 'Lifecycle Leaf', parent: branchKey },
+						{ key: otherKey, name: 'Lifecycle Other', parent: null },
+					]),
+					{ destructive: true }
+				);
+
+				expect(created.statusCode).toBe(200);
+
+				expect(created.body.data.folders.created).toEqual(
+					expect.arrayContaining([rootKey, branchKey, leafKey, otherKey])
+				);
+
+				const afterCreate = foldersByKey(await adminSnapshot(vendor));
+				expect(afterCreate.get(rootKey)?.parent).toBeNull();
+				expect(afterCreate.get(branchKey)?.parent).toBe(rootKey);
+				expect(afterCreate.get(leafKey)?.parent).toBe(branchKey);
+				expect(afterCreate.get(otherKey)?.parent).toBeNull();
+				expect(afterCreate.get(branchKey)?.parent).not.toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-/i);
+
+				const snapshot1 = await adminSnapshot(vendor);
+				const reapply = await applyConfig(vendor, snapshot1, { destructive: true });
+				expect(reapply.statusCode).toBe(200);
+				expect(reapply.body.data.folders).toEqual({ created: [], updated: [], deleted: [] });
+
+				const reparented = JSON.parse(JSON.stringify(snapshot1)) as ConfigSnapshot;
+
+				for (const folder of reparented.folders ?? []) {
+					if (folder.key === leafKey) folder.parent = otherKey;
+				}
+
+				const reparent = await applyConfig(vendor, reparented, { destructive: true });
+				expect(reparent.statusCode).toBe(200);
+				expect(reparent.body.data.folders.updated).toEqual([leafKey]);
+				expect(reparent.body.data.folders.created).toEqual([]);
+				expect(reparent.body.data.folders.deleted).toEqual([]);
+
+				const afterReparent = foldersByKey(await adminSnapshot(vendor));
+				expect(afterReparent.get(leafKey)?.parent).toBe(otherKey);
+				expect(afterReparent.get(rootKey)?.parent).toBeNull();
+
+				const withoutBranch = JSON.parse(JSON.stringify(await adminSnapshot(vendor))) as ConfigSnapshot;
+				withoutBranch.folders = (withoutBranch.folders ?? []).filter((folder) => folder.key !== branchKey);
+
+				const deleteBranch = await applyConfig(vendor, withoutBranch, { destructive: true });
+				expect(deleteBranch.statusCode).toBe(200);
+				expect(deleteBranch.body.data.folders.deleted).toEqual([branchKey]);
+
+				const afterDelete = foldersByKey(await adminSnapshot(vendor));
+				expect(afterDelete.has(branchKey)).toBe(false);
+				expect(afterDelete.get(leafKey)?.parent).toBe(otherKey);
+
+				const settled = await adminSnapshot(vendor);
+				const settleReapply = await applyConfig(vendor, settled, { destructive: true });
+				expect(settleReapply.statusCode).toBe(200);
+				expect(settleReapply.body.data.folders).toEqual({ created: [], updated: [], deleted: [] });
+			} finally {
+				await resetToBaseline(vendor);
+			}
+		});
+	});
+
+	eachServerVendor('resolves a mixed-case parent through snapshot and re-apply (%s)', async (vendor) => {
+		const parentKey = `mixed_${run}_parent`;
+		const childKey = `mixed_${run}_child`;
+		const failures: string[] = [];
+		let testError: unknown;
+
+		try {
+			const created = await applyConfig(
+				vendor,
+				managedWithFolders(await getBaseline(vendor), [
+					{ key: parentKey, name: 'Mixed Parent', parent: null },
+					{ key: childKey, name: 'Mixed Child', parent: null },
+				]),
+				{ destructive: true }
+			);
+
+			expect(created.statusCode).toBe(200);
+
+			const parentId = await folderIdByKey(vendor, parentKey);
+			const childId = await folderIdByKey(vendor, childKey);
+
+			const move = await request(getUrl(vendor))
+				.patch(`/folders/${childId}`)
+				.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+				.send({ parent: parentId.toUpperCase() });
+
+			expect(move.statusCode).toBe(200);
+
+			const snapshot = foldersByKey(await adminSnapshot(vendor));
+			expect(snapshot.get(childKey)?.parent).toBe(parentKey);
+
+			const reapply = await applyConfig(vendor, await adminSnapshot(vendor), { destructive: true });
+			expect(reapply.statusCode).toBe(200);
+			expect(reapply.body.data.folders).toEqual({ created: [], updated: [], deleted: [] });
+		} catch (error) {
+			testError = error;
+		} finally {
+			await attemptCleanup(failures, `folder ${childKey}`, () => deleteFolderByKey(vendor, childKey));
+			await attemptCleanup(failures, `folder ${parentKey}`, () => deleteFolderByKey(vendor, parentKey));
+			await attemptCleanup(failures, 'resetToBaseline', () => resetToBaseline(vendor));
+		}
+
+		reportOutcome(testError, failures);
+	});
+
+	it.each(vendors)('deletes a parent and its child together and confirms both are gone (%s)', async (vendor) => {
+		const parentKey = `pair_${run}_parent`;
+		const childKey = `pair_${run}_child`;
+
+		try {
+			const created = await applyConfig(
+				vendor,
+				managedWithFolders(await getBaseline(vendor), [
+					{ key: parentKey, name: 'Pair Parent', parent: null },
+					{ key: childKey, name: 'Pair Child', parent: parentKey },
+				]),
+				{ destructive: true }
+			);
+
+			expect(created.statusCode).toBe(200);
+			expect(created.body.data.folders.created).toEqual(expect.arrayContaining([parentKey, childKey]));
+
+			const withoutPair = JSON.parse(JSON.stringify(await adminSnapshot(vendor))) as ConfigSnapshot;
+
+			withoutPair.folders = (withoutPair.folders ?? []).filter(
+				(folder) => folder.key !== parentKey && folder.key !== childKey
+			);
+
+			const deletePair = await applyConfig(vendor, withoutPair, { destructive: true });
+			expect(deletePair.statusCode).toBe(200);
+			expect(deletePair.body.data.folders.deleted).toEqual(expect.arrayContaining([parentKey, childKey]));
+			expect(deletePair.body.data.folders.deleted).toHaveLength(2);
+
+			const after = foldersByKey(await adminSnapshot(vendor));
+			expect(after.has(parentKey)).toBe(false);
+			expect(after.has(childKey)).toBe(false);
+		} finally {
+			await resetToBaseline(vendor);
+		}
+	});
+
+	it.each(vendors)('deletes a folder while a field carries an empty options.folder (%s)', async (vendor) => {
+		const token = `Bearer ${common.USER.ADMIN!.TOKEN}`;
+		const folderKey = `probe_${run}_folder`;
+		const collectionName = `probe_${run}_coll`;
+		const failures: string[] = [];
+		let testError: unknown;
+
+		try {
+			const createCollection = await request(getUrl(vendor))
+				.post('/collections')
+				.set('Authorization', token)
+				.send({
+					collection: collectionName,
+					meta: {},
+					schema: {},
+					fields: [
+						{
+							field: 'id',
+							type: 'integer',
+							meta: { hidden: true, interface: 'input', readonly: true },
+							schema: { is_primary_key: true, has_auto_increment: true },
+						},
+					],
+				});
+
+			expect(createCollection.statusCode).toBe(200);
+
+			const createField = await request(getUrl(vendor))
+				.post(`/fields/${collectionName}`)
+				.set('Authorization', token)
+				.send({ field: 'attachment', type: 'uuid', meta: { interface: 'file', options: { folder: '' } }, schema: {} });
+
+			expect(createField.statusCode).toBe(200);
+
+			const created = await applyConfig(
+				vendor,
+				managedWithFolders(await getBaseline(vendor), [{ key: folderKey, name: 'Probe Folder', parent: null }]),
+				{ destructive: true }
+			);
+
+			expect(created.statusCode).toBe(200);
+
+			const withoutFolder = JSON.parse(JSON.stringify(await adminSnapshot(vendor))) as ConfigSnapshot;
+			withoutFolder.folders = (withoutFolder.folders ?? []).filter((folder) => folder.key !== folderKey);
+
+			const deleteFolder = await applyConfig(vendor, withoutFolder, { destructive: true });
+			expect(deleteFolder.statusCode).toBe(200);
+			expect(deleteFolder.body.data.folders.deleted).toEqual([folderKey]);
+		} catch (error) {
+			testError = error;
+		} finally {
+			await attemptCleanup(failures, `folder ${folderKey}`, () => deleteFolderByKey(vendor, folderKey));
+			await attemptCleanup(failures, `collection ${collectionName}`, () => deleteCollection(vendor, collectionName));
+			await attemptCleanup(failures, 'resetToBaseline', () => resetToBaseline(vendor));
+		}
+
+		reportOutcome(testError, failures);
+	});
+
+	eachServerVendor(
+		'refuses a config deletion of a folder referenced by a mixed-case field option (%s)',
+		async (vendor) => {
+			const token = `Bearer ${common.USER.ADMIN!.TOKEN}`;
+			const folderKey = `optref_${run}_folder`;
+			const collectionName = `optref_${run}_coll`;
+			const failures: string[] = [];
+			let testError: unknown;
+
+			try {
+				const createCollection = await request(getUrl(vendor))
+					.post('/collections')
+					.set('Authorization', token)
+					.send({
+						collection: collectionName,
+						meta: {},
+						schema: {},
+						fields: [
+							{
+								field: 'id',
+								type: 'integer',
+								meta: { hidden: true, interface: 'input', readonly: true },
+								schema: { is_primary_key: true, has_auto_increment: true },
+							},
+						],
+					});
+
+				expect(createCollection.statusCode).toBe(200);
+
+				const created = await applyConfig(
+					vendor,
+					managedWithFolders(await getBaseline(vendor), [{ key: folderKey, name: 'Ref Folder', parent: null }]),
+					{ destructive: true }
+				);
+
+				expect(created.statusCode).toBe(200);
+
+				const folderId = await folderIdByKey(vendor, folderKey);
+
+				const createField = await request(getUrl(vendor))
+					.post(`/fields/${collectionName}`)
+					.set('Authorization', token)
+					.send({
+						field: 'attachment',
+						type: 'uuid',
+						meta: { interface: 'file', options: { folder: folderId.toUpperCase() } },
+						schema: {},
+					});
+
+				expect(createField.statusCode).toBe(200);
+
+				const withoutFolder = JSON.parse(JSON.stringify(await adminSnapshot(vendor))) as ConfigSnapshot;
+				withoutFolder.folders = (withoutFolder.folders ?? []).filter((folder) => folder.key !== folderKey);
+
+				const dryRun = await applyConfig(vendor, withoutFolder, { destructive: true, dryRun: true });
+				expect(dryRun.statusCode).toBe(200);
+
+				const change = (dryRun.body.data.changes as Array<Record<string, any>>).find(
+					(entry) => entry.kind === 'folders' && entry.operation === 'delete' && entry.identity.key === folderKey
+				);
+
+				expect(change?.impact).toEqual([{ blockedBy: 'options.folder' }]);
+
+				const apply = await applyConfig(vendor, withoutFolder, { destructive: true });
+				expect(apply.statusCode).toBe(400);
+				expect(apply.body.errors[0].extensions.code).toBe('CONFIG_FOLDER_IN_USE');
+				expect(apply.body.errors[0].extensions.key).toBe(folderKey);
+
+				expect(foldersByKey(await adminSnapshot(vendor)).has(folderKey)).toBe(true);
+			} catch (error) {
+				testError = error;
+			} finally {
+				await attemptCleanup(failures, `collection ${collectionName}`, () => deleteCollection(vendor, collectionName));
+				await attemptCleanup(failures, `folder ${folderKey}`, () => deleteFolderByKey(vendor, folderKey));
+				await attemptCleanup(failures, 'resetToBaseline', () => resetToBaseline(vendor));
+			}
+
+			reportOutcome(testError, failures);
+		}
+	);
+});
+
 describe('Config-as-Code managed scope', () => {
 	function sanitize(vendor: string): string {
 		return vendor.replace(/[^a-z0-9_]/gi, '_');
@@ -1195,6 +1598,7 @@ describe('Config-as-Code managed scope', () => {
 			const desired = JSON.parse(JSON.stringify(before)) as ConfigSnapshot;
 			desired.manifest = { version: 1, resources: ['roles'] };
 			desired.permissions = [];
+			delete desired.folders;
 
 			try {
 				const response = await applyConfig(vendor, desired, { destructive: true });
@@ -1278,6 +1682,7 @@ describe('Config-as-Code managed scope', () => {
 				const permsOnly = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
 				permsOnly.manifest = { version: 1, resources: ['permissions'] };
 				permsOnly.roles = [];
+				delete permsOnly.folders;
 
 				permsOnly.permissions.push({
 					role: roleKey,
@@ -1553,7 +1958,7 @@ describe('cairncms config snapshot preserves managed scope', () => {
 
 			expect(result.error).toBeUndefined();
 			expect(result.status).toBe(0);
-			expect((await readManifest()).resources.slice().sort()).toEqual(['permissions', 'roles']);
+			expect((await readManifest()).resources.slice().sort()).toEqual(['folders', 'permissions', 'roles']);
 		});
 	});
 });
@@ -1983,6 +2388,7 @@ describe('Config-as-Code audit and events', () => {
 				expect(createResp.body.data).toEqual({
 					roles: { created: [roleKey], updated: [], deleted: [] },
 					permissions: { created: 1, updated: 0, deleted: 0 },
+					folders: { created: [], updated: [], deleted: [] },
 				});
 
 				const role = await db('directus_roles').where({ key: roleKey }).first();
@@ -2013,6 +2419,7 @@ describe('Config-as-Code audit and events', () => {
 				expect(updateResp.body.data).toEqual({
 					roles: { created: [], updated: [roleKey], deleted: [] },
 					permissions: { created: 0, updated: 1, deleted: 0 },
+					folders: { created: [], updated: [], deleted: [] },
 				});
 
 				await expectAudited(db, 'directus_roles', role.id, 'update', admin.id, true);
@@ -2161,6 +2568,7 @@ describe('Config-as-Code audit and events', () => {
 				expect(createResp.body.data).toEqual({
 					roles: { created: [roleKey], updated: [], deleted: [] },
 					permissions: { created: 1, updated: 0, deleted: 0 },
+					folders: { created: [], updated: [], deleted: [] },
 				});
 
 				const role = await db('directus_roles').where({ key: roleKey }).first();
@@ -2195,6 +2603,7 @@ describe('Config-as-Code audit and events', () => {
 				expect(deleteResp.body.data).toEqual({
 					roles: { created: [], updated: [], deleted: [roleKey] },
 					permissions: { created: 0, updated: 0, deleted: 0 },
+					folders: { created: [], updated: [], deleted: [] },
 				});
 
 				expect(await db('directus_roles').where({ id: role.id }).first()).toBeUndefined();
@@ -2289,6 +2698,7 @@ describe('Config-as-Code audit and events', () => {
 				expect(deleteResp.body.data).toEqual({
 					roles: { created: [], updated: [], deleted: [removedKey] },
 					permissions: { created: 0, updated: 0, deleted: 1 },
+					folders: { created: [], updated: [], deleted: [] },
 				});
 
 				const after = await adminSnapshot(vendor);

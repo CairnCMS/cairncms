@@ -1,5 +1,5 @@
 import { promises as fs } from 'fs';
-import { dump as dumpYaml } from 'js-yaml';
+import { dump as dumpYaml, load as loadYaml } from 'js-yaml';
 import os from 'os';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,8 +18,12 @@ vi.mock('./operator-remote-transport.js', () => ({
 	createOperatorRemoteTransport: vi.fn(async () => ({ request: transportRequestMock })),
 }));
 
+vi.mock('../../../utils/get-config-snapshot.js', () => ({ readCurrentConfig: vi.fn() }));
+
+import getDatabase, { hasDatabaseConnection, isInstalled } from '../../../database/index.js';
 import logger from '../../../logger.js';
 import { configSnapshot } from './snapshot.js';
+import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
 
 const TOKEN = 'sentinel-token';
 
@@ -132,5 +136,89 @@ describe('configSnapshot against a remote server', () => {
 		expect(await fs.readFile(path.join(tmpDir, 'roles', 'editor.yaml'), 'utf8')).toContain('Renamed');
 		expect(await fs.readFile(path.join(tmpDir, 'notes.txt'), 'utf8')).toBe('operator notes\n');
 		expect(vi.mocked(logger.info)).toHaveBeenCalledWith(expect.stringContaining('1 role(s), 0 permission set(s)'));
+	});
+});
+
+describe('configSnapshot manifest version preservation', () => {
+	async function seedManifest(version: number): Promise<void> {
+		await fs.writeFile(
+			path.join(tmpDir, 'cairncms-config.yaml'),
+			dumpYaml({ version, resources: ['roles', 'permissions'] })
+		);
+	}
+
+	async function writtenVersion(): Promise<number> {
+		const parsed = loadYaml(await fs.readFile(path.join(tmpDir, 'cairncms-config.yaml'), 'utf8')) as {
+			version: number;
+		};
+
+		return parsed.version;
+	}
+
+	describe('remote', () => {
+		it.each([
+			['an existing v1 directory', 1, 1],
+			['an existing v2 directory', 2, 2],
+			['a fresh directory', undefined, 2],
+		])('sends and writes the expected version for %s', async (_label, seeded, expected) => {
+			if (seeded !== undefined) await seedManifest(seeded);
+
+			const respondedResources = seeded === undefined ? ['roles', 'permissions', 'folders'] : ['roles', 'permissions'];
+
+			respondWith({
+				manifest: { version: expected, resources: respondedResources },
+				roles: [],
+				permissions: [],
+				...(expected >= 2 ? { folders: [] } : {}),
+			});
+
+			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
+
+			expect(vi.mocked(process.exit).mock.calls).toEqual([[0]]);
+
+			const snapshotCall = transportRequestMock.mock.calls.find(([config]) =>
+				new URL((config as { url: string }).url).pathname.endsWith('/config/snapshot')
+			);
+
+			expect((snapshotCall![0] as { params: Record<string, string> }).params.manifest_version).toBe(String(expected));
+
+			expect(await writtenVersion()).toBe(expected);
+		});
+	});
+
+	describe('local', () => {
+		beforeEach(() => {
+			vi.mocked(getDatabase).mockReturnValue({ destroy: vi.fn() } as never);
+			vi.mocked(hasDatabaseConnection).mockResolvedValue(true);
+			vi.mocked(isInstalled).mockResolvedValue(true);
+
+			vi.mocked(readCurrentConfig).mockImplementation(
+				async (options) =>
+					({
+						config: {
+							manifest: { version: options.manifestVersion ?? 2, resources: [...options.resources] },
+							roles: [],
+							permissions: [],
+							folders: [],
+						},
+						currentRoleKeys: new Set<string>(),
+						stateToken: { resources: [...options.resources], digest: 'digest' },
+					} as never)
+			);
+		});
+
+		it.each([
+			['an existing v1 directory', 1, 1],
+			['an existing v2 directory', 2, 2],
+			['a fresh directory', undefined, 2],
+		])('writes the expected version for %s', async (_label, seeded, expected) => {
+			if (seeded !== undefined) await seedManifest(seeded);
+
+			await configSnapshot(tmpDir, { yes: true });
+
+			expect(vi.mocked(process.exit).mock.calls).toEqual([[0]]);
+			expect(vi.mocked(logger.error)).not.toHaveBeenCalled();
+			expect(await writtenVersion()).toBe(expected);
+		});
 	});
 });

@@ -1,7 +1,8 @@
 import type { Accountability, PermissionsAction } from '@cairncms/types';
+import type { ManifestVersion } from '../utils/config-contract.js';
 import type { ConfigKindTypeMap } from '../utils/config/registry.js';
 
-export const CONFIG_KINDS = ['roles', 'permissions'] as const;
+export const CONFIG_KINDS = ['roles', 'permissions', 'folders'] as const;
 export type ConfigKind = (typeof CONFIG_KINDS)[number];
 
 export interface ConfigRole {
@@ -29,8 +30,14 @@ export interface ConfigPermission {
 	fields: string[] | null;
 }
 
+export interface ConfigFolder {
+	key: string;
+	name: string;
+	parent: string | null;
+}
+
 export interface ConfigManifest {
-	version: 1;
+	version: ManifestVersion;
 	resources: ConfigKind[];
 }
 
@@ -38,9 +45,19 @@ export interface CairnConfig {
 	manifest: ConfigManifest;
 	roles: ConfigRole[];
 	permissions: ConfigPermissionSet[];
+	folders: ConfigFolder[];
 }
 
 export type RoleIdentity = { key: string };
+
+export type FolderIdentity = { key: string };
+
+export type FolderValues = {
+	name: string;
+	parent: string | null;
+};
+
+export type FolderFieldChanges = { [K in keyof FolderValues]?: FieldChange<FolderValues[K]> };
 
 export type FieldChange<T> = { before: T; after: T };
 
@@ -87,6 +104,11 @@ export interface ConfigPlan {
 		update: Array<{ roleKey: string; collection: string; action: PermissionsAction; changes: PermissionFieldChanges }>;
 		delete: Array<{ roleKey: string; collection: string; action: PermissionsAction }>;
 	};
+	folders: {
+		create: ConfigFolder[];
+		update: Array<{ key: string; changes: FolderFieldChanges }>;
+		delete: string[];
+	};
 	protections: ConfigProtection[];
 }
 
@@ -105,8 +127,13 @@ export type RoleDeletionImpactEntry =
 	| { kind: 'users'; suspended: string[] }
 	| { kind: 'sessions'; active: number };
 
+export type FolderDeletionImpactEntry = {
+	blockedBy: 'files' | 'folders' | 'storage_default_folder' | 'options.folder';
+};
+
 export interface ConfigPlanEnrichment {
 	roleDeletionImpact: Map<string, RoleDeletionImpactEntry[]>;
+	folderDeletionImpact: Map<string, FolderDeletionImpactEntry[]>;
 	warnings: ConfigPlanWarning[];
 }
 
@@ -116,7 +143,10 @@ export type ConfigPlanChange =
 	| { kind: 'roles'; operation: 'delete'; identity: RoleIdentity; impact: RoleDeletionImpactEntry[] }
 	| { kind: 'permissions'; operation: 'create'; identity: PermissionIdentity; values: PermissionValues }
 	| { kind: 'permissions'; operation: 'update'; identity: PermissionIdentity; fields: PermissionFieldChanges }
-	| { kind: 'permissions'; operation: 'delete'; identity: PermissionIdentity; impact: [] };
+	| { kind: 'permissions'; operation: 'delete'; identity: PermissionIdentity; impact: [] }
+	| { kind: 'folders'; operation: 'create'; identity: FolderIdentity; values: FolderValues }
+	| { kind: 'folders'; operation: 'update'; identity: FolderIdentity; fields: FolderFieldChanges }
+	| { kind: 'folders'; operation: 'delete'; identity: FolderIdentity; impact: FolderDeletionImpactEntry[] };
 
 export type SerializedConfigPlan = {
 	planVersion: 2;

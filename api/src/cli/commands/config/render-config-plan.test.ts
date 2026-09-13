@@ -188,6 +188,62 @@ describe('renderConfigPlan', () => {
 		);
 	});
 
+	it('lists folder deletion blockers in fixed order', () => {
+		const output = renderConfigPlan(
+			plan({
+				changes: [
+					{
+						kind: 'folders',
+						operation: 'delete',
+						identity: { key: 'reports' },
+						impact: [
+							{ blockedBy: 'files' },
+							{ blockedBy: 'folders' },
+							{ blockedBy: 'storage_default_folder' },
+							{ blockedBy: 'options.folder' },
+						],
+					},
+				],
+				summary: { create: 0, update: 0, delete: 1 },
+			})
+		);
+
+		expect(output).toBe(
+			[
+				planIntro,
+				'',
+				heading('Folders'),
+				`  - ${deleteVerb()} reports`,
+				'    - Blocked by files',
+				'    - Blocked by child folders',
+				'    - Blocked by the default storage folder setting',
+				'    - Blocked by a field default folder',
+				'',
+				'Plan: 0 to create, 0 to update, 1 to delete.',
+			].join('\n')
+		);
+	});
+
+	it('omits blocker lines for a folder deletion with no observed blockers', () => {
+		const output = renderConfigPlan(
+			plan({
+				changes: [{ kind: 'folders', operation: 'delete', identity: { key: 'reports' }, impact: [] }],
+				summary: { create: 0, update: 0, delete: 1 },
+			})
+		);
+
+		expect(output).toBe(
+			[
+				planIntro,
+				'',
+				heading('Folders'),
+				`  - ${deleteVerb()} reports`,
+				'',
+				'Plan: 0 to create, 0 to update, 1 to delete.',
+			].join('\n')
+		);
+	});
+
 	it('renders a warnings section', () => {
 		const output = renderConfigPlan(
 			plan({
@@ -422,10 +478,11 @@ describe('renderResultSummary', () => {
 		const summary = renderResultSummary({
 			roles: { created: ['a', 'b'], updated: ['c'], deleted: [] },
 			permissions: { created: 3, updated: 0, deleted: 1 },
+			folders: { created: ['docs'], updated: [], deleted: [] },
 		});
 
 		expect(summary).toBe(
-			'Config applied: 2 role(s) created, 1 role(s) updated, 3 permission(s) created, 1 permission(s) deleted'
+			'Config applied: 2 role(s) created, 1 role(s) updated, 3 permission(s) created, 1 permission(s) deleted, 1 folder(s) created'
 		);
 	});
 });

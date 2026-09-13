@@ -1,6 +1,10 @@
 import type { PermissionsAction } from '@cairncms/types';
 
-export const SUPPORTED_MANIFEST_VERSION = 1;
+export const SUPPORTED_MANIFEST_VERSIONS = [1, 2] as const;
+
+export type ManifestVersion = (typeof SUPPORTED_MANIFEST_VERSIONS)[number];
+
+export const LATEST_MANIFEST_VERSION: ManifestVersion = 2;
 
 /** The `Record` check makes a new `PermissionsAction` member a compile-time error here. */
 export const SUPPORTED_ACTIONS: ReadonlySet<string> = new Set(
@@ -22,6 +26,7 @@ export const ROLE_KEY_MAX_LENGTH = 255;
 export const ROLE_NAME_MAX_LENGTH = 100;
 export const ROLE_ICON_MAX_LENGTH = 30;
 export const PERMISSION_COLLECTION_MAX_LENGTH = 64;
+export const FOLDER_NAME_MAX_LENGTH = 255;
 
 /**
  * A key that becomes a document filename is written as `<key>.yaml` and staged as `<key>.yaml.tmp`, so

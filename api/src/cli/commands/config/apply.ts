@@ -22,6 +22,7 @@ import { isValidUuid } from '../../../utils/is-valid-uuid.js';
 import { readConfigDirectory } from '../../../utils/read-config-directory.js';
 import { serializeConfigPlan } from '../../../utils/serialize-config-plan.js';
 import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
+import { serializeToWire } from '../../../utils/config/wire.js';
 import type { CairnConfig, ConfigPlan, SerializedConfigPlan } from '../../../types/config.js';
 import { confirmPrompt } from '../../presentation.js';
 import { isHttpTarget, parseOperatorRemoteTarget } from './operator-remote-target.js';
@@ -145,7 +146,7 @@ async function runLocalEngine(
 			resources: desired.manifest.resources,
 		});
 
-		const documentErrors = validateDesiredConfig(desired, {
+		const documentErrors = validateDesiredConfig(serializeToWire(desired, desired.manifest.version), {
 			label: configPath,
 			references: 'current-state',
 			currentRoleKeys,

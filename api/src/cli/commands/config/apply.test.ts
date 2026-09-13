@@ -74,6 +74,7 @@ const EMPTY_PLAN: ConfigPlan = {
 	managedResources: ['permissions'],
 	roles: { create: [], update: [], delete: [] },
 	permissions: { create: [], update: [], delete: [] },
+	folders: { create: [], update: [], delete: [] },
 	protections: [],
 };
 
@@ -98,6 +99,7 @@ const CREATE_PLAN: ConfigPlan = {
 		delete: [],
 	},
 	permissions: { create: [], update: [], delete: [] },
+	folders: { create: [], update: [], delete: [] },
 	protections: [],
 };
 
@@ -170,6 +172,7 @@ describe('configApply empty plan warnings', () => {
 			manifest: { version: 1, resources: ['permissions'] },
 			roles: [],
 			permissions: [{ role: 'editor', permissions: [MISSING_COLLECTION_PERMISSION] }],
+			folders: [],
 		};
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(managed);
@@ -224,6 +227,7 @@ describe('configApply empty plan with unmanaged permissions', () => {
 			manifest: { version: 1, resources: ['roles'] },
 			roles: [],
 			permissions: [],
+			folders: [],
 		};
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(rolesOnly);
@@ -249,6 +253,7 @@ describe('configApply protected plan', () => {
 	const PROTECTED_PLAN: ConfigPlan = {
 		roles: { create: [], update: [], delete: ['administrator'] },
 		permissions: { create: [], update: [], delete: [] },
+		folders: { create: [], update: [], delete: [] },
 		protections: [
 			{
 				code: 'ADMIN_CONTINUITY_REQUIRED',
@@ -272,7 +277,13 @@ describe('configApply protected plan', () => {
 			throw new Error(`exit:${code}`);
 		});
 
-		const rolesOnly: CairnConfig = { manifest: { version: 1, resources: ['roles'] }, roles: [], permissions: [] };
+		const rolesOnly: CairnConfig = {
+			manifest: { version: 1, resources: ['roles'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+		};
+
 		vi.mocked(readConfigDirectory).mockResolvedValue(rolesOnly);
 		vi.mocked(readCurrentConfig).mockResolvedValue({ config: rolesOnly, currentRoleKeys: new Set<string>() });
 		vi.mocked(computeConfigPlan).mockReturnValue(PROTECTED_PLAN);
@@ -328,7 +339,12 @@ describe('configApply state token forwarding', () => {
 			throw new Error(`exit:${code}`);
 		});
 
-		const managed: CairnConfig = { manifest: { version: 1, resources: ['roles'] }, roles: [], permissions: [] };
+		const managed: CairnConfig = {
+			manifest: { version: 1, resources: ['roles'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+		};
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(managed);
 
@@ -344,6 +360,7 @@ describe('configApply state token forwarding', () => {
 		vi.mocked(applyConfigPlan).mockResolvedValue({
 			roles: { created: [], updated: [], deleted: [] },
 			permissions: { created: 0, updated: 0, deleted: 0 },
+			folders: { created: [], updated: [], deleted: [] },
 		} as never);
 
 		await configApply('./config', { format: 'human', dryRun: false, destructive: false, yes: true }).catch(
@@ -357,17 +374,24 @@ describe('configApply state token forwarding', () => {
 });
 
 describe('configApply run record', () => {
-	const MANAGED: CairnConfig = { manifest: { version: 1, resources: ['roles'] }, roles: [], permissions: [] };
+	const MANAGED: CairnConfig = {
+		manifest: { version: 1, resources: ['roles'] },
+		roles: [],
+		permissions: [],
+		folders: [],
+	};
 
 	const APPLY_RESULT = {
 		roles: { created: ['editor'], updated: [], deleted: [] },
 		permissions: { created: 0, updated: 0, deleted: 0 },
+		folders: { created: [], updated: [], deleted: [] },
 	};
 
 	const PROTECTED_PLAN: ConfigPlan = {
 		managedResources: ['roles'],
 		roles: { create: [], update: [], delete: ['administrator'] },
 		permissions: { create: [], update: [], delete: [] },
+		folders: { create: [], update: [], delete: [] },
 		protections: [
 			{
 				code: 'ADMIN_CONTINUITY_REQUIRED',
@@ -682,5 +706,62 @@ describe('configApply placeholder-shaped desired values', () => {
 		expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('field "name" holds placeholder syntax'));
 		expect(computeConfigPlan).not.toHaveBeenCalled();
 		expect(applyConfigPlan).not.toHaveBeenCalled();
+	});
+});
+
+describe('configApply local wire projection', () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+		vi.clearAllMocks();
+		vi.mocked(validateDesiredConfig).mockImplementation(() => []);
+	});
+
+	it('projects the complete internal shape to the wire contract before validating and applying', async () => {
+		vi.spyOn(process, 'exit').mockImplementation((code) => {
+			throw new Error(`exit:${code}`);
+		});
+
+		const actual = await vi.importActual<typeof import('../../../utils/validate-desired-config.js')>(
+			'../../../utils/validate-desired-config.js'
+		);
+
+		let validated: unknown;
+
+		vi.mocked(validateDesiredConfig).mockImplementation((document, context) => {
+			validated = document;
+			return actual.validateDesiredConfig(document, context);
+		});
+
+		const desired: CairnConfig = {
+			manifest: { version: 1, resources: ['roles'] },
+			roles: [{ key: 'editor', name: 'Editor', admin_access: false, app_access: true }],
+			permissions: [],
+			folders: [],
+		};
+
+		vi.mocked(readConfigDirectory).mockResolvedValue(desired);
+
+		vi.mocked(readCurrentConfig).mockResolvedValue({
+			config: { ...desired, roles: [] },
+			currentRoleKeys: new Set<string>(),
+			stateToken: STATE_TOKEN,
+		});
+
+		vi.mocked(computeConfigPlan).mockReturnValue(CREATE_PLAN);
+		vi.mocked(serializeConfigPlan).mockReturnValue(CREATE_SERIALIZED);
+
+		vi.mocked(applyConfigPlan).mockResolvedValue({
+			roles: { created: ['editor'], updated: [], deleted: [] },
+			permissions: { created: 0, updated: 0, deleted: 0 },
+			folders: { created: [], updated: [], deleted: [] },
+		} as never);
+
+		await expect(
+			configApply('./config', { format: 'human', dryRun: false, destructive: false, yes: true })
+		).rejects.toThrow('exit:0');
+
+		expect(validated).toHaveProperty('roles');
+		expect(validated).not.toHaveProperty('folders');
+		expect(applyConfigPlan).toHaveBeenCalledTimes(1);
 	});
 });

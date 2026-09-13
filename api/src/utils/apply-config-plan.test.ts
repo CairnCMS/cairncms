@@ -64,7 +64,7 @@ vi.mock('../services/roles.js', () => ({ RolesService: vi.fn(() => rolesService)
 const STATE_TOKEN: ConfigStateToken = { resources: ['permissions', 'roles'], digest: 'digest-current' };
 
 readCurrentConfigMock.mockImplementation(async () => ({
-	config: { manifest: { version: 1, resources: ['permissions', 'roles'] }, roles: [], permissions: [] },
+	config: { manifest: { version: 1, resources: ['permissions', 'roles'] }, roles: [], permissions: [], folders: [] },
 	currentRoleKeys: new Set<string>(),
 	stateToken: STATE_TOKEN,
 }));
@@ -114,6 +114,7 @@ function emptyPlan(): ConfigPlan {
 		managedResources: ['permissions', 'roles'],
 		roles: { create: [], update: [], delete: [] },
 		permissions: { create: [], update: [], delete: [] },
+		folders: { create: [], update: [], delete: [] },
 		protections: [],
 	};
 }
@@ -764,6 +765,7 @@ describe('applyConfigPlan:engine schedule', () => {
 		expect(result).toEqual({
 			roles: { created: ['editor', 'author'], updated: ['viewer', 'guest'], deleted: ['old_one', 'old_two'] },
 			permissions: { created: 2, updated: 2, deleted: 2 },
+			folders: { created: [], updated: [], deleted: [] },
 		});
 	});
 });
@@ -1018,6 +1020,7 @@ describe('applyConfigPlan:role-state refresh', () => {
 		expect(result).toEqual({
 			roles: { created: ['editor'], updated: [], deleted: [] },
 			permissions: { created: 1, updated: 0, deleted: 0 },
+			folders: { created: [], updated: [], deleted: [] },
 		});
 	});
 });
@@ -1259,6 +1262,7 @@ describe('applyConfigPlan:result assembly and boundaries', () => {
 		expect(result).toEqual({
 			roles: { created: [], updated: [], deleted: [] },
 			permissions: { created: 0, updated: 0, deleted: 0 },
+			folders: { created: [], updated: [], deleted: [] },
 		});
 
 		expect(vi.mocked(getDatabase)).not.toHaveBeenCalled();
@@ -1288,6 +1292,7 @@ describe('applyConfigPlan:result assembly and boundaries', () => {
 		expect(result).toEqual({
 			roles: { created: ['editor'], updated: [], deleted: [] },
 			permissions: { created: 0, updated: 0, deleted: 0 },
+			folders: { created: [], updated: [], deleted: [] },
 		});
 	});
 
@@ -1366,6 +1371,7 @@ describe('applyConfigPlan:registry routing', () => {
 			expect(result).toEqual({
 				roles: { created: ['registry_sentinel'], updated: [], deleted: [] },
 				permissions: { created: 0, updated: 0, deleted: 0 },
+				folders: { created: [], updated: [], deleted: [] },
 			});
 
 			expect(rolesService.createOne).not.toHaveBeenCalled();
@@ -1432,7 +1438,12 @@ describe('applyConfigPlan:state-token recheck and scope binding', () => {
 		trxRows = { directus_roles: [], directus_permissions: [] };
 
 		readCurrentConfigMock.mockImplementation(async () => ({
-			config: { manifest: { version: 1, resources: ['permissions', 'roles'] }, roles: [], permissions: [] },
+			config: {
+				manifest: { version: 1, resources: ['permissions', 'roles'] },
+				roles: [],
+				permissions: [],
+				folders: [],
+			},
 			currentRoleKeys: new Set<string>(),
 			stateToken: STATE_TOKEN,
 		}));
@@ -1468,7 +1479,12 @@ describe('applyConfigPlan:state-token recheck and scope binding', () => {
 
 	it('refuses with CONFIG_STATE_CHANGED when the in-transaction digest differs, before any handler', async () => {
 		readCurrentConfigMock.mockResolvedValue({
-			config: { manifest: { version: 1, resources: ['permissions', 'roles'] }, roles: [], permissions: [] },
+			config: {
+				manifest: { version: 1, resources: ['permissions', 'roles'] },
+				roles: [],
+				permissions: [],
+				folders: [],
+			},
 			currentRoleKeys: new Set<string>(),
 			stateToken: { resources: ['permissions', 'roles'], digest: 'digest-changed' },
 		});

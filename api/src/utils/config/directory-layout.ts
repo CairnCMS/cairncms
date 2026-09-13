@@ -1,4 +1,4 @@
-import { normalizeRoleKey } from '@cairncms/utils';
+import { normalizeConfigKey } from '@cairncms/utils';
 import { ConfigReadFailedException } from '../../exceptions/config-read-failed.js';
 import type { ConfigKind } from '../../types/config.js';
 import type { ConfigFieldDescriptor, ConfigKindTypes, ConfigResourceDescriptor } from './descriptor.js';
@@ -20,13 +20,13 @@ export function classifyIdentityStem(stem: string, field: ConfigFieldDescriptor)
 	const { grammar, maxLength } = field;
 
 	if (
-		grammar === 'role-key' &&
+		grammar === 'config-key' &&
 		typeof maxLength === 'number' &&
 		Number.isFinite(maxLength) &&
 		maxLength > 0 &&
 		stem !== '' &&
 		stem.length <= maxLength &&
-		normalizeRoleKey(stem) === stem
+		normalizeConfigKey(stem) === stem
 	) {
 		return 'owned';
 	}

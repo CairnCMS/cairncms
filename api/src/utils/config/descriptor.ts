@@ -39,7 +39,7 @@ export interface ConfigFieldDescriptor {
 	minLength?: number;
 	maxLength?: number;
 	enum?: readonly string[];
-	grammar?: 'role-key';
+	grammar?: 'config-key';
 	reserved?: readonly string[];
 	acceptsPlaceholder: boolean;
 	canonicalize?: (value: unknown) => unknown;

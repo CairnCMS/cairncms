@@ -16,8 +16,10 @@ const PAST = '2000-01-01T00:00:00.000Z';
 
 function planDeletingRoles(...keys: string[]): ConfigPlan {
 	return {
+		managedResources: [],
 		roles: { create: [], update: [], delete: keys },
 		permissions: { create: [], update: [], delete: [] },
+		folders: { create: [], update: [], delete: [] },
 		protections: [],
 	};
 }
@@ -27,6 +29,7 @@ function makeConfig(resources: ConfigKind[], permissions: ConfigPermissionSet[] 
 		manifest: { version: 1, resources },
 		roles: [],
 		permissions,
+		folders: [],
 	};
 }
 
@@ -368,13 +371,13 @@ describe('enrichConfigPlan', () => {
 		expect(enrichment.warnings).toEqual([]);
 	});
 
-	it('merges the handler fragments into exactly roleDeletionImpact and warnings', async () => {
+	it('merges the handler fragments into exactly folderDeletionImpact, roleDeletionImpact, and warnings', async () => {
 		const enrichment = await enrichConfigPlan(planDeletingRoles(), makeConfig(['roles', 'permissions']), {
 			schema: schemaWith(),
 			database: db,
 		});
 
-		expect(Object.keys(enrichment).sort()).toEqual(['roleDeletionImpact', 'warnings']);
+		expect(Object.keys(enrichment).sort()).toEqual(['folderDeletionImpact', 'roleDeletionImpact', 'warnings']);
 	});
 
 	it('rejects a duplicate fragment key from the handlers', async () => {
@@ -406,11 +409,14 @@ describe('enrichConfigPlan', () => {
 			manifest: { version: 1, resources: ['roles'] },
 			roles: [],
 			permissions: [null] as unknown as CairnConfig['permissions'],
+			folders: [],
 		};
 
 		const plan: ConfigPlan = {
+			managedResources: ['roles'],
 			roles: { create: [], update: [], delete: [] },
 			permissions: { create: [{ roleKey: 'x', permission: perm('articles') }], update: [], delete: [] },
+			folders: { create: [], update: [], delete: [] },
 			protections: [],
 		};
 

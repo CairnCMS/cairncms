@@ -3,7 +3,14 @@ import path from 'path';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import logger from '../logger.js';
 import { safeLogFragment } from './safe-log-fragment.js';
-import type { CairnConfig, ConfigKind, ConfigManifest, ConfigPermissionSet, ConfigRole } from '../types/config.js';
+import type {
+	CairnConfig,
+	ConfigFolder,
+	ConfigKind,
+	ConfigManifest,
+	ConfigPermissionSet,
+	ConfigRole,
+} from '../types/config.js';
 import { classifyConfigFilename } from './config/directory-layout.js';
 import { getDescriptor, listConfigKinds } from './config/registry.js';
 import {
@@ -124,7 +131,8 @@ export async function readConfigDirectory(configPath: string, options?: ConfigRe
 
 	const roles: ConfigRole[] = [];
 	const permissions: ConfigPermissionSet[] = [];
-	const sink: Record<ConfigKind, unknown[]> = { roles, permissions };
+	const folders: ConfigFolder[] = [];
+	const sink: Record<ConfigKind, unknown[]> = { roles, permissions, folders };
 
 	for (const kind of listConfigKinds()) {
 		if (!manifest.resources.includes(kind)) continue;
@@ -137,5 +145,5 @@ export async function readConfigDirectory(configPath: string, options?: ConfigRe
 		}
 	}
 
-	return { manifest, roles, permissions };
+	return { manifest, roles, permissions, folders };
 }

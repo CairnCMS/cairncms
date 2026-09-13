@@ -69,7 +69,7 @@ const KEY_FIELD: ConfigFieldDescriptor = {
 	nullable: false,
 	minLength: 1,
 	maxLength: CONFIG_FILENAME_STEM_MAX_LENGTH,
-	grammar: 'role-key',
+	grammar: 'config-key',
 	reserved: [PUBLIC_ROLE_KEY],
 	acceptsPlaceholder: false,
 	sensitivity: NON_SECRET,

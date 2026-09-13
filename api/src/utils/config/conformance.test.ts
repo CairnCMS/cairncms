@@ -1,6 +1,12 @@
 import type { PermissionsAction } from '@cairncms/types';
 import { describe, expect, it } from 'vitest';
-import { CONFIG_KINDS, type ConfigKind, type ConfigPermission, type ConfigRole } from '../../types/config.js';
+import {
+	CONFIG_KINDS,
+	type ConfigFolder,
+	type ConfigKind,
+	type ConfigPermission,
+	type ConfigRole,
+} from '../../types/config.js';
 import {
 	RemoteApplyResult,
 	RemoteConfigPlanChange,
@@ -9,6 +15,7 @@ import {
 import { buildRecordSchemas } from '../validate-desired-config.js';
 import { computeKindPlan } from './diff.js';
 import type { ConfigKindTypes, ConfigResourceDescriptor, KindPlan } from './descriptor.js';
+import type { FoldersKindTypes } from './handlers/folders.js';
 import type { PermissionsKindTypes } from './handlers/permissions.js';
 import type { RolesKindTypes } from './handlers/roles.js';
 import { getDescriptor, listConfigKinds } from './registry.js';
@@ -27,6 +34,10 @@ type ConformanceFixture<K extends ConfigKindTypes> = {
 
 function role(overrides: Partial<ConfigRole> & { key: string }): ConfigRole {
 	return { name: 'Role', admin_access: false, app_access: true, ...overrides };
+}
+
+function folder(overrides: Partial<ConfigFolder> & { key: string }): ConfigFolder {
+	return { name: 'Folder', parent: null, ...overrides };
 }
 
 type FlatPermission = ConfigPermission & { role: string };
@@ -106,6 +117,29 @@ const PERMISSIONS_FIXTURE: ConformanceFixture<PermissionsKindTypes> = {
 	},
 };
 
+const FOLDERS_FIXTURE: ConformanceFixture<FoldersKindTypes> = {
+	document: folder({ key: 'docs', name: 'Docs' }),
+	documentIdentity: { key: 'docs' },
+	record: folder({ key: 'docs', name: 'Docs' }),
+	identity: { key: 'docs' },
+	filenameStem: 'docs',
+	current: [
+		folder({ key: 'keeper', name: 'Keeper' }),
+		folder({ key: 'docs', name: 'Docs' }),
+		folder({ key: 'legacy', name: 'Legacy' }),
+	],
+	desired: [
+		folder({ key: 'keeper', name: 'Keeper' }),
+		folder({ key: 'docs', name: 'Documents' }),
+		folder({ key: 'newcomer', name: 'Newcomer' }),
+	],
+	expectedPlan: {
+		create: [folder({ key: 'newcomer', name: 'Newcomer' })],
+		update: [{ key: 'docs', changes: { name: { before: 'Docs', after: 'Documents' } } }],
+		delete: ['legacy'],
+	},
+};
+
 function runConformance<K extends ConfigKindTypes>(
 	descriptor: ConfigResourceDescriptor<K>,
 	fixture: ConformanceFixture<K>
@@ -147,6 +181,7 @@ function runConformance<K extends ConfigKindTypes>(
 const RUNNERS = {
 	roles: () => runConformance(getDescriptor('roles'), ROLES_FIXTURE),
 	permissions: () => runConformance(getDescriptor('permissions'), PERMISSIONS_FIXTURE),
+	folders: () => runConformance(getDescriptor('folders'), FOLDERS_FIXTURE),
 } satisfies Record<ConfigKind, () => void>;
 
 describe.each(listConfigKinds())('descriptor conformance: %s', (kind) => {
@@ -174,11 +209,18 @@ const REPRESENTATIVE_CHANGE: Record<ConfigKind, unknown> = {
 		identity: { role: 'sample', collection: 'articles', action: 'read' },
 		values: { permissions: null, validation: null, presets: null, fields: null },
 	},
+	folders: {
+		kind: 'folders',
+		operation: 'create',
+		identity: { key: 'sample' },
+		values: { name: 'Sample', parent: null },
+	},
 };
 
 const REPRESENTATIVE_DELETION: Record<ConfigKind, unknown> = {
 	roles: { kind: 'roles', identity: { key: 'sample' } },
 	permissions: { kind: 'permissions', identity: { role: 'sample', collection: 'articles', action: 'read' } },
+	folders: { kind: 'folders', identity: { key: 'sample' } },
 };
 
 function destructiveExtension(deletion: unknown): unknown {

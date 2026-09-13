@@ -14,9 +14,26 @@ import {
 const TOKEN = 'secret-token-123';
 const BEL = String.fromCharCode(7);
 
-const BODY: CairnConfig = { manifest: { version: 1, resources: ['roles', 'permissions'] }, roles: [], permissions: [] };
+const BODY: CairnConfig = {
+	manifest: { version: 1, resources: ['roles', 'permissions'] },
+	roles: [],
+	permissions: [],
+	folders: [],
+};
 
-const ROLES_ONLY_BODY: CairnConfig = { manifest: { version: 1, resources: ['roles'] }, roles: [], permissions: [] };
+const ROLES_ONLY_BODY: CairnConfig = {
+	manifest: { version: 1, resources: ['roles'] },
+	roles: [],
+	permissions: [],
+	folders: [],
+};
+
+const V2_FOLDERS_BODY: CairnConfig = {
+	manifest: { version: 2, resources: ['folders'] },
+	roles: [],
+	permissions: [],
+	folders: [{ key: 'docs', name: 'Docs', parent: null }],
+};
 
 const ROLE_CREATE = {
 	kind: 'roles',
@@ -122,6 +139,7 @@ const DEEP_PLAN = {
 const OK_RESULT = {
 	roles: { created: [], updated: [], deleted: [] },
 	permissions: { created: 0, updated: 0, deleted: 0 },
+	folders: { created: [], updated: [], deleted: [] },
 };
 
 function dryRun(plan: unknown): Promise<RemoteClientError> {
@@ -191,6 +209,24 @@ describe('applyRemote', () => {
 
 		expect(outcome).toEqual({ plan: OK_PLAN });
 		expect(requests[0].params).toEqual({ dry_run: 'true' });
+	});
+
+	it('omits the out-of-version folders key from a v1 request body', async () => {
+		const { remote, requests } = session(() => ({ status: 200, data: { data: OK_PLAN } }));
+
+		await applyRemote(remote, BODY, { dryRun: true, destructive: false });
+
+		expect(requests[0].data).not.toHaveProperty('folders');
+		expect(requests[0].data).toMatchObject({ manifest: BODY.manifest, roles: [], permissions: [] });
+	});
+
+	it('retains folder records in a v2 request body', async () => {
+		const { remote, requests } = session(() => ({ status: 200, data: { data: { ...OK_PLAN, manifestVersion: 2 } } }));
+
+		await applyRemote(remote, V2_FOLDERS_BODY, { dryRun: true, destructive: false });
+
+		expect(requests[0].data.folders).toEqual(V2_FOLDERS_BODY.folders);
+		expect(requests[0].data.manifest).toEqual(V2_FOLDERS_BODY.manifest);
 	});
 
 	it('accepts a fully populated plan with protections and role-deletion impact', async () => {
@@ -295,6 +331,7 @@ describe('applyRemote', () => {
 		const wrongKind = {
 			roles: { created: ['a', 'b'], updated: [], deleted: [] },
 			permissions: { created: 0, updated: 0, deleted: 0 },
+			folders: { created: [], updated: [], deleted: [] },
 		};
 
 		const swapped = session(() => ({ status: 200, data: { data: wrongKind, meta: { plan } } }));
@@ -305,6 +342,7 @@ describe('applyRemote', () => {
 		const result = {
 			roles: { created: ['4a3b'], updated: [], deleted: [] },
 			permissions: { created: 1, updated: 0, deleted: 0 },
+			folders: { created: [], updated: [], deleted: [] },
 		};
 
 		const matching = session(() => ({ status: 200, data: { data: result, meta: { plan } } }));
@@ -569,6 +607,7 @@ describe('applyRemote', () => {
 				data: {
 					roles: { created: [], updated: [], deleted: [] },
 					permissions: { created: -1, updated: 0, deleted: 0 },
+					folders: { created: [], updated: [], deleted: [] },
 				},
 				meta: { plan: OK_PLAN },
 			},
@@ -901,7 +940,7 @@ describe('fetchRemoteSnapshot', () => {
 
 		const snapshot = await fetchRemoteSnapshot(remote, scope);
 
-		expect(snapshot).toEqual(VALID_SNAPSHOT);
+		expect(snapshot).toEqual({ ...VALID_SNAPSHOT, folders: [] });
 		expect(snapshot).not.toBe(VALID_SNAPSHOT);
 	});
 
@@ -914,9 +953,10 @@ describe('fetchRemoteSnapshot', () => {
 
 		const { remote } = session(() => ({ status: 200, data: { data: permissionsOnly } }));
 
-		await expect(fetchRemoteSnapshot(remote, { manifestVersion: 1, resources: ['permissions'] })).resolves.toEqual(
-			permissionsOnly
-		);
+		await expect(fetchRemoteSnapshot(remote, { manifestVersion: 1, resources: ['permissions'] })).resolves.toEqual({
+			...permissionsOnly,
+			folders: [],
+		});
 	});
 
 	it('ignores records under an unmanaged kind and returns that kind empty', async () => {
@@ -932,6 +972,7 @@ describe('fetchRemoteSnapshot', () => {
 			manifest: { version: 1, resources: ['roles'] },
 			roles: VALID_SNAPSHOT.roles,
 			permissions: [],
+			folders: [],
 		});
 	});
 

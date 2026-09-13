@@ -22,6 +22,7 @@ import {
 import type { AbstractServiceOptions, Alterations, Item, MutationOptions, PrimaryKey } from '../types/index.js';
 import { leavesAtLeastOneAdmin } from '../utils/admin-continuity.js';
 import { CONFIG_FILENAME_STEM_MAX_LENGTH } from '../utils/config-contract.js';
+import { generateBoundedKey } from '../utils/config/generate-bounded-key.js';
 import { validateKeys } from '../utils/validate-keys.js';
 import { AuthorizationService } from './authorization.js';
 import { ItemsService } from './items.js';
@@ -78,30 +79,7 @@ export class RolesService extends ItemsService {
 	}
 
 	private resolveKey(name: string, usedKeys: Set<string>): string {
-		let candidate = normalizeRoleKey(name);
-		if (candidate === '') candidate = 'role';
-
-		let key = RolesService.boundStem(candidate);
-		let suffix = 2;
-
-		while (usedKeys.has(key) || RolesService.RESERVED_KEYS.has(key)) {
-			key = RolesService.boundStem(candidate, suffix);
-			suffix++;
-		}
-
-		usedKeys.add(key);
-		return key;
-	}
-
-	private static boundStem(candidate: string, suffix?: number): string {
-		if (suffix === undefined) {
-			return candidate.slice(0, CONFIG_FILENAME_STEM_MAX_LENGTH);
-		}
-
-		const suffixPart = `_${suffix}`;
-		const room = Math.max(CONFIG_FILENAME_STEM_MAX_LENGTH - suffixPart.length, 1);
-		const base = candidate.slice(0, room).replace(/_+$/, '') || 'role';
-		return `${base}${suffixPart}`;
+		return generateBoundedKey(name, usedKeys, { fallback: 'role', reserved: RolesService.RESERVED_KEYS });
 	}
 
 	private static readonly RESERVED_KEYS = new Set([PUBLIC_ROLE_KEY]);

@@ -3,6 +3,7 @@ import { isPlainObject } from 'lodash-es';
 import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
 import { ConfigUnsupportedVersionException } from '../../../exceptions/config-unsupported-version.js';
 import type { CairnConfig, ConfigKind } from '../../../types/config.js';
+import { serializeToWire } from '../../../utils/config/wire.js';
 import { CONFIG_RUN_ID_HEADER } from '../../../utils/config/run-record.js';
 import { listConfigKinds } from '../../../utils/config/registry.js';
 import { isValidUuid } from '../../../utils/is-valid-uuid.js';
@@ -195,7 +196,7 @@ export async function applyRemote(
 
 	const { data, meta, runId } = await request(session, 'POST', 'config/apply', {
 		query,
-		body,
+		body: serializeToWire(body, body.manifest.version),
 		mutating: !options.dryRun,
 	});
 
@@ -277,6 +278,13 @@ function resultCardinality(kind: ConfigKind, result: RemoteWireResult): Record<'
 				delete: result.permissions.deleted,
 			};
 
+		case 'folders':
+			return {
+				create: result.folders.created.length,
+				update: result.folders.updated.length,
+				delete: result.folders.deleted.length,
+			};
+
 		default: {
 			const unhandled: never = kind;
 			throw new Error(`Unhandled config kind: ${JSON.stringify(unhandled)}`);
@@ -336,6 +344,7 @@ function validatedSnapshot(data: unknown, token: string): CairnConfig {
 		manifest: { version: snapshot.manifest.version, resources: [...snapshot.manifest.resources] },
 		roles: managed.has('roles') ? snapshot.roles : [],
 		permissions: managed.has('permissions') ? snapshot.permissions : [],
+		folders: managed.has('folders') ? snapshot.folders : [],
 	};
 }
 
@@ -399,6 +408,10 @@ function redactedDeletion(deletion: RenderableDeletion, token: string): Renderab
 				action: redactToken(action, token),
 			},
 		};
+	}
+
+	if (deletion.kind === 'folders') {
+		return { kind: 'folders', identity: { key: redactToken(deletion.identity.key, token) } };
 	}
 
 	const unhandled: never = deletion;
