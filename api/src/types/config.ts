@@ -127,8 +127,13 @@ export type RoleDeletionImpactEntry =
 	| { kind: 'users'; suspended: string[] }
 	| { kind: 'sessions'; active: number };
 
+export type FolderDeletionImpactEntry = {
+	blockedBy: 'files' | 'folders' | 'storage_default_folder' | 'options.folder';
+};
+
 export interface ConfigPlanEnrichment {
 	roleDeletionImpact: Map<string, RoleDeletionImpactEntry[]>;
+	folderDeletionImpact: Map<string, FolderDeletionImpactEntry[]>;
 	warnings: ConfigPlanWarning[];
 }
 
@@ -141,7 +146,7 @@ export type ConfigPlanChange =
 	| { kind: 'permissions'; operation: 'delete'; identity: PermissionIdentity; impact: [] }
 	| { kind: 'folders'; operation: 'create'; identity: FolderIdentity; values: FolderValues }
 	| { kind: 'folders'; operation: 'update'; identity: FolderIdentity; fields: FolderFieldChanges }
-	| { kind: 'folders'; operation: 'delete'; identity: FolderIdentity; impact: [] };
+	| { kind: 'folders'; operation: 'delete'; identity: FolderIdentity; impact: FolderDeletionImpactEntry[] };
 
 export type SerializedConfigPlan = {
 	planVersion: 2;

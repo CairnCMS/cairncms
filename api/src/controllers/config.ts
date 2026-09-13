@@ -72,7 +72,7 @@ router.post(
 
 		if (!isPlainObject(desired)) {
 			throw new ConfigInvalidException(
-				'Request body must be a CairnConfig object with manifest, roles, and permissions.'
+				'Request body must be a config snapshot object with a manifest and its managed resources.'
 			);
 		}
 

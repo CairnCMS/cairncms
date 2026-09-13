@@ -59,6 +59,12 @@ const impact = z.array(
 
 const emptyImpact = z.array(z.unknown()).max(0);
 
+const folderBlocker = z
+	.object({ blockedBy: z.enum(['files', 'folders', 'storage_default_folder', 'options.folder']) })
+	.passthrough();
+
+const folderImpact = z.array(folderBlocker);
+
 export const RemoteConfigPlanChange = z.union([
 	z
 		.object({ kind: z.literal('roles'), operation: z.literal('create'), identity: roleIdentity, values: roleValues })
@@ -112,7 +118,7 @@ export const RemoteConfigPlanChange = z.union([
 			kind: z.literal('folders'),
 			operation: z.literal('delete'),
 			identity: folderIdentity,
-			impact: emptyImpact,
+			impact: folderImpact,
 		})
 		.passthrough(),
 ]);

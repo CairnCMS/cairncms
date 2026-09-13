@@ -44,7 +44,7 @@ Roles and folders are matched across environments by their keys. Keys remain unc
 
 Deleting a role also deletes its permissions and presets, and suspends and unassigns its users, even when those resources are outside the manifest's scope. Review the dry-run output before authorizing deletions.
 
-Unlike [deleting a folder in the app](/docs/guides/files/#renaming-moving-and-deleting-folders), config apply does not relocate its contents. Before deleting a folder, move its files and clear or replace any settings or field references to it. Child folders must be moved or deleted, which can be part of the same config apply. If any of these remain at deletion time, the entire apply is refused with `CONFIG_FOLDER_IN_USE`.
+Unlike [deleting a folder in the app](/docs/guides/files/#renaming-moving-and-deleting-folders), config apply does not relocate its contents. Before deleting a folder, move its files and clear or replace any settings or field references to it. Child folders must be moved or deleted, which can be part of the same config apply. If any of these remain at deletion time, the entire apply is refused with `CONFIG_FOLDER_IN_USE`. A dry run lists the blockers observed for each folder it would delete, and the apply checks again at deletion time.
 
 ## Two surfaces, one engine
 
@@ -356,7 +356,7 @@ Plans and applies produce a structured `config.run.finished` log record, includi
 - **`changes`** — the plan's create, update, and delete counts.
 - **`durationMs`** — time spent planning and applying, excluding transport time.
 
-The server writes these records at `info` level. For local CLI runs in CI, set `LOG_STYLE=raw` to receive them as JSON lines. Failures before planning starts may produce no run record.
+The server writes these records at `info` level. For local CLI runs in CI, set `LOG_STYLE=raw` to receive them as JSON lines. A failure before a run starts, such as a rejected request body, produces no run record, while a validation failure inside a started run is recorded with an `invalid` result.
 
 Use the HTTP response's `X-Config-Run-Id` header to find the matching server record. The remote CLI prints it as `Run <id>`. Requests rejected before a run starts have no run id. Local CLI runs have no run id either.
 

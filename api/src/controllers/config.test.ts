@@ -46,7 +46,13 @@ vi.mock('../utils/validate-desired-config.js', async (importOriginal) => ({
 
 vi.mock('../utils/compute-config-plan.js', () => ({ computeConfigPlan: vi.fn() }));
 
-vi.mock('../utils/enrich-config-plan.js', () => ({ enrichConfigPlan: vi.fn(async () => ({ warnings: [] })) }));
+vi.mock('../utils/enrich-config-plan.js', () => ({
+	enrichConfigPlan: vi.fn(async () => ({
+		roleDeletionImpact: new Map(),
+		folderDeletionImpact: new Map(),
+		warnings: [],
+	})),
+}));
 
 vi.mock('../utils/serialize-config-plan.js', () => ({ serializeConfigPlan: vi.fn() }));
 

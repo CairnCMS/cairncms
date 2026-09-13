@@ -7,6 +7,8 @@ type RoleIdentityView = { key: string };
 
 type FolderIdentityView = { key: string };
 
+type FolderBlockerView = { blockedBy: string };
+
 type PermissionIdentityView = { role: string; collection: string; action: string };
 
 type FieldChangeView = { before: unknown; after: unknown };
@@ -42,7 +44,7 @@ export type RenderableChange =
 			identity: FolderIdentityView;
 			fields: Record<string, FieldChangeView | undefined>;
 	  }
-	| { kind: 'folders'; operation: 'delete'; identity: FolderIdentityView };
+	| { kind: 'folders'; operation: 'delete'; identity: FolderIdentityView; impact: FolderBlockerView[] };
 
 /** The structural view the renderers read, satisfied by the server's serialized plan and by the remote wire plan. */
 export type RenderablePlan = {
@@ -217,6 +219,8 @@ function renderChange(change: RenderableChange): string[] {
 
 	if (change.kind === 'roles') {
 		lines.push(...renderImpact(change.impact));
+	} else if (change.kind === 'folders') {
+		lines.push(...renderFolderImpact(change.impact));
 	}
 
 	return lines;
@@ -301,4 +305,15 @@ function renderImpact(impact: RenderableImpactEntry[]): string[] {
 	}
 
 	return lines;
+}
+
+const FOLDER_BLOCKER_LABELS: Record<string, string> = {
+	files: 'files',
+	folders: 'child folders',
+	storage_default_folder: 'the default storage folder setting',
+	'options.folder': 'a field default folder',
+};
+
+function renderFolderImpact(impact: FolderBlockerView[]): string[] {
+	return impact.map((entry) => `    - Blocked by ${FOLDER_BLOCKER_LABELS[entry.blockedBy] ?? entry.blockedBy}`);
 }

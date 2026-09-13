@@ -44,6 +44,16 @@ describe('folders validateDesired', () => {
 		expect(failures).toEqual(['CONFIG_INVALID']);
 	});
 
+	it('reports a cycle once even when another folder feeds into it', () => {
+		const failures = codes([folder('a', 'b'), folder('b', 'c'), folder('c', 'a'), folder('d', 'a')]);
+		expect(failures).toEqual(['CONFIG_INVALID']);
+	});
+
+	it('reports two distinct cycles separately', () => {
+		const failures = codes([folder('a', 'b'), folder('b', 'a'), folder('x', 'y'), folder('y', 'x')]);
+		expect(failures).toEqual(['CONFIG_INVALID', 'CONFIG_INVALID']);
+	});
+
 	it('allows a root folder with a null parent', () => {
 		expect(validate([folder('root', null)])).toEqual([]);
 	});

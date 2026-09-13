@@ -7,10 +7,12 @@ import { ConfigFolderInUseException } from '../../../exceptions/config-folder-in
 import { ConfigStateChangedException } from '../../../exceptions/config-state-changed.js';
 import { InvalidPayloadException } from '../../../exceptions/index.js';
 import { FoldersService } from '../../../services/folders.js';
-import type { CairnConfig, ConfigApplySecurityContext } from '../../../types/config.js';
+import type { CairnConfig, ConfigApplySecurityContext, ConfigPlanChange } from '../../../types/config.js';
 import { applyConfigPlan } from '../../apply-config-plan.js';
 import { computeConfigPlan } from '../../compute-config-plan.js';
+import { enrichConfigPlan } from '../../enrich-config-plan.js';
 import { readCurrentConfig } from '../../get-config-snapshot.js';
+import { serializeConfigPlan } from '../../serialize-config-plan.js';
 
 vi.mock('../../../database/index', () => ({
 	default: vi.fn(),
@@ -266,17 +268,44 @@ describe('folders through the real apply engine on SQLite', () => {
 		const { config: current, stateToken } = await snapshot();
 		const plan = computeConfigPlan(current, { ...current, folders: [] });
 
-		await expect(
-			applyConfigPlan(plan, {
-				database: db,
-				schema,
-				destructive: true,
-				context: securityContext,
-				expectedStateToken: stateToken,
-			})
-		).rejects.toBeInstanceOf(ConfigFolderInUseException);
+		const error = await applyConfigPlan(plan, {
+			database: db,
+			schema,
+			destructive: true,
+			context: securityContext,
+			expectedStateToken: stateToken,
+		}).catch((err) => err);
+
+		expect(error).toBeInstanceOf(ConfigFolderInUseException);
+		expect(error.extensions.key).toBe('root');
+		expect(error.extensions.blockedBy).toBe('files');
 
 		expect(await tree()).toEqual({ root: null });
+	});
+
+	it('previews the blocking category for each folder a destructive plan would delete', async () => {
+		await seed([
+			{ key: 'holder', parent: null },
+			{ key: 'clean', parent: null },
+		]);
+
+		await db('directus_files').insert({ id: '00000000-0000-4000-8000-0000000000f2', folder: idFor('holder') });
+
+		const { config: current } = await snapshot();
+		const desired: CairnConfig = { ...current, folders: [] };
+		const plan = computeConfigPlan(current, desired);
+		const enrichment = await enrichConfigPlan(plan, desired, { schema, database: db });
+		const serialized = serializeConfigPlan(plan, { enrichment, manifestVersion: 2 });
+
+		const deletes = serialized.changes.filter(
+			(change): change is Extract<ConfigPlanChange, { kind: 'folders'; operation: 'delete' }> =>
+				change.kind === 'folders' && change.operation === 'delete'
+		);
+
+		const byKey = Object.fromEntries(deletes.map((change) => [change.identity.key, change.impact]));
+
+		expect(byKey['holder']).toEqual([{ blockedBy: 'files' }]);
+		expect(byKey['clean']).toEqual([]);
 	});
 
 	it('allows a reparent-then-delete in the same apply', async () => {

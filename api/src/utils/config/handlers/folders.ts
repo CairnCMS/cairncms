@@ -1,12 +1,17 @@
 import { normalizeConfigKey } from '@cairncms/utils';
 import { withMutationGuard } from '../../../database/mutation-guard.js';
+import { ConfigFolderInUseException } from '../../../exceptions/config-folder-in-use.js';
 import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
 import { FoldersService } from '../../../services/folders.js';
 import { FolderDeletionGuard } from '../folder-deletion-guard.js';
+import { resolveFolderReference } from '../folder-id-lookup.js';
+import { normalizeFolderImpact, readFolderDeletionImpact } from './folders-impact.js';
 import type {
 	ConfigFailure,
 	ConfigFolder,
 	ConfigPlanChange,
+	ConfigPlanEnrichment,
+	FolderDeletionImpactEntry,
 	FolderFieldChanges,
 	FolderIdentity,
 	FolderValues,
@@ -19,6 +24,7 @@ import type {
 	ConfigFieldDescriptor,
 	ConfigReadMode,
 	ConfigResourceDescriptor,
+	EnrichContext,
 	FieldSensitivity,
 	KindPlan,
 	NoConfigDependencies,
@@ -48,7 +54,7 @@ export interface FoldersKindTypes {
 	ReadDependencies: NoConfigDependencies;
 	PlanDependencies: NoConfigDependencies;
 	ApplyDependencies: NoConfigDependencies;
-	Enrichment: Record<never, never>;
+	Enrichment: { folderDeletionImpact: Map<string, FolderDeletionImpactEntry[]> };
 	ResultSlice: { created: string[]; updated: string[]; deleted: string[] };
 	Outcome:
 		| { op: 'create'; created: string[] }
@@ -148,7 +154,9 @@ async function readCurrent(context: ReadContext<FoldersKindTypes>): Promise<Read
 	if (full) {
 		for (const folder of rows) {
 			const parentId = requireColumn(folder, 'parent');
-			const parentKey = parentId === null ? null : folderKeyById.get(parentId) ?? null;
+
+			const parentKey =
+				parentId === null ? null : (await resolveFolderReference(context.database, folderKeyById, parentId)) ?? null;
 
 			if (parentId !== null && parentKey === null) {
 				throw unreadable(`folder id=${safeLogFragment(folder['id'])}`, `column "parent" points to an unknown folder`);
@@ -225,6 +233,8 @@ function validateDesired(documents: ConfigFolder[]): ConfigFailure[] {
 		let cursor: string | null = document.key;
 
 		while (cursor !== null && parentByKey.has(cursor)) {
+			if (inCycle.has(cursor)) break;
+
 			if (onPath.has(cursor)) {
 				const cycle = path.slice(path.indexOf(cursor));
 				for (const key of cycle) inCycle.add(key);
@@ -247,15 +257,19 @@ function validateDesired(documents: ConfigFolder[]): ConfigFailure[] {
 	return failures;
 }
 
-async function enrich(): Promise<FoldersKindTypes['Enrichment']> {
-	return {};
+async function enrich(
+	plan: KindPlan<FoldersKindTypes>,
+	_records: ConfigFolder[],
+	context: EnrichContext
+): Promise<FoldersKindTypes['Enrichment']> {
+	return { folderDeletionImpact: await readFolderDeletionImpact(plan, context.database) };
 }
 
 function emptyEnrichment(): FoldersKindTypes['Enrichment'] {
-	return {};
+	return { folderDeletionImpact: new Map() };
 }
 
-function toChanges(plan: KindPlan<FoldersKindTypes>): ConfigPlanChange[] {
+function toChanges(plan: KindPlan<FoldersKindTypes>, enrichment: ConfigPlanEnrichment): ConfigPlanChange[] {
 	const changes: ConfigPlanChange[] = [];
 
 	for (const folder of plan.create) {
@@ -276,7 +290,12 @@ function toChanges(plan: KindPlan<FoldersKindTypes>): ConfigPlanChange[] {
 	}
 
 	for (const key of plan.delete) {
-		changes.push({ kind: 'folders', operation: 'delete', identity: { key }, impact: [] });
+		changes.push({
+			kind: 'folders',
+			operation: 'delete',
+			identity: { key },
+			impact: normalizeFolderImpact(enrichment.folderDeletionImpact.get(key)),
+		});
 	}
 
 	return changes;
@@ -392,9 +411,14 @@ async function applyUpdates(
 		updated.push(update.key);
 	}
 
-	const desiredParentByKey = new Map<string, string | null>(
-		rows.map((row) => [row['key'], row['parent'] === null ? null : keyById.get(row['parent']) ?? null])
-	);
+	const desiredParentByKey = new Map<string, string | null>();
+
+	for (const row of rows) {
+		const parentKey =
+			row['parent'] === null ? null : (await resolveFolderReference(context.database, keyById, row['parent'])) ?? null;
+
+		desiredParentByKey.set(row['key'], parentKey);
+	}
 
 	for (const update of reparents) desiredParentByKey.set(update.key, update.changes.parent!.after);
 
@@ -435,7 +459,8 @@ async function applyDeletes(
 	const childrenOf = new Map<string, string[]>();
 
 	for (const row of rows) {
-		const parentKey = row['parent'] === null ? null : keyById.get(row['parent']) ?? null;
+		const parentKey =
+			row['parent'] === null ? null : (await resolveFolderReference(context.database, keyById, row['parent'])) ?? null;
 
 		if (parentKey !== null && deleteSet.has(parentKey) && deleteSet.has(row['key'])) {
 			const siblings = childrenOf.get(parentKey) ?? [];
@@ -461,7 +486,22 @@ async function applyDeletes(
 	for (const key of ordered) {
 		const id = folderIdByKey.get(key);
 		if (!id) continue;
-		await foldersService.deleteOne(id, guardedOptions);
+
+		try {
+			await foldersService.deleteOne(id, guardedOptions);
+		} catch (error) {
+			if (error instanceof ConfigFolderInUseException) {
+				const blockedBy = (error.extensions as { blockedBy?: unknown }).blockedBy;
+
+				throw new ConfigFolderInUseException(
+					`Cannot delete folder "${safeLogFragment(key)}" because it is still in use.`,
+					{ key, ...(typeof blockedBy === 'string' ? { blockedBy } : {}) }
+				);
+			}
+
+			throw error;
+		}
+
 		deleted.push(key);
 	}
 
@@ -506,7 +546,7 @@ export const foldersDescriptor: ConfigResourceDescriptor<FoldersKindTypes> = {
 		filenameOf: (documentIdentity) => documentIdentity.key,
 		parseDocumentFile: (record, filename) => {
 			if (!record['key']) {
-				throw new ConfigInvalidException(`Invalid folder file: ${filename} — missing "key" field.`);
+				throw new ConfigInvalidException(`Invalid folder file: ${filename} is missing a "key" field.`);
 			}
 
 			const expected = `${record['key']}.yaml`;
@@ -515,7 +555,7 @@ export const foldersDescriptor: ConfigResourceDescriptor<FoldersKindTypes> = {
 				throw new ConfigInvalidException(
 					`Folder file "${filename}" contains key "${safeLogFragment(
 						record['key']
-					)}" — filename must match key ("${safeLogFragment(expected)}").`
+					)}". The filename must match the key ("${safeLogFragment(expected)}").`
 				);
 			}
 

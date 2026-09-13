@@ -371,13 +371,13 @@ describe('enrichConfigPlan', () => {
 		expect(enrichment.warnings).toEqual([]);
 	});
 
-	it('merges the handler fragments into exactly roleDeletionImpact and warnings', async () => {
+	it('merges the handler fragments into exactly folderDeletionImpact, roleDeletionImpact, and warnings', async () => {
 		const enrichment = await enrichConfigPlan(planDeletingRoles(), makeConfig(['roles', 'permissions']), {
 			schema: schemaWith(),
 			database: db,
 		});
 
-		expect(Object.keys(enrichment).sort()).toEqual(['roleDeletionImpact', 'warnings']);
+		expect(Object.keys(enrichment).sort()).toEqual(['folderDeletionImpact', 'roleDeletionImpact', 'warnings']);
 	});
 
 	it('rejects a duplicate fragment key from the handlers', async () => {

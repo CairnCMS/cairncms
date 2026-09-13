@@ -24,7 +24,7 @@ function emptyPlan(): ConfigPlan {
 }
 
 function emptyEnrichment(): ConfigPlanEnrichment {
-	return { roleDeletionImpact: new Map(), warnings: [] };
+	return { roleDeletionImpact: new Map(), folderDeletionImpact: new Map(), warnings: [] };
 }
 
 function role(key: string): ConfigRole {
@@ -54,6 +54,7 @@ function zeroImpact(): RoleDeletionImpactEntry[] {
 
 function labelOf(change: ConfigPlanChange): string {
 	if (change.kind === 'roles') return `roles/${change.operation}/${change.identity.key}`;
+	if (change.kind === 'folders') return `folders/${change.operation}/${change.identity.key}`;
 	return `permissions/${change.operation}/${change.identity.role}:${change.identity.collection}:${change.identity.action}`;
 }
 
@@ -72,7 +73,11 @@ describe('serializeConfigPlan', () => {
 	});
 
 	it('carries warnings on an otherwise empty plan', () => {
-		const enrichment: ConfigPlanEnrichment = { roleDeletionImpact: new Map(), warnings: [warning('editor', 'ghost')] };
+		const enrichment: ConfigPlanEnrichment = {
+			roleDeletionImpact: new Map(),
+			folderDeletionImpact: new Map(),
+			warnings: [warning('editor', 'ghost')],
+		};
 
 		const result = serializeConfigPlan(emptyPlan(), { enrichment, manifestVersion: 1 });
 
@@ -184,7 +189,12 @@ describe('serializeConfigPlan', () => {
 			{ kind: 'sessions', active: 2 },
 		];
 
-		const enrichment: ConfigPlanEnrichment = { roleDeletionImpact: new Map([['editor', impact]]), warnings: [] };
+		const enrichment: ConfigPlanEnrichment = {
+			roleDeletionImpact: new Map([['editor', impact]]),
+			folderDeletionImpact: new Map(),
+			warnings: [],
+		};
+
 		const plan = emptyPlan();
 		plan.roles.delete.push('editor');
 
@@ -230,7 +240,11 @@ describe('serializeConfigPlan', () => {
 
 		expect(() =>
 			serializeConfigPlan(plan, {
-				enrichment: { roleDeletionImpact: new Map([['editor', impact]]), warnings: [] },
+				enrichment: {
+					roleDeletionImpact: new Map([['editor', impact]]),
+					folderDeletionImpact: new Map(),
+					warnings: [],
+				},
 				manifestVersion: 1,
 			})
 		).toThrow(ConfigReadFailedException);
@@ -249,7 +263,11 @@ describe('serializeConfigPlan', () => {
 
 		expect(() =>
 			serializeConfigPlan(plan, {
-				enrichment: { roleDeletionImpact: new Map([['editor', impact]]), warnings: [] },
+				enrichment: {
+					roleDeletionImpact: new Map([['editor', impact]]),
+					folderDeletionImpact: new Map(),
+					warnings: [],
+				},
 				manifestVersion: 1,
 			})
 		).toThrow(ConfigReadFailedException);
@@ -277,7 +295,11 @@ describe('serializeConfigPlan', () => {
 			plan.roles.delete.push('editor');
 
 			return serializeConfigPlan(plan, {
-				enrichment: { roleDeletionImpact: new Map([['editor', impact]]), warnings: [] },
+				enrichment: {
+					roleDeletionImpact: new Map([['editor', impact]]),
+					folderDeletionImpact: new Map(),
+					warnings: [],
+				},
 				manifestVersion: 1,
 			});
 		};
@@ -308,7 +330,12 @@ describe('serializeConfigPlan', () => {
 			changes: { fields: { before: null, after: ['x'] } },
 		});
 
-		const enrichment: ConfigPlanEnrichment = { roleDeletionImpact: new Map([['zebra', zeroImpact()]]), warnings: [] };
+		const enrichment: ConfigPlanEnrichment = {
+			roleDeletionImpact: new Map([['zebra', zeroImpact()]]),
+			folderDeletionImpact: new Map(),
+			warnings: [],
+		};
+
 		const result = serializeConfigPlan(plan, { enrichment, manifestVersion: 1 });
 
 		expect(result.changes.map(labelOf)).toEqual([
@@ -349,7 +376,7 @@ describe('serializeConfigPlan', () => {
 	it('sorts warnings by identity regardless of input order', () => {
 		const withOrder = (warnings: ConfigPlanWarning[]) =>
 			serializeConfigPlan(emptyPlan(), {
-				enrichment: { roleDeletionImpact: new Map(), warnings },
+				enrichment: { roleDeletionImpact: new Map(), folderDeletionImpact: new Map(), warnings },
 				manifestVersion: 1,
 			}).warnings.map((entry) => entry.identity.role);
 
@@ -408,6 +435,7 @@ describe('serializeConfigPlan', () => {
 
 		const enrichment: ConfigPlanEnrichment = {
 			roleDeletionImpact: new Map([['z', zeroImpact()]]),
+			folderDeletionImpact: new Map(),
 			warnings: [warning('a', 'ghost')],
 		};
 

@@ -2,6 +2,7 @@ import type { Knex } from 'knex';
 import type { MutationGuard } from '../../database/mutation-guard.js';
 import { ConfigFolderInUseException } from '../../exceptions/index.js';
 import type { PrimaryKey } from '../../types/index.js';
+import { resolveFolderReference } from './folder-id-lookup.js';
 
 function parseOptions(value: unknown): Record<string, unknown> | undefined {
 	if (value && typeof value === 'object') return value as Record<string, unknown>;
@@ -51,13 +52,13 @@ export class FolderDeletionGuard implements MutationGuard {
 			});
 		}
 
-		const referenced = new Set(keys.map((key) => String(key)));
+		const deletedIds = new Map<string, true>(keys.map((key) => [String(key), true]));
 		const fields = await trx.select('options').from('directus_fields').whereNotNull('options');
 
 		for (const field of fields) {
-			const options = parseOptions(field['options']);
+			const folder = parseOptions(field['options'])?.['folder'];
 
-			if (options && 'folder' in options && referenced.has(String(options['folder']))) {
+			if (await resolveFolderReference(trx, deletedIds, folder)) {
 				throw new ConfigFolderInUseException('Cannot delete a folder referenced by a field interface.', {
 					blockedBy: 'options.folder',
 				});

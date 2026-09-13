@@ -1,10 +1,9 @@
 import knex from 'knex';
 import type { Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { CONFIG_FILENAME_STEM_MAX_LENGTH } from '../../utils/config-contract.js';
 import { down, up } from './20260909A-add-folder-key.js';
 
-const MAX = CONFIG_FILENAME_STEM_MAX_LENGTH;
+const MAX = 246;
 
 const FIXTURE = [
 	{ id: 'f-a', name: 'Docs', parent: null },
@@ -97,6 +96,49 @@ describe('20260909A-add-folder-key', () => {
 		const rows = await db('directus_folders').select('id', 'name', 'parent').orderBy('id', 'asc');
 
 		expect(rows).toEqual([...FIXTURE].sort((a, b) => a.id.localeCompare(b.id)));
+	});
+
+	it('derives literal golden keys independent of the runtime bound', async () => {
+		await db('directus_folders').del();
+
+		const golden = [
+			{ id: 'g01', name: 'Hello, World!', parent: null },
+			{ id: 'g02', name: '123 Reports', parent: null },
+			{ id: 'g03', name: 'Cafe' + String.fromCharCode(0x0301), parent: null },
+			{ id: 'g04', name: String.fromCharCode(0xfb01) + 'le', parent: null },
+			{ id: 'g05', name: 'Images', parent: null },
+			{ id: 'g06', name: 'images', parent: null },
+			{ id: 'g07', name: 'IMAGES', parent: null },
+			{ id: 'g08', name: '!!!', parent: null },
+			{ id: 'g09', name: '@@@', parent: null },
+			{ id: 'g10', name: 'a'.repeat(243) + ' b', parent: null },
+			{ id: 'g11', name: 'a'.repeat(243) + ' b', parent: null },
+		];
+
+		await db('directus_folders').insert(golden);
+		await up(db);
+
+		expect(await keysById()).toEqual({
+			g01: 'hello_world',
+			g02: 'reports',
+			g03: 'cafe',
+			g04: 'file',
+			g05: 'images',
+			g06: 'images_2',
+			g07: 'images_3',
+			g08: 'folder',
+			g09: 'folder_2',
+			g10: 'a'.repeat(243) + '_b',
+			g11: 'a'.repeat(243) + '_2',
+		});
+	});
+
+	it('completes on an empty folders table', async () => {
+		await db('directus_folders').del();
+		await up(db);
+
+		expect(await db('directus_folders').select('id')).toEqual([]);
+		await expect(db('directus_folders').insert({ id: 'x', name: 'X', parent: null })).rejects.toThrow();
 	});
 });
 

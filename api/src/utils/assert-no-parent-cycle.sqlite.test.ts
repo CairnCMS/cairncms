@@ -84,4 +84,23 @@ describe('assertNoParentCycle on a real SQLite database', () => {
 	it('does not touch an unguarded collection', async () => {
 		await expect(assertNoParentCycle(db, 'directus_other', 'id', ['x'], { parent: 'y' })).resolves.toBeUndefined();
 	});
+
+	it('refuses a descendant-parenting move with a fixed message that discloses no ancestor id', async () => {
+		const error = await guard(['a'], { parent: 'c' }).catch((err) => err);
+		expect(error).toBeInstanceOf(InvalidPayloadException);
+		expect(error.message).toBe('Moving a folder here would create a parent cycle.');
+	});
+
+	it('refuses a missing ancestor with a fixed message', async () => {
+		const error = await guard(['c'], { parent: 'ghost' }).catch((err) => err);
+		expect(error).toBeInstanceOf(InvalidPayloadException);
+		expect(error.message).toBe('The requested parent folder does not exist.');
+	});
+
+	it('reports a pre-existing data cycle with a fixed message', async () => {
+		await db('directus_folders').where({ id: 'a' }).update({ parent: 'c' });
+		const error = await guard(['fresh'], { parent: 'a' }).catch((err) => err);
+		expect(error).toBeInstanceOf(InvalidPayloadException);
+		expect(error.message).toBe('The folder hierarchy already contains a cycle.');
+	});
 });

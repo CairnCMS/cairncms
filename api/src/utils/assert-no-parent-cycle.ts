@@ -28,17 +28,17 @@ export async function assertNoParentCycle(
 		const key = canonical(cursor);
 
 		if (moved.has(key)) {
-			throw new InvalidPayloadException(`Moving a folder under "${String(cursor)}" would create a parent cycle.`);
+			throw new InvalidPayloadException('Moving a folder here would create a parent cycle.');
 		}
 
 		if (seen.has(key)) {
-			throw new InvalidPayloadException(`The folder hierarchy already contains a cycle at "${String(cursor)}".`);
+			throw new InvalidPayloadException('The folder hierarchy already contains a cycle.');
 		}
 
 		seen.add(key);
 
 		const row = await trx.select(parentField).from(collection).where(primaryKeyField, cursor).first();
-		if (!row) throw new InvalidPayloadException(`Parent folder "${String(cursor)}" does not exist.`);
+		if (!row) throw new InvalidPayloadException('The requested parent folder does not exist.');
 
 		cursor = row[parentField];
 	}

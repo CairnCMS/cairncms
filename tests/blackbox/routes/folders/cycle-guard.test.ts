@@ -9,6 +9,11 @@ const admin = `Bearer ${common.USER.ADMIN!.TOKEN}`;
 
 const serverVendors = vendors.filter((vendor) => vendor !== 'sqlite3');
 
+const eachServerVendor = (name: string, fn: (vendor: string) => Promise<void>): void => {
+	if (serverVendors.length > 0) it.each(serverVendors)(name, fn);
+	else it.skip(name, () => undefined);
+};
+
 const createdFolderIds: Record<string, string[]> = {};
 const createdFileIds: Record<string, string[]> = {};
 const createdUserIds: Record<string, string[]> = {};
@@ -178,7 +183,7 @@ describe('folder parent-cycle guard and config deletion guard', () => {
 		expect(await folderParent(vendor, a.id)).toBeNull();
 	});
 
-	it.each(serverVendors)('allows a valid move to a mixed-case parent id (%s)', async (vendor) => {
+	eachServerVendor('allows a valid move to a mixed-case parent id (%s)', async (vendor) => {
 		const a = await createFolder(vendor);
 		const b = await createFolder(vendor);
 
@@ -261,6 +266,22 @@ describe('folder parent-cycle guard and config deletion guard', () => {
 		const desired = snapshot.body.data;
 		desired.folders = desired.folders.filter((folder: { key: string }) => folder.key !== key);
 
+		const preview = await request(getUrl(vendor))
+			.post('/config/apply')
+			.query({ dry_run: 'true' })
+			.set('Authorization', admin)
+			.set('Content-Type', 'application/json')
+			.send(desired);
+
+		expect(preview.statusCode).toBe(200);
+
+		const previewed = preview.body.data.changes.find(
+			(change: { kind: string; operation: string; identity: { key: string } }) =>
+				change.kind === 'folders' && change.operation === 'delete' && change.identity.key === key
+		);
+
+		expect(previewed.impact).toEqual([{ blockedBy: 'files' }]);
+
 		const apply = await request(getUrl(vendor))
 			.post('/config/apply')
 			.query({ destructive: 'true' })
@@ -270,6 +291,8 @@ describe('folder parent-cycle guard and config deletion guard', () => {
 
 		expect(apply.statusCode).toBe(400);
 		expect(apply.body.errors[0].extensions.code).toBe('CONFIG_FOLDER_IN_USE');
+		expect(apply.body.errors[0].extensions.key).toBe(key);
+		expect(apply.body.errors[0].extensions.blockedBy).toBe('files');
 		expect(await folderParent(vendor, id)).toBeNull();
 	});
 });

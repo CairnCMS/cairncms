@@ -4,7 +4,11 @@ import type { CairnConfig, ConfigPlanChange, ConfigPlanEnrichment, ConfigRole } 
 import { computeConfigPlan } from './compute-config-plan.js';
 import { serializeConfigPlan } from './serialize-config-plan.js';
 
-const NO_ENRICHMENT: ConfigPlanEnrichment = { roleDeletionImpact: new Map(), warnings: [] };
+const NO_ENRICHMENT: ConfigPlanEnrichment = {
+	roleDeletionImpact: new Map(),
+	folderDeletionImpact: new Map(),
+	warnings: [],
+};
 
 function config(roles: ConfigRole[]): CairnConfig {
 	return { manifest: { version: 1, resources: ['roles', 'permissions'] }, roles, permissions: [] };
