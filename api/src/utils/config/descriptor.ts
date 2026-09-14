@@ -130,17 +130,24 @@ export interface ReadContext<K extends ConfigKindTypes> {
 }
 
 /**
- * Where role references outside the document resolve. A server-produced snapshot was already resolved against the
- * server's own state, so it is the only document that may skip the current-state check, and it must say so explicitly.
+ * Where references outside a document resolve against current state. Roles resolve permission subjects, and folders
+ * resolve a parent preserved by an omitted field, this way. A server-produced snapshot was already resolved against
+ * the server's own state, so it is the only document that may skip the current-state check, and it must say so
+ * explicitly.
  */
-export type RoleReferenceSource =
-	| { references: 'current-state'; currentRoleKeys: ReadonlySet<string> }
+export type ReferenceStateSource =
+	| {
+			references: 'current-state';
+			currentRoleKeys: ReadonlySet<string>;
+			/** Required when a current-state validation must resolve a folder whose parent is omitted; a validation of fully explicit declarations does not need it. */
+			currentFolderParents?: ReadonlyMap<string, string | null>;
+	  }
 	| { references: 'server-snapshot' };
 
 export type ValidationContext = {
 	rolesManaged: boolean;
 	declaredRoleKeys: ReadonlySet<string>;
-} & RoleReferenceSource;
+} & ReferenceStateSource;
 
 export interface PlanContext<K extends ConfigKindTypes> {
 	/** Typed access to a declared dependency's finalized plan; the engine throws if that dependency was not published. */

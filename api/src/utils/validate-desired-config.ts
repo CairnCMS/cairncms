@@ -9,9 +9,9 @@ import {
 	type ConfigKind,
 	type ConfigManifest,
 } from '../types/config.js';
-import type { RoleReferenceSource, ValidationContext } from './config/descriptor.js';
+import type { ReferenceStateSource, ValidationContext } from './config/descriptor.js';
 import { invalid } from './config/failures.js';
-import { buildDocumentSchema } from './config/field-schema.js';
+import { buildDocumentSchema, type SchemaMode } from './config/field-schema.js';
 import { isPlaceholder } from './config/placeholder.js';
 import { getDescriptor, kindsForVersion, listConfigKinds } from './config/registry.js';
 import { SUPPORTED_MANIFEST_VERSIONS, type ManifestVersion } from './config-contract.js';
@@ -20,13 +20,18 @@ import { replaceControlCharacters, safeLogFragment } from './safe-log-fragment.j
 /** Callers keep the input object, so coercing "false" would validate while the planner sees a truthy string. */
 const VALIDATE_OPTIONS = { convert: false, abortEarly: false } as const;
 
-export function buildRecordSchemas(): Record<ConfigKind, Joi.ObjectSchema> {
+export function buildRecordSchemas(mode: SchemaMode = 'authored'): Record<ConfigKind, Joi.ObjectSchema> {
 	return Object.fromEntries(
-		listConfigKinds().map((kind) => [kind, buildDocumentSchema(getDescriptor(kind))])
+		listConfigKinds().map((kind) => [kind, buildDocumentSchema(getDescriptor(kind), mode)])
 	) as Record<ConfigKind, Joi.ObjectSchema>;
 }
 
-const RECORD_SCHEMA: Record<ConfigKind, Joi.ObjectSchema> = buildRecordSchemas();
+const RECORD_SCHEMA: Record<ConfigKind, Joi.ObjectSchema> = buildRecordSchemas('authored');
+const SNAPSHOT_RECORD_SCHEMA: Record<ConfigKind, Joi.ObjectSchema> = buildRecordSchemas('snapshot');
+
+function recordSchemas(mode: SchemaMode): Record<ConfigKind, Joi.ObjectSchema> {
+	return mode === 'snapshot' ? SNAPSHOT_RECORD_SCHEMA : RECORD_SCHEMA;
+}
 
 const MANIFEST = Joi.object({
 	version: Joi.valid(...SUPPORTED_MANIFEST_VERSIONS).required(),
@@ -80,11 +85,11 @@ export function validateConfigManifest(value: unknown, label: string): ConfigMan
 	return manifest;
 }
 
-export function validateConfigRecord(kind: ConfigKind, record: unknown): string[] {
-	return messagesOf(RECORD_SCHEMA[kind].validate(record, VALIDATE_OPTIONS).error);
+export function validateConfigRecord(kind: ConfigKind, record: unknown, mode: SchemaMode = 'authored'): string[] {
+	return messagesOf(recordSchemas(mode)[kind].validate(record, VALIDATE_OPTIONS).error);
 }
 
-export type DesiredConfigContext = { label: string } & RoleReferenceSource;
+export type DesiredConfigContext = { label: string } & ReferenceStateSource;
 
 /**
  * The local reader substitutes a whole-string placeholder in a field that accepts one, so a persisted document
@@ -124,21 +129,33 @@ export function findPlaceholderSyntax(config: CairnConfig): string[] {
 	return problems;
 }
 
-function envelopeSchema(managed: ReadonlySet<ConfigKind>, version: ManifestVersion): Joi.ObjectSchema {
+function envelopeSchema(
+	managed: ReadonlySet<ConfigKind>,
+	version: ManifestVersion,
+	mode: SchemaMode
+): Joi.ObjectSchema {
+	const schemas = recordSchemas(mode);
+
 	const kinds = Object.fromEntries(
 		kindsForVersion(version).map((kind) => [
 			kind,
-			managed.has(kind) ? Joi.array().items(RECORD_SCHEMA[kind]).required() : Joi.array().required(),
+			managed.has(kind) ? Joi.array().items(schemas[kind]).required() : Joi.array().required(),
 		])
 	);
 
 	return Joi.object({ manifest: Joi.any(), ...kinds });
 }
 
-function referenceSource(context: DesiredConfigContext): RoleReferenceSource {
+function referenceSource(context: DesiredConfigContext): ReferenceStateSource {
 	switch (context.references) {
 		case 'current-state':
-			return { references: 'current-state', currentRoleKeys: context.currentRoleKeys };
+			return {
+				references: 'current-state',
+				currentRoleKeys: context.currentRoleKeys,
+				...(context.currentFolderParents !== undefined && {
+					currentFolderParents: context.currentFolderParents,
+				}),
+			};
 		case 'server-snapshot':
 			return { references: 'server-snapshot' };
 
@@ -157,8 +174,12 @@ export function validateDesiredConfig(document: unknown, context: DesiredConfigC
 	const body = document as Record<string, unknown>;
 	const manifest = validateConfigManifest(body['manifest'], context.label);
 	const managed = new Set<ConfigKind>(manifest.resources);
+	const mode: SchemaMode = context.references === 'server-snapshot' ? 'snapshot' : 'authored';
 
-	const fieldErrors = messagesOf(envelopeSchema(managed, manifest.version).validate(body, VALIDATE_OPTIONS).error);
+	const fieldErrors = messagesOf(
+		envelopeSchema(managed, manifest.version, mode).validate(body, VALIDATE_OPTIONS).error
+	);
+
 	if (fieldErrors.length > 0) return fieldErrors.map(invalid);
 
 	const rolesManaged = managed.has('roles');

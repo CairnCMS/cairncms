@@ -924,7 +924,18 @@ describe('fetchRemoteSnapshot', () => {
 
 	const VALID_SNAPSHOT = {
 		manifest: { version: 1, resources: ['roles', 'permissions'] },
-		roles: [{ key: 'editor', name: 'Editor', admin_access: false, app_access: true }],
+		roles: [
+			{
+				key: 'editor',
+				name: 'Editor',
+				admin_access: false,
+				app_access: true,
+				icon: 'supervised_user_circle',
+				enforce_tfa: false,
+				description: null,
+				ip_access: null,
+			},
+		],
 		permissions: [
 			{
 				role: 'editor',
@@ -989,6 +1000,73 @@ describe('fetchRemoteSnapshot', () => {
 		expect(error.message).toBe(
 			'The server returned a malformed snapshot response ("roles[0].external_id" is not allowed).'
 		);
+	});
+
+	it('refuses a snapshot whose role omits a snapshot-safe field, naming it', async () => {
+		const role: Record<string, unknown> = { ...VALID_SNAPSHOT.roles[0] };
+		delete role['enforce_tfa'];
+
+		const { remote } = session(() => ({ status: 200, data: { data: { ...VALID_SNAPSHOT, roles: [role] } } }));
+
+		const error = await caught(() => fetchRemoteSnapshot(remote, scope));
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('enforce_tfa');
+	});
+
+	it('refuses a snapshot whose folder omits parent, naming it', async () => {
+		const folderSnapshot = {
+			manifest: { version: 2, resources: ['folders'] },
+			roles: [],
+			permissions: [],
+			folders: [{ key: 'docs', name: 'Docs' }],
+		};
+
+		const { remote } = session(() => ({ status: 200, data: { data: folderSnapshot } }));
+
+		const error = await caught(() =>
+			fetchRemoteSnapshot(remote, { manifestVersion: 2, resources: ['folders'] as const })
+		);
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('parent');
+	});
+
+	it('accepts a complete snapshot with a non-default role policy and a nested folder tree', async () => {
+		const complete = {
+			manifest: { version: 2, resources: ['roles', 'folders'] },
+			roles: [
+				{
+					key: 'ops',
+					name: 'Ops',
+					admin_access: false,
+					app_access: true,
+					icon: 'shield',
+					enforce_tfa: true,
+					description: 'Restricted',
+					ip_access: ['10.0.0.0/8'],
+				},
+			],
+			permissions: [],
+			folders: [
+				{ key: 'root', name: 'Root', parent: null },
+				{ key: 'child', name: 'Child', parent: 'root' },
+			],
+		};
+
+		const { remote } = session(() => ({ status: 200, data: { data: complete } }));
+
+		const snapshot = await fetchRemoteSnapshot(remote, {
+			manifestVersion: 2,
+			resources: ['roles', 'folders'] as const,
+		});
+
+		expect(snapshot.roles[0]).toMatchObject({ enforce_tfa: true, ip_access: ['10.0.0.0/8'] });
+
+		expect(snapshot.folders).toEqual([
+			{ key: 'root', name: 'Root', parent: null },
+			{ key: 'child', name: 'Child', parent: 'root' },
+		]);
 	});
 
 	it('scrubs a token longer than the diagnostic bound before truncating', async () => {

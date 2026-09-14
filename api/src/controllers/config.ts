@@ -105,6 +105,7 @@ router.post(
 				const {
 					config: current,
 					currentRoleKeys,
+					currentFolderParents,
 					stateToken,
 				} = await readCurrentConfig({
 					database,
@@ -116,6 +117,7 @@ router.post(
 					label: BODY_LABEL,
 					references: 'current-state',
 					currentRoleKeys,
+					currentFolderParents,
 				});
 
 				if (failures.length > 0) throw failures.map(toConfigException);

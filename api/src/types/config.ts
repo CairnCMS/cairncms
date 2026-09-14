@@ -33,7 +33,7 @@ export interface ConfigPermission {
 export interface ConfigFolder {
 	key: string;
 	name: string;
-	parent: string | null;
+	parent?: string | null;
 }
 
 export interface ConfigManifest {

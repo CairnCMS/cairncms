@@ -150,7 +150,7 @@ describe('folders handler against a real SQLite database', () => {
 	});
 
 	it('creates a root when the parent is omitted', async () => {
-		await foldersDescriptor.handler.applyCreates([{ key: 'root', name: 'Root' } as ConfigFolder], applyContext(db));
+		await foldersDescriptor.handler.applyCreates([{ key: 'root', name: 'Root' }], applyContext(db));
 
 		expect(await tree()).toEqual({ root: null });
 	});

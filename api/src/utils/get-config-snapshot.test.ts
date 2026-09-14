@@ -969,7 +969,18 @@ describe('readCurrentConfig', () => {
 			handler: {
 				...real.handler,
 				readCurrent: async () => ({
-					records: [{ key: 'registry_sentinel', name: 'Sentinel', admin_access: false, app_access: true }],
+					records: [
+						{
+							key: 'registry_sentinel',
+							name: 'Sentinel',
+							admin_access: false,
+							app_access: true,
+							icon: 'supervised_user_circle',
+							enforce_tfa: false,
+							description: null,
+							ip_access: null,
+						},
+					],
 					documentIdentities: [{ key: 'registry_sentinel' }],
 					dependencyState: { currentRoleKeys: new Set(['registry_sentinel']), roleKeyById: new Map() },
 				}),
@@ -980,13 +991,62 @@ describe('readCurrentConfig', () => {
 			const { config } = await readCurrentConfig({ database: db, resources: ['roles'] });
 
 			expect(config.roles).toEqual([
-				{ key: 'registry_sentinel', name: 'Sentinel', admin_access: false, app_access: true },
+				{
+					key: 'registry_sentinel',
+					name: 'Sentinel',
+					admin_access: false,
+					app_access: true,
+					icon: 'supervised_user_circle',
+					enforce_tfa: false,
+					description: null,
+					ip_access: null,
+				},
 			]);
 
 			expect(rolesRead).not.toHaveBeenCalled();
 		} finally {
 			CONFIG_REGISTRY.roles = real;
 		}
+	});
+
+	it('refuses a generated document that drops a snapshot-safe field', async () => {
+		const real = CONFIG_REGISTRY.roles;
+
+		CONFIG_REGISTRY.roles = {
+			...real,
+			handler: {
+				...real.handler,
+				readCurrent: async () => ({
+					records: [
+						{
+							key: 'faulty',
+							name: 'Faulty',
+							admin_access: false,
+							app_access: true,
+							icon: 'supervised_user_circle',
+							description: null,
+							ip_access: null,
+						},
+					],
+					documentIdentities: [{ key: 'faulty' }],
+					dependencyState: { currentRoleKeys: new Set(['faulty']), roleKeyById: new Map() },
+				}),
+			},
+		};
+
+		let error: unknown;
+
+		try {
+			await readCurrentConfig({ database: db, resources: ['roles'] });
+		} catch (caught) {
+			error = caught;
+		} finally {
+			CONFIG_REGISTRY.roles = real;
+		}
+
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+		expect((error as Error).message).toContain('enforce_tfa');
 	});
 
 	it('produces a document its own validator accepts, including permissions on the public role', async () => {
@@ -1028,16 +1088,21 @@ describe('readCurrentConfig', () => {
 			},
 		]);
 
-		const { config, currentRoleKeys } = await readCurrentConfig({
+		const { config, currentRoleKeys, currentFolderParents } = await readCurrentConfig({
 			database: db,
 			resources: ['roles', 'permissions'],
 		});
 
 		expect(config.permissions.map((set) => set.role)).toEqual(['editor', 'public']);
 
-		expect(validateDesiredConfig(config, { label: 'snapshot', references: 'current-state', currentRoleKeys })).toEqual(
-			[]
-		);
+		expect(
+			validateDesiredConfig(config, {
+				label: 'snapshot',
+				references: 'current-state',
+				currentRoleKeys,
+				currentFolderParents,
+			})
+		).toEqual([]);
 	});
 
 	describe('refuses an existing overlong key', () => {

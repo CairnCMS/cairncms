@@ -212,6 +212,7 @@ beforeEach(() => {
 	vi.mocked(readCurrentConfig).mockResolvedValue({
 		config: CURRENT_CONFIG,
 		currentRoleKeys: new Set<string>(),
+		currentFolderParents: new Map<string, string | null>(),
 		stateToken: { resources: ['roles'], digest: 'digest' },
 	});
 
@@ -602,5 +603,42 @@ describe('GET /config/snapshot manifest version', () => {
 		expect(res.status).toBe(400);
 		expect(res.body.errors[0].extensions.code).toBe('CONFIG_UNSUPPORTED_VERSION');
 		expect(readCurrentConfig).not.toHaveBeenCalled();
+	});
+});
+
+describe('POST /config/apply forwards current folder state to validation', () => {
+	it('rejects a preserved-edge folder cycle with 400 CONFIG_INVALID and no planning', async () => {
+		const actual = await vi.importActual<typeof import('../utils/validate-desired-config.js')>(
+			'../utils/validate-desired-config.js'
+		);
+
+		vi.mocked(validateDesiredConfig).mockImplementation(actual.validateDesiredConfig);
+
+		vi.mocked(readCurrentConfig).mockResolvedValue({
+			config: CURRENT_CONFIG,
+			currentRoleKeys: new Set<string>(),
+			currentFolderParents: new Map<string, string | null>([
+				['a', null],
+				['b', 'a'],
+			]),
+			stateToken: { resources: ['folders'], digest: 'digest' },
+		});
+
+		const res = await request(makeApp(ADMIN))
+			.post('/config/apply')
+			.set('User-Agent', 'cairncms-cli/1.6.0')
+			.send({
+				manifest: { version: 2, resources: ['folders'] },
+				roles: [],
+				permissions: [],
+				folders: [
+					{ key: 'a', name: 'a', parent: 'b' },
+					{ key: 'b', name: 'b' },
+				],
+			});
+
+		expect(res.status).toBe(400);
+		expect(res.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+		expect(computeConfigPlan).not.toHaveBeenCalled();
 	});
 });

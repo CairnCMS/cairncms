@@ -12,8 +12,8 @@ import {
 	RemoteConfigPlanChange,
 	RemoteErrorExtensions,
 } from '../../cli/commands/config/remote-response-schema.js';
-import { buildRecordSchemas } from '../validate-desired-config.js';
-import { computeKindPlan } from './diff.js';
+import { buildRecordSchemas, validateConfigRecord } from '../validate-desired-config.js';
+import { computeKindPlan, diffRecordValues } from './diff.js';
 import type { ConfigKindTypes, ConfigResourceDescriptor, KindPlan } from './descriptor.js';
 import type { FoldersKindTypes } from './handlers/folders.js';
 import type { PermissionsKindTypes } from './handlers/permissions.js';
@@ -267,6 +267,126 @@ describe('config kind wiring conformance', () => {
 
 		expect(result.success).toBe(false);
 	});
+});
+
+describe('cross-kind omission contract', () => {
+	// Independently authored, not read from the descriptor, so a requiredness or omission change must update it.
+	const OPTIONAL_FIELDS: Record<ConfigKind, string[]> = {
+		roles: ['description', 'enforce_tfa', 'icon', 'ip_access'],
+		permissions: [],
+		folders: ['parent'],
+	};
+
+	it.each(listConfigKinds())('binds omissionPreservesCurrent to optionality for every %s field', (kind) => {
+		const descriptor = getDescriptor(kind);
+
+		for (const field of [...descriptor.documentIdentityFields, ...descriptor.recordFields]) {
+			expect(field.omissionPreservesCurrent).toBe(!field.required);
+		}
+	});
+
+	it.each(listConfigKinds())('pins the preserve-on-omit fields of %s to an independent expectation', (kind) => {
+		const descriptor = getDescriptor(kind);
+
+		const optional = [...descriptor.documentIdentityFields, ...descriptor.recordFields]
+			.filter((field) => !field.required)
+			.map((field) => field.name)
+			.sort();
+
+		expect(optional).toEqual([...OPTIONAL_FIELDS[kind]].sort());
+	});
+});
+
+describe('cross-kind omission behavior', () => {
+	const rolesDescriptor = getDescriptor('roles');
+	const foldersDescriptor = getDescriptor('folders');
+	const permissionsDescriptor = getDescriptor('permissions');
+
+	type Change = { before: unknown; after: unknown };
+
+	function completePermissionRecord(): Record<string, unknown> {
+		return { collection: 'articles', action: 'read', permissions: null, validation: null, presets: null, fields: null };
+	}
+
+	it('preserves non-default optional role values when omitted on update while a present field changes', () => {
+		const current = role({
+			key: 'editor',
+			name: 'Editor',
+			icon: 'custom_icon',
+			enforce_tfa: true,
+			description: 'Kept',
+			ip_access: ['10.0.0.0/8'],
+		});
+
+		const changes = diffRecordValues(rolesDescriptor, current, role({ key: 'editor', name: 'Renamed' })) as Record<
+			string,
+			Change
+		>;
+
+		expect(Object.keys(changes)).toEqual(['name']);
+		expect(changes['name']).toEqual({ before: 'Editor', after: 'Renamed' });
+	});
+
+	it('applies the literal role service defaults when optional fields are omitted on create', () => {
+		const created = rolesDescriptor.canonicalizeValues(role({ key: 'fresh', name: 'Fresh' })) as Record<
+			string,
+			unknown
+		>;
+
+		expect(created).toMatchObject({
+			icon: 'supervised_user_circle',
+			enforce_tfa: false,
+			description: null,
+			ip_access: null,
+		});
+	});
+
+	it('treats an explicit false for a security-bearing field as a change, not omission', () => {
+		const changes = diffRecordValues(
+			rolesDescriptor,
+			role({ key: 'editor', name: 'Editor', enforce_tfa: true }),
+			role({ key: 'editor', name: 'Editor', enforce_tfa: false })
+		) as Record<string, Change>;
+
+		expect(changes['enforce_tfa']).toEqual({ before: true, after: false });
+	});
+
+	it('preserves a folder parent on omitted update and roots it on omitted create', () => {
+		const changes = diffRecordValues(foldersDescriptor, folder({ key: 'child', name: 'Child', parent: 'root' }), {
+			key: 'child',
+			name: 'Renamed',
+		}) as Record<string, Change>;
+
+		expect(Object.keys(changes)).toEqual(['name']);
+		expect(changes['name']).toEqual({ before: 'Child', after: 'Renamed' });
+
+		const created = foldersDescriptor.canonicalizeValues({ key: 'fresh', name: 'Fresh' }) as Record<string, unknown>;
+
+		expect(created).toMatchObject({ parent: null });
+	});
+
+	it('replaces a whole permission policy object rather than merging clauses', () => {
+		const changes = diffRecordValues(
+			permissionsDescriptor,
+			permission({ role: 'editor', collection: 'articles', action: 'read', permissions: { a: 1 } }),
+			permission({ role: 'editor', collection: 'articles', action: 'read', permissions: { b: 2 } })
+		) as Record<string, Change>;
+
+		expect(changes['permissions']).toEqual({ before: { a: 1 }, after: { b: 2 } });
+	});
+
+	it.each(['action', 'permissions', 'validation', 'presets', 'fields'])(
+		'rejects a permission that omits the required field %s before planning',
+		(field) => {
+			const record = completePermissionRecord();
+			delete record[field];
+
+			const problems = validateConfigRecord('permissions', { role: 'author', permissions: [record] });
+
+			expect(problems.length).toBeGreaterThan(0);
+			expect(problems.join(' ')).toContain(field);
+		}
+	);
 });
 
 describe('projectReadState mode invariant', () => {

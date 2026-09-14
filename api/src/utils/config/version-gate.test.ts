@@ -3,7 +3,12 @@ import { ConfigUnsupportedVersionException } from '../../exceptions/config-unsup
 import { validateConfigManifest, validateDesiredConfig } from '../validate-desired-config.js';
 import { kindsForVersion } from './registry.js';
 
-const CTX = { label: 'test', references: 'current-state', currentRoleKeys: new Set<string>() } as const;
+const CTX = {
+	label: 'test',
+	references: 'current-state',
+	currentRoleKeys: new Set<string>(),
+	currentFolderParents: new Map<string, string | null>(),
+} as const;
 
 describe('kindsForVersion', () => {
 	it('excludes folders at version 1 and includes it at version 2', () => {

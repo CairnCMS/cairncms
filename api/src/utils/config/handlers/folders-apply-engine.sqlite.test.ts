@@ -13,6 +13,7 @@ import { computeConfigPlan } from '../../compute-config-plan.js';
 import { enrichConfigPlan } from '../../enrich-config-plan.js';
 import { readCurrentConfig } from '../../get-config-snapshot.js';
 import { serializeConfigPlan } from '../../serialize-config-plan.js';
+import { validateDesiredConfig } from '../../validate-desired-config.js';
 
 vi.mock('../../../database/index', () => ({
 	default: vi.fn(),
@@ -423,5 +424,109 @@ describe('folders through the real apply engine on SQLite', () => {
 		expect(await db('directus_folders').where({ key: 'fresh' }).first()).toBeUndefined();
 		expect(await db('directus_files').count({ n: '*' }).first()).toMatchObject({ n: 0 });
 		expect(dispatched).not.toHaveBeenCalled();
+	});
+
+	it('preserves an omitted parent while renaming the folder in the same apply', async () => {
+		await seed([
+			{ key: 'root', parent: null },
+			{ key: 'child', parent: 'root' },
+		]);
+
+		const { config: current, stateToken } = await snapshot();
+
+		const desired: CairnConfig = {
+			manifest: manifestFolders(),
+			roles: [],
+			permissions: [],
+			folders: [
+				{ key: 'root', name: 'root', parent: null },
+				{ key: 'child', name: 'Renamed' },
+			],
+		};
+
+		const plan = computeConfigPlan(current, desired);
+		const childUpdate = plan.folders.update.find((entry) => entry.key === 'child');
+		expect(childUpdate?.changes).toHaveProperty('name');
+		expect(childUpdate?.changes).not.toHaveProperty('parent');
+
+		const result = await applyConfigPlan(plan, {
+			database: db,
+			schema,
+			destructive: false,
+			context: securityContext,
+			expectedStateToken: stateToken,
+		});
+
+		expect(result.folders.updated).toContain('child');
+		expect(await tree()).toEqual({ root: null, child: 'root' });
+		expect(await db('directus_folders').where({ key: 'child' }).first()).toMatchObject({ name: 'Renamed' });
+	});
+
+	it('blocks deleting a folder whose only child preserves it through an omitted parent', async () => {
+		await seed([
+			{ key: 'root', parent: null },
+			{ key: 'child', parent: 'root' },
+		]);
+
+		const { config: current, stateToken } = await snapshot();
+
+		const desired: CairnConfig = {
+			manifest: manifestFolders(),
+			roles: [],
+			permissions: [],
+			folders: [{ key: 'child', name: 'child' }],
+		};
+
+		const plan = computeConfigPlan(current, desired);
+
+		const enrichment = await enrichConfigPlan(plan, desired, { schema, database: db });
+		const serialized = serializeConfigPlan(plan, { enrichment, manifestVersion: 2 });
+
+		const rootDelete = serialized.changes.find(
+			(change): change is Extract<ConfigPlanChange, { kind: 'folders'; operation: 'delete' }> =>
+				change.kind === 'folders' && change.operation === 'delete' && change.identity.key === 'root'
+		);
+
+		expect(rootDelete?.impact).toEqual([{ blockedBy: 'folders' }]);
+
+		const error = await applyConfigPlan(plan, {
+			database: db,
+			schema,
+			destructive: true,
+			context: securityContext,
+			expectedStateToken: stateToken,
+		}).catch((err) => err);
+
+		expect(error).toBeInstanceOf(ConfigFolderInUseException);
+		expect(error.extensions.blockedBy).toBe('folders');
+		expect(await tree()).toEqual({ root: null, child: 'root' });
+	});
+
+	it('rejects a preserved-edge cycle through readCurrentConfig and validateDesiredConfig', async () => {
+		await seed([
+			{ key: 'a', parent: null },
+			{ key: 'b', parent: 'a' },
+		]);
+
+		const { currentRoleKeys, currentFolderParents } = await snapshot();
+
+		const desired: CairnConfig = {
+			manifest: manifestFolders(),
+			roles: [],
+			permissions: [],
+			folders: [
+				{ key: 'a', name: 'a', parent: 'b' },
+				{ key: 'b', name: 'b' },
+			],
+		};
+
+		const failures = validateDesiredConfig(desired, {
+			label: 'apply',
+			references: 'current-state',
+			currentRoleKeys,
+			currentFolderParents,
+		});
+
+		expect(failures.map((failure) => failure.code)).toContain('CONFIG_INVALID');
 	});
 });

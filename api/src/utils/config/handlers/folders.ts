@@ -31,6 +31,7 @@ import type {
 	ReadContext,
 	ReadCurrentResult,
 	ReadStateProjection,
+	ValidationContext,
 } from '../descriptor.js';
 import { identityConflict, invalid } from '../failures.js';
 import { UNFILTERED, unreadable } from '../read-parsing.js';
@@ -103,7 +104,7 @@ const RECORD_FIELDS: ConfigFieldDescriptor[] = [
 		sensitivity: NON_SECRET,
 		snapshotSafe: true,
 		mutable: true,
-		omissionPreservesCurrent: false,
+		omissionPreservesCurrent: true,
 	},
 ];
 
@@ -190,7 +191,11 @@ function projectReadState(result: ReadCurrentResult<FoldersKindTypes>, mode: Con
 	return { mode, identities: values.map(([key]) => key), values };
 }
 
-function validateDesired(documents: ConfigFolder[]): ConfigFailure[] {
+function validateDesired(
+	documents: ConfigFolder[],
+	_records: ConfigFolder[],
+	context: ValidationContext
+): ConfigFailure[] {
 	const failures: ConfigFailure[] = [];
 	const keys = new Set<string>();
 
@@ -202,16 +207,28 @@ function validateDesired(documents: ConfigFolder[]): ConfigFailure[] {
 		keys.add(document.key);
 	}
 
+	const currentParents = context.references === 'current-state' ? context.currentFolderParents : undefined;
+	// An omitted parent (the property is absent) preserves the current parent, which is root for a new folder. An
+	// explicit null is root. A server snapshot always writes parent explicitly, so it never consults current state.
+	const declaresParent = (document: ConfigFolder): boolean => Object.hasOwn(document, 'parent');
+	const preservesParent = documents.some((document) => !declaresParent(document));
+
+	if (context.references === 'current-state' && preservesParent && currentParents === undefined) {
+		throw unreadable('folder parent preservation', 'current folder state was not supplied');
+	}
+
+	const effectiveParent = (document: ConfigFolder): string | null =>
+		declaresParent(document) ? document.parent ?? null : currentParents?.get(document.key) ?? null;
+
 	for (const document of documents) {
-		const parent = document.parent ?? null;
-		if (parent === null) continue;
+		const parent = effectiveParent(document);
 
 		if (parent === document.key) {
 			failures.push(invalid(`Folder "${safeLogFragment(document.key)}" cannot be its own parent.`));
 			continue;
 		}
 
-		if (!keys.has(parent)) {
+		if (declaresParent(document) && parent !== null && !keys.has(parent)) {
 			failures.push(
 				invalid(
 					`Folder "${safeLogFragment(document.key)}" references parent "${safeLogFragment(
@@ -222,7 +239,7 @@ function validateDesired(documents: ConfigFolder[]): ConfigFailure[] {
 		}
 	}
 
-	const parentByKey = new Map(documents.map((document) => [document.key, document.parent ?? null] as const));
+	const parentByKey = new Map(documents.map((document) => [document.key, effectiveParent(document)] as const));
 	const inCycle = new Set<string>();
 
 	for (const document of documents) {

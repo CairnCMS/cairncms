@@ -18,6 +18,20 @@ function role(overrides: Record<string, unknown> = {}): Record<string, unknown> 
 	return { key: 'editor', name: 'Editor', admin_access: false, app_access: true, ...overrides };
 }
 
+function completeRole(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+	return {
+		key: 'editor',
+		name: 'Editor',
+		admin_access: false,
+		app_access: true,
+		icon: 'supervised_user_circle',
+		enforce_tfa: false,
+		description: null,
+		ip_access: null,
+		...overrides,
+	};
+}
+
 function permission(overrides: Record<string, unknown> = {}): Record<string, unknown> {
 	return {
 		collection: 'articles',
@@ -47,6 +61,7 @@ function validateFull(doc: Record<string, unknown>, currentRoleKeys: string[] = 
 		label: 'test',
 		references: 'current-state',
 		currentRoleKeys: new Set(currentRoleKeys),
+		currentFolderParents: new Map<string, string | null>(),
 	});
 }
 
@@ -350,8 +365,38 @@ describe('validateDesiredConfig', () => {
 		expect(validateSnapshot(duplicateTuple)).toHaveLength(1);
 	});
 
+	it.each(['icon', 'enforce_tfa', 'description', 'ip_access'])(
+		'accepts an authored role that omits %s but rejects the same document as a generated snapshot',
+		(field) => {
+			const partial = completeRole();
+			delete partial[field];
+			const doc = document({ roles: [partial] });
+
+			expect(validate(doc)).toEqual([]);
+
+			const failures = validateSnapshot(doc);
+			expect(failures).toHaveLength(1);
+			expect(failures[0]).toContain(field);
+		}
+	);
+
+	it('rejects a generated folder snapshot that omits parent, while the same authored folder is accepted', () => {
+		const doc = {
+			manifest: { version: 2, resources: ['folders'] },
+			roles: [],
+			permissions: [],
+			folders: [{ key: 'docs', name: 'Docs' }],
+		};
+
+		expect(validate(doc)).toEqual([]);
+
+		const failures = validateSnapshot(doc);
+		expect(failures).toHaveLength(1);
+		expect(failures[0]).toContain('parent');
+	});
+
 	it.each(['name', 'description'])('rejects a role %s written in placeholder form in both modes', (field) => {
-		const doc = document({ roles: [role({ [field]: '{{CAIRNCMS_CONFIG_SECRET}}' })] });
+		const doc = document({ roles: [completeRole({ [field]: '{{CAIRNCMS_CONFIG_SECRET}}' })] });
 
 		const expected = `roles record "editor" field "${field}" holds placeholder syntax, which cannot be stored because the reader would substitute it. Send a resolved value.`;
 

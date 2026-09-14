@@ -31,7 +31,22 @@ const TOKEN_VARIABLES = ['CAIRNCMS_TOKEN', 'CAIRNCMS_TOKEN_FILE'] as const;
 
 const MANIFEST = { version: 1, resources: ['roles', 'permissions'] };
 
-const EDITOR = { key: 'editor', name: 'Editor', admin_access: false, app_access: true };
+const EDITOR = {
+	key: 'editor',
+	name: 'Editor',
+	admin_access: false,
+	app_access: true,
+	icon: 'supervised_user_circle',
+	enforce_tfa: false,
+	description: null,
+	ip_access: null,
+};
+
+function without(obj: Record<string, unknown>, key: string): Record<string, unknown> {
+	const copy = { ...obj };
+	delete copy[key];
+	return copy;
+}
 
 let tmpDir: string;
 let savedEnv: Map<string, string | undefined>;
@@ -107,6 +122,7 @@ describe('configSnapshot against a remote server', () => {
 	it.each([
 		['an unknown role field', { ...EDITOR, name: 'Renamed', external_id: 'sso-7' }, 'external_id'],
 		['a role name in placeholder form', { ...EDITOR, name: '{{CAIRNCMS_CONFIG_SECRET}}' }, 'placeholder syntax'],
+		['a role missing enforce_tfa', without(EDITOR, 'enforce_tfa'), 'enforce_tfa'],
 	])(
 		'leaves a pre-existing destination byte-for-byte unchanged when the snapshot carries %s',
 		async (_label, role, detail) => {
@@ -123,6 +139,21 @@ describe('configSnapshot against a remote server', () => {
 			expect(await captureTree(tmpDir)).toEqual(before);
 		}
 	);
+
+	it('refuses an incomplete snapshot into an empty destination and writes nothing', async () => {
+		respondWith({
+			manifest: { version: 2, resources: ['roles', 'permissions', 'folders'] },
+			roles: [without(EDITOR, 'enforce_tfa')],
+			permissions: [],
+			folders: [],
+		});
+
+		await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
+
+		expect(vi.mocked(process.exit).mock.calls).toEqual([[3]]);
+		expect(vi.mocked(logger.error)).toHaveBeenCalledWith(expect.stringContaining('enforce_tfa'));
+		expect(await fs.readdir(tmpDir)).toEqual([]);
+	});
 
 	it('writes a valid snapshot into the same destination', async () => {
 		await seedDestination();

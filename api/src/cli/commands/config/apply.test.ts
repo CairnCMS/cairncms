@@ -351,6 +351,7 @@ describe('configApply state token forwarding', () => {
 		vi.mocked(readCurrentConfig).mockResolvedValue({
 			config: managed,
 			currentRoleKeys: new Set<string>(),
+			currentFolderParents: new Map<string, string | null>(),
 			stateToken: STATE_TOKEN,
 		});
 
@@ -458,6 +459,7 @@ describe('configApply run record', () => {
 		vi.mocked(readCurrentConfig).mockResolvedValue({
 			config: MANAGED,
 			currentRoleKeys: new Set<string>(),
+			currentFolderParents: new Map<string, string | null>(),
 			stateToken: STATE_TOKEN,
 		});
 
@@ -696,6 +698,7 @@ describe('configApply placeholder-shaped desired values', () => {
 		vi.mocked(readCurrentConfig).mockResolvedValue({
 			config: { ...desired, roles: [] },
 			currentRoleKeys: new Set<string>(),
+			currentFolderParents: new Map<string, string | null>(),
 			stateToken: STATE_TOKEN,
 		});
 
@@ -744,6 +747,7 @@ describe('configApply local wire projection', () => {
 		vi.mocked(readCurrentConfig).mockResolvedValue({
 			config: { ...desired, roles: [] },
 			currentRoleKeys: new Set<string>(),
+			currentFolderParents: new Map<string, string | null>(),
 			stateToken: STATE_TOKEN,
 		});
 
@@ -763,5 +767,54 @@ describe('configApply local wire projection', () => {
 		expect(validated).toHaveProperty('roles');
 		expect(validated).not.toHaveProperty('folders');
 		expect(applyConfigPlan).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('configApply forwards current folder state to validation', () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+		vi.clearAllMocks();
+	});
+
+	it('rejects a preserved-edge folder cycle at exit 2 before planning', async () => {
+		const actual = await vi.importActual<typeof import('../../../utils/validate-desired-config.js')>(
+			'../../../utils/validate-desired-config.js'
+		);
+
+		vi.mocked(validateDesiredConfig).mockImplementation(actual.validateDesiredConfig);
+
+		vi.spyOn(process, 'exit').mockImplementation((code) => {
+			throw new Error(`exit:${code}`);
+		});
+
+		const desired: CairnConfig = {
+			manifest: { version: 2, resources: ['folders'] },
+			roles: [],
+			permissions: [],
+			folders: [
+				{ key: 'a', name: 'a', parent: 'b' },
+				{ key: 'b', name: 'b' },
+			],
+		};
+
+		vi.mocked(readConfigDirectory).mockResolvedValue(desired);
+
+		vi.mocked(readCurrentConfig).mockResolvedValue({
+			config: desired,
+			currentRoleKeys: new Set<string>(),
+			currentFolderParents: new Map<string, string | null>([
+				['a', null],
+				['b', 'a'],
+			]),
+			stateToken: STATE_TOKEN,
+		});
+
+		await expect(
+			configApply('./config', { format: 'human', dryRun: false, destructive: false, yes: false })
+		).rejects.toThrow('exit:2');
+
+		expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('parent cycle'));
+		expect(computeConfigPlan).not.toHaveBeenCalled();
+		expect(applyConfigPlan).not.toHaveBeenCalled();
 	});
 });

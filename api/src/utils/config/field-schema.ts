@@ -48,16 +48,23 @@ function buildBase(field: ConfigFieldDescriptor): Joi.Schema {
 	}
 }
 
+/**
+ * A generated snapshot must carry every managed, snapshot-safe field explicitly, so its records reconstruct on a
+ * fresh target without silently taking create defaults. An authored declaration may omit optional fields to preserve
+ * live values, so authored validation keeps the descriptor's own requiredness.
+ */
+export type SchemaMode = 'authored' | 'snapshot';
+
 /** Applies nullability and requiredness uniformly, so every field type honors the same metadata contract. */
-function buildFieldSchema(field: ConfigFieldDescriptor): Joi.Schema {
+function buildFieldSchema(field: ConfigFieldDescriptor, mode: SchemaMode): Joi.Schema {
 	let schema = buildBase(field);
 	if (field.nullable) schema = schema.allow(null);
-	if (field.required) schema = schema.required();
+	if (field.required || (mode === 'snapshot' && field.snapshotSafe)) schema = schema.required();
 	return schema;
 }
 
-function fieldEntries(fields: ConfigFieldDescriptor[]): Record<string, Joi.Schema> {
-	return Object.fromEntries(fields.map((field) => [field.name, buildFieldSchema(field)]));
+function fieldEntries(fields: ConfigFieldDescriptor[], mode: SchemaMode): Record<string, Joi.Schema> {
+	return Object.fromEntries(fields.map((field) => [field.name, buildFieldSchema(field, mode)]));
 }
 
 export type DocumentSchemaSpec = {
@@ -66,14 +73,14 @@ export type DocumentSchemaSpec = {
 	recordFields: ConfigFieldDescriptor[];
 };
 
-export function buildDocumentSchema(spec: DocumentSchemaSpec): Joi.ObjectSchema {
-	const identity = fieldEntries(spec.documentIdentityFields);
+export function buildDocumentSchema(spec: DocumentSchemaSpec, mode: SchemaMode = 'authored'): Joi.ObjectSchema {
+	const identity = fieldEntries(spec.documentIdentityFields, mode);
 	const shape = spec.layout.documentShape;
 
 	if (shape === 'flat') {
-		return Joi.object({ ...identity, ...fieldEntries(spec.recordFields) });
+		return Joi.object({ ...identity, ...fieldEntries(spec.recordFields, mode) });
 	}
 
-	const recordSchema = Joi.object(fieldEntries(spec.recordFields));
+	const recordSchema = Joi.object(fieldEntries(spec.recordFields, mode));
 	return Joi.object({ ...identity, [shape.recordsField]: Joi.array().items(recordSchema).required() });
 }

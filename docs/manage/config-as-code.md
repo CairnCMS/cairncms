@@ -366,7 +366,7 @@ When editing the files or an HTTP snapshot:
 
 - **Omitted optional role fields are preserved.** If a role payload omits `icon`, `description`, `enforce_tfa`, or `ip_access`, the database value is left unchanged.
 - **Clear a role's `description` or `ip_access` with `null`.** Other role fields do not accept `null`.
-- **Folder parents use keys.** Set `parent` to another folder's key from the same config. Set it to `null`, or omit it, to place the folder at the top level. Include `key` and `name` in every folder document.
+- **Folder parents use keys.** Set `parent` to another folder's key from the same config to place the folder under it. Set it to `null` to move the folder to the top level. Omitting `parent` preserves the folder's current parent, and a new folder with no `parent` is created at the top level. Include `key` and `name` in every folder document.
 
 To rename or move a folder, edit its `name` or `parent` and keep its `key`. Generated snapshots include all supported fields.
 

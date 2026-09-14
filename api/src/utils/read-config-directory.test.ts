@@ -373,6 +373,7 @@ describe('readConfigDirectory', () => {
 			label: 'true.yaml',
 			references: 'current-state',
 			currentRoleKeys: new Set(),
+			currentFolderParents: new Map<string, string | null>(),
 		});
 
 		const keyFailure = failures.find(

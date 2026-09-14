@@ -140,6 +140,7 @@ async function runLocalEngine(
 		const {
 			config: current,
 			currentRoleKeys,
+			currentFolderParents,
 			stateToken,
 		} = await readCurrentConfig({
 			database,
@@ -150,6 +151,7 @@ async function runLocalEngine(
 			label: configPath,
 			references: 'current-state',
 			currentRoleKeys,
+			currentFolderParents,
 		});
 
 		if (documentErrors.length > 0) {

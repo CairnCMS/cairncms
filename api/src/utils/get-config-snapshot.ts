@@ -25,6 +25,7 @@ import { findPlaceholderSyntax, validateConfigRecord } from './validate-desired-
 export type CurrentConfigRead = {
 	config: CairnConfig;
 	currentRoleKeys: ReadonlySet<string>;
+	currentFolderParents: ReadonlyMap<string, string | null>;
 	stateToken: ConfigStateToken;
 };
 
@@ -46,7 +47,7 @@ function readSubjectOf<Identity>(
 
 /** A composed document that cannot be represented in the config format is a current-state failure, not caller input. */
 function assertEmittedDocument(kind: ConfigKind, subject: string, document: unknown): void {
-	const problems = validateConfigRecord(kind, document);
+	const problems = validateConfigRecord(kind, document, 'snapshot');
 
 	if (problems.length > 0) {
 		throw new ConfigReadFailedException(
@@ -68,6 +69,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		return {
 			config: { manifest, roles: [], permissions: [], folders: [] },
 			currentRoleKeys: new Set(),
+			currentFolderParents: new Map(),
 			stateToken: Object.freeze({ resources: Object.freeze([]), digest: computeConfigStateDigest([]) }),
 		};
 	}
@@ -158,7 +160,11 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		);
 	}
 
-	return { config, currentRoleKeys, stateToken };
+	const currentFolderParents = new Map<string, string | null>(
+		config.folders.map((folder) => [folder.key, folder.parent ?? null])
+	);
+
+	return { config, currentRoleKeys, currentFolderParents, stateToken };
 }
 
 export async function getConfigSnapshot(options?: { database?: Knex; schema?: SchemaOverview }): Promise<CairnConfig> {
