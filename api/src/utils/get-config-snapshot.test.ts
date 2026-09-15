@@ -10,6 +10,7 @@ import logger from '../logger.js';
 import { FoldersService } from '../services/folders.js';
 import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
+import { SettingsService } from '../services/settings.js';
 import { CONFIG_FILENAME_STEM_MAX_LENGTH } from './config-contract.js';
 import { rolesDescriptor } from './config/handlers/roles.js';
 import { CONFIG_REGISTRY } from './config/registry.js';
@@ -52,6 +53,32 @@ function mockPermission(overrides: Record<string, any> = {}): void {
 	]);
 }
 
+function settingsRow(overrides: Record<string, any> = {}): Record<string, any> {
+	return {
+		id: 1,
+		project_name: 'CairnCMS',
+		project_descriptor: null,
+		project_url: null,
+		default_language: 'en-US',
+		project_color: null,
+		public_note: null,
+		custom_css: null,
+		module_bar: null,
+		auth_password_policy: null,
+		auth_login_attempts: 25,
+		storage_asset_transform: 'all',
+		storage_asset_presets: null,
+		basemaps: null,
+		custom_aspect_ratios: null,
+		mapbox_key: null,
+		...overrides,
+	};
+}
+
+function mockSettings(overrides: Record<string, any> = {}): void {
+	vi.spyOn(SettingsService.prototype, 'readSingleton').mockResolvedValue(settingsRow(overrides));
+}
+
 vi.mock('../logger.js', () => ({
 	default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
@@ -65,6 +92,7 @@ describe('getConfigSnapshot', () => {
 		db = vi.mocked(knex.default({ client: MockClient }));
 		vi.spyOn(getSchema, 'getSchema').mockResolvedValue(testSchema);
 		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([]);
+		mockSettings();
 	});
 
 	afterEach(() => {
@@ -77,7 +105,7 @@ describe('getConfigSnapshot', () => {
 
 		const config = await getConfigSnapshot({ database: db });
 
-		expect(config.manifest).toEqual({ version: 2, resources: ['roles', 'permissions', 'folders'] });
+		expect(config.manifest).toEqual({ version: 2, resources: ['roles', 'permissions', 'folders', 'settings'] });
 	});
 
 	it('builds ConfigRole entries with v1 allowlist only', async () => {
@@ -730,6 +758,7 @@ describe('readCurrentConfig', () => {
 		db = vi.mocked(knex.default({ client: MockClient }));
 		vi.spyOn(getSchema, 'getSchema').mockResolvedValue(testSchema);
 		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([]);
+		mockSettings();
 	});
 
 	afterEach(() => {
@@ -896,7 +925,15 @@ describe('readCurrentConfig', () => {
 		expect(roles).not.toHaveBeenCalled();
 		expect(perms).not.toHaveBeenCalled();
 		expect(getSchema.getSchema).not.toHaveBeenCalled();
-		expect(config).toEqual({ manifest: { version: 2, resources: [] }, roles: [], permissions: [], folders: [] });
+
+		expect(config).toEqual({
+			manifest: { version: 2, resources: [] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+		});
+
 		expect(currentRoleKeys.size).toBe(0);
 	});
 
@@ -1162,6 +1199,7 @@ describe('central subject sanitization', () => {
 		db = vi.mocked(knex.default({ client: MockClient }));
 		vi.spyOn(getSchema, 'getSchema').mockResolvedValue(testSchema);
 		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([]);
+		mockSettings();
 	});
 
 	afterEach(() => {

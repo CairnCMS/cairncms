@@ -94,6 +94,7 @@ const CURRENT_CONFIG: CairnConfig = {
 	roles: [],
 	permissions: [],
 	folders: [],
+	settings: [],
 };
 
 const ADMIN = { admin: true, app: true, user: USER, role: ROLE, ip: '10.0.0.1' };
@@ -103,6 +104,7 @@ const EMPTY_PLAN: ConfigPlan = {
 	roles: { create: [], update: [], delete: [] },
 	permissions: { create: [], update: [], delete: [] },
 	folders: { create: [], update: [], delete: [] },
+	settings: { create: [], update: [], delete: [] },
 	protections: [],
 };
 
@@ -126,6 +128,7 @@ const CREATE_PLAN: ConfigPlan = {
 	},
 	permissions: { create: [], update: [], delete: [] },
 	folders: { create: [], update: [], delete: [] },
+	settings: { create: [], update: [], delete: [] },
 	protections: [],
 };
 
@@ -141,6 +144,7 @@ const SERIALIZED: SerializedConfigPlan = {
 const APPLY_RESULT = {
 	roles: { created: ['editor'], updated: [], deleted: [] },
 	permissions: { created: 0, updated: 0, deleted: 0 },
+	settings: { updated: [] },
 };
 
 function makeApp(accountability: Record<string, unknown> | null) {
@@ -526,6 +530,7 @@ describe('POST /config/apply wire-contract validation', () => {
 			roles: [],
 			permissions: [],
 			folders: [{ key: 'ghost', name: 'Ghost', parent: null }],
+			settings: [],
 		});
 
 		expect(res.status).toBe(200);

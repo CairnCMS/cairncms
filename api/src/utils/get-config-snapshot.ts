@@ -9,6 +9,7 @@ import {
 	type ConfigFolder,
 	type ConfigPermissionSet,
 	type ConfigRole,
+	type ConfigSettings,
 	type ConfigStateToken,
 } from '../types/config.js';
 import { LATEST_MANIFEST_VERSION, type ManifestVersion } from './config-contract.js';
@@ -67,7 +68,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 
 	if (closure.length === 0) {
 		return {
-			config: { manifest, roles: [], permissions: [], folders: [] },
+			config: { manifest, roles: [], permissions: [], folders: [], settings: [] },
 			currentRoleKeys: new Set(),
 			currentFolderParents: new Map(),
 			stateToken: Object.freeze({ resources: Object.freeze([]), digest: computeConfigStateDigest([]) }),
@@ -111,6 +112,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		roles: (documentsByKind.get('roles') ?? []) as ConfigRole[],
 		permissions: (documentsByKind.get('permissions') ?? []) as ConfigPermissionSet[],
 		folders: (documentsByKind.get('folders') ?? []) as ConfigFolder[],
+		settings: (documentsByKind.get('settings') ?? []) as ConfigSettings[],
 	};
 
 	const placeholders = findPlaceholderSyntax(config);

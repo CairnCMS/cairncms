@@ -63,8 +63,16 @@ function buildDocuments(config: CairnConfig, root: string): { pending: PendingDo
 		if (!managed.has(kind)) continue;
 
 		const descriptor = getDescriptor(kind) as ConfigResourceDescriptor<ConfigKindTypes>;
+		const documents = orderedNormalizedDocuments(descriptor, config[kind]);
+		const shape = descriptor.layout.documentShape;
 
-		for (const document of orderedNormalizedDocuments(descriptor, config[kind])) {
+		if (typeof shape === 'object' && 'singleton' in shape && documents.length !== 1) {
+			throw new ConfigInvalidException(
+				`Config ${kind} must resolve to exactly one document, but found ${documents.length}.`
+			);
+		}
+
+		for (const document of documents) {
 			const filename = `${descriptor.layout.filenameOf(descriptor.layout.documentIdentityOf(document))}${YAML_SUFFIX}`;
 			const label = `${kind}/${filename}`;
 
@@ -101,7 +109,13 @@ async function cleanKindDirectory(root: string, kind: ConfigKind, keep: Set<stri
 	const entries = await readContainedDirectory(root, path.join(root, kind));
 	if (entries === null) return;
 
-	const identityField = getDescriptor(kind).documentIdentityFields[0]!.name;
+	const descriptor = getDescriptor(kind);
+	const shape = descriptor.layout.documentShape;
+
+	// A singleton owns only its one fixed file, which is always written and kept, so there is nothing to remove.
+	if (typeof shape === 'object' && 'singleton' in shape) return;
+
+	const identityField = descriptor.documentIdentityFields[0]!.name;
 
 	for (const entry of entries.sort()) {
 		const label = `${kind}/${entry}`;

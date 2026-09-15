@@ -19,6 +19,7 @@ function emptyPlan(): ConfigPlan {
 		roles: { create: [], update: [], delete: [] },
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
+		settings: { create: [], update: [], delete: [] },
 		protections: [],
 	};
 }

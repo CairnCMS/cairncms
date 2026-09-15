@@ -6,6 +6,7 @@ import {
 	type ConfigKind,
 	type ConfigPermission,
 	type ConfigRole,
+	type ConfigSettings,
 } from '../../types/config.js';
 import {
 	RemoteApplyResult,
@@ -18,6 +19,7 @@ import type { ConfigKindTypes, ConfigResourceDescriptor, KindPlan } from './desc
 import type { FoldersKindTypes } from './handlers/folders.js';
 import type { PermissionsKindTypes } from './handlers/permissions.js';
 import type { RolesKindTypes } from './handlers/roles.js';
+import type { SettingsKindTypes } from './handlers/settings.js';
 import { getDescriptor, listConfigKinds } from './registry.js';
 
 type ConformanceFixture<K extends ConfigKindTypes> = {
@@ -46,6 +48,27 @@ function permission(
 	overrides: Partial<FlatPermission> & { role: string; collection: string; action: PermissionsAction }
 ): FlatPermission {
 	return { permissions: null, validation: null, presets: null, fields: null, ...overrides };
+}
+
+function settings(overrides: Partial<ConfigSettings> = {}): ConfigSettings {
+	return {
+		project_name: 'CairnCMS',
+		project_descriptor: null,
+		project_url: null,
+		default_language: 'en-US',
+		project_color: null,
+		public_note: null,
+		custom_css: null,
+		module_bar: null,
+		auth_password_policy: null,
+		auth_login_attempts: 25,
+		storage_asset_transform: 'all',
+		storage_asset_presets: null,
+		basemaps: null,
+		custom_aspect_ratios: null,
+		mapbox_key: null,
+		...overrides,
+	};
 }
 
 const ROLES_FIXTURE: ConformanceFixture<RolesKindTypes> = {
@@ -140,6 +163,21 @@ const FOLDERS_FIXTURE: ConformanceFixture<FoldersKindTypes> = {
 	},
 };
 
+const SETTINGS_FIXTURE: ConformanceFixture<SettingsKindTypes> = {
+	document: settings(),
+	documentIdentity: { key: 'project' },
+	record: settings(),
+	identity: { key: 'project' },
+	filenameStem: 'project',
+	current: [settings()],
+	desired: [settings({ project_name: 'Renamed' })],
+	expectedPlan: {
+		create: [],
+		update: [{ changes: { project_name: { before: 'CairnCMS', after: 'Renamed' } } }],
+		delete: [],
+	},
+};
+
 function runConformance<K extends ConfigKindTypes>(
 	descriptor: ConfigResourceDescriptor<K>,
 	fixture: ConformanceFixture<K>
@@ -182,6 +220,7 @@ const RUNNERS = {
 	roles: () => runConformance(getDescriptor('roles'), ROLES_FIXTURE),
 	permissions: () => runConformance(getDescriptor('permissions'), PERMISSIONS_FIXTURE),
 	folders: () => runConformance(getDescriptor('folders'), FOLDERS_FIXTURE),
+	settings: () => runConformance(getDescriptor('settings'), SETTINGS_FIXTURE),
 } satisfies Record<ConfigKind, () => void>;
 
 describe.each(listConfigKinds())('descriptor conformance: %s', (kind) => {
@@ -215,9 +254,15 @@ const REPRESENTATIVE_CHANGE: Record<ConfigKind, unknown> = {
 		identity: { key: 'sample' },
 		values: { name: 'Sample', parent: null },
 	},
+	settings: {
+		kind: 'settings',
+		operation: 'update',
+		identity: { key: 'project' },
+		fields: { project_name: { before: 'CairnCMS', after: 'Renamed' } },
+	},
 };
 
-const REPRESENTATIVE_DELETION: Record<ConfigKind, unknown> = {
+const REPRESENTATIVE_DELETION: Partial<Record<ConfigKind, unknown>> = {
 	roles: { kind: 'roles', identity: { key: 'sample' } },
 	permissions: { kind: 'permissions', identity: { role: 'sample', collection: 'articles', action: 'read' } },
 	folders: { kind: 'folders', identity: { key: 'sample' } },
@@ -254,8 +299,8 @@ describe('config kind wiring conformance', () => {
 		expect(result.success).toBe(false);
 	});
 
-	it('parses a representative destructive-refusal deletion for every managed kind', () => {
-		for (const kind of listConfigKinds()) {
+	it('parses a representative destructive-refusal deletion for every deletable kind', () => {
+		for (const kind of Object.keys(REPRESENTATIVE_DELETION) as ConfigKind[]) {
 			expect(RemoteErrorExtensions.safeParse(destructiveExtension(REPRESENTATIVE_DELETION[kind])).success).toBe(true);
 		}
 	});
@@ -263,6 +308,14 @@ describe('config kind wiring conformance', () => {
 	it('rejects a destructive-refusal deletion whose kind is not managed', () => {
 		const result = RemoteErrorExtensions.safeParse(
 			destructiveExtension({ kind: 'notakind', identity: { key: 'sample' } })
+		);
+
+		expect(result.success).toBe(false);
+	});
+
+	it('rejects a settings deletion, which the singleton does not support', () => {
+		const result = RemoteErrorExtensions.safeParse(
+			destructiveExtension({ kind: 'settings', identity: { key: 'project' } })
 		);
 
 		expect(result.success).toBe(false);
@@ -275,6 +328,23 @@ describe('cross-kind omission contract', () => {
 		roles: ['description', 'enforce_tfa', 'icon', 'ip_access'],
 		permissions: [],
 		folders: ['parent'],
+		settings: [
+			'auth_login_attempts',
+			'auth_password_policy',
+			'basemaps',
+			'custom_aspect_ratios',
+			'custom_css',
+			'default_language',
+			'mapbox_key',
+			'module_bar',
+			'project_color',
+			'project_descriptor',
+			'project_name',
+			'project_url',
+			'public_note',
+			'storage_asset_presets',
+			'storage_asset_transform',
+		],
 	};
 
 	it.each(listConfigKinds())('binds omissionPreservesCurrent to optionality for every %s field', (kind) => {
@@ -373,6 +443,37 @@ describe('cross-kind omission behavior', () => {
 		) as Record<string, Change>;
 
 		expect(changes['permissions']).toEqual({ before: { a: 1 }, after: { b: 2 } });
+	});
+
+	it('preserves non-default settings values when omitted on update while a present field changes', () => {
+		const current = settings({ project_name: 'Live', auth_password_policy: '^.{12,}$', auth_login_attempts: 3 });
+
+		const changes = diffRecordValues(getDescriptor('settings'), current, {
+			project_name: 'Renamed',
+		} as never) as Record<string, Change>;
+
+		expect(Object.keys(changes)).toEqual(['project_name']);
+		expect(changes['project_name']).toEqual({ before: 'Live', after: 'Renamed' });
+	});
+
+	it('treats an explicit null for a nullable settings field as a change, not omission', () => {
+		const changes = diffRecordValues(
+			getDescriptor('settings'),
+			settings({ auth_login_attempts: 5 }),
+			settings({ auth_login_attempts: null })
+		) as Record<string, Change>;
+
+		expect(changes['auth_login_attempts']).toEqual({ before: 5, after: null });
+	});
+
+	it('treats an explicit empty string as a distinct value from null on a settings field', () => {
+		const changes = diffRecordValues(
+			getDescriptor('settings'),
+			settings({ custom_css: null }),
+			settings({ custom_css: '' })
+		) as Record<string, Change>;
+
+		expect(changes['custom_css']).toEqual({ before: null, after: '' });
 	});
 
 	it.each(['action', 'permissions', 'validation', 'presets', 'fields'])(

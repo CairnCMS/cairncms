@@ -158,6 +158,7 @@ describe('folders through the real apply engine on SQLite', () => {
 			manifest: manifestFolders(),
 			roles: [],
 			permissions: [],
+			settings: [],
 			folders: [
 				{ key: 'root', name: 'root', parent: null },
 				{ key: 'mover', name: 'mover', parent: null },
@@ -438,6 +439,7 @@ describe('folders through the real apply engine on SQLite', () => {
 			manifest: manifestFolders(),
 			roles: [],
 			permissions: [],
+			settings: [],
 			folders: [
 				{ key: 'root', name: 'root', parent: null },
 				{ key: 'child', name: 'Renamed' },
@@ -474,6 +476,7 @@ describe('folders through the real apply engine on SQLite', () => {
 			manifest: manifestFolders(),
 			roles: [],
 			permissions: [],
+			settings: [],
 			folders: [{ key: 'child', name: 'child' }],
 		};
 
@@ -514,6 +517,7 @@ describe('folders through the real apply engine on SQLite', () => {
 			manifest: manifestFolders(),
 			roles: [],
 			permissions: [],
+			settings: [],
 			folders: [
 				{ key: 'a', name: 'a', parent: 'b' },
 				{ key: 'b', name: 'b' },

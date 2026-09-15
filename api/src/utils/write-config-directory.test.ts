@@ -31,6 +31,8 @@ function makeConfig(overrides?: Partial<CairnConfig>): CairnConfig {
 		manifest: { version: 1, resources: ['roles', 'permissions'] },
 		roles: [],
 		permissions: [],
+		folders: [],
+		settings: [],
 		...overrides,
 	};
 }
@@ -676,5 +678,68 @@ describe('writeConfigDirectory', () => {
 		} finally {
 			CONFIG_REGISTRY.roles = real;
 		}
+	});
+});
+
+describe('writeConfigDirectory settings singleton cardinality', () => {
+	function settingsConfig(settings: CairnConfig['settings']): CairnConfig {
+		return makeConfig({ manifest: { version: 2, resources: ['settings'] }, settings });
+	}
+
+	async function captureTree(dir: string): Promise<Map<string, string>> {
+		const entries = new Map<string, string>();
+
+		async function walk(current: string): Promise<void> {
+			const children = await fs.readdir(current, { withFileTypes: true });
+
+			for (const child of children.sort((a, b) => a.name.localeCompare(b.name))) {
+				const full = path.join(current, child.name);
+				const relative = path.relative(dir, full);
+
+				if (child.isDirectory()) {
+					entries.set(`${relative}/`, '');
+					await walk(full);
+				} else {
+					entries.set(relative, (await fs.readFile(full)).toString('base64'));
+				}
+			}
+		}
+
+		await walk(dir);
+
+		return entries;
+	}
+
+	async function seedDestination(): Promise<void> {
+		await fs.mkdir(path.join(tmpDir, 'settings'), { recursive: true });
+		await fs.writeFile(path.join(tmpDir, 'settings', 'project.yaml'), 'project_name: Existing\n');
+		await fs.writeFile(path.join(tmpDir, 'notes.txt'), 'operator notes\n');
+	}
+
+	it('writes the one settings record to the fixed project.yaml', async () => {
+		await writeConfigDirectory(settingsConfig([{ project_name: 'Live' }]), tmpDir);
+
+		const written = await readYaml(path.join(tmpDir, 'settings', 'project.yaml'));
+		expect(written).toMatchObject({ project_name: 'Live' });
+	});
+
+	it('rejects zero settings documents and leaves the destination byte-identical', async () => {
+		await seedDestination();
+		const before = await captureTree(tmpDir);
+
+		await expect(writeConfigDirectory(settingsConfig([]), tmpDir)).rejects.toBeInstanceOf(ConfigInvalidException);
+
+		expect(await captureTree(tmpDir)).toEqual(before);
+	});
+
+	it('rejects two settings documents and leaves the destination byte-identical', async () => {
+		await seedDestination();
+		const before = await captureTree(tmpDir);
+
+		await expect(
+			writeConfigDirectory(settingsConfig([{ project_name: 'A' }, { project_name: 'B' }]), tmpDir)
+		).rejects.toBeInstanceOf(ConfigInvalidException);
+
+		expect(await captureTree(tmpDir)).toEqual(before);
 	});
 });

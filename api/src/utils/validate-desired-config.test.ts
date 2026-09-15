@@ -386,6 +386,7 @@ describe('validateDesiredConfig', () => {
 			roles: [],
 			permissions: [],
 			folders: [{ key: 'docs', name: 'Docs' }],
+			settings: [],
 		};
 
 		expect(validate(doc)).toEqual([]);
@@ -394,6 +395,53 @@ describe('validateDesiredConfig', () => {
 		expect(failures).toHaveLength(1);
 		expect(failures[0]).toContain('parent');
 	});
+
+	const COMPLETE_SETTINGS: Record<string, unknown> = {
+		project_name: 'CairnCMS',
+		project_descriptor: null,
+		project_url: null,
+		default_language: 'en-US',
+		project_color: null,
+		public_note: null,
+		custom_css: null,
+		module_bar: null,
+		auth_password_policy: null,
+		auth_login_attempts: 25,
+		storage_asset_transform: 'all',
+		storage_asset_presets: null,
+		basemaps: null,
+		custom_aspect_ratios: null,
+		mapbox_key: null,
+	};
+
+	function settingsBody(settings: unknown[]): Record<string, unknown> {
+		return { manifest: { version: 2, resources: ['settings'] }, roles: [], permissions: [], folders: [], settings };
+	}
+
+	it('accepts a partial authored settings declaration while requiring a complete one in snapshot mode', () => {
+		expect(validate(settingsBody([{ project_name: 'Live' }]))).toEqual([]);
+		expect(validateSnapshot(settingsBody([COMPLETE_SETTINGS]))).toEqual([]);
+	});
+
+	it.each(Object.keys(COMPLETE_SETTINGS))('refuses a settings snapshot that omits the %s field', (fieldName) => {
+		const record: Record<string, unknown> = { ...COMPLETE_SETTINGS };
+		delete record[fieldName];
+
+		const failures = validateSnapshot(settingsBody([record]));
+
+		expect(failures.length).toBeGreaterThan(0);
+		expect(failures.join(' ')).toContain(fieldName);
+	});
+
+	it.each(['authored', 'snapshot'] as const)(
+		'rejects a settings set that is not exactly one record in %s mode',
+		(mode) => {
+			const run = mode === 'authored' ? validate : validateSnapshot;
+
+			expect(run(settingsBody([])).length).toBeGreaterThan(0);
+			expect(run(settingsBody([COMPLETE_SETTINGS, COMPLETE_SETTINGS])).length).toBeGreaterThan(0);
+		}
+	);
 
 	it.each(['name', 'description'])('rejects a role %s written in placeholder form in both modes', (field) => {
 		const doc = document({ roles: [completeRole({ [field]: '{{CAIRNCMS_CONFIG_SECRET}}' })] });

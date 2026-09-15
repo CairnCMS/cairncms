@@ -75,6 +75,7 @@ const EMPTY_PLAN: ConfigPlan = {
 	roles: { create: [], update: [], delete: [] },
 	permissions: { create: [], update: [], delete: [] },
 	folders: { create: [], update: [], delete: [] },
+	settings: { create: [], update: [], delete: [] },
 	protections: [],
 };
 
@@ -100,6 +101,7 @@ const CREATE_PLAN: ConfigPlan = {
 	},
 	permissions: { create: [], update: [], delete: [] },
 	folders: { create: [], update: [], delete: [] },
+	settings: { create: [], update: [], delete: [] },
 	protections: [],
 };
 
@@ -173,6 +175,7 @@ describe('configApply empty plan warnings', () => {
 			roles: [],
 			permissions: [{ role: 'editor', permissions: [MISSING_COLLECTION_PERMISSION] }],
 			folders: [],
+			settings: [],
 		};
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(managed);
@@ -228,6 +231,7 @@ describe('configApply empty plan with unmanaged permissions', () => {
 			roles: [],
 			permissions: [],
 			folders: [],
+			settings: [],
 		};
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(rolesOnly);
@@ -251,9 +255,11 @@ describe('configApply empty plan with unmanaged permissions', () => {
 
 describe('configApply protected plan', () => {
 	const PROTECTED_PLAN: ConfigPlan = {
+		managedResources: ['roles'],
 		roles: { create: [], update: [], delete: ['administrator'] },
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
+		settings: { create: [], update: [], delete: [] },
 		protections: [
 			{
 				code: 'ADMIN_CONTINUITY_REQUIRED',
@@ -282,6 +288,7 @@ describe('configApply protected plan', () => {
 			roles: [],
 			permissions: [],
 			folders: [],
+			settings: [],
 		};
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(rolesOnly);
@@ -344,6 +351,7 @@ describe('configApply state token forwarding', () => {
 			roles: [],
 			permissions: [],
 			folders: [],
+			settings: [],
 		};
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(managed);
@@ -362,6 +370,7 @@ describe('configApply state token forwarding', () => {
 			roles: { created: [], updated: [], deleted: [] },
 			permissions: { created: 0, updated: 0, deleted: 0 },
 			folders: { created: [], updated: [], deleted: [] },
+			settings: { updated: [] },
 		} as never);
 
 		await configApply('./config', { format: 'human', dryRun: false, destructive: false, yes: true }).catch(
@@ -380,12 +389,14 @@ describe('configApply run record', () => {
 		roles: [],
 		permissions: [],
 		folders: [],
+		settings: [],
 	};
 
 	const APPLY_RESULT = {
 		roles: { created: ['editor'], updated: [], deleted: [] },
 		permissions: { created: 0, updated: 0, deleted: 0 },
 		folders: { created: [], updated: [], deleted: [] },
+		settings: { updated: [] },
 	};
 
 	const PROTECTED_PLAN: ConfigPlan = {
@@ -393,6 +404,7 @@ describe('configApply run record', () => {
 		roles: { create: [], update: [], delete: ['administrator'] },
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
+		settings: { create: [], update: [], delete: [] },
 		protections: [
 			{
 				code: 'ADMIN_CONTINUITY_REQUIRED',
@@ -691,6 +703,8 @@ describe('configApply placeholder-shaped desired values', () => {
 			manifest: { version: 1, resources: ['roles'] },
 			roles: [{ key: 'editor', name: '{{CAIRNCMS_CONFIG_OTHER}}', admin_access: false, app_access: true }],
 			permissions: [],
+			folders: [],
+			settings: [],
 		};
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(desired);
@@ -740,6 +754,7 @@ describe('configApply local wire projection', () => {
 			roles: [{ key: 'editor', name: 'Editor', admin_access: false, app_access: true }],
 			permissions: [],
 			folders: [],
+			settings: [],
 		};
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(desired);
@@ -758,6 +773,7 @@ describe('configApply local wire projection', () => {
 			roles: { created: ['editor'], updated: [], deleted: [] },
 			permissions: { created: 0, updated: 0, deleted: 0 },
 			folders: { created: [], updated: [], deleted: [] },
+			settings: { updated: [] },
 		} as never);
 
 		await expect(
@@ -795,6 +811,7 @@ describe('configApply forwards current folder state to validation', () => {
 				{ key: 'a', name: 'a', parent: 'b' },
 				{ key: 'b', name: 'b' },
 			],
+			settings: [],
 		};
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(desired);

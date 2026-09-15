@@ -196,6 +196,7 @@ export function validateDesiredConfig(document: unknown, context: DesiredConfigC
 		roles: (body['roles'] ?? []) as CairnConfig['roles'],
 		permissions: (body['permissions'] ?? []) as CairnConfig['permissions'],
 		folders: (body['folders'] ?? []) as CairnConfig['folders'],
+		settings: (body['settings'] ?? []) as CairnConfig['settings'],
 	}).map((problem) =>
 		invalid(`${problem}, which cannot be stored because the reader would substitute it. Send a resolved value.`)
 	);

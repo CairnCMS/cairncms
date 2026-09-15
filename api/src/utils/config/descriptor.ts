@@ -31,13 +31,15 @@ export type FieldSensitivity =
 
 export interface ConfigFieldDescriptor {
 	name: string;
-	type: 'string' | 'boolean' | 'string-list' | 'policy-object';
+	type: 'string' | 'boolean' | 'string-list' | 'policy-object' | 'number' | 'json-array';
 	required: boolean;
 	nullable: boolean;
 	allowEmpty?: boolean;
 	allowEmptyElements?: boolean;
 	minLength?: number;
 	maxLength?: number;
+	min?: number;
+	max?: number;
 	enum?: readonly string[];
 	grammar?: 'config-key';
 	reserved?: readonly string[];
@@ -51,7 +53,7 @@ export interface ConfigFieldDescriptor {
 	identityComponent?: boolean;
 }
 
-export type ConfigDocumentShape = 'flat' | { recordsField: string };
+export type ConfigDocumentShape = 'flat' | { recordsField: string } | { singleton: { filename: string } };
 
 /** A per-kind dependency payload, keyed only by config kinds. */
 export type ConfigDependencyMap = Partial<Record<ConfigKind, unknown>>;

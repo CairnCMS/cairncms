@@ -38,8 +38,14 @@ export function classifyConfigFilename(filename: string, kind: ConfigKind): File
 	if (!filename.endsWith(YAML_SUFFIX)) return 'unowned';
 
 	const stem = filename.slice(0, -YAML_SUFFIX.length);
+	const descriptor = getDescriptor(kind);
+	const shape = descriptor.layout.documentShape;
 
-	return classifyIdentityStem(stem, getDescriptor(kind).documentIdentityFields[0]!);
+	if (typeof shape === 'object' && 'singleton' in shape) {
+		return stem === shape.singleton.filename ? 'owned' : 'unowned';
+	}
+
+	return classifyIdentityStem(stem, descriptor.documentIdentityFields[0]!);
 }
 
 /** Whether a kind generates the filename, which is what makes it eligible for stale-file cleanup. */

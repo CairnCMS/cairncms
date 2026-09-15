@@ -34,6 +34,7 @@ describe('serializeToWire', () => {
 		roles: [{ key: 'editor' }] as never,
 		permissions: [] as never,
 		folders: [{ key: 'docs' }] as never,
+		settings: [] as never,
 	};
 
 	it('drops out-of-version kinds for a version-1 wire body', () => {

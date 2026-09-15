@@ -8,6 +8,7 @@ function emptyPlan(): ConfigPlan {
 		roles: { create: [], update: [], delete: [] },
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
+		settings: { create: [], update: [], delete: [] },
 		protections: [],
 	};
 }
@@ -38,6 +39,7 @@ const SLICE_MUTATIONS: Array<[string, (plan: ConfigPlan) => void]> = [
 	['folders.create', (plan) => plan.folders.create.push(A_FOLDER)],
 	['folders.update', (plan) => plan.folders.update.push({ key: 'x', changes: {} })],
 	['folders.delete', (plan) => plan.folders.delete.push('x')],
+	['settings.update', (plan) => plan.settings.update.push({ changes: {} })],
 ];
 
 describe('plan folds', () => {
@@ -60,7 +62,7 @@ describe('plan folds', () => {
 		for (const [, mutate] of SLICE_MUTATIONS) mutate(plan);
 		plan.roles.delete.push('y');
 
-		expect(planSummary(plan)).toEqual({ create: 3, update: 3, delete: 4 });
+		expect(planSummary(plan)).toEqual({ create: 3, update: 4, delete: 4 });
 	});
 
 	it('detects deletions in any kind', () => {

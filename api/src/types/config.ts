@@ -2,7 +2,7 @@ import type { Accountability, PermissionsAction } from '@cairncms/types';
 import type { ManifestVersion } from '../utils/config-contract.js';
 import type { ConfigKindTypeMap } from '../utils/config/registry.js';
 
-export const CONFIG_KINDS = ['roles', 'permissions', 'folders'] as const;
+export const CONFIG_KINDS = ['roles', 'permissions', 'folders', 'settings'] as const;
 export type ConfigKind = (typeof CONFIG_KINDS)[number];
 
 export interface ConfigRole {
@@ -36,6 +36,24 @@ export interface ConfigFolder {
 	parent?: string | null;
 }
 
+export interface ConfigSettings {
+	project_name?: string;
+	project_descriptor?: string | null;
+	project_url?: string | null;
+	default_language?: string;
+	project_color?: string | null;
+	public_note?: string | null;
+	custom_css?: string | null;
+	module_bar?: unknown[] | null;
+	auth_password_policy?: string | null;
+	auth_login_attempts?: number | null;
+	storage_asset_transform?: string | null;
+	storage_asset_presets?: unknown[] | null;
+	basemaps?: unknown[] | null;
+	custom_aspect_ratios?: unknown[] | null;
+	mapbox_key?: string | null;
+}
+
 export interface ConfigManifest {
 	version: ManifestVersion;
 	resources: ConfigKind[];
@@ -46,6 +64,7 @@ export interface CairnConfig {
 	roles: ConfigRole[];
 	permissions: ConfigPermissionSet[];
 	folders: ConfigFolder[];
+	settings: ConfigSettings[];
 }
 
 export type RoleIdentity = { key: string };
@@ -58,6 +77,28 @@ export type FolderValues = {
 };
 
 export type FolderFieldChanges = { [K in keyof FolderValues]?: FieldChange<FolderValues[K]> };
+
+export type SettingsIdentity = { key: string };
+
+export type SettingsValues = {
+	project_name: string;
+	project_descriptor: string | null;
+	project_url: string | null;
+	default_language: string;
+	project_color: string | null;
+	public_note: string | null;
+	custom_css: string | null;
+	module_bar: unknown[] | null;
+	auth_password_policy: string | null;
+	auth_login_attempts: number | null;
+	storage_asset_transform: string | null;
+	storage_asset_presets: unknown[] | null;
+	basemaps: unknown[] | null;
+	custom_aspect_ratios: unknown[] | null;
+	mapbox_key: string | null;
+};
+
+export type SettingsFieldChanges = { [K in keyof SettingsValues]?: FieldChange<SettingsValues[K]> };
 
 export type FieldChange<T> = { before: T; after: T };
 
@@ -109,6 +150,11 @@ export interface ConfigPlan {
 		update: Array<{ key: string; changes: FolderFieldChanges }>;
 		delete: string[];
 	};
+	settings: {
+		create: never[];
+		update: Array<{ changes: SettingsFieldChanges }>;
+		delete: never[];
+	};
 	protections: ConfigProtection[];
 }
 
@@ -146,7 +192,8 @@ export type ConfigPlanChange =
 	| { kind: 'permissions'; operation: 'delete'; identity: PermissionIdentity; impact: [] }
 	| { kind: 'folders'; operation: 'create'; identity: FolderIdentity; values: FolderValues }
 	| { kind: 'folders'; operation: 'update'; identity: FolderIdentity; fields: FolderFieldChanges }
-	| { kind: 'folders'; operation: 'delete'; identity: FolderIdentity; impact: FolderDeletionImpactEntry[] };
+	| { kind: 'folders'; operation: 'delete'; identity: FolderIdentity; impact: FolderDeletionImpactEntry[] }
+	| { kind: 'settings'; operation: 'update'; identity: SettingsIdentity; fields: SettingsFieldChanges };
 
 export type SerializedConfigPlan = {
 	planVersion: 2;

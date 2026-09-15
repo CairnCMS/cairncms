@@ -16,6 +16,7 @@ type ConfigSnapshot = {
 	roles: Array<Record<string, any>>;
 	permissions: Array<{ role: string; permissions: Array<Record<string, any>> }>;
 	folders?: Array<Record<string, any>>;
+	settings?: Array<Record<string, any>>;
 };
 
 const serverVendors = vendors.filter((vendor) => vendor !== 'sqlite3');
@@ -1599,6 +1600,7 @@ describe('Config-as-Code managed scope', () => {
 			desired.manifest = { version: 1, resources: ['roles'] };
 			desired.permissions = [];
 			delete desired.folders;
+			delete desired.settings;
 
 			try {
 				const response = await applyConfig(vendor, desired, { destructive: true });
@@ -1683,6 +1685,7 @@ describe('Config-as-Code managed scope', () => {
 				permsOnly.manifest = { version: 1, resources: ['permissions'] };
 				permsOnly.roles = [];
 				delete permsOnly.folders;
+				delete permsOnly.settings;
 
 				permsOnly.permissions.push({
 					role: roleKey,
@@ -1958,7 +1961,7 @@ describe('cairncms config snapshot preserves managed scope', () => {
 
 			expect(result.error).toBeUndefined();
 			expect(result.status).toBe(0);
-			expect((await readManifest()).resources.slice().sort()).toEqual(['folders', 'permissions', 'roles']);
+			expect((await readManifest()).resources.slice().sort()).toEqual(['folders', 'permissions', 'roles', 'settings']);
 		});
 	});
 });
@@ -2389,6 +2392,7 @@ describe('Config-as-Code audit and events', () => {
 					roles: { created: [roleKey], updated: [], deleted: [] },
 					permissions: { created: 1, updated: 0, deleted: 0 },
 					folders: { created: [], updated: [], deleted: [] },
+					settings: { updated: [] },
 				});
 
 				const role = await db('directus_roles').where({ key: roleKey }).first();
@@ -2420,6 +2424,7 @@ describe('Config-as-Code audit and events', () => {
 					roles: { created: [], updated: [roleKey], deleted: [] },
 					permissions: { created: 0, updated: 1, deleted: 0 },
 					folders: { created: [], updated: [], deleted: [] },
+					settings: { updated: [] },
 				});
 
 				await expectAudited(db, 'directus_roles', role.id, 'update', admin.id, true);
@@ -2569,6 +2574,7 @@ describe('Config-as-Code audit and events', () => {
 					roles: { created: [roleKey], updated: [], deleted: [] },
 					permissions: { created: 1, updated: 0, deleted: 0 },
 					folders: { created: [], updated: [], deleted: [] },
+					settings: { updated: [] },
 				});
 
 				const role = await db('directus_roles').where({ key: roleKey }).first();
@@ -2604,6 +2610,7 @@ describe('Config-as-Code audit and events', () => {
 					roles: { created: [], updated: [], deleted: [roleKey] },
 					permissions: { created: 0, updated: 0, deleted: 0 },
 					folders: { created: [], updated: [], deleted: [] },
+					settings: { updated: [] },
 				});
 
 				expect(await db('directus_roles').where({ id: role.id }).first()).toBeUndefined();
@@ -2699,6 +2706,7 @@ describe('Config-as-Code audit and events', () => {
 					roles: { created: [], updated: [], deleted: [removedKey] },
 					permissions: { created: 0, updated: 0, deleted: 1 },
 					folders: { created: [], updated: [], deleted: [] },
+					settings: { updated: [] },
 				});
 
 				const after = await adminSnapshot(vendor);

@@ -4,11 +4,13 @@ import type { ConfigResourceDescriptor } from './descriptor.js';
 import { foldersDescriptor, type FoldersKindTypes } from './handlers/folders.js';
 import { permissionsDescriptor, type PermissionsKindTypes } from './handlers/permissions.js';
 import { rolesDescriptor, type RolesKindTypes } from './handlers/roles.js';
+import { settingsDescriptor, type SettingsKindTypes } from './handlers/settings.js';
 
 export type ConfigKindTypeMap = {
 	roles: RolesKindTypes;
 	permissions: PermissionsKindTypes;
 	folders: FoldersKindTypes;
+	settings: SettingsKindTypes;
 };
 
 export type ConfigRegistry = {
@@ -19,6 +21,7 @@ export const CONFIG_REGISTRY = {
 	roles: rolesDescriptor,
 	permissions: permissionsDescriptor,
 	folders: foldersDescriptor,
+	settings: settingsDescriptor,
 } satisfies ConfigRegistry;
 
 export function getDescriptor<C extends ConfigKind>(kind: C): (typeof CONFIG_REGISTRY)[C] {

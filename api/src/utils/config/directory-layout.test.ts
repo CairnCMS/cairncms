@@ -88,16 +88,22 @@ describe('descriptor directory conformance', () => {
 	it('each kind has a single string identity field with ownership grammar and a bounded length', () => {
 		for (const kind of listConfigKinds()) {
 			const descriptor = getDescriptor(kind);
-			expect(descriptor.documentIdentityFields).toHaveLength(1);
+			const shape = descriptor.layout.documentShape;
 
-			const field = descriptor.documentIdentityFields[0]!;
-			expect(field.type).toBe('string');
-			expect(field.grammar).toBe('config-key');
-			expect(typeof field.maxLength).toBe('number');
-			expect(field.maxLength).toBeGreaterThan(0);
+			if (typeof shape === 'object' && 'singleton' in shape) {
+				expect(descriptor.documentIdentityFields).toHaveLength(0);
+			} else {
+				expect(descriptor.documentIdentityFields).toHaveLength(1);
 
-			if (field.reserved && field.reserved.length > 0) {
-				expect(typeof descriptor.layout.reservedFilenameMessage).toBe('function');
+				const field = descriptor.documentIdentityFields[0]!;
+				expect(field.type).toBe('string');
+				expect(field.grammar).toBe('config-key');
+				expect(typeof field.maxLength).toBe('number');
+				expect(field.maxLength).toBeGreaterThan(0);
+
+				if (field.reserved && field.reserved.length > 0) {
+					expect(typeof descriptor.layout.reservedFilenameMessage).toBe('function');
+				}
 			}
 
 			for (const recordField of descriptor.recordFields) {
@@ -106,6 +112,14 @@ describe('descriptor directory conformance', () => {
 				}
 			}
 		}
+	});
+
+	it('a singleton owns only its fixed filename', () => {
+		const descriptor = getDescriptor('settings');
+		expect(descriptor.layout.filenameOf(descriptor.layout.documentIdentityOf({}))).toBe('project');
+		expect(classifyConfigFilename('project.yaml', 'settings')).toBe('owned');
+		expect(classifyConfigFilename('other.yaml', 'settings')).toBe('unowned');
+		expect(isOwnedConfigFilename('project.yaml', 'settings')).toBe(true);
 	});
 
 	it('the roles filename identity agrees with its layout', () => {
