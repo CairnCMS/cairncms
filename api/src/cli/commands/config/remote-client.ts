@@ -285,6 +285,13 @@ function resultCardinality(kind: ConfigKind, result: RemoteWireResult): Record<'
 				delete: result.folders.deleted.length,
 			};
 
+		case 'settings':
+			return {
+				create: 0,
+				update: result.settings.updated.length,
+				delete: 0,
+			};
+
 		default: {
 			const unhandled: never = kind;
 			throw new Error(`Unhandled config kind: ${JSON.stringify(unhandled)}`);
@@ -345,6 +352,7 @@ function validatedSnapshot(data: unknown, token: string): CairnConfig {
 		roles: managed.has('roles') ? snapshot.roles : [],
 		permissions: managed.has('permissions') ? snapshot.permissions : [],
 		folders: managed.has('folders') ? snapshot.folders : [],
+		settings: managed.has('settings') ? snapshot.settings : [],
 	};
 }
 

@@ -64,7 +64,13 @@ vi.mock('../services/roles.js', () => ({ RolesService: vi.fn(() => rolesService)
 const STATE_TOKEN: ConfigStateToken = { resources: ['permissions', 'roles'], digest: 'digest-current' };
 
 readCurrentConfigMock.mockImplementation(async () => ({
-	config: { manifest: { version: 1, resources: ['permissions', 'roles'] }, roles: [], permissions: [], folders: [] },
+	config: {
+		manifest: { version: 1, resources: ['permissions', 'roles'] },
+		roles: [],
+		permissions: [],
+		folders: [],
+		settings: [],
+	},
 	currentRoleKeys: new Set<string>(),
 	stateToken: STATE_TOKEN,
 }));
@@ -115,6 +121,7 @@ function emptyPlan(): ConfigPlan {
 		roles: { create: [], update: [], delete: [] },
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
+		settings: { create: [], update: [], delete: [] },
 		protections: [],
 	};
 }
@@ -766,6 +773,7 @@ describe('applyConfigPlan:engine schedule', () => {
 			roles: { created: ['editor', 'author'], updated: ['viewer', 'guest'], deleted: ['old_one', 'old_two'] },
 			permissions: { created: 2, updated: 2, deleted: 2 },
 			folders: { created: [], updated: [], deleted: [] },
+			settings: { updated: [] },
 		});
 	});
 });
@@ -1021,6 +1029,7 @@ describe('applyConfigPlan:role-state refresh', () => {
 			roles: { created: ['editor'], updated: [], deleted: [] },
 			permissions: { created: 1, updated: 0, deleted: 0 },
 			folders: { created: [], updated: [], deleted: [] },
+			settings: { updated: [] },
 		});
 	});
 });
@@ -1263,6 +1272,7 @@ describe('applyConfigPlan:result assembly and boundaries', () => {
 			roles: { created: [], updated: [], deleted: [] },
 			permissions: { created: 0, updated: 0, deleted: 0 },
 			folders: { created: [], updated: [], deleted: [] },
+			settings: { updated: [] },
 		});
 
 		expect(vi.mocked(getDatabase)).not.toHaveBeenCalled();
@@ -1293,6 +1303,7 @@ describe('applyConfigPlan:result assembly and boundaries', () => {
 			roles: { created: ['editor'], updated: [], deleted: [] },
 			permissions: { created: 0, updated: 0, deleted: 0 },
 			folders: { created: [], updated: [], deleted: [] },
+			settings: { updated: [] },
 		});
 	});
 
@@ -1372,6 +1383,7 @@ describe('applyConfigPlan:registry routing', () => {
 				roles: { created: ['registry_sentinel'], updated: [], deleted: [] },
 				permissions: { created: 0, updated: 0, deleted: 0 },
 				folders: { created: [], updated: [], deleted: [] },
+				settings: { updated: [] },
 			});
 
 			expect(rolesService.createOne).not.toHaveBeenCalled();
@@ -1443,6 +1455,7 @@ describe('applyConfigPlan:state-token recheck and scope binding', () => {
 				roles: [],
 				permissions: [],
 				folders: [],
+				settings: [],
 			},
 			currentRoleKeys: new Set<string>(),
 			stateToken: STATE_TOKEN,
@@ -1484,6 +1497,7 @@ describe('applyConfigPlan:state-token recheck and scope binding', () => {
 				roles: [],
 				permissions: [],
 				folders: [],
+				settings: [],
 			},
 			currentRoleKeys: new Set<string>(),
 			stateToken: { resources: ['permissions', 'roles'], digest: 'digest-changed' },

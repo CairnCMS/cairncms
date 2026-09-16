@@ -1,13 +1,49 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConfigInvalidException } from '../../exceptions/config-invalid.js';
 import { ConfigPlaceholderUnresolvedException } from '../../exceptions/config-placeholder-unresolved.js';
-import { interpolateEnvVar, isPlaceholder } from './placeholder.js';
+import type { ConfigFieldDescriptor } from './descriptor.js';
+import { interpolateEnvVar, interpolatePlaceholderFields, isPlaceholder, placeholderVarName } from './placeholder.js';
+
+function field(name: string, acceptsPlaceholder: boolean): ConfigFieldDescriptor {
+	return { name, acceptsPlaceholder } as unknown as ConfigFieldDescriptor;
+}
 
 describe('isPlaceholder', () => {
 	it('recognizes only the whole-string placeholder form', () => {
 		expect(isPlaceholder('{{CAIRNCMS_CONFIG_X}}')).toBe(true);
 		expect(isPlaceholder('prefix {{CAIRNCMS_CONFIG_X}}')).toBe(false);
 		expect(isPlaceholder(42)).toBe(false);
+	});
+});
+
+describe('placeholderVarName', () => {
+	it('returns the variable name of a whole-string placeholder', () => {
+		expect(placeholderVarName('{{CAIRNCMS_CONFIG_X}}')).toBe('CAIRNCMS_CONFIG_X');
+	});
+
+	it('returns undefined for a non-placeholder or a non-string', () => {
+		expect(placeholderVarName('prefix {{CAIRNCMS_CONFIG_X}}')).toBeUndefined();
+		expect(placeholderVarName(42)).toBeUndefined();
+	});
+});
+
+describe('interpolatePlaceholderFields', () => {
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	it('substitutes only acceptsPlaceholder string fields and copies the record', () => {
+		vi.stubEnv('CAIRNCMS_CONFIG_A', 'resolved');
+
+		const record = { a: '{{CAIRNCMS_CONFIG_A}}', b: '{{CAIRNCMS_CONFIG_B}}', c: 7 };
+		const fields = [field('a', true), field('b', false), field('c', true)];
+
+		const out = interpolatePlaceholderFields(fields, record, { label: 'x', value: 'y' });
+
+		expect(out).not.toBe(record);
+		expect(out['a']).toBe('resolved');
+		expect(out['b']).toBe('{{CAIRNCMS_CONFIG_B}}');
+		expect(out['c']).toBe(7);
 	});
 });
 

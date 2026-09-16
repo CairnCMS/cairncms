@@ -1,5 +1,5 @@
 import type { Knex } from 'knex';
-import type { FolderDeletionImpactEntry } from '../../../types/config.js';
+import type { FolderDeletionImpactEntry, SettingsRetarget } from '../../../types/config.js';
 import { resolveFolderReference } from '../folder-id-lookup.js';
 
 type FolderDeletionPlan = {
@@ -30,6 +30,11 @@ function orderBlockers(observed: Set<Blocker>): FolderDeletionImpactEntry[] {
 	return BLOCKER_ORDER.filter((blocker) => observed.has(blocker)).map((blockedBy) => ({ blockedBy }));
 }
 
+/** True when the same apply moves the default folder away from this deleted key, so its live reference is about to clear. */
+function retargetsAwayFrom(retarget: SettingsRetarget | undefined, key: string): boolean {
+	return retarget !== undefined && retarget.retargeted && retarget.toKey !== key;
+}
+
 /**
  * Observes the categories that would block each planned folder deletion, accounting for children this
  * same plan deletes or reparents away. It is an advisory point-in-time preview. The authoritative check
@@ -37,7 +42,8 @@ function orderBlockers(observed: Set<Blocker>): FolderDeletionImpactEntry[] {
  */
 export async function readFolderDeletionImpact(
 	plan: FolderDeletionPlan,
-	database: Knex
+	database: Knex,
+	retarget?: SettingsRetarget
 ): Promise<Map<string, FolderDeletionImpactEntry[]>> {
 	const result = new Map<string, FolderDeletionImpactEntry[]>();
 	if (plan.delete.length === 0) return result;
@@ -102,7 +108,7 @@ export async function readFolderDeletionImpact(
 		if (remainingChild) observed.add('folders');
 
 		const setting = await database('directus_settings').where('storage_default_folder', id).first('id');
-		if (setting) observed.add('storage_default_folder');
+		if (setting && !retargetsAwayFrom(retarget, key)) observed.add('storage_default_folder');
 
 		if (optionsFolderBlocked.has(key)) observed.add('options.folder');
 

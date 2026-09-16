@@ -19,6 +19,7 @@ const BODY: CairnConfig = {
 	roles: [],
 	permissions: [],
 	folders: [],
+	settings: [],
 };
 
 const ROLES_ONLY_BODY: CairnConfig = {
@@ -26,6 +27,7 @@ const ROLES_ONLY_BODY: CairnConfig = {
 	roles: [],
 	permissions: [],
 	folders: [],
+	settings: [],
 };
 
 const V2_FOLDERS_BODY: CairnConfig = {
@@ -33,6 +35,7 @@ const V2_FOLDERS_BODY: CairnConfig = {
 	roles: [],
 	permissions: [],
 	folders: [{ key: 'docs', name: 'Docs', parent: null }],
+	settings: [],
 };
 
 const ROLE_CREATE = {
@@ -140,6 +143,7 @@ const OK_RESULT = {
 	roles: { created: [], updated: [], deleted: [] },
 	permissions: { created: 0, updated: 0, deleted: 0 },
 	folders: { created: [], updated: [], deleted: [] },
+	settings: { updated: [] },
 };
 
 function dryRun(plan: unknown): Promise<RemoteClientError> {
@@ -332,6 +336,7 @@ describe('applyRemote', () => {
 			roles: { created: ['a', 'b'], updated: [], deleted: [] },
 			permissions: { created: 0, updated: 0, deleted: 0 },
 			folders: { created: [], updated: [], deleted: [] },
+			settings: { updated: [] },
 		};
 
 		const swapped = session(() => ({ status: 200, data: { data: wrongKind, meta: { plan } } }));
@@ -343,6 +348,7 @@ describe('applyRemote', () => {
 			roles: { created: ['4a3b'], updated: [], deleted: [] },
 			permissions: { created: 1, updated: 0, deleted: 0 },
 			folders: { created: [], updated: [], deleted: [] },
+			settings: { updated: [] },
 		};
 
 		const matching = session(() => ({ status: 200, data: { data: result, meta: { plan } } }));
@@ -951,7 +957,7 @@ describe('fetchRemoteSnapshot', () => {
 
 		const snapshot = await fetchRemoteSnapshot(remote, scope);
 
-		expect(snapshot).toEqual({ ...VALID_SNAPSHOT, folders: [] });
+		expect(snapshot).toEqual({ ...VALID_SNAPSHOT, folders: [], settings: [] });
 		expect(snapshot).not.toBe(VALID_SNAPSHOT);
 	});
 
@@ -967,6 +973,7 @@ describe('fetchRemoteSnapshot', () => {
 		await expect(fetchRemoteSnapshot(remote, { manifestVersion: 1, resources: ['permissions'] })).resolves.toEqual({
 			...permissionsOnly,
 			folders: [],
+			settings: [],
 		});
 	});
 
@@ -984,6 +991,7 @@ describe('fetchRemoteSnapshot', () => {
 			roles: VALID_SNAPSHOT.roles,
 			permissions: [],
 			folders: [],
+			settings: [],
 		});
 	});
 
@@ -1052,6 +1060,7 @@ describe('fetchRemoteSnapshot', () => {
 				{ key: 'root', name: 'Root', parent: null },
 				{ key: 'child', name: 'Child', parent: 'root' },
 			],
+			settings: [],
 		};
 
 		const { remote } = session(() => ({ status: 200, data: { data: complete } }));

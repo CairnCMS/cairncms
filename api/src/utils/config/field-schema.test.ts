@@ -247,4 +247,40 @@ describe('generator honors metadata for field-type/nullable combinations the pro
 		expect(messagesOf(schema, { rk: null })).toEqual([]);
 		expect(messagesOf(schema, { rk: 'Bad' }).length).toBeGreaterThan(0);
 	});
+
+	it('leaves a generic json-array unconstrained without arrayItems', () => {
+		const schema = syntheticSchema([{ ...base, name: 'items', type: 'json-array', nullable: true }]);
+
+		expect(messagesOf(schema, { items: [null] })).toEqual([]);
+		expect(messagesOf(schema, { items: ['scalar', 1, true] })).toEqual([]);
+		expect(messagesOf(schema, { items: [] })).toEqual([]);
+		expect(messagesOf(schema, { items: null })).toEqual([]);
+	});
+
+	it('requires non-null object elements for a record json-array', () => {
+		const schema = syntheticSchema([
+			{ ...base, name: 'items', type: 'json-array', arrayItems: 'record', nullable: true },
+		]);
+
+		expect(messagesOf(schema, { items: [{ a: 1 }] })).toEqual([]);
+		expect(messagesOf(schema, { items: [] })).toEqual([]);
+		expect(messagesOf(schema, { items: null })).toEqual([]);
+		expect(messagesOf(schema, { items: [null] }).length).toBeGreaterThan(0);
+		expect(messagesOf(schema, { items: ['scalar'] }).length).toBeGreaterThan(0);
+		expect(messagesOf(schema, { items: [1] }).length).toBeGreaterThan(0);
+		expect(messagesOf(schema, { items: [true] }).length).toBeGreaterThan(0);
+		expect(messagesOf(schema, { items: [[]] }).length).toBeGreaterThan(0);
+	});
+
+	it('preserves order, nested arrays, and unknown properties of record json-array elements', () => {
+		const schema = syntheticSchema([
+			{ ...base, name: 'items', type: 'json-array', arrayItems: 'record', nullable: true },
+		]);
+
+		const input = { items: [{ id: 'a', nested: [1, [2, 3]], extra: { deep: true } }, { id: 'b' }] };
+		const { error, value } = schema.validate(input, VALIDATE_OPTIONS);
+
+		expect(error).toBeUndefined();
+		expect(value).toEqual(input);
+	});
 });

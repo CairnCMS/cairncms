@@ -9,12 +9,14 @@ import {
 	type ConfigFolder,
 	type ConfigPermissionSet,
 	type ConfigRole,
+	type ConfigSettings,
 	type ConfigStateToken,
 } from '../types/config.js';
 import { LATEST_MANIFEST_VERSION, type ManifestVersion } from './config-contract.js';
 import { computeConfigStateDigest, toStateDigestEntry, type StateDigestEntry } from './config/config-state-digest.js';
 import { makeDependencyAccessor } from './config/dependency-context.js';
 import type { ConfigReadMode } from './config/descriptor.js';
+import type { FoldersKindTypes } from './config/handlers/folders.js';
 import type { RolesKindTypes } from './config/handlers/roles.js';
 import { getDescriptor } from './config/registry.js';
 import { resolveReadClosure } from './config/scope.js';
@@ -25,6 +27,7 @@ import { findPlaceholderSyntax, validateConfigRecord } from './validate-desired-
 export type CurrentConfigRead = {
 	config: CairnConfig;
 	currentRoleKeys: ReadonlySet<string>;
+	currentFolderKeys: ReadonlySet<string>;
 	currentFolderParents: ReadonlyMap<string, string | null>;
 	stateToken: ConfigStateToken;
 };
@@ -67,8 +70,9 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 
 	if (closure.length === 0) {
 		return {
-			config: { manifest, roles: [], permissions: [], folders: [] },
+			config: { manifest, roles: [], permissions: [], folders: [], settings: [] },
 			currentRoleKeys: new Set(),
+			currentFolderKeys: new Set(),
 			currentFolderParents: new Map(),
 			stateToken: Object.freeze({ resources: Object.freeze([]), digest: computeConfigStateDigest([]) }),
 		};
@@ -111,6 +115,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		roles: (documentsByKind.get('roles') ?? []) as ConfigRole[],
 		permissions: (documentsByKind.get('permissions') ?? []) as ConfigPermissionSet[],
 		folders: (documentsByKind.get('folders') ?? []) as ConfigFolder[],
+		settings: (documentsByKind.get('settings') ?? []) as ConfigSettings[],
 	};
 
 	const placeholders = findPlaceholderSyntax(config);
@@ -136,6 +141,21 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		}
 
 		currentRoleKeys = rolesState.currentRoleKeys;
+	}
+
+	const readsFolders = closure.some((entry) => entry.kind === 'folders');
+	let currentFolderKeys: ReadonlySet<string> = new Set<string>();
+
+	if (readsFolders) {
+		const foldersState = published.get('folders') as FoldersKindTypes['ReadDependencyState'] | undefined;
+
+		if (!foldersState) {
+			throw new ConfigReadFailedException(
+				'Configuration state could not be assembled. Retry the operation and report the failure if it persists.'
+			);
+		}
+
+		currentFolderKeys = foldersState.currentFolderKeys;
 	}
 
 	let stateToken: ConfigStateToken;
@@ -164,7 +184,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		config.folders.map((folder) => [folder.key, folder.parent ?? null])
 	);
 
-	return { config, currentRoleKeys, currentFolderParents, stateToken };
+	return { config, currentRoleKeys, currentFolderKeys, currentFolderParents, stateToken };
 }
 
 export async function getConfigSnapshot(options?: { database?: Knex; schema?: SchemaOverview }): Promise<CairnConfig> {

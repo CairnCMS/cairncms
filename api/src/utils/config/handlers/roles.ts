@@ -28,7 +28,7 @@ import type {
 	ReadStateProjection,
 } from '../descriptor.js';
 import { identityConflict } from '../failures.js';
-import { interpolateEnvVar } from '../placeholder.js';
+import { interpolatePlaceholderFields } from '../placeholder.js';
 import { UNFILTERED, assertStringArray, parseStoredCSV, unreadable } from '../read-parsing.js';
 import { compareCodeUnits } from '../canonical-encode.js';
 import { changesToValues, composeValues, sortedOrNull } from '../values.js';
@@ -488,18 +488,10 @@ export const rolesDescriptor: ConfigResourceDescriptor<RolesKindTypes> = {
 				);
 			}
 
-			const document: Record<string, unknown> = { ...record };
-			const subject = { label: 'role', value: record['key'] };
-
-			for (const field of RECORD_FIELDS) {
-				const value = document[field.name];
-
-				if (field.acceptsPlaceholder && typeof value === 'string') {
-					document[field.name] = interpolateEnvVar(value, field.name, subject);
-				}
-			}
-
-			return document as unknown as ConfigRole;
+			return interpolatePlaceholderFields(RECORD_FIELDS, record, {
+				label: 'role',
+				value: record['key'],
+			}) as unknown as ConfigRole;
 		},
 		reservedFilenameMessage: () =>
 			`Role key "public" is reserved for public permissions. Remove roles/public.yaml. ` +

@@ -19,7 +19,7 @@ For first-time installation and local exploration, see [Quickstart](/docs/gettin
 - **[Upgrades](/docs/manage/upgrades/)** — the version model, the standard upgrade procedure, multi-instance considerations, and rollback.
 - **[Schema as code](/docs/manage/schema-as-code/)** — capturing the data model to a versioned file and applying it across environments.
 - **[Migration between instances](/docs/manage/migration-between-instances/)** — moving a deployment from one home to another, including cross-vendor and cross-version migrations.
-- **[Config as code](/docs/manage/config-as-code/)** — the same diff/apply pattern for roles and permissions.
+- **[Config as code](/docs/manage/config-as-code/)** — the same diff/apply pattern for roles, permissions, folders, and project settings.
 
 ## Where to go after this section
 

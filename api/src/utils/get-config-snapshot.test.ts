@@ -10,6 +10,7 @@ import logger from '../logger.js';
 import { FoldersService } from '../services/folders.js';
 import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
+import { SettingsService } from '../services/settings.js';
 import { CONFIG_FILENAME_STEM_MAX_LENGTH } from './config-contract.js';
 import { rolesDescriptor } from './config/handlers/roles.js';
 import { CONFIG_REGISTRY } from './config/registry.js';
@@ -52,6 +53,33 @@ function mockPermission(overrides: Record<string, any> = {}): void {
 	]);
 }
 
+function settingsRow(overrides: Record<string, any> = {}): Record<string, any> {
+	return {
+		id: 1,
+		project_name: 'CairnCMS',
+		project_descriptor: null,
+		project_url: null,
+		default_language: 'en-US',
+		project_color: null,
+		public_note: null,
+		custom_css: null,
+		module_bar: null,
+		auth_password_policy: null,
+		auth_login_attempts: 25,
+		storage_asset_transform: 'all',
+		storage_asset_presets: null,
+		basemaps: null,
+		custom_aspect_ratios: null,
+		mapbox_key: null,
+		storage_default_folder: null,
+		...overrides,
+	};
+}
+
+function mockSettings(overrides: Record<string, any> = {}): void {
+	vi.spyOn(SettingsService.prototype, 'readSingleton').mockResolvedValue(settingsRow(overrides));
+}
+
 vi.mock('../logger.js', () => ({
 	default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
@@ -65,6 +93,7 @@ describe('getConfigSnapshot', () => {
 		db = vi.mocked(knex.default({ client: MockClient }));
 		vi.spyOn(getSchema, 'getSchema').mockResolvedValue(testSchema);
 		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([]);
+		mockSettings();
 	});
 
 	afterEach(() => {
@@ -77,7 +106,7 @@ describe('getConfigSnapshot', () => {
 
 		const config = await getConfigSnapshot({ database: db });
 
-		expect(config.manifest).toEqual({ version: 2, resources: ['roles', 'permissions', 'folders'] });
+		expect(config.manifest).toEqual({ version: 2, resources: ['roles', 'permissions', 'folders', 'settings'] });
 	});
 
 	it('builds ConfigRole entries with v1 allowlist only', async () => {
@@ -730,6 +759,7 @@ describe('readCurrentConfig', () => {
 		db = vi.mocked(knex.default({ client: MockClient }));
 		vi.spyOn(getSchema, 'getSchema').mockResolvedValue(testSchema);
 		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([]);
+		mockSettings();
 	});
 
 	afterEach(() => {
@@ -747,6 +777,40 @@ describe('readCurrentConfig', () => {
 		expect(config.roles).toEqual([]);
 		expect(config.permissions[0]!.role).toBe('editor');
 		expect(currentRoleKeys.has('editor')).toBe(true);
+	});
+
+	it('sources folder reference keys from the published folders dependency, not the empty config.folders slice', async () => {
+		const folderId = '00000000-0000-4000-8000-000000000001';
+		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([{ id: folderId, key: 'uploads' }] as never);
+		mockSettings({ storage_default_folder: folderId });
+
+		const { config, currentFolderKeys } = await readCurrentConfig({ database: db, resources: ['settings'] });
+
+		expect(config.folders).toEqual([]);
+		expect(currentFolderKeys.has('uploads')).toBe(true);
+		expect(config.settings[0]!.storage_default_folder).toBe('uploads');
+
+		const settingsBody = (folderKey: string): Record<string, unknown> => ({
+			manifest: { version: 2, resources: ['settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [{ storage_default_folder: folderKey }],
+		});
+
+		const contextFor = {
+			label: 'settings-only',
+			references: 'current-state' as const,
+			currentRoleKeys: new Set<string>(),
+			currentFolderKeys,
+			currentFolderParents: new Map<string, string | null>(),
+		};
+
+		expect(validateDesiredConfig(settingsBody('uploads'), contextFor)).toEqual([]);
+
+		expect(validateDesiredConfig(settingsBody('ghost'), contextFor).map((failure) => failure.code)).toContain(
+			'CONFIG_INVALID'
+		);
 	});
 
 	it('returns a stable state token digest for an unchanged managed read closure', async () => {
@@ -896,7 +960,15 @@ describe('readCurrentConfig', () => {
 		expect(roles).not.toHaveBeenCalled();
 		expect(perms).not.toHaveBeenCalled();
 		expect(getSchema.getSchema).not.toHaveBeenCalled();
-		expect(config).toEqual({ manifest: { version: 2, resources: [] }, roles: [], permissions: [], folders: [] });
+
+		expect(config).toEqual({
+			manifest: { version: 2, resources: [] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+		});
+
 		expect(currentRoleKeys.size).toBe(0);
 	});
 
@@ -1088,7 +1160,7 @@ describe('readCurrentConfig', () => {
 			},
 		]);
 
-		const { config, currentRoleKeys, currentFolderParents } = await readCurrentConfig({
+		const { config, currentRoleKeys, currentFolderKeys, currentFolderParents } = await readCurrentConfig({
 			database: db,
 			resources: ['roles', 'permissions'],
 		});
@@ -1100,6 +1172,7 @@ describe('readCurrentConfig', () => {
 				label: 'snapshot',
 				references: 'current-state',
 				currentRoleKeys,
+				currentFolderKeys,
 				currentFolderParents,
 			})
 		).toEqual([]);
@@ -1162,6 +1235,7 @@ describe('central subject sanitization', () => {
 		db = vi.mocked(knex.default({ client: MockClient }));
 		vi.spyOn(getSchema, 'getSchema').mockResolvedValue(testSchema);
 		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([]);
+		mockSettings();
 	});
 
 	afterEach(() => {

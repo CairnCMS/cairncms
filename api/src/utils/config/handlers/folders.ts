@@ -279,7 +279,9 @@ async function enrich(
 	_records: ConfigFolder[],
 	context: EnrichContext
 ): Promise<FoldersKindTypes['Enrichment']> {
-	return { folderDeletionImpact: await readFolderDeletionImpact(plan, context.database) };
+	return {
+		folderDeletionImpact: await readFolderDeletionImpact(plan, context.database, context.settingsRetarget),
+	};
 }
 
 function emptyEnrichment(): FoldersKindTypes['Enrichment'] {

@@ -10,6 +10,7 @@ import type {
 	ConfigManifest,
 	ConfigPermissionSet,
 	ConfigRole,
+	ConfigSettings,
 } from '../types/config.js';
 import { classifyConfigFilename } from './config/directory-layout.js';
 import { getDescriptor, listConfigKinds } from './config/registry.js';
@@ -132,18 +133,27 @@ export async function readConfigDirectory(configPath: string, options?: ConfigRe
 	const roles: ConfigRole[] = [];
 	const permissions: ConfigPermissionSet[] = [];
 	const folders: ConfigFolder[] = [];
-	const sink: Record<ConfigKind, unknown[]> = { roles, permissions, folders };
+	const settings: ConfigSettings[] = [];
+	const sink: Record<ConfigKind, unknown[]> = { roles, permissions, folders, settings };
 
 	for (const kind of listConfigKinds()) {
 		if (!manifest.resources.includes(kind)) continue;
 
 		const descriptor = getDescriptor(kind);
+		const filenames = await readKindFilenames(root, kind, notice);
+		const shape = descriptor.layout.documentShape;
 
-		for (const filename of await readKindFilenames(root, kind, notice)) {
+		if (typeof shape === 'object' && 'singleton' in shape && filenames.length !== 1) {
+			throw new ConfigInvalidException(
+				`Config ${kind} must provide exactly one "${shape.singleton.filename}.yaml" file, but found ${filenames.length}.`
+			);
+		}
+
+		for (const filename of filenames) {
 			const record = await readRecord(root, kind, filename);
 			sink[kind].push(descriptor.layout.parseDocumentFile(record, filename));
 		}
 	}
 
-	return { manifest, roles, permissions, folders };
+	return { manifest, roles, permissions, folders, settings };
 }

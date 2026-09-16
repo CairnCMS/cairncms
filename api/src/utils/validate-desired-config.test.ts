@@ -56,11 +56,12 @@ function validate(doc: Record<string, unknown>, currentRoleKeys: string[] = []):
 	return validateFull(doc, currentRoleKeys).map((failure) => failure.message);
 }
 
-function validateFull(doc: Record<string, unknown>, currentRoleKeys: string[] = []) {
+function validateFull(doc: Record<string, unknown>, currentRoleKeys: string[] = [], currentFolderKeys: string[] = []) {
 	return validateDesiredConfig(doc, {
 		label: 'test',
 		references: 'current-state',
 		currentRoleKeys: new Set(currentRoleKeys),
+		currentFolderKeys: new Set(currentFolderKeys),
 		currentFolderParents: new Map<string, string | null>(),
 	});
 }
@@ -386,6 +387,7 @@ describe('validateDesiredConfig', () => {
 			roles: [],
 			permissions: [],
 			folders: [{ key: 'docs', name: 'Docs' }],
+			settings: [],
 		};
 
 		expect(validate(doc)).toEqual([]);
@@ -393,6 +395,106 @@ describe('validateDesiredConfig', () => {
 		const failures = validateSnapshot(doc);
 		expect(failures).toHaveLength(1);
 		expect(failures[0]).toContain('parent');
+	});
+
+	const COMPLETE_SETTINGS: Record<string, unknown> = {
+		project_name: 'CairnCMS',
+		project_descriptor: null,
+		project_url: null,
+		default_language: 'en-US',
+		project_color: null,
+		public_note: null,
+		custom_css: null,
+		module_bar: null,
+		auth_password_policy: null,
+		auth_login_attempts: 25,
+		storage_asset_transform: 'all',
+		storage_asset_presets: null,
+		basemaps: null,
+		custom_aspect_ratios: null,
+		mapbox_key: null,
+		storage_default_folder: null,
+	};
+
+	function settingsBody(settings: unknown[]): Record<string, unknown> {
+		return { manifest: { version: 2, resources: ['settings'] }, roles: [], permissions: [], folders: [], settings };
+	}
+
+	it('accepts a partial authored settings declaration while requiring a complete one in snapshot mode', () => {
+		expect(validate(settingsBody([{ project_name: 'Live' }]))).toEqual([]);
+		expect(validateSnapshot(settingsBody([COMPLETE_SETTINGS]))).toEqual([]);
+	});
+
+	it.each(Object.keys(COMPLETE_SETTINGS))('refuses a settings snapshot that omits the %s field', (fieldName) => {
+		const record: Record<string, unknown> = { ...COMPLETE_SETTINGS };
+		delete record[fieldName];
+
+		const failures = validateSnapshot(settingsBody([record]));
+
+		expect(failures.length).toBeGreaterThan(0);
+		expect(failures.join(' ')).toContain(fieldName);
+	});
+
+	it.each(['authored', 'snapshot'] as const)(
+		'rejects a settings set that is not exactly one record in %s mode',
+		(mode) => {
+			const run = mode === 'authored' ? validate : validateSnapshot;
+
+			expect(run(settingsBody([])).length).toBeGreaterThan(0);
+			expect(run(settingsBody([COMPLETE_SETTINGS, COMPLETE_SETTINGS])).length).toBeGreaterThan(0);
+		}
+	);
+
+	it.each(['authored', 'snapshot'] as const)(
+		'rejects a null structured-array element and names the field in %s mode',
+		(mode) => {
+			const record = { ...COMPLETE_SETTINGS, storage_asset_presets: [null] };
+
+			const failures =
+				mode === 'authored'
+					? validateFull(settingsBody([record]))
+					: validateDesiredConfig(settingsBody([record]), { label: 'test', references: 'server-snapshot' });
+
+			expect(failures.map((failure) => failure.code)).toContain('CONFIG_INVALID');
+			expect(failures.some((failure) => failure.message.includes('settings[0].storage_asset_presets[0]'))).toBe(true);
+		}
+	);
+
+	it('accepts a complete settings declaration whose structured arrays hold valid records in both modes', () => {
+		const record = {
+			...COMPLETE_SETTINGS,
+			module_bar: [{ type: 'module', id: 'content', enabled: true }],
+			storage_asset_presets: [{ key: 'thumb' }],
+		};
+
+		expect(validate(settingsBody([record]))).toEqual([]);
+		expect(validateSnapshot(settingsBody([record]))).toEqual([]);
+	});
+
+	function foldersAndSettings(folders: unknown[], settings: unknown[]): Record<string, unknown> {
+		return {
+			manifest: { version: 2, resources: ['folders', 'settings'] },
+			roles: [],
+			permissions: [],
+			folders,
+			settings,
+		};
+	}
+
+	it('accepts a default folder a managed folder file newly declares, though it is absent from current state', () => {
+		const body = foldersAndSettings([{ key: 'new', name: 'New', parent: null }], [{ storage_default_folder: 'new' }]);
+
+		expect(validateFull(body, [], []).map((failure) => failure.code)).toEqual([]);
+	});
+
+	it('rejects a default folder present only in current state when folders is managed', () => {
+		const body = foldersAndSettings([], [{ storage_default_folder: 'existing' }]);
+
+		expect(validateFull(body, [], ['existing']).map((failure) => failure.code)).toContain('CONFIG_INVALID');
+	});
+
+	it('accepts a complete settings server snapshot that references a folder without any folder check', () => {
+		expect(validateSnapshot(settingsBody([{ ...COMPLETE_SETTINGS, storage_default_folder: 'uploads' }]))).toEqual([]);
 	});
 
 	it.each(['name', 'description'])('rejects a role %s written in placeholder form in both modes', (field) => {

@@ -6,6 +6,7 @@ import type {
 	ConfigKind,
 	ConfigPlanChange,
 	ConfigPlanEnrichment,
+	SettingsRetarget,
 } from '../../types/config.js';
 import type { MutationOptions } from '../../types/index.js';
 
@@ -31,13 +32,17 @@ export type FieldSensitivity =
 
 export interface ConfigFieldDescriptor {
 	name: string;
-	type: 'string' | 'boolean' | 'string-list' | 'policy-object';
+	type: 'string' | 'boolean' | 'string-list' | 'policy-object' | 'number' | 'json-array';
 	required: boolean;
 	nullable: boolean;
 	allowEmpty?: boolean;
 	allowEmptyElements?: boolean;
+	/** For a json-array field, requires every element to be a non-null object. Absent leaves elements unconstrained. */
+	arrayItems?: 'record';
 	minLength?: number;
 	maxLength?: number;
+	min?: number;
+	max?: number;
 	enum?: readonly string[];
 	grammar?: 'config-key';
 	reserved?: readonly string[];
@@ -51,7 +56,7 @@ export interface ConfigFieldDescriptor {
 	identityComponent?: boolean;
 }
 
-export type ConfigDocumentShape = 'flat' | { recordsField: string };
+export type ConfigDocumentShape = 'flat' | { recordsField: string } | { singleton: { filename: string } };
 
 /** A per-kind dependency payload, keyed only by config kinds. */
 export type ConfigDependencyMap = Partial<Record<ConfigKind, unknown>>;
@@ -139,6 +144,7 @@ export type ReferenceStateSource =
 	| {
 			references: 'current-state';
 			currentRoleKeys: ReadonlySet<string>;
+			currentFolderKeys: ReadonlySet<string>;
 			/** Required when a current-state validation must resolve a folder whose parent is omitted; a validation of fully explicit declarations does not need it. */
 			currentFolderParents?: ReadonlyMap<string, string | null>;
 	  }
@@ -147,6 +153,8 @@ export type ReferenceStateSource =
 export type ValidationContext = {
 	rolesManaged: boolean;
 	declaredRoleKeys: ReadonlySet<string>;
+	foldersManaged: boolean;
+	declaredFolderKeys: ReadonlySet<string>;
 } & ReferenceStateSource;
 
 export interface PlanContext<K extends ConfigKindTypes> {
@@ -157,6 +165,8 @@ export interface PlanContext<K extends ConfigKindTypes> {
 export interface EnrichContext {
 	database: Knex;
 	schema: SchemaOverview;
+	/** The default-folder retarget the plan performs, so the folders deletion preview can drop a blocker the same apply clears. */
+	settingsRetarget?: SettingsRetarget;
 }
 
 export interface ApplyContext<K extends ConfigKindTypes> {

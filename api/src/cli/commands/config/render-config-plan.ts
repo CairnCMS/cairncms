@@ -7,6 +7,8 @@ type RoleIdentityView = { key: string };
 
 type FolderIdentityView = { key: string };
 
+type SettingsIdentityView = { key: string };
+
 type FolderBlockerView = { blockedBy: string };
 
 type PermissionIdentityView = { role: string; collection: string; action: string };
@@ -44,7 +46,13 @@ export type RenderableChange =
 			identity: FolderIdentityView;
 			fields: Record<string, FieldChangeView | undefined>;
 	  }
-	| { kind: 'folders'; operation: 'delete'; identity: FolderIdentityView; impact: FolderBlockerView[] };
+	| { kind: 'folders'; operation: 'delete'; identity: FolderIdentityView; impact: FolderBlockerView[] }
+	| {
+			kind: 'settings';
+			operation: 'update';
+			identity: SettingsIdentityView;
+			fields: Record<string, FieldChangeView | undefined>;
+	  };
 
 /** The structural view the renderers read, satisfied by the server's serialized plan and by the remote wire plan. */
 export type RenderablePlan = {
@@ -58,6 +66,7 @@ type RenderableResultSlice = {
 	roles: { created: unknown[]; updated: unknown[]; deleted: unknown[] };
 	permissions: { created: number; updated: number; deleted: number };
 	folders: { created: unknown[]; updated: unknown[]; deleted: unknown[] };
+	settings: { updated: unknown[] };
 };
 
 export type RenderableResult = { [C in ConfigKind]: RenderableResultSlice[C] };
@@ -88,6 +97,12 @@ function summarizeResultSlice(kind: ConfigKind, result: RenderableResult): strin
 			return parts;
 		}
 
+		case 'settings': {
+			const parts: string[] = [];
+			if (result.settings.updated.length > 0) parts.push(`${result.settings.updated.length} setting(s) updated`);
+			return parts;
+		}
+
 		default: {
 			const unhandled: never = kind;
 			throw new Error(`Unhandled config kind: ${JSON.stringify(unhandled)}`);
@@ -108,6 +123,8 @@ function kindHeading(kind: RenderableChange['kind']): string {
 			return 'Permissions';
 		case 'folders':
 			return 'Folders';
+		case 'settings':
+			return 'Settings';
 
 		default: {
 			const unhandled: never = kind;
@@ -239,6 +256,10 @@ function renderIdentity(change: RenderableChange | RenderableDeletion): string {
 	}
 
 	if (change.kind === 'folders') {
+		return replaceControlCharacters(change.identity.key);
+	}
+
+	if (change.kind === 'settings') {
 		return replaceControlCharacters(change.identity.key);
 	}
 

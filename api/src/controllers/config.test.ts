@@ -94,6 +94,7 @@ const CURRENT_CONFIG: CairnConfig = {
 	roles: [],
 	permissions: [],
 	folders: [],
+	settings: [],
 };
 
 const ADMIN = { admin: true, app: true, user: USER, role: ROLE, ip: '10.0.0.1' };
@@ -103,6 +104,7 @@ const EMPTY_PLAN: ConfigPlan = {
 	roles: { create: [], update: [], delete: [] },
 	permissions: { create: [], update: [], delete: [] },
 	folders: { create: [], update: [], delete: [] },
+	settings: { create: [], update: [], delete: [] },
 	protections: [],
 };
 
@@ -126,6 +128,7 @@ const CREATE_PLAN: ConfigPlan = {
 	},
 	permissions: { create: [], update: [], delete: [] },
 	folders: { create: [], update: [], delete: [] },
+	settings: { create: [], update: [], delete: [] },
 	protections: [],
 };
 
@@ -141,6 +144,7 @@ const SERIALIZED: SerializedConfigPlan = {
 const APPLY_RESULT = {
 	roles: { created: ['editor'], updated: [], deleted: [] },
 	permissions: { created: 0, updated: 0, deleted: 0 },
+	settings: { updated: [] },
 };
 
 function makeApp(accountability: Record<string, unknown> | null) {
@@ -212,6 +216,7 @@ beforeEach(() => {
 	vi.mocked(readCurrentConfig).mockResolvedValue({
 		config: CURRENT_CONFIG,
 		currentRoleKeys: new Set<string>(),
+		currentFolderKeys: new Set<string>(),
 		currentFolderParents: new Map<string, string | null>(),
 		stateToken: { resources: ['roles'], digest: 'digest' },
 	});
@@ -526,6 +531,7 @@ describe('POST /config/apply wire-contract validation', () => {
 			roles: [],
 			permissions: [],
 			folders: [{ key: 'ghost', name: 'Ghost', parent: null }],
+			settings: [],
 		});
 
 		expect(res.status).toBe(200);
@@ -617,6 +623,7 @@ describe('POST /config/apply forwards current folder state to validation', () =>
 		vi.mocked(readCurrentConfig).mockResolvedValue({
 			config: CURRENT_CONFIG,
 			currentRoleKeys: new Set<string>(),
+			currentFolderKeys: new Set<string>(['a', 'b']),
 			currentFolderParents: new Map<string, string | null>([
 				['a', null],
 				['b', 'a'],
@@ -635,6 +642,67 @@ describe('POST /config/apply forwards current folder state to validation', () =>
 					{ key: 'a', name: 'a', parent: 'b' },
 					{ key: 'b', name: 'b' },
 				],
+			});
+
+		expect(res.status).toBe(400);
+		expect(res.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+		expect(computeConfigPlan).not.toHaveBeenCalled();
+	});
+
+	it('accepts a settings-only default folder that exists in live state without managing folders', async () => {
+		const actual = await vi.importActual<typeof import('../utils/validate-desired-config.js')>(
+			'../utils/validate-desired-config.js'
+		);
+
+		vi.mocked(validateDesiredConfig).mockImplementation(actual.validateDesiredConfig);
+
+		vi.mocked(readCurrentConfig).mockResolvedValue({
+			config: CURRENT_CONFIG,
+			currentRoleKeys: new Set<string>(),
+			currentFolderKeys: new Set<string>(['uploads']),
+			currentFolderParents: new Map<string, string | null>(),
+			stateToken: { resources: ['settings'], digest: 'digest' },
+		});
+
+		const res = await request(makeApp(ADMIN))
+			.post('/config/apply?dry_run=true')
+			.set('User-Agent', 'cairncms-cli/1.6.0')
+			.send({
+				manifest: { version: 2, resources: ['settings'] },
+				roles: [],
+				permissions: [],
+				folders: [],
+				settings: [{ storage_default_folder: 'uploads' }],
+			});
+
+		expect(res.status).toBe(200);
+		expect(computeConfigPlan).toHaveBeenCalledTimes(1);
+	});
+
+	it('rejects a settings-only default folder absent from live state with 400 CONFIG_INVALID and no planning', async () => {
+		const actual = await vi.importActual<typeof import('../utils/validate-desired-config.js')>(
+			'../utils/validate-desired-config.js'
+		);
+
+		vi.mocked(validateDesiredConfig).mockImplementation(actual.validateDesiredConfig);
+
+		vi.mocked(readCurrentConfig).mockResolvedValue({
+			config: CURRENT_CONFIG,
+			currentRoleKeys: new Set<string>(),
+			currentFolderKeys: new Set<string>(['uploads']),
+			currentFolderParents: new Map<string, string | null>(),
+			stateToken: { resources: ['settings'], digest: 'digest' },
+		});
+
+		const res = await request(makeApp(ADMIN))
+			.post('/config/apply')
+			.set('User-Agent', 'cairncms-cli/1.6.0')
+			.send({
+				manifest: { version: 2, resources: ['settings'] },
+				roles: [],
+				permissions: [],
+				folders: [],
+				settings: [{ storage_default_folder: 'ghost' }],
 			});
 
 		expect(res.status).toBe(400);

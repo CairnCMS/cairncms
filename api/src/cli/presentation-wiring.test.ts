@@ -190,20 +190,27 @@ describe('config apply sources the confirmation token from the presentation prim
 			manifest: { version: 1, resources: ['roles'] },
 			roles: [{ key: 'reviewer', name: 'Reviewer', admin_access: false, app_access: true }],
 			permissions: [],
+			folders: [],
+			settings: [],
 		});
 
 		vi.mocked(readCurrentConfig).mockResolvedValue({
-			config: { manifest: { version: 1, resources: ['roles'] }, roles: [], permissions: [] },
+			config: { manifest: { version: 1, resources: ['roles'] }, roles: [], permissions: [], folders: [], settings: [] },
 			currentRoleKeys: new Set<string>(),
+			currentFolderParents: new Map<string, string | null>(),
+			stateToken: { resources: ['roles'], digest: 'digest' },
 		});
 
 		vi.mocked(computeConfigPlan).mockReturnValue({
+			managedResources: ['roles'],
 			roles: {
 				create: [{ key: 'reviewer', name: 'Reviewer', admin_access: false, app_access: true }],
 				update: [],
 				delete: [],
 			},
 			permissions: { create: [], update: [], delete: [] },
+			folders: { create: [], update: [], delete: [] },
+			settings: { create: [], update: [], delete: [] },
 			protections: [],
 		});
 

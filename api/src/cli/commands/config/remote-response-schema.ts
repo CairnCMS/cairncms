@@ -9,6 +9,7 @@ const action = z.string().refine((value) => SUPPORTED_ACTIONS.has(value));
 
 const roleIdentity = z.object({ key: z.string() }).passthrough();
 const folderIdentity = z.object({ key: z.string() }).passthrough();
+const settingsIdentity = z.object({ key: z.string() }).passthrough();
 const permissionIdentity = z.object({ role: z.string(), collection: z.string(), action }).passthrough();
 
 const fieldChange = z.custom<{ before: unknown; after: unknown }>(
@@ -121,6 +122,14 @@ export const RemoteConfigPlanChange = z.union([
 			impact: folderImpact,
 		})
 		.passthrough(),
+	z
+		.object({
+			kind: z.literal('settings'),
+			operation: z.literal('update'),
+			identity: settingsIdentity,
+			fields: fieldChanges,
+		})
+		.passthrough(),
 ]);
 
 const contributor = z
@@ -166,6 +175,7 @@ export const RemoteApplyResult = z
 		folders: z
 			.object({ created: z.array(z.string()), updated: z.array(z.string()), deleted: z.array(z.string()) })
 			.passthrough(),
+		settings: z.object({ updated: z.array(z.string()) }).passthrough(),
 	})
 	.passthrough();
 

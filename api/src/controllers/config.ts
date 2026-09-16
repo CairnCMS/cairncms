@@ -105,6 +105,7 @@ router.post(
 				const {
 					config: current,
 					currentRoleKeys,
+					currentFolderKeys,
 					currentFolderParents,
 					stateToken,
 				} = await readCurrentConfig({
@@ -117,6 +118,7 @@ router.post(
 					label: BODY_LABEL,
 					references: 'current-state',
 					currentRoleKeys,
+					currentFolderKeys,
 					currentFolderParents,
 				});
 

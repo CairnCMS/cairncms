@@ -42,6 +42,25 @@ const EDITOR = {
 	ip_access: null,
 };
 
+const SETTINGS_DOC = {
+	project_name: 'CairnCMS',
+	project_descriptor: null,
+	project_url: null,
+	default_language: 'en-US',
+	project_color: null,
+	public_note: null,
+	custom_css: null,
+	module_bar: null,
+	auth_password_policy: null,
+	auth_login_attempts: 25,
+	storage_asset_transform: 'all',
+	storage_asset_presets: null,
+	basemaps: null,
+	custom_aspect_ratios: null,
+	mapbox_key: null,
+	storage_default_folder: null,
+};
+
 function without(obj: Record<string, unknown>, key: string): Record<string, unknown> {
 	const copy = { ...obj };
 	delete copy[key];
@@ -142,10 +161,11 @@ describe('configSnapshot against a remote server', () => {
 
 	it('refuses an incomplete snapshot into an empty destination and writes nothing', async () => {
 		respondWith({
-			manifest: { version: 2, resources: ['roles', 'permissions', 'folders'] },
+			manifest: { version: 2, resources: ['roles', 'permissions', 'folders', 'settings'] },
 			roles: [without(EDITOR, 'enforce_tfa')],
 			permissions: [],
 			folders: [],
+			settings: [SETTINGS_DOC],
 		});
 
 		await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
@@ -194,13 +214,14 @@ describe('configSnapshot manifest version preservation', () => {
 		])('sends and writes the expected version for %s', async (_label, seeded, expected) => {
 			if (seeded !== undefined) await seedManifest(seeded);
 
-			const respondedResources = seeded === undefined ? ['roles', 'permissions', 'folders'] : ['roles', 'permissions'];
+			const respondedResources =
+				seeded === undefined ? ['roles', 'permissions', 'folders', 'settings'] : ['roles', 'permissions'];
 
 			respondWith({
 				manifest: { version: expected, resources: respondedResources },
 				roles: [],
 				permissions: [],
-				...(expected >= 2 ? { folders: [] } : {}),
+				...(expected >= 2 ? { folders: [], settings: seeded === undefined ? [SETTINGS_DOC] : [] } : {}),
 			});
 
 			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
@@ -231,6 +252,7 @@ describe('configSnapshot manifest version preservation', () => {
 							roles: [],
 							permissions: [],
 							folders: [],
+							settings: options.resources.includes('settings') ? [SETTINGS_DOC] : [],
 						},
 						currentRoleKeys: new Set<string>(),
 						stateToken: { resources: [...options.resources], digest: 'digest' },
@@ -251,5 +273,55 @@ describe('configSnapshot manifest version preservation', () => {
 			expect(vi.mocked(logger.error)).not.toHaveBeenCalled();
 			expect(await writtenVersion()).toBe(expected);
 		});
+	});
+});
+
+describe('configSnapshot placeholder preservation', () => {
+	const RESOLVED_EDITOR = { ...EDITOR, name: 'Resolved Name' };
+
+	async function seedPlaceholder(): Promise<void> {
+		await fs.mkdir(path.join(tmpDir, 'roles'), { recursive: true });
+		await fs.writeFile(path.join(tmpDir, 'cairncms-config.yaml'), dumpYaml(MANIFEST));
+
+		await fs.writeFile(
+			path.join(tmpDir, 'roles', 'editor.yaml'),
+			dumpYaml({ ...EDITOR, name: '{{CAIRNCMS_CONFIG_ROLE_NAME}}' })
+		);
+	}
+
+	async function writtenRoleName(): Promise<unknown> {
+		const parsed = loadYaml(await fs.readFile(path.join(tmpDir, 'roles', 'editor.yaml'), 'utf8')) as { name: unknown };
+		return parsed.name;
+	}
+
+	it('preserves a committed placeholder on a remote snapshot', async () => {
+		await seedPlaceholder();
+		respondWith({ manifest: MANIFEST, roles: [RESOLVED_EDITOR], permissions: [] });
+
+		await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
+
+		expect(vi.mocked(process.exit).mock.calls).toEqual([[0]]);
+		expect(await writtenRoleName()).toBe('{{CAIRNCMS_CONFIG_ROLE_NAME}}');
+	});
+
+	it('preserves a committed placeholder on a local snapshot', async () => {
+		vi.mocked(getDatabase).mockReturnValue({ destroy: vi.fn() } as never);
+		vi.mocked(hasDatabaseConnection).mockResolvedValue(true);
+		vi.mocked(isInstalled).mockResolvedValue(true);
+
+		vi.mocked(readCurrentConfig).mockResolvedValue({
+			config: { manifest: MANIFEST, roles: [RESOLVED_EDITOR], permissions: [], folders: [], settings: [] },
+			currentRoleKeys: new Set<string>(),
+			currentFolderKeys: new Set<string>(),
+			currentFolderParents: new Map<string, string | null>(),
+			stateToken: { resources: ['roles', 'permissions'], digest: 'digest' },
+		} as never);
+
+		await seedPlaceholder();
+
+		await configSnapshot(tmpDir, { yes: true });
+
+		expect(vi.mocked(process.exit).mock.calls).toEqual([[0]]);
+		expect(await writtenRoleName()).toBe('{{CAIRNCMS_CONFIG_ROLE_NAME}}');
 	});
 });

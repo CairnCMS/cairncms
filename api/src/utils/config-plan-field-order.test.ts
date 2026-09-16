@@ -11,7 +11,13 @@ const NO_ENRICHMENT: ConfigPlanEnrichment = {
 };
 
 function config(roles: ConfigRole[]): CairnConfig {
-	return { manifest: { version: 1, resources: ['roles', 'permissions'] }, roles, permissions: [] };
+	return {
+		manifest: { version: 1, resources: ['roles', 'permissions'] },
+		roles,
+		permissions: [],
+		folders: [],
+		settings: [],
+	};
 }
 
 function role(overrides: Partial<ConfigRole>): ConfigRole {

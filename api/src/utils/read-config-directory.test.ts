@@ -373,6 +373,7 @@ describe('readConfigDirectory', () => {
 			label: 'true.yaml',
 			references: 'current-state',
 			currentRoleKeys: new Set(),
+			currentFolderKeys: new Set(),
 			currentFolderParents: new Map<string, string | null>(),
 		});
 
@@ -570,5 +571,52 @@ describe('readOptionalConfigManifest', () => {
 		const root = await resolveConfigRoot(tmpDir, 'read');
 
 		await expect(readOptionalConfigManifest(root)).rejects.toMatchObject({ code: 'CONFIG_UNSUPPORTED_VERSION' });
+	});
+});
+
+describe('readConfigDirectory settings singleton cardinality', () => {
+	async function writeSettingsManifest(): Promise<void> {
+		await fs.writeFile(path.join(tmpDir, 'cairncms-config.yaml'), toYaml({ version: 2, resources: ['settings'] }));
+	}
+
+	async function writeSettingsFile(name: string, data: Record<string, unknown>): Promise<void> {
+		const dir = path.join(tmpDir, 'settings');
+		await fs.mkdir(dir, { recursive: true });
+		await fs.writeFile(path.join(dir, name), toYaml(data));
+	}
+
+	it('reads the one settings file into a single record', async () => {
+		await writeSettingsManifest();
+		await writeSettingsFile('project.yaml', { project_name: 'Live' });
+
+		const config = await readConfigDirectory(tmpDir);
+
+		expect(config.settings).toEqual([{ project_name: 'Live' }]);
+	});
+
+	it('reads an empty settings mapping as a single preserve-everything record', async () => {
+		await writeSettingsManifest();
+		await writeSettingsFile('project.yaml', {});
+
+		const config = await readConfigDirectory(tmpDir);
+
+		expect(config.settings).toEqual([{}]);
+	});
+
+	it('rejects a managed settings kind with no settings file', async () => {
+		await writeSettingsManifest();
+
+		const error = await captureRejection(() => readConfigDirectory(tmpDir));
+
+		expect(error).toBeInstanceOf(ConfigInvalidException);
+	});
+
+	it('rejects a managed settings kind whose only file is not the fixed name', async () => {
+		await writeSettingsManifest();
+		await writeSettingsFile('other.yaml', { project_name: 'Live' });
+
+		const error = await captureRejection(() => readConfigDirectory(tmpDir));
+
+		expect(error).toBeInstanceOf(ConfigInvalidException);
 	});
 });

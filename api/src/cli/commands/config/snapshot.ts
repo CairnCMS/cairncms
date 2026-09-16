@@ -84,7 +84,7 @@ export async function configSnapshot(
 		}
 
 		logger.info(
-			`Snapshot: ${config.roles.length} role(s), ${config.permissions.length} permission set(s), ${config.folders.length} folder(s) written to ${where}`
+			`Snapshot: ${config.roles.length} role(s), ${config.permissions.length} permission set(s), ${config.folders.length} folder(s), ${config.settings.length} setting(s) written to ${where}`
 		);
 
 		database.destroy();
@@ -150,7 +150,7 @@ async function configSnapshotRemote(
 		const where = replaceControlCharacters(resolved);
 
 		logger.info(
-			`Snapshot: ${config.roles.length} role(s), ${config.permissions.length} permission set(s), ${config.folders.length} folder(s) written to ${where}`
+			`Snapshot: ${config.roles.length} role(s), ${config.permissions.length} permission set(s), ${config.folders.length} folder(s), ${config.settings.length} setting(s) written to ${where}`
 		);
 
 		process.exit(0);

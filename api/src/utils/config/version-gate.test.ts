@@ -7,13 +7,14 @@ const CTX = {
 	label: 'test',
 	references: 'current-state',
 	currentRoleKeys: new Set<string>(),
+	currentFolderKeys: new Set<string>(),
 	currentFolderParents: new Map<string, string | null>(),
 } as const;
 
 describe('kindsForVersion', () => {
 	it('excludes folders at version 1 and includes it at version 2', () => {
 		expect(kindsForVersion(1)).toEqual(['roles', 'permissions']);
-		expect(kindsForVersion(2)).toEqual(['roles', 'permissions', 'folders']);
+		expect(kindsForVersion(2)).toEqual(['roles', 'permissions', 'folders', 'settings']);
 	});
 });
 
@@ -28,6 +29,19 @@ describe('validateConfigManifest version gate', () => {
 		expect(validateConfigManifest({ version: 2, resources: ['folders'] }, 'test')).toMatchObject({
 			version: 2,
 			resources: ['folders'],
+		});
+	});
+
+	it('rejects a version-1 manifest that names settings', () => {
+		expect(() => validateConfigManifest({ version: 1, resources: ['settings'] }, 'test')).toThrow(
+			ConfigUnsupportedVersionException
+		);
+	});
+
+	it('accepts a version-2 manifest that names settings', () => {
+		expect(validateConfigManifest({ version: 2, resources: ['settings'] }, 'test')).toMatchObject({
+			version: 2,
+			resources: ['settings'],
 		});
 	});
 
@@ -55,7 +69,14 @@ describe('validateDesiredConfig folder version boundary', () => {
 	});
 
 	it('accepts a version-2 roles-only body that carries an empty folders array', () => {
-		const body = { manifest: { version: 2, resources: ['roles'] }, roles: [], permissions: [], folders: [] };
+		const body = {
+			manifest: { version: 2, resources: ['roles'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+		};
+
 		expect(validateDesiredConfig(body, CTX)).toEqual([]);
 	});
 
@@ -65,6 +86,7 @@ describe('validateDesiredConfig folder version boundary', () => {
 			roles: [],
 			permissions: [],
 			folders: [{ garbage: true }],
+			settings: [],
 		};
 
 		expect(validateDesiredConfig(body, CTX)).toEqual([]);
@@ -75,6 +97,7 @@ describe('validateDesiredConfig folder version boundary', () => {
 			manifest: { version: 2, resources: ['folders'] },
 			roles: [],
 			permissions: [],
+			settings: [],
 			folders: [
 				{ key: 'docs', name: 'Docs' },
 				{ key: 'docs', name: 'Docs Two' },

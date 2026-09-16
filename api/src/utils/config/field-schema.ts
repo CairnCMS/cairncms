@@ -43,6 +43,16 @@ function buildBase(field: ConfigFieldDescriptor): Joi.Schema {
 			return Joi.array().items(field.allowEmptyElements ? Joi.string().allow('') : Joi.string());
 		case 'policy-object':
 			return Joi.object().unknown();
+
+		case 'number': {
+			let schema = Joi.number().integer();
+			if (field.min !== undefined) schema = schema.min(field.min);
+			if (field.max !== undefined) schema = schema.max(field.max);
+			return schema;
+		}
+
+		case 'json-array':
+			return field.arrayItems === 'record' ? Joi.array().items(Joi.object().unknown()) : Joi.array();
 		default:
 			return buildStringBase(field);
 	}
@@ -77,7 +87,7 @@ export function buildDocumentSchema(spec: DocumentSchemaSpec, mode: SchemaMode =
 	const identity = fieldEntries(spec.documentIdentityFields, mode);
 	const shape = spec.layout.documentShape;
 
-	if (shape === 'flat') {
+	if (shape === 'flat' || 'singleton' in shape) {
 		return Joi.object({ ...identity, ...fieldEntries(spec.recordFields, mode) });
 	}
 

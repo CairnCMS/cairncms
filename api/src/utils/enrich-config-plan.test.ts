@@ -20,6 +20,7 @@ function planDeletingRoles(...keys: string[]): ConfigPlan {
 		roles: { create: [], update: [], delete: keys },
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
+		settings: { create: [], update: [], delete: [] },
 		protections: [],
 	};
 }
@@ -30,6 +31,7 @@ function makeConfig(resources: ConfigKind[], permissions: ConfigPermissionSet[] 
 		roles: [],
 		permissions,
 		folders: [],
+		settings: [],
 	};
 }
 
@@ -410,6 +412,7 @@ describe('enrichConfigPlan', () => {
 			roles: [],
 			permissions: [null] as unknown as CairnConfig['permissions'],
 			folders: [],
+			settings: [],
 		};
 
 		const plan: ConfigPlan = {
@@ -417,6 +420,7 @@ describe('enrichConfigPlan', () => {
 			roles: { create: [], update: [], delete: [] },
 			permissions: { create: [{ roleKey: 'x', permission: perm('articles') }], update: [], delete: [] },
 			folders: { create: [], update: [], delete: [] },
+			settings: { create: [], update: [], delete: [] },
 			protections: [],
 		};
 
