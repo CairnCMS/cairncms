@@ -445,6 +445,32 @@ describe('validateDesiredConfig', () => {
 		}
 	);
 
+	it.each(['authored', 'snapshot'] as const)(
+		'rejects a null structured-array element and names the field in %s mode',
+		(mode) => {
+			const record = { ...COMPLETE_SETTINGS, storage_asset_presets: [null] };
+
+			const failures =
+				mode === 'authored'
+					? validateFull(settingsBody([record]))
+					: validateDesiredConfig(settingsBody([record]), { label: 'test', references: 'server-snapshot' });
+
+			expect(failures.map((failure) => failure.code)).toContain('CONFIG_INVALID');
+			expect(failures.some((failure) => failure.message.includes('settings[0].storage_asset_presets[0]'))).toBe(true);
+		}
+	);
+
+	it('accepts a complete settings declaration whose structured arrays hold valid records in both modes', () => {
+		const record = {
+			...COMPLETE_SETTINGS,
+			module_bar: [{ type: 'module', id: 'content', enabled: true }],
+			storage_asset_presets: [{ key: 'thumb' }],
+		};
+
+		expect(validate(settingsBody([record]))).toEqual([]);
+		expect(validateSnapshot(settingsBody([record]))).toEqual([]);
+	});
+
 	function foldersAndSettings(folders: unknown[], settings: unknown[]): Record<string, unknown> {
 		return {
 			manifest: { version: 2, resources: ['folders', 'settings'] },

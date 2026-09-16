@@ -37,6 +37,8 @@ export interface ConfigFieldDescriptor {
 	nullable: boolean;
 	allowEmpty?: boolean;
 	allowEmptyElements?: boolean;
+	/** For a json-array field, requires every element to be a non-null object. Absent leaves elements unconstrained. */
+	arrayItems?: 'record';
 	minLength?: number;
 	maxLength?: number;
 	min?: number;

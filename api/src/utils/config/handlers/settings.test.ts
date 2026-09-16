@@ -7,7 +7,7 @@ import { ConfigReadFailedException } from '../../../exceptions/config-read-faile
 import { SettingsService } from '../../../services/settings.js';
 import type { ConfigSettings } from '../../../types/config.js';
 import type { ApplyContext, ReadContext, ValidationContext } from '../descriptor.js';
-import { validateConfigRecord } from '../../validate-desired-config.js';
+import { buildRecordSchemas, validateConfigRecord } from '../../validate-desired-config.js';
 import { settingsDescriptor, type SettingsKindTypes } from './settings.js';
 
 function currentStateContext(
@@ -361,11 +361,55 @@ describe('settings field validation through the shared record schema', () => {
 		rejects({ auth_login_attempts: 1.5 });
 	});
 
-	it('accepts an array, an empty array, and null for module_bar but rejects a non-array', () => {
-		accepts({ module_bar: [{ id: 'nav' }] });
-		accepts({ module_bar: [] });
-		accepts({ module_bar: null });
-		rejects({ module_bar: 'not-an-array' });
+	const STRUCTURED_ARRAY_FIELDS = ['module_bar', 'storage_asset_presets', 'basemaps', 'custom_aspect_ratios'] as const;
+
+	it.each(STRUCTURED_ARRAY_FIELDS)('accepts a record array, an empty array, and null for %s', (field) => {
+		accepts({ [field]: [{ key: 'a' }] });
+		accepts({ [field]: [] });
+		accepts({ [field]: null });
+	});
+
+	it.each(STRUCTURED_ARRAY_FIELDS)(
+		'rejects a non-array, a null element, a scalar element, and a nested-array element for %s',
+		(field) => {
+			rejects({ [field]: 'not-an-array' });
+			rejects({ [field]: [null] });
+			rejects({ [field]: ['scalar'] });
+			rejects({ [field]: [1] });
+			rejects({ [field]: [true] });
+			rejects({ [field]: [[]] });
+		}
+	);
+
+	it('preserves element order, nested arrays, and unknown properties of valid records', () => {
+		const record = {
+			module_bar: [
+				{ type: 'module', id: 'content', enabled: true },
+				{ type: 'link', id: 'docs', url: 'https://example.test', icon: 'book', name: 'Docs', enabled: false },
+			],
+			storage_asset_presets: [{ key: 'thumb', transforms: [['blur', 5]], nested: { deep: [1, 2] } }],
+		};
+
+		const { error, value } = buildRecordSchemas('authored').settings.validate(record, {
+			convert: false,
+			abortEarly: false,
+		});
+
+		expect(error).toBeUndefined();
+		expect(value).toEqual(record);
+	});
+
+	it('rejects a null array element in snapshot mode as well as authored mode', () => {
+		const authored = validateConfigRecord('settings', { ...COMPLETE_RECORD, storage_asset_presets: [null] });
+
+		const snapshot = validateConfigRecord(
+			'settings',
+			{ ...COMPLETE_RECORD, storage_asset_presets: [null] },
+			'snapshot'
+		);
+
+		expect(authored.some((message) => message.includes('storage_asset_presets'))).toBe(true);
+		expect(snapshot.some((message) => message.includes('storage_asset_presets'))).toBe(true);
 	});
 
 	it('rejects null for a non-nullable field and accepts it for a nullable one', () => {

@@ -52,7 +52,7 @@ function buildBase(field: ConfigFieldDescriptor): Joi.Schema {
 		}
 
 		case 'json-array':
-			return Joi.array();
+			return field.arrayItems === 'record' ? Joi.array().items(Joi.object().unknown()) : Joi.array();
 		default:
 			return buildStringBase(field);
 	}

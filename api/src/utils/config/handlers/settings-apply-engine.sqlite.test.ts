@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import emitter from '../../../emitter.js';
 import { ConfigApplyFailedException } from '../../../exceptions/config-apply-failed.js';
 import { ConfigFolderInUseException } from '../../../exceptions/config-folder-in-use.js';
+import { ConfigReadFailedException } from '../../../exceptions/config-read-failed.js';
 import { SettingsService } from '../../../services/settings.js';
 import type {
 	CairnConfig,
@@ -63,13 +64,13 @@ const schema = {
 				project_color: field('project_color', 'string'),
 				public_note: field('public_note', 'text'),
 				custom_css: field('custom_css', 'text'),
-				module_bar: field('module_bar', 'json'),
+				module_bar: field('module_bar', 'json', { special: ['cast-json'] }),
 				auth_password_policy: field('auth_password_policy', 'string'),
 				auth_login_attempts: field('auth_login_attempts', 'integer', { defaultValue: 25 }),
 				storage_asset_transform: field('storage_asset_transform', 'string', { defaultValue: 'all' }),
-				storage_asset_presets: field('storage_asset_presets', 'json'),
-				basemaps: field('basemaps', 'json'),
-				custom_aspect_ratios: field('custom_aspect_ratios', 'json'),
+				storage_asset_presets: field('storage_asset_presets', 'json', { special: ['cast-json'] }),
+				basemaps: field('basemaps', 'json', { special: ['cast-json'] }),
+				custom_aspect_ratios: field('custom_aspect_ratios', 'json', { special: ['cast-json'] }),
 				mapbox_key: field('mapbox_key', 'string'),
 				storage_default_folder: field('storage_default_folder', 'uuid'),
 			},
@@ -229,6 +230,19 @@ describe('settings through the real apply engine on SQLite', () => {
 		await apply(desired({ custom_css: '' }));
 
 		expect((await snapshotSettings()).custom_css).toBe('');
+	});
+
+	it('fails the snapshot read as CONFIG_READ_FAILED when a stored structured array holds a null element', async () => {
+		await apply(desired({ storage_asset_presets: [null] }));
+
+		await expect(snapshotSettings()).rejects.toBeInstanceOf(ConfigReadFailedException);
+		await expect(snapshotSettings()).rejects.toThrow('storage_asset_presets[0]');
+	});
+
+	it('snapshots a stored structured array of valid records', async () => {
+		await apply(desired({ storage_asset_presets: [{ key: 'thumb' }] }));
+
+		expect((await snapshotSettings()).storage_asset_presets).toEqual([{ key: 'thumb' }]);
 	});
 
 	it('is a no-op when the desired settings match the current row', async () => {
