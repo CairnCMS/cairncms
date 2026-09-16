@@ -8,13 +8,32 @@ import type { ApplyContext, ReadContext, ValidationContext } from '../descriptor
 import { validateConfigRecord } from '../../validate-desired-config.js';
 import { settingsDescriptor, type SettingsKindTypes } from './settings.js';
 
-const CONTEXT: ValidationContext = {
-	rolesManaged: false,
-	declaredRoleKeys: new Set<string>(),
-	references: 'current-state',
-	currentRoleKeys: new Set<string>(),
-	currentFolderParents: new Map<string, string | null>(),
-};
+function currentStateContext(
+	options: { foldersManaged?: string[]; currentFolderKeys?: string[] } = {}
+): ValidationContext {
+	return {
+		rolesManaged: false,
+		declaredRoleKeys: new Set<string>(),
+		foldersManaged: options.foldersManaged !== undefined,
+		declaredFolderKeys: new Set(options.foldersManaged ?? []),
+		references: 'current-state',
+		currentRoleKeys: new Set<string>(),
+		currentFolderKeys: new Set(options.currentFolderKeys ?? []),
+		currentFolderParents: new Map<string, string | null>(),
+	};
+}
+
+function serverSnapshotContext(options: { foldersManaged?: string[] } = {}): ValidationContext {
+	return {
+		rolesManaged: false,
+		declaredRoleKeys: new Set<string>(),
+		foldersManaged: options.foldersManaged !== undefined,
+		declaredFolderKeys: new Set(options.foldersManaged ?? []),
+		references: 'server-snapshot',
+	};
+}
+
+const CONTEXT: ValidationContext = currentStateContext();
 
 const COMPLETE_ROW: Record<string, unknown> = {
 	id: 1,
@@ -33,6 +52,7 @@ const COMPLETE_ROW: Record<string, unknown> = {
 	basemaps: null,
 	custom_aspect_ratios: null,
 	mapbox_key: null,
+	storage_default_folder: null,
 };
 
 const COMPLETE_RECORD: ConfigSettings = {
@@ -51,7 +71,15 @@ const COMPLETE_RECORD: ConfigSettings = {
 	basemaps: null,
 	custom_aspect_ratios: null,
 	mapbox_key: null,
+	storage_default_folder: null,
 };
+
+const NO_FOLDER_DB = {
+	select: () => NO_FOLDER_DB,
+	from: () => NO_FOLDER_DB,
+	where: () => NO_FOLDER_DB,
+	first: async () => undefined,
+} as unknown as Knex;
 
 function row(overrides: Record<string, unknown> = {}): Record<string, unknown> {
 	return { ...COMPLETE_ROW, ...overrides };
@@ -63,16 +91,20 @@ function without(source: Record<string, unknown>, key: string): Record<string, u
 	return copy;
 }
 
-function readContext(readMode: 'full' | 'identity' = 'full'): ReadContext<SettingsKindTypes> {
+function readContext(
+	readMode: 'full' | 'identity' = 'full',
+	folderKeyById: Map<string, string> = new Map(),
+	database: Knex = NO_FOLDER_DB
+): ReadContext<SettingsKindTypes> {
 	return {
-		database: {} as Knex,
+		database,
 		schema: {} as SchemaOverview,
 		readMode,
-		dependency: (() => undefined) as never,
+		dependency: (() => ({ currentFolderKeys: new Set(folderKeyById.values()), folderKeyById })) as never,
 	};
 }
 
-function applyContext(): ApplyContext<SettingsKindTypes> {
+function applyContext(folderIdByKey: Map<string, string> = new Map()): ApplyContext<SettingsKindTypes> {
 	return {
 		database: {} as Knex,
 		schema: {} as SchemaOverview,
@@ -83,7 +115,7 @@ function applyContext(): ApplyContext<SettingsKindTypes> {
 			bypassLimits: true,
 			bypassEmitAction: () => undefined,
 		},
-		dependency: (() => undefined) as never,
+		dependency: (() => ({ folderIdByKey })) as never,
 	};
 }
 
@@ -106,6 +138,45 @@ describe('settings validateDesired cardinality', () => {
 
 	it('rejects more than one settings record', () => {
 		expect(codes([{}, {}])).toEqual(['CONFIG_INVALID']);
+	});
+});
+
+describe('settings validateDesired folder reference', () => {
+	function codes(document: ConfigSettings, context: ValidationContext): string[] {
+		return settingsDescriptor.handler.validateDesired([document], [document], context).map((failure) => failure.code);
+	}
+
+	it('does not check an omitted or explicit-null reference', () => {
+		expect(codes({}, currentStateContext())).toEqual([]);
+		expect(codes({ storage_default_folder: null }, currentStateContext())).toEqual([]);
+	});
+
+	it('accepts a declared folder key when folders are managed', () => {
+		expect(codes({ storage_default_folder: 'uploads' }, currentStateContext({ foldersManaged: ['uploads'] }))).toEqual(
+			[]
+		);
+	});
+
+	it('rejects a reference no folder file declares when folders are managed', () => {
+		expect(codes({ storage_default_folder: 'ghost' }, currentStateContext({ foldersManaged: ['uploads'] }))).toEqual([
+			'CONFIG_INVALID',
+		]);
+	});
+
+	it('accepts a live folder key in current-state mode when folders are unmanaged', () => {
+		expect(
+			codes({ storage_default_folder: 'uploads' }, currentStateContext({ currentFolderKeys: ['uploads'] }))
+		).toEqual([]);
+	});
+
+	it('rejects a reference absent from the database in current-state mode when folders are unmanaged', () => {
+		expect(codes({ storage_default_folder: 'ghost' }, currentStateContext({ currentFolderKeys: ['uploads'] }))).toEqual(
+			['CONFIG_INVALID']
+		);
+	});
+
+	it('accepts any reference in server-snapshot mode without a local folder check', () => {
+		expect(codes({ storage_default_folder: 'ghost' }, serverSnapshotContext())).toEqual([]);
 	});
 });
 
@@ -160,6 +231,31 @@ describe('settings readCurrent', () => {
 		);
 	});
 
+	it('resolves a stored folder id to its config key through the folders dependency', async () => {
+		const id = '00000000-0000-4000-8000-000000000001';
+		mockRead(row({ storage_default_folder: id }));
+
+		const result = await settingsDescriptor.handler.readCurrent(readContext('full', new Map([[id, 'uploads']])));
+
+		expect(result.records[0]!.storage_default_folder).toBe('uploads');
+	});
+
+	it('fails closed when a stored folder id resolves to no folder', async () => {
+		mockRead(row({ storage_default_folder: '00000000-0000-4000-8000-0000000000ff' }));
+
+		await expect(settingsDescriptor.handler.readCurrent(readContext('full', new Map()))).rejects.toBeInstanceOf(
+			ConfigReadFailedException
+		);
+	});
+
+	it('fails closed when an existing row is missing the storage_default_folder column', async () => {
+		mockRead(without(COMPLETE_ROW, 'storage_default_folder'));
+
+		await expect(settingsDescriptor.handler.readCurrent(readContext())).rejects.toBeInstanceOf(
+			ConfigReadFailedException
+		);
+	});
+
 	it('returns only the fixed identity in identity mode without reading the row', async () => {
 		const read = vi.spyOn(SettingsService.prototype, 'readSingleton');
 
@@ -196,6 +292,33 @@ describe('settings applyUpdates', () => {
 
 		expect(upsert).not.toHaveBeenCalled();
 		expect(outcome).toEqual({ op: 'update', updated: [] });
+	});
+
+	it('resolves a storage_default_folder key to a folder id before upserting', async () => {
+		const upsert = vi.spyOn(SettingsService.prototype, 'upsertSingleton').mockResolvedValue(1 as never);
+		const context = applyContext(new Map([['uploads', '00000000-0000-4000-8000-000000000001']]));
+
+		await settingsDescriptor.handler.applyUpdates(
+			[{ changes: { storage_default_folder: { before: null, after: 'uploads' } } }],
+			context
+		);
+
+		expect(upsert).toHaveBeenCalledWith(
+			{ storage_default_folder: '00000000-0000-4000-8000-000000000001' },
+			context.mutationOptions
+		);
+	});
+
+	it('clears storage_default_folder when the change sets it to null', async () => {
+		const upsert = vi.spyOn(SettingsService.prototype, 'upsertSingleton').mockResolvedValue(1 as never);
+		const context = applyContext();
+
+		await settingsDescriptor.handler.applyUpdates(
+			[{ changes: { storage_default_folder: { before: 'uploads', after: null } } }],
+			context
+		);
+
+		expect(upsert).toHaveBeenCalledWith({ storage_default_folder: null }, context.mutationOptions);
 	});
 });
 

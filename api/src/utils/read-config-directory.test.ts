@@ -373,6 +373,7 @@ describe('readConfigDirectory', () => {
 			label: 'true.yaml',
 			references: 'current-state',
 			currentRoleKeys: new Set(),
+			currentFolderKeys: new Set(),
 			currentFolderParents: new Map<string, string | null>(),
 		});
 

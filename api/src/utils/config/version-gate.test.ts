@@ -7,6 +7,7 @@ const CTX = {
 	label: 'test',
 	references: 'current-state',
 	currentRoleKeys: new Set<string>(),
+	currentFolderKeys: new Set<string>(),
 	currentFolderParents: new Map<string, string | null>(),
 } as const;
 

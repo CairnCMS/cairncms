@@ -58,6 +58,7 @@ const SETTINGS_DOC = {
 	basemaps: null,
 	custom_aspect_ratios: null,
 	mapbox_key: null,
+	storage_default_folder: null,
 };
 
 function without(obj: Record<string, unknown>, key: string): Record<string, unknown> {

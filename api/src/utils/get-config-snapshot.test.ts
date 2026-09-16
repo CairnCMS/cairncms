@@ -71,6 +71,7 @@ function settingsRow(overrides: Record<string, any> = {}): Record<string, any> {
 		basemaps: null,
 		custom_aspect_ratios: null,
 		mapbox_key: null,
+		storage_default_folder: null,
 		...overrides,
 	};
 }
@@ -778,6 +779,40 @@ describe('readCurrentConfig', () => {
 		expect(currentRoleKeys.has('editor')).toBe(true);
 	});
 
+	it('sources folder reference keys from the published folders dependency, not the empty config.folders slice', async () => {
+		const folderId = '00000000-0000-4000-8000-000000000001';
+		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([{ id: folderId, key: 'uploads' }] as never);
+		mockSettings({ storage_default_folder: folderId });
+
+		const { config, currentFolderKeys } = await readCurrentConfig({ database: db, resources: ['settings'] });
+
+		expect(config.folders).toEqual([]);
+		expect(currentFolderKeys.has('uploads')).toBe(true);
+		expect(config.settings[0]!.storage_default_folder).toBe('uploads');
+
+		const settingsBody = (folderKey: string): Record<string, unknown> => ({
+			manifest: { version: 2, resources: ['settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [{ storage_default_folder: folderKey }],
+		});
+
+		const contextFor = {
+			label: 'settings-only',
+			references: 'current-state' as const,
+			currentRoleKeys: new Set<string>(),
+			currentFolderKeys,
+			currentFolderParents: new Map<string, string | null>(),
+		};
+
+		expect(validateDesiredConfig(settingsBody('uploads'), contextFor)).toEqual([]);
+
+		expect(validateDesiredConfig(settingsBody('ghost'), contextFor).map((failure) => failure.code)).toContain(
+			'CONFIG_INVALID'
+		);
+	});
+
 	it('returns a stable state token digest for an unchanged managed read closure', async () => {
 		mockRole();
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
@@ -1125,7 +1160,7 @@ describe('readCurrentConfig', () => {
 			},
 		]);
 
-		const { config, currentRoleKeys, currentFolderParents } = await readCurrentConfig({
+		const { config, currentRoleKeys, currentFolderKeys, currentFolderParents } = await readCurrentConfig({
 			database: db,
 			resources: ['roles', 'permissions'],
 		});
@@ -1137,6 +1172,7 @@ describe('readCurrentConfig', () => {
 				label: 'snapshot',
 				references: 'current-state',
 				currentRoleKeys,
+				currentFolderKeys,
 				currentFolderParents,
 			})
 		).toEqual([]);

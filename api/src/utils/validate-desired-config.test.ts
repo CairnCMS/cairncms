@@ -56,11 +56,12 @@ function validate(doc: Record<string, unknown>, currentRoleKeys: string[] = []):
 	return validateFull(doc, currentRoleKeys).map((failure) => failure.message);
 }
 
-function validateFull(doc: Record<string, unknown>, currentRoleKeys: string[] = []) {
+function validateFull(doc: Record<string, unknown>, currentRoleKeys: string[] = [], currentFolderKeys: string[] = []) {
 	return validateDesiredConfig(doc, {
 		label: 'test',
 		references: 'current-state',
 		currentRoleKeys: new Set(currentRoleKeys),
+		currentFolderKeys: new Set(currentFolderKeys),
 		currentFolderParents: new Map<string, string | null>(),
 	});
 }
@@ -412,6 +413,7 @@ describe('validateDesiredConfig', () => {
 		basemaps: null,
 		custom_aspect_ratios: null,
 		mapbox_key: null,
+		storage_default_folder: null,
 	};
 
 	function settingsBody(settings: unknown[]): Record<string, unknown> {
@@ -442,6 +444,32 @@ describe('validateDesiredConfig', () => {
 			expect(run(settingsBody([COMPLETE_SETTINGS, COMPLETE_SETTINGS])).length).toBeGreaterThan(0);
 		}
 	);
+
+	function foldersAndSettings(folders: unknown[], settings: unknown[]): Record<string, unknown> {
+		return {
+			manifest: { version: 2, resources: ['folders', 'settings'] },
+			roles: [],
+			permissions: [],
+			folders,
+			settings,
+		};
+	}
+
+	it('accepts a default folder a managed folder file newly declares, though it is absent from current state', () => {
+		const body = foldersAndSettings([{ key: 'new', name: 'New', parent: null }], [{ storage_default_folder: 'new' }]);
+
+		expect(validateFull(body, [], []).map((failure) => failure.code)).toEqual([]);
+	});
+
+	it('rejects a default folder present only in current state when folders is managed', () => {
+		const body = foldersAndSettings([], [{ storage_default_folder: 'existing' }]);
+
+		expect(validateFull(body, [], ['existing']).map((failure) => failure.code)).toContain('CONFIG_INVALID');
+	});
+
+	it('accepts a complete settings server snapshot that references a folder without any folder check', () => {
+		expect(validateSnapshot(settingsBody([{ ...COMPLETE_SETTINGS, storage_default_folder: 'uploads' }]))).toEqual([]);
+	});
 
 	it.each(['name', 'description'])('rejects a role %s written in placeholder form in both modes', (field) => {
 		const doc = document({ roles: [completeRole({ [field]: '{{CAIRNCMS_CONFIG_SECRET}}' })] });

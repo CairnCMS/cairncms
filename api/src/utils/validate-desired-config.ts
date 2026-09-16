@@ -152,6 +152,7 @@ function referenceSource(context: DesiredConfigContext): ReferenceStateSource {
 			return {
 				references: 'current-state',
 				currentRoleKeys: context.currentRoleKeys,
+				currentFolderKeys: context.currentFolderKeys,
 				...(context.currentFolderParents !== undefined && {
 					currentFolderParents: context.currentFolderParents,
 				}),
@@ -189,7 +190,20 @@ export function validateDesiredConfig(document: unknown, context: DesiredConfigC
 		? new Set((body['roles'] as Array<{ key: string }>).map((role) => role.key))
 		: new Set<string>();
 
-	const validationContext: ValidationContext = { rolesManaged, declaredRoleKeys, ...referenceSource(context) };
+	const foldersManaged = managed.has('folders');
+
+	// When folders are managed, a folder reference resolves only against desired folder declarations.
+	const declaredFolderKeys = foldersManaged
+		? new Set((body['folders'] as Array<{ key: string }>).map((folder) => folder.key))
+		: new Set<string>();
+
+	const validationContext: ValidationContext = {
+		rolesManaged,
+		declaredRoleKeys,
+		foldersManaged,
+		declaredFolderKeys,
+		...referenceSource(context),
+	};
 
 	const failures: ConfigFailure[] = findPlaceholderSyntax({
 		manifest,

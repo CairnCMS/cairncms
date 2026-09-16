@@ -381,6 +381,89 @@ describe('configApply state token forwarding', () => {
 		expect(applyConfigPlan).toHaveBeenCalledTimes(1);
 		expect(vi.mocked(applyConfigPlan).mock.calls[0]![1]).toMatchObject({ expectedStateToken: STATE_TOKEN });
 	});
+
+	it('applies a settings-only default-folder workflow, forwarding live folder keys to the real validator', async () => {
+		const actual = await vi.importActual<typeof import('../../../utils/validate-desired-config.js')>(
+			'../../../utils/validate-desired-config.js'
+		);
+
+		vi.mocked(validateDesiredConfig).mockImplementation(actual.validateDesiredConfig);
+
+		const exit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+
+		const managed: CairnConfig = {
+			manifest: { version: 2, resources: ['settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [{ storage_default_folder: 'uploads' }],
+		};
+
+		const settingsStateToken: ConfigStateToken = { resources: ['settings'], digest: 'settings-digest' };
+
+		const settingsPlan: ConfigPlan = {
+			managedResources: ['settings'],
+			roles: { create: [], update: [], delete: [] },
+			permissions: { create: [], update: [], delete: [] },
+			folders: { create: [], update: [], delete: [] },
+			settings: {
+				create: [],
+				update: [{ changes: { storage_default_folder: { before: null, after: 'uploads' } } }],
+				delete: [],
+			},
+			protections: [],
+		};
+
+		const settingsSerialized: SerializedConfigPlan = {
+			planVersion: 2,
+			manifestVersion: 2,
+			changes: [
+				{
+					kind: 'settings',
+					operation: 'update',
+					identity: { key: 'project' },
+					fields: { storage_default_folder: { before: null, after: 'uploads' } },
+				},
+			],
+			summary: { create: 0, update: 1, delete: 0 },
+			protections: [],
+			warnings: [],
+		};
+
+		vi.mocked(readConfigDirectory).mockResolvedValue(managed);
+
+		vi.mocked(readCurrentConfig).mockResolvedValue({
+			config: managed,
+			currentRoleKeys: new Set<string>(),
+			currentFolderKeys: new Set<string>(['uploads']),
+			currentFolderParents: new Map<string, string | null>(),
+			stateToken: settingsStateToken,
+		});
+
+		vi.mocked(computeConfigPlan).mockReturnValue(settingsPlan);
+		vi.mocked(serializeConfigPlan).mockReturnValue(settingsSerialized);
+
+		vi.mocked(applyConfigPlan).mockResolvedValue({
+			roles: { created: [], updated: [], deleted: [] },
+			permissions: { created: 0, updated: 0, deleted: 0 },
+			folders: { created: [], updated: [], deleted: [] },
+			settings: { updated: ['project'] },
+		} as never);
+
+		await configApply('./config', { format: 'human', dryRun: false, destructive: false, yes: true });
+
+		expect(validateDesiredConfig).toHaveBeenCalledTimes(1);
+
+		const context = vi.mocked(validateDesiredConfig).mock.calls[0]![1] as {
+			references: string;
+			currentFolderKeys: ReadonlySet<string>;
+		};
+
+		expect(context.references).toBe('current-state');
+		expect(context.currentFolderKeys.has('uploads')).toBe(true);
+		expect(applyConfigPlan).toHaveBeenCalledTimes(1);
+		expect(exit).toHaveBeenCalledWith(0);
+	});
 });
 
 describe('configApply run record', () => {

@@ -67,6 +67,7 @@ function settings(overrides: Partial<ConfigSettings> = {}): ConfigSettings {
 		basemaps: null,
 		custom_aspect_ratios: null,
 		mapbox_key: null,
+		storage_default_folder: null,
 		...overrides,
 	};
 }
@@ -344,6 +345,7 @@ describe('cross-kind omission contract', () => {
 			'public_note',
 			'storage_asset_presets',
 			'storage_asset_transform',
+			'storage_default_folder',
 		],
 	};
 

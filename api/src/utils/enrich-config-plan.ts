@@ -1,6 +1,6 @@
 import type { SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
-import type { CairnConfig, ConfigKind, ConfigPlan, ConfigPlanEnrichment } from '../types/config.js';
+import type { CairnConfig, ConfigKind, ConfigPlan, ConfigPlanEnrichment, SettingsRetarget } from '../types/config.js';
 import { getDescriptor, listConfigKinds } from './config/registry.js';
 
 type EnrichOptions = {
@@ -12,13 +12,28 @@ function isSliceActive(slice: { create: unknown[]; update: unknown[]; delete: un
 	return slice.create.length > 0 || slice.update.length > 0 || slice.delete.length > 0;
 }
 
+function settingsRetargetOf(updates: ConfigPlan['settings']['update']): SettingsRetarget {
+	for (const update of updates) {
+		const change = update.changes.storage_default_folder;
+		if (change !== undefined) return { retargeted: true, toKey: change.after };
+	}
+
+	return { retargeted: false };
+}
+
 export async function enrichConfigPlan(
 	plan: ConfigPlan,
 	desired: CairnConfig,
 	options: EnrichOptions
 ): Promise<ConfigPlanEnrichment> {
 	const managed = new Set<ConfigKind>(desired.manifest.resources);
-	const context = { database: options.database, schema: options.schema };
+
+	const context = {
+		database: options.database,
+		schema: options.schema,
+		settingsRetarget: settingsRetargetOf(plan.settings.update),
+	};
+
 	const fragments = new Map<string, unknown>();
 
 	for (const kind of listConfigKinds()) {

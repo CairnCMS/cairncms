@@ -511,7 +511,7 @@ describe('folders through the real apply engine on SQLite', () => {
 			{ key: 'b', parent: 'a' },
 		]);
 
-		const { currentRoleKeys, currentFolderParents } = await snapshot();
+		const { currentRoleKeys, currentFolderKeys, currentFolderParents } = await snapshot();
 
 		const desired: CairnConfig = {
 			manifest: manifestFolders(),
@@ -528,6 +528,7 @@ describe('folders through the real apply engine on SQLite', () => {
 			label: 'apply',
 			references: 'current-state',
 			currentRoleKeys,
+			currentFolderKeys,
 			currentFolderParents,
 		});
 

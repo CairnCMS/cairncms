@@ -9,6 +9,7 @@ import type {
 	SettingsIdentity,
 	SettingsValues,
 } from '../../../types/config.js';
+import { CONFIG_FILENAME_STEM_MAX_LENGTH } from '../../config-contract.js';
 import { safeLogFragment } from '../../safe-log-fragment.js';
 import type {
 	ApplyContext,
@@ -25,8 +26,10 @@ import type {
 	ValidationContext,
 } from '../descriptor.js';
 import { invalid } from '../failures.js';
+import { resolveFolderReference } from '../folder-id-lookup.js';
 import { UNFILTERED, unreadable } from '../read-parsing.js';
 import { changesToValues, composeValues } from '../values.js';
+import type { FoldersKindTypes } from './folders.js';
 
 const NON_SECRET: FieldSensitivity = { secret: false, redact: 'none' };
 
@@ -45,9 +48,9 @@ export interface SettingsKindTypes {
 	Changes: SettingsFieldChanges;
 	ReadDependencyState: Record<never, never>;
 	ApplyDependencyState: Record<never, never>;
-	ReadDependencies: NoConfigDependencies;
+	ReadDependencies: { folders: FoldersKindTypes['ReadDependencyState'] };
 	PlanDependencies: NoConfigDependencies;
-	ApplyDependencies: NoConfigDependencies;
+	ApplyDependencies: { folders: FoldersKindTypes['ApplyDependencyState'] };
 	Enrichment: Record<never, never>;
 	ResultSlice: { updated: string[] };
 	Outcome: { op: 'update'; updated: string[] };
@@ -110,6 +113,15 @@ const RECORD_FIELDS: ConfigFieldDescriptor[] = [
 		maxLength: 255,
 		acceptsPlaceholder: true,
 	},
+	{
+		...FIELD_BASE,
+		name: 'storage_default_folder',
+		type: 'string',
+		nullable: true,
+		grammar: 'config-key',
+		maxLength: CONFIG_FILENAME_STEM_MAX_LENGTH,
+		canonicalize: (value) => value ?? null,
+	},
 ];
 
 const VALUE_FIELD_ORDER = [
@@ -128,6 +140,7 @@ const VALUE_FIELD_ORDER = [
 	'basemaps',
 	'custom_aspect_ratios',
 	'mapbox_key',
+	'storage_default_folder',
 ] as const;
 
 /**
@@ -179,8 +192,24 @@ async function readCurrent(context: ReadContext<SettingsKindTypes>): Promise<Rea
 	}
 
 	const rowExists = source['id'] !== null;
+	const record = buildRecord(source, rowExists);
+	const storedFolderId = record.storage_default_folder;
 
-	return { records: [buildRecord(source, rowExists)], documentIdentities, dependencyState: {} };
+	if (storedFolderId !== null && storedFolderId !== undefined) {
+		const folderKey = await resolveFolderReference(
+			context.database,
+			context.dependency('folders').folderKeyById,
+			storedFolderId
+		);
+
+		if (folderKey === undefined) {
+			throw unreadable('project settings', 'column "storage_default_folder" points to an unknown folder');
+		}
+
+		record.storage_default_folder = folderKey;
+	}
+
+	return { records: [record], documentIdentities, dependencyState: {} };
 }
 
 function projectReadState(result: ReadCurrentResult<SettingsKindTypes>, mode: ConfigReadMode): ReadStateProjection {
@@ -197,13 +226,43 @@ function projectReadState(result: ReadCurrentResult<SettingsKindTypes>, mode: Co
 function validateDesired(
 	documents: ConfigSettings[],
 	_records: ConfigSettings[],
-	_context: ValidationContext
+	context: ValidationContext
 ): ConfigFailure[] {
 	if (documents.length !== 1) {
 		return [invalid(`Project settings must declare exactly one record, but found ${documents.length}.`)];
 	}
 
-	return [];
+	const reference = documents[0]!.storage_default_folder;
+
+	if (typeof reference !== 'string') return [];
+
+	const subject = safeLogFragment(reference);
+
+	if (context.foldersManaged) {
+		if (!context.declaredFolderKeys.has(reference)) {
+			return [invalid(`Project settings references default folder "${subject}", which no folder file declares.`)];
+		}
+
+		return [];
+	}
+
+	switch (context.references) {
+		case 'current-state':
+			if (!context.currentFolderKeys.has(reference)) {
+				return [
+					invalid(`Project settings references default folder "${subject}", which does not exist in the database.`),
+				];
+			}
+
+			return [];
+		case 'server-snapshot':
+			return [];
+
+		default: {
+			const unsupported: never = context;
+			throw new Error(`Unsupported folder reference source: ${JSON.stringify(unsupported)}`);
+		}
+	}
 }
 
 async function enrich(
@@ -240,8 +299,23 @@ async function applyUpdates(
 		accountability: context.securityContext.accountability,
 	});
 
+	const { folderIdByKey } = context.dependency('folders');
+
+	const folderIdFor = (key: string): string => {
+		const id = folderIdByKey.get(key);
+		if (id === undefined) throw new Error(`Folder "${key}" not found during settings apply.`);
+		return id;
+	};
+
 	for (const update of updates) {
-		await settingsService.upsertSingleton(changesToValues(update.changes), context.mutationOptions);
+		const values = changesToValues(update.changes);
+
+		if (Object.hasOwn(values, 'storage_default_folder')) {
+			const folderKey = values['storage_default_folder'];
+			values['storage_default_folder'] = folderKey === null ? null : folderIdFor(folderKey as string);
+		}
+
+		await settingsService.upsertSingleton(values, context.mutationOptions);
 		updated.push(SETTINGS_STEM);
 	}
 
@@ -282,7 +356,7 @@ function mergeOutcome(
 export const settingsDescriptor: ConfigResourceDescriptor<SettingsKindTypes> = {
 	kind: 'settings',
 	formatVersion: 2,
-	dependencies: [],
+	dependencies: ['folders'],
 	layout: {
 		directory: 'settings',
 		documentShape: { singleton: { filename: SETTINGS_STEM } },

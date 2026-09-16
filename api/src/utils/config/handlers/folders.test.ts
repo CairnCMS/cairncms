@@ -7,8 +7,11 @@ import { foldersDescriptor } from './folders.js';
 const CONTEXT: ValidationContext = {
 	rolesManaged: false,
 	declaredRoleKeys: new Set<string>(),
+	foldersManaged: false,
+	declaredFolderKeys: new Set<string>(),
 	references: 'current-state',
 	currentRoleKeys: new Set<string>(),
+	currentFolderKeys: new Set<string>(),
 	currentFolderParents: new Map<string, string | null>(),
 };
 
@@ -16,8 +19,11 @@ function contextWith(currentFolderParents: Map<string, string | null>): Validati
 	return {
 		rolesManaged: false,
 		declaredRoleKeys: new Set<string>(),
+		foldersManaged: false,
+		declaredFolderKeys: new Set<string>(),
 		references: 'current-state',
 		currentRoleKeys: new Set<string>(),
+		currentFolderKeys: new Set<string>(),
 		currentFolderParents,
 	};
 }
@@ -126,8 +132,11 @@ describe('folders validateDesired', () => {
 		const context: ValidationContext = {
 			rolesManaged: false,
 			declaredRoleKeys: new Set<string>(),
+			foldersManaged: false,
+			declaredFolderKeys: new Set<string>(),
 			references: 'current-state',
 			currentRoleKeys: new Set<string>(),
+			currentFolderKeys: new Set<string>(),
 		};
 
 		let error: unknown;

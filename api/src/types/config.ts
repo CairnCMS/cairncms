@@ -52,6 +52,7 @@ export interface ConfigSettings {
 	basemaps?: unknown[] | null;
 	custom_aspect_ratios?: unknown[] | null;
 	mapbox_key?: string | null;
+	storage_default_folder?: string | null;
 }
 
 export interface ConfigManifest {
@@ -96,9 +97,13 @@ export type SettingsValues = {
 	basemaps: unknown[] | null;
 	custom_aspect_ratios: unknown[] | null;
 	mapbox_key: string | null;
+	storage_default_folder: string | null;
 };
 
 export type SettingsFieldChanges = { [K in keyof SettingsValues]?: FieldChange<SettingsValues[K]> };
+
+/** Whether a plan retargets the default folder, and to which key, so the deletion preview can drop a blocker the same apply clears. */
+export type SettingsRetarget = { retargeted: false } | { retargeted: true; toKey: string | null };
 
 export type FieldChange<T> = { before: T; after: T };
 
