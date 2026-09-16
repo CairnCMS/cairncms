@@ -1,11 +1,11 @@
 ---
 title: Config as code
-description: Capture roles, permissions, and folders to versioned files, review changes, and apply them across environments.
+description: Capture roles, permissions, folders, and project settings to versioned files, review changes, and apply them across environments.
 sidebar:
   order: 8
 ---
 
-Use config-as-code to capture roles, permissions, and folders, review changes in source control, and apply them across environments. Use the CLI for a directory of YAML files or the HTTP API for a single JSON or YAML document.
+Use config-as-code to capture roles, permissions, folders, and project settings, review changes in source control, and apply them across environments. Use the CLI for a directory of YAML files or the HTTP API for a single JSON or YAML document.
 
 ## What a config snapshot captures
 
@@ -14,6 +14,7 @@ A snapshot contains:
 - **Roles** — every operator-managed role with its key, name, icon, description, access flags, and `enforce_tfa` setting.
 - **Permissions** — the operator-defined rules attached to each role, grouped by role. Each permission rule includes the collection, action, field allow-list, item-level filter, validation, and presets.
 - **Folders** — the file-library folder names and hierarchy. File contents are not included.
+- **Project settings** — the operator-authored project configuration including branding text, the default language, the login and password policy, the module bar, asset presets and the transform mode, map settings, and the default storage folder.
 
 It does not contain:
 
@@ -21,6 +22,7 @@ It does not contain:
 - **Users and content.** Account records, collection items, uploaded files, and their metadata require a separate migration or backup.
 - **The Public role record.** Public access is managed through `permissions/public.yaml`. There is no `roles/public.yaml`.
 - **System-managed permissions.** Built-in rules, such as those supplied by `app_access: true`, are provided automatically by CairnCMS.
+- **Image settings.** Config as code does not manage project files, so the project logo and the public foreground and background images are not captured.
 
 ## Managed scope
 
@@ -32,11 +34,14 @@ resources:
   - roles
   - permissions
   - folders
+  - settings
 ```
 
-Within each listed kind, the files describe the complete desired set. Records absent from that set are planned for deletion. Omitted kinds are left alone, and `resources: []` manages nothing.
+Within each listed kind, the files describe the complete desired set, and a record absent from that set is planned for deletion. Project settings is the exception as it is a single record and is never deleted, as described below. Omitted kinds are left alone, and `resources: []` manages nothing in that case.
 
-Re-snapshotting an existing directory preserves its version and scope. Version 1 supports roles and permissions. Version 2 adds folders. To adopt folders in an existing project, set `version: 2`, add `folders` to `resources`, then re-snapshot the source instance and review the files before applying elsewhere.
+Re-snapshotting an existing directory preserves its version and scope. Version 1 supports roles and permissions. Version 2 adds folders and project settings. To adopt one in an existing project, set `version: 2`, add `folders` or `settings` to `resources`, then re-snapshot the source instance and review the files before applying elsewhere.
+
+When `settings` is listed in `resources`, `config snapshot` writes the project settings from the database to `settings/project.yaml`. Applying the snapshot updates the target instance's settings. If you omit individual fields from the file, their values in the target database remain unchanged.
 
 Roles and permissions can be managed independently. When both are managed, each permission set must reference a role declared in the config. When only permissions are managed, role references resolve against roles already in the target database.
 
@@ -44,7 +49,7 @@ Roles and folders are matched across environments by their keys. Keys remain unc
 
 Deleting a role also deletes its permissions and presets, and suspends and unassigns its users, even when those resources are outside the manifest's scope. Review the dry-run output before authorizing deletions.
 
-Unlike [deleting a folder in the app](/docs/guides/files/#renaming-moving-and-deleting-folders), config apply does not relocate its contents. Before deleting a folder, move its files and clear or replace any settings or field references to it. Child folders must be moved or deleted, which can be part of the same config apply. If any of these remain at deletion time, the entire apply is refused with `CONFIG_FOLDER_IN_USE`. A dry run lists the blockers observed for each folder it would delete, and the apply checks again at deletion time.
+Unlike [deleting a folder in the app](/docs/guides/files/#renaming-moving-and-deleting-folders), config apply does not relocate its contents. Before deleting a folder, move its files and clear or replace any settings or field references to it, such as retargeting the default storage folder. Child folders must be moved or deleted, and clearing the reference and deleting the folder can be part of the same config apply. If any of these remain at deletion time, the entire apply is refused with `CONFIG_FOLDER_IN_USE`. A dry run lists the blockers observed for each folder it would delete, and the apply checks again at deletion time.
 
 ## Two surfaces, one engine
 
@@ -81,9 +86,11 @@ config/
 ├── permissions/
 │   ├── editor.yaml               # one file per role's permissions
 │   └── public.yaml               # public role's permissions (no roles/public.yaml)
-└── folders/
-    ├── documents.yaml           # one file per folder, named after folder.key
-    └── reports.yaml
+├── folders/
+│   ├── documents.yaml            # one file per folder, named after folder.key
+│   └── reports.yaml
+└── settings/
+    └── project.yaml              # project settings (a single record)
 ```
 
 For example, `folders/reports.yaml` places Reports under the folder whose key is `documents`:
@@ -248,7 +255,9 @@ In remote mode, server refusals (`4xx`), a server below version 1.6.0, and missi
 
 ### Environment variables
 
-Role names and descriptions accept environment placeholders such as `{{CAIRNCMS_CONFIG_EDITOR_NAME}}`. The placeholder must occupy the entire field value. The CLI resolves it before planning. Unset variables or names outside the `CAIRNCMS_CONFIG_` namespace stop the command. Folder fields do not support interpolation.
+Role names and descriptions, and the project name, descriptor, URL, and Mapbox key, accept environment placeholders such as `{{CAIRNCMS_CONFIG_PROJECT_NAME}}`. The placeholder must occupy the entire field value. The CLI resolves it before planning. Unset variables or names outside the `CAIRNCMS_CONFIG_` namespace stop the command. Folder fields and the default storage folder do not support interpolation.
+
+When you snapshot into a directory that already declares a whole-value placeholder for one of these fields, the CLI keeps your committed placeholder instead of replacing it with the resolved value, even when the variable is unset or its value differs from the database. A fresh directory, a field the existing file does not already declare as a placeholder, and the HTTP snapshot return the stored value.
 
 The HTTP API does not resolve placeholders. Send resolved values in the request body.
 
@@ -308,6 +317,9 @@ A mutating apply returns a summary like this under `data`:
     "created": ["reports"],
     "updated": [],
     "deleted": []
+  },
+  "settings": {
+    "updated": []
   }
 }
 ```
@@ -367,6 +379,8 @@ When editing the files or an HTTP snapshot:
 - **Omitted optional role fields are preserved.** If a role payload omits `icon`, `description`, `enforce_tfa`, or `ip_access`, the database value is left unchanged.
 - **Clear a role's `description` or `ip_access` with `null`.** Other role fields do not accept `null`.
 - **Folder parents use keys.** Set `parent` to another folder's key from the same config to place the folder under it. Set it to `null` to move the folder to the top level. Omitting `parent` preserves the folder's current parent, and a new folder with no `parent` is created at the top level. Include `key` and `name` in every folder document.
+- **Omitted settings fields remain unchanged in the target database.** `project_name` and `default_language` cannot be `null`.
+- **Set the default storage folder by key.** Use a folder key for `storage_default_folder`, or `null` to clear the default. If `folders` is listed in `resources`, include the folder in the config. Otherwise, it must already exist in the target database.
 
 To rename or move a folder, edit its `name` or `parent` and keep its `key`. Generated snapshots include all supported fields.
 
@@ -376,7 +390,7 @@ Unknown fields stop the apply. Fields outside the config format are not exported
 
 ## Validation
 
-Both surfaces validate the configuration and plan before applying changes. Role and folder references must resolve as described in [Managed scope](#managed-scope) and [Field semantics](#field-semantics). Each role can have only one permission rule per collection and action.
+Both surfaces validate the configuration and plan before applying changes. Role and folder references must resolve as described in [Managed scope](#managed-scope) and [Field semantics](#field-semantics). A settings default folder must reference a folder the config declares when folders are managed, or one already in the database when they are not. Each role can have only one permission rule per collection and action.
 
 Every step must retain at least one role with `admin_access: true`. Plans that cannot do so report `ADMIN_CONTINUITY_REQUIRED`; `--destructive` does not override this protection.
 
@@ -415,7 +429,7 @@ The CLI writes failure messages to standard error and uses the [exit codes](#exi
 
 For a multi-environment project:
 
-1. Make role, permission, or folder changes in your development instance using Settings → Access Control or the File library.
+1. Make role, permission, folder, or project-settings changes in your development instance using Settings → Access Control, the File library, or the project settings screens.
 2. Run `cairncms config snapshot ./config` to write the directory tree.
 3. Review and commit the snapshot diff.
 4. Run `cairncms config apply --dry-run --format json ./config` against staging. Exit `1` means changes are planned. After review, apply them with `cairncms config apply --yes ./config`.
