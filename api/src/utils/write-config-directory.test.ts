@@ -6,10 +6,12 @@ import { dump as dumpYaml, load as loadYaml } from 'js-yaml';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import { writeConfigDirectory } from './write-config-directory.js';
+import { readConfigDirectory } from './read-config-directory.js';
+import { validateConfigRecord } from './validate-desired-config.js';
 import { CONFIG_FILENAME_STEM_MAX_LENGTH } from './config-contract.js';
 import { CONFIG_REGISTRY } from './config/registry.js';
 import logger from '../logger.js';
-import type { CairnConfig } from '../types/config.js';
+import type { CairnConfig, ConfigSettings } from '../types/config.js';
 
 vi.mock('../logger.js', () => ({
 	default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
@@ -40,6 +42,60 @@ function makeConfig(overrides?: Partial<CairnConfig>): CairnConfig {
 async function readYaml(filePath: string): Promise<any> {
 	const content = await fs.readFile(filePath, 'utf-8');
 	return loadYaml(content);
+}
+
+function settings(overrides: Partial<ConfigSettings> = {}): ConfigSettings {
+	return {
+		project_name: 'CairnCMS',
+		project_descriptor: null,
+		project_url: null,
+		default_language: 'en-US',
+		project_color: null,
+		public_note: null,
+		custom_css: null,
+		module_bar: null,
+		auth_password_policy: null,
+		auth_login_attempts: 25,
+		storage_asset_transform: 'all',
+		storage_asset_presets: null,
+		basemaps: null,
+		custom_aspect_ratios: null,
+		mapbox_key: null,
+		storage_default_folder: null,
+		...overrides,
+	};
+}
+
+function settingsScope(record: Partial<ConfigSettings>): CairnConfig {
+	return makeConfig({ manifest: { version: 2, resources: ['settings'] }, settings: [settings(record)] });
+}
+
+async function writeExisting(kind: string, filename: string, document: unknown): Promise<void> {
+	await fs.mkdir(path.join(tmpDir, kind), { recursive: true });
+	await fs.writeFile(path.join(tmpDir, kind, filename), dumpYaml(document), 'utf-8');
+}
+
+async function treeOf(dir: string): Promise<Map<string, string>> {
+	const entries = new Map<string, string>();
+
+	async function walk(current: string): Promise<void> {
+		for (const child of (await fs.readdir(current, { withFileTypes: true })).sort((a, b) =>
+			a.name.localeCompare(b.name)
+		)) {
+			const full = path.join(current, child.name);
+			const relative = path.relative(dir, full);
+
+			if (child.isDirectory()) {
+				entries.set(`${relative}/`, '');
+				await walk(full);
+			} else {
+				entries.set(relative, (await fs.readFile(full)).toString('base64'));
+			}
+		}
+	}
+
+	await walk(dir);
+	return entries;
 }
 
 describe('writeConfigDirectory', () => {
@@ -741,5 +797,122 @@ describe('writeConfigDirectory settings singleton cardinality', () => {
 		).rejects.toBeInstanceOf(ConfigInvalidException);
 
 		expect(await captureTree(tmpDir)).toEqual(before);
+	});
+});
+
+describe('writeConfigDirectory placeholder preservation', () => {
+	const ROLE_BASE = { admin_access: false, app_access: true } as const;
+
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	it('preserves a committed settings placeholder rather than the resolved value, with the variable unset', async () => {
+		vi.stubEnv('CAIRNCMS_CONFIG_PROJECT_URL', undefined);
+		await writeExisting('settings', 'project.yaml', { project_url: '{{CAIRNCMS_CONFIG_PROJECT_URL}}' });
+
+		await writeConfigDirectory(settingsScope({ project_url: 'https://live.example' }), tmpDir);
+
+		expect((await readYaml(path.join(tmpDir, 'settings', 'project.yaml'))).project_url).toBe(
+			'{{CAIRNCMS_CONFIG_PROJECT_URL}}'
+		);
+	});
+
+	it('round-trips a preserved placeholder through a real directory read to the environment value', async () => {
+		vi.stubEnv('CAIRNCMS_CONFIG_PROJECT_URL', 'https://env-value.example');
+		await writeExisting('settings', 'project.yaml', { project_url: '{{CAIRNCMS_CONFIG_PROJECT_URL}}' });
+
+		await writeConfigDirectory(settingsScope({ project_url: 'https://database-value.example' }), tmpDir);
+
+		expect((await readYaml(path.join(tmpDir, 'settings', 'project.yaml'))).project_url).toBe(
+			'{{CAIRNCMS_CONFIG_PROJECT_URL}}'
+		);
+
+		const readBack = await readConfigDirectory(tmpDir);
+
+		expect(readBack.settings[0]!.project_url).toBe('https://env-value.example');
+		expect(validateConfigRecord('settings', readBack.settings[0]!)).toEqual([]);
+	});
+
+	it('preserves a committed roles placeholder, proving the mechanism is cross-kind', async () => {
+		await writeExisting('roles', 'editor.yaml', { key: 'editor', name: '{{CAIRNCMS_CONFIG_ROLE_NAME}}' });
+
+		await writeConfigDirectory(makeConfig({ roles: [{ key: 'editor', name: 'Resolved', ...ROLE_BASE }] }), tmpDir);
+
+		expect((await readYaml(path.join(tmpDir, 'roles', 'editor.yaml'))).name).toBe('{{CAIRNCMS_CONFIG_ROLE_NAME}}');
+	});
+
+	it('exports the resolved value into a fresh destination with no declaration', async () => {
+		await writeConfigDirectory(settingsScope({ project_url: 'https://live.example' }), tmpDir);
+
+		expect((await readYaml(path.join(tmpDir, 'settings', 'project.yaml'))).project_url).toBe('https://live.example');
+	});
+
+	it('preserves a declared field while exporting the value for an undeclared sibling', async () => {
+		await writeExisting('settings', 'project.yaml', { project_url: '{{CAIRNCMS_CONFIG_PROJECT_URL}}' });
+
+		await writeConfigDirectory(
+			settingsScope({ project_url: 'https://live.example', project_descriptor: 'A real descriptor' }),
+			tmpDir
+		);
+
+		const out = await readYaml(path.join(tmpDir, 'settings', 'project.yaml'));
+		expect(out.project_url).toBe('{{CAIRNCMS_CONFIG_PROJECT_URL}}');
+		expect(out.project_descriptor).toBe('A real descriptor');
+	});
+
+	it('does not preserve an out-of-namespace placeholder', async () => {
+		await writeExisting('settings', 'project.yaml', { project_url: '{{OTHER_VAR}}' });
+
+		await writeConfigDirectory(settingsScope({ project_url: 'https://live.example' }), tmpDir);
+
+		expect((await readYaml(path.join(tmpDir, 'settings', 'project.yaml'))).project_url).toBe('https://live.example');
+	});
+
+	it('never preserves a placeholder in a field the descriptor does not mark interpolatable', async () => {
+		await writeExisting('settings', 'project.yaml', { default_language: '{{CAIRNCMS_CONFIG_LANG}}' });
+
+		await writeConfigDirectory(settingsScope({ default_language: 'fr-FR' }), tmpDir);
+
+		expect((await readYaml(path.join(tmpDir, 'settings', 'project.yaml'))).default_language).toBe('fr-FR');
+	});
+
+	it('does not import a placeholder from a file whose declared identity mismatches its filename', async () => {
+		await writeExisting('roles', 'editor.yaml', { key: 'another_role', name: '{{CAIRNCMS_CONFIG_ROLE_NAME}}' });
+
+		await writeConfigDirectory(makeConfig({ roles: [{ key: 'editor', name: 'Resolved', ...ROLE_BASE }] }), tmpDir);
+
+		expect((await readYaml(path.join(tmpDir, 'roles', 'editor.yaml'))).name).toBe('Resolved');
+	});
+
+	it('does not import a placeholder from a file that declares no identity', async () => {
+		await writeExisting('roles', 'editor.yaml', { name: '{{CAIRNCMS_CONFIG_ROLE_NAME}}' });
+
+		await writeConfigDirectory(makeConfig({ roles: [{ key: 'editor', name: 'Resolved', ...ROLE_BASE }] }), tmpDir);
+
+		expect((await readYaml(path.join(tmpDir, 'roles', 'editor.yaml'))).name).toBe('Resolved');
+	});
+
+	it('refuses to write when a preservation source cannot be parsed, leaving the whole destination byte-identical', async () => {
+		await fs.writeFile(
+			path.join(tmpDir, 'cairncms-config.yaml'),
+			dumpYaml({ version: 2, resources: ['roles', 'settings'] })
+		);
+
+		await writeExisting('roles', 'editor.yaml', { key: 'editor', name: 'Existing' });
+		await fs.mkdir(path.join(tmpDir, 'settings'), { recursive: true });
+		await fs.writeFile(path.join(tmpDir, 'settings', 'project.yaml'), 'project_url: [\n', 'utf-8');
+
+		const before = await treeOf(tmpDir);
+
+		const config = makeConfig({
+			manifest: { version: 2, resources: ['roles', 'settings'] },
+			roles: [{ key: 'editor', name: 'Resolved', ...ROLE_BASE }],
+			settings: [settings({ project_url: 'https://live.example' })],
+		});
+
+		await expect(writeConfigDirectory(config, tmpDir)).rejects.toBeInstanceOf(ConfigReadFailedException);
+
+		expect(await treeOf(tmpDir)).toEqual(before);
 	});
 });

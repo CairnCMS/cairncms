@@ -13,9 +13,11 @@ import {
 	orderedDocuments,
 	orderedRecords,
 } from './config/directory-layout.js';
+import { PLACEHOLDER_NAMESPACE, placeholderVarName } from './config/placeholder.js';
 import { getDescriptor } from './config/registry.js';
 import {
 	assertContained,
+	classifyConfigEntry,
 	readContainedDirectory,
 	readContainedFile,
 	replaceFileAtomically,
@@ -28,7 +30,7 @@ const MANIFEST_FILENAME = 'cairncms-config.yaml';
 
 const YAML_SUFFIX = '.yaml';
 
-type PendingDocument = { label: string; target: string; document: unknown };
+type PendingDocument = { label: string; target: string; document: unknown; kind?: ConfigKind };
 
 function dumpYaml(data: unknown): string {
 	return toYaml(data, { indent: 2, sortKeys: true, lineWidth: -1, noRefs: true });
@@ -94,11 +96,91 @@ function buildDocuments(config: CairnConfig, root: string): { pending: PendingDo
 			assertContained(path.join(root, kind), target, label);
 
 			keep.add(label);
-			pending.push({ label, target, document });
+			pending.push({ label, target, document, kind });
 		}
 	}
 
 	return { pending, keep };
+}
+
+/**
+ * Reads the existing on-disk document at a pending target so its committed placeholder declarations can
+ * be preserved. Genuine absence is the fresh-export case (null). A relevant source that cannot be parsed
+ * safely refuses the whole snapshot before any file is written, so a typo never erases a declaration.
+ */
+async function readExistingDeclaration(
+	root: string,
+	target: string,
+	label: string
+): Promise<Record<string, unknown> | null> {
+	const entry = await classifyConfigEntry(root, target);
+
+	if (entry.kind === 'absent') return null;
+
+	if (entry.kind !== 'file') {
+		throw new ConfigReadFailedException(`Config path "${safeLogFragment(label)}" is not a regular file.`);
+	}
+
+	const source = await readContainedFile(root, target);
+
+	let parsed: unknown;
+
+	try {
+		parsed = parseConfigYaml(source, label);
+	} catch (err) {
+		if (err instanceof ConfigInvalidException) {
+			throw new ConfigReadFailedException(
+				`Config could not be written: the existing file "${safeLogFragment(
+					label
+				)}" could not be read to preserve its placeholder declarations (${err.message}). Fix or remove it and retry.`
+			);
+		}
+
+		throw err;
+	}
+
+	return isPlainObject(parsed) ? (parsed as Record<string, unknown>) : null;
+}
+
+/**
+ * Restores a committed `{{CAIRNCMS_CONFIG_*}}` placeholder into one pending document when the existing
+ * file of the same identity declares one for an `acceptsPlaceholder` field. Preserving keeps an operator's
+ * committed declaration rather than overwriting it with the resolved database value on re-snapshot.
+ */
+async function restoreDeclaredPlaceholders(root: string, pending: PendingDocument): Promise<void> {
+	if (pending.kind === undefined) return;
+
+	const descriptor = getDescriptor(pending.kind);
+
+	const placeholderFields = [...descriptor.documentIdentityFields, ...descriptor.recordFields].filter(
+		(field) => field.acceptsPlaceholder
+	);
+
+	if (placeholderFields.length === 0) return;
+
+	const existing = await readExistingDeclaration(root, pending.target, pending.label);
+	if (existing === null) return;
+
+	// A file whose declared identity does not match the record its filename names is not this record's
+	// declaration, so nothing is preserved from it. The identity field is never a placeholder, so this
+	// comparison needs no interpolation and works with an unset variable. A singleton has no identity field.
+	const identityField = descriptor.documentIdentityFields[0];
+
+	if (identityField !== undefined) {
+		const stem = path.basename(pending.target).slice(0, -YAML_SUFFIX.length);
+		if (existing[identityField.name] !== stem) return;
+	}
+
+	const document = pending.document as Record<string, unknown>;
+
+	for (const field of placeholderFields) {
+		const declared = existing[field.name];
+		const varName = placeholderVarName(declared);
+
+		if (varName !== undefined && varName.startsWith(PLACEHOLDER_NAMESPACE)) {
+			document[field.name] = declared;
+		}
+	}
 }
 
 /**
@@ -161,6 +243,12 @@ export async function writeConfigDirectory(config: CairnConfig, root: string): P
 		throw new ConfigReadFailedException(
 			`Config could not be written: ${placeholders.join('; ')}. The config format substitutes that form on read.`
 		);
+	}
+
+	// After the database values are validated, restore an operator's committed placeholder declarations from
+	// the existing files. A parse failure here refuses before any write, so nothing is serialized yet.
+	for (const entry of pending) {
+		await restoreDeclaredPlaceholders(root, entry);
 	}
 
 	// The checks protect the serializer, so every document is validated before any is serialized or written.

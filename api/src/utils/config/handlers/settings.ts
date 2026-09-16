@@ -27,6 +27,7 @@ import type {
 } from '../descriptor.js';
 import { invalid } from '../failures.js';
 import { resolveFolderReference } from '../folder-id-lookup.js';
+import { interpolatePlaceholderFields } from '../placeholder.js';
 import { UNFILTERED, unreadable } from '../read-parsing.js';
 import { changesToValues, composeValues } from '../values.js';
 import type { FoldersKindTypes } from './folders.js';
@@ -371,7 +372,10 @@ export const settingsDescriptor: ConfigResourceDescriptor<SettingsKindTypes> = {
 				);
 			}
 
-			return { ...record } as unknown as ConfigSettings;
+			return interpolatePlaceholderFields(RECORD_FIELDS, record, {
+				label: 'project settings',
+				value: SETTINGS_STEM,
+			}) as unknown as ConfigSettings;
 		},
 	},
 	documentIdentityFields: [],

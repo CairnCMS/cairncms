@@ -275,3 +275,53 @@ describe('configSnapshot manifest version preservation', () => {
 		});
 	});
 });
+
+describe('configSnapshot placeholder preservation', () => {
+	const RESOLVED_EDITOR = { ...EDITOR, name: 'Resolved Name' };
+
+	async function seedPlaceholder(): Promise<void> {
+		await fs.mkdir(path.join(tmpDir, 'roles'), { recursive: true });
+		await fs.writeFile(path.join(tmpDir, 'cairncms-config.yaml'), dumpYaml(MANIFEST));
+
+		await fs.writeFile(
+			path.join(tmpDir, 'roles', 'editor.yaml'),
+			dumpYaml({ ...EDITOR, name: '{{CAIRNCMS_CONFIG_ROLE_NAME}}' })
+		);
+	}
+
+	async function writtenRoleName(): Promise<unknown> {
+		const parsed = loadYaml(await fs.readFile(path.join(tmpDir, 'roles', 'editor.yaml'), 'utf8')) as { name: unknown };
+		return parsed.name;
+	}
+
+	it('preserves a committed placeholder on a remote snapshot', async () => {
+		await seedPlaceholder();
+		respondWith({ manifest: MANIFEST, roles: [RESOLVED_EDITOR], permissions: [] });
+
+		await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
+
+		expect(vi.mocked(process.exit).mock.calls).toEqual([[0]]);
+		expect(await writtenRoleName()).toBe('{{CAIRNCMS_CONFIG_ROLE_NAME}}');
+	});
+
+	it('preserves a committed placeholder on a local snapshot', async () => {
+		vi.mocked(getDatabase).mockReturnValue({ destroy: vi.fn() } as never);
+		vi.mocked(hasDatabaseConnection).mockResolvedValue(true);
+		vi.mocked(isInstalled).mockResolvedValue(true);
+
+		vi.mocked(readCurrentConfig).mockResolvedValue({
+			config: { manifest: MANIFEST, roles: [RESOLVED_EDITOR], permissions: [], folders: [], settings: [] },
+			currentRoleKeys: new Set<string>(),
+			currentFolderKeys: new Set<string>(),
+			currentFolderParents: new Map<string, string | null>(),
+			stateToken: { resources: ['roles', 'permissions'], digest: 'digest' },
+		} as never);
+
+		await seedPlaceholder();
+
+		await configSnapshot(tmpDir, { yes: true });
+
+		expect(vi.mocked(process.exit).mock.calls).toEqual([[0]]);
+		expect(await writtenRoleName()).toBe('{{CAIRNCMS_CONFIG_ROLE_NAME}}');
+	});
+});

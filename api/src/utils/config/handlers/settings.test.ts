@@ -1,6 +1,8 @@
 import type { SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
+import { ConfigPlaceholderUnresolvedException } from '../../../exceptions/config-placeholder-unresolved.js';
 import { ConfigReadFailedException } from '../../../exceptions/config-read-failed.js';
 import { SettingsService } from '../../../services/settings.js';
 import type { ConfigSettings } from '../../../types/config.js';
@@ -388,5 +390,37 @@ describe('settings field validation through the shared record schema', () => {
 
 	it('rejects an unknown top-level field', () => {
 		rejects({ unknown_setting: true });
+	});
+});
+
+describe('settings parseDocumentFile interpolation', () => {
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	function parse(record: Record<string, unknown>): ConfigSettings {
+		return settingsDescriptor.layout.parseDocumentFile(record, 'project.yaml');
+	}
+
+	it('interpolates an in-namespace placeholder from the environment', () => {
+		vi.stubEnv('CAIRNCMS_CONFIG_PROJECT_URL', 'https://resolved.example');
+
+		expect(parse({ project_url: '{{CAIRNCMS_CONFIG_PROJECT_URL}}' }).project_url).toBe('https://resolved.example');
+	});
+
+	it('refuses an unset in-namespace variable', () => {
+		vi.stubEnv('CAIRNCMS_CONFIG_PROJECT_URL', undefined);
+
+		expect(() => parse({ project_url: '{{CAIRNCMS_CONFIG_PROJECT_URL}}' })).toThrow(
+			ConfigPlaceholderUnresolvedException
+		);
+	});
+
+	it('refuses an out-of-namespace variable', () => {
+		expect(() => parse({ project_url: '{{OTHER_VAR}}' })).toThrow(ConfigInvalidException);
+	});
+
+	it('leaves a non-interpolatable field untouched', () => {
+		expect(parse({ default_language: '{{CAIRNCMS_CONFIG_LANG}}' }).default_language).toBe('{{CAIRNCMS_CONFIG_LANG}}');
 	});
 });
