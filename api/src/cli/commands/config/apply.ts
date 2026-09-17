@@ -5,6 +5,10 @@ import logger from '../../../logger.js';
 import { configFailureExitCode } from './exit-code.js';
 import { applyConfigPlan, planHasDeletions } from '../../../utils/apply-config-plan.js';
 import { computeConfigPlan } from '../../../utils/compute-config-plan.js';
+import {
+	buildExtensionDeclarationSnapshot,
+	desiredExtensionSubjects,
+} from '../../../utils/config/handlers/extension-settings.js';
 import { isPlanEmpty, planSummary } from '../../../utils/config/plan-folds.js';
 import {
 	classifyConfigError,
@@ -23,6 +27,7 @@ import { readConfigDirectory } from '../../../utils/read-config-directory.js';
 import { serializeConfigPlan } from '../../../utils/serialize-config-plan.js';
 import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
 import { serializeToWire } from '../../../utils/config/wire.js';
+import type { SchemaOverview } from '@cairncms/types';
 import type { CairnConfig, ConfigPlan, SerializedConfigPlan } from '../../../types/config.js';
 import { confirmPrompt } from '../../presentation.js';
 import { isHttpTarget, parseOperatorRemoteTarget } from './operator-remote-target.js';
@@ -42,9 +47,14 @@ import {
 	renderResultSummary,
 } from './render-config-plan.js';
 
-async function serializePlan(plan: ConfigPlan, desired: CairnConfig, database: Knex): Promise<SerializedConfigPlan> {
-	const schema = await getSchema({ database, bypassCache: true });
-	const enrichment = await enrichConfigPlan(plan, desired, { schema, database });
+async function serializePlan(
+	plan: ConfigPlan,
+	desired: CairnConfig,
+	database: Knex,
+	schema?: SchemaOverview
+): Promise<SerializedConfigPlan> {
+	const resolvedSchema = schema ?? (await getSchema({ database, bypassCache: true }));
+	const enrichment = await enrichConfigPlan(plan, desired, { schema: resolvedSchema, database });
 
 	return serializeConfigPlan(plan, { enrichment, manifestVersion: desired.manifest.version });
 }
@@ -137,6 +147,17 @@ async function runLocalEngine(
 	const { dryRun, destructive, format, yes } = opts;
 
 	try {
+		const extensionSettingsManaged = desired.manifest.resources.includes('extension-settings');
+		const schema = extensionSettingsManaged ? await getSchema({ database, bypassCache: true }) : undefined;
+
+		const extensionDeclarations = extensionSettingsManaged ? await buildExtensionDeclarationSnapshot() : undefined;
+
+		const currentCollections = schema !== undefined ? new Set(Object.keys(schema.collections)) : undefined;
+
+		const extensionSettingsSubjects = extensionSettingsManaged
+			? desiredExtensionSubjects(desired['extension-settings'])
+			: undefined;
+
 		const {
 			config: current,
 			currentRoleKeys,
@@ -145,7 +166,10 @@ async function runLocalEngine(
 			stateToken,
 		} = await readCurrentConfig({
 			database,
+			...(schema !== undefined && { schema }),
 			resources: desired.manifest.resources,
+			...(extensionSettingsSubjects !== undefined && { extensionSettingsSubjects }),
+			...(extensionDeclarations !== undefined && { extensionDeclarations }),
 		});
 
 		const documentErrors = validateDesiredConfig(serializeToWire(desired, desired.manifest.version), {
@@ -154,6 +178,8 @@ async function runLocalEngine(
 			currentRoleKeys,
 			currentFolderKeys,
 			currentFolderParents,
+			...(extensionDeclarations !== undefined && { extensionDeclarations }),
+			...(currentCollections !== undefined && { currentCollections }),
 		});
 
 		if (documentErrors.length > 0) {
@@ -164,20 +190,24 @@ async function runLocalEngine(
 			return { result: 'invalid', errorCode: documentErrors[0]!.code, exitCode: 2 };
 		}
 
-		const plan = computeConfigPlan(current, desired);
+		const plan = computeConfigPlan(
+			current,
+			desired,
+			extensionDeclarations !== undefined ? { extensionDeclarations } : undefined
+		);
 
 		const empty = isPlanEmpty(plan);
 
 		run.planned(planSummary(plan));
 
 		if (format === 'json') {
-			process.stdout.write(JSON.stringify(await serializePlan(plan, desired, database)) + '\n');
+			process.stdout.write(JSON.stringify(await serializePlan(plan, desired, database, schema)) + '\n');
 			return { result: empty ? 'no_changes' : 'planned', exitCode: empty ? 0 : 1 };
 		}
 
 		if (empty) {
 			if (desired.manifest.resources.includes('permissions')) {
-				logger.info(renderNoChanges(await serializePlan(plan, desired, database)));
+				logger.info(renderNoChanges(await serializePlan(plan, desired, database, schema)));
 			} else {
 				logger.info(renderNoChanges());
 			}
@@ -185,7 +215,7 @@ async function runLocalEngine(
 			return { result: 'no_changes', exitCode: 0 };
 		}
 
-		const serialized = await serializePlan(plan, desired, database);
+		const serialized = await serializePlan(plan, desired, database, schema);
 
 		if (dryRun) {
 			logger.info(renderConfigPlan(serialized));
@@ -226,6 +256,7 @@ async function runLocalEngine(
 				accountability: { ...getSystemAccountability(), origin: CONFIG_APPLY_ORIGIN },
 			},
 			expectedStateToken: stateToken,
+			...(extensionDeclarations !== undefined && { extensionDeclarations }),
 		});
 
 		logger.info(renderResultSummary(result));

@@ -406,4 +406,52 @@ describe('ExtensionSettingsService', () => {
 			);
 		});
 	});
+
+	describe('applyForConfig', () => {
+		it('writes an ordinary create on the transaction, with no per-item activity, revision, or event', async () => {
+			tracker.on.insert(TABLE).response([]);
+
+			await service(admin).applyForConfig({
+				operation: 'create',
+				subject: 'cairncms-extension-preview',
+				scope: 'global',
+				scopeKey: '',
+				key: 'count',
+				value: 5,
+				declared: { type: 'number', scope: 'global' },
+			});
+
+			expect(tracker.history.insert).toHaveLength(1);
+			expect(tracker.history.delete).toHaveLength(0);
+		});
+
+		it('deletes on the transaction', async () => {
+			tracker.on.delete(TABLE).response(1);
+
+			await service(admin).applyForConfig({
+				operation: 'delete',
+				subject: 'cairncms-extension-preview',
+				scope: 'collection',
+				scopeKey: 'articles',
+				key: 'preview_url',
+				declared: { type: 'string', scope: 'collection' },
+			});
+
+			expect(tracker.history.delete).toHaveLength(1);
+		});
+
+		it('refuses to write a secret value from config', async () => {
+			await expect(
+				service(admin).applyForConfig({
+					operation: 'create',
+					subject: 'cairncms-extension-preview',
+					scope: 'global',
+					scopeKey: '',
+					key: 'api_key',
+					value: 'plaintext',
+					declared: { type: 'string', scope: 'global', secret: { source: 'inline' } },
+				})
+			).rejects.toBeInstanceOf(InvalidPayloadException);
+		});
+	});
 });

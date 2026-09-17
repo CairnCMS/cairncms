@@ -1,3 +1,4 @@
+import { ExtensionSettingKeySchema } from '@cairncms/constants';
 import { normalizeConfigKey } from '@cairncms/utils';
 import Joi from 'joi';
 import type { ConfigDocumentShape, ConfigFieldDescriptor } from './descriptor.js';
@@ -32,6 +33,21 @@ function buildStringBase(field: ConfigFieldDescriptor): Joi.Schema {
 	if (field.maxLength !== undefined) schema = schema.max(field.maxLength);
 	return schema;
 }
+
+/**
+ * Portable structure only; declaration-specific checks happen on the target.
+ * unsafe() admits the finite numbers accepted by the settings API beyond Joi's safe-number range.
+ */
+const EXTENSION_SETTING_LEAF_SCHEMA = Joi.alternatives(
+	Joi.string().allow(''),
+	Joi.number().unsafe(),
+	Joi.boolean(),
+	Joi.object({ $secret: Joi.valid('preserve').required() }).strict()
+);
+
+const EXTENSION_SETTING_KEY_SCHEMA = Joi.string().custom((value, helpers) =>
+	ExtensionSettingKeySchema.safeParse(value).success ? value : helpers.error('any.invalid')
+);
 
 function buildBase(field: ConfigFieldDescriptor): Joi.Schema {
 	if (field.grammar === 'config-key') return buildConfigKeyBase(field);
@@ -89,6 +105,18 @@ export function buildDocumentSchema(spec: DocumentSchemaSpec, mode: SchemaMode =
 
 	if (shape === 'flat' || 'singleton' in shape) {
 		return Joi.object({ ...identity, ...fieldEntries(spec.recordFields, mode) });
+	}
+
+	if ('nestedMap' in shape) {
+		const valueMap = Joi.object().pattern(EXTENSION_SETTING_KEY_SCHEMA, EXTENSION_SETTING_LEAF_SCHEMA);
+		const collectionsMap = Joi.object().pattern(Joi.string(), valueMap);
+		const globalSchema = mode === 'snapshot' ? valueMap.required() : valueMap;
+		const collectionsSchema = mode === 'snapshot' ? collectionsMap.required() : collectionsMap;
+		return Joi.object({
+			...identity,
+			[shape.nestedMap.globalField]: globalSchema,
+			[shape.nestedMap.collectionsField]: collectionsSchema,
+		});
 	}
 
 	const recordSchema = Joi.object(fieldEntries(spec.recordFields, mode));

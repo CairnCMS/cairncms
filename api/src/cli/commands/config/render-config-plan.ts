@@ -13,6 +13,8 @@ type FolderBlockerView = { blockedBy: string };
 
 type PermissionIdentityView = { role: string; collection: string; action: string };
 
+type ExtensionSettingIdentityView = { subject: string; scope: string; scope_key: string; key: string };
+
 type FieldChangeView = { before: unknown; after: unknown };
 
 export type RenderableImpactEntry =
@@ -52,7 +54,15 @@ export type RenderableChange =
 			operation: 'update';
 			identity: SettingsIdentityView;
 			fields: Record<string, FieldChangeView | undefined>;
-	  };
+	  }
+	| { kind: 'extension-settings'; operation: 'create'; identity: ExtensionSettingIdentityView }
+	| {
+			kind: 'extension-settings';
+			operation: 'update';
+			identity: ExtensionSettingIdentityView;
+			fields: Record<string, FieldChangeView | undefined>;
+	  }
+	| { kind: 'extension-settings'; operation: 'delete'; identity: ExtensionSettingIdentityView };
 
 /** The structural view the renderers read, satisfied by the server's serialized plan and by the remote wire plan. */
 export type RenderablePlan = {
@@ -67,6 +77,7 @@ type RenderableResultSlice = {
 	permissions: { created: number; updated: number; deleted: number };
 	folders: { created: unknown[]; updated: unknown[]; deleted: unknown[] };
 	settings: { updated: unknown[] };
+	'extension-settings': { created: number; updated: number; deleted: number };
 };
 
 export type RenderableResult = { [C in ConfigKind]: RenderableResultSlice[C] };
@@ -103,6 +114,15 @@ function summarizeResultSlice(kind: ConfigKind, result: RenderableResult): strin
 			return parts;
 		}
 
+		case 'extension-settings': {
+			const slice = result['extension-settings'];
+			const parts: string[] = [];
+			if (slice.created > 0) parts.push(`${slice.created} extension setting(s) created`);
+			if (slice.updated > 0) parts.push(`${slice.updated} extension setting(s) updated`);
+			if (slice.deleted > 0) parts.push(`${slice.deleted} extension setting(s) deleted`);
+			return parts;
+		}
+
 		default: {
 			const unhandled: never = kind;
 			throw new Error(`Unhandled config kind: ${JSON.stringify(unhandled)}`);
@@ -125,6 +145,8 @@ function kindHeading(kind: RenderableChange['kind']): string {
 			return 'Folders';
 		case 'settings':
 			return 'Settings';
+		case 'extension-settings':
+			return 'Extension settings';
 
 		default: {
 			const unhandled: never = kind;
@@ -189,7 +211,8 @@ export function renderProtectionContributors(
 export type RenderableDeletion =
 	| { kind: 'roles'; identity: RoleIdentityView }
 	| { kind: 'permissions'; identity: PermissionIdentityView }
-	| { kind: 'folders'; identity: FolderIdentityView };
+	| { kind: 'folders'; identity: FolderIdentityView }
+	| { kind: 'extension-settings'; identity: ExtensionSettingIdentityView };
 
 export function renderDeletions(deletions: RenderableDeletion[]): string[] {
 	return deletions.map((deletion) => `    - ${deleteVerb()} ${renderIdentity(deletion)}`);
@@ -261,6 +284,12 @@ function renderIdentity(change: RenderableChange | RenderableDeletion): string {
 
 	if (change.kind === 'settings') {
 		return replaceControlCharacters(change.identity.key);
+	}
+
+	if (change.kind === 'extension-settings') {
+		const { subject, scope, scope_key, key } = change.identity;
+		const location = scope === 'collection' ? `${replaceControlCharacters(scope_key)} / ` : '';
+		return `${replaceControlCharacters(subject)} / ${location}${replaceControlCharacters(key)}`;
 	}
 
 	const unhandled: never = change;

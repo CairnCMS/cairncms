@@ -9,7 +9,7 @@ import {
 	type ConfigKind,
 	type ConfigManifest,
 } from '../types/config.js';
-import type { ReferenceStateSource, ValidationContext } from './config/descriptor.js';
+import type { ExtensionDeclarationSnapshot, ReferenceStateSource, ValidationContext } from './config/descriptor.js';
 import { invalid } from './config/failures.js';
 import { buildDocumentSchema, type SchemaMode } from './config/field-schema.js';
 import { isPlaceholder } from './config/placeholder.js';
@@ -89,7 +89,12 @@ export function validateConfigRecord(kind: ConfigKind, record: unknown, mode: Sc
 	return messagesOf(recordSchemas(mode)[kind].validate(record, VALIDATE_OPTIONS).error);
 }
 
-export type DesiredConfigContext = { label: string } & ReferenceStateSource;
+export type DesiredConfigContext = {
+	label: string;
+	/** Target-only context; omitted when validating a portable server snapshot. */
+	extensionDeclarations?: ExtensionDeclarationSnapshot;
+	currentCollections?: ReadonlySet<string>;
+} & ReferenceStateSource;
 
 /**
  * The local reader substitutes a whole-string placeholder in a field that accepts one, so a persisted document
@@ -124,6 +129,13 @@ export function findPlaceholderSyntax(config: CairnConfig): string[] {
 				problems.push(`${kind} record "${identity}" field "${field.name}" holds placeholder syntax`);
 			}
 		}
+	}
+
+	for (const kind of listConfigKinds()) {
+		if (!config.manifest.resources.includes(kind)) continue;
+
+		const { residualPlaceholders } = getDescriptor(kind);
+		if (residualPlaceholders !== undefined) problems.push(...residualPlaceholders(config[kind] as never));
 	}
 
 	return problems;
@@ -202,6 +214,8 @@ export function validateDesiredConfig(document: unknown, context: DesiredConfigC
 		declaredRoleKeys,
 		foldersManaged,
 		declaredFolderKeys,
+		...(context.extensionDeclarations !== undefined && { extensionDeclarations: context.extensionDeclarations }),
+		...(context.currentCollections !== undefined && { currentCollections: context.currentCollections }),
 		...referenceSource(context),
 	};
 
@@ -211,6 +225,7 @@ export function validateDesiredConfig(document: unknown, context: DesiredConfigC
 		permissions: (body['permissions'] ?? []) as CairnConfig['permissions'],
 		folders: (body['folders'] ?? []) as CairnConfig['folders'],
 		settings: (body['settings'] ?? []) as CairnConfig['settings'],
+		'extension-settings': (body['extension-settings'] ?? []) as CairnConfig['extension-settings'],
 	}).map((problem) =>
 		invalid(`${problem}, which cannot be stored because the reader would substitute it. Send a resolved value.`)
 	);

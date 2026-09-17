@@ -148,6 +148,12 @@ export class ExtensionManager {
 
 	private settingsEligible = new Set<Extension>();
 
+	// isLoaded also becomes true after caught discovery failures; it cannot prove catalogue completeness.
+	private settingsDiscoverySucceeded = false;
+
+	// Include failures absorbed by getExtensions so a partial catalogue never appears complete.
+	private discoveryHadFailure = false;
+
 	// The public, variable-free reason per ineligible owner, what the diagnostics field
 	// and the owners endpoint publish. The variable-bearing collision detail is log-only.
 	private settingsIneligible = new Map<Extension, SanitizedExtensionError>();
@@ -339,6 +345,10 @@ export class ExtensionManager {
 	 */
 	public getDeclaredSettings(subject: string): ExtensionSettings[] {
 		return this.declaredSettingsBySubject.get(subject) ?? [];
+	}
+
+	public isSettingsDiscoveryComplete(): boolean {
+		return this.settingsDiscoverySucceeded;
 	}
 
 	public getSettingsOwners(): SettingsOwner[] {
@@ -594,6 +604,7 @@ export class ExtensionManager {
 		this.confinedEligible.clear();
 		this.settingsEligible.clear();
 		this.settingsIneligible.clear();
+		this.settingsDiscoverySucceeded = false;
 		this.settingsOwners = [];
 		this.discoveredAppExtensions = [];
 		this.declaredSettingsBySubject.clear();
@@ -605,6 +616,7 @@ export class ExtensionManager {
 		this.hookEmbedsBody = [];
 
 		let discovered: Extension[] = [];
+		let discoverySucceeded = false;
 
 		try {
 			await ensureExtensionDirs(env['EXTENSIONS_PATH'], NESTED_EXTENSION_TYPES);
@@ -619,6 +631,7 @@ export class ExtensionManager {
 				: discovered.filter((extension) => APP_EXTENSION_TYPES.includes(extension.type as any) === false);
 
 			this.discoveredAppExtensions = discovered.filter((extension) => isIn(extension.type, APP_EXTENSION_TYPES));
+			discoverySucceeded = true;
 		} catch (err: any) {
 			const reason = sanitizeExtensionError(err, 'DISCOVERY_FAILED');
 			logger.warn(`Couldn't load extensions: ${reason.code} ${reason.detail}`);
@@ -630,6 +643,7 @@ export class ExtensionManager {
 		await this.prepareConfinedRuntime();
 		await this.gateConfinedExtensions();
 		this.gateSettingsSubjects(discovered);
+		this.settingsDiscoverySucceeded = discoverySucceeded && !this.discoveryHadFailure;
 
 		await this.registerHooks();
 		await this.registerEndpoints();
@@ -663,6 +677,7 @@ export class ExtensionManager {
 		this.confinedEligible.clear();
 		this.settingsEligible.clear();
 		this.settingsIneligible.clear();
+		this.settingsDiscoverySucceeded = false;
 		this.settingsOwners = [];
 		this.discoveredAppExtensions = [];
 		this.declaredSettingsBySubject.clear();
@@ -765,7 +780,11 @@ export class ExtensionManager {
 	}
 
 	private async getExtensions(): Promise<Extension[]> {
+		this.discoveryHadFailure = false;
+
 		const onDiscoveryFailure = (failure: ExtensionDiscoveryFailure) => {
+			this.discoveryHadFailure = true;
+
 			const reason = sanitizeExtensionError(failure.error, 'MANIFEST_INVALID');
 
 			this.diagnostics.push({
@@ -790,6 +809,8 @@ export class ExtensionManager {
 		try {
 			localExtensions = await getLocalExtensions(env['EXTENSIONS_PATH']);
 		} catch (error) {
+			this.discoveryHadFailure = true;
+
 			const reason = sanitizeExtensionError(error, 'DISCOVERY_FAILED');
 
 			this.diagnostics.push({

@@ -161,11 +161,12 @@ describe('configSnapshot against a remote server', () => {
 
 	it('refuses an incomplete snapshot into an empty destination and writes nothing', async () => {
 		respondWith({
-			manifest: { version: 2, resources: ['roles', 'permissions', 'folders', 'settings'] },
+			manifest: { version: 2, resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings'] },
 			roles: [without(EDITOR, 'enforce_tfa')],
 			permissions: [],
 			folders: [],
 			settings: [SETTINGS_DOC],
+			'extension-settings': [],
 		});
 
 		await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
@@ -215,13 +216,17 @@ describe('configSnapshot manifest version preservation', () => {
 			if (seeded !== undefined) await seedManifest(seeded);
 
 			const respondedResources =
-				seeded === undefined ? ['roles', 'permissions', 'folders', 'settings'] : ['roles', 'permissions'];
+				seeded === undefined
+					? ['roles', 'permissions', 'folders', 'settings', 'extension-settings']
+					: ['roles', 'permissions'];
 
 			respondWith({
 				manifest: { version: expected, resources: respondedResources },
 				roles: [],
 				permissions: [],
-				...(expected >= 2 ? { folders: [], settings: seeded === undefined ? [SETTINGS_DOC] : [] } : {}),
+				...(expected >= 2
+					? { folders: [], settings: seeded === undefined ? [SETTINGS_DOC] : [], 'extension-settings': [] }
+					: {}),
 			});
 
 			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
@@ -253,6 +258,7 @@ describe('configSnapshot manifest version preservation', () => {
 							permissions: [],
 							folders: [],
 							settings: options.resources.includes('settings') ? [SETTINGS_DOC] : [],
+							'extension-settings': [],
 						},
 						currentRoleKeys: new Set<string>(),
 						stateToken: { resources: [...options.resources], digest: 'digest' },

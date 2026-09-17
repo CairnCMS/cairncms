@@ -92,6 +92,14 @@ describe('descriptor directory conformance', () => {
 
 			if (typeof shape === 'object' && 'singleton' in shape) {
 				expect(descriptor.documentIdentityFields).toHaveLength(0);
+			} else if (typeof shape === 'object' && 'nestedMap' in shape) {
+				expect(descriptor.documentIdentityFields).toHaveLength(1);
+
+				const field = descriptor.documentIdentityFields[0]!;
+				expect(field.type).toBe('string');
+				expect(typeof field.maxLength).toBe('number');
+				expect(field.maxLength).toBeGreaterThan(0);
+				expect(typeof descriptor.layout.ownsFilenameStem).toBe('function');
 			} else {
 				expect(descriptor.documentIdentityFields).toHaveLength(1);
 

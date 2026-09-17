@@ -292,6 +292,13 @@ function resultCardinality(kind: ConfigKind, result: RemoteWireResult): Record<'
 				delete: 0,
 			};
 
+		case 'extension-settings':
+			return {
+				create: result['extension-settings'].created,
+				update: result['extension-settings'].updated,
+				delete: result['extension-settings'].deleted,
+			};
+
 		default: {
 			const unhandled: never = kind;
 			throw new Error(`Unhandled config kind: ${JSON.stringify(unhandled)}`);
@@ -353,6 +360,7 @@ function validatedSnapshot(data: unknown, token: string): CairnConfig {
 		permissions: managed.has('permissions') ? snapshot.permissions : [],
 		folders: managed.has('folders') ? snapshot.folders : [],
 		settings: managed.has('settings') ? snapshot.settings : [],
+		'extension-settings': managed.has('extension-settings') ? snapshot['extension-settings'] : [],
 	};
 }
 
@@ -420,6 +428,20 @@ function redactedDeletion(deletion: RenderableDeletion, token: string): Renderab
 
 	if (deletion.kind === 'folders') {
 		return { kind: 'folders', identity: { key: redactToken(deletion.identity.key, token) } };
+	}
+
+	if (deletion.kind === 'extension-settings') {
+		const { subject, scope, scope_key, key } = deletion.identity;
+
+		return {
+			kind: 'extension-settings',
+			identity: {
+				subject: redactToken(subject, token),
+				scope,
+				scope_key: redactToken(scope_key, token),
+				key: redactToken(key, token),
+			},
+		};
 	}
 
 	const unhandled: never = deletion;

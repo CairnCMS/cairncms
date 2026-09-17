@@ -35,7 +35,20 @@ vi.mock('../logger.js', () => {
 
 vi.mock('../database/index.js', () => ({ default: vi.fn(() => ({})) }));
 
-vi.mock('../utils/get-schema.js', () => ({ getSchema: vi.fn(async () => ({})) }));
+vi.mock('../extensions.js', () => ({
+	getExtensionManager: () => ({
+		isSettingsDiscoveryComplete: () => true,
+		getSettingsOwners: () => [
+			{
+				subject: '@cairncms/extension-widget',
+				status: 'available',
+				declaration: { color: { type: 'string', scope: 'global' } },
+			},
+		],
+	}),
+}));
+
+vi.mock('../utils/get-schema.js', () => ({ getSchema: vi.fn(async () => ({ collections: {} })) }));
 
 vi.mock('../utils/get-config-snapshot.js', () => ({ readCurrentConfig: vi.fn() }));
 
@@ -95,6 +108,7 @@ const CURRENT_CONFIG: CairnConfig = {
 	permissions: [],
 	folders: [],
 	settings: [],
+	'extension-settings': [],
 };
 
 const ADMIN = { admin: true, app: true, user: USER, role: ROLE, ip: '10.0.0.1' };
@@ -105,6 +119,7 @@ const EMPTY_PLAN: ConfigPlan = {
 	permissions: { create: [], update: [], delete: [] },
 	folders: { create: [], update: [], delete: [] },
 	settings: { create: [], update: [], delete: [] },
+	'extension-settings': { create: [], update: [], delete: [] },
 	protections: [],
 };
 
@@ -129,6 +144,7 @@ const CREATE_PLAN: ConfigPlan = {
 	permissions: { create: [], update: [], delete: [] },
 	folders: { create: [], update: [], delete: [] },
 	settings: { create: [], update: [], delete: [] },
+	'extension-settings': { create: [], update: [], delete: [] },
 	protections: [],
 };
 
@@ -532,6 +548,7 @@ describe('POST /config/apply wire-contract validation', () => {
 			permissions: [],
 			folders: [{ key: 'ghost', name: 'Ghost', parent: null }],
 			settings: [],
+			'extension-settings': [],
 		});
 
 		expect(res.status).toBe(200);
@@ -673,6 +690,7 @@ describe('POST /config/apply forwards current folder state to validation', () =>
 				permissions: [],
 				folders: [],
 				settings: [{ storage_default_folder: 'uploads' }],
+				'extension-settings': [],
 			});
 
 		expect(res.status).toBe(200);
@@ -703,10 +721,90 @@ describe('POST /config/apply forwards current folder state to validation', () =>
 				permissions: [],
 				folders: [],
 				settings: [{ storage_default_folder: 'ghost' }],
+				'extension-settings': [],
 			});
 
 		expect(res.status).toBe(400);
 		expect(res.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
 		expect(computeConfigPlan).not.toHaveBeenCalled();
+	});
+});
+
+describe('POST /config/apply extension-settings forwarding', () => {
+	let realValidate: typeof validateDesiredConfig;
+
+	beforeAll(async () => {
+		const actual = await vi.importActual<typeof import('../utils/validate-desired-config.js')>(
+			'../utils/validate-desired-config.js'
+		);
+
+		realValidate = actual.validateDesiredConfig;
+	});
+
+	it('forwards the captured catalogue to the read, real validation, planning, and mutation of a successful apply', async () => {
+		vi.mocked(validateDesiredConfig).mockImplementation(realValidate);
+
+		const config: CairnConfig = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [],
+		};
+
+		vi.mocked(readCurrentConfig).mockResolvedValue({
+			config,
+			currentRoleKeys: new Set<string>(),
+			currentFolderKeys: new Set<string>(),
+			currentFolderParents: new Map<string, string | null>(),
+			stateToken: { resources: ['extension-settings'], digest: 'd', extensionSubjects: ['@cairncms/extension-widget'] },
+		});
+
+		const plan: ConfigPlan = {
+			...EMPTY_PLAN,
+			managedResources: ['extension-settings'],
+			'extension-settings': {
+				create: [
+					{
+						identity: { subject: '@cairncms/extension-widget', scope: 'global', scope_key: '', key: 'color' },
+						value: 'blue',
+					},
+				],
+				update: [],
+				delete: [],
+			},
+		};
+
+		vi.mocked(computeConfigPlan).mockReturnValue(plan);
+		vi.mocked(serializeConfigPlan).mockReturnValue(SERIALIZED);
+		vi.mocked(applyConfigPlan).mockResolvedValue(APPLY_RESULT as never);
+
+		const res = await request(makeApp(ADMIN))
+			.post('/config/apply')
+			.set('User-Agent', 'cairncms-cli/1.6.0')
+			.send({
+				manifest: { version: 2, resources: ['extension-settings'] },
+				roles: [],
+				permissions: [],
+				folders: [],
+				settings: [],
+				'extension-settings': [{ subject: '@cairncms/extension-widget', global: { color: 'blue' }, collections: {} }],
+			});
+
+		expect(res.status).toBe(200);
+
+		const readArg = vi.mocked(readCurrentConfig).mock.calls[0]![0];
+		expect([...(readArg.extensionSettingsSubjects ?? [])]).toEqual(['@cairncms/extension-widget']);
+
+		const captured = readArg.extensionDeclarations;
+		expect(captured).toEqual(expect.objectContaining({ discoveryComplete: true }));
+
+		const validateContext = vi.mocked(validateDesiredConfig).mock.calls[0]![1] as { extensionDeclarations?: unknown };
+		expect(validateContext.extensionDeclarations).toBe(captured);
+
+		expect(vi.mocked(computeConfigPlan).mock.calls[0]![2]?.extensionDeclarations).toBe(captured);
+
+		expect(vi.mocked(applyConfigPlan).mock.calls[0]![1].extensionDeclarations).toBe(captured);
 	});
 });

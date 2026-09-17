@@ -84,6 +84,14 @@ vi.mock('../logger.js', () => ({
 	default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
 
+vi.mock('../extensions.js', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('../extensions.js')>();
+	return {
+		...actual,
+		getExtensionManager: () => ({ isSettingsDiscoveryComplete: () => true, getSettingsOwners: () => [] }),
+	};
+});
+
 const testSchema = {} as SchemaOverview;
 
 describe('getConfigSnapshot', () => {
@@ -106,7 +114,10 @@ describe('getConfigSnapshot', () => {
 
 		const config = await getConfigSnapshot({ database: db });
 
-		expect(config.manifest).toEqual({ version: 2, resources: ['roles', 'permissions', 'folders', 'settings'] });
+		expect(config.manifest).toEqual({
+			version: 2,
+			resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings'],
+		});
 	});
 
 	it('builds ConfigRole entries with v1 allowlist only', async () => {
@@ -796,6 +807,7 @@ describe('readCurrentConfig', () => {
 			permissions: [],
 			folders: [],
 			settings: [{ storage_default_folder: folderKey }],
+			'extension-settings': [],
 		});
 
 		const contextFor = {
@@ -967,6 +979,7 @@ describe('readCurrentConfig', () => {
 			permissions: [],
 			folders: [],
 			settings: [],
+			'extension-settings': [],
 		});
 
 		expect(currentRoleKeys.size).toBe(0);

@@ -388,6 +388,7 @@ describe('validateDesiredConfig', () => {
 			permissions: [],
 			folders: [{ key: 'docs', name: 'Docs' }],
 			settings: [],
+			'extension-settings': [],
 		};
 
 		expect(validate(doc)).toEqual([]);
@@ -417,7 +418,14 @@ describe('validateDesiredConfig', () => {
 	};
 
 	function settingsBody(settings: unknown[]): Record<string, unknown> {
-		return { manifest: { version: 2, resources: ['settings'] }, roles: [], permissions: [], folders: [], settings };
+		return {
+			manifest: { version: 2, resources: ['settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings,
+			'extension-settings': [],
+		};
 	}
 
 	it('accepts a partial authored settings declaration while requiring a complete one in snapshot mode', () => {
@@ -478,6 +486,7 @@ describe('validateDesiredConfig', () => {
 			permissions: [],
 			folders,
 			settings,
+			'extension-settings': [],
 		};
 	}
 

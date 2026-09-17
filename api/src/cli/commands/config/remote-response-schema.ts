@@ -12,6 +12,10 @@ const folderIdentity = z.object({ key: z.string() }).passthrough();
 const settingsIdentity = z.object({ key: z.string() }).passthrough();
 const permissionIdentity = z.object({ role: z.string(), collection: z.string(), action }).passthrough();
 
+const extensionSettingsIdentity = z
+	.object({ subject: z.string(), scope: z.enum(['global', 'collection']), scope_key: z.string(), key: z.string() })
+	.passthrough();
+
 const fieldChange = z.custom<{ before: unknown; after: unknown }>(
 	(value) => isPlainObject(value) && 'before' in (value as object) && 'after' in (value as object)
 );
@@ -130,6 +134,30 @@ export const RemoteConfigPlanChange = z.union([
 			fields: fieldChanges,
 		})
 		.passthrough(),
+	z
+		.object({
+			kind: z.literal('extension-settings'),
+			operation: z.literal('create'),
+			identity: extensionSettingsIdentity,
+			values: z.object({ value: z.unknown() }).passthrough(),
+		})
+		.passthrough(),
+	z
+		.object({
+			kind: z.literal('extension-settings'),
+			operation: z.literal('update'),
+			identity: extensionSettingsIdentity,
+			fields: fieldChanges,
+		})
+		.passthrough(),
+	z
+		.object({
+			kind: z.literal('extension-settings'),
+			operation: z.literal('delete'),
+			identity: extensionSettingsIdentity,
+			impact: emptyImpact,
+		})
+		.passthrough(),
 ]);
 
 const contributor = z
@@ -176,6 +204,7 @@ export const RemoteApplyResult = z
 			.object({ created: z.array(z.string()), updated: z.array(z.string()), deleted: z.array(z.string()) })
 			.passthrough(),
 		settings: z.object({ updated: z.array(z.string()) }).passthrough(),
+		'extension-settings': z.object({ created: count, updated: count, deleted: count }).passthrough(),
 	})
 	.passthrough();
 
@@ -183,6 +212,7 @@ const deletion = z.union([
 	z.object({ kind: z.literal('roles'), identity: roleIdentity }).passthrough(),
 	z.object({ kind: z.literal('permissions'), identity: permissionIdentity }).passthrough(),
 	z.object({ kind: z.literal('folders'), identity: folderIdentity }).passthrough(),
+	z.object({ kind: z.literal('extension-settings'), identity: extensionSettingsIdentity }).passthrough(),
 ]);
 
 export const RemoteErrorEnvelope = z.object({ errors: z.array(z.unknown()) }).passthrough();

@@ -1,5 +1,5 @@
 import type { Knex } from 'knex';
-import type { SchemaOverview } from '@cairncms/types';
+import type { ExtensionSettings, SchemaOverview } from '@cairncms/types';
 import type {
 	ConfigApplySecurityContext,
 	ConfigFailure,
@@ -56,7 +56,11 @@ export interface ConfigFieldDescriptor {
 	identityComponent?: boolean;
 }
 
-export type ConfigDocumentShape = 'flat' | { recordsField: string } | { singleton: { filename: string } };
+export type ConfigDocumentShape =
+	| 'flat'
+	| { recordsField: string }
+	| { singleton: { filename: string } }
+	| { nestedMap: { globalField: string; collectionsField: string } };
 
 /** A per-kind dependency payload, keyed only by config kinds. */
 export type ConfigDependencyMap = Partial<Record<ConfigKind, unknown>>;
@@ -105,6 +109,8 @@ export interface ConfigResourceDescriptor<K extends ConfigKindTypes> {
 		parseDocumentFile(record: Record<string, unknown>, filename: string): K['Document'];
 		/** The rejection message for a reserved filename; required only for a kind whose identity declares reserved stems. */
 		reservedFilenameMessage?(filename: string): string;
+		/** Checks derived filename ownership before reading the file; required for nestedMap layouts. */
+		ownsFilenameStem?(stem: string): boolean;
 	};
 	documentIdentityFields: ConfigFieldDescriptor[];
 	recordFields: ConfigFieldDescriptor[];
@@ -120,6 +126,10 @@ export interface ConfigResourceDescriptor<K extends ConfigKindTypes> {
 	compareIdentity(a: K['Identity'], b: K['Identity']): number;
 	identityOfDelete(entry: K['Delete']): K['Identity'];
 	canonicalizeValues(record: K['Record']): K['Values'];
+	/** Nested-value alternative to the generic field scan. */
+	residualPlaceholders?(documents: K['Document'][]): string[];
+	/** Restores nested declarations not covered by acceptsPlaceholder fields. */
+	restorePlaceholders?(pending: K['Document'], existing: Record<string, unknown>): K['Document'];
 	toCreateEntry(record: K['Record']): K['Create'];
 	toUpdateEntry(identity: K['Identity'], changes: K['Changes']): K['Update'];
 	toDeleteEntry(identity: K['Identity']): K['Delete'];
@@ -130,6 +140,10 @@ export interface ReadContext<K extends ConfigKindTypes> {
 	database: Knex;
 	schema: SchemaOverview;
 	readMode: ConfigReadMode;
+	/** Absent reads all eligible subjects; an empty set reads none. */
+	selectedExtensionSubjects?: ReadonlySet<string>;
+	/** Reuse the operation's catalogue; omit during the transaction recheck to detect declaration changes. */
+	extensionDeclarations?: ExtensionDeclarationSnapshot;
 	/** Typed access to a declared dependency's read state; the engine throws if that dependency was not published. */
 	dependency<D extends Extract<keyof K['ReadDependencies'], ConfigKind>>(kind: D): K['ReadDependencies'][D];
 }
@@ -150,16 +164,28 @@ export type ReferenceStateSource =
 	  }
 	| { references: 'server-snapshot' };
 
+/** Captured once per operation; discoveryComplete distinguishes empty success from failed discovery. */
+export type ExtensionDeclarationSnapshot = {
+	discoveryComplete: boolean;
+	eligible: ReadonlyMap<string, ExtensionSettings>;
+};
+
 export type ValidationContext = {
 	rolesManaged: boolean;
 	declaredRoleKeys: ReadonlySet<string>;
 	foldersManaged: boolean;
 	declaredFolderKeys: ReadonlySet<string>;
+	/** Target-only context; omitted when validating a portable server snapshot. */
+	extensionDeclarations?: ExtensionDeclarationSnapshot;
+	currentCollections?: ReadonlySet<string>;
 } & ReferenceStateSource;
 
 export interface PlanContext<K extends ConfigKindTypes> {
 	/** Typed access to a declared dependency's finalized plan; the engine throws if that dependency was not published. */
 	dependency<D extends Extract<keyof K['PlanDependencies'], ConfigKind>>(kind: D): K['PlanDependencies'][D];
+	/** Includes empty subject documents, which still manage stored keys. */
+	desiredSubjects?: ReadonlySet<string>;
+	extensionDeclarations?: ExtensionDeclarationSnapshot;
 }
 
 export interface EnrichContext {
@@ -174,6 +200,7 @@ export interface ApplyContext<K extends ConfigKindTypes> {
 	schema: SchemaOverview;
 	securityContext: ConfigApplySecurityContext;
 	mutationOptions: ConfigApplyMutationOptions;
+	extensionDeclarations?: ExtensionDeclarationSnapshot;
 	/** Typed access to a declared dependency's apply state; the engine throws if that dependency was not published. */
 	dependency<D extends Extract<keyof K['ApplyDependencies'], ConfigKind>>(kind: D): K['ApplyDependencies'][D];
 }

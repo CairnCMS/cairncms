@@ -29,6 +29,10 @@ import {
 	userAgentFrom,
 	withConfigRun,
 } from '../utils/config/run-record.js';
+import {
+	buildExtensionDeclarationSnapshot,
+	desiredExtensionSubjects,
+} from '../utils/config/handlers/extension-settings.js';
 import { enrichConfigPlan } from '../utils/enrich-config-plan.js';
 import { readCurrentConfig } from '../utils/get-config-snapshot.js';
 import { serializeConfigPlan } from '../utils/serialize-config-plan.js';
@@ -102,6 +106,17 @@ router.post(
 				const database = getDatabase();
 				const schema = await getSchema({ database, bypassCache: true });
 
+				const extensionSettingsManaged = manifest.resources.includes('extension-settings');
+
+				// Use one declaration snapshot for read, validation, planning, and mutation.
+				const extensionDeclarations = extensionSettingsManaged ? await buildExtensionDeclarationSnapshot() : undefined;
+
+				const extensionSettingsSubjects = extensionSettingsManaged
+					? desiredExtensionSubjects(document['extension-settings'])
+					: undefined;
+
+				const currentCollections = extensionSettingsManaged ? new Set(Object.keys(schema.collections)) : undefined;
+
 				const {
 					config: current,
 					currentRoleKeys,
@@ -112,6 +127,8 @@ router.post(
 					database,
 					schema,
 					resources: manifest.resources,
+					...(extensionSettingsSubjects !== undefined && { extensionSettingsSubjects }),
+					...(extensionDeclarations !== undefined && { extensionDeclarations }),
 				});
 
 				const failures = validateDesiredConfig(document, {
@@ -120,13 +137,19 @@ router.post(
 					currentRoleKeys,
 					currentFolderKeys,
 					currentFolderParents,
+					...(extensionDeclarations !== undefined && { extensionDeclarations }),
+					...(currentCollections !== undefined && { currentCollections }),
 				});
 
 				if (failures.length > 0) throw failures.map(toConfigException);
 
 				const config = normalizeToInternal(manifest, document);
 
-				const plan = computeConfigPlan(current, config);
+				const plan = computeConfigPlan(
+					current,
+					config,
+					extensionDeclarations !== undefined ? { extensionDeclarations } : undefined
+				);
 
 				run.planned(planSummary(plan));
 
@@ -146,6 +169,7 @@ router.post(
 					destructive,
 					context: { mode: 'request', accountability },
 					expectedStateToken: stateToken,
+					...(extensionDeclarations !== undefined && { extensionDeclarations }),
 				});
 
 				res.locals['payload'] = { data: result, meta: { plan: serialized } };

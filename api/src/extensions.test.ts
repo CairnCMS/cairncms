@@ -74,6 +74,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 	return { ...actual, readdir: async () => [] };
 });
 
+import * as discovery from '@cairncms/utils/node';
 import { ExtensionManager } from './extensions.js';
 import { getFlowManager } from './flows.js';
 import logger from './logger.js';
@@ -687,6 +688,57 @@ describe('the settings subject gate in the loader', () => {
 
 		expect((instance as any).isSettingsEligible(owner)).toBe(true);
 		expect((instance as any).extensions).toContain(owner);
+	});
+
+	it('reports settings discovery complete after a successful load', async () => {
+		const instance = new ExtensionManager();
+		const owner = settingsOwner('preview', 'cairncms-extension-preview');
+		(instance as any).getExtensions = async () => [owner];
+
+		await (instance as any).load();
+
+		expect(instance.isSettingsDiscoveryComplete()).toBe(true);
+	});
+
+	it('reports settings discovery incomplete and owns nothing when discovery fails', async () => {
+		const instance = new ExtensionManager();
+
+		(instance as any).getExtensions = async () => {
+			throw new Error('discovery boom');
+		};
+
+		await (instance as any).load();
+
+		expect(instance.isSettingsDiscoveryComplete()).toBe(false);
+		expect(instance.getSettingsOwners()).toEqual([]);
+	});
+
+	it('reports discovery incomplete when the real getExtensions absorbs a local-directory failure', async () => {
+		const instance = new ExtensionManager();
+
+		vi.spyOn(discovery, 'getPackageExtensions').mockResolvedValue([]);
+		vi.spyOn(discovery, 'resolvePackageExtensions').mockResolvedValue([]);
+		vi.spyOn(discovery, 'getLocalExtensions').mockRejectedValue(new Error('local directory unreadable'));
+
+		await (instance as any).load();
+
+		expect(instance.isSettingsDiscoveryComplete()).toBe(false);
+	});
+
+	it('reports discovery incomplete when the real getExtensions absorbs a per-package failure', async () => {
+		const instance = new ExtensionManager();
+
+		vi.spyOn(discovery, 'getPackageExtensions').mockImplementation(async (_location: any, onFailure: any) => {
+			onFailure({ name: 'bad-package', local: false, error: new Error('manifest invalid') });
+			return [];
+		});
+
+		vi.spyOn(discovery, 'resolvePackageExtensions').mockResolvedValue([]);
+		vi.spyOn(discovery, 'getLocalExtensions').mockResolvedValue([]);
+
+		await (instance as any).load();
+
+		expect(instance.isSettingsDiscoveryComplete()).toBe(false);
 	});
 
 	it('refuses an invalid settings subject without failing the extension, warning instead', async () => {

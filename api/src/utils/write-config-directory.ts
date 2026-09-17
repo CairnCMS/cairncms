@@ -142,34 +142,26 @@ async function readExistingDeclaration(
 	return isPlainObject(parsed) ? (parsed as Record<string, unknown>) : null;
 }
 
-/**
- * Restores a committed `{{CAIRNCMS_CONFIG_*}}` placeholder into one pending document when the existing
- * file of the same identity declares one for an `acceptsPlaceholder` field. Preserving keeps an operator's
- * committed declaration rather than overwriting it with the resolved database value on re-snapshot.
- */
 async function restoreDeclaredPlaceholders(root: string, pending: PendingDocument): Promise<void> {
 	if (pending.kind === undefined) return;
 
-	const descriptor = getDescriptor(pending.kind);
+	const descriptor = getDescriptor(pending.kind) as ConfigResourceDescriptor<ConfigKindTypes>;
 
 	const placeholderFields = [...descriptor.documentIdentityFields, ...descriptor.recordFields].filter(
 		(field) => field.acceptsPlaceholder
 	);
 
-	if (placeholderFields.length === 0) return;
+	if (placeholderFields.length === 0 && descriptor.restorePlaceholders === undefined) return;
 
 	const existing = await readExistingDeclaration(root, pending.target, pending.label);
 	if (existing === null) return;
 
-	// A file whose declared identity does not match the record its filename names is not this record's
-	// declaration, so nothing is preserved from it. The identity field is never a placeholder, so this
-	// comparison needs no interpolation and works with an unset variable. A singleton has no identity field.
-	const identityField = descriptor.documentIdentityFields[0];
+	// Preserve declarations only from the same identity; a singleton's fixed filename supplies its identity.
+	const shape = descriptor.layout.documentShape;
+	const isSingleton = typeof shape === 'object' && 'singleton' in shape;
+	const stem = path.basename(pending.target).slice(0, -YAML_SUFFIX.length);
 
-	if (identityField !== undefined) {
-		const stem = path.basename(pending.target).slice(0, -YAML_SUFFIX.length);
-		if (existing[identityField.name] !== stem) return;
-	}
+	if (!isSingleton && !declaredMatchesFilename(descriptor, existing, stem)) return;
 
 	const document = pending.document as Record<string, unknown>;
 
@@ -181,6 +173,30 @@ async function restoreDeclaredPlaceholders(root: string, pending: PendingDocumen
 			document[field.name] = declared;
 		}
 	}
+
+	if (descriptor.restorePlaceholders !== undefined) {
+		pending.document = descriptor.restorePlaceholders(pending.document, existing);
+	}
+}
+
+function declaredMatchesFilename(
+	descriptor: ConfigResourceDescriptor<ConfigKindTypes>,
+	declared: unknown,
+	stem: string
+): boolean {
+	if (!isPlainObject(declared)) return false;
+
+	const shape = descriptor.layout.documentShape;
+
+	if (typeof shape === 'object' && 'nestedMap' in shape) {
+		try {
+			return descriptor.layout.filenameOf(descriptor.layout.documentIdentityOf(declared as never)) === stem;
+		} catch {
+			return false;
+		}
+	}
+
+	return (declared as Record<string, unknown>)[descriptor.documentIdentityFields[0]!.name] === stem;
 }
 
 /**
@@ -191,13 +207,11 @@ async function cleanKindDirectory(root: string, kind: ConfigKind, keep: Set<stri
 	const entries = await readContainedDirectory(root, path.join(root, kind));
 	if (entries === null) return;
 
-	const descriptor = getDescriptor(kind);
+	const descriptor = getDescriptor(kind) as ConfigResourceDescriptor<ConfigKindTypes>;
 	const shape = descriptor.layout.documentShape;
 
 	// A singleton owns only its one fixed file, which is always written and kept, so there is nothing to remove.
 	if (typeof shape === 'object' && 'singleton' in shape) return;
-
-	const identityField = descriptor.documentIdentityFields[0]!.name;
 
 	for (const entry of entries.sort()) {
 		const label = `${kind}/${entry}`;
@@ -223,9 +237,7 @@ async function cleanKindDirectory(root: string, kind: ConfigKind, keep: Set<stri
 			continue;
 		}
 
-		const identity = isPlainObject(declared) ? (declared as Record<string, unknown>)[identityField] : undefined;
-
-		if (identity !== entry.slice(0, -YAML_SUFFIX.length)) {
+		if (!declaredMatchesFilename(descriptor, declared, entry.slice(0, -YAML_SUFFIX.length))) {
 			logger.warn(`Leaving "${label}": it does not declare the identity its filename promises.`);
 			continue;
 		}
