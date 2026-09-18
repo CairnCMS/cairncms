@@ -75,10 +75,6 @@ create_role: Rolle erstellen
 create_user: Benutzer erstellen
 message: Nachricht
 delete_panel: Panel löschen
-create_custom_translation: Create Custom Translation
-edit_custom_translation: Edit Custom Translation
-no_custom_translations: No Custom Translations
-no_custom_translations_copy: There are no custom translations yet.
 invite_users: Benutzer einladen
 invite: Einladen
 email_already_invited: E-Mail "{email}" wurde bereits eingeladen
@@ -115,7 +111,6 @@ archive_confirm_count: >-
   Keine Elemente ausgewählt | Möchten Sie dieses Element wirklich archivieren? | Möchten Sie diese {count} Elemente wirklich archivieren?
 reset_system_permissions_to: 'Systemberechtigungen zurücksetzen auf:'
 reset_system_permissions_copy: Diese Aktion wird alle benutzerdefinierten Berechtigungen überschreiben, die Sie möglicherweise auf die System-Sammlungen angewendet haben. Sind Sie sicher?
-the_following_are_minimum_permissions: The following minimum permissions are automatically applied when "App Access" is enabled. You can grant additional permissions if needed, but you cannot reduce permissions below this level.
 app_access_minimum: App-Zugriff Minimum
 recommended_defaults: Empfohlene Standardwerte
 unarchive: Archivierung zurücksetzen
@@ -166,7 +161,6 @@ permissions_for_role: 'Elemente, die {role} Rolle {action} kann.'
 fields_for_role: 'Felder die von der {role} Rolle {action} werden können.'
 validation_for_role: 'Feld {action} Regeln, welche die {role} Rolle befolgen muss.'
 presets_for_role: 'Standardwert für die {role} Rolle.'
-presets_field_warning: 'Relational presets for field "{field}" should be configured with the "detailed" syntax.'
 presentation_and_aliases: Darstellung & Aliase
 revision_post_create: So sah dieses Element bei der Erstellung aus.
 revision_post_update: So sieht dieses Element nach der Überarbeitung aus.
@@ -222,7 +216,6 @@ bigInteger: Big Integer
 boolean: Boolean
 date: Datum
 date_range: Zeitspanne
-translation_key_placeholder: Enter a key...
 datetime: Datum mit Uhrzeit
 dateTime: Datum mit Uhrzeit
 precision: Präzision
@@ -282,12 +275,7 @@ o2m_relationship: 1:n-Beziehung
 m2m_relationship: n:m-Beziehung
 m2a_relationship: n:x-Beziehung (Many to Any)
 invalid_item: Ungültiges Element
-require_confirmation: Require Confirmation
-dialog: Dialog
 modal: Modal
-confirmation_dialog: Confirmation Dialog
-confirmation_description: Confirmation Description
-confirmation_input_fields: Confirmation Input Fields
 next: Weiter
 field_name: Feldname
 translations: Übersetzungen
@@ -306,7 +294,6 @@ updated_on: Geändert am
 updated_by: Geändert von
 primary_key: Primärschlüssel
 foreign_key: Fremdschlüssel
-field_key: Field Key
 finish_setup: Einrichtung abschließen
 dismiss: Verwerfen
 toggle_raw_editor: Raw-Editor umschalten
@@ -435,7 +422,6 @@ checksum: Prüfsumme
 owner: Besitzer
 edited_by: Editiert von
 folder: Ordner
-folders: Folders
 zoom: Zoom
 download: Herunterladen
 open: Öffnen
@@ -458,8 +444,6 @@ exporting_all_items_in_collection: Alle {total} Elemente innerhalb von {collecti
 exporting_limited_items_in_collection: '{limit} von {total} Elementen innerhalb von {collection} exportieren.'
 exporting_no_items_to_export: Keine Elemente zu exportieren. Passen Sie die Konfiguration unten an.
 exporting_download_hint: Sobald abgeschlossen, wird die {format} Datei automatisch auf das Gerät heruntergeladen.
-exporting_library_hint: Once the {format} file is created, it will be saved to the File Library.
-exporting_library_hint_forced: This export must be processed in batches. Once completed, the {format} file will be saved to the File Library.
 collection_key: Sammlungsschlüssel
 name: Name
 primary_key_field: Primärschlüsselfeld
@@ -484,8 +468,6 @@ enable_select_button: Knopf zum Auswählen aktivieren
 allow_duplicates: Duplikate erlauben
 comments: Kommentare
 no_comments: Noch keine Kommentare
-expand: Expand
-collapse: Collapse
 select_item: Element auswählen
 no_items: Keine Elemente
 search_items: Elemente suchen...
@@ -517,7 +499,6 @@ create_collection: Sammlung erstellen
 no_collections_copy_admin: Keine Sammlungen vorhanden. Auf die untenstehende Schaltfläche klicken, um loszulegen.
 no_collections_copy: Keine Sammlungen vorhanden. Bitte Systemadministrator kontaktieren.
 relationship_not_setup: Die relationale Beziehung wurde nicht korrekt konfiguriert
-no_singleton_relations: Relationships to Singletons are not supported
 display_template_not_setup: Die Anzeige-Vorlage ist falsch konfiguriert
 collection_field_not_setup: Das Sammlungsfeld ist falsch konfiguriert
 select_a_collection: Sammlung auswählen
@@ -610,7 +591,6 @@ errors:
   RANGE_NOT_SATISFIABLE: Ungültiger Bereich
   METHOD_NOT_ALLOWED: Methode ist nicht erlaubt
   REQUESTS_EXCEEDED: Anfragelimit erreicht
-  CONTENT_TOO_LARGE: Submitted item/file is too large
 security: Sicherheit
 value_hashed: Wert sicher gehashed
 bookmark_name: Name des Lesezeichens...
@@ -656,7 +636,6 @@ one_filtered_item: '1 gefiltertes Element'
 delete_collection_are_you_sure: >-
   Sind Sie sicher, dass Sie die Sammlung "{collection}" löschen möchten? Dies wird die Sammlung und alle darin enthaltenen Elemente löschen. Diese Aktion kann nicht rückgängig gemacht werden.
 delete_folder_are_you_sure: Sind Sie sicher, dass Sie den Ordner "{folder}" löschen wollen? Verschachtelte Ordner und Sammlungen werden an die oberste Ebene verschoben.
-delete_collection_peer_dependencies: The following fields will be deleted as well, as they are related to the current collection.
 collections_shown: Angezeigte Sammlungen
 visible_collections: Sichtbare Sammlungen
 hidden_collections: Versteckte Sammlungen
@@ -782,15 +761,8 @@ label: Label
 flows: Flows
 flow: Flow
 select_a_flow: Flow auswählen
-run_flow_confirm: Are you sure you want to execute this flow?
-run_flow_on_current_collection: Run Flow on Current Collection
-run_flow_on_current: Run Flow on Current Item
 run_flow_on_current_edited_confirm: Dieses Element kann durch diesen Flow aktualisiert werden, bist du dir sicher, dass du es ausführen möchtest?
-run_flow_on_selected: Select One or More Items First | Run Flow on 1 Selected Item | Run Flow on {n} Selected Items
-run_flow: Run Flow
 run_flow_success: Flow "{flow}" wurde erfolgreich ausgeführt
-field_name_placeholder: Enter field name...
-field_key_placeholder: Enter field key...
 trigger: Trigger
 trigger_options: Auslöse-Optionen
 view_trigger: Auslöser anzeigen
@@ -949,8 +921,6 @@ settings_permissions: Rollen & Berechtigungen
 settings_project: Projekteinstellungen
 settings_flows: Flows
 settings_presets: Vorlagen & Lesezeichen
-settings_translations: Custom Translations
-settings_extensions: Extensions
 one_or_more_options_are_missing: Eine oder mehrere Optionen fehlen
 scope: Bereich
 actions: Aktionen
@@ -998,48 +968,6 @@ page_help_settings_presets_item: >-
   **Vorlagen-Details** — Ein Formular zur Verwaltung von Lesezeichen und Vorlagen für Sammlungen.
 page_help_settings_flows_collection: '**Flows anzeigen** — Zeige alle Flows des Projektes.'
 page_help_settings_flows_item: '**Flow Details** — Verwaltung einer oder mehrerer Operationen.'
-page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
-extension_health_normal: Normal
-extension_health_warning: Warning | Warnings
-extension_health_failed: Failed
-extension_bundle_contents: Bundled extensions
-extension_capabilities: Capabilities
-extension_advanced_diagnostics: Advanced Diagnostics
-extension_sandboxed: Sandboxed
-extension_runtime: Runtime
-extension_runtime_sandboxed: Sandboxed
-extension_runtime_full_authority: Full Authority
-extension_runtime_browser: Browser App
-confined_runtime: Sandbox
-confined_runtime_mode: 'OS hardening: {decision} ({mode})'
-confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
-extension_status_loaded_detail: Loaded and running on the server.
-extension_status_discovered_detail: Discovered on this instance.
-extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
-extension_status_failed_detail: The extension failed to load on this instance.
-extension_settings_unavailable_detail: Extension settings are unavailable.
-extension_settings_drawer_subtitle: Extension settings
-extension_settings_section: Extension Settings
-extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
-extension_settings_no_global_keys: This extension declares no global settings.
-extension_settings_load_failed: Could not load the extension's settings.
-extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
-extension_type_group_hook: Hooks
-extension_type_group_endpoint: Endpoints
-extension_type_group_operation: Operations
-extension_type_group_bundle: Bundles
-extension_type_group_interface: Interfaces
-extension_type_group_display: Displays
-extension_type_group_layout: Layouts
-extension_type_group_module: Modules
-extension_type_group_panel: Panels
-extension_type_group_item-view: Item Views
-extension_type_group_other: Other
-no_extensions: No Extensions
-no_extensions_copy: No extensions were discovered in the configured extensions path.
-extensions_load_failed: Could not load the extensions inventory.
-page_help_settings_translations_collection: '**Browse Custom Translations** — Lists all custom translations within the project.'
-page_help_settings_translations_item: '**Custom Translations Detail** — A form for viewing and managing this item.'
 page_help_users_collection: '**Benutzerverzeichnis** — Auflistung aller Benutzer in diesem Projekt.'
 page_help_users_item: >-
   **Benutzer-Detail** — Kontoinformationen verwalten oder Details anderer Benutzer anzeigen.
@@ -1082,7 +1010,6 @@ directus_collection:
   directus_settings: Projekt-Konfiguration
   directus_shares: Verfolgen von extern freigegebenen Elementen
   directus_users: Systembenutzer für die Plattform
-  directus_translations: Custom translations
 fields:
   directus_activity:
     item: Item-Primärschlüssel
@@ -1171,7 +1098,6 @@ fields:
     png: PNG
     webP: WebP
     tiff: Tiff
-    avif: AVIF
     mapping: Zuordnung
     basemaps: Basiskarte
     basemaps_raster: Raster
@@ -1439,14 +1365,12 @@ export_started: Export gestartet
 export_started_copy: Der Export hat begonnen. Du wirst benachrichtigt, wenn die Datei zum Download bereit ist.
 sort_asc: Aufsteigend sortieren
 sort_desc: Absteigend sortieren
-disable_sort: Disable Sorting
 template: Vorlage
 require_value_to_be_set: Wert muss bei Erstellung gesetzt werden
 translation: Übersetzung
 translation_placeholder: Geben Sie eine Übersetzung ein...
 value: Wert
 view_project: Projekt anzeigen
-weeks: { }
 report_error: Fehler melden
 start: Start
 table: Tabelle
@@ -1579,9 +1503,6 @@ interfaces:
     description: Den zu hashenden Wert eingeben
     masked: Maskiert
     masked_label: Wahre Werte ausblenden
-  system-extension-secret:
-    name: Extension Secret
-    value_stored: Value Securely Encrypted
   select-icon:
     icon: Symbol
     description: Icon aus einer Dropdown-Liste auswählen
@@ -1607,9 +1528,6 @@ interfaces:
     many-to-one: n:1
     description: Ein einzelnes verwandtes Element auswählen
     display_template: Anzeigevorlage
-  collection-item-dropdown:
-    collection-item-dropdown: Collection Item Dropdown
-    description: Select an item from a collection in JSON format
   input-rich-text-md:
     markdown: Markdown
     description: Markdown eingeben und Vorschau anzeigen
@@ -1644,7 +1562,6 @@ interfaces:
     notice: Anmerkung
     description: Kurze Anmerkung anzeigen
     text: Inhalt der Anmerkung eingeben...
-    no_text: No text configured...
   list-o2m:
     one-to-many: 1:n
     description: Mehrere verwandte Elemente auswählen
@@ -1652,7 +1569,6 @@ interfaces:
   system-folder:
     folder: Ordner
     description: Ordner auswählen
-    field_hint: Default folder for uploaded files without a folder specified. Does not affect existing files.
     root_name: Stammordner für Dateien
     system_default: System-Standardeinstellungen
   select-radio:
@@ -1706,7 +1622,6 @@ interfaces:
     input-translated-string: Übersetzte Elemente
     description: Übersetzungselement auswählen oder hinzufügen
     search_placeholder: Suchen...
-    new_custom_translation: New Custom Translation
   boolean:
     toggle: Umschalten
     description: Zwischen Ein und Aus wechseln
@@ -2012,7 +1927,6 @@ panels:
     description: Liniendiagramm zum Vergleich der Änderung eines Feldes
     disabled_grouping: Deaktiviert, wenn Gruppierung ausgewählt ist.
     disabled_no_grouping: Deaktiviert, wenn keine Gruppierung ausgewählt ist.
-    show_marker: Show Tooltip Marker
     curve_type: Kurventyp
     smooth: Weich
     straight: Gerade
@@ -2117,8 +2031,6 @@ operations:
     name: Benachrichtigung senden
     description: App-Interne Benachrichtigung an einen oder mehrere Benutzer senden
     recipient: Benutzer
-    recipient_placeholder: Enter a UUID...
-    recipient_note: Add user UUID and press enter...
     message: Nachricht
   request:
     name: Webhook / Anfrage URL
@@ -2150,4 +2062,3 @@ operations:
     parallel: Parallel
     batch: Stapel
     batch_size: Stapelgröße
-    cache: Cache
