@@ -75,10 +75,6 @@ create_role: Szerepkör létrehozása
 create_user: Felhasználó létrehozása
 message: Üzenet
 delete_panel: Panel törlése
-create_custom_translation: Create Custom Translation
-edit_custom_translation: Edit Custom Translation
-no_custom_translations: No Custom Translations
-no_custom_translations_copy: There are no custom translations yet.
 invite_users: Felhasználók meghívása
 invite: Meghívás
 email_already_invited: Az "{email}" e-mail címet már meghívták
@@ -115,7 +111,6 @@ archive_confirm_count: >-
   Egy elem sincs kiválasztva `| Biztosan archiválni akarod ezt az elemet? | Biztosan archiválni akarod ezt a {count} elemet?
 reset_system_permissions_to: 'Rendszerjogosultságok visszaállítása a következőkre:'
 reset_system_permissions_copy: Ez a művelet felülírja a rendszergyűjteményekre alkalmazott egyéni engedélyeid. Biztos vagy benne?
-the_following_are_minimum_permissions: The following minimum permissions are automatically applied when "App Access" is enabled. You can grant additional permissions if needed, but you cannot reduce permissions below this level.
 app_access_minimum: App hozzáférés minimuma
 recommended_defaults: Ajánlott alapértelmezések
 unarchive: Archiválás visszavonása
@@ -166,7 +161,6 @@ permissions_for_role: 'A {role} szerepkör elemei a következő funkciót hajtha
 fields_for_role: 'A {role} szerepkör mezői a következő funkciót hajthatják végre: {action}.'
 validation_for_role: 'A {action} mező szabályozza a {role} szerepek által követendő viselkedést.'
 presets_for_role: 'A {role} szerepkör mezőértékeinek alapértelmezései.'
-presets_field_warning: 'Relational presets for field "{field}" should be configured with the "detailed" syntax.'
 presentation_and_aliases: Prezentációk és Aliasok
 revision_post_create: Ez az elem így nézett ki létrehozásakor.
 revision_post_update: Ez az elem így nézett ki a frissítés után.
@@ -222,7 +216,6 @@ bigInteger: Nagy egész számok
 boolean: Logikai
 date: Dátum
 date_range: Dátum intervallum
-translation_key_placeholder: Enter a key...
 datetime: Dátum és idő
 dateTime: Dátum és idő
 precision: Pontosság
@@ -282,12 +275,7 @@ o2m_relationship: Egy a Többhöz kapcsolat
 m2m_relationship: Több a Többhöz kapcsolat
 m2a_relationship: M2A kapcsolat (polimorf asszociációs leképezéshez több táblából)
 invalid_item: Érvénytelen elem
-require_confirmation: Require Confirmation
-dialog: Dialog
 modal: Ablak
-confirmation_dialog: Confirmation Dialog
-confirmation_description: Confirmation Description
-confirmation_input_fields: Confirmation Input Fields
 next: Következő
 field_name: Mezőnév
 translations: Fordítások
@@ -306,7 +294,6 @@ updated_on: Frissítve
 updated_by: Frissítette
 primary_key: Elsődleges kulcs
 foreign_key: Idegen Kulcs
-field_key: Field Key
 finish_setup: Beállítás befejezése
 dismiss: Elutasít
 toggle_raw_editor: Nyers szerkesztő ki/bekapcsolása
@@ -435,7 +422,6 @@ checksum: Ellenőrző
 owner: Tulajdonos
 edited_by: Módosította
 folder: Könyvtár
-folders: Folders
 zoom: Nagyítás
 download: Letöltés
 open: Megnyitás
@@ -458,8 +444,6 @@ exporting_all_items_in_collection: A(z) {collection} összes {total} elemének e
 exporting_limited_items_in_collection: 'A(z) {total} elemből {limit} exportálása a(z) {collection} gyűjteménybe.'
 exporting_no_items_to_export: Nincs exportálandó tétel. Módosítsa az alábbi exportálási konfigurációt.
 exporting_download_hint: Ha elkészült, ez a {format} fájl automatikusan letöltődik az eszközére.
-exporting_library_hint: Once the {format} file is created, it will be saved to the File Library.
-exporting_library_hint_forced: This export must be processed in batches. Once completed, the {format} file will be saved to the File Library.
 collection_key: Gyűjtemény kulcsa
 name: Név
 primary_key_field: Elsődleges kulcs mező
@@ -484,8 +468,6 @@ enable_select_button: Kiválasztás gomb engedélyezése
 allow_duplicates: Másolatok engedélyezése
 comments: Hozzászólások
 no_comments: Még nincs hozzászólás
-expand: Expand
-collapse: Collapse
 select_item: Elem kiválasztása
 no_items: Nincs megjeleníthető elem
 search_items: Tételek keresése...
@@ -517,7 +499,6 @@ create_collection: Gyűjtemény létrehozása
 no_collections_copy_admin: Még nem hoztál létre gyűjteményt. Kattints az alábbi gombra a kezdéshez.
 no_collections_copy: Ön még nem rendelkezik Gyűjteményekkel. Lépjen kapcsolatba a rendszeradminisztrátorral!
 relationship_not_setup: Ez a kapcsolat nincs megfelelően beállítva
-no_singleton_relations: Relationships to Singletons are not supported
 display_template_not_setup: A megjelenítő sablon nem megfelelően van beállítva
 collection_field_not_setup: A gyűjtemény mező opció nem megfelelően van beállítva
 select_a_collection: Gyűjtemény kiválasztása
@@ -610,7 +591,6 @@ errors:
   RANGE_NOT_SATISFIABLE: Érvénytelen tartomány
   METHOD_NOT_ALLOWED: A módszer nem támogatott
   REQUESTS_EXCEEDED: Elérte a kérelmek számának maximumát
-  CONTENT_TOO_LARGE: Submitted item/file is too large
 security: Biztonság
 value_hashed: Biztonságosan hashelt érték
 bookmark_name: Könyvjelző neve...
@@ -656,7 +636,6 @@ one_filtered_item: '1 szűrt elem'
 delete_collection_are_you_sure: >-
   Biztos, hogy törölni szeretné ezt a gyűjteményt"{collection}"? Ez törli a gyűjteményt a benne lévő összes elemével együtt. Ez a művelet végleges.
 delete_folder_are_you_sure: Biztosan törli a(z) "{folder}" mappát? A beágyazott mappák és gyűjtemények a legfelső szintre kerülnek.
-delete_collection_peer_dependencies: The following fields will be deleted as well, as they are related to the current collection.
 collections_shown: Megjelenített gyűjtemények
 visible_collections: Látható gyűjtemények
 hidden_collections: Rejtett gyűjtemények
@@ -782,15 +761,12 @@ label: Címke
 flows: Folyamatok
 flow: Folyamat
 select_a_flow: Válasszon egy folyamatot
-run_flow_confirm: Are you sure you want to execute this flow?
 run_flow_on_current_collection: Folyamat futtatása az aktuális gyűjteményen
 run_flow_on_current: Folyamat futtatása a jelenlegi elemen
 run_flow_on_current_edited_confirm: Lehetséges, hogy a tétel frissítve lesz a futtatás miatt, biztosan folytatja?
 run_flow_on_selected: Futtatás a kiválasztott elemeken
 run_flow: Folyamat futtatása
 run_flow_success: Folyamat "{flow}" sikeresen futtatva
-field_name_placeholder: Enter field name...
-field_key_placeholder: Enter field key...
 trigger: Eseményindító
 trigger_options: Trigger opciók
 view_trigger: Trigger megtekintése
@@ -949,8 +925,6 @@ settings_permissions: Szerepkörök és jogosultságok
 settings_project: Projekt beállításai
 settings_flows: Folyamatok
 settings_presets: Alapértelmezések és Könyvjelzők
-settings_translations: Custom Translations
-settings_extensions: Extensions
 one_or_more_options_are_missing: Egy vagy több opció hiányzik
 scope: Hatókör
 actions: Műveletek
@@ -998,48 +972,6 @@ page_help_settings_presets_item: >-
   **Alapbeállítások Részletei** - Könyvjelzők és alapértelmezett gyűjteménybeállítások kezelésére szolgáló űrlap.
 page_help_settings_flows_collection: '**Folyamatok tallózása** — A projekten belüli összes folyamat felsorolása.'
 page_help_settings_flows_item: '**A folyamat részletei** — Munkaterület egy vagy több művelet kezeléséhez.'
-page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
-extension_health_normal: Normal
-extension_health_warning: Warning | Warnings
-extension_health_failed: Failed
-extension_bundle_contents: Bundled extensions
-extension_capabilities: Capabilities
-extension_advanced_diagnostics: Advanced Diagnostics
-extension_sandboxed: Sandboxed
-extension_runtime: Runtime
-extension_runtime_sandboxed: Sandboxed
-extension_runtime_full_authority: Full Authority
-extension_runtime_browser: Browser App
-confined_runtime: Sandbox
-confined_runtime_mode: 'OS hardening: {decision} ({mode})'
-confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
-extension_status_loaded_detail: Loaded and running on the server.
-extension_status_discovered_detail: Discovered on this instance.
-extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
-extension_status_failed_detail: The extension failed to load on this instance.
-extension_settings_unavailable_detail: Extension settings are unavailable.
-extension_settings_drawer_subtitle: Extension settings
-extension_settings_section: Extension Settings
-extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
-extension_settings_no_global_keys: This extension declares no global settings.
-extension_settings_load_failed: Could not load the extension's settings.
-extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
-extension_type_group_hook: Hooks
-extension_type_group_endpoint: Endpoints
-extension_type_group_operation: Operations
-extension_type_group_bundle: Bundles
-extension_type_group_interface: Interfaces
-extension_type_group_display: Displays
-extension_type_group_layout: Layouts
-extension_type_group_module: Modules
-extension_type_group_panel: Panels
-extension_type_group_item-view: Item Views
-extension_type_group_other: Other
-no_extensions: No Extensions
-no_extensions_copy: No extensions were discovered in the configured extensions path.
-extensions_load_failed: Could not load the extensions inventory.
-page_help_settings_translations_collection: '**Browse Custom Translations** — Lists all custom translations within the project.'
-page_help_settings_translations_item: '**Custom Translations Detail** — A form for viewing and managing this item.'
 page_help_users_collection: '**Felhasználók Könyvtára** - A projekt összes rendszerfelhasználójának listája.'
 page_help_users_item: >-
   **Felhasználó részletei** - Kezelje fiókinformációit, vagy tekintse meg más felhasználók adatait.
@@ -1082,7 +1014,6 @@ directus_collection:
   directus_settings: Projekt konfigurációs lehetőségek
   directus_shares: Követi a külsőleg megosztott elemeket
   directus_users: A platform rendszerhasználói
-  directus_translations: Custom translations
 fields:
   directus_activity:
     item: Elem elsődleges kulcsa
@@ -1171,7 +1102,6 @@ fields:
     png: PNG
     webP: WebP
     tiff: Tiff
-    avif: AVIF
     mapping: Térképezés
     basemaps: Alaptérkép
     basemaps_raster: Raszter
@@ -1439,14 +1369,12 @@ export_started: Az exportálás megkezdődött
 export_started_copy: Az exportálás megkezdődött. Értesítést kap, ha készen áll a letöltésre.
 sort_asc: Növekvő sorrend
 sort_desc: Csökkenő sorrend
-disable_sort: Disable Sorting
 template: Sablon
 require_value_to_be_set: Szükséges értéket megadni létrehozáskor
 translation: Fordítás
 translation_placeholder: Fordítás megadása...
 value: Érték
 view_project: Projekt megtekintése
-weeks: { }
 report_error: Hiba jelentése
 start: Start
 table: Táblázat
@@ -1579,9 +1507,6 @@ interfaces:
     description: Adjon meg egy hashelni kívánt értéket
     masked: Maszkolt
     masked_label: Valós értékek elrejtése
-  system-extension-secret:
-    name: Extension Secret
-    value_stored: Value Securely Encrypted
   select-icon:
     icon: Ikon
     description: Válasszon egy ikont legördülő listából
@@ -1607,9 +1532,6 @@ interfaces:
     many-to-one: Sok az egyhez
     description: Egyetlen kapcsolódó elem kiválasztása
     display_template: Megjelenítési sablon
-  collection-item-dropdown:
-    collection-item-dropdown: Collection Item Dropdown
-    description: Select an item from a collection in JSON format
   input-rich-text-md:
     markdown: Markdown
     description: Markdown bevitele és előnézete
@@ -1644,7 +1566,6 @@ interfaces:
     notice: Értesítés
     description: Rövid értesítés megjelenítése
     text: Írja ide az értesítés tartalmát...
-    no_text: No text configured...
   list-o2m:
     one-to-many: Egy a sokhoz
     description: Több kapcsolódó elem választása
@@ -1652,7 +1573,6 @@ interfaces:
   system-folder:
     folder: Könyvtár
     description: Válasszon egy mappát
-    field_hint: Default folder for uploaded files without a folder specified. Does not affect existing files.
     root_name: Fájlok gyökérkönyvtára
     system_default: Rendszer alapértelmezései
   select-radio:
@@ -1706,7 +1626,6 @@ interfaces:
     input-translated-string: Lefordított szavak
     description: Válassza ki vagy adja hozzá a fordítási karakterláncot
     search_placeholder: Keresés...
-    new_custom_translation: New Custom Translation
   boolean:
     toggle: Váltás
     description: Be- és kikapcsolás közti váltás
@@ -2117,8 +2036,6 @@ operations:
     name: Értesítés küldése
     description: Alkalmazáson belüli értesítés küldése egy vagy több felhasználónak
     recipient: Felhasználó
-    recipient_placeholder: Enter a UUID...
-    recipient_note: Add user UUID and press enter...
     message: Üzenet
   request:
     name: Webhook / URL-kérés
@@ -2150,4 +2067,3 @@ operations:
     parallel: Párhuzamos
     batch: Tömeges
     batch_size: Darabszám
-    cache: Cache
