@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: Identifikator
 avatar: Avatar
 application: Anwendung
@@ -76,14 +75,6 @@ create_role: Rolle erstellen
 create_user: Benutzer erstellen
 message: Nachricht
 delete_panel: Panel löschen
-create_translation_string: Übersetzungselement erstellen
-no_translation_string: Keine Übersetzung
-no_translation_string_copy: Es existiert noch keine Übersetzung.
-translation_string_key_placeholder: Schlüssel für Übersetzungselement...
-translation_string_translations_placeholder: Neue Übersetzung hinzufügen
-edit_translation_string: Übersetzungselement editieren
-delete_translation_string_copy: >-
-  Soll das Übersetzungselement "{key}" wirklich gelöscht werden? Diese Aktion kann nicht rückgängig gemacht werden.
 invite_users: Benutzer einladen
 invite: Einladen
 email_already_invited: E-Mail "{email}" wurde bereits eingeladen
@@ -114,13 +105,6 @@ public_label: Öffentlich
 public_description: Bestimmt, welche API-Daten ohne Authentifizierung zugänglich sind.
 admin_description: Initiale administrative Rolle mit uneingeschränktem App/API-Zugriff.
 not_allowed: Nicht erlaubt
-directus_version: CairnCMS-Version
-node_version: NodeJS-Version
-node_uptime: Server-Betriebszeit
-os_type: Betriebssystem
-os_version: Betriebssystem-Version
-os_uptime: System-Betriebszeit
-os_totalmem: Arbeitsspeicher
 archive: Archivieren
 archive_confirm: Sind Sie sicher, dass Sie dieses Element archivieren möchten?
 archive_confirm_count: >-
@@ -460,8 +444,6 @@ exporting_all_items_in_collection: Alle {total} Elemente innerhalb von {collecti
 exporting_limited_items_in_collection: '{limit} von {total} Elementen innerhalb von {collection} exportieren.'
 exporting_no_items_to_export: Keine Elemente zu exportieren. Passen Sie die Konfiguration unten an.
 exporting_download_hint: Sobald abgeschlossen, wird die {format} Datei automatisch auf das Gerät heruntergeladen.
-exporting_batch_hint: Dieser Export wird in Batches abgearbeitet und sobald abgeschlossen wird die Datei {format} in der Dateibibliothek gespeichert.
-exporting_batch_hint_forced: Aufgrund der großen Anzahl von Elementen muss dieser Export in Batches abgearbeitet werden und nach Fertigstellung wird die Datei {format} in der Dateibibliothek gespeichert.
 collection_key: Sammlungsschlüssel
 name: Name
 primary_key_field: Primärschlüsselfeld
@@ -486,7 +468,6 @@ enable_select_button: Knopf zum Auswählen aktivieren
 allow_duplicates: Duplikate erlauben
 comments: Kommentare
 no_comments: Noch keine Kommentare
-click_to_expand: Zum Erweitern klicken
 select_item: Element auswählen
 no_items: Keine Elemente
 search_items: Elemente suchen...
@@ -940,7 +921,6 @@ settings_permissions: Rollen & Berechtigungen
 settings_project: Projekteinstellungen
 settings_flows: Flows
 settings_presets: Vorlagen & Lesezeichen
-settings_translation_strings: Übersetzungselemente
 one_or_more_options_are_missing: Eine oder mehrere Optionen fehlen
 scope: Bereich
 actions: Aktionen
@@ -988,7 +968,6 @@ page_help_settings_presets_item: >-
   **Vorlagen-Details** — Ein Formular zur Verwaltung von Lesezeichen und Vorlagen für Sammlungen.
 page_help_settings_flows_collection: '**Flows anzeigen** — Zeige alle Flows des Projektes.'
 page_help_settings_flows_item: '**Flow Details** — Verwaltung einer oder mehrerer Operationen.'
-page_help_settings_translation_strings_collection: '**Übersetzungsstrings durchsuchen** — Listet alle Übersetzungselemente im Projekt auf.'
 page_help_users_collection: '**Benutzerverzeichnis** — Auflistung aller Benutzer in diesem Projekt.'
 page_help_users_item: >-
   **Benutzer-Detail** — Kontoinformationen verwalten oder Details anderer Benutzer anzeigen.
@@ -1643,7 +1622,6 @@ interfaces:
     input-translated-string: Übersetzte Elemente
     description: Übersetzungselement auswählen oder hinzufügen
     search_placeholder: Suchen...
-    new_translation_string: Neues Übersetzungelement
   boolean:
     toggle: Umschalten
     description: Zwischen Ein und Aus wechseln

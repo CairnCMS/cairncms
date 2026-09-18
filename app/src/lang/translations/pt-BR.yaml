@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: Identificador
 avatar: Imagem de Perfil
 application: Aplicação
@@ -76,14 +75,6 @@ create_role: Criar Cargo
 create_user: Criar Usuário
 message: Mensagem
 delete_panel: Excluir Painel
-create_translation_string: String chave para a tradução
-no_translation_string: Nenhuma tradução
-no_translation_string_copy: Ainda não há nenhuma memória de tradução.
-translation_string_key_placeholder: Chave da tradução...
-translation_string_translations_placeholder: Adicionar uma nova tradução
-edit_translation_string: Editar String de Tradução
-delete_translation_string_copy: >-
-  Tem certeza de que deseja excluir a string de tradução "{key}"? Essa ação não pode ser desfeita.
 invite_users: Convidar Usuários
 invite: Convidar
 email_already_invited: Um convite já foi enviado para o email "{email}"
@@ -114,13 +105,6 @@ public_label: Público
 public_description: Controla quais dados da API estão disponíveis sem autenticação.
 admin_description: Cargo administrativo inicial com acesso irrestrito ao App/API.
 not_allowed: Não Permitido
-directus_version: Versão do CairnCMS
-node_version: Versão Node
-node_uptime: Tempo de Atividade do Node
-os_type: Tipo de SO
-os_version: Versão do SO
-os_uptime: Tempo de Atividade do SO
-os_totalmem: Memória do SO
 archive: Arquivar
 archive_confirm: Tem certeza de que deseja arquivar este item?
 archive_confirm_count: >-
@@ -456,11 +440,9 @@ open_file_in_tab: Abrir em nova guia
 start_export: Iniciar Exportação
 not_available_for_local_downloads: Não disponível para downloads locais
 exporting_all_items_in_collection: Exportando todos os {total} itens dentro de {collection}.
-exporting_limited_items_in_collection: Exportando {limit} de {total} itens em {collection}.
+exporting_limited_items_in_collection: 'Exportando {limit} de {total} itens em {collection}.'
 exporting_no_items_to_export: Sem itens para exportar. Ajuste a configuração exportadora abaixo.
 exporting_download_hint: Uma vez concluído, este arquivo {format} será automaticamente baixado para o seu dispositivo.
-exporting_batch_hint: Esta exportação será processada em lotes e, assim que concluída, o arquivo {format} será salvo na Biblioteca de Arquivos.
-exporting_batch_hint_forced: Devido ao grande número de itens, esta exportação deve ser processada em lotes, e assim que concluído, o arquivo {format} será salvo na Biblioteca de Arquivos.
 collection_key: Chave da coleção
 name: Nome
 primary_key_field: Campo de chave primária
@@ -485,7 +467,6 @@ enable_select_button: Habilitar botão de seleção
 allow_duplicates: Permitir duplicatas
 comments: Comentários
 no_comments: Nenhum comentário ainda
-click_to_expand: Clique para expandir
 select_item: Selecionar item
 no_items: Nenhum item
 search_items: Buscar Itens...
@@ -939,7 +920,6 @@ settings_permissions: Funções & Permissões
 settings_project: Configurações do projeto
 settings_flows: Fluxos
 settings_presets: Predefinições & Marcadores
-settings_translation_strings: Traduções
 one_or_more_options_are_missing: Uma ou mais opções estão faltando
 scope: Escopo
 actions: Ações
@@ -987,7 +967,6 @@ page_help_settings_presets_item: >-
   **Detalhe da predefinição** — Um formulário para gerenciar marcadores e predefinições de coleção padrão.
 page_help_settings_flows_collection: '**Navegue fluxos** — Lista todos os fluxos dentro do projeto.'
 page_help_settings_flows_item: '**Detalhes do fluxo** — Área para gerenciar uma ou mais operações.'
-page_help_settings_translation_strings_collection: '**Navegue em traduções** — Lista todas as traduções do projeto.'
 page_help_users_collection: '**Diretório do Usuário** — Lista todos os usuários do sistema neste projeto.'
 page_help_users_item: >-
   **Detalhe do Usuário** — Gerencie as informações da sua conta, ou veja os detalhes de outros usuários.
@@ -1642,7 +1621,6 @@ interfaces:
     input-translated-string: Textos traduzidos
     description: Selecione ou adicione texto de tradução
     search_placeholder: Pesquisar...
-    new_translation_string: Nova tradução
   boolean:
     toggle: Alternar
     description: Alternar entre ligado e desligado

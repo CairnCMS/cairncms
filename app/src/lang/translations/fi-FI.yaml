@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: Tunniste
 avatar: Avatari
 application: Sovellus
@@ -75,14 +74,6 @@ create_role: Luo rooli
 create_user: Luo käyttäjä
 message: Viesti
 delete_panel: Poista paneeli
-create_translation_string: Luo käännös
-no_translation_string: Ei käännöksiä
-no_translation_string_copy: Ei vielä käännöksiä.
-translation_string_key_placeholder: Käännöksen merkkijonoavain...
-translation_string_translations_placeholder: Lisää käännös
-edit_translation_string: Muokkaa käännöstä
-delete_translation_string_copy: >-
-  Haluatko poistaa käännöksen "{key}"? Tätä toimintoa ei voi kumota.
 invite_users: Kutsu käyttäjiä
 invite: Kutsu
 email_already_invited: Sähköposti "{email}" on jo kutsuttu
@@ -113,13 +104,6 @@ public_label: Julkinen
 public_description: Määrittää mitä API-tietoja on saatavilla ilman autentikointia.
 admin_description: Alkuperäinen hallinnollinen rooli rajoittamattomalla App/API-käyttöoikeudella.
 not_allowed: Ei sallittu
-directus_version: CairnCMS-versio
-node_version: Node-versio
-node_uptime: Node-käynnissäoloaika
-os_type: Käyttöjärjestelmätyyppi
-os_version: Käyttöjärjestelmäversio
-os_uptime: Käyttöjärjestelmän käynnissäoloaika
-os_totalmem: Käyttöjärjestelmämuisti
 archive: Arkistoi
 archive_confirm: Oletko varma, että haluat arkistoida tämän kohteen?
 archive_confirm_count: >-
@@ -455,11 +439,9 @@ open_file_in_tab: Avaa tiedosto uudessa välilehdessä
 start_export: Aloita vienti
 not_available_for_local_downloads: Ei saatavilla paikallisille latauksille
 exporting_all_items_in_collection: Viedään kaikki {total} kohdetta kokoelmasta {collection}.
-exporting_limited_items_in_collection: Viedään {limit} kohdetta kokoelman {collection} {total} kohteesta.
+exporting_limited_items_in_collection: 'Viedään {limit} kohdetta kokoelman {collection} {total} kohteesta.'
 exporting_no_items_to_export: Ei vietäviä kohteita. Muokkaa viennin asetuksia alla.
 exporting_download_hint: Valmistumisen jälkeen, tämä {format} tiedosto ladataan automaattisesti laitteellesi.
-exporting_batch_hint: Tämä vienti käsitellään erissä, ja kun vienti on valmis, tiedosto {format} tallennetaan Tiedostokirjastoon.
-exporting_batch_hint_forced: Koska kohteita on paljon, vienti on käsiteltävä erissä, ja kun vienti on valmis, {format} tiedosto tallennetaan Tiedostokirjastoon.
 collection_key: Kokoeilman avain
 name: Nimi
 primary_key_field: Ensisijainen avaimen kenttä
@@ -484,7 +466,6 @@ enable_select_button: Ota käyttöön valintanappula
 allow_duplicates: Salli kaksoiskappaleet
 comments: Kommentit
 no_comments: Ei vielä kommentteja
-click_to_expand: Klikkaa laajentaaksesi
 select_item: Valitse kohde
 no_items: Ei kohteita
 search_items: Hae kohteita...
