@@ -75,10 +75,6 @@ create_role: Створити роль
 create_user: Новий користувач
 message: Повідомлення
 delete_panel: Видалити панель
-create_custom_translation: Create Custom Translation
-edit_custom_translation: Edit Custom Translation
-no_custom_translations: No Custom Translations
-no_custom_translations_copy: There are no custom translations yet.
 invite_users: Запросити друзів
 invite: Запросити
 email_already_invited: Користувача "{email}" вже запрошено
@@ -115,7 +111,6 @@ archive_confirm_count: >-
   Жодного елементу не обрано | Ви впевнені, що хочете додати цей файл до архіву? | Ви впевнені, що хочете додати ці {count} файлів до архіву?
 reset_system_permissions_to: 'Скинути налаштування до:'
 reset_system_permissions_copy: Ця дія перезапише будь-які користувацькі дозволи, які ви могли задати до системних колекцій. Ви впевнені?
-the_following_are_minimum_permissions: The following minimum permissions are automatically applied when "App Access" is enabled. You can grant additional permissions if needed, but you cannot reduce permissions below this level.
 app_access_minimum: Мінімальний доступ до додатку
 recommended_defaults: Рекомендовані значення за замовчуванням
 unarchive: Розархівувати
@@ -166,7 +161,6 @@ permissions_for_role: 'Об''єкти {role} ролі можуть {action}.'
 fields_for_role: 'Поля {role} ролі можуть {action}.'
 validation_for_role: 'Поле {action} направляє {role} Роль повинна підпорядкуватися.'
 presets_for_role: 'Значення поля за замовчуванням для ролі {role}.'
-presets_field_warning: 'Relational presets for field "{field}" should be configured with the "detailed" syntax.'
 presentation_and_aliases: Подання та Аліаси
 revision_post_create: Ось як виглядав цей елемент після його створення.
 revision_post_update: Ось як виглядав цей елемент після його оновлення.
@@ -222,7 +216,6 @@ bigInteger: Велике ціле число
 boolean: Логічне значення
 date: Дата
 date_range: Період
-translation_key_placeholder: Enter a key...
 datetime: Час
 dateTime: Час
 precision: Точність
@@ -282,12 +275,7 @@ o2m_relationship: Одне до багатьох відношеннь
 m2m_relationship: Багато до багатьох відношеннь
 m2a_relationship: Багато до будь-яких відношеннь
 invalid_item: Недійсний елемент
-require_confirmation: Require Confirmation
-dialog: Dialog
 modal: Модальне
-confirmation_dialog: Confirmation Dialog
-confirmation_description: Confirmation Description
-confirmation_input_fields: Confirmation Input Fields
 next: Уперед
 field_name: Назва поля
 translations: Переклади
@@ -306,7 +294,6 @@ updated_on: Оновлене
 updated_by: Оновлено
 primary_key: Первинний ключ
 foreign_key: Чужерідна клавіша
-field_key: Field Key
 finish_setup: Завершити налаштування
 dismiss: Відмінити
 toggle_raw_editor: Перемкнути редактор RAW
@@ -435,7 +422,6 @@ checksum: Контрольна сума
 owner: Власник
 edited_by: Відредагували
 folder: Папка
-folders: Folders
 zoom: Масштаб зображення
 download: Завантажити
 open: Відкрити
@@ -458,8 +444,6 @@ exporting_all_items_in_collection: Експорт усіх {total} елемен�
 exporting_limited_items_in_collection: 'Експорт {limit} з {total} елементів в рамках {collection}.'
 exporting_no_items_to_export: Немає елементів для експорту. Налаштуйте конфігурацію для експорту нижче.
 exporting_download_hint: Після завершення цей {format} файл буде автоматично завантажений на ваш пристрій.
-exporting_library_hint: Once the {format} file is created, it will be saved to the File Library.
-exporting_library_hint_forced: This export must be processed in batches. Once completed, the {format} file will be saved to the File Library.
 collection_key: Клавіша колекції
 name: Назва
 primary_key_field: Первинне ключове поле
@@ -484,8 +468,6 @@ enable_select_button: Підключити кнопку "обрати"
 allow_duplicates: Дозволити дублікати
 comments: Коментарі
 no_comments: Коментарів ще немає
-expand: Expand
-collapse: Collapse
 select_item: Обрати об'єкт
 no_items: Об'єктів немає
 search_items: Пошук об'єктів...
@@ -517,7 +499,6 @@ create_collection: Створити колекцію
 no_collections_copy_admin: В вас ще немає колекцій. Натисніть кнопку нижче, щоб розпочати.
 no_collections_copy: В вас поки що немає колекцій. Будь ласка, зверніться до свого системного адміністратора.
 relationship_not_setup: Зв’язок не правильно налаштовано
-no_singleton_relations: Relationships to Singletons are not supported
 display_template_not_setup: Параметр шаблону відображення налаштовано неправильно
 collection_field_not_setup: Параметр поля колекції налаштовано неправильно
 select_a_collection: Оберіть колекцію
@@ -610,7 +591,6 @@ errors:
   RANGE_NOT_SATISFIABLE: Невірний діапазон
   METHOD_NOT_ALLOWED: Метод не допустимий
   REQUESTS_EXCEEDED: Досягнуто ліміт запитів
-  CONTENT_TOO_LARGE: Submitted item/file is too large
 security: Захист
 value_hashed: Значення надійно видалені
 bookmark_name: Назва закладки...
@@ -656,7 +636,6 @@ one_filtered_item: '1 відсортований об''єкт'
 delete_collection_are_you_sure: >-
   Ви впевнені що хочете видалити колекцію "{collection}"? Це видалить колекцію та всі елементи в ній. Ця дія є безповоротною.
 delete_folder_are_you_sure: Ви впевнені що бажаєте видалити теку "{folder}"? Вкладені теки й колекції будуть переміщені на самий верхній рівень.
-delete_collection_peer_dependencies: The following fields will be deleted as well, as they are related to the current collection.
 collections_shown: Показані колекції
 visible_collections: Видимі колекції
 hidden_collections: Приховані колекції
@@ -782,15 +761,8 @@ label: Ярлик
 flows: Автоматизація
 flow: Автоматизація
 select_a_flow: Виберіть Автоматизацію
-run_flow_confirm: Are you sure you want to execute this flow?
-run_flow_on_current_collection: Run Flow on Current Collection
-run_flow_on_current: Run Flow on Current Item
 run_flow_on_current_edited_confirm: Ця автоматизацією може внести зміни до вибраного об'єкту, ви впевнені що хочете її виконати?
-run_flow_on_selected: Select One or More Items First | Run Flow on 1 Selected Item | Run Flow on {n} Selected Items
-run_flow: Run Flow
 run_flow_success: Автоматизацію {flow} успішно виконано
-field_name_placeholder: Enter field name...
-field_key_placeholder: Enter field key...
 trigger: Тригер
 trigger_options: Параметри Тригера
 view_trigger: Деталі Тригера
@@ -949,8 +921,6 @@ settings_permissions: Ролі і Дозволи
 settings_project: Налаштування проекту
 settings_flows: Автоматизація
 settings_presets: Шаблони і закладки
-settings_translations: Custom Translations
-settings_extensions: Extensions
 one_or_more_options_are_missing: Одно або більше налаштувань відсутні
 scope: Область застосування
 actions: Дії
@@ -998,48 +968,6 @@ page_help_settings_presets_item: >-
   **Деталі попереднього налаштування** — форма для керування закладками та стандартними налаштуваннями колекцій.
 page_help_settings_flows_collection: '**Перегляд потоків** - Перелік всіх потоків в проєкті.'
 page_help_settings_flows_item: '**Деталі потоку** - Робочий простір для управління однією або кількома операціями.'
-page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
-extension_health_normal: Normal
-extension_health_warning: Warning | Warnings
-extension_health_failed: Failed
-extension_bundle_contents: Bundled extensions
-extension_capabilities: Capabilities
-extension_advanced_diagnostics: Advanced Diagnostics
-extension_sandboxed: Sandboxed
-extension_runtime: Runtime
-extension_runtime_sandboxed: Sandboxed
-extension_runtime_full_authority: Full Authority
-extension_runtime_browser: Browser App
-confined_runtime: Sandbox
-confined_runtime_mode: 'OS hardening: {decision} ({mode})'
-confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
-extension_status_loaded_detail: Loaded and running on the server.
-extension_status_discovered_detail: Discovered on this instance.
-extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
-extension_status_failed_detail: The extension failed to load on this instance.
-extension_settings_unavailable_detail: Extension settings are unavailable.
-extension_settings_drawer_subtitle: Extension settings
-extension_settings_section: Extension Settings
-extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
-extension_settings_no_global_keys: This extension declares no global settings.
-extension_settings_load_failed: Could not load the extension's settings.
-extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
-extension_type_group_hook: Hooks
-extension_type_group_endpoint: Endpoints
-extension_type_group_operation: Operations
-extension_type_group_bundle: Bundles
-extension_type_group_interface: Interfaces
-extension_type_group_display: Displays
-extension_type_group_layout: Layouts
-extension_type_group_module: Modules
-extension_type_group_panel: Panels
-extension_type_group_item-view: Item Views
-extension_type_group_other: Other
-no_extensions: No Extensions
-no_extensions_copy: No extensions were discovered in the configured extensions path.
-extensions_load_failed: Could not load the extensions inventory.
-page_help_settings_translations_collection: '**Browse Custom Translations** — Lists all custom translations within the project.'
-page_help_settings_translations_item: '**Custom Translations Detail** — A form for viewing and managing this item.'
 page_help_users_collection: '**Каталог користувачів** — перелік усіх користувачів системи в цьому проекті.'
 page_help_users_item: >-
   **Інформація про користувача** — керуйте інформацією свого облікового запису або переглядайте відомості про інших користувачів.
@@ -1082,7 +1010,6 @@ directus_collection:
   directus_settings: Параметри конфігурації проекту
   directus_shares: Відстежує зовнішні елементи
   directus_users: Користувачі системи для платформи
-  directus_translations: Custom translations
 fields:
   directus_activity:
     item: Первинний ключ елемента
@@ -1171,7 +1098,6 @@ fields:
     png: PNG
     webP: WebP
     tiff: Порада
-    avif: AVIF
     mapping: Зіставлення
     basemaps: Карта-схеми
     basemaps_raster: Растровий
@@ -1439,14 +1365,12 @@ export_started: Експорт розпочато
 export_started_copy: Ваш експорт розпочато. Ви отримаєте сповіщення, коли він буде готовий до завантаження.
 sort_asc: Впорядкувати за збільшенням
 sort_desc: Впорядкувати за зменшенням
-disable_sort: Disable Sorting
 template: Шаблон
 require_value_to_be_set: Вимагати встановити значення для створення
 translation: Переклад
 translation_placeholder: Введіть переклад...
 value: Значення
 view_project: Переглянути проект
-weeks: { }
 report_error: Звіт про помилку
 start: Почати
 table: Таблиця
@@ -1579,9 +1503,6 @@ interfaces:
     description: Введіть значення для хешування
     masked: Масковано
     masked_label: Приховати дійсне значення
-  system-extension-secret:
-    name: Extension Secret
-    value_stored: Value Securely Encrypted
   select-icon:
     icon: Іконка
     description: Виберіть значок зі списку
@@ -1607,9 +1528,6 @@ interfaces:
     many-to-one: Багато до одного
     description: Виберіть один пов'язаний об'єкт
     display_template: Шаблон відображення
-  collection-item-dropdown:
-    collection-item-dropdown: Collection Item Dropdown
-    description: Select an item from a collection in JSON format
   input-rich-text-md:
     markdown: Розмітка
     description: Увійти та переглянути розмітку
@@ -1644,7 +1562,6 @@ interfaces:
     notice: Зверніть увагу
     description: Відобразити коротке повідомлення
     text: Введіть вміст попередження...
-    no_text: No text configured...
   list-o2m:
     one-to-many: Один до багатьох
     description: Вибрати кілька пов'язаних об'єктів
@@ -1652,7 +1569,6 @@ interfaces:
   system-folder:
     folder: Папка
     description: Обрати теку
-    field_hint: Default folder for uploaded files without a folder specified. Does not affect existing files.
     root_name: Корінь файлової бібліотеки
     system_default: Стандартні налаштування
   select-radio:
@@ -1706,7 +1622,6 @@ interfaces:
     input-translated-string: Перекладені рядки
     description: Виберіть або додайте рядок перекладу
     search_placeholder: Шукати...
-    new_custom_translation: New Custom Translation
   boolean:
     toggle: Переключити
     description: Перемикання між вкл/вимк
@@ -1962,28 +1877,11 @@ layouts:
     no_group: Без Групи
     not_all_loaded: Можна завантажити лише перші 1000 елементів.
 horizontal: Горизонтальний
-vertical: Vertical
 x_axis: Вісь X
 y_axis: Вісь Y
-y_axis_function: Y-Axis Function
 show_x_only: Показувати лише вісь X
 show_y_only: Показувати лише вісь Y
-show_data_label: Show Data Label
 both: Обидва
-show_axis_labels: Show Axis Labels
-function: Function
-half_circle: Half Circle
-full_circle: Full Circle
-stroke_width: Stroke Width
-rounded_stroke: Rounded Stroke
-thin: Thin
-medium: Medium
-broad: Broad
-show_labels: Show Labels
-show_legend: Show Legend
-right: Right
-left: Left
-donut: Donut
 panels:
   metric:
     name: Метрична
@@ -2009,65 +1907,21 @@ panels:
     select_collection: Виберіть колекцію.
   linechart:
     name: Лінійна діаграма
-    description: Line chart for comparing change of a field
-    disabled_grouping: Disabled when grouping is selected.
     disabled_no_grouping: Вимкнено, якщо групування не вибрано.
     show_marker: Показати маркер підказки
     curve_type: Тип кривої
-    smooth: Smooth
-    straight: Straight
-    step_line: Step Line
-  meter:
-    name: Meter
-    description: Meter for tracking values
-  piechart:
-    name: Pie or Donut Chart
-    description: Circular chart showing the ratios of groups on a column
-  variable:
-    name: Global Variable
-    description: Set a global value for use in other Panels' filters
-    variable_key: Variable Key
   relational-variable:
     name: Глобальна реляційна змінна
     description: Встановити глобальне реляційне значення для використання у фільтрі інших панелей
-    variable_key: Variable Key
-    multiple: Multiple
     multiple-label: Вибрати кілька елементів
 triggers:
   common:
-    response_body: Response Body
     response_body_all: Всі дані
     response_body_last: Дані Останньої Дії
-  event:
-    name: Event Hook
-    description: Triggers on platform or data events
-    action: 'Action (Non-Blocking)'
-    filter: 'Filter (Blocking)'
   webhook:
-    name: Webhook
-    description: Triggers on an incoming HTTP request
     method: Метод
-    async: Asynchronous
   operation:
     name: Інша Автоматизація
-    description: Triggered by another Flow, for chaining
-    preview: Triggered by an operation in a different Flow
-  schedule:
-    name: Schedule (CRON)
-    description: Triggers at regular points in time
-    cron: Interval
-  manual:
-    name: Manual
-    description: Triggers on manual run within selected collection(s)
-    collection_and_item: Collection & Item Pages
-    collection_only: Collection Page Only
-    item_only: Item Page Only
-    collection_page: Collection Page
-    require_selection: Requires Selection
-a_flow_uuid: Select a Flow to trigger...
-any_string_or_json: Any string or JSON...
-item_payload_placeholder: This is the JSON used to update the item's field values...
-operation_variables_note: You can access flow data with variables such as **{'{'}{'{'}$last{'}'}{'}'}**, **{'{'}{'{'}$trigger{'}'}{'}'}** and **{'{'}{'{'}$accountability{'}'}{'}'}**, or reference previous operations using **{'{'}{'{'}operation_key{'}'}{'}'}**.'
 operations:
   condition:
     name: Умова
@@ -2075,7 +1929,6 @@ operations:
   exec:
     name: Виконати Скрипт
     description: Виконати довільний код щоб змінити дані
-    modules: 'The following **Node modules** can be used:'
   item-create:
     name: Створити дані
     description: Створити елементи в базі даних
@@ -2117,8 +1970,6 @@ operations:
     name: Надіслати сповіщення
     description: Надіслати сповіщення в застосунку одному або декільком користувачам
     recipient: Користувач
-    recipient_placeholder: Enter a UUID...
-    recipient_note: Add user UUID and press enter...
     message: Повідомлення
   request:
     name: Веб хук / URL запиту
@@ -2150,4 +2001,3 @@ operations:
     parallel: Паралельно
     batch: Пакетно
     batch_size: Розмір пакету
-    cache: Cache
