@@ -75,10 +75,6 @@ create_role: Stwórz rolę
 create_user: Utwórz użytkownika
 message: Wiadomość
 delete_panel: Usuń panel
-create_custom_translation: Create Custom Translation
-edit_custom_translation: Edit Custom Translation
-no_custom_translations: No Custom Translations
-no_custom_translations_copy: There are no custom translations yet.
 invite_users: Zaproś użytkowników
 invite: Zaproś
 email_already_invited: E-mail "{email}" został już zaproszony
@@ -166,7 +162,6 @@ permissions_for_role: 'Przedmioty roli {role} mogą {action}.'
 fields_for_role: 'Pola roli {role} mogą {action}.'
 validation_for_role: 'Pole {action} zasad roli {role} musi być przestrzegane.'
 presets_for_role: 'Wartość domyślna dla roli {role}.'
-presets_field_warning: 'Relational presets for field "{field}" should be configured with the "detailed" syntax.'
 presentation_and_aliases: Prezentacja i aliasy
 revision_post_create: Oto jak wyglądał ten przedmiot podczas jego tworzenia.
 revision_post_update: Oto jak wyglądał ten element po aktualizacji.
@@ -222,7 +217,6 @@ bigInteger: Duża liczba całkowita
 boolean: Wartość logiczna
 date: Data
 date_range: Zakres dat
-translation_key_placeholder: Enter a key...
 datetime: Data i godzina
 dateTime: Data i godzina
 precision: Dokładność
@@ -435,7 +429,6 @@ checksum: Suma kontrolna
 owner: Właściciel
 edited_by: Edytowane przez
 folder: Folder
-folders: Folders
 zoom: Powiększ
 download: Pobierz
 open: Otwórz
@@ -458,8 +451,6 @@ exporting_all_items_in_collection: Eksportowanie wszystkich {total} elementów w
 exporting_limited_items_in_collection: 'Eksportowanie {limit} z {total} przedmiotów w {collection}.'
 exporting_no_items_to_export: Brak elementów do wyeksportowania. Dostosuj konfigurację eksportu poniżej.
 exporting_download_hint: Po zakończeniu, ten plik {format} zostanie automatycznie pobrany na twoje urządzenie.
-exporting_library_hint: Once the {format} file is created, it will be saved to the File Library.
-exporting_library_hint_forced: This export must be processed in batches. Once completed, the {format} file will be saved to the File Library.
 collection_key: Klucz kolekcji
 name: Nazwa
 primary_key_field: Pole klucza podstawowego
@@ -484,8 +475,6 @@ enable_select_button: Włącz przycisk wyboru
 allow_duplicates: Zezwalaj na duplikaty
 comments: Komentarze
 no_comments: Brak komentarzy
-expand: Expand
-collapse: Collapse
 select_item: Wybierz element
 no_items: Brak elementów
 search_items: Szukaj elementów...
@@ -610,7 +599,6 @@ errors:
   RANGE_NOT_SATISFIABLE: Błędny zakres
   METHOD_NOT_ALLOWED: Metoda niedozwolona
   REQUESTS_EXCEEDED: Osiągnięto limit żądań
-  CONTENT_TOO_LARGE: Submitted item/file is too large
 security: Bezpieczeństwo
 value_hashed: Wartość bezpiecznie zakodowana
 bookmark_name: Nazwa zakładki...
@@ -949,8 +937,6 @@ settings_permissions: Role i uprawnienia
 settings_project: Ustawienia projektu
 settings_flows: Przepływy
 settings_presets: Szablony i zakładki
-settings_translations: Custom Translations
-settings_extensions: Extensions
 one_or_more_options_are_missing: Brakuje jednej lub więcej opcji
 scope: Zakres
 actions: Akcje
@@ -998,48 +984,6 @@ page_help_settings_presets_item: >-
   **Ustawienia szczegółów** — Formularz do zarządzania zakładkami i domyślnymi ustawieniami kolekcji.
 page_help_settings_flows_collection: '**Przeglądaj Przepływy ** — Listy wszystkich Przepływów w ramach projektu.'
 page_help_settings_flows_item: '**Szczegóły przepływu** — Obszar roboczy do zarządzania jedną lub większą liczbą operacji.'
-page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
-extension_health_normal: Normal
-extension_health_warning: Warning | Warnings
-extension_health_failed: Failed
-extension_bundle_contents: Bundled extensions
-extension_capabilities: Capabilities
-extension_advanced_diagnostics: Advanced Diagnostics
-extension_sandboxed: Sandboxed
-extension_runtime: Runtime
-extension_runtime_sandboxed: Sandboxed
-extension_runtime_full_authority: Full Authority
-extension_runtime_browser: Browser App
-confined_runtime: Sandbox
-confined_runtime_mode: 'OS hardening: {decision} ({mode})'
-confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
-extension_status_loaded_detail: Loaded and running on the server.
-extension_status_discovered_detail: Discovered on this instance.
-extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
-extension_status_failed_detail: The extension failed to load on this instance.
-extension_settings_unavailable_detail: Extension settings are unavailable.
-extension_settings_drawer_subtitle: Extension settings
-extension_settings_section: Extension Settings
-extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
-extension_settings_no_global_keys: This extension declares no global settings.
-extension_settings_load_failed: Could not load the extension's settings.
-extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
-extension_type_group_hook: Hooks
-extension_type_group_endpoint: Endpoints
-extension_type_group_operation: Operations
-extension_type_group_bundle: Bundles
-extension_type_group_interface: Interfaces
-extension_type_group_display: Displays
-extension_type_group_layout: Layouts
-extension_type_group_module: Modules
-extension_type_group_panel: Panels
-extension_type_group_item-view: Item Views
-extension_type_group_other: Other
-no_extensions: No Extensions
-no_extensions_copy: No extensions were discovered in the configured extensions path.
-extensions_load_failed: Could not load the extensions inventory.
-page_help_settings_translations_collection: '**Browse Custom Translations** — Lists all custom translations within the project.'
-page_help_settings_translations_item: '**Custom Translations Detail** — A form for viewing and managing this item.'
 page_help_users_collection: '**Katalog Użytkowników** — Lista wszystkich użytkowników systemu w tym projekcie.'
 page_help_users_item: >-
   **Szczegóły użytkownika** — Zarządzaj informacjami o koncie lub zobacz szczegóły innych użytkowników.
@@ -1082,7 +1026,6 @@ directus_collection:
   directus_settings: Opcje konfiguracji projektu
   directus_shares: Śledzenie elementów współdzielonych na zewnątrz
   directus_users: Użytkownicy systemu dla platformy
-  directus_translations: Custom translations
 fields:
   directus_activity:
     item: Klucz główny produktu
@@ -1446,7 +1389,6 @@ translation: Tłumaczenia
 translation_placeholder: Wprowadź tłumaczenie...
 value: Wartość
 view_project: Zobacz projekt
-weeks: { }
 report_error: Zgłoś błąd
 start: Rozpocznij
 table: Tabela
@@ -1579,9 +1521,6 @@ interfaces:
     description: Wprowadź wartość do hashowania
     masked: Zamaskowany
     masked_label: Ukryj rzeczywiste wartości
-  system-extension-secret:
-    name: Extension Secret
-    value_stored: Value Securely Encrypted
   select-icon:
     icon: Ikona
     description: Wybierz ikonę z listy rozwijanej
@@ -1644,7 +1583,6 @@ interfaces:
     notice: Informacja
     description: Wyświetl krótką informacje
     text: Wprowadź zawartość informacji...
-    no_text: No text configured...
   list-o2m:
     one-to-many: Jeden do wielu
     description: Wybierz wiele powiązanych elementów
@@ -1706,7 +1644,6 @@ interfaces:
     input-translated-string: Przetłumaczone ciągi
     description: Wybierz lub dodaj tłumaczenia
     search_placeholder: Szukaj...
-    new_custom_translation: New Custom Translation
   boolean:
     toggle: Przełącz
     description: Przełącz między włącz/wyłącz
@@ -2150,4 +2087,3 @@ operations:
     parallel: Równoległy
     batch: Partia
     batch_size: Rozmiar partii
-    cache: Cache
