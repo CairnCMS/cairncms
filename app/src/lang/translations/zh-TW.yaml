@@ -75,10 +75,6 @@ create_role: 新建角色
 create_user: 建立用户
 message: 訊息
 delete_panel: 刪除面板
-create_custom_translation: Create Custom Translation
-edit_custom_translation: Edit Custom Translation
-no_custom_translations: No Custom Translations
-no_custom_translations_copy: There are no custom translations yet.
 invite_users: 邀請用戶
 invite: 邀请
 email_already_invited: 此電郵 "{email}" 已被邀請
@@ -115,7 +111,6 @@ archive_confirm_count: >-
   未選擇任何項目 | 是否確定要封存此項目？ | 是否確定要封存這 {count} 個項目？
 reset_system_permissions_to: '重設系統權限至:'
 reset_system_permissions_copy: 此動作會取代你先前自設的系統權限。你確定?
-the_following_are_minimum_permissions: The following minimum permissions are automatically applied when "App Access" is enabled. You can grant additional permissions if needed, but you cannot reduce permissions below this level.
 app_access_minimum: 管理介面最低需求
 recommended_defaults: 建議值
 unarchive: 取消封存
@@ -166,7 +161,6 @@ permissions_for_role: '角色 {role} 可以 {action} 項目'
 fields_for_role: '角色 {role} 可以 {action} 欄位'
 validation_for_role: '角色 {role} 必須遵守欄位 {action} 規則'
 presets_for_role: '{role} 角色的欄位預設值。'
-presets_field_warning: 'Relational presets for field "{field}" should be configured with the "detailed" syntax.'
 presentation_and_aliases: 顯示與別名
 revision_post_create: 這是項目建立後看起來的樣子.
 revision_post_update: 這是項目更新後看起來的樣子.
@@ -222,7 +216,6 @@ bigInteger: 長整數
 boolean: 布林值
 date: 日期
 date_range: 日期範圍
-translation_key_placeholder: Enter a key...
 datetime: 日期時間
 dateTime: 日期時間
 precision: 精確度
@@ -231,7 +224,6 @@ float: 浮點
 integer: 整數
 json: JSON
 xml: XML
-yaml: YAML
 string: 字串
 text: 文字
 time: 時間
@@ -262,7 +254,6 @@ fields_group: 欄位群組
 no_collections_found: 目前尚無資料集。
 new_data_alert: '以下資料將會在您的資料模型中建立:'
 search_collection: 搜尋資料集...
-search_field: Search Field...
 new_field: '新增欄位'
 new_collection: '新增資料集'
 add_m2o_to_collection: '新增多對一關係到 "{collection}"'
@@ -282,12 +273,7 @@ o2m_relationship: 一對多關聯
 m2m_relationship: 多對多關聯
 m2a_relationship: 多對Any關係
 invalid_item: 無效項目
-require_confirmation: Require Confirmation
-dialog: Dialog
 modal: 對話框
-confirmation_dialog: Confirmation Dialog
-confirmation_description: Confirmation Description
-confirmation_input_fields: Confirmation Input Fields
 next: 下一個
 field_name: 欄位名稱
 translations: 翻譯
@@ -306,11 +292,9 @@ updated_on: 更新於
 updated_by: 已更新由
 primary_key: 主鍵
 foreign_key: 外鍵
-field_key: Field Key
 finish_setup: 完成安装
 dismiss: 忽略
 toggle_raw_editor: 切換原始碼編輯器
-raw_editor_placeholder: "{'{'}{'{'}$trigger.payload.example{'}'}{'}'}"
 raw_value: 原始值
 copy_raw_value: 複製原始資料
 copy_raw_value_success: 已複製
@@ -395,14 +379,8 @@ functions:
   minute: 分
   second: 秒
   count: 數量
-date-fns_date: PPP
 date-fns_time: 'h:mm:ss a'
 date-fns_time_no_seconds: 'h:mm a'
-date-fns_time_24hour: 'HH:mm:ss'
-date-fns_time_no_seconds_24hour: 'HH:mm'
-date-fns_date_short: 'MMM d, u'
-date-fns_time_short: 'h:mma'
-date-fns_date_short_no_year: MMM d
 minutes: 分
 hours: 小時
 month: 月
@@ -435,7 +413,6 @@ checksum: 校驗和
 owner: 擁有者
 edited_by: 編輯者
 folder: 資料夾
-folders: Folders
 zoom: 縮放
 download: 下載
 open: 開啟
@@ -458,8 +435,6 @@ exporting_all_items_in_collection: 將 {collection} 中的所有 {total} 個項�
 exporting_limited_items_in_collection: '{collection} 中共有 {total} 個項目，現在匯出 {limit} 個。'
 exporting_no_items_to_export: 沒有可供匯出的項目，請修改匯出設定。
 exporting_download_hint: 完成後，{format} 格式的檔案將會下載到您的裝置上。
-exporting_library_hint: Once the {format} file is created, it will be saved to the File Library.
-exporting_library_hint_forced: This export must be processed in batches. Once completed, the {format} file will be saved to the File Library.
 collection_key: 資料集名稱
 name: 名稱
 primary_key_field: 主鍵欄位
@@ -484,8 +459,6 @@ enable_select_button: 啟用選取按鈕
 allow_duplicates: 允許重複
 comments: 評論
 no_comments: 還沒有評論
-expand: Expand
-collapse: Collapse
 select_item: 選擇項目
 no_items: 沒有任何項目
 search_items: 搜尋項目...
@@ -517,7 +490,6 @@ create_collection: 新建集合
 no_collections_copy_admin: 你還沒有任何集合，點擊下方按鈕開始。
 no_collections_copy: 你還沒有任何集合，請與你的系統管理員聯絡。
 relationship_not_setup: 關聯配置不正確
-no_singleton_relations: Relationships to Singletons are not supported
 display_template_not_setup: 顯示範本選項設定錯誤。
 collection_field_not_setup: 集合中有欄位設定錯誤
 select_a_collection: 選擇一個集合
@@ -567,8 +539,6 @@ select_an_item: 選取一個項目...
 edit: 編輯
 enabled: 已啟用
 disable_tfa: 停用兩步驟驗證
-admin_disable_tfa_text: Are you sure you want to disable 2FA for this user?
-tfa_setup: Setup 2FA
 tfa_scan_code: 掃描條碼於你的驗證器應用程式已完成設置兩步驟驗證
 enter_otp_to_disable_tfa: 輸入OTP以停用兩階段驗證
 create_account: 建立帳號
@@ -610,7 +580,6 @@ errors:
   RANGE_NOT_SATISFIABLE: 範圍無效
   METHOD_NOT_ALLOWED: 不支援此方式
   REQUESTS_EXCEEDED: 已達到要求數量限制
-  CONTENT_TOO_LARGE: Submitted item/file is too large
 security: 安全
 value_hashed: 值已安全加密
 bookmark_name: 書籤名稱...
@@ -656,7 +625,6 @@ one_filtered_item: '一個篩選項目'
 delete_collection_are_you_sure: >-
   是否確認要刪除資料集 {collection} ？這將刪除資料集及其中的所有項目。此操作無法復原。
 delete_folder_are_you_sure: 是否確定要刪除資料夾 {folder} ？包含的所有資料夾都會被移到最外層。
-delete_collection_peer_dependencies: The following fields will be deleted as well, as they are related to the current collection.
 collections_shown: 顯示的資料集
 visible_collections: 可見集合
 hidden_collections: 隱藏集合
@@ -782,15 +750,8 @@ label: 標籤
 flows: 流程
 flow: 流程
 select_a_flow: 選擇流程
-run_flow_confirm: Are you sure you want to execute this flow?
-run_flow_on_current_collection: Run Flow on Current Collection
-run_flow_on_current: Run Flow on Current Item
 run_flow_on_current_edited_confirm: 有些項目可能會被這個工作流程更新，是否確定要執行？
-run_flow_on_selected: Select One or More Items First | Run Flow on 1 Selected Item | Run Flow on {n} Selected Items
-run_flow: Run Flow
 run_flow_success: 流程 {flow} 執行完畢
-field_name_placeholder: Enter field name...
-field_key_placeholder: Enter field key...
 trigger: 觸發條件
 trigger_options: 觸發條件選項
 view_trigger: 檢視觸發條件
@@ -949,8 +910,6 @@ settings_permissions: 角色和權限
 settings_project: 專案設定
 settings_flows: 流程
 settings_presets: 預設與書籤
-settings_translations: Custom Translations
-settings_extensions: Extensions
 one_or_more_options_are_missing: 一或多個選項遺失
 scope: 範圍
 actions: 操作
@@ -990,61 +949,12 @@ page_help_settings_datamodel_collections: >-
   **資料模型：資料集** - 列出所有可用的資料集。包含可見、隱藏以及系統資料集，以及尚未加入管理介面的資料庫。
 page_help_settings_datamodel_fields: >-
   **數據模型: 資料集** - 管理此資料集及欄位
-page_help_settings_roles_collection: '**Browse Roles** — Lists the Admin, Public and custom User Roles.'
 page_help_settings_roles_item: "**角色詳情** - 管理角色權限和其他設定"
-page_help_settings_presets_collection: >-
-  **Browse Presets** — Lists all presets in the project, including: user, role, and global bookmarks, as well as default views.
-page_help_settings_presets_item: >-
-  **Preset Detail** — A form for managing bookmarks and default collection presets.
 page_help_settings_flows_collection: '瀏覽流程 - 列出在此項目中的所有流程'
 page_help_settings_flows_item: '流程細節 - 管理各項操作'
-page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
-extension_health_normal: Normal
-extension_health_warning: Warning | Warnings
-extension_health_failed: Failed
-extension_bundle_contents: Bundled extensions
-extension_capabilities: Capabilities
-extension_advanced_diagnostics: Advanced Diagnostics
-extension_sandboxed: Sandboxed
-extension_runtime: Runtime
-extension_runtime_sandboxed: Sandboxed
-extension_runtime_full_authority: Full Authority
-extension_runtime_browser: Browser App
-confined_runtime: Sandbox
-confined_runtime_mode: 'OS hardening: {decision} ({mode})'
-confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
-extension_status_loaded_detail: Loaded and running on the server.
-extension_status_discovered_detail: Discovered on this instance.
-extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
-extension_status_failed_detail: The extension failed to load on this instance.
-extension_settings_unavailable_detail: Extension settings are unavailable.
-extension_settings_drawer_subtitle: Extension settings
-extension_settings_section: Extension Settings
-extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
-extension_settings_no_global_keys: This extension declares no global settings.
-extension_settings_load_failed: Could not load the extension's settings.
-extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
-extension_type_group_hook: Hooks
-extension_type_group_endpoint: Endpoints
-extension_type_group_operation: Operations
-extension_type_group_bundle: Bundles
-extension_type_group_interface: Interfaces
-extension_type_group_display: Displays
-extension_type_group_layout: Layouts
-extension_type_group_module: Modules
-extension_type_group_panel: Panels
-extension_type_group_item-view: Item Views
-extension_type_group_other: Other
-no_extensions: No Extensions
-no_extensions_copy: No extensions were discovered in the configured extensions path.
-extensions_load_failed: Could not load the extensions inventory.
-page_help_settings_translations_collection: '**Browse Custom Translations** — Lists all custom translations within the project.'
-page_help_settings_translations_item: '**Custom Translations Detail** — A form for viewing and managing this item.'
 page_help_users_collection: '**使用者目錄** - 列出在此項目中的所有系統用戶。'
 page_help_users_item: >-
   **用戶細節** - 管理您的帳戶資料或查閱其他用戶細節
-page_help_insights_overview: '**Insights** — List of dashboards you have access to.'
-page_help_insights_dashboard: '**Dashboard** — Workspace for managing one or more panels'
 activity_feed: 活動紀錄
 add_new: 新增
 create_new: 新增
@@ -1082,7 +992,6 @@ directus_collection:
   directus_settings: 專案設定選項
   directus_shares: 追蹤外部分享資料項目
   directus_users: 平台的系統使用者
-  directus_translations: Custom translations
 fields:
   directus_activity:
     item: 項目主鍵值
@@ -1171,14 +1080,12 @@ fields:
     png: PNG
     webP: WebP
     tiff: Tiff
-    avif: AVIF
     mapping: 地圖
     basemaps: 基礎地圖
     basemaps_raster: Raster
     basemaps_tile: Raster TileJSON
     basemaps_style: Mapbox 風格
     mapbox_key: Mapbox Access Token
-    mapbox_placeholder: pk.eyJ1Ijo.....
     attribution: 致謝
     attribution_placeholder: '© OpenStreetMap'
     transforms_note: Sharp方式的名稱以及其欄位。請至 https://sharp.pixelplumbing.com/api-constructor 查詢更多資訊。
@@ -1439,14 +1346,12 @@ export_started: 匯出已開始
 export_started_copy: 匯出作業已經開始，當可下載時會通知您。
 sort_asc: 由小到大排序
 sort_desc: 由大到小排序
-disable_sort: Disable Sorting
 template: 模板
 require_value_to_be_set: 建立時須填寫必填欄位
 translation: 翻譯
 translation_placeholder: 輸入翻譯...
 value: 值
 view_project: 檢視專案
-weeks: { }
 report_error: 報告錯誤
 start: 開始
 table: 表格
@@ -1579,9 +1484,6 @@ interfaces:
     description: 輸入要加密的值
     masked: 已遮罩
     masked_label: 隱藏真實值
-  system-extension-secret:
-    name: Extension Secret
-    value_stored: Value Securely Encrypted
   select-icon:
     icon: 圖示
     description: 從下拉清單中選擇圖示
@@ -1607,9 +1509,6 @@ interfaces:
     many-to-one: 多對一
     description: 選擇一個關聯項目
     display_template: 顯示模板
-  collection-item-dropdown:
-    collection-item-dropdown: Collection Item Dropdown
-    description: Select an item from a collection in JSON format
   input-rich-text-md:
     markdown: Markdown
     description: 輸入和預覽 Markdown
@@ -1644,7 +1543,6 @@ interfaces:
     notice: 注意
     description: 顯示簡短通知訊息
     text: 在此輸入通知內容...
-    no_text: No text configured...
   list-o2m:
     one-to-many: 一對多
     description: 選擇多個關聯項目
@@ -1652,7 +1550,6 @@ interfaces:
   system-folder:
     folder: 資料夾
     description: 選擇一個資料夾
-    field_hint: Default folder for uploaded files without a folder specified. Does not affect existing files.
     root_name: 檔案庫的基礎位置
     system_default: 系統預設值
   select-radio:
@@ -1706,7 +1603,6 @@ interfaces:
     input-translated-string: 已翻譯字串
     description: 選擇或新增翻譯字串
     search_placeholder: 搜尋...
-    new_custom_translation: New Custom Translation
   boolean:
     toggle: 切換
     description: 在狀態間切換
@@ -1933,57 +1829,11 @@ layouts:
     default_template: 使用資料集的預設值...
     no_compatible_fields: 沒有相容的欄位
   kanban:
-    name: Kanban
-    group_field: Group By
-    group_field_placeholder: Field to group by...
-    group_title: Group Title
-    group_title_placeholder: Field for group titles...
-    title: Card Title
-    title_placeholder: Optional title field...
-    text: Card Text
-    text_placeholder: Optional text field...
-    date: Card Date
-    date_placeholder: Optional date field...
-    tags: Card Tags
-    tags_placeholder: Optional tags field...
-    user: Card User
-    user_placeholder: Optional user field...
-    image: Card Image
-    image_placeholder: Optional image field...
-    image_fit: Card Image Fit
     crop: 裁剪
     advanced: 進階
-    edit_group: Edit Group
-    delete_group: Delete Group
-    add_group: Add Group
-    add_group_placeholder: Enter a new group title...
-    show_ungrouped: Show Ungrouped
-    show: Show
-    no_group: No Group
     not_all_loaded: 只能讀取前1000個項目。
 horizontal: 水平
-vertical: Vertical
-x_axis: X-Axis
-y_axis: Y-Axis
-y_axis_function: Y-Axis Function
-show_x_only: Show X-Axis Only
-show_y_only: Show Y-Axis Only
-show_data_label: Show Data Label
 both: 都要
-show_axis_labels: Show Axis Labels
-function: Function
-half_circle: Half Circle
-full_circle: Full Circle
-stroke_width: Stroke Width
-rounded_stroke: Rounded Stroke
-thin: Thin
-medium: Medium
-broad: Broad
-show_labels: Show Labels
-show_legend: Show Legend
-right: Right
-left: Left
-donut: Donut
 panels:
   metric:
     name: 格式
@@ -2009,8 +1859,6 @@ panels:
     select_collection: 您必須選擇一個資料集。
   linechart:
     name: 折線圖
-    description: Line chart for comparing change of a field
-    disabled_grouping: Disabled when grouping is selected.
     disabled_no_grouping: 當未選擇群組時停用
     show_marker: 顯示提示文字
     curve_type: 曲線類型
@@ -2022,7 +1870,6 @@ panels:
     description: 根據數值產生格線
   piechart:
     name: 圓餅圖
-    description: Circular chart showing the ratios of groups on a column
   variable:
     name: 全域變數
     description: 在其他面板的篩選器中設定一個全域值
@@ -2062,8 +1909,6 @@ triggers:
     collection_and_item: 資料集與項目頁面
     collection_only: 只在資料集頁面
     item_only: 只在資料項目頁面
-    collection_page: Collection Page
-    require_selection: Requires Selection
 a_flow_uuid: 選擇要觸發的流程...
 any_string_or_json: 任何字串或 JSON...
 item_payload_placeholder: 這個JSON用來更新資料項目各欄位的值
@@ -2117,8 +1962,6 @@ operations:
     name: 發送通知
     description: 發送管理介面通知給其他使用者
     recipient: 用戶
-    recipient_placeholder: Enter a UUID...
-    recipient_note: Add user UUID and press enter...
     message: 訊息
   request:
     name: Webhook / 要求網址
@@ -2144,10 +1987,3 @@ operations:
     flows: 流程
     flow: 流程
     data: 資料
-    iteration_mode: Iteration Mode
-    iteration_mode_note: Mode for iterating over arrays.
-    serial: Serial
-    parallel: Parallel
-    batch: Batch
-    batch_size: Batch Size
-    cache: Cache
