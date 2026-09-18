@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: المعرِّف
 avatar: الصورة الرمزية
 application: التطبيق
@@ -76,14 +75,10 @@ create_role: إنشاء دور أو صلاحية
 create_user: إضافة مستخدم
 message: الرسالة
 delete_panel: حذف لوحة
-create_translation_string: إنشئ نص ترجمة
-no_translation_string: لا توجد نصوص ترجمة
-no_translation_string_copy: لا توجد نصوص ترجمة حتى الآن.
-translation_string_key_placeholder: مفتاح نص الترجمة...
-translation_string_translations_placeholder: إضافة ترجمة جديدة
-edit_translation_string: تحليل نص الترجمة
-delete_translation_string_copy: >-
-  هل أنت متأكد من أنك تريد حذف نص الترجمة لـ "{key}"؟ لا يمكن التراجع عن هذا الإجراء.
+create_custom_translation: Create Custom Translation
+edit_custom_translation: Edit Custom Translation
+no_custom_translations: No Custom Translations
+no_custom_translations_copy: There are no custom translations yet.
 invite_users: دعوة مستخدمين
 invite: دعوة
 email_already_invited: البريد الإلكتروني {email} تم دعوته مسبقاً
@@ -114,19 +109,13 @@ public_label: عام
 public_description: التحكم بتوفر البيانات على واجهة الربط البرمجي بدون تسجيل دخول.
 admin_description: الدور الأساسي للمدير مع وصول غير مقيّد للتطبيق والـ API.
 not_allowed: غير مسموح
-directus_version: إصدار CairnCMS
-node_version: رقم نسخة الوحدة
-node_uptime: مدة الاستيقاظ الوحدة
-os_type: نوع نظام التشغيل
-os_version: إصدار نظام التشغيل
-os_uptime: مدة استيقاظ نظام التشغيل
-os_totalmem: ذاكرة نظام التشغيل
 archive: أرشفة
 archive_confirm: هل أنت متأكد من أنك تريد أرشفة هذا العنصر؟
 archive_confirm_count: >-
   لا توجد عناصر محددة | هل أنت متأكد من أنك تريد أرشفة هذا العنصر؟ | هل أنت متأكد من أنك تريد أرشفة هذه العناصر {count}؟
 reset_system_permissions_to: 'إعادة تعيين صلاحيات النظام إلى:'
 reset_system_permissions_copy: سيؤدي هذا الإجراء إلى الكتابة فوق أي صلاحيات مخصصة ربما تكون قد طبقت على مجموعات النظام. هل أنت متأكد؟
+the_following_are_minimum_permissions: The following minimum permissions are automatically applied when "App Access" is enabled. You can grant additional permissions if needed, but you cannot reduce permissions below this level.
 app_access_minimum: الحد الأدنى للوصول إلى التطبيق
 recommended_defaults: الإعدادات الافتراضية الافضل
 unarchive: إزالة من الأرشيف
@@ -177,6 +166,7 @@ permissions_for_role: 'عناصر الدور {role} يمكن أن {action}.'
 fields_for_role: 'عناصر الدور {role} يمكن أن {action}.'
 validation_for_role: 'الحقل {action} قواعد الدور {role} يجب أن يطيع.'
 presets_for_role: 'قيمة الحقل الافتراضية لدور {role}.'
+presets_field_warning: 'Relational presets for field "{field}" should be configured with the "detailed" syntax.'
 presentation_and_aliases: Presentation & Aliases
 revision_post_create: إليك ما بدا عليه هذا العنصر بعد التحديث.
 revision_post_update: إليك ما بدا عليه هذا العنصر بعد التحديث.
@@ -232,6 +222,7 @@ bigInteger: عدد صحيح كبير
 boolean: نعم/لا
 date: التاريخ
 date_range: فترة التاريخ
+translation_key_placeholder: Enter a key...
 datetime: الوقت و التاريخ
 dateTime: الوقت و التاريخ
 precision: الدقة
@@ -252,6 +243,8 @@ geometry.Point: نقطة
 geometry.LineString: LineString
 geometry.Polygon: مضلّع
 geometry.MultiPoint: نقاط متعددة
+geometry.MultiLineString: MultiLineString
+geometry.MultiPolygon: MultiPolygon
 not_available_for_type: غير متوفّر لنوع الملفات هذا
 create_translations: إنشاء ترجمات
 auto_refresh: تحديث تلقائي
@@ -289,6 +282,12 @@ o2m_relationship: علاقة واحد لكثير
 m2m_relationship: علاقة كثير لكثير
 m2a_relationship: علاقة كثيرون لأية علاقة
 invalid_item: عنصر غير صالح
+require_confirmation: Require Confirmation
+dialog: Dialog
+modal: Modal
+confirmation_dialog: Confirmation Dialog
+confirmation_description: Confirmation Description
+confirmation_input_fields: Confirmation Input Fields
 next: التالي
 field_name: إسم الحقل
 translations: الترجمة
@@ -307,6 +306,7 @@ updated_on: تم التحديث في
 updated_by: تم التحديث بواسطة
 primary_key: المفتاح الرئيسي
 foreign_key: مفتاح خارجي
+field_key: Field Key
 finish_setup: إنهاء التثبيت
 dismiss: تجاهل
 toggle_raw_editor: فتح \ إغلاق محرر الخريطة
@@ -435,6 +435,7 @@ checksum: بصمة الملف
 owner: المالك
 edited_by: تم التحرير بواسطة
 folder: مجلد
+folders: Folders
 zoom: تكبير/تصغير
 download: تنزيل
 open: فتح
@@ -454,11 +455,11 @@ open_file_in_tab: أفتح الملف في علامة تبويب جديدة
 start_export: بدء التصدير
 not_available_for_local_downloads: غير متوفر للتنزيلات المحلية
 exporting_all_items_in_collection: تصدير جميع العناصر {total} ضمن {collection}.
-exporting_limited_items_in_collection: تصدير {limit} من أصل {total} عناصر داخل {collection}.
+exporting_limited_items_in_collection: 'تصدير {limit} من أصل {total} عناصر داخل {collection}.'
 exporting_no_items_to_export: لا توجد عناصر للتصدير. قم بتعديل تكوين التصدير أدناه.
 exporting_download_hint: بمجرد اكتمال هذا الملف {format} سيتم تنزيله تلقائيا إلى جهازك.
-exporting_batch_hint: سيتم معالجة هذا التصدير في الدفعات، وبمجرد اكتماله، سيتم حفظ الملف {format} في مكتبة الملفات.
-exporting_batch_hint_forced: بسبب العدد الكبير من العناصر، يجب معالجة هذا التصدير في دفعات، وبمجرد الانتهاء من ذلك، سيتم حفظ مِلَفّ {format} في مكتبة الملفات.
+exporting_library_hint: Once the {format} file is created, it will be saved to the File Library.
+exporting_library_hint_forced: This export must be processed in batches. Once completed, the {format} file will be saved to the File Library.
 collection_key: مفتاح المجموعة
 name: الاسم
 primary_key_field: '‮حقل المفتاح الرئيسي'
@@ -483,7 +484,8 @@ enable_select_button: تفعيل زر التحديد
 allow_duplicates: السماح بالتكرارات
 comments: تعليقات
 no_comments: لا توجد تعليقات بعد
-click_to_expand: أضغط للمزيد
+expand: Expand
+collapse: Collapse
 select_item: تحديد عنصر
 no_items: لا يوجد عناصر
 search_items: البحث عن عناصر...
@@ -515,6 +517,7 @@ create_collection: إنشاء مجموعة
 no_collections_copy_admin: ليس لديك أي مجموعات حتى الآن. انقر على الزر أدناه للبدء.
 no_collections_copy: ليس لديك أي مجموعات حتى الآن. الرجاء الاتصال بمدير النظام الخاص بك.
 relationship_not_setup: لم يتم إعداد العلاقة بشكل صحيح
+no_singleton_relations: Relationships to Singletons are not supported
 display_template_not_setup: خيار قالب العرض خاطئ التكوين
 collection_field_not_setup: خيار حقل المجموعة خاطئ التكوين
 select_a_collection: حدد مجموعة
@@ -599,6 +602,7 @@ errors:
   VALUE_OUT_OF_RANGE: القيمة خارج النطاق
   INVALID_FOREIGN_KEY: مفتاح مرشح غير صحيح
   UNKNOWN: خطأ غير متوقع
+  GRAPHQL_VALIDATION_EXCEPTION: GraphQL Validation Exception
   SERVICE_UNAVAILABLE: الخدمة غير متاحة
   UNSUPPORTED_MEDIA_TYPE: نوع الوسائط غير مدعوم
   UNEXPECTED_RESPONSE: استجابة غير متوقعة
@@ -606,6 +610,7 @@ errors:
   RANGE_NOT_SATISFIABLE: النطاق غير صالح
   METHOD_NOT_ALLOWED: الطريقة غير مسموح بها
   REQUESTS_EXCEEDED: تم بلوغ حد الطلبات
+  CONTENT_TOO_LARGE: Submitted item/file is too large
 security: الأمان
 value_hashed: تم تجزئة القيمة بشكل آمن
 bookmark_name: اسم الإشارة المرجعية...
@@ -651,6 +656,7 @@ one_filtered_item: '1 عنصر مصفى'
 delete_collection_are_you_sure: >-
   هل أنت متيقِّن من أنك تريد حذف المجموعة"{collection}"؟ سيؤدي هذا إلى حذف المجموعة وجميع العناصر فيها. وهذا الإجراء دائم الأثر.
 delete_folder_are_you_sure: هل أنت متيقِّن من أنك تريد حذف المجلد"{folder}"؟ سيتم نقل المجلدات والمجموعات المتفرعة منه إلى أعلى مستوى.
+delete_collection_peer_dependencies: The following fields will be deleted as well, as they are related to the current collection.
 collections_shown: المجموعات المعروضة
 visible_collections: مجموعات مرئية
 hidden_collections: مجموعات مخفية
@@ -776,8 +782,15 @@ label: تسمية
 flows: التدفقات
 flow: التدفق
 select_a_flow: حدد تدفق
+run_flow_confirm: Are you sure you want to execute this flow?
+run_flow_on_current_collection: Run Flow on Current Collection
+run_flow_on_current: Run Flow on Current Item
 run_flow_on_current_edited_confirm: قد يتم تحديث هذا العنصر بواسطة هذا التدفق، هل أنت متيقِّن من أنك تريد تنفيذه؟
+run_flow_on_selected: Select One or More Items First | Run Flow on 1 Selected Item | Run Flow on {n} Selected Items
+run_flow: Run Flow
 run_flow_success: تدفق "{flow}" تم بنجاح
+field_name_placeholder: Enter field name...
+field_key_placeholder: Enter field key...
 trigger: المحفز
 trigger_options: خيارات المحفز
 view_trigger: عرض المحفز
@@ -833,36 +846,69 @@ no_dashboards_copy: ليس لديك أي لوحة تحكم حتى الآن.
 create_dashboard: إنشاء لوحة تحكم
 dashboard_name: اسم لوحة التحكم
 no_data: لا توجد بيانات
+no_data_in_flow: No data was produced or accessed within this Flow
 accountability: المساءلة
+payload: Payload
 details: التفاصيل
 full_screen: ملء الشاشة
+full_text_search: Full-Text Search
 edit_panels: تحرير لوحة
+center_align: Center Align
+left_align: Left Align
+right_align: Right Align
+fit_to_screen: Fit to Screen
 image_url: رابط الصورة
 alt_text: النص البديل
 media: وسائط الإعلام
+quality: Quality
 width: العرض
 height: الارتفاع
+transformation_preset_key: Transformation Preset Key
 source: مصدر
 url_placeholder: أدخل عنوان الرابط
 display_text: عرض النص
+display_text_placeholder: Enter a display text...
+interface_group_text_and_numbers: Text & Numbers
+interface_group_selection: Selection
+interface_group_relational: Relational
+interface_group_presentation: Presentation
+interface_group_groups: Groups
+interface_group_other: Other
 tooltip: تلميح
+tooltip_placeholder: Enter a tooltip...
 unlimited: غير محدود
 open_link_in: افتح الرابط في
+new_tab: New tab
+current_tab: Current tab
+save_image: Save Image
+save_media: Save Media
 wysiwyg_options:
+  aligncenter: Align Center
+  alignjustify: Align Justify
   alignleft: محاذاة إلى اليسار
+  alignnone: Align None
   alignright: محاذاة إلى اليمين
   forecolor: لون الواجهة
   backcolor: لون الخلفية
   bold: عريض
   italic: خط مائل
   underline: مسطر
+  strikethrough: Strikethrough
+  subscript: Subscript
+  superscript: Superscript
   codeblock: نص برمجي
+  blockquote: Blockquote
+  bullist: Bullet List
+  numlist: Numbered List
+  hr: Horizontal Rule
   link: إضافة/تحرير الرابط
   unlink: إزالة الرابط
+  media: Add/Edit Media
   image: إضافة/تحرير الصورة
   copy: نسخ
   cut: قص
   paste: لصق
+  heading: Heading
   h1: العنوان 1
   h2: العنوان 2
   h3: العنوان 3
@@ -871,11 +917,16 @@ wysiwyg_options:
   h6: العنوان 6
   fontselect: تحديد الخط
   fontsizeselect: حدد حجم الخط
+  indent: Indent
+  outdent: Outdent
+  undo: Undo
+  redo: Redo
   remove: احذف
   removeformat: إزالة التنسيق
   selectall: تحديد الكل
   table: الجدول
   visualaid: عرض العناصر غير المرئية
+  source_code: Edit Source Code
   fullscreen: ملء الشاشة
   directionality: الاتجاهية
 dropdown: قائمة منسدلة
@@ -898,12 +949,14 @@ settings_permissions: الأدوار والأذونات
 settings_project: إعدادات المشروع
 settings_flows: التدفقات
 settings_presets: الإعدادات المسبقة والعلامات
-settings_translation_strings: نصوص التّرجَمَة
+settings_translations: Custom Translations
+settings_extensions: Extensions
 one_or_more_options_are_missing: واحد أو أكثر من الخيارات مفقودة
 scope: مجال
 actions: الإجراءات
 select: حدد...
 layout: نموذج العرض
+tree_view: Tree View
 changes_are_permanent: التغييرات دائمة
 preset_name_placeholder: يعمل كإعداد افتراضي عندما يكون فارغًا...
 preset_search_placeholder: استعلام البحث...
@@ -945,7 +998,48 @@ page_help_settings_presets_item: >-
   **تفاصيل الإعداد المسبق** - نموذج لإدارة الإشارات المرجعية والضبط المسبق الافتراضي للمجموعات.
 page_help_settings_flows_collection: '**تصفح التدفقات** - عرض جميع التدفقات داخل المشروع.'
 page_help_settings_flows_item: '**تفاصيل التدفق** - مساحة عمل لإدارة عملية واحدة أو أكثر.'
-page_help_settings_translation_strings_collection: '**تصفح مقاطع الترجمة** - عرض جميع مقاطع الترجمة داخل المشروع.'
+page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
+extension_health_normal: Normal
+extension_health_warning: Warning | Warnings
+extension_health_failed: Failed
+extension_bundle_contents: Bundled extensions
+extension_capabilities: Capabilities
+extension_advanced_diagnostics: Advanced Diagnostics
+extension_sandboxed: Sandboxed
+extension_runtime: Runtime
+extension_runtime_sandboxed: Sandboxed
+extension_runtime_full_authority: Full Authority
+extension_runtime_browser: Browser App
+confined_runtime: Sandbox
+confined_runtime_mode: 'OS hardening: {decision} ({mode})'
+confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
+extension_status_loaded_detail: Loaded and running on the server.
+extension_status_discovered_detail: Discovered on this instance.
+extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
+extension_status_failed_detail: The extension failed to load on this instance.
+extension_settings_unavailable_detail: Extension settings are unavailable.
+extension_settings_drawer_subtitle: Extension settings
+extension_settings_section: Extension Settings
+extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
+extension_settings_no_global_keys: This extension declares no global settings.
+extension_settings_load_failed: Could not load the extension's settings.
+extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
+extension_type_group_hook: Hooks
+extension_type_group_endpoint: Endpoints
+extension_type_group_operation: Operations
+extension_type_group_bundle: Bundles
+extension_type_group_interface: Interfaces
+extension_type_group_display: Displays
+extension_type_group_layout: Layouts
+extension_type_group_module: Modules
+extension_type_group_panel: Panels
+extension_type_group_item-view: Item Views
+extension_type_group_other: Other
+no_extensions: No Extensions
+no_extensions_copy: No extensions were discovered in the configured extensions path.
+extensions_load_failed: Could not load the extensions inventory.
+page_help_settings_translations_collection: '**Browse Custom Translations** — Lists all custom translations within the project.'
+page_help_settings_translations_item: '**Custom Translations Detail** — A form for viewing and managing this item.'
 page_help_users_collection: '**دليل المستخدم** - يعرض جميع مستخدمي النظام داخل هذا المشروع.'
 page_help_users_item: >-
   **تفاصيل المستخدم** - إدارة معلومات حسابك، أو عرض تفاصيل المستخدمين الآخرين.
@@ -988,6 +1082,7 @@ directus_collection:
   directus_settings: خيارات تكوين المشروع
   directus_shares: تتبع العناصر المشتركة خارجيًا
   directus_users: مستخدمي النظام للمنصة
+  directus_translations: Custom translations
 fields:
   directus_activity:
     item: المفتاح الأساسي للعنصر
@@ -1076,10 +1171,17 @@ fields:
     png: PNG
     webP: WebP
     tiff: Tiff
+    avif: AVIF
     mapping: تعيين
+    basemaps: Basemaps
+    basemaps_raster: Raster
+    basemaps_tile: Raster TileJSON
+    basemaps_style: Mapbox Style
+    mapbox_key: Mapbox Access Token
     mapbox_placeholder: pk.eyJ1Ijo.....
     attribution: السمات
     attribution_placeholder: المساهمون © OpenStreetMap
+    transforms_note: The Sharp method name and its arguments. See https://sharp.pixelplumbing.com/api-constructor for more information.
     additional_transforms: تحولات إضافية
     project_name: اسم المشروع
     project_descriptor: وصف المشروع
@@ -1102,13 +1204,16 @@ fields:
     module_bar: شريط الوحدة
     transformations_all: السماح بجميع التحولات
     transformations_none: تعطيل التحولات
+    transformations_presets: Limit transformations to presets below
     image_editor: محرر الصور
+    custom_aspect_ratios: Custom Aspect Ratios
   directus_shares:
     name: الاسم
     role: الدور
     password: كلمة المرور
     date_start: تاريخ البدء
     date_end: تاريخ الانتهاء
+    max_uses: Max Uses
     times_used: الوقت المستغرق
   directus_fields:
     collection: اسم المجموعة
@@ -1124,8 +1229,10 @@ fields:
     description: التفاصيل
     app_access: صلاحيات تطبيق
     admin_access: صلاحيات مسؤول
+    ip_access: IP Access
     enforce_tfa: يتطلب التحقق بخطوتين 2FA
     users: المستخدمون في الدور
+    module_list: Module Navigation
 field_options:
   directus_settings:
     project_name_placeholder: مشروعي...
@@ -1146,8 +1253,14 @@ field_options:
         fit_text: تلائم بالداخل
         outside_text: تلائم بالخارج
     additional_transforms: تحولات إضافية
+    transforms_note: The Sharp method name and its arguments. See https://sharp.pixelplumbing.com/api-constructor for more information.
     mapbox_key: رمز وصول الخريطة
     mapbox_placeholder: pk.eyJ1Ijo.....
+    basemaps: Basemaps
+    basemaps_name_placeholder: Enter the basemap name...
+    basemaps_raster: Raster
+    basemaps_tile: Raster TileJSON
+    basemaps_style: Mapbox Style
     files_divider_title: الملفات و الصور المصغرة
     overrides_divider_title: تجاوزات التطبيق
   directus_activity:
@@ -1188,10 +1301,13 @@ field_options:
   directus_roles:
     name: الاسم الفريد لهذا الدور...
     description: وصف لهذا الدور...
+    ip_access: Add allowed IP addresses, leave empty to allow all...
     fields:
       icon_name: أيقونة
       name_name: الاسم
       name_placeholder: أدخل عنوانًا...
+      link_name: Link
+      link_placeholder: Relative or absolute URL...
     collections_name: مجموعات
     collections_addLabel: مجموعة جديدة...
   directus_users:
@@ -1209,32 +1325,50 @@ field_options:
 no_fields_in_collection: 'لا توجد حقول في "{collection}" حتى الآن'
 no_value: لا توجد قيمة
 do_nothing: لا تفعل شيئا
+generate_and_save_uuid: Generate and Save UUID
+save_current_user_id: Save Current User ID
 save_current_user_role: احفظ دور المستخدم الحالي
 save_current_datetime: أحفظ التاريخ/الوقت الحالي
 always_open: يعمل دائماً
+start_open: Start Open
+start_collapsed: Start Collapsed
 block: حَظْر
 inline: ضمن السياق
 comment: تعليق
 shares: مشاركات
 unlimited_usage: استخدام غير محدود
+uses_left: No uses left | 1 use left | {n} uses left
 no_shares: لا توجد مشاركات لإظهارها
 new_share: مشاركة جديدة
 expired: منتهية الصلاحية
 upcoming: القادم
 share: مشاركة
+share_item: Share Item
 shared_with_you: تم مشاركة عنصر معك
 shared_enter_passcode: أدخل رمز المرور الخاص بك للمتابعة...
+shared_leave_blank_for_unlimited: Leave blank for unlimited
+shared_times_remaining: This link can only be used {n} times
+shared_last_remaining: This link can only be used once
+shared_uses_left: For added security, this shared page has been configured with a limited number of views. There are currently {n} views remaining, after which, the page will no longer be accessible.
+share_access_page: Access Shared Page
+share_access_not_found: This shared page either does not exist or has already exceeded the maximum number of allowed uses.
+share_access_not_found_desc: Please contact an authorized user of this project to request access.
+share_access_not_found_title: Unknown Share Page
 share_copy_link: نسخ الرابط
 share_copy_link_success: تم نسخ الرابط
 share_copy_link_error: تعذر نسخ الرابط
 share_send_link: إرسال الرابط
+relational_triggers: Relational Triggers
 referential_action_field_label_m2o: عند حذف {collection}...
 referential_action_field_label_o2m: عند إلغاء تحديد {collection}...
 referential_action_no_action: منع الحذف
 referential_action_cascade: حذف العنصر {collection} (تسلسلي)
+referential_action_set_null: Nullify the {field} field
 referential_action_set_default: تعيين {field} إلى قيمته الافتراضية
 choose_action: اختر الإجراء
 continue_label: متابعة
+continue_as: >-
+  {name} is currently authenticated. If you recognize this account, press continue.
 editing_role: 'دور {role}'
 default_label: الافتراضي
 delete_label: حذف
@@ -1305,12 +1439,14 @@ export_started: بدأ التصدير
 export_started_copy: لقد بدأ التصدير الخاص بك. سيتم إعلامك عندما يكون جاهز للتحميل.
 sort_asc: ترتيب تصاعدي
 sort_desc: ترتيب تنازلي
+disable_sort: Disable Sorting
 template: قالب
 require_value_to_be_set: تتطلب القيمة ليتم تعيينها عند الإنشاء
 translation: الترجمة
 translation_placeholder: أدخل ترجمة...
 value: قيمة
 view_project: عرض المشروع
+weeks: { }
 report_error: الإبلاغ عن خطأ
 start: إبدأ
 table: الجدول
@@ -1349,8 +1485,13 @@ interfaces:
     all_closed: تم إغلاق الكل
     first_opened: تم فتح الأول
     all_opened: تم فتح الكل
+    accordion_mode: Accordion Mode
+    max_one_section_open: Max 1 Section Open
   presentation-links:
+    presentation-links: Button Links
     links: روابط
+    description: Configurable link buttons for launching dynamic URLs
+    style: Style
     primary: الأساسي
     link: روابط
     button: أزرار
@@ -1358,34 +1499,48 @@ interfaces:
   select-multiple-checkbox:
     checkboxes: مربعات الاختيار
     description: اختر بين خيارات متعددة عبر مربعات الاختيار
+    allow_other: Allow Other
     show_more: 'أظهر {count} أكثر'
     items_shown: العناصر المعروضة
   select-multiple-checkbox-tree:
+    name: Checkboxes (Tree)
+    description: Choose between multiple options via nested checkboxes
+    value_combining: Value Combining
+    value_combining_note: Controls what value is stored when nested selections are made.
     show_all: عرض الكل
     show_selected: إظهار المحدد
   input-code:
     code: نص برمجي
     description: كتابة أو مشاركة الكود البرمجي
     line_number: رقم السطر
+    line_wrapping: Line Wrapping
     placeholder: أدخل الكود هنا...
   system-collection:
     collection: المجموعة
+    description: Select between existing collections
+    include_system_collections: Include System Collections
   system-collections:
     collections: مجموعات
+    description: Select between existing collections
+    include_system_collections: Include System Collections
   select-color:
     color: لون
     description: أدخل أو حدد قيمة اللون
     placeholder: اختر لون...
     preset_colors: ألوان محددة مسبقًا
+    opacity: Opacity
     preset_colors_add_label: إضافة لون جديد...
     name_placeholder: أدخل اسم اللون...
   datetime:
     datetime: التاريخ والوقت
     description: أدخل التواريخ والأوقات
+    include_seconds: Include Seconds
     set_to_now: اضبط على الآن
     use_24: استخدم تنسيق 24 ساعة
+    placeholder: Choose a datetime...
   system-fields:
     select_a_collection: حدد مجموعة
+    no_fields: No fields
   system-display-template:
     display-template: عرض القالب
     description: خلط النص الثابت وقيم الحقل الديناميكي
@@ -1394,16 +1549,22 @@ interfaces:
     select_a_collection: حدد مجموعة
   presentation-divider:
     divider: الفاصل
+    description: Label and divide fields into sections
+    title_placeholder: Enter a title, or leave blank to only show a line...
+    inline_title: Inline Title
     inline_title_label: أظهر العنوان داخل السطر
     margin_top: الهامش العلوي
     margin_top_label: زيادة الهامش العلوي
   select-dropdown:
     description: حدد قيمة من القائمة المنسدلة
     choices_placeholder: أضف خيار جديد
+    allow_other: Allow Other
     allow_other_label: السماح بقيم أخرى
+    allow_none: Allow None
     allow_none_label: لا يسمح بتحديد
     choices_name_placeholder: أدخل اسم...
     choices_value_placeholder: أدخل قيمة...
+    preview_threshold: Preview Threshold
   select-multiple-dropdown:
     select-multiple-dropdown: منسدلة (متعدد)
     description: حدد قيم متعددة من القائمة المنسدلة
@@ -1415,8 +1576,12 @@ interfaces:
     description: حدد أو ارفع ملفات متعددة
   input-hash:
     hash: الهاش
+    description: Enter a value to be hashed
     masked: مقنع
     masked_label: إخفاء القيم الحقيقية
+  system-extension-secret:
+    name: Extension Secret
+    value_stored: Value Securely Encrypted
   select-icon:
     icon: أيقونة
     description: حدد أيقونة من القائمة المنسدلة
@@ -1424,59 +1589,143 @@ interfaces:
   file-image:
     image: صورة
     description: حدد أو ارفع صورة
+    crop: Crop to Fit
+    crop_label: Crop image as needed
   system-interface:
     interface: الواجهة
+    description: Select an existing interface
+    placeholder: Select an interface...
+  system-interface-options:
+    interface-options: Interface Options
+    description: A modal for selecting options of an interface
   list-m2m:
     many-to-many: كثير لكثير
+    description: Select multiple related junction items
+    columns_configure_notice: You can configure the columns after creating this field.
+    display_template_configure_notice: You can configure the display template after creating this field.
   select-dropdown-m2o:
     many-to-one: كثير إلى واحد
     description: حدد عنصر واحد ذو صلة
     display_template: عرض القالب
+  collection-item-dropdown:
+    collection-item-dropdown: Collection Item Dropdown
+    description: Select an item from a collection in JSON format
   input-rich-text-md:
+    markdown: Markdown
     description: أدخل و معاينة markdown
     edit: تعديل
+    preview: Preview
+    editorFont: Editor Font
+    previewFont: Preview Font
+    customSyntax: Custom Blocks
+    customSyntax_label: Add custom syntax types
+    customSyntax_add: Add custom syntax
+    box: Block / Inline
+    imageToken: Static Access Token
+    imageToken_label: Static access token is appended to the assets' URL
   map:
+    map: Map
+    description: Select a location on a map
     zoom: تكبير/تصغير
+    geometry_type: Geometry Type
+    geometry_format: Geometry Format
+    default_view: Default View
+    invalid_options: Invalid options
+    invalid_format: Invalid format ({format})
+    unexpected_geometry: Expected {expected}, got {got}.
+    fit_bounds: Fit view to data
+    native: Native
+    geojson: GeoJSON
+    lnglat: Longitude, Latitude
+    wkt: WKT
+    wkb: WKB
+    click_to_select: Click to select {geometry}
+  presentation-notice:
+    notice: Notice
+    description: Display a short notice
+    text: Enter notice content here...
+    no_text: No text configured...
   list-o2m:
+    one-to-many: One to Many
     description: حدد عدة عناصر ذات صلة
+    no_collection: The collection could not be found
   system-folder:
     folder: مجلد
+    description: Select a folder
+    field_hint: Default folder for uploaded files without a folder specified. Does not affect existing files.
+    root_name: File Library Root
+    system_default: System Defaults
   select-radio:
+    radio-buttons: Radio Buttons
     description: حدد اختيار واحد من خيارات متعددة
   list:
+    repeater: Repeater
+    description: Create multiple entries of the same structure
     edit_fields: تعديل الحقول
+    add_label: '"Create New" Label'
     sort: رتب
+    sort_placeholder: Manual
+    field_note_placeholder: Enter field note...
+    incompatible_data: The current data is not compatible with the repeater interface and will be overridden when adding items to the repeater
   slider:
     slider: شريط
+    description: Select a number using a slider
     always_show_value: إظهار القيمة دائمًا
   tags:
     tags: الوسوم
     description: حدد أو أضف وسوم
+    whitespace: Whitespace
+    hyphen: Replace with hyphen
+    underscore: Replace with underscore
+    remove: Remove whitespace
+    capitalization: Capitalization
+    uppercase: Convert Uppercase
+    lowercase: Convert Lowercase
     auto_formatter: استخدام التنسيق التلقائي للعنوان
     alphabetize: رتب أبجديا
     alphabetize_label: فرض الترتيب الأبجدي
+    add_tags: Add a tag and press Enter...
   input:
+    input: Input
     description: أدخل قيمة يدوياً
+    trim: Trim
+    trim_label: Trim the start and end
     mask: مقنع
     mask_label: إخفاء القيمة الحقيقية
+    clear: Cleared Value
+    clear_label: Save as empty string
     minimum_value: أدنى قيمة
     maximum_value: أقصى قيمة
+    step_interval: Step Interval
+    slug: Slugify
     slug_label: اجعل رابط القيمة المدخلة آمن
   input-multiline:
+    textarea: Textarea
     description: أدخل النص المتعدد الأسطر
   input-translated-string:
     input-translated-string: نصوص التّرجَمَة
+    description: Select or add custom translation
     search_placeholder: بحث...
+    new_custom_translation: New Custom Translation
   boolean:
     toggle: تبديل
     description: التبديل بين تشغيل وإيقاف التشغيل
     color_on: تشغيل اللون
     color_off: إيقاف اللون
+    label_placeholder: Enter a label...
     label_default: تمكين
   translations:
     display_template: عرض القالب
     no_collection: لا توجد مجموعة
+    toggle_split_view: Toggle Split View
     enable: تفعيل
+    user_language: Use Current User Language
+    default_language: Default Language
+    language_field: Language Indicator Field
+    language_direction_field: Language Direction Field
+  list-o2m-tree-view:
+    description: Tree view for nested recursive one-to-many items
+    recursive_only: The tree view interface only works for recursive relationships.
   user:
     user: مستخدم
     description: حدد مستخدم CairnCMS موجود
@@ -1484,22 +1733,62 @@ interfaces:
     modes:
       auto: تلقائي
       dropdown: قائمة منسدلة
+      modal: Modal
   input-rich-text-html:
+    wysiwyg: WYSIWYG
     description: محرر نص يكتب محتوى HTML
     toolbar: شريط الأدوات
     custom_formats: تنسيقات مخصصة
     options_override: تجاوز الخيارات
+    folder_note: Folder for uploaded files. Does not affect existing files.
+    imageToken: Static Access Token
+    imageToken_label: Static access token is appended to the assets' URL
   input-autocomplete-api:
+    input-autocomplete-api: Autocomplete Input (API)
+    description: A search typeahead for external API values.
+    results_path: Results Path
+    value_path: Value Path
+    text_path: Text Path
     trigger: المشغّل
     rate: معدل
+  group-raw:
+    name: Raw Group
+    description: Render the fields as-is
+  group-detail:
+    name: Detail Group
+    description: Render the fields as a collapsable section
+    show_header: Show Group Header
+    header_icon: Header Icon
+    header_color: Header Color
+    start_open: Start Open
+    start_closed: Start Closed
   system-token:
     system-token: الرمز المميز
+    description: Manage static access token
+    placeholder: Click "Generate Token" to create a new static access token
+    value_securely_saved: Value Securely Saved
+    generate: Generate Token
+    regenerate: Regenerate Token
+    generate_success_copy: Make sure to backup and copy the token above. For security reasons, you will not be able to view the token again after saving and navigate off this page.
+    remove_token: Remove Token
+  system-raw-editor:
+    system-raw-editor: Raw Editor
+    description: Allow entering of raw or mustache templating values
 displays:
   translations:
     translations: الترجمة
+    description: Preview translations
+    enable: Enable
+    user_language: Use Current User Language
+    default_language: Default Language
+    language_field: Language Indicator Field
   boolean:
     boolean: نعم/لا
     description: عرض حالة التشغيل وإيقاف التشغيل
+    label_on: Label On
+    label_on_placeholder: Enter an on label...
+    label_off: Label Off
+    label_off_placeholder: Enter an off label...
     icon_on: تشغيل الأيقونة
     icon_off: إيقاف الأيقونة
     color_on: تشغيل اللون
@@ -1516,11 +1805,23 @@ displays:
     datetime: التاريخ والوقت
     description: عرض القيم المتصلة بالوقت
     format: التنسيق
+    format_note: >-
+      The custom format accepts the __[Date Field Symbol Table](https://www.unicode.org/reports/tr35/tr35-dates.html#Date_Field_Symbol_Table)__
     long: طويل
     short: قصير
     relative: نسبي
     relative_label: 'أظهر الوقت النسبي، مثال: قبل 5 دقائق'
     suffix: لاحقة
+    suffix_label: Show relative indicator
+    suffix_note: Uses words like 'in' and 'ago'
+    strict: Strict
+    strict_label: Use strict units
+    strict_note: Removes words like 'almost', 'over', 'less than'
+    round: Round
+    round_note: Choose a rounding function to use
+    down: Down
+    nearest: Nearest
+    up: Up
   file:
     file: ملف
     description: اعرض الملفات
@@ -1531,39 +1832,64 @@ displays:
     formatted-value: قيمة منسقة
     description: عرض نسخة منسقة من النص
     format: التنسيق
+    format_label: Auto format
     font: الخط
+    font_sans_serif: Sans serif
     font_serif: خط سيريف Serif
     font_monospace: Monospace
     bold: عريض
+    bold_label: Use bold style
     italic: خط مائل
+    italic_label: Use italic style
     prefix: بادئة
+    prefix_label: Prepend text
     suffix: لاحقة
+    suffix_label: Appended Text
     color: لون
+    background: Background
     icon: أيقونة
+    border: Border
+    border_label: Show border
     text: نص
+    text_placeholder: Optional value override...
+  formatted-json-value:
+    formatted-json-value: Formatted JSON value
+    description: Display a formatted version of the object
   icon:
     icon: أيقونة
     description: عرض أيقونة
     filled: مملوء
+    filled_label: Use the filled variant
   image:
     image: صورة
     description: عرض معاينة صغيرة للصورة
     circle: دائرة
     circle_label: عرض كدائرة
   labels:
+    labels: Labels
+    description: Display either a single or a list of labels
+    default_foreground: Default Foreground
+    default_background: Default Background
+    format_label: Format each label
     show_as_dot: أظهر كنقطة
     choices_value_placeholder: أدخل قيمة...
     choices_text_placeholder: أدخل نص...
   mime-type:
+    mime-type: MIME Type
     description: أظهر MIME-Type الملف
+    extension_only: Extension Only
     extension_only_label: أظهر ملحق الملف فقط
   rating:
     rating: التقييم
+    description: Visualize a number as stars relative to the max-value
     simple: بسيط
     simple_label: أظهر النجوم بصيغة بسيطة
+  raw:
+    raw: Raw Value
   related-values:
     related-values: القيم ذات الصلة
     description: اعرض القيم ذات الصلة
+    display_template_configure_notice: You can configure the display template after creating this field.
   user:
     user: مستخدم
     description: عرض مستخدم CairnCMS
@@ -1575,6 +1901,9 @@ layouts:
   cards:
     cards: البطاقات
     image_source: مصدر الصورة
+    image_fit: Image Fit
+    crop: Crop
+    contain: Contain
     title: العنوان
     subtitle: الترجمة
   tabular:
@@ -1587,14 +1916,176 @@ layouts:
     calendar: تقويم
     start_date_field: حقل تاريخ البداية
     end_date_field: حقل تاريخ الإنتهاء
+    optional: Optional
+    first_day: First Day of the Week
+  map:
+    map: Map
+    basemap: Basemap
+    layers: Layers
+    cluster_options: Clustering options
+    cluster: Cluster Nearby Data
+    cluster_radius: Cluster radius
+    cluster_minpoints: Cluster minimum size
+    cluster_maxzoom: Maximum zoom for clustering
+    field: Geospatial Field
+    invalid_geometry: Invalid geometry
+    find_location: Find location...
+    default_template: Using Collection Default...
+    no_compatible_fields: No compatible fields
   kanban:
+    name: Kanban
+    group_field: Group By
+    group_field_placeholder: Field to group by...
+    group_title: Group Title
+    group_title_placeholder: Field for group titles...
+    title: Card Title
+    title_placeholder: Optional title field...
+    text: Card Text
+    text_placeholder: Optional text field...
+    date: Card Date
+    date_placeholder: Optional date field...
+    tags: Card Tags
+    tags_placeholder: Optional tags field...
+    user: Card User
+    user_placeholder: Optional user field...
+    image: Card Image
+    image_placeholder: Optional image field...
+    image_fit: Card Image Fit
+    crop: Crop
     advanced: متقدم
+    edit_group: Edit Group
+    delete_group: Delete Group
+    add_group: Add Group
+    add_group_placeholder: Enter a new group title...
+    show_ungrouped: Show Ungrouped
+    show: Show
+    no_group: No Group
+    not_all_loaded: Could only load the first 1000 items.
+horizontal: Horizontal
+vertical: Vertical
+x_axis: X-Axis
+y_axis: Y-Axis
+y_axis_function: Y-Axis Function
+show_x_only: Show X-Axis Only
+show_y_only: Show Y-Axis Only
+show_data_label: Show Data Label
 both: كل منهما
+show_axis_labels: Show Axis Labels
+function: Function
+half_circle: Half Circle
+full_circle: Full Circle
+stroke_width: Stroke Width
+rounded_stroke: Rounded Stroke
+thin: Thin
+medium: Medium
+broad: Broad
+show_labels: Show Labels
+show_legend: Show Legend
+right: Right
+left: Left
+donut: Donut
 panels:
+  metric:
+    name: Metric
+    description: Show a single value based on a query
+    field: Field
+  time_series:
+    name: Time Series
+    description: Render a line chart based on values over time
+    date_field: Date Field
+    value_field: Value Field
+    fill_type: Fill Type
+    curve_type: Curve Type
   label:
     name: تسمية
+    description: Show some text
+  list:
+    name: List
+    description: Filter and list fields from a collection
+  barchart:
+    name: Bar Chart
+    description: Bar or column charts for comparing groups of values
+    horizontal: Horizontal
+    select_collection: You must select a collection.
+  linechart:
+    name: Line Chart
+    description: Line chart for comparing change of a field
+    disabled_grouping: Disabled when grouping is selected.
+    disabled_no_grouping: Disabled when no grouping is selected.
+    show_marker: Show Tooltip Marker
+    curve_type: Curve Type
+    smooth: Smooth
+    straight: Straight
+    step_line: Step Line
+  meter:
+    name: Meter
+    description: Meter for tracking values
+  piechart:
+    name: Pie or Donut Chart
+    description: Circular chart showing the ratios of groups on a column
+  variable:
+    name: Global Variable
+    description: Set a global value for use in other Panels' filters
+    variable_key: Variable Key
+  relational-variable:
+    name: Global Relational Variable
+    description: Set a global relational value for use in other Panels' filters
+    variable_key: Variable Key
+    multiple: Multiple
+    multiple-label: Select multiple items
+triggers:
+  common:
+    response_body: Response Body
+    response_body_all: All Data
+    response_body_last: Data of Last Operation
+  event:
+    name: Event Hook
+    description: Triggers on platform or data events
+    action: 'Action (Non-Blocking)'
+    filter: 'Filter (Blocking)'
+  webhook:
+    name: Webhook
+    description: Triggers on an incoming HTTP request
+    method: Method
+    async: Asynchronous
+  operation:
+    name: Another Flow
+    description: Triggered by another Flow, for chaining
+    preview: Triggered by an operation in a different Flow
+  schedule:
+    name: Schedule (CRON)
+    description: Triggers at regular points in time
+    cron: Interval
+  manual:
+    name: Manual
+    description: Triggers on manual run within selected collection(s)
+    collection_and_item: Collection & Item Pages
+    collection_only: Collection Page Only
+    item_only: Item Page Only
+    collection_page: Collection Page
+    require_selection: Requires Selection
+a_flow_uuid: Select a Flow to trigger...
+any_string_or_json: Any string or JSON...
+item_payload_placeholder: This is the JSON used to update the item's field values...
+operation_variables_note: You can access flow data with variables such as **{'{'}{'{'}$last{'}'}{'}'}**, **{'{'}{'{'}$trigger{'}'}{'}'}** and **{'{'}{'{'}$accountability{'}'}{'}'}**, or reference previous operations using **{'{'}{'{'}operation_key{'}'}{'}'}**.'
 operations:
+  condition:
+    name: Condition
+    description: Route a flow based on If / Else logic
+  exec:
+    name: Run Script
+    description: Execute arbitrary code to modify the payload
+    modules: 'The following **Node modules** can be used:'
+  item-create:
+    name: Create Data
+    description: Create items in the database
+    payload: Payload
+    emit_events: Emit Events
   item-delete:
+    name: Delete Data
+    description: Delete items in the database
+    emit_events: Emit Events
+    key: IDs
     query: الاستعلام
   item-read:
     name: قراءة البيانات
@@ -1610,7 +2101,10 @@ operations:
     payload: حمولة
     query: الاستعلام
   log:
+    name: Log to Console
+    description: Output something to the console
     message: الرسالة
+    message_placeholder: Enter a message to show in the console...
   mail:
     name: إرسال بريد إلكتروني
     description: إرسال بريد إلكتروني إلى شخص واحد أو أكثر
@@ -1623,8 +2117,11 @@ operations:
     name: إرسال إشعار
     description: إرسال إشعار داخل التطبيق إلى واحد أو أكثر من المستخدمين
     recipient: مستخدم
+    recipient_placeholder: Enter a UUID...
+    recipient_note: Add user UUID and press enter...
     message: الرسالة
   request:
+    name: Webhook / Request URL
     description: "تقديم طلب إلى عنوان URL"
     url: الرابط
     url_placeholder: https://example.com/example
@@ -1636,7 +2133,21 @@ operations:
     value_placeholder: Bearer eyJhbGciOi...
   sleep:
     name: النوم
+    description: Wait a given number of milliseconds
+    milliseconds: Milliseconds
+  transform:
+    name: Transform Payload
+    description: Alter the Flow's JSON payload
   trigger:
+    name: Trigger Flow
+    description: Pass this data to another flow
     flows: التدفقات
     flow: التدفق
     data: البيانات
+    iteration_mode: Iteration Mode
+    iteration_mode_note: Mode for iterating over arrays.
+    serial: Serial
+    parallel: Parallel
+    batch: Batch
+    batch_size: Batch Size
+    cache: Cache
