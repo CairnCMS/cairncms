@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: Indentificador
 avatar: Foto
 application: Aplicació
@@ -76,14 +75,10 @@ create_role: Crea un rol
 create_user: Crear usuari
 message: Missatge
 delete_panel: Elimina el panell
-create_translation_string: Crea una cadena de traducció
-no_translation_string: No hi ha traduccions
-no_translation_string_copy: Encara no hi ha traduccions.
-translation_string_key_placeholder: Clau de cadena de traducció...
-translation_string_translations_placeholder: Afegeix una nova traducció
-edit_translation_string: Edita la cadena de traducció
-delete_translation_string_copy: >-
-  Estàs segur d'eliminar la cadena de traducció "{key}"? Aquesta acció no es podrà revertir.
+create_custom_translation: Create Custom Translation
+edit_custom_translation: Edit Custom Translation
+no_custom_translations: No Custom Translations
+no_custom_translations_copy: There are no custom translations yet.
 invite_users: Convidar usuaris
 invite: Convida
 email_already_invited: El correu "{email}" ja s'ha convidat
@@ -114,19 +109,13 @@ public_label: Públic
 public_description: Controla quines dades API estan disponibles sense autenticar.
 admin_description: Rol d'administració inicial sense restriccions d'accés a l'APP/API.
 not_allowed: No permès
-directus_version: Versió de CairnCMS
-node_version: Versió de Node
-node_uptime: Temps d'activitat de Node
-os_type: Tipus de SO
-os_version: Versió d'OS
-os_uptime: Temps d'activitat del SO
-os_totalmem: Memòria del SO
 archive: Arxiu
 archive_confirm: Estàs segur de que vols arxivar aquest element?
 archive_confirm_count: >-
   No hi ha elements seleccionats | Segur que voleu arxivar aquest element? | Segur que voleu arxivar aquests {count} elements?
 reset_system_permissions_to: 'Restableix els permisos del sistema a:'
 reset_system_permissions_copy: Aquesta acció rescriurà qualsevol permís personalitzat que hagis aplicat a les col·leccions del sistema. Estàs sgur?
+the_following_are_minimum_permissions: The following minimum permissions are automatically applied when "App Access" is enabled. You can grant additional permissions if needed, but you cannot reduce permissions below this level.
 app_access_minimum: Accés a l'aplicació mínim
 recommended_defaults: Predeterminats recomanats
 unarchive: Desarxiva
@@ -177,6 +166,7 @@ permissions_for_role: 'Elements {role} poden {action}.'
 fields_for_role: 'Camps del {role} poden {action}.'
 validation_for_role: 'El camp {action} determina que el rol {role} ha de obeir.'
 presets_for_role: 'Valor de camp predeterminat per al rol {role}.'
+presets_field_warning: 'Relational presets for field "{field}" should be configured with the "detailed" syntax.'
 presentation_and_aliases: Presentació i àlies
 revision_post_create: Aquest és l'aspecte d'aquest element quan es va crear.
 revision_post_update: Aquest és l'aspecte de l'element després de l'actualització.
@@ -232,6 +222,7 @@ bigInteger: Big Integer
 boolean: Boolean
 date: Data
 date_range: Interval de dates
+translation_key_placeholder: Enter a key...
 datetime: DateTime
 dateTime: DateTime
 precision: Precisió
@@ -240,6 +231,7 @@ float: Float
 integer: Integer
 json: JSON
 xml: XML
+yaml: YAML
 string: String
 text: Text
 time: Time
@@ -270,6 +262,7 @@ fields_group: Agrupació de camps
 no_collections_found: No s'han trobat col·leccions.
 new_data_alert: 'Es crearà el següent en el teu Model de dades:'
 search_collection: Cerca la col·lecció...
+search_field: Search Field...
 new_field: 'Nou camp'
 new_collection: 'Nova col·lecció'
 add_m2o_to_collection: 'Afegeix Molts-a-Un a "{collection}"'
@@ -289,7 +282,12 @@ o2m_relationship: Relació Un a molts
 m2m_relationship: Relació Molts a molts
 m2a_relationship: Relació Molts a qualsevol
 invalid_item: Element invàlid
+require_confirmation: Require Confirmation
+dialog: Dialog
 modal: Modal
+confirmation_dialog: Confirmation Dialog
+confirmation_description: Confirmation Description
+confirmation_input_fields: Confirmation Input Fields
 next: Següent
 field_name: Nom del camp
 translations: Traduccions
@@ -308,6 +306,7 @@ updated_on: Actualitzat el
 updated_by: Actualitzat per
 primary_key: Clau primària
 foreign_key: Clau forana
+field_key: Field Key
 finish_setup: Finalitza la configuració
 dismiss: Descarta
 toggle_raw_editor: Canviar d`editor
@@ -436,6 +435,7 @@ checksum: Checksum
 owner: Propietari
 edited_by: Editat per
 folder: Carpeta
+folders: Folders
 zoom: Zoom
 download: Descarrega
 open: Obre
@@ -455,11 +455,11 @@ open_file_in_tab: Obre el fitxer en una nova pestanya
 start_export: Comença l'exportació
 not_available_for_local_downloads: No disponible per a descàrregues locals
 exporting_all_items_in_collection: Exportant tots els {total} elements de {collection}.
-exporting_limited_items_in_collection: Exportant {limit} dels {total} elements de {collection}.
+exporting_limited_items_in_collection: 'Exportant {limit} dels {total} elements de {collection}.'
 exporting_no_items_to_export: No hi ha elements a exportar. Ajusta d'exportació de sota.
 exporting_download_hint: Un cop completat, aquest fitxer {format} es descarregarà autormaticament al teu dispositiu.
-exporting_batch_hint: Aquesta exportació es processarà en lots, i un cop completada, es desarà el fitxer {format} a la biblioteca de fitxers.
-exporting_batch_hint_forced: Degut al gran nombre d'elements, aquesta exportació ha de ser processada en lots, i un cop completada, es desarà el fitxer {format} a la biblioteca de fitxers.
+exporting_library_hint: Once the {format} file is created, it will be saved to the File Library.
+exporting_library_hint_forced: This export must be processed in batches. Once completed, the {format} file will be saved to the File Library.
 collection_key: Clau de la col·lecció
 name: Nom
 primary_key_field: Camp de clau primària
@@ -484,7 +484,8 @@ enable_select_button: Habilita el botó de selecció
 allow_duplicates: Permet duplicats
 comments: Comentaris
 no_comments: No hi ha comentaris, encara
-click_to_expand: Fes clic per ampliar
+expand: Expand
+collapse: Collapse
 select_item: Selecciona element
 no_items: No hi ha elements
 search_items: Cerca elements...
@@ -516,6 +517,7 @@ create_collection: Crea una col·lecció
 no_collections_copy_admin: Encara no hi ha cap col·lecció. Fes clic al botó següent per començar.
 no_collections_copy: Encara no hi ha cap col·lecció. Posa't en contacte amb l'administrador del sistema.
 relationship_not_setup: La relació no s'ha configurat correctament
+no_singleton_relations: Relationships to Singletons are not supported
 display_template_not_setup: L'opció de plantilla de disposió no està configurada
 collection_field_not_setup: L'opció de camp de col·lecció no està configurada
 select_a_collection: Selecciona una col·lecció
@@ -565,6 +567,8 @@ select_an_item: Selecciona un element...
 edit: Edita
 enabled: Habilitat
 disable_tfa: Desactiva 2FA
+admin_disable_tfa_text: Are you sure you want to disable 2FA for this user?
+tfa_setup: Setup 2FA
 tfa_scan_code: Escaneja el codi a l'aplicació d'autenticació per acabar d'establir el 2Fa
 enter_otp_to_disable_tfa: Introdueix el OTP per deshabilitar el 2FA
 create_account: Crea un compte
@@ -606,6 +610,7 @@ errors:
   RANGE_NOT_SATISFIABLE: Interval no vàlid
   METHOD_NOT_ALLOWED: Mètode no permès
   REQUESTS_EXCEEDED: Límit de peticions assolit
+  CONTENT_TOO_LARGE: Submitted item/file is too large
 security: Seguretat
 value_hashed: Aplicat hash segur al valor
 bookmark_name: Nom del marcador...
@@ -651,6 +656,7 @@ one_filtered_item: '1 element filtrat'
 delete_collection_are_you_sure: >-
   Estàs segur d'eliminar aquesta "{collection}"? Això també eliminarà tots els elements que conté. Aquesta acció és permanent.
 delete_folder_are_you_sure: Estàs segur d'eliminar aquesta "{folder}"? Les carpetes i col·leccions anidades es mouran al nivell més alt.
+delete_collection_peer_dependencies: The following fields will be deleted as well, as they are related to the current collection.
 collections_shown: Col·leccions mostrades
 visible_collections: Col·leccions visibles
 hidden_collections: Col·leccions amagades
@@ -775,11 +781,64 @@ icon_off: Icona desactivada
 label: Etiqueta
 flows: Fluxes
 flow: Fluxe
+select_a_flow: Select a Flow
+run_flow_confirm: Are you sure you want to execute this flow?
+run_flow_on_current_collection: Run Flow on Current Collection
+run_flow_on_current: Run Flow on Current Item
+run_flow_on_current_edited_confirm: This item may be updated by this flow, are you sure you want to execute it?
+run_flow_on_selected: Select One or More Items First | Run Flow on 1 Selected Item | Run Flow on {n} Selected Items
+run_flow: Run Flow
+run_flow_success: Flow "{flow}" ran successfully
+field_name_placeholder: Enter field name...
+field_key_placeholder: Enter field key...
 trigger: Disparador
+trigger_options: Trigger Options
+view_trigger: View Trigger
+create_trigger: Create Trigger
+trigger_setup: Trigger Setup
+change_trigger: Change Trigger
+flow_delete_confirm: Are you sure you want to delete Flow "{flow}"? This action can not be undone.
+set_flow_active: Set Flow to Active
+set_flow_inactive: Set Flow to Inactive
+edit_flow: Edit Flow
+delete_flow: Delete Flow
+no_other_flows_copy: You don't have any other Flows yet.
+no_flows: No Flows
+no_flows_copy: You don't have any Flows yet.
+create_flow: Create Flow
+creating_new_flow: Creating New Flow
+updating_flow: Updating Flow
+flow_setup: Flow Setup
 flow_name: Nom
+flow_tracking: Activity & Logs Tracking
+flow_tracking_all: Track Activity & Logs
 flow_tracking_activity: Només traça l'activitat
 flow_tracking_null: No tracis res
+start_flow: Start Flow
+stop_flow: Stop Flow
+create_operation: Create Operation
+edit_operation: Edit Operation
 code: Codi
+operation_options: Operation Options
+operation_name: Name of operation...
+operation_key: Identifier for reference...
+operation_key_unique_error: Operation keys must be unique in a Flow
+operation_handle_resolve: 'Resolve: Click to Add or Drag to Reroute'
+operation_handle_reject: 'Reject: Click to Add or Drag to Reroute'
+insights: Insights
+dashboard: Dashboard
+panel: Panel
+panel_options: Panel Options
+panel_header: Panel Header
+panel_name_placeholder: Name this panel...
+panel_note_placeholder: Optional details about this panel...
+panel_delete_confirm: Are you sure you want to delete this panel? This action can not be undone.
+list_panel_allow_edit: Allow Inline Editing
+dashboard_delete_confirm: Are you sure you want to delete this dashboard? This action can not be undone.
+edit_dashboard: Edit Dashboard
+delete_dashboard: Delete Dashboard
+visible: Visible
+prefix_placeholder: Text before value...
 suffix_placeholder: Text després del valor...
 decimals_placeholder: Nombre de posicions decimals...
 no_dashboards: Sense taulers de control
@@ -814,6 +873,7 @@ interface_group_selection: Selecció
 interface_group_relational: Relacional
 interface_group_presentation: Presentació
 interface_group_groups: Grups
+interface_group_other: Other
 tooltip: Consell
 tooltip_placeholder: Introdueix el consell...
 unlimited: Il·limitat
@@ -889,7 +949,8 @@ settings_permissions: Rols i permisos
 settings_project: Ajustaments del projecte
 settings_flows: Fluxes
 settings_presets: Predefinits i Marcadors
-settings_translation_strings: Cadenes de traducció
+settings_translations: Custom Translations
+settings_extensions: Extensions
 one_or_more_options_are_missing: Falta una o més opcions
 scope: Abast
 actions: Accions
@@ -936,7 +997,49 @@ page_help_settings_presets_collection: >-
 page_help_settings_presets_item: >-
   ** Detall de predefinit **: Un formulari per gestionar adreces d'interès i predefinits de col·lecció predeterminats.
 page_help_settings_flows_collection: '**Examina els fluxos** — Llista tots els fluxos del projecte.'
-page_help_settings_translation_strings_collection: '**Examina cadenes de traducció** - Llista totes les cadenes de traducció del projecte.'
+page_help_settings_flows_item: '**Flow Detail** — Workspace for managing one or more operations.'
+page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
+extension_health_normal: Normal
+extension_health_warning: Warning | Warnings
+extension_health_failed: Failed
+extension_bundle_contents: Bundled extensions
+extension_capabilities: Capabilities
+extension_advanced_diagnostics: Advanced Diagnostics
+extension_sandboxed: Sandboxed
+extension_runtime: Runtime
+extension_runtime_sandboxed: Sandboxed
+extension_runtime_full_authority: Full Authority
+extension_runtime_browser: Browser App
+confined_runtime: Sandbox
+confined_runtime_mode: 'OS hardening: {decision} ({mode})'
+confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
+extension_status_loaded_detail: Loaded and running on the server.
+extension_status_discovered_detail: Discovered on this instance.
+extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
+extension_status_failed_detail: The extension failed to load on this instance.
+extension_settings_unavailable_detail: Extension settings are unavailable.
+extension_settings_drawer_subtitle: Extension settings
+extension_settings_section: Extension Settings
+extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
+extension_settings_no_global_keys: This extension declares no global settings.
+extension_settings_load_failed: Could not load the extension's settings.
+extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
+extension_type_group_hook: Hooks
+extension_type_group_endpoint: Endpoints
+extension_type_group_operation: Operations
+extension_type_group_bundle: Bundles
+extension_type_group_interface: Interfaces
+extension_type_group_display: Displays
+extension_type_group_layout: Layouts
+extension_type_group_module: Modules
+extension_type_group_panel: Panels
+extension_type_group_item-view: Item Views
+extension_type_group_other: Other
+no_extensions: No Extensions
+no_extensions_copy: No extensions were discovered in the configured extensions path.
+extensions_load_failed: Could not load the extensions inventory.
+page_help_settings_translations_collection: '**Browse Custom Translations** — Lists all custom translations within the project.'
+page_help_settings_translations_item: '**Custom Translations Detail** — A form for viewing and managing this item.'
 page_help_users_collection: '**Directori de l''usuari**.'
 page_help_users_item: >-
   ** Detall de l'usuari **: Gestiona la informació del compte o consulta la informació d'altres usuaris.
@@ -979,6 +1082,7 @@ directus_collection:
   directus_settings: Opcions de configuració del projecte
   directus_shares: Rastreja els elements compartits externament
   directus_users: Usuaris del sistema per a la plataforma
+  directus_translations: Custom translations
 fields:
   directus_activity:
     item: Clau primaria de l'ítem
@@ -1067,6 +1171,7 @@ fields:
     png: PNG
     webP: WebP
     tiff: Tiff
+    avif: AVIF
     mapping: Mapeig
     basemaps: Mapes base
     basemaps_raster: Raster
@@ -1169,6 +1274,7 @@ field_options:
     do_not_track_anything: No tracis res
     collection_setup: Configuració de la col·lecció
     note_placeholder: Descripció d'aquesta col·lecció...
+    hidden_label: Hide within the App
     singleton: Tracta com un objecte únic
     language: Idioma
     translation: Traducció
@@ -1178,13 +1284,32 @@ field_options:
     plural_unit: Unitat plural
     archive_divider: Arxiu
     archive_field_placeholder: Tria un camp...
+    archive_app_filter: Enable App Archive Filter
+    archive_value: Value set when archiving...
+    unarchive_value: Value set when unarchiving...
     sort_divider: Ordre
+    sort_field: Choose a field...
+    accountability_divider: Accountability
+    duplication_divider: Duplication
+  directus_files:
+    title: A unique title...
+    description: An optional description...
+    location: An optional location...
+    storage_divider: File Naming
+    filename_disk: Name on disk storage...
+    filename_download: Name when downloading...
   directus_roles:
+    name: The unique name for this role...
+    description: A description of this role...
+    ip_access: Add allowed IP addresses, leave empty to allow all...
     fields:
       icon_name: Icona
       name_name: Nom
       name_placeholder: Introdueix un títol...
+      link_name: Link
+      link_placeholder: Relative or absolute URL...
     collections_name: Col·leccions
+    collections_addLabel: Add Collection...
   directus_users:
     preferences_divider: Preferències de l'usuari
     dropdown_auto: Automàtic (basat en el sistema)
@@ -1192,20 +1317,47 @@ field_options:
     dropdown_dark: Mode fosc
     admin_divider: Opcions d'administrador
     status_dropdown_draft: Esborrany
+    status_dropdown_invited: Invited
     status_dropdown_active: Activa
     status_dropdown_suspended: Suspès
     status_dropdown_archived: Arxivat
     token: Entra un testimoni d'accés (token) segur...
 no_fields_in_collection: 'Encara no hi ha camps a "{collection}"'
+no_value: No value
 do_nothing: No facis res
 generate_and_save_uuid: Genera i Desa UUID
 save_current_user_id: Desa el ID d'usuari actual
 save_current_user_role: Desa el rol d'usuari actual
 save_current_datetime: Desa la Data/Hora actual
+always_open: Always Open
 start_open: Comença obert
+start_collapsed: Start Collapsed
 block: Block
 inline: Inline
 comment: Comentari
+shares: Shares
+unlimited_usage: Unlimited usage
+uses_left: No uses left | 1 use left | {n} uses left
+no_shares: No shares to show
+new_share: New Share
+expired: Expired
+upcoming: Upcoming
+share: Share
+share_item: Share Item
+shared_with_you: An item has been shared with you
+shared_enter_passcode: Enter your passcode to continue...
+shared_leave_blank_for_unlimited: Leave blank for unlimited
+shared_times_remaining: This link can only be used {n} times
+shared_last_remaining: This link can only be used once
+shared_uses_left: For added security, this shared page has been configured with a limited number of views. There are currently {n} views remaining, after which, the page will no longer be accessible.
+share_access_page: Access Shared Page
+share_access_not_found: This shared page either does not exist or has already exceeded the maximum number of allowed uses.
+share_access_not_found_desc: Please contact an authorized user of this project to request access.
+share_access_not_found_title: Unknown Share Page
+share_copy_link: Copy Link
+share_copy_link_success: Link Copied
+share_copy_link_error: Unable to Copy Link
+share_send_link: Send Link
 relational_triggers: Disparadors relacionals
 referential_action_field_label_m2o: Si s'esborra de {collection}...
 referential_action_field_label_o2m: Si es deselecciona de {collection}...
@@ -1287,12 +1439,14 @@ export_started: S'ha iniciat l'exportació
 export_started_copy: La vostra exportació ha començat. Rebràs una notificació quan estigui llest per descarregar.
 sort_asc: Ordre ascendent
 sort_desc: Ordre descendent
+disable_sort: Disable Sorting
 template: Plantilla
 require_value_to_be_set: Requereix que s'estableixi un valor en la creació
 translation: Traducció
 translation_placeholder: Introdueix una traducció...
 value: Valor
 view_project: Veure el projecte
+weeks: { }
 report_error: Notifica un error
 start: Comença
 table: Taula
@@ -1425,6 +1579,9 @@ interfaces:
     description: Entra un valor per aplicar-hi hash
     masked: Enmascarat
     masked_label: Amaga els valors "cert"
+  system-extension-secret:
+    name: Extension Secret
+    value_stored: Value Securely Encrypted
   select-icon:
     icon: Icona
     description: Selecciona la icona d'un desplegable
@@ -1450,6 +1607,9 @@ interfaces:
     many-to-one: Molts a un
     description: Selecciona un únic element relacionat
     display_template: Mostra la plantilla
+  collection-item-dropdown:
+    collection-item-dropdown: Collection Item Dropdown
+    description: Select an item from a collection in JSON format
   input-rich-text-md:
     markdown: Markdown
     description: Entra i previsualitza el markdown
@@ -1461,10 +1621,15 @@ interfaces:
     customSyntax_label: Afegeix tipus de sintaxi personalitzats
     customSyntax_add: Afegeix sintaxi personalitzada
     box: Block / Inline
+    imageToken: Static Access Token
+    imageToken_label: Static access token is appended to the assets' URL
   map:
     map: Mapa
     description: Selecciona una localització al mapa
     zoom: Zoom
+    geometry_type: Geometry Type
+    geometry_format: Geometry Format
+    default_view: Default View
     invalid_options: Opcions no vàlides
     invalid_format: Format no vàlid ({format})
     unexpected_geometry: Esperat {expected}, obtingut {got}.
@@ -1474,10 +1639,12 @@ interfaces:
     lnglat: Longitud, Latitud
     wkt: WKT
     wkb: WKB
+    click_to_select: Click to select {geometry}
   presentation-notice:
     notice: Avís
     description: Mostra un petit avís
     text: Introdueix el contingut de l'avís aquí...
+    no_text: No text configured...
   list-o2m:
     one-to-many: Un a Molts
     description: Selecciona múltiples elements relacionats
@@ -1485,6 +1652,7 @@ interfaces:
   system-folder:
     folder: Carpeta
     description: Selecciona una carpeta
+    field_hint: Default folder for uploaded files without a folder specified. Does not affect existing files.
     root_name: Arrel de la biblioteca de fitxers
     system_default: Predeterminats del sistema
   select-radio:
@@ -1496,7 +1664,9 @@ interfaces:
     edit_fields: Edita els camps
     add_label: 'Etiqueta "Crea nou"'
     sort: Ordre
+    sort_placeholder: Manual
     field_note_placeholder: Introdueix una nota sobre el camp...
+    incompatible_data: The current data is not compatible with the repeater interface and will be overridden when adding items to the repeater
   slider:
     slider: Lliscador
     description: Selecciona un número utilitzant el lliscador
@@ -1514,6 +1684,7 @@ interfaces:
     auto_formatter: Utilitza autoformatador del títol
     alphabetize: Alfabètic
     alphabetize_label: Força ordre alfabètic
+    add_tags: Add a tag and press Enter...
   input:
     input: Entrada
     description: Entra manualment un valor
@@ -1531,6 +1702,11 @@ interfaces:
   input-multiline:
     textarea: Textarea
     description: Entra text multilínia
+  input-translated-string:
+    input-translated-string: Translated Strings
+    description: Select or add custom translation
+    search_placeholder: Search...
+    new_custom_translation: New Custom Translation
   boolean:
     toggle: Canvia
     description: Canvia entre Encés i apagat
@@ -1541,6 +1717,12 @@ interfaces:
   translations:
     display_template: Mostra la plantilla
     no_collection: No hi ha col·leccions
+    toggle_split_view: Toggle Split View
+    enable: Enable
+    user_language: Use Current User Language
+    default_language: Default Language
+    language_field: Language Indicator Field
+    language_direction_field: Language Direction Field
   list-o2m-tree-view:
     description: Vista d'arbre per a elements un-a-molts anidats recursivament
     recursive_only: La interfície de vista d'arbre només funciona per a relacions recursives.
@@ -1558,11 +1740,15 @@ interfaces:
     toolbar: Barra d'eines
     custom_formats: Formats personalitzats
     options_override: Sobreescriptura d'opcions
+    folder_note: Folder for uploaded files. Does not affect existing files.
+    imageToken: Static Access Token
+    imageToken_label: Static access token is appended to the assets' URL
   input-autocomplete-api:
     input-autocomplete-api: Entrada autocompleta (API)
     description: Una cerca typeahead per valors d'API externes.
     results_path: Camí dels resultats
     value_path: Camí del Valor
+    text_path: Text Path
     trigger: Disparador
     rate: Velocitat
   group-raw:
@@ -1578,9 +1764,24 @@ interfaces:
     start_closed: Comená tancat
   system-token:
     system-token: Token
+    description: Manage static access token
+    placeholder: Click "Generate Token" to create a new static access token
+    value_securely_saved: Value Securely Saved
+    generate: Generate Token
+    regenerate: Regenerate Token
+    generate_success_copy: Make sure to backup and copy the token above. For security reasons, you will not be able to view the token again after saving and navigate off this page.
+    remove_token: Remove Token
+  system-raw-editor:
+    system-raw-editor: Raw Editor
+    description: Allow entering of raw or mustache templating values
 displays:
   translations:
     translations: Traduccions
+    description: Preview translations
+    enable: Enable
+    user_language: Use Current User Language
+    default_language: Default Language
+    language_field: Language Indicator Field
   boolean:
     boolean: Boolean
     description: Mostra els estats Activat i desactivat
@@ -1611,6 +1812,16 @@ displays:
     relative: Relatiu
     relative_label: 'Mostra el temps relatiu, ex: fa 5 minuts'
     suffix: Sufix
+    suffix_label: Show relative indicator
+    suffix_note: Uses words like 'in' and 'ago'
+    strict: Strict
+    strict_label: Use strict units
+    strict_note: Removes words like 'almost', 'over', 'less than'
+    round: Round
+    round_note: Choose a rounding function to use
+    down: Down
+    nearest: Nearest
+    up: Up
   file:
     file: Fitxer
     description: Mostra fitxers
@@ -1621,17 +1832,26 @@ displays:
     formatted-value: Valor formatat
     description: Mostra una versió formatada del text
     format: Format
+    format_label: Auto format
     font: Font
+    font_sans_serif: Sans serif
     font_serif: Serif
     font_monospace: Espai únic
     bold: Negreta
     bold_label: Utilitza text en negreta
     italic: Cursiva
+    italic_label: Use italic style
     prefix: Prefix
+    prefix_label: Prepend text
     suffix: Sufix
+    suffix_label: Appended Text
     color: Color
+    background: Background
     icon: Icona
+    border: Border
+    border_label: Show border
     text: Text
+    text_placeholder: Optional value override...
   formatted-json-value:
     formatted-json-value: Valor JSON formatat
     description: Mostra una versió formatada del l'objecte
@@ -1696,44 +1916,238 @@ layouts:
     calendar: Calendari
     start_date_field: Camp de data d'inici
     end_date_field: Camp de data de fi
+    optional: Optional
+    first_day: First Day of the Week
   map:
     map: Mapa
     basemap: Mapa base
     layers: Capes
     cluster_options: Opcions de clustering
+    cluster: Cluster Nearby Data
     cluster_radius: Radi del cluster
     cluster_minpoints: Mida mínima del clúster
     cluster_maxzoom: Zoom màxim per clustering
+    field: Geospatial Field
     invalid_geometry: Geometria invàlida
+    find_location: Find location...
+    default_template: Using Collection Default...
+    no_compatible_fields: No compatible fields
   kanban:
+    name: Kanban
+    group_field: Group By
+    group_field_placeholder: Field to group by...
+    group_title: Group Title
+    group_title_placeholder: Field for group titles...
+    title: Card Title
+    title_placeholder: Optional title field...
+    text: Card Text
+    text_placeholder: Optional text field...
+    date: Card Date
+    date_placeholder: Optional date field...
+    tags: Card Tags
+    tags_placeholder: Optional tags field...
+    user: Card User
+    user_placeholder: Optional user field...
+    image: Card Image
+    image_placeholder: Optional image field...
+    image_fit: Card Image Fit
     crop: Retalla
     advanced: Avançat
+    edit_group: Edit Group
+    delete_group: Delete Group
+    add_group: Add Group
+    add_group_placeholder: Enter a new group title...
+    show_ungrouped: Show Ungrouped
+    show: Show
+    no_group: No Group
+    not_all_loaded: Could only load the first 1000 items.
+horizontal: Horizontal
+vertical: Vertical
+x_axis: X-Axis
+y_axis: Y-Axis
+y_axis_function: Y-Axis Function
+show_x_only: Show X-Axis Only
+show_y_only: Show Y-Axis Only
+show_data_label: Show Data Label
 both: Ambdós
+show_axis_labels: Show Axis Labels
+function: Function
+half_circle: Half Circle
+full_circle: Full Circle
+stroke_width: Stroke Width
+rounded_stroke: Rounded Stroke
+thin: Thin
+medium: Medium
+broad: Broad
+show_labels: Show Labels
+show_legend: Show Legend
+right: Right
+left: Left
+donut: Donut
 panels:
+  metric:
+    name: Metric
+    description: Show a single value based on a query
+    field: Field
+  time_series:
+    name: Time Series
+    description: Render a line chart based on values over time
+    date_field: Date Field
+    value_field: Value Field
+    fill_type: Fill Type
+    curve_type: Curve Type
   label:
     name: Etiqueta
+    description: Show some text
+  list:
+    name: List
+    description: Filter and list fields from a collection
+  barchart:
+    name: Bar Chart
+    description: Bar or column charts for comparing groups of values
+    horizontal: Horizontal
+    select_collection: You must select a collection.
+  linechart:
+    name: Line Chart
+    description: Line chart for comparing change of a field
+    disabled_grouping: Disabled when grouping is selected.
+    disabled_no_grouping: Disabled when no grouping is selected.
+    show_marker: Show Tooltip Marker
+    curve_type: Curve Type
+    smooth: Smooth
+    straight: Straight
+    step_line: Step Line
+  meter:
+    name: Meter
+    description: Meter for tracking values
+  piechart:
+    name: Pie or Donut Chart
+    description: Circular chart showing the ratios of groups on a column
+  variable:
+    name: Global Variable
+    description: Set a global value for use in other Panels' filters
+    variable_key: Variable Key
+  relational-variable:
+    name: Global Relational Variable
+    description: Set a global relational value for use in other Panels' filters
+    variable_key: Variable Key
+    multiple: Multiple
+    multiple-label: Select multiple items
 triggers:
+  common:
+    response_body: Response Body
+    response_body_all: All Data
+    response_body_last: Data of Last Operation
+  event:
+    name: Event Hook
+    description: Triggers on platform or data events
+    action: 'Action (Non-Blocking)'
+    filter: 'Filter (Blocking)'
   webhook:
+    name: Webhook
+    description: Triggers on an incoming HTTP request
     method: Mètode
+    async: Asynchronous
+  operation:
+    name: Another Flow
+    description: Triggered by another Flow, for chaining
+    preview: Triggered by an operation in a different Flow
+  schedule:
+    name: Schedule (CRON)
+    description: Triggers at regular points in time
+    cron: Interval
+  manual:
+    name: Manual
+    description: Triggers on manual run within selected collection(s)
+    collection_and_item: Collection & Item Pages
+    collection_only: Collection Page Only
+    item_only: Item Page Only
+    collection_page: Collection Page
+    require_selection: Requires Selection
+a_flow_uuid: Select a Flow to trigger...
+any_string_or_json: Any string or JSON...
+item_payload_placeholder: This is the JSON used to update the item's field values...
+operation_variables_note: You can access flow data with variables such as **{'{'}{'{'}$last{'}'}{'}'}**, **{'{'}{'{'}$trigger{'}'}{'}'}** and **{'{'}{'{'}$accountability{'}'}{'}'}**, or reference previous operations using **{'{'}{'{'}operation_key{'}'}{'}'}**.'
 operations:
+  condition:
+    name: Condition
+    description: Route a flow based on If / Else logic
+  exec:
+    name: Run Script
+    description: Execute arbitrary code to modify the payload
+    modules: 'The following **Node modules** can be used:'
   item-create:
+    name: Create Data
+    description: Create items in the database
     payload: Càrrega
+    emit_events: Emit Events
+  item-delete:
+    name: Delete Data
+    description: Delete items in the database
+    emit_events: Emit Events
+    key: IDs
+    query: Query
+  item-read:
+    name: Read Data
+    description: Read items from the database
+    key: IDs
+    query: Query
+    emit_events: Emit Events
   item-update:
+    name: Update Data
+    description: Update items in the database
+    emit_events: Emit Events
+    key: IDs
     payload: Càrrega
+    query: Query
   log:
+    name: Log to Console
+    description: Output something to the console
     message: Missatge
+    message_placeholder: Enter a message to show in the console...
   mail:
+    name: Send Email
+    description: Send an email to one or more people
+    to: To
+    to_placeholder: Add e-mail addresses and press enter...
+    body: Body
     template: Plantilla
     data: Dades
   notification:
+    name: Send Notification
+    description: Send an in-app notification to one or more users
     recipient: Usuari
+    recipient_placeholder: Enter a UUID...
+    recipient_note: Add user UUID and press enter...
     message: Missatge
   request:
+    name: Webhook / Request URL
+    description: "Make a request to a URL"
     url: URL
+    url_placeholder: https://example.com/example
     method: Mètode
     data: Dades
+    headers: Headers
     header: Capçalera
+    header_placeholder: Authorization...
+    value_placeholder: Bearer eyJhbGciOi...
+  sleep:
+    name: Sleep
+    description: Wait a given number of milliseconds
+    milliseconds: Milliseconds
+  transform:
+    name: Transform Payload
+    description: Alter the Flow's JSON payload
   trigger:
+    name: Trigger Flow
+    description: Pass this data to another flow
     flows: Fluxes
     flow: Fluxe
     data: Dades
+    iteration_mode: Iteration Mode
+    iteration_mode_note: Mode for iterating over arrays.
+    serial: Serial
+    parallel: Parallel
+    batch: Batch
+    batch_size: Batch Size
+    cache: Cache
