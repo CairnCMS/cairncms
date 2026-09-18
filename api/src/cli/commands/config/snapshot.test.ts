@@ -24,6 +24,7 @@ import getDatabase, { hasDatabaseConnection, isInstalled } from '../../../databa
 import logger from '../../../logger.js';
 import { configSnapshot } from './snapshot.js';
 import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
+import { CONFIG_REGISTRY } from '../../../utils/config/registry.js';
 
 const TOKEN = 'sentinel-token';
 
@@ -188,6 +189,44 @@ describe('configSnapshot against a remote server', () => {
 		expect(await fs.readFile(path.join(tmpDir, 'roles', 'editor.yaml'), 'utf8')).toContain('Renamed');
 		expect(await fs.readFile(path.join(tmpDir, 'notes.txt'), 'utf8')).toBe('operator notes\n');
 		expect(vi.mocked(logger.info)).toHaveBeenCalledWith(expect.stringContaining('1 role(s), 0 permission set(s)'));
+	});
+
+	it('refuses a malformed existing extension-settings source through the real writer and writes nothing', async () => {
+		const subject = 'cairncms-extension-widget';
+		const file = `${CONFIG_REGISTRY['extension-settings'].layout.filenameOf({ subject })}.yaml`;
+
+		await fs.mkdir(path.join(tmpDir, 'extension-settings'), { recursive: true });
+
+		await fs.writeFile(
+			path.join(tmpDir, 'cairncms-config.yaml'),
+			dumpYaml({ version: 2, resources: ['extension-settings'] })
+		);
+
+		await fs.writeFile(
+			path.join(tmpDir, 'extension-settings', file),
+			dumpYaml({
+				subject,
+				global: { token: JSON.parse('{"$secret":"preserve","__proto__":"{{CAIRNCMS_CONFIG_LOST}}"}') },
+				collections: {},
+			})
+		);
+
+		await fs.writeFile(path.join(tmpDir, 'notes.txt'), 'operator notes\n');
+		const before = await captureTree(tmpDir);
+
+		respondWith({
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [{ subject, global: { color: 'blue' }, collections: {} }],
+		});
+
+		await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
+
+		expect(vi.mocked(logger.error)).toHaveBeenCalled();
+		expect(await captureTree(tmpDir)).toEqual(before);
 	});
 });
 

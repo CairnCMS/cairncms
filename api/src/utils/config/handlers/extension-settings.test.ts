@@ -6,7 +6,12 @@ import { createTracker, MockClient, type Tracker } from 'knex-mock-client';
 import os from 'os';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CairnConfig, ExtensionSettingLeaf, ExtensionSettingsIdentity } from '../../../types/config.js';
+import type {
+	CairnConfig,
+	ConfigExtensionSettings,
+	ExtensionSettingLeaf,
+	ExtensionSettingsIdentity,
+} from '../../../types/config.js';
 import { readConfigDirectory } from '../../read-config-directory.js';
 import { validateConfigRecord } from '../../validate-desired-config.js';
 import { writeConfigDirectory } from '../../write-config-directory.js';
@@ -82,11 +87,11 @@ function validationContext(
 
 function readContext(
 	database: unknown,
-	options: { readMode?: 'full' | 'identity'; scope?: ReadonlySet<string> } = {}
+	options: { readMode?: 'full' | 'identity'; scope?: ReadonlySet<string>; collections?: Record<string, unknown> } = {}
 ): ReadContext<ExtensionSettingsKindTypes> {
 	return {
 		database: database as never,
-		schema: {} as SchemaOverview,
+		schema: { collections: options.collections ?? {} } as unknown as SchemaOverview,
 		readMode: options.readMode ?? 'full',
 		...(options.scope !== undefined && { selectedExtensionSubjects: options.scope }),
 		dependency: (() => undefined) as never,
@@ -480,6 +485,97 @@ describe('readCurrent', () => {
 
 		await expect(handler.readCurrent(readContext(db))).rejects.toThrow(fragment);
 	});
+
+	it('leaves stored undeclared prototype-like keys inert, even when their values are malformed JSON', async () => {
+		extensionMock.owners = [
+			{
+				subject: WIDGET,
+				status: 'available',
+				declaration: declaration({ color: { type: 'string', scope: 'global' } }),
+			},
+		];
+
+		rowsFor([
+			{ extension: WIDGET, scope: 'global', scope_key: '', key: 'constructor', value: 'not-json{' },
+			{ extension: WIDGET, scope: 'global', scope_key: '', key: 'toString', value: 'not-json{' },
+			{ extension: WIDGET, scope: 'global', scope_key: '', key: '__proto__', value: 'not-json{' },
+			{ extension: WIDGET, scope: 'global', scope_key: '', key: 'color', value: '"blue"' },
+		]);
+
+		const result = await handler.readCurrent(readContext(db));
+
+		expect(result.records).toEqual([{ subject: WIDGET, scope: 'global', scope_key: '', key: 'color', value: 'blue' }]);
+	});
+
+	it('fails closed on a global row stored with a non-empty scope key', async () => {
+		extensionMock.owners = [
+			{
+				subject: WIDGET,
+				status: 'available',
+				declaration: declaration({ color: { type: 'string', scope: 'global' } }),
+			},
+		];
+
+		rowsFor([{ extension: WIDGET, scope: 'global', scope_key: 'articles', key: 'color', value: '"blue"' }]);
+
+		await expect(handler.readCurrent(readContext(db, { collections: { articles: {} } }))).rejects.toThrow(
+			'non-empty scope key'
+		);
+	});
+
+	it('fails closed on a collection row stored without a scope key', async () => {
+		extensionMock.owners = [
+			{
+				subject: WIDGET,
+				status: 'available',
+				declaration: declaration({ label: { type: 'string', scope: 'collection' } }),
+			},
+		];
+
+		rowsFor([{ extension: WIDGET, scope: 'collection', scope_key: '', key: 'label', value: '"News"' }]);
+
+		await expect(handler.readCurrent(readContext(db, { collections: { articles: {} } }))).rejects.toThrow(
+			'without an existing target collection'
+		);
+	});
+
+	it('fails closed on a collection row targeting a collection absent from the schema', async () => {
+		extensionMock.owners = [
+			{
+				subject: WIDGET,
+				status: 'available',
+				declaration: declaration({ label: { type: 'string', scope: 'collection' } }),
+			},
+		];
+
+		rowsFor([{ extension: WIDGET, scope: 'collection', scope_key: 'ghosts', key: 'label', value: '"News"' }]);
+
+		await expect(handler.readCurrent(readContext(db, { collections: { articles: {} } }))).rejects.toBeInstanceOf(
+			ConfigReadFailedException
+		);
+	});
+
+	it('reads a valid collection tuple, including an own prototype-like collection name in the schema', async () => {
+		extensionMock.owners = [
+			{
+				subject: WIDGET,
+				status: 'available',
+				declaration: declaration({ label: { type: 'string', scope: 'collection' } }),
+			},
+		];
+
+		rowsFor([
+			{ extension: WIDGET, scope: 'collection', scope_key: 'articles', key: 'label', value: '"News"' },
+			{ extension: WIDGET, scope: 'collection', scope_key: 'constructor', key: 'label', value: '"Meta"' },
+		]);
+
+		const result = await handler.readCurrent(readContext(db, { collections: { articles: {}, constructor: {} } }));
+
+		expect(result.records).toEqual([
+			{ subject: WIDGET, scope: 'collection', scope_key: 'articles', key: 'label', value: 'News' },
+			{ subject: WIDGET, scope: 'collection', scope_key: 'constructor', key: 'label', value: 'Meta' },
+		]);
+	});
 });
 
 describe('projectReadState digest', () => {
@@ -576,6 +672,14 @@ describe('config placeholders', () => {
 		expect(document.global['runtime_key']).toBe(reference);
 	});
 
+	it('keeps a non-CONFIG placeholder-like ordinary string as a literal, not an interpolation or error', () => {
+		const document = layout.parseDocumentFile({ subject: WIDGET, global: { color: '{{OTHER_VAR}}' } }, filename);
+
+		expect(document.global['color']).toBe('{{OTHER_VAR}}');
+		expect(extensionSettingsDescriptor.residualPlaceholders!([document])).toEqual([]);
+		expect(validateConfigRecord('extension-settings', document, 'snapshot')).toEqual([]);
+	});
+
 	it('flags a residual CONFIG placeholder but not a runtime reference', () => {
 		const reference = `{{${getExtensionConfigSecretName(WIDGET, 'runtime_key')}}}`;
 
@@ -621,6 +725,131 @@ describe('config placeholders', () => {
 		);
 
 		expect(restored.global).toEqual(emitted);
+	});
+});
+
+describe('own-key-safe dynamic maps', () => {
+	const proto = Object.prototype as Record<string, unknown>;
+
+	afterEach(() => {
+		delete proto['label'];
+		delete proto['polluted'];
+	});
+
+	it('round-trips a value under an own "constructor" collection without record loss', () => {
+		const { records, anchors } = extensionSettingsDescriptor.projectDocuments([
+			{ subject: WIDGET, global: {}, collections: { constructor: { label: 'News' } } },
+		]);
+
+		expect(records).toHaveLength(1);
+		expect(records[0]).toMatchObject({ scope: 'collection', scope_key: 'constructor', key: 'label', value: 'News' });
+
+		const composed = extensionSettingsDescriptor.composeDocuments(records, anchors);
+		const collections = composed[0]!.collections;
+
+		expect(Object.prototype.hasOwnProperty.call(collections, 'constructor')).toBe(true);
+		expect(Object.getOwnPropertyDescriptor(collections, 'constructor')?.value).toEqual({ label: 'News' });
+	});
+
+	it('composes an own "__proto__" collection without mutating Object.prototype', () => {
+		const authored = JSON.parse(
+			'[{"subject":"@cairncms/extension-widget","global":{},"collections":{"__proto__":{"label":"x"}}}]'
+		);
+
+		const { records, anchors } = extensionSettingsDescriptor.projectDocuments(authored);
+		const composed = extensionSettingsDescriptor.composeDocuments(records, anchors);
+
+		expect(({} as Record<string, unknown>)['label']).toBeUndefined();
+		expect(Object.prototype.hasOwnProperty.call(composed[0]!.collections, '__proto__')).toBe(true);
+	});
+
+	it('refuses a reserved "__proto__" setting key in server-snapshot validation without discarding it', () => {
+		const document = JSON.parse('{"subject":"@cairncms/extension-widget","global":{"__proto__":"x"},"collections":{}}');
+
+		const serverContext: ValidationContext = {
+			rolesManaged: false,
+			declaredRoleKeys: new Set(),
+			foldersManaged: false,
+			declaredFolderKeys: new Set(),
+			references: 'server-snapshot',
+		};
+
+		expect(messages(handler.validateDesired([document], [], serverContext))).toContain('not a valid setting key');
+		expect(Object.prototype.hasOwnProperty.call(document.global, '__proto__')).toBe(true);
+	});
+
+	it('refuses a reserved "__proto__" setting key in authored validation', () => {
+		const document = JSON.parse('{"subject":"@cairncms/extension-widget","global":{"__proto__":"x"},"collections":{}}');
+
+		const widget = snapshot({ [WIDGET]: declaration({ color: { type: 'string', scope: 'global' } }) });
+
+		expect(messages(handler.validateDesired([document], [], validationContext(widget)))).toContain(
+			'not a valid setting key'
+		);
+	});
+
+	it('refuses an own "__proto__" collection with a non-map value in server-snapshot validation', () => {
+		const document = JSON.parse(
+			'{"subject":"@cairncms/extension-widget","global":{},"collections":{"__proto__":null}}'
+		);
+
+		const serverContext: ValidationContext = {
+			rolesManaged: false,
+			declaredRoleKeys: new Set(),
+			foldersManaged: false,
+			declaredFolderKeys: new Set(),
+			references: 'server-snapshot',
+		};
+
+		expect(messages(handler.validateDesired([document], [], serverContext))).toContain('non-map');
+		expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+	});
+
+	it('refuses a non-portable leaf beneath an own "__proto__" collection in server-snapshot validation', () => {
+		const document = JSON.parse(
+			'{"subject":"@cairncms/extension-widget","global":{},"collections":{"__proto__":{"label":null}}}'
+		);
+
+		const serverContext: ValidationContext = {
+			rolesManaged: false,
+			declaredRoleKeys: new Set(),
+			foldersManaged: false,
+			declaredFolderKeys: new Set(),
+			references: 'server-snapshot',
+		};
+
+		expect(messages(handler.validateDesired([document], [], serverContext))).toContain('not a portable setting value');
+	});
+});
+
+describe('authored document types', () => {
+	it('accepts an omitted map in CairnConfig and projects it through the real input boundary', () => {
+		const config: CairnConfig = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [{ subject: WIDGET, collections: { articles: { label: 'News' } } }],
+		};
+
+		const { records } = extensionSettingsDescriptor.projectDocuments(config['extension-settings']);
+
+		expect(records).toHaveLength(1);
+
+		expect(records[0]).toMatchObject({
+			subject: WIDGET,
+			scope: 'collection',
+			scope_key: 'articles',
+			key: 'label',
+			value: 'News',
+		});
+	});
+
+	it('exposes composeDocuments with the complete document type, even when the input omitted both maps', () => {
+		const composed: ConfigExtensionSettings[] = extensionSettingsDescriptor.composeDocuments([], [{ subject: WIDGET }]);
+
+		expect(composed).toEqual([{ subject: WIDGET, global: {}, collections: {} }]);
 	});
 });
 
@@ -864,5 +1093,23 @@ describe('config directory round-trip', () => {
 		const read = await readConfigDirectory(tmpDir, { notice: () => undefined });
 
 		expect(bySubject(read['extension-settings'])).toEqual(bySubject(documents));
+	});
+
+	it('round-trips an own "constructor" collection through a write and read without record loss', async () => {
+		const config: CairnConfig = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [{ subject: WIDGET, global: {}, collections: { constructor: { label: 'Meta' } } }],
+		};
+
+		await writeConfigDirectory(config, tmpDir);
+		const read = await readConfigDirectory(tmpDir, { notice: () => undefined });
+		const collections = read['extension-settings'][0]!.collections;
+
+		expect(Object.prototype.hasOwnProperty.call(collections, 'constructor')).toBe(true);
+		expect(Object.getOwnPropertyDescriptor(collections, 'constructor')?.value).toEqual({ label: 'Meta' });
 	});
 });

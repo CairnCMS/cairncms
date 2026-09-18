@@ -38,7 +38,7 @@ function buildStringBase(field: ConfigFieldDescriptor): Joi.Schema {
  * Portable structure only; declaration-specific checks happen on the target.
  * unsafe() admits the finite numbers accepted by the settings API beyond Joi's safe-number range.
  */
-const EXTENSION_SETTING_LEAF_SCHEMA = Joi.alternatives(
+export const EXTENSION_SETTING_LEAF_SCHEMA = Joi.alternatives(
 	Joi.string().allow(''),
 	Joi.number().unsafe(),
 	Joi.boolean(),
@@ -75,13 +75,11 @@ function buildBase(field: ConfigFieldDescriptor): Joi.Schema {
 }
 
 /**
- * A generated snapshot must carry every managed, snapshot-safe field explicitly, so its records reconstruct on a
- * fresh target without silently taking create defaults. An authored declaration may omit optional fields to preserve
- * live values, so authored validation keeps the descriptor's own requiredness.
+ * Snapshots require all snapshot-safe fields to avoid adopting target defaults.
+ * Authored documents use each field's declared requiredness.
  */
 export type SchemaMode = 'authored' | 'snapshot';
 
-/** Applies nullability and requiredness uniformly, so every field type honors the same metadata contract. */
 function buildFieldSchema(field: ConfigFieldDescriptor, mode: SchemaMode): Joi.Schema {
 	let schema = buildBase(field);
 	if (field.nullable) schema = schema.allow(null);

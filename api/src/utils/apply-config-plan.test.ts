@@ -167,6 +167,16 @@ describe('applyConfigPlan:extension-settings scope binding', () => {
 
 		expect(transactionSpy).not.toHaveBeenCalled();
 	});
+
+	it('refuses a plan with subjects when the token carries no extension scope, before opening the transaction', async () => {
+		const token: ConfigStateToken = { resources: ['extension-settings'], digest: 'd' };
+
+		await expect(applyConfigPlan(scopedPlan(), { context, expectedStateToken: token })).rejects.toBeInstanceOf(
+			ConfigApplyScopeMismatchException
+		);
+
+		expect(transactionSpy).not.toHaveBeenCalled();
+	});
 });
 
 describe('applyConfigPlan:destructive refusal', () => {

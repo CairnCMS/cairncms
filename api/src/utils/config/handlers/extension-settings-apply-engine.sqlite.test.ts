@@ -2,6 +2,7 @@ import type { SchemaOverview } from '@cairncms/types';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfigApplyFailedException } from '../../../exceptions/config-apply-failed.js';
+import { ConfigReadFailedException } from '../../../exceptions/config-read-failed.js';
 import { ConfigStateChangedException } from '../../../exceptions/config-state-changed.js';
 import { ExtensionSettingsService } from '../../../services/extension-settings.js';
 import type { CairnConfig, ConfigApplySecurityContext } from '../../../types/config.js';
@@ -235,5 +236,32 @@ describe('extension settings through the real apply engine on SQLite', () => {
 
 		expect(await stored(WIDGET)).toEqual({ color: '"red"' });
 		expect(await stored(METRICS)).toEqual({ region: 'not-json{' });
+	});
+
+	it('refuses the snapshot read on an unrepresentable stored scope tuple, leaving the row unchanged', async () => {
+		await db(TABLE).insert({
+			id: '00000000-0000-4000-8000-0000000000ff',
+			extension: WIDGET,
+			scope: 'global',
+			scope_key: 'articles',
+			key: 'color',
+			value: '"blue"',
+		});
+
+		const subjects = desiredExtensionSubjects(desired({ color: 'red' })['extension-settings']);
+		const declarations = await buildExtensionDeclarationSnapshot();
+
+		await expect(
+			readCurrentConfig({
+				database: db,
+				schema,
+				resources: ['extension-settings'],
+				extensionSettingsSubjects: subjects,
+				extensionDeclarations: declarations,
+			})
+		).rejects.toBeInstanceOf(ConfigReadFailedException);
+
+		const rows = await db(TABLE).where({ extension: WIDGET }).select('scope', 'scope_key', 'key', 'value');
+		expect(rows).toEqual([{ scope: 'global', scope_key: 'articles', key: 'color', value: '"blue"' }]);
 	});
 });

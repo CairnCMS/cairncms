@@ -36,11 +36,7 @@ function dumpYaml(data: unknown): string {
 	return toYaml(data, { indent: 2, sortKeys: true, lineWidth: -1, noRefs: true });
 }
 
-/**
- * Canonical documents for one kind: `projectDocuments` lifts grouped records to their full identity,
- * they are ordered and their string-list fields sorted, then `composeDocuments` rebuilds them (empty
- * sets preserved through anchors) and `orderedDocuments` fixes the on-disk file order.
- */
+/** Anchors retain empty documents that have no records to sort. */
 function orderedNormalizedDocuments(
 	descriptor: ConfigResourceDescriptor<ConfigKindTypes>,
 	documents: unknown[]
@@ -104,9 +100,8 @@ function buildDocuments(config: CairnConfig, root: string): { pending: PendingDo
 }
 
 /**
- * Reads the existing on-disk document at a pending target so its committed placeholder declarations can
- * be preserved. Genuine absence is the fresh-export case (null). A relevant source that cannot be parsed
- * safely refuses the whole snapshot before any file is written, so a typo never erases a declaration.
+ * Only an absent file is a fresh export. Reject unreadable declarations before writing so committed
+ * placeholders are not lost.
  */
 async function readExistingDeclaration(
 	root: string,
@@ -139,7 +134,15 @@ async function readExistingDeclaration(
 		throw err;
 	}
 
-	return isPlainObject(parsed) ? (parsed as Record<string, unknown>) : null;
+	if (!isPlainObject(parsed)) {
+		throw new ConfigReadFailedException(
+			`Config could not be written: the existing file "${safeLogFragment(
+				label
+			)}" is not a mapping, so its placeholder declarations cannot be preserved. Fix or remove it and retry.`
+		);
+	}
+
+	return parsed as Record<string, unknown>;
 }
 
 async function restoreDeclaredPlaceholders(root: string, pending: PendingDocument): Promise<void> {
@@ -162,6 +165,8 @@ async function restoreDeclaredPlaceholders(root: string, pending: PendingDocumen
 	const stem = path.basename(pending.target).slice(0, -YAML_SUFFIX.length);
 
 	if (!isSingleton && !declaredMatchesFilename(descriptor, existing, stem)) return;
+
+	descriptor.validatePreservationSource?.(existing, pending.label);
 
 	const document = pending.document as Record<string, unknown>;
 
@@ -210,7 +215,7 @@ async function cleanKindDirectory(root: string, kind: ConfigKind, keep: Set<stri
 	const descriptor = getDescriptor(kind) as ConfigResourceDescriptor<ConfigKindTypes>;
 	const shape = descriptor.layout.documentShape;
 
-	// A singleton owns only its one fixed file, which is always written and kept, so there is nothing to remove.
+	// The singleton's fixed file is always kept.
 	if (typeof shape === 'object' && 'singleton' in shape) return;
 
 	for (const entry of entries.sort()) {
@@ -257,13 +262,12 @@ export async function writeConfigDirectory(config: CairnConfig, root: string): P
 		);
 	}
 
-	// After the database values are validated, restore an operator's committed placeholder declarations from
-	// the existing files. A parse failure here refuses before any write, so nothing is serialized yet.
+	// Check database values before restoring placeholders, and reconcile every source before writing.
 	for (const entry of pending) {
 		await restoreDeclaredPlaceholders(root, entry);
 	}
 
-	// The checks protect the serializer, so every document is validated before any is serialized or written.
+	// Validate every document before serializing or writing any of them.
 	for (const { label, document } of pending) {
 		try {
 			assertConfigValueSafe(document, label);

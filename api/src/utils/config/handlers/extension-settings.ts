@@ -6,9 +6,11 @@ import {
 import type { ExtensionSettings } from '@cairncms/types';
 import { createHash } from 'node:crypto';
 import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
+import { ConfigReadFailedException } from '../../../exceptions/config-read-failed.js';
 import type { ExtensionSettingsService } from '../../../services/extension-settings.js';
 import type {
 	ConfigExtensionSettings,
+	ConfigExtensionSettingsAuthored,
 	ConfigFailure,
 	ConfigPlanChange,
 	ConfigPlanEnrichment,
@@ -36,7 +38,8 @@ import type {
 	ReadStateProjection,
 	ValidationContext,
 } from '../descriptor.js';
-import { checkSettingValue } from '../extension-settings-rules.js';
+import { checkSettingScope, checkSettingValue, type SettingScopeProblem } from '../extension-settings-rules.js';
+import { EXTENSION_SETTING_LEAF_SCHEMA } from '../field-schema.js';
 import { invalid, identityConflict } from '../failures.js';
 import { unreadable } from '../read-parsing.js';
 import { changesToValues, composeValues } from '../values.js';
@@ -52,7 +55,7 @@ type ExtensionSettingRecord = ExtensionSettingsIdentity & { value: ExtensionSett
 
 export interface ExtensionSettingsKindTypes {
 	Kind: 'extension-settings';
-	Document: ConfigExtensionSettings;
+	Document: ConfigExtensionSettingsAuthored;
 	Record: ExtensionSettingRecord;
 	Values: ExtensionSettingsValues;
 	Identity: ExtensionSettingsIdentity;
@@ -102,6 +105,34 @@ const VALUE_FIELD_ORDER = ['value'] as const;
 
 const PRESERVE_MARKER: ExtensionSettingLeaf = { $secret: 'preserve' };
 
+function hasOwn(target: object, key: string): boolean {
+	return Object.prototype.hasOwnProperty.call(target, key);
+}
+
+// Untrusted names must neither read inherited entries nor change a map's prototype through `__proto__`.
+function ownGet<T>(map: Record<string, T>, key: string): T | undefined {
+	return hasOwn(map, key) ? map[key] : undefined;
+}
+
+function ownSet<T>(map: Record<string, T>, key: string, value: T): void {
+	Object.defineProperty(map, key, { value, enumerable: true, writable: true, configurable: true });
+}
+
+function isLeafMap(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+// Joi skips an own `__proto__` key even in strict objects, so marker shape needs an own-key check.
+function isExactPreserveMarker(value: Record<string, unknown>): boolean {
+	const keys = Reflect.ownKeys(value);
+	return keys.length === 1 && keys[0] === '$secret' && value['$secret'] === 'preserve';
+}
+
+function isPortableLeaf(value: unknown): boolean {
+	if (isLeafMap(value)) return isExactPreserveMarker(value);
+	return EXTENSION_SETTING_LEAF_SCHEMA.validate(value).error === undefined;
+}
+
 function isPreserveMarker(value: unknown): value is { $secret: 'preserve' } {
 	return typeof value === 'object' && value !== null && (value as Record<string, unknown>)['$secret'] === 'preserve';
 }
@@ -130,13 +161,13 @@ function interpolateLeafMap(
 ): Record<string, ExtensionSettingLeaf> {
 	const out: Record<string, ExtensionSettingLeaf> = {};
 
-	for (const [key, value] of Object.entries(map)) out[key] = interpolateLeaf(value, subject, key);
+	for (const [key, value] of Object.entries(map)) ownSet(out, key, interpolateLeaf(value, subject, key));
 
 	return out;
 }
 
 function leafMapOf(value: unknown): Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+	return isLeafMap(value) ? value : {};
 }
 
 function restoreCommittedPlaceholders(
@@ -147,36 +178,82 @@ function restoreCommittedPlaceholders(
 		target: Record<string, ExtensionSettingLeaf>,
 		source: Record<string, unknown>
 	): Record<string, ExtensionSettingLeaf> => {
-		const out: Record<string, ExtensionSettingLeaf> = { ...target };
+		const out: Record<string, ExtensionSettingLeaf> = {};
 
-		for (const key of Object.keys(out)) {
-			const emitted = out[key];
+		for (const [key, emitted] of Object.entries(target)) {
+			const committed = ownGet(source, key);
 
-			// An old placeholder must not override the emitted value's type or secret category.
-			if (isConfigPlaceholder(source[key]) && typeof emitted === 'string' && !isExtReference(emitted)) {
-				out[key] = source[key] as ExtensionSettingLeaf;
+			// A committed placeholder must not change the emitted value's type or secret category.
+			if (isConfigPlaceholder(committed) && typeof emitted === 'string' && !isExtReference(emitted)) {
+				ownSet(out, key, committed as ExtensionSettingLeaf);
+			} else {
+				ownSet(out, key, emitted);
 			}
 		}
 
 		return out;
 	};
 
-	const existingCollections = leafMapOf(existing['collections']);
+	const existingCollections = leafMapOf(ownGet(existing, 'collections') ?? {});
 	const collections: Record<string, Record<string, ExtensionSettingLeaf>> = {};
 
 	for (const [collection, entries] of Object.entries(pending.collections)) {
-		collections[collection] = restoreMap(entries, leafMapOf(existingCollections[collection]));
+		ownSet(collections, collection, restoreMap(entries, leafMapOf(ownGet(existingCollections, collection) ?? {})));
 	}
 
 	return {
 		subject: pending.subject,
-		global: restoreMap(pending.global, leafMapOf(existing['global'])),
+		global: restoreMap(pending.global, leafMapOf(ownGet(existing, 'global') ?? {})),
 		collections,
 	};
 }
 
+function preservationFailure(label: string, detail: string): ConfigReadFailedException {
+	return new ConfigReadFailedException(
+		`Config could not be written: the existing extension-settings file "${safeLogFragment(
+			label
+		)}" ${detail}, so its placeholder declarations cannot be preserved. Fix or remove it and retry.`
+	);
+}
+
+function assertPortableLeafMap(value: unknown, label: string, where: string): void {
+	if (!isLeafMap(value)) throw preservationFailure(label, `has a non-map ${where}`);
+
+	for (const [key, leaf] of Object.entries(value)) {
+		if (!ExtensionSettingKeySchema.safeParse(key).success) {
+			throw preservationFailure(label, `declares an invalid setting key "${safeLogFragment(key)}" under ${where}`);
+		}
+
+		if (!isPortableLeaf(leaf)) {
+			throw preservationFailure(label, `declares a non-portable value for "${safeLogFragment(key)}" under ${where}`);
+		}
+	}
+}
+
+// Preservation must work with unset variables and without a local declaration catalogue.
+function assertPreservationStructure(existing: Record<string, unknown>, label: string): void {
+	for (const field of Object.keys(existing)) {
+		if (field !== 'subject' && field !== 'global' && field !== 'collections') {
+			throw preservationFailure(label, `has an unknown field "${safeLogFragment(field)}"`);
+		}
+	}
+
+	const global = ownGet(existing, 'global');
+	if (global !== undefined) assertPortableLeafMap(global, label, 'global');
+
+	const collections = ownGet(existing, 'collections');
+
+	if (collections !== undefined) {
+		if (!isLeafMap(collections)) throw preservationFailure(label, 'has a non-map "collections"');
+
+		for (const [collection, entries] of Object.entries(collections)) {
+			assertPortableLeafMap(entries, label, `collection "${safeLogFragment(collection)}"`);
+		}
+	}
+}
+
 // EXT references are portable values, not unresolved CLI placeholders.
-function residualConfigPlaceholders(documents: ConfigExtensionSettings[]): string[] {
+function residualConfigPlaceholders(documents: ConfigExtensionSettingsAuthored[]): string[] {
 	const problems: string[] = [];
 
 	const note = (subject: string, scope: string, scopeKey: string, key: string): void => {
@@ -268,6 +345,17 @@ function declarationClassification(subjects: string[], eligible: ReadonlyMap<str
 	return entries.sort();
 }
 
+function scopeProblemDetail(problem: SettingScopeProblem, storedScope: string): string {
+	switch (problem) {
+		case 'scope':
+			return `is stored at an unsupported scope "${safeLogFragment(storedScope)}"`;
+		case 'global-key':
+			return 'is stored as a global value with a non-empty scope key';
+		case 'collection-key':
+			return 'is stored as a collection value without an existing target collection';
+	}
+}
+
 async function readCurrent(
 	context: ReadContext<ExtensionSettingsKindTypes>
 ): Promise<ReadCurrentResult<ExtensionSettingsKindTypes>> {
@@ -294,25 +382,38 @@ async function readCurrent(
 		if (scope !== undefined) query.whereIn('extension', eligibleSubjects);
 
 		const rows = await query;
+		const collections = context.schema.collections ?? {};
 
 		for (const row of rows) {
 			const subject = row['extension'] as string;
 			const declaration = snapshot.eligible.get(subject);
-			if (declaration === undefined || (scope !== undefined && !scope.has(subject))) continue; // inert: out of scope
+			// Out-of-scope subjects and undeclared keys stay inert, even if their stored values are malformed.
+			if (declaration === undefined || (scope !== undefined && !scope.has(subject))) continue;
 
-			const declared = declaration[row['key'] as string];
-			if (declared === undefined) continue; // inert: key no longer declared
+			const key = row['key'] as string;
+			const declared = ownGet(declaration, key);
+			if (declared === undefined) continue;
 
 			const storedScope = row['scope'] as string;
 
 			if (storedScope !== declared.scope) {
 				throw unreadable(
-					`extension setting ${safeLogFragment(subject)}/${safeLogFragment(row['key'])}`,
+					`extension setting ${safeLogFragment(subject)}/${safeLogFragment(key)}`,
 					`is stored at scope "${safeLogFragment(storedScope)}" but declared at "${declared.scope}"`
 				);
 			}
 
-			if (declared.secret !== undefined && declared.secret.source === 'config') continue; // config-sourced is never a stored row
+			if (declared.secret !== undefined && declared.secret.source === 'config') continue;
+
+			const storedScopeKey = row['scope_key'] as string;
+			const scopeProblem = checkSettingScope(storedScope, storedScopeKey, (name) => hasOwn(collections, name));
+
+			if (scopeProblem !== undefined) {
+				throw unreadable(
+					`extension setting ${safeLogFragment(subject)}/${safeLogFragment(key)}`,
+					scopeProblemDetail(scopeProblem, storedScope)
+				);
+			}
 
 			const storedValue = row['value'] as string;
 			let parsed: unknown;
@@ -321,7 +422,7 @@ async function readCurrent(
 				parsed = JSON.parse(storedValue);
 			} catch {
 				throw unreadable(
-					`extension setting ${safeLogFragment(subject)}/${safeLogFragment(row['key'])}`,
+					`extension setting ${safeLogFragment(subject)}/${safeLogFragment(key)}`,
 					'did not read as valid JSON'
 				);
 			}
@@ -329,14 +430,14 @@ async function readCurrent(
 			const identity: ExtensionSettingsIdentity = {
 				subject,
 				scope: storedScope === COLLECTION_SCOPE ? COLLECTION_SCOPE : GLOBAL_SCOPE,
-				scope_key: row['scope_key'] as string,
-				key: row['key'] as string,
+				scope_key: storedScopeKey,
+				key,
 			};
 
 			if (declared.secret !== undefined) {
 				if (!isSecretEnvelope(parsed)) {
 					throw unreadable(
-						`extension setting ${safeLogFragment(subject)}/${safeLogFragment(row['key'])}`,
+						`extension setting ${safeLogFragment(subject)}/${safeLogFragment(key)}`,
 						'is declared secret but its stored value is not an encrypted envelope'
 					);
 				}
@@ -347,14 +448,14 @@ async function readCurrent(
 
 			if (typeof parsed !== declared.type) {
 				throw unreadable(
-					`extension setting ${safeLogFragment(subject)}/${safeLogFragment(row['key'])}`,
+					`extension setting ${safeLogFragment(subject)}/${safeLogFragment(key)}`,
 					`holds a value that does not match the declared type "${declared.type}"`
 				);
 			}
 
 			if (isExtReference(parsed)) {
 				throw unreadable(
-					`extension setting ${safeLogFragment(subject)}/${safeLogFragment(row['key'])}`,
+					`extension setting ${safeLogFragment(subject)}/${safeLogFragment(key)}`,
 					'is an ordinary value that is a reserved runtime-reference expression'
 				);
 			}
@@ -363,7 +464,7 @@ async function readCurrent(
 		}
 	}
 
-	// Config-sourced references are emitted from the declaration, whether or not a row exists (they are never stored).
+	// Runtime references come from declarations, not stored rows.
 	for (const subject of eligibleSubjects) {
 		const declaration = snapshot.eligible.get(subject)!;
 
@@ -413,8 +514,53 @@ function projectReadState(
 	return { mode, identities, values };
 }
 
+// Joi's object pattern skips an own `__proto__` key, so validate nested structure over the original document's own keys.
+function validatePortableStructure(
+	failures: ConfigFailure[],
+	subjectLabel: string,
+	document: ConfigExtensionSettingsAuthored
+): void {
+	const checkLeafMap = (value: unknown, where: string): void => {
+		if (!isLeafMap(value)) {
+			failures.push(invalid(`Extension settings for "${subjectLabel}" have a non-map ${where}.`));
+			return;
+		}
+
+		for (const [key, leaf] of Object.entries(value)) {
+			if (!ExtensionSettingKeySchema.safeParse(key).success) {
+				failures.push(
+					invalid(`Extension setting "${subjectLabel}/${safeLogFragment(key)}" is not a valid setting key.`)
+				);
+			} else if (!isPortableLeaf(leaf)) {
+				failures.push(
+					invalid(
+						`Extension setting "${subjectLabel}/${safeLogFragment(
+							key
+						)}" has a value that is not a portable setting value.`
+					)
+				);
+			}
+		}
+	};
+
+	if (document.global !== undefined) checkLeafMap(document.global, 'global map');
+
+	const collections = document.collections;
+
+	if (collections !== undefined) {
+		if (!isLeafMap(collections)) {
+			failures.push(invalid(`Extension settings for "${subjectLabel}" have a non-map collections field.`));
+			return;
+		}
+
+		for (const [collection, entries] of Object.entries(collections)) {
+			checkLeafMap(entries, `collection "${safeLogFragment(collection)}"`);
+		}
+	}
+}
+
 function validateDesired(
-	documents: ConfigExtensionSettings[],
+	documents: ConfigExtensionSettingsAuthored[],
 	_records: ExtensionSettingRecord[],
 	context: ValidationContext
 ): ConfigFailure[] {
@@ -436,7 +582,11 @@ function validateDesired(
 
 		seenSubjects.add(subject);
 
-		if (context.references === 'server-snapshot') continue; // portable structure only, no local catalogue
+		const structuralStart = failures.length;
+		validatePortableStructure(failures, subjectLabel, document);
+		if (failures.length > structuralStart) continue;
+
+		if (context.references === 'server-snapshot') continue;
 
 		const declaration = context.extensionDeclarations?.eligible.get(subject);
 
@@ -485,7 +635,7 @@ function validateEntries(
 			continue;
 		}
 
-		const declared = declaration[key];
+		const declared = ownGet(declaration, key);
 
 		if (declared === undefined) {
 			failures.push(invalid(`Extension setting "${subjectLabel}/${keyLabel}" is not declared by the extension.`));
@@ -543,7 +693,8 @@ function postPlan(
 	const declarations = context.extensionDeclarations;
 
 	const isConfigSourced = (identity: ExtensionSettingsIdentity): boolean => {
-		const declared = declarations?.eligible.get(identity.subject)?.[identity.key];
+		const declaration = declarations?.eligible.get(identity.subject);
+		const declared = declaration !== undefined ? ownGet(declaration, identity.key) : undefined;
 		return declared?.secret?.source === 'config';
 	};
 
@@ -607,7 +758,8 @@ function declaredFor(
 	context: ApplyContext<ExtensionSettingsKindTypes>,
 	identity: ExtensionSettingsIdentity
 ): { type: string; scope: string; secret?: { source: 'inline' | 'config' } | undefined } {
-	const declared = context.extensionDeclarations?.eligible.get(identity.subject)?.[identity.key];
+	const declaration = context.extensionDeclarations?.eligible.get(identity.subject);
+	const declared = declaration !== undefined ? ownGet(declaration, identity.key) : undefined;
 
 	if (declared === undefined) {
 		throw new ConfigInvalidException(
@@ -737,7 +889,12 @@ function ownsFilenameStem(stem: string): boolean {
 
 const YAML_SUFFIX = '.yaml';
 
-export const extensionSettingsDescriptor: ConfigResourceDescriptor<ExtensionSettingsKindTypes> = {
+export const extensionSettingsDescriptor: Omit<
+	ConfigResourceDescriptor<ExtensionSettingsKindTypes>,
+	'composeDocuments'
+> & {
+	composeDocuments(records: ExtensionSettingRecord[], anchors: { subject: string }[]): ConfigExtensionSettings[];
+} = {
 	kind: 'extension-settings' as const,
 	formatVersion: 2,
 	dependencies: [] as [],
@@ -812,7 +969,7 @@ export const extensionSettingsDescriptor: ConfigResourceDescriptor<ExtensionSett
 					);
 				}
 
-				collections[collection] = interpolateLeafMap(entries, subject);
+				ownSet(collections, collection, interpolateLeafMap(entries, subject));
 			}
 
 			return {
@@ -829,7 +986,7 @@ export const extensionSettingsDescriptor: ConfigResourceDescriptor<ExtensionSett
 		label: 'extension settings for subject',
 		value: identity.subject,
 	}),
-	projectDocuments: (documents: ConfigExtensionSettings[]) => {
+	projectDocuments: (documents: ConfigExtensionSettingsAuthored[]) => {
 		const records: ExtensionSettingRecord[] = [];
 
 		for (const document of documents) {
@@ -858,9 +1015,11 @@ export const extensionSettingsDescriptor: ConfigResourceDescriptor<ExtensionSett
 			bySubject.set(record.subject, doc);
 
 			if (record.scope === COLLECTION_SCOPE) {
-				(doc.collections[record.scope_key] ??= {})[record.key] = record.value;
+				const collection = ownGet(doc.collections, record.scope_key) ?? {};
+				ownSet(doc.collections, record.scope_key, collection);
+				ownSet(collection, record.key, record.value);
 			} else {
-				doc.global[record.key] = record.value;
+				ownSet(doc.global, record.key, record.value);
 			}
 		}
 
@@ -883,6 +1042,7 @@ export const extensionSettingsDescriptor: ConfigResourceDescriptor<ExtensionSett
 		) as ExtensionSettingsValues,
 	residualPlaceholders: residualConfigPlaceholders,
 	restorePlaceholders: restoreCommittedPlaceholders,
+	validatePreservationSource: assertPreservationStructure,
 	toCreateEntry: (record: ExtensionSettingRecord) => ({
 		identity: { subject: record.subject, scope: record.scope, scope_key: record.scope_key, key: record.key },
 		value: record.value,

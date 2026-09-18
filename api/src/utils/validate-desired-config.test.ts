@@ -366,6 +366,58 @@ describe('validateDesiredConfig', () => {
 		expect(validateSnapshot(duplicateTuple)).toHaveLength(1);
 	});
 
+	it('refuses an own "__proto__" collection in a server snapshot without polluting Object.prototype', () => {
+		const settings = JSON.parse(
+			'{"subject":"@cairncms/extension-widget","global":{},"collections":{"__proto__":null}}'
+		);
+
+		const body = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [settings],
+		};
+
+		expect(validateSnapshot(body).some((message) => message.includes('non-map'))).toBe(true);
+		expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+	});
+
+	it('refuses an own "__proto__" collection in current-state apply input as well as a snapshot', () => {
+		const settings = JSON.parse(
+			'{"subject":"@cairncms/extension-widget","global":{},"collections":{"__proto__":null}}'
+		);
+
+		const body = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [settings],
+		};
+
+		expect(validate(body).some((message) => message.includes('non-map'))).toBe(true);
+	});
+
+	it('refuses a preserve marker carrying an own "__proto__" property in a server snapshot', () => {
+		const settings = JSON.parse(
+			'{"subject":"@cairncms/extension-widget","global":{"token":{"$secret":"preserve","__proto__":"{{CAIRNCMS_CONFIG_LOST}}"}},"collections":{}}'
+		);
+
+		const body = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [settings],
+		};
+
+		expect(validateSnapshot(body).some((message) => message.includes('not a portable setting value'))).toBe(true);
+	});
+
 	it.each(['icon', 'enforce_tfa', 'description', 'ip_access'])(
 		'accepts an authored role that omits %s but rejects the same document as a generated snapshot',
 		(field) => {

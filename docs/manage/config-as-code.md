@@ -313,6 +313,8 @@ When you snapshot into a directory that already declares a whole-value placehold
 
 Extension secrets do not use this interpolation. Use `$secret: preserve` for an inline secret and keep the snapshot's `{{CAIRNCMS_EXT_*}}` reference for a config-sourced secret, as described under [Extension settings](#extension-settings).
 
+For an ordinary extension-setting string, only a whole-value `{{CAIRNCMS_CONFIG_*}}` placeholder is interpolated. Any other placeholder-like string is stored as a literal value, so `{{OTHER}}` is kept verbatim rather than resolved or rejected. The one exception is a reserved `{{CAIRNCMS_EXT_*}}` reference, which is valid only in a config-sourced position and is never resolved by config. Role and project-setting placeholder handling is unchanged.
+
 The HTTP API does not resolve `CAIRNCMS_CONFIG_*` placeholders. Send resolved ordinary values in the request body and carry config-sourced `CAIRNCMS_EXT_*` references verbatim.
 
 To store a literal role name or description, avoid whole-value placeholder syntax such as `{{NAME}}`.
@@ -510,7 +512,15 @@ Config-specific HTTP codes are:
 
 Malformed JSON uses `INVALID_PAYLOAD`. Unsupported content types use `UNSUPPORTED_MEDIA_TYPE`.
 
-The CLI writes failure messages to standard error and uses the [exit codes](#exit-codes) above. An unset `CAIRNCMS_CONFIG_*` placeholder is reported as `CONFIG_PLACEHOLDER_UNRESOLVED`. An interpolation placeholder outside that namespace is `CONFIG_INVALID`. Declared `CAIRNCMS_EXT_*` runtime references are carried without interpolation.
+The CLI writes failure messages to standard error and uses the [exit codes](#exit-codes) above. An unset `CAIRNCMS_CONFIG_*` placeholder is reported as `CONFIG_PLACEHOLDER_UNRESOLVED`. In a role or project-setting field, an interpolation placeholder outside that namespace is `CONFIG_INVALID`. In an ordinary extension-setting string, a placeholder outside that namespace is kept as a literal value. Declared `CAIRNCMS_EXT_*` runtime references are carried without interpolation.
+
+### Repairing an unreadable extension setting
+
+A change to an extension's declaration can leave a currently declared stored value incompatible with its new type or scope, which a snapshot or apply reports as `CONFIG_READ_FAILED`. The message identifies the setting.
+
+If the value is still stored under the correct identity, correct it through the Studio settings screen or by sending the corrected value to `POST /extension-settings` with `{ subject, scope, scope_key, key, value }`, then snapshot again.
+
+If the stored row now has an obsolete scope or targets a collection that no longer exists, remove that exact row with `DELETE /extension-settings` and a body of `{ subject, scope, scope_key, key }`, then snapshot again. Re-saving the value under its new identity does not remove the stale row, and config apply never deletes it for you. Both endpoints require an administrator token.
 
 ## Source-control workflow
 

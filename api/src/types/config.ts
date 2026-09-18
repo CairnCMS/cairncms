@@ -66,7 +66,7 @@ export interface CairnConfig {
 	permissions: ConfigPermissionSet[];
 	folders: ConfigFolder[];
 	settings: ConfigSettings[];
-	'extension-settings': ConfigExtensionSettings[];
+	'extension-settings': ConfigExtensionSettingsAuthored[];
 }
 
 export type RoleIdentity = { key: string };
@@ -103,7 +103,7 @@ export type SettingsValues = {
 
 export type SettingsFieldChanges = { [K in keyof SettingsValues]?: FieldChange<SettingsValues[K]> };
 
-/** Whether a plan retargets the default folder, and to which key, so the deletion preview can drop a blocker the same apply clears. */
+/** Allows deletion previews to account for a default-folder reference cleared by the same apply. */
 export type SettingsRetarget = { retargeted: false } | { retargeted: true; toKey: string | null };
 
 export type FieldChange<T> = { before: T; after: T };
@@ -115,6 +115,13 @@ export interface ConfigExtensionSettings {
 	subject: string;
 	global: Record<string, ExtensionSettingLeaf>;
 	collections: Record<string, Record<string, ExtensionSettingLeaf>>;
+}
+
+/** Omitted maps mean empty desired sets. Composed documents always include both maps. */
+export interface ConfigExtensionSettingsAuthored {
+	subject: string;
+	global?: Record<string, ExtensionSettingLeaf>;
+	collections?: Record<string, Record<string, ExtensionSettingLeaf>>;
 }
 
 export type ExtensionSettingsScope = 'global' | 'collection';
