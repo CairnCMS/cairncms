@@ -75,10 +75,6 @@ create_role: Создать роль
 create_user: Создать пользователя
 message: Сообщение
 delete_panel: Удалить панель
-create_custom_translation: Create Custom Translation
-edit_custom_translation: Edit Custom Translation
-no_custom_translations: No Custom Translations
-no_custom_translations_copy: There are no custom translations yet.
 invite_users: Пригласить пользователей
 invite: Пригласить
 email_already_invited: На адрес «{email}» уже было отправлено приглашение
@@ -115,7 +111,6 @@ archive_confirm_count: >-
   Элементы не выбраны | Вы уверены, что хотите архивировать этот элемент? | Вы уверены, что хотите архивировать эти {count} элементов?
 reset_system_permissions_to: 'Сбросить системные разрешения:'
 reset_system_permissions_copy: Это действие перезапишет пользовательские разрешения, которые вы могли задать системным коллекциям. Вы уверены?
-the_following_are_minimum_permissions: The following minimum permissions are automatically applied when "App Access" is enabled. You can grant additional permissions if needed, but you cannot reduce permissions below this level.
 app_access_minimum: Минимальный доступ к приложению
 recommended_defaults: Рекомендуемые значения по умолчанию
 unarchive: Разархивировать
@@ -166,7 +161,6 @@ permissions_for_role: 'Элементы, для которых роль «{role}
 fields_for_role: 'Поля, для которых роль «{role}» имеет разрешение {action}.'
 validation_for_role: 'Правила, которым должна следовать роль «{role}» для {action} в поле.'
 presets_for_role: 'Значения поля по умолчанию для роли «{role}».'
-presets_field_warning: 'Relational presets for field "{field}" should be configured with the "detailed" syntax.'
 presentation_and_aliases: Оформление и псевдонимы
 revision_post_create: Вот как этот элемент выглядел, когда он был создан.
 revision_post_update: Вот как этот элемент выглядел после обновления.
@@ -222,7 +216,6 @@ bigInteger: Большое целое число
 boolean: Логическое значение
 date: Дата
 date_range: Диапазон дат
-translation_key_placeholder: Enter a key...
 datetime: Дата и время
 dateTime: Дата и время
 precision: Точность
@@ -231,7 +224,6 @@ float: Десятичная дробь
 integer: Целое число
 json: JSON
 xml: XML
-yaml: YAML
 string: Строка
 text: Текст
 time: Время
@@ -282,12 +274,7 @@ o2m_relationship: Отношение «один ко многим» (O2M)
 m2m_relationship: Отношение «многие ко многим» (M2M)
 m2a_relationship: Отношение «многие к любому» (M2A)
 invalid_item: Недействительный элемент
-require_confirmation: Require Confirmation
-dialog: Dialog
 modal: Модальный
-confirmation_dialog: Confirmation Dialog
-confirmation_description: Confirmation Description
-confirmation_input_fields: Confirmation Input Fields
 next: Дальше
 field_name: Название поля
 translations: Переводы
@@ -306,7 +293,6 @@ updated_on: Дата обновления
 updated_by: Обновлено
 primary_key: Первичный ключ
 foreign_key: Внешний ключ
-field_key: Field Key
 finish_setup: Завершить настройку
 dismiss: Скрыть
 toggle_raw_editor: Включить/отключить редактор без форматирования
@@ -435,7 +421,6 @@ checksum: Контрольная сумма
 owner: Владелец
 edited_by: Изменено
 folder: Папка
-folders: Folders
 zoom: Масштаб
 download: Скачать
 open: Открыть
@@ -458,8 +443,6 @@ exporting_all_items_in_collection: Экспортирование всех {tota
 exporting_limited_items_in_collection: 'Экспортирование {limit} из {total} элементов в {collection}.'
 exporting_no_items_to_export: Нет элементов для экспорта. Настройте конфигурацию экспорта ниже.
 exporting_download_hint: По завершении этот {format} файл будет автоматически скачан на ваше устройство.
-exporting_library_hint: Once the {format} file is created, it will be saved to the File Library.
-exporting_library_hint_forced: This export must be processed in batches. Once completed, the {format} file will be saved to the File Library.
 collection_key: Ключ коллекции
 name: Название
 primary_key_field: Поле основного ключа
@@ -484,8 +467,6 @@ enable_select_button: Включить кнопку «Выбрать»
 allow_duplicates: Разрешить дубликаты
 comments: Комментарии
 no_comments: Комментариев пока нет
-expand: Expand
-collapse: Collapse
 select_item: Выбрать элемент
 no_items: Нет элементов
 search_items: Поиск элементов...
@@ -517,7 +498,6 @@ create_collection: Создать коллекцию
 no_collections_copy_admin: У вас пока нет коллекций. Нажмите кнопку ниже, чтобы начать.
 no_collections_copy: У вас пока нет коллекций. Пожалуйста, обратитесь к системному администратору.
 relationship_not_setup: Отношение не было настроено правильно
-no_singleton_relations: Relationships to Singletons are not supported
 display_template_not_setup: Опция шаблона отображения настроена неправильно
 collection_field_not_setup: Опция поля коллекции настроена неправильно
 select_a_collection: Выберите коллекцию
@@ -610,7 +590,6 @@ errors:
   RANGE_NOT_SATISFIABLE: Недопустимый диапазон
   METHOD_NOT_ALLOWED: Метод не разрешён
   REQUESTS_EXCEEDED: Достигнуто максимальное количество запросов
-  CONTENT_TOO_LARGE: Submitted item/file is too large
 security: Безопасность
 value_hashed: Надёжно зашифрованное значение
 bookmark_name: Название закладки...
@@ -656,7 +635,6 @@ one_filtered_item: '1 отфильтрованный элемент'
 delete_collection_are_you_sure: >-
   Вы уверены, что хотите удалить коллекцию «{collection}»? Это приведет к удалению коллекции и всех её элементов. Это действие необратимо.
 delete_folder_are_you_sure: Вы уверены, что хотите удалить папку «{folder}»? Вложенные папки и коллекции будут перемещены на самый верхний уровень.
-delete_collection_peer_dependencies: The following fields will be deleted as well, as they are related to the current collection.
 collections_shown: Показано коллекций
 visible_collections: Видимые коллекции
 hidden_collections: Скрытые коллекции
@@ -782,15 +760,8 @@ label: Описание
 flows: Процессы
 flow: Процесс
 select_a_flow: Выберите процесс
-run_flow_confirm: Are you sure you want to execute this flow?
-run_flow_on_current_collection: Run Flow on Current Collection
-run_flow_on_current: Run Flow on Current Item
 run_flow_on_current_edited_confirm: Этот элемент может быть обновлен этим процессом — вы уверены, что хотите выполнить его?
-run_flow_on_selected: Select One or More Items First | Run Flow on 1 Selected Item | Run Flow on {n} Selected Items
-run_flow: Run Flow
 run_flow_success: Процесс «{flow}» успешно завершён
-field_name_placeholder: Enter field name...
-field_key_placeholder: Enter field key...
 trigger: Триггер
 trigger_options: Параметры триггера
 view_trigger: Просмотреть триггер
@@ -949,8 +920,6 @@ settings_permissions: Роли и права доступа
 settings_project: Настройки проекта
 settings_flows: Процессы
 settings_presets: Шаблоны и закладки
-settings_translations: Custom Translations
-settings_extensions: Extensions
 one_or_more_options_are_missing: Один или несколько вариантов отсутствуют
 scope: Область применения
 actions: Действия
@@ -998,48 +967,6 @@ page_help_settings_presets_item: >-
   **Карточка шаблона** — форма для управления шаблонами закладок и коллекций по умолчанию.
 page_help_settings_flows_collection: '**Просмотреть процессы** — список всех процессов в проекте.'
 page_help_settings_flows_item: '**Карточка процесса** — рабочее пространство для управления одной или несколькими операциями.'
-page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
-extension_health_normal: Normal
-extension_health_warning: Warning | Warnings
-extension_health_failed: Failed
-extension_bundle_contents: Bundled extensions
-extension_capabilities: Capabilities
-extension_advanced_diagnostics: Advanced Diagnostics
-extension_sandboxed: Sandboxed
-extension_runtime: Runtime
-extension_runtime_sandboxed: Sandboxed
-extension_runtime_full_authority: Full Authority
-extension_runtime_browser: Browser App
-confined_runtime: Sandbox
-confined_runtime_mode: 'OS hardening: {decision} ({mode})'
-confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
-extension_status_loaded_detail: Loaded and running on the server.
-extension_status_discovered_detail: Discovered on this instance.
-extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
-extension_status_failed_detail: The extension failed to load on this instance.
-extension_settings_unavailable_detail: Extension settings are unavailable.
-extension_settings_drawer_subtitle: Extension settings
-extension_settings_section: Extension Settings
-extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
-extension_settings_no_global_keys: This extension declares no global settings.
-extension_settings_load_failed: Could not load the extension's settings.
-extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
-extension_type_group_hook: Hooks
-extension_type_group_endpoint: Endpoints
-extension_type_group_operation: Operations
-extension_type_group_bundle: Bundles
-extension_type_group_interface: Interfaces
-extension_type_group_display: Displays
-extension_type_group_layout: Layouts
-extension_type_group_module: Modules
-extension_type_group_panel: Panels
-extension_type_group_item-view: Item Views
-extension_type_group_other: Other
-no_extensions: No Extensions
-no_extensions_copy: No extensions were discovered in the configured extensions path.
-extensions_load_failed: Could not load the extensions inventory.
-page_help_settings_translations_collection: '**Browse Custom Translations** — Lists all custom translations within the project.'
-page_help_settings_translations_item: '**Custom Translations Detail** — A form for viewing and managing this item.'
 page_help_users_collection: '**Пользователи** — список всех системных пользователей в этом проекте.'
 page_help_users_item: >-
   **Карточка пользователя** — управляйте данными вашей учётной записи или просматривайте данные других пользователей.
@@ -1082,7 +1009,6 @@ directus_collection:
   directus_settings: Параметры конфигурации проекта
   directus_shares: Отслеживает элементы с общим доступом
   directus_users: Системные пользователи для платформы
-  directus_translations: Custom translations
 fields:
   directus_activity:
     item: Ключ элемента
@@ -1171,7 +1097,6 @@ fields:
     png: PNG
     webP: WebP
     tiff: Tiff
-    avif: AVIF
     mapping: Картография
     basemaps: Базовые карты
     basemaps_raster: Растр
@@ -1335,13 +1260,9 @@ start_collapsed: Начать свёрнутым
 block: Блок
 inline: Встроенный
 comment: Комментарий
-shares: Shares
 unlimited_usage: Неограниченное использование
-uses_left: No uses left | 1 use left | {n} uses left
-no_shares: No shares to show
 new_share: Новая публикация
 expired: Истекло
-upcoming: Upcoming
 share: Поделиться
 share_item: Поделиться элементом
 shared_with_you: С вами поделились элементом
@@ -1350,10 +1271,6 @@ shared_leave_blank_for_unlimited: Оставьте пустым для неог�
 shared_times_remaining: Ссылка может быть использована {n} раз
 shared_last_remaining: Одноразовая ссылка
 shared_uses_left: Для безопасности, количество просмотров страницы ограничено. В настоящее время осталось {n} просмотра, после чего страница больше не будет доступна.
-share_access_page: Access Shared Page
-share_access_not_found: This shared page either does not exist or has already exceeded the maximum number of allowed uses.
-share_access_not_found_desc: Please contact an authorized user of this project to request access.
-share_access_not_found_title: Unknown Share Page
 share_copy_link: Скопировать ссылку
 share_copy_link_success: Ссылка скопирована
 share_copy_link_error: Невозможно скопировать ссылку
@@ -1388,7 +1305,6 @@ file: Файл
 file_library: Библиотека Файлов
 forgot_password: Забыли пароль
 hidden: Скрыто
-hidden_in_group: Hidden in {group}
 icon: Иконка
 info: Инфо
 normal: Нормальный
@@ -1439,26 +1355,17 @@ export_started: Экспорт начат
 export_started_copy: Ваш экспорт начат. Вы получите уведомление, когда он будет готов к загрузке.
 sort_asc: По Возрастанию
 sort_desc: По Убыванию
-disable_sort: Disable Sorting
 template: Шаблон
-require_value_to_be_set: Require value to be set on creation
 translation: Перевод
 translation_placeholder: Введите перевод...
 value: Значение
 view_project: Просмотреть проект
-weeks: { }
 report_error: Сообщить об Ошибке
 start: Начало
 table: Таблица
 list: Список
 search_filter: Поиск и фильтрация
 enable_search_filter: Включить поиск и фильтрацию
-item_link: Item link
-show_link_to_item: Show a link to the item
-navigate_to_item: Navigate to Item
-undo_removed_item: Undo Removed Item
-remove_item: Remove Item
-delete_item: Delete Item
 interfaces:
   filter:
     name: Фильтр
@@ -1475,7 +1382,6 @@ interfaces:
     no_rules: Правила не установлены
     change_value: Нажмите, чтобы изменить значение
     placeholder: Перетащите правила сюда
-    add_key_placeholder: Add a key and press enter...
   fields:
     name: Поля
   group-accordion:
@@ -1513,7 +1419,6 @@ interfaces:
     code: Код
     description: Написать или поделиться фрагментами кода
     line_number: Номер строки
-    line_wrapping: Line Wrapping
     placeholder: Введите код сюда...
   system-collection:
     collection: Коллекция
@@ -1540,7 +1445,6 @@ interfaces:
     placeholder: Выберите дату и время...
   system-fields:
     select_a_collection: Выберите коллекцию
-    no_fields: No fields
   system-display-template:
     display-template: Шаблон отображения
     description: Смешивать статический текст и динамические значения полей
@@ -1579,9 +1483,6 @@ interfaces:
     description: Введите значение для хеширования
     masked: С маской
     masked_label: Скрывать настоящие значения
-  system-extension-secret:
-    name: Extension Secret
-    value_stored: Value Securely Encrypted
   select-icon:
     icon: Иконка
     description: Выберите иконку из выпадающего списка
@@ -1590,7 +1491,6 @@ interfaces:
     image: Изображение
     description: Выберите или загрузите изображение
     crop: Обрезать по размеру
-    crop_label: Crop image as needed
   system-interface:
     interface: Интерфейс
     description: Выберите существующий интерфейс
@@ -1601,27 +1501,20 @@ interfaces:
   list-m2m:
     many-to-many: Многие ко Многим
     description: Выберите несколько связанных элементов
-    columns_configure_notice: You can configure the columns after creating this field.
-    display_template_configure_notice: You can configure the display template after creating this field.
   select-dropdown-m2o:
     many-to-one: Многие к Одному
     description: Выберите один связанный элемент
     display_template: Шаблон отображения
-  collection-item-dropdown:
-    collection-item-dropdown: Collection Item Dropdown
-    description: Select an item from a collection in JSON format
   input-rich-text-md:
     markdown: Markdown
     description: Ввод и предпросмотр разметки
     edit: Редактирование
     preview: Предпросмотр
-    editorFont: Editor Font
     previewFont: Шрифт на предпросмотре
     customSyntax: Произвольные блоки
     customSyntax_label: Добавить произвольные типы синтаксиса
     customSyntax_add: Добавить произвольный синтаксис
     box: Блок / Строчный элемент
-    imageToken: Static Access Token
     imageToken_label: Статический токен доступа добавляется после URL-адреса файла
   map:
     map: Карта
@@ -1644,7 +1537,6 @@ interfaces:
     notice: Уведомление
     description: Показать короткое уведомление
     text: Введите содержание уведомления здесь...
-    no_text: No text configured...
   list-o2m:
     one-to-many: Один ко многим
     description: Выберите связанные элементы
@@ -1652,7 +1544,6 @@ interfaces:
   system-folder:
     folder: Папка
     description: Выбрать папку
-    field_hint: Default folder for uploaded files without a folder specified. Does not affect existing files.
     root_name: Корень файловой библиотеки
     system_default: Системные настройки по умолчанию
   select-radio:
@@ -1664,9 +1555,7 @@ interfaces:
     edit_fields: Редактировать поля
     add_label: 'Ярлык «Создать новый»'
     sort: Сортировать
-    sort_placeholder: Manual
     field_note_placeholder: Примечание к полю...
-    incompatible_data: The current data is not compatible with the repeater interface and will be overridden when adding items to the repeater
   slider:
     slider: Слайдер
     description: Выберите номер с помощью слайдера
@@ -1706,7 +1595,6 @@ interfaces:
     input-translated-string: Переведенные строки
     description: Выберите или добавьте строку перевода
     search_placeholder: Поиск...
-    new_custom_translation: New Custom Translation
   boolean:
     toggle: Переключить
     description: Переключение вкл / выкл
@@ -1722,7 +1610,6 @@ interfaces:
     user_language: Использовать текущий язык пользователя
     default_language: Язык по умолчанию
     language_field: Языковое поле
-    language_direction_field: Language Direction Field
   list-o2m-tree-view:
     description: В виде дерева рекурсивно вложенных элементов
     recursive_only: Интерфейс просмотра дерева работает только для рекурсивных отношений.
@@ -1741,14 +1628,12 @@ interfaces:
     custom_formats: Пользовательские форматы
     options_override: Переопределение параметров
     folder_note: Папка для загруженных файлов. Не влияет на существующие файлы.
-    imageToken: Static Access Token
     imageToken_label: Статический токен доступа добавляется после URL-адреса файла
   input-autocomplete-api:
     input-autocomplete-api: Автоматическое дополнение ввода (API)
     description: Автодополнение значений поиска через внешний API.
     results_path: Путь к результатам
     value_path: Путь значения
-    text_path: Text Path
     trigger: Триггер
     rate: Рейтинг
   group-raw:
@@ -1764,16 +1649,7 @@ interfaces:
     start_closed: Свёрнута
   system-token:
     system-token: Ключ доступа
-    description: Manage static access token
-    placeholder: Click "Generate Token" to create a new static access token
-    value_securely_saved: Value Securely Saved
-    generate: Generate Token
-    regenerate: Regenerate Token
     generate_success_copy: Обязательно создайте резервную копию и скопируйте токен выше. Из соображений безопасности вы не сможете просмотреть токен снова после сохранения и перехода с этой страницы.
-    remove_token: Remove Token
-  system-raw-editor:
-    system-raw-editor: Raw Editor
-    description: Allow entering of raw or mustache templating values
 displays:
   translations:
     translations: Переводы
@@ -1812,16 +1688,8 @@ displays:
     relative: Относительный
     relative_label: 'Показывать относительное время, прим.: 5 минут назад'
     suffix: Суффикс
-    suffix_label: Show relative indicator
-    suffix_note: Uses words like 'in' and 'ago'
-    strict: Strict
     strict_label: Использовать строгие единицы измерения
     strict_note: Удаляет слова типа 'almost', 'over', 'less than'
-    round: Round
-    round_note: Choose a rounding function to use
-    down: Down
-    nearest: Nearest
-    up: Up
   file:
     file: Файл
     description: Показать файлы
@@ -1834,17 +1702,14 @@ displays:
     format: Формат
     format_label: Автоформат
     font: Шрифт
-    font_sans_serif: Sans serif
     font_serif: Serif
     font_monospace: Моноширинный
     bold: Жирный
     bold_label: Использовать жирный шрифт
     italic: Наклонный
-    italic_label: Use italic style
     prefix: Префикс
     prefix_label: Подготовить текст
     suffix: Суффикс
-    suffix_label: Appended Text
     color: Цвет
     background: Фон
     icon: Иконка
@@ -1889,7 +1754,6 @@ displays:
   related-values:
     related-values: Связанные Значения
     description: Показать относительные значения
-    display_template_configure_notice: You can configure the display template after creating this field.
   user:
     user: Пользователь
     description: Показать пользователя CairnCMS
@@ -1933,57 +1797,16 @@ layouts:
     default_template: Использование коллекции по умолчанию...
     no_compatible_fields: Нет совместимых полей
   kanban:
-    name: Kanban
-    group_field: Group By
-    group_field_placeholder: Field to group by...
-    group_title: Group Title
-    group_title_placeholder: Field for group titles...
-    title: Card Title
     title_placeholder: Название (необязательно)...
-    text: Card Text
     text_placeholder: Текст (необязательно)...
-    date: Card Date
     date_placeholder: Дата (необязательно)...
     tags: Теги карточки
     tags_placeholder: Теги (необязательно)...
-    user: Card User
     user_placeholder: Пользователь (необязательно)...
-    image: Card Image
     image_placeholder: Изображение (необязательно)...
-    image_fit: Card Image Fit
     crop: Обрезать
     advanced: Доп. настройки
-    edit_group: Edit Group
-    delete_group: Delete Group
-    add_group: Add Group
-    add_group_placeholder: Enter a new group title...
-    show_ungrouped: Show Ungrouped
-    show: Show
-    no_group: No Group
-    not_all_loaded: Could only load the first 1000 items.
-horizontal: Horizontal
-vertical: Vertical
-x_axis: X-Axis
-y_axis: Y-Axis
-y_axis_function: Y-Axis Function
-show_x_only: Show X-Axis Only
-show_y_only: Show Y-Axis Only
-show_data_label: Show Data Label
 both: Оба
-show_axis_labels: Show Axis Labels
-function: Function
-half_circle: Half Circle
-full_circle: Full Circle
-stroke_width: Stroke Width
-rounded_stroke: Rounded Stroke
-thin: Thin
-medium: Medium
-broad: Broad
-show_labels: Show Labels
-show_legend: Show Legend
-right: Right
-left: Left
-donut: Donut
 panels:
   metric:
     name: Метрика
@@ -1994,39 +1817,16 @@ panels:
     description: Отображение линейного графика на основе значений по времени
     date_field: Поле Дата
     value_field: Поле значения
-    fill_type: Fill Type
-    curve_type: Curve Type
   label:
     name: Описание
     description: Показать немного текста
   list:
     name: Список
     description: Фильтр и список полей из коллекции
-  barchart:
-    name: Bar Chart
-    description: Bar or column charts for comparing groups of values
-    horizontal: Horizontal
-    select_collection: You must select a collection.
   linechart:
-    name: Line Chart
-    description: Line chart for comparing change of a field
-    disabled_grouping: Disabled when grouping is selected.
     disabled_no_grouping: Отключено, если не выбрана ни одна группировка.
-    show_marker: Show Tooltip Marker
-    curve_type: Curve Type
-    smooth: Smooth
-    straight: Straight
-    step_line: Step Line
-  meter:
-    name: Meter
-    description: Meter for tracking values
-  piechart:
-    name: Pie or Donut Chart
-    description: Circular chart showing the ratios of groups on a column
   variable:
     name: Глобальная переменная
-    description: Set a global value for use in other Panels' filters
-    variable_key: Variable Key
   relational-variable:
     name: Глобальная реляционная переменная
     description: Установить глобальное реляционное значение для использования в фильтре других панелей
@@ -2035,90 +1835,49 @@ panels:
     multiple-label: Выберите несколько элементов
 triggers:
   common:
-    response_body: Response Body
     response_body_all: Все данные
     response_body_last: Данные последней операции
-  event:
-    name: Event Hook
-    description: Triggers on platform or data events
-    action: 'Action (Non-Blocking)'
-    filter: 'Filter (Blocking)'
   webhook:
-    name: Webhook
-    description: Triggers on an incoming HTTP request
     method: Метод
-    async: Asynchronous
   operation:
     name: Другой процесс
     description: Запускается другим процессом, для цепочки
     preview: Запускается операцией из другого процесса
-  schedule:
-    name: Schedule (CRON)
-    description: Triggers at regular points in time
-    cron: Interval
-  manual:
-    name: Manual
-    description: Triggers on manual run within selected collection(s)
-    collection_and_item: Collection & Item Pages
-    collection_only: Collection Page Only
-    item_only: Item Page Only
-    collection_page: Collection Page
-    require_selection: Requires Selection
 a_flow_uuid: Выберите процесс для запуска...
-any_string_or_json: Any string or JSON...
-item_payload_placeholder: This is the JSON used to update the item's field values...
 operation_variables_note: Вы можете получить доступ к данным процесса с такими переменными как **{'{'}{'{'}$last{'}'}{'}'}**, **{'{'}{'{'}$trigger{'}'}{'}'}** и **{'{'}{'{'}$accountability{'}'}{'}'}**, или ссылаться на предыдущие операции, используя **{'{'}{'{'}operation_key{'}'}{'}'}**.'
 operations:
   condition:
-    name: Condition
     description: Маршрутизировать процесс на основе логики If / Else
   exec:
-    name: Run Script
-    description: Execute arbitrary code to modify the payload
     modules: 'Можно использовать следующие **Node модули**:'
   item-create:
     name: Создать данные
-    description: Create items in the database
     payload: Содержимое
-    emit_events: Emit Events
   item-delete:
     name: Удалить данные
-    description: Delete items in the database
-    emit_events: Emit Events
-    key: IDs
     query: Запрос
   item-read:
     name: Читать данные
     description: Чтение элементов из базы данных
-    key: IDs
     query: Запрос
-    emit_events: Emit Events
   item-update:
     name: Обновить данные
     description: Обновить элементы в базе данных
-    emit_events: Emit Events
-    key: IDs
     payload: Содержимое
     query: Запрос
   log:
     name: Лог в консоли
     description: Вывод какой-либо информации в консоль
     message: Сообщение
-    message_placeholder: Enter a message to show in the console...
   mail:
     name: Отправить эл. письмо
     description: Отправить письмо одному или нескольким людям
-    to: To
     to_placeholder: Добавьте адреса эл. почты и нажмите Enter...
-    body: Body
     template: Шаблон
     data: Данные
   notification:
     name: Отправить уведомление
-    description: Send an in-app notification to one or more users
     recipient: Пользователь
-    recipient_placeholder: Enter a UUID...
-    recipient_note: Add user UUID and press enter...
     message: Сообщение
   request:
     name: Веб-хук / URL-адрес запроса
@@ -2127,13 +1886,9 @@ operations:
     url_placeholder: https://example.com/example
     method: Метод
     data: Данные
-    headers: Headers
     header: HTTP-заголовок
     header_placeholder: Авторизация...
-    value_placeholder: Bearer eyJhbGciOi...
   sleep:
-    name: Sleep
-    description: Wait a given number of milliseconds
     milliseconds: Миллисекунды
   transform:
     name: Содержание преобразования
@@ -2144,10 +1899,3 @@ operations:
     flows: Процессы
     flow: Процесс
     data: Данные
-    iteration_mode: Iteration Mode
-    iteration_mode_note: Mode for iterating over arrays.
-    serial: Serial
-    parallel: Parallel
-    batch: Batch
-    batch_size: Batch Size
-    cache: Cache
