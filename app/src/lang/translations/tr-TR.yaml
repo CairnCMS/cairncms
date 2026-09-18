@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: Tanımlayıcı
 avatar: Avatar
 application: Uygulama
@@ -76,14 +75,10 @@ create_role: Rol Oluştur
 create_user: Kullanıcı Oluştur
 message: Mesaj
 delete_panel: Paneli Sil
-create_translation_string: Çeviri Dizesi Oluştur
-no_translation_string: Çeviri Dizesi Yok
-no_translation_string_copy: Henüz çeviri dizesi yok.
-translation_string_key_placeholder: Çeviri dizesi anahtarı...
-translation_string_translations_placeholder: Yeni çeviri ekle
-edit_translation_string: Çeviri Dizesini Düzenle
-delete_translation_string_copy: >-
-  "{key}" çeviri dizesini silmek istediğinizden emin misiniz? Bu eylem geri alınamaz.
+create_custom_translation: Create Custom Translation
+edit_custom_translation: Edit Custom Translation
+no_custom_translations: No Custom Translations
+no_custom_translations_copy: There are no custom translations yet.
 invite_users: Kullanıcıları Davet Et
 invite: Davet Et
 email_already_invited: E-posta "{email}" zaten davet edildi
@@ -114,19 +109,13 @@ public_label: Herkese Açık
 public_description: Kimlik doğrulaması olmadan hangi API verilerinin kullanılabileceğini kontrol eder.
 admin_description: Sınırsız Uygulama/API erişimine sahip ilk yönetici rolü.
 not_allowed: İzin Verilmedi
-directus_version: CairnCMS Versiyon
-node_version: Node Versiyon
-node_uptime: Node Hizmet Zamanı
-os_type: OS Tip
-os_version: OS Versiyon
-os_uptime: OS Hizmet Zamanı
-os_totalmem: OS Bellek
 archive: Arşiv
 archive_confirm: Bu öğeyi arşivlemek istediğinizden emin misiniz?
 archive_confirm_count: >-
   Hiçbir Öğe Seçilmedi | Bu öğeyi arşivlemek istediğinizden emin misiniz? | Seçilen {count} öğeyi arşivlemek istediğinizden emin misiniz?
 reset_system_permissions_to: 'Sistem Yetkilerini Sıfırla:'
 reset_system_permissions_copy: Bu işlem sistem koleksiyonlarına vermiş olabileceğiniz özel izinlerin üstüne yazacaktır. Emin misiniz?
+the_following_are_minimum_permissions: The following minimum permissions are automatically applied when "App Access" is enabled. You can grant additional permissions if needed, but you cannot reduce permissions below this level.
 app_access_minimum: Minimum Uygulama Erişimi
 recommended_defaults: Önerilen Varsayılanlar
 unarchive: Arşivden Çıkar
@@ -177,6 +166,7 @@ permissions_for_role: '{role} rolünün, {action} yapabileceği öğeler.'
 fields_for_role: '{role} rolünün, {action} yapabileceği alanlar.'
 validation_for_role: '{action} alanı, {role} rolünün uyması gereken kuralları belirler.'
 presets_for_role: '{role} rolü için varsayılan alan değeri.'
+presets_field_warning: 'Relational presets for field "{field}" should be configured with the "detailed" syntax.'
 presentation_and_aliases: Sunumlar
 revision_post_create: Öğe oluşturulduğunda böyle gözüküyordu.
 revision_post_update: Öğe güncellendikten sonra böyle gözüküyordu.
@@ -232,6 +222,7 @@ bigInteger: Büyük Tamsayı
 boolean: Evet/Hayır
 date: Tarih
 date_range: Tarih Aralığı
+translation_key_placeholder: Enter a key...
 datetime: Tarih ve Zaman
 dateTime: Tarih ve Zaman
 precision: Hassasiyet
@@ -292,7 +283,11 @@ m2m_relationship: Çoktan Çoka İlişki
 m2a_relationship: Çoktan Herhangi Bire İlişki
 invalid_item: Geçersiz Öğe
 require_confirmation: Doğrulama Gerekiyor
+dialog: Dialog
 modal: Açılır Pencere
+confirmation_dialog: Confirmation Dialog
+confirmation_description: Confirmation Description
+confirmation_input_fields: Confirmation Input Fields
 next: Sonraki
 field_name: Alan Adı
 translations: Çeviriler
@@ -311,6 +306,7 @@ updated_on: Güncelleme Tarihi
 updated_by: Güncelleyen
 primary_key: Birincil Anahtar
 foreign_key: Yabancı Anahtar
+field_key: Field Key
 finish_setup: Kurulumu Bitir
 dismiss: Yoksay
 toggle_raw_editor: Ham Düzenleyiciyi Aç/Kapat
@@ -439,6 +435,7 @@ checksum: Checksum
 owner: Sahip
 edited_by: Düzenleyen
 folder: Klasör
+folders: Folders
 zoom: Yakınlaş
 download: İndir
 open: Aç
@@ -461,8 +458,8 @@ exporting_all_items_in_collection: '{collection} içindeki tüm {total} öğe d�
 exporting_limited_items_in_collection: '{collection} içindeki {total} öğeden {limit} dışa aktarılıyor.'
 exporting_no_items_to_export: Dışa aktarılacak öğe yok. Aşağıdaki dışa aktarma yapılandırmasını ayarlayın.
 exporting_download_hint: Tamamlandığında, bu {format} dosyası otomatik olarak cihazınıza indirilecektir.
-exporting_batch_hint: Bu dışa aktarma, gruplar halinde işlenecek ve tamamlandıktan sonra {format} dosyası Dosya Kitaplığına kaydedilecektir.
-exporting_batch_hint_forced: Çok sayıda öğe nedeniyle, bu dışa aktarma toplu olarak işlenecek ve tamamlandıktan sonra {format} dosyası Dosya Kitaplığına kaydedilecektir.
+exporting_library_hint: Once the {format} file is created, it will be saved to the File Library.
+exporting_library_hint_forced: This export must be processed in batches. Once completed, the {format} file will be saved to the File Library.
 collection_key: Koleksiyon Anahtarı
 name: İsim
 primary_key_field: Birincil Anahtar Alanı
@@ -487,7 +484,8 @@ enable_select_button: Seç Butonunu Etkinleştir
 allow_duplicates: Çiftlere İzin Ver
 comments: Yorumlar
 no_comments: Henüz Yorum Yok
-click_to_expand: Genişletmek için Tıklayın
+expand: Expand
+collapse: Collapse
 select_item: Öğe Seçin
 no_items: Hiç öğe yok
 search_items: Öğeleri ara...
@@ -519,6 +517,7 @@ create_collection: Koleksiyon Oluştur
 no_collections_copy_admin: Henüz bir koleksiyonunuz yok. Başlamak için aşağıdaki butona tıklayın.
 no_collections_copy: Henüz bir koleksiyonunuz yok. Lütfen sistem yöneticinizle görüşün.
 relationship_not_setup: İlişki doğru bir şekilde konfigüre edilmedi
+no_singleton_relations: Relationships to Singletons are not supported
 display_template_not_setup: Görüntüleme şablonu seçeneği yanlış yapılandırılmış
 collection_field_not_setup: Koleksiyon alan seçenekleri yanlış yapılandırılmış
 select_a_collection: Bir Koleksiyon Seç
@@ -611,6 +610,7 @@ errors:
   RANGE_NOT_SATISFIABLE: Geçersiz aralık
   METHOD_NOT_ALLOWED: İzin verilmeyen yöntem
   REQUESTS_EXCEEDED: İstek sınırına ulaşıldı
+  CONTENT_TOO_LARGE: Submitted item/file is too large
 security: Güvenlik
 value_hashed: Değer Güvenli Şekilde Hashlendi
 bookmark_name: Yer işareti adı...
@@ -656,6 +656,7 @@ one_filtered_item: '1 filtrelenmiş öğe'
 delete_collection_are_you_sure: >-
   "{collection}" koleksiyonunu silmek istediğinizden emin misiniz? Bu, koleksiyonu ve içindeki tüm öğeleri siler. Bu işlem kalıcıdır.
 delete_folder_are_you_sure: Are you sure you want to delete the folder "{folder}"? Nested folders and collections will be moved to the top most level.
+delete_collection_peer_dependencies: The following fields will be deleted as well, as they are related to the current collection.
 collections_shown: Görüntülenen Koleksiyonlar
 visible_collections: Görünen Koleksiyonlar
 hidden_collections: Gizli Koleksiyonlar
@@ -782,8 +783,14 @@ flows: Akışlar
 flow: Akış
 select_a_flow: Bir Akış Seç
 run_flow_confirm: Bu komut dosyasını çalıştırmak istediğinize emin misiniz?
+run_flow_on_current_collection: Run Flow on Current Collection
+run_flow_on_current: Run Flow on Current Item
 run_flow_on_current_edited_confirm: Bu öğe bu akış tarafından güncellenebilir, yürütmek istediğinizden emin misiniz?
+run_flow_on_selected: Select One or More Items First | Run Flow on 1 Selected Item | Run Flow on {n} Selected Items
+run_flow: Run Flow
 run_flow_success: Akış "{flow}" çalıştırma başarılı
+field_name_placeholder: Enter field name...
+field_key_placeholder: Enter field key...
 trigger: Tetikleme
 trigger_options: Tetikleyici Seçenekleri
 view_trigger: Tetikleyiciyi Görüntüle
@@ -942,7 +949,8 @@ settings_permissions: Roller ve Yetkiler
 settings_project: Proje Ayarları
 settings_flows: Akışlar
 settings_presets: Ön Ayarlar ve Yer İşaretleri
-settings_translation_strings: Çeviri Dizeleri
+settings_translations: Custom Translations
+settings_extensions: Extensions
 one_or_more_options_are_missing: Bir ya da birden fazla seçenek eksik
 scope: Kapsam
 actions: Aksiyonlar
@@ -990,7 +998,48 @@ page_help_settings_presets_item: >-
   **Ön Ayar Detayı** —Yer işaretleri ve varsayılan koleksiyon ön ayarlarını yönetmek için bir form/sayfa.
 page_help_settings_flows_collection: '**Akışlara Gözat** — Proje içindeki tüm Akışları listeler.'
 page_help_settings_flows_item: '**Akış Ayrıntısı** — Bir veya daha fazla işlemi yönetmek için çalışma alanı.'
-page_help_settings_translation_strings_collection: '**Dize Çevirilerini Görüntüle** — Projedeki tüm çeviri dizelerini gösterir.'
+page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
+extension_health_normal: Normal
+extension_health_warning: Warning | Warnings
+extension_health_failed: Failed
+extension_bundle_contents: Bundled extensions
+extension_capabilities: Capabilities
+extension_advanced_diagnostics: Advanced Diagnostics
+extension_sandboxed: Sandboxed
+extension_runtime: Runtime
+extension_runtime_sandboxed: Sandboxed
+extension_runtime_full_authority: Full Authority
+extension_runtime_browser: Browser App
+confined_runtime: Sandbox
+confined_runtime_mode: 'OS hardening: {decision} ({mode})'
+confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
+extension_status_loaded_detail: Loaded and running on the server.
+extension_status_discovered_detail: Discovered on this instance.
+extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
+extension_status_failed_detail: The extension failed to load on this instance.
+extension_settings_unavailable_detail: Extension settings are unavailable.
+extension_settings_drawer_subtitle: Extension settings
+extension_settings_section: Extension Settings
+extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
+extension_settings_no_global_keys: This extension declares no global settings.
+extension_settings_load_failed: Could not load the extension's settings.
+extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
+extension_type_group_hook: Hooks
+extension_type_group_endpoint: Endpoints
+extension_type_group_operation: Operations
+extension_type_group_bundle: Bundles
+extension_type_group_interface: Interfaces
+extension_type_group_display: Displays
+extension_type_group_layout: Layouts
+extension_type_group_module: Modules
+extension_type_group_panel: Panels
+extension_type_group_item-view: Item Views
+extension_type_group_other: Other
+no_extensions: No Extensions
+no_extensions_copy: No extensions were discovered in the configured extensions path.
+extensions_load_failed: Could not load the extensions inventory.
+page_help_settings_translations_collection: '**Browse Custom Translations** — Lists all custom translations within the project.'
+page_help_settings_translations_item: '**Custom Translations Detail** — A form for viewing and managing this item.'
 page_help_users_collection: '**Kullanıcı Dizini** — Projedeki tüm sistem kullanıcılarını listeler.'
 page_help_users_item: >-
   **Kullanıcı Detayı** — Hesap bilgilerini düzenle ya da diğer kullanıcıların detaylarını gör.
@@ -1033,6 +1082,7 @@ directus_collection:
   directus_settings: Proje konfigürasyon seçenekleri
   directus_shares: Dışarı paylaşılan öğeleri takip eder
   directus_users: Platform için sistem kullanıcıları
+  directus_translations: Custom translations
 fields:
   directus_activity:
     item: Öğe Birincil Anahtarı
@@ -1121,6 +1171,7 @@ fields:
     png: PNG
     webP: WebP
     tiff: Tiff
+    avif: AVIF
     mapping: Haritalama
     basemaps: Taban Haritalar
     basemaps_raster: Raster
@@ -1388,12 +1439,14 @@ export_started: Dışa Aktarma Başladı
 export_started_copy: Dışa aktarma başladı. İndirilmeye hazır olduğunda bilgilendirileceksiniz.
 sort_asc: Artan Şekilde Sırala
 sort_desc: Azalan Şekilde Sırala
+disable_sort: Disable Sorting
 template: Şablon
 require_value_to_be_set: Oluşturmada değer gerektir
 translation: Çeviri
 translation_placeholder: Bir çeviri girin...
 value: Değer
 view_project: Projeyi görüntüle
+weeks: { }
 report_error: Hata Bildir
 start: Başla
 table: Tablo
@@ -1526,6 +1579,9 @@ interfaces:
     description: Hashlenmesi için bir değer girin
     masked: Maskelenmiş
     masked_label: Gerçek değerleri gizle
+  system-extension-secret:
+    name: Extension Secret
+    value_stored: Value Securely Encrypted
   select-icon:
     icon: İkon
     description: Açılır Listeden bir ikon seç
@@ -1551,6 +1607,9 @@ interfaces:
     many-to-one: Çoktan Bire
     description: Tek ilişkili bir öğe seçin
     display_template: Görüntüleme Şablonu
+  collection-item-dropdown:
+    collection-item-dropdown: Collection Item Dropdown
+    description: Select an item from a collection in JSON format
   input-rich-text-md:
     markdown: Markdown
     description: Markdown girin ve önizleyin
@@ -1585,6 +1644,7 @@ interfaces:
     notice: Bildiri
     description: Kısa bir bildiri gösterin
     text: Bildiri içeriğini buraya gir...
+    no_text: No text configured...
   list-o2m:
     one-to-many: Birden Çoka
     description: Birden fazla ilişkili öğe seçin
@@ -1592,6 +1652,7 @@ interfaces:
   system-folder:
     folder: Klasör
     description: Bir klasör seçin
+    field_hint: Default folder for uploaded files without a folder specified. Does not affect existing files.
     root_name: Dosya Kütüphanesi Kökü
     system_default: Sistem Varsayılanları
   select-radio:
@@ -1645,7 +1706,7 @@ interfaces:
     input-translated-string: Çevrilmiş Dizeler
     description: Çeviri dizesi seçin veya ekleyin
     search_placeholder: Ara...
-    new_translation_string: Yeni Çeviri Dizesi
+    new_custom_translation: New Custom Translation
   boolean:
     toggle: Aç/Kapat
     description: Açık ve kapalı arasında geçiş yap
@@ -1909,6 +1970,7 @@ show_x_only: Yalnızca X eksenini göster
 show_y_only: Yalnızca Y eksenini göster
 show_data_label: Veri etiketini göster
 both: İkisi de
+show_axis_labels: Show Axis Labels
 function: İşlev
 half_circle: Yarım Daire
 full_circle: Tam Daire
@@ -1918,8 +1980,10 @@ thin: İnce
 medium: Orta
 broad: Kalın
 show_labels: Etiketleri Göster
+show_legend: Show Legend
 right: Sağ
 left: Sol
+donut: Donut
 panels:
   metric:
     name: Metrik
@@ -1945,13 +2009,20 @@ panels:
     select_collection: Bir koleksiyon seçmelisiniz.
   linechart:
     name: Çizgi Grafik
+    description: Line chart for comparing change of a field
+    disabled_grouping: Disabled when grouping is selected.
     disabled_no_grouping: Gruplandırma seçilmediğinde devre dışı bırakılır.
     show_marker: Araç İpucu İşaretçisini Göster
     curve_type: Eğim Türü
+    smooth: Smooth
     straight: Düz
+    step_line: Step Line
   meter:
     name: Metre
     description: İzleme değerleri için sayaç
+  piechart:
+    name: Pie or Donut Chart
+    description: Circular chart showing the ratios of groups on a column
   variable:
     name: Global Değişken
     description: Diğer Panellerin filtrelerinde kullanım için global bir değer belirleyin
@@ -1968,10 +2039,12 @@ triggers:
     response_body_all: Tüm Veri
     response_body_last: Son İşlem Verileri
   event:
+    name: Event Hook
     description: Platform veya veri olaylarında tetikleyiciler
     action: 'Eylem (Engellenmeyen)'
     filter: 'Filtre (Engellenen)'
   webhook:
+    name: Webhook
     description: Gelen bir HTTP isteğinde tetikler
     method: Metod
     async: Eşzamanlı Olmayan
@@ -1989,13 +2062,19 @@ triggers:
     collection_and_item: Koleksiyon ve Öğe Sayfaları
     collection_only: Yalnızca Koleksiyon Sayfası
     item_only: Yalnızca Öğe Sayfası
+    collection_page: Collection Page
+    require_selection: Requires Selection
+a_flow_uuid: Select a Flow to trigger...
 any_string_or_json: Herhangi bir dize veya JSON...
 item_payload_placeholder: Bu, öğenin alan değerlerini güncellemek için kullanılan JSON'dur...
+operation_variables_note: You can access flow data with variables such as **{'{'}{'{'}$last{'}'}{'}'}**, **{'{'}{'{'}$trigger{'}'}{'}'}** and **{'{'}{'{'}$accountability{'}'}{'}'}**, or reference previous operations using **{'{'}{'{'}operation_key{'}'}{'}'}**.'
 operations:
   condition:
     name: Durum
+    description: Route a flow based on If / Else logic
   exec:
     name: Komut Dosyasını Çalıştır
+    description: Execute arbitrary code to modify the payload
     modules: 'Aşağıdaki **Düğüm modülleri** kullanılabilir:'
   item-create:
     name: Veri Oluştur
@@ -2023,11 +2102,13 @@ operations:
     query: Sorgula
   log:
     name: Konsolda Oturum Aç
+    description: Output something to the console
     message: Mesaj
     message_placeholder: Konsolda gösterilecek bir mesaj girin...
   mail:
     name: E-posta Gönder
     description: Bir veya daha fazla kişiye e-posta gönderin
+    to: To
     to_placeholder: E-posta adreslerini ekleyin ve enter tuşuna basın...
     body: Gövde
     template: Şablon
@@ -2036,8 +2117,11 @@ operations:
     name: Bildirim Gönder
     description: Bir veya daha fazla kullanıcıya uygulama içi bildirim gönderin
     recipient: Kullanıcı
+    recipient_placeholder: Enter a UUID...
+    recipient_note: Add user UUID and press enter...
     message: Mesaj
   request:
+    name: Webhook / Request URL
     description: "Bir URL'ye istekte bulunun"
     url: URL
     url_placeholder: https://example.com/example
@@ -2046,16 +2130,24 @@ operations:
     headers: Başlıklar
     header: Header
     header_placeholder: Yetkilendirme...
+    value_placeholder: Bearer eyJhbGciOi...
   sleep:
     name: Uyku
     description: Belirli bir milisaniye kadar bekleyin
     milliseconds: Milisaniye
   transform:
     name: Yükü Dönüştür
+    description: Alter the Flow's JSON payload
   trigger:
     name: Tetik Akışı
     description: Bu verileri başka bir akışa iletin
     flows: Akışlar
     flow: Akış
     data: Veri
+    iteration_mode: Iteration Mode
+    iteration_mode_note: Mode for iterating over arrays.
     serial: Seri No
+    parallel: Parallel
+    batch: Batch
+    batch_size: Batch Size
+    cache: Cache
