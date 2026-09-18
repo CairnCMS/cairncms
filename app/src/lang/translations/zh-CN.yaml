@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: 标识符（identifier）
 avatar: 头像
 application: 应用程序
@@ -76,14 +75,10 @@ create_role: 创建角色
 create_user: 创建用户
 message: 消息
 delete_panel: 删除面板
-create_translation_string: 创建翻译字符串
-no_translation_string: 空
-no_translation_string_copy: 目前没有翻译字符串。
-translation_string_key_placeholder: 翻译字符串键..
-translation_string_translations_placeholder: 添加新翻译
-edit_translation_string: 编辑翻译字符串
-delete_translation_string_copy: >-
-  您确定要删除翻译字符串"{key}" 吗? 此操作无法撤消。
+create_custom_translation: Create Custom Translation
+edit_custom_translation: Edit Custom Translation
+no_custom_translations: No Custom Translations
+no_custom_translations_copy: There are no custom translations yet.
 invite_users: 邀请用户
 invite: 邀请
 email_already_invited: 电子邮件 "{email}" 已被邀请
@@ -114,19 +109,13 @@ public_label: 公开
 public_description: 设置哪些API无需身份验证。
 admin_description: 不受限制的 App/ API 访问权限的初始管理角色
 not_allowed: 不允许
-directus_version: CairnCMS 版本
-node_version: Node 版本
-node_uptime: Node 运行时间
-os_type: 系统类型
-os_version: 系统版本
-os_uptime: 系统运行时间
-os_totalmem: 系统内存
 archive: 存档
 archive_confirm: 您确定要归档所选吗？
 archive_confirm_count: >-
   没有选定条目 | 你确定要存档这个条目吗？| 你确定你想要存档这些 {count} 个条目吗？
 reset_system_permissions_to: '重置系统权限：'
 reset_system_permissions_copy: 此操作将覆盖您可能应用到系统模型中的自定义权限。确定吗？
+the_following_are_minimum_permissions: The following minimum permissions are automatically applied when "App Access" is enabled. You can grant additional permissions if needed, but you cannot reduce permissions below this level.
 app_access_minimum: 最小权限
 recommended_defaults: 推荐设置
 unarchive: 取消存档
@@ -177,6 +166,7 @@ permissions_for_role: '{role} 角色能够 {action}。'
 fields_for_role: '{role} 角色能够 {action} 字段。'
 validation_for_role: '{role} 角色必须遵守字段的 {action} 规则。'
 presets_for_role: '{role} 角色的默认值。'
+presets_field_warning: 'Relational presets for field "{field}" should be configured with the "detailed" syntax.'
 presentation_and_aliases: 别名
 revision_post_create: 这是新建条目后看起来的样子。
 revision_post_update: 这是更新后该条目的外观。
@@ -232,6 +222,7 @@ bigInteger: Big Integer
 boolean: Boolean
 date: Date
 date_range: 时间段
+translation_key_placeholder: Enter a key...
 datetime: DateTime
 dateTime: DateTime
 precision: 精度
@@ -315,6 +306,7 @@ updated_on: 更新于
 updated_by: 更新，由
 primary_key: 主键
 foreign_key: 外键
+field_key: Field Key
 finish_setup: 完成安装
 dismiss: 关闭
 toggle_raw_editor: 切换原始编辑器
@@ -443,6 +435,7 @@ checksum: 校验和
 owner: 所有者
 edited_by: 编辑者
 folder: 文件夹
+folders: Folders
 zoom: 缩放
 download: 下载
 open: 打开
@@ -462,11 +455,11 @@ open_file_in_tab: 在新标签页中打开文件
 start_export: 开始导出
 not_available_for_local_downloads: 本地下载不可用
 exporting_all_items_in_collection: 正在导出 {collection} 内所有的 {total} 项。
-exporting_limited_items_in_collection: 正在导出 {collection} 内 {total} 项中的 {limit} 项。
+exporting_limited_items_in_collection: '正在导出 {collection} 内 {total} 项中的 {limit} 项。'
 exporting_no_items_to_export: 没有要导出的条目。调整下面的导出配置。
 exporting_download_hint: 完成后，此 {format} 文件将自动下载到您的设备。
-exporting_batch_hint: 此导出将分批处理，完成后 {format} 文件将被保存到文件库。
-exporting_batch_hint_forced: 由于条目数量过大，导出必须分批处理，完成后 {format} 文件将被保存到文件库。
+exporting_library_hint: Once the {format} file is created, it will be saved to the File Library.
+exporting_library_hint_forced: This export must be processed in batches. Once completed, the {format} file will be saved to the File Library.
 collection_key: 模型的主键
 name: 名称
 primary_key_field: 主键字段
@@ -491,7 +484,8 @@ enable_select_button: 启用选择按钮
 allow_duplicates: 允许重复项
 comments: 注释
 no_comments: 暂无注释
-click_to_expand: 单击展开
+expand: Expand
+collapse: Collapse
 select_item: 选择条目
 no_items: 无条目
 search_items: 搜索条目...
@@ -523,6 +517,7 @@ create_collection: 新建模型
 no_collections_copy_admin: 您还没有任何模型。点击下面的按钮开始新建。
 no_collections_copy: 您还没有任何可用的模型。请联系您的系统管理员。
 relationship_not_setup: 关系配置不正确
+no_singleton_relations: Relationships to Singletons are not supported
 display_template_not_setup: 显示的模板选项配置错误
 collection_field_not_setup: 该模型的字段配置错误
 select_a_collection: 选择模型
@@ -615,6 +610,7 @@ errors:
   RANGE_NOT_SATISFIABLE: 无效的范围
   METHOD_NOT_ALLOWED: 不被允许的方法
   REQUESTS_EXCEEDED: 已达到请求数量限制
+  CONTENT_TOO_LARGE: Submitted item/file is too large
 security: 安全
 value_hashed: 哈希值
 bookmark_name: 书签名称
@@ -794,6 +790,7 @@ run_flow_on_selected: 先选择一个或多个项目 | 在 1 个选定项目 上
 run_flow: 运行流程
 run_flow_success: 流程 "{flow}" 运行成功
 field_name_placeholder: 输入字段名称...
+field_key_placeholder: Enter field key...
 trigger: 触发器
 trigger_options: 触发器选项
 view_trigger: 查看触发器
@@ -952,7 +949,8 @@ settings_permissions: 角色与权限
 settings_project: 项目设置
 settings_flows: 流程
 settings_presets: 预设&书签
-settings_translation_strings: 翻译字符串
+settings_translations: Custom Translations
+settings_extensions: Extensions
 one_or_more_options_are_missing: 缺少一个或多个选项
 scope: 范围
 actions: 操作
@@ -1000,7 +998,48 @@ page_help_settings_presets_item: >-
   **预设详细信息** - 管理书签和默认模型预设的表单。
 page_help_settings_flows_collection: '**Browse Webhooks** - 列出项目内的所有流。'
 page_help_settings_flows_item: '**流程详情** - 管理一个或多个操作面板的工作空间。'
-page_help_settings_translation_strings_collection: '**浏览翻译字符串** - 列出项目中的所有翻译字符串。'
+page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
+extension_health_normal: Normal
+extension_health_warning: Warning | Warnings
+extension_health_failed: Failed
+extension_bundle_contents: Bundled extensions
+extension_capabilities: Capabilities
+extension_advanced_diagnostics: Advanced Diagnostics
+extension_sandboxed: Sandboxed
+extension_runtime: Runtime
+extension_runtime_sandboxed: Sandboxed
+extension_runtime_full_authority: Full Authority
+extension_runtime_browser: Browser App
+confined_runtime: Sandbox
+confined_runtime_mode: 'OS hardening: {decision} ({mode})'
+confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
+extension_status_loaded_detail: Loaded and running on the server.
+extension_status_discovered_detail: Discovered on this instance.
+extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
+extension_status_failed_detail: The extension failed to load on this instance.
+extension_settings_unavailable_detail: Extension settings are unavailable.
+extension_settings_drawer_subtitle: Extension settings
+extension_settings_section: Extension Settings
+extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
+extension_settings_no_global_keys: This extension declares no global settings.
+extension_settings_load_failed: Could not load the extension's settings.
+extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
+extension_type_group_hook: Hooks
+extension_type_group_endpoint: Endpoints
+extension_type_group_operation: Operations
+extension_type_group_bundle: Bundles
+extension_type_group_interface: Interfaces
+extension_type_group_display: Displays
+extension_type_group_layout: Layouts
+extension_type_group_module: Modules
+extension_type_group_panel: Panels
+extension_type_group_item-view: Item Views
+extension_type_group_other: Other
+no_extensions: No Extensions
+no_extensions_copy: No extensions were discovered in the configured extensions path.
+extensions_load_failed: Could not load the extensions inventory.
+page_help_settings_translations_collection: '**Browse Custom Translations** — Lists all custom translations within the project.'
+page_help_settings_translations_item: '**Custom Translations Detail** — A form for viewing and managing this item.'
 page_help_users_collection: '**用户目录** - 列出此项目中的所有系统用户。'
 page_help_users_item: >-
   **用户详细信息** - 管理您的帐户信息，或查看其他用户的详细信息。
@@ -1043,6 +1082,7 @@ directus_collection:
   directus_settings: 项目配置
   directus_shares: 跟踪外部共享条目
   directus_users: 平台系统用户
+  directus_translations: Custom translations
 fields:
   directus_activity:
     item: 条目主键
@@ -1131,6 +1171,7 @@ fields:
     png: PNG
     webP: WebP
     tiff: Tiff
+    avif: AVIF
     mapping: 映射
     basemaps: 底图
     basemaps_raster: 栅格化
@@ -1405,6 +1446,7 @@ translation: 翻译
 translation_placeholder: 输入翻译...
 value: 值
 view_project: 查看项目
+weeks: { }
 report_error: 报告错误
 start: 开始
 table: 表
@@ -1537,6 +1579,9 @@ interfaces:
     description: 输入一个hash值
     masked: Masked
     masked_label: Hide the true values
+  system-extension-secret:
+    name: Extension Secret
+    value_stored: Value Securely Encrypted
   select-icon:
     icon: 图标
     description: 从下拉列表中选择一个图标
@@ -1599,6 +1644,7 @@ interfaces:
     notice: 提示
     description: 显示一个快捷提示
     text: 在此输入通知内容...
+    no_text: No text configured...
   list-o2m:
     one-to-many: 一对多
     description: 选择多个相关项目
@@ -1660,7 +1706,7 @@ interfaces:
     input-translated-string: 已翻译的字符串
     description: 选择或添加翻译字符串
     search_placeholder: 搜索...
-    new_translation_string: 新翻译字符串
+    new_custom_translation: New Custom Translation
   boolean:
     toggle: 切换
     description: 开启或关闭
@@ -2104,3 +2150,4 @@ operations:
     parallel: 并行
     batch: 批处理
     batch_size: 批量大小
+    cache: Cache
