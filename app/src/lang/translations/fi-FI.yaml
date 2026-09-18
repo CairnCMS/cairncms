@@ -47,7 +47,6 @@ and: Ja
 or: Tai
 init: Alusta
 dataset_too_large_currently_showing_n_items: Dataset on liian suuri, näytetään ensimmäiset {n} kohdetta.
-modifier: Modifier
 custom: Mukautettu
 hook: Koukku
 fill_width: Täysleveä
@@ -75,10 +74,6 @@ create_role: Luo rooli
 create_user: Luo käyttäjä
 message: Viesti
 delete_panel: Poista paneeli
-create_custom_translation: Create Custom Translation
-edit_custom_translation: Edit Custom Translation
-no_custom_translations: No Custom Translations
-no_custom_translations_copy: There are no custom translations yet.
 invite_users: Kutsu käyttäjiä
 invite: Kutsu
 email_already_invited: Sähköposti "{email}" on jo kutsuttu
@@ -115,7 +110,6 @@ archive_confirm_count: >-
   Kohteita ei ole valittu | Oletko varma, että haluat arkistoida tämän kohteen? | Oletko varma, että haluat arkistoida nämä {count} kohdetta?
 reset_system_permissions_to: 'Palauta järjestelmän käyttöoikeudet:'
 reset_system_permissions_copy: Tämä toiminto korvaa kaikki mukautetut käyttöoikeudet, joita olet saattanut soveltaa järjestelmäkokoelmiin. Oletko varma?
-the_following_are_minimum_permissions: The following minimum permissions are automatically applied when "App Access" is enabled. You can grant additional permissions if needed, but you cannot reduce permissions below this level.
 app_access_minimum: Sovelluspääsy vähintään
 recommended_defaults: Suositellut oletukset
 unarchive: Palauta arkistosta
@@ -166,13 +160,11 @@ permissions_for_role: 'Kohteet joita {role} rooli voi {action}.'
 fields_for_role: 'Kentät joita {role} rooli voi {action}.'
 validation_for_role: 'Kentän sääntöjä {action} roolille {role} on noudatettava.'
 presets_for_role: 'Kentän oletusarvot roolille {role}.'
-presets_field_warning: 'Relational presets for field "{field}" should be configured with the "detailed" syntax.'
 presentation_and_aliases: Esitystapa & aliakset
 revision_post_create: Tässä on miltä tämä kohde näytti kun se luotiin.
 revision_post_update: Tässä on miltä tämä kohde näytti päivityksen jälkeen.
 changes_made: Alla esitetään tässä tarkistuksessa tehdyt erityiset muutokset.
 no_relational_data: Muista, että relaatiotiedot eivät sisälly tähän.
-junction_field_location: Junction Fields Location
 top: Ylös
 bottom: Alas
 hide_field: Piilota kenttä
@@ -222,7 +214,6 @@ bigInteger: Suuri kokonaisluku
 boolean: Totuusarvo
 date: Päivämäärä
 date_range: Ajanjakso
-translation_key_placeholder: Enter a key...
 datetime: DateTime
 dateTime: DateTime
 precision: Tarkkuus
@@ -282,12 +273,7 @@ o2m_relationship: Yksi moneen (O2M) -suhde
 m2m_relationship: Moni moneen (M2M) -suhde
 m2a_relationship: Moni mihin tahansa (M2A) -suhde
 invalid_item: Virheellinen kohde
-require_confirmation: Require Confirmation
-dialog: Dialog
 modal: Modaali
-confirmation_dialog: Confirmation Dialog
-confirmation_description: Confirmation Description
-confirmation_input_fields: Confirmation Input Fields
 next: Seuraava
 field_name: Kentän nimi
 translations: Käännökset
@@ -306,7 +292,6 @@ updated_on: Päivitetty vimeksi
 updated_by: Päivittänyt
 primary_key: Ensisijainen avain
 foreign_key: Viiteavain
-field_key: Field Key
 finish_setup: Viimeistele asennus
 dismiss: Hylkää
 toggle_raw_editor: Avaa ulkoasumuokkain
@@ -435,7 +420,6 @@ checksum: Tarkistussumma
 owner: Omistaja
 edited_by: Muokannut
 folder: Kansio
-folders: Folders
 zoom: Lähennä
 download: Lataa
 open: Avaa
@@ -458,8 +442,6 @@ exporting_all_items_in_collection: Viedään kaikki {total} kohdetta kokoelmasta
 exporting_limited_items_in_collection: 'Viedään {limit} kohdetta kokoelman {collection} {total} kohteesta.'
 exporting_no_items_to_export: Ei vietäviä kohteita. Muokkaa viennin asetuksia alla.
 exporting_download_hint: Valmistumisen jälkeen, tämä {format} tiedosto ladataan automaattisesti laitteellesi.
-exporting_library_hint: Once the {format} file is created, it will be saved to the File Library.
-exporting_library_hint_forced: This export must be processed in batches. Once completed, the {format} file will be saved to the File Library.
 collection_key: Kokoeilman avain
 name: Nimi
 primary_key_field: Ensisijainen avaimen kenttä
@@ -484,8 +466,6 @@ enable_select_button: Ota käyttöön valintanappula
 allow_duplicates: Salli kaksoiskappaleet
 comments: Kommentit
 no_comments: Ei vielä kommentteja
-expand: Expand
-collapse: Collapse
 select_item: Valitse kohde
 no_items: Ei kohteita
 search_items: Hae kohteita...
@@ -517,7 +497,6 @@ create_collection: Luo kokoelma
 no_collections_copy_admin: Sinulla ei ole vielä kokoelmia. Aloita painamalla alla olevaa painiketta.
 no_collections_copy: Sinulla ei ole vielä kokoelmia. Ota yhteyttä järjestelmänvalvojaan.
 relationship_not_setup: Suhdetta ei ole määritetty oikein
-no_singleton_relations: Relationships to Singletons are not supported
 display_template_not_setup: Näyttöpohjan asetus on konfiguroitu väärin
 collection_field_not_setup: Kokoelmakentän asetus on konfiguroitu virheellisesti
 select_a_collection: Valitse kokoelma
@@ -608,18 +587,14 @@ errors:
   UNEXPECTED_RESPONSE: Odottamaton vastaus
   TOKEN_EXPIRED: Token vanhentunut
   RANGE_NOT_SATISFIABLE: Virheellinen väli
-  METHOD_NOT_ALLOWED: Method not allowed
   REQUESTS_EXCEEDED: Pyyntöjen raja saavutettu
-  CONTENT_TOO_LARGE: Submitted item/file is too large
 security: Turvallisuus
 value_hashed: Arvo tiivistetty turvallisesti
 bookmark_name: Kirjanmerkin nimi...
 create_bookmark: Luo kirjanmerkki
 edit_bookmark: Muokkaa kirjanmerkkiä
 edit_personal_bookmark: Muokkaa henkilökohtaista kirjanmerkkiä
-edit_role_bookmark: Edit Role Bookmark
 edit_global_bookmark: Muokkaa yleistä kirjanmerkkiä
-cannot_edit_role_bookmarks: Can't Edit Role Bookmarks
 cannot_edit_global_bookmarks: Yleisten kirjanmerkkien muokkaus epäonnistui
 bookmarks: Kirjainmerkit
 presets: Esiasetukset
@@ -656,7 +631,6 @@ one_filtered_item: '1 suodatettu kohde'
 delete_collection_are_you_sure: >-
   Haluatko poistaa kokoelman "{collection}"? Kokoelma ja kaikki siihen kuuluvat kohteet poistetaan pysyvästi.
 delete_folder_are_you_sure: Haluatko poistaa kansion "{folder}"? Kansion kansiot ja kokoelmat siirretään ylimmälle tasolle.
-delete_collection_peer_dependencies: The following fields will be deleted as well, as they are related to the current collection.
 collections_shown: Näytettävät kokoelmat
 visible_collections: Näkyvät kokoelmat
 hidden_collections: Piilotetut kokoelmat
@@ -712,8 +686,6 @@ operators:
   nintersects: Ei leikkaa
   intersects_bbox: Leikkaa rajaavaa laatikkoa
   nintersects_bbox: Ei leikkaa rajaavaa laatikkoa
-  regex: Matches RegExp
-custom_validation_message: Custom Validation Message
 loading: Ladataan...
 drop_to_upload: Pudota ladataksesi
 item: Kohde
@@ -782,36 +754,24 @@ label: Tunniste
 flows: Toiminnot
 flow: Vuo
 select_a_flow: Valitse Vuo
-run_flow_confirm: Are you sure you want to execute this flow?
-run_flow_on_current_collection: Run Flow on Current Collection
-run_flow_on_current: Run Flow on Current Item
 run_flow_on_current_edited_confirm: Tämä kohde voidaan päivittää tällä Vuolla, oletko varma, että haluat suorittaa Vuon?
-run_flow_on_selected: Select One or More Items First | Run Flow on 1 Selected Item | Run Flow on {n} Selected Items
-run_flow: Run Flow
 run_flow_success: Vuon "{flow}" suoritus onnistui
-field_name_placeholder: Enter field name...
-field_key_placeholder: Enter field key...
 trigger: Laukaisija
 trigger_options: Liipaisun asetukset
 view_trigger: Näytä liipaisin
 create_trigger: Luo liipaisin
 trigger_setup: Liipaisimen asetukset
 change_trigger: Muokkaa liipaisinta
-flow_delete_confirm: Are you sure you want to delete Flow "{flow}"? This action can not be undone.
 set_flow_active: Aseta toiminto aktiiviseksi
 set_flow_inactive: Aseta toiminto ei aktiiviseksi
 edit_flow: Muokkaa toimintoa
 delete_flow: Poista toiminto
-no_other_flows_copy: You don't have any other Flows yet.
 no_flows: Ei toimintoja
-no_flows_copy: You don't have any Flows yet.
 create_flow: Luo Vuo
 creating_new_flow: Luodaan uutta Vuota
 updating_flow: Vuota päivitetään
 flow_setup: Vuon asetukset
 flow_name: Nimi
-flow_tracking: Activity & Logs Tracking
-flow_tracking_all: Track Activity & Logs
 flow_tracking_activity: Seuraa vain tapahtumia
 flow_tracking_null: Älä seuraa mitään
 start_flow: Käynnistä toiminto
@@ -819,12 +779,6 @@ stop_flow: Pysäytä toiminto
 create_operation: Luo toiminto
 edit_operation: Muokkaa toimintoa
 code: Koodi
-operation_options: Operation Options
-operation_name: Name of operation...
-operation_key: Identifier for reference...
-operation_key_unique_error: Operation keys must be unique in a Flow
-operation_handle_resolve: 'Resolve: Click to Add or Drag to Reroute'
-operation_handle_reject: 'Reject: Click to Add or Drag to Reroute'
 insights: Yleiskatsaus
 dashboard: Kojelauta
 panel: Paneeli
@@ -833,7 +787,6 @@ panel_header: Paneelin otsikko
 panel_name_placeholder: Nimeä tämä paneeli...
 panel_note_placeholder: Valinnainen tiedot tästä paneelista...
 panel_delete_confirm: Oletko varma, että haluat poistaa tämän paneelin? Tätä toimintoa ei voi perua.
-list_panel_allow_edit: Allow Inline Editing
 dashboard_delete_confirm: Oletko varma, että haluat poistaa tämän kojelaudan? Tätä toimintoa ei voi perua.
 edit_dashboard: Muokkaa kojelautaa
 delete_dashboard: Poista kojelauta
@@ -846,7 +799,6 @@ no_dashboards_copy: Sinulla ei ole vielä yhtään kojelautaa.
 create_dashboard: Luo kojelauta
 dashboard_name: Kojelaudan nimi
 no_data: Ei tietoja
-no_data_in_flow: No data was produced or accessed within this Flow
 accountability: Vastuuvelvollisuus
 payload: Tietosisältö
 details: Tarkemmat tiedot
@@ -863,7 +815,6 @@ media: Media
 quality: Laatu
 width: Leveys
 height: Korkeus
-transformation_preset_key: Transformation Preset Key
 source: Lähde
 url_placeholder: Syötä URL...
 display_text: Näyttöteksti
@@ -939,7 +890,6 @@ adding_user: Lisätään käyttäjää
 unknown_user: Tuntematon käyttäjä
 creating_in: 'Luodaan kohdetta kokoelmassa {collection}'
 editing_in: 'Muokataan kohdetta: {collection}'
-viewing_in: 'Viewing Item in {collection}'
 creating_unit: 'Luodaan {unit}'
 editing_unit: 'Muokataan {unit}'
 editing_in_batch: 'Muokataan {count} kohdetta erässä'
@@ -949,8 +899,6 @@ settings_permissions: Roolit ja oikeudet
 settings_project: Projektin asetukset
 settings_flows: Toiminnot
 settings_presets: Esiasetukset ja kirjanmerkit
-settings_translations: Custom Translations
-settings_extensions: Extensions
 one_or_more_options_are_missing: Yksi tai useampi vaihtoehto puuttuu
 scope: Laajuus
 actions: Toiminnot
@@ -996,50 +944,6 @@ page_help_settings_presets_collection: >-
   **Selaa esiasetuksia** — Listaa kaikki projektin esiasetukset, mukaan lukien käyttäjät, roolit ja maailmanlaajuiset kirjanmerkit sekä oletusnäkymät.
 page_help_settings_presets_item: >-
   **Esiasetuksen yksityiskohdat** — Lomake kirjanmerkkien ja oletuskokoelmien esiasetusten hallintaan.
-page_help_settings_flows_collection: '**Browse Flows** — Lists all Flows within the project.'
-page_help_settings_flows_item: '**Flow Detail** — Workspace for managing one or more operations.'
-page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
-extension_health_normal: Normal
-extension_health_warning: Warning | Warnings
-extension_health_failed: Failed
-extension_bundle_contents: Bundled extensions
-extension_capabilities: Capabilities
-extension_advanced_diagnostics: Advanced Diagnostics
-extension_sandboxed: Sandboxed
-extension_runtime: Runtime
-extension_runtime_sandboxed: Sandboxed
-extension_runtime_full_authority: Full Authority
-extension_runtime_browser: Browser App
-confined_runtime: Sandbox
-confined_runtime_mode: 'OS hardening: {decision} ({mode})'
-confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
-extension_status_loaded_detail: Loaded and running on the server.
-extension_status_discovered_detail: Discovered on this instance.
-extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
-extension_status_failed_detail: The extension failed to load on this instance.
-extension_settings_unavailable_detail: Extension settings are unavailable.
-extension_settings_drawer_subtitle: Extension settings
-extension_settings_section: Extension Settings
-extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
-extension_settings_no_global_keys: This extension declares no global settings.
-extension_settings_load_failed: Could not load the extension's settings.
-extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
-extension_type_group_hook: Hooks
-extension_type_group_endpoint: Endpoints
-extension_type_group_operation: Operations
-extension_type_group_bundle: Bundles
-extension_type_group_interface: Interfaces
-extension_type_group_display: Displays
-extension_type_group_layout: Layouts
-extension_type_group_module: Modules
-extension_type_group_panel: Panels
-extension_type_group_item-view: Item Views
-extension_type_group_other: Other
-no_extensions: No Extensions
-no_extensions_copy: No extensions were discovered in the configured extensions path.
-extensions_load_failed: Could not load the extensions inventory.
-page_help_settings_translations_collection: '**Browse Custom Translations** — Lists all custom translations within the project.'
-page_help_settings_translations_item: '**Custom Translations Detail** — A form for viewing and managing this item.'
 page_help_users_collection: '**Käyttäjähakemisto** — Listaa kaikki järjestelmän käyttäjät tässä projektissa.'
 page_help_users_item: >-
   **Käyttäjätieto** — Hallitse tilitietojasi tai tarkastele muiden käyttäjien tietoja.
@@ -1063,26 +967,15 @@ singleton_label: Käsittele yhtenä objektina
 system_fields_locked: Järjestelmäkentät ovat lukittuja, eikä niitä voi muokata
 directus_collection:
   directus_activity: Vastuuvelvollisuuslokit kaikille tapahtumille
-  directus_collections: Additional collection configuration and metadata
   directus_dashboards: Kojelaudat yleiskatsausmoduulissa
-  directus_fields: Additional field configuration and metadata
   directus_files: Kaikkien hallittujen tiedostojen metatiedot
-  directus_flows: Automation flows
-  directus_folders: Provides virtual directories for files
   directus_migrations: Mitä versiota tietokannasta käytät
   directus_notifications: Ilmoitus lähetetty käyttäjille
-  directus_operations: Operations that run in Flows
-  directus_panels: Individual panels within Insights dashboards
-  directus_permissions: Access permissions for each role
   directus_presets: Esiasetukset kokoelmien oletusarvoille ja kirjanmerkeille
-  directus_relations: Relationship configuration and metadata
-  directus_revisions: Data snapshots for all activity
   directus_roles: Käyttöoikeusryhmät järjestelmäkäyttäjille
   directus_sessions: Käyttäjän istunnon tiedot
   directus_settings: Projektin konfiguraation asetukset
-  directus_shares: Tracks externally shared items
   directus_users: Alustan järjestelmäkäyttäjät
-  directus_translations: Custom translations
 fields:
   directus_activity:
     item: Kohteen ensisijainen avain
@@ -1165,24 +1058,16 @@ fields:
     external_identifier: Ulkopuoliset tunnistautumiset
     last_page: Viimeinen sivu
     last_access: Viimeksi käytetty
-    email_notifications: Email Notifications
   directus_settings:
     jpg: JPEG
     png: PNG
     webP: WebP
     tiff: Tiff
-    avif: AVIF
-    mapping: Mapping
     basemaps: Pohjakartat
     basemaps_raster: Rasteri
-    basemaps_tile: Raster TileJSON
     basemaps_style: Mapbox-tyyli
     mapbox_key: Mapbox-käyttötunniste
     mapbox_placeholder: pk.eyJ1Ijo.....
-    attribution: Attribution
-    attribution_placeholder: '© OpenStreetMap contributors'
-    transforms_note: The Sharp method name and its arguments. See https://sharp.pixelplumbing.com/api-constructor for more information.
-    additional_transforms: Additional Transformations
     project_name: Projektin nimi
     project_descriptor: Projektin kuvaus
     project_url: Projektin osoite
@@ -1197,24 +1082,16 @@ fields:
     auth_login_attempts: Kirjautumisyritykset
     files_and_thumbnails: Tiedostot ja tallennustila
     storage_default_folder: Oletuskansio
-    storage_asset_presets: Transformation Presets
-    storage_asset_transform: Allowed Transformations
     overrides: Sovelluksen ylikirjoitukset
     custom_css: Mukautettu CSS
     module_bar: Moduulipalkki
     transformations_all: Salli kaikki muutokset
     transformations_none: Poista muunnokset käytöstä
     transformations_presets: Rajoita muunnoksia allaoleviin esiasetuksiin
-    image_editor: Image Editor
-    custom_aspect_ratios: Custom Aspect Ratios
   directus_shares:
     name: Nimi
     role: Rooli
     password: Salasana
-    date_start: Date Start
-    date_end: Date End
-    max_uses: Max Uses
-    times_used: Times Used
   directus_fields:
     collection: Kokoelman nimi
     icon: Kokoelman kuvake
@@ -1243,16 +1120,10 @@ field_options:
     auth_password_policy:
       none_text: Ei mitään – Ei suositeltu
       weak_text: Heikko – Vähintään 8 merkkiä
-      strong_text: Strong – Upper / Lowercase / Numbers / Special
     storage_asset_presets:
-      fit_label: Fit
-      upscaling: Upscaling
       fit:
-        contain_text: Contain (preserve aspect ratio)
-        cover_text: Cover (forces exact size)
         fit_text: Sovita sisälle
         outside_text: Sovita ulkopuolelle
-    additional_transforms: Additional Transformations
     transforms_note: Sharp-menetelmän nimi ja sen argumentit. Katso lisätietoja https://sharp.pixelplumbing.com/api-constructor.
     mapbox_key: Mapbox-käyttötunniste
     mapbox_placeholder: pk.eyJ1Ijo.....
@@ -1335,40 +1206,10 @@ start_collapsed: Aloita tiivistettynä
 block: Estä
 inline: Rivitetty
 comment: Kommentti
-shares: Shares
-unlimited_usage: Unlimited usage
-uses_left: No uses left | 1 use left | {n} uses left
-no_shares: No shares to show
-new_share: New Share
-expired: Expired
-upcoming: Upcoming
-share: Share
-share_item: Share Item
-shared_with_you: An item has been shared with you
-shared_enter_passcode: Enter your passcode to continue...
-shared_leave_blank_for_unlimited: Leave blank for unlimited
-shared_times_remaining: This link can only be used {n} times
-shared_last_remaining: This link can only be used once
-shared_uses_left: For added security, this shared page has been configured with a limited number of views. There are currently {n} views remaining, after which, the page will no longer be accessible.
-share_access_page: Access Shared Page
-share_access_not_found: This shared page either does not exist or has already exceeded the maximum number of allowed uses.
-share_access_not_found_desc: Please contact an authorized user of this project to request access.
-share_access_not_found_title: Unknown Share Page
-share_copy_link: Copy Link
-share_copy_link_success: Link Copied
-share_copy_link_error: Unable to Copy Link
-share_send_link: Send Link
 relational_triggers: Relatiiviset käynnistimet
-referential_action_field_label_m2o: On Delete of {collection}...
-referential_action_field_label_o2m: On Deselect of {collection}...
 referential_action_no_action: Estä poisto
-referential_action_cascade: Delete the {collection} item (cascade)
-referential_action_set_null: Nullify the {field} field
-referential_action_set_default: Set {field} to its default value
 choose_action: Valitse toiminto
 continue_label: Jatka
-continue_as: >-
-  {name} is currently authenticated. If you recognize this account, press continue.
 editing_role: '{role} rooli'
 default_label: Oletus
 delete_label: Poista
@@ -1388,23 +1229,12 @@ file: Tiedosto
 file_library: Tiedostokirjasto
 forgot_password: Unohtunut salasana
 hidden: Piilotettu
-hidden_in_group: Hidden in {group}
 icon: Kuvake
 info: Tietoja
 normal: Normaali
 success: Onnistui
 warning: Varoitus
 danger: Vaara
-colors:
-  purple: Purple
-  blue: Blue
-  green: Green
-  yellow: Yellow
-  orange: Orange
-  red: Red
-  black: Black
-  gray: Gray
-  white: White
 junction_collection: Liitoskokoelma
 latency: Latenssi
 login: Kirjaudu sisään
@@ -1419,8 +1249,6 @@ relationship: Relaatio
 reset: Nollaa
 reset_password: Nollaa salasana
 revisions: Versiot
-no_revisions: No Revisions Yet
-no_logs: No Logs Yet
 revert: Palauta
 save: Tallenna
 schema: Rakenne
@@ -1434,31 +1262,17 @@ sign_out: Kirjaudu ulos
 sign_out_confirm: Haluatko varmasti kirjautua ulos?
 something_went_wrong: Jokin meni pieleen.
 sort_direction: Järjestyssuunta
-export_location: Export Location
-export_started: Export Started
-export_started_copy: Your export has started. You'll be notified when it's ready to download.
 sort_asc: Järjestä nousevasti
 sort_desc: Lajittele laskeva
-disable_sort: Disable Sorting
 template: Pohja
-require_value_to_be_set: Require value to be set on creation
 translation: Käännös
 translation_placeholder: Syötä käännös...
 value: Arvo
 view_project: Näytä projekti
-weeks: { }
 report_error: Raportoi virhe
 start: Aloita
 table: Taulukko
 list: Lista
-search_filter: Search & Filter
-enable_search_filter: Enable searching & filtering
-item_link: Item link
-show_link_to_item: Show a link to the item
-navigate_to_item: Navigate to Item
-undo_removed_item: Undo Removed Item
-remove_item: Remove Item
-delete_item: Delete Item
 interfaces:
   filter:
     name: Suodatin
@@ -1466,8 +1280,6 @@ interfaces:
     add_filter: Lisää suodatin
     add_group: Ja / tai -ryhmä
     add_value: Lisää arvo
-    logic_type_and: AND
-    logic_type_or: OR
     all: Kaikki
     any: Mikä tahansa
     and: ja
@@ -1475,18 +1287,13 @@ interfaces:
     no_rules: Ei määritetty sääntöjä
     change_value: Klikkaa muuttaaksesi arvoa
     placeholder: Raahaa säännöt tähän
-    add_key_placeholder: Add a key and press enter...
-  fields:
-    name: Fields
   group-accordion:
     name: Haitari
-    description: Display fields or groups as accordion sections
     start: Aloita
     all_closed: Kaikki suljettuna
     first_opened: Ensimmäinen avattuna
     all_opened: Kaikki avattuna
     accordion_mode: Haitarin tila
-    max_one_section_open: Max 1 Section Open
   presentation-links:
     presentation-links: Painikelinkit
     links: Linkit
@@ -1503,7 +1310,6 @@ interfaces:
     show_more: 'Näytä {count} lisää'
     items_shown: Näytettävät kohteet
   select-multiple-checkbox-tree:
-    name: Checkboxes (Tree)
     description: Valitse useista vaihtoehdoista sisäkkäisten valintaruutujen kautta
     value_combining: Arvojen yhdistäminen
     value_combining_note: Määrittää mitä arvoa tallennetaan, kun sisäkkäisiä valintoja tehdään.
@@ -1513,7 +1319,6 @@ interfaces:
     code: Koodi
     description: Kirjoita tai jaa koodipätkiä
     line_number: Rivinumero
-    line_wrapping: Line Wrapping
     placeholder: Syötä koodi tähän...
   system-collection:
     collection: Kokoelma
@@ -1528,7 +1333,6 @@ interfaces:
     description: Syötä tai valitse väriarvo
     placeholder: Valitse väri...
     preset_colors: Esiasetuksen värit
-    opacity: Opacity
     preset_colors_add_label: Lisää uusi väri...
     name_placeholder: Syötä värin nimi...
   datetime:
@@ -1537,10 +1341,8 @@ interfaces:
     include_seconds: Sisällytä sekunnit
     set_to_now: Aseta olemaan nyt
     use_24: Käytä 24-tuntista muotoa
-    placeholder: Choose a datetime...
   system-fields:
     select_a_collection: Valitse kokoelma
-    no_fields: No fields
   system-display-template:
     display-template: Esitysmalli
     description: Sekoita staattinen teksti ja dynaamiset kenttäarvot
@@ -1564,7 +1366,6 @@ interfaces:
     allow_none_label: Salli ei valintaa
     choices_name_placeholder: Syötä nimi...
     choices_value_placeholder: Syötä arvo...
-    preview_threshold: Preview Threshold
   select-multiple-dropdown:
     select-multiple-dropdown: Pudotusvalikko (useampi)
     description: Valitse useita arvoja pudotusvalikosta
@@ -1579,9 +1380,6 @@ interfaces:
     description: Syötä arvo, josta luodaan tiiviste
     masked: Maskeerattu
     masked_label: Piilota totuus-arvot
-  system-extension-secret:
-    name: Extension Secret
-    value_stored: Value Securely Encrypted
   select-icon:
     icon: Kuvake
     description: Valitse kuvake pudotusvalikosta
@@ -1601,28 +1399,19 @@ interfaces:
   list-m2m:
     many-to-many: Monet monelle
     description: Valitse useita liittyviä risteyskohteita
-    columns_configure_notice: You can configure the columns after creating this field.
-    display_template_configure_notice: You can configure the display template after creating this field.
   select-dropdown-m2o:
     many-to-one: Monet yhdelle
     description: Valitse yksi liittyvä kohde
     display_template: Esitysmalli
-  collection-item-dropdown:
-    collection-item-dropdown: Collection Item Dropdown
-    description: Select an item from a collection in JSON format
   input-rich-text-md:
     markdown: Markdown
     description: Syötä ja esikatsele markdownia
     edit: Muokkaa
     preview: Esikatselu
-    editorFont: Editor Font
-    previewFont: Preview Font
     customSyntax: Mukautetut lohkot
     customSyntax_label: Lisää mukautettuja syntaksityyppejä
     customSyntax_add: Lisää mukautettu syntaksi
     box: Lohko / rivillä
-    imageToken: Static Access Token
-    imageToken_label: Static access token is appended to the assets' URL
   map:
     map: Kartta
     description: Valitse sijainti kartalla
@@ -1644,7 +1433,6 @@ interfaces:
     notice: Ilmoitus
     description: Näytä lyhyt ilmoitus
     text: Syötä ilmoituksen sisältö tähän...
-    no_text: No text configured...
   list-o2m:
     one-to-many: Yksi monille
     description: Valitse useita liittyviä kohteita
@@ -1652,7 +1440,6 @@ interfaces:
   system-folder:
     folder: Kansio
     description: Valitse kansio
-    field_hint: Default folder for uploaded files without a folder specified. Does not affect existing files.
     root_name: Tiedostokirjaston juuri
     system_default: Järjestelmän oletukset
   select-radio:
@@ -1664,9 +1451,7 @@ interfaces:
     edit_fields: Muokkaa kenttiä
     add_label: '"Luo uusi"-tunniste'
     sort: Järjestä
-    sort_placeholder: Manual
     field_note_placeholder: Syötä kentän muistiinpano...
-    incompatible_data: The current data is not compatible with the repeater interface and will be overridden when adding items to the repeater
   slider:
     slider: Liukusäädin
     description: Valitse numero käyttäen liukusäädintä
@@ -1684,7 +1469,6 @@ interfaces:
     auto_formatter: Käytä otsikon automaattimuotoilua
     alphabetize: Aakkosjärjestyksessä
     alphabetize_label: Pakota aakkosjärjestys
-    add_tags: Add a tag and press Enter...
   input:
     input: Syöte
     description: Manuaalisesti syötetty arvo
@@ -1702,11 +1486,6 @@ interfaces:
   input-multiline:
     textarea: Tekstialue
     description: Syötä monirivinen tavallinen teksti
-  input-translated-string:
-    input-translated-string: Translated Strings
-    description: Select or add custom translation
-    search_placeholder: Search...
-    new_custom_translation: New Custom Translation
   boolean:
     toggle: Vaihda
     description: Vaihda päälle ja pois päältä
@@ -1722,7 +1501,6 @@ interfaces:
     user_language: Käytä käyttäjän nykyistä kieltä
     default_language: Oletuskieli
     language_field: Kielen indikaattorin kenttä
-    language_direction_field: Language Direction Field
   list-o2m-tree-view:
     description: Puunäkymä sisäkkäisille ja rekursiivisille yksi monille (O2M) -kohteille
     recursive_only: Puunäkymäliittymä toimii vain rekursiivisille suhteille.
@@ -1741,14 +1519,11 @@ interfaces:
     custom_formats: Mukautetut muodot
     options_override: Valintojen ohitus
     folder_note: Ladattujen tiedostojen kansio. Ei vaikuta olemassa oleviin tiedostoihin.
-    imageToken: Static Access Token
-    imageToken_label: Static access token is appended to the assets' URL
   input-autocomplete-api:
     input-autocomplete-api: Automaattitäydennyskenttä (API)
     description: Ulkoisia API-arvoja koskeva ennakoiva hakutyyppi.
     results_path: Tulosten polku
     value_path: Arvon polku
-    text_path: Text Path
     trigger: Laukaisija
     rate: Rajoita
   group-raw:
@@ -1756,7 +1531,6 @@ interfaces:
     description: Renderoi kentät sellaisenaan
   group-detail:
     name: Yksityiskohtainen ryhmä
-    description: Render the fields as a collapsable section
     show_header: Näytä ryhmän otsikko
     header_icon: Otsikon kuvake
     header_color: Otsikon väri
@@ -1764,16 +1538,6 @@ interfaces:
     start_closed: Aloita suljettuna
   system-token:
     system-token: Token
-    description: Manage static access token
-    placeholder: Click "Generate Token" to create a new static access token
-    value_securely_saved: Value Securely Saved
-    generate: Generate Token
-    regenerate: Regenerate Token
-    generate_success_copy: Make sure to backup and copy the token above. For security reasons, you will not be able to view the token again after saving and navigate off this page.
-    remove_token: Remove Token
-  system-raw-editor:
-    system-raw-editor: Raw Editor
-    description: Allow entering of raw or mustache templating values
 displays:
   translations:
     translations: Käännökset
@@ -1812,16 +1576,6 @@ displays:
     relative: Suhteellinen
     relative_label: 'Näytä suhteellinen aika, esim: 5 minuuttia sitten'
     suffix: Jälkiliite
-    suffix_label: Show relative indicator
-    suffix_note: Uses words like 'in' and 'ago'
-    strict: Strict
-    strict_label: Use strict units
-    strict_note: Removes words like 'almost', 'over', 'less than'
-    round: Round
-    round_note: Choose a rounding function to use
-    down: Down
-    nearest: Nearest
-    up: Up
   file:
     file: Tiedosto
     description: Näytä tiedostot
@@ -1832,26 +1586,17 @@ displays:
     formatted-value: Muotoiltu arvo
     description: Näytä tekstin muotoiltu versio
     format: Muoto
-    format_label: Auto format
     font: Kirjasin
-    font_sans_serif: Sans serif
     font_serif: Serif
     font_monospace: Tasavälinen
     bold: Lihavoitu
     bold_label: Käytä lihavoitua tyyliä
     italic: Kursiivi
-    italic_label: Use italic style
     prefix: Etuliite
-    prefix_label: Prepend text
     suffix: Jälkiliite
-    suffix_label: Appended Text
     color: Väri
-    background: Background
     icon: Kuvake
-    border: Border
-    border_label: Show border
     text: Teksti
-    text_placeholder: Optional value override...
   formatted-json-value:
     formatted-json-value: Muotoiltu JSON-arvo
     description: Näytä objektin muotoiltu versio
@@ -1889,7 +1634,6 @@ displays:
   related-values:
     related-values: Liittyvät arvot
     description: Näytä suhteelliset arvot
-    display_template_configure_notice: You can configure the display template after creating this field.
   user:
     user: Käyttäjänimi
     description: Näytä CairnCMS-käyttäjä
@@ -1916,8 +1660,6 @@ layouts:
     calendar: Kalenteri
     start_date_field: Aloituspäivämäärän kenttä
     end_date_field: Päättymispäivämäärän kenttä
-    optional: Optional
-    first_day: First Day of the Week
   map:
     map: Kartta
     basemap: Pohjakartta
@@ -1926,64 +1668,14 @@ layouts:
     cluster: Ryhmittele lähellä olevat tiedot
     cluster_radius: Ryhmittelyn säde
     cluster_minpoints: Ryhmittelyn vähimmäiskoko
-    cluster_maxzoom: Maximum zoom for clustering
     field: Geospatiaalinen kenttä
     invalid_geometry: Virheellinen geometria
     find_location: Etsi sijainti...
-    default_template: Using Collection Default...
     no_compatible_fields: Ei yhteensopivia kenttiä
   kanban:
-    name: Kanban
-    group_field: Group By
-    group_field_placeholder: Field to group by...
-    group_title: Group Title
-    group_title_placeholder: Field for group titles...
-    title: Card Title
-    title_placeholder: Optional title field...
-    text: Card Text
-    text_placeholder: Optional text field...
-    date: Card Date
-    date_placeholder: Optional date field...
-    tags: Card Tags
-    tags_placeholder: Optional tags field...
-    user: Card User
-    user_placeholder: Optional user field...
-    image: Card Image
-    image_placeholder: Optional image field...
-    image_fit: Card Image Fit
     crop: Rajaa
     advanced: Lisäasetukset
-    edit_group: Edit Group
-    delete_group: Delete Group
-    add_group: Add Group
-    add_group_placeholder: Enter a new group title...
-    show_ungrouped: Show Ungrouped
-    show: Show
-    no_group: No Group
-    not_all_loaded: Could only load the first 1000 items.
-horizontal: Horizontal
-vertical: Vertical
-x_axis: X-Axis
-y_axis: Y-Axis
-y_axis_function: Y-Axis Function
-show_x_only: Show X-Axis Only
-show_y_only: Show Y-Axis Only
-show_data_label: Show Data Label
 both: Molemmat
-show_axis_labels: Show Axis Labels
-function: Function
-half_circle: Half Circle
-full_circle: Full Circle
-stroke_width: Stroke Width
-rounded_stroke: Rounded Stroke
-thin: Thin
-medium: Medium
-broad: Broad
-show_labels: Show Labels
-show_legend: Show Legend
-right: Right
-left: Left
-donut: Donut
 panels:
   metric:
     name: Metrinen
@@ -2002,152 +1694,30 @@ panels:
   list:
     name: Lista
     description: Suodata ja luetteloi kentät kokoelmasta
-  barchart:
-    name: Bar Chart
-    description: Bar or column charts for comparing groups of values
-    horizontal: Horizontal
-    select_collection: You must select a collection.
   linechart:
-    name: Line Chart
-    description: Line chart for comparing change of a field
-    disabled_grouping: Disabled when grouping is selected.
-    disabled_no_grouping: Disabled when no grouping is selected.
-    show_marker: Show Tooltip Marker
     curve_type: Käyrän tyyppi
-    smooth: Smooth
-    straight: Straight
-    step_line: Step Line
-  meter:
-    name: Meter
-    description: Meter for tracking values
-  piechart:
-    name: Pie or Donut Chart
-    description: Circular chart showing the ratios of groups on a column
-  variable:
-    name: Global Variable
-    description: Set a global value for use in other Panels' filters
-    variable_key: Variable Key
-  relational-variable:
-    name: Global Relational Variable
-    description: Set a global relational value for use in other Panels' filters
-    variable_key: Variable Key
-    multiple: Multiple
-    multiple-label: Select multiple items
 triggers:
-  common:
-    response_body: Response Body
-    response_body_all: All Data
-    response_body_last: Data of Last Operation
-  event:
-    name: Event Hook
-    description: Triggers on platform or data events
-    action: 'Action (Non-Blocking)'
-    filter: 'Filter (Blocking)'
   webhook:
-    name: Webhook
-    description: Triggers on an incoming HTTP request
     method: Metodi
-    async: Asynchronous
-  operation:
-    name: Another Flow
-    description: Triggered by another Flow, for chaining
-    preview: Triggered by an operation in a different Flow
-  schedule:
-    name: Schedule (CRON)
-    description: Triggers at regular points in time
-    cron: Interval
-  manual:
-    name: Manual
-    description: Triggers on manual run within selected collection(s)
-    collection_and_item: Collection & Item Pages
-    collection_only: Collection Page Only
-    item_only: Item Page Only
-    collection_page: Collection Page
-    require_selection: Requires Selection
-a_flow_uuid: Select a Flow to trigger...
-any_string_or_json: Any string or JSON...
-item_payload_placeholder: This is the JSON used to update the item's field values...
-operation_variables_note: You can access flow data with variables such as **{'{'}{'{'}$last{'}'}{'}'}**, **{'{'}{'{'}$trigger{'}'}{'}'}** and **{'{'}{'{'}$accountability{'}'}{'}'}**, or reference previous operations using **{'{'}{'{'}operation_key{'}'}{'}'}**.'
 operations:
-  condition:
-    name: Condition
-    description: Route a flow based on If / Else logic
-  exec:
-    name: Run Script
-    description: Execute arbitrary code to modify the payload
-    modules: 'The following **Node modules** can be used:'
   item-create:
-    name: Create Data
-    description: Create items in the database
     payload: Tietosisältö
-    emit_events: Emit Events
-  item-delete:
-    name: Delete Data
-    description: Delete items in the database
-    emit_events: Emit Events
-    key: IDs
-    query: Query
-  item-read:
-    name: Read Data
-    description: Read items from the database
-    key: IDs
-    query: Query
-    emit_events: Emit Events
   item-update:
-    name: Update Data
-    description: Update items in the database
-    emit_events: Emit Events
-    key: IDs
     payload: Tietosisältö
-    query: Query
   log:
-    name: Log to Console
-    description: Output something to the console
     message: Viesti
-    message_placeholder: Enter a message to show in the console...
   mail:
-    name: Send Email
-    description: Send an email to one or more people
-    to: To
-    to_placeholder: Add e-mail addresses and press enter...
-    body: Body
     template: Pohja
     data: Tiedot
   notification:
-    name: Send Notification
-    description: Send an in-app notification to one or more users
     recipient: Käyttäjänimi
-    recipient_placeholder: Enter a UUID...
-    recipient_note: Add user UUID and press enter...
     message: Viesti
   request:
-    name: Webhook / Request URL
-    description: "Make a request to a URL"
     url: URL
-    url_placeholder: https://example.com/example
     method: Metodi
     data: Tiedot
-    headers: Headers
     header: Ylätunniste
-    header_placeholder: Authorization...
-    value_placeholder: Bearer eyJhbGciOi...
-  sleep:
-    name: Sleep
-    description: Wait a given number of milliseconds
-    milliseconds: Milliseconds
-  transform:
-    name: Transform Payload
-    description: Alter the Flow's JSON payload
   trigger:
-    name: Trigger Flow
-    description: Pass this data to another flow
     flows: Toiminnot
     flow: Vuo
     data: Tiedot
-    iteration_mode: Iteration Mode
-    iteration_mode_note: Mode for iterating over arrays.
-    serial: Serial
-    parallel: Parallel
-    batch: Batch
-    batch_size: Batch Size
-    cache: Cache
