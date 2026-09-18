@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: Identifier
 avatar: Profilbillede
 application: Anvendelse
@@ -76,14 +75,10 @@ create_role: Opret rolle
 create_user: Opret bruger
 message: Besked
 delete_panel: Slet panel
-create_translation_string: Opret oversættelsesstreng
-no_translation_string: Oversættelse mangler
-no_translation_string_copy: Der er ingen oversættelsesstrenge endnu.
-translation_string_key_placeholder: Oversættelse streng nøgle...
-translation_string_translations_placeholder: Tilføj en ny oversættelse
-edit_translation_string: Rediger oversættelsesstreng
-delete_translation_string_copy: >-
-  Er du sikker på du vil slette oversættelsesstrengen "{key}"? Denne handling kan ikke fortrydes.
+create_custom_translation: Create Custom Translation
+edit_custom_translation: Edit Custom Translation
+no_custom_translations: No Custom Translations
+no_custom_translations_copy: There are no custom translations yet.
 invite_users: Inviter brugere
 invite: Inviter
 email_already_invited: Email "{email}" er allerede blevet inviteret
@@ -114,19 +109,13 @@ public_label: Offentlig
 public_description: Styrer, hvilke API-data der er tilgængelige uden godkendelse.
 admin_description: Oprindelig administrativ rolle med ubegrænset App/API-adgang.
 not_allowed: Ikke tilladt
-directus_version: CairnCMS version
-node_version: Node version
-node_uptime: Node oppetid
-os_type: OS type
-os_version: OS version
-os_uptime: OS oppetid
-os_totalmem: OS hukommelse
 archive: Arkiver
 archive_confirm: Er du sikker på at du vil arkivere dette element?
 archive_confirm_count: >-
   Ingen elementer valgt | Er du sikker på at du vil arkivere dette element? | Er du sikker på du vil arkiverer disse {count} elementer?
 reset_system_permissions_to: 'Nulstil systemtilladelser til:'
 reset_system_permissions_copy: Denne handling vil overskrive eventuelle tilpassede tilladelser, du måtte have anvendt på systemsamlingerne. Er du sikker?
+the_following_are_minimum_permissions: The following minimum permissions are automatically applied when "App Access" is enabled. You can grant additional permissions if needed, but you cannot reduce permissions below this level.
 app_access_minimum: Minimum app-adgang
 recommended_defaults: Anbefalede standarder
 unarchive: Fjern fra arkiv
@@ -177,6 +166,7 @@ permissions_for_role: 'Elementer {role} Rollen kan {action}.'
 fields_for_role: 'Felter {role} Rollen kan {action}.'
 validation_for_role: 'Felt {action} reglerne for {role} Rollen skal følge.'
 presets_for_role: 'Feltets værdi er standard for {role} Rollen.'
+presets_field_warning: 'Relational presets for field "{field}" should be configured with the "detailed" syntax.'
 presentation_and_aliases: Presentation og kaldenavne
 revision_post_create: Her er hvordan dette element så ud, da det blev oprettet.
 revision_post_update: Her er hvad dette element så ud efter opdateringen.
@@ -232,6 +222,7 @@ bigInteger: Big Integer
 boolean: Boolean
 date: Dato
 date_range: Datointerval
+translation_key_placeholder: Enter a key...
 datetime: Dato/Tid
 dateTime: Dato/Tid
 precision: Præcision
@@ -240,6 +231,7 @@ float: Flydende
 integer: Heltal
 json: JSON
 xml: XML
+yaml: YAML
 string: Streng
 text: Tekst
 time: Tid
@@ -290,7 +282,12 @@ o2m_relationship: En til mange relationer
 m2m_relationship: Mange til mange relationer
 m2a_relationship: Mange til ethvert forhold
 invalid_item: Ugyldigt element
+require_confirmation: Require Confirmation
+dialog: Dialog
 modal: Modal
+confirmation_dialog: Confirmation Dialog
+confirmation_description: Confirmation Description
+confirmation_input_fields: Confirmation Input Fields
 next: Næste
 field_name: Feltnavn
 translations: Oversættelser
@@ -309,8 +306,11 @@ updated_on: Opdateret den
 updated_by: Opdateret af
 primary_key: Primærnøgle
 foreign_key: Fremmednøgle
+field_key: Field Key
 finish_setup: Afslut opsætning
 dismiss: Afvis
+toggle_raw_editor: Toggle Raw Editor
+raw_editor_placeholder: "{'{'}{'{'}$trigger.payload.example{'}'}{'}'}"
 raw_value: Rå værdi
 copy_raw_value: Kopier rå værdi
 copy_raw_value_success: Kopieret
@@ -435,6 +435,7 @@ checksum: Kontrolsum
 owner: Ejer
 edited_by: Redigeret af
 folder: Mappe
+folders: Folders
 zoom: Zoom
 download: Download
 open: Åbn
@@ -454,11 +455,11 @@ open_file_in_tab: Åbn fil i nyt faneblad
 start_export: Start eksport
 not_available_for_local_downloads: Ikke tilgængelig for lokale downloads
 exporting_all_items_in_collection: Eksporterer alle {total} elementer inden for {collection}.
-exporting_limited_items_in_collection: Eksporterer {limit} ud af {total} elementer inden for {collection}.
+exporting_limited_items_in_collection: 'Eksporterer {limit} ud af {total} elementer inden for {collection}.'
 exporting_no_items_to_export: Ingen elementer at eksportere. Juster eksportkonfigurationen nedenfor.
 exporting_download_hint: Når den er færdig, vil denne {format}-fil automatisk blive hentet til din enhed.
-exporting_batch_hint: Denne eksport vil blive behandlet i batcher, og når den er fuldført, vil {format}-filen blive gemt i filbiblioteket.
-exporting_batch_hint_forced: På grund af det stort antal elementer skal denne eksport forarbejdes i partier og når den er færdig, gemmes {format}-filen i Filbiblioteket.
+exporting_library_hint: Once the {format} file is created, it will be saved to the File Library.
+exporting_library_hint_forced: This export must be processed in batches. Once completed, the {format} file will be saved to the File Library.
 collection_key: Samlings nøgle
 name: Navn
 primary_key_field: Primær nøglefelt
@@ -483,7 +484,8 @@ enable_select_button: Aktivér vælg-knap
 allow_duplicates: Tillad gengangere
 comments: Kommentarer
 no_comments: Ingen kommentarer endnu
-click_to_expand: Klik for at udvide
+expand: Expand
+collapse: Collapse
 select_item: Vælg element
 no_items: Ingen elementer
 search_items: Søg efter emner...
@@ -515,6 +517,7 @@ create_collection: Opret samling
 no_collections_copy_admin: Du har endnu ikke nogen samlinger. Klik på knappen nedenfor for at komme i gang.
 no_collections_copy: Du har endnu ikke nogen samlinger. Kontakt venligst din systemadministrator.
 relationship_not_setup: Forholdet er ikke konfigureret korrekt
+no_singleton_relations: Relationships to Singletons are not supported
 display_template_not_setup: Visningsskabelonen er forkert konfigureret
 collection_field_not_setup: Indstillingen for samlingsfelt er forkert konfigureret
 select_a_collection: Vælg en samling
@@ -607,6 +610,7 @@ errors:
   RANGE_NOT_SATISFIABLE: Ugyldigt interval
   METHOD_NOT_ALLOWED: Metode ikke tilladt
   REQUESTS_EXCEEDED: Kvota overskredet
+  CONTENT_TOO_LARGE: Submitted item/file is too large
 security: Sikkerhed
 value_hashed: Værdi sikker hashed
 bookmark_name: Bogmærke navn...
@@ -652,6 +656,7 @@ one_filtered_item: '1 filtreret element'
 delete_collection_are_you_sure: >-
   Er du sikker på du vil slette denne samling "{collection}"? Dette vil slette alle enheder i samlingen. Denne handling er permanent.
 delete_folder_are_you_sure: Er du sikker på du vil slette denne mappe"{folder}"? Dette vil slette alle undermapper og enheder i mappen. Denne handling er permanent.
+delete_collection_peer_dependencies: The following fields will be deleted as well, as they are related to the current collection.
 collections_shown: Viste samlinger
 visible_collections: Synlige samlinger
 hidden_collections: Skjulte samlinger
@@ -774,9 +779,18 @@ toggle: Skift
 icon_on: Ikon til
 icon_off: Ikon fra
 label: Etiket
+flows: Flows
+flow: Flow
 select_a_flow: Vælg et Flow
+run_flow_confirm: Are you sure you want to execute this flow?
+run_flow_on_current_collection: Run Flow on Current Collection
+run_flow_on_current: Run Flow on Current Item
 run_flow_on_current_edited_confirm: Dette element kan blive opdateret af dette flow, er du sikker på, at du vil udføre det?
+run_flow_on_selected: Select One or More Items First | Run Flow on 1 Selected Item | Run Flow on {n} Selected Items
+run_flow: Run Flow
 run_flow_success: Flow "{flow}" kørte med succes
+field_name_placeholder: Enter field name...
+field_key_placeholder: Enter field key...
 trigger: Udløser
 trigger_options: Udløserindstillinger
 view_trigger: Vis udløser
@@ -800,6 +814,8 @@ flow_tracking: Aktivitets- og logsporing
 flow_tracking_all: Spor aktivitet og logs
 flow_tracking_activity: Spor kun aktivitet
 flow_tracking_null: Spor ikke
+start_flow: Start Flow
+stop_flow: Stop Flow
 create_operation: Opret handling
 edit_operation: Rediger handling
 code: Kode
@@ -931,8 +947,10 @@ no_options_available: Ingen tilgængelige valgmuligheder
 settings_data_model: Data model
 settings_permissions: Roller og tilladelser
 settings_project: Projektindstillinger
+settings_flows: Flows
 settings_presets: Forudindstillinger og bogmærker
-settings_translation_strings: Oversættelsesstrenge
+settings_translations: Custom Translations
+settings_extensions: Extensions
 one_or_more_options_are_missing: En eller flere muligheder mangler
 scope: Anvendelsesområde
 actions: Handlinger
@@ -980,7 +998,48 @@ page_help_settings_presets_item: >-
   **Forudindstilling Detaljer** — En formular til håndtering af bogmærker og standard samlingsindstillinger.
 page_help_settings_flows_collection: '**Gennemse flows** — Viser alle flows i projektet.'
 page_help_settings_flows_item: '**Flowdetalje** — Arbejdsområde til styring af en eller flere operationer.'
-page_help_settings_translation_strings_collection: '**Gennemse oversættelsesstrenge** — Viser alle oversættelsesstrenge i projektet.'
+page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
+extension_health_normal: Normal
+extension_health_warning: Warning | Warnings
+extension_health_failed: Failed
+extension_bundle_contents: Bundled extensions
+extension_capabilities: Capabilities
+extension_advanced_diagnostics: Advanced Diagnostics
+extension_sandboxed: Sandboxed
+extension_runtime: Runtime
+extension_runtime_sandboxed: Sandboxed
+extension_runtime_full_authority: Full Authority
+extension_runtime_browser: Browser App
+confined_runtime: Sandbox
+confined_runtime_mode: 'OS hardening: {decision} ({mode})'
+confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
+extension_status_loaded_detail: Loaded and running on the server.
+extension_status_discovered_detail: Discovered on this instance.
+extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
+extension_status_failed_detail: The extension failed to load on this instance.
+extension_settings_unavailable_detail: Extension settings are unavailable.
+extension_settings_drawer_subtitle: Extension settings
+extension_settings_section: Extension Settings
+extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
+extension_settings_no_global_keys: This extension declares no global settings.
+extension_settings_load_failed: Could not load the extension's settings.
+extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
+extension_type_group_hook: Hooks
+extension_type_group_endpoint: Endpoints
+extension_type_group_operation: Operations
+extension_type_group_bundle: Bundles
+extension_type_group_interface: Interfaces
+extension_type_group_display: Displays
+extension_type_group_layout: Layouts
+extension_type_group_module: Modules
+extension_type_group_panel: Panels
+extension_type_group_item-view: Item Views
+extension_type_group_other: Other
+no_extensions: No Extensions
+no_extensions_copy: No extensions were discovered in the configured extensions path.
+extensions_load_failed: Could not load the extensions inventory.
+page_help_settings_translations_collection: '**Browse Custom Translations** — Lists all custom translations within the project.'
+page_help_settings_translations_item: '**Custom Translations Detail** — A form for viewing and managing this item.'
 page_help_users_collection: '**Bruger Directory** — Viser en liste over alle systembrugere i dette projekt.'
 page_help_users_item: >-
   **Brugeroplysninger** — Administrer dine kontooplysninger eller se andre brugeres detaljer.
@@ -1023,6 +1082,7 @@ directus_collection:
   directus_settings: Valgmuligheder for projektopsætning
   directus_shares: Spor eksternt delte elementer
   directus_users: Systembrugere til platformen
+  directus_translations: Custom translations
 fields:
   directus_activity:
     item: Element primær nøgle
@@ -1111,10 +1171,14 @@ fields:
     png: PNG
     webP: WebP
     tiff: Tiff
+    avif: AVIF
     mapping: Kortlægning
     basemaps: Grundkort
+    basemaps_raster: Raster
+    basemaps_tile: Raster TileJSON
     basemaps_style: Mapbox stil
     mapbox_key: Mapbox adgangsnøgle
+    mapbox_placeholder: pk.eyJ1Ijo.....
     attribution: Tildeling
     attribution_placeholder: '© OpenStreetMap bidragsydere'
     transforms_note: Navn på sharp metode og dens argumenter. Se https://sharp.pixelplumbing.com/api-constructor for mere information.
@@ -1191,8 +1255,11 @@ field_options:
     additional_transforms: Yderligere transformationer
     transforms_note: Navn på sharp metode og dens argumenter. Se https://sharp.pixelplumbing.com/api-constructor for mere information.
     mapbox_key: Mapbox adgangs token
+    mapbox_placeholder: pk.eyJ1Ijo.....
     basemaps: Grundkort
     basemaps_name_placeholder: Indtast det basemap navn...
+    basemaps_raster: Raster
+    basemaps_tile: Raster TileJSON
     basemaps_style: Mapbox stil
     files_divider_title: Filer og miniaturer
     overrides_divider_title: App tilsidesættelser
@@ -1372,12 +1439,14 @@ export_started: Eksport startet
 export_started_copy: Din eksport er startet. Du får besked, når den er klar til download.
 sort_asc: Sortér stigende
 sort_desc: Sortér faldende
+disable_sort: Disable Sorting
 template: Skabelon
 require_value_to_be_set: Kræv værdi for at blive sat på oprettelse
 translation: Oversættelse
 translation_placeholder: Indtast en oversættelse...
 value: Værdi
 view_project: Vis projekt
+weeks: { }
 report_error: Fejl i rapport
 start: Start
 table: Tabel
@@ -1386,6 +1455,7 @@ search_filter: Søg og filtrer
 enable_search_filter: Aktiver søgning og filtrering
 item_link: Element link
 show_link_to_item: Vis et link til element
+navigate_to_item: Navigate to Item
 undo_removed_item: Fortryd fjernet element
 remove_item: Fjern element
 delete_item: Slet element
@@ -1509,6 +1579,9 @@ interfaces:
     description: Indtast en værdi der skal hashes
     masked: Maskeret
     masked_label: Skjul de sande værdier
+  system-extension-secret:
+    name: Extension Secret
+    value_stored: Value Securely Encrypted
   select-icon:
     icon: Ikon
     description: Vælg et ikon fra en rullemenu
@@ -1534,6 +1607,9 @@ interfaces:
     many-to-one: Mange til én
     description: Vælg et enkelt relateret element
     display_template: Vis Skabelon
+  collection-item-dropdown:
+    collection-item-dropdown: Collection Item Dropdown
+    description: Select an item from a collection in JSON format
   input-rich-text-md:
     markdown: Markdown
     description: Indtast og vis markdown
@@ -1561,12 +1637,14 @@ interfaces:
     native: Indbygget
     geojson: GeoJSON
     lnglat: Længdegrad, breddegrad
+    wkt: WKT
     wkb: WKB
     click_to_select: Klik for at vælge {geometry}
   presentation-notice:
     notice: Bemærk
     description: Vis en kort meddelelse
     text: Indtast notits indhold her...
+    no_text: No text configured...
   list-o2m:
     one-to-many: En til mange
     description: Vælg flere relaterede elementer
@@ -1574,6 +1652,7 @@ interfaces:
   system-folder:
     folder: Mappe
     description: Vælg en mappe
+    field_hint: Default folder for uploaded files without a folder specified. Does not affect existing files.
     root_name: Fil Biblioteks Rod
     system_default: Systemstandarder
   select-radio:
@@ -1618,6 +1697,7 @@ interfaces:
     minimum_value: Minimum værdi
     maximum_value: Maksimal værdi
     step_interval: Trin interval
+    slug: Slugify
     slug_label: Gør den angivne værdi URL sikker
   input-multiline:
     textarea: Tekstareal
@@ -1626,7 +1706,7 @@ interfaces:
     input-translated-string: Oversatte strenge
     description: Vælg eller tilføj oversættelsesstreng
     search_placeholder: Søg...
-    new_translation_string: Ny oversættelsesstreng
+    new_custom_translation: New Custom Translation
   boolean:
     toggle: Skift
     description: Skift mellem tænd og sluk
@@ -1754,6 +1834,7 @@ displays:
     format: Format
     format_label: Automatisk format
     font: Skrifttype
+    font_sans_serif: Sans serif
     font_serif: Serif
     font_monospace: Monospace
     bold: Fed
@@ -1794,6 +1875,7 @@ displays:
     choices_value_placeholder: Indtast en værdi...
     choices_text_placeholder: Indtast en tekst...
   mime-type:
+    mime-type: MIME Type
     description: Vis MIME-typen for en fil
     extension_only: Kun udvidelse
     extension_only_label: Vis kun filendelsen
@@ -1851,14 +1933,33 @@ layouts:
     default_template: Brug samling standard...
     no_compatible_fields: Ingen kompatible felter
   kanban:
+    name: Kanban
+    group_field: Group By
+    group_field_placeholder: Field to group by...
+    group_title: Group Title
+    group_title_placeholder: Field for group titles...
     title: Korttitel
     title_placeholder: Valgfrit titelfelt...
+    text: Card Text
+    text_placeholder: Optional text field...
+    date: Card Date
+    date_placeholder: Optional date field...
+    tags: Card Tags
+    tags_placeholder: Optional tags field...
+    user: Card User
+    user_placeholder: Optional user field...
     image: Kortbillede
+    image_placeholder: Optional image field...
+    image_fit: Card Image Fit
     crop: Beskær
     advanced: Avanceret
     edit_group: Rediger gruppe
     delete_group: Slet gruppe
     add_group: Tilføj gruppe
+    add_group_placeholder: Enter a new group title...
+    show_ungrouped: Show Ungrouped
+    show: Show
+    no_group: No Group
     not_all_loaded: Kunne kun indlæse de første 1000 elementer.
 horizontal: Horisontal
 vertical: Lodret
@@ -1872,14 +1973,17 @@ both: Begge
 show_axis_labels: Vis akseetiketter
 function: Funktion
 half_circle: Halv cirkel
+full_circle: Full Circle
 stroke_width: Slagbredde
 rounded_stroke: Afrundet slaglængde
 thin: tynd
+medium: Medium
 broad: Bred
 show_labels: Vis etiketter
 show_legend: Vis legende
 right: Højre
 left: venstre
+donut: Donut
 panels:
   metric:
     name: Metrisk
@@ -1932,6 +2036,8 @@ panels:
 triggers:
   common:
     response_body: Svar organ
+    response_body_all: All Data
+    response_body_last: Data of Last Operation
   event:
     name: Begivenhedskrog
     description: Udløsere på platform eller datahændelser
@@ -1949,6 +2055,7 @@ triggers:
   schedule:
     name: Tidsplan (CRON)
     description: Udløses på regelmæssige tidspunkter
+    cron: Interval
   manual:
     name: Manuel
     description: Udløsere ved manuel kørsel inden for udvalgte samling(er)
@@ -1979,10 +2086,12 @@ operations:
     description: Slet elementer i databasen
     emit_events: Udsende begivenheder
     key: ID
+    query: Query
   item-read:
     name: Læs Data
     description: Læs elementer fra databasen
     key: ID
+    query: Query
     emit_events: Udsende begivenheder
   item-update:
     name: Opdater data
@@ -1990,6 +2099,7 @@ operations:
     emit_events: Udsende begivenheder
     key: ID
     payload: Nyttelast
+    query: Query
   log:
     name: Log på konsol
     description: Output noget til konsollen
@@ -2000,29 +2110,44 @@ operations:
     description: Send en mail til en eller flere personer
     to: Til
     to_placeholder: Tilføj e-mail-adresser og tryk på enter...
+    body: Body
     template: Skabelon
     data: Data
   notification:
     name: Send meddelelse
     description: Send en meddelelse i appen til en eller flere brugere
     recipient: Bruger
+    recipient_placeholder: Enter a UUID...
+    recipient_note: Add user UUID and press enter...
     message: besked
   request:
+    name: Webhook / Request URL
     description: "Lav en anmodning til en URL"
     url: URL
     url_placeholder: https://eksempel.dk/eksempel
     method: Metode
     data: Data
+    headers: Headers
     header: Overskrift
     header_placeholder: Godkendelse...
+    value_placeholder: Bearer eyJhbGciOi...
   sleep:
+    name: Sleep
+    description: Wait a given number of milliseconds
     milliseconds: Millisekunder
   transform:
     name: Transformer nyttelast
     description: Ændre Flows JSON-nyttelast
   trigger:
+    name: Trigger Flow
     description: Send disse data til et andet flow
+    flows: Flows
+    flow: Flow
     data: Data
     iteration_mode: Iterationstilstand
     iteration_mode_note: Mode til iteration over arrays.
     serial: Seriel
+    parallel: Parallel
+    batch: Batch
+    batch_size: Batch Size
+    cache: Cache
