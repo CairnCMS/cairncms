@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: ID
 avatar: Profielafbeelding
 application: Applicatie
@@ -76,14 +75,10 @@ create_role: Maak rol
 create_user: Gebruiker Aanmaken
 message: Bericht
 delete_panel: Paneel verwijderen
-create_translation_string: Vertalingen aanmaken
-no_translation_string: Vertaalde Strings
-no_translation_string_copy: Er zijn nog geen vertaling reeksen.
-translation_string_key_placeholder: Tekenreeks van vertalingen...
-translation_string_translations_placeholder: Voeg nieuwe vertaling toe
-edit_translation_string: Vertaalstring bewerken
-delete_translation_string_copy: >-
-  Weet je zeker dat je het {key} veld wilt verwijderen? Dit kan niet ongedaan gemaakt worden.
+create_custom_translation: Create Custom Translation
+edit_custom_translation: Edit Custom Translation
+no_custom_translations: No Custom Translations
+no_custom_translations_copy: There are no custom translations yet.
 invite_users: Gebruikers Uitnodigen
 invite: Nodig uit
 email_already_invited: E-mailadres "{email}" is al uitgenodigd
@@ -114,19 +109,13 @@ public_label: Openbaar
 public_description: Bepaalt welke data beschikbaar is in de API zonder in te loggen.
 admin_description: Initiële administratieve rol met onbeperkte App/API toegang.
 not_allowed: Niet toegestaan
-directus_version: CairnCMS Versie
-node_version: Node Versie
-node_uptime: Node Uptime
-os_type: OS Type
-os_version: OS Versie
-os_uptime: OS Uptime
-os_totalmem: OS Geheugen
 archive: Archiveren
 archive_confirm: Weet je zeker dat je dit item wilt archiveren?
 archive_confirm_count: >-
   Geen Items Geselecteerd | Weet je zeker dat je dit item wilt archiveren? | Weet je zeker dat je deze {count} items wilt archiveren?
 reset_system_permissions_to: 'Systeemrechten resetten naar:'
 reset_system_permissions_copy: Deze actie overschrijft alle rechten die u heeft toegepast op de systeemcollecties. Weet u het zeker?
+the_following_are_minimum_permissions: The following minimum permissions are automatically applied when "App Access" is enabled. You can grant additional permissions if needed, but you cannot reduce permissions below this level.
 app_access_minimum: Minimale apptoegang
 recommended_defaults: Aanbevolen standaardinstellingen
 unarchive: Terugzetten
@@ -177,6 +166,7 @@ permissions_for_role: 'Items die de rol "{role}" kan {action}.'
 fields_for_role: 'Velden die de rol "{role}" kan {action}.'
 validation_for_role: 'Veld {action} regels die de rol "{role}" moet gehoorzamen.'
 presets_for_role: 'Standaardwaarden voor de velden voor rol {role}.'
+presets_field_warning: 'Relational presets for field "{field}" should be configured with the "detailed" syntax.'
 presentation_and_aliases: Presentatie & Aliasen
 revision_post_create: Zo zag dit item eruit toen het werd gemaakt.
 revision_post_update: Zo zag dit item eruit na de update.
@@ -232,6 +222,7 @@ bigInteger: Big Integer
 boolean: Boolean
 date: Datum
 date_range: Datumbereik
+translation_key_placeholder: Enter a key...
 datetime: DateTime
 dateTime: DateTime
 precision: Precisie
@@ -444,6 +435,7 @@ checksum: Checksum
 owner: Eigenaar
 edited_by: Aangepast door
 folder: Map
+folders: Folders
 zoom: Zoom
 download: Downloaden
 open: Openen
@@ -466,8 +458,8 @@ exporting_all_items_in_collection: Alle {total} items uit {collection} aan het e
 exporting_limited_items_in_collection: '{limit} van de {total} items uit {collection} aan het exporteren.'
 exporting_no_items_to_export: Geen items om te exporteren. Pas de exportconfiguratie hieronder aan.
 exporting_download_hint: Eenmaal voltooid, zal dit {format}-bestand automatisch worden gedownload naar je apparaat.
-exporting_batch_hint: Deze export zal worden verwerkt in batches, en wanneer voltooid, zal het {format}-bestand worden opgeslagen in de Bestandsbibliotheek.
-exporting_batch_hint_forced: Vanwege het grote aantal items moet deze export in batches worden verwerkt, en wanneer voltooid, zal het {format}-bestand worden opgeslagen in de Bestandsbibliotheek.
+exporting_library_hint: Once the {format} file is created, it will be saved to the File Library.
+exporting_library_hint_forced: This export must be processed in batches. Once completed, the {format} file will be saved to the File Library.
 collection_key: Collectie Key
 name: Naam
 primary_key_field: Primary Key veld
@@ -492,7 +484,8 @@ enable_select_button: Selecteerknop inschakelen
 allow_duplicates: Sta duplicaten toe
 comments: Reacties
 no_comments: Nog geen reacties
-click_to_expand: Klik om uit te breiden
+expand: Expand
+collapse: Collapse
 select_item: Selecteer Item
 no_items: Geen items
 search_items: Zoek items...
@@ -524,6 +517,7 @@ create_collection: Maak collectie
 no_collections_copy_admin: Je hebt nog geen Collecties. Klik op de knop hieronder om te beginnen.
 no_collections_copy: Je hebt nog geen collecties. Neem contact op met je systeembeheerder.
 relationship_not_setup: De relatie is niet correct geconfigureerd
+no_singleton_relations: Relationships to Singletons are not supported
 display_template_not_setup: De weergavesjabloon optie is onjuist geconfigureerd
 collection_field_not_setup: De collectie-veld optie is onjuist geconfigureerd
 select_a_collection: Selecteer een collectie
@@ -616,6 +610,7 @@ errors:
   RANGE_NOT_SATISFIABLE: Ongeldig bereik
   METHOD_NOT_ALLOWED: Methode niet toegestaan
   REQUESTS_EXCEEDED: Limiet aantal verzoeken bereikt
+  CONTENT_TOO_LARGE: Submitted item/file is too large
 security: Beveiliging
 value_hashed: Waarde veilig opgeslagen
 bookmark_name: Bladwijzer naam...
@@ -661,6 +656,7 @@ one_filtered_item: '1 gefilterd item'
 delete_collection_are_you_sure: >-
   Weet je zeker dat je collectie "{collection}" wilt verwijderen? Dit zal de collectie en alle items die erin zijn opgeslagen verwijderen. Deze actie is permanent.
 delete_folder_are_you_sure: Weet je zeker dat je de map "{folder}" wilt verwijderen? Geneste mappen en collecties zullen worden verplaatst naar het hoogste niveau.
+delete_collection_peer_dependencies: The following fields will be deleted as well, as they are related to the current collection.
 collections_shown: Collecties getoond
 visible_collections: Zichtbare collecties
 hidden_collections: Verborgen collecties
@@ -788,8 +784,13 @@ flow: Flow
 select_a_flow: Selecteer een Flow
 run_flow_confirm: Ben je zeker dat u deze flow wilt uitvoeren?
 run_flow_on_current_collection: Voer flow uit op Huidige Collectie
+run_flow_on_current: Run Flow on Current Item
 run_flow_on_current_edited_confirm: Dit item kan aangepast worden door deze Flow, weet je zeker dat je het wilt uitvoeren?
+run_flow_on_selected: Select One or More Items First | Run Flow on 1 Selected Item | Run Flow on {n} Selected Items
+run_flow: Run Flow
 run_flow_success: Flow "{flow}" is succesvol uitgevoerd
+field_name_placeholder: Enter field name...
+field_key_placeholder: Enter field key...
 trigger: Trigger
 trigger_options: Trigger opties
 view_trigger: Trigger weergeven
@@ -820,6 +821,7 @@ edit_operation: Operatie bewerken
 code: Code
 operation_options: Operatie opties
 operation_name: Operatienaam...
+operation_key: Identifier for reference...
 operation_key_unique_error: Operatie-sleutels moeten uniek zijn in een Flow
 operation_handle_resolve: 'Los op: Klik om toe te voegen, of sleep om te omleiden'
 operation_handle_reject: 'Weiger: Klik om toe te voegen, of sleep om te omleiden'
@@ -831,6 +833,7 @@ panel_header: Paneelrubriek
 panel_name_placeholder: Benoem dit paneel...
 panel_note_placeholder: Optionele details over dit paneel...
 panel_delete_confirm: Weet je zeker dat je dit paneel wilt verwijderen? Dit kan niet ongedaan worden gemaakt.
+list_panel_allow_edit: Allow Inline Editing
 dashboard_delete_confirm: Weet je zeker dat je dit dashboard wilt verwijderen? Dit kan niet ongedaan worden gemaakt.
 edit_dashboard: Bewerk dashboard
 delete_dashboard: Verwijder dashboard
@@ -946,7 +949,8 @@ settings_permissions: Rollen & Permissies
 settings_project: Projectinstellingen
 settings_flows: Flows
 settings_presets: Voorkeuren & Bladwijzers
-settings_translation_strings: Schermtekst vertalingen
+settings_translations: Custom Translations
+settings_extensions: Extensions
 one_or_more_options_are_missing: Eén of meer opties ontbreken
 scope: Bereik
 actions: Acties
@@ -994,7 +998,48 @@ page_help_settings_presets_item: >-
   **Voorkeur Detail** — Formulier om voorkeuren en bladwijzers mee te beheren.
 page_help_settings_flows_collection: '**Blader door Flows** — Toon alle Flows in het project.'
 page_help_settings_flows_item: '**Flow details** — Werkruimte voor het beheren van één of meerdere operaties.'
-page_help_settings_translation_strings_collection: '**Blader door vertaling reeksen** — Toont alle vertaling reeksen in het project.'
+page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
+extension_health_normal: Normal
+extension_health_warning: Warning | Warnings
+extension_health_failed: Failed
+extension_bundle_contents: Bundled extensions
+extension_capabilities: Capabilities
+extension_advanced_diagnostics: Advanced Diagnostics
+extension_sandboxed: Sandboxed
+extension_runtime: Runtime
+extension_runtime_sandboxed: Sandboxed
+extension_runtime_full_authority: Full Authority
+extension_runtime_browser: Browser App
+confined_runtime: Sandbox
+confined_runtime_mode: 'OS hardening: {decision} ({mode})'
+confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
+extension_status_loaded_detail: Loaded and running on the server.
+extension_status_discovered_detail: Discovered on this instance.
+extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
+extension_status_failed_detail: The extension failed to load on this instance.
+extension_settings_unavailable_detail: Extension settings are unavailable.
+extension_settings_drawer_subtitle: Extension settings
+extension_settings_section: Extension Settings
+extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
+extension_settings_no_global_keys: This extension declares no global settings.
+extension_settings_load_failed: Could not load the extension's settings.
+extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
+extension_type_group_hook: Hooks
+extension_type_group_endpoint: Endpoints
+extension_type_group_operation: Operations
+extension_type_group_bundle: Bundles
+extension_type_group_interface: Interfaces
+extension_type_group_display: Displays
+extension_type_group_layout: Layouts
+extension_type_group_module: Modules
+extension_type_group_panel: Panels
+extension_type_group_item-view: Item Views
+extension_type_group_other: Other
+no_extensions: No Extensions
+no_extensions_copy: No extensions were discovered in the configured extensions path.
+extensions_load_failed: Could not load the extensions inventory.
+page_help_settings_translations_collection: '**Browse Custom Translations** — Lists all custom translations within the project.'
+page_help_settings_translations_item: '**Custom Translations Detail** — A form for viewing and managing this item.'
 page_help_users_collection: '**User Directory** — Laat alle gebruikers in dit project zien.'
 page_help_users_item: >-
   **Gebruikersdetail** — Beheer je accountgegevens, of bekijk de details van andere gebruikers.
@@ -1028,11 +1073,16 @@ directus_collection:
   directus_notifications: Notificaties verzonden naar gebruikers
   directus_operations: Operaties die worden uitgevoerd in Flows
   directus_panels: Individuele panelen binnen de Inzichten dashboards
+  directus_permissions: Access permissions for each role
   directus_presets: Standaardinstellingen voor collecties en bladwijzers
+  directus_relations: Relationship configuration and metadata
+  directus_revisions: Data snapshots for all activity
   directus_roles: Machtigingsgroepen voor systeemgebruikers
   directus_sessions: Gebruikerssessie-informatie
   directus_settings: Project configuratie opties
+  directus_shares: Tracks externally shared items
   directus_users: Systeemgebruikers voor het platform
+  directus_translations: Custom translations
 fields:
   directus_activity:
     item: Item Primary Key
@@ -1060,6 +1110,7 @@ fields:
     sort_field: Sorteerveld
     accountability: Activiteit & Revisie Tracking
     archive_field: Veld archiveren
+    item_duplication_fields: Item Duplication Fields
   directus_files:
     $thumbnail: Thumbnail
     title: Titel
@@ -1111,6 +1162,7 @@ fields:
     role: Rol
     token: Token
     provider: Provider
+    external_identifier: External Identifier
     last_page: Laatste pagina
     last_access: Laatste toegang
     email_notifications: Email Notificaties
@@ -1119,11 +1171,20 @@ fields:
     png: PNG
     webP: WebP
     tiff: Tiff
+    avif: AVIF
+    mapping: Mapping
+    basemaps: Basemaps
+    basemaps_raster: Raster
+    basemaps_tile: Raster TileJSON
     basemaps_style: Mapbox stijl
     mapbox_key: Toegangstoken Mapbox
     mapbox_placeholder: pk.eyJ1Ijo.....
+    attribution: Attribution
     attribution_placeholder: '© OpenStreetMap bijdragers'
+    transforms_note: The Sharp method name and its arguments. See https://sharp.pixelplumbing.com/api-constructor for more information.
+    additional_transforms: Additional Transformations
     project_name: Projectnaam
+    project_descriptor: Project Descriptor
     project_url: Project URL
     project_color: Projectkleur
     project_logo: Projectlogo
@@ -1136,12 +1197,24 @@ fields:
     auth_login_attempts: Login pogingen
     files_and_thumbnails: Bestanden & Opslag
     storage_default_folder: Standaard map
+    storage_asset_presets: Transformation Presets
+    storage_asset_transform: Allowed Transformations
+    overrides: App Overrides
     custom_css: Aangepaste CSS
     module_bar: Modulebalk
+    transformations_all: Allow all transformations
+    transformations_none: Disable transformations
+    transformations_presets: Limit transformations to presets below
+    image_editor: Image Editor
+    custom_aspect_ratios: Custom Aspect Ratios
   directus_shares:
     name: Naam
     role: Rol
     password: Wachtwoord
+    date_start: Date Start
+    date_end: Date End
+    max_uses: Max Uses
+    times_used: Times Used
   directus_fields:
     collection: Collectie naam
     icon: Collectie Icoon
@@ -1173,14 +1246,23 @@ field_options:
       strong_text: Sterk – groot / klein / nummers / speciale tekens
     storage_asset_presets:
       fit_label: Vak vullend
+      upscaling: Upscaling
       fit:
+        contain_text: Contain (preserve aspect ratio)
+        cover_text: Cover (forces exact size)
+        fit_text: Fit inside
         outside_text: Vak vullend, mag deels buiten vak treden
+    additional_transforms: Additional Transformations
+    transforms_note: The Sharp method name and its arguments. See https://sharp.pixelplumbing.com/api-constructor for more information.
     mapbox_key: Toegangstoken Mapbox
     mapbox_placeholder: pk.eyJ1Ijo.....
+    basemaps: Basemaps
+    basemaps_name_placeholder: Enter the basemap name...
     basemaps_raster: Raster
     basemaps_tile: Raster TileJSON
     basemaps_style: Mapbox stijl
     files_divider_title: Bestanden en miniaturen
+    overrides_divider_title: App Overrides
   directus_activity:
     login: Inloggen
     create: Maak
@@ -1202,16 +1284,28 @@ field_options:
     plural_unit: Meervoudige eenheid
     archive_divider: Archiveren
     archive_field_placeholder: Kies een veld...
+    archive_app_filter: Enable App Archive Filter
+    archive_value: Value set when archiving...
+    unarchive_value: Value set when unarchiving...
     sort_divider: Sorteren
     sort_field: Kies een veld...
     accountability_divider: Verantwoording
+    duplication_divider: Duplication
   directus_files:
     title: Een unieke titel...
+    description: An optional description...
+    location: An optional location...
+    storage_divider: File Naming
+    filename_disk: Name on disk storage...
+    filename_download: Name when downloading...
   directus_roles:
+    name: The unique name for this role...
+    description: A description of this role...
     ip_access: Toegestane IP-adressen toevoegen, leeg laten om alles toe te staan...
     fields:
       icon_name: Icoon
       name_name: Naam
+      name_placeholder: Enter a title...
       link_name: Link
       link_placeholder: Relatieve of absolute URL...
     collections_name: Collecties
@@ -1227,6 +1321,7 @@ field_options:
     status_dropdown_active: Actief
     status_dropdown_suspended: Geschorst
     status_dropdown_archived: Gearchiveerd
+    token: Enter a secure access token...
 no_fields_in_collection: 'Er zijn nog geen velden in "{collection}"'
 no_value: Geen waarde
 do_nothing: Niets doen
@@ -1240,25 +1335,40 @@ start_collapsed: Start gesloten
 block: Blok
 inline: Doorlopend
 comment: Reactie
+shares: Shares
 unlimited_usage: Onbeperkt gebruik
+uses_left: No uses left | 1 use left | {n} uses left
+no_shares: No shares to show
 new_share: Delen
 expired: Verlopen
+upcoming: Upcoming
 share: Delen
+share_item: Share Item
+shared_with_you: An item has been shared with you
+shared_enter_passcode: Enter your passcode to continue...
 shared_leave_blank_for_unlimited: Laat leeg voor geen limiet
 shared_times_remaining: Deze link kan slechts {n} keer worden gebruikt
 shared_last_remaining: Deze link kan slechts één keer worden gebruikt
 shared_uses_left: Voor extra veiligheid is deze gedeelde pagina geconfigureerd met een beperkt aantal weergaven. Er zijn momenteel {n} weergaven resterend, waarna de pagina niet langer toegankelijk zal zijn.
+share_access_page: Access Shared Page
 share_access_not_found: Deze gedeelde pagina bestaat niet of heeft het maximum aantal toegestane weergaven al overschreden.
 share_access_not_found_desc: Neem contact op met een geautoriseerde gebruiker van dit project om toegang te vragen.
+share_access_not_found_title: Unknown Share Page
 share_copy_link: Link kopiëren
 share_copy_link_success: Link gekopieerd
+share_copy_link_error: Unable to Copy Link
 share_send_link: Link versturen
 relational_triggers: Relationele triggers
 referential_action_field_label_m2o: Wanneer {collection} wordt verwijderd...
 referential_action_field_label_o2m: Wanneer {collection} wordt gedeselecteerd...
 referential_action_no_action: Voorkom de verwijdering
 referential_action_cascade: Verwijder het {collection} item (cascade)
+referential_action_set_null: Nullify the {field} field
+referential_action_set_default: Set {field} to its default value
+choose_action: Choose Action
 continue_label: Doorgaan
+continue_as: >-
+  {name} is currently authenticated. If you recognize this account, press continue.
 editing_role: '{role} Rol'
 default_label: Standaard
 delete_label: Verwijderen
@@ -1309,6 +1419,8 @@ relationship: Relatie
 reset: Reset
 reset_password: Reset wachtwoord
 revisions: Revisies
+no_revisions: No Revisions Yet
+no_logs: No Logs Yet
 revert: Terugzetten
 save: Sla op
 schema: Schema
@@ -1322,19 +1434,35 @@ sign_out: Log out
 sign_out_confirm: Weet je zeker dat je uit wilt loggen?
 something_went_wrong: Iets ging mis.
 sort_direction: Sorteerrichting
+export_location: Export Location
+export_started: Export Started
+export_started_copy: Your export has started. You'll be notified when it's ready to download.
 sort_asc: Sorteer Oplopend
 sort_desc: Sorteer Aflopend
+disable_sort: Disable Sorting
 template: Sjabloon
+require_value_to_be_set: Require value to be set on creation
 translation: Vertaling
 translation_placeholder: Voer een vertaling in...
 value: Waarde
 view_project: Bekijk project
+weeks: { }
 report_error: Rapporteer fout
+start: Start
 table: Tabel
 list: Lijst
+search_filter: Search & Filter
+enable_search_filter: Enable searching & filtering
+item_link: Item link
+show_link_to_item: Show a link to the item
+navigate_to_item: Navigate to Item
+undo_removed_item: Undo Removed Item
+remove_item: Remove Item
+delete_item: Delete Item
 interfaces:
   filter:
     name: Filter
+    description: Configure a filter object.
     add_filter: Filter toevoegen
     add_group: En/of-groep
     add_value: Waarde toevoegen
@@ -1343,25 +1471,50 @@ interfaces:
     all: Alle
     any: Eender
     and: en
+    of_the_following: of the following
+    no_rules: No configured rules
+    change_value: Click to change value
+    placeholder: Drag rules here
+    add_key_placeholder: Add a key and press enter...
   fields:
     name: Velden
   group-accordion:
     name: Accordeon
+    description: Display fields or groups as accordion sections
     start: Starten
     all_closed: Alles gesloten
     first_opened: Eerst geopend
     all_opened: Alle geopende
     accordion_mode: Accordeonmodus
+    max_one_section_open: Max 1 Section Open
   presentation-links:
     presentation-links: Knoplinks
     links: Links
+    description: Configurable link buttons for launching dynamic URLs
     style: Stijl
     primary: Primair
     link: Links
     button: Knoppen
+    error: Cannot perform action
+  select-multiple-checkbox:
+    checkboxes: Checkboxes
+    description: Choose between multiple options via checkboxes
+    allow_other: Allow Other
+    show_more: 'Show {count} more'
+    items_shown: Items Shown
+  select-multiple-checkbox-tree:
+    name: Checkboxes (Tree)
+    description: Choose between multiple options via nested checkboxes
+    value_combining: Value Combining
+    value_combining_note: Controls what value is stored when nested selections are made.
+    show_all: Show All
+    show_selected: Show Selected
   input-code:
     code: Code
+    description: Write or share code snippets
     line_number: Regelnummer
+    line_wrapping: Line Wrapping
+    placeholder: Enter code here...
   system-collection:
     collection: Collectie
     description: Selecteer tussen bestaande collecties
@@ -1372,7 +1525,10 @@ interfaces:
     include_system_collections: Toon systeem collecties
   select-color:
     color: Kleur
+    description: Enter or select a color value
     placeholder: Kies een kleur...
+    preset_colors: Preset Colors
+    opacity: Opacity
     preset_colors_add_label: Nieuwe kleur toevoegen...
     name_placeholder: Voer kleurnaam in...
   datetime:
@@ -1381,20 +1537,34 @@ interfaces:
     include_seconds: Seconden opnemen
     set_to_now: Op Nu instellen
     use_24: 24-uurs formaat gebruiken
+    placeholder: Choose a datetime...
   system-fields:
     select_a_collection: Selecteer een collectie
     no_fields: Geen velden
   system-display-template:
     display-template: Weergavesjabloon
+    description: Mix static text and dynamic field values
     collection_field: Collectieveld
     collection_field_not_setup: De collectie-veld optie is onjuist geconfigureerd
     select_a_collection: Selecteer een collectie
   presentation-divider:
     divider: Scheidingslijn
+    description: Label and divide fields into sections
+    title_placeholder: Enter a title, or leave blank to only show a line...
+    inline_title: Inline Title
+    inline_title_label: Show title inside line
+    margin_top: Margin Top
+    margin_top_label: Increase Top Margin
   select-dropdown:
+    description: Select a value from a dropdown
     choices_placeholder: Een nieuwe keuze toevoegen
+    allow_other: Allow Other
+    allow_other_label: Allow Other Values
+    allow_none: Allow None
+    allow_none_label: Allow No Selection
     choices_name_placeholder: Voer een naam in...
     choices_value_placeholder: Voer een waarde in...
+    preview_threshold: Preview Threshold
   select-multiple-dropdown:
     select-multiple-dropdown: Dropdown (meerdere)
     description: Selecteer meerdere waarden in een dropdown
@@ -1409,6 +1579,9 @@ interfaces:
     description: Voer een waarde in om te hashen
     masked: Gemaskeerd
     masked_label: Verberg de echte waarden
+  system-extension-secret:
+    name: Extension Secret
+    value_stored: Value Securely Encrypted
   select-icon:
     icon: Icoon
     description: Selecteer een waarde in een dropdown
@@ -1416,6 +1589,8 @@ interfaces:
   file-image:
     image: Afbeelding
     description: Selecteer of upload een afbeelding
+    crop: Crop to Fit
+    crop_label: Crop image as needed
   system-interface:
     interface: Interface
     description: Selecteer een bestaande interface
@@ -1424,36 +1599,74 @@ interfaces:
     interface-options: Interface-opties
     description: Een modal voor het selecteren van een interface
   list-m2m:
+    many-to-many: Many to Many
     description: Selecteer meerdere gerelateerde items
+    columns_configure_notice: You can configure the columns after creating this field.
+    display_template_configure_notice: You can configure the display template after creating this field.
   select-dropdown-m2o:
+    many-to-one: Many to One
     description: Selecteer één gerelateerd item
     display_template: Weergavesjabloon
+  collection-item-dropdown:
+    collection-item-dropdown: Collection Item Dropdown
+    description: Select an item from a collection in JSON format
   input-rich-text-md:
     markdown: Markdown
+    description: Enter and preview markdown
     edit: Wijzig
+    preview: Preview
+    editorFont: Editor Font
+    previewFont: Preview Font
     customSyntax: Aangepaste blokken
+    customSyntax_label: Add custom syntax types
+    customSyntax_add: Add custom syntax
     box: Blok / Inline
+    imageToken: Static Access Token
+    imageToken_label: Static access token is appended to the assets' URL
   map:
     map: Kaart
+    description: Select a location on a map
     zoom: Zoom
+    geometry_type: Geometry Type
+    geometry_format: Geometry Format
+    default_view: Default View
+    invalid_options: Invalid options
+    invalid_format: Invalid format ({format})
+    unexpected_geometry: Expected {expected}, got {got}.
+    fit_bounds: Fit view to data
+    native: Native
     geojson: GeoJSON
     lnglat: Lengtegraad, breedtegraad
     wkt: WKT
     wkb: WKB
+    click_to_select: Click to select {geometry}
   presentation-notice:
     notice: Melding
     description: Een korte melding weergeven
+    text: Enter notice content here...
+    no_text: No text configured...
   list-o2m:
+    one-to-many: One to Many
+    description: Select multiple related items
     no_collection: Deze collectie is niet vindbaar
   system-folder:
     folder: Map
+    description: Select a folder
+    field_hint: Default folder for uploaded files without a folder specified. Does not affect existing files.
+    root_name: File Library Root
+    system_default: System Defaults
   select-radio:
     radio-buttons: Keuzerondjes
+    description: Select one of multiple choices
   list:
     repeater: Herhaler
+    description: Create multiple entries of the same structure
     edit_fields: Velden bewerken
+    add_label: '"Create New" Label'
     sort: Sorteren
     sort_placeholder: Handmatig
+    field_note_placeholder: Enter field note...
+    incompatible_data: The current data is not compatible with the repeater interface and will be overridden when adding items to the repeater
   slider:
     slider: Schuifregelaar
     description: Selecteer een nummer met een slider
@@ -1471,19 +1684,32 @@ interfaces:
     auto_formatter: Automatische titel formatter gebruiken
     alphabetize: Alfabetische volgorde
     alphabetize_label: Alfabetische volgorde forceren
+    add_tags: Add a tag and press Enter...
   input:
     input: Invoer
+    description: Manually enter a value
+    trim: Trim
+    trim_label: Trim the start and end
     mask: Gemaskeerd
     mask_label: Verberg de werkelijke waarde
+    clear: Cleared Value
     clear_label: Opslaan als lege tekst
     minimum_value: Minimale waarde
     maximum_value: Maximale waarde
+    step_interval: Step Interval
     slug: Slug maken
+    slug_label: Make entered value URL safe
+  input-multiline:
+    textarea: Textarea
+    description: Enter multiline plain-text
   input-translated-string:
     input-translated-string: Vertaalde tekenreeksen
+    description: Select or add custom translation
     search_placeholder: Zoeken...
+    new_custom_translation: New Custom Translation
   boolean:
     toggle: Schakel
+    description: Switch between on and off
     color_on: Kleur Aan
     color_off: Kleur uit
     label_placeholder: Voer een label in...
@@ -1491,8 +1717,15 @@ interfaces:
   translations:
     display_template: Weergavesjabloon
     no_collection: Geen collectie
+    toggle_split_view: Toggle Split View
     enable: Inschakelen
+    user_language: Use Current User Language
     default_language: Standaardtaal
+    language_field: Language Indicator Field
+    language_direction_field: Language Direction Field
+  list-o2m-tree-view:
+    description: Tree view for nested recursive one-to-many items
+    recursive_only: The tree view interface only works for recursive relationships.
   user:
     user: Gebruiker
     description: Selecteer een bestaande CairnCMS gebruiker
@@ -1503,17 +1736,52 @@ interfaces:
       modal: Modal
   input-rich-text-html:
     wysiwyg: WYSIWYG
+    description: A rich-text editor writing HTML content
     toolbar: Werkbalk
     custom_formats: Aangepaste vorm
     options_override: Overschrijf opties
+    folder_note: Folder for uploaded files. Does not affect existing files.
     imageToken: Statische toegangstoken
+    imageToken_label: Static access token is appended to the assets' URL
+  input-autocomplete-api:
+    input-autocomplete-api: Autocomplete Input (API)
+    description: A search typeahead for external API values.
+    results_path: Results Path
+    value_path: Value Path
+    text_path: Text Path
+    trigger: Trigger
+    rate: Rate
+  group-raw:
+    name: Raw Group
+    description: Render the fields as-is
+  group-detail:
+    name: Detail Group
+    description: Render the fields as a collapsable section
+    show_header: Show Group Header
+    header_icon: Header Icon
+    header_color: Header Color
+    start_open: Start Open
+    start_closed: Start Closed
   system-token:
     system-token: Token
+    description: Manage static access token
+    placeholder: Click "Generate Token" to create a new static access token
+    value_securely_saved: Value Securely Saved
+    generate: Generate Token
+    regenerate: Regenerate Token
+    generate_success_copy: Make sure to backup and copy the token above. For security reasons, you will not be able to view the token again after saving and navigate off this page.
+    remove_token: Remove Token
+  system-raw-editor:
+    system-raw-editor: Raw Editor
+    description: Allow entering of raw or mustache templating values
 displays:
   translations:
     translations: Vertalingen
+    description: Preview translations
     enable: Inschakelen
+    user_language: Use Current User Language
     default_language: Standaardtaal
+    language_field: Language Indicator Field
   boolean:
     boolean: Boolean
     description: Toon aan/uit status
@@ -1544,6 +1812,16 @@ displays:
     relative: Relatief
     relative_label: 'Relatieve tijd tonen, bijvoorbeeld 5 minuten geleden'
     suffix: Achtervoegsel
+    suffix_label: Show relative indicator
+    suffix_note: Uses words like 'in' and 'ago'
+    strict: Strict
+    strict_label: Use strict units
+    strict_note: Removes words like 'almost', 'over', 'less than'
+    round: Round
+    round_note: Choose a rounding function to use
+    down: Down
+    nearest: Nearest
+    up: Up
   file:
     file: Bestand
     description: Bestanden weergeven
@@ -1554,20 +1832,26 @@ displays:
     formatted-value: Opgemaakte waarde
     description: Een geformatteerde versie van de tekst weergeven
     format: Format
+    format_label: Auto format
     font: Lettertype
+    font_sans_serif: Sans serif
     font_serif: Serif
     font_monospace: Monospace
     bold: Vetgedrukt
     bold_label: Gebruik bold
     italic: Cursief
+    italic_label: Use italic style
     prefix: Voorvoegsel
+    prefix_label: Prepend text
     suffix: Achtervoegsel
+    suffix_label: Appended Text
     color: Kleur
     background: Achtergrond
     icon: Icoon
     border: Rand
     border_label: Rand tonen
     text: Tekst
+    text_placeholder: Optional value override...
   formatted-json-value:
     formatted-json-value: Geformatteerde JSON waarde
     description: Een geformatteerde versie van het object weergeven
@@ -1605,6 +1889,7 @@ displays:
   related-values:
     related-values: Gerelateerde waarden
     description: Relatieve waarden weergeven
+    display_template_configure_notice: You can configure the display template after creating this field.
   user:
     user: Gebruiker
     description: Toon een CairnCMS gebruiker
@@ -1629,24 +1914,53 @@ layouts:
     cozy: Knus
   calendar:
     calendar: Kalender
+    start_date_field: Start Date Field
+    end_date_field: End Date Field
     optional: Optioneel
     first_day: Eerste dag van de week
   map:
     map: Kaart
+    basemap: Basemap
     layers: Lagen
+    cluster_options: Clustering options
+    cluster: Cluster Nearby Data
+    cluster_radius: Cluster radius
+    cluster_minpoints: Cluster minimum size
+    cluster_maxzoom: Maximum zoom for clustering
+    field: Geospatial Field
+    invalid_geometry: Invalid geometry
+    find_location: Find location...
+    default_template: Using Collection Default...
+    no_compatible_fields: No compatible fields
   kanban:
     name: Kanban
     group_field: Groeperen op
+    group_field_placeholder: Field to group by...
     group_title: Groepstitel
+    group_title_placeholder: Field for group titles...
     title: Kaarttitel
+    title_placeholder: Optional title field...
     text: Kaarttekst
+    text_placeholder: Optional text field...
     date: Kaartdatum
+    date_placeholder: Optional date field...
+    tags: Card Tags
+    tags_placeholder: Optional tags field...
+    user: Card User
+    user_placeholder: Optional user field...
+    image: Card Image
+    image_placeholder: Optional image field...
+    image_fit: Card Image Fit
     crop: Bijsnijden
     advanced: Geavanceerd
     edit_group: Groep bewerken
     delete_group: Groep verwijderen
     add_group: Groep toevoegen
+    add_group_placeholder: Enter a new group title...
+    show_ungrouped: Show Ungrouped
+    show: Show
     no_group: Geen groep
+    not_all_loaded: Could only load the first 1000 items.
 horizontal: Horizontaal
 vertical: Verticaal
 x_axis: X-as
@@ -1654,10 +1968,14 @@ y_axis: Y-as
 y_axis_function: Y-asfunctie
 show_x_only: Alleen X-as tonen
 show_y_only: Alleen Y-as tonen
+show_data_label: Show Data Label
 both: Beiden
+show_axis_labels: Show Axis Labels
 function: Functie
 half_circle: Halve cirkel
 full_circle: Volle cirkel
+stroke_width: Stroke Width
+rounded_stroke: Rounded Stroke
 thin: Dun
 medium: Middel
 broad: Breed
@@ -1665,53 +1983,171 @@ show_labels: Labels tonen
 show_legend: Legenda tonen
 right: Rechts
 left: Links
+donut: Donut
 panels:
   metric:
+    name: Metric
+    description: Show a single value based on a query
     field: Veld
+  time_series:
+    name: Time Series
+    description: Render a line chart based on values over time
+    date_field: Date Field
+    value_field: Value Field
+    fill_type: Fill Type
+    curve_type: Curve Type
   label:
     name: Label
+    description: Show some text
   list:
     name: Lijst
+    description: Filter and list fields from a collection
   barchart:
+    name: Bar Chart
+    description: Bar or column charts for comparing groups of values
     horizontal: Horizontaal
+    select_collection: You must select a collection.
   linechart:
+    name: Line Chart
+    description: Line chart for comparing change of a field
+    disabled_grouping: Disabled when grouping is selected.
+    disabled_no_grouping: Disabled when no grouping is selected.
+    show_marker: Show Tooltip Marker
+    curve_type: Curve Type
+    smooth: Smooth
     straight: Recht
+    step_line: Step Line
+  meter:
+    name: Meter
+    description: Meter for tracking values
+  piechart:
+    name: Pie or Donut Chart
+    description: Circular chart showing the ratios of groups on a column
+  variable:
+    name: Global Variable
+    description: Set a global value for use in other Panels' filters
+    variable_key: Variable Key
+  relational-variable:
+    name: Global Relational Variable
+    description: Set a global relational value for use in other Panels' filters
+    variable_key: Variable Key
+    multiple: Multiple
+    multiple-label: Select multiple items
 triggers:
+  common:
+    response_body: Response Body
+    response_body_all: All Data
+    response_body_last: Data of Last Operation
+  event:
+    name: Event Hook
+    description: Triggers on platform or data events
+    action: 'Action (Non-Blocking)'
+    filter: 'Filter (Blocking)'
   webhook:
     name: Webhook
+    description: Triggers on an incoming HTTP request
     method: Methode
     async: Asynchroon
+  operation:
+    name: Another Flow
+    description: Triggered by another Flow, for chaining
+    preview: Triggered by an operation in a different Flow
+  schedule:
+    name: Schedule (CRON)
+    description: Triggers at regular points in time
+    cron: Interval
   manual:
     name: Handmatig
+    description: Triggers on manual run within selected collection(s)
+    collection_and_item: Collection & Item Pages
+    collection_only: Collection Page Only
+    item_only: Item Page Only
+    collection_page: Collection Page
+    require_selection: Requires Selection
+a_flow_uuid: Select a Flow to trigger...
+any_string_or_json: Any string or JSON...
+item_payload_placeholder: This is the JSON used to update the item's field values...
+operation_variables_note: You can access flow data with variables such as **{'{'}{'{'}$last{'}'}{'}'}**, **{'{'}{'{'}$trigger{'}'}{'}'}** and **{'{'}{'{'}$accountability{'}'}{'}'}**, or reference previous operations using **{'{'}{'{'}operation_key{'}'}{'}'}**.'
 operations:
   condition:
     name: Conditie
+    description: Route a flow based on If / Else logic
+  exec:
+    name: Run Script
+    description: Execute arbitrary code to modify the payload
+    modules: 'The following **Node modules** can be used:'
   item-create:
+    name: Create Data
+    description: Create items in the database
     payload: Payload
+    emit_events: Emit Events
   item-delete:
     name: Data verwijderen
+    description: Delete items in the database
+    emit_events: Emit Events
+    key: IDs
+    query: Query
+  item-read:
+    name: Read Data
+    description: Read items from the database
+    key: IDs
+    query: Query
+    emit_events: Emit Events
   item-update:
+    name: Update Data
+    description: Update items in the database
+    emit_events: Emit Events
+    key: IDs
     payload: Payload
+    query: Query
   log:
+    name: Log to Console
+    description: Output something to the console
     message: Bericht
+    message_placeholder: Enter a message to show in the console...
   mail:
+    name: Send Email
+    description: Send an email to one or more people
     to: Aan
+    to_placeholder: Add e-mail addresses and press enter...
+    body: Body
     template: Sjabloon
     data: Data
   notification:
+    name: Send Notification
+    description: Send an in-app notification to one or more users
     recipient: Gebruiker
+    recipient_placeholder: Enter a UUID...
+    recipient_note: Add user UUID and press enter...
     message: Bericht
   request:
+    name: Webhook / Request URL
+    description: "Make a request to a URL"
     url: URL
     url_placeholder: https://example.com/voorbeeld
     method: Methode
     data: Data
     headers: Headers
     header: Header
+    header_placeholder: Authorization...
     value_placeholder: Bearer eyJhbGciOi...
+  sleep:
+    name: Sleep
+    description: Wait a given number of milliseconds
+    milliseconds: Milliseconds
   transform:
     name: Payload transformeren
+    description: Alter the Flow's JSON payload
   trigger:
+    name: Trigger Flow
+    description: Pass this data to another flow
     flows: Flows
     flow: Flow
     data: Data
+    iteration_mode: Iteration Mode
+    iteration_mode_note: Mode for iterating over arrays.
+    serial: Serial
+    parallel: Parallel
+    batch: Batch
+    batch_size: Batch Size
+    cache: Cache
