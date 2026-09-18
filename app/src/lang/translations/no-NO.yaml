@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: Identifikator
 avatar: Profilbilde
 application: Applikasjon
@@ -76,14 +75,10 @@ create_role: Opprett rolle
 create_user: Opprett bruker
 message: Melding
 delete_panel: Slett panel
-create_translation_string: Opprett oversettelsestekst
-no_translation_string: Ingen oversettelse tekst
-no_translation_string_copy: Det finnes ingen oversettelsestekst ennå.
-translation_string_key_placeholder: Oversettelse tekst nøkkel...
-translation_string_translations_placeholder: Legg til ny oversettelse
-edit_translation_string: Rediger oversettelsestekst
-delete_translation_string_copy: >-
-  Er du sikker på at du har lyst til å slette oversettelsesstrenga "{key}"? Handlingen kan ikke angres.
+create_custom_translation: Create Custom Translation
+edit_custom_translation: Edit Custom Translation
+no_custom_translations: No Custom Translations
+no_custom_translations_copy: There are no custom translations yet.
 invite_users: Invitere brukere
 invite: Inviter
 email_already_invited: E-postadressen "{email}" er allerede invitert
@@ -105,26 +100,22 @@ delete_bookmark: Slett bokmerke
 delete_bookmark_copy: >-
   Er du sikker på at du vil slette "{bookmark}"? Handlingen kan ikke angres.
 delete_personal_bookmark: Slett personlig bokmerke
+delete_role_bookmark: Delete Role Bookmark
 delete_global_bookmark: Slett global bokmerke
 logoutReason:
   SIGN_OUT: Utlogget
   SESSION_EXPIRED: Økt utløpt
 public_label: Offentlig
 public_description: Kontrollerer hvilke API-data som er tilgjengelige uten å autentisere.
+admin_description: Initial administrative role with unrestricted App/API access.
 not_allowed: Ikke tillatt
-directus_version: CairnCMS versjon
-node_version: Node versjon
-node_uptime: Node oppetid
-os_type: OS Type
-os_version: OS versjon
-os_uptime: OS oppetid
-os_totalmem: OS minne
 archive: Arkiv
 archive_confirm: Er du sikker på at du vil arkivere dette elementet?
 archive_confirm_count: >-
   Ingen elementer valgt | Er du sikker på at du vil arkivere dette elementet? | Er du sikker på at du vil arkivere disse {count} elementene?
 reset_system_permissions_to: 'Tilbakestill systemtillatelser til:'
 reset_system_permissions_copy: Denne handlingen vil overskrive eventuelle egendefinerte rettigheter du kan ha brukt på systemkolleksjonene. Er du sikker?
+the_following_are_minimum_permissions: The following minimum permissions are automatically applied when "App Access" is enabled. You can grant additional permissions if needed, but you cannot reduce permissions below this level.
 app_access_minimum: App Minimumstilgang
 recommended_defaults: Anbefalte standardinnstillinger
 unarchive: Uarkivér
@@ -175,11 +166,13 @@ permissions_for_role: 'Elementer {role} rollen kan {action}.'
 fields_for_role: 'Felter {role} rollen kan {action}.'
 validation_for_role: 'Felt {action} regler {role} rollen må følge.'
 presets_for_role: 'Felt standardverdi for rollen {role}.'
+presets_field_warning: 'Relational presets for field "{field}" should be configured with the "detailed" syntax.'
 presentation_and_aliases: Presentation & Aliaser
 revision_post_create: Her er hvordan dette produktet så ut etter oppdateringen.
 revision_post_update: Her er hvordan dette produktet så ut etter oppdateringen.
 changes_made: Nedenfor følger de spesifikke endringene i denne revisjonen.
 no_relational_data: Husk at relasjonsdata ikke er tatt med her.
+junction_field_location: Junction Fields Location
 top: Øverst
 bottom: Nederst
 hide_field: Skjul felt
@@ -194,15 +187,21 @@ language: Språk
 language_placeholder: Velg et språk...
 aggregate_function: Aggregert funksjon
 aggregate_precision: Aggregert presisjon
+group_aggregation: Group Aggregation
+group_precision: Group Precision
 global: Globalt
 admins_have_all_permissions: Administratorer har alle rettigheter
 camera: Kamera
 show_zero: Vis null
+create_in_advanced_field_creation_mode: Create Field in Advanced Mode
 continue_in_advanced_field_creation_mode: Opprett i avansert feltopprettingsmodus
 validation: Godkjenning
 sum: Sum
+sum_distinct: Sum Distinct
 avg: Gjennomsnitt
+avg_distinct: Average Distinct
 count: Antall
+count_distinct: Count Distinct
 min: Min
 max: Maks
 exposure: Eksponering
@@ -223,8 +222,10 @@ bigInteger: Stort heltall
 boolean: Sann/usann
 date: Dato
 date_range: Periode
+translation_key_placeholder: Enter a key...
 datetime: Dato og tid
 dateTime: Dato og tid
+precision: Precision
 decimal: Desimaltall
 float: Flyttall
 integer: Heltall
@@ -237,7 +238,13 @@ time: Tid
 timestamp: Tidsstempel
 uuid: UUID
 hash: Hash
+geometry: Geometry (All)
 geometry.Point: Punkt
+geometry.LineString: LineString
+geometry.Polygon: Polygon
+geometry.MultiPoint: MultiPoint
+geometry.MultiLineString: MultiLineString
+geometry.MultiPolygon: MultiPolygon
 not_available_for_type: Ikke tilgjengelig for denne typen
 create_translations: Lag oversettelser
 auto_refresh: Automatisk oppdatering
@@ -255,8 +262,12 @@ fields_group: Feltgruppe
 no_collections_found: Ingen kolleksjoner funnet.
 new_data_alert: 'Følgende vil bli opprettet i din Data Model:'
 search_collection: Søk i kolleksjonen...
+search_field: Search Field...
 new_field: 'Nytt felt'
 new_collection: 'Ny Kolleksjon'
+add_m2o_to_collection: 'Add M2O to "{collection}"'
+add_o2m_to_collection: 'Add O2M to "{collection}"'
+add_m2m_to_collection: 'Add M2M to "{collection}"'
 choose_a_type: Velg en Type...
 determined_by_relationship: Fastsatt av relasjon
 add_note: Legg til en god beskrivelse til brukerne...
@@ -271,6 +282,12 @@ o2m_relationship: Én til mange relasjon
 m2m_relationship: Mange til mange relasjon
 m2a_relationship: Mange til alle relasjon
 invalid_item: Ugyldig element
+require_confirmation: Require Confirmation
+dialog: Dialog
+modal: Modal
+confirmation_dialog: Confirmation Dialog
+confirmation_description: Confirmation Description
+confirmation_input_fields: Confirmation Input Fields
 next: Neste
 field_name: Feltnavn
 translations: Oversettelser
@@ -281,6 +298,7 @@ note: Notat
 enter_a_value: Legg inn verdi...
 enter_a_placeholder: Legg inn en plassholder...
 length: Lengde
+soft_length: Soft Limit
 precision_scale: Presisjon og skala
 readonly: Skrivebeskyttet
 unique: Unik
@@ -288,8 +306,11 @@ updated_on: Opprettet den
 updated_by: Oppdatert av
 primary_key: Primærnøkkel
 foreign_key: Fremmednøkkel
+field_key: Field Key
 finish_setup: Fullfør oppsett
 dismiss: Lukk
+toggle_raw_editor: Toggle Raw Editor
+raw_editor_placeholder: "{'{'}{'{'}$trigger.payload.example{'}'}{'}'}"
 raw_value: Rå verdi
 copy_raw_value: Kopier råverdi
 copy_raw_value_success: Kopiert
@@ -319,21 +340,27 @@ revision_delta_created_externally: Opprettet eksternt
 revision_delta_updated: 'Oppdatert 1 felt | Oppdatert {count} felter'
 revision_delta_deleted: Slettet
 revision_delta_reverted: Tilbakestilt
+revision_delta_update_message: This field has been updated but its value is being concealed for security reasons.
 revision_delta_other: Revisjon
 revision_delta_by: '{date} av {user}'
+presentation_text_values_cannot_be_reimported: "Uses presentation text, values can not be re-imported."
 download_page_as_csv: 'Last ned side som CSV'
 private_user: Privat bruker
+creation_preview: Creation Preview
 revision_preview: Revisjon forhåndsvisning
 updates_made: Oppdateringer Laget
 leave_comment: Legg igjen en kommentar...
 post_comment_success: Kommentaren ble lagt til
+post_comment_updated: Comment updated
 item_create_success: Elementet ble opprettet | Elementene ble opprettet
 item_update_success: Elementet ble oppdatert | Elementene ble oppdaterte
 item_delete_success: Elementet ble slettet | Elementene ble slettet
 this_collection: Denne kolleksjonen
 related_collection: Relatert kolleksjon
 related_collections: Relaterte kolleksjoner
+translations_collection: Translation Collection
 languages_collection: Språkkolleksjon
+import_data_input_placeholder: CSV or JSON...
 import_data_button: Start import
 import_data_indeterminate: Importerer data...
 import_data_success: Importeringen fra {filename} var vellykket
@@ -357,6 +384,7 @@ interface_label: Grensesnitt
 today: Idag
 yesterday: Igår
 delete_comment: Slett kommentar
+delete_share: Delete Share
 functions:
   year: År
   month: Måned
@@ -371,6 +399,7 @@ date-fns_date: PPP
 date-fns_time: 'h:mm:ss a'
 date-fns_time_no_seconds: 'h:mm a'
 date-fns_time_24hour: 'H:mm:ss'
+date-fns_time_no_seconds_24hour: 'HH:mm'
 date-fns_date_short: 'd MMM, u'
 date-fns_time_short: 'h:mma'
 date-fns_date_short_no_year: d MMM
@@ -402,13 +431,17 @@ dimensions: Dimensjoner
 size: Størrelse
 created: Opprettet
 modified: Endret
+checksum: Checksum
 owner: Eier
 edited_by: Redigert av
 folder: Mappe
+folders: Folders
 zoom: Zoom
 download: Last ned
 open: Åpen
 open_in_new_window: Åpne i nytt vindu
+open_folder: Open "{folder}" folder
+foreground_color: Foreground Color
 background_color: Bakgrunnsfarge
 upload_from_device: Last opp fil fra enhet
 choose_from_library: Velg fil fra bibliotek
@@ -418,7 +451,15 @@ replace_from_library: Erstatt fil fra bibliotek
 replace_from_url: Erstatt fil fra URL
 no_file_selected: Ingen fil valgt
 download_file: Last ned fil
+open_file_in_tab: Open file in new tab
 start_export: Start eksport
+not_available_for_local_downloads: Not available for local downloads
+exporting_all_items_in_collection: Exporting all items ({total}) within {collection}.
+exporting_limited_items_in_collection: '{count} out of {total} items within {collection} will be exported.'
+exporting_no_items_to_export: No items to export. Adjust the exporting configuration and/or add items to the collection.
+exporting_download_hint: Once the {format} file is created, it will be downloaded to your device.
+exporting_library_hint: Once the {format} file is created, it will be saved to the File Library.
+exporting_library_hint_forced: This export must be processed in batches. Once completed, the {format} file will be saved to the File Library.
 collection_key: Nøkkel Samling
 name: Navn
 primary_key_field: Hovednøkkelfelt (Automatic Translation)
@@ -426,16 +467,25 @@ type: Type
 creating_new_collection: Oppretter ny samling
 created_by: Opprettet av
 created_on: Opprettet den
+creating_collection_info: Name the collection and setup its unique “key” field...
+creating_collection_system: Enable and rename any of these optional fields.
+auto_increment_integer: Auto-incremented integer
+auto_increment_big_integer: Auto-incremented big integer
 generated_uuid: Generert UUID
+manual_string: Manually entered string
+save_and_create_new: Save and Create New
 save_and_stay: Lagre og fortsett
 save_as_copy: Lagre som kopi
 add_existing: Legge til eksisterende
 creating_items: Oppretter elementer
+enable_create_button: Enable Create Button
 selecting_items: Velg elementer
+enable_select_button: Enable Select Button
 allow_duplicates: Tillat duplikater
 comments: Kommentarer
 no_comments: Ingen kommentarer ennå
-click_to_expand: Klikk for å utvide
+expand: Expand
+collapse: Collapse
 select_item: Velg element
 no_items: Ingen elementer
 search_items: Søk etter elementer...
@@ -443,7 +493,9 @@ disabled: Deaktivert
 information: Informasjon
 report_bug: Rapporter feil
 request_feature: Foreslå ny funksjon
+request_body: Request Body
 interface_not_found: 'Grensesnitt "{interface}" ble ikke funnet.'
+operation_not_found: 'Operation "{operation}" not found.'
 reset_interface: Tilbakestill grensesnitt
 display_not_found: 'Vis "{display}" ikke funnet.'
 reset_display: Tilbakestill visning
@@ -465,6 +517,7 @@ create_collection: Opprett kolleksjon
 no_collections_copy_admin: Du har ingen kolleksjoner enda. Klikk knappen nedenfor for å starte.
 no_collections_copy: Du har ingen kolleksjoner enda. Vennligst kontakt din systemadministrator.
 relationship_not_setup: Relasjonen er ikke konfigurert riktig
+no_singleton_relations: Relationships to Singletons are not supported
 display_template_not_setup: Visningsmalen alternativet er feilkonfigurert
 collection_field_not_setup: Kolleksjonsfeltalternativet er feilkonfigurert
 select_a_collection: Velg en Kolleksjon
@@ -529,6 +582,7 @@ errors:
   INVALID_CREDENTIALS: Feil brukernavn eller passord
   INVALID_OTP: Feil engangspassord
   INVALID_PAYLOAD: Invalid payload
+  INVALID_PROVIDER: User belongs to a different auth provider
   INVALID_QUERY: Ugyldig spørring
   INVALID_CONFIG: Ugyldig konfigurasjon
   INVALID_TOKEN: Ugyldig nøkkel
@@ -548,11 +602,15 @@ errors:
   VALUE_OUT_OF_RANGE: Verdien er utenfor gyldig område
   INVALID_FOREIGN_KEY: Ugyldig fremmednøkkel
   UNKNOWN: Uventet feil
+  GRAPHQL_VALIDATION_EXCEPTION: GraphQL Validation Exception
   SERVICE_UNAVAILABLE: Tjenesten er ikke tilgjengelig
   UNSUPPORTED_MEDIA_TYPE: Filtypen støttes ikke
+  UNEXPECTED_RESPONSE: Unexpected response
   TOKEN_EXPIRED: Nøkkelen har utgått
+  RANGE_NOT_SATISFIABLE: Invalid range
   METHOD_NOT_ALLOWED: Metode ikke tillatt
   REQUESTS_EXCEEDED: Maks antall forespørsler nådd
+  CONTENT_TOO_LARGE: Submitted item/file is too large
 security: Sikkerhet
 value_hashed: Sikker verdi Hastet
 bookmark_name: Bokmerkenavn...
@@ -595,245 +653,1257 @@ start_end_of_count_items: '{start}–{end} av {count} artikler'
 start_end_of_count_filtered_items: '{start}–{end} av {count} filtrerte artikler'
 one_item: '1 element'
 one_filtered_item: '1 filtrert element'
+delete_collection_are_you_sure: >-
+  Are you sure you want to delete the collection "{collection}"? This will delete the collection and all items in it. This action is permanent.
+delete_folder_are_you_sure: Are you sure you want to delete the folder "{folder}"? Nested folders and collections will be moved to the top most level.
+delete_collection_peer_dependencies: The following fields will be deleted as well, as they are related to the current collection.
 collections_shown: Samlinger vises
 visible_collections: Synlige samlinger
 hidden_collections: Skjulte samlinger
 show_hidden_collections: Vis skjulte samlinger
 hide_hidden_collections: Skjul skjulte samlinger
+show_header: Show Header
+unmanaged_collections: Unconfigured Collections
+system_collections: System Collections
+placeholder: Placeholder
+icon_left: Icon Left
+icon_right: Icon Right
+count_other_revisions: '{count} Other Revisions'
+font: Font
+sans_serif: Sans Serif
+serif: Serif
 monospace: Fastbredde
+divider: Divider
 color: Farge
 circle: Sirkel
 empty_item: Tomt element
+log_in_with: 'Log In with {provider}'
+conditional_styles: Conditional Styles
+advanced_settings: Advanced Settings
+advanced_filter: Advanced Filter
+delete_advanced_filter: Delete Filter
+change_advanced_filter_operator: Change Operator
+advanced: Advanced
 operators:
+  eq: Equals
+  neq: Doesn't equal
   lt: Mindre enn
   gt: Større enn
   lte: Mindre enn eller lik
   gte: Større enn eller lik
+  in: Is one of
+  nin: Is not one of
+  null: Is null
+  nnull: Isn't null
   contains: Inneholder
   ncontains: Inneholder ikke
+  icontains: Contains (insensitive)
+  starts_with: Starts with
+  nstarts_with: Doesn't start with
+  ends_with: Ends with
+  nends_with: Doesn't end with
+  between: Is between
+  nbetween: Isn't between
   empty: Er tom
+  nempty: Isn't empty
+  all: Contains these keys
+  has: Contains some of these keys
+  intersects: Intersects
+  nintersects: Doesn't intersect
+  intersects_bbox: Intersects bounding box
+  nintersects_bbox: Doesn't intersect bounding box
+  regex: Matches RegExp
+custom_validation_message: Custom Validation Message
 loading: Laster...
+drop_to_upload: Drop to Upload
 item: Element
 items: Elementer
+upload_file: Upload File
 upload_file_indeterminate: Laster opp fil...
 upload_file_success: Fil lastet opp
 upload_files_indeterminate: 'Laster opp filer {done}/{total}'
 upload_files_success: '{count} filer lastet opp'
+upload_pending: Upload Pending
+drag_file_here: Drag & Drop a File Here
+click_to_browse: Click to Browse
+interface_options: Interface Options
+layout_options: Layout Options
 rows: Rader
 columns: Kolonner
+collection_setup: Collection Setup
+optional_system_fields: Optional System Fields
 value_unique: Verdien må være unik
 all_activity: All aktivitet
 create_item: Opprette element
+display_template: Display Template
+language_display_template: Language Display Template
+translations_display_template: Translations Display Template
+n_items_selected: 'No Items Selected | 1 Item Selected | {n} Items Selected'
+per_page: Per Page
+all_files: All Files
+my_files: My Files
+recent_files: Recent Files
+create_folder: Create Folder
+edit_folder: Edit Folder
+folder_name: Folder Name...
+folder_key: Folder Key...
+add_file: Add File
+replace_file: Replace File
 no_results: Ingen treff
+no_results_copy: Adjust or clear search filters to see results.
+no_visible_fields: Empty Form
+no_visible_fields_copy: This form has no visible fields.
+clear_filters: Clear Filters
+saves_automatically: Saves Automatically
+role: Role
+edit_role: Edit Role
+rule: Rule
+user: User
+no_presets: No Presets
+no_presets_copy: No presets or bookmarks have been saved yet.
+no_presets_cta: Add Preset
+presets_only: Presets Only
 create: Opprett
+on_create: On Create
 on_update: Ved oppdatering
 read: Les
 update: Oppdater
+delete: Delete
 select_fields: Velg felter
+format_text: Format Text
+format_value: Format Value
+abbreviate_value: Abbreviate Value
+operator: Operator
+bold: Bold
+toggle: Toggle
+icon_on: Icon On
+icon_off: Icon Off
+label: Label
+flows: Flows
+flow: Flow
+select_a_flow: Select a Flow
+run_flow_confirm: Are you sure you want to execute this flow?
+run_flow_on_current_collection: Run Flow on Current Collection
+run_flow_on_current: Run Flow on Current Item
+run_flow_on_current_edited_confirm: This item may be updated by this flow, are you sure you want to execute it?
+run_flow_on_selected: Select One or More Items First | Run Flow on 1 Selected Item | Run Flow on {n} Selected Items
+run_flow: Run Flow
+run_flow_success: Flow "{flow}" ran successfully
+field_name_placeholder: Enter field name...
+field_key_placeholder: Enter field key...
+trigger: Trigger
+trigger_options: Trigger Options
+view_trigger: View Trigger
+create_trigger: Create Trigger
+trigger_setup: Trigger Setup
+change_trigger: Change Trigger
+flow_delete_confirm: Are you sure you want to delete Flow "{flow}"? This action can not be undone.
+set_flow_active: Set Flow to Active
+set_flow_inactive: Set Flow to Inactive
+edit_flow: Edit Flow
+delete_flow: Delete Flow
+no_other_flows_copy: You don't have any other Flows yet.
+no_flows: No Flows
+no_flows_copy: You don't have any Flows yet.
+create_flow: Create Flow
+creating_new_flow: Creating New Flow
+updating_flow: Updating Flow
+flow_setup: Flow Setup
 flow_name: Navn
+flow_tracking: Activity & Logs Tracking
+flow_tracking_all: Track Activity & Logs
+flow_tracking_activity: Only Track Activity
+flow_tracking_null: Do Not Track Anything
+start_flow: Start Flow
+stop_flow: Stop Flow
+create_operation: Create Operation
+edit_operation: Edit Operation
+code: Code
+operation_options: Operation Options
+operation_name: Name of operation...
+operation_key: Identifier for reference...
+operation_key_unique_error: Operation keys must be unique in a Flow
+operation_handle_resolve: 'Resolve: Click to Add or Drag to Reroute'
+operation_handle_reject: 'Reject: Click to Add or Drag to Reroute'
 insights: Nøkkeltall
+dashboard: Dashboard
+panel: Panel
+panel_options: Panel Options
+panel_header: Panel Header
+panel_name_placeholder: Name this panel...
+panel_note_placeholder: Optional details about this panel...
+panel_delete_confirm: Are you sure you want to delete this panel? This action can not be undone.
+list_panel_allow_edit: Allow Inline Editing
+dashboard_delete_confirm: Are you sure you want to delete this dashboard? This action can not be undone.
+edit_dashboard: Edit Dashboard
+delete_dashboard: Delete Dashboard
+visible: Visible
+prefix_placeholder: Text before value...
+suffix_placeholder: Text after value...
+decimals_placeholder: Number of decimal places...
+no_dashboards: No Dashboards
+no_dashboards_copy: You don’t have any Dashboards yet.
+create_dashboard: Create Dashboard
+dashboard_name: Dashboard Name
+no_data: No Data
+no_data_in_flow: No data was produced or accessed within this Flow
+accountability: Accountability
+payload: Payload
+details: Details
+full_screen: Full Screen
+full_text_search: Full-Text Search
+edit_panels: Edit Panels
+center_align: Center Align
+left_align: Left Align
+right_align: Right Align
+fit_to_screen: Fit to Screen
+image_url: Image Url
+alt_text: Alternative Text
+media: Media
+quality: Quality
+width: Width
+height: Height
+transformation_preset_key: Transformation Preset Key
+source: Source
+url_placeholder: Enter an url...
+display_text: Display Text
+display_text_placeholder: Enter a display text...
+interface_group_text_and_numbers: Text & Numbers
+interface_group_selection: Selection
+interface_group_relational: Relational
+interface_group_presentation: Presentation
+interface_group_groups: Groups
+interface_group_other: Other
+tooltip: Tooltip
+tooltip_placeholder: Enter a tooltip...
+unlimited: Unlimited
+open_link_in: Open link in
+new_tab: New tab
+current_tab: Current tab
+save_image: Save Image
+save_media: Save Media
 wysiwyg_options:
+  aligncenter: Align Center
+  alignjustify: Align Justify
+  alignleft: Align Left
+  alignnone: Align None
+  alignright: Align Right
+  forecolor: Foreground Color
   backcolor: Bakgrunnsfarge
+  bold: Bold
+  italic: Italic
+  underline: Underline
+  strikethrough: Strikethrough
+  subscript: Subscript
+  superscript: Superscript
+  codeblock: Code
+  blockquote: Blockquote
+  bullist: Bullet List
+  numlist: Numbered List
+  hr: Horizontal Rule
+  link: Add/Edit Link
+  unlink: Remove Link
+  media: Add/Edit Media
+  image: Add/Edit Image
+  copy: Copy
+  cut: Cut
+  paste: Paste
+  heading: Heading
+  h1: Heading 1
+  h2: Heading 2
+  h3: Heading 3
+  h4: Heading 4
+  h5: Heading 5
+  h6: Heading 6
+  fontselect: Select Font
+  fontsizeselect: Select Font Size
+  indent: Indent
+  outdent: Outdent
+  undo: Undo
+  redo: Redo
   remove: Fjern
+  removeformat: Remove Format
   selectall: Merk alt
   table: Tabell
+  visualaid: View invisible elements
+  source_code: Edit Source Code
+  fullscreen: Full Screen
+  directionality: Directionality
+dropdown: Dropdown
+choices: Choices
+choices_option_configured_incorrectly: Choices configured incorrectly
 deselect: Velg bort
+deselect_all: Deselect All
+other: Other...
+adding_user: Adding User
+unknown_user: Unknown User
+creating_in: 'Creating Item in {collection}'
+editing_in: 'Editing Item in {collection}'
+viewing_in: 'Viewing Item in {collection}'
+creating_unit: 'Creating {unit}'
+editing_unit: 'Editing {unit}'
 editing_in_batch: 'Batch Editing {count} elementer'
+no_options_available: No options available
+settings_data_model: Data Model
 settings_permissions: Roller og tilganger
 settings_project: Prosjektinnstillinger
+settings_flows: Flows
+settings_presets: Presets & Bookmarks
+settings_translations: Custom Translations
+settings_extensions: Extensions
+one_or_more_options_are_missing: One or more options are missing
+scope: Scope
+actions: Actions
+select: Select...
+layout: Layout
+tree_view: Tree View
+changes_are_permanent: Changes are permanent
+preset_name_placeholder: Serves as default when empty...
+preset_search_placeholder: Search query...
+editing_preset: Editing Preset
+layout_preview: Layout Preview
+layout_setup: Layout Setup
+data: Data
+unsaved_changes: Unsaved Changes
+unsaved_changes_copy: Are you sure you want to leave this page?
 discard_changes: Forkast endringer
+discard_all_changes: Discard All Changes
+discard_changes_copy: Are you sure you want to discard all the changes made?
+show_x_axis: Show X Axis
+show_y_axis: Show Y Axis
 keep_editing: Fortsett å rediger
+page_help_collections_overview: '**Collections Overview** — List of all collections you have access to.'
+page_help_collections_collection: >-
+  **Browse Items** — Lists all {collection} items you have access to. Customize layout, filters, and sorting to tailor your view, and even save bookmarks of these different configurations for quick access.
+page_help_collections_item: >-
+  **Item Detail** — A form for viewing and managing this item. This sidebar also contains a full history of revisions, and embedded comments.
+page_help_activity_collection: >-
+  **Browse Activity** — A comprehensive listing of all your user's system and content activity.
+page_help_docs_global: >-
+  **Documentation Overview** — Docs tailored specifically to this project's version and schema.
+page_help_files_collection: >-
+  **File Library** — Lists all file assets uploaded to this project. Customize layout, filters, and sorting to tailor your view, and even save bookmarks of these different configurations for quick access.
+page_help_files_item: >-
+  **File Detail** — A form for managing file metadata, editing the original asset, and updating access settings.
+page_help_settings_project: "**Project Settings** — Your project's global configuration options."
+page_help_settings_datamodel_collections: >-
+  **Data Model: Collections** — Lists all collections available. This includes visible, hidden, and system collections, as well as unmanaged database tables that can be added.
+page_help_settings_datamodel_fields: >-
+  **Data Model: Collection** — A form for managing this collection and its fields.
+page_help_settings_roles_collection: '**Browse Roles** — Lists the Admin, Public and custom User Roles.'
+page_help_settings_roles_item: "**Role Detail** — Manage a role's permissions and other settings."
+page_help_settings_presets_collection: >-
+  **Browse Presets** — Lists all presets in the project, including: user, role, and global bookmarks, as well as default views.
+page_help_settings_presets_item: >-
+  **Preset Detail** — A form for managing bookmarks and default collection presets.
+page_help_settings_flows_collection: '**Browse Flows** — Lists all Flows within the project.'
+page_help_settings_flows_item: '**Flow Detail** — Workspace for managing one or more operations.'
+page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
+extension_health_normal: Normal
+extension_health_warning: Warning | Warnings
+extension_health_failed: Failed
+extension_bundle_contents: Bundled extensions
+extension_capabilities: Capabilities
+extension_advanced_diagnostics: Advanced Diagnostics
+extension_sandboxed: Sandboxed
+extension_runtime: Runtime
+extension_runtime_sandboxed: Sandboxed
+extension_runtime_full_authority: Full Authority
+extension_runtime_browser: Browser App
+confined_runtime: Sandbox
+confined_runtime_mode: 'OS hardening: {decision} ({mode})'
+confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
+extension_status_loaded_detail: Loaded and running on the server.
+extension_status_discovered_detail: Discovered on this instance.
+extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
+extension_status_failed_detail: The extension failed to load on this instance.
+extension_settings_unavailable_detail: Extension settings are unavailable.
+extension_settings_drawer_subtitle: Extension settings
+extension_settings_section: Extension Settings
+extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
+extension_settings_no_global_keys: This extension declares no global settings.
+extension_settings_load_failed: Could not load the extension's settings.
+extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
+extension_type_group_hook: Hooks
+extension_type_group_endpoint: Endpoints
+extension_type_group_operation: Operations
+extension_type_group_bundle: Bundles
+extension_type_group_interface: Interfaces
+extension_type_group_display: Displays
+extension_type_group_layout: Layouts
+extension_type_group_module: Modules
+extension_type_group_panel: Panels
+extension_type_group_item-view: Item Views
+extension_type_group_other: Other
+no_extensions: No Extensions
+no_extensions_copy: No extensions were discovered in the configured extensions path.
+extensions_load_failed: Could not load the extensions inventory.
+page_help_settings_translations_collection: '**Browse Custom Translations** — Lists all custom translations within the project.'
+page_help_settings_translations_item: '**Custom Translations Detail** — A form for viewing and managing this item.'
+page_help_users_collection: '**User Directory** — Lists all system users within this project.'
+page_help_users_item: >-
+  **User Detail** — Manage your account information, or view the details of other users.
+page_help_insights_overview: '**Insights** — List of dashboards you have access to.'
+page_help_insights_dashboard: '**Dashboard** — Workspace for managing one or more panels'
+activity_feed: Activity Feed
 add_new: Legg til ny
+create_new: Create New
 all: Alle
+none: None
+no_layout_collection_selected_yet: No layout/collection selected yet
 batch_delete_confirm: >-
   Ingen elementer har blitt valgt | Er du sikker på at du vil slette dette elementet? Handlingen kan ikke angres. | Er du sikker på at du vil slette disse {count} elementene? Handlingen kan ikke angres.
 cancel: Avbryt
+no_upscale: Don't upscale images
 collection: Kolleksjon
 collections: Kolleksjoner
+content: Content
+singleton: Singleton
+singleton_label: Treat as single object
+system_fields_locked: System fields are locked and can't be edited
+directus_collection:
+  directus_activity: Accountability logs for all events
+  directus_collections: Additional collection configuration and metadata
+  directus_dashboards: Dashboards within the Insights module
+  directus_fields: Additional field configuration and metadata
+  directus_files: Metadata for all managed file assets
+  directus_flows: Automation flows
+  directus_folders: Provides virtual directories for files
+  directus_migrations: What version of the database you're using
+  directus_notifications: Notifications sent to users
+  directus_operations: Operations that run in Flows
+  directus_panels: Individual panels within Insights dashboards
+  directus_permissions: Access permissions for each role
+  directus_presets: Presets for collection defaults and bookmarks
+  directus_relations: Relationship configuration and metadata
+  directus_revisions: Data snapshots for all activity
+  directus_roles: Permission groups for system users
+  directus_sessions: User session information
+  directus_settings: Project configuration options
+  directus_shares: Tracks externally shared items
+  directus_users: System users for the platform
+  directus_translations: Custom translations
 fields:
   directus_activity:
     item: Element Hovednøkkel
+    action: Action
     collection: Kolleksjon
+    timestamp: Action On
+    user: Action By
     comment: Kommenter
     user_agent: Brukeragent
     origin: Opprinnelse
     ip: IP-addresse
+    revisions: Revisions
   directus_collections:
     collection: Kolleksjon
     icon: Ikon
     note: Notat
     color: Farge
+    display_template: Display Template
     hidden: Skjult
+    singleton: Singleton
+    translations: Collection Naming Translations
+    archive_app_filter: Archive App Filter
+    archive_value: Archive Value
+    unarchive_value: Unarchive Value
     sort_field: Sorter felt
+    accountability: Activity & Revision Tracking
+    archive_field: Archive Field
+    item_duplication_fields: Item Duplication Fields
   directus_files:
+    $thumbnail: Thumbnail
     title: Tittel
     description: Beskrivelse
     tags: Etiketter
     location: Lokasjon
+    storage: Storage
+    filename_disk: Filename (Disk)
+    filename_download: Filename (Download)
+    metadata: Metadata
+    type: Mime Type
+    filesize: Filesize
+    modified_by: Modified By
     modified_on: Modifisert den
     created_on: Opprettet den
     created_by: Opprettet av
     embed: Embed
+    uploaded_by: Uploaded By
     folder: Mappe
+    width: Width
+    uploaded_on: Uploaded On
+    height: Height
     charset: Charset
     duration: Varighet
   directus_users:
+    first_name: First Name
+    last_name: Last Name
     email: E-post
     password: Passord
+    avatar: Avatar
     location: Lokasjon
     title: Tittel
     description: Beskrivelse
     tags: Etiketter
+    user_preferences: User Preferences
     language: Språk
+    theme: Theme
+    theme_auto: Automatic (Based on System)
+    theme_light: Light Mode
+    theme_dark: Dark Mode
+    tfa_secret: Two-Factor Authentication
+    admin_options: Admin Options
     status: Status
+    status_draft: Draft
+    status_invited: Invited
     status_active: Aktiv
+    status_suspended: Suspended
+    status_archived: Archived
+    role: Role
+    token: Token
+    provider: Provider
+    external_identifier: External Identifier
     last_page: Siste side
     last_access: Siste tilgang
+    email_notifications: Email Notifications
   directus_settings:
+    jpg: JPEG
+    png: PNG
+    webP: WebP
+    tiff: Tiff
+    avif: AVIF
+    mapping: Mapping
+    basemaps: Basemaps
+    basemaps_raster: Raster
+    basemaps_tile: Raster TileJSON
+    basemaps_style: Mapbox Style
+    mapbox_key: Mapbox Access Token
+    mapbox_placeholder: pk.eyJ1Ijo.....
+    attribution: Attribution
+    attribution_placeholder: '© OpenStreetMap contributors'
+    transforms_note: The Sharp method name and its arguments. See https://sharp.pixelplumbing.com/api-constructor for more information.
+    additional_transforms: Additional Transformations
     project_name: Prosjektnavn
+    project_descriptor: Project Descriptor
+    project_url: Project URL
+    project_color: Project Color
+    project_logo: Project Logo
+    default_language: Default Language
+    branding: Branding & Style
+    public_foreground: Public Foreground
+    public_background: Public Background
+    public_note: Public Note
+    auth_password_policy: Auth Password Policy
+    auth_login_attempts: Auth Login Attempts
+    files_and_thumbnails: Files & Storage
+    storage_default_folder: Default Folder
+    storage_asset_presets: Transformation Presets
+    storage_asset_transform: Allowed Transformations
+    overrides: App Overrides
+    custom_css: Custom CSS
     module_bar: Modul Bar
+    transformations_all: Allow all transformations
+    transformations_none: Disable transformations
+    transformations_presets: Limit transformations to presets below
+    image_editor: Image Editor
+    custom_aspect_ratios: Custom Aspect Ratios
   directus_shares:
     name: Navn
+    role: Role
     password: Passord
+    date_start: Date Start
+    date_end: Date End
+    max_uses: Max Uses
+    times_used: Times Used
   directus_fields:
+    collection: Collection Name
+    icon: Collection Icon
     note: Notat
     hidden: Skjult
+    singleton: Singleton
     translation: Feltnavn oversettelser
+    display_template: Template
   directus_roles:
     name: Rollenavn
+    icon: Role Icon
     description: Beskrivelse
+    app_access: App Access
+    admin_access: Admin Access
+    ip_access: IP Access
+    enforce_tfa: Require 2FA
+    users: Users in Role
+    module_list: Module Navigation
 field_options:
   directus_settings:
+    project_name_placeholder: My project...
+    project_color_note: Login & Logo Background
+    project_logo_note: White 40x40 SVG/PNG
+    public_note_placeholder: A short, public message that supports markdown formatting...
     security_divider_title: Sikkerhet
+    auth_password_policy:
+      none_text: None – Not Recommended
+      weak_text: Weak – Minimum 8 Characters
+      strong_text: Strong – Upper / Lowercase / Numbers / Special
+    storage_asset_presets:
+      fit_label: Fit
+      upscaling: Upscaling
+      fit:
+        contain_text: Contain (preserve aspect ratio)
+        cover_text: Cover (forces exact size)
+        fit_text: Fit inside
+        outside_text: Fit outside
+    additional_transforms: Additional Transformations
+    transforms_note: The Sharp method name and its arguments. See https://sharp.pixelplumbing.com/api-constructor for more information.
+    mapbox_key: Mapbox Access Token
+    mapbox_placeholder: pk.eyJ1Ijo.....
+    basemaps: Basemaps
+    basemaps_name_placeholder: Enter the basemap name...
+    basemaps_raster: Raster
+    basemaps_tile: Raster TileJSON
+    basemaps_style: Mapbox Style
+    files_divider_title: Files & Thumbnails
+    overrides_divider_title: App Overrides
   directus_activity:
+    login: Login
     create: Opprett
     update: Oppdater
+    delete: Delete
   directus_collections:
+    track_activity_revisions: Track Activity & Revisions
+    only_track_activity: Only Track Activity
+    do_not_track_anything: Do Not Track Anything
+    collection_setup: Collection Setup
+    note_placeholder: A description of this collection...
+    hidden_label: Hide within the App
+    singleton: Treat as single object
     language: Språk
+    translation: Translation
+    translation_placeholder: Enter a translation...
+    collection_name: Collection Name
+    singular_unit: Singular Unit
+    plural_unit: Plural Unit
     archive_divider: Arkiv
+    archive_field_placeholder: Choose a field...
+    archive_app_filter: Enable App Archive Filter
+    archive_value: Value set when archiving...
+    unarchive_value: Value set when unarchiving...
     sort_divider: Sorter
+    sort_field: Choose a field...
+    accountability_divider: Accountability
+    duplication_divider: Duplication
+  directus_files:
+    title: A unique title...
+    description: An optional description...
+    location: An optional location...
+    storage_divider: File Naming
+    filename_disk: Name on disk storage...
+    filename_download: Name when downloading...
   directus_roles:
+    name: The unique name for this role...
+    description: A description of this role...
+    ip_access: Add allowed IP addresses, leave empty to allow all...
     fields:
       icon_name: Ikon
       name_name: Navn
+      name_placeholder: Enter a title...
+      link_name: Link
+      link_placeholder: Relative or absolute URL...
     collections_name: Kolleksjoner
+    collections_addLabel: Add Collection...
   directus_users:
+    preferences_divider: User Preferences
+    dropdown_auto: Automatic (Based on System)
+    dropdown_light: Light Mode
+    dropdown_dark: Dark Mode
+    admin_divider: Admin Options
+    status_dropdown_draft: Draft
+    status_dropdown_invited: Invited
     status_dropdown_active: Aktiv
+    status_dropdown_suspended: Suspended
+    status_dropdown_archived: Archived
+    token: Enter a secure access token...
+no_fields_in_collection: 'There are no fields in "{collection}" yet'
+no_value: No value
+do_nothing: Do Nothing
+generate_and_save_uuid: Generate and Save UUID
+save_current_user_id: Save Current User ID
+save_current_user_role: Save Current User Role
+save_current_datetime: Save Current Date/Time
+always_open: Always Open
+start_open: Start Open
+start_collapsed: Start Collapsed
+block: Block
+inline: Inline
 comment: Kommenter
+shares: Shares
+unlimited_usage: Unlimited usage
+uses_left: No uses left | 1 use left | {n} uses left
+no_shares: No shares to show
+new_share: New Share
+expired: Expired
+upcoming: Upcoming
+share: Share
+share_item: Share Item
+shared_with_you: An item has been shared with you
+shared_enter_passcode: Enter your passcode to continue...
+shared_leave_blank_for_unlimited: Leave blank for unlimited
+shared_times_remaining: This link can only be used {n} times
+shared_last_remaining: This link can only be used once
+shared_uses_left: For added security, this shared page has been configured with a limited number of views. There are currently {n} views remaining, after which, the page will no longer be accessible.
+share_access_page: Access Shared Page
+share_access_not_found: This shared page either does not exist or has already exceeded the maximum number of allowed uses.
+share_access_not_found_desc: Please contact an authorized user of this project to request access.
+share_access_not_found_title: Unknown Share Page
+share_copy_link: Copy Link
+share_copy_link_success: Link Copied
+share_copy_link_error: Unable to Copy Link
+share_send_link: Send Link
+relational_triggers: Relational Triggers
+referential_action_field_label_m2o: On Delete of {collection}...
+referential_action_field_label_o2m: On Deselect of {collection}...
+referential_action_no_action: Prevent the deletion
+referential_action_cascade: Delete the {collection} item (cascade)
+referential_action_set_null: Nullify the {field} field
+referential_action_set_default: Set {field} to its default value
+choose_action: Choose Action
+continue_label: Continue
+continue_as: >-
+  {name} is currently authenticated. If you recognize this account, press continue.
+editing_role: '{role} Role'
+default_label: Default
+delete_label: Delete
+delete_are_you_sure: >-
+  This action is permanent and can not be undone. Are you sure you would like to proceed?
 delete_field_are_you_sure: >-
   Er du sikker på at du vil slette feltet "{field}"? Handlingen kan ikke angres..
 description: Beskrivelse
 done: Ferdig
 duplicate: Dupliser
+limit: Limit
 email: E-post
 embed: Embed
+fallback_icon: Fallback Icon
+field: Field | Fields
 file: Fil
 file_library: Filbibliotek
 forgot_password: Glemt passord
 hidden: Skjult
+hidden_in_group: Hidden in {group}
 icon: Ikon
 info: Info
+normal: Normal
+success: Success
+warning: Warning
+danger: Danger
+colors:
+  purple: Purple
+  blue: Blue
+  green: Green
+  yellow: Yellow
+  orange: Orange
+  red: Red
+  black: Black
+  gray: Gray
+  white: White
 junction_collection: Junction Collection
 latency: Ventetid
 login: Logg inn
 my_activity: Min aktivitet
+not_authenticated: Not Authenticated
+authenticated: Authenticated
 options: Alternativer
 otp: Engangspassord
 password: Passord
 permissions: Tilganger
 relationship: Relasjon
+reset: Reset
 reset_password: Tilbakestill passord
+revisions: Revisions
+no_revisions: No Revisions Yet
+no_logs: No Logs Yet
 revert: Reverter
 save: Lagre
 schema: Skjema
 search: Søk
 select_existing: Velg eksisterende
+select_field_type: Select a field type
 select_interface: Velg ett grensesnitt
 settings: Innstillinger
 sign_in: Logg inn
 sign_out: Logg ut
 sign_out_confirm: Er du sikker på at du vil logge ut?
 something_went_wrong: Noe gikk galt.
+sort_direction: Sort Direction
+export_location: Export Location
+export_started: Export Started
+export_started_copy: Your export has started. You'll be notified when it's ready to download.
+sort_asc: Sort Ascending
+sort_desc: Sort Descending
+disable_sort: Disable Sorting
+template: Template
+require_value_to_be_set: Require value to be set on creation
+translation: Translation
+translation_placeholder: Enter a translation...
 value: Verdi
+view_project: View Project
+weeks: { }
+report_error: Report Error
+start: Start
 table: Tabell
+list: List
+search_filter: Search & Filter
+enable_search_filter: Enable searching & filtering
+item_link: Item link
+show_link_to_item: Show a link to the item
+navigate_to_item: Navigate to Item
+undo_removed_item: Undo Removed Item
+remove_item: Remove Item
+delete_item: Delete Item
 interfaces:
   filter:
     name: Filter
+    description: Configure a filter object.
     add_filter: Legg til filter
+    add_group: And / Or group
+    add_value: Add Value
+    logic_type_and: AND
+    logic_type_or: OR
     all: Alle
     any: Noen
+    and: and
+    of_the_following: of the following
+    no_rules: No configured rules
+    change_value: Click to change value
+    placeholder: Drag rules here
+    add_key_placeholder: Add a key and press enter...
+  fields:
+    name: Fields
+  group-accordion:
+    name: Accordion
+    description: Display fields or groups as accordion sections
+    start: Start
+    all_closed: All Closed
+    first_opened: First Opened
+    all_opened: All Opened
+    accordion_mode: Accordion Mode
+    max_one_section_open: Max 1 Section Open
   presentation-links:
+    presentation-links: Button Links
+    links: Links
+    description: Configurable link buttons for launching dynamic URLs
+    style: Style
     primary: Primær
+    link: Links
+    button: Buttons
+    error: Cannot perform action
+  select-multiple-checkbox:
+    checkboxes: Checkboxes
+    description: Choose between multiple options via checkboxes
+    allow_other: Allow Other
+    show_more: 'Show {count} more'
+    items_shown: Items Shown
+  select-multiple-checkbox-tree:
+    name: Checkboxes (Tree)
+    description: Choose between multiple options via nested checkboxes
+    value_combining: Value Combining
+    value_combining_note: Controls what value is stored when nested selections are made.
+    show_all: Show All
+    show_selected: Show Selected
+  input-code:
+    code: Code
+    description: Write or share code snippets
+    line_number: Line Number
+    line_wrapping: Line Wrapping
+    placeholder: Enter code here...
   system-collection:
     collection: Kolleksjon
+    description: Select between existing collections
+    include_system_collections: Include System Collections
   system-collections:
     collections: Kolleksjoner
+    description: Select between existing collections
+    include_system_collections: Include System Collections
   select-color:
     color: Farge
+    description: Enter or select a color value
+    placeholder: Choose a color...
+    preset_colors: Preset Colors
+    opacity: Opacity
+    preset_colors_add_label: Add new color...
+    name_placeholder: Enter color name...
+  datetime:
+    datetime: Datetime
+    description: Enter dates and times
+    include_seconds: Include Seconds
+    set_to_now: Set to Now
+    use_24: Use 24-Hour Format
+    placeholder: Choose a datetime...
   system-fields:
     select_a_collection: Velg en Kolleksjon
+    no_fields: No fields
   system-display-template:
+    display-template: Display Template
+    description: Mix static text and dynamic field values
+    collection_field: Collection field
     collection_field_not_setup: Kolleksjonsfeltalternativet er feilkonfigurert
     select_a_collection: Velg en Kolleksjon
+  presentation-divider:
+    divider: Divider
+    description: Label and divide fields into sections
+    title_placeholder: Enter a title, or leave blank to only show a line...
+    inline_title: Inline Title
+    inline_title_label: Show title inside line
+    margin_top: Margin Top
+    margin_top_label: Increase Top Margin
   select-dropdown:
+    description: Select a value from a dropdown
+    choices_placeholder: Add a new choice
+    allow_other: Allow Other
+    allow_other_label: Allow Other Values
+    allow_none: Allow None
+    allow_none_label: Allow No Selection
+    choices_name_placeholder: Enter a name...
     choices_value_placeholder: Legg inn verdi...
+    preview_threshold: Preview Threshold
+  select-multiple-dropdown:
+    select-multiple-dropdown: Dropdown (Multiple)
+    description: Select multiple values from a dropdown
   file:
     file: Fil
+    description: Select or upload a file
   files:
     files: Filer
+    description: Select or upload multiple files
   input-hash:
     hash: Hash
+    description: Enter a value to be hashed
+    masked: Masked
+    masked_label: Hide the true values
+  system-extension-secret:
+    name: Extension Secret
+    value_stored: Value Securely Encrypted
   select-icon:
     icon: Ikon
+    description: Select an icon from a dropdown
+    search_for_icon: Search for icon...
+  file-image:
+    image: Image
+    description: Select or upload an image
+    crop: Crop to Fit
+    crop_label: Crop image as needed
   system-interface:
     interface: Grensesnitt
+    description: Select an existing interface
+    placeholder: Select an interface...
+  system-interface-options:
+    interface-options: Interface Options
+    description: A modal for selecting options of an interface
+  list-m2m:
+    many-to-many: Many to Many
+    description: Select multiple related junction items
+    columns_configure_notice: You can configure the columns after creating this field.
+    display_template_configure_notice: You can configure the display template after creating this field.
+  select-dropdown-m2o:
+    many-to-one: Many to One
+    description: Select a single related item
+    display_template: Display Template
+  collection-item-dropdown:
+    collection-item-dropdown: Collection Item Dropdown
+    description: Select an item from a collection in JSON format
   input-rich-text-md:
+    markdown: Markdown
+    description: Enter and preview markdown
     edit: Rediger
+    preview: Preview
+    editorFont: Editor Font
+    previewFont: Preview Font
+    customSyntax: Custom Blocks
+    customSyntax_label: Add custom syntax types
+    customSyntax_add: Add custom syntax
+    box: Block / Inline
+    imageToken: Static Access Token
+    imageToken_label: Static access token is appended to the assets' URL
   map:
+    map: Map
+    description: Select a location on a map
     zoom: Zoom
+    geometry_type: Geometry Type
+    geometry_format: Geometry Format
+    default_view: Default View
+    invalid_options: Invalid options
+    invalid_format: Invalid format ({format})
+    unexpected_geometry: Expected {expected}, got {got}.
+    fit_bounds: Fit view to data
+    native: Native
+    geojson: GeoJSON
+    lnglat: Longitude, Latitude
+    wkt: WKT
+    wkb: WKB
+    click_to_select: Click to select {geometry}
+  presentation-notice:
+    notice: Notice
+    description: Display a short notice
+    text: Enter notice content here...
+    no_text: No text configured...
+  list-o2m:
+    one-to-many: One to Many
+    description: Select multiple related items
+    no_collection: The collection could not be found
   system-folder:
     folder: Mappe
+    description: Select a folder
+    field_hint: Default folder for uploaded files without a folder specified. Does not affect existing files.
+    root_name: File Library Root
+    system_default: System Defaults
+  select-radio:
+    radio-buttons: Radio Buttons
+    description: Select one of multiple choices
   list:
+    repeater: Repeater
+    description: Create multiple entries of the same structure
+    edit_fields: Edit Fields
+    add_label: '"Create New" Label'
     sort: Sorter
+    sort_placeholder: Manual
+    field_note_placeholder: Enter field note...
+    incompatible_data: The current data is not compatible with the repeater interface and will be overridden when adding items to the repeater
+  slider:
+    slider: Slider
+    description: Select a number using a slider
+    always_show_value: Always show value
   tags:
     tags: Etiketter
+    description: Select or add tags
+    whitespace: Whitespace
+    hyphen: Replace with hyphen
+    underscore: Replace with underscore
+    remove: Remove whitespace
+    capitalization: Capitalization
+    uppercase: Convert Uppercase
+    lowercase: Convert Lowercase
+    auto_formatter: Use Title Auto-Formatter
+    alphabetize: Alphabetize
+    alphabetize_label: Force Alphabetical Order
+    add_tags: Add a tag and press Enter...
+  input:
+    input: Input
+    description: Manually enter a value
+    trim: Trim
+    trim_label: Trim the start and end
+    mask: Masked
+    mask_label: Hide the real value
+    clear: Cleared Value
+    clear_label: Save as empty string
+    minimum_value: Minimum Value
+    maximum_value: Maximum Value
+    step_interval: Step Interval
+    slug: Slugify
+    slug_label: Make entered value URL safe
+  input-multiline:
+    textarea: Textarea
+    description: Enter multiline plain-text
+  input-translated-string:
+    input-translated-string: Translated Strings
+    description: Select or add custom translation
+    search_placeholder: Search...
+    new_custom_translation: New Custom Translation
   boolean:
+    toggle: Toggle
+    description: Switch between on and off
+    color_on: Color On
+    color_off: Color Off
+    label_placeholder: Enter a label...
     label_default: Aktivert
+  translations:
+    display_template: Display Template
+    no_collection: No Collection
+    toggle_split_view: Toggle Split View
+    enable: Enable
+    user_language: Use Current User Language
+    default_language: Default Language
+    language_field: Language Indicator Field
+    language_direction_field: Language Direction Field
+  list-o2m-tree-view:
+    description: Tree view for nested recursive one-to-many items
+    recursive_only: The tree view interface only works for recursive relationships.
+  user:
+    user: User
+    description: Select an existing CairnCMS user
+    select_mode: Select Mode
+    modes:
+      auto: Auto
+      dropdown: Dropdown
+      modal: Modal
+  input-rich-text-html:
+    wysiwyg: WYSIWYG
+    description: A rich-text editor writing HTML content
+    toolbar: Toolbar
+    custom_formats: Custom Formats
+    options_override: Options Override
+    folder_note: Folder for uploaded files. Does not affect existing files.
+    imageToken: Static Access Token
+    imageToken_label: Static access token is appended to the assets' URL
+  input-autocomplete-api:
+    input-autocomplete-api: Autocomplete Input (API)
+    description: A search typeahead for external API values.
+    results_path: Results Path
+    value_path: Value Path
+    text_path: Text Path
+    trigger: Trigger
+    rate: Rate
+  group-raw:
+    name: Raw Group
+    description: Render the fields as-is
+  group-detail:
+    name: Detail Group
+    description: Render the fields as a collapsable section
+    show_header: Show Group Header
+    header_icon: Header Icon
+    header_color: Header Color
+    start_open: Start Open
+    start_closed: Start Closed
+  system-token:
+    system-token: Token
+    description: Manage static access token
+    placeholder: Click "Generate Token" to create a new static access token
+    value_securely_saved: Value Securely Saved
+    generate: Generate Token
+    regenerate: Regenerate Token
+    generate_success_copy: Make sure to backup and copy the token above. For security reasons, you will not be able to view the token again after saving and navigate off this page.
+    remove_token: Remove Token
+  system-raw-editor:
+    system-raw-editor: Raw Editor
+    description: Allow entering of raw or mustache templating values
 displays:
   translations:
     translations: Oversettelser
+    description: Preview translations
+    enable: Enable
+    user_language: Use Current User Language
+    default_language: Default Language
+    language_field: Language Indicator Field
   boolean:
     boolean: Sann/usann
+    description: Display on and off states
+    label_on: Label On
+    label_on_placeholder: Enter an on label...
+    label_off: Label Off
+    label_off_placeholder: Enter an off label...
+    icon_on: Icon On
+    icon_off: Icon Off
+    color_on: Color On
+    color_off: Color Off
   collection:
     collection: Kolleksjon
+    description: Display a collection
+    icon_label: Show the collection's icon
   color:
     color: Farge
+    description: Display a colored dot
+    default_color: Default Color
   datetime:
+    datetime: Datetime
+    description: Display values related to time
     format: Format
+    format_note: >-
+      The custom format accepts the __[Date Field Symbol Table](https://www.unicode.org/reports/tr35/tr35-dates.html#Date_Field_Symbol_Table)__
+    long: Long
+    short: Short
+    relative: Relative
+    relative_label: 'Show relative time, eg: 5 minutes ago'
     suffix: Suffiks
+    suffix_label: Show relative indicator
+    suffix_note: Uses words like 'in' and 'ago'
+    strict: Strict
+    strict_label: Use strict units
+    strict_note: Removes words like 'almost', 'over', 'less than'
+    round: Round
+    round_note: Choose a rounding function to use
+    down: Down
+    nearest: Nearest
+    up: Up
   file:
     file: Fil
+    description: Display files
+  filesize:
+    filesize: File Size
+    description: Display the size of a file
   formatted-value:
+    formatted-value: Formatted Value
+    description: Display a formatted version of the text
     format: Format
+    format_label: Auto format
+    font: Font
+    font_sans_serif: Sans serif
+    font_serif: Serif
     font_monospace: Fastbredde
+    bold: Bold
+    bold_label: Use bold style
+    italic: Italic
+    italic_label: Use italic style
     prefix: Prefiks
+    prefix_label: Prepend text
     suffix: Suffiks
+    suffix_label: Appended Text
     color: Farge
+    background: Background
     icon: Ikon
+    border: Border
+    border_label: Show border
     text: Tekst
+    text_placeholder: Optional value override...
+  formatted-json-value:
+    formatted-json-value: Formatted JSON value
+    description: Display a formatted version of the object
   icon:
     icon: Ikon
+    description: Display an icon
+    filled: Filled
+    filled_label: Use the filled variant
   image:
+    image: Image
+    description: Display a tiny image preview
     circle: Sirkel
+    circle_label: Display as a circle
   labels:
+    labels: Labels
+    description: Display either a single or a list of labels
+    default_foreground: Default Foreground
+    default_background: Default Background
+    format_label: Format each label
+    show_as_dot: Show As Dot
     choices_value_placeholder: Legg inn verdi...
+    choices_text_placeholder: Enter a text...
+  mime-type:
+    mime-type: MIME Type
+    description: Show the MIME-Type of a file
+    extension_only: Extension Only
+    extension_only_label: Only show the file extension
+  rating:
+    rating: Rating
+    description: Visualize a number as stars relative to the max-value
+    simple: Simple
+    simple_label: Show stars in a simple format
+  raw:
+    raw: Raw Value
+  related-values:
+    related-values: Related Values
+    description: Display relative values
+    display_template_configure_notice: You can configure the display template after creating this field.
   user:
+    user: User
+    description: Display a CairnCMS user
+    avatar: Avatar
     name: Navn
     both: Begge
+    circle_label: Show user in a circle
 layouts:
   cards:
     cards: Kort
     image_source: Bilde Kilde
+    image_fit: Image Fit
+    crop: Crop
+    contain: Contain
     title: Tittel
     subtitle: Undertittel
   tabular:
@@ -842,11 +1912,242 @@ layouts:
     comfortable: Komfortabel
     compact: Kompakt
     cozy: Cozy
+  calendar:
+    calendar: Calendar
+    start_date_field: Start Date Field
+    end_date_field: End Date Field
+    optional: Optional
+    first_day: First Day of the Week
+  map:
+    map: Map
+    basemap: Basemap
+    layers: Layers
+    cluster_options: Clustering options
+    cluster: Cluster Nearby Data
+    cluster_radius: Cluster radius
+    cluster_minpoints: Cluster minimum size
+    cluster_maxzoom: Maximum zoom for clustering
+    field: Geospatial Field
+    invalid_geometry: Invalid geometry
+    find_location: Find location...
+    default_template: Using Collection Default...
+    no_compatible_fields: No compatible fields
+  kanban:
+    name: Kanban
+    group_field: Group By
+    group_field_placeholder: Field to group by...
+    group_title: Group Title
+    group_title_placeholder: Field for group titles...
+    title: Card Title
+    title_placeholder: Optional title field...
+    text: Card Text
+    text_placeholder: Optional text field...
+    date: Card Date
+    date_placeholder: Optional date field...
+    tags: Card Tags
+    tags_placeholder: Optional tags field...
+    user: Card User
+    user_placeholder: Optional user field...
+    image: Card Image
+    image_placeholder: Optional image field...
+    image_fit: Card Image Fit
+    crop: Crop
+    advanced: Advanced
+    edit_group: Edit Group
+    delete_group: Delete Group
+    add_group: Add Group
+    add_group_placeholder: Enter a new group title...
+    show_ungrouped: Show Ungrouped
+    show: Show
+    no_group: No Group
+    not_all_loaded: Could only load the first 1000 items.
+horizontal: Horizontal
+vertical: Vertical
+x_axis: X-Axis
+y_axis: Y-Axis
+y_axis_function: Y-Axis Function
+show_x_only: Show X-Axis Only
+show_y_only: Show Y-Axis Only
+show_data_label: Show Data Label
 both: Begge
+show_axis_labels: Show Axis Labels
+function: Function
+half_circle: Half Circle
+full_circle: Full Circle
+stroke_width: Stroke Width
+rounded_stroke: Rounded Stroke
+thin: Thin
+medium: Medium
+broad: Broad
+show_labels: Show Labels
+show_legend: Show Legend
+right: Right
+left: Left
+donut: Donut
+panels:
+  metric:
+    name: Metric
+    description: Show a single value based on a query
+    field: Field
+  time_series:
+    name: Time Series
+    description: Render a line chart based on values over time
+    date_field: Date Field
+    value_field: Value Field
+    fill_type: Fill Type
+    curve_type: Curve Type
+  label:
+    name: Label
+    description: Show some text
+  list:
+    name: List
+    description: Filter and list fields from a collection
+  barchart:
+    name: Bar Chart
+    description: Bar or column charts for comparing groups of values
+    horizontal: Horizontal
+    select_collection: You must select a collection.
+  linechart:
+    name: Line Chart
+    description: Line chart for comparing change of a field
+    disabled_grouping: Disabled when grouping is selected.
+    disabled_no_grouping: Disabled when no grouping is selected.
+    show_marker: Show Tooltip Marker
+    curve_type: Curve Type
+    smooth: Smooth
+    straight: Straight
+    step_line: Step Line
+  meter:
+    name: Meter
+    description: Meter for tracking values
+  piechart:
+    name: Pie or Donut Chart
+    description: Circular chart showing the ratios of groups on a column
+  variable:
+    name: Global Variable
+    description: Set a global value for use in other Panels' filters
+    variable_key: Variable Key
+  relational-variable:
+    name: Global Relational Variable
+    description: Set a global relational value for use in other Panels' filters
+    variable_key: Variable Key
+    multiple: Multiple
+    multiple-label: Select multiple items
+triggers:
+  common:
+    response_body: Response Body
+    response_body_all: All Data
+    response_body_last: Data of Last Operation
+  event:
+    name: Event Hook
+    description: Triggers on platform or data events
+    action: 'Action (Non-Blocking)'
+    filter: 'Filter (Blocking)'
+  webhook:
+    name: Webhook
+    description: Triggers on an incoming HTTP request
+    method: Method
+    async: Asynchronous
+  operation:
+    name: Another Flow
+    description: Triggered by another Flow, for chaining
+    preview: Triggered by an operation in a different Flow
+  schedule:
+    name: Schedule (CRON)
+    description: Triggers at regular points in time
+    cron: Interval
+  manual:
+    name: Manual
+    description: Triggers on manual run within selected collection(s)
+    collection_and_item: Collection & Item Pages
+    collection_only: Collection Page Only
+    item_only: Item Page Only
+    collection_page: Collection Page
+    require_selection: Requires Selection
+a_flow_uuid: Select a Flow to trigger...
+any_string_or_json: Any string or JSON...
+item_payload_placeholder: This is the JSON used to update the item's field values...
+operation_variables_note: You can access flow data with variables such as **{'{'}{'{'}$last{'}'}{'}'}**, **{'{'}{'{'}$trigger{'}'}{'}'}** and **{'{'}{'{'}$accountability{'}'}{'}'}**, or reference previous operations using **{'{'}{'{'}operation_key{'}'}{'}'}**.'
 operations:
+  condition:
+    name: Condition
+    description: Route a flow based on If / Else logic
+  exec:
+    name: Run Script
+    description: Execute arbitrary code to modify the payload
+    modules: 'The following **Node modules** can be used:'
+  item-create:
+    name: Create Data
+    description: Create items in the database
+    payload: Payload
+    emit_events: Emit Events
+  item-delete:
+    name: Delete Data
+    description: Delete items in the database
+    emit_events: Emit Events
+    key: IDs
+    query: Query
+  item-read:
+    name: Read Data
+    description: Read items from the database
+    key: IDs
+    query: Query
+    emit_events: Emit Events
+  item-update:
+    name: Update Data
+    description: Update items in the database
+    emit_events: Emit Events
+    key: IDs
+    payload: Payload
+    query: Query
   log:
+    name: Log to Console
+    description: Output something to the console
     message: Melding
+    message_placeholder: Enter a message to show in the console...
+  mail:
+    name: Send Email
+    description: Send an email to one or more people
+    to: To
+    to_placeholder: Add e-mail addresses and press enter...
+    body: Body
+    template: Template
+    data: Data
   notification:
+    name: Send Notification
+    description: Send an in-app notification to one or more users
+    recipient: User
+    recipient_placeholder: Enter a UUID...
+    recipient_note: Add user UUID and press enter...
     message: Melding
   request:
+    name: Webhook / Request URL
+    description: "Make a request to a URL"
     url: URL
+    url_placeholder: https://example.com/example
+    method: Method
+    data: Data
+    headers: Headers
+    header: Header
+    header_placeholder: Authorization...
+    value_placeholder: Bearer eyJhbGciOi...
+  sleep:
+    name: Sleep
+    description: Wait a given number of milliseconds
+    milliseconds: Milliseconds
+  transform:
+    name: Transform Payload
+    description: Alter the Flow's JSON payload
+  trigger:
+    name: Trigger Flow
+    description: Pass this data to another flow
+    flows: Flows
+    flow: Flow
+    data: Data
+    iteration_mode: Iteration Mode
+    iteration_mode_note: Mode for iterating over arrays.
+    serial: Serial
+    parallel: Parallel
+    batch: Batch
+    batch_size: Batch Size
+    cache: Cache
