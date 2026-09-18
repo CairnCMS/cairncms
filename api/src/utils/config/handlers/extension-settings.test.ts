@@ -10,6 +10,7 @@ import type { CairnConfig, ExtensionSettingLeaf, ExtensionSettingsIdentity } fro
 import { readConfigDirectory } from '../../read-config-directory.js';
 import { validateConfigRecord } from '../../validate-desired-config.js';
 import { writeConfigDirectory } from '../../write-config-directory.js';
+import { ConfigReadFailedException } from '../../../exceptions/config-read-failed.js';
 import type { ApplyContext, PlanContext, ReadContext, ValidationContext } from '../descriptor.js';
 import {
 	buildExtensionDeclarationSnapshot,
@@ -312,6 +313,14 @@ describe('readCurrent', () => {
 		const result = await handler.readCurrent(readContext(db));
 
 		expect(result.records).toEqual([]);
+		expect(tracker.history.select).toHaveLength(0);
+	});
+
+	it('fails closed with a read error when settings discovery is incomplete', async () => {
+		extensionMock.complete = false;
+		extensionMock.owners = [{ subject: WIDGET, status: 'available', declaration: {} }];
+
+		await expect(handler.readCurrent(readContext(db))).rejects.toThrow(ConfigReadFailedException);
 		expect(tracker.history.select).toHaveLength(0);
 	});
 
