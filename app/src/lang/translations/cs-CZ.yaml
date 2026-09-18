@@ -75,10 +75,6 @@ create_role: Vytvořit roli
 create_user: Vytvořit uživatele
 message: Zpráva
 delete_panel: Odstranit panel
-create_custom_translation: Create Custom Translation
-edit_custom_translation: Edit Custom Translation
-no_custom_translations: No Custom Translations
-no_custom_translations_copy: There are no custom translations yet.
 invite_users: Pozvat uživatele
 invite: Pozvat
 email_already_invited: E-mail "{email}" již byl pozván
@@ -115,7 +111,6 @@ archive_confirm_count: >-
   Nevybrány žádné položky | Jste si jisti, že chcete archivovat tuto položku? | Jste si jisti, že chcete archivovat tyto {count} položky?
 reset_system_permissions_to: 'Resetovat systémová oprávnění na:'
 reset_system_permissions_copy: Tato akce přepíše libovolná vlastní oprávnění, která jste možná použili na kolekce systému. Jste si jisti?
-the_following_are_minimum_permissions: The following minimum permissions are automatically applied when "App Access" is enabled. You can grant additional permissions if needed, but you cannot reduce permissions below this level.
 app_access_minimum: Minimální přístup k aplikaci
 recommended_defaults: Doporučené výchozí hodnoty
 unarchive: Vyjmout z archivu
@@ -166,14 +161,11 @@ permissions_for_role: 'Položky, které {role} role může {action}.'
 fields_for_role: 'Pole, které {role} role může {action}.'
 validation_for_role: 'Pole {action} praví, že role {role} musí uposlechnout.'
 presets_for_role: 'Výchozí hodnota pole pro roli {role}.'
-presets_field_warning: 'Relational presets for field "{field}" should be configured with the "detailed" syntax.'
 presentation_and_aliases: Prezentace a aliasy
 revision_post_create: Zde je jak položka vypadala po jejím vytvoření.
 revision_post_update: Zde je jak položka vypadala po její aktualizaci.
 changes_made: Níže jsou uvedeny konkrétní změny provedené v této revizi.
 no_relational_data: Mějte na paměti, že údaje o vztazích zde nejsou zahrnuty.
-junction_field_location: Junction Fields Location
-top: Top
 bottom: Dole
 hide_field: Skrýt pole
 hide_field_on_detail: Skrýt pole v detailu
@@ -222,7 +214,6 @@ bigInteger: Velké celé číslo
 boolean: Logická hodnota
 date: Datum
 date_range: Časový rozsah
-translation_key_placeholder: Enter a key...
 datetime: Datum a čas
 dateTime: Datum a čas
 precision: Přesnost
@@ -231,7 +222,6 @@ float: Plovoucí
 integer: Celé číslo
 json: JSON
 xml: XML
-yaml: YAML
 string: Text
 text: Text
 time: Čas
@@ -262,7 +252,6 @@ fields_group: Skupina polí
 no_collections_found: Nebyly nalezeny žádné kolekce.
 new_data_alert: 'V rámci vašeho datového modelu bude vytvořeno toto:'
 search_collection: Vyhledat v kolekci...
-search_field: Search Field...
 new_field: 'Nové pole'
 new_collection: 'Nová kolekce'
 add_m2o_to_collection: 'Přidat M2O do "{collection}"'
@@ -282,12 +271,7 @@ o2m_relationship: Vztah 1:N
 m2m_relationship: Vztah N:N
 m2a_relationship: Vztah N:cokoliv
 invalid_item: Neplatná položka
-require_confirmation: Require Confirmation
-dialog: Dialog
 modal: Modál
-confirmation_dialog: Confirmation Dialog
-confirmation_description: Confirmation Description
-confirmation_input_fields: Confirmation Input Fields
 next: Další
 field_name: Název pole
 translations: Překlady
@@ -306,11 +290,8 @@ updated_on: Aktualizováno
 updated_by: Aktualizoval/a
 primary_key: Primární klíč
 foreign_key: Cizí klíč
-field_key: Field Key
 finish_setup: Dokončit nastavení
 dismiss: Odmítnout
-toggle_raw_editor: Toggle Raw Editor
-raw_editor_placeholder: "{'{'}{'{'}$trigger.payload.example{'}'}{'}'}"
 raw_value: Surová hodnota
 copy_raw_value: Kopírovat surovou hodnotu
 copy_raw_value_success: Zkopírováno
@@ -323,7 +304,6 @@ edit_raw_value: Upravit surovou hodnotu
 enter_raw_value: Zadejte surovou hodnotu...
 clear_value: Vymazat hodnotu
 clear_changes: Vymazat změny
-clear_items: Clear Items
 reset_to_default: Obnovit výchozí
 undo_changes: Vrátit změny
 notifications: Notifikace
@@ -435,7 +415,6 @@ checksum: Kontrolní součet
 owner: Vlastník
 edited_by: Upravil/a
 folder: Složka
-folders: Folders
 zoom: Přiblížení
 download: Stáhnout
 open: Otevřít
@@ -458,8 +437,6 @@ exporting_all_items_in_collection: Exportuji všech {total} položek z {collecti
 exporting_limited_items_in_collection: 'Exportuji {limit} z {total} položek z {collection}.'
 exporting_no_items_to_export: Žádné položky k exportu. Upravte nastavení exportu níže.
 exporting_download_hint: Po dokončení bude tento soubor {format} automaticky stažen do vašeho zařízení.
-exporting_library_hint: Once the {format} file is created, it will be saved to the File Library.
-exporting_library_hint_forced: This export must be processed in batches. Once completed, the {format} file will be saved to the File Library.
 collection_key: Klíč kolekce
 name: Jméno
 primary_key_field: Pole primárního klíče
@@ -484,8 +461,6 @@ enable_select_button: Povolit tlačítko Vybrat
 allow_duplicates: Povolit duplicity
 comments: Komentáře
 no_comments: Zatím bez komentářů
-expand: Expand
-collapse: Collapse
 select_item: Vybrat položku
 no_items: Žádné položky
 search_items: Hledat položky...
@@ -517,7 +492,6 @@ create_collection: Vytvořit kategorii
 no_collections_copy_admin: Zatím nemáte žádné kolekce. Začněte kliknutím na tlačítko níže.
 no_collections_copy: Zatím nemáte žádné kolekce. Obraťte se na správce systému.
 relationship_not_setup: Vztah nebyl správně nakonfigurován
-no_singleton_relations: Relationships to Singletons are not supported
 display_template_not_setup: Šablona zobrazení je špatně nakonfigurována
 collection_field_not_setup: Volba pole kolekce je špatně nastavena
 select_a_collection: Vyberte kolekci
@@ -534,7 +508,6 @@ activity_item: Položka činnosti
 action: Akce
 ip_address: IP adresa
 user_agent: Uživatelský agent
-origin: Origin
 decimals: Desetinná místa
 value_decimals: Desetinná hodnota
 min_value: Minimální hodnota
@@ -567,8 +540,6 @@ select_an_item: Vyberte položku...
 edit: Upravit
 enabled: Povoleno
 disable_tfa: Zakázat 2FA
-admin_disable_tfa_text: Are you sure you want to disable 2FA for this user?
-tfa_setup: Setup 2FA
 tfa_scan_code: Naskenujte kód ve vaší ověřovací aplikaci pro dokončení nastavení 2FA
 enter_otp_to_disable_tfa: Zadejte OTP pro vypnutí 2FA
 create_account: Vytvořit účet
@@ -584,7 +555,6 @@ errors:
   INVALID_PAYLOAD: Neplatný payload
   INVALID_PROVIDER: Uživatel patří k jinému poskytovateli ověření
   INVALID_QUERY: Neplatný dotaz
-  INVALID_CONFIG: Invalid config
   INVALID_TOKEN: Neplatný token
   INVALID_IP: IP adresa není povolena
   INVALID_USER: Ověření uživatele se nezdařilo
@@ -606,11 +576,6 @@ errors:
   SERVICE_UNAVAILABLE: Služba není dostupná
   UNSUPPORTED_MEDIA_TYPE: Nepodporovaný typ média
   UNEXPECTED_RESPONSE: Neočekávaná odpověď
-  TOKEN_EXPIRED: Token expired
-  RANGE_NOT_SATISFIABLE: Invalid range
-  METHOD_NOT_ALLOWED: Method not allowed
-  REQUESTS_EXCEEDED: Requests limit reached
-  CONTENT_TOO_LARGE: Submitted item/file is too large
 security: Zabezpečení
 value_hashed: Hodnota bezpečně hashována
 bookmark_name: Název záložky...
@@ -656,7 +621,6 @@ one_filtered_item: '1 filtrovaná položka'
 delete_collection_are_you_sure: >-
   Jste si jisti, že chcete odstranit kolekci "{collection}"? Tato akce odstraní kolekci a všechny její položky. Tato akce je trvalá.
 delete_folder_are_you_sure: Jste si jisti, že chcete odstranit složku "{folder}"? Vnořené složky a kolekce budou přesunuty na nejvyšší úroveň.
-delete_collection_peer_dependencies: The following fields will be deleted as well, as they are related to the current collection.
 collections_shown: Zobrazené kolekce
 visible_collections: Viditelné kolekce
 hidden_collections: Skryté kolekce
@@ -751,8 +715,6 @@ add_file: Přidat soubor
 replace_file: Nahradit soubor
 no_results: Bez výsledků
 no_results_copy: Upravte nebo vymažte vyhledávací filtry pro zobrazení výsledků.
-no_visible_fields: Empty Form
-no_visible_fields_copy: This form has no visible fields.
 clear_filters: Vymazat filtry
 saves_automatically: Ukládá se automaticky
 role: Role
@@ -782,15 +744,7 @@ label: Popisek
 flows: Toky
 flow: Tok
 select_a_flow: Vybrat tok
-run_flow_confirm: Are you sure you want to execute this flow?
-run_flow_on_current_collection: Run Flow on Current Collection
-run_flow_on_current: Run Flow on Current Item
-run_flow_on_current_edited_confirm: This item may be updated by this flow, are you sure you want to execute it?
-run_flow_on_selected: Select One or More Items First | Run Flow on 1 Selected Item | Run Flow on {n} Selected Items
-run_flow: Run Flow
 run_flow_success: Tok "{flow}" proběhl úspěšně
-field_name_placeholder: Enter field name...
-field_key_placeholder: Enter field key...
 trigger: Spouštěč
 trigger_options: Možnosti spouštěče
 view_trigger: Zobrazit spouštěč
@@ -833,7 +787,6 @@ panel_header: Záhlaví panelu
 panel_name_placeholder: Pojmenovat tento panel...
 panel_note_placeholder: Volitelné podrobnosti o tomto panelu...
 panel_delete_confirm: Opravdu chcete odstranit tento panel? Tuto akci nelze vrátit zpět.
-list_panel_allow_edit: Allow Inline Editing
 dashboard_delete_confirm: Jste si jisti, že chcete odstranit tuto nástěnku? Tuto akci nelze vrátit zpět.
 edit_dashboard: Upravit nástěnku
 delete_dashboard: Odstranit nástěnku
@@ -848,7 +801,6 @@ dashboard_name: Název nástěnky
 no_data: Žádná data
 no_data_in_flow: V rámci tohoto toku nebyla vytvořena ani zpřístupněna žádná data
 accountability: Odpovědnost
-payload: Payload
 details: Podrobnosti
 full_screen: Celá obrazovka
 full_text_search: Full-Text vyhledávání
@@ -863,7 +815,6 @@ media: Média
 quality: Kvalita
 width: Šířka
 height: Výška
-transformation_preset_key: Transformation Preset Key
 source: Zdroj
 url_placeholder: Zadejte adresu url...
 display_text: Zobrazený text
@@ -949,8 +900,6 @@ settings_permissions: Role a oprávnění
 settings_project: Nastavení projektu
 settings_flows: Toky
 settings_presets: Předvolby a záložky
-settings_translations: Custom Translations
-settings_extensions: Extensions
 one_or_more_options_are_missing: Chybí jedna nebo více možností
 scope: Rozsah
 actions: Akce
@@ -998,48 +947,6 @@ page_help_settings_presets_item: >-
   **Detail předvoleb** – Formulář pro správu záložek a předvoleb pro výchozí kolekci.
 page_help_settings_flows_collection: '**Procházet toky** — Zobrazuje všechny toky v rámci projektu.'
 page_help_settings_flows_item: '**Detail toku** – Pracovní prostor pro správu jedné nebo více operací.'
-page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
-extension_health_normal: Normal
-extension_health_warning: Warning | Warnings
-extension_health_failed: Failed
-extension_bundle_contents: Bundled extensions
-extension_capabilities: Capabilities
-extension_advanced_diagnostics: Advanced Diagnostics
-extension_sandboxed: Sandboxed
-extension_runtime: Runtime
-extension_runtime_sandboxed: Sandboxed
-extension_runtime_full_authority: Full Authority
-extension_runtime_browser: Browser App
-confined_runtime: Sandbox
-confined_runtime_mode: 'OS hardening: {decision} ({mode})'
-confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
-extension_status_loaded_detail: Loaded and running on the server.
-extension_status_discovered_detail: Discovered on this instance.
-extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
-extension_status_failed_detail: The extension failed to load on this instance.
-extension_settings_unavailable_detail: Extension settings are unavailable.
-extension_settings_drawer_subtitle: Extension settings
-extension_settings_section: Extension Settings
-extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
-extension_settings_no_global_keys: This extension declares no global settings.
-extension_settings_load_failed: Could not load the extension's settings.
-extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
-extension_type_group_hook: Hooks
-extension_type_group_endpoint: Endpoints
-extension_type_group_operation: Operations
-extension_type_group_bundle: Bundles
-extension_type_group_interface: Interfaces
-extension_type_group_display: Displays
-extension_type_group_layout: Layouts
-extension_type_group_module: Modules
-extension_type_group_panel: Panels
-extension_type_group_item-view: Item Views
-extension_type_group_other: Other
-no_extensions: No Extensions
-no_extensions_copy: No extensions were discovered in the configured extensions path.
-extensions_load_failed: Could not load the extensions inventory.
-page_help_settings_translations_collection: '**Browse Custom Translations** — Lists all custom translations within the project.'
-page_help_settings_translations_item: '**Custom Translations Detail** — A form for viewing and managing this item.'
 page_help_users_collection: '**Uživatelé** — Zobrazuje všechny systémové uživatele v rámci tohoto projektu.'
 page_help_users_item: >-
   **Detaily uživatele** — Správa informací o Vašem účtu nebo zobrazení detailů ostatních uživatelů.
@@ -1082,7 +989,6 @@ directus_collection:
   directus_settings: Možnosti konfigurace projektu
   directus_shares: Sleduje externě sdílené položky
   directus_users: Systémoví uživatelé pro platformu
-  directus_translations: Custom translations
 fields:
   directus_activity:
     item: Primární klíč položky
@@ -1092,7 +998,6 @@ fields:
     user: Akce podle
     comment: Komentář
     user_agent: Uživatelský agent
-    origin: Origin
     ip: IP adresa
     revisions: Revize
   directus_collections:
@@ -1171,7 +1076,6 @@ fields:
     png: PNG
     webP: WebP
     tiff: Tiff
-    avif: AVIF
     mapping: Mapování
     basemaps: Základní mapy
     basemaps_raster: Rastr
@@ -1205,8 +1109,6 @@ fields:
     transformations_all: Povolit všechny transformace
     transformations_none: Zakázat transformace
     transformations_presets: Omezit transformace na přednastavení níže
-    image_editor: Image Editor
-    custom_aspect_ratios: Custom Aspect Ratios
   directus_shares:
     name: Jméno
     role: Role
@@ -1439,26 +1341,16 @@ export_started: Export zahájen
 export_started_copy: Váš export byl zahájen. Až bude připraven ke stažení, budete upozorněni.
 sort_asc: Seřadit vzestupně
 sort_desc: Seřadit sestupně
-disable_sort: Disable Sorting
 template: Šablona
 require_value_to_be_set: Požadovat hodnotu při vytvoření
 translation: Překlad
 translation_placeholder: Zadejte překlad...
 value: Hodnota
 view_project: Zobrazit projekt
-weeks: { }
 report_error: Nahlásit chybu
 start: Začátek
 table: Tabulka
 list: Seznam
-search_filter: Search & Filter
-enable_search_filter: Enable searching & filtering
-item_link: Item link
-show_link_to_item: Show a link to the item
-navigate_to_item: Navigate to Item
-undo_removed_item: Undo Removed Item
-remove_item: Remove Item
-delete_item: Delete Item
 interfaces:
   filter:
     name: Filtr
@@ -1540,7 +1432,6 @@ interfaces:
     placeholder: Vyberte datum a čas...
   system-fields:
     select_a_collection: Vyberte kolekci
-    no_fields: No fields
   system-display-template:
     display-template: Šablona zobrazení
     description: Směs statických hodnot textu a dynamického pole
@@ -1564,7 +1455,6 @@ interfaces:
     allow_none_label: Povolit žádný výběr
     choices_name_placeholder: Zadejte název...
     choices_value_placeholder: Zadejte hodnotu...
-    preview_threshold: Preview Threshold
   select-multiple-dropdown:
     select-multiple-dropdown: Rozbalovací nabídka (Více možností)
     description: Vyberte více hodnot z rozevíracího seznamu
@@ -1579,9 +1469,6 @@ interfaces:
     description: Zadejte hodnotu, která má být hashována
     masked: Maskovaná
     masked_label: Skrýt skutečné hodnoty
-  system-extension-secret:
-    name: Extension Secret
-    value_stored: Value Securely Encrypted
   select-icon:
     icon: Ikona
     description: Vyberte ikonu z rozevíracího seznamu
@@ -1601,15 +1488,11 @@ interfaces:
   list-m2m:
     many-to-many: M:N
     description: Vyberte více souvisejících položek
-    columns_configure_notice: You can configure the columns after creating this field.
     display_template_configure_notice: Po vytvoření tohoto pole můžete nakonfigurovat šablonu zobrazení.
   select-dropdown-m2o:
     many-to-one: N:1
     description: Vyberte jednu související položku
     display_template: Šablona zobrazení
-  collection-item-dropdown:
-    collection-item-dropdown: Collection Item Dropdown
-    description: Select an item from a collection in JSON format
   input-rich-text-md:
     markdown: Markdown
     description: Zadat a zobrazit náhled markdown
@@ -1644,7 +1527,6 @@ interfaces:
     notice: Upozornění
     description: Zobrazit krátké upozornění
     text: Zde zadejte obsah upozornění...
-    no_text: No text configured...
   list-o2m:
     one-to-many: 1:N
     description: Vyberte více souvisejících položek
@@ -1652,7 +1534,6 @@ interfaces:
   system-folder:
     folder: Složka
     description: Vyberte složku
-    field_hint: Default folder for uploaded files without a folder specified. Does not affect existing files.
     root_name: Kořenový adresář knihovny souborů
     system_default: Výchozí nastavení systému
   select-radio:
@@ -1706,7 +1587,6 @@ interfaces:
     input-translated-string: Překlady
     description: Vyberte nebo přidejte překlad
     search_placeholder: Hledat...
-    new_custom_translation: New Custom Translation
   boolean:
     toggle: Přepínač
     description: Přepínání mezi zapnutím a vypnutím
@@ -1722,7 +1602,6 @@ interfaces:
     user_language: Použít aktuální jazyk uživatele
     default_language: Výchozí jazyk
     language_field: Pole indikátoru jazyka
-    language_direction_field: Language Direction Field
   list-o2m-tree-view:
     description: Zobrazení stromu pro vnořené rekurentní položky 1:N
     recursive_only: Rozhraní stromového pohledu funguje pouze pro rekurentní vztahy.
@@ -1771,9 +1650,6 @@ interfaces:
     regenerate: Obnovit token
     generate_success_copy: Ujistěte se, že si zálohujete a zkopírujete token uvedený výše. Z bezpečnostních důvodů nebudete moci znovu zobrazit token po uložení a opuštění této stránky.
     remove_token: Odstranit token
-  system-raw-editor:
-    system-raw-editor: Raw Editor
-    description: Allow entering of raw or mustache templating values
 displays:
   translations:
     translations: Překlady
@@ -1813,9 +1689,6 @@ displays:
     relative_label: 'Zobrazit relativní čas, např.: před 5 minutami'
     suffix: Přípona
     suffix_label: Zobrazit indikátor vztahu
-    suffix_note: Uses words like 'in' and 'ago'
-    strict: Strict
-    strict_label: Use strict units
     strict_note: Odstraní slova jako 'téměř', 'přes', 'méně než'
     round: Zaokrouhlený
     round_note: Vyberte funkci zaokrouhlování
@@ -1933,57 +1806,11 @@ layouts:
     default_template: Použití výchozího nastavení kolekce...
     no_compatible_fields: Žádná kompatibilní pole
   kanban:
-    name: Kanban
-    group_field: Group By
-    group_field_placeholder: Field to group by...
-    group_title: Group Title
-    group_title_placeholder: Field for group titles...
-    title: Card Title
-    title_placeholder: Optional title field...
-    text: Card Text
-    text_placeholder: Optional text field...
-    date: Card Date
-    date_placeholder: Optional date field...
-    tags: Card Tags
-    tags_placeholder: Optional tags field...
-    user: Card User
-    user_placeholder: Optional user field...
-    image: Card Image
-    image_placeholder: Optional image field...
-    image_fit: Card Image Fit
     crop: Oříznout
     advanced: Rozšířené
-    edit_group: Edit Group
-    delete_group: Delete Group
-    add_group: Add Group
-    add_group_placeholder: Enter a new group title...
-    show_ungrouped: Show Ungrouped
-    show: Show
-    no_group: No Group
     not_all_loaded: Podařilo se načíst pouze prvních 1000 položek.
 horizontal: Horizontální
-vertical: Vertical
-x_axis: X-Axis
-y_axis: Y-Axis
-y_axis_function: Y-Axis Function
-show_x_only: Show X-Axis Only
-show_y_only: Show Y-Axis Only
-show_data_label: Show Data Label
 both: Vše
-show_axis_labels: Show Axis Labels
-function: Function
-half_circle: Half Circle
-full_circle: Full Circle
-stroke_width: Stroke Width
-rounded_stroke: Rounded Stroke
-thin: Thin
-medium: Medium
-broad: Broad
-show_labels: Show Labels
-show_legend: Show Legend
-right: Right
-left: Left
-donut: Donut
 panels:
   metric:
     name: Metrika
@@ -2009,8 +1836,6 @@ panels:
     select_collection: Musíte vybrat kolekci.
   linechart:
     name: Čárový graf
-    description: Line chart for comparing change of a field
-    disabled_grouping: Disabled when grouping is selected.
     disabled_no_grouping: Zakázáno, pokud není vybrána žádná skupina.
     show_marker: Zobrazit značku popisku
     curve_type: Typ křivky
@@ -2022,25 +1847,14 @@ panels:
     description: Měřič pro sledování hodnot
   piechart:
     name: Koláčový nebo prstencový graf
-    description: Circular chart showing the ratios of groups on a column
   variable:
     name: Globální proměnná
-    description: Set a global value for use in other Panels' filters
-    variable_key: Variable Key
-  relational-variable:
-    name: Global Relational Variable
-    description: Set a global relational value for use in other Panels' filters
-    variable_key: Variable Key
-    multiple: Multiple
-    multiple-label: Select multiple items
 triggers:
   common:
-    response_body: Response Body
     response_body_all: Všechna data
     response_body_last: Data poslední operace
   event:
     name: Hook událost
-    description: Triggers on platform or data events
     action: 'Akce (neblokující)'
     filter: 'Filtr (blokující)'
   webhook:
@@ -2050,46 +1864,29 @@ triggers:
     async: Asynchronní
   operation:
     name: Další tok
-    description: Triggered by another Flow, for chaining
-    preview: Triggered by an operation in a different Flow
   schedule:
     name: Plán (CRON)
     description: Spouštět v pravidelných intervalech
     cron: Interval
   manual:
     name: Manuálně
-    description: Triggers on manual run within selected collection(s)
     collection_and_item: Stránka kolekce a položek
     collection_only: Pouze stránka kolekce
     item_only: Pouze stránka položek
-    collection_page: Collection Page
-    require_selection: Requires Selection
-a_flow_uuid: Select a Flow to trigger...
 any_string_or_json: Jakýkoliv řetězec nebo JSON...
 item_payload_placeholder: Toto je JSON používaný k aktualizaci hodnot polí položky...
-operation_variables_note: You can access flow data with variables such as **{'{'}{'{'}$last{'}'}{'}'}**, **{'{'}{'{'}$trigger{'}'}{'}'}** and **{'{'}{'{'}$accountability{'}'}{'}'}**, or reference previous operations using **{'{'}{'{'}operation_key{'}'}{'}'}**.'
 operations:
   condition:
     name: Podmínka
-    description: Route a flow based on If / Else logic
-  exec:
-    name: Run Script
-    description: Execute arbitrary code to modify the payload
-    modules: 'The following **Node modules** can be used:'
   item-create:
     name: Vytvořit data
     description: Vytvořit položky v databázi
-    payload: Payload
     emit_events: Povolit události
   item-delete:
     name: Smazat data
     description: Odstranit položky v databázi
     emit_events: Povolit události
-    key: IDs
-    query: Query
   item-read:
-    name: Read Data
-    description: Read items from the database
     key: ID
     query: Dotaz
     emit_events: Povolit události
@@ -2098,10 +1895,8 @@ operations:
     description: Aktualizovat položky v databázi
     emit_events: Povolit události
     key: ID
-    payload: Payload
     query: Dotaz
   log:
-    name: Log to Console
     description: Vypsat něco do konzole
     message: Zpráva
     message_placeholder: Zadejte zprávu, která se zobrazí v konzoli...
@@ -2115,10 +1910,7 @@ operations:
     data: Údaje
   notification:
     name: Odeslat oznámení
-    description: Send an in-app notification to one or more users
     recipient: Uživatel
-    recipient_placeholder: Enter a UUID...
-    recipient_note: Add user UUID and press enter...
     message: Zpráva
   request:
     name: Webhook / Request URL
@@ -2129,25 +1921,11 @@ operations:
     data: Údaje
     headers: Headers
     header: Hlavička
-    header_placeholder: Authorization...
-    value_placeholder: Bearer eyJhbGciOi...
   sleep:
-    name: Sleep
     description: Počkat zadaný počet milisekund
     milliseconds: Milisekundy
-  transform:
-    name: Transform Payload
-    description: Alter the Flow's JSON payload
   trigger:
     name: Spouštěč toku
-    description: Pass this data to another flow
     flows: Toky
     flow: Tok
     data: Údaje
-    iteration_mode: Iteration Mode
-    iteration_mode_note: Mode for iterating over arrays.
-    serial: Serial
-    parallel: Parallel
-    batch: Batch
-    batch_size: Batch Size
-    cache: Cache
