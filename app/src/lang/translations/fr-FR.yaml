@@ -75,10 +75,6 @@ create_role: Créer un rôle
 create_user: Créer un utilisateur
 message: Message
 delete_panel: Supprimer le panneau
-create_custom_translation: Create Custom Translation
-edit_custom_translation: Edit Custom Translation
-no_custom_translations: No Custom Translations
-no_custom_translations_copy: There are no custom translations yet.
 invite_users: Inviter des utilisateurs
 invite: Inviter
 email_already_invited: '"{email}" a déjà été invité'
@@ -115,7 +111,6 @@ archive_confirm_count: >-
   Aucun élément sélectionné | Êtes-vous sûr de vouloir archiver cet élément ? | Êtes-vous sûr de vouloir archiver ces {count} éléments ?
 reset_system_permissions_to: 'Réinitialiser les autorisations système:'
 reset_system_permissions_copy: Cette action écrasera toutes les autorisations personnalisées que vous avez peut-être appliquées aux collections du système. Êtes-vous sûr ?
-the_following_are_minimum_permissions: The following minimum permissions are automatically applied when "App Access" is enabled. You can grant additional permissions if needed, but you cannot reduce permissions below this level.
 app_access_minimum: Autorisation minimale requise pour accéder à l'application
 recommended_defaults: Valeurs par défaut recommandées
 unarchive: Restaurer
@@ -166,7 +161,6 @@ permissions_for_role: 'Éléments que le rôle {role} peut {action}.'
 fields_for_role: 'Champs dont l''action « {action} » peut être effectué par le rôle {role} .'
 validation_for_role: 'Règles pour {action} le champ que le rôle {role} doit suivre.'
 presets_for_role: 'Valeur par défaut du champ pour le rôle {role}.'
-presets_field_warning: 'Relational presets for field "{field}" should be configured with the "detailed" syntax.'
 presentation_and_aliases: Présentation & Alias
 revision_post_create: Voici à quoi ressemblait cet élément lors de sa création.
 revision_post_update: Voici à quoi ressemblait cet élément après la mise à jour.
@@ -222,7 +216,6 @@ bigInteger: Grand entier
 boolean: Booléen
 date: Date
 date_range: Plage de dates
-translation_key_placeholder: Enter a key...
 datetime: Date et heure
 dateTime: Date et heure
 precision: Précision
@@ -435,7 +428,6 @@ checksum: Code de vérification
 owner: Propriétaire
 edited_by: Modifié par
 folder: Dossier
-folders: Folders
 zoom: Zoom
 download: Télécharger
 open: Ouvrir
@@ -458,8 +450,6 @@ exporting_all_items_in_collection: Export de la totalité des {total} éléments
 exporting_limited_items_in_collection: 'Exportat de {limit} éléments sur {total} dans la collection {collection}.'
 exporting_no_items_to_export: Aucun élément à exporter. Ajustez la configuration d'export ci-dessous.
 exporting_download_hint: Une fois terminé, ce fichier {format} sera automatiquement téléchargé sur votre appareil.
-exporting_library_hint: Once the {format} file is created, it will be saved to the File Library.
-exporting_library_hint_forced: This export must be processed in batches. Once completed, the {format} file will be saved to the File Library.
 collection_key: Clé de la collection
 name: Nom
 primary_key_field: Champ de clé primaire
@@ -484,8 +474,6 @@ enable_select_button: Activer le bouton de sélection
 allow_duplicates: Autoriser les doublons
 comments: Commentaires
 no_comments: Pas encore de commentaires
-expand: Expand
-collapse: Collapse
 select_item: Sélectionner un élément
 no_items: Aucun élément
 search_items: Rechercher des éléments...
@@ -517,7 +505,6 @@ create_collection: Créer une collection
 no_collections_copy_admin: Vous n'avez pas encore de collection. Cliquez sur le bouton ci-dessous pour commencer.
 no_collections_copy: Vous n'avez pas encore de Collections. Veuillez contacter votre administrateur système.
 relationship_not_setup: La relation n'a pas été configurée correctement
-no_singleton_relations: Relationships to Singletons are not supported
 display_template_not_setup: L'option d'affichage du modèle est mal configurée
 collection_field_not_setup: L'option de champ de collection est mal configurée
 select_a_collection: Sélectionner une collection
@@ -610,7 +597,6 @@ errors:
   RANGE_NOT_SATISFIABLE: Plage non valide
   METHOD_NOT_ALLOWED: Méthode non autorisée
   REQUESTS_EXCEEDED: Limite de requêtes atteinte
-  CONTENT_TOO_LARGE: Submitted item/file is too large
 security: Sécurité
 value_hashed: Valeur cryptée sécurisée
 bookmark_name: Nom du favori...
@@ -656,7 +642,6 @@ one_filtered_item: '1 élément filtré'
 delete_collection_are_you_sure: >-
   Êtes-vous sûr de vouloir supprimer la collection "{collection}" ? Cette action supprimera la collection et tous les éléments qu'elle contient. Cette action est irréversible.
 delete_folder_are_you_sure: Êtes-vous sûr de vouloir supprimer le dossier "{folder}" ? Les dossiers imbriqués et les collections seront déplacés à la racine.
-delete_collection_peer_dependencies: The following fields will be deleted as well, as they are related to the current collection.
 collections_shown: Collections affichées
 visible_collections: Collections visibles
 hidden_collections: Collections masquées
@@ -949,8 +934,6 @@ settings_permissions: Rôles et autorisations
 settings_project: Paramètres du projet
 settings_flows: Flux
 settings_presets: Préréglages et favoris
-settings_translations: Custom Translations
-settings_extensions: Extensions
 one_or_more_options_are_missing: Une ou plusieurs options sont manquantes
 scope: Utilisateurs ou rôles
 actions: Actions
@@ -998,48 +981,6 @@ page_help_settings_presets_item: >-
   **Détail du préréglage** — Un formulaire pour gérer les favoris et les préréglages de collection par défaut.
 page_help_settings_flows_collection: '**Parcourir les Flux** — Liste tous les Flux du projet.'
 page_help_settings_flows_item: '**Détail du Flux** - Espace de travail permettant de gérer une ou plusieurs opérations.'
-page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
-extension_health_normal: Normal
-extension_health_warning: Warning | Warnings
-extension_health_failed: Failed
-extension_bundle_contents: Bundled extensions
-extension_capabilities: Capabilities
-extension_advanced_diagnostics: Advanced Diagnostics
-extension_sandboxed: Sandboxed
-extension_runtime: Runtime
-extension_runtime_sandboxed: Sandboxed
-extension_runtime_full_authority: Full Authority
-extension_runtime_browser: Browser App
-confined_runtime: Sandbox
-confined_runtime_mode: 'OS hardening: {decision} ({mode})'
-confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
-extension_status_loaded_detail: Loaded and running on the server.
-extension_status_discovered_detail: Discovered on this instance.
-extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
-extension_status_failed_detail: The extension failed to load on this instance.
-extension_settings_unavailable_detail: Extension settings are unavailable.
-extension_settings_drawer_subtitle: Extension settings
-extension_settings_section: Extension Settings
-extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
-extension_settings_no_global_keys: This extension declares no global settings.
-extension_settings_load_failed: Could not load the extension's settings.
-extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
-extension_type_group_hook: Hooks
-extension_type_group_endpoint: Endpoints
-extension_type_group_operation: Operations
-extension_type_group_bundle: Bundles
-extension_type_group_interface: Interfaces
-extension_type_group_display: Displays
-extension_type_group_layout: Layouts
-extension_type_group_module: Modules
-extension_type_group_panel: Panels
-extension_type_group_item-view: Item Views
-extension_type_group_other: Other
-no_extensions: No Extensions
-no_extensions_copy: No extensions were discovered in the configured extensions path.
-extensions_load_failed: Could not load the extensions inventory.
-page_help_settings_translations_collection: '**Browse Custom Translations** — Lists all custom translations within the project.'
-page_help_settings_translations_item: '**Custom Translations Detail** — A form for viewing and managing this item.'
 page_help_users_collection: '**Répertoire utilisateur** — Liste tous les utilisateurs système de ce projet.'
 page_help_users_item: >-
   **Détail de l'utilisateur** — Gérez les informations de votre compte ou consultez les détails des autres utilisateurs.
@@ -1082,7 +1023,6 @@ directus_collection:
   directus_settings: Options de configuration du projet
   directus_shares: Trace les éléments externes partagés
   directus_users: Utilisateurs du système pour la plateforme
-  directus_translations: Custom translations
 fields:
   directus_activity:
     item: Clé principale de l'élément
@@ -1171,7 +1111,6 @@ fields:
     png: PNG
     webP: WebP
     tiff: Tiff
-    avif: AVIF
     mapping: Cartographie
     basemaps: Cartes de base
     basemaps_raster: Raster
@@ -1446,7 +1385,6 @@ translation: Traduction
 translation_placeholder: Entrez une nouvelle traduction...
 value: Valeur
 view_project: Voir le projet
-weeks: { }
 report_error: Signaler l'erreur
 start: Début
 table: Tableau
@@ -1579,9 +1517,6 @@ interfaces:
     description: Entrer une valeur à hacher
     masked: Masqué
     masked_label: Cacher les valeurs marquées "vrai"
-  system-extension-secret:
-    name: Extension Secret
-    value_stored: Value Securely Encrypted
   select-icon:
     icon: Icône
     description: Sélectionner une icône depuis une liste déroulante
@@ -1644,7 +1579,6 @@ interfaces:
     notice: Remarque
     description: Afficher une courte remarque
     text: Entrez le contenu de la remarque ici...
-    no_text: No text configured...
   list-o2m:
     one-to-many: Un à plusieurs
     description: Sélectionner plusieurs éléments liés
@@ -1706,7 +1640,6 @@ interfaces:
     input-translated-string: Chaînes traduites
     description: Sélectionner ou ajouter une traduction
     search_placeholder: Rechercher...
-    new_custom_translation: New Custom Translation
   boolean:
     toggle: Case à cocher
     description: Basculer entre l'activation et la désactivation
@@ -2150,4 +2083,3 @@ operations:
     parallel: En parallèle
     batch: Par lots
     batch_size: Taille de chaque lot
-    cache: Cache
