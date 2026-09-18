@@ -75,10 +75,6 @@ create_role: Skapa roll
 create_user: Skapa användare
 message: Meddelande
 delete_panel: Ta bort panel
-create_custom_translation: Create Custom Translation
-edit_custom_translation: Edit Custom Translation
-no_custom_translations: No Custom Translations
-no_custom_translations_copy: There are no custom translations yet.
 invite_users: Bjud in användare
 invite: Bjud in
 email_already_invited: E-postadressen "{email}" har redan blivit inbjuden
@@ -115,7 +111,6 @@ archive_confirm_count: >-
   Inga objekt valda | Är du säker på att du vill arkivera detta objekt? | Är du säker på att du vill arkivera dessa {count} objekt?
 reset_system_permissions_to: 'Återställ systemrättigheter till:'
 reset_system_permissions_copy: Den här åtgärden kommer att skriva över alla anpassade behörigheter som du kan ha tillämpat på systemkollektionerna. Är du säker?
-the_following_are_minimum_permissions: The following minimum permissions are automatically applied when "App Access" is enabled. You can grant additional permissions if needed, but you cannot reduce permissions below this level.
 app_access_minimum: Minsta tillgång till applikationen
 recommended_defaults: Rekommenderade standardvärden
 unarchive: Ångra arkivering
@@ -166,7 +161,6 @@ permissions_for_role: 'Objekt som {role} rollen kan {action}.'
 fields_for_role: 'Fält {role} rollen kan {action}.'
 validation_for_role: 'Fältets {action} regler {role} rollen måste lyda.'
 presets_for_role: 'Förvalt fältvärde för rollen {role}.'
-presets_field_warning: 'Relational presets for field "{field}" should be configured with the "detailed" syntax.'
 presentation_and_aliases: Presentation & alias
 revision_post_create: Så här såg objektet ut när det skapades.
 revision_post_update: Så här såg objektet ut efter uppdateringen.
@@ -222,7 +216,6 @@ bigInteger: Big Integer
 boolean: Boolean
 date: Datum
 date_range: Datumintervall
-translation_key_placeholder: Enter a key...
 datetime: DateTime
 dateTime: DateTime
 precision: Precision
@@ -282,12 +275,7 @@ o2m_relationship: One to Many relation
 m2m_relationship: Many to Many relation
 m2a_relationship: Many to Any relation
 invalid_item: Ogiltigt objekt
-require_confirmation: Require Confirmation
-dialog: Dialog
 modal: Popup
-confirmation_dialog: Confirmation Dialog
-confirmation_description: Confirmation Description
-confirmation_input_fields: Confirmation Input Fields
 next: Nästa
 field_name: Fältnamn
 translations: Översättningar
@@ -306,11 +294,8 @@ updated_on: Uppdaterad den
 updated_by: Uppdaterad av
 primary_key: Primärnyckel
 foreign_key: Främmande nyckel
-field_key: Field Key
 finish_setup: Slutför installation
 dismiss: Avfärda
-toggle_raw_editor: Toggle Raw Editor
-raw_editor_placeholder: "{'{'}{'{'}$trigger.payload.example{'}'}{'}'}"
 raw_value: Obearbetat värde
 copy_raw_value: Kopiera obearbetat värde
 copy_raw_value_success: Kopierad
@@ -435,7 +420,6 @@ checksum: Kontrollsumma
 owner: Ägare
 edited_by: Redigerad av
 folder: Mapp
-folders: Folders
 zoom: Zooma
 download: Ladda ner
 open: Öppna
@@ -458,8 +442,6 @@ exporting_all_items_in_collection: Exporterar alla {total} objekt inom {collecti
 exporting_limited_items_in_collection: 'Exporterar {limit} av {total} objekt inom {collection}.'
 exporting_no_items_to_export: Inga objekt att exportera. Justera exportkonfigurationen nedan.
 exporting_download_hint: När den är klar kommer den här {format}-filen att laddas ner till din enhet automatiskt.
-exporting_library_hint: Once the {format} file is created, it will be saved to the File Library.
-exporting_library_hint_forced: This export must be processed in batches. Once completed, the {format} file will be saved to the File Library.
 collection_key: Kollektionsnyckel
 name: Namn
 primary_key_field: Primär nyckelfält
@@ -470,7 +452,6 @@ created_on: Skapad den
 creating_collection_info: Namnge kollektionen och konfigurera dess unika "nyckelfält"...
 creating_collection_system: Aktivera och döp om något av dessa valfria fält.
 auto_increment_integer: Auto-incremented integer
-auto_increment_big_integer: Auto-incremented big integer
 generated_uuid: Genererad UUID
 manual_string: Manuellt inmatad textsträng
 save_and_create_new: Spara och skapa ny
@@ -484,8 +465,6 @@ enable_select_button: Aktivera markerings knapp
 allow_duplicates: Tillåt dubbletter
 comments: Kommentarer
 no_comments: Inga kommentarer ännu
-expand: Expand
-collapse: Collapse
 select_item: Välj objekt
 no_items: Inga objekt
 search_items: Sök objekt...
@@ -495,7 +474,6 @@ report_bug: Rapportera bugg
 request_feature: Efterfråga funktionalitet
 request_body: Begär text
 interface_not_found: 'Gränssnittet "{interface}" hittades inte.'
-operation_not_found: 'Operation "{operation}" not found.'
 reset_interface: Återställ gränssnitt
 display_not_found: 'Vyn "{display}" hittades inte.'
 reset_display: Återställ visning
@@ -517,7 +495,6 @@ create_collection: Skapa samling
 no_collections_copy_admin: Du har inga kollektioner än. Klicka på knappen nedan för att komma igång.
 no_collections_copy: Du har inga kollektioner än. Kontakta din systemadministratör.
 relationship_not_setup: Relationen har inte konfigurerats korrekt
-no_singleton_relations: Relationships to Singletons are not supported
 display_template_not_setup: Visningsmallens alternativ är felaktigt konfigurerad
 collection_field_not_setup: Kollektionsfältets alternativ är felaktigt konfigurerad
 select_a_collection: Välj en kollektion
@@ -584,7 +561,6 @@ errors:
   INVALID_PAYLOAD: Ogiltig payload
   INVALID_PROVIDER: Användaren tillhör en annan auth leverantör
   INVALID_QUERY: Ogiltig query
-  INVALID_CONFIG: Invalid config
   INVALID_TOKEN: Ogiltig token
   INVALID_IP: IP-adress är inte tillåten
   INVALID_USER: Det gick inte att autentisera användaren
@@ -602,15 +578,9 @@ errors:
   VALUE_OUT_OF_RANGE: Värdet är utanför giltigt intervall
   INVALID_FOREIGN_KEY: Ogiltig främmande nyckel
   UNKNOWN: Oväntat fel
-  GRAPHQL_VALIDATION_EXCEPTION: GraphQL Validation Exception
   SERVICE_UNAVAILABLE: Tjänsten är inte tillgänglig
-  UNSUPPORTED_MEDIA_TYPE: Unsupported media type
-  UNEXPECTED_RESPONSE: Unexpected response
   TOKEN_EXPIRED: Token har löpt ut
-  RANGE_NOT_SATISFIABLE: Invalid range
   METHOD_NOT_ALLOWED: Metoden är inte tillåten
-  REQUESTS_EXCEEDED: Requests limit reached
-  CONTENT_TOO_LARGE: Submitted item/file is too large
 security: Säkerhet
 value_hashed: Värde säkert hashat
 bookmark_name: Bokmärkesnamn...
@@ -619,8 +589,6 @@ edit_bookmark: Redigera bokmärke
 edit_personal_bookmark: Redigera personligt bokmärke
 edit_role_bookmark: Redigera roll-bokmärke
 edit_global_bookmark: Redigera globalt bokmärke
-cannot_edit_role_bookmarks: Can't Edit Role Bookmarks
-cannot_edit_global_bookmarks: Can't Edit Global Bookmarks
 bookmarks: Bokmärken
 presets: Förval
 unexpected_error: Oväntat fel
@@ -656,7 +624,6 @@ one_filtered_item: '1 filtrerat objekt'
 delete_collection_are_you_sure: >-
   Är du säker på att du vill ta bort denna kollektion? Detta kommer att ta bort kollektionen och alla objekt i den. Denna åtgärd är permanent.
 delete_folder_are_you_sure: Är du säker på att du vill ta bort mappen "{folder}"? Kapslade mappar och samlingar kommer att flyttas till den översta nivån.
-delete_collection_peer_dependencies: The following fields will be deleted as well, as they are related to the current collection.
 collections_shown: Visade kollektioner
 visible_collections: Synliga kollektioner
 hidden_collections: Dolda kollektioner
@@ -710,10 +677,6 @@ operators:
   has: Innehåller några av dessa nycklar
   intersects: Korsar
   nintersects: Korsar inte
-  intersects_bbox: Intersects bounding box
-  nintersects_bbox: Doesn't intersect bounding box
-  regex: Matches RegExp
-custom_validation_message: Custom Validation Message
 loading: Laddar...
 drop_to_upload: Släpp för att ladda upp
 item: Objekt
@@ -736,8 +699,6 @@ value_unique: Värdet måste vara unikt
 all_activity: All aktivitet
 create_item: Skapa objekt
 display_template: Visningsmall
-language_display_template: Language Display Template
-translations_display_template: Translations Display Template
 n_items_selected: 'Inga valda objekt | 1 valt objekt | {n} valda objekt'
 per_page: Per sida
 all_files: Alla filer
@@ -752,7 +713,6 @@ replace_file: Ersätt fil
 no_results: Inga resultat
 no_results_copy: Justera eller rensa sökfilter för att se resultat.
 no_visible_fields: Tomt formulär
-no_visible_fields_copy: This form has no visible fields.
 clear_filters: Rensa filter
 saves_automatically: Sparar automatiskt
 role: Roll
@@ -773,7 +733,6 @@ select_fields: Välj fält
 format_text: Formatera text
 format_value: Formatera värde
 abbreviate_value: Förkorta värde
-operator: Operator
 bold: Fet
 toggle: Växla
 icon_on: Ikon på
@@ -782,18 +741,9 @@ label: Etikett
 flows: Flöden
 flow: Flöde
 select_a_flow: Välj ett flöde
-run_flow_confirm: Are you sure you want to execute this flow?
-run_flow_on_current_collection: Run Flow on Current Collection
-run_flow_on_current: Run Flow on Current Item
 run_flow_on_current_edited_confirm: Detta objekt kan uppdateras av detta flöde, är du säker på att du vill köra det?
-run_flow_on_selected: Select One or More Items First | Run Flow on 1 Selected Item | Run Flow on {n} Selected Items
-run_flow: Run Flow
 run_flow_success: Flödet "{flow}" kördes framgångsrikt
-field_name_placeholder: Enter field name...
-field_key_placeholder: Enter field key...
 trigger: Utlösare
-trigger_options: Trigger Options
-view_trigger: View Trigger
 create_trigger: Skapa utlösare
 trigger_setup: Konfiguration av utlösare
 change_trigger: Ändra utlösare
@@ -808,7 +758,6 @@ no_flows_copy: Du har inga flöden ännu.
 create_flow: Skapa flöde
 creating_new_flow: Skapar nytt flöde
 updating_flow: Uppdaterar flöde
-flow_setup: Flow Setup
 flow_name: Namn
 flow_tracking: Aktivitets- och loggspårning
 flow_tracking_all: Spåra aktivitet och loggar
@@ -816,15 +765,8 @@ flow_tracking_activity: Spåra endast aktivitet
 flow_tracking_null: Spåra ingenting
 start_flow: Starta flöde
 stop_flow: Stoppa flöde
-create_operation: Create Operation
 edit_operation: Redigera åtgärd
 code: Kod
-operation_options: Operation Options
-operation_name: Name of operation...
-operation_key: Identifier for reference...
-operation_key_unique_error: Operation keys must be unique in a Flow
-operation_handle_resolve: 'Resolve: Click to Add or Drag to Reroute'
-operation_handle_reject: 'Reject: Click to Add or Drag to Reroute'
 insights: Insikter
 dashboard: Kontrollpanel
 panel: Panel
@@ -833,7 +775,6 @@ panel_header: Panelens sidhuvud
 panel_name_placeholder: Namnge denna panel...
 panel_note_placeholder: Valfri information om denna panel...
 panel_delete_confirm: Är du säker på att du vill ta bort denna panel? Denna åtgärd kan inte ångras.
-list_panel_allow_edit: Allow Inline Editing
 dashboard_delete_confirm: Är du säker på att du vill radera kontrollpanelen? Denna åtgärd kan inte ångras.
 edit_dashboard: Redigera kontrollpanel
 delete_dashboard: Radera kontrollpanel
@@ -846,16 +787,9 @@ no_dashboards_copy: Du har inga kontrollpaneler än.
 create_dashboard: Skapa kontrollpanel
 dashboard_name: Kontrollpanelens namn
 no_data: Ingen data
-no_data_in_flow: No data was produced or accessed within this Flow
 accountability: Ansvarsskyldighet
-payload: Payload
-details: Details
 full_screen: Helskärm
-full_text_search: Full-Text Search
 edit_panels: Redigera paneler
-center_align: Center Align
-left_align: Left Align
-right_align: Right Align
 fit_to_screen: Anpassa till skärm
 image_url: Bild-URL
 alt_text: Alternativ text
@@ -863,7 +797,6 @@ media: Media
 quality: Kvalitet
 width: Bredd
 height: Höjd
-transformation_preset_key: Transformation Preset Key
 source: Källa
 url_placeholder: Ange en webbadress...
 display_text: Visningstext
@@ -939,7 +872,6 @@ adding_user: Lägger till användare
 unknown_user: Okänd användare
 creating_in: 'Skapar objekt i {collection}'
 editing_in: 'Redigerar objekt i {collection}'
-viewing_in: 'Viewing Item in {collection}'
 creating_unit: 'Skapar {unit}'
 editing_unit: 'Redigerar {unit}'
 editing_in_batch: 'Massredigerar {count} objekt'
@@ -949,8 +881,6 @@ settings_permissions: Roller & behörigheter
 settings_project: Projektinställningar
 settings_flows: Flöden
 settings_presets: Förinställningar & bokmärken
-settings_translations: Custom Translations
-settings_extensions: Extensions
 one_or_more_options_are_missing: Ett eller flera alternativ saknas
 scope: Omfattning
 actions: Åtgärder
@@ -996,50 +926,6 @@ page_help_settings_presets_collection: >-
   **Bläddra i förinställningar** — Visar alla förinställningar i projektet, inklusive: användare, roll och globala bokmärken, samt standardvyer.
 page_help_settings_presets_item: >-
   **Förinställda detaljer** — Ett formulär för att hantera bokmärken och förinställningar för standardinsamling.
-page_help_settings_flows_collection: '**Browse Flows** — Lists all Flows within the project.'
-page_help_settings_flows_item: '**Flow Detail** — Workspace for managing one or more operations.'
-page_help_settings_extensions_collection: '**Browse Extensions.** Shows the extensions the server discovered and whether each one loaded, with the reason for any failures. This view is read-only.'
-extension_health_normal: Normal
-extension_health_warning: Warning | Warnings
-extension_health_failed: Failed
-extension_bundle_contents: Bundled extensions
-extension_capabilities: Capabilities
-extension_advanced_diagnostics: Advanced Diagnostics
-extension_sandboxed: Sandboxed
-extension_runtime: Runtime
-extension_runtime_sandboxed: Sandboxed
-extension_runtime_full_authority: Full Authority
-extension_runtime_browser: Browser App
-confined_runtime: Sandbox
-confined_runtime_mode: 'OS hardening: {decision} ({mode})'
-confined_runtime_unavailable: Sandboxed extensions are present but the sandbox runtime did not resolve.
-extension_status_loaded_detail: Loaded and running on the server.
-extension_status_discovered_detail: Discovered on this instance.
-extension_status_partial_detail: Some bundled contributions failed to load. See the entries below.
-extension_status_failed_detail: The extension failed to load on this instance.
-extension_settings_unavailable_detail: Extension settings are unavailable.
-extension_settings_drawer_subtitle: Extension settings
-extension_settings_section: Extension Settings
-extension_settings_config_notice: This extension also uses deployment configuration. Refer to the extension documentation or contact your deployment administrator.
-extension_settings_no_global_keys: This extension declares no global settings.
-extension_settings_load_failed: Could not load the extension's settings.
-extension_settings_key_not_configured: Secrets cannot be stored because the server's encryption key is not configured. Contact your deployment administrator.
-extension_type_group_hook: Hooks
-extension_type_group_endpoint: Endpoints
-extension_type_group_operation: Operations
-extension_type_group_bundle: Bundles
-extension_type_group_interface: Interfaces
-extension_type_group_display: Displays
-extension_type_group_layout: Layouts
-extension_type_group_module: Modules
-extension_type_group_panel: Panels
-extension_type_group_item-view: Item Views
-extension_type_group_other: Other
-no_extensions: No Extensions
-no_extensions_copy: No extensions were discovered in the configured extensions path.
-extensions_load_failed: Could not load the extensions inventory.
-page_help_settings_translations_collection: '**Browse Custom Translations** — Lists all custom translations within the project.'
-page_help_settings_translations_item: '**Custom Translations Detail** — A form for viewing and managing this item.'
 page_help_users_collection: '**Användarkatalog** — Listar alla systemanvändare i detta projekt.'
 page_help_users_item: >-
   **Användarinformation** — Hantera din kontoinformation eller visa information om andra användare.
@@ -1063,26 +949,14 @@ singleton_label: Behandla som ett enskilt objekt
 system_fields_locked: Systemfälten är låsta och kan inte redigeras
 directus_collection:
   directus_activity: Ansvarsloggar för alla händelser
-  directus_collections: Additional collection configuration and metadata
   directus_dashboards: Kontrollpaneler i insights modulen
-  directus_fields: Additional field configuration and metadata
-  directus_files: Metadata for all managed file assets
-  directus_flows: Automation flows
-  directus_folders: Provides virtual directories for files
-  directus_migrations: What version of the database you're using
   directus_notifications: Meddelande skickat till användare
-  directus_operations: Operations that run in Flows
   directus_panels: Individuella paneler inom Insights kontrollpaneler
-  directus_permissions: Access permissions for each role
-  directus_presets: Presets for collection defaults and bookmarks
-  directus_relations: Relationship configuration and metadata
   directus_revisions: Ögonblicksbilder för all aktivitet
   directus_roles: Behörighetsgrupper för systemanvändare
   directus_sessions: Information om användarsessioner
   directus_settings: Projektets konfigurationsalternativ
-  directus_shares: Tracks externally shared items
   directus_users: Systemanvändare för plattformen
-  directus_translations: Custom translations
 fields:
   directus_activity:
     item: Primärnyckel för objekt
@@ -1103,14 +977,11 @@ fields:
     display_template: Visningsmall
     hidden: Dold
     singleton: Singleton
-    translations: Collection Naming Translations
     archive_app_filter: Arkivera appfilter
     archive_value: Arkivera värde
     unarchive_value: Avarkivera värde
     sort_field: Sortera fält
-    accountability: Activity & Revision Tracking
     archive_field: Arkivera fält
-    item_duplication_fields: Item Duplication Fields
   directus_files:
     $thumbnail: Miniatyrbild
     title: Rubrik
@@ -1165,31 +1036,18 @@ fields:
     external_identifier: Extern identifierare
     last_page: Sista sidan
     last_access: Senaste åtkomsten
-    email_notifications: Email Notifications
   directus_settings:
     jpg: JPEG
     png: PNG
     webP: WebP
     tiff: Tiff
-    avif: AVIF
-    mapping: Mapping
-    basemaps: Basemaps
     basemaps_raster: Raster
     basemaps_tile: Raster TileJSON
-    basemaps_style: Mapbox Style
-    mapbox_key: Mapbox Access Token
-    mapbox_placeholder: pk.eyJ1Ijo.....
-    attribution: Attribution
-    attribution_placeholder: '© OpenStreetMap contributors'
-    transforms_note: The Sharp method name and its arguments. See https://sharp.pixelplumbing.com/api-constructor for more information.
-    additional_transforms: Additional Transformations
     project_name: Projektnamn
-    project_descriptor: Project Descriptor
     project_url: Projektets URL
     project_color: Projektets färg
     project_logo: Projektets logotyp
     default_language: Förvalt språk
-    branding: Branding & Style
     public_foreground: Publik förgrund
     public_background: Publik bakgrund
     public_note: Publik anteckning
@@ -1197,24 +1055,16 @@ fields:
     auth_login_attempts: Inloggningsförsök
     files_and_thumbnails: Filer och lagring
     storage_default_folder: Förvald mapp
-    storage_asset_presets: Transformation Presets
     storage_asset_transform: Tillåtna transformationer
-    overrides: App Overrides
     custom_css: Custom CSS
     module_bar: Modulfält
     transformations_all: Tillåt alla transformationer
     transformations_none: Inaktivera transformationer
     transformations_presets: Begränsa transformationer till inställningarna nedan
-    image_editor: Image Editor
-    custom_aspect_ratios: Custom Aspect Ratios
   directus_shares:
     name: Namn
     role: Roll
     password: Lösenord
-    date_start: Date Start
-    date_end: Date End
-    max_uses: Max Uses
-    times_used: Times Used
   directus_fields:
     collection: Namn kollektion
     icon: Ikon kollektion
@@ -1254,15 +1104,8 @@ field_options:
         outside_text: Passa utanför
     additional_transforms: Ytterligare Transformationer
     transforms_note: Skarpa metodens namn och dess argument. Se https://sharp.pixelplumbing.com/api-constructor för mer information.
-    mapbox_key: Mapbox Access Token
-    mapbox_placeholder: pk.eyJ1Ijo.....
-    basemaps: Basemaps
-    basemaps_name_placeholder: Enter the basemap name...
     basemaps_raster: Raster
     basemaps_tile: Raster TileJSON
-    basemaps_style: Mapbox Style
-    files_divider_title: Files & Thumbnails
-    overrides_divider_title: App Overrides
   directus_activity:
     login: Inloggning
     create: Skapa
@@ -1284,7 +1127,6 @@ field_options:
     plural_unit: Enhet för plural
     archive_divider: Arkivera
     archive_field_placeholder: Välj ett fält...
-    archive_app_filter: Enable App Archive Filter
     archive_value: Värde som sätts vid arkivering...
     unarchive_value: Värde som sätts vid avarkivering...
     sort_divider: Sortera
@@ -1335,30 +1177,14 @@ start_collapsed: Start ihopfälld
 block: Blockera
 inline: Infogad
 comment: Kommentera
-shares: Shares
-unlimited_usage: Unlimited usage
-uses_left: No uses left | 1 use left | {n} uses left
-no_shares: No shares to show
-new_share: New Share
 expired: Upphört
 upcoming: Kommande
 share: Dela
-share_item: Share Item
-shared_with_you: An item has been shared with you
-shared_enter_passcode: Enter your passcode to continue...
-shared_leave_blank_for_unlimited: Leave blank for unlimited
-shared_times_remaining: This link can only be used {n} times
-shared_last_remaining: This link can only be used once
-shared_uses_left: For added security, this shared page has been configured with a limited number of views. There are currently {n} views remaining, after which, the page will no longer be accessible.
-share_access_page: Access Shared Page
-share_access_not_found: This shared page either does not exist or has already exceeded the maximum number of allowed uses.
 share_access_not_found_desc: Kontakta en auktoriserad användare av detta projekt för att begära åtkomst.
-share_access_not_found_title: Unknown Share Page
 share_copy_link: Kopiera länk
 share_copy_link_success: Länk kopierad
 share_copy_link_error: Kunde inte kopiera länk
 share_send_link: Skicka länk
-relational_triggers: Relational Triggers
 referential_action_field_label_m2o: Vid radering av {collection}...
 referential_action_field_label_o2m: Vid avmarkering av {collection}...
 referential_action_no_action: Förhindra radering
@@ -1434,31 +1260,20 @@ sign_out: Logga ut
 sign_out_confirm: Är du säker på att du vill logga ut?
 something_went_wrong: Något gick fel.
 sort_direction: Sorteringsordning
-export_location: Export Location
-export_started: Export Started
 export_started_copy: Din export har börjat. Du kommer att meddelas när den är klar för nedladdning.
 sort_asc: Sortera stigande
 sort_desc: Sortera fallande
-disable_sort: Disable Sorting
 template: Mall
-require_value_to_be_set: Require value to be set on creation
 translation: Översättning
 translation_placeholder: Ange en översättning...
 value: Värde
 view_project: Visa projekt
-weeks: { }
 report_error: Rapportera fel
 start: Starta
 table: Tabell
 list: Lista
 search_filter: Sök & filtrera
 enable_search_filter: Aktivera sökning & filtrering
-item_link: Item link
-show_link_to_item: Show a link to the item
-navigate_to_item: Navigate to Item
-undo_removed_item: Undo Removed Item
-remove_item: Remove Item
-delete_item: Delete Item
 interfaces:
   filter:
     name: Filtrera
@@ -1466,8 +1281,6 @@ interfaces:
     add_filter: Lägg till filter
     add_group: Och / Eller grupp
     add_value: Lägg till värde
-    logic_type_and: AND
-    logic_type_or: OR
     all: Alla
     any: Valfri
     and: och
@@ -1475,9 +1288,6 @@ interfaces:
     no_rules: Inga regler konfigurerade
     change_value: Klicka för att ändra värde
     placeholder: Dra regler hit
-    add_key_placeholder: Add a key and press enter...
-  fields:
-    name: Fields
   group-accordion:
     name: Dragspel
     description: Visa fält eller grupper som dragspels-sektioner
@@ -1513,7 +1323,6 @@ interfaces:
     code: Kod
     description: Skriv eller dela kod-snippets
     line_number: Radnummer
-    line_wrapping: Line Wrapping
     placeholder: Ange kod här...
   system-collection:
     collection: Kollektion
@@ -1528,7 +1337,6 @@ interfaces:
     description: Ange eller välj ett färgvärde
     placeholder: Välj en färg...
     preset_colors: Förinställda färger
-    opacity: Opacity
     preset_colors_add_label: Lägg till ny färg...
     name_placeholder: Ange färgnamn...
   datetime:
@@ -1537,10 +1345,8 @@ interfaces:
     include_seconds: Inkludera sekunder
     set_to_now: Ställ in till nu
     use_24: Använd 24-timmars format
-    placeholder: Choose a datetime...
   system-fields:
     select_a_collection: Välj en kollektion
-    no_fields: No fields
   system-display-template:
     display-template: Visningsmall
     description: Blanda statisk text och dynamiska fältvärden
@@ -1564,7 +1370,6 @@ interfaces:
     allow_none_label: Tillåt inga val
     choices_name_placeholder: Ange ett namn...
     choices_value_placeholder: Ange ett värde...
-    preview_threshold: Preview Threshold
   select-multiple-dropdown:
     select-multiple-dropdown: Flervalslista (flera)
     description: Välj flera värden från flervalslista
@@ -1579,9 +1384,6 @@ interfaces:
     description: Ange ett värde som ska hashas
     masked: Maskerad
     masked_label: Dölj det riktiga värdet
-  system-extension-secret:
-    name: Extension Secret
-    value_stored: Value Securely Encrypted
   select-icon:
     icon: Ikon
     description: Välj en ikon från en flervalslista
@@ -1589,8 +1391,6 @@ interfaces:
   file-image:
     image: Bild
     description: Välj eller ladda upp en bild
-    crop: Crop to Fit
-    crop_label: Crop image as needed
   system-interface:
     interface: Gränssnitt
     description: Välj ett befintligt gränssnitt
@@ -1601,34 +1401,22 @@ interfaces:
   list-m2m:
     many-to-many: Many to Many
     description: Välj flera relaterade kopplingsobjekt
-    columns_configure_notice: You can configure the columns after creating this field.
-    display_template_configure_notice: You can configure the display template after creating this field.
   select-dropdown-m2o:
     many-to-one: Many to One
     description: Välj ett relaterat objekt
     display_template: Visningsmall
-  collection-item-dropdown:
-    collection-item-dropdown: Collection Item Dropdown
-    description: Select an item from a collection in JSON format
   input-rich-text-md:
     markdown: Markdown
     description: Ange och förhandsgranska markdown
     edit: Redigera
     preview: Förhandsgranska
-    editorFont: Editor Font
-    previewFont: Preview Font
     customSyntax: Anpassade block
     customSyntax_label: Lägg till anpassade syntaxtyper
     customSyntax_add: Lägg till anpassad syntax
     box: Block / Infogad
-    imageToken: Static Access Token
-    imageToken_label: Static access token is appended to the assets' URL
   map:
     map: Karta
-    description: Select a location on a map
     zoom: Zooma
-    geometry_type: Geometry Type
-    geometry_format: Geometry Format
     default_view: Förvald vy
     invalid_options: Ogiltiga alternativ
     invalid_format: Ogiltigt format ({format})
@@ -1644,7 +1432,6 @@ interfaces:
     notice: Notis
     description: Visa en kort notis
     text: Ange notisens innehåll här...
-    no_text: No text configured...
   list-o2m:
     one-to-many: One to Many
     description: Välj flera relaterade objekt
@@ -1652,7 +1439,6 @@ interfaces:
   system-folder:
     folder: Mapp
     description: Välj en mapp
-    field_hint: Default folder for uploaded files without a folder specified. Does not affect existing files.
     root_name: Filbibliotek
     system_default: Systemstandard
   select-radio:
@@ -1666,7 +1452,6 @@ interfaces:
     sort: Sortera
     sort_placeholder: Manuell
     field_note_placeholder: Ange fältanteckning...
-    incompatible_data: The current data is not compatible with the repeater interface and will be overridden when adding items to the repeater
   slider:
     slider: Reglage
     description: Välj ett nummer med ett reglage
@@ -1684,7 +1469,6 @@ interfaces:
     auto_formatter: Använd titel Auto-Formatter
     alphabetize: Alfabetisera
     alphabetize_label: Tvinga alfabetisk ordning
-    add_tags: Add a tag and press Enter...
   input:
     input: Inmatning
     description: Ange ett värde manuellt
@@ -1702,11 +1486,6 @@ interfaces:
   input-multiline:
     textarea: Textfält
     description: Ange fritext på flera rader
-  input-translated-string:
-    input-translated-string: Translated Strings
-    description: Select or add custom translation
-    search_placeholder: Search...
-    new_custom_translation: New Custom Translation
   boolean:
     toggle: Växla
     description: Växla mellan på och av
@@ -1721,11 +1500,6 @@ interfaces:
     enable: Aktivera
     user_language: Använd nuvarande användarspråk
     default_language: Förvalt språk
-    language_field: Language Indicator Field
-    language_direction_field: Language Direction Field
-  list-o2m-tree-view:
-    description: Tree view for nested recursive one-to-many items
-    recursive_only: The tree view interface only works for recursive relationships.
   user:
     user: Användare
     description: Välj en befintlig CairnCMS användare
@@ -1741,39 +1515,20 @@ interfaces:
     custom_formats: Anpassade format
     options_override: Skriv över alternativ
     folder_note: Mapp för uppladdade filer. Påverkar inte befintliga filer.
-    imageToken: Static Access Token
-    imageToken_label: Static access token is appended to the assets' URL
   input-autocomplete-api:
-    input-autocomplete-api: Autocomplete Input (API)
-    description: A search typeahead for external API values.
     results_path: Sökväg för resultat
-    value_path: Value Path
-    text_path: Text Path
     trigger: Utlösare
     rate: Begränsning
   group-raw:
     name: Avskalad grupp
-    description: Render the fields as-is
   group-detail:
     name: Detalj grupp
-    description: Render the fields as a collapsable section
-    show_header: Show Group Header
     header_icon: Ikon sidhuvud
     header_color: Färg sidhuvud
     start_open: Start öppen
     start_closed: Start stängd
   system-token:
     system-token: Token
-    description: Manage static access token
-    placeholder: Click "Generate Token" to create a new static access token
-    value_securely_saved: Value Securely Saved
-    generate: Generate Token
-    regenerate: Regenerate Token
-    generate_success_copy: Make sure to backup and copy the token above. For security reasons, you will not be able to view the token again after saving and navigate off this page.
-    remove_token: Remove Token
-  system-raw-editor:
-    system-raw-editor: Raw Editor
-    description: Allow entering of raw or mustache templating values
 displays:
   translations:
     translations: Översättningar
@@ -1781,7 +1536,6 @@ displays:
     enable: Aktivera
     user_language: Använd nuvarande användarspråk
     default_language: Förvalt språk
-    language_field: Language Indicator Field
   boolean:
     boolean: Boolean
     description: Visa på och av lägen
@@ -1812,13 +1566,7 @@ displays:
     relative: Relativ
     relative_label: 'Visa relativ tid, t. ex.: 5 minuter sedan'
     suffix: Suffix
-    suffix_label: Show relative indicator
-    suffix_note: Uses words like 'in' and 'ago'
-    strict: Strict
-    strict_label: Use strict units
-    strict_note: Removes words like 'almost', 'over', 'less than'
     round: Rund
-    round_note: Choose a rounding function to use
     down: Ner
     nearest: Närmaste
     up: Upp
@@ -1832,26 +1580,18 @@ displays:
     formatted-value: Formaterat värde
     description: Visa en formaterad version av texten
     format: Format
-    format_label: Auto format
     font: Typsnitt
-    font_sans_serif: Sans serif
     font_serif: Serif
     font_monospace: Monospace
     bold: Fet
     bold_label: Använd fet stil
     italic: Kursiv
-    italic_label: Use italic style
     prefix: Prefix
-    prefix_label: Prepend text
     suffix: Suffix
-    suffix_label: Appended Text
     color: Färg
     background: Bakgrund
     icon: Ikon
-    border: Border
-    border_label: Show border
     text: Text
-    text_placeholder: Optional value override...
   formatted-json-value:
     formatted-json-value: Formaterat JSON-värde
     description: Visa en formaterad version av objektet
@@ -1889,7 +1629,6 @@ displays:
   related-values:
     related-values: Relaterade värden
     description: Visa relativa värden
-    display_template_configure_notice: You can configure the display template after creating this field.
   user:
     user: Användare
     description: Visa en CairnCMS användare
@@ -1916,238 +1655,53 @@ layouts:
     calendar: Kalender
     start_date_field: Fält för startdatum
     end_date_field: Fält för slutdatum
-    optional: Optional
-    first_day: First Day of the Week
   map:
     map: Karta
     basemap: Basemap
     layers: Lager
-    cluster_options: Clustering options
-    cluster: Cluster Nearby Data
-    cluster_radius: Cluster radius
-    cluster_minpoints: Cluster minimum size
-    cluster_maxzoom: Maximum zoom for clustering
-    field: Geospatial Field
-    invalid_geometry: Invalid geometry
     find_location: Hitta plats...
-    default_template: Using Collection Default...
-    no_compatible_fields: No compatible fields
   kanban:
-    name: Kanban
-    group_field: Group By
-    group_field_placeholder: Field to group by...
-    group_title: Group Title
-    group_title_placeholder: Field for group titles...
-    title: Card Title
-    title_placeholder: Optional title field...
-    text: Card Text
-    text_placeholder: Optional text field...
-    date: Card Date
-    date_placeholder: Optional date field...
-    tags: Card Tags
-    tags_placeholder: Optional tags field...
-    user: Card User
-    user_placeholder: Optional user field...
-    image: Card Image
-    image_placeholder: Optional image field...
-    image_fit: Card Image Fit
     crop: Beskär
     advanced: Avancerat
-    edit_group: Edit Group
-    delete_group: Delete Group
-    add_group: Add Group
-    add_group_placeholder: Enter a new group title...
-    show_ungrouped: Show Ungrouped
-    show: Show
-    no_group: No Group
-    not_all_loaded: Could only load the first 1000 items.
-horizontal: Horizontal
-vertical: Vertical
-x_axis: X-Axis
-y_axis: Y-Axis
-y_axis_function: Y-Axis Function
-show_x_only: Show X-Axis Only
-show_y_only: Show Y-Axis Only
-show_data_label: Show Data Label
 both: Båda
-show_axis_labels: Show Axis Labels
-function: Function
-half_circle: Half Circle
-full_circle: Full Circle
-stroke_width: Stroke Width
-rounded_stroke: Rounded Stroke
-thin: Thin
-medium: Medium
-broad: Broad
-show_labels: Show Labels
-show_legend: Show Legend
-right: Right
-left: Left
-donut: Donut
 panels:
   metric:
     name: Metrisk
     description: Visa ett enskilt värde baserat på en query
     field: Fält
   time_series:
-    name: Time Series
     description: Rendera ett linjediagram baserat på värden över tid
     date_field: Datumfält
     value_field: Värdefält
-    fill_type: Fill Type
-    curve_type: Curve Type
   label:
     name: Etikett
     description: Visa lite text
   list:
     name: Lista
     description: Filtrera och lista fält från en kollektion
-  barchart:
-    name: Bar Chart
-    description: Bar or column charts for comparing groups of values
-    horizontal: Horizontal
-    select_collection: You must select a collection.
-  linechart:
-    name: Line Chart
-    description: Line chart for comparing change of a field
-    disabled_grouping: Disabled when grouping is selected.
-    disabled_no_grouping: Disabled when no grouping is selected.
-    show_marker: Show Tooltip Marker
-    curve_type: Curve Type
-    smooth: Smooth
-    straight: Straight
-    step_line: Step Line
-  meter:
-    name: Meter
-    description: Meter for tracking values
-  piechart:
-    name: Pie or Donut Chart
-    description: Circular chart showing the ratios of groups on a column
-  variable:
-    name: Global Variable
-    description: Set a global value for use in other Panels' filters
-    variable_key: Variable Key
-  relational-variable:
-    name: Global Relational Variable
-    description: Set a global relational value for use in other Panels' filters
-    variable_key: Variable Key
-    multiple: Multiple
-    multiple-label: Select multiple items
 triggers:
-  common:
-    response_body: Response Body
-    response_body_all: All Data
-    response_body_last: Data of Last Operation
-  event:
-    name: Event Hook
-    description: Triggers on platform or data events
-    action: 'Action (Non-Blocking)'
-    filter: 'Filter (Blocking)'
   webhook:
-    name: Webhook
-    description: Triggers on an incoming HTTP request
     method: Metod
-    async: Asynchronous
-  operation:
-    name: Another Flow
-    description: Triggered by another Flow, for chaining
-    preview: Triggered by an operation in a different Flow
-  schedule:
-    name: Schedule (CRON)
-    description: Triggers at regular points in time
-    cron: Interval
   manual:
     name: Manuell
-    description: Triggers on manual run within selected collection(s)
-    collection_and_item: Collection & Item Pages
-    collection_only: Collection Page Only
-    item_only: Item Page Only
-    collection_page: Collection Page
-    require_selection: Requires Selection
-a_flow_uuid: Select a Flow to trigger...
-any_string_or_json: Any string or JSON...
-item_payload_placeholder: This is the JSON used to update the item's field values...
-operation_variables_note: You can access flow data with variables such as **{'{'}{'{'}$last{'}'}{'}'}**, **{'{'}{'{'}$trigger{'}'}{'}'}** and **{'{'}{'{'}$accountability{'}'}{'}'}**, or reference previous operations using **{'{'}{'{'}operation_key{'}'}{'}'}**.'
 operations:
   condition:
     name: Villkor
-    description: Route a flow based on If / Else logic
-  exec:
-    name: Run Script
-    description: Execute arbitrary code to modify the payload
-    modules: 'The following **Node modules** can be used:'
-  item-create:
-    name: Create Data
-    description: Create items in the database
-    payload: Payload
-    emit_events: Emit Events
-  item-delete:
-    name: Delete Data
-    description: Delete items in the database
-    emit_events: Emit Events
-    key: IDs
-    query: Query
-  item-read:
-    name: Read Data
-    description: Read items from the database
-    key: IDs
-    query: Query
-    emit_events: Emit Events
-  item-update:
-    name: Update Data
-    description: Update items in the database
-    emit_events: Emit Events
-    key: IDs
-    payload: Payload
-    query: Query
   log:
-    name: Log to Console
-    description: Output something to the console
     message: Meddelande
-    message_placeholder: Enter a message to show in the console...
   mail:
     name: Skicka e-post
-    description: Send an email to one or more people
     to: Till
-    to_placeholder: Add e-mail addresses and press enter...
-    body: Body
     template: Mall
     data: Data
   notification:
-    name: Send Notification
-    description: Send an in-app notification to one or more users
     recipient: Användare
-    recipient_placeholder: Enter a UUID...
-    recipient_note: Add user UUID and press enter...
     message: Meddelande
   request:
-    name: Webhook / Request URL
-    description: "Make a request to a URL"
     url: URL
-    url_placeholder: https://example.com/example
     method: Metod
     data: Data
-    headers: Headers
-    header: Header
-    header_placeholder: Authorization...
-    value_placeholder: Bearer eyJhbGciOi...
-  sleep:
-    name: Sleep
-    description: Wait a given number of milliseconds
-    milliseconds: Milliseconds
-  transform:
-    name: Transform Payload
-    description: Alter the Flow's JSON payload
   trigger:
-    name: Trigger Flow
-    description: Pass this data to another flow
     flows: Flöden
     flow: Flöde
     data: Data
-    iteration_mode: Iteration Mode
-    iteration_mode_note: Mode for iterating over arrays.
-    serial: Serial
-    parallel: Parallel
-    batch: Batch
-    batch_size: Batch Size
-    cache: Cache
