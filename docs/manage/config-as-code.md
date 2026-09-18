@@ -1,11 +1,11 @@
 ---
 title: Config as code
-description: Capture roles, permissions, folders, and project settings to versioned files, review changes, and apply them across environments.
+description: Capture roles, permissions, folders, project settings, and extension settings to versioned files, review changes, and apply them across environments.
 sidebar:
   order: 8
 ---
 
-Use config-as-code to capture roles, permissions, folders, and project settings, review changes in source control, and apply them across environments. Use the CLI for a directory of YAML files or the HTTP API for a single JSON or YAML document.
+Use config-as-code to capture roles, permissions, folders, project settings, and extension settings, review changes in source control, and apply them across environments. Use the CLI for a directory of YAML files or the HTTP API for a single JSON or YAML document.
 
 ## What a config snapshot captures
 
@@ -15,6 +15,7 @@ A snapshot contains:
 - **Permissions** — the operator-defined rules attached to each role, grouped by role. Each permission rule includes the collection, action, field allow-list, item-level filter, validation, and presets.
 - **Folders** — the file-library folder names and hierarchy. File contents are not included.
 - **Project settings** — the operator-authored project configuration including branding text, the default language, the login and password policy, the module bar, asset presets and the transform mode, map settings, and the default storage folder.
+- **Extension settings** — settings for installed extensions that declare them, grouped by extension subject (the package name). Secrets are represented by preserve markers or runtime references.
 
 It does not contain:
 
@@ -23,6 +24,7 @@ It does not contain:
 - **The Public role record.** Public access is managed through `permissions/public.yaml`. There is no `roles/public.yaml`.
 - **System-managed permissions.** Built-in rules, such as those supplied by `app_access: true`, are provided automatically by CairnCMS.
 - **Image settings.** Config as code does not manage project files, so the project logo and the public foreground and background images are not captured.
+- **Inline secret values.** A snapshot carries `$secret: preserve` for a stored extension secret. Supply its value separately on each instance.
 
 ## Managed scope
 
@@ -35,13 +37,16 @@ resources:
   - permissions
   - folders
   - settings
+  - extension-settings
 ```
 
-Within each listed kind, the files describe the complete desired set, and a record absent from that set is planned for deletion. Project settings is the exception as it is a single record and is never deleted, as described below. Omitted kinds are left alone, and `resources: []` manages nothing in that case.
+For roles, permissions, and folders, the files describe the complete desired set, and a record absent from that set is planned for deletion. Project settings is a single record and is never deleted. Extension settings are managed per subject, as described below. Omitted kinds are left alone, and in that case `resources: []` manages nothing.
 
-Re-snapshotting an existing directory preserves its version and scope. Version 1 supports roles and permissions. Version 2 adds folders and project settings. To adopt one in an existing project, set `version: 2`, add `folders` or `settings` to `resources`, then re-snapshot the source instance and review the files before applying elsewhere.
+Re-snapshotting an existing directory preserves its version and scope. Version 1 supports roles and permissions. Version 2 adds folders, project settings, and extension settings. To adopt one in an existing project, set `version: 2`, add `folders`, `settings`, or `extension-settings` to `resources`, then re-snapshot the source instance and review the files before applying elsewhere.
 
 When `settings` is listed in `resources`, `config snapshot` writes the project settings from the database to `settings/project.yaml`. Applying the snapshot updates the target instance's settings. If you omit individual fields from the file, their values in the target database remain unchanged.
+
+When `extension-settings` is listed in `resources`, a snapshot writes one file per extension subject with an available settings declaration, including subjects with no stored values. An apply manages only the subjects with a file. Each file is the complete desired set of that subject's declared stored values. Removing a key plans a deletion, which requires `--destructive`. Removing the whole file stops managing the subject and leaves its values untouched. See [Extension settings](#extension-settings) for secret handling and clearing values.
 
 Roles and permissions can be managed independently. When both are managed, each permission set must reference a role declared in the config. When only permissions are managed, role references resolve against roles already in the target database.
 
@@ -62,6 +67,8 @@ Choose the surface that fits your deployment:
 | Safety | Interactive confirmation | Opt-in query flags |
 
 Both produce the same plans and apply the same scope rules. The CLI also requires filenames to match record identities: `roles/editor.yaml` must declare `key: editor`, and `folders/reports.yaml` must declare `key: reports`.
+
+Extension-settings filenames are derived from the `subject` inside the file. Keep the snapshot-generated filename since a name that does not match its subject is rejected.
 
 ## The CLI
 
@@ -89,8 +96,10 @@ config/
 ├── folders/
 │   ├── documents.yaml            # one file per folder, named after folder.key
 │   └── reports.yaml
-└── settings/
-    └── project.yaml              # project settings (a single record)
+├── settings/
+│   └── project.yaml              # project settings (a single record)
+└── extension-settings/
+    └── cairncms-extension-chat-notify-11fe5f91.yaml
 ```
 
 For example, `folders/reports.yaml` places Reports under the folder whose key is `documents`:
@@ -100,6 +109,21 @@ key: reports
 name: Reports
 parent: documents
 ```
+
+An extension-settings file groups global values and collection-scoped values for its subject. For example, `extension-settings/cairncms-extension-chat-notify-11fe5f91.yaml`:
+
+```yaml
+subject: cairncms-extension-chat-notify
+global:
+  sender_name: CairnCMS
+  api_token:
+    $secret: preserve
+collections:
+  articles:
+    channel: editorial
+```
+
+The extension declares the available keys, their types, and their scopes. The config file supplies their values. The preserve marker keeps the target's inline secret without copying it from the source.
 
 Snapshot treats any record file whose filename and declared identity match as managed, including hand-authored files. It leaves other files unchanged during cleanup.
 
@@ -119,7 +143,7 @@ Three flags adjust the flow:
 
 - **`--dry-run`** — compute and print the plan without writing. Exits `1` when the plan contains changes and `0` when it is empty, which supports CI drift checks. Add `--format json` for the machine-readable plan. JSON is only available with `--dry-run`.
 - **`--yes`** — skip the confirmation prompt.
-- **`--destructive`** — authorize deleting managed roles, permissions, or folders that are absent from the config. Off by default.
+- **`--destructive`** — authorize deleting managed roles, permissions, or folders absent from the config, and declared stored extension-setting values absent from a managed subject's file. Off by default.
 
 Without `--destructive`, a plan containing deletions is displayed but not applied:
 
@@ -143,8 +167,16 @@ Roles:
 Permissions:
   - Delete editor / articles / delete
 
-Plan: 1 to create, 1 to update, 1 to delete.
+Extension settings:
+  - Create cairncms-extension-chat-notify / notify_updates
+  - Update cairncms-extension-chat-notify / sender_name
+    - Set value to Editorial
+  - Delete cairncms-extension-chat-notify / api_token
+
+Plan: 2 to create, 2 to update, 2 to delete.
 ```
+
+Extension-setting updates show ordinary values. Inline secrets can only be preserved or deleted by config apply, so the plan shows a secret deletion by identity without its value. Preserve markers and config-sourced references produce no changes.
 
 For each role deletion, the plan lists the cascading permission and preset deletions, the suspended users, and the affected active sessions:
 
@@ -183,15 +215,35 @@ cairncms config apply --dry-run --format json ./config
       "operation": "delete",
       "identity": { "role": "editor", "collection": "articles", "action": "delete" },
       "impact": []
+    },
+    {
+      "kind": "extension-settings",
+      "operation": "create",
+      "identity": { "subject": "cairncms-extension-chat-notify", "scope": "global", "scope_key": "", "key": "notify_updates" },
+      "values": { "value": true }
+    },
+    {
+      "kind": "extension-settings",
+      "operation": "update",
+      "identity": { "subject": "cairncms-extension-chat-notify", "scope": "global", "scope_key": "", "key": "sender_name" },
+      "fields": { "value": { "before": "CairnCMS", "after": "Editorial" } }
+    },
+    {
+      "kind": "extension-settings",
+      "operation": "delete",
+      "identity": { "subject": "cairncms-extension-chat-notify", "scope": "global", "scope_key": "", "key": "api_token" },
+      "impact": []
     }
   ],
-  "summary": { "create": 0, "update": 1, "delete": 1 },
+  "summary": { "create": 1, "update": 2, "delete": 2 },
   "warnings": [],
   "protections": []
 }
 ```
 
 `planVersion` identifies the output format, independently of the input's `manifestVersion`. Each change has a `kind`, `operation`, and `identity`. Creates include `values`, updates include `before`/`after` fields, and role deletions include their cascading `impact`. An empty plan has a zeroed `summary`.
+
+An extension-setting identity includes `subject`, `scope`, `scope_key`, and `key`. Global settings use an empty `scope_key`, while collection-scoped settings use the collection name. Secret deletions carry no value.
 
 `protections` lists reasons a plan cannot be applied, even with `--destructive`. Each entry includes a `code`, `message`, and contributing changes. Automation should branch on `code`, not message text.
 
@@ -255,11 +307,13 @@ In remote mode, server refusals (`4xx`), a server below version 1.6.0, and missi
 
 ### Environment variables
 
-Role names and descriptions, and the project name, descriptor, URL, and Mapbox key, accept environment placeholders such as `{{CAIRNCMS_CONFIG_PROJECT_NAME}}`. The placeholder must occupy the entire field value. The CLI resolves it before planning. Unset variables or names outside the `CAIRNCMS_CONFIG_` namespace stop the command. Folder fields and the default storage folder do not support interpolation.
+Role names and descriptions, the project name, descriptor, URL, and Mapbox key, and ordinary extension-setting strings accept environment placeholders such as `{{CAIRNCMS_CONFIG_PROJECT_NAME}}`. The placeholder must occupy the entire field value. Use the `CAIRNCMS_CONFIG_` namespace for interpolation. The CLI resolves the variable before planning, and an unset variable stops the command. Folder fields and the default storage folder do not support interpolation.
 
 When you snapshot into a directory that already declares a whole-value placeholder for one of these fields, the CLI keeps your committed placeholder instead of replacing it with the resolved value, even when the variable is unset or its value differs from the database. A fresh directory, a field the existing file does not already declare as a placeholder, and the HTTP snapshot return the stored value.
 
-The HTTP API does not resolve placeholders. Send resolved values in the request body.
+Extension secrets do not use this interpolation. Use `$secret: preserve` for an inline secret and keep the snapshot's `{{CAIRNCMS_EXT_*}}` reference for a config-sourced secret, as described under [Extension settings](#extension-settings).
+
+The HTTP API does not resolve `CAIRNCMS_CONFIG_*` placeholders. Send resolved ordinary values in the request body and carry config-sourced `CAIRNCMS_EXT_*` references verbatim.
 
 To store a literal role name or description, avoid whole-value placeholder syntax such as `{{NAME}}`.
 
@@ -320,6 +374,11 @@ A mutating apply returns a summary like this under `data`:
   },
   "settings": {
     "updated": []
+  },
+  "extension-settings": {
+    "created": 1,
+    "updated": 1,
+    "deleted": 0
   }
 }
 ```
@@ -336,7 +395,7 @@ Use `POST /config/apply?dry_run=true` to preview changes. Each apply computes a 
 
 ## Audit records and events
 
-Config applies use the normal activity and revision tracking for each affected collection, including changes caused by a role deletion.
+For roles, permissions, folders, and project settings, config applies use the normal activity and revision tracking for each affected collection, including changes caused by a role deletion.
 
 Applies are attributed:
 
@@ -384,6 +443,32 @@ When editing the files or an HTTP snapshot:
 
 To rename or move a folder, edit its `name` or `parent` and keep its `key`. Generated snapshots include all supported fields.
 
+### Extension settings
+
+Each subject's file has a `global` map and a `collections` map. Put global settings under `global.<key>` and collection-scoped settings under `collections.<collection>.<key>`. The extension's declaration determines each key's scope, type, and secret source.
+
+Values take three forms:
+
+- **Ordinary values** are strings, numbers, or booleans. Ordinary strings may use a whole-value `{{CAIRNCMS_CONFIG_*}}` placeholder with the CLI.
+- **Inline secrets** use `{ $secret: preserve }`. A snapshot emits this marker for a stored secret, and an apply leaves the target's value unchanged.
+- **Config-sourced secrets** use the exact `{{CAIRNCMS_EXT_*}}` reference emitted by the snapshot. Set the corresponding environment variable on the target server. These secrets are read from the environment at runtime and are never stored or deleted by config apply.
+
+Config apply does not supply inline secret values. Set or rotate them in the admin app or through the admin API as a separate instance-setup step. `$secret: preserve` also succeeds when the target has no value, leaving it unset. Functionality that requires that secret remains unavailable until it is supplied. The extension author chooses the [secret source](/docs/develop/extensions/settings/#secret-settings), and the config file cannot change it.
+
+For a subject with a file, an apply clears stored values for currently declared target keys absent from that file, including inline secrets and keys that exist only on the target. Omitting the `global` or `collections` map means an empty desired set for that map. These deletions are shown in the plan and require `--destructive`.
+
+To clear all currently declared stored values for a subject, including its inline secrets, keep its generated file and use empty maps:
+
+```yaml
+subject: cairncms-extension-chat-notify
+global: {}
+collections: {}
+```
+
+Review the deletion plan before applying with `--destructive`. A blank file or `{}` is invalid because `subject` is required. Removing the file entirely stops managing that subject and preserves its stored values.
+
+Rows left behind by uninstalled or ineligible extensions, and stored keys an extension no longer declares, remain untouched. Config-sourced references are also unaffected by clearing stored values.
+
 ### Supported fields
 
 Unknown fields stop the apply. Fields outside the config format are not exported or updated, but are removed with their record if it is deleted.
@@ -391,6 +476,8 @@ Unknown fields stop the apply. Fields outside the config format are not exported
 ## Validation
 
 Both surfaces validate the configuration and plan before applying changes. Role and folder references must resolve as described in [Managed scope](#managed-scope) and [Field semantics](#field-semantics). A settings default folder must reference a folder the config declares when folders are managed, or one already in the database when they are not. Each role can have only one permission rule per collection and action.
+
+Every named extension subject must be installed on the target with an available settings declaration, even in a document with empty maps. Each setting key must be declared with the matching type and scope, and collection-scoped settings must name an existing collection. Inline secrets accept only the preserve marker, and config-sourced secrets require their exact runtime reference.
 
 Every step must retain at least one role with `admin_access: true`. Plans that cannot do so report `ADMIN_CONTINUITY_REQUIRED`; `--destructive` does not override this protection.
 
@@ -413,7 +500,7 @@ Config-specific HTTP codes are:
 
 - **`CONFIG_INVALID`** (400) — invalid configuration. The message identifies the field or reference to correct.
 - **`CONFIG_UNSUPPORTED_VERSION`** (400) — the manifest version is unsupported or does not support a listed kind.
-- **`CONFIG_IDENTITY_CONFLICT`** (400) — a duplicate role key, folder key, or permission identity.
+- **`CONFIG_IDENTITY_CONFLICT`** (400) — a duplicate role key, folder key, permission identity, or extension-settings subject.
 - **`CONFIG_PROTECTED_RECORD`** (400) — the plan would break administrator continuity.
 - **`DESTRUCTIVE_CHANGES_REQUIRED`** (400) — a plan contains deletions that were not authorized. `extensions.deletions` lists the identities.
 - **`CONFIG_FOLDER_IN_USE`** (400) — a folder still has contents or references. `extensions.blockedBy` identifies what must be moved or cleared before deletion.
@@ -423,13 +510,13 @@ Config-specific HTTP codes are:
 
 Malformed JSON uses `INVALID_PAYLOAD`. Unsupported content types use `UNSUPPORTED_MEDIA_TYPE`.
 
-The CLI writes failure messages to standard error and uses the [exit codes](#exit-codes) above. An unset `CAIRNCMS_CONFIG_*` placeholder is reported as `CONFIG_PLACEHOLDER_UNRESOLVED`. A placeholder outside that namespace is `CONFIG_INVALID`.
+The CLI writes failure messages to standard error and uses the [exit codes](#exit-codes) above. An unset `CAIRNCMS_CONFIG_*` placeholder is reported as `CONFIG_PLACEHOLDER_UNRESOLVED`. An interpolation placeholder outside that namespace is `CONFIG_INVALID`. Declared `CAIRNCMS_EXT_*` runtime references are carried without interpolation.
 
 ## Source-control workflow
 
 For a multi-environment project:
 
-1. Make role, permission, folder, or project-settings changes in your development instance using Settings → Access Control, the File library, or the project settings screens.
+1. Make role, permission, folder, project-settings, or extension-settings changes in your development instance using the corresponding admin screens.
 2. Run `cairncms config snapshot ./config` to write the directory tree.
 3. Review and commit the snapshot diff.
 4. Run `cairncms config apply --dry-run --format json ./config` against staging. Exit `1` means changes are planned. After review, apply them with `cairncms config apply --yes ./config`.
@@ -446,7 +533,7 @@ cairncms schema apply ./schema.yaml
 cairncms config apply ./config
 ```
 
-Apply schema before config so referenced collections exist when permissions are installed. Config apply does not reject permissions for missing collections, but the plan reports them as warnings.
+Apply schema before config so referenced collections exist when permissions and collection-scoped extension settings are installed. Config apply reports missing permission collections as warnings. A missing collection for an extension setting stops the apply.
 
 Applying an unchanged schema or config is a no-op, so both commands can run on every deployment.
 
