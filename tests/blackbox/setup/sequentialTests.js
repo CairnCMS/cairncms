@@ -1,4 +1,3 @@
-// Tests will run sequentially according to this list
 exports.list = {
 	before: [
 		{ testFilePath: '/common/seed-database.test.ts' },
@@ -7,6 +6,7 @@ exports.list = {
 		{ testFilePath: '/routes/schema/apply-nested-meta.test.ts' },
 		{ testFilePath: '/routes/config/config.test.ts' },
 		{ testFilePath: '/routes/config/config-settings.test.ts' },
+		{ testFilePath: '/routes/config/config-extension-settings.test.ts' },
 		{ testFilePath: '/routes/config/config-concurrency.test.ts' },
 		{ testFilePath: '/routes/config/config-cache-effect.test.ts' },
 		{ testFilePath: '/routes/config/remote-cli.test.ts' },
@@ -50,11 +50,8 @@ exports.list = {
 		{ testFilePath: '/routes/realtime/realtime.test.ts' },
 		{ testFilePath: '/utils/await-connection.test.ts' },
 	],
-	// If specified, only run these tests sequentially
-	only: [
-		// { testFilePath: '/common/seed-database.test.ts' },
-		// { testFilePath: '/common/common.test.ts' },
-	],
+	// A nonempty list replaces the full suite.
+	only: [],
 };
 
 exports.getReversedTestIndex = function (testFilePath) {
