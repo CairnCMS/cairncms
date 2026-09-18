@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: 标识符（identifier）
 avatar: 头像
 application: 应用程序
@@ -76,14 +75,6 @@ create_role: 创建角色
 create_user: 创建用户
 message: 消息
 delete_panel: 删除面板
-create_translation_string: 创建翻译字符串
-no_translation_string: 空
-no_translation_string_copy: 目前没有翻译字符串。
-translation_string_key_placeholder: 翻译字符串键..
-translation_string_translations_placeholder: 添加新翻译
-edit_translation_string: 编辑翻译字符串
-delete_translation_string_copy: >-
-  您确定要删除翻译字符串"{key}" 吗? 此操作无法撤消。
 invite_users: 邀请用户
 invite: 邀请
 email_already_invited: 电子邮件 "{email}" 已被邀请
@@ -114,13 +105,6 @@ public_label: 公开
 public_description: 设置哪些API无需身份验证。
 admin_description: 不受限制的 App/ API 访问权限的初始管理角色
 not_allowed: 不允许
-directus_version: CairnCMS 版本
-node_version: Node 版本
-node_uptime: Node 运行时间
-os_type: 系统类型
-os_version: 系统版本
-os_uptime: 系统运行时间
-os_totalmem: 系统内存
 archive: 存档
 archive_confirm: 您确定要归档所选吗？
 archive_confirm_count: >-
@@ -462,11 +446,9 @@ open_file_in_tab: 在新标签页中打开文件
 start_export: 开始导出
 not_available_for_local_downloads: 本地下载不可用
 exporting_all_items_in_collection: 正在导出 {collection} 内所有的 {total} 项。
-exporting_limited_items_in_collection: 正在导出 {collection} 内 {total} 项中的 {limit} 项。
+exporting_limited_items_in_collection: '正在导出 {collection} 内 {total} 项中的 {limit} 项。'
 exporting_no_items_to_export: 没有要导出的条目。调整下面的导出配置。
 exporting_download_hint: 完成后，此 {format} 文件将自动下载到您的设备。
-exporting_batch_hint: 此导出将分批处理，完成后 {format} 文件将被保存到文件库。
-exporting_batch_hint_forced: 由于条目数量过大，导出必须分批处理，完成后 {format} 文件将被保存到文件库。
 collection_key: 模型的主键
 name: 名称
 primary_key_field: 主键字段
@@ -491,7 +473,6 @@ enable_select_button: 启用选择按钮
 allow_duplicates: 允许重复项
 comments: 注释
 no_comments: 暂无注释
-click_to_expand: 单击展开
 select_item: 选择条目
 no_items: 无条目
 search_items: 搜索条目...
@@ -952,7 +933,6 @@ settings_permissions: 角色与权限
 settings_project: 项目设置
 settings_flows: 流程
 settings_presets: 预设&书签
-settings_translation_strings: 翻译字符串
 one_or_more_options_are_missing: 缺少一个或多个选项
 scope: 范围
 actions: 操作
@@ -1000,7 +980,6 @@ page_help_settings_presets_item: >-
   **预设详细信息** - 管理书签和默认模型预设的表单。
 page_help_settings_flows_collection: '**Browse Webhooks** - 列出项目内的所有流。'
 page_help_settings_flows_item: '**流程详情** - 管理一个或多个操作面板的工作空间。'
-page_help_settings_translation_strings_collection: '**浏览翻译字符串** - 列出项目中的所有翻译字符串。'
 page_help_users_collection: '**用户目录** - 列出此项目中的所有系统用户。'
 page_help_users_item: >-
   **用户详细信息** - 管理您的帐户信息，或查看其他用户的详细信息。
@@ -1660,7 +1639,6 @@ interfaces:
     input-translated-string: 已翻译的字符串
     description: 选择或添加翻译字符串
     search_placeholder: 搜索...
-    new_translation_string: 新翻译字符串
   boolean:
     toggle: 切换
     description: 开启或关闭
