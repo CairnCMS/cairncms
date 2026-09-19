@@ -122,6 +122,14 @@ function isLeafMap(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+const DOCUMENT_FIELDS = new Set(['subject', 'global', 'collections']);
+
+// Portable validation, directory parsing, and preservation share one field allowlist so a misspelled or reserved
+// own field name is refused at every boundary rather than dropped and turned into a planned deletion.
+function unknownDocumentField(record: object): string | undefined {
+	return Object.keys(record).find((field) => !DOCUMENT_FIELDS.has(field));
+}
+
 // Joi skips an own `__proto__` key even in strict objects, so marker shape needs an own-key check.
 function isExactPreserveMarker(value: Record<string, unknown>): boolean {
 	const keys = Reflect.ownKeys(value);
@@ -232,10 +240,10 @@ function assertPortableLeafMap(value: unknown, label: string, where: string): vo
 
 // Preservation must work with unset variables and without a local declaration catalogue.
 function assertPreservationStructure(existing: Record<string, unknown>, label: string): void {
-	for (const field of Object.keys(existing)) {
-		if (field !== 'subject' && field !== 'global' && field !== 'collections') {
-			throw preservationFailure(label, `has an unknown field "${safeLogFragment(field)}"`);
-		}
+	const unknownField = unknownDocumentField(existing);
+
+	if (unknownField !== undefined) {
+		throw preservationFailure(label, `has an unknown field "${safeLogFragment(unknownField)}"`);
 	}
 
 	const global = ownGet(existing, 'global');
@@ -345,14 +353,16 @@ function declarationClassification(subjects: string[], eligible: ReadonlyMap<str
 	return entries.sort();
 }
 
-function scopeProblemDetail(problem: SettingScopeProblem, storedScope: string): string {
+function scopeProblemDetail(problem: SettingScopeProblem, storedScope: string, storedScopeKey: string): string {
 	switch (problem) {
 		case 'scope':
 			return `is stored at an unsupported scope "${safeLogFragment(storedScope)}"`;
 		case 'global-key':
-			return 'is stored as a global value with a non-empty scope key';
+			return `is stored as a global value with a non-empty scope key "${safeLogFragment(storedScopeKey)}"`;
 		case 'collection-key':
-			return 'is stored as a collection value without an existing target collection';
+			return `is stored as a collection value whose scope key "${safeLogFragment(
+				storedScopeKey
+			)}" has no existing target collection`;
 	}
 }
 
@@ -395,23 +405,25 @@ async function readCurrent(
 			if (declared === undefined) continue;
 
 			const storedScope = row['scope'] as string;
+			const storedScopeKey = row['scope_key'] as string;
 
 			if (storedScope !== declared.scope) {
 				throw unreadable(
 					`extension setting ${safeLogFragment(subject)}/${safeLogFragment(key)}`,
-					`is stored at scope "${safeLogFragment(storedScope)}" but declared at "${declared.scope}"`
+					`is stored at scope "${safeLogFragment(storedScope)}" with scope key "${safeLogFragment(
+						storedScopeKey
+					)}" but declared at "${declared.scope}"`
 				);
 			}
 
 			if (declared.secret !== undefined && declared.secret.source === 'config') continue;
 
-			const storedScopeKey = row['scope_key'] as string;
 			const scopeProblem = checkSettingScope(storedScope, storedScopeKey, (name) => hasOwn(collections, name));
 
 			if (scopeProblem !== undefined) {
 				throw unreadable(
 					`extension setting ${safeLogFragment(subject)}/${safeLogFragment(key)}`,
-					scopeProblemDetail(scopeProblem, storedScope)
+					scopeProblemDetail(scopeProblem, storedScope, storedScopeKey)
 				);
 			}
 
@@ -520,6 +532,14 @@ function validatePortableStructure(
 	subjectLabel: string,
 	document: ConfigExtensionSettingsAuthored
 ): void {
+	const unknownField = unknownDocumentField(document);
+
+	if (unknownField !== undefined) {
+		failures.push(
+			invalid(`Extension settings for "${subjectLabel}" have an unknown field "${safeLogFragment(unknownField)}".`)
+		);
+	}
+
 	const checkLeafMap = (value: unknown, where: string): void => {
 		if (!isLeafMap(value)) {
 			failures.push(invalid(`Extension settings for "${subjectLabel}" have a non-map ${where}.`));
@@ -891,9 +911,13 @@ const YAML_SUFFIX = '.yaml';
 
 export const extensionSettingsDescriptor: Omit<
 	ConfigResourceDescriptor<ExtensionSettingsKindTypes>,
-	'composeDocuments'
+	'composeDocuments' | 'restorePlaceholders' | 'layout'
 > & {
 	composeDocuments(records: ExtensionSettingRecord[], anchors: { subject: string }[]): ConfigExtensionSettings[];
+	restorePlaceholders(pending: ConfigExtensionSettings, existing: Record<string, unknown>): ConfigExtensionSettings;
+	layout: Omit<ConfigResourceDescriptor<ExtensionSettingsKindTypes>['layout'], 'parseDocumentFile'> & {
+		parseDocumentFile(record: Record<string, unknown>, filename: string): ConfigExtensionSettings;
+	};
 } = {
 	kind: 'extension-settings' as const,
 	formatVersion: 2,
@@ -913,10 +937,7 @@ export const extensionSettingsDescriptor: Omit<
 				);
 			}
 
-			// Dropping a misspelled map name would turn its values into planned deletions.
-			const unknown = Object.keys(record).find(
-				(field) => field !== 'subject' && field !== 'global' && field !== 'collections'
-			);
+			const unknown = unknownDocumentField(record);
 
 			if (unknown !== undefined) {
 				throw new ConfigInvalidException(

@@ -225,7 +225,13 @@ describe('configSnapshot against a remote server', () => {
 
 		await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
 
-		expect(vi.mocked(logger.error)).toHaveBeenCalled();
+		expect(vi.mocked(process.exit).mock.calls).toEqual([[3]]);
+
+		expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
+			expect.stringContaining('placeholder declarations cannot be preserved')
+		);
+
+		expect(vi.mocked(logger.error)).toHaveBeenCalledWith(expect.stringContaining('token'));
 		expect(await captureTree(tmpDir)).toEqual(before);
 	});
 });

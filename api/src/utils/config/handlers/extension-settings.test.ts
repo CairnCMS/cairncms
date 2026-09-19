@@ -22,6 +22,7 @@ import {
 	extensionSettingsDescriptor,
 	type ExtensionSettingsKindTypes,
 } from './extension-settings.js';
+import { CONFIG_REGISTRY } from '../registry.js';
 
 const extensionMock = vi.hoisted(() => ({ complete: true, owners: [] as unknown[] }));
 
@@ -104,6 +105,15 @@ function codes(failures: { code: string }[]): string[] {
 
 function messages(failures: { message: string }[]): string {
 	return failures.map((failure) => failure.message).join(' ');
+}
+
+async function readError(promise: Promise<unknown>): Promise<Error> {
+	return promise.then(
+		() => {
+			throw new Error('expected the read to reject');
+		},
+		(error) => error as Error
+	);
 }
 
 afterEach(() => {
@@ -507,7 +517,7 @@ describe('readCurrent', () => {
 		expect(result.records).toEqual([{ subject: WIDGET, scope: 'global', scope_key: '', key: 'color', value: 'blue' }]);
 	});
 
-	it('fails closed on a global row stored with a non-empty scope key', async () => {
+	it('fails closed on a global row stored with a non-empty scope key, naming the stored scope key', async () => {
 		extensionMock.owners = [
 			{
 				subject: WIDGET,
@@ -516,14 +526,17 @@ describe('readCurrent', () => {
 			},
 		];
 
-		rowsFor([{ extension: WIDGET, scope: 'global', scope_key: 'articles', key: 'color', value: '"blue"' }]);
+		rowsFor([{ extension: WIDGET, scope: 'global', scope_key: 'articles', key: 'color', value: '"sentinel-value"' }]);
 
-		await expect(handler.readCurrent(readContext(db, { collections: { articles: {} } }))).rejects.toThrow(
-			'non-empty scope key'
-		);
+		const error = await readError(handler.readCurrent(readContext(db, { collections: { articles: {} } })));
+
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error.message).toContain(`${WIDGET}/color`);
+		expect(error.message).toContain('non-empty scope key "articles"');
+		expect(error.message).not.toContain('sentinel-value');
 	});
 
-	it('fails closed on a collection row stored without a scope key', async () => {
+	it('fails closed on a collection row stored without a scope key, rendering the empty scope key', async () => {
 		extensionMock.owners = [
 			{
 				subject: WIDGET,
@@ -532,14 +545,16 @@ describe('readCurrent', () => {
 			},
 		];
 
-		rowsFor([{ extension: WIDGET, scope: 'collection', scope_key: '', key: 'label', value: '"News"' }]);
+		rowsFor([{ extension: WIDGET, scope: 'collection', scope_key: '', key: 'label', value: '"sentinel-value"' }]);
 
-		await expect(handler.readCurrent(readContext(db, { collections: { articles: {} } }))).rejects.toThrow(
-			'without an existing target collection'
-		);
+		const error = await readError(handler.readCurrent(readContext(db, { collections: { articles: {} } })));
+
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error.message).toContain('scope key "" has no existing target collection');
+		expect(error.message).not.toContain('sentinel-value');
 	});
 
-	it('fails closed on a collection row targeting a collection absent from the schema', async () => {
+	it('fails closed on a collection row targeting a missing collection, naming the stored scope key', async () => {
 		extensionMock.owners = [
 			{
 				subject: WIDGET,
@@ -548,11 +563,75 @@ describe('readCurrent', () => {
 			},
 		];
 
-		rowsFor([{ extension: WIDGET, scope: 'collection', scope_key: 'ghosts', key: 'label', value: '"News"' }]);
+		rowsFor([{ extension: WIDGET, scope: 'collection', scope_key: 'ghosts', key: 'label', value: '"sentinel-value"' }]);
 
-		await expect(handler.readCurrent(readContext(db, { collections: { articles: {} } }))).rejects.toBeInstanceOf(
-			ConfigReadFailedException
-		);
+		const error = await readError(handler.readCurrent(readContext(db, { collections: { articles: {} } })));
+
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error.message).toContain('scope key "ghosts" has no existing target collection');
+		expect(error.message).not.toContain('sentinel-value');
+	});
+
+	it('names the stored scope and scope key when the stored scope does not match the declaration', async () => {
+		extensionMock.owners = [
+			{
+				subject: WIDGET,
+				status: 'available',
+				declaration: declaration({ color: { type: 'string', scope: 'global' } }),
+			},
+		];
+
+		rowsFor([
+			{ extension: WIDGET, scope: 'collection', scope_key: 'articles', key: 'color', value: '"sentinel-value"' },
+		]);
+
+		const error = await readError(handler.readCurrent(readContext(db, { collections: { articles: {} } })));
+
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error.message).toContain('stored at scope "collection" with scope key "articles"');
+		expect(error.message).toContain('declared at "global"');
+		expect(error.message).not.toContain('sentinel-value');
+	});
+
+	it('sanitizes a control-character scope key and never exposes the stored value', async () => {
+		extensionMock.owners = [
+			{
+				subject: WIDGET,
+				status: 'available',
+				declaration: declaration({ color: { type: 'string', scope: 'global' } }),
+			},
+		];
+
+		rowsFor([{ extension: WIDGET, scope: 'global', scope_key: 'a\nb\tc', key: 'color', value: '"sentinel-value"' }]);
+
+		const error = await readError(handler.readCurrent(readContext(db, { collections: {} })));
+
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error.message).toContain('non-empty scope key "a?b?c"');
+		expect(error.message).not.toContain('\n');
+		expect(error.message).not.toContain('\t');
+		expect(error.message).not.toContain('sentinel-value');
+	});
+
+	it('truncates a long scope key in the diagnostic and never exposes the stored value', async () => {
+		extensionMock.owners = [
+			{
+				subject: WIDGET,
+				status: 'available',
+				declaration: declaration({ color: { type: 'string', scope: 'global' } }),
+			},
+		];
+
+		const longKey = 'k'.repeat(80);
+
+		rowsFor([{ extension: WIDGET, scope: 'global', scope_key: longKey, key: 'color', value: '"sentinel-value"' }]);
+
+		const error = await readError(handler.readCurrent(readContext(db, { collections: {} })));
+
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error.message).toContain(`non-empty scope key "${'k'.repeat(64)}..."`);
+		expect(error.message).not.toContain(longKey);
+		expect(error.message).not.toContain('sentinel-value');
 	});
 
 	it('reads a valid collection tuple, including an own prototype-like collection name in the schema', async () => {
@@ -850,6 +929,42 @@ describe('authored document types', () => {
 		const composed: ConfigExtensionSettings[] = extensionSettingsDescriptor.composeDocuments([], [{ subject: WIDGET }]);
 
 		expect(composed).toEqual([{ subject: WIDGET, global: {}, collections: {} }]);
+	});
+
+	it('exposes complete parser and restoration return types on the concrete descriptor', () => {
+		const parsed: ConfigExtensionSettings = extensionSettingsDescriptor.layout.parseDocumentFile(
+			{ subject: WIDGET, global: { color: 'blue' }, collections: {} },
+			'cairncms-extension-widget-33d0cc9c.yaml'
+		);
+
+		const restored: ConfigExtensionSettings = extensionSettingsDescriptor.restorePlaceholders(
+			{ subject: WIDGET, global: {}, collections: {} },
+			{}
+		);
+
+		expect(parsed.global['color']).toBe('blue');
+		expect(restored.collections).toEqual({});
+	});
+
+	it('preserves the complete parser and composer return types through the config registry', () => {
+		const descriptor = CONFIG_REGISTRY['extension-settings'];
+
+		const parsed: ConfigExtensionSettings = descriptor.layout.parseDocumentFile(
+			{ subject: WIDGET, global: {}, collections: {} },
+			'cairncms-extension-widget-33d0cc9c.yaml'
+		);
+
+		const composed: ConfigExtensionSettings[] = descriptor.composeDocuments([], [{ subject: WIDGET }]);
+
+		expect(parsed.subject).toBe(WIDGET);
+		expect(composed).toHaveLength(1);
+	});
+
+	it('keeps authored omitted-map input distinct from the complete output type', () => {
+		// @ts-expect-error a document that omits maps is not assignable to the complete output type
+		const complete: ConfigExtensionSettings = { subject: WIDGET };
+
+		expect(complete.subject).toBe(WIDGET);
 	});
 });
 

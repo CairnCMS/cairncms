@@ -418,6 +418,42 @@ describe('validateDesiredConfig', () => {
 		expect(validateSnapshot(body).some((message) => message.includes('not a portable setting value'))).toBe(true);
 	});
 
+	it.each([
+		['current-state', (body: Record<string, unknown>) => validate(body)],
+		['server-snapshot', (body: Record<string, unknown>) => validateSnapshot(body)],
+	])('refuses an own "__proto__" top-level field in %s mode', (_mode, run) => {
+		const settings = JSON.parse(
+			'{"subject":"@cairncms/extension-widget","global":{},"collections":{},"__proto__":{"unexpected":true}}'
+		);
+
+		const body = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [settings],
+		};
+
+		const problems = run(body);
+
+		expect(problems.some((message) => message.includes('unknown field') && message.includes('__proto__'))).toBe(true);
+		expect(({} as Record<string, unknown>)['unexpected']).toBeUndefined();
+	});
+
+	it('accepts a complete empty extension-settings document in a server snapshot', () => {
+		const body = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [{ subject: '@cairncms/extension-widget', global: {}, collections: {} }],
+		};
+
+		expect(validateSnapshot(body)).toEqual([]);
+	});
+
 	it.each(['icon', 'enforce_tfa', 'description', 'ip_access'])(
 		'accepts an authored role that omits %s but rejects the same document as a generated snapshot',
 		(field) => {

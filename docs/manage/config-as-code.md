@@ -516,11 +516,14 @@ The CLI writes failure messages to standard error and uses the [exit codes](#exi
 
 ### Repairing an unreadable extension setting
 
-A change to an extension's declaration can leave a currently declared stored value incompatible with its new type or scope, which a snapshot or apply reports as `CONFIG_READ_FAILED`. The message identifies the setting.
+Normal collection changes do not require separate settings cleanup. Deleting a collection through the admin app, API, or schema apply automatically removes its collection-scoped extension settings. When adding collections, [apply schema before config](#pairing-with-schema-as-code) so they exist before their settings are applied.
 
-If the value is still stored under the correct identity, correct it through the Studio settings screen or by sending the corrected value to `POST /extension-settings` with `{ subject, scope, scope_key, key, value }`, then snapshot again.
+The repair steps below apply when a snapshot or apply reports `CONFIG_READ_FAILED` for corrupt or incompatible stored settings. For example, an extension update might change a currently declared key from global to collection-scoped, leaving its old global value behind. Config apply refuses that existing state before planning changes, even if the config file supplies a valid replacement. The error identifies the setting and, for scope problems, the stored scope and scope key.
 
-If the stored row now has an obsolete scope or targets a collection that no longer exists, remove that exact row with `DELETE /extension-settings` and a body of `{ subject, scope, scope_key, key }`, then snapshot again. Re-saving the value under its new identity does not remove the stale row, and config apply never deletes it for you. Both endpoints require an administrator token.
+- If the row still uses the declared scope and a valid collection where required, correct its value in the [admin app](/docs/guides/extensions/#editing-extension-settings), or send `POST /extension-settings` with `{ subject, scope, scope_key, key, value }`.
+- If the row uses an obsolete scope or remains for a collection that no longer exists, removing it discards that stale value. Send `DELETE /extension-settings` with `{ subject, scope, scope_key, key }`, identifying the exact row by its stored scope and scope key. Saving a replacement under a new scope does not remove the old row.
+
+Both API requests require an administrator token. `GET /extension-settings` omits rows whose stored JSON cannot be parsed, so the affected row may be absent from that listing. After repair, retry the snapshot or apply.
 
 ## Source-control workflow
 
