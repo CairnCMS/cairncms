@@ -199,7 +199,7 @@ CairnCMS sets standard security response headers via Helmet. Most can be tuned p
 - **`HSTS_*`** — pass-through to Helmet's HSTS options (`HSTS_MAX_AGE`, `HSTS_INCLUDE_SUBDOMAINS`, `HSTS_PRELOAD`).
 - **`CONTENT_SECURITY_POLICY_*`** — pass-through to Helmet's CSP option shape. The default policy limits the admin app's `connect-src` to first-party (`'self'`) plus the built-in map origins (OpenStreetMap tiles, OpenMapTiles fonts, and Mapbox), with no external wildcard. Setting `CONTENT_SECURITY_POLICY_DIRECTIVES__CONNECT_SRC` fully replaces that list, so include `'self'` and any map origins you still rely on. This bounds where an app extension can connect from the browser. See [Security hardening](/docs/manage/security-hardening/) for the extension egress details.
 - **`ASSETS_CONTENT_SECURITY_POLICY`** — separate CSP applied only to `/assets/*` responses. Useful when serving user-uploaded content with a stricter policy than the rest of the API.
-- **`IMPORT_IP_DENY_LIST`** — comma-separated exact IP addresses blocked from URL imports (SSRF defense). Matches are literal string comparisons; CIDR notation is not supported. Default blocks `0.0.0.0` and the EC2/cloud metadata endpoint `169.254.169.254`. The `0.0.0.0` entry has a special meaning: when present, all loopback addresses and any address bound to the host's own network interfaces are also blocked. To block other addresses, list each one explicitly.
+- **`IMPORT_IP_DENY_LIST`** — comma-separated exact IP addresses blocked from URL imports (SSRF defense). Matches are literal string comparisons. CIDR notation is not supported. Default blocks `0.0.0.0` and the EC2/cloud metadata endpoint `169.254.169.254`. The `0.0.0.0` entry has a special meaning: when present, all loopback addresses and any address bound to the host's own network interfaces are also blocked. To block other addresses, list each one explicitly. The remote config CLI applies explicit entries to its `--url` target but ignores the `0.0.0.0` expansion, allowing operator-selected local targets.
 
 For the full Helmet option shape, see the Helmet documentation.
 
@@ -211,7 +211,7 @@ Disabled by default. Enable when a frontend on a different origin needs to call 
 - **`CORS_ORIGIN`** — `true` to reflect the request origin, `false` to disable, or a comma-separated list of allowed origins.
 - **`CORS_METHODS`** — allowed methods. Default `GET,POST,PATCH,DELETE`.
 - **`CORS_ALLOWED_HEADERS`** — allowed request headers. Default `Content-Type,Authorization`.
-- **`CORS_EXPOSED_HEADERS`** — response headers exposed to the browser. Default `Content-Range`.
+- **`CORS_EXPOSED_HEADERS`** — response headers exposed to the browser. Default `Content-Range,X-Config-Run-Id`. An override replaces the default, so keep `X-Config-Run-Id` in the list if browser clients need to read the config run id.
 - **`CORS_CREDENTIALS`** — whether credentials (cookies, auth headers) can be included on cross-origin requests. Default `true`.
 - **`CORS_MAX_AGE`** — preflight cache duration in seconds. Default `18000`.
 
@@ -255,7 +255,7 @@ Variables for the response cache:
 - **`CACHE_ENABLED`** — `true` to enable response caching. Default `false`.
 - **`CACHE_STORE`** — `memory`, `redis`, or `memcache`.
 - **`CACHE_TTL`** — default cache duration. Default `5m`.
-- **`CACHE_AUTO_PURGE`** — when `true`, the cache invalidates automatically on writes to relevant collections.
+- **`CACHE_AUTO_PURGE`** — when `true`, the cache invalidates automatically on writes to relevant collections. Role and permission changes that affect authorization always clear the response cache, regardless of this setting or `CACHE_AUTO_PURGE_IGNORE_LIST`.
 - **`CACHE_AUTO_PURGE_IGNORE_LIST`** — comma-separated collections whose writes do not purge the response cache when `CACHE_AUTO_PURGE` is `true`. Default `directus_activity,directus_presets`. Cached responses may remain until `CACHE_TTL` expires. Remove a collection from the list if its writes must invalidate cached responses.
 - **`CACHE_CONTROL_S_MAXAGE`** — value for the `Cache-Control: s-maxage` directive on cached responses, in seconds. Default `0`.
 - **`CACHE_STATUS_HEADER`** — name of the response header indicating cache hit/miss. Unset by default (no header emitted).

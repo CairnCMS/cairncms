@@ -172,6 +172,8 @@ An [item view](/docs/develop/extensions/app-extensions/item-views/) pane does no
 
 Operators edit global settings from the extension's entry on the Extensions page, and collection-scoped settings in the data model editor of each collection. Secret values are entered through a masked input that shows a saved state once stored. See [Managing extensions](/docs/guides/extensions/) for the operator walkthrough.
 
+Operators can also snapshot and apply declared settings across instances with [config as code](/docs/manage/config-as-code/#extension-settings). Inline secret values are supplied separately on each instance.
+
 ## Where to go next
 
 - [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) — the confined runtime, the host API, and secret references.

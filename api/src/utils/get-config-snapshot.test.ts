@@ -1,17 +1,91 @@
-import type { SchemaOverview } from '@cairncms/types';
+import { PUBLIC_ROLE_ID } from '@cairncms/constants';
+import type { Filter, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';
 import { MockClient } from 'knex-mock-client';
 import type { MockedFunction } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import logger from '../logger.js';
+import { FoldersService } from '../services/folders.js';
 import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
-import { getConfigSnapshot } from './get-config-snapshot.js';
+import { SettingsService } from '../services/settings.js';
+import { CONFIG_FILENAME_STEM_MAX_LENGTH } from './config-contract.js';
+import { rolesDescriptor } from './config/handlers/roles.js';
+import { CONFIG_REGISTRY } from './config/registry.js';
+import { getConfigSnapshot, readCurrentConfig } from './get-config-snapshot.js';
 import * as getSchema from './get-schema.js';
+import { validateDesiredConfig } from './validate-desired-config.js';
+
+function roleRow(overrides: Record<string, any> = {}): Record<string, any> {
+	return {
+		id: 'uuid-1',
+		key: 'editor',
+		name: 'Editor',
+		icon: 'supervised_user_circle',
+		description: null,
+		admin_access: false,
+		app_access: true,
+		enforce_tfa: false,
+		ip_access: null,
+		...overrides,
+	};
+}
+
+function mockRole(overrides: Record<string, any> = {}): void {
+	vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow(overrides)]);
+}
+
+function mockPermission(overrides: Record<string, any> = {}): void {
+	vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
+		{
+			id: 42,
+			role: 'uuid-1',
+			collection: 'articles',
+			action: 'read',
+			permissions: null,
+			validation: null,
+			presets: null,
+			fields: null,
+			...overrides,
+		},
+	]);
+}
+
+function settingsRow(overrides: Record<string, any> = {}): Record<string, any> {
+	return {
+		id: 1,
+		project_name: 'CairnCMS',
+		project_descriptor: null,
+		project_url: null,
+		default_language: 'en-US',
+		project_color: null,
+		public_note: null,
+		custom_css: null,
+		module_bar: null,
+		auth_password_policy: null,
+		auth_login_attempts: 25,
+		storage_asset_transform: 'all',
+		storage_asset_presets: null,
+		basemaps: null,
+		custom_aspect_ratios: null,
+		mapbox_key: null,
+		storage_default_folder: null,
+		...overrides,
+	};
+}
+
+function mockSettings(overrides: Record<string, any> = {}): void {
+	vi.spyOn(SettingsService.prototype, 'readSingleton').mockResolvedValue(settingsRow(overrides));
+}
 
 vi.mock('../logger.js', () => ({
 	default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
+}));
+
+vi.mock('../extensions.js', () => ({
+	getExtensionManager: () => ({ isSettingsDiscoveryComplete: () => true, getSettingsOwners: () => [] }),
 }));
 
 const testSchema = {} as SchemaOverview;
@@ -22,19 +96,24 @@ describe('getConfigSnapshot', () => {
 	beforeEach(() => {
 		db = vi.mocked(knex.default({ client: MockClient }));
 		vi.spyOn(getSchema, 'getSchema').mockResolvedValue(testSchema);
+		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([]);
+		mockSettings();
 	});
 
 	afterEach(() => {
 		vi.restoreAllMocks();
 	});
 
-	it('returns manifest with version 1 and declared resources', async () => {
+	it('returns manifest with the latest version and declared resources', async () => {
 		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([]);
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
 
 		const config = await getConfigSnapshot({ database: db });
 
-		expect(config.manifest).toEqual({ version: 1, resources: ['roles', 'permissions'] });
+		expect(config.manifest).toEqual({
+			version: 2,
+			resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings'],
+		});
 	});
 
 	it('builds ConfigRole entries with v1 allowlist only', async () => {
@@ -68,6 +147,7 @@ describe('getConfigSnapshot', () => {
 			admin_access: false,
 			app_access: true,
 			enforce_tfa: false,
+			ip_access: null,
 		});
 
 		expect(config.roles[0]).not.toHaveProperty('external_identifier');
@@ -75,17 +155,17 @@ describe('getConfigSnapshot', () => {
 		expect(config.roles[0]).not.toHaveProperty('id');
 	});
 
-	it('omits null-valued optional fields from role snapshots', async () => {
+	it('records explicit null for nullable columns so the snapshot fully describes the row', async () => {
 		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
 			{
 				id: 'uuid-1',
 				key: 'editor',
 				name: 'Editor',
-				icon: null,
+				icon: 'badge',
 				description: null,
 				admin_access: false,
 				app_access: true,
-				enforce_tfa: null,
+				enforce_tfa: false,
 				ip_access: null,
 			},
 		]);
@@ -94,22 +174,39 @@ describe('getConfigSnapshot', () => {
 
 		const config = await getConfigSnapshot({ database: db });
 
-		expect(config.roles[0]).not.toHaveProperty('icon');
-		expect(config.roles[0]).not.toHaveProperty('description');
-		expect(config.roles[0]).not.toHaveProperty('enforce_tfa');
-		expect(config.roles[0]).not.toHaveProperty('ip_access');
+		expect(config.roles[0]!.description).toBeNull();
+		expect(config.roles[0]!.ip_access).toBeNull();
+	});
+
+	it('aborts when the nullable description column is absent, rather than fabricating null', async () => {
+		const row = roleRow();
+		delete row['description'];
+
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([row]);
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const error = await getConfigSnapshot({ database: db }).catch((err) => err);
+
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+		expect(error.message).toContain('"description" was absent from the row');
+	});
+
+	it('aborts when the nullable ip_access column is absent, rather than fabricating null', async () => {
+		const row = roleRow();
+		delete row['ip_access'];
+
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([row]);
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const error = await getConfigSnapshot({ database: db }).catch((err) => err);
+
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+		expect(error.message).toContain('"ip_access" was absent from the row');
 	});
 
 	it('canonicalizes ip_access by sorting alphabetically', async () => {
 		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{
-				id: 'uuid-1',
-				key: 'editor',
-				name: 'Editor',
-				admin_access: false,
-				app_access: true,
-				ip_access: ['10.0.0.2', '192.168.1.1', '10.0.0.1'],
-			},
+			roleRow({ ip_access: ['10.0.0.2', '192.168.1.1', '10.0.0.1'] }),
 		]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
@@ -128,20 +225,8 @@ describe('getConfigSnapshot', () => {
 				admin_access: false,
 				app_access: false,
 			},
-			{
-				id: 'admin-uuid',
-				key: 'administrator',
-				name: 'Administrator',
-				admin_access: true,
-				app_access: true,
-			},
-			{
-				id: 'editor-uuid',
-				key: 'editor',
-				name: 'Editor',
-				admin_access: false,
-				app_access: true,
-			},
+			roleRow({ id: 'admin-uuid', key: 'administrator', name: 'Administrator', admin_access: true }),
+			roleRow({ id: 'editor-uuid', key: 'editor', name: 'Editor' }),
 		]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
@@ -169,10 +254,8 @@ describe('getConfigSnapshot', () => {
 
 		const config = await getConfigSnapshot({ database: db });
 
-		// Sentinel excluded, other two roles present
 		expect(config.roles.map((r) => r.key).sort()).toEqual(['administrator', 'editor']);
 
-		// Permissions grouped by their role's key (public for sentinel, editor for editor-uuid)
 		expect(config.permissions.map((p) => p.role).sort()).toEqual(['editor', 'public']);
 
 		const publicSet = config.permissions.find((p) => p.role === 'public');
@@ -185,8 +268,7 @@ describe('getConfigSnapshot', () => {
 	});
 
 	it('groups permissions on the sentinel role under the "public" key', async () => {
-		// The sentinel row lives in directus_roles; snapshot excludes it from
-		// config.roles but still uses its UUID→key mapping to resolve public permissions.
+		// Public permissions need the sentinel's UUID-to-key mapping even though its role is excluded.
 		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
 			{
 				id: '00000000-0000-0000-0000-000000000000',
@@ -218,10 +300,8 @@ describe('getConfigSnapshot', () => {
 		expect(config.permissions[0]!.permissions).toHaveLength(1);
 	});
 
-	it('skips orphaned permissions referencing non-existent roles and warns', async () => {
-		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: false, app_access: true },
-		]);
+	it('refuses a permission row whose role does not exist, without naming the row or the role', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
 			{
@@ -235,7 +315,7 @@ describe('getConfigSnapshot', () => {
 				fields: null,
 			},
 			{
-				id: 2,
+				id: 'orphan-row-77',
 				role: 'ghost-uuid',
 				collection: 'articles',
 				action: 'read',
@@ -246,49 +326,211 @@ describe('getConfigSnapshot', () => {
 			},
 		]);
 
-		const config = await getConfigSnapshot({ database: db });
+		const error = await getConfigSnapshot({ database: db }).catch((err) => err);
 
-		expect(config.permissions).toHaveLength(1);
-		expect(config.permissions[0]!.role).toBe('editor');
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
 
-		expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('non-existent role'));
-		expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('orphaned permission'));
+		expect(error.message).toBe(
+			'Config snapshot could not read the permissions table: one or more permission rows reference a role that does not exist, so the database needs repair before the current state can be read.'
+		);
+
+		expect(error.message).not.toContain('orphan-row-77');
+		expect(error.message).not.toContain('ghost-uuid');
+		expect(logger.warn).not.toHaveBeenCalled();
 	});
 
-	it('treats malformed JSON payload fields as null and warns', async () => {
+	it('aborts on a malformed JSON payload field rather than exporting it as no policy', async () => {
+		mockRole();
+		mockPermission({ permissions: '{not valid json' });
+
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow('id=42');
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow('permissions');
+	});
+
+	it('aborts on stored policy that parses to a scalar or an array', async () => {
+		for (const value of ['"just a string"', '42', 'true', '[{"_eq":1}]']) {
+			mockRole();
+			mockPermission({ permissions: value });
+
+			await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+		}
+	});
+
+	it('aborts on a bare array in a policy column', async () => {
+		mockRole();
+		mockPermission({ validation: [{ _eq: 1 }] });
+
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+	});
+
+	it('aborts on numeric and boolean policy columns', async () => {
+		for (const value of [42, true]) {
+			mockRole();
+			mockPermission({ presets: value });
+
+			await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+		}
+	});
+
+	it('aborts when a policy column is absent from the row, which is an incomplete read', async () => {
+		mockRole();
+		mockPermission({ permissions: undefined });
+
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow('incomplete');
+	});
+
+	it('aborts on a non-string element in a stored field list', async () => {
+		mockRole();
+		mockPermission({ fields: ['title', 7] });
+
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+	});
+
+	it('aborts on a stored filter nested past the supported depth', async () => {
+		let nested: Filter = { id: { _eq: 'probe' } };
+		for (let level = 0; level < 150; level++) nested = { _and: [nested] };
+
+		mockRole();
+		mockPermission({ permissions: nested });
+
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+	});
+
+	it('accepts every action the permission contract defines', async () => {
+		for (const action of ['create', 'read', 'update', 'delete', 'comment', 'explain', 'share']) {
+			mockRole();
+			mockPermission({ action });
+
+			const config = await getConfigSnapshot({ database: db });
+
+			expect(config.permissions[0]!.permissions[0]!.action).toBe(action);
+		}
+	});
+
+	it('aborts on a role key that is empty or fails the key grammar', async () => {
+		for (const key of ['', 'Editor', '2fa_admin', '_tmp']) {
+			vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
+				{ id: 'uuid-1', key, name: 'Editor', admin_access: false, app_access: true },
+			]);
+
+			vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+			await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+		}
+	});
+
+	it('aborts on a string admin_access, which would count as an administrator by truthiness', async () => {
 		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: false, app_access: true },
+			{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: 'false', app_access: true },
 		]);
 
-		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
-			{
-				id: 42,
-				role: 'uuid-1',
-				collection: 'articles',
-				action: 'read',
-				permissions: '{not valid json',
-				validation: 'also not json',
-				presets: '{"almost": "valid"',
-				fields: null,
-			},
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow('admin_access');
+	});
+
+	it('aborts on a non-boolean app_access and a malformed ip_access element', async () => {
+		for (const role of [
+			{ admin_access: false, app_access: 1 },
+			{ admin_access: false, app_access: true, ip_access: ['10.0.0.1', 7] },
+		]) {
+			vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
+				{ id: 'uuid-1', key: 'editor', name: 'Editor', ...role },
+			]);
+
+			vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+			await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+		}
+	});
+
+	it('aborts on an unsupported permission action', async () => {
+		mockRole();
+		mockPermission({ action: 'drop' });
+
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow(ConfigReadFailedException);
+		await expect(getConfigSnapshot({ database: db })).rejects.toThrow('supported action');
+	});
+
+	it('reads current state unfiltered, so no query filter, read filter, or read action can shape it', async () => {
+		const roles = vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
+
+		const perms = vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		await getConfigSnapshot({ database: db });
+
+		expect(roles).toHaveBeenCalledWith(expect.anything(), { emitEvents: false });
+		expect(perms).toHaveBeenCalledWith(expect.anything(), { emitEvents: false });
+	});
+
+	it('still exports a real NULL policy column as null', async () => {
+		mockRole();
+		mockPermission({ permissions: null, validation: null, presets: null, fields: null });
+
+		const config = await getConfigSnapshot({ database: db });
+		const permission = config.permissions[0]!.permissions[0]!;
+
+		expect(permission.permissions).toBeNull();
+		expect(permission.validation).toBeNull();
+		expect(permission.presets).toBeNull();
+		expect(permission.fields).toBeNull();
+	});
+
+	it('refuses to export a display column it cannot represent, naming the role', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow({ name: 42 })]);
+
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const error = await getConfigSnapshot({ database: db }).catch((err) => err);
+
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+		expect(error.message).toContain('role key=editor');
+		expect(error.message).toContain('"name" must be a string');
+	});
+
+	it('refuses to export a permission set it cannot represent, naming the role', async () => {
+		mockRole();
+		mockPermission({ collection: 'x'.repeat(65) });
+
+		const error = await getConfigSnapshot({ database: db }).catch((err) => err);
+
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+		expect(error.message).toContain('permissions for role key=editor');
+		expect(error.message).toContain('collection');
+		expect(error.message).toContain('less than or equal to 64');
+	});
+
+	it.each(['name', 'description'])('refuses a role whose %s is written in placeholder form', async (field) => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
+			roleRow({ [field]: '{{CAIRNCMS_CONFIG_SECRET}}' }),
 		]);
+
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const error = await getConfigSnapshot({ database: db }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error.message).toContain(`field "${field}" holds placeholder syntax`);
+		expect(error.message).toContain('editor');
+		expect(error.message).toContain('rename the stored value');
+		expect(error.message).not.toContain('CAIRNCMS_CONFIG_SECRET');
+	});
+
+	it('still exports a value that merely contains braces', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow({ name: 'Team {{alpha}}' })]);
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
 
 		const config = await getConfigSnapshot({ database: db });
 
-		expect(config.permissions[0]!.permissions[0]!.permissions).toBeNull();
-		expect(config.permissions[0]!.permissions[0]!.validation).toBeNull();
-		expect(config.permissions[0]!.permissions[0]!.presets).toBeNull();
-
-		expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('permissions'));
-		expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('validation'));
-		expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('presets'));
-		expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('id=42'));
+		expect(config.roles[0]!.name).toBe('Team {{alpha}}');
 	});
 
 	it('skips synthetic system permissions', async () => {
-		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: false, app_access: true },
-		]);
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
 			{
@@ -310,9 +552,7 @@ describe('getConfigSnapshot', () => {
 	});
 
 	it('throws on duplicate (role, collection, action) tuples', async () => {
-		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: false, app_access: true },
-		]);
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
 			{
@@ -337,13 +577,73 @@ describe('getConfigSnapshot', () => {
 			},
 		]);
 
-		await expect(getConfigSnapshot({ database: db })).rejects.toThrow('Duplicate permission');
+		const error = await getConfigSnapshot({ database: db }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+
+		expect(error.message).toBe(
+			'Config snapshot could not read permissions for role key=editor: collection "articles" with action "read" is stored more than once, so the rows must be deduplicated before the current state can be read.'
+		);
+	});
+
+	it('keeps the orphan refusal free of identifiers even when they carry control characters', async () => {
+		mockRole();
+		const idControl = String.fromCharCode(1);
+		const roleControl = String.fromCharCode(2);
+
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
+			{
+				id: `7${idControl}`,
+				role: `ghost${roleControl}`,
+				collection: 'articles',
+				action: 'read',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: null,
+			},
+		]);
+
+		const error = await getConfigSnapshot({ database: db }).catch((err) => err);
+
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+		expect(error.message).not.toContain('7');
+		expect(error.message).not.toContain('ghost');
+		expect(error.message).not.toContain(idControl);
+		expect(error.message).not.toContain(roleControl);
+		expect(logger.warn).not.toHaveBeenCalled();
+	});
+
+	it('sanitizes control characters in the duplicate permission error', async () => {
+		mockRole();
+		const control = String.fromCharCode(1);
+
+		const duplicate = {
+			role: 'uuid-1',
+			collection: `arti${control}cles`,
+			action: 'read',
+			permissions: null,
+			validation: null,
+			presets: null,
+			fields: null,
+		};
+
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
+			{ id: 1, ...duplicate },
+			{ id: 2, ...duplicate },
+		]);
+
+		const error = await getConfigSnapshot({ database: db }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error.message).toContain('is stored more than once');
+		expect(error.message).toContain('arti?cles');
+		expect(error.message).not.toContain(control);
 	});
 
 	it('parses stringified JSON payload fields', async () => {
-		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: false, app_access: true },
-		]);
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
 			{
@@ -364,9 +664,7 @@ describe('getConfigSnapshot', () => {
 	});
 
 	it('parses CSV fields and sorts them alphabetically', async () => {
-		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: false, app_access: true },
-		]);
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
 			{
@@ -387,9 +685,7 @@ describe('getConfigSnapshot', () => {
 	});
 
 	it('returns null for empty CSV fields', async () => {
-		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{ id: 'uuid-1', key: 'editor', name: 'Editor', admin_access: false, app_access: true },
-		]);
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
 			{
@@ -411,8 +707,8 @@ describe('getConfigSnapshot', () => {
 
 	it('sorts output deterministically (roles by key, permissions by collection+action)', async () => {
 		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
-			{ id: 'uuid-b', key: 'zebra', name: 'Zebra', admin_access: false, app_access: true },
-			{ id: 'uuid-a', key: 'alpha', name: 'Alpha', admin_access: false, app_access: true },
+			roleRow({ id: 'uuid-b', key: 'zebra', name: 'Zebra' }),
+			roleRow({ id: 'uuid-a', key: 'alpha', name: 'Alpha' }),
 		]);
 
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
@@ -457,5 +753,510 @@ describe('getConfigSnapshot', () => {
 			'articles:update',
 			'posts:read',
 		]);
+	});
+});
+
+describe('readCurrentConfig', () => {
+	let db: MockedFunction<Knex>;
+
+	beforeEach(() => {
+		db = vi.mocked(knex.default({ client: MockClient }));
+		vi.spyOn(getSchema, 'getSchema').mockResolvedValue(testSchema);
+		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([]);
+		mockSettings();
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('groups permissions under a portable role key without exporting the role', async () => {
+		const roles = vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
+
+		mockPermission();
+
+		const { config, currentRoleKeys } = await readCurrentConfig({ database: db, resources: ['permissions'] });
+
+		expect(roles).toHaveBeenCalledWith({ limit: -1, fields: ['id', 'key'] }, { emitEvents: false });
+		expect(config.roles).toEqual([]);
+		expect(config.permissions[0]!.role).toBe('editor');
+		expect(currentRoleKeys.has('editor')).toBe(true);
+	});
+
+	it('sources folder reference keys from the published folders dependency, not the empty config.folders slice', async () => {
+		const folderId = '00000000-0000-4000-8000-000000000001';
+		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([{ id: folderId, key: 'uploads' }] as never);
+		mockSettings({ storage_default_folder: folderId });
+
+		const { config, currentFolderKeys } = await readCurrentConfig({ database: db, resources: ['settings'] });
+
+		expect(config.folders).toEqual([]);
+		expect(currentFolderKeys.has('uploads')).toBe(true);
+		expect(config.settings[0]!.storage_default_folder).toBe('uploads');
+
+		const settingsBody = (folderKey: string): Record<string, unknown> => ({
+			manifest: { version: 2, resources: ['settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [{ storage_default_folder: folderKey }],
+			'extension-settings': [],
+		});
+
+		const contextFor = {
+			label: 'settings-only',
+			references: 'current-state' as const,
+			currentRoleKeys: new Set<string>(),
+			currentFolderKeys,
+			currentFolderParents: new Map<string, string | null>(),
+		};
+
+		expect(validateDesiredConfig(settingsBody('uploads'), contextFor)).toEqual([]);
+
+		expect(validateDesiredConfig(settingsBody('ghost'), contextFor).map((failure) => failure.code)).toContain(
+			'CONFIG_INVALID'
+		);
+	});
+
+	it('returns a stable state token digest for an unchanged managed read closure', async () => {
+		mockRole();
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const first = await readCurrentConfig({ database: db, resources: ['roles'] });
+		const second = await readCurrentConfig({ database: db, resources: ['roles'] });
+
+		expect(first.stateToken.resources).toEqual(['roles']);
+		expect(second.stateToken.digest).toBe(first.stateToken.digest);
+	});
+
+	it('honors an explicit manifest version and defaults a fresh read to the latest', async () => {
+		mockRole();
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const v1 = await readCurrentConfig({ database: db, resources: ['roles'], manifestVersion: 1 });
+		const v2 = await readCurrentConfig({ database: db, resources: ['roles'], manifestVersion: 2 });
+		const fresh = await readCurrentConfig({ database: db, resources: ['roles'] });
+
+		expect(v1.config.manifest.version).toBe(1);
+		expect(v2.config.manifest.version).toBe(2);
+		expect(fresh.config.manifest.version).toBe(2);
+	});
+
+	it('computes the same state token digest regardless of manifest version', async () => {
+		mockRole();
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const v1 = await readCurrentConfig({ database: db, resources: ['roles'], manifestVersion: 1 });
+		const v2 = await readCurrentConfig({ database: db, resources: ['roles'], manifestVersion: 2 });
+
+		expect(v2.stateToken.digest).toBe(v1.stateToken.digest);
+	});
+
+	it('changes the state token digest when a managed role value changes', async () => {
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+		const roles = vi.spyOn(RolesService.prototype, 'readByQuery');
+
+		roles.mockResolvedValueOnce([roleRow({ admin_access: false })]);
+		const before = await readCurrentConfig({ database: db, resources: ['roles'] });
+
+		roles.mockResolvedValueOnce([roleRow({ admin_access: true })]);
+		const after = await readCurrentConfig({ database: db, resources: ['roles'] });
+
+		expect(after.stateToken.digest).not.toBe(before.stateToken.digest);
+	});
+
+	it('changes the state token digest when a dependency role identity is removed even though managed permissions are unchanged', async () => {
+		const permission = {
+			id: 42,
+			role: 'uuid-view',
+			collection: 'articles',
+			action: 'read',
+			permissions: null,
+			validation: null,
+			presets: null,
+			fields: null,
+		};
+
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([permission]);
+		const roles = vi.spyOn(RolesService.prototype, 'readByQuery');
+
+		roles.mockResolvedValueOnce([
+			{ id: 'uuid-1', key: 'editor' },
+			{ id: 'uuid-view', key: 'viewer' },
+		]);
+
+		const withEditor = await readCurrentConfig({ database: db, resources: ['permissions'] });
+
+		roles.mockResolvedValueOnce([{ id: 'uuid-view', key: 'viewer' }]);
+
+		const withoutEditor = await readCurrentConfig({ database: db, resources: ['permissions'] });
+
+		expect(withEditor.config.permissions[0]!.role).toBe('viewer');
+		expect(withoutEditor.config.permissions).toEqual(withEditor.config.permissions);
+		expect(withoutEditor.stateToken.digest).not.toBe(withEditor.stateToken.digest);
+	});
+
+	it('changes the state token digest when a stored permission policy changes', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([{ id: 'uuid-1', key: 'editor' } as never]);
+		const perms = vi.spyOn(PermissionsService.prototype, 'readByQuery');
+
+		const row = (permissions: Record<string, unknown>) => ({
+			id: 42,
+			role: 'uuid-1',
+			collection: 'articles',
+			action: 'read',
+			permissions,
+			validation: { status: { _eq: 'published' } },
+			presets: { status: 'published' },
+			fields: 'title,body',
+		});
+
+		perms.mockResolvedValueOnce([row({ status: { _eq: 'published' } })]);
+		const before = await readCurrentConfig({ database: db, resources: ['permissions'] });
+
+		perms.mockResolvedValueOnce([row({ status: { _eq: 'draft' } })]);
+		const after = await readCurrentConfig({ database: db, resources: ['permissions'] });
+
+		expect(after.stateToken.digest).not.toBe(before.stateToken.digest);
+	});
+
+	it('reads an unrelated role that cannot be exported, because only its identity is needed', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
+			roleRow(),
+			{ id: 'uuid-2', key: 'broken', name: 'Broken', admin_access: 'false', app_access: true },
+		]);
+
+		mockPermission();
+
+		const { config } = await readCurrentConfig({ database: db, resources: ['permissions'] });
+
+		expect(config.permissions[0]!.role).toBe('editor');
+	});
+
+	it('still refuses a malformed access column when roles are managed', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
+			{ id: 'uuid-2', key: 'broken', name: 'Broken', admin_access: 'false', app_access: true },
+		]);
+
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		await expect(readCurrentConfig({ database: db, resources: ['roles'] })).rejects.toMatchObject({
+			code: 'CONFIG_READ_FAILED',
+		});
+	});
+
+	it('skips the permission query when only roles are managed', async () => {
+		mockRole();
+		const perms = vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const { config } = await readCurrentConfig({ database: db, resources: ['roles'] });
+
+		expect(perms).not.toHaveBeenCalled();
+		expect(config.permissions).toEqual([]);
+		expect(config.roles).toHaveLength(1);
+	});
+
+	it('queries neither service when nothing is managed', async () => {
+		const roles = vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([]);
+		const perms = vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const { config, currentRoleKeys } = await readCurrentConfig({ database: db, resources: [] });
+
+		expect(roles).not.toHaveBeenCalled();
+		expect(perms).not.toHaveBeenCalled();
+		expect(getSchema.getSchema).not.toHaveBeenCalled();
+
+		expect(config).toEqual({
+			manifest: { version: 2, resources: [] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [],
+		});
+
+		expect(currentRoleKeys.size).toBe(0);
+	});
+
+	it('fails closed when the roles read publishes no dependency state', async () => {
+		vi.spyOn(rolesDescriptor.handler, 'readCurrent').mockResolvedValue({
+			records: [],
+			documentIdentities: [],
+			dependencyState: undefined,
+		} as never);
+
+		const error = await readCurrentConfig({ database: db, resources: ['roles'] }).catch((err) => err);
+
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+		expect(error.message).toContain('Configuration state could not be assembled');
+		expect(error.message).not.toContain('published');
+	});
+
+	it('mints no state token when a permission row references a role that does not exist', async () => {
+		mockRole();
+		mockPermission({ id: 'orphan-row-77', role: 'ghost-uuid' });
+
+		const error = await readCurrentConfig({ database: db, resources: ['permissions'] }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+		expect(error).not.toHaveProperty('stateToken');
+		expect(error.message).not.toContain('orphan-row-77');
+		expect(error.message).not.toContain('ghost-uuid');
+	});
+
+	it('mints no state token when a permission tuple is stored twice', async () => {
+		mockRole();
+
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
+			{
+				id: 1,
+				role: 'uuid-1',
+				collection: 'articles',
+				action: 'read',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: null,
+			},
+			{
+				id: 2,
+				role: 'uuid-1',
+				collection: 'articles',
+				action: 'read',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: null,
+			},
+		]);
+
+		const error = await readCurrentConfig({ database: db, resources: ['permissions'] }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+		expect(error).not.toHaveProperty('stateToken');
+	});
+
+	it('routes role reads through the registry descriptor', async () => {
+		const real = CONFIG_REGISTRY.roles;
+		const rolesRead = vi.spyOn(RolesService.prototype, 'readByQuery');
+
+		CONFIG_REGISTRY.roles = {
+			...real,
+			handler: {
+				...real.handler,
+				readCurrent: async () => ({
+					records: [
+						{
+							key: 'registry_sentinel',
+							name: 'Sentinel',
+							admin_access: false,
+							app_access: true,
+							icon: 'supervised_user_circle',
+							enforce_tfa: false,
+							description: null,
+							ip_access: null,
+						},
+					],
+					documentIdentities: [{ key: 'registry_sentinel' }],
+					dependencyState: { currentRoleKeys: new Set(['registry_sentinel']), roleKeyById: new Map() },
+				}),
+			},
+		};
+
+		try {
+			const { config } = await readCurrentConfig({ database: db, resources: ['roles'] });
+
+			expect(config.roles).toEqual([
+				{
+					key: 'registry_sentinel',
+					name: 'Sentinel',
+					admin_access: false,
+					app_access: true,
+					icon: 'supervised_user_circle',
+					enforce_tfa: false,
+					description: null,
+					ip_access: null,
+				},
+			]);
+
+			expect(rolesRead).not.toHaveBeenCalled();
+		} finally {
+			CONFIG_REGISTRY.roles = real;
+		}
+	});
+
+	it('refuses a generated document that drops a snapshot-safe field', async () => {
+		const real = CONFIG_REGISTRY.roles;
+
+		CONFIG_REGISTRY.roles = {
+			...real,
+			handler: {
+				...real.handler,
+				readCurrent: async () => ({
+					records: [
+						{
+							key: 'faulty',
+							name: 'Faulty',
+							admin_access: false,
+							app_access: true,
+							icon: 'supervised_user_circle',
+							description: null,
+							ip_access: null,
+						},
+					],
+					documentIdentities: [{ key: 'faulty' }],
+					dependencyState: { currentRoleKeys: new Set(['faulty']), roleKeyById: new Map() },
+				}),
+			},
+		};
+
+		let error: unknown;
+
+		try {
+			await readCurrentConfig({ database: db, resources: ['roles'] });
+		} catch (caught) {
+			error = caught;
+		} finally {
+			CONFIG_REGISTRY.roles = real;
+		}
+
+		expect(error).toBeInstanceOf(ConfigReadFailedException);
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+		expect((error as Error).message).toContain('enforce_tfa');
+	});
+
+	it('produces a document its own validator accepts, including permissions on the public role', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
+			{ id: PUBLIC_ROLE_ID, key: 'public', name: 'Public', admin_access: false, app_access: false },
+			{
+				id: 'uuid-1',
+				key: 'editor',
+				name: 'Editor',
+				icon: 'edit',
+				description: null,
+				admin_access: false,
+				app_access: true,
+				enforce_tfa: false,
+				ip_access: '10.0.0.1,10.0.0.2',
+			},
+		]);
+
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([
+			{
+				id: 1,
+				role: 'uuid-1',
+				collection: 'articles',
+				action: 'read',
+				permissions: { status: { _eq: 'published' } },
+				validation: null,
+				presets: null,
+				fields: 'title,body',
+			},
+			{
+				id: 2,
+				role: PUBLIC_ROLE_ID,
+				collection: 'articles',
+				action: 'read',
+				permissions: null,
+				validation: null,
+				presets: null,
+				fields: null,
+			},
+		]);
+
+		const { config, currentRoleKeys, currentFolderKeys, currentFolderParents } = await readCurrentConfig({
+			database: db,
+			resources: ['roles', 'permissions'],
+		});
+
+		expect(config.permissions.map((set) => set.role)).toEqual(['editor', 'public']);
+
+		expect(
+			validateDesiredConfig(config, {
+				label: 'snapshot',
+				references: 'current-state',
+				currentRoleKeys,
+				currentFolderKeys,
+				currentFolderParents,
+			})
+		).toEqual([]);
+	});
+
+	describe('refuses an existing overlong key', () => {
+		const overlong = 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1);
+
+		it('fails when a managed role key exceeds the filename-stem bound', async () => {
+			mockRole({ key: overlong });
+			vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+			const error = await readCurrentConfig({ database: db, resources: ['roles'] }).catch((err) => err);
+
+			expect(error).toBeInstanceOf(ConfigReadFailedException);
+			expect(error.code).toBe('CONFIG_READ_FAILED');
+			expect(error.message).toContain(String(CONFIG_FILENAME_STEM_MAX_LENGTH));
+		});
+
+		it('fails when a managed permission references a role key over the bound', async () => {
+			vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([{ id: 'uuid-1', key: overlong } as never]);
+			mockPermission();
+
+			const error = await readCurrentConfig({ database: db, resources: ['permissions'] }).catch((err) => err);
+
+			expect(error).toBeInstanceOf(ConfigReadFailedException);
+			expect(error.code).toBe('CONFIG_READ_FAILED');
+		});
+
+		it('fails when both kinds are managed and a role key is over the bound', async () => {
+			mockRole({ key: overlong });
+			mockPermission();
+
+			const error = await readCurrentConfig({ database: db, resources: ['roles', 'permissions'] }).catch((err) => err);
+
+			expect(error).toBeInstanceOf(ConfigReadFailedException);
+			expect(error.code).toBe('CONFIG_READ_FAILED');
+		});
+
+		it('does not length-check a role read only as a permissions dependency', async () => {
+			vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
+				{ id: 'uuid-1', key: 'editor' },
+				{ id: 'uuid-2', key: overlong },
+			] as never);
+
+			mockPermission({ role: 'uuid-1' });
+
+			const { config, currentRoleKeys } = await readCurrentConfig({ database: db, resources: ['permissions'] });
+
+			expect(config.permissions[0]!.role).toBe('editor');
+			expect(currentRoleKeys.has(overlong)).toBe(true);
+		});
+	});
+});
+
+describe('central subject sanitization', () => {
+	let db: MockedFunction<Knex>;
+
+	beforeEach(() => {
+		db = vi.mocked(knex.default({ client: MockClient }));
+		vi.spyOn(getSchema, 'getSchema').mockResolvedValue(testSchema);
+		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([]);
+		mockSettings();
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('sanitizes the emitted-document subject value through readCurrentConfig', async () => {
+		vi.spyOn(rolesDescriptor, 'emittedDocumentSubject').mockReturnValue({ label: 'role key', value: 'bad\nvalue' });
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow({ name: 42 })]);
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const error = await readCurrentConfig({ database: db, resources: ['roles'] }).catch((err) => err);
+
+		expect(error).toMatchObject({ code: 'CONFIG_READ_FAILED' });
+		expect(error.message).toContain('role key=bad?value');
+		expect(error.message).not.toContain('\n');
 	});
 });

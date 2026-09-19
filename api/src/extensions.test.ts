@@ -8,16 +8,13 @@ const { envState, confinedRuntime } = vi.hoisted(() => ({
 		string,
 		unknown
 	>,
-	// The manager resolves the confined runtime at load. The real resolver detects
-	// host hardening by spawning probes, so the whole suite drives it through this
-	// controllable stub: a baseline success by default, overridable per test.
+	// Avoid spawning host-hardening probes; individual tests can override the resolved runtime.
 	confinedRuntime: { resolve: undefined as undefined | (() => Promise<unknown>) },
 }));
 
 vi.mock('./env.js', () => ({ default: envState, getEnv: () => envState, refreshEnv: () => undefined }));
 
-// registerEndpoint and its siblings build their register context eagerly, and the
-// real getDatabase exits the process when the test env declares no database.
+// Registration builds context eagerly; the real getDatabase exits without database configuration.
 vi.mock('./database/index.js', () => ({ default: () => ({}) }));
 
 vi.mock('./extensions/confined/supervisor.js', async (importOriginal) => {
@@ -38,8 +35,6 @@ vi.mock('./extensions/confined/supervisor.js', async (importOriginal) => {
 		ok: true,
 		supervisor: {
 			probeLoad: async () => ({ loadable: true }),
-			// Echoes the shaped input per contract so binding tests can assert what
-			// reached the child.
 			invoke: async (invocation: { activation?: string; input: unknown }) => {
 				if (invocation.activation === 'event-filter') {
 					return { ok: true, value: { unchanged: false, payload: { echoed: invocation.input } } };
@@ -66,14 +61,13 @@ vi.mock('./extensions/confined/supervisor.js', async (importOriginal) => {
 	return { ...actual, resolveConfinedRuntime: () => (confinedRuntime.resolve ?? baseline)() };
 });
 
-// The internal-operations loop reads its directory with a template-literal dynamic
-// import that the test bundler cannot resolve. Skipping that read lets the test
-// exercise the extension-operations lane, which is the path under test.
+// The test bundler cannot resolve internal-operation dynamic imports; skip their directory scan.
 vi.mock('node:fs/promises', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('node:fs/promises')>();
 	return { ...actual, readdir: async () => [] };
 });
 
+import * as discovery from '@cairncms/utils/node';
 import { ExtensionManager } from './extensions.js';
 import { getFlowManager } from './flows.js';
 import logger from './logger.js';
@@ -172,8 +166,7 @@ describe('the confined load gate in the loader', () => {
 		writeFileSync(path.join(dir, 'src', 'ep.js'), 'export default {};\n');
 		writeFileSync(path.join(dir, 'src', 'hk.js'), 'export default {};\n');
 
-		// The built bundle artifact the gate reads and probes; the mocked supervisor
-		// answers the probe loadable, so its content is not validated here.
+		// The supervisor is mocked, so this fixture does not prove the artifact executes.
 		const bundleArtifact =
 			"var CairnBundle = (() => ({ default: { 'endpoint:ep': { id: 'ep', handler: async () => ({}) }, 'hook:hk': { id: 'hk', actions: { 'items.create': () => undefined } } } }))();\n";
 
@@ -249,8 +242,7 @@ describe('the confined load gate in the loader', () => {
 		const rows = (instance as any).getDiagnostics().filter((entry: any) => entry.name === 'duplicate-name');
 		expect(rows).toHaveLength(2);
 
-		// A name-keyed join would put the eligible extension's capabilities on its gate-failed
-		// same-name sibling too. The object-identity join keeps them on the eligible row only.
+		// Same-name packages must not inherit each other's capabilities in diagnostics.
 		const gateFailed = rows.find((row: any) => row.reason?.code === 'USES_RAW_FS');
 		const eligible = rows.find((row: any) => row.reason?.code !== 'USES_RAW_FS');
 
@@ -367,7 +359,6 @@ describe('the confined load gate in the loader', () => {
 		expect(eligible.get(one)?.entrySource).toContain('CairnOperation');
 		expect(eligible.get(two)?.entrySource).toContain('CairnOperation');
 
-		// Both pass the gate with no gate-time row, then register as loaded operations.
 		const diagnostics = (instance as any).getDiagnostics();
 
 		expect(diagnostics.map((entry: any) => `${entry.name}:${entry.status}`).sort()).toEqual([
@@ -398,8 +389,7 @@ describe('the confined load gate in the loader', () => {
 
 		expect(failed).toHaveLength(2);
 
-		// The id is marked ambiguous in the flow manager, so a flow rejects rather than
-		// taking the missing-operation unknown path.
+		// Ambiguous operations must reject execution, unlike an unknown operation's fallback path.
 		const flow = {
 			id: 'f',
 			name: 'f',
@@ -437,8 +427,7 @@ describe('the confined load gate in the loader', () => {
 		expect(row?.reason?.code).toBe('USES_RAW_FS');
 		expect((instance as any).confinedEligible.has(bundle)).toBe(false);
 
-		// The discovered set feeds the app bundler, so the refusal of the server side
-		// does not remove the package from it.
+		// Server-side refusal must not remove app entries from the bundler's discovered set.
 		expect((instance as any).extensions).toContain(bundle);
 		expect(filterServerExtensions((instance as any).extensions)).not.toContain(bundle);
 	});
@@ -461,8 +450,6 @@ describe('the confined load gate in the loader', () => {
 
 		await (instance as any).load();
 
-		// Every probed type, including the bundle, fails closed, and each is processed
-		// (gets a diagnostic) rather than the loader aborting after the first throw.
 		const diagnostics = (instance as any).getDiagnostics();
 
 		for (const name of ['probe-thrower', 'confined-endpoint', 'probe-bundle-sibling']) {
@@ -531,7 +518,6 @@ describe('the confined runtime boot', () => {
 
 		await (instance as any).load();
 
-		// The summary is exactly the operator-facing fields, never `coreSatisfied`.
 		expect((instance as any).getConfinedRuntimeMeta()).toEqual({
 			state: 'available',
 			posture: {
@@ -558,8 +544,7 @@ describe('the confined runtime boot', () => {
 	});
 
 	it('fails a confined extension closed when the runtime cannot be resolved, skipping the gate', async () => {
-		// The package is clean, so it would be eligible if the gate ran. The runtime
-		// failure must refuse it instead, proving the gate is skipped.
+		// Valid source isolates runtime unavailability from a source-validation failure.
 		writeConfinedPackage('boot-clean', 'export default {};\n');
 
 		confinedRuntime.resolve = async () => ({
@@ -592,13 +577,10 @@ describe('the confined runtime boot', () => {
 
 		const diagnostics = (instance as any).getDiagnostics();
 
-		// The confined extension is failed by the runtime; the inherited one follows its
-		// own registration path, never failed by the confined runtime's unavailability.
 		expect(diagnostics.find((entry: any) => entry.name === 'confined-endpoint')?.reason?.code).toBe(
 			'VALIDATION_INCOMPLETE'
 		);
 
-		// A failed confined extension still carries its runtime marker.
 		expect(diagnostics.find((entry: any) => entry.name === 'confined-endpoint')?.runtime).toBe('confined-server');
 
 		expect((instance as any).isLoaded).toBe(true);
@@ -687,6 +669,60 @@ describe('the settings subject gate in the loader', () => {
 
 		expect((instance as any).isSettingsEligible(owner)).toBe(true);
 		expect((instance as any).extensions).toContain(owner);
+	});
+
+	it('reports settings discovery complete after a successful load', async () => {
+		const instance = new ExtensionManager();
+		const owner = settingsOwner('preview', 'cairncms-extension-preview');
+		(instance as any).getExtensions = async () => [owner];
+
+		await (instance as any).load();
+
+		expect(instance.isSettingsDiscoveryComplete()).toBe(true);
+	});
+
+	it('reports settings discovery incomplete and owns nothing when discovery fails', async () => {
+		const instance = new ExtensionManager();
+
+		(instance as any).getExtensions = async () => {
+			throw new Error('discovery boom');
+		};
+
+		await (instance as any).load();
+
+		expect(instance.isSettingsDiscoveryComplete()).toBe(false);
+		expect(instance.getSettingsOwners()).toEqual([]);
+	});
+
+	it('reports discovery incomplete when the real getExtensions absorbs a local-directory failure', async () => {
+		const instance = new ExtensionManager();
+
+		vi.spyOn(discovery, 'getPackageExtensions').mockResolvedValue([]);
+		vi.spyOn(discovery, 'resolvePackageExtensions').mockResolvedValue([]);
+		vi.spyOn(discovery, 'getLocalExtensions').mockRejectedValue(new Error('local directory unreadable'));
+
+		await (instance as any).load();
+
+		expect(instance.isSettingsDiscoveryComplete()).toBe(false);
+	});
+
+	it('keeps settings discovery complete when getExtensions absorbs a per-package rejection', async () => {
+		const instance = new ExtensionManager();
+
+		vi.spyOn(discovery, 'getPackageExtensions').mockImplementation(async (_location: any, onFailure: any) => {
+			onFailure({ name: 'bad-package', local: false, error: new Error('manifest invalid') });
+			return [];
+		});
+
+		vi.spyOn(discovery, 'resolvePackageExtensions').mockResolvedValue([]);
+		vi.spyOn(discovery, 'getLocalExtensions').mockResolvedValue([]);
+
+		await (instance as any).load();
+
+		expect(instance.isSettingsDiscoveryComplete()).toBe(true);
+
+		const diagnostics = (instance as any).getDiagnostics();
+		expect(diagnostics.some((entry: any) => entry.name === 'bad-package' && entry.status === 'failed')).toBe(true);
 	});
 
 	it('refuses an invalid settings subject without failing the extension, warning instead', async () => {
