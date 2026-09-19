@@ -84,6 +84,10 @@ vi.mock('../logger.js', () => ({
 	default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
 
+vi.mock('../extensions.js', () => ({
+	getExtensionManager: () => ({ isSettingsDiscoveryComplete: () => true, getSettingsOwners: () => [] }),
+}));
+
 const testSchema = {} as SchemaOverview;
 
 describe('getConfigSnapshot', () => {
@@ -106,7 +110,10 @@ describe('getConfigSnapshot', () => {
 
 		const config = await getConfigSnapshot({ database: db });
 
-		expect(config.manifest).toEqual({ version: 2, resources: ['roles', 'permissions', 'folders', 'settings'] });
+		expect(config.manifest).toEqual({
+			version: 2,
+			resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings'],
+		});
 	});
 
 	it('builds ConfigRole entries with v1 allowlist only', async () => {
@@ -247,10 +254,8 @@ describe('getConfigSnapshot', () => {
 
 		const config = await getConfigSnapshot({ database: db });
 
-		// Sentinel excluded, other two roles present
 		expect(config.roles.map((r) => r.key).sort()).toEqual(['administrator', 'editor']);
 
-		// Permissions grouped by their role's key (public for sentinel, editor for editor-uuid)
 		expect(config.permissions.map((p) => p.role).sort()).toEqual(['editor', 'public']);
 
 		const publicSet = config.permissions.find((p) => p.role === 'public');
@@ -263,8 +268,7 @@ describe('getConfigSnapshot', () => {
 	});
 
 	it('groups permissions on the sentinel role under the "public" key', async () => {
-		// The sentinel row lives in directus_roles; snapshot excludes it from
-		// config.roles but still uses its UUID→key mapping to resolve public permissions.
+		// Public permissions need the sentinel's UUID-to-key mapping even though its role is excluded.
 		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
 			{
 				id: '00000000-0000-0000-0000-000000000000',
@@ -796,6 +800,7 @@ describe('readCurrentConfig', () => {
 			permissions: [],
 			folders: [],
 			settings: [{ storage_default_folder: folderKey }],
+			'extension-settings': [],
 		});
 
 		const contextFor = {
@@ -967,6 +972,7 @@ describe('readCurrentConfig', () => {
 			permissions: [],
 			folders: [],
 			settings: [],
+			'extension-settings': [],
 		});
 
 		expect(currentRoleKeys.size).toBe(0);

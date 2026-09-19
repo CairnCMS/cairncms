@@ -5,6 +5,7 @@ import logger from '../logger.js';
 import { safeLogFragment } from './safe-log-fragment.js';
 import type {
 	CairnConfig,
+	ConfigExtensionSettings,
 	ConfigFolder,
 	ConfigKind,
 	ConfigManifest,
@@ -134,7 +135,15 @@ export async function readConfigDirectory(configPath: string, options?: ConfigRe
 	const permissions: ConfigPermissionSet[] = [];
 	const folders: ConfigFolder[] = [];
 	const settings: ConfigSettings[] = [];
-	const sink: Record<ConfigKind, unknown[]> = { roles, permissions, folders, settings };
+	const extensionSettings: ConfigExtensionSettings[] = [];
+
+	const sink: Record<ConfigKind, unknown[]> = {
+		roles,
+		permissions,
+		folders,
+		settings,
+		'extension-settings': extensionSettings,
+	};
 
 	for (const kind of listConfigKinds()) {
 		if (!manifest.resources.includes(kind)) continue;
@@ -155,5 +164,5 @@ export async function readConfigDirectory(configPath: string, options?: ConfigRe
 		}
 	}
 
-	return { manifest, roles, permissions, folders, settings };
+	return { manifest, roles, permissions, folders, settings, 'extension-settings': extensionSettings };
 }

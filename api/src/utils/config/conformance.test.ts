@@ -2,6 +2,7 @@ import type { PermissionsAction } from '@cairncms/types';
 import { describe, expect, it } from 'vitest';
 import {
 	CONFIG_KINDS,
+	type ConfigExtensionSettings,
 	type ConfigFolder,
 	type ConfigKind,
 	type ConfigPermission,
@@ -16,6 +17,7 @@ import {
 import { buildRecordSchemas, validateConfigRecord } from '../validate-desired-config.js';
 import { computeKindPlan, diffRecordValues } from './diff.js';
 import type { ConfigKindTypes, ConfigResourceDescriptor, KindPlan } from './descriptor.js';
+import type { ExtensionSettingsKindTypes } from './handlers/extension-settings.js';
 import type { FoldersKindTypes } from './handlers/folders.js';
 import type { PermissionsKindTypes } from './handlers/permissions.js';
 import type { RolesKindTypes } from './handlers/roles.js';
@@ -179,6 +181,46 @@ const SETTINGS_FIXTURE: ConformanceFixture<SettingsKindTypes> = {
 	},
 };
 
+function extensionSettings(subject: string): ConfigExtensionSettings {
+	return {
+		subject,
+		global: { color: 'blue', size: 10 },
+		collections: { articles: { enabled: true } },
+	};
+}
+
+const EXTENSION_SETTINGS_FIXTURE: ConformanceFixture<ExtensionSettingsKindTypes> = {
+	document: extensionSettings('@acme/widget'),
+	documentIdentity: { subject: '@acme/widget' },
+	record: { subject: '@acme/widget', scope: 'global', scope_key: '', key: 'color', value: 'blue' },
+	identity: { subject: '@acme/widget', scope: 'global', scope_key: '', key: 'color' },
+	filenameStem: 'acme-widget-12bb0b74',
+	emptyDocument: { subject: '@acme/widget', global: {}, collections: {} },
+	current: [
+		{ subject: '@acme/widget', scope: 'global', scope_key: '', key: 'color', value: 'blue' },
+		{ subject: '@acme/widget', scope: 'global', scope_key: '', key: 'size', value: 10 },
+	],
+	desired: [
+		{ subject: '@acme/widget', scope: 'global', scope_key: '', key: 'color', value: 'red' },
+		{ subject: '@acme/widget', scope: 'collection', scope_key: 'articles', key: 'enabled', value: true },
+	],
+	expectedPlan: {
+		create: [
+			{
+				identity: { subject: '@acme/widget', scope: 'collection', scope_key: 'articles', key: 'enabled' },
+				value: true,
+			},
+		],
+		update: [
+			{
+				identity: { subject: '@acme/widget', scope: 'global', scope_key: '', key: 'color' },
+				changes: { value: { before: 'blue', after: 'red' } },
+			},
+		],
+		delete: [{ identity: { subject: '@acme/widget', scope: 'global', scope_key: '', key: 'size' } }],
+	},
+};
+
 function runConformance<K extends ConfigKindTypes>(
 	descriptor: ConfigResourceDescriptor<K>,
 	fixture: ConformanceFixture<K>
@@ -222,6 +264,7 @@ const RUNNERS = {
 	permissions: () => runConformance(getDescriptor('permissions'), PERMISSIONS_FIXTURE),
 	folders: () => runConformance(getDescriptor('folders'), FOLDERS_FIXTURE),
 	settings: () => runConformance(getDescriptor('settings'), SETTINGS_FIXTURE),
+	'extension-settings': () => runConformance(getDescriptor('extension-settings'), EXTENSION_SETTINGS_FIXTURE),
 } satisfies Record<ConfigKind, () => void>;
 
 describe.each(listConfigKinds())('descriptor conformance: %s', (kind) => {
@@ -261,12 +304,22 @@ const REPRESENTATIVE_CHANGE: Record<ConfigKind, unknown> = {
 		identity: { key: 'project' },
 		fields: { project_name: { before: 'CairnCMS', after: 'Renamed' } },
 	},
+	'extension-settings': {
+		kind: 'extension-settings',
+		operation: 'create',
+		identity: { subject: '@acme/widget', scope: 'global', scope_key: '', key: 'color' },
+		values: { value: 'blue' },
+	},
 };
 
 const REPRESENTATIVE_DELETION: Partial<Record<ConfigKind, unknown>> = {
 	roles: { kind: 'roles', identity: { key: 'sample' } },
 	permissions: { kind: 'permissions', identity: { role: 'sample', collection: 'articles', action: 'read' } },
 	folders: { kind: 'folders', identity: { key: 'sample' } },
+	'extension-settings': {
+		kind: 'extension-settings',
+		identity: { subject: '@acme/widget', scope: 'global', scope_key: '', key: 'color' },
+	},
 };
 
 function destructiveExtension(deletion: unknown): unknown {
@@ -347,6 +400,7 @@ describe('cross-kind omission contract', () => {
 			'storage_asset_transform',
 			'storage_default_folder',
 		],
+		'extension-settings': [],
 	};
 
 	it.each(listConfigKinds())('binds omissionPreservesCurrent to optionality for every %s field', (kind) => {

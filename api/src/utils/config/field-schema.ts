@@ -1,3 +1,4 @@
+import { ExtensionSettingKeySchema } from '@cairncms/constants';
 import { normalizeConfigKey } from '@cairncms/utils';
 import Joi from 'joi';
 import type { ConfigDocumentShape, ConfigFieldDescriptor } from './descriptor.js';
@@ -33,6 +34,21 @@ function buildStringBase(field: ConfigFieldDescriptor): Joi.Schema {
 	return schema;
 }
 
+/**
+ * Portable structure only; declaration-specific checks happen on the target.
+ * unsafe() admits the finite numbers accepted by the settings API beyond Joi's safe-number range.
+ */
+export const EXTENSION_SETTING_LEAF_SCHEMA = Joi.alternatives(
+	Joi.string().allow(''),
+	Joi.number().unsafe(),
+	Joi.boolean(),
+	Joi.object({ $secret: Joi.valid('preserve').required() }).strict()
+);
+
+const EXTENSION_SETTING_KEY_SCHEMA = Joi.string().custom((value, helpers) =>
+	ExtensionSettingKeySchema.safeParse(value).success ? value : helpers.error('any.invalid')
+);
+
 function buildBase(field: ConfigFieldDescriptor): Joi.Schema {
 	if (field.grammar === 'config-key') return buildConfigKeyBase(field);
 
@@ -59,13 +75,11 @@ function buildBase(field: ConfigFieldDescriptor): Joi.Schema {
 }
 
 /**
- * A generated snapshot must carry every managed, snapshot-safe field explicitly, so its records reconstruct on a
- * fresh target without silently taking create defaults. An authored declaration may omit optional fields to preserve
- * live values, so authored validation keeps the descriptor's own requiredness.
+ * Snapshots require all snapshot-safe fields to avoid adopting target defaults.
+ * Authored documents use each field's declared requiredness.
  */
 export type SchemaMode = 'authored' | 'snapshot';
 
-/** Applies nullability and requiredness uniformly, so every field type honors the same metadata contract. */
 function buildFieldSchema(field: ConfigFieldDescriptor, mode: SchemaMode): Joi.Schema {
 	let schema = buildBase(field);
 	if (field.nullable) schema = schema.allow(null);
@@ -89,6 +103,18 @@ export function buildDocumentSchema(spec: DocumentSchemaSpec, mode: SchemaMode =
 
 	if (shape === 'flat' || 'singleton' in shape) {
 		return Joi.object({ ...identity, ...fieldEntries(spec.recordFields, mode) });
+	}
+
+	if ('nestedMap' in shape) {
+		const valueMap = Joi.object().pattern(EXTENSION_SETTING_KEY_SCHEMA, EXTENSION_SETTING_LEAF_SCHEMA);
+		const collectionsMap = Joi.object().pattern(Joi.string(), valueMap);
+		const globalSchema = mode === 'snapshot' ? valueMap.required() : valueMap;
+		const collectionsSchema = mode === 'snapshot' ? collectionsMap.required() : collectionsMap;
+		return Joi.object({
+			...identity,
+			[shape.nestedMap.globalField]: globalSchema,
+			[shape.nestedMap.collectionsField]: collectionsSchema,
+		});
 	}
 
 	const recordSchema = Joi.object(fieldEntries(spec.recordFields, mode));

@@ -2,7 +2,7 @@ import type { Accountability, PermissionsAction } from '@cairncms/types';
 import type { ManifestVersion } from '../utils/config-contract.js';
 import type { ConfigKindTypeMap } from '../utils/config/registry.js';
 
-export const CONFIG_KINDS = ['roles', 'permissions', 'folders', 'settings'] as const;
+export const CONFIG_KINDS = ['roles', 'permissions', 'folders', 'settings', 'extension-settings'] as const;
 export type ConfigKind = (typeof CONFIG_KINDS)[number];
 
 export interface ConfigRole {
@@ -66,6 +66,7 @@ export interface CairnConfig {
 	permissions: ConfigPermissionSet[];
 	folders: ConfigFolder[];
 	settings: ConfigSettings[];
+	'extension-settings': ConfigExtensionSettingsAuthored[];
 }
 
 export type RoleIdentity = { key: string };
@@ -102,10 +103,41 @@ export type SettingsValues = {
 
 export type SettingsFieldChanges = { [K in keyof SettingsValues]?: FieldChange<SettingsValues[K]> };
 
-/** Whether a plan retargets the default folder, and to which key, so the deletion preview can drop a blocker the same apply clears. */
+/** Allows deletion previews to account for a default-folder reference cleared by the same apply. */
 export type SettingsRetarget = { retargeted: false } | { retargeted: true; toKey: string | null };
 
 export type FieldChange<T> = { before: T; after: T };
+
+export type ExtensionSettingLeaf = string | number | boolean | { $secret: 'preserve' };
+
+/** Declaration metadata belongs to the extension manifest, not this document. */
+export interface ConfigExtensionSettings {
+	subject: string;
+	global: Record<string, ExtensionSettingLeaf>;
+	collections: Record<string, Record<string, ExtensionSettingLeaf>>;
+}
+
+/** Omitted maps mean empty desired sets. Composed documents always include both maps. */
+export interface ConfigExtensionSettingsAuthored {
+	subject: string;
+	global?: Record<string, ExtensionSettingLeaf>;
+	collections?: Record<string, Record<string, ExtensionSettingLeaf>>;
+}
+
+export type ExtensionSettingsScope = 'global' | 'collection';
+
+export type ExtensionSettingsIdentity = {
+	subject: string;
+	scope: ExtensionSettingsScope;
+	scope_key: string;
+	key: string;
+};
+
+export type ExtensionSettingsValues = { value: ExtensionSettingLeaf };
+
+export type ExtensionSettingsFieldChanges = {
+	[K in keyof ExtensionSettingsValues]?: FieldChange<ExtensionSettingsValues[K]>;
+};
 
 export type RoleValues = {
 	name: string;
@@ -135,8 +167,13 @@ export type ConfigProtection = {
 	contributors: ProtectionContributor[];
 };
 
-/** The precondition value binding a plan or apply to the state its read closure was computed from. */
-export type ConfigStateToken = Readonly<{ resources: readonly ConfigKind[]; digest: string }>;
+/** Binds an apply to the state and scope read during planning. */
+export type ConfigStateToken = Readonly<{
+	resources: readonly ConfigKind[];
+	digest: string;
+	/** Recheck this scope: absent means all eligible subjects, empty means none. */
+	extensionSubjects?: readonly string[];
+}>;
 
 export interface ConfigPlan {
 	managedResources: readonly ConfigKind[];
@@ -159,6 +196,11 @@ export interface ConfigPlan {
 		create: never[];
 		update: Array<{ changes: SettingsFieldChanges }>;
 		delete: never[];
+	};
+	'extension-settings': {
+		create: Array<{ identity: ExtensionSettingsIdentity; value: ExtensionSettingLeaf }>;
+		update: Array<{ identity: ExtensionSettingsIdentity; changes: ExtensionSettingsFieldChanges }>;
+		delete: Array<{ identity: ExtensionSettingsIdentity }>;
 	};
 	protections: ConfigProtection[];
 }
@@ -198,7 +240,20 @@ export type ConfigPlanChange =
 	| { kind: 'folders'; operation: 'create'; identity: FolderIdentity; values: FolderValues }
 	| { kind: 'folders'; operation: 'update'; identity: FolderIdentity; fields: FolderFieldChanges }
 	| { kind: 'folders'; operation: 'delete'; identity: FolderIdentity; impact: FolderDeletionImpactEntry[] }
-	| { kind: 'settings'; operation: 'update'; identity: SettingsIdentity; fields: SettingsFieldChanges };
+	| { kind: 'settings'; operation: 'update'; identity: SettingsIdentity; fields: SettingsFieldChanges }
+	| {
+			kind: 'extension-settings';
+			operation: 'create';
+			identity: ExtensionSettingsIdentity;
+			values: ExtensionSettingsValues;
+	  }
+	| {
+			kind: 'extension-settings';
+			operation: 'update';
+			identity: ExtensionSettingsIdentity;
+			fields: ExtensionSettingsFieldChanges;
+	  }
+	| { kind: 'extension-settings'; operation: 'delete'; identity: ExtensionSettingsIdentity; impact: [] };
 
 export type SerializedConfigPlan = {
 	planVersion: 2;

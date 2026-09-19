@@ -9,6 +9,7 @@ function emptyPlan(): ConfigPlan {
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
 		settings: { create: [], update: [], delete: [] },
+		'extension-settings': { create: [], update: [], delete: [] },
 		protections: [],
 	};
 }

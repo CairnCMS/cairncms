@@ -20,6 +20,7 @@ type ConfigSnapshot = {
 	permissions: Array<{ role: string; permissions: Array<Record<string, any>> }>;
 	folders?: Array<Record<string, any>>;
 	settings?: Settings[];
+	'extension-settings'?: Settings[];
 };
 
 const REMOTE_VENDOR = 'postgres';
@@ -59,6 +60,7 @@ function settingsOnly(settings: Settings): ConfigSnapshot {
 		permissions: [],
 		folders: [],
 		settings: [settings],
+		'extension-settings': [],
 	};
 }
 
@@ -69,6 +71,7 @@ function foldersAndSettings(folders: Array<Record<string, any>>, settings: Setti
 		permissions: [],
 		folders,
 		settings: [settings],
+		'extension-settings': [],
 	};
 }
 
@@ -101,15 +104,10 @@ async function rawSettings(vendor: string): Promise<Record<string, any>> {
 	return response.body.data;
 }
 
-// The ordinary settings API may omit an unset nullable field (undefined) that a restore later writes as
-// null, so both representations are normalized before comparing and before patching.
+// Unset nullable fields may read as undefined; PATCH must send null or JSON would omit the clear.
 const norm = (value: unknown): unknown => value ?? null;
 
-/**
- * Restores the touched fields through the ordinary settings API. An omitted baseline value must be sent as
- * an explicit null, because JSON serialization drops an undefined property and would leave the change in
- * place. GET/PATCH /settings use the id form of a folder reference, so rawBaseline supplies those values.
- */
+// The ordinary settings API needs folder IDs, not the keys emitted by config snapshots.
 async function patchRestore(vendor: string, rawBaseline: Record<string, any>, fields: string[]): Promise<void> {
 	const patch: Record<string, any> = {};
 	for (const field of fields) patch[field] = norm(rawBaseline[field]);
@@ -118,10 +116,7 @@ async function patchRestore(vendor: string, rawBaseline: Record<string, any>, fi
 }
 
 /**
- * Restores only the touched settings fields to their baseline, independently of the config snapshot path.
- * It tries a settings-only config apply with the config-form (folder key) values and verifies through the
- * ordinary GET /settings API. If the apply throws, is refused, or does not verify, it patches the ordinary
- * settings API, then re-verifies through that same API.
+ * Cleanup verification and fallback use the ordinary API so a broken config path cannot prevent restoration.
  */
 async function restoreSettings(
 	vendor: string,
@@ -209,7 +204,6 @@ describe('Config-as-Code settings round-trip', () => {
 				expect(afterSet.auth_login_attempts).toBe(7);
 				expect(afterSet.storage_asset_presets).toEqual(presets);
 
-				// Omission during a real update preserves the untouched fields.
 				const preserved = await applyConfig(vendor, settingsOnly({ project_descriptor: 'Renamed descriptor' }));
 				expect(preserved.statusCode).toBe(200);
 
@@ -218,7 +212,6 @@ describe('Config-as-Code settings round-trip', () => {
 				expect(afterOmit.auth_login_attempts).toBe(7);
 				expect(afterOmit.storage_asset_presets).toEqual(presets);
 
-				// Explicit null clears a nullable field; an explicit empty array is stored distinct from null.
 				const cleared = await applyConfig(
 					vendor,
 					settingsOnly({ project_descriptor: null, storage_asset_presets: [] })
@@ -230,7 +223,6 @@ describe('Config-as-Code settings round-trip', () => {
 				expect(afterClear.project_descriptor).toBeNull();
 				expect(afterClear.storage_asset_presets).toEqual([]);
 
-				// A json-array field stores null distinct from the empty array.
 				const nulledArray = await applyConfig(vendor, settingsOnly({ storage_asset_presets: null }));
 				expect(nulledArray.statusCode).toBe(200);
 				expect((await httpSettings(vendor)).storage_asset_presets).toBeNull();
@@ -260,9 +252,7 @@ describe('Config-as-Code settings cleanup fallback', () => {
 
 				expect(changed.statusCode).toBe(200);
 
-				// An explicitly omitted baseline ({} has no project_descriptor) forces the unset case: patchRestore
-				// must send an explicit null. Without the normalization JSON would drop the field, the change would
-				// remain, and this assertion would fail.
+				// Force an unset baseline regardless of the instance's existing descriptor.
 				await patchRestore(vendor, {}, ['project_descriptor']);
 
 				expect(norm((await rawSettings(vendor)).project_descriptor)).toBeNull();
@@ -270,8 +260,6 @@ describe('Config-as-Code settings cleanup fallback', () => {
 				testError = error;
 			}
 
-			// Restore the real baseline independently, whether or not the probe threw, so a thrown fallback does
-			// not leave the probe value persisted.
 			await attemptCleanup(failures, 'restore settings', () =>
 				patchRestore(vendor, rawBaseline, ['project_descriptor'])
 			);
@@ -294,8 +282,7 @@ describe('Config-as-Code settings manifest v1 rejection', () => {
 		expect(badManifest.statusCode).toBe(400);
 		expect(errorCodes(badManifest)).toContain('CONFIG_UNSUPPORTED_VERSION');
 
-		// resources: [] removes any admin-continuity or deletion refusal that could also return 400, so the
-		// failure is unambiguously the out-of-version settings key.
+		// Empty scope rules out unrelated admin-continuity and deletion refusals.
 		const carriedKey = await applyConfig(vendor, {
 			manifest: { version: 1, resources: [] },
 			roles: [],
@@ -334,7 +321,6 @@ describe('Config-as-Code settings default folder', () => {
 				expect(created.statusCode).toBe(200);
 				expect((await httpSettings(vendor)).storage_default_folder).toBe(first);
 
-				// One destructive apply: create the second folder, retarget the default to it, delete the first.
 				const handed = await applyConfig(
 					vendor,
 					foldersAndSettings([...baseFolders, { key: second, name: 'Second', parent: null }], {
@@ -382,9 +368,7 @@ describe('Config-as-Code settings default folder', () => {
 
 				expect(seeded.statusCode).toBe(200);
 
-				// Drop the folder while OMITTING storage_default_folder so the live reference is preserved (a declared
-				// reference to a deleted folder would be rejected earlier as CONFIG_INVALID, never reaching the guard).
-				// Another settings change in the same apply proves whole-apply rollback.
+				// Omit the default-folder field to reach the live guard; an explicit dangling reference fails validation.
 				const refused = await applyConfig(
 					vendor,
 					foldersAndSettings([...baseFolders], { project_descriptor: 'Should roll back' }),
@@ -429,6 +413,7 @@ describe('Config-as-Code settings file-field exclusion', () => {
 
 		expect(refused.statusCode).toBe(400);
 		expect(errorCodes(refused)).toContain('CONFIG_INVALID');
+		expect(JSON.stringify(refused.body)).toContain('project_logo');
 		expect(await httpSettings(vendor)).toEqual(before);
 	});
 });
@@ -461,7 +446,6 @@ describe('Config-as-Code settings placeholder preservation', () => {
 
 				await writeSettingsFixture(fixture, PLACEHOLDER);
 
-				// The variable is left unset: preservation on write does not consult it.
 				const env = { ...config.envs[vendor as keyof typeof config.envs] };
 				delete env['CAIRNCMS_CONFIG_PROJECT_DESCRIPTOR'];
 
@@ -477,10 +461,9 @@ describe('Config-as-Code settings placeholder preservation', () => {
 
 				const written = await readWrittenSettings(fixture);
 				expect(written.project_descriptor).toBe(PLACEHOLDER);
-				// A field the seeded file did not declare is written from the database, proving a real snapshot ran.
+				// The seeded file lacks this field, so a no-op snapshot cannot satisfy the assertion.
 				expect(written.project_name).toBe(baseline.project_name);
 
-				// The HTTP snapshot has no directory to reconcile against, so it returns the stored value.
 				expect((await httpSettings(vendor)).project_descriptor).toBe('Stored database value');
 			} catch (error) {
 				testError = error;

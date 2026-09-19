@@ -366,6 +366,94 @@ describe('validateDesiredConfig', () => {
 		expect(validateSnapshot(duplicateTuple)).toHaveLength(1);
 	});
 
+	it('refuses an own "__proto__" collection in a server snapshot without polluting Object.prototype', () => {
+		const settings = JSON.parse(
+			'{"subject":"@cairncms/extension-widget","global":{},"collections":{"__proto__":null}}'
+		);
+
+		const body = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [settings],
+		};
+
+		expect(validateSnapshot(body).some((message) => message.includes('non-map'))).toBe(true);
+		expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+	});
+
+	it('refuses an own "__proto__" collection in current-state apply input as well as a snapshot', () => {
+		const settings = JSON.parse(
+			'{"subject":"@cairncms/extension-widget","global":{},"collections":{"__proto__":null}}'
+		);
+
+		const body = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [settings],
+		};
+
+		expect(validate(body).some((message) => message.includes('non-map'))).toBe(true);
+	});
+
+	it('refuses a preserve marker carrying an own "__proto__" property in a server snapshot', () => {
+		const settings = JSON.parse(
+			'{"subject":"@cairncms/extension-widget","global":{"token":{"$secret":"preserve","__proto__":"{{CAIRNCMS_CONFIG_LOST}}"}},"collections":{}}'
+		);
+
+		const body = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [settings],
+		};
+
+		expect(validateSnapshot(body).some((message) => message.includes('not a portable setting value'))).toBe(true);
+	});
+
+	it.each([
+		['current-state', (body: Record<string, unknown>) => validate(body)],
+		['server-snapshot', (body: Record<string, unknown>) => validateSnapshot(body)],
+	])('refuses an own "__proto__" top-level field in %s mode', (_mode, run) => {
+		const settings = JSON.parse(
+			'{"subject":"@cairncms/extension-widget","global":{},"collections":{},"__proto__":{"unexpected":true}}'
+		);
+
+		const body = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [settings],
+		};
+
+		const problems = run(body);
+
+		expect(problems.some((message) => message.includes('unknown field') && message.includes('__proto__'))).toBe(true);
+		expect(({} as Record<string, unknown>)['unexpected']).toBeUndefined();
+	});
+
+	it('accepts a complete empty extension-settings document in a server snapshot', () => {
+		const body = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [{ subject: '@cairncms/extension-widget', global: {}, collections: {} }],
+		};
+
+		expect(validateSnapshot(body)).toEqual([]);
+	});
+
 	it.each(['icon', 'enforce_tfa', 'description', 'ip_access'])(
 		'accepts an authored role that omits %s but rejects the same document as a generated snapshot',
 		(field) => {
@@ -388,6 +476,7 @@ describe('validateDesiredConfig', () => {
 			permissions: [],
 			folders: [{ key: 'docs', name: 'Docs' }],
 			settings: [],
+			'extension-settings': [],
 		};
 
 		expect(validate(doc)).toEqual([]);
@@ -417,7 +506,14 @@ describe('validateDesiredConfig', () => {
 	};
 
 	function settingsBody(settings: unknown[]): Record<string, unknown> {
-		return { manifest: { version: 2, resources: ['settings'] }, roles: [], permissions: [], folders: [], settings };
+		return {
+			manifest: { version: 2, resources: ['settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings,
+			'extension-settings': [],
+		};
 	}
 
 	it('accepts a partial authored settings declaration while requiring a complete one in snapshot mode', () => {
@@ -478,6 +574,7 @@ describe('validateDesiredConfig', () => {
 			permissions: [],
 			folders,
 			settings,
+			'extension-settings': [],
 		};
 	}
 

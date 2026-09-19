@@ -1,6 +1,7 @@
 import type { CairnConfig, ConfigKind, ConfigPlan, ConfigProtection, ProtectionContributor } from '../types/config.js';
 import { leavesAtLeastOneAdmin } from './admin-continuity.js';
 import { makeDependencyAccessor } from './config/dependency-context.js';
+import type { ExtensionDeclarationSnapshot } from './config/descriptor.js';
 import { computeKindPlan } from './config/diff.js';
 import { dependencyClosure, dependencyOrder } from './config/graph.js';
 import { getDescriptor, listConfigKinds } from './config/registry.js';
@@ -13,10 +14,16 @@ function emptyKindPlan(): { create: never[]; update: never[]; delete: never[] } 
 	return { create: [], update: [], delete: [] };
 }
 
-export function computeConfigPlan(current: CairnConfig, desired: CairnConfig): ConfigPlan {
+export function computeConfigPlan(
+	current: CairnConfig,
+	desired: CairnConfig,
+	options?: { extensionDeclarations?: ExtensionDeclarationSnapshot }
+): ConfigPlan {
 	const managed = new Set<ConfigKind>(desired.manifest.resources);
 	const closure = dependencyOrder([...dependencyClosure([...managed], (kind) => getDescriptor(kind).dependencies)]);
 	const published = new Map<ConfigKind, unknown>();
+
+	const desiredSubjects = new Set((desired['extension-settings'] ?? []).map((document) => document.subject));
 
 	for (const kind of closure) {
 		if (!managed.has(kind)) {
@@ -29,7 +36,12 @@ export function computeConfigPlan(current: CairnConfig, desired: CairnConfig): C
 		const desiredRecords = descriptor.projectDocuments(desired[kind] as never).records;
 		const raw = computeKindPlan(descriptor as never, currentRecords as never, desiredRecords as never);
 
-		const context = { dependency: makeDependencyAccessor(descriptor.dependencies, published) };
+		const context = {
+			dependency: makeDependencyAccessor(descriptor.dependencies, published),
+			desiredSubjects,
+			extensionDeclarations: options?.extensionDeclarations,
+		};
+
 		published.set(kind, descriptor.handler.postPlan(raw as never, context as never));
 	}
 

@@ -25,7 +25,7 @@ import type {
 } from '../types/config.js';
 import { makeDependencyAccessor } from './config/dependency-context.js';
 import { readCurrentConfig } from './get-config-snapshot.js';
-import type { ConfigApplyMutationOptions } from './config/descriptor.js';
+import type { ConfigApplyMutationOptions, ExtensionDeclarationSnapshot } from './config/descriptor.js';
 import { dependencyClosure, dependencyOrder, reverseDependencyOrder } from './config/graph.js';
 import { planDeletions, planHasDeletions } from './config/plan-folds.js';
 import { getDescriptor, listConfigKinds } from './config/registry.js';
@@ -37,6 +37,8 @@ type ApplyOptions = {
 	destructive?: boolean;
 	context: ConfigApplySecurityContext;
 	expectedStateToken: ConfigStateToken;
+	/** Must be the catalogue used for read, validation, and planning. */
+	extensionDeclarations?: ExtensionDeclarationSnapshot;
 };
 
 function sameResourceSet(a: readonly ConfigKind[], b: readonly ConfigKind[]): boolean {
@@ -53,11 +55,39 @@ function sameResourceSet(a: readonly ConfigKind[], b: readonly ConfigKind[]): bo
 	return true;
 }
 
+// A scoped state token cannot protect mutations to subjects it never read.
+function assertExtensionScopeBound(plan: ConfigPlan, expected: ConfigStateToken): void {
+	const slice = plan['extension-settings'];
+	const planSubjects = new Set<string>();
+
+	for (const entry of slice.create) planSubjects.add(entry.identity.subject);
+	for (const entry of slice.update) planSubjects.add(entry.identity.subject);
+	for (const entry of slice.delete) planSubjects.add(entry.identity.subject);
+
+	if (planSubjects.size === 0) return;
+
+	const scope = expected.extensionSubjects;
+	if (scope === undefined) throw new ConfigApplyScopeMismatchException();
+
+	const allowed = new Set(scope);
+
+	for (const subject of planSubjects) {
+		if (!allowed.has(subject)) throw new ConfigApplyScopeMismatchException();
+	}
+}
+
 async function assertStateUnchanged(trx: Knex, schema: SchemaOverview, expected: ConfigStateToken): Promise<void> {
 	let current;
 
 	try {
-		current = await readCurrentConfig({ database: trx, schema, resources: expected.resources });
+		current = await readCurrentConfig({
+			database: trx,
+			schema,
+			resources: expected.resources,
+			...(expected.extensionSubjects !== undefined && {
+				extensionSettingsSubjects: new Set(expected.extensionSubjects),
+			}),
+		});
 	} catch (err) {
 		if (err instanceof ConfigReadFailedException) throw new ConfigStateChangedException();
 		throw err;
@@ -86,6 +116,8 @@ export async function applyConfigPlan(plan: ConfigPlan, opts: ApplyOptions): Pro
 	if (!sameResourceSet(plan.managedResources, opts.expectedStateToken.resources)) {
 		throw new ConfigApplyScopeMismatchException();
 	}
+
+	assertExtensionScopeBound(plan, opts.expectedStateToken);
 
 	const protection = plan.protections[0];
 
@@ -136,6 +168,7 @@ export async function applyConfigPlan(plan: ConfigPlan, opts: ApplyOptions): Pro
 					schema,
 					securityContext: opts.context,
 					mutationOptions,
+					...(opts.extensionDeclarations !== undefined && { extensionDeclarations: opts.extensionDeclarations }),
 					dependency: makeDependencyAccessor(getDescriptor(kind).dependencies, published),
 				});
 

@@ -5,6 +5,7 @@ import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import {
 	CONFIG_KINDS,
 	type CairnConfig,
+	type ConfigExtensionSettings,
 	type ConfigKind,
 	type ConfigFolder,
 	type ConfigPermissionSet,
@@ -15,7 +16,7 @@ import {
 import { LATEST_MANIFEST_VERSION, type ManifestVersion } from './config-contract.js';
 import { computeConfigStateDigest, toStateDigestEntry, type StateDigestEntry } from './config/config-state-digest.js';
 import { makeDependencyAccessor } from './config/dependency-context.js';
-import type { ConfigReadMode } from './config/descriptor.js';
+import type { ConfigReadMode, ExtensionDeclarationSnapshot } from './config/descriptor.js';
 import type { FoldersKindTypes } from './config/handlers/folders.js';
 import type { RolesKindTypes } from './config/handlers/roles.js';
 import { getDescriptor } from './config/registry.js';
@@ -37,6 +38,10 @@ export type CurrentConfigOptions = {
 	schema?: SchemaOverview;
 	resources: readonly ConfigKind[];
 	manifestVersion?: ManifestVersion;
+	/** Absent reads all eligible subjects; an empty set reads none. */
+	extensionSettingsSubjects?: ReadonlySet<string>;
+	/** Omit to discover fresh declarations for the transaction recheck or a standalone snapshot. */
+	extensionDeclarations?: ExtensionDeclarationSnapshot;
 };
 
 /** Formats a read-diagnostic subject, applying safeLogFragment to the descriptor-supplied value centrally. */
@@ -70,7 +75,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 
 	if (closure.length === 0) {
 		return {
-			config: { manifest, roles: [], permissions: [], folders: [], settings: [] },
+			config: { manifest, roles: [], permissions: [], folders: [], settings: [], 'extension-settings': [] },
 			currentRoleKeys: new Set(),
 			currentFolderKeys: new Set(),
 			currentFolderParents: new Map(),
@@ -90,6 +95,12 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 			database,
 			schema,
 			readMode: mode,
+			...(options.extensionSettingsSubjects !== undefined && {
+				selectedExtensionSubjects: options.extensionSettingsSubjects,
+			}),
+			...(options.extensionDeclarations !== undefined && {
+				extensionDeclarations: options.extensionDeclarations,
+			}),
 			dependency: makeDependencyAccessor(descriptor.dependencies, published),
 		};
 
@@ -116,6 +127,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		permissions: (documentsByKind.get('permissions') ?? []) as ConfigPermissionSet[],
 		folders: (documentsByKind.get('folders') ?? []) as ConfigFolder[],
 		settings: (documentsByKind.get('settings') ?? []) as ConfigSettings[],
+		'extension-settings': (documentsByKind.get('extension-settings') ?? []) as ConfigExtensionSettings[],
 	};
 
 	const placeholders = findPlaceholderSyntax(config);
@@ -173,6 +185,9 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 					.sort()
 			),
 			digest: computeConfigStateDigest(entries),
+			...(options.extensionSettingsSubjects !== undefined && {
+				extensionSubjects: Object.freeze([...options.extensionSettingsSubjects].sort()),
+			}),
 		});
 	} catch {
 		throw new ConfigReadFailedException(

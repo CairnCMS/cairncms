@@ -57,7 +57,20 @@ vi.mock('../../../utils/compute-config-plan.js', () => ({
 	computeConfigPlan: vi.fn(),
 }));
 
-vi.mock('../../../utils/get-schema.js', () => ({ getSchema: vi.fn(async () => ({})) }));
+vi.mock('../../../utils/get-schema.js', () => ({ getSchema: vi.fn(async () => ({ collections: {} })) }));
+
+vi.mock('../../../extensions.js', () => ({
+	getExtensionManager: () => ({
+		isSettingsDiscoveryComplete: () => true,
+		getSettingsOwners: () => [
+			{
+				subject: '@cairncms/extension-widget',
+				status: 'available',
+				declaration: { color: { type: 'string', scope: 'global' } },
+			},
+		],
+	}),
+}));
 
 vi.mock('../../../utils/enrich-config-plan.js', () => ({ enrichConfigPlan: vi.fn(async () => ({})) }));
 
@@ -76,6 +89,7 @@ const EMPTY_PLAN: ConfigPlan = {
 	permissions: { create: [], update: [], delete: [] },
 	folders: { create: [], update: [], delete: [] },
 	settings: { create: [], update: [], delete: [] },
+	'extension-settings': { create: [], update: [], delete: [] },
 	protections: [],
 };
 
@@ -102,6 +116,7 @@ const CREATE_PLAN: ConfigPlan = {
 	permissions: { create: [], update: [], delete: [] },
 	folders: { create: [], update: [], delete: [] },
 	settings: { create: [], update: [], delete: [] },
+	'extension-settings': { create: [], update: [], delete: [] },
 	protections: [],
 };
 
@@ -260,6 +275,7 @@ describe('configApply protected plan', () => {
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
 		settings: { create: [], update: [], delete: [] },
+		'extension-settings': { create: [], update: [], delete: [] },
 		protections: [
 			{
 				code: 'ADMIN_CONTINUITY_REQUIRED',
@@ -371,6 +387,7 @@ describe('configApply state token forwarding', () => {
 			permissions: { created: 0, updated: 0, deleted: 0 },
 			folders: { created: [], updated: [], deleted: [] },
 			settings: { updated: [] },
+			'extension-settings': { created: 0, updated: 0, deleted: 0 },
 		} as never);
 
 		await configApply('./config', { format: 'human', dryRun: false, destructive: false, yes: true }).catch(
@@ -397,6 +414,7 @@ describe('configApply state token forwarding', () => {
 			permissions: [],
 			folders: [],
 			settings: [{ storage_default_folder: 'uploads' }],
+			'extension-settings': [],
 		};
 
 		const settingsStateToken: ConfigStateToken = { resources: ['settings'], digest: 'settings-digest' };
@@ -411,6 +429,7 @@ describe('configApply state token forwarding', () => {
 				update: [{ changes: { storage_default_folder: { before: null, after: 'uploads' } } }],
 				delete: [],
 			},
+			'extension-settings': { create: [], update: [], delete: [] },
 			protections: [],
 		};
 
@@ -448,6 +467,7 @@ describe('configApply state token forwarding', () => {
 			permissions: { created: 0, updated: 0, deleted: 0 },
 			folders: { created: [], updated: [], deleted: [] },
 			settings: { updated: ['project'] },
+			'extension-settings': { created: 0, updated: 0, deleted: 0 },
 		} as never);
 
 		await configApply('./config', { format: 'human', dryRun: false, destructive: false, yes: true });
@@ -480,6 +500,7 @@ describe('configApply run record', () => {
 		permissions: { created: 0, updated: 0, deleted: 0 },
 		folders: { created: [], updated: [], deleted: [] },
 		settings: { updated: [] },
+		'extension-settings': { created: 0, updated: 0, deleted: 0 },
 	};
 
 	const PROTECTED_PLAN: ConfigPlan = {
@@ -488,6 +509,7 @@ describe('configApply run record', () => {
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
 		settings: { create: [], update: [], delete: [] },
+		'extension-settings': { create: [], update: [], delete: [] },
 		protections: [
 			{
 				code: 'ADMIN_CONTINUITY_REQUIRED',
@@ -857,6 +879,7 @@ describe('configApply local wire projection', () => {
 			permissions: { created: 0, updated: 0, deleted: 0 },
 			folders: { created: [], updated: [], deleted: [] },
 			settings: { updated: [] },
+			'extension-settings': { created: 0, updated: 0, deleted: 0 },
 		} as never);
 
 		await expect(
@@ -895,6 +918,7 @@ describe('configApply forwards current folder state to validation', () => {
 				{ key: 'b', name: 'b' },
 			],
 			settings: [],
+			'extension-settings': [],
 		};
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(desired);
@@ -916,5 +940,86 @@ describe('configApply forwards current folder state to validation', () => {
 		expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('parent cycle'));
 		expect(computeConfigPlan).not.toHaveBeenCalled();
 		expect(applyConfigPlan).not.toHaveBeenCalled();
+	});
+});
+
+describe('configApply extension-settings forwarding (CLI)', () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+		vi.clearAllMocks();
+	});
+
+	it('forwards the captured catalogue to the read, real validation, planning, and mutation at exit 0', async () => {
+		vi.spyOn(process, 'exit').mockImplementation((code) => {
+			throw new Error(`exit:${code}`);
+		});
+
+		const actual = await vi.importActual<typeof import('../../../utils/validate-desired-config.js')>(
+			'../../../utils/validate-desired-config.js'
+		);
+
+		vi.mocked(validateDesiredConfig).mockImplementation(actual.validateDesiredConfig);
+
+		const desired: CairnConfig = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [{ subject: '@cairncms/extension-widget', global: { color: 'blue' }, collections: {} }],
+		};
+
+		vi.mocked(readConfigDirectory).mockResolvedValue(desired);
+
+		vi.mocked(readCurrentConfig).mockResolvedValue({
+			config: desired,
+			currentRoleKeys: new Set<string>(),
+			currentFolderKeys: new Set<string>(),
+			currentFolderParents: new Map<string, string | null>(),
+			stateToken: { resources: ['extension-settings'], digest: 'd', extensionSubjects: ['@cairncms/extension-widget'] },
+		});
+
+		const plan: ConfigPlan = {
+			...EMPTY_PLAN,
+			managedResources: ['extension-settings'],
+			'extension-settings': {
+				create: [
+					{
+						identity: { subject: '@cairncms/extension-widget', scope: 'global', scope_key: '', key: 'color' },
+						value: 'blue',
+					},
+				],
+				update: [],
+				delete: [],
+			},
+		};
+
+		vi.mocked(computeConfigPlan).mockReturnValue(plan);
+		vi.mocked(serializeConfigPlan).mockReturnValue(CREATE_SERIALIZED);
+
+		vi.mocked(applyConfigPlan).mockResolvedValue({
+			roles: { created: [], updated: [], deleted: [] },
+			permissions: { created: 0, updated: 0, deleted: 0 },
+			folders: { created: [], updated: [], deleted: [] },
+			settings: { updated: [] },
+			'extension-settings': { created: 1, updated: 0, deleted: 0 },
+		} as never);
+
+		await expect(
+			configApply('./config', { format: 'human', dryRun: false, destructive: false, yes: true })
+		).rejects.toThrow('exit:0');
+
+		const readArg = vi.mocked(readCurrentConfig).mock.calls[0]![0];
+		expect([...(readArg.extensionSettingsSubjects ?? [])]).toEqual(['@cairncms/extension-widget']);
+
+		const captured = readArg.extensionDeclarations;
+		expect(captured).toEqual(expect.objectContaining({ discoveryComplete: true }));
+
+		const validateContext = vi.mocked(validateDesiredConfig).mock.calls[0]![1] as { extensionDeclarations?: unknown };
+		expect(validateContext.extensionDeclarations).toBe(captured);
+
+		expect(vi.mocked(computeConfigPlan).mock.calls[0]![2]?.extensionDeclarations).toBe(captured);
+
+		expect(vi.mocked(applyConfigPlan).mock.calls[0]![1].extensionDeclarations).toBe(captured);
 	});
 });

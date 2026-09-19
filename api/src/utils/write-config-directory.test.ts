@@ -458,7 +458,7 @@ describe('writeConfigDirectory', () => {
 		await fs.mkdir(rolesDir, { recursive: true });
 
 		const real = path.join(tmpDir, 'shared-editor.yaml');
-		await fs.writeFile(real, 'placeholder\n');
+		await fs.writeFile(real, dumpYaml({ key: 'editor', name: 'Placeholder' }));
 		await fs.symlink(real, path.join(rolesDir, 'editor.yaml'));
 
 		const config = makeConfig({
@@ -914,5 +914,112 @@ describe('writeConfigDirectory placeholder preservation', () => {
 		await expect(writeConfigDirectory(config, tmpDir)).rejects.toBeInstanceOf(ConfigReadFailedException);
 
 		expect(await treeOf(tmpDir)).toEqual(before);
+	});
+});
+
+describe('writeConfigDirectory non-mapping preservation root', () => {
+	async function seedSibling(kind: string, filename: string, contents: string): Promise<void> {
+		await fs.writeFile(
+			path.join(tmpDir, 'cairncms-config.yaml'),
+			dumpYaml({ version: 2, resources: ['roles', 'settings'] })
+		);
+
+		await fs.mkdir(path.join(tmpDir, kind), { recursive: true });
+		await fs.writeFile(path.join(tmpDir, kind, filename), contents, 'utf-8');
+	}
+
+	const config = makeConfig({
+		manifest: { version: 2, resources: ['roles', 'settings'] },
+		roles: [{ key: 'editor', name: 'Resolved', admin_access: false, app_access: true }],
+		settings: [settings({ project_url: 'https://live.example' })],
+	});
+
+	it.each([
+		['roles', 'editor.yaml', 'a scalar root', 'just a string\n'],
+		['roles', 'editor.yaml', 'a sequence root', '- one\n- two\n'],
+		['settings', 'project.yaml', 'a scalar root', 'just a string\n'],
+		['settings', 'project.yaml', 'a sequence root', '- one\n- two\n'],
+	])('refuses %s/%s with %s, leaving the tree byte-identical', async (kind, filename, _label, contents) => {
+		await seedSibling(kind, filename, contents);
+
+		const before = await treeOf(tmpDir);
+
+		await expect(writeConfigDirectory(config, tmpDir)).rejects.toBeInstanceOf(ConfigReadFailedException);
+
+		expect(await treeOf(tmpDir)).toEqual(before);
+	});
+});
+
+describe('writeConfigDirectory extension-settings preservation source', () => {
+	const SUBJECT = 'cairncms-extension-widget';
+	const FILE = `${CONFIG_REGISTRY['extension-settings'].layout.filenameOf({ subject: SUBJECT })}.yaml`;
+
+	function extConfig(documents: CairnConfig['extension-settings']): CairnConfig {
+		return {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': documents,
+		};
+	}
+
+	async function seedManifest(): Promise<void> {
+		await fs.writeFile(
+			path.join(tmpDir, 'cairncms-config.yaml'),
+			dumpYaml({ version: 2, resources: ['extension-settings'] })
+		);
+	}
+
+	it.each([
+		['an unknown top-level field', { subject: SUBJECT, bogus: {} }],
+		['a non-map global', { subject: SUBJECT, global: 'x' }],
+		['a non-map collections', { subject: SUBJECT, collections: 'x' }],
+		['a non-map collection entry', { subject: SUBJECT, collections: { articles: 'x' } }],
+		['an invalid setting key', { subject: SUBJECT, global: { 'Bad-Key': 'x' } }],
+		['a non-portable value', { subject: SUBJECT, global: { color: [] } }],
+		[
+			'a preserve marker carrying an extra field',
+			{ subject: SUBJECT, global: { token: { $secret: 'preserve', extra: '{{CAIRNCMS_CONFIG_LOST}}' } } },
+		],
+		[
+			'a preserve marker carrying an own __proto__ property',
+			{
+				subject: SUBJECT,
+				global: { token: JSON.parse('{"$secret":"preserve","__proto__":"{{CAIRNCMS_CONFIG_LOST}}"}') },
+			},
+		],
+	])('refuses a matching source with %s, leaving the tree byte-identical', async (_label, source) => {
+		await seedManifest();
+		await writeExisting('extension-settings', FILE, source);
+		await fs.writeFile(path.join(tmpDir, 'operator-notes.txt'), 'keep me\n');
+
+		const before = await treeOf(tmpDir);
+
+		await expect(
+			writeConfigDirectory(extConfig([{ subject: SUBJECT, global: { color: 'blue' }, collections: {} }]), tmpDir)
+		).rejects.toBeInstanceOf(ConfigReadFailedException);
+
+		expect(await treeOf(tmpDir)).toEqual(before);
+	});
+
+	it('preserves a committed CONFIG placeholder from a valid source while emitting a newly added value', async () => {
+		await seedManifest();
+
+		await writeExisting('extension-settings', FILE, {
+			subject: SUBJECT,
+			global: { url: '{{CAIRNCMS_CONFIG_WIDGET_URL}}' },
+			collections: {},
+		});
+
+		await writeConfigDirectory(
+			extConfig([{ subject: SUBJECT, global: { url: 'https://live.example', color: 'blue' }, collections: {} }]),
+			tmpDir
+		);
+
+		const out = await readYaml(path.join(tmpDir, 'extension-settings', FILE));
+		expect(out.global.url).toBe('{{CAIRNCMS_CONFIG_WIDGET_URL}}');
+		expect(out.global.color).toBe('blue');
 	});
 });

@@ -1,5 +1,5 @@
 import type { Knex } from 'knex';
-import type { SchemaOverview } from '@cairncms/types';
+import type { ExtensionSettings, SchemaOverview } from '@cairncms/types';
 import type {
 	ConfigApplySecurityContext,
 	ConfigFailure,
@@ -14,11 +14,7 @@ export type ConfigOperation = 'create' | 'update' | 'delete';
 
 export type ConfigReadMode = 'full' | 'identity';
 
-/**
- * The four config-controlled mutation options. Each literal is intersected with its MutationOptions source, so a
- * removed or widened upstream field fails here. Handlers forward one mutable object so nested mutations share the
- * event sink. Services may add fields such as preMutationException.
- */
+/** Keep options tied to MutationOptions and share one mutable event sink across nested services. */
 export interface ConfigApplyMutationOptions {
 	autoPurgeCache: false & NonNullable<MutationOptions['autoPurgeCache']>;
 	autoPurgeSystemCache: false & NonNullable<MutationOptions['autoPurgeSystemCache']>;
@@ -56,15 +52,17 @@ export interface ConfigFieldDescriptor {
 	identityComponent?: boolean;
 }
 
-export type ConfigDocumentShape = 'flat' | { recordsField: string } | { singleton: { filename: string } };
+export type ConfigDocumentShape =
+	| 'flat'
+	| { recordsField: string }
+	| { singleton: { filename: string } }
+	| { nestedMap: { globalField: string; collectionsField: string } };
 
-/** A per-kind dependency payload, keyed only by config kinds. */
 export type ConfigDependencyMap = Partial<Record<ConfigKind, unknown>>;
 
 /** A kind with no cross-kind dependencies (its dependency accessor cannot be called). */
 export type NoConfigDependencies = Record<never, never>;
 
-/** Every associated type of one kind, so the descriptor and handler are declared and constrained end to end. */
 export interface ConfigKindTypes {
 	Kind: ConfigKind;
 	Document: unknown;
@@ -101,10 +99,12 @@ export interface ConfigResourceDescriptor<K extends ConfigKindTypes> {
 		documentShape: ConfigDocumentShape;
 		documentIdentityOf(document: K['Document']): K['DocumentIdentity'];
 		filenameOf(documentIdentity: K['DocumentIdentity']): string;
-		/** Checks an untrusted mapping's file shell (identity presence, kind shape, filename match) and returns a typed document; full field validation happens later in validateDesiredConfig. */
+		/** Checks file structure and identity. Full field validation happens later in validateDesiredConfig. */
 		parseDocumentFile(record: Record<string, unknown>, filename: string): K['Document'];
 		/** The rejection message for a reserved filename; required only for a kind whose identity declares reserved stems. */
 		reservedFilenameMessage?(filename: string): string;
+		/** Checks derived filename ownership before reading the file; required for nestedMap layouts. */
+		ownsFilenameStem?(stem: string): boolean;
 	};
 	documentIdentityFields: ConfigFieldDescriptor[];
 	recordFields: ConfigFieldDescriptor[];
@@ -120,6 +120,12 @@ export interface ConfigResourceDescriptor<K extends ConfigKindTypes> {
 	compareIdentity(a: K['Identity'], b: K['Identity']): number;
 	identityOfDelete(entry: K['Delete']): K['Identity'];
 	canonicalizeValues(record: K['Record']): K['Values'];
+	/** Nested-value alternative to the generic field scan. */
+	residualPlaceholders?(documents: K['Document'][]): string[];
+	/** Restores nested declarations not covered by acceptsPlaceholder fields. */
+	restorePlaceholders?(pending: K['Document'], existing: Record<string, unknown>): K['Document'];
+	/** Validates a matching preservation source before any write, without resolving placeholders. */
+	validatePreservationSource?(existing: Record<string, unknown>, label: string): void;
 	toCreateEntry(record: K['Record']): K['Create'];
 	toUpdateEntry(identity: K['Identity'], changes: K['Changes']): K['Update'];
 	toDeleteEntry(identity: K['Identity']): K['Delete'];
@@ -130,36 +136,47 @@ export interface ReadContext<K extends ConfigKindTypes> {
 	database: Knex;
 	schema: SchemaOverview;
 	readMode: ConfigReadMode;
+	/** Absent reads all eligible subjects; an empty set reads none. */
+	selectedExtensionSubjects?: ReadonlySet<string>;
+	/** Reuse the operation's catalogue; omit during the transaction recheck to detect declaration changes. */
+	extensionDeclarations?: ExtensionDeclarationSnapshot;
 	/** Typed access to a declared dependency's read state; the engine throws if that dependency was not published. */
 	dependency<D extends Extract<keyof K['ReadDependencies'], ConfigKind>>(kind: D): K['ReadDependencies'][D];
 }
 
-/**
- * Where references outside a document resolve against current state. Roles resolve permission subjects, and folders
- * resolve a parent preserved by an omitted field, this way. A server-produced snapshot was already resolved against
- * the server's own state, so it is the only document that may skip the current-state check, and it must say so
- * explicitly.
- */
+/** Portable server snapshots resolve references on the server and must validate without target-local state. */
 export type ReferenceStateSource =
 	| {
 			references: 'current-state';
 			currentRoleKeys: ReadonlySet<string>;
 			currentFolderKeys: ReadonlySet<string>;
-			/** Required when a current-state validation must resolve a folder whose parent is omitted; a validation of fully explicit declarations does not need it. */
+			/** Required to resolve folder parents preserved by omission. */
 			currentFolderParents?: ReadonlyMap<string, string | null>;
 	  }
 	| { references: 'server-snapshot' };
+
+/** Captured once per operation; discoveryComplete distinguishes empty success from failed discovery. */
+export type ExtensionDeclarationSnapshot = {
+	discoveryComplete: boolean;
+	eligible: ReadonlyMap<string, ExtensionSettings>;
+};
 
 export type ValidationContext = {
 	rolesManaged: boolean;
 	declaredRoleKeys: ReadonlySet<string>;
 	foldersManaged: boolean;
 	declaredFolderKeys: ReadonlySet<string>;
+	/** Target-only context; omitted when validating a portable server snapshot. */
+	extensionDeclarations?: ExtensionDeclarationSnapshot;
+	currentCollections?: ReadonlySet<string>;
 } & ReferenceStateSource;
 
 export interface PlanContext<K extends ConfigKindTypes> {
 	/** Typed access to a declared dependency's finalized plan; the engine throws if that dependency was not published. */
 	dependency<D extends Extract<keyof K['PlanDependencies'], ConfigKind>>(kind: D): K['PlanDependencies'][D];
+	/** Includes empty subject documents, which still manage stored keys. */
+	desiredSubjects?: ReadonlySet<string>;
+	extensionDeclarations?: ExtensionDeclarationSnapshot;
 }
 
 export interface EnrichContext {
@@ -174,6 +191,7 @@ export interface ApplyContext<K extends ConfigKindTypes> {
 	schema: SchemaOverview;
 	securityContext: ConfigApplySecurityContext;
 	mutationOptions: ConfigApplyMutationOptions;
+	extensionDeclarations?: ExtensionDeclarationSnapshot;
 	/** Typed access to a declared dependency's apply state; the engine throws if that dependency was not published. */
 	dependency<D extends Extract<keyof K['ApplyDependencies'], ConfigKind>>(kind: D): K['ApplyDependencies'][D];
 }

@@ -24,6 +24,7 @@ import getDatabase, { hasDatabaseConnection, isInstalled } from '../../../databa
 import logger from '../../../logger.js';
 import { configSnapshot } from './snapshot.js';
 import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
+import { CONFIG_REGISTRY } from '../../../utils/config/registry.js';
 
 const TOKEN = 'sentinel-token';
 
@@ -161,11 +162,12 @@ describe('configSnapshot against a remote server', () => {
 
 	it('refuses an incomplete snapshot into an empty destination and writes nothing', async () => {
 		respondWith({
-			manifest: { version: 2, resources: ['roles', 'permissions', 'folders', 'settings'] },
+			manifest: { version: 2, resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings'] },
 			roles: [without(EDITOR, 'enforce_tfa')],
 			permissions: [],
 			folders: [],
 			settings: [SETTINGS_DOC],
+			'extension-settings': [],
 		});
 
 		await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
@@ -187,6 +189,50 @@ describe('configSnapshot against a remote server', () => {
 		expect(await fs.readFile(path.join(tmpDir, 'roles', 'editor.yaml'), 'utf8')).toContain('Renamed');
 		expect(await fs.readFile(path.join(tmpDir, 'notes.txt'), 'utf8')).toBe('operator notes\n');
 		expect(vi.mocked(logger.info)).toHaveBeenCalledWith(expect.stringContaining('1 role(s), 0 permission set(s)'));
+	});
+
+	it('refuses a malformed existing extension-settings source through the real writer and writes nothing', async () => {
+		const subject = 'cairncms-extension-widget';
+		const file = `${CONFIG_REGISTRY['extension-settings'].layout.filenameOf({ subject })}.yaml`;
+
+		await fs.mkdir(path.join(tmpDir, 'extension-settings'), { recursive: true });
+
+		await fs.writeFile(
+			path.join(tmpDir, 'cairncms-config.yaml'),
+			dumpYaml({ version: 2, resources: ['extension-settings'] })
+		);
+
+		await fs.writeFile(
+			path.join(tmpDir, 'extension-settings', file),
+			dumpYaml({
+				subject,
+				global: { token: JSON.parse('{"$secret":"preserve","__proto__":"{{CAIRNCMS_CONFIG_LOST}}"}') },
+				collections: {},
+			})
+		);
+
+		await fs.writeFile(path.join(tmpDir, 'notes.txt'), 'operator notes\n');
+		const before = await captureTree(tmpDir);
+
+		respondWith({
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [{ subject, global: { color: 'blue' }, collections: {} }],
+		});
+
+		await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
+
+		expect(vi.mocked(process.exit).mock.calls).toEqual([[3]]);
+
+		expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
+			expect.stringContaining('placeholder declarations cannot be preserved')
+		);
+
+		expect(vi.mocked(logger.error)).toHaveBeenCalledWith(expect.stringContaining('token'));
+		expect(await captureTree(tmpDir)).toEqual(before);
 	});
 });
 
@@ -215,13 +261,17 @@ describe('configSnapshot manifest version preservation', () => {
 			if (seeded !== undefined) await seedManifest(seeded);
 
 			const respondedResources =
-				seeded === undefined ? ['roles', 'permissions', 'folders', 'settings'] : ['roles', 'permissions'];
+				seeded === undefined
+					? ['roles', 'permissions', 'folders', 'settings', 'extension-settings']
+					: ['roles', 'permissions'];
 
 			respondWith({
 				manifest: { version: expected, resources: respondedResources },
 				roles: [],
 				permissions: [],
-				...(expected >= 2 ? { folders: [], settings: seeded === undefined ? [SETTINGS_DOC] : [] } : {}),
+				...(expected >= 2
+					? { folders: [], settings: seeded === undefined ? [SETTINGS_DOC] : [], 'extension-settings': [] }
+					: {}),
 			});
 
 			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
@@ -253,6 +303,7 @@ describe('configSnapshot manifest version preservation', () => {
 							permissions: [],
 							folders: [],
 							settings: options.resources.includes('settings') ? [SETTINGS_DOC] : [],
+							'extension-settings': [],
 						},
 						currentRoleKeys: new Set<string>(),
 						stateToken: { resources: [...options.resources], digest: 'digest' },

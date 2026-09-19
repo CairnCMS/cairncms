@@ -122,9 +122,62 @@ function emptyPlan(): ConfigPlan {
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
 		settings: { create: [], update: [], delete: [] },
+		'extension-settings': { create: [], update: [], delete: [] },
 		protections: [],
 	};
 }
+
+describe('applyConfigPlan:extension-settings scope binding', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	function scopedPlan(): ConfigPlan {
+		const plan = emptyPlan();
+		plan.managedResources = ['extension-settings'];
+
+		plan['extension-settings'].create.push({
+			identity: { subject: '@cairncms/extension-widget', scope: 'global', scope_key: '', key: 'color' },
+			value: 'blue',
+		});
+
+		return plan;
+	}
+
+	it('refuses a plan whose subject is outside an empty token scope before opening the transaction', async () => {
+		const token: ConfigStateToken = { resources: ['extension-settings'], digest: 'd', extensionSubjects: [] };
+
+		await expect(applyConfigPlan(scopedPlan(), { context, expectedStateToken: token })).rejects.toBeInstanceOf(
+			ConfigApplyScopeMismatchException
+		);
+
+		expect(transactionSpy).not.toHaveBeenCalled();
+	});
+
+	it('refuses a plan whose subject is outside a non-empty token scope', async () => {
+		const token: ConfigStateToken = {
+			resources: ['extension-settings'],
+			digest: 'd',
+			extensionSubjects: ['cairncms-extension-other'],
+		};
+
+		await expect(applyConfigPlan(scopedPlan(), { context, expectedStateToken: token })).rejects.toBeInstanceOf(
+			ConfigApplyScopeMismatchException
+		);
+
+		expect(transactionSpy).not.toHaveBeenCalled();
+	});
+
+	it('refuses a plan with subjects when the token carries no extension scope, before opening the transaction', async () => {
+		const token: ConfigStateToken = { resources: ['extension-settings'], digest: 'd' };
+
+		await expect(applyConfigPlan(scopedPlan(), { context, expectedStateToken: token })).rejects.toBeInstanceOf(
+			ConfigApplyScopeMismatchException
+		);
+
+		expect(transactionSpy).not.toHaveBeenCalled();
+	});
+});
 
 describe('applyConfigPlan:destructive refusal', () => {
 	beforeEach(() => {
@@ -774,6 +827,7 @@ describe('applyConfigPlan:engine schedule', () => {
 			permissions: { created: 2, updated: 2, deleted: 2 },
 			folders: { created: [], updated: [], deleted: [] },
 			settings: { updated: [] },
+			'extension-settings': { created: 0, updated: 0, deleted: 0 },
 		});
 	});
 });
@@ -1030,6 +1084,7 @@ describe('applyConfigPlan:role-state refresh', () => {
 			permissions: { created: 1, updated: 0, deleted: 0 },
 			folders: { created: [], updated: [], deleted: [] },
 			settings: { updated: [] },
+			'extension-settings': { created: 0, updated: 0, deleted: 0 },
 		});
 	});
 });
@@ -1273,6 +1328,7 @@ describe('applyConfigPlan:result assembly and boundaries', () => {
 			permissions: { created: 0, updated: 0, deleted: 0 },
 			folders: { created: [], updated: [], deleted: [] },
 			settings: { updated: [] },
+			'extension-settings': { created: 0, updated: 0, deleted: 0 },
 		});
 
 		expect(vi.mocked(getDatabase)).not.toHaveBeenCalled();
@@ -1304,6 +1360,7 @@ describe('applyConfigPlan:result assembly and boundaries', () => {
 			permissions: { created: 0, updated: 0, deleted: 0 },
 			folders: { created: [], updated: [], deleted: [] },
 			settings: { updated: [] },
+			'extension-settings': { created: 0, updated: 0, deleted: 0 },
 		});
 	});
 
@@ -1384,6 +1441,7 @@ describe('applyConfigPlan:registry routing', () => {
 				permissions: { created: 0, updated: 0, deleted: 0 },
 				folders: { created: [], updated: [], deleted: [] },
 				settings: { updated: [] },
+				'extension-settings': { created: 0, updated: 0, deleted: 0 },
 			});
 
 			expect(rolesService.createOne).not.toHaveBeenCalled();
