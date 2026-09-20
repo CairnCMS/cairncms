@@ -7,6 +7,7 @@ exports.list = {
 		{ testFilePath: '/routes/config/config.test.ts' },
 		{ testFilePath: '/routes/config/config-settings.test.ts' },
 		{ testFilePath: '/routes/config/config-extension-settings.test.ts' },
+		{ testFilePath: '/routes/config/config-translations.test.ts' },
 		{ testFilePath: '/routes/config/config-concurrency.test.ts' },
 		{ testFilePath: '/routes/config/config-cache-effect.test.ts' },
 		{ testFilePath: '/routes/config/remote-cli.test.ts' },

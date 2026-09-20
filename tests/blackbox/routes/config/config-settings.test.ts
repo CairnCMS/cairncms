@@ -21,6 +21,7 @@ type ConfigSnapshot = {
 	folders?: Array<Record<string, any>>;
 	settings?: Settings[];
 	'extension-settings'?: Settings[];
+	translations?: Settings[];
 };
 
 const REMOTE_VENDOR = 'postgres';
@@ -61,6 +62,7 @@ function settingsOnly(settings: Settings): ConfigSnapshot {
 		folders: [],
 		settings: [settings],
 		'extension-settings': [],
+		translations: [],
 	};
 }
 
@@ -72,6 +74,7 @@ function foldersAndSettings(folders: Array<Record<string, any>>, settings: Setti
 		folders,
 		settings: [settings],
 		'extension-settings': [],
+		translations: [],
 	};
 }
 

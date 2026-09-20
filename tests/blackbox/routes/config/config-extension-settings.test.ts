@@ -46,6 +46,7 @@ function extConfig(docs: Doc[]): unknown {
 		folders: [],
 		settings: [],
 		'extension-settings': docs,
+		translations: [],
 	};
 }
 
@@ -346,6 +347,7 @@ describe('Config-as-Code extension settings subject-scoped ownership', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': [{ subject: 'cairncms-extension-not-installed', global: {}, collections: {} }],
+			translations: [],
 		});
 
 		expect(absent.statusCode).toBe(400);
@@ -382,6 +384,7 @@ describe('Config-as-Code extension settings subject-scoped ownership', () => {
 				folders: [],
 				settings: [],
 				'extension-settings': [{ subject: orphan, global: {}, collections: {} }],
+				translations: [],
 			});
 
 			expect(refused.statusCode).toBe(400);
