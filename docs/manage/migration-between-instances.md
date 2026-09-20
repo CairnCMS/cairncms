@@ -167,6 +167,6 @@ Stop at step 7 if anything fails to validate. The previous instance is still ser
 ## Where to go next
 
 - [Schema as code](/docs/manage/schema-as-code/) — the snapshot/apply mechanism for the data model.
-- [Config as code](/docs/manage/config-as-code/) — the snapshot/apply mechanism for roles, permissions, folders, project settings, and extension settings.
+- [Config as code](/docs/manage/config-as-code/) — the snapshot/apply mechanism for roles, permissions, folders, project settings, extension settings, and translations.
 - [Backups](/docs/manage/backups/) — per-vendor dump and restore commands, the same machinery used for full-instance migration.
 - [Upgrades](/docs/manage/upgrades/) — the version-bump procedure that pairs with cross-version migrations.
