@@ -21,6 +21,7 @@ const BODY: CairnConfig = {
 	folders: [],
 	settings: [],
 	'extension-settings': [],
+	translations: [],
 };
 
 const ROLES_ONLY_BODY: CairnConfig = {
@@ -30,6 +31,7 @@ const ROLES_ONLY_BODY: CairnConfig = {
 	folders: [],
 	settings: [],
 	'extension-settings': [],
+	translations: [],
 };
 
 const V2_FOLDERS_BODY: CairnConfig = {
@@ -39,6 +41,7 @@ const V2_FOLDERS_BODY: CairnConfig = {
 	folders: [{ key: 'docs', name: 'Docs', parent: null }],
 	settings: [],
 	'extension-settings': [],
+	translations: [],
 };
 
 const ROLE_CREATE = {
@@ -148,6 +151,7 @@ const OK_RESULT = {
 	folders: { created: [], updated: [], deleted: [] },
 	settings: { updated: [] },
 	'extension-settings': { created: 0, updated: 0, deleted: 0 },
+	translations: { created: 0, updated: 0, deleted: 0 },
 };
 
 function dryRun(plan: unknown): Promise<RemoteClientError> {
@@ -342,6 +346,7 @@ describe('applyRemote', () => {
 			folders: { created: [], updated: [], deleted: [] },
 			settings: { updated: [] },
 			'extension-settings': { created: 0, updated: 0, deleted: 0 },
+			translations: { created: 0, updated: 0, deleted: 0 },
 		};
 
 		const swapped = session(() => ({ status: 200, data: { data: wrongKind, meta: { plan } } }));
@@ -355,6 +360,7 @@ describe('applyRemote', () => {
 			folders: { created: [], updated: [], deleted: [] },
 			settings: { updated: [] },
 			'extension-settings': { created: 0, updated: 0, deleted: 0 },
+			translations: { created: 0, updated: 0, deleted: 0 },
 		};
 
 		const matching = session(() => ({ status: 200, data: { data: result, meta: { plan } } }));
@@ -963,7 +969,14 @@ describe('fetchRemoteSnapshot', () => {
 
 		const snapshot = await fetchRemoteSnapshot(remote, scope);
 
-		expect(snapshot).toEqual({ ...VALID_SNAPSHOT, folders: [], settings: [], 'extension-settings': [] });
+		expect(snapshot).toEqual({
+			...VALID_SNAPSHOT,
+			folders: [],
+			settings: [],
+			'extension-settings': [],
+			translations: [],
+		});
+
 		expect(snapshot).not.toBe(VALID_SNAPSHOT);
 	});
 
@@ -981,6 +994,7 @@ describe('fetchRemoteSnapshot', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': [],
+			translations: [],
 		});
 	});
 
@@ -1000,6 +1014,7 @@ describe('fetchRemoteSnapshot', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': [],
+			translations: [],
 		});
 	});
 
@@ -1070,6 +1085,7 @@ describe('fetchRemoteSnapshot', () => {
 			],
 			settings: [],
 			'extension-settings': [],
+			translations: [],
 		};
 
 		const { remote } = session(() => ({ status: 200, data: { data: complete } }));

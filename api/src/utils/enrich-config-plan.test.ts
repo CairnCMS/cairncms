@@ -22,6 +22,7 @@ function planDeletingRoles(...keys: string[]): ConfigPlan {
 		folders: { create: [], update: [], delete: [] },
 		settings: { create: [], update: [], delete: [] },
 		'extension-settings': { create: [], update: [], delete: [] },
+		translations: { create: [], update: [], delete: [] },
 		protections: [],
 	};
 }
@@ -34,6 +35,7 @@ function makeConfig(resources: ConfigKind[], permissions: ConfigPermissionSet[] 
 		folders: [],
 		settings: [],
 		'extension-settings': [],
+		translations: [],
 	};
 }
 
@@ -416,6 +418,7 @@ describe('enrichConfigPlan', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': [],
+			translations: [],
 		};
 
 		const plan: ConfigPlan = {
@@ -425,6 +428,7 @@ describe('enrichConfigPlan', () => {
 			folders: { create: [], update: [], delete: [] },
 			settings: { create: [], update: [], delete: [] },
 			'extension-settings': { create: [], update: [], delete: [] },
+			translations: { create: [], update: [], delete: [] },
 			protections: [],
 		};
 

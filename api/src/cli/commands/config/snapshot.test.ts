@@ -162,12 +162,16 @@ describe('configSnapshot against a remote server', () => {
 
 	it('refuses an incomplete snapshot into an empty destination and writes nothing', async () => {
 		respondWith({
-			manifest: { version: 2, resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings'] },
+			manifest: {
+				version: 2,
+				resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+			},
 			roles: [without(EDITOR, 'enforce_tfa')],
 			permissions: [],
 			folders: [],
 			settings: [SETTINGS_DOC],
 			'extension-settings': [],
+			translations: [],
 		});
 
 		await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
@@ -221,6 +225,7 @@ describe('configSnapshot against a remote server', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': [{ subject, global: { color: 'blue' }, collections: {} }],
+			translations: [],
 		});
 
 		await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
@@ -262,7 +267,7 @@ describe('configSnapshot manifest version preservation', () => {
 
 			const respondedResources =
 				seeded === undefined
-					? ['roles', 'permissions', 'folders', 'settings', 'extension-settings']
+					? ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations']
 					: ['roles', 'permissions'];
 
 			respondWith({
@@ -270,7 +275,12 @@ describe('configSnapshot manifest version preservation', () => {
 				roles: [],
 				permissions: [],
 				...(expected >= 2
-					? { folders: [], settings: seeded === undefined ? [SETTINGS_DOC] : [], 'extension-settings': [] }
+					? {
+							folders: [],
+							settings: seeded === undefined ? [SETTINGS_DOC] : [],
+							'extension-settings': [],
+							translations: [],
+					  }
 					: {}),
 			});
 
@@ -304,6 +314,7 @@ describe('configSnapshot manifest version preservation', () => {
 							folders: [],
 							settings: options.resources.includes('settings') ? [SETTINGS_DOC] : [],
 							'extension-settings': [],
+							translations: [],
 						},
 						currentRoleKeys: new Set<string>(),
 						stateToken: { resources: [...options.resources], digest: 'digest' },

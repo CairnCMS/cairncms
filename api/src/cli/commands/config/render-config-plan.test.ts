@@ -481,10 +481,11 @@ describe('renderResultSummary', () => {
 			folders: { created: ['docs'], updated: [], deleted: [] },
 			settings: { updated: ['project'] },
 			'extension-settings': { created: 2, updated: 0, deleted: 1 },
+			translations: { created: 1, updated: 0, deleted: 0 },
 		});
 
 		expect(summary).toBe(
-			'Config applied: 2 role(s) created, 1 role(s) updated, 3 permission(s) created, 1 permission(s) deleted, 1 folder(s) created, 1 setting(s) updated, 2 extension setting(s) created, 1 extension setting(s) deleted'
+			'Config applied: 2 role(s) created, 1 role(s) updated, 3 permission(s) created, 1 permission(s) deleted, 1 folder(s) created, 1 setting(s) updated, 2 extension setting(s) created, 1 extension setting(s) deleted, 1 translation(s) created'
 		);
 	});
 });

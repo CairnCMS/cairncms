@@ -2,7 +2,14 @@ import type { Accountability, PermissionsAction } from '@cairncms/types';
 import type { ManifestVersion } from '../utils/config-contract.js';
 import type { ConfigKindTypeMap } from '../utils/config/registry.js';
 
-export const CONFIG_KINDS = ['roles', 'permissions', 'folders', 'settings', 'extension-settings'] as const;
+export const CONFIG_KINDS = [
+	'roles',
+	'permissions',
+	'folders',
+	'settings',
+	'extension-settings',
+	'translations',
+] as const;
 export type ConfigKind = (typeof CONFIG_KINDS)[number];
 
 export interface ConfigRole {
@@ -55,6 +62,17 @@ export interface ConfigSettings {
 	storage_default_folder?: string | null;
 }
 
+export interface ConfigTranslations {
+	language: string;
+	translations: Record<string, string>;
+}
+
+/** An omitted map means an empty desired set. Composed documents always include the map. */
+export interface ConfigTranslationsAuthored {
+	language: string;
+	translations?: Record<string, string>;
+}
+
 export interface ConfigManifest {
 	version: ManifestVersion;
 	resources: ConfigKind[];
@@ -67,6 +85,7 @@ export interface CairnConfig {
 	folders: ConfigFolder[];
 	settings: ConfigSettings[];
 	'extension-settings': ConfigExtensionSettingsAuthored[];
+	translations: ConfigTranslationsAuthored[];
 }
 
 export type RoleIdentity = { key: string };
@@ -139,6 +158,12 @@ export type ExtensionSettingsFieldChanges = {
 	[K in keyof ExtensionSettingsValues]?: FieldChange<ExtensionSettingsValues[K]>;
 };
 
+export type TranslationsIdentity = { language: string; key: string };
+
+export type TranslationsValues = { value: string };
+
+export type TranslationsFieldChanges = { [K in keyof TranslationsValues]?: FieldChange<TranslationsValues[K]> };
+
 export type RoleValues = {
 	name: string;
 	icon: string;
@@ -202,6 +227,11 @@ export interface ConfigPlan {
 		update: Array<{ identity: ExtensionSettingsIdentity; changes: ExtensionSettingsFieldChanges }>;
 		delete: Array<{ identity: ExtensionSettingsIdentity }>;
 	};
+	translations: {
+		create: Array<{ identity: TranslationsIdentity; value: string }>;
+		update: Array<{ identity: TranslationsIdentity; changes: TranslationsFieldChanges }>;
+		delete: Array<{ identity: TranslationsIdentity }>;
+	};
 	protections: ConfigProtection[];
 }
 
@@ -253,7 +283,10 @@ export type ConfigPlanChange =
 			identity: ExtensionSettingsIdentity;
 			fields: ExtensionSettingsFieldChanges;
 	  }
-	| { kind: 'extension-settings'; operation: 'delete'; identity: ExtensionSettingsIdentity; impact: [] };
+	| { kind: 'extension-settings'; operation: 'delete'; identity: ExtensionSettingsIdentity; impact: [] }
+	| { kind: 'translations'; operation: 'create'; identity: TranslationsIdentity; values: TranslationsValues }
+	| { kind: 'translations'; operation: 'update'; identity: TranslationsIdentity; fields: TranslationsFieldChanges }
+	| { kind: 'translations'; operation: 'delete'; identity: TranslationsIdentity; impact: [] };
 
 export type SerializedConfigPlan = {
 	planVersion: 2;

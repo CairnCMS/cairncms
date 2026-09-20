@@ -92,7 +92,7 @@ describe('descriptor directory conformance', () => {
 
 			if (typeof shape === 'object' && 'singleton' in shape) {
 				expect(descriptor.documentIdentityFields).toHaveLength(0);
-			} else if (typeof shape === 'object' && 'nestedMap' in shape) {
+			} else if (typeof shape === 'object' && ('nestedMap' in shape || 'keyedMap' in shape)) {
 				expect(descriptor.documentIdentityFields).toHaveLength(1);
 
 				const field = descriptor.documentIdentityFields[0]!;

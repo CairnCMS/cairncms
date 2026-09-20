@@ -16,6 +16,8 @@ const extensionSettingsIdentity = z
 	.object({ subject: z.string(), scope: z.enum(['global', 'collection']), scope_key: z.string(), key: z.string() })
 	.passthrough();
 
+const translationsIdentity = z.object({ language: z.string(), key: z.string() }).passthrough();
+
 const fieldChange = z.custom<{ before: unknown; after: unknown }>(
 	(value) => isPlainObject(value) && 'before' in (value as object) && 'after' in (value as object)
 );
@@ -158,6 +160,30 @@ export const RemoteConfigPlanChange = z.union([
 			impact: emptyImpact,
 		})
 		.passthrough(),
+	z
+		.object({
+			kind: z.literal('translations'),
+			operation: z.literal('create'),
+			identity: translationsIdentity,
+			values: z.object({ value: z.string() }).passthrough(),
+		})
+		.passthrough(),
+	z
+		.object({
+			kind: z.literal('translations'),
+			operation: z.literal('update'),
+			identity: translationsIdentity,
+			fields: fieldChanges,
+		})
+		.passthrough(),
+	z
+		.object({
+			kind: z.literal('translations'),
+			operation: z.literal('delete'),
+			identity: translationsIdentity,
+			impact: emptyImpact,
+		})
+		.passthrough(),
 ]);
 
 const contributor = z
@@ -205,6 +231,7 @@ export const RemoteApplyResult = z
 			.passthrough(),
 		settings: z.object({ updated: z.array(z.string()) }).passthrough(),
 		'extension-settings': z.object({ created: count, updated: count, deleted: count }).passthrough(),
+		translations: z.object({ created: count, updated: count, deleted: count }).passthrough(),
 	})
 	.passthrough();
 
@@ -213,6 +240,7 @@ const deletion = z.union([
 	z.object({ kind: z.literal('permissions'), identity: permissionIdentity }).passthrough(),
 	z.object({ kind: z.literal('folders'), identity: folderIdentity }).passthrough(),
 	z.object({ kind: z.literal('extension-settings'), identity: extensionSettingsIdentity }).passthrough(),
+	z.object({ kind: z.literal('translations'), identity: translationsIdentity }).passthrough(),
 ]);
 
 export const RemoteErrorEnvelope = z.object({ errors: z.array(z.unknown()) }).passthrough();

@@ -117,6 +117,12 @@ export function buildDocumentSchema(spec: DocumentSchemaSpec, mode: SchemaMode =
 		});
 	}
 
+	if ('keyedMap' in shape) {
+		const valueMap = Joi.object().pattern(Joi.string().allow(''), Joi.string().allow(''));
+		const fieldSchema = mode === 'snapshot' ? valueMap.required() : valueMap;
+		return Joi.object({ ...identity, [shape.keyedMap.field]: fieldSchema });
+	}
+
 	const recordSchema = Joi.object(fieldEntries(spec.recordFields, mode));
 	return Joi.object({ ...identity, [shape.recordsField]: Joi.array().items(recordSchema).required() });
 }

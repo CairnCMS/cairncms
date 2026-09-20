@@ -14,7 +14,15 @@ const CTX = {
 describe('kindsForVersion', () => {
 	it('excludes folders at version 1 and includes it at version 2', () => {
 		expect(kindsForVersion(1)).toEqual(['roles', 'permissions']);
-		expect(kindsForVersion(2)).toEqual(['roles', 'permissions', 'folders', 'settings', 'extension-settings']);
+
+		expect(kindsForVersion(2)).toEqual([
+			'roles',
+			'permissions',
+			'folders',
+			'settings',
+			'extension-settings',
+			'translations',
+		]);
 	});
 });
 
@@ -76,6 +84,7 @@ describe('validateDesiredConfig folder version boundary', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': [],
+			translations: [],
 		};
 
 		expect(validateDesiredConfig(body, CTX)).toEqual([]);
@@ -89,6 +98,7 @@ describe('validateDesiredConfig folder version boundary', () => {
 			folders: [{ garbage: true }],
 			settings: [],
 			'extension-settings': [],
+			translations: [],
 		};
 
 		expect(validateDesiredConfig(body, CTX)).toEqual([]);
@@ -101,6 +111,7 @@ describe('validateDesiredConfig folder version boundary', () => {
 			permissions: [],
 			settings: [],
 			'extension-settings': [],
+			translations: [],
 			folders: [
 				{ key: 'docs', name: 'Docs' },
 				{ key: 'docs', name: 'Docs Two' },
