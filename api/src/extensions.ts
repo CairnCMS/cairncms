@@ -96,9 +96,7 @@ type BundleConfig = {
 	operations: { name: string; config: OperationApiConfig }[];
 };
 
-// One settings-declaring owner for the management surface. `subject` is the validated raw
-// package name, present only for an available owner, and `declaration` likewise, so an
-// ineligible owner exposes nothing beyond its sanitized name and reason.
+// Only available owners expose their raw subject and declaration; others expose sanitized diagnostics.
 export type SettingsOwner = {
 	subject?: string;
 	displaySubject: string;
@@ -123,10 +121,6 @@ const defaultOptions: Options = {
 
 const RELOAD_DEBOUNCE_MS = 250;
 
-// The per-contribution facts a confined runner binding needs, identical for a
-// top-level extension and one server entry of a bundle. A bundle entry adds the
-// `type:name` key so the engine selects it from the shared CairnBundle artifact.
-
 export { findSharedDepAsset } from './extensions/app-bundle.js';
 
 export class ExtensionManager {
@@ -136,54 +130,42 @@ export class ExtensionManager {
 	private extensions: Extension[] = [];
 	private serverExtensions: Extension[] = [];
 
-	// Confined extensions that passed the load gate this load, for the confined
-	// bindings. Keyed by the discovered object itself, because a name is not a safe
-	// identity: two same-name packages can both be discovered. An entry carries the
-	// probed entry bytes for an operation and the gate-validated capabilities (per
-	// bundle server entry, never merged), so the binding executes exactly what the
-	// gate scanned and probed under exactly what was validated. Transient by design:
-	// recomputed on every load, never persisted, and carrying no public diagnostic
-	// row until registration.
+	// Object identity distinguishes same-name packages. Rebuilt each load to bind the exact
+	// probed bytes and validated capabilities; bundle-entry capabilities are never merged.
 	private confinedEligible = new Map<Extension, ConfinedEligibleEntry>();
 
 	private settingsEligible = new Set<Extension>();
 
-	// The public, variable-free reason per ineligible owner, what the diagnostics field
-	// and the owners endpoint publish. The variable-bearing collision detail is log-only.
+	// isLoaded also becomes true after caught discovery failures; it cannot prove catalogue completeness.
+	private settingsDiscoverySucceeded = false;
+
+	// Scan failures invalidate the catalogue; individual package failures only exclude that package.
+	private discoveryScanFailed = false;
+
+	// Public reasons omit environment variable names; collision details containing them are log-only.
 	private settingsIneligible = new Map<Extension, SanitizedExtensionError>();
 
-	// Every discovered settings-declaring owner in discovery order, whatever its
-	// eligibility and whether or not this instance serves it.
+	// Includes ineligible and unserved owners, in discovery order.
 	private settingsOwners: Extension[] = [];
 
-	// Every discovered app extension, for the diagnostics listing. Serving and bundling
-	// stay on the SERVE_APP-filtered set; the listing is topology-complete.
+	// Diagnostics include app extensions even when SERVE_APP excludes them from serving and bundling.
 	private discoveredAppExtensions: Extension[] = [];
 
-	// Every discovered owner's declaration by subject, eligibility-independent, so the
-	// admin read's secret masking cannot weaken when an owner is gated ineligible.
+	// Keep ineligible owners' declarations so admin reads still mask their stored secrets.
 	private declaredSettingsBySubject = new Map<string, ExtensionSettings[]>();
 
-	// Test seam for the gate's scanner, probe, and limits dependencies. Overrides
-	// the production-resolved deps below, so a test can drive the gate directly.
+	// Test overrides take precedence over the runtime-resolved gate dependencies.
 	private confinedGateDeps: ConfinedLoadGateDeps = {};
 
-	// The gate config and probe resolved from the confined runtime this load, when
-	// confined extensions are present. The probe runs under the operator's resolved
-	// posture, not the baseline default singleton.
+	// Probes use this load's resolved sandbox posture, not the default supervisor.
 	private confinedRuntimeDeps: ConfinedLoadGateDeps = {};
 
-	// Set when the confined runtime could not be resolved this load. Every declared
-	// confined extension is failed closed and the gate is skipped, while inherited
-	// extensions load untouched.
+	// Runtime failure skips confined gating without blocking inherited extensions.
 	private confinedRuntimeUnavailable = false;
 
-	// The resolved confined runtime this load, retained so confined operation bindings
-	// run under the posture-validated supervisor rather than a default singleton.
+	// Bindings reuse the posture-validated supervisor from this load.
 	private confinedRuntime: { supervisor: ConfinedSupervisor; config: SandboxConfig } | undefined;
 
-	// The resolved OS hardening posture this load, retained for the operator diagnostics
-	// metadata. Present only when a confined extension is present and the runtime resolved.
 	private confinedRuntimePosture: SandboxPosture | undefined;
 
 	private appExtensions: AppExtensions = null;
@@ -196,15 +178,9 @@ export class ExtensionManager {
 	private hookEvents: EventHandler[] = [];
 	private endpointRouter: Router;
 
-	// Every endpoint route mounted this load, inherited and confined, so a confined
-	// endpoint can fail closed on a collision instead of relying on Express order.
+	// Include inherited routes so confined collisions are rejected rather than resolved by Express order.
 	private registeredEndpointRoutes = new Set<string>();
 
-	// Confined operation ids that may not register this load, computed once across
-	// every confined operation contributor (top-level and bundle entries) plus the
-	// inherited operations, so a duplicate or inherited collision fails every
-	// contributor at registration rather than one being recorded loaded and then
-	// turned ambiguous by a later one. Keyed id to the sanitized failure reason.
 	private confinedRegistrar: ConfinedRegistrar;
 	private hookEmbedsHead: string[] = [];
 	private hookEmbedsBody: string[] = [];
@@ -332,13 +308,15 @@ export class ExtensionManager {
 	}
 
 	/**
-	 * Every discovered declaration for a subject, whatever its eligibility, duplicates
-	 * included. Concealment consumers mask from this set so a stored secret under a
-	 * gated-ineligible owner never reads back in cleartext. Function-granting paths
-	 * (writes, confined reads) stay on the eligibility-gated owner.
+	 * Includes duplicate and ineligible owners for secret masking, not authorization.
+	 * Writes and confined reads must use the eligibility-gated owner.
 	 */
 	public getDeclaredSettings(subject: string): ExtensionSettings[] {
 		return this.declaredSettingsBySubject.get(subject) ?? [];
+	}
+
+	public isSettingsDiscoveryComplete(): boolean {
+		return this.settingsDiscoverySucceeded;
 	}
 
 	public getSettingsOwners(): SettingsOwner[] {
@@ -365,9 +343,8 @@ export class ExtensionManager {
 	}
 
 	/**
-	 * The global confined-runtime metadata for the diagnostics response. Derived from the
-	 * load state, never by resolving the runtime, so a plain-only load (no confined
-	 * extension) stays `not-required` and never touches the sandbox env.
+	 * Inspect load state without resolving the runtime: diagnostics must not validate
+	 * sandbox configuration when no confined extension needs it.
 	 */
 	public getConfinedRuntimeMeta(): ConfinedRuntimeMeta {
 		const posture = this.confinedRuntime !== undefined ? this.confinedRuntimePosture : undefined;
@@ -387,12 +364,8 @@ export class ExtensionManager {
 	}
 
 	/**
-	 * Resolves the confined runtime once per load, only when a declared confined
-	 * extension is present, so a malformed sandbox env never affects a load with no
-	 * confined extensions. A resolution failure fails every confined extension closed
-	 * and leaves inherited extensions to load. On success the resolved config and a
-	 * probe bound to the posture-validated supervisor are injected into the gate, and
-	 * the resolved posture is logged once.
+	 * Resolve only for confined extensions so invalid sandbox configuration cannot
+	 * block inherited extensions. Gating and execution share the resolved supervisor.
 	 */
 	private async prepareConfinedRuntime(): Promise<void> {
 		const confined = this.extensions.filter((extension) => extension.runtime === CONFINED_RUNTIME);
@@ -420,13 +393,9 @@ export class ExtensionManager {
 	}
 
 	/**
-	 * Validates each declared-confined extension before it may run confined. A
-	 * failure refuses the extension into diagnostics, never downgrading it to full
-	 * authority. A pass joins the private eligible set with no public diagnostic
-	 * row, since a confined extension is rowed at registration. Sequential by
-	 * design: probes spawn confined children, and one at a time stays inside the
-	 * supervisor's capacity gate, so a probe can never be refused busy by a
-	 * sibling probe.
+	 * Failed gates never downgrade an extension to full authority. Successful gates
+	 * defer public diagnostics until registration. Probes run sequentially so sibling
+	 * probes cannot exhaust the supervisor's capacity.
 	 */
 	private async gateConfinedExtensions(): Promise<void> {
 		// The runtime resolution already failed every confined extension closed.
@@ -442,8 +411,7 @@ export class ExtensionManager {
 			try {
 				verdict = await gateConfinedExtension(extension, deps);
 			} catch {
-				// A gate failure fails this extension closed. It must never abort the
-				// loader and take every other extension down with it.
+				// Isolate a failed gate without aborting other extensions' loads.
 				verdict = {
 					ok: false,
 					error: { code: VALIDATION_INCOMPLETE, detail: 'confined validation could not complete' },
@@ -457,8 +425,7 @@ export class ExtensionManager {
 				if (verdict.entryCapabilities !== undefined) entry.entryCapabilities = verdict.entryCapabilities;
 				if (verdict.entryEvents !== undefined) entry.entryEvents = verdict.entryEvents;
 				if (verdict.optionDelivery !== undefined) entry.optionDelivery = verdict.optionDelivery;
-				// The fail-open boundary: a per-entry reference declaration dropped here would
-				// reach the guest as a clear configured value, so it is copied explicitly.
+				// Dropping per-entry reference declarations would expose configured values to the guest.
 				if (verdict.entryOptionDelivery !== undefined) entry.entryOptionDelivery = verdict.entryOptionDelivery;
 				if (verdict.events !== undefined) entry.events = verdict.events;
 
@@ -470,9 +437,7 @@ export class ExtensionManager {
 	}
 
 	/**
-	 * Gates each settings owner's durable subject after confined gating, so any confined
-	 * capabilities it reads are already validated. A bad or colliding subject is refused
-	 * settings only, never failing the extension's load.
+	 * Subject failures disable settings access, not the extension's load.
 	 */
 	private gateSettingsSubjects(discovered: Extension[]): void {
 		const statuses = resolveSettingsSubjects(discovered);
@@ -594,6 +559,7 @@ export class ExtensionManager {
 		this.confinedEligible.clear();
 		this.settingsEligible.clear();
 		this.settingsIneligible.clear();
+		this.settingsDiscoverySucceeded = false;
 		this.settingsOwners = [];
 		this.discoveredAppExtensions = [];
 		this.declaredSettingsBySubject.clear();
@@ -605,20 +571,20 @@ export class ExtensionManager {
 		this.hookEmbedsBody = [];
 
 		let discovered: Extension[] = [];
+		let discoverySucceeded = false;
 
 		try {
 			await ensureExtensionDirs(env['EXTENSIONS_PATH'], NESTED_EXTENSION_TYPES);
 
 			discovered = await this.getExtensions();
 
-			// The settings gate sees every discovered extension so an app extension's settings
-			// ownership resolves even when SERVE_APP is off and an external bundler serves the app.
-			// this.extensions stays the SERVE_APP-filtered set used for serving and listing.
+			// Settings ownership uses the unfiltered discoveries even when SERVE_APP disables app serving.
 			this.extensions = env['SERVE_APP']
 				? discovered
 				: discovered.filter((extension) => APP_EXTENSION_TYPES.includes(extension.type as any) === false);
 
 			this.discoveredAppExtensions = discovered.filter((extension) => isIn(extension.type, APP_EXTENSION_TYPES));
+			discoverySucceeded = true;
 		} catch (err: any) {
 			const reason = sanitizeExtensionError(err, 'DISCOVERY_FAILED');
 			logger.warn(`Couldn't load extensions: ${reason.code} ${reason.detail}`);
@@ -630,21 +596,18 @@ export class ExtensionManager {
 		await this.prepareConfinedRuntime();
 		await this.gateConfinedExtensions();
 		this.gateSettingsSubjects(discovered);
+		this.settingsDiscoverySucceeded = discoverySucceeded && !this.discoveryScanFailed;
 
 		await this.registerHooks();
 		await this.registerEndpoints();
 		await this.registerOperations();
 		await this.registerBundles();
-		// After every inherited operation source, top-level and bundle, so a confined
-		// operation colliding with an inherited one is caught at load rather than read
-		// loaded and rejected only at run.
+		// Inherited operations, including bundle entries, must exist before collision checks.
 		this.registerConfinedOperations();
-		// After every inherited registration, so the collision check sees every
-		// inherited route, bundle entries included.
+		// Route collision checks must also see inherited bundle endpoints.
 		this.registerConfinedEndpoints();
 		this.registerConfinedHooks();
-		// Last, so a bundle entry's collision check sees every inherited and top-level
-		// confined route and operation already registered.
+		// Bundle collision checks run after inherited and top-level confined registrations.
 		this.registerConfinedBundles();
 
 		if (env['SERVE_APP']) {
@@ -663,6 +626,7 @@ export class ExtensionManager {
 		this.confinedEligible.clear();
 		this.settingsEligible.clear();
 		this.settingsIneligible.clear();
+		this.settingsDiscoverySucceeded = false;
 		this.settingsOwners = [];
 		this.discoveredAppExtensions = [];
 		this.declaredSettingsBySubject.clear();
@@ -730,13 +694,8 @@ export class ExtensionManager {
 		if (this.watcher) {
 			const nestedLocalTypeDir = (type: string) => path.resolve(env['EXTENSIONS_PATH'], pluralize(type));
 
-			// Package-style local extensions build into dist paths the nested-layout
-			// globs never see, so their server-relevant entrypoints are watched
-			// per-extension. The globs keep sole ownership of the nested layout:
-			// unwatching a path suppresses it in chokidar even where a glob still
-			// matches, so a dynamically managed nested entrypoint would lose its
-			// reloads permanently after a remove and re-add. App types stay with
-			// Vite unless the API serves the app.
+			// Package entrypoints lie outside the nested-layout globs and need individual watches.
+			// Keep nested paths glob-owned: chokidar unwatch suppresses even matching globs after re-add.
 			const toPackageExtensionPaths = (extensions: Extension[]) =>
 				extensions
 					.filter((extension) => env['SERVE_APP'] || !isIn(extension.type, APP_EXTENSION_TYPES))
@@ -765,6 +724,8 @@ export class ExtensionManager {
 	}
 
 	private async getExtensions(): Promise<Extension[]> {
+		this.discoveryScanFailed = false;
+
 		const onDiscoveryFailure = (failure: ExtensionDiscoveryFailure) => {
 			const reason = sanitizeExtensionError(failure.error, 'MANIFEST_INVALID');
 
@@ -790,6 +751,8 @@ export class ExtensionManager {
 		try {
 			localExtensions = await getLocalExtensions(env['EXTENSIONS_PATH']);
 		} catch (error) {
+			this.discoveryScanFailed = true;
+
 			const reason = sanitizeExtensionError(error, 'DISCOVERY_FAILED');
 
 			this.diagnostics.push({

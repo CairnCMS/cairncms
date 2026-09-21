@@ -2,9 +2,9 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { merge } from 'lodash';
 import { createI18n } from 'vue-i18n';
-import availableLanguages from './available-languages.yaml';
+import { AVAILABLE_LANGUAGES } from '@cairncms/constants';
 
-const locales = Object.keys(availableLanguages).sort();
+const locales = Object.keys(AVAILABLE_LANGUAGES).sort();
 const consoleErrorSpy = vi.spyOn(console, 'error');
 
 afterEach(() => {

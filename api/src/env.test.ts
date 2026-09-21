@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, test, expect, vi } from 'vitest';
 
 const testEnv = {
@@ -35,5 +38,17 @@ describe('env processed values', async () => {
 
 	test('Multiple type cast', () => {
 		expect(env['MULTIPLE']).toStrictEqual(['https://example.com', /\.example2\.com$/]);
+	});
+});
+
+describe('env defaults', async () => {
+	const configPath = join(mkdtempSync(join(tmpdir(), 'cairncms-env-')), '.env');
+	writeFileSync(configPath, '');
+	process.env = { CONFIG_PATH: configPath };
+	vi.resetModules();
+	const env = ((await vi.importActual('../src/env')) as { default: Record<string, any> }).default;
+
+	test('exposes Content-Range and the config run id header through CORS', () => {
+		expect(env['CORS_EXPOSED_HEADERS']).toStrictEqual(['Content-Range', 'X-Config-Run-Id']);
 	});
 });

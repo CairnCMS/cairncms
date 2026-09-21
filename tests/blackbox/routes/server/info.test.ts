@@ -32,6 +32,7 @@ describe('/server', () => {
 						expect(response.statusCode).toBe(200);
 						expect(response.body.data).not.toHaveProperty('node');
 						expect(response.body.data).not.toHaveProperty('os');
+						expect(response.headers['cache-control']).toMatch(/no-cache|no-store/);
 
 						if (userKey === common.USER.ADMIN.KEY) {
 							expect(response.body.data.cairncms).toEqual({ version: expect.any(String) });
