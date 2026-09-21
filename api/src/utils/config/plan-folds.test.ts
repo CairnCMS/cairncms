@@ -10,6 +10,7 @@ function emptyPlan(): ConfigPlan {
 		folders: { create: [], update: [], delete: [] },
 		settings: { create: [], update: [], delete: [] },
 		'extension-settings': { create: [], update: [], delete: [] },
+		translations: { create: [], update: [], delete: [] },
 		protections: [],
 	};
 }

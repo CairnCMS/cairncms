@@ -962,6 +962,7 @@ describe('writeConfigDirectory extension-settings preservation source', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': documents,
+			translations: [],
 		};
 	}
 

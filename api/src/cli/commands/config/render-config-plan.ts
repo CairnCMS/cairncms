@@ -15,6 +15,8 @@ type PermissionIdentityView = { role: string; collection: string; action: string
 
 type ExtensionSettingIdentityView = { subject: string; scope: string; scope_key: string; key: string };
 
+type TranslationIdentityView = { language: string; key: string };
+
 type FieldChangeView = { before: unknown; after: unknown };
 
 export type RenderableImpactEntry =
@@ -62,7 +64,15 @@ export type RenderableChange =
 			identity: ExtensionSettingIdentityView;
 			fields: Record<string, FieldChangeView | undefined>;
 	  }
-	| { kind: 'extension-settings'; operation: 'delete'; identity: ExtensionSettingIdentityView };
+	| { kind: 'extension-settings'; operation: 'delete'; identity: ExtensionSettingIdentityView }
+	| { kind: 'translations'; operation: 'create'; identity: TranslationIdentityView }
+	| {
+			kind: 'translations';
+			operation: 'update';
+			identity: TranslationIdentityView;
+			fields: Record<string, FieldChangeView | undefined>;
+	  }
+	| { kind: 'translations'; operation: 'delete'; identity: TranslationIdentityView };
 
 /** The structural view the renderers read, satisfied by the server's serialized plan and by the remote wire plan. */
 export type RenderablePlan = {
@@ -78,6 +88,7 @@ type RenderableResultSlice = {
 	folders: { created: unknown[]; updated: unknown[]; deleted: unknown[] };
 	settings: { updated: unknown[] };
 	'extension-settings': { created: number; updated: number; deleted: number };
+	translations: { created: number; updated: number; deleted: number };
 };
 
 export type RenderableResult = { [C in ConfigKind]: RenderableResultSlice[C] };
@@ -123,6 +134,15 @@ function summarizeResultSlice(kind: ConfigKind, result: RenderableResult): strin
 			return parts;
 		}
 
+		case 'translations': {
+			const slice = result.translations;
+			const parts: string[] = [];
+			if (slice.created > 0) parts.push(`${slice.created} translation(s) created`);
+			if (slice.updated > 0) parts.push(`${slice.updated} translation(s) updated`);
+			if (slice.deleted > 0) parts.push(`${slice.deleted} translation(s) deleted`);
+			return parts;
+		}
+
 		default: {
 			const unhandled: never = kind;
 			throw new Error(`Unhandled config kind: ${JSON.stringify(unhandled)}`);
@@ -147,6 +167,8 @@ function kindHeading(kind: RenderableChange['kind']): string {
 			return 'Settings';
 		case 'extension-settings':
 			return 'Extension settings';
+		case 'translations':
+			return 'Translations';
 
 		default: {
 			const unhandled: never = kind;
@@ -212,7 +234,8 @@ export type RenderableDeletion =
 	| { kind: 'roles'; identity: RoleIdentityView }
 	| { kind: 'permissions'; identity: PermissionIdentityView }
 	| { kind: 'folders'; identity: FolderIdentityView }
-	| { kind: 'extension-settings'; identity: ExtensionSettingIdentityView };
+	| { kind: 'extension-settings'; identity: ExtensionSettingIdentityView }
+	| { kind: 'translations'; identity: TranslationIdentityView };
 
 export function renderDeletions(deletions: RenderableDeletion[]): string[] {
 	return deletions.map((deletion) => `    - ${deleteVerb()} ${renderIdentity(deletion)}`);
@@ -290,6 +313,11 @@ function renderIdentity(change: RenderableChange | RenderableDeletion): string {
 		const { subject, scope, scope_key, key } = change.identity;
 		const location = scope === 'collection' ? `${replaceControlCharacters(scope_key)} / ` : '';
 		return `${replaceControlCharacters(subject)} / ${location}${replaceControlCharacters(key)}`;
+	}
+
+	if (change.kind === 'translations') {
+		const { language, key } = change.identity;
+		return `${replaceControlCharacters(language)} / ${replaceControlCharacters(key)}`;
 	}
 
 	const unhandled: never = change;

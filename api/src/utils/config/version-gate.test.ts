@@ -14,7 +14,15 @@ const CTX = {
 describe('kindsForVersion', () => {
 	it('excludes folders at version 1 and includes it at version 2', () => {
 		expect(kindsForVersion(1)).toEqual(['roles', 'permissions']);
-		expect(kindsForVersion(2)).toEqual(['roles', 'permissions', 'folders', 'settings', 'extension-settings']);
+
+		expect(kindsForVersion(2)).toEqual([
+			'roles',
+			'permissions',
+			'folders',
+			'settings',
+			'extension-settings',
+			'translations',
+		]);
 	});
 });
 
@@ -45,6 +53,19 @@ describe('validateConfigManifest version gate', () => {
 		});
 	});
 
+	it('rejects a version-1 manifest that names translations', () => {
+		expect(() => validateConfigManifest({ version: 1, resources: ['translations'] }, 'test')).toThrow(
+			ConfigUnsupportedVersionException
+		);
+	});
+
+	it('accepts a version-2 manifest that names translations', () => {
+		expect(validateConfigManifest({ version: 2, resources: ['translations'] }, 'test')).toMatchObject({
+			version: 2,
+			resources: ['translations'],
+		});
+	});
+
 	it('accepts a version-1 manifest naming only version-1 kinds', () => {
 		expect(validateConfigManifest({ version: 1, resources: ['roles', 'permissions'] }, 'test')).toMatchObject({
 			version: 1,
@@ -63,6 +84,11 @@ describe('validateDesiredConfig folder version boundary', () => {
 		expect(validateDesiredConfig(body, CTX).length).toBeGreaterThan(0);
 	});
 
+	it('rejects a version-1 body that carries a translations key', () => {
+		const body = { manifest: { version: 1, resources: ['roles'] }, roles: [], permissions: [], translations: [] };
+		expect(validateDesiredConfig(body, CTX).length).toBeGreaterThan(0);
+	});
+
 	it('requires a folders array in a version-2 body', () => {
 		const body = { manifest: { version: 2, resources: ['roles'] }, roles: [], permissions: [] };
 		expect(validateDesiredConfig(body, CTX).length).toBeGreaterThan(0);
@@ -76,6 +102,7 @@ describe('validateDesiredConfig folder version boundary', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': [],
+			translations: [],
 		};
 
 		expect(validateDesiredConfig(body, CTX)).toEqual([]);
@@ -89,6 +116,7 @@ describe('validateDesiredConfig folder version boundary', () => {
 			folders: [{ garbage: true }],
 			settings: [],
 			'extension-settings': [],
+			translations: [],
 		};
 
 		expect(validateDesiredConfig(body, CTX)).toEqual([]);
@@ -101,6 +129,7 @@ describe('validateDesiredConfig folder version boundary', () => {
 			permissions: [],
 			settings: [],
 			'extension-settings': [],
+			translations: [],
 			folders: [
 				{ key: 'docs', name: 'Docs' },
 				{ key: 'docs', name: 'Docs Two' },

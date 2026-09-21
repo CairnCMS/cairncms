@@ -22,6 +22,7 @@ import type { FoldersKindTypes } from './handlers/folders.js';
 import type { PermissionsKindTypes } from './handlers/permissions.js';
 import type { RolesKindTypes } from './handlers/roles.js';
 import type { SettingsKindTypes } from './handlers/settings.js';
+import type { TranslationsKindTypes } from './handlers/translations.js';
 import { getDescriptor, listConfigKinds } from './registry.js';
 
 type ConformanceFixture<K extends ConfigKindTypes> = {
@@ -221,6 +222,30 @@ const EXTENSION_SETTINGS_FIXTURE: ConformanceFixture<ExtensionSettingsKindTypes>
 	},
 };
 
+const TRANSLATIONS_FIXTURE: ConformanceFixture<TranslationsKindTypes> = {
+	document: { language: 'fr-FR', translations: { greeting: 'Bonjour' } },
+	documentIdentity: { language: 'fr-FR' },
+	record: { language: 'fr-FR', key: 'greeting', value: 'Bonjour' },
+	identity: { language: 'fr-FR', key: 'greeting' },
+	filenameStem: 'fr-FR',
+	emptyDocument: { language: 'fr-FR', translations: {} },
+	current: [
+		{ language: 'fr-FR', key: 'greeting', value: 'Bonjour' },
+		{ language: 'fr-FR', key: 'old', value: 'obsolete' },
+	],
+	desired: [
+		{ language: 'fr-FR', key: 'greeting', value: 'Salut' },
+		{ language: 'fr-FR', key: 'new', value: 'Nouveau' },
+	],
+	expectedPlan: {
+		create: [{ identity: { language: 'fr-FR', key: 'new' }, value: 'Nouveau' }],
+		update: [
+			{ identity: { language: 'fr-FR', key: 'greeting' }, changes: { value: { before: 'Bonjour', after: 'Salut' } } },
+		],
+		delete: [{ identity: { language: 'fr-FR', key: 'old' } }],
+	},
+};
+
 function runConformance<K extends ConfigKindTypes>(
 	descriptor: ConfigResourceDescriptor<K>,
 	fixture: ConformanceFixture<K>
@@ -265,6 +290,7 @@ const RUNNERS = {
 	folders: () => runConformance(getDescriptor('folders'), FOLDERS_FIXTURE),
 	settings: () => runConformance(getDescriptor('settings'), SETTINGS_FIXTURE),
 	'extension-settings': () => runConformance(getDescriptor('extension-settings'), EXTENSION_SETTINGS_FIXTURE),
+	translations: () => runConformance(getDescriptor('translations'), TRANSLATIONS_FIXTURE),
 } satisfies Record<ConfigKind, () => void>;
 
 describe.each(listConfigKinds())('descriptor conformance: %s', (kind) => {
@@ -310,6 +336,12 @@ const REPRESENTATIVE_CHANGE: Record<ConfigKind, unknown> = {
 		identity: { subject: '@acme/widget', scope: 'global', scope_key: '', key: 'color' },
 		values: { value: 'blue' },
 	},
+	translations: {
+		kind: 'translations',
+		operation: 'create',
+		identity: { language: 'fr-FR', key: 'greeting' },
+		values: { value: 'Bonjour' },
+	},
 };
 
 const REPRESENTATIVE_DELETION: Partial<Record<ConfigKind, unknown>> = {
@@ -320,6 +352,7 @@ const REPRESENTATIVE_DELETION: Partial<Record<ConfigKind, unknown>> = {
 		kind: 'extension-settings',
 		identity: { subject: '@acme/widget', scope: 'global', scope_key: '', key: 'color' },
 	},
+	translations: { kind: 'translations', identity: { language: 'fr-FR', key: 'greeting' } },
 };
 
 function destructiveExtension(deletion: unknown): unknown {
@@ -401,6 +434,7 @@ describe('cross-kind omission contract', () => {
 			'storage_default_folder',
 		],
 		'extension-settings': [],
+		translations: [],
 	};
 
 	it.each(listConfigKinds())('binds omissionPreservesCurrent to optionality for every %s field', (kind) => {

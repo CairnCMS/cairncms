@@ -378,6 +378,7 @@ describe('validateDesiredConfig', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': [settings],
+			translations: [],
 		};
 
 		expect(validateSnapshot(body).some((message) => message.includes('non-map'))).toBe(true);
@@ -396,6 +397,7 @@ describe('validateDesiredConfig', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': [settings],
+			translations: [],
 		};
 
 		expect(validate(body).some((message) => message.includes('non-map'))).toBe(true);
@@ -413,6 +415,7 @@ describe('validateDesiredConfig', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': [settings],
+			translations: [],
 		};
 
 		expect(validateSnapshot(body).some((message) => message.includes('not a portable setting value'))).toBe(true);
@@ -433,6 +436,7 @@ describe('validateDesiredConfig', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': [settings],
+			translations: [],
 		};
 
 		const problems = run(body);
@@ -449,6 +453,7 @@ describe('validateDesiredConfig', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': [{ subject: '@cairncms/extension-widget', global: {}, collections: {} }],
+			translations: [],
 		};
 
 		expect(validateSnapshot(body)).toEqual([]);
@@ -477,6 +482,7 @@ describe('validateDesiredConfig', () => {
 			folders: [{ key: 'docs', name: 'Docs' }],
 			settings: [],
 			'extension-settings': [],
+			translations: [],
 		};
 
 		expect(validate(doc)).toEqual([]);
@@ -513,6 +519,7 @@ describe('validateDesiredConfig', () => {
 			folders: [],
 			settings,
 			'extension-settings': [],
+			translations: [],
 		};
 	}
 
@@ -575,6 +582,7 @@ describe('validateDesiredConfig', () => {
 			folders,
 			settings,
 			'extension-settings': [],
+			translations: [],
 		};
 	}
 

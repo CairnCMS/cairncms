@@ -1,11 +1,11 @@
 ---
 title: Config as code
-description: Capture roles, permissions, folders, project settings, and extension settings to versioned files, review changes, and apply them across environments.
+description: Capture roles, permissions, folders, project settings, extension settings, and translations to versioned files, review changes, and apply them across environments.
 sidebar:
   order: 8
 ---
 
-Use config-as-code to capture roles, permissions, folders, project settings, and extension settings, review changes in source control, and apply them across environments. Use the CLI for a directory of YAML files or the HTTP API for a single JSON or YAML document.
+Use config-as-code to capture roles, permissions, folders, project settings, extension settings, and translations, review changes in source control, and apply them across environments. Use the CLI for a directory of YAML files or the HTTP API for a single JSON or YAML document.
 
 ## What a config snapshot captures
 
@@ -16,6 +16,7 @@ A snapshot contains:
 - **Folders** — the file-library folder names and hierarchy. File contents are not included.
 - **Project settings** — the operator-authored project configuration including branding text, the default language, the login and password policy, the module bar, asset presets and the transform mode, map settings, and the default storage folder.
 - **Extension settings** — settings for installed extensions that declare them, grouped by extension subject (the package name). Secrets are represented by preserve markers or runtime references.
+- **Translations** — custom translation strings, grouped by language.
 
 It does not contain:
 
@@ -25,6 +26,7 @@ It does not contain:
 - **System-managed permissions.** Built-in rules, such as those supplied by `app_access: true`, are provided automatically by CairnCMS.
 - **Image settings.** Config as code does not manage project files, so the project logo and the public foreground and background images are not captured.
 - **Inline secret values.** A snapshot carries `$secret: preserve` for a stored extension secret. Supply its value separately on each instance.
+- **Bundled interface translations.** The admin app ships its own locale files. Only the custom translation strings an operator defines are captured.
 
 ## Managed scope
 
@@ -38,15 +40,18 @@ resources:
   - folders
   - settings
   - extension-settings
+  - translations
 ```
 
-For roles, permissions, and folders, the files describe the complete desired set, and a record absent from that set is planned for deletion. Project settings is a single record and is never deleted. Extension settings are managed per subject, as described below. Omitted kinds are left alone, and in that case `resources: []` manages nothing.
+For roles, permissions, folders, and translations, the files describe the complete desired set, and a record absent from that set is planned for deletion. Project settings is a single record and is never deleted. Extension settings are managed per subject, as described below. Omitted kinds are left alone, and in that case `resources: []` manages nothing.
 
-Re-snapshotting an existing directory preserves its version and scope. Version 1 supports roles and permissions. Version 2 adds folders, project settings, and extension settings. To adopt one in an existing project, set `version: 2`, add `folders`, `settings`, or `extension-settings` to `resources`, then re-snapshot the source instance and review the files before applying elsewhere.
+Re-snapshotting an existing directory preserves its version and scope. Version 1 supports roles and permissions. Version 2 adds folders, project settings, extension settings, and translations. To adopt one in an existing project, set `version: 2`, add `folders`, `settings`, `extension-settings`, or `translations` to `resources`, then re-snapshot the source instance and review the files before applying elsewhere.
 
 When `settings` is listed in `resources`, `config snapshot` writes the project settings from the database to `settings/project.yaml`. Applying the snapshot updates the target instance's settings. If you omit individual fields from the file, their values in the target database remain unchanged.
 
 When `extension-settings` is listed in `resources`, a snapshot writes one file per extension subject with an available settings declaration, including subjects with no stored values. An apply manages only the subjects with a file. Each file is the complete desired set of that subject's declared stored values. Removing a key plans a deletion, which requires `--destructive`. Removing the whole file stops managing the subject and leaves its values untouched. See [Extension settings](#extension-settings) for secret handling and clearing values.
+
+When `translations` is listed in `resources`, the language files describe the complete desired set of custom translations. Omitting a key or a whole language file plans deletions, which require `--destructive`. See [Translations](#translations) for language and value rules.
 
 Roles and permissions can be managed independently. When both are managed, each permission set must reference a role declared in the config. When only permissions are managed, role references resolve against roles already in the target database.
 
@@ -69,6 +74,8 @@ Choose the surface that fits your deployment:
 Both produce the same plans and apply the same scope rules. The CLI also requires filenames to match record identities: `roles/editor.yaml` must declare `key: editor`, and `folders/reports.yaml` must declare `key: reports`.
 
 Extension-settings filenames are derived from the `subject` inside the file. Keep the snapshot-generated filename since a name that does not match its subject is rejected.
+
+Translation filenames match the declared language: `translations/fr-FR.yaml` must contain `language: fr-FR`.
 
 ## The CLI
 
@@ -98,8 +105,11 @@ config/
 │   └── reports.yaml
 ├── settings/
 │   └── project.yaml              # project settings (a single record)
-└── extension-settings/
-    └── cairncms-extension-chat-notify-11fe5f91.yaml
+├── extension-settings/
+│   └── cairncms-extension-chat-notify-11fe5f91.yaml
+└── translations/
+    ├── de-DE.yaml               # one file per language
+    └── fr-FR.yaml
 ```
 
 For example, `folders/reports.yaml` places Reports under the folder whose key is `documents`:
@@ -125,6 +135,15 @@ collections:
 
 The extension declares the available keys, their types, and their scopes. The config file supplies their values. The preserve marker keeps the target's inline secret without copying it from the source.
 
+For example, `translations/fr-FR.yaml` contains a flat map of translation keys and values:
+
+```yaml
+language: fr-FR
+translations:
+  welcome_banner: Bienvenue
+  save_button: Enregistrer
+```
+
 Snapshot treats any record file whose filename and declared identity match as managed, including hand-authored files. It leaves other files unchanged during cleanup.
 
 Symlinks must resolve to files or directories inside the config directory. Snapshot preserves valid links and removes only the link when cleaning up a stale record. Invalid or escaping links stop the command.
@@ -143,7 +162,7 @@ Three flags adjust the flow:
 
 - **`--dry-run`** — compute and print the plan without writing. Exits `1` when the plan contains changes and `0` when it is empty, which supports CI drift checks. Add `--format json` for the machine-readable plan. JSON is only available with `--dry-run`.
 - **`--yes`** — skip the confirmation prompt.
-- **`--destructive`** — authorize deleting managed roles, permissions, or folders absent from the config, and declared stored extension-setting values absent from a managed subject's file. Off by default.
+- **`--destructive`** — authorize deleting managed roles, permissions, folders, or translation strings absent from the config, and declared stored extension-setting values absent from a managed subject's file. Translation deletions include all strings for languages with no file. Off by default.
 
 Without `--destructive`, a plan containing deletions is displayed but not applied:
 
@@ -381,6 +400,11 @@ A mutating apply returns a summary like this under `data`:
     "created": 1,
     "updated": 1,
     "deleted": 0
+  },
+  "translations": {
+    "created": 2,
+    "updated": 0,
+    "deleted": 0
   }
 }
 ```
@@ -397,7 +421,7 @@ Use `POST /config/apply?dry_run=true` to preview changes. Each apply computes a 
 
 ## Audit records and events
 
-For roles, permissions, folders, and project settings, config applies use the normal activity and revision tracking for each affected collection, including changes caused by a role deletion.
+For roles, permissions, folders, project settings, and translations, config applies use the normal activity and revision tracking for each affected collection, including changes caused by a role deletion.
 
 Applies are attributed:
 
@@ -471,6 +495,18 @@ Review the deletion plan before applying with `--destructive`. A blank file or `
 
 Rows left behind by uninstalled or ineligible extensions, and stored keys an extension no longer declares, remain untouched. Config-sourced references are also unaffected by clearing stored values.
 
+### Translations
+
+Each language file declares its `language` and a flat `translations` map.
+
+- **Use supported languages.** Codes must match the admin language picker, such as `en-US` or `fr-FR`. Unsupported codes stop apply or snapshot.
+- **Keys are literal strings.** Keys may be empty and can contain up to 255 Unicode code points. Dots do not create nested maps. Malformed Unicode is refused rather than repaired.
+- **Values are literal strings.** Values are stored verbatim. Environment placeholders are not resolved, and malformed Unicode is refused.
+- **The files form the complete set.** When `translations` is managed, any stored translation missing from the files is planned for deletion, including every translation for a language with no file. Deletions require `--destructive`. A value changed only in the target can also be overwritten by an ordinary edit without `--destructive`, so fold intended target edits back into the files before reapplying.
+- **Key equality follows the target database.** Whether two keys that differ only in case or accent collide depends on the target's collation. Config does not fold or merge them, so a case-only rename can require deleting the old key and creating the new one as separate steps.
+
+If a snapshot or apply reports an unreadable translation, inspect it with an administrator account through `GET /translations` filtered by the reported language, then correct the row with `PATCH /translations/:id` or remove it with `DELETE /translations/:id` and retry. Some invalid keys cannot be reached through the admin app.
+
 ### Supported fields
 
 Unknown fields stop the apply. Fields outside the config format are not exported or updated, but are removed with their record if it is deleted.
@@ -480,6 +516,8 @@ Unknown fields stop the apply. Fields outside the config format are not exported
 Both surfaces validate the configuration and plan before applying changes. Role and folder references must resolve as described in [Managed scope](#managed-scope) and [Field semantics](#field-semantics). A settings default folder must reference a folder the config declares when folders are managed, or one already in the database when they are not. Each role can have only one permission rule per collection and action.
 
 Every named extension subject must be installed on the target with an available settings declaration, even in a document with empty maps. Each setting key must be declared with the matching type and scope, and collection-scoped settings must name an existing collection. Inline secrets accept only the preserve marker, and config-sourced secrets require their exact runtime reference.
+
+Translation languages must be supported, and values must be strings.
 
 Every step must retain at least one role with `admin_access: true`. Plans that cannot do so report `ADMIN_CONTINUITY_REQUIRED`; `--destructive` does not override this protection.
 
@@ -502,12 +540,12 @@ Config-specific HTTP codes are:
 
 - **`CONFIG_INVALID`** (400) — invalid configuration. The message identifies the field or reference to correct.
 - **`CONFIG_UNSUPPORTED_VERSION`** (400) — the manifest version is unsupported or does not support a listed kind.
-- **`CONFIG_IDENTITY_CONFLICT`** (400) — a duplicate role key, folder key, permission identity, or extension-settings subject.
+- **`CONFIG_IDENTITY_CONFLICT`** (400) — a duplicate role key, folder key, permission identity, extension-settings subject, or translation language.
 - **`CONFIG_PROTECTED_RECORD`** (400) — the plan would break administrator continuity.
 - **`DESTRUCTIVE_CHANGES_REQUIRED`** (400) — a plan contains deletions that were not authorized. `extensions.deletions` lists the identities.
 - **`CONFIG_FOLDER_IN_USE`** (400) — a folder still has contents or references. `extensions.blockedBy` identifies what must be moved or cleared before deletion.
 - **`CONFIG_STATE_CHANGED`** (409) — required state changed or a conflicting write prevented the apply. Review a fresh plan and retry.
-- **`CONFIG_READ_FAILED`** (500) — required database state is unreadable, such as an orphaned or duplicate permission row.
+- **`CONFIG_READ_FAILED`** (500) — required database state is unreadable, such as an orphaned or duplicate permission row, or a stored translation with an unsupported language code.
 - **`CONFIG_APPLY_FAILED`** (500) — the apply transaction failed and was rolled back.
 
 Malformed JSON uses `INVALID_PAYLOAD`. Unsupported content types use `UNSUPPORTED_MEDIA_TYPE`.
@@ -529,7 +567,7 @@ Both API requests require an administrator token. `GET /extension-settings` omit
 
 For a multi-environment project:
 
-1. Make role, permission, folder, project-settings, or extension-settings changes in your development instance using the corresponding admin screens.
+1. Make role, permission, folder, project-settings, extension-settings, or translation changes in your development instance using the corresponding admin screens.
 2. Run `cairncms config snapshot ./config` to write the directory tree.
 3. Review and commit the snapshot diff.
 4. Run `cairncms config apply --dry-run --format json ./config` against staging. Exit `1` means changes are planned. After review, apply them with `cairncms config apply --yes ./config`.

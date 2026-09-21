@@ -56,7 +56,8 @@ export type ConfigDocumentShape =
 	| 'flat'
 	| { recordsField: string }
 	| { singleton: { filename: string } }
-	| { nestedMap: { globalField: string; collectionsField: string } };
+	| { nestedMap: { globalField: string; collectionsField: string } }
+	| { keyedMap: { field: string } };
 
 export type ConfigDependencyMap = Partial<Record<ConfigKind, unknown>>;
 
@@ -103,7 +104,7 @@ export interface ConfigResourceDescriptor<K extends ConfigKindTypes> {
 		parseDocumentFile(record: Record<string, unknown>, filename: string): K['Document'];
 		/** The rejection message for a reserved filename; required only for a kind whose identity declares reserved stems. */
 		reservedFilenameMessage?(filename: string): string;
-		/** Checks derived filename ownership before reading the file; required for nestedMap layouts. */
+		/** Identifies owned filename stems for nestedMap and keyedMap layouts. */
 		ownsFilenameStem?(stem: string): boolean;
 	};
 	documentIdentityFields: ConfigFieldDescriptor[];
@@ -116,7 +117,7 @@ export interface ConfigResourceDescriptor<K extends ConfigKindTypes> {
 	composeDocuments(records: K['Record'][], anchors: K['DocumentIdentity'][]): K['Document'][];
 	identityOf(record: K['Record']): K['Identity'];
 	identityKey(identity: K['Identity']): string;
-	/** Locale ordering of two identities of this kind, for deterministic serialized output. */
+	/** Orders identities for deterministic planning and serialized output. */
 	compareIdentity(a: K['Identity'], b: K['Identity']): number;
 	identityOfDelete(entry: K['Delete']): K['Identity'];
 	canonicalizeValues(record: K['Record']): K['Values'];

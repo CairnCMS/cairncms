@@ -18,6 +18,7 @@ function makeConfig(overrides?: Partial<CairnConfig>): CairnConfig {
 		folders: [],
 		settings: [],
 		'extension-settings': [],
+		translations: [],
 		...overrides,
 	};
 }
@@ -567,6 +568,7 @@ describe('managed scope', () => {
 			folders: { create: [], update: [], delete: [] },
 			settings: { create: [], update: [], delete: [] },
 			'extension-settings': { create: [], update: [], delete: [] },
+			translations: { create: [], update: [], delete: [] },
 			protections: [],
 		});
 	});
@@ -609,6 +611,7 @@ describe('managed scope', () => {
 			folders: { create: [], update: [], delete: [] },
 			settings: { create: [], update: [], delete: [] },
 			'extension-settings': { create: [], update: [], delete: [] },
+			translations: { create: [], update: [], delete: [] },
 			protections: [],
 		});
 	});
@@ -636,6 +639,7 @@ describe('managed scope', () => {
 			folders: { create: [], update: [], delete: [] },
 			settings: { create: [], update: [], delete: [] },
 			'extension-settings': { create: [], update: [], delete: [] },
+			translations: { create: [], update: [], delete: [] },
 			protections: [],
 		});
 	});

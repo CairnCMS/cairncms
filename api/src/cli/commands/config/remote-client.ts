@@ -299,6 +299,13 @@ function resultCardinality(kind: ConfigKind, result: RemoteWireResult): Record<'
 				delete: result['extension-settings'].deleted,
 			};
 
+		case 'translations':
+			return {
+				create: result.translations.created,
+				update: result.translations.updated,
+				delete: result.translations.deleted,
+			};
+
 		default: {
 			const unhandled: never = kind;
 			throw new Error(`Unhandled config kind: ${JSON.stringify(unhandled)}`);
@@ -361,6 +368,7 @@ function validatedSnapshot(data: unknown, token: string): CairnConfig {
 		folders: managed.has('folders') ? snapshot.folders : [],
 		settings: managed.has('settings') ? snapshot.settings : [],
 		'extension-settings': managed.has('extension-settings') ? snapshot['extension-settings'] : [],
+		translations: managed.has('translations') ? snapshot.translations : [],
 	};
 }
 
@@ -442,6 +450,12 @@ function redactedDeletion(deletion: RenderableDeletion, token: string): Renderab
 				key: redactToken(key, token),
 			},
 		};
+	}
+
+	if (deletion.kind === 'translations') {
+		const { language, key } = deletion.identity;
+
+		return { kind: 'translations', identity: { language: redactToken(language, token), key: redactToken(key, token) } };
 	}
 
 	const unhandled: never = deletion;

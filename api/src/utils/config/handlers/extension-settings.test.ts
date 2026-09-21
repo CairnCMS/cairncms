@@ -910,6 +910,7 @@ describe('authored document types', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': [{ subject: WIDGET, collections: { articles: { label: 'News' } } }],
+			translations: [],
 		};
 
 		const { records } = extensionSettingsDescriptor.projectDocuments(config['extension-settings']);
@@ -1202,6 +1203,7 @@ describe('config directory round-trip', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': documents,
+			translations: [],
 		};
 
 		await writeConfigDirectory(config, tmpDir);
@@ -1218,6 +1220,7 @@ describe('config directory round-trip', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': [{ subject: WIDGET, global: {}, collections: { constructor: { label: 'Meta' } } }],
+			translations: [],
 		};
 
 		await writeConfigDirectory(config, tmpDir);

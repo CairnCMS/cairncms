@@ -18,6 +18,7 @@ type ConfigSnapshot = {
 	folders?: Array<Record<string, any>>;
 	settings?: Array<Record<string, any>>;
 	'extension-settings'?: Array<Record<string, any>>;
+	translations?: Array<Record<string, any>>;
 };
 
 const serverVendors = vendors.filter((vendor) => vendor !== 'sqlite3');
@@ -1603,6 +1604,7 @@ describe('Config-as-Code managed scope', () => {
 			delete desired.folders;
 			delete desired.settings;
 			delete desired['extension-settings'];
+			delete desired['translations'];
 
 			try {
 				const response = await applyConfig(vendor, desired, { destructive: true });
@@ -1689,6 +1691,7 @@ describe('Config-as-Code managed scope', () => {
 				delete permsOnly.folders;
 				delete permsOnly.settings;
 				delete permsOnly['extension-settings'];
+				delete permsOnly['translations'];
 
 				permsOnly.permissions.push({
 					role: roleKey,
@@ -1971,6 +1974,7 @@ describe('cairncms config snapshot preserves managed scope', () => {
 				'permissions',
 				'roles',
 				'settings',
+				'translations',
 			]);
 		});
 	});
@@ -2404,6 +2408,7 @@ describe('Config-as-Code audit and events', () => {
 					folders: { created: [], updated: [], deleted: [] },
 					settings: { updated: [] },
 					'extension-settings': { created: 0, updated: 0, deleted: 0 },
+					translations: { created: 0, updated: 0, deleted: 0 },
 				});
 
 				const role = await db('directus_roles').where({ key: roleKey }).first();
@@ -2437,6 +2442,7 @@ describe('Config-as-Code audit and events', () => {
 					folders: { created: [], updated: [], deleted: [] },
 					settings: { updated: [] },
 					'extension-settings': { created: 0, updated: 0, deleted: 0 },
+					translations: { created: 0, updated: 0, deleted: 0 },
 				});
 
 				await expectAudited(db, 'directus_roles', role.id, 'update', admin.id, true);
@@ -2588,6 +2594,7 @@ describe('Config-as-Code audit and events', () => {
 					folders: { created: [], updated: [], deleted: [] },
 					settings: { updated: [] },
 					'extension-settings': { created: 0, updated: 0, deleted: 0 },
+					translations: { created: 0, updated: 0, deleted: 0 },
 				});
 
 				const role = await db('directus_roles').where({ key: roleKey }).first();
@@ -2625,6 +2632,7 @@ describe('Config-as-Code audit and events', () => {
 					folders: { created: [], updated: [], deleted: [] },
 					settings: { updated: [] },
 					'extension-settings': { created: 0, updated: 0, deleted: 0 },
+					translations: { created: 0, updated: 0, deleted: 0 },
 				});
 
 				expect(await db('directus_roles').where({ id: role.id }).first()).toBeUndefined();
@@ -2722,6 +2730,7 @@ describe('Config-as-Code audit and events', () => {
 					folders: { created: [], updated: [], deleted: [] },
 					settings: { updated: [] },
 					'extension-settings': { created: 0, updated: 0, deleted: 0 },
+					translations: { created: 0, updated: 0, deleted: 0 },
 				});
 
 				const after = await adminSnapshot(vendor);

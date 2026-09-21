@@ -90,6 +90,7 @@ const EMPTY_PLAN: ConfigPlan = {
 	folders: { create: [], update: [], delete: [] },
 	settings: { create: [], update: [], delete: [] },
 	'extension-settings': { create: [], update: [], delete: [] },
+	translations: { create: [], update: [], delete: [] },
 	protections: [],
 };
 
@@ -117,6 +118,7 @@ const CREATE_PLAN: ConfigPlan = {
 	folders: { create: [], update: [], delete: [] },
 	settings: { create: [], update: [], delete: [] },
 	'extension-settings': { create: [], update: [], delete: [] },
+	translations: { create: [], update: [], delete: [] },
 	protections: [],
 };
 
@@ -276,6 +278,7 @@ describe('configApply protected plan', () => {
 		folders: { create: [], update: [], delete: [] },
 		settings: { create: [], update: [], delete: [] },
 		'extension-settings': { create: [], update: [], delete: [] },
+		translations: { create: [], update: [], delete: [] },
 		protections: [
 			{
 				code: 'ADMIN_CONTINUITY_REQUIRED',
@@ -388,6 +391,7 @@ describe('configApply state token forwarding', () => {
 			folders: { created: [], updated: [], deleted: [] },
 			settings: { updated: [] },
 			'extension-settings': { created: 0, updated: 0, deleted: 0 },
+			translations: { created: 0, updated: 0, deleted: 0 },
 		} as never);
 
 		await configApply('./config', { format: 'human', dryRun: false, destructive: false, yes: true }).catch(
@@ -415,6 +419,7 @@ describe('configApply state token forwarding', () => {
 			folders: [],
 			settings: [{ storage_default_folder: 'uploads' }],
 			'extension-settings': [],
+			translations: [],
 		};
 
 		const settingsStateToken: ConfigStateToken = { resources: ['settings'], digest: 'settings-digest' };
@@ -430,6 +435,7 @@ describe('configApply state token forwarding', () => {
 				delete: [],
 			},
 			'extension-settings': { create: [], update: [], delete: [] },
+			translations: { create: [], update: [], delete: [] },
 			protections: [],
 		};
 
@@ -468,6 +474,7 @@ describe('configApply state token forwarding', () => {
 			folders: { created: [], updated: [], deleted: [] },
 			settings: { updated: ['project'] },
 			'extension-settings': { created: 0, updated: 0, deleted: 0 },
+			translations: { created: 0, updated: 0, deleted: 0 },
 		} as never);
 
 		await configApply('./config', { format: 'human', dryRun: false, destructive: false, yes: true });
@@ -501,6 +508,7 @@ describe('configApply run record', () => {
 		folders: { created: [], updated: [], deleted: [] },
 		settings: { updated: [] },
 		'extension-settings': { created: 0, updated: 0, deleted: 0 },
+		translations: { created: 0, updated: 0, deleted: 0 },
 	};
 
 	const PROTECTED_PLAN: ConfigPlan = {
@@ -510,6 +518,7 @@ describe('configApply run record', () => {
 		folders: { create: [], update: [], delete: [] },
 		settings: { create: [], update: [], delete: [] },
 		'extension-settings': { create: [], update: [], delete: [] },
+		translations: { create: [], update: [], delete: [] },
 		protections: [
 			{
 				code: 'ADMIN_CONTINUITY_REQUIRED',
@@ -880,6 +889,7 @@ describe('configApply local wire projection', () => {
 			folders: { created: [], updated: [], deleted: [] },
 			settings: { updated: [] },
 			'extension-settings': { created: 0, updated: 0, deleted: 0 },
+			translations: { created: 0, updated: 0, deleted: 0 },
 		} as never);
 
 		await expect(
@@ -919,6 +929,7 @@ describe('configApply forwards current folder state to validation', () => {
 			],
 			settings: [],
 			'extension-settings': [],
+			translations: [],
 		};
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(desired);
@@ -967,6 +978,7 @@ describe('configApply extension-settings forwarding (CLI)', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': [{ subject: '@cairncms/extension-widget', global: { color: 'blue' }, collections: {} }],
+			translations: [],
 		};
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(desired);
@@ -1003,6 +1015,7 @@ describe('configApply extension-settings forwarding (CLI)', () => {
 			folders: { created: [], updated: [], deleted: [] },
 			settings: { updated: [] },
 			'extension-settings': { created: 1, updated: 0, deleted: 0 },
+			translations: { created: 0, updated: 0, deleted: 0 },
 		} as never);
 
 		await expect(

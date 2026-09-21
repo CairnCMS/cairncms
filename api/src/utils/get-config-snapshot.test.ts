@@ -11,6 +11,7 @@ import { FoldersService } from '../services/folders.js';
 import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
 import { SettingsService } from '../services/settings.js';
+import { TranslationsService } from '../services/translations.js';
 import { CONFIG_FILENAME_STEM_MAX_LENGTH } from './config-contract.js';
 import { rolesDescriptor } from './config/handlers/roles.js';
 import { CONFIG_REGISTRY } from './config/registry.js';
@@ -97,6 +98,7 @@ describe('getConfigSnapshot', () => {
 		db = vi.mocked(knex.default({ client: MockClient }));
 		vi.spyOn(getSchema, 'getSchema').mockResolvedValue(testSchema);
 		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([]);
+		vi.spyOn(TranslationsService.prototype, 'readByQuery').mockResolvedValue([]);
 		mockSettings();
 	});
 
@@ -112,7 +114,7 @@ describe('getConfigSnapshot', () => {
 
 		expect(config.manifest).toEqual({
 			version: 2,
-			resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings'],
+			resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
 		});
 	});
 
@@ -801,6 +803,7 @@ describe('readCurrentConfig', () => {
 			folders: [],
 			settings: [{ storage_default_folder: folderKey }],
 			'extension-settings': [],
+			translations: [],
 		});
 
 		const contextFor = {
@@ -973,6 +976,7 @@ describe('readCurrentConfig', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': [],
+			translations: [],
 		});
 
 		expect(currentRoleKeys.size).toBe(0);

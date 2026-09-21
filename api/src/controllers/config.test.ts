@@ -109,6 +109,7 @@ const CURRENT_CONFIG: CairnConfig = {
 	folders: [],
 	settings: [],
 	'extension-settings': [],
+	translations: [],
 };
 
 const ADMIN = { admin: true, app: true, user: USER, role: ROLE, ip: '10.0.0.1' };
@@ -120,6 +121,7 @@ const EMPTY_PLAN: ConfigPlan = {
 	folders: { create: [], update: [], delete: [] },
 	settings: { create: [], update: [], delete: [] },
 	'extension-settings': { create: [], update: [], delete: [] },
+	translations: { create: [], update: [], delete: [] },
 	protections: [],
 };
 
@@ -145,6 +147,7 @@ const CREATE_PLAN: ConfigPlan = {
 	folders: { create: [], update: [], delete: [] },
 	settings: { create: [], update: [], delete: [] },
 	'extension-settings': { create: [], update: [], delete: [] },
+	translations: { create: [], update: [], delete: [] },
 	protections: [],
 };
 
@@ -549,6 +552,7 @@ describe('POST /config/apply wire-contract validation', () => {
 			folders: [{ key: 'ghost', name: 'Ghost', parent: null }],
 			settings: [],
 			'extension-settings': [],
+			translations: [],
 		});
 
 		expect(res.status).toBe(200);
@@ -691,6 +695,7 @@ describe('POST /config/apply forwards current folder state to validation', () =>
 				folders: [],
 				settings: [{ storage_default_folder: 'uploads' }],
 				'extension-settings': [],
+				translations: [],
 			});
 
 		expect(res.status).toBe(200);
@@ -722,6 +727,7 @@ describe('POST /config/apply forwards current folder state to validation', () =>
 				folders: [],
 				settings: [{ storage_default_folder: 'ghost' }],
 				'extension-settings': [],
+				translations: [],
 			});
 
 		expect(res.status).toBe(400);
@@ -751,6 +757,7 @@ describe('POST /config/apply extension-settings forwarding', () => {
 			folders: [],
 			settings: [],
 			'extension-settings': [],
+			translations: [],
 		};
 
 		vi.mocked(readCurrentConfig).mockResolvedValue({
@@ -790,6 +797,7 @@ describe('POST /config/apply extension-settings forwarding', () => {
 				folders: [],
 				settings: [],
 				'extension-settings': [{ subject: '@cairncms/extension-widget', global: { color: 'blue' }, collections: {} }],
+				translations: [],
 			});
 
 		expect(res.status).toBe(200);

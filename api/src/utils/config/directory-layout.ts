@@ -45,7 +45,7 @@ export function classifyConfigFilename(filename: string, kind: ConfigKind): File
 		return stem === shape.singleton.filename ? 'owned' : 'unowned';
 	}
 
-	if (typeof shape === 'object' && 'nestedMap' in shape) {
+	if (typeof shape === 'object' && ('nestedMap' in shape || 'keyedMap' in shape)) {
 		return descriptor.layout.ownsFilenameStem?.(stem) ? 'owned' : 'unowned';
 	}
 
