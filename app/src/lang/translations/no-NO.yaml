@@ -358,7 +358,7 @@ date-fns_date: PPP
 date-fns_time: 'h:mm:ss a'
 date-fns_time_no_seconds: 'h:mm a'
 date-fns_time_24hour: 'H:mm:ss'
-date-fns_time_no_seconds_24hour: 'TT:mm'
+date-fns_time_no_seconds_24hour: 'HH:mm'
 date-fns_date_short: 'd MMM, u'
 date-fns_time_short: 'h:mma'
 date-fns_date_short_no_year: d MMM
@@ -795,7 +795,7 @@ discard_changes_copy: Er du sikker på at du vil forkaste alle endringer?
 show_x_axis: Vis X-akse
 show_y_axis: Vis Y-akse
 keep_editing: Fortsett å rediger
-page_help_collections_overview: '**Oversikt over samlinger* — Liste over alle samlinger du har tilgang til.'
+page_help_collections_overview: '**Oversikt over samlinger** — Liste over alle samlinger du har tilgang til.'
 extension_health_warning: Advarsel | Advarsler
 extension_capabilities: Funksjoner
 extension_advanced_diagnostics: Avansert diagnostikk
