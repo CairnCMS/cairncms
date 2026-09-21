@@ -1,5 +1,7 @@
 import { isAvailableLanguage } from '@cairncms/constants';
 import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
+import { InvalidPayloadException } from '../../../exceptions/index.js';
+import { RecordNotUniqueException } from '../../../exceptions/database/record-not-unique.js';
 import type { TranslationsService } from '../../../services/translations.js';
 import type {
 	ConfigFailure,
@@ -103,6 +105,16 @@ function isStringMap(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+// Drivers can replace unpaired surrogates with U+FFFD.
+function isWellFormedUtf16(value: string): boolean {
+	return (value as unknown as { isWellFormed: () => boolean }).isWellFormed();
+}
+
+// Column limits count code points, not UTF-16 code units.
+function codePointLength(value: string): number {
+	return [...value].length;
+}
+
 const DOCUMENT_FIELDS = new Set(['language', 'translations']);
 
 // Dropping an unknown field could turn a misspelled map into deletions.
@@ -151,10 +163,14 @@ async function readCurrent(
 			throw unreadable(`translation language=${safeLogFragment(language)}`, 'column "key" is not a string');
 		}
 
-		if (key.length > KEY_MAX_LENGTH) {
+		if (!isWellFormedUtf16(key)) {
+			throw unreadable(`translation language=${safeLogFragment(language)}`, 'column "key" is not well-formed Unicode');
+		}
+
+		if (codePointLength(key) > KEY_MAX_LENGTH) {
 			throw unreadable(
 				`translation language=${safeLogFragment(language)}`,
-				`column "key" exceeds ${KEY_MAX_LENGTH} characters`
+				`column "key" exceeds ${KEY_MAX_LENGTH} code points`
 			);
 		}
 
@@ -171,6 +187,13 @@ async function readCurrent(
 				throw unreadable(
 					`translation ${safeLogFragment(language)}/${safeLogFragment(key)}`,
 					'column "value" is not a string'
+				);
+			}
+
+			if (!isWellFormedUtf16(stored)) {
+				throw unreadable(
+					`translation ${safeLogFragment(language)}/${safeLogFragment(key)}`,
+					'column "value" is not well-formed Unicode'
 				);
 			}
 
@@ -226,16 +249,25 @@ function validatePortableStructure(
 	}
 
 	for (const [key, value] of Object.entries(translations)) {
-		if (key.length > KEY_MAX_LENGTH) {
+		if (!isWellFormedUtf16(key)) {
+			failures.push(invalid(`Translations for "${languageLabel}" have a key that is not well-formed Unicode.`));
+			continue;
+		}
+
+		if (codePointLength(key) > KEY_MAX_LENGTH) {
 			failures.push(
 				invalid(
-					`Translation key "${safeLogFragment(key)}" for "${languageLabel}" exceeds ${KEY_MAX_LENGTH} characters.`
+					`Translation key "${safeLogFragment(key)}" for "${languageLabel}" exceeds ${KEY_MAX_LENGTH} code points.`
 				)
 			);
 		}
 
 		if (typeof value !== 'string') {
 			failures.push(invalid(`Translation "${languageLabel}/${safeLogFragment(key)}" must be a string value.`));
+		} else if (!isWellFormedUtf16(value)) {
+			failures.push(
+				invalid(`Translation "${languageLabel}/${safeLogFragment(key)}" has a value that is not well-formed Unicode.`)
+			);
 		}
 	}
 }
@@ -335,6 +367,25 @@ function idOrThrow(map: Map<string, string>, identity: TranslationsIdentity): st
 	return id;
 }
 
+// Do not expose driver messages or rejected values.
+function refuseCreate(error: unknown, identity: TranslationsIdentity): ConfigInvalidException {
+	const label = `${safeLogFragment(identity.language)}/${safeLogFragment(identity.key)}`;
+
+	if (error instanceof RecordNotUniqueException) {
+		return new ConfigInvalidException(
+			`Translation "${label}" collides with an existing key under the target's collation.`
+		);
+	}
+
+	if (error instanceof InvalidPayloadException) {
+		return new ConfigInvalidException(
+			`Translation "${label}" was refused by the target's input or uniqueness constraints.`
+		);
+	}
+
+	throw error;
+}
+
 async function applyCreates(
 	creates: TranslationsKindTypes['Create'][],
 	context: ApplyContext<TranslationsKindTypes>
@@ -343,7 +394,12 @@ async function applyCreates(
 	let count = 0;
 
 	for (const { identity, value } of creates) {
-		await service.createOne({ language: identity.language, key: identity.key, value }, context.mutationOptions);
+		try {
+			await service.createOne({ language: identity.language, key: identity.key, value }, context.mutationOptions);
+		} catch (error) {
+			throw refuseCreate(error, identity);
+		}
+
 		count++;
 	}
 

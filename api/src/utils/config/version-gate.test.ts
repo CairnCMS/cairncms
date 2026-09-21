@@ -53,6 +53,19 @@ describe('validateConfigManifest version gate', () => {
 		});
 	});
 
+	it('rejects a version-1 manifest that names translations', () => {
+		expect(() => validateConfigManifest({ version: 1, resources: ['translations'] }, 'test')).toThrow(
+			ConfigUnsupportedVersionException
+		);
+	});
+
+	it('accepts a version-2 manifest that names translations', () => {
+		expect(validateConfigManifest({ version: 2, resources: ['translations'] }, 'test')).toMatchObject({
+			version: 2,
+			resources: ['translations'],
+		});
+	});
+
 	it('accepts a version-1 manifest naming only version-1 kinds', () => {
 		expect(validateConfigManifest({ version: 1, resources: ['roles', 'permissions'] }, 'test')).toMatchObject({
 			version: 1,
@@ -68,6 +81,11 @@ describe('validateDesiredConfig folder version boundary', () => {
 
 	it('rejects a version-1 body that carries a folders key', () => {
 		const body = { manifest: { version: 1, resources: ['roles'] }, roles: [], permissions: [], folders: [] };
+		expect(validateDesiredConfig(body, CTX).length).toBeGreaterThan(0);
+	});
+
+	it('rejects a version-1 body that carries a translations key', () => {
+		const body = { manifest: { version: 1, resources: ['roles'] }, roles: [], permissions: [], translations: [] };
 		expect(validateDesiredConfig(body, CTX).length).toBeGreaterThan(0);
 	});
 

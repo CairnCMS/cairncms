@@ -6,7 +6,7 @@ import { readContainedDirectory, resolveConfigRoot } from '../../../utils/config
 import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
 import { readOptionalConfigManifest } from '../../../utils/read-config-directory.js';
 import { replaceControlCharacters } from '../../../utils/safe-log-fragment.js';
-import { CONFIG_KINDS } from '../../../types/config.js';
+import { CONFIG_KINDS, type CairnConfig } from '../../../types/config.js';
 import { LATEST_MANIFEST_VERSION } from '../../../utils/config-contract.js';
 import { kindsForVersion } from '../../../utils/config/registry.js';
 import { writeConfigDirectory } from '../../../utils/write-config-directory.js';
@@ -20,6 +20,15 @@ import {
 } from './remote-client.js';
 import { resolveRemoteToken } from './remote-token.js';
 import { readFileSync } from 'node:fs';
+
+function snapshotSummary(config: CairnConfig, where: string): string {
+	return (
+		`Snapshot: ${config.roles.length} role(s), ${config.permissions.length} permission set(s), ` +
+		`${config.folders.length} folder(s), ${config.settings.length} setting(s), ` +
+		`${config['extension-settings'].length} extension-settings subject file(s), ` +
+		`${config.translations.length} translation language file(s) written to ${where}`
+	);
+}
 
 export async function configSnapshot(
 	targetPath: string,
@@ -83,9 +92,7 @@ export async function configSnapshot(
 			}
 		}
 
-		logger.info(
-			`Snapshot: ${config.roles.length} role(s), ${config.permissions.length} permission set(s), ${config.folders.length} folder(s), ${config.settings.length} setting(s) written to ${where}`
-		);
+		logger.info(snapshotSummary(config, where));
 
 		database.destroy();
 		process.exit(0);
@@ -149,9 +156,7 @@ async function configSnapshotRemote(
 
 		const where = replaceControlCharacters(resolved);
 
-		logger.info(
-			`Snapshot: ${config.roles.length} role(s), ${config.permissions.length} permission set(s), ${config.folders.length} folder(s), ${config.settings.length} setting(s) written to ${where}`
-		);
+		logger.info(snapshotSummary(config, where));
 
 		process.exit(0);
 	} catch (err) {

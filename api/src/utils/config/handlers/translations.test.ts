@@ -120,19 +120,49 @@ describe('translations validateDesired', () => {
 		expect(validate([{ language: 'fr-fr', translations: { a: 'b' } }]).map((f) => f.code)).toContain('CONFIG_INVALID');
 	});
 
-	it('accepts a key at the storage length limit and refuses one over it in both modes', () => {
-		const atLimit = 'a'.repeat(255);
-		const overLimit = 'a'.repeat(256);
+	it('bounds keys by code point, accepting 255 and refusing 256 for ASCII, astral, and mixed keys', () => {
+		const astral = String.fromCodePoint(0x1f600);
 
-		expect(validate([{ language: 'fr-FR', translations: { [atLimit]: 'v' } }])).toEqual([]);
+		const cases = [
+			{ at: 'a'.repeat(255), over: 'a'.repeat(256) },
+			{ at: astral.repeat(255), over: astral.repeat(256) },
+			{ at: `a${astral.repeat(254)}`, over: `a${astral.repeat(255)}` },
+		];
 
-		expect(
-			validate([{ language: 'fr-FR', translations: { [overLimit]: 'v' } }], 'current-state').map((f) => f.code)
-		).toContain('CONFIG_INVALID');
+		for (const { at, over } of cases) {
+			expect(validate([{ language: 'fr-FR', translations: { [at]: 'v' } }])).toEqual([]);
 
-		expect(
-			validate([{ language: 'fr-FR', translations: { [overLimit]: 'v' } }], 'server-snapshot').map((f) => f.code)
-		).toContain('CONFIG_INVALID');
+			for (const mode of ['current-state', 'server-snapshot'] as const) {
+				expect(validate([{ language: 'fr-FR', translations: { [over]: 'v' } }], mode).map((f) => f.code)).toContain(
+					'CONFIG_INVALID'
+				);
+			}
+		}
+	});
+
+	it('refuses lone high and low surrogates in keys and values with a specific, value-free reason', () => {
+		const highKey = JSON.parse('{"a\\ud800": "kept"}') as Record<string, string>;
+		const lowKey = JSON.parse('{"a\\udc00": "kept"}') as Record<string, string>;
+		const highValue = `sentinel${String.fromCharCode(0xd800)}`;
+		const lowValue = `sentinel${String.fromCharCode(0xdc00)}`;
+
+		for (const mode of ['current-state', 'server-snapshot'] as const) {
+			for (const badKey of [highKey, lowKey]) {
+				const failures = validate([{ language: 'fr-FR', translations: badKey }], mode);
+				expect(failures.map((f) => f.code)).toContain('CONFIG_INVALID');
+				expect(failures.map((f) => f.message).join('\n')).toContain('well-formed Unicode');
+			}
+
+			for (const value of [highValue, lowValue]) {
+				const failures = validate([{ language: 'fr-FR', translations: { k: value } }], mode);
+				const text = failures.map((f) => f.message).join('\n');
+
+				expect(failures.map((f) => f.code)).toContain('CONFIG_INVALID');
+				expect(text).toContain('well-formed Unicode');
+				expect(text).not.toContain('sentinel');
+				expect(text).not.toContain(value);
+			}
+		}
 	});
 });
 

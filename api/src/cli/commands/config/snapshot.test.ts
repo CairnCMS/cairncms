@@ -195,6 +195,35 @@ describe('configSnapshot against a remote server', () => {
 		expect(vi.mocked(logger.info)).toHaveBeenCalledWith(expect.stringContaining('1 role(s), 0 permission set(s)'));
 	});
 
+	it('summarizes translation language files and extension-settings subjects by document count', async () => {
+		respondWith({
+			manifest: {
+				version: 2,
+				resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+			},
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [SETTINGS_DOC],
+			'extension-settings': [{ subject: 'cairncms-extension-widget', global: {}, collections: {} }],
+			translations: [
+				{ language: 'fr-FR', translations: { greeting: 'Bonjour', farewell: 'Au revoir' } },
+				{ language: 'de-DE', translations: { greeting: 'Hallo' } },
+			],
+		});
+
+		await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
+
+		expect(vi.mocked(process.exit).mock.calls).toEqual([[0]]);
+		expect(vi.mocked(logger.error)).not.toHaveBeenCalled();
+		expect((await fs.readdir(path.join(tmpDir, 'translations'))).sort()).toEqual(['de-DE.yaml', 'fr-FR.yaml']);
+		expect(vi.mocked(logger.info)).toHaveBeenCalledWith(expect.stringContaining('2 translation language file(s)'));
+
+		expect(vi.mocked(logger.info)).toHaveBeenCalledWith(
+			expect.stringContaining('1 extension-settings subject file(s)')
+		);
+	});
+
 	it('refuses a malformed existing extension-settings source through the real writer and writes nothing', async () => {
 		const subject = 'cairncms-extension-widget';
 		const file = `${CONFIG_REGISTRY['extension-settings'].layout.filenameOf({ subject })}.yaml`;
@@ -335,6 +364,32 @@ describe('configSnapshot manifest version preservation', () => {
 			expect(vi.mocked(logger.error)).not.toHaveBeenCalled();
 			expect(await writtenVersion()).toBe(expected);
 		});
+
+		it('summarizes translation language files by document count on a local snapshot', async () => {
+			vi.mocked(readCurrentConfig).mockResolvedValue({
+				config: {
+					manifest: { version: 2, resources: ['translations'] },
+					roles: [],
+					permissions: [],
+					folders: [],
+					settings: [],
+					'extension-settings': [],
+					translations: [
+						{ language: 'fr-FR', translations: { greeting: 'Bonjour', farewell: 'Au revoir' } },
+						{ language: 'de-DE', translations: { greeting: 'Hallo' } },
+					],
+				},
+				currentRoleKeys: new Set<string>(),
+				stateToken: { resources: ['translations'], digest: 'digest' },
+			} as never);
+
+			await configSnapshot(tmpDir, { yes: true });
+
+			expect(vi.mocked(process.exit).mock.calls).toEqual([[0]]);
+			expect(vi.mocked(logger.error)).not.toHaveBeenCalled();
+			expect((await fs.readdir(path.join(tmpDir, 'translations'))).sort()).toEqual(['de-DE.yaml', 'fr-FR.yaml']);
+			expect(vi.mocked(logger.info)).toHaveBeenCalledWith(expect.stringContaining('2 translation language file(s)'));
+		});
 	});
 });
 
@@ -372,7 +427,15 @@ describe('configSnapshot placeholder preservation', () => {
 		vi.mocked(isInstalled).mockResolvedValue(true);
 
 		vi.mocked(readCurrentConfig).mockResolvedValue({
-			config: { manifest: MANIFEST, roles: [RESOLVED_EDITOR], permissions: [], folders: [], settings: [] },
+			config: {
+				manifest: MANIFEST,
+				roles: [RESOLVED_EDITOR],
+				permissions: [],
+				folders: [],
+				settings: [],
+				'extension-settings': [],
+				translations: [],
+			},
 			currentRoleKeys: new Set<string>(),
 			currentFolderKeys: new Set<string>(),
 			currentFolderParents: new Map<string, string | null>(),
