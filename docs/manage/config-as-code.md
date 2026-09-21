@@ -26,6 +26,7 @@ It does not contain:
 - **System-managed permissions.** Built-in rules, such as those supplied by `app_access: true`, are provided automatically by CairnCMS.
 - **Image settings.** Config as code does not manage project files, so the project logo and the public foreground and background images are not captured.
 - **Inline secret values.** A snapshot carries `$secret: preserve` for a stored extension secret. Supply its value separately on each instance.
+- **Bundled interface translations.** The admin app ships its own locale files. Only the custom translation strings an operator defines are captured.
 
 ## Managed scope
 
@@ -499,9 +500,12 @@ Rows left behind by uninstalled or ineligible extensions, and stored keys an ext
 Each language file declares its `language` and a flat `translations` map.
 
 - **Use supported languages.** Codes must match the admin language picker, such as `en-US` or `fr-FR`. Unsupported codes stop apply or snapshot.
-- **Keys are literal strings.** Keys may be empty and can contain up to 255 characters. Dots do not create nested maps.
-- **Values are literal strings.** Values are stored verbatim. Environment placeholders are not resolved.
-- **The files form the complete set.** When `translations` is managed, any stored translation missing from the files is planned for deletion, including every translation for a language with no file. Deletions require `--destructive`.
+- **Keys are literal strings.** Keys may be empty and can contain up to 255 Unicode code points. Dots do not create nested maps. Malformed Unicode is refused rather than repaired.
+- **Values are literal strings.** Values are stored verbatim. Environment placeholders are not resolved, and malformed Unicode is refused.
+- **The files form the complete set.** When `translations` is managed, any stored translation missing from the files is planned for deletion, including every translation for a language with no file. Deletions require `--destructive`. A value changed only in the target can also be overwritten by an ordinary edit without `--destructive`, so fold intended target edits back into the files before reapplying.
+- **Key equality follows the target database.** Whether two keys that differ only in case or accent collide depends on the target's collation. Config does not fold or merge them, so a case-only rename can require deleting the old key and creating the new one as separate steps.
+
+If a snapshot or apply reports an unreadable translation, inspect it with an administrator account through `GET /translations` filtered by the reported language, then correct the row with `PATCH /translations/:id` or remove it with `DELETE /translations/:id` and retry. Some invalid keys cannot be reached through the admin app.
 
 ### Supported fields
 
