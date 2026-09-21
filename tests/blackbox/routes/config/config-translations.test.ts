@@ -293,6 +293,17 @@ describe('Config-as-Code translations arbitrary keys', () => {
 		expect(stored['']).toBe('blank-key-value');
 		expect(stored['normal']).toBe('n');
 	});
+
+	it.each(vendors)('%s round-trips a 255 code point astral key at the limit', async (vendor) => {
+		const key = String.fromCodePoint(0x1f600).repeat(255);
+
+		const created = await apply(vendor, translationsConfig([{ language: LANG_A, translations: { [key]: 'ok' } }]));
+		expect(created.statusCode).toBe(200);
+		expect(created.body.data.translations).toEqual({ created: 1, updated: 0, deleted: 0 });
+
+		const { docs } = await snapshotDocs(vendor);
+		expect(docFor(docs, LANG_A)?.translations[key]).toBe('ok');
+	});
 });
 
 describe('Config-as-Code translations catalogue enforcement', () => {
@@ -344,6 +355,17 @@ describe('Config-as-Code translations validation', () => {
 		expect(invalid.statusCode).toBe(400);
 		expect(errorCodes(invalid)).toContain('CONFIG_INVALID');
 		expect(await rows(vendor)).toHaveLength(0);
+	});
+
+	it.each(vendors)('%s refuses a malformed Unicode value over HTTP and stores nothing', async (vendor) => {
+		const refused = await apply(
+			vendor,
+			translationsConfig([{ language: LANG_A, translations: { k: `v${String.fromCharCode(0xdc00)}` } }])
+		);
+
+		expect(refused.statusCode).toBe(400);
+		expect(errorCodes(refused)).toContain('CONFIG_INVALID');
+		expect(await rows(vendor, { language: LANG_A })).toHaveLength(0);
 	});
 });
 
