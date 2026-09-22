@@ -144,7 +144,7 @@ export default function getDatabase(): Knex {
 	}
 
 	database = knex.default(knexConfig);
-	validateDatabaseCharset(database);
+	validateDatabaseCharset(database).catch((error) => logger.warn(error, `Could not validate the database charset`));
 
 	const times: Record<string, number> = {};
 
