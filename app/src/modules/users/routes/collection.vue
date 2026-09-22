@@ -328,38 +328,11 @@ function clearFilters() {
 }
 
 function usePermissions() {
-	const batchEditAllowed = computed(() => {
-		const admin = userStore?.currentUser?.role.admin_access === true;
-		if (admin) return true;
+	const batchEditAllowed = computed(() => permissionsStore.hasPermission('directus_users', 'update'));
 
-		const updatePermissions = permissionsStore.permissions.find(
-			(permission) => permission.action === 'update' && permission.collection === 'directus_users'
-		);
+	const batchDeleteAllowed = computed(() => permissionsStore.hasPermission('directus_users', 'delete'));
 
-		return !!updatePermissions;
-	});
-
-	const batchDeleteAllowed = computed(() => {
-		const admin = userStore?.currentUser?.role.admin_access === true;
-		if (admin) return true;
-
-		const deletePermissions = permissionsStore.permissions.find(
-			(permission) => permission.action === 'delete' && permission.collection === 'directus_users'
-		);
-
-		return !!deletePermissions;
-	});
-
-	const createAllowed = computed(() => {
-		const admin = userStore?.currentUser?.role.admin_access === true;
-		if (admin) return true;
-
-		const createPermissions = permissionsStore.permissions.find(
-			(permission) => permission.action === 'create' && permission.collection === 'directus_users'
-		);
-
-		return !!createPermissions;
-	});
+	const createAllowed = computed(() => permissionsStore.hasPermission('directus_users', 'create'));
 
 	return { batchEditAllowed, batchDeleteAllowed, createAllowed };
 }

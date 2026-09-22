@@ -102,12 +102,29 @@ export function usePermissions(
 		return !!permissionsStore.getPermissionsForUser(collection.value, 'create');
 	});
 
-	const deleteAllowed = computed(() =>
-		itemActionAllowed(collection.value, 'delete', itemPermissions.value, localReady.value, capabilityReady.value)
-	);
+	const deleteAllowed = computed(() => {
+		if (context.isBatch.value === true) {
+			if (localReady.value === false) return false;
+			return permissionsStore.hasPermission(collection.value, 'delete');
+		}
+
+		return itemActionAllowed(
+			collection.value,
+			'delete',
+			itemPermissions.value,
+			localReady.value,
+			capabilityReady.value
+		);
+	});
 
 	const updateAllowed = computed(() => {
 		if (isEmptySingleton.value) return createAllowed.value;
+
+		if (context.isBatch.value === true) {
+			if (localReady.value === false) return false;
+			return permissionsStore.hasPermission(collection.value, 'update');
+		}
+
 		return itemActionAllowed(
 			collection.value,
 			'update',
@@ -134,6 +151,10 @@ export function usePermissions(
 
 		const permission = permissionsStore.getPermissionsForUser(collection.value, 'update');
 		if (!permission) return false;
+
+		if (context.isBatch.value === true) {
+			return fieldEditable(permission.fields, archiveField);
+		}
 
 		if (isUnconditional(permission)) {
 			return fieldEditable(permission.fields, archiveField);

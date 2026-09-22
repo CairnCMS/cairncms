@@ -443,10 +443,29 @@ describe('usePermissions item actions', () => {
 		expect(me.paths).toEqual([]);
 	});
 
-	test('fails a batch closed for a conditional permission and issues no capability request', async () => {
-		const { updateAllowed } = setup({
+	test('allows a batch through a conditional permission without a capability request', async () => {
+		const { updateAllowed, deleteAllowed } = setup({
 			admin: false,
-			permissions: [updatePermission({ status: { _eq: 'x' } }, ['*'])],
+			permissions: [
+				updatePermission({ status: { _eq: 'x' } }, ['*']),
+				{ collection: 'test', action: 'delete', role: 'role-1', permissions: { status: { _eq: 'x' } }, fields: null },
+			],
+			item: {},
+			requestedKey: '1,2',
+			isBatch: true,
+		});
+
+		await flushPromises();
+
+		expect(updateAllowed.value).toBe(true);
+		expect(deleteAllowed.value).toBe(true);
+		expect(me.paths).toEqual([]);
+	});
+
+	test('keeps a batch unavailable without a matching permission', async () => {
+		const { updateAllowed, deleteAllowed } = setup({
+			admin: false,
+			permissions: [],
 			item: {},
 			requestedKey: '1,2',
 			isBatch: true,
@@ -455,6 +474,39 @@ describe('usePermissions item actions', () => {
 		await flushPromises();
 
 		expect(updateAllowed.value).toBe(false);
+		expect(deleteAllowed.value).toBe(false);
+		expect(me.paths).toEqual([]);
+	});
+
+	test('allows batch archive when the archive field is editable under a conditional permission', async () => {
+		const { archiveAllowed } = setup({
+			admin: false,
+			permissions: [updatePermission({ status: { _eq: 'x' } }, ['status'])],
+			item: {},
+			requestedKey: '1,2',
+			isBatch: true,
+			archiveField: 'status',
+		});
+
+		await flushPromises();
+
+		expect(archiveAllowed.value).toBe(true);
+		expect(me.paths).toEqual([]);
+	});
+
+	test('denies batch archive when the archive field is not editable', async () => {
+		const { archiveAllowed } = setup({
+			admin: false,
+			permissions: [updatePermission({ status: { _eq: 'x' } }, ['name'])],
+			item: {},
+			requestedKey: '1,2',
+			isBatch: true,
+			archiveField: 'status',
+		});
+
+		await flushPromises();
+
+		expect(archiveAllowed.value).toBe(false);
 		expect(me.paths).toEqual([]);
 	});
 });
