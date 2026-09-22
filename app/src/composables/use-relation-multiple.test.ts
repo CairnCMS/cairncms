@@ -4,6 +4,7 @@ import { cloneDeep } from 'lodash';
 import { describe, expect, test, vi } from 'vitest';
 import { computed, defineComponent, h, ref, toRefs } from 'vue';
 import { RelationM2A } from './use-relation-m2a';
+import { RelationM2M } from './use-relation-m2m';
 import { RelationO2M } from './use-relation-o2m';
 
 vi.mock('@/api', () => {
@@ -28,6 +29,10 @@ vi.mock('@/api', () => {
 							data: [{ count: { id: m2aData.length } }],
 						},
 					});
+				} else if (path === '/items/facility_tag' && params?.aggregate?.count === 'id') {
+					return Promise.resolve({ data: { data: [{ count: { id: 0 } }] } });
+				} else if (path === '/items/facility_tag') {
+					return Promise.resolve({ data: { data: [] } });
 				} else {
 					return Promise.resolve({
 						data: {
@@ -509,5 +514,140 @@ describe('test m2a relation', () => {
 				$edits: 1,
 			},
 		]);
+	});
+
+	test('accepts a metadata-only update without a nested relationship', async () => {
+		const wrapper = mount(TestComponentM2A, {
+			props: {
+				relation: relationM2A,
+				value: [],
+				id: 1,
+			},
+		});
+
+		await flushPromises();
+
+		wrapper.vm.update({ id: 2, item: { id: 2 }, collection: 'text', sort: 5 });
+
+		await flushPromises();
+
+		expect(() => wrapper.vm.update({ id: 2, sort: 9, $type: 'updated', $index: 0 })).not.toThrow();
+
+		await flushPromises();
+
+		expect(wrapper.vm.value).toEqual({ create: [], update: [{ id: 2, sort: 9 }], delete: [] });
+	});
+});
+
+describe('staging identity from a reopened editor', () => {
+	test('a preserved created marker replaces the pending create instead of appending', async () => {
+		const wrapper = mount(TestComponent, {
+			props: { relation: relationO2M, value: [], id: 1 },
+		});
+
+		wrapper.vm.create({ name: 'Original' });
+
+		await flushPromises();
+
+		wrapper.vm.update({ name: 'Revised', $type: 'created', $index: 0 });
+
+		await flushPromises();
+
+		expect(wrapper.vm.value).toEqual({ create: [{ name: 'Revised' }], update: [], delete: [] });
+	});
+});
+
+const relationM2M: RelationM2M = {
+	relatedCollection: { name: 'Tag', collection: 'tag', icon: 'sell', meta: null, schema: null, type: 'table' },
+	relatedPrimaryKeyField: { name: 'ID', collection: 'tag', field: 'id', type: 'integer', meta: null, schema: null },
+	junctionCollection: {
+		name: 'Facility Tag',
+		collection: 'facility_tag',
+		icon: 'import_export',
+		meta: null,
+		schema: null,
+		type: 'table',
+	},
+	junctionPrimaryKeyField: {
+		name: 'ID',
+		collection: 'facility_tag',
+		field: 'id',
+		type: 'integer',
+		meta: null,
+		schema: null,
+	},
+	junctionField: {
+		name: 'Tag',
+		collection: 'facility_tag',
+		field: 'tag_id',
+		type: 'integer',
+		meta: null,
+		schema: null,
+	},
+	reverseJunctionField: {
+		name: 'Facility',
+		collection: 'facility_tag',
+		field: 'facility_id',
+		type: 'integer',
+		meta: null,
+		schema: null,
+	},
+	relation: {
+		collection: 'facility_tag',
+		field: 'tag_id',
+		related_collection: 'tag',
+		meta: {
+			id: 1,
+			junction_field: 'facility_id',
+			many_collection: 'facility_tag',
+			many_field: 'tag_id',
+			one_allowed_collections: null,
+			one_collection: 'tag',
+			one_collection_field: null,
+			one_deselect_action: 'nullify',
+			one_field: null,
+			sort_field: 'sort',
+		},
+		schema: null,
+	},
+	junction: {
+		collection: 'facility_tag',
+		field: 'facility_id',
+		related_collection: 'facility',
+		meta: {
+			id: 2,
+			junction_field: 'tag_id',
+			many_collection: 'facility_tag',
+			many_field: 'facility_id',
+			one_allowed_collections: null,
+			one_collection: 'facility',
+			one_collection_field: null,
+			one_deselect_action: 'nullify',
+			one_field: 'tags',
+			sort_field: 'sort',
+		},
+		schema: null,
+	},
+	sortField: 'sort',
+	type: 'm2m',
+};
+
+describe('test m2m relation', () => {
+	test('accepts a metadata-only update without a nested relationship', async () => {
+		const wrapper = mount(TestComponent, {
+			props: { relation: relationM2M, value: [], id: 1 },
+		});
+
+		await flushPromises();
+
+		wrapper.vm.update({ id: 2, tag_id: { id: 7 }, sort: 5 });
+
+		await flushPromises();
+
+		expect(() => wrapper.vm.update({ id: 2, sort: 9, $type: 'updated', $index: 0 })).not.toThrow();
+
+		await flushPromises();
+
+		expect(wrapper.vm.value).toEqual({ create: [], update: [{ id: 2, sort: 9 }], delete: [] });
 	});
 });

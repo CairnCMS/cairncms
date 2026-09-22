@@ -60,7 +60,7 @@
 			:primary-key="currentPrimaryKey"
 			:edits="edits"
 			:circular-field="relationInfo.relation.meta?.one_field ?? undefined"
-			:disabled="!updateAllowed || disabled"
+			:disabled="disabled"
 			@input="onDrawerItemInput"
 		/>
 
@@ -171,10 +171,10 @@ const query = computed<RelationQuerySingle>(() => ({
 }));
 
 const { update, remove, displayItem, loading } = useRelationSingle(value, query, relationInfo);
-const { createAllowed, updateAllowed } = useRelationPermissionsM2O(relationInfo);
+const { createAllowed } = useRelationPermissionsM2O(relationInfo);
 
 const currentPrimaryKey = computed<string | number>(() => {
-	if (!displayItem.value || !props.value || !relationInfo.value) return '+';
+	if (!displayItem.value || props.value === null || props.value === undefined || !relationInfo.value) return '+';
 
 	if (typeof props.value === 'number' || typeof props.value === 'string') {
 		return props.value;
@@ -211,7 +211,7 @@ function onDrawerItemInput(event: any) {
 const selection = computed<(number | string)[]>(() => {
 	const pkField = relationInfo.value?.relatedPrimaryKeyField.field;
 
-	if (!props.value || !pkField) return [];
+	if (props.value === null || props.value === undefined || !pkField) return [];
 
 	if (typeof props.value === 'object' && pkField in props.value) {
 		return [props.value[pkField]];

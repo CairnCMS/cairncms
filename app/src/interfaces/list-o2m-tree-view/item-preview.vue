@@ -15,8 +15,9 @@
 
 		<drawer-item
 			v-model:active="editActive"
+			:disabled="disabled"
 			:collection="collection"
-			:primary-key="item[props.relationInfo.relatedPrimaryKeyField.field] || '+'"
+			:primary-key="item[props.relationInfo.relatedPrimaryKeyField.field] ?? '+'"
 			:edits="edits"
 			:circular-field="props.relationInfo.reverseJunctionField.field"
 			@input="$emit('input', $event)"
