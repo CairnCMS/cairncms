@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: Identifier
 avatar: Profilbillede
 application: Anvendelse
@@ -76,14 +75,6 @@ create_role: Opret rolle
 create_user: Opret bruger
 message: Besked
 delete_panel: Slet panel
-create_translation_string: Opret oversættelsesstreng
-no_translation_string: Oversættelse mangler
-no_translation_string_copy: Der er ingen oversættelsesstrenge endnu.
-translation_string_key_placeholder: Oversættelse streng nøgle...
-translation_string_translations_placeholder: Tilføj en ny oversættelse
-edit_translation_string: Rediger oversættelsesstreng
-delete_translation_string_copy: >-
-  Er du sikker på du vil slette oversættelsesstrengen "{key}"? Denne handling kan ikke fortrydes.
 invite_users: Inviter brugere
 invite: Inviter
 email_already_invited: Email "{email}" er allerede blevet inviteret
@@ -114,13 +105,6 @@ public_label: Offentlig
 public_description: Styrer, hvilke API-data der er tilgængelige uden godkendelse.
 admin_description: Oprindelig administrativ rolle med ubegrænset App/API-adgang.
 not_allowed: Ikke tilladt
-directus_version: CairnCMS version
-node_version: Node version
-node_uptime: Node oppetid
-os_type: OS type
-os_version: OS version
-os_uptime: OS oppetid
-os_totalmem: OS hukommelse
 archive: Arkiver
 archive_confirm: Er du sikker på at du vil arkivere dette element?
 archive_confirm_count: >-
@@ -454,11 +438,9 @@ open_file_in_tab: Åbn fil i nyt faneblad
 start_export: Start eksport
 not_available_for_local_downloads: Ikke tilgængelig for lokale downloads
 exporting_all_items_in_collection: Eksporterer alle {total} elementer inden for {collection}.
-exporting_limited_items_in_collection: Eksporterer {limit} ud af {total} elementer inden for {collection}.
+exporting_limited_items_in_collection: 'Eksporterer {limit} ud af {total} elementer inden for {collection}.'
 exporting_no_items_to_export: Ingen elementer at eksportere. Juster eksportkonfigurationen nedenfor.
 exporting_download_hint: Når den er færdig, vil denne {format}-fil automatisk blive hentet til din enhed.
-exporting_batch_hint: Denne eksport vil blive behandlet i batcher, og når den er fuldført, vil {format}-filen blive gemt i filbiblioteket.
-exporting_batch_hint_forced: På grund af det stort antal elementer skal denne eksport forarbejdes i partier og når den er færdig, gemmes {format}-filen i Filbiblioteket.
 collection_key: Samlings nøgle
 name: Navn
 primary_key_field: Primær nøglefelt
@@ -483,7 +465,6 @@ enable_select_button: Aktivér vælg-knap
 allow_duplicates: Tillad gengangere
 comments: Kommentarer
 no_comments: Ingen kommentarer endnu
-click_to_expand: Klik for at udvide
 select_item: Vælg element
 no_items: Ingen elementer
 search_items: Søg efter emner...
@@ -932,7 +913,6 @@ settings_data_model: Data model
 settings_permissions: Roller og tilladelser
 settings_project: Projektindstillinger
 settings_presets: Forudindstillinger og bogmærker
-settings_translation_strings: Oversættelsesstrenge
 one_or_more_options_are_missing: En eller flere muligheder mangler
 scope: Anvendelsesområde
 actions: Handlinger
@@ -980,7 +960,6 @@ page_help_settings_presets_item: >-
   **Forudindstilling Detaljer** — En formular til håndtering af bogmærker og standard samlingsindstillinger.
 page_help_settings_flows_collection: '**Gennemse flows** — Viser alle flows i projektet.'
 page_help_settings_flows_item: '**Flowdetalje** — Arbejdsområde til styring af en eller flere operationer.'
-page_help_settings_translation_strings_collection: '**Gennemse oversættelsesstrenge** — Viser alle oversættelsesstrenge i projektet.'
 page_help_users_collection: '**Bruger Directory** — Viser en liste over alle systembrugere i dette projekt.'
 page_help_users_item: >-
   **Brugeroplysninger** — Administrer dine kontooplysninger eller se andre brugeres detaljer.
@@ -1626,7 +1605,6 @@ interfaces:
     input-translated-string: Oversatte strenge
     description: Vælg eller tilføj oversættelsesstreng
     search_placeholder: Søg...
-    new_translation_string: Ny oversættelsesstreng
   boolean:
     toggle: Skift
     description: Skift mellem tænd og sluk

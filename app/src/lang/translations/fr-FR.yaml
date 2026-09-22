@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: Identifiant
 avatar: Avatar
 application: Application
@@ -76,14 +75,6 @@ create_role: Créer un rôle
 create_user: Créer un utilisateur
 message: Message
 delete_panel: Supprimer le panneau
-create_translation_string: Créer une traduction
-no_translation_string: Aucune traduction
-no_translation_string_copy: Il n'y a pas encore de traduction.
-translation_string_key_placeholder: Traduction de la clé...
-translation_string_translations_placeholder: Ajouter une nouvelle traduction
-edit_translation_string: Modifier la traduction
-delete_translation_string_copy: >-
-  Êtes-vous sûr de vouloir supprimer la traduction "{key}" ? Cette action ne peut pas être annulée.
 invite_users: Inviter des utilisateurs
 invite: Inviter
 email_already_invited: '"{email}" a déjà été invité'
@@ -114,13 +105,6 @@ public_label: Public
 public_description: Contrôle quelles sont les données API disponibles sans authentification.
 admin_description: Rôle administratif initial avec accès illimité à l'application/à l'API.
 not_allowed: Non autorisé
-directus_version: Version de CairnCMS
-node_version: Version de Node
-node_uptime: Temps de disponibilité du nœud
-os_type: Type d'OS
-os_version: Version de l'OS
-os_uptime: Temps de disponibilité de l'OS
-os_totalmem: Mémoire de l'OS
 archive: Archiver
 archive_confirm: Êtes-vous sûr de vouloir archiver cet élément ?
 archive_confirm_count: >-
@@ -463,11 +447,9 @@ open_file_in_tab: Ouvrir le fichier dans un nouvel onglet
 start_export: Démarrer l'export
 not_available_for_local_downloads: Indisponible pour les téléchargements en local
 exporting_all_items_in_collection: Export de la totalité des {total} éléments dans la collection {collection}.
-exporting_limited_items_in_collection: Exportat de {limit} éléments sur {total} dans la collection {collection}.
+exporting_limited_items_in_collection: 'Exportat de {limit} éléments sur {total} dans la collection {collection}.'
 exporting_no_items_to_export: Aucun élément à exporter. Ajustez la configuration d'export ci-dessous.
 exporting_download_hint: Une fois terminé, ce fichier {format} sera automatiquement téléchargé sur votre appareil.
-exporting_batch_hint: Cet export sera traité en lots et, une fois terminé, le fichier {format} sera sauvegardé dans la bibliothèque de fichiers.
-exporting_batch_hint_forced: En raison du grand nombre d'éléments, cet export doit être traité par lots, et une fois terminé, le fichier {format} sera sauvegardé dans la bibliothèque de fichiers.
 collection_key: Clé de la collection
 name: Nom
 primary_key_field: Champ de clé primaire
@@ -492,7 +474,6 @@ enable_select_button: Activer le bouton de sélection
 allow_duplicates: Autoriser les doublons
 comments: Commentaires
 no_comments: Pas encore de commentaires
-click_to_expand: Cliquer pour agrandir
 select_item: Sélectionner un élément
 no_items: Aucun élément
 search_items: Rechercher des éléments...
@@ -953,7 +934,6 @@ settings_permissions: Rôles et autorisations
 settings_project: Paramètres du projet
 settings_flows: Flux
 settings_presets: Préréglages et favoris
-settings_translation_strings: Traductions
 one_or_more_options_are_missing: Une ou plusieurs options sont manquantes
 scope: Utilisateurs ou rôles
 actions: Actions
@@ -1001,7 +981,6 @@ page_help_settings_presets_item: >-
   **Détail du préréglage** — Un formulaire pour gérer les favoris et les préréglages de collection par défaut.
 page_help_settings_flows_collection: '**Parcourir les Flux** — Liste tous les Flux du projet.'
 page_help_settings_flows_item: '**Détail du Flux** - Espace de travail permettant de gérer une ou plusieurs opérations.'
-page_help_settings_translation_strings_collection: '**Parcourir les de traductions** — Liste toutes les traductions du projet.'
 page_help_users_collection: '**Répertoire utilisateur** — Liste tous les utilisateurs système de ce projet.'
 page_help_users_item: >-
   **Détail de l'utilisateur** — Gérez les informations de votre compte ou consultez les détails des autres utilisateurs.
@@ -1661,7 +1640,6 @@ interfaces:
     input-translated-string: Chaînes traduites
     description: Sélectionner ou ajouter une traduction
     search_placeholder: Rechercher...
-    new_translation_string: Nouvelle traduction
   boolean:
     toggle: Case à cocher
     description: Basculer entre l'activation et la désactivation

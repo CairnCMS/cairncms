@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: Ідентифікатор
 avatar: Аватар
 application: Додаток
@@ -76,14 +75,6 @@ create_role: Створити роль
 create_user: Новий користувач
 message: Повідомлення
 delete_panel: Видалити панель
-create_translation_string: Створити лінію перекладу
-no_translation_string: Немає рядків перекладу
-no_translation_string_copy: Ще немає рядків для перекладу.
-translation_string_key_placeholder: Ключ лінії перекладу ...
-translation_string_translations_placeholder: Додати новий переклад
-edit_translation_string: Змінити лінію перекладу
-delete_translation_string_copy: >-
-  Ви впевнені, що ви хочете видалити лінію перекладу "{key}"? Ця дія не може бути скасованою.
 invite_users: Запросити друзів
 invite: Запросити
 email_already_invited: Користувача "{email}" вже запрошено
@@ -114,13 +105,6 @@ public_label: Загальнодоступний
 public_description: Контролює, які дані API є доступними без входу в особистий кабінет.
 admin_description: Початкова роль управління з необмеженим APP/API доступом.
 not_allowed: Заборонено
-directus_version: Версія CairnCMS
-node_version: Версія Node
-node_uptime: Час роботи Node
-os_type: Тип ОС
-os_version: Версія ОС
-os_uptime: Час роботи ОС
-os_totalmem: Пам'ять операційної системи
 archive: Архів
 archive_confirm: Ви впевнені, що хочете додати цей файл до архіву?
 archive_confirm_count: >-
@@ -457,11 +441,9 @@ open_file_in_tab: Відкрити файл у новій вкладці
 start_export: Розпочати експорт
 not_available_for_local_downloads: Недоступний для локальних завантажень
 exporting_all_items_in_collection: Експорт усіх {total} елементів в межах {collection}.
-exporting_limited_items_in_collection: Експорт {limit} з {total} елементів в рамках {collection}.
+exporting_limited_items_in_collection: 'Експорт {limit} з {total} елементів в рамках {collection}.'
 exporting_no_items_to_export: Немає елементів для експорту. Налаштуйте конфігурацію для експорту нижче.
 exporting_download_hint: Після завершення цей {format} файл буде автоматично завантажений на ваш пристрій.
-exporting_batch_hint: Цей експорт буде оброблено партіями та після завершення {format} файл буде збережено до Бібліотеки Файлів.
-exporting_batch_hint_forced: Через велику кількість елементів, цей експорт буде оброблено партіями та після завершення {format} файл буде збережено до Бібліотеки Файлів.
 collection_key: Клавіша колекції
 name: Назва
 primary_key_field: Первинне ключове поле
@@ -486,7 +468,6 @@ enable_select_button: Підключити кнопку "обрати"
 allow_duplicates: Дозволити дублікати
 comments: Коментарі
 no_comments: Коментарів ще немає
-click_to_expand: Натисніть щоб розгорнути
 select_item: Обрати об'єкт
 no_items: Об'єктів немає
 search_items: Пошук об'єктів...
@@ -940,7 +921,6 @@ settings_permissions: Ролі і Дозволи
 settings_project: Налаштування проекту
 settings_flows: Автоматизація
 settings_presets: Шаблони і закладки
-settings_translation_strings: Переклади рядків
 one_or_more_options_are_missing: Одно або більше налаштувань відсутні
 scope: Область застосування
 actions: Дії
@@ -988,7 +968,6 @@ page_help_settings_presets_item: >-
   **Деталі попереднього налаштування** — форма для керування закладками та стандартними налаштуваннями колекцій.
 page_help_settings_flows_collection: '**Перегляд потоків** - Перелік всіх потоків в проєкті.'
 page_help_settings_flows_item: '**Деталі потоку** - Робочий простір для управління однією або кількома операціями.'
-page_help_settings_translation_strings_collection: '**Переглянути переклади рядків** — Відображається повний список рядків у проекті.'
 page_help_users_collection: '**Каталог користувачів** — перелік усіх користувачів системи в цьому проекті.'
 page_help_users_item: >-
   **Інформація про користувача** — керуйте інформацією свого облікового запису або переглядайте відомості про інших користувачів.
@@ -1643,7 +1622,6 @@ interfaces:
     input-translated-string: Перекладені рядки
     description: Виберіть або додайте рядок перекладу
     search_placeholder: Шукати...
-    new_translation_string: Новий рядок перекладу
   boolean:
     toggle: Переключити
     description: Перемикання між вкл/вимк

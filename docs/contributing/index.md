@@ -50,10 +50,10 @@ A short checklist that runs faster locally than in CI:
 
 1. **Run `pnpm test`** — the unit-test suite. Required to pass before review.
 2. **Run `pnpm lint`** — the ESLint pass across the workspace. Auto-fix common issues with `pnpm lint --fix`.
-3. **Run the SQLite blackbox path** if your changes touch query semantics, schema operations, or auth. The PR-CI pipeline runs the SQLite blackbox suite on every PR; running it locally first surfaces failures faster.
+3. **Run the SQLite blackbox path** if your changes touch query semantics, schema operations, or auth. The full blackbox vendor matrix runs in CI on pull requests into `main`. Running the SQLite path locally first surfaces failures faster.
 
    ```bash
-   docker compose -f tests/blackbox/docker-compose.yml up auth-saml redis minio minio-mc -d
+   docker compose -f tests/blackbox/docker-compose.yml up auth-saml redis s3proxy s3proxy-init -d --wait
    pnpm build
    TEST_DB=sqlite3 pnpm test:blackbox
    ```

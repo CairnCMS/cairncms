@@ -6,7 +6,7 @@ import path from 'path';
 import * as common from '@common/index';
 
 const assetsDirectory = [__dirname, '..', '..', 'assets'];
-const storages = ['local', 'minio'];
+const storages = ['local', 's3'];
 
 const imageFile = {
 	name: 'directus.png',

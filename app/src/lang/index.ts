@@ -1,6 +1,6 @@
 import { RequestError } from '@/api';
+import { AVAILABLE_LANGUAGES } from '@cairncms/constants';
 import { createI18n, I18nOptions } from 'vue-i18n';
-import availableLanguages from './available-languages.yaml';
 import datetimeFormats from './date-formats.yaml';
 import numberFormats from './number-formats.yaml';
 import enUSBase from './translations/en-US.yaml';
@@ -17,7 +17,7 @@ export const i18n = createI18n({
 	numberFormats,
 });
 
-export type Language = keyof typeof availableLanguages;
+export type Language = keyof typeof AVAILABLE_LANGUAGES;
 
 export const loadedLanguages: Language[] = ['en-US'];
 

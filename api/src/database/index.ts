@@ -104,6 +104,7 @@ export default function getDatabase(): Knex {
 
 			const run = promisify(conn.run.bind(conn));
 			await run('PRAGMA foreign_keys = ON');
+			await run('PRAGMA busy_timeout = 5000');
 
 			callback(null, conn);
 		};
@@ -143,7 +144,7 @@ export default function getDatabase(): Knex {
 	}
 
 	database = knex.default(knexConfig);
-	validateDatabaseCharset(database);
+	validateDatabaseCharset(database).catch((error) => logger.warn(error, `Could not validate the database charset`));
 
 	const times: Record<string, number> = {};
 

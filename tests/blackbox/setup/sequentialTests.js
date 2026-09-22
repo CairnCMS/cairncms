@@ -1,4 +1,3 @@
-// Tests will run sequentially according to this list
 exports.list = {
 	before: [
 		{ testFilePath: '/common/seed-database.test.ts' },
@@ -6,6 +5,12 @@ exports.list = {
 		{ testFilePath: '/routes/schema/schema.test.ts' },
 		{ testFilePath: '/routes/schema/apply-nested-meta.test.ts' },
 		{ testFilePath: '/routes/config/config.test.ts' },
+		{ testFilePath: '/routes/config/config-settings.test.ts' },
+		{ testFilePath: '/routes/config/config-extension-settings.test.ts' },
+		{ testFilePath: '/routes/config/config-translations.test.ts' },
+		{ testFilePath: '/routes/config/config-concurrency.test.ts' },
+		{ testFilePath: '/routes/config/config-cache-effect.test.ts' },
+		{ testFilePath: '/routes/config/remote-cli.test.ts' },
 		{ testFilePath: '/routes/collections/crud.test.ts' },
 		{ testFilePath: '/routes/fields/change-fields.test.ts' },
 		{ testFilePath: '/routes/fields/crud.test.ts' },
@@ -17,6 +22,7 @@ exports.list = {
 		{ testFilePath: '/schema/timezone/timezone-changed-node-tz-america.test.ts' },
 		{ testFilePath: '/schema/timezone/timezone-changed-node-tz-asia.test.ts' },
 		{ testFilePath: '/logger/redact.test.ts' },
+		{ testFilePath: '/logger/config-run-record.test.ts' },
 		{ testFilePath: '/routes/flows/webhook.test.ts' },
 		{ testFilePath: '/routes/extensions/confined-items.test.ts' },
 		{ testFilePath: '/routes/extensions/confined-endpoints.test.ts' },
@@ -29,11 +35,15 @@ exports.list = {
 		{ testFilePath: '/routes/permissions/cache-share-segmentation.test.ts' },
 		{ testFilePath: '/routes/permissions/cache-data-studio.test.ts' },
 		{ testFilePath: '/routes/permissions/item-permissions.test.ts' },
+		{ testFilePath: '/routes/roles/administrator-continuity.test.ts' },
 		{ testFilePath: '/routes/translations/translations.test.ts' },
 		{ testFilePath: '/routes/files/upload-limits.test.ts' },
+		{ testFilePath: '/routes/folders/key-enforcement.test.ts' },
+		{ testFilePath: '/routes/folders/cycle-guard.test.ts' },
 		{ testFilePath: '/routes/security/trusted-ip.test.ts' },
 		{ testFilePath: '/routes/items/relational-presets.test.ts' },
 		{ testFilePath: '/routes/items/query-limit.test.ts' },
+		{ testFilePath: '/routes/items/flag-operator-filter.test.ts' },
 		{ testFilePath: '/routes/assets/format.test.ts' },
 		{ testFilePath: '/routes/assets/system-preset-format-isolation.test.ts' },
 		{ testFilePath: '/routes/assets/read.test.ts' },
@@ -43,11 +53,8 @@ exports.list = {
 		{ testFilePath: '/routes/realtime/realtime.test.ts' },
 		{ testFilePath: '/utils/await-connection.test.ts' },
 	],
-	// If specified, only run these tests sequentially
-	only: [
-		// { testFilePath: '/common/seed-database.test.ts' },
-		// { testFilePath: '/common/common.test.ts' },
-	],
+	// A nonempty list replaces the full suite.
+	only: [],
 };
 
 exports.getReversedTestIndex = function (testFilePath) {

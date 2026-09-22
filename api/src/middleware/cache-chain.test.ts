@@ -54,6 +54,7 @@ function makeReqRes(originalUrl: string) {
 	const req = {
 		method: 'GET',
 		originalUrl,
+		path: originalUrl.split('?')[0],
 		sanitizedQuery: {},
 		accountability: null,
 		get: () => undefined,
@@ -84,7 +85,7 @@ describe('cache read + respond chain — fail closed', () => {
 			throw new Error('unhashable');
 		});
 
-		const { req, res } = makeReqRes('/server/info');
+		const { req, res } = makeReqRes('/items/articles');
 
 		await (checkCacheMiddleware as any)(req, res, vi.fn());
 		await (respond as any)(req, res, vi.fn());

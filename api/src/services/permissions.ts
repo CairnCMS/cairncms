@@ -181,7 +181,10 @@ export class PermissionsService extends ItemsService {
 
 	override async createOne(data: Partial<Item>, opts?: MutationOptions) {
 		const res = await super.createOne(data, opts);
-		await clearSystemCache({ autoPurgeCache: opts?.autoPurgeCache });
+
+		if (opts?.autoPurgeSystemCache !== false) {
+			await clearSystemCache({ autoPurgeCache: opts?.autoPurgeCache });
+		}
 
 		if (this.cache && opts?.autoPurgeCache !== false) {
 			await this.cache.clear();
@@ -192,7 +195,10 @@ export class PermissionsService extends ItemsService {
 
 	override async createMany(data: Partial<Item>[], opts?: MutationOptions) {
 		const res = await super.createMany(data, opts);
-		await clearSystemCache({ autoPurgeCache: opts?.autoPurgeCache });
+
+		if (opts?.autoPurgeSystemCache !== false) {
+			await clearSystemCache({ autoPurgeCache: opts?.autoPurgeCache });
+		}
 
 		if (this.cache && opts?.autoPurgeCache !== false) {
 			await this.cache.clear();
@@ -203,7 +209,10 @@ export class PermissionsService extends ItemsService {
 
 	override async updateBatch(data: Partial<Item>[], opts?: MutationOptions) {
 		const res = await super.updateBatch(data, opts);
-		await clearSystemCache({ autoPurgeCache: opts?.autoPurgeCache });
+
+		if (opts?.autoPurgeSystemCache !== false) {
+			await clearSystemCache({ autoPurgeCache: opts?.autoPurgeCache });
+		}
 
 		if (this.cache && opts?.autoPurgeCache !== false) {
 			await this.cache.clear();
@@ -214,7 +223,10 @@ export class PermissionsService extends ItemsService {
 
 	override async updateMany(keys: PrimaryKey[], data: Partial<Item>, opts?: MutationOptions) {
 		const res = await super.updateMany(keys, data, opts);
-		await clearSystemCache({ autoPurgeCache: opts?.autoPurgeCache });
+
+		if (opts?.autoPurgeSystemCache !== false) {
+			await clearSystemCache({ autoPurgeCache: opts?.autoPurgeCache });
+		}
 
 		if (this.cache && opts?.autoPurgeCache !== false) {
 			await this.cache.clear();
@@ -225,7 +237,10 @@ export class PermissionsService extends ItemsService {
 
 	override async upsertMany(payloads: Partial<Item>[], opts?: MutationOptions) {
 		const res = await super.upsertMany(payloads, opts);
-		await clearSystemCache({ autoPurgeCache: opts?.autoPurgeCache });
+
+		if (opts?.autoPurgeSystemCache !== false) {
+			await clearSystemCache({ autoPurgeCache: opts?.autoPurgeCache });
+		}
 
 		if (this.cache && opts?.autoPurgeCache !== false) {
 			await this.cache.clear();
@@ -236,7 +251,10 @@ export class PermissionsService extends ItemsService {
 
 	override async deleteMany(keys: PrimaryKey[], opts?: MutationOptions) {
 		const res = await super.deleteMany(keys, opts);
-		await clearSystemCache({ autoPurgeCache: opts?.autoPurgeCache });
+
+		if (opts?.autoPurgeSystemCache !== false) {
+			await clearSystemCache({ autoPurgeCache: opts?.autoPurgeCache });
+		}
 
 		if (this.cache && opts?.autoPurgeCache !== false) {
 			await this.cache.clear();

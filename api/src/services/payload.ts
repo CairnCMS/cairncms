@@ -20,6 +20,7 @@ import type {
 	MutationOptions,
 	PrimaryKey,
 } from '../types/index.js';
+import { resolveFolderKey } from '../utils/config/folder-key.js';
 import { generateHash } from '../utils/generate-hash.js';
 import { ItemsService } from './items.js';
 import { maskOperationOptions } from './operation-option-secrets.js';
@@ -34,6 +35,7 @@ type Transformers = {
 		accountability: Accountability | null;
 		specials: string[];
 		helpers: Helpers;
+		knex: Knex;
 	}) => Promise<any>;
 };
 
@@ -145,6 +147,9 @@ export class PayloadService {
 			}
 
 			return value;
+		},
+		async 'folder-key'({ action, value, payload, knex }) {
+			return resolveFolderKey({ action, value, name: payload['name'], knex });
 		},
 	};
 
@@ -306,6 +311,7 @@ export class PayloadService {
 					accountability,
 					specials: fieldSpecials,
 					helpers: this.helpers,
+					knex: this.knex,
 				});
 			}
 		}

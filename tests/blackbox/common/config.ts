@@ -52,14 +52,14 @@ const directusAuthConfig = {
 };
 
 const directusStorageConfig = {
-	STORAGE_LOCATIONS: 'local,minio',
-	STORAGE_MINIO_DRIVER: 's3',
-	STORAGE_MINIO_KEY: 'cairncms',
-	STORAGE_MINIO_SECRET: 'miniosecret',
-	STORAGE_MINIO_BUCKET: 'cairncms-blackbox-test',
-	STORAGE_MINIO_REGION: 'us-east-1',
-	STORAGE_MINIO_ENDPOINT: 'http://localhost:8881',
-	STORAGE_MINIO_FORCE_PATH_STYLE: 'true',
+	STORAGE_LOCATIONS: 'local,s3',
+	STORAGE_S3_DRIVER: 's3',
+	STORAGE_S3_KEY: 'cairncms',
+	STORAGE_S3_SECRET: 'miniosecret',
+	STORAGE_S3_BUCKET: 'cairncms-blackbox-test',
+	STORAGE_S3_REGION: 'us-east-1',
+	STORAGE_S3_ENDPOINT: 'http://localhost:8881',
+	STORAGE_S3_FORCE_PATH_STYLE: 'true',
 };
 
 const directusConfig = {

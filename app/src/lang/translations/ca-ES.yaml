@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: Indentificador
 avatar: Foto
 application: Aplicació
@@ -76,14 +75,6 @@ create_role: Crea un rol
 create_user: Crear usuari
 message: Missatge
 delete_panel: Elimina el panell
-create_translation_string: Crea una cadena de traducció
-no_translation_string: No hi ha traduccions
-no_translation_string_copy: Encara no hi ha traduccions.
-translation_string_key_placeholder: Clau de cadena de traducció...
-translation_string_translations_placeholder: Afegeix una nova traducció
-edit_translation_string: Edita la cadena de traducció
-delete_translation_string_copy: >-
-  Estàs segur d'eliminar la cadena de traducció "{key}"? Aquesta acció no es podrà revertir.
 invite_users: Convidar usuaris
 invite: Convida
 email_already_invited: El correu "{email}" ja s'ha convidat
@@ -114,13 +105,6 @@ public_label: Públic
 public_description: Controla quines dades API estan disponibles sense autenticar.
 admin_description: Rol d'administració inicial sense restriccions d'accés a l'APP/API.
 not_allowed: No permès
-directus_version: Versió de CairnCMS
-node_version: Versió de Node
-node_uptime: Temps d'activitat de Node
-os_type: Tipus de SO
-os_version: Versió d'OS
-os_uptime: Temps d'activitat del SO
-os_totalmem: Memòria del SO
 archive: Arxiu
 archive_confirm: Estàs segur de que vols arxivar aquest element?
 archive_confirm_count: >-
@@ -455,11 +439,9 @@ open_file_in_tab: Obre el fitxer en una nova pestanya
 start_export: Comença l'exportació
 not_available_for_local_downloads: No disponible per a descàrregues locals
 exporting_all_items_in_collection: Exportant tots els {total} elements de {collection}.
-exporting_limited_items_in_collection: Exportant {limit} dels {total} elements de {collection}.
+exporting_limited_items_in_collection: 'Exportant {limit} dels {total} elements de {collection}.'
 exporting_no_items_to_export: No hi ha elements a exportar. Ajusta d'exportació de sota.
 exporting_download_hint: Un cop completat, aquest fitxer {format} es descarregarà autormaticament al teu dispositiu.
-exporting_batch_hint: Aquesta exportació es processarà en lots, i un cop completada, es desarà el fitxer {format} a la biblioteca de fitxers.
-exporting_batch_hint_forced: Degut al gran nombre d'elements, aquesta exportació ha de ser processada en lots, i un cop completada, es desarà el fitxer {format} a la biblioteca de fitxers.
 collection_key: Clau de la col·lecció
 name: Nom
 primary_key_field: Camp de clau primària
@@ -484,7 +466,6 @@ enable_select_button: Habilita el botó de selecció
 allow_duplicates: Permet duplicats
 comments: Comentaris
 no_comments: No hi ha comentaris, encara
-click_to_expand: Fes clic per ampliar
 select_item: Selecciona element
 no_items: No hi ha elements
 search_items: Cerca elements...
@@ -889,7 +870,6 @@ settings_permissions: Rols i permisos
 settings_project: Ajustaments del projecte
 settings_flows: Fluxes
 settings_presets: Predefinits i Marcadors
-settings_translation_strings: Cadenes de traducció
 one_or_more_options_are_missing: Falta una o més opcions
 scope: Abast
 actions: Accions
@@ -936,7 +916,6 @@ page_help_settings_presets_collection: >-
 page_help_settings_presets_item: >-
   ** Detall de predefinit **: Un formulari per gestionar adreces d'interès i predefinits de col·lecció predeterminats.
 page_help_settings_flows_collection: '**Examina els fluxos** — Llista tots els fluxos del projecte.'
-page_help_settings_translation_strings_collection: '**Examina cadenes de traducció** - Llista totes les cadenes de traducció del projecte.'
 page_help_users_collection: '**Directori de l''usuari**.'
 page_help_users_item: >-
   ** Detall de l'usuari **: Gestiona la informació del compte o consulta la informació d'altres usuaris.

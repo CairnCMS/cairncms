@@ -1,0 +1,835 @@
+import { describe, expect, it } from 'vitest';
+import { ConfigInvalidException } from '../exceptions/config-invalid.js';
+import { ConfigUnsupportedVersionException } from '../exceptions/config-unsupported-version.js';
+import type { ConfigKind, ConfigManifest } from '../types/config.js';
+import {
+	buildRecordSchemas,
+	validateConfigManifest,
+	validateConfigRecord,
+	validateDesiredConfig,
+} from './validate-desired-config.js';
+import { CONFIG_REGISTRY } from './config/registry.js';
+
+function manifest(resources: ConfigKind[] = ['roles', 'permissions']): ConfigManifest {
+	return { version: 1, resources };
+}
+
+function role(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+	return { key: 'editor', name: 'Editor', admin_access: false, app_access: true, ...overrides };
+}
+
+function completeRole(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+	return {
+		key: 'editor',
+		name: 'Editor',
+		admin_access: false,
+		app_access: true,
+		icon: 'supervised_user_circle',
+		enforce_tfa: false,
+		description: null,
+		ip_access: null,
+		...overrides,
+	};
+}
+
+function permission(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+	return {
+		collection: 'articles',
+		action: 'read',
+		permissions: null,
+		validation: null,
+		presets: null,
+		fields: null,
+		...overrides,
+	};
+}
+
+function permissionSet(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+	return { role: 'editor', permissions: [permission()], ...overrides };
+}
+
+function document(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+	return { manifest: manifest(), roles: [role()], permissions: [permissionSet()], ...overrides };
+}
+
+function validate(doc: Record<string, unknown>, currentRoleKeys: string[] = []): string[] {
+	return validateFull(doc, currentRoleKeys).map((failure) => failure.message);
+}
+
+function validateFull(doc: Record<string, unknown>, currentRoleKeys: string[] = [], currentFolderKeys: string[] = []) {
+	return validateDesiredConfig(doc, {
+		label: 'test',
+		references: 'current-state',
+		currentRoleKeys: new Set(currentRoleKeys),
+		currentFolderKeys: new Set(currentFolderKeys),
+		currentFolderParents: new Map<string, string | null>(),
+	});
+}
+
+function validateSnapshot(doc: Record<string, unknown>): string[] {
+	return validateDesiredConfig(doc, { label: 'test', references: 'server-snapshot' }).map((failure) => failure.message);
+}
+
+describe('validateConfigManifest', () => {
+	it('returns the declaration when it is valid', () => {
+		expect(validateConfigManifest({ version: 1, resources: ['roles'] }, 'test')).toEqual({
+			version: 1,
+			resources: ['roles'],
+		});
+	});
+
+	it('accepts an empty resource list as managing nothing', () => {
+		expect(validateConfigManifest({ version: 1, resources: [] }, 'test')).toEqual({ version: 1, resources: [] });
+	});
+
+	it('accepts manifest version 2', () => {
+		expect(validateConfigManifest({ version: 2, resources: ['roles'] }, 'test')).toEqual({
+			version: 2,
+			resources: ['roles'],
+		});
+	});
+
+	it('raises the unsupported-version code for a newer version', () => {
+		expect(() => validateConfigManifest({ version: 3, resources: [] }, 'test')).toThrow(
+			ConfigUnsupportedVersionException
+		);
+	});
+
+	it('raises the unsupported-version code when no version is declared', () => {
+		expect(() => validateConfigManifest({ resources: [] }, 'test')).toThrow(ConfigUnsupportedVersionException);
+	});
+
+	it('rejects a manifest that is not a mapping', () => {
+		expect(() => validateConfigManifest(['roles'], 'test')).toThrow(ConfigInvalidException);
+	});
+
+	it('rejects a resource that is not a supported kind', () => {
+		expect(() => validateConfigManifest({ version: 1, resources: ['flows'] }, 'test')).toThrow(ConfigInvalidException);
+	});
+
+	it('rejects a repeated resource', () => {
+		expect(() => validateConfigManifest({ version: 1, resources: ['roles', 'roles'] }, 'test')).toThrow(
+			ConfigInvalidException
+		);
+	});
+
+	it('rejects a missing resource list', () => {
+		expect(() => validateConfigManifest({ version: 1 }, 'test')).toThrow(ConfigInvalidException);
+	});
+
+	it('rejects an unknown manifest key', () => {
+		expect(() => validateConfigManifest({ version: 1, resources: [], mode: 'merge' }, 'test')).toThrow(
+			ConfigInvalidException
+		);
+	});
+});
+
+describe('validateDesiredConfig', () => {
+	it('accepts a document that satisfies the contract', () => {
+		expect(validate(document())).toEqual([]);
+	});
+
+	it('rejects a string where a boolean belongs, so no value is coerced into an access grant', () => {
+		const errors = validate(document({ roles: [role({ admin_access: 'false' })] }));
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0]).toContain('admin_access');
+	});
+
+	it('accepts operator-authored filters, validation, and presets inside policy objects', () => {
+		const errors = validate(
+			document({
+				permissions: [
+					permissionSet({
+						permissions: [
+							permission({
+								permissions: { _and: [{ owner: { _eq: '$CURRENT_USER' } }] },
+								validation: { status: { _in: ['draft', 'published'] } },
+								presets: { status: 'draft', 'nested.field': 1 },
+								fields: ['title', 'body'],
+							}),
+						],
+					}),
+				],
+			})
+		);
+
+		expect(errors).toEqual([]);
+	});
+
+	it('rejects a policy value that is an array', () => {
+		expect(
+			validate(document({ permissions: [permissionSet({ permissions: [permission({ presets: [] })] })] }))
+		).toHaveLength(1);
+	});
+
+	it('rejects a policy value that is a scalar', () => {
+		expect(
+			validate(document({ permissions: [permissionSet({ permissions: [permission({ validation: 'draft' })] })] }))
+		).toHaveLength(1);
+	});
+
+	it('rejects an unknown key on a role', () => {
+		expect(validate(document({ roles: [role({ admin_acess: true })] }))).toHaveLength(1);
+	});
+
+	it('rejects an unknown key on a permission set', () => {
+		expect(validate(document({ permissions: [permissionSet({ collection: 'articles' })] }))).toHaveLength(1);
+	});
+
+	it('rejects an unknown key on a permission', () => {
+		expect(
+			validate(document({ permissions: [permissionSet({ permissions: [permission({ field: ['title'] })] })] }))
+		).toHaveLength(1);
+	});
+
+	it('rejects an unknown top-level key', () => {
+		expect(validate(document({ folders: [] }))).toHaveLength(1);
+	});
+
+	it('rejects a role key that fails the key grammar', () => {
+		expect(validate(document({ roles: [role({ key: 'Editor Role' })] }))).toHaveLength(1);
+	});
+
+	it('rejects a role key longer than the stored column', () => {
+		expect(validate(document({ roles: [role({ key: 'e'.repeat(256) })] }))).toHaveLength(1);
+	});
+
+	it('rejects an empty role key, which the key grammar alone accepts', () => {
+		const errors = validate(document({ roles: [role({ key: '' })], permissions: [] }));
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0]).toContain('key');
+	});
+
+	it('rejects "public" as a role key', () => {
+		const errors = validate(document({ roles: [role({ key: 'public' })], permissions: [] }));
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0]).toContain('reserved');
+	});
+
+	it('accepts "public" as a permission subject with no role declared for it', () => {
+		expect(validate(document({ roles: [], permissions: [permissionSet({ role: 'public' })] }))).toEqual([]);
+	});
+
+	it('accepts empty display values', () => {
+		expect(validate(document({ roles: [role({ name: '', icon: '', description: '' })] }))).toEqual([]);
+	});
+
+	it('accepts an empty element in a stored list, which a stored comma-separated column produces', () => {
+		const errors = validate(
+			document({
+				roles: [role({ ip_access: ['10.0.0.1', ''] })],
+				permissions: [permissionSet({ permissions: [permission({ fields: ['title', ''] })] })],
+			})
+		);
+
+		expect(errors).toEqual([]);
+	});
+
+	it('rejects an empty collection', () => {
+		expect(
+			validate(document({ permissions: [permissionSet({ permissions: [permission({ collection: '' })] })] }))
+		).toHaveLength(1);
+	});
+
+	it('rejects an empty permission subject', () => {
+		expect(validate(document({ permissions: [permissionSet({ role: '' })] }))).toHaveLength(1);
+	});
+
+	it('rejects a name longer than the stored column', () => {
+		expect(validate(document({ roles: [role({ name: 'n'.repeat(101) })] }))).toHaveLength(1);
+	});
+
+	it('rejects an icon longer than the stored column', () => {
+		expect(validate(document({ roles: [role({ icon: 'i'.repeat(31) })] }))).toHaveLength(1);
+	});
+
+	it('rejects a collection longer than the stored column', () => {
+		expect(
+			validate(
+				document({ permissions: [permissionSet({ permissions: [permission({ collection: 'c'.repeat(65) })] })] })
+			)
+		).toHaveLength(1);
+	});
+
+	it('accepts a null description', () => {
+		expect(validate(document({ roles: [role({ description: null })] }))).toEqual([]);
+	});
+
+	it('rejects a null icon, which the column does not accept', () => {
+		expect(validate(document({ roles: [role({ icon: null })] }))).toHaveLength(1);
+	});
+
+	it('rejects a null enforce_tfa, which the column does not accept', () => {
+		expect(validate(document({ roles: [role({ enforce_tfa: null })] }))).toHaveLength(1);
+	});
+
+	it('rejects an unsupported action', () => {
+		expect(
+			validate(document({ permissions: [permissionSet({ permissions: [permission({ action: 'publish' })] })] }))
+		).toHaveLength(1);
+	});
+
+	it('rejects duplicate role keys', () => {
+		const errors = validate(document({ roles: [role(), role({ name: 'Second' })] }));
+
+		expect(errors).toEqual(['Duplicate role "editor".']);
+	});
+
+	it('rejects two permission sets for the same role', () => {
+		const errors = validate(document({ permissions: [permissionSet(), permissionSet()] }));
+
+		expect(errors).toEqual(['Duplicate permission set for role "editor".']);
+	});
+
+	it('rejects two empty permission sets for the same role, on the document identity not the records', () => {
+		const failures = validateFull(
+			document({ permissions: [permissionSet({ permissions: [] }), permissionSet({ permissions: [] })] })
+		);
+
+		expect(failures).toEqual([
+			{ code: 'CONFIG_IDENTITY_CONFLICT', message: 'Duplicate permission set for role "editor".' },
+		]);
+	});
+
+	it('routes role validation through the registry descriptor', () => {
+		const real = CONFIG_REGISTRY.roles;
+
+		CONFIG_REGISTRY.roles = {
+			...real,
+			handler: {
+				...real.handler,
+				validateDesired: () => [{ code: 'CONFIG_INVALID' as const, message: 'registry sentinel failure' }],
+			},
+		};
+
+		try {
+			expect(validateFull(document())).toEqual([{ code: 'CONFIG_INVALID', message: 'registry sentinel failure' }]);
+		} finally {
+			CONFIG_REGISTRY.roles = real;
+		}
+	});
+
+	it('rejects the same collection and action twice in one set', () => {
+		const errors = validate(document({ permissions: [permissionSet({ permissions: [permission(), permission()] })] }));
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0]).toContain('articles');
+	});
+
+	it('resolves a permission subject only against the tree when roles are managed', () => {
+		const errors = validate(document({ roles: [], permissions: [permissionSet()] }), ['editor']);
+
+		expect(errors).toEqual(['Permission set references role "editor", which no role file declares.']);
+	});
+
+	it('resolves a permission subject against the database when roles are unmanaged', () => {
+		const doc = document({ manifest: manifest(['permissions']), roles: [], permissions: [permissionSet()] });
+
+		expect(validate(doc, ['editor'])).toEqual([]);
+	});
+
+	it('rejects a permission subject that exists in neither the tree nor the database', () => {
+		const doc = document({ manifest: manifest(['permissions']), roles: [], permissions: [permissionSet()] });
+
+		expect(validate(doc)).toEqual(['Permission set references role "editor", which does not exist in the database.']);
+	});
+
+	it('accepts a permissions-only server snapshot whose subjects are unknown locally', () => {
+		const doc = document({ manifest: manifest(['permissions']), roles: [], permissions: [permissionSet()] });
+
+		expect(validateSnapshot(doc)).toEqual([]);
+	});
+
+	it('still resolves a permission subject against the snapshot itself when the snapshot manages roles', () => {
+		const doc = document({ roles: [], permissions: [permissionSet()] });
+
+		expect(validateSnapshot(doc)).toEqual(['Permission set references role "editor", which no role file declares.']);
+	});
+
+	it('keeps the structural rules in server-snapshot mode', () => {
+		const unknownField = document({
+			manifest: manifest(['permissions']),
+			roles: [],
+			permissions: [permissionSet({ collection: 'articles' })],
+		});
+
+		const duplicateTuple = document({
+			manifest: manifest(['permissions']),
+			roles: [],
+			permissions: [permissionSet({ permissions: [permission(), permission()] })],
+		});
+
+		expect(validateSnapshot(unknownField)).toHaveLength(1);
+		expect(validateSnapshot(duplicateTuple)).toHaveLength(1);
+	});
+
+	it('refuses an own "__proto__" collection in a server snapshot without polluting Object.prototype', () => {
+		const settings = JSON.parse(
+			'{"subject":"@cairncms/extension-widget","global":{},"collections":{"__proto__":null}}'
+		);
+
+		const body = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [settings],
+			translations: [],
+		};
+
+		expect(validateSnapshot(body).some((message) => message.includes('non-map'))).toBe(true);
+		expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+	});
+
+	it('refuses an own "__proto__" collection in current-state apply input as well as a snapshot', () => {
+		const settings = JSON.parse(
+			'{"subject":"@cairncms/extension-widget","global":{},"collections":{"__proto__":null}}'
+		);
+
+		const body = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [settings],
+			translations: [],
+		};
+
+		expect(validate(body).some((message) => message.includes('non-map'))).toBe(true);
+	});
+
+	it('refuses a preserve marker carrying an own "__proto__" property in a server snapshot', () => {
+		const settings = JSON.parse(
+			'{"subject":"@cairncms/extension-widget","global":{"token":{"$secret":"preserve","__proto__":"{{CAIRNCMS_CONFIG_LOST}}"}},"collections":{}}'
+		);
+
+		const body = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [settings],
+			translations: [],
+		};
+
+		expect(validateSnapshot(body).some((message) => message.includes('not a portable setting value'))).toBe(true);
+	});
+
+	it.each([
+		['current-state', (body: Record<string, unknown>) => validate(body)],
+		['server-snapshot', (body: Record<string, unknown>) => validateSnapshot(body)],
+	])('refuses an own "__proto__" top-level field in %s mode', (_mode, run) => {
+		const settings = JSON.parse(
+			'{"subject":"@cairncms/extension-widget","global":{},"collections":{},"__proto__":{"unexpected":true}}'
+		);
+
+		const body = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [settings],
+			translations: [],
+		};
+
+		const problems = run(body);
+
+		expect(problems.some((message) => message.includes('unknown field') && message.includes('__proto__'))).toBe(true);
+		expect(({} as Record<string, unknown>)['unexpected']).toBeUndefined();
+	});
+
+	it('accepts a complete empty extension-settings document in a server snapshot', () => {
+		const body = {
+			manifest: { version: 2, resources: ['extension-settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [{ subject: '@cairncms/extension-widget', global: {}, collections: {} }],
+			translations: [],
+		};
+
+		expect(validateSnapshot(body)).toEqual([]);
+	});
+
+	it.each(['icon', 'enforce_tfa', 'description', 'ip_access'])(
+		'accepts an authored role that omits %s but rejects the same document as a generated snapshot',
+		(field) => {
+			const partial = completeRole();
+			delete partial[field];
+			const doc = document({ roles: [partial] });
+
+			expect(validate(doc)).toEqual([]);
+
+			const failures = validateSnapshot(doc);
+			expect(failures).toHaveLength(1);
+			expect(failures[0]).toContain(field);
+		}
+	);
+
+	it('rejects a generated folder snapshot that omits parent, while the same authored folder is accepted', () => {
+		const doc = {
+			manifest: { version: 2, resources: ['folders'] },
+			roles: [],
+			permissions: [],
+			folders: [{ key: 'docs', name: 'Docs' }],
+			settings: [],
+			'extension-settings': [],
+			translations: [],
+		};
+
+		expect(validate(doc)).toEqual([]);
+
+		const failures = validateSnapshot(doc);
+		expect(failures).toHaveLength(1);
+		expect(failures[0]).toContain('parent');
+	});
+
+	const COMPLETE_SETTINGS: Record<string, unknown> = {
+		project_name: 'CairnCMS',
+		project_descriptor: null,
+		project_url: null,
+		default_language: 'en-US',
+		project_color: null,
+		public_note: null,
+		custom_css: null,
+		module_bar: null,
+		auth_password_policy: null,
+		auth_login_attempts: 25,
+		storage_asset_transform: 'all',
+		storage_asset_presets: null,
+		basemaps: null,
+		custom_aspect_ratios: null,
+		mapbox_key: null,
+		storage_default_folder: null,
+	};
+
+	function settingsBody(settings: unknown[]): Record<string, unknown> {
+		return {
+			manifest: { version: 2, resources: ['settings'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings,
+			'extension-settings': [],
+			translations: [],
+		};
+	}
+
+	it('accepts a partial authored settings declaration while requiring a complete one in snapshot mode', () => {
+		expect(validate(settingsBody([{ project_name: 'Live' }]))).toEqual([]);
+		expect(validateSnapshot(settingsBody([COMPLETE_SETTINGS]))).toEqual([]);
+	});
+
+	it.each(Object.keys(COMPLETE_SETTINGS))('refuses a settings snapshot that omits the %s field', (fieldName) => {
+		const record: Record<string, unknown> = { ...COMPLETE_SETTINGS };
+		delete record[fieldName];
+
+		const failures = validateSnapshot(settingsBody([record]));
+
+		expect(failures.length).toBeGreaterThan(0);
+		expect(failures.join(' ')).toContain(fieldName);
+	});
+
+	it.each(['authored', 'snapshot'] as const)(
+		'rejects a settings set that is not exactly one record in %s mode',
+		(mode) => {
+			const run = mode === 'authored' ? validate : validateSnapshot;
+
+			expect(run(settingsBody([])).length).toBeGreaterThan(0);
+			expect(run(settingsBody([COMPLETE_SETTINGS, COMPLETE_SETTINGS])).length).toBeGreaterThan(0);
+		}
+	);
+
+	it.each(['authored', 'snapshot'] as const)(
+		'rejects a null structured-array element and names the field in %s mode',
+		(mode) => {
+			const record = { ...COMPLETE_SETTINGS, storage_asset_presets: [null] };
+
+			const failures =
+				mode === 'authored'
+					? validateFull(settingsBody([record]))
+					: validateDesiredConfig(settingsBody([record]), { label: 'test', references: 'server-snapshot' });
+
+			expect(failures.map((failure) => failure.code)).toContain('CONFIG_INVALID');
+			expect(failures.some((failure) => failure.message.includes('settings[0].storage_asset_presets[0]'))).toBe(true);
+		}
+	);
+
+	it('accepts a complete settings declaration whose structured arrays hold valid records in both modes', () => {
+		const record = {
+			...COMPLETE_SETTINGS,
+			module_bar: [{ type: 'module', id: 'content', enabled: true }],
+			storage_asset_presets: [{ key: 'thumb' }],
+		};
+
+		expect(validate(settingsBody([record]))).toEqual([]);
+		expect(validateSnapshot(settingsBody([record]))).toEqual([]);
+	});
+
+	function foldersAndSettings(folders: unknown[], settings: unknown[]): Record<string, unknown> {
+		return {
+			manifest: { version: 2, resources: ['folders', 'settings'] },
+			roles: [],
+			permissions: [],
+			folders,
+			settings,
+			'extension-settings': [],
+			translations: [],
+		};
+	}
+
+	it('accepts a default folder a managed folder file newly declares, though it is absent from current state', () => {
+		const body = foldersAndSettings([{ key: 'new', name: 'New', parent: null }], [{ storage_default_folder: 'new' }]);
+
+		expect(validateFull(body, [], []).map((failure) => failure.code)).toEqual([]);
+	});
+
+	it('rejects a default folder present only in current state when folders is managed', () => {
+		const body = foldersAndSettings([], [{ storage_default_folder: 'existing' }]);
+
+		expect(validateFull(body, [], ['existing']).map((failure) => failure.code)).toContain('CONFIG_INVALID');
+	});
+
+	it('accepts a complete settings server snapshot that references a folder without any folder check', () => {
+		expect(validateSnapshot(settingsBody([{ ...COMPLETE_SETTINGS, storage_default_folder: 'uploads' }]))).toEqual([]);
+	});
+
+	it.each(['name', 'description'])('rejects a role %s written in placeholder form in both modes', (field) => {
+		const doc = document({ roles: [completeRole({ [field]: '{{CAIRNCMS_CONFIG_SECRET}}' })] });
+
+		const expected = `roles record "editor" field "${field}" holds placeholder syntax, which cannot be stored because the reader would substitute it. Send a resolved value.`;
+
+		expect(validate(doc)).toEqual([expected]);
+		expect(validateSnapshot(doc)).toEqual([expected]);
+		expect(validateFull(doc)[0]!.code).toBe('CONFIG_INVALID');
+	});
+
+	it('accepts a value that merely contains braces or an out-of-form placeholder', () => {
+		expect(validate(document({ roles: [role({ name: 'Team {{alpha}}', description: '{{lower}}' })] }))).toEqual([]);
+	});
+
+	it('ignores placeholder-shaped values under an unmanaged kind', () => {
+		const doc = document({
+			manifest: manifest(['permissions']),
+			roles: [role({ name: '{{CAIRNCMS_CONFIG_SECRET}}' })],
+			permissions: [permissionSet()],
+		});
+
+		expect(validate(doc, ['editor'])).toEqual([]);
+	});
+
+	it('takes scope from the document, so a declared kind is the only thing validation follows', () => {
+		const doc = document({ manifest: manifest(['permissions']), roles: [], permissions: [permissionSet()] });
+
+		expect(validate(doc, ['editor'])).toEqual([]);
+
+		expect(validate({ ...doc, manifest: manifest(['roles', 'permissions']) }, ['editor'])).toEqual([
+			'Permission set references role "editor", which no role file declares.',
+		]);
+	});
+
+	it('throws when the document declares no manifest at all', () => {
+		const { manifest: _omitted, ...withoutManifest } = document();
+
+		expect(() => validate(withoutManifest)).toThrow(ConfigInvalidException);
+	});
+
+	it('ignores malformed records belonging to an unmanaged kind', () => {
+		const doc = document({
+			manifest: manifest(['permissions']),
+			roles: [{ key: 'Bad Key', name: 42, bogus: true }],
+			permissions: [permissionSet()],
+		});
+
+		expect(validate(doc, ['editor'])).toEqual([]);
+	});
+
+	it('ignores a null entry when roles are unmanaged', () => {
+		const doc = document({
+			manifest: manifest(['permissions']),
+			roles: [null],
+			permissions: [permissionSet({ role: 'public' })],
+		});
+
+		expect(validate(doc)).toEqual([]);
+	});
+
+	it('ignores a null entry when permissions are unmanaged', () => {
+		const doc = document({ manifest: manifest(['roles']), permissions: [null] });
+
+		expect(validate(doc)).toEqual([]);
+	});
+
+	it('ignores duplicate records belonging to an unmanaged kind', () => {
+		const doc = document({ manifest: manifest(['permissions']), roles: [role(), role()] });
+
+		expect(validate(doc, ['editor'])).toEqual([]);
+	});
+
+	it('ignores malformed and duplicate records when permissions are the unmanaged kind', () => {
+		const doc = document({
+			manifest: manifest(['roles']),
+			permissions: [
+				permissionSet({ permissions: [permission({ action: 'publish' }), permission({ collection: '' })] }),
+				permissionSet(),
+			],
+		});
+
+		expect(validate(doc)).toEqual([]);
+	});
+
+	it('ignores an unmanaged kind when resolving references, so the database stays authoritative', () => {
+		const doc = document({ manifest: manifest(['permissions']), roles: [role()], permissions: [permissionSet()] });
+
+		expect(validate(doc)).toEqual(['Permission set references role "editor", which does not exist in the database.']);
+	});
+
+	it('collapses control characters in a diagnostic built from an operator-authored key', () => {
+		const hostile = `${String.fromCharCode(27)}[31mred${String.fromCharCode(27)}[0m`;
+		const errors = validate(document({ roles: [role({ [hostile]: 1 })] }));
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0]).not.toContain(String.fromCharCode(27));
+		expect(errors[0]).toContain('?[31mred');
+	});
+
+	it('keeps a long diagnostic whole rather than truncating its tail', () => {
+		const longKey = 'k'.repeat(300);
+		const errors = validate(document({ roles: [role({ [longKey]: 1 })] }));
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0]).toContain(longKey);
+		expect(errors[0]).not.toContain('...');
+	});
+
+	it('collapses control characters in a duplicate-collection diagnostic', () => {
+		const hostile = `articles${String.fromCharCode(7)}`;
+
+		const errors = validate(
+			document({
+				permissions: [
+					permissionSet({
+						permissions: [permission({ collection: hostile }), permission({ collection: hostile })],
+					}),
+				],
+			})
+		);
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0]).not.toContain(String.fromCharCode(7));
+	});
+
+	it('reports every field failure in one pass', () => {
+		const errors = validate(
+			document({
+				roles: [role({ key: 'Bad Key' }), role({ name: 'n'.repeat(101) })],
+				permissions: [permissionSet({ permissions: [permission({ action: 'publish' })] })],
+			})
+		);
+
+		expect(errors).toEqual([
+			'"roles[0].key" must be lowercase alphanumeric with underscores, and cannot start with a digit or underscore.',
+			'"roles[1].name" length must be less than or equal to 100 characters long',
+			'"permissions[0].permissions[0].action" must be one of [create, read, update, delete, comment, explain, share]',
+		]);
+	});
+
+	it('reports every cross-record failure in one pass', () => {
+		const errors = validate(
+			document({
+				roles: [role(), role()],
+				permissions: [permissionSet({ role: 'ghost' })],
+			})
+		);
+
+		expect(errors).toEqual([
+			'Duplicate role "editor".',
+			'Permission set references role "ghost", which no role file declares.',
+		]);
+	});
+});
+
+describe('validateConfigRecord', () => {
+	it('accepts a role record on its own', () => {
+		expect(validateConfigRecord('roles', role())).toEqual([]);
+	});
+
+	it('accepts a permission set record on its own', () => {
+		expect(validateConfigRecord('permissions', permissionSet())).toEqual([]);
+	});
+
+	it('reports a field failure in a single record', () => {
+		expect(validateConfigRecord('roles', role({ name: 42 }))).toHaveLength(1);
+	});
+
+	it('leaves reference resolution to the document, so an undeclared subject passes', () => {
+		expect(validateConfigRecord('permissions', permissionSet({ role: 'ghost' }))).toEqual([]);
+	});
+});
+
+describe('validateDesiredConfig failure codes', () => {
+	it('labels a duplicate role as an identity conflict', () => {
+		const failures = validateFull(document({ roles: [role({ key: 'editor' }), role({ key: 'editor' })] }));
+
+		expect(failures).toHaveLength(1);
+		expect(failures[0]!.code).toBe('CONFIG_IDENTITY_CONFLICT');
+	});
+
+	it('labels a duplicate permission set as an identity conflict', () => {
+		const failures = validateFull(document({ permissions: [permissionSet(), permissionSet()] }));
+
+		expect(failures).toHaveLength(1);
+		expect(failures[0]!.code).toBe('CONFIG_IDENTITY_CONFLICT');
+	});
+
+	it('labels a duplicate permission tuple as an identity conflict', () => {
+		const failures = validateFull(
+			document({ permissions: [permissionSet({ permissions: [permission(), permission()] })] })
+		);
+
+		expect(failures).toHaveLength(1);
+		expect(failures[0]!.code).toBe('CONFIG_IDENTITY_CONFLICT');
+	});
+
+	it('labels a field-contract violation as invalid', () => {
+		const failures = validateFull(document({ roles: [role({ admin_access: 'false' })] }));
+
+		expect(failures).toHaveLength(1);
+		expect(failures[0]!.code).toBe('CONFIG_INVALID');
+	});
+
+	it('labels an undefined role reference as invalid', () => {
+		const failures = validateFull(document({ permissions: [permissionSet({ role: 'ghost' })] }));
+
+		expect(failures).toHaveLength(1);
+		expect(failures[0]!.code).toBe('CONFIG_INVALID');
+	});
+});
+
+describe('buildRecordSchemas', () => {
+	it('builds each kind schema from its registry descriptor at call time', () => {
+		const real = CONFIG_REGISTRY.roles;
+		const sentinel = { ...real.recordFields[0]!, name: 'sentinel_field', required: true, nullable: false };
+
+		CONFIG_REGISTRY.roles = { ...real, recordFields: [...real.recordFields, sentinel] };
+
+		try {
+			const withSentinel = buildRecordSchemas().roles.validate(role(), { convert: false, abortEarly: false });
+			expect(withSentinel.error).toBeDefined();
+			expect(withSentinel.error!.message).toContain('sentinel_field');
+		} finally {
+			CONFIG_REGISTRY.roles = real;
+		}
+
+		const restored = buildRecordSchemas().roles.validate(role(), { convert: false, abortEarly: false });
+		expect(restored.error).toBeUndefined();
+	});
+});

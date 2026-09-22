@@ -1,6 +1,7 @@
 import type { ActionHandler, EventContext, FilterHandler, InitHandler } from '@cairncms/types';
 import ee2 from 'eventemitter2';
 import logger from './logger.js';
+import { safeLogFragment } from './utils/safe-log-fragment.js';
 
 export class Emitter {
 	private filterEmitter;
@@ -51,14 +52,50 @@ export class Emitter {
 	}
 
 	public emitAction(event: string | string[], meta: Record<string, any>, context: EventContext): void {
-		const events = Array.isArray(event) ? event : [event];
+		void this.dispatchActions(event, meta, context);
+	}
 
+	public async emitActionAndWait(
+		event: string | string[],
+		meta: Record<string, any>,
+		context: EventContext
+	): Promise<void> {
+		await this.dispatchActions(event, meta, context);
+	}
+
+	private async dispatchActions(
+		event: string | string[],
+		meta: Record<string, any>,
+		context: EventContext
+	): Promise<void> {
+		const events = Array.isArray(event) ? event : [event];
+		const pending: Promise<unknown>[] = [];
+
+		// Start every listener before awaiting, and handle each returned promise before invoking the next.
 		for (const event of events) {
-			this.actionEmitter.emitAsync(event, { event, ...meta }, context).catch((err) => {
-				logger.warn(`An error was thrown while executing action "${event}"`);
-				logger.warn(err);
-			});
+			for (const listener of this.actionEmitter.listeners(event) as ActionHandler[]) {
+				// EventEmitter2 restores the current event before each invocation, in case a listener emits.
+				(this.actionEmitter as unknown as { event: string }).event = event;
+
+				try {
+					const result = listener.call(this.actionEmitter, { event, ...meta }, context) as unknown;
+
+					if (result && typeof (result as { then?: unknown }).then === 'function') {
+						pending.push(
+							Promise.resolve(result as PromiseLike<unknown>).catch(() => this.logActionHandlerError(event))
+						);
+					}
+				} catch {
+					this.logActionHandlerError(event);
+				}
+			}
 		}
+
+		await Promise.allSettled(pending);
+	}
+
+	private logActionHandlerError(event: string): void {
+		logger.warn(`An error was thrown while executing action "${safeLogFragment(event)}"`);
 	}
 
 	public async emitActionBounded(event: string, meta: Record<string, any>, context: EventContext): Promise<void> {
