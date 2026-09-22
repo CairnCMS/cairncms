@@ -35,6 +35,7 @@ exports.list = {
 		{ testFilePath: '/routes/permissions/cache-share-segmentation.test.ts' },
 		{ testFilePath: '/routes/permissions/cache-data-studio.test.ts' },
 		{ testFilePath: '/routes/permissions/item-permissions.test.ts' },
+		{ testFilePath: '/routes/permissions/batch-atomicity.test.ts' },
 		{ testFilePath: '/routes/roles/administrator-continuity.test.ts' },
 		{ testFilePath: '/routes/translations/translations.test.ts' },
 		{ testFilePath: '/routes/files/upload-limits.test.ts' },
