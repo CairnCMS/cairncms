@@ -8,7 +8,7 @@ import { sleep } from '@utils/sleep';
 import { spawn } from 'child_process';
 
 const assetsDirectory = [__dirname, '..', '..', 'assets'];
-const storages = ['local', 'minio'];
+const storages = ['local', 's3'];
 const imageFilePath = path.join(...assetsDirectory, 'layers.png');
 
 describe('/assets', () => {

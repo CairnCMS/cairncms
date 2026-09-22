@@ -12,6 +12,7 @@ on:
       - package.json
       - pnpm-lock.yaml
       - .github/workflows/blackbox-main.yml
+      - .github/workflows/blackbox-pr.yml
 
 concurrency:
   group: blackbox-main
@@ -47,12 +48,12 @@ jobs:
       - name: Start services (SQLite)
         if: matrix.vendor == 'sqlite3'
         run:
-          docker compose -f tests/blackbox/docker-compose.yml up auth-saml redis minio minio-mc -d --quiet-pull --wait
+          docker compose -f tests/blackbox/docker-compose.yml up auth-saml redis s3proxy s3proxy-init -d --quiet-pull --wait
 
       - name: Start services (other vendors)
         if: matrix.vendor != 'sqlite3'
         run:
-          docker compose -f tests/blackbox/docker-compose.yml up ${{ matrix.vendor }} auth-saml redis redis7 redis60 minio minio-mc
+          docker compose -f tests/blackbox/docker-compose.yml up ${{ matrix.vendor }} auth-saml redis redis7 redis60 s3proxy s3proxy-init
           -d --quiet-pull --wait
 
       - name: Run tests (SQLite)

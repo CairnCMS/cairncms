@@ -22,13 +22,13 @@ Blackbox tests run automatically in GitHub Actions on every push to `main`. The 
 Start the database and supporting services using the **blackbox** compose file:
 
 ```bash
-docker compose -f tests/blackbox/docker-compose.yml up postgres auth-saml redis redis7 redis60 minio minio-mc -d
+docker compose -f tests/blackbox/docker-compose.yml up postgres auth-saml redis redis7 redis60 s3proxy s3proxy-init -d --wait
 ```
 
 For SQLite (no database container needed):
 
 ```bash
-docker compose -f tests/blackbox/docker-compose.yml up auth-saml redis minio minio-mc -d
+docker compose -f tests/blackbox/docker-compose.yml up auth-saml redis s3proxy s3proxy-init -d --wait
 ```
 
 ### 2. Run tests
