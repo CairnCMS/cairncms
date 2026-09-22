@@ -1,4 +1,4 @@
-# This compose file is meant to spin up a copy of all supported database vendors + Redis and S3 (Minio).
+# This compose file is meant to spin up a copy of all supported database vendors + Redis and S3 (S3Proxy).
 # For production use, see the CairnCMS docs under Self-Hosted → Installation → Docker → Docker Compose.
 #
 # ONLY FOR DEBUGGING. THIS IS NOT INTENDED FOR PRODUCTION USE.
@@ -10,13 +10,12 @@
 #   MS SQL:          5103
 #   Oracle:          5104
 #   Redis:           5105
-#   Minio (S3):      5106
+#   S3Proxy (S3):    5106
 #   Azure            5107
 #   MySQL (5.7):     5108
 #   Memcached:       5109
 #   Keycloak:        5110
 #   Postgres (10):   5111
-#   Minio Admin:     5112
 #   CockroachDB:     5113
 #
 # Credentials:
@@ -45,9 +44,9 @@
 #   Redis:
 #     n/a
 #
-#   Minio:
-#     Key:           minioadmin
-#     Secret:        minioadmin
+#   S3Proxy:
+#     Key:           cairncms
+#     Secret:        miniosecret
 #     (Make sure to set S3_FORCE_PATH_STYLE to true)
 #
 #   Azure Blob Storage
@@ -117,12 +116,18 @@ services:
     ports:
       - 5105:6379
 
-  minio:
-    image: minio/minio:latest
-    command: server /data/minio/ --console-address :9001
+  s3proxy:
+    image: andrewgaul/s3proxy@sha256:87662b2a5afcdfa5f478a1c61650bae4c87bbd15f6ff2823236bcfd66ef7fe04 # 4.1.1
     ports:
-      - 5106:9000
-      - 5112:9001
+      - 5106:80
+    environment:
+      S3PROXY_AUTHORIZATION: aws-v4
+      S3PROXY_IDENTITY: cairncms
+      S3PROXY_CREDENTIAL: miniosecret
+      JCLOUDS_PROVIDER: filesystem
+      JCLOUDS_FILESYSTEM_BASEDIR: /data
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
 
   azure:
     image: mcr.microsoft.com/azure-storage/azurite

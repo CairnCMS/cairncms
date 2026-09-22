@@ -59,6 +59,28 @@ docker compose up -d maria
 
 The compose file's header comment lists the full port and credential matrix. The exposed ports are in the `5xxx` range so they don't collide with the blackbox compose stack (`6xxx`).
 
+The compose also defines `s3proxy`, an S3-compatible server on port `5106` (key `cairncms`, secret `miniosecret`), for exercising the S3 storage driver locally. Start it, then create a bucket with the AWS CLI (S3Proxy has no web console):
+
+```bash
+docker compose up -d --wait s3proxy
+
+AWS_ACCESS_KEY_ID=cairncms AWS_SECRET_ACCESS_KEY=miniosecret \
+  aws --endpoint-url http://localhost:5106 --region us-east-1 s3api create-bucket --bucket cairncms-local
+```
+
+Then point a storage location at it in your `.env`:
+
+```
+STORAGE_LOCATIONS="local,s3"
+STORAGE_S3_DRIVER="s3"
+STORAGE_S3_KEY="cairncms"
+STORAGE_S3_SECRET="miniosecret"
+STORAGE_S3_BUCKET="cairncms-local"
+STORAGE_S3_REGION="us-east-1"
+STORAGE_S3_ENDPOINT="http://localhost:5106"
+STORAGE_S3_FORCE_PATH_STYLE="true"
+```
+
 For a setup that mirrors what most operators run in production, Postgres is the right choice. The local credentials are `postgres` / `secret` against the `cairncms` database on port `5100`.
 
 ## Configure the environment
@@ -145,12 +167,12 @@ Three test layers run independently:
 
   ```bash
   # Start the supporting services
-  docker compose -f tests/blackbox/docker-compose.yml up auth-saml redis minio minio-mc -d
+  docker compose -f tests/blackbox/docker-compose.yml up auth-saml redis s3proxy s3proxy-init -d --wait
 
   # Rebuild before running the suite (see note below)
   pnpm build
 
-  # For SQLite (the cheapest path; what PR CI runs)
+  # For SQLite (the cheapest local path)
   TEST_DB=sqlite3 pnpm test:blackbox
 
   # For other vendors (start the matching DB container first)

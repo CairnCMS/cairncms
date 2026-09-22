@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: 식별자
 avatar: 아바타
 application: 애플리케이션
@@ -76,14 +75,6 @@ create_role: 역할 생성
 create_user: 사용자 생성
 message: 메시지
 delete_panel: 판넬 삭제
-create_translation_string: 번역 문구 추가
-no_translation_string: 번역 문구 없음.
-no_translation_string_copy: 아직 등록된 번역 문구가 없습니다.
-translation_string_key_placeholder: 번역 문구 키(key)...
-translation_string_translations_placeholder: 새로운 번역 문구를 추가하세요.
-edit_translation_string: 번역 문구 수정
-delete_translation_string_copy: >-
-  번역 문구 "{key}"를 삭제하시겠습니까? 한번 삭제하면 복구되지 않습니다.
 invite_users: 사용자 초대
 invite: 초대
 email_already_invited: 이메일주소 "{email}" 로 이미 초대하였습니다.
@@ -114,13 +105,6 @@ public_label: 공개
 public_description: 인증 없이 사용할 수 있는 API 데이터를 제어합니다.
 admin_description: 제한 없는 앱/API 액세스 권한이 있는 초기 관리자 역할입니다.
 not_allowed: 허용되지 않음
-directus_version: CairnCMS 버전
-node_version: 노드 버전
-node_uptime: 노드 가동 시간
-os_type: OS 유형
-os_version: OS 버전
-os_uptime: OS 가동 시간
-os_totalmem: OS 메모리
 archive: 보관
 archive_confirm: 이 항목을 사용하지 않고 보관하시겠습니까?
 archive_confirm_count: >-
@@ -440,7 +424,7 @@ file_details: 파일 세부 정보
 dimensions: 규격
 size: 용량
 created: 작성됨
-modified: 수정됨 
+modified: 수정됨
 checksum: 체크섬
 owner: 소유자
 edited_by: 편집자
@@ -467,8 +451,6 @@ exporting_all_items_in_collection: '{collection}의 전체 데이터({total}개 
 exporting_limited_items_in_collection: '{collection}의 전체 {total}개 중 {limit}개 항목 내보내기'
 exporting_no_items_to_export: 내보낼 데이터가 없습니다. 아래 설정을 확인 해보세요.
 exporting_download_hint: 완료되면 이 {format} 파일이 기기에 자동으로 다운로드됩니다.
-exporting_batch_hint: 이 내보내기는 일괄 처리되며 완료되면 {format} 파일이 파일 라이브러리에 저장됩니다.
-exporting_batch_hint_forced: 항목 수가 많기 때문에 이 내보내기는 일괄 처리해야 하며 완료되면 {format} 파일이 파일 라이브러리에 저장됩니다.
 collection_key: 컬렉션 키
 name: 이름
 primary_key_field: 기본키 필드
@@ -493,7 +475,6 @@ enable_select_button: 선택 버튼 활성화
 allow_duplicates: 중복 허용
 comments: 코멘트
 no_comments: 아직 코멘트가 없습니다
-click_to_expand: 확장하려면 클릭
 select_item: 항목 선택
 no_items: 항목 없음
 search_items: 검색
@@ -956,7 +937,6 @@ settings_permissions: 역할 및 권한
 settings_project: 프로젝트 설정
 settings_flows: 플로우
 settings_presets: 사전설정 및 북마크
-settings_translation_strings: 번역 문자열
 one_or_more_options_are_missing: 하나 이상의 옵션이 없습니다.
 scope: 범위
 actions: 액션
@@ -1004,7 +984,6 @@ page_help_settings_presets_item: >-
   **사전 설정 세부 정보** — 책갈피 및 기본 컬렉션 사전 설정을 관리하기 위한 양식입니다.
 page_help_settings_flows_collection: '**플로우 찾아보기** — 프로젝트 내의 모든 플로우을 나열합니다.'
 page_help_settings_flows_item: '**Flow Detail** — 하나 이상의 작업을 관리하기 위한 작업 공간입니다.'
-page_help_settings_translation_strings_collection: '**번역 문자열 찾아보기** — 프로젝트 내의 모든 번역 문자열을 나열합니다.'
 page_help_users_collection: '**사용자 디렉터리** — 이 프로젝트 내의 모든 시스템 사용자를 나열합니다.'
 page_help_users_item: >-
   **사용자 세부 정보** — 계정 정보를 관리하거나 다른 사용자의 세부 정보를 봅니다.
@@ -1332,8 +1311,7 @@ referential_action_set_default: '{field}를 기본값으로 설정'
 choose_action: 액션 선택
 continue_label: 계속
 continue_as: >-
-  현재 {name}으로 인증되었습니다.
-  이 계정으로 계속하려면 계속을 누르세요.
+  현재 {name}으로 인증되었습니다. 이 계정으로 계속하려면 계속을 누르세요.
 editing_role: '{role} 역할'
 default_label: 기본
 delete_label: 삭제
@@ -1411,7 +1389,6 @@ translation: 번역
 translation_placeholder: 번역을 입력하세요...
 value: 값
 view_project: 프로젝트 보기
-weeks: { }
 report_error: 오류 신고
 start: 시작
 table: 테이블
@@ -1576,7 +1553,7 @@ interfaces:
     markdown: 마크다운
     description: 마크다운 입력 및 미리보기
     edit: 수정
-    preview: 미리보기 
+    preview: 미리보기
     editorFont: 편집기 글꼴
     previewFont: 글꼴 미리보기
     customSyntax: 맞춤형 블록
@@ -1667,7 +1644,6 @@ interfaces:
     input-translated-string: 번역된 문자열
     description: 번역 문자열 선택 또는 추가
     search_placeholder: 검색...
-    new_translation_string: 새 번역 문자열
   boolean:
     toggle: 비녀장
     description: 켜기와 끄기 간 전환

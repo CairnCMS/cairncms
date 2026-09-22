@@ -120,25 +120,39 @@ services:
     extra_hosts:
       - 'host.docker.internal:host-gateway'
 
-  minio:
-    image: minio/minio:latest
-    command: server /data/minio/ --console-address :9001
+  s3proxy:
+    image: andrewgaul/s3proxy@sha256:87662b2a5afcdfa5f478a1c61650bae4c87bbd15f6ff2823236bcfd66ef7fe04 # 4.1.1
     ports:
-      - 8881:9000
-      - 8882:9001
+      - 8881:80
     environment:
-      MINIO_ROOT_USER: cairncms
-      MINIO_ROOT_PASSWORD: miniosecret
+      S3PROXY_AUTHORIZATION: aws-v4
+      S3PROXY_IDENTITY: cairncms
+      S3PROXY_CREDENTIAL: miniosecret
+      JCLOUDS_PROVIDER: filesystem
+      JCLOUDS_FILESYSTEM_BASEDIR: /data
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
 
-  minio-mc:
-    image: minio/mc
+  s3proxy-init:
+    image: amazon/aws-cli@sha256:c240dd63cdbab17197486d55460675ef2b94c9cc372dedae34dee53ccd30657c
     depends_on:
-      - minio
-    entrypoint: >
-      /bin/sh -c " until (/usr/bin/mc alias set cairnminio http://minio:9000 cairncms miniosecret &&
-             /usr/bin/mc admin info cairnminio > /dev/null 2>&1); do
-          echo 'Waiting for MinIO to be ready...';
-          sleep 1;
-      done; /usr/bin/mc mb cairnminio/cairncms-blackbox-test; while true; do
-          sleep 3600;
-      done;"
+      - s3proxy
+    environment:
+      AWS_ACCESS_KEY_ID: cairncms
+      AWS_SECRET_ACCESS_KEY: miniosecret
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        aws configure set default.s3.addressing_style path
+        until aws --endpoint-url http://s3proxy:80 s3api create-bucket --bucket cairncms-blackbox-test || aws --endpoint-url http://s3proxy:80 s3api head-bucket --bucket cairncms-blackbox-test; do
+          echo 'Waiting for S3Proxy to be ready...'
+          sleep 1
+        done
+        while true; do sleep 3600; done
+    healthcheck:
+      test: ["CMD-SHELL", "aws --endpoint-url http://s3proxy:80 s3api head-bucket --bucket cairncms-blackbox-test || exit 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 20

@@ -4,14 +4,6 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - api/**
-      - tests/blackbox/**
-      - packages/**
-      - sdk/**
-      - package.json
-      - pnpm-lock.yaml
-      - .github/workflows/blackbox-pr.yml
 
 concurrency:
   group: blackbox-pr-${{ github.ref }}
@@ -22,11 +14,45 @@ env:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
-  test:
-    name: SQLite Only
+  changes:
+    name: Detect changes
     runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.filter.outputs.blackbox }}
+    steps:
+      - name: Filter blackbox-relevant paths
+        id: filter
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
+        with:
+          filters: |
+            blackbox:
+              - 'api/**'
+              - 'tests/blackbox/**'
+              - 'packages/**'
+              - 'sdk/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - '.github/workflows/blackbox-pr.yml'
+              - '.github/workflows/blackbox-main.yml'
+
+  test:
+    name: ${{ matrix.vendor }}
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        vendor:
+          - sqlite3
+          - postgres
+          - postgres10
+          - mysql
+          - mysql5
+          - maria
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -34,9 +60,47 @@ jobs:
       - name: Prepare
         uses: ./.github/actions/prepare
 
-      - name: Start services
+      - name: Start services (SQLite)
+        if: matrix.vendor == 'sqlite3'
         run:
-          docker compose -f tests/blackbox/docker-compose.yml up auth-saml redis minio minio-mc -d --quiet-pull --wait
+          docker compose -f tests/blackbox/docker-compose.yml up auth-saml redis s3proxy s3proxy-init -d --quiet-pull --wait
 
-      - name: Run tests
-        run: TEST_DB=sqlite3 pnpm run test:blackbox --maxWorkers=2
+      - name: Start services (other vendors)
+        if: matrix.vendor != 'sqlite3'
+        run:
+          docker compose -f tests/blackbox/docker-compose.yml up ${{ matrix.vendor }} auth-saml redis redis7 redis60 s3proxy s3proxy-init
+          -d --quiet-pull --wait
+
+      - name: Run tests (SQLite)
+        if: matrix.vendor == 'sqlite3'
+        run: TEST_DB=${{ matrix.vendor }} pnpm run test:blackbox --runInBand
+
+      - name: Run tests (other vendors)
+        if: matrix.vendor != 'sqlite3'
+        run: TEST_DB=${{ matrix.vendor }} pnpm run test:blackbox --maxWorkers=2
+
+  gate:
+    name: Blackbox PR Gate
+    runs-on: ubuntu-latest
+    needs:
+      - changes
+      - test
+    if: always()
+    steps:
+      - name: Require every vendor to pass, or the matrix to be correctly skipped
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          RUN: ${{ needs.changes.outputs.run }}
+          TEST_RESULT: ${{ needs.test.result }}
+        run: |
+          echo "changes=$CHANGES_RESULT run=$RUN test=$TEST_RESULT"
+          if [ "$CHANGES_RESULT" = "success" ] && [ "$RUN" = "false" ] && [ "$TEST_RESULT" = "skipped" ]; then
+            echo "No blackbox-relevant changes; the vendor matrix was correctly skipped."
+            exit 0
+          fi
+          if [ "$CHANGES_RESULT" = "success" ] && [ "$RUN" = "true" ] && [ "$TEST_RESULT" = "success" ]; then
+            echo "All blackbox vendors passed."
+            exit 0
+          fi
+          echo "Blackbox gate failed: unexpected or failing state."
+          exit 1

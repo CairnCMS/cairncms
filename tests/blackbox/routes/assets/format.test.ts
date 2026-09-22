@@ -8,7 +8,7 @@ import * as common from '@common/index';
 jest.setTimeout(30000);
 
 const assetsDirectory = [__dirname, '..', '..', 'assets'];
-const storages = ['local', 'minio'];
+const storages = ['local', 's3'];
 
 const imageFileAvif = path.join(...assetsDirectory, 'directus.avif');
 const imageFilePng = path.join(...assetsDirectory, 'directus.png');
