@@ -15,7 +15,7 @@
 			</v-list>
 		</div>
 		<drawer-item
-			:active="!!currentlyEditing"
+			:active="currentlyEditing !== undefined"
 			:collection="collection"
 			:primary-key="currentlyEditing ?? '+'"
 			:edits="editsAtStart"
@@ -27,6 +27,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { omit } from 'lodash';
 import api from '@/api';
 import { useFieldsStore } from '@/stores/fields';
 import { useInsightsStore } from '@/stores/insights';
@@ -71,7 +72,7 @@ function cancelEdit() {
 
 async function saveEdits(item: Record<string, any>) {
 	try {
-		await api.patch(`${getEndpoint(props.collection)}/${currentlyEditing.value}`, item);
+		await api.patch(`${getEndpoint(props.collection)}/${currentlyEditing.value}`, omit(item, primaryKeyField.value));
 	} catch (err: any) {
 		unexpectedError(err);
 	}
