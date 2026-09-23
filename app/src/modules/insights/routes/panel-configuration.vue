@@ -8,7 +8,7 @@
 		@cancel="router.push(`/insights/${dashboardKey}`)"
 	>
 		<template #actions>
-			<v-button v-tooltip.bottom="t('done')" :disabled="!panel.type" icon rounded @click="stageChanges">
+			<v-button v-tooltip.bottom="t('done')" :disabled="!canSave" icon rounded @click="stageChanges">
 				<v-icon name="check" />
 			</v-button>
 		</template>
@@ -20,6 +20,7 @@
 				:model-value="panel.type"
 				class="select"
 				:items="selectItems"
+				:disabled="!fieldWritable('type')"
 				@update:model-value="edits.type = $event"
 			/>
 
@@ -30,6 +31,7 @@
 				type="panel"
 				:extension="panel.type"
 				raw-editor-enabled
+				:disabled="!fieldWritable('options')"
 				@update:model-value="edits.options = $event"
 			/>
 
@@ -45,6 +47,7 @@
 						:model-value="panel.show_header"
 						block
 						:label="t('show_header')"
+						:disabled="!fieldWritable('show_header')"
 						@update:model-value="edits.show_header = $event"
 					/>
 				</div>
@@ -54,7 +57,7 @@
 					<v-input
 						:model-value="panel.name"
 						:nullable="false"
-						:disabled="panel.show_header !== true"
+						:disabled="panel.show_header !== true || !fieldWritable('name')"
 						:placeholder="t('panel_name_placeholder')"
 						@update:model-value="edits.name = $event"
 					/>
@@ -64,7 +67,7 @@
 					<p class="type-label">{{ t('icon') }}</p>
 					<interface-select-icon
 						:value="panel.icon"
-						:disabled="panel.show_header !== true"
+						:disabled="panel.show_header !== true || !fieldWritable('icon')"
 						@input="edits.icon = $event"
 					/>
 				</div>
@@ -73,7 +76,7 @@
 					<p class="type-label">{{ t('color') }}</p>
 					<interface-select-color
 						:value="panel.color"
-						:disabled="panel.show_header !== true"
+						:disabled="panel.show_header !== true || !fieldWritable('color')"
 						width="half"
 						@input="edits.color = $event"
 					/>
@@ -83,7 +86,7 @@
 					<p class="type-label">{{ t('note') }}</p>
 					<v-input
 						:model-value="panel.note"
-						:disabled="panel.show_header !== true"
+						:disabled="panel.show_header !== true || !fieldWritable('note')"
 						:placeholder="t('panel_note_placeholder')"
 						@update:model-value="edits.note = $event"
 					/>
@@ -96,17 +99,29 @@
 <script lang="ts" setup>
 import { useDialogRoute } from '@/composables/use-dialog-route';
 import { useExtension } from '@/composables/use-extension';
+import {
+	hasConditionalItemPermission,
+	itemActionAllowed,
+	useItemPermissions,
+} from '@/composables/use-item-permissions';
 import { useExtensions } from '@/extensions';
 import { useInsightsStore } from '@/stores/insights';
 import { CreatePanel } from '@/stores/insights';
+import { usePermissionsStore } from '@/stores/permissions';
+import { useUserStore } from '@/stores/user';
+import { pickWritable } from '@/utils/pick-writable';
 import { Panel } from '@cairncms/types';
-import { assign, clone, omitBy, isUndefined } from 'lodash';
+import { assign, clone, merge, omitBy, isUndefined } from 'lodash';
 import { nanoid } from 'nanoid/non-secure';
 import { storeToRefs } from 'pinia';
-import { computed, reactive, unref } from 'vue';
+import { computed, reactive, ref, unref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import ExtensionOptions from '../../settings/routes/data-model/field-detail/shared/extension-options.vue';
+
+const COLLECTION = 'directus_panels';
+const CONFIG_FIELDS = ['type', 'options', 'show_header', 'name', 'icon', 'color', 'note'];
+const REQUIRED_CREATE = ['dashboard', 'type', 'position_x', 'position_y', 'width', 'height'];
 
 interface Props {
 	dashboardKey: string;
@@ -140,10 +155,172 @@ const { panels: panelTypes } = useExtensions();
 
 const router = useRouter();
 
+const insightsEdits = insightsStore.edits;
+const permissionsStore = usePermissionsStore();
+const userStore = useUserStore();
+
+const isNewKey = computed(() => props.panelKey === '+');
+const isStaged = computed(() => props.panelKey.startsWith('_'));
+const isPersisted = computed(() => isNewKey.value === false && isStaged.value === false);
+
+function resetEdits() {
+	for (const key of Object.keys(edits)) (edits as Record<string, any>)[key] = undefined;
+}
+
+watch(
+	() => [props.dashboardKey, props.panelKey, isOpen.value] as const,
+	([newDash, newKey, newOpen], [oldDash, oldKey, oldOpen]) => {
+		const targetChanged = newDash !== oldDash || newKey !== oldKey;
+		const closed = oldOpen === true && newOpen === false;
+		if (targetChanged || closed) resetEdits();
+	}
+);
+
+const existingPanel = computed(() => unref(panels).find((p) => p.id === props.panelKey));
+const stagedEntry = computed(() => insightsEdits.create.find((p) => p.id === props.panelKey));
+
+const localReady = computed(() => {
+	if (isOpen.value !== true) return false;
+	if (isNewKey.value) return true;
+	if (isStaged.value) return !!stagedEntry.value;
+	return !!existingPanel.value;
+});
+
+const isAdmin = computed(() => userStore.currentUser?.role?.admin_access === true);
+
+const conditionalUpdate = computed(
+	() => localReady.value && isPersisted.value && hasConditionalItemPermission(COLLECTION, ['update'])
+);
+
+const { itemPermissions } = useItemPermissions(
+	ref(COLLECTION),
+	computed(() => (isPersisted.value ? props.panelKey : null)),
+	conditionalUpdate,
+	existingPanel
+);
+
+const capabilityReady = computed(() => conditionalUpdate.value === false || itemPermissions.value !== null);
+
+const updateAllowed = computed(() =>
+	itemActionAllowed(COLLECTION, 'update', itemPermissions.value, localReady.value, capabilityReady.value)
+);
+
+const createPermission = computed(() => permissionsStore.getPermissionsForUser(COLLECTION, 'create'));
+const createPresets = computed<Record<string, any>>(() => createPermission.value?.presets ?? {});
+const createAllowed = computed(() => localReady.value && permissionsStore.hasPermission(COLLECTION, 'create'));
+
+const canEdit = computed(() => (isPersisted.value ? updateAllowed.value : createAllowed.value));
+
+const writableFields = computed<string[] | null>(() => {
+	if (isAdmin.value) return ['*'];
+	if (isPersisted.value === false) return createPermission.value?.fields ?? null;
+
+	const permission = permissionsStore.getPermissionsForUser(COLLECTION, 'update');
+	if (!permission) return null;
+
+	const unconditional = !permission.permissions || Object.keys(permission.permissions).length === 0;
+	if (unconditional) return permission.fields ?? null;
+
+	return itemPermissions.value?.update.fields ?? null;
+});
+
+function fieldWritable(name: string): boolean {
+	if (canEdit.value === false) return false;
+	const fields = writableFields.value;
+	return !!fields && (fields.includes('*') || fields.includes(name));
+}
+
+function writableForCreate(col: string): boolean {
+	const fields = writableFields.value;
+	return !!fields && (fields.includes('*') || fields.includes(col));
+}
+
+const hasWritableContent = computed(() => {
+	const fields = writableFields.value;
+	if (!fields) return false;
+	if (fields.includes('*')) return true;
+	return CONFIG_FIELDS.some((field) => fields.includes(field));
+});
+
+const effectiveType = computed<string | null>(() => {
+	const edited = edits.type as string | null | undefined;
+
+	if (isPersisted.value) {
+		if (edited !== undefined) return edited;
+		return (existingPanel.value?.type as string | undefined) ?? null;
+	}
+
+	if (writableForCreate('type')) {
+		if (edited !== undefined) return edited;
+		return (
+			(isStaged.value ? ((existingPanel.value ?? stagedEntry.value)?.type as string | undefined) : undefined) ??
+			(createPresets.value.type as string | undefined) ??
+			null
+		);
+	}
+
+	return (createPresets.value.type as string | undefined) ?? null;
+});
+
+const currentTypeInfo = useExtension('panel', effectiveType);
+
+const effectiveDashboard = computed<string>(() =>
+	writableForCreate('dashboard') ? props.dashboardKey : createPresets.value.dashboard ?? props.dashboardKey
+);
+
+const manufacturedDefaults = computed<Record<string, any>>(() => ({
+	options: {},
+	width: currentTypeInfo.value?.minWidth ?? 4,
+	height: currentTypeInfo.value?.minHeight ?? 4,
+	position_x: 1,
+	position_y: 1,
+}));
+
+const effectivePanel = computed<Partial<Panel>>(() => {
+	const fields = writableFields.value;
+	const all = !!fields && fields.includes('*');
+	const canWrite = (key: string) => all || (!!fields && fields.includes(key));
+
+	const result: Record<string, any> = merge({}, manufacturedDefaults.value, createPresets.value);
+
+	const staged = isStaged.value ? existingPanel.value ?? stagedEntry.value ?? {} : {};
+
+	for (const [key, value] of Object.entries(staged)) {
+		if (key !== 'id' && canWrite(key)) result[key] = value;
+	}
+
+	for (const [key, value] of Object.entries(omitBy(edits, isUndefined))) {
+		if (canWrite(key)) result[key] = value;
+	}
+
+	result.type = effectiveType.value;
+	result.dashboard = effectiveDashboard.value;
+	return result;
+});
+
+const createSatisfiable = computed(() =>
+	REQUIRED_CREATE.every((col) => {
+		const value = writableForCreate(col)
+			? (effectivePanel.value as Record<string, any>)[col]
+			: createPresets.value[col];
+
+		return value !== undefined && value !== null;
+	})
+);
+
+const requiredNotNulled = computed(() => {
+	const content = pickWritable(omitBy(edits, isUndefined), writableFields.value);
+	return !REQUIRED_CREATE.some((col) => content[col] === null);
+});
+
+const canSave = computed(() => {
+	if (isNewKey.value || isStaged.value) return canEdit.value && createSatisfiable.value;
+	return updateAllowed.value && hasWritableContent.value && requiredNotNulled.value;
+});
+
 const panel = computed<Partial<Panel>>(() => {
-	if (props.panelKey === '+') return edits;
-	const existing: Partial<Panel> = unref(panels).find((panel) => panel.id === props.panelKey) ?? {};
-	return assign({}, existing, omitBy(edits, isUndefined));
+	if (isPersisted.value) return assign({}, existingPanel.value ?? {}, omitBy(edits, isUndefined));
+	return effectivePanel.value;
 });
 
 const selectItems = computed<FancySelectItem[]>(() => {
@@ -159,11 +336,6 @@ const selectItems = computed<FancySelectItem[]>(() => {
 	});
 });
 
-const currentTypeInfo = useExtension(
-	'panel',
-	computed(() => panel.value.type ?? null)
-);
-
 const customOptionsFields = computed(() => {
 	if (typeof currentTypeInfo.value?.options === 'function') {
 		return currentTypeInfo.value?.options(unref(panel)) ?? null;
@@ -173,23 +345,32 @@ const customOptionsFields = computed(() => {
 });
 
 const stageChanges = () => {
-	if (props.panelKey === '+') {
-		const createPanel = clone(unref(panel));
+	if (canSave.value !== true) return;
 
-		createPanel.id = `_${nanoid()}`;
-		createPanel.dashboard = props.dashboardKey;
-		createPanel.width ??= unref(currentTypeInfo)?.minWidth ?? 4;
-		createPanel.height ??= unref(currentTypeInfo)?.minHeight ?? 4;
-		createPanel.position_x ??= 1;
-		createPanel.position_y ??= 1;
-		createPanel.options ??= {};
+	if (isNewKey.value || isStaged.value) {
+		const reconciled = clone(unref(effectivePanel)) as Partial<Panel>;
 
-		insightsStore.stagePanelCreate(unref(createPanel as CreatePanel));
+		if (isNewKey.value) {
+			reconciled.id = `_${nanoid()}`;
+		} else {
+			reconciled.id = props.panelKey;
+			insightsStore.stagePanelDelete(props.panelKey);
+		}
+
+		insightsStore.stagePanelCreate(reconciled as CreatePanel, writableFields.value);
 		router.push(`/insights/${props.dashboardKey}`);
-	} else {
-		insightsStore.stagePanelUpdate({ id: props.panelKey, edits: unref(panel) });
-		router.push(`/insights/${props.dashboardKey}`);
+		return;
 	}
+
+	const content = pickWritable(omitBy(edits, isUndefined), writableFields.value);
+
+	if (Object.keys(content).length === 0) {
+		router.push(`/insights/${props.dashboardKey}`);
+		return;
+	}
+
+	insightsStore.stagePanelUpdate({ id: props.panelKey, edits: content });
+	router.push(`/insights/${props.dashboardKey}`);
 };
 </script>
 

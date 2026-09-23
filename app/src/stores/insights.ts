@@ -11,6 +11,7 @@ import { acceptHMRUpdate, defineStore } from 'pinia';
 import { computed, reactive, ref, unref } from 'vue';
 import { Dashboard } from '@/types/insights';
 import { fetchAll } from '@/utils/fetch-all';
+import { pickWritable } from '@/utils/pick-writable';
 import escapeStringRegexp from 'escape-string-regexp';
 import { useExtensions } from '@/extensions';
 
@@ -44,6 +45,12 @@ export const useInsightsStore = defineStore('insightsStore', () => {
 		update: [],
 		delete: [],
 	});
+
+	/**
+	 * Writable field set recorded per staged create (keyed by temp id). Absent means no metadata was
+	 * recorded and the create submits every field; an explicit null means no writable fields.
+	 */
+	const createWritable = new Map<string, string[] | null>();
 
 	const refreshIntervals = {} as { [dashboard: string]: number };
 
@@ -156,6 +163,7 @@ export const useInsightsStore = defineStore('insightsStore', () => {
 		edits.create = [];
 		edits.update = [];
 		edits.delete = [];
+		createWritable.clear();
 	}
 
 	function getDashboard(id: string) {
@@ -329,16 +337,27 @@ export const useInsightsStore = defineStore('insightsStore', () => {
 		);
 	}
 
-	function stagePanelCreate(panel: CreatePanel) {
+	function stagePanelCreate(panel: CreatePanel, writableFields?: string[] | null) {
 		edits.create.push(panel);
+		if (writableFields !== undefined) createWritable.set(panel.id, writableFields);
 		loadPanelData(panel);
 	}
 
-	function stagePanelUpdate({ id, edits: panelEdits }: { id: string; edits: Partial<Panel> }) {
+	function stagePanelUpdate({
+		id,
+		edits: panelEdits,
+		writableFields,
+	}: {
+		id: string;
+		edits: Partial<Panel>;
+		writableFields?: string[] | null;
+	}) {
 		panelEdits = omitBy(panelEdits, isUndefined);
 
 		const isNew = id.startsWith('_');
 		const arr = isNew ? edits.create : edits.update;
+
+		if (isNew && writableFields !== undefined) createWritable.set(id, writableFields);
 
 		/**
 		 * Check what the currently used data query is, so we can compare it to the new query later to
@@ -417,6 +436,7 @@ export const useInsightsStore = defineStore('insightsStore', () => {
 	function stagePanelDelete(panelKey: string) {
 		if (edits.create.some((created) => created.id === panelKey)) {
 			edits.create = edits.create.filter((created) => created.id !== panelKey);
+			createWritable.delete(panelKey);
 			return;
 		}
 
@@ -432,11 +452,16 @@ export const useInsightsStore = defineStore('insightsStore', () => {
 			const requests: Promise<AxiosResponse<any, any>>[] = [];
 
 			if (edits.create) {
-				// Created edits might come with a temporary ID for editing. Make sure to submit to API without temp ID
+				// Created edits carry a temporary ID for editing and the full object for preview; submit
+				// without the temp ID and filtered to the writable fields recorded for that create. An
+				// absent record submits every field (external callers), an explicit set (including null)
+				// limits the payload to the authorized content.
 				requests.push(
 					api.post(
 						`/panels`,
-						edits.create.map((create) => omit(create, 'id'))
+						edits.create.map((create) =>
+							pickWritable(omit(create, 'id'), createWritable.has(create.id) ? createWritable.get(create.id)! : ['*'])
+						)
 					)
 				);
 			}

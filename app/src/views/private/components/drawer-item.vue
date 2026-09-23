@@ -92,6 +92,7 @@ import { usePermissionsStore } from '@/stores/permissions';
 import { useRelationsStore } from '@/stores/relations';
 import { useUserStore } from '@/stores/user';
 import { getDefaultValuesFromFields } from '@/utils/get-default-values-from-fields';
+import { pickWritable } from '@/utils/pick-writable';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { validateItem } from '@/utils/validate-item';
 import FilePreview from '@/views/private/components/file-preview.vue';
@@ -161,22 +162,6 @@ function hasMeaningfulContent(
 	identityFields: (string | null | undefined)[]
 ): boolean {
 	return meaningfulContentKeys(edits, identityFields).length > 0;
-}
-
-function pickWritable(edits: Record<string, any>, fields: string[] | null): Record<string, any> {
-	const picked: Record<string, any> = {};
-	const all = !!fields && fields.includes('*');
-
-	for (const key of Object.keys(edits)) {
-		if (key.startsWith('$')) {
-			picked[key] = edits[key];
-			continue;
-		}
-
-		if (all || (fields && fields.includes(key))) picked[key] = edits[key];
-	}
-
-	return picked;
 }
 
 function stripStaging(edits: Record<string, any>): Record<string, any> {
