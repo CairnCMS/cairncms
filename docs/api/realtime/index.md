@@ -3,7 +3,7 @@ title: Realtime
 description: Subscribe to collection changes over a WebSocket. The two transports, the three authentication modes, the subscription model, the SDK, the extension surface, and the database-authoritative recovery contract.
 sidebar:
   label: Overview
-  order: 8
+  order: 0
 ---
 
 CairnCMS can push change notifications to connected clients over a WebSocket, so an interface can update as data changes instead of polling. A client opens a persistent connection, subscribes to one or more collections, and receives a message whenever a matching item is created, updated, or deleted.

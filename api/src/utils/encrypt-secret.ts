@@ -145,6 +145,16 @@ function parseEnvelope(value: unknown): { salt: Buffer; iv: Buffer; ct: Buffer; 
 	};
 }
 
+/** Checks envelope structure without a key; does not decrypt or authenticate the ciphertext. */
+export function isSecretEnvelope(value: unknown): boolean {
+	try {
+		parseEnvelope(value);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 /**
  * Decrypts a marked envelope server-side. Validates the envelope contract first, then fails
  * closed by throwing on a tampered ciphertext, IV, or tag through the GCM tag check, and on

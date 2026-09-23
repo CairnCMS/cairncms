@@ -14,6 +14,9 @@ const checkCacheMiddleware: RequestHandler = asyncHandler(async (req, res, next)
 	if (env['CACHE_ENABLED'] !== true) return next();
 	if (!cache) return next();
 
+	// Server info must always be served fresh, never from a prior cached entry.
+	if (req.path === '/server/info') return next();
+
 	if (shouldSkipCache(req)) {
 		if (env['CACHE_STATUS_HEADER']) res.setHeader(`${env['CACHE_STATUS_HEADER']}`, 'MISS');
 		return next();
