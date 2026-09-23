@@ -177,11 +177,15 @@ const config: Config = {
 				port: 6107,
 			},
 			pool: {
-				afterCreate: async (conn: any, callback: any) => {
+				afterCreate: (conn: any, callback: any) => {
 					const run = promisify(conn.query.bind(conn));
-					await run('SET serial_normalization = "sql_sequence"');
-					await run('SET default_int_size = 4');
-					callback(null, conn);
+
+					run('SET serial_normalization = "sql_sequence"')
+						.then(() => run('SET default_int_size = 4'))
+						.then(
+							() => callback(null, conn),
+							(error: unknown) => callback(error)
+						);
 				},
 			},
 			...knexConfig,
@@ -193,10 +197,13 @@ const config: Config = {
 			},
 			useNullAsDefault: true,
 			pool: {
-				afterCreate: async (conn: any, callback: any) => {
+				afterCreate: (conn: any, callback: any) => {
 					const run = promisify(conn.run.bind(conn));
-					await run('PRAGMA foreign_keys = ON');
-					callback(null, conn);
+
+					run('PRAGMA foreign_keys = ON').then(
+						() => callback(null, conn),
+						(error: unknown) => callback(error)
+					);
 				},
 			},
 			...knexConfig,
