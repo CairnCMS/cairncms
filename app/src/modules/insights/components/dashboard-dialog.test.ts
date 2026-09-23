@@ -337,6 +337,104 @@ describe('insights dashboard-dialog capability gating', () => {
 		expect(transport.posts).toHaveLength(0);
 	});
 
+	it('creates with a preset name without submitting the non-writable name', async () => {
+		const presetCreate: Permission = {
+			role: 'role-1',
+			collection: 'directus_dashboards',
+			action: 'create',
+			permissions: {},
+			validation: null,
+			presets: { name: 'Preset Dashboard' },
+			fields: ['note'],
+		};
+
+		const wrapper = mountDialog({ dashboard: undefined }, [presetCreate]);
+		await flushPromises();
+
+		expect(nameInput(wrapper).props('disabled')).toBe(true);
+		expect(nameInput(wrapper).props('modelValue')).toBe('Preset Dashboard');
+		expect(saveButton(wrapper).attributes('disabled')).toBeUndefined();
+
+		await wrapper.findAllComponents(VInput)[1]!.setValue('a note');
+		await saveButton(wrapper).trigger('click');
+		await flushPromises();
+
+		expect(transport.posts).toHaveLength(1);
+		expect(transport.posts[0]!.payload).toEqual({ note: 'a note' });
+	});
+
+	it('prefills an editable preset name and blocks clearing it', async () => {
+		const editablePresetCreate: Permission = {
+			role: 'role-1',
+			collection: 'directus_dashboards',
+			action: 'create',
+			permissions: {},
+			validation: null,
+			presets: { name: 'Preset Editable' },
+			fields: ['name', 'note'],
+		};
+
+		const wrapper = mountDialog({ dashboard: undefined }, [editablePresetCreate]);
+		await flushPromises();
+
+		expect(nameInput(wrapper).props('disabled')).toBe(false);
+		expect(nameInput(wrapper).props('modelValue')).toBe('Preset Editable');
+		expect(saveButton(wrapper).attributes('disabled')).toBeUndefined();
+
+		await nameInput(wrapper).setValue('');
+		expect(saveButton(wrapper).attributes('disabled')).toBeDefined();
+
+		saveButton(wrapper).vm.$emit('click');
+		await flushPromises();
+
+		expect(transport.posts).toHaveLength(0);
+	});
+
+	it('allows a zero-input create backed entirely by a preset', async () => {
+		const presetOnlyCreate: Permission = {
+			role: 'role-1',
+			collection: 'directus_dashboards',
+			action: 'create',
+			permissions: {},
+			validation: null,
+			presets: { name: 'Preset Only' },
+			fields: [],
+		};
+
+		const wrapper = mountDialog({ dashboard: undefined }, [presetOnlyCreate]);
+		await flushPromises();
+
+		expect(saveButton(wrapper).attributes('disabled')).toBeUndefined();
+
+		await saveButton(wrapper).trigger('click');
+		await flushPromises();
+
+		expect(transport.posts).toHaveLength(1);
+		expect(transport.posts[0]!.payload).toEqual({});
+	});
+
+	it('blocks a create when the name is neither writable nor preset-supplied', async () => {
+		const noNameCreate: Permission = {
+			role: 'role-1',
+			collection: 'directus_dashboards',
+			action: 'create',
+			permissions: {},
+			validation: null,
+			presets: null,
+			fields: ['note'],
+		};
+
+		const wrapper = mountDialog({ dashboard: undefined }, [noNameCreate]);
+		await flushPromises();
+
+		expect(saveButton(wrapper).attributes('disabled')).toBeDefined();
+
+		saveButton(wrapper).vm.$emit('click');
+		await flushPromises();
+
+		expect(transport.posts).toHaveLength(0);
+	});
+
 	it('issues a single write for immediate repeated save events', async () => {
 		defer('/dashboards');
 

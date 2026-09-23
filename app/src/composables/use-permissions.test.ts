@@ -210,6 +210,51 @@ describe('usePermissions item actions', () => {
 		expect(updateAllowed.value).toBe(true);
 	});
 
+	test('denies a conditional update whose capability grants no writable field', async () => {
+		me.response = { update: { access: true, fields: [] }, delete: { access: false }, share: { access: false } };
+
+		const { updateAllowed, saveAllowed } = setup({
+			admin: false,
+			permissions: [updatePermission({ status: { _eq: 'x' } }, ['title'])],
+			item: { id: '5' },
+			requestedKey: '5',
+		});
+
+		await flushPromises();
+
+		expect(updateAllowed.value).toBe(false);
+		expect(saveAllowed.value).toBe(false);
+	});
+
+	test('denies an unconditional update that grants no writable field', async () => {
+		const { updateAllowed, saveAllowed } = setup({
+			admin: false,
+			permissions: [updatePermission(null, [])],
+			item: { id: '5' },
+			requestedKey: '5',
+		});
+
+		await flushPromises();
+
+		expect(updateAllowed.value).toBe(false);
+		expect(saveAllowed.value).toBe(false);
+		expect(me.paths).toEqual([]);
+	});
+
+	test('allows an unconditional update that grants a writable field', async () => {
+		const { updateAllowed } = setup({
+			admin: false,
+			permissions: [updatePermission(null, ['title'])],
+			item: { id: '5' },
+			requestedKey: '5',
+		});
+
+		await flushPromises();
+
+		expect(updateAllowed.value).toBe(true);
+		expect(me.paths).toEqual([]);
+	});
+
 	test('denies a conditional update when the server capabilities are unavailable', async () => {
 		me.reject = true;
 

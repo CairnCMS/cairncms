@@ -102,6 +102,23 @@ export function usePermissions(
 		return !!permissionsStore.getPermissionsForUser(collection.value, 'create');
 	});
 
+	const updateWritableFields = computed<string[] | null>(() => {
+		if (isAdmin.value) return ['*'];
+
+		const permission = permissionsStore.getPermissionsForUser(collection.value, 'update');
+		if (!permission) return null;
+
+		if (isUnconditional(permission)) return permission.fields ?? null;
+
+		if (capabilityReady.value === false) return null;
+		if (itemPermissions.value?.update.access !== true) return null;
+		return itemPermissions.value.update.fields ?? null;
+	});
+
+	function hasWritableContent(fields: string[] | null): boolean {
+		return !!fields && fields.length > 0;
+	}
+
 	const deleteAllowed = computed(() => {
 		if (context.isBatch.value === true) {
 			if (localReady.value === false) return false;
@@ -125,13 +142,15 @@ export function usePermissions(
 			return permissionsStore.hasPermission(collection.value, 'update');
 		}
 
-		return itemActionAllowed(
+		const allowed = itemActionAllowed(
 			collection.value,
 			'update',
 			itemPermissions.value,
 			localReady.value,
 			capabilityReady.value
 		);
+
+		return allowed && hasWritableContent(updateWritableFields.value);
 	});
 
 	const saveAllowed = computed(() => {

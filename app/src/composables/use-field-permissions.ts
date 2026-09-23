@@ -27,12 +27,15 @@ export function useFieldPermissions(collection: Ref<string>, isNew: Ref<boolean>
 
 		if (!permissions) return fields;
 
-		if (permissions.fields?.includes('*') === false) {
+		const writableFields = permissions.fields ?? [];
+
+		if (writableFields.includes('*') === false) {
 			fields = fields.map((field: Field) => {
-				if (permissions.fields?.includes(field.field) === false) {
+				if (writableFields.includes(field.field) === false) {
 					field.meta = {
 						...(field.meta || {}),
 						readonly: true,
+						conditions: field.meta?.conditions?.map((condition) => ({ ...condition, readonly: true })),
 					} as any;
 				}
 

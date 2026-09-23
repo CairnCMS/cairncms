@@ -109,15 +109,24 @@ const writableFields = computed<string[] | null>(() => {
 	return permission.fields ?? null;
 });
 
+const createPresetName = computed<string | null>(() => {
+	if (isAdmin.value) return null;
+	const permission = permissionsStore.getPermissionsForUser(collection.value, 'create');
+	return (permission?.presets?.name as string | null) ?? null;
+});
+
 const saveAllowed = computed(() => {
 	if (props.modelValue !== true) return false;
 	if (saving.value) return false;
-	if (!values.name) return false;
 
 	if (isNew.value) {
-		if (isAdmin.value) return true;
-		return !!permissionsStore.getPermissionsForUser(collection.value, 'create');
+		if (!isAdmin.value && !permissionsStore.getPermissionsForUser(collection.value, 'create')) return false;
+
+		const effectiveName = fieldWritable('name') ? values.name : createPresetName.value;
+		return !!effectiveName;
 	}
+
+	if (fieldWritable('name') && !values.name) return false;
 
 	const updatable = itemActionAllowed(
 		collection.value,
@@ -140,6 +149,11 @@ function fieldWritable(field: string): boolean {
 	return fields.includes('*') || fields.includes(field);
 }
 
+function resolvedName(): string | null {
+	if (props.dashboard) return props.dashboard.name ?? null;
+	return createPresetName.value;
+}
+
 function writablePayload(): Record<string, any> {
 	const fields = writableFields.value;
 	const all = !!fields && fields.includes('*');
@@ -153,7 +167,7 @@ function writablePayload(): Record<string, any> {
 }
 
 const values = reactive({
-	name: props.dashboard?.name ?? null,
+	name: resolvedName(),
 	icon: props.dashboard?.icon ?? 'dashboard',
 	color: props.dashboard?.color ?? null,
 	note: props.dashboard?.note ?? null,
@@ -166,7 +180,7 @@ let sessionGeneration = 0;
 watch([() => props.modelValue, () => props.dashboard?.id], () => {
 	sessionGeneration++;
 	saving.value = false;
-	values.name = props.dashboard?.name ?? null;
+	values.name = resolvedName();
 	values.icon = props.dashboard?.icon ?? 'dashboard';
 	values.color = props.dashboard?.color ?? null;
 	values.note = props.dashboard?.note ?? null;

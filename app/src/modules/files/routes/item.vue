@@ -323,6 +323,8 @@ function useBreadcrumb() {
 }
 
 async function saveAndQuit() {
+	if (isSavable.value === false) return;
+
 	try {
 		await save();
 		router.push(to.value);
@@ -332,6 +334,8 @@ async function saveAndQuit() {
 }
 
 async function saveAndStay() {
+	if (isSavable.value === false) return;
+
 	try {
 		await save();
 		revisionsDrawerDetailRef.value?.refresh?.();

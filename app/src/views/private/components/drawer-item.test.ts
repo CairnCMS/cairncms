@@ -373,6 +373,70 @@ describe('drawer-item single-item gating', () => {
 		expect(payload.id).toBe('5');
 	});
 
+	it('marks a subset-restricted field readonly in the opened form', async () => {
+		transport.capabilities['articles/5'] = cap(true, ['title']);
+		transport.items['/items/articles/5'] = { id: '5', title: 'Existing', body: 'Body' };
+
+		const restrictedUpdate = {
+			collection: 'articles',
+			action: 'update',
+			role: 'role-1',
+			permissions: { owner: { _eq: '$CURRENT_USER' } },
+			fields: ['title'],
+		};
+
+		const wrapper = mountDrawer({ collection: 'articles', primaryKey: '5' }, { permissions: [restrictedUpdate] });
+		await flushPromises();
+
+		const mainForm = forms(wrapper).find((form) => (form.props('fields') as any[]).some((f) => f.field === 'title'))!;
+		const formFields = mainForm.props('fields') as any[];
+		expect(formFields.find((f) => f.field === 'body').meta.readonly).toBe(true);
+		expect(formFields.find((f) => f.field === 'title').meta.readonly).toBeFalsy();
+	});
+
+	it('marks every field readonly for a null-field update grant', async () => {
+		transport.capabilities['articles/5'] = cap(true, null);
+		transport.items['/items/articles/5'] = { id: '5', title: 'Existing', body: 'Body' };
+
+		const nullUpdate = {
+			collection: 'articles',
+			action: 'update',
+			role: 'role-1',
+			permissions: { owner: { _eq: '$CURRENT_USER' } },
+			fields: null,
+		};
+
+		const wrapper = mountDrawer({ collection: 'articles', primaryKey: '5' }, { permissions: [nullUpdate] });
+		await flushPromises();
+
+		const mainForm = forms(wrapper).find((form) => (form.props('fields') as any[]).some((f) => f.field === 'title'))!;
+		const formFields = mainForm.props('fields') as any[];
+		expect(formFields.every((f) => f.meta.readonly === true)).toBe(true);
+	});
+
+	it('emits an empty default-only create validated by a preset for a required field', async () => {
+		const presetCreate = {
+			collection: 'authors',
+			action: 'create',
+			role: 'role-1',
+			permissions: {},
+			fields: [],
+			presets: { name: 'From Preset' },
+		};
+
+		const wrapper = mountDrawer({ collection: 'authors', primaryKey: '+' }, { permissions: [presetCreate] });
+		await flushPromises();
+
+		expect(saveButton(wrapper).attributes('disabled')).toBeUndefined();
+
+		await saveButton(wrapper).trigger('click');
+
+		expect(emittedPayload(wrapper)).toEqual({});
+
+		const mainForm = forms(wrapper).find((form) => (form.props('fields') as any[]).some((f) => f.field === 'name'))!;
+		expect(mainForm.props('validationErrors')).toEqual([]);
+	});
+
 	it('does not enable Save for an existing item whose only staged key is its identifier', async () => {
 		transport.capabilities['articles/5'] = cap(true);
 		transport.items['/items/articles/5'] = { id: '5', title: 'Existing' };

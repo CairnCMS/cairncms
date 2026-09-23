@@ -328,6 +328,8 @@ function useBreadcrumb() {
 }
 
 async function saveAndQuit() {
+	if (isSavable.value === false) return;
+
 	try {
 		const savedItem: Record<string, any> = await save();
 		await setLang(savedItem);
@@ -339,6 +341,8 @@ async function saveAndQuit() {
 }
 
 async function saveAndStay() {
+	if (isSavable.value === false) return;
+
 	try {
 		const savedItem: Record<string, any> = await save();
 		await setLang(savedItem);
@@ -356,6 +360,8 @@ async function saveAndStay() {
 }
 
 async function saveAndAddNew() {
+	if (isSavable.value === false) return;
+
 	try {
 		const savedItem: Record<string, any> = await save();
 		await setLang(savedItem);
