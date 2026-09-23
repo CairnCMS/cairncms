@@ -5,7 +5,9 @@ import type { MockedFunction } from 'vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Helpers } from '../../src/database/helpers/index.js';
 import { getHelpers } from '../../src/database/helpers/index.js';
-import { PayloadService } from '../../src/services/index.js';
+import type { CollectionsOverview, FieldOverview, Relation } from '@cairncms/types';
+import { ItemsService, PayloadService } from '../../src/services/index.js';
+import { InvalidPayloadException } from '../exceptions/index.js';
 
 vi.mock('../../src/database/index', () => ({
 	default: vi.fn(),
@@ -581,6 +583,314 @@ describe('Integration Tests', () => {
 				})) as any[];
 
 				expect(childResult[0].shared_pwd).toBe('**********');
+			});
+		});
+
+		describe('nested write selector and link separation', () => {
+			const field = (name: string, overrides: Partial<FieldOverview> = {}): FieldOverview => ({
+				field: name,
+				defaultValue: null,
+				nullable: true,
+				generated: false,
+				type: 'integer',
+				dbType: 'integer',
+				precision: null,
+				scale: null,
+				special: [],
+				note: null,
+				alias: false,
+				validation: null,
+				...overrides,
+			});
+
+			const collection = (name: string, fields: Record<string, FieldOverview>) => ({
+				collection: name,
+				primary: 'id',
+				singleton: false,
+				note: null,
+				sortField: null,
+				accountability: null,
+				fields,
+			});
+
+			const relSchema = {
+				collections: {
+					authors: collection('authors', {
+						id: field('id', { nullable: false }),
+						name: field('name', { type: 'string', dbType: 'text' }),
+						posts: field('posts', { type: 'alias', dbType: null, special: ['o2m'], alias: true }),
+					}),
+					posts: collection('posts', {
+						id: field('id', { nullable: false }),
+						title: field('title', { type: 'string', dbType: 'text' }),
+						author: field('author'),
+						sort: field('sort'),
+					}),
+				} as CollectionsOverview,
+				relations: [
+					{
+						collection: 'posts',
+						field: 'author',
+						related_collection: 'authors',
+						schema: null,
+						meta: {
+							id: 1,
+							many_collection: 'posts',
+							many_field: 'author',
+							one_collection: 'authors',
+							one_field: 'posts',
+							one_collection_field: null,
+							one_allowed_collections: null,
+							junction_field: null,
+							sort_field: 'sort',
+							one_deselect_action: 'nullify',
+						},
+					},
+				] as Relation[],
+			};
+
+			const a2oSchema = {
+				collections: {
+					comments: collection('comments', {
+						id: field('id', { nullable: false }),
+						body: field('body', { type: 'string', dbType: 'text' }),
+						collection: field('collection', { type: 'string', dbType: 'text' }),
+						item: field('item', { type: 'string', dbType: 'text' }),
+					}),
+					authors: collection('authors', {
+						id: field('id', { nullable: false }),
+						name: field('name', { type: 'string', dbType: 'text' }),
+					}),
+				} as CollectionsOverview,
+				relations: [
+					{
+						collection: 'comments',
+						field: 'item',
+						related_collection: null,
+						schema: null,
+						meta: {
+							id: 2,
+							many_collection: 'comments',
+							many_field: 'item',
+							one_collection: null,
+							one_field: null,
+							one_collection_field: 'collection',
+							one_allowed_collections: ['authors'],
+							junction_field: null,
+							sort_field: null,
+							one_deselect_action: 'nullify',
+						},
+					},
+				] as Relation[],
+			};
+
+			function childSpies() {
+				const spies = {
+					updateOne: vi.spyOn(ItemsService.prototype, 'updateOne').mockResolvedValue(0),
+					createOne: vi.spyOn(ItemsService.prototype, 'createOne').mockResolvedValue(0),
+					createMany: vi.spyOn(ItemsService.prototype, 'createMany').mockResolvedValue([]),
+					upsertMany: vi.spyOn(ItemsService.prototype, 'upsertMany').mockResolvedValue([]),
+					updateByQuery: vi.spyOn(ItemsService.prototype, 'updateByQuery').mockResolvedValue([]),
+					deleteByQuery: vi.spyOn(ItemsService.prototype, 'deleteByQuery').mockResolvedValue([]),
+				};
+
+				activeSpies = spies;
+				return spies;
+			}
+
+			let activeSpies: ReturnType<typeof childSpies> | null = null;
+
+			afterEach(() => {
+				if (activeSpies) {
+					for (const spy of Object.values(activeSpies)) spy.mockRestore();
+					activeSpies = null;
+				}
+			});
+
+			it('updates an existing m2o related record without its primary key', async () => {
+				const spies = childSpies();
+				tracker.on.select('authors').response([{ id: 7 }]);
+
+				const service = new PayloadService('posts', { knex: db, schema: relSchema });
+				await service.processM2O({ author: { id: 7, name: 'New name' } });
+
+				expect(spies.updateOne).toHaveBeenCalledWith(7, { name: 'New name' }, expect.anything());
+			});
+
+			it('updates an existing a2o record without its key and keeps the discriminator on the parent', async () => {
+				const spies = childSpies();
+				tracker.on.select('authors').response([{ id: 3 }]);
+
+				const service = new PayloadService('comments', { knex: db, schema: a2oSchema });
+				const { payload } = await service.processA2O({ collection: 'authors', item: { id: 3, name: 'Renamed' } });
+
+				expect(spies.updateOne).toHaveBeenCalledWith(3, { name: 'Renamed' }, expect.anything());
+				expect(payload['collection']).toBe('authors');
+			});
+
+			it('updates an already-linked o2m child as metadata only, without a reverse-field write', async () => {
+				const spies = childSpies();
+				tracker.on.select('posts').response([{ author: 1 }]);
+
+				const service = new PayloadService('authors', { knex: db, schema: relSchema });
+				await service.processO2M({ posts: [{ id: 5, title: 'Edited' }] }, 1);
+
+				expect(spies.upsertMany).toHaveBeenCalledWith([{ id: 5, title: 'Edited' }], expect.anything());
+			});
+
+			it('skips a key-only already-linked o2m child and retains its key in the exclusion filter', async () => {
+				const spies = childSpies();
+				tracker.on.select('posts').response([{ author: 1 }]);
+
+				const service = new PayloadService('authors', { knex: db, schema: relSchema });
+				await service.processO2M({ posts: [{ id: 5 }] }, 1);
+
+				expect(spies.upsertMany).toHaveBeenCalledWith([], expect.anything());
+
+				const nullifyQuery = spies.updateByQuery.mock.calls[0]![0] as any;
+				expect(nullifyQuery.filter._and[1].id._nin).toContain(5);
+			});
+
+			it('retains an explicit reverse field that matches the parent without stripping it', async () => {
+				const spies = childSpies();
+				tracker.on.select('posts').response([{ author: 1 }]);
+
+				const service = new PayloadService('authors', { knex: db, schema: relSchema });
+				await service.processO2M({ posts: [{ id: 5, title: 'X', author: 1 }] }, 1);
+
+				expect(spies.upsertMany).toHaveBeenCalledWith([{ id: 5, title: 'X', author: 1 }], expect.anything());
+			});
+
+			it('injects the reverse field when an o2m child is relinked to a new parent', async () => {
+				const spies = childSpies();
+				tracker.on.select('posts').response([{ author: 2 }]);
+
+				const service = new PayloadService('authors', { knex: db, schema: relSchema });
+				await service.processO2M({ posts: [{ id: 5, title: 'Moved' }] }, 1);
+
+				expect(spies.upsertMany).toHaveBeenCalledWith([{ id: 5, title: 'Moved', author: 1 }], expect.anything());
+			});
+
+			it('rejects an o2m child whose explicit reverse field conflicts with its parent', async () => {
+				childSpies();
+
+				const service = new PayloadService('authors', { knex: db, schema: relSchema });
+
+				await expect(service.processO2M({ posts: [{ id: 5, author: 99 }] }, 1)).rejects.toThrow(
+					InvalidPayloadException
+				);
+			});
+
+			it('creates an o2m child with a supplied key when the row is absent', async () => {
+				const spies = childSpies();
+				tracker.on.select('posts').response([]);
+
+				const service = new PayloadService('authors', { knex: db, schema: relSchema });
+				await service.processO2M({ posts: [{ id: 5, title: 'Fresh' }] }, 1);
+
+				expect(spies.upsertMany).toHaveBeenCalledWith([{ id: 5, title: 'Fresh', author: 1 }], expect.anything());
+			});
+
+			it('updates a linked o2m alteration child without its key or a reverse-field write', async () => {
+				const spies = childSpies();
+				tracker.on.select('posts').response([{ author: 1 }]);
+
+				const service = new PayloadService('authors', { knex: db, schema: relSchema });
+				await service.processO2M({ posts: { update: [{ id: 5, title: 'Edited' }] } }, 1);
+
+				expect(spies.updateOne).toHaveBeenCalledWith(5, { title: 'Edited' }, expect.anything());
+			});
+
+			it('does not update a key-only already-linked o2m alteration child', async () => {
+				const spies = childSpies();
+				tracker.on.select('posts').response([{ author: 1 }]);
+
+				const service = new PayloadService('authors', { knex: db, schema: relSchema });
+				await service.processO2M({ posts: { update: [{ id: 5 }] } }, 1);
+
+				expect(spies.updateOne).not.toHaveBeenCalled();
+			});
+
+			it('updates rather than creates a missing-row o2m alteration child', async () => {
+				const spies = childSpies();
+				tracker.on.select('posts').response([]);
+
+				const service = new PayloadService('authors', { knex: db, schema: relSchema });
+				await service.processO2M({ posts: { update: [{ id: 5, title: 'X' }] } }, 1);
+
+				expect(spies.updateOne).toHaveBeenCalledWith(5, { title: 'X', author: 1 }, expect.anything());
+				expect(spies.createOne).not.toHaveBeenCalled();
+				expect(spies.createMany).not.toHaveBeenCalled();
+			});
+
+			it('reparents an o2m alteration child with a reverse-field write and no key in the content', async () => {
+				const spies = childSpies();
+				tracker.on.select('posts').response([{ author: 2 }]);
+
+				const service = new PayloadService('authors', { knex: db, schema: relSchema });
+				await service.processO2M({ posts: { update: [{ id: 5, title: 'Moved' }] } }, 1);
+
+				expect(spies.updateOne).toHaveBeenCalledWith(5, { title: 'Moved', author: 1 }, expect.anything());
+			});
+
+			it('rejects a conflicting o2m alteration create before the sort lookup', async () => {
+				childSpies();
+
+				const service = new PayloadService('authors', { knex: db, schema: relSchema });
+
+				await expect(service.processO2M({ posts: { create: [{ title: 'X', author: 99 }] } }, 1)).rejects.toThrow(
+					InvalidPayloadException
+				);
+
+				expect(tracker.history.select.length).toBe(0);
+			});
+
+			it('rejects an o2m alteration create whose explicit reverse field is null', async () => {
+				childSpies();
+
+				const service = new PayloadService('authors', { knex: db, schema: relSchema });
+
+				await expect(service.processO2M({ posts: { create: [{ title: 'X', author: null }] } }, 1)).rejects.toThrow(
+					InvalidPayloadException
+				);
+			});
+
+			it('creates an o2m alteration child linked to its parent', async () => {
+				const spies = childSpies();
+				tracker.on.select('posts').response([{ max: null }]);
+
+				const service = new PayloadService('authors', { knex: db, schema: relSchema });
+				await service.processO2M({ posts: { create: [{ title: 'X' }] } }, 1);
+
+				expect(spies.createMany).toHaveBeenCalledWith([{ title: 'X', sort: 1, author: 1 }], expect.anything());
+			});
+
+			it('rejects a malformed o2m child key before reading', async () => {
+				childSpies();
+
+				const service = new PayloadService('authors', { knex: db, schema: relSchema });
+				await expect(service.processO2M({ posts: [{ id: 'not-a-number', title: 'X' }] }, 1)).rejects.toThrow();
+				expect(tracker.history.select.length).toBe(0);
+			});
+
+			it('resolves a numeric-zero parent for the reverse field', async () => {
+				const spies = childSpies();
+				tracker.on.select('posts').response([{ author: null }]);
+
+				const service = new PayloadService('authors', { knex: db, schema: relSchema });
+				await service.processO2M({ posts: [{ id: 5, title: 'X' }] }, 0);
+
+				expect(spies.upsertMany).toHaveBeenCalledWith([{ id: 5, title: 'X', author: 0 }], expect.anything());
+			});
+
+			it('resolves a numeric-zero parent for a detailed create', async () => {
+				const spies = childSpies();
+				tracker.on.select('posts').response([{ max: null }]);
+
+				const service = new PayloadService('authors', { knex: db, schema: relSchema });
+				await service.processO2M({ posts: { create: [{ title: 'X' }] } }, 0);
+
+				expect(spies.createMany).toHaveBeenCalledWith([{ title: 'X', sort: 1, author: 0 }], expect.anything());
 			});
 		});
 	});

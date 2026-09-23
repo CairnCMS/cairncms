@@ -1,5 +1,5 @@
 import { SECRET_MASK } from '@cairncms/constants';
-import type { Accountability, Query, SchemaOverview } from '@cairncms/types';
+import type { Accountability, Query, Relation, SchemaOverview } from '@cairncms/types';
 import { parseJSON, toArray } from '@cairncms/utils';
 import { format, isValid, parseISO } from 'date-fns';
 import flat from 'flat';
@@ -22,6 +22,7 @@ import type {
 } from '../types/index.js';
 import { resolveFolderKey } from '../utils/config/folder-key.js';
 import { generateHash } from '../utils/generate-hash.js';
+import { validateKeys } from '../utils/validate-keys.js';
 import { ItemsService } from './items.js';
 import { maskOperationOptions } from './operation-option-secrets.js';
 
@@ -528,7 +529,7 @@ export class PayloadService {
 				const fieldsToUpdate = omit(relatedRecord, relatedPrimary);
 
 				if (Object.keys(fieldsToUpdate).length > 0) {
-					await itemsService.updateOne(relatedPrimaryKey, relatedRecord, {
+					await itemsService.updateOne(relatedPrimaryKey, fieldsToUpdate, {
 						onRevisionCreate: (pk) => revisions.push(pk),
 						bypassEmitAction: (params) =>
 							opts?.bypassEmitAction ? opts.bypassEmitAction(params) : nestedActionEvents.push(params),
@@ -609,7 +610,7 @@ export class PayloadService {
 				const fieldsToUpdate = omit(relatedRecord, relatedPrimaryKeyField);
 
 				if (Object.keys(fieldsToUpdate).length > 0) {
-					await itemsService.updateOne(relatedPrimaryKey, relatedRecord, {
+					await itemsService.updateOne(relatedPrimaryKey, fieldsToUpdate, {
 						onRevisionCreate: (pk) => revisions.push(pk),
 						bypassEmitAction: (params) =>
 							opts?.bypassEmitAction ? opts.bypassEmitAction(params) : nestedActionEvents.push(params),
@@ -687,14 +688,13 @@ export class PayloadService {
 
 				for (let i = 0; i < updates.length; i++) {
 					const relatedRecord = updates[i];
-
-					let record = cloneDeep(relatedRecord);
+					const resolvedParent = parent ?? payload[currentPrimaryKeyField];
 
 					if (typeof relatedRecord === 'string' || typeof relatedRecord === 'number') {
 						const existingRecord = await this.knex
 							.select(relatedPrimaryKeyField, relation.field)
 							.from(relation.collection)
-							.where({ [relatedPrimaryKeyField]: record })
+							.where({ [relatedPrimaryKeyField]: relatedRecord })
 							.first();
 
 						if (!!existingRecord === false) {
@@ -716,15 +716,28 @@ export class PayloadService {
 							continue;
 						}
 
-						record = {
+						recordsToUpsert.push({
 							[relatedPrimaryKeyField]: relatedRecord,
-						};
-					}
+							[relation.field]: resolvedParent,
+						});
+					} else {
+						const record = cloneDeep(relatedRecord);
+						const childPk = record[relatedPrimaryKeyField];
 
-					recordsToUpsert.push({
-						...record,
-						[relation.field]: parent || payload[currentPrimaryKeyField],
-					});
+						const { skip, injectReverse } = await this.resolveNestedChild(
+							relation,
+							relatedPrimaryKeyField,
+							record,
+							resolvedParent
+						);
+
+						if (skip) {
+							savedPrimaryKeys.push(childPk);
+							continue;
+						}
+
+						recordsToUpsert.push(injectReverse ? { ...record, [relation.field]: resolvedParent } : { ...record });
+					}
 				}
 
 				savedPrimaryKeys.push(
@@ -785,6 +798,11 @@ export class PayloadService {
 
 				if (alterations.create) {
 					const sortField = relation.meta.sort_field;
+					const resolvedParent = parent ?? payload[currentPrimaryKeyField];
+
+					for (const item of alterations.create) {
+						this.assertReverseFieldCompatible(relation, item, resolvedParent);
+					}
 
 					let createPayload: Alterations['create'];
 
@@ -806,13 +824,13 @@ export class PayloadService {
 
 							return {
 								...record,
-								[relation.field]: parent || payload[currentPrimaryKeyField],
+								[relation.field]: resolvedParent,
 							};
 						});
 					} else {
 						createPayload = alterations.create.map((item) => ({
 							...item,
-							[relation.field]: parent || payload[currentPrimaryKeyField],
+							[relation.field]: resolvedParent,
 						}));
 					}
 
@@ -829,12 +847,21 @@ export class PayloadService {
 					const primaryKeyField = this.schema.collections[relation.collection]!.primary;
 
 					for (const item of alterations.update) {
+						const resolvedParent = parent ?? payload[currentPrimaryKeyField];
+						const content = omit(item, primaryKeyField);
+
+						const { skip, injectReverse } = await this.resolveNestedChild(
+							relation,
+							primaryKeyField,
+							item,
+							resolvedParent
+						);
+
+						if (skip) continue;
+
 						await itemsService.updateOne(
 							item[primaryKeyField],
-							{
-								...item,
-								[relation.field]: parent || payload[currentPrimaryKeyField],
-							},
+							injectReverse ? { ...content, [relation.field]: resolvedParent } : content,
 							{
 								onRevisionCreate: (pk) => revisions.push(pk),
 								bypassEmitAction: (params) =>
@@ -889,6 +916,63 @@ export class PayloadService {
 		}
 
 		return { revisions, nestedActionEvents };
+	}
+
+	/**
+	 * Reject a nested record whose supplied reverse-relationship field contradicts its parent.
+	 */
+	private assertReverseFieldCompatible(
+		relation: Relation,
+		record: Record<string, any>,
+		resolvedParent: PrimaryKey
+	): void {
+		if (relation.field in record && record[relation.field] != resolvedParent) {
+			throw new InvalidPayloadException(
+				`Nested "${relation.collection}.${relation.field}" conflicts with the record it is nested under`
+			);
+		}
+	}
+
+	/**
+	 * Resolve how a nested o2m child is written from its stored link state.
+	 */
+	private async resolveNestedChild(
+		relation: Relation,
+		relatedPrimaryKeyField: string,
+		record: Record<string, any>,
+		resolvedParent: PrimaryKey
+	): Promise<{ skip: boolean; injectReverse: boolean }> {
+		this.assertReverseFieldCompatible(relation, record, resolvedParent);
+
+		const hasExplicitReverse = relation.field in record;
+		const childPk = record[relatedPrimaryKeyField];
+
+		if (isNil(childPk)) {
+			return { skip: false, injectReverse: hasExplicitReverse === false };
+		}
+
+		validateKeys(this.schema, relation.collection, relatedPrimaryKeyField, childPk);
+
+		const existingRecord = await this.knex
+			.select(relation.field)
+			.from(relation.collection)
+			.where({ [relatedPrimaryKeyField]: childPk })
+			.first();
+
+		if (!existingRecord) {
+			return { skip: false, injectReverse: hasExplicitReverse === false };
+		}
+
+		const alreadyLinked = existingRecord[relation.field] == resolvedParent;
+		const injectReverse = alreadyLinked === false && hasExplicitReverse === false;
+
+		const contentKeys = Object.keys(omit(record, relatedPrimaryKeyField, relation.field));
+
+		if (alreadyLinked && hasExplicitReverse === false && contentKeys.length === 0) {
+			return { skip: true, injectReverse: false };
+		}
+
+		return { skip: false, injectReverse };
 	}
 
 	/**

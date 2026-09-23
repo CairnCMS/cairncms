@@ -43,6 +43,7 @@ exports.list = {
 		{ testFilePath: '/routes/folders/cycle-guard.test.ts' },
 		{ testFilePath: '/routes/security/trusted-ip.test.ts' },
 		{ testFilePath: '/routes/items/relational-presets.test.ts' },
+		{ testFilePath: '/routes/items/nested-write-permissions.test.ts' },
 		{ testFilePath: '/routes/items/query-limit.test.ts' },
 		{ testFilePath: '/routes/items/flag-operator-filter.test.ts' },
 		{ testFilePath: '/routes/assets/format.test.ts' },
