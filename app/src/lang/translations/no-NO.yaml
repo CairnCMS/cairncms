@@ -1116,6 +1116,7 @@ interfaces:
   tags:
     tags: Etiketter
     whitespace: Blanktegn
+    alphabetize: Alfabetisere
     alphabetize_label: Tving alfabetisk rekkefølge
   input-translated-string:
     input-translated-string: Oversatte strenger
