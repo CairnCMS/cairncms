@@ -81,11 +81,7 @@
 import api from '@/api';
 import { useEditsGuard } from '@/composables/use-edits-guard';
 import { useFieldPermissions } from '@/composables/use-field-permissions';
-import {
-	hasConditionalItemPermission,
-	itemActionAllowed,
-	useItemPermissions,
-} from '@/composables/use-item-permissions';
+import { useItemUpdateGate } from '@/composables/use-item-permissions';
 import { useTemplateData } from '@/composables/use-template-data';
 import { useFieldsStore } from '@/stores/fields';
 import { usePermissionsStore } from '@/stores/permissions';
@@ -97,7 +93,7 @@ import { unexpectedError } from '@/utils/unexpected-error';
 import { validateItem } from '@/utils/validate-item';
 import FilePreview from '@/views/private/components/file-preview.vue';
 import { useCollection } from '@cairncms/composables';
-import { Field, ItemPermissions, Permission, Relation } from '@cairncms/types';
+import { Field, Relation } from '@cairncms/types';
 import { getEndpoint } from '@cairncms/utils';
 import { cloneDeep, isEmpty, merge, set } from 'lodash';
 import { computed, ref, toRefs, watch } from 'vue';
@@ -621,56 +617,36 @@ function useGating() {
 		isExistingKey(props.primaryKey) ? props.primaryKey ?? null : null
 	);
 
-	const junctionCapabilityEnabled = computed(
-		() =>
-			internalActive.value === true &&
-			isExistingKey(props.primaryKey) === true &&
-			hasConditionalItemPermission(props.collection, ['update'])
-	);
-
-	const { itemPermissions: junctionItemPermissions } = useItemPermissions(
+	const junctionGate = useItemUpdateGate({
 		collection,
-		junctionCapabilityKey,
-		junctionCapabilityEnabled,
-		activeSource
-	);
+		primaryKey: junctionCapabilityKey,
+		enabled: computed(() => internalActive.value === true),
+		localReady: junctionLoaded,
+		itemSource: activeSource,
+	});
 
 	const relatedCapabilityKey = computed<string | number | null>(() =>
 		isExistingKey(props.relatedPrimaryKey) ? props.relatedPrimaryKey ?? null : null
 	);
 
-	const relatedCapabilityEnabled = computed(
-		() =>
-			internalActive.value === true &&
-			!!props.junctionField &&
-			!!relatedCollection.value &&
-			isExistingKey(props.relatedPrimaryKey) === true &&
-			hasConditionalItemPermission(relatedCollection.value as string, ['update'])
-	);
-
-	const { itemPermissions: relatedItemPermissions } = useItemPermissions(
-		relatedCollection as any,
-		relatedCapabilityKey,
-		relatedCapabilityEnabled,
-		activeSource
-	);
+	const relatedGate = useItemUpdateGate({
+		collection: computed(() => relatedCollection.value ?? ''),
+		primaryKey: relatedCapabilityKey,
+		enabled: computed(() => internalActive.value === true && !!props.junctionField && !!relatedCollection.value),
+		localReady: relatedLoaded,
+		itemSource: activeSource,
+	});
 
 	const junctionWritableFields = computed<string[] | null>(() =>
-		writableFields(
-			props.collection,
-			isExistingKey(props.primaryKey) ? 'update' : 'create',
-			junctionItemPermissions.value
-		)
+		isExistingKey(props.primaryKey) ? junctionGate.writableFields.value : createWritableFields(props.collection)
 	);
 
 	const relatedWritableFields = computed<string[] | null>(() => {
 		if (!relatedCollection.value) return null;
 
-		return writableFields(
-			relatedCollection.value,
-			isExistingKey(props.relatedPrimaryKey) ? 'update' : 'create',
-			relatedItemPermissions.value
-		);
+		return isExistingKey(props.relatedPrimaryKey)
+			? relatedGate.writableFields.value
+			: createWritableFields(relatedCollection.value);
 	});
 
 	const junctionRelationWritable = computed(() => {
@@ -685,34 +661,14 @@ function useGating() {
 
 	const junctionAuthorized = computed(() => {
 		if (junctionMode.value === 'create') return createAvailable(props.collection);
-
-		if (junctionMode.value === 'update') {
-			return itemActionAllowed(
-				props.collection,
-				'update',
-				junctionItemPermissions.value,
-				junctionLoaded.value,
-				junctionItemPermissions.value !== null
-			);
-		}
-
+		if (junctionMode.value === 'update') return junctionGate.updateAllowed.value;
 		return false;
 	});
 
 	const relatedRowAuthorized = computed(() => {
 		if (!props.junctionField || !relatedCollection.value) return false;
 		if (relatedMode.value === 'create') return createAvailable(relatedCollection.value);
-
-		if (relatedMode.value === 'update') {
-			return itemActionAllowed(
-				relatedCollection.value,
-				'update',
-				relatedItemPermissions.value,
-				relatedLoaded.value,
-				relatedItemPermissions.value !== null
-			);
-		}
-
+		if (relatedMode.value === 'update') return relatedGate.updateAllowed.value;
 		return false;
 	});
 
@@ -862,25 +818,9 @@ function useGating() {
 		return !!permissionsStore.getPermissionsForUser(collectionName, 'create');
 	}
 
-	function writableFields(
-		collectionName: string,
-		action: 'create' | 'update',
-		itemPermissions: ItemPermissions | null
-	): string[] | null {
+	function createWritableFields(collectionName: string): string[] | null {
 		if (userStore.currentUser?.role?.admin_access === true) return ['*'];
-
-		const permission = permissionsStore.getPermissionsForUser(collectionName, action);
-		if (!permission) return null;
-
-		if (action === 'update' && isUnconditional(permission) === false) {
-			return itemPermissions?.update.fields ?? null;
-		}
-
-		return permission.fields ?? null;
-	}
-
-	function isUnconditional(permission: Permission): boolean {
-		return !permission.permissions || Object.keys(permission.permissions).length === 0;
+		return permissionsStore.getPermissionsForUser(collectionName, 'create')?.fields ?? null;
 	}
 }
 

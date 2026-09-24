@@ -46,17 +46,12 @@
 
 <script setup lang="ts">
 import api from '@/api';
-import {
-	hasConditionalItemPermission,
-	itemActionAllowed,
-	useItemPermissions,
-} from '@/composables/use-item-permissions';
+import { useItemUpdateGate } from '@/composables/use-item-permissions';
 import { router } from '@/router';
 import { useInsightsStore } from '@/stores/insights';
 import { usePermissionsStore } from '@/stores/permissions';
 import { useUserStore } from '@/stores/user';
 import { Dashboard } from '@/types/insights';
-import { Permission } from '@cairncms/types';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { computed, onUnmounted, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -80,16 +75,13 @@ const collection = ref('directus_dashboards');
 const isNew = computed(() => !props.dashboard);
 const primaryKey = computed<string | number | null>(() => props.dashboard?.id ?? null);
 
-const capabilityEnabled = computed(
-	() => props.modelValue === true && isNew.value === false && hasConditionalItemPermission(collection.value, ['update'])
-);
-
-const { itemPermissions } = useItemPermissions(
+const { updateAllowed, writableFields: updateWritableFields } = useItemUpdateGate({
 	collection,
 	primaryKey,
-	capabilityEnabled,
-	computed(() => props.dashboard)
-);
+	enabled: computed(() => props.modelValue === true),
+	localReady: computed(() => props.modelValue === true),
+	itemSource: computed(() => props.dashboard),
+});
 
 const isAdmin = computed(() => userStore.currentUser?.role?.admin_access === true);
 
@@ -97,16 +89,8 @@ const dialogFields = ['name', 'icon', 'color', 'note'];
 
 const writableFields = computed<string[] | null>(() => {
 	if (isAdmin.value) return ['*'];
-
-	const action = isNew.value ? 'create' : 'update';
-	const permission = permissionsStore.getPermissionsForUser(collection.value, action);
-	if (!permission) return null;
-
-	if (action === 'update' && isUnconditional(permission) === false) {
-		return itemPermissions.value?.update.fields ?? null;
-	}
-
-	return permission.fields ?? null;
+	if (isNew.value) return permissionsStore.getPermissionsForUser(collection.value, 'create')?.fields ?? null;
+	return updateWritableFields.value;
 });
 
 const createPresetName = computed<string | null>(() => {
@@ -128,20 +112,8 @@ const saveAllowed = computed(() => {
 
 	if (fieldWritable('name') && !values.name) return false;
 
-	const updatable = itemActionAllowed(
-		collection.value,
-		'update',
-		itemPermissions.value,
-		true,
-		itemPermissions.value !== null
-	);
-
-	return updatable && dialogFields.some((field) => fieldWritable(field));
+	return updateAllowed.value && dialogFields.some((field) => fieldWritable(field));
 });
-
-function isUnconditional(permission: Permission): boolean {
-	return !permission.permissions || Object.keys(permission.permissions).length === 0;
-}
 
 function fieldWritable(field: string): boolean {
 	const fields = writableFields.value;

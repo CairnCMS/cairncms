@@ -5,7 +5,12 @@ import { flushPromises } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
-import { hasConditionalItemPermission, itemActionAllowed, useItemPermissions } from './use-item-permissions';
+import {
+	hasConditionalItemPermission,
+	itemActionAllowed,
+	useItemPermissions,
+	useItemUpdateGate,
+} from './use-item-permissions';
 
 const apiGet = vi.fn();
 
@@ -212,5 +217,190 @@ describe('useItemPermissions', () => {
 		await flushPromises();
 
 		expect(itemPermissions.value).toEqual(denied);
+	});
+});
+
+const allowedEmpty = {
+	update: { access: true, fields: [] as string[] },
+	delete: { access: false },
+	share: { access: false },
+};
+
+function gate(
+	overrides: {
+		collection?: string;
+		primaryKey?: string | number | null;
+		enabled?: boolean;
+		localReady?: boolean;
+	} = {}
+) {
+	return useItemUpdateGate({
+		collection: ref(overrides.collection ?? 'articles'),
+		primaryKey: ref<string | number | null>('primaryKey' in overrides ? overrides.primaryKey ?? null : '5'),
+		enabled: ref(overrides.enabled ?? true),
+		localReady: ref(overrides.localReady ?? true),
+		itemSource: ref(null),
+	});
+}
+
+describe('useItemUpdateGate', () => {
+	it('allows an admin without fetching and treats every field as writable', async () => {
+		setUser(true);
+		setPermissions([]);
+
+		const { updateAllowed, writableFields, fieldWritable } = gate();
+		await flushPromises();
+
+		expect(apiGet).not.toHaveBeenCalled();
+		expect(updateAllowed.value).toBe(true);
+		expect(writableFields.value).toEqual(['*']);
+		expect(fieldWritable('title')).toBe(true);
+	});
+
+	it('allows an unconditional grant without fetching and gates on its fields', async () => {
+		setUser(false);
+		setPermissions([{ ...permission('update', null), fields: ['title'] }]);
+
+		const { updateAllowed, writableFields, fieldWritable } = gate();
+		await flushPromises();
+
+		expect(apiGet).not.toHaveBeenCalled();
+		expect(updateAllowed.value).toBe(true);
+		expect(writableFields.value).toEqual(['title']);
+		expect(fieldWritable('title')).toBe(true);
+		expect(fieldWritable('body')).toBe(false);
+	});
+
+	it('denies when there is no matching permission', async () => {
+		setUser(false);
+		setPermissions([]);
+
+		const { updateAllowed, writableFields, fieldWritable } = gate();
+		await flushPromises();
+
+		expect(apiGet).not.toHaveBeenCalled();
+		expect(updateAllowed.value).toBe(false);
+		expect(writableFields.value).toBeNull();
+		expect(fieldWritable('title')).toBe(false);
+	});
+
+	it('defers a conditional grant to the server result', async () => {
+		apiGet.mockResolvedValue({ data: { data: allowed } });
+		setUser(false);
+		setPermissions([permission('update', { status: { _eq: 'published' } })]);
+
+		const { updateAllowed, writableFields } = gate();
+
+		expect(updateAllowed.value).toBe(false);
+
+		await flushPromises();
+
+		expect(apiGet).toHaveBeenCalledWith('/permissions/me/articles/5');
+		expect(updateAllowed.value).toBe(true);
+		expect(writableFields.value).toEqual(['title']);
+	});
+
+	it('denies a conditional grant the server rejects', async () => {
+		apiGet.mockResolvedValue({ data: { data: denied } });
+		setUser(false);
+		setPermissions([permission('update', { status: { _eq: 'published' } })]);
+
+		const { updateAllowed } = gate();
+		await flushPromises();
+
+		expect(updateAllowed.value).toBe(false);
+	});
+
+	it('stays unavailable when the capability request fails', async () => {
+		apiGet.mockRejectedValue(new Error('network'));
+		setUser(false);
+		setPermissions([permission('update', { status: { _eq: 'published' } })]);
+
+		const { updateAllowed, fieldWritable } = gate();
+		await flushPromises();
+
+		expect(updateAllowed.value).toBe(false);
+		expect(fieldWritable('title')).toBe(false);
+	});
+
+	it('grants row access but no writable field for access true with empty fields', async () => {
+		apiGet.mockResolvedValue({ data: { data: allowedEmpty } });
+		setUser(false);
+		setPermissions([permission('update', { status: { _eq: 'published' } })]);
+
+		const { updateAllowed, writableFields, fieldWritable } = gate();
+		await flushPromises();
+
+		expect(updateAllowed.value).toBe(true);
+		expect(writableFields.value).toEqual([]);
+		expect(fieldWritable('title')).toBe(false);
+	});
+
+	it('does not fetch when disabled, even for a conditional grant', async () => {
+		setUser(false);
+		setPermissions([permission('update', { status: { _eq: 'published' } })]);
+
+		const { updateAllowed } = gate({ enabled: false });
+		await flushPromises();
+
+		expect(apiGet).not.toHaveBeenCalled();
+		expect(updateAllowed.value).toBe(false);
+	});
+
+	it('disables the whole path for a null key, including an admin', async () => {
+		setUser(true);
+		setPermissions([]);
+
+		const { updateAllowed } = gate({ primaryKey: null });
+		await flushPromises();
+
+		expect(apiGet).not.toHaveBeenCalled();
+		expect(updateAllowed.value).toBe(false);
+	});
+
+	it('treats a numeric zero key as a valid target', async () => {
+		apiGet.mockResolvedValue({ data: { data: allowed } });
+		setUser(false);
+		setPermissions([permission('update', { status: { _eq: 'published' } })]);
+
+		const { updateAllowed } = gate({ primaryKey: 0 });
+		await flushPromises();
+
+		expect(apiGet).toHaveBeenCalledWith('/permissions/me/articles/0');
+		expect(updateAllowed.value).toBe(true);
+	});
+
+	it('is unavailable and does not fetch for an empty collection', async () => {
+		setUser(false);
+		setPermissions([permission('update', { status: { _eq: 'published' } })]);
+
+		const { updateAllowed, writableFields } = gate({ collection: '' });
+		await flushPromises();
+
+		expect(apiGet).not.toHaveBeenCalled();
+		expect(updateAllowed.value).toBe(false);
+		expect(writableFields.value).toBeNull();
+	});
+
+	it('fetches on enabled while the allow decision still waits on local readiness', async () => {
+		apiGet.mockResolvedValue({ data: { data: allowed } });
+		setUser(false);
+		setPermissions([permission('update', { status: { _eq: 'published' } })]);
+
+		const collection = ref('articles');
+		const primaryKey = ref<string | number | null>('5');
+		const enabled = ref(true);
+		const localReady = ref(false);
+
+		const { updateAllowed } = useItemUpdateGate({ collection, primaryKey, enabled, localReady, itemSource: ref(null) });
+		await flushPromises();
+
+		expect(apiGet).toHaveBeenCalledWith('/permissions/me/articles/5');
+		expect(updateAllowed.value).toBe(false);
+
+		localReady.value = true;
+		await flushPromises();
+
+		expect(updateAllowed.value).toBe(true);
 	});
 });

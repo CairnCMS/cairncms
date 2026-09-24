@@ -99,11 +99,7 @@
 <script lang="ts" setup>
 import { useDialogRoute } from '@/composables/use-dialog-route';
 import { useExtension } from '@/composables/use-extension';
-import {
-	hasConditionalItemPermission,
-	itemActionAllowed,
-	useItemPermissions,
-} from '@/composables/use-item-permissions';
+import { useItemUpdateGate } from '@/composables/use-item-permissions';
 import { useExtensions } from '@/extensions';
 import { useInsightsStore } from '@/stores/insights';
 import { CreatePanel } from '@/stores/insights';
@@ -188,22 +184,17 @@ const localReady = computed(() => {
 
 const isAdmin = computed(() => userStore.currentUser?.role?.admin_access === true);
 
-const conditionalUpdate = computed(
-	() => localReady.value && isPersisted.value && hasConditionalItemPermission(COLLECTION, ['update'])
-);
-
-const { itemPermissions } = useItemPermissions(
-	ref(COLLECTION),
-	computed(() => (isPersisted.value ? props.panelKey : null)),
-	conditionalUpdate,
-	existingPanel
-);
-
-const capabilityReady = computed(() => conditionalUpdate.value === false || itemPermissions.value !== null);
-
-const updateAllowed = computed(() =>
-	itemActionAllowed(COLLECTION, 'update', itemPermissions.value, localReady.value, capabilityReady.value)
-);
+const {
+	updateAllowed,
+	writableFields: updateWritableFields,
+	fieldWritable: updateFieldWritable,
+} = useItemUpdateGate({
+	collection: ref(COLLECTION),
+	primaryKey: computed(() => (isPersisted.value ? props.panelKey : null)),
+	enabled: localReady,
+	localReady,
+	itemSource: existingPanel,
+});
 
 const createPermission = computed(() => permissionsStore.getPermissionsForUser(COLLECTION, 'create'));
 const createPresets = computed<Record<string, any>>(() => createPermission.value?.presets ?? {});
@@ -214,18 +205,12 @@ const canEdit = computed(() => (isPersisted.value ? updateAllowed.value : create
 const writableFields = computed<string[] | null>(() => {
 	if (isAdmin.value) return ['*'];
 	if (isPersisted.value === false) return createPermission.value?.fields ?? null;
-
-	const permission = permissionsStore.getPermissionsForUser(COLLECTION, 'update');
-	if (!permission) return null;
-
-	const unconditional = !permission.permissions || Object.keys(permission.permissions).length === 0;
-	if (unconditional) return permission.fields ?? null;
-
-	return itemPermissions.value?.update.fields ?? null;
+	return updateWritableFields.value;
 });
 
 function fieldWritable(name: string): boolean {
-	if (canEdit.value === false) return false;
+	if (isPersisted.value) return updateFieldWritable(name);
+	if (createAllowed.value === false) return false;
 	const fields = writableFields.value;
 	return !!fields && (fields.includes('*') || fields.includes(name));
 }

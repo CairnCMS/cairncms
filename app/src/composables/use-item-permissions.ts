@@ -2,7 +2,7 @@ import api from '@/api';
 import { usePermissionsStore } from '@/stores/permissions';
 import { useUserStore } from '@/stores/user';
 import { ItemPermissions, Permission } from '@cairncms/types';
-import { Ref, ref, unref, watch } from 'vue';
+import { Ref, computed, ref, unref, watch } from 'vue';
 
 type ItemAction = 'update' | 'delete' | 'share';
 
@@ -94,4 +94,63 @@ export function useItemPermissions(
 			if (token === generation) loading.value = false;
 		}
 	}
+}
+
+function hasKey(key: string | number | null | undefined): key is string | number {
+	return key !== null && key !== undefined;
+}
+
+export function useItemUpdateGate(options: {
+	collection: Ref<string>;
+	primaryKey: Ref<string | number | null>;
+	enabled: Ref<boolean>;
+	localReady: Ref<boolean>;
+	itemSource: Ref<unknown>;
+}) {
+	const { collection, primaryKey, enabled, localReady, itemSource } = options;
+
+	const conditionalUpdate = computed(
+		() =>
+			enabled.value === true &&
+			hasKey(primaryKey.value) &&
+			!!collection.value &&
+			hasConditionalItemPermission(collection.value, ['update'])
+	);
+
+	const { itemPermissions } = useItemPermissions(collection, primaryKey, conditionalUpdate, itemSource);
+
+	const capabilityReady = computed(() => conditionalUpdate.value === false || itemPermissions.value !== null);
+
+	const updateAllowed = computed(() => {
+		if (!hasKey(primaryKey.value) || !collection.value) return false;
+		return itemActionAllowed(
+			collection.value,
+			'update',
+			itemPermissions.value,
+			localReady.value,
+			capabilityReady.value
+		);
+	});
+
+	const writableFields = computed<string[] | null>(() => {
+		if (!collection.value) return null;
+
+		const userStore = useUserStore();
+		if (userStore.currentUser?.role?.admin_access === true) return ['*'];
+
+		const permissionsStore = usePermissionsStore();
+		const permission = permissionsStore.getPermissionsForUser(collection.value, 'update');
+		if (!permission) return null;
+		if (isUnconditional(permission)) return permission.fields ?? null;
+
+		return itemPermissions.value?.update.fields ?? null;
+	});
+
+	function fieldWritable(name: string): boolean {
+		if (updateAllowed.value === false) return false;
+		const fields = writableFields.value;
+		return !!fields && (fields.includes('*') || fields.includes(name));
+	}
+
+	return { updateAllowed, writableFields, fieldWritable };
 }
