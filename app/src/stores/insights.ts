@@ -46,10 +46,7 @@ export const useInsightsStore = defineStore('insightsStore', () => {
 		delete: [],
 	});
 
-	/**
-	 * Writable field set recorded per staged create (keyed by temp id). Absent means no metadata was
-	 * recorded and the create submits every field; an explicit null means no writable fields.
-	 */
+	// Missing entries allow all fields. An explicit null allows none.
 	const createWritable = new Map<string, string[] | null>();
 
 	const refreshIntervals = {} as { [dashboard: string]: number };
@@ -452,10 +449,7 @@ export const useInsightsStore = defineStore('insightsStore', () => {
 			const requests: Promise<AxiosResponse<any, any>>[] = [];
 
 			if (edits.create) {
-				// Created edits carry a temporary ID for editing and the full object for preview; submit
-				// without the temp ID and filtered to the writable fields recorded for that create. An
-				// absent record submits every field (external callers), an explicit set (including null)
-				// limits the payload to the authorized content.
+				// Keep the full object for preview, but submit only writable fields.
 				requests.push(
 					api.post(
 						`/panels`,

@@ -4,11 +4,7 @@ import * as common from '@common/index';
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 
-// These paths are only exercised under a non-admin accountability (admin bypasses the
-// permission system), so this suite creates its own non-admin roles rather than reusing
-// the admin-capable TESTS_FLOW role. Identifiers carry a per-run suffix so a failed run
-// cannot collide with the next one, and every created resource registers its cleanup
-// immediately so a mid-setup failure still tears down.
+// TESTS_FLOW has admin access and would bypass the field restrictions under test.
 
 const runId = randomUUID().slice(0, 8);
 const parentCollection = `test_fr2b_parent_${runId}`;
@@ -328,7 +324,6 @@ describe('Nested write selector and link separation', () => {
 				.send({ children: { update: [{ id: reparentChild, name: 'Edited child' }] } })
 				.set('Authorization', `Bearer ${metaToken}`);
 
-			// metaToken lacks child.parent_id; the alterations metadata update still succeeds.
 			expect(response.statusCode).toBe(200);
 
 			const row = await childRow(vendor, reparentChild);
@@ -539,7 +534,7 @@ describe('Nested junction (m2m) write selector and link separation', () => {
 				primaryKeyType: 'integer',
 			});
 
-			// The junction collection outlives the m2m field; register cleanup before asserting.
+			// Deleting the M2M field does not delete its junction collection.
 			track(async () => {
 				await request(getUrl(vendor))
 					.delete(`/collections/${junctionCollection}`)
@@ -595,9 +590,8 @@ describe('Nested junction (m2m) write selector and link separation', () => {
 			for (const [collection, action, fields] of [
 				[m2mParent, 'read', ['*']],
 				[m2mParent, 'update', ['*']],
-				// Junction update grant excludes the reverse field back to the parent.
+				// The parent link must not be rewritten.
 				[junctionCollection, 'update', ['label', tagField]],
-				// Related-tag content update grant excludes the tag primary key.
 				[tagCollection, 'update', ['name']],
 			] as const) {
 				const permission = await request(getUrl(vendor))
@@ -726,7 +720,7 @@ describe('Nested any (m2a) write selector and link separation', () => {
 		for (const [collection, action, fields] of [
 			[m2aParent, 'read', ['*']],
 			[m2aParent, 'update', ['*']],
-			// Junction update grant excludes the reverse field back to the parent.
+			// The parent link must not be rewritten.
 			[junctionM2A, 'update', junctionUpdateFields],
 			[blockCollection, 'update', blockUpdateFields],
 		] as const) {
@@ -761,7 +755,7 @@ describe('Nested any (m2a) write selector and link separation', () => {
 
 			await common.CreateField(vendor, { collection: m2aParent, field: 'name', type: 'string' });
 			await common.CreateField(vendor, { collection: blockCollection, field: 'name', type: 'string' });
-			// A block content field named the same as the a2o discriminator.
+			// This content field intentionally shares the routing field's name.
 			await common.CreateField(vendor, { collection: blockCollection, field: 'collection', type: 'string' });
 
 			const m2a = await common.CreateFieldM2A(vendor, {
@@ -782,7 +776,6 @@ describe('Nested any (m2a) write selector and link separation', () => {
 
 			await makeRoleUser(vendor, `FR2b M2A Allow ${runId}`, m2aToken, ['item', 'collection'], ['name', 'collection']);
 			await makeRoleUser(vendor, `FR2b M2A Deny ${runId}`, denyToken, ['item', 'collection'], ['collection']);
-			// Grants related content but not the outer discriminator (junction `collection`).
 			await makeRoleUser(vendor, `FR2b M2A Disc Deny ${runId}`, discDenyToken, ['item'], ['name', 'collection']);
 
 			const parent = await request(getUrl(vendor))

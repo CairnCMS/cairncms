@@ -918,9 +918,6 @@ export class PayloadService {
 		return { revisions, nestedActionEvents };
 	}
 
-	/**
-	 * Reject a nested record whose supplied reverse-relationship field contradicts its parent.
-	 */
 	private assertReverseFieldCompatible(
 		relation: Relation,
 		record: Record<string, any>,
@@ -933,9 +930,6 @@ export class PayloadService {
 		}
 	}
 
-	/**
-	 * Resolve how a nested o2m child is written from its stored link state.
-	 */
 	private async resolveNestedChild(
 		relation: Relation,
 		relatedPrimaryKeyField: string,

@@ -10,7 +10,7 @@ function isUnconditional(permission: Permission): boolean {
 	return !permission.permissions || Object.keys(permission.permissions).length === 0;
 }
 
-// Conditional filters are evaluated by the server; a missing result remains denied.
+// Only the server evaluates conditional filters. Missing results remain denied.
 export function itemActionAllowed(
 	collection: string,
 	action: ItemAction,

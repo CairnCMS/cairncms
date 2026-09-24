@@ -18,7 +18,7 @@ export function useFieldPermissions(collection: Ref<string>, isNew: Ref<boolean>
 
 		const permissions = permissionsStore.getPermissionsForUser(collection.value, isNew.value ? 'create' : 'update');
 
-		// remove fields without read permissions so they don't show up in the DOM
+		// Keep unreadable fields out of the DOM.
 		const readableFields = permissionsStore.getPermissionsForUser(collection.value, 'read')?.fields;
 
 		if (readableFields && readableFields.includes('*') === false) {

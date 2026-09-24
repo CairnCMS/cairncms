@@ -258,7 +258,6 @@ describe('translations create and update gating', () => {
 		await wrapper.find('[data-name="flip"]').trigger('click');
 		await flushPromises();
 
-		// existing pane uses update ['text']; new pane uses create null
 		let firstFields = fieldsByName(forms(wrapper)[0]!);
 		let secondFields = fieldsByName(forms(wrapper)[1]!);
 		expect(firstFields.text!.meta!.readonly).toBe(false);
@@ -271,7 +270,6 @@ describe('translations create and update gating', () => {
 		selects[1]!.vm.$emit('update:modelValue', 'en');
 		await flushPromises();
 
-		// the mapping follows the translation: now the first pane is new (create null), the second existing (update ['text'])
 		firstFields = fieldsByName(forms(wrapper)[0]!);
 		secondFields = fieldsByName(forms(wrapper)[1]!);
 		expect(firstFields.text!.meta!.readonly).toBe(true);
