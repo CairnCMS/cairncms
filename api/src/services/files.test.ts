@@ -1,3 +1,4 @@
+import type { Accountability, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';
 import { createTracker, MockClient, Tracker } from 'knex-mock-client';
@@ -46,15 +47,17 @@ vi.mock('../emitter.js', () => ({
 	},
 }));
 
-const { mockCheckAccess, mockValidatePayload } = vi.hoisted(() => ({
+const { mockCheckAccess, mockValidatePayload, mockValidateFields } = vi.hoisted(() => ({
 	mockCheckAccess: vi.fn(),
 	mockValidatePayload: vi.fn(),
+	mockValidateFields: vi.fn(),
 }));
 
 vi.mock('./authorization.js', () => ({
 	AuthorizationService: vi.fn(() => ({
 		checkAccess: mockCheckAccess,
 		validatePayload: mockValidatePayload,
+		validateFields: mockValidateFields,
 	})),
 }));
 
@@ -637,6 +640,299 @@ describe('Integration Tests', () => {
 
 				const key = await service().importOne('https://example.com/small.png', {});
 				expect(key).toBe('new-key');
+			});
+		});
+
+		describe('importOne — URL replacement gate', () => {
+			const EXISTING_ID = '11111111-1111-4111-8111-111111111111';
+			const MISSING_ID = '22222222-2222-4222-8222-222222222222';
+
+			const filesSchema: SchemaOverview = {
+				collections: {
+					directus_files: {
+						collection: 'directus_files',
+						primary: 'id',
+						singleton: false,
+						sortField: null,
+						note: null,
+						accountability: 'all',
+						fields: {
+							id: {
+								field: 'id',
+								defaultValue: null,
+								nullable: false,
+								generated: false,
+								type: 'uuid',
+								dbType: 'uuid',
+								precision: null,
+								scale: null,
+								special: [],
+								note: null,
+								validation: null,
+								alias: false,
+							},
+						},
+					},
+				},
+				relations: [],
+			};
+
+			function axiosResponse(contentType = 'image/png', responseUrl = 'https://example.com/import/photo.png') {
+				return {
+					data: new Readable({
+						read() {
+							this.push(Buffer.alloc(4, 0x61));
+							this.push(null);
+						},
+					}),
+					headers: { 'content-type': contentType },
+					request: { res: { responseUrl } },
+				};
+			}
+
+			function drainingWrite() {
+				storageWrite.mockImplementationOnce(async (_path: string, stream: Readable) => {
+					for await (const chunk of stream) {
+						void chunk;
+					}
+				});
+			}
+
+			function service(options: { admin?: boolean } = {}) {
+				const accountability: Accountability = {
+					user: 'u1',
+					role: 'r1',
+					admin: options.admin ?? false,
+					permissions: [],
+				};
+
+				return new FilesService({ knex: db, schema: filesSchema, accountability });
+			}
+
+			beforeEach(() => {
+				storageWrite.mockReset().mockResolvedValue(undefined);
+				storageStat.mockReset().mockResolvedValue({ size: 42 });
+				mockAxiosGet.mockReset();
+				mockCheckAccess.mockReset().mockResolvedValue(undefined);
+				mockValidateFields.mockReset();
+				mockValidatePayload.mockReset().mockReturnValue({});
+			});
+
+			afterEach(() => {
+				delete env['FILES_MAX_UPLOAD_SIZE'];
+				vi.restoreAllMocks();
+			});
+
+			it('rejects a non-scalar id before fetching', async () => {
+				const uploadSpy = vi.spyOn(FilesService.prototype, 'uploadOne');
+
+				await expect(service().importOne('https://example.com/x.png', { id: {} } as never)).rejects.toBeInstanceOf(
+					InvalidPayloadException
+				);
+
+				expect(mockAxiosGet).not.toHaveBeenCalled();
+				expect(uploadSpy).not.toHaveBeenCalled();
+			});
+
+			it('rejects an empty id before fetching', async () => {
+				await expect(service().importOne('https://example.com/x.png', { id: '' })).rejects.toBeInstanceOf(
+					InvalidPayloadException
+				);
+
+				expect(mockAxiosGet).not.toHaveBeenCalled();
+			});
+
+			it('rejects a malformed id before fetching', async () => {
+				const uploadSpy = vi.spyOn(FilesService.prototype, 'uploadOne');
+
+				await expect(service().importOne('https://example.com/x.png', { id: 'not-a-uuid' })).rejects.toBeInstanceOf(
+					ForbiddenException
+				);
+
+				expect(mockAxiosGet).not.toHaveBeenCalled();
+				expect(uploadSpy).not.toHaveBeenCalled();
+			});
+
+			it('refuses a missing target before fetching, without checking access', async () => {
+				tracker.on.select(/directus_files/).response(null);
+				const uploadSpy = vi.spyOn(FilesService.prototype, 'uploadOne');
+
+				await expect(service().importOne('https://example.com/x.png', { id: MISSING_ID })).rejects.toBeInstanceOf(
+					ForbiddenException
+				);
+
+				expect(mockCheckAccess).not.toHaveBeenCalled();
+				expect(mockAxiosGet).not.toHaveBeenCalled();
+				expect(uploadSpy).not.toHaveBeenCalled();
+			});
+
+			it('checks the submitted field names, including caller content, before fetching', async () => {
+				tracker.on.select(/directus_files/).response({ storage: 'local' });
+
+				mockValidateFields.mockImplementation(() => {
+					throw new ForbiddenException();
+				});
+
+				const uploadSpy = vi.spyOn(FilesService.prototype, 'uploadOne');
+
+				await expect(
+					service().importOne('https://example.com/x.png', { id: EXISTING_ID, evil: 'x' } as never)
+				).rejects.toBeInstanceOf(ForbiddenException);
+
+				expect(mockValidateFields).toHaveBeenCalledWith(
+					'update',
+					'directus_files',
+					expect.arrayContaining(['folder', 'filename_download', 'storage', 'type', 'evil'])
+				);
+
+				expect(mockAxiosGet).not.toHaveBeenCalled();
+				expect(uploadSpy).not.toHaveBeenCalled();
+			});
+
+			it('preserves the existing storage and injects no new-file defaults on a replace', async () => {
+				tracker.on.select(/directus_files/).response({ storage: 'secondary' });
+				mockAxiosGet.mockResolvedValue(axiosResponse('image/png'));
+				const uploadSpy = vi.spyOn(FilesService.prototype, 'uploadOne').mockResolvedValue(EXISTING_ID as never);
+
+				await service().importOne('https://example.com/x.png', { id: EXISTING_ID });
+
+				expect(uploadSpy).toHaveBeenCalledOnce();
+				const [, payload, key] = uploadSpy.mock.calls[0]!;
+				expect(key).toBe(EXISTING_ID);
+				expect((payload as Record<string, unknown>).storage).toBe('secondary');
+				expect((payload as Record<string, unknown>).type).toBe('image/png');
+				expect(payload).not.toHaveProperty('title');
+				expect(payload).not.toHaveProperty('filename_download');
+			});
+
+			it('updates the existing row and never creates on a replace', async () => {
+				tracker.on
+					.select(/directus_files/)
+					.response({ storage: 'local', folder: null, filename_download: 'existing.bin' });
+
+				mockAxiosGet.mockResolvedValue(axiosResponse('application/octet-stream'));
+				const createSpy = vi.spyOn(ItemsService.prototype, 'createOne');
+				const updateSpy = vi.spyOn(ItemsService.prototype, 'updateOne').mockResolvedValue(EXISTING_ID as never);
+				drainingWrite();
+
+				await service().importOne('https://example.com/x.bin', { id: EXISTING_ID });
+
+				expect(createSpy).not.toHaveBeenCalled();
+				expect(updateSpy).toHaveBeenCalledWith(EXISTING_ID, expect.anything(), expect.anything());
+			});
+
+			it('destroys the fetched stream when the response URL cannot be decoded', async () => {
+				const response = axiosResponse('image/png', 'https://example.com/%FF');
+				mockAxiosGet.mockResolvedValue(response);
+
+				await expect(service({ admin: true }).importOne('https://example.com/x.png', {})).rejects.toThrow();
+
+				expect(response.data.destroyed).toBe(true);
+			});
+
+			function abortedSource() {
+				return new Readable({
+					read() {
+						/* The test aborts this stream. */
+					},
+				});
+			}
+
+			it('awaits cleanup before rejecting an interrupted replace with a size cap', async () => {
+				tracker.on
+					.select(/directus_files/)
+					.response({ storage: 'local', folder: null, filename_download: 'existing.png' });
+
+				env['FILES_MAX_UPLOAD_SIZE'] = '1mb';
+
+				const source = abortedSource();
+
+				mockAxiosGet.mockResolvedValue({
+					data: source,
+					headers: { 'content-type': 'image/png' },
+					request: { res: { responseUrl: 'https://example.com/import/photo.png' } },
+				});
+
+				// Fail before storage starts consuming the stream.
+				mockCheckAccess
+					.mockReset()
+					.mockResolvedValueOnce(undefined)
+					.mockImplementationOnce(async () => {
+						source.destroy(new Error('connection reset'));
+					});
+
+				drainingWrite();
+
+				let caught: unknown;
+
+				await service()
+					.importOne('https://example.com/import/photo.png', { id: EXISTING_ID })
+					.catch((err) => (caught = err));
+
+				expect((caught as Error).message).toContain('connection reset');
+				expect(storageDelete).toHaveBeenCalled();
+			});
+
+			it('awaits cleanup before rejecting an interrupted replace without a size cap', async () => {
+				tracker.on
+					.select(/directus_files/)
+					.response({ storage: 'local', folder: null, filename_download: 'existing.png' });
+
+				const source = abortedSource();
+
+				mockAxiosGet.mockResolvedValue({
+					data: source,
+					headers: { 'content-type': 'image/png' },
+					request: { res: { responseUrl: 'https://example.com/import/photo.png' } },
+				});
+
+				mockCheckAccess
+					.mockReset()
+					.mockResolvedValueOnce(undefined)
+					.mockImplementationOnce(async () => {
+						source.destroy(new Error('connection reset'));
+					});
+
+				drainingWrite();
+
+				let caught: unknown;
+
+				await service()
+					.importOne('https://example.com/import/photo.png', { id: EXISTING_ID })
+					.catch((err) => (caught = err));
+
+				expect((caught as Error).message).toContain('connection reset');
+				expect(storageDelete).toHaveBeenCalled();
+			});
+
+			it('awaits cleanup before rejecting an interrupted create', async () => {
+				tracker.on.select(/storage_default_folder/).response({ storage_default_folder: null });
+
+				const source = abortedSource();
+
+				mockAxiosGet.mockResolvedValue({
+					data: source,
+					headers: { 'content-type': 'application/octet-stream' },
+					request: { res: { responseUrl: 'https://example.com/import/photo.bin' } },
+				});
+
+				// Creation inserts a row before storage starts consuming the stream.
+				vi.spyOn(ItemsService.prototype, 'createOne').mockImplementation(async () => {
+					source.destroy(new Error('connection reset'));
+					return 'new-key' as never;
+				});
+
+				const deleteSpy = vi.spyOn(ItemsService.prototype, 'deleteOne').mockResolvedValue('new-key' as never);
+				drainingWrite();
+
+				let caught: unknown;
+
+				await service({ admin: true })
+					.importOne('https://example.com/import/photo.bin', {})
+					.catch((err) => (caught = err));
+
+				expect((caught as Error).message).toContain('connection reset');
+				expect(deleteSpy).toHaveBeenCalled();
 			});
 		});
 

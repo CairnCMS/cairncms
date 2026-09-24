@@ -230,11 +230,13 @@ const revisionsDrawerDetail = ref<InstanceType<typeof RevisionsDrawerDetail> | n
 
 const {
 	isNew,
+	isNewOrEmptySingleton,
 	edits,
 	hasEdits,
 	item,
 	saving,
 	loading,
+	error,
 	save,
 	remove,
 	deleting,
@@ -276,7 +278,7 @@ const title = computed(() => {
 const { loading: previewLoading, avatarSrc, roleName } = useUserPreview();
 
 const { createAllowed, deleteAllowed, archiveAllowed, saveAllowed, updateAllowed, revisionsAllowed, fields } =
-	usePermissions(ref('directus_users'), item, isNew);
+	usePermissions(ref('directus_users'), item, isNew, { primaryKey, loading, error, isNewOrEmptySingleton, isBatch });
 
 // These fields will be shown in the sidebar instead
 const fieldsDenyList = ['id', 'last_page', 'created_on', 'created_by', 'modified_by', 'modified_on', 'last_access'];
@@ -326,6 +328,8 @@ function useBreadcrumb() {
 }
 
 async function saveAndQuit() {
+	if (isSavable.value === false) return;
+
 	try {
 		const savedItem: Record<string, any> = await save();
 		await setLang(savedItem);
@@ -337,6 +341,8 @@ async function saveAndQuit() {
 }
 
 async function saveAndStay() {
+	if (isSavable.value === false) return;
+
 	try {
 		const savedItem: Record<string, any> = await save();
 		await setLang(savedItem);
@@ -354,6 +360,8 @@ async function saveAndStay() {
 }
 
 async function saveAndAddNew() {
+	if (isSavable.value === false) return;
+
 	try {
 		const savedItem: Record<string, any> = await save();
 		await setLang(savedItem);

@@ -391,49 +391,13 @@ function clearFilters() {
 }
 
 function usePermissions() {
-	const batchEditAllowed = computed(() => {
-		const admin = userStore?.currentUser?.role.admin_access === true;
-		if (admin) return true;
+	const batchEditAllowed = computed(() => permissionsStore.hasPermission('directus_files', 'update'));
 
-		const updatePermissions = permissionsStore.permissions.find(
-			(permission) => permission.action === 'update' && permission.collection === 'directus_files'
-		);
+	const batchDeleteAllowed = computed(() => permissionsStore.hasPermission('directus_files', 'delete'));
 
-		return !!updatePermissions;
-	});
+	const createAllowed = computed(() => permissionsStore.hasPermission('directus_files', 'create'));
 
-	const batchDeleteAllowed = computed(() => {
-		const admin = userStore?.currentUser?.role.admin_access === true;
-		if (admin) return true;
-
-		const deletePermissions = permissionsStore.permissions.find(
-			(permission) => permission.action === 'delete' && permission.collection === 'directus_files'
-		);
-
-		return !!deletePermissions;
-	});
-
-	const createAllowed = computed(() => {
-		const admin = userStore?.currentUser?.role.admin_access === true;
-		if (admin) return true;
-
-		const createPermissions = permissionsStore.permissions.find(
-			(permission) => permission.action === 'create' && permission.collection === 'directus_files'
-		);
-
-		return !!createPermissions;
-	});
-
-	const createFolderAllowed = computed(() => {
-		const admin = userStore?.currentUser?.role.admin_access === true;
-		if (admin) return true;
-
-		const createPermissions = permissionsStore.permissions.find(
-			(permission) => permission.action === 'create' && permission.collection === 'directus_folders'
-		);
-
-		return !!createPermissions;
-	});
+	const createFolderAllowed = computed(() => permissionsStore.hasPermission('directus_folders', 'create'));
 
 	return { batchEditAllowed, batchDeleteAllowed, createAllowed, createFolderAllowed };
 }

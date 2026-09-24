@@ -1,0 +1,39 @@
+get:
+  summary: Retrieve My Singleton Permissions
+  description: >-
+    Check an authenticated user's update, delete, and share permissions for a singleton, which holds
+    one item. Administrators and users with any of these collection permissions can omit the key.
+    An empty singleton denies all three actions. Other collections require a key. Non-admin users
+    without these permissions receive `400` whether the collection exists or not. The API rechecks
+    permissions when an action is submitted. Other failures return the usual API error response.
+  operationId: getMySingletonPermissions
+  security:
+    - Auth: []
+    - KeyAuth: []
+  parameters:
+    - name: collection
+      in: path
+      required: true
+      description: Specify the singleton collection.
+      schema:
+        type: string
+  responses:
+    '200':
+      description: The request succeeded.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '../../openapi.yaml#/components/schemas/ItemPermissions'
+    '400':
+      description: >-
+        The request needs a primary key. This response also applies to non-admin users without update,
+        delete, or share permission on the collection, whether the collection exists or not.
+    '401':
+      $ref: '../../openapi.yaml#/components/responses/UnauthorizedError'
+    '500':
+      description: The server could not complete the request.
+  tags:
+    - ItemPermissions

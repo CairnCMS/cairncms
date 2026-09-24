@@ -13,7 +13,7 @@ import { getEndpoint } from '@cairncms/utils';
 import { AxiosResponse } from 'axios';
 import { mergeWith } from 'lodash';
 import { computed, ComputedRef, isRef, Ref, ref, unref, watch } from 'vue';
-import { usePermissions } from './use-permissions';
+import { useFieldPermissions } from './use-field-permissions';
 import { Field, Query, Relation } from '@cairncms/types';
 import { getDefaultValuesFromFields } from '@/utils/get-default-values-from-fields';
 
@@ -27,6 +27,7 @@ type UsableItem = {
 	refresh: () => void;
 	save: () => Promise<any>;
 	isNew: ComputedRef<boolean>;
+	isNewOrEmptySingleton: ComputedRef<boolean>;
 	remove: () => Promise<void>;
 	deleting: Ref<boolean>;
 	archive: () => Promise<void>;
@@ -57,6 +58,19 @@ export function useItem(
 	const isBatch = computed(() => typeof primaryKey.value === 'string' && primaryKey.value.includes(','));
 	const isSingle = computed(() => !!collectionInfo.value?.meta?.singleton);
 
+	const isEmptySingleton = computed(() => {
+		if (!isSingle.value || isNew.value || loading.value || error.value != null || item.value == null) {
+			return false;
+		}
+
+		const keyField = primaryKeyField.value?.field;
+		if (keyField === undefined) return false;
+
+		return Object.prototype.hasOwnProperty.call(item.value, keyField) && item.value[keyField] === null;
+	});
+
+	const isNewOrEmptySingleton = computed(() => isNew.value || isEmptySingleton.value);
+
 	const isArchived = computed(() => {
 		if (!collectionInfo.value?.meta?.archive_field) return null;
 
@@ -67,7 +81,7 @@ export function useItem(
 		return item.value?.[collectionInfo.value.meta.archive_field] === collectionInfo.value.meta.archive_value;
 	});
 
-	const { fields: fieldsWithPermissions } = usePermissions(collection, item, isNew);
+	const { fields: fieldsWithPermissions } = useFieldPermissions(collection, isNewOrEmptySingleton);
 
 	const itemEndpoint = computed(() => {
 		if (isSingle.value) {
@@ -91,6 +105,7 @@ export function useItem(
 		refresh,
 		save,
 		isNew,
+		isNewOrEmptySingleton,
 		remove,
 		deleting,
 		archive,
@@ -132,7 +147,7 @@ export function useItem(
 			}
 		);
 
-		const errors = validateItem(payloadToValidate, fieldsWithPermissions.value, isNew.value);
+		const errors = validateItem(payloadToValidate, fieldsWithPermissions.value, isNewOrEmptySingleton.value);
 
 		if (errors.length > 0) {
 			validationErrors.value = errors;
@@ -256,7 +271,7 @@ export function useItem(
 			}
 		}
 
-		const errors = validateItem(newItem, fieldsWithPermissions.value, isNew.value);
+		const errors = validateItem(newItem, fieldsWithPermissions.value, isNewOrEmptySingleton.value);
 
 		if (errors.length > 0) {
 			validationErrors.value = errors;

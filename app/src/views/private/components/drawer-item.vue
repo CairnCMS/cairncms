@@ -14,7 +14,7 @@
 
 		<template #actions>
 			<slot name="actions" />
-			<v-button v-tooltip.bottom="t('save')" icon rounded @click="save">
+			<v-button v-tooltip.bottom="t('save')" icon rounded :disabled="!saveAvailable" @click="save">
 				<v-icon name="check" />
 			</v-button>
 		</template>
@@ -35,14 +35,14 @@
 			<div v-else class="drawer-item-order" :class="{ swap: swapFormOrder }">
 				<v-form
 					v-if="junctionField"
-					:disabled="disabled"
-					:loading="loading"
+					:disabled="relatedFormDisabled"
+					:loading="relatedLoading"
 					:show-no-visible-fields="false"
-					:initial-values="initialValues?.[junctionField]"
+					:initial-values="relatedData"
 					:primary-key="relatedPrimaryKey"
 					:model-value="internalEdits?.[junctionField]"
 					:fields="relatedCollectionFields"
-					:validation-errors="junctionField ? validationErrors : undefined"
+					:validation-errors="relatedValidationErrors"
 					:autofocus="!swapFormOrder"
 					:show-divider="!swapFormOrder"
 					@update:model-value="setRelationEdits"
@@ -50,15 +50,15 @@
 
 				<v-form
 					v-model="internalEdits"
-					:disabled="disabled"
-					:loading="loading"
+					:disabled="junctionFormDisabled"
+					:loading="junctionLoading"
 					:show-no-visible-fields="false"
 					:initial-values="initialValues"
 					:autofocus="swapFormOrder"
 					:show-divider="swapFormOrder"
 					:primary-key="primaryKey"
 					:fields="fields"
-					:validation-errors="!junctionField ? validationErrors : undefined"
+					:validation-errors="junctionValidationErrors"
 				/>
 			</div>
 		</div>
@@ -80,18 +80,22 @@
 <script setup lang="ts">
 import api from '@/api';
 import { useEditsGuard } from '@/composables/use-edits-guard';
-import { usePermissions } from '@/composables/use-permissions';
+import { useFieldPermissions } from '@/composables/use-field-permissions';
+import { useItemUpdateGate } from '@/composables/use-item-permissions';
 import { useTemplateData } from '@/composables/use-template-data';
 import { useFieldsStore } from '@/stores/fields';
+import { usePermissionsStore } from '@/stores/permissions';
 import { useRelationsStore } from '@/stores/relations';
+import { useUserStore } from '@/stores/user';
 import { getDefaultValuesFromFields } from '@/utils/get-default-values-from-fields';
+import { pickWritable } from '@/utils/pick-writable';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { validateItem } from '@/utils/validate-item';
 import FilePreview from '@/views/private/components/file-preview.vue';
 import { useCollection } from '@cairncms/composables';
 import { Field, Relation } from '@cairncms/types';
 import { getEndpoint } from '@cairncms/utils';
-import { isEmpty, merge, set } from 'lodash';
+import { cloneDeep, isEmpty, merge, set } from 'lodash';
 import { computed, ref, toRefs, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
@@ -126,24 +130,120 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits(['update:active', 'input']);
 
+function isNewKey(key: string | number | null | undefined): boolean {
+	return key === '+';
+}
+
+function isExistingKey(key: string | number | null | undefined): boolean {
+	return key !== '+' && key !== null && key !== undefined;
+}
+
+function keyMode(key: string | number | null | undefined): 'create' | 'update' | null {
+	if (isNewKey(key)) return 'create';
+	if (isExistingKey(key)) return 'update';
+	return null;
+}
+
+function meaningfulContentKeys(
+	edits: Record<string, any> | null | undefined,
+	identityFields: (string | null | undefined)[]
+): string[] {
+	if (!edits) return [];
+	const identity = identityFields.filter((field): field is string => !!field);
+	return Object.keys(edits).filter((key) => key.startsWith('$') === false && identity.includes(key) === false);
+}
+
+function hasMeaningfulContent(
+	edits: Record<string, any> | null | undefined,
+	identityFields: (string | null | undefined)[]
+): boolean {
+	return meaningfulContentKeys(edits, identityFields).length > 0;
+}
+
+function stripStaging(edits: Record<string, any>): Record<string, any> {
+	const stripped: Record<string, any> = {};
+
+	for (const key of Object.keys(edits)) {
+		if (key.startsWith('$') === false) stripped[key] = edits[key];
+	}
+
+	return stripped;
+}
+
+function stripKey(edits: Record<string, any>, key: string | null): Record<string, any> {
+	if (!key) return { ...edits };
+
+	const rest = { ...edits };
+	delete rest[key];
+	return rest;
+}
+
+function fieldWritable(fields: string[] | null, field: string | null | undefined): boolean {
+	if (!fields || !field) return false;
+	return fields.includes('*') || fields.includes(field);
+}
+
+type SaveTarget = { fields: Field[]; state: Record<string, any>; isNew: boolean };
+
+type SaveOperation = {
+	available: boolean;
+	emit: Record<string, any>;
+	junction: SaveTarget | null;
+	related: SaveTarget | null;
+};
+
 const { t, te } = useI18n();
 
-const validationErrors = ref<any[]>([]);
+const junctionValidationErrors = ref<any[]>([]);
+const relatedValidationErrors = ref<any[]>([]);
 
 const fieldsStore = useFieldsStore();
 const relationsStore = useRelationsStore();
-
-const { internalActive } = useActiveState();
-
-const { junctionFieldInfo, relatedCollection, relatedCollectionInfo, setRelationEdits, relatedPrimaryKeyField } =
-	useRelation();
-
-const { internalEdits, loading, initialValues } = useItem();
-const { save, cancel } = useActions();
+const userStore = useUserStore();
+const permissionsStore = usePermissionsStore();
 
 const { collection } = toRefs(props);
 
+const { internalActive } = useActiveState();
+
+const internalEdits = ref<Record<string, any>>({});
+const junctionData = ref<Record<string, any> | null>(null);
+const relatedData = ref<Record<string, any> | undefined>(undefined);
+const junctionLoading = ref(false);
+const relatedLoading = ref(false);
+const junctionLoaded = ref(false);
+const relatedLoaded = ref(false);
+
+const loading = computed(() => junctionLoading.value || relatedLoading.value);
+
+const initialValues = computed<Record<string, any> | null>(() => {
+	if (junctionData.value === null && relatedData.value === undefined) return null;
+
+	const composed = { ...(junctionData.value ?? {}) };
+
+	if (props.junctionField && relatedData.value !== undefined) {
+		composed[props.junctionField] = relatedData.value;
+	}
+
+	return composed;
+});
+
+const {
+	junctionFieldInfo,
+	relatedCollection,
+	relatedCollectionInfo,
+	setRelationEdits,
+	relatedPrimaryKeyField,
+	collectionField,
+} = useRelation();
+
+useDataLoaders();
+
 const { info: collectionInfo, primaryKeyField } = useCollection(collection);
+
+const { operation, junctionFormDisabled, relatedFormDisabled, saveAvailable } = useGating();
+
+const { save, cancel } = useActions();
 
 const isNew = computed(() => props.primaryKey === '+' && props.relatedPrimaryKey === '+');
 
@@ -180,15 +280,13 @@ const title = computed(() => {
 		: t('editing_in', { collection: collection.name });
 });
 
-const { fields: relatedCollectionFields } = usePermissions(
+const { fields: relatedCollectionFields } = useFieldPermissions(
 	relatedCollection as any,
-	computed(() => initialValues.value && initialValues.value[props.junctionField as any]),
-	computed(() => props.primaryKey === '+')
+	computed(() => props.relatedPrimaryKey === '+')
 );
 
-const { fields: fieldsWithPermissions } = usePermissions(
+const { fields: fieldsWithPermissions } = useFieldPermissions(
 	collection,
-	initialValues,
 	computed(() => props.primaryKey === '+')
 );
 
@@ -268,39 +366,137 @@ function useActiveState() {
 	return { internalActive };
 }
 
-function useItem() {
-	const internalEdits = ref<Record<string, any>>({});
-	const loading = ref(false);
-	const initialValues = ref<Record<string, any> | null>(null);
+function useDataLoaders() {
+	const noSeed = Symbol('no-seed');
+
+	let junctionGeneration = 0;
+	let relatedGeneration = 0;
+	let adoptedEdits: unknown = noSeed;
+	let relatedSeedRef: unknown = noSeed;
+	let junctionOwner: string | null = null;
+	let relatedOwner: { junction: string; key: string; collection: string | null } | null = null;
 
 	watch(
-		() => props.active,
-		(isActive) => {
-			if (isActive) {
-				if (props.primaryKey !== '+') fetchItem();
-				if (props.relatedPrimaryKey !== '+') fetchRelatedItem();
-				internalEdits.value = props.edits ?? {};
-			} else {
-				loading.value = false;
-				initialValues.value = null;
-				internalEdits.value = {};
-			}
-		},
+		() => [props.active, props.collection, props.primaryKey, props.junctionField],
+		() => loadJunctionData(),
 		{ immediate: true }
 	);
 
-	return { internalEdits, loading, initialValues, fetchItem };
+	watch(
+		() => [props.active, relatedCollection.value, props.relatedPrimaryKey, props.junctionField],
+		() => loadRelatedData(),
+		{ immediate: true }
+	);
 
-	async function fetchItem() {
-		if (!props.primaryKey) return;
+	watch(
+		() => [
+			props.active,
+			props.collection,
+			props.primaryKey,
+			props.relatedPrimaryKey,
+			relatedCollection.value,
+			props.junctionField,
+			props.edits,
+		],
+		() => reconcileEdits(),
+		{ immediate: true }
+	);
 
-		loading.value = true;
+	function reconcileEdits() {
+		if (props.active !== true) {
+			internalEdits.value = {};
+			adoptedEdits = noSeed;
+			relatedSeedRef = noSeed;
+			junctionOwner = null;
+			relatedOwner = null;
+			return;
+		}
+
+		const freshSeed = props.edits !== adoptedEdits;
+		const seed = props.edits ? cloneDeep(props.edits) : {};
+		const junctionField = props.junctionField;
+
+		let draft = { ...internalEdits.value };
+
+		const currentJunction = `${props.collection}::${String(props.primaryKey)}`;
+
+		if (junctionOwner === null || currentJunction !== junctionOwner) {
+			draft = freshSeed ? stripKey(seed, junctionField) : {};
+			junctionOwner = currentJunction;
+			relatedOwner = null;
+		}
+
+		if (junctionField) {
+			const currentKey = String(props.relatedPrimaryKey);
+			const currentCollection = relatedCollection.value;
+			const relatedFresh = props.edits !== relatedSeedRef;
+
+			const identityMatches =
+				relatedOwner !== null && relatedOwner.junction === currentJunction && relatedOwner.key === currentKey;
+
+			const collectionCompatible =
+				relatedOwner !== null &&
+				(relatedOwner.collection === currentCollection ||
+					(relatedFresh === false && (currentCollection === null || relatedOwner.collection === null)));
+
+			const sameTarget = identityMatches && collectionCompatible;
+
+			if (sameTarget) {
+				if (relatedOwner!.collection === null && currentCollection !== null)
+					relatedOwner!.collection = currentCollection;
+				if (relatedFresh) relatedSeedRef = props.edits;
+			} else if (relatedFresh) {
+				if (seed[junctionField] !== undefined) draft[junctionField] = seed[junctionField];
+				else delete draft[junctionField];
+
+				relatedOwner = { junction: currentJunction, key: currentKey, collection: currentCollection };
+				relatedSeedRef = props.edits;
+			} else {
+				delete draft[junctionField];
+				relatedOwner = { junction: currentJunction, key: currentKey, collection: currentCollection };
+			}
+		}
+
+		internalEdits.value = draft;
+		adoptedEdits = props.edits;
+	}
+
+	function loadJunctionData() {
+		const token = ++junctionGeneration;
+
+		junctionLoading.value = false;
+		junctionLoaded.value = false;
+		junctionData.value = null;
+		junctionValidationErrors.value = [];
+
+		if (props.active !== true) return;
+
+		if (isExistingKey(props.primaryKey)) fetchItem(token);
+	}
+
+	function loadRelatedData() {
+		const token = ++relatedGeneration;
+
+		relatedLoading.value = false;
+		relatedLoaded.value = false;
+		relatedData.value = undefined;
+		relatedValidationErrors.value = [];
+
+		if (props.active !== true) return;
+		if (!props.junctionField || !relatedCollection.value) return;
+		if (isExistingKey(props.relatedPrimaryKey) === false) return;
+
+		fetchRelatedItem(token);
+	}
+
+	async function fetchItem(token: number) {
+		junctionLoading.value = true;
 
 		const baseEndpoint = getEndpoint(props.collection);
 
 		const endpoint = props.collection.startsWith('directus_')
 			? `${baseEndpoint}/${props.primaryKey}`
-			: `${baseEndpoint}/${encodeURIComponent(props.primaryKey)}`;
+			: `${baseEndpoint}/${encodeURIComponent(props.primaryKey!)}`;
 
 		let fields = '*';
 
@@ -311,20 +507,23 @@ function useItem() {
 		try {
 			const response = await api.get(endpoint, { params: { fields } });
 
-			initialValues.value = response.data.data;
+			if (token !== junctionGeneration) return;
+
+			junctionData.value = response.data.data;
+			junctionLoaded.value = true;
 		} catch (err: any) {
+			if (token !== junctionGeneration) return;
+
 			unexpectedError(err);
 		} finally {
-			loading.value = false;
+			if (token === junctionGeneration) junctionLoading.value = false;
 		}
 	}
 
-	async function fetchRelatedItem() {
-		const collection = relatedCollection.value;
+	async function fetchRelatedItem(token: number) {
+		const collection = relatedCollection.value!;
 
-		if (!collection || !junctionFieldInfo.value) return;
-
-		loading.value = true;
+		relatedLoading.value = true;
 
 		const baseEndpoint = getEndpoint(collection);
 
@@ -335,14 +534,16 @@ function useItem() {
 		try {
 			const response = await api.get(endpoint);
 
-			initialValues.value = {
-				...(initialValues.value || {}),
-				[junctionFieldInfo.value.field]: response.data.data,
-			};
+			if (token !== relatedGeneration) return;
+
+			relatedData.value = response.data.data;
+			relatedLoaded.value = true;
 		} catch (err: any) {
+			if (token !== relatedGeneration) return;
+
 			unexpectedError(err);
 		} finally {
-			loading.value = false;
+			if (token === relatedGeneration) relatedLoading.value = false;
 		}
 	}
 }
@@ -371,16 +572,36 @@ function useRelation() {
 		if (relationForField.meta?.one_collection_field) {
 			return (
 				props.edits?.[relationForField.meta.one_collection_field] ||
-				initialValues.value?.[relationForField.meta.one_collection_field]
+				junctionData.value?.[relationForField.meta.one_collection_field] ||
+				null
 			);
 		}
 
 		return null;
 	});
 
+	const collectionField = computed<string | null>(() => {
+		if (!props.junctionField) return null;
+
+		const relations = relationsStore.getRelationsForField(props.collection, props.junctionField);
+
+		const relationForField = relations.find((relation: Relation) => {
+			return relation.collection === props.collection && relation.field === props.junctionField;
+		});
+
+		return relationForField?.meta?.one_collection_field ?? null;
+	});
+
 	const { info: relatedCollectionInfo, primaryKeyField: relatedPrimaryKeyField } = useCollection(relatedCollection);
 
-	return { junctionFieldInfo, relatedCollection, relatedCollectionInfo, setRelationEdits, relatedPrimaryKeyField };
+	return {
+		junctionFieldInfo,
+		relatedCollection,
+		relatedCollectionInfo,
+		setRelationEdits,
+		relatedPrimaryKeyField,
+		collectionField,
+	};
 
 	function setRelationEdits(edits: any) {
 		if (!props.junctionField) return;
@@ -389,48 +610,260 @@ function useRelation() {
 	}
 }
 
+function useGating() {
+	const activeSource = computed(() => internalActive.value);
+
+	const junctionCapabilityKey = computed<string | number | null>(() =>
+		isExistingKey(props.primaryKey) ? props.primaryKey ?? null : null
+	);
+
+	const junctionGate = useItemUpdateGate({
+		collection,
+		primaryKey: junctionCapabilityKey,
+		enabled: computed(() => internalActive.value === true),
+		localReady: junctionLoaded,
+		itemSource: activeSource,
+	});
+
+	const relatedCapabilityKey = computed<string | number | null>(() =>
+		isExistingKey(props.relatedPrimaryKey) ? props.relatedPrimaryKey ?? null : null
+	);
+
+	const relatedGate = useItemUpdateGate({
+		collection: computed(() => relatedCollection.value ?? ''),
+		primaryKey: relatedCapabilityKey,
+		enabled: computed(() => internalActive.value === true && !!props.junctionField && !!relatedCollection.value),
+		localReady: relatedLoaded,
+		itemSource: activeSource,
+	});
+
+	const junctionWritableFields = computed<string[] | null>(() =>
+		isExistingKey(props.primaryKey) ? junctionGate.writableFields.value : createWritableFields(props.collection)
+	);
+
+	const relatedWritableFields = computed<string[] | null>(() => {
+		if (!relatedCollection.value) return null;
+
+		return isExistingKey(props.relatedPrimaryKey)
+			? relatedGate.writableFields.value
+			: createWritableFields(relatedCollection.value);
+	});
+
+	const junctionRelationWritable = computed(() => {
+		if (fieldWritable(junctionWritableFields.value, props.junctionField) === false) return false;
+		if (collectionField.value) return fieldWritable(junctionWritableFields.value, collectionField.value);
+		return true;
+	});
+
+	const junctionMode = computed(() => keyMode(props.primaryKey));
+
+	const relatedMode = computed(() => (props.junctionField ? keyMode(props.relatedPrimaryKey) : null));
+
+	const junctionAuthorized = computed(() => {
+		if (junctionMode.value === 'create') return createAvailable(props.collection);
+		if (junctionMode.value === 'update') return junctionGate.updateAllowed.value;
+		return false;
+	});
+
+	const relatedRowAuthorized = computed(() => {
+		if (!props.junctionField || !relatedCollection.value) return false;
+		if (relatedMode.value === 'create') return createAvailable(relatedCollection.value);
+		if (relatedMode.value === 'update') return relatedGate.updateAllowed.value;
+		return false;
+	});
+
+	const junctionContentEdits = computed<Record<string, any>>(() => {
+		if (!props.junctionField) return internalEdits.value;
+
+		const rest = { ...internalEdits.value };
+		delete rest[props.junctionField];
+		return rest;
+	});
+
+	const relatedContentEdits = computed<Record<string, any>>(() =>
+		props.junctionField ? internalEdits.value[props.junctionField] ?? {} : {}
+	);
+
+	const junctionFiltered = computed(() => pickWritable(junctionContentEdits.value, junctionWritableFields.value));
+	const relatedFiltered = computed(() => pickWritable(relatedContentEdits.value, relatedWritableFields.value));
+
+	const junctionHasContent = computed(() =>
+		hasMeaningfulContent(junctionFiltered.value, [primaryKeyField.value?.field, collectionField.value])
+	);
+
+	const relatedHasContent = computed(() =>
+		hasMeaningfulContent(relatedFiltered.value, [relatedPrimaryKeyField.value?.field])
+	);
+
+	const relatedOp = computed<'none' | 'content' | 'link' | 'create'>(() => {
+		if (!props.junctionField || !relatedCollection.value) return 'none';
+		if (junctionRelationWritable.value === false) return 'none';
+
+		if (relatedMode.value === 'create') return relatedRowAuthorized.value ? 'create' : 'none';
+
+		if (relatedMode.value === 'update') {
+			if (relatedRowAuthorized.value && relatedHasContent.value) return 'content';
+			if (junctionMode.value === 'create') return 'link';
+		}
+
+		return 'none';
+	});
+
+	const junctionFormDisabled = computed(() => props.disabled || junctionAuthorized.value === false);
+
+	const relatedFormDisabled = computed(
+		() =>
+			props.disabled ||
+			relatedRowAuthorized.value === false ||
+			junctionRelationWritable.value === false ||
+			junctionAuthorized.value === false
+	);
+
+	const operation = computed(() => buildOperation());
+
+	const saveAvailable = computed(
+		() => props.disabled === false && internalActive.value === true && operation.value.available
+	);
+
+	return { operation, junctionFormDisabled, relatedFormDisabled, saveAvailable };
+
+	function buildOperation(): SaveOperation {
+		if (!props.junctionField) {
+			let available = false;
+			if (junctionMode.value === 'create') available = junctionAuthorized.value;
+			else if (junctionMode.value === 'update') available = junctionAuthorized.value && junctionHasContent.value;
+
+			const emit: Record<string, any> = { ...junctionFiltered.value };
+
+			if (junctionMode.value === 'update' && primaryKeyField.value) {
+				emit[primaryKeyField.value.field] = props.primaryKey;
+			}
+
+			const existing = junctionMode.value === 'create' ? {} : initialValues.value ?? {};
+			const state = merge({}, defaultsFor(fieldsWithoutCircular.value), existing, stripStaging(emit));
+
+			return {
+				available,
+				emit,
+				junction: { fields: fieldsWithoutCircular.value, state, isNew: junctionMode.value === 'create' },
+				related: null,
+			};
+		}
+
+		const junctionField = props.junctionField;
+		const op = relatedOp.value;
+		const relatedReady = op !== 'none' && junctionAuthorized.value;
+
+		const junctionUpdateChange =
+			junctionMode.value === 'update' && junctionAuthorized.value && junctionHasContent.value;
+
+		const available = junctionUpdateChange || relatedReady;
+
+		let related: Record<string, any> | null = null;
+
+		if (op === 'content') {
+			related = { ...relatedFiltered.value };
+			if (relatedPrimaryKeyField.value) related[relatedPrimaryKeyField.value.field] = props.relatedPrimaryKey;
+		} else if (op === 'create') {
+			related = { ...relatedFiltered.value };
+		} else if (op === 'link') {
+			related = relatedPrimaryKeyField.value ? { [relatedPrimaryKeyField.value.field]: props.relatedPrimaryKey } : {};
+		}
+
+		const emit: Record<string, any> = { ...junctionFiltered.value };
+		if (related !== null) emit[junctionField] = related;
+		if (collectionField.value && op !== 'none') emit[collectionField.value] = relatedCollection.value;
+		if (junctionMode.value === 'update' && primaryKeyField.value) emit[primaryKeyField.value.field] = props.primaryKey;
+
+		const includeJunction =
+			junctionMode.value === 'create' ||
+			(junctionMode.value === 'update' && (junctionHasContent.value || op !== 'none'));
+
+		let junction: SaveTarget | null = null;
+
+		if (includeJunction) {
+			const existing = junctionMode.value === 'create' ? {} : initialValues.value ?? {};
+			const state = merge({}, defaultsFor(fieldsWithoutCircular.value), existing, stripStaging(junctionFiltered.value));
+
+			if (related !== null) state[junctionField] = related;
+
+			junction = { fields: fieldsWithoutCircular.value, state, isNew: junctionMode.value === 'create' };
+		}
+
+		let relatedTarget: SaveTarget | null = null;
+
+		if (op === 'content' || op === 'create') {
+			const existing = relatedMode.value === 'create' ? {} : initialValues.value?.[junctionField] ?? {};
+
+			const state = merge(
+				{},
+				defaultsFor(relatedCollectionFields.value),
+				existing,
+				stripStaging(relatedFiltered.value)
+			);
+
+			relatedTarget = { fields: relatedCollectionFields.value, state, isNew: relatedMode.value === 'create' };
+		}
+
+		return { available, emit, junction, related: relatedTarget };
+	}
+
+	function defaultsFor(fields: Field[]): Record<string, any> {
+		return getDefaultValuesFromFields(fields).value;
+	}
+
+	function createAvailable(collectionName: string | null): boolean {
+		if (!collectionName) return false;
+		if (userStore.currentUser?.role?.admin_access === true) return true;
+		return !!permissionsStore.getPermissionsForUser(collectionName, 'create');
+	}
+
+	function createWritableFields(collectionName: string): string[] | null {
+		if (userStore.currentUser?.role?.admin_access === true) return ['*'];
+		return permissionsStore.getPermissionsForUser(collectionName, 'create')?.fields ?? null;
+	}
+}
+
 function useActions() {
 	return { save, cancel };
 
 	function save() {
-		const editsToValidate = props.junctionField ? internalEdits.value[props.junctionField] : internalEdits.value;
-		const fieldsToValidate = props.junctionField ? relatedCollectionFields.value : fieldsWithoutCircular.value;
-		const defaultValues = getDefaultValuesFromFields(fieldsToValidate);
-		const existingValues = props.junctionField ? initialValues?.value?.[props.junctionField] : initialValues?.value;
+		if (saveAvailable.value !== true) return;
 
-		let errors = validateItem(
-			merge({}, defaultValues.value, existingValues, editsToValidate),
-			fieldsToValidate,
-			isNew.value
-		);
+		const plan = operation.value;
+		if (plan.available === false) return;
 
-		if (errors.length > 0) {
-			validationErrors.value = errors;
-			return;
-		} else {
-			validationErrors.value = [];
+		if (plan.related) {
+			const errors = validateItem(plan.related.state, plan.related.fields, plan.related.isNew);
+
+			if (errors.length > 0) {
+				relatedValidationErrors.value = errors;
+				return;
+			}
 		}
 
-		if (props.junctionField && Object.values(defaultValues.value).some((value) => value !== null)) {
-			internalEdits.value[props.junctionField] = internalEdits.value[props.junctionField] ?? {};
+		relatedValidationErrors.value = [];
+
+		if (plan.junction) {
+			const errors = validateItem(plan.junction.state, plan.junction.fields, plan.junction.isNew);
+
+			if (errors.length > 0) {
+				junctionValidationErrors.value = errors;
+				return;
+			}
 		}
 
-		if (props.junctionField && props.relatedPrimaryKey !== '+' && relatedPrimaryKeyField.value) {
-			set(internalEdits.value, [props.junctionField, relatedPrimaryKeyField.value.field], props.relatedPrimaryKey);
-		}
+		junctionValidationErrors.value = [];
 
-		if (props.primaryKey && props.primaryKey !== '+' && primaryKeyField.value) {
-			internalEdits.value[primaryKeyField.value.field] = props.primaryKey;
-		}
-
-		emit('input', internalEdits.value);
+		emit('input', plan.emit);
 
 		internalActive.value = false;
 		internalEdits.value = {};
 	}
 
 	function cancel() {
-		validationErrors.value = [];
+		junctionValidationErrors.value = [];
+		relatedValidationErrors.value = [];
 		internalActive.value = false;
 		internalEdits.value = {};
 	}

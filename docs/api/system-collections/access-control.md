@@ -145,6 +145,8 @@ A permission row is a tuple of role, collection, and action plus the rules that 
 | `PATCH` | `/permissions/<id>` | Update a single permission. |
 | `DELETE` | `/permissions` | Delete many permissions. |
 | `DELETE` | `/permissions/<id>` | Delete a single permission. |
+| `GET` | `/permissions/me/<collection>/<key>` | Check the current user's permissions for one item. |
+| `GET` | `/permissions/me/<collection>` | Check the current user's permissions for a singleton. |
 
 ### Permission record fields
 
@@ -160,6 +162,53 @@ A permission row is a tuple of role, collection, and action plus the rules that 
 A read or write that matches no permission row for a non-admin role is denied. The `permissions`, `validation`, and `presets` filters can reference filter variables (`$NOW`, `$CURRENT_USER`, `$CURRENT_ROLE`) to scope rules per caller.
 
 Permissions on system collections work the same way as permissions on user collections, with one caveat: the platform-managed minimum permissions for app-access roles are projected at read time rather than stored as rows, so they are invisible to `/permissions` queries. See [Config as code / What a config snapshot captures](/docs/manage/config-as-code/#what-a-config-snapshot-captures) for the full picture.
+
+### Check permissions for an item
+
+Use `GET /permissions/me/<collection>/<key>` to check whether the current user can update, delete, or share a stored item. Apps can use the result to show or disable controls. The SDK provides the same result through `readItemPermissions(collection, key?)`.
+
+CairnCMS evaluates permission rules against stored data and rechecks them on every mutation. A successful check does not guarantee that a later request will succeed.
+
+These routes require an authenticated user. Requests made with the Public role or a share link receive `401`.
+
+```http
+GET /permissions/me/articles/42
+```
+
+The response contains an `ItemPermissions` object.
+
+```json
+{
+  "data": {
+    "update": { "access": true, "fields": ["*"] },
+    "delete": { "access": false },
+    "share": { "access": false }
+  }
+}
+```
+
+- **`update.access`**, **`delete.access`**, and **`share.access`** show whether the user can perform each action on the item.
+- **`update.fields`** lists writable fields. `["*"]` allows all fields that support updates. A list of names allows only those fields. `[]` allows no fields. `null` means update is denied.
+
+For a singleton, which holds one item, use `GET /permissions/me/<collection>` without a key. This requires an administrator or a user with update, delete, or share permission on that collection. An empty singleton denies all three actions, and the admin app uses create permission for its first save. Other collections return `400` without a key.
+
+With a key, missing items, unknown collections, invalid keys, and items for which all three actions are denied return the same result. Every `access` value is `false` and `update.fields` is `null`. This conceals whether the item exists.
+
+For non-admin users without any of these collection permissions, omitting the key returns `400`, including for singletons. Neither response reveals whether the collection exists.
+
+Failures other than permission denials return the usual API error response.
+
+Checks can trigger query hooks, read hooks, and flows even without read permission. Events keep their usual names for user and system collections, and their number varies by request.
+
+### Updating related items
+
+Related-item updates and imports use primary keys to select existing records. Hooks and permission validation receive the update fields without the key. Update hooks receive record IDs in `meta.keys`. Creates can still include a primary key.
+
+The parent link follows these rules.
+
+- An omitted link field stays omitted when the item is already linked to its parent.
+- An explicitly supplied matching link or a move to another parent requires permission to write the link field.
+- An already-linked item submitted with only its key is not updated and emits no update event. Supplying unchanged field values still counts as an update.
 
 ## Shares (`/shares`)
 

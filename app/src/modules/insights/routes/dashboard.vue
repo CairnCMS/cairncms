@@ -24,7 +24,14 @@
 					<v-icon name="clear" />
 				</v-button>
 
-				<v-button v-tooltip.bottom="t('create_panel')" rounded icon outlined :to="`/insights/${currentDashboard.id}/+`">
+				<v-button
+					v-if="createAllowed"
+					v-tooltip.bottom="t('create_panel')"
+					rounded
+					icon
+					outlined
+					:to="`/insights/${currentDashboard.id}/+`"
+				>
 					<v-icon name="add" />
 				</v-button>
 
@@ -239,6 +246,10 @@ const zoomToFit = ref(false);
 
 const updateAllowed = computed<boolean>(() => {
 	return permissionsStore.hasPermission('directus_panels', 'update');
+});
+
+const createAllowed = computed<boolean>(() => {
+	return permissionsStore.hasPermission('directus_panels', 'create');
 });
 
 const now = new Date();

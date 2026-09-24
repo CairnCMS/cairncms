@@ -30,6 +30,7 @@ import { getMaxUploadSize } from '../utils/get-max-upload-size.js';
 import { resolveMimeType } from '../utils/mime-type.js';
 import { parseIptc, parseXmp } from '../utils/parse-image-metadata.js';
 import { createUploadSizeLimit } from '../utils/upload-size-limit.js';
+import { validateKeys } from '../utils/validate-keys.js';
 import { AuthorizationService } from './authorization.js';
 import { ItemsService } from './items.js';
 
@@ -370,12 +371,61 @@ export class FilesService extends ItemsService {
 	 * Import a single file from an external URL
 	 */
 	async importOne(importURL: string, body: Partial<File>): Promise<PrimaryKey> {
-		const fileCreatePermissions = this.accountability?.permissions?.find(
-			(permission) => permission.collection === 'directus_files' && permission.action === 'create'
-		);
+		const { id: idSelector, ...importBody } = body ?? {};
 
-		if (this.accountability && this.accountability?.admin !== true && !fileCreatePermissions) {
-			throw new ForbiddenException();
+		let primaryKey: PrimaryKey | undefined;
+
+		if (idSelector !== undefined) {
+			if (
+				idSelector === null ||
+				idSelector === '' ||
+				(typeof idSelector !== 'string' && typeof idSelector !== 'number')
+			) {
+				throw new InvalidPayloadException(`Invalid file id`);
+			}
+
+			validateKeys(this.schema, 'directus_files', 'id', idSelector);
+			primaryKey = idSelector;
+		}
+
+		let existingStorage: string | undefined;
+
+		if (primaryKey !== undefined) {
+			const existingFile = await this.knex.select('storage').from('directus_files').where({ id: primaryKey }).first();
+
+			// Conceal missing targets even when checkAccess bypasses authorization.
+			if (!existingFile) throw new ForbiddenException();
+
+			existingStorage = existingFile.storage;
+
+			// Check item and field permissions before fetching. uploadOne validates the fetched values.
+			if (this.accountability) {
+				const authorizationService = new AuthorizationService({
+					accountability: this.accountability,
+					knex: this.knex,
+					schema: this.schema,
+				});
+
+				await authorizationService.checkAccess('update', 'directus_files', primaryKey);
+
+				const sanitizedContent = sanitizeFilePayload(clone(importBody));
+
+				authorizationService.validateFields('update', 'directus_files', [
+					'folder',
+					'filename_download',
+					'storage',
+					'type',
+					...Object.keys(sanitizedContent),
+				]);
+			}
+		} else {
+			const fileCreatePermissions = this.accountability?.permissions?.find(
+				(permission) => permission.collection === 'directus_files' && permission.action === 'create'
+			);
+
+			if (this.accountability && this.accountability?.admin !== true && !fileCreatePermissions) {
+				throw new ForbiddenException();
+			}
 		}
 
 		let fileResponse;
@@ -393,33 +443,66 @@ export class FilesService extends ItemsService {
 			});
 		}
 
-		const parsedURL = url.parse(fileResponse.request.res.responseUrl);
-		const filename = decodeURI(path.basename(parsedURL.pathname as string));
+		const source: Readable = fileResponse.data;
+		let stream: Readable = source;
+		let downloadError: Error | undefined;
 
-		const contentType = fileResponse.headers['content-type'];
-		const { mimeType, allowed } = resolveMimeType(typeof contentType === 'string' ? contentType : undefined);
+		try {
+			const contentType = fileResponse.headers['content-type'];
+			const { mimeType, allowed } = resolveMimeType(typeof contentType === 'string' ? contentType : undefined);
 
-		if (allowed === false) {
-			fileResponse.data.destroy();
-			throw new InvalidPayloadException(`File is of invalid content type`);
+			if (allowed === false) {
+				throw new InvalidPayloadException(`File is of invalid content type`);
+			}
+
+			let payload: Partial<File> & { storage: string };
+
+			if (primaryKey === undefined) {
+				const parsedURL = url.parse(fileResponse.request.res.responseUrl);
+				const filename = decodeURI(path.basename(parsedURL.pathname as string));
+
+				payload = {
+					filename_download: filename,
+					storage: toArray(env['STORAGE_LOCATIONS'])[0],
+					title: formatTitle(filename),
+					...importBody,
+					// Caller metadata must not override the checked MIME type.
+					type: mimeType,
+				};
+			} else {
+				// New-file defaults would overwrite existing metadata.
+				payload = {
+					...importBody,
+					storage: existingStorage!,
+					type: mimeType,
+				};
+			}
+
+			const maxUploadSize = getMaxUploadSize();
+
+			if (maxUploadSize !== undefined) {
+				stream = createUploadSizeLimit(source, maxUploadSize);
+			}
+
+			// Downloads can fail before storage attaches a listener. Catch early errors and await
+			// uploadOne so cleanup finishes before the request rejects.
+			const onStreamError = (err: Error) => {
+				downloadError ??= err;
+				if (!stream.destroyed) stream.destroy();
+				if (!source.destroyed) source.destroy();
+			};
+
+			stream.once('error', onStreamError);
+			if (stream !== source) source.once('error', onStreamError);
+
+			const primaryKeyResult = await this.uploadOne(stream, payload, primaryKey);
+			if (downloadError) throw downloadError;
+			return primaryKeyResult;
+		} catch (err: any) {
+			if (!stream.destroyed) stream.destroy();
+			if (!source.destroyed) source.destroy();
+			throw downloadError ?? err;
 		}
-
-		const payload = {
-			filename_download: filename,
-			storage: toArray(env['STORAGE_LOCATIONS'])[0],
-			title: formatTitle(filename),
-			...(body || {}),
-			// The server-resolved, allow-list-checked type wins over any caller-supplied type.
-			type: mimeType,
-		};
-
-		// URL imports honor the same size cap as multipart uploads by counting bytes as they stream.
-		const maxUploadSize = getMaxUploadSize();
-
-		const stream =
-			maxUploadSize === undefined ? fileResponse.data : createUploadSizeLimit(fileResponse.data, maxUploadSize);
-
-		return await this.uploadOne(stream, payload);
 	}
 
 	/**

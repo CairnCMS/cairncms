@@ -27,7 +27,7 @@ export function useRelationSingle(
 		const pkField = relation.value.relatedPrimaryKeyField.field;
 
 		// make sure when updating from an existing primary key, we also have it inside the changes
-		if (value.value && typeof item === 'object' && pkField in item === false) {
+		if (value.value !== null && value.value !== undefined && typeof item === 'object' && pkField in item === false) {
 			const existingPk: string | number = typeof value.value === 'object' ? value.value[pkField] : value.value;
 
 			item[pkField] = existingPk;
@@ -47,7 +47,7 @@ export function useRelationSingle(
 	async function getDisplayItem() {
 		const val = value.value;
 
-		if (!val) {
+		if (val === null || val === undefined) {
 			displayItem.value = null;
 			return;
 		}
@@ -59,7 +59,7 @@ export function useRelationSingle(
 
 		const id = typeof val === 'object' ? val[relation.value.relatedPrimaryKeyField.field] : val;
 
-		if (!id) {
+		if (id === null || id === undefined) {
 			displayItem.value = val as Record<string, any>;
 			return;
 		}

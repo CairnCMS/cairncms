@@ -333,18 +333,18 @@ const secondItemNew = computed(
 
 const firstChangesAllowed = computed(() => {
 	if (firstItemNew.value) {
-		return updateAllowed.value;
+		return createAllowed.value;
 	}
 
-	return createAllowed.value;
+	return updateAllowed.value;
 });
 
 const secondChangesAllowed = computed(() => {
 	if (secondItemNew.value) {
-		return updateAllowed.value;
+		return createAllowed.value;
 	}
 
-	return createAllowed.value;
+	return updateAllowed.value;
 });
 
 const firstFields = computed(() => {
@@ -358,12 +358,15 @@ const firstFields = computed(() => {
 
 	if (!permissions) return fieldsWithPerms;
 
-	if (permissions.fields?.includes('*') === false) {
+	const writableFields = permissions.fields ?? [];
+
+	if (writableFields.includes('*') === false) {
 		fieldsWithPerms = fieldsWithPerms.map((field) => {
-			if (permissions.fields?.includes(field.field) === false) {
+			if (writableFields.includes(field.field) === false) {
 				field.meta = {
 					...(field.meta || {}),
 					readonly: true,
+					conditions: field.meta?.conditions?.map((condition) => ({ ...condition, readonly: true })),
 				} as any;
 			}
 
@@ -385,12 +388,15 @@ const secondFields = computed(() => {
 
 	if (!permissions) return fieldsWithPerms;
 
-	if (permissions.fields?.includes('*') === false) {
+	const writableFields = permissions.fields ?? [];
+
+	if (writableFields.includes('*') === false) {
 		fieldsWithPerms = fieldsWithPerms.map((field) => {
-			if (permissions.fields?.includes(field.field) === false) {
+			if (writableFields.includes(field.field) === false) {
 				field.meta = {
 					...(field.meta || {}),
 					readonly: true,
+					conditions: field.meta?.conditions?.map((condition) => ({ ...condition, readonly: true })),
 				} as any;
 			}
 

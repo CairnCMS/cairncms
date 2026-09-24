@@ -569,18 +569,7 @@ export class AuthorizationService {
 
 			if (!permission) throw new ForbiddenException();
 
-			// Check if you have permission to access the fields you're trying to access
-
-			const allowedFields = permission.fields || [];
-
-			if (allowedFields.includes('*') === false) {
-				const keysInData = Object.keys(payload);
-				const invalidKeys = keysInData.filter((fieldKey) => allowedFields.includes(fieldKey) === false);
-
-				if (invalidKeys.length > 0) {
-					throw new ForbiddenException();
-				}
-			}
+			this.validateFields(action, collection, Object.keys(payload));
 		}
 
 		const preset = permission.presets ?? {};
@@ -655,6 +644,27 @@ export class AuthorizationService {
 		if (validationErrors.length > 0) throw validationErrors;
 
 		return payloadWithPresets;
+	}
+
+	/**
+	 * Checks field permissions without validating values.
+	 */
+	validateFields(action: PermissionsAction, collection: string, fields: string[]): void {
+		if (this.accountability?.admin === true) return;
+
+		const permission = this.accountability?.permissions?.find((permission) => {
+			return permission.collection === collection && permission.action === action;
+		});
+
+		if (!permission) throw new ForbiddenException();
+
+		const allowedFields = permission.fields || [];
+
+		if (allowedFields.includes('*')) return;
+
+		const invalidFields = fields.filter((field) => allowedFields.includes(field) === false);
+
+		if (invalidFields.length > 0) throw new ForbiddenException();
 	}
 
 	async checkAccess(action: PermissionsAction, collection: string, pk: PrimaryKey | PrimaryKey[]): Promise<void> {

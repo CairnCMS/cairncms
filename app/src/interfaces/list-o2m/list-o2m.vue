@@ -175,10 +175,10 @@
 		</div>
 
 		<drawer-item
-			:disabled="disabled || (!updateAllowed && currentlyEditing !== '+')"
+			:disabled="disabled"
 			:active="currentlyEditing !== null"
 			:collection="relationInfo.relatedCollection.collection"
-			:primary-key="currentlyEditing || '+'"
+			:primary-key="currentlyEditing ?? '+'"
 			:edits="editsAtStart"
 			:circular-field="relationInfo.reverseJunctionField.field"
 			@input="stageEdits"

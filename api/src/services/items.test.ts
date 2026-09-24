@@ -1,4 +1,11 @@
-import type { ActionHandler, CollectionsOverview, FilterHandler, NestedDeepQuery } from '@cairncms/types';
+import type {
+	Accountability,
+	ActionHandler,
+	CollectionsOverview,
+	FilterHandler,
+	NestedDeepQuery,
+	Relation,
+} from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';
 import { MockClient, Tracker, createTracker } from 'knex-mock-client';
@@ -6,7 +13,8 @@ import { cloneDeep } from 'lodash-es';
 import type { MockedFunction } from 'vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDatabaseClient } from '../../src/database/index.js';
-import { ItemsService } from '../../src/services/index.js';
+import { Readable } from 'node:stream';
+import { ImportService, ItemsService } from '../../src/services/index.js';
 import { sqlFieldFormatter, sqlFieldList } from '../__utils__/items-utils.js';
 import { systemSchema, userSchema } from '../__utils__/schemas.js';
 import emitter from '../emitter.js';
@@ -1117,6 +1125,273 @@ describe('Integration Tests', () => {
 				expect(response).toStrictEqual(item.id);
 			}
 		);
+	});
+
+	describe('upsertOne', () => {
+		const authorId = '6107c897-9182-40f7-b22e-4f044d1258d2';
+
+		const intSchema = {
+			collections: {
+				widgets: {
+					collection: 'widgets',
+					primary: 'id',
+					singleton: false,
+					note: null,
+					sortField: null,
+					accountability: null,
+					fields: {
+						id: {
+							field: 'id',
+							defaultValue: null,
+							nullable: false,
+							generated: false,
+							type: 'integer',
+							dbType: 'integer',
+							precision: null,
+							scale: null,
+							special: [],
+							note: null,
+							alias: false,
+							validation: null,
+						},
+						name: {
+							field: 'name',
+							defaultValue: null,
+							nullable: true,
+							generated: false,
+							type: 'string',
+							dbType: 'text',
+							precision: null,
+							scale: null,
+							special: [],
+							note: null,
+							alias: false,
+							validation: null,
+						},
+					},
+				},
+			} as CollectionsOverview,
+			relations: [] as Relation[],
+		};
+
+		const admin = { role: 'admin', admin: true };
+
+		const restrictedUpdate: Accountability = {
+			role: 'restricted',
+			admin: false,
+			permissions: [
+				{
+					id: 1,
+					role: 'restricted',
+					collection: 'authors',
+					action: 'update',
+					permissions: {},
+					validation: {},
+					presets: {},
+					fields: ['name'],
+				},
+			],
+		};
+
+		const restores: Array<() => void> = [];
+
+		afterEach(() => {
+			while (restores.length) restores.pop()!();
+		});
+
+		it('updates an existing row and never falls into the create branch', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+			tracker.on.update('authors').response([{ id: authorId }]);
+
+			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
+
+			const result = await service.upsertOne({ id: authorId, name: 'Updated' }, { emitEvents: false });
+
+			expect(tracker.history.update.length).toBeGreaterThan(0);
+			expect(tracker.history.insert.length).toBe(0);
+			expect(result).toBe(authorId);
+		});
+
+		it('creates a row with the supplied key reaching the insert when the row is absent', async () => {
+			tracker.on.select('authors').response([]);
+			tracker.on.insert('authors').response([{ id: authorId }]);
+
+			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
+
+			await service.upsertOne({ id: authorId, name: 'Created' }, { emitEvents: false });
+
+			expect(tracker.history.insert.length).toBeGreaterThan(0);
+			expect(tracker.history.update.length).toBe(0);
+			expect(tracker.history.insert[0]!.bindings).toContain(authorId);
+		});
+
+		it('applies a field-restricted update that would be rejected with the selector present', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+			tracker.on.update('authors').response([{ id: authorId }]);
+
+			const service = new ItemsService('authors', { knex: db, accountability: restrictedUpdate, schema: userSchema });
+
+			await expect(service.upsertOne({ id: authorId, name: 'Restricted' }, { emitEvents: false })).resolves.toBe(
+				authorId
+			);
+
+			expect(tracker.history.update.length).toBeGreaterThan(0);
+		});
+
+		it('forwards mutation options and passes selector-free content to updateOne', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+
+			const updateOneSpy = vi.spyOn(ItemsService.prototype, 'updateOne').mockResolvedValue(authorId);
+			restores.push(() => updateOneSpy.mockRestore());
+
+			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
+			const mutationTracker = service.createMutationTracker();
+			const onRevisionCreate = vi.fn();
+
+			await service.upsertOne(
+				{ id: authorId, name: 'Forwarded' },
+				{ emitEvents: false, mutationTracker, onRevisionCreate }
+			);
+
+			expect(updateOneSpy).toHaveBeenCalledWith(
+				authorId,
+				{ name: 'Forwarded' },
+				expect.objectContaining({ emitEvents: false, mutationTracker, onRevisionCreate })
+			);
+		});
+
+		it('resolves a numeric zero key to the update branch', async () => {
+			tracker.on.select('widgets').response([{ id: 0 }]);
+			tracker.on.update('widgets').response([{ id: 0 }]);
+
+			const service = new ItemsService('widgets', { knex: db, accountability: admin, schema: intSchema });
+
+			await service.upsertOne({ id: 0, name: 'Zero' }, { emitEvents: false });
+
+			expect(tracker.history.update.length).toBeGreaterThan(0);
+			expect(tracker.history.insert.length).toBe(0);
+		});
+
+		it('honors emitEvents false through to the mutation', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+			tracker.on.update('authors').response([{ id: authorId }]);
+
+			const emitActionSpy = vi.spyOn(emitter, 'emitAction');
+			restores.push(() => emitActionSpy.mockRestore());
+
+			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
+
+			await service.upsertOne({ id: authorId, name: 'Quiet' }, { emitEvents: false });
+
+			expect(emitActionSpy).not.toHaveBeenCalled();
+		});
+
+		it('does not mutate the caller payload on the update path', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+			tracker.on.update('authors').response([{ id: authorId }]);
+
+			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
+
+			const input = { id: authorId, name: 'Keep' };
+			await service.upsertOne(input, { emitEvents: false });
+
+			expect(input).toEqual({ id: authorId, name: 'Keep' });
+		});
+
+		it('does not mutate the caller payload on the create path', async () => {
+			tracker.on.select('authors').response([]);
+			tracker.on.insert('authors').response([{ id: authorId }]);
+
+			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
+
+			const input = { id: authorId, name: 'Keep' };
+			await service.upsertOne(input, { emitEvents: false });
+
+			expect(input).toEqual({ id: authorId, name: 'Keep' });
+		});
+	});
+
+	describe('nested write action events', () => {
+		const authorId = '6107c897-9182-40f7-b22e-4f044d1258d2';
+		const postId = 'd66ec139-2655-48c1-9d9a-4753f98a9ee7';
+		const otherAuthorId = 'b5a7dd0f-fc9f-4242-b331-83990990198f';
+		const admin = { role: 'admin', admin: true };
+
+		function spyEmitters() {
+			return { action: vi.spyOn(emitter, 'emitAction'), filter: vi.spyOn(emitter, 'emitFilter') };
+		}
+
+		let emitters: ReturnType<typeof spyEmitters>;
+
+		function eventFor(collection: string) {
+			return emitters.action.mock.calls.find(([, meta]) => (meta as { collection?: string }).collection === collection);
+		}
+
+		function filterFor(collection: string) {
+			return emitters.filter.mock.calls.find(
+				([, , meta]) => (meta as { collection?: string }).collection === collection
+			);
+		}
+
+		beforeEach(() => {
+			emitters = spyEmitters();
+		});
+
+		afterEach(() => {
+			emitters.action.mockRestore();
+			emitters.filter.mockRestore();
+		});
+
+		it('emits a nested update event carrying selector-free metadata content', async () => {
+			tracker.on.select('posts').response([{ uploaded_by: authorId }]);
+			tracker.on.update('posts').response([{ id: postId }]);
+
+			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
+			await service.updateOne(authorId, { items: { update: [{ id: postId, title: 'Edited' }] } }, { emitEvents: true });
+
+			const event = eventFor('posts');
+			expect(event).toBeDefined();
+			expect((event![1] as { payload: unknown }).payload).toEqual({ title: 'Edited' });
+
+			const filter = filterFor('posts');
+			expect(filter).toBeDefined();
+			expect(filter![1]).toEqual({ title: 'Edited' });
+		});
+
+		it('emits a nested reparent event including the reverse field', async () => {
+			tracker.on.select('posts').response([{ uploaded_by: otherAuthorId }]);
+			tracker.on.update('posts').response([{ id: postId }]);
+
+			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
+			await service.updateOne(authorId, { items: { update: [{ id: postId, title: 'Moved' }] } }, { emitEvents: true });
+
+			const event = eventFor('posts');
+			expect(event).toBeDefined();
+			expect((event![1] as { payload: unknown }).payload).toEqual({ title: 'Moved', uploaded_by: authorId });
+		});
+
+		it('emits no nested child event for a key-only already-linked child', async () => {
+			tracker.on.select('posts').response([{ uploaded_by: authorId }]);
+
+			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
+			await service.updateOne(authorId, { items: { update: [{ id: postId }] } }, { emitEvents: true });
+
+			expect(eventFor('posts')).toBeUndefined();
+		});
+
+		it('emits a selector-free update event through the real import path', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+			tracker.on.update('authors').response([{ id: authorId }]);
+
+			const service = new ImportService({ knex: db, accountability: admin, schema: userSchema });
+			const stream = Readable.from(JSON.stringify([{ id: authorId, name: 'Imported' }]));
+
+			await service.import('authors', 'application/json', stream);
+
+			const event = eventFor('authors');
+			expect(event).toBeDefined();
+			expect((event![1] as { payload: unknown }).payload).toEqual({ name: 'Imported' });
+		});
 	});
 
 	describe('updateBatch', () => {

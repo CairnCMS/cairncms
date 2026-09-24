@@ -45,6 +45,10 @@ export async function uploadFile(
 
 		emitter.emit(Events.upload);
 
+		if (options?.fileId && response.status === 204) {
+			return { id: options.fileId };
+		}
+
 		return response.data.data;
 	} catch (err: any) {
 		unexpectedError(err);

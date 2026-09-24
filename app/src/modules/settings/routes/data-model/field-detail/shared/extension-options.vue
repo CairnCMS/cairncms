@@ -15,13 +15,16 @@
 	/>
 
 	<v-error-boundary v-else :name="`${type}-options-${extensionInfo!.id}`">
-		<component
-			:is="`${type}-options-${extensionInfo!.id}`"
-			:value="optionsValues"
-			:collection="collection"
-			:field="field"
-			@input="optionsValues = $event"
-		/>
+		<div :inert="disabled || undefined">
+			<component
+				:is="`${type}-options-${extensionInfo!.id}`"
+				:value="optionsValues"
+				:collection="collection"
+				:field="field"
+				:disabled="disabled"
+				@input="optionsValues = $event"
+			/>
+		</div>
 		<template #fallback>
 			<v-notice type="warning">{{ t('unexpected_error') }}</v-notice>
 		</template>
@@ -97,6 +100,7 @@ const optionsValues = computed({
 		return props.modelValue;
 	},
 	set(values: Record<string, any>) {
+		if (props.disabled) return;
 		emit('update:modelValue', values);
 	},
 });

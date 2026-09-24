@@ -570,53 +570,21 @@ function clearFilters() {
 }
 
 function usePermissions() {
-	const batchEditAllowed = computed(() => {
-		const admin = userStore?.currentUser?.role.admin_access === true;
-		if (admin) return true;
-
-		const updatePermissions = permissionsStore.permissions.find(
-			(permission) => permission.action === 'update' && permission.collection === collection.value
-		);
-
-		return !!updatePermissions;
-	});
+	const batchEditAllowed = computed(() => permissionsStore.hasPermission(collection.value, 'update'));
 
 	const batchArchiveAllowed = computed(() => {
-		if (!currentCollection.value?.meta?.archive_field) return false;
-		const admin = userStore?.currentUser?.role.admin_access === true;
-		if (admin) return true;
+		const archiveField = currentCollection.value?.meta?.archive_field;
+		if (!archiveField) return false;
+		if (userStore?.currentUser?.role.admin_access === true) return true;
 
-		const updatePermissions = permissionsStore.permissions.find(
-			(permission) => permission.action === 'update' && permission.collection === collection.value
-		);
-
-		if (!updatePermissions) return false;
-		if (!updatePermissions.fields) return false;
-		if (updatePermissions.fields.includes('*')) return true;
-		return updatePermissions.fields.includes(currentCollection.value.meta.archive_field);
+		const permission = permissionsStore.getPermissionsForUser(collection.value, 'update');
+		if (!permission?.fields) return false;
+		return permission.fields.includes('*') || permission.fields.includes(archiveField);
 	});
 
-	const batchDeleteAllowed = computed(() => {
-		const admin = userStore?.currentUser?.role.admin_access === true;
-		if (admin) return true;
+	const batchDeleteAllowed = computed(() => permissionsStore.hasPermission(collection.value, 'delete'));
 
-		const deletePermissions = permissionsStore.permissions.find(
-			(permission) => permission.action === 'delete' && permission.collection === collection.value
-		);
-
-		return !!deletePermissions;
-	});
-
-	const createAllowed = computed(() => {
-		const admin = userStore?.currentUser?.role.admin_access === true;
-		if (admin) return true;
-
-		const createPermissions = permissionsStore.permissions.find(
-			(permission) => permission.action === 'create' && permission.collection === collection.value
-		);
-
-		return !!createPermissions;
-	});
+	const createAllowed = computed(() => permissionsStore.hasPermission(collection.value, 'create'));
 
 	return { batchEditAllowed, batchArchiveAllowed, batchDeleteAllowed, createAllowed };
 }
