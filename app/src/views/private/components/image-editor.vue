@@ -116,7 +116,7 @@
 		</div>
 
 		<template #actions>
-			<v-button v-tooltip.bottom="t('save')" :loading="saving" icon rounded @click="save">
+			<v-button v-tooltip.bottom="t('save')" :disabled="!canSave" :loading="saving" icon rounded @click="save">
 				<v-icon name="check" />
 			</v-button>
 		</template>
@@ -125,13 +125,14 @@
 
 <script lang="ts" setup>
 import api from '@/api';
+import { useItemUpdateGate } from '@/composables/use-item-permissions';
 import { useSettingsStore } from '@/stores/settings';
 import { getRootPath } from '@/utils/get-root-path';
 import { unexpectedError } from '@/utils/unexpected-error';
 import Cropper from 'cropperjs';
 import throttle from 'lodash/throttle';
 import { nanoid } from 'nanoid/non-secure';
-import { computed, nextTick, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 type Image = {
@@ -168,7 +169,7 @@ const internalActive = computed({
 	},
 });
 
-const { loading, error, imageData, imageElement, save, saving, fetchImage, onImageLoad } = useImage();
+const { loading, error, imageData, imageElement, saving } = useImage();
 
 const {
 	cropperInstance,
@@ -183,21 +184,151 @@ const {
 	cropping,
 } = useCropper();
 
+const randomId = ref<string>(nanoid());
+
+const COLLECTION = 'directus_files';
+const REPLACE_FIELDS = ['folder', 'filename_download', 'storage', 'type'];
+
+const { updateAllowed, writableFields } = useItemUpdateGate({
+	collection: ref(COLLECTION),
+	primaryKey: computed(() => props.id ?? null),
+	enabled: computed(() => internalActive.value === true),
+	localReady: computed(
+		() => internalActive.value === true && imageData.value !== null && loading.value === false && error.value === null
+	),
+	itemSource: computed(() => imageData.value),
+});
+
+const replaceFieldsWritable = computed(() => {
+	const fields = writableFields.value;
+	if (!fields) return false;
+	if (fields.includes('*')) return true;
+	return REPLACE_FIELDS.every((field) => fields.includes(field));
+});
+
+const saveAuthorized = computed(() => updateAllowed.value && replaceFieldsWritable.value);
+
+const cropperReady = ref(false);
+
+const canSave = computed(() => saveAuthorized.value && cropperReady.value && saving.value === false);
+
+let session = 0;
+
+function invalidateSession() {
+	session += 1;
+	saving.value = false;
+	cropperReady.value = false;
+
+	if (cropperInstance.value) {
+		cropperInstance.value.destroy();
+		cropperInstance.value = null;
+	}
+}
+
+async function fetchImage() {
+	const token = session;
+
+	loading.value = true;
+	error.value = null;
+	imageData.value = null;
+
+	try {
+		const response = await api.get(`/files/${props.id}`, {
+			params: { fields: ['type', 'filesize', 'filename_download', 'width', 'height'] },
+		});
+
+		if (token !== session) return;
+		imageData.value = response.data.data;
+	} catch (err: any) {
+		if (token !== session) return;
+		error.value = err;
+	} finally {
+		if (token === session) loading.value = false;
+	}
+}
+
+async function onImageLoad() {
+	const token = session;
+	await nextTick();
+	if (token !== session) return;
+
+	initCropper(() => {
+		if (token === session) cropperReady.value = true;
+	});
+}
+
+function save() {
+	if (saving.value === true || saveAuthorized.value !== true || cropperReady.value !== true) return;
+
+	const token = session;
+	const targetId = props.id;
+	const targetType = imageData.value?.type;
+	const targetName = imageData.value?.filename_download;
+
+	let canvas: HTMLCanvasElement | undefined;
+
+	try {
+		canvas = cropperInstance.value?.getCroppedCanvas({ imageSmoothingQuality: 'high' });
+	} catch {
+		return;
+	}
+
+	if (!canvas) return;
+
+	saving.value = true;
+
+	try {
+		canvas.toBlob(async (blob) => {
+			if (token !== session) return;
+
+			if (blob === null || saveAuthorized.value !== true) {
+				saving.value = false;
+				return;
+			}
+
+			const formData = new FormData();
+			formData.append('file', blob, targetName);
+
+			try {
+				await api.patch(`/files/${targetId}`, formData);
+				if (token !== session) return;
+				emit('refresh');
+				internalActive.value = false;
+				randomId.value = nanoid();
+			} catch (err: any) {
+				if (token === session) unexpectedError(err);
+			} finally {
+				if (token === session) saving.value = false;
+			}
+		}, targetType);
+	} catch {
+		if (token === session) saving.value = false;
+	}
+}
+
 watch(internalActive, (isActive) => {
+	invalidateSession();
+
 	if (isActive === true) {
 		fetchImage();
 	} else {
-		if (cropperInstance.value) {
-			cropperInstance.value.destroy();
-		}
-
 		loading.value = false;
 		error.value = null;
 		imageData.value = null;
 	}
 });
 
-const randomId = ref<string>(nanoid());
+watch(
+	() => props.id,
+	() => {
+		invalidateSession();
+		if (internalActive.value === true) fetchImage();
+	}
+);
+
+onBeforeUnmount(() => {
+	invalidateSession();
+});
 
 const imageURL = computed(() => {
 	return `${getRootPath()}assets/${props.id}?${randomId.value}`;
@@ -234,7 +365,7 @@ const customAspectRatios = settingsStore.settings?.custom_aspect_ratios ?? null;
 
 function useImage() {
 	const loading = ref(false);
-	const error = ref(null);
+	const error = ref<unknown>(null);
 	const imageData = ref<Image | null>(null);
 	const saving = ref(false);
 
@@ -245,63 +376,8 @@ function useImage() {
 		error,
 		imageData,
 		saving,
-		fetchImage,
 		imageElement,
-		save,
-		onImageLoad,
 	};
-
-	async function fetchImage() {
-		try {
-			loading.value = true;
-
-			const response = await api.get(`/files/${props.id}`, {
-				params: {
-					fields: ['type', 'filesize', 'filename_download', 'width', 'height'],
-				},
-			});
-
-			imageData.value = response.data.data;
-		} catch (err: any) {
-			error.value = err;
-		} finally {
-			loading.value = false;
-		}
-	}
-
-	function save() {
-		saving.value = true;
-
-		cropperInstance.value
-			?.getCroppedCanvas({
-				imageSmoothingQuality: 'high',
-			})
-			.toBlob(async (blob) => {
-				if (blob === null) {
-					saving.value = false;
-					return;
-				}
-
-				const formData = new FormData();
-				formData.append('file', blob, imageData.value?.filename_download);
-
-				try {
-					await api.patch(`/files/${props.id}`, formData);
-					emit('refresh');
-					internalActive.value = false;
-					randomId.value = nanoid();
-				} catch (err: any) {
-					unexpectedError(err);
-				} finally {
-					saving.value = false;
-				}
-			}, imageData.value?.type);
-	}
-
-	async function onImageLoad() {
-		await nextTick();
-		initCropper();
-	}
 }
 
 function useCropper() {
@@ -404,7 +480,7 @@ function useCropper() {
 		cropping,
 	};
 
-	function initCropper() {
+	function initCropper(onReady?: () => void) {
 		if (imageElement.value === null) return;
 
 		if (cropperInstance.value) {
@@ -419,6 +495,7 @@ function useCropper() {
 			toggleDragModeOnDblclick: false,
 			dragMode: 'move',
 			viewMode: 1,
+			ready: onReady,
 			crop: throttle((event) => {
 				if (!imageData.value) return;
 

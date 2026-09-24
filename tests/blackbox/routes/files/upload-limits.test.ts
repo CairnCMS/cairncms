@@ -14,6 +14,79 @@ const adminToken = common.USER.ADMIN.TOKEN;
 
 describe('/files upload limits and permission gate', () => {
 	describe('PATCH /files/:pk permission gate', () => {
+		const layersFilePath = path.join(...assetsDirectory, 'layers.png');
+		const cleanups: Array<() => Promise<unknown>> = [];
+
+		afterAll(async () => {
+			for (const cleanup of cleanups.reverse()) {
+				await cleanup().catch(() => undefined);
+			}
+		});
+
+		const deleteAsAdmin = (vendor: string, resource: string) =>
+			request(getUrl(vendor)).delete(resource).set('Authorization', `Bearer ${adminToken}`);
+
+		const readAsset = (vendor: string, id: string) =>
+			request(getUrl(vendor)).get(`/assets/${id}`).set('Authorization', `Bearer ${adminToken}`);
+
+		const rowFields = 'filename_disk,filesize,type,storage,folder,filename_download,title';
+
+		const readRow = (vendor: string, id: string) =>
+			request(getUrl(vendor))
+				.get(`/files/${id}`)
+				.query({ fields: rowFields })
+				.set('Authorization', `Bearer ${adminToken}`);
+
+		async function seedFile(vendor: string, title: string) {
+			const response = await request(getUrl(vendor))
+				.post('/files')
+				.set('Authorization', `Bearer ${adminToken}`)
+				.field('storage', 'local')
+				.field('title', title)
+				.attach('file', createReadStream(imageFilePath));
+
+			const id = response.body?.data?.id as string | undefined;
+			if (id) cleanups.push(() => deleteAsAdmin(vendor, `/files/${id}`));
+
+			expect(response.statusCode).toBe(200);
+			expect(id).toBeDefined();
+			return id as string;
+		}
+
+		async function createReplacer(
+			vendor: string,
+			options: { name: string; token: string; email: string; fields: string[]; conditional?: boolean }
+		) {
+			const role = await common.CreateRole(vendor, {
+				name: options.name,
+				appAccessEnabled: false,
+				adminAccessEnabled: false,
+			});
+
+			cleanups.push(() => deleteAsAdmin(vendor, `/roles/${role.id}`));
+
+			const filter = options.conditional ? { uploaded_by: { _eq: '$CURRENT_USER' } } : {};
+
+			const permission = await request(getUrl(vendor))
+				.post('/permissions')
+				.set('Authorization', `Bearer ${adminToken}`)
+				.send({
+					role: role.id,
+					collection: 'directus_files',
+					action: 'update',
+					fields: options.fields,
+					permissions: filter,
+				});
+
+			expect(permission.statusCode).toBe(200);
+			expect(permission.body.data.fields).toEqual(options.fields);
+			expect(permission.body.data.permissions).toEqual(filter);
+
+			const user = await common.CreateUser(vendor, { token: options.token, email: options.email, role: role.id });
+			cleanups.push(() => deleteAsAdmin(vendor, `/users/${user.id}`));
+			return options.token;
+		}
+
 		it.each(vendors)(
 			'%s denies a replace to a user without update access and leaves the original bytes intact',
 			async (vendor) => {
@@ -62,6 +135,109 @@ describe('/files upload limits and permission gate', () => {
 					.get(`/assets/${fileId}`)
 					.set('Authorization', `Bearer ${adminToken}`);
 
+				expect(asset.statusCode).toBe(200);
+				expect(Buffer.compare(asset.body, originalBytes)).toBe(0);
+			}
+		);
+
+		it.each(vendors)(
+			'%s replaces the binary and preserves metadata for a grant covering the replace fields',
+			async (vendor) => {
+				const replacementBytes = readFileSync(layersFilePath);
+				const fileId = await seedFile(vendor, 'seed-title');
+
+				const token = await createReplacer(vendor, {
+					name: 'files-replace-fields',
+					token: 'FilesReplaceFieldsToken',
+					email: 'files-replace-fields@example.com',
+					fields: ['folder', 'filename_download', 'storage', 'type'],
+				});
+
+				const replace = await request(getUrl(vendor))
+					.patch(`/files/${fileId}`)
+					.set('Authorization', `Bearer ${token}`)
+					.attach('file', createReadStream(layersFilePath));
+
+				expect(replace.statusCode).toBe(204);
+
+				const asset = await readAsset(vendor, fileId);
+				expect(asset.statusCode).toBe(200);
+				expect(Buffer.compare(asset.body, replacementBytes)).toBe(0);
+
+				const readback = await request(getUrl(vendor))
+					.get(`/files/${fileId}`)
+					.query({ fields: 'title' })
+					.set('Authorization', `Bearer ${adminToken}`);
+
+				expect(readback.statusCode).toBe(200);
+				expect(readback.body.data.title).toBe('seed-title');
+			}
+		);
+
+		it.each(vendors)(
+			'%s forbids a replace whose grant omits the replace fields and leaves the row and bytes intact',
+			async (vendor) => {
+				const originalBytes = readFileSync(imageFilePath);
+				const fileId = await seedFile(vendor, 'title-only-seed');
+
+				const token = await createReplacer(vendor, {
+					name: 'files-replace-title-only',
+					token: 'FilesReplaceTitleOnlyToken',
+					email: 'files-replace-title-only@example.com',
+					fields: ['title'],
+				});
+
+				const before = await readRow(vendor, fileId);
+				expect(before.statusCode).toBe(200);
+
+				const replace = await request(getUrl(vendor))
+					.patch(`/files/${fileId}`)
+					.set('Authorization', `Bearer ${token}`)
+					.attach('file', createReadStream(layersFilePath));
+
+				expect(replace.statusCode).toBe(403);
+				expect(replace.body.errors[0].extensions.code).toBe('FORBIDDEN');
+
+				const after = await readRow(vendor, fileId);
+				expect(after.statusCode).toBe(200);
+				expect(after.body.data).toEqual(before.body.data);
+
+				const asset = await readAsset(vendor, fileId);
+				expect(asset.statusCode).toBe(200);
+				expect(Buffer.compare(asset.body, originalBytes)).toBe(0);
+			}
+		);
+
+		it.each(vendors)(
+			'%s forbids a conditional grant from replacing a foreign file and leaves the row and bytes intact',
+			async (vendor) => {
+				const originalBytes = readFileSync(imageFilePath);
+				const fileId = await seedFile(vendor, 'foreign-seed');
+
+				const token = await createReplacer(vendor, {
+					name: 'files-replace-foreign',
+					token: 'FilesReplaceForeignToken',
+					email: 'files-replace-foreign@example.com',
+					fields: ['*'],
+					conditional: true,
+				});
+
+				const before = await readRow(vendor, fileId);
+				expect(before.statusCode).toBe(200);
+
+				const replace = await request(getUrl(vendor))
+					.patch(`/files/${fileId}`)
+					.set('Authorization', `Bearer ${token}`)
+					.attach('file', createReadStream(layersFilePath));
+
+				expect(replace.statusCode).toBe(403);
+				expect(replace.body.errors[0].extensions.code).toBe('FORBIDDEN');
+
+				const after = await readRow(vendor, fileId);
+				expect(after.statusCode).toBe(200);
+				expect(after.body.data).toEqual(before.body.data);
+
+				const asset = await readAsset(vendor, fileId);
 				expect(asset.statusCode).toBe(200);
 				expect(Buffer.compare(asset.body, originalBytes)).toBe(0);
 			}
