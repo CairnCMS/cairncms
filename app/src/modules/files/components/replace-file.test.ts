@@ -13,21 +13,21 @@ const FILE_B = '22222222-2222-4222-8222-222222222222';
 const REPLACE_FIELDS = ['folder', 'filename_download', 'storage', 'type'];
 
 const apiGet = vi.fn<(path: string) => Promise<unknown>>();
+const apiPost = vi.fn();
+const apiPatch = vi.fn();
 
-vi.mock('@/api', () => ({ default: { get: (path: string) => apiGet(path) } }));
-
-const { uploadCalls } = vi.hoisted(() => ({
-	uploadCalls: [] as Array<{ fileId: string | undefined; resolve: (value: unknown) => void }>,
-}));
-
-vi.mock('@/utils/upload-file', () => ({
-	uploadFile: (_file: unknown, options?: { fileId?: string }) =>
-		new Promise((resolve) => {
-			uploadCalls.push({ fileId: options?.fileId, resolve });
-		}),
+vi.mock('@/api', () => ({
+	default: {
+		get: (path: string) => apiGet(path),
+		post: (...args: unknown[]) => apiPost(...args),
+		patch: (...args: unknown[]) => apiPatch(...args),
+	},
 }));
 
 vi.mock('@/utils/upload-files', () => ({ uploadFiles: vi.fn() }));
+vi.mock('@/utils/notify', () => ({ notify: vi.fn() }));
+vi.mock('@/lang', () => ({ i18n: { global: { t: vi.fn(() => '') } } }));
+vi.mock('@/utils/unexpected-error', () => ({ unexpectedError: vi.fn() }));
 vi.mock('@/events', () => ({ default: { emit: vi.fn(), on: vi.fn(), off: vi.fn() }, Events: { upload: 'upload' } }));
 
 vi.mock('@/views/private/components/drawer-files.vue', () => ({
@@ -120,6 +120,8 @@ function capabilityRequests() {
 
 beforeEach(() => {
 	apiGet.mockReset();
+	apiPost.mockReset();
+	apiPatch.mockReset();
 });
 
 describe('replace-file gating', () => {
@@ -205,67 +207,173 @@ describe('replace-file gating', () => {
 		expect(wrapper.emitted('replaced')).toHaveLength(1);
 	});
 
-	it('disposes an in-flight uploader when the target switches, then completes the new target', async () => {
+	function mountWired(fileId = FILE_A, { conditionalDialog = false } = {}) {
 		const pinia = createTestingPinia({ createSpy: vi.fn, stubActions: false });
 		setActivePinia(pinia);
 		(useUserStore() as any).currentUser = { id: 'user-1', role: { id: 'role-1', admin_access: true } };
 		(usePermissionsStore() as any).permissions = [];
 		apiGet.mockResolvedValue({ data: { data: null } });
 
-		const wrapper = mount(ReplaceFile, {
-			props: { modelValue: true, file: { id: FILE_A }, preset: {} },
+		return mount(ReplaceFile, {
+			props: { modelValue: true, file: { id: fileId }, preset: {} },
 			global: {
 				plugins: [i18n, pinia],
 				components: { VUpload: VUploadReal },
 				stubs: {
-					'v-dialog': { props: ['modelValue'], template: '<div><slot /></div>' },
+					'v-dialog': {
+						props: ['modelValue'],
+						template: conditionalDialog ? '<div v-if="modelValue"><slot /></div>' : '<div><slot /></div>',
+					},
 					'v-card': { template: '<div><slot /></div>' },
 					'v-card-title': { template: '<div><slot /></div>' },
 					'v-card-text': { template: '<div><slot /></div>' },
 					'v-card-actions': { template: '<div><slot /></div>' },
-					'v-button': { template: '<button><slot /></button>' },
+					'v-button': {
+						inheritAttrs: false,
+						emits: ['click'],
+						template: '<button @click="$emit(\'click\')"><slot /></button>',
+					},
 					'v-icon': { template: '<i />' },
-					'v-input': { template: '<input />' },
+					'v-input': {
+						props: ['modelValue'],
+						emits: ['update:modelValue'],
+						template:
+							'<input class="url-input" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+					},
 					'v-progress-linear': { template: '<div />' },
 					'v-notice': { template: '<div class="v-notice"><slot /></div>' },
 				},
 				directives: { tooltip: {} },
 			},
 		});
+	}
 
+	async function startMultipart(wrapper: ReturnType<typeof mountWired>) {
+		const input = wrapper.find('input.browse');
+
+		Object.defineProperty(input.element, 'files', {
+			configurable: true,
+			value: [new File(['x'], 'replacement.png', { type: 'image/png' })],
+		});
+
+		await input.trigger('input');
+		await flushPromises();
+	}
+
+	async function importUrl(wrapper: ReturnType<typeof mountWired>, url: string) {
+		await wrapper.find('input.url-input').setValue(url);
+		const importButton = wrapper.findAll('button').find((button) => button.text() === 'import_label');
+		await importButton!.trigger('click');
+		await flushPromises();
+	}
+
+	it('closes the dialog when a multipart replace returns 204', async () => {
+		apiPatch.mockResolvedValue({ status: 204, data: '' });
+
+		const wrapper = mountWired();
+		await flushPromises();
+		await startMultipart(wrapper);
+
+		expect(apiPatch).toHaveBeenCalledWith(`/files/${FILE_A}`, expect.anything(), expect.anything());
+		expect((wrapper.emitted('update:modelValue') ?? []).some(([value]) => value === false)).toBe(true);
+		expect(wrapper.emitted('replaced')).toHaveLength(1);
+	});
+
+	it('does not complete a switched target with a stale URL response', async () => {
+		const pending = deferred<{ status: number; data: unknown }>();
+		apiPost.mockReturnValue(pending.promise);
+
+		const wrapper = mountWired(FILE_A);
 		await flushPromises();
 
-		const startUpload = async () => {
-			const input = wrapper.find('input.browse');
-
-			Object.defineProperty(input.element, 'files', {
-				configurable: true,
-				value: [new File(['x'], 'replacement.png', { type: 'image/png' })],
-			});
-
-			await input.trigger('input');
-			await flushPromises();
-		};
-
-		await startUpload();
-		expect(uploadCalls).toHaveLength(1);
-		expect(uploadCalls[0]!.fileId).toBe(FILE_A);
+		await importUrl(wrapper, 'https://example.com/a.png');
 
 		await wrapper.setProps({ file: { id: FILE_B } });
 		await flushPromises();
 
-		uploadCalls[0]!.resolve({ id: FILE_A });
+		pending.resolve({ status: 204, data: '' });
 		await flushPromises();
 
 		expect(wrapper.emitted('replaced')).toBeUndefined();
+	});
 
-		await startUpload();
-		const latest = uploadCalls[uploadCalls.length - 1]!;
-		expect(latest.fileId).toBe(FILE_B);
+	it('closes the dialog when a URL replace returns 204 and sends the target id', async () => {
+		apiPost.mockResolvedValue({ status: 204, data: '' });
 
-		latest.resolve({ id: FILE_B });
+		const wrapper = mountWired();
+		await flushPromises();
+		await importUrl(wrapper, 'https://example.com/a.png');
+
+		expect(apiPost).toHaveBeenCalledWith('/files/import', {
+			url: 'https://example.com/a.png',
+			data: { folder: undefined, id: FILE_A },
+		});
+
+		expect(apiPost).toHaveBeenCalledTimes(1);
+		expect((wrapper.emitted('update:modelValue') ?? []).some(([value]) => value === false)).toBe(true);
+		expect(wrapper.emitted('replaced')).toHaveLength(1);
+	});
+
+	it('does not close the dialog when a URL replace fails', async () => {
+		apiPost.mockRejectedValue(new Error('boom'));
+
+		const wrapper = mountWired();
+		await flushPromises();
+		await importUrl(wrapper, 'https://example.com/a.png');
+
+		expect(wrapper.emitted('replaced')).toBeUndefined();
+		expect((wrapper.emitted('update:modelValue') ?? []).some(([value]) => value === false)).toBe(false);
+	});
+
+	it('does not complete a switched target with a stale multipart response, then completes the new one', async () => {
+		const first = deferred<{ status: number; data: unknown }>();
+		const second = deferred<{ status: number; data: unknown }>();
+		apiPatch.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+
+		const wrapper = mountWired(FILE_A);
 		await flushPromises();
 
+		await startMultipart(wrapper);
+		expect(apiPatch).toHaveBeenLastCalledWith(`/files/${FILE_A}`, expect.anything(), expect.anything());
+
+		await wrapper.setProps({ file: { id: FILE_B } });
+		await flushPromises();
+
+		first.resolve({ status: 204, data: '' });
+		await flushPromises();
+		expect(wrapper.emitted('replaced')).toBeUndefined();
+
+		await startMultipart(wrapper);
+		expect(apiPatch).toHaveBeenLastCalledWith(`/files/${FILE_B}`, expect.anything(), expect.anything());
+
+		second.resolve({ status: 204, data: '' });
+		await flushPromises();
+		expect(wrapper.emitted('replaced')).toHaveLength(1);
+	});
+
+	it('ignores a stale completion from a session closed and reopened on the same target', async () => {
+		const first = deferred<{ status: number; data: unknown }>();
+		const second = deferred<{ status: number; data: unknown }>();
+		apiPatch.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+
+		const wrapper = mountWired(FILE_A, { conditionalDialog: true });
+		await flushPromises();
+
+		await startMultipart(wrapper);
+
+		await wrapper.setProps({ modelValue: false });
+		await flushPromises();
+		await wrapper.setProps({ modelValue: true });
+		await flushPromises();
+
+		await startMultipart(wrapper);
+
+		first.resolve({ status: 204, data: '' });
+		await flushPromises();
+		expect(wrapper.emitted('replaced')).toBeUndefined();
+
+		second.resolve({ status: 204, data: '' });
+		await flushPromises();
 		expect(wrapper.emitted('replaced')).toHaveLength(1);
 	});
 });

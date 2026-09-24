@@ -297,20 +297,25 @@ function useURLImport() {
 	async function importFromURL() {
 		loading.value = true;
 
+		const fileId = props.fileId;
+
 		try {
 			const response = await api.post(`/files/import`, {
 				url: url.value,
 				data: {
 					folder: props.folder,
+					id: fileId,
 				},
 			});
 
 			emitter.emit(Events.upload);
 
+			const result = response.status === 204 && fileId ? { id: fileId } : response.data?.data;
+
 			if (props.multiple) {
-				emit('input', [response.data.data]);
+				emit('input', [result]);
 			} else {
-				emit('input', response.data.data);
+				emit('input', result);
 			}
 
 			activeDialog.value = null;

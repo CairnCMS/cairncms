@@ -7,7 +7,7 @@
 		<v-card v-if="file">
 			<v-card-title>{{ t('replace_file') }}</v-card-title>
 			<v-card-text>
-				<v-upload v-if="replaceAllowed" :key="file.id" :preset="preset" :file-id="file.id" @input="uploaded" />
+				<v-upload v-if="replaceAllowed" :key="file.id" :preset="preset" :file-id="file.id" from-url @input="uploaded" />
 				<v-notice v-else type="warning">{{ t('not_allowed') }}</v-notice>
 			</v-card-text>
 			<v-card-actions>
