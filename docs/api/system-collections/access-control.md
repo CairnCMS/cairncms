@@ -145,7 +145,8 @@ A permission row is a tuple of role, collection, and action plus the rules that 
 | `PATCH` | `/permissions/<id>` | Update a single permission. |
 | `DELETE` | `/permissions` | Delete many permissions. |
 | `DELETE` | `/permissions/<id>` | Delete a single permission. |
-| `GET` | `/permissions/me/<collection>[/<key>]` | The current user's update, delete, and share access on one item. |
+| `GET` | `/permissions/me/<collection>/<key>` | Check the current user's permissions for one item. |
+| `GET` | `/permissions/me/<collection>` | Check the current user's permissions for a singleton. |
 
 ### Permission record fields
 
@@ -162,17 +163,19 @@ A read or write that matches no permission row for a non-admin role is denied. T
 
 Permissions on system collections work the same way as permissions on user collections, with one caveat: the platform-managed minimum permissions for app-access roles are projected at read time rather than stored as rows, so they are invisible to `/permissions` queries. See [Config as code / What a config snapshot captures](/docs/manage/config-as-code/#what-a-config-snapshot-captures) for the full picture.
 
-### `GET /permissions/me/<collection>[/<key>]`
+### Check permissions for an item
 
-Use this endpoint to decide whether to show update, delete, or share controls for a stored item. CairnCMS evaluates conditional permission filters against the stored row and returns the current result. The API checks authorization again when the client submits the action.
+Use `GET /permissions/me/<collection>/<key>` to check whether the current user can update, delete, or share a stored item. Apps can use the result to show or disable controls. The SDK provides the same result through `readItemPermissions(collection, key?)`.
 
-The endpoint requires an authenticated user. Unauthenticated callers, including the Public role and share visitors, receive `401`.
+CairnCMS evaluates permission rules against stored data and rechecks them on every mutation. A successful check does not guarantee that a later request will succeed.
+
+These routes require an authenticated user. Requests made with the Public role or a share link receive `401`.
 
 ```http
 GET /permissions/me/articles/42
 ```
 
-The response carries an `ItemPermissions` object:
+The response contains an `ItemPermissions` object.
 
 ```json
 {
@@ -184,16 +187,28 @@ The response carries an `ItemPermissions` object:
 }
 ```
 
-- **`update.access`**, **`delete.access`**, **`share.access`** — whether the caller may perform each action on this item, after the row's field values are checked against any permission filter.
-- **`update.fields`** — the fields the caller may modify: `["*"]` for all fields, a non-empty list for a restricted field set, `[]` when no fields are editable, and `null` when update is denied. `delete` and `share` carry only `access`.
+- **`update.access`**, **`delete.access`**, and **`share.access`** show whether the user can perform each action on the item.
+- **`update.fields`** lists writable fields. `["*"]` allows all fields that support updates. A list of names allows only those fields. `[]` allows no fields. `null` means update is denied.
 
-For a singleton collection, omit the key when the caller is an admin or has update, delete, or share permission on that collection. If the singleton has no stored row, the response denies all three item actions. The admin app uses collection-level create authority for the first save. Ordinary collections require a key. Requests without one return `400`.
+For a singleton, which holds one item, use `GET /permissions/me/<collection>` without a key. This requires an administrator or a user with update, delete, or share permission on that collection. An empty singleton denies all three actions, and the admin app uses create permission for its first save. Other collections return `400` without a key.
 
-When a key is supplied, the API returns the fully denied response for a nonexistent item, an unknown collection, a key rejected by validation, or an existing item for which all three actions are denied. In this response, every `access` value is `false` and `update.fields` is `null`. This prevents a denied response from revealing whether the row exists.
+With a key, missing items, unknown collections, invalid keys, and items for which all three actions are denied return the same result. Every `access` value is `false` and `update.fields` is `null`. This conceals whether the item exists.
 
-A caller with no update, delete, or share permission on the named collection cannot use this endpoint to tell a known collection from an unknown one. Such a caller receives the same denied response for a supplied key, and the same `400` for a keyless request, whether or not the collection exists.
+For non-admin users without any of these collection permissions, omitting the key returns `400`, including for singletons. Neither response reveals whether the collection exists.
 
-The SDK exposes this endpoint as `readItemPermissions(collection, key?)`, which returns the same `ItemPermissions` shape.
+Failures other than permission denials return the usual API error response.
+
+Checks can trigger query hooks, read hooks, and flows even without read permission. Events keep their usual names for user and system collections, and their number varies by request.
+
+### Updating related items
+
+Related-item updates and imports use primary keys to select existing records. Hooks and permission validation receive the update fields without the key. Update hooks receive record IDs in `meta.keys`. Creates can still include a primary key.
+
+The parent link follows these rules.
+
+- An omitted link field stays omitted when the item is already linked to its parent.
+- An explicitly supplied matching link or a move to another parent requires permission to write the link field.
+- An already-linked item submitted with only its key is not updated and emits no update event. Supplying unchanged field values still counts as an update.
 
 ## Shares (`/shares`)
 

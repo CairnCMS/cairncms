@@ -60,6 +60,8 @@ tags:
   - name: Permissions
     description: Permissions control who has access to what and when.
     x-collection: directus_permissions
+  - name: ItemPermissions
+    description: Check whether the current user can update, delete, or share an item.
   - name: Relations
     description:
       What data is linked to what other data. Allows you to assign authors to articles, products to sales, and whatever
@@ -185,6 +187,10 @@ paths:
     $ref: './paths/permissions/permissions.yaml'
   /permissions/me:
     $ref: './paths/permissions/permissions-me.yaml'
+  /permissions/me/{collection}:
+    $ref: './paths/permissions/permissions-me-singleton.yaml'
+  /permissions/me/{collection}/{key}:
+    $ref: './paths/permissions/permissions-me-item.yaml'
   /permissions/{id}:
     $ref: './paths/permissions/permission.yaml'
 
@@ -291,6 +297,8 @@ components:
       $ref: './components/operation.yaml'
     Permissions:
       $ref: './components/permissions.yaml'
+    ItemPermissions:
+      $ref: './components/item-permissions.yaml'
     Relations:
       $ref: './components/relation.yaml'
     Revisions:

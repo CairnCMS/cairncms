@@ -5,6 +5,7 @@ import type { MockedFunction } from 'vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CollectionsService, FieldsService, RelationsService, SpecificationService } from '../../src/services/index.js';
 import type { Collection } from '../types/index.js';
+import type { Permission } from '@cairncms/types';
 
 class Client_PG extends MockClient {}
 
@@ -32,6 +33,83 @@ describe('Integration Tests', () => {
 						knex: db,
 						schema: { collections: {}, relations: [] },
 						accountability: { role: 'admin', admin: true },
+					});
+				});
+
+				describe('permission filtering', () => {
+					const permissionsCollection: Collection = {
+						collection: 'directus_permissions',
+						meta: null,
+						schema: null,
+					};
+
+					function permission(action: Permission['action']): Permission {
+						return {
+							role: 'restricted',
+							collection: 'directus_permissions',
+							action,
+							permissions: {},
+							validation: null,
+							presets: null,
+							fields: ['*'],
+						};
+					}
+
+					function nonAdminService(permissions: Permission[], collections: Collection[]) {
+						vi.spyOn(CollectionsService.prototype, 'readByQuery').mockResolvedValue(collections);
+						vi.spyOn(FieldsService.prototype, 'readAll').mockResolvedValue([]);
+						vi.spyOn(RelationsService.prototype, 'readAll').mockResolvedValue([]);
+
+						return new SpecificationService({
+							knex: db,
+							schema: { collections: {}, relations: [] },
+							accountability: { user: 'test-user', role: 'restricted', admin: false, permissions },
+						}).oas;
+					}
+
+					it('exposes the capability paths to a principal without directus_permissions read', async () => {
+						const spec = await nonAdminService([], []).generate();
+
+						expect(spec.paths?.['/permissions/me/{collection}/{key}']?.get).toBeDefined();
+						expect(spec.paths?.['/permissions/me/{collection}']?.get).toBeDefined();
+						expect(spec.paths?.['/permissions']).toBeUndefined();
+						expect(spec.paths?.['/permissions/{id}']).toBeUndefined();
+						expect(spec.components?.schemas?.['ItemPermissions']).toBeDefined();
+					});
+
+					it('gates permission-record CRUD per action for a read-only permission grant', async () => {
+						const spec = await nonAdminService([permission('read')], [permissionsCollection]).generate();
+
+						expect(spec.paths?.['/permissions/me/{collection}/{key}']?.get).toBeDefined();
+						expect(spec.paths?.['/permissions']?.get).toBeDefined();
+						expect(spec.paths?.['/permissions']?.post).toBeUndefined();
+						expect(spec.paths?.['/permissions/{id}']?.get).toBeDefined();
+						expect(spec.paths?.['/permissions/{id}']?.patch).toBeUndefined();
+						expect(spec.paths?.['/permissions/{id}']?.delete).toBeUndefined();
+						expect((spec.paths?.['/permissions/me']?.get as any)?.deprecated).toBe(true);
+					});
+
+					it('requires authentication and returns ItemPermissions on both capability operations', async () => {
+						const spec = await nonAdminService([], []).generate();
+
+						for (const path of ['/permissions/me/{collection}/{key}', '/permissions/me/{collection}']) {
+							const operation = spec.paths?.[path]?.get as any;
+
+							expect(operation?.security).toEqual([{ Auth: [] }, { KeyAuth: [] }]);
+
+							expect(operation?.responses?.['200']?.content?.['application/json']?.schema?.properties?.data?.$ref).toBe(
+								'#/components/schemas/ItemPermissions'
+							);
+						}
+					});
+
+					it('models ItemPermissions with required members, nullable update fields, and no presets', async () => {
+						const spec = await nonAdminService([], []).generate();
+						const schema = spec.components?.schemas?.['ItemPermissions'] as any;
+
+						expect(schema.required).toEqual(expect.arrayContaining(['update', 'delete', 'share']));
+						expect(schema.properties.update.properties.fields.nullable).toBe(true);
+						expect(schema.properties.update.properties).not.toHaveProperty('presets');
 					});
 				});
 
@@ -229,6 +307,68 @@ describe('Integration Tests', () => {
 							        "type": "string",
 							      },
 							    },
+							    "type": "object",
+							  },
+							  "ItemPermissions": {
+							    "description": "The response shows whether the current user can update, delete, or share an item.",
+							    "properties": {
+							      "delete": {
+							        "properties": {
+							          "access": {
+							            "description": "The value is true when the current user can delete the item.",
+							            "example": false,
+							            "type": "boolean",
+							          },
+							        },
+							        "required": [
+							          "access",
+							        ],
+							        "type": "object",
+							      },
+							      "share": {
+							        "properties": {
+							          "access": {
+							            "description": "The value is true when the current user can share the item.",
+							            "example": false,
+							            "type": "boolean",
+							          },
+							        },
+							        "required": [
+							          "access",
+							        ],
+							        "type": "object",
+							      },
+							      "update": {
+							        "properties": {
+							          "access": {
+							            "description": "The value is true when the current user can update the item.",
+							            "example": true,
+							            "type": "boolean",
+							          },
+							          "fields": {
+							            "description": "This list contains the fields the user can update. \`["*"]\` allows all fields that support updates. A list of names allows only those fields. \`[]\` allows no fields. \`null\` means the user cannot update the item.",
+							            "example": [
+							              "title",
+							            ],
+							            "items": {
+							              "type": "string",
+							            },
+							            "nullable": true,
+							            "type": "array",
+							          },
+							        },
+							        "required": [
+							          "access",
+							          "fields",
+							        ],
+							        "type": "object",
+							      },
+							    },
+							    "required": [
+							      "update",
+							      "delete",
+							      "share",
+							    ],
 							    "type": "object",
 							  },
 							  "ItemsTestTable": {
