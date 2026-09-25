@@ -324,6 +324,10 @@ const isSavable = computed(() => {
 		return !!edits.value?.[primaryKeyField.value.field];
 	}
 
+	if (isNewOrEmptySingleton.value === true && isNew.value === false) {
+		return true;
+	}
+
 	if (isNew.value === true) {
 		return Object.keys(defaults.value).length > 0 || hasEdits.value;
 	}
