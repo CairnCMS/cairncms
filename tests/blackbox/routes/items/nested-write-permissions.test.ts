@@ -17,6 +17,82 @@ const reparentToken = `Fr2bReparent_${runId}`;
 const noReadToken = `Fr2bNoRead_${runId}`;
 const nestedCreateToken = `Fr2bNestedCreate_${runId}`;
 
+type Register = (fn: () => Promise<void>) => void;
+
+async function createRole(vendor: string, name: string, register: Register): Promise<string> {
+	const role = await request(getUrl(vendor))
+		.post('/roles')
+		.send({ name, admin_access: false, app_access: true })
+		.set('Authorization', `Bearer ${adminToken}`);
+
+	const roleId = role.body?.data?.id as string | undefined;
+
+	if (roleId) {
+		register(async () => {
+			await request(getUrl(vendor)).delete(`/roles/${roleId}`).set('Authorization', `Bearer ${adminToken}`);
+		});
+	}
+
+	expect(role.statusCode).toBe(200);
+
+	return roleId!;
+}
+
+async function createUser(
+	vendor: string,
+	roleId: string,
+	token: string,
+	email: string,
+	register: Register
+): Promise<string> {
+	const user = await request(getUrl(vendor))
+		.post('/users')
+		.send({ email, password: 'Fr2bPassword', token, role: roleId, status: 'active' })
+		.set('Authorization', `Bearer ${adminToken}`);
+
+	const userId = user.body?.data?.id as string | undefined;
+
+	if (userId) {
+		register(async () => {
+			await request(getUrl(vendor)).delete(`/users/${userId}`).set('Authorization', `Bearer ${adminToken}`);
+		});
+	}
+
+	expect(user.statusCode).toBe(200);
+
+	return userId!;
+}
+
+async function createRoleUser(
+	vendor: string,
+	name: string,
+	token: string,
+	email: string,
+	register: Register
+): Promise<string> {
+	const roleId = await createRole(vendor, name, register);
+	await createUser(vendor, roleId, token, email, register);
+	return roleId;
+}
+
+async function grant(
+	vendor: string,
+	roleId: string,
+	collection: string,
+	action: string,
+	fields: readonly string[],
+	permissions: Record<string, any> = {},
+	presets: Record<string, any> | null = null,
+	validation: Record<string, any> | null = null
+): Promise<void> {
+	const response = await request(getUrl(vendor))
+		.post('/permissions')
+		.send({ role: roleId, collection, action, fields, permissions, presets, validation })
+		.set('Authorization', `Bearer ${adminToken}`);
+
+	expect(response.statusCode).toBe(200);
+}
+
 describe('Nested write selector and link separation', () => {
 	const cleanups: Record<string, (() => Promise<void>)[]> = {};
 
@@ -42,62 +118,6 @@ describe('Nested write selector and link separation', () => {
 
 	function track(vendor: string, fn: () => Promise<void>) {
 		(cleanups[vendor] ??= []).push(fn);
-	}
-
-	async function createRole(vendor: string, name: string) {
-		const role = await request(getUrl(vendor))
-			.post('/roles')
-			.send({ name, admin_access: false, app_access: true })
-			.set('Authorization', `Bearer ${adminToken}`);
-
-		const roleId = role.body?.data?.id as string | undefined;
-
-		if (roleId) {
-			track(vendor, async () => {
-				await request(getUrl(vendor)).delete(`/roles/${roleId}`).set('Authorization', `Bearer ${adminToken}`);
-			});
-		}
-
-		expect(role.statusCode).toBe(200);
-
-		return roleId!;
-	}
-
-	async function createUser(vendor: string, roleId: string, token: string, email: string) {
-		const user = await request(getUrl(vendor))
-			.post('/users')
-			.send({ email, password: 'Fr2bPassword', token, role: roleId, status: 'active' })
-			.set('Authorization', `Bearer ${adminToken}`);
-
-		const userId = user.body?.data?.id as string | undefined;
-
-		if (userId) {
-			track(vendor, async () => {
-				await request(getUrl(vendor)).delete(`/users/${userId}`).set('Authorization', `Bearer ${adminToken}`);
-			});
-		}
-
-		expect(user.statusCode).toBe(200);
-
-		return userId!;
-	}
-
-	async function grant(
-		vendor: string,
-		roleId: string,
-		collection: string,
-		action: string,
-		fields: string[],
-		permissions: Record<string, any> = {},
-		presets: Record<string, any> | null = null,
-		validation: Record<string, any> | null = null
-	) {
-		const response = await request(getUrl(vendor))
-			.post('/permissions')
-			.send({ role: roleId, collection, action, fields, permissions, presets, validation })
-			.set('Authorization', `Bearer ${adminToken}`);
-
-		expect(response.statusCode).toBe(200);
 	}
 
 	async function createCollection(vendor: string, name: string) {
@@ -215,21 +235,39 @@ describe('Nested write selector and link separation', () => {
 			expect(m2o.field.field).toBe('author');
 			expect(m2o.relation.related_collection).toBe(authorCollection);
 
-			const metaRole = await createRole(vendor, `FR2b Metadata ${runId}`);
-			await createUser(vendor, metaRole, metaToken, `fr2b-meta-${runId}-${vendor}@tests.com`);
+			const metaRole = await createRoleUser(
+				vendor,
+				`FR2b Metadata ${runId}`,
+				metaToken,
+				`fr2b-meta-${runId}-${vendor}@tests.com`,
+				(fn) => track(vendor, fn)
+			);
+
 			await grant(vendor, metaRole, parentCollection, 'read', ['*']);
 			await grant(vendor, metaRole, parentCollection, 'update', ['*']);
 			await grant(vendor, metaRole, childCollection, 'update', ['name'], { name: { _neq: 'Foreign child' } });
 			await grant(vendor, metaRole, authorCollection, 'update', ['name']);
 
-			const reparentRole = await createRole(vendor, `FR2b Reparent ${runId}`);
-			await createUser(vendor, reparentRole, reparentToken, `fr2b-reparent-${runId}-${vendor}@tests.com`);
+			const reparentRole = await createRoleUser(
+				vendor,
+				`FR2b Reparent ${runId}`,
+				reparentToken,
+				`fr2b-reparent-${runId}-${vendor}@tests.com`,
+				(fn) => track(vendor, fn)
+			);
+
 			await grant(vendor, reparentRole, parentCollection, 'read', ['*']);
 			await grant(vendor, reparentRole, parentCollection, 'update', ['*']);
 			await grant(vendor, reparentRole, childCollection, 'update', ['name', 'parent_id']);
 
-			const noReadRole = await createRole(vendor, `FR2b No Read ${runId}`);
-			await createUser(vendor, noReadRole, noReadToken, `fr2b-noread-${runId}-${vendor}@tests.com`);
+			const noReadRole = await createRoleUser(
+				vendor,
+				`FR2b No Read ${runId}`,
+				noReadToken,
+				`fr2b-noread-${runId}-${vendor}@tests.com`,
+				(fn) => track(vendor, fn)
+			);
+
 			await grant(vendor, noReadRole, parentCollection, 'update', ['*']);
 			await grant(vendor, noReadRole, childCollection, 'update', ['name']);
 
@@ -244,8 +282,14 @@ describe('Nested write selector and link separation', () => {
 				{ parent_id: { _submitted: true } }
 			);
 
-			const nestedCreateRole = await createRole(vendor, `FR2b Nested Create ${runId}`);
-			await createUser(vendor, nestedCreateRole, nestedCreateToken, `fr2b-nestedcreate-${runId}-${vendor}@tests.com`);
+			const nestedCreateRole = await createRoleUser(
+				vendor,
+				`FR2b Nested Create ${runId}`,
+				nestedCreateToken,
+				`fr2b-nestedcreate-${runId}-${vendor}@tests.com`,
+				(fn) => track(vendor, fn)
+			);
+
 			await grant(vendor, nestedCreateRole, parentCollection, 'read', ['*']);
 			await grant(vendor, nestedCreateRole, parentCollection, 'create', ['*']);
 			await grant(vendor, nestedCreateRole, childCollection, 'create', ['name', 'parent_id']);
@@ -629,41 +673,13 @@ describe('Nested junction (m2m) write selector and link separation', () => {
 
 			expect(label.field).toBe('label');
 
-			const role = await request(getUrl(vendor))
-				.post('/roles')
-				.send({ name: `FR2b Junction ${runId}`, admin_access: false, app_access: true })
-				.set('Authorization', `Bearer ${adminToken}`);
-
-			const roleId = role.body?.data?.id as string | undefined;
-
-			if (roleId) {
-				track(async () => {
-					await request(getUrl(vendor)).delete(`/roles/${roleId}`).set('Authorization', `Bearer ${adminToken}`);
-				});
-			}
-
-			expect(role.statusCode).toBe(200);
-
-			const user = await request(getUrl(vendor))
-				.post('/users')
-				.send({
-					email: `fr2b-junction-${runId}-${vendor}@tests.com`,
-					password: 'Fr2bPassword',
-					token: junctionToken,
-					role: roleId,
-					status: 'active',
-				})
-				.set('Authorization', `Bearer ${adminToken}`);
-
-			const userId = user.body?.data?.id as string | undefined;
-
-			if (userId) {
-				track(async () => {
-					await request(getUrl(vendor)).delete(`/users/${userId}`).set('Authorization', `Bearer ${adminToken}`);
-				});
-			}
-
-			expect(user.statusCode).toBe(200);
+			const roleId = await createRoleUser(
+				vendor,
+				`FR2b Junction ${runId}`,
+				junctionToken,
+				`fr2b-junction-${runId}-${vendor}@tests.com`,
+				track
+			);
 
 			for (const [collection, action, fields] of [
 				[m2mParent, 'read', ['*']],
@@ -675,12 +691,7 @@ describe('Nested junction (m2m) write selector and link separation', () => {
 				[tagCollection, 'update', ['name']],
 				[tagCollection, 'create', ['name']],
 			] as const) {
-				const permission = await request(getUrl(vendor))
-					.post('/permissions')
-					.send({ role: roleId, collection, action, fields })
-					.set('Authorization', `Bearer ${adminToken}`);
-
-				expect(permission.statusCode).toBe(200);
+				await grant(vendor, roleId, collection, action, fields);
 			}
 
 			const created = await request(getUrl(vendor))
@@ -838,35 +849,7 @@ describe('Nested any (m2a) write selector and link separation', () => {
 		junctionUpdateFields: string[],
 		blockUpdateFields: string[]
 	) {
-		const role = await request(getUrl(vendor))
-			.post('/roles')
-			.send({ name, admin_access: false, app_access: true })
-			.set('Authorization', `Bearer ${adminToken}`);
-
-		const roleId = role.body?.data?.id as string | undefined;
-
-		if (roleId) {
-			track(async () => {
-				await request(getUrl(vendor)).delete(`/roles/${roleId}`).set('Authorization', `Bearer ${adminToken}`);
-			});
-		}
-
-		expect(role.statusCode).toBe(200);
-
-		const user = await request(getUrl(vendor))
-			.post('/users')
-			.send({ email: `${token}-${vendor}@tests.com`, password: 'Fr2bPassword', token, role: roleId, status: 'active' })
-			.set('Authorization', `Bearer ${adminToken}`);
-
-		const userId = user.body?.data?.id as string | undefined;
-
-		if (userId) {
-			track(async () => {
-				await request(getUrl(vendor)).delete(`/users/${userId}`).set('Authorization', `Bearer ${adminToken}`);
-			});
-		}
-
-		expect(user.statusCode).toBe(200);
+		const roleId = await createRoleUser(vendor, name, token, `${token}-${vendor}@tests.com`, track);
 
 		for (const [collection, action, fields] of [
 			[m2aParent, 'read', ['*']],
@@ -875,12 +858,7 @@ describe('Nested any (m2a) write selector and link separation', () => {
 			[junctionM2A, 'update', junctionUpdateFields],
 			[blockCollection, 'update', blockUpdateFields],
 		] as const) {
-			const permission = await request(getUrl(vendor))
-				.post('/permissions')
-				.send({ role: roleId, collection, action, fields })
-				.set('Authorization', `Bearer ${adminToken}`);
-
-			expect(permission.statusCode).toBe(200);
+			await grant(vendor, roleId, collection, action, fields);
 		}
 	}
 
@@ -929,57 +907,20 @@ describe('Nested any (m2a) write selector and link separation', () => {
 			await makeRoleUser(vendor, `FR2b M2A Deny ${runId}`, denyToken, ['item', 'collection'], ['collection']);
 			await makeRoleUser(vendor, `FR2b M2A Disc Deny ${runId}`, discDenyToken, ['item'], ['name', 'collection']);
 
-			const m2aCreateRoleResp = await request(getUrl(vendor))
-				.post('/roles')
-				.send({ name: `FR2b M2A Create ${runId}`, admin_access: false, app_access: true })
-				.set('Authorization', `Bearer ${adminToken}`);
-
-			const m2aCreateRoleId = m2aCreateRoleResp.body?.data?.id as string | undefined;
-
-			if (m2aCreateRoleId) {
-				track(async () => {
-					await request(getUrl(vendor))
-						.delete(`/roles/${m2aCreateRoleId}`)
-						.set('Authorization', `Bearer ${adminToken}`);
-				});
-			}
-
-			expect(m2aCreateRoleResp.statusCode).toBe(200);
-
-			const m2aCreateUserResp = await request(getUrl(vendor))
-				.post('/users')
-				.send({
-					email: `${m2aCreateToken}-${vendor}@tests.com`,
-					password: 'Fr2bPassword',
-					token: m2aCreateToken,
-					role: m2aCreateRoleId,
-					status: 'active',
-				})
-				.set('Authorization', `Bearer ${adminToken}`);
-
-			const m2aCreateUserId = m2aCreateUserResp.body?.data?.id as string | undefined;
-
-			if (m2aCreateUserId) {
-				track(async () => {
-					await request(getUrl(vendor))
-						.delete(`/users/${m2aCreateUserId}`)
-						.set('Authorization', `Bearer ${adminToken}`);
-				});
-			}
-
-			expect(m2aCreateUserResp.statusCode).toBe(200);
+			const m2aCreateRoleId = await createRoleUser(
+				vendor,
+				`FR2b M2A Create ${runId}`,
+				m2aCreateToken,
+				`${m2aCreateToken}-${vendor}@tests.com`,
+				track
+			);
 
 			for (const [collection, action, fields] of [
 				[m2aParent, 'read', ['*']],
 				[m2aParent, 'create', ['*']],
 				[junctionM2A, 'create', ['collection', 'item', reverseFieldM2A]],
 			] as const) {
-				const permission = await request(getUrl(vendor))
-					.post('/permissions')
-					.send({ role: m2aCreateRoleId, collection, action, fields })
-					.set('Authorization', `Bearer ${adminToken}`);
-
-				expect(permission.statusCode).toBe(200);
+				await grant(vendor, m2aCreateRoleId, collection, action, fields);
 			}
 
 			const parent = await request(getUrl(vendor))

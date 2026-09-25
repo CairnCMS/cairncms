@@ -1,76 +1,10 @@
 import { createTestingPinia } from '@pinia/testing';
 import { setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Field, Relation } from '@cairncms/types';
 import { useFieldsStore } from '@/stores/fields';
 import { useRelationsStore } from '@/stores/relations';
 import { stripUnboundParentLinks } from '@/utils/strip-unbound-parent-links';
-
-type FieldSchema = NonNullable<Field['schema']>;
-type FieldRelationMeta = NonNullable<Relation['meta']>;
-
-function columnSchema(overrides: Partial<FieldSchema> = {}): FieldSchema {
-	return {
-		name: '',
-		table: '',
-		data_type: 'integer',
-		default_value: null,
-		max_length: null,
-		numeric_precision: null,
-		numeric_scale: null,
-		is_nullable: true,
-		is_unique: false,
-		is_primary_key: false,
-		is_generated: false,
-		has_auto_increment: false,
-		foreign_key_table: null,
-		foreign_key_column: null,
-		...overrides,
-	};
-}
-
-function field(collection: string, name: string, primary = false, dataType: Field['type'] = 'integer'): Field {
-	return {
-		collection,
-		field: name,
-		name,
-		type: primary ? dataType : 'string',
-		schema: primary ? columnSchema({ is_primary_key: true, data_type: dataType }) : null,
-		meta: null,
-		children: null,
-	};
-}
-
-function relationMeta(overrides: Partial<FieldRelationMeta> = {}): FieldRelationMeta {
-	return {
-		id: 0,
-		many_collection: '',
-		many_field: '',
-		one_collection: null,
-		one_field: null,
-		one_collection_field: null,
-		one_allowed_collections: null,
-		one_deselect_action: 'nullify',
-		junction_field: null,
-		sort_field: null,
-		...overrides,
-	};
-}
-
-function relation(partial: {
-	collection: string;
-	field: string;
-	related_collection?: string | null;
-	meta?: Partial<FieldRelationMeta>;
-}): Relation {
-	return {
-		collection: partial.collection,
-		field: partial.field,
-		related_collection: partial.related_collection ?? null,
-		schema: null,
-		meta: relationMeta(partial.meta),
-	};
-}
+import { field, relation } from '@/__utils__/field-relation-fixtures';
 
 function seed() {
 	const pinia = createTestingPinia({ createSpy: vi.fn, stubActions: false });

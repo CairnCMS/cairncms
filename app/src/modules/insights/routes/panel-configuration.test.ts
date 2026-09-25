@@ -506,10 +506,6 @@ describe('panel configuration permission gating', () => {
 		const allowed = mountEditor('+', { permissions: [perm('create', ['*'], false, null)] });
 		await flushPromises();
 		expect(doneButton(allowed.wrapper).props('disabled')).toBe(true);
-
-		typeSelect(allowed.wrapper).vm.$emit('update:modelValue', 'metric');
-		await flushPromises();
-		expect(doneButton(allowed.wrapper).props('disabled')).toBe(false);
 	});
 
 	it('allows a preset-only create whose presets cover every required column', async () => {

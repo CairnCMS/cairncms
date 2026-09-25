@@ -1205,11 +1205,13 @@ describe('Integration Tests', () => {
 
 			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
 
-			const result = await service.upsertOne({ id: authorId, name: 'Updated' }, { emitEvents: false });
+			const input = { id: authorId, name: 'Updated' };
+			const result = await service.upsertOne(input, { emitEvents: false });
 
 			expect(tracker.history.update.length).toBeGreaterThan(0);
 			expect(tracker.history.insert.length).toBe(0);
 			expect(result).toBe(authorId);
+			expect(input).toEqual({ id: authorId, name: 'Updated' });
 		});
 
 		it('creates a row with the supplied key reaching the insert when the row is absent', async () => {
@@ -1218,11 +1220,13 @@ describe('Integration Tests', () => {
 
 			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
 
-			await service.upsertOne({ id: authorId, name: 'Created' }, { emitEvents: false });
+			const input = { id: authorId, name: 'Created' };
+			await service.upsertOne(input, { emitEvents: false });
 
 			expect(tracker.history.insert.length).toBeGreaterThan(0);
 			expect(tracker.history.update.length).toBe(0);
 			expect(tracker.history.insert[0]!.bindings).toContain(authorId);
+			expect(input).toEqual({ id: authorId, name: 'Created' });
 		});
 
 		it('applies a field-restricted update that would be rejected with the selector present', async () => {
@@ -1284,30 +1288,6 @@ describe('Integration Tests', () => {
 			await service.upsertOne({ id: authorId, name: 'Quiet' }, { emitEvents: false });
 
 			expect(emitActionSpy).not.toHaveBeenCalled();
-		});
-
-		it('does not mutate the caller payload on the update path', async () => {
-			tracker.on.select('authors').response([{ id: authorId }]);
-			tracker.on.update('authors').response([{ id: authorId }]);
-
-			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
-
-			const input = { id: authorId, name: 'Keep' };
-			await service.upsertOne(input, { emitEvents: false });
-
-			expect(input).toEqual({ id: authorId, name: 'Keep' });
-		});
-
-		it('does not mutate the caller payload on the create path', async () => {
-			tracker.on.select('authors').response([]);
-			tracker.on.insert('authors').response([{ id: authorId }]);
-
-			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
-
-			const input = { id: authorId, name: 'Keep' };
-			await service.upsertOne(input, { emitEvents: false });
-
-			expect(input).toEqual({ id: authorId, name: 'Keep' });
 		});
 	});
 

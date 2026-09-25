@@ -3,67 +3,11 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
-import type { Field, Relation } from '@cairncms/types';
 import { i18n } from '@/lang';
 import { useFieldsStore } from '@/stores/fields';
 import { useRelationsStore } from '@/stores/relations';
 import DrawerBatch from './drawer-batch.vue';
-
-function fld(collection: string, name: string, primary = false): Field {
-	return {
-		collection,
-		field: name,
-		name,
-		type: primary ? 'integer' : 'string',
-		schema: primary
-			? {
-					name,
-					table: collection,
-					data_type: 'integer',
-					default_value: null,
-					max_length: null,
-					numeric_precision: null,
-					numeric_scale: null,
-					is_nullable: false,
-					is_unique: true,
-					is_primary_key: true,
-					is_generated: false,
-					has_auto_increment: true,
-					foreign_key_table: null,
-					foreign_key_column: null,
-			  }
-			: null,
-		meta: null,
-		children: null,
-	};
-}
-
-function rel(
-	collection: string,
-	field: string,
-	related: string,
-	meta: Partial<NonNullable<Relation['meta']>>
-): Relation {
-	return {
-		collection,
-		field,
-		related_collection: related,
-		schema: null,
-		meta: {
-			id: 0,
-			many_collection: collection,
-			many_field: field,
-			one_collection: related,
-			one_field: null,
-			one_collection_field: null,
-			one_allowed_collections: null,
-			one_deselect_action: 'nullify',
-			junction_field: null,
-			sort_field: null,
-			...meta,
-		},
-	};
-}
+import { fld, rel } from '@/__utils__/field-relation-fixtures';
 
 const apiPatch = vi.fn((_path: string, _body?: unknown) => Promise.resolve({}));
 
