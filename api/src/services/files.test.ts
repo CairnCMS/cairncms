@@ -26,7 +26,7 @@ const storageList = vi.fn(() => ({
 	},
 }));
 
-const storageDelete = vi.fn(async () => undefined);
+const storageDelete = vi.fn<(key: string) => Promise<void>>(async () => undefined);
 const storageRead = vi.fn();
 
 vi.mock('../storage/index.js', () => ({
@@ -838,6 +838,32 @@ describe('Integration Tests', () => {
 				});
 			}
 
+			function gateStorageDelete() {
+				const events: string[] = [];
+				let release!: () => void;
+
+				const gate = new Promise<void>((resolve) => {
+					release = resolve;
+				});
+
+				let deletedKey: string | undefined;
+
+				storageDelete.mockReset().mockResolvedValue(undefined);
+
+				storageDelete.mockImplementationOnce(async (key: string) => {
+					deletedKey = key;
+					events.push('delete-start');
+					await gate;
+					events.push('delete-end');
+				});
+
+				return {
+					events,
+					release: () => release(),
+					deletedKey: () => deletedKey,
+				};
+			}
+
 			it('awaits cleanup before rejecting an interrupted replace with a size cap', async () => {
 				tracker.on
 					.select(/directus_files/)
@@ -863,14 +889,32 @@ describe('Integration Tests', () => {
 
 				drainingWrite();
 
+				const deleteOneSpy = vi.spyOn(ItemsService.prototype, 'deleteOne').mockResolvedValue('unused' as never);
+				const gate = gateStorageDelete();
 				let caught: unknown;
 
-				await service()
+				const pending = service()
 					.importOne('https://example.com/import/photo.png', { id: EXISTING_ID })
-					.catch((err) => (caught = err));
+					.catch((err) => {
+						gate.events.push('import-rejected');
+						caught = err;
+					});
 
+				try {
+					await vi.waitFor(() => expect(gate.events).toContain('delete-start'));
+					expect(gate.events).not.toContain('import-rejected');
+				} finally {
+					gate.release();
+					await pending;
+				}
+
+				expect(gate.events).toEqual(['delete-start', 'delete-end', 'import-rejected']);
 				expect((caught as Error).message).toContain('connection reset');
-				expect(storageDelete).toHaveBeenCalled();
+
+				const freshKey = (storageWrite.mock.calls[0] as unknown[])[0];
+				expect(gate.deletedKey()).toBe(freshKey);
+				expect((storageDelete.mock.calls as unknown[][]).every((call) => call[0] === freshKey)).toBe(true);
+				expect(deleteOneSpy).not.toHaveBeenCalled();
 			});
 
 			it('awaits cleanup before rejecting an interrupted replace without a size cap', async () => {
@@ -895,14 +939,32 @@ describe('Integration Tests', () => {
 
 				drainingWrite();
 
+				const deleteOneSpy = vi.spyOn(ItemsService.prototype, 'deleteOne').mockResolvedValue('unused' as never);
+				const gate = gateStorageDelete();
 				let caught: unknown;
 
-				await service()
+				const pending = service()
 					.importOne('https://example.com/import/photo.png', { id: EXISTING_ID })
-					.catch((err) => (caught = err));
+					.catch((err) => {
+						gate.events.push('import-rejected');
+						caught = err;
+					});
 
+				try {
+					await vi.waitFor(() => expect(gate.events).toContain('delete-start'));
+					expect(gate.events).not.toContain('import-rejected');
+				} finally {
+					gate.release();
+					await pending;
+				}
+
+				expect(gate.events).toEqual(['delete-start', 'delete-end', 'import-rejected']);
 				expect((caught as Error).message).toContain('connection reset');
-				expect(storageDelete).toHaveBeenCalled();
+
+				const freshKey = (storageWrite.mock.calls[0] as unknown[])[0];
+				expect(gate.deletedKey()).toBe(freshKey);
+				expect((storageDelete.mock.calls as unknown[][]).every((call) => call[0] === freshKey)).toBe(true);
+				expect(deleteOneSpy).not.toHaveBeenCalled();
 			});
 
 			it('awaits cleanup before rejecting an interrupted create', async () => {
@@ -922,17 +984,33 @@ describe('Integration Tests', () => {
 					return 'new-key' as never;
 				});
 
-				const deleteSpy = vi.spyOn(ItemsService.prototype, 'deleteOne').mockResolvedValue('new-key' as never);
+				const deleteOneSpy = vi.spyOn(ItemsService.prototype, 'deleteOne').mockResolvedValue('new-key' as never);
 				drainingWrite();
 
+				const gate = gateStorageDelete();
 				let caught: unknown;
 
-				await service({ admin: true })
+				const pending = service({ admin: true })
 					.importOne('https://example.com/import/photo.bin', {})
-					.catch((err) => (caught = err));
+					.catch((err) => {
+						gate.events.push('import-rejected');
+						caught = err;
+					});
 
+				try {
+					await vi.waitFor(() => expect(gate.events).toContain('delete-start'));
+					expect(gate.events).not.toContain('import-rejected');
+				} finally {
+					gate.release();
+					await pending;
+				}
+
+				expect(gate.events).toEqual(['delete-start', 'delete-end', 'import-rejected']);
 				expect((caught as Error).message).toContain('connection reset');
-				expect(deleteSpy).toHaveBeenCalled();
+
+				const freshKey = (storageWrite.mock.calls[0] as unknown[])[0];
+				expect(gate.deletedKey()).toBe(freshKey);
+				expect(deleteOneSpy).toHaveBeenCalledWith('new-key', { emitEvents: false });
 			});
 		});
 
