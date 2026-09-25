@@ -1,11 +1,11 @@
 get:
   summary: Retrieve My Item Permissions
   description: >-
-    Check an authenticated user's update, delete, and share permissions for a stored item.
-    The API rechecks permissions when an action is submitted. Missing items, unknown collections,
-    invalid keys, and items with all three actions denied return `access: false` for each action
-    and `update.fields: null`. Users without these permissions cannot infer whether the item or
-    collection exists. Other failures return the usual API error response.
+    Check whether the current user can update, delete, or share an item. Authentication is required.
+    The API checks permissions again when you submit an action. Missing items and items the user
+    cannot update, delete, or share return the same result. Every `access` value is `false` and
+    `update.fields` is `null`. Unknown collections and invalid keys also return this result.
+    The response does not reveal whether the item exists. Other failures return the usual API error response.
   operationId: getMyItemPermissions
   security:
     - Auth: []

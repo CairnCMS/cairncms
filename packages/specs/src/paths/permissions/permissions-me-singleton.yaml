@@ -1,11 +1,12 @@
 get:
   summary: Retrieve My Singleton Permissions
   description: >-
-    Check an authenticated user's update, delete, and share permissions for a singleton, which holds
-    one item. Administrators and users with any of these collection permissions can omit the key.
-    An empty singleton denies all three actions. Other collections require a key. Non-admin users
-    without these permissions receive `400` whether the collection exists or not. The API rechecks
-    permissions when an action is submitted. Other failures return the usual API error response.
+    Check whether the current user can update, delete, or share the item in a singleton collection.
+    A singleton holds at most one item. Authentication is required. You must be an administrator or
+    have at least one of these permissions on the collection. An empty singleton returns `false` for
+    all three actions. Other collections require a key. Non-admin users with none of these permissions
+    receive `400`, even for unknown collections. The API checks permissions again when you submit an
+    action. Other failures return the usual API error response.
   operationId: getMySingletonPermissions
   security:
     - Auth: []

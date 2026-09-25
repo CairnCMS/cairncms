@@ -94,11 +94,13 @@ Content-Type: application/json
 }
 ```
 
-`url` must be an absolute HTTP or HTTPS URL. Optional `data` fields set file metadata. Without `data.id`, the endpoint creates a file.
+`url` must be an absolute HTTP or HTTPS URL. `data` is optional and supplies file metadata. Without `data.id`, the endpoint creates a file.
 
-Set `data.id` to an existing file's ID to replace its bytes. Replacement requires update permission on the file and on `folder`, `filename_download`, `storage`, and `type`, just like a multipart replacement. Create permission is not required. The file keeps its storage location and any metadata not supplied in `data`. The fetched content type replaces `type`.
+To replace an existing file, put its ID in `data.id`. The file keeps its ID, storage location, and any metadata you leave out of `data`. The server sets `type` from the download's content type.
 
-Missing item or field permission blocks the request before the URL is fetched. A missing file receives the same refusal as an inaccessible file. Rules that depend on fetched content, such as content-type validation, run after the fetch.
+Replacement requires update permission on the file and on `folder`, `filename_download`, `storage`, and `type`. Any other metadata you supply also requires update permission. Create permission is not required.
+
+The server checks item and field permissions before downloading the file. Missing files and files the user cannot update return the same `403` response. Checks that need the downloaded content, such as content-type validation, run after the download starts.
 
 URL imports are subject to outbound IP validation. By default, loopback ranges, the host's own network interfaces, and the EC2/cloud metadata endpoint at `169.254.169.254` are blocked to prevent server-side request forgery against internal services. Imports that resolve to a denied IP fail at the outbound connection step and return `503 SERVICE_UNAVAILABLE` with a body indicating the import URL could not be fetched. Operators can extend the deny list through the `IMPORT_IP_DENY_LIST` environment variable; see [Configuration](/docs/manage/configuration/) for the exact behavior, including the special meaning of `0.0.0.0`.
 
