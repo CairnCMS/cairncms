@@ -267,6 +267,10 @@ function fieldByPlaceholder(wrapper: ReturnType<typeof mountEditor>['wrapper'], 
 	return wrapper.findAllComponents(Field).find((field) => field.props('placeholder') === placeholder)!;
 }
 
+function optionsField(wrapper: ReturnType<typeof mountEditor>['wrapper']) {
+	return wrapper.findAllComponents(Field).find((field) => field.attributes('raw-editor-enabled') !== undefined)!;
+}
+
 beforeEach(() => {
 	isOpen.value = true;
 	apiGet.mockReset();
@@ -651,13 +655,39 @@ describe('panel configuration permission gating', () => {
 		expect(insights.edits.create[0]).toMatchObject({ id: stagedId, type: 'metric', dashboard: DASH_A });
 	});
 
-	it('reconciles a restricted duplicate reopen so the preview matches the filtered POST', async () => {
+	it.each([
+		{
+			label: 'options writable',
+			fields: ['name', 'options'],
+			presetOptions: { a: 1, b: { x: 1, y: 2 } } as Record<string, unknown> | undefined,
+			optionsEdit: { a: 99 } as Record<string, unknown> | undefined,
+			expectedPreviewOptions: { a: 99, b: { x: 1, y: 2 } } as Record<string, unknown>,
+			expectedBody: [{ name: 'Original', options: { a: 99, b: { x: 1, y: 2 } } }] as Record<string, unknown>[],
+		},
+		{
+			label: 'options not writable',
+			fields: ['name'],
+			presetOptions: undefined,
+			optionsEdit: undefined,
+			expectedPreviewOptions: {} as Record<string, unknown>,
+			expectedBody: [{ name: 'Original' }] as Record<string, unknown>[],
+		},
+	])('reconciles a restricted duplicate reopen and persists the filtered POST ($label)', async (scenario) => {
 		apiGet.mockImplementation(() => Promise.resolve({ data: { data: [] } }));
 
-		const presets = { type: 'metric', dashboard: DASH_B, position_x: 1, position_y: 1, width: 8, height: 6 };
+		const presets: Record<string, unknown> = {
+			type: 'metric',
+			dashboard: DASH_B,
+			position_x: 1,
+			position_y: 1,
+			width: 8,
+			height: 6,
+		};
+
+		if (scenario.presetOptions !== undefined) presets.options = scenario.presetOptions;
 
 		const { wrapper, insights } = mountEditor('+', {
-			permissions: [perm('create', ['name'], false, presets)],
+			permissions: [perm('create', scenario.fields, false, presets)],
 			dashboardKey: DASH_A,
 			realStaging: true,
 		});
@@ -684,17 +714,23 @@ describe('panel configuration permission gating', () => {
 
 		expect(doneButton(wrapper).props('disabled')).toBe(false);
 
+		if (scenario.optionsEdit !== undefined) {
+			optionsField(wrapper).vm.$emit('update:modelValue', scenario.optionsEdit);
+			await flushPromises();
+		}
+
 		doneButton(wrapper).vm.$emit('click');
 		await flushPromises();
 
 		const preview = insights.edits.create.find((entry) => entry.id === dupId)!;
-		expect(preview).toMatchObject({ id: dupId, dashboard: DASH_B, type: 'metric', options: {}, name: 'Original' });
+		expect(preview).toMatchObject({ id: dupId, dashboard: DASH_B, type: 'metric', name: 'Original' });
+		expect(preview.options).toEqual(scenario.expectedPreviewOptions);
 		expect(preview).not.toHaveProperty('note');
 
 		await insights.saveChanges();
 
 		const body = apiPost.mock.calls.find(([path]) => path === '/panels')?.[1] as Record<string, unknown>[];
-		expect(body).toEqual([{ name: 'Original' }]);
+		expect(body).toEqual(scenario.expectedBody);
 	});
 
 	it('preserves a non-writable preset dashboard in the preview and drops it from the POST', async () => {
@@ -881,5 +917,74 @@ describe('panel configuration permission gating', () => {
 				{ id: PANEL_B, note: 'Second' },
 			])
 		);
+	});
+});
+
+describe('panel configuration preset merge', () => {
+	const optionsPresets = {
+		type: 'metric',
+		dashboard: DASH_B,
+		position_x: 1,
+		position_y: 1,
+		width: 8,
+		height: 6,
+		options: { a: 1, b: { x: 1, y: 2 } },
+	};
+
+	function createPostBody() {
+		return apiPost.mock.calls.find(([path]) => path === '/panels')?.[1] as Record<string, unknown>[];
+	}
+
+	it('merges a partial options edit under the preset so the preview matches the effective saved value', async () => {
+		apiGet.mockImplementation(() => Promise.resolve({ data: { data: [] } }));
+
+		const { wrapper, insights } = mountEditor('+', {
+			permissions: [perm('create', ['options'], false, optionsPresets)],
+			dashboardKey: DASH_A,
+			realStaging: true,
+		});
+
+		await flushPromises();
+		expect(doneButton(wrapper).props('disabled')).toBe(false);
+
+		optionsField(wrapper).vm.$emit('update:modelValue', { a: 99, c: 3 });
+		await flushPromises();
+
+		doneButton(wrapper).vm.$emit('click');
+		await flushPromises();
+
+		const preview = insights.edits.create.at(-1)!;
+		expect(preview.options).toEqual({ a: 99, b: { x: 1, y: 2 }, c: 3 });
+
+		await insights.saveChanges();
+
+		const body = createPostBody();
+		expect((body[0] as { options: unknown }).options).toEqual({ a: 99, b: { x: 1, y: 2 }, c: 3 });
+	});
+
+	it('preserves an explicit null options member through the preview and the POST', async () => {
+		apiGet.mockImplementation(() => Promise.resolve({ data: { data: [] } }));
+
+		const { wrapper, insights } = mountEditor('+', {
+			permissions: [perm('create', ['options'], false, optionsPresets)],
+			dashboardKey: DASH_A,
+			realStaging: true,
+		});
+
+		await flushPromises();
+
+		optionsField(wrapper).vm.$emit('update:modelValue', { a: 1, b: null });
+		await flushPromises();
+
+		doneButton(wrapper).vm.$emit('click');
+		await flushPromises();
+
+		const preview = insights.edits.create.at(-1)!;
+		expect(preview.options).toEqual({ a: 1, b: null });
+
+		await insights.saveChanges();
+
+		const body = createPostBody();
+		expect((body[0] as { options: unknown }).options).toEqual({ a: 1, b: null });
 	});
 });

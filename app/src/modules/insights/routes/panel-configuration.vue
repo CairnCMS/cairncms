@@ -268,15 +268,19 @@ const effectivePanel = computed<Partial<Panel>>(() => {
 
 	const result: Record<string, any> = merge({}, manufacturedDefaults.value, createPresets.value);
 
+	const clientOverrides: Record<string, any> = {};
+
 	const staged = isStaged.value ? existingPanel.value ?? stagedEntry.value ?? {} : {};
 
 	for (const [key, value] of Object.entries(staged)) {
-		if (key !== 'id' && canWrite(key)) result[key] = value;
+		if (key !== 'id' && canWrite(key)) clientOverrides[key] = value;
 	}
 
 	for (const [key, value] of Object.entries(omitBy(edits, isUndefined))) {
-		if (canWrite(key)) result[key] = value;
+		if (canWrite(key)) clientOverrides[key] = value;
 	}
+
+	merge(result, clientOverrides);
 
 	result.type = effectiveType.value;
 	result.dashboard = effectiveDashboard.value;
