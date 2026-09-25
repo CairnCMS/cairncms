@@ -1,6 +1,7 @@
 import api from '@/api';
 import { i18n } from '@/lang';
 import { notify } from '@/utils/notify';
+import { stripUnboundParentLinks } from '@/utils/strip-unbound-parent-links';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { merge } from 'lodash';
 import { defineStore } from 'pinia';
@@ -32,7 +33,7 @@ export const useSettingsStore = defineStore({
 			this.settings = newSettings;
 
 			try {
-				const response = await api.patch(`/settings`, updates);
+				const response = await api.patch(`/settings`, stripUnboundParentLinks('directus_settings', updates, true));
 
 				this.settings = response.data.data;
 

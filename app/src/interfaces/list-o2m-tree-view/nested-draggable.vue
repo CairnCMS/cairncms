@@ -221,7 +221,11 @@ function change(event: ChangeEvent) {
 	if ('added' in event) {
 		switch (event.added.element.$type) {
 			case 'created':
-				create(cleanItem(event.added.element));
+				create({
+					...cleanItem(event.added.element),
+					[relationInfo.value.reverseJunctionField.field]: primaryKey.value,
+				});
+
 				break;
 
 			case 'updated': {

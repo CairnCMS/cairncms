@@ -1,16 +1,30 @@
 import { RelationQueryMultiple, useRelationMultiple } from '@/composables/use-relation-multiple';
-import { flushPromises, mount } from '@vue/test-utils';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { cloneDeep } from 'lodash';
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { computed, defineComponent, h, ref, toRefs } from 'vue';
 import { RelationM2A } from './use-relation-m2a';
 import { RelationM2M } from './use-relation-m2m';
 import { RelationO2M } from './use-relation-o2m';
+import { createTestingPinia } from '@pinia/testing';
+import { setActivePinia } from 'pinia';
+import type { Field, Relation } from '@cairncms/types';
+import { useFieldsStore } from '@/stores/fields';
+import { useRelationsStore } from '@/stores/relations';
+import { stripUnboundParentLinks } from '@/utils/strip-unbound-parent-links';
+
+const { apiOverride } = vi.hoisted(() => ({
+	apiOverride: { get: null as null | ((path: string, config: { params: Record<string, any> }) => any) },
+}));
 
 vi.mock('@/api', () => {
 	return {
 		default: {
-			get: (path: string, { params }: { params: Record<string, any> }) => {
+			get: (path: string, config: { params: Record<string, any> }) => {
+				if (apiOverride.get) return apiOverride.get(path, config);
+
+				const { params } = config;
+
 				if (path === '/items/worker' && params?.aggregate?.count === 'id') {
 					return Promise.resolve({
 						data: {
@@ -649,5 +663,235 @@ describe('test m2m relation', () => {
 		await flushPromises();
 
 		expect(wrapper.vm.value).toEqual({ create: [], update: [{ id: 2, sort: 9 }], delete: [] });
+	});
+});
+
+function fld(collection: string, name: string, primary = false): Field {
+	return {
+		collection,
+		field: name,
+		name,
+		type: primary ? 'integer' : 'string',
+		schema: primary
+			? {
+					name,
+					table: collection,
+					data_type: 'integer',
+					default_value: null,
+					max_length: null,
+					numeric_precision: null,
+					numeric_scale: null,
+					is_nullable: false,
+					is_unique: true,
+					is_primary_key: true,
+					is_generated: false,
+					has_auto_increment: true,
+					foreign_key_table: null,
+					foreign_key_column: null,
+			  }
+			: null,
+		meta: null,
+		children: null,
+	};
+}
+
+function rel(
+	collection: string,
+	field: string,
+	related: string | null,
+	meta: Partial<NonNullable<Relation['meta']>>
+): Relation {
+	return {
+		collection,
+		field,
+		related_collection: related,
+		schema: null,
+		meta: {
+			id: 0,
+			many_collection: collection,
+			many_field: field,
+			one_collection: related,
+			one_field: null,
+			one_collection_field: null,
+			one_allowed_collections: null,
+			one_deselect_action: 'nullify',
+			junction_field: null,
+			sort_field: null,
+			...meta,
+		},
+	};
+}
+
+function apiGetForRecords(records: Record<string, Record<string, any>[]>) {
+	return (path: string, config: { params: Record<string, any> }) => {
+		const collection = path.replace('/items/', '');
+		const data = records[collection] ?? [];
+
+		if (config?.params?.aggregate?.count) {
+			return Promise.resolve({ data: { data: [{ count: { id: data.length } }] } });
+		}
+
+		return Promise.resolve({ data: { data } });
+	};
+}
+
+type ApproachACase = {
+	name: string;
+	relation: RelationO2M | RelationM2M | RelationM2A;
+	doSelect: (vm: any) => void;
+	records: Record<string, Record<string, any>[]>;
+	parentCollection: string;
+	oneField: string;
+	reverseField: string;
+	branch: 'create' | 'update';
+	findSelected: (items: any[]) => any;
+	assertContent: (item: any) => void;
+	seed: () => void;
+};
+
+const approachACases: ApproachACase[] = [
+	{
+		name: 'o2m',
+		relation: relationO2M,
+		doSelect: (vm: any) => vm.select([100]),
+		records: { worker: [{ id: 100, name: 'Selected Worker' }] },
+		parentCollection: 'facility',
+		oneField: 'workers',
+		reverseField: 'facility',
+		branch: 'update' as const,
+		findSelected: (items: any[]) => items.find((item) => item.id === 100),
+		assertContent: (item: any) => expect(item.name).toBe('Selected Worker'),
+		seed: () => {
+			useFieldsStore().fields = [fld('facility', 'workers'), fld('worker', 'id', true)];
+
+			useRelationsStore().relations = [
+				rel('worker', 'facility', 'facility', { one_field: 'workers', many_field: 'facility' }),
+			];
+		},
+	},
+	{
+		name: 'm2m',
+		relation: relationM2M,
+		doSelect: (vm: any) => vm.select([200]),
+		records: { tag: [{ id: 200, name: 'Selected Tag' }] },
+		parentCollection: 'facility',
+		oneField: 'tags',
+		reverseField: 'facility_id',
+		branch: 'create' as const,
+		findSelected: (items: any[]) => items.find((item) => item.tag_id?.id === 200),
+		assertContent: (item: any) => expect(item.tag_id.name).toBe('Selected Tag'),
+		seed: () => {
+			useFieldsStore().fields = [
+				fld('facility', 'tags'),
+				fld('facility_tag', 'id', true),
+				fld('facility_tag', 'facility_id'),
+				fld('facility_tag', 'tag_id'),
+				fld('tag', 'id', true),
+			];
+
+			useRelationsStore().relations = [
+				rel('facility_tag', 'facility_id', 'facility', { one_field: 'tags', junction_field: 'tag_id' }),
+				rel('facility_tag', 'tag_id', 'tag', { junction_field: 'facility_id' }),
+			];
+		},
+	},
+	{
+		name: 'm2a',
+		relation: relationM2A,
+		doSelect: (vm: any) => vm.select([300], 'text'),
+		records: { text: [{ id: 300, name: 'Selected Text' }] },
+		parentCollection: 'article',
+		oneField: 'content',
+		reverseField: 'article_id',
+		branch: 'create' as const,
+		findSelected: (items: any[]) => items.find((item) => item.item?.id === 300),
+		assertContent: (item: any) => expect(item.item.name).toBe('Selected Text'),
+		seed: () => {
+			useFieldsStore().fields = [
+				fld('article', 'content'),
+				fld('article_m2a', 'id', true),
+				fld('article_m2a', 'article_id'),
+				fld('article_m2a', 'item'),
+				fld('article_m2a', 'collection'),
+				fld('text', 'id', true),
+				fld('code', 'id', true),
+			];
+
+			useRelationsStore().relations = [
+				rel('article_m2a', 'article_id', 'article', { one_field: 'content', junction_field: 'item' }),
+				rel('article_m2a', 'item', null, {
+					junction_field: 'article_id',
+					one_collection_field: 'collection',
+					one_allowed_collections: ['text', 'code'],
+				}),
+			];
+		},
+	},
+];
+
+enableAutoUnmount(afterEach);
+
+afterEach(() => {
+	apiOverride.get = null;
+});
+
+describe.each(approachACases)('approach A client end to end ($name)', (config) => {
+	function strip(value: any) {
+		return stripUnboundParentLinks(config.parentCollection, { [config.oneField]: value }, false);
+	}
+
+	function emptyChanges() {
+		return { create: [], update: [], delete: [] };
+	}
+
+	function expectNoOperations(value: any) {
+		const changes = value ?? emptyChanges();
+		expect(changes.create ?? []).toEqual([]);
+		expect(changes.update ?? []).toEqual([]);
+		expect(changes.delete ?? []).toEqual([]);
+	}
+
+	test('previews fetched content while keeping the marker, and the outgoing copy is stripped through reopen and removal', async () => {
+		setActivePinia(createTestingPinia({ createSpy: vi.fn, stubActions: false }));
+		config.seed();
+		apiOverride.get = apiGetForRecords(config.records);
+
+		const wrapper = mount(TestComponent, { props: { relation: config.relation, value: [], id: '+' } });
+		await flushPromises();
+
+		config.doSelect(wrapper.vm);
+		await flushPromises();
+
+		const staged = wrapper.vm.value;
+		expect(staged[config.branch][0][config.reverseField]).toBe('+');
+
+		const preview = config.findSelected(wrapper.vm.displayItems);
+		expect(preview).toBeDefined();
+		expect(preview[config.reverseField]).toBe('+');
+		config.assertContent(preview);
+
+		const snapshot = cloneDeep(staged);
+		const outgoing = strip(staged);
+		expect(outgoing[config.oneField][config.branch][0][config.reverseField]).toBeUndefined();
+		expect(staged).toEqual(snapshot);
+
+		const reopened = mount(TestComponent, { props: { relation: config.relation, value: cloneDeep(staged), id: '+' } });
+		await flushPromises();
+
+		const reopenedStaged = reopened.vm.value;
+		expect(reopenedStaged[config.branch][0][config.reverseField]).toBe('+');
+
+		const reopenedPreview = config.findSelected(reopened.vm.displayItems);
+		expect(reopenedPreview).toBeDefined();
+		expect(reopenedPreview[config.reverseField]).toBe('+');
+		config.assertContent(reopenedPreview);
+
+		expect(strip(reopenedStaged)[config.oneField][config.branch][0][config.reverseField]).toBeUndefined();
+
+		reopened.vm.remove(config.findSelected(reopened.vm.displayItems));
+		await flushPromises();
+
+		expectNoOperations(reopened.vm.value);
+		expectNoOperations(strip(reopened.vm.value ?? emptyChanges())[config.oneField]);
 	});
 });

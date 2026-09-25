@@ -1,12 +1,14 @@
 import api from '@/api';
 import { useCollection } from '@cairncms/composables';
-import { AppCollection, Field } from '@cairncms/types';
+import { AppCollection, Field, Relation } from '@cairncms/types';
 import { createTestingPinia } from '@pinia/testing';
 import { flushPromises } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { computed, ref } from 'vue';
 
+import { useFieldsStore } from '@/stores/fields';
+import { useRelationsStore } from '@/stores/relations';
 import { useItem } from './use-item';
 
 vi.mock('@/utils/notify', () => ({
@@ -344,5 +346,151 @@ describe('empty singleton state', () => {
 
 		expect(apiPatchSpy).toHaveBeenCalled();
 		expect(isNewOrEmptySingleton.value).toBe(false);
+	});
+});
+
+function fld(collection: string, name: string, primary = false): Field {
+	return {
+		collection,
+		field: name,
+		name,
+		type: primary ? 'integer' : 'string',
+		schema: primary
+			? {
+					name,
+					table: collection,
+					data_type: 'integer',
+					default_value: null,
+					max_length: null,
+					numeric_precision: null,
+					numeric_scale: null,
+					is_nullable: false,
+					is_unique: true,
+					is_primary_key: true,
+					is_generated: false,
+					has_auto_increment: true,
+					foreign_key_table: null,
+					foreign_key_column: null,
+			  }
+			: null,
+		meta: null,
+		children: null,
+	};
+}
+
+function rel(
+	collection: string,
+	field: string,
+	related: string,
+	meta: Partial<NonNullable<Relation['meta']>>
+): Relation {
+	return {
+		collection,
+		field,
+		related_collection: related,
+		schema: null,
+		meta: {
+			id: 0,
+			many_collection: collection,
+			many_field: field,
+			one_collection: related,
+			one_field: null,
+			one_collection_field: null,
+			one_allowed_collections: null,
+			one_deselect_action: 'nullify',
+			junction_field: null,
+			sort_field: null,
+			...meta,
+		},
+	};
+}
+
+function mockUseCollection(info: AppCollection, primaryKeyField: Field): void {
+	vi.mocked(useCollection).mockReturnValue({
+		info: computed(() => info),
+		fields: computed(() => useFieldsStore().fields),
+		defaults: computed(() => ({})),
+		primaryKeyField: computed(() => primaryKeyField),
+		userCreatedField: computed(() => null),
+		sortField: computed(() => null),
+		isSingleton: computed(() => info.meta?.singleton === true),
+		accountabilityScope: computed(() => 'all'),
+	});
+}
+
+describe('Strips unbound parent links on save', () => {
+	const articlesPrimaryKeyField = fld('articles', 'id', true);
+
+	const articlesCollection = {
+		collection: 'articles',
+		name: 'articles',
+		meta: { archive_field: null, singleton: false },
+		schema: {},
+	} as AppCollection;
+
+	function seedSchema() {
+		useFieldsStore().fields = [
+			articlesPrimaryKeyField,
+			fld('articles', 'sections'),
+			fld('sections', 'id', true),
+			fld('sections', 'article_id'),
+		];
+
+		useRelationsStore().relations = [
+			rel('sections', 'article_id', 'articles', { one_field: 'sections', many_field: 'article_id' }),
+		];
+
+		mockUseCollection(articlesCollection, articlesPrimaryKeyField);
+	}
+
+	test('drops the generated reverse marker from a new-parent create payload', async () => {
+		vi.spyOn(api, 'get').mockResolvedValue({ data: { data: {} } });
+		const apiPostSpy = vi.spyOn(api, 'post').mockResolvedValue({ data: { data: { id: 1 } } });
+		seedSchema();
+
+		const { save, edits } = useItem(ref('articles'), ref('+'));
+		edits.value = { sections: { create: [{ article_id: '+', title: 'Intro' }] } };
+
+		await save();
+		await flushPromises();
+
+		const body = apiPostSpy.mock.lastCall![1] as any;
+		expect(body.sections.create[0]).toEqual({ title: 'Intro' });
+	});
+
+	test('preserves an authored marker under a bound parent on update', async () => {
+		vi.spyOn(api, 'get').mockResolvedValue({ data: { data: { id: 7 } } });
+		const apiPatchSpy = vi.spyOn(api, 'patch').mockResolvedValue({ data: { data: { id: 7 } } });
+		seedSchema();
+
+		const { save, edits } = useItem(ref('articles'), ref(7));
+		edits.value = { sections: { update: [{ id: 9, article_id: '+', title: 'Changed' }] } };
+
+		await save();
+		await flushPromises();
+
+		const body = apiPatchSpy.mock.lastCall![1] as any;
+		expect(body.sections.update[0]).toEqual({ id: 9, article_id: '+', title: 'Changed' });
+	});
+
+	test('drops the reverse marker from an empty-singleton patch payload', async () => {
+		vi.spyOn(api, 'get').mockResolvedValue({ data: { data: { id: null } } });
+		const apiPatchSpy = vi.spyOn(api, 'patch').mockResolvedValue({ data: { data: { id: null } } });
+		seedSchema();
+
+		mockUseCollection(
+			{ ...articlesCollection, meta: { archive_field: null, singleton: true } } as AppCollection,
+			articlesPrimaryKeyField
+		);
+
+		const { save, edits } = useItem(ref('articles'), ref(null));
+		await flushPromises();
+		edits.value = { sections: { create: [{ article_id: '+', title: 'Intro' }] } };
+
+		await save();
+		await flushPromises();
+
+		const body = apiPatchSpy.mock.lastCall![1] as any;
+		expect(body.sections.create[0]).toEqual({ title: 'Intro' });
 	});
 });

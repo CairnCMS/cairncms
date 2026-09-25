@@ -3,8 +3,66 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
+import type { Field, Relation } from '@cairncms/types';
 import { useFieldsStore } from '@/stores/fields';
+import { useRelationsStore } from '@/stores/relations';
 import PanelList from './panel-list.vue';
+
+function fld(collection: string, name: string, primary = false): Field {
+	return {
+		collection,
+		field: name,
+		name,
+		type: primary ? 'integer' : 'string',
+		schema: primary
+			? {
+					name,
+					table: collection,
+					data_type: 'integer',
+					default_value: null,
+					max_length: null,
+					numeric_precision: null,
+					numeric_scale: null,
+					is_nullable: false,
+					is_unique: true,
+					is_primary_key: true,
+					is_generated: false,
+					has_auto_increment: true,
+					foreign_key_table: null,
+					foreign_key_column: null,
+			  }
+			: null,
+		meta: null,
+		children: null,
+	};
+}
+
+function rel(
+	collection: string,
+	field: string,
+	related: string,
+	meta: Partial<NonNullable<Relation['meta']>>
+): Relation {
+	return {
+		collection,
+		field,
+		related_collection: related,
+		schema: null,
+		meta: {
+			id: 0,
+			many_collection: collection,
+			many_field: field,
+			one_collection: related,
+			one_field: null,
+			one_collection_field: null,
+			one_allowed_collections: null,
+			one_deselect_action: 'nullify',
+			junction_field: null,
+			sort_field: null,
+			...meta,
+		},
+	};
+}
 
 const apiPatch = vi.fn((_path: string, _body?: unknown) => Promise.resolve({}));
 
@@ -103,5 +161,63 @@ describe('list panel row editing', () => {
 		await flushPromises();
 
 		expect(apiPatch).toHaveBeenCalledWith('/items/articles/5', { title: 'Renamed' });
+	});
+});
+
+describe('list panel strips unbound parent links', () => {
+	function seedSchema() {
+		const fieldsStore = useFieldsStore();
+		const relationsStore = useRelationsStore();
+
+		fieldsStore.fields = [
+			fld('articles', 'id', true),
+			fld('articles', 'sections'),
+			fld('sections', 'id', true),
+			fld('sections', 'article_id'),
+			fld('sections', 'notes'),
+			fld('notes', 'id', true),
+			fld('notes', 'section_id'),
+		];
+
+		relationsStore.relations = [
+			rel('sections', 'article_id', 'articles', { one_field: 'sections', many_field: 'article_id' }),
+			rel('notes', 'section_id', 'sections', { one_field: 'notes', many_field: 'section_id' }),
+		];
+	}
+
+	function mountPanel(data: Record<string, any>[]) {
+		const pinia = createTestingPinia({ createSpy: vi.fn, stubActions: false });
+		setActivePinia(pinia);
+		seedSchema();
+
+		return mount(PanelList, {
+			props: { collection: 'articles', dashboard: 'dash-1', linkToItem: true, data },
+			global: {
+				plugins: [pinia],
+				stubs: {
+					'v-list': passthrough,
+					'v-list-item': VListItem,
+					'render-template': { template: '<div />' },
+					'drawer-item': DrawerItemStub,
+				},
+			},
+		});
+	}
+
+	it('removes a generated reverse marker under a new nested parent from the patch body', async () => {
+		const wrapper = mountPanel([{ id: 5, title: 'Five' }]);
+		await flushPromises();
+
+		await wrapper.find('.v-list-item-stub').trigger('click');
+
+		wrapper.findComponent({ name: 'DrawerItemStub' }).vm.$emit('input', {
+			id: 5,
+			sections: { create: [{ title: 'S', notes: { create: [{ section_id: '+', body: 'N' }] } }] },
+		});
+
+		await flushPromises();
+
+		const body = apiPatch.mock.calls.at(-1)![1] as any;
+		expect(body.sections.create[0].notes.create[0]).toEqual({ body: 'N' });
 	});
 });

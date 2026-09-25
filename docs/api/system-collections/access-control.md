@@ -165,11 +165,11 @@ Permissions on system collections work the same way as permissions on user colle
 
 ### Check permissions for an item
 
-Use `GET /permissions/me/<collection>/<key>` to check whether the current user can update, delete, or share a stored item. Apps can use the result to show or disable controls. The SDK provides the same result through `readItemPermissions(collection, key?)`.
+Use `GET /permissions/me/<collection>/<key>` to check whether the current user can update, delete, or share an item. Your app can use the result to enable or disable buttons and fields. In the SDK, use `readItemPermissions(collection, key?)`.
 
-CairnCMS evaluates permission rules against stored data and rechecks them on every mutation. A successful check does not guarantee that a later request will succeed.
+CairnCMS checks the item's saved values. It checks permissions again when you submit an update, delete, or share request. A successful check does not guarantee that a later request will succeed.
 
-These routes require an authenticated user. Requests made with the Public role or a share link receive `401`.
+These routes require an authenticated user. Anonymous requests and requests using a share link receive `401`.
 
 ```http
 GET /permissions/me/articles/42
@@ -190,25 +190,28 @@ The response contains an `ItemPermissions` object.
 - **`update.access`**, **`delete.access`**, and **`share.access`** show whether the user can perform each action on the item.
 - **`update.fields`** lists writable fields. `["*"]` allows all fields that support updates. A list of names allows only those fields. `[]` allows no fields. `null` means update is denied.
 
-For a singleton, which holds one item, use `GET /permissions/me/<collection>` without a key. This requires an administrator or a user with update, delete, or share permission on that collection. An empty singleton denies all three actions, and the admin app uses create permission for its first save. Other collections return `400` without a key.
+For a singleton collection, which holds at most one item, use `GET /permissions/me/<collection>` without a key. You must be an administrator or have update, delete, or share permission on the collection. An empty singleton returns `false` for all three actions. Its first save requires create permission.
 
-With a key, missing items, unknown collections, invalid keys, and items for which all three actions are denied return the same result. Every `access` value is `false` and `update.fields` is `null`. This conceals whether the item exists.
+Other collections return `400` without a key. Non-admin users with none of these collection permissions also receive `400` without a key, even for singletons or unknown collections.
 
-For non-admin users without any of these collection permissions, omitting the key returns `400`, including for singletons. Neither response reveals whether the collection exists.
+With a key, the response does not distinguish a missing item from one the user cannot update, delete, or share. Both return `false` for every `access` value and `null` for `update.fields`. Unknown collections and invalid keys return the same result.
 
 Failures other than permission denials return the usual API error response.
 
-Checks can trigger query hooks, read hooks, and flows even without read permission. Events keep their usual names for user and system collections, and their number varies by request.
+These checks can trigger query hooks, read hooks, and flows even if the user lacks read permission. User and system collections keep their usual event names. The number of events can vary by request.
 
 ### Updating related items
 
-Related-item updates and imports use primary keys to select existing records. Hooks and permission validation receive the update fields without the key. Update hooks receive record IDs in `meta.keys`. Creates can still include a primary key.
+Include the primary key when updating a related item or importing changes to an existing record. The API uses the key to select the record and leaves it out of the update data passed to hooks and permission validation. Update hooks receive record IDs in `meta.keys`. You can still supply a primary key when creating a record.
 
-The parent link follows these rules.
+The field that links a related item to its parent has these rules.
 
-- An omitted link field stays omitted when the item is already linked to its parent.
-- An explicitly supplied matching link or a move to another parent requires permission to write the link field.
-- An already-linked item submitted with only its key is not updated and emits no update event. Supplying unchanged field values still counts as an update.
+- If the item is already linked to the parent, leaving out the link field keeps it out of the update data. The stored link stays unchanged.
+- Supplying the link field requires permission to update it, even if its value is unchanged. Moving an item to another parent also requires this permission.
+- A supplied link must match the parent being saved. A different parent ID or `null` returns `INVALID_PAYLOAD`.
+- When creating a parent and its related items together, leave out the link field. CairnCMS sets it after creating the parent.
+
+Submitting only the key of an item already linked to the parent does not update that item or emit its update event. Submitting field values still counts as an update, even if the values are unchanged.
 
 ## Shares (`/shares`)
 

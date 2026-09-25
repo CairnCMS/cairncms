@@ -15,6 +15,7 @@ const adminToken = common.USER.ADMIN.TOKEN;
 const metaToken = `Fr2bMeta_${runId}`;
 const reparentToken = `Fr2bReparent_${runId}`;
 const noReadToken = `Fr2bNoRead_${runId}`;
+const nestedCreateToken = `Fr2bNestedCreate_${runId}`;
 
 describe('Nested write selector and link separation', () => {
 	const cleanups: Record<string, (() => Promise<void>)[]> = {};
@@ -35,6 +36,7 @@ describe('Nested write selector and link separation', () => {
 			noReadParent: string;
 			noReadChild: string;
 			m2oParent: string;
+			o2mSelectableChild: string;
 		}
 	>;
 
@@ -242,6 +244,13 @@ describe('Nested write selector and link separation', () => {
 				{ parent_id: { _submitted: true } }
 			);
 
+			const nestedCreateRole = await createRole(vendor, `FR2b Nested Create ${runId}`);
+			await createUser(vendor, nestedCreateRole, nestedCreateToken, `fr2b-nestedcreate-${runId}-${vendor}@tests.com`);
+			await grant(vendor, nestedCreateRole, parentCollection, 'read', ['*']);
+			await grant(vendor, nestedCreateRole, parentCollection, 'create', ['*']);
+			await grant(vendor, nestedCreateRole, childCollection, 'create', ['name', 'parent_id']);
+			await grant(vendor, nestedCreateRole, childCollection, 'update', ['name', 'parent_id']);
+
 			const author = await request(getUrl(vendor))
 				.post(`/items/${authorCollection}`)
 				.send({ name: 'Original author' })
@@ -256,6 +265,7 @@ describe('Nested write selector and link separation', () => {
 			const denyReparent = await seedParent(vendor, 'Deny reparent target', null);
 			const foreign = await seedParent(vendor, 'Foreign parent', 'Foreign child');
 			const noRead = await seedParent(vendor, 'No-read parent', 'No-read child');
+			const o2mSelectable = await seedParent(vendor, 'O2M selection source', 'Existing selectable child');
 
 			const m2oParent = await request(getUrl(vendor))
 				.post(`/items/${parentCollection}`)
@@ -278,6 +288,7 @@ describe('Nested write selector and link separation', () => {
 				noReadParent: noRead.id,
 				noReadChild: noRead.children[0].id,
 				m2oParent: m2oParent.body.data.id,
+				o2mSelectableChild: o2mSelectable.children[0].id,
 			};
 		}
 	}, 300000);
@@ -450,6 +461,73 @@ describe('Nested write selector and link separation', () => {
 		expect(created.note).toBe('Preset note');
 	});
 
+	it.each(vendors)(
+		'%s creates a new parent and nested o2m children when the reverse field is omitted',
+		async (vendor) => {
+			const response = await request(getUrl(vendor))
+				.post(`/items/${parentCollection}`)
+				.send({
+					name: 'Omitted-reverse parent',
+					children: { create: [{ name: 'Omitted child A' }, { name: 'Omitted child B' }] },
+				})
+				.set('Authorization', `Bearer ${nestedCreateToken}`);
+
+			expect(response.statusCode).toBe(200);
+
+			const parentId = response.body.data.id;
+
+			const readBack = await request(getUrl(vendor))
+				.get(`/items/${parentCollection}/${parentId}`)
+				.query({ fields: 'name,children.name,children.parent_id' })
+				.set('Authorization', `Bearer ${adminToken}`);
+
+			expect(readBack.statusCode).toBe(200);
+			expect(readBack.body.data.name).toBe('Omitted-reverse parent');
+
+			const children = readBack.body.data.children;
+			expect(children.map((child: any) => child.name).sort()).toEqual(['Omitted child A', 'Omitted child B']);
+
+			for (const child of children) {
+				expect(child.parent_id).toBe(parentId);
+			}
+		}
+	);
+
+	it.each(vendors)(
+		'%s links an existing o2m child to a new parent when the reverse field is omitted',
+		async (vendor) => {
+			const { o2mSelectableChild } = ids[vendor]!;
+
+			const response = await request(getUrl(vendor))
+				.post(`/items/${parentCollection}`)
+				.send({ name: 'O2M selection parent', children: { update: [{ id: o2mSelectableChild }] } })
+				.set('Authorization', `Bearer ${nestedCreateToken}`);
+
+			expect(response.statusCode).toBe(200);
+
+			const parentId = response.body.data.id;
+
+			const readBack = await request(getUrl(vendor))
+				.get(`/items/${parentCollection}/${parentId}`)
+				.query({ fields: 'children.id,children.name,children.parent_id' })
+				.set('Authorization', `Bearer ${adminToken}`);
+
+			expect(readBack.statusCode).toBe(200);
+			expect(readBack.body.data.children).toHaveLength(1);
+			expect(readBack.body.data.children[0].id).toBe(o2mSelectableChild);
+			expect(readBack.body.data.children[0].name).toBe('Existing selectable child');
+			expect(readBack.body.data.children[0].parent_id).toBe(parentId);
+
+			const duplicates = await request(getUrl(vendor))
+				.get(`/items/${childCollection}`)
+				.query({ filter: JSON.stringify({ name: { _eq: 'Existing selectable child' } }) })
+				.set('Authorization', `Bearer ${adminToken}`);
+
+			expect(duplicates.statusCode).toBe(200);
+			expect(duplicates.body.data).toHaveLength(1);
+		}
+	);
+
 	it.each(vendors)('%s rejects a direct child create that omits the required association', async (vendor) => {
 		const response = await request(getUrl(vendor))
 			.post(`/items/${childCollection}`)
@@ -496,7 +574,7 @@ describe('Nested junction (m2m) write selector and link separation', () => {
 	const junctionToken = `Fr2bJunction_${runId}`;
 
 	const cleanups: (() => Promise<void>)[] = [];
-	const ids = {} as Record<string, { parent: string; junction: string; tag: string }>;
+	const ids = {} as Record<string, { parent: string; junction: string; tag: string; existingTag: string }>;
 
 	function track(fn: () => Promise<void>) {
 		cleanups.push(fn);
@@ -590,9 +668,12 @@ describe('Nested junction (m2m) write selector and link separation', () => {
 			for (const [collection, action, fields] of [
 				[m2mParent, 'read', ['*']],
 				[m2mParent, 'update', ['*']],
-				// The parent link must not be rewritten.
+				[m2mParent, 'create', ['*']],
+				// The parent link must not be rewritten on update, but create authorizes the injected reverse field.
 				[junctionCollection, 'update', ['label', tagField]],
+				[junctionCollection, 'create', ['label', tagField, reverseField]],
 				[tagCollection, 'update', ['name']],
+				[tagCollection, 'create', ['name']],
 			] as const) {
 				const permission = await request(getUrl(vendor))
 					.post('/permissions')
@@ -610,10 +691,18 @@ describe('Nested junction (m2m) write selector and link separation', () => {
 
 			expect(created.statusCode).toBe(200);
 
+			const existingTag = await request(getUrl(vendor))
+				.post(`/items/${tagCollection}`)
+				.send({ name: 'Existing selectable tag' })
+				.set('Authorization', `Bearer ${adminToken}`);
+
+			expect(existingTag.statusCode).toBe(200);
+
 			ids[vendor] = {
 				parent: created.body.data.id,
 				junction: created.body.data.tags[0].id,
 				tag: created.body.data.tags[0][tagField],
+				existingTag: existingTag.body.data.id,
 			};
 		}
 	}, 300000);
@@ -662,6 +751,67 @@ describe('Nested junction (m2m) write selector and link separation', () => {
 		expect(readBack.statusCode).toBe(200);
 		expect(readBack.body.data.name).toBe('Renamed tag');
 	});
+
+	it.each(vendors)('%s creates a new m2m parent and junctions when the reverse field is omitted', async (vendor) => {
+		const response = await request(getUrl(vendor))
+			.post(`/items/${m2mParent}`)
+			.send({
+				name: 'Omitted-reverse m2m parent',
+				tags: { create: [{ label: 'Omitted junction', [tagField]: { name: 'Omitted tag' } }] },
+			})
+			.set('Authorization', `Bearer ${junctionToken}`);
+
+		expect(response.statusCode).toBe(200);
+
+		const parentId = response.body.data.id;
+
+		const readBack = await request(getUrl(vendor))
+			.get(`/items/${m2mParent}/${parentId}`)
+			.query({ fields: `name,tags.label,tags.${reverseField},tags.${tagField}.name` })
+			.set('Authorization', `Bearer ${adminToken}`);
+
+		expect(readBack.statusCode).toBe(200);
+		expect(readBack.body.data.name).toBe('Omitted-reverse m2m parent');
+		expect(readBack.body.data.tags).toHaveLength(1);
+		expect(readBack.body.data.tags[0].label).toBe('Omitted junction');
+		expect(readBack.body.data.tags[0][reverseField]).toBe(parentId);
+		expect(readBack.body.data.tags[0][tagField].name).toBe('Omitted tag');
+	});
+
+	it.each(vendors)('%s links an existing tag to a new m2m parent when the reverse field is omitted', async (vendor) => {
+		const { existingTag } = ids[vendor]!;
+
+		const response = await request(getUrl(vendor))
+			.post(`/items/${m2mParent}`)
+			.send({
+				name: 'M2M selection parent',
+				tags: { create: [{ label: 'Selection junction', [tagField]: { id: existingTag } }] },
+			})
+			.set('Authorization', `Bearer ${junctionToken}`);
+
+		expect(response.statusCode).toBe(200);
+
+		const parentId = response.body.data.id;
+
+		const readBack = await request(getUrl(vendor))
+			.get(`/items/${m2mParent}/${parentId}`)
+			.query({ fields: `tags.${reverseField},tags.${tagField}.id,tags.${tagField}.name` })
+			.set('Authorization', `Bearer ${adminToken}`);
+
+		expect(readBack.statusCode).toBe(200);
+		expect(readBack.body.data.tags).toHaveLength(1);
+		expect(readBack.body.data.tags[0][reverseField]).toBe(parentId);
+		expect(readBack.body.data.tags[0][tagField].id).toBe(existingTag);
+		expect(readBack.body.data.tags[0][tagField].name).toBe('Existing selectable tag');
+
+		const duplicates = await request(getUrl(vendor))
+			.get(`/items/${tagCollection}`)
+			.query({ filter: JSON.stringify({ name: { _eq: 'Existing selectable tag' } }) })
+			.set('Authorization', `Bearer ${adminToken}`);
+
+		expect(duplicates.statusCode).toBe(200);
+		expect(duplicates.body.data).toHaveLength(1);
+	});
 });
 
 describe('Nested any (m2a) write selector and link separation', () => {
@@ -672,9 +822,10 @@ describe('Nested any (m2a) write selector and link separation', () => {
 	const m2aToken = `Fr2bM2aAllow_${runId}`;
 	const denyToken = `Fr2bM2aDeny_${runId}`;
 	const discDenyToken = `Fr2bM2aDiscDeny_${runId}`;
+	const m2aCreateToken = `Fr2bM2aCreate_${runId}`;
 
 	const cleanups: (() => Promise<void>)[] = [];
-	const ids = {} as Record<string, { parent: string; block: string; junction: string }>;
+	const ids = {} as Record<string, { parent: string; block: string; junction: string; existingBlock: string }>;
 
 	function track(fn: () => Promise<void>) {
 		cleanups.push(fn);
@@ -778,6 +929,59 @@ describe('Nested any (m2a) write selector and link separation', () => {
 			await makeRoleUser(vendor, `FR2b M2A Deny ${runId}`, denyToken, ['item', 'collection'], ['collection']);
 			await makeRoleUser(vendor, `FR2b M2A Disc Deny ${runId}`, discDenyToken, ['item'], ['name', 'collection']);
 
+			const m2aCreateRoleResp = await request(getUrl(vendor))
+				.post('/roles')
+				.send({ name: `FR2b M2A Create ${runId}`, admin_access: false, app_access: true })
+				.set('Authorization', `Bearer ${adminToken}`);
+
+			const m2aCreateRoleId = m2aCreateRoleResp.body?.data?.id as string | undefined;
+
+			if (m2aCreateRoleId) {
+				track(async () => {
+					await request(getUrl(vendor))
+						.delete(`/roles/${m2aCreateRoleId}`)
+						.set('Authorization', `Bearer ${adminToken}`);
+				});
+			}
+
+			expect(m2aCreateRoleResp.statusCode).toBe(200);
+
+			const m2aCreateUserResp = await request(getUrl(vendor))
+				.post('/users')
+				.send({
+					email: `${m2aCreateToken}-${vendor}@tests.com`,
+					password: 'Fr2bPassword',
+					token: m2aCreateToken,
+					role: m2aCreateRoleId,
+					status: 'active',
+				})
+				.set('Authorization', `Bearer ${adminToken}`);
+
+			const m2aCreateUserId = m2aCreateUserResp.body?.data?.id as string | undefined;
+
+			if (m2aCreateUserId) {
+				track(async () => {
+					await request(getUrl(vendor))
+						.delete(`/users/${m2aCreateUserId}`)
+						.set('Authorization', `Bearer ${adminToken}`);
+				});
+			}
+
+			expect(m2aCreateUserResp.statusCode).toBe(200);
+
+			for (const [collection, action, fields] of [
+				[m2aParent, 'read', ['*']],
+				[m2aParent, 'create', ['*']],
+				[junctionM2A, 'create', ['collection', 'item', reverseFieldM2A]],
+			] as const) {
+				const permission = await request(getUrl(vendor))
+					.post('/permissions')
+					.send({ role: m2aCreateRoleId, collection, action, fields })
+					.set('Authorization', `Bearer ${adminToken}`);
+
+				expect(permission.statusCode).toBe(200);
+			}
+
 			const parent = await request(getUrl(vendor))
 				.post(`/items/${m2aParent}`)
 				.send({ name: 'M2A parent' })
@@ -801,7 +1005,19 @@ describe('Nested any (m2a) write selector and link separation', () => {
 
 			expect(junction.statusCode).toBe(200);
 
-			ids[vendor] = { parent: parentId, block: blockId, junction: junction.body.data.id };
+			const existingBlock = await request(getUrl(vendor))
+				.post(`/items/${blockCollection}`)
+				.send({ name: 'Existing selectable block', collection: 'own-existing' })
+				.set('Authorization', `Bearer ${adminToken}`);
+
+			expect(existingBlock.statusCode).toBe(200);
+
+			ids[vendor] = {
+				parent: parentId,
+				block: blockId,
+				junction: junction.body.data.id,
+				existingBlock: existingBlock.body.data.id,
+			};
 		}
 	}, 300000);
 
@@ -912,6 +1128,44 @@ describe('Nested any (m2a) write selector and link separation', () => {
 
 			expect(await adminRead(vendor, blockCollection, block, 'name,collection')).toEqual(blockBefore);
 			expect(await adminRead(vendor, junctionM2A, junction, `collection,${reverseFieldM2A}`)).toEqual(junctionBefore);
+		}
+	);
+
+	it.each(vendors)(
+		'%s links an existing m2a item to a new parent when the reverse field is omitted',
+		async (vendor) => {
+			const { existingBlock } = ids[vendor]!;
+
+			const response = await request(getUrl(vendor))
+				.post(`/items/${m2aParent}`)
+				.send({
+					name: 'M2A selection parent',
+					blocks: { create: [{ collection: blockCollection, item: { id: existingBlock } }] },
+				})
+				.set('Authorization', `Bearer ${m2aCreateToken}`);
+
+			expect(response.statusCode).toBe(200);
+
+			const parentId = response.body.data.id;
+
+			const readBack = await request(getUrl(vendor))
+				.get(`/items/${m2aParent}/${parentId}`)
+				.query({ fields: `blocks.${reverseFieldM2A},blocks.collection,blocks.item` })
+				.set('Authorization', `Bearer ${adminToken}`);
+
+			expect(readBack.statusCode).toBe(200);
+			expect(readBack.body.data.blocks).toHaveLength(1);
+			expect(readBack.body.data.blocks[0][reverseFieldM2A]).toBe(parentId);
+			expect(readBack.body.data.blocks[0].collection).toBe(blockCollection);
+			expect(String(readBack.body.data.blocks[0].item)).toBe(String(existingBlock));
+
+			const duplicates = await request(getUrl(vendor))
+				.get(`/items/${blockCollection}`)
+				.query({ filter: JSON.stringify({ name: { _eq: 'Existing selectable block' } }) })
+				.set('Authorization', `Bearer ${adminToken}`);
+
+			expect(duplicates.statusCode).toBe(200);
+			expect(duplicates.body.data).toHaveLength(1);
 		}
 	);
 });

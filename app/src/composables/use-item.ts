@@ -5,6 +5,7 @@ import { useFieldsStore } from '@/stores/fields';
 import { useRelationsStore } from '@/stores/relations';
 import { APIError } from '@/types/error';
 import { notify } from '@/utils/notify';
+import { stripUnboundParentLinks } from '@/utils/strip-unbound-parent-links';
 import { translate } from '@/utils/translate-object-values';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { validateItem } from '@/utils/validate-item';
@@ -159,13 +160,19 @@ export function useItem(
 			let response;
 
 			if (isNew.value === true) {
-				response = await api.post(getEndpoint(collection.value), edits.value);
+				response = await api.post(
+					getEndpoint(collection.value),
+					stripUnboundParentLinks(collection.value, edits.value, false)
+				);
 
 				notify({
 					title: i18n.global.t('item_create_success', isBatch.value ? 2 : 1),
 				});
 			} else {
-				response = await api.patch(itemEndpoint.value, edits.value);
+				response = await api.patch(
+					itemEndpoint.value,
+					stripUnboundParentLinks(collection.value, edits.value, !isNewOrEmptySingleton.value)
+				);
 
 				notify({
 					title: i18n.global.t('item_update_success', isBatch.value ? 2 : 1),
@@ -280,7 +287,10 @@ export function useItem(
 		}
 
 		try {
-			const response = await api.post(getEndpoint(collection.value), newItem);
+			const response = await api.post(
+				getEndpoint(collection.value),
+				stripUnboundParentLinks(collection.value, newItem, false)
+			);
 
 			notify({
 				title: i18n.global.t('item_create_success', 1),

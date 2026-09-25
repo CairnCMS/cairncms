@@ -79,6 +79,7 @@ import { useI18n } from 'vue-i18n';
 import { computed, ref } from 'vue';
 import { omit } from 'lodash';
 import { getRootPath } from '@/utils/get-root-path';
+import { stripUnboundParentLinks } from '@/utils/strip-unbound-parent-links';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { Share } from '@cairncms/types';
 import { useClipboard } from '@/composables/use-clipboard';
@@ -127,9 +128,19 @@ async function input(data: any) {
 
 	try {
 		if (shareToEdit.value === '+') {
-			await api.post('/shares', { ...data, collection: props.collection, item: props.primaryKey });
+			await api.post(
+				'/shares',
+				stripUnboundParentLinks(
+					'directus_shares',
+					{ ...data, collection: props.collection, item: props.primaryKey },
+					false
+				)
+			);
 		} else {
-			await api.patch(`/shares/${shareToEdit.value}`, omit(data, sharePrimaryKeyField.value));
+			await api.patch(
+				`/shares/${shareToEdit.value}`,
+				stripUnboundParentLinks('directus_shares', omit(data, sharePrimaryKeyField.value), true)
+			);
 		}
 
 		await refresh();
