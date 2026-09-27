@@ -1,0 +1,72 @@
+name: Blackbox migration baseline
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/blackbox-baseline.yml
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    name: Frozen baseline (${{ matrix.vendor }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        vendor: [sqlite3, postgres, postgres10, mysql, mysql5, maria]
+    env:
+      CI: true
+      TEST_DB: ${{ matrix.vendor }}
+      TEST_SAVE_LOGS: info
+      NODE_OPTIONS: --max_old_space_size=6144
+      EVIDENCE: ${{ runner.temp }}/blackbox-baseline
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 0e4a48991e0389908b0047fea264ed90ff672765
+      - uses: ./.github/actions/prepare
+      - name: Record frozen inputs and build
+        run: |
+          mkdir -p "$EVIDENCE"
+          git rev-parse HEAD > "$EVIDENCE/source.txt"
+          git rev-parse 'HEAD^{tree}' >> "$EVIDENCE/source.txt"
+          test "$(git rev-parse HEAD)" = 0e4a48991e0389908b0047fea264ed90ff672765
+          git diff --exit-code
+          node --version > "$EVIDENCE/versions.txt"
+          pnpm --version >> "$EVIDENCE/versions.txt"
+          sha256sum pnpm-lock.yaml api/dist/server.js api/dist/extensions/confined/runtime/* > "$EVIDENCE/build-sha256.txt"
+          TEST_DB="$TEST_DB" pnpm --filter tests-blackbox exec jest --listTests --runInBand --json > "$EVIDENCE/files.json"
+      - name: Start SQLite services
+        if: matrix.vendor == 'sqlite3'
+        run: docker compose -f tests/blackbox/docker-compose.yml up auth-saml redis s3proxy s3proxy-init -d --quiet-pull --wait
+      - name: Start server-vendor services
+        if: matrix.vendor != 'sqlite3'
+        run: docker compose -f tests/blackbox/docker-compose.yml up "$TEST_DB" auth-saml redis redis7 redis60 s3proxy s3proxy-init -d --quiet-pull --wait
+      - name: Record service identities
+        run: |
+          docker compose -f tests/blackbox/docker-compose.yml ps --format json > "$EVIDENCE/services.jsonl"
+          docker image ls --digests --no-trunc > "$EVIDENCE/images.txt"
+      - name: Run complete frozen suite
+        run: |
+          if [ "$TEST_DB" = sqlite3 ]; then
+            pnpm test:blackbox --runInBand --json --outputFile="$EVIDENCE/results.json"
+          else
+            pnpm test:blackbox --maxWorkers=2 --json --outputFile="$EVIDENCE/results.json"
+          fi
+      - name: Retain service logs
+        if: always()
+        run: |
+          mkdir -p "$EVIDENCE"
+          docker compose -f tests/blackbox/docker-compose.yml logs --no-color > "$EVIDENCE/services.log" 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: blackbox-baseline-${{ matrix.vendor }}
+          path: |
+            ${{ runner.temp }}/blackbox-baseline/
+            tests/blackbox/server-log-*
+          retention-days: 30
