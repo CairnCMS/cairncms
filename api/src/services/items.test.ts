@@ -1448,6 +1448,117 @@ describe('Integration Tests', () => {
 			expect(updateFilterFor('posts')).toBeUndefined();
 		});
 
+		it('rejects a key-only no-op when a read hook substitutes a different parent identity', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+			tracker.on.select('posts').response([{ id: postId, uploaded_by: authorId }]);
+
+			const accountability: Accountability = {
+				role: 'editor',
+				admin: false,
+				permissions: [
+					{
+						id: 1,
+						role: 'editor',
+						collection: 'authors',
+						action: 'update',
+						permissions: {},
+						validation: {},
+						presets: {},
+						fields: ['*'],
+					},
+					{
+						id: 2,
+						role: 'editor',
+						collection: 'authors',
+						action: 'read',
+						permissions: {},
+						validation: {},
+						presets: {},
+						fields: ['*'],
+					},
+					{
+						id: 3,
+						role: 'editor',
+						collection: 'posts',
+						action: 'read',
+						permissions: {},
+						validation: {},
+						presets: {},
+						fields: ['id'],
+					},
+				],
+			};
+
+			const substituteParent = (payload: any) =>
+				Array.isArray(payload)
+					? payload.map((row) => ({ ...row, id: otherAuthorId }))
+					: { ...payload, id: otherAuthorId };
+
+			emitter.onFilter('authors.items.read', substituteParent);
+
+			try {
+				const service = new ItemsService('authors', { knex: db, accountability, schema: userSchema });
+
+				await expect(
+					service.updateOne(authorId, { items: { update: [{ id: postId }] } }, { emitEvents: true })
+				).rejects.toThrow(ForbiddenException);
+
+				expect(updateActionFor('posts')).toBeUndefined();
+				expect(updateFilterFor('posts')).toBeUndefined();
+			} finally {
+				emitter.offFilter('authors.items.read', substituteParent);
+			}
+		});
+
+		it('allows a key-only no-op through the parent-relation route when the parent identity matches', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+			tracker.on.select('posts').response([{ id: postId, uploaded_by: authorId }]);
+
+			const accountability: Accountability = {
+				role: 'editor',
+				admin: false,
+				permissions: [
+					{
+						id: 1,
+						role: 'editor',
+						collection: 'authors',
+						action: 'update',
+						permissions: {},
+						validation: {},
+						presets: {},
+						fields: ['*'],
+					},
+					{
+						id: 2,
+						role: 'editor',
+						collection: 'authors',
+						action: 'read',
+						permissions: {},
+						validation: {},
+						presets: {},
+						fields: ['*'],
+					},
+					{
+						id: 3,
+						role: 'editor',
+						collection: 'posts',
+						action: 'read',
+						permissions: {},
+						validation: {},
+						presets: {},
+						fields: ['id'],
+					},
+				],
+			};
+
+			const service = new ItemsService('authors', { knex: db, accountability, schema: userSchema });
+
+			await service.updateOne(authorId, { items: { update: [{ id: postId }] } }, { emitEvents: true });
+
+			expect(updateActionFor('posts')).toBeUndefined();
+			expect(updateFilterFor('posts')).toBeUndefined();
+		});
+
 		it('emits a selector-free update event through the real import path', async () => {
 			tracker.on.select('authors').response([{ id: authorId }]);
 			tracker.on.update('authors').response([{ id: authorId }]);

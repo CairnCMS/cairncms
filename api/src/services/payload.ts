@@ -1006,6 +1006,8 @@ export class PayloadService {
 		const oneField = relation.meta?.one_field;
 
 		if (relation.related_collection && oneField) {
+			const parentPrimaryKeyField = this.schema.collections[relation.related_collection]!.primary;
+
 			const parentService = new ItemsService(relation.related_collection, {
 				accountability: this.accountability,
 				knex: this.knex,
@@ -1015,21 +1017,23 @@ export class PayloadService {
 			const parentRecord = await this.readNestedItem(
 				parentService,
 				resolvedParent,
-				[`${oneField}.${relatedPrimaryKeyField}`],
+				[parentPrimaryKeyField, `${oneField}.${relatedPrimaryKeyField}`],
 				'read',
 				{ [oneField]: { _filter: { [relatedPrimaryKeyField]: { _eq: childPk } } } }
 			);
 
-			const linkedChildren = parentRecord?.[oneField];
+			if (parentRecord && parentRecord[parentPrimaryKeyField] == resolvedParent) {
+				const linkedChildren = parentRecord[oneField];
 
-			if (
-				Array.isArray(linkedChildren) &&
-				linkedChildren.some((entry) => {
-					const entryKey = isObject(entry) ? (entry as Record<string, any>)[relatedPrimaryKeyField] : entry;
-					return isNil(entryKey) === false && entryKey == childPk;
-				})
-			) {
-				return;
+				if (
+					Array.isArray(linkedChildren) &&
+					linkedChildren.some((entry) => {
+						const entryKey = isObject(entry) ? (entry as Record<string, any>)[relatedPrimaryKeyField] : entry;
+						return isNil(entryKey) === false && entryKey == childPk;
+					})
+				) {
+					return;
+				}
 			}
 		}
 

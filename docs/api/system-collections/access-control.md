@@ -211,7 +211,7 @@ The field that links a related item to its parent has these rules.
 - A supplied link must match the parent being saved. A different parent ID or `null` returns `INVALID_PAYLOAD`.
 - When creating a parent and its related items together, leave out the link field. CairnCMS sets it after creating the parent.
 
-Submitting only the key of an item already linked to the parent does not update that item or emit its update event. The caller must still be authorized for that item: either permission to update it, or permission to read its link to the parent (its link field, or its presence in the parent's list of related items). A caller with neither is denied, so the response cannot reveal which items are linked. Submitting field values still counts as an update, even if the values are unchanged.
+Submitting only the key of an item already linked to the parent does not update that item or emit its update event. The caller must still be authorized for that item: either permission to update it, or permission to read its link to the parent (its link field, or its presence in the parent's list of related items). A caller with neither is denied, so the response cannot reveal which items are linked. These checks can read the related item or its parent and trigger query hooks, read hooks, and flows. Submitting field values still counts as an update, even if the values are unchanged.
 
 ## Shares (`/shares`)
 

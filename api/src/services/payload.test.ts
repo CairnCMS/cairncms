@@ -887,6 +887,29 @@ describe('Integration Tests', () => {
 				expect(spies.upsertMany).not.toHaveBeenCalled();
 			});
 
+			it('rejects an already-linked no-op when the parent relation names a different parent', async () => {
+				const spies = childSpies();
+
+				activeReadOneSpy = vi
+					.spyOn(ItemsService.prototype, 'readOne')
+					.mockRejectedValueOnce(new ForbiddenException())
+					.mockRejectedValueOnce(new ForbiddenException())
+					.mockResolvedValueOnce({ id: 999, posts: [{ id: 5 }] });
+
+				tracker.on.select('posts').response([{ author: 1 }]);
+
+				const service = new PayloadService('authors', {
+					knex: db,
+					schema: relSchema,
+					accountability: nonAdminAccountability,
+				});
+
+				await expect(service.processO2M({ posts: { update: [{ id: 5 }] } }, 1)).rejects.toThrow(ForbiddenException);
+
+				expect(spies.updateOne).not.toHaveBeenCalled();
+				expect(spies.upsertMany).not.toHaveBeenCalled();
+			});
+
 			it('retains an explicit reverse field that matches the parent without stripping it', async () => {
 				const spies = childSpies();
 				tracker.on.select('posts').response([{ author: 1 }]);
