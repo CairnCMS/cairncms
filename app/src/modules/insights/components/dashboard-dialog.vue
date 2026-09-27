@@ -10,10 +10,25 @@
 
 			<v-card-text>
 				<div class="fields">
-					<v-input v-model="values.name" class="full" autofocus :placeholder="t('dashboard_name')" />
-					<interface-select-icon :value="values.icon" @input="values.icon = $event" />
-					<interface-select-color width="half" :value="values.color" @input="values.color = $event" />
-					<v-input v-model="values.note" class="full" :placeholder="t('note')" />
+					<v-input
+						v-model="values.name"
+						class="full"
+						autofocus
+						:disabled="!fieldWritable('name')"
+						:placeholder="t('dashboard_name')"
+					/>
+					<interface-select-icon
+						:value="values.icon"
+						:disabled="!fieldWritable('icon')"
+						@input="values.icon = $event"
+					/>
+					<interface-select-color
+						width="half"
+						:value="values.color"
+						:disabled="!fieldWritable('color')"
+						@input="values.color = $event"
+					/>
+					<v-input v-model="values.note" class="full" :disabled="!fieldWritable('note')" :placeholder="t('note')" />
 				</div>
 			</v-card-text>
 
@@ -21,7 +36,7 @@
 				<v-button secondary @click="cancel">
 					{{ t('cancel') }}
 				</v-button>
-				<v-button :disabled="!values.name" :loading="saving" @click="save">
+				<v-button :disabled="!saveAllowed" :loading="saving" @click="save">
 					{{ t('save') }}
 				</v-button>
 			</v-card-actions>
@@ -31,12 +46,14 @@
 
 <script setup lang="ts">
 import api from '@/api';
+import { useItemUpdateGate } from '@/composables/use-item-permissions';
 import { router } from '@/router';
 import { useInsightsStore } from '@/stores/insights';
+import { usePermissionsStore } from '@/stores/permissions';
+import { useUserStore } from '@/stores/user';
 import { Dashboard } from '@/types/insights';
 import { unexpectedError } from '@/utils/unexpected-error';
-import { isEqual } from 'lodash';
-import { reactive, ref, watch } from 'vue';
+import { computed, onUnmounted, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 const props = defineProps<{
@@ -51,50 +68,131 @@ const emit = defineEmits<{
 const { t } = useI18n();
 
 const insightsStore = useInsightsStore();
+const permissionsStore = usePermissionsStore();
+const userStore = useUserStore();
+
+const collection = ref('directus_dashboards');
+const isNew = computed(() => !props.dashboard);
+const primaryKey = computed<string | number | null>(() => props.dashboard?.id ?? null);
+
+const { updateAllowed, writableFields: updateWritableFields } = useItemUpdateGate({
+	collection,
+	primaryKey,
+	enabled: computed(() => props.modelValue === true),
+	localReady: computed(() => props.modelValue === true),
+	itemSource: computed(() => props.dashboard),
+});
+
+const isAdmin = computed(() => userStore.currentUser?.role?.admin_access === true);
+
+const dialogFields = ['name', 'icon', 'color', 'note'];
+
+const writableFields = computed<string[] | null>(() => {
+	if (isAdmin.value) return ['*'];
+	if (isNew.value) return permissionsStore.getPermissionsForUser(collection.value, 'create')?.fields ?? null;
+	return updateWritableFields.value;
+});
+
+const createPresetName = computed<string | null>(() => {
+	if (isAdmin.value) return null;
+	const permission = permissionsStore.getPermissionsForUser(collection.value, 'create');
+	return (permission?.presets?.name as string | null) ?? null;
+});
+
+const saveAllowed = computed(() => {
+	if (props.modelValue !== true) return false;
+	if (saving.value) return false;
+
+	if (isNew.value) {
+		if (!isAdmin.value && !permissionsStore.getPermissionsForUser(collection.value, 'create')) return false;
+
+		const effectiveName = fieldWritable('name') ? values.name : createPresetName.value;
+		return !!effectiveName;
+	}
+
+	if (fieldWritable('name') && !values.name) return false;
+
+	return updateAllowed.value && dialogFields.some((field) => fieldWritable(field));
+});
+
+function fieldWritable(field: string): boolean {
+	const fields = writableFields.value;
+	if (!fields) return false;
+	return fields.includes('*') || fields.includes(field);
+}
+
+function resolvedName(): string | null {
+	if (props.dashboard) return props.dashboard.name ?? null;
+	return createPresetName.value;
+}
+
+function writablePayload(): Record<string, any> {
+	const fields = writableFields.value;
+	const all = !!fields && fields.includes('*');
+	const payload: Record<string, any> = {};
+
+	for (const key of Object.keys(values)) {
+		if (all || (fields && fields.includes(key))) payload[key] = values[key as keyof typeof values];
+	}
+
+	return payload;
+}
 
 const values = reactive({
-	name: props.dashboard?.name ?? null,
+	name: resolvedName(),
 	icon: props.dashboard?.icon ?? 'dashboard',
 	color: props.dashboard?.color ?? null,
 	note: props.dashboard?.note ?? null,
 });
 
-watch(
-	() => props.modelValue,
-	(newValue, oldValue) => {
-		if (isEqual(newValue, oldValue) === false) {
-			values.name = props.dashboard?.name ?? null;
-			values.icon = props.dashboard?.icon ?? 'dashboard';
-			values.color = props.dashboard?.color ?? null;
-			values.note = props.dashboard?.note ?? null;
-		}
-	}
-);
-
 const saving = ref(false);
 
+let sessionGeneration = 0;
+
+watch([() => props.modelValue, () => props.dashboard?.id], () => {
+	sessionGeneration++;
+	saving.value = false;
+	values.name = resolvedName();
+	values.icon = props.dashboard?.icon ?? 'dashboard';
+	values.color = props.dashboard?.color ?? null;
+	values.note = props.dashboard?.note ?? null;
+});
+
+onUnmounted(() => {
+	sessionGeneration++;
+});
+
 function cancel() {
+	sessionGeneration++;
+	saving.value = false;
 	emit('update:modelValue', false);
 }
 
 async function save() {
+	if (saveAllowed.value !== true) return;
+
+	const token = ++sessionGeneration;
 	saving.value = true;
 
 	try {
 		if (props.dashboard) {
-			await api.patch(`/dashboards/${props.dashboard.id}`, values, { params: { fields: ['id'] } });
+			await api.patch(`/dashboards/${props.dashboard.id}`, writablePayload(), { params: { fields: ['id'] } });
 			await insightsStore.hydrate();
+
+			if (token !== sessionGeneration) return;
+			emit('update:modelValue', false);
 		} else {
-			const response = await api.post('/dashboards', values, { params: { fields: ['id'] } });
+			const response = await api.post('/dashboards', writablePayload(), { params: { fields: ['id'] } });
 			await insightsStore.hydrate();
+
+			if (token !== sessionGeneration) return;
+			emit('update:modelValue', false);
 			router.push(`/insights/${response.data.data.id}`);
 		}
-
-		emit('update:modelValue', false);
 	} catch (err: any) {
-		unexpectedError(err);
+		if (token === sessionGeneration) unexpectedError(err);
 	} finally {
-		saving.value = false;
+		if (token === sessionGeneration) saving.value = false;
 	}
 }
 </script>

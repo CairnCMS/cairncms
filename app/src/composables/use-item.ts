@@ -5,6 +5,7 @@ import { useFieldsStore } from '@/stores/fields';
 import { useRelationsStore } from '@/stores/relations';
 import { APIError } from '@/types/error';
 import { notify } from '@/utils/notify';
+import { stripUnboundParentLinks } from '@/utils/strip-unbound-parent-links';
 import { translate } from '@/utils/translate-object-values';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { validateItem } from '@/utils/validate-item';
@@ -13,7 +14,7 @@ import { getEndpoint } from '@cairncms/utils';
 import { AxiosResponse } from 'axios';
 import { mergeWith } from 'lodash';
 import { computed, ComputedRef, isRef, Ref, ref, unref, watch } from 'vue';
-import { usePermissions } from './use-permissions';
+import { useFieldPermissions } from './use-field-permissions';
 import { Field, Query, Relation } from '@cairncms/types';
 import { getDefaultValuesFromFields } from '@/utils/get-default-values-from-fields';
 
@@ -27,6 +28,7 @@ type UsableItem = {
 	refresh: () => void;
 	save: () => Promise<any>;
 	isNew: ComputedRef<boolean>;
+	isNewOrEmptySingleton: ComputedRef<boolean>;
 	remove: () => Promise<void>;
 	deleting: Ref<boolean>;
 	archive: () => Promise<void>;
@@ -57,6 +59,19 @@ export function useItem(
 	const isBatch = computed(() => typeof primaryKey.value === 'string' && primaryKey.value.includes(','));
 	const isSingle = computed(() => !!collectionInfo.value?.meta?.singleton);
 
+	const isEmptySingleton = computed(() => {
+		if (!isSingle.value || isNew.value || loading.value || error.value != null || item.value == null) {
+			return false;
+		}
+
+		const keyField = primaryKeyField.value?.field;
+		if (keyField === undefined) return false;
+
+		return Object.prototype.hasOwnProperty.call(item.value, keyField) && item.value[keyField] === null;
+	});
+
+	const isNewOrEmptySingleton = computed(() => isNew.value || isEmptySingleton.value);
+
 	const isArchived = computed(() => {
 		if (!collectionInfo.value?.meta?.archive_field) return null;
 
@@ -67,7 +82,7 @@ export function useItem(
 		return item.value?.[collectionInfo.value.meta.archive_field] === collectionInfo.value.meta.archive_value;
 	});
 
-	const { fields: fieldsWithPermissions } = usePermissions(collection, item, isNew);
+	const { fields: fieldsWithPermissions } = useFieldPermissions(collection, isNewOrEmptySingleton);
 
 	const itemEndpoint = computed(() => {
 		if (isSingle.value) {
@@ -91,6 +106,7 @@ export function useItem(
 		refresh,
 		save,
 		isNew,
+		isNewOrEmptySingleton,
 		remove,
 		deleting,
 		archive,
@@ -132,7 +148,7 @@ export function useItem(
 			}
 		);
 
-		const errors = validateItem(payloadToValidate, fieldsWithPermissions.value, isNew.value);
+		const errors = validateItem(payloadToValidate, fieldsWithPermissions.value, isNewOrEmptySingleton.value);
 
 		if (errors.length > 0) {
 			validationErrors.value = errors;
@@ -144,13 +160,19 @@ export function useItem(
 			let response;
 
 			if (isNew.value === true) {
-				response = await api.post(getEndpoint(collection.value), edits.value);
+				response = await api.post(
+					getEndpoint(collection.value),
+					stripUnboundParentLinks(collection.value, edits.value, false)
+				);
 
 				notify({
 					title: i18n.global.t('item_create_success', isBatch.value ? 2 : 1),
 				});
 			} else {
-				response = await api.patch(itemEndpoint.value, edits.value);
+				response = await api.patch(
+					itemEndpoint.value,
+					stripUnboundParentLinks(collection.value, edits.value, !isNewOrEmptySingleton.value)
+				);
 
 				notify({
 					title: i18n.global.t('item_update_success', isBatch.value ? 2 : 1),
@@ -218,6 +240,7 @@ export function useItem(
 						}
 
 						delete relatedItem[relatedPrimaryKeyField!.field];
+						delete relatedItem[relation.field];
 
 						updateJunctionRelatedKey(relation, existsJunctionRelated, fieldsStore, relatedItem);
 						return relatedItem;
@@ -248,15 +271,28 @@ export function useItem(
 
 					updatedRelatedItems.length = 0;
 
-					for (const item of existingItems) {
-						delete item[relatedPrimaryKeyField!.field];
-						createdRelatedItems.push(item);
-					}
+					const stagedCreates = (createdRelatedItems ?? []).map((relatedItem: any) => {
+						const copiedItem = { ...relatedItem };
+						delete copiedItem[relation.field];
+						return copiedItem;
+					});
+
+					const clonedExistingItems = existingItems.map((existingItem: any) => {
+						const copiedItem = { ...existingItem };
+						delete copiedItem[relatedPrimaryKeyField!.field];
+						delete copiedItem[relation.field];
+						return copiedItem;
+					});
+
+					newItem[relation.meta.one_field] = {
+						...newItem[relation.meta.one_field],
+						create: [...stagedCreates, ...clonedExistingItems],
+					};
 				}
 			}
 		}
 
-		const errors = validateItem(newItem, fieldsWithPermissions.value, isNew.value);
+		const errors = validateItem(newItem, fieldsWithPermissions.value, isNewOrEmptySingleton.value);
 
 		if (errors.length > 0) {
 			validationErrors.value = errors;
@@ -265,7 +301,10 @@ export function useItem(
 		}
 
 		try {
-			const response = await api.post(getEndpoint(collection.value), newItem);
+			const response = await api.post(
+				getEndpoint(collection.value),
+				stripUnboundParentLinks(collection.value, newItem, false)
+			);
 
 			notify({
 				title: i18n.global.t('item_create_success', 1),

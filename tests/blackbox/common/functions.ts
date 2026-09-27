@@ -666,6 +666,14 @@ export async function CreateItem(vendor: string, options: OptionsCreateItem) {
 		.set('Authorization', `Bearer ${common.USER.TESTS_FLOW.TOKEN}`)
 		.send(options.item);
 
+	if (response.statusCode !== 200) {
+		throw new Error(
+			`CreateItem(${options.collection}) failed: ${response.statusCode} ${JSON.stringify(
+				response.body?.errors ?? response.body
+			)}`
+		);
+	}
+
 	return response.body.data;
 }
 

@@ -2,8 +2,12 @@ import { createTestingPinia } from '@pinia/testing';
 import { setActivePinia } from 'pinia';
 import { nextTick } from 'vue';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import api from '@/api';
 import { fetchAll } from '@/utils/fetch-all';
 import { i18n } from '@/lang';
+import { useFieldsStore } from '@/stores/fields';
+import { useRelationsStore } from '@/stores/relations';
+import { fld, rel } from '@/__utils__/field-relation-fixtures';
 
 vi.mock('@/api');
 vi.mock('@/utils/fetch-all');
@@ -99,5 +103,44 @@ describe('useTranslationsStore', () => {
 		expect(messages.greeting).toBe('Hallo');
 		expect(Object.prototype.hasOwnProperty.call(messages, 'farewell')).toBe(true);
 		expect(messages.farewell).toBeUndefined();
+	});
+
+	test('create strips a generated reverse marker from a nested relational field before posting', async () => {
+		const fieldsStore = useFieldsStore();
+		const relationsStore = useRelationsStore();
+
+		fieldsStore.fields = [
+			fld('directus_translations', 'id', true),
+			fld('directus_translations', 'sections'),
+			fld('sections', 'id', true),
+			fld('sections', 'translation_id'),
+		];
+
+		relationsStore.relations = [
+			rel('sections', 'translation_id', 'directus_translations', {
+				one_field: 'sections',
+				many_field: 'translation_id',
+			}),
+		];
+
+		vi.mocked(fetchAll).mockResolvedValue([]);
+
+		const store = useTranslationsStore();
+
+		const translation = {
+			language: 'de-DE',
+			key: 'greeting',
+			value: 'Hallo',
+			sections: { create: [{ translation_id: '+', title: 'x' }] },
+		};
+
+		await store.create(translation);
+
+		expect(api.post).toHaveBeenCalledWith('/translations', {
+			language: 'de-DE',
+			key: 'greeting',
+			value: 'Hallo',
+			sections: { create: [{ title: 'x' }] },
+		});
 	});
 });

@@ -634,7 +634,8 @@ export function useRelationMultiple(
 			} else if (relation.value?.type === 'm2m') {
 				if (topLevelKeys.length === 1 && topLevelKeys[0] === relation.value.junctionPrimaryKeyField.field) return true;
 
-				const deepLevelKeys = Object.keys(item[relation.value.junctionField.field]);
+				const nested = item[relation.value.junctionField.field];
+				const deepLevelKeys = nested ? Object.keys(nested) : [];
 
 				return (
 					topLevelKeys.length === 2 &&
@@ -646,7 +647,8 @@ export function useRelationMultiple(
 			} else if (relation.value?.type === 'm2a') {
 				if (topLevelKeys.length === 1 && topLevelKeys[0] === relation.value.junctionPrimaryKeyField.field) return true;
 
-				const deepLevelKeys = Object.keys(item[relation.value.junctionField.field]);
+				const nested = item[relation.value.junctionField.field];
+				const deepLevelKeys = nested ? Object.keys(nested) : [];
 
 				if (
 					topLevelKeys.length === 2 &&

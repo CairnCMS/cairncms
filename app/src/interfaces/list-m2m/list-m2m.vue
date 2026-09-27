@@ -52,7 +52,7 @@
 				:loading="loading"
 				:items="displayItems"
 				:row-height="tableRowHeight"
-				:disabled="!updateAllowed"
+				:disabled="!editAllowed"
 				:show-manual-sort="allowDrag"
 				:manual-sort-key="relationInfo?.sortField"
 				show-resize
@@ -178,10 +178,10 @@
 
 		<drawer-item
 			v-model:active="editModalActive"
-			:disabled="disabled || (!updateAllowed && currentlyEditing !== null)"
+			:disabled="disabled"
 			:collection="relationInfo.junctionCollection.collection"
-			:primary-key="currentlyEditing || '+'"
-			:related-primary-key="relatedPrimaryKey || '+'"
+			:primary-key="currentlyEditing ?? '+'"
+			:related-primary-key="relatedPrimaryKey ?? '+'"
 			:junction-field="relationInfo.junctionField.field"
 			:edits="editsAtStart"
 			:circular-field="relationInfo.reverseJunctionField.field"
@@ -434,7 +434,11 @@ const spacings = {
 const tableRowHeight = computed(() => spacings[props.tableSpacing] ?? spacings.cozy);
 
 const allowDrag = computed(
-	() => totalItemCount.value <= limit.value && relationInfo.value?.sortField !== undefined && !props.disabled
+	() =>
+		totalItemCount.value <= limit.value &&
+		relationInfo.value?.sortField !== undefined &&
+		!props.disabled &&
+		junctionPerms.value.update
 );
 
 function getDeselectIcon(item: DisplayItem) {
@@ -608,7 +612,8 @@ function getLinkForItem(item: DisplayItem) {
 	return null;
 }
 
-const { createAllowed, updateAllowed, deleteAllowed, selectAllowed } = useRelationPermissionsM2M(relationInfo);
+const { createAllowed, editAllowed, deleteAllowed, selectAllowed, junctionPerms } =
+	useRelationPermissionsM2M(relationInfo);
 </script>
 
 <style lang="scss">

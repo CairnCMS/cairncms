@@ -77,10 +77,13 @@
 <script lang="ts" setup>
 import { useI18n } from 'vue-i18n';
 import { computed, ref } from 'vue';
+import { omit } from 'lodash';
 import { getRootPath } from '@/utils/get-root-path';
+import { stripUnboundParentLinks } from '@/utils/strip-unbound-parent-links';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { Share } from '@cairncms/types';
 import { useClipboard } from '@/composables/use-clipboard';
+import { useFieldsStore } from '@/stores/fields';
 
 import api from '@/api';
 import ShareItem from './share-item.vue';
@@ -95,6 +98,12 @@ const props = defineProps<{
 const { t } = useI18n();
 
 const { copyToClipboard } = useClipboard();
+
+const fieldsStore = useFieldsStore();
+
+const sharePrimaryKeyField = computed(
+	() => fieldsStore.getPrimaryKeyFieldForCollection('directus_shares')?.field ?? 'id'
+);
 
 const shares = ref<Share[] | null>([]);
 const count = ref(0);
@@ -117,14 +126,21 @@ refresh();
 async function input(data: any) {
 	if (!data) return;
 
-	data.collection = props.collection;
-	data.item = props.primaryKey;
-
 	try {
 		if (shareToEdit.value === '+') {
-			await api.post('/shares', data);
+			await api.post(
+				'/shares',
+				stripUnboundParentLinks(
+					'directus_shares',
+					{ ...data, collection: props.collection, item: props.primaryKey },
+					false
+				)
+			);
 		} else {
-			await api.patch(`/shares/${shareToEdit.value}`, data);
+			await api.patch(
+				`/shares/${shareToEdit.value}`,
+				stripUnboundParentLinks('directus_shares', omit(data, sharePrimaryKeyField.value), true)
+			);
 		}
 
 		await refresh();

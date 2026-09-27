@@ -1,5 +1,5 @@
 import express from 'express';
-import { ForbiddenException } from '../exceptions/index.js';
+import { ForbiddenException, InvalidCredentialsException } from '../exceptions/index.js';
 import { respond } from '../middleware/respond.js';
 import useCollection from '../middleware/use-collection.js';
 import { validateBatch } from '../middleware/validate-batch.js';
@@ -12,6 +12,27 @@ import { sanitizeQuery } from '../utils/sanitize-query.js';
 const router = express.Router();
 
 router.use(useCollection('directus_permissions'));
+
+router.get(
+	'/me/:collection/:pk?',
+	asyncHandler(async (req, res, next) => {
+		if (!req.accountability?.user) {
+			throw new InvalidCredentialsException();
+		}
+
+		const service = new PermissionsService({
+			accountability: req.accountability,
+			schema: req.schema,
+		});
+
+		const result = await service.getItemPermissions(req.params['collection']!, req.params['pk']);
+
+		res.locals['payload'] = { data: result };
+		res.locals['cache'] = false;
+		return next();
+	}),
+	respond
+);
 
 router.post(
 	'/',

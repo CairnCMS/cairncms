@@ -1,0 +1,46 @@
+type: object
+description: The response shows whether the current user can update, delete, or share an item.
+properties:
+  update:
+    type: object
+    properties:
+      access:
+        description: The value is true when the current user can update the item.
+        type: boolean
+        example: true
+      fields:
+        description: >-
+          This list contains the fields the user can update. `["*"]` allows all fields that support
+          updates. A list of names allows only those fields. `[]` allows no fields. `null` means the
+          user cannot update the item.
+        type: array
+        items:
+          type: string
+        nullable: true
+        example:
+          - title
+    required:
+      - access
+      - fields
+  delete:
+    type: object
+    properties:
+      access:
+        description: The value is true when the current user can delete the item.
+        type: boolean
+        example: false
+    required:
+      - access
+  share:
+    type: object
+    properties:
+      access:
+        description: The value is true when the current user can share the item.
+        type: boolean
+        example: false
+    required:
+      - access
+required:
+  - update
+  - delete
+  - share

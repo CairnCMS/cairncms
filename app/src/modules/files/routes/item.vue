@@ -217,11 +217,13 @@ const revisionsDrawerDetailRef = ref<InstanceType<typeof RevisionsDrawerDetail> 
 
 const {
 	isNew,
+	isNewOrEmptySingleton,
 	edits,
 	hasEdits,
 	item,
 	saving,
 	loading,
+	error,
 	save,
 	remove,
 	deleting,
@@ -275,7 +277,8 @@ useShortcut('meta+s', saveAndStay, form);
 const { createAllowed, deleteAllowed, saveAllowed, updateAllowed, fields, revisionsAllowed } = usePermissions(
 	ref('directus_files'),
 	item,
-	isNew
+	isNew,
+	{ primaryKey, loading, error, isNewOrEmptySingleton, isBatch }
 );
 
 const fieldsFiltered = computed(() => {
@@ -320,6 +323,8 @@ function useBreadcrumb() {
 }
 
 async function saveAndQuit() {
+	if (isSavable.value === false) return;
+
 	try {
 		await save();
 		router.push(to.value);
@@ -329,6 +334,8 @@ async function saveAndQuit() {
 }
 
 async function saveAndStay() {
+	if (isSavable.value === false) return;
+
 	try {
 		await save();
 		revisionsDrawerDetailRef.value?.refresh?.();

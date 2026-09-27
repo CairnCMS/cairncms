@@ -43,6 +43,57 @@ function createIngredient(pkType: common.PrimaryKeyType) {
 	return item;
 }
 
+function indexFoodsByIngredients(foods: any[], ingredientField: string) {
+	const byFood = new Map<any, { junctionId: any; ingredientId: any; name: string }[]>();
+
+	for (const food of foods) {
+		byFood.set(
+			food.id,
+			food.ingredients.map((junction: any) => ({
+				junctionId: junction.id,
+				ingredientId: junction[ingredientField].id,
+				name: junction[ingredientField].name,
+			}))
+		);
+	}
+
+	return byFood;
+}
+
+function byJunctionId(a: { junctionId: any }, b: { junctionId: any }) {
+	if (a.junctionId < b.junctionId) return -1;
+	if (a.junctionId > b.junctionId) return 1;
+	return 0;
+}
+
+async function readIngredientsAsAdmin(vendor: string, collection: string, ids: any[], ingredientField: string) {
+	const response = await request(getUrl(vendor))
+		.get(`/items/${collection}`)
+		.query({
+			fields: ['id', 'ingredients.id', `ingredients.${ingredientField}.id`, `ingredients.${ingredientField}.name`],
+			filter: { id: { _in: ids } },
+		})
+		.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`);
+
+	expect(response.statusCode).toBe(200);
+
+	return response.body.data;
+}
+
+async function readIngredientsByName(vendor: string, collection: string, names: string[]) {
+	const response = await request(getUrl(vendor))
+		.get(`/items/${collection}`)
+		.query({
+			fields: ['id', 'name'],
+			filter: { name: { _in: names } },
+		})
+		.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`);
+
+	expect(response.statusCode).toBe(200);
+
+	return response.body.data;
+}
+
 const cachedSchema = common.PRIMARY_KEY_TYPES.reduce((acc, pkType) => {
 	acc[pkType] = getTestsSchema(pkType);
 	return acc;
@@ -72,13 +123,14 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 				it.each(vendors)('%s', async (vendor) => {
 					// Setup
 					const ingredient = createIngredient(pkType);
+					const food = createFood(pkType);
 
 					const insertedIngredient = await CreateItem(vendor, {
 						collection: localCollectionIngredients,
 						item: {
 							...ingredient,
 							foods: {
-								create: [{ [`${localCollectionIngredients}_id`]: createFood(pkType) }],
+								create: [{ [`${localCollectionFoods}_id`]: food }],
 								update: [],
 								delete: [],
 							},
@@ -88,6 +140,7 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 					// Action
 					const response = await request(getUrl(vendor))
 						.get(`/items/${localCollectionIngredients}/${insertedIngredient.id}`)
+						.query({ fields: `foods.${localCollectionFoods}_id.name` })
 						.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`);
 
 					const gqlResponse = await requestGraphQL(getUrl(vendor), false, common.USER.ADMIN.TOKEN, {
@@ -101,7 +154,9 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 									},
 								},
 								foods: {
-									id: true,
+									[`${localCollectionFoods}_id`]: {
+										name: true,
+									},
 								},
 							},
 						},
@@ -110,9 +165,14 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 					// Assert
 					expect(response.statusCode).toEqual(200);
 					expect(response.body.data.foods).toHaveLength(1);
+					expect(response.body.data.foods[0][`${localCollectionFoods}_id`].name).toBe(food.name);
 
 					expect(gqlResponse.statusCode).toEqual(200);
 					expect(gqlResponse.body.data[localCollectionIngredients][0].foods).toHaveLength(1);
+
+					expect(gqlResponse.body.data[localCollectionIngredients][0].foods[0][`${localCollectionFoods}_id`].name).toBe(
+						food.name
+					);
 				});
 			});
 		});
@@ -1569,7 +1629,7 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 						item: {
 							...food,
 							ingredients: {
-								create: [{ [`${localCollectionFoods}_id`]: createIngredient(pkType) }],
+								create: [{ [`${localCollectionIngredients}_id`]: createIngredient(pkType) }],
 								update: [],
 								delete: [],
 							},
@@ -1664,7 +1724,7 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 						item: {
 							...food,
 							ingredients: {
-								create: [{ [`${localCollectionFoods}_id`]: createIngredient(pkType) }],
+								create: [{ [`${localCollectionIngredients}_id`]: createIngredient(pkType) }],
 								update: [],
 								delete: [],
 							},
@@ -1725,7 +1785,7 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 						item: {
 							...food,
 							ingredients: {
-								create: [{ [`${localCollectionFoods}_id`]: createIngredient(pkType) }],
+								create: [{ [`${localCollectionIngredients}_id`]: createIngredient(pkType) }],
 								update: [],
 								delete: [],
 							},
@@ -1789,7 +1849,7 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 						item: {
 							...food,
 							ingredients: {
-								create: [{ [`${localCollectionFoods}_id`]: ingredient }],
+								create: [{ [`${localCollectionIngredients}_id`]: ingredient }],
 								update: [],
 								delete: [],
 							},
@@ -1838,7 +1898,7 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 						item: {
 							...food,
 							ingredients: {
-								create: [{ [`${localCollectionFoods}_id`]: createIngredient(pkType) }],
+								create: [{ [`${localCollectionIngredients}_id`]: createIngredient(pkType) }],
 								update: [],
 								delete: [],
 							},
@@ -1954,7 +2014,7 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 						item: {
 							...food,
 							ingredients: {
-								create: [{ [`${localCollectionFoods}_id`]: ingredient }],
+								create: [{ [`${localCollectionIngredients}_id`]: ingredient }],
 								update: [],
 								delete: [],
 							},
@@ -2037,7 +2097,7 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 						item: {
 							...food,
 							ingredients: {
-								create: [{ [`${localCollectionFoods}_id`]: createIngredient(pkType) }],
+								create: [{ [`${localCollectionIngredients}_id`]: createIngredient(pkType) }],
 								update: [],
 								delete: [],
 							},
@@ -2136,7 +2196,7 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 						item: {
 							...food,
 							ingredients: {
-								create: [{ [`${localCollectionFoods}_id`]: createIngredient(pkType) }],
+								create: [{ [`${localCollectionIngredients}_id`]: createIngredient(pkType) }],
 								update: [],
 								delete: [],
 							},
@@ -2199,7 +2259,7 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 						item: {
 							...food,
 							ingredients: {
-								create: [{ [`${localCollectionFoods}_id`]: createIngredient(pkType) }],
+								create: [{ [`${localCollectionIngredients}_id`]: createIngredient(pkType) }],
 								update: [],
 								delete: [],
 							},
@@ -2252,7 +2312,7 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 						item: {
 							...food,
 							ingredients: {
-								create: [{ [`${localCollectionFoods}_id`]: createIngredient(pkType) }],
+								create: [{ [`${localCollectionIngredients}_id`]: createIngredient(pkType) }],
 								update: [],
 								delete: [],
 							},
@@ -2555,8 +2615,8 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 							// Setup
 							const count = Number(config.envs[vendor].MAX_BATCH_MUTATION) / 10;
 							const countCreate = 2;
-							const countUpdate = 3;
-							const countDelete = 2;
+							const countUpdate = 1;
+							const countDelete = 1;
 							const foodsID = [];
 							const foodsID2 = [];
 
@@ -2587,8 +2647,8 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 								fields: [
 									'*',
 									'ingredients.id',
-									`ingredients.${localCollectionIngredients}.id`,
-									`ingredients.${localCollectionIngredients}.name`,
+									`ingredients.${localCollectionIngredients}_id.id`,
+									`ingredients.${localCollectionIngredients}_id.name`,
 								],
 								filter: { id: { _in: foodsID } },
 							});
@@ -2598,11 +2658,13 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 								fields: [
 									'*',
 									'ingredients.id',
-									`ingredients.${localCollectionIngredients}.id`,
-									`ingredients.${localCollectionIngredients}.name`,
+									`ingredients.${localCollectionIngredients}_id.id`,
+									`ingredients.${localCollectionIngredients}_id.name`,
 								],
 								filter: { id: { _in: foodsID2 } },
 							});
+
+							const ingredientField = `${localCollectionIngredients}_id`;
 
 							for (const food of foods) {
 								const ingredients = food.ingredients;
@@ -2613,14 +2675,26 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 										.map(() => {
 											return { [`${localCollectionIngredients}_id`]: createIngredient(pkType) };
 										}),
-									update: ingredients.slice(0, countUpdate),
+									update: ingredients.slice(0, countUpdate).map((entry: any) => ({
+										id: entry.id,
+										[`${localCollectionIngredients}_id`]: {
+											id: entry[`${localCollectionIngredients}_id`].id,
+											name: 'updated-' + uuid(),
+										},
+									})),
 									delete: ingredients.slice(-countDelete).map((ingredient: Ingredient) => ingredient.id),
 								};
 							}
 
 							for (const food of foods2) {
 								food.ingredients = [
-									...food.ingredients,
+									...food.ingredients.map((entry: any) => ({
+										id: entry.id,
+										[`${localCollectionIngredients}_id`]: {
+											id: entry[`${localCollectionIngredients}_id`].id,
+											name: 'updated-' + uuid(),
+										},
+									})),
 									...Array(countCreate)
 										.fill(0)
 										.map(() => {
@@ -2654,6 +2728,56 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 
 							expect(gqlResponse.statusCode).toBe(200);
 							expect(gqlResponse.body.data[mutationKey].length).toEqual(count);
+
+							const restReadback = indexFoodsByIngredients(
+								await readIngredientsAsAdmin(vendor, localCollectionFoods, foodsID, ingredientField),
+								ingredientField
+							);
+
+							for (const sent of foods) {
+								const persisted = restReadback.get(sent.id);
+								expect(persisted).toBeDefined();
+
+								expect(persisted!.length).toBe(sent.ingredients.update.length + sent.ingredients.create.length);
+
+								for (const updated of sent.ingredients.update) {
+									const match = persisted!.find((junction) => junction.junctionId === updated.id);
+									expect(match).toBeDefined();
+									expect(match!.ingredientId).toBe(updated[ingredientField].id);
+									expect(match!.name).toBe(updated[ingredientField].name);
+								}
+
+								for (const created of sent.ingredients.create) {
+									expect(persisted!.some((junction) => junction.name === created[ingredientField].name)).toBe(true);
+								}
+
+								for (const deletedJunctionId of sent.ingredients.delete) {
+									expect(persisted!.some((junction) => junction.junctionId === deletedJunctionId)).toBe(false);
+								}
+							}
+
+							const gqlReadback = indexFoodsByIngredients(
+								await readIngredientsAsAdmin(vendor, localCollectionFoods, foodsID2, ingredientField),
+								ingredientField
+							);
+
+							for (const sent of foods2) {
+								const persisted = gqlReadback.get(sent.id);
+								expect(persisted).toBeDefined();
+
+								expect(persisted!.length).toBe(sent.ingredients.length);
+
+								for (const entry of sent.ingredients) {
+									if (entry.id) {
+										const match = persisted!.find((junction) => junction.junctionId === entry.id);
+										expect(match).toBeDefined();
+										expect(match!.ingredientId).toBe(entry[ingredientField].id);
+										expect(match!.name).toBe(entry[ingredientField].name);
+									} else {
+										expect(persisted!.some((junction) => junction.name === entry[ingredientField].name)).toBe(true);
+									}
+								}
+							}
 						},
 						120000
 					);
@@ -2672,8 +2796,8 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 							// Setup
 							const count = Number(config.envs[vendor].MAX_BATCH_MUTATION) / 10;
 							const countCreate = 2;
-							const countUpdate = 3;
-							const countDelete = 3;
+							const countUpdate = 1;
+							const countDelete = 4;
 							const foodsID = [];
 							const foodsID2 = [];
 
@@ -2704,8 +2828,8 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 								fields: [
 									'*',
 									'ingredients.id',
-									`ingredients.${localCollectionIngredients}.id`,
-									`ingredients.${localCollectionIngredients}.name`,
+									`ingredients.${localCollectionIngredients}_id.id`,
+									`ingredients.${localCollectionIngredients}_id.name`,
 								],
 								filter: { id: { _in: foodsID } },
 							});
@@ -2715,11 +2839,15 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 								fields: [
 									'*',
 									'ingredients.id',
-									`ingredients.${localCollectionIngredients}.id`,
-									`ingredients.${localCollectionIngredients}.name`,
+									`ingredients.${localCollectionIngredients}_id.id`,
+									`ingredients.${localCollectionIngredients}_id.name`,
 								],
 								filter: { id: { _in: foodsID2 } },
 							});
+
+							const ingredientField = `${localCollectionIngredients}_id`;
+							const restBefore = indexFoodsByIngredients(foods, ingredientField);
+							const gqlBefore = indexFoodsByIngredients(foods2, ingredientField);
 
 							for (const food of foods) {
 								const ingredients = food.ingredients;
@@ -2730,14 +2858,26 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 										.map(() => {
 											return { [`${localCollectionIngredients}_id`]: createIngredient(pkType) };
 										}),
-									update: ingredients.slice(0, countUpdate),
+									update: ingredients.slice(0, countUpdate).map((entry: any) => ({
+										id: entry.id,
+										[`${localCollectionIngredients}_id`]: {
+											id: entry[`${localCollectionIngredients}_id`].id,
+											name: 'updated-' + uuid(),
+										},
+									})),
 									delete: ingredients.slice(-countDelete).map((ingredient: Ingredient) => ingredient.id),
 								};
 							}
 
 							for (const food of foods2) {
 								food.ingredients = [
-									...food.ingredients,
+									...food.ingredients.map((entry: any) => ({
+										id: entry.id,
+										[`${localCollectionIngredients}_id`]: {
+											id: entry[`${localCollectionIngredients}_id`].id,
+											name: 'updated-' + uuid(),
+										},
+									})),
 									...Array(countCreate)
 										.fill(0)
 										.map(() => {
@@ -2779,6 +2919,44 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 							expect(gqlResponse.body.errors[0].message).toBe(
 								`Exceeded max batch mutation limit of ${config.envs[vendor].MAX_BATCH_MUTATION}.`
 							);
+
+							const restReadback = indexFoodsByIngredients(
+								await readIngredientsAsAdmin(vendor, localCollectionFoods, foodsID, ingredientField),
+								ingredientField
+							);
+
+							for (const [foodId, before] of restBefore) {
+								const persisted = restReadback.get(foodId);
+								expect(persisted).toBeDefined();
+
+								expect([...persisted!].sort(byJunctionId)).toEqual([...before].sort(byJunctionId));
+							}
+
+							const restCreatedNames = foods.flatMap((food: any) =>
+								food.ingredients.create.map((entry: any) => entry[ingredientField].name)
+							);
+
+							const restOrphans = await readIngredientsByName(vendor, localCollectionIngredients, restCreatedNames);
+							expect(restOrphans.length).toBe(0);
+
+							const gqlReadback = indexFoodsByIngredients(
+								await readIngredientsAsAdmin(vendor, localCollectionFoods, foodsID2, ingredientField),
+								ingredientField
+							);
+
+							for (const [foodId, before] of gqlBefore) {
+								const persisted = gqlReadback.get(foodId);
+								expect(persisted).toBeDefined();
+
+								expect([...persisted!].sort(byJunctionId)).toEqual([...before].sort(byJunctionId));
+							}
+
+							const gqlCreatedNames = foods2.flatMap((food: any) =>
+								food.ingredients.filter((entry: any) => !entry.id).map((entry: any) => entry[ingredientField].name)
+							);
+
+							const gqlOrphans = await readIngredientsByName(vendor, localCollectionIngredients, gqlCreatedNames);
+							expect(gqlOrphans.length).toBe(0);
 						},
 						120000
 					);

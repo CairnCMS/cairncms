@@ -50,10 +50,14 @@
 </template>
 
 <script setup lang="ts">
-import { isAllowed } from '@/utils/is-allowed';
+import {
+	hasConditionalItemPermission,
+	itemActionAllowed,
+	useItemPermissions,
+} from '@/composables/use-item-permissions';
 import { Share } from '@cairncms/types';
 import { format } from 'date-fns';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 const props = defineProps<{
@@ -69,13 +73,25 @@ defineEmits<{
 
 const { t } = useI18n();
 
-const editAllowed = computed(() => {
-	return isAllowed('directus_shares', 'update', props.share);
-});
+const collection = ref('directus_shares');
+const shareKey = computed(() => props.share.id ?? null);
+const itemReady = computed(() => shareKey.value !== null);
+const needsServerCheck = computed(() => hasConditionalItemPermission('directus_shares', ['update', 'delete']));
 
-const deleteAllowed = computed(() => {
-	return isAllowed('directus_shares', 'delete', props.share);
-});
+const { itemPermissions } = useItemPermissions(
+	collection,
+	shareKey,
+	needsServerCheck,
+	computed(() => props.share)
+);
+
+const editAllowed = computed(() =>
+	itemActionAllowed('directus_shares', 'update', itemPermissions.value, itemReady.value, itemReady.value)
+);
+
+const deleteAllowed = computed(() =>
+	itemActionAllowed('directus_shares', 'delete', itemPermissions.value, itemReady.value, itemReady.value)
+);
 
 const usesLeft = computed(() => {
 	if (props.share.max_uses === null) return null;

@@ -145,6 +145,8 @@ A permission row is a tuple of role, collection, and action plus the rules that 
 | `PATCH` | `/permissions/<id>` | Update a single permission. |
 | `DELETE` | `/permissions` | Delete many permissions. |
 | `DELETE` | `/permissions/<id>` | Delete a single permission. |
+| `GET` | `/permissions/me/<collection>/<key>` | Check the current user's permissions for one item. |
+| `GET` | `/permissions/me/<collection>` | Check the current user's permissions for a singleton. |
 
 ### Permission record fields
 
@@ -160,6 +162,56 @@ A permission row is a tuple of role, collection, and action plus the rules that 
 A read or write that matches no permission row for a non-admin role is denied. The `permissions`, `validation`, and `presets` filters can reference filter variables (`$NOW`, `$CURRENT_USER`, `$CURRENT_ROLE`) to scope rules per caller.
 
 Permissions on system collections work the same way as permissions on user collections, with one caveat: the platform-managed minimum permissions for app-access roles are projected at read time rather than stored as rows, so they are invisible to `/permissions` queries. See [Config as code / What a config snapshot captures](/docs/manage/config-as-code/#what-a-config-snapshot-captures) for the full picture.
+
+### Check permissions for an item
+
+Use `GET /permissions/me/<collection>/<key>` to check whether the current user can update, delete, or share an item. Your app can use the result to enable or disable buttons and fields. In the SDK, use `readItemPermissions(collection, key?)`.
+
+CairnCMS checks the item's saved values. It checks permissions again when you submit an update, delete, or share request. A successful check does not guarantee that a later request will succeed.
+
+These routes require an authenticated user. Anonymous requests and requests using a share link receive `401`.
+
+```http
+GET /permissions/me/articles/42
+```
+
+The response contains an `ItemPermissions` object.
+
+```json
+{
+  "data": {
+    "update": { "access": true, "fields": ["*"] },
+    "delete": { "access": false },
+    "share": { "access": false }
+  }
+}
+```
+
+- **`update.access`**, **`delete.access`**, and **`share.access`** show whether the user can perform each action on the item.
+- **`update.fields`** lists writable fields. `["*"]` allows all fields that support updates. A list of names allows only those fields. `[]` allows no fields. `null` means update is denied.
+
+For a singleton collection, which holds at most one item, use `GET /permissions/me/<collection>` without a key. You must be an administrator or have update, delete, or share permission on the collection. An empty singleton returns `false` for all three actions. Its first save requires create permission.
+
+Other collections return `400` without a key. Non-admin users with none of these collection permissions also receive `400` without a key, even for singletons or unknown collections.
+
+With a key, the response does not distinguish a missing item from one the user cannot update, delete, or share. Both return `false` for every `access` value and `null` for `update.fields`. Unknown collections and invalid keys return the same result.
+
+Failures other than permission denials return the usual API error response.
+
+These checks can trigger query hooks, read hooks, and flows even if the user lacks read permission. User and system collections keep their usual event names. The number of events can vary by request.
+
+### Updating related items
+
+Include the primary key when updating a related item or importing changes to an existing record. The API uses the key to select the record and leaves it out of the update data passed to hooks and permission validation. Update hooks receive record IDs in `meta.keys`. You can still supply a primary key when creating a record.
+
+The field that links a related item to its parent has these rules.
+
+- If the item is already linked to the parent, leaving out the link field keeps it out of the update data. The stored link stays unchanged.
+- Supplying the link field requires permission to update it, even if its value is unchanged. Moving an item to another parent also requires this permission.
+- A supplied link must match the parent being saved. A different parent ID or `null` returns `INVALID_PAYLOAD`.
+- When creating a parent and its related items together, leave out the link field. CairnCMS sets it after creating the parent.
+
+Submitting only the key of an item already linked to the parent does not update that item or emit its update event. The caller must still be authorized for that item: either permission to update it, or permission to read its link to the parent (its link field, or its presence in the parent's list of related items). A caller with neither is denied, so the response cannot reveal which items are linked. These checks can read the related item or its parent and trigger query hooks, read hooks, and flows. Submitting field values still counts as an update, even if the values are unchanged.
 
 ## Shares (`/shares`)
 

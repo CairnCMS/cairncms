@@ -27,6 +27,7 @@
 import api from '@/api';
 import { VALIDATION_TYPES } from '@/constants';
 import { APIError } from '@/types/error';
+import { stripUnboundParentLinks } from '@/utils/strip-unbound-parent-links';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { getEndpoint } from '@cairncms/utils';
 import { computed, ref, toRefs } from 'vue';
@@ -102,7 +103,7 @@ function useActions() {
 		try {
 			await api.patch(getEndpoint(collection.value), {
 				keys: props.primaryKeys,
-				data: internalEdits.value,
+				data: stripUnboundParentLinks(collection.value, internalEdits.value, false),
 			});
 
 			emit('refresh');

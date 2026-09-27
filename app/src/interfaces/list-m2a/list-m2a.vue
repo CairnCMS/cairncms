@@ -123,12 +123,10 @@
 
 		<drawer-item
 			v-model:active="editModalActive"
-			:disabled="
-				disabled || (editingCollection !== null && !updateAllowed[editingCollection] && currentlyEditing !== null)
-			"
+			:disabled="disabled"
 			:collection="relationInfo.junctionCollection.collection"
-			:primary-key="currentlyEditing || '+'"
-			:related-primary-key="relatedPrimaryKey || '+'"
+			:primary-key="currentlyEditing ?? '+'"
+			:related-primary-key="relatedPrimaryKey ?? '+'"
 			:junction-field="relationInfo.junctionField.field"
 			:edits="editsAtStart"
 			:circular-field="relationInfo.reverseJunctionField.field"

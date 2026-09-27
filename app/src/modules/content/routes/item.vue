@@ -289,6 +289,8 @@ const { info: collectionInfo, defaults, primaryKeyField, isSingleton, accountabi
 
 const {
 	isNew,
+	isNewOrEmptySingleton,
+	isBatch,
 	edits,
 	hasEdits,
 	item,
@@ -320,6 +322,10 @@ const isSavable = computed(() => {
 
 	if (!primaryKeyField.value?.schema?.has_auto_increment && !primaryKeyField.value?.meta?.special?.includes('uuid')) {
 		return !!edits.value?.[primaryKeyField.value.field];
+	}
+
+	if (isNewOrEmptySingleton.value === true && isNew.value === false) {
+		return true;
 	}
 
 	if (isNew.value === true) {
@@ -381,7 +387,7 @@ const {
 	shareAllowed,
 	fields,
 	revisionsAllowed,
-} = usePermissions(collection, item, isNew);
+} = usePermissions(collection, item, isNew, { primaryKey, loading, error, isNewOrEmptySingleton, isBatch });
 
 const internalPrimaryKey = computed(() => {
 	if (unref(loading)) return '+';

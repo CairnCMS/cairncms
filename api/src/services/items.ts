@@ -794,13 +794,14 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 	async upsertOne(payload: Partial<Item>, opts?: MutationOptions): Promise<PrimaryKey> {
 		const primaryKeyField = this.schema.collections[this.collection]!.primary;
 		const primaryKey: PrimaryKey | undefined = payload[primaryKeyField];
+		const hasPrimaryKey = primaryKey !== undefined && primaryKey !== null;
 
-		if (primaryKey) {
+		if (hasPrimaryKey) {
 			validateKeys(this.schema, this.collection, primaryKeyField, primaryKey);
 		}
 
 		const exists =
-			primaryKey &&
+			hasPrimaryKey &&
 			!!(await this.knex
 				.select(primaryKeyField)
 				.from(this.collection)
@@ -808,7 +809,7 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 				.first());
 
 		if (exists) {
-			return await this.updateOne(primaryKey as PrimaryKey, payload, opts);
+			return await this.updateOne(primaryKey as PrimaryKey, omit(payload, primaryKeyField) as Partial<Item>, opts);
 		} else {
 			return await this.createOne(payload, opts);
 		}

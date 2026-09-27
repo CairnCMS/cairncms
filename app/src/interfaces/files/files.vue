@@ -24,7 +24,7 @@
 					<v-list-item
 						:class="{ deleted: element.$type === 'deleted' }"
 						:dense="totalItemCount > 4"
-						:disabled="disabled || !updateAllowed"
+						:disabled="disabled || !editAllowed"
 						block
 						clickable
 						@click="editItem(element)"
@@ -79,10 +79,10 @@
 
 		<drawer-item
 			v-model:active="editModalActive"
-			:disabled="disabled || (!updateAllowed && currentlyEditing !== null)"
+			:disabled="disabled"
 			:collection="relationInfo.junctionCollection.collection"
-			:primary-key="currentlyEditing || '+'"
-			:related-primary-key="relatedPrimaryKey || '+'"
+			:primary-key="currentlyEditing ?? '+'"
+			:related-primary-key="relatedPrimaryKey ?? '+'"
 			:junction-field="relationInfo.junctionField.field"
 			:edits="editsAtStart"
 			:circular-field="relationInfo.reverseJunctionField.field"
@@ -234,7 +234,8 @@ const {
 	getItemEdits,
 } = useRelationMultiple(value, query, relationInfo, primaryKey);
 
-const { createAllowed, updateAllowed, selectAllowed, deleteAllowed } = useRelationPermissionsM2M(relationInfo);
+const { createAllowed, updateAllowed, editAllowed, selectAllowed, deleteAllowed } =
+	useRelationPermissionsM2M(relationInfo);
 
 const pageCount = computed(() => Math.ceil(totalItemCount.value / limit.value));
 
