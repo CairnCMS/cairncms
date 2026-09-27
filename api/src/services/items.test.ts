@@ -19,7 +19,7 @@ import { sqlFieldFormatter, sqlFieldList } from '../__utils__/items-utils.js';
 import { systemSchema, userSchema } from '../__utils__/schemas.js';
 import emitter from '../emitter.js';
 import env from '../env.js';
-import { InvalidPayloadException } from '../exceptions/index.js';
+import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
 
 vi.mock('../env', async () => {
 	const actual = (await vi.importActual('../env')) as { default: Record<string, any> };
@@ -1313,6 +1313,26 @@ describe('Integration Tests', () => {
 			);
 		}
 
+		function updateActionFor(collection: string) {
+			return emitters.action.mock.calls.find(([event, meta]) => {
+				const names = Array.isArray(event) ? event : [event];
+				return (
+					(meta as { collection?: string }).collection === collection &&
+					names.some((name) => typeof name === 'string' && name.endsWith('.update'))
+				);
+			});
+		}
+
+		function updateFilterFor(collection: string) {
+			return emitters.filter.mock.calls.find(([event, , meta]) => {
+				const names = Array.isArray(event) ? event : [event];
+				return (
+					(meta as { collection?: string }).collection === collection &&
+					names.some((name) => typeof name === 'string' && name.endsWith('.update'))
+				);
+			});
+		}
+
 		beforeEach(() => {
 			emitters = spyEmitters();
 		});
@@ -1357,6 +1377,75 @@ describe('Integration Tests', () => {
 			await service.updateOne(authorId, { items: { update: [{ id: postId }] } }, { emitEvents: true });
 
 			expect(eventFor('posts')).toBeUndefined();
+		});
+
+		it('emits no child update event for a non-admin authorized key-only no-op', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+			tracker.on.select('posts').response([{ id: postId, uploaded_by: authorId }]);
+
+			const accountability: Accountability = {
+				role: 'editor',
+				admin: false,
+				permissions: [
+					{
+						id: 1,
+						role: 'editor',
+						collection: 'authors',
+						action: 'update',
+						permissions: {},
+						validation: {},
+						presets: {},
+						fields: ['*'],
+					},
+					{
+						id: 2,
+						role: 'editor',
+						collection: 'posts',
+						action: 'update',
+						permissions: {},
+						validation: {},
+						presets: {},
+						fields: ['*'],
+					},
+				],
+			};
+
+			const service = new ItemsService('authors', { knex: db, accountability, schema: userSchema });
+			await service.updateOne(authorId, { items: { update: [{ id: postId }] } }, { emitEvents: true });
+
+			expect(updateActionFor('posts')).toBeUndefined();
+			expect(updateFilterFor('posts')).toBeUndefined();
+		});
+
+		it('rejects a non-admin unauthorized key-only no-op without emitting a child update event', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+			tracker.on.select('posts').response([{ id: postId, uploaded_by: authorId }]);
+
+			const accountability: Accountability = {
+				role: 'editor',
+				admin: false,
+				permissions: [
+					{
+						id: 1,
+						role: 'editor',
+						collection: 'authors',
+						action: 'update',
+						permissions: {},
+						validation: {},
+						presets: {},
+						fields: ['*'],
+					},
+				],
+			};
+
+			const service = new ItemsService('authors', { knex: db, accountability, schema: userSchema });
+
+			await expect(
+				service.updateOne(authorId, { items: { update: [{ id: postId }] } }, { emitEvents: true })
+			).rejects.toThrow(ForbiddenException);
+
+			expect(updateActionFor('posts')).toBeUndefined();
+			expect(updateFilterFor('posts')).toBeUndefined();
 		});
 
 		it('emits a selector-free update event through the real import path', async () => {

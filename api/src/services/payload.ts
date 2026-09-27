@@ -712,6 +712,7 @@ export class PayloadService {
 							(existingRecord[relation.field] == parent ||
 								existingRecord[relation.field] == payload[currentPrimaryKeyField])
 						) {
+							await this.assertNestedNoopAuthorized(relation, relatedPrimaryKeyField, relatedRecord, resolvedParent);
 							savedPrimaryKeys.push(existingRecord[relatedPrimaryKeyField]);
 							continue;
 						}
@@ -963,10 +964,92 @@ export class PayloadService {
 		const contentKeys = Object.keys(omit(record, relatedPrimaryKeyField, relation.field));
 
 		if (alreadyLinked && hasExplicitReverse === false && contentKeys.length === 0) {
+			await this.assertNestedNoopAuthorized(relation, relatedPrimaryKeyField, childPk, resolvedParent);
 			return { skip: true, injectReverse: false };
 		}
 
 		return { skip: false, injectReverse };
+	}
+
+	private async assertNestedNoopAuthorized(
+		relation: Relation,
+		relatedPrimaryKeyField: string,
+		childPk: PrimaryKey,
+		resolvedParent: PrimaryKey
+	): Promise<void> {
+		if (!this.accountability || this.accountability.admin === true) return;
+
+		const childService = new ItemsService(relation.collection, {
+			accountability: this.accountability,
+			knex: this.knex,
+			schema: this.schema,
+		});
+
+		if (await this.readNestedItem(childService, childPk, ['*'], 'update')) return;
+
+		const childRecord = await this.readNestedItem(
+			childService,
+			childPk,
+			[relatedPrimaryKeyField, relation.field],
+			'read'
+		);
+
+		if (
+			childRecord &&
+			childRecord[relatedPrimaryKeyField] == childPk &&
+			isNil(childRecord[relation.field]) === false &&
+			childRecord[relation.field] == resolvedParent
+		) {
+			return;
+		}
+
+		const oneField = relation.meta?.one_field;
+
+		if (relation.related_collection && oneField) {
+			const parentService = new ItemsService(relation.related_collection, {
+				accountability: this.accountability,
+				knex: this.knex,
+				schema: this.schema,
+			});
+
+			const parentRecord = await this.readNestedItem(
+				parentService,
+				resolvedParent,
+				[`${oneField}.${relatedPrimaryKeyField}`],
+				'read',
+				{ [oneField]: { _filter: { [relatedPrimaryKeyField]: { _eq: childPk } } } }
+			);
+
+			const linkedChildren = parentRecord?.[oneField];
+
+			if (
+				Array.isArray(linkedChildren) &&
+				linkedChildren.some((entry) => {
+					const entryKey = isObject(entry) ? (entry as Record<string, any>)[relatedPrimaryKeyField] : entry;
+					return isNil(entryKey) === false && entryKey == childPk;
+				})
+			) {
+				return;
+			}
+		}
+
+		throw new ForbiddenException();
+	}
+
+	private async readNestedItem(
+		service: ItemsService,
+		primaryKey: PrimaryKey,
+		fields: string[],
+		permissionsAction: 'read' | 'update',
+		deep?: Query['deep']
+	): Promise<Item | null> {
+		try {
+			const query: Query = deep ? { fields, deep } : { fields };
+			return await service.readOne(primaryKey, query, { permissionsAction });
+		} catch (error) {
+			if (error instanceof ForbiddenException) return null;
+			throw error;
+		}
 	}
 
 	/**

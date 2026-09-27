@@ -16,6 +16,12 @@ const metaToken = `Fr2bMeta_${runId}`;
 const reparentToken = `Fr2bReparent_${runId}`;
 const noReadToken = `Fr2bNoRead_${runId}`;
 const nestedCreateToken = `Fr2bNestedCreate_${runId}`;
+const parentUpdateOnlyToken = `Fr2bParentUpdateOnly_${runId}`;
+const childReverseReaderToken = `Fr2bChildReverseReader_${runId}`;
+const childRelationReaderToken = `Fr2bChildRelationReader_${runId}`;
+const childRowReaderToken = `Fr2bChildRowReader_${runId}`;
+const childUpdateReadExcludedToken = `Fr2bChildUpdateReadExcluded_${runId}`;
+const childUpdateExcludedReadAllowedToken = `Fr2bChildUpdateExcludedReadAllowed_${runId}`;
 
 type Register = (fn: () => Promise<void>) => void;
 
@@ -113,6 +119,10 @@ describe('Nested write selector and link separation', () => {
 			noReadChild: string;
 			m2oParent: string;
 			o2mSelectableChild: string;
+			linkedParent: string;
+			linkedChild: string;
+			multiLinkParent: string;
+			multiLinkChildren: string[];
 		}
 	>;
 
@@ -295,6 +305,86 @@ describe('Nested write selector and link separation', () => {
 			await grant(vendor, nestedCreateRole, childCollection, 'create', ['name', 'parent_id']);
 			await grant(vendor, nestedCreateRole, childCollection, 'update', ['name', 'parent_id']);
 
+			const parentUpdateOnlyRole = await createRoleUser(
+				vendor,
+				`FR2b Parent Update Only ${runId}`,
+				parentUpdateOnlyToken,
+				`fr2b-parentupdateonly-${runId}-${vendor}@tests.com`,
+				(fn) => track(vendor, fn)
+			);
+
+			await grant(vendor, parentUpdateOnlyRole, parentCollection, 'update', ['*']);
+
+			const childReverseReaderRole = await createRoleUser(
+				vendor,
+				`FR2b Child Reverse Reader ${runId}`,
+				childReverseReaderToken,
+				`fr2b-childreversereader-${runId}-${vendor}@tests.com`,
+				(fn) => track(vendor, fn)
+			);
+
+			await grant(vendor, childReverseReaderRole, parentCollection, 'update', ['*']);
+			await grant(vendor, childReverseReaderRole, childCollection, 'read', ['*']);
+
+			const childRelationReaderRole = await createRoleUser(
+				vendor,
+				`FR2b Child Relation Reader ${runId}`,
+				childRelationReaderToken,
+				`fr2b-childrelationreader-${runId}-${vendor}@tests.com`,
+				(fn) => track(vendor, fn)
+			);
+
+			await grant(vendor, childRelationReaderRole, parentCollection, 'read', ['*']);
+			await grant(vendor, childRelationReaderRole, parentCollection, 'update', ['*']);
+			await grant(vendor, childRelationReaderRole, childCollection, 'read', ['id', 'name']);
+
+			const childRowReaderRole = await createRoleUser(
+				vendor,
+				`FR2b Child Row Reader ${runId}`,
+				childRowReaderToken,
+				`fr2b-childrowreader-${runId}-${vendor}@tests.com`,
+				(fn) => track(vendor, fn)
+			);
+
+			await grant(vendor, childRowReaderRole, parentCollection, 'update', ['*']);
+			await grant(vendor, childRowReaderRole, childCollection, 'read', ['id', 'name']);
+
+			const childUpdateReadExcludedRole = await createRoleUser(
+				vendor,
+				`FR2b Child Update Read Excluded ${runId}`,
+				childUpdateReadExcludedToken,
+				`fr2b-childupdatereadexcluded-${runId}-${vendor}@tests.com`,
+				(fn) => track(vendor, fn)
+			);
+
+			await grant(vendor, childUpdateReadExcludedRole, parentCollection, 'read', ['*']);
+			await grant(vendor, childUpdateReadExcludedRole, parentCollection, 'update', ['*']);
+
+			await grant(vendor, childUpdateReadExcludedRole, childCollection, 'update', ['name'], {
+				name: { _neq: 'Linked target child' },
+			});
+
+			await grant(vendor, childUpdateReadExcludedRole, childCollection, 'read', ['*'], {
+				name: { _neq: 'Linked target child' },
+			});
+
+			const childUpdateExcludedReadAllowedRole = await createRoleUser(
+				vendor,
+				`FR2b Child Update Excluded Read Allowed ${runId}`,
+				childUpdateExcludedReadAllowedToken,
+				`fr2b-childupdateexcludedreadallowed-${runId}-${vendor}@tests.com`,
+				(fn) => track(vendor, fn)
+			);
+
+			await grant(vendor, childUpdateExcludedReadAllowedRole, parentCollection, 'read', ['*']);
+			await grant(vendor, childUpdateExcludedReadAllowedRole, parentCollection, 'update', ['*']);
+
+			await grant(vendor, childUpdateExcludedReadAllowedRole, childCollection, 'update', ['name'], {
+				name: { _neq: 'Linked target child' },
+			});
+
+			await grant(vendor, childUpdateExcludedReadAllowedRole, childCollection, 'read', ['*']);
+
 			const author = await request(getUrl(vendor))
 				.post(`/items/${authorCollection}`)
 				.send({ name: 'Original author' })
@@ -310,6 +400,20 @@ describe('Nested write selector and link separation', () => {
 			const foreign = await seedParent(vendor, 'Foreign parent', 'Foreign child');
 			const noRead = await seedParent(vendor, 'No-read parent', 'No-read child');
 			const o2mSelectable = await seedParent(vendor, 'O2M selection source', 'Existing selectable child');
+			const linked = await seedParent(vendor, 'Linked parent', 'Linked target child');
+
+			const multiLink = await request(getUrl(vendor))
+				.post(`/items/${parentCollection}`)
+				.send({
+					name: 'Multi link parent',
+					children: {
+						create: [{ name: 'Multi link child A' }, { name: 'Multi link child B' }, { name: 'Multi link child C' }],
+					},
+				})
+				.query({ fields: '*,children.*' })
+				.set('Authorization', `Bearer ${adminToken}`);
+
+			expect(multiLink.statusCode).toBe(200);
 
 			const m2oParent = await request(getUrl(vendor))
 				.post(`/items/${parentCollection}`)
@@ -333,6 +437,10 @@ describe('Nested write selector and link separation', () => {
 				noReadChild: noRead.children[0].id,
 				m2oParent: m2oParent.body.data.id,
 				o2mSelectableChild: o2mSelectable.children[0].id,
+				linkedParent: linked.id,
+				linkedChild: linked.children[0].id,
+				multiLinkParent: multiLink.body.data.id,
+				multiLinkChildren: multiLink.body.data.children.map((child: any) => child.id),
 			};
 		}
 	}, 300000);
@@ -607,6 +715,238 @@ describe('Nested write selector and link separation', () => {
 		expect(readBack.statusCode).toBe(200);
 		expect(readBack.body.data.name).toBe('Renamed author');
 	});
+
+	it.each(vendors)('%s establishes the read-route roles read only what their names claim', async (vendor) => {
+		const { linkedParent, linkedChild } = ids[vendor]!;
+
+		const reverseRead = await request(getUrl(vendor))
+			.get(`/items/${childCollection}/${linkedChild}`)
+			.query({ fields: 'id,parent_id' })
+			.set('Authorization', `Bearer ${childReverseReaderToken}`);
+
+		expect(reverseRead.statusCode).toBe(200);
+		expect(reverseRead.body.data.parent_id).toBe(linkedParent);
+
+		const relationChildRead = await request(getUrl(vendor))
+			.get(`/items/${childCollection}/${linkedChild}`)
+			.query({ fields: 'id,parent_id' })
+			.set('Authorization', `Bearer ${childRelationReaderToken}`);
+
+		expect(relationChildRead.statusCode).toBe(403);
+
+		const relationParentRead = await request(getUrl(vendor))
+			.get(`/items/${parentCollection}/${linkedParent}`)
+			.query({ fields: 'id,children.id' })
+			.set('Authorization', `Bearer ${childRelationReaderToken}`);
+
+		expect(relationParentRead.statusCode).toBe(200);
+		expect(relationParentRead.body.data.children.map((child: any) => child.id)).toContain(linkedChild);
+
+		const rowReaderParent = await request(getUrl(vendor))
+			.get(`/items/${parentCollection}/${linkedParent}`)
+			.query({ fields: 'id,children.id' })
+			.set('Authorization', `Bearer ${childRowReaderToken}`);
+
+		expect(rowReaderParent.statusCode).toBe(403);
+	});
+
+	it.each(vendors)('%s denies a parent-update-only caller probing o2m membership across every form', async (vendor) => {
+		const { linkedParent, linkedChild, multiLinkChildren } = ids[vendor]!;
+		const probes = [linkedChild, multiLinkChildren[0]!, 999000001];
+
+		for (const key of probes) {
+			const scalar = await request(getUrl(vendor))
+				.patch(`/items/${parentCollection}/${linkedParent}`)
+				.send({ children: [key] })
+				.set('Authorization', `Bearer ${parentUpdateOnlyToken}`);
+
+			expect(scalar.statusCode).toBe(403);
+			expect(scalar.body.errors[0].extensions.code).toBe('FORBIDDEN');
+
+			const objectArray = await request(getUrl(vendor))
+				.patch(`/items/${parentCollection}/${linkedParent}`)
+				.send({ children: [{ id: key }] })
+				.set('Authorization', `Bearer ${parentUpdateOnlyToken}`);
+
+			expect(objectArray.statusCode).toBe(403);
+			expect(objectArray.body.errors[0].extensions.code).toBe('FORBIDDEN');
+
+			const detailed = await request(getUrl(vendor))
+				.patch(`/items/${parentCollection}/${linkedParent}`)
+				.send({ children: { update: [{ id: key }] } })
+				.set('Authorization', `Bearer ${parentUpdateOnlyToken}`);
+
+			expect(detailed.statusCode).toBe(403);
+			expect(detailed.body.errors[0].extensions.code).toBe('FORBIDDEN');
+		}
+
+		const linkedRow = await childRow(vendor, linkedChild);
+		expect(linkedRow.name).toBe('Linked target child');
+		expect(linkedRow.parent_id).toBe(linkedParent);
+	});
+
+	it.each(vendors)(
+		'%s denies a per-membership detailed probe amid siblings on a multi-child parent',
+		async (vendor) => {
+			const { multiLinkParent, multiLinkChildren } = ids[vendor]!;
+			const target = multiLinkChildren[0]!;
+
+			const response = await request(getUrl(vendor))
+				.patch(`/items/${parentCollection}/${multiLinkParent}`)
+				.send({ children: { update: [{ id: target }] } })
+				.set('Authorization', `Bearer ${parentUpdateOnlyToken}`);
+
+			expect(response.statusCode).toBe(403);
+			expect(response.body.errors[0].extensions.code).toBe('FORBIDDEN');
+
+			for (const childId of multiLinkChildren) {
+				const row = await childRow(vendor, childId);
+				expect(row.parent_id).toBe(multiLinkParent);
+			}
+		}
+	);
+
+	it.each(vendors)('%s creates no child revision when a denied membership probe is rejected', async (vendor) => {
+		const { linkedParent, linkedChild } = ids[vendor]!;
+
+		const before = await childRevisionCount(vendor, linkedChild);
+
+		const response = await request(getUrl(vendor))
+			.patch(`/items/${parentCollection}/${linkedParent}`)
+			.send({ children: { update: [{ id: linkedChild }] } })
+			.set('Authorization', `Bearer ${parentUpdateOnlyToken}`);
+
+		expect(response.statusCode).toBe(403);
+
+		const after = await childRevisionCount(vendor, linkedChild);
+		expect(after).toBe(before);
+	});
+
+	it.each(vendors)('%s preserves the key-only no-op for an update-without-read caller', async (vendor) => {
+		const { linkedParent, linkedChild } = ids[vendor]!;
+
+		const before = await childRevisionCount(vendor, linkedChild);
+
+		const response = await request(getUrl(vendor))
+			.patch(`/items/${parentCollection}/${linkedParent}`)
+			.send({ children: { update: [{ id: linkedChild }] } })
+			.set('Authorization', `Bearer ${noReadToken}`);
+
+		expect(response.statusCode).toBe(204);
+
+		const after = await childRevisionCount(vendor, linkedChild);
+		expect(after).toBe(before);
+
+		const row = await childRow(vendor, linkedChild);
+		expect(row.parent_id).toBe(linkedParent);
+	});
+
+	it.each(vendors)('%s allows the key-only no-op when the caller can read the child reverse field', async (vendor) => {
+		const { linkedParent, linkedChild } = ids[vendor]!;
+
+		const response = await request(getUrl(vendor))
+			.patch(`/items/${parentCollection}/${linkedParent}`)
+			.send({ children: { update: [{ id: linkedChild }] } })
+			.set('Authorization', `Bearer ${childReverseReaderToken}`);
+
+		expect(response.statusCode).toBe(204);
+
+		const row = await childRow(vendor, linkedChild);
+		expect(row.parent_id).toBe(linkedParent);
+	});
+
+	it.each(vendors)(
+		'%s allows the key-only no-op when the caller can read the child id through the parent relation',
+		async (vendor) => {
+			const { linkedParent, linkedChild } = ids[vendor]!;
+
+			const response = await request(getUrl(vendor))
+				.patch(`/items/${parentCollection}/${linkedParent}`)
+				.send({ children: { update: [{ id: linkedChild }] } })
+				.set('Authorization', `Bearer ${childRelationReaderToken}`);
+
+			expect(response.statusCode).toBe(200);
+
+			const row = await childRow(vendor, linkedChild);
+			expect(row.parent_id).toBe(linkedParent);
+		}
+	);
+
+	it.each(vendors)(
+		'%s denies the key-only no-op when the child row is readable but no membership route is',
+		async (vendor) => {
+			const { linkedParent, linkedChild } = ids[vendor]!;
+
+			const response = await request(getUrl(vendor))
+				.patch(`/items/${parentCollection}/${linkedParent}`)
+				.send({ children: { update: [{ id: linkedChild }] } })
+				.set('Authorization', `Bearer ${childRowReaderToken}`);
+
+			expect(response.statusCode).toBe(403);
+			expect(response.body.errors[0].extensions.code).toBe('FORBIDDEN');
+		}
+	);
+
+	it.each(vendors)('%s denies the key-only no-op when update and read both exclude the child', async (vendor) => {
+		const { linkedParent, linkedChild } = ids[vendor]!;
+
+		const response = await request(getUrl(vendor))
+			.patch(`/items/${parentCollection}/${linkedParent}`)
+			.send({ children: { update: [{ id: linkedChild }] } })
+			.set('Authorization', `Bearer ${childUpdateReadExcludedToken}`);
+
+		expect(response.statusCode).toBe(403);
+		expect(response.body.errors[0].extensions.code).toBe('FORBIDDEN');
+	});
+
+	it.each(vendors)(
+		'%s allows the key-only no-op when child update is excluded but membership read is granted',
+		async (vendor) => {
+			const { linkedParent, linkedChild } = ids[vendor]!;
+
+			const response = await request(getUrl(vendor))
+				.patch(`/items/${parentCollection}/${linkedParent}`)
+				.send({ children: { update: [{ id: linkedChild }] } })
+				.set('Authorization', `Bearer ${childUpdateExcludedReadAllowedToken}`);
+
+			expect(response.statusCode).toBe(200);
+
+			const row = await childRow(vendor, linkedChild);
+			expect(row.parent_id).toBe(linkedParent);
+		}
+	);
+
+	it.each(vendors)('%s preserves a full-list scalar array round-trip without unlinking siblings', async (vendor) => {
+		const { multiLinkParent, multiLinkChildren } = ids[vendor]!;
+
+		const response = await request(getUrl(vendor))
+			.patch(`/items/${parentCollection}/${multiLinkParent}`)
+			.send({ children: multiLinkChildren })
+			.set('Authorization', `Bearer ${childReverseReaderToken}`);
+
+		expect(response.statusCode).toBe(204);
+
+		for (const childId of multiLinkChildren) {
+			const row = await childRow(vendor, childId);
+			expect(row.parent_id).toBe(multiLinkParent);
+		}
+	});
+
+	it.each(vendors)('%s preserves a full-list object-array round-trip without unlinking siblings', async (vendor) => {
+		const { multiLinkParent, multiLinkChildren } = ids[vendor]!;
+
+		const response = await request(getUrl(vendor))
+			.patch(`/items/${parentCollection}/${multiLinkParent}`)
+			.send({ children: multiLinkChildren.map((id) => ({ id })) })
+			.set('Authorization', `Bearer ${childReverseReaderToken}`);
+
+		expect(response.statusCode).toBe(204);
+
+		for (const childId of multiLinkChildren) {
+			const row = await childRow(vendor, childId);
+			expect(row.parent_id).toBe(multiLinkParent);
+		}
+	});
 });
 
 describe('Nested junction (m2m) write selector and link separation', () => {
@@ -616,6 +956,7 @@ describe('Nested junction (m2m) write selector and link separation', () => {
 	const reverseField = `${m2mParent}_id`;
 	const tagField = `${tagCollection}_id`;
 	const junctionToken = `Fr2bJunction_${runId}`;
+	const m2mParentUpdateOnlyToken = `Fr2bM2mParentOnly_${runId}`;
 
 	const cleanups: (() => Promise<void>)[] = [];
 	const ids = {} as Record<string, { parent: string; junction: string; tag: string; existingTag: string }>;
@@ -694,6 +1035,16 @@ describe('Nested junction (m2m) write selector and link separation', () => {
 				await grant(vendor, roleId, collection, action, fields);
 			}
 
+			const m2mParentUpdateOnlyRole = await createRoleUser(
+				vendor,
+				`FR2b M2M Parent Update Only ${runId}`,
+				m2mParentUpdateOnlyToken,
+				`fr2b-m2mparentupdateonly-${runId}-${vendor}@tests.com`,
+				track
+			);
+
+			await grant(vendor, m2mParentUpdateOnlyRole, m2mParent, 'update', ['*']);
+
 			const created = await request(getUrl(vendor))
 				.post(`/items/${m2mParent}`)
 				.send({ name: 'M2M parent', tags: { create: [{ label: 'Original label', [tagField]: { name: 'Tag A' } }] } })
@@ -742,6 +1093,18 @@ describe('Nested junction (m2m) write selector and link separation', () => {
 		expect(readBack.statusCode).toBe(200);
 		expect(readBack.body.data.label).toBe('Edited label');
 		expect(readBack.body.data[reverseField]).toBe(parent);
+	});
+
+	it.each(vendors)('%s denies a junction membership probe for a parent-update-only caller', async (vendor) => {
+		const { parent, junction } = ids[vendor]!;
+
+		const response = await request(getUrl(vendor))
+			.patch(`/items/${m2mParent}/${parent}`)
+			.send({ tags: { update: [{ id: junction }] } })
+			.set('Authorization', `Bearer ${m2mParentUpdateOnlyToken}`);
+
+		expect(response.statusCode).toBe(403);
+		expect(response.body.errors[0].extensions.code).toBe('FORBIDDEN');
 	});
 
 	it.each(vendors)('%s updates related-tag content through the junction under narrow grants', async (vendor) => {
@@ -834,6 +1197,7 @@ describe('Nested any (m2a) write selector and link separation', () => {
 	const denyToken = `Fr2bM2aDeny_${runId}`;
 	const discDenyToken = `Fr2bM2aDiscDeny_${runId}`;
 	const m2aCreateToken = `Fr2bM2aCreate_${runId}`;
+	const m2aParentUpdateOnlyToken = `Fr2bM2aParentUpdateOnly_${runId}`;
 
 	const cleanups: (() => Promise<void>)[] = [];
 	const ids = {} as Record<string, { parent: string; block: string; junction: string; existingBlock: string }>;
@@ -922,6 +1286,16 @@ describe('Nested any (m2a) write selector and link separation', () => {
 			] as const) {
 				await grant(vendor, m2aCreateRoleId, collection, action, fields);
 			}
+
+			const m2aParentUpdateOnlyRoleId = await createRoleUser(
+				vendor,
+				`FR2b M2A Parent Update Only ${runId}`,
+				m2aParentUpdateOnlyToken,
+				`${m2aParentUpdateOnlyToken}-${vendor}@tests.com`,
+				track
+			);
+
+			await grant(vendor, m2aParentUpdateOnlyRoleId, m2aParent, 'update', ['*']);
 
 			const parent = await request(getUrl(vendor))
 				.post(`/items/${m2aParent}`)
@@ -1109,4 +1483,16 @@ describe('Nested any (m2a) write selector and link separation', () => {
 			expect(duplicates.body.data).toHaveLength(1);
 		}
 	);
+
+	it.each(vendors)('%s denies an m2a junction membership probe for a parent-update-only caller', async (vendor) => {
+		const { parent, junction } = ids[vendor]!;
+
+		const response = await request(getUrl(vendor))
+			.patch(`/items/${m2aParent}/${parent}`)
+			.send({ blocks: { update: [{ id: junction }] } })
+			.set('Authorization', `Bearer ${m2aParentUpdateOnlyToken}`);
+
+		expect(response.statusCode).toBe(403);
+		expect(response.body.errors[0].extensions.code).toBe('FORBIDDEN');
+	});
 });

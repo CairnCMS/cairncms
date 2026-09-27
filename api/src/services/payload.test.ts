@@ -5,9 +5,9 @@ import type { MockedFunction } from 'vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Helpers } from '../../src/database/helpers/index.js';
 import { getHelpers } from '../../src/database/helpers/index.js';
-import type { CollectionsOverview, FieldOverview, Relation } from '@cairncms/types';
+import type { Accountability, CollectionsOverview, FieldOverview, Relation } from '@cairncms/types';
 import { ItemsService, PayloadService } from '../../src/services/index.js';
-import { InvalidPayloadException } from '../exceptions/index.js';
+import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
 
 vi.mock('../../src/database/index', () => ({
 	default: vi.fn(),
@@ -699,11 +699,25 @@ describe('Integration Tests', () => {
 			}
 
 			let activeSpies: ReturnType<typeof childSpies> | null = null;
+			let activeReadOneSpy: { mockRestore: () => void } | null = null;
+
+			const nonAdminAccountability: Accountability = {
+				role: 'role',
+				user: 'user',
+				admin: false,
+				app: true,
+				permissions: [],
+			};
 
 			afterEach(() => {
 				if (activeSpies) {
 					for (const spy of Object.values(activeSpies)) spy.mockRestore();
 					activeSpies = null;
+				}
+
+				if (activeReadOneSpy) {
+					activeReadOneSpy.mockRestore();
+					activeReadOneSpy = null;
 				}
 			});
 
@@ -749,6 +763,128 @@ describe('Integration Tests', () => {
 
 				const nullifyQuery = spies.updateByQuery.mock.calls[0]![0] as any;
 				expect(nullifyQuery.filter._and[1].id._nin).toContain(5);
+			});
+
+			it('skips an authorized already-linked o2m no-op without writing the child', async () => {
+				const spies = childSpies();
+				activeReadOneSpy = vi.spyOn(ItemsService.prototype, 'readOne').mockResolvedValue({ id: 5, author: 1 });
+				tracker.on.select('posts').response([{ author: 1 }]);
+
+				const service = new PayloadService('authors', {
+					knex: db,
+					schema: relSchema,
+					accountability: nonAdminAccountability,
+				});
+
+				await service.processO2M({ posts: [{ id: 5 }] }, 1);
+
+				expect(spies.upsertMany).toHaveBeenCalledWith([], expect.anything());
+				expect(spies.updateOne).not.toHaveBeenCalled();
+			});
+
+			it('rejects an unauthorized already-linked o2m no-op without entering the child writer', async () => {
+				const spies = childSpies();
+				activeReadOneSpy = vi.spyOn(ItemsService.prototype, 'readOne').mockRejectedValue(new ForbiddenException());
+				tracker.on.select('posts').response([{ author: 1 }]);
+
+				const service = new PayloadService('authors', {
+					knex: db,
+					schema: relSchema,
+					accountability: nonAdminAccountability,
+				});
+
+				await expect(service.processO2M({ posts: { update: [{ id: 5 }] } }, 1)).rejects.toThrow(ForbiddenException);
+
+				expect(spies.updateOne).not.toHaveBeenCalled();
+				expect(spies.upsertMany).not.toHaveBeenCalled();
+			});
+
+			it('propagates a non-Forbidden read failure without trying another authorization route', async () => {
+				const spies = childSpies();
+				const failure = new Error('read transport failed');
+				activeReadOneSpy = vi.spyOn(ItemsService.prototype, 'readOne').mockRejectedValue(failure);
+				tracker.on.select('posts').response([{ author: 1 }]);
+
+				const service = new PayloadService('authors', {
+					knex: db,
+					schema: relSchema,
+					accountability: nonAdminAccountability,
+				});
+
+				await expect(service.processO2M({ posts: { update: [{ id: 5 }] } }, 1)).rejects.toThrow(failure);
+
+				expect(ItemsService.prototype.readOne).toHaveBeenCalledTimes(1);
+				expect(spies.updateOne).not.toHaveBeenCalled();
+				expect(spies.upsertMany).not.toHaveBeenCalled();
+			});
+
+			it('rejects an already-linked no-op when the readable child is a different record', async () => {
+				const spies = childSpies();
+
+				activeReadOneSpy = vi
+					.spyOn(ItemsService.prototype, 'readOne')
+					.mockRejectedValueOnce(new ForbiddenException())
+					.mockResolvedValueOnce({ id: 999, author: 1 })
+					.mockRejectedValueOnce(new ForbiddenException());
+
+				tracker.on.select('posts').response([{ author: 1 }]);
+
+				const service = new PayloadService('authors', {
+					knex: db,
+					schema: relSchema,
+					accountability: nonAdminAccountability,
+				});
+
+				await expect(service.processO2M({ posts: { update: [{ id: 5 }] } }, 1)).rejects.toThrow(ForbiddenException);
+
+				expect(spies.updateOne).not.toHaveBeenCalled();
+				expect(spies.upsertMany).not.toHaveBeenCalled();
+			});
+
+			it('rejects an already-linked no-op when the readable child has a null reverse link', async () => {
+				const spies = childSpies();
+
+				activeReadOneSpy = vi
+					.spyOn(ItemsService.prototype, 'readOne')
+					.mockRejectedValueOnce(new ForbiddenException())
+					.mockResolvedValueOnce({ id: 5, author: null })
+					.mockRejectedValueOnce(new ForbiddenException());
+
+				tracker.on.select('posts').response([{ author: 1 }]);
+
+				const service = new PayloadService('authors', {
+					knex: db,
+					schema: relSchema,
+					accountability: nonAdminAccountability,
+				});
+
+				await expect(service.processO2M({ posts: { update: [{ id: 5 }] } }, 1)).rejects.toThrow(ForbiddenException);
+
+				expect(spies.updateOne).not.toHaveBeenCalled();
+				expect(spies.upsertMany).not.toHaveBeenCalled();
+			});
+
+			it('rejects an already-linked no-op when the parent relation lists only a different child', async () => {
+				const spies = childSpies();
+
+				activeReadOneSpy = vi
+					.spyOn(ItemsService.prototype, 'readOne')
+					.mockRejectedValueOnce(new ForbiddenException())
+					.mockRejectedValueOnce(new ForbiddenException())
+					.mockResolvedValueOnce({ posts: [{ id: 999 }] });
+
+				tracker.on.select('posts').response([{ author: 1 }]);
+
+				const service = new PayloadService('authors', {
+					knex: db,
+					schema: relSchema,
+					accountability: nonAdminAccountability,
+				});
+
+				await expect(service.processO2M({ posts: { update: [{ id: 5 }] } }, 1)).rejects.toThrow(ForbiddenException);
+
+				expect(spies.updateOne).not.toHaveBeenCalled();
+				expect(spies.upsertMany).not.toHaveBeenCalled();
 			});
 
 			it('retains an explicit reverse field that matches the parent without stripping it', async () => {
