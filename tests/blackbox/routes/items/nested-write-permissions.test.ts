@@ -680,6 +680,34 @@ describe('Nested write selector and link separation', () => {
 		}
 	);
 
+	it.each(vendors)(
+		'%s copies children onto a new parent without altering the source parent relationships',
+		async (vendor) => {
+			const source = await seedParent(vendor, 'Copy source parent', 'Copy source child');
+			const sourceChildId = source.children[0].id;
+
+			const response = await request(getUrl(vendor))
+				.post(`/items/${parentCollection}`)
+				.send({ name: 'Copied parent', children: { create: [{ name: 'Copied child' }] } })
+				.query({ fields: '*,children.*' })
+				.set('Authorization', `Bearer ${adminToken}`);
+
+			expect(response.statusCode).toBe(200);
+
+			const copyId = response.body.data.id;
+			expect(response.body.data.children).toHaveLength(1);
+
+			const copiedChild = response.body.data.children[0];
+			expect(copiedChild.name).toBe('Copied child');
+			expect(copiedChild.parent_id).toBe(copyId);
+			expect(copiedChild.id).not.toBe(sourceChildId);
+
+			const sourceChild = await childRow(vendor, sourceChildId);
+			expect(sourceChild.name).toBe('Copy source child');
+			expect(sourceChild.parent_id).toBe(source.id);
+		}
+	);
+
 	it.each(vendors)('%s rejects a direct child create that omits the required association', async (vendor) => {
 		const response = await request(getUrl(vendor))
 			.post(`/items/${childCollection}`)

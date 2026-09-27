@@ -64,6 +64,35 @@ describe('Save As Copy', () => {
 		schema: {},
 	} as AppCollection;
 
+	const copyCollection: AppCollection = {
+		collection: 'articles',
+		name: 'articles',
+		icon: 'article',
+		type: 'table',
+		color: null,
+		schema: null,
+		meta: {
+			collection: 'articles',
+			note: null,
+			hidden: false,
+			singleton: false,
+			icon: null,
+			color: null,
+			translations: null,
+			display_template: null,
+			sort_field: null,
+			archive_field: null,
+			archive_value: null,
+			unarchive_value: null,
+			archive_app_filter: true,
+			item_duplication_fields: ['title', 'sections.*', 'tags.*'],
+			accountability: 'all',
+			sort: null,
+			group: null,
+			collapse: 'open',
+		},
+	};
+
 	test('should keep manual primary key', async () => {
 		apiGetSpy.mockResolvedValue(mockResponse);
 		apiPostSpy.mockResolvedValue(mockResponse);
@@ -231,6 +260,122 @@ describe('Save As Copy', () => {
 		await saveAsCopy();
 
 		expect(apiPostSpy.mock.lastCall![1]).not.toHaveProperty(mockPrimaryKeyFieldName);
+	});
+
+	test('strips cloned children source-parent links when copying', async () => {
+		const primaryKeyField = fld('articles', 'id', true);
+
+		useFieldsStore().fields = [
+			primaryKeyField,
+			fld('articles', 'title'),
+			fld('articles', 'sections'),
+			fld('sections', 'id', true),
+			fld('sections', 'name'),
+			fld('sections', 'article_id'),
+		];
+
+		useRelationsStore().relations = [
+			rel('sections', 'article_id', 'articles', { one_field: 'sections', many_field: 'article_id' }),
+		];
+
+		mockUseCollection(copyCollection, primaryKeyField);
+
+		apiGetSpy.mockResolvedValue({
+			data: { data: { id: 1, title: 'Original', sections: [{ id: 10, name: 'Child', article_id: 1 }] } },
+		});
+
+		apiPostSpy.mockResolvedValue({ data: { data: { id: 2 } } });
+
+		const { saveAsCopy } = useItem(ref('articles'), ref(1));
+
+		await saveAsCopy();
+
+		const body = apiPostSpy.mock.lastCall![1] as { sections: Record<string, unknown>[] };
+		expect(body.sections).toHaveLength(1);
+		expect(body.sections[0]).not.toHaveProperty('id');
+		expect(body.sections[0]).not.toHaveProperty('article_id');
+		expect(body.sections[0]!.name).toBe('Child');
+	});
+
+	test('strips the source-parent link from a detailed staged child without mutating the source draft', async () => {
+		const primaryKeyField = fld('articles', 'id', true);
+
+		useFieldsStore().fields = [
+			primaryKeyField,
+			fld('articles', 'title'),
+			fld('articles', 'sections'),
+			fld('sections', 'id', true),
+			fld('sections', 'title'),
+			fld('sections', 'article_id'),
+		];
+
+		useRelationsStore().relations = [
+			rel('sections', 'article_id', 'articles', { one_field: 'sections', many_field: 'article_id' }),
+		];
+
+		mockUseCollection(copyCollection, primaryKeyField);
+
+		apiGetSpy.mockResolvedValue({ data: { data: { id: 1, title: 'Original', sections: [] } } });
+		apiPostSpy.mockResolvedValue({ data: { data: { id: 2 } } });
+
+		const { saveAsCopy, edits } = useItem(ref('articles'), ref(1));
+		await flushPromises();
+
+		const stagedChild = { title: 'New child', article_id: 1 };
+		const manualKeyChild = { id: 50, title: 'Manual child', article_id: 1 };
+		edits.value = { sections: { create: [stagedChild, manualKeyChild], update: [], delete: [] } };
+
+		await saveAsCopy();
+
+		const body = apiPostSpy.mock.lastCall![1] as { sections: { create: Record<string, unknown>[] } };
+		expect(body.sections.create).toHaveLength(2);
+		expect(body.sections.create[0]).not.toHaveProperty('article_id');
+		expect(body.sections.create[0]!.title).toBe('New child');
+		expect(body.sections.create[1]).not.toHaveProperty('article_id');
+		expect(body.sections.create[1]!.id).toBe(50);
+		expect(body.sections.create[1]!.title).toBe('Manual child');
+		expect(stagedChild).toHaveProperty('article_id', 1);
+		expect(manualKeyChild).toHaveProperty('article_id', 1);
+	});
+
+	test('strips the source-parent link from a staged existing-junction selection while preserving the far-side key', async () => {
+		const primaryKeyField = fld('articles', 'id', true);
+
+		useFieldsStore().fields = [
+			primaryKeyField,
+			fld('articles', 'title'),
+			fld('articles', 'tags'),
+			fld('article_tags', 'id', true),
+			fld('article_tags', 'article_id'),
+			fld('article_tags', 'tag_id'),
+			fld('tags', 'id', true),
+		];
+
+		useRelationsStore().relations = [
+			rel('article_tags', 'article_id', 'articles', {
+				one_field: 'tags',
+				many_field: 'article_id',
+				junction_field: 'tag_id',
+			}),
+			rel('article_tags', 'tag_id', 'tags', { many_field: 'tag_id' }),
+		];
+
+		mockUseCollection(copyCollection, primaryKeyField);
+
+		apiGetSpy.mockResolvedValue({ data: { data: { id: 1, title: 'Original', tags: [] } } });
+		apiPostSpy.mockResolvedValue({ data: { data: { id: 2 } } });
+
+		const { saveAsCopy, edits } = useItem(ref('articles'), ref(1));
+		await flushPromises();
+
+		edits.value = { tags: { create: [{ tag_id: { id: 5 }, article_id: 1 }], update: [], delete: [] } };
+
+		await saveAsCopy();
+
+		const body = apiPostSpy.mock.lastCall![1] as { tags: { create: Record<string, unknown>[] } };
+		expect(body.tags.create).toHaveLength(1);
+		expect(body.tags.create[0]).not.toHaveProperty('article_id');
+		expect(body.tags.create[0]!.tag_id).toEqual({ id: 5 });
 	});
 });
 

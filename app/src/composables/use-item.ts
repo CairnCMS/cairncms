@@ -240,6 +240,7 @@ export function useItem(
 						}
 
 						delete relatedItem[relatedPrimaryKeyField!.field];
+						delete relatedItem[relation.field];
 
 						updateJunctionRelatedKey(relation, existsJunctionRelated, fieldsStore, relatedItem);
 						return relatedItem;
@@ -270,10 +271,23 @@ export function useItem(
 
 					updatedRelatedItems.length = 0;
 
-					for (const item of existingItems) {
-						delete item[relatedPrimaryKeyField!.field];
-						createdRelatedItems.push(item);
-					}
+					const stagedCreates = (createdRelatedItems ?? []).map((relatedItem: any) => {
+						const copiedItem = { ...relatedItem };
+						delete copiedItem[relation.field];
+						return copiedItem;
+					});
+
+					const clonedExistingItems = existingItems.map((existingItem: any) => {
+						const copiedItem = { ...existingItem };
+						delete copiedItem[relatedPrimaryKeyField!.field];
+						delete copiedItem[relation.field];
+						return copiedItem;
+					});
+
+					newItem[relation.meta.one_field] = {
+						...newItem[relation.meta.one_field],
+						create: [...stagedCreates, ...clonedExistingItems],
+					};
 				}
 			}
 		}
