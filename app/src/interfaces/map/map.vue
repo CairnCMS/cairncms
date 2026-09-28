@@ -12,7 +12,7 @@
 		</div>
 		<div
 			v-if="location"
-			class="mapboxgl-user-location-dot mapboxgl-search-location-dot"
+			class="maplibregl-user-location-dot maplibregl-search-location-dot"
 			:style="`transform: translate(${projection!.x}px, ${projection!.y}px) translate(-50%, -50%) rotateX(0deg) rotateZ(0deg)`"
 		></div>
 		<transition name="fade">
@@ -24,7 +24,7 @@
 				{{ tooltipMessage }}
 			</div>
 		</transition>
-		<div class="mapboxgl-ctrl-group mapboxgl-ctrl mapboxgl-ctrl-dropdown basemap-select">
+		<div class="maplibregl-ctrl-group maplibregl-ctrl maplibregl-ctrl-dropdown basemap-select">
 			<v-icon name="map" />
 			<v-select v-model="basemap" inline :items="basemaps.map((s) => ({ text: s.name, value: s.name }))" />
 		</div>
@@ -65,7 +65,7 @@
 import { useAppStore } from '@/stores/app';
 import { useSettingsStore } from '@/stores/settings';
 import { flatten, getBBox, getGeometryFormatForType, getParser, getSerializer } from '@/utils/geometry';
-import { getBasemapSources, getStyleFromBasemapSource } from '@/utils/geometry/basemap';
+import { getBasemapSources, getMapboxTransformRequest, getStyleFromBasemapSource } from '@/utils/geometry/basemap';
 import { ButtonControl } from '@/utils/geometry/controls';
 import { Field, GeoJSONParser, GeoJSONSerializer, GeometryType, MultiGeometry, SimpleGeometry } from '@cairncms/types';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
@@ -74,7 +74,8 @@ import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder';
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css';
 import { Geometry } from 'geojson';
 import { debounce, isEqual, snakeCase } from 'lodash';
-import maplibre, {
+import * as maplibre from 'maplibre-gl';
+import {
 	AnimationOptions,
 	AttributionControl,
 	CameraOptions,
@@ -85,6 +86,7 @@ import maplibre, {
 	NavigationControl,
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import '@/utils/geometry/worker';
 import type { Ref } from 'vue';
 import { computed, onMounted, onUnmounted, ref, toRefs, watch } from 'vue';
 import { TranslateResult, useI18n } from 'vue-i18n';
@@ -92,6 +94,15 @@ import { getMapStyle } from './style';
 
 // @ts-ignore
 import StaticMode from '@mapbox/mapbox-gl-draw-static-mode';
+
+// mapbox-gl-draw detects the map canvas and builds its controls using mapbox-gl class names; align them with the classes maplibre renders.
+Object.assign((MapboxDraw as any).constants.classes, {
+	CANVAS: 'maplibregl-canvas',
+	CONTROL_BASE: 'maplibregl-ctrl',
+	CONTROL_PREFIX: 'maplibregl-ctrl-',
+	CONTROL_GROUP: 'maplibregl-ctrl-group',
+	ATTRIBUTION: 'maplibregl-ctrl-attrib',
+});
 
 const activeLayers = [
 	'directus-point',
@@ -170,7 +181,7 @@ watch(location, updateProjection);
 const controls = {
 	attribution: new AttributionControl(),
 	draw: new MapboxDraw(getDrawOptions(geometryType)),
-	fitData: new ButtonControl('mapboxgl-ctrl-fitdata', fitDataBounds),
+	fitData: new ButtonControl('maplibregl-ctrl-fitdata', fitDataBounds),
 	navigation: new NavigationControl({
 		showCompass: false,
 	}),
@@ -227,7 +238,7 @@ function setupMap(): () => void {
 		logoPosition: 'bottom-left',
 		attributionControl: false,
 		...props.defaultView,
-		...(mapboxKey ? { accessToken: mapboxKey } : {}),
+		transformRequest: getMapboxTransformRequest(mapboxKey),
 	});
 
 	if (controls.geocoder) {
@@ -520,7 +531,7 @@ function handleKeyDown(event: any) {
 		}
 	}
 
-	.mapboxgl-search-location-dot {
+	.maplibregl-search-location-dot {
 		position: absolute;
 		top: 0;
 		left: 0;
