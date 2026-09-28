@@ -6,6 +6,8 @@ export const collection = 'test_items_geometry_bbox_filter';
 export const geometryVendors = vendors.filter((vendor) => vendor === 'postgres' || vendor === 'postgres10');
 
 export const seedDBStructure = () => {
+	if (geometryVendors.length === 0) return;
+
 	it.each(geometryVendors)(
 		'%s',
 		async (vendor) => {

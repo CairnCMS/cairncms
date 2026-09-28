@@ -5,51 +5,55 @@ import { collection, geometryVendors, seedDBValues } from './geometry-bbox-filte
 
 let isSeeded = false;
 
-beforeAll(async () => {
-	isSeeded = await seedDBValues();
-}, 300000);
+if (geometryVendors.length === 0) {
+	test.skip('geometry bbox filter requires a PostGIS-capable vendor', () => expect(geometryVendors).toHaveLength(0));
+} else {
+	beforeAll(async () => {
+		isSeeded = await seedDBValues();
+	}, 300000);
 
-test('Seed Database Values', () => {
-	expect(isSeeded).toStrictEqual(true);
-});
+	test('Seed Database Values', () => {
+		expect(isSeeded).toStrictEqual(true);
+	});
 
-describe('geometry bbox filter', () => {
-	const bbox = {
-		type: 'Polygon',
-		coordinates: [
-			[
-				[0, 0],
-				[20, 0],
-				[20, 20],
-				[0, 20],
-				[0, 0],
+	describe('geometry bbox filter', () => {
+		const bbox = {
+			type: 'Polygon',
+			coordinates: [
+				[
+					[0, 0],
+					[20, 0],
+					[20, 20],
+					[0, 20],
+					[0, 0],
+				],
 			],
-		],
-	};
+		};
 
-	describe('_intersects_bbox on a typed geometry field returns only rows inside the box', () => {
-		it.each(geometryVendors)('%s', async (vendor) => {
-			const response = await request(getUrl(vendor))
-				.get(`/items/${collection}`)
-				.query({ filter: JSON.stringify({ location: { _intersects_bbox: bbox } }), fields: 'label' })
-				.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`);
+		describe('_intersects_bbox on a typed geometry field returns only rows inside the box', () => {
+			it.each(geometryVendors)('%s', async (vendor) => {
+				const response = await request(getUrl(vendor))
+					.get(`/items/${collection}`)
+					.query({ filter: JSON.stringify({ location: { _intersects_bbox: bbox } }), fields: 'label' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`);
 
-			expect(response.statusCode).toEqual(200);
-			expect(response.body.data.length).toBe(1);
-			expect(response.body.data[0].label).toBe('inside');
+				expect(response.statusCode).toEqual(200);
+				expect(response.body.data.length).toBe(1);
+				expect(response.body.data[0].label).toBe('inside');
+			});
+		});
+
+		describe('_nintersects_bbox on a typed geometry field returns only rows outside the box', () => {
+			it.each(geometryVendors)('%s', async (vendor) => {
+				const response = await request(getUrl(vendor))
+					.get(`/items/${collection}`)
+					.query({ filter: JSON.stringify({ location: { _nintersects_bbox: bbox } }), fields: 'label' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`);
+
+				expect(response.statusCode).toEqual(200);
+				expect(response.body.data.length).toBe(1);
+				expect(response.body.data[0].label).toBe('outside');
+			});
 		});
 	});
-
-	describe('_nintersects_bbox on a typed geometry field returns only rows outside the box', () => {
-		it.each(geometryVendors)('%s', async (vendor) => {
-			const response = await request(getUrl(vendor))
-				.get(`/items/${collection}`)
-				.query({ filter: JSON.stringify({ location: { _nintersects_bbox: bbox } }), fields: 'label' })
-				.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`);
-
-			expect(response.statusCode).toEqual(200);
-			expect(response.body.data.length).toBe(1);
-			expect(response.body.data[0].label).toBe('outside');
-		});
-	});
-});
+}
