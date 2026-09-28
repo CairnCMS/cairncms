@@ -19,11 +19,12 @@
 <script setup lang="ts">
 import { useAppStore } from '@/stores/app';
 import { useSettingsStore } from '@/stores/settings';
-import { getBasemapSources, getStyleFromBasemapSource } from '@/utils/geometry/basemap';
+import { getBasemapSources, getMapboxTransformRequest, getStyleFromBasemapSource } from '@/utils/geometry/basemap';
 import { GEOMETRY_TYPES } from '@cairncms/constants';
 import { Field, GeometryOptions, GeometryType } from '@cairncms/types';
 import { CameraOptions, Map } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import '@/utils/geometry/worker';
 import type { Ref } from 'vue';
 import { computed, onMounted, onUnmounted, ref, toRefs, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -81,7 +82,7 @@ onMounted(() => {
 		container: mapContainer.value!,
 		style: style.value,
 		...(defaultView.value || {}),
-		...(mapboxKey ? { accessToken: mapboxKey } : {}),
+		transformRequest: getMapboxTransformRequest(mapboxKey),
 	});
 
 	map.on('moveend', () => {

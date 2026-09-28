@@ -10,6 +10,10 @@ export function getFilterOperatorsForType(
 ): ClientFilterOperator[] {
 	const validationOnlyStringFilterOperators: ClientFilterOperator[] = opts?.includeValidation ? ['regex'] : [];
 
+	if (type.startsWith('geometry')) {
+		return ['eq', 'neq', 'null', 'nnull', 'intersects', 'nintersects', 'intersects_bbox', 'nintersects_bbox'];
+	}
+
 	switch (type) {
 		// Text
 		case 'binary':
@@ -60,9 +64,6 @@ export function getFilterOperatorsForType(
 		case 'date':
 		case 'time':
 			return ['eq', 'neq', 'lt', 'lte', 'gt', 'gte', 'between', 'nbetween', 'null', 'nnull', 'in', 'nin'];
-
-		case 'geometry':
-			return ['eq', 'neq', 'null', 'nnull', 'intersects', 'nintersects', 'intersects_bbox', 'nintersects_bbox'];
 
 		default:
 			return [

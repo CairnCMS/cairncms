@@ -9,8 +9,9 @@
 <script setup lang="ts">
 import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder';
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css';
-import maplibre, {
-	AnyLayer,
+import * as maplibre from 'maplibre-gl';
+import {
+	AddLayerObject,
 	AttributionControl,
 	CameraOptions,
 	GeoJSONSource,
@@ -18,17 +19,18 @@ import maplibre, {
 	LngLatBoundsLike,
 	LngLatLike,
 	Map,
+	MapGeoJSONFeature,
 	MapLayerMouseEvent,
-	MapboxGeoJSONFeature,
 	NavigationControl,
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import '@/utils/geometry/worker';
 import { WatchStopHandle, computed, onMounted, onUnmounted, ref, toRefs, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 import { useAppStore } from '@/stores/app';
 import { useSettingsStore } from '@/stores/settings';
-import { getBasemapSources, getStyleFromBasemapSource } from '@/utils/geometry/basemap';
+import { getBasemapSources, getMapboxTransformRequest, getStyleFromBasemapSource } from '@/utils/geometry/basemap';
 import { BoxSelectControl, ButtonControl } from '@/utils/geometry/controls';
 import { ShowSelect } from '@cairncms/types';
 
@@ -36,7 +38,7 @@ const props = withDefaults(
 	defineProps<{
 		data: GeoJSON.FeatureCollection;
 		source: GeoJSONSource;
-		layers?: AnyLayer[];
+		layers?: AddLayerObject[];
 		camera?: CameraOptions & { bbox: any };
 		bounds?: GeoJSON.BBox;
 		featureId?: string;
@@ -57,7 +59,7 @@ const { t } = useI18n();
 const appStore = useAppStore();
 const settingsStore = useSettingsStore();
 let map: Map;
-const hoveredFeature = ref<MapboxGeoJSONFeature>();
+const hoveredFeature = ref<MapGeoJSONFeature>();
 const hoveredCluster = ref<boolean>();
 const selectMode = ref<boolean>();
 const container = ref<HTMLElement>();
@@ -79,13 +81,13 @@ const navigationControl = new NavigationControl({
 
 const geolocateControl = new GeolocateControl();
 
-const fitDataControl = new ButtonControl('mapboxgl-ctrl-fitdata', () => {
+const fitDataControl = new ButtonControl('maplibregl-ctrl-fitdata', () => {
 	emit('fitdata');
 });
 
 const boxSelectControl = new BoxSelectControl({
 	boxElementClass: 'map-selection-box',
-	selectButtonClass: 'mapboxgl-ctrl-select',
+	selectButtonClass: 'maplibregl-ctrl-select',
 	layers: ['__directus_polygons', '__directus_points', '__directus_lines'],
 });
 
@@ -93,7 +95,7 @@ let geocoderControl: MapboxGeocoder | undefined;
 
 if (mapboxKey) {
 	const marker = document.createElement('div');
-	marker.className = 'mapboxgl-user-location-dot mapboxgl-search-location-dot';
+	marker.className = 'maplibregl-user-location-dot maplibregl-search-location-dot';
 
 	geocoderControl = new MapboxGeocoder({
 		accessToken: mapboxKey,
@@ -120,7 +122,7 @@ function setupMap() {
 		dragRotate: false,
 		attributionControl: false,
 		...props.camera,
-		...(mapboxKey ? { accessToken: mapboxKey } : {}),
+		transformRequest: getMapboxTransformRequest(mapboxKey),
 	});
 
 	if (geocoderControl) {
@@ -239,7 +241,7 @@ function updateSource(newSource: GeoJSONSource) {
 	});
 }
 
-function updateLayers(newLayers?: AnyLayer[], previousLayers?: AnyLayer[]) {
+function updateLayers(newLayers?: AddLayerObject[], previousLayers?: AddLayerObject[]) {
 	const currentMapLayersId = new Set(map.getStyle().layers?.map(({ id }) => id));
 
 	previousLayers?.forEach((layer) => {
@@ -317,7 +319,7 @@ function updatePopupLocation(event: MapLayerMouseEvent) {
 	}
 }
 
-function expandCluster(event: MapLayerMouseEvent) {
+async function expandCluster(event: MapLayerMouseEvent) {
 	const features = map.queryRenderedFeatures(event.point, {
 		layers: ['__directus_clusters'],
 	});
@@ -325,15 +327,17 @@ function expandCluster(event: MapLayerMouseEvent) {
 	const clusterId = features[0]?.properties?.cluster_id;
 	const source = map.getSource('__directus') as GeoJSONSource;
 
-	source.getClusterExpansionZoom(clusterId, (err: any, zoom: number) => {
-		if (err) return;
+	try {
+		const zoom = await source.getClusterExpansionZoom(clusterId);
 
 		map.flyTo({
 			center: (features[0].geometry as GeoJSON.Point).coordinates as LngLatLike,
-			zoom: zoom,
+			zoom,
 			speed: 1.3,
 		});
-	});
+	} catch {
+		return;
+	}
 }
 
 function hoverCluster(event: MapLayerMouseEvent) {
@@ -346,11 +350,11 @@ function hoverCluster(event: MapLayerMouseEvent) {
 </script>
 
 <style lang="scss" scoped>
-#map-container.hover :deep(.mapboxgl-canvas-container) {
+#map-container.hover :deep(.maplibregl-canvas-container) {
 	cursor: pointer !important;
 }
 
-#map-container.select :deep(.mapboxgl-canvas-container) {
+#map-container.select :deep(.maplibregl-canvas-container) {
 	cursor: crosshair !important;
 }
 

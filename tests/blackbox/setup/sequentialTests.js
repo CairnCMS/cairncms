@@ -46,6 +46,7 @@ exports.list = {
 		{ testFilePath: '/routes/items/nested-write-permissions.test.ts' },
 		{ testFilePath: '/routes/items/query-limit.test.ts' },
 		{ testFilePath: '/routes/items/flag-operator-filter.test.ts' },
+		{ testFilePath: '/routes/items/geometry-bbox-filter.test.ts' },
 		{ testFilePath: '/routes/assets/format.test.ts' },
 		{ testFilePath: '/routes/assets/system-preset-format-isolation.test.ts' },
 		{ testFilePath: '/routes/assets/read.test.ts' },

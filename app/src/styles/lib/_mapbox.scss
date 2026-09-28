@@ -1,8 +1,8 @@
-.mapboxgl-map {
+.maplibregl-map {
 	font: inherit;
 }
 
-.mapboxgl-ctrl-group {
+.maplibregl-ctrl-group {
 	overflow: hidden;
 	background: none;
 
@@ -51,8 +51,7 @@
 	}
 }
 
-.mapboxgl-search-location-dot,
-.mapboxgl-user-location-dot,
+.maplibregl-search-location-dot,
 .maplibregl-user-location-dot {
 	width: .75rem;
 	height: .75rem;
@@ -69,14 +68,14 @@
 	pointer-events: none;
 }
 
-.mapboxgl-search-location-dot {
+.maplibregl-search-location-dot {
 	&,
 	&::before {
 		background-color: var(--purple);
 	}
 }
 
-.mapboxgl-ctrl-attrib.mapboxgl-compact {
+.maplibregl-ctrl-attrib.maplibregl-compact {
 	min-width: 1.5rem;
 	min-height: 1.5rem;
 	color: var(--foreground-normal);
@@ -101,14 +100,13 @@
 		}
 	}
 
-	.maplibregl-ctrl-attrib-inner,
-	.mapboxgl-ctrl-attrib-inner {
+	.maplibregl-ctrl-attrib-inner {
 		font-size: .75rem;
 		line-height: 1.25rem;
 	}
 }
 
-.mapboxgl-ctrl-attrib:not(.mapboxgl-compact) {
+.maplibregl-ctrl-attrib:not(.maplibregl-compact) {
 	font-size: 0.8em;
 	color: var(--foreground-normal);
 	background: var(--background-input);
@@ -195,31 +193,31 @@
 	max-width: 80%;
 }
 
-.mapboxgl-ctrl-zoom-in::after {
+.maplibregl-ctrl-zoom-in::after {
 	content: 'add';
 }
 
-.mapboxgl-ctrl-zoom-out::after {
+.maplibregl-ctrl-zoom-out::after {
 	content: 'remove';
 }
 
-.mapboxgl-ctrl-compass::after {
+.maplibregl-ctrl-compass::after {
 	content: 'explore';
 }
 
-.mapboxgl-ctrl-geolocate::after {
+.maplibregl-ctrl-geolocate::after {
 	content: 'my_location';
 }
 
-.mapboxgl-ctrl-fitdata::after {
+.maplibregl-ctrl-fitdata::after {
 	content: 'crop_free';
 }
 
-.mapboxgl-ctrl-select::after {
+.maplibregl-ctrl-select::after {
 	content: 'select';
 }
 
-.mapboxgl-ctrl-unselect::after {
+.maplibregl-ctrl-unselect::after {
 	content: 'clear';
 }
 
@@ -245,4 +243,37 @@
 
 .mapbox-gl-draw_combine::after {
 	content: 'call_merge';
+}
+
+// mapbox-gl-draw sets its cursor styles on mapbox-gl class names; re-map them to the classes maplibre renders.
+.maplibregl-map.mouse-pointer .maplibregl-canvas-container.maplibregl-interactive {
+	cursor: pointer;
+}
+
+.maplibregl-map.mouse-move .maplibregl-canvas-container.maplibregl-interactive {
+	cursor: move;
+}
+
+.maplibregl-map.mouse-add .maplibregl-canvas-container.maplibregl-interactive {
+	cursor: crosshair;
+}
+
+.maplibregl-map.mouse-move.mode-direct_select .maplibregl-canvas-container.maplibregl-interactive {
+	cursor: grab;
+}
+
+.maplibregl-map.mode-direct_select.feature-vertex.mouse-move .maplibregl-canvas-container.maplibregl-interactive {
+	cursor: move;
+}
+
+.maplibregl-map.mode-direct_select.feature-midpoint.mouse-pointer .maplibregl-canvas-container.maplibregl-interactive {
+	cursor: cell;
+}
+
+.maplibregl-map.mode-direct_select.feature-feature.mouse-move .maplibregl-canvas-container.maplibregl-interactive {
+	cursor: move;
+}
+
+.maplibregl-map.mode-static.mouse-pointer .maplibregl-canvas-container.maplibregl-interactive {
+	cursor: grab;
 }
