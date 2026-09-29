@@ -394,10 +394,13 @@ describe('/items QUERY_LIMIT_MAX enforcement', () => {
 				.set('Authorization', `Bearer ${adminToken}`);
 		}
 
-		async function findExportFile(url: string, title: string): Promise<{ id: string } | null> {
+		async function findExportFile(
+			url: string,
+			title: string
+		): Promise<{ id: string; filename_disk: string | null } | null> {
 			const response = await request(url)
 				.get('/files')
-				.query({ 'filter[title][_eq]': title, fields: 'id' })
+				.query({ 'filter[title][_eq]': title, fields: 'id,filename_disk' })
 				.set('Authorization', `Bearer ${adminToken}`);
 
 			expect(response.statusCode).toBe(200);
@@ -410,7 +413,7 @@ describe('/items QUERY_LIMIT_MAX enforcement', () => {
 
 			do {
 				const row = await findExportFile(url, title);
-				if (row) return row;
+				if (row?.filename_disk) return { id: row.id };
 				await new Promise((resolve) => setTimeout(resolve, 250));
 			} while (Date.now() - started < timeoutMs);
 
