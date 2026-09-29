@@ -261,6 +261,7 @@ o2m_relationship: Én til mange relasjon
 m2m_relationship: Mange til mange relasjon
 m2a_relationship: Mange til alle relasjon
 invalid_item: Ugyldig element
+dialog: Dialogvindu
 next: Neste
 field_name: Feltnavn
 translations: Oversettelser
@@ -271,6 +272,7 @@ note: Notat
 enter_a_value: Legg inn verdi...
 enter_a_placeholder: Legg inn en plassholder...
 length: Lengde
+soft_length: Myk grense
 precision_scale: Presisjon og skala
 readonly: Skrivebeskyttet
 unique: Unik
@@ -692,6 +694,7 @@ select_fields: Velg felter
 format_text: Formater tekst
 format_value: Formater verdi
 bold: Fet
+toggle: Veksle
 icon_on: Ikon på
 icon_off: Ikon av
 field_name_placeholder: Angi feltnavn...
@@ -704,6 +707,7 @@ creating_new_flow: Opprett ny Flyt
 updating_flow: Oppdater Flyt
 flow_setup: Oppsett av Flyt
 flow_name: Navn
+flow_tracking_null: Ikke spor noenting
 start_flow: Start Flyt
 stop_flow: Stopp Flyt
 create_operation: Opprett operasjon
