@@ -137,8 +137,9 @@ describe('sharp transform compatibility', () => {
 		rmSync(operandDir, { recursive: true, force: true });
 	});
 
-	test('bundles exactly libvips 8.18.3', () => {
-		expect(sharp.versions.vips).toBe('8.18.3');
+	test('bundles exactly libvips 8.18.6 with patched libheif 1.23.2', () => {
+		expect(sharp.versions.vips).toBe('8.18.6');
+		expect(sharp.versions.heif).toBe('1.23.2');
 	});
 
 	test(`runs on the ${backend} backend`, () => {
