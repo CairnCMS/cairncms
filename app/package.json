@@ -99,7 +99,7 @@
 		"micromustache": "8.0.3",
 		"mime": "3.0.0",
 		"mitt": "3.0.0",
-		"nanoid": "5.0.9",
+		"nanoid": "5.1.16",
 		"p-queue": "7.3.4",
 		"pinia": "2.3.1",
 		"pretty-ms": "8.0.0",
