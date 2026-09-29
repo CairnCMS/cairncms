@@ -52,6 +52,7 @@ exports.list = {
 		{ testFilePath: '/routes/assets/read.test.ts' },
 		{ testFilePath: '/routes/assets/limit.test.ts' },
 		{ testFilePath: '/routes/assets/concurrency.test.ts' },
+		{ testFilePath: '/routes/utils/random-string.test.ts' },
 		{ testFilePath: '/flows/schedule-coordination.test.ts' },
 		{ testFilePath: '/routes/realtime/realtime.test.ts' },
 		{ testFilePath: '/utils/await-connection.test.ts' },

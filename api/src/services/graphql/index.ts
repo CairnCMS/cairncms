@@ -2429,11 +2429,13 @@ export class GraphQLService {
 				resolve: async (_, args) => {
 					const { nanoid } = await import('nanoid');
 
-					if (args['length'] && Number(args['length']) > 500) {
-						throw new InvalidPayloadException(`"length" can't be more than 500 characters`);
+					const length = args['length'] === undefined || args['length'] === null ? 32 : Number(args['length']);
+
+					if (!Number.isInteger(length) || length < 1 || length > 500) {
+						throw new InvalidPayloadException(`"length" must be a positive integer no greater than 500`);
 					}
 
-					return nanoid(args['length'] ? Number(args['length']) : 32);
+					return nanoid(length);
 				},
 			},
 			utils_hash_generate: {
