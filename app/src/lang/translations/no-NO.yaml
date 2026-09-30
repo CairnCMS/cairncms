@@ -1240,6 +1240,7 @@ half_circle: Halvsirkel
 thin: Tynn
 medium: Middels
 broad: Bred
+show_labels: Vis etiketter
 right: Høyre
 left: Venstre
 donut: Smultring
@@ -1250,6 +1251,10 @@ panels:
   time_series:
     date_field: Datofelt
     value_field: Verdifelt
+  label:
+    name: Etikett
+  list:
+    name: Liste
   barchart:
     name: Stolpediagram
     horizontal: Horisontal
@@ -1261,20 +1266,58 @@ panels:
   piechart:
     name: Kake- eller smultringsdiagram
   relational-variable:
+    multiple: Flere
     multiple-label: Velg flere elementer
+triggers:
+  webhook:
+    async: Asynkron
+  schedule:
+    cron: Intervall
+  manual:
+    name: Manuell
 operations:
   exec:
     name: Kjør skript
+  item-create:
+    name: Opprett data
+    description: Opprett elementer i databasen
+  item-delete:
+    name: Slett data
+  item-read:
+    name: Les data
+    query: Spørring
+  item-update:
+    name: Oppdater data
+    query: Spørring
   log:
+    name: Logg til konsollen
     message: Melding
+  mail:
+    name: Send e-post
+    description: Send en e-post til en eller flere personer
+    to: Til
+    to_placeholder: Legg til e-postadresser og trykk enter...
+    template: Mal
+    data: Data
   notification:
+    name: Send varsel
+    description: Send et varsel i appen til en eller flere brukere
+    recipient: Bruker
     message: Melding
   request:
     url: URL
     url_placeholder: https://example.com/example
     data: Data
+    header_placeholder: Autorisasjon...
   sleep:
+    description: Vent et gitt antall millisekunder
     milliseconds: Millisekunder
   trigger:
+    description: Gi dataene videre til en annen flyt
+    flows: Flyter
+    flow: Flyt
     data: Data
+    iteration_mode: Iterasjonsmodus
+    serial: Seriell
+    parallel: Parallell
     cache: Buffer
