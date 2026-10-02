@@ -15,7 +15,6 @@ permissions:
 
 jobs:
   test:
-    name: SQLite API
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

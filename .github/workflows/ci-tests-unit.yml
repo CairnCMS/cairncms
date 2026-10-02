@@ -15,7 +15,6 @@ permissions:
 
 jobs:
   unit:
-    name: Workspace suites
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

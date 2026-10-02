@@ -16,7 +16,6 @@ permissions:
 
 jobs:
   stress:
-    name: ${{ github.event_name == 'pull_request' && '3,000 invocations' || '10,000 invocations' }}
     runs-on: ubuntu-latest
     env:
       INVOCATION_COUNT: ${{ github.event_name == 'pull_request' && '3000' || '10000' }}
