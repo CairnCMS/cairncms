@@ -724,3 +724,53 @@ describe('applyAggregate primary key countDistinct optimization', () => {
 		).toThrow(InvalidQueryException);
 	});
 });
+
+describe('applyFilter flag operator null and empty semantics', () => {
+	const FLAG_OPERATORS = [
+		{ operator: '_null', affirmative: 'null', family: 'null' },
+		{ operator: '_nnull', affirmative: 'notnull', family: 'null' },
+		{ operator: '_empty', affirmative: 'null', family: 'empty' },
+		{ operator: '_nempty', affirmative: 'notnull', family: 'empty' },
+	] as const;
+
+	const FLAG_VALUES = [true, '', null, false];
+
+	function whereSql(operator: string, value: unknown) {
+		const dbQuery = makeBuilder();
+		const knexInstance = knex.default({ client: 'sqlite3', useNullAsDefault: true });
+		applyFilter(knexInstance, makeSchema(), dbQuery, { title: { [operator]: value } }, 'notes', {});
+		return dbQuery.toSQL().sql.toLowerCase();
+	}
+
+	function flip(affirmative: 'null' | 'notnull') {
+		return affirmative === 'null' ? 'notnull' : 'null';
+	}
+
+	function valueLabel(value: unknown) {
+		if (value === false) return 'false';
+		if (value === '') return 'empty string';
+		return String(value);
+	}
+
+	for (const { operator, affirmative, family } of FLAG_OPERATORS) {
+		for (const value of FLAG_VALUES) {
+			const direction = value === false ? flip(affirmative) : affirmative;
+
+			it(`${operator} with ${valueLabel(value)} applies the ${direction} condition`, () => {
+				const sql = whereSql(operator, value);
+
+				if (direction === 'null') {
+					expect(sql).toContain('is null');
+					expect(sql).not.toContain('is not null');
+				} else {
+					expect(sql).toContain('is not null');
+					expect(sql).not.toContain('is null');
+				}
+
+				if (family === 'empty') {
+					expect(sql).toContain(direction === 'null' ? ' = ?' : ' != ?');
+				}
+			});
+		}
+	}
+});

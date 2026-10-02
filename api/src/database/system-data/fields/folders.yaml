@@ -12,3 +12,10 @@ fields:
 
   - field: name
     width: full
+
+  - field: key
+    special:
+      - folder-key
+    readonly: true
+    hidden: true
+    width: half

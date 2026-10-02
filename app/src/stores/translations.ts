@@ -2,6 +2,7 @@ import api from '@/api';
 import { i18n } from '@/lang';
 import { fetchAll } from '@/utils/fetch-all';
 import { getLiteralInterpolatedTranslation } from '@/utils/get-literal-interpolated-translation';
+import { stripUnboundParentLinks } from '@/utils/strip-unbound-parent-links';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { defineStore } from 'pinia';
 import { ref, unref, watch } from 'vue';
@@ -43,7 +44,7 @@ export const useTranslationsStore = defineStore('translations', () => {
 
 	const create = async (translation: Translation) => {
 		try {
-			await api.post('/translations', translation);
+			await api.post('/translations', stripUnboundParentLinks('directus_translations', translation, false));
 			await loadTranslations();
 		} catch (err: any) {
 			unexpectedError(err);

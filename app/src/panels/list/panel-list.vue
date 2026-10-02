@@ -15,7 +15,7 @@
 			</v-list>
 		</div>
 		<drawer-item
-			:active="!!currentlyEditing"
+			:active="currentlyEditing !== undefined"
 			:collection="collection"
 			:primary-key="currentlyEditing ?? '+'"
 			:edits="editsAtStart"
@@ -27,9 +27,11 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { omit } from 'lodash';
 import api from '@/api';
 import { useFieldsStore } from '@/stores/fields';
 import { useInsightsStore } from '@/stores/insights';
+import { stripUnboundParentLinks } from '@/utils/strip-unbound-parent-links';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { getEndpoint } from '@cairncms/utils';
 
@@ -71,7 +73,10 @@ function cancelEdit() {
 
 async function saveEdits(item: Record<string, any>) {
 	try {
-		await api.patch(`${getEndpoint(props.collection)}/${currentlyEditing.value}`, item);
+		await api.patch(
+			`${getEndpoint(props.collection)}/${currentlyEditing.value}`,
+			stripUnboundParentLinks(props.collection, omit(item, primaryKeyField.value), true)
+		);
 	} catch (err: any) {
 		unexpectedError(err);
 	}

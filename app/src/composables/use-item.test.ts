@@ -2,10 +2,14 @@ import api from '@/api';
 import { useCollection } from '@cairncms/composables';
 import { AppCollection, Field } from '@cairncms/types';
 import { createTestingPinia } from '@pinia/testing';
+import { flushPromises } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { computed, ref } from 'vue';
 
+import { useFieldsStore } from '@/stores/fields';
+import { useRelationsStore } from '@/stores/relations';
+import { fld, rel } from '@/__utils__/field-relation-fixtures';
 import { useItem } from './use-item';
 
 vi.mock('@/utils/notify', () => ({
@@ -17,11 +21,15 @@ vi.mock('@/api', () => {
 		default: {
 			get: vi.fn(),
 			post: vi.fn(),
+			patch: vi.fn(),
 		},
 	};
 });
 
 vi.mock('@cairncms/composables');
+
+const { validateItemMock } = vi.hoisted(() => ({ validateItemMock: vi.fn(() => [] as any[]) }));
+vi.mock('@/utils/validate-item', () => ({ validateItem: (...args: any[]) => validateItemMock(...args) }));
 
 beforeEach(() => {
 	setActivePinia(
@@ -55,6 +63,35 @@ describe('Save As Copy', () => {
 		},
 		schema: {},
 	} as AppCollection;
+
+	const copyCollection: AppCollection = {
+		collection: 'articles',
+		name: 'articles',
+		icon: 'article',
+		type: 'table',
+		color: null,
+		schema: null,
+		meta: {
+			collection: 'articles',
+			note: null,
+			hidden: false,
+			singleton: false,
+			icon: null,
+			color: null,
+			translations: null,
+			display_template: null,
+			sort_field: null,
+			archive_field: null,
+			archive_value: null,
+			unarchive_value: null,
+			archive_app_filter: true,
+			item_duplication_fields: ['title', 'sections.*', 'tags.*'],
+			accountability: 'all',
+			sort: null,
+			group: null,
+			collapse: 'open',
+		},
+	};
 
 	test('should keep manual primary key', async () => {
 		apiGetSpy.mockResolvedValue(mockResponse);
@@ -223,5 +260,327 @@ describe('Save As Copy', () => {
 		await saveAsCopy();
 
 		expect(apiPostSpy.mock.lastCall![1]).not.toHaveProperty(mockPrimaryKeyFieldName);
+	});
+
+	test('strips cloned children source-parent links when copying', async () => {
+		const primaryKeyField = fld('articles', 'id', true);
+
+		useFieldsStore().fields = [
+			primaryKeyField,
+			fld('articles', 'title'),
+			fld('articles', 'sections'),
+			fld('sections', 'id', true),
+			fld('sections', 'name'),
+			fld('sections', 'article_id'),
+		];
+
+		useRelationsStore().relations = [
+			rel('sections', 'article_id', 'articles', { one_field: 'sections', many_field: 'article_id' }),
+		];
+
+		mockUseCollection(copyCollection, primaryKeyField);
+
+		apiGetSpy.mockResolvedValue({
+			data: { data: { id: 1, title: 'Original', sections: [{ id: 10, name: 'Child', article_id: 1 }] } },
+		});
+
+		apiPostSpy.mockResolvedValue({ data: { data: { id: 2 } } });
+
+		const { saveAsCopy } = useItem(ref('articles'), ref(1));
+
+		await saveAsCopy();
+
+		const body = apiPostSpy.mock.lastCall![1] as { sections: Record<string, unknown>[] };
+		expect(body.sections).toHaveLength(1);
+		expect(body.sections[0]).not.toHaveProperty('id');
+		expect(body.sections[0]).not.toHaveProperty('article_id');
+		expect(body.sections[0]!.name).toBe('Child');
+	});
+
+	test('strips the source-parent link from a detailed staged child without mutating the source draft', async () => {
+		const primaryKeyField = fld('articles', 'id', true);
+
+		useFieldsStore().fields = [
+			primaryKeyField,
+			fld('articles', 'title'),
+			fld('articles', 'sections'),
+			fld('sections', 'id', true),
+			fld('sections', 'title'),
+			fld('sections', 'article_id'),
+		];
+
+		useRelationsStore().relations = [
+			rel('sections', 'article_id', 'articles', { one_field: 'sections', many_field: 'article_id' }),
+		];
+
+		mockUseCollection(copyCollection, primaryKeyField);
+
+		apiGetSpy.mockResolvedValue({ data: { data: { id: 1, title: 'Original', sections: [] } } });
+		apiPostSpy.mockResolvedValue({ data: { data: { id: 2 } } });
+
+		const { saveAsCopy, edits } = useItem(ref('articles'), ref(1));
+		await flushPromises();
+
+		const stagedChild = { title: 'New child', article_id: 1 };
+		const manualKeyChild = { id: 50, title: 'Manual child', article_id: 1 };
+		edits.value = { sections: { create: [stagedChild, manualKeyChild], update: [], delete: [] } };
+
+		await saveAsCopy();
+
+		const body = apiPostSpy.mock.lastCall![1] as { sections: { create: Record<string, unknown>[] } };
+		expect(body.sections.create).toHaveLength(2);
+		expect(body.sections.create[0]).not.toHaveProperty('article_id');
+		expect(body.sections.create[0]!.title).toBe('New child');
+		expect(body.sections.create[1]).not.toHaveProperty('article_id');
+		expect(body.sections.create[1]!.id).toBe(50);
+		expect(body.sections.create[1]!.title).toBe('Manual child');
+		expect(stagedChild).toHaveProperty('article_id', 1);
+		expect(manualKeyChild).toHaveProperty('article_id', 1);
+	});
+
+	test('strips the source-parent link from a staged existing-junction selection while preserving the far-side key', async () => {
+		const primaryKeyField = fld('articles', 'id', true);
+
+		useFieldsStore().fields = [
+			primaryKeyField,
+			fld('articles', 'title'),
+			fld('articles', 'tags'),
+			fld('article_tags', 'id', true),
+			fld('article_tags', 'article_id'),
+			fld('article_tags', 'tag_id'),
+			fld('tags', 'id', true),
+		];
+
+		useRelationsStore().relations = [
+			rel('article_tags', 'article_id', 'articles', {
+				one_field: 'tags',
+				many_field: 'article_id',
+				junction_field: 'tag_id',
+			}),
+			rel('article_tags', 'tag_id', 'tags', { many_field: 'tag_id' }),
+		];
+
+		mockUseCollection(copyCollection, primaryKeyField);
+
+		apiGetSpy.mockResolvedValue({ data: { data: { id: 1, title: 'Original', tags: [] } } });
+		apiPostSpy.mockResolvedValue({ data: { data: { id: 2 } } });
+
+		const { saveAsCopy, edits } = useItem(ref('articles'), ref(1));
+		await flushPromises();
+
+		edits.value = { tags: { create: [{ tag_id: { id: 5 }, article_id: 1 }], update: [], delete: [] } };
+
+		await saveAsCopy();
+
+		const body = apiPostSpy.mock.lastCall![1] as { tags: { create: Record<string, unknown>[] } };
+		expect(body.tags.create).toHaveLength(1);
+		expect(body.tags.create[0]).not.toHaveProperty('article_id');
+		expect(body.tags.create[0]!.tag_id).toEqual({ id: 5 });
+	});
+});
+
+describe('empty singleton state', () => {
+	const apiGetSpy = vi.mocked(api.get);
+	const apiPatchSpy = vi.mocked(api.patch);
+
+	const idField = {
+		collection: 'test',
+		field: 'id',
+		type: 'string',
+		schema: { is_primary_key: true, is_generated: false },
+		meta: { collection: 'test', field: 'id', special: null },
+	} as unknown as Field;
+
+	function mockSingleton() {
+		vi.mocked(useCollection).mockReturnValue({
+			info: computed(
+				() => ({ collection: 'test', name: 'test', meta: { singleton: true }, schema: {} } as AppCollection)
+			),
+			primaryKeyField: computed(() => idField),
+			fields: computed(() => [idField]),
+		} as any);
+	}
+
+	test('derives create state from a loaded empty singleton', async () => {
+		mockSingleton();
+		apiGetSpy.mockResolvedValue({ data: { data: { id: null } } });
+
+		const { isNew, isNewOrEmptySingleton } = useItem(ref('test'), ref(null));
+		await flushPromises();
+
+		expect(isNew.value).toBe(false);
+		expect(isNewOrEmptySingleton.value).toBe(true);
+	});
+
+	test('treats a populated singleton as not create', async () => {
+		mockSingleton();
+		apiGetSpy.mockResolvedValue({ data: { data: { id: 1 } } });
+
+		const { isNewOrEmptySingleton } = useItem(ref('test'), ref(null));
+		await flushPromises();
+
+		expect(isNewOrEmptySingleton.value).toBe(false);
+	});
+
+	test('treats a singleton loaded without its key property as not create', async () => {
+		mockSingleton();
+		apiGetSpy.mockResolvedValue({ data: { data: { name: 'loaded' } } });
+
+		const { isNewOrEmptySingleton } = useItem(ref('test'), ref(null));
+		await flushPromises();
+
+		expect(isNewOrEmptySingleton.value).toBe(false);
+	});
+
+	test('treats a failed singleton load as not create', async () => {
+		mockSingleton();
+		apiGetSpy.mockRejectedValue(new Error('nope'));
+
+		const { isNewOrEmptySingleton } = useItem(ref('test'), ref(null));
+		await flushPromises();
+
+		expect(isNewOrEmptySingleton.value).toBe(false);
+	});
+
+	test('treats the new-item route as create', async () => {
+		mockSingleton();
+
+		const { isNew, isNewOrEmptySingleton } = useItem(ref('test'), ref('+'));
+		await flushPromises();
+
+		expect(isNew.value).toBe(true);
+		expect(isNewOrEmptySingleton.value).toBe(true);
+	});
+
+	test('runs create-mode validation when saving an empty singleton', async () => {
+		mockSingleton();
+		apiGetSpy.mockResolvedValue({ data: { data: { id: null } } });
+		apiPatchSpy.mockResolvedValue({ data: { data: { id: 1 } } });
+
+		const { save } = useItem(ref('test'), ref(null));
+		await flushPromises();
+
+		await save();
+
+		expect(validateItemMock.mock.calls.at(-1)?.[2]).toBe(true);
+	});
+
+	test('blocks an empty singleton save when validation fails and does not patch', async () => {
+		mockSingleton();
+		apiGetSpy.mockResolvedValue({ data: { data: { id: null } } });
+		validateItemMock.mockReturnValueOnce([{ field: 'name', type: 'required' }] as any);
+
+		const { save } = useItem(ref('test'), ref(null));
+		await flushPromises();
+
+		await expect(save()).rejects.toBeDefined();
+		expect(apiPatchSpy).not.toHaveBeenCalled();
+	});
+
+	test('saves an empty singleton through patch and returns to populated state', async () => {
+		mockSingleton();
+		apiGetSpy.mockResolvedValue({ data: { data: { id: null } } });
+		apiPatchSpy.mockResolvedValue({ data: { data: { id: 1 } } });
+
+		const { save, isNewOrEmptySingleton } = useItem(ref('test'), ref(null));
+		await flushPromises();
+
+		expect(isNewOrEmptySingleton.value).toBe(true);
+
+		await save();
+		await flushPromises();
+
+		expect(apiPatchSpy).toHaveBeenCalled();
+		expect(isNewOrEmptySingleton.value).toBe(false);
+	});
+});
+
+function mockUseCollection(info: AppCollection, primaryKeyField: Field): void {
+	vi.mocked(useCollection).mockReturnValue({
+		info: computed(() => info),
+		fields: computed(() => useFieldsStore().fields),
+		defaults: computed(() => ({})),
+		primaryKeyField: computed(() => primaryKeyField),
+		userCreatedField: computed(() => null),
+		sortField: computed(() => null),
+		isSingleton: computed(() => info.meta?.singleton === true),
+		accountabilityScope: computed(() => 'all'),
+	});
+}
+
+describe('Strips unbound parent links on save', () => {
+	const articlesPrimaryKeyField = fld('articles', 'id', true);
+
+	const articlesCollection = {
+		collection: 'articles',
+		name: 'articles',
+		meta: { archive_field: null, singleton: false },
+		schema: {},
+	} as AppCollection;
+
+	function seedSchema() {
+		useFieldsStore().fields = [
+			articlesPrimaryKeyField,
+			fld('articles', 'sections'),
+			fld('sections', 'id', true),
+			fld('sections', 'article_id'),
+		];
+
+		useRelationsStore().relations = [
+			rel('sections', 'article_id', 'articles', { one_field: 'sections', many_field: 'article_id' }),
+		];
+
+		mockUseCollection(articlesCollection, articlesPrimaryKeyField);
+	}
+
+	test('drops the generated reverse marker from a new-parent create payload', async () => {
+		vi.spyOn(api, 'get').mockResolvedValue({ data: { data: {} } });
+		const apiPostSpy = vi.spyOn(api, 'post').mockResolvedValue({ data: { data: { id: 1 } } });
+		seedSchema();
+
+		const { save, edits } = useItem(ref('articles'), ref('+'));
+		edits.value = { sections: { create: [{ article_id: '+', title: 'Intro' }] } };
+
+		await save();
+		await flushPromises();
+
+		const body = apiPostSpy.mock.lastCall![1] as any;
+		expect(body.sections.create[0]).toEqual({ title: 'Intro' });
+	});
+
+	test('preserves an authored marker under a bound parent on update', async () => {
+		vi.spyOn(api, 'get').mockResolvedValue({ data: { data: { id: 7 } } });
+		const apiPatchSpy = vi.spyOn(api, 'patch').mockResolvedValue({ data: { data: { id: 7 } } });
+		seedSchema();
+
+		const { save, edits } = useItem(ref('articles'), ref(7));
+		edits.value = { sections: { update: [{ id: 9, article_id: '+', title: 'Changed' }] } };
+
+		await save();
+		await flushPromises();
+
+		const body = apiPatchSpy.mock.lastCall![1] as any;
+		expect(body.sections.update[0]).toEqual({ id: 9, article_id: '+', title: 'Changed' });
+	});
+
+	test('drops the reverse marker from an empty-singleton patch payload', async () => {
+		vi.spyOn(api, 'get').mockResolvedValue({ data: { data: { id: null } } });
+		const apiPatchSpy = vi.spyOn(api, 'patch').mockResolvedValue({ data: { data: { id: null } } });
+		seedSchema();
+
+		mockUseCollection(
+			{ ...articlesCollection, meta: { archive_field: null, singleton: true } } as AppCollection,
+			articlesPrimaryKeyField
+		);
+
+		const { save, edits } = useItem(ref('articles'), ref(null));
+		await flushPromises();
+		edits.value = { sections: { create: [{ article_id: '+', title: 'Intro' }] } };
+
+		await save();
+		await flushPromises();
+
+		const body = apiPatchSpy.mock.lastCall![1] as any;
+		expect(body.sections.create[0]).toEqual({ title: 'Intro' });
 	});
 });

@@ -50,19 +50,25 @@ A short checklist that runs faster locally than in CI:
 
 1. **Run `pnpm test`** — the unit-test suite. Required to pass before review.
 2. **Run `pnpm lint`** — the ESLint pass across the workspace. Auto-fix common issues with `pnpm lint --fix`.
-3. **Run the SQLite blackbox path** if your changes touch query semantics, schema operations, or auth. The full blackbox vendor matrix runs in CI on pull requests into `main`. Running the SQLite path locally first surfaces failures faster.
+3. **Run the relevant API integration suites** if your changes touch query semantics, schema operations, or auth. You
+   can select a file or a named case. CI runs all six database vendors after changes merge into `develop`.
 
    ```bash
-   docker compose -f tests/blackbox/docker-compose.yml up auth-saml redis s3proxy s3proxy-init -d --wait
-   pnpm build
-   TEST_DB=sqlite3 pnpm test:blackbox
+   pnpm test:integration:prepare
+   pnpm test:integration routes/auth/login.test.ts
    ```
 
-   The `pnpm build` step is important. `pnpm test:blackbox` deploys whatever is already in each package's `dist/` directory; it does not rebuild from source. After any change in `api/`, `packages/`, or `sdk/`, run `pnpm build` (or rebuild the affected package with `pnpm --filter <name> run build`) before invoking the blackbox suite, otherwise the tests run against stale compiled output and produce confusing pass/fail results.
+   PostgreSQL is the default. Keep Docker running. The harness provisions and cleans up its own databases and services.
+   Repeat preparation after changing application source, dependencies, or build configuration. The runner rejects stale
+   builds. Test-only edits can reuse the build.
 
-   For changes that affect SQL generation, also run the matching server vendor (`postgres`, `mysql`, `maria`). See [Running locally / Tests](/docs/contributing/running-locally/#tests) for the full set.
+   For changes that affect SQL generation, select the relevant vendor with `--vendor`. See
+   [Running locally / Tests](/docs/contributing/running-locally/#tests) for commands and vendor choices.
+
 4. **Confirm a `Signed-off-by:` line** is on every commit (`git commit -s` adds it).
-5. **Open the PR against `main`**. The PR template auto-populates with the issue link, scope summary, test checklist, and AI-disclosure section. Fill in every applicable box; the AI-disclosure section is required if AI tools were used at any point.
+5. **Open the PR against `develop`**. The PR template auto-populates with the issue link, scope summary, test checklist,
+   and AI-disclosure section. Fill in every applicable box. The AI-disclosure section is required if AI tools were used
+   at any point.
 
 ## Commit hygiene
 

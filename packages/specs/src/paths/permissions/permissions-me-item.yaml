@@ -1,0 +1,41 @@
+get:
+  summary: Retrieve My Item Permissions
+  description: >-
+    Check whether the current user can update, delete, or share an item. Authentication is required.
+    The API checks permissions again when you submit an action. Missing items and items the user
+    cannot update, delete, or share return the same result. Every `access` value is `false` and
+    `update.fields` is `null`. Unknown collections and invalid keys also return this result.
+    The response does not reveal whether the item exists. Other failures return the usual API error response.
+  operationId: getMyItemPermissions
+  security:
+    - Auth: []
+    - KeyAuth: []
+  parameters:
+    - name: collection
+      in: path
+      required: true
+      description: Specify the collection that contains the item.
+      schema:
+        type: string
+    - name: key
+      in: path
+      required: true
+      description: Specify the item's primary key.
+      schema:
+        type: string
+  responses:
+    '200':
+      description: The request succeeded.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '../../openapi.yaml#/components/schemas/ItemPermissions'
+    '401':
+      $ref: '../../openapi.yaml#/components/responses/UnauthorizedError'
+    '500':
+      description: The server could not complete the request.
+  tags:
+    - ItemPermissions

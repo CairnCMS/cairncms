@@ -5,4 +5,5 @@ extensions
 # The broad `extensions` ignore above also matches maintained source directories named extensions. Keep those linted.
 !packages/extensions
 !api/src/extensions
+!tests/integration/routes/extensions
 packages/extensions/dist

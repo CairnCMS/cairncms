@@ -28,7 +28,7 @@ vi.mock('./extension-settings-store.js', () => ({
 
 import { ForbiddenException, InvalidConfigException, InvalidPayloadException } from '../exceptions/index.js';
 import { encryptSecret, SECRET_MASK } from '../utils/encrypt-secret.js';
-import { ExtensionSettingsService } from './extension-settings.js';
+import { ExtensionSettingsService, type ConfigSettingWrite } from './extension-settings.js';
 
 const TABLE = 'cairncms_extension_settings';
 
@@ -404,6 +404,101 @@ describe('ExtensionSettingsService', () => {
 			await expect(service({ user: 'u', app: false }).readForApp('cairncms-extension-preview')).rejects.toBeInstanceOf(
 				ForbiddenException
 			);
+		});
+	});
+
+	describe('applyForConfig', () => {
+		function createWrite(): ConfigSettingWrite {
+			return {
+				operation: 'create',
+				subject: 'cairncms-extension-preview',
+				scope: 'global',
+				scopeKey: '',
+				key: 'count',
+				value: 5,
+				declared: { type: 'number', scope: 'global' },
+			};
+		}
+
+		it('writes an ordinary create as a single insert carrying the serialized value', async () => {
+			tracker.on.insert(TABLE).response([]);
+
+			await service(admin).applyForConfig(createWrite());
+
+			expect(tracker.history.insert).toHaveLength(1);
+			expect(tracker.history.delete).toHaveLength(0);
+
+			expect(tracker.history.insert[0]?.bindings).toEqual(
+				expect.arrayContaining(['cairncms-extension-preview', 'global', '', 'count', '5'])
+			);
+		});
+
+		it.each([
+			['a non-admin', () => service({ admin: false }), createWrite(), ForbiddenException],
+			['absent accountability', () => service(null), createWrite(), ForbiddenException],
+			[
+				'a declaration-scope mismatch',
+				() => service(admin),
+				{ ...createWrite(), declared: { type: 'number', scope: 'collection' } },
+				InvalidPayloadException,
+			],
+			[
+				'a global scope carrying a scope key',
+				() => service(admin),
+				{ ...createWrite(), scopeKey: 'articles' },
+				InvalidPayloadException,
+			],
+			[
+				'a collection scope to a missing collection',
+				() => service(admin),
+				{
+					...createWrite(),
+					scope: 'collection' as const,
+					scopeKey: 'ghosts',
+					declared: { type: 'number', scope: 'collection' },
+				},
+				InvalidPayloadException,
+			],
+			[
+				'a value that mismatches the declared type',
+				() => service(admin),
+				{ ...createWrite(), value: 'not-a-number' },
+				InvalidPayloadException,
+			],
+		])('refuses %s before any mutation', async (_label, make, write, Exception) => {
+			await expect(make().applyForConfig(write)).rejects.toBeInstanceOf(Exception);
+
+			expect(tracker.history.insert).toHaveLength(0);
+			expect(tracker.history.delete).toHaveLength(0);
+		});
+
+		it('deletes on the transaction', async () => {
+			tracker.on.delete(TABLE).response(1);
+
+			await service(admin).applyForConfig({
+				operation: 'delete',
+				subject: 'cairncms-extension-preview',
+				scope: 'collection',
+				scopeKey: 'articles',
+				key: 'preview_url',
+				declared: { type: 'string', scope: 'collection' },
+			});
+
+			expect(tracker.history.delete).toHaveLength(1);
+		});
+
+		it('refuses to write a secret value from config', async () => {
+			await expect(
+				service(admin).applyForConfig({
+					operation: 'create',
+					subject: 'cairncms-extension-preview',
+					scope: 'global',
+					scopeKey: '',
+					key: 'api_key',
+					value: 'plaintext',
+					declared: { type: 'string', scope: 'global', secret: { source: 'inline' } },
+				})
+			).rejects.toBeInstanceOf(InvalidPayloadException);
 		});
 	});
 });

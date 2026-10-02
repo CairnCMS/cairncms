@@ -7,9 +7,20 @@ import { ForbiddenException, InvalidConfigException, InvalidPayloadException } f
 import { getExtensionManager } from '../extensions.js';
 import logger from '../logger.js';
 import type { AbstractServiceOptions } from '../types/index.js';
+import { checkSettingScope, checkSettingValue } from '../utils/config/extension-settings-rules.js';
 import { encryptSecret, hasSecretMarker, SECRET_MASK, validateSecretsEncryptionKey } from '../utils/encrypt-secret.js';
 import { safeLogFragment } from '../utils/safe-log-fragment.js';
 import { readCollectionSettings, readGlobalSettings, type StoredSettingRow } from './extension-settings-store.js';
+
+export type ConfigSettingWrite = {
+	operation: 'create' | 'update' | 'delete';
+	subject: string;
+	scope: SettingsScope;
+	scopeKey: string;
+	key: string;
+	value?: unknown;
+	declared: { type: string; scope: string; secret?: { source: 'inline' | 'config' } | undefined };
+};
 
 const TABLE = 'cairncms_extension_settings';
 
@@ -141,6 +152,41 @@ export class ExtensionSettingsService {
 		return await this.knex(TABLE).where({ extension: subject, scope, scope_key: scopeKey, key }).delete();
 	}
 
+	/**
+	 * Uses the captured declaration and apply transaction, not the live manager.
+	 * Like ordinary settings writes, emits no per-item audit or events; config logs the operation as a whole.
+	 */
+	async applyForConfig(write: ConfigSettingWrite): Promise<void> {
+		this.requireAdmin();
+
+		const { operation, subject, scope, scopeKey, key, declared } = write;
+
+		this.validateScope(scope, scopeKey);
+
+		if (scope !== declared.scope) {
+			throw new InvalidPayloadException(`The setting key "${key}" is declared at "${declared.scope}" scope.`);
+		}
+
+		if (operation === 'delete') {
+			await this.knex(TABLE).where({ extension: subject, scope, scope_key: scopeKey, key }).delete();
+			return;
+		}
+
+		// Preserve markers and runtime references are filtered out before mutation.
+		if (declared.secret !== undefined) {
+			throw new InvalidPayloadException(`A secret setting "${key}" cannot be written from config.`);
+		}
+
+		this.validateValue(declared, write.value);
+
+		const serialized = JSON.stringify(write.value);
+
+		await this.knex(TABLE)
+			.insert({ id: uuid(), extension: subject, scope, scope_key: scopeKey, key, value: serialized })
+			.onConflict(['extension', 'scope', 'scope_key', 'key'])
+			.merge({ value: serialized });
+	}
+
 	async readForApp(subject: string, collection?: string): Promise<Record<string, unknown>> {
 		this.requireAppAccess();
 
@@ -169,30 +215,23 @@ export class ExtensionSettingsService {
 	}
 
 	private validateScope(scope: SettingsScope, scopeKey: string): void {
-		if (scope !== 'global' && scope !== 'collection') {
-			throw new InvalidPayloadException(`The setting scope must be "global" or "collection".`);
-		}
+		const problem = checkSettingScope(scope, scopeKey, (name) =>
+			Object.prototype.hasOwnProperty.call(this.schema.collections, name)
+		);
 
-		if (scope === 'global' && scopeKey !== '') {
-			throw new InvalidPayloadException(`A global setting must use an empty scope key.`);
-		}
+		if (problem === 'scope') throw new InvalidPayloadException(`The setting scope must be "global" or "collection".`);
+		if (problem === 'global-key') throw new InvalidPayloadException(`A global setting must use an empty scope key.`);
 
-		if (
-			scope === 'collection' &&
-			(scopeKey === '' || Object.prototype.hasOwnProperty.call(this.schema.collections, scopeKey) === false)
-		) {
+		if (problem === 'collection-key') {
 			throw new InvalidPayloadException(`A collection setting must target an existing collection.`);
 		}
 	}
 
 	private validateValue(declared: { type: string }, value: unknown): void {
-		if (typeof value !== declared.type) {
-			throw new InvalidPayloadException(`The setting value does not match the declared type.`);
-		}
+		const problem = checkSettingValue(declared.type, value);
 
-		if (declared.type === 'number' && Number.isFinite(value) === false) {
-			throw new InvalidPayloadException(`A number setting must be a finite number.`);
-		}
+		if (problem === 'type') throw new InvalidPayloadException(`The setting value does not match the declared type.`);
+		if (problem === 'finite') throw new InvalidPayloadException(`A number setting must be a finite number.`);
 	}
 
 	private collectAppReadable(

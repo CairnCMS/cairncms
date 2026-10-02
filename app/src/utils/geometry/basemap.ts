@@ -1,6 +1,8 @@
-import { Style, RasterSource } from 'maplibre-gl';
+import type { RasterSourceSpecification, RequestParameters, StyleSpecification } from 'maplibre-gl';
 import { getTheme } from '@/utils/get-theme';
 import { useSettingsStore } from '@/stores/settings';
+
+const MAPBOX_API = 'https://api.mapbox.com';
 
 export type BasemapSource = {
 	name: string;
@@ -18,8 +20,8 @@ const defaultBasemap: BasemapSource = {
 	attribution: '© OpenStreetMap contributors',
 };
 
-const baseStyle: Style = {
-	version: 8,
+const baseStyle = {
+	version: 8 as const,
 	glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
 };
 
@@ -33,27 +35,30 @@ export function getBasemapSources(): BasemapSource[] {
 	return [defaultBasemap, ...(settingsStore.settings?.basemaps || [])];
 }
 
-export function getStyleFromBasemapSource(basemap: BasemapSource): Style | string {
+export function getStyleFromBasemapSource(basemap: BasemapSource): StyleSpecification | string {
 	if (basemap.type == 'style') {
-		return basemap.url;
-	} else {
-		const style: Style = { ...baseStyle };
-		const source: RasterSource = { type: 'raster' };
-		if (basemap.attribution) source.attribution = basemap.attribution;
-
-		if (basemap.type == 'raster') {
-			source.tiles = expandUrl(basemap.url);
-			source.tileSize = basemap.tileSize || 512;
-		}
-
-		if (basemap.type == 'tile') {
-			source.url = basemap.url;
-		}
-
-		style.layers = [{ id: basemap.name, source: basemap.name, type: 'raster' }];
-		style.sources = { [basemap.name]: source };
-		return style;
+		const token = useSettingsStore().settings?.mapbox_key;
+		return token ? transformMapboxUrl(basemap.url, token) : basemap.url;
 	}
+
+	const source: RasterSourceSpecification = { type: 'raster' };
+
+	if (basemap.attribution) source.attribution = basemap.attribution;
+
+	if (basemap.type == 'raster') {
+		source.tiles = expandUrl(basemap.url);
+		source.tileSize = basemap.tileSize || 512;
+	}
+
+	if (basemap.type == 'tile') {
+		source.url = basemap.url;
+	}
+
+	return {
+		...baseStyle,
+		sources: { [basemap.name]: source },
+		layers: [{ id: basemap.name, source: basemap.name, type: 'raster' }],
+	};
 }
 
 function expandUrl(url: string): string[] {
@@ -115,4 +120,53 @@ function getDefaultMapboxBasemap(): BasemapSource {
 	}
 
 	return defaultMapboxBasemap;
+}
+
+export function getMapboxTransformRequest(token: string | undefined) {
+	if (!token) return undefined;
+
+	return (url: string): RequestParameters | undefined => {
+		if (url.startsWith('mapbox://')) return { url: transformMapboxUrl(url, token) };
+
+		return undefined;
+	};
+}
+
+export function transformMapboxUrl(url: string, token: string): string {
+	if (!url.startsWith('mapbox://')) return url;
+
+	const path = url.slice('mapbox://'.length);
+
+	if (path.startsWith('styles/')) {
+		return appendAccessToken(`${MAPBOX_API}/styles/v1/${path.slice('styles/'.length)}`, token);
+	}
+
+	if (path.startsWith('fonts/')) {
+		return appendAccessToken(`${MAPBOX_API}/fonts/v1/${path.slice('fonts/'.length)}`, token);
+	}
+
+	if (path.startsWith('sprites/')) {
+		const rest = path.slice('sprites/'.length);
+		const separator = rest.indexOf('/');
+		const user = rest.slice(0, separator);
+		const styleAndSuffix = rest.slice(separator + 1);
+		const suffixMatch = /^([^.@]+)(.*)$/.exec(styleAndSuffix);
+		const style = suffixMatch ? suffixMatch[1] : styleAndSuffix;
+		const suffix = suffixMatch ? suffixMatch[2] : '';
+		return appendAccessToken(`${MAPBOX_API}/styles/v1/${user}/${style}/sprite${suffix}`, token);
+	}
+
+	if (path.startsWith('tiles/')) {
+		return appendAccessToken(`${MAPBOX_API}/v4/${path.slice('tiles/'.length)}`, token);
+	}
+
+	const queryStart = path.indexOf('?');
+	const tilesets = queryStart === -1 ? path : path.slice(0, queryStart);
+	const existingQuery = queryStart === -1 ? '' : path.slice(queryStart + 1);
+	const query = ['secure', existingQuery].filter(Boolean).join('&');
+	return appendAccessToken(`${MAPBOX_API}/v4/${tilesets}.json?${query}`, token);
+}
+
+function appendAccessToken(url: string, token: string): string {
+	return `${url}${url.includes('?') ? '&' : '?'}access_token=${encodeURIComponent(token)}`;
 }

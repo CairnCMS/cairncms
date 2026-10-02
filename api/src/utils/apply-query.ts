@@ -619,21 +619,21 @@ export function applyFilter(
 			// the `as any` cast above is required until upstream knex types are fixed.
 
 			// These operators don't rely on a value, and can thus be used without one (eg `?filter[field][_null]`)
-			if (operator === '_null' || (operator === '_nnull' && compareValue === false)) {
+			if ((operator === '_null' && compareValue !== false) || (operator === '_nnull' && compareValue === false)) {
 				dbQuery[logical].whereNull(selectionRaw);
 			}
 
-			if (operator === '_nnull' || (operator === '_null' && compareValue === false)) {
+			if ((operator === '_nnull' && compareValue !== false) || (operator === '_null' && compareValue === false)) {
 				dbQuery[logical].whereNotNull(selectionRaw);
 			}
 
-			if (operator === '_empty' || (operator === '_nempty' && compareValue === false)) {
+			if ((operator === '_empty' && compareValue !== false) || (operator === '_nempty' && compareValue === false)) {
 				dbQuery[logical].andWhere((query) => {
 					query.whereNull(key).orWhere(key, '=', '');
 				});
 			}
 
-			if (operator === '_nempty' || (operator === '_empty' && compareValue === false)) {
+			if ((operator === '_nempty' && compareValue !== false) || (operator === '_empty' && compareValue === false)) {
 				dbQuery[logical].andWhere((query) => {
 					query.whereNotNull(key).andWhere(key, '!=', '');
 				});

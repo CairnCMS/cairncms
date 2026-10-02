@@ -313,6 +313,12 @@ Many-to-any items carry both a `collection` reference and an `item` payload. Eac
 
 Updating and deleting many-to-any entries follow the same pattern as many-to-many. Use the detailed form (`create`, `update`, `delete`) for explicit control.
 
+### Parent links
+
+When creating a parent and its related items in one request, leave out the field that links each related item to the parent. CairnCMS sets that link after creating the parent.
+
+If you supply this field in a nested create or update, it must match the parent in the request. A different parent ID or `null` returns `INVALID_PAYLOAD`.
+
 ## Permission semantics
 
 Every items request is filtered by the caller's role permissions:

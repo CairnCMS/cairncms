@@ -8,12 +8,12 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import path from 'path';
 import { performance } from 'perf_hooks';
-import { promisify } from 'util';
 import env from '../env.js';
 import logger from '../logger.js';
 import type { DatabaseClient } from '../types/index.js';
 import { getConfigFromEnv } from '../utils/get-config-from-env.js';
 import { validateEnv } from '../utils/validate-env.js';
+import { cockroachAfterCreate, createMysqlAfterCreate, sqliteAfterCreate } from './connection-hooks.js';
 import { getHelpers } from './helpers/index.js';
 
 let database: Knex | null = null;
@@ -98,41 +98,19 @@ export default function getDatabase(): Knex {
 
 	if (client === 'sqlite3') {
 		knexConfig.useNullAsDefault = true;
-
-		poolConfig.afterCreate = async (conn: any, callback: any) => {
-			logger.trace('Enabling SQLite Foreign Keys support...');
-
-			const run = promisify(conn.run.bind(conn));
-			await run('PRAGMA foreign_keys = ON');
-
-			callback(null, conn);
-		};
+		poolConfig.afterCreate = sqliteAfterCreate;
 	}
 
 	if (client === 'cockroachdb') {
-		poolConfig.afterCreate = async (conn: any, callback: any) => {
-			logger.trace('Setting CRDB serial_normalization and default_int_size');
-			const run = promisify(conn.query.bind(conn));
-
-			await run('SET serial_normalization = "sql_sequence"');
-			await run('SET default_int_size = 4');
-
-			callback(null, conn);
-		};
+		poolConfig.afterCreate = cockroachAfterCreate;
 	}
 
 	if (client === 'mysql') {
 		Object.assign(knexConfig, { client: 'mysql2' });
 
-		poolConfig.afterCreate = async (conn: any, callback: any) => {
-			logger.trace('Retrieving database version');
-			const run = promisify(conn.query.bind(conn));
-
-			const version = await run('SELECT @@version;');
-			databaseVersion = version[0]['@@version'];
-
-			callback(null, conn);
-		};
+		poolConfig.afterCreate = createMysqlAfterCreate((version) => {
+			databaseVersion = version;
+		});
 	}
 
 	if (client === 'mssql') {
@@ -143,7 +121,7 @@ export default function getDatabase(): Knex {
 	}
 
 	database = knex.default(knexConfig);
-	validateDatabaseCharset(database);
+	validateDatabaseCharset(database).catch((error) => logger.warn(error, `Could not validate the database charset`));
 
 	const times: Record<string, number> = {};
 

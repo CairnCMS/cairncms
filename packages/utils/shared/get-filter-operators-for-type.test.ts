@@ -115,6 +115,30 @@ describe('', () => {
 		]);
 	});
 
+	it('returns the geometry filter operators for typed geometry fields', () => {
+		const operators = [
+			'eq',
+			'neq',
+			'null',
+			'nnull',
+			'intersects',
+			'nintersects',
+			'intersects_bbox',
+			'nintersects_bbox',
+		];
+
+		for (const type of [
+			'geometry.Point',
+			'geometry.LineString',
+			'geometry.Polygon',
+			'geometry.MultiPoint',
+			'geometry.MultiLineString',
+			'geometry.MultiPolygon',
+		] as const) {
+			expect(getFilterOperatorsForType(type)).toStrictEqual(operators);
+		}
+	});
+
 	it('includes validation only types', () => {
 		expect(getFilterOperatorsForType('alias', { includeValidation: true })).toStrictEqual([
 			'contains',

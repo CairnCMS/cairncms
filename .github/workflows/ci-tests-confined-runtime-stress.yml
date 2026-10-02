@@ -1,0 +1,61 @@
+name: CI / Tests / Confined Runtime Stress
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+concurrency:
+  group: ci-tests-confined-runtime-stress-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  stress:
+    runs-on: ubuntu-latest
+    env:
+      INVOCATION_COUNT: ${{ github.event_name == 'pull_request' && '3000' || '10000' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect relevant changes
+        if: github.event_name == 'pull_request'
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          # Use git so large PRs are not truncated by the changed-files API.
+          token: ''
+          filters: |
+            relevant:
+              - 'api/**'
+              - 'packages/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - '.npmrc'
+              - '.pnpmfile.cjs'
+              - 'patches/**'
+              - 'tsconfig*.json'
+              - '.github/actions/prepare/**'
+              - '.github/workflows/ci-tests-confined-runtime-stress.yml'
+
+      - name: Prepare
+        if: github.event_name != 'pull_request' || steps.changes.outputs.relevant == 'true'
+        uses: ./.github/actions/prepare
+
+      - name: Run confined runtime stress
+        if: github.event_name != 'pull_request' || steps.changes.outputs.relevant == 'true'
+        run: pnpm --filter @cairncms/api run test:stress --count "$INVOCATION_COUNT"
+
+      - name: Report skipped tests
+        if: github.event_name == 'pull_request' && steps.changes.outputs.relevant == 'false'
+        run:
+          echo 'Confined runtime stress was skipped because no relevant source, dependency, or build configuration
+          changed.' >> "$GITHUB_STEP_SUMMARY"

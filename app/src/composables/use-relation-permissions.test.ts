@@ -304,6 +304,7 @@ test('useRelationPermissionsM2M with no permissions', () => {
 	expect(wrapper.vm.updateAllowed).toBeFalsy();
 	expect(wrapper.vm.deleteAllowed).toBeFalsy();
 	expect(wrapper.vm.selectAllowed).toBeFalsy();
+	expect(wrapper.vm.editAllowed).toBeFalsy();
 });
 
 test('useRelationPermissionsM2M with update permissions', () => {
@@ -333,6 +334,47 @@ test('useRelationPermissionsM2M with update permissions', () => {
 	expect(wrapper.vm.updateAllowed).toBeTruthy();
 	expect(wrapper.vm.deleteAllowed).toBeTruthy();
 	expect(wrapper.vm.selectAllowed).toBeFalsy();
+	expect(wrapper.vm.editAllowed).toBeTruthy();
+});
+
+test('useRelationPermissionsM2M allows editing with junction-only update permission', () => {
+	// eslint-disable-next-line vue/one-component-per-file
+	const TestComponent = defineComponent({
+		setup() {
+			return useRelationPermissionsM2M(relationM2M);
+		},
+		render: () => h('div'),
+	});
+
+	const junctionOnly = [
+		{
+			role: 'd5c4be68-627f-4082-a8c2-5d1f3ebce2f2',
+			permissions: {},
+			validation: null,
+			presets: null,
+			fields: ['*'],
+			system: false,
+			collection: 'a_b',
+			action: 'update',
+		},
+	];
+
+	const wrapper = mount(TestComponent, {
+		global: {
+			plugins: [
+				createTestingPinia({
+					initialState: {
+						userStore: { currentUser: merge({}, currentUser, { role: { admin_access: false } }) },
+						permissionsStore: { permissions: junctionOnly },
+					},
+					createSpy: vi.fn,
+				}),
+			],
+		},
+	});
+
+	expect(wrapper.vm.updateAllowed).toBeFalsy();
+	expect(wrapper.vm.editAllowed).toBeTruthy();
 });
 
 const relationM2A = ref({

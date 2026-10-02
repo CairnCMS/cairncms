@@ -1,4 +1,11 @@
-import type { CollectionsOverview, NestedDeepQuery } from '@cairncms/types';
+import type {
+	Accountability,
+	ActionHandler,
+	CollectionsOverview,
+	FilterHandler,
+	NestedDeepQuery,
+	Relation,
+} from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';
 import { MockClient, Tracker, createTracker } from 'knex-mock-client';
@@ -6,11 +13,13 @@ import { cloneDeep } from 'lodash-es';
 import type { MockedFunction } from 'vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDatabaseClient } from '../../src/database/index.js';
-import { ItemsService } from '../../src/services/index.js';
+import { Readable } from 'node:stream';
+import { ImportService, ItemsService } from '../../src/services/index.js';
 import { sqlFieldFormatter, sqlFieldList } from '../__utils__/items-utils.js';
 import { systemSchema, userSchema } from '../__utils__/schemas.js';
+import emitter from '../emitter.js';
 import env from '../env.js';
-import { InvalidPayloadException } from '../exceptions/index.js';
+import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
 
 vi.mock('../env', async () => {
 	const actual = (await vi.importActual('../env')) as { default: Record<string, any> };
@@ -1118,6 +1127,453 @@ describe('Integration Tests', () => {
 		);
 	});
 
+	describe('upsertOne', () => {
+		const authorId = '6107c897-9182-40f7-b22e-4f044d1258d2';
+
+		const intSchema = {
+			collections: {
+				widgets: {
+					collection: 'widgets',
+					primary: 'id',
+					singleton: false,
+					note: null,
+					sortField: null,
+					accountability: null,
+					fields: {
+						id: {
+							field: 'id',
+							defaultValue: null,
+							nullable: false,
+							generated: false,
+							type: 'integer',
+							dbType: 'integer',
+							precision: null,
+							scale: null,
+							special: [],
+							note: null,
+							alias: false,
+							validation: null,
+						},
+						name: {
+							field: 'name',
+							defaultValue: null,
+							nullable: true,
+							generated: false,
+							type: 'string',
+							dbType: 'text',
+							precision: null,
+							scale: null,
+							special: [],
+							note: null,
+							alias: false,
+							validation: null,
+						},
+					},
+				},
+			} as CollectionsOverview,
+			relations: [] as Relation[],
+		};
+
+		const admin = { role: 'admin', admin: true };
+
+		const restrictedUpdate: Accountability = {
+			role: 'restricted',
+			admin: false,
+			permissions: [
+				{
+					id: 1,
+					role: 'restricted',
+					collection: 'authors',
+					action: 'update',
+					permissions: {},
+					validation: {},
+					presets: {},
+					fields: ['name'],
+				},
+			],
+		};
+
+		const restores: Array<() => void> = [];
+
+		afterEach(() => {
+			while (restores.length) restores.pop()!();
+		});
+
+		it('updates an existing row and never falls into the create branch', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+			tracker.on.update('authors').response([{ id: authorId }]);
+
+			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
+
+			const input = { id: authorId, name: 'Updated' };
+			const result = await service.upsertOne(input, { emitEvents: false });
+
+			expect(tracker.history.update.length).toBeGreaterThan(0);
+			expect(tracker.history.insert.length).toBe(0);
+			expect(result).toBe(authorId);
+			expect(input).toEqual({ id: authorId, name: 'Updated' });
+		});
+
+		it('creates a row with the supplied key reaching the insert when the row is absent', async () => {
+			tracker.on.select('authors').response([]);
+			tracker.on.insert('authors').response([{ id: authorId }]);
+
+			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
+
+			const input = { id: authorId, name: 'Created' };
+			await service.upsertOne(input, { emitEvents: false });
+
+			expect(tracker.history.insert.length).toBeGreaterThan(0);
+			expect(tracker.history.update.length).toBe(0);
+			expect(tracker.history.insert[0]!.bindings).toContain(authorId);
+			expect(input).toEqual({ id: authorId, name: 'Created' });
+		});
+
+		it('applies a field-restricted update that would be rejected with the selector present', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+			tracker.on.update('authors').response([{ id: authorId }]);
+
+			const service = new ItemsService('authors', { knex: db, accountability: restrictedUpdate, schema: userSchema });
+
+			await expect(service.upsertOne({ id: authorId, name: 'Restricted' }, { emitEvents: false })).resolves.toBe(
+				authorId
+			);
+
+			expect(tracker.history.update.length).toBeGreaterThan(0);
+		});
+
+		it('forwards mutation options and passes selector-free content to updateOne', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+
+			const updateOneSpy = vi.spyOn(ItemsService.prototype, 'updateOne').mockResolvedValue(authorId);
+			restores.push(() => updateOneSpy.mockRestore());
+
+			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
+			const mutationTracker = service.createMutationTracker();
+			const onRevisionCreate = vi.fn();
+
+			await service.upsertOne(
+				{ id: authorId, name: 'Forwarded' },
+				{ emitEvents: false, mutationTracker, onRevisionCreate }
+			);
+
+			expect(updateOneSpy).toHaveBeenCalledWith(
+				authorId,
+				{ name: 'Forwarded' },
+				expect.objectContaining({ emitEvents: false, mutationTracker, onRevisionCreate })
+			);
+		});
+
+		it('resolves a numeric zero key to the update branch', async () => {
+			tracker.on.select('widgets').response([{ id: 0 }]);
+			tracker.on.update('widgets').response([{ id: 0 }]);
+
+			const service = new ItemsService('widgets', { knex: db, accountability: admin, schema: intSchema });
+
+			await service.upsertOne({ id: 0, name: 'Zero' }, { emitEvents: false });
+
+			expect(tracker.history.update.length).toBeGreaterThan(0);
+			expect(tracker.history.insert.length).toBe(0);
+		});
+
+		it('honors emitEvents false through to the mutation', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+			tracker.on.update('authors').response([{ id: authorId }]);
+
+			const emitActionSpy = vi.spyOn(emitter, 'emitAction');
+			restores.push(() => emitActionSpy.mockRestore());
+
+			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
+
+			await service.upsertOne({ id: authorId, name: 'Quiet' }, { emitEvents: false });
+
+			expect(emitActionSpy).not.toHaveBeenCalled();
+		});
+	});
+
+	describe('nested write action events', () => {
+		const authorId = '6107c897-9182-40f7-b22e-4f044d1258d2';
+		const postId = 'd66ec139-2655-48c1-9d9a-4753f98a9ee7';
+		const otherAuthorId = 'b5a7dd0f-fc9f-4242-b331-83990990198f';
+		const admin = { role: 'admin', admin: true };
+
+		function spyEmitters() {
+			return { action: vi.spyOn(emitter, 'emitAction'), filter: vi.spyOn(emitter, 'emitFilter') };
+		}
+
+		let emitters: ReturnType<typeof spyEmitters>;
+
+		function eventFor(collection: string) {
+			return emitters.action.mock.calls.find(([, meta]) => (meta as { collection?: string }).collection === collection);
+		}
+
+		function filterFor(collection: string) {
+			return emitters.filter.mock.calls.find(
+				([, , meta]) => (meta as { collection?: string }).collection === collection
+			);
+		}
+
+		function updateActionFor(collection: string) {
+			return emitters.action.mock.calls.find(([event, meta]) => {
+				const names = Array.isArray(event) ? event : [event];
+				return (
+					(meta as { collection?: string }).collection === collection &&
+					names.some((name) => typeof name === 'string' && name.endsWith('.update'))
+				);
+			});
+		}
+
+		function updateFilterFor(collection: string) {
+			return emitters.filter.mock.calls.find(([event, , meta]) => {
+				const names = Array.isArray(event) ? event : [event];
+				return (
+					(meta as { collection?: string }).collection === collection &&
+					names.some((name) => typeof name === 'string' && name.endsWith('.update'))
+				);
+			});
+		}
+
+		beforeEach(() => {
+			emitters = spyEmitters();
+		});
+
+		afterEach(() => {
+			emitters.action.mockRestore();
+			emitters.filter.mockRestore();
+		});
+
+		it('emits a nested update event carrying selector-free metadata content', async () => {
+			tracker.on.select('posts').response([{ uploaded_by: authorId }]);
+			tracker.on.update('posts').response([{ id: postId }]);
+
+			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
+			await service.updateOne(authorId, { items: { update: [{ id: postId, title: 'Edited' }] } }, { emitEvents: true });
+
+			const event = eventFor('posts');
+			expect(event).toBeDefined();
+			expect((event![1] as { payload: unknown }).payload).toEqual({ title: 'Edited' });
+
+			const filter = filterFor('posts');
+			expect(filter).toBeDefined();
+			expect(filter![1]).toEqual({ title: 'Edited' });
+		});
+
+		it('emits a nested reparent event including the reverse field', async () => {
+			tracker.on.select('posts').response([{ uploaded_by: otherAuthorId }]);
+			tracker.on.update('posts').response([{ id: postId }]);
+
+			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
+			await service.updateOne(authorId, { items: { update: [{ id: postId, title: 'Moved' }] } }, { emitEvents: true });
+
+			const event = eventFor('posts');
+			expect(event).toBeDefined();
+			expect((event![1] as { payload: unknown }).payload).toEqual({ title: 'Moved', uploaded_by: authorId });
+		});
+
+		it('emits no nested child event for a key-only already-linked child', async () => {
+			tracker.on.select('posts').response([{ uploaded_by: authorId }]);
+
+			const service = new ItemsService('authors', { knex: db, accountability: admin, schema: userSchema });
+			await service.updateOne(authorId, { items: { update: [{ id: postId }] } }, { emitEvents: true });
+
+			expect(eventFor('posts')).toBeUndefined();
+		});
+
+		it('emits no child update event for a non-admin authorized key-only no-op', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+			tracker.on.select('posts').response([{ id: postId, uploaded_by: authorId }]);
+
+			const accountability: Accountability = {
+				role: 'editor',
+				admin: false,
+				permissions: [
+					{
+						id: 1,
+						role: 'editor',
+						collection: 'authors',
+						action: 'update',
+						permissions: {},
+						validation: {},
+						presets: {},
+						fields: ['*'],
+					},
+					{
+						id: 2,
+						role: 'editor',
+						collection: 'posts',
+						action: 'update',
+						permissions: {},
+						validation: {},
+						presets: {},
+						fields: ['*'],
+					},
+				],
+			};
+
+			const service = new ItemsService('authors', { knex: db, accountability, schema: userSchema });
+			await service.updateOne(authorId, { items: { update: [{ id: postId }] } }, { emitEvents: true });
+
+			expect(updateActionFor('posts')).toBeUndefined();
+			expect(updateFilterFor('posts')).toBeUndefined();
+		});
+
+		it('rejects a non-admin unauthorized key-only no-op without emitting a child update event', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+			tracker.on.select('posts').response([{ id: postId, uploaded_by: authorId }]);
+
+			const accountability: Accountability = {
+				role: 'editor',
+				admin: false,
+				permissions: [
+					{
+						id: 1,
+						role: 'editor',
+						collection: 'authors',
+						action: 'update',
+						permissions: {},
+						validation: {},
+						presets: {},
+						fields: ['*'],
+					},
+				],
+			};
+
+			const service = new ItemsService('authors', { knex: db, accountability, schema: userSchema });
+
+			await expect(
+				service.updateOne(authorId, { items: { update: [{ id: postId }] } }, { emitEvents: true })
+			).rejects.toThrow(ForbiddenException);
+
+			expect(updateActionFor('posts')).toBeUndefined();
+			expect(updateFilterFor('posts')).toBeUndefined();
+		});
+
+		it('rejects a key-only no-op when a read hook substitutes a different parent identity', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+			tracker.on.select('posts').response([{ id: postId, uploaded_by: authorId }]);
+
+			const accountability: Accountability = {
+				role: 'editor',
+				admin: false,
+				permissions: [
+					{
+						id: 1,
+						role: 'editor',
+						collection: 'authors',
+						action: 'update',
+						permissions: {},
+						validation: {},
+						presets: {},
+						fields: ['*'],
+					},
+					{
+						id: 2,
+						role: 'editor',
+						collection: 'authors',
+						action: 'read',
+						permissions: {},
+						validation: {},
+						presets: {},
+						fields: ['*'],
+					},
+					{
+						id: 3,
+						role: 'editor',
+						collection: 'posts',
+						action: 'read',
+						permissions: {},
+						validation: {},
+						presets: {},
+						fields: ['id'],
+					},
+				],
+			};
+
+			const substituteParent = (payload: any) =>
+				Array.isArray(payload)
+					? payload.map((row) => ({ ...row, id: otherAuthorId }))
+					: { ...payload, id: otherAuthorId };
+
+			emitter.onFilter('authors.items.read', substituteParent);
+
+			try {
+				const service = new ItemsService('authors', { knex: db, accountability, schema: userSchema });
+
+				await expect(
+					service.updateOne(authorId, { items: { update: [{ id: postId }] } }, { emitEvents: true })
+				).rejects.toThrow(ForbiddenException);
+
+				expect(updateActionFor('posts')).toBeUndefined();
+				expect(updateFilterFor('posts')).toBeUndefined();
+			} finally {
+				emitter.offFilter('authors.items.read', substituteParent);
+			}
+		});
+
+		it('allows a key-only no-op through the parent-relation route when the parent identity matches', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+			tracker.on.select('posts').response([{ id: postId, uploaded_by: authorId }]);
+
+			const accountability: Accountability = {
+				role: 'editor',
+				admin: false,
+				permissions: [
+					{
+						id: 1,
+						role: 'editor',
+						collection: 'authors',
+						action: 'update',
+						permissions: {},
+						validation: {},
+						presets: {},
+						fields: ['*'],
+					},
+					{
+						id: 2,
+						role: 'editor',
+						collection: 'authors',
+						action: 'read',
+						permissions: {},
+						validation: {},
+						presets: {},
+						fields: ['*'],
+					},
+					{
+						id: 3,
+						role: 'editor',
+						collection: 'posts',
+						action: 'read',
+						permissions: {},
+						validation: {},
+						presets: {},
+						fields: ['id'],
+					},
+				],
+			};
+
+			const service = new ItemsService('authors', { knex: db, accountability, schema: userSchema });
+
+			await service.updateOne(authorId, { items: { update: [{ id: postId }] } }, { emitEvents: true });
+
+			expect(updateActionFor('posts')).toBeUndefined();
+			expect(updateFilterFor('posts')).toBeUndefined();
+		});
+
+		it('emits a selector-free update event through the real import path', async () => {
+			tracker.on.select('authors').response([{ id: authorId }]);
+			tracker.on.update('authors').response([{ id: authorId }]);
+
+			const service = new ImportService({ knex: db, accountability: admin, schema: userSchema });
+			const stream = Readable.from(JSON.stringify([{ id: authorId, name: 'Imported' }]));
+
+			await service.import('authors', 'application/json', stream);
+
+			const event = eventFor('authors');
+			expect(event).toBeDefined();
+			expect((event![1] as { payload: unknown }).payload).toEqual({ name: 'Imported' });
+		});
+	});
+
 	describe('updateBatch', () => {
 		const items = [
 			{ id: '6107c897-9182-40f7-b22e-4f044d1258d2', name: 'Item 1' },
@@ -1493,6 +1949,83 @@ describe('Integration Tests', () => {
 
 			expect(tracker.history.select.length).toBe(1);
 			expect(response).toStrictEqual(testDefaultValues);
+		});
+	});
+
+	describe('read event suppression', () => {
+		const rows = [{ id: '6107c897-9182-40f7-b22e-4f044d1258d2' }];
+
+		it('leaves a registered query filter, read filter, and read action inert when emitEvents is false', async () => {
+			const table = schemas['user'].tables[0];
+			const fired: string[] = [];
+
+			const queryFilter: FilterHandler = (payload) => {
+				fired.push('query');
+				return payload;
+			};
+
+			const readFilter: FilterHandler = (payload) => {
+				fired.push('read-filter');
+				return payload;
+			};
+
+			const readAction: ActionHandler = () => {
+				fired.push('read-action');
+			};
+
+			emitter.onFilter(`${table}.items.query`, queryFilter);
+			emitter.onFilter(`${table}.items.read`, readFilter);
+			emitter.onAction(`${table}.items.read`, readAction);
+
+			const service = () =>
+				new ItemsService(table, {
+					knex: db,
+					accountability: { role: 'admin', admin: true },
+					schema: schemas['user'].schema,
+				});
+
+			try {
+				tracker.on.select(table).responseOnce(rows);
+				await service().readByQuery({ fields: ['id'] });
+
+				// Control: the same read reaches all three sites when events are not suppressed, so the
+				// assertion below cannot pass merely because the read never got that far.
+				expect(fired).toEqual(['query', 'read-filter', 'read-action']);
+
+				fired.length = 0;
+
+				tracker.on.select(table).responseOnce(rows);
+				const suppressed = await service().readByQuery({ fields: ['id'] }, { emitEvents: false });
+
+				expect(suppressed).toStrictEqual(rows);
+				expect(fired).toEqual([]);
+			} finally {
+				emitter.offFilter(`${table}.items.query`, queryFilter);
+				emitter.offFilter(`${table}.items.read`, readFilter);
+				emitter.offAction(`${table}.items.read`, readAction);
+			}
+		});
+	});
+
+	describe('deleteMany', () => {
+		it('throws a supplied preMutationException before running any delete query', async () => {
+			const table = schemas['user'].tables[0];
+			const failure = new InvalidPayloadException('blocked before write');
+
+			const service = new ItemsService(table, {
+				knex: db,
+				accountability: null,
+				schema: schemas['user'].schema,
+			});
+
+			await expect(
+				service.deleteMany(['6107c897-9182-40f7-b22e-4f044d1258d2'], {
+					preMutationException: failure,
+					bypassLimits: true,
+				})
+			).rejects.toBe(failure);
+
+			expect(tracker.history.delete).toHaveLength(0);
 		});
 	});
 });

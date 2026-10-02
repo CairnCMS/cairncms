@@ -40,7 +40,7 @@ vi.mock('../logger.js', () => ({
 import checkCacheMiddleware from './cache.js';
 
 function makeReqRes(originalUrl: string, method = 'GET') {
-	const req = { method, originalUrl } as unknown as Request;
+	const req = { method, originalUrl, path: originalUrl.split('?')[0] } as unknown as Request;
 
 	const res = {
 		locals: {} as Record<string, unknown>,
@@ -59,12 +59,12 @@ describe('cache middleware — read-path key stashing and fail-closed', () => {
 
 	it('stashes the computed key on res.locals for reuse on a miss', async () => {
 		getCacheValueMock.mockResolvedValue(undefined);
-		const { req, res } = makeReqRes('/server/info');
+		const { req, res } = makeReqRes('/items/articles');
 		const next = vi.fn();
 
 		await (checkCacheMiddleware as any)(req, res, next);
 
-		expect((res.locals as any).cacheKey).toBe('key:/server/info');
+		expect((res.locals as any).cacheKey).toBe('key:/items/articles');
 		expect(next).toHaveBeenCalledOnce();
 	});
 
@@ -73,7 +73,7 @@ describe('cache middleware — read-path key stashing and fail-closed', () => {
 			throw new Error('unhashable');
 		});
 
-		const { req, res } = makeReqRes('/server/info');
+		const { req, res } = makeReqRes('/items/articles');
 		const next = vi.fn();
 
 		await (checkCacheMiddleware as any)(req, res, next);
@@ -82,5 +82,18 @@ describe('cache middleware — read-path key stashing and fail-closed', () => {
 		expect(getCacheValueMock).not.toHaveBeenCalled();
 		expect(next).toHaveBeenCalledOnce();
 		expect(next).not.toHaveBeenCalledWith(expect.any(Error));
+	});
+
+	it('skips the cache read for /server/info so a preloaded entry is never served stale', async () => {
+		getCacheValueMock.mockResolvedValue({ cached: 'stale' });
+		const { req, res } = makeReqRes('/server/info');
+		const next = vi.fn();
+
+		await (checkCacheMiddleware as any)(req, res, next);
+
+		expect(getCacheValueMock).not.toHaveBeenCalled();
+		expect((res.locals as any).cacheKey).toBeUndefined();
+		expect(res.json).not.toHaveBeenCalled();
+		expect(next).toHaveBeenCalledOnce();
 	});
 });

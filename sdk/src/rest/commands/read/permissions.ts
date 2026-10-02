@@ -53,10 +53,11 @@ export const readPermission =
 	};
 
 /**
- * Check the current user's permissions on a specific item.
+ * Check the current user's update, delete, and share access on a specific item.
  * @param collection The collection of the item
- * @param key The primary key of the item
- * @returns Returns a ItemPermissions object if a valid collection / primary key was provided.
+ * @param key The primary key of the item. Omit for a singleton collection.
+ * @returns The caller's current item permissions.
+ * @throws Will throw if collection is empty, or if a provided key is empty
  */
 export const readItemPermissions =
 	<Schema, Collection extends AllCollections<Schema>>(
@@ -66,7 +67,11 @@ export const readItemPermissions =
 	() => {
 		throwIfEmpty(String(collection), 'Collection cannot be empty');
 
-		const item = key ? `${collection as string}/${key}` : `${collection as string}`;
+		if (key !== undefined) {
+			throwIfEmpty(String(key), 'Key cannot be empty');
+		}
+
+		const item = key !== undefined ? `${collection as string}/${key}` : `${collection as string}`;
 
 		return {
 			path: `/permissions/me/${item}`,

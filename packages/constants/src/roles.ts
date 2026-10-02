@@ -10,3 +10,5 @@
  * collide with UUID v4 output, and visually distinct in logs/queries.
  */
 export const PUBLIC_ROLE_ID = '00000000-0000-0000-0000-000000000000';
+
+export const PUBLIC_ROLE_KEY = 'public';

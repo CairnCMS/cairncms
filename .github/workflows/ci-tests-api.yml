@@ -1,0 +1,191 @@
+name: CI / Tests / API Integration
+run-name: API Integration / ${{ github.ref_name }}
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CI: 'true'
+  TZ: UTC
+  NODE_OPTIONS: --max_old_space_size=6144
+
+jobs:
+  validation:
+    name: Validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Record tested revision
+        run: |
+          mkdir -p tests/integration/.artifacts
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          printf 'repository=%s\ncommit=%s\nref=%s\nrun=%s\nattempt=%s\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$GITHUB_REF" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            | tee tests/integration/.artifacts/workflow.txt
+      - name: Install dependencies
+        id: install
+        uses: ./.github/actions/prepare
+        with:
+          build: 'false'
+      - name: Prepare API and SDK
+        id: prepare
+        run: pnpm test:integration:prepare 2>&1 | tee tests/integration/.artifacts/prepare.log
+      - name: Check integration types
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        run: pnpm --filter tests-integration typecheck 2>&1 | tee tests/integration/.artifacts/typecheck.log
+      - name: Verify harness and readiness checks
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm --filter tests-integration test:harness 2>&1 | tee tests/integration/.artifacts/harness.log
+      - name: Verify process lifecycle and ownership
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        env:
+          TEST_DB: postgres
+        run: pnpm --filter tests-integration test:lifecycle 2>&1 | tee tests/integration/.artifacts/lifecycle.log
+      - name: Verify service startup and cleanup
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        run: pnpm --filter tests-integration test:services 2>&1 | tee tests/integration/.artifacts/services.log
+      - name: Retain validation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-validation-${{ github.run_attempt }}
+          path: tests/integration/.artifacts/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  restoration:
+    name: Restoration / ${{ matrix.label }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - vendor: mysql
+            label: MySQL
+          - vendor: postgres
+            label: PostgreSQL
+          - vendor: sqlite3
+            label: SQLite
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Record tested revision
+        run: |
+          mkdir -p tests/integration/.artifacts
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          printf 'repository=%s\ncommit=%s\nref=%s\nrun=%s\nattempt=%s\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$GITHUB_REF" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            | tee tests/integration/.artifacts/workflow.txt
+      - name: Install dependencies
+        uses: ./.github/actions/prepare
+        with:
+          build: 'false'
+      - name: Prepare API and SDK
+        run: pnpm test:integration:prepare 2>&1 | tee tests/integration/.artifacts/prepare.log
+      - name: Verify database restoration and failure cleanup
+        env:
+          TEST_DB: ${{ matrix.vendor }}
+          INTEGRATION_CONTROL_OUTPUT: ${{ github.workspace }}/tests/integration/.artifacts/restoration
+        run: pnpm --filter tests-integration test:restoration 2>&1 | tee tests/integration/.artifacts/restoration.log
+      - name: Retain restoration diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-restoration-${{ matrix.vendor }}-${{ github.run_attempt }}
+          path: tests/integration/.artifacts/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  test:
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - vendor: postgres
+            label: PostgreSQL
+          - vendor: postgres10
+            label: PostgreSQL 10
+          - vendor: mysql
+            label: MySQL 8
+          - vendor: mysql5
+            label: MySQL 5
+          - vendor: maria
+            label: MariaDB
+          - vendor: sqlite3
+            label: SQLite
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Record tested revision
+        run: |
+          mkdir -p tests/integration/.artifacts
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          printf 'repository=%s\ncommit=%s\nref=%s\nrun=%s\nattempt=%s\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$GITHUB_REF" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            | tee tests/integration/.artifacts/workflow.txt
+      - name: Install dependencies
+        uses: ./.github/actions/prepare
+        with:
+          build: 'false'
+      - name: Prepare API and SDK
+        run: pnpm test:integration:prepare 2>&1 | tee tests/integration/.artifacts/prepare.log
+      - name: Run every integration suite
+        timeout-minutes: 90
+        env:
+          TEST_DB: ${{ matrix.vendor }}
+        run:
+          pnpm test:integration --vendor "$TEST_DB" --workers 2 2>&1 | tee tests/integration/.artifacts/integration.log
+      - name: Retain vendor diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-integration-${{ matrix.vendor }}-${{ github.run_attempt }}
+          path: tests/integration/.artifacts/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  results:
+    name: Results
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    needs: [validation, restoration, test]
+    if: always()
+    steps:
+      - name: Require validation, restoration and all six vendors
+        env:
+          VALIDATION_RESULT: ${{ needs.validation.result }}
+          RESTORATION_RESULT: ${{ needs.restoration.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+        run: |
+          printf 'Validation: %s\nRestoration: %s\nVendor matrix: %s\n' \
+            "$VALIDATION_RESULT" "$RESTORATION_RESULT" "$TEST_RESULT" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [[ "$VALIDATION_RESULT" == success && "$RESTORATION_RESULT" == success && "$TEST_RESULT" == success ]]; then
+            echo 'All API integration checks passed.'
+          else
+            echo '::error::API integration requires successful validation, restoration and every vendor.'
+            exit 1
+          fi

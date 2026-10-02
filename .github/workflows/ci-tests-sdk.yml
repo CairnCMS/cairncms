@@ -1,0 +1,58 @@
+name: CI / Tests / SDK Integration
+
+on:
+  pull_request:
+
+concurrency:
+  group: ci-tests-sdk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_OPTIONS: --max_old_space_size=6144
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect relevant changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          # Use git so large PRs are not truncated by the changed-files API.
+          token: ''
+          filters: |
+            relevant:
+              - 'sdk/**'
+              - 'api/**'
+              - 'packages/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - '.npmrc'
+              - '.pnpmfile.cjs'
+              - 'patches/**'
+              - 'tsconfig*.json'
+              - '.github/actions/prepare/**'
+              - '.github/workflows/ci-tests-sdk.yml'
+
+      - name: Prepare
+        if: steps.changes.outputs.relevant == 'true'
+        uses: ./.github/actions/prepare
+
+      - name: Run SDK integration tests
+        if: steps.changes.outputs.relevant == 'true'
+        run: pnpm --filter @cairncms/sdk test:integration
+
+      - name: Report skipped tests
+        if: steps.changes.outputs.relevant == 'false'
+        run:
+          echo 'SDK integration was skipped because no relevant source, dependency, or build configuration changed.' >>
+          "$GITHUB_STEP_SUMMARY"

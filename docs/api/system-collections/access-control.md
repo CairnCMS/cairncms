@@ -127,6 +127,8 @@ A reserved role with the sentinel UUID `00000000-0000-0000-0000-000000000000` an
 
 The "no admin role left after this delete" guard at the engine level enforces that at least one role with `admin_access: true` always exists. There is no override.
 
+`/roles` writes that change administrator access use a serializable transaction. A conflicting write returns `409 CONCURRENCY_CONFLICT` without changes; re-read the role and retry manually.
+
 ## Permissions (`/permissions`)
 
 A permission row is a tuple of role, collection, and action plus the rules that gate that action. Every read, create, update, and delete the platform performs is filtered by the calling role's permissions on the targeted collection.
@@ -143,6 +145,8 @@ A permission row is a tuple of role, collection, and action plus the rules that 
 | `PATCH` | `/permissions/<id>` | Update a single permission. |
 | `DELETE` | `/permissions` | Delete many permissions. |
 | `DELETE` | `/permissions/<id>` | Delete a single permission. |
+| `GET` | `/permissions/me/<collection>/<key>` | Check the current user's permissions for one item. |
+| `GET` | `/permissions/me/<collection>` | Check the current user's permissions for a singleton. |
 
 ### Permission record fields
 
@@ -158,6 +162,56 @@ A permission row is a tuple of role, collection, and action plus the rules that 
 A read or write that matches no permission row for a non-admin role is denied. The `permissions`, `validation`, and `presets` filters can reference filter variables (`$NOW`, `$CURRENT_USER`, `$CURRENT_ROLE`) to scope rules per caller.
 
 Permissions on system collections work the same way as permissions on user collections, with one caveat: the platform-managed minimum permissions for app-access roles are projected at read time rather than stored as rows, so they are invisible to `/permissions` queries. See [Config as code / What a config snapshot captures](/docs/manage/config-as-code/#what-a-config-snapshot-captures) for the full picture.
+
+### Check permissions for an item
+
+Use `GET /permissions/me/<collection>/<key>` to check whether the current user can update, delete, or share an item. Your app can use the result to enable or disable buttons and fields. In the SDK, use `readItemPermissions(collection, key?)`.
+
+CairnCMS checks the item's saved values. It checks permissions again when you submit an update, delete, or share request. A successful check does not guarantee that a later request will succeed.
+
+These routes require an authenticated user. Anonymous requests and requests using a share link receive `401`.
+
+```http
+GET /permissions/me/articles/42
+```
+
+The response contains an `ItemPermissions` object.
+
+```json
+{
+  "data": {
+    "update": { "access": true, "fields": ["*"] },
+    "delete": { "access": false },
+    "share": { "access": false }
+  }
+}
+```
+
+- **`update.access`**, **`delete.access`**, and **`share.access`** show whether the user can perform each action on the item.
+- **`update.fields`** lists writable fields. `["*"]` allows all fields that support updates. A list of names allows only those fields. `[]` allows no fields. `null` means update is denied.
+
+For a singleton collection, which holds at most one item, use `GET /permissions/me/<collection>` without a key. You must be an administrator or have update, delete, or share permission on the collection. An empty singleton returns `false` for all three actions. Its first save requires create permission.
+
+Other collections return `400` without a key. Non-admin users with none of these collection permissions also receive `400` without a key, even for singletons or unknown collections.
+
+With a key, the response does not distinguish a missing item from one the user cannot update, delete, or share. Both return `false` for every `access` value and `null` for `update.fields`. Unknown collections and invalid keys return the same result.
+
+Failures other than permission denials return the usual API error response.
+
+These checks can trigger query hooks, read hooks, and flows even if the user lacks read permission. User and system collections keep their usual event names. The number of events can vary by request.
+
+### Updating related items
+
+Include the primary key when updating a related item or importing changes to an existing record. The API uses the key to select the record and leaves it out of the update data passed to hooks and permission validation. Update hooks receive record IDs in `meta.keys`. You can still supply a primary key when creating a record.
+
+The field that links a related item to its parent has these rules.
+
+- If the item is already linked to the parent, leaving out the link field keeps it out of the update data. The stored link stays unchanged.
+- Supplying the link field requires permission to update it, even if its value is unchanged. Moving an item to another parent also requires this permission.
+- A supplied link must match the parent being saved. A different parent ID or `null` returns `INVALID_PAYLOAD`.
+- When creating a parent and its related items together, leave out the link field. CairnCMS sets it after creating the parent.
+
+Submitting only the key of an item already linked to the parent does not update that item or emit its update event. The caller must still be authorized for that item: either permission to update it, or permission to read its link to the parent (its link field, or its presence in the parent's list of related items). A caller with neither is denied, so the response cannot reveal which items are linked. These checks can read the related item or its parent and trigger query hooks, read hooks, and flows. Submitting field values still counts as an update, even if the values are unchanged.
 
 ## Shares (`/shares`)
 
@@ -236,14 +290,16 @@ Two endpoints snapshot and apply role and permission state across deployments:
 | `GET` | `/config/snapshot` | Return the current roles and permissions as a `CairnConfig` payload. |
 | `POST` | `/config/apply` | Apply a `CairnConfig` payload, with optional dry-run and destructive flags. |
 
-These are admin-only and operator-facing rather than collection-CRUD. They wrap the same engine that powers `cairncms config snapshot` and `cairncms config apply`. See [Config as code](/docs/manage/config-as-code/) for the full reference, including the payload shape, the dry-run and destructive flags, the field-level omit-vs-null semantics, and the validation surface.
+These admin-only endpoints back remote CLI mode and custom HTTP automation. CLI users do not need to construct the requests themselves. See [Config as code](/docs/manage/config-as-code/) for the full reference.
 
 In short:
 
-- `GET /config/snapshot` returns JSON by default. Pass `?export=yaml` to get a YAML attachment instead.
-- `POST /config/apply` accepts JSON or any of three YAML media types. Pass `?dry_run=true` to preview the plan without writing; pass `?destructive=true` to allow deletion of orphan roles and permissions.
+- `GET /config/snapshot` has no manifest request body. Optional `manifest_version` and comma-separated `resources` parameters select the manifest in the response. Omission means the current version and all kinds; `resources=` means an empty managed scope. The remote CLI derives these values from the local manifest automatically. Pass `?export=yaml` for a YAML attachment.
+- `POST /config/apply` takes a manifest in its JSON or YAML body, so that manifest defines managed scope. Pass `?dry_run=true` to preview without writing or `?destructive=true` to authorize deletions. Each flag must be exactly `true` or `false`, and any other value is rejected with `CONFIG_INVALID` before any state is read. A dry run returns the plan as `data`; a mutating apply returns the result as `data` and the plan under `meta.plan`.
 
 There is no `/config/diff` endpoint. The apply endpoint computes the plan internally on every call.
+
+The `cairncms` CLI can call these endpoints on a remote instance with `cairncms config apply --url` and `cairncms config snapshot --url`, authenticating with an administrator token. See [Config as code / Applying to a remote instance](/docs/manage/config-as-code/#applying-to-a-remote-instance).
 
 ## GraphQL
 

@@ -37,6 +37,12 @@
 	</div>
 </template>
 
+<script lang="ts">
+export default {
+	inheritAttrs: false,
+};
+</script>
+
 <script lang="ts" setup>
 import { useAppStore } from '@/stores/app';
 import { getBasemapSources } from '@/utils/geometry/basemap';

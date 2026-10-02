@@ -1,0 +1,11 @@
+{
+	"name": "@cairncms/test-utils",
+	"private": true,
+	"main": "requests.ts",
+	"types": "requests.ts",
+	"dependencies": {
+		"@types/supertest": "2.0.12",
+		"json-to-graphql-query": "2.2.5",
+		"supertest": "6.3.3"
+	}
+}

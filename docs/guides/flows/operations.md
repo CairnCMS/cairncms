@@ -9,6 +9,10 @@ Operations are the individual steps inside a flow. CairnCMS ships with a built-i
 
 Every operation appends a value to the [data chain](/docs/guides/flows/#the-data-chain) under its own key. Operations that do not produce data still append `null` so that downstream operations can reference them predictably.
 
+Filter flows use the database connection supplied by the event. When that connection is a transaction, database work on it shares the transaction's commit or rollback. A non-blocking flow starts when its action event is emitted and runs on a fresh connection. Whether that emission follows the outer commit depends on the emitting path (see [action hook timing](/docs/develop/extensions/server-extensions/hooks/#action-hooks)).
+
+Exception: a data operation that resolves **Permissions** for `$public` or a specific role reads through a root connection. On single-connection SQLite, use a non-blocking Event trigger for that operation during a role write to avoid deadlock.
+
 ## Condition
 
 Routes execution to the success or failure path based on a filter rule.
@@ -19,7 +23,7 @@ Use this when a flow needs to branch on data the trigger or earlier operations p
 
 If the filter rule itself is misconfigured, the operation appends a debug array describing the misconfiguration.
 
-When used at the end of a flow on a Filter (blocking) Event hook trigger, a failure-path Condition cancels the original database transaction.
+When used at the end of a flow on a Filter (blocking) Event hook trigger, a failure-path Condition cancels the triggering operation. If that operation supplied a transaction, its writes roll back with it.
 
 ## Run Script
 
@@ -29,7 +33,7 @@ The sandbox is fully isolated from the host: no file system access, network acce
 
 The script's `process.env` is populated from the operator-allow-listed environment variables (governed separately by `FLOWS_ENV_ALLOW_LIST`).
 
-Throwing inside a script ends the flow. On a Filter (blocking) Event hook trigger, throwing also cancels the original event transaction.
+A script error follows the operation's failure path. If a Filter flow ends in failure, it cancels the triggering operation. Database work in a supplied transaction rolls back.
 
 The isolate has a configurable memory and time budget, set via `FLOWS_RUN_SCRIPT_MAX_MEMORY` (default 32, MB) and `FLOWS_RUN_SCRIPT_TIMEOUT` (default 10000, ms). Scripts that exceed either limit are aborted.
 

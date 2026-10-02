@@ -51,7 +51,7 @@
 		"cli": "NODE_ENV=development SERVE_APP=false NODE_OPTIONS=--no-node-snapshot tsx src/cli/run.ts",
 		"dev": "NODE_ENV=development SERVE_APP=false NODE_OPTIONS=--no-node-snapshot tsx watch --clear-screen=false src/start.ts",
 		"test": "vitest --watch=false",
-		"test:soak": "NODE_OPTIONS='--no-node-snapshot --expose-gc' tsx src/extensions/confined/soak/run.ts"
+		"test:stress": "NODE_OPTIONS='--no-node-snapshot --expose-gc' tsx src/extensions/confined/stress/run.ts"
 	},
 	"dependencies": {
 		"@authenio/samlify-node-xmllint": "2.0.0",
@@ -72,7 +72,7 @@
 		"@cairncms/storage-driver-s3": "workspace:*",
 		"@cairncms/utils": "workspace:*",
 		"@godaddy/terminus": "4.12.0",
-		"@img/sharp-wasm32": "0.35.3",
+		"@img/sharp-wasm32": "0.35.4",
 		"@jitl/quickjs-ng-wasmfile-release-asyncify": "0.31.0",
 		"@rollup/plugin-alias": "5.0.0",
 		"@rollup/plugin-node-resolve": "15.0.2",
@@ -126,7 +126,7 @@
 		"mime-types": "2.1.35",
 		"minimatch": "9.0.7",
 		"ms": "2.1.3",
-		"nanoid": "5.0.9",
+		"nanoid": "5.1.16",
 		"node-cron": "4.6.0",
 		"nodemailer": "9.0.1",
 		"object-hash": "3.0.0",
@@ -145,7 +145,7 @@
 		"rollup": "4.60.1",
 		"samlify": "2.13.0",
 		"sanitize-html": "2.13.0",
-		"sharp": "0.35.3",
+		"sharp": "0.35.4",
 		"snappy": "7.2.2",
 		"stream-json": "1.7.5",
 		"strip-bom-stream": "5.0.0",

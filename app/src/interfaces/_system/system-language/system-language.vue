@@ -9,7 +9,7 @@
 </template>
 
 <script setup lang="ts">
-import availableLanguages from '@/lang/available-languages.yaml';
+import { AVAILABLE_LANGUAGES } from '@cairncms/constants';
 import { useI18n } from 'vue-i18n';
 
 const props = defineProps<{
@@ -24,7 +24,7 @@ defineEmits<{
 
 const { t } = useI18n();
 
-const languages = Object.entries(availableLanguages).map(([key, value]) => ({
+const languages = Object.entries(AVAILABLE_LANGUAGES).map(([key, value]) => ({
 	text: value,
 	value: key as string | null,
 }));

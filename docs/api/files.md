@@ -94,7 +94,13 @@ Content-Type: application/json
 }
 ```
 
-`url` is required and must be an absolute HTTP/HTTPS URL. `data` is an optional object of metadata fields applied to the resulting `directus_files` row. The platform fetches the URL, stores the bytes in the configured storage location, and returns the new file record.
+`url` must be an absolute HTTP or HTTPS URL. `data` is optional and supplies file metadata. Without `data.id`, the endpoint creates a file.
+
+To replace an existing file, put its ID in `data.id`. The file keeps its ID, storage location, and any metadata you leave out of `data`. The server sets `type` from the download's content type.
+
+Replacement requires update permission on the file and on `folder`, `filename_download`, `storage`, and `type`. Any other metadata you supply also requires update permission. Create permission is not required.
+
+The server checks item and field permissions before downloading the file. Missing files and files the user cannot update return the same `403` response. Checks that need the downloaded content, such as content-type validation, run after the download starts.
 
 URL imports are subject to outbound IP validation. By default, loopback ranges, the host's own network interfaces, and the EC2/cloud metadata endpoint at `169.254.169.254` are blocked to prevent server-side request forgery against internal services. Imports that resolve to a denied IP fail at the outbound connection step and return `503 SERVICE_UNAVAILABLE` with a body indicating the import URL could not be fetched. Operators can extend the deny list through the `IMPORT_IP_DENY_LIST` environment variable; see [Configuration](/docs/manage/configuration/) for the exact behavior, including the special meaning of `0.0.0.0`.
 
@@ -282,8 +288,8 @@ Multi-location setups support per-file backend choice (some files on local disk,
 File metadata permissions are role-driven the same way item permissions are. Permissions are checked against the `directus_files` system collection:
 
 - **Read** — what fields and rows the role can list and fetch through `/files`. Asset access through `/assets/<id>` checks the same read permission against the file's row.
-- **Create** — required for upload. Roles without create permission on `directus_files` get `403` on `POST /files` and `POST /files/import`.
-- **Update** — required for metadata edits and bytes replacement.
+- **Create** permission is required for `POST /files` and URL imports without `data.id`. Requests without it return `403`.
+- **Update** permission is required for metadata edits and file replacement, including URL imports with `data.id`.
 - **Delete** — required for `DELETE /files`.
 
 Same-origin authenticated browser clients can fetch protected assets without attaching a token. The refresh-token cookie set during login is used to look up the session and authorize the asset request, which is the path the first-party admin app uses for protected asset loads. Cross-origin clients and server-to-server callers still need an `Authorization: Bearer` header (the `?access_token=` query parameter is also supported for compatibility, but not preferred — see [Authentication / Attaching a token](/docs/api/authentication/#attaching-a-token)).

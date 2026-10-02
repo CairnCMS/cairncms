@@ -55,7 +55,11 @@ export const DEFAULT_AUTH_PROVIDER = 'default';
 
 export const COLUMN_TRANSFORMS = ['year', 'month', 'day', 'weekday', 'hour', 'minute', 'second'];
 
-export const GENERATE_SPECIAL = ['uuid', 'date-created', 'role-created', 'user-created'];
+export const GENERATE_SPECIAL = ['uuid', 'date-created', 'role-created', 'user-created', 'folder-key'];
+
+export const WRITE_PROTECTED_FIELDS = new Map<string, readonly string[]>([['directus_folders', ['key']]]);
+
+export const PARENT_CYCLE_GUARDED_COLLECTIONS = new Map<string, string>([['directus_folders', 'parent']]);
 
 export { UUID_REGEX } from './utils/is-valid-uuid.js';
 
@@ -67,7 +71,7 @@ export const COOKIE_OPTIONS: CookieOptions = {
 	sameSite: (env['REFRESH_TOKEN_COOKIE_SAME_SITE'] as 'lax' | 'strict' | 'none') || 'strict',
 };
 
-export const OAS_REQUIRED_SCHEMAS = ['Diff', 'Schema', 'Query', 'x-metadata'];
+export const OAS_REQUIRED_SCHEMAS = ['Diff', 'Schema', 'Query', 'x-metadata', 'ItemPermissions'];
 
 /** Formats from which transformation is supported */
 export const SUPPORTED_IMAGE_TRANSFORM_FORMATS = ['image/jpeg', 'image/png', 'image/webp', 'image/tiff', 'image/avif'];
