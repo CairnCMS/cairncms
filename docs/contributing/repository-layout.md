@@ -16,7 +16,7 @@ CairnCMS is a pnpm-managed monorepo. The published platform is composed of multi
 - `app` — the admin app.
 - `sdk` — the JavaScript client.
 - `packages/*` — shared utilities, type definitions, the extensions SDK, the storage drivers, and supporting libraries.
-- `tests/*` — the blackbox test suite.
+- `tests/*` — API integration tests and shared test helpers.
 
 Run `pnpm install` from the repo root to install dependencies for every workspace member. Cross-package imports (`@cairncms/utils` from inside `api/`, for example) resolve through pnpm's symlinking and reflect local source changes immediately.
 
@@ -93,9 +93,16 @@ The `packages/dist/` directory is build output for the workspace and is gitignor
 
 End-to-end tests that exercise a running CairnCMS instance against real databases.
 
-- **`tests/blackbox/`** — the blackbox suite. Spins up the supporting services (Redis, S3Proxy, a SAML test IdP) and an optional database container via `tests/blackbox/docker-compose.yml`, runs `cairncms bootstrap` against the chosen vendor, then exercises the API end-to-end. SQLite does not run in a container; the SQLite path uses a local file and only the supporting services come up. Other vendors (Postgres, Postgres 10, MySQL, MySQL 5, MariaDB) bring up their database container alongside the supporting services. Pick a vendor with `TEST_DB=postgres pnpm test:blackbox` (or `sqlite3`, `mysql`, `maria`, etc.).
+- **`tests/integration/`** — tests the compiled API through Vitest. Testcontainers provisions databases and supporting
+  Redis, S3Proxy, and SAML services as needed. Each test file owns a fresh database, API process, and storage directory.
+  Select a suite with `pnpm test:integration routes/auth/login.test.ts` after running `pnpm test:integration:prepare`.
+- **`tests/shared/`** — request helpers used by the integration suites.
 
-The blackbox suite is the highest-coverage layer of CairnCMS testing. CI runs the full vendor matrix (`sqlite3`, `postgres`, `postgres10`, `mysql`, `mysql5`, `maria`) on pull requests targeting `main` (the `Blackbox Tests` workflow at `.github/workflows/blackbox-pr.yml`), so vendor-specific regressions are caught before merge, and again on pushes to `main` (`.github/workflows/blackbox-main.yml`). Pull requests into `develop` do not trigger it. Locally, run at least the SQLite path before submitting changes that touch query semantics, schema operations, or the auth flow; run additional vendors when changes affect SQL generation. See [Running locally / Tests](/docs/contributing/running-locally/#tests) for the local-run command.
+The `CI / Tests / API Integration` workflow in `.github/workflows/ci-tests-api.yml` runs every suite on all six vendors
+(`sqlite3`, `postgres`, `postgres10`, `mysql`, `mysql5`, `maria`) on `develop` pushes. It also supports manual runs.
+Pull requests into `develop` run basic checks, while the complete integration matrix tests the assembled branch after
+merge. Locally, select the suites and vendors affected by your change. See
+[Running locally / Tests](/docs/contributing/running-locally/#tests) for commands.
 
 ## Documentation
 
@@ -107,10 +114,12 @@ Two trees:
 ## Container and deployment files
 
 - **`Dockerfile`** — the multi-stage build that produces the `cairncms/cairncms` image.
-- **`docker-compose.yml`** — local-dev stack at the repo root (Postgres, Redis, CairnCMS pointed at the local source). Uses ports `5xxx` so it can run alongside the blackbox stack.
-- **`tests/blackbox/docker-compose.yml`** — the blackbox stack on ports `6xxx`. Lives under `tests/` rather than at the repo root for that reason.
+- **`docker-compose.yml`** — local-dev stack at the repo root (Postgres, Redis, CairnCMS pointed at the local source).
+  Uses ports `5xxx`. Integration tests provision their own containers on dynamically assigned ports.
 
-Both compose files are intended to run from a developer machine. Production deployments build their own compose or Kubernetes manifests around the published image; see [Deployment](/docs/manage/deployment/) for the operator-facing reference.
+The compose file is intended to run from a developer machine. Production deployments build their own compose or
+Kubernetes manifests around the published image. See [Deployment](/docs/manage/deployment/) for the operator-facing
+reference.
 
 ## Working across packages
 

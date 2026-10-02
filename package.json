@@ -5,8 +5,7 @@
 		"build": "pnpm --recursive --filter '!docs' run build",
 		"format": "prettier --write \"**/*.{md,y?(a)ml,json}\"",
 		"lint": "eslint .",
-		"test": "pnpm --recursive --filter '!tests-blackbox' --filter '!tests-integration' test",
-		"test:blackbox": "node tests/blackbox/setup/assert-ci-selection.js && rm -rf dist && pnpm --filter cairncms deploy --legacy --prod dist && pnpm --filter tests-blackbox test",
+		"test": "pnpm --recursive --filter '!tests-integration' test",
 		"test:integration": "pnpm --filter tests-integration test",
 		"test:integration:prepare": "pnpm --filter tests-integration prepare:api"
 	},
@@ -15,7 +14,6 @@
 		"@typescript-eslint/parser": "5.59.0",
 		"eslint": "8.38.0",
 		"eslint-config-prettier": "8.8.0",
-		"eslint-plugin-jest": "27.2.1",
 		"eslint-plugin-prettier": "4.2.1",
 		"eslint-plugin-vue": "9.33.0",
 		"prettier": "2.8.7"

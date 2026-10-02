@@ -255,9 +255,13 @@ export async function withEnvironment(
 		await mkdir(join(directory, 'cli-empty-extensions'), { recursive: true });
 
 		for (const extension of options.extensions ?? []) {
-			await cp(join(project, 'tests/blackbox/extensions', extension), join(env.EXTENSIONS_PATH!, extension), {
-				recursive: true,
-			});
+			await cp(
+				join(project, 'tests/integration/fixtures/extensions', extension),
+				join(env.EXTENSIONS_PATH!, extension),
+				{
+					recursive: true,
+				}
+			);
 		}
 
 		for (const migration of options.migrations ?? []) {
@@ -380,7 +384,11 @@ export async function withEnvironment(
 			for (const name of hookFixtures) {
 				const extension = join(env.EXTENSIONS_PATH!, 'hooks', name);
 				await mkdir(extension, { recursive: true });
-				await copyFile(join(project, 'tests/blackbox/extensions/hooks', name, 'index.js'), join(extension, 'index.js'));
+
+				await copyFile(
+					join(project, 'tests/integration/fixtures/extensions/hooks', name, 'index.js'),
+					join(extension, 'index.js')
+				);
 			}
 		}
 

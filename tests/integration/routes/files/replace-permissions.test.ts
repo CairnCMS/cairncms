@@ -11,7 +11,7 @@ import { initializeFixtures } from '../../harness/fixture-setup.mjs';
 
 initializeFixtures();
 
-const assetsDirectory = [fileURLToPath(new URL('../../../blackbox/assets/', import.meta.url))];
+const assetsDirectory = [fileURLToPath(new URL('../../fixtures/assets/', import.meta.url))];
 const imageFilePath = path.join(...assetsDirectory, 'directus.png');
 const test = createApiTest();
 

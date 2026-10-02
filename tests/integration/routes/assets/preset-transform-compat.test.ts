@@ -10,7 +10,7 @@ vi.setConfig({ testTimeout: 60000 });
 
 initializeFixtures();
 
-const imageFilePath = fileURLToPath(new URL('../../../blackbox/assets/directus.png', import.meta.url));
+const imageFilePath = fileURLToPath(new URL('../../fixtures/assets/directus.png', import.meta.url));
 
 const blur = ['blur', 45];
 const grayscale = ['grayscale'];

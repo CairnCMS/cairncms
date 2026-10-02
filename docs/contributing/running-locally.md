@@ -57,7 +57,8 @@ docker compose up -d mysql
 docker compose up -d maria
 ```
 
-The compose file's header comment lists the full port and credential matrix. The exposed ports are in the `5xxx` range so they don't collide with the blackbox compose stack (`6xxx`).
+The compose file's header comment lists the full port and credential matrix. The exposed ports are in the `5xxx` range.
+API integration tests provision separate containers with dynamically assigned ports.
 
 The compose also defines `s3proxy`, an S3-compatible server on port `5106` (key `cairncms`, secret `miniosecret`), for exercising the S3 storage driver locally. Start it, then create a bucket with the AWS CLI (S3Proxy has no web console):
 
@@ -153,7 +154,7 @@ For most contributing work, both the api dev server and the app dev server need 
 
 ## Tests
 
-Three test layers run independently:
+Run tests and lint independently:
 
 - **Unit tests** (per-package, fast):
 
@@ -161,28 +162,39 @@ Three test layers run independently:
   pnpm test
   ```
 
-  Recursively runs `vitest --watch=false` in every workspace member except the blackbox suite. Most contributions need this to pass before review.
+  Runs the workspace unit tests and SDK type tests. API integration has a separate command. Most contributions need this
+  to pass before review.
 
-- **Blackbox tests** (slow, requires Docker):
+- **API integration tests**:
 
   ```bash
-  # Start the supporting services
-  docker compose -f tests/blackbox/docker-compose.yml up auth-saml redis s3proxy s3proxy-init -d --wait
+  # Build the application and record the inputs being tested
+  pnpm test:integration:prepare
 
-  # Rebuild before running the suite (see note below)
-  pnpm build
+  # Run one suite on PostgreSQL (requires Docker)
+  pnpm test:integration routes/auth/login.test.ts
 
-  # For SQLite (the cheapest local path)
-  TEST_DB=sqlite3 pnpm test:blackbox
+  # Select a named case
+  pnpm test:integration routes/auth/login.test.ts -t 'when correct credentials.*Admin User'
 
-  # For other vendors (start the matching DB container first)
-  docker compose -f tests/blackbox/docker-compose.yml up postgres -d
-  TEST_DB=postgres pnpm test:blackbox
+  # Run an ordinary SQLite suite without Docker
+  pnpm test:integration --vendor sqlite3 routes/items/no-relation.test.ts
+
+  # Run the full PostgreSQL suite and collect all failures
+  pnpm test:integration --vendor postgres --collect-all
   ```
 
-  `pnpm test:blackbox` deploys whatever is already in each package's `dist/` directory rather than rebuilding from source. After any source change in `api/`, `packages/`, or `sdk/`, run `pnpm build` (or rebuild the affected package with `pnpm --filter <name> run build`) before invoking the suite, or the tests run against stale compiled output.
+  Each file gets a fresh database and API process. Keep Docker running for server databases and suites that use Redis,
+  SAML, or S3. The harness starts and cleans up its own services. Local runs stop on the first failure by default. Use
+  `--collect-all` to continue or `--list` to inspect a selection without starting services.
 
-  The blackbox suite is the highest-coverage layer. Run at least the SQLite path before submitting; run the relevant server vendor when changes affect SQL generation. See [Repository layout / `tests/`](/docs/contributing/repository-layout/#tests) for the full vendor matrix.
+  Repeat `pnpm test:integration:prepare` after changing application source, dependencies, or build configuration. The
+  runner rejects stale builds. Test-only and documentation edits can reuse the build.
+
+  Available vendors are `postgres`, `postgres10`, `mysql`, `mysql5`, `maria`, and `sqlite3`. Use `--vendor all` for all
+  six. CI runs the complete matrix on `develop` pushes. See the
+  [integration README](https://github.com/CairnCMS/cairncms/blob/develop/tests/integration/README.md) for adding suites
+  and reading results.
 
 - **Lint**:
 
@@ -243,11 +255,17 @@ pnpm --filter api run cli bootstrap
 
 ## Troubleshooting
 
-- **`pnpm install` fails on Node 24+** — the platform targets Node 22 LTS. If you must run on a newer version, expect occasional dependency-version mismatches; the lockfile is pinned against Node 22.
-- **The api dev server fails to start with a database error** — the most common cause is the database not being up yet. `docker compose ps` shows the running services; `docker compose logs <service>` shows why something failed.
-- **The admin app loads but says "API not reachable"** — check that the api dev server is running on `8055` and that `PUBLIC_URL` in `api/.env` matches the URL the app is making requests against.
-- **A blackbox test fails on first run** — check that the supporting services are healthy with `docker compose -f tests/blackbox/docker-compose.yml ps`. The first run after a Docker restart sometimes hits a service-still-starting race; rerun once everything is `healthy`.
-- **Changes in a `packages/` library don't show up in the api or app** — the package may need a manual rebuild. Run `pnpm --filter <package> run build` and reload the dev server.
+- **`pnpm install` fails on Node 24+** — the platform targets Node 22 LTS. If you must run on a newer version, expect
+  occasional dependency-version mismatches; the lockfile is pinned against Node 22.
+- **The api dev server fails to start with a database error** — the most common cause is the database not being up yet.
+  `docker compose ps` shows the running services; `docker compose logs <service>` shows why something failed.
+- **The admin app loads but says "API not reachable"** — check that the api dev server is running on `8055` and that
+  `PUBLIC_URL` in `api/.env` matches the URL the app is making requests against.
+- **An API integration test fails** — inspect the result directory printed by the command under
+  `tests/integration/.artifacts/`. It retains test results and process logs. A startup failure should be diagnosed from
+  those logs before rerunning.
+- **Changes in a `packages/` library don't show up in the api or app** — the package may need a manual rebuild. Run
+  `pnpm --filter <package> run build` and reload the dev server.
 
 ## Where to go next
 
