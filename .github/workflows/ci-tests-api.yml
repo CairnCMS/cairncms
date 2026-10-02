@@ -1,5 +1,5 @@
 name: CI / Tests / API Integration
-run-name: API integration / ${{ github.ref_name }} / ${{ github.sha }}
+run-name: API Integration / ${{ github.ref_name }}
 
 on:
   push:
