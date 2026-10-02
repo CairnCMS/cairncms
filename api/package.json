@@ -51,7 +51,7 @@
 		"cli": "NODE_ENV=development SERVE_APP=false NODE_OPTIONS=--no-node-snapshot tsx src/cli/run.ts",
 		"dev": "NODE_ENV=development SERVE_APP=false NODE_OPTIONS=--no-node-snapshot tsx watch --clear-screen=false src/start.ts",
 		"test": "vitest --watch=false",
-		"test:soak": "NODE_OPTIONS='--no-node-snapshot --expose-gc' tsx src/extensions/confined/soak/run.ts"
+		"test:stress": "NODE_OPTIONS='--no-node-snapshot --expose-gc' tsx src/extensions/confined/stress/run.ts"
 	},
 	"dependencies": {
 		"@authenio/samlify-node-xmllint": "2.0.0",

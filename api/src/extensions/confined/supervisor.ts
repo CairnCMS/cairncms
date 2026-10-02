@@ -399,7 +399,7 @@ export class ConfinedSupervisor {
 		if (next) next();
 	}
 
-	/** Read-only slot accounting for the soak harness to assert no slot or waiter leak after a run drains. */
+	/** Read-only slot accounting for the stress harness to assert no slot or waiter leak after a run drains. */
 	liveness(): { active: number; queued: number } {
 		return { active: this.active, queued: this.waiters.length };
 	}

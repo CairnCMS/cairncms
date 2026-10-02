@@ -29,7 +29,7 @@ interface HandleState {
 
 /**
  * A cgroupOps that records the create, place, remove, and killScope lifecycle per handle
- * rather than only in aggregate, so the soak proves every created cgroup was placed once
+ * rather than only in aggregate, so the stress proves every created cgroup was placed once
  * and removed once with no unknown or duplicate operation. create returns a non-null
  * handle so place and remove are exercised, which keeps the equality a real proof rather
  * than 0 === 0.
@@ -43,7 +43,7 @@ export function createCountingCgroupOps(): CountingCgroupOps {
 	const ops: ConfinedCgroupOps = {
 		create: (): ChildCgroup => {
 			created += 1;
-			const path = `soak-cgroup-${created}`;
+			const path = `stress-cgroup-${created}`;
 			handles.set(path, { placed: 0, removed: 0 });
 			return { path };
 		},

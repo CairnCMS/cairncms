@@ -1,8 +1,8 @@
 import { writeFileSync } from 'node:fs';
-import { assertHeapBounded, assertSoakClean, buildReport, runSoak } from './harness.js';
+import { assertHeapBounded, assertStressClean, buildReport, runStress } from './harness.js';
 
 // The heavy, deliberate run: thousands of invocations with the capacity report and the heap
-// growth bound, invoked by the test:soak script and the CI soak workflows. The bounded smoke
+// growth bound, invoked by the test:stress script and the CI stress workflows. The bounded smoke
 // in the unit suite stays the per-PR regression guard.
 const DEFAULT_COUNT = 3000;
 // Heap growth after GC, so a no-leak run stays small. Generous enough to absorb V8 noise,
@@ -15,16 +15,16 @@ async function main(): Promise<void> {
 	const maxGrowthMb = readPositiveInt(args, '--max-growth-mb') ?? DEFAULT_MAX_GROWTH_MB;
 	const out = readString(args, '--out');
 
-	const result = await runSoak({ count });
+	const result = await runStress({ count });
 	const report = buildReport(result);
 
 	process.stdout.write(`${report}\n`);
 	if (out !== undefined) writeFileSync(out, `${report}\n`);
 
-	assertSoakClean(result);
+	assertStressClean(result);
 	assertHeapBounded(result, maxGrowthMb * 1024 * 1024);
 
-	process.stdout.write('soak: PASS\n');
+	process.stdout.write('stress: PASS\n');
 }
 
 function readString(args: string[], flag: string): string | undefined {
@@ -43,6 +43,6 @@ function readPositiveInt(args: string[], flag: string): number | undefined {
 }
 
 main().catch((error: unknown) => {
-	process.stderr.write(`soak: FAIL ${error instanceof Error ? error.message : String(error)}\n`);
+	process.stderr.write(`stress: FAIL ${error instanceof Error ? error.message : String(error)}\n`);
 	process.exit(1);
 });

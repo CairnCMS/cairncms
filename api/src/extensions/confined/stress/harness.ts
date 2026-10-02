@@ -15,11 +15,11 @@ import type {
 } from '../types.js';
 import { createCountingCgroupOps, type CgroupTally } from './counting-cgroup-ops.js';
 
-export type SoakExitPath = 'complete' | 'crash' | 'timeout' | 'oversize' | 'hostcall-timeout' | 'hostcall-flood';
+export type StressExitPath = 'complete' | 'crash' | 'timeout' | 'oversize' | 'hostcall-timeout' | 'hostcall-flood';
 
-const ALL_PATHS: SoakExitPath[] = ['complete', 'crash', 'timeout', 'oversize', 'hostcall-timeout', 'hostcall-flood'];
+const ALL_PATHS: StressExitPath[] = ['complete', 'crash', 'timeout', 'oversize', 'hostcall-timeout', 'hostcall-flood'];
 
-// The soak pins a small process cap so the saturation pass can drive contention with a
+// The stress pins a small process cap so the saturation pass can drive contention with a
 // known number of concurrent invocations.
 const MAX_CONCURRENT = 4;
 
@@ -56,7 +56,7 @@ const HOST_CALL_TIMEOUT_MS = 100;
 const FLOOD_MAX_HOST_CALLS = 8;
 const FLOOD_MAX_IN_FLIGHT = 4;
 
-const SOAK_STUB_CHILD = `import net from 'node:net';
+const STRESS_STUB_CHILD = `import net from 'node:net';
 const channel = new net.Socket({ fd: 3, readable: true, writable: true });
 channel.on('error', () => {});
 let buf = Buffer.alloc(0);
@@ -90,14 +90,14 @@ channel.on('data', (chunk) => {
 		if (mode === 'crash') process.exit(1);
 		else if (mode === 'timeout') { /* hang, the parent wall-clock kills */ }
 		else if (mode === 'oversize') { const h = Buffer.allocUnsafe(4); h.writeUInt32BE(256 * 1024 * 1024, 0); channel.write(h); }
-		else if (mode === 'hostcall-timeout') { awaiting = 1; channel.write(frame({ type: 'host-call', id: 1, method: 'log.info', args: { soakMode: 'slow' } })); }
+		else if (mode === 'hostcall-timeout') { awaiting = 1; channel.write(frame({ type: 'host-call', id: 1, method: 'log.info', args: { stressMode: 'slow' } })); }
 		else if (mode === 'hostcall-flood') {
 			awaiting = 10;
 			let batch = Buffer.alloc(0);
-			for (let i = 1; i <= 10; i++) batch = Buffer.concat([batch, frame({ type: 'host-call', id: i, method: 'log.info', args: { soakMode: 'fast' } })]);
+			for (let i = 1; i <= 10; i++) batch = Buffer.concat([batch, frame({ type: 'host-call', id: i, method: 'log.info', args: { stressMode: 'fast' } })]);
 			channel.write(batch);
 		}
-		else sendDone({ ok: true, value: 'soak' });
+		else sendDone({ ok: true, value: 'stress' });
 	}
 });
 function frame(msg) {
@@ -113,9 +113,9 @@ function sendDone(result) {
 }
 `;
 
-export interface SoakConfig {
+export interface StressConfig {
 	count: number;
-	paths?: SoakExitPath[];
+	paths?: StressExitPath[];
 }
 
 export interface SaturationResult {
@@ -135,13 +135,13 @@ export interface HostCallProof {
 	totalDenials: number;
 }
 
-export interface SoakTiming {
+export interface StressTiming {
 	totalMs: number;
 	perInvocationP50Ms: number;
 	perInvocationP95Ms: number;
 }
 
-export interface SoakMemory {
+export interface StressMemory {
 	// heapUsed sampled after a best-effort GC, before and after the run, so a steady leak
 	// shows as positive heap growth. RSS is a high-water mark that does not shrink after GC,
 	// so peak RSS is reported as a capacity number, not the leak signal.
@@ -151,9 +151,9 @@ export interface SoakMemory {
 	peakRssBytes: number;
 }
 
-export interface SoakResult {
-	plannedPaths: Record<SoakExitPath, number>;
-	observedPaths: Record<SoakExitPath, number>;
+export interface StressResult {
+	plannedPaths: Record<StressExitPath, number>;
+	observedPaths: Record<StressExitPath, number>;
 	mismatches: number;
 	hostCall: HostCallProof;
 	saturation: SaturationResult;
@@ -163,16 +163,16 @@ export interface SoakResult {
 	// case) is a later slice.
 	spawnedChildren: number;
 	orphanedPids: number;
-	timing: SoakTiming;
-	memory: SoakMemory;
+	timing: StressTiming;
+	memory: StressMemory;
 	liveness: { active: number; queued: number };
 	cgroup: CgroupTally;
 }
 
-export async function runSoak(config: SoakConfig): Promise<SoakResult> {
-	const dir = mkdtempSync(join(tmpdir(), 'confined-soak-'));
-	const childPath = join(dir, 'soak-child.mjs');
-	writeFileSync(childPath, SOAK_STUB_CHILD);
+export async function runStress(config: StressConfig): Promise<StressResult> {
+	const dir = mkdtempSync(join(tmpdir(), 'confined-stress-'));
+	const childPath = join(dir, 'stress-child.mjs');
+	writeFileSync(childPath, STRESS_STUB_CHILD);
 
 	const counting = createCountingCgroupOps();
 	const spawnedPids: number[] = [];
@@ -185,7 +185,7 @@ export async function runSoak(config: SoakConfig): Promise<SoakResult> {
 		cgroupOps: counting.ops,
 		spawn: recordingSpawn(spawnedPids),
 		hostDispatcher: countingDispatcher(hostCallState),
-		limits: soakLimits(),
+		limits: stressLimits(),
 	});
 
 	const plan = planPaths(config.count, config.paths ?? ALL_PATHS);
@@ -262,7 +262,7 @@ export async function runSoak(config: SoakConfig): Promise<SoakResult> {
 	}
 }
 
-export function assertSoakClean(result: SoakResult): void {
+export function assertStressClean(result: StressResult): void {
 	const {
 		plannedPaths,
 		observedPaths,
@@ -335,10 +335,10 @@ export function assertSoakClean(result: SoakResult): void {
 	if (cgroup.pending !== 0) throw new Error(`cgroup pending leak: ${cgroup.pending} pending after drain`);
 }
 
-// The heap slope is the one judgment-prone check, so it stays out of assertSoakClean (the
+// The heap slope is the one judgment-prone check, so it stays out of assertStressClean (the
 // deterministic gate the bounded smoke shares) and is applied only by the heavy runner, which
 // runs with GC exposed so the heap reading is clean.
-export function assertHeapBounded(result: SoakResult, maxGrowthBytes: number): void {
+export function assertHeapBounded(result: StressResult, maxGrowthBytes: number): void {
 	if (result.memory.heapGrowthBytes > maxGrowthBytes) {
 		throw new Error(`heap growth ${result.memory.heapGrowthBytes} bytes exceeds bound ${maxGrowthBytes} bytes`);
 	}
@@ -346,13 +346,13 @@ export function assertHeapBounded(result: SoakResult, maxGrowthBytes: number): v
 
 // An aggregate-only proof report: counts, timing, and memory, never request URLs, auth
 // material, secret handles, raw host-call args, or per-invocation payloads.
-export function buildReport(result: SoakResult): string {
+export function buildReport(result: StressResult): string {
 	const serial = sumValues(result.plannedPaths);
 	const paths = ALL_PATHS.map((path) => `${path}=${result.observedPaths[path]}`).join(' ');
 	const { hostCall, saturation, cgroup, timing, memory } = result;
 
 	return [
-		'confined runtime soak report',
+		'confined runtime stress report',
 		`  invocations: ${serial} serial, ${saturation.burst * 2} saturation`,
 		`  exit paths: ${paths}`,
 		`  host calls: dispatched=${hostCall.dispatched} timeouts=${hostCall.timeouts} inFlightDenials=${hostCall.inFlightDenials} totalDenials=${hostCall.totalDenials}`,
@@ -395,7 +395,7 @@ function isBusy(result: ConfinedResult): boolean {
 
 // The host-call guests return the gate denials they observed in their result value, so the
 // proof reflects what actually fired rather than that the dispatcher ran at all.
-function accumulateHostCallProof(proof: HostCallProof, path: SoakExitPath, result: ConfinedResult): void {
+function accumulateHostCallProof(proof: HostCallProof, path: StressExitPath, result: ConfinedResult): void {
 	if (!result.ok || (path !== 'hostcall-timeout' && path !== 'hostcall-flood')) return;
 
 	const value = result.value as { timeout?: number; inFlight?: number; total?: number } | null;
@@ -406,12 +406,12 @@ function accumulateHostCallProof(proof: HostCallProof, path: SoakExitPath, resul
 	proof.totalDenials += value.total ?? 0;
 }
 
-function emptyPathCounts(): Record<SoakExitPath, number> {
+function emptyPathCounts(): Record<StressExitPath, number> {
 	return { complete: 0, crash: 0, timeout: 0, oversize: 0, 'hostcall-timeout': 0, 'hostcall-flood': 0 };
 }
 
-function planPaths(count: number, mix: SoakExitPath[]): SoakExitPath[] {
-	const plan: SoakExitPath[] = [];
+function planPaths(count: number, mix: StressExitPath[]): StressExitPath[] {
+	const plan: StressExitPath[] = [];
 	for (let i = 0; i < count; i++) plan.push(mix[i % mix.length]!);
 	return plan;
 }
@@ -420,7 +420,7 @@ function resultCode(result: ConfinedResult): string {
 	return result.ok ? 'ok' : result.error.code;
 }
 
-function expectedCode(path: SoakExitPath): string {
+function expectedCode(path: StressExitPath): string {
 	if (path === 'timeout') return 'timeout';
 	// crash exits the child (channel close) and oversize trips the frame-reader protocol
 	// violation, both of which the supervisor surfaces as 'crash'.
@@ -429,7 +429,7 @@ function expectedCode(path: SoakExitPath): string {
 	return 'ok';
 }
 
-function invocationFor(path: SoakExitPath): ConfinedInvocation {
+function invocationFor(path: StressExitPath): ConfinedInvocation {
 	let limits = BASE_LIMITS;
 
 	if (path === 'timeout') limits = { ...BASE_LIMITS, wallClockMs: TIMEOUT_WALL_CLOCK_MS };
@@ -438,18 +438,18 @@ function invocationFor(path: SoakExitPath): ConfinedInvocation {
 		limits = { ...BASE_LIMITS, maxHostCalls: FLOOD_MAX_HOST_CALLS, maxInFlightHostCalls: FLOOD_MAX_IN_FLIGHT };
 	}
 
-	return soakInvocation(path, limits);
+	return stressInvocation(path, limits);
 }
 
 function saturationInvocation(acquireTimeoutMs: number): ConfinedInvocation {
-	return soakInvocation('complete', { ...BASE_LIMITS, acquireTimeoutMs });
+	return stressInvocation('complete', { ...BASE_LIMITS, acquireTimeoutMs });
 }
 
-function soakInvocation(mode: SoakExitPath, limits: ConfinedRuntimeLimits): ConfinedInvocation {
+function stressInvocation(mode: StressExitPath, limits: ConfinedRuntimeLimits): ConfinedInvocation {
 	return {
-		extensionId: 'soak.harness',
-		contributionId: 'flow-operation.soak',
-		operationId: 'soak',
+		extensionId: 'stress.harness',
+		contributionId: 'flow-operation.stress',
+		operationId: 'stress',
 		entrySource: '',
 		options: { mode },
 		input: null,
@@ -458,9 +458,9 @@ function soakInvocation(mode: SoakExitPath, limits: ConfinedRuntimeLimits): Conf
 	};
 }
 
-function soakLimits(): SandboxLimits {
+function stressLimits(): SandboxLimits {
 	const resolved = resolveSandboxLimits({});
-	if (!resolved.ok) throw new Error('soak: default sandbox limits should resolve');
+	if (!resolved.ok) throw new Error('stress: default sandbox limits should resolve');
 	return { ...resolved.limits, maxProcesses: MAX_CONCURRENT };
 }
 
@@ -471,7 +471,7 @@ function countingDispatcher(state: { calls: number }): ConfinedHostDispatcher {
 		// so the timeout path exercises the timer and abort. A fast call resolves promptly so
 		// the flood path is bounded by the caps, not by the dispatcher. The method must be a
 		// real host method to pass validation, so slow vs fast travels in the args.
-		const slow = (call.args as { soakMode?: string } | undefined)?.soakMode === 'slow';
+		const slow = (call.args as { stressMode?: string } | undefined)?.stressMode === 'slow';
 		return abortableReply(signal, slow ? undefined : 10);
 	};
 }
@@ -563,7 +563,7 @@ function percentile(values: number[], p: number): number {
 	return Math.round(sorted[index]!);
 }
 
-function sumValues(counts: Record<SoakExitPath, number>): number {
+function sumValues(counts: Record<StressExitPath, number>): number {
 	return Object.values(counts).reduce((total, value) => total + value, 0);
 }
 
