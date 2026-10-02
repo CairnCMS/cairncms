@@ -2,6 +2,38 @@
 
 All notable changes to CairnCMS are documented in this file. Releases are listed in reverse chronological order. Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0]
+
+### Potential Breaking Changes
+
+- Use server-computed permissions in item editors. Custom nested-write clients may now receive 400 for conflicting parent links or 403 for key-only children without child-update or relationship-read access. Omit parent links and adjust grants. Related-item update hooks must read IDs from `meta.keys`, and key-only no-ops no longer emit update events. (#239)
+- Bumped maplibre-gl to 6.11.2. MapLibre GL JS 6 requires WebGL2, so browsers or devices without WebGL2 can no longer display the map interface or map layout. (#241)
+- Bumped sharp to 0.35.4. Deployments built against a globally installed libvips now require libvips 8.18.6 or later. They must also update libheif to 1.23.2 or later. Deployments using sharp's bundled binaries need no additional library update. (#243)
+- Bumped nanoid to 5.1.16. The GraphQL `utils_random_string` mutation now rejects `length: 0` and negative lengths with `INVALID_PAYLOAD`. Zero previously selected the 32-character default. Omit `length` for that default, or provide an integer from 1 to 500. (#244)
+
+### New Features
+
+- Expanded and improved config as code, including:
+	- Version 2 manifests and HTTP snapshot and apply endpoints. (#184)
+	- Remote snapshot and apply from the CLI. (#227)
+	- Folder hierarchy synchronization. (#230)
+	- Project settings synchronization. (#231)
+	- Extension settings with secret placeholders. (#234)
+	- Custom translation strings. (#236)
+- Modernized API integration testing. (#245)
+
+### Fixes & Improvements
+
+- Fixed between filter input values. (#222)
+- Corrected null and empty filter flag semantics. (#223)
+- Forwarded initialization errors from database connection hooks. (#238)
+- Use server-computed permissions in item editors. (#239)
+- Bumped maplibre-gl to 6.11.2. (#241)
+- Bumped @xmldom/xmldom override to 0.8.15. (#242)
+- Bumped sharp to 0.35.4. (#243)
+- Bumped nanoid to 5.1.16. (#244)
+- Retired the blackbox test harness. (#246)
+
 ## [1.5.0]
 
 ### Potential Breaking Changes
