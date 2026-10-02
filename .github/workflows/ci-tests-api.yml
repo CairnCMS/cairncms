@@ -20,7 +20,7 @@ env:
 
 jobs:
   validation:
-    name: CI / Tests / API Integration / Validation
+    name: Validation
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -68,7 +68,7 @@ jobs:
           retention-days: 7
 
   restoration:
-    name: CI / Tests / API Integration / Restoration / ${{ matrix.label }}
+    name: Restoration / ${{ matrix.label }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -115,7 +115,7 @@ jobs:
           retention-days: 7
 
   test:
-    name: CI / Tests / API Integration / ${{ matrix.label }}
+    name: ${{ matrix.label }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     strategy:
@@ -169,7 +169,7 @@ jobs:
           retention-days: 7
 
   results:
-    name: CI / Tests / API Integration / Results
+    name: Results
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     needs: [validation, restoration, test]

@@ -65,7 +65,7 @@ test('Results rejects every failed, cancelled, skipped or missing dependency com
 	const job = workflow.jobs.results;
 	assert.deepEqual(job.needs, ['validation', 'restoration', 'test']);
 	assert.equal(job.if, 'always()');
-	assert.equal(job.name, 'CI / Tests / API Integration / Results');
+	assert.equal(job.name, 'Results');
 	assert.equal(job.steps.length, 1);
 	const step = job.steps[0];
 
