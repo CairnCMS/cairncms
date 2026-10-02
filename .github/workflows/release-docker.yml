@@ -24,7 +24,6 @@ on:
 
 jobs:
   publish:
-    name: Build and publish image
     runs-on: ubuntu-latest
     permissions:
       contents: read
