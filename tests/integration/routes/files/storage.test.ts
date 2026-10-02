@@ -10,7 +10,7 @@ const test = createStorageTest();
 
 initializeFixtures();
 
-const assetsDirectory = [fileURLToPath(new URL('../../../blackbox/assets/', import.meta.url))];
+const assetsDirectory = [fileURLToPath(new URL('../../fixtures/assets/', import.meta.url))];
 const storages = ['local', 's3'];
 
 const imageFile = {

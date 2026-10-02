@@ -12,7 +12,7 @@ vi.setConfig({ testTimeout: 30000 });
 
 initializeFixtures();
 
-const assetsDirectory = [fileURLToPath(new URL('../../../blackbox/assets/', import.meta.url))];
+const assetsDirectory = [fileURLToPath(new URL('../../fixtures/assets/', import.meta.url))];
 const storages = ['local', 's3'];
 
 const imageFileAvif = path.join(...assetsDirectory, 'directus.avif');

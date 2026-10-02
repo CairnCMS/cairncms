@@ -133,7 +133,6 @@ export async function controlCheckout(include, { copyApi = false } = {}) {
 		'app',
 		'packages',
 		'tests/shared',
-		'tests/blackbox',
 		...(await readdir(sourceRoot)).filter((name) => /^tsconfig.*\.json$/.test(name)),
 	])
 		await symlink(join(sourceRoot, relative), join(directory, relative));

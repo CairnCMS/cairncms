@@ -57,15 +57,6 @@ module.exports = {
 		sourceType: 'module',
 	},
 	overrides: [
-		// Jest
-		{
-			files: ['**/*.test.js'],
-			env: {
-				jest: true,
-			},
-			plugins: ['jest'],
-			rules: defaultRules,
-		},
 		// Configuration for ts/vue files
 		{
 			files: ['*.ts', '*.vue'],

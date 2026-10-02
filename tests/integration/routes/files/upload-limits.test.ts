@@ -12,7 +12,7 @@ import { initializeFixtures } from '../../harness/fixture-setup.mjs';
 vi.setConfig({ hookTimeout: 300_000 });
 initializeFixtures();
 
-const assetsDirectory = [fileURLToPath(new URL('../../../blackbox/assets/', import.meta.url))];
+const assetsDirectory = [fileURLToPath(new URL('../../fixtures/assets/', import.meta.url))];
 const imageFilePath = path.join(...assetsDirectory, 'directus.png');
 const test = createApiTest({ env: { FILES_MAX_UPLOAD_SIZE: '1mb', FILES_MIME_TYPE_ALLOW_LIST: 'image/png' } });
 

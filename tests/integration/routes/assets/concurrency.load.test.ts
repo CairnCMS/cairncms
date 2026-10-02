@@ -13,7 +13,7 @@ initializeFixtures();
 
 const test = createStorageTest();
 const autocannon = createRequire(import.meta.url).resolve('autocannon/autocannon.js');
-const imageFilePath = fileURLToPath(new URL('../../../blackbox/assets/layers.png', import.meta.url));
+const imageFilePath = fileURLToPath(new URL('../../fixtures/assets/layers.png', import.meta.url));
 
 describe('/assets', () => {
 	describe('GET /assets/:id', () => {
