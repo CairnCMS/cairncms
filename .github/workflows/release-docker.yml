@@ -1,4 +1,4 @@
-name: Docker
+name: Release / Docker
 
 on:
   workflow_dispatch:
@@ -8,12 +8,16 @@ on:
         required: true
         type: string
       update_channel_alias:
-        description: 'Also push the beta/latest alias. Off by default so historical rebuilds do not move aliases backward. Turn on only when seeding a fresh registry or intentionally republishing the current channel target.'
+        description:
+          'Also push the beta/latest alias. Off by default so historical rebuilds do not move aliases backward. Turn on
+          only when seeding a fresh registry or intentionally republishing the current channel target.'
         required: false
         default: false
         type: boolean
       dry_run:
-        description: 'Skip the push step. Verifies checkout, multi-arch build, tag computation, and credential handshake. Does NOT exercise push authorization, only a real publish proves those.'
+        description:
+          'Skip the push step. Verifies checkout, multi-arch build, tag computation, and credential handshake. Does NOT
+          exercise push authorization, only a real publish proves those.'
         required: false
         default: false
         type: boolean
