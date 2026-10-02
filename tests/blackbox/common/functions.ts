@@ -1,4 +1,5 @@
 import request from 'supertest';
+import { requestCreateItem } from '@cairncms/test-utils';
 import { Env, getUrl } from './config';
 import * as common from './index';
 import vendors from './get-dbs-to-test';
@@ -661,10 +662,7 @@ export type OptionsCreateItem = {
 
 export async function CreateItem(vendor: string, options: OptionsCreateItem) {
 	// Action
-	const response = await request(getUrl(vendor))
-		.post(`/items/${options.collection}`)
-		.set('Authorization', `Bearer ${common.USER.TESTS_FLOW.TOKEN}`)
-		.send(options.item);
+	const response = await requestCreateItem(getUrl(vendor), common.USER.TESTS_FLOW.TOKEN, options);
 
 	if (response.statusCode !== 200) {
 		throw new Error(

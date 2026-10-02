@@ -1397,6 +1397,9 @@ importers:
       '@cairncms/sdk':
         specifier: workspace:*
         version: link:../../sdk
+      '@cairncms/test-utils':
+        specifier: workspace:*
+        version: link:../shared
       '@cairncms/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -1469,6 +1472,18 @@ importers:
       ws:
         specifier: 8.21.0
         version: 8.21.0
+
+  tests/shared:
+    dependencies:
+      '@types/supertest':
+        specifier: 2.0.12
+        version: 2.0.12
+      json-to-graphql-query:
+        specifier: 2.2.5
+        version: 2.2.5
+      supertest:
+        specifier: 6.3.3
+        version: 6.3.3
 
 packages:
 
