@@ -1,5 +1,6 @@
-import request, { Response } from 'supertest';
-import { EnumType, jsonToGraphQLQuery } from 'json-to-graphql-query';
+import { EnumType } from 'json-to-graphql-query';
+import { processGraphQLJson } from '@cairncms/test-utils';
+export { processGraphQLJson, requestGraphQL } from '@cairncms/test-utils';
 import { WebSocket } from 'ws';
 import { createClient } from 'graphql-ws';
 import type {
@@ -10,30 +11,6 @@ import type {
 	WebSocketSubscriptionOptionsGql,
 	WebSocketUID,
 } from './types';
-
-export function processGraphQLJson(jsonQuery: any) {
-	return jsonToGraphQLQuery(jsonQuery);
-}
-
-export async function requestGraphQL(
-	host: string,
-	isSystemCollection: boolean,
-	token: string | null,
-	jsonQuery: any,
-	options?: { variables?: any; cookies?: string[] }
-): Promise<Response> {
-	const req = request(host)
-		.post(isSystemCollection ? '/graphql/system' : '/graphql')
-		.send({
-			query: processGraphQLJson(jsonQuery),
-			variables: options?.variables,
-		});
-
-	if (token) req.set('Authorization', `Bearer ${token}`);
-	if (options?.cookies) req.set('Cookie', options.cookies);
-
-	return await req;
-}
 
 const stateName = (state: number): string => {
 	switch (state) {

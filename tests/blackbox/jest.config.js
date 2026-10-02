@@ -1,6 +1,8 @@
 const { pathsToModuleNameMapper } = require('ts-jest');
 const { compilerOptions } = require('./tsconfig');
 
+require('./setup/assert-ci-selection')();
+
 module.exports = {
 	preset: 'ts-jest',
 	verbose: true,

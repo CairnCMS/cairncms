@@ -1,0 +1,2998 @@
+import { beforeEach, afterEach, describe, expect } from 'vitest';
+import type { Api } from '../../fixtures/environment';
+import { createIdentityTest } from '../../fixtures/identities';
+import { describeForVendors } from '../../fixtures/applicability';
+import { capturePrerequisite, requirePrerequisite, type Prerequisite } from '../../fixtures/prerequisite';
+import request from '../../fixtures/request';
+import { randomUUID } from 'crypto';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { dump as dumpYaml, load as loadYaml } from 'js-yaml';
+import type { Filter } from '@cairncms/types';
+import * as common from '../../fixtures/identities';
+import type { Knex } from 'knex';
+import { initializeFixtures } from '../../harness/fixture-setup.mjs';
+
+type CliOptions = NonNullable<Parameters<Api['cli']>[1]>;
+
+const test = createIdentityTest({ hookFixtures: ['config-apply-probe', 'roles-continuity-barrier'] }).extend<{
+	baselineState: Prerequisite<ConfigSnapshot>;
+	initialSnapshot: void;
+}>({
+	baselineState: [
+		async ({ apiState, identityState, teardownFailures }, use) => {
+			if (!apiState.ok) return use(apiState);
+			if (!identityState.ok) return use(identityState);
+
+			await capturePrerequisite<ConfigSnapshot>(
+				async (ready) => {
+					await ready(await getBaseline(apiState.value));
+				},
+				use,
+				teardownFailures
+			);
+		},
+		{ scope: 'file' },
+	],
+	initialSnapshot: [
+		async ({ api, identities, baselineState, task, skip }, use) => {
+			void api;
+			void identities;
+			requirePrerequisite(baselineState, 'initial config snapshot', { task, skip });
+			await use();
+		},
+		{ auto: true },
+	],
+});
+
+initializeFixtures();
+
+type ConfigSnapshot = {
+	manifest: { version: number; resources: string[] };
+	roles: Array<Record<string, any>>;
+	permissions: Array<{ role: string; permissions: Array<Record<string, any>> }>;
+	folders?: Array<Record<string, any>>;
+	settings?: Array<Record<string, any>>;
+	'extension-settings'?: Array<Record<string, any>>;
+	translations?: Array<Record<string, any>>;
+};
+
+const baselineCache: Record<string, ConfigSnapshot> = {};
+
+async function getBaseline(api: Api): Promise<ConfigSnapshot> {
+	if (!baselineCache[api.directory]) {
+		const response = await request(api.url)
+			.get('/config/snapshot')
+			.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+		expect(response.statusCode).toBe(200);
+		baselineCache[api.directory] = response.body.data;
+	}
+
+	return JSON.parse(JSON.stringify(baselineCache[api.directory]!)) as ConfigSnapshot;
+}
+
+async function applyConfig(api: Api, desired: unknown, options: { destructive?: boolean; dryRun?: boolean } = {}) {
+	const req = request(api.url)
+		.post('/config/apply')
+		.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+		.set('Content-Type', 'application/json');
+
+	if (options.destructive) req.query({ destructive: 'true' });
+	if (options.dryRun) req.query({ dry_run: 'true' });
+
+	return req.send(desired as object);
+}
+
+async function resetToBaseline(api: Api): Promise<void> {
+	const baseline = await getBaseline(api);
+	const response = await applyConfig(api, baseline, { destructive: true });
+	expect(response.statusCode).toBe(200);
+}
+
+async function adminSnapshot(api: Api): Promise<ConfigSnapshot> {
+	const response = await request(api.url)
+		.get('/config/snapshot')
+		.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+	expect(response.statusCode).toBe(200);
+	return response.body.data as ConfigSnapshot;
+}
+
+function errorMessages(response: { body: { errors?: unknown } }): string[] {
+	const errors = response.body.errors;
+	if (!Array.isArray(errors)) return [];
+	return errors.map((error: unknown) =>
+		typeof error === 'string' ? error : String((error as { message?: unknown }).message ?? '')
+	);
+}
+
+/** Uses canonical filter grammar so only the guard under test can reject the fixture. */
+function setPublicFilter(snapshot: ConfigSnapshot, filter: Filter): void {
+	const permission = {
+		collection: 'directus_files',
+		action: 'read',
+		permissions: filter,
+		validation: null,
+		presets: null,
+		fields: ['*'],
+	};
+
+	const publicSet = snapshot.permissions.find((set) => set.role === 'public');
+
+	if (publicSet) {
+		publicSet.permissions.push(permission);
+	} else {
+		snapshot.permissions.push({ role: 'public', permissions: [permission] });
+	}
+}
+
+describe('Config-as-Code API', () => {
+	describe('GET /config/snapshot', () => {
+		describe('denies non-admin users', () => {
+			test('REST', async ({ api }) => {
+				const noAuth = await request(api.url).get('/config/snapshot');
+				expect(noAuth.statusCode).toBe(403);
+
+				const invalid = await request(api.url).get('/config/snapshot').set('Authorization', 'Bearer invalid-token');
+
+				expect(invalid.statusCode).toBe(401);
+
+				for (const userKey of ['APP_ACCESS', 'API_ONLY', 'NO_ROLE'] as const) {
+					const response = await request(api.url)
+						.get('/config/snapshot')
+						.set('Authorization', `Bearer ${common.USER[userKey]!.TOKEN}`);
+
+					expect(response.statusCode).toBe(403);
+				}
+			});
+		});
+
+		describe('returns snapshot (JSON) for admin', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.get('/config/snapshot')
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body).toHaveProperty('data');
+				expect(response.body.data).toHaveProperty('manifest');
+				expect(response.body.data).toHaveProperty('roles');
+				expect(response.body.data).toHaveProperty('permissions');
+				expect(response.body.data.manifest.version).toBe(2);
+				expect(Array.isArray(response.body.data.roles)).toBe(true);
+				expect(Array.isArray(response.body.data.permissions)).toBe(true);
+			});
+		});
+
+		describe('returns snapshot as YAML', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.get('/config/snapshot')
+					.query({ export: 'yaml' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.headers['content-type']).toContain('text/yaml');
+
+				const parsed = loadYaml(response.text) as ConfigSnapshot;
+				expect(parsed.manifest.version).toBe(2);
+				expect(Array.isArray(parsed.roles)).toBe(true);
+				expect(Array.isArray(parsed.permissions)).toBe(true);
+			});
+		});
+
+		describe('scopes the snapshot to the requested resources', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.get('/config/snapshot')
+					.query({ resources: 'roles' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.manifest.resources).toEqual(['roles']);
+				expect(response.body.data.permissions).toEqual([]);
+			});
+		});
+
+		describe('treats an empty resources query as an explicitly empty scope', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.get('/config/snapshot')
+					.query({ resources: '' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.manifest.resources).toEqual([]);
+				expect(response.body.data.roles).toEqual([]);
+				expect(response.body.data.permissions).toEqual([]);
+			});
+		});
+
+		describe('rejects an unsupported manifest version', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.get('/config/snapshot')
+					.query({ manifest_version: '3' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_UNSUPPORTED_VERSION');
+			});
+		});
+
+		describe('rejects a non-canonical manifest version form', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.get('/config/snapshot')
+					.query({ manifest_version: '1e0' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_UNSUPPORTED_VERSION');
+			});
+		});
+
+		describe('rejects a repeated manifest_version parameter', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.get('/config/snapshot')
+					.query({ manifest_version: ['1', '1'] })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_UNSUPPORTED_VERSION');
+			});
+		});
+
+		describe('accepts an explicit v1 manifest version', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.get('/config/snapshot')
+					.query({ manifest_version: '1' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.manifest.version).toBe(1);
+			});
+		});
+
+		describe('accepts an explicit v2 manifest version', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.get('/config/snapshot')
+					.query({ manifest_version: '2' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.manifest.version).toBe(2);
+			});
+		});
+
+		describe('rejects an unknown resource kind', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.get('/config/snapshot')
+					.query({ resources: 'bogus' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+			});
+		});
+
+		describe('rejects a duplicate resource kind', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.get('/config/snapshot')
+					.query({ resources: 'roles,roles' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+			});
+		});
+
+		describe('rejects an empty resource member', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.get('/config/snapshot')
+					.query({ resources: 'roles,,permissions' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+			});
+		});
+
+		describe('rejects a repeated resources parameter', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.get('/config/snapshot')
+					.query({ resources: ['roles', 'permissions'] })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+			});
+		});
+	});
+
+	describe('POST /config/apply', () => {
+		describe('denies non-admin users', () => {
+			test('REST', async ({ api }) => {
+				const baseline = await getBaseline(api);
+
+				const noAuth = await request(api.url)
+					.post('/config/apply')
+					.set('Content-Type', 'application/json')
+					.send(baseline);
+
+				expect(noAuth.statusCode).toBe(403);
+
+				const invalid = await request(api.url)
+					.post('/config/apply')
+					.set('Authorization', 'Bearer invalid-token')
+					.set('Content-Type', 'application/json')
+					.send(baseline);
+
+				expect(invalid.statusCode).toBe(401);
+
+				for (const userKey of ['APP_ACCESS', 'API_ONLY', 'NO_ROLE'] as const) {
+					const response = await request(api.url)
+						.post('/config/apply')
+						.set('Authorization', `Bearer ${common.USER[userKey]!.TOKEN}`)
+						.set('Content-Type', 'application/json')
+						.send(baseline);
+
+					expect(response.statusCode).toBe(403);
+				}
+			});
+		});
+
+		describe('applies baseline snapshot with no drift (JSON)', () => {
+			test('REST', async ({ api }) => {
+				const baseline = await getBaseline(api);
+				const response = await applyConfig(api, baseline);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.roles.created).toEqual([]);
+				expect(response.body.data.roles.updated).toEqual([]);
+				expect(response.body.data.roles.deleted).toEqual([]);
+				expect(response.body.data.permissions.created).toBe(0);
+				expect(response.body.data.permissions.updated).toBe(0);
+				expect(response.body.data.permissions.deleted).toBe(0);
+				expect(response.body.meta.plan.planVersion).toBe(2);
+				expect(response.body.meta.plan.changes).toEqual([]);
+			});
+		});
+
+		describe('applies baseline snapshot with no drift (YAML)', () => {
+			test('REST', async ({ api }) => {
+				const baseline = await getBaseline(api);
+				const yaml = dumpYaml(baseline);
+
+				const response = await request(api.url)
+					.post('/config/apply')
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+					.set('Content-Type', 'text/yaml')
+					.send(yaml);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.roles.created).toEqual([]);
+				expect(response.body.data.roles.updated).toEqual([]);
+			});
+		});
+
+		describe('?dry_run=true does not mutate', () => {
+			test('REST', async ({ api, vendor }) => {
+				const before = await adminSnapshot(api);
+				const desired = JSON.parse(JSON.stringify(before)) as ConfigSnapshot;
+				const probeKey = `dryrun_${vendor.replace(/[^a-z0-9_]/gi, '_')}`;
+
+				desired.roles.push({
+					key: probeKey,
+					name: 'Dry Run Probe',
+					admin_access: false,
+					app_access: true,
+				});
+
+				try {
+					const dry = await applyConfig(api, desired, { dryRun: true });
+
+					expect(dry.statusCode).toBe(200);
+
+					expect(
+						dry.body.data.changes.filter(
+							(change: any) =>
+								change.kind === 'roles' && change.operation === 'create' && change.identity.key === probeKey
+						)
+					).toHaveLength(1);
+
+					expect(await adminSnapshot(api)).toEqual(before);
+				} finally {
+					await resetToBaseline(api);
+				}
+			});
+		});
+
+		describe('a malformed apply flag is refused before any state is read', () => {
+			test('REST', async ({ api, vendor }) => {
+				const before = await adminSnapshot(api);
+				const desired = JSON.parse(JSON.stringify(before)) as ConfigSnapshot;
+				const probeKey = `badflag_${vendor.replace(/[^a-z0-9_]/gi, '_')}`;
+
+				desired.roles.push({
+					key: probeKey,
+					name: 'Bad Flag Probe',
+					admin_access: false,
+					app_access: true,
+				});
+
+				try {
+					for (const query of ['dry_run=1', 'dry_run=True', 'dry_run=true&dry_run=true', 'destructive=1']) {
+						const response = await request(api.url)
+							.post(`/config/apply?${query}`)
+							.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+							.set('Content-Type', 'application/json')
+							.send(desired);
+
+						expect(response.statusCode).toBe(400);
+						expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+						expect(response.headers['x-config-run-id']).toBeUndefined();
+					}
+
+					expect(await adminSnapshot(api)).toEqual(before);
+				} finally {
+					await resetToBaseline(api);
+				}
+			});
+		});
+
+		describe('?destructive=true removes orphan roles', () => {
+			test('REST', async ({ api, vendor }) => {
+				const baseline = await getBaseline(api);
+				const orphanKey = `orphan_destructive_${vendor.replace(/[^a-z0-9_]/gi, '_')}`;
+
+				const desiredCreate = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+
+				desiredCreate.roles.push({
+					key: orphanKey,
+					name: 'Orphan Destructive',
+					admin_access: false,
+					app_access: true,
+				});
+
+				try {
+					const create = await applyConfig(api, desiredCreate);
+					expect(create.statusCode).toBe(200);
+					expect(create.body.data.roles.created).toContain(orphanKey);
+
+					const destructive = await applyConfig(api, baseline, { destructive: true });
+					expect(destructive.statusCode).toBe(200);
+					expect(destructive.body.data.roles.deleted).toContain(orphanKey);
+
+					const snap = await request(api.url)
+						.get('/config/snapshot')
+						.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+					expect(snap.body.data.roles.find((r: any) => r.key === orphanKey)).toBeUndefined();
+				} finally {
+					await resetToBaseline(api);
+				}
+			});
+		});
+
+		describe('rejects malformed JSON', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.post('/config/apply')
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+					.set('Content-Type', 'application/json')
+					.send('not json {');
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('INVALID_PAYLOAD');
+			});
+		});
+
+		describe('rejects malformed YAML', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.post('/config/apply')
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+					.set('Content-Type', 'text/yaml')
+					.send('manifest: [: not valid');
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+				expect(response.body.errors[0].message).toContain('could not be parsed');
+			});
+		});
+
+		describe('does not echo the offending source line when YAML fails to parse', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.post('/config/apply')
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+					.set('Content-Type', 'text/yaml')
+					.send('manifest: {version: 1, resources: []}\ntoken: "s3cret-probe-value\n');
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+				expect(JSON.stringify(response.body)).not.toContain('s3cret-probe-value');
+			});
+		});
+
+		describe('rejects a YAML filter value that cannot be stored without silent change', () => {
+			test('REST', async ({ api }) => {
+				const baseline = await getBaseline(api);
+				setPublicFilter(baseline, { filesize: { _eq: '__NON_FINITE__' } });
+				const yaml = dumpYaml(baseline).replace('__NON_FINITE__', '.inf');
+
+				const response = await request(api.url)
+					.post('/config/apply')
+					.query({ dry_run: 'true' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+					.set('Content-Type', 'text/yaml')
+					.send(yaml);
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+				expect(response.body.errors[0].message).toContain('cannot be stored');
+				expect(response.body.errors[0].message).toContain('filesize');
+			});
+		});
+
+		describe('rejects a JSON filter nested past the supported depth', () => {
+			test('REST', async ({ api }) => {
+				const baseline = await getBaseline(api);
+
+				let nested: Filter = { id: { _eq: 'probe' } };
+				for (let level = 0; level < 150; level++) nested = { _and: [nested] };
+				setPublicFilter(baseline, nested);
+
+				const response = await request(api.url)
+					.post('/config/apply')
+					.query({ dry_run: 'true' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+					.set('Content-Type', 'application/json')
+					.send(baseline);
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+				expect(response.body.errors[0].message).toContain('nesting is deeper than');
+			});
+		});
+
+		describe('rejects placeholder syntax and stores nothing', () => {
+			test('REST', async ({ api }) => {
+				const baseline = await getBaseline(api);
+
+				baseline.roles.push({
+					key: 'probe_placeholder',
+					name: '{{CAIRNCMS_CONFIG_ROLE_NAME}}',
+					admin_access: false,
+					app_access: true,
+				});
+
+				try {
+					const response = await applyConfig(api, baseline);
+
+					expect(response.statusCode).toBe(400);
+					expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+					expect(response.body.errors[0].message).toContain('placeholder syntax');
+
+					const snapshot = await request(api.url)
+						.get('/config/snapshot')
+						.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+					expect(snapshot.statusCode).toBe(200);
+					expect(snapshot.body.data.roles.find((r: any) => r.key === 'probe_placeholder')).toBeUndefined();
+				} finally {
+					await resetToBaseline(api);
+				}
+			});
+		});
+
+		describe('rejects unsupported Content-Type', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.post('/config/apply')
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+					.set('Content-Type', 'text/plain')
+					.send('hello');
+
+				expect(response.statusCode).toBe(415);
+				expect(response.body.errors[0].extensions.code).toBe('UNSUPPORTED_MEDIA_TYPE');
+			});
+		});
+
+		describe('structural guard rejects malformed shapes', () => {
+			test('null role entries', async ({ api }) => {
+				const response = await request(api.url)
+					.post('/config/apply')
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+					.set('Content-Type', 'application/json')
+					.send({
+						manifest: { version: 1, resources: ['roles', 'permissions'] },
+						roles: [null],
+						permissions: [],
+					});
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+				expect(response.body.errors[0].message).toContain('roles[0]');
+			});
+
+			test('permission set with non-array permissions', async ({ api }) => {
+				const response = await request(api.url)
+					.post('/config/apply')
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+					.set('Content-Type', 'application/json')
+					.send({
+						manifest: { version: 1, resources: ['roles', 'permissions'] },
+						roles: [],
+						permissions: [{ role: 'x', permissions: null }],
+					});
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+				expect(response.body.errors[0].message).toContain('permissions[0].permissions');
+			});
+
+			test('role with non-string key', async ({ api }) => {
+				const response = await request(api.url)
+					.post('/config/apply')
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+					.set('Content-Type', 'application/json')
+					.send({
+						manifest: { version: 1, resources: ['roles', 'permissions'] },
+						roles: [{ key: 1 }],
+						permissions: [],
+					});
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+				expect(response.body.errors[0].message).toContain('roles[0]');
+				expect(response.body.errors[0].message).toContain('key');
+			});
+		});
+
+		describe('rejects an unsupported manifest version with a typed code', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.post('/config/apply')
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+					.set('Content-Type', 'application/json')
+					.send({
+						manifest: { version: 99, resources: ['roles', 'permissions'] },
+						roles: [],
+						permissions: [],
+					});
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_UNSUPPORTED_VERSION');
+				expect(response.body.errors[0].message).toContain('version 99');
+			});
+		});
+
+		describe('accepts a v2 manifest', () => {
+			test('REST', async ({ api }) => {
+				const desired = await getBaseline(api);
+				desired.manifest.version = 2;
+
+				const response = await applyConfig(api, desired, { dryRun: true });
+
+				expect(response.statusCode).toBe(200);
+			});
+		});
+
+		describe('rejects a duplicate permission tuple as a typed identity conflict', () => {
+			test('REST', async ({ api }) => {
+				const desired = await getBaseline(api);
+
+				const duplicate = {
+					collection: 'directus_files',
+					action: 'update',
+					permissions: null,
+					validation: null,
+					presets: null,
+					fields: ['*'],
+				};
+
+				const publicSet = desired.permissions.find((set) => set.role === 'public');
+
+				if (publicSet) {
+					publicSet.permissions.push({ ...duplicate }, { ...duplicate });
+				} else {
+					desired.permissions.push({ role: 'public', permissions: [{ ...duplicate }, { ...duplicate }] });
+				}
+
+				const response = await applyConfig(api, desired, { dryRun: true });
+
+				expect(response.statusCode).toBe(400);
+				expect(response.body.errors[0].extensions.code).toBe('CONFIG_IDENTITY_CONFLICT');
+				expect(errorMessages(response).some((message) => message.includes('Duplicate permission'))).toBe(true);
+			});
+		});
+
+		describe('administrator continuity protection', () => {
+			function adminKeysOf(snapshot: ConfigSnapshot): string[] {
+				return snapshot.roles.filter((role) => role.admin_access === true).map((role) => role.key);
+			}
+
+			function withoutAdministrators(snapshot: ConfigSnapshot): ConfigSnapshot {
+				const desired = JSON.parse(JSON.stringify(snapshot)) as ConfigSnapshot;
+				const adminKeys = adminKeysOf(desired);
+				desired.roles = desired.roles.filter((role) => role.admin_access !== true);
+				desired.permissions = desired.permissions.filter((set) => !adminKeys.includes(set.role));
+				return desired;
+			}
+
+			function deleteContributor(key: string) {
+				return { kind: 'roles', operation: 'delete', identity: { key } };
+			}
+
+			async function roleForEmail(db: Knex, email: string): Promise<{ key: string; id: unknown; admin: boolean }> {
+				const user = await db('directus_users').where({ email }).first();
+				expect(user).toBeTruthy();
+				const role = await db('directus_roles').where({ id: user.role }).first();
+				expect(role).toBeTruthy();
+				return { key: role.key, id: role.id, admin: role.admin_access === true || role.admin_access === 1 };
+			}
+
+			async function withSoleAdmin(
+				api: Api,
+				fn: (ctx: { db: Knex; original: ConfigSnapshot; adminKey: string }) => Promise<void>
+			): Promise<void> {
+				const db = api.database;
+				const original = await adminSnapshot(api);
+				const admin = await roleForEmail(db, common.USER.ADMIN!.EMAIL);
+				expect(admin.admin).toBe(true);
+
+				const soleAdmin = JSON.parse(JSON.stringify(original)) as ConfigSnapshot;
+
+				for (const role of soleAdmin.roles) {
+					if (role.admin_access === true && role.key !== admin.key) role.admin_access = false;
+				}
+
+				try {
+					expect((await applyConfig(api, soleAdmin, { destructive: true })).statusCode).toBe(200);
+					expect(adminKeysOf(await adminSnapshot(api))).toEqual([admin.key]);
+
+					await fn({ db, original, adminKey: admin.key });
+				} finally {
+					expect((await applyConfig(api, original, { destructive: true })).statusCode).toBe(200);
+					expect(await adminSnapshot(api)).toEqual(original);
+				}
+			}
+
+			async function applyAs(api: Api, token: string, desired: unknown, options: { destructive?: boolean } = {}) {
+				const req = request(api.url)
+					.post('/config/apply')
+					.set('Authorization', `Bearer ${token}`)
+					.set('Content-Type', 'application/json');
+
+				if (options.destructive) req.query({ destructive: 'true' });
+
+				return req.send(desired as object);
+			}
+
+			async function snapshotAs(api: Api, token: string): Promise<ConfigSnapshot> {
+				const response = await request(api.url).get('/config/snapshot').set('Authorization', `Bearer ${token}`);
+
+				expect(response.statusCode).toBe(200);
+				return response.body.data as ConfigSnapshot;
+			}
+
+			async function roleAuditIds(db: Knex): Promise<{ activity: Set<unknown>; revisions: Set<unknown> }> {
+				const activity = await db('directus_activity').where({ collection: 'directus_roles' }).select('id');
+				const revisions = await db('directus_revisions').where({ collection: 'directus_roles' }).select('id');
+				return {
+					activity: new Set(activity.map((row) => row.id)),
+					revisions: new Set(revisions.map((row) => row.id)),
+				};
+			}
+
+			describe('a dry run of a plan that removes the last administrator returns the protection at 200', () => {
+				test('REST', async ({ api }) => {
+					await withSoleAdmin(api, async ({ adminKey }) => {
+						const before = await adminSnapshot(api);
+						const response = await applyConfig(api, withoutAdministrators(before), { dryRun: true });
+
+						expect(response.statusCode).toBe(200);
+
+						const { protections } = response.body.data;
+						expect(protections).toHaveLength(1);
+						expect(Object.keys(protections[0]).sort()).toEqual(['code', 'contributors', 'message']);
+						expect(protections[0].code).toBe('ADMIN_CONTINUITY_REQUIRED');
+						expect(typeof protections[0].message).toBe('string');
+						expect(protections[0].contributors).toEqual([deleteContributor(adminKey)]);
+
+						expect(await adminSnapshot(api)).toEqual(before);
+					});
+				});
+			});
+
+			describe('a JSON and a YAML dry run of the same plan return an identical protection', () => {
+				test('REST', async ({ api }) => {
+					await withSoleAdmin(api, async ({ adminKey }) => {
+						const desired = withoutAdministrators(await adminSnapshot(api));
+
+						const json = await applyConfig(api, desired, { dryRun: true });
+
+						const yaml = await request(api.url)
+							.post('/config/apply')
+							.query({ dry_run: 'true' })
+							.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+							.set('Content-Type', 'text/yaml')
+							.send(dumpYaml(desired));
+
+						expect(json.statusCode).toBe(200);
+						expect(yaml.statusCode).toBe(200);
+
+						expect(json.body.data.protections).toEqual([
+							{
+								code: 'ADMIN_CONTINUITY_REQUIRED',
+								message: expect.any(String),
+								contributors: [deleteContributor(adminKey)],
+							},
+						]);
+
+						expect(yaml.body.data.protections).toEqual(json.body.data.protections);
+					});
+				});
+			});
+
+			describe('a mutating apply that removes the last administrator is refused and changes nothing', () => {
+				test('REST', async ({ api }) => {
+					await withSoleAdmin(api, async ({ db, adminKey }) => {
+						const before = await adminSnapshot(api);
+						const auditBefore = await roleAuditIds(db);
+
+						const response = await applyConfig(api, withoutAdministrators(before), { destructive: true });
+
+						expect(response.statusCode).toBe(400);
+
+						const extensions = response.body.errors[0].extensions;
+						expect(Object.keys(extensions).sort()).toEqual(['code', 'contributors', 'protection']);
+						expect(extensions.code).toBe('CONFIG_PROTECTED_RECORD');
+						expect(extensions.protection).toEqual({ code: 'ADMIN_CONTINUITY_REQUIRED' });
+						expect(extensions.contributors).toEqual([deleteContributor(adminKey)]);
+
+						expect(await adminSnapshot(api)).toEqual(before);
+
+						const auditAfter = await roleAuditIds(db);
+						expect([...auditAfter.activity].filter((id) => !auditBefore.activity.has(id))).toEqual([]);
+						expect([...auditAfter.revisions].filter((id) => !auditBefore.revisions.has(id))).toEqual([]);
+					});
+				});
+			});
+
+			describe('the platform service rejects demoting the sole administrator directly', () => {
+				test('REST', async ({ api }) => {
+					await withSoleAdmin(api, async ({ db, adminKey }) => {
+						const adminRole = await db('directus_roles').where({ key: adminKey }).first();
+
+						const response = await request(api.url)
+							.patch(`/roles/${adminRole.id}`)
+							.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+							.set('Content-Type', 'application/json')
+							.send({ admin_access: false });
+
+						expect(response.statusCode).toBe(422);
+						expect(response.body.errors[0].extensions.code).toBe('UNPROCESSABLE_ENTITY');
+						expect(response.body.errors[0].message).toContain('last admin role');
+
+						const after = await db('directus_roles').where({ id: adminRole.id }).first();
+						expect(after.admin_access === true || after.admin_access === 1).toBe(true);
+					});
+				});
+			});
+
+			describe('a promotion ordered before the administrator demotion applies through the real service', () => {
+				test('REST', async ({ api }) => {
+					const db = api.database;
+					const original = await adminSnapshot(api);
+					const adminRole = await roleForEmail(db, common.USER.ADMIN!.EMAIL);
+					const appRole = await roleForEmail(db, common.USER.APP_ACCESS!.EMAIL);
+
+					expect(adminRole.admin).toBe(true);
+					expect(appRole.admin).toBe(false);
+
+					const soleAdmin = JSON.parse(JSON.stringify(original)) as ConfigSnapshot;
+
+					for (const role of soleAdmin.roles) {
+						if (role.admin_access === true && role.key !== adminRole.key) role.admin_access = false;
+					}
+
+					let handoffCommitted = false;
+
+					try {
+						expect((await applyConfig(api, soleAdmin, { destructive: true })).statusCode).toBe(200);
+						expect(adminKeysOf(await adminSnapshot(api))).toEqual([adminRole.key]);
+
+						const handoff = JSON.parse(JSON.stringify(await adminSnapshot(api))) as ConfigSnapshot;
+						const adminEntry = handoff.roles.find((role) => role.key === adminRole.key)!;
+						const appEntry = handoff.roles.find((role) => role.key === appRole.key)!;
+						adminEntry.admin_access = false;
+						appEntry.admin_access = true;
+
+						handoff.roles = [
+							appEntry,
+							...handoff.roles.filter((role) => role.key !== adminRole.key && role.key !== appRole.key),
+							adminEntry,
+						];
+
+						const applied = await applyAs(api, common.USER.ADMIN!.TOKEN, handoff, { destructive: true });
+						expect(applied.statusCode).toBe(200);
+						handoffCommitted = true;
+
+						const promoted = await snapshotAs(api, common.USER.APP_ACCESS!.TOKEN);
+						const byKey = new Map(promoted.roles.map((role) => [role.key, role]));
+						expect(byKey.get(appRole.key)!.admin_access).toBe(true);
+						expect(byKey.get(adminRole.key)!.admin_access).toBe(false);
+					} finally {
+						const token = handoffCommitted ? common.USER.APP_ACCESS!.TOKEN : common.USER.ADMIN!.TOKEN;
+
+						const restore = JSON.parse(JSON.stringify(original)) as ConfigSnapshot;
+						const adminEntry = restore.roles.find((role) => role.key === adminRole.key)!;
+						const appEntry = restore.roles.find((role) => role.key === appRole.key)!;
+
+						restore.roles = [
+							adminEntry,
+							...restore.roles.filter((role) => role.key !== adminRole.key && role.key !== appRole.key),
+							appEntry,
+						];
+
+						expect((await applyAs(api, token, restore, { destructive: true })).statusCode).toBe(200);
+						expect(await adminSnapshot(api)).toEqual(original);
+					}
+				});
+			});
+
+			describe('a demotion ordered before its replacement promotion is reordered and applies in one run', () => {
+				test('REST', async ({ api }) => {
+					await withSoleAdmin(api, async ({ db, adminKey }) => {
+						const app = await roleForEmail(db, common.USER.APP_ACCESS!.EMAIL);
+						expect(app.admin).toBe(false);
+
+						const desired = JSON.parse(JSON.stringify(await adminSnapshot(api))) as ConfigSnapshot;
+						const adminEntry = desired.roles.find((role) => role.key === adminKey)!;
+						const appEntry = desired.roles.find((role) => role.key === app.key)!;
+						adminEntry.admin_access = false;
+						appEntry.admin_access = true;
+
+						desired.roles = [
+							adminEntry,
+							...desired.roles.filter((role) => role.key !== adminKey && role.key !== app.key),
+							appEntry,
+						];
+
+						const dry = await applyConfig(api, desired, { destructive: true, dryRun: true });
+						expect(dry.statusCode).toBe(200);
+						expect(dry.body.data.protections).toEqual([]);
+
+						const response = await applyConfig(api, desired, { destructive: true });
+						expect(response.statusCode).toBe(200);
+
+						try {
+							const promoted = await snapshotAs(api, common.USER.APP_ACCESS!.TOKEN);
+							const byKey = new Map(promoted.roles.map((role) => [role.key, role]));
+							expect(byKey.get(app.key)!.admin_access).toBe(true);
+							expect(byKey.get(adminKey)!.admin_access).toBe(false);
+						} finally {
+							const restore = JSON.parse(
+								JSON.stringify(await snapshotAs(api, common.USER.APP_ACCESS!.TOKEN))
+							) as ConfigSnapshot;
+
+							restore.roles.find((role) => role.key === adminKey)!.admin_access = true;
+							restore.roles.find((role) => role.key === app.key)!.admin_access = false;
+
+							const handedBack = await applyAs(api, common.USER.APP_ACCESS!.TOKEN, restore, { destructive: true });
+							expect(handedBack.statusCode).toBe(200);
+						}
+					});
+				});
+			});
+
+			describe('a filter that strips the promotion leaves the demotion refused and rolls everything back', () => {
+				test('REST', async ({ api }) => {
+					await withSoleAdmin(api, async ({ db, adminKey }) => {
+						const app = await roleForEmail(db, common.USER.APP_ACCESS!.EMAIL);
+						expect(app.admin).toBe(false);
+
+						const appBefore = await db('directus_roles').where({ id: app.id }).first();
+						const adminBefore = await db('directus_roles').where({ key: adminKey }).first();
+
+						const desired = JSON.parse(JSON.stringify(await adminSnapshot(api))) as ConfigSnapshot;
+						const adminEntry = desired.roles.find((role) => role.key === adminKey)!;
+						const appEntry = desired.roles.find((role) => role.key === app.key)!;
+						adminEntry.admin_access = false;
+						appEntry.admin_access = true;
+						appEntry.name = 'strip-promotion-probe';
+
+						const response = await applyConfig(api, desired, { destructive: true });
+
+						expect(response.statusCode).toBe(422);
+						expect(response.body.errors[0].extensions.code).toBe('UNPROCESSABLE_ENTITY');
+
+						expect(await db('directus_roles').where({ id: app.id }).first()).toEqual(appBefore);
+						expect(await db('directus_roles').where({ key: adminKey }).first()).toEqual(adminBefore);
+					});
+				});
+			});
+		});
+
+		describe('a non-destructive mutating apply with deletions is refused', () => {
+			test('REST', async ({ api, vendor }) => {
+				const baseline = await getBaseline(api);
+				const suffix = vendor.replace(/[^a-z0-9_]/gi, '_');
+				const orphanKey = `refuse_orphan_${suffix}`;
+				const updateKey = `refuse_update_${suffix}`;
+				const newKey = `refuse_new_${suffix}`;
+
+				const withProbes = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+
+				withProbes.roles.push(
+					{ key: orphanKey, name: 'Refuse Orphan', admin_access: false, app_access: true },
+					{ key: updateKey, name: 'Refuse Update', description: 'update-before', admin_access: false, app_access: true }
+				);
+
+				try {
+					expect((await applyConfig(api, withProbes)).statusCode).toBe(200);
+
+					const afterSetup = await adminSnapshot(api);
+
+					const desired = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+
+					desired.roles.push(
+						{ key: newKey, name: 'Refuse New', admin_access: false, app_access: true },
+						{
+							key: updateKey,
+							name: 'Refuse Update',
+							description: 'update-after',
+							admin_access: false,
+							app_access: true,
+						}
+					);
+
+					const response = await applyConfig(api, desired);
+
+					expect(response.statusCode).toBe(400);
+					expect(response.body.errors[0].extensions.code).toBe('DESTRUCTIVE_CHANGES_REQUIRED');
+
+					expect(response.body.errors[0].extensions.deletions).toEqual([
+						{ kind: 'roles', identity: { key: orphanKey } },
+					]);
+
+					const after = await adminSnapshot(api);
+
+					expect(after).toEqual(afterSetup);
+				} finally {
+					await resetToBaseline(api);
+				}
+			});
+		});
+
+		describe('an empty dry run returns the complete plan document', () => {
+			test('REST', async ({ api }) => {
+				const baseline = await getBaseline(api);
+				const response = await applyConfig(api, baseline, { dryRun: true });
+
+				expect(response.statusCode).toBe(200);
+
+				expect(response.body.data).toEqual({
+					planVersion: 2,
+					manifestVersion: 2,
+					changes: [],
+					summary: { create: 0, update: 0, delete: 0 },
+					warnings: [],
+					protections: [],
+				});
+			});
+		});
+
+		describe('a permission for a missing collection applies and warns', () => {
+			test('REST', async ({ api, vendor }) => {
+				const baseline = await getBaseline(api);
+				const collection = `missing_coll_${vendor.replace(/[^a-z0-9_]/gi, '_')}`;
+				const desired = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+
+				const perm = { collection, action: 'read', permissions: null, validation: null, presets: null, fields: ['*'] };
+				const publicSet = desired.permissions.find((set) => set.role === 'public');
+				if (publicSet) publicSet.permissions.push(perm);
+				else desired.permissions.push({ role: 'public', permissions: [perm] });
+
+				try {
+					const dry = await applyConfig(api, desired, { dryRun: true });
+					expect(dry.statusCode).toBe(200);
+
+					expect(dry.body.data.warnings).toEqual([
+						{
+							code: 'COLLECTION_MISSING',
+							kind: 'permissions',
+							identity: { role: 'public', collection, action: 'read' },
+							message: expect.stringContaining(collection),
+						},
+					]);
+
+					const apply = await applyConfig(api, desired);
+					expect(apply.statusCode).toBe(200);
+					expect(apply.body.data.permissions.created).toBe(1);
+
+					const snap = await request(api.url)
+						.get('/config/snapshot')
+						.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+					expect(snap.statusCode).toBe(200);
+
+					const pub = snap.body.data.permissions.find((set: any) => set.role === 'public');
+
+					expect(pub.permissions.find((p: any) => p.collection === collection)).toEqual({
+						collection,
+						action: 'read',
+						permissions: null,
+						validation: null,
+						presets: null,
+						fields: ['*'],
+					});
+				} finally {
+					await resetToBaseline(api);
+				}
+			});
+		});
+
+		describe('omit-preserve regression: omitted optional role fields are not cleared', () => {
+			test('REST', async ({ api }) => {
+				const baseline = await getBaseline(api);
+				const desired = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+				const adminRole = desired.roles.find((r: any) => r.admin_access === true);
+				expect(adminRole).toBeDefined();
+
+				const originalIcon = adminRole!['icon'];
+				const originalDescription = adminRole!['description'];
+				const originalEnforceTfa = adminRole!['enforce_tfa'];
+
+				delete adminRole!['icon'];
+				delete adminRole!['description'];
+				delete adminRole!['enforce_tfa'];
+
+				const response = await applyConfig(api, desired);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.roles.updated).toEqual([]);
+
+				const snap = await request(api.url)
+					.get('/config/snapshot')
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				const snapAdmin = snap.body.data.roles.find((r: any) => r.admin_access === true);
+				expect(snapAdmin.icon).toBe(originalIcon);
+				expect(snapAdmin.description).toBe(originalDescription);
+				expect(snapAdmin.enforce_tfa).toBe(originalEnforceTfa);
+			});
+		});
+
+		describe('public role round-trip', () => {
+			test('REST', async ({ api, vendor }) => {
+				const baseline = await getBaseline(api);
+				const collection = `pub_test_${vendor.replace(/[^a-z0-9_]/gi, '_')}`;
+				const desired = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+
+				const newPerm = {
+					collection,
+					action: 'read',
+					permissions: null,
+					validation: null,
+					presets: null,
+					fields: ['*'],
+				};
+
+				const publicSet = desired.permissions.find((p) => p.role === 'public');
+
+				if (publicSet) {
+					publicSet.permissions = publicSet.permissions.filter(
+						(p) => !(p['collection'] === collection && p['action'] === 'read')
+					);
+
+					publicSet.permissions.push(newPerm);
+				} else {
+					desired.permissions.push({ role: 'public', permissions: [newPerm] });
+				}
+
+				try {
+					const apply = await applyConfig(api, desired);
+					expect(apply.statusCode).toBe(200);
+					expect(apply.body.data.permissions.created).toBeGreaterThanOrEqual(1);
+
+					const snap = await request(api.url)
+						.get('/config/snapshot')
+						.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+					const pub = snap.body.data.permissions.find((p: any) => p.role === 'public');
+					expect(pub).toBeDefined();
+					expect(pub.permissions.find((p: any) => p.collection === collection && p.action === 'read')).toBeDefined();
+				} finally {
+					await resetToBaseline(api);
+				}
+			});
+		});
+	});
+});
+
+describe('Config-as-Code folders lifecycle', () => {
+	const run = randomUUID().replace(/-/g, '').slice(0, 10);
+	const rootKey = `lifecycle_${run}_root`;
+	const branchKey = `lifecycle_${run}_branch`;
+	const leafKey = `lifecycle_${run}_leaf`;
+	const otherKey = `lifecycle_${run}_other`;
+
+	function managedWithFolders(
+		base: ConfigSnapshot,
+		folders: Array<{ key: string; name: string; parent: string | null }>
+	): ConfigSnapshot {
+		const snapshot = JSON.parse(JSON.stringify(base)) as ConfigSnapshot;
+		snapshot.manifest.version = 2;
+		if (!snapshot.manifest.resources.includes('folders')) snapshot.manifest.resources.push('folders');
+		snapshot.folders = [...(snapshot.folders ?? []), ...folders];
+		return snapshot;
+	}
+
+	function foldersByKey(snapshot: ConfigSnapshot): Map<string, Record<string, any>> {
+		return new Map((snapshot.folders ?? []).map((folder) => [folder.key, folder]));
+	}
+
+	async function folderIdByKey(api: Api, key: string): Promise<string> {
+		const response = await request(api.url)
+			.get('/folders')
+			.query({ filter: JSON.stringify({ key: { _eq: key } }), fields: 'id' })
+			.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+		expect(response.statusCode).toBe(200);
+		expect(response.body.data).toHaveLength(1);
+		return response.body.data[0].id as string;
+	}
+
+	async function attemptCleanup(failures: string[], label: string, run: () => Promise<void>): Promise<void> {
+		try {
+			await run();
+		} catch (error) {
+			failures.push(`${label}: ${(error as Error).message}`);
+		}
+	}
+
+	function reportOutcome(testError: unknown, failures: string[]): void {
+		if (testError !== undefined) {
+			if (failures.length > 0) {
+				throw new Error(
+					`${(testError as Error)?.message ?? String(testError)} (cleanup also failed: ${failures.join('; ')})`
+				);
+			}
+
+			throw testError;
+		}
+
+		if (failures.length > 0) throw new Error(failures.join('; '));
+	}
+
+	async function deleteFolderByKey(api: Api, key: string): Promise<void> {
+		const token = `Bearer ${common.USER.ADMIN!.TOKEN}`;
+
+		const found = await request(api.url)
+			.get('/folders')
+			.query({ filter: JSON.stringify({ key: { _eq: key } }), fields: 'id' })
+			.set('Authorization', token);
+
+		if (found.statusCode !== 200) throw new Error(`lookup returned ${found.statusCode}`);
+
+		for (const row of found.body.data ?? []) {
+			const del = await request(api.url).delete(`/folders/${row.id}`).set('Authorization', token);
+			if (del.statusCode !== 200 && del.statusCode !== 204) throw new Error(`delete returned ${del.statusCode}`);
+		}
+	}
+
+	async function deleteCollection(api: Api, name: string): Promise<void> {
+		const del = await request(api.url)
+			.delete(`/collections/${name}`)
+			.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+		if (del.statusCode !== 200 && del.statusCode !== 204) throw new Error(`delete returned ${del.statusCode}`);
+	}
+
+	describe('creates, snapshots, reparents, deletes, and stays idempotent', () => {
+		test('REST', async ({ api }) => {
+			try {
+				const baseline = await getBaseline(api);
+
+				const created = await applyConfig(
+					api,
+					managedWithFolders(baseline, [
+						{ key: rootKey, name: 'Lifecycle Root', parent: null },
+						{ key: branchKey, name: 'Lifecycle Branch', parent: rootKey },
+						{ key: leafKey, name: 'Lifecycle Leaf', parent: branchKey },
+						{ key: otherKey, name: 'Lifecycle Other', parent: null },
+					]),
+					{ destructive: true }
+				);
+
+				expect(created.statusCode).toBe(200);
+
+				expect(created.body.data.folders.created).toEqual(
+					expect.arrayContaining([rootKey, branchKey, leafKey, otherKey])
+				);
+
+				const afterCreate = foldersByKey(await adminSnapshot(api));
+				expect(afterCreate.get(rootKey)?.parent).toBeNull();
+				expect(afterCreate.get(branchKey)?.parent).toBe(rootKey);
+				expect(afterCreate.get(leafKey)?.parent).toBe(branchKey);
+				expect(afterCreate.get(otherKey)?.parent).toBeNull();
+				expect(afterCreate.get(branchKey)?.parent).not.toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-/i);
+
+				const snapshot1 = await adminSnapshot(api);
+				const reapply = await applyConfig(api, snapshot1, { destructive: true });
+				expect(reapply.statusCode).toBe(200);
+				expect(reapply.body.data.folders).toEqual({ created: [], updated: [], deleted: [] });
+
+				const reparented = JSON.parse(JSON.stringify(snapshot1)) as ConfigSnapshot;
+
+				for (const folder of reparented.folders ?? []) {
+					if (folder.key === leafKey) folder.parent = otherKey;
+				}
+
+				const reparent = await applyConfig(api, reparented, { destructive: true });
+				expect(reparent.statusCode).toBe(200);
+				expect(reparent.body.data.folders.updated).toEqual([leafKey]);
+				expect(reparent.body.data.folders.created).toEqual([]);
+				expect(reparent.body.data.folders.deleted).toEqual([]);
+
+				const afterReparent = foldersByKey(await adminSnapshot(api));
+				expect(afterReparent.get(leafKey)?.parent).toBe(otherKey);
+				expect(afterReparent.get(rootKey)?.parent).toBeNull();
+
+				const withoutBranch = JSON.parse(JSON.stringify(await adminSnapshot(api))) as ConfigSnapshot;
+				withoutBranch.folders = (withoutBranch.folders ?? []).filter((folder) => folder.key !== branchKey);
+
+				const deleteBranch = await applyConfig(api, withoutBranch, { destructive: true });
+				expect(deleteBranch.statusCode).toBe(200);
+				expect(deleteBranch.body.data.folders.deleted).toEqual([branchKey]);
+
+				const afterDelete = foldersByKey(await adminSnapshot(api));
+				expect(afterDelete.has(branchKey)).toBe(false);
+				expect(afterDelete.get(leafKey)?.parent).toBe(otherKey);
+
+				const settled = await adminSnapshot(api);
+				const settleReapply = await applyConfig(api, settled, { destructive: true });
+				expect(settleReapply.statusCode).toBe(200);
+				expect(settleReapply.body.data.folders).toEqual({ created: [], updated: [], deleted: [] });
+			} finally {
+				await resetToBaseline(api);
+			}
+		});
+	});
+
+	describeForVendors(
+		'server database collation',
+		['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'],
+		'Mixed-case folder identifier matching is tested on server-database collations; SQLite is not validated.',
+		() => {
+			test('resolves a mixed-case parent through snapshot and re-apply', async ({ api }) => {
+				const parentKey = `mixed_${run}_parent`;
+				const childKey = `mixed_${run}_child`;
+				const failures: string[] = [];
+				let testError: unknown;
+
+				try {
+					const created = await applyConfig(
+						api,
+						managedWithFolders(await getBaseline(api), [
+							{ key: parentKey, name: 'Mixed Parent', parent: null },
+							{ key: childKey, name: 'Mixed Child', parent: null },
+						]),
+						{ destructive: true }
+					);
+
+					expect(created.statusCode).toBe(200);
+
+					const parentId = await folderIdByKey(api, parentKey);
+					const childId = await folderIdByKey(api, childKey);
+
+					const move = await request(api.url)
+						.patch(`/folders/${childId}`)
+						.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+						.send({ parent: parentId.toUpperCase() });
+
+					expect(move.statusCode).toBe(200);
+
+					const snapshot = foldersByKey(await adminSnapshot(api));
+					expect(snapshot.get(childKey)?.parent).toBe(parentKey);
+
+					const reapply = await applyConfig(api, await adminSnapshot(api), { destructive: true });
+					expect(reapply.statusCode).toBe(200);
+					expect(reapply.body.data.folders).toEqual({ created: [], updated: [], deleted: [] });
+				} catch (error) {
+					testError = error;
+				} finally {
+					await attemptCleanup(failures, `folder ${childKey}`, () => deleteFolderByKey(api, childKey));
+					await attemptCleanup(failures, `folder ${parentKey}`, () => deleteFolderByKey(api, parentKey));
+					await attemptCleanup(failures, 'resetToBaseline', () => resetToBaseline(api));
+				}
+
+				reportOutcome(testError, failures);
+			});
+		}
+	);
+
+	test('deletes a parent and its child together and confirms both are gone', async ({ api }) => {
+		const parentKey = `pair_${run}_parent`;
+		const childKey = `pair_${run}_child`;
+
+		try {
+			const created = await applyConfig(
+				api,
+				managedWithFolders(await getBaseline(api), [
+					{ key: parentKey, name: 'Pair Parent', parent: null },
+					{ key: childKey, name: 'Pair Child', parent: parentKey },
+				]),
+				{ destructive: true }
+			);
+
+			expect(created.statusCode).toBe(200);
+			expect(created.body.data.folders.created).toEqual(expect.arrayContaining([parentKey, childKey]));
+
+			const withoutPair = JSON.parse(JSON.stringify(await adminSnapshot(api))) as ConfigSnapshot;
+
+			withoutPair.folders = (withoutPair.folders ?? []).filter(
+				(folder) => folder.key !== parentKey && folder.key !== childKey
+			);
+
+			const deletePair = await applyConfig(api, withoutPair, { destructive: true });
+			expect(deletePair.statusCode).toBe(200);
+			expect(deletePair.body.data.folders.deleted).toEqual(expect.arrayContaining([parentKey, childKey]));
+			expect(deletePair.body.data.folders.deleted).toHaveLength(2);
+
+			const after = foldersByKey(await adminSnapshot(api));
+			expect(after.has(parentKey)).toBe(false);
+			expect(after.has(childKey)).toBe(false);
+		} finally {
+			await resetToBaseline(api);
+		}
+	});
+
+	test('deletes a folder while a field carries an empty options.folder', async ({ api }) => {
+		const token = `Bearer ${common.USER.ADMIN!.TOKEN}`;
+		const folderKey = `probe_${run}_folder`;
+		const collectionName = `probe_${run}_coll`;
+		const failures: string[] = [];
+		let testError: unknown;
+
+		try {
+			const createCollection = await request(api.url)
+				.post('/collections')
+				.set('Authorization', token)
+				.send({
+					collection: collectionName,
+					meta: {},
+					schema: {},
+					fields: [
+						{
+							field: 'id',
+							type: 'integer',
+							meta: { hidden: true, interface: 'input', readonly: true },
+							schema: { is_primary_key: true, has_auto_increment: true },
+						},
+					],
+				});
+
+			expect(createCollection.statusCode).toBe(200);
+
+			const createField = await request(api.url)
+				.post(`/fields/${collectionName}`)
+				.set('Authorization', token)
+				.send({ field: 'attachment', type: 'uuid', meta: { interface: 'file', options: { folder: '' } }, schema: {} });
+
+			expect(createField.statusCode).toBe(200);
+
+			const created = await applyConfig(
+				api,
+				managedWithFolders(await getBaseline(api), [{ key: folderKey, name: 'Probe Folder', parent: null }]),
+				{ destructive: true }
+			);
+
+			expect(created.statusCode).toBe(200);
+
+			const withoutFolder = JSON.parse(JSON.stringify(await adminSnapshot(api))) as ConfigSnapshot;
+			withoutFolder.folders = (withoutFolder.folders ?? []).filter((folder) => folder.key !== folderKey);
+
+			const deleteFolder = await applyConfig(api, withoutFolder, { destructive: true });
+			expect(deleteFolder.statusCode).toBe(200);
+			expect(deleteFolder.body.data.folders.deleted).toEqual([folderKey]);
+		} catch (error) {
+			testError = error;
+		} finally {
+			await attemptCleanup(failures, `folder ${folderKey}`, () => deleteFolderByKey(api, folderKey));
+			await attemptCleanup(failures, `collection ${collectionName}`, () => deleteCollection(api, collectionName));
+			await attemptCleanup(failures, 'resetToBaseline', () => resetToBaseline(api));
+		}
+
+		reportOutcome(testError, failures);
+	});
+
+	describeForVendors(
+		'server database collation',
+		['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'],
+		'Mixed-case folder identifier matching is tested on server-database collations; SQLite is not validated.',
+		() => {
+			test('refuses a config deletion of a folder referenced by a mixed-case field option', async ({ api }) => {
+				const token = `Bearer ${common.USER.ADMIN!.TOKEN}`;
+				const folderKey = `optref_${run}_folder`;
+				const collectionName = `optref_${run}_coll`;
+				const failures: string[] = [];
+				let testError: unknown;
+
+				try {
+					const createCollection = await request(api.url)
+						.post('/collections')
+						.set('Authorization', token)
+						.send({
+							collection: collectionName,
+							meta: {},
+							schema: {},
+							fields: [
+								{
+									field: 'id',
+									type: 'integer',
+									meta: { hidden: true, interface: 'input', readonly: true },
+									schema: { is_primary_key: true, has_auto_increment: true },
+								},
+							],
+						});
+
+					expect(createCollection.statusCode).toBe(200);
+
+					const created = await applyConfig(
+						api,
+						managedWithFolders(await getBaseline(api), [{ key: folderKey, name: 'Ref Folder', parent: null }]),
+						{ destructive: true }
+					);
+
+					expect(created.statusCode).toBe(200);
+
+					const folderId = await folderIdByKey(api, folderKey);
+
+					const createField = await request(api.url)
+						.post(`/fields/${collectionName}`)
+						.set('Authorization', token)
+						.send({
+							field: 'attachment',
+							type: 'uuid',
+							meta: { interface: 'file', options: { folder: folderId.toUpperCase() } },
+							schema: {},
+						});
+
+					expect(createField.statusCode).toBe(200);
+
+					const withoutFolder = JSON.parse(JSON.stringify(await adminSnapshot(api))) as ConfigSnapshot;
+					withoutFolder.folders = (withoutFolder.folders ?? []).filter((folder) => folder.key !== folderKey);
+
+					const dryRun = await applyConfig(api, withoutFolder, { destructive: true, dryRun: true });
+					expect(dryRun.statusCode).toBe(200);
+
+					const change = (dryRun.body.data.changes as Array<Record<string, any>>).find(
+						(entry) => entry.kind === 'folders' && entry.operation === 'delete' && entry.identity.key === folderKey
+					);
+
+					expect(change?.impact).toEqual([{ blockedBy: 'options.folder' }]);
+
+					const apply = await applyConfig(api, withoutFolder, { destructive: true });
+					expect(apply.statusCode).toBe(400);
+					expect(apply.body.errors[0].extensions.code).toBe('CONFIG_FOLDER_IN_USE');
+					expect(apply.body.errors[0].extensions.key).toBe(folderKey);
+
+					expect(foldersByKey(await adminSnapshot(api)).has(folderKey)).toBe(true);
+				} catch (error) {
+					testError = error;
+				} finally {
+					await attemptCleanup(failures, `collection ${collectionName}`, () => deleteCollection(api, collectionName));
+					await attemptCleanup(failures, `folder ${folderKey}`, () => deleteFolderByKey(api, folderKey));
+					await attemptCleanup(failures, 'resetToBaseline', () => resetToBaseline(api));
+				}
+
+				reportOutcome(testError, failures);
+			});
+		}
+	);
+});
+
+describe('Config-as-Code managed scope', () => {
+	function sanitize(vendor: string): string {
+		return vendor.replace(/[^a-z0-9_]/gi, '_');
+	}
+
+	async function currentSnapshot(api: Api): Promise<ConfigSnapshot> {
+		const response = await request(api.url)
+			.get('/config/snapshot')
+			.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+		expect(response.statusCode).toBe(200);
+		return response.body.data as ConfigSnapshot;
+	}
+
+	describe('a roles-only destructive apply leaves permissions untouched', () => {
+		test('REST', async ({ api }) => {
+			const before = await currentSnapshot(api);
+			const desired = JSON.parse(JSON.stringify(before)) as ConfigSnapshot;
+			desired.manifest = { version: 1, resources: ['roles'] };
+			desired.permissions = [];
+			delete desired.folders;
+			delete desired.settings;
+			delete desired['extension-settings'];
+			delete desired['translations'];
+
+			try {
+				const response = await applyConfig(api, desired, { destructive: true });
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.roles.deleted).toEqual([]);
+				expect(response.body.data.permissions.created).toBe(0);
+				expect(response.body.data.permissions.updated).toBe(0);
+				expect(response.body.data.permissions.deleted).toBe(0);
+
+				expect(await currentSnapshot(api)).toEqual(before);
+			} finally {
+				await resetToBaseline(api);
+			}
+		});
+	});
+
+	describe('an empty managed scope ignores malformed records and changes nothing', () => {
+		test('REST', async ({ api }) => {
+			const before = await currentSnapshot(api);
+
+			try {
+				const response = await applyConfig(
+					api,
+					{
+						manifest: { version: 1, resources: [] },
+						roles: [null, { nonsense: true }],
+						permissions: [{ role: 42, permissions: 'not-an-array' }],
+					},
+					{ destructive: true }
+				);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.roles.created).toEqual([]);
+				expect(response.body.data.roles.updated).toEqual([]);
+				expect(response.body.data.roles.deleted).toEqual([]);
+				expect(response.body.data.permissions.created).toBe(0);
+				expect(response.body.data.permissions.updated).toBe(0);
+				expect(response.body.data.permissions.deleted).toBe(0);
+
+				expect(await currentSnapshot(api)).toEqual(before);
+			} finally {
+				await resetToBaseline(api);
+			}
+		});
+	});
+
+	describe('a resources mapping is refused as CONFIG_INVALID and changes nothing', () => {
+		test('REST', async ({ api }) => {
+			const before = await currentSnapshot(api);
+
+			const response = await request(api.url)
+				.post('/config/apply')
+				.query({ dry_run: 'true' })
+				.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+				.set('Content-Type', 'application/json')
+				.send({ manifest: { version: 1, resources: {} }, roles: [], permissions: [] });
+
+			expect(response.statusCode).toBe(400);
+			expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+
+			expect(await currentSnapshot(api)).toEqual(before);
+		});
+	});
+
+	describe('a permissions-only apply creates a permission for a role it does not manage', () => {
+		test('REST', async ({ api, vendor }) => {
+			const roleKey = `perm_only_${sanitize(vendor)}`;
+			const baseline = await getBaseline(api);
+
+			const withRole = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+			withRole.roles.push({ key: roleKey, name: 'Perm Only', admin_access: false, app_access: true });
+
+			try {
+				const create = await applyConfig(api, withRole);
+				expect(create.statusCode).toBe(200);
+				expect(create.body.data.roles.created).toContain(roleKey);
+
+				const rolesAfterSetup = (await currentSnapshot(api)).roles;
+
+				const permsOnly = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+				permsOnly.manifest = { version: 1, resources: ['permissions'] };
+				permsOnly.roles = [];
+				delete permsOnly.folders;
+				delete permsOnly.settings;
+				delete permsOnly['extension-settings'];
+				delete permsOnly['translations'];
+
+				permsOnly.permissions.push({
+					role: roleKey,
+					permissions: [
+						{
+							collection: 'directus_files',
+							action: 'read',
+							permissions: null,
+							validation: null,
+							presets: null,
+							fields: ['*'],
+						},
+					],
+				});
+
+				const response = await applyConfig(api, permsOnly);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.permissions.created).toBe(1);
+				expect(response.body.data.permissions.updated).toBe(0);
+				expect(response.body.data.permissions.deleted).toBe(0);
+
+				const final = await currentSnapshot(api);
+				expect(final.roles).toEqual(rolesAfterSetup);
+
+				const set = final.permissions.find((p) => p.role === roleKey);
+				expect(set).toBeDefined();
+				expect(set!.permissions.find((p) => p.collection === 'directus_files')).toBeDefined();
+			} finally {
+				await resetToBaseline(api);
+			}
+		});
+	});
+
+	describe('a both-managed apply rejects a permission for a role it does not declare', () => {
+		test('REST', async ({ api, vendor }) => {
+			const roleKey = `ref_probe_${sanitize(vendor)}`;
+			const baseline = await getBaseline(api);
+
+			const withRole = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+			withRole.roles.push({ key: roleKey, name: 'Ref Probe', admin_access: false, app_access: true });
+
+			try {
+				expect((await applyConfig(api, withRole)).statusCode).toBe(200);
+				const afterCreate = await currentSnapshot(api);
+
+				const both = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+
+				both.permissions.push({
+					role: roleKey,
+					permissions: [
+						{
+							collection: 'directus_files',
+							action: 'read',
+							permissions: null,
+							validation: null,
+							presets: null,
+							fields: ['*'],
+						},
+					],
+				});
+
+				const response = await applyConfig(api, both);
+
+				expect(response.statusCode).toBe(400);
+				expect(errorMessages(response).some((message) => message.includes(roleKey))).toBe(true);
+
+				expect(await currentSnapshot(api)).toEqual(afterCreate);
+			} finally {
+				await resetToBaseline(api);
+			}
+		});
+	});
+
+	describe('an unknown role field is refused', () => {
+		test('REST', async ({ api, vendor }) => {
+			const baseline = await getBaseline(api);
+			const desired = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+
+			desired.roles.push({
+				key: `unknown_field_${sanitize(vendor)}`,
+				name: 'Unknown Field',
+				admin_access: false,
+				app_access: true,
+				bogus_field: true,
+			});
+
+			const response = await applyConfig(api, desired, { dryRun: true });
+
+			expect(response.statusCode).toBe(400);
+			expect(errorMessages(response).some((message) => message.includes('bogus_field'))).toBe(true);
+		});
+	});
+});
+
+describe('cairncms config apply refuses a tree it cannot read', () => {
+	let fixtureRoot: string;
+
+	beforeEach(async ({ api }: { api: Api }) => {
+		fixtureRoot = await fs.mkdtemp(path.join(api.directory, 'cairncms-config-cli-'));
+	});
+
+	afterEach(async () => {
+		await fs.rm(fixtureRoot, { recursive: true, force: true });
+	});
+
+	async function snapshotData(api: Api): Promise<ConfigSnapshot> {
+		const response = await request(api.url)
+			.get('/config/snapshot')
+			.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+		expect(response.statusCode).toBe(200);
+		return response.body.data as ConfigSnapshot;
+	}
+
+	async function expectApplyRefused(api: Api, diagnostic: string, status: number): Promise<void> {
+		const result = await api.cli(['config', 'apply', fixtureRoot, '--yes']);
+
+		expect(result.error).toBeUndefined();
+		expect(result.status).toBe(status);
+		expect(`${result.stdout ?? ''}${result.stderr ?? ''}`).toContain(diagnostic);
+	}
+
+	async function writeManifest(version = 1): Promise<void> {
+		await fs.writeFile(
+			path.join(fixtureRoot, 'cairncms-config.yaml'),
+			dumpYaml({ version, resources: ['roles', 'permissions'] })
+		);
+	}
+
+	describe('an unsupported manifest version terminates nonzero and writes nothing', () => {
+		test('CLI', async ({ api }) => {
+			const before = await snapshotData(api);
+			await writeManifest(99);
+
+			await expectApplyRefused(api, 'declares version 99', 2);
+			expect(await snapshotData(api)).toEqual(before);
+		});
+	});
+
+	describe('a managed directory whose link does not resolve terminates nonzero and writes nothing', () => {
+		test('CLI', async ({ api }) => {
+			const before = await snapshotData(api);
+			await writeManifest();
+			await fs.symlink(path.join(fixtureRoot, 'never-created'), path.join(fixtureRoot, 'roles'));
+
+			await expectApplyRefused(api, 'is a link that does not resolve', 2);
+			expect(await snapshotData(api)).toEqual(before);
+		});
+	});
+
+	describe('a placeholder outside the supported namespace terminates nonzero and writes nothing', () => {
+		test('CLI', async ({ api }) => {
+			const before = await snapshotData(api);
+			await writeManifest();
+			await fs.mkdir(path.join(fixtureRoot, 'roles'), { recursive: true });
+
+			await fs.writeFile(
+				path.join(fixtureRoot, 'roles', 'cli_probe.yaml'),
+				dumpYaml({
+					key: 'cli_probe',
+					name: '{{DATABASE_PASSWORD}}',
+					admin_access: false,
+					app_access: true,
+				})
+			);
+
+			try {
+				await expectApplyRefused(api, 'outside the CAIRNCMS_CONFIG_ namespace', 2);
+
+				const after = await snapshotData(api);
+				expect(after).toEqual(before);
+				expect(after.roles.map((role) => role.key)).not.toContain('cli_probe');
+			} finally {
+				await resetToBaseline(api);
+			}
+		});
+	});
+
+	describe('a role file with an unsupported field terminates nonzero and writes nothing', () => {
+		test('CLI', async ({ api }) => {
+			const before = await snapshotData(api);
+			await writeManifest();
+			await fs.mkdir(path.join(fixtureRoot, 'roles'), { recursive: true });
+
+			await fs.writeFile(
+				path.join(fixtureRoot, 'roles', 'cli_unknown.yaml'),
+				dumpYaml({
+					key: 'cli_unknown',
+					name: 'CLI Unknown',
+					admin_access: false,
+					app_access: true,
+					bogus_field: true,
+				})
+			);
+
+			try {
+				await expectApplyRefused(api, 'bogus_field', 2);
+
+				const after = await snapshotData(api);
+				expect(after).toEqual(before);
+				expect(after.roles.map((role) => role.key)).not.toContain('cli_unknown');
+			} finally {
+				await resetToBaseline(api);
+			}
+		});
+	});
+});
+
+describe('cairncms config snapshot preserves managed scope', () => {
+	let fixtureRoot: string;
+
+	beforeEach(async ({ api }: { api: Api }) => {
+		fixtureRoot = await fs.mkdtemp(path.join(api.directory, 'cairncms-config-snap-'));
+	});
+
+	afterEach(async () => {
+		await fs.rm(fixtureRoot, { recursive: true, force: true });
+	});
+
+	async function runSnapshot(api: Api) {
+		return await api.cli(['config', 'snapshot', fixtureRoot, '--yes'], {
+			env: { LOG_LEVEL: 'info', LOG_STYLE: 'raw' },
+		});
+	}
+
+	async function readManifest(): Promise<{ resources: string[] }> {
+		return loadYaml(await fs.readFile(path.join(fixtureRoot, 'cairncms-config.yaml'), 'utf8')) as {
+			resources: string[];
+		};
+	}
+
+	describe('snapshotting a roles-only tree keeps it roles-only and leaves permission files untouched', () => {
+		test('CLI', async ({ api }) => {
+			await fs.writeFile(
+				path.join(fixtureRoot, 'cairncms-config.yaml'),
+				dumpYaml({ version: 1, resources: ['roles'] })
+			);
+
+			await fs.mkdir(path.join(fixtureRoot, 'permissions'), { recursive: true });
+
+			const survivor = path.join(fixtureRoot, 'permissions', 'editor.yaml');
+			const survivorBody = dumpYaml({ role: 'editor', permissions: [] });
+			await fs.writeFile(survivor, survivorBody);
+			await fs.writeFile(path.join(fixtureRoot, 'permissions', 'broken.yaml'), 'this: [not, valid');
+
+			const result = await runSnapshot(api);
+
+			expect(result.error).toBeUndefined();
+			expect(result.status).toBe(0);
+			expect((await readManifest()).resources).toEqual(['roles']);
+
+			const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+			expect(output.match(/Leaving permissions unmanaged/g)?.length ?? 0).toBe(1);
+
+			expect(await fs.readFile(survivor, 'utf8')).toBe(survivorBody);
+		});
+	});
+
+	describe('snapshotting an empty directory manages every supported kind', () => {
+		test('CLI', async ({ api }) => {
+			const result = await runSnapshot(api);
+
+			expect(result.error).toBeUndefined();
+			expect(result.status).toBe(0);
+
+			expect((await readManifest()).resources.slice().sort()).toEqual([
+				'extension-settings',
+				'folders',
+				'permissions',
+				'roles',
+				'settings',
+				'translations',
+			]);
+		});
+	});
+});
+
+describe('config-as-code refuses a role key over the filename-stem limit', () => {
+	let fixtureRoot: string;
+
+	beforeEach(async ({ api }: { api: Api }) => {
+		fixtureRoot = await fs.mkdtemp(path.join(api.directory, 'cairncms-config-overlong-'));
+	});
+
+	afterEach(async () => {
+		await fs.rm(fixtureRoot, { recursive: true, force: true });
+	});
+
+	function overlongKey(): string {
+		return `overlong_${randomUUID().replace(/-/g, '')}`.padEnd(247, 'a').slice(0, 247);
+	}
+
+	async function removeRoleByKey(db: Knex, key: string): Promise<void> {
+		for (const { id } of await db('directus_roles').where({ key }).select('id')) {
+			await db('directus_revisions')
+				.where({ collection: 'directus_roles', item: String(id) })
+				.del();
+
+			await db('directus_activity')
+				.where({ collection: 'directus_roles', item: String(id) })
+				.del();
+		}
+
+		await db('directus_roles').where({ key }).del();
+	}
+
+	test('an HTTP apply is refused CONFIG_INVALID and stores nothing', async ({ api }) => {
+		const db = api.database;
+		const key = overlongKey();
+		const desired = await getBaseline(api);
+		desired.roles.push({ key, name: 'Overlong', admin_access: false, app_access: true });
+
+		try {
+			const response = await applyConfig(api, desired);
+
+			expect(response.statusCode).toBe(400);
+			expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+			expect(errorMessages(response).some((message) => message.includes('246'))).toBe(true);
+
+			expect((await adminSnapshot(api)).roles.find((role) => role.key === key)).toBeUndefined();
+		} finally {
+			await removeRoleByKey(db, key);
+		}
+	});
+
+	test('a CLI snapshot of a directly-seeded overlong role fails exit 3 and writes nothing', async ({ api }) => {
+		const db = api.database;
+		const key = overlongKey();
+
+		try {
+			await db('directus_roles').insert({
+				id: randomUUID(),
+				key,
+				name: 'Overlong',
+				admin_access: false,
+				app_access: true,
+			});
+
+			const result = await api.cli(['config', 'snapshot', fixtureRoot, '--yes'], {
+				env: { LOG_LEVEL: 'info', LOG_STYLE: 'raw' },
+				timeoutMs: 20000,
+			});
+
+			expect(result.error).toBeUndefined();
+			expect(result.signal).toBeNull();
+			expect(result.status).toBe(3);
+
+			const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+			expect(output).toContain('cannot be represented in the config format');
+			expect(output).toContain('246');
+
+			expect(await fs.readdir(fixtureRoot)).toEqual([]);
+		} finally {
+			await removeRoleByKey(db, key);
+		}
+	}, 30000);
+});
+
+describe('Config-as-Code stored state', () => {
+	const PROBE_COLLECTION = 'cairncms_config_stored_state_probe';
+
+	describe('refuses to read a stored filter it cannot interpret', () => {
+		test('REST', async ({ api }) => {
+			const db = api.database;
+			const role = await db('directus_roles').select('id').first();
+			expect(role).toBeDefined();
+
+			// Valid JSON reaches the read path on every vendor; malformed text can fail at the database boundary.
+			await db('directus_permissions').insert({
+				role: role.id,
+				collection: PROBE_COLLECTION,
+				action: 'read',
+				permissions: '[]',
+			});
+
+			try {
+				const snapshot = await request(api.url)
+					.get('/config/snapshot')
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(snapshot.statusCode).toBe(500);
+				expect(snapshot.body.errors[0].extensions.code).toBe('CONFIG_READ_FAILED');
+
+				const apply = await request(api.url)
+					.post('/config/apply')
+					.query({ dry_run: 'true' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`)
+					.set('Content-Type', 'application/json')
+					.send({ manifest: { version: 1, resources: ['roles', 'permissions'] }, roles: [], permissions: [] });
+
+				expect(apply.statusCode).toBe(500);
+				expect(apply.body.errors[0].extensions.code).toBe('CONFIG_READ_FAILED');
+			} finally {
+				await db('directus_permissions').where({ collection: PROBE_COLLECTION }).del();
+			}
+
+			const recovered = await request(api.url)
+				.get('/config/snapshot')
+				.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+			expect(recovered.statusCode).toBe(200);
+		});
+	});
+});
+
+describe('Config-as-Code deletion impact', () => {
+	let fixtureRoot: string;
+
+	beforeEach(async ({ api }: { api: Api }) => {
+		fixtureRoot = await fs.mkdtemp(path.join(api.directory, 'cairncms-config-impact-'));
+	});
+
+	afterEach(async () => {
+		await fs.rm(fixtureRoot, { recursive: true, force: true });
+	});
+
+	describe('a role deletion reports its cascade impact identically on both surfaces', () => {
+		test('REST and CLI', async ({ api, vendor }) => {
+			const db = api.database;
+			const suffix = vendor.replace(/[^a-z0-9_]/gi, '_');
+			const rand = randomUUID().replace(/-/g, '').slice(0, 8);
+			const roleKey = `impact_probe_${suffix}_${rand}`;
+			const roleId = randomUUID();
+			const userId = randomUUID();
+			const token = randomUUID().replace(/-/g, '');
+			const collection = 'directus_files';
+			const bookmark = 'Probe Bookmark';
+
+			const baseline = await getBaseline(api);
+
+			const snapshot = await api.cli(['config', 'snapshot', fixtureRoot, '--yes']);
+
+			expect(snapshot.status).toBe(0);
+
+			let roleInserted = false;
+			let userInserted = false;
+
+			try {
+				await db('directus_roles').insert({ id: roleId, key: roleKey, name: 'Impact Probe', app_access: false });
+				roleInserted = true;
+
+				await db('directus_permissions').insert({
+					role: roleId,
+					collection,
+					action: 'read',
+					permissions: null,
+					validation: null,
+					presets: null,
+					fields: '*',
+				});
+
+				await db('directus_presets').insert({ role: roleId, bookmark });
+
+				await db('directus_users').insert({ id: userId, email: `${roleKey}@example.invalid`, role: roleId });
+				userInserted = true;
+
+				const expiresAt = Date.now() + 3600 * 1000;
+				const expires = vendor === 'sqlite3' ? expiresAt : new Date(expiresAt);
+				await db('directus_sessions').insert({ token, user: userId, expires });
+
+				const httpDry = await applyConfig(api, baseline, { dryRun: true });
+				expect(httpDry.statusCode).toBe(200);
+
+				const cli = await api.cli(['config', 'apply', fixtureRoot, '--dry-run', '--format', 'json']);
+
+				expect(cli.status).toBe(1);
+
+				const cliDocument = JSON.parse(cli.stdout);
+				expect(cliDocument).toEqual(httpDry.body.data);
+
+				const roleDeletion = httpDry.body.data.changes.find(
+					(change: any) => change.kind === 'roles' && change.operation === 'delete' && change.identity.key === roleKey
+				);
+
+				expect(roleDeletion).toBeDefined();
+
+				expect(roleDeletion.impact).toEqual([
+					{ kind: 'permissions', identity: { role: roleKey, collection, action: 'read' } },
+					{ kind: 'presets', count: 1, bookmarks: [bookmark] },
+					{ kind: 'users', suspended: [userId] },
+					{ kind: 'sessions', active: 1 },
+				]);
+
+				const mutating = await applyConfig(api, baseline, { destructive: true });
+
+				expect(mutating.statusCode).toBe(200);
+				expect(mutating.body.data.roles.deleted).toContain(roleKey);
+				expect(mutating.body.meta.plan).toEqual(httpDry.body.data);
+			} finally {
+				await db('directus_sessions').where({ token }).del();
+				if (userInserted) await db('directus_users').where({ id: userId }).del();
+				await db('directus_presets').where({ role: roleId }).del();
+				await db('directus_permissions').where({ role: roleId }).del();
+				if (roleInserted) await db('directus_roles').where({ id: roleId }).del();
+			}
+		});
+	});
+});
+
+describe('Config-as-Code audit and events', () => {
+	type Id = string | number;
+	type ProbeIds = { roleIds: Set<Id>; permIds: Set<Id>; userIds: Set<Id>; presetIds: Set<Id> };
+
+	function newIds(): ProbeIds {
+		return { roleIds: new Set(), permIds: new Set(), userIds: new Set(), presetIds: new Set() };
+	}
+
+	function probeRole(key: string): Record<string, unknown> {
+		return {
+			key,
+			name: 'Audit Probe',
+			admin_access: false,
+			app_access: false,
+			icon: 'supervised_user_circle',
+			enforce_tfa: false,
+			description: null,
+			ip_access: null,
+		};
+	}
+
+	function probePermissionSet(
+		roleKey: string,
+		collection: string
+	): { role: string; permissions: Array<Record<string, unknown>> } {
+		return {
+			role: roleKey,
+			permissions: [{ collection, action: 'read', permissions: null, validation: null, presets: null, fields: ['*'] }],
+		};
+	}
+
+	async function markerCount(db: Knex, key: string): Promise<number> {
+		return (await db('tests_extensions_log').where({ key })).length;
+	}
+
+	async function expectAudited(
+		db: Knex,
+		collection: string,
+		item: Id,
+		action: 'create' | 'update' | 'delete',
+		expectedUser: Id | null,
+		expectRevision: boolean
+	): Promise<Record<string, unknown>> {
+		const activities = await db('directus_activity').where({ collection, item: String(item), action });
+
+		expect(activities.length).toBe(1);
+		const activity = activities[0]!;
+		expect(activity.user).toBe(expectedUser);
+
+		const revisions = await db('directus_revisions').where({ activity: activity.id });
+
+		if (expectRevision) {
+			expect(revisions.length).toBe(1);
+			expect(revisions[0]!.collection).toBe(collection);
+			expect(String(revisions[0]!.item)).toBe(String(item));
+		} else {
+			expect(revisions.length).toBe(0);
+		}
+
+		return activity;
+	}
+
+	async function idsFor(db: Knex, table: string, where: Record<string, unknown>): Promise<Id[]> {
+		const rows = await db(table).where(where).select('id');
+		return rows.map((row) => row.id as Id);
+	}
+
+	async function purge(db: Knex, roleKey: string, ids: ProbeIds, collections: string[]): Promise<void> {
+		const role = await db('directus_roles').where({ key: roleKey }).first();
+
+		if (role) {
+			ids.roleIds.add(role.id);
+			for (const id of await idsFor(db, 'directus_permissions', { role: role.id })) ids.permIds.add(id);
+			for (const id of await idsFor(db, 'directus_users', { role: role.id })) ids.userIds.add(id);
+			for (const id of await idsFor(db, 'directus_presets', { role: role.id })) ids.presetIds.add(id);
+		}
+
+		const roleIds = [...ids.roleIds];
+		const permIds = [...ids.permIds];
+		const userIds = [...ids.userIds];
+		const presetIds = [...ids.presetIds];
+
+		for (const [collection, items] of [
+			['directus_roles', roleIds],
+			['directus_permissions', permIds],
+			['directus_users', userIds],
+			['directus_presets', presetIds],
+		] as const) {
+			for (const item of items) {
+				await db('directus_revisions')
+					.where({ collection, item: String(item) })
+					.del();
+
+				await db('directus_activity')
+					.where({ collection, item: String(item) })
+					.del();
+			}
+		}
+
+		await db('tests_extensions_log')
+			.where({ key: `config-apply-probe/roles.create/${roleKey}` })
+			.del();
+
+		for (const collection of collections) {
+			await db('tests_extensions_log')
+				.where({ key: `config-apply-probe/permissions.create/${collection}` })
+				.del();
+		}
+
+		for (const id of [...roleIds, ...permIds, ...userIds]) {
+			await db('tests_extensions_log').where('key', 'like', `config-apply-probe/%/${id}`).del();
+		}
+
+		for (const id of presetIds) await db('directus_presets').where({ id }).del();
+		for (const id of userIds) await db('directus_users').where({ id }).del();
+		for (const id of permIds) await db('directus_permissions').where({ id }).del();
+		for (const id of roleIds) await db('directus_permissions').where({ role: id }).del();
+		for (const id of roleIds) await db('directus_roles').where({ id }).del();
+	}
+
+	describe('an HTTP apply attributes create and update audit to the administrator and dispatches their events', () => {
+		test('REST', async ({ api, vendor }) => {
+			const db = api.database;
+			const suffix = vendor.replace(/[^a-z0-9_]/gi, '_');
+			const rand = randomUUID().replace(/-/g, '').slice(0, 8);
+			const roleKey = `audit_probe_${suffix}_${rand}`;
+			const probeCollection = `audit_probe_${rand}`;
+			const ids = newIds();
+
+			try {
+				const admin = await db('directus_users').where({ email: 'admin@default.com' }).first();
+				expect(admin).toBeDefined();
+
+				const created = await getBaseline(api);
+				created.roles.push(probeRole(roleKey));
+				created.permissions.push(probePermissionSet(roleKey, probeCollection));
+
+				const createResp = await applyConfig(api, created);
+				expect(createResp.statusCode).toBe(200);
+
+				expect(createResp.body.data).toEqual({
+					roles: { created: [roleKey], updated: [], deleted: [] },
+					permissions: { created: 1, updated: 0, deleted: 0 },
+					folders: { created: [], updated: [], deleted: [] },
+					settings: { updated: [] },
+					'extension-settings': { created: 0, updated: 0, deleted: 0 },
+					translations: { created: 0, updated: 0, deleted: 0 },
+				});
+
+				const role = await db('directus_roles').where({ key: roleKey }).first();
+				expect(role).toBeDefined();
+				ids.roleIds.add(role.id);
+
+				const perm = await db('directus_permissions').where({ role: role.id, collection: probeCollection }).first();
+				expect(perm).toBeDefined();
+				ids.permIds.add(perm.id);
+
+				await expectAudited(db, 'directus_roles', role.id, 'create', admin.id, true);
+				await expectAudited(db, 'directus_permissions', perm.id, 'create', admin.id, true);
+
+				expect(await markerCount(db, `config-apply-probe/roles.create/${roleKey}`)).toBe(1);
+				expect(await markerCount(db, `config-apply-probe/permissions.create/${probeCollection}`)).toBe(1);
+
+				const updated = await adminSnapshot(api);
+				const roleDoc = updated.roles.find((r) => r['key'] === roleKey);
+				expect(roleDoc).toBeDefined();
+				roleDoc!['name'] = 'Audit Probe Renamed';
+				const permSet = updated.permissions.find((p) => p.role === roleKey);
+				expect(permSet).toBeDefined();
+				permSet!.permissions[0]!['fields'] = ['id'];
+
+				const updateResp = await applyConfig(api, updated);
+				expect(updateResp.statusCode).toBe(200);
+
+				expect(updateResp.body.data).toEqual({
+					roles: { created: [], updated: [roleKey], deleted: [] },
+					permissions: { created: 0, updated: 1, deleted: 0 },
+					folders: { created: [], updated: [], deleted: [] },
+					settings: { updated: [] },
+					'extension-settings': { created: 0, updated: 0, deleted: 0 },
+					translations: { created: 0, updated: 0, deleted: 0 },
+				});
+
+				await expectAudited(db, 'directus_roles', role.id, 'update', admin.id, true);
+				await expectAudited(db, 'directus_permissions', perm.id, 'update', admin.id, true);
+
+				const after = await adminSnapshot(api);
+				const afterRole = after.roles.find((r) => r['key'] === roleKey);
+				expect(afterRole).toBeDefined();
+				expect(afterRole!['name']).toBe('Audit Probe Renamed');
+				const afterPermSet = after.permissions.find((p) => p.role === roleKey);
+				expect(afterPermSet).toBeDefined();
+				expect(afterPermSet!.permissions[0]!['fields']).toEqual(['id']);
+
+				expect(await markerCount(db, `config-apply-probe/roles.update/${role.id}`)).toBe(1);
+				expect(await markerCount(db, `config-apply-probe/permissions.update/${perm.id}`)).toBe(1);
+			} finally {
+				await purge(db, roleKey, ids, [probeCollection]);
+			}
+		});
+	});
+
+	describe('a local CLI apply attributes activity to the system actor and awaits its events before exit', () => {
+		let fixtureRoot: string;
+
+		beforeEach(async ({ api }: { api: Api }) => {
+			fixtureRoot = await fs.mkdtemp(path.join(api.directory, 'cairncms-config-audit-'));
+		});
+
+		afterEach(async () => {
+			await fs.rm(fixtureRoot, { recursive: true, force: true });
+		});
+
+		test('CLI', async ({ api, vendor }) => {
+			const db = api.database;
+			const suffix = vendor.replace(/[^a-z0-9_]/gi, '_');
+			const rand = randomUUID().replace(/-/g, '').slice(0, 8);
+			const roleKey = `audit_probe_cli_${suffix}_${rand}`;
+			const ids = newIds();
+
+			const snapshot = await api.cli(['config', 'snapshot', fixtureRoot, '--yes']);
+
+			expect(snapshot.status).toBe(0);
+
+			await fs.writeFile(path.join(fixtureRoot, 'roles', `${roleKey}.yaml`), dumpYaml(probeRole(roleKey)));
+
+			try {
+				const apply = await api.cli(['config', 'apply', fixtureRoot, '--yes'], {
+					env: { LOG_LEVEL: 'info', LOG_STYLE: 'raw' },
+				});
+
+				expect(apply.status).toBe(0);
+				expect(`${apply.stdout ?? ''}${apply.stderr ?? ''}`).toContain('1 role(s) created');
+
+				const role = await db('directus_roles').where({ key: roleKey }).first();
+				expect(role).toBeDefined();
+				ids.roleIds.add(role.id);
+
+				const activity = await expectAudited(db, 'directus_roles', role.id, 'create', null, true);
+				expect(activity['origin']).toBe('config-cli');
+
+				expect(await markerCount(db, `config-apply-probe/roles.create/${roleKey}`)).toBe(1);
+			} finally {
+				await purge(db, roleKey, ids, []);
+			}
+		});
+	});
+
+	describe('a rollback commits no role row, audit rows, or events', () => {
+		test('REST', async ({ api, vendor }) => {
+			const db = api.database;
+			const suffix = vendor.replace(/[^a-z0-9_]/gi, '_');
+			const rand = randomUUID().replace(/-/g, '').slice(0, 8);
+			const roleKey = `audit_probe_rollback_${suffix}_${rand}`;
+			const ids = newIds();
+
+			const desired = await getBaseline(api);
+			desired.roles.push(probeRole(roleKey));
+			desired.permissions.push(probePermissionSet(roleKey, 'audit_probe_rollback'));
+
+			const activityBefore = new Set(await idsFor(db, 'directus_activity', { collection: 'directus_roles' }));
+			const revisionsBefore = new Set(await idsFor(db, 'directus_revisions', { collection: 'directus_roles' }));
+
+			try {
+				const response = await applyConfig(api, desired);
+				expect(response.statusCode).toBe(500);
+				expect(response.body.errors?.[0]?.extensions?.code).toBe('CONFIG_APPLY_FAILED');
+
+				const addedActivity = (await idsFor(db, 'directus_activity', { collection: 'directus_roles' })).filter(
+					(id) => !activityBefore.has(id)
+				);
+
+				const addedRevisions = (await idsFor(db, 'directus_revisions', { collection: 'directus_roles' })).filter(
+					(id) => !revisionsBefore.has(id)
+				);
+
+				expect(addedActivity).toEqual([]);
+				expect(addedRevisions).toEqual([]);
+				expect(await db('directus_roles').where({ key: roleKey }).first()).toBeUndefined();
+				expect(await markerCount(db, `config-apply-probe/roles.create/${roleKey}`)).toBe(0);
+			} finally {
+				// Recompute during teardown so assertion failures cannot leak audit rows.
+				const leakedRevisions = (await idsFor(db, 'directus_revisions', { collection: 'directus_roles' })).filter(
+					(id) => !revisionsBefore.has(id)
+				);
+
+				for (const id of leakedRevisions) await db('directus_revisions').where({ id }).del();
+
+				const leakedActivity = (await idsFor(db, 'directus_activity', { collection: 'directus_roles' })).filter(
+					(id) => !activityBefore.has(id)
+				);
+
+				for (const id of leakedActivity) await db('directus_activity').where({ id }).del();
+
+				await purge(db, roleKey, ids, ['audit_probe_rollback']);
+			}
+		});
+	});
+
+	describe('a role deletion records delete activity without a revision and cascades to users and presets', () => {
+		test('REST', async ({ api, vendor }) => {
+			const db = api.database;
+			const suffix = vendor.replace(/[^a-z0-9_]/gi, '_');
+			const rand = randomUUID().replace(/-/g, '').slice(0, 8);
+			const roleKey = `audit_probe_del_${suffix}_${rand}`;
+			const probeCollection = `audit_probe_del_${rand}`;
+			const userId = randomUUID();
+			const ids = newIds();
+
+			try {
+				const admin = await db('directus_users').where({ email: 'admin@default.com' }).first();
+				expect(admin).toBeDefined();
+
+				const created = await getBaseline(api);
+				created.roles.push(probeRole(roleKey));
+				created.permissions.push(probePermissionSet(roleKey, probeCollection));
+
+				const createResp = await applyConfig(api, created);
+				expect(createResp.statusCode).toBe(200);
+
+				expect(createResp.body.data).toEqual({
+					roles: { created: [roleKey], updated: [], deleted: [] },
+					permissions: { created: 1, updated: 0, deleted: 0 },
+					folders: { created: [], updated: [], deleted: [] },
+					settings: { updated: [] },
+					'extension-settings': { created: 0, updated: 0, deleted: 0 },
+					translations: { created: 0, updated: 0, deleted: 0 },
+				});
+
+				const role = await db('directus_roles').where({ key: roleKey }).first();
+				expect(role).toBeDefined();
+				ids.roleIds.add(role.id);
+
+				const perm = await db('directus_permissions').where({ role: role.id, collection: probeCollection }).first();
+				expect(perm).toBeDefined();
+				ids.permIds.add(perm.id);
+
+				await db('directus_users').insert({
+					id: userId,
+					email: `${roleKey}@example.invalid`,
+					role: role.id,
+					status: 'active',
+				});
+
+				ids.userIds.add(userId);
+
+				await db('directus_presets').insert({ role: role.id, bookmark: 'Audit Probe Bookmark' });
+				const preset = await db('directus_presets').where({ role: role.id }).first();
+				expect(preset).toBeDefined();
+				ids.presetIds.add(preset.id);
+
+				const snapshot = await adminSnapshot(api);
+				snapshot.roles = snapshot.roles.filter((r) => r['key'] !== roleKey);
+				snapshot.permissions = snapshot.permissions.filter((p) => p.role !== roleKey);
+
+				const deleteResp = await applyConfig(api, snapshot, { destructive: true });
+				expect(deleteResp.statusCode).toBe(200);
+
+				expect(deleteResp.body.data).toEqual({
+					roles: { created: [], updated: [], deleted: [roleKey] },
+					permissions: { created: 0, updated: 0, deleted: 0 },
+					folders: { created: [], updated: [], deleted: [] },
+					settings: { updated: [] },
+					'extension-settings': { created: 0, updated: 0, deleted: 0 },
+					translations: { created: 0, updated: 0, deleted: 0 },
+				});
+
+				expect(await db('directus_roles').where({ id: role.id }).first()).toBeUndefined();
+				expect(await db('directus_permissions').where({ id: perm.id }).first()).toBeUndefined();
+				expect(await db('directus_presets').where({ id: preset.id }).first()).toBeUndefined();
+
+				await expectAudited(db, 'directus_roles', role.id, 'delete', admin.id, false);
+				await expectAudited(db, 'directus_permissions', perm.id, 'delete', admin.id, false);
+				await expectAudited(db, 'directus_users', userId, 'update', admin.id, true);
+
+				expect(
+					await db('directus_activity')
+						.where({ collection: 'directus_presets', item: String(preset.id) })
+						.first()
+				).toBeUndefined();
+
+				expect(
+					await db('directus_revisions')
+						.where({ collection: 'directus_presets', item: String(preset.id) })
+						.first()
+				).toBeUndefined();
+
+				const suspendedUser = await db('directus_users').where({ id: userId }).first();
+				expect(suspendedUser).toBeDefined();
+				expect(suspendedUser.status).toBe('suspended');
+				expect(suspendedUser.role).toBeNull();
+
+				expect(await markerCount(db, `config-apply-probe/roles.create/${roleKey}`)).toBe(1);
+				expect(await markerCount(db, `config-apply-probe/permissions.create/${probeCollection}`)).toBe(1);
+				expect(await markerCount(db, `config-apply-probe/roles.delete/${role.id}`)).toBe(1);
+				expect(await markerCount(db, `config-apply-probe/permissions.delete/${perm.id}`)).toBe(1);
+				expect(await markerCount(db, `config-apply-probe/users.update/${userId}`)).toBe(1);
+			} finally {
+				await purge(db, roleKey, ids, [probeCollection]);
+			}
+		});
+	});
+
+	describe('an HTTP apply runs deletions in reverse dependency order, deleting permissions before roles', () => {
+		test('REST', async ({ api, vendor }) => {
+			const db = api.database;
+			const suffix = vendor.replace(/[^a-z0-9_]/gi, '_');
+			const rand = randomUUID().replace(/-/g, '').slice(0, 8);
+			const survivorKey = `audit_probe_survivor_${suffix}_${rand}`;
+			const removedKey = `audit_probe_removed_${suffix}_${rand}`;
+			const survivorCollection = `audit_probe_surv_${rand}`;
+			const removedCollection = `audit_probe_rem_${rand}`;
+			const ids = newIds();
+
+			try {
+				const created = await getBaseline(api);
+				created.roles.push(probeRole(survivorKey));
+				created.roles.push(probeRole(removedKey));
+				created.permissions.push(probePermissionSet(survivorKey, survivorCollection));
+				created.permissions.push(probePermissionSet(removedKey, removedCollection));
+
+				const createResp = await applyConfig(api, created);
+				expect(createResp.statusCode).toBe(200);
+				expect([...createResp.body.data.roles.created].sort()).toEqual([removedKey, survivorKey].sort());
+				expect(createResp.body.data.roles.updated).toEqual([]);
+				expect(createResp.body.data.roles.deleted).toEqual([]);
+				expect(createResp.body.data.permissions).toEqual({ created: 2, updated: 0, deleted: 0 });
+
+				const survivorRole = await db('directus_roles').where({ key: survivorKey }).first();
+				const removedRole = await db('directus_roles').where({ key: removedKey }).first();
+				expect(survivorRole).toBeDefined();
+				expect(removedRole).toBeDefined();
+				ids.roleIds.add(survivorRole.id);
+				ids.roleIds.add(removedRole.id);
+
+				const survivorPerm = await db('directus_permissions')
+					.where({ role: survivorRole.id, collection: survivorCollection })
+					.first();
+
+				const removedPerm = await db('directus_permissions')
+					.where({ role: removedRole.id, collection: removedCollection })
+					.first();
+
+				expect(survivorPerm).toBeDefined();
+				expect(removedPerm).toBeDefined();
+				ids.permIds.add(survivorPerm.id);
+				ids.permIds.add(removedPerm.id);
+
+				// The survivor's permission is standalone; the removed role's permission is cascade-subsumed.
+				const desired = await adminSnapshot(api);
+				desired.roles = desired.roles.filter((r) => r['key'] !== removedKey);
+				desired.permissions = desired.permissions.filter((p) => p.role !== removedKey && p.role !== survivorKey);
+
+				const deleteResp = await applyConfig(api, desired, { destructive: true });
+				expect(deleteResp.statusCode).toBe(200);
+
+				expect(deleteResp.body.data).toEqual({
+					roles: { created: [], updated: [], deleted: [removedKey] },
+					permissions: { created: 0, updated: 0, deleted: 1 },
+					folders: { created: [], updated: [], deleted: [] },
+					settings: { updated: [] },
+					'extension-settings': { created: 0, updated: 0, deleted: 0 },
+					translations: { created: 0, updated: 0, deleted: 0 },
+				});
+
+				const after = await adminSnapshot(api);
+				expect(after).toEqual(desired);
+
+				const permFilter = await db('tests_extensions_log')
+					.where({ key: `config-apply-probe/permissions.delete.filter/${survivorPerm.id}` })
+					.first();
+
+				const roleFilter = await db('tests_extensions_log')
+					.where({ key: `config-apply-probe/roles.delete.filter/${removedRole.id}` })
+					.first();
+
+				expect(permFilter).toBeDefined();
+				expect(roleFilter).toBeDefined();
+				expect(Number(permFilter.id)).toBeLessThan(Number(roleFilter.id));
+
+				const permAction = await db('tests_extensions_log')
+					.where({ key: `config-apply-probe/permissions.delete/${survivorPerm.id}` })
+					.first();
+
+				const roleAction = await db('tests_extensions_log')
+					.where({ key: `config-apply-probe/roles.delete/${removedRole.id}` })
+					.first();
+
+				expect(permAction).toBeDefined();
+				expect(roleAction).toBeDefined();
+				expect(Number(permAction.id)).toBeLessThan(Number(roleAction.id));
+
+				expect(await markerCount(db, `config-apply-probe/permissions.delete/${survivorPerm.id}`)).toBe(1);
+				expect(await markerCount(db, `config-apply-probe/roles.delete/${removedRole.id}`)).toBe(1);
+				expect(await markerCount(db, `config-apply-probe/permissions.delete.filter/${survivorPerm.id}`)).toBe(1);
+				expect(await markerCount(db, `config-apply-probe/roles.delete.filter/${removedRole.id}`)).toBe(1);
+
+				const permActivity = await db('directus_activity')
+					.where({ collection: 'directus_permissions', item: String(survivorPerm.id), action: 'delete' })
+					.first();
+
+				const roleActivity = await db('directus_activity')
+					.where({ collection: 'directus_roles', item: String(removedRole.id), action: 'delete' })
+					.first();
+
+				expect(permActivity).toBeDefined();
+				expect(roleActivity).toBeDefined();
+				expect(Number(permActivity.id)).toBeLessThan(Number(roleActivity.id));
+			} finally {
+				await purge(db, survivorKey, ids, [survivorCollection]);
+				await purge(db, removedKey, ids, [removedCollection]);
+			}
+		});
+	});
+
+	describe('a failed role deletion rolls back the whole apply, restoring records and leaving no audit or event rows', () => {
+		test('REST', async ({ api, vendor }) => {
+			const db = api.database;
+			const suffix = vendor.replace(/[^a-z0-9_]/gi, '_');
+			const rand = randomUUID().replace(/-/g, '').slice(0, 8);
+			const survivorKey = `audit_probe_survivor_${suffix}_${rand}`;
+			const rollbackKey = `audit_probe_delrollback_${suffix}_${rand}`;
+			const survivorCollection = `audit_probe_surv_${rand}`;
+			const ids = newIds();
+
+			try {
+				const created = await getBaseline(api);
+				created.roles.push(probeRole(survivorKey));
+				created.roles.push(probeRole(rollbackKey));
+				created.permissions.push(probePermissionSet(survivorKey, survivorCollection));
+
+				const createResp = await applyConfig(api, created);
+				expect(createResp.statusCode).toBe(200);
+
+				const survivorRole = await db('directus_roles').where({ key: survivorKey }).first();
+				const rollbackRole = await db('directus_roles').where({ key: rollbackKey }).first();
+				expect(survivorRole).toBeDefined();
+				expect(rollbackRole).toBeDefined();
+				ids.roleIds.add(survivorRole.id);
+				ids.roleIds.add(rollbackRole.id);
+
+				const survivorPerm = await db('directus_permissions')
+					.where({ role: survivorRole.id, collection: survivorCollection })
+					.first();
+
+				expect(survivorPerm).toBeDefined();
+				ids.permIds.add(survivorPerm.id);
+
+				const desired = await adminSnapshot(api);
+				desired.roles = desired.roles.filter((r) => r['key'] !== rollbackKey);
+				desired.permissions = desired.permissions.filter((p) => p.role !== survivorKey);
+
+				const deleteResp = await applyConfig(api, desired, { destructive: true });
+				expect(deleteResp.statusCode).toBe(500);
+				expect(deleteResp.body.errors?.[0]?.extensions?.code).toBe('CONFIG_APPLY_FAILED');
+
+				expect(await db('directus_permissions').where({ id: survivorPerm.id }).first()).toBeDefined();
+				expect(await db('directus_roles').where({ id: rollbackRole.id }).first()).toBeDefined();
+				expect(await db('directus_roles').where({ id: survivorRole.id }).first()).toBeDefined();
+
+				expect(
+					await db('directus_activity')
+						.where({ collection: 'directus_permissions', item: String(survivorPerm.id), action: 'delete' })
+						.first()
+				).toBeUndefined();
+
+				expect(
+					await db('directus_activity')
+						.where({ collection: 'directus_roles', item: String(rollbackRole.id), action: 'delete' })
+						.first()
+				).toBeUndefined();
+
+				expect(await markerCount(db, `config-apply-probe/permissions.delete/${survivorPerm.id}`)).toBe(0);
+				expect(await markerCount(db, `config-apply-probe/roles.delete/${rollbackRole.id}`)).toBe(0);
+				expect(await markerCount(db, `config-apply-probe/permissions.delete.filter/${survivorPerm.id}`)).toBe(0);
+				expect(await markerCount(db, `config-apply-probe/roles.delete.filter/${rollbackRole.id}`)).toBe(0);
+			} finally {
+				await purge(db, survivorKey, ids, [survivorCollection]);
+				await purge(db, rollbackKey, ids, []);
+			}
+		});
+	});
+});
+
+function unreachableDbEnv(_api: Api): CliOptions {
+	return { unreachableDatabase: true };
+}
+
+describe('cairncms config apply exit codes and machine output', () => {
+	let fixtureRoot: string;
+
+	beforeEach(async ({ api }: { api: Api }) => {
+		fixtureRoot = await fs.mkdtemp(path.join(api.directory, 'cairncms-config-apply-codes-'));
+	});
+
+	afterEach(async () => {
+		await fs.rm(fixtureRoot, { recursive: true, force: true });
+	});
+
+	async function runApply(api: Api, args: string[], options: CliOptions = {}) {
+		return await api.cli(['config', 'apply', ...args], options);
+	}
+
+	async function snapshotBaseline(api: Api): Promise<void> {
+		const result = await api.cli(['config', 'snapshot', fixtureRoot, '--yes']);
+
+		expect(result.status).toBe(0);
+	}
+
+	describe('exits 0 on a mutating apply with no changes', () => {
+		test('CLI', async ({ api }) => {
+			await snapshotBaseline(api);
+			expect((await runApply(api, [fixtureRoot, '--yes'])).status).toBe(0);
+		});
+	});
+
+	describe('exits 1 on a dry run with drift', () => {
+		test('CLI', async ({ api, vendor }) => {
+			await snapshotBaseline(api);
+			const key = `exit_drift_${vendor.replace(/[^a-z0-9_]/gi, '_')}`;
+
+			await fs.writeFile(
+				path.join(fixtureRoot, 'roles', `${key}.yaml`),
+				dumpYaml({ key, name: 'Exit Drift', admin_access: false, app_access: true })
+			);
+
+			expect((await runApply(api, [fixtureRoot, '--dry-run'])).status).toBe(1);
+		});
+	});
+
+	describe('exits 0 on an empty dry run and emits the full JSON document', () => {
+		test('REST and CLI', async ({ api }) => {
+			await snapshotBaseline(api);
+			const result = await runApply(api, [fixtureRoot, '--dry-run', '--format', 'json']);
+
+			expect(result.status).toBe(0);
+
+			const httpDry = await applyConfig(api, await getBaseline(api), { dryRun: true });
+			expect(httpDry.statusCode).toBe(200);
+			expect(JSON.parse(result.stdout)).toEqual(httpDry.body.data);
+		});
+	});
+
+	describe('exits 2 and refuses a deletion without --destructive', () => {
+		test('CLI', async ({ api, vendor }) => {
+			const baseline = await getBaseline(api);
+			const orphanKey = `cli_refuse_${vendor.replace(/[^a-z0-9_]/gi, '_')}`;
+
+			await snapshotBaseline(api);
+
+			const withOrphan = JSON.parse(JSON.stringify(baseline)) as ConfigSnapshot;
+			withOrphan.roles.push({ key: orphanKey, name: 'CLI Refuse Orphan', admin_access: false, app_access: true });
+
+			try {
+				expect((await applyConfig(api, withOrphan)).statusCode).toBe(200);
+
+				const afterSetup = await adminSnapshot(api);
+
+				const env = { LOG_LEVEL: 'info', LOG_STYLE: 'raw' };
+				const result = await runApply(api, [fixtureRoot, '--yes'], { env: env });
+				const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+
+				expect(result.status).toBe(2);
+				expect(output).toContain('Apply refused');
+				expect(output).toContain(orphanKey);
+
+				const after = await adminSnapshot(api);
+
+				expect(after).toEqual(afterSetup);
+			} finally {
+				await resetToBaseline(api);
+			}
+		});
+	});
+
+	describe('keeps standard output pure in machine mode', () => {
+		test('CLI', async ({ api }) => {
+			await snapshotBaseline(api);
+			await fs.writeFile(path.join(fixtureRoot, 'roles', 'Unowned.yaml'), dumpYaml({ note: 'ignored' }));
+
+			const env = { LOG_LEVEL: 'warn', LOG_STYLE: 'raw' };
+			const result = await runApply(api, [fixtureRoot, '--dry-run', '--format', 'json'], { env: env });
+
+			expect(result.status).toBe(0);
+			expect(() => JSON.parse(result.stdout)).not.toThrow();
+			expect(result.stderr).toContain('Ignoring');
+			expect(result.stdout).not.toContain('Ignoring');
+		});
+	});
+
+	describe('exits 2 on an unknown --format', () => {
+		test('CLI', async ({ api }) => {
+			await snapshotBaseline(api);
+			expect((await runApply(api, [fixtureRoot, '--dry-run', '--format', 'xml'])).status).toBe(2);
+		});
+	});
+
+	describe('exits 2 on --format json without --dry-run before reading the config path', () => {
+		test('CLI', async ({ api }) => {
+			const result = await runApply(api, [path.join(fixtureRoot, 'does-not-exist'), '--format', 'json']);
+
+			expect(result.status).toBe(2);
+			expect(`${result.stdout ?? ''}${result.stderr ?? ''}`).toContain('only available with --dry-run');
+		});
+	});
+
+	describe('exits 2 on a missing path argument', () => {
+		test('CLI', async ({ api }) => {
+			expect((await runApply(api, [])).status).toBe(2);
+		});
+	});
+
+	describe('exits 0 on --help', () => {
+		test('CLI', async ({ api }) => {
+			expect((await runApply(api, ['--help'])).status).toBe(0);
+		});
+	});
+
+	describe('exits 3 when the database is unreachable', () => {
+		test('CLI', async ({ api }) => {
+			await snapshotBaseline(api);
+			const result = await runApply(api, [fixtureRoot, '--yes'], unreachableDbEnv(api));
+			expect(result.status).toBe(3);
+			expect(`${result.stdout ?? ''}${result.stderr ?? ''}`).toContain(`Can't connect to the database.`);
+		});
+	});
+});
+
+describe('cairncms config snapshot exit codes', () => {
+	let fixtureRoot: string;
+
+	beforeEach(async ({ api }: { api: Api }) => {
+		fixtureRoot = await fs.mkdtemp(path.join(api.directory, 'cairncms-config-snap-codes-'));
+	});
+
+	afterEach(async () => {
+		await fs.rm(fixtureRoot, { recursive: true, force: true });
+	});
+
+	async function runSnapshot(api: Api, args: string[], options: CliOptions = {}) {
+		return await api.cli(['config', 'snapshot', ...args], options);
+	}
+
+	describe('exits 0 on a successful snapshot', () => {
+		test('CLI', async ({ api }) => {
+			expect((await runSnapshot(api, [fixtureRoot, '--yes'])).status).toBe(0);
+		});
+	});
+
+	describe('exits 0 on --help', () => {
+		test('CLI', async ({ api }) => {
+			expect((await runSnapshot(api, ['--help'])).status).toBe(0);
+		});
+	});
+
+	describe('exits 2 on a missing path argument', () => {
+		test('CLI', async ({ api }) => {
+			expect((await runSnapshot(api, [])).status).toBe(2);
+		});
+	});
+
+	describe('exits 2 on an invalid existing tree', () => {
+		test('CLI', async ({ api }) => {
+			await fs.writeFile(
+				path.join(fixtureRoot, 'cairncms-config.yaml'),
+				dumpYaml({ version: 99, resources: ['roles'] })
+			);
+
+			expect((await runSnapshot(api, [fixtureRoot, '--yes'])).status).toBe(2);
+		});
+	});
+
+	describe('exits 3 when the database is unreachable', () => {
+		test('CLI', async ({ api }) => {
+			const result = await runSnapshot(api, [fixtureRoot, '--yes'], unreachableDbEnv(api));
+			expect(result.status).toBe(3);
+			expect(`${result.stdout ?? ''}${result.stderr ?? ''}`).toContain(`Can't connect to the database.`);
+		});
+	});
+});

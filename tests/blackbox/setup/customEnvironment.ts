@@ -3,6 +3,7 @@ import axios from 'axios';
 import * as SequentialTests from './sequentialTests.js';
 import { sleep } from '../utils/sleep';
 import * as common from '../common';
+import getTestFilePath from './get-test-file-path.js';
 
 /* eslint-disable no-var */
 declare global {
@@ -14,7 +15,7 @@ declare global {
 class CustomEnvironment extends NodeEnvironment {
 	constructor(config: any, context: any) {
 		super(config, context);
-		this.global.testFilePath = String(context.testPath).split('blackbox')[1]!;
+		this.global.testFilePath = getTestFilePath(context.testPath);
 	}
 
 	async setup() {
