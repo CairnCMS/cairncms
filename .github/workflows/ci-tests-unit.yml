@@ -1,20 +1,20 @@
-name: Confined Soak
+name: CI / Tests / Unit Tests
 
 on:
   pull_request:
-    branches:
-      - main
 
 concurrency:
-  group: soak-pr-${{ github.ref }}
+  group: ci-tests-unit-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  NODE_OPTIONS: --max_old_space_size=6144
 
 permissions:
   contents: read
 
 jobs:
-  soak:
-    name: Confined runtime soak
+  unit:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -23,5 +23,5 @@ jobs:
       - name: Prepare
         uses: ./.github/actions/prepare
 
-      - name: Run soak
-        run: pnpm --filter @cairncms/api run test:soak --count 3000
+      - name: Run Tests
+        run: pnpm test

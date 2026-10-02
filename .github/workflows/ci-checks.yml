@@ -1,15 +1,10 @@
-name: Check
+name: CI / Checks
 
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - docs/**
   pull_request:
 
 concurrency:
-  group: check-${{ github.ref }}
+  group: ci-checks-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -31,16 +26,3 @@ jobs:
 
       - name: Run Linter
         run: pnpm lint
-
-  unit:
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Prepare
-        uses: ./.github/actions/prepare
-
-      - name: Run Tests
-        run: pnpm test

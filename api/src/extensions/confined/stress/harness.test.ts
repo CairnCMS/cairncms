@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { assertSoakClean, runSoak } from './harness.js';
+import { assertStressClean, runStress } from './harness.js';
 
-describe('confined runtime soak smoke', () => {
+describe('confined runtime stress smoke', () => {
 	it('drives confined invocations across exit paths with no slot or cgroup leak', async () => {
-		const result = await runSoak({ count: 42 });
+		const result = await runStress({ count: 42 });
 
-		assertSoakClean(result);
+		assertStressClean(result);
 
 		// Every exit path was both planned and observed producing its intended outcome.
 		expect(result.mismatches).toBe(0);
@@ -29,7 +29,7 @@ describe('confined runtime soak smoke', () => {
 
 		// Every spawned child is reaped, and every cgroup it created is placed once and
 		// removed once with no stray operation. The cgroup-equals-children tie is enforced by
-		// assertSoakClean above.
+		// assertStressClean above.
 		expect(result.orphanedPids).toBe(0);
 		expect(result.cgroup.unexpectedOps).toBe(0);
 		expect(result.cgroup.placedExactlyOnce).toBe(result.cgroup.created);

@@ -1,4 +1,4 @@
-name: Notify Docs Changed
+name: Docs / Notify
 
 on:
   push:

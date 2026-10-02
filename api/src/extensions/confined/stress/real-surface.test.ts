@@ -12,7 +12,7 @@ import {
 import { ConfinedSupervisor } from '../supervisor.js';
 import type { ConfinedRuntimeLimits } from '../types.js';
 
-// The stub-child soak proves the supervisor does not leak at scale. This is the small
+// The stub-child stress proves the supervisor does not leak at scale. This is the small
 // complement: repeated invocations through the real spawned child and the real broker the
 // runner builds, asserting the same drain invariants so a lifecycle drift in the runner or
 // broker composition (a slot never released, a child never reaped) fails here even though
