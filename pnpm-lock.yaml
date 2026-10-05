@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  testcontainers@11.14.0>undici: 7.29.0
   form-data@>=2.0.0 <2.5.6: 2.5.6
   form-data@>=3.0.0 <3.0.5: 3.0.5
   form-data@>=4.0.0 <4.0.6: 4.0.6
@@ -47,7 +48,7 @@ overrides:
   '@tootallnate/once@1': 2.0.1
   '@tootallnate/once@2': 2.0.1
   shell-quote@>=1.0.0 <1.10.0: 1.10.0
-  testcontainers@11.14.0>undici: 7.29.0
+  svgo@>=2.0.0 <2.8.4: 2.8.4
 
 importers:
 
@@ -8180,8 +8181,8 @@ packages:
     resolution: {integrity: sha512-h5IS/hKkuVCbKSieR9uQCj9w+zLHoPh+ce19bBYyqF53g6mnPB8sAtIbe1s9dh2S2fCmYX2xel1Ln3PJBbK4kw==}
     engines: {node: '>= 0.8.0'}
 
-  svgo@2.8.2:
-    resolution: {integrity: sha512-TyzE4NVGLUFy+H/Uy4N6c3G0HEeprsVfge6Lmq+0FdQQ/zqoVYB62IsBZORsiL+o96s6ff/V6/3UQo/C0cgCAA==}
+  svgo@2.8.4:
+    resolution: {integrity: sha512-2GJ4h3rl13qYTdwllaK6QlL8tG+UrM8626V2Ylcd/yBUv2Y/EwLsYisVV6UDCRmlk+C74G8nMpxJCk0RWPdDCw==}
     engines: {node: '>=10.13.0'}
     hasBin: true
 
@@ -15506,7 +15507,7 @@ snapshots:
     dependencies:
       postcss: 8.5.26
       postcss-value-parser: 4.2.0
-      svgo: 2.8.2
+      svgo: 2.8.4
 
   postcss-unique-selectors@5.1.1(postcss@8.5.26):
     dependencies:
@@ -16586,7 +16587,7 @@ snapshots:
     dependencies:
       svg.js: 2.7.1
 
-  svgo@2.8.2:
+  svgo@2.8.4:
     dependencies:
       commander: 7.2.0
       css-select: 4.3.0
