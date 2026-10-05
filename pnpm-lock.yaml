@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  testcontainers@11.14.0>undici: 7.29.0
   form-data@>=2.0.0 <2.5.6: 2.5.6
   form-data@>=3.0.0 <3.0.5: 3.0.5
   form-data@>=4.0.0 <4.0.6: 4.0.6
@@ -47,7 +48,6 @@ overrides:
   '@tootallnate/once@1': 2.0.1
   '@tootallnate/once@2': 2.0.1
   shell-quote@>=1.0.0 <1.10.0: 1.10.0
-  testcontainers@11.14.0>undici: 7.29.0
 
 importers:
 
@@ -156,8 +156,8 @@ importers:
         specifier: 3.2.4
         version: 3.2.4
       axios:
-        specifier: 1.18.1
-        version: 1.18.1
+        specifier: 1.20.0
+        version: 1.20.0
       busboy:
         specifier: 1.6.0
         version: 1.6.0
@@ -686,8 +686,8 @@ importers:
         specifier: 3.39.0
         version: 3.39.0
       axios:
-        specifier: 1.18.1
-        version: 1.18.1
+        specifier: 1.20.0
+        version: 1.20.0
       base-64:
         specifier: 1.0.0
         version: 1.0.0
@@ -842,8 +842,8 @@ importers:
         specifier: workspace:*
         version: link:../utils
       axios:
-        specifier: 1.18.1
-        version: 1.18.1
+        specifier: 1.20.0
+        version: 1.20.0
       lodash-es:
         specifier: 4.18.1
         version: 4.18.1
@@ -4027,8 +4027,8 @@ packages:
     resolution: {integrity: sha512-NZKeq9AfyQvEeNlN0zSYAaWrmBffJh3IELMZfRpJVWgrpEbtEpnjvzqBPf+mxoI287JohRDoa+/nsfqqiZmF6g==}
     engines: {node: '>= 6.0.0'}
 
-  axios@1.18.1:
-    resolution: {integrity: sha512-3nTvFlvpn9Zu/RkHUqtc7/+al4UpRW5az71ap5zccp6e8RAYEzhMTecX8Dz1wWDYrPpUoB1HAQEGEAEvUr7S9g==}
+  axios@1.20.0:
+    resolution: {integrity: sha512-r8aOh8j9cGKpgQAqpzrUHnSIc6a59Y3Xf/cv8sy1DrHCkZHzQGEuoq1tARk6qSyDdtQGSDgpb9kFlruzPvrgwg==}
 
   b4a@1.9.0:
     resolution: {integrity: sha512-dpfcF9fDNR6++cthXR67iyhgqWy9CBouAvIWhIntzBG6cvK/cnIPiZQjBwi/ZqjjBEDGfoNDtmB0kTjroOJ3pQ==}
@@ -11041,7 +11041,7 @@ snapshots:
   '@sendgrid/client@8.1.6':
     dependencies:
       '@sendgrid/helpers': 8.0.0
-      axios: 1.18.1
+      axios: 1.20.0
     transitivePeerDependencies:
       - debug
       - supports-color
@@ -11914,7 +11914,7 @@ snapshots:
 
   aws-ssl-profiles@1.1.2: {}
 
-  axios@1.18.1:
+  axios@1.20.0:
     dependencies:
       follow-redirects: 1.16.0
       form-data: 4.0.6
@@ -14437,7 +14437,7 @@ snapshots:
 
   mailgun.js@8.2.2:
     dependencies:
-      axios: 1.18.1
+      axios: 1.20.0
       base-64: 1.0.0
       url-join: 4.0.1
     transitivePeerDependencies:

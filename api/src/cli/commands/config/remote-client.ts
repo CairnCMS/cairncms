@@ -86,7 +86,7 @@ async function request(
 			method,
 			url: url.href,
 			headers: { Authorization: `Bearer ${session.token}` },
-			params: options.query,
+			...(options.query !== undefined ? { params: options.query } : {}),
 			data: options.body,
 			responseType: 'json',
 			validateStatus: () => true,
