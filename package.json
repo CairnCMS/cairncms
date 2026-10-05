@@ -25,7 +25,7 @@
 	},
 	"pnpm": {
 		"overrides": {
-			"testcontainers@11.14.0>undici": "7.29.0",
+			"testcontainers@11.14.0>undici": "7.29.1",
 			"form-data@>=2.0.0 <2.5.6": "2.5.6",
 			"form-data@>=3.0.0 <3.0.5": "3.0.5",
 			"form-data@>=4.0.0 <4.0.6": "4.0.6",
@@ -48,8 +48,8 @@
 			"brace-expansion@5": "5.0.9",
 			"uuid@>=8.0.0 <11.1.1": "11.1.1",
 			"@sendgrid/mail": "8.1.6",
-			"js-yaml@>=4.0.0 <4.3.1": "4.3.1",
-			"js-yaml@3": "3.15.0",
+			"js-yaml@>=4.0.0 <4.3.2": "4.3.2",
+			"js-yaml@3": "3.15.2",
 			"underscore": "1.13.8",
 			"serialize-javascript@<7.0.5": "7.0.5",
 			"semver@>=7.0.0 <7.5.2": "7.5.2",
@@ -63,11 +63,12 @@
 			"tmp@0.0.33": "0.2.7",
 			"postcss@>=8.0.0 <8.5.26": "8.5.26",
 			"@xmldom/xmldom": "0.8.15",
-			"fast-uri@>=3.0.0 <3.1.5": "3.1.5",
+			"fast-uri@>=3.0.0 <3.1.8": "3.1.8",
 			"ip-address": "10.3.1",
 			"@tootallnate/once@1": "2.0.1",
 			"@tootallnate/once@2": "2.0.1",
-			"shell-quote@>=1.0.0 <1.10.0": "1.10.0"
+			"shell-quote@>=1.0.0 <1.10.0": "1.10.0",
+			"svgo@>=2.0.0 <2.8.4": "2.8.4"
 		}
 	}
 }

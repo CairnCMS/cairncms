@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  testcontainers@11.14.0>undici: 7.29.0
+  testcontainers@11.14.0>undici: 7.29.1
   form-data@>=2.0.0 <2.5.6: 2.5.6
   form-data@>=3.0.0 <3.0.5: 3.0.5
   form-data@>=4.0.0 <4.0.6: 4.0.6
@@ -28,8 +28,8 @@ overrides:
   brace-expansion@5: 5.0.9
   uuid@>=8.0.0 <11.1.1: 11.1.1
   '@sendgrid/mail': 8.1.6
-  js-yaml@>=4.0.0 <4.3.1: 4.3.1
-  js-yaml@3: 3.15.0
+  js-yaml@>=4.0.0 <4.3.2: 4.3.2
+  js-yaml@3: 3.15.2
   underscore: 1.13.8
   serialize-javascript@<7.0.5: 7.0.5
   semver@>=7.0.0 <7.5.2: 7.5.2
@@ -43,11 +43,12 @@ overrides:
   tmp@0.0.33: 0.2.7
   postcss@>=8.0.0 <8.5.26: 8.5.26
   '@xmldom/xmldom': 0.8.15
-  fast-uri@>=3.0.0 <3.1.5: 3.1.5
+  fast-uri@>=3.0.0 <3.1.8: 3.1.8
   ip-address: 10.3.1
   '@tootallnate/once@1': 2.0.1
   '@tootallnate/once@2': 2.0.1
   shell-quote@>=1.0.0 <1.10.0: 1.10.0
+  svgo@>=2.0.0 <2.8.4: 2.8.4
 
 importers:
 
@@ -252,8 +253,8 @@ importers:
         specifier: 17.13.4
         version: 17.13.4
       js-yaml:
-        specifier: 4.3.1
-        version: 4.3.1
+        specifier: 4.3.2
+        version: 4.3.2
       js2xmlparser:
         specifier: 5.0.0
         version: 5.0.0
@@ -1153,8 +1154,8 @@ importers:
         specifier: 7.3.4
         version: 7.3.4
       undici:
-        specifier: 6.27.0
-        version: 6.27.0
+        specifier: 6.28.1
+        version: 6.28.1
     devDependencies:
       '@ngneat/falso':
         specifier: 6.4.0
@@ -1292,8 +1293,8 @@ importers:
         specifier: 7.6.2
         version: 7.6.2
       undici:
-        specifier: 6.27.0
-        version: 6.27.0
+        specifier: 6.28.1
+        version: 6.28.1
     devDependencies:
       '@ngneat/falso':
         specifier: 6.4.0
@@ -1435,8 +1436,8 @@ importers:
         specifier: 5.3.2
         version: 5.3.2
       js-yaml:
-        specifier: 4.3.1
-        version: 4.3.1
+        specifier: 4.3.2
+        version: 4.3.2
       json-to-graphql-query:
         specifier: 2.2.5
         version: 2.2.5
@@ -4099,8 +4100,8 @@ packages:
     resolution: {integrity: sha512-lGe34o6EHj9y3Kts9R4ZYs/Gr+6N7MCaMlIFA3F1R2O5/m7K06AxfSeO5530PEERE6/WyEg3lsuyw4GHlPZHog==}
     engines: {node: ^4.5.0 || >= 5.9}
 
-  baseline-browser-mapping@2.10.18:
-    resolution: {integrity: sha512-VSnGQAOLtP5mib/DPyg2/t+Tlv65NTBz83BJBJvmLVHHuKJVaDOBvJJykiT5TR++em5nfAySPccDZDa4oSrn8A==}
+  baseline-browser-mapping@2.11.27:
+    resolution: {integrity: sha512-ElY12DaROGuan+lMmZ8Cvo/ZUbXPe7Enc/9VU/b1T3Kp4dwytRcNdR8DoSJN5SNJT/CuvcCA0DHDVmMOCePdRQ==}
     engines: {node: '>=6.0.0'}
     hasBin: true
 
@@ -4150,8 +4151,8 @@ packages:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
     engines: {node: '>=8'}
 
-  browserslist@4.28.2:
-    resolution: {integrity: sha512-48xSriZYYg+8qXna9kwqjIVzuQxi+KYWp2+5nCYnYKPTr0LvD89Jqk2Or5ogxz0NUMfIjhh2lIUX/LyX9B4oIg==}
+  browserslist@4.29.3:
+    resolution: {integrity: sha512-1R4kiYKXGViqEN0CnoDrXc1StD9niAwu+j2dukWzrD4bJgsD4lDmEp0CRbc6E/vYJIfTHwPmwyaKtVSudICdPA==}
     engines: {node: ^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7}
     hasBin: true
 
@@ -4269,6 +4270,9 @@ packages:
 
   caniuse-lite@1.0.30001788:
     resolution: {integrity: sha512-6q8HFp+lOQtcf7wBK+uEenxymVWkGKkjFpCvw5W25cmMwEDU45p1xQFBQv8JDlMMry7eNxyBaR+qxgmTUZkIRQ==}
+
+  caniuse-lite@1.0.30001814:
+    resolution: {integrity: sha512-/Uaf1lAzr59XcMpW0o96WoEfr+VXK2OX4U9AgFoiSHsVJ4HppnIFUjtYzsyDH2+tgANaQb2/oxYGwCPapN1FpA==}
 
   caret-pos@2.0.0:
     resolution: {integrity: sha512-cOIiBS1SjzXg+LXSiQAzGg89dHDKq/y4c30+tB5hkVN7GbtXh1BNypOmjti4LwAWQrvP4y+bNG7RJFxLGoL3bA==}
@@ -5001,8 +5005,8 @@ packages:
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
 
-  electron-to-chromium@1.5.336:
-    resolution: {integrity: sha512-AbH9q9J455r/nLmdNZes0G0ZKcRX73FicwowalLs6ijwOmCJSRRrLX63lcAlzy9ux3dWK1w1+1nsBJEWN11hcQ==}
+  electron-to-chromium@1.5.444:
+    resolution: {integrity: sha512-5ss/uJfoDYDHT0lfJzT6FbcskIzROIOPf0BbbFkGcvDzoJU7i//9GDrwwIHQVmIsrAGiF3ihpADBRIsrEFt1rQ==}
 
   emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
@@ -5293,8 +5297,8 @@ packages:
   fast-text-encoding@1.0.6:
     resolution: {integrity: sha512-VhXlQgj9ioXCqGstD37E/HBeqEGV/qOD/kmbVG8h5xKBYvM1L3lR1Zn4555cQ8GkYbJa8aJSipLPndE1k6zK2w==}
 
-  fast-uri@3.1.5:
-    resolution: {integrity: sha512-gHwA1O9LDIcKunMKhObS/HimwtehO1nPUECKAu5TpKgaO19fcWEl4bliWe1jWxVFvIXztJjjQ4L8XQ1EU9f7Jw==}
+  fast-uri@3.1.8:
+    resolution: {integrity: sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==}
 
   fast-xml-parser@4.5.5:
     resolution: {integrity: sha512-cK9c5I/DwIOI7/Q7AlGN3DuTdwN61gwSfL8rvuVPK+0mcCNHHGxRrpiFtaZZRfRMJL3Gl8B2AFlBG6qXf03w9A==}
@@ -6086,12 +6090,12 @@ packages:
   js-tokens@9.0.1:
     resolution: {integrity: sha512-mxa9E9ITFOt0ban3j6L5MpjwegGz6lBQmM1IJkWeBZGcMxto50+eWdjC/52xDbS2vy0k7vIMK0Fe2wfL9OQSpQ==}
 
-  js-yaml@3.15.0:
-    resolution: {integrity: sha512-ttBQIIQPDeLjpPOohtUdXuXUVoA2uIB6fEH9HyJ7234s5mBJ5wTx20njxplLZQgLaOfpmPQA7X2t5AX6tIPbog==}
+  js-yaml@3.15.2:
+    resolution: {integrity: sha512-6EuL879VkRA+1Cz578mKMiKvjPNEuk6+r1JaFzoSWejZmtf7xWbIyw1e3KkxlkzTIt9Taw6JBhEppG7utc1P+w==}
     hasBin: true
 
-  js-yaml@4.3.1:
-    resolution: {integrity: sha512-CY6crGq313MX8GkwvB7tzgp99vjQxY1++5y10/BKN/GUfHqWaOGQMNZkBvqSzsZKWk/ijwHlWzzkLulsGHhjWQ==}
+  js-yaml@4.3.2:
+    resolution: {integrity: sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==}
     hasBin: true
 
   js2xmlparser@5.0.0:
@@ -6703,8 +6707,9 @@ packages:
     engines: {node: '>= 10.12.0'}
     hasBin: true
 
-  node-releases@2.0.37:
-    resolution: {integrity: sha512-1h5gKZCF+pO/o3Iqt5Jp7wc9rH3eJJ0+nh/CIoiRwjRxde/hAHyLPXYN4V3CqKAbiZPSeJFSWHmJsbkicta0Eg==}
+  node-releases@2.0.57:
+    resolution: {integrity: sha512-kQK9LGGFiHtrWiNhZtA7Qbw17AQz+dmsEKODRIVTXA9+e5MS/2gZEBhYJt13GrAz5/IOZKddH/0Z3TP/Zgo+yw==}
+    engines: {node: '>=18'}
 
   node-rsa@1.1.1:
     resolution: {integrity: sha512-Jd4cvbJMryN21r5HgxQOpMEqv+ooke/korixNNK3mGqfGJmy0M77WDDzo/05969+OkMy3XW1UuZsSmW9KQm7Fw==}
@@ -8183,8 +8188,8 @@ packages:
     resolution: {integrity: sha512-h5IS/hKkuVCbKSieR9uQCj9w+zLHoPh+ce19bBYyqF53g6mnPB8sAtIbe1s9dh2S2fCmYX2xel1Ln3PJBbK4kw==}
     engines: {node: '>= 0.8.0'}
 
-  svgo@2.8.2:
-    resolution: {integrity: sha512-TyzE4NVGLUFy+H/Uy4N6c3G0HEeprsVfge6Lmq+0FdQQ/zqoVYB62IsBZORsiL+o96s6ff/V6/3UQo/C0cgCAA==}
+  svgo@2.8.4:
+    resolution: {integrity: sha512-2GJ4h3rl13qYTdwllaK6QlL8tG+UrM8626V2Ylcd/yBUv2Y/EwLsYisVV6UDCRmlk+C74G8nMpxJCk0RWPdDCw==}
     engines: {node: '>=10.13.0'}
     hasBin: true
 
@@ -8513,12 +8518,12 @@ packages:
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
-  undici@6.27.0:
-    resolution: {integrity: sha512-YmfV3YnEDzXRC5lZ2jWtWWHKGUm1zIt8AhesR1tens+HTNv+YZlN/dp6G727LOvMJ8xjP9Be7Y2Sdr96LDm+pg==}
+  undici@6.28.1:
+    resolution: {integrity: sha512-zWpdTVD54H48CIybL0rWQ3ukpb9d23wM7eH5RtfdmeP70cWHNjtfo7P4vZX+5CoDcO53J4Pu5uXp7lNfjc6DRA==}
     engines: {node: '>=18.17'}
 
-  undici@7.29.0:
-    resolution: {integrity: sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==}
+  undici@7.29.1:
+    resolution: {integrity: sha512-RYONW2MeafgYlkVOKYKkA/Ag7BmXqgIWCa8t1m0JcxrQg9pI9lEqRhAOruOBCbAohOa/gkCF+iPi9hrgvTzu6Q==}
     engines: {node: '>=20.18.1'}
 
   unique-filename@1.1.1:
@@ -8543,8 +8548,8 @@ packages:
     resolution: {integrity: sha512-KK8xQ1mkzZeg9inewmFVDNkg3l5LUhoq9kN6iWYB/CC9YMG8HA+c1Q8HwDe6dEX7kErrEVNVBO3fWsVq5iDgtw==}
     engines: {node: '>=8'}
 
-  update-browserslist-db@1.2.3:
-    resolution: {integrity: sha512-Js0m9cx+qOgDxo0eMiFGEueWztz+d4+M3rGlmKPT+T4IS/jP4ylw3Nwpu6cpTTP8R1MAC1kF4VbdLt3ARf209w==}
+  update-browserslist-db@1.3.3:
+    resolution: {integrity: sha512-pJ2sYawQS0R/WI928Gj5GlPhTGzbMelq0+4INtSYNDV9ErKJcX6xjGWkoG/VnB3dpUm00zALaqkrUD77pO5TDQ==}
     hasBin: true
     peerDependencies:
       browserslist: '>= 4.21.0'
@@ -8940,7 +8945,7 @@ snapshots:
     dependencies:
       '@jsdevtools/ono': 7.1.3
       '@types/json-schema': 7.0.15
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
 
   '@apidevtools/openapi-schemas@2.1.0': {}
 
@@ -8948,7 +8953,7 @@ snapshots:
     dependencies:
       '@apidevtools/swagger-parser': 10.1.1(openapi-types@12.1.0)
       chalk: 4.1.2
-      js-yaml: 3.15.0
+      js-yaml: 3.15.2
       yargs: 15.4.1
     transitivePeerDependencies:
       - openapi-types
@@ -10169,7 +10174,7 @@ snapshots:
       globals: 13.24.0
       ignore: 5.3.2
       import-fresh: 3.3.1
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
       minimatch: 3.1.4
       strip-json-comments: 3.1.1
     transitivePeerDependencies:
@@ -10937,7 +10942,7 @@ snapshots:
   '@rollup/plugin-yaml@4.0.1':
     dependencies:
       '@rollup/pluginutils': 5.3.0(rollup@4.60.1)
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
       tosource: 2.0.0-alpha.3
 
   '@rollup/pluginutils@4.2.1':
@@ -11733,7 +11738,7 @@ snapshots:
   ajv@8.18.0:
     dependencies:
       fast-deep-equal: 3.1.3
-      fast-uri: 3.1.5
+      fast-uri: 3.1.8
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
@@ -11971,7 +11976,7 @@ snapshots:
 
   base64id@2.0.0: {}
 
-  baseline-browser-mapping@2.10.18: {}
+  baseline-browser-mapping@2.11.27: {}
 
   bcrypt-pbkdf@1.0.2:
     dependencies:
@@ -12038,13 +12043,13 @@ snapshots:
     dependencies:
       fill-range: 7.1.1
 
-  browserslist@4.28.2:
+  browserslist@4.29.3:
     dependencies:
-      baseline-browser-mapping: 2.10.18
-      caniuse-lite: 1.0.30001788
-      electron-to-chromium: 1.5.336
-      node-releases: 2.0.37
-      update-browserslist-db: 1.2.3(browserslist@4.28.2)
+      baseline-browser-mapping: 2.11.27
+      caniuse-lite: 1.0.30001814
+      electron-to-chromium: 1.5.444
+      node-releases: 2.0.57
+      update-browserslist-db: 1.3.3(browserslist@4.29.3)
 
   buffer-crc32@1.0.0: {}
 
@@ -12180,12 +12185,14 @@ snapshots:
 
   caniuse-api@3.0.0:
     dependencies:
-      browserslist: 4.28.2
+      browserslist: 4.29.3
       caniuse-lite: 1.0.30001788
       lodash.memoize: 4.1.2
       lodash.uniq: 4.5.0
 
   caniuse-lite@1.0.30001788: {}
+
+  caniuse-lite@1.0.30001814: {}
 
   caret-pos@2.0.0: {}
 
@@ -12775,7 +12782,7 @@ snapshots:
 
   ee-first@1.1.1: {}
 
-  electron-to-chromium@1.5.336: {}
+  electron-to-chromium@1.5.444: {}
 
   emoji-regex@8.0.0: {}
 
@@ -13076,7 +13083,7 @@ snapshots:
       is-glob: 4.0.3
       is-path-inside: 3.0.3
       js-sdsl: 4.4.2
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
       json-stable-stringify-without-jsonify: 1.0.1
       levn: 0.4.1
       lodash.merge: 4.6.2
@@ -13227,7 +13234,7 @@ snapshots:
 
   fast-text-encoding@1.0.6: {}
 
-  fast-uri@3.1.5: {}
+  fast-uri@3.1.8: {}
 
   fast-xml-parser@4.5.5:
     dependencies:
@@ -14136,12 +14143,12 @@ snapshots:
 
   js-tokens@9.0.1: {}
 
-  js-yaml@3.15.0:
+  js-yaml@3.15.2:
     dependencies:
       argparse: 1.0.10
       esprima: 4.0.1
 
-  js-yaml@4.3.1:
+  js-yaml@4.3.2:
     dependencies:
       argparse: 2.0.1
 
@@ -14191,7 +14198,7 @@ snapshots:
     dependencies:
       commander: 4.1.1
       graphlib: 2.1.8
-      js-yaml: 3.15.0
+      js-yaml: 3.15.2
       lodash: 4.18.1
       native-promise-only: 0.8.1
       path-loader: 1.0.12
@@ -14809,7 +14816,7 @@ snapshots:
       - supports-color
     optional: true
 
-  node-releases@2.0.37: {}
+  node-releases@2.0.57: {}
 
   node-rsa@1.1.1:
     dependencies:
@@ -15341,7 +15348,7 @@ snapshots:
 
   postcss-colormin@5.3.1(postcss@8.5.26):
     dependencies:
-      browserslist: 4.28.2
+      browserslist: 4.29.3
       caniuse-api: 3.0.0
       colord: 2.9.3
       postcss: 8.5.26
@@ -15349,7 +15356,7 @@ snapshots:
 
   postcss-convert-values@5.1.3(postcss@8.5.26):
     dependencies:
-      browserslist: 4.28.2
+      browserslist: 4.29.3
       postcss: 8.5.26
       postcss-value-parser: 4.2.0
 
@@ -15385,7 +15392,7 @@ snapshots:
 
   postcss-merge-rules@5.1.4(postcss@8.5.26):
     dependencies:
-      browserslist: 4.28.2
+      browserslist: 4.29.3
       caniuse-api: 3.0.0
       cssnano-utils: 3.1.0(postcss@8.5.26)
       postcss: 8.5.26
@@ -15405,7 +15412,7 @@ snapshots:
 
   postcss-minify-params@5.1.4(postcss@8.5.26):
     dependencies:
-      browserslist: 4.28.2
+      browserslist: 4.29.3
       cssnano-utils: 3.1.0(postcss@8.5.26)
       postcss: 8.5.26
       postcss-value-parser: 4.2.0
@@ -15467,7 +15474,7 @@ snapshots:
 
   postcss-normalize-unicode@5.1.1(postcss@8.5.26):
     dependencies:
-      browserslist: 4.28.2
+      browserslist: 4.29.3
       postcss: 8.5.26
       postcss-value-parser: 4.2.0
 
@@ -15490,7 +15497,7 @@ snapshots:
 
   postcss-reduce-initial@5.1.2(postcss@8.5.26):
     dependencies:
-      browserslist: 4.28.2
+      browserslist: 4.29.3
       caniuse-api: 3.0.0
       postcss: 8.5.26
 
@@ -15513,7 +15520,7 @@ snapshots:
     dependencies:
       postcss: 8.5.26
       postcss-value-parser: 4.2.0
-      svgo: 2.8.2
+      svgo: 2.8.4
 
   postcss-unique-selectors@5.1.1(postcss@8.5.26):
     dependencies:
@@ -16479,7 +16486,7 @@ snapshots:
 
   stylehacks@5.1.1(postcss@8.5.26):
     dependencies:
-      browserslist: 4.28.2
+      browserslist: 4.29.3
       postcss: 8.5.26
       postcss-selector-parser: 6.1.2
 
@@ -16591,7 +16598,7 @@ snapshots:
     dependencies:
       svg.js: 2.7.1
 
-  svgo@2.8.2:
+  svgo@2.8.4:
     dependencies:
       commander: 7.2.0
       css-select: 4.3.0
@@ -16614,7 +16621,7 @@ snapshots:
       chokidar: 3.5.3
       commander: 5.1.0
       express: 4.21.2
-      js-yaml: 3.15.0
+      js-yaml: 3.15.2
       json-refs: 3.0.15
       open: 7.4.2
       path: 0.12.7
@@ -16749,7 +16756,7 @@ snapshots:
       ssh-remote-port-forward: 1.0.4
       tar-fs: 3.1.3
       tmp: 0.2.7
-      undici: 7.29.0
+      undici: 7.29.1
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -17001,9 +17008,9 @@ snapshots:
 
   undici-types@6.21.0: {}
 
-  undici@6.27.0: {}
+  undici@6.28.1: {}
 
-  undici@7.29.0: {}
+  undici@7.29.1: {}
 
   unique-filename@1.1.1:
     dependencies:
@@ -17023,9 +17030,9 @@ snapshots:
 
   untildify@4.0.0: {}
 
-  update-browserslist-db@1.2.3(browserslist@4.28.2):
+  update-browserslist-db@1.3.3(browserslist@4.29.3):
     dependencies:
-      browserslist: 4.28.2
+      browserslist: 4.29.3
       escalade: 3.2.0
       picocolors: 1.1.1
 
