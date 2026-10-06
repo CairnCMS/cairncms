@@ -290,6 +290,43 @@ describe('createApp', async () => {
 		});
 	});
 
+	describe('Query string array limit', () => {
+		let originalArrayLimit: unknown;
+
+		beforeEach(async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			originalArrayLimit = env['QUERYSTRING_ARRAY_LIMIT'];
+			env['QUERYSTRING_ARRAY_LIMIT'] = 1;
+		});
+
+		afterEach(async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['QUERYSTRING_ARRAY_LIMIT'] = originalArrayLimit;
+		});
+
+		test('represents an array within the limit as an array', async () => {
+			const router = Router();
+			router.get('/echo-query', (req, res) => res.json(req.query));
+			mockGetEndpointRouter.mockReturnValueOnce(router);
+
+			const app = await createApp();
+			const response = await request(app).get('/echo-query?a[]=0');
+
+			expect(response.body).toEqual({ a: ['0'] });
+		});
+
+		test('represents an over-limit array as a numeric-keyed object', async () => {
+			const router = Router();
+			router.get('/echo-query', (req, res) => res.json(req.query));
+			mockGetEndpointRouter.mockReturnValueOnce(router);
+
+			const app = await createApp();
+			const response = await request(app).get('/echo-query?a[]=0&a=1');
+
+			expect(response.body).toEqual({ a: { 0: '0', 1: '1' } });
+		});
+	});
+
 	describe('Not Found Handler', () => {
 		test('Should return ROUTE_NOT_FOUND error when a route does not exist', async () => {
 			const testRoute = '/this-route-does-not-exist';
