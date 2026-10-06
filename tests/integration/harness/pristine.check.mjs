@@ -282,7 +282,17 @@ for (const mode of modes)
 				if (mode === 'body-bail') {
 					assert.deepEqual(record.report.fileErrors, []);
 					assert.deepEqual(record.report.blocked, []);
-					assert.deepEqual(record.report.unexpectedSkips, []);
+
+					assert.deepEqual(
+						record.report.unexpectedSkips.map((entry) => ({ name: entry.name, result: entry.result })),
+						[
+							{
+								name: 'independent later case b',
+								result: { state: 'skipped', note: 'The test run was aborted by the user.' },
+							},
+						]
+					);
+
 					assert.equal(record.report.passed, 1);
 
 					assert.deepEqual(
@@ -290,17 +300,12 @@ for (const mode of modes)
 						['independent later case a']
 					);
 
-					assert.equal(record.report.failures.length, 2);
+					assert.equal(record.report.failures.length, 1);
 					const failures = new Map(record.report.failures.map((entry) => [entry.name, entry.result.errors]));
 
 					assert.deepEqual(
 						failures.get('isolated concurrent restores a')?.map((error) => error.message),
 						['DELIBERATE_RESTORE_BODY_FAILURE']
-					);
-
-					assert.deepEqual(
-						failures.get('independent later case b')?.map((error) => ({ name: error.name, reason: error.reason })),
-						[{ name: 'TestRunAbortError', reason: 'test-failure' }]
 					);
 
 					record.cancellation = await read(join(out, 'b-cancellation.json'));
