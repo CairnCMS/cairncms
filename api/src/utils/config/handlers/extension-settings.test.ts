@@ -45,6 +45,9 @@ const TABLE = 'cairncms_extension_settings';
 const WIDGET = '@cairncms/extension-widget';
 const METRICS = 'cairncms-extension-metrics';
 
+const SCOPE_KEY_PRECOMPOSED = 'é';
+const SCOPE_KEY_DECOMPOSED = 'é';
+
 // Structurally valid but not decryptable: reads validate and fingerprint envelopes without using a key.
 function secretEnvelope(ciphertext: string): string {
 	return JSON.stringify({
@@ -724,6 +727,55 @@ describe('projectReadState digest', () => {
 		);
 
 		expect(asOrdinary).not.toEqual(asSecret);
+	});
+
+	const unicodeScopeOwner = [
+		{
+			subject: WIDGET,
+			status: 'available',
+			declaration: declaration({ color: { type: 'string', scope: 'collection' } }),
+		},
+	];
+
+	const unicodeCollections = { [SCOPE_KEY_PRECOMPOSED]: {}, [SCOPE_KEY_DECOMPOSED]: {} };
+
+	function collectionRow(scopeKey: string): Record<string, unknown> {
+		return {
+			extension: WIDGET,
+			scope: 'collection',
+			scope_key: scopeKey,
+			key: 'color',
+			value: JSON.stringify(scopeKey),
+		};
+	}
+
+	it('orders readCurrent records by code unit for collate-equal collection scope keys', async () => {
+		extensionMock.owners = unicodeScopeOwner;
+
+		tracker.on.select(TABLE).response([collectionRow(SCOPE_KEY_PRECOMPOSED), collectionRow(SCOPE_KEY_DECOMPOSED)]);
+		const forward = await handler.readCurrent(readContext(db, { collections: unicodeCollections }));
+
+		tracker.reset();
+		tracker.on.select(TABLE).response([collectionRow(SCOPE_KEY_DECOMPOSED), collectionRow(SCOPE_KEY_PRECOMPOSED)]);
+		const reversed = await handler.readCurrent(readContext(db, { collections: unicodeCollections }));
+
+		expect(forward.records.map((record) => record.scope_key)).toEqual(
+			reversed.records.map((record) => record.scope_key)
+		);
+
+		expect(forward.records.map((record) => record.scope_key)).toEqual([SCOPE_KEY_DECOMPOSED, SCOPE_KEY_PRECOMPOSED]);
+	});
+
+	it('projects an identical read state regardless of record order', async () => {
+		extensionMock.owners = unicodeScopeOwner;
+
+		tracker.on.select(TABLE).response([collectionRow(SCOPE_KEY_PRECOMPOSED), collectionRow(SCOPE_KEY_DECOMPOSED)]);
+		const result = await handler.readCurrent(readContext(db, { collections: unicodeCollections }));
+
+		const forward = handler.projectReadState(result, 'full');
+		const reversed = handler.projectReadState({ ...result, records: [...result.records].reverse() }, 'full');
+
+		expect(forward).toEqual(reversed);
 	});
 });
 

@@ -38,6 +38,7 @@ import type {
 	ReadStateProjection,
 	ValidationContext,
 } from '../descriptor.js';
+import { compareCodeUnits } from '../canonical-encode.js';
 import { checkSettingScope, checkSettingValue, type SettingScopeProblem } from '../extension-settings-rules.js';
 import { EXTENSION_SETTING_LEAF_SCHEMA } from '../field-schema.js';
 import { invalid, identityConflict } from '../failures.js';
@@ -326,10 +327,10 @@ function identityKeyOf(identity: ExtensionSettingsIdentity): string {
 
 function compareIdentity(a: ExtensionSettingsIdentity, b: ExtensionSettingsIdentity): number {
 	return (
-		a.subject.localeCompare(b.subject) ||
-		a.scope.localeCompare(b.scope) ||
-		a.scope_key.localeCompare(b.scope_key) ||
-		a.key.localeCompare(b.key)
+		compareCodeUnits(a.subject, b.subject) ||
+		compareCodeUnits(a.scope, b.scope) ||
+		compareCodeUnits(a.scope_key, b.scope_key) ||
+		compareCodeUnits(a.key, b.key)
 	);
 }
 
@@ -519,7 +520,7 @@ function projectReadState(
 				? { value: record.value, fingerprint: record.fingerprint }
 				: composeValues(RECORD_FIELDS, VALUE_FIELD_ORDER, record as unknown as Record<string, unknown>),
 		])
-		.sort((a, b) => a[0].localeCompare(b[0]));
+		.sort((a, b) => compareCodeUnits(a[0], b[0]));
 
 	values.push([CLASSIFICATION_DIGEST_KEY, result.dependencyState.classification]);
 
