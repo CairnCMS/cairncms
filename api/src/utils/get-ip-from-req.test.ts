@@ -222,4 +222,35 @@ describe('getIPFromReq wired through Express', () => {
 		expect(res.status).toBe(200);
 		expect(res.text).toBe('127.0.0.1');
 	});
+
+	test('a short IPv4-mapped IPv6 trust prefix does not trust an untrusted peer forwarding an address', async () => {
+		const res = await request(serve('::ffff:10.0.0.0/8')).get('/').set('X-Forwarded-For', '1.2.3.4');
+		expect(res.status).toBe(200);
+		expect(res.text).toBe('127.0.0.1');
+	});
+
+	test('a short IPv4-mapped IPv6 trust prefix does not honor a custom header from an untrusted peer', async () => {
+		getEnv()['IP_CUSTOM_HEADER'] = 'X-Real-IP';
+		const res = await request(serve('::ffff:10.0.0.0/8')).get('/').set('X-Real-IP', '9.9.9.9');
+		expect(res.status).toBe(200);
+		expect(res.text).toBe('127.0.0.1');
+	});
+
+	test('a full-length IPv4-mapped IPv6 trust subnet honors X-Forwarded-For from an in-range peer', async () => {
+		const res = await request(serve('::ffff:127.0.0.0/104')).get('/').set('X-Forwarded-For', '1.2.3.4');
+		expect(res.status).toBe(200);
+		expect(res.text).toBe('1.2.3.4');
+	});
+
+	test('a comma-separated trust list honors X-Forwarded-For from a listed peer', async () => {
+		const res = await request(serve('203.0.113.0/24, 127.0.0.0/8')).get('/').set('X-Forwarded-For', '1.2.3.4');
+		expect(res.status).toBe(200);
+		expect(res.text).toBe('1.2.3.4');
+	});
+
+	test('a comma-separated trust list with a short mapped prefix does not trust an untrusted peer', async () => {
+		const res = await request(serve('::ffff:10.0.0.0/8, 203.0.113.0/24')).get('/').set('X-Forwarded-For', '1.2.3.4');
+		expect(res.status).toBe(200);
+		expect(res.text).toBe('127.0.0.1');
+	});
 });

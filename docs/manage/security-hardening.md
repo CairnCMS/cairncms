@@ -102,6 +102,8 @@ Rate limiting, IP allowlists, audit records, and login records all key on the cl
 
 Behind a reverse proxy or load balancer, set `IP_TRUST_PROXY` to that proxy's exact address or subnet (for example `10.0.0.5/32`), a comma-separated list, or `loopback` for a same-host proxy. CairnCMS then reads the forwarded client IP only when the immediate peer is in that trusted set. Do not set a broad range you do not control.
 
+To express an IPv4 range as an IPv4-mapped IPv6 subnet, use its full mapped prefix. Trust an IPv4 `10.0.0.0/8` range as `10.0.0.0/8` or `::ffff:10.0.0.0/104`. A short mapped prefix such as `::ffff:10.0.0.0/8` does not trust the intended IPv4 peers.
+
 Avoid `true` (trust every hop). It is safe only if every ingress in front of CairnCMS strips or overwrites client-supplied `X-Forwarded-For` and related headers, so a value the client sent cannot survive to CairnCMS. Blocking direct network access to the API is not sufficient on its own, because a request that reaches CairnCMS through the proxy still carries whatever forwarding headers the client set unless the proxy rewrites them.
 
 `IP_CUSTOM_HEADER` names an alternative header for the client IP. It is honored only from a trusted immediate peer under the same rule, so a direct client cannot use it to spoof.
