@@ -5,11 +5,15 @@ import { describe, expect, it, vi } from 'vitest';
 const health = vi.fn();
 
 vi.mock('../services/server.js', () => ({
-	ServerService: vi.fn().mockImplementation(() => ({ health })),
+	ServerService: vi.fn().mockImplementation(function () {
+		return { health };
+	}),
 }));
 
 vi.mock('../services/specifications.js', () => ({
-	SpecificationService: vi.fn().mockImplementation(() => ({ oas: { generate: vi.fn() } })),
+	SpecificationService: vi.fn().mockImplementation(function () {
+		return { oas: { generate: vi.fn() } };
+	}),
 }));
 
 vi.mock('../middleware/respond.js', () => ({

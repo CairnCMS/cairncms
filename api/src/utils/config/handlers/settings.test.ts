@@ -1,6 +1,6 @@
 import type { SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
 import { ConfigPlaceholderUnresolvedException } from '../../../exceptions/config-placeholder-unresolved.js';
 import { ConfigReadFailedException } from '../../../exceptions/config-read-failed.js';
@@ -438,8 +438,16 @@ describe('settings field validation through the shared record schema', () => {
 });
 
 describe('settings parseDocumentFile interpolation', () => {
+	const PROJECT_URL_KEY = 'CAIRNCMS_CONFIG_PROJECT_URL';
+	let previousProjectUrl: string | undefined;
+
+	beforeEach(() => {
+		previousProjectUrl = process.env[PROJECT_URL_KEY];
+	});
+
 	afterEach(() => {
-		vi.unstubAllEnvs();
+		if (previousProjectUrl === undefined) delete process.env[PROJECT_URL_KEY];
+		else process.env[PROJECT_URL_KEY] = previousProjectUrl;
 	});
 
 	function parse(record: Record<string, unknown>): ConfigSettings {
@@ -447,13 +455,13 @@ describe('settings parseDocumentFile interpolation', () => {
 	}
 
 	it('interpolates an in-namespace placeholder from the environment', () => {
-		vi.stubEnv('CAIRNCMS_CONFIG_PROJECT_URL', 'https://resolved.example');
+		process.env[PROJECT_URL_KEY] = 'https://resolved.example';
 
 		expect(parse({ project_url: '{{CAIRNCMS_CONFIG_PROJECT_URL}}' }).project_url).toBe('https://resolved.example');
 	});
 
 	it('refuses an unset in-namespace variable', () => {
-		vi.stubEnv('CAIRNCMS_CONFIG_PROJECT_URL', undefined);
+		delete process.env[PROJECT_URL_KEY];
 
 		expect(() => parse({ project_url: '{{CAIRNCMS_CONFIG_PROJECT_URL}}' })).toThrow(
 			ConfigPlaceholderUnresolvedException

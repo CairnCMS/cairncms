@@ -8,11 +8,15 @@ const { getItemPermissions, captured } = vi.hoisted(() => ({
 }));
 
 vi.mock('../services/permissions.js', () => ({
-	PermissionsService: vi.fn().mockImplementation(() => ({ getItemPermissions })),
+	PermissionsService: vi.fn().mockImplementation(function () {
+		return { getItemPermissions };
+	}),
 }));
 
 vi.mock('../services/meta.js', () => ({
-	MetaService: vi.fn().mockImplementation(() => ({ getMetaForQuery: vi.fn() })),
+	MetaService: vi.fn().mockImplementation(function () {
+		return { getMetaForQuery: vi.fn() };
+	}),
 }));
 
 vi.mock('../middleware/use-collection.js', () => ({

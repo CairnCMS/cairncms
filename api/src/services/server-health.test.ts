@@ -56,7 +56,9 @@ vi.mock('../schedule-coordination.js', () => ({
 }));
 
 vi.mock('./settings.js', () => ({
-	SettingsService: vi.fn().mockImplementation(() => ({ readSingleton: vi.fn() })),
+	SettingsService: vi.fn().mockImplementation(function () {
+		return { readSingleton: vi.fn() };
+	}),
 }));
 
 import { ServerService } from './server.js';

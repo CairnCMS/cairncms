@@ -54,11 +54,13 @@ const { mockCheckAccess, mockValidatePayload, mockValidateFields } = vi.hoisted(
 }));
 
 vi.mock('./authorization.js', () => ({
-	AuthorizationService: vi.fn(() => ({
-		checkAccess: mockCheckAccess,
-		validatePayload: mockValidatePayload,
-		validateFields: mockValidateFields,
-	})),
+	AuthorizationService: vi.fn(function () {
+		return {
+			checkAccess: mockCheckAccess,
+			validatePayload: mockValidatePayload,
+			validateFields: mockValidateFields,
+		};
+	}),
 }));
 
 const { mockAxiosGet } = vi.hoisted(() => ({ mockAxiosGet: vi.fn() }));

@@ -36,7 +36,9 @@ vi.mock('../../../extensions.js', () => ({
 const serviceMock = vi.hoisted(() => ({ set: vi.fn(), deleteOne: vi.fn(), applyForConfig: vi.fn() }));
 
 vi.mock('../../../services/extension-settings.js', () => ({
-	ExtensionSettingsService: vi.fn(() => serviceMock),
+	ExtensionSettingsService: vi.fn(function () {
+		return serviceMock;
+	}),
 }));
 
 const TABLE = 'cairncms_extension_settings';

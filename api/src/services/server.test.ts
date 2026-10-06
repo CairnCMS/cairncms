@@ -8,7 +8,9 @@ const { readSingleton, getActiveRealtime } = vi.hoisted(() => ({
 }));
 
 vi.mock('./settings.js', () => ({
-	SettingsService: vi.fn().mockImplementation(() => ({ readSingleton })),
+	SettingsService: vi.fn().mockImplementation(function () {
+		return { readSingleton };
+	}),
 }));
 
 vi.mock('../websocket/controllers/active.js', () => ({ getActiveRealtime }));

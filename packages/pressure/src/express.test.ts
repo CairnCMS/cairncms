@@ -19,14 +19,13 @@ beforeEach(() => {
 
 	overloadedGetter = vi.fn();
 
-	vi.mocked(PressureMonitor).mockImplementation(
-		() =>
-			({
-				get overloaded() {
-					return overloadedGetter();
-				},
-			} as unknown as PressureMonitor)
-	);
+	vi.mocked(PressureMonitor).mockImplementation(function () {
+		return {
+			get overloaded() {
+				return overloadedGetter();
+			},
+		} as unknown as PressureMonitor;
+	});
 });
 
 afterEach(() => {

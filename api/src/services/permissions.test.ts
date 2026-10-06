@@ -9,7 +9,9 @@ import { PermissionsService } from './permissions.js';
 const { checkAccessMock } = vi.hoisted(() => ({ checkAccessMock: vi.fn() }));
 
 vi.mock('./authorization.js', () => ({
-	AuthorizationService: vi.fn(() => ({ checkAccess: checkAccessMock })),
+	AuthorizationService: vi.fn(function () {
+		return { checkAccess: checkAccessMock };
+	}),
 }));
 
 vi.mock('../env', async () => {
