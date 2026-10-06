@@ -258,7 +258,7 @@ describe('buildRevisionData', () => {
 		expect((stepB.options as Record<string, unknown>)['target']).toBe('audit@example.com');
 	});
 
-	test('does not redact non-sensitive-keyed step output values (regression — no false positives)', () => {
+	test('preserves non-sensitive-keyed step output values', () => {
 		const PROSE = 'an innocuous descriptive prose string';
 		const keyedData = makeKeyedData({});
 		keyedData['fetch-content'] = { data: { description: PROSE } };
@@ -288,9 +288,7 @@ describe('buildRevisionData', () => {
 		const secret = 'sk_live_confined_reference_secret_value';
 		const handle = 'cairn-secret-ref-abc123';
 
-		// The flow data after a confined operation (top-level or a bundle entry) ran with a
-		// reference option: a step option carries the configured secret under the declared
-		// reference key, and the operation output echoes the minted handle the guest held.
+		// The guest receives an opaque handle, while redaction also needs the resolved secret.
 		const keyedData = makeKeyedData({});
 		keyedData['secret-op'] = { echoedHandle: handle, marker: 'ran' };
 
@@ -298,16 +296,12 @@ describe('buildRevisionData', () => {
 			{ operation: 'op-1', key: 'secret-op', status: 'resolve', options: { apiKey: secret, note: 'plain' } },
 		];
 
-		// The runner returns the resolved secret and the minted handle as redaction values,
-		// and the descriptor's declared reference keys drive key-redaction.
 		const result = buildRevisionData(steps, keyedData, [secret, handle], new Set(['apiKey']));
 		const serialized = JSON.stringify(result);
 
-		// Neither the resolved secret nor the minted handle persists anywhere in the revision.
 		expect(serialized).not.toContain(secret);
 		expect(serialized).not.toContain(handle);
 
-		// The declared reference key is key-redacted; the plain sibling option is preserved.
 		const step = result.steps[0] as Step;
 		expect((step.options as Record<string, unknown>)['apiKey']).toBe(REDACT_TEXT);
 		expect((step.options as Record<string, unknown>)['note']).toBe('plain');
@@ -474,9 +468,7 @@ describe('executeFlow — confined operation reference redaction reaches the rev
 
 		const manager = getFlowManager();
 
-		// A confined operation descriptor as the bundle binding registers one: the declared
-		// reference keys drive key-redaction, and the run returns the resolved secret and the
-		// minted handle as the redaction values a real runner produces.
+		// Match the runner's outcome/redaction split without executing a guest.
 		manager.addConfinedOperation('confined-secret-op', {
 			referenceKeys: ['apiKey'],
 			run: async () => ({
@@ -490,7 +482,7 @@ describe('executeFlow — confined operation reference redaction reaches the rev
 			name: 'secret-flow',
 			status: 'active',
 			trigger: 'webhook',
-			// Only accountability 'all' persists a revision, so this drives the real sink.
+			// Revisions are written only with full accountability.
 			accountability: 'all',
 			options: { method: 'POST', return: '$last', async: false },
 			operation: {
@@ -516,20 +508,15 @@ describe('executeFlow — confined operation reference redaction reaches the rev
 		const revision = revisionsCreateSpy.mock.calls[0]![0] as { data: { steps: Step[]; data: Record<string, unknown> } };
 		const serialized = JSON.stringify(revision.data);
 
-		// The real flow collected the descriptor's referenceKeys and the runner's redaction
-		// values and passed them to the sink, so neither persists anywhere in the revision.
 		expect(serialized).not.toContain(rawSecret);
 		expect(serialized).not.toContain(handle);
 
 		const step = revision.data.steps[0] as Step;
 
-		// Key-redaction of the declared reference key.
 		expect((step.options as Record<string, unknown>)['apiKey']).toBe(REDACT_TEXT);
 
-		// Value-redaction of the same secret echoed into a non-sensitive-keyed nested option.
 		expect((step.options as Record<string, any>)['audit']['token']).toBe(REDACT_TEXT);
 
-		// A non-sensitive option is preserved.
 		expect((step.options as Record<string, unknown>)['note']).toBe('plain');
 	});
 });
@@ -609,7 +596,7 @@ describe('executeFlow — confined operation envelopes decrypt before interpolat
 	});
 });
 
-describe('FlowManager._runManualFlow (GHSA-7cvf-pxgp-42fc)', () => {
+describe('manual flow authorization', () => {
 	const FLOW_ID = 'manual-flow-id';
 	const TARGET_COLLECTION = 'articles';
 	const TARGET_KEYS = ['article-1', 'article-2'];
@@ -682,7 +669,7 @@ describe('FlowManager._runManualFlow (GHSA-7cvf-pxgp-42fc)', () => {
 		vi.restoreAllMocks();
 	});
 
-	describe('bug-exposing — caller without auth or permission is rejected', () => {
+	describe('unauthorized triggers are rejected', () => {
 		it('rejects anonymous caller (accountability.user is null)', async () => {
 			await expect(
 				manager._runManualFlow(buildFlow(), buildData(), buildContext(anonAccountability))
@@ -723,7 +710,7 @@ describe('FlowManager._runManualFlow (GHSA-7cvf-pxgp-42fc)', () => {
 			expect(executeFlowSpy).not.toHaveBeenCalled();
 		});
 
-		it('rejects when keys is absent and requireSelection is not false (defensive)', async () => {
+		it('rejects when keys is absent and requireSelection is not false', async () => {
 			const flow = buildFlow();
 			const data = buildData({ collection: TARGET_COLLECTION });
 
@@ -735,7 +722,7 @@ describe('FlowManager._runManualFlow (GHSA-7cvf-pxgp-42fc)', () => {
 		});
 	});
 
-	describe('regression — authorized triggers execute', () => {
+	describe('authorized triggers execute', () => {
 		it('admin caller with keys executes the flow', async () => {
 			await manager._runManualFlow(buildFlow(), buildData(), buildContext(adminAccountability));
 			expect(executeFlowSpy).toHaveBeenCalledTimes(1);
@@ -749,7 +736,7 @@ describe('FlowManager._runManualFlow (GHSA-7cvf-pxgp-42fc)', () => {
 			expect(executeFlowSpy).toHaveBeenCalledTimes(1);
 		});
 
-		it('triggers without directus_flows.read when caller has target-item read (Decision #18)', async () => {
+		it('triggers without directus_flows.read when caller has target-item read', async () => {
 			await manager._runManualFlow(buildFlow(), buildData(), buildContext(nonAdminWithItemRead));
 
 			expect(executeFlowSpy).toHaveBeenCalledTimes(1);
@@ -765,7 +752,7 @@ describe('FlowManager._runManualFlow (GHSA-7cvf-pxgp-42fc)', () => {
 			expect(executeFlowSpy).toHaveBeenCalledTimes(1);
 		});
 
-		it('preserves the existing collection-allowlist check', async () => {
+		it('rejects collections outside the flow allowlist', async () => {
 			const flow = buildFlow({ options: { collections: ['other-collection'] } });
 
 			await expect(manager._runManualFlow(flow, buildData(), buildContext(adminAccountability))).rejects.toBeInstanceOf(
@@ -909,7 +896,7 @@ describe('confined operation binding', () => {
 		expect(seen?.input).toEqual({ last: 'x' });
 	});
 
-	it('keeps an inherited operation running after the Map registry change', async () => {
+	it('executes registered full-authority operations', async () => {
 		const manager = getFlowManager();
 		manager.addOperation('inherited-op', (() => ({ ran: true })) as any);
 
@@ -1394,5 +1381,166 @@ describe('executeFlow — trusted Run Script redacts secrets in console output',
 		await (manager as any).executeFlow(flow, { x: 1 }, context);
 
 		expect(logSpy.info).toHaveBeenCalledWith(`before ${REDACT_TEXT} after`);
+	});
+});
+
+describe('executeFlow — blocking filter rejection delivers a controlled client error', () => {
+	beforeEach(() => {
+		revisionsCreateSpy.mockReset();
+	});
+
+	function filterFlow(type: string, operationOverrides: Record<string, unknown> = {}, accountability: unknown = null) {
+		return {
+			id: 'test-flow',
+			name: 'test-flow',
+			status: 'active',
+			trigger: 'event',
+			accountability,
+			options: { type: 'filter', scope: ['items.create'], collections: ['widgets'], return: '$last' },
+			operation: { id: 'op-1', key: 'step', type, options: {}, resolve: null, reject: null, ...operationOverrides },
+		};
+	}
+
+	const context = {
+		accountability: null,
+		database: {} as any,
+		schema: { collections: {}, relations: [] } as any,
+	};
+
+	async function rejectionFrom(flow: any, data: unknown = { phone: '123' }): Promise<unknown> {
+		try {
+			await (getFlowManager() as any).executeFlow(flow, data, context);
+		} catch (error) {
+			return error;
+		}
+
+		throw new Error('expected executeFlow to throw');
+	}
+
+	it('rethrows a recognized exception as a fresh BaseException carrying only status, code, and message', async () => {
+		getFlowManager().addOperation('test-reject-recognized', () => {
+			throw new BaseException('not a valid phone number', 400, 'INVALID_PAYLOAD');
+		});
+
+		const error = (await rejectionFrom(filterFlow('test-reject-recognized'))) as BaseException;
+		expect(error).toBeInstanceOf(BaseException);
+		expect(error.status).toBe(400);
+		expect(error.code).toBe('INVALID_PAYLOAD');
+		expect(error.message).toBe('not a valid phone number');
+	});
+
+	it('exposes no stack, cause, custom property, or forwarded extension', async () => {
+		getFlowManager().addOperation('test-reject-rich', () => {
+			const rich = new BaseException('bad value', 422, 'UNPROCESSABLE_ENTITY', { field: 'phone' });
+			(rich as any).cause = 'inner cause';
+			(rich as any).custom = 'debug detail';
+			throw rich;
+		});
+
+		const error = (await rejectionFrom(filterFlow('test-reject-rich'))) as BaseException;
+		expect(error).toBeInstanceOf(BaseException);
+		expect(error.status).toBe(422);
+		expect(error.code).toBe('UNPROCESSABLE_ENTITY');
+		expect(error.extensions).toEqual({});
+		expect(error.stack).toBeUndefined();
+		expect((error as any).cause).toBeUndefined();
+		expect((error as any).custom).toBeUndefined();
+	});
+
+	it('leaves an unrecognized error as the curated plain object, not a public exception', async () => {
+		getFlowManager().addOperation('test-reject-raw', () => {
+			throw new Error('boom');
+		});
+
+		const error = await rejectionFrom(filterFlow('test-reject-raw'));
+		expect(error).not.toBeInstanceOf(BaseException);
+		expect(error).toEqual({ message: 'boom' });
+	});
+
+	it('does not promote a thrown plain object carrying status, code, and message', async () => {
+		const forged = { status: 400, code: 'INVALID_PAYLOAD', message: 'forged public error' };
+
+		getFlowManager().addOperation('test-reject-forged', () => {
+			throw forged;
+		});
+
+		const error = await rejectionFrom(filterFlow('test-reject-forged'));
+		expect(error).not.toBeInstanceOf(BaseException);
+		expect(error).toBe(forged);
+	});
+
+	it('does not reuse a stale recognized rejection when a later operation fails unrecognized', async () => {
+		getFlowManager().addOperation('test-stale-a', () => {
+			throw new BaseException('recognized first', 400, 'INVALID_PAYLOAD');
+		});
+
+		getFlowManager().addOperation('test-stale-b', () => {
+			throw new Error('raw second');
+		});
+
+		const flow = filterFlow('test-stale-a', {
+			reject: { id: 'op-2', key: 'step2', type: 'test-stale-b', options: {}, resolve: null, reject: null },
+		});
+
+		const error = await rejectionFrom(flow);
+		expect(error).not.toBeInstanceOf(BaseException);
+		expect(error).toEqual({ message: 'raw second' });
+	});
+
+	it('does not rethrow when a rejection recovers to a resolving operation', async () => {
+		getFlowManager().addOperation('test-recover-a', () => {
+			throw new BaseException('recognized', 400, 'INVALID_PAYLOAD');
+		});
+
+		getFlowManager().addOperation('test-recover-b', () => ({ ok: true }));
+
+		const flow = filterFlow('test-recover-a', {
+			reject: { id: 'op-2', key: 'step2', type: 'test-recover-b', options: {}, resolve: null, reject: null },
+		});
+
+		await expect((getFlowManager() as any).executeFlow(flow, { phone: '123' }, context)).resolves.toBeDefined();
+	});
+
+	it('redacts a short flow-only secret from the client error message', async () => {
+		getFlowManager().addOperation('test-secret-producer', () => ({ password: 'shortpw8' }));
+
+		getFlowManager().addOperation('test-secret-leaker', () => {
+			throw new BaseException('leaked shortpw8 here', 400, 'INVALID_PAYLOAD');
+		});
+
+		const flow = filterFlow('test-secret-producer', {
+			resolve: { id: 'op-2', key: 'step2', type: 'test-secret-leaker', options: {}, resolve: null, reject: null },
+		});
+
+		const error = (await rejectionFrom(flow)) as BaseException;
+		expect(error.message).not.toContain('shortpw8');
+		expect(error.message).toContain(REDACT_TEXT);
+	});
+
+	it('persists the curated error shape in the revision without stack, cause, or custom properties', async () => {
+		getFlowManager().addOperation('test-reject-revision', () => {
+			const rich = new BaseException('not a valid phone number', 400, 'INVALID_PAYLOAD', { field: 'phone' });
+			(rich as any).cause = 'inner cause detail';
+			(rich as any).custom = 'debug detail value';
+			throw rich;
+		});
+
+		const error = (await rejectionFrom(filterFlow('test-reject-revision', {}, 'all'))) as BaseException;
+		expect(error).toBeInstanceOf(BaseException);
+		expect(error.code).toBe('INVALID_PAYLOAD');
+		expect(error.extensions).toEqual({});
+
+		expect(revisionsCreateSpy).toHaveBeenCalledTimes(1);
+		const revision = revisionsCreateSpy.mock.calls[0]![0] as { data: { data: Record<string, unknown> } };
+
+		const curated = {
+			message: 'not a valid phone number',
+			code: 'INVALID_PAYLOAD',
+			status: 400,
+			extensions: { field: 'phone' },
+		};
+
+		expect(revision.data.data['$last']).toEqual(curated);
+		expect(revision.data.data['step']).toEqual(curated);
 	});
 });

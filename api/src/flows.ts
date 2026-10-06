@@ -34,14 +34,12 @@ import { constructFlowTree } from './utils/construct-flow-tree.js';
 import { getSchema } from './utils/get-schema.js';
 import { JobQueue } from './utils/job-queue.js';
 import { mapValuesDeep } from './utils/map-values-deep.js';
-import { collectSensitiveValues, redactSensitive } from './utils/redact-sensitive.js';
+import { collectSensitiveValues, collectSensitiveValuesExhaustive, redactSensitive } from './utils/redact-sensitive.js';
 import type { ConfinedOperationResult } from './extensions/confined/operation.js';
 
 /**
- * A registered confined Flow operation. `run` executes the gate-probed entry in the
- * confined child and returns a sanitized outcome plus the values to redact from the
- * revision. `referenceKeys` are the declared reference option keys, key-redacted
- * from the revision so a malformed or nested sensitive value cannot persist.
+ * Confined execution returns redaction values alongside its outcome. Declared
+ * reference keys also redact malformed or nested secret values from revisions.
  */
 export interface ConfinedOperationDescriptor {
 	run: (params: {
@@ -74,8 +72,7 @@ export function buildRevisionData(
 	for (const value of extraSensitiveValues) sensitiveValues.add(value);
 	for (const value of collectEnvValues(keyedData)) sensitiveValues.add(value);
 
-	// redactSensitive matches sensitive keys case-insensitively against a lowercased
-	// candidate, so a declared key like `apiKey` is lowercased to match.
+	// The redactor expects lowercase keys, including camelCase extension option names.
 	const sensitiveKeys = new Set([...extraSensitiveKeys].map((key) => key.toLowerCase()));
 
 	return {
@@ -136,6 +133,22 @@ function buildFlowLogRedactor(
 ): (value: unknown) => unknown {
 	const sensitiveValues = new Set([
 		...collectSensitiveValues(keyedData),
+		...collectEnvValues(keyedData),
+		...(accumulatedRedaction?.values ?? []),
+	]);
+
+	const sensitiveKeys = new Set([...(accumulatedRedaction?.keys ?? [])].map((key) => key.toLowerCase()));
+
+	return (value) => redactSensitive(value, sensitiveValues, sensitiveKeys);
+}
+
+// HTTP middleware cannot see flow-only secrets, including short values under sensitive keys.
+function buildClientErrorRedactor(
+	keyedData: Record<string, unknown>,
+	accumulatedRedaction: { values: readonly string[]; keys: ReadonlySet<string> } | undefined
+): (value: unknown) => unknown {
+	const sensitiveValues = new Set([
+		...collectSensitiveValuesExhaustive(keyedData),
 		...collectEnvValues(keyedData),
 		...(accumulatedRedaction?.values ?? []),
 	]);
@@ -283,7 +296,7 @@ class FlowManager {
 			try {
 				options = typeof row.options === 'string' ? parseJSON(row.options) : row.options;
 			} catch {
-				// an unparseable row keeps its masked read value
+				// Keep the masked read value if the stored options cannot be parsed.
 				continue;
 			}
 
@@ -398,7 +411,6 @@ class FlowManager {
 					}
 				};
 
-				// Default return to $last for webhooks
 				flow.options['return'] = flow.options['return'] ?? '$last';
 
 				this.webhookFlowHandlers[`${method}-${flow.id}`] = handler;
@@ -408,7 +420,6 @@ class FlowManager {
 					cacheEnabled: true,
 				});
 
-				// Default return to $last for manual
 				flow.options['return'] = '$last';
 
 				this.webhookFlowHandlers[`POST-${flow.id}`] = handler;
@@ -507,13 +518,14 @@ class FlowManager {
 
 		let nextOperation = flow.operation;
 		let lastOperationStatus: 'resolve' | 'reject' | 'unknown' = 'unknown';
+		let lastRejection: { status: number; code: string; message: string } | undefined;
 
 		const steps: Step[] = [];
 		const confinedRedactionValues: string[] = [];
 		const confinedReferenceKeys = new Set<string>();
 
 		while (nextOperation !== null) {
-			const { successor, data, status, options, redaction } = await this.executeOperation(
+			const { successor, data, status, options, redaction, rejection } = await this.executeOperation(
 				nextOperation,
 				keyedData,
 				context,
@@ -523,6 +535,7 @@ class FlowManager {
 			keyedData[nextOperation.key] = data;
 			keyedData[LAST_KEY] = data;
 			lastOperationStatus = status;
+			lastRejection = rejection;
 			steps.push({ operation: nextOperation!.id, key: nextOperation.key, status, options });
 
 			if (redaction !== undefined) {
@@ -567,6 +580,21 @@ class FlowManager {
 		}
 
 		if (flow.trigger === 'event' && flow.options['type'] === 'filter' && lastOperationStatus === 'reject') {
+			if (lastRejection !== undefined) {
+				const redactForClient = buildClientErrorRedactor(keyedData, {
+					values: confinedRedactionValues,
+					keys: confinedReferenceKeys,
+				});
+
+				const message = String(redactForClient(lastRejection.message));
+				// Forwarding the original exception would expose its cause and custom properties to logging.
+				// Drop the new stack too: middleware logs it and may return it in development.
+				const clientError = new BaseException(message, lastRejection.status, lastRejection.code);
+				delete (clientError as { stack?: string }).stack;
+
+				throw clientError;
+			}
+
 			throw keyedData[LAST_KEY];
 		}
 
@@ -590,14 +618,13 @@ class FlowManager {
 		data: unknown;
 		options: Record<string, any> | null;
 		redaction?: { values: string[]; keys: string[] };
+		rejection?: { status: number; code: string; message: string };
 	}> {
 		const entry = this.operations.get(operation.type);
 		const handler = entry?.handler;
 		const isConfined = this.confinedOperations.has(operation.type);
 
-		// A type in both registries, or a duplicated confined type, is ambiguous and
-		// runs neither path. Rejecting with a sanitized message keeps the operator from
-		// being silently routed to one of two operations.
+		// An ambiguous type must reject instead of silently choosing one registry's handler.
 		if (handler !== undefined && isConfined) {
 			logger.warn(`Operation type "${operation.type}" is declared by both an inherited and a confined extension`);
 			return {
@@ -657,11 +684,10 @@ class FlowManager {
 
 			let result = await handler(options, handlerContext as Parameters<OperationHandler>[1]);
 
-			// Validate that the operations result is serializable and thus catching the error inside the flow execution
+			// Keep serialization failures on the operation's reject branch.
 			JSON.stringify(result ?? null);
 
-			// JSON structures don't allow for undefined values, so we need to replace them with null
-			// Otherwise the applyOptionsData function will not work correctly on the next operation
+			// Downstream option interpolation needs explicit nulls for undefined result fields.
 			if (typeof result === 'object' && result !== null) {
 				result = mapValuesDeep(result, (_, value) => (value === undefined ? null : value));
 			}
@@ -669,16 +695,17 @@ class FlowManager {
 			return { successor: operation.resolve, status: 'resolve', data: result ?? null, options };
 		} catch (error) {
 			let data;
+			// Keep exception provenance separate from the operator-visible data stored in revisions.
+			let rejection: { status: number; code: string; message: string } | undefined;
 
 			if (error instanceof BaseException) {
 				data = { message: error.message, code: error.code, extensions: error.extensions, status: error.status };
+				rejection = { status: error.status, code: error.code, message: error.message };
 			} else if (error instanceof Error) {
 				data = { message: error.message };
 			} else if (typeof error === 'string') {
-				// If the error is a JSON string, parse it and use that as the error data
 				data = isValidJSON(error) ? parseJSON(error) : error;
 			} else {
-				// If error is plain object, use this as the error data and otherwise fallback to null
 				data = error ?? null;
 			}
 
@@ -687,16 +714,15 @@ class FlowManager {
 				status: 'reject',
 				data,
 				options,
+				...(rejection !== undefined ? { rejection } : {}),
 			};
 		}
 	}
 
 	/**
-	 * Runs a confined operation through its descriptor. The resolved clear options are
-	 * recorded as the step options, the same shape an inherited operation records, and
-	 * the returned redaction values plus the declared reference keys scrub the secrets
-	 * from the revision. The guest receives only `$last` and the handle-substituted
-	 * options, never the full flow data bag.
+	 * Only `$last` and handle-substituted options reach the guest. Resolved options
+	 * remain on the step, so returned secret values and declared reference keys must
+	 * redact them before revision storage.
 	 */
 	private async executeConfinedOperation(
 		operation: Operation,
