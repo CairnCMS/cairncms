@@ -139,7 +139,7 @@
 		"pino-http-print": "3.1.0",
 		"pino-pretty": "10.0.0",
 		"proxy-addr": "2.0.8",
-		"qs": "6.15.2",
+		"qs": "6.16.0",
 		"quickjs-emscripten-core": "0.31.0",
 		"rate-limiter-flexible": "2.4.1",
 		"rollup": "4.60.1",
