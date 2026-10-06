@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 import { createVitest } from 'vitest/node';
-import { DefaultReporter, VerboseReporter } from 'vitest/reporters';
+import { DefaultReporter, VerboseReporter } from 'vitest/node';
 import { Wait } from 'testcontainers';
 import { RecordedContainer } from './recorded-container.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -56,9 +56,6 @@ try {
 		bail: collectAll ? 0 : 1,
 		fileParallelism: (options.workers ?? 1) > 1,
 		maxWorkers: options.workers ?? 1,
-		// Isolated workers are recycled after each file. Keep the configured capacity
-		// so queued files can start while another worker is still busy.
-		minWorkers: options.workers ?? 1,
 		testNamePattern: pattern,
 		reporters: [
 			new LiveFailures(vendor, collectAll ? undefined : () => writeFileSync(`${reports}/cancelled`, 'test-failure')),
@@ -68,6 +65,12 @@ try {
 		],
 		outputFile: `${reports}/results.json`,
 	});
+
+	for (const project of vitest.projects) {
+		const workers = project.name === 'load' ? 1 : (options.workers ?? 1);
+		project.config.maxWorkers = workers;
+		project.config.fileParallelism = workers > 1;
+	}
 
 	if (options.sequence) {
 		Object.assign(vitest.config.sequence, options.sequence);

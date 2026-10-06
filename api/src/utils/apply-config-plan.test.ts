@@ -58,8 +58,18 @@ vi.mock('./get-schema.js', () => ({ getSchema: vi.fn(async () => ({ collections:
 vi.mock('./get-config-snapshot.js', () => ({ readCurrentConfig: readCurrentConfigMock }));
 vi.mock('../cache.js', () => ({ clearSystemCache: vi.fn(), flushCaches: vi.fn() }));
 vi.mock('../emitter.js', () => ({ default: { emitActionAndWait: vi.fn() } }));
-vi.mock('../services/permissions.js', () => ({ PermissionsService: vi.fn(() => permissionsService) }));
-vi.mock('../services/roles.js', () => ({ RolesService: vi.fn(() => rolesService) }));
+
+vi.mock('../services/permissions.js', () => ({
+	PermissionsService: vi.fn(function () {
+		return permissionsService;
+	}),
+}));
+
+vi.mock('../services/roles.js', () => ({
+	RolesService: vi.fn(function () {
+		return rolesService;
+	}),
+}));
 
 const STATE_TOKEN: ConfigStateToken = { resources: ['permissions', 'roles'], digest: 'digest-current' };
 

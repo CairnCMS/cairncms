@@ -13,9 +13,24 @@ vi.mock('../database/helpers/index.js', () => ({
 	getHelpers: () => ({ schema: { preColumnChange: async () => false, postColumnChange: async () => undefined } }),
 }));
 
-vi.mock('../services/collections.js', () => ({ CollectionsService: vi.fn(() => collections) }));
-vi.mock('../services/fields.js', () => ({ FieldsService: vi.fn(() => fields) }));
-vi.mock('../services/relations.js', () => ({ RelationsService: vi.fn(() => relations) }));
+vi.mock('../services/collections.js', () => ({
+	CollectionsService: vi.fn(function () {
+		return collections;
+	}),
+}));
+
+vi.mock('../services/fields.js', () => ({
+	FieldsService: vi.fn(function () {
+		return fields;
+	}),
+}));
+
+vi.mock('../services/relations.js', () => ({
+	RelationsService: vi.fn(function () {
+		return relations;
+	}),
+}));
+
 vi.mock('../emitter.js', () => ({ default: { emitAction: vi.fn() } }));
 vi.mock('../cache.js', () => ({ clearSystemCache: vi.fn() }));
 vi.mock('../logger.js', () => ({ default: { error: vi.fn(), warn: vi.fn() } }));

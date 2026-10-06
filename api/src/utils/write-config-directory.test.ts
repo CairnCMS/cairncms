@@ -802,13 +802,23 @@ describe('writeConfigDirectory settings singleton cardinality', () => {
 
 describe('writeConfigDirectory placeholder preservation', () => {
 	const ROLE_BASE = { admin_access: false, app_access: true } as const;
+	let envSnapshot: NodeJS.ProcessEnv;
+
+	beforeEach(() => {
+		envSnapshot = { ...process.env };
+	});
 
 	afterEach(() => {
-		vi.unstubAllEnvs();
+		for (const key of Object.keys(process.env)) {
+			if (!(key in envSnapshot)) delete process.env[key];
+		}
+
+		Object.assign(process.env, envSnapshot);
 	});
 
 	it('preserves a committed settings placeholder rather than the resolved value, with the variable unset', async () => {
-		vi.stubEnv('CAIRNCMS_CONFIG_PROJECT_URL', undefined);
+		delete process.env['CAIRNCMS_CONFIG_PROJECT_URL'];
+
 		await writeExisting('settings', 'project.yaml', { project_url: '{{CAIRNCMS_CONFIG_PROJECT_URL}}' });
 
 		await writeConfigDirectory(settingsScope({ project_url: 'https://live.example' }), tmpDir);
@@ -819,7 +829,7 @@ describe('writeConfigDirectory placeholder preservation', () => {
 	});
 
 	it('round-trips a preserved placeholder through a real directory read to the environment value', async () => {
-		vi.stubEnv('CAIRNCMS_CONFIG_PROJECT_URL', 'https://env-value.example');
+		process.env['CAIRNCMS_CONFIG_PROJECT_URL'] = 'https://env-value.example';
 		await writeExisting('settings', 'project.yaml', { project_url: '{{CAIRNCMS_CONFIG_PROJECT_URL}}' });
 
 		await writeConfigDirectory(settingsScope({ project_url: 'https://database-value.example' }), tmpDir);

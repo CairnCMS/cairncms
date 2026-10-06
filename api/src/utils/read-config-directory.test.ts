@@ -18,13 +18,19 @@ vi.mock('../logger.js', () => ({
 }));
 
 let tmpDir: string;
+let envSnapshot: NodeJS.ProcessEnv;
 
 beforeEach(async () => {
+	envSnapshot = { ...process.env };
 	tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cairncms-read-test-'));
 });
 
 afterEach(async () => {
-	vi.unstubAllEnvs();
+	for (const key of Object.keys(process.env)) {
+		if (!(key in envSnapshot)) delete process.env[key];
+	}
+
+	Object.assign(process.env, envSnapshot);
 	await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
@@ -145,8 +151,8 @@ describe('readConfigDirectory', () => {
 	});
 
 	it('substitutes variables inside the supported namespace', async () => {
-		vi.stubEnv('CAIRNCMS_CONFIG_ROLE_NAME', 'Interpolated Name');
-		vi.stubEnv('CAIRNCMS_CONFIG_ROLE_DESC', 'Interpolated Description');
+		process.env['CAIRNCMS_CONFIG_ROLE_NAME'] = 'Interpolated Name';
+		process.env['CAIRNCMS_CONFIG_ROLE_DESC'] = 'Interpolated Description';
 
 		await writeManifest();
 
@@ -163,7 +169,7 @@ describe('readConfigDirectory', () => {
 
 	it('refuses a variable outside the supported namespace instead of reading it', async () => {
 		for (const varName of ['DATABASE_PASSWORD', 'SECRET']) {
-			vi.stubEnv(varName, 'a-real-secret-value');
+			process.env[varName] = 'a-real-secret-value';
 
 			await writeManifest();
 			await writeRole('editor', { name: `{{${varName}}}` });
@@ -177,7 +183,7 @@ describe('readConfigDirectory', () => {
 	});
 
 	it('refuses an in-namespace variable with no value, naming the variable, role, and field', async () => {
-		vi.stubEnv('CAIRNCMS_CONFIG_MISSING', undefined);
+		delete process.env['CAIRNCMS_CONFIG_MISSING'];
 
 		await writeManifest();
 		await writeRole('editor', { description: '{{CAIRNCMS_CONFIG_MISSING}}' });
