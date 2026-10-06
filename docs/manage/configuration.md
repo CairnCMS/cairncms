@@ -46,7 +46,7 @@ Variables that control how CairnCMS listens for requests:
 - **`SERVE_APP`** — whether to serve the admin app at `/admin`. Default `true`. Set to `false` for headless API deployments where no operator UI is needed.
 - **`GRAPHQL_INTROSPECTION`** — whether the GraphQL schema is introspectable. Default `true`. Disable in production if you do not want unauthenticated clients to enumerate the schema.
 - **`GRAPHQL_QUERY_TOKEN_LIMIT`** — maximum tokens allowed in one GraphQL document. Default `5000`. CairnCMS rejects larger documents before validation or execution. Accepts a whole number of `1` or greater; invalid or imprecise values prevent startup. Higher limits allow larger documents but increase parser resource use. CairnCMS does not define a universally safe maximum.
-- **`MAX_PAYLOAD_SIZE`** — the maximum request body size. Default `1mb`. Increase when receiving large uploads or imports. For a per-file upload cap, see `FILES_MAX_UPLOAD_SIZE` under Files and batch operations.
+- **`MAX_PAYLOAD_SIZE`** — caps JSON and `/config/apply` YAML request bodies. Default `1mb`. Use `FILES_MAX_UPLOAD_SIZE` for a per-file multipart cap.
 - **`MAX_RELATIONAL_DEPTH`** — how deeply nested a single query can fetch related data. Default `10`.
 - **`MAX_BATCH_MUTATION`** — limit on items in a batch create/update/delete. Default unlimited.
 - **`QUERYSTRING_PARSE_DEPTH`** — maximum nesting depth parsed from URL query strings. Default `10`.
@@ -325,7 +325,7 @@ Both transports deliver permission-checked collection changes. Deployments with 
 - **`WEBSOCKETS_IP_CONN_LIMIT`** — maximum concurrent connections per client IP. It gates anonymous and pre-authentication connections. Once a connection authenticates, it counts against `WEBSOCKETS_USER_CONN_LIMIT` instead. Accepts a whole number of `1` or greater. Default `50`.
 - **`WEBSOCKETS_PROCESS_CONN_LIMIT`** — maximum concurrent connections per API process. Accepts a whole number of `1` or greater. Default `1000`.
 
-An invalid shared setting disables realtime. An invalid item-protocol or GraphQL setting disables only that transport. HTTP remains available.
+An invalid shared setting disables realtime. An invalid `MAX_PAYLOAD_SIZE` also rejects JSON and `/config/apply` YAML bodies with `INVALID_CONFIG`. Other HTTP routes remain available. An invalid item-protocol or GraphQL setting disables only that transport.
 
 The shared `MAX_PAYLOAD_SIZE` bounds inbound WebSocket frames (see [Server](#server)). Realtime requires it to resolve to a positive whole number of bytes. Outbound WebSocket frames are limited to 1 MiB, including initial subscription results and change notifications. An oversized frame closes the affected connection. The client must reconnect and reread current state.
 

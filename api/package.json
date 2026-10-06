@@ -99,7 +99,7 @@
 		"eventemitter2": "6.4.9",
 		"execa": "7.1.1",
 		"exif-reader": "1.2.0",
-		"express": "4.21.2",
+		"express": "4.22.3",
 		"flat": "5.0.2",
 		"fs-extra": "11.1.1",
 		"graphql": "16.9.0",
