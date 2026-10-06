@@ -411,6 +411,106 @@ describe('applyFilter — unknown field validation', () => {
 			expect(() => callApplyFilter({ author: { name: { _eq: 'Ada' } } })).not.toThrow();
 		});
 	});
+
+	describe('a relational filter whose root does not resolve to a relation', () => {
+		function makeSchemaWithAliases(): SchemaOverview {
+			const schema = makeRelationalSchema() as any;
+
+			schema.collections.notes.fields.details = { ...makeField('details'), type: 'alias', dbType: null };
+			schema.collections.notes.fields.item = makeField('item');
+			schema.collections.notes.fields.collection = makeField('collection');
+			schema.collections.users.fields.notes = { ...makeField('notes'), type: 'alias', dbType: null };
+			schema.relations[0].meta = { one_field: 'notes' };
+
+			schema.relations.push({
+				collection: 'notes',
+				field: 'item',
+				related_collection: null,
+				schema: null,
+				meta: { one_collection_field: 'collection', one_allowed_collections: ['users'] },
+			});
+
+			return schema as SchemaOverview;
+		}
+
+		function compile(filter: Record<string, any>, collection = 'notes') {
+			const knexInstance = knex.default({ client: 'sqlite3', useNullAsDefault: true });
+			const dbQuery = knexInstance.from(collection).select('*');
+			return applyFilter(knexInstance, makeSchemaWithAliases(), dbQuery, filter, collection, {}).query.toSQL().sql;
+		}
+
+		function rejection(filter: Record<string, any>, collection = 'notes') {
+			try {
+				compile(filter, collection);
+			} catch (error) {
+				return error;
+			}
+
+			return undefined;
+		}
+
+		it('rejects a root key that is not a field, without naming the key or the collection', () => {
+			const error = rejection({ organization: { name: { _eq: 'A' } } });
+
+			expect(error).toBeInstanceOf(InvalidQueryException);
+			expect((error as Error).message).toBe('Invalid relational filter');
+		});
+
+		it('rejects a root key that is a field but not a relation', () => {
+			const error = rejection({ title: { name: { _eq: 'A' } } });
+
+			expect(error).toBeInstanceOf(InvalidQueryException);
+			expect((error as Error).message).toBe('Invalid relational filter');
+		});
+
+		it('rejects a filter on an alias field that has no relation', () => {
+			const error = rejection({ details: { _eq: 'A' } });
+
+			expect(error).toBeInstanceOf(InvalidQueryException);
+			expect((error as Error).message).toBe('Invalid relational filter');
+		});
+
+		it('rejects the missing root inside _and, the shape stored permissions are merged into', () => {
+			expect(() => compile({ _and: [{ organization: { name: { _eq: 'A' } } }] })).toThrow(InvalidQueryException);
+		});
+
+		it('rejects the missing root inside _or', () => {
+			expect(() => compile({ _or: [{ title: { _eq: 'x' } }, { organization: { name: { _eq: 'A' } } }] })).toThrow(
+				InvalidQueryException
+			);
+		});
+
+		it('rejects the missing root inside a _some subquery', () => {
+			expect(() => compile({ notes: { _some: { organization: { name: { _eq: 'A' } } } } }, 'users')).toThrow(
+				InvalidQueryException
+			);
+		});
+
+		it('still builds a join and a condition for a valid many-to-one filter', () => {
+			const sql = compile({ _and: [{ author: { name: { _eq: 'Ada' } } }] });
+
+			expect(sql).toContain('left join `users`');
+			expect(sql).toMatch(/\.`name` = \?/);
+		});
+
+		it('still builds a subquery for a valid one-to-many _some filter', () => {
+			const sql = compile({ notes: { _some: { title: { _eq: 'x' } } } }, 'users');
+
+			expect(sql).toContain('in (select');
+		});
+
+		it('still resolves an implicit $FOLLOW relation', () => {
+			const sql = compile({ '$FOLLOW(notes, author)': { _some: { title: { _eq: 'x' } } } }, 'users');
+
+			expect(sql).toContain('in (select');
+		});
+
+		it('still resolves a many-to-any root with a collection scope', () => {
+			const sql = compile({ 'item:users': { name: { _eq: 'Ada' } } });
+
+			expect(sql).toContain('left join `users`');
+		});
+	});
 });
 
 describe('applySort — nested relational sort validation', () => {

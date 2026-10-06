@@ -495,7 +495,7 @@ export function applyFilter(
 				filterPath.length > 1 ||
 				(!(key.includes('(') && key.includes(')')) && schema.collections[collection]?.fields[key]?.type === 'alias')
 			) {
-				if (!relation) continue;
+				if (!relation) throw new InvalidQueryException('Invalid relational filter');
 
 				if (relationType === 'o2m' || relationType === 'o2a') {
 					let pkField: Knex.Raw<any> | string = `${collection}.${
