@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it, vi } from 'vitest';
 import { REDACT_TEXT } from '../../constants.js';
+import { InvalidConfigException } from '../../exceptions/index.js';
 import config from './index.js';
 
 const DEFAULT_LIMITS = {
@@ -85,12 +88,84 @@ describe('exec — sandbox enforcement', () => {
 		);
 	});
 
+	it('aborts an exported handler whose returned promise never settles', { timeout: 5000 }, async () => {
+		const code = 'module.exports = () => new Promise(() => {});';
+
+		await expect(callHandler(code, { env: { ...DEFAULT_LIMITS, FLOWS_RUN_SCRIPT_TIMEOUT: 250 } })).rejects.toThrow(
+			/timed out/i
+		);
+	});
+
+	it('times out before evaluation when the budget is already spent', async () => {
+		const now = vi.spyOn(performance, 'now').mockReturnValueOnce(0).mockReturnValue(10_000);
+
+		try {
+			await expect(callHandler('module.exports = () => 1;')).rejects.toThrow(/timed out/i);
+		} finally {
+			now.mockRestore();
+		}
+	});
+
 	it('rejects calls to the CommonJS require', async () => {
 		await expect(callHandler(`require('node:fs');`)).rejects.toThrow(/require is not defined/);
 	});
 
 	it('rejects ESM import statements', async () => {
 		await expect(callHandler(`import 'node:fs';`)).rejects.toThrow(/import statement outside a module/);
+	});
+});
+
+function runNeverSettlingChild(): Promise<{ code: number | null; stdout: string; stderr: string }> {
+	const childTs = fileURLToPath(new URL('./__fixtures__/never-settling-child.ts', import.meta.url));
+
+	return new Promise((resolve, reject) => {
+		const child = spawn(process.execPath, ['--no-node-snapshot', '--import', 'tsx', childTs], {
+			stdio: ['ignore', 'pipe', 'pipe'],
+			env: { PATH: process.env['PATH'] },
+		});
+
+		let stdout = '';
+		let stderr = '';
+		child.stdout.on('data', (chunk) => (stdout += chunk));
+		child.stderr.on('data', (chunk) => (stderr += chunk));
+
+		const watchdog = setTimeout(() => {
+			child.kill('SIGKILL');
+			reject(new Error(`the child produced no report before the watchdog fired\n${stderr}`));
+		}, 20_000);
+
+		child.on('error', (error) => {
+			clearTimeout(watchdog);
+			reject(error);
+		});
+
+		child.on('close', (code) => {
+			clearTimeout(watchdog);
+			resolve({ code, stdout, stderr });
+		});
+	});
+}
+
+describe('exec: isolate release', () => {
+	it('disposes the isolate of every never-settling invocation it times out', { timeout: 30_000 }, async () => {
+		const run = await runNeverSettlingChild();
+		expect(run.code, run.stderr).toBe(0);
+
+		const output = run.stdout.trim();
+		expect(output, run.stderr).not.toBe('');
+
+		const report = JSON.parse(output.split('\n').pop()!);
+
+		expect(report.results).toHaveLength(3);
+
+		for (const result of report.results) {
+			expect(result.outcome).toBe('rejected');
+			expect(result.message).toMatch(/timed out/i);
+			expect(result.elapsedMs).toBeLessThan(2000);
+		}
+
+		expect(report.disposed).toEqual([true, true, true]);
+		expect(report.unhandled).toEqual([]);
 	});
 });
 
@@ -277,11 +352,23 @@ describe('exec — configuration validation', () => {
 		).rejects.toThrow(/memoryLimit.*must be a number/);
 	});
 
-	it('rejects when FLOWS_RUN_SCRIPT_TIMEOUT is not a number', async () => {
-		const code = `module.exports = () => null;`;
+	it.each([0, -1, 250.5, 2_147_483_648, 'oops'])(
+		'rejects a FLOWS_RUN_SCRIPT_TIMEOUT of %s as invalid config',
+		async (value) => {
+			const result = callHandler(`module.exports = () => null;`, {
+				env: { ...DEFAULT_LIMITS, FLOWS_RUN_SCRIPT_TIMEOUT: value },
+			});
 
-		await expect(callHandler(code, { env: { ...DEFAULT_LIMITS, FLOWS_RUN_SCRIPT_TIMEOUT: 'oops' } })).rejects.toThrow(
-			/timeout.*must be a 32-bit number/
-		);
+			await expect(result).rejects.toBeInstanceOf(InvalidConfigException);
+			await expect(result).rejects.toThrow(/FLOWS_RUN_SCRIPT_TIMEOUT/);
+		}
+	);
+
+	it('accepts the largest FLOWS_RUN_SCRIPT_TIMEOUT a timer can hold', async () => {
+		const code = `module.exports = () => 'done';`;
+
+		await expect(
+			callHandler(code, { env: { ...DEFAULT_LIMITS, FLOWS_RUN_SCRIPT_TIMEOUT: 2_147_483_647 } })
+		).resolves.toBe('done');
 	});
 });

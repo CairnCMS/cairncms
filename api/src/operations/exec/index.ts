@@ -1,6 +1,8 @@
 import { defineOperationApi, stripFunctions } from '@cairncms/utils';
 import { createRequire } from 'node:module';
 import { REDACT_TEXT } from '../../constants.js';
+import { InvalidConfigException } from '../../exceptions/index.js';
+import { type BoundedSpec, parseCount } from '../../utils/parse-config.js';
 
 const ivm = createRequire(import.meta.url)('isolated-vm');
 
@@ -21,6 +23,15 @@ type Redactor = (value: unknown) => unknown;
 type FlowLogRedactor = { redactForFlowLog?: Redactor };
 
 const CONSOLE_METHODS = ['log', 'info', 'warn', 'error', 'trace', 'debug'] as const;
+
+const TIMEOUT_MESSAGE = 'Script execution timed out.';
+
+const TIMEOUT_SPEC: BoundedSpec = {
+	envVar: 'FLOWS_RUN_SCRIPT_TIMEOUT',
+	defaultValue: 10_000,
+	floor: 1,
+	ceiling: 2_147_483_647,
+};
 
 export function redactConsoleArgs(rest: unknown[], redact: Redactor): unknown {
 	return redact(rest.length === 1 ? rest[0] : rest);
@@ -49,6 +60,21 @@ function prepareSandbox(context: any, scriptEnv: Record<string, unknown>, logger
 	jail.setSync('console', buildConsoleShim(logger, redact), { copy: true });
 }
 
+function startDeadline(timeoutMs: number) {
+	const expiresAt = performance.now() + timeoutMs;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+
+	const expired = new Promise<never>((_resolve, reject) => {
+		timer = setTimeout(() => reject(new Error(TIMEOUT_MESSAGE)), timeoutMs);
+	});
+
+	return {
+		race: <T>(work: Promise<T>) => Promise.race([work, expired]),
+		remainingMs: () => Math.floor(expiresAt - performance.now()),
+		clear: () => clearTimeout(timer),
+	};
+}
+
 const wrapScript = (userCode: string) => `
 ${userCode};
 if (typeof module.exports !== 'function') {
@@ -62,15 +88,18 @@ export default defineOperationApi<Options>({
 	handler: async ({ code }, flowContext) => {
 		const { data, env, logger } = flowContext;
 		const memoryLimitMb = env['FLOWS_RUN_SCRIPT_MAX_MEMORY'];
-		const timeoutMs = env['FLOWS_RUN_SCRIPT_TIMEOUT'];
 		const scriptEnv = (data['$env'] ?? {}) as Record<string, unknown>;
+
+		const timeout = parseCount(env['FLOWS_RUN_SCRIPT_TIMEOUT'], TIMEOUT_SPEC);
+		if (!timeout.ok) throw new InvalidConfigException(timeout.error.message);
 
 		const redact = (flowContext as FlowLogRedactor).redactForFlowLog ?? (() => REDACT_TEXT);
 
 		const isolate = new ivm.Isolate({ memoryLimit: memoryLimitMb });
+		const deadline = startDeadline(timeout.value);
 
 		try {
-			const context = await isolate.createContext();
+			const context = await deadline.race<any>(isolate.createContext());
 
 			try {
 				prepareSandbox(context, scriptEnv, logger as LoggerLike, redact);
@@ -78,13 +107,18 @@ export default defineOperationApi<Options>({
 				const inputCopy = new ivm.ExternalCopy({ data: stripFunctions(data) });
 
 				try {
-					const resultRef = await context.evalClosure(wrapScript(code), [inputCopy.copyInto()], {
-						result: { reference: true, promise: true },
-						timeout: timeoutMs,
-					});
+					const remainingMs = deadline.remainingMs();
+					if (remainingMs < 1) throw new Error(TIMEOUT_MESSAGE);
+
+					const resultRef = await deadline.race<any>(
+						context.evalClosure(wrapScript(code), [inputCopy.copyInto()], {
+							result: { reference: true, promise: true },
+							timeout: remainingMs,
+						})
+					);
 
 					try {
-						return await resultRef.copy();
+						return await deadline.race<unknown>(resultRef.copy());
 					} finally {
 						resultRef.release();
 					}
@@ -95,6 +129,7 @@ export default defineOperationApi<Options>({
 				context.release();
 			}
 		} finally {
+			deadline.clear();
 			isolate.dispose();
 		}
 	},
