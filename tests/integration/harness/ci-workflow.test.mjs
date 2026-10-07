@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { readFile, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import yaml from 'js-yaml';
 import { vendors } from './database-vendors.mjs';
@@ -116,7 +117,7 @@ test('workflow pipelines preserve failing command status and revision checks rej
 		};
 
 		for (const id of ['validation', 'restoration', 'test']) {
-			for (const step of workflow.jobs[id].steps.filter((step) => step.run?.startsWith('pnpm '))) {
+			for (const step of workflow.jobs[id].steps.filter((step) => step.run?.includes('pnpm '))) {
 				const result = shell(step.run, { cwd: directory, env });
 				assert.equal(result.status, 7, `${id}: ${step.name}: ${result.stderr}`);
 				assert.match(result.stdout, /CONTROL_COMMAND_FAILURE/);
@@ -131,6 +132,139 @@ test('workflow pipelines preserve failing command status and revision checks rej
 				});
 
 				assert.equal(result.status, matching ? 0 : 1, result.stderr);
+			}
+		}
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test('control runs keep child reports out of job summaries while vendors publish their results', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'cairn-workflow-summary-'));
+	const root = fileURLToPath(new URL('../', import.meta.url));
+	const summary = join(directory, 'summary.md');
+	const existing = 'Parent summary\n';
+
+	try {
+		await mkdir(join(directory, 'bin'));
+		await mkdir(join(directory, 'tests/integration/.artifacts'), { recursive: true });
+
+		await writeFile(
+			join(directory, 'bin/pnpm'),
+			'#!/bin/sh\nexec env -u NODE_TEST_CONTEXT "$CONTROL_NODE" --test --test-name-pattern="piped failure is immediate; collectAll=false" "$CONTROL_ROOT/harness/reporting.test.mjs"\n',
+			{ mode: 0o755 }
+		);
+
+		const env = {
+			...process.env,
+			PATH: `${join(directory, 'bin')}:${process.env.PATH}`,
+			CONTROL_NODE: process.execPath,
+			CONTROL_ROOT: root,
+			GITHUB_ACTIONS: 'true',
+			GITHUB_STEP_SUMMARY: summary,
+			TEST_DB: 'sqlite3',
+		};
+
+		for (const [job, command] of [
+			['validation', 'test:harness'],
+			['validation', 'test:lifecycle'],
+			['validation', 'test:services'],
+			['restoration', 'test:restoration'],
+		]) {
+			const step = workflow.jobs[job].steps.find((step) => step.run?.includes(`tests-integration ${command} `));
+			await writeFile(summary, existing);
+			const result = shell(step.run, { cwd: directory, env, timeout: 30000 });
+			assert.equal(result.status, 0, `${command}: ${result.stdout}\n${result.stderr}`);
+			assert.match(result.stdout, /# pass 1\b/);
+			assert.match(result.stdout, /# fail 0\b/);
+			assert.equal(await readFile(summary, 'utf8'), existing, `${command} published a child report`);
+		}
+
+		await writeFile(
+			join(directory, 'bin/pnpm'),
+			'#!/bin/sh\ncd "$CONTROL_ROOT"\nexec "$CONTROL_NODE" harness/vendor.mjs\n',
+			{ mode: 0o755 }
+		);
+
+		const vendor = workflow.jobs.test.steps.find((step) => step.name === 'Run every integration suite');
+
+		for (const [filter, code, label] of [
+			['name-pattern.case.ts', 0, '✅'],
+			['assertion.case.ts', 1, '❌'],
+		]) {
+			await writeFile(summary, existing);
+
+			const result = shell(vendor.run, {
+				cwd: directory,
+				timeout: 30000,
+				env: {
+					...env,
+					CONTROL_RELEASE: '',
+					INTEGRATION_OPTIONS: JSON.stringify({
+						vendor: 'sqlite3',
+						directory: join(directory, filter),
+						filters: [filter],
+						collectAll: true,
+						services: false,
+						configFile: join(root, 'harness/controls.config.ts'),
+					}),
+				},
+			});
+
+			assert.equal(result.status, code, `${filter}: ${result.stdout}\n${result.stderr}`);
+			const report = await readFile(summary, 'utf8');
+			assert(report.startsWith(existing));
+			assert.match(report, /## Vitest Test Report/);
+			assert(report.includes(label), report);
+			if (code) assert.match(result.stdout, /EARLY_FAILURE_DETAIL/);
+		}
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+test('validation and restoration summaries report each check outcome, including incomplete checks', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'cairn-workflow-outcomes-'));
+	const summary = join(directory, 'summary.md');
+	const states = ['success', 'failure', 'cancelled', 'skipped'];
+
+	try {
+		for (const [job, checks] of [
+			[
+				'validation',
+				[
+					['typecheck', 'Integration types'],
+					['harness', 'Harness checks'],
+					['lifecycle', 'Process lifecycle'],
+					['services', 'Service checks'],
+				],
+			],
+			['restoration', [['restoration', 'Database restoration and cleanup']]],
+		]) {
+			const step = workflow.jobs[job].steps.find((step) => step.name === `Summarize ${job} checks`);
+			assert(step, `${job} summary is missing`);
+			assert.equal(step.if, 'always()');
+
+			for (const [id] of checks) {
+				assert(
+					workflow.jobs[job].steps.some((step) => step.id === id),
+					`Missing check: ${id}`
+				);
+
+				assert.equal(step.env[`${id.toUpperCase()}_RESULT`], `\${{ steps.${id}.outcome }}`);
+			}
+
+			for (let offset = 0; offset < states.length; offset++) {
+				const env = { ...process.env, GITHUB_STEP_SUMMARY: summary };
+				for (const [index, [id]] of checks.entries())
+					env[`${id.toUpperCase()}_RESULT`] = states[(index + offset) % states.length];
+				await writeFile(summary, 'Existing summary\n');
+				const result = shell(step.run, { env });
+				assert.equal(result.status, 0, result.stderr);
+				const report = await readFile(summary, 'utf8');
+				assert(report.startsWith('Existing summary\n'));
+				for (const [id, label] of checks)
+					assert(report.includes(`| ${label} | ${env[`${id.toUpperCase()}_RESULT`]} |`), report);
 			}
 		}
 	} finally {
