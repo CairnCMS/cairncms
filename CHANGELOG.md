@@ -2,6 +2,17 @@
 
 All notable changes to CairnCMS are documented in this file. Releases are listed in reverse chronological order. Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1]
+
+### Fixes & Improvements
+
+- Updated dependencies. (#249, #255, #252, #256, #257, #258, #259, #260, #261, #262, #263, #264, #265, #266, #267, #268, #269)
+- Preserved explicit error statuses in blocking flows. (#270)
+- Ordered extension-settings config state by code unit. (#271)
+- Rejected filters that reference removed relations. (#272)
+- Enforced the Run Script timeout on unresolved promises. (#273)
+- Fixed relation and cache invalidation during schema apply. (#274)
+
 ## [1.6.0]
 
 ### Potential Breaking Changes
