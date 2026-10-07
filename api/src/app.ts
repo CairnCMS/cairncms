@@ -47,6 +47,7 @@ import {
 } from './database/index.js';
 import emitter from './emitter.js';
 import env from './env.js';
+import { InvalidConfigException } from './exceptions/invalid-config.js';
 import { InvalidPayloadException } from './exceptions/invalid-payload.js';
 import { ServiceUnavailableException } from './exceptions/service-unavailable.js';
 import { getExtensionManager } from './extensions.js';
@@ -65,6 +66,7 @@ import sanitizeQuery from './middleware/sanitize-query.js';
 import schema from './middleware/schema.js';
 import { initScheduleCoordination } from './schedule-coordination.js';
 import { validateGraphQLQueryTokenLimit } from './services/graphql/query-gate.js';
+import { boundedBodyParser } from './utils/bounded-body-parser.js';
 import { validateSecretsEncryptionKey } from './utils/encrypt-secret.js';
 import { normalizeTrustProxy, validateIpProxyConfig } from './utils/validate-ip-proxy-config.js';
 import { validateQueryLimitConfig } from './utils/query-limit.js';
@@ -240,17 +242,17 @@ export default async function createApp(): Promise<express.Application> {
 		app.use(cors);
 	}
 
-	app.use((req, res, next) => {
-		(
-			express.json({
-				limit: env['MAX_PAYLOAD_SIZE'],
-			}) as RequestHandler
-		)(req, res, (err: any) => {
-			if (err) {
-				return next(new InvalidPayloadException(err.message));
-			}
+	const jsonBodyParser = boundedBodyParser(
+		env['MAX_PAYLOAD_SIZE'],
+		'application/json',
+		(limit) => express.json({ limit }) as RequestHandler
+	);
 
-			return next();
+	app.use((req, res, next) => {
+		jsonBodyParser(req, res, (err: any) => {
+			if (!err) return next();
+			if (err instanceof InvalidConfigException) return next(err);
+			return next(new InvalidPayloadException(err.message));
 		});
 	});
 

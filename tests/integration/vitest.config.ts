@@ -12,7 +12,6 @@ const shared = defineConfig({
 		pool: 'forks',
 		fileParallelism: false,
 		maxWorkers: 1,
-		minWorkers: 1,
 		isolate: true,
 		watch: false,
 		retry: 0,
@@ -36,7 +35,7 @@ export default defineConfig({
 					name: 'load',
 					include: ['**/*.load.test.ts'],
 					sequence: { groupOrder: 0 },
-					poolOptions: { forks: { singleFork: true } },
+					isolate: false,
 				},
 			},
 			{

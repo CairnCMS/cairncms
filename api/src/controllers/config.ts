@@ -1,5 +1,5 @@
 import { BaseException } from '@cairncms/exceptions';
-import express from 'express';
+import express, { type RequestHandler } from 'express';
 import { isPlainObject } from 'lodash-es';
 import { randomUUID } from 'node:crypto';
 import getDatabase from '../database/index.js';
@@ -14,6 +14,7 @@ import {
 import { respond } from '../middleware/respond.js';
 import asyncHandler from '../utils/async-handler.js';
 import { applyConfigPlan } from '../utils/apply-config-plan.js';
+import { boundedBodyParser } from '../utils/bounded-body-parser.js';
 import { computeConfigPlan } from '../utils/compute-config-plan.js';
 import {
 	LATEST_MANIFEST_VERSION,
@@ -60,10 +61,13 @@ router.get(
 	respond
 );
 
-const yamlBodyParser = express.text({
-	type: ['application/x-yaml', 'application/yaml', 'text/yaml'],
-	limit: env['MAX_PAYLOAD_SIZE'],
-});
+const YAML_CONTENT_TYPES = ['application/x-yaml', 'application/yaml', 'text/yaml'];
+
+const yamlBodyParser = boundedBodyParser(
+	env['MAX_PAYLOAD_SIZE'],
+	YAML_CONTENT_TYPES,
+	(limit) => express.text({ type: YAML_CONTENT_TYPES, limit }) as RequestHandler
+);
 
 router.post(
 	'/apply',

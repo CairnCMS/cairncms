@@ -1,23 +1,49 @@
 import type { Diff } from 'deep-diff';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Collection, Snapshot, SnapshotDiff } from '../types/index.js';
+import type { Collection, MutationOptions, Snapshot, SnapshotDiff } from '../types/index.js';
 
+const order: string[] = [];
 const collections = { createOne: vi.fn(), updateOne: vi.fn(), deleteOne: vi.fn() };
 const fields = { createField: vi.fn(), updateField: vi.fn(), deleteField: vi.fn() };
 const relations = { createOne: vi.fn(), updateOne: vi.fn(), deleteOne: vi.fn() };
+const cache = { flushCaches: vi.fn(async () => void order.push('flush')), clearSystemCache: vi.fn() };
+const emitter = { emitAction: vi.fn() };
 
-vi.mock('../database/index.js', () => ({ default: () => ({ transaction: async (cb: any) => cb({}) }) }));
+vi.mock('../database/index.js', () => ({
+	default: () => ({
+		transaction: async (cb: any) => {
+			await cb({});
+			order.push('commit');
+		},
+	}),
+}));
+
 vi.mock('./get-schema.js', () => ({ getSchema: async () => ({ collections: {}, relations: [] }) }));
 
 vi.mock('../database/helpers/index.js', () => ({
 	getHelpers: () => ({ schema: { preColumnChange: async () => false, postColumnChange: async () => undefined } }),
 }));
 
-vi.mock('../services/collections.js', () => ({ CollectionsService: vi.fn(() => collections) }));
-vi.mock('../services/fields.js', () => ({ FieldsService: vi.fn(() => fields) }));
-vi.mock('../services/relations.js', () => ({ RelationsService: vi.fn(() => relations) }));
-vi.mock('../emitter.js', () => ({ default: { emitAction: vi.fn() } }));
-vi.mock('../cache.js', () => ({ clearSystemCache: vi.fn() }));
+vi.mock('../services/collections.js', () => ({
+	CollectionsService: vi.fn(function () {
+		return collections;
+	}),
+}));
+
+vi.mock('../services/fields.js', () => ({
+	FieldsService: vi.fn(function () {
+		return fields;
+	}),
+}));
+
+vi.mock('../services/relations.js', () => ({
+	RelationsService: vi.fn(function () {
+		return relations;
+	}),
+}));
+
+vi.mock('../emitter.js', () => ({ default: emitter }));
+vi.mock('../cache.js', () => cache);
 vi.mock('../logger.js', () => ({ default: { error: vi.fn(), warn: vi.fn() } }));
 
 const { applyDiff } = await import('./apply-diff.js');
@@ -35,6 +61,16 @@ function collectionDiff(collection: string, diff: Diff<Collection | undefined>[]
 }
 
 const emptyDiff = (): SnapshotDiff => ({ collections: [], fields: [], relations: [] });
+
+function newRelationDiff(rhs: Record<string, unknown>): SnapshotDiff {
+	const diff = emptyDiff();
+
+	diff.relations = [
+		{ collection: 'articles', field: 'author', related_collection: 'authors', diff: [{ kind: 'N', rhs } as any] },
+	];
+
+	return diff;
+}
 
 describe('applyDiff collection routing', () => {
 	beforeEach(() => vi.clearAllMocks());
@@ -111,5 +147,62 @@ describe('applyDiff collection routing', () => {
 			expect.objectContaining({ collection: 'child' }),
 			expect.anything()
 		);
+	});
+});
+
+describe('applyDiff relation creation', () => {
+	beforeEach(() => vi.clearAllMocks());
+
+	it('creates a relation from the entry identifiers when the new value omits them', async () => {
+		await applyDiff(snapshot(), newRelationDiff({ related_collection: 'authors', meta: null, schema: null }));
+
+		expect(relations.createOne).toHaveBeenCalledWith(
+			expect.objectContaining({ collection: 'articles', field: 'author', related_collection: 'authors' }),
+			expect.anything()
+		);
+	});
+
+	it('prefers the entry identifiers over conflicting identifiers in the new value', async () => {
+		await applyDiff(
+			snapshot(),
+			newRelationDiff({ collection: 'other', field: 'other_field', related_collection: 'authors', meta: null })
+		);
+
+		expect(relations.createOne).toHaveBeenCalledWith(
+			expect.objectContaining({ collection: 'articles', field: 'author' }),
+			expect.anything()
+		);
+	});
+});
+
+describe('applyDiff cache invalidation', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		order.length = 0;
+
+		relations.createOne.mockImplementationOnce(async (_payload: unknown, opts: MutationOptions) => {
+			opts.bypassEmitAction!({ event: 'relations.create', meta: {}, context: {} } as any);
+		});
+	});
+
+	const diffWithActionEvent = () => newRelationDiff({ related_collection: 'authors', meta: null, schema: null });
+
+	it('flushes every cache once after the schema transaction commits', async () => {
+		await applyDiff(snapshot(), diffWithActionEvent());
+
+		expect(cache.flushCaches).toHaveBeenCalledOnce();
+		expect(cache.clearSystemCache).not.toHaveBeenCalled();
+		expect(order).toEqual(['commit', 'flush']);
+		expect(emitter.emitAction).toHaveBeenCalledOnce();
+	});
+
+	it('rejects with the flush error and emits no action events when the flush fails after commit', async () => {
+		const failure = new Error('cache unavailable');
+		cache.flushCaches.mockRejectedValueOnce(failure);
+
+		await expect(applyDiff(snapshot(), diffWithActionEvent())).rejects.toBe(failure);
+
+		expect(order).toEqual(['commit']);
+		expect(emitter.emitAction).not.toHaveBeenCalled();
 	});
 });

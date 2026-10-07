@@ -28,13 +28,13 @@
 	},
 	"dependencies": {
 		"semver": "7.6.2",
-		"undici": "6.27.0"
+		"undici": "6.28.1"
 	},
 	"devDependencies": {
 		"@ngneat/falso": "6.4.0",
 		"@types/semver": "7.3.13",
-		"@vitest/coverage-v8": "3.2.6",
+		"@vitest/coverage-v8": "4.1.11",
 		"typescript": "5.0.4",
-		"vitest": "3.2.6"
+		"vitest": "4.1.11"
 	}
 }

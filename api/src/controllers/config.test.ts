@@ -816,3 +816,37 @@ describe('POST /config/apply extension-settings forwarding', () => {
 		expect(vi.mocked(applyConfigPlan).mock.calls[0]![1].extensionDeclarations).toBe(captured);
 	});
 });
+
+describe('POST /config/apply with an invalid MAX_PAYLOAD_SIZE', () => {
+	afterEach(() => {
+		delete envOverrides['MAX_PAYLOAD_SIZE'];
+		vi.resetModules();
+	});
+
+	it('rejects the YAML body with INVALID_CONFIG without crashing at import', async () => {
+		envOverrides['MAX_PAYLOAD_SIZE'] = 'not-a-size';
+		vi.resetModules();
+
+		const freshController = (await import('./config.js')).default;
+		const freshErrorHandler = (await import('../middleware/error-handler.js')).default;
+
+		const app = express();
+		app.use(express.json());
+
+		app.use((req: Record<string, unknown>, _res: unknown, next: () => void) => {
+			req['accountability'] = ADMIN;
+			next();
+		});
+
+		app.use('/config', freshController);
+		app.use(freshErrorHandler);
+
+		const res = await request(app)
+			.post('/config/apply')
+			.set('Content-Type', 'application/yaml')
+			.send('manifest:\n  version: 1');
+
+		expect(res.status).toBe(503);
+		expect(res.body.errors?.[0]?.extensions?.code).toBe('INVALID_CONFIG');
+	});
+});

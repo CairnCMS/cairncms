@@ -39,7 +39,7 @@
 		"sqlite3": "5.1.6",
 		"tsup": "8.5.1",
 		"typescript": "5.4.5",
-		"vitest": "3.2.6"
+		"vitest": "4.1.11"
 	},
 	"engines": {
 		"node": ">=22.0.0"

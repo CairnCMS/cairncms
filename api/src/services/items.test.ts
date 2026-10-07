@@ -1597,6 +1597,7 @@ describe('Integration Tests', () => {
 			});
 
 			const itemsServiceCacheClearSpy = vi.spyOn(itemsService.cache, 'clear' as never).mockResolvedValue(() => vi.fn());
+			itemsServiceCacheClearSpy.mockClear();
 
 			await itemsService.updateBatch(items);
 

@@ -1,6 +1,7 @@
 import { inject } from 'vitest';
 import { Wait } from 'testcontainers';
-import { createEnvironmentTest } from '../../fixtures/environment';
+import { createEnvironmentTest, apiFixtures, type EnvironmentOptions } from '../../fixtures/environment';
+import { capturePrerequisite, type Prerequisite } from '../../fixtures/prerequisite';
 import { withService } from '../../fixtures/service';
 import { redisImages } from '../../fixtures/redis';
 import { s3Image } from '../../fixtures/storage';
@@ -15,22 +16,36 @@ const definitions = {
 	storage: { name: 'storage-startup-control', image: s3Image, port: 80 },
 };
 
-const test = createEnvironmentTest();
+// Native cancellation can abandon a test body's pending work. Fixture setup must own startup.
+const test = createEnvironmentTest()
+	.extend<{ configurationState: Prerequisite<EnvironmentOptions> }>({
+		configurationState: [
+			async ({ cancellationSignal, teardownFailures }, use) => {
+				const name = process.env.CONTROL_STARTUP_SERVICE as keyof typeof definitions;
+				if (!definitions[name]) throw new Error('Missing startup control service');
 
-test('unready service fails before any API is provisioned', async ({ cancellationSignal }) => {
-	const name = process.env.CONTROL_STARTUP_SERVICE as keyof typeof definitions;
-	if (!definitions[name]) throw new Error('Missing startup control service');
+				await capturePrerequisite<EnvironmentOptions>(
+					(ready) =>
+						withService(
+							{
+								...definitions[name],
+								wait: Wait.forLogMessage('CAIRN_CONTROL_THIS_READINESS_MARKER_IS_NEVER_EMITTED'),
+								startupTimeoutMs: 2_000,
+							},
+							inject('integration').directory,
+							cancellationSignal,
+							() => ready({})
+						),
+					use,
+					teardownFailures
+				);
+			},
+			{ scope: 'file' },
+		],
+	})
+	.extend(apiFixtures);
 
-	await withService(
-		{
-			...definitions[name],
-			wait: Wait.forLogMessage('CAIRN_CONTROL_THIS_READINESS_MARKER_IS_NEVER_EMITTED'),
-			startupTimeoutMs: 2_000,
-		},
-		inject('integration').directory,
-		cancellationSignal,
-		async () => {
-			throw new Error('UNEXPECTED_SERVICE_READY');
-		}
-	);
+test('unready service fails before any API is provisioned', async ({ api }) => {
+	void api;
+	throw new Error('UNEXPECTED_SERVICE_READY');
 }, 20_000);

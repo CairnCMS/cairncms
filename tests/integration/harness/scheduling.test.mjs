@@ -15,7 +15,7 @@ for (const [scenario, filters, selected, passed, exitCode] of [
 	['ordinary selection', ['controls/c.test.ts', 'controls/d.test.ts'], 2, 2, 0],
 	['bail', [], 4, 0, 1],
 	['collect all', [], 4, 2, 1],
-	['cancel', [], 4, 1, 143],
+	['cancel', [], 4, 0, 143],
 ])
 	test(`native load scheduling: ${scenario}`, { timeout: 30000 }, async () => {
 		const checkout = await controlCheckout(files.map((file) => `harness/controls/${file}`));

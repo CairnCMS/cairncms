@@ -30,9 +30,11 @@ vi.mock('../storage/index.js', () => ({
 const checkAccessSpy = vi.fn();
 
 vi.mock('./authorization.js', () => ({
-	AuthorizationService: vi.fn().mockImplementation(() => ({
-		checkAccess: checkAccessSpy,
-	})),
+	AuthorizationService: vi.fn().mockImplementation(function () {
+		return {
+			checkAccess: checkAccessSpy,
+		};
+	}),
 }));
 
 vi.mock('../database/index.js', () => ({

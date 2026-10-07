@@ -25,25 +25,25 @@ type SchemaTimezoneTypesResponse = SchemaTimezoneTypesObject & {
 	date_updated: string;
 };
 
+const currentTzOffset = new Date().getTimezoneOffset();
+const isWindows = ['win32', 'win64'].includes(process.platform);
+
+const newTzOffset = currentTzOffset !== -540 ? -540 : -240;
+let newTz: string;
+
+// Different timezone format for Windows
+if (isWindows) {
+	newTz = String(newTzOffset * 60);
+} else if (newTzOffset === -540) {
+	newTz = 'Asia/Seoul';
+} else {
+	newTz = 'Asia/Dubai';
+}
+
+const americanTz = currentTzOffset !== 180 ? 'America/Sao_Paulo' : 'America/Mexico_City';
+const test = createTimezoneTest(newTz, americanTz);
+
 describe('schema', () => {
-	const currentTzOffset = new Date().getTimezoneOffset();
-	const isWindows = ['win32', 'win64'].includes(process.platform);
-
-	const newTzOffset = currentTzOffset !== -540 ? -540 : -240;
-	let newTz: string;
-
-	// Different timezone format for Windows
-	if (isWindows) {
-		newTz = String(newTzOffset * 60);
-	} else if (newTzOffset === -540) {
-		newTz = 'Asia/Seoul';
-	} else {
-		newTz = 'Asia/Dubai';
-	}
-
-	const americanTz = currentTzOffset !== 180 ? 'America/Sao_Paulo' : 'America/Mexico_City';
-	const test = createTimezoneTest(newTz, americanTz);
-
 	const sampleDates: SchemaTimezoneTypesObject[] = [];
 
 	for (let i = 0; i < 24; i++) {

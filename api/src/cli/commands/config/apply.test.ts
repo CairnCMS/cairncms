@@ -155,6 +155,12 @@ const MISSING_COLLECTION_PERMISSION: ConfigPermission = {
 	fields: null,
 };
 
+beforeEach(() => {
+	vi.mocked(validateDesiredConfig).mockReturnValue([]);
+	vi.mocked(planHasDeletions).mockReturnValue(false);
+	vi.mocked(logger.info).mockReset();
+});
+
 describe('configApply usage ordering', () => {
 	afterEach(() => {
 		vi.restoreAllMocks();

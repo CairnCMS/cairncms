@@ -30,12 +30,12 @@
 		"@cairncms/schema": "workspace:*",
 		"@types/express": "4.17.17",
 		"@types/geojson": "7946.0.10",
-		"express": "4.21.2",
+		"express": "4.22.3",
 		"geojson": "0.5.0",
 		"knex": "2.4.2",
 		"pino": "8.11.0",
 		"typescript": "5.0.4",
-		"vue": "3.5.38",
+		"vue": "3.5.43",
 		"vue-router": "4.6.4",
 		"zod": "3.23.8"
 	}

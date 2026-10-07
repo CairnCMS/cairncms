@@ -16,7 +16,9 @@ vi.mock('../env.js', () => {
 const lookupSessionSpy = vi.fn();
 
 vi.mock('../services/authentication.js', () => ({
-	AuthenticationService: vi.fn().mockImplementation(() => ({ lookupSession: lookupSessionSpy })),
+	AuthenticationService: vi.fn().mockImplementation(function () {
+		return { lookupSession: lookupSessionSpy };
+	}),
 }));
 
 const getPermissionsSpy = vi.fn();

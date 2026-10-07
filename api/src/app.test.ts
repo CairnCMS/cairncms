@@ -290,6 +290,112 @@ describe('createApp', async () => {
 		});
 	});
 
+	describe('Query string array limit', () => {
+		let originalArrayLimit: unknown;
+
+		beforeEach(async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			originalArrayLimit = env['QUERYSTRING_ARRAY_LIMIT'];
+			env['QUERYSTRING_ARRAY_LIMIT'] = 1;
+		});
+
+		afterEach(async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['QUERYSTRING_ARRAY_LIMIT'] = originalArrayLimit;
+		});
+
+		test('represents an array within the limit as an array', async () => {
+			const router = Router();
+			router.get('/echo-query', (req, res) => res.json(req.query));
+			mockGetEndpointRouter.mockReturnValueOnce(router);
+
+			const app = await createApp();
+			const response = await request(app).get('/echo-query?a[]=0');
+
+			expect(response.body).toEqual({ a: ['0'] });
+		});
+
+		test('represents an over-limit array as a numeric-keyed object', async () => {
+			const router = Router();
+			router.get('/echo-query', (req, res) => res.json(req.query));
+			mockGetEndpointRouter.mockReturnValueOnce(router);
+
+			const app = await createApp();
+			const response = await request(app).get('/echo-query?a[]=0&a=1');
+
+			expect(response.body).toEqual({ a: { 0: '0', 1: '1' } });
+		});
+	});
+
+	describe('Request body size limit', () => {
+		let originalLimit: unknown;
+
+		beforeEach(async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			originalLimit = env['MAX_PAYLOAD_SIZE'];
+		});
+
+		afterEach(async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['MAX_PAYLOAD_SIZE'] = originalLimit;
+		});
+
+		function echoBody(): void {
+			const router = Router();
+			router.post('/echo-body', (_req, res) => res.json({ ok: true }));
+			mockGetEndpointRouter.mockReturnValueOnce(router);
+		}
+
+		test('rejects a JSON body with INVALID_CONFIG when MAX_PAYLOAD_SIZE is invalid', async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['MAX_PAYLOAD_SIZE'] = 'not-a-size';
+			echoBody();
+
+			const app = await createApp();
+			const res = await request(app).post('/echo-body').set('Content-Type', 'application/json').send('{"a":1}');
+
+			expect(res.status).toBe(503);
+			expect(res.body.errors?.[0]?.extensions?.code).toBe('INVALID_CONFIG');
+		});
+
+		test('leaves an independent form-encoded body reachable when MAX_PAYLOAD_SIZE is invalid', async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['MAX_PAYLOAD_SIZE'] = 'not-a-size';
+			echoBody();
+
+			const app = await createApp();
+			const res = await request(app).post('/echo-body').type('form').send({ a: '1' });
+
+			expect(res.status).toBe(200);
+			expect(res.body.ok).toBe(true);
+		});
+
+		test('a blank MAX_PAYLOAD_SIZE enforces the 1 MiB default rather than body-parser 100 KB', async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['MAX_PAYLOAD_SIZE'] = '';
+			echoBody();
+
+			const app = await createApp();
+			const payload = JSON.stringify({ a: 'x'.repeat(200 * 1024) });
+			const res = await request(app).post('/echo-body').set('Content-Type', 'application/json').send(payload);
+
+			expect(res.status).toBe(200);
+		});
+
+		test('a blank MAX_PAYLOAD_SIZE still rejects a body over 1 MiB', async () => {
+			const env = (await import('./env.js')).default as Record<string, unknown>;
+			env['MAX_PAYLOAD_SIZE'] = '';
+			echoBody();
+
+			const app = await createApp();
+			const payload = JSON.stringify({ a: 'x'.repeat(1024 * 1024 + 1024) });
+			const res = await request(app).post('/echo-body').set('Content-Type', 'application/json').send(payload);
+
+			expect(res.status).toBe(400);
+			expect(res.body.errors?.[0]?.extensions?.code).toBe('INVALID_PAYLOAD');
+		});
+	});
+
 	describe('Not Found Handler', () => {
 		test('Should return ROUTE_NOT_FOUND error when a route does not exist', async () => {
 			const testRoute = '/this-route-does-not-exist';
