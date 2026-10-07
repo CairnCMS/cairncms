@@ -274,7 +274,9 @@ describe('Logger Redact Tests', () => {
 		}) => {
 			const propagatedSecret = 'propagated-body-secret-4f9a2c1d';
 
-			const logger = new TestLogger(api.child, ERROR_SINK_ENDPOINT);
+			const logger = new TestLogger(api.child, ERROR_SINK_ENDPOINT, undefined, {
+				completeWhen: (logs) => findErrorRecord(logs, 'error-sink endpoint failure') !== undefined,
+			});
 
 			const response = await request(api.url)
 				.post(ERROR_SINK_ENDPOINT)
@@ -309,7 +311,9 @@ describe('Logger Redact Tests', () => {
 		test('redacts a variable secret echoed in a coercion error in the response and the log', async ({ api }) => {
 			const variableSecret = 'graphql-variable-secret-8c2f1a3b';
 
-			const logger = new TestLogger(api.child, '/graphql/system');
+			const logger = new TestLogger(api.child, '/graphql/system', undefined, {
+				completeWhen: (logs) => findErrorRecord(logs, 'got invalid value') !== undefined,
+			});
 
 			const response = await request(api.url)
 				.post('/graphql/system')

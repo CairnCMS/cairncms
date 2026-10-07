@@ -2,15 +2,17 @@ import { StringDecoder } from 'node:string_decoder';
 
 export class TestLogger {
 	/**
-	 * Capture complete stdout lines after construction, stopping at the request marker.
+	 * Capture complete stdout lines until the request marker and optional completion condition are satisfied.
 	 * @param {import('node:child_process').ChildProcess} server
 	 * @param {string} stopCondition
 	 * @param {boolean | string} [filterCondition]
-	 * @param {{ timeoutMs?: number }} [options]
+	 * @param {{ timeoutMs?: number, completeWhen?: (logs: string) => boolean }} [options]
 	 */
 	constructor(server, stopCondition, filterCondition, options = {}) {
 		this.server = server;
 		this.stopCondition = stopCondition;
+		this.markerSeen = false;
+		this.completeWhen = options.completeWhen;
 		this.filterCondition = filterCondition === true ? stopCondition : filterCondition || undefined;
 		this.logs = '';
 		this.buffer = '';
@@ -24,7 +26,7 @@ export class TestLogger {
 		this.reject = undefined;
 
 		this.timer = setTimeout(
-			() => this.fail(new Error(`Log marker ${stopCondition} did not arrive before the deadline`)),
+			() => this.fail(new Error(`Log capture for ${stopCondition} did not complete before the deadline`)),
 			options.timeoutMs ?? 10_000
 		);
 
@@ -43,15 +45,22 @@ export class TestLogger {
 			this.buffer = this.buffer.slice(newline + 1);
 			if (!this.filterCondition || line.includes(this.filterCondition)) this.logs += line;
 
-			if (line.includes(this.stopCondition)) {
-				this.stopped = true;
-				this.cleanup();
-				this.resolve?.(this.logs);
+			this.markerSeen ||= line.includes(this.stopCondition);
+
+			try {
+				// Application and HTTP loggers can flush their records in either order.
+				if (this.markerSeen && (!this.completeWhen || this.completeWhen(this.logs))) {
+					this.stopped = true;
+					this.cleanup();
+					this.resolve?.(this.logs);
+				}
+			} catch (error) {
+				this.fail(error);
 			}
 		}
 	};
 
-	onExit = () => this.fail(new Error(`API exited before log marker ${this.stopCondition}`));
+	onExit = () => this.fail(new Error(`API exited before log capture for ${this.stopCondition} completed`));
 	/** @param {Error} error */
 	onError = (error) => this.fail(error);
 	/** @param {Error} error */
