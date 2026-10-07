@@ -2,7 +2,7 @@ import { describe, expect } from 'vitest';
 import type { Test } from 'supertest';
 import type { Api } from '../../fixtures/environment';
 import { identityTest as test } from '../../fixtures/identities';
-import { CreateCollection, CreateFieldM2O } from '../../fixtures/data';
+import { CreateCollection, CreateField } from '../../fixtures/data';
 import * as common from '../../fixtures/data';
 import request from '../../fixtures/request';
 import { initializeFixtures } from '../../harness/fixture-setup.mjs';
@@ -32,13 +32,18 @@ describe('Schema apply: new relations', () => {
 				try {
 					await CreateCollection(api, { collection: authors });
 					await CreateCollection(api, { collection: articles });
-					await CreateFieldM2O(api, { collection: articles, field: 'author', otherCollection: authors });
+					await CreateField(api, { collection: articles, field: 'author', type: 'integer' });
 
 					const snapshotRes = await adminAuth(request(api.url).get('/schema/snapshot'));
 					expect(snapshotRes.statusCode).toBe(200);
 
-					const deleteRes = await adminAuth(request(api.url).delete(`/relations/${articles}/author`));
-					expect(deleteRes.statusCode).toBe(204);
+					snapshotRes.body.data.relations.push({
+						collection: articles,
+						field: 'author',
+						related_collection: authors,
+						meta: {},
+						schema: { on_delete: 'SET NULL' },
+					});
 
 					const diffRes = await adminAuth(
 						request(api.url).post('/schema/diff').send(snapshotRes.body.data).set('Content-type', 'application/json')

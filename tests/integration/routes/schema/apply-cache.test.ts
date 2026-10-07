@@ -121,7 +121,7 @@ async function snapshotWithField(api: Api, url: string, collection: string, fiel
 	return snapshot;
 }
 
-async function applySnapshot(api: Api, url: string, snapshot: unknown) {
+async function applySnapshot(api: Api, url: string, snapshot: object) {
 	const diffRes = await asAdmin(api, url).post('/schema/diff').send(snapshot).set('Content-type', 'application/json');
 	expect(diffRes.statusCode).toBe(200);
 
