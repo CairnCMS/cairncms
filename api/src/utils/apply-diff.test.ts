@@ -51,6 +51,16 @@ function collectionDiff(collection: string, diff: Diff<Collection | undefined>[]
 
 const emptyDiff = (): SnapshotDiff => ({ collections: [], fields: [], relations: [] });
 
+function newRelationDiff(rhs: Record<string, unknown>): SnapshotDiff {
+	const diff = emptyDiff();
+
+	diff.relations = [
+		{ collection: 'articles', field: 'author', related_collection: 'authors', diff: [{ kind: 'N', rhs } as any] },
+	];
+
+	return diff;
+}
+
 describe('applyDiff collection routing', () => {
 	beforeEach(() => vi.clearAllMocks());
 
@@ -124,6 +134,31 @@ describe('applyDiff collection routing', () => {
 
 		expect(collections.createOne).toHaveBeenCalledWith(
 			expect.objectContaining({ collection: 'child' }),
+			expect.anything()
+		);
+	});
+});
+
+describe('applyDiff relation creation', () => {
+	beforeEach(() => vi.clearAllMocks());
+
+	it('creates a relation from the entry identifiers when the new value omits them', async () => {
+		await applyDiff(snapshot(), newRelationDiff({ related_collection: 'authors', meta: null, schema: null }));
+
+		expect(relations.createOne).toHaveBeenCalledWith(
+			expect.objectContaining({ collection: 'articles', field: 'author', related_collection: 'authors' }),
+			expect.anything()
+		);
+	});
+
+	it('prefers the entry identifiers over conflicting identifiers in the new value', async () => {
+		await applyDiff(
+			snapshot(),
+			newRelationDiff({ collection: 'other', field: 'other_field', related_collection: 'authors', meta: null })
+		);
+
+		expect(relations.createOne).toHaveBeenCalledWith(
+			expect.objectContaining({ collection: 'articles', field: 'author' }),
 			expect.anything()
 		);
 	});
