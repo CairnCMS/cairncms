@@ -44,19 +44,44 @@ jobs:
         id: prepare
         run: pnpm test:integration:prepare 2>&1 | tee tests/integration/.artifacts/prepare.log
       - name: Check integration types
+        id: typecheck
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: pnpm --filter tests-integration typecheck 2>&1 | tee tests/integration/.artifacts/typecheck.log
       - name: Verify harness and readiness checks
+        id: harness
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: pnpm --filter tests-integration test:harness 2>&1 | tee tests/integration/.artifacts/harness.log
+        run:
+          env -u GITHUB_STEP_SUMMARY pnpm --filter tests-integration test:harness 2>&1 | tee
+          tests/integration/.artifacts/harness.log
       - name: Verify process lifecycle and ownership
+        id: lifecycle
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         env:
           TEST_DB: postgres
-        run: pnpm --filter tests-integration test:lifecycle 2>&1 | tee tests/integration/.artifacts/lifecycle.log
+        run:
+          env -u GITHUB_STEP_SUMMARY pnpm --filter tests-integration test:lifecycle 2>&1 | tee
+          tests/integration/.artifacts/lifecycle.log
       - name: Verify service startup and cleanup
+        id: services
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
-        run: pnpm --filter tests-integration test:services 2>&1 | tee tests/integration/.artifacts/services.log
+        run:
+          env -u GITHUB_STEP_SUMMARY pnpm --filter tests-integration test:services 2>&1 | tee
+          tests/integration/.artifacts/services.log
+      - name: Summarize validation checks
+        if: always()
+        env:
+          TYPECHECK_RESULT: ${{ steps.typecheck.outcome }}
+          HARNESS_RESULT: ${{ steps.harness.outcome }}
+          LIFECYCLE_RESULT: ${{ steps.lifecycle.outcome }}
+          SERVICES_RESULT: ${{ steps.services.outcome }}
+        run: |
+          {
+            printf '### Validation checks\n\n| Check | Result |\n| --- | --- |\n'
+            printf '| Integration types | %s |\n' "$TYPECHECK_RESULT"
+            printf '| Harness checks | %s |\n' "$HARNESS_RESULT"
+            printf '| Process lifecycle | %s |\n' "$LIFECYCLE_RESULT"
+            printf '| Service checks | %s |\n' "$SERVICES_RESULT"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Retain validation diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -100,10 +125,22 @@ jobs:
       - name: Prepare API and SDK
         run: pnpm test:integration:prepare 2>&1 | tee tests/integration/.artifacts/prepare.log
       - name: Verify database restoration and failure cleanup
+        id: restoration
         env:
           TEST_DB: ${{ matrix.vendor }}
           INTEGRATION_CONTROL_OUTPUT: ${{ github.workspace }}/tests/integration/.artifacts/restoration
-        run: pnpm --filter tests-integration test:restoration 2>&1 | tee tests/integration/.artifacts/restoration.log
+        run:
+          env -u GITHUB_STEP_SUMMARY pnpm --filter tests-integration test:restoration 2>&1 | tee
+          tests/integration/.artifacts/restoration.log
+      - name: Summarize restoration checks
+        if: always()
+        env:
+          RESTORATION_RESULT: ${{ steps.restoration.outcome }}
+        run: |
+          {
+            printf '### Restoration checks\n\n| Check | Result |\n| --- | --- |\n'
+            printf '| Database restoration and cleanup | %s |\n' "$RESTORATION_RESULT"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Retain restoration diagnostics
         if: always()
         uses: actions/upload-artifact@v4
