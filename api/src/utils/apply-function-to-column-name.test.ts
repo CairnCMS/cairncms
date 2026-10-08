@@ -7,6 +7,7 @@ test.each([
 	{ input: 'year(date_created)', expected: 'date_created_year' },
 	{ input: `hour(timestamp)`, expected: 'timestamp_hour' },
 	{ input: `count(value)`, expected: 'value_count' },
+	{ input: 'year)(date_created', expected: 'year)(date_created' },
 ])('should return "$expected" for "$input"', ({ input, expected }) => {
 	expect(applyFunctionToColumnName(input)).toBe(expected);
 });

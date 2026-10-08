@@ -2,8 +2,8 @@
  * Generate an AST based on a given collection and query
  */
 
-import { REGEX_BETWEEN_PARENS } from '@cairncms/constants';
 import type { Accountability, PermissionsAction, Query, SchemaOverview } from '@cairncms/types';
+import { getBetweenParens } from '@cairncms/utils';
 import type { Knex } from 'knex';
 import { cloneDeep, isEmpty, mapKeys, omitBy, uniq } from 'lodash-es';
 import { InvalidQueryException } from '../exceptions/invalid-query.js';
@@ -181,8 +181,9 @@ export default async function getASTFromQuery(
 					}
 				}
 			} else {
-				if (fieldKey.includes('(') && fieldKey.includes(')')) {
-					const columnName = fieldKey.match(REGEX_BETWEEN_PARENS)![1]!;
+				const columnName = getBetweenParens(fieldKey);
+
+				if (columnName !== null) {
 					const foundField = schema.collections[parentCollection]!.fields[columnName];
 
 					if (foundField && foundField.type === 'alias') {
@@ -204,9 +205,9 @@ export default async function getASTFromQuery(
 					}
 				}
 
-				const column = name.includes('(') && name.includes(')') ? name.match(REGEX_BETWEEN_PARENS)![1]! : name;
-
-				if (strict && !schema.collections[parentCollection]!.fields[column]) throw unresolvedPath();
+				if (strict && !schema.collections[parentCollection]!.fields[getBetweenParens(name) ?? name]) {
+					throw unresolvedPath();
+				}
 
 				children.push({ type: 'field', name, fieldKey });
 			}

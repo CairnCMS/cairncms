@@ -9,6 +9,7 @@ export * from './defaults.js';
 export * from './define-extension.js';
 export * from './functions.js';
 export * from './generate-joi.js';
+export * from './get-between-parens.js';
 export * from './get-collection-type.js';
 export * from './get-endpoint.js';
 export * from './get-fields-from-template.js';

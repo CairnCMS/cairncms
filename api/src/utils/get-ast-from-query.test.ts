@@ -259,4 +259,18 @@ describe('getASTFromQuery strict mode', () => {
 
 		expect(ast.children.map((child) => child.fieldKey)).toEqual(['email', 'org']);
 	});
+
+	it('keeps a function-shaped key that encloses nothing as a plain field when not strict', async () => {
+		const malformed = ')' + '('.repeat(20_000);
+
+		const ast = await getASTFromQuery('directus_users', { fields: [malformed] }, makeStrictSchema());
+
+		expect(ast.children).toEqual([{ type: 'field', name: malformed, fieldKey: malformed }]);
+	});
+
+	it('rejects a function-shaped key that encloses nothing when strict', async () => {
+		await expect(
+			getASTFromQuery('directus_users', { fields: ['year)(birthday'] }, makeStrictSchema(), { strict: true })
+		).rejects.toThrow('Invalid field path');
+	});
 });
