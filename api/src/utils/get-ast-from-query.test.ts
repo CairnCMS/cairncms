@@ -138,3 +138,125 @@ describe('getASTFromQuery — default sort normalization for unread schema sortF
 		});
 	});
 });
+
+function makeCollection(collection: string, fields: Record<string, any>): any {
+	return {
+		collection,
+		primary: 'id',
+		singleton: false,
+		sortField: null,
+		note: null,
+		accountability: null,
+		fields: { id: makeField('id', 'uuid'), ...fields },
+	};
+}
+
+function makeAlias(name: string): any {
+	return { ...makeField(name), type: 'alias', alias: true, special: ['o2m'] };
+}
+
+function makeStrictSchema(allowedCollections: string[] = ['orgs']): SchemaOverview {
+	return {
+		collections: {
+			directus_users: makeCollection('directus_users', {
+				email: makeField('email'),
+				birthday: { ...makeField('birthday'), type: 'date' },
+				org: makeField('org', 'uuid'),
+				role: makeField('role', 'uuid'),
+				favorite: makeField('favorite'),
+				favorite_collection: makeField('favorite_collection'),
+				memberships: makeAlias('memberships'),
+			}),
+			directus_roles: makeCollection('directus_roles', { name: makeField('name') }),
+			orgs: makeCollection('orgs', { name: makeField('name'), blocked_tenant: makeField('blocked_tenant') }),
+			teams: makeCollection('teams', { name: makeField('name') }),
+			memberships: makeCollection('memberships', {
+				user: makeField('user', 'uuid'),
+				blocked_tenant: makeField('blocked_tenant'),
+			}),
+		},
+		relations: [
+			{ collection: 'directus_users', field: 'org', related_collection: 'orgs', schema: null, meta: null },
+			{ collection: 'directus_users', field: 'role', related_collection: 'directus_roles', schema: null, meta: null },
+			{
+				collection: 'memberships',
+				field: 'user',
+				related_collection: 'directus_users',
+				schema: null,
+				meta: { one_field: 'memberships' },
+			},
+			{
+				collection: 'directus_users',
+				field: 'favorite',
+				related_collection: null,
+				schema: null,
+				meta: { one_collection_field: 'favorite_collection', one_allowed_collections: allowedCollections },
+			},
+		],
+	} as unknown as SchemaOverview;
+}
+
+describe('getASTFromQuery strict mode', () => {
+	it.each([
+		'email',
+		'year(birthday)',
+		'org.blocked_tenant',
+		'role.name',
+		'memberships.blocked_tenant',
+		'favorite:orgs.blocked_tenant',
+		'favorite.blocked_tenant',
+	])('accepts the resolvable path %s', async (path) => {
+		await expect(
+			getASTFromQuery('directus_users', { fields: [path] }, makeStrictSchema(), { strict: true })
+		).resolves.toBeDefined();
+	});
+
+	it.each([
+		['a missing plain field', 'tenant'],
+		['a function over a missing column', 'year(missing)'],
+		['a missing relation', 'team.name'],
+		['a plain field used as a relation', 'email.domain'],
+		['a missing field behind a relation', 'org.missing'],
+		['a missing relation below the root', 'org.parent.name'],
+		['a missing field behind a reverse alias', 'memberships.missing'],
+		['a many-to-any scope that is not allowed', 'favorite:teams.name'],
+		['a missing path behind a many-to-any scope', 'favorite:orgs.missing.deep'],
+	])('rejects %s', async (_case, path) => {
+		await expect(
+			getASTFromQuery('directus_users', { fields: [path] }, makeStrictSchema(), { strict: true })
+		).rejects.toThrow('Invalid field path');
+	});
+
+	it('rejects an unscoped many-to-any path that one allowed collection cannot resolve', async () => {
+		await expect(
+			getASTFromQuery('directus_users', { fields: ['favorite.blocked_tenant'] }, makeStrictSchema(['orgs', 'teams']), {
+				strict: true,
+			})
+		).rejects.toThrow('Invalid field path');
+	});
+
+	it('rejects a many-to-any path with no allowed collections', async () => {
+		await expect(
+			getASTFromQuery('directus_users', { fields: ['favorite.name'] }, makeStrictSchema([]), { strict: true })
+		).rejects.toThrow('Invalid field path');
+	});
+
+	it('rejects a relation whose target collection is not in the schema', async () => {
+		const schema = makeStrictSchema();
+		delete (schema.collections as Record<string, unknown>)['orgs'];
+
+		await expect(
+			getASTFromQuery('directus_users', { fields: ['org.blocked_tenant'] }, schema, { strict: true })
+		).rejects.toThrow('Invalid field path');
+	});
+
+	it('leaves unresolvable paths out without throwing when not strict', async () => {
+		const ast = await getASTFromQuery(
+			'directus_users',
+			{ fields: ['email', 'team.name', 'org.missing'] },
+			makeStrictSchema()
+		);
+
+		expect(ast.children.map((child) => child.fieldKey)).toEqual(['email', 'org']);
+	});
+});

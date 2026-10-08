@@ -7,11 +7,26 @@ import { getCache, getCacheValue, getSystemCache, setCacheValue, setSystemCache 
 import getDatabase from '../database/index.js';
 import { appAccessMinimalPermissions } from '../database/system-data/app-access-permissions/index.js';
 import env from '../env.js';
+import { InvalidQueryException } from '../exceptions/invalid-query.js';
 import logger from '../logger.js';
 import { RolesService } from '../services/roles.js';
 import { UsersService } from '../services/users.js';
 import { mergePermissions } from '../utils/merge-permissions.js';
+import getASTFromQuery from './get-ast-from-query.js';
 import { mergePermissionsForShare } from './merge-permissions-for-share.js';
+
+type RequiredPermissionData = {
+	$CURRENT_USER: string[];
+	$CURRENT_ROLE: string[];
+};
+
+const MAX_UNRESOLVED_WARNINGS = 1000;
+
+const UNRESOLVED_WARNING_INTERVAL = 60 * 60 * 1000;
+
+const unresolvedWarnedAt = new Map<string, number>();
+
+let unresolvedOverflowWarnedAt = Number.NEGATIVE_INFINITY;
 
 export async function getPermissions(accountability: Accountability, schema: SchemaOverview) {
 	const database = getDatabase();
@@ -36,32 +51,26 @@ export async function getPermissions(accountability: Accountability, schema: Sch
 				return processPermissions(accountability, cachedPermissions['permissions'], {});
 			}
 
-			const cachedFilterContext = await getCacheValue(
-				cache,
-				`filterContext-${hash({ user, role, permissions: cachedPermissions['permissions'] })}`
+			permissions = await withoutUnresolvedDynamicData(
+				accountability,
+				schema,
+				parsePermissions(cachedPermissions['permissions'])
 			);
 
+			const filterContextKey = `filterContext-${hash({ user, role, permissions })}`;
+			const cachedFilterContext = await getCacheValue(cache, filterContextKey);
+
 			if (cachedFilterContext) {
-				return processPermissions(accountability, cachedPermissions['permissions'], cachedFilterContext);
-			} else {
-				const {
-					permissions: parsedPermissions,
-					requiredPermissionData,
-					containDynamicData,
-				} = parsePermissions(cachedPermissions['permissions']);
-
-				permissions = parsedPermissions;
-
-				const filterContext = containDynamicData
-					? await getFilterContext(schema, accountability, requiredPermissionData)
-					: {};
-
-				if (containDynamicData && env['CACHE_ENABLED'] !== false) {
-					await setCacheValue(cache, `filterContext-${hash({ user, role, permissions })}`, filterContext);
-				}
-
-				return processPermissions(accountability, permissions, filterContext);
+				return processPermissions(accountability, permissions, cachedFilterContext);
 			}
+
+			const filterContext = await getFilterContext(schema, accountability, getRequiredPermissionData(permissions));
+
+			if (env['CACHE_ENABLED'] !== false) {
+				await setCacheValue(cache, filterContextKey, filterContext);
+			}
+
+			return processPermissions(accountability, permissions, filterContext);
 		}
 	}
 
@@ -72,13 +81,7 @@ export async function getPermissions(accountability: Accountability, schema: Sch
 
 		const permissionsForRole = await query;
 
-		const {
-			permissions: parsedPermissions,
-			requiredPermissionData,
-			containDynamicData,
-		} = parsePermissions(permissionsForRole);
-
-		permissions = parsedPermissions;
+		permissions = parsePermissions(permissionsForRole);
 
 		if (accountability.app === true) {
 			permissions = mergePermissions(
@@ -92,33 +95,36 @@ export async function getPermissions(accountability: Accountability, schema: Sch
 			permissions = mergePermissionsForShare(permissions, accountability, schema);
 		}
 
+		const containDynamicData = hasDynamicData(getRequiredPermissionData(permissions));
+
+		const resolvablePermissions = containDynamicData
+			? await withoutUnresolvedDynamicData(accountability, schema, permissions)
+			: permissions;
+
 		const filterContext = containDynamicData
-			? await getFilterContext(schema, accountability, requiredPermissionData)
+			? await getFilterContext(schema, accountability, getRequiredPermissionData(resolvablePermissions))
 			: {};
 
 		if (cache && env['CACHE_PERMISSIONS'] !== false) {
 			await setSystemCache(cacheKey, { permissions, containDynamicData });
 
 			if (containDynamicData && env['CACHE_ENABLED'] !== false) {
-				await setCacheValue(cache, `filterContext-${hash({ user, role, permissions })}`, filterContext);
+				await setCacheValue(
+					cache,
+					`filterContext-${hash({ user, role, permissions: resolvablePermissions })}`,
+					filterContext
+				);
 			}
 		}
 
-		return processPermissions(accountability, permissions, filterContext);
+		return processPermissions(accountability, resolvablePermissions, filterContext);
 	}
 
 	return permissions;
 }
 
-function parsePermissions(permissions: any[]) {
-	const requiredPermissionData = {
-		$CURRENT_USER: [] as string[],
-		$CURRENT_ROLE: [] as string[],
-	};
-
-	let containDynamicData = false;
-
-	permissions = permissions.map((permissionRaw) => {
+function parsePermissions(permissions: any[]): Permission[] {
+	return permissions.map((permissionRaw) => {
 		const permission = cloneDeep(permissionRaw);
 
 		if (permission.permissions && typeof permission.permissions === 'string') {
@@ -145,31 +151,132 @@ function parsePermissions(permissions: any[]) {
 			permission.fields = [];
 		}
 
-		const extractPermissionData = (val: any) => {
-			if (typeof val === 'string' && val.startsWith('$CURRENT_USER.')) {
-				requiredPermissionData.$CURRENT_USER.push(val.replace('$CURRENT_USER.', ''));
-				containDynamicData = true;
-			}
+		return permission;
+	});
+}
 
-			if (typeof val === 'string' && val.startsWith('$CURRENT_ROLE.')) {
-				requiredPermissionData.$CURRENT_ROLE.push(val.replace('$CURRENT_ROLE.', ''));
-				containDynamicData = true;
-			}
+function getRequiredPermissionData(permissions: Permission[]): RequiredPermissionData {
+	const requiredPermissionData: RequiredPermissionData = {
+		$CURRENT_USER: [],
+		$CURRENT_ROLE: [],
+	};
 
-			return val;
-		};
+	const extractPermissionData = (val: any) => {
+		if (typeof val === 'string' && val.startsWith('$CURRENT_USER.')) {
+			requiredPermissionData.$CURRENT_USER.push(val.replace('$CURRENT_USER.', ''));
+		}
 
+		if (typeof val === 'string' && val.startsWith('$CURRENT_ROLE.')) {
+			requiredPermissionData.$CURRENT_ROLE.push(val.replace('$CURRENT_ROLE.', ''));
+		}
+
+		return val;
+	};
+
+	for (const permission of permissions) {
 		deepMap(permission.permissions, extractPermissionData);
 		deepMap(permission.validation, extractPermissionData);
 		deepMap(permission.presets, extractPermissionData);
+	}
 
-		return permission;
-	});
-
-	return { permissions, requiredPermissionData, containDynamicData };
+	return requiredPermissionData;
 }
 
-async function getFilterContext(schema: SchemaOverview, accountability: Accountability, requiredPermissionData: any) {
+function hasDynamicData(requiredPermissionData: RequiredPermissionData) {
+	return requiredPermissionData.$CURRENT_USER.length > 0 || requiredPermissionData.$CURRENT_ROLE.length > 0;
+}
+
+async function withoutUnresolvedDynamicData(
+	accountability: Accountability,
+	schema: SchemaOverview,
+	permissions: Permission[]
+): Promise<Permission[]> {
+	const resolved = new Map<string, boolean>();
+
+	const pathResolves = async (collection: string, path: string) => {
+		const key = `${collection}:${path}`;
+
+		if (!resolved.has(key)) {
+			resolved.set(key, await dynamicPathResolves(schema, collection, path));
+		}
+
+		return resolved.get(key)!;
+	};
+
+	const resolvable: Permission[] = [];
+
+	for (const permission of permissions) {
+		const { $CURRENT_USER, $CURRENT_ROLE } = getRequiredPermissionData([permission]);
+
+		let unresolved = false;
+
+		for (const path of $CURRENT_USER) {
+			if (!(await pathResolves('directus_users', path))) unresolved = true;
+		}
+
+		for (const path of $CURRENT_ROLE) {
+			if (!(await pathResolves('directus_roles', path))) unresolved = true;
+		}
+
+		if (unresolved) {
+			warnUnresolvedPermission(accountability, permission);
+			continue;
+		}
+
+		resolvable.push(permission);
+	}
+
+	return resolvable;
+}
+
+async function dynamicPathResolves(schema: SchemaOverview, collection: string, path: string) {
+	try {
+		await getASTFromQuery(collection, { fields: [path] }, schema, { strict: true });
+		return true;
+	} catch (error) {
+		if (error instanceof InvalidQueryException) return false;
+		throw error;
+	}
+}
+
+function warnUnresolvedPermission(accountability: Accountability, permission: Permission) {
+	const role = accountability.role ?? PUBLIC_ROLE_ID;
+	const key = `${role}:${permission.collection}:${permission.action}`;
+	const now = Date.now();
+	const warnedAt = unresolvedWarnedAt.get(key);
+
+	if (warnedAt !== undefined && now - warnedAt < UNRESOLVED_WARNING_INTERVAL) return;
+
+	if (warnedAt === undefined && unresolvedWarnedAt.size >= MAX_UNRESOLVED_WARNINGS) {
+		for (const [entry, at] of unresolvedWarnedAt) {
+			if (now - at >= UNRESOLVED_WARNING_INTERVAL) unresolvedWarnedAt.delete(entry);
+		}
+	}
+
+	if (warnedAt === undefined && unresolvedWarnedAt.size >= MAX_UNRESOLVED_WARNINGS) {
+		if (now - unresolvedOverflowWarnedAt >= UNRESOLVED_WARNING_INTERVAL) {
+			unresolvedOverflowWarnedAt = now;
+
+			logger.warn(
+				`More than ${MAX_UNRESOLVED_WARNINGS} permissions use dynamic variables whose fields no longer exist, so further warnings are suppressed for an hour`
+			);
+		}
+
+		return;
+	}
+
+	unresolvedWarnedAt.set(key, now);
+
+	logger.warn(
+		`The ${permission.action} permission on "${permission.collection}" for role "${role}" uses a dynamic variable whose field no longer exists and will deny access until it is repaired`
+	);
+}
+
+async function getFilterContext(
+	schema: SchemaOverview,
+	accountability: Accountability,
+	requiredPermissionData: RequiredPermissionData
+) {
 	const usersService = new UsersService({ schema });
 	const rolesService = new RolesService({ schema });
 
