@@ -1,6 +1,8 @@
 # Changelog
 
-All notable changes to CairnCMS are documented in this file. Releases are listed in reverse chronological order. Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+All notable changes to CairnCMS are documented in this file. Releases are listed in reverse chronological order.
+
+CairnCMS uses the Semantic Versioning number format (`MAJOR.MINOR.PATCH`) but does not promise strict SemVer compatibility. See the [versioning policy](https://cairncms.dev/docs/manage/upgrades/#versioning-policy) for deprecation windows and the cases where minor or patch releases can include breaking changes.
 
 ## [1.6.1]
 
