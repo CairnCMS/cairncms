@@ -2,6 +2,10 @@ name: CI / Tests / Unit Tests
 
 on:
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'CHANGELOG.md'
+      - 'README.md'
 
 concurrency:
   group: ci-tests-unit-${{ github.ref }}
