@@ -90,6 +90,24 @@ orphan cleanup.
 Request helpers use a 10-second response deadline and a 30-second total deadline. Batch cases use 120-second limits.
 Test bodies default to 30 seconds, hooks to 120 seconds, and bootstrap/API readiness to 90 seconds.
 
+Use these defaults for new cases. If a case times out, identify whether setup, the test body, or a request exceeded its
+deadline. Resolve expensive prerequisites through an automatic fixture or native hook before increasing the body
+timeout. Ordinary case-specific setup can stay in the body. Keep the operation being tested in the body.
+
+Only increase a timeout when measured execution on the relevant vendors shows a legitimate need. Prefer a per-case
+override as the third argument to `test(name, body, timeoutMs)`. Add a short comment explaining the expensive operation
+and the reason for the limit. Allow room for normal runtime variation. Do not copy another suite's limit or raise one
+to hide an unexplained stall.
+
+File-wide `vi.setConfig({ testTimeout, hookTimeout })` changes are supported when the need applies across the file.
+Place them before `initializeFixtures()` and explain the reason. Increase `hookTimeout` for slow automatic setup, not
+`testTimeout`. Changing either does not extend request or API-readiness deadlines.
+
+Vitest's reported case duration includes `beforeEach` and `afterEach` hooks and their fixture work. The first case
+using a file fixture can therefore report much longer than later cases. Automatic fixture setup runs under the hook
+deadline. Lazy fixtures requested by the body use the body deadline. The reported duration alone does not show that a
+body needs more time.
+
 Test workers, bootstrap, and base API processes use UTC. Explicit timezone scenarios override only their owned process.
 Use real REST/GraphQL requests when testing transport behavior.
 
