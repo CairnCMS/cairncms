@@ -2,7 +2,6 @@ import { Action, FUNCTIONS } from '@cairncms/constants';
 import type { BaseException } from '@cairncms/exceptions';
 import type { Accountability, Aggregate, Filter, PrimaryKey, Query, SchemaOverview } from '@cairncms/types';
 import { parseFilterFunctionPath } from '@cairncms/utils';
-import argon2 from 'argon2';
 import type {
 	ArgumentNode,
 	ExecutionResult,
@@ -54,6 +53,7 @@ import { getMilliseconds } from '../../utils/get-milliseconds.js';
 import { reduceSchema } from '../../utils/reduce-schema.js';
 import { sanitizeQuery } from '../../utils/sanitize-query.js';
 import { validateQuery } from '../../utils/validate-query.js';
+import { verifyHash } from '../../utils/verify-hash.js';
 import { ActivityService } from '../activity.js';
 import { AuthenticationService } from '../authentication.js';
 import { CollectionsService } from '../collections.js';
@@ -2443,7 +2443,13 @@ export class GraphQLService {
 				args: {
 					string: new GraphQLNonNull(GraphQLString),
 				},
+				deprecationReason:
+					'Hash and verify values in your own application with an Argon2 package, such as argon2 for Node.js. Removal is planned for 1.8.0 or later.',
 				resolve: async (_, args) => {
+					if (this.accountability?.admin !== true) {
+						throw new ForbiddenException();
+					}
+
 					return await generateHash(args['string']);
 				},
 			},
@@ -2453,8 +2459,14 @@ export class GraphQLService {
 					string: new GraphQLNonNull(GraphQLString),
 					hash: new GraphQLNonNull(GraphQLString),
 				},
+				deprecationReason:
+					'Hash and verify values in your own application with an Argon2 package, such as argon2 for Node.js. Removal is planned for 1.8.0 or later.',
 				resolve: async (_, args) => {
-					return await argon2.verify(args['hash'], args['string']);
+					if (this.accountability?.admin !== true) {
+						throw new ForbiddenException();
+					}
+
+					return await verifyHash(args['hash'], args['string']);
 				},
 			},
 			utils_sort: {
