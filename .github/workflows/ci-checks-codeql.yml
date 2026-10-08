@@ -2,6 +2,10 @@ name: CI / Checks / CodeQL
 
 on:
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'CHANGELOG.md'
+      - 'README.md'
   workflow_dispatch:
   schedule:
     - cron: '35 17 * * 1'

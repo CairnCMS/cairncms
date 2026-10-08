@@ -19,8 +19,12 @@ const shell = (script, options = {}) =>
 		...options,
 	});
 
-test('API workflow runs complete independent vendors on develop pushes and manual requests', () => {
-	assert.deepEqual(workflow.on, { push: { branches: ['develop'] }, workflow_dispatch: null });
+test('API workflow filters documentation pushes and runs complete independent vendors', () => {
+	assert.deepEqual(workflow.on, {
+		push: { branches: ['develop'], 'paths-ignore': ['docs/**', 'CHANGELOG.md', 'README.md'] },
+		workflow_dispatch: null,
+	});
+
 	assert.equal(workflow.env.CI, 'true');
 	assert.equal(workflow.defaults.run.shell, 'bash');
 	assert.deepEqual(workflow.permissions, { contents: 'read' });
