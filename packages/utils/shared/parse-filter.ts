@@ -1,8 +1,8 @@
-import { REGEX_BETWEEN_PARENS } from '@cairncms/constants';
 import type { Accountability, Filter, Role, User } from '@cairncms/types';
 import { isObjectLike } from 'lodash-es';
 import { adjustDate } from './adjust-date.js';
 import { deepMap } from './deep-map.js';
+import { getBetweenParens } from './get-between-parens.js';
 import { get } from './get-with-arrays.js';
 import { isDynamicVariable } from './is-dynamic-variable.js';
 import { toArray } from './to-array.js';
@@ -123,7 +123,7 @@ function parseFilterValue(value: any, accountability: Accountability | null, con
 function parseDynamicVariable(value: any, accountability: Accountability | null, context: ParseFilterContext) {
 	if (value.startsWith('$NOW')) {
 		if (value.includes('(') && value.includes(')')) {
-			const adjustment = value.match(REGEX_BETWEEN_PARENS)?.[1];
+			const adjustment = getBetweenParens(value);
 			if (!adjustment) return new Date();
 			return adjustDate(new Date(), adjustment);
 		}

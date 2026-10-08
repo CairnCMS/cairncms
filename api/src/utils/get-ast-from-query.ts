@@ -2,10 +2,11 @@
  * Generate an AST based on a given collection and query
  */
 
-import { REGEX_BETWEEN_PARENS } from '@cairncms/constants';
 import type { Accountability, PermissionsAction, Query, SchemaOverview } from '@cairncms/types';
+import { getBetweenParens } from '@cairncms/utils';
 import type { Knex } from 'knex';
 import { cloneDeep, isEmpty, mapKeys, omitBy, uniq } from 'lodash-es';
+import { InvalidQueryException } from '../exceptions/invalid-query.js';
 import type { AST, FieldNode, FunctionFieldNode, NestedCollectionNode } from '../types/index.js';
 import { getRelationType } from '../utils/get-relation-type.js';
 
@@ -13,6 +14,7 @@ type GetASTOptions = {
 	accountability?: Accountability | null;
 	action?: PermissionsAction;
 	knex?: Knex;
+	strict?: boolean;
 };
 
 type anyNested = {
@@ -29,6 +31,7 @@ export default async function getASTFromQuery(
 
 	const accountability = options?.accountability;
 	const action = options?.action || 'read';
+	const strict = options?.strict === true;
 
 	const permissions =
 		accountability && accountability.admin !== true
@@ -178,8 +181,9 @@ export default async function getASTFromQuery(
 					}
 				}
 			} else {
-				if (fieldKey.includes('(') && fieldKey.includes(')')) {
-					const columnName = fieldKey.match(REGEX_BETWEEN_PARENS)![1]!;
+				const columnName = getBetweenParens(fieldKey);
+
+				if (columnName !== null) {
 					const foundField = schema.collections[parentCollection]!.fields[columnName];
 
 					if (foundField && foundField.type === 'alias') {
@@ -201,6 +205,10 @@ export default async function getASTFromQuery(
 					}
 				}
 
+				if (strict && !schema.collections[parentCollection]!.fields[getBetweenParens(name) ?? name]) {
+					throw unresolvedPath();
+				}
+
 				children.push({ type: 'field', name, fieldKey });
 			}
 		}
@@ -215,7 +223,10 @@ export default async function getASTFromQuery(
 			const relatedCollection = getRelatedCollection(parentCollection, fieldName);
 			const relation = getRelation(parentCollection, fieldName);
 
-			if (!relation) continue;
+			if (!relation) {
+				if (strict) throw unresolvedPath();
+				continue;
+			}
 
 			const relationType = getRelationType({
 				relation,
@@ -223,7 +234,10 @@ export default async function getASTFromQuery(
 				field: fieldName,
 			});
 
-			if (!relationType) continue;
+			if (!relationType) {
+				if (strict) throw unresolvedPath();
+				continue;
+			}
 
 			let child: NestedCollectionNode | null = null;
 
@@ -232,6 +246,17 @@ export default async function getASTFromQuery(
 					if (!permissions) return true;
 					return permissions.some((permission) => permission.collection === collection);
 				});
+
+				if (strict) {
+					const scopes = Array.isArray(nestedFields) ? [] : Object.keys(nestedFields);
+
+					const unresolved =
+						allowedCollections.length === 0 ||
+						allowedCollections.some((collection) => !schema.collections[collection]) ||
+						scopes.some((scope) => !allowedCollections.includes(scope));
+
+					if (unresolved) throw unresolvedPath();
+				}
 
 				child = {
 					type: 'a2o',
@@ -256,6 +281,8 @@ export default async function getASTFromQuery(
 					child.relatedKey[relatedCollection] = schema.collections[relatedCollection]!.primary;
 				}
 			} else if (relatedCollection) {
+				if (strict && !schema.collections[relatedCollection]) throw unresolvedPath();
+
 				if (permissions && permissions.some((permission) => permission.collection === relatedCollection) === false) {
 					continue;
 				}
@@ -282,6 +309,8 @@ export default async function getASTFromQuery(
 
 			if (child) {
 				children.push(child);
+			} else if (strict) {
+				throw unresolvedPath();
 			}
 		}
 
@@ -408,6 +437,10 @@ export default async function getASTFromQuery(
 		}
 
 		return null;
+	}
+
+	function unresolvedPath() {
+		return new InvalidQueryException('Invalid field path');
 	}
 }
 
