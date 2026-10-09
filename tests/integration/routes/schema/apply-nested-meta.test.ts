@@ -13,8 +13,6 @@ import { initializeFixtures } from '../../harness/fixture-setup.mjs';
 
 initializeFixtures();
 
-const TEST_TIMEOUT = 300000;
-
 type CollectionTranslation = { language: string; translation: string; singular?: string; plural?: string };
 type CollectionMetaFixture = { note?: string; translations: CollectionTranslation[] };
 
@@ -94,173 +92,153 @@ const collectionDiffEntry = (diff: any, collection: string) =>
 
 describe('Schema apply: nested collection meta diffs', () => {
 	describe('a nested meta delete leaves the collection and its rows intact and applies the change', () => {
-		test(
-			'REST',
-			async ({ api, vendor }) => {
-				const collection = `test_apply_nm_delete_${vendor}`;
+		test('REST', async ({ api, vendor }) => {
+			const collection = `test_apply_nm_delete_${vendor}`;
+			await deleteCollection(api, collection);
+
+			try {
+				await seedCollection(api, collection, baseMeta());
+
+				const result = await snapshotEditApply(api, (snapshot) => {
+					const target = findCollection(snapshot, collection);
+					delete target.meta.translations[0].plural;
+				});
+
+				const entry = collectionDiffEntry(result.diff, collection);
+				expect(entry?.kind).toBe('D');
+				expect(entry?.path).toEqual(['meta', 'translations', 0, 'plural']);
+
+				expect(result.applyStatus).toBe(204);
+				expect(await getRowTitles(api, collection)).toEqual(['first', 'second']);
+
+				const meta = await getCollectionMeta(api, collection);
+				expect(meta.translations[0].plural).toBeUndefined();
+				expect(meta.translations[0].singular).toBe('article');
+			} finally {
 				await deleteCollection(api, collection);
-
-				try {
-					await seedCollection(api, collection, baseMeta());
-
-					const result = await snapshotEditApply(api, (snapshot) => {
-						const target = findCollection(snapshot, collection);
-						delete target.meta.translations[0].plural;
-					});
-
-					const entry = collectionDiffEntry(result.diff, collection);
-					expect(entry?.kind).toBe('D');
-					expect(entry?.path).toEqual(['meta', 'translations', 0, 'plural']);
-
-					expect(result.applyStatus).toBe(204);
-					expect(await getRowTitles(api, collection)).toEqual(['first', 'second']);
-
-					const meta = await getCollectionMeta(api, collection);
-					expect(meta.translations[0].plural).toBeUndefined();
-					expect(meta.translations[0].singular).toBe('article');
-				} finally {
-					await deleteCollection(api, collection);
-				}
-			},
-			TEST_TIMEOUT
-		);
+			}
+		});
 	});
 
 	describe('a nested meta create succeeds where it used to hard-fail the whole apply', () => {
-		test(
-			'REST',
-			async ({ api, vendor }) => {
-				const collection = `test_apply_nm_create_${vendor}`;
+		test('REST', async ({ api, vendor }) => {
+			const collection = `test_apply_nm_create_${vendor}`;
+			await deleteCollection(api, collection);
+
+			try {
+				await seedCollection(api, collection, metaWithoutPlural());
+
+				const result = await snapshotEditApply(api, (snapshot) => {
+					const target = findCollection(snapshot, collection);
+					target.meta.translations[0].plural = 'articles';
+				});
+
+				const entry = collectionDiffEntry(result.diff, collection);
+				expect(entry?.kind).toBe('N');
+				expect(entry?.path).toEqual(['meta', 'translations', 0, 'plural']);
+
+				expect(result.applyStatus).toBe(204);
+				expect(await getRowTitles(api, collection)).toEqual(['first', 'second']);
+
+				const meta = await getCollectionMeta(api, collection);
+				expect(meta.translations[0].plural).toBe('articles');
+				expect(meta.translations[0].singular).toBe('article');
+			} finally {
 				await deleteCollection(api, collection);
-
-				try {
-					await seedCollection(api, collection, metaWithoutPlural());
-
-					const result = await snapshotEditApply(api, (snapshot) => {
-						const target = findCollection(snapshot, collection);
-						target.meta.translations[0].plural = 'articles';
-					});
-
-					const entry = collectionDiffEntry(result.diff, collection);
-					expect(entry?.kind).toBe('N');
-					expect(entry?.path).toEqual(['meta', 'translations', 0, 'plural']);
-
-					expect(result.applyStatus).toBe(204);
-					expect(await getRowTitles(api, collection)).toEqual(['first', 'second']);
-
-					const meta = await getCollectionMeta(api, collection);
-					expect(meta.translations[0].plural).toBe('articles');
-					expect(meta.translations[0].singular).toBe('article');
-				} finally {
-					await deleteCollection(api, collection);
-				}
-			},
-			TEST_TIMEOUT
-		);
+			}
+		});
 	});
 
 	describe('a top-level meta delete is safe (collection and rows survive)', () => {
-		test(
-			'REST',
-			async ({ api, vendor }) => {
-				const collection = `test_apply_nm_note_${vendor}`;
+		test('REST', async ({ api, vendor }) => {
+			const collection = `test_apply_nm_note_${vendor}`;
+			await deleteCollection(api, collection);
+
+			try {
+				await seedCollection(api, collection, baseMeta());
+
+				const result = await snapshotEditApply(api, (snapshot) => {
+					const target = findCollection(snapshot, collection);
+					delete target.meta.note;
+				});
+
+				const entry = collectionDiffEntry(result.diff, collection);
+				expect(entry?.kind).toBe('D');
+				expect(entry?.path).toEqual(['meta', 'note']);
+
+				// A top-level meta delete is a partial update that does not converge, so this asserts
+				// data safety only, not that note was removed.
+				expect(result.applyStatus).toBe(204);
+				expect(await getRowTitles(api, collection)).toEqual(['first', 'second']);
+			} finally {
 				await deleteCollection(api, collection);
-
-				try {
-					await seedCollection(api, collection, baseMeta());
-
-					const result = await snapshotEditApply(api, (snapshot) => {
-						const target = findCollection(snapshot, collection);
-						delete target.meta.note;
-					});
-
-					const entry = collectionDiffEntry(result.diff, collection);
-					expect(entry?.kind).toBe('D');
-					expect(entry?.path).toEqual(['meta', 'note']);
-
-					// A top-level meta delete is a partial update that does not converge, so this asserts
-					// data safety only, not that note was removed.
-					expect(result.applyStatus).toBe(204);
-					expect(await getRowTitles(api, collection)).toEqual(['first', 'second']);
-				} finally {
-					await deleteCollection(api, collection);
-				}
-			},
-			TEST_TIMEOUT
-		);
+			}
+		});
 	});
 
 	describe('a nested meta delete does not suppress a real field change on the same collection', () => {
-		test(
-			'REST',
-			async ({ api, vendor }) => {
-				const collection = `test_apply_nm_suppress_${vendor}`;
-				await deleteCollection(api, collection);
+		test('REST', async ({ api, vendor }) => {
+			const collection = `test_apply_nm_suppress_${vendor}`;
+			await deleteCollection(api, collection);
 
-				try {
-					await seedCollection(api, collection, baseMeta());
+			try {
+				await seedCollection(api, collection, baseMeta());
 
-					const result = await snapshotEditApply(api, (snapshot) => {
-						const target = findCollection(snapshot, collection);
-						delete target.meta.translations[0].plural;
+				const result = await snapshotEditApply(api, (snapshot) => {
+					const target = findCollection(snapshot, collection);
+					delete target.meta.translations[0].plural;
 
-						snapshot.fields.push({
-							collection,
-							field: 'subtitle',
-							type: 'string',
-							meta: { collection, field: 'subtitle', interface: 'input' },
-							schema: { name: 'subtitle', table: collection, data_type: 'varchar' },
-						});
+					snapshot.fields.push({
+						collection,
+						field: 'subtitle',
+						type: 'string',
+						meta: { collection, field: 'subtitle', interface: 'input' },
+						schema: { name: 'subtitle', table: collection, data_type: 'varchar' },
 					});
+				});
 
-					const entry = collectionDiffEntry(result.diff, collection);
-					expect(entry?.kind).toBe('D');
-					expect(entry?.path).toEqual(['meta', 'translations', 0, 'plural']);
+				const entry = collectionDiffEntry(result.diff, collection);
+				expect(entry?.kind).toBe('D');
+				expect(entry?.path).toEqual(['meta', 'translations', 0, 'plural']);
 
-					const fieldEntry = result.diff.fields.find((f: any) => f.collection === collection && f.field === 'subtitle');
+				const fieldEntry = result.diff.fields.find((f: any) => f.collection === collection && f.field === 'subtitle');
 
-					expect(fieldEntry?.diff?.[0]?.kind).toBe('N');
+				expect(fieldEntry?.diff?.[0]?.kind).toBe('N');
 
-					expect(result.applyStatus).toBe(204);
+				expect(result.applyStatus).toBe(204);
 
-					const fieldRes = await adminAuth(request(api.url).get(`/fields/${collection}/subtitle`));
-					expect(fieldRes.statusCode).toBe(200);
-				} finally {
-					await deleteCollection(api, collection);
-				}
-			},
-			TEST_TIMEOUT
-		);
+				const fieldRes = await adminAuth(request(api.url).get(`/fields/${collection}/subtitle`));
+				expect(fieldRes.statusCode).toBe(200);
+			} finally {
+				await deleteCollection(api, collection);
+			}
+		});
 	});
 
 	describe('a genuine whole-collection delete still deletes it', () => {
-		test(
-			'REST',
-			async ({ api, vendor }) => {
-				const collection = `test_apply_nm_realdelete_${vendor}`;
+		test('REST', async ({ api, vendor }) => {
+			const collection = `test_apply_nm_realdelete_${vendor}`;
+			await deleteCollection(api, collection);
+
+			try {
+				await seedCollection(api, collection, baseMeta());
+
+				const result = await snapshotEditApply(api, (snapshot) => {
+					snapshot.collections = snapshot.collections.filter((c: any) => c.collection !== collection);
+					snapshot.fields = snapshot.fields.filter((f: any) => f.collection !== collection);
+				});
+
+				const entry = collectionDiffEntry(result.diff, collection);
+				expect(entry?.kind).toBe('D');
+				expect(entry?.path).toBeUndefined();
+
+				expect(result.applyStatus).toBe(204);
+
+				const stillThere = await adminAuth(request(api.url).get(`/collections/${collection}`));
+				expect(stillThere.statusCode).toBe(403);
+			} finally {
 				await deleteCollection(api, collection);
-
-				try {
-					await seedCollection(api, collection, baseMeta());
-
-					const result = await snapshotEditApply(api, (snapshot) => {
-						snapshot.collections = snapshot.collections.filter((c: any) => c.collection !== collection);
-						snapshot.fields = snapshot.fields.filter((f: any) => f.collection !== collection);
-					});
-
-					const entry = collectionDiffEntry(result.diff, collection);
-					expect(entry?.kind).toBe('D');
-					expect(entry?.path).toBeUndefined();
-
-					expect(result.applyStatus).toBe(204);
-
-					const stillThere = await adminAuth(request(api.url).get(`/collections/${collection}`));
-					expect(stillThere.statusCode).toBe(403);
-				} finally {
-					await deleteCollection(api, collection);
-				}
-			},
-			TEST_TIMEOUT
-		);
+			}
+		});
 	});
 });
