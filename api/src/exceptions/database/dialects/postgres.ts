@@ -2,6 +2,7 @@ import { ContainsNullValuesException } from '../contains-null-values.js';
 import { InvalidForeignKeyException } from '../invalid-foreign-key.js';
 import { NotNullViolationException } from '../not-null-violation.js';
 import { RecordNotUniqueException } from '../record-not-unique.js';
+import { RecordStillReferencedException } from '../record-still-referenced.js';
 import { ValueOutOfRangeException } from '../value-out-of-range.js';
 import { ValueTooLongException } from '../value-too-long.js';
 import type { PostgresError } from './types.js';
@@ -14,7 +15,7 @@ enum PostgresErrorCodes {
 	VALUE_LIMIT_VIOLATION = '22001',
 }
 
-export function extractError(error: PostgresError): PostgresError | Error {
+export function extractError(error: PostgresError, action?: 'delete'): PostgresError | Error {
 	switch (error.code) {
 		case PostgresErrorCodes.UNIQUE_VIOLATION:
 			return uniqueViolation(error);
@@ -25,7 +26,7 @@ export function extractError(error: PostgresError): PostgresError | Error {
 		case PostgresErrorCodes.NOT_NULL_VIOLATION:
 			return notNullViolation(error);
 		case PostgresErrorCodes.FOREIGN_KEY_VIOLATION:
-			return foreignKeyViolation(error);
+			return action === 'delete' ? new RecordStillReferencedException() : foreignKeyViolation(error);
 		default:
 			return error;
 	}
