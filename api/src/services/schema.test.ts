@@ -2,11 +2,11 @@ import type { Diff } from 'deep-diff';
 import knex from 'knex';
 import type { Knex } from 'knex';
 import { createTracker, MockClient, Tracker } from 'knex-mock-client';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SchemaService } from './schema.js';
 import { ForbiddenException } from '../exceptions/forbidden.js';
 import type { Collection } from '../types/collection.js';
-import type { Snapshot, SnapshotDiffWithHash } from '../types/snapshot.js';
+import type { PortableSnapshot, Snapshot, SnapshotDiffWithHash } from '../types/snapshot.js';
 import { applyDiff } from '../utils/apply-diff.js';
 import { getSnapshot } from '../utils/get-snapshot.js';
 
@@ -67,10 +67,37 @@ beforeAll(() => {
 	tracker = createTracker(db);
 });
 
+beforeEach(() => {
+	tracker.on.select('directus_folders').response([{ id: FOLDER_ID, key: 'images' }]);
+});
+
 afterEach(() => {
 	tracker.reset();
 	vi.clearAllMocks();
 });
+
+const FOLDER_ID = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+
+function uploadFields(folder: string) {
+	return [
+		{
+			collection: 'articles',
+			field: 'image',
+			type: 'uuid',
+			schema: null,
+			meta: { collection: 'articles', field: 'image', interface: 'file', options: { folder } },
+		},
+	];
+}
+
+function snapshotWithUploadField(folder: string): Snapshot {
+	return { ...testSnapshot, fields: uploadFields(folder) } as unknown as Snapshot;
+}
+
+function portableWithUploadField(folder: string): PortableSnapshot {
+	const { directus: _directus, ...rest } = testSnapshot;
+	return { ...rest, version: 2, release: '0.0.0', fields: uploadFields(folder) } as unknown as PortableSnapshot;
+}
 
 describe('Services / Schema', () => {
 	describe('snapshot', () => {
@@ -88,6 +115,14 @@ describe('Services / Schema', () => {
 			const service = new SchemaService({ knex: db, accountability: { role: 'admin', admin: true } });
 
 			await expect(service.snapshot()).resolves.toEqual(testSnapshot);
+		});
+
+		it('should return a version 2 snapshot with folder keys on request', async () => {
+			vi.mocked(getSnapshot).mockReset().mockResolvedValueOnce(snapshotWithUploadField(FOLDER_ID));
+
+			const service = new SchemaService({ knex: db, accountability: { role: 'admin', admin: true } });
+
+			await expect(service.snapshot({ version: 2 })).resolves.toEqual(portableWithUploadField('images'));
 		});
 	});
 
@@ -171,6 +206,30 @@ describe('Services / Schema', () => {
 			const service = new SchemaService({ knex: db, accountability: { role: 'admin', admin: true } });
 
 			await expect(service.diff(testSnapshot, { currentSnapshot: testSnapshot, force: true })).resolves.toBeNull();
+		});
+
+		it('should compare a version 2 snapshot by folder key', async () => {
+			const service = new SchemaService({ knex: db, accountability: { role: 'admin', admin: true } });
+
+			await expect(
+				service.diff(portableWithUploadField('images'), {
+					currentSnapshot: snapshotWithUploadField(FOLDER_ID),
+					force: true,
+				})
+			).resolves.toBeNull();
+		});
+
+		it('should refuse a version 2 snapshot whose folder key does not exist', async () => {
+			const service = new SchemaService({ knex: db, accountability: { role: 'admin', admin: true } });
+
+			await expect(
+				service.diff(portableWithUploadField('missing'), {
+					currentSnapshot: snapshotWithUploadField(FOLDER_ID),
+					force: true,
+				})
+			).rejects.toThrowError(
+				'Folder reference "missing" could not be resolved. Referenced by: articles.image.meta.options.folder'
+			);
 		});
 	});
 
