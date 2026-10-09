@@ -13,23 +13,24 @@ import type { SQLError } from './dialects/types.js';
  * - Invalid Foreign Key
  * - Not Null Violation
  * - Record Not Unique
+ * - Record Still Referenced
  * - Value Out of Range
  * - Value Too Long
  */
-export async function translateDatabaseError(error: SQLError): Promise<any> {
+export async function translateDatabaseError(error: SQLError, action?: 'delete'): Promise<any> {
 	const client = getDatabaseClient();
 	let defaultError: any;
 
 	switch (client) {
 		case 'mysql':
-			defaultError = mysql(error);
+			defaultError = mysql(error, action);
 			break;
 		case 'cockroachdb':
 		case 'postgres':
-			defaultError = postgres(error);
+			defaultError = postgres(error, action);
 			break;
 		case 'sqlite':
-			defaultError = sqlite(error);
+			defaultError = sqlite(error, action);
 			break;
 		case 'oracle':
 			defaultError = oracle(error);

@@ -2,6 +2,7 @@ import { ContainsNullValuesException } from '../contains-null-values.js';
 import { InvalidForeignKeyException } from '../invalid-foreign-key.js';
 import { NotNullViolationException } from '../not-null-violation.js';
 import { RecordNotUniqueException } from '../record-not-unique.js';
+import { RecordStillReferencedException } from '../record-still-referenced.js';
 import { ValueOutOfRangeException } from '../value-out-of-range.js';
 import { ValueTooLongException } from '../value-too-long.js';
 import type { MySQLError } from './types.js';
@@ -12,11 +13,13 @@ enum MySQLErrorCodes {
 	ER_DATA_TOO_LONG = 'ER_DATA_TOO_LONG',
 	NOT_NULL_VIOLATION = 'ER_BAD_NULL_ERROR',
 	FOREIGN_KEY_VIOLATION = 'ER_NO_REFERENCED_ROW_2',
+	ROW_IS_REFERENCED = 'ER_ROW_IS_REFERENCED',
+	ROW_IS_REFERENCED_2 = 'ER_ROW_IS_REFERENCED_2',
 	ER_INVALID_USE_OF_NULL = 'ER_INVALID_USE_OF_NULL',
 	WARN_DATA_TRUNCATED = 'WARN_DATA_TRUNCATED',
 }
 
-export function extractError(error: MySQLError): MySQLError | Error {
+export function extractError(error: MySQLError, action?: 'delete'): MySQLError | Error {
 	switch (error.code) {
 		case MySQLErrorCodes.UNIQUE_VIOLATION:
 			return uniqueViolation(error);
@@ -28,6 +31,10 @@ export function extractError(error: MySQLError): MySQLError | Error {
 			return notNullViolation(error);
 		case MySQLErrorCodes.FOREIGN_KEY_VIOLATION:
 			return foreignKeyViolation(error);
+		case MySQLErrorCodes.ROW_IS_REFERENCED:
+		case MySQLErrorCodes.ROW_IS_REFERENCED_2:
+			if (action === 'delete') return new RecordStillReferencedException();
+			break;
 		// Note: MariaDB throws data truncated for null value error
 		case MySQLErrorCodes.ER_INVALID_USE_OF_NULL:
 		case MySQLErrorCodes.WARN_DATA_TRUNCATED:
