@@ -2,14 +2,14 @@ import type { SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import { getCache } from '../cache.js';
 import getDatabase from '../database/index.js';
-import type { Snapshot, SnapshotDiff } from '../types/index.js';
+import type { PortableSnapshot, Snapshot, SnapshotDiff } from '../types/index.js';
 import { applyDiff } from './apply-diff.js';
 import { getSchema } from './get-schema.js';
 import { getSnapshot } from './get-snapshot.js';
-import { getSnapshotDiff } from './get-snapshot-diff.js';
+import { getTargetSnapshotDiff } from './get-target-snapshot-diff.js';
 
 export async function applySnapshot(
-	snapshot: Snapshot,
+	snapshot: Snapshot | PortableSnapshot,
 	options?: { database?: Knex; schema?: SchemaOverview; current?: Snapshot; diff?: SnapshotDiff }
 ): Promise<void> {
 	const database = options?.database ?? getDatabase();
@@ -17,7 +17,7 @@ export async function applySnapshot(
 	const { systemCache } = getCache();
 
 	const current = options?.current ?? (await getSnapshot({ database, schema }));
-	const snapshotDiff = options?.diff ?? getSnapshotDiff(current, snapshot);
+	const snapshotDiff = options?.diff ?? (await getTargetSnapshotDiff(snapshot, { current, database }));
 
 	await applyDiff(current, snapshotDiff, { database, schema });
 

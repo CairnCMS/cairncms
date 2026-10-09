@@ -1,5 +1,5 @@
 import type { RestCommand } from '../../types.js';
-import type { SchemaSnapshotOutput } from './snapshot.js';
+import type { SchemaSnapshotOutput, SchemaSnapshotV2Output } from './snapshot.js';
 
 // TODO improve typing
 export type SchemaDiffOutput = {
@@ -14,7 +14,10 @@ export type SchemaDiffOutput = {
  * @returns Returns the differences between the current instance's schema and the schema passed in the request body.
  */
 export const schemaDiff =
-	<Schema>(snapshot: SchemaSnapshotOutput, force = false): RestCommand<SchemaDiffOutput, Schema> =>
+	<Schema>(
+		snapshot: SchemaSnapshotOutput | SchemaSnapshotV2Output,
+		force = false
+	): RestCommand<SchemaDiffOutput, Schema> =>
 	() => ({
 		method: 'POST',
 		path: '/schema/diff',

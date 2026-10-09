@@ -11,8 +11,16 @@ import logger from '../logger.js';
 import { CollectionsService } from '../services/collections.js';
 import { FieldsService } from '../services/fields.js';
 import { RelationsService } from '../services/relations.js';
-import type { ActionEventParams, Collection, MutationOptions, Snapshot, SnapshotDiff } from '../types/index.js';
+import type {
+	ActionEventParams,
+	Collection,
+	MutationOptions,
+	Snapshot,
+	SnapshotDiff,
+	SnapshotField,
+} from '../types/index.js';
 import { DiffKind } from '../types/index.js';
+import { readFolderKeys, toFolderIds } from './folder-references.js';
 import { getSchema } from './get-schema.js';
 import { isNestedMetaUpdate } from './is-nested-meta-update.js';
 
@@ -20,6 +28,48 @@ type CollectionDelta = {
 	collection: string;
 	diff: Diff<Collection | undefined>[];
 };
+
+type FieldWrites = Map<string, Map<string, SnapshotField>>;
+
+function rebuildFromDiff<T>(current: T, diff: Diff<any>[]): T {
+	return diff.reduce((acc, currentDiff) => {
+		deepDiff.applyChange(acc, undefined, currentDiff);
+		return acc;
+	}, cloneDeep(current));
+}
+
+function isFieldUpdate(diff: Diff<any>[]): boolean {
+	return diff?.[0]?.kind === DiffKind.EDIT || diff?.[0]?.kind === DiffKind.ARRAY || isNestedMetaUpdate(diff[0]!);
+}
+
+function resolveFieldWrites(
+	currentSnapshot: Snapshot,
+	snapshotDiff: SnapshotDiff,
+	folderIdByKey: ReadonlyMap<string, string>
+): FieldWrites {
+	const writes: FieldWrites = new Map();
+
+	for (const { collection, field, diff } of snapshotDiff.fields) {
+		let finalField: SnapshotField | undefined;
+
+		if (diff?.[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff?.[0])) {
+			finalField = (diff[0] as DiffNew<SnapshotField>).rhs;
+		} else if (isFieldUpdate(diff)) {
+			const currentField = currentSnapshot.fields.find(
+				(snapshotField) => snapshotField.collection === collection && snapshotField.field === field
+			);
+
+			if (currentField) finalField = rebuildFromDiff(currentField, diff);
+		}
+
+		if (finalField === undefined) continue;
+
+		if (!writes.has(collection)) writes.set(collection, new Map());
+		writes.get(collection)!.set(field, toFolderIds(finalField, folderIdByKey));
+	}
+
+	return writes;
+}
 
 export async function applyDiff(
 	currentSnapshot: Snapshot,
@@ -42,6 +92,10 @@ export async function applyDiff(
 
 	try {
 		await database.transaction(async (trx) => {
+			const { folderIdByKey } = await readFolderKeys(trx);
+			const fieldWrites = resolveFieldWrites(currentSnapshot, snapshotDiff, folderIdByKey);
+			const fieldWrite = (collection: string, field: string) => fieldWrites.get(collection)?.get(field);
+
 			const collectionsService = new CollectionsService({ knex: trx, schema });
 
 			const getNestedCollectionsToCreate = (currentLevelCollection: string) =>
@@ -61,7 +115,10 @@ export async function applyDiff(
 						// creating a collection without a primary key
 						const fields = snapshotDiff.fields
 							.filter((fieldDiff) => fieldDiff.collection === collection)
-							.map((fieldDiff) => (fieldDiff.diff[0] as DiffNew<Field>).rhs)
+							.map(
+								(fieldDiff) =>
+									fieldWrite(fieldDiff.collection, fieldDiff.field) ?? (fieldDiff.diff[0] as DiffNew<Field>).rhs
+							)
 							.map((fieldDiff) => {
 								// Casts field type to UUID when applying non-PostgreSQL schema onto PostgreSQL database.
 								// This is needed because they snapshots UUID fields as char/varchar with length 36.
@@ -215,25 +272,23 @@ export async function applyDiff(
 			for (const { collection, field, diff } of snapshotDiff.fields) {
 				if (diff?.[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff?.[0])) {
 					try {
-						await fieldsService.createField(collection, (diff[0] as DiffNew<Field>).rhs, undefined, mutationOptions);
+						await fieldsService.createField(
+							collection,
+							fieldWrite(collection, field) ?? (diff[0] as DiffNew<Field>).rhs,
+							undefined,
+							mutationOptions
+						);
 					} catch (err) {
 						logger.error(`Failed to create field "${collection}.${field}"`);
 						throw err;
 					}
 				}
 
-				if (diff?.[0]?.kind === DiffKind.EDIT || diff?.[0]?.kind === DiffKind.ARRAY || isNestedMetaUpdate(diff[0]!)) {
-					const currentField = currentSnapshot.fields.find((snapshotField) => {
-						return snapshotField.collection === collection && snapshotField.field === field;
-					});
+				if (isFieldUpdate(diff)) {
+					const newValues = fieldWrite(collection, field);
 
-					if (currentField) {
+					if (newValues) {
 						try {
-							const newValues = diff.reduce((acc, currentDiff) => {
-								deepDiff.applyChange(acc, undefined, currentDiff);
-								return acc;
-							}, cloneDeep(currentField));
-
 							await fieldsService.updateField(collection, newValues, mutationOptions);
 						} catch (err) {
 							logger.error(`Failed to update field "${collection}.${field}"`);

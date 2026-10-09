@@ -43,7 +43,7 @@ async function foreignKeys() {
 	return rows[0].foreign_keys;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
 	createCollection.mockReset();
 
 	database = knex.default({
@@ -52,6 +52,13 @@ beforeEach(() => {
 		useNullAsDefault: true,
 		pool: { min: 1, max: 1, afterCreate: sqliteAfterCreate },
 	});
+
+	await database.schema.createTable('directus_folders', (table) => {
+		table.uuid('id').primary();
+		table.string('key');
+	});
+
+	await database('directus_folders').insert({ id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa', key: 'images' });
 });
 
 afterEach(async () => {
@@ -86,5 +93,33 @@ describe('applyDiff on SQLite', () => {
 		);
 
 		expect(await foreignKeys()).toBe(0);
+	});
+
+	it('refuses a missing folder key before creating an unrelated collection', async () => {
+		const diff = structuredClone(snapshotDiff);
+
+		diff.fields = [
+			{
+				collection: 'articles',
+				field: 'image',
+				diff: [
+					{
+						kind: DiffKind.NEW,
+						rhs: {
+							collection: 'articles',
+							field: 'image',
+							meta: { interface: 'file', options: { folder: 'missing' } },
+						},
+					},
+				],
+			},
+		] as unknown as SnapshotDiff['fields'];
+
+		await expect(applyDiff(currentSnapshot, diff, { database, schema })).rejects.toThrow(
+			'Folder reference "missing" could not be resolved. Referenced by: articles.image.meta.options.folder'
+		);
+
+		expect(createCollection).not.toHaveBeenCalled();
+		expect(await foreignKeys()).toBe(1);
 	});
 });

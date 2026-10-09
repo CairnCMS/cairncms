@@ -586,6 +586,8 @@ cairncms config apply ./config
 
 Apply schema before config so referenced collections exist when permissions and collection-scoped extension settings are installed. Config apply reports missing permission collections as warnings. A missing collection for an extension setting stops the apply.
 
+A [version 2 schema snapshot](/docs/manage/schema-as-code/#upload-folders) records upload folders by key, so a standalone `schema apply` requires those folders to already exist on the target. The unified `config apply` creates missing folders and applies schema and configuration in one coordinated run.
+
 Applying an unchanged schema or config is a no-op, so both commands can run on every deployment.
 
 ## Where to go next
