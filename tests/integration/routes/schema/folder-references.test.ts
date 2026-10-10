@@ -383,8 +383,15 @@ describe('version 2 schema snapshots with config, through the CLI', () => {
 			});
 
 			const early = await cli(api, ['config', 'apply', '--yes', '--destructive', final]);
-			expect(early.status).not.toBe(0);
-			expect((await currentFolders(api)).map((folder) => folder.key)).not.toContain(keyB);
+			expect(early.error).toBeUndefined();
+			expect(early.signal).toBeNull();
+			expect(early.status).toBe(2);
+			const earlyOutput = `${early.stdout ?? ''}${early.stderr ?? ''}`;
+			expect(earlyOutput).toContain(articles);
+			expect(earlyOutput).toContain('does not exist');
+			const foldersAfterEarly = (await currentFolders(api)).map((folder) => folder.key);
+			expect(foldersAfterEarly).not.toContain(keyB);
+			expect(foldersAfterEarly).toContain(keyA);
 
 			const deployment1 = await cli(api, ['config', 'apply', '--yes', intermediate]);
 			expect(deployment1.status).toBe(0);
@@ -428,7 +435,11 @@ describe('version 2 schema snapshots with config, through the CLI', () => {
 			await fs.writeFile(unsupported, dumpYaml({ ...written, version: 3 }));
 
 			const refused = await cli(api, ['schema', 'apply', '--yes', unsupported]);
-			expect(refused.status).not.toBe(0);
+			expect(refused.error).toBeUndefined();
+			expect(refused.signal).toBeNull();
+			expect(refused.status).toBe(1);
+			expect(`${refused.stdout ?? ''}${refused.stderr ?? ''}`).toContain('must be one of [1, 2]');
+			expect((await storedMeta(api, posts, 'image')).options.folder).toBe(folderB);
 		} finally {
 			await api.database('cairncms_extension_settings').where({ extension: SUBJECT }).delete();
 			await remove(api, `/collections/${articles}`);

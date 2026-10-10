@@ -5,6 +5,7 @@ import { getPortableSnapshot } from '../../../utils/get-portable-snapshot.js';
 import { getSnapshot } from '../../../utils/get-snapshot.js';
 import { DEFAULT_SNAPSHOT_VERSION, type SnapshotVersion } from '../../../utils/schema-contract.js';
 import { validateSnapshotVersion } from '../../../utils/validate-snapshot.js';
+import { parseJSON } from '@cairncms/utils';
 import { promises as fs } from 'fs';
 import path from 'path';
 import inquirer from 'inquirer';
@@ -76,7 +77,7 @@ async function readExistingVersion(filename: string): Promise<SnapshotVersion | 
 	let existing: unknown;
 
 	try {
-		existing = loadYaml(contents);
+		existing = filename.endsWith('.yaml') || filename.endsWith('.yml') ? loadYaml(contents) : parseJSON(contents);
 	} catch {
 		throw new InvalidPayloadException(
 			`The existing snapshot at ${filename} could not be parsed, so its version is unknown.`

@@ -56,7 +56,7 @@ relations: [...]
 
 Version 1 is the default today, but that is deprecated: new snapshots will default to version 2 in a later release. See [Choosing the version](#choosing-the-version) for how to adopt version 2 now and what the default change means.
 
-The producing release (`directus` in version 1, `release` in version 2) and `vendor` describe the environment the snapshot came from. `vendor` is the normalized database vendor name: `postgres`, `mysql`, or `sqlite`. A MariaDB instance reports `mysql`, since it uses the same database client. These fields turn into a portability check at apply time. See [Cross-environment caveats](#cross-environment-caveats) below.
+The producing release (`directus` in version 1, `release` in version 2) and `vendor` describe the environment the snapshot came from. The supported vendor values are `postgres`, `mysql`, and `sqlite`. A MariaDB instance reports `mysql`, since it uses the same database client. These fields turn into a portability check at apply time. See [Cross-environment caveats](#cross-environment-caveats) below.
 
 The bulk of the file is the three sorted arrays of collections, fields, and relations. Sorting is deterministic so snapshots produced from equivalent schemas diff cleanly in source control.
 
@@ -180,7 +180,7 @@ Several interfaces store the folder that uploads go into: `file`, `file-image`, 
 - **Extension interfaces.** Options of interfaces added by extensions are copied as they are, folder IDs included, in both versions.
 - **Folders changed during an apply.** Folder references are checked when the apply starts. A folder another admin moves or deletes while the apply runs is not tracked, and the apply can write a field's previous folder back. Coordinate folder changes with your deployments.
 
-Standalone `schema apply` requires the referenced folders to already exist on the target. Create them with [config as code](/docs/manage/config-as-code/) first. The unified `config apply` creates missing folders and applies schema and configuration in one coordinated run.
+Standalone `schema apply` requires the referenced folders to already exist on the target. Create them with [config as code](/docs/manage/config-as-code/) first. A unified `config apply` that creates missing folders and applies schema and configuration in one coordinated run is planned.
 
 ## What schema-as-code does not cover
 

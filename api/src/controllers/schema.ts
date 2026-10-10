@@ -39,6 +39,8 @@ function snapshotVersion(raw: unknown): SnapshotVersion {
 router.get(
 	'/snapshot',
 	asyncHandler(async (req, res, next) => {
+		if (req.accountability?.admin !== true) throw new ForbiddenException();
+
 		const service = new SchemaService({ accountability: req.accountability });
 		const currentSnapshot = await service.snapshot({ version: snapshotVersion(req.query['version']) });
 		res.locals['payload'] = { data: currentSnapshot };
