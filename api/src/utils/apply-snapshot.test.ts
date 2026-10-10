@@ -30,6 +30,7 @@ describe('applySnapshot', () => {
 	beforeEach(() => {
 		db = vi.mocked(knex.default({ client: Client_PG }));
 		tracker = createTracker(db);
+		tracker.on.select('directus_folders').response([]);
 	});
 
 	afterEach(() => {
