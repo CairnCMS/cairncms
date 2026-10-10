@@ -59,18 +59,19 @@ vi.mock('../utils/apply-diff.js', () => ({ applyDiff: vi.fn(async () => undefine
 
 import errorHandler from '../middleware/error-handler.js';
 import { applyDiff } from '../utils/apply-diff.js';
+import { getSnapshot } from '../utils/get-snapshot.js';
 import { getVersionedHash } from '../utils/get-versioned-hash.js';
 import schemaController from './schema.js';
 
 const admin = { user: 'admin-id', role: 'admin-role-id', admin: true, app: true, ip: '127.0.0.1' };
 
-function makeApp() {
+function makeApp(accountability: Record<string, unknown> = admin) {
 	const app = express();
 
 	app.use(express.json());
 
 	app.use((req: Record<string, unknown>, _res: unknown, next: () => void) => {
-		req['accountability'] = admin;
+		req['accountability'] = accountability;
 		req['sanitizedQuery'] = {};
 		next();
 	});
@@ -144,6 +145,24 @@ describe('GET /schema/snapshot', () => {
 		expect(res.status).toBe(422);
 		expect(res.body.errors[0].message).toContain('Field "articles.image" references folder');
 		expect(res.body.errors[0].message).toContain(DANGLING_ID);
+	});
+
+	it.each([
+		['default', '/schema/snapshot'],
+		['unsupported', '/schema/snapshot?version=3'],
+	])('refuses a non-admin before reading the schema, %s version', async (_label, path) => {
+		const res = await request(makeApp({ ...admin, admin: false })).get(path);
+
+		expect(res.status).toBe(403);
+		expect(getSnapshot).not.toHaveBeenCalled();
+	});
+
+	it('refuses an admin unsupported version before reading the schema', async () => {
+		const res = await request(makeApp()).get('/schema/snapshot?version=3');
+
+		expect(res.status).toBe(400);
+		expect(res.body.errors[0].extensions.code).toBe('INVALID_QUERY');
+		expect(getSnapshot).not.toHaveBeenCalled();
 	});
 });
 

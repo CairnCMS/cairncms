@@ -1,4 +1,5 @@
 import { promises as fs } from 'fs';
+import inquirer from 'inquirer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import logger from '../../../logger.js';
 import { getPortableSnapshot } from '../../../utils/get-portable-snapshot.js';
@@ -126,5 +127,29 @@ describe('schema snapshot version', () => {
 			expect(fs.writeFile).not.toHaveBeenCalled();
 			expect(vi.mocked(logger.error).mock.calls[0]![0]).toMatchObject({ message: expect.stringContaining(message) });
 		});
+
+		it('refuses a .json file whose content is valid YAML but invalid JSON', async () => {
+			vi.mocked(fs.readFile).mockResolvedValueOnce('version: 2\nrelease: old\n');
+
+			await snapshot('schema.json', { yes, format: 'json' });
+
+			expect(process.exit).toHaveBeenCalledWith(1);
+			expect(fs.writeFile).not.toHaveBeenCalled();
+			expect(vi.mocked(inquirer.prompt)).not.toHaveBeenCalled();
+
+			expect(vi.mocked(logger.error).mock.calls[0]![0]).toMatchObject({
+				message: expect.stringContaining('could not be parsed'),
+			});
+		});
+	});
+
+	it('keeps a .yaml file at its version, parsing it as YAML', async () => {
+		vi.mocked(fs.readFile).mockResolvedValueOnce('version: 2\n');
+
+		await snapshot('schema.yaml', { yes: true, format: 'yaml' });
+
+		expect(process.exit).toHaveBeenCalledWith(0);
+		expect(fs.writeFile).toHaveBeenCalled();
+		expect(getPortableSnapshot).toHaveBeenCalled();
 	});
 });
