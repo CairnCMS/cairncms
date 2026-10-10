@@ -146,7 +146,9 @@ describe('settings through the real apply engine on SQLite', () => {
 
 		await db.schema.createTable('directus_fields', (table) => {
 			table.increments('id');
+			table.string('interface');
 			table.text('options');
+			table.text('conditions');
 		});
 	});
 

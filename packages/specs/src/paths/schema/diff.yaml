@@ -16,10 +16,7 @@ post:
     content:
       application/json:
         schema:
-          type: object
-          properties:
-            data:
-              $ref: '../../openapi.yaml#/components/schemas/Schema'
+          $ref: '../../openapi.yaml#/components/schemas/Schema'
       multipart/form-data:
         schema:
           type: object

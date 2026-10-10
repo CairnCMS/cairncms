@@ -12,6 +12,8 @@ export type Snapshot = {
 	relations: SnapshotRelation[];
 };
 
+export type PortableSnapshot = Omit<Snapshot, 'version' | 'directus'> & { version: 2; release: string };
+
 export type SnapshotField = Field & { meta: Omit<FieldMeta, 'id'> };
 export type SnapshotRelation = Relation & { meta: Omit<RelationMeta, 'id'> };
 

@@ -32,7 +32,9 @@ describe('FolderDeletionGuard on a real SQLite database', () => {
 
 		await db.schema.createTable('directus_fields', (table) => {
 			table.increments('id');
+			table.string('interface');
 			table.text('options');
+			table.text('conditions');
 		});
 
 		await db('directus_folders').insert({ id: 'target', name: 'target', parent: null });
@@ -101,6 +103,77 @@ describe('FolderDeletionGuard on a real SQLite database', () => {
 
 		await expect(guard.beforeDelete(['target'], db)).resolves.toBeUndefined();
 	});
+
+	it('refuses a repeater sub-field reference stored as JSON text', async () => {
+		await db('directus_fields').insert({
+			interface: 'list',
+			options: JSON.stringify({
+				fields: [{ field: 'body', meta: { interface: 'input-rich-text-md', options: { folder: 'target' } } }],
+			}),
+		});
+
+		const error = await guard.beforeDelete(['target'], db).catch((err) => err);
+		expect(error).toBeInstanceOf(ConfigFolderInUseException);
+		expect(error.extensions.blockedBy).toBe('options.folder');
+	});
+
+	it('refuses a condition reference on a field whose options are null', async () => {
+		await db('directus_fields').insert({
+			interface: 'file',
+			options: null,
+			conditions: JSON.stringify([{ name: 'locked', rule: {}, options: { folder: 'target' } }]),
+		});
+
+		const error = await guard.beforeDelete(['target'], db).catch((err) => err);
+		expect(error).toBeInstanceOf(ConfigFolderInUseException);
+		expect(error.extensions.blockedBy).toBe('options.folder');
+	});
+
+	it('ignores a nested folder option on an interface outside the registry', async () => {
+		await db('directus_fields').insert({
+			interface: 'list',
+			options: JSON.stringify({
+				fields: [{ field: 'upload', meta: { interface: 'custom-upload', options: { folder: 'target' } } }],
+			}),
+		});
+
+		await expect(guard.beforeDelete(['target'], db)).resolves.toBeUndefined();
+	});
+
+	it("refuses a reference in a repeater sub-field's own condition", async () => {
+		await db('directus_fields').insert({
+			interface: 'list',
+			options: JSON.stringify({
+				fields: [
+					{
+						field: 'body',
+						meta: {
+							interface: 'input-rich-text-md',
+							conditions: [{ name: 'locked', rule: {}, options: { folder: 'target' } }],
+						},
+					},
+				],
+			}),
+		});
+
+		const error = await guard.beforeDelete(['target'], db).catch((err) => err);
+		expect(error).toBeInstanceOf(ConfigFolderInUseException);
+		expect(error.extensions.blockedBy).toBe('options.folder');
+	});
+
+	it('refuses a partial repeater condition override that sets only the folder', async () => {
+		await db('directus_fields').insert({
+			interface: 'list',
+			options: JSON.stringify({ fields: [{ field: 'body', meta: { interface: 'input-rich-text-html' } }] }),
+			conditions: JSON.stringify([
+				{ name: 'locked', rule: {}, options: { fields: [{ meta: { options: { folder: 'target' } } }] } },
+			]),
+		});
+
+		const error = await guard.beforeDelete(['target'], db).catch((err) => err);
+		expect(error).toBeInstanceOf(ConfigFolderInUseException);
+		expect(error.extensions.blockedBy).toBe('options.folder');
+	});
 });
 
 describe('FolderDeletionGuard mixed-case reference on a case-insensitive id column', () => {
@@ -124,7 +197,9 @@ describe('FolderDeletionGuard mixed-case reference on a case-insensitive id colu
 
 		await db.schema.createTable('directus_fields', (table) => {
 			table.increments('id');
+			table.string('interface');
 			table.text('options');
+			table.text('conditions');
 		});
 
 		await db('directus_folders').insert({ id: LOWER, name: 'target', parent: null });
