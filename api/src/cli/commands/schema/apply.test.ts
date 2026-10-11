@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import logger from '../../../logger.js';
-import { applySnapshot } from '../../../utils/apply-snapshot.js';
+import { applyDiff } from '../../../utils/apply-diff.js';
 import { getSnapshot } from '../../../utils/get-snapshot.js';
 import { apply } from './apply.js';
 
@@ -56,7 +56,9 @@ vi.mock('../../../utils/folder-references.js', () => ({
 	})),
 }));
 
-vi.mock('../../../utils/apply-snapshot.js', () => ({ applySnapshot: vi.fn(async () => undefined) }));
+vi.mock('../../../utils/apply-diff.js', () => ({ applyDiff: vi.fn(async () => undefined) }));
+
+vi.mock('../../../cache.js', () => ({ getCache: () => ({ systemCache: { clear: vi.fn() } }) }));
 
 vi.mock('inquirer', () => ({ default: { prompt: vi.fn(async () => ({ proceed: false })) } }));
 
@@ -144,7 +146,7 @@ describe('schema apply after its confirmation prompt', () => {
 
 		await expect(apply('snapshot.json', { yes: false, dryRun: false })).rejects.toThrow();
 
-		expect(applySnapshot).not.toHaveBeenCalled();
+		expect(applyDiff).not.toHaveBeenCalled();
 
 		expect(vi.mocked(logger.error).mock.calls[0]![0]).toMatchObject({
 			message: 'The schema changed while waiting for confirmation. Run the command again to review the new changes.',
@@ -157,7 +159,7 @@ describe('schema apply after its confirmation prompt', () => {
 
 		await expect(apply('snapshot.json', { yes: false, dryRun: false })).rejects.toThrow();
 
-		expect(vi.mocked(applySnapshot).mock.calls[0]![1]!.current).toBe(fresh);
+		expect(vi.mocked(applyDiff).mock.calls[0]![0]).toBe(fresh);
 	});
 
 	it('applies from the fresh read when a folder was replaced under the same key and the field moved to it', async () => {
@@ -171,7 +173,7 @@ describe('schema apply after its confirmation prompt', () => {
 
 		await expect(apply('snapshot.json', { yes: false, dryRun: false })).rejects.toThrow();
 
-		const current = vi.mocked(applySnapshot).mock.calls[0]![1]!.current!;
+		const current = vi.mocked(applyDiff).mock.calls[0]![0]!;
 		expect(current.fields[0]!.meta.options).toEqual({ folder: FOLDER_B });
 	});
 
@@ -182,6 +184,6 @@ describe('schema apply after its confirmation prompt', () => {
 		await expect(apply('snapshot.json', { yes: true, dryRun: false })).rejects.toThrow();
 
 		expect(getSnapshot).toHaveBeenCalledOnce();
-		expect(vi.mocked(applySnapshot).mock.calls[0]![1]!.current).toBe(first);
+		expect(vi.mocked(applyDiff).mock.calls[0]![0]).toBe(first);
 	});
 });
