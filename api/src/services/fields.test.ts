@@ -257,3 +257,129 @@ describe('updateField column comparison basis', () => {
 		expect(ddl.length).toBeGreaterThan(0);
 	});
 });
+
+describe('schema-apply refusals', () => {
+	let db: MockedFunction<Knex>;
+	let tracker: Tracker;
+	let writes: string[];
+
+	const admin = { role: 'admin', admin: true } as any;
+
+	beforeAll(() => {
+		db = vi.mocked(knex.default({ client: MockClient }));
+		tracker = createTracker(db);
+	});
+
+	afterEach(() => {
+		tracker.reset();
+	});
+
+	function captureWrites() {
+		writes = [];
+
+		tracker.on.any(/create table|alter table|insert into|update |delete from/i).response((q) => {
+			writes.push(q.sql);
+			return [];
+		});
+	}
+
+	function fieldsService(schema: Record<string, any>) {
+		return new FieldsService({ knex: db as unknown as Knex, schema: schema as any, accountability: admin });
+	}
+
+	it('createField refuses a field that already exists before any write', async () => {
+		captureWrites();
+
+		const service = fieldsService({
+			collections: { articles: { collection: 'articles', primary: 'id', fields: { title: {} } } },
+			relations: [],
+		});
+
+		await expect(
+			service.createField('articles', {
+				field: 'title',
+				type: 'string',
+				schema: { is_nullable: true },
+				meta: { note: 'unused' },
+			} as any)
+		).rejects.toThrow('Field "title" already exists in collection "articles"');
+
+		expect(writes).toEqual([]);
+	});
+
+	it('updateField refuses an alias type change before any write', async () => {
+		captureWrites();
+		tracker.on.select('directus_fields').response([{ id: 1 }]);
+
+		const service = fieldsService({
+			collections: { articles: { collection: 'articles', primary: 'id', fields: { body: { type: 'string' } } } },
+			relations: [],
+		});
+
+		await expect(
+			service.updateField('articles', {
+				collection: 'articles',
+				field: 'body',
+				type: 'alias',
+				schema: { is_nullable: true },
+				meta: { note: 'unused' },
+			} as any)
+		).rejects.toThrow('Alias type cannot be changed');
+
+		expect(writes).toEqual([]);
+	});
+
+	describe('addColumnToTable type dispatch', () => {
+		function service() {
+			return new FieldsService({ knex: db as unknown as Knex, schema: { collections: {}, relations: [] } as any });
+		}
+
+		function untouchableTable() {
+			return new Proxy(
+				{},
+				{
+					get() {
+						return () => {
+							throw new Error('table builder was touched');
+						};
+					},
+				}
+			) as unknown as Knex.CreateTableBuilder;
+		}
+
+		it('refuses an illegal type before touching the table builder', () => {
+			expect(() => service().addColumnToTable(untouchableTable(), { field: 'x', type: 'wibble' } as any)).toThrow(
+				'Illegal type passed: "wibble"'
+			);
+		});
+
+		it('skips alias and unknown fields without touching the table builder', () => {
+			expect(() => service().addColumnToTable(untouchableTable(), { field: 'x', type: 'alias' } as any)).not.toThrow();
+
+			expect(() =>
+				service().addColumnToTable(untouchableTable(), { field: 'x', type: 'unknown' } as any)
+			).not.toThrow();
+		});
+
+		it('dispatches a supported type to the matching column builder', () => {
+			const calls: Array<[string, unknown[]]> = [];
+			const column = { nullable: vi.fn(), notNullable: vi.fn(), primary: vi.fn(), unique: vi.fn() };
+
+			const table = new Proxy(
+				{},
+				{
+					get(_target, prop: string) {
+						return (...args: unknown[]) => {
+							calls.push([prop, args]);
+							return column;
+						};
+					},
+				}
+			) as unknown as Knex.CreateTableBuilder;
+
+			service().addColumnToTable(table, { field: 'flag', type: 'boolean' } as any);
+
+			expect(calls).toContainEqual(['boolean', ['flag']]);
+		});
+	});
+});
