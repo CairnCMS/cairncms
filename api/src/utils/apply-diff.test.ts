@@ -1,5 +1,6 @@
 import type { Diff } from 'deep-diff';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { SchemaStateChangedException } from '../exceptions/schema-state-changed.js';
 import type { Collection, MutationOptions, Snapshot, SnapshotDiff, SnapshotField } from '../types/index.js';
 
 const order: string[] = [];
@@ -9,17 +10,45 @@ const relations = { createOne: vi.fn(), updateOne: vi.fn(), deleteOne: vi.fn() }
 const cache = { flushCaches: vi.fn(async () => void order.push('flush')), clearSystemCache: vi.fn() };
 const emitter = { emitAction: vi.fn() };
 let folderRows: { id: string; key: string }[] = [];
+let currentSnapshotValue: Snapshot;
+
+function folderQueryBuilder() {
+	const rows = folderRows;
+
+	return {
+		where: (column: string, value: unknown) => ({
+			first: async () => rows.find((row: Record<string, unknown>) => row[column] === value),
+		}),
+		then: (resolve: (value: typeof folderRows) => unknown, reject: (reason: unknown) => unknown) =>
+			Promise.resolve(rows).then(resolve, reject),
+	};
+}
+
+function folderTrx() {
+	return { select: () => ({ from: () => folderQueryBuilder() }) };
+}
 
 vi.mock('../database/index.js', () => ({
 	default: () => ({
 		transaction: async (cb: any) => {
-			await cb({ select: () => ({ from: async () => folderRows }) });
+			await cb(folderTrx());
 			order.push('commit');
 		},
 	}),
+	getDatabaseClient: () => 'postgres',
+}));
+
+vi.mock('../database/bound-transaction.js', () => ({
+	runInBoundSerializable: async (database: any, fn: any, flush: any) => {
+		const result = await database.transaction(fn);
+		await flush({ events: [], responseCacheDirty: false, systemCacheDirty: false });
+		return result;
+	},
 }));
 
 vi.mock('./get-schema.js', () => ({ getSchema: async () => ({ collections: {}, relations: [] }) }));
+vi.mock('./get-snapshot.js', () => ({ getSnapshot: async () => currentSnapshotValue }));
+vi.mock('./get-versioned-hash.js', () => ({ getVersionedHash: () => 'HASH' }));
 
 vi.mock('../database/helpers/index.js', () => ({
 	getHelpers: () => ({ schema: { preColumnChange: async () => false, postColumnChange: async () => undefined } }),
@@ -78,34 +107,53 @@ function newRelationDiff(rhs: Record<string, unknown>): SnapshotDiff {
 	return diff;
 }
 
+const HASH = 'HASH';
+
+beforeEach(() => {
+	currentSnapshotValue = snapshot();
+});
+
+describe('applyDiff in-transaction recheck', () => {
+	beforeEach(() => vi.clearAllMocks());
+
+	it('refuses with SchemaStateChangedException and writes nothing when the expected hash no longer matches', async () => {
+		const diff = emptyDiff();
+		diff.collections = [collectionDiff('fresh', [{ kind: 'N', rhs: stubCollection('fresh') } as any])];
+
+		await expect(applyDiff(diff, { expectedHash: 'STALE' })).rejects.toBeInstanceOf(SchemaStateChangedException);
+
+		expect(collections.createOne).not.toHaveBeenCalled();
+	});
+});
+
 describe('applyDiff collection routing', () => {
 	beforeEach(() => vi.clearAllMocks());
 
 	it('routes a nested collection-meta delete to updateOne, never deleteOne', async () => {
-		const current = snapshot({ collections: [stubCollection('articles', { note: 'x' })] });
+		currentSnapshotValue = snapshot({ collections: [stubCollection('articles', { note: 'x' })] });
 
 		const diff = emptyDiff();
 		diff.collections = [collectionDiff('articles', [{ kind: 'D', path: ['meta', 'note'], lhs: 'x' } as any])];
 
-		await applyDiff(current, diff);
+		await applyDiff(diff, { expectedHash: HASH });
 
 		expect(collections.updateOne).toHaveBeenCalledWith('articles', expect.anything(), expect.anything());
 		expect(collections.deleteOne).not.toHaveBeenCalled();
 	});
 
 	it('routes a nested collection-meta create to updateOne, never createOne', async () => {
-		const current = snapshot({ collections: [stubCollection('articles')] });
+		currentSnapshotValue = snapshot({ collections: [stubCollection('articles')] });
 		const diff = emptyDiff();
 		diff.collections = [collectionDiff('articles', [{ kind: 'N', path: ['meta', 'icon'], rhs: 'box' } as any])];
 
-		await applyDiff(current, diff);
+		await applyDiff(diff, { expectedHash: HASH });
 
 		expect(collections.updateOne).toHaveBeenCalledWith('articles', expect.anything(), expect.anything());
 		expect(collections.createOne).not.toHaveBeenCalled();
 	});
 
 	it('still deletes a genuine whole-collection delete (no path)', async () => {
-		const current = snapshot({ collections: [stubCollection('temp', { group: null })] });
+		currentSnapshotValue = snapshot({ collections: [stubCollection('temp', { group: null })] });
 
 		const diff = emptyDiff();
 
@@ -113,7 +161,7 @@ describe('applyDiff collection routing', () => {
 			collectionDiff('temp', [{ kind: 'D', lhs: { collection: 'temp', meta: { group: null } } } as any]),
 		];
 
-		await applyDiff(current, diff);
+		await applyDiff(diff, { expectedHash: HASH });
 
 		expect(collections.deleteOne).toHaveBeenCalledWith('temp', expect.anything());
 	});
@@ -127,7 +175,7 @@ describe('applyDiff collection routing', () => {
 			]),
 		];
 
-		await applyDiff(snapshot(), diff);
+		await applyDiff(diff, { expectedHash: HASH });
 
 		expect(collections.createOne).toHaveBeenCalledWith(
 			expect.objectContaining({ collection: 'fresh' }),
@@ -136,7 +184,7 @@ describe('applyDiff collection routing', () => {
 	});
 
 	it('creates a new grouped child even when its existing parent only has a nested-meta change', async () => {
-		const current = snapshot({ collections: [stubCollection('parent', { group: null })] });
+		currentSnapshotValue = snapshot({ collections: [stubCollection('parent', { group: null })] });
 
 		const diff = emptyDiff();
 
@@ -147,7 +195,7 @@ describe('applyDiff collection routing', () => {
 			]),
 		];
 
-		await applyDiff(current, diff);
+		await applyDiff(diff, { expectedHash: HASH });
 
 		expect(collections.createOne).toHaveBeenCalledWith(
 			expect.objectContaining({ collection: 'child' }),
@@ -160,7 +208,9 @@ describe('applyDiff relation creation', () => {
 	beforeEach(() => vi.clearAllMocks());
 
 	it('creates a relation from the entry identifiers when the new value omits them', async () => {
-		await applyDiff(snapshot(), newRelationDiff({ related_collection: 'authors', meta: null, schema: null }));
+		await applyDiff(newRelationDiff({ related_collection: 'authors', meta: null, schema: null }), {
+			expectedHash: HASH,
+		});
 
 		expect(relations.createOne).toHaveBeenCalledWith(
 			expect.objectContaining({ collection: 'articles', field: 'author', related_collection: 'authors' }),
@@ -170,8 +220,8 @@ describe('applyDiff relation creation', () => {
 
 	it('prefers the entry identifiers over conflicting identifiers in the new value', async () => {
 		await applyDiff(
-			snapshot(),
-			newRelationDiff({ collection: 'other', field: 'other_field', related_collection: 'authors', meta: null })
+			newRelationDiff({ collection: 'other', field: 'other_field', related_collection: 'authors', meta: null }),
+			{ expectedHash: HASH }
 		);
 
 		expect(relations.createOne).toHaveBeenCalledWith(
@@ -194,7 +244,7 @@ describe('applyDiff cache invalidation', () => {
 	const diffWithActionEvent = () => newRelationDiff({ related_collection: 'authors', meta: null, schema: null });
 
 	it('flushes every cache once after the schema transaction commits', async () => {
-		await applyDiff(snapshot(), diffWithActionEvent());
+		await applyDiff(diffWithActionEvent(), { expectedHash: HASH });
 
 		expect(cache.flushCaches).toHaveBeenCalledOnce();
 		expect(cache.flushCaches).toHaveBeenCalledWith(true);
@@ -207,7 +257,7 @@ describe('applyDiff cache invalidation', () => {
 		const failure = new Error('cache unavailable');
 		cache.flushCaches.mockRejectedValueOnce(failure);
 
-		await expect(applyDiff(snapshot(), diffWithActionEvent())).rejects.toBe(failure);
+		await expect(applyDiff(diffWithActionEvent(), { expectedHash: HASH })).rejects.toBe(failure);
 
 		expect(order).toEqual(['commit']);
 		expect(emitter.emitAction).not.toHaveBeenCalled();
@@ -241,7 +291,7 @@ describe('applyDiff folder references', () => {
 			]),
 		];
 
-		await applyDiff(snapshot(), diff);
+		await applyDiff(diff, { expectedHash: HASH });
 
 		const payload = collections.createOne.mock.calls[0]![0] as { fields: SnapshotField[] };
 		expect(payload.fields[0]!.meta.options).toEqual({ folder: IMAGES_ID });
@@ -256,13 +306,13 @@ describe('applyDiff folder references', () => {
 			]),
 		];
 
-		await applyDiff(snapshot(), diff);
+		await applyDiff(diff, { expectedHash: HASH });
 
 		expect((fields.createField.mock.calls[0]![1] as SnapshotField).meta.options).toEqual({ folder: IMAGES_ID });
 	});
 
 	it('writes the target folder ID for an updated field, rebuilt from the stored field', async () => {
-		const current = snapshot({
+		currentSnapshotValue = snapshot({
 			fields: [field('articles', 'image', { interface: 'file', note: null, options: { folder: OTHER_ID } })],
 		});
 
@@ -275,7 +325,7 @@ describe('applyDiff folder references', () => {
 			]),
 		];
 
-		await applyDiff(current, diff);
+		await applyDiff(diff, { expectedHash: HASH });
 
 		const written = fields.updateField.mock.calls[0]![1] as SnapshotField;
 		expect(written.meta.options).toEqual({ folder: IMAGES_ID });
@@ -283,7 +333,7 @@ describe('applyDiff folder references', () => {
 	});
 
 	it('writes version 1 IDs as given and keeps unchanged IDs', async () => {
-		const current = snapshot({
+		currentSnapshotValue = snapshot({
 			fields: [
 				field('articles', 'image', { interface: 'file', options: { folder: IMAGES_ID } }),
 				field('articles', 'cover', { interface: 'file', note: null, options: { folder: IMAGES_ID } }),
@@ -299,14 +349,14 @@ describe('applyDiff folder references', () => {
 			fieldDiff('articles', 'cover', [{ kind: 'E', path: ['meta', 'note'], lhs: null, rhs: 'Cover' }]),
 		];
 
-		await applyDiff(current, diff);
+		await applyDiff(diff, { expectedHash: HASH });
 
 		const written = fields.updateField.mock.calls.map(([, values]) => (values as SnapshotField).meta.options);
 		expect(written).toEqual([{ folder: OTHER_ID }, { folder: IMAGES_ID }]);
 	});
 
 	it('keeps the stored ID when a version 1 diff moves a field to an extension interface', async () => {
-		const current = snapshot({
+		currentSnapshotValue = snapshot({
 			fields: [
 				field('articles', 'body', { interface: 'input-rich-text-md', options: { folder: IMAGES_ID } }),
 				field('articles', 'items', {
@@ -334,7 +384,7 @@ describe('applyDiff folder references', () => {
 			]),
 		];
 
-		await applyDiff(current, diff);
+		await applyDiff(diff, { expectedHash: HASH });
 
 		const [body, items] = fields.updateField.mock.calls.map(([, values]) => values as SnapshotField);
 		expect(body!.meta).toMatchObject({ interface: 'custom-md', options: { folder: IMAGES_ID } });
@@ -346,7 +396,7 @@ describe('applyDiff folder references', () => {
 	});
 
 	it('resolves the key when a version 2 diff moves a field from an extension interface to a registered one', async () => {
-		const current = snapshot({
+		currentSnapshotValue = snapshot({
 			fields: [field('articles', 'body', { interface: 'custom-md', options: { folder: OTHER_ID } })],
 		});
 
@@ -359,7 +409,7 @@ describe('applyDiff folder references', () => {
 			]),
 		];
 
-		await applyDiff(current, diff);
+		await applyDiff(diff, { expectedHash: HASH });
 
 		expect((fields.updateField.mock.calls[0]![1] as SnapshotField).meta.options).toEqual({ folder: IMAGES_ID });
 	});
@@ -374,7 +424,7 @@ describe('applyDiff folder references', () => {
 			]),
 		];
 
-		await expect(applyDiff(snapshot(), diff)).rejects.toThrow(
+		await expect(applyDiff(diff, { expectedHash: HASH })).rejects.toThrow(
 			'Folder reference "missing" could not be resolved. Referenced by: articles.image.meta.options.folder'
 		);
 
@@ -383,10 +433,11 @@ describe('applyDiff folder references', () => {
 	});
 
 	describe('from a version 2 diff', () => {
-		const database = { select: () => ({ from: async () => folderRows }) } as any;
+		const database = folderTrx() as any;
 
 		async function diffAndApply(current: Snapshot, desired: Snapshot) {
-			await applyDiff(current, await getTargetSnapshotDiff(desired, { current, database }));
+			currentSnapshotValue = current;
+			await applyDiff(await getTargetSnapshotDiff(desired, { current, database }), { expectedHash: HASH });
 		}
 
 		it('writes a literal value when a field leaves the registry for an extension interface', async () => {
@@ -467,7 +518,8 @@ describe('applyDiff folder references', () => {
 
 			expect(diff.fields[0]!.diff).toEqual([{ ...entry, path: ['meta', 'options', 'folder'] }]);
 
-			await applyDiff(current, diff);
+			currentSnapshotValue = current;
+			await applyDiff(diff, { expectedHash: HASH });
 
 			expect((fields.updateField.mock.calls[0]![1] as SnapshotField).meta.options).toEqual(options);
 		});

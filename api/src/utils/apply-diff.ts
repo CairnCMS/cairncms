@@ -1,12 +1,15 @@
-import type { Field, Relation, SchemaOverview } from '@cairncms/types';
+import type { Field, Relation } from '@cairncms/types';
 import type { Diff, DiffDeleted, DiffNew } from 'deep-diff';
 import deepDiff from 'deep-diff';
 import type { Knex } from 'knex';
 import { cloneDeep, merge, set } from 'lodash-es';
 import { flushCaches } from '../cache.js';
+import { runInBoundSerializable } from '../database/bound-transaction.js';
 import { getHelpers } from '../database/helpers/index.js';
-import getDatabase from '../database/index.js';
+import getDatabase, { getDatabaseClient } from '../database/index.js';
+import { isSerializationConflict } from '../database/serialization-error.js';
 import emitter from '../emitter.js';
+import { SchemaStateChangedException } from '../exceptions/schema-state-changed.js';
 import logger from '../logger.js';
 import { CollectionsService } from '../services/collections.js';
 import { FieldsService } from '../services/fields.js';
@@ -20,8 +23,10 @@ import type {
 	SnapshotField,
 } from '../types/index.js';
 import { DiffKind } from '../types/index.js';
-import { readFolderKeys, toFolderIds } from './folder-references.js';
+import { readFolderKeys, toFolderIds, toKeyFormSnapshot } from './folder-references.js';
 import { getSchema } from './get-schema.js';
+import { getSnapshot } from './get-snapshot.js';
+import { getVersionedHash } from './get-versioned-hash.js';
 import { isNestedMetaUpdate } from './is-nested-meta-update.js';
 
 type CollectionDelta = {
@@ -72,13 +77,12 @@ function resolveFieldWrites(
 }
 
 export async function applyDiff(
-	currentSnapshot: Snapshot,
 	snapshotDiff: SnapshotDiff,
-	options?: { database?: Knex; schema?: SchemaOverview }
+	options: { database?: Knex; expectedHash: string }
 ): Promise<void> {
-	const database = options?.database ?? getDatabase();
+	const database = options.database ?? getDatabase();
 	const helpers = getHelpers(database);
-	const schema = options?.schema ?? (await getSchema({ database, bypassCache: true }));
+	const vendor = getDatabaseClient(database);
 
 	const nestedActionEvents: ActionEventParams[] = [];
 
@@ -91,286 +95,318 @@ export async function applyDiff(
 	const runPostColumnChange = await helpers.schema.preColumnChange();
 
 	try {
-		await database.transaction(async (trx) => {
-			const { folderIdByKey } = await readFolderKeys(trx);
-			const fieldWrites = resolveFieldWrites(currentSnapshot, snapshotDiff, folderIdByKey);
-			const fieldWrite = (collection: string, field: string) => fieldWrites.get(collection)?.get(field);
+		await runInBoundSerializable(
+			database,
+			async (trx) => {
+				const schema = await getSchema({ database: trx, bypassCache: true });
+				const currentSnapshot = await getSnapshot({ database: trx, schema });
+				const currentKeyForm = await toKeyFormSnapshot(currentSnapshot, { database: trx });
 
-			const collectionsService = new CollectionsService({ knex: trx, schema });
+				if (getVersionedHash(currentKeyForm.snapshot) !== options.expectedHash) {
+					throw new SchemaStateChangedException();
+				}
 
-			const getNestedCollectionsToCreate = (currentLevelCollection: string) =>
-				snapshotDiff.collections.filter(
-					({ diff }) => (diff[0] as DiffNew<Collection>).rhs?.meta?.group === currentLevelCollection
-				) as CollectionDelta[];
+				const { folderIdByKey } = await readFolderKeys(trx);
+				const fieldWrites = resolveFieldWrites(currentSnapshot, snapshotDiff, folderIdByKey);
+				const fieldWrite = (collection: string, field: string) => fieldWrites.get(collection)?.get(field);
 
-			const getNestedCollectionsToDelete = (currentLevelCollection: string) =>
-				snapshotDiff.collections.filter(
-					({ diff }) => (diff[0] as DiffDeleted<Collection>).lhs?.meta?.group === currentLevelCollection
-				) as CollectionDelta[];
+				const collectionsService = new CollectionsService({ knex: trx, schema });
 
-			const createCollections = async (collections: CollectionDelta[]) => {
-				for (const { collection, diff } of collections) {
-					if (diff?.[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff?.[0]) && diff[0].rhs) {
-						// We'll nest the to-be-created fields in the same collection creation, to prevent
-						// creating a collection without a primary key
-						const fields = snapshotDiff.fields
-							.filter((fieldDiff) => fieldDiff.collection === collection)
-							.map(
-								(fieldDiff) =>
-									fieldWrite(fieldDiff.collection, fieldDiff.field) ?? (fieldDiff.diff[0] as DiffNew<Field>).rhs
-							)
-							.map((fieldDiff) => {
-								// Casts field type to UUID when applying non-PostgreSQL schema onto PostgreSQL database.
-								// This is needed because they snapshots UUID fields as char/varchar with length 36.
-								if (
-									['char', 'varchar'].includes(String(fieldDiff.schema?.data_type).toLowerCase()) &&
-									fieldDiff.schema?.max_length === 36 &&
-									(fieldDiff.schema?.is_primary_key ||
-										(fieldDiff.schema?.foreign_key_table && fieldDiff.schema?.foreign_key_column))
-								) {
-									return merge(fieldDiff, { type: 'uuid', schema: { data_type: 'uuid', max_length: null } });
-								} else {
-									return fieldDiff;
+				const getNestedCollectionsToCreate = (currentLevelCollection: string) =>
+					snapshotDiff.collections.filter(
+						({ diff }) => (diff[0] as DiffNew<Collection>).rhs?.meta?.group === currentLevelCollection
+					) as CollectionDelta[];
+
+				const getNestedCollectionsToDelete = (currentLevelCollection: string) =>
+					snapshotDiff.collections.filter(
+						({ diff }) => (diff[0] as DiffDeleted<Collection>).lhs?.meta?.group === currentLevelCollection
+					) as CollectionDelta[];
+
+				const createCollections = async (collections: CollectionDelta[]) => {
+					for (const { collection, diff } of collections) {
+						if (diff?.[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff?.[0]) && diff[0].rhs) {
+							// We'll nest the to-be-created fields in the same collection creation, to prevent
+							// creating a collection without a primary key
+							const fields = snapshotDiff.fields
+								.filter((fieldDiff) => fieldDiff.collection === collection)
+								.map(
+									(fieldDiff) =>
+										fieldWrite(fieldDiff.collection, fieldDiff.field) ?? (fieldDiff.diff[0] as DiffNew<Field>).rhs
+								)
+								.map((fieldDiff) => {
+									// Casts field type to UUID when applying non-PostgreSQL schema onto PostgreSQL database.
+									// This is needed because they snapshots UUID fields as char/varchar with length 36.
+									if (
+										['char', 'varchar'].includes(String(fieldDiff.schema?.data_type).toLowerCase()) &&
+										fieldDiff.schema?.max_length === 36 &&
+										(fieldDiff.schema?.is_primary_key ||
+											(fieldDiff.schema?.foreign_key_table && fieldDiff.schema?.foreign_key_column))
+									) {
+										return merge(fieldDiff, { type: 'uuid', schema: { data_type: 'uuid', max_length: null } });
+									} else {
+										return fieldDiff;
+									}
+								});
+
+							try {
+								await collectionsService.createOne(
+									{
+										...diff[0].rhs,
+										fields,
+									},
+									mutationOptions
+								);
+							} catch (err: any) {
+								logger.error(`Failed to create collection "${collection}"`);
+								throw err;
+							}
+
+							// Now that the fields are in for this collection, we can strip them from the field edits
+							snapshotDiff.fields = snapshotDiff.fields.filter((fieldDiff) => fieldDiff.collection !== collection);
+
+							await createCollections(getNestedCollectionsToCreate(collection));
+						}
+					}
+				};
+
+				const deleteCollections = async (collections: CollectionDelta[]) => {
+					for (const { collection, diff } of collections) {
+						if (diff?.[0]?.kind === DiffKind.DELETE && !isNestedMetaUpdate(diff?.[0])) {
+							const relations = schema.relations.filter(
+								(r) => r.related_collection === collection || r.collection === collection
+							);
+
+							if (relations.length > 0) {
+								const relationsService = new RelationsService({ knex: trx, schema });
+
+								for (const relation of relations) {
+									try {
+										await relationsService.deleteOne(relation.collection, relation.field, mutationOptions);
+									} catch (err) {
+										logger.error(
+											`Failed to delete collection "${collection}" due to relation "${relation.collection}.${relation.field}"`
+										);
+
+										throw err;
+									}
 								}
-							});
 
+								// clean up deleted relations from existing schema
+								schema.relations = schema.relations.filter(
+									(r) => r.related_collection !== collection && r.collection !== collection
+								);
+							}
+
+							await deleteCollections(getNestedCollectionsToDelete(collection));
+
+							try {
+								await collectionsService.deleteOne(collection, mutationOptions);
+							} catch (err) {
+								logger.error(`Failed to delete collection "${collection}"`);
+								throw err;
+							}
+						}
+					}
+				};
+
+				// Finds all collections that need to be created
+				const filterCollectionsForCreation = ({
+					diff,
+				}: {
+					collection: string;
+					diff: Diff<Collection | undefined>[];
+				}) => {
+					// Check new collections only
+					const isNewCollection = diff[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff[0]);
+					if (!isNewCollection) return false;
+
+					// Create now if no group
+					const groupName = (diff[0] as DiffNew<Collection>).rhs.meta?.group;
+					if (!groupName) return true;
+
+					// Check if parent collection already exists in schema
+					const parentExists = currentSnapshot.collections.find((c) => c.collection === groupName) !== undefined;
+
+					// If this is a new collection and the parent collection doesn't exist in current schema ->
+					// Check if the parent collection will be created as part of applying this snapshot ->
+					// If yes -> this collection will be created recursively
+					// If not -> create now
+					// (ex.)
+					// TopLevelCollection - I exist in current schema
+					// 		NestedCollection - I exist in snapshotDiff as a new collection
+					//			TheCurrentCollectionInIteration - I exist in snapshotDiff as a new collection but will be created as part of NestedCollection
+					const parentWillBeCreatedInThisApply =
+						snapshotDiff.collections.filter(
+							({ collection, diff }) =>
+								diff[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff[0]) && collection === groupName
+						).length > 0;
+
+					// Has group, but parent is not new, parent is also not being created in this snapshot apply
+					if (parentExists && !parentWillBeCreatedInThisApply) return true;
+
+					return false;
+				};
+
+				// Create top level collections (no group, or highest level in existing group) first,
+				// then continue with nested collections recursively
+				await createCollections(snapshotDiff.collections.filter(filterCollectionsForCreation));
+
+				// delete top level collections (no group) first, then continue with nested collections recursively
+				await deleteCollections(
+					snapshotDiff.collections.filter(
+						({ diff }) =>
+							diff[0]?.kind === DiffKind.DELETE &&
+							!isNestedMetaUpdate(diff[0]) &&
+							(diff[0] as DiffDeleted<Collection>).lhs.meta?.group === null
+					)
+				);
+
+				for (const { collection, diff } of snapshotDiff.collections) {
+					if (
+						diff?.[0]?.kind === DiffKind.EDIT ||
+						diff?.[0]?.kind === DiffKind.ARRAY ||
+						isNestedMetaUpdate(diff?.[0])
+					) {
+						const currentCollection = currentSnapshot.collections.find((field) => {
+							return field.collection === collection;
+						});
+
+						if (currentCollection) {
+							try {
+								const newValues = diff.reduce((acc, currentDiff) => {
+									deepDiff.applyChange(acc, undefined, currentDiff);
+									return acc;
+								}, cloneDeep(currentCollection));
+
+								await collectionsService.updateOne(collection, newValues, mutationOptions);
+							} catch (err) {
+								logger.error(`Failed to update collection "${collection}"`);
+								throw err;
+							}
+						}
+					}
+				}
+
+				const fieldsService = new FieldsService({
+					knex: trx,
+					schema: await getSchema({ database: trx, bypassCache: true }),
+				});
+
+				for (const { collection, field, diff } of snapshotDiff.fields) {
+					if (diff?.[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff?.[0])) {
 						try {
-							await collectionsService.createOne(
+							await fieldsService.createField(
+								collection,
+								fieldWrite(collection, field) ?? (diff[0] as DiffNew<Field>).rhs,
+								undefined,
+								mutationOptions
+							);
+						} catch (err) {
+							logger.error(`Failed to create field "${collection}.${field}"`);
+							throw err;
+						}
+					}
+
+					if (isFieldUpdate(diff)) {
+						const newValues = fieldWrite(collection, field);
+
+						if (newValues) {
+							try {
+								await fieldsService.updateField(collection, newValues, mutationOptions);
+							} catch (err) {
+								logger.error(`Failed to update field "${collection}.${field}"`);
+								throw err;
+							}
+						}
+					}
+
+					if (diff?.[0]?.kind === DiffKind.DELETE && !isNestedMetaUpdate(diff?.[0])) {
+						try {
+							await fieldsService.deleteField(collection, field, mutationOptions);
+						} catch (err) {
+							logger.error(`Failed to delete field "${collection}.${field}"`);
+							throw err;
+						}
+
+						// Field deletion also cleans up the relationship. We should ignore any relationship
+						// changes attached to this now non-existing field
+						snapshotDiff.relations = snapshotDiff.relations.filter(
+							(relation) => (relation.collection === collection && relation.field === field) === false
+						);
+					}
+				}
+
+				const relationsService = new RelationsService({
+					knex: trx,
+					schema: await getSchema({ database: trx, bypassCache: true }),
+				});
+
+				for (const { collection, field, diff } of snapshotDiff.relations) {
+					const structure = {};
+
+					for (const diffEdit of diff) {
+						set(structure, diffEdit.path!, undefined);
+					}
+
+					if (diff?.[0]?.kind === DiffKind.NEW) {
+						try {
+							await relationsService.createOne(
 								{
-									...diff[0].rhs,
-									fields,
+									...(diff[0] as DiffNew<Relation>).rhs,
+									collection,
+									field,
 								},
 								mutationOptions
 							);
-						} catch (err: any) {
-							logger.error(`Failed to create collection "${collection}"`);
+						} catch (err) {
+							logger.error(`Failed to create relation "${collection}.${field}"`);
 							throw err;
 						}
-
-						// Now that the fields are in for this collection, we can strip them from the field edits
-						snapshotDiff.fields = snapshotDiff.fields.filter((fieldDiff) => fieldDiff.collection !== collection);
-
-						await createCollections(getNestedCollectionsToCreate(collection));
 					}
-				}
-			};
 
-			const deleteCollections = async (collections: CollectionDelta[]) => {
-				for (const { collection, diff } of collections) {
-					if (diff?.[0]?.kind === DiffKind.DELETE && !isNestedMetaUpdate(diff?.[0])) {
-						const relations = schema.relations.filter(
-							(r) => r.related_collection === collection || r.collection === collection
-						);
+					if (diff?.[0]?.kind === DiffKind.EDIT || diff?.[0]?.kind === DiffKind.ARRAY) {
+						const currentRelation = currentSnapshot.relations.find((relation) => {
+							return relation.collection === collection && relation.field === field;
+						});
 
-						if (relations.length > 0) {
-							const relationsService = new RelationsService({ knex: trx, schema });
+						if (currentRelation) {
+							try {
+								const newValues = diff.reduce((acc, currentDiff) => {
+									deepDiff.applyChange(acc, undefined, currentDiff);
+									return acc;
+								}, cloneDeep(currentRelation));
 
-							for (const relation of relations) {
-								try {
-									await relationsService.deleteOne(relation.collection, relation.field, mutationOptions);
-								} catch (err) {
-									logger.error(
-										`Failed to delete collection "${collection}" due to relation "${relation.collection}.${relation.field}"`
-									);
-
-									throw err;
-								}
+								await relationsService.updateOne(collection, field, newValues, mutationOptions);
+							} catch (err) {
+								logger.error(`Failed to update relation "${collection}.${field}"`);
+								throw err;
 							}
-
-							// clean up deleted relations from existing schema
-							schema.relations = schema.relations.filter(
-								(r) => r.related_collection !== collection && r.collection !== collection
-							);
 						}
+					}
 
-						await deleteCollections(getNestedCollectionsToDelete(collection));
-
+					if (diff?.[0]?.kind === DiffKind.DELETE) {
 						try {
-							await collectionsService.deleteOne(collection, mutationOptions);
+							await relationsService.deleteOne(collection, field, mutationOptions);
 						} catch (err) {
-							logger.error(`Failed to delete collection "${collection}"`);
+							logger.error(`Failed to delete relation "${collection}.${field}"`);
 							throw err;
 						}
 					}
 				}
-			};
+			},
+			// Cache flushing and event dispatch run after foreign key restoration below, so this
+			// post-commit callback is intentionally empty.
+			async () => undefined
+		);
+	} catch (err) {
+		// A serialization conflict is a clean rollback only where the whole transaction unwinds.
+		// MySQL and MariaDB commit data definition changes implicitly, so a conflict there may
+		// follow a committed change and is not treated as a clean rollback.
+		if (isSerializationConflict(err) && (vendor === 'postgres' || vendor === 'sqlite')) {
+			throw new SchemaStateChangedException();
+		}
 
-			// Finds all collections that need to be created
-			const filterCollectionsForCreation = ({ diff }: { collection: string; diff: Diff<Collection | undefined>[] }) => {
-				// Check new collections only
-				const isNewCollection = diff[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff[0]);
-				if (!isNewCollection) return false;
-
-				// Create now if no group
-				const groupName = (diff[0] as DiffNew<Collection>).rhs.meta?.group;
-				if (!groupName) return true;
-
-				// Check if parent collection already exists in schema
-				const parentExists = currentSnapshot.collections.find((c) => c.collection === groupName) !== undefined;
-
-				// If this is a new collection and the parent collection doesn't exist in current schema ->
-				// Check if the parent collection will be created as part of applying this snapshot ->
-				// If yes -> this collection will be created recursively
-				// If not -> create now
-				// (ex.)
-				// TopLevelCollection - I exist in current schema
-				// 		NestedCollection - I exist in snapshotDiff as a new collection
-				//			TheCurrentCollectionInIteration - I exist in snapshotDiff as a new collection but will be created as part of NestedCollection
-				const parentWillBeCreatedInThisApply =
-					snapshotDiff.collections.filter(
-						({ collection, diff }) =>
-							diff[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff[0]) && collection === groupName
-					).length > 0;
-
-				// Has group, but parent is not new, parent is also not being created in this snapshot apply
-				if (parentExists && !parentWillBeCreatedInThisApply) return true;
-
-				return false;
-			};
-
-			// Create top level collections (no group, or highest level in existing group) first,
-			// then continue with nested collections recursively
-			await createCollections(snapshotDiff.collections.filter(filterCollectionsForCreation));
-
-			// delete top level collections (no group) first, then continue with nested collections recursively
-			await deleteCollections(
-				snapshotDiff.collections.filter(
-					({ diff }) =>
-						diff[0]?.kind === DiffKind.DELETE &&
-						!isNestedMetaUpdate(diff[0]) &&
-						(diff[0] as DiffDeleted<Collection>).lhs.meta?.group === null
-				)
-			);
-
-			for (const { collection, diff } of snapshotDiff.collections) {
-				if (diff?.[0]?.kind === DiffKind.EDIT || diff?.[0]?.kind === DiffKind.ARRAY || isNestedMetaUpdate(diff?.[0])) {
-					const currentCollection = currentSnapshot.collections.find((field) => {
-						return field.collection === collection;
-					});
-
-					if (currentCollection) {
-						try {
-							const newValues = diff.reduce((acc, currentDiff) => {
-								deepDiff.applyChange(acc, undefined, currentDiff);
-								return acc;
-							}, cloneDeep(currentCollection));
-
-							await collectionsService.updateOne(collection, newValues, mutationOptions);
-						} catch (err) {
-							logger.error(`Failed to update collection "${collection}"`);
-							throw err;
-						}
-					}
-				}
-			}
-
-			const fieldsService = new FieldsService({
-				knex: trx,
-				schema: await getSchema({ database: trx, bypassCache: true }),
-			});
-
-			for (const { collection, field, diff } of snapshotDiff.fields) {
-				if (diff?.[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff?.[0])) {
-					try {
-						await fieldsService.createField(
-							collection,
-							fieldWrite(collection, field) ?? (diff[0] as DiffNew<Field>).rhs,
-							undefined,
-							mutationOptions
-						);
-					} catch (err) {
-						logger.error(`Failed to create field "${collection}.${field}"`);
-						throw err;
-					}
-				}
-
-				if (isFieldUpdate(diff)) {
-					const newValues = fieldWrite(collection, field);
-
-					if (newValues) {
-						try {
-							await fieldsService.updateField(collection, newValues, mutationOptions);
-						} catch (err) {
-							logger.error(`Failed to update field "${collection}.${field}"`);
-							throw err;
-						}
-					}
-				}
-
-				if (diff?.[0]?.kind === DiffKind.DELETE && !isNestedMetaUpdate(diff?.[0])) {
-					try {
-						await fieldsService.deleteField(collection, field, mutationOptions);
-					} catch (err) {
-						logger.error(`Failed to delete field "${collection}.${field}"`);
-						throw err;
-					}
-
-					// Field deletion also cleans up the relationship. We should ignore any relationship
-					// changes attached to this now non-existing field
-					snapshotDiff.relations = snapshotDiff.relations.filter(
-						(relation) => (relation.collection === collection && relation.field === field) === false
-					);
-				}
-			}
-
-			const relationsService = new RelationsService({
-				knex: trx,
-				schema: await getSchema({ database: trx, bypassCache: true }),
-			});
-
-			for (const { collection, field, diff } of snapshotDiff.relations) {
-				const structure = {};
-
-				for (const diffEdit of diff) {
-					set(structure, diffEdit.path!, undefined);
-				}
-
-				if (diff?.[0]?.kind === DiffKind.NEW) {
-					try {
-						await relationsService.createOne(
-							{
-								...(diff[0] as DiffNew<Relation>).rhs,
-								collection,
-								field,
-							},
-							mutationOptions
-						);
-					} catch (err) {
-						logger.error(`Failed to create relation "${collection}.${field}"`);
-						throw err;
-					}
-				}
-
-				if (diff?.[0]?.kind === DiffKind.EDIT || diff?.[0]?.kind === DiffKind.ARRAY) {
-					const currentRelation = currentSnapshot.relations.find((relation) => {
-						return relation.collection === collection && relation.field === field;
-					});
-
-					if (currentRelation) {
-						try {
-							const newValues = diff.reduce((acc, currentDiff) => {
-								deepDiff.applyChange(acc, undefined, currentDiff);
-								return acc;
-							}, cloneDeep(currentRelation));
-
-							await relationsService.updateOne(collection, field, newValues, mutationOptions);
-						} catch (err) {
-							logger.error(`Failed to update relation "${collection}.${field}"`);
-							throw err;
-						}
-					}
-				}
-
-				if (diff?.[0]?.kind === DiffKind.DELETE) {
-					try {
-						await relationsService.deleteOne(collection, field, mutationOptions);
-					} catch (err) {
-						logger.error(`Failed to delete relation "${collection}.${field}"`);
-						throw err;
-					}
-				}
-			}
-		});
+		throw err;
 	} finally {
 		if (runPostColumnChange) {
 			await helpers.schema.postColumnChange();

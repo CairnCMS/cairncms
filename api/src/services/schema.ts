@@ -11,7 +11,7 @@ import type {
 	SnapshotWithHash,
 } from '../types/index.js';
 import { applyDiff } from '../utils/apply-diff.js';
-import { toKeyFormSnapshot, type KeyFormState } from '../utils/folder-references.js';
+import type { KeyFormState } from '../utils/folder-references.js';
 import { getPortableSnapshot } from '../utils/get-portable-snapshot.js';
 import { getSnapshot } from '../utils/get-snapshot.js';
 import { getTargetSnapshotDiff } from '../utils/get-target-snapshot-diff.js';
@@ -48,12 +48,10 @@ export class SchemaService {
 		if (this.accountability?.admin !== true) throw new ForbiddenException();
 
 		const currentSnapshot = await this.snapshot({ version: 1 });
-		const keyForm = await toKeyFormSnapshot(currentSnapshot, { database: this.knex });
-		const snapshotWithHash: SnapshotWithHash = { ...currentSnapshot, hash: getVersionedHash(keyForm.snapshot) };
 
-		if (!validateApplyDiff(payload, snapshotWithHash)) return;
+		if (!validateApplyDiff(payload, currentSnapshot)) return;
 
-		await applyDiff(currentSnapshot, payload.diff, { database: this.knex });
+		await applyDiff(payload.diff, { database: this.knex, expectedHash: payload.hash });
 	}
 
 	async diff(

@@ -5,7 +5,6 @@ import inquirer from 'inquirer';
 import { load as loadYaml } from 'js-yaml';
 import path from 'path';
 import getDatabase, { isInstalled, validateDatabaseConnection } from '../../../database/index.js';
-import { InvalidPayloadException } from '../../../exceptions/index.js';
 import logger from '../../../logger.js';
 import { confirmPrompt, createVerb, deleteVerb, heading, planIntro, updateVerb } from '../../presentation.js';
 import type { Snapshot } from '../../../types/index.js';
@@ -49,8 +48,6 @@ export async function apply(snapshotPath: string, options?: { yes: boolean; dryR
 			currentKeyForm,
 			database,
 		});
-
-		let applyFrom = currentSnapshot;
 
 		if (
 			snapshotDiff.collections.length === 0 &&
@@ -170,20 +167,9 @@ export async function apply(snapshotPath: string, options?: { yes: boolean; dryR
 			if (proceed === false) {
 				process.exit(0);
 			}
-
-			const freshSnapshot = await getSnapshot({ database });
-			const freshKeyForm = await toKeyFormSnapshot(freshSnapshot, { database });
-
-			if (getVersionedHash(freshKeyForm.snapshot) !== getVersionedHash(currentKeyForm.snapshot)) {
-				throw new InvalidPayloadException(
-					'The schema changed while waiting for confirmation. Run the command again to review the new changes.'
-				);
-			}
-
-			applyFrom = freshSnapshot;
 		}
 
-		await applyDiff(applyFrom, snapshotDiff, { database });
+		await applyDiff(snapshotDiff, { database, expectedHash: getVersionedHash(currentKeyForm.snapshot) });
 
 		logger.info(`Snapshot applied successfully`);
 
