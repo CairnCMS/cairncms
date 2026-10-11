@@ -197,6 +197,7 @@ describe('applyDiff cache invalidation', () => {
 		await applyDiff(snapshot(), diffWithActionEvent());
 
 		expect(cache.flushCaches).toHaveBeenCalledOnce();
+		expect(cache.flushCaches).toHaveBeenCalledWith(true);
 		expect(cache.clearSystemCache).not.toHaveBeenCalled();
 		expect(order).toEqual(['commit', 'flush']);
 		expect(emitter.emitAction).toHaveBeenCalledOnce();

@@ -377,7 +377,7 @@ export async function applyDiff(
 		}
 	}
 
-	await flushCaches();
+	await flushCaches(true);
 
 	if (nestedActionEvents.length > 0) {
 		const updatedSchema = await getSchema({ database, bypassCache: true });

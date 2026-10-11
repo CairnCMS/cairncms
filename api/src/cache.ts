@@ -90,8 +90,12 @@ export async function clearSystemCache(opts?: {
 
 	if (opts?.forced || !(await lockCache.get('system-cache-lock'))) {
 		await lockCache.set('system-cache-lock', true, 10000);
-		await systemCache.clear();
-		await lockCache.delete('system-cache-lock');
+
+		try {
+			await systemCache.clear();
+		} finally {
+			await lockCache.delete('system-cache-lock');
+		}
 	}
 
 	await sharedSchemaCache.delete('hash');

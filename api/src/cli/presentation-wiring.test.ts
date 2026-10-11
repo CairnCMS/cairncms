@@ -61,8 +61,6 @@ vi.mock('../utils/package.js', () => ({ version: '1.0.0' }));
 
 vi.mock('../utils/apply-diff.js', () => ({ applyDiff: vi.fn(async () => undefined) }));
 
-vi.mock('../cache.js', () => ({ getCache: () => ({ systemCache: { clear: vi.fn() } }) }));
-
 vi.mock('inquirer', () => ({ default: { prompt: vi.fn(async () => ({ proceed: false })) } }));
 
 vi.mock('fs', () => {

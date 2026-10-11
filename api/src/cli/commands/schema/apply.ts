@@ -11,7 +11,6 @@ import { confirmPrompt, createVerb, deleteVerb, heading, planIntro, updateVerb }
 import type { Snapshot } from '../../../types/index.js';
 import { DiffKind } from '../../../types/index.js';
 import { isNestedMetaUpdate } from '../../../utils/is-nested-meta-update.js';
-import { getCache } from '../../../cache.js';
 import { applyDiff } from '../../../utils/apply-diff.js';
 import { toKeyFormSnapshot } from '../../../utils/folder-references.js';
 import { getSnapshot } from '../../../utils/get-snapshot.js';
@@ -185,9 +184,6 @@ export async function apply(snapshotPath: string, options?: { yes: boolean; dryR
 		}
 
 		await applyDiff(applyFrom, snapshotDiff, { database });
-
-		const { systemCache } = getCache();
-		await systemCache?.clear();
 
 		logger.info(`Snapshot applied successfully`);
 
