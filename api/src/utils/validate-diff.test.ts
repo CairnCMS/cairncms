@@ -19,19 +19,6 @@ test('should fail on invalid diff schema', () => {
 	expect(() => validateApplyDiff(diff, snapshot)).toThrowError('"hash" is required');
 });
 
-test('should fail on invalid hash', () => {
-	const diff = {
-		hash: 'abc',
-		diff: { collections: [{ collection: 'test', diff: [] }], fields: [], relations: [] },
-	} as SnapshotDiffWithHash;
-
-	const snapshot = { hash: 'xyz' } as SnapshotWithHash;
-
-	expect(() => validateApplyDiff(diff, snapshot)).toThrowError(
-		"Provided hash does not match the current instance's schema hash"
-	);
-});
-
 describe('should throw accurate error', () => {
 	const baseDiff = (partialDiff: Partial<SnapshotDiff>): SnapshotDiffWithHash => {
 		return {
@@ -135,6 +122,83 @@ describe('should throw accurate error', () => {
 		expect(() => validateApplyDiff(diff, baseSnapshot())).toThrowError(
 			'Provided diff is trying to delete relation "test.test-> relation" but it does not exist'
 		);
+	});
+});
+
+describe('distinguishes nested metadata changes from whole-entity operations', () => {
+	test('allows a nested collection-meta create on an existing collection', () => {
+		const diff: any = {
+			hash: 'abc',
+			diff: {
+				collections: [{ collection: 'a', diff: [{ kind: 'N', path: ['meta', 'icon'], rhs: 'box' }] }],
+				fields: [],
+				relations: [],
+			},
+		};
+
+		const snapshot = { collections: [{ collection: 'a' }], fields: [], relations: [] } as unknown as Snapshot;
+
+		expect(validateApplyDiff(diff, snapshot)).toBe(true);
+	});
+
+	test('allows a nested collection-meta delete on an existing collection', () => {
+		const diff: any = {
+			hash: 'abc',
+			diff: {
+				collections: [{ collection: 'a', diff: [{ kind: 'D', path: ['meta', 'note'], lhs: 'kept' }] }],
+				fields: [],
+				relations: [],
+			},
+		};
+
+		const snapshot = { collections: [{ collection: 'a' }], fields: [], relations: [] } as unknown as Snapshot;
+
+		expect(validateApplyDiff(diff, snapshot)).toBe(true);
+	});
+
+	test('allows a nested field-meta create on an existing field', () => {
+		const diff: any = {
+			hash: 'abc',
+			diff: {
+				collections: [],
+				fields: [{ collection: 'a', field: 'f', diff: [{ kind: 'N', path: ['meta', 'options'], rhs: {} }] }],
+				relations: [],
+			},
+		};
+
+		const snapshot = {
+			collections: [],
+			fields: [{ collection: 'a', field: 'f' }],
+			relations: [],
+		} as unknown as Snapshot;
+
+		expect(validateApplyDiff(diff, snapshot)).toBe(true);
+	});
+
+	test('allows a nested relation-meta create on an existing relation', () => {
+		const diff: any = {
+			hash: 'abc',
+			diff: {
+				collections: [],
+				fields: [],
+				relations: [
+					{
+						collection: 'a',
+						field: 'r',
+						related_collection: 'b',
+						diff: [{ kind: 'N', path: ['meta', 'one_field'], rhs: 'x' }],
+					},
+				],
+			},
+		};
+
+		const snapshot = {
+			collections: [],
+			fields: [],
+			relations: [{ collection: 'a', field: 'r', related_collection: 'b' }],
+		} as unknown as Snapshot;
+
+		expect(validateApplyDiff(diff, snapshot)).toBe(true);
 	});
 });
 
@@ -255,7 +319,11 @@ test('should not throw error for diffs with varying types of lhs/rhs', () => {
 		},
 	};
 
-	const snapshot = { hash: 'abc' } as SnapshotWithHash;
+	const snapshot = {
+		collections: [],
+		fields: [{ collection: 'a', field: 'delete_field' } as SnapshotField],
+		relations: [],
+	} as unknown as Snapshot;
 
 	expect(() => validateApplyDiff(diff, snapshot)).not.toThrow();
 });
@@ -297,7 +365,7 @@ test('should not throw error for relation diff with null related_collection (app
 		},
 	};
 
-	const snapshot = { hash: 'abc' } as SnapshotWithHash;
+	const snapshot = { collections: [], fields: [], relations: [] } as unknown as Snapshot;
 
 	expect(() => validateApplyDiff(diff, snapshot)).not.toThrow();
 });

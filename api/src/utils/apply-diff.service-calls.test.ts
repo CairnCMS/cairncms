@@ -12,12 +12,25 @@ import {
 } from '../__utils__/snapshots.js';
 import { CollectionsService, FieldsService } from '../services/index.js';
 import type { Snapshot, SnapshotField } from '../types/index.js';
-import { applySnapshot } from './apply-snapshot.js';
+import { applyDiff } from './apply-diff.js';
+import { getTargetSnapshotDiff } from './get-target-snapshot-diff.js';
+import { getSnapshot } from './get-snapshot.js';
 import * as getSchema from './get-schema.js';
+
+vi.mock('./get-snapshot.js', () => ({ getSnapshot: vi.fn() }));
+vi.mock('./get-versioned-hash.js', () => ({ getVersionedHash: () => 'HASH' }));
+
+vi.mock('../database/bound-transaction.js', () => ({
+	runInBoundSerializable: async (database: any, fn: any, flush: any) => {
+		const result = await database.transaction(fn);
+		await flush({ events: [], responseCacheDirty: false, systemCacheDirty: false });
+		return result;
+	},
+}));
 
 class Client_PG extends MockClient {}
 
-describe('applySnapshot', () => {
+describe('applyDiff via target snapshot diff', () => {
 	let db: MockedFunction<Knex>;
 	let tracker: Tracker;
 
@@ -100,17 +113,20 @@ describe('applySnapshot', () => {
 				],
 			};
 
-			// Stop call to db later on in apply-snapshot
+			// Stop call to db later on in apply-diff
 			vi.spyOn(getSchema, 'getSchema').mockReturnValue(Promise.resolve(snapshotApplyTestSchema));
 			// We are not actually testing that createOne works, just that is is called correctly
 			const createOneCollectionSpy = vi.spyOn(CollectionsService.prototype, 'createOne').mockResolvedValue('test');
 			const createFieldSpy = vi.spyOn(FieldsService.prototype, 'createField').mockResolvedValue();
 
-			await applySnapshot(snapshotCreateCollectionNotNested, {
-				database: db,
+			vi.mocked(getSnapshot).mockResolvedValue(snapshotBeforeCreateCollection);
+
+			const diff = await getTargetSnapshotDiff(snapshotCreateCollectionNotNested, {
 				current: snapshotBeforeCreateCollection,
-				schema: snapshotApplyTestSchema,
+				database: db,
 			});
+
+			await applyDiff(diff, { database: db, expectedHash: 'HASH' });
 
 			expect(createOneCollectionSpy).toHaveBeenCalledTimes(1);
 			expect(createOneCollectionSpy).toHaveBeenCalledWith(expected, mutationOptions);
@@ -241,17 +257,20 @@ describe('applySnapshot', () => {
 				schema: { name: 'test_table_3' },
 			};
 
-			// Stop call to db later on in apply-snapshot
+			// Stop call to db later on in apply-diff
 			vi.spyOn(getSchema, 'getSchema').mockReturnValue(Promise.resolve(snapshotApplyTestSchema));
 			// We are not actually testing that createOne works, just that is is called correctly
 			const createOneCollectionSpy = vi.spyOn(CollectionsService.prototype, 'createOne').mockResolvedValue('test');
 			const createFieldSpy = vi.spyOn(FieldsService.prototype, 'createField').mockResolvedValue();
 
-			await applySnapshot(snapshotCreateCollection, {
-				database: db,
+			vi.mocked(getSnapshot).mockResolvedValue(snapshotBeforeCreateCollection);
+
+			const diff = await getTargetSnapshotDiff(snapshotCreateCollection, {
 				current: snapshotBeforeCreateCollection,
-				schema: snapshotApplyTestSchema,
+				database: db,
 			});
+
+			await applyDiff(diff, { database: db, expectedHash: 'HASH' });
 
 			expect(createOneCollectionSpy).toHaveBeenCalledTimes(2);
 			expect(createOneCollectionSpy).toHaveBeenCalledWith(expected, mutationOptions);
@@ -398,23 +417,25 @@ describe('applySnapshot', () => {
 					],
 				};
 
-				// Stop call to db later on in apply-snapshot
+				// Stop call to db later on in apply-diff
 				vi.spyOn(getSchema, 'getSchema').mockReturnValue(Promise.resolve(snapshotApplyTestSchema));
 				// We are not actually testing that createOne works, just that is is called with the right data type
 				const createOneCollectionSpy = vi.spyOn(CollectionsService.prototype, 'createOne').mockResolvedValue('test');
 				vi.spyOn(FieldsService.prototype, 'createField').mockResolvedValue();
 
-				await applySnapshot(snapshotToApply, {
-					database: db,
-					current: {
-						version: 1,
-						directus: '0.0.0',
-						collections: [],
-						fields: [],
-						relations: [],
-					},
-					schema: snapshotApplyTestSchema,
-				});
+				const current: Snapshot = {
+					version: 1,
+					directus: '0.0.0',
+					collections: [],
+					fields: [],
+					relations: [],
+				};
+
+				vi.mocked(getSnapshot).mockResolvedValue(current);
+
+				const diff = await getTargetSnapshotDiff(snapshotToApply, { current, database: db });
+
+				await applyDiff(diff, { database: db, expectedHash: 'HASH' });
 
 				expect(createOneCollectionSpy).toHaveBeenCalledOnce();
 				expect(createOneCollectionSpy).toHaveBeenCalledWith(expected, mutationOptions);
@@ -432,16 +453,19 @@ describe('applySnapshot', () => {
 				relations: [],
 			};
 
-			// Stop call to db later on in apply-snapshot
+			// Stop call to db later on in apply-diff
 			vi.spyOn(getSchema, 'getSchema').mockReturnValue(Promise.resolve(snapshotApplyTestSchema));
 			// We are not actually testing that deleteOne works, just that is is called correctly
 			const deleteOneCollectionSpy = vi.spyOn(CollectionsService.prototype, 'deleteOne').mockResolvedValue('test');
 
-			await applySnapshot(snapshotToApply, {
-				database: db,
+			vi.mocked(getSnapshot).mockResolvedValue(snapshotBeforeDeleteCollection);
+
+			const diff = await getTargetSnapshotDiff(snapshotToApply, {
 				current: snapshotBeforeDeleteCollection,
-				schema: snapshotApplyTestSchema,
+				database: db,
 			});
+
+			await applyDiff(diff, { database: db, expectedHash: 'HASH' });
 
 			expect(deleteOneCollectionSpy).toHaveBeenCalledTimes(3);
 		});

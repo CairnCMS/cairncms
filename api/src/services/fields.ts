@@ -18,6 +18,11 @@ import { ForbiddenException, InvalidPayloadException } from '../exceptions/index
 import { ItemsService } from '../services/items.js';
 import { PayloadService } from '../services/payload.js';
 import type { AbstractServiceOptions, ActionEventParams, MutationOptions } from '../types/index.js';
+import {
+	assertAliasTypeUnchanged,
+	assertFieldAbsent,
+	assertFieldTypeIsSupported,
+} from '../utils/schema-diff-validators.js';
 import getDefaultValue from '../utils/get-default-value.js';
 import getLocalType from '../utils/get-local-type.js';
 import { getSchema } from '../utils/get-schema.js';
@@ -264,9 +269,7 @@ export class FieldsService {
 				) === false;
 
 			// Check if field already exists, either as a column, or as a row in directus_fields
-			if (exists) {
-				throw new InvalidPayloadException(`Field "${field.field}" already exists in collection "${collection}"`);
-			}
+			assertFieldAbsent(collection, field.field, exists);
 
 			// Add flag for specific database type overrides
 			const flagToAdd = this.helpers.date.fieldFlagForField(field.type);
@@ -387,14 +390,7 @@ export class FieldsService {
 				? await this.knex.select('id').from('directus_fields').where({ collection, field: field.field }).first()
 				: null;
 
-			if (
-				hookAdjustedField.type &&
-				(hookAdjustedField.type === 'alias' ||
-					this.schema.collections[collection]!.fields[field.field]?.type === 'alias') &&
-				hookAdjustedField.type !== (this.schema.collections[collection]!.fields[field.field]?.type ?? 'alias')
-			) {
-				throw new InvalidPayloadException('Alias type cannot be changed');
-			}
+			assertAliasTypeUnchanged(hookAdjustedField.type, this.schema.collections[collection]!.fields[field.field]?.type);
 
 			if (hookAdjustedField.schema) {
 				const existingColumn = await this.schemaInspector.columnInfo(collection, hookAdjustedField.field);
@@ -657,6 +653,8 @@ export class FieldsService {
 
 		// Don't attempt to add a DB column for alias / corrupt fields
 		if (field.type === 'alias' || field.type === 'unknown') return;
+
+		assertFieldTypeIsSupported(field);
 
 		if (field.schema?.has_auto_increment) {
 			if (field.type === 'bigInteger') {

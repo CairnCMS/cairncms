@@ -59,7 +59,7 @@ vi.mock('../utils/folder-references.js', () => ({
 
 vi.mock('../utils/package.js', () => ({ version: '1.0.0' }));
 
-vi.mock('../utils/apply-snapshot.js', () => ({ applySnapshot: vi.fn(async () => undefined) }));
+vi.mock('../utils/apply-diff.js', () => ({ applyDiff: vi.fn(async () => undefined) }));
 
 vi.mock('inquirer', () => ({ default: { prompt: vi.fn(async () => ({ proceed: false })) } }));
 

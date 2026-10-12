@@ -57,6 +57,7 @@ vi.mock('../utils/package.js', () => ({ version: '1.0.0' }));
 vi.mock('../utils/get-snapshot.js', () => ({ getSnapshot: vi.fn(async () => structuredClone(state.current)) }));
 vi.mock('../utils/apply-diff.js', () => ({ applyDiff: vi.fn(async () => undefined) }));
 
+import { SchemaStateChangedException } from '../exceptions/schema-state-changed.js';
 import errorHandler from '../middleware/error-handler.js';
 import { applyDiff } from '../utils/apply-diff.js';
 import { getSnapshot } from '../utils/get-snapshot.js';
@@ -167,27 +168,31 @@ describe('GET /schema/snapshot', () => {
 });
 
 describe('POST /schema/diff and /schema/apply', () => {
-	it('hashes the same key form the diff was computed from, and apply checks its own fresh read', async () => {
-		vi.mocked(state.folderSource).mockReturnValueOnce(folders).mockReturnValue([]);
-
+	it('hashes the same key form the diff was computed from and forwards it to the apply engine', async () => {
 		const diffRes = await request(makeApp()).post('/schema/diff').send(snapshot('images', 'Hero image', 2));
 
 		expect(diffRes.status).toBe(200);
 		expect(state.folderSource).toHaveBeenCalledOnce();
 		expect(diffRes.body.data.hash).toBe(getVersionedHash(snapshot('images')));
 
-		const refused = await request(makeApp()).post('/schema/apply').send(diffRes.body.data);
-
-		expect(refused.status).toBe(400);
-		expect(refused.body.errors[0].message).toContain('Provided hash does not match');
-		expect(applyDiff).not.toHaveBeenCalled();
-
-		state.folderSource = vi.fn(() => folders);
-
 		const applied = await request(makeApp()).post('/schema/apply').send(diffRes.body.data);
 
 		expect(applied.status).toBe(204);
 		expect(applyDiff).toHaveBeenCalledOnce();
+
+		const [, options] = vi.mocked(applyDiff).mock.calls[0]!;
+		expect(options.expectedHash).toBe(diffRes.body.data.hash);
+	});
+
+	it('surfaces a concurrent schema change reported by the apply engine as 409', async () => {
+		const diffRes = await request(makeApp()).post('/schema/diff').send(snapshot('images', 'Hero image', 2));
+
+		vi.mocked(applyDiff).mockRejectedValueOnce(new SchemaStateChangedException());
+
+		const refused = await request(makeApp()).post('/schema/apply').send(diffRes.body.data);
+
+		expect(refused.status).toBe(409);
+		expect(refused.body.errors[0].extensions.code).toBe('SCHEMA_STATE_CHANGED');
 	});
 
 	it('keeps internal reads in stored-ID form when the export default is version 2', async () => {
@@ -205,8 +210,6 @@ describe('POST /schema/diff and /schema/apply', () => {
 		const applied = await request(makeApp()).post('/schema/apply').send(diffRes.body.data);
 
 		expect(applied.status).toBe(204);
-
-		const [current] = vi.mocked(applyDiff).mock.calls[0]!;
-		expect(current.fields[0]!.meta.options).toEqual({ folder: DANGLING_ID });
+		expect(applyDiff).toHaveBeenCalledOnce();
 	});
 });

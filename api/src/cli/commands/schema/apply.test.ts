@@ -2,8 +2,11 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import logger from '../../../logger.js';
-import { applySnapshot } from '../../../utils/apply-snapshot.js';
+import { applyDiff } from '../../../utils/apply-diff.js';
+import { toKeyFormSnapshot } from '../../../utils/folder-references.js';
 import { getSnapshot } from '../../../utils/get-snapshot.js';
+import { getVersionedHash } from '../../../utils/get-versioned-hash.js';
+import { SchemaApplyFailedException } from '../../../exceptions/schema-apply-failed.js';
 import { apply } from './apply.js';
 
 const { FIXTURE_DIFF, folderKeyById } = vi.hoisted(() => {
@@ -56,7 +59,7 @@ vi.mock('../../../utils/folder-references.js', () => ({
 	})),
 }));
 
-vi.mock('../../../utils/apply-snapshot.js', () => ({ applySnapshot: vi.fn(async () => undefined) }));
+vi.mock('../../../utils/apply-diff.js', () => ({ applyDiff: vi.fn(async () => undefined) }));
 
 vi.mock('inquirer', () => ({ default: { prompt: vi.fn(async () => ({ proceed: false })) } }));
 
@@ -112,7 +115,6 @@ describe('schema apply presentation', () => {
 
 describe('schema apply after its confirmation prompt', () => {
 	const FOLDER_A = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
-	const FOLDER_B = 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb';
 
 	function stored(folder: string, note: string | null = null) {
 		return {
@@ -139,49 +141,42 @@ describe('schema apply after its confirmation prompt', () => {
 		vi.clearAllMocks();
 	});
 
-	it('refuses when the schema changed while the prompt was open', async () => {
-		vi.mocked(getSnapshot).mockResolvedValueOnce(stored(FOLDER_A)).mockResolvedValueOnce(stored(FOLDER_A, 'Edited'));
+	it('applies the computed diff after confirmation', async () => {
+		vi.mocked(getSnapshot).mockResolvedValue(stored(FOLDER_A));
 
 		await expect(apply('snapshot.json', { yes: false, dryRun: false })).rejects.toThrow();
 
-		expect(applySnapshot).not.toHaveBeenCalled();
-
-		expect(vi.mocked(logger.error).mock.calls[0]![0]).toMatchObject({
-			message: 'The schema changed while waiting for confirmation. Run the command again to review the new changes.',
-		});
+		expect(vi.mocked(applyDiff).mock.calls[0]![0]).toBe(FIXTURE_DIFF);
 	});
 
-	it('applies from the fresh read when nothing changed', async () => {
-		const fresh = stored(FOLDER_A);
-		vi.mocked(getSnapshot).mockResolvedValueOnce(stored(FOLDER_A)).mockResolvedValueOnce(fresh);
-
-		await expect(apply('snapshot.json', { yes: false, dryRun: false })).rejects.toThrow();
-
-		expect(vi.mocked(applySnapshot).mock.calls[0]![1]!.current).toBe(fresh);
-	});
-
-	it('applies from the fresh read when a folder was replaced under the same key and the field moved to it', async () => {
-		vi.mocked(getSnapshot)
-			.mockResolvedValueOnce(stored(FOLDER_A))
-			.mockImplementationOnce(async () => {
-				folderKeyById.clear();
-				folderKeyById.set(FOLDER_B, 'images');
-				return stored(FOLDER_B);
-			});
-
-		await expect(apply('snapshot.json', { yes: false, dryRun: false })).rejects.toThrow();
-
-		const current = vi.mocked(applySnapshot).mock.calls[0]![1]!.current!;
-		expect(current.fields[0]!.meta.options).toEqual({ folder: FOLDER_B });
-	});
-
-	it('reads once and skips the check with --yes', async () => {
-		const first = stored(FOLDER_A);
-		vi.mocked(getSnapshot).mockResolvedValueOnce(first);
+	it('reads the schema once and applies with --yes', async () => {
+		vi.mocked(getSnapshot).mockResolvedValue(stored(FOLDER_A));
 
 		await expect(apply('snapshot.json', { yes: true, dryRun: false })).rejects.toThrow();
 
 		expect(getSnapshot).toHaveBeenCalledOnce();
-		expect(vi.mocked(applySnapshot).mock.calls[0]![1]!.current).toBe(first);
+		expect(vi.mocked(applyDiff).mock.calls[0]![0]).toBe(FIXTURE_DIFF);
+	});
+
+	it('forwards the planning hash to the apply engine across confirmation', async () => {
+		vi.mocked(getSnapshot).mockResolvedValue(stored(FOLDER_A));
+
+		await expect(apply('snapshot.json', { yes: false, dryRun: false })).rejects.toThrow();
+
+		const keyForm = await vi.mocked(toKeyFormSnapshot).mock.results[0]!.value;
+		const [, options] = vi.mocked(applyDiff).mock.calls[0]!;
+		expect(options.expectedHash).toBe(getVersionedHash(keyForm.snapshot));
+	});
+
+	it('surfaces the failure diagnostic, exits unsuccessfully, and prints no success when the apply fails', async () => {
+		vi.mocked(getSnapshot).mockResolvedValue(stored(FOLDER_A));
+
+		const carrier = new SchemaApplyFailedException('unknown', { cause: new Error('mid-apply failure') });
+		vi.mocked(applyDiff).mockRejectedValueOnce(carrier);
+
+		await expect(apply('snapshot.json', { yes: true, dryRun: false })).rejects.toThrow('exit:1');
+
+		expect(logger.error).toHaveBeenCalledWith(carrier);
+		expect(logger.info).not.toHaveBeenCalledWith('Snapshot applied successfully');
 	});
 });

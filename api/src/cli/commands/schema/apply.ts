@@ -5,13 +5,12 @@ import inquirer from 'inquirer';
 import { load as loadYaml } from 'js-yaml';
 import path from 'path';
 import getDatabase, { isInstalled, validateDatabaseConnection } from '../../../database/index.js';
-import { InvalidPayloadException } from '../../../exceptions/index.js';
 import logger from '../../../logger.js';
 import { confirmPrompt, createVerb, deleteVerb, heading, planIntro, updateVerb } from '../../presentation.js';
 import type { Snapshot } from '../../../types/index.js';
 import { DiffKind } from '../../../types/index.js';
 import { isNestedMetaUpdate } from '../../../utils/is-nested-meta-update.js';
-import { applySnapshot } from '../../../utils/apply-snapshot.js';
+import { applyDiff } from '../../../utils/apply-diff.js';
 import { toKeyFormSnapshot } from '../../../utils/folder-references.js';
 import { getSnapshot } from '../../../utils/get-snapshot.js';
 import { getTargetSnapshotDiff } from '../../../utils/get-target-snapshot-diff.js';
@@ -49,8 +48,6 @@ export async function apply(snapshotPath: string, options?: { yes: boolean; dryR
 			currentKeyForm,
 			database,
 		});
-
-		let applyFrom = currentSnapshot;
 
 		if (
 			snapshotDiff.collections.length === 0 &&
@@ -170,20 +167,9 @@ export async function apply(snapshotPath: string, options?: { yes: boolean; dryR
 			if (proceed === false) {
 				process.exit(0);
 			}
-
-			const freshSnapshot = await getSnapshot({ database });
-			const freshKeyForm = await toKeyFormSnapshot(freshSnapshot, { database });
-
-			if (getVersionedHash(freshKeyForm.snapshot) !== getVersionedHash(currentKeyForm.snapshot)) {
-				throw new InvalidPayloadException(
-					'The schema changed while waiting for confirmation. Run the command again to review the new changes.'
-				);
-			}
-
-			applyFrom = freshSnapshot;
 		}
 
-		await applySnapshot(snapshot, { current: applyFrom, diff: snapshotDiff, database });
+		await applyDiff(snapshotDiff, { database, expectedHash: getVersionedHash(currentKeyForm.snapshot) });
 
 		logger.info(`Snapshot applied successfully`);
 

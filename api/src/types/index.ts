@@ -11,5 +11,6 @@ export * from './items.js';
 export * from './meta.js';
 export * from './migration.js';
 export * from './revision.js';
+export * from './schema-apply.js';
 export * from './services.js';
 export * from './snapshot.js';
