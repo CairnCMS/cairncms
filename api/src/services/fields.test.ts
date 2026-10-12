@@ -351,6 +351,10 @@ describe('schema-apply refusals', () => {
 			expect(() => service().addColumnToTable(untouchableTable(), { field: 'x', type: 'wibble' } as any)).toThrow(
 				'Illegal type passed: "wibble"'
 			);
+
+			expect(() => service().addColumnToTable(untouchableTable(), { field: 'x', type: 'constructor' } as any)).toThrow(
+				'Illegal type passed: "constructor"'
+			);
 		});
 
 		it('skips alias and unknown fields without touching the table builder', () => {

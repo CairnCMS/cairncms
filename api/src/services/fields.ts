@@ -14,7 +14,7 @@ import getDatabase, { getSchemaInspector } from '../database/index.js';
 import { systemFieldRows } from '../database/system-data/fields/index.js';
 import emitter from '../emitter.js';
 import { translateDatabaseError } from '../exceptions/database/translate.js';
-import { ForbiddenException } from '../exceptions/index.js';
+import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
 import { ItemsService } from '../services/items.js';
 import { PayloadService } from '../services/payload.js';
 import type { AbstractServiceOptions, ActionEventParams, MutationOptions } from '../types/index.js';
@@ -677,8 +677,10 @@ export class FieldsService {
 			column = table.timestamp(field.field, { useTz: true });
 		} else if (field.type.startsWith('geometry')) {
 			column = this.helpers.st.createColumn(table, field);
-		} else {
+		} else if (KNEX_TYPES.includes(field.type as (typeof KNEX_TYPES)[number])) {
 			column = table[field.type as (typeof KNEX_TYPES)[number]](field.field);
+		} else {
+			throw new InvalidPayloadException(`Illegal type passed: "${field.type}"`);
 		}
 
 		if (field.schema?.default_value !== undefined) {
