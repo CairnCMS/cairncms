@@ -300,8 +300,8 @@ describe('portable folder references in schema snapshots', () => {
 			await remove(api, `/folders/${folder}`);
 
 			const apply = await admin(api, request(api.url).post('/schema/apply')).send(diff.body.data);
-			expect(apply.statusCode).toBe(400);
-			expect(apply.body.errors[0].message).toContain('Provided hash does not match');
+			expect(apply.statusCode).toBe(409);
+			expect(apply.body.errors[0].extensions.code).toBe('SCHEMA_STATE_CHANGED');
 
 			expect((await storedMeta(api, collection, 'image')).note).toBeNull();
 		} finally {
