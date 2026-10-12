@@ -11,6 +11,15 @@ const cache = { flushCaches: vi.fn(async () => void order.push('flush')), clearS
 const emitter = { emitAction: vi.fn() };
 let folderRows: { id: string; key: string }[] = [];
 let currentSnapshotValue: Snapshot;
+let currentSchemaValue: any;
+
+const relationSchema = () => ({
+	collections: {
+		articles: { collection: 'articles', primary: 'id', fields: { id: {}, author: {} } },
+		authors: { collection: 'authors', primary: 'id', fields: { id: {} } },
+	},
+	relations: [],
+});
 
 function folderQueryBuilder() {
 	const rows = folderRows;
@@ -46,7 +55,7 @@ vi.mock('../database/bound-transaction.js', () => ({
 	},
 }));
 
-vi.mock('./get-schema.js', () => ({ getSchema: async () => ({ collections: {}, relations: [] }) }));
+vi.mock('./get-schema.js', () => ({ getSchema: async () => currentSchemaValue }));
 vi.mock('./get-snapshot.js', () => ({ getSnapshot: async () => currentSnapshotValue }));
 vi.mock('./get-versioned-hash.js', () => ({ getVersionedHash: () => 'HASH' }));
 
@@ -111,6 +120,7 @@ const HASH = 'HASH';
 
 beforeEach(() => {
 	currentSnapshotValue = snapshot();
+	currentSchemaValue = { collections: {}, relations: [] };
 });
 
 describe('applyDiff in-transaction recheck', () => {
@@ -205,7 +215,10 @@ describe('applyDiff collection routing', () => {
 });
 
 describe('applyDiff relation creation', () => {
-	beforeEach(() => vi.clearAllMocks());
+	beforeEach(() => {
+		vi.clearAllMocks();
+		currentSchemaValue = relationSchema();
+	});
 
 	it('creates a relation from the entry identifiers when the new value omits them', async () => {
 		await applyDiff(newRelationDiff({ related_collection: 'authors', meta: null, schema: null }), {
@@ -235,6 +248,7 @@ describe('applyDiff cache invalidation', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		order.length = 0;
+		currentSchemaValue = relationSchema();
 
 		relations.createOne.mockImplementationOnce(async (_payload: unknown, opts: MutationOptions) => {
 			opts.bypassEmitAction!({ event: 'relations.create', meta: {}, context: {} } as any);

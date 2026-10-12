@@ -23,6 +23,7 @@ import type {
 	SnapshotField,
 } from '../types/index.js';
 import { DiffKind } from '../types/index.js';
+import { assertSchemaDiffApplicable } from './assert-schema-diff-applicable.js';
 import { readFolderKeys, toFolderIds, toKeyFormSnapshot } from './folder-references.js';
 import { getSchema } from './get-schema.js';
 import { getSnapshot } from './get-snapshot.js';
@@ -105,6 +106,8 @@ export async function applyDiff(
 				if (getVersionedHash(currentKeyForm.snapshot) !== options.expectedHash) {
 					throw new SchemaStateChangedException();
 				}
+
+				assertSchemaDiffApplicable(snapshotDiff, currentSnapshot, schema);
 
 				const { folderIdByKey } = await readFolderKeys(trx);
 				const fieldWrites = resolveFieldWrites(currentSnapshot, snapshotDiff, folderIdByKey);
