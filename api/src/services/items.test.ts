@@ -15,6 +15,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { getDatabaseClient } from '../../src/database/index.js';
 import { Readable } from 'node:stream';
 import { ImportService, ItemsService } from '../../src/services/index.js';
+import { ActivityService } from './activity.js';
 import { sqlFieldFormatter, sqlFieldList } from '../__utils__/items-utils.js';
 import { systemSchema, userSchema } from '../__utils__/schemas.js';
 import emitter from '../emitter.js';
@@ -2027,6 +2028,127 @@ describe('Integration Tests', () => {
 			).rejects.toBe(failure);
 
 			expect(tracker.history.delete).toHaveLength(0);
+		});
+
+		const referencedErrors: [string, () => Error][] = [
+			[
+				'postgres',
+				() =>
+					Object.assign(
+						new Error(
+							'delete from "authors" where "id" in ($1) - update or delete on table "authors" violates foreign key constraint "posts_author_foreign" on table "posts"'
+						),
+						{ code: '23503', detail: 'Key (id)=(1) is still referenced from table "posts".', table: 'posts' }
+					),
+			],
+			[
+				'mysql',
+				() =>
+					Object.assign(new Error('Cannot delete or update a parent row: a foreign key constraint fails'), {
+						code: 'ER_ROW_IS_REFERENCED_2',
+						errno: 1451,
+						sqlState: '23000',
+					}),
+			],
+			[
+				'sqlite',
+				() =>
+					Object.assign(
+						new Error('delete from `authors` where `id` in (1) - SQLITE_CONSTRAINT: FOREIGN KEY constraint failed'),
+						{ code: 'SQLITE_CONSTRAINT', errno: 19 }
+					),
+			],
+		];
+
+		it.each(referencedErrors)(
+			'%s rejects a blocked delete with RECORD_STILL_REFERENCED and emits no delete action',
+			async (client, makeError) => {
+				vi.mocked(getDatabaseClient).mockReturnValue(client);
+
+				const table = schemas['user'].tables[0];
+
+				const service = new ItemsService(table, {
+					knex: db,
+					accountability: null,
+					schema: schemas['user'].schema,
+				});
+
+				tracker.on.delete(table).simulateError(makeError());
+
+				const emitActionSpy = vi.spyOn(emitter, 'emitAction');
+
+				try {
+					const error = await service
+						.deleteMany(['6107c897-9182-40f7-b22e-4f044d1258d2'], { bypassLimits: true })
+						.catch((err) => err);
+
+					expect(error).toMatchObject({ code: 'RECORD_STILL_REFERENCED', status: 400 });
+					expect(error.message).toBe(`Item can't be deleted because other items still reference it.`);
+					expect(error.extensions).toEqual({});
+					expect(emitActionSpy).not.toHaveBeenCalled();
+				} finally {
+					emitActionSpy.mockRestore();
+				}
+			}
+		);
+
+		it('passes a non-foreign-key delete error through untranslated', async () => {
+			vi.mocked(getDatabaseClient).mockReturnValue('postgres');
+
+			const table = schemas['user'].tables[0];
+
+			const service = new ItemsService(table, {
+				knex: db,
+				accountability: null,
+				schema: schemas['user'].schema,
+			});
+
+			const original = Object.assign(new Error('connection terminated unexpectedly'), { code: '08006' });
+			tracker.on.delete(table).simulateError(original);
+
+			const error = await service
+				.deleteMany(['6107c897-9182-40f7-b22e-4f044d1258d2'], { bypassLimits: true })
+				.catch((err) => err);
+
+			expect(error).toBe(original);
+		});
+
+		it('does not relabel an activity-write failure as a reference conflict', async () => {
+			vi.mocked(getDatabaseClient).mockReturnValue('postgres');
+
+			const table = schemas['user'].tables[0];
+			const schema = cloneDeep(schemas['user'].schema);
+			schema.collections[table].accountability = 'all';
+
+			const service = new ItemsService(table, {
+				knex: db,
+				accountability: { role: 'admin', admin: true },
+				schema,
+			});
+
+			tracker.on.delete(table).response(1);
+
+			const activityError = Object.assign(
+				new Error('insert into "directus_activity" violates foreign key constraint'),
+				{
+					code: '23503',
+					detail: 'Key (user)=(x) is not present in table "directus_users".',
+					table: 'directus_activity',
+				}
+			);
+
+			const activitySpy = vi.spyOn(ActivityService.prototype, 'createMany').mockRejectedValue(activityError);
+
+			try {
+				const error = await service
+					.deleteMany(['6107c897-9182-40f7-b22e-4f044d1258d2'], { bypassLimits: true })
+					.catch((err) => err);
+
+				expect(error).toBe(activityError);
+				expect(error.code).not.toBe('RECORD_STILL_REFERENCED');
+			} finally {
+				activitySpy.mockRestore();
+			}
 		});
 	});
 });
