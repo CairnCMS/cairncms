@@ -6,6 +6,7 @@ import { applyDiff } from '../../../utils/apply-diff.js';
 import { toKeyFormSnapshot } from '../../../utils/folder-references.js';
 import { getSnapshot } from '../../../utils/get-snapshot.js';
 import { getVersionedHash } from '../../../utils/get-versioned-hash.js';
+import { SchemaApplyFailedException } from '../../../exceptions/schema-apply-failed.js';
 import { apply } from './apply.js';
 
 const { FIXTURE_DIFF, folderKeyById } = vi.hoisted(() => {
@@ -165,5 +166,17 @@ describe('schema apply after its confirmation prompt', () => {
 		const keyForm = await vi.mocked(toKeyFormSnapshot).mock.results[0]!.value;
 		const [, options] = vi.mocked(applyDiff).mock.calls[0]!;
 		expect(options.expectedHash).toBe(getVersionedHash(keyForm.snapshot));
+	});
+
+	it('surfaces the failure diagnostic, exits unsuccessfully, and prints no success when the apply fails', async () => {
+		vi.mocked(getSnapshot).mockResolvedValue(stored(FOLDER_A));
+
+		const carrier = new SchemaApplyFailedException('unknown', { cause: new Error('mid-apply failure') });
+		vi.mocked(applyDiff).mockRejectedValueOnce(carrier);
+
+		await expect(apply('snapshot.json', { yes: true, dryRun: false })).rejects.toThrow('exit:1');
+
+		expect(logger.error).toHaveBeenCalledWith(carrier);
+		expect(logger.info).not.toHaveBeenCalledWith('Snapshot applied successfully');
 	});
 });

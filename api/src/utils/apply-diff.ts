@@ -4,11 +4,17 @@ import deepDiff from 'deep-diff';
 import type { Knex } from 'knex';
 import { cloneDeep, merge, set } from 'lodash-es';
 import { flushCaches } from '../cache.js';
+import { ALIAS_TYPES } from '../constants.js';
 import { runInBoundSerializable } from '../database/bound-transaction.js';
 import { getHelpers } from '../database/helpers/index.js';
 import getDatabase, { getDatabaseClient } from '../database/index.js';
 import { isSerializationConflict } from '../database/serialization-error.js';
 import emitter from '../emitter.js';
+import { SchemaApplyFailedException } from '../exceptions/schema-apply-failed.js';
+import {
+	SchemaPostCommitFailedException,
+	type SchemaPostCommitPhase,
+} from '../exceptions/schema-post-commit-failed.js';
 import { SchemaStateChangedException } from '../exceptions/schema-state-changed.js';
 import logger from '../logger.js';
 import { CollectionsService } from '../services/collections.js';
@@ -18,6 +24,8 @@ import type {
 	ActionEventParams,
 	Collection,
 	MutationOptions,
+	SchemaOperation,
+	SchemaPersistedState,
 	Snapshot,
 	SnapshotDiff,
 	SnapshotField,
@@ -29,6 +37,12 @@ import { getSchema } from './get-schema.js';
 import { getSnapshot } from './get-snapshot.js';
 import { getVersionedHash } from './get-versioned-hash.js';
 import { isNestedMetaUpdate } from './is-nested-meta-update.js';
+import {
+	type FacetApplicability,
+	readSchemaObservedState,
+	schemaStateVerifiedReverted,
+	type SchemaTouchedEntities,
+} from './read-schema-observed-state.js';
 
 type CollectionDelta = {
 	collection: string;
@@ -46,6 +60,48 @@ function rebuildFromDiff<T>(current: T, diff: Diff<any>[]): T {
 
 function isFieldUpdate(diff: Diff<any>[]): boolean {
 	return diff?.[0]?.kind === DiffKind.EDIT || diff?.[0]?.kind === DiffKind.ARRAY || isNestedMetaUpdate(diff[0]!);
+}
+
+function operationOf(diff: Diff<any>[]): SchemaOperation {
+	if (diff?.[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff[0]!)) return 'create';
+	if (diff?.[0]?.kind === DiffKind.DELETE && !isNestedMetaUpdate(diff[0]!)) return 'delete';
+	return 'update';
+}
+
+function changedDefinition(diff: Diff<any>[]): any {
+	const change = diff?.[0];
+	if (change?.kind === DiffKind.NEW) return (change as DiffNew<any>).rhs;
+	if (change?.kind === DiffKind.DELETE) return (change as DiffDeleted<any>).lhs;
+	return undefined;
+}
+
+function collectionTableApplicability(definition: any): FacetApplicability {
+	return definition?.schema != null ? 'yes' : 'no';
+}
+
+function collectionMetadataApplicability(definition: any): FacetApplicability {
+	return definition?.meta != null ? 'yes' : 'no';
+}
+
+function fieldColumnApplicability(operation: SchemaOperation, definition: any): FacetApplicability {
+	const type = definition?.type;
+	if (typeof type !== 'string') return 'no';
+	if (ALIAS_TYPES.includes(type)) return 'no';
+	// Creation skips the 'unknown' type in the column builder, but deletion drops any non-alias column.
+	if (operation === 'create' && type === 'unknown') return 'no';
+	return 'yes';
+}
+
+function fieldMetadataApplicability(operation: SchemaOperation, definition: any): FacetApplicability {
+	if (definition?.meta != null) return 'yes';
+	if (operation === 'delete') return 'no';
+	return 'unknown';
+}
+
+function relationMetadataApplicability(operation: SchemaOperation, definition: any): FacetApplicability {
+	if (operation === 'create') return 'yes';
+	if (operation === 'delete') return definition?.meta != null ? 'yes' : 'no';
+	return 'yes';
 }
 
 function resolveFieldWrites(
@@ -93,7 +149,58 @@ export async function applyDiff(
 		bypassLimits: true,
 	};
 
+	const touched: SchemaTouchedEntities = {
+		collections: snapshotDiff.collections.map(({ collection, diff }) => {
+			const definition = changedDefinition(diff);
+
+			return {
+				collection,
+				operation: operationOf(diff),
+				table: collectionTableApplicability(definition),
+				metadata: collectionMetadataApplicability(definition),
+			};
+		}),
+		fields: snapshotDiff.fields.map(({ collection, field, diff }) => {
+			const operation = operationOf(diff);
+			const definition = changedDefinition(diff);
+
+			return {
+				collection,
+				field,
+				operation,
+				column: fieldColumnApplicability(operation, definition),
+				metadata: fieldMetadataApplicability(operation, definition),
+			};
+		}),
+		relations: snapshotDiff.relations.map(({ collection, field, diff }) => {
+			const operation = operationOf(diff);
+			const definition = changedDefinition(diff);
+
+			return {
+				collection,
+				field,
+				operation,
+				metadata: relationMetadataApplicability(operation, definition),
+			};
+		}),
+	};
+
+	let writesStarted = false;
+	let committed = false;
+
 	const runPostColumnChange = await helpers.schema.preColumnChange();
+
+	const restoreForeignKeys = async (): Promise<boolean> => {
+		if (!runPostColumnChange) return true;
+
+		try {
+			await helpers.schema.postColumnChange();
+			return true;
+		} catch {
+			logger.error('Failed to restore foreign key enforcement after a schema apply');
+			return false;
+		}
+	};
 
 	try {
 		await runInBoundSerializable(
@@ -250,6 +357,8 @@ export async function applyDiff(
 					return false;
 				};
 
+				writesStarted = true;
+
 				// Create top level collections (no group, or highest level in existing group) first,
 				// then continue with nested collections recursively
 				await createCollections(snapshotDiff.collections.filter(filterCollectionsForCreation));
@@ -397,33 +506,102 @@ export async function applyDiff(
 					}
 				}
 			},
-			// Cache flushing and event dispatch run after foreign key restoration below, so this
-			// post-commit callback is intentionally empty.
-			async () => undefined
+			async () => {
+				committed = true;
+
+				const foreignKeysRestored = await restoreForeignKeys();
+
+				let cacheFailed = false;
+
+				try {
+					await flushCaches(true);
+				} catch {
+					cacheFailed = true;
+				}
+
+				if (!foreignKeysRestored) {
+					throw new SchemaPostCommitFailedException(cacheFailed ? 'foreign_keys_and_cache' : 'foreign_keys');
+				}
+
+				let actionFailed = false;
+
+				try {
+					if (nestedActionEvents.length > 0) {
+						const updatedSchema = await getSchema({ database, bypassCache: true });
+
+						for (const nestedActionEvent of nestedActionEvents) {
+							nestedActionEvent.context.schema = updatedSchema;
+
+							await emitter.emitActionAndWait(
+								nestedActionEvent.event,
+								nestedActionEvent.meta,
+								nestedActionEvent.context
+							);
+						}
+					}
+				} catch {
+					actionFailed = true;
+				}
+
+				if (cacheFailed || actionFailed) {
+					throw new SchemaPostCommitFailedException(postCommitPhase(cacheFailed, actionFailed));
+				}
+			}
 		);
 	} catch (err) {
-		// A serialization conflict is a clean rollback only where the whole transaction unwinds.
-		// MySQL and MariaDB commit data definition changes implicitly, so a conflict there may
-		// follow a committed change and is not treated as a clean rollback.
-		if (isSerializationConflict(err) && (vendor === 'postgres' || vendor === 'sqlite')) {
+		if (committed) throw err;
+
+		const foreignKeysRestored = await restoreForeignKeys();
+
+		// A serialization conflict unwinds the whole transaction only on PostgreSQL and SQLite, where
+		// it is a clean rollback. MySQL and MariaDB commit data definition changes implicitly, so a
+		// conflict there can follow a committed change and is reported as a persisted outcome instead.
+		if (isSerializationConflict(err) && foreignKeysRestored && (vendor === 'postgres' || vendor === 'sqlite')) {
 			throw new SchemaStateChangedException();
 		}
 
-		throw err;
-	} finally {
-		if (runPostColumnChange) {
-			await helpers.schema.postColumnChange();
+		if (!writesStarted && foreignKeysRestored) throw err;
+
+		const persisted = await readObservedStateOrUnknown(database, touched);
+
+		// On PostgreSQL and SQLite the apply is one transaction. A verified-reverted observed state
+		// means every touched change is gone and nothing is left unverified, so it fully unwound and
+		// the original failure is a clean rollback. An unknown facet keeps the outcome uncertain.
+		if (
+			foreignKeysRestored &&
+			persisted !== 'unknown' &&
+			(vendor === 'postgres' || vendor === 'sqlite') &&
+			schemaStateVerifiedReverted(persisted)
+		) {
+			throw err;
 		}
+
+		await forceCacheClear();
+		throw new SchemaApplyFailedException(persisted, { cause: err, foreignKeysRestored });
 	}
+}
 
-	await flushCaches(true);
+function postCommitPhase(cacheFailed: boolean, actionFailed: boolean): SchemaPostCommitPhase {
+	if (cacheFailed && actionFailed) return 'cache_and_actions';
+	if (cacheFailed) return 'cache';
+	return 'actions';
+}
 
-	if (nestedActionEvents.length > 0) {
-		const updatedSchema = await getSchema({ database, bypassCache: true });
+async function readObservedStateOrUnknown(
+	database: Knex,
+	touched: SchemaTouchedEntities
+): Promise<SchemaPersistedState | 'unknown'> {
+	try {
+		return await readSchemaObservedState(database, touched);
+	} catch {
+		return 'unknown';
+	}
+}
 
-		for (const nestedActionEvent of nestedActionEvents) {
-			nestedActionEvent.context.schema = updatedSchema;
-			emitter.emitAction(nestedActionEvent.event, nestedActionEvent.meta, nestedActionEvent.context);
-		}
+async function forceCacheClear(): Promise<void> {
+	try {
+		await flushCaches(true);
+	} catch {
+		logger.error('Failed to clear caches after a partial or unknown schema apply');
 	}
 }

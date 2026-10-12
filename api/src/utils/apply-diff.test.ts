@@ -1,5 +1,7 @@
 import type { Diff } from 'deep-diff';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { SchemaApplyFailedException } from '../exceptions/schema-apply-failed.js';
+import { SchemaPostCommitFailedException } from '../exceptions/schema-post-commit-failed.js';
 import { SchemaStateChangedException } from '../exceptions/schema-state-changed.js';
 import type { Collection, MutationOptions, Snapshot, SnapshotDiff, SnapshotField } from '../types/index.js';
 
@@ -8,10 +10,21 @@ const collections = { createOne: vi.fn(), updateOne: vi.fn(), deleteOne: vi.fn()
 const fields = { createField: vi.fn(), updateField: vi.fn(), deleteField: vi.fn() };
 const relations = { createOne: vi.fn(), updateOne: vi.fn(), deleteOne: vi.fn() };
 const cache = { flushCaches: vi.fn(async () => void order.push('flush')), clearSystemCache: vi.fn() };
-const emitter = { emitAction: vi.fn() };
+const emitter = { emitAction: vi.fn(), emitActionAndWait: vi.fn(async () => undefined) };
 let folderRows: { id: string; key: string }[] = [];
 let currentSnapshotValue: Snapshot;
 let currentSchemaValue: any;
+let currentVendor = 'postgres';
+let commitRejection: unknown = null;
+let observedTables = new Set<string>();
+let observedColumns = new Set<string>();
+let observedMetaRows: Record<string, Record<string, string>[]> = {};
+let observedReadThrows = false;
+
+const schemaHelper = {
+	preColumnChange: vi.fn(async (): Promise<boolean> => false),
+	postColumnChange: vi.fn(async (): Promise<void> => undefined),
+};
 
 const relationSchema = () => ({
 	collections: {
@@ -37,15 +50,36 @@ function folderTrx() {
 	return { select: () => ({ from: () => folderQueryBuilder() }) };
 }
 
-vi.mock('../database/index.js', () => ({
-	default: () => ({
-		transaction: async (cb: any) => {
+vi.mock('../database/index.js', () => {
+	const makeDatabase = () => {
+		const database: any = (table: string) => ({
+			where: (where: Record<string, string>) => ({
+				first: async () =>
+					(observedMetaRows[table] ?? []).find((row) =>
+						Object.entries(where).every(([key, value]) => row[key] === value)
+					),
+			}),
+		});
+
+		database.transaction = async (cb: any) => {
 			await cb(folderTrx());
 			order.push('commit');
-		},
-	}),
-	getDatabaseClient: () => 'postgres',
-}));
+			if (commitRejection) throw commitRejection;
+		};
+
+		database.schema = {
+			hasTable: async (table: string) => {
+				if (observedReadThrows) throw new Error('inspection unavailable');
+				return observedTables.has(table);
+			},
+			hasColumn: async (table: string, column: string) => observedColumns.has(`${table}.${column}`),
+		};
+
+		return database;
+	};
+
+	return { default: () => makeDatabase(), getDatabaseClient: () => currentVendor };
+});
 
 vi.mock('../database/bound-transaction.js', () => ({
 	runInBoundSerializable: async (database: any, fn: any, flush: any) => {
@@ -60,7 +94,7 @@ vi.mock('./get-snapshot.js', () => ({ getSnapshot: async () => currentSnapshotVa
 vi.mock('./get-versioned-hash.js', () => ({ getVersionedHash: () => 'HASH' }));
 
 vi.mock('../database/helpers/index.js', () => ({
-	getHelpers: () => ({ schema: { preColumnChange: async () => false, postColumnChange: async () => undefined } }),
+	getHelpers: () => ({ schema: schemaHelper }),
 }));
 
 vi.mock('../services/collections.js', () => ({
@@ -121,6 +155,14 @@ const HASH = 'HASH';
 beforeEach(() => {
 	currentSnapshotValue = snapshot();
 	currentSchemaValue = { collections: {}, relations: [] };
+	currentVendor = 'postgres';
+	commitRejection = null;
+	observedTables = new Set();
+	observedColumns = new Set();
+	observedMetaRows = {};
+	observedReadThrows = false;
+	schemaHelper.preColumnChange.mockResolvedValue(false);
+	schemaHelper.postColumnChange.mockResolvedValue(undefined);
 });
 
 describe('applyDiff in-transaction recheck', () => {
@@ -264,17 +306,319 @@ describe('applyDiff cache invalidation', () => {
 		expect(cache.flushCaches).toHaveBeenCalledWith(true);
 		expect(cache.clearSystemCache).not.toHaveBeenCalled();
 		expect(order).toEqual(['commit', 'flush']);
-		expect(emitter.emitAction).toHaveBeenCalledOnce();
+		expect(emitter.emitActionAndWait).toHaveBeenCalledOnce();
+	});
+});
+
+describe('applyDiff post-commit failure reporting', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		order.length = 0;
+		currentSchemaValue = relationSchema();
+
+		relations.createOne.mockImplementationOnce(async (_payload: unknown, opts: MutationOptions) => {
+			opts.bypassEmitAction!({ event: 'relations.create', meta: {}, context: {} } as any);
+		});
 	});
 
-	it('rejects with the flush error and emits no action events when the flush fails after commit', async () => {
-		const failure = new Error('cache unavailable');
-		cache.flushCaches.mockRejectedValueOnce(failure);
+	const diffWithActionEvent = () => newRelationDiff({ related_collection: 'authors', meta: null, schema: null });
 
-		await expect(applyDiff(diffWithActionEvent(), { expectedHash: HASH })).rejects.toBe(failure);
+	it('reports a committed cache failure and still delivers the action events', async () => {
+		cache.flushCaches.mockRejectedValueOnce(new Error('cache unavailable'));
 
-		expect(order).toEqual(['commit']);
-		expect(emitter.emitAction).not.toHaveBeenCalled();
+		const error = await applyDiff(diffWithActionEvent(), { expectedHash: HASH }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(SchemaPostCommitFailedException);
+		expect(error.extensions).toMatchObject({ committed: true, phase: 'cache' });
+		expect(emitter.emitActionAndWait).toHaveBeenCalledOnce();
+	});
+
+	it('reports a committed action failure', async () => {
+		emitter.emitActionAndWait.mockRejectedValueOnce(new Error('listener exploded'));
+
+		const error = await applyDiff(diffWithActionEvent(), { expectedHash: HASH }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(SchemaPostCommitFailedException);
+		expect(error.extensions).toMatchObject({ committed: true, phase: 'actions' });
+	});
+
+	it('reports a committed foreign key restore failure, attempts the cache clear, and suppresses actions', async () => {
+		schemaHelper.preColumnChange.mockResolvedValueOnce(true);
+		schemaHelper.postColumnChange.mockRejectedValueOnce(new Error('pragma failed'));
+
+		const error = await applyDiff(diffWithActionEvent(), { expectedHash: HASH }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(SchemaPostCommitFailedException);
+		expect(error.extensions).toMatchObject({ committed: true, phase: 'foreign_keys' });
+		expect(cache.flushCaches).toHaveBeenCalledWith(true);
+		expect(emitter.emitActionAndWait).not.toHaveBeenCalled();
+	});
+
+	it('reports a combined foreign key restore and cache failure', async () => {
+		schemaHelper.preColumnChange.mockResolvedValueOnce(true);
+		schemaHelper.postColumnChange.mockRejectedValueOnce(new Error('pragma failed'));
+		cache.flushCaches.mockRejectedValueOnce(new Error('cache unavailable'));
+
+		const error = await applyDiff(diffWithActionEvent(), { expectedHash: HASH }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(SchemaPostCommitFailedException);
+		expect(error.extensions).toMatchObject({ committed: true, phase: 'foreign_keys_and_cache' });
+		expect(emitter.emitActionAndWait).not.toHaveBeenCalled();
+	});
+});
+
+describe('applyDiff failed-apply persistence classification', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		order.length = 0;
+		currentSchemaValue = relationSchema();
+	});
+
+	const failingCollectionCreate = () => {
+		const diff = emptyDiff();
+		diff.collections = [collectionDiff('fresh', [{ kind: 'N', rhs: stubCollection('fresh') } as any])];
+		return diff;
+	};
+
+	it('propagates the original error when a PostgreSQL failure left nothing applied', async () => {
+		const failure = new Error('column already exists');
+		collections.createOne.mockRejectedValueOnce(failure);
+
+		await expect(applyDiff(failingCollectionCreate(), { expectedHash: HASH })).rejects.toBe(failure);
+		expect(cache.flushCaches).not.toHaveBeenCalled();
+	});
+
+	it('reports a carrier when a PostgreSQL failure left a created table behind', async () => {
+		const failure = new Error('a later step failed');
+		collections.createOne.mockRejectedValueOnce(failure);
+		observedTables = new Set(['fresh']);
+
+		const error = await applyDiff(failingCollectionCreate(), { expectedHash: HASH }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(SchemaApplyFailedException);
+		expect(error.cause).toBe(failure);
+		expect(cache.flushCaches).toHaveBeenCalledWith(true);
+	});
+
+	it('reports a persisted-outcome carrier that retains the original cause on a MySQL mid-apply failure', async () => {
+		currentVendor = 'mysql';
+		const failure = new Error('alter table failed');
+		collections.createOne.mockRejectedValueOnce(failure);
+		observedTables = new Set(['fresh']);
+
+		const error = await applyDiff(failingCollectionCreate(), { expectedHash: HASH }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(SchemaApplyFailedException);
+		expect(error.cause).toBe(failure);
+		expect(Object.keys(error.extensions)).toEqual(['persisted']);
+	});
+
+	it('reports an unknown outcome when the post-failure inspection fails', async () => {
+		const failure = new Error('mid-apply failure');
+		collections.createOne.mockRejectedValueOnce(failure);
+		observedReadThrows = true;
+
+		const error = await applyDiff(failingCollectionCreate(), { expectedHash: HASH }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(SchemaApplyFailedException);
+		expect(error.extensions).toMatchObject({ persisted: 'unknown' });
+	});
+
+	it('reports foreign keys unrestored when restoration fails on the failure path', async () => {
+		schemaHelper.preColumnChange.mockResolvedValueOnce(true);
+		schemaHelper.postColumnChange.mockRejectedValueOnce(new Error('pragma failed'));
+		currentVendor = 'sqlite';
+		const failure = new Error('mid-apply failure');
+		collections.createOne.mockRejectedValueOnce(failure);
+
+		const error = await applyDiff(failingCollectionCreate(), { expectedHash: HASH }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(SchemaApplyFailedException);
+		expect(error.extensions).toMatchObject({ foreignKeysRestored: false });
+	});
+
+	it('reports an unresolved outcome for an update-only apply whose commit is unacknowledged', async () => {
+		currentSnapshotValue = snapshot({ collections: [stubCollection('articles', { note: 'x' })] });
+		commitRejection = new Error('connection reset during commit');
+
+		const diff = emptyDiff();
+		diff.collections = [collectionDiff('articles', [{ kind: 'D', path: ['meta', 'note'], lhs: 'x' } as any])];
+
+		const error = await applyDiff(diff, { expectedHash: HASH }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(SchemaApplyFailedException);
+		expect(error.extensions.persisted).not.toBe('unknown');
+		expect(error.extensions.persisted.collections[0]).toMatchObject({ operation: 'update', table: 'unknown' });
+		expect(cache.flushCaches).toHaveBeenCalledWith(true);
+	});
+
+	it('classifies a schema-null physical field creation by its type, not its schema object', async () => {
+		currentSnapshotValue = snapshot({ collections: [stubCollection('articles')] });
+		observedTables = new Set(['articles']);
+		observedColumns = new Set(['articles.headline']);
+
+		const failure = new Error('a later step failed');
+		fields.createField.mockRejectedValueOnce(failure);
+
+		const diff = emptyDiff();
+
+		diff.fields = [
+			{
+				collection: 'articles',
+				field: 'headline',
+				diff: [
+					{ kind: 'N', rhs: { field: 'headline', type: 'string', schema: null, meta: { interface: 'input' } } } as any,
+				],
+			},
+		];
+
+		const error = await applyDiff(diff, { expectedHash: HASH }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(SchemaApplyFailedException);
+		const reported = error.extensions.persisted.fields.find((entry: any) => entry.field === 'headline');
+		expect(reported.column).toBe('applied');
+	});
+
+	it('treats a rolled-back deletion of a database-only field as a clean rollback', async () => {
+		currentSnapshotValue = snapshot({ collections: [stubCollection('articles')] });
+		observedTables = new Set(['articles']);
+		observedColumns = new Set(['articles.legacy']);
+
+		const failure = new Error('mid-apply failure');
+		fields.deleteField.mockRejectedValueOnce(failure);
+
+		const diff = emptyDiff();
+
+		diff.fields = [
+			{
+				collection: 'articles',
+				field: 'legacy',
+				diff: [{ kind: 'D', lhs: { field: 'legacy', type: 'string', schema: { name: 'legacy' }, meta: null } } as any],
+			},
+		];
+
+		await expect(applyDiff(diff, { expectedHash: HASH })).rejects.toBe(failure);
+	});
+
+	it('treats an unknown-type field column as not_applicable, matching the column builder skip', async () => {
+		currentSnapshotValue = snapshot({ collections: [stubCollection('articles')] });
+		currentVendor = 'mysql';
+		fields.createField.mockRejectedValueOnce(new Error('mid-apply failure'));
+
+		const diff = emptyDiff();
+
+		diff.fields = [
+			{
+				collection: 'articles',
+				field: 'mystery',
+				diff: [
+					{ kind: 'N', rhs: { field: 'mystery', type: 'unknown', schema: null, meta: { interface: 'input' } } } as any,
+				],
+			},
+		];
+
+		const error = await applyDiff(diff, { expectedHash: HASH }).catch((err) => err);
+
+		const reported = error.extensions.persisted.fields.find((entry: any) => entry.field === 'mystery');
+		expect(reported.column).toBe('not_applicable');
+	});
+
+	it('keeps metadata unknown for a meta-null field creation that the service may still normalize', async () => {
+		currentSnapshotValue = snapshot({ collections: [stubCollection('articles')] });
+		currentVendor = 'mysql';
+		fields.createField.mockRejectedValueOnce(new Error('mid-apply failure'));
+
+		const diff = emptyDiff();
+
+		diff.fields = [
+			{
+				collection: 'articles',
+				field: 'stamp',
+				diff: [{ kind: 'N', rhs: { field: 'stamp', type: 'timestamp', schema: null, meta: null } } as any],
+			},
+		];
+
+		const error = await applyDiff(diff, { expectedHash: HASH }).catch((err) => err);
+
+		const reported = error.extensions.persisted.fields.find((entry: any) => entry.field === 'stamp');
+		expect(reported.metadata).toBe('unknown');
+	});
+
+	it('reports a native relation deletion metadata as not_applicable', async () => {
+		currentVendor = 'mysql';
+
+		currentSchemaValue = {
+			collections: {
+				articles: { collection: 'articles', primary: 'id', fields: { id: {}, author: {} } },
+				authors: { collection: 'authors', primary: 'id', fields: { id: {} } },
+			},
+			relations: [{ collection: 'articles', field: 'author', related_collection: 'authors', meta: null, schema: {} }],
+		};
+
+		relations.deleteOne.mockRejectedValueOnce(new Error('mid-apply failure'));
+
+		const diff = emptyDiff();
+
+		diff.relations = [
+			{
+				collection: 'articles',
+				field: 'author',
+				diff: [
+					{
+						kind: 'D',
+						lhs: { collection: 'articles', field: 'author', related_collection: 'authors', meta: null, schema: {} },
+					} as any,
+				],
+			},
+		];
+
+		const error = await applyDiff(diff, { expectedHash: HASH }).catch((err) => err);
+
+		const reported = error.extensions.persisted.relations.find((entry: any) => entry.field === 'author');
+		expect(reported.metadata).toBe('not_applicable');
+		expect(reported.foreignKey).toBe('unknown');
+	});
+
+	const nativeColumnDelete = () => {
+		const diff = emptyDiff();
+
+		diff.fields = [
+			{
+				collection: 'articles',
+				field: 'native',
+				diff: [{ kind: 'D', lhs: { field: 'native', type: 'unknown', schema: { name: 'native' }, meta: null } } as any],
+			},
+		];
+
+		return diff;
+	};
+
+	it('reports a lost-acknowledgement deletion of a native unknown column as applied', async () => {
+		currentSnapshotValue = snapshot({ collections: [stubCollection('articles')] });
+		currentVendor = 'mysql';
+		observedTables = new Set(['articles']);
+
+		const commitError = new Error('connection reset during commit');
+		commitRejection = commitError;
+
+		const error = await applyDiff(nativeColumnDelete(), { expectedHash: HASH }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(SchemaApplyFailedException);
+		expect(error.cause).toBe(commitError);
+		const reported = error.extensions.persisted.fields.find((entry: any) => entry.field === 'native');
+		expect(reported.column).toBe('applied');
+		expect(cache.flushCaches).toHaveBeenCalledWith(true);
+	});
+
+	it('treats a rolled-back deletion of a native unknown column as a clean rollback', async () => {
+		currentSnapshotValue = snapshot({ collections: [stubCollection('articles')] });
+		observedTables = new Set(['articles']);
+		observedColumns = new Set(['articles.native']);
+
+		const failure = new Error('mid-apply failure');
+		fields.deleteField.mockRejectedValueOnce(failure);
+
+		await expect(applyDiff(nativeColumnDelete(), { expectedHash: HASH })).rejects.toBe(failure);
 	});
 });
 

@@ -28,6 +28,8 @@ export * from './invalid-token.js';
 export * from './method-not-allowed.js';
 export * from './range-not-satisfiable.js';
 export * from './route-not-found.js';
+export * from './schema-apply-failed.js';
+export * from './schema-post-commit-failed.js';
 export * from './schema-state-changed.js';
 export * from './service-unavailable.js';
 export * from './token-expired.js';
