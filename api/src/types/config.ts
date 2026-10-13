@@ -95,9 +95,16 @@ export type SchemaValues = Record<string, unknown>;
 
 export type SchemaFieldChanges = Record<string, FieldChange<unknown>>;
 
+/** The release and database vendor a schema snapshot was taken from. */
+export interface ConfigManifestSchemaProvenance {
+	release: string;
+	vendor: string;
+}
+
 export interface ConfigManifest {
 	version: ManifestVersion;
 	resources: ConfigKind[];
+	schema?: ConfigManifestSchemaProvenance;
 }
 
 export interface CairnConfig {
