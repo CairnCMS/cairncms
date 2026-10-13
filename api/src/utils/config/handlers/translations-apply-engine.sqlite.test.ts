@@ -17,6 +17,7 @@ import { computeConfigPlan } from '../../compute-config-plan.js';
 import { readCurrentConfig } from '../../get-config-snapshot.js';
 import { readConfigDirectory } from '../../read-config-directory.js';
 import { validateDesiredConfig } from '../../validate-desired-config.js';
+import { serializeToWire } from '../wire.js';
 import { writeConfigDirectory } from '../../write-config-directory.js';
 import { translationsDescriptor } from './translations.js';
 
@@ -161,7 +162,7 @@ describe('translations through the real apply engine on SQLite', () => {
 	async function runValidatedApply(config: CairnConfig, options: { destructive?: boolean } = {}): Promise<void> {
 		const { config: current, currentRoleKeys, currentFolderKeys, currentFolderParents, stateToken } = await snapshot();
 
-		const failures = validateDesiredConfig(config, {
+		const failures = validateDesiredConfig(serializeToWire(config, config.manifest.version), {
 			label: 'sqlite validated apply',
 			references: 'current-state',
 			currentRoleKeys,
@@ -293,7 +294,7 @@ describe('translations through the real apply engine on SQLite', () => {
 			await writeConfigDirectory(config, dir);
 			const readBack = await readConfigDirectory(dir);
 
-			const failures = validateDesiredConfig(readBack, {
+			const failures = validateDesiredConfig(serializeToWire(readBack, readBack.manifest.version), {
 				label: 'round-trip',
 				references: 'current-state',
 				currentRoleKeys,
@@ -412,7 +413,7 @@ describe('translations through the real apply engine on SQLite', () => {
 
 			const readBack = await readConfigDirectory(dir);
 
-			const failures = validateDesiredConfig(readBack, {
+			const failures = validateDesiredConfig(serializeToWire(readBack, readBack.manifest.version), {
 				label: 'yaml',
 				references: 'current-state',
 				currentRoleKeys: new Set<string>(),

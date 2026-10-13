@@ -227,6 +227,7 @@ export function validateDesiredConfig(document: unknown, context: DesiredConfigC
 		settings: (body['settings'] ?? []) as CairnConfig['settings'],
 		'extension-settings': (body['extension-settings'] ?? []) as CairnConfig['extension-settings'],
 		translations: (body['translations'] ?? []) as CairnConfig['translations'],
+		schema: (body['schema'] ?? []) as CairnConfig['schema'],
 	}).map((problem) =>
 		invalid(`${problem}, which cannot be stored because the reader would substitute it. Send a resolved value.`)
 	);

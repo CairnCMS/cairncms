@@ -284,6 +284,13 @@ function runConformance<K extends ConfigKindTypes>(
 	});
 }
 
+// Schema uses a separate execution engine and does not share these planning contracts.
+type ConfigurationEngineKind = Exclude<ConfigKind, 'schema'>;
+
+const CONFIGURATION_ENGINE_KINDS = listConfigKinds().filter(
+	(kind): kind is ConfigurationEngineKind => kind !== 'schema'
+);
+
 const RUNNERS = {
 	roles: () => runConformance(getDescriptor('roles'), ROLES_FIXTURE),
 	permissions: () => runConformance(getDescriptor('permissions'), PERMISSIONS_FIXTURE),
@@ -291,13 +298,68 @@ const RUNNERS = {
 	settings: () => runConformance(getDescriptor('settings'), SETTINGS_FIXTURE),
 	'extension-settings': () => runConformance(getDescriptor('extension-settings'), EXTENSION_SETTINGS_FIXTURE),
 	translations: () => runConformance(getDescriptor('translations'), TRANSLATIONS_FIXTURE),
-} satisfies Record<ConfigKind, () => void>;
+} satisfies Record<ConfigurationEngineKind, () => void>;
 
-describe.each(listConfigKinds())('descriptor conformance: %s', (kind) => {
+describe.each(CONFIGURATION_ENGINE_KINDS)('descriptor conformance: %s', (kind) => {
 	RUNNERS[kind]();
 });
 
-const REPRESENTATIVE_CHANGE: Record<ConfigKind, unknown> = {
+describe('schema descriptor registration', () => {
+	const descriptor = getDescriptor('schema');
+
+	it('registers at manifest version 3 as a flat directory with no dependencies', () => {
+		expect(descriptor.formatVersion).toBe(3);
+		expect(descriptor.layout.documentShape).toBe('flat');
+		expect(descriptor.dependencies).toEqual([]);
+	});
+
+	it('maps a collection document to its identity and filename', () => {
+		const document = { collection: 'articles', fields: [], relations: [] };
+		expect(descriptor.layout.documentIdentityOf(document)).toEqual({ collection: 'articles' });
+		expect(descriptor.layout.filenameOf({ collection: 'articles' })).toBe('articles');
+	});
+
+	it('accepts a 65-character collection name', () => {
+		const longName = 'c'.repeat(65);
+		expect(validateConfigRecord('schema', { collection: longName, fields: [], relations: [] })).toEqual([]);
+	});
+
+	it('keeps the engine-wide neutral helpers real no-ops', async () => {
+		expect(descriptor.handler.emptyEnrichment()).toEqual({});
+		expect(descriptor.handler.emptyResult()).toEqual({ created: 0, updated: 0, deleted: 0 });
+		expect(descriptor.handler.toChanges({ create: [], update: [], delete: [] }, {} as never)).toEqual([]);
+		await expect(descriptor.handler.readApplyDependencyState({} as never)).resolves.toBeUndefined();
+
+		const slice = { created: 0, updated: 0, deleted: 0 };
+		expect(descriptor.handler.mergeOutcome(slice, { op: 'create', count: 2 })).toBe(slice);
+	});
+
+	it('refuses every schema-specific operation', async () => {
+		expect(() => descriptor.layout.parseDocumentFile({}, 'articles.yaml')).toThrow(
+			'Schema file loading is not supported'
+		);
+
+		expect(() => descriptor.projectDocuments([])).toThrow('Schema projection is not supported');
+		expect(() => descriptor.composeDocuments([], [])).toThrow('Schema projection is not supported');
+
+		expect(() => descriptor.canonicalizeValues({ collection: 'articles', fields: [], relations: [] })).toThrow(
+			'Schema projection is not supported'
+		);
+
+		await expect(descriptor.handler.readCurrent({} as never)).rejects.toThrow('Schema read is not supported');
+
+		await expect(descriptor.handler.enrich({} as never, [], {} as never)).rejects.toThrow(
+			'Schema planning is not supported'
+		);
+
+		await expect(descriptor.handler.applyCreates([], {} as never)).rejects.toThrow('Schema apply is not supported');
+
+		expect(() => descriptor.handler.validateDesired([], [], {} as never)).toThrow('Schema validation is not supported');
+		expect(() => descriptor.handler.projectReadState({} as never, 'full')).toThrow('Schema read is not supported');
+	});
+});
+
+const REPRESENTATIVE_CHANGE: Record<ConfigurationEngineKind, unknown> = {
 	roles: {
 		kind: 'roles',
 		operation: 'create',
@@ -361,17 +423,18 @@ function destructiveExtension(deletion: unknown): unknown {
 
 describe('config kind wiring conformance', () => {
 	const kinds = [...CONFIG_KINDS].sort();
+	const configurationEngineKinds = [...CONFIGURATION_ENGINE_KINDS].sort();
 
-	it('derives a record schema for exactly every managed kind', () => {
+	it('derives a record schema for exactly every kind', () => {
 		expect(Object.keys(buildRecordSchemas()).sort()).toEqual(kinds);
 	});
 
-	it('declares a remote apply-result slice for exactly every managed kind', () => {
-		expect(Object.keys(RemoteApplyResult.shape).sort()).toEqual(kinds);
+	it('declares a remote apply-result slice for exactly every configuration-engine kind', () => {
+		expect(Object.keys(RemoteApplyResult.shape).sort()).toEqual(configurationEngineKinds);
 	});
 
-	it('parses a representative change for every managed kind through the remote change union', () => {
-		for (const kind of listConfigKinds()) {
+	it('parses a representative change for every configuration-engine kind through the remote change union', () => {
+		for (const kind of CONFIGURATION_ENGINE_KINDS) {
 			expect(RemoteConfigPlanChange.safeParse(REPRESENTATIVE_CHANGE[kind]).success).toBe(true);
 		}
 	});
@@ -381,6 +444,16 @@ describe('config kind wiring conformance', () => {
 			kind: 'notakind',
 			operation: 'create',
 			identity: { key: 'sample' },
+		});
+
+		expect(result.success).toBe(false);
+	});
+
+	it('rejects a schema change kind on the remote change union', () => {
+		const result = RemoteConfigPlanChange.safeParse({
+			kind: 'schema',
+			operation: 'create',
+			identity: { collection: 'articles' },
 		});
 
 		expect(result.success).toBe(false);
@@ -435,6 +508,7 @@ describe('cross-kind omission contract', () => {
 		],
 		'extension-settings': [],
 		translations: [],
+		schema: ['meta', 'schema'],
 	};
 
 	it.each(listConfigKinds())('binds omissionPreservesCurrent to optionality for every %s field', (kind) => {

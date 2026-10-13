@@ -16,6 +16,7 @@ import { CONFIG_REGISTRY } from './config/registry.js';
 function emptyPlan(): ConfigPlan {
 	return {
 		managedResources: [],
+		schema: { create: [], update: [], delete: [] },
 		roles: { create: [], update: [], delete: [] },
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },

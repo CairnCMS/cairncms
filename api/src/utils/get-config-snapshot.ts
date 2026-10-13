@@ -3,13 +3,13 @@ import type { Knex } from 'knex';
 import getDatabase from '../database/index.js';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import {
-	CONFIG_KINDS,
 	type CairnConfig,
 	type ConfigExtensionSettings,
 	type ConfigKind,
 	type ConfigFolder,
 	type ConfigPermissionSet,
 	type ConfigRole,
+	type ConfigSchemaCollection,
 	type ConfigSettings,
 	type ConfigStateToken,
 	type ConfigTranslations,
@@ -20,7 +20,7 @@ import { makeDependencyAccessor } from './config/dependency-context.js';
 import type { ConfigReadMode, ExtensionDeclarationSnapshot } from './config/descriptor.js';
 import type { FoldersKindTypes } from './config/handlers/folders.js';
 import type { RolesKindTypes } from './config/handlers/roles.js';
-import { getDescriptor } from './config/registry.js';
+import { getDescriptor, kindsForVersion } from './config/registry.js';
 import { resolveReadClosure } from './config/scope.js';
 import { getSchema } from './get-schema.js';
 import { safeLogFragment } from './safe-log-fragment.js';
@@ -84,6 +84,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 				settings: [],
 				'extension-settings': [],
 				translations: [],
+				schema: [],
 			},
 			currentRoleKeys: new Set(),
 			currentFolderKeys: new Set(),
@@ -138,6 +139,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		settings: (documentsByKind.get('settings') ?? []) as ConfigSettings[],
 		'extension-settings': (documentsByKind.get('extension-settings') ?? []) as ConfigExtensionSettings[],
 		translations: (documentsByKind.get('translations') ?? []) as ConfigTranslations[],
+		schema: (documentsByKind.get('schema') ?? []) as ConfigSchemaCollection[],
 	};
 
 	const placeholders = findPlaceholderSyntax(config);
@@ -213,7 +215,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 }
 
 export async function getConfigSnapshot(options?: { database?: Knex; schema?: SchemaOverview }): Promise<CairnConfig> {
-	const { config } = await readCurrentConfig({ ...options, resources: CONFIG_KINDS });
+	const { config } = await readCurrentConfig({ ...options, resources: kindsForVersion(LATEST_MANIFEST_VERSION) });
 
 	return config;
 }

@@ -11,6 +11,7 @@ import type {
 	ConfigManifest,
 	ConfigPermissionSet,
 	ConfigRole,
+	ConfigSchemaCollection,
 	ConfigSettings,
 	ConfigTranslations,
 } from '../types/config.js';
@@ -138,6 +139,7 @@ export async function readConfigDirectory(configPath: string, options?: ConfigRe
 	const settings: ConfigSettings[] = [];
 	const extensionSettings: ConfigExtensionSettings[] = [];
 	const translations: ConfigTranslations[] = [];
+	const schema: ConfigSchemaCollection[] = [];
 
 	const sink: Record<ConfigKind, unknown[]> = {
 		roles,
@@ -146,6 +148,7 @@ export async function readConfigDirectory(configPath: string, options?: ConfigRe
 		settings,
 		'extension-settings': extensionSettings,
 		translations,
+		schema,
 	};
 
 	for (const kind of listConfigKinds()) {
@@ -167,5 +170,14 @@ export async function readConfigDirectory(configPath: string, options?: ConfigRe
 		}
 	}
 
-	return { manifest, roles, permissions, folders, settings, 'extension-settings': extensionSettings, translations };
+	return {
+		manifest,
+		roles,
+		permissions,
+		folders,
+		settings,
+		'extension-settings': extensionSettings,
+		translations,
+		schema,
+	};
 }

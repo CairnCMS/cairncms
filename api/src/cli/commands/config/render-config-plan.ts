@@ -89,9 +89,13 @@ type RenderableResultSlice = {
 	settings: { updated: unknown[] };
 	'extension-settings': { created: number; updated: number; deleted: number };
 	translations: { created: number; updated: number; deleted: number };
+	schema: { created: number; updated: number; deleted: number };
 };
 
-export type RenderableResult = { [C in ConfigKind]: RenderableResultSlice[C] };
+// Remote config results may omit the schema slice.
+export type RenderableResult = { [C in Exclude<ConfigKind, 'schema'>]: RenderableResultSlice[C] } & {
+	schema?: RenderableResultSlice['schema'];
+};
 
 function summarizeResultSlice(kind: ConfigKind, result: RenderableResult): string[] {
 	switch (kind) {
@@ -142,6 +146,9 @@ function summarizeResultSlice(kind: ConfigKind, result: RenderableResult): strin
 			if (slice.deleted > 0) parts.push(`${slice.deleted} translation(s) deleted`);
 			return parts;
 		}
+
+		case 'schema':
+			return [];
 
 		default: {
 			const unhandled: never = kind;

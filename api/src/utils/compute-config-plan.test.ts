@@ -563,6 +563,7 @@ describe('managed scope', () => {
 
 		expect(computeConfigPlan(current, desired)).toEqual({
 			managedResources: [],
+			schema: { create: [], update: [], delete: [] },
 			roles: { create: [], update: [], delete: [] },
 			permissions: { create: [], update: [], delete: [] },
 			folders: { create: [], update: [], delete: [] },
@@ -606,6 +607,7 @@ describe('managed scope', () => {
 
 		expect(computeConfigPlan(current, desired)).toEqual({
 			managedResources: ['roles'],
+			schema: { create: [], update: [], delete: [] },
 			roles: { create: [makeRole('viewer')], update: [], delete: ['editor'] },
 			permissions: { create: [], update: [], delete: [] },
 			folders: { create: [], update: [], delete: [] },
@@ -630,6 +632,7 @@ describe('managed scope', () => {
 
 		expect(computeConfigPlan(current, desired)).toEqual({
 			managedResources: ['permissions'],
+			schema: { create: [], update: [], delete: [] },
 			roles: { create: [], update: [], delete: [] },
 			permissions: {
 				create: [],

@@ -17,6 +17,7 @@ const PAST = '2000-01-01T00:00:00.000Z';
 function planDeletingRoles(...keys: string[]): ConfigPlan {
 	return {
 		managedResources: [],
+		schema: { create: [], update: [], delete: [] },
 		roles: { create: [], update: [], delete: keys },
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
@@ -423,6 +424,7 @@ describe('enrichConfigPlan', () => {
 
 		const plan: ConfigPlan = {
 			managedResources: ['roles'],
+			schema: { create: [], update: [], delete: [] },
 			roles: { create: [], update: [], delete: [] },
 			permissions: { create: [{ roleKey: 'x', permission: perm('articles') }], update: [], delete: [] },
 			folders: { create: [], update: [], delete: [] },

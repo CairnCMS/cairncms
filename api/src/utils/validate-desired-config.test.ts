@@ -89,10 +89,32 @@ describe('validateConfigManifest', () => {
 		});
 	});
 
+	it('accepts manifest version 3', () => {
+		expect(validateConfigManifest({ version: 3, resources: ['roles'] }, 'test')).toEqual({
+			version: 3,
+			resources: ['roles'],
+		});
+	});
+
 	it('raises the unsupported-version code for a newer version', () => {
-		expect(() => validateConfigManifest({ version: 3, resources: [] }, 'test')).toThrow(
+		expect(() => validateConfigManifest({ version: 4, resources: [] }, 'test')).toThrow(
 			ConfigUnsupportedVersionException
 		);
+	});
+
+	it('accepts the schema kind only at manifest version 3', () => {
+		expect(() => validateConfigManifest({ version: 1, resources: ['schema'] }, 'test')).toThrow(
+			ConfigUnsupportedVersionException
+		);
+
+		expect(() => validateConfigManifest({ version: 2, resources: ['schema'] }, 'test')).toThrow(
+			ConfigUnsupportedVersionException
+		);
+
+		expect(validateConfigManifest({ version: 3, resources: ['schema'] }, 'test')).toEqual({
+			version: 3,
+			resources: ['schema'],
+		});
 	});
 
 	it('raises the unsupported-version code when no version is declared', () => {

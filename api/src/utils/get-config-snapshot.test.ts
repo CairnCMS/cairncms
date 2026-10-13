@@ -18,6 +18,7 @@ import { CONFIG_REGISTRY } from './config/registry.js';
 import { getConfigSnapshot, readCurrentConfig } from './get-config-snapshot.js';
 import * as getSchema from './get-schema.js';
 import { validateDesiredConfig } from './validate-desired-config.js';
+import { serializeToWire } from './config/wire.js';
 
 function roleRow(overrides: Record<string, any> = {}): Record<string, any> {
 	return {
@@ -977,6 +978,7 @@ describe('readCurrentConfig', () => {
 			settings: [],
 			'extension-settings': [],
 			translations: [],
+			schema: [],
 		});
 
 		expect(currentRoleKeys.size).toBe(0);
@@ -1178,7 +1180,7 @@ describe('readCurrentConfig', () => {
 		expect(config.permissions.map((set) => set.role)).toEqual(['editor', 'public']);
 
 		expect(
-			validateDesiredConfig(config, {
+			validateDesiredConfig(serializeToWire(config, config.manifest.version), {
 				label: 'snapshot',
 				references: 'current-state',
 				currentRoleKeys,
