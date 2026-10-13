@@ -119,6 +119,18 @@ describe('getConfigSnapshot', () => {
 		});
 	});
 
+	it('excludes schema from the default snapshot without reaching its guarded read', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([]);
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+		const schemaRead = vi.spyOn(CONFIG_REGISTRY.schema.handler, 'readCurrent');
+
+		const config = await getConfigSnapshot({ database: db });
+
+		expect(config.manifest.resources).not.toContain('schema');
+		expect(config.schema).toEqual([]);
+		expect(schemaRead).not.toHaveBeenCalled();
+	});
+
 	it('builds ConfigRole entries with v1 allowlist only', async () => {
 		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([
 			{
