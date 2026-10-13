@@ -261,7 +261,9 @@ o2m_relationship: Én til mange relasjon
 m2m_relationship: Mange til mange relasjon
 m2a_relationship: Mange til alle relasjon
 invalid_item: Ugyldig element
+require_confirmation: Krev bekreftelse
 dialog: Dialogvindu
+confirmation_dialog: Bekreftelsesdialog
 next: Neste
 field_name: Feltnavn
 translations: Oversettelser
@@ -707,6 +709,7 @@ creating_new_flow: Opprett ny Flyt
 updating_flow: Oppdater Flyt
 flow_setup: Oppsett av Flyt
 flow_name: Navn
+flow_tracking_activity: Bare spor aktivitet
 flow_tracking_null: Ikke spor noenting
 start_flow: Start Flyt
 stop_flow: Stopp Flyt
