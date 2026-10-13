@@ -334,12 +334,47 @@ describe('schema descriptor registration', () => {
 		expect(descriptor.handler.mergeOutcome(slice, { op: 'create', count: 2 })).toBe(slice);
 	});
 
-	it('refuses every schema operation except loading', async () => {
-		expect(() => descriptor.projectDocuments([])).toThrow('Schema projection is not supported');
-		expect(() => descriptor.composeDocuments([], [])).toThrow('Schema projection is not supported');
+	it('serializes documents as a flat passthrough', () => {
+		const documents = [
+			{
+				collection: 'articles',
+				meta: { collection: 'articles', note: 'Articles' },
+				schema: { name: 'articles' },
+				fields: [
+					{
+						collection: 'articles',
+						field: 'title',
+						type: 'string',
+						meta: { interface: 'input', options: { trim: { enabled: true } } },
+					},
+				],
+				relations: [{ collection: 'articles', field: 'author', related_collection: 'authors' }],
+			},
+			{ collection: 'authors', fields: [], relations: [] },
+		];
 
+		const projected = descriptor.projectDocuments(documents as never);
+		expect(descriptor.composeDocuments(projected.records, projected.anchors)).toEqual(documents);
+		expect(projected.anchors).toEqual([{ collection: 'articles' }, { collection: 'authors' }]);
+
+		expect(descriptor.identityOf({ collection: 'articles', fields: [], relations: [] } as never)).toEqual({
+			collection: 'articles',
+		});
+
+		expect(descriptor.identityKey({ collection: 'articles' } as never)).toBe(JSON.stringify(['articles']));
+
+		expect(
+			descriptor.compareIdentity({ collection: 'articles' } as never, { collection: 'authors' } as never)
+		).toBeLessThan(0);
+	});
+
+	it('refuses planning, apply, and database-read operations', async () => {
 		expect(() => descriptor.canonicalizeValues({ collection: 'articles', fields: [], relations: [] })).toThrow(
-			'Schema projection is not supported'
+			'Schema planning is not supported'
+		);
+
+		expect(() => descriptor.identityOfDelete({ collection: 'articles' } as never)).toThrow(
+			'Schema planning is not supported'
 		);
 
 		await expect(descriptor.handler.readCurrent({} as never)).rejects.toThrow('Schema read is not supported');

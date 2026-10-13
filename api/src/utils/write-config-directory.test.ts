@@ -132,24 +132,59 @@ describe('writeConfigDirectory', () => {
 		expect(perms.permissions).toHaveLength(1);
 	});
 
-	it('refuses to write a schema-managed tree, leaving the destination unchanged', async () => {
-		await fs.writeFile(
-			path.join(tmpDir, 'cairncms-config.yaml'),
-			dumpYaml({ version: 2, resources: ['roles'], sentinel: 'original' })
-		);
-
-		await writeExisting('roles', 'editor.yaml', { key: 'editor', name: 'Existing' });
-
-		const before = await treeOf(tmpDir);
+	it('writes a schema-managed tree that reads back with full fidelity and rewrites identically', async () => {
+		const articles = {
+			collection: 'articles',
+			meta: {
+				collection: 'articles',
+				note: 'Articles',
+				hidden: false,
+				singleton: false,
+				icon: null,
+				translations: {},
+				item_duplication_fields: null,
+				accountability: 'all',
+				group: null,
+			},
+			schema: { name: 'articles' },
+			fields: [
+				{
+					collection: 'articles',
+					field: 'title',
+					type: 'string',
+					meta: { interface: 'input', options: { font: 'serif', trim: { enabled: true } } },
+					schema: { name: 'title', is_nullable: false },
+				},
+			],
+			relations: [
+				{
+					collection: 'articles',
+					field: 'author',
+					related_collection: 'authors',
+					meta: { one_field: 'articles' },
+					schema: { table: 'articles', column: 'author' },
+				},
+			],
+		};
 
 		const config = makeConfig({
 			manifest: { version: 3, resources: ['schema'] },
-			schema: [{ collection: 'articles', fields: [], relations: [] }],
+			schema: [articles, { collection: 'Mixed Case', fields: [], relations: [] }],
 		});
 
-		await expect(writeConfigDirectory(config, tmpDir)).rejects.toThrow('Schema projection is not supported');
+		await writeConfigDirectory(config, tmpDir);
 
-		expect(await treeOf(tmpDir)).toEqual(before);
+		const readBack = await readConfigDirectory(tmpDir);
+		expect(readBack.schema).toEqual(config.schema);
+
+		const second = await fs.mkdtemp(path.join(os.tmpdir(), 'cairncms-test-'));
+
+		try {
+			await writeConfigDirectory(readBack, second);
+			expect(await treeOf(second)).toEqual(await treeOf(tmpDir));
+		} finally {
+			await fs.rm(second, { recursive: true, force: true });
+		}
 	});
 
 	it('refuses a role key that would escape the config directory and writes nothing', async () => {

@@ -13,6 +13,7 @@ import type {
 } from '../../../types/config.js';
 import { CONFIG_FILENAME_STEM_MAX_LENGTH } from '../../config-contract.js';
 import { safeLogFragment } from '../../safe-log-fragment.js';
+import { compareCodeUnits } from '../canonical-encode.js';
 import type {
 	ConfigFieldDescriptor,
 	ConfigResourceDescriptor,
@@ -282,13 +283,16 @@ export const schemaDescriptor: ConfigResourceDescriptor<SchemaKindTypes> = {
 	recordFields: RECORD_FIELDS,
 	valueFieldOrder: VALUE_FIELD_ORDER,
 	emittedDocumentSubject: (identity) => ({ label: 'collection', value: identity.collection }),
-	projectDocuments: () => unsupported('projection'),
-	composeDocuments: () => unsupported('projection'),
-	identityOf: () => unsupported('projection'),
-	identityKey: () => unsupported('projection'),
-	compareIdentity: () => unsupported('projection'),
-	identityOfDelete: () => unsupported('projection'),
-	canonicalizeValues: () => unsupported('projection'),
+	projectDocuments: (documents) => ({
+		records: documents,
+		anchors: documents.map((document) => ({ collection: document.collection })),
+	}),
+	composeDocuments: (records) => records,
+	identityOf: (record) => ({ collection: record.collection }),
+	identityKey: (identity) => JSON.stringify([identity.collection]),
+	compareIdentity: (a, b) => compareCodeUnits(a.collection, b.collection),
+	identityOfDelete: () => unsupported('planning'),
+	canonicalizeValues: () => unsupported('planning'),
 	toCreateEntry: () => unsupported('planning'),
 	toUpdateEntry: () => unsupported('planning'),
 	toDeleteEntry: () => unsupported('planning'),
