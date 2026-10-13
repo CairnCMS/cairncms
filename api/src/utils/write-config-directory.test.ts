@@ -792,6 +792,94 @@ describe('writeConfigDirectory', () => {
 	});
 });
 
+describe('writeConfigDirectory schema filename contract', () => {
+	function schemaConfig(schema: CairnConfig['schema']): CairnConfig {
+		return makeConfig({ manifest: { version: 3, resources: ['schema'] }, schema });
+	}
+
+	it('writes each filename-stem shape to its own distinct file and reads them back', async () => {
+		const collections = ['articles', 'Blog Posts', '---', 'con'];
+
+		await writeConfigDirectory(
+			schemaConfig(collections.map((collection) => ({ collection, fields: [], relations: [] }))),
+			tmpDir
+		);
+
+		const files = (await fs.readdir(path.join(tmpDir, 'schema'))).sort();
+		expect(files).toHaveLength(4);
+		expect(files).toContain('articles.yaml');
+		expect(files.some((file) => /^blog-posts-[0-9a-f]{8}\.yaml$/.test(file))).toBe(true);
+		expect(files.some((file) => /^collection-[0-9a-f]{8}\.yaml$/.test(file))).toBe(true);
+		expect(files.some((file) => /^con-[0-9a-f]{8}\.yaml$/.test(file))).toBe(true);
+
+		const readBack = await readConfigDirectory(tmpDir);
+		expect(readBack.schema.map((record) => record.collection).sort()).toEqual([...collections].sort());
+	});
+
+	it('removes a removed collection, a stale rename, and a stale slug-and-hash file, keeping a malformed and an unowned file byte-for-byte', async () => {
+		const schemaDir = path.join(tmpDir, 'schema');
+		await fs.mkdir(schemaDir, { recursive: true });
+
+		const brokenBytes = dumpYaml({ fields: [], relations: [] });
+		const unownedBytes = dumpYaml({ collection: 'Whatever', fields: [], relations: [] });
+
+		await fs.writeFile(
+			path.join(schemaDir, 'removed.yaml'),
+			dumpYaml({ collection: 'removed', fields: [], relations: [] })
+		);
+
+		await fs.writeFile(
+			path.join(schemaDir, 'posts.yaml'),
+			dumpYaml({ collection: 'articles', fields: [], relations: [] })
+		);
+
+		await fs.writeFile(
+			path.join(schemaDir, 'old-collection-deadbeef.yaml'),
+			dumpYaml({ collection: 'Old Collection', fields: [], relations: [] })
+		);
+
+		await fs.writeFile(path.join(schemaDir, 'broken.yaml'), brokenBytes);
+		await fs.writeFile(path.join(schemaDir, 'UPPER.yaml'), unownedBytes);
+
+		await writeConfigDirectory(schemaConfig([{ collection: 'articles', fields: [], relations: [] }]), tmpDir);
+
+		expect((await fs.readdir(schemaDir)).sort()).toEqual(['UPPER.yaml', 'articles.yaml', 'broken.yaml']);
+		expect(await fs.readFile(path.join(schemaDir, 'broken.yaml'), 'utf8')).toBe(brokenBytes);
+		expect(await fs.readFile(path.join(schemaDir, 'UPPER.yaml'), 'utf8')).toBe(unownedBytes);
+		expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('does not read as a schema record'));
+		expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('not a name this config engine generates'));
+	});
+
+	it('refuses two collections that map to the same file, naming both and leaving the tree unchanged', async () => {
+		await fs.writeFile(
+			path.join(tmpDir, 'cairncms-config.yaml'),
+			dumpYaml({ version: 3, resources: ['schema'], sentinel: 'original' })
+		);
+
+		await fs.mkdir(path.join(tmpDir, 'schema'), { recursive: true });
+		await fs.writeFile(path.join(tmpDir, 'schema', 'existing.yaml'), 'untouched\n');
+
+		const before = await treeOf(tmpDir);
+
+		const config = schemaConfig([
+			{ collection: 'SCHEMaFilEnamecollisionfixturE', fields: [], relations: [] },
+			{ collection: 'ScHEMAFIlenaMeCollisionfixturE', fields: [], relations: [] },
+		]);
+
+		const error = await writeConfigDirectory(config, tmpDir).then(
+			() => null,
+			(reason: unknown) => reason
+		);
+
+		expect(error).toBeInstanceOf(ConfigInvalidException);
+		expect((error as Error).message).toContain('SCHEMaFilEnamecollisionfixturE');
+		expect((error as Error).message).toContain('ScHEMAFIlenaMeCollisionfixturE');
+		expect((error as Error).message).toContain('schemafilenamecollisionfixture-cb99c71d.yaml');
+
+		expect(await treeOf(tmpDir)).toEqual(before);
+	});
+});
+
 describe('writeConfigDirectory settings singleton cardinality', () => {
 	function settingsConfig(settings: CairnConfig['settings']): CairnConfig {
 		return makeConfig({ manifest: { version: 2, resources: ['settings'] }, settings });

@@ -106,6 +106,8 @@ export interface ConfigResourceDescriptor<K extends ConfigKindTypes> {
 		reservedFilenameMessage?(filename: string): string;
 		/** Identifies owned filename stems for nestedMap and keyedMap layouts. */
 		ownsFilenameStem?(stem: string): boolean;
+		/** Whether a non-kept owned file is a removable generated record, for a kind whose identity is its content, not its filename. */
+		removesUnkeptFile?(declared: unknown, filename: string): boolean;
 	};
 	documentIdentityFields: ConfigFieldDescriptor[];
 	recordFields: ConfigFieldDescriptor[];

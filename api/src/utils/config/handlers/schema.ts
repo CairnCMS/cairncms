@@ -196,6 +196,18 @@ function parseSchemaDocumentFile(record: Record<string, unknown>, filename: stri
 	return document;
 }
 
+function removesUnkeptFile(declared: unknown, filename: string): boolean {
+	if (!isMapping(declared)) return false;
+
+	try {
+		parseSchemaDocumentFile(declared, filename);
+		return true;
+	} catch (error) {
+		if (error instanceof ConfigInvalidException) return false;
+		throw error;
+	}
+}
+
 const RECORD_FIELDS: ConfigFieldDescriptor[] = [
 	{
 		name: 'fields',
@@ -278,6 +290,7 @@ export const schemaDescriptor: ConfigResourceDescriptor<SchemaKindTypes> = {
 		filenameOf: (documentIdentity) => filenameStemFor(documentIdentity.collection),
 		ownsFilenameStem,
 		parseDocumentFile: parseSchemaDocumentFile,
+		removesUnkeptFile,
 	},
 	documentIdentityFields: [COLLECTION_FIELD],
 	recordFields: RECORD_FIELDS,

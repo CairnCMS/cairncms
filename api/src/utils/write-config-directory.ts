@@ -56,6 +56,7 @@ function buildDocuments(config: CairnConfig, root: string): { pending: PendingDo
 	];
 
 	const keep = new Set<string>();
+	const subjects = new Map<string, string>();
 
 	for (const kind of CONFIG_KINDS) {
 		if (!managed.has(kind)) continue;
@@ -71,7 +72,9 @@ function buildDocuments(config: CairnConfig, root: string): { pending: PendingDo
 		}
 
 		for (const document of documents) {
-			const filename = `${descriptor.layout.filenameOf(descriptor.layout.documentIdentityOf(document))}${YAML_SUFFIX}`;
+			const identity = descriptor.layout.documentIdentityOf(document);
+			const subject = descriptor.emittedDocumentSubject(identity);
+			const filename = `${descriptor.layout.filenameOf(identity)}${YAML_SUFFIX}`;
 			const label = `${kind}/${filename}`;
 
 			if (!isOwnedConfigFilename(filename, kind)) {
@@ -83,8 +86,18 @@ function buildDocuments(config: CairnConfig, root: string): { pending: PendingDo
 			}
 
 			if (keep.has(label)) {
+				const existing = subjects.get(label)!;
+
+				if (existing === subject.value) {
+					throw new ConfigInvalidException(
+						`Config declares a duplicate ${kind} identity "${safeLogFragment(filename)}".`
+					);
+				}
+
 				throw new ConfigInvalidException(
-					`Config declares a duplicate ${kind} identity "${safeLogFragment(filename)}".`
+					`Config ${kind} ${subject.label}s "${safeLogFragment(existing)}" and "${safeLogFragment(
+						subject.value
+					)}" both map to file "${safeLogFragment(filename)}".`
 				);
 			}
 
@@ -92,6 +105,7 @@ function buildDocuments(config: CairnConfig, root: string): { pending: PendingDo
 			assertContained(path.join(root, kind), target, label);
 
 			keep.add(label);
+			subjects.set(label, subject.value);
 			pending.push({ label, target, document, kind });
 		}
 	}
@@ -204,10 +218,7 @@ function declaredMatchesFilename(
 	return (declared as Record<string, unknown>)[descriptor.documentIdentityFields[0]!.name] === stem;
 }
 
-/**
- * Removal requires an owned filename that parses and declares the identity its stem promises. Provenance
- * is not recorded, so a hand-authored record indistinguishable from generated output is removed too.
- */
+/** Provenance is not recorded, so a hand-authored record indistinguishable from generated output is removed too. */
 async function cleanKindDirectory(root: string, kind: ConfigKind, keep: Set<string>): Promise<void> {
 	const entries = await readContainedDirectory(root, path.join(root, kind));
 	if (entries === null) return;
@@ -242,7 +253,14 @@ async function cleanKindDirectory(root: string, kind: ConfigKind, keep: Set<stri
 			continue;
 		}
 
-		if (!declaredMatchesFilename(descriptor, declared, entry.slice(0, -YAML_SUFFIX.length))) {
+		const removesUnkept = descriptor.layout.removesUnkeptFile;
+
+		if (removesUnkept) {
+			if (!removesUnkept(declared, entry)) {
+				logger.warn(`Leaving "${label}": it does not read as a ${kind} record.`);
+				continue;
+			}
+		} else if (!declaredMatchesFilename(descriptor, declared, entry.slice(0, -YAML_SUFFIX.length))) {
 			logger.warn(`Leaving "${label}": it does not declare the identity its filename promises.`);
 			continue;
 		}
