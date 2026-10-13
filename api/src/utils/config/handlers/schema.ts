@@ -1,7 +1,8 @@
-import { normalizeConfigKey } from '@cairncms/utils';
+import { normalizeConfigKey, toArray } from '@cairncms/utils';
 import { isPlainObject } from 'lodash-es';
 import { createHash } from 'node:crypto';
 import { isInternalTable } from '../../../database/internal-tables.js';
+import env from '../../../env.js';
 import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
 import type {
 	ConfigPlanChange,
@@ -11,16 +12,24 @@ import type {
 	SchemaIdentity,
 	SchemaValues,
 } from '../../../types/config.js';
+import type { PortableSnapshot, SnapshotField, SnapshotRelation } from '../../../types/index.js';
 import { CONFIG_FILENAME_STEM_MAX_LENGTH } from '../../config-contract.js';
+import { getPortableSnapshot } from '../../get-portable-snapshot.js';
+import { getSnapshot } from '../../get-snapshot.js';
 import { safeLogFragment } from '../../safe-log-fragment.js';
 import { compareCodeUnits } from '../canonical-encode.js';
 import type {
 	ConfigFieldDescriptor,
+	ConfigReadMode,
 	ConfigResourceDescriptor,
 	FieldSensitivity,
 	KindPlan,
 	NoConfigDependencies,
+	ReadContext,
+	ReadCurrentResult,
+	ReadStateProjection,
 } from '../descriptor.js';
+import { composeValues } from '../values.js';
 
 const NON_SECRET: FieldSensitivity = { secret: false, redact: 'none' };
 
@@ -279,6 +288,98 @@ function mergeOutcome(
 	return slice;
 }
 
+function relationInScope(relation: SnapshotRelation, excluded: ReadonlySet<string>): boolean {
+	for (const endpoint of [relation.collection, relation.related_collection]) {
+		if (typeof endpoint !== 'string') continue;
+		if (isInternalTable(endpoint) || excluded.has(endpoint)) return false;
+	}
+
+	return true;
+}
+
+function groupSnapshotCollections(snapshot: PortableSnapshot): ConfigSchemaCollection[] {
+	const excluded = new Set(toArray(env['DB_EXCLUDE_TABLES']));
+
+	const fieldsByCollection = new Map<string, SnapshotField[]>();
+
+	for (const field of snapshot.fields) {
+		const group = fieldsByCollection.get(field.collection) ?? [];
+		group.push(field);
+		fieldsByCollection.set(field.collection, group);
+	}
+
+	const relationsByCollection = new Map<string, SnapshotRelation[]>();
+
+	for (const relation of snapshot.relations) {
+		if (!relationInScope(relation, excluded)) continue;
+
+		const group = relationsByCollection.get(relation.collection) ?? [];
+		group.push(relation);
+		relationsByCollection.set(relation.collection, group);
+	}
+
+	const membersOf = (name: string) => ({
+		fields: fieldsByCollection.get(name) ?? [],
+		relations: relationsByCollection.get(name) ?? [],
+	});
+
+	const records: ConfigSchemaCollection[] = [];
+	const emitted = new Set<string>();
+
+	for (const collection of snapshot.collections) {
+		const name = collection.collection;
+		emitted.add(name);
+
+		// A system collection is operator-managed through its fields alone. Its definition belongs to the
+		// platform, so it is emitted without meta or schema even when the snapshot carries an override.
+		if (name.startsWith('directus_')) {
+			records.push({ collection: name, ...membersOf(name) });
+			continue;
+		}
+
+		records.push({ collection: name, meta: collection.meta, schema: collection.schema, ...membersOf(name) });
+	}
+
+	// A system collection with only operator-added fields never reaches the snapshot's collections.
+	for (const owner of [...fieldsByCollection.keys(), ...relationsByCollection.keys()]) {
+		if (emitted.has(owner)) continue;
+		emitted.add(owner);
+
+		records.push({ collection: owner, ...membersOf(owner) });
+	}
+
+	records.sort((a, b) => compareCodeUnits(a.collection, b.collection));
+
+	return records;
+}
+
+async function readCurrent(context: ReadContext<SchemaKindTypes>): Promise<ReadCurrentResult<SchemaKindTypes>> {
+	const snapshot = await getSnapshot({ database: context.database, schema: context.schema });
+	const portable = await getPortableSnapshot(snapshot, { database: context.database });
+	const records = groupSnapshotCollections(portable);
+
+	return {
+		records,
+		documentIdentities: records.map((record) => ({ collection: record.collection })),
+		dependencyState: undefined,
+	};
+}
+
+function projectReadState(result: ReadCurrentResult<SchemaKindTypes>, mode: ConfigReadMode): ReadStateProjection {
+	const identities = result.records.map((record) => record.collection);
+
+	if (mode === 'identity') {
+		return { mode, identities };
+	}
+
+	const values = result.records.map((record): [string, unknown] => [
+		record.collection,
+		composeValues(RECORD_FIELDS, VALUE_FIELD_ORDER, record as unknown as Record<string, unknown>),
+	]);
+
+	return { mode, identities, values };
+}
+
 export const schemaDescriptor: ConfigResourceDescriptor<SchemaKindTypes> = {
 	kind: 'schema',
 	formatVersion: 3,
@@ -310,8 +411,8 @@ export const schemaDescriptor: ConfigResourceDescriptor<SchemaKindTypes> = {
 	toUpdateEntry: () => unsupported('planning'),
 	toDeleteEntry: () => unsupported('planning'),
 	handler: {
-		readCurrent: async () => unsupported('read'),
-		projectReadState: () => unsupported('read'),
+		readCurrent,
+		projectReadState,
 		validateDesired: () => unsupported('validation'),
 		postPlan: () => unsupported('planning'),
 		enrich: async () => unsupported('planning'),
