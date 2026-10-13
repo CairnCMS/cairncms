@@ -3,6 +3,8 @@ import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConfigSchemaCollection } from '../types/config.js';
 import { readCurrentConfig } from './get-config-snapshot.js';
+import { version } from './package.js';
+import { validateConfigManifest } from './validate-desired-config.js';
 
 vi.mock('../database/index', () => ({
 	default: vi.fn(),
@@ -324,5 +326,12 @@ describe('readCurrentConfig schema on a real SQLite database', () => {
 
 		await db('directus_relations').where({ many_field: 'author' }).update({ one_field: 'posts' });
 		expect(await readDigest()).not.toBe(afterField);
+	});
+
+	it('records the source release and vendor in the manifest, valid on its next read', async () => {
+		const { config } = await readCurrentConfig({ database: db, schema, resources: ['schema'], manifestVersion: 3 });
+
+		expect(config.manifest.schema).toEqual({ release: version, vendor: 'sqlite' });
+		expect(() => validateConfigManifest(config.manifest, 'snapshot')).not.toThrow();
 	});
 });

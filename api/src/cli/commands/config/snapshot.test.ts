@@ -344,6 +344,7 @@ describe('configSnapshot manifest version preservation', () => {
 							settings: options.resources.includes('settings') ? [SETTINGS_DOC] : [],
 							'extension-settings': [],
 							translations: [],
+							schema: [],
 						},
 						currentRoleKeys: new Set<string>(),
 						stateToken: { resources: [...options.resources], digest: 'digest' },
@@ -378,6 +379,7 @@ describe('configSnapshot manifest version preservation', () => {
 						{ language: 'fr-FR', translations: { greeting: 'Bonjour', farewell: 'Au revoir' } },
 						{ language: 'de-DE', translations: { greeting: 'Hallo' } },
 					],
+					schema: [],
 				},
 				currentRoleKeys: new Set<string>(),
 				stateToken: { resources: ['translations'], digest: 'digest' },
@@ -389,6 +391,40 @@ describe('configSnapshot manifest version preservation', () => {
 			expect(vi.mocked(logger.error)).not.toHaveBeenCalled();
 			expect((await fs.readdir(path.join(tmpDir, 'translations'))).sort()).toEqual(['de-DE.yaml', 'fr-FR.yaml']);
 			expect(vi.mocked(logger.info)).toHaveBeenCalledWith(expect.stringContaining('2 translation language file(s)'));
+		});
+
+		it('summarizes schema collections by count on a local snapshot', async () => {
+			await fs.writeFile(path.join(tmpDir, 'cairncms-config.yaml'), dumpYaml({ version: 3, resources: ['schema'] }));
+
+			vi.mocked(readCurrentConfig).mockResolvedValue({
+				config: {
+					manifest: { version: 3, resources: ['schema'], schema: { release: '1.0.0', vendor: 'sqlite' } },
+					roles: [],
+					permissions: [],
+					folders: [],
+					settings: [],
+					'extension-settings': [],
+					translations: [],
+					schema: [
+						{ collection: 'articles', fields: [], relations: [] },
+						{ collection: 'posts', fields: [], relations: [] },
+					],
+				},
+				currentRoleKeys: new Set<string>(),
+				stateToken: { resources: ['schema'], digest: 'digest' },
+			} as never);
+
+			await configSnapshot(tmpDir, { yes: true });
+
+			expect(vi.mocked(process.exit).mock.calls).toEqual([[0]]);
+			expect(vi.mocked(logger.error)).not.toHaveBeenCalled();
+
+			expect(vi.mocked(readCurrentConfig)).toHaveBeenCalledWith(
+				expect.objectContaining({ manifestVersion: 3, resources: ['schema'] })
+			);
+
+			expect((await fs.readdir(path.join(tmpDir, 'schema'))).sort()).toEqual(['articles.yaml', 'posts.yaml']);
+			expect(vi.mocked(logger.info)).toHaveBeenCalledWith(expect.stringContaining('2 schema collection(s)'));
 		});
 	});
 });
@@ -435,6 +471,7 @@ describe('configSnapshot placeholder preservation', () => {
 				settings: [],
 				'extension-settings': [],
 				translations: [],
+				schema: [],
 			},
 			currentRoleKeys: new Set<string>(),
 			currentFolderKeys: new Set<string>(),
