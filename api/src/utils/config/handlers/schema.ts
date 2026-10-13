@@ -1,5 +1,8 @@
 import { normalizeConfigKey } from '@cairncms/utils';
+import { isPlainObject } from 'lodash-es';
 import { createHash } from 'node:crypto';
+import { isInternalTable } from '../../../database/internal-tables.js';
+import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
 import type {
 	ConfigPlanChange,
 	ConfigPlanEnrichment,
@@ -9,6 +12,7 @@ import type {
 	SchemaValues,
 } from '../../../types/config.js';
 import { CONFIG_FILENAME_STEM_MAX_LENGTH } from '../../config-contract.js';
+import { safeLogFragment } from '../../safe-log-fragment.js';
 import type {
 	ConfigFieldDescriptor,
 	ConfigResourceDescriptor,
@@ -98,6 +102,99 @@ function ownsFilenameStem(stem: string): boolean {
 	return isNormalizedStem(stem) || DERIVED_STEM.test(stem);
 }
 
+const DOCUMENT_FIELDS = new Set(['collection', 'meta', 'schema', 'fields', 'relations']);
+
+function isMapping(value: unknown): value is Record<string, unknown> {
+	return isPlainObject(value);
+}
+
+function assertOwnedElements(elements: unknown[], kind: string, collection: string, filename: string): void {
+	const label = safeLogFragment(filename);
+
+	elements.forEach((element, index) => {
+		if (!isMapping(element)) {
+			throw new ConfigInvalidException(`Schema file "${label}" has a ${kind} at index ${index} that is not a mapping.`);
+		}
+
+		const owner = element['collection'];
+
+		if (typeof owner !== 'string') {
+			throw new ConfigInvalidException(
+				`Schema file "${label}" has a ${kind} at index ${index} without a string "collection".`
+			);
+		}
+
+		if (owner !== collection) {
+			throw new ConfigInvalidException(
+				`Schema file "${label}" has a ${kind} declaring collection "${safeLogFragment(
+					owner
+				)}", but the file declares "${safeLogFragment(collection)}".`
+			);
+		}
+	});
+}
+
+function parseSchemaDocumentFile(record: Record<string, unknown>, filename: string): ConfigSchemaCollection {
+	const label = safeLogFragment(filename);
+	const collection = record['collection'];
+
+	if (typeof collection !== 'string' || collection === '') {
+		throw new ConfigInvalidException(`Schema file "${label}" is missing a "collection".`);
+	}
+
+	if (isInternalTable(collection)) {
+		throw new ConfigInvalidException(
+			`Schema file "${label}" names internal table "${safeLogFragment(
+				collection
+			)}", which is not operator-managed schema.`
+		);
+	}
+
+	const unknownField = Object.keys(record).find((key) => !DOCUMENT_FIELDS.has(key));
+
+	if (unknownField !== undefined) {
+		throw new ConfigInvalidException(`Schema file "${label}" has an unknown field "${safeLogFragment(unknownField)}".`);
+	}
+
+	const fields = record['fields'];
+	const relations = record['relations'];
+
+	if (!Array.isArray(fields)) {
+		throw new ConfigInvalidException(`Schema file "${label}" must declare "fields" as an array.`);
+	}
+
+	if (!Array.isArray(relations)) {
+		throw new ConfigInvalidException(`Schema file "${label}" must declare "relations" as an array.`);
+	}
+
+	assertOwnedElements(fields, 'field', collection, filename);
+	assertOwnedElements(relations, 'relation', collection, filename);
+
+	if (collection.startsWith('directus_') && (Object.hasOwn(record, 'meta') || Object.hasOwn(record, 'schema'))) {
+		throw new ConfigInvalidException(
+			`Schema file "${label}" for system collection "${safeLogFragment(
+				collection
+			)}" must declare only fields, not a collection definition.`
+		);
+	}
+
+	const document: ConfigSchemaCollection = {
+		collection,
+		fields: fields as ConfigSchemaCollection['fields'],
+		relations: relations as ConfigSchemaCollection['relations'],
+	};
+
+	if (Object.hasOwn(record, 'meta')) {
+		document.meta = record['meta'] as Exclude<ConfigSchemaCollection['meta'], undefined>;
+	}
+
+	if (Object.hasOwn(record, 'schema')) {
+		document.schema = record['schema'] as Exclude<ConfigSchemaCollection['schema'], undefined>;
+	}
+
+	return document;
+}
+
 const RECORD_FIELDS: ConfigFieldDescriptor[] = [
 	{
 		name: 'fields',
@@ -179,7 +276,7 @@ export const schemaDescriptor: ConfigResourceDescriptor<SchemaKindTypes> = {
 		documentIdentityOf: (document) => ({ collection: document.collection }),
 		filenameOf: (documentIdentity) => filenameStemFor(documentIdentity.collection),
 		ownsFilenameStem,
-		parseDocumentFile: () => unsupported('file loading'),
+		parseDocumentFile: parseSchemaDocumentFile,
 	},
 	documentIdentityFields: [COLLECTION_FIELD],
 	recordFields: RECORD_FIELDS,

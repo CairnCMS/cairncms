@@ -334,11 +334,7 @@ describe('schema descriptor registration', () => {
 		expect(descriptor.handler.mergeOutcome(slice, { op: 'create', count: 2 })).toBe(slice);
 	});
 
-	it('refuses every schema-specific operation', async () => {
-		expect(() => descriptor.layout.parseDocumentFile({}, 'articles.yaml')).toThrow(
-			'Schema file loading is not supported'
-		);
-
+	it('refuses every schema operation except loading', async () => {
 		expect(() => descriptor.projectDocuments([])).toThrow('Schema projection is not supported');
 		expect(() => descriptor.composeDocuments([], [])).toThrow('Schema projection is not supported');
 

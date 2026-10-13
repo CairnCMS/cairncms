@@ -151,6 +151,10 @@ export async function readConfigDirectory(configPath: string, options?: ConfigRe
 		schema,
 	};
 
+	// The schema kind decouples the authoritative collection from the filename, so two owned files could declare the
+	// same collection.
+	const seenSchemaCollections = new Set<string>();
+
 	for (const kind of listConfigKinds()) {
 		if (!manifest.resources.includes(kind)) continue;
 
@@ -166,7 +170,21 @@ export async function readConfigDirectory(configPath: string, options?: ConfigRe
 
 		for (const filename of filenames) {
 			const record = await readRecord(root, kind, filename);
-			sink[kind].push(descriptor.layout.parseDocumentFile(record, filename));
+			const parsed = descriptor.layout.parseDocumentFile(record, filename);
+
+			if (kind === 'schema') {
+				const { collection } = parsed as ConfigSchemaCollection;
+
+				if (seenSchemaCollections.has(collection)) {
+					throw new ConfigInvalidException(
+						`Config schema declares collection "${safeLogFragment(collection)}" in more than one file.`
+					);
+				}
+
+				seenSchemaCollections.add(collection);
+			}
+
+			sink[kind].push(parsed);
 		}
 	}
 
