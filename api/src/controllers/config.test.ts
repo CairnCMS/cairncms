@@ -116,6 +116,7 @@ const ADMIN = { admin: true, app: true, user: USER, role: ROLE, ip: '10.0.0.1' }
 
 const EMPTY_PLAN: ConfigPlan = {
 	managedResources: ['roles'],
+	schema: { create: [], update: [], delete: [] },
 	roles: { create: [], update: [], delete: [] },
 	permissions: { create: [], update: [], delete: [] },
 	folders: { create: [], update: [], delete: [] },
@@ -127,6 +128,7 @@ const EMPTY_PLAN: ConfigPlan = {
 
 const CREATE_PLAN: ConfigPlan = {
 	managedResources: ['roles'],
+	schema: { create: [], update: [], delete: [] },
 	roles: {
 		create: [
 			{
@@ -429,7 +431,7 @@ describe('POST /config/apply run record', () => {
 	it('emits no record and no run id for an unsupported manifest version', async () => {
 		const res = await request(makeApp(ADMIN))
 			.post('/config/apply')
-			.send({ ...WIRE_BODY, manifest: { version: 3, resources: ['roles'] } });
+			.send({ ...WIRE_BODY, manifest: { version: 4, resources: ['roles'] } });
 
 		expect(res.status).toBe(400);
 		expect(records()).toHaveLength(0);
@@ -625,7 +627,7 @@ describe('GET /config/snapshot manifest version', () => {
 	});
 
 	it('refuses an unsupported version without reading current state', async () => {
-		const res = await request(makeApp(ADMIN)).get('/config/snapshot?manifest_version=3');
+		const res = await request(makeApp(ADMIN)).get('/config/snapshot?manifest_version=4');
 
 		expect(res.status).toBe(400);
 		expect(res.body.errors[0].extensions.code).toBe('CONFIG_UNSUPPORTED_VERSION');
@@ -771,6 +773,7 @@ describe('POST /config/apply extension-settings forwarding', () => {
 		const plan: ConfigPlan = {
 			...EMPTY_PLAN,
 			managedResources: ['extension-settings'],
+			schema: { create: [], update: [], delete: [] },
 			'extension-settings': {
 				create: [
 					{

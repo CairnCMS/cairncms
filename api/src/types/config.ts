@@ -1,6 +1,9 @@
 import type { Accountability, PermissionsAction } from '@cairncms/types';
+import type { Table } from '@cairncms/schema';
 import type { ManifestVersion } from '../utils/config-contract.js';
 import type { ConfigKindTypeMap } from '../utils/config/registry.js';
+import type { CollectionMeta } from './collection.js';
+import type { SnapshotField, SnapshotRelation } from './snapshot.js';
 
 export const CONFIG_KINDS = [
 	'roles',
@@ -9,6 +12,7 @@ export const CONFIG_KINDS = [
 	'settings',
 	'extension-settings',
 	'translations',
+	'schema',
 ] as const;
 export type ConfigKind = (typeof CONFIG_KINDS)[number];
 
@@ -73,9 +77,34 @@ export interface ConfigTranslationsAuthored {
 	translations?: Record<string, string>;
 }
 
+/**
+ * Relations belong to the collection that owns their foreign key.
+ * System-collection documents omit the collection definition and contain only operator-added fields.
+ */
+export interface ConfigSchemaCollection {
+	collection: string;
+	meta?: CollectionMeta | null;
+	schema?: Table | null;
+	fields: SnapshotField[];
+	relations: SnapshotRelation[];
+}
+
+export type SchemaIdentity = { collection: string };
+
+export type SchemaValues = Record<string, unknown>;
+
+export type SchemaFieldChanges = Record<string, FieldChange<unknown>>;
+
+/** The release and database vendor a schema snapshot was taken from. */
+export interface ConfigManifestSchemaProvenance {
+	release: string;
+	vendor: string;
+}
+
 export interface ConfigManifest {
 	version: ManifestVersion;
 	resources: ConfigKind[];
+	schema?: ConfigManifestSchemaProvenance;
 }
 
 export interface CairnConfig {
@@ -86,6 +115,7 @@ export interface CairnConfig {
 	settings: ConfigSettings[];
 	'extension-settings': ConfigExtensionSettingsAuthored[];
 	translations: ConfigTranslationsAuthored[];
+	schema: ConfigSchemaCollection[];
 }
 
 export type RoleIdentity = { key: string };
@@ -231,6 +261,11 @@ export interface ConfigPlan {
 		create: Array<{ identity: TranslationsIdentity; value: string }>;
 		update: Array<{ identity: TranslationsIdentity; changes: TranslationsFieldChanges }>;
 		delete: Array<{ identity: TranslationsIdentity }>;
+	};
+	schema: {
+		create: never[];
+		update: never[];
+		delete: never[];
 	};
 	protections: ConfigProtection[];
 }

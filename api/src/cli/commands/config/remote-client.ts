@@ -306,6 +306,9 @@ function resultCardinality(kind: ConfigKind, result: RemoteWireResult): Record<'
 				delete: result.translations.deleted,
 			};
 
+		case 'schema':
+			return { create: 0, update: 0, delete: 0 };
+
 		default: {
 			const unhandled: never = kind;
 			throw new Error(`Unhandled config kind: ${JSON.stringify(unhandled)}`);
@@ -369,6 +372,7 @@ function validatedSnapshot(data: unknown, token: string): CairnConfig {
 		settings: managed.has('settings') ? snapshot.settings : [],
 		'extension-settings': managed.has('extension-settings') ? snapshot['extension-settings'] : [],
 		translations: managed.has('translations') ? snapshot.translations : [],
+		schema: managed.has('schema') ? snapshot.schema : [],
 	};
 }
 

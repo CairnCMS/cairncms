@@ -209,6 +209,7 @@ describe('config apply sources the confirmation token from the presentation prim
 
 		vi.mocked(computeConfigPlan).mockReturnValue({
 			managedResources: ['roles'],
+			schema: { create: [], update: [], delete: [] },
 			roles: {
 				create: [{ key: 'reviewer', name: 'Reviewer', admin_access: false, app_access: true }],
 				update: [],

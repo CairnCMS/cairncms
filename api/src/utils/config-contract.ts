@@ -1,6 +1,6 @@
 import type { PermissionsAction } from '@cairncms/types';
 
-export const SUPPORTED_MANIFEST_VERSIONS = [1, 2] as const;
+export const SUPPORTED_MANIFEST_VERSIONS = [1, 2, 3] as const;
 
 export type ManifestVersion = (typeof SUPPORTED_MANIFEST_VERSIONS)[number];
 

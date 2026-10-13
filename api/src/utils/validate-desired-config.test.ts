@@ -89,10 +89,73 @@ describe('validateConfigManifest', () => {
 		});
 	});
 
+	it('accepts manifest version 3', () => {
+		expect(validateConfigManifest({ version: 3, resources: ['roles'] }, 'test')).toEqual({
+			version: 3,
+			resources: ['roles'],
+		});
+	});
+
 	it('raises the unsupported-version code for a newer version', () => {
-		expect(() => validateConfigManifest({ version: 3, resources: [] }, 'test')).toThrow(
+		expect(() => validateConfigManifest({ version: 4, resources: [] }, 'test')).toThrow(
 			ConfigUnsupportedVersionException
 		);
+	});
+
+	it('accepts the schema kind only at manifest version 3', () => {
+		expect(() => validateConfigManifest({ version: 1, resources: ['schema'] }, 'test')).toThrow(
+			ConfigUnsupportedVersionException
+		);
+
+		expect(() => validateConfigManifest({ version: 2, resources: ['schema'] }, 'test')).toThrow(
+			ConfigUnsupportedVersionException
+		);
+
+		expect(validateConfigManifest({ version: 3, resources: ['schema'] }, 'test')).toEqual({
+			version: 3,
+			resources: ['schema'],
+		});
+	});
+
+	it('accepts a schema provenance block on a version 3 manifest managing schema', () => {
+		expect(
+			validateConfigManifest(
+				{ version: 3, resources: ['schema'], schema: { release: '1.7.0', vendor: 'postgres' } },
+				'test'
+			)
+		).toEqual({ version: 3, resources: ['schema'], schema: { release: '1.7.0', vendor: 'postgres' } });
+	});
+
+	it('rejects a schema provenance block below version 3', () => {
+		expect(() =>
+			validateConfigManifest({ version: 2, resources: [], schema: { release: '1.7.0', vendor: 'postgres' } }, 'test')
+		).toThrow(ConfigInvalidException);
+	});
+
+	it('rejects a schema provenance block when schema is not managed', () => {
+		expect(() =>
+			validateConfigManifest(
+				{ version: 3, resources: ['roles'], schema: { release: '1.7.0', vendor: 'postgres' } },
+				'test'
+			)
+		).toThrow(ConfigInvalidException);
+	});
+
+	it('rejects a malformed schema provenance block', () => {
+		expect(() =>
+			validateConfigManifest({ version: 3, resources: ['schema'], schema: { release: '1.7.0' } }, 'test')
+		).toThrow(ConfigInvalidException);
+
+		expect(() =>
+			validateConfigManifest(
+				{ version: 3, resources: ['schema'], schema: { release: '1.7.0', vendor: 'postgres', extra: true } },
+				'test'
+			)
+		).toThrow(ConfigInvalidException);
+
+		expect(() =>
+			validateConfigManifest({ version: 3, resources: ['schema'], schema: { release: 1, vendor: 'postgres' } }, 'test')
+		).toThrow(ConfigInvalidException);
 	});
 
 	it('raises the unsupported-version code when no version is declared', () => {

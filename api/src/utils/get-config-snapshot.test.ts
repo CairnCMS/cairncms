@@ -18,6 +18,7 @@ import { CONFIG_REGISTRY } from './config/registry.js';
 import { getConfigSnapshot, readCurrentConfig } from './get-config-snapshot.js';
 import * as getSchema from './get-schema.js';
 import { validateDesiredConfig } from './validate-desired-config.js';
+import { serializeToWire } from './config/wire.js';
 
 function roleRow(overrides: Record<string, any> = {}): Record<string, any> {
 	return {
@@ -116,6 +117,18 @@ describe('getConfigSnapshot', () => {
 			version: 2,
 			resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
 		});
+	});
+
+	it('excludes schema from the default snapshot without reaching its guarded read', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([]);
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+		const schemaRead = vi.spyOn(CONFIG_REGISTRY.schema.handler, 'readCurrent');
+
+		const config = await getConfigSnapshot({ database: db });
+
+		expect(config.manifest.resources).not.toContain('schema');
+		expect(config.schema).toEqual([]);
+		expect(schemaRead).not.toHaveBeenCalled();
 	});
 
 	it('builds ConfigRole entries with v1 allowlist only', async () => {
@@ -977,6 +990,7 @@ describe('readCurrentConfig', () => {
 			settings: [],
 			'extension-settings': [],
 			translations: [],
+			schema: [],
 		});
 
 		expect(currentRoleKeys.size).toBe(0);
@@ -1178,7 +1192,7 @@ describe('readCurrentConfig', () => {
 		expect(config.permissions.map((set) => set.role)).toEqual(['editor', 'public']);
 
 		expect(
-			validateDesiredConfig(config, {
+			validateDesiredConfig(serializeToWire(config, config.manifest.version), {
 				label: 'snapshot',
 				references: 'current-state',
 				currentRoleKeys,

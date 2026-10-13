@@ -257,6 +257,15 @@ describe('applyRemote', () => {
 		expect(outcome).toEqual({ plan: OK_PLAN, result: OK_RESULT });
 	});
 
+	it('tolerates an apply result that carries an extra schema slice', async () => {
+		const withSchema = { ...OK_RESULT, schema: { created: 0, updated: 0, deleted: 0 } };
+		const { remote } = session(() => ({ status: 200, data: { data: withSchema, meta: { plan: OK_PLAN } } }));
+
+		const outcome = await applyRemote(remote, BODY, { dryRun: false, destructive: true });
+
+		expect(outcome).toEqual({ plan: OK_PLAN, result: withSchema });
+	});
+
 	it('refuses a plan for a different manifest version than the one submitted', async () => {
 		const { remote } = session(() => ({ status: 200, data: { data: { ...OK_PLAN, manifestVersion: 2 } } }));
 
@@ -975,6 +984,7 @@ describe('fetchRemoteSnapshot', () => {
 			settings: [],
 			'extension-settings': [],
 			translations: [],
+			schema: [],
 		});
 
 		expect(snapshot).not.toBe(VALID_SNAPSHOT);
@@ -995,6 +1005,7 @@ describe('fetchRemoteSnapshot', () => {
 			settings: [],
 			'extension-settings': [],
 			translations: [],
+			schema: [],
 		});
 	});
 
@@ -1015,6 +1026,7 @@ describe('fetchRemoteSnapshot', () => {
 			settings: [],
 			'extension-settings': [],
 			translations: [],
+			schema: [],
 		});
 	});
 

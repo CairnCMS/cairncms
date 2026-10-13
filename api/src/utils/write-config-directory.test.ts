@@ -132,6 +132,26 @@ describe('writeConfigDirectory', () => {
 		expect(perms.permissions).toHaveLength(1);
 	});
 
+	it('refuses to write a schema-managed tree, leaving the destination unchanged', async () => {
+		await fs.writeFile(
+			path.join(tmpDir, 'cairncms-config.yaml'),
+			dumpYaml({ version: 2, resources: ['roles'], sentinel: 'original' })
+		);
+
+		await writeExisting('roles', 'editor.yaml', { key: 'editor', name: 'Existing' });
+
+		const before = await treeOf(tmpDir);
+
+		const config = makeConfig({
+			manifest: { version: 3, resources: ['schema'] },
+			schema: [{ collection: 'articles', fields: [], relations: [] }],
+		});
+
+		await expect(writeConfigDirectory(config, tmpDir)).rejects.toThrow('Schema projection is not supported');
+
+		expect(await treeOf(tmpDir)).toEqual(before);
+	});
+
 	it('refuses a role key that would escape the config directory and writes nothing', async () => {
 		const manifestPath = path.join(tmpDir, 'cairncms-config.yaml');
 		await fs.writeFile(manifestPath, dumpYaml({ version: 1, resources: [], sentinel: 'original' }));

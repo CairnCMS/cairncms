@@ -85,6 +85,7 @@ vi.mock('inquirer', () => ({ default: { prompt: vi.fn(async () => ({ proceed: fa
 
 const EMPTY_PLAN: ConfigPlan = {
 	managedResources: ['permissions'],
+	schema: { create: [], update: [], delete: [] },
 	roles: { create: [], update: [], delete: [] },
 	permissions: { create: [], update: [], delete: [] },
 	folders: { create: [], update: [], delete: [] },
@@ -98,6 +99,7 @@ const STATE_TOKEN: ConfigStateToken = { resources: ['roles'], digest: 'cli-diges
 
 const CREATE_PLAN: ConfigPlan = {
 	managedResources: ['roles'],
+	schema: { create: [], update: [], delete: [] },
 	roles: {
 		create: [
 			{
@@ -279,6 +281,7 @@ describe('configApply empty plan with unmanaged permissions', () => {
 describe('configApply protected plan', () => {
 	const PROTECTED_PLAN: ConfigPlan = {
 		managedResources: ['roles'],
+		schema: { create: [], update: [], delete: [] },
 		roles: { create: [], update: [], delete: ['administrator'] },
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
@@ -432,6 +435,7 @@ describe('configApply state token forwarding', () => {
 
 		const settingsPlan: ConfigPlan = {
 			managedResources: ['settings'],
+			schema: { create: [], update: [], delete: [] },
 			roles: { create: [], update: [], delete: [] },
 			permissions: { create: [], update: [], delete: [] },
 			folders: { create: [], update: [], delete: [] },
@@ -519,6 +523,7 @@ describe('configApply run record', () => {
 
 	const PROTECTED_PLAN: ConfigPlan = {
 		managedResources: ['roles'],
+		schema: { create: [], update: [], delete: [] },
 		roles: { create: [], update: [], delete: ['administrator'] },
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
@@ -1000,6 +1005,7 @@ describe('configApply extension-settings forwarding (CLI)', () => {
 		const plan: ConfigPlan = {
 			...EMPTY_PLAN,
 			managedResources: ['extension-settings'],
+			schema: { create: [], update: [], delete: [] },
 			'extension-settings': {
 				create: [
 					{
