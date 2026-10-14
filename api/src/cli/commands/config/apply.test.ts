@@ -1,6 +1,7 @@
 import { BaseException } from '@cairncms/exceptions';
 import inquirer from 'inquirer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { configFixture } from '../../../__utils__/config-fixtures.js';
 import getDatabase, { hasDatabaseConnection, isInstalled } from '../../../database/index.js';
 import { ConfigPostCommitFailedException, ConfigStateChangedException } from '../../../exceptions/index.js';
 import logger from '../../../logger.js';
@@ -107,7 +108,7 @@ const CREATE_PLAN: ConfigPlan = {
 				name: 'Editor',
 				admin_access: false,
 				app_access: true,
-				icon: null,
+				icon: 'supervised_user_circle',
 				enforce_tfa: false,
 				description: null,
 				ip_access: null,
@@ -136,7 +137,7 @@ const CREATE_SERIALIZED: SerializedConfigPlan = {
 				name: 'Editor',
 				admin_access: false,
 				app_access: true,
-				icon: null,
+				icon: 'supervised_user_circle',
 				enforce_tfa: false,
 				description: null,
 				ip_access: null,
@@ -195,17 +196,20 @@ describe('configApply empty plan warnings', () => {
 			throw new Error(`exit:${code}`);
 		});
 
-		const managed: CairnConfig = {
+		const managed: CairnConfig = configFixture({
 			manifest: { version: 1, resources: ['permissions'] },
-			roles: [],
 			permissions: [{ role: 'editor', permissions: [MISSING_COLLECTION_PERMISSION] }],
-			folders: [],
-			settings: [],
-		};
+		});
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(managed);
 
-		vi.mocked(readCurrentConfig).mockResolvedValue({ config: managed, currentRoleKeys: new Set<string>(['editor']) });
+		vi.mocked(readCurrentConfig).mockResolvedValue({
+			currentFolderKeys: new Set<string>(),
+			currentFolderParents: new Map<string, string | null>(),
+			stateToken: { resources: managed.manifest.resources, digest: 'cli-digest' },
+			config: managed,
+			currentRoleKeys: new Set<string>(['editor']),
+		});
 
 		vi.mocked(computeConfigPlan).mockReturnValue(EMPTY_PLAN);
 
@@ -251,17 +255,19 @@ describe('configApply empty plan with unmanaged permissions', () => {
 			throw new Error(`exit:${code}`);
 		});
 
-		const rolesOnly: CairnConfig = {
+		const rolesOnly: CairnConfig = configFixture({
 			manifest: { version: 1, resources: ['roles'] },
-			roles: [],
-			permissions: [],
-			folders: [],
-			settings: [],
-		};
+		});
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(rolesOnly);
 
-		vi.mocked(readCurrentConfig).mockResolvedValue({ config: rolesOnly, currentRoleKeys: new Set<string>() });
+		vi.mocked(readCurrentConfig).mockResolvedValue({
+			currentFolderKeys: new Set<string>(),
+			currentFolderParents: new Map<string, string | null>(),
+			stateToken: { resources: rolesOnly.manifest.resources, digest: 'cli-digest' },
+			config: rolesOnly,
+			currentRoleKeys: new Set<string>(),
+		});
 
 		vi.mocked(computeConfigPlan).mockReturnValue(EMPTY_PLAN);
 
@@ -311,16 +317,20 @@ describe('configApply protected plan', () => {
 			throw new Error(`exit:${code}`);
 		});
 
-		const rolesOnly: CairnConfig = {
+		const rolesOnly: CairnConfig = configFixture({
 			manifest: { version: 1, resources: ['roles'] },
-			roles: [],
-			permissions: [],
-			folders: [],
-			settings: [],
-		};
+		});
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(rolesOnly);
-		vi.mocked(readCurrentConfig).mockResolvedValue({ config: rolesOnly, currentRoleKeys: new Set<string>() });
+
+		vi.mocked(readCurrentConfig).mockResolvedValue({
+			currentFolderKeys: new Set<string>(),
+			currentFolderParents: new Map<string, string | null>(),
+			stateToken: { resources: rolesOnly.manifest.resources, digest: 'cli-digest' },
+			config: rolesOnly,
+			currentRoleKeys: new Set<string>(),
+		});
+
 		vi.mocked(computeConfigPlan).mockReturnValue(PROTECTED_PLAN);
 		vi.mocked(serializeConfigPlan).mockReturnValue(PROTECTED_SERIALIZED);
 	});
@@ -374,17 +384,14 @@ describe('configApply state token forwarding', () => {
 			throw new Error(`exit:${code}`);
 		});
 
-		const managed: CairnConfig = {
+		const managed: CairnConfig = configFixture({
 			manifest: { version: 1, resources: ['roles'] },
-			roles: [],
-			permissions: [],
-			folders: [],
-			settings: [],
-		};
+		});
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(managed);
 
 		vi.mocked(readCurrentConfig).mockResolvedValue({
+			currentFolderKeys: new Set<string>(),
 			config: managed,
 			currentRoleKeys: new Set<string>(),
 			currentFolderParents: new Map<string, string | null>(),
@@ -429,6 +436,7 @@ describe('configApply state token forwarding', () => {
 			settings: [{ storage_default_folder: 'uploads' }],
 			'extension-settings': [],
 			translations: [],
+			schema: [],
 		};
 
 		const settingsStateToken: ConfigStateToken = { resources: ['settings'], digest: 'settings-digest' };
@@ -504,13 +512,9 @@ describe('configApply state token forwarding', () => {
 });
 
 describe('configApply run record', () => {
-	const MANAGED: CairnConfig = {
+	const MANAGED: CairnConfig = configFixture({
 		manifest: { version: 1, resources: ['roles'] },
-		roles: [],
-		permissions: [],
-		folders: [],
-		settings: [],
-	};
+	});
 
 	const APPLY_RESULT = {
 		roles: { created: ['editor'], updated: [], deleted: [] },
@@ -549,9 +553,9 @@ describe('configApply run record', () => {
 
 	function records(): ConfigRunRecord[] {
 		return vi
-			.mocked(logger.info)
-			.mock.calls.filter((call) => (call[0] as ConfigRunRecord | undefined)?.event === CONFIG_RUN_EVENT)
-			.map((call) => call[0] as ConfigRunRecord);
+			.mocked<(record: ConfigRunRecord | string, message?: string) => void>(logger.info)
+			.mock.calls.map(([record]) => record)
+			.filter((record): record is ConfigRunRecord => typeof record !== 'string' && record?.event === CONFIG_RUN_EVENT);
 	}
 
 	function presentation(): unknown[] {
@@ -594,6 +598,7 @@ describe('configApply run record', () => {
 		vi.mocked(readConfigDirectory).mockResolvedValue(MANAGED);
 
 		vi.mocked(readCurrentConfig).mockResolvedValue({
+			currentFolderKeys: new Set<string>(),
 			config: MANAGED,
 			currentRoleKeys: new Set<string>(),
 			currentFolderParents: new Map<string, string | null>(),
@@ -824,17 +829,15 @@ describe('configApply placeholder-shaped desired values', () => {
 
 		vi.mocked(validateDesiredConfig).mockImplementation(actual.validateDesiredConfig);
 
-		const desired: CairnConfig = {
+		const desired: CairnConfig = configFixture({
 			manifest: { version: 1, resources: ['roles'] },
 			roles: [{ key: 'editor', name: '{{CAIRNCMS_CONFIG_OTHER}}', admin_access: false, app_access: true }],
-			permissions: [],
-			folders: [],
-			settings: [],
-		};
+		});
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(desired);
 
 		vi.mocked(readCurrentConfig).mockResolvedValue({
+			currentFolderKeys: new Set<string>(),
 			config: { ...desired, roles: [] },
 			currentRoleKeys: new Set<string>(),
 			currentFolderParents: new Map<string, string | null>(),
@@ -874,17 +877,15 @@ describe('configApply local wire projection', () => {
 			return actual.validateDesiredConfig(document, context);
 		});
 
-		const desired: CairnConfig = {
+		const desired: CairnConfig = configFixture({
 			manifest: { version: 1, resources: ['roles'] },
 			roles: [{ key: 'editor', name: 'Editor', admin_access: false, app_access: true }],
-			permissions: [],
-			folders: [],
-			settings: [],
-		};
+		});
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(desired);
 
 		vi.mocked(readCurrentConfig).mockResolvedValue({
+			currentFolderKeys: new Set<string>(),
 			config: { ...desired, roles: [] },
 			currentRoleKeys: new Set<string>(),
 			currentFolderParents: new Map<string, string | null>(),
@@ -941,11 +942,13 @@ describe('configApply forwards current folder state to validation', () => {
 			settings: [],
 			'extension-settings': [],
 			translations: [],
+			schema: [],
 		};
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(desired);
 
 		vi.mocked(readCurrentConfig).mockResolvedValue({
+			currentFolderKeys: new Set(['a', 'b']),
 			config: desired,
 			currentRoleKeys: new Set<string>(),
 			currentFolderParents: new Map<string, string | null>([
@@ -990,6 +993,7 @@ describe('configApply extension-settings forwarding (CLI)', () => {
 			settings: [],
 			'extension-settings': [{ subject: '@cairncms/extension-widget', global: { color: 'blue' }, collections: {} }],
 			translations: [],
+			schema: [],
 		};
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(desired);

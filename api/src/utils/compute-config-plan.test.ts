@@ -19,6 +19,7 @@ function makeConfig(overrides?: Partial<CairnConfig>): CairnConfig {
 		settings: [],
 		'extension-settings': [],
 		translations: [],
+		schema: [],
 		...overrides,
 	};
 }

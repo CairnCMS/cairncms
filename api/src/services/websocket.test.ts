@@ -67,7 +67,7 @@ describe('WebSocketService', () => {
 			expect.fail('expected broadcast to throw');
 		} catch (error) {
 			expect(error).toBeInstanceOf(ServiceUnavailableException);
-			expect((error as InstanceType<typeof ServiceUnavailableException>).extensions.service).toBe('websocket');
+			expect((error as InstanceType<typeof ServiceUnavailableException>).extensions['service']).toBe('websocket');
 		}
 
 		expect(() => service.clients()).toThrow(ServiceUnavailableException);

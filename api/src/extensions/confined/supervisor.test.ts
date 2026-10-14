@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { Duplex, PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { readOnlyItemsService } from '../../__utils__/confined-items-fixtures.js';
 import { REDACT_TEXT } from '../../constants.js';
 import { createConfinedHostBroker, type ConfinedLogEntry } from './broker.js';
 import type { CgroupMechanic, ChildCgroup, HardeningLayer, SandboxPosture } from './sandbox-hardening.js';
@@ -1018,10 +1019,10 @@ describe('ConfinedSupervisor', () => {
 						itemsService: (collection, acct) => {
 							itemsCalls.push({ collection, accountability: acct });
 
-							return {
+							return readOnlyItemsService({
 								readByQuery: async () => [{ id: 1, title: 'first' }],
 								readOne: async (key) => ({ id: key }),
-							};
+							});
 						},
 						limits: {
 							settingsValueBytes: SETTINGS_VALUE_BYTES,

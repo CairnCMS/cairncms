@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
+import { configFixture } from '../__utils__/config-fixtures.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
@@ -11,7 +12,8 @@ import { validateConfigRecord } from './validate-desired-config.js';
 import { CONFIG_FILENAME_STEM_MAX_LENGTH } from './config-contract.js';
 import { CONFIG_REGISTRY } from './config/registry.js';
 import logger from '../logger.js';
-import type { CairnConfig, ConfigSettings } from '../types/config.js';
+import type { DeepPartial } from '@cairncms/types';
+import type { CairnConfig, ConfigSchemaCollection, ConfigSettings } from '../types/config.js';
 
 vi.mock('../logger.js', () => ({
 	default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
@@ -29,14 +31,10 @@ afterEach(async () => {
 });
 
 function makeConfig(overrides?: Partial<CairnConfig>): CairnConfig {
-	return {
+	return configFixture({
 		manifest: { version: 1, resources: ['roles', 'permissions'] },
-		roles: [],
-		permissions: [],
-		folders: [],
-		settings: [],
 		...overrides,
-	};
+	});
 }
 
 async function readYaml(filePath: string): Promise<any> {
@@ -133,7 +131,7 @@ describe('writeConfigDirectory', () => {
 	});
 
 	it('writes a schema-managed tree that reads back with full fidelity and rewrites identically', async () => {
-		const articles = {
+		const articles: DeepPartial<ConfigSchemaCollection> = {
 			collection: 'articles',
 			meta: {
 				collection: 'articles',
@@ -169,7 +167,7 @@ describe('writeConfigDirectory', () => {
 
 		const config = makeConfig({
 			manifest: { version: 3, resources: ['schema'] },
-			schema: [articles, { collection: 'Mixed Case', fields: [], relations: [] }],
+			schema: [articles as ConfigSchemaCollection, { collection: 'Mixed Case', fields: [], relations: [] }],
 		});
 
 		await writeConfigDirectory(config, tmpDir);
@@ -1116,6 +1114,7 @@ describe('writeConfigDirectory extension-settings preservation source', () => {
 			settings: [],
 			'extension-settings': documents,
 			translations: [],
+			schema: [],
 		};
 	}
 

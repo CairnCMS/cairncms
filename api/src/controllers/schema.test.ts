@@ -1,6 +1,7 @@
 import express from 'express';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Accountability } from '@cairncms/types';
 import type { Snapshot } from '../types/index.js';
 
 const IMAGES_ID = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
@@ -66,12 +67,12 @@ import schemaController from './schema.js';
 
 const admin = { user: 'admin-id', role: 'admin-role-id', admin: true, app: true, ip: '127.0.0.1' };
 
-function makeApp(accountability: Record<string, unknown> = admin) {
+function makeApp(accountability: Accountability = admin) {
 	const app = express();
 
 	app.use(express.json());
 
-	app.use((req: Record<string, unknown>, _res: unknown, next: () => void) => {
+	app.use((req, _res, next) => {
 		req['accountability'] = accountability;
 		req['sanitizedQuery'] = {};
 		next();

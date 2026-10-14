@@ -306,7 +306,7 @@ describe('readCurrentConfig schema on a real SQLite database', () => {
 		const result = await readSchema();
 		const hero = result[0]!.fields.find((entry) => entry.field === 'hero')!;
 
-		expect((hero.meta as { options: { folder: string } }).options.folder).toBe('media');
+		expect(hero.meta?.options?.['folder']).toBe('media');
 	});
 
 	it('refuses a field whose folder reference cannot be resolved', async () => {

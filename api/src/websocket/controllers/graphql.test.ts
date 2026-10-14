@@ -474,7 +474,7 @@ describe('GraphQL protocol frame handling', () => {
 			authMode: 'public',
 			consumeIpRateLimit: async () => {
 				calls += 1;
-				return { allowed: calls <= 1 };
+				return calls <= 1 ? { allowed: true } : { allowed: false, retryAfterMs: 1000 };
 			},
 		});
 

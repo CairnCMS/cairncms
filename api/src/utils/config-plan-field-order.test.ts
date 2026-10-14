@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { configFixture } from '../__utils__/config-fixtures.js';
 import { renderConfigPlan } from '../cli/commands/config/render-config-plan.js';
 import type { CairnConfig, ConfigPlanChange, ConfigPlanEnrichment, ConfigRole } from '../types/config.js';
 import { computeConfigPlan } from './compute-config-plan.js';
@@ -11,13 +12,10 @@ const NO_ENRICHMENT: ConfigPlanEnrichment = {
 };
 
 function config(roles: ConfigRole[]): CairnConfig {
-	return {
+	return configFixture({
 		manifest: { version: 1, resources: ['roles', 'permissions'] },
 		roles,
-		permissions: [],
-		folders: [],
-		settings: [],
-	};
+	});
 }
 
 function role(overrides: Partial<ConfigRole>): ConfigRole {

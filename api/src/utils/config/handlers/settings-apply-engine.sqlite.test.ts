@@ -1,6 +1,7 @@
 import type { SchemaOverview } from '@cairncms/types';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { configFixture } from '../../../__utils__/config-fixtures.js';
 import emitter from '../../../emitter.js';
 import { ConfigApplyFailedException } from '../../../exceptions/config-apply-failed.js';
 import { ConfigFolderInUseException } from '../../../exceptions/config-folder-in-use.js';
@@ -95,7 +96,7 @@ const schema = {
 
 const securityContext: ConfigApplySecurityContext = {
 	mode: 'system',
-	reason: 'engine test apply',
+	reason: 'local config apply',
 	accountability: { user: null, role: null, admin: true, app: true, permissions: [], origin: 'config-cli' } as never,
 };
 
@@ -162,13 +163,10 @@ describe('settings through the real apply engine on SQLite', () => {
 	}
 
 	function desired(record: Partial<ConfigSettings>): CairnConfig {
-		return {
+		return configFixture({
 			manifest: { version: 2, resources: ['settings'] },
-			roles: [],
-			permissions: [],
-			folders: [],
 			settings: [record],
-		};
+		});
 	}
 
 	async function apply(target: CairnConfig): Promise<Awaited<ReturnType<typeof applyConfigPlan>>> {
@@ -274,8 +272,8 @@ describe('settings through the real apply engine on SQLite', () => {
 		spies.push(
 			vi
 				.spyOn(SettingsService.prototype, 'upsertSingleton')
-				.mockImplementation(async function (this: SettingsService, data: never, options: never) {
-					await realUpsert.call(this, data, options);
+				.mockImplementation(async function (this: SettingsService, ...args: Parameters<typeof realUpsert>) {
+					await realUpsert.apply(this, args);
 					throw new Error('write barrier');
 				})
 		);
@@ -294,13 +292,11 @@ describe('settings through the real apply engine on SQLite', () => {
 		}
 
 		function retargetDesired(): CairnConfig {
-			return {
+			return configFixture({
 				manifest: { version: 2, resources: ['folders', 'settings'] },
-				roles: [],
-				permissions: [],
 				folders: [{ key: 'new', name: 'new', parent: null }],
 				settings: [{ storage_default_folder: 'new' }],
-			};
+			});
 		}
 
 		async function folderId(key: string): Promise<string | undefined> {
@@ -370,13 +366,9 @@ describe('settings through the real apply engine on SQLite', () => {
 
 			const { config: current } = await readCurrentConfig({ database: db, schema, resources: ['folders'] });
 
-			const desired: CairnConfig = {
+			const desired: CairnConfig = configFixture({
 				manifest: { version: 2, resources: ['folders'] },
-				roles: [],
-				permissions: [],
-				folders: [],
-				settings: [],
-			};
+			});
 
 			const plan = computeConfigPlan(current, desired);
 			const enrichment = await enrichConfigPlan(plan, desired, { schema, database: db });
@@ -431,13 +423,10 @@ describe('settings through the real apply engine on SQLite', () => {
 				resources: ['settings'],
 			});
 
-			const desired: CairnConfig = {
+			const desired: CairnConfig = configFixture({
 				manifest: { version: 2, resources: ['settings'] },
-				roles: [],
-				permissions: [],
-				folders: [],
 				settings: [{ project_name: 'Renamed' }],
-			};
+			});
 
 			await applyConfigPlan(computeConfigPlan(current, desired), {
 				database: db,
@@ -461,13 +450,10 @@ describe('settings through the real apply engine on SQLite', () => {
 				resources: ['folders', 'settings'],
 			});
 
-			const desired: CairnConfig = {
+			const desired: CairnConfig = configFixture({
 				manifest: { version: 2, resources: ['folders', 'settings'] },
-				roles: [],
-				permissions: [],
-				folders: [],
 				settings: [{ project_name: 'Renamed' }],
-			};
+			});
 
 			const plan = computeConfigPlan(current, desired);
 			const enrichment = await enrichConfigPlan(plan, desired, { schema, database: db });
@@ -500,13 +486,10 @@ describe('settings through the real apply engine on SQLite', () => {
 				resources: ['folders', 'settings'],
 			});
 
-			const desired: CairnConfig = {
+			const desired: CairnConfig = configFixture({
 				manifest: { version: 2, resources: ['folders', 'settings'] },
-				roles: [],
-				permissions: [],
-				folders: [],
 				settings: [{ storage_default_folder: null }],
-			};
+			});
 
 			const plan = computeConfigPlan(current, desired);
 			const enrichment = await enrichConfigPlan(plan, desired, { schema, database: db });

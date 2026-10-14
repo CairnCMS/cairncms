@@ -965,6 +965,7 @@ describe('authored document types', () => {
 			settings: [],
 			'extension-settings': [{ subject: WIDGET, collections: { articles: { label: 'News' } } }],
 			translations: [],
+			schema: [],
 		};
 
 		const { records } = extensionSettingsDescriptor.projectDocuments(config['extension-settings']);
@@ -1090,8 +1091,8 @@ describe('postPlan', () => {
 	});
 
 	it('resolves a preserve marker to a no-op create and update while keeping a delete', () => {
-		const plan = {
-			create: [{ identity: identity(WIDGET, 'color'), value: { $secret: 'preserve' } as ExtensionSettingLeaf }],
+		const plan: Parameters<typeof handler.postPlan>[0] = {
+			create: [{ identity: identity(WIDGET, 'color'), value: { $secret: 'preserve' } }],
 			update: [
 				{ identity: identity(WIDGET, 'color'), changes: { value: { before: 'blue', after: { $secret: 'preserve' } } } },
 			],
@@ -1258,6 +1259,7 @@ describe('config directory round-trip', () => {
 			settings: [],
 			'extension-settings': documents,
 			translations: [],
+			schema: [],
 		};
 
 		await writeConfigDirectory(config, tmpDir);
@@ -1275,6 +1277,7 @@ describe('config directory round-trip', () => {
 			settings: [],
 			'extension-settings': [{ subject: WIDGET, global: {}, collections: { constructor: { label: 'Meta' } } }],
 			translations: [],
+			schema: [],
 		};
 
 		await writeConfigDirectory(config, tmpDir);

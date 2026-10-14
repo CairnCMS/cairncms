@@ -85,6 +85,7 @@ function desired(translations: ConfigTranslationsAuthored[]): CairnConfig {
 		settings: [],
 		'extension-settings': [],
 		translations,
+		schema: [],
 	};
 }
 
@@ -340,7 +341,7 @@ describe('translations through the real apply engine on SQLite', () => {
 			'{"language": "fr-FR", "translations": {"__proto__": 5}}'
 		) as ConfigTranslationsAuthored;
 
-		const document = desired([malformed]);
+		const document = serializeToWire(desired([malformed]), 2);
 
 		const authored = validateDesiredConfig(document, {
 			label: 'authored',
@@ -351,18 +352,24 @@ describe('translations through the real apply engine on SQLite', () => {
 		});
 
 		expect(authored.map((failure) => failure.code)).toContain('CONFIG_INVALID');
+		expect(authored.map((failure) => failure.message).join('\n')).toContain('must be a string value');
 
 		const portable = validateDesiredConfig(document, { label: 'snapshot', references: 'server-snapshot' });
 
 		expect(portable.map((failure) => failure.code)).toContain('CONFIG_INVALID');
+		expect(portable.map((failure) => failure.message).join('\n')).toContain('must be a string value');
 	});
 
 	it('rejects an unpaired surrogate key and value through the shared validator in both modes', () => {
-		const badKey = desired([
-			{ language: 'fr-FR', translations: JSON.parse('{"a\\ud800": "x"}') as Record<string, string> },
-		]);
+		const badKey = serializeToWire(
+			desired([{ language: 'fr-FR', translations: JSON.parse('{"a\\ud800": "x"}') as Record<string, string> }]),
+			2
+		);
 
-		const badValue = desired([{ language: 'fr-FR', translations: { k: `v${String.fromCharCode(0xdc00)}` } }]);
+		const badValue = serializeToWire(
+			desired([{ language: 'fr-FR', translations: { k: `v${String.fromCharCode(0xdc00)}` } }]),
+			2
+		);
 
 		for (const document of [badKey, badValue]) {
 			const authored = validateDesiredConfig(document, {
@@ -374,16 +381,19 @@ describe('translations through the real apply engine on SQLite', () => {
 			});
 
 			expect(authored.map((failure) => failure.code)).toContain('CONFIG_INVALID');
+			expect(authored.map((failure) => failure.message).join('\n')).toContain('not well-formed Unicode');
 
 			const portable = validateDesiredConfig(document, { label: 'snapshot', references: 'server-snapshot' });
 			expect(portable.map((failure) => failure.code)).toContain('CONFIG_INVALID');
+			expect(portable.map((failure) => failure.message).join('\n')).toContain('not well-formed Unicode');
 		}
 	});
 
 	it('accepts a 255 code point astral key through the shared validator in both modes', () => {
-		const document = desired([
-			{ language: 'fr-FR', translations: { [String.fromCodePoint(0x1f600).repeat(255)]: 'ok' } },
-		]);
+		const document = serializeToWire(
+			desired([{ language: 'fr-FR', translations: { [String.fromCodePoint(0x1f600).repeat(255)]: 'ok' } }]),
+			2
+		);
 
 		expect(
 			validateDesiredConfig(document, {
@@ -683,9 +693,12 @@ describe('translations through the real apply engine on SQLite', () => {
 	});
 
 	it('refuses an own __proto__ document field through the shared validator in both modes', () => {
-		const document = desired([
-			JSON.parse('{"language": "fr-FR", "translations": {}, "__proto__": {"x": "y"}}') as ConfigTranslationsAuthored,
-		]);
+		const document = serializeToWire(
+			desired([
+				JSON.parse('{"language": "fr-FR", "translations": {}, "__proto__": {"x": "y"}}') as ConfigTranslationsAuthored,
+			]),
+			2
+		);
 
 		const authored = validateDesiredConfig(document, {
 			label: 'proto',

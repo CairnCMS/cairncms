@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
+import { configFixture } from '../__utils__/config-fixtures.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
@@ -499,7 +500,7 @@ describe('readConfigDirectory', () => {
 		);
 
 		const desired = await readConfigDirectory(tmpDir);
-		const plan = computeConfigPlan({ manifest: desired.manifest, roles: [], permissions: [] }, desired);
+		const plan = computeConfigPlan(configFixture({ manifest: desired.manifest }), desired);
 
 		const planned = plan.permissions.create.map((entry) => entry.permission.permissions);
 

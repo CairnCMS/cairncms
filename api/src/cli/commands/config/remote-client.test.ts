@@ -22,6 +22,7 @@ const BODY: CairnConfig = {
 	settings: [],
 	'extension-settings': [],
 	translations: [],
+	schema: [],
 };
 
 const ROLES_ONLY_BODY: CairnConfig = {
@@ -32,6 +33,7 @@ const ROLES_ONLY_BODY: CairnConfig = {
 	settings: [],
 	'extension-settings': [],
 	translations: [],
+	schema: [],
 };
 
 const V2_FOLDERS_BODY: CairnConfig = {
@@ -42,6 +44,7 @@ const V2_FOLDERS_BODY: CairnConfig = {
 	settings: [],
 	'extension-settings': [],
 	translations: [],
+	schema: [],
 };
 
 const ROLE_CREATE = {

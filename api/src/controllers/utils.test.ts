@@ -1,3 +1,4 @@
+import type { Accountability } from '@cairncms/types';
 import argon2 from 'argon2';
 import express from 'express';
 import request from 'supertest';
@@ -39,12 +40,12 @@ const anonymous = { user: null, role: null, admin: false, app: false, ip: '127.0
 const nonAdmin = { user: 'user-id', role: 'role-id', admin: false, app: true, ip: '127.0.0.1' };
 const admin = { user: 'admin-id', role: 'admin-role-id', admin: true, app: true, ip: '127.0.0.1' };
 
-function makeApp(accountability: Record<string, unknown>) {
+function makeApp(accountability: Accountability) {
 	const app = express();
 
 	app.use(express.json());
 
-	app.use((req: Record<string, unknown>, _res: unknown, next: () => void) => {
+	app.use((req, _res, next) => {
 		req['accountability'] = accountability;
 		next();
 	});

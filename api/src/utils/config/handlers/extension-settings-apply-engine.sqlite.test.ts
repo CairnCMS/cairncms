@@ -47,7 +47,7 @@ const schema = { collections: { articles: {} }, relations: [] } as unknown as Sc
 
 const securityContext: ConfigApplySecurityContext = {
 	mode: 'system',
-	reason: 'engine test apply',
+	reason: 'local config apply',
 	accountability: { user: null, role: null, admin: true, app: true, permissions: [], origin: 'config-cli' } as never,
 };
 
@@ -60,6 +60,7 @@ function desired(global: Record<string, unknown>): CairnConfig {
 		settings: [],
 		'extension-settings': [{ subject: WIDGET, global: global as never, collections: {} }],
 		translations: [],
+		schema: [],
 	};
 }
 

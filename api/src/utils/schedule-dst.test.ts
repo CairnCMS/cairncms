@@ -34,7 +34,10 @@ async function firedBetween(id: string, rule: string, fromIso: string, toIso: st
 	vi.setSystemTime(new Date(fromIso));
 
 	const fired: string[] = [];
-	const job = scheduleSynchronizedJob(id, rule, (date) => fired.push(date.toISOString()));
+
+	const job = scheduleSynchronizedJob(id, rule, (date) => {
+		fired.push(date.toISOString());
+	});
 
 	await vi.advanceTimersByTimeAsync(new Date(toIso).getTime() - new Date(fromIso).getTime());
 	await job!.stop();

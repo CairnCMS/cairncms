@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { configFixture } from '../../__utils__/config-fixtures.js';
 import type { ConfigManifest } from '../../types/config.js';
 import { normalizeToInternal, serializeToWire } from './wire.js';
 
@@ -29,13 +30,11 @@ describe('normalizeToInternal', () => {
 });
 
 describe('serializeToWire', () => {
-	const complete = {
+	const complete = configFixture({
 		manifest: manifest(2, ['roles', 'folders']),
-		roles: [{ key: 'editor' }] as never,
-		permissions: [] as never,
-		folders: [{ key: 'docs' }] as never,
-		settings: [] as never,
-	};
+		roles: [{ key: 'editor', name: 'Editor', admin_access: false, app_access: true }],
+		folders: [{ key: 'docs', name: 'Docs' }],
+	});
 
 	it('drops out-of-version kinds for a version-1 wire body', () => {
 		const wire = serializeToWire({ ...complete, manifest: manifest(1, ['roles']) }, 1);

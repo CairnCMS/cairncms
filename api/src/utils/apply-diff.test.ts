@@ -563,6 +563,7 @@ describe('applyDiff failed-apply persistence classification', () => {
 			{
 				collection: 'articles',
 				field: 'author',
+				related_collection: 'authors',
 				diff: [
 					{
 						kind: 'D',

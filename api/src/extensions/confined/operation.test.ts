@@ -267,7 +267,7 @@ describe('runConfinedOperation brokered option secret', () => {
 		};
 
 		const invoke = async (
-			invocation: ConfinedInvocation,
+			_invocation: ConfinedInvocation,
 			dispatcher: (
 				call: { method: string; args: unknown },
 				context: ConfinedHostCallContext,

@@ -624,8 +624,9 @@ describe('Integration Tests', () => {
 
 						const spec = await service.oas.generate();
 
-						const targetSchema =
-							spec.paths[`/items/${collection.collection}`].post.requestBody.content['application/json'].schema;
+						const requestBody = spec.paths[`/items/${collection.collection}`]?.post?.requestBody;
+						if (!requestBody || !('content' in requestBody)) throw new Error('Expected an inline request body');
+						const targetSchema = requestBody.content['application/json']?.schema;
 
 						expect(targetSchema).toHaveProperty('oneOf');
 						expect(targetSchema).not.toHaveProperty('type');
