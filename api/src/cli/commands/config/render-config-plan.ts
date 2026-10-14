@@ -17,6 +17,10 @@ type ExtensionSettingIdentityView = { subject: string; scope: string; scope_key:
 
 type TranslationIdentityView = { language: string; key: string };
 
+type SchemaCollectionIdentityView = { collection: string };
+
+type SchemaFieldIdentityView = { collection: string; field: string };
+
 type FieldChangeView = { before: unknown; after: unknown };
 
 export type RenderableImpactEntry =
@@ -72,7 +76,32 @@ export type RenderableChange =
 			identity: TranslationIdentityView;
 			fields: Record<string, FieldChangeView | undefined>;
 	  }
-	| { kind: 'translations'; operation: 'delete'; identity: TranslationIdentityView };
+	| { kind: 'translations'; operation: 'delete'; identity: TranslationIdentityView }
+	| { kind: 'collections'; operation: 'create'; identity: SchemaCollectionIdentityView }
+	| {
+			kind: 'collections';
+			operation: 'update';
+			identity: SchemaCollectionIdentityView;
+			fields: Record<string, FieldChangeView | undefined>;
+	  }
+	| { kind: 'collections'; operation: 'delete'; identity: SchemaCollectionIdentityView }
+	| { kind: 'fields'; operation: 'create'; identity: SchemaFieldIdentityView }
+	| {
+			kind: 'fields';
+			operation: 'update';
+			identity: SchemaFieldIdentityView;
+			fields: Record<string, FieldChangeView | undefined>;
+	  }
+	| { kind: 'fields'; operation: 'delete'; identity: SchemaFieldIdentityView }
+	| { kind: 'relations'; operation: 'create'; identity: SchemaFieldIdentityView; relatedCollection: string | null }
+	| {
+			kind: 'relations';
+			operation: 'update';
+			identity: SchemaFieldIdentityView;
+			relatedCollection: string | null;
+			fields: Record<string, FieldChangeView | undefined>;
+	  }
+	| { kind: 'relations'; operation: 'delete'; identity: SchemaFieldIdentityView; relatedCollection: string | null };
 
 /** The structural view the renderers read, satisfied by the server's serialized plan and by the remote wire plan. */
 export type RenderablePlan = {
@@ -176,6 +205,12 @@ function kindHeading(kind: RenderableChange['kind']): string {
 			return 'Extension settings';
 		case 'translations':
 			return 'Translations';
+		case 'collections':
+			return 'Collections';
+		case 'fields':
+			return 'Fields';
+		case 'relations':
+			return 'Relations';
 
 		default: {
 			const unhandled: never = kind;
@@ -279,7 +314,7 @@ function renderChange(change: RenderableChange): string[] {
 		const lines = [`  - ${updateVerb()} ${identity}`];
 
 		for (const [field, fieldChange] of Object.entries(change.fields)) {
-			lines.push(`    - Set ${field} to ${renderValue(fieldChange!.after)}`);
+			lines.push(`    - Set ${replaceControlCharacters(field)} to ${renderValue(fieldChange!.after)}`);
 		}
 
 		return lines;
@@ -325,6 +360,23 @@ function renderIdentity(change: RenderableChange | RenderableDeletion): string {
 	if (change.kind === 'translations') {
 		const { language, key } = change.identity;
 		return `${replaceControlCharacters(language)} / ${replaceControlCharacters(key)}`;
+	}
+
+	if (change.kind === 'collections') {
+		return replaceControlCharacters(change.identity.collection);
+	}
+
+	if (change.kind === 'fields') {
+		return `${replaceControlCharacters(change.identity.collection)} / ${replaceControlCharacters(
+			change.identity.field
+		)}`;
+	}
+
+	if (change.kind === 'relations') {
+		const target = change.relatedCollection ? ` -> ${replaceControlCharacters(change.relatedCollection)}` : '';
+		return `${replaceControlCharacters(change.identity.collection)} / ${replaceControlCharacters(
+			change.identity.field
+		)}${target}`;
 	}
 
 	const unhandled: never = change;

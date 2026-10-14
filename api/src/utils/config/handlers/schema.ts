@@ -8,6 +8,7 @@ import type {
 	ConfigPlanChange,
 	ConfigPlanEnrichment,
 	ConfigSchemaCollection,
+	SchemaChangeEntry,
 	SchemaFieldChanges,
 	SchemaIdentity,
 	SchemaValues,
@@ -40,9 +41,9 @@ export interface SchemaKindTypes {
 	Values: SchemaValues;
 	Identity: SchemaIdentity;
 	DocumentIdentity: SchemaIdentity;
-	Create: ConfigSchemaCollection;
-	Update: { collection: string; changes: SchemaFieldChanges };
-	Delete: SchemaIdentity;
+	Create: SchemaChangeEntry;
+	Update: SchemaChangeEntry;
+	Delete: SchemaChangeEntry;
 	Changes: SchemaFieldChanges;
 	ReadDependencyState: undefined;
 	ApplyDependencyState: undefined;
@@ -273,8 +274,85 @@ function emptyEnrichment(): SchemaKindTypes['Enrichment'] {
 	return {};
 }
 
-function toChanges(_plan: KindPlan<SchemaKindTypes>, _enrichment: ConfigPlanEnrichment): ConfigPlanChange[] {
-	return [];
+function createValues(changes: SchemaFieldChanges): SchemaValues {
+	const values: SchemaValues = {};
+
+	for (const [key, change] of Object.entries(changes)) {
+		values[key] = change.after;
+	}
+
+	return values;
+}
+
+function toChanges(plan: KindPlan<SchemaKindTypes>, _enrichment: ConfigPlanEnrichment): ConfigPlanChange[] {
+	const changes: ConfigPlanChange[] = [];
+
+	for (const entry of plan.create) {
+		const values = createValues(entry.changes);
+
+		switch (entry.changeKind) {
+			case 'collections':
+				changes.push({ kind: 'collections', operation: 'create', identity: entry.identity, values });
+				break;
+			case 'fields':
+				changes.push({ kind: 'fields', operation: 'create', identity: entry.identity, values });
+				break;
+			case 'relations':
+				changes.push({
+					kind: 'relations',
+					operation: 'create',
+					identity: entry.identity,
+					relatedCollection: entry.relatedCollection,
+					values,
+				});
+
+				break;
+		}
+	}
+
+	for (const entry of plan.update) {
+		switch (entry.changeKind) {
+			case 'collections':
+				changes.push({ kind: 'collections', operation: 'update', identity: entry.identity, fields: entry.changes });
+				break;
+			case 'fields':
+				changes.push({ kind: 'fields', operation: 'update', identity: entry.identity, fields: entry.changes });
+				break;
+			case 'relations':
+				changes.push({
+					kind: 'relations',
+					operation: 'update',
+					identity: entry.identity,
+					relatedCollection: entry.relatedCollection,
+					fields: entry.changes,
+				});
+
+				break;
+		}
+	}
+
+	for (const entry of plan.delete) {
+		switch (entry.changeKind) {
+			case 'collections':
+				changes.push({ kind: 'collections', operation: 'delete', identity: entry.identity, impact: [] });
+				break;
+			case 'fields':
+				changes.push({ kind: 'fields', operation: 'delete', identity: entry.identity, impact: [] });
+				break;
+			case 'relations':
+				changes.push({
+					kind: 'relations',
+					operation: 'delete',
+					identity: entry.identity,
+					relatedCollection: entry.relatedCollection,
+					impact: [],
+				});
+
+				break;
+		}
+	}
+
+	return changes;
 }
 
 function emptyResult(): SchemaKindTypes['ResultSlice'] {
