@@ -63,6 +63,7 @@ async function getBaseline(api: Api): Promise<ConfigSnapshot> {
 	if (!baselineCache[api.directory]) {
 		const response = await request(api.url)
 			.get('/config/snapshot')
+			.query({ manifest_version: '2' })
 			.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
 
 		expect(response.statusCode).toBe(200);
@@ -93,6 +94,7 @@ async function resetToBaseline(api: Api): Promise<void> {
 async function adminSnapshot(api: Api): Promise<ConfigSnapshot> {
 	const response = await request(api.url)
 		.get('/config/snapshot')
+		.query({ manifest_version: '2' })
 		.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
 
 	expect(response.statusCode).toBe(200);
@@ -159,7 +161,7 @@ describe('Config-as-Code API', () => {
 				expect(response.body.data).toHaveProperty('manifest');
 				expect(response.body.data).toHaveProperty('roles');
 				expect(response.body.data).toHaveProperty('permissions');
-				expect(response.body.data.manifest.version).toBe(2);
+				expect(response.body.data.manifest.version).toBe(3);
 				expect(Array.isArray(response.body.data.roles)).toBe(true);
 				expect(Array.isArray(response.body.data.permissions)).toBe(true);
 			});
@@ -176,7 +178,7 @@ describe('Config-as-Code API', () => {
 				expect(response.headers['content-type']).toContain('text/yaml');
 
 				const parsed = loadYaml(response.text) as ConfigSnapshot;
-				expect(parsed.manifest.version).toBe(2);
+				expect(parsed.manifest.version).toBe(3);
 				expect(Array.isArray(parsed.roles)).toBe(true);
 				expect(Array.isArray(parsed.permissions)).toBe(true);
 			});
@@ -213,7 +215,7 @@ describe('Config-as-Code API', () => {
 			test('REST', async ({ api }) => {
 				const response = await request(api.url)
 					.get('/config/snapshot')
-					.query({ manifest_version: '3' })
+					.query({ manifest_version: '4' })
 					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
 
 				expect(response.statusCode).toBe(400);
@@ -266,6 +268,19 @@ describe('Config-as-Code API', () => {
 
 				expect(response.statusCode).toBe(200);
 				expect(response.body.data.manifest.version).toBe(2);
+			});
+		});
+
+		describe('accepts an explicit v3 manifest version', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.get('/config/snapshot')
+					.query({ manifest_version: '3' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.manifest.version).toBe(3);
+				expect(response.body.data.manifest.resources).toContain('schema');
 			});
 		});
 
@@ -780,7 +795,10 @@ describe('Config-as-Code API', () => {
 			}
 
 			async function snapshotAs(api: Api, token: string): Promise<ConfigSnapshot> {
-				const response = await request(api.url).get('/config/snapshot').set('Authorization', `Bearer ${token}`);
+				const response = await request(api.url)
+					.get('/config/snapshot')
+					.query({ manifest_version: '2' })
+					.set('Authorization', `Bearer ${token}`);
 
 				expect(response.statusCode).toBe(200);
 				return response.body.data as ConfigSnapshot;
@@ -1771,6 +1789,7 @@ describe('Config-as-Code managed scope', () => {
 	async function currentSnapshot(api: Api): Promise<ConfigSnapshot> {
 		const response = await request(api.url)
 			.get('/config/snapshot')
+			.query({ manifest_version: '2' })
 			.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
 
 		expect(response.statusCode).toBe(200);
@@ -2145,6 +2164,7 @@ describe('cairncms config snapshot preserves managed scope', () => {
 				'folders',
 				'permissions',
 				'roles',
+				'schema',
 				'settings',
 				'translations',
 			]);
@@ -2304,6 +2324,14 @@ describe('Config-as-Code deletion impact', () => {
 			const bookmark = 'Probe Bookmark';
 
 			const baseline = await getBaseline(api);
+
+			await fs.writeFile(
+				path.join(fixtureRoot, 'cairncms-config.yaml'),
+				dumpYaml({
+					version: 2,
+					resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+				})
+			);
 
 			const snapshot = await api.cli(['config', 'snapshot', fixtureRoot, '--yes']);
 
@@ -2521,6 +2549,7 @@ describe('Config-as-Code audit and events', () => {
 					settings: { updated: [] },
 					'extension-settings': { created: 0, updated: 0, deleted: 0 },
 					translations: { created: 0, updated: 0, deleted: 0 },
+					schema: { created: 0, updated: 0, deleted: 0 },
 				});
 
 				const role = await db('directus_roles').where({ key: roleKey }).first();
@@ -2555,6 +2584,7 @@ describe('Config-as-Code audit and events', () => {
 					settings: { updated: [] },
 					'extension-settings': { created: 0, updated: 0, deleted: 0 },
 					translations: { created: 0, updated: 0, deleted: 0 },
+					schema: { created: 0, updated: 0, deleted: 0 },
 				});
 
 				await expectAudited(db, 'directus_roles', role.id, 'update', admin.id, true);
@@ -2593,6 +2623,14 @@ describe('Config-as-Code audit and events', () => {
 			const rand = randomUUID().replace(/-/g, '').slice(0, 8);
 			const roleKey = `audit_probe_cli_${suffix}_${rand}`;
 			const ids = newIds();
+
+			await fs.writeFile(
+				path.join(fixtureRoot, 'cairncms-config.yaml'),
+				dumpYaml({
+					version: 2,
+					resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+				})
+			);
 
 			const snapshot = await api.cli(['config', 'snapshot', fixtureRoot, '--yes']);
 
@@ -2701,6 +2739,7 @@ describe('Config-as-Code audit and events', () => {
 					settings: { updated: [] },
 					'extension-settings': { created: 0, updated: 0, deleted: 0 },
 					translations: { created: 0, updated: 0, deleted: 0 },
+					schema: { created: 0, updated: 0, deleted: 0 },
 				});
 
 				const role = await db('directus_roles').where({ key: roleKey }).first();
@@ -2739,6 +2778,7 @@ describe('Config-as-Code audit and events', () => {
 					settings: { updated: [] },
 					'extension-settings': { created: 0, updated: 0, deleted: 0 },
 					translations: { created: 0, updated: 0, deleted: 0 },
+					schema: { created: 0, updated: 0, deleted: 0 },
 				});
 
 				expect(await db('directus_roles').where({ id: role.id }).first()).toBeUndefined();
@@ -2837,6 +2877,7 @@ describe('Config-as-Code audit and events', () => {
 					settings: { updated: [] },
 					'extension-settings': { created: 0, updated: 0, deleted: 0 },
 					translations: { created: 0, updated: 0, deleted: 0 },
+					schema: { created: 0, updated: 0, deleted: 0 },
 				});
 
 				const after = await adminSnapshot(api);
@@ -2978,6 +3019,14 @@ describe('cairncms config apply exit codes and machine output', () => {
 	}
 
 	async function snapshotBaseline(api: Api): Promise<void> {
+		await fs.writeFile(
+			path.join(fixtureRoot, 'cairncms-config.yaml'),
+			dumpYaml({
+				version: 2,
+				resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+			})
+		);
+
 		const result = await api.cli(['config', 'snapshot', fixtureRoot, '--yes']);
 
 		expect(result.status).toBe(0);

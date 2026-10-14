@@ -160,7 +160,17 @@ describe('configSnapshot against a remote server', () => {
 		}
 	);
 
-	it('refuses an incomplete snapshot into an empty destination and writes nothing', async () => {
+	it('refuses an incomplete snapshot and writes nothing', async () => {
+		await fs.writeFile(
+			path.join(tmpDir, 'cairncms-config.yaml'),
+			dumpYaml({
+				version: 2,
+				resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+			})
+		);
+
+		const before = await captureTree(tmpDir);
+
 		respondWith({
 			manifest: {
 				version: 2,
@@ -178,7 +188,7 @@ describe('configSnapshot against a remote server', () => {
 
 		expect(vi.mocked(process.exit).mock.calls).toEqual([[3]]);
 		expect(vi.mocked(logger.error)).toHaveBeenCalledWith(expect.stringContaining('enforce_tfa'));
-		expect(await fs.readdir(tmpDir)).toEqual([]);
+		expect(await captureTree(tmpDir)).toEqual(before);
 	});
 
 	it('writes a valid snapshot into the same destination', async () => {
@@ -196,6 +206,14 @@ describe('configSnapshot against a remote server', () => {
 	});
 
 	it('summarizes translation language files and extension-settings subjects by document count', async () => {
+		await fs.writeFile(
+			path.join(tmpDir, 'cairncms-config.yaml'),
+			dumpYaml({
+				version: 2,
+				resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+			})
+		);
+
 		respondWith({
 			manifest: {
 				version: 2,
@@ -290,27 +308,14 @@ describe('configSnapshot manifest version preservation', () => {
 		it.each([
 			['an existing v1 directory', 1, 1],
 			['an existing v2 directory', 2, 2],
-			['a fresh directory', undefined, 2],
 		])('sends and writes the expected version for %s', async (_label, seeded, expected) => {
-			if (seeded !== undefined) await seedManifest(seeded);
-
-			const respondedResources =
-				seeded === undefined
-					? ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations']
-					: ['roles', 'permissions'];
+			await seedManifest(seeded);
 
 			respondWith({
-				manifest: { version: expected, resources: respondedResources },
+				manifest: { version: expected, resources: ['roles', 'permissions'] },
 				roles: [],
 				permissions: [],
-				...(expected >= 2
-					? {
-							folders: [],
-							settings: seeded === undefined ? [SETTINGS_DOC] : [],
-							'extension-settings': [],
-							translations: [],
-					  }
-					: {}),
+				...(expected >= 2 ? { folders: [], settings: [], 'extension-settings': [], translations: [] } : {}),
 			});
 
 			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
@@ -325,6 +330,32 @@ describe('configSnapshot manifest version preservation', () => {
 
 			expect(await writtenVersion()).toBe(expected);
 		});
+
+		it('refuses a fresh remote v3 schema capture before writing', async () => {
+			respondWith({
+				manifest: {
+					version: 3,
+					resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations', 'schema'],
+				},
+				roles: [],
+				permissions: [],
+				folders: [],
+				settings: [SETTINGS_DOC],
+				'extension-settings': [],
+				translations: [],
+				schema: [],
+			});
+
+			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
+
+			expect(vi.mocked(process.exit).mock.calls).toEqual([[3]]);
+
+			expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
+				expect.stringContaining('Schema validation is not supported')
+			);
+
+			expect(await fs.readdir(tmpDir)).toEqual([]);
+		});
 	});
 
 	describe('local', () => {
@@ -337,13 +368,14 @@ describe('configSnapshot manifest version preservation', () => {
 				async (options) =>
 					({
 						config: {
-							manifest: { version: options.manifestVersion ?? 2, resources: [...options.resources] },
+							manifest: { version: options.manifestVersion ?? 3, resources: [...options.resources] },
 							roles: [],
 							permissions: [],
 							folders: [],
 							settings: options.resources.includes('settings') ? [SETTINGS_DOC] : [],
 							'extension-settings': [],
 							translations: [],
+							schema: [],
 						},
 						currentRoleKeys: new Set<string>(),
 						stateToken: { resources: [...options.resources], digest: 'digest' },
@@ -354,7 +386,7 @@ describe('configSnapshot manifest version preservation', () => {
 		it.each([
 			['an existing v1 directory', 1, 1],
 			['an existing v2 directory', 2, 2],
-			['a fresh directory', undefined, 2],
+			['a fresh directory', undefined, 3],
 		])('writes the expected version for %s', async (_label, seeded, expected) => {
 			if (seeded !== undefined) await seedManifest(seeded);
 
@@ -378,6 +410,7 @@ describe('configSnapshot manifest version preservation', () => {
 						{ language: 'fr-FR', translations: { greeting: 'Bonjour', farewell: 'Au revoir' } },
 						{ language: 'de-DE', translations: { greeting: 'Hallo' } },
 					],
+					schema: [],
 				},
 				currentRoleKeys: new Set<string>(),
 				stateToken: { resources: ['translations'], digest: 'digest' },
@@ -389,6 +422,40 @@ describe('configSnapshot manifest version preservation', () => {
 			expect(vi.mocked(logger.error)).not.toHaveBeenCalled();
 			expect((await fs.readdir(path.join(tmpDir, 'translations'))).sort()).toEqual(['de-DE.yaml', 'fr-FR.yaml']);
 			expect(vi.mocked(logger.info)).toHaveBeenCalledWith(expect.stringContaining('2 translation language file(s)'));
+		});
+
+		it('summarizes schema collections by count on a local snapshot', async () => {
+			await fs.writeFile(path.join(tmpDir, 'cairncms-config.yaml'), dumpYaml({ version: 3, resources: ['schema'] }));
+
+			vi.mocked(readCurrentConfig).mockResolvedValue({
+				config: {
+					manifest: { version: 3, resources: ['schema'], schema: { release: '1.0.0', vendor: 'sqlite' } },
+					roles: [],
+					permissions: [],
+					folders: [],
+					settings: [],
+					'extension-settings': [],
+					translations: [],
+					schema: [
+						{ collection: 'articles', fields: [], relations: [] },
+						{ collection: 'posts', fields: [], relations: [] },
+					],
+				},
+				currentRoleKeys: new Set<string>(),
+				stateToken: { resources: ['schema'], digest: 'digest' },
+			} as never);
+
+			await configSnapshot(tmpDir, { yes: true });
+
+			expect(vi.mocked(process.exit).mock.calls).toEqual([[0]]);
+			expect(vi.mocked(logger.error)).not.toHaveBeenCalled();
+
+			expect(vi.mocked(readCurrentConfig)).toHaveBeenCalledWith(
+				expect.objectContaining({ manifestVersion: 3, resources: ['schema'] })
+			);
+
+			expect((await fs.readdir(path.join(tmpDir, 'schema'))).sort()).toEqual(['articles.yaml', 'posts.yaml']);
+			expect(vi.mocked(logger.info)).toHaveBeenCalledWith(expect.stringContaining('2 schema collection(s)'));
 		});
 	});
 });
@@ -435,6 +502,7 @@ describe('configSnapshot placeholder preservation', () => {
 				settings: [],
 				'extension-settings': [],
 				translations: [],
+				schema: [],
 			},
 			currentRoleKeys: new Set<string>(),
 			currentFolderKeys: new Set<string>(),

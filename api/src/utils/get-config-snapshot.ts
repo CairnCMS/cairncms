@@ -1,11 +1,12 @@
 import type { SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
-import getDatabase from '../database/index.js';
+import getDatabase, { getDatabaseClient } from '../database/index.js';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import {
 	type CairnConfig,
 	type ConfigExtensionSettings,
 	type ConfigKind,
+	type ConfigManifest,
 	type ConfigFolder,
 	type ConfigPermissionSet,
 	type ConfigRole,
@@ -23,6 +24,7 @@ import type { RolesKindTypes } from './config/handlers/roles.js';
 import { getDescriptor, kindsForVersion } from './config/registry.js';
 import { resolveReadClosure } from './config/scope.js';
 import { getSchema } from './get-schema.js';
+import { version } from './package.js';
 import { safeLogFragment } from './safe-log-fragment.js';
 import { findPlaceholderSyntax, validateConfigRecord } from './validate-desired-config.js';
 
@@ -69,8 +71,13 @@ function assertEmittedDocument(kind: ConfigKind, subject: string, document: unkn
 
 export async function readCurrentConfig(options: CurrentConfigOptions): Promise<CurrentConfigRead> {
 	const database = options.database ?? getDatabase();
-	const manifest = { version: options.manifestVersion ?? LATEST_MANIFEST_VERSION, resources: [...options.resources] };
 	const managed = new Set<ConfigKind>(options.resources);
+
+	const manifest: ConfigManifest = {
+		version: options.manifestVersion ?? LATEST_MANIFEST_VERSION,
+		resources: [...options.resources],
+		...(managed.has('schema') && { schema: { release: version, vendor: getDatabaseClient(database) } }),
+	};
 
 	const closure = resolveReadClosure(manifest);
 

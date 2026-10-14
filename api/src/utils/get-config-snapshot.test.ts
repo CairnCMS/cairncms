@@ -5,6 +5,7 @@ import knex from 'knex';
 import { MockClient } from 'knex-mock-client';
 import type { MockedFunction } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as databaseIndex from '../database/index.js';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import logger from '../logger.js';
 import { FoldersService } from '../services/folders.js';
@@ -17,6 +18,7 @@ import { rolesDescriptor } from './config/handlers/roles.js';
 import { CONFIG_REGISTRY } from './config/registry.js';
 import { getConfigSnapshot, readCurrentConfig } from './get-config-snapshot.js';
 import * as getSchema from './get-schema.js';
+import { version } from './package.js';
 import { validateDesiredConfig } from './validate-desired-config.js';
 import { serializeToWire } from './config/wire.js';
 
@@ -100,6 +102,14 @@ describe('getConfigSnapshot', () => {
 		vi.spyOn(getSchema, 'getSchema').mockResolvedValue(testSchema);
 		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([]);
 		vi.spyOn(TranslationsService.prototype, 'readByQuery').mockResolvedValue([]);
+		vi.spyOn(databaseIndex, 'getDatabaseClient').mockReturnValue('sqlite');
+
+		vi.spyOn(CONFIG_REGISTRY.schema.handler, 'readCurrent').mockResolvedValue({
+			records: [],
+			documentIdentities: [],
+			dependencyState: undefined,
+		} as never);
+
 		mockSettings();
 	});
 
@@ -114,21 +124,21 @@ describe('getConfigSnapshot', () => {
 		const config = await getConfigSnapshot({ database: db });
 
 		expect(config.manifest).toEqual({
-			version: 2,
-			resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+			version: 3,
+			resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations', 'schema'],
+			schema: { release: version, vendor: 'sqlite' },
 		});
 	});
 
-	it('excludes schema from the default snapshot without reaching its guarded read', async () => {
+	it('includes schema in the default snapshot and reaches its read', async () => {
 		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([]);
 		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
-		const schemaRead = vi.spyOn(CONFIG_REGISTRY.schema.handler, 'readCurrent');
 
 		const config = await getConfigSnapshot({ database: db });
 
-		expect(config.manifest.resources).not.toContain('schema');
+		expect(config.manifest.resources).toContain('schema');
 		expect(config.schema).toEqual([]);
-		expect(schemaRead).not.toHaveBeenCalled();
+		expect(vi.mocked(CONFIG_REGISTRY.schema.handler.readCurrent)).toHaveBeenCalled();
 	});
 
 	it('builds ConfigRole entries with v1 allowlist only', async () => {
@@ -855,7 +865,7 @@ describe('readCurrentConfig', () => {
 
 		expect(v1.config.manifest.version).toBe(1);
 		expect(v2.config.manifest.version).toBe(2);
-		expect(fresh.config.manifest.version).toBe(2);
+		expect(fresh.config.manifest.version).toBe(3);
 	});
 
 	it('computes the same state token digest regardless of manifest version', async () => {
@@ -983,7 +993,7 @@ describe('readCurrentConfig', () => {
 		expect(getSchema.getSchema).not.toHaveBeenCalled();
 
 		expect(config).toEqual({
-			manifest: { version: 2, resources: [] },
+			manifest: { version: 3, resources: [] },
 			roles: [],
 			permissions: [],
 			folders: [],

@@ -192,6 +192,13 @@ describeForVendors(
 				const untrustedDir = path.join(workDir!, 'untrusted');
 				await fs.mkdir(untrustedDir, { recursive: true });
 
+				const untrustedManifest = dumpYaml({
+					version: 2,
+					resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+				});
+
+				await fs.writeFile(path.join(untrustedDir, 'cairncms-config.yaml'), untrustedManifest);
+
 				const untrusted = await runCli(
 					api,
 					['config', 'snapshot', untrustedDir, '--url', proxyUrl, '--yes'],
@@ -199,9 +206,20 @@ describeForVendors(
 				);
 
 				expect(untrusted.status).toBe(3);
-				await expect(fs.access(path.join(untrustedDir, 'cairncms-config.yaml'))).rejects.toThrow();
+				expect(`${untrusted.stdout ?? ''}${untrusted.stderr ?? ''}`).toContain('DEPTH_ZERO_SELF_SIGNED_CERT');
+				expect(await fs.readFile(path.join(untrustedDir, 'cairncms-config.yaml'), 'utf8')).toBe(untrustedManifest);
+				expect(await fs.readdir(untrustedDir)).toEqual(['cairncms-config.yaml']);
 
 				const configDir = path.join(workDir!, 'config');
+				await fs.mkdir(configDir, { recursive: true });
+
+				await fs.writeFile(
+					path.join(configDir, 'cairncms-config.yaml'),
+					dumpYaml({
+						version: 2,
+						resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+					})
+				);
 
 				const snapshot = await runCli(api, ['config', 'snapshot', configDir, '--url', proxyUrl, '--yes'], trustedEnv);
 				expect(snapshot.status).toBe(0);
