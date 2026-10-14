@@ -54,7 +54,7 @@ function fieldIn(snapshotData: any, collection: string, field: string): any {
 	return snapshotData.fields.find((entry: any) => entry.collection === collection && entry.field === field);
 }
 
-async function applySnapshot(api: Api, snapshotData: unknown): Promise<void> {
+async function applySnapshot(api: Api, snapshotData: Record<string, unknown>): Promise<void> {
 	const diff = await admin(api, request(api.url).post('/schema/diff')).send(snapshotData);
 	if (diff.statusCode === 204) return;
 	expect(diff.statusCode).toBe(200);
