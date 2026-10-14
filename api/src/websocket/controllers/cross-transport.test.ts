@@ -11,6 +11,7 @@ import { Admission } from '../admission.js';
 import { SubscriptionRegistry } from '../subscriptions.js';
 import { GraphQLController } from './graphql.js';
 import { WebSocketController } from './rest.js';
+import type { SocketControllerOptions } from './base.js';
 
 const SCHEMA = { collections: {}, relations: [] } as unknown as SchemaOverview;
 const TEST_SECRET = 'realtime-test-secret';
@@ -32,7 +33,7 @@ interface Harness {
 async function createHarness(admission: Admission, authMode: 'public' | 'strict'): Promise<Harness> {
 	const subscriptions = new SubscriptionRegistry();
 
-	const shared = {
+	const shared: Omit<SocketControllerOptions, 'transport' | 'path'> = {
 		authMode,
 		authTimeoutMs: 10_000,
 		maxPayload: 1_048_576,

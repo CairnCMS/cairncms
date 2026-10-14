@@ -40,7 +40,7 @@ function initWatcher(): ExtensionManager {
 
 describe('extension watcher initial path scoping', () => {
 	it('with SERVE_APP off, watches server-relevant entrypoints only', () => {
-		envState.SERVE_APP = false;
+		envState['SERVE_APP'] = false;
 		initWatcher();
 		const paths = watchSpy.mock.calls[0]![0] as string[];
 
@@ -52,7 +52,7 @@ describe('extension watcher initial path scoping', () => {
 	});
 
 	it('with SERVE_APP on, also watches app entrypoints', () => {
-		envState.SERVE_APP = true;
+		envState['SERVE_APP'] = true;
 		initWatcher();
 		const paths = watchSpy.mock.calls[0]![0] as string[];
 
@@ -77,7 +77,7 @@ describe('extension watcher dynamic path scoping', () => {
 	};
 
 	it('with SERVE_APP off, adds only the API entrypoint of a bundle', () => {
-		envState.SERVE_APP = false;
+		envState['SERVE_APP'] = false;
 		const manager = initWatcher();
 		(manager as any).updateWatchedExtensions([bundle], []);
 		const added = watcher.add.mock.calls[0]![0] as string[];
@@ -87,7 +87,7 @@ describe('extension watcher dynamic path scoping', () => {
 	});
 
 	it('with SERVE_APP on, adds both app and API entrypoints of a bundle', () => {
-		envState.SERVE_APP = true;
+		envState['SERVE_APP'] = true;
 		const manager = initWatcher();
 		(manager as any).updateWatchedExtensions([bundle], []);
 		const added = watcher.add.mock.calls[0]![0] as string[];
@@ -100,7 +100,7 @@ describe('extension watcher dynamic path scoping', () => {
 		// Package-style local extensions build into dist paths the nested-layout
 		// globs never match, so the watcher must track them per-extension or the
 		// dev loop loses rebuild reloads.
-		envState.SERVE_APP = false;
+		envState['SERVE_APP'] = false;
 		const manager = initWatcher();
 
 		(manager as any).updateWatchedExtensions(
@@ -122,7 +122,7 @@ describe('extension watcher dynamic path scoping', () => {
 	});
 
 	it('keeps app-type extensions unwatched while the app is not served', () => {
-		envState.SERVE_APP = false;
+		envState['SERVE_APP'] = false;
 		const manager = initWatcher();
 
 		(manager as any).updateWatchedExtensions(
@@ -138,7 +138,7 @@ describe('extension watcher dynamic path scoping', () => {
 		// An unwatch of a glob-covered path suppresses it in chokidar even though
 		// the glob still matches, so a nested local that was removed and re-added
 		// would permanently lose its reloads if it were managed per-extension.
-		envState.SERVE_APP = false;
+		envState['SERVE_APP'] = false;
 		const manager = initWatcher();
 
 		const nested = {
@@ -156,7 +156,7 @@ describe('extension watcher dynamic path scoping', () => {
 	});
 
 	it('unwatches a removed package-style local extension', () => {
-		envState.SERVE_APP = false;
+		envState['SERVE_APP'] = false;
 		const manager = initWatcher();
 
 		const packaged = {

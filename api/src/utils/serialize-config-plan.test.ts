@@ -58,7 +58,12 @@ function zeroImpact(): RoleDeletionImpactEntry[] {
 function labelOf(change: ConfigPlanChange): string {
 	if (change.kind === 'roles') return `roles/${change.operation}/${change.identity.key}`;
 	if (change.kind === 'folders') return `folders/${change.operation}/${change.identity.key}`;
-	return `permissions/${change.operation}/${change.identity.role}:${change.identity.collection}:${change.identity.action}`;
+
+	if (change.kind === 'permissions') {
+		return `permissions/${change.operation}/${change.identity.role}:${change.identity.collection}:${change.identity.action}`;
+	}
+
+	throw new Error(`Unexpected config kind: ${change.kind}`);
 }
 
 describe('serializeConfigPlan', () => {

@@ -1,5 +1,5 @@
 import type { SchemaOverview } from '@cairncms/types';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { ForbiddenException } from '../../exceptions/index.js';
 import type { CommandContext, SocketClient } from '../controllers/base.js';
 import { WebSocketException } from '../exceptions.js';
@@ -46,11 +46,11 @@ const DENIED_FEED_CONTEXT: CommandContext = {
 };
 
 let registry: InstanceType<typeof SubscriptionRegistry>;
-let close: ReturnType<typeof vi.fn>;
+let close: Mock<Parameters<typeof handleSubscription>[5]>;
 
 beforeEach(() => {
 	registry = new SubscriptionRegistry();
-	close = vi.fn();
+	close = vi.fn<Parameters<typeof handleSubscription>[5]>();
 	resolveTarget.mockReset();
 	resolveTarget.mockReturnValue({} as never);
 	initialPayload.mockReset();
@@ -62,7 +62,7 @@ function makeClient(): SocketClient {
 }
 
 function makeSend(accepted = true) {
-	return vi.fn(() => ({ accepted }));
+	return vi.fn<Parameters<typeof handleSubscription>[3]>(() => ({ accepted }));
 }
 
 function run(client: SocketClient, message: Record<string, unknown>, send: ReturnType<typeof makeSend>) {
@@ -87,7 +87,7 @@ describe('handleSubscription subscribe', () => {
 
 		expect(registry.getActiveByCollection('articles', 999)).toHaveLength(1);
 
-		expect(JSON.parse(send.mock.calls[0]![0] as string)).toMatchObject({
+		expect(JSON.parse(send.mock.calls[0]![0])).toMatchObject({
 			type: 'subscription',
 			uid: '1',
 			event: 'init',
@@ -100,7 +100,7 @@ describe('handleSubscription subscribe', () => {
 		await run(makeClient(), { type: 'subscribe', collection: 'articles', event: 'update', item: 0 }, send);
 
 		expect(initialPayload).not.toHaveBeenCalled();
-		expect(JSON.parse(send.mock.calls[0]![0] as string)).toMatchObject({ type: 'subscription', event: 'init' });
+		expect(JSON.parse(send.mock.calls[0]![0])).toMatchObject({ type: 'subscription', event: 'init' });
 
 		const [reservation] = registry.getActiveByCollection('articles', 999);
 		expect(reservation!.subscription.item).toBe('0');
@@ -118,7 +118,7 @@ describe('handleSubscription subscribe', () => {
 		const send = makeSend();
 		await run(makeClient(), { type: 'subscribe', collection: 'articles', uid: 0 }, send);
 
-		expect(JSON.parse(send.mock.calls[0]![0] as string).uid).toBe('0');
+		expect(JSON.parse(send.mock.calls[0]![0]).uid).toBe('0');
 		expect(registry.getActiveByCollection('articles', 999)).toHaveLength(1);
 	});
 
@@ -217,7 +217,7 @@ describe('handleSubscription delete feed', () => {
 		expect(registry.getActiveByCollection('articles', 999)).toHaveLength(1);
 		expect(initialPayload).not.toHaveBeenCalled();
 
-		expect(JSON.parse(send.mock.calls[0]![0] as string)).toMatchObject({
+		expect(JSON.parse(send.mock.calls[0]![0])).toMatchObject({
 			type: 'subscription',
 			event: 'init',
 			uid: '3',
@@ -277,7 +277,7 @@ describe('handleSubscription unsubscribe', () => {
 
 		expect(registry.getActiveByCollection('articles', 999)).toHaveLength(0);
 
-		expect(JSON.parse(send.mock.calls[0]![0] as string)).toMatchObject({
+		expect(JSON.parse(send.mock.calls[0]![0])).toMatchObject({
 			type: 'subscription',
 			event: 'unsubscribe',
 			uid: '1',

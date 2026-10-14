@@ -277,7 +277,7 @@ describe('runConfinedEntry', () => {
 	it('configures the engine-hardening options and never sets dangerousSync', () => {
 		expect(hardenedSandboxOptions.allowFetch).toBe(false);
 		expect(hardenedSandboxOptions.allowFs).toBe(false);
-		expect(typeof hardenedSandboxOptions.console.log).toBe('function');
+		expect(typeof hardenedSandboxOptions.console['log']).toBe('function');
 		expect(hardenedSandboxOptions.maxTimeoutCount).toBe(MAX_GUEST_TIMERS);
 		expect(hardenedSandboxOptions.maxIntervalCount).toBe(MAX_GUEST_TIMERS);
 		expect(MAX_GUEST_TIMERS).toBeGreaterThan(0);
@@ -652,9 +652,12 @@ const BUNDLE_ARTIFACT = `var CairnBundle = (() => ({ default: {
 } }))();`;
 
 function bundleInvocation(key: string, overrides: Partial<ConfinedInvocation> = {}): ConfinedInvocation {
+	const contributionId = overrides.contributionId ?? key.split(':')[1];
+	if (contributionId === undefined) throw new Error(`Missing contribution in bundle entry: ${key}`);
+
 	return invocation(BUNDLE_ARTIFACT, {
 		bundleEntryKey: key,
-		contributionId: key.split(':')[1],
+		contributionId,
 		...overrides,
 	});
 }

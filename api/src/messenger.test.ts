@@ -171,7 +171,10 @@ describe('construction', () => {
 		const messenger = getMessenger();
 		const received: Array<Record<string, any>> = [];
 
-		messenger.subscribe('flows', (payload) => received.push(payload));
+		messenger.subscribe('flows', (payload) => {
+			received.push(payload);
+		});
+
 		subClient().emit('message', 'cairncms:flows', JSON.stringify({ type: 'reload' }));
 
 		expect(received).toEqual([{ type: 'reload' }]);
@@ -347,7 +350,10 @@ describe('multiple callbacks per channel', () => {
 		});
 
 		messenger.subscribe('flows', () => Promise.reject(new Error(`async failure exposing ${secret}`)));
-		messenger.subscribe('flows', (payload) => received.push(payload));
+
+		messenger.subscribe('flows', (payload) => {
+			received.push(payload);
+		});
 
 		hoisted.logger.warn.mockClear();
 		subClient().emit('message', 'cairncms:flows', JSON.stringify({ type: 'reload' }));
@@ -967,7 +973,10 @@ describe('memory messenger', () => {
 
 		messenger.subscribe('flows', kept);
 		messenger.subscribe('flows', removed);
-		messenger.subscribe('flows', (payload) => received.push(payload));
+
+		messenger.subscribe('flows', (payload) => {
+			received.push(payload);
+		});
 
 		hoisted.logger.warn.mockClear();
 		messenger.publish('flows', { type: 'reload' });

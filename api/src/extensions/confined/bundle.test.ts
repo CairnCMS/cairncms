@@ -123,7 +123,7 @@ describe('confined runtime bundle', () => {
 		];
 
 		const computed = [...bundleText.matchAll(/\b(?:import|require)\(\s*(?!["'])([\s\S]{0,50})/g)]
-			.map((match) => match[1])
+			.map((match) => match[1]!)
 			.filter((arg) => !arg.startsWith('import.meta'));
 
 		const unaccepted = computed.filter((arg) => !accepted.some((entry) => entry.pattern.test(arg)));
