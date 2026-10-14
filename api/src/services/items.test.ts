@@ -1597,7 +1597,8 @@ describe('Integration Tests', () => {
 				schema: schemas[schema].schema,
 			});
 
-			const itemsServiceCacheClearSpy = vi.spyOn(itemsService.cache, 'clear' as never).mockResolvedValue(() => vi.fn());
+			if (itemsService.cache === null) throw new Error('Expected an enabled items cache');
+			const itemsServiceCacheClearSpy = vi.spyOn(itemsService.cache, 'clear').mockResolvedValue(undefined);
 			itemsServiceCacheClearSpy.mockClear();
 
 			await itemsService.updateBatch(items);
@@ -2030,7 +2031,7 @@ describe('Integration Tests', () => {
 			expect(tracker.history.delete).toHaveLength(0);
 		});
 
-		const referencedErrors: [string, () => Error][] = [
+		const referencedErrors: [ReturnType<typeof getDatabaseClient>, () => Error][] = [
 			[
 				'postgres',
 				() =>

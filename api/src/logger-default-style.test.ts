@@ -1,4 +1,5 @@
 import http from 'node:http';
+import type { Request, Response } from 'express';
 import { Socket } from 'node:net';
 import { Writable } from 'node:stream';
 import { pino } from 'pino';
@@ -28,7 +29,9 @@ function captureLog(options: { url?: string; applyHeaders?: (res: http.ServerRes
 	});
 
 	// The pretty-print transport is dropped so the log lands on the capture stream instead.
-	const middleware = createExpressLogger(pino({ ...httpLoggerOptions, transport: undefined }, stream));
+	const optionsWithoutTransport = { ...httpLoggerOptions };
+	delete optionsWithoutTransport.transport;
+	const middleware = createExpressLogger(pino(optionsWithoutTransport, stream));
 
 	// An unconnected socket drives pino-http without binding a network port.
 	const socket = new Socket();
@@ -38,7 +41,7 @@ function captureLog(options: { url?: string; applyHeaders?: (res: http.ServerRes
 	req.headers = {};
 
 	const res = new http.ServerResponse(req);
-	middleware(req, res, () => undefined);
+	middleware(req as Request, res as Response, () => undefined);
 	applyHeaders(res);
 	res.statusCode = 200;
 	res.emit('finish');

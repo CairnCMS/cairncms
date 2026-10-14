@@ -27,5 +27,8 @@ jobs:
       - name: Prepare
         uses: ./.github/actions/prepare
 
+      - name: Check API test types
+        run: pnpm --filter @cairncms/api typecheck:tests
+
       - name: Run Tests
         run: pnpm test

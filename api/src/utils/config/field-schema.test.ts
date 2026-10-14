@@ -2,7 +2,6 @@ import { PUBLIC_ROLE_KEY } from '@cairncms/constants';
 import { normalizeRoleKey } from '@cairncms/utils';
 import Joi from 'joi';
 import { describe, expect, it } from 'vitest';
-import type { ConfigKind } from '../../types/config.js';
 import {
 	CONFIG_FILENAME_STEM_MAX_LENGTH,
 	PERMISSION_COLLECTION_MAX_LENGTH,
@@ -97,7 +96,7 @@ function permissionSet(overrides: Record<string, unknown> = {}): Record<string, 
 	return { role: 'editor', permissions: [permission()], ...overrides };
 }
 
-type Case = { name: string; kind: ConfigKind; input: unknown; valid: boolean };
+type Case = { name: string; kind: keyof typeof expectedSchemas; input: unknown; valid: boolean };
 
 const CASES: Case[] = [
 	{

@@ -66,9 +66,7 @@ describe('FlowManager schedule trigger wiring', () => {
 		expect(manager.triggerHandlers).toHaveLength(1);
 		expect(manager.triggerHandlers[0].id).toBe('flow-valid');
 
-		const invalidCall = logSpy.error.mock.calls.find(
-			([fields]: [{ scheduleId?: string }]) => fields?.scheduleId === 'flow-invalid'
-		);
+		const invalidCall = logSpy.error.mock.calls.find(([fields]) => fields?.scheduleId === 'flow-invalid');
 
 		expect(invalidCall).toBeDefined();
 		expect(invalidCall![0]).toEqual({ scheduleId: 'flow-invalid' });

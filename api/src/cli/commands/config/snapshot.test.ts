@@ -321,7 +321,9 @@ describe('configSnapshot manifest version preservation', () => {
 				new URL((config as { url: string }).url).pathname.endsWith('/config/snapshot')
 			);
 
-			expect((snapshotCall![0] as { params: Record<string, string> }).params.manifest_version).toBe(String(expected));
+			expect((snapshotCall![0] as { params: Record<string, string> }).params['manifest_version']).toBe(
+				String(expected)
+			);
 
 			expect(await writtenVersion()).toBe(expected);
 		});

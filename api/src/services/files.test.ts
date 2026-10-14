@@ -1,9 +1,10 @@
+import type { Driver } from '@cairncms/storage';
 import type { Accountability, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';
 import { createTracker, MockClient, Tracker } from 'knex-mock-client';
 import { Readable } from 'node:stream';
-import type { MockedFunction, SpyInstance } from 'vitest';
+import type { MockedFunction, MockInstance } from 'vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import env from '../env.js';
 import {
@@ -17,10 +18,10 @@ import { FilesService, ItemsService } from './index.js';
 const ATTACKER_FILENAME_DISK = '../victim-deadbeef.bin';
 const ATTACKER_UPLOADED_BY = '00000000-dead-dead-dead-000000000000';
 
-const storageWrite = vi.fn(async () => undefined);
+const storageWrite = vi.fn<Driver['write']>(async () => undefined);
 const storageStat = vi.fn(async () => ({ size: 42 }));
 
-const storageList = vi.fn(() => ({
+const storageList = vi.fn<Driver['list']>(() => ({
 	async *[Symbol.asyncIterator]() {
 		// no entries
 	},
@@ -86,7 +87,7 @@ describe('Integration Tests', () => {
 	describe('Services / Files', () => {
 		describe('createOne', () => {
 			let service: FilesService;
-			let superCreateOne: SpyInstance;
+			let superCreateOne: MockInstance<ItemsService['createOne']>;
 
 			beforeEach(() => {
 				service = new FilesService({
@@ -137,14 +138,14 @@ describe('Integration Tests', () => {
 				const [payload] = superCreateOne.mock.calls[0]!;
 				expect(payload).not.toHaveProperty('filename_disk');
 				expect(payload).not.toHaveProperty('uploaded_by');
-				expect(payload.title).toBe('Test File');
-				expect(payload.type).toBe('application/octet-stream');
+				expect(payload['title']).toBe('Test File');
+				expect(payload['type']).toBe('application/octet-stream');
 			});
 		});
 
 		describe('createMany', () => {
 			let service: FilesService;
-			let superCreateMany: SpyInstance;
+			let superCreateMany: MockInstance<ItemsService['createMany']>;
 
 			beforeEach(() => {
 				service = new FilesService({
@@ -180,14 +181,14 @@ describe('Integration Tests', () => {
 					expect(payload).not.toHaveProperty('uploaded_by');
 				}
 
-				expect(payloads[0].title).toBe('File A');
-				expect(payloads[1].title).toBe('File B');
+				expect(payloads[0]!['title']).toBe('File A');
+				expect(payloads[1]!['title']).toBe('File B');
 			});
 		});
 
 		describe('updateOne', () => {
 			let service: FilesService;
-			let superUpdateOne: SpyInstance;
+			let superUpdateOne: MockInstance<ItemsService['updateOne']>;
 
 			beforeEach(() => {
 				service = new FilesService({
@@ -210,13 +211,13 @@ describe('Integration Tests', () => {
 				expect(key).toBe(1);
 				expect(payload).not.toHaveProperty('filename_disk');
 				expect(payload).not.toHaveProperty('uploaded_by');
-				expect(payload.title).toBe('Renamed');
+				expect(payload['title']).toBe('Renamed');
 			});
 		});
 
 		describe('updateMany', () => {
 			let service: FilesService;
-			let superUpdateMany: SpyInstance;
+			let superUpdateMany: MockInstance<ItemsService['updateMany']>;
 
 			beforeEach(() => {
 				service = new FilesService({
@@ -239,13 +240,13 @@ describe('Integration Tests', () => {
 				expect(keys).toEqual([1, 2]);
 				expect(payload).not.toHaveProperty('filename_disk');
 				expect(payload).not.toHaveProperty('uploaded_by');
-				expect(payload.title).toBe('Renamed');
+				expect(payload['title']).toBe('Renamed');
 			});
 		});
 
 		describe('updateBatch', () => {
 			let service: FilesService;
-			let superUpdateBatch: SpyInstance;
+			let superUpdateBatch: MockInstance<ItemsService['updateBatch']>;
 
 			beforeEach(() => {
 				service = new FilesService({
@@ -281,16 +282,16 @@ describe('Integration Tests', () => {
 					expect(payload).not.toHaveProperty('uploaded_by');
 				}
 
-				expect(payloads[0].id).toBe(1);
-				expect(payloads[0].title).toBe('File A renamed');
-				expect(payloads[1].id).toBe(2);
-				expect(payloads[1].title).toBe('File B renamed');
+				expect(payloads[0]!['id']).toBe(1);
+				expect(payloads[0]!['title']).toBe('File A renamed');
+				expect(payloads[1]!['id']).toBe(2);
+				expect(payloads[1]!['title']).toBe('File B renamed');
 			});
 		});
 
 		describe('uploadOne — regression guard for strip overrides', () => {
 			let service: FilesService;
-			let superUpdateOne: SpyInstance;
+			let superUpdateOne: MockInstance<ItemsService['updateOne']>;
 
 			beforeEach(() => {
 				service = new FilesService({
@@ -544,7 +545,11 @@ describe('Integration Tests', () => {
 
 				const data = new Readable({
 					read() {
-						if (sent >= byteCount) return this.push(null);
+						if (sent >= byteCount) {
+							this.push(null);
+							return;
+						}
+
 						const n = Math.min(4, byteCount - sent);
 						sent += n;
 						this.push(Buffer.alloc(n, 0x61));
@@ -606,7 +611,7 @@ describe('Integration Tests', () => {
 				await service().importOne('https://example.com/x.png', {});
 
 				expect(uploadSpy).toHaveBeenCalledOnce();
-				expect((uploadSpy.mock.calls[0]![1] as Record<string, unknown>).type).toBe('image/png');
+				expect((uploadSpy.mock.calls[0]![1] as Record<string, unknown>)['type']).toBe('image/png');
 			});
 
 			it('stores the server-resolved type, ignoring a caller-supplied type override', async () => {
@@ -616,7 +621,7 @@ describe('Integration Tests', () => {
 
 				await service().importOne('https://example.com/x.png', { type: 'application/x-evil' } as never);
 
-				expect((uploadSpy.mock.calls[0]![1] as Record<string, unknown>).type).toBe('image/png');
+				expect((uploadSpy.mock.calls[0]![1] as Record<string, unknown>)['type']).toBe('image/png');
 			});
 
 			it('rejects an over-limit URL import and cleans up the new row', async () => {
@@ -801,8 +806,8 @@ describe('Integration Tests', () => {
 				expect(uploadSpy).toHaveBeenCalledOnce();
 				const [, payload, key] = uploadSpy.mock.calls[0]!;
 				expect(key).toBe(EXISTING_ID);
-				expect((payload as Record<string, unknown>).storage).toBe('secondary');
-				expect((payload as Record<string, unknown>).type).toBe('image/png');
+				expect((payload as Record<string, unknown>)['storage']).toBe('secondary');
+				expect((payload as Record<string, unknown>)['type']).toBe('image/png');
 				expect(payload).not.toHaveProperty('title');
 				expect(payload).not.toHaveProperty('filename_download');
 			});
@@ -1018,7 +1023,7 @@ describe('Integration Tests', () => {
 
 		describe('updateByQuery', () => {
 			let service: FilesService;
-			let superUpdateByQuery: SpyInstance;
+			let superUpdateByQuery: MockInstance<ItemsService['updateByQuery']>;
 
 			beforeEach(() => {
 				service = new FilesService({
@@ -1043,7 +1048,7 @@ describe('Integration Tests', () => {
 				expect(passedQuery).toEqual(query);
 				expect(payload).not.toHaveProperty('filename_disk');
 				expect(payload).not.toHaveProperty('uploaded_by');
-				expect(payload.title).toBe('Bulk renamed');
+				expect(payload['title']).toBe('Bulk renamed');
 			});
 		});
 	});

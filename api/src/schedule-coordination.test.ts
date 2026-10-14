@@ -221,7 +221,7 @@ describe('initScheduleCoordination', () => {
 	it('does not restore readiness while the claim key is denied even if another key would be writable', async () => {
 		enableRedis();
 
-		hoisted.zaddImpl = (key: string) =>
+		hoisted.zaddImpl = (key: unknown) =>
 			key === 'cairncms:schedule-coordination' ? Promise.reject(new Error('NOPERM')) : Promise.resolve(1);
 
 		const mod = await import('./schedule-coordination.js');
@@ -535,7 +535,7 @@ describe('createRunCoordinator', () => {
 		];
 
 		for (const bad of badKeys) {
-			const error = (await coordinator.shouldRun(bad, 30_000).then(
+			const error = (await Promise.resolve(coordinator.shouldRun(bad, 30_000)).then(
 				() => null,
 				(reason) => reason
 			)) as InstanceType<typeof mod.ScheduleCoordinationError>;
@@ -553,7 +553,7 @@ describe('createRunCoordinator', () => {
 		const mod = await import('./schedule-coordination.js');
 		const coordinator = mod.createRunCoordinator('flow-a');
 
-		const error = (await coordinator.shouldRun(key, 30_000).then(
+		const error = (await Promise.resolve(coordinator.shouldRun(key, 30_000)).then(
 			() => null,
 			(reason) => reason
 		)) as InstanceType<typeof mod.ScheduleCoordinationError>;
@@ -576,7 +576,7 @@ describe('createRunCoordinator', () => {
 			while (queued.length) queued.shift()!(new Error('Connection is closed'));
 		};
 
-		const first = coordinator.shouldRun('flow-a:2026-08-11T00:00:00.000Z', 30_000);
+		const first = Promise.resolve(coordinator.shouldRun('flow-a:2026-08-11T00:00:00.000Z', 30_000));
 		first.catch(() => undefined);
 
 		await vi.advanceTimersByTimeAsync(5_000);
@@ -616,7 +616,7 @@ describe('createRunCoordinator', () => {
 
 		for (let second = 0; second < 5; second++) {
 			const iso = new Date(Date.UTC(2026, 7, 11, 0, 0, second)).toISOString();
-			const claim = coordinator.shouldRun(`flow-a:${iso}`, 30_000);
+			const claim = Promise.resolve(coordinator.shouldRun(`flow-a:${iso}`, 30_000));
 			claim.catch(() => undefined);
 			claims.push(claim);
 

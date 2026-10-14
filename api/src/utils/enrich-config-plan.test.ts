@@ -3,6 +3,7 @@ import type { Knex } from 'knex';
 import knex from 'knex';
 import { createTracker, MockClient, type Tracker } from 'knex-mock-client';
 import type { MockedFunction } from 'vitest';
+import { configFixture } from '../__utils__/config-fixtures.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import type { CairnConfig, ConfigKind, ConfigPermission, ConfigPermissionSet, ConfigPlan } from '../types/config.js';
@@ -349,9 +350,8 @@ describe('enrichConfigPlan', () => {
 	});
 
 	it('does not scan or warn on desired permissions when permissions are unmanaged, even if malformed', async () => {
-		const desired: CairnConfig = {
+		const desired: CairnConfig = configFixture({
 			manifest: { version: 1, resources: ['roles'] },
-			roles: [],
 			permissions: [
 				{
 					role: 'x',
@@ -367,7 +367,7 @@ describe('enrichConfigPlan', () => {
 					],
 				},
 			],
-		};
+		});
 
 		const enrichment = await enrichConfigPlan(planDeletingRoles(), desired, {
 			schema: schemaWith('articles'),

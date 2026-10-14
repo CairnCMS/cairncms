@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
+import { configFixture } from '../__utils__/config-fixtures.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
@@ -29,14 +30,10 @@ afterEach(async () => {
 });
 
 function makeConfig(overrides?: Partial<CairnConfig>): CairnConfig {
-	return {
+	return configFixture({
 		manifest: { version: 1, resources: ['roles', 'permissions'] },
-		roles: [],
-		permissions: [],
-		folders: [],
-		settings: [],
 		...overrides,
-	};
+	});
 }
 
 async function readYaml(filePath: string): Promise<any> {

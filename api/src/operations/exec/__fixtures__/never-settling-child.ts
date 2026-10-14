@@ -26,7 +26,7 @@ loader._load = function (this: unknown, request: string, ...rest: unknown[]) {
 
 			return new Proxy(value, {
 				construct(Isolate, args) {
-					const isolate = Reflect.construct(Isolate, args);
+					const isolate = Reflect.construct(Isolate, args) as import('isolated-vm').Isolate;
 					isolates.push(isolate);
 					return isolate;
 				},

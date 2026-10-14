@@ -35,9 +35,9 @@ const { default: permissionsController } = await import('./permissions.js');
 function makeApp() {
 	const app = express();
 
-	app.use((req: Record<string, unknown>, _res: unknown, next: () => void) => {
-		req['accountability'] = { user: 'u', admin: true };
-		req['schema'] = {};
+	app.use((req, _res, next) => {
+		req['accountability'] = { user: 'u', admin: true, role: null };
+		req.schema = { collections: {}, relations: [] };
 		next();
 	});
 

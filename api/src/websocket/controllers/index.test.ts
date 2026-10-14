@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const producerRegister = vi.fn();
 const producerDestroy = vi.fn();
 const coordinatorStart = vi.fn();
-const coordinatorStop = vi.fn(async () => undefined);
+const coordinatorStop = vi.fn<import('../dispatch.js').DispatchCoordinator['stop']>(async () => undefined);
 const controllerTerminate = vi.fn(async () => undefined);
 const controllerHandleUpgrade = vi.fn();
 const graphqlHandleUpgrade = vi.fn();
