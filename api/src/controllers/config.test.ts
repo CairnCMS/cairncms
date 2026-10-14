@@ -595,7 +595,7 @@ describe('GET /config/snapshot manifest version', () => {
 		vi.mocked(readCurrentConfig).mockImplementation(
 			async (options) =>
 				({
-					config: { manifest: { version: options.manifestVersion ?? 2, resources: [] }, roles: [], permissions: [] },
+					config: { manifest: { version: options.manifestVersion ?? 3, resources: [] }, roles: [], permissions: [] },
 					currentRoleKeys: new Set<string>(),
 					stateToken: { resources: [], digest: 'digest' },
 				} as never)
@@ -606,8 +606,8 @@ describe('GET /config/snapshot manifest version', () => {
 		const res = await request(makeApp(ADMIN)).get('/config/snapshot');
 
 		expect(res.status).toBe(200);
-		expect(readCurrentConfig).toHaveBeenCalledWith(expect.objectContaining({ manifestVersion: 2 }));
-		expect(res.body.data.manifest.version).toBe(2);
+		expect(readCurrentConfig).toHaveBeenCalledWith(expect.objectContaining({ manifestVersion: 3 }));
+		expect(res.body.data.manifest.version).toBe(3);
 	});
 
 	it('honors an explicit v1 request rather than the default', async () => {

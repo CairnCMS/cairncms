@@ -1,10 +1,15 @@
 import type { SchemaOverview } from '@cairncms/types';
+import { promises as fs } from 'fs';
 import knex, { type Knex } from 'knex';
+import os from 'os';
+import path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConfigSchemaCollection } from '../types/config.js';
+import { readConfigDirectory } from './read-config-directory.js';
 import { readCurrentConfig } from './get-config-snapshot.js';
 import { version } from './package.js';
 import { validateConfigManifest } from './validate-desired-config.js';
+import { writeConfigDirectory } from './write-config-directory.js';
 
 vi.mock('../database/index', () => ({
 	default: vi.fn(),
@@ -333,5 +338,21 @@ describe('readCurrentConfig schema on a real SQLite database', () => {
 
 		expect(config.manifest.schema).toEqual({ release: version, vendor: 'sqlite' });
 		expect(() => validateConfigManifest(config.manifest, 'snapshot')).not.toThrow();
+	});
+
+	it('round-trips a written snapshot back through the reader with provenance intact', async () => {
+		const { config } = await readCurrentConfig({ database: db, schema, resources: ['schema'], manifestVersion: 3 });
+
+		const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cairncms-schema-roundtrip-'));
+
+		try {
+			await writeConfigDirectory(config, dir);
+			const readBack = await readConfigDirectory(dir);
+
+			expect(readBack.schema).toEqual(config.schema);
+			expect(readBack.manifest.schema).toEqual(config.manifest.schema);
+		} finally {
+			await fs.rm(dir, { recursive: true, force: true });
+		}
 	});
 });

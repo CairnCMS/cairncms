@@ -160,6 +160,14 @@ describe('Config-as-Code local confirmation-window concurrency', () => {
 		const baseId = baseCreate.body.data.id as string;
 
 		try {
+			await fs.writeFile(
+				path.join(fixtureRoot, 'cairncms-config.yaml'),
+				dumpYaml({
+					version: 2,
+					resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+				})
+			);
+
 			const snapshot = await api.cli(['config', 'snapshot', fixtureRoot, '--yes']);
 
 			expect(snapshot.status).toBe(0);
@@ -273,7 +281,10 @@ describeForVendors(
 			const role = await createProbeRole(api, vendor);
 
 			try {
-				const snapshotResponse = await adminAuth(request(api.url).get('/config/snapshot'));
+				const snapshotResponse = await adminAuth(
+					request(api.url).get('/config/snapshot').query({ manifest_version: '2' })
+				);
+
 				expect(snapshotResponse.statusCode).toBe(200);
 				const baseline = snapshotResponse.body.data as ConfigSnapshot;
 

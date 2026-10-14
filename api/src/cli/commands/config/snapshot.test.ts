@@ -160,7 +160,17 @@ describe('configSnapshot against a remote server', () => {
 		}
 	);
 
-	it('refuses an incomplete snapshot into an empty destination and writes nothing', async () => {
+	it('refuses an incomplete snapshot and writes nothing', async () => {
+		await fs.writeFile(
+			path.join(tmpDir, 'cairncms-config.yaml'),
+			dumpYaml({
+				version: 2,
+				resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+			})
+		);
+
+		const before = await captureTree(tmpDir);
+
 		respondWith({
 			manifest: {
 				version: 2,
@@ -178,7 +188,7 @@ describe('configSnapshot against a remote server', () => {
 
 		expect(vi.mocked(process.exit).mock.calls).toEqual([[3]]);
 		expect(vi.mocked(logger.error)).toHaveBeenCalledWith(expect.stringContaining('enforce_tfa'));
-		expect(await fs.readdir(tmpDir)).toEqual([]);
+		expect(await captureTree(tmpDir)).toEqual(before);
 	});
 
 	it('writes a valid snapshot into the same destination', async () => {
@@ -196,6 +206,14 @@ describe('configSnapshot against a remote server', () => {
 	});
 
 	it('summarizes translation language files and extension-settings subjects by document count', async () => {
+		await fs.writeFile(
+			path.join(tmpDir, 'cairncms-config.yaml'),
+			dumpYaml({
+				version: 2,
+				resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+			})
+		);
+
 		respondWith({
 			manifest: {
 				version: 2,
@@ -290,27 +308,14 @@ describe('configSnapshot manifest version preservation', () => {
 		it.each([
 			['an existing v1 directory', 1, 1],
 			['an existing v2 directory', 2, 2],
-			['a fresh directory', undefined, 2],
 		])('sends and writes the expected version for %s', async (_label, seeded, expected) => {
-			if (seeded !== undefined) await seedManifest(seeded);
-
-			const respondedResources =
-				seeded === undefined
-					? ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations']
-					: ['roles', 'permissions'];
+			await seedManifest(seeded);
 
 			respondWith({
-				manifest: { version: expected, resources: respondedResources },
+				manifest: { version: expected, resources: ['roles', 'permissions'] },
 				roles: [],
 				permissions: [],
-				...(expected >= 2
-					? {
-							folders: [],
-							settings: seeded === undefined ? [SETTINGS_DOC] : [],
-							'extension-settings': [],
-							translations: [],
-					  }
-					: {}),
+				...(expected >= 2 ? { folders: [], settings: [], 'extension-settings': [], translations: [] } : {}),
 			});
 
 			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
@@ -325,6 +330,32 @@ describe('configSnapshot manifest version preservation', () => {
 
 			expect(await writtenVersion()).toBe(expected);
 		});
+
+		it('refuses a fresh remote v3 schema capture before writing', async () => {
+			respondWith({
+				manifest: {
+					version: 3,
+					resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations', 'schema'],
+				},
+				roles: [],
+				permissions: [],
+				folders: [],
+				settings: [SETTINGS_DOC],
+				'extension-settings': [],
+				translations: [],
+				schema: [],
+			});
+
+			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
+
+			expect(vi.mocked(process.exit).mock.calls).toEqual([[3]]);
+
+			expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
+				expect.stringContaining('Schema validation is not supported')
+			);
+
+			expect(await fs.readdir(tmpDir)).toEqual([]);
+		});
 	});
 
 	describe('local', () => {
@@ -337,7 +368,7 @@ describe('configSnapshot manifest version preservation', () => {
 				async (options) =>
 					({
 						config: {
-							manifest: { version: options.manifestVersion ?? 2, resources: [...options.resources] },
+							manifest: { version: options.manifestVersion ?? 3, resources: [...options.resources] },
 							roles: [],
 							permissions: [],
 							folders: [],
@@ -355,7 +386,7 @@ describe('configSnapshot manifest version preservation', () => {
 		it.each([
 			['an existing v1 directory', 1, 1],
 			['an existing v2 directory', 2, 2],
-			['a fresh directory', undefined, 2],
+			['a fresh directory', undefined, 3],
 		])('writes the expected version for %s', async (_label, seeded, expected) => {
 			if (seeded !== undefined) await seedManifest(seeded);
 
