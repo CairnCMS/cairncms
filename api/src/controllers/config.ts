@@ -127,6 +127,7 @@ router.post(
 					currentFolderKeys,
 					currentFolderParents,
 					stateToken,
+					schemaStoredFields,
 				} = await readCurrentConfig({
 					database,
 					schema,
@@ -149,11 +150,10 @@ router.post(
 
 				const config = normalizeToInternal(manifest, document);
 
-				const plan = computeConfigPlan(
-					current,
-					config,
-					extensionDeclarations !== undefined ? { extensionDeclarations } : undefined
-				);
+				const plan = computeConfigPlan(current, config, {
+					...(extensionDeclarations !== undefined && { extensionDeclarations }),
+					...(schemaStoredFields !== undefined && { currentSchemaStoredFields: schemaStoredFields }),
+				});
 
 				run.planned(planSummary(plan));
 

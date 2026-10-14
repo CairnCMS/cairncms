@@ -1,13 +1,12 @@
-import { TYPES } from '@cairncms/constants';
 import Joi from 'joi';
 import { isPlainObject } from 'lodash-es';
-import { ALIAS_TYPES } from '../constants.js';
 import { getDatabaseClient } from '../database/index.js';
 import { InvalidPayloadException } from '../exceptions/invalid-payload.js';
 import type { PortableSnapshot, Snapshot } from '../types/index.js';
 import { DatabaseClients } from '../types/index.js';
 import { version as currentRelease } from './package.js';
 import { SUPPORTED_SNAPSHOT_VERSIONS } from './schema-contract.js';
+import { collectionEntitySchema, fieldEntitySchema, relationEntitySchema } from './snapshot-entity-schemas.js';
 
 const snapshotVersionSchema = Joi.number()
 	.strict()
@@ -27,41 +26,9 @@ const snapshotJoiSchema = Joi.object({
 	vendor: Joi.string()
 		.valid(...DatabaseClients)
 		.optional(),
-	collections: Joi.array().items(
-		Joi.object({
-			collection: Joi.string(),
-			meta: Joi.any(),
-			schema: Joi.object({
-				name: Joi.string(),
-			}),
-		})
-	),
-	fields: Joi.array().items(
-		Joi.object({
-			collection: Joi.string(),
-			field: Joi.string(),
-			meta: Joi.any(),
-			schema: Joi.object({
-				default_value: Joi.any(),
-				max_length: [Joi.number(), Joi.string(), Joi.valid(null)],
-				is_nullable: Joi.bool(),
-			})
-				.unknown()
-				.allow(null),
-			type: Joi.string()
-				.valid(...TYPES, ...ALIAS_TYPES)
-				.allow(null),
-		})
-	),
-	relations: Joi.array().items(
-		Joi.object({
-			collection: Joi.string(),
-			field: Joi.string(),
-			meta: Joi.any(),
-			related_collection: Joi.any(),
-			schema: Joi.any(),
-		})
-	),
+	collections: Joi.array().items(collectionEntitySchema),
+	fields: Joi.array().items(fieldEntitySchema),
+	relations: Joi.array().items(relationEntitySchema),
 });
 
 export function validateSnapshotVersion(snapshot: unknown): void {

@@ -107,7 +107,7 @@ describe('getConfigSnapshot', () => {
 		vi.spyOn(CONFIG_REGISTRY.schema.handler, 'readCurrent').mockResolvedValue({
 			records: [],
 			documentIdentities: [],
-			dependencyState: undefined,
+			dependencyState: { storedFields: [] },
 		} as never);
 
 		mockSettings();

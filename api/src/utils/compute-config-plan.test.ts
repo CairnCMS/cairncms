@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computeConfigPlan } from './compute-config-plan.js';
 import { CONFIG_REGISTRY } from './config/registry.js';
 import { rolesDescriptor } from './config/handlers/roles.js';
-import type { CairnConfig, ConfigKind } from '../types/config.js';
+import { enrichConfigPlan } from './enrich-config-plan.js';
+import { serializeConfigPlan } from './serialize-config-plan.js';
+import type { CairnConfig, ConfigKind, ConfigSchemaCollection } from '../types/config.js';
+import type { SnapshotField } from '../types/index.js';
 
 const emptyManifest = { version: 1 as const, resources: ['roles' as const, 'permissions' as const] };
 
@@ -656,5 +659,61 @@ describe('managed scope', () => {
 
 		expect(plan.roles.delete).toEqual([]);
 		expect(plan.protections).toEqual([]);
+	});
+});
+
+function schemaCollection(collection: string): ConfigSchemaCollection {
+	return {
+		collection,
+		meta: {} as Exclude<ConfigSchemaCollection['meta'], undefined>,
+		schema: { name: collection } as Exclude<ConfigSchemaCollection['schema'], undefined>,
+		fields: [
+			{ collection, field: 'title', type: 'string', meta: {}, schema: { name: 'title' } } as unknown as SnapshotField,
+		],
+		relations: [],
+	};
+}
+
+const schemaManifest = { version: 3 as const, resources: ['schema' as const] };
+
+describe('computeConfigPlan schema', () => {
+	it('computes a populated schema slice when schema is managed', () => {
+		const current = makeConfig();
+		const desired = makeConfig({ manifest: schemaManifest, schema: [schemaCollection('articles')] });
+
+		const plan = computeConfigPlan(current, desired, { currentSchemaStoredFields: [] });
+
+		expect(plan.managedResources).toContain('schema');
+		expect(plan.schema.create.length).toBeGreaterThan(0);
+		expect(plan.schema.create.some((entry) => entry.changeKind === 'collections')).toBe(true);
+	});
+
+	it('leaves the schema slice empty and plans no deletion when schema is not managed', () => {
+		const current = makeConfig({ schema: [schemaCollection('articles')] });
+		const desired = makeConfig();
+
+		const plan = computeConfigPlan(current, desired);
+
+		expect(plan.schema).toEqual({ create: [], update: [], delete: [] });
+	});
+
+	it('refuses schema planning without the retained stored fields', () => {
+		const desired = makeConfig({ manifest: schemaManifest, schema: [schemaCollection('articles')] });
+
+		expect(() => computeConfigPlan(makeConfig(), desired)).toThrow(
+			'Schema planning requires the retained current schema fields'
+		);
+	});
+
+	it('reaches a serialized planVersion 3 plan without a guarded enrichment throw', async () => {
+		const current = makeConfig();
+		const desired = makeConfig({ manifest: schemaManifest, schema: [schemaCollection('articles')] });
+
+		const plan = computeConfigPlan(current, desired, { currentSchemaStoredFields: [] });
+		const enrichment = await enrichConfigPlan(plan, desired, { schema: {} as never, database: {} as never });
+		const serialized = serializeConfigPlan(plan, { enrichment, manifestVersion: 3 });
+
+		expect(serialized.planVersion).toBe(3);
+		expect(serialized.changes.some((change) => change.kind === 'collections')).toBe(true);
 	});
 });

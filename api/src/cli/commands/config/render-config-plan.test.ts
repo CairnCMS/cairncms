@@ -553,4 +553,28 @@ describe('renderConfigPlan schema changes', () => {
 		expect(output).toContain(`${createVerb()} articles / author -> direc?users`);
 		expect(output).not.toContain(bel);
 	});
+
+	it('renders added and removed schema attributes distinctly from an edit', () => {
+		const output = renderConfigPlan(
+			plan({
+				changes: [
+					{
+						kind: 'fields',
+						operation: 'update',
+						identity: { collection: 'articles', field: 'title' },
+						fields: {
+							schema: { before: null, after: { name: 'title' }, beforePresent: false },
+							meta: { before: { note: 'legacy' }, after: null, afterPresent: false },
+							type: { before: 'string', after: 'text' },
+						},
+					},
+				],
+				summary: { create: 0, update: 1, delete: 0 },
+			})
+		);
+
+		expect(output).toContain('    - Add schema as');
+		expect(output).toContain('    - Remove meta');
+		expect(output).toContain('    - Set type to text');
+	});
 });

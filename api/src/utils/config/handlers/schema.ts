@@ -1,10 +1,12 @@
 import { normalizeConfigKey, toArray } from '@cairncms/utils';
-import { isPlainObject } from 'lodash-es';
+import Joi from 'joi';
+import { isEqual, isPlainObject } from 'lodash-es';
 import { createHash } from 'node:crypto';
 import { isInternalTable } from '../../../database/internal-tables.js';
 import env from '../../../env.js';
 import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
 import type {
+	ConfigFailure,
 	ConfigPlanChange,
 	ConfigPlanEnrichment,
 	ConfigSchemaCollection,
@@ -13,12 +15,25 @@ import type {
 	SchemaIdentity,
 	SchemaValues,
 } from '../../../types/config.js';
-import type { PortableSnapshot, SnapshotField, SnapshotRelation } from '../../../types/index.js';
+import type {
+	Collection,
+	PortableSnapshot,
+	Snapshot,
+	SnapshotDiff,
+	SnapshotField,
+	SnapshotRelation,
+} from '../../../types/index.js';
 import { CONFIG_FILENAME_STEM_MAX_LENGTH } from '../../config-contract.js';
+import { alignToDesiredReferences } from '../../folder-references.js';
 import { getPortableSnapshot } from '../../get-portable-snapshot.js';
 import { getSnapshot } from '../../get-snapshot.js';
-import { safeLogFragment } from '../../safe-log-fragment.js';
+import { getSnapshotDiff } from '../../get-snapshot-diff.js';
+import { version as currentRelease } from '../../package.js';
+import { replaceControlCharacters, safeLogFragment } from '../../safe-log-fragment.js';
+import { sanitizeCollection, sanitizeField, sanitizeRelation } from '../../sanitize-schema.js';
+import { collectionEntitySchema, fieldEntitySchema, relationEntitySchema } from '../../snapshot-entity-schemas.js';
 import { compareCodeUnits } from '../canonical-encode.js';
+import { identityConflict, invalid } from '../failures.js';
 import type {
 	ConfigFieldDescriptor,
 	ConfigReadMode,
@@ -45,7 +60,7 @@ export interface SchemaKindTypes {
 	Update: SchemaChangeEntry;
 	Delete: SchemaChangeEntry;
 	Changes: SchemaFieldChanges;
-	ReadDependencyState: undefined;
+	ReadDependencyState: { storedFields: SnapshotField[] };
 	ApplyDependencyState: undefined;
 	ReadDependencies: NoConfigDependencies;
 	PlanDependencies: NoConfigDependencies;
@@ -119,46 +134,12 @@ function isMapping(value: unknown): value is Record<string, unknown> {
 	return isPlainObject(value);
 }
 
-function assertOwnedElements(elements: unknown[], kind: string, collection: string, filename: string): void {
-	const label = safeLogFragment(filename);
-
-	elements.forEach((element, index) => {
-		if (!isMapping(element)) {
-			throw new ConfigInvalidException(`Schema file "${label}" has a ${kind} at index ${index} that is not a mapping.`);
-		}
-
-		const owner = element['collection'];
-
-		if (typeof owner !== 'string') {
-			throw new ConfigInvalidException(
-				`Schema file "${label}" has a ${kind} at index ${index} without a string "collection".`
-			);
-		}
-
-		if (owner !== collection) {
-			throw new ConfigInvalidException(
-				`Schema file "${label}" has a ${kind} declaring collection "${safeLogFragment(
-					owner
-				)}", but the file declares "${safeLogFragment(collection)}".`
-			);
-		}
-	});
-}
-
 function parseSchemaDocumentFile(record: Record<string, unknown>, filename: string): ConfigSchemaCollection {
 	const label = safeLogFragment(filename);
 	const collection = record['collection'];
 
 	if (typeof collection !== 'string' || collection === '') {
 		throw new ConfigInvalidException(`Schema file "${label}" is missing a "collection".`);
-	}
-
-	if (isInternalTable(collection)) {
-		throw new ConfigInvalidException(
-			`Schema file "${label}" names internal table "${safeLogFragment(
-				collection
-			)}", which is not operator-managed schema.`
-		);
 	}
 
 	const unknownField = Object.keys(record).find((key) => !DOCUMENT_FIELDS.has(key));
@@ -178,17 +159,6 @@ function parseSchemaDocumentFile(record: Record<string, unknown>, filename: stri
 		throw new ConfigInvalidException(`Schema file "${label}" must declare "relations" as an array.`);
 	}
 
-	assertOwnedElements(fields, 'field', collection, filename);
-	assertOwnedElements(relations, 'relation', collection, filename);
-
-	if (collection.startsWith('directus_') && (Object.hasOwn(record, 'meta') || Object.hasOwn(record, 'schema'))) {
-		throw new ConfigInvalidException(
-			`Schema file "${label}" for system collection "${safeLogFragment(
-				collection
-			)}" must declare only fields, not a collection definition.`
-		);
-	}
-
 	const document: ConfigSchemaCollection = {
 		collection,
 		fields: fields as ConfigSchemaCollection['fields'],
@@ -201,6 +171,12 @@ function parseSchemaDocumentFile(record: Record<string, unknown>, filename: stri
 
 	if (Object.hasOwn(record, 'schema')) {
 		document.schema = record['schema'] as Exclude<ConfigSchemaCollection['schema'], undefined>;
+	}
+
+	const [problem] = schemaRecordProblems(document);
+
+	if (problem) {
+		throw new ConfigInvalidException(`Schema file "${label}": ${problem.message}`);
 	}
 
 	return document;
@@ -439,7 +415,7 @@ async function readCurrent(context: ReadContext<SchemaKindTypes>): Promise<ReadC
 	return {
 		records,
 		documentIdentities: records.map((record) => ({ collection: record.collection })),
-		dependencyState: undefined,
+		dependencyState: { storedFields: snapshot.fields },
 	};
 }
 
@@ -456,6 +432,303 @@ function projectReadState(result: ReadCurrentResult<SchemaKindTypes>, mode: Conf
 	]);
 
 	return { mode, identities, values };
+}
+
+const COLLECTION_VALUE_ATTRIBUTES = ['meta', 'schema'] as const;
+const FIELD_VALUE_ATTRIBUTES = ['type', 'meta', 'schema'] as const;
+const RELATION_VALUE_ATTRIBUTES = ['related_collection', 'meta', 'schema'] as const;
+
+function entityKey(collection: string, field: string): string {
+	return JSON.stringify([collection, field]);
+}
+
+function unfoldToSnapshot(records: ConfigSchemaCollection[]): {
+	collections: Collection[];
+	fields: SnapshotField[];
+	relations: SnapshotRelation[];
+} {
+	const collections: Collection[] = [];
+	const fields: SnapshotField[] = [];
+	const relations: SnapshotRelation[] = [];
+
+	for (const record of records) {
+		if (Object.hasOwn(record, 'meta') || Object.hasOwn(record, 'schema')) {
+			const collection: Record<string, unknown> = { collection: record.collection };
+			if (Object.hasOwn(record, 'meta')) collection['meta'] = record.meta;
+			if (Object.hasOwn(record, 'schema')) collection['schema'] = record.schema;
+			collections.push(collection as unknown as Collection);
+		}
+
+		fields.push(...record.fields);
+		relations.push(...record.relations);
+	}
+
+	return { collections, fields, relations };
+}
+
+function bucketOf(plan: KindPlan<SchemaKindTypes>, before: unknown, after: unknown): SchemaChangeEntry[] {
+	if (before === undefined) return plan.create;
+	if (after === undefined) return plan.delete;
+	return plan.update;
+}
+
+function changedAttributes(
+	diff: readonly unknown[] | undefined,
+	before: unknown,
+	after: unknown,
+	valueAttributes: readonly string[]
+): readonly string[] {
+	if (before === undefined || after === undefined) return valueAttributes;
+
+	const changed = new Set<string>();
+
+	for (const entry of diff ?? []) {
+		const path = (entry as { path?: readonly unknown[] }).path;
+
+		if (path === undefined || path.length === 0) {
+			for (const attribute of valueAttributes) changed.add(attribute);
+			continue;
+		}
+
+		const top = path[0];
+		if (typeof top === 'string' && valueAttributes.includes(top)) changed.add(top);
+	}
+
+	return [...changed];
+}
+
+function attributeChanges(before: unknown, after: unknown, attributes: readonly string[]): SchemaFieldChanges {
+	const beforeObject = before as Record<string, unknown> | undefined;
+	const afterObject = after as Record<string, unknown> | undefined;
+	const changes: SchemaFieldChanges = {};
+
+	for (const attribute of attributes) {
+		const beforePresent = beforeObject !== undefined && Object.hasOwn(beforeObject, attribute);
+		const afterPresent = afterObject !== undefined && Object.hasOwn(afterObject, attribute);
+		const beforeValue = beforePresent ? beforeObject![attribute] : null;
+		const afterValue = afterPresent ? afterObject![attribute] : null;
+
+		if (beforePresent === afterPresent && isEqual(beforeValue, afterValue)) continue;
+
+		changes[attribute] = {
+			before: beforeValue,
+			after: afterValue,
+			...(beforePresent ? {} : { beforePresent: false }),
+			...(afterPresent ? {} : { afterPresent: false }),
+		};
+	}
+
+	return changes;
+}
+
+function translateSnapshotDiff(
+	diff: SnapshotDiff,
+	current: Snapshot,
+	desired: Snapshot | PortableSnapshot
+): KindPlan<SchemaKindTypes> {
+	const plan: KindPlan<SchemaKindTypes> = { create: [], update: [], delete: [] };
+
+	const currentCollections = new Map(current.collections.map((entry) => [entry.collection, entry]));
+	const desiredCollections = new Map(desired.collections.map((entry) => [entry.collection, entry]));
+
+	for (const { collection, diff: entryDiff } of diff.collections) {
+		const before = currentCollections.get(collection);
+		const after = desiredCollections.get(collection);
+		const attributes = changedAttributes(entryDiff, before, after, COLLECTION_VALUE_ATTRIBUTES);
+
+		bucketOf(plan, before, after).push({
+			changeKind: 'collections',
+			identity: { collection },
+			changes: attributeChanges(sanitizeCollection(before), sanitizeCollection(after), attributes),
+		});
+	}
+
+	const currentFields = new Map(current.fields.map((entry) => [entityKey(entry.collection, entry.field), entry]));
+	const desiredFields = new Map(desired.fields.map((entry) => [entityKey(entry.collection, entry.field), entry]));
+
+	for (const { collection, field, diff: entryDiff } of diff.fields) {
+		const before = currentFields.get(entityKey(collection, field));
+		const after = desiredFields.get(entityKey(collection, field));
+		const attributes = changedAttributes(entryDiff, before, after, FIELD_VALUE_ATTRIBUTES);
+
+		const currentSchema = (
+			before as { schema?: { is_primary_key?: boolean; has_auto_increment?: boolean } } | undefined
+		)?.schema;
+
+		const autoIncrementPrimaryKey =
+			Boolean(currentSchema?.is_primary_key) && Boolean(currentSchema?.has_auto_increment);
+
+		bucketOf(plan, before, after).push({
+			changeKind: 'fields',
+			identity: { collection, field },
+			changes: attributeChanges(
+				sanitizeField(before, autoIncrementPrimaryKey),
+				sanitizeField(after, autoIncrementPrimaryKey),
+				attributes
+			),
+		});
+	}
+
+	const currentRelations = new Map(current.relations.map((entry) => [entityKey(entry.collection, entry.field), entry]));
+	const desiredRelations = new Map(desired.relations.map((entry) => [entityKey(entry.collection, entry.field), entry]));
+
+	for (const { collection, field, diff: entryDiff } of diff.relations) {
+		const before = currentRelations.get(entityKey(collection, field));
+		const after = desiredRelations.get(entityKey(collection, field));
+		const relatedCollection = (after ?? before)?.related_collection ?? null;
+		const attributes = changedAttributes(entryDiff, before, after, RELATION_VALUE_ATTRIBUTES);
+
+		bucketOf(plan, before, after).push({
+			changeKind: 'relations',
+			identity: { collection, field },
+			relatedCollection,
+			changes: attributeChanges(sanitizeRelation(before), sanitizeRelation(after), attributes),
+		});
+	}
+
+	return plan;
+}
+
+export function computeSchemaPlan(
+	currentRecords: ConfigSchemaCollection[],
+	desiredRecords: ConfigSchemaCollection[],
+	storedFields: SnapshotField[] | undefined
+): KindPlan<SchemaKindTypes> {
+	if (storedFields === undefined) {
+		throw new Error('Schema planning requires the retained current schema fields.');
+	}
+
+	const current = unfoldToSnapshot(currentRecords);
+	const desired = unfoldToSnapshot(desiredRecords);
+
+	const currentSnapshot: Snapshot = {
+		version: 1,
+		directus: currentRelease,
+		collections: current.collections,
+		fields: alignToDesiredReferences(current.fields, storedFields, desired.fields),
+		relations: current.relations,
+	};
+
+	const desiredSnapshot: PortableSnapshot = {
+		version: 2,
+		release: currentRelease,
+		collections: desired.collections,
+		fields: desired.fields,
+		relations: desired.relations,
+	};
+
+	return translateSnapshotDiff(getSnapshotDiff(currentSnapshot, desiredSnapshot), currentSnapshot, desiredSnapshot);
+}
+
+function collectJoiFailures(failures: ConfigFailure[], result: Joi.ValidationResult, label: string): void {
+	if (!result.error) return;
+
+	for (const detail of result.error.details) {
+		failures.push(invalid(`Schema ${label}: ${replaceControlCharacters(detail.message)}`));
+	}
+}
+
+function structuralFailures(document: ConfigSchemaCollection): ConfigFailure[] {
+	const failures: ConfigFailure[] = [];
+	const label = safeLogFragment(document.collection);
+	const options = { convert: false, abortEarly: false };
+
+	const collectionEntity: Record<string, unknown> = { collection: document.collection };
+	if (Object.hasOwn(document, 'meta')) collectionEntity['meta'] = document.meta;
+	if (Object.hasOwn(document, 'schema')) collectionEntity['schema'] = document.schema;
+
+	collectJoiFailures(failures, collectionEntitySchema.validate(collectionEntity, options), `collection "${label}"`);
+
+	for (const field of document.fields) {
+		collectJoiFailures(failures, fieldEntitySchema.validate(field, options), `field in "${label}"`);
+	}
+
+	for (const relation of document.relations) {
+		collectJoiFailures(failures, relationEntitySchema.validate(relation, options), `relation in "${label}"`);
+	}
+
+	return failures;
+}
+
+function ownedElementProblems(
+	elements: unknown[],
+	kind: 'field' | 'relation',
+	owner: string,
+	label: string
+): ConfigFailure[] {
+	const problems: ConfigFailure[] = [];
+	const seen = new Set<string>();
+
+	for (const element of elements) {
+		if (!isMapping(element)) {
+			problems.push(invalid(`Schema collection "${label}" has a ${kind} that is not a mapping.`));
+			continue;
+		}
+
+		const declared = element['collection'];
+
+		if (typeof declared !== 'string') {
+			problems.push(invalid(`Schema collection "${label}" has a ${kind} without a string "collection".`));
+		} else if (declared !== owner) {
+			problems.push(
+				invalid(`Schema collection "${label}" has a ${kind} declaring collection "${safeLogFragment(declared)}".`)
+			);
+		}
+
+		const name = element['field'];
+
+		if (typeof name !== 'string' || name === '') {
+			problems.push(invalid(`Schema collection "${label}" has a ${kind} without a string "field".`));
+			continue;
+		}
+
+		if (seen.has(name)) {
+			problems.push(
+				identityConflict(`Schema collection "${label}" declares duplicate ${kind} "${safeLogFragment(name)}".`)
+			);
+		}
+
+		seen.add(name);
+	}
+
+	return problems;
+}
+
+function schemaRecordProblems(document: ConfigSchemaCollection): ConfigFailure[] {
+	const problems: ConfigFailure[] = [];
+	const collection = document.collection;
+	const label = safeLogFragment(collection);
+
+	if (isInternalTable(collection)) {
+		problems.push(invalid(`Schema collection "${label}" is an internal table, which is not operator-managed schema.`));
+	}
+
+	if (collection.startsWith('directus_') && (Object.hasOwn(document, 'meta') || Object.hasOwn(document, 'schema'))) {
+		problems.push(invalid(`System collection "${label}" must declare only fields, not a collection definition.`));
+	}
+
+	problems.push(...ownedElementProblems(document.fields, 'field', collection, label));
+	problems.push(...ownedElementProblems(document.relations, 'relation', collection, label));
+
+	return problems;
+}
+
+function validateDesired(documents: ConfigSchemaCollection[]): ConfigFailure[] {
+	const failures: ConfigFailure[] = [];
+	const seen = new Set<string>();
+
+	for (const document of documents) {
+		if (seen.has(document.collection)) {
+			failures.push(identityConflict(`Duplicate schema collection "${safeLogFragment(document.collection)}".`));
+		}
+
+		seen.add(document.collection);
+
+		failures.push(...structuralFailures(document));
+		failures.push(...schemaRecordProblems(document));
+	}
+
+	return failures;
 }
 
 export const schemaDescriptor: ConfigResourceDescriptor<SchemaKindTypes> = {
@@ -491,9 +764,9 @@ export const schemaDescriptor: ConfigResourceDescriptor<SchemaKindTypes> = {
 	handler: {
 		readCurrent,
 		projectReadState,
-		validateDesired: () => unsupported('validation'),
+		validateDesired,
 		postPlan: () => unsupported('planning'),
-		enrich: async () => unsupported('planning'),
+		enrich: async () => emptyEnrichment(),
 		emptyEnrichment,
 		toChanges,
 		applyCreates: async () => unsupported('apply'),

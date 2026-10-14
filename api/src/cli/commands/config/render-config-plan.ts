@@ -21,7 +21,7 @@ type SchemaCollectionIdentityView = { collection: string };
 
 type SchemaFieldIdentityView = { collection: string; field: string };
 
-type FieldChangeView = { before: unknown; after: unknown };
+type FieldChangeView = { before: unknown; after: unknown; beforePresent?: boolean; afterPresent?: boolean };
 
 export type RenderableImpactEntry =
 	| { kind: 'permissions'; identity: PermissionIdentityView }
@@ -314,7 +314,7 @@ function renderChange(change: RenderableChange): string[] {
 		const lines = [`  - ${updateVerb()} ${identity}`];
 
 		for (const [field, fieldChange] of Object.entries(change.fields)) {
-			lines.push(`    - Set ${replaceControlCharacters(field)} to ${renderValue(fieldChange!.after)}`);
+			lines.push(`    - ${renderAttributeChange(field, fieldChange!)}`);
 		}
 
 		return lines;
@@ -386,6 +386,15 @@ function renderIdentity(change: RenderableChange | RenderableDeletion): string {
 function renderValue(value: unknown): string {
 	if (typeof value === 'string') return displayString(value);
 	return JSON.stringify(value);
+}
+
+function renderAttributeChange(field: string, change: FieldChangeView): string {
+	const name = replaceControlCharacters(field);
+
+	if (change.beforePresent === false) return `Add ${name} as ${renderValue(change.after)}`;
+	if (change.afterPresent === false) return `Remove ${name}`;
+
+	return `Set ${name} to ${renderValue(change.after)}`;
 }
 
 function displayString(value: string): string {

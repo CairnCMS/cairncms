@@ -93,7 +93,9 @@ export type SchemaIdentity = { collection: string };
 
 export type SchemaValues = Record<string, unknown>;
 
-export type SchemaFieldChanges = Record<string, FieldChange<unknown>>;
+export type SchemaAttributeChange = FieldChange<unknown> & { beforePresent?: boolean; afterPresent?: boolean };
+
+export type SchemaFieldChanges = Record<string, SchemaAttributeChange>;
 
 /** The release and database vendor a schema snapshot was taken from. */
 export interface ConfigManifestSchemaProvenance {

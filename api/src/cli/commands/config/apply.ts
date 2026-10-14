@@ -164,6 +164,7 @@ async function runLocalEngine(
 			currentFolderKeys,
 			currentFolderParents,
 			stateToken,
+			schemaStoredFields,
 		} = await readCurrentConfig({
 			database,
 			...(schema !== undefined && { schema }),
@@ -190,11 +191,10 @@ async function runLocalEngine(
 			return { result: 'invalid', errorCode: documentErrors[0]!.code, exitCode: 2 };
 		}
 
-		const plan = computeConfigPlan(
-			current,
-			desired,
-			extensionDeclarations !== undefined ? { extensionDeclarations } : undefined
-		);
+		const plan = computeConfigPlan(current, desired, {
+			...(extensionDeclarations !== undefined && { extensionDeclarations }),
+			...(schemaStoredFields !== undefined && { currentSchemaStoredFields: schemaStoredFields }),
+		});
 
 		const empty = isPlanEmpty(plan);
 
