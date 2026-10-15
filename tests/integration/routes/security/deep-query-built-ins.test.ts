@@ -37,7 +37,14 @@ const test = createScenarioTest({
 		await common.CreateCollection(api, { collection: authorsCollection });
 		await common.CreateCollection(api, { collection: booksCollection });
 		await common.CreateField(api, { collection: authorsCollection, field: 'name', type: 'string' });
-		await common.CreateField(api, { collection: authorsCollection, field: 'details', type: 'json' });
+
+		await common.CreateField(api, {
+			collection: authorsCollection,
+			field: 'details',
+			type: 'json',
+			meta: { special: ['cast-json'] },
+		});
+
 		await common.CreateField(api, { collection: booksCollection, field: 'title', type: 'string' });
 
 		await common.CreateFieldO2M(api, {
