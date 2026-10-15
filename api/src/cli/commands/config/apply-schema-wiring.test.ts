@@ -34,7 +34,16 @@ vi.mock('../../../utils/get-config-snapshot.js', () => ({ readCurrentConfig: vi.
 vi.mock('../../../utils/get-schema.js', () => ({ getSchema: vi.fn(async () => ({ collections: {} })) }));
 
 vi.mock('../../../extensions.js', () => ({
-	getExtensionManager: () => ({ isSettingsDiscoveryComplete: () => true, getSettingsOwners: () => [] }),
+	getExtensionManager: () => ({
+		isSettingsDiscoveryComplete: () => true,
+		getSettingsOwners: () => [
+			{
+				status: 'available',
+				subject: '@cairncms/extension-widget',
+				declaration: { label: { type: 'string', scope: 'collection' } },
+			},
+		],
+	}),
 }));
 
 import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
@@ -138,6 +147,33 @@ describe('configApply schema wiring', () => {
 		expect(kinds).toContain('fields');
 
 		expect(output).not.toContain(STORED_MARKER);
+	});
+
+	it('admits a collection-scoped extension setting for a collection the schema plan creates', async () => {
+		const tree = desired();
+
+		tree.manifest = { version: 3, resources: ['extension-settings', 'schema'] };
+
+		tree.schema[0]!.fields.push({
+			collection: 'articles',
+			field: 'id',
+			type: 'integer',
+			meta: {},
+			schema: { name: 'id', is_primary_key: true },
+		} as unknown as SnapshotField);
+
+		tree['extension-settings'] = [
+			{ subject: '@cairncms/extension-widget', global: {}, collections: { articles: { label: 'x' } } },
+		];
+
+		vi.mocked(readConfigDirectory).mockResolvedValue(tree);
+
+		await configApply('./config', { format: 'json', dryRun: true, destructive: false, yes: true });
+
+		expect(exitCode).toBe(1);
+
+		const kinds = JSON.parse(writes.join('')).changes.map((change: { kind: string }) => change.kind);
+		expect(kinds).toContain('extension-settings');
 	});
 
 	it('fails a version 3 dry run when the private capture was not forwarded', async () => {

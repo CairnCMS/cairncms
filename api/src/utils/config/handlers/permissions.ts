@@ -340,7 +340,7 @@ async function enrich(
 	const warnings: ConfigPlanWarning[] = [];
 
 	for (const record of records) {
-		if (Object.hasOwn(context.schema.collections, record.collection)) continue;
+		if (context.collections.has(record.collection)) continue;
 
 		warnings.push({
 			code: 'COLLECTION_MISSING',

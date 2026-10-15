@@ -152,7 +152,7 @@ async function runLocalEngine(
 
 		const extensionDeclarations = extensionSettingsManaged ? await buildExtensionDeclarationSnapshot() : undefined;
 
-		const currentCollections = schema !== undefined ? new Set(Object.keys(schema.collections)) : undefined;
+		const currentCollections = schema?.collections;
 
 		const extensionSettingsSubjects = extensionSettingsManaged
 			? desiredExtensionSubjects(desired['extension-settings'])
@@ -181,6 +181,9 @@ async function runLocalEngine(
 			currentFolderParents,
 			...(extensionDeclarations !== undefined && { extensionDeclarations }),
 			...(currentCollections !== undefined && { currentCollections }),
+			...(schemaStoredFields !== undefined && {
+				currentSchema: { records: current.schema, storedFields: schemaStoredFields },
+			}),
 		});
 
 		if (documentErrors.length > 0) {

@@ -710,7 +710,12 @@ describe('computeConfigPlan schema', () => {
 		const desired = makeConfig({ manifest: schemaManifest, schema: [schemaCollection('articles')] });
 
 		const plan = computeConfigPlan(current, desired, { currentSchemaStoredFields: [] });
-		const enrichment = await enrichConfigPlan(plan, desired, { schema: {} as never, database: {} as never });
+
+		const enrichment = await enrichConfigPlan(plan, desired, {
+			schema: { collections: {}, relations: [] },
+			database: {} as never,
+		});
+
 		const serialized = serializeConfigPlan(plan, { enrichment, manifestVersion: 3 });
 
 		expect(serialized.planVersion).toBe(3);

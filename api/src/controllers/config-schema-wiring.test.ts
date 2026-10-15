@@ -30,7 +30,13 @@ vi.mock('../database/index.js', () => ({ default: vi.fn(() => ({})) }));
 vi.mock('../extensions.js', () => ({
 	getExtensionManager: () => ({
 		isSettingsDiscoveryComplete: () => true,
-		getSettingsOwners: () => [],
+		getSettingsOwners: () => [
+			{
+				status: 'available',
+				subject: '@cairncms/extension-widget',
+				declaration: { label: { type: 'string', scope: 'collection' } },
+			},
+		],
 	}),
 }));
 
@@ -149,6 +155,26 @@ describe('POST /config/apply schema wiring', () => {
 		expect(response.status).toBe(400);
 		expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
 		expect(response.body.errors[0].message).toContain('type');
+	});
+
+	it('admits a collection-scoped extension setting for a collection the schema plan creates', async () => {
+		const body = {
+			...articlesBody({ field: 'id', type: 'integer', meta: {}, schema: { name: 'id', is_primary_key: true } }),
+			manifest: { version: 3, resources: ['extension-settings', 'schema'] },
+			'extension-settings': [
+				{ subject: '@cairncms/extension-widget', global: {}, collections: { articles: { label: 'x' } } },
+			],
+		};
+
+		const response = await request(makeApp())
+			.post('/config/apply?dry_run=true')
+			.set('User-Agent', 'cairncms-cli/1.6.0')
+			.send(body);
+
+		expect(response.status).toBe(200);
+
+		const kinds = response.body.data.changes.map((change: { kind: string }) => change.kind);
+		expect(kinds).toContain('extension-settings');
 	});
 
 	it('fails a version 3 dry run when the private capture was not forwarded', async () => {
