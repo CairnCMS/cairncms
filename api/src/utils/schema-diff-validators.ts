@@ -56,6 +56,23 @@ export function assertCollectionAttributesKept(collection: string, changes: read
 	}
 }
 
+/** A collection's group references a collection metadata row, which must exist when the collection is created. */
+export function assertCollectionGroupHasMetadata(collection: string, group: string, hasMetadata: boolean): void {
+	if (!hasMetadata) {
+		throw new InvalidPayloadException(
+			`Collection "${collection}" can't be grouped under "${group}", which has no collection metadata.`
+		);
+	}
+}
+
+export function assertCollectionGroupAcyclic(collection: string, inCycle: boolean): void {
+	if (inCycle) {
+		throw new InvalidPayloadException(
+			`Collection "${collection}" can't be grouped under itself through a group cycle.`
+		);
+	}
+}
+
 export function assertFieldAbsent(collection: string, field: string, exists: boolean): void {
 	if (exists) {
 		throw new InvalidPayloadException(`Field "${field}" already exists in collection "${collection}"`);

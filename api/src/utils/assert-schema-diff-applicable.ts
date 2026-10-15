@@ -6,11 +6,13 @@ import { ALIAS_TYPES } from '../constants.js';
 import type { Collection, Snapshot, SnapshotDiff, SnapshotField, SnapshotRelation } from '../types/index.js';
 import { DiffKind } from '../types/index.js';
 import { isNestedMetaUpdate } from './is-nested-meta-update.js';
-import { collectionDeleteOrder } from './schema-collection-order.js';
+import { collectionCreateOrder, collectionDeleteOrder } from './schema-collection-order.js';
 import {
 	assertAliasTypeUnchanged,
 	assertCollectionAbsent,
 	assertCollectionAttributesKept,
+	assertCollectionGroupAcyclic,
+	assertCollectionGroupHasMetadata,
 	assertCollectionNameAllowed,
 	assertCollectionPresent,
 	assertFieldAbsent,
@@ -40,54 +42,75 @@ export function assertSchemaDiffApplicable(
 	const createdCollections = new Set<string>();
 	const deletedFields = new Set<string>();
 
-	const nestedCreates = (parent: string): SnapshotDiff['collections'] =>
-		snapshotDiff.collections.filter(({ diff }) => (diff[0] as DiffNew<Collection>).rhs?.meta?.group === parent);
+	const createdDefinitions = new Map<string, Collection>();
 
-	const projectCollectionCreate = (collections: SnapshotDiff['collections']): void => {
-		for (const { collection, diff } of collections) {
-			if (diff[0]?.kind !== DiffKind.NEW || isNestedMetaUpdate(diff[0])) continue;
+	for (const { collection, diff } of snapshotDiff.collections) {
+		if (diff[0]?.kind !== DiffKind.NEW || isNestedMetaUpdate(diff[0])) continue;
+		createdDefinitions.set(collection, (diff[0] as DiffNew<Collection>).rhs);
+	}
 
-			const created = (diff[0] as DiffNew<Collection>).rhs;
-			if (!created) continue;
+	const groupHasMetadata = (group: string): boolean => {
+		const created = createdDefinitions.get(group);
+		if (created !== undefined) return created.meta != null;
+		return currentSnapshot.collections.some((collection) => collection.collection === group && collection.meta != null);
+	};
 
-			assertCollectionNameAllowed(collection);
-			assertCollectionAbsent(collection, reservedNames);
+	const inGroupCycle = (collection: string): boolean => {
+		const seen = new Set<string>();
+		let group = createdDefinitions.get(collection)?.meta?.group;
 
-			const embedded = snapshotDiff.fields
-				.filter((fieldDiff) => fieldDiff.collection === collection)
-				.map((fieldDiff) => (fieldDiff.diff[0] as DiffNew<SnapshotField>).rhs)
-				.filter((field): field is SnapshotField => field !== undefined);
+		while (group && createdDefinitions.has(group) && !seen.has(group)) {
+			if (group === collection) return true;
+			seen.add(group);
+			group = createdDefinitions.get(group)?.meta?.group;
+		}
 
-			if (created.schema) {
-				const fields: Record<string, FieldOverview> = {};
-				let primary = '';
+		return false;
+	};
 
-				for (const field of embedded) {
-					if (field.type && ALIAS_TYPES.includes(field.type) === false) {
-						assertFieldTypeIsSupported(field);
-					}
+	const projectCollectionCreate = (collection: string, created: Collection): void => {
+		assertCollectionNameAllowed(collection);
+		assertCollectionAbsent(collection, reservedNames);
 
-					if (isRuntimeVisible(field)) fields[field.field] = toFieldOverview(field);
-					if (field.schema?.is_primary_key) primary = field.field;
-					fieldRows.add(`${collection}.${field.field}`);
+		const group = created.meta?.group;
+
+		if (group) {
+			assertCollectionGroupHasMetadata(collection, group, groupHasMetadata(group));
+			assertCollectionGroupAcyclic(collection, inGroupCycle(collection));
+		}
+
+		const embedded = snapshotDiff.fields
+			.filter((fieldDiff) => fieldDiff.collection === collection)
+			.map((fieldDiff) => (fieldDiff.diff[0] as DiffNew<SnapshotField>).rhs)
+			.filter((field): field is SnapshotField => field !== undefined);
+
+		if (created.schema) {
+			const fields: Record<string, FieldOverview> = {};
+			let primary = '';
+
+			for (const field of embedded) {
+				if (field.type && ALIAS_TYPES.includes(field.type) === false) {
+					assertFieldTypeIsSupported(field);
 				}
 
-				work.collections[collection] = {
-					collection,
-					primary,
-					singleton: false,
-					sortField: null,
-					note: null,
-					accountability: 'all',
-					fields,
-				};
+				if (isRuntimeVisible(field)) fields[field.field] = toFieldOverview(field);
+				if (field.schema?.is_primary_key) primary = field.field;
+				fieldRows.add(`${collection}.${field.field}`);
 			}
 
-			reservedNames.add(collection);
-			createdCollections.add(collection);
-
-			projectCollectionCreate(nestedCreates(collection));
+			work.collections[collection] = {
+				collection,
+				primary,
+				singleton: false,
+				sortField: null,
+				note: null,
+				accountability: 'all',
+				fields,
+			};
 		}
+
+		reservedNames.add(collection);
+		createdCollections.add(collection);
 	};
 
 	const projectCollectionDelete = (collection: string): void => {
@@ -113,23 +136,9 @@ export function assertSchemaDiffApplicable(
 		}
 	};
 
-	projectCollectionCreate(
-		snapshotDiff.collections.filter(({ diff }) => {
-			if (diff[0]?.kind !== DiffKind.NEW || isNestedMetaUpdate(diff[0])) return false;
-
-			const group = (diff[0] as DiffNew<Collection>).rhs.meta?.group;
-			if (!group) return true;
-
-			const parentExists = currentSnapshot.collections.some((collection) => collection.collection === group);
-
-			const parentWillBeCreated = snapshotDiff.collections.some(
-				({ collection, diff: parentDiff }) =>
-					parentDiff[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(parentDiff[0]) && collection === group
-			);
-
-			return parentExists && !parentWillBeCreated;
-		})
-	);
+	for (const collection of collectionCreateOrder(snapshotDiff)) {
+		projectCollectionCreate(collection, createdDefinitions.get(collection)!);
+	}
 
 	for (const collection of collectionDeleteOrder(snapshotDiff)) projectCollectionDelete(collection);
 

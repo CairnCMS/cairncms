@@ -548,6 +548,73 @@ describe('assertSchemaDiffApplicable', () => {
 		expect(() => assertSchemaDiffApplicable(diff, snapshot({}), schemaOverview([]))).toThrow();
 	});
 
+	describe('a new collection grouped under another', () => {
+		const groupedUnder = (group: string, ...others: SnapshotDiff['collections']): SnapshotDiff => {
+			const diff = emptyDiff();
+			diff.collections = [{ collection: 'articles', diff: newDiff(collection('articles', {}, group)) }, ...others];
+
+			diff.fields = [
+				{
+					collection: 'articles',
+					field: 'id',
+					diff: newDiff(field('articles', 'id', 'integer', { is_primary_key: true })),
+				},
+			];
+
+			return diff;
+		};
+
+		const missingMetadata = `Collection "articles" can't be grouped under "content", which has no collection metadata.`;
+
+		it('refuses a group that does not exist', () => {
+			expect(() => assertSchemaDiffApplicable(groupedUnder('content'), snapshot({}), schemaOverview([]))).toThrow(
+				missingMetadata
+			);
+		});
+
+		it('refuses a group that is a current table without metadata', () => {
+			const current = snapshot({ collections: [{ collection: 'content', meta: null, schema: {} }] as any });
+
+			expect(() => assertSchemaDiffApplicable(groupedUnder('content'), current, schemaOverview([]))).toThrow(
+				missingMetadata
+			);
+		});
+
+		it('refuses a group the diff creates without metadata', () => {
+			const diff = groupedUnder('content', {
+				collection: 'content',
+				diff: newDiff({ collection: 'content', meta: null, schema: null }),
+			});
+
+			expect(() => assertSchemaDiffApplicable(diff, snapshot({}), schemaOverview([]))).toThrow(missingMetadata);
+		});
+
+		it('accepts a group that is a current collection with metadata', () => {
+			const current = snapshot({ collections: [collection('content', null)] as any });
+
+			expect(() => assertSchemaDiffApplicable(groupedUnder('content'), current, schemaOverview([]))).not.toThrow();
+		});
+
+		it('accepts a group the diff creates with metadata', () => {
+			const diff = groupedUnder('content', { collection: 'content', diff: newDiff(collection('content', null)) });
+
+			expect(() => assertSchemaDiffApplicable(diff, snapshot({}), schemaOverview([]))).not.toThrow();
+		});
+
+		it('refuses new collections whose groups form a cycle', () => {
+			const diff = emptyDiff();
+
+			diff.collections = [
+				{ collection: 'a', diff: newDiff(collection('a', null, 'b')) },
+				{ collection: 'b', diff: newDiff(collection('b', null, 'a')) },
+			];
+
+			expect(() => assertSchemaDiffApplicable(diff, snapshot({}), schemaOverview([]))).toThrow(
+				/can't be grouped under itself through a group cycle/
+			);
+		});
+	});
+
 	it('refuses a diff that removes the table of a kept collection', () => {
 		const diff = emptyDiff();
 

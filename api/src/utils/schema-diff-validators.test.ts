@@ -6,6 +6,8 @@ import {
 	assertAliasTypeUnchanged,
 	assertCollectionAbsent,
 	assertCollectionAttributesKept,
+	assertCollectionGroupAcyclic,
+	assertCollectionGroupHasMetadata,
 	assertCollectionNameAllowed,
 	assertCollectionPresent,
 	assertFieldAbsent,
@@ -13,6 +15,28 @@ import {
 	assertRelationCreatable,
 	assertRelationModifiable,
 } from './schema-diff-validators.js';
+
+describe('collection group validators', () => {
+	it('refuses a group without collection metadata', () => {
+		expect(() => assertCollectionGroupHasMetadata('articles', 'content', false)).toThrow(
+			`Collection "articles" can't be grouped under "content", which has no collection metadata.`
+		);
+	});
+
+	it('accepts a group with collection metadata', () => {
+		expect(() => assertCollectionGroupHasMetadata('articles', 'content', true)).not.toThrow();
+	});
+
+	it('refuses a group cycle', () => {
+		expect(() => assertCollectionGroupAcyclic('articles', true)).toThrow(
+			`Collection "articles" can't be grouped under itself through a group cycle.`
+		);
+	});
+
+	it('accepts a group outside any cycle', () => {
+		expect(() => assertCollectionGroupAcyclic('articles', false)).not.toThrow();
+	});
+});
 
 describe('assertCollectionNameAllowed', () => {
 	it('requires a collection name', () => {

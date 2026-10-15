@@ -43,12 +43,7 @@ import {
 	schemaStateVerifiedReverted,
 	type SchemaTouchedEntities,
 } from './read-schema-observed-state.js';
-import { collectionDeleteOrder } from './schema-collection-order.js';
-
-type CollectionDelta = {
-	collection: string;
-	diff: Diff<Collection | undefined>[];
-};
+import { collectionCreateOrder, collectionDeleteOrder } from './schema-collection-order.js';
 
 type FieldWrites = Map<string, Map<string, SnapshotField>>;
 
@@ -223,56 +218,45 @@ export async function applyDiff(
 
 				const collectionsService = new CollectionsService({ knex: trx, schema });
 
-				const getNestedCollectionsToCreate = (currentLevelCollection: string) =>
-					snapshotDiff.collections.filter(
-						({ diff }) => (diff[0] as DiffNew<Collection>).rhs?.meta?.group === currentLevelCollection
-					) as CollectionDelta[];
-
-				const createCollections = async (collections: CollectionDelta[]) => {
-					for (const { collection, diff } of collections) {
-						if (diff?.[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff?.[0]) && diff[0].rhs) {
-							// We'll nest the to-be-created fields in the same collection creation, to prevent
-							// creating a collection without a primary key
-							const fields = snapshotDiff.fields
-								.filter((fieldDiff) => fieldDiff.collection === collection)
-								.map(
-									(fieldDiff) =>
-										fieldWrite(fieldDiff.collection, fieldDiff.field) ?? (fieldDiff.diff[0] as DiffNew<Field>).rhs
-								)
-								.map((fieldDiff) => {
-									// Casts field type to UUID when applying non-PostgreSQL schema onto PostgreSQL database.
-									// This is needed because they snapshots UUID fields as char/varchar with length 36.
-									if (
-										['char', 'varchar'].includes(String(fieldDiff.schema?.data_type).toLowerCase()) &&
-										fieldDiff.schema?.max_length === 36 &&
-										(fieldDiff.schema?.is_primary_key ||
-											(fieldDiff.schema?.foreign_key_table && fieldDiff.schema?.foreign_key_column))
-									) {
-										return merge(fieldDiff, { type: 'uuid', schema: { data_type: 'uuid', max_length: null } });
-									} else {
-										return fieldDiff;
-									}
-								});
-
-							try {
-								await collectionsService.createOne(
-									{
-										...diff[0].rhs,
-										fields,
-									},
-									mutationOptions
-								);
-							} catch (err: any) {
-								logger.error(`Failed to create collection "${collection}"`);
-								throw err;
+				const createCollection = async (collection: string, created: Collection) => {
+					// We'll nest the to-be-created fields in the same collection creation, to prevent
+					// creating a collection without a primary key
+					const fields = snapshotDiff.fields
+						.filter((fieldDiff) => fieldDiff.collection === collection)
+						.map(
+							(fieldDiff) =>
+								fieldWrite(fieldDiff.collection, fieldDiff.field) ?? (fieldDiff.diff[0] as DiffNew<Field>).rhs
+						)
+						.map((fieldDiff) => {
+							// Casts field type to UUID when applying non-PostgreSQL schema onto PostgreSQL database.
+							// This is needed because they snapshots UUID fields as char/varchar with length 36.
+							if (
+								['char', 'varchar'].includes(String(fieldDiff.schema?.data_type).toLowerCase()) &&
+								fieldDiff.schema?.max_length === 36 &&
+								(fieldDiff.schema?.is_primary_key ||
+									(fieldDiff.schema?.foreign_key_table && fieldDiff.schema?.foreign_key_column))
+							) {
+								return merge(fieldDiff, { type: 'uuid', schema: { data_type: 'uuid', max_length: null } });
+							} else {
+								return fieldDiff;
 							}
+						});
 
-							// Now that the fields are in for this collection, we can strip them from the field edits
-							snapshotDiff.fields = snapshotDiff.fields.filter((fieldDiff) => fieldDiff.collection !== collection);
-
-							await createCollections(getNestedCollectionsToCreate(collection));
-						}
+					try {
+						await collectionsService.createOne(
+							{
+								...created,
+								fields,
+							},
+							mutationOptions
+						);
+					} catch (err: any) {
+						logger.error(`Failed to create collection "${collection}"`);
+						throw err;
 					}
+
+					// Now that the fields are in for this collection, we can strip them from the field edits
+					snapshotDiff.fields = snapshotDiff.fields.filter((fieldDiff) => fieldDiff.collection !== collection);
 				};
 
 				const deleteCollection = async (collection: string) => {
@@ -309,49 +293,12 @@ export async function applyDiff(
 					}
 				};
 
-				// Finds all collections that need to be created
-				const filterCollectionsForCreation = ({
-					diff,
-				}: {
-					collection: string;
-					diff: Diff<Collection | undefined>[];
-				}) => {
-					// Check new collections only
-					const isNewCollection = diff[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff[0]);
-					if (!isNewCollection) return false;
-
-					// Create now if no group
-					const groupName = (diff[0] as DiffNew<Collection>).rhs.meta?.group;
-					if (!groupName) return true;
-
-					// Check if parent collection already exists in schema
-					const parentExists = currentSnapshot.collections.find((c) => c.collection === groupName) !== undefined;
-
-					// If this is a new collection and the parent collection doesn't exist in current schema ->
-					// Check if the parent collection will be created as part of applying this snapshot ->
-					// If yes -> this collection will be created recursively
-					// If not -> create now
-					// (ex.)
-					// TopLevelCollection - I exist in current schema
-					// 		NestedCollection - I exist in snapshotDiff as a new collection
-					//			TheCurrentCollectionInIteration - I exist in snapshotDiff as a new collection but will be created as part of NestedCollection
-					const parentWillBeCreatedInThisApply =
-						snapshotDiff.collections.filter(
-							({ collection, diff }) =>
-								diff[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff[0]) && collection === groupName
-						).length > 0;
-
-					// Has group, but parent is not new, parent is also not being created in this snapshot apply
-					if (parentExists && !parentWillBeCreatedInThisApply) return true;
-
-					return false;
-				};
-
 				writesStarted = true;
 
-				// Create top level collections (no group, or highest level in existing group) first,
-				// then continue with nested collections recursively
-				await createCollections(snapshotDiff.collections.filter(filterCollectionsForCreation));
+				for (const collection of collectionCreateOrder(snapshotDiff)) {
+					const { diff } = snapshotDiff.collections.find((entry) => entry.collection === collection)!;
+					await createCollection(collection, (diff[0] as DiffNew<Collection>).rhs);
+				}
 
 				for (const collection of collectionDeleteOrder(snapshotDiff)) {
 					await deleteCollection(collection);

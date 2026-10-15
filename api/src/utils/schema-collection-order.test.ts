@@ -2,7 +2,7 @@ import type { Diff, DiffDeleted, DiffNew } from 'deep-diff';
 import { describe, expect, it } from 'vitest';
 import type { CollectionMeta } from '../types/collection.js';
 import type { Collection, SnapshotDiff } from '../types/index.js';
-import { collectionDeleteOrder } from './schema-collection-order.js';
+import { collectionCreateOrder, collectionDeleteOrder } from './schema-collection-order.js';
 
 type CollectionChange = SnapshotDiff['collections'][number];
 
@@ -86,5 +86,46 @@ describe('collectionDeleteOrder', () => {
 		);
 
 		expect(collectionDeleteOrder(diff)).toEqual([]);
+	});
+});
+
+function created(collection: string, group: string | null = null): CollectionChange {
+	const change: DiffNew<Collection> = { kind: 'N', rhs: definition(collection, group) };
+	return { collection, diff: [change] };
+}
+
+describe('collectionCreateOrder', () => {
+	it('lists a created top-level collection', () => {
+		expect(collectionCreateOrder(diffOf(created('articles')))).toEqual(['articles']);
+	});
+
+	it('lists a created collection grouped under an existing one', () => {
+		expect(collectionCreateOrder(diffOf(created('articles', 'content')))).toEqual(['articles']);
+	});
+
+	it('lists created parents before the created collections grouped under them', () => {
+		const order = collectionCreateOrder(
+			diffOf(created('articles', 'archive'), created('archive', 'content'), created('comments', 'articles'))
+		);
+
+		expect(order).toEqual(['archive', 'articles', 'comments']);
+	});
+
+	it('lists each member of a group cycle once', () => {
+		const order = collectionCreateOrder(diffOf(created('a', 'b'), created('b', 'a')));
+
+		expect(order).toHaveLength(2);
+		expect(new Set(order)).toEqual(new Set(['a', 'b']));
+	});
+
+	it('ignores collections the diff deletes or updates', () => {
+		const diff = diffOf(
+			created('pages'),
+			deleted('legacy'),
+			attributeChange('posts', { kind: 'E', path: ['meta', 'note'], lhs: null, rhs: 'Posts' }),
+			attributeChange('tags', { kind: 'N', path: ['meta', 'translations'], rhs: { en: 'Tags' } })
+		);
+
+		expect(collectionCreateOrder(diff)).toEqual(['pages']);
 	});
 });
