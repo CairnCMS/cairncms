@@ -15,6 +15,7 @@ import {
 	type ConfigStateToken,
 	type ConfigTranslations,
 } from '../types/config.js';
+import type { SnapshotField } from '../types/index.js';
 import { LATEST_MANIFEST_VERSION, type ManifestVersion } from './config-contract.js';
 import { computeConfigStateDigest, toStateDigestEntry, type StateDigestEntry } from './config/config-state-digest.js';
 import { makeDependencyAccessor } from './config/dependency-context.js';
@@ -34,6 +35,7 @@ export type CurrentConfigRead = {
 	currentFolderKeys: ReadonlySet<string>;
 	currentFolderParents: ReadonlyMap<string, string | null>;
 	stateToken: ConfigStateToken;
+	schemaStoredFields?: SnapshotField[];
 };
 
 export type CurrentConfigOptions = {
@@ -104,6 +106,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 	const published = new Map<ConfigKind, unknown>();
 	const documentsByKind = new Map<ConfigKind, unknown[]>();
 	const projectionInputs: Array<{ kind: ConfigKind; mode: ConfigReadMode; result: unknown }> = [];
+	let schemaStoredFields: SnapshotField[] | undefined;
 
 	for (const { kind, mode } of closure) {
 		const descriptor = getDescriptor(kind);
@@ -124,6 +127,10 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		const result = await descriptor.handler.readCurrent(context as never);
 		published.set(kind, result.dependencyState);
 		projectionInputs.push({ kind, mode, result });
+
+		if (kind === 'schema') {
+			schemaStoredFields = (result.dependencyState as { storedFields: SnapshotField[] } | undefined)?.storedFields;
+		}
 
 		if (!managed.has(kind)) continue;
 
@@ -218,7 +225,14 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		config.folders.map((folder) => [folder.key, folder.parent ?? null])
 	);
 
-	return { config, currentRoleKeys, currentFolderKeys, currentFolderParents, stateToken };
+	return {
+		config,
+		currentRoleKeys,
+		currentFolderKeys,
+		currentFolderParents,
+		stateToken,
+		...(schemaStoredFields !== undefined && { schemaStoredFields }),
+	};
 }
 
 export async function getConfigSnapshot(options?: { database?: Knex; schema?: SchemaOverview }): Promise<CairnConfig> {

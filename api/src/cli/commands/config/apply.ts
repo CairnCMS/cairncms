@@ -152,7 +152,7 @@ async function runLocalEngine(
 
 		const extensionDeclarations = extensionSettingsManaged ? await buildExtensionDeclarationSnapshot() : undefined;
 
-		const currentCollections = schema !== undefined ? new Set(Object.keys(schema.collections)) : undefined;
+		const currentCollections = schema?.collections;
 
 		const extensionSettingsSubjects = extensionSettingsManaged
 			? desiredExtensionSubjects(desired['extension-settings'])
@@ -164,6 +164,7 @@ async function runLocalEngine(
 			currentFolderKeys,
 			currentFolderParents,
 			stateToken,
+			schemaStoredFields,
 		} = await readCurrentConfig({
 			database,
 			...(schema !== undefined && { schema }),
@@ -180,6 +181,9 @@ async function runLocalEngine(
 			currentFolderParents,
 			...(extensionDeclarations !== undefined && { extensionDeclarations }),
 			...(currentCollections !== undefined && { currentCollections }),
+			...(schemaStoredFields !== undefined && {
+				currentSchema: { records: current.schema, storedFields: schemaStoredFields },
+			}),
 		});
 
 		if (documentErrors.length > 0) {
@@ -190,11 +194,10 @@ async function runLocalEngine(
 			return { result: 'invalid', errorCode: documentErrors[0]!.code, exitCode: 2 };
 		}
 
-		const plan = computeConfigPlan(
-			current,
-			desired,
-			extensionDeclarations !== undefined ? { extensionDeclarations } : undefined
-		);
+		const plan = computeConfigPlan(current, desired, {
+			...(extensionDeclarations !== undefined && { extensionDeclarations }),
+			...(schemaStoredFields !== undefined && { currentSchemaStoredFields: schemaStoredFields }),
+		});
 
 		const empty = isPlanEmpty(plan);
 

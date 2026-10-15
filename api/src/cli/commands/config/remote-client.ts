@@ -364,6 +364,10 @@ function validatedSnapshot(data: unknown, token: string): CairnConfig {
 	const snapshot = data as CairnConfig;
 	const managed = new Set<ConfigKind>(snapshot.manifest.resources);
 
+	if (managed.has('schema')) {
+		throw new RemoteClientError('Remote capture of schema-managing snapshots is not yet supported.', 3);
+	}
+
 	return {
 		manifest: { version: snapshot.manifest.version, resources: [...snapshot.manifest.resources] },
 		roles: managed.has('roles') ? snapshot.roles : [],

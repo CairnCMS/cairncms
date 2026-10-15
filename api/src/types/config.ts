@@ -93,7 +93,9 @@ export type SchemaIdentity = { collection: string };
 
 export type SchemaValues = Record<string, unknown>;
 
-export type SchemaFieldChanges = Record<string, FieldChange<unknown>>;
+export type SchemaAttributeChange = FieldChange<unknown> & { beforePresent?: boolean; afterPresent?: boolean };
+
+export type SchemaFieldChanges = Record<string, SchemaAttributeChange>;
 
 /** The release and database vendor a schema snapshot was taken from. */
 export interface ConfigManifestSchemaProvenance {
@@ -263,12 +265,26 @@ export interface ConfigPlan {
 		delete: Array<{ identity: TranslationsIdentity }>;
 	};
 	schema: {
-		create: never[];
-		update: never[];
-		delete: never[];
+		create: SchemaChangeEntry[];
+		update: SchemaChangeEntry[];
+		delete: SchemaChangeEntry[];
 	};
 	protections: ConfigProtection[];
 }
+
+export type SchemaCollectionIdentity = { collection: string };
+export type SchemaFieldIdentity = { collection: string; field: string };
+export type SchemaRelationIdentity = { collection: string; field: string };
+
+export type SchemaChangeEntry =
+	| { changeKind: 'collections'; identity: SchemaCollectionIdentity; changes: SchemaFieldChanges }
+	| { changeKind: 'fields'; identity: SchemaFieldIdentity; changes: SchemaFieldChanges }
+	| {
+			changeKind: 'relations';
+			identity: SchemaRelationIdentity;
+			relatedCollection: string | null;
+			changes: SchemaFieldChanges;
+	  };
 
 export type PermissionIdentity = { role: string; collection: string; action: PermissionsAction };
 
@@ -321,10 +337,37 @@ export type ConfigPlanChange =
 	| { kind: 'extension-settings'; operation: 'delete'; identity: ExtensionSettingsIdentity; impact: [] }
 	| { kind: 'translations'; operation: 'create'; identity: TranslationsIdentity; values: TranslationsValues }
 	| { kind: 'translations'; operation: 'update'; identity: TranslationsIdentity; fields: TranslationsFieldChanges }
-	| { kind: 'translations'; operation: 'delete'; identity: TranslationsIdentity; impact: [] };
+	| { kind: 'translations'; operation: 'delete'; identity: TranslationsIdentity; impact: [] }
+	| { kind: 'collections'; operation: 'create'; identity: SchemaCollectionIdentity; values: SchemaValues }
+	| { kind: 'collections'; operation: 'update'; identity: SchemaCollectionIdentity; fields: SchemaFieldChanges }
+	| { kind: 'collections'; operation: 'delete'; identity: SchemaCollectionIdentity; impact: [] }
+	| { kind: 'fields'; operation: 'create'; identity: SchemaFieldIdentity; values: SchemaValues }
+	| { kind: 'fields'; operation: 'update'; identity: SchemaFieldIdentity; fields: SchemaFieldChanges }
+	| { kind: 'fields'; operation: 'delete'; identity: SchemaFieldIdentity; impact: [] }
+	| {
+			kind: 'relations';
+			operation: 'create';
+			identity: SchemaRelationIdentity;
+			relatedCollection: string | null;
+			values: SchemaValues;
+	  }
+	| {
+			kind: 'relations';
+			operation: 'update';
+			identity: SchemaRelationIdentity;
+			relatedCollection: string | null;
+			fields: SchemaFieldChanges;
+	  }
+	| {
+			kind: 'relations';
+			operation: 'delete';
+			identity: SchemaRelationIdentity;
+			relatedCollection: string | null;
+			impact: [];
+	  };
 
 export type SerializedConfigPlan = {
-	planVersion: 2;
+	planVersion: 2 | 3;
 	manifestVersion: number;
 	changes: ConfigPlanChange[];
 	summary: { create: number; update: number; delete: number };

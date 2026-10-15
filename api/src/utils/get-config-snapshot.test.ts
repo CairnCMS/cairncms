@@ -107,7 +107,7 @@ describe('getConfigSnapshot', () => {
 		vi.spyOn(CONFIG_REGISTRY.schema.handler, 'readCurrent').mockResolvedValue({
 			records: [],
 			documentIdentities: [],
-			dependencyState: undefined,
+			dependencyState: { storedFields: [] },
 		} as never);
 
 		mockSettings();
@@ -806,6 +806,17 @@ describe('readCurrentConfig', () => {
 		expect(config.roles).toEqual([]);
 		expect(config.permissions[0]!.role).toBe('editor');
 		expect(currentRoleKeys.has('editor')).toBe(true);
+	});
+
+	it('does not read schema for a version 2 tree that does not manage schema', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
+		mockPermission();
+		const schemaRead = vi.spyOn(CONFIG_REGISTRY.schema.handler, 'readCurrent');
+
+		const read = await readCurrentConfig({ database: db, resources: ['permissions'], manifestVersion: 2 });
+
+		expect(schemaRead).not.toHaveBeenCalled();
+		expect(read.schemaStoredFields).toBeUndefined();
 	});
 
 	it('sources folder reference keys from the published folders dependency, not the empty config.folders slice', async () => {

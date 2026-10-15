@@ -351,6 +351,40 @@ describe('enrichConfigPlan', () => {
 		expect(enrichment.warnings).toEqual([]);
 	});
 
+	it('reads permission collections from the schema the plan leaves, not the live schema', async () => {
+		const plan: ConfigPlan = {
+			...planDeletingRoles(),
+			schema: {
+				create: [
+					{
+						changeKind: 'collections',
+						identity: { collection: 'pages' },
+						changes: { schema: { before: null, after: { name: 'pages' }, beforePresent: false } },
+					},
+					{
+						changeKind: 'fields',
+						identity: { collection: 'pages', field: 'id' },
+						changes: {
+							type: { before: null, after: 'integer', beforePresent: false },
+							schema: { before: null, after: { is_primary_key: true }, beforePresent: false },
+						},
+					},
+				],
+				update: [],
+				delete: [{ changeKind: 'collections', identity: { collection: 'articles' }, changes: {} }],
+			},
+		};
+
+		const desired = makeConfig(
+			['roles', 'permissions'],
+			[{ role: 'editor', permissions: [perm('articles', 'read'), perm('pages', 'read')] }]
+		);
+
+		const enrichment = await enrichConfigPlan(plan, desired, { schema: schemaWith('articles'), database: db });
+
+		expect(enrichment.warnings.map((warning) => warning.identity.collection)).toEqual(['articles']);
+	});
+
 	it('does not scan or warn on desired permissions when permissions are unmanaged, even if malformed', async () => {
 		const desired: CairnConfig = configFixture({
 			manifest: { version: 1, resources: ['roles'] },

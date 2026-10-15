@@ -1,7 +1,10 @@
+import type { ExtensionSettings, SchemaOverview } from '@cairncms/types';
 import { describe, expect, it } from 'vitest';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
 import { ConfigUnsupportedVersionException } from '../exceptions/config-unsupported-version.js';
-import type { ConfigKind, ConfigManifest } from '../types/config.js';
+import type { CollectionMeta } from '../types/collection.js';
+import type { ConfigKind, ConfigManifest, ConfigSchemaCollection } from '../types/config.js';
+import type { SnapshotField } from '../types/index.js';
 import {
 	buildRecordSchemas,
 	validateConfigManifest,
@@ -874,6 +877,109 @@ describe('validateDesiredConfig failure codes', () => {
 
 		expect(failures).toHaveLength(1);
 		expect(failures[0]!.code).toBe('CONFIG_INVALID');
+	});
+});
+
+describe('validateDesiredConfig collection references', () => {
+	const WIDGET = '@cairncms/extension-widget';
+
+	const declarations = {
+		discoveryComplete: true,
+		eligible: new Map([[WIDGET, { label: { type: 'string', scope: 'collection' } } as ExtensionSettings]]),
+	};
+
+	function idField(collection: string): SnapshotField {
+		return {
+			collection,
+			field: 'id',
+			type: 'integer',
+			meta: null,
+			schema: { name: 'id', table: collection, is_primary_key: true, has_auto_increment: true },
+		} as unknown as SnapshotField;
+	}
+
+	function keyed(collection: string): ConfigSchemaCollection {
+		return {
+			collection,
+			meta: null,
+			schema: { name: collection } as Exclude<ConfigSchemaCollection['schema'], undefined>,
+			fields: [idField(collection)],
+			relations: [],
+		};
+	}
+
+	function folder(collection: string): ConfigSchemaCollection {
+		return { collection, meta: { collection } as CollectionMeta, fields: [], relations: [] };
+	}
+
+	function body(resources: ConfigKind[], schema: unknown[], collection: string): Record<string, unknown> {
+		return {
+			manifest: { version: 3, resources },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [{ subject: WIDGET, global: {}, collections: { [collection]: { label: 'x' } } }],
+			translations: [],
+			schema,
+		};
+	}
+
+	function validateAgainst(doc: Record<string, unknown>, current: ConfigSchemaCollection[]): string[] {
+		const collections = Object.fromEntries(
+			current.map((record) => [record.collection, { collection: record.collection, primary: 'id' }])
+		) as unknown as SchemaOverview['collections'];
+
+		return validateDesiredConfig(doc, {
+			label: 'test',
+			references: 'current-state',
+			currentRoleKeys: new Set(),
+			currentFolderKeys: new Set(),
+			extensionDeclarations: declarations,
+			currentCollections: collections,
+			currentSchema: { records: current, storedFields: [] },
+		}).map((failure) => failure.message);
+	}
+
+	const both: ConfigKind[] = ['extension-settings', 'schema'];
+
+	it('accepts a collection-scoped extension setting for a collection the schema plan creates', () => {
+		const doc = body(both, [keyed('articles'), keyed('pages')], 'pages');
+
+		expect(validateAgainst(doc, [keyed('articles')])).toEqual([]);
+	});
+
+	it('refuses a collection-scoped extension setting for a collection the schema plan drops', () => {
+		const doc = body(both, [keyed('articles')], 'legacy');
+
+		expect(validateAgainst(doc, [keyed('articles'), keyed('legacy')])).toEqual([
+			expect.stringContaining('target collection "legacy", which does not exist'),
+		]);
+	});
+
+	it('refuses a collection-scoped extension setting for a metadata-only group the schema plan creates', () => {
+		const doc = body(both, [keyed('articles'), folder('navigation')], 'navigation');
+
+		expect(validateAgainst(doc, [keyed('articles')])).toEqual([
+			expect.stringContaining('target collection "navigation", which does not exist'),
+		]);
+	});
+
+	it('resolves against the live collections when the schema is not managed', () => {
+		const doc = body(['extension-settings'], [], 'pages');
+
+		expect(validateAgainst(doc, [keyed('articles')])).toEqual([
+			expect.stringContaining('target collection "pages", which does not exist'),
+		]);
+	});
+
+	it('reports only the schema failure when the desired schema is invalid', () => {
+		const doc = body(both, [{ ...keyed('pages'), fields: [{ ...idField('pages'), type: 'not-a-type' }] }], 'pages');
+
+		const messages = validateAgainst(doc, [keyed('articles')]);
+
+		expect(messages).toHaveLength(1);
+		expect(messages[0]).toContain('field in "pages"');
 	});
 });
 

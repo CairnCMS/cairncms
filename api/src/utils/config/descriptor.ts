@@ -185,6 +185,8 @@ export interface PlanContext<K extends ConfigKindTypes> {
 export interface EnrichContext {
 	database: Knex;
 	schema: SchemaOverview;
+	/** The collections the runtime schema holds once the plan's schema changes apply. */
+	collections: ReadonlySet<string>;
 	/** The default-folder retarget the plan performs, so the folders deletion preview can drop a blocker the same apply clears. */
 	settingsRetarget?: SettingsRetarget;
 }

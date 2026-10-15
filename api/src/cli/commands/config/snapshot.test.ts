@@ -333,11 +333,12 @@ describe('configSnapshot manifest version preservation', () => {
 			expect(await writtenVersion()).toBe(expected);
 		});
 
-		it('refuses a fresh remote v3 schema capture before writing', async () => {
+		it('refuses a remote schema-managing capture before writing', async () => {
 			respondWith({
 				manifest: {
 					version: 3,
 					resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations', 'schema'],
+					schema: { release: '1.6.0', vendor: 'postgres' },
 				},
 				roles: [],
 				permissions: [],
@@ -345,7 +346,7 @@ describe('configSnapshot manifest version preservation', () => {
 				settings: [SETTINGS_DOC],
 				'extension-settings': [],
 				translations: [],
-				schema: [],
+				schema: [{ collection: 'articles', meta: {}, schema: { name: 'articles' }, fields: [], relations: [] }],
 			});
 
 			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
@@ -353,10 +354,68 @@ describe('configSnapshot manifest version preservation', () => {
 			expect(vi.mocked(process.exit).mock.calls).toEqual([[3]]);
 
 			expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
-				expect.stringContaining('Schema validation is not supported')
+				expect.stringContaining('schema-managing snapshots is not yet supported')
 			);
 
 			expect(await fs.readdir(tmpDir)).toEqual([]);
+		});
+
+		it('leaves an existing destination unchanged when it refuses a schema-managing capture', async () => {
+			await fs.writeFile(
+				path.join(tmpDir, 'cairncms-config.yaml'),
+				dumpYaml({
+					version: 3,
+					resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations', 'schema'],
+					schema: { release: '1.6.0', vendor: 'postgres' },
+				})
+			);
+
+			const before = await captureTree(tmpDir);
+
+			respondWith({
+				manifest: {
+					version: 3,
+					resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations', 'schema'],
+					schema: { release: '1.6.0', vendor: 'postgres' },
+				},
+				roles: [],
+				permissions: [],
+				folders: [],
+				settings: [SETTINGS_DOC],
+				'extension-settings': [],
+				translations: [],
+				schema: [{ collection: 'articles', meta: {}, schema: { name: 'articles' }, fields: [], relations: [] }],
+			});
+
+			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
+
+			expect(vi.mocked(process.exit).mock.calls).toEqual([[3]]);
+
+			expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
+				expect.stringContaining('schema-managing snapshots is not yet supported')
+			);
+
+			expect(await captureTree(tmpDir)).toEqual(before);
+		});
+
+		it('still captures a v3 snapshot that does not manage schema', async () => {
+			await seedManifest(3);
+
+			respondWith({
+				manifest: { version: 3, resources: ['roles', 'permissions'] },
+				roles: [],
+				permissions: [],
+				folders: [],
+				settings: [],
+				'extension-settings': [],
+				translations: [],
+				schema: [],
+			});
+
+			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
+
+			expect(vi.mocked(process.exit).mock.calls).toEqual([[0]]);
+			expect(await writtenVersion()).toBe(3);
 		});
 	});
 

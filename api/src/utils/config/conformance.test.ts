@@ -391,7 +391,7 @@ describe('schema descriptor registration', () => {
 		).toBeLessThan(0);
 	});
 
-	it('refuses planning and apply operations', async () => {
+	it('admits validation and neutral enrichment while the generic plan hooks and apply stay guarded', async () => {
 		expect(() => descriptor.canonicalizeValues({ collection: 'articles', fields: [], relations: [] })).toThrow(
 			'Schema planning is not supported'
 		);
@@ -400,13 +400,13 @@ describe('schema descriptor registration', () => {
 			'Schema planning is not supported'
 		);
 
-		await expect(descriptor.handler.enrich({} as never, [], {} as never)).rejects.toThrow(
-			'Schema planning is not supported'
-		);
+		expect(descriptor.handler.validateDesired([], [], {} as never)).toEqual([]);
+
+		await expect(descriptor.handler.enrich({} as never, [], {} as never)).resolves.toEqual({});
 
 		await expect(descriptor.handler.applyCreates([], {} as never)).rejects.toThrow('Schema apply is not supported');
-
-		expect(() => descriptor.handler.validateDesired([], [], {} as never)).toThrow('Schema validation is not supported');
+		await expect(descriptor.handler.applyUpdates([], {} as never)).rejects.toThrow('Schema apply is not supported');
+		await expect(descriptor.handler.applyDeletes([], {} as never)).rejects.toThrow('Schema apply is not supported');
 	});
 });
 
