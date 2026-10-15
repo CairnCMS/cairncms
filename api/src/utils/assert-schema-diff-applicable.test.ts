@@ -671,4 +671,136 @@ describe('assertSchemaDiffApplicable', () => {
 
 		expect(() => assertSchemaDiffApplicable(diff, current, schema)).toThrow(`Collection "notes" doesn't exist`);
 	});
+
+	describe('a primary key follows the column the builder writes', () => {
+		const autoIncrementOnly = { is_primary_key: false, has_auto_increment: true };
+		const flagged = { is_primary_key: true };
+		const refused = `Collection "targets" doesn't exist`;
+
+		const referencingTargets = (diff: SnapshotDiff): SnapshotDiff => {
+			diff.relations = [
+				{
+					collection: 'articles',
+					field: 'ref',
+					related_collection: 'targets',
+					diff: newDiff(relation('articles', 'ref', 'targets')),
+				},
+			];
+
+			return diff;
+		};
+
+		const articlesOnly = () => ({
+			schema: schemaOverview([collectionOverview('articles', 'id', { id: 'integer', ref: 'integer' })]),
+			current: snapshot({
+				collections: [collection('articles')] as any,
+				fields: [field('articles', 'id', 'integer'), field('articles', 'ref', 'integer')] as any,
+			}),
+		});
+
+		const existingTargets = (extra: Record<string, unknown>[] = []) => ({
+			schema: schemaOverview([
+				collectionOverview('articles', 'id', { id: 'integer', ref: 'integer' }),
+				collectionOverview('targets', 'id', { id: 'integer', code: 'integer', blob: 'unknown' }),
+			]),
+			current: snapshot({
+				collections: [collection('articles'), collection('targets')] as any,
+				fields: [
+					field('articles', 'id', 'integer'),
+					field('articles', 'ref', 'integer'),
+					field('targets', 'id', 'integer', flagged),
+					...extra,
+				] as any,
+			}),
+		});
+
+		const droppingTargetsKey = (...changes: SnapshotDiff['fields']): SnapshotDiff => {
+			const diff = emptyDiff();
+
+			diff.fields = [
+				{ collection: 'targets', field: 'id', diff: deleteDiff(field('targets', 'id', 'integer', flagged)) },
+				...changes,
+			];
+
+			return referencingTargets(diff);
+		};
+
+		describe('in a new collection', () => {
+			const newTargets = (type: string, key: Record<string, unknown>): SnapshotDiff => {
+				const diff = emptyDiff();
+				diff.collections = [{ collection: 'targets', diff: newDiff(collection('targets')) }];
+
+				diff.fields = [
+					{ collection: 'targets', field: 'id', diff: newDiff(field('targets', 'id', type, key)) },
+					{ collection: 'targets', field: 'name', diff: newDiff(field('targets', 'name', 'string')) },
+				];
+
+				return referencingTargets(diff);
+			};
+
+			it('accepts a relation to a collection keyed only by an auto-increment field', () => {
+				const { schema, current } = articlesOnly();
+
+				expect(() =>
+					assertSchemaDiffApplicable(newTargets('integer', autoIncrementOnly), current, schema)
+				).not.toThrow();
+			});
+
+			it.each(['unknown', 'o2m'])('refuses a relation to a collection keyed by a flagged %s field', (type) => {
+				const { schema, current } = articlesOnly();
+
+				expect(() => assertSchemaDiffApplicable(newTargets(type, flagged), current, schema)).toThrow(refused);
+			});
+		});
+
+		describe('in a field created on an existing collection', () => {
+			const createdKey = (type: string, key: Record<string, unknown>) => ({
+				collection: 'targets',
+				field: 'new_id',
+				diff: newDiff(field('targets', 'new_id', type, key)),
+			});
+
+			it('accepts a relation when an auto-increment field replaces the dropped key', () => {
+				const { schema, current } = existingTargets();
+				const diff = droppingTargetsKey(createdKey('integer', autoIncrementOnly));
+
+				expect(() => assertSchemaDiffApplicable(diff, current, schema)).not.toThrow();
+			});
+
+			it('refuses a relation when a flagged unknown-typed field replaces the dropped key', () => {
+				const { schema, current } = existingTargets();
+				const diff = droppingTargetsKey(createdKey('unknown', flagged));
+
+				expect(() => assertSchemaDiffApplicable(diff, current, schema)).toThrow(refused);
+			});
+		});
+
+		describe('in a field updated on an existing collection', () => {
+			it('accepts a relation when an updated field starts to auto-increment', () => {
+				const { schema, current } = existingTargets([
+					field('targets', 'code', 'integer', { is_primary_key: false, has_auto_increment: false }),
+				]);
+
+				const diff = droppingTargetsKey({
+					collection: 'targets',
+					field: 'code',
+					diff: editDiff(['schema', 'has_auto_increment'], false, true),
+				});
+
+				expect(() => assertSchemaDiffApplicable(diff, current, schema)).not.toThrow();
+			});
+
+			it('refuses a relation when an updated unknown-typed field is flagged as the key', () => {
+				const { schema, current } = existingTargets([field('targets', 'blob', 'unknown', { is_primary_key: false })]);
+
+				const diff = droppingTargetsKey({
+					collection: 'targets',
+					field: 'blob',
+					diff: editDiff(['schema', 'is_primary_key'], false, true),
+				});
+
+				expect(() => assertSchemaDiffApplicable(diff, current, schema)).toThrow(refused);
+			});
+		});
+	});
 });

@@ -20,6 +20,7 @@ import {
 	assertRelationCreatable,
 	assertRelationModifiable,
 } from './schema-diff-validators.js';
+import { writesPrimaryKey } from './writes-primary-key.js';
 
 /**
  * Evaluates the deterministic schema-apply refusals over the whole diff against the transaction-bound
@@ -94,7 +95,7 @@ export function assertSchemaDiffApplicable(
 				}
 
 				if (isRuntimeVisible(field)) fields[field.field] = toFieldOverview(field);
-				if (field.schema?.is_primary_key) primary = field.field;
+				if (writesPrimaryKey(field.type, field.schema)) primary = field.field;
 				fieldRows.add(`${collection}.${field.field}`);
 			}
 
@@ -211,7 +212,7 @@ export function assertSchemaDiffApplicable(
 
 			const target = relationPhase.collections[collection]!;
 			if (isRuntimeVisible(incoming)) target.fields[field] = toFieldOverview(incoming);
-			if (incoming.schema?.is_primary_key) target.primary = field;
+			if (writesPrimaryKey(incoming.type, incoming.schema)) target.primary = field;
 			fieldRows.add(`${collection}.${field}`);
 		}
 
@@ -235,7 +236,7 @@ export function assertSchemaDiffApplicable(
 				if (target) {
 					if (isRuntimeVisible(incoming)) target.fields[field] = toFieldOverview(incoming);
 					else delete target.fields[field];
-					if (incoming.schema?.is_primary_key) target.primary = field;
+					if (writesPrimaryKey(incoming.type, incoming.schema)) target.primary = field;
 				}
 			}
 		}

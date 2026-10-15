@@ -1,10 +1,10 @@
 import type { SchemaOverview } from '@cairncms/types';
 import { toArray } from '@cairncms/utils';
 import { isPlainObject } from 'lodash-es';
-import { ALIAS_TYPES } from '../../constants.js';
 import { isInternalTable } from '../../database/internal-tables.js';
 import env from '../../env.js';
 import type { ConfigPlan } from '../../types/config.js';
+import { writesPrimaryKey } from '../writes-primary-key.js';
 
 /**
  * Projects the collections `getSchema` admits once the schema plan applies. A dropped collection leaves. A collection
@@ -63,18 +63,6 @@ function liveType(current: SchemaOverview['collections'], collection: string, fi
 
 	const fields = current[collection]!.fields;
 	return Object.hasOwn(fields, field) ? fields[field]!.type : undefined;
-}
-
-/**
- * Mirrors the column builder: a field writes no column when its type is missing, an alias type, or unknown, and a
- * written column becomes the primary key when it is flagged as one or auto-increments.
- */
-function writesPrimaryKey(type: unknown, schema: unknown): boolean {
-	if (typeof type !== 'string' || type === 'unknown' || ALIAS_TYPES.includes(type)) return false;
-	if (!isPlainObject(schema)) return false;
-
-	const { is_primary_key, has_auto_increment } = schema as Record<string, unknown>;
-	return Boolean(is_primary_key) || Boolean(has_auto_increment);
 }
 
 function isAdmittedName(collection: string): boolean {
