@@ -1,7 +1,7 @@
 import type { SchemaInspector, Table } from '@cairncms/schema';
 import { createInspector } from '@cairncms/schema';
 import type { Accountability, FieldMeta, RawField, SchemaOverview } from '@cairncms/types';
-import { addFieldFlag } from '@cairncms/utils';
+import { addFieldFlag, toArray } from '@cairncms/utils';
 import type Keyv from 'keyv';
 import type { Knex } from 'knex';
 import { chunk, omit } from 'lodash-es';
@@ -645,8 +645,14 @@ export class CollectionsService {
 					});
 
 					for (const relation of a2oRelationsThatIncludeThisCollection) {
-						const newAllowedCollections = relation
-							.meta!.one_allowed_collections!.filter((collection) => collectionKey !== collection)
+						// The schema's list predates earlier deletes in the same transaction, so narrow the stored one.
+						const stored = await trx('directus_relations')
+							.select('one_allowed_collections')
+							.where({ id: relation.meta!.id })
+							.first();
+
+						const newAllowedCollections = toArray<string>(stored?.one_allowed_collections ?? '')
+							.filter((collection) => collection !== '' && collection !== collectionKey)
 							.join(',');
 
 						await trx('directus_relations')
