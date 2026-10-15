@@ -547,4 +547,61 @@ describe('assertSchemaDiffApplicable', () => {
 
 		expect(() => assertSchemaDiffApplicable(diff, snapshot({}), schemaOverview([]))).toThrow();
 	});
+
+	it('refuses a diff that removes the table of a kept collection', () => {
+		const diff = emptyDiff();
+
+		diff.collections = [
+			{ collection: 'articles', diff: [{ kind: 'D', path: ['schema'], lhs: { name: 'articles' } }] as any },
+		];
+
+		const current = snapshot({ collections: [collection('articles')] as any });
+
+		expect(() =>
+			assertSchemaDiffApplicable(
+				diff,
+				current,
+				schemaOverview([collectionOverview('articles', 'id', { id: 'integer' })])
+			)
+		).toThrow(`Collection "articles" can't remove its table and remain as a collection.`);
+	});
+
+	it('refuses deleting a grouped collection that no longer exists', () => {
+		const diff = emptyDiff();
+		diff.collections = [{ collection: 'ghost', diff: deleteDiff(collection('ghost', {}, 'content')) }];
+
+		const current = snapshot({ collections: [collection('content', null)] as any });
+
+		expect(() => assertSchemaDiffApplicable(diff, current, schemaOverview([]))).toThrow();
+	});
+
+	it.each([
+		['whose group survives', collection('notes', {}, 'content')],
+		['that has no metadata row', { collection: 'notes', meta: null, schema: {} }],
+	])('refuses a relation to a dropped collection %s', (_case, dropped) => {
+		const diff = emptyDiff();
+		diff.collections = [{ collection: 'notes', diff: deleteDiff(dropped) }];
+		diff.fields = [{ collection: 'articles', field: 'note', diff: newDiff(field('articles', 'note', 'integer')) }];
+
+		diff.relations = [
+			{
+				collection: 'articles',
+				field: 'note',
+				related_collection: 'notes',
+				diff: newDiff(relation('articles', 'note', 'notes')),
+			},
+		];
+
+		const schema = schemaOverview([
+			collectionOverview('articles', 'id', { id: 'integer' }),
+			collectionOverview('notes', 'id', { id: 'integer' }),
+		]);
+
+		const current = snapshot({
+			collections: [collection('content', null), collection('articles'), dropped] as any,
+			fields: [field('articles', 'id', 'integer'), field('notes', 'id', 'integer')] as any,
+		});
+
+		expect(() => assertSchemaDiffApplicable(diff, current, schema)).toThrow(`Collection "notes" doesn't exist`);
+	});
 });

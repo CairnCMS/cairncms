@@ -1,14 +1,16 @@
 import type { Field, FieldOverview, Relation, SchemaOverview } from '@cairncms/types';
-import type { Diff, DiffDeleted, DiffNew } from 'deep-diff';
+import type { Diff, DiffNew } from 'deep-diff';
 import deepDiff from 'deep-diff';
 import { cloneDeep } from 'lodash-es';
 import { ALIAS_TYPES } from '../constants.js';
 import type { Collection, Snapshot, SnapshotDiff, SnapshotField, SnapshotRelation } from '../types/index.js';
 import { DiffKind } from '../types/index.js';
 import { isNestedMetaUpdate } from './is-nested-meta-update.js';
+import { collectionDeleteOrder } from './schema-collection-order.js';
 import {
 	assertAliasTypeUnchanged,
 	assertCollectionAbsent,
+	assertCollectionAttributesKept,
 	assertCollectionNameAllowed,
 	assertCollectionPresent,
 	assertFieldAbsent,
@@ -40,9 +42,6 @@ export function assertSchemaDiffApplicable(
 
 	const nestedCreates = (parent: string): SnapshotDiff['collections'] =>
 		snapshotDiff.collections.filter(({ diff }) => (diff[0] as DiffNew<Collection>).rhs?.meta?.group === parent);
-
-	const nestedDeletes = (parent: string): SnapshotDiff['collections'] =>
-		snapshotDiff.collections.filter(({ diff }) => (diff[0] as DiffDeleted<Collection>).lhs?.meta?.group === parent);
 
 	const projectCollectionCreate = (collections: SnapshotDiff['collections']): void => {
 		for (const { collection, diff } of collections) {
@@ -91,32 +90,26 @@ export function assertSchemaDiffApplicable(
 		}
 	};
 
-	const projectCollectionDelete = (collections: SnapshotDiff['collections']): void => {
-		for (const { collection, diff } of collections) {
-			if (diff[0]?.kind !== DiffKind.DELETE || isNestedMetaUpdate(diff[0])) continue;
+	const projectCollectionDelete = (collection: string): void => {
+		const touching = work.relations.filter(
+			(relation) => relation.related_collection === collection || relation.collection === collection
+		);
 
-			const touching = work.relations.filter(
-				(relation) => relation.related_collection === collection || relation.collection === collection
-			);
+		for (const relation of touching) {
+			assertRelationModifiable(relation.collection, relation.field, work);
+		}
 
-			for (const relation of touching) {
-				assertRelationModifiable(relation.collection, relation.field, work);
-			}
+		work.relations = work.relations.filter(
+			(relation) => relation.related_collection !== collection && relation.collection !== collection
+		);
 
-			work.relations = work.relations.filter(
-				(relation) => relation.related_collection !== collection && relation.collection !== collection
-			);
+		assertCollectionPresent(collection, reservedNames);
 
-			projectCollectionDelete(nestedDeletes(collection));
+		reservedNames.delete(collection);
+		delete work.collections[collection];
 
-			assertCollectionPresent(collection, reservedNames);
-
-			reservedNames.delete(collection);
-			delete work.collections[collection];
-
-			for (const key of fieldRows) {
-				if (key.startsWith(`${collection}.`)) fieldRows.delete(key);
-			}
+		for (const key of fieldRows) {
+			if (key.startsWith(`${collection}.`)) fieldRows.delete(key);
 		}
 	};
 
@@ -138,14 +131,9 @@ export function assertSchemaDiffApplicable(
 		})
 	);
 
-	projectCollectionDelete(
-		snapshotDiff.collections.filter(
-			({ diff }) =>
-				diff[0]?.kind === DiffKind.DELETE &&
-				!isNestedMetaUpdate(diff[0]) &&
-				(diff[0] as DiffDeleted<Collection>).lhs.meta?.group === null
-		)
-	);
+	for (const collection of collectionDeleteOrder(snapshotDiff)) projectCollectionDelete(collection);
+
+	for (const { collection, diff } of snapshotDiff.collections) assertCollectionAttributesKept(collection, diff);
 
 	// The field services read a schema captured once after the collection phase, so the field loop
 	// evaluates its guards against this frozen view while projecting each write's effect forward into

@@ -1,9 +1,11 @@
 import type { SchemaOverview } from '@cairncms/types';
+import type { Diff } from 'deep-diff';
 import { describe, expect, it } from 'vitest';
 import { ForbiddenException } from '../exceptions/index.js';
 import {
 	assertAliasTypeUnchanged,
 	assertCollectionAbsent,
+	assertCollectionAttributesKept,
 	assertCollectionNameAllowed,
 	assertCollectionPresent,
 	assertFieldAbsent,
@@ -46,6 +48,45 @@ describe('assertCollectionPresent', () => {
 
 	it('accepts an existing collection', () => {
 		expect(() => assertCollectionPresent('articles', new Set(['articles']))).not.toThrow();
+	});
+});
+
+describe('assertCollectionAttributesKept', () => {
+	const tableRemoved: Diff<unknown> = { kind: 'D', path: ['schema'], lhs: { name: 'articles' } };
+	const metaRemoved: Diff<unknown> = { kind: 'D', path: ['meta'], lhs: { collection: 'articles' } };
+	const metaNulled: Diff<unknown> = { kind: 'E', path: ['meta'], lhs: { collection: 'articles' }, rhs: null };
+	const noteEdited: Diff<unknown> = { kind: 'E', path: ['meta', 'note'], lhs: null, rhs: 'Articles' };
+
+	it('refuses removing the table of a kept collection', () => {
+		expect(() => assertCollectionAttributesKept('articles', [tableRemoved])).toThrow(
+			`Collection "articles" can't remove its table and remain as a collection.`
+		);
+	});
+
+	it.each([
+		['removed', metaRemoved],
+		['set to null', metaNulled],
+	])('refuses collection metadata %s', (_case, change) => {
+		expect(() => assertCollectionAttributesKept('articles', [change])).toThrow(
+			`Collection "articles" can't remove its collection metadata.`
+		);
+	});
+
+	it('refuses a removal that follows an ordinary metadata edit', () => {
+		expect(() => assertCollectionAttributesKept('articles', [noteEdited, metaRemoved])).toThrow(
+			`Collection "articles" can't remove its collection metadata.`
+		);
+	});
+
+	it('accepts removing metadata that is already null', () => {
+		expect(() => assertCollectionAttributesKept('articles', [{ kind: 'D', path: ['meta'], lhs: null }])).not.toThrow();
+	});
+
+	it('accepts nested metadata edits and whole-collection changes', () => {
+		const deleted: Diff<unknown> = { kind: 'D', lhs: { collection: 'articles', meta: null, schema: null } };
+
+		expect(() => assertCollectionAttributesKept('articles', [noteEdited])).not.toThrow();
+		expect(() => assertCollectionAttributesKept('articles', [deleted])).not.toThrow();
 	});
 });
 

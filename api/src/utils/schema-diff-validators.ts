@@ -1,6 +1,8 @@
 import { KNEX_TYPES } from '@cairncms/constants';
 import type { Field, RawField, Relation, SchemaOverview } from '@cairncms/types';
+import type { Diff } from 'deep-diff';
 import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
+import { DiffKind } from '../types/index.js';
 
 /**
  * Deterministic schema-apply refusals shared by the write services and the apply preflight, so a plan
@@ -26,6 +28,31 @@ export function assertCollectionPresent(collection: string, existingCollections:
 	// The delete path reports a missing collection as forbidden rather than not-found; preserve that.
 	if (existingCollections.has(collection) === false) {
 		throw new ForbiddenException();
+	}
+}
+
+/**
+ * The collection services cannot drop a kept collection's table or remove its metadata row, so a change that removes
+ * either attribute whole is refused. Removing metadata that is already null changes nothing and passes.
+ */
+export function assertCollectionAttributesKept(collection: string, changes: readonly Diff<unknown>[]): void {
+	for (const change of changes) {
+		if (change.path?.length !== 1) continue;
+
+		const attribute = change.path[0];
+		if (attribute !== 'schema' && attribute !== 'meta') continue;
+
+		const removed =
+			(change.kind === DiffKind.DELETE && change.lhs != null) ||
+			(change.kind === DiffKind.EDIT && change.lhs != null && change.rhs == null);
+
+		if (!removed) continue;
+
+		throw new InvalidPayloadException(
+			attribute === 'schema'
+				? `Collection "${collection}" can't remove its table and remain as a collection.`
+				: `Collection "${collection}" can't remove its collection metadata.`
+		);
 	}
 }
 

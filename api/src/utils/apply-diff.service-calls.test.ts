@@ -1,3 +1,4 @@
+import type { Diff, DiffDeleted } from 'deep-diff';
 import type { Knex } from 'knex';
 import knex from 'knex';
 import { createTracker, MockClient, Tracker } from 'knex-mock-client';
@@ -10,8 +11,10 @@ import {
 	snapshotCreateCollection,
 	snapshotCreateCollectionNotNested,
 } from '../__utils__/snapshots.js';
+import { InvalidPayloadException } from '../exceptions/index.js';
 import { CollectionsService, FieldsService } from '../services/index.js';
-import type { Snapshot, SnapshotField } from '../types/index.js';
+import type { CollectionMeta } from '../types/collection.js';
+import type { Collection, Snapshot, SnapshotDiff, SnapshotField } from '../types/index.js';
 import { applyDiff } from './apply-diff.js';
 import { getTargetSnapshotDiff } from './get-target-snapshot-diff.js';
 import { getSnapshot } from './get-snapshot.js';
@@ -468,6 +471,76 @@ describe('applyDiff via target snapshot diff', () => {
 			await applyDiff(diff, { database: db, expectedHash: 'HASH' });
 
 			expect(deleteOneCollectionSpy).toHaveBeenCalledTimes(3);
+		});
+
+		const definition = (collection: string, group: string | null, table = true): Collection => ({
+			collection,
+			meta: { collection, group } as CollectionMeta,
+			schema: table ? ({ name: collection } as Collection['schema']) : null,
+		});
+
+		const snapshotOf = (collections: Collection[]): Snapshot => ({
+			version: 1,
+			directus: '0.0.0',
+			collections,
+			fields: [],
+			relations: [],
+		});
+
+		const deletion = (lhs: Collection): DiffDeleted<Collection> => ({ kind: 'D', lhs });
+
+		it('Deletes dropped collections whose group survives or that have no metadata row, children first', async () => {
+			const imported: Collection = { ...definition('imported', null), meta: null };
+			const archive = definition('archive', 'content');
+			const entries = definition('entries', 'archive');
+
+			const diff: SnapshotDiff = {
+				collections: [
+					{ collection: 'archive', diff: [deletion(archive)] },
+					{ collection: 'entries', diff: [deletion(entries)] },
+					{ collection: 'imported', diff: [deletion(imported)] },
+				],
+				fields: [],
+				relations: [],
+			};
+
+			vi.spyOn(getSchema, 'getSchema').mockReturnValue(Promise.resolve(snapshotApplyTestSchema));
+			const deleteOneCollectionSpy = vi.spyOn(CollectionsService.prototype, 'deleteOne').mockResolvedValue('test');
+
+			vi.mocked(getSnapshot).mockResolvedValue(
+				snapshotOf([definition('content', null, false), archive, entries, imported])
+			);
+
+			await applyDiff(diff, { database: db, expectedHash: 'HASH' });
+
+			expect(deleteOneCollectionSpy.mock.calls.map(([collection]) => collection)).toEqual([
+				'entries',
+				'archive',
+				'imported',
+			]);
+		});
+
+		it.each([
+			['schema', { name: 'articles' }],
+			['meta', { collection: 'articles', group: null }],
+		])('Refuses removing only the %s of a kept collection and deletes nothing', async (attribute, lhs) => {
+			const removal: Diff<unknown> = { kind: 'D', path: [attribute], lhs };
+
+			const diff: SnapshotDiff = {
+				collections: [{ collection: 'articles', diff: [removal as Diff<Collection | undefined>] }],
+				fields: [],
+				relations: [],
+			};
+
+			vi.spyOn(getSchema, 'getSchema').mockReturnValue(Promise.resolve(snapshotApplyTestSchema));
+			const deleteOneCollectionSpy = vi.spyOn(CollectionsService.prototype, 'deleteOne').mockResolvedValue('test');
+			vi.mocked(getSnapshot).mockResolvedValue(snapshotOf([definition('articles', null)]));
+
+			await expect(applyDiff(diff, { database: db, expectedHash: 'HASH' })).rejects.toBeInstanceOf(
+				InvalidPayloadException
+			);
+
+			expect(deleteOneCollectionSpy).not.toHaveBeenCalled();
 		});
 	});
 });

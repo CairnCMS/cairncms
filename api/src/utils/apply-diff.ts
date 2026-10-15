@@ -43,6 +43,7 @@ import {
 	schemaStateVerifiedReverted,
 	type SchemaTouchedEntities,
 } from './read-schema-observed-state.js';
+import { collectionDeleteOrder } from './schema-collection-order.js';
 
 type CollectionDelta = {
 	collection: string;
@@ -227,11 +228,6 @@ export async function applyDiff(
 						({ diff }) => (diff[0] as DiffNew<Collection>).rhs?.meta?.group === currentLevelCollection
 					) as CollectionDelta[];
 
-				const getNestedCollectionsToDelete = (currentLevelCollection: string) =>
-					snapshotDiff.collections.filter(
-						({ diff }) => (diff[0] as DiffDeleted<Collection>).lhs?.meta?.group === currentLevelCollection
-					) as CollectionDelta[];
-
 				const createCollections = async (collections: CollectionDelta[]) => {
 					for (const { collection, diff } of collections) {
 						if (diff?.[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff?.[0]) && diff[0].rhs) {
@@ -279,43 +275,37 @@ export async function applyDiff(
 					}
 				};
 
-				const deleteCollections = async (collections: CollectionDelta[]) => {
-					for (const { collection, diff } of collections) {
-						if (diff?.[0]?.kind === DiffKind.DELETE && !isNestedMetaUpdate(diff?.[0])) {
-							const relations = schema.relations.filter(
-								(r) => r.related_collection === collection || r.collection === collection
-							);
+				const deleteCollection = async (collection: string) => {
+					const relations = schema.relations.filter(
+						(r) => r.related_collection === collection || r.collection === collection
+					);
 
-							if (relations.length > 0) {
-								const relationsService = new RelationsService({ knex: trx, schema });
+					if (relations.length > 0) {
+						const relationsService = new RelationsService({ knex: trx, schema });
 
-								for (const relation of relations) {
-									try {
-										await relationsService.deleteOne(relation.collection, relation.field, mutationOptions);
-									} catch (err) {
-										logger.error(
-											`Failed to delete collection "${collection}" due to relation "${relation.collection}.${relation.field}"`
-										);
-
-										throw err;
-									}
-								}
-
-								// clean up deleted relations from existing schema
-								schema.relations = schema.relations.filter(
-									(r) => r.related_collection !== collection && r.collection !== collection
-								);
-							}
-
-							await deleteCollections(getNestedCollectionsToDelete(collection));
-
+						for (const relation of relations) {
 							try {
-								await collectionsService.deleteOne(collection, mutationOptions);
+								await relationsService.deleteOne(relation.collection, relation.field, mutationOptions);
 							} catch (err) {
-								logger.error(`Failed to delete collection "${collection}"`);
+								logger.error(
+									`Failed to delete collection "${collection}" due to relation "${relation.collection}.${relation.field}"`
+								);
+
 								throw err;
 							}
 						}
+
+						// clean up deleted relations from existing schema
+						schema.relations = schema.relations.filter(
+							(r) => r.related_collection !== collection && r.collection !== collection
+						);
+					}
+
+					try {
+						await collectionsService.deleteOne(collection, mutationOptions);
+					} catch (err) {
+						logger.error(`Failed to delete collection "${collection}"`);
+						throw err;
 					}
 				};
 
@@ -363,15 +353,9 @@ export async function applyDiff(
 				// then continue with nested collections recursively
 				await createCollections(snapshotDiff.collections.filter(filterCollectionsForCreation));
 
-				// delete top level collections (no group) first, then continue with nested collections recursively
-				await deleteCollections(
-					snapshotDiff.collections.filter(
-						({ diff }) =>
-							diff[0]?.kind === DiffKind.DELETE &&
-							!isNestedMetaUpdate(diff[0]) &&
-							(diff[0] as DiffDeleted<Collection>).lhs.meta?.group === null
-					)
-				);
+				for (const collection of collectionDeleteOrder(snapshotDiff)) {
+					await deleteCollection(collection);
+				}
 
 				for (const { collection, diff } of snapshotDiff.collections) {
 					if (
