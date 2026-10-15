@@ -45,6 +45,28 @@ Use `setupRequest` and `setupGraphQL` from [fixtures/request.ts](fixtures/reques
 successful responses and returned data, with API error details on failure. Use the ordinary request helper for
 intentional rejection tests, or specify the expected rejection with `.expect(status)`.
 
+### Field metadata
+
+`CreateField` from [fixtures/schema.ts](fixtures/schema.ts) does not add the app's type-specific `meta.special` values.
+When modeling fields created through the app, supply the values defined by
+[getSpecialForType](../../app/src/utils/get-special-for-type.ts). These flags affect value processing, including JSON
+parsing and boolean conversion.
+
+For example, create a JSON field on an existing collection with `cast-json` when the test expects parsed values on read:
+
+```ts
+await CreateField(api, {
+	collection: 'test_articles',
+	field: 'details',
+	type: 'json',
+	meta: { special: ['cast-json'] },
+});
+```
+
+Without `cast-json`, SQLite returns JSON as text while PostgreSQL can already return an object. A fixture can therefore
+pass on PostgreSQL and fail on SQLite. Keep metadata explicit when testing its omission or a schema created directly
+through the API. The helper preserves that choice.
+
 ### API configuration and services
 
 Use [createApiTest](fixtures/environment.ts) to configure a file's API:
