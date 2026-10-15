@@ -52,6 +52,7 @@ import { getGraphQLType } from '../../utils/get-graphql-type.js';
 import { getMilliseconds } from '../../utils/get-milliseconds.js';
 import { reduceSchema } from '../../utils/reduce-schema.js';
 import { sanitizeQuery } from '../../utils/sanitize-query.js';
+import { setOwn } from '../../utils/set-own.js';
 import { validateQuery } from '../../utils/validate-query.js';
 import { verifyHash } from '../../utils/verify-hash.js';
 import { ActivityService } from '../activity.js';
@@ -1816,11 +1817,10 @@ export class GraphQLService {
 						if (currentAlias) {
 							currentAlias = `${parent}.${currentAlias}`;
 
-							// add nested aliases into deep query
 							if (selection.selectionSet) {
 								if (!query.deep) query.deep = {};
 
-								set(
+								setOwn(
 									query.deep,
 									parent,
 									merge({}, get(query.deep, parent), { _alias: { [selection.alias!.value]: selection.name.value } })
@@ -1858,7 +1858,7 @@ export class GraphQLService {
 
 						const args: Record<string, any> = this.parseArgs(selection.arguments, variableValues);
 
-						set(
+						setOwn(
 							query.deep,
 							currentAlias ?? current,
 							merge(
