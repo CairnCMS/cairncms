@@ -1,11 +1,11 @@
-import type { SchemaOverview } from '@cairncms/types';
+import type { ActionHandler, SchemaOverview } from '@cairncms/types';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import type { Knex } from 'knex';
 import { createServer, type IncomingHttpHeaders, type Server } from 'node:http';
 import type { Duplex } from 'node:stream';
-import { connect as netConnect, type AddressInfo } from 'node:net';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { connect as netConnect, type AddressInfo, type Socket } from 'node:net';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { WebSocket } from 'ws';
 import emitter from '../../emitter.js';
 import { getEnv } from '../../env.js';
@@ -159,7 +159,7 @@ type ConnectResult =
 	| { kind: 'open'; ws: WebSocket }
 	| { kind: 'reject'; status: number; headers: IncomingHttpHeaders; body: string };
 
-let emitActionBounded: ReturnType<typeof vi.spyOn>;
+let emitActionBounded: MockInstance<typeof emitter.emitActionBounded>;
 
 async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
 	const admission = options.admission ?? new Admission({ process: 100, ip: 100, user: 100, transports: { rest: 100 } });
@@ -528,7 +528,10 @@ const NON_GET_UPGRADE =
 
 function sendRawUpgrade(port: number, raw: string): Promise<string> {
 	return new Promise((resolve, reject) => {
-		const socket = netConnect(port, '127.0.0.1', () => socket.write(raw));
+		const socket: Socket = netConnect(port, '127.0.0.1', () => {
+			socket.write(raw);
+		});
+
 		socket.setEncoding('utf8');
 
 		let settled = false;
@@ -1411,7 +1414,12 @@ describe('Authentication lifecycle and command admission', () => {
 	it('rejects a command whose full-authority filter changed the message type', async () => {
 		const { ws, frames } = await openClient({ controllerClass: TestController });
 		const controller = harness!.controller as TestController;
-		const filter = (message: Record<string, unknown>) => ({ ...message, type: 'rerouted' });
+
+		const filter = (message: unknown) => {
+			if (typeof message !== 'object' || message === null) throw new Error('Expected a websocket message');
+			return { ...message, type: 'rerouted' };
+		};
+
 		emitter.onFilter('websocket.message', filter);
 
 		try {
@@ -1426,8 +1434,9 @@ describe('Authentication lifecycle and command admission', () => {
 	it('keys the message limiter on the immutable connection IP, not mutable accountability', async () => {
 		const ipCalls: string[] = [];
 
-		const tamper = (meta: { client: SocketClient }) => {
-			(meta.client.auth.accountability as { ip: string }).ip = 'tampered';
+		const tamper: ActionHandler = (meta) => {
+			const client = meta['client'] as SocketClient;
+			(client.auth.accountability as { ip: string }).ip = 'tampered';
 		};
 
 		emitter.onAction('websocket.connect', tamper);
@@ -1660,7 +1669,8 @@ describe('shutdown-complete terminate, closeConnection, and heartbeat wiring', (
 		await vi.waitFor(() => expect(callsFor('websocket.connect')).toHaveLength(1));
 		const serverWs = (callsFor('websocket.connect')[0]![1] as { client: SocketClient }).client;
 
-		expect(() => harness.controller.closeConnection({} as SocketClient, 1000)).not.toThrow();
+		const controller = harness.controller;
+		expect(() => controller.closeConnection({} as SocketClient, 1000)).not.toThrow();
 
 		const closed = new Promise<void>((resolve) => opened.ws.on('close', () => resolve()));
 		harness.controller.closeConnection(serverWs, 1000);
@@ -1707,7 +1717,7 @@ describe('shutdown-complete terminate, closeConnection, and heartbeat wiring', (
 		await db.called;
 		sendJson(ws, { type: 'nope', uid: 'probe' });
 
-		await vi.waitFor(() => expect(frames.some((frame) => frame.uid === 'probe')).toBe(true));
+		await vi.waitFor(() => expect(frames.some((frame) => frame['uid'] === 'probe')).toBe(true));
 		await flush();
 
 		let terminated = false;
@@ -2047,7 +2057,7 @@ describe('static-token identity revalidation', () => {
 
 		const frames = collect(result.ws);
 		sendJson(result.ws, { type: 'auth', access_token: 'static-service-token' });
-		await waitFrames(() => frames.some((frame) => frame.type === 'auth' && frame.status === 'ok'));
+		await waitFrames(() => frames.some((frame) => frame['type'] === 'auth' && frame['status'] === 'ok'));
 
 		const [serverClient] = [...active.controller.clientSnapshot()];
 		expect(serverClient!.auth.accountability.user).toBe('svc');

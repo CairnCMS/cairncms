@@ -26,9 +26,9 @@ const { default: serverController } = await import('./server.js');
 function makeApp() {
 	const app = express();
 
-	app.use((req: Record<string, unknown>, _res: unknown, next: () => void) => {
-		req['accountability'] = { admin: true };
-		req['schema'] = {};
+	app.use((req, _res, next) => {
+		req['accountability'] = { admin: true, role: null };
+		req.schema = { collections: {}, relations: [] };
 		next();
 	});
 

@@ -2,9 +2,17 @@ name: CI / Tests / Confined Runtime Stress
 
 on:
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'CHANGELOG.md'
+      - 'README.md'
   push:
     branches:
       - develop
+    paths-ignore:
+      - 'docs/**'
+      - 'CHANGELOG.md'
+      - 'README.md'
   workflow_dispatch:
 
 concurrency:

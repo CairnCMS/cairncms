@@ -95,9 +95,9 @@ function start(overrides: Partial<ConfigRunStart> = {}): ConfigRunStart {
 
 function emitted(): ConfigRunRecord[] {
 	return vi
-		.mocked(logger.info)
-		.mock.calls.filter((call) => (call[0] as ConfigRunRecord | undefined)?.event === CONFIG_RUN_EVENT)
-		.map((call) => call[0] as ConfigRunRecord);
+		.mocked<(record: ConfigRunRecord | string, message?: string) => void>(logger.info)
+		.mock.calls.map(([record]) => record)
+		.filter((record): record is ConfigRunRecord => typeof record !== 'string' && record?.event === CONFIG_RUN_EVENT);
 }
 
 beforeEach(() => {

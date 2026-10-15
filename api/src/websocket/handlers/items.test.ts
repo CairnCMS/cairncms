@@ -70,13 +70,13 @@ beforeEach(() => {
 });
 
 async function run(message: Record<string, unknown>, context: CommandContext) {
-	const send = vi.fn(() => ({ accepted: true }));
+	const send = vi.fn<Parameters<typeof handleItems>[2]>(() => ({ accepted: true }));
 	await handleItems(message as WebSocketMessage, context, send);
-	return JSON.parse(send.mock.calls[0]![0] as string);
+	return JSON.parse(send.mock.calls[0]![0]);
 }
 
 async function reject(message: Record<string, unknown>, context: CommandContext): Promise<WebSocketException> {
-	const send = vi.fn(() => ({ accepted: true }));
+	const send = vi.fn<Parameters<typeof handleItems>[2]>(() => ({ accepted: true }));
 
 	const error = await handleItems(message as WebSocketMessage, context, send).then(
 		() => null,

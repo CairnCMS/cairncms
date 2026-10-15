@@ -289,8 +289,8 @@ The `/utils` subtree is a grab bag of operational helpers that don't fit anywher
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/utils/random/string` | Generate a random URL-safe string. |
-| `POST` | `/utils/hash/generate` | Argon2-hash a string. |
-| `POST` | `/utils/hash/verify` | Verify a string against an Argon2 hash. |
+| `POST` | `/utils/hash/generate` | Argon2-hash a string. Admin-only. Deprecated. |
+| `POST` | `/utils/hash/verify` | Verify a string against an Argon2 hash. Admin-only. Deprecated. |
 | `POST` | `/utils/sort/<collection>` | Reorder items in a sortable collection. |
 | `POST` | `/utils/revert/<revision-id>` | Revert an item to a specific revision. |
 | `POST` | `/utils/import/<collection>` | Import items from a CSV or JSON file (multipart upload). |
@@ -307,7 +307,13 @@ Returns `{ "data": "<random-string>" }`. The `length` query parameter is optiona
 
 ### `POST /utils/hash/generate` and `POST /utils/hash/verify`
 
-Generate and verify Argon2 hashes against arbitrary strings. Useful when an external system needs to interoperate with the platform's password hashes.
+:::caution[Deprecated]
+These endpoints and the `utils_hash_generate` and `utils_hash_verify` GraphQL mutations are deprecated and will be removed in 1.8.0 or later. Hash and verify values in your own application with an Argon2 package, such as `argon2` for Node.js, instead of calling these endpoints.
+:::
+
+Generate and verify Argon2 hashes against arbitrary strings. Admin-only. Non-admin REST callers get `403 FORBIDDEN`, and the GraphQL mutations return a `FORBIDDEN` error.
+
+Verification uses the memory, time, and parallelism settings encoded in the supplied hash. A hash with high settings makes verification slow and memory-intensive, so only verify hashes from a trusted source.
 
 ```http
 POST /utils/hash/generate
@@ -409,7 +415,7 @@ The collections and endpoints on this page span the permission model:
 - **`/extensions`** — admin-only. The root diagnostics route returns `403 FORBIDDEN` to non-admins.
 - **`/extensions/sources/<chunk>`** — unauthenticated. The admin app loads the bundled extension JavaScript on its login screen before anyone signs in, so this route cannot require a token. It serves client-side bundle code, the same as the static admin assets under `/admin`.
 - **`/extension-settings`** — admin-only, except `GET /extension-settings/app`, which requires a signed-in user with app access and applies the caller's collection read permissions to collection-scoped values.
-- **`/utils/*`** — varies. `random/string` and `hash/*` are unauthenticated. `sort`, `revert`, `import`, and `export` require accountability and are gated by per-collection permissions. `cache/clear` is admin-only.
+- **`/utils/*`** — varies. `random/string` is unauthenticated. `sort`, `revert`, `import`, and `export` require accountability and are gated by per-collection permissions. `cache/clear` and the deprecated `hash/*` endpoints are admin-only.
 
 ## GraphQL
 

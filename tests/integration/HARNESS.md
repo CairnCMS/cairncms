@@ -45,6 +45,28 @@ Use `setupRequest` and `setupGraphQL` from [fixtures/request.ts](fixtures/reques
 successful responses and returned data, with API error details on failure. Use the ordinary request helper for
 intentional rejection tests, or specify the expected rejection with `.expect(status)`.
 
+### Field metadata
+
+`CreateField` from [fixtures/schema.ts](fixtures/schema.ts) does not add the app's type-specific `meta.special` values.
+When modeling fields created through the app, supply the values defined by
+[getSpecialForType](../../app/src/utils/get-special-for-type.ts). These flags affect value processing, including JSON
+parsing and boolean conversion.
+
+For example, create a JSON field on an existing collection with `cast-json` when the test expects parsed values on read:
+
+```ts
+await CreateField(api, {
+	collection: 'test_articles',
+	field: 'details',
+	type: 'json',
+	meta: { special: ['cast-json'] },
+});
+```
+
+Without `cast-json`, SQLite returns JSON as text while PostgreSQL can already return an object. A fixture can therefore
+pass on PostgreSQL and fail on SQLite. Keep metadata explicit when testing its omission or a schema created directly
+through the API. The helper preserves that choice.
+
 ### API configuration and services
 
 Use [createApiTest](fixtures/environment.ts) to configure a file's API:
@@ -89,6 +111,24 @@ orphan cleanup.
 
 Request helpers use a 10-second response deadline and a 30-second total deadline. Batch cases use 120-second limits.
 Test bodies default to 30 seconds, hooks to 120 seconds, and bootstrap/API readiness to 90 seconds.
+
+Use these defaults for new cases. If a case times out, identify whether setup, the test body, or a request exceeded its
+deadline. Resolve expensive prerequisites through an automatic fixture or native hook before increasing the body
+timeout. Ordinary case-specific setup can stay in the body. Keep the operation being tested in the body.
+
+Only increase a timeout when measured execution on the relevant vendors shows a legitimate need. Prefer a per-case
+override as the third argument to `test(name, body, timeoutMs)`. Add a short comment explaining the expensive operation
+and the reason for the limit. Allow room for normal runtime variation. Do not copy another suite's limit or raise one
+to hide an unexplained stall.
+
+File-wide `vi.setConfig({ testTimeout, hookTimeout })` changes are supported when the need applies across the file.
+Place them before `initializeFixtures()` and explain the reason. Increase `hookTimeout` for slow automatic setup, not
+`testTimeout`. Changing either does not extend request or API-readiness deadlines.
+
+Vitest's reported case duration includes `beforeEach` and `afterEach` hooks and their fixture work. The first case
+using a file fixture can therefore report much longer than later cases. Automatic fixture setup runs under the hook
+deadline. Lazy fixtures requested by the body use the body deadline. The reported duration alone does not show that a
+body needs more time.
 
 Test workers, bootstrap, and base API processes use UTC. Explicit timezone scenarios override only their owned process.
 Use real REST/GraphQL requests when testing transport behavior.

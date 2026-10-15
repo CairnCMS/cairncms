@@ -50,6 +50,7 @@ describe('Integration Tests', () => {
 						accountability: { role: null },
 						specials: [],
 						helpers,
+						knex: db,
 					});
 
 					expect(result).toBe(undefined);
@@ -63,6 +64,7 @@ describe('Integration Tests', () => {
 						accountability: { role: null },
 						specials: [],
 						helpers,
+						knex: db,
 					});
 
 					expect(result).toMatchObject([]);
@@ -76,6 +78,7 @@ describe('Integration Tests', () => {
 						accountability: { role: null },
 						specials: [],
 						helpers,
+						knex: db,
 					});
 
 					expect(result).toEqual(['test', 'example']);
@@ -89,6 +92,7 @@ describe('Integration Tests', () => {
 						accountability: { role: null },
 						specials: [],
 						helpers,
+						knex: db,
 					});
 
 					expect(result).toMatchObject(['test', 'example']);
@@ -102,6 +106,7 @@ describe('Integration Tests', () => {
 						accountability: { role: null },
 						specials: [],
 						helpers,
+						knex: db,
 					});
 
 					expect(result).toBe('test,example');
@@ -115,6 +120,7 @@ describe('Integration Tests', () => {
 						accountability: { role: null },
 						specials: [],
 						helpers,
+						knex: db,
 					});
 
 					expect(result).toBe('test,example');

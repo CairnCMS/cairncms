@@ -1,7 +1,8 @@
 import type { Query } from '@cairncms/types';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import type { SocketClient } from './controllers/base.js';
 import type { WebSocketEvent } from './messages.js';
+import type { DispatchCoordinatorOptions } from './dispatch.js';
 
 vi.mock('./config.js', () => ({
 	SUBSCRIPTIONS_PER_CONNECTION: 100,
@@ -56,7 +57,7 @@ function deferred<T>() {
 
 let registry: InstanceType<typeof SubscriptionRegistry>;
 let messengerCallback: ((message: Record<string, any>) => void) | null;
-let closeConnection: ReturnType<typeof vi.fn>;
+let closeConnection: Mock<DispatchCoordinatorOptions['closeConnection']>;
 let unsubscribe: ReturnType<typeof vi.fn>;
 let coordinator: InstanceType<typeof DispatchCoordinator>;
 
@@ -72,7 +73,7 @@ function build(deliveryConcurrency = 5, getSchema: () => Promise<any> = async ()
 		getStatus: vi.fn(),
 	} as never;
 
-	closeConnection = vi.fn();
+	closeConnection = vi.fn<DispatchCoordinatorOptions['closeConnection']>();
 
 	coordinator = new DispatchCoordinator({
 		registry,

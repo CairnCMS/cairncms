@@ -165,6 +165,14 @@ Run tests and lint independently:
   Runs the workspace unit tests and SDK type tests. API integration has a separate command. Most contributions need this
   to pass before review.
 
+  After the workspace build above, check API test fixtures and mocks against the current types:
+
+  ```bash
+  pnpm --filter @cairncms/api typecheck:tests
+  ```
+
+  CI runs this check before the unit tests. Rebuild changed workspace dependencies before checking locally.
+
 - **API integration tests**:
 
   ```bash

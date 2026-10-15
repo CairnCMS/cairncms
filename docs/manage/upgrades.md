@@ -5,36 +5,54 @@ sidebar:
   order: 5
 ---
 
-CairnCMS follows semantic versioning. Most upgrades are routine: pull the new image, restart the container, and the database catches up automatically on startup. The work that does need attention is the small amount of structural and operational care around an upgrade, including taking a backup, reading the changelog, choosing the right window, and rebuilding extensions when a major version moves the host range.
-
-This page covers the upgrade procedure, the rollback path, and the considerations specific to multi-instance and major-version upgrades.
+This page covers versioning, upgrades, rollback, and the considerations for multi-instance deployments, custom migrations, and extensions.
 
 ## Versioning policy
 
-CairnCMS uses semver. For a given version `MAJOR.MINOR.PATCH`:
+CairnCMS uses the Semantic Versioning number format (`MAJOR.MINOR.PATCH`) but does not promise strict SemVer compatibility. Minor releases can remove features after a deprecation notice, and necessary security fixes can change supported behavior in patch or minor releases.
 
-- **Patch** (`1.2.3` → `1.2.4`) — bug fixes and security patches. No schema changes that require a code change on your side, no breaking API or extension contract changes.
-- **Minor** (`1.2.3` → `1.3.0`) — new features, additive changes. The HTTP API, SDK, and extension contracts stay backwards-compatible. Database schema changes happen here, but always through migrations that run automatically.
-- **Major** (`1.x` → `2.x`) — breaking changes. Possible API contract changes, extension SDK changes, and migrations that require operator attention. Major upgrades are documented in dedicated migration notes alongside the release.
+- **Patch** (`1.2.3` to `1.2.4`): compatible bug fixes and security updates. Breaking changes are limited to necessary security fixes described below.
+- **Minor** (`1.2.3` to `1.3.0`): new features, fixes, and removals whose deprecation period has elapsed. A minor release may also include dependency-required platform updates or necessary security changes.
+- **Major** (`1.x` to `2.x`): broader API, SDK, or platform changes, with dedicated migration guidance.
 
-The version is stamped into every container image tag (`cairncms/cairncms:1.2.3`) and reported by `cairncms --version` on the CLI. The running platform reports its version through the `/server/info` API endpoint.
+These rules cover documented REST and GraphQL APIs, published SDK and extension APIs, documented configuration and CLI commands, and supported data formats and deployment requirements. CairnCMS's internal implementation details are outside this compatibility promise.
+
+Releases have versioned container image tags such as `cairncms/cairncms:1.2.3`. To check the installed version, run `cairncms --version`. An admin-authenticated `GET /server/info` request also returns it at `data.cairncms.version`.
+
+### Deprecation notices
+
+A deprecated feature remains supported while you migrate away from it. We announce deprecations in a stable minor release. A feature can be removed in a later minor release, but no sooner than **30 calendar days after the announcing release is published**.
+
+Look for a **Deprecations** section in the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) and the corresponding [GitHub release notes](https://github.com/CairnCMS/cairncms/releases). The affected documentation also carries a notice, with SDK `@deprecated` annotations where applicable. Each notice identifies the feature, why it is being retired, the replacement or lack of one, and the earliest removal version and date.
+
+When removal ships, its **Potential Breaking Changes** entry explains who is affected, how to migrate, and which release announced the deprecation.
+
+### Security fixes
+
+A patch or minor release may restrict or remove a feature without the normal notice period when a vulnerability cannot reasonably be fixed without changing supported behavior. We limit the changes to what the security fix requires.
+
+The release's **Potential Breaking Changes** section names affected callers and provides migration guidance, or states when no safe replacement exists.
+
+### Platform requirements
+
+A minor release may raise a system-library, runtime, or browser requirement when a dependency update requires it, without the normal deprecation period. These changes appear under **Potential Breaking Changes**, with instructions for meeting the new requirement.
+
+This applies only to the new requirement itself. Removing an API, configuration option, or support for a database vendor or version still requires notice unless a security exception applies. Choosing to retire a supported runtime independently of a dependency requirement also follows the notice period.
 
 ## Before you upgrade
 
-Three things every time, no exceptions:
-
 1. **Take a backup.** A full database dump and, if files have changed since the last backup, a copy of the storage volume. See [Backups](/docs/manage/backups/).
-2. **Read the changelog** for every version between yours and the target. Even within a single minor range, you might have skipped a release that introduced a configuration default change or a deprecated environment variable.
+2. **Read the changelog** for every version between yours and the target, especially **Deprecations** and **Potential Breaking Changes**. Follow its migration instructions for configuration, clients, and extensions.
 3. **Test in a non-production environment first** if you can. A staging instance restored from production data, run through the upgrade, is the cheapest way to surface upgrade-time problems before they reach users.
 
 For major-version upgrades, also:
 
-- Audit your extensions. Their `cairncms:extension.host` semver range in `package.json` declares which CairnCMS versions they are compatible with. An extension built for `^1.0.0` will not load against `2.x` until it is rebuilt with a compatible range.
-- Review breaking-change notes for any deprecated environment variables, removed flags, or schema changes that need manual intervention.
+- Audit your extensions against the [extension compatibility guidance](#extension-compatibility). A declared `host` range does not guarantee compatibility or prevent an incompatible extension from loading.
+- Follow the release's dedicated migration notes.
 
 ## The standard upgrade
 
-The procedure is the same for any patch or minor version, and most major versions:
+Follow any release-specific instructions alongside this standard upgrade procedure:
 
 ### Docker image
 
@@ -140,9 +158,9 @@ Each extension's `package.json` declares a host range:
 
 This field is informational. CairnCMS surfaces it in extension metadata so operators and tooling know which platform versions an extension was built against, but the loader does not enforce the range. An extension whose declared `host` excludes the running platform version still loads.
 
-In practice, that means extension compatibility is your responsibility to manage during upgrades. For minor and patch upgrades within an extension's declared range, the extension keeps working without intervention because the SDK contract is stable. For major upgrades, where the SDK contract may change:
+Check release notes for extension API deprecations, removals, and security changes on every upgrade. A matching `host` range does not exempt an extension from those changes. For major upgrades, or whenever release notes require extension changes:
 
-1. Update each extension's `host` range to include the new major.
+1. Apply required code or manifest changes and update each extension's `host` range to match the versions you have tested.
 2. Rebuild against the new SDK version with `npm run build` (which calls `cairncms-extension build`).
 3. Run the extension's tests, if any, against the upgraded SDK.
 4. Reinstall or redeploy the extension alongside the platform upgrade.
@@ -153,7 +171,7 @@ Bundles use the same `host` field; rebuilding a bundle rebuilds all of its entri
 
 App extensions carry an extra consideration. They share the admin app's Vue runtime rather than bundling their own, so a host-Vue or SDK change can require rebuilding them even within a compatible `host` range. If an app extension fails to mount after an upgrade, rebuild it against the current SDK before investigating further. See [Creating extensions](/docs/develop/extensions/creating-extensions/).
 
-Confined extensions depend on the capability and settings vocabulary and the brokered host API, which can grow or change across major versions. A confined extension may need its manifest `capabilities`, its `settings` declaration, or its `host.*` usage updated when those evolve. The [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) reference documents the current capability set.
+Confined extensions depend on the capability and settings vocabulary and the brokered host API. Changes follow the same compatibility and deprecation rules. A confined extension may need its manifest `capabilities`, its `settings` declaration, or its `host.*` usage updated when those evolve. The [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) reference documents the current capability set.
 
 ## Where to go next
 

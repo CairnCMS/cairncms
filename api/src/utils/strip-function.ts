@@ -1,11 +1,11 @@
-import { REGEX_BETWEEN_PARENS } from '@cairncms/constants';
+import { getBetweenParens } from '@cairncms/utils';
 
 /**
  * Strip the function declarations from a list of fields
  */
 export function stripFunction(field: string): string {
 	if (field.includes('(') && field.includes(')')) {
-		return field.match(REGEX_BETWEEN_PARENS)?.[1]?.trim() ?? field;
+		return getBetweenParens(field)?.trim() ?? field;
 	} else {
 		return field;
 	}

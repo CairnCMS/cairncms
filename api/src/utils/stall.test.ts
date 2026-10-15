@@ -1,9 +1,9 @@
 import { performance } from 'perf_hooks';
-import type { SpyInstance } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { afterAll, beforeAll, expect, test, vi } from 'vitest';
 import { stall } from './stall.js';
 
-let performanceNowSpy: SpyInstance;
+let performanceNowSpy: MockInstance<typeof performance.now>;
 
 beforeAll(() => {
 	vi.useFakeTimers();

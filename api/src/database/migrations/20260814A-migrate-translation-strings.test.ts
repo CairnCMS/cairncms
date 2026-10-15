@@ -44,7 +44,7 @@ describe('20260814A-migrate-translation-strings', () => {
 	});
 
 	test('up then down preserves data, including dotted and prototype-sensitive keys and languages', async () => {
-		const fixture = [
+		const fixture: Parameters<typeof canonical>[0] = [
 			{ key: 'greeting', translations: { 'en-US': 'Hello', 'fr-FR': 'Bonjour' } },
 			{ key: 'a.b.c', translations: { 'en-US': 'dotted' } },
 			{ key: '__proto__', translations: { 'en-US': 'proto-key' } },

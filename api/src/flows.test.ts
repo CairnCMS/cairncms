@@ -1128,7 +1128,7 @@ describe('executeFlow — trusted log and exec operations redact secrets in live
 
 	test('a downstream non-gated operation context carries no raw confined redaction values', async () => {
 		const rawSecret = 'sk_live_confined_isolation_secret';
-		let captured: Record<string, unknown> | null = null;
+		const captured: { context: Record<string, unknown> | null } = { context: null };
 		const manager = getFlowManager();
 
 		manager.addConfinedOperation('confined-secret-op', {
@@ -1142,7 +1142,7 @@ describe('executeFlow — trusted log and exec operations redact secrets in live
 		manager.addOperation(
 			'capture',
 			((_options: unknown, context: Record<string, unknown>) => {
-				captured = context;
+				captured.context = context;
 				return null;
 			}) as any,
 			true
@@ -1159,14 +1159,14 @@ describe('executeFlow — trusted log and exec operations redact secrets in live
 
 		await (manager as any).executeFlow(flow, { x: 1 }, flowContext);
 
-		expect(captured).not.toBeNull();
-		const contextWithoutKeyedData: Record<string, unknown> = { ...(captured as Record<string, unknown>) };
+		expect(captured.context).not.toBeNull();
+		const contextWithoutKeyedData: Record<string, unknown> = { ...captured.context };
 		delete contextWithoutKeyedData['data'];
 		expect(JSON.stringify(contextWithoutKeyedData)).not.toContain(rawSecret);
 
-		expect(captured).not.toHaveProperty('redactionValues');
-		expect(captured).not.toHaveProperty('redactionKeys');
-		expect((captured as any)?.redactForFlowLog).toBeUndefined();
+		expect(captured.context).not.toHaveProperty('redactionValues');
+		expect(captured.context).not.toHaveProperty('redactionKeys');
+		expect((captured.context as any)?.redactForFlowLog).toBeUndefined();
 	});
 
 	test('redacts an allowlisted $env value referenced in a Log to Console message', async () => {

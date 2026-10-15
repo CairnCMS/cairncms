@@ -4,7 +4,7 @@ const REALTIME_SHUTDOWN_FAILED = 'WebSocket realtime shutdown did not complete i
 
 const createTerminus = vi.fn();
 const activateRealtime = vi.fn();
-const databaseDestroy = vi.fn(async () => undefined);
+const databaseDestroy = vi.fn<import('knex').Knex['destroy']>(async () => undefined);
 const getDatabase = vi.fn(() => ({ destroy: databaseDestroy }));
 
 vi.mock('@godaddy/terminus', () => ({ createTerminus }));

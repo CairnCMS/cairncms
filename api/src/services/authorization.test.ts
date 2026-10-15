@@ -394,4 +394,33 @@ describe('AuthorizationService.processAST — sort operand requires field-read a
 			await expect(service.processAST(ast)).resolves.toBeDefined();
 		});
 	});
+
+	describe('a malformed function-shaped field name', () => {
+		const malformed = ')' + '('.repeat(20_000);
+
+		it('is rejected as unreadable when requested directly', async () => {
+			const service = makeService(['id', 'name']);
+			const { default: getASTFromQuery } = await import('../utils/get-ast-from-query.js');
+
+			const ast = await getASTFromQuery('employees', { fields: ['id', malformed] }, employeesSchema, {
+				accountability: service.accountability,
+			});
+
+			await expect(service.processAST(ast)).rejects.toBeInstanceOf(ForbiddenException);
+		});
+
+		it('is rejected as unreadable when requested through an alias', async () => {
+			const service = makeService(['id', 'name']);
+			const { default: getASTFromQuery } = await import('../utils/get-ast-from-query.js');
+
+			const ast = await getASTFromQuery(
+				'employees',
+				{ fields: ['id', 'renamed'], alias: { renamed: malformed } },
+				employeesSchema,
+				{ accountability: service.accountability }
+			);
+
+			await expect(service.processAST(ast)).rejects.toBeInstanceOf(ForbiddenException);
+		});
+	});
 });

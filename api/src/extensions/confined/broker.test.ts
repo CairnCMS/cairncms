@@ -2,6 +2,7 @@ import axios, { type AxiosInstance } from 'axios';
 import http from 'node:http';
 import { gzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { readOnlyItemsService } from '../../__utils__/confined-items-fixtures.js';
 import { REDACT_TEXT } from '../../constants.js';
 import {
 	createConfinedHostBroker,
@@ -844,13 +845,14 @@ describe('createConfinedHostBroker items', () => {
 
 		const { dispatch } = makeBroker({
 			capabilities: { items: { accountability: 'full-access' } },
-			itemsService: () => ({
-				readByQuery: async () => [{ id: 1 }],
-				readOne: async (key) => {
-					seen.push(key);
-					return { id: key };
-				},
-			}),
+			itemsService: () =>
+				readOnlyItemsService({
+					readByQuery: async () => [{ id: 1 }],
+					readOne: async (key) => {
+						seen.push(key);
+						return { id: key };
+					},
+				}),
 		});
 
 		expect(await dispatch({ method: 'items.readMany', args: { collection: 'articles' } }, context, liveSignal)).toEqual(

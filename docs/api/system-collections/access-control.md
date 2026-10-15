@@ -145,6 +145,7 @@ A permission row is a tuple of role, collection, and action plus the rules that 
 | `PATCH` | `/permissions/<id>` | Update a single permission. |
 | `DELETE` | `/permissions` | Delete many permissions. |
 | `DELETE` | `/permissions/<id>` | Delete a single permission. |
+| `GET` | `/permissions/me` | Deprecated. Returns `204 No Content`. |
 | `GET` | `/permissions/me/<collection>/<key>` | Check the current user's permissions for one item. |
 | `GET` | `/permissions/me/<collection>` | Check the current user's permissions for a singleton. |
 
@@ -162,6 +163,12 @@ A permission row is a tuple of role, collection, and action plus the rules that 
 A read or write that matches no permission row for a non-admin role is denied. The `permissions`, `validation`, and `presets` filters can reference filter variables (`$NOW`, `$CURRENT_USER`, `$CURRENT_ROLE`) to scope rules per caller.
 
 Permissions on system collections work the same way as permissions on user collections, with one caveat: the platform-managed minimum permissions for app-access roles are projected at read time rather than stored as rows, so they are invisible to `/permissions` queries. See [Config as code / What a config snapshot captures](/docs/manage/config-as-code/#what-a-config-snapshot-captures) for the full picture.
+
+### Deprecated legacy permissions route
+
+`GET /permissions/me` is deprecated because it returns `204 No Content` without any permission data. Remove calls to this empty endpoint. For item permission checks, use `GET /permissions/me/<collection>/<key>`, or `GET /permissions/me/<collection>` for singletons, as described [below](#check-permissions-for-an-item).
+
+Removal is planned for **1.8.0 or later**, no sooner than **30 calendar days after 1.7.0 is published**. See the [deprecation policy](/docs/manage/upgrades/#deprecation-notices).
 
 ### Check permissions for an item
 

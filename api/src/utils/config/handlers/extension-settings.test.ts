@@ -1090,8 +1090,8 @@ describe('postPlan', () => {
 	});
 
 	it('resolves a preserve marker to a no-op create and update while keeping a delete', () => {
-		const plan = {
-			create: [{ identity: identity(WIDGET, 'color'), value: { $secret: 'preserve' } as ExtensionSettingLeaf }],
+		const plan: Parameters<typeof handler.postPlan>[0] = {
+			create: [{ identity: identity(WIDGET, 'color'), value: { $secret: 'preserve' } }],
 			update: [
 				{ identity: identity(WIDGET, 'color'), changes: { value: { before: 'blue', after: { $secret: 'preserve' } } } },
 			],
