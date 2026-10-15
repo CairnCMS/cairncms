@@ -1,11 +1,12 @@
 import type { Accountability, Aggregate, Filter, Query } from '@cairncms/types';
 import { parseFilter, parseJSON } from '@cairncms/utils';
-import { flatten, get, isPlainObject, merge, set } from 'lodash-es';
+import { flatten, get, isPlainObject, merge } from 'lodash-es';
 import { getEnv } from '../env.js';
 import { InvalidQueryException } from '../exceptions/invalid-query.js';
 import logger from '../logger.js';
 import { Meta } from '../types/index.js';
 import { getQueryLimitConfig, hasFiniteMax } from './query-limit.js';
+import { setOwn } from './set-own.js';
 
 export function sanitizeQuery(
 	rawQuery: Record<string, any>,
@@ -211,7 +212,7 @@ function sanitizeDeep(deep: Record<string, any>, accountability?: Accountability
 		}
 
 		if (Object.keys(parsedLevel).length > 0) {
-			set(result, path, merge({}, get(result, path, {}), parsedLevel));
+			setOwn(result, path, merge({}, get(result, path, {}), parsedLevel));
 		}
 	}
 }

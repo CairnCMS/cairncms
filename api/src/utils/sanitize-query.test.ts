@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
+import { BUILT_IN_TARGETS, observeBuiltIns } from '../__utils__/built-ins.js';
 import env from '../env.js';
 
 let factoryEnv: { [k: string]: any } = {};
@@ -349,7 +350,7 @@ describe('deep', () => {
 	});
 
 	test('should parse as json when it is a string', () => {
-		const deep = { deep: { relational_field: { _sort: ['name'] } } };
+		const deep = '{ "deep": { "relational_field": { "_sort": ["name"] } } }';
 
 		const sanitizedQuery = sanitizeQuery({ deep });
 
@@ -402,6 +403,26 @@ describe('deep', () => {
 		const sanitizedQuery = sanitizeQuery({ deep: { translations: { _limit: null, _sort: ['id'] } } });
 
 		expect(sanitizedQuery.deep).toEqual({ translations: { _sort: ['id'] } });
+	});
+
+	test('keeps built-in property names in a JSON string deep as own data', async () => {
+		const { result, changes } = await observeBuiltIns(BUILT_IN_TARGETS, () =>
+			sanitizeQuery({ deep: '{"toString":{"call":{"_limit":1}}}' })
+		);
+
+		expect(changes).toEqual([]);
+		expect(result.deep).toEqual({ toString: { call: { _limit: 1 } } });
+		expect(Object.hasOwn(result.deep!, 'toString')).toBe(true);
+	});
+
+	test('keeps built-in property names in an object deep as own data', async () => {
+		const { result, changes } = await observeBuiltIns(BUILT_IN_TARGETS, () =>
+			sanitizeQuery({ deep: JSON.parse('{"toString":{"call":{"_limit":1}}}') })
+		);
+
+		expect(changes).toEqual([]);
+		expect(result.deep).toEqual({ toString: { call: { _limit: 1 } } });
+		expect(Object.hasOwn(result.deep!, 'toString')).toBe(true);
 	});
 });
 
