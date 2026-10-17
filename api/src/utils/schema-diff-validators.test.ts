@@ -1,5 +1,6 @@
-import type { SchemaOverview } from '@cairncms/types';
+import type { Relation, SchemaOverview } from '@cairncms/types';
 import type { Diff } from 'deep-diff';
+import { cloneDeep, set, unset } from 'lodash-es';
 import { describe, expect, it } from 'vitest';
 import { ForbiddenException } from '../exceptions/index.js';
 import {
@@ -11,7 +12,10 @@ import {
 	assertCollectionNameAllowed,
 	assertCollectionPresent,
 	assertFieldAbsent,
+	assertFieldAttributesKept,
 	assertFieldTypeIsSupported,
+	assertRelationAttributesKept,
+	assertRelationConnectionKept,
 	assertRelationCreatable,
 	assertRelationModifiable,
 } from './schema-diff-validators.js';
@@ -111,6 +115,216 @@ describe('assertCollectionAttributesKept', () => {
 
 		expect(() => assertCollectionAttributesKept('articles', [noteEdited])).not.toThrow();
 		expect(() => assertCollectionAttributesKept('articles', [deleted])).not.toThrow();
+	});
+});
+
+describe('assertFieldAttributesKept', () => {
+	const column = { name: 'title', table: 'articles', data_type: 'varchar', max_length: 1000 };
+
+	it.each([
+		['removed', { kind: 'D', path: ['schema'], lhs: column }],
+		['set to null', { kind: 'E', path: ['schema'], lhs: column, rhs: null }],
+	] as [string, Diff<unknown>][])('refuses a column %s', (_case, change) => {
+		expect(() => assertFieldAttributesKept('articles', 'title', [change])).toThrow(
+			`Field "articles.title" can't remove its column and remain as a field.`
+		);
+	});
+
+	it.each([
+		['removed', { kind: 'D', path: ['meta'], lhs: { note: 'Headline' } }],
+		['set to null', { kind: 'E', path: ['meta'], lhs: { note: 'Headline' }, rhs: null }],
+	] as [string, Diff<unknown>][])('refuses field metadata %s', (_case, change) => {
+		expect(() => assertFieldAttributesKept('articles', 'title', [change])).toThrow(
+			`Field "articles.title" can't remove its field metadata.`
+		);
+	});
+
+	it('refuses a removed type', () => {
+		expect(() =>
+			assertFieldAttributesKept('articles', 'title', [{ kind: 'D', path: ['type'], lhs: 'string' }])
+		).toThrow(`Field "articles.title" can't remove its type.`);
+	});
+
+	it.each(['max_length', 'default_value', 'is_nullable'])('refuses omitting schema.%s', (property) => {
+		const omitted: Diff<unknown> = { kind: 'D', path: ['schema', property], lhs: null };
+
+		expect(() => assertFieldAttributesKept('articles', 'title', [omitted])).toThrow(
+			`Field "articles.title" can't omit "schema.${property}" from its column definition.`
+		);
+	});
+
+	it('refuses a column added to a kept field', () => {
+		expect(() =>
+			assertFieldAttributesKept('articles', 'title', [{ kind: 'N', path: ['schema'], rhs: column }])
+		).toThrow(`Field "articles.title" can't add a column to an existing field.`);
+	});
+
+	it('refuses a removal that follows an ordinary metadata edit', () => {
+		const noteEdited: Diff<unknown> = { kind: 'E', path: ['meta', 'note'], lhs: null, rhs: 'Headline' };
+
+		expect(() =>
+			assertFieldAttributesKept('articles', 'title', [noteEdited, { kind: 'D', path: ['schema'], lhs: column }])
+		).toThrow(`Field "articles.title" can't remove its column and remain as a field.`);
+	});
+
+	it.each([
+		['removing metadata that is already null', { kind: 'D', path: ['meta'], lhs: null }],
+		['an omitted metadata property', { kind: 'D', path: ['meta', 'note'], lhs: 'Headline' }],
+		['gained metadata', { kind: 'E', path: ['meta'], lhs: null, rhs: { note: 'Headline' } }],
+		['an explicit column property edit', { kind: 'E', path: ['schema', 'max_length'], lhs: 1000, rhs: 255 }],
+		['a type change', { kind: 'E', path: ['type'], lhs: 'string', rhs: 'text' }],
+	] as [string, Diff<unknown>][])('accepts %s', (_case, change) => {
+		expect(() => assertFieldAttributesKept('articles', 'title', [change])).not.toThrow();
+	});
+});
+
+describe('assertRelationAttributesKept', () => {
+	const foreignKey = { table: 'articles', column: 'author', foreign_key_table: 'authors', foreign_key_column: 'id' };
+	const meta = { many_collection: 'articles', many_field: 'author', one_collection: 'authors' };
+
+	it.each([
+		['removed', { kind: 'D', path: ['schema'], lhs: foreignKey }],
+		['set to null', { kind: 'E', path: ['schema'], lhs: foreignKey, rhs: null }],
+	] as [string, Diff<unknown>][])('refuses a foreign key %s', (_case, change) => {
+		expect(() => assertRelationAttributesKept('articles', 'author', [change])).toThrow(
+			`Relation "articles.author" can't remove its foreign key and remain as a relation.`
+		);
+	});
+
+	it.each([
+		['removed', { kind: 'D', path: ['meta'], lhs: meta }],
+		['set to null', { kind: 'E', path: ['meta'], lhs: meta, rhs: null }],
+	] as [string, Diff<unknown>][])('refuses relation metadata %s', (_case, change) => {
+		expect(() => assertRelationAttributesKept('articles', 'author', [change])).toThrow(
+			`Relation "articles.author" can't remove its relation metadata.`
+		);
+	});
+
+	it.each([
+		['removing metadata that is already null', { kind: 'D', path: ['meta'], lhs: null }],
+		['an omitted metadata property', { kind: 'D', path: ['meta', 'sort_field'], lhs: 'sort' }],
+		['an omitted foreign key property', { kind: 'D', path: ['schema', 'on_delete'], lhs: 'SET NULL' }],
+	] as [string, Diff<unknown>][])('accepts %s', (_case, change) => {
+		expect(() => assertRelationAttributesKept('articles', 'author', [change])).not.toThrow();
+	});
+});
+
+describe('assertRelationConnectionKept', () => {
+	const current = (): Relation => ({
+		collection: 'articles',
+		field: 'author',
+		related_collection: 'authors',
+		meta: {
+			id: 1,
+			many_collection: 'articles',
+			many_field: 'author',
+			one_collection: 'authors',
+			one_field: null,
+			one_collection_field: null,
+			one_allowed_collections: null,
+			one_deselect_action: 'nullify',
+			junction_field: null,
+			sort_field: null,
+		},
+		schema: {
+			table: 'articles',
+			column: 'author',
+			foreign_key_table: 'authors',
+			foreign_key_column: 'id',
+			constraint_name: 'articles_author_foreign',
+			on_update: 'NO ACTION',
+			on_delete: 'SET NULL',
+		},
+	});
+
+	const changedAt = (path: string, value: unknown): Relation => {
+		const incoming = current();
+		if (value === undefined) unset(incoming, path);
+		else set(incoming, path, value);
+		return incoming;
+	};
+
+	const targetChanged = `Relation "articles.author" can't change its related collection.`;
+	const ownerChanged = `Relation "articles.author" can't change the field it belongs to.`;
+
+	it.each([
+		['related_collection', 'editors'],
+		['meta.one_collection', 'editors'],
+		['schema.foreign_key_table', 'editors'],
+		['schema.foreign_key_column', 'uuid'],
+		['meta.one_collection', undefined],
+	])('refuses changing %s to %s', (path, value) => {
+		expect(() => assertRelationConnectionKept(current(), changedAt(path, value), 'id')).toThrow(targetChanged);
+	});
+
+	it('refuses a related collection set on an any-to-any relation, which has none', () => {
+		const anyToAny: Relation = {
+			collection: 'articles',
+			field: 'item',
+			related_collection: null,
+			schema: null,
+			meta: {
+				...current().meta!,
+				many_field: 'item',
+				one_collection: null,
+				one_collection_field: 'collection',
+				one_allowed_collections: ['authors', 'editors'],
+			},
+		};
+
+		expect(() => assertRelationConnectionKept(anyToAny, cloneDeep(anyToAny), undefined)).not.toThrow();
+
+		expect(() =>
+			assertRelationConnectionKept(anyToAny, { ...cloneDeep(anyToAny), related_collection: 'authors' }, undefined)
+		).toThrow(`Relation "articles.item" can't change its related collection.`);
+	});
+
+	it.each([
+		['meta.many_collection', 'posts'],
+		['meta.many_field', 'editor'],
+		['schema.table', 'posts'],
+		['schema.column', 'editor'],
+	])('refuses changing %s to %s', (path, value) => {
+		expect(() => assertRelationConnectionKept(current(), changedAt(path, value), 'id')).toThrow(ownerChanged);
+	});
+
+	it.each([
+		['meta.sort_field', 'sort'],
+		['schema.on_delete', 'CASCADE'],
+		['meta.sort_field', undefined],
+		['schema.on_delete', undefined],
+	])('accepts changing %s to %s', (path, value) => {
+		expect(() => assertRelationConnectionKept(current(), changedAt(path, value), 'id')).not.toThrow();
+	});
+
+	it('accepts metadata a native foreign key gains when it names the current connection, and refuses any other', () => {
+		const nativeKey = (): Relation => ({ ...current(), meta: null });
+
+		expect(() => assertRelationConnectionKept(nativeKey(), current(), 'id')).not.toThrow();
+
+		expect(() => assertRelationConnectionKept(nativeKey(), changedAt('meta.one_collection', 'editors'), 'id')).toThrow(
+			targetChanged
+		);
+
+		expect(() => assertRelationConnectionKept(nativeKey(), changedAt('meta.many_field', 'editor'), 'id')).toThrow(
+			ownerChanged
+		);
+	});
+
+	it('accepts a foreign key a metadata-only relation gains when it names the current connection, and refuses any other', () => {
+		const metadataOnly = (): Relation => ({ ...current(), schema: null });
+
+		expect(() => assertRelationConnectionKept(metadataOnly(), current(), 'id')).not.toThrow();
+
+		expect(() =>
+			assertRelationConnectionKept(metadataOnly(), changedAt('schema.foreign_key_table', 'editors'), 'id')
+		).toThrow(targetChanged);
+
+		expect(() => assertRelationConnectionKept(metadataOnly(), current(), 'uuid')).toThrow(targetChanged);
+
+		expect(() => assertRelationConnectionKept(metadataOnly(), changedAt('schema.column', 'editor'), 'id')).toThrow(
+			ownerChanged
+		);
 	});
 });
 

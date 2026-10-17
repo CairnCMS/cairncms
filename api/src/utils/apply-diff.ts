@@ -36,6 +36,7 @@ import { readFolderKeys, toFolderIds, toKeyFormSnapshot } from './folder-referen
 import { getSchema } from './get-schema.js';
 import { getSnapshot } from './get-snapshot.js';
 import { getVersionedHash } from './get-versioned-hash.js';
+import { isEntityDelete } from './is-entity-delete.js';
 import { isNestedMetaUpdate } from './is-nested-meta-update.js';
 import {
 	type FacetApplicability,
@@ -44,6 +45,7 @@ import {
 	type SchemaTouchedEntities,
 } from './read-schema-observed-state.js';
 import { collectionCreateOrder, collectionDeleteOrder } from './schema-collection-order.js';
+import { schemaDiffOperation } from './schema-diff-operation.js';
 
 type FieldWrites = Map<string, Map<string, SnapshotField>>;
 
@@ -54,13 +56,9 @@ function rebuildFromDiff<T>(current: T, diff: Diff<any>[]): T {
 	}, cloneDeep(current));
 }
 
-function isFieldUpdate(diff: Diff<any>[]): boolean {
-	return diff?.[0]?.kind === DiffKind.EDIT || diff?.[0]?.kind === DiffKind.ARRAY || isNestedMetaUpdate(diff[0]!);
-}
-
-function operationOf(diff: Diff<any>[]): SchemaOperation {
+function collectionOperationOf(diff: Diff<any>[]): SchemaOperation {
 	if (diff?.[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff[0]!)) return 'create';
-	if (diff?.[0]?.kind === DiffKind.DELETE && !isNestedMetaUpdate(diff[0]!)) return 'delete';
+	if (isEntityDelete(diff?.[0])) return 'delete';
 	return 'update';
 }
 
@@ -109,10 +107,11 @@ function resolveFieldWrites(
 
 	for (const { collection, field, diff } of snapshotDiff.fields) {
 		let finalField: SnapshotField | undefined;
+		const operation = schemaDiffOperation(diff);
 
-		if (diff?.[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff?.[0])) {
+		if (operation === 'create') {
 			finalField = (diff[0] as DiffNew<SnapshotField>).rhs;
-		} else if (isFieldUpdate(diff)) {
+		} else if (operation === 'update') {
 			const currentField = currentSnapshot.fields.find(
 				(snapshotField) => snapshotField.collection === collection && snapshotField.field === field
 			);
@@ -151,13 +150,13 @@ export async function applyDiff(
 
 			return {
 				collection,
-				operation: operationOf(diff),
+				operation: collectionOperationOf(diff),
 				table: collectionTableApplicability(definition),
 				metadata: collectionMetadataApplicability(definition),
 			};
 		}),
 		fields: snapshotDiff.fields.map(({ collection, field, diff }) => {
-			const operation = operationOf(diff);
+			const operation = schemaDiffOperation(diff);
 			const definition = changedDefinition(diff);
 
 			return {
@@ -169,7 +168,7 @@ export async function applyDiff(
 			};
 		}),
 		relations: snapshotDiff.relations.map(({ collection, field, diff }) => {
-			const operation = operationOf(diff);
+			const operation = schemaDiffOperation(diff);
 			const definition = changedDefinition(diff);
 
 			return {
@@ -336,7 +335,9 @@ export async function applyDiff(
 				});
 
 				for (const { collection, field, diff } of snapshotDiff.fields) {
-					if (diff?.[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff?.[0])) {
+					const operation = schemaDiffOperation(diff);
+
+					if (operation === 'create') {
 						try {
 							await fieldsService.createField(
 								collection,
@@ -350,7 +351,7 @@ export async function applyDiff(
 						}
 					}
 
-					if (isFieldUpdate(diff)) {
+					if (operation === 'update') {
 						const newValues = fieldWrite(collection, field);
 
 						if (newValues) {
@@ -363,7 +364,7 @@ export async function applyDiff(
 						}
 					}
 
-					if (diff?.[0]?.kind === DiffKind.DELETE && !isNestedMetaUpdate(diff?.[0])) {
+					if (operation === 'delete') {
 						try {
 							await fieldsService.deleteField(collection, field, mutationOptions);
 						} catch (err) {
@@ -391,7 +392,9 @@ export async function applyDiff(
 						set(structure, diffEdit.path!, undefined);
 					}
 
-					if (diff?.[0]?.kind === DiffKind.NEW) {
+					const operation = schemaDiffOperation(diff);
+
+					if (operation === 'create') {
 						try {
 							await relationsService.createOne(
 								{
@@ -407,7 +410,7 @@ export async function applyDiff(
 						}
 					}
 
-					if (diff?.[0]?.kind === DiffKind.EDIT || diff?.[0]?.kind === DiffKind.ARRAY) {
+					if (operation === 'update') {
 						const currentRelation = currentSnapshot.relations.find((relation) => {
 							return relation.collection === collection && relation.field === field;
 						});
@@ -427,7 +430,7 @@ export async function applyDiff(
 						}
 					}
 
-					if (diff?.[0]?.kind === DiffKind.DELETE) {
+					if (operation === 'delete') {
 						try {
 							await relationsService.deleteOne(collection, field, mutationOptions);
 						} catch (err) {

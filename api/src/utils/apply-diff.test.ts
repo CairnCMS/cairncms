@@ -256,6 +256,97 @@ describe('applyDiff collection routing', () => {
 	});
 });
 
+describe('applyDiff field and relation routing', () => {
+	const legacy = {
+		collection: 'articles',
+		field: 'legacy',
+		type: 'integer',
+		meta: null,
+		schema: { name: 'legacy', table: 'articles', data_type: 'integer' },
+	};
+
+	const author = {
+		collection: 'articles',
+		field: 'author',
+		related_collection: 'authors',
+		meta: { many_collection: 'articles', many_field: 'author', one_collection: 'authors', sort_field: 'position' },
+		schema: { table: 'articles', column: 'author', foreign_key_table: 'authors', foreign_key_column: 'id' },
+	};
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+
+		currentSnapshotValue = snapshot({
+			collections: [stubCollection('articles'), stubCollection('authors')],
+			fields: [legacy as unknown as SnapshotField],
+			relations: [author as any],
+		});
+
+		currentSchemaValue = { ...relationSchema(), relations: [author] };
+	});
+
+	const attributeRemovals = (): SnapshotDiff => {
+		const diff = emptyDiff();
+
+		diff.fields = [
+			{ collection: 'articles', field: 'legacy', diff: [{ kind: 'D', path: ['meta'], lhs: null } as any] },
+		];
+
+		diff.relations = [
+			{
+				collection: 'articles',
+				field: 'author',
+				related_collection: 'authors',
+				diff: [{ kind: 'D', path: ['meta', 'sort_field'], lhs: 'position' } as any],
+			},
+		];
+
+		return diff;
+	};
+
+	it('updates a field whose diff removes only its null meta, and a relation whose diff omits a metadata property', async () => {
+		await applyDiff(attributeRemovals(), { expectedHash: HASH });
+
+		expect(fields.deleteField).not.toHaveBeenCalled();
+		expect(fields.createField).not.toHaveBeenCalled();
+		expect(fields.updateField).toHaveBeenCalledOnce();
+
+		const [, writtenField] = fields.updateField.mock.calls[0]!;
+		expect(writtenField).toEqual({ collection: 'articles', field: 'legacy', type: 'integer', schema: legacy.schema });
+
+		expect(relations.deleteOne).not.toHaveBeenCalled();
+		expect(relations.updateOne).toHaveBeenCalledOnce();
+
+		const [collection, field, writtenRelation] = relations.updateOne.mock.calls[0]!;
+		expect([collection, field]).toEqual(['articles', 'author']);
+
+		expect(writtenRelation.meta).toEqual({
+			many_collection: 'articles',
+			many_field: 'author',
+			one_collection: 'authors',
+		});
+
+		expect(writtenRelation.schema).toEqual(author.schema);
+	});
+
+	it('reports both changes as updates when the apply fails', async () => {
+		currentVendor = 'mysql';
+		relations.updateOne.mockRejectedValueOnce(new Error('alter table failed'));
+
+		const error = await applyDiff(attributeRemovals(), { expectedHash: HASH }).catch((err) => err);
+
+		expect(error).toBeInstanceOf(SchemaApplyFailedException);
+
+		expect(error.extensions.persisted.fields).toEqual([
+			expect.objectContaining({ collection: 'articles', field: 'legacy', operation: 'update' }),
+		]);
+
+		expect(error.extensions.persisted.relations).toEqual([
+			expect.objectContaining({ collection: 'articles', field: 'author', operation: 'update' }),
+		]);
+	});
+});
+
 describe('applyDiff relation creation', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();

@@ -1,6 +1,7 @@
 import { KNEX_TYPES } from '@cairncms/constants';
 import type { Field, RawField, Relation, SchemaOverview } from '@cairncms/types';
 import type { Diff } from 'deep-diff';
+import { get } from 'lodash-es';
 import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
 import { DiffKind } from '../types/index.js';
 
@@ -42,11 +43,7 @@ export function assertCollectionAttributesKept(collection: string, changes: read
 		const attribute = change.path[0];
 		if (attribute !== 'schema' && attribute !== 'meta') continue;
 
-		const removed =
-			(change.kind === DiffKind.DELETE && change.lhs != null) ||
-			(change.kind === DiffKind.EDIT && change.lhs != null && change.rhs == null);
-
-		if (!removed) continue;
+		if (!removesValue(change)) continue;
 
 		throw new InvalidPayloadException(
 			attribute === 'schema'
@@ -54,6 +51,139 @@ export function assertCollectionAttributesKept(collection: string, changes: read
 				: `Collection "${collection}" can't remove its collection metadata.`
 		);
 	}
+}
+
+/**
+ * The field services change a column, type, or metadata row only when given one, and rebuild a kept column from the
+ * whole column definition with defaults for what it leaves out. So a kept field can't remove one of those attributes,
+ * gain a column, or omit a property from its column definition. Removing an attribute that is already null passes.
+ */
+export function assertFieldAttributesKept(collection: string, field: string, changes: readonly Diff<unknown>[]): void {
+	const name = `${collection}.${field}`;
+
+	for (const change of changes) {
+		const [attribute, property] = change.path ?? [];
+
+		if (change.path?.length === 2 && attribute === 'schema' && change.kind === DiffKind.DELETE) {
+			throw new InvalidPayloadException(
+				`Field "${name}" can't omit "schema.${String(property)}" from its column definition.`
+			);
+		}
+
+		if (change.path?.length !== 1) continue;
+
+		if (attribute === 'schema' && addsValue(change)) {
+			throw new InvalidPayloadException(`Field "${name}" can't add a column to an existing field.`);
+		}
+
+		if (!removesValue(change)) continue;
+
+		if (attribute === 'schema') {
+			throw new InvalidPayloadException(`Field "${name}" can't remove its column and remain as a field.`);
+		}
+
+		if (attribute === 'meta') {
+			throw new InvalidPayloadException(`Field "${name}" can't remove its field metadata.`);
+		}
+
+		if (attribute === 'type') {
+			throw new InvalidPayloadException(`Field "${name}" can't remove its type.`);
+		}
+	}
+}
+
+/**
+ * The relation services keep a foreign key or metadata row unless given a replacement, so a kept relation can't
+ * remove either attribute. Removing metadata that is already null changes nothing and passes.
+ */
+export function assertRelationAttributesKept(
+	collection: string,
+	field: string,
+	changes: readonly Diff<unknown>[]
+): void {
+	for (const change of changes) {
+		if (change.path?.length !== 1 || !removesValue(change)) continue;
+
+		const attribute = change.path[0];
+
+		if (attribute === 'schema') {
+			throw new InvalidPayloadException(
+				`Relation "${collection}.${field}" can't remove its foreign key and remain as a relation.`
+			);
+		}
+
+		if (attribute === 'meta') {
+			throw new InvalidPayloadException(`Relation "${collection}.${field}" can't remove its relation metadata.`);
+		}
+	}
+}
+
+const RELATION_TARGET_PATHS = [
+	'related_collection',
+	'meta.one_collection',
+	'schema.foreign_key_table',
+	'schema.foreign_key_column',
+] as const;
+
+const RELATION_OWNER_PATHS = ['meta.many_collection', 'meta.many_field', 'schema.table', 'schema.column'] as const;
+
+type RelationConnection = Pick<Relation, 'collection' | 'field' | 'related_collection' | 'meta' | 'schema'>;
+
+/**
+ * Updating a relation re-adds its foreign key on the relation's own field against its current target, while writing
+ * the given metadata as is. So a kept relation can't change what it connects, and metadata or a foreign key it gains
+ * must describe the connection it already has, keyed to the target's primary key in the given view.
+ */
+export function assertRelationConnectionKept(
+	current: RelationConnection,
+	incoming: Pick<Relation, 'related_collection' | 'meta' | 'schema'>,
+	relatedPrimary: string | undefined
+): void {
+	const { collection, field, related_collection: related } = current;
+
+	const gained: Record<string, unknown> = {
+		'meta.one_collection': related,
+		'meta.many_collection': collection,
+		'meta.many_field': field,
+		'schema.foreign_key_table': related,
+		'schema.foreign_key_column': relatedPrimary,
+		'schema.table': collection,
+		'schema.column': field,
+	};
+
+	const changed = (path: string): boolean => {
+		const [attribute] = path.split('.');
+
+		if (attribute === 'meta' || attribute === 'schema') {
+			if (incoming[attribute] == null) return false;
+			const before = current[attribute] != null ? get(current, path) : gained[path];
+			return (get(incoming, path) ?? null) !== (before ?? null);
+		}
+
+		return (get(incoming, path) ?? null) !== (get(current, path) ?? null);
+	};
+
+	if (RELATION_TARGET_PATHS.some(changed)) {
+		throw new InvalidPayloadException(`Relation "${collection}.${field}" can't change its related collection.`);
+	}
+
+	if (RELATION_OWNER_PATHS.some(changed)) {
+		throw new InvalidPayloadException(`Relation "${collection}.${field}" can't change the field it belongs to.`);
+	}
+}
+
+function removesValue(change: Diff<unknown>): boolean {
+	return (
+		(change.kind === DiffKind.DELETE && change.lhs != null) ||
+		(change.kind === DiffKind.EDIT && change.lhs != null && change.rhs == null)
+	);
+}
+
+function addsValue(change: Diff<unknown>): boolean {
+	return (
+		(change.kind === DiffKind.NEW && change.rhs != null) ||
+		(change.kind === DiffKind.EDIT && change.lhs == null && change.rhs != null)
+	);
 }
 
 /** A collection's group references a collection metadata row, which must exist when the collection is created. */
