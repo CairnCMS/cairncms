@@ -1,7 +1,9 @@
 import type { FieldOverview, SchemaOverview } from '@cairncms/types';
+import { cloneDeep } from 'lodash-es';
 import { describe, expect, it } from 'vitest';
 import type { Snapshot, SnapshotDiff } from '../types/index.js';
 import { assertSchemaDiffApplicable } from './assert-schema-diff-applicable.js';
+import { getSnapshotDiff } from './get-snapshot-diff.js';
 
 function fieldOverview(field: string, type = 'string'): FieldOverview {
 	return {
@@ -802,5 +804,236 @@ describe('assertSchemaDiffApplicable', () => {
 				expect(() => assertSchemaDiffApplicable(diff, current, schema)).toThrow(refused);
 			});
 		});
+	});
+});
+
+describe('assertSchemaDiffApplicable on attribute changes to kept fields and relations', () => {
+	const relationMeta = (field: string, related: string | null, extra: Record<string, unknown> = {}) => ({
+		many_collection: 'articles',
+		many_field: field,
+		one_collection: related,
+		one_field: null,
+		one_collection_field: null,
+		one_allowed_collections: null,
+		one_deselect_action: 'nullify',
+		junction_field: null,
+		sort_field: null,
+		...extra,
+	});
+
+	const foreignKey = (field: string, related: string) => ({
+		table: 'articles',
+		column: field,
+		foreign_key_table: related,
+		foreign_key_column: 'id',
+		constraint_name: `articles_${field}_foreign`,
+		on_update: 'NO ACTION',
+		on_delete: 'SET NULL',
+	});
+
+	const relations = () => [
+		{
+			collection: 'articles',
+			field: 'author',
+			related_collection: 'authors',
+			meta: relationMeta('author', 'authors'),
+			schema: foreignKey('author', 'authors'),
+		},
+		{
+			collection: 'articles',
+			field: 'editor',
+			related_collection: 'editors',
+			meta: null,
+			schema: foreignKey('editor', 'editors'),
+		},
+		{
+			collection: 'articles',
+			field: 'item',
+			related_collection: null,
+			meta: relationMeta('item', null, { one_allowed_collections: ['authors', 'editors'] }),
+			schema: null,
+		},
+	];
+
+	const current = (): Snapshot =>
+		snapshot({
+			collections: ['articles', 'authors', 'editors'].map((name) => collection(name, { name })),
+			fields: [
+				{
+					collection: 'articles',
+					field: 'id',
+					type: 'integer',
+					meta: null,
+					schema: { name: 'id', table: 'articles', is_primary_key: true, has_auto_increment: true },
+				},
+				{
+					collection: 'articles',
+					field: 'title',
+					type: 'string',
+					meta: { collection: 'articles', field: 'title', note: 'Headline' },
+					schema: {
+						name: 'title',
+						table: 'articles',
+						data_type: 'varchar',
+						default_value: 'Untitled',
+						max_length: 1000,
+						is_nullable: false,
+					},
+				},
+				{
+					collection: 'articles',
+					field: 'legacy',
+					type: 'integer',
+					meta: null,
+					schema: { name: 'legacy', table: 'articles', data_type: 'integer' },
+				},
+				aliasField('articles', 'comments'),
+			],
+			relations: relations(),
+		} as unknown as Partial<Snapshot>);
+
+	const overview = () =>
+		schemaOverview(
+			[
+				collectionOverview('articles', 'id', {
+					id: 'integer',
+					title: 'string',
+					legacy: 'integer',
+					author: 'integer',
+					editor: 'integer',
+					item: 'string',
+				}),
+				collectionOverview('authors', 'id', { id: 'integer', favorite: 'integer' }),
+				collectionOverview('editors', 'id', { id: 'integer' }),
+			],
+			relations()
+		);
+
+	const fieldOf = (target: Snapshot, name: string) => target.fields.find((entry) => entry.field === name)! as any;
+	const relationOf = (target: Snapshot, name: string) => target.relations.find((entry) => entry.field === name)! as any;
+
+	function applying(edit: (desired: Snapshot) => void): () => void {
+		const before = current();
+		const desired = cloneDeep(before);
+		edit(desired);
+
+		return () => assertSchemaDiffApplicable(getSnapshotDiff(before, desired), before, overview());
+	}
+
+	it.each([
+		[
+			'an omitted schema',
+			(d: Snapshot) => delete fieldOf(d, 'title').schema,
+			`can't remove its column and remain as a field.`,
+		],
+		[
+			'a null schema',
+			(d: Snapshot) => (fieldOf(d, 'title').schema = null),
+			`can't remove its column and remain as a field.`,
+		],
+		['an omitted meta', (d: Snapshot) => delete fieldOf(d, 'title').meta, `can't remove its field metadata.`],
+		['an omitted type', (d: Snapshot) => delete fieldOf(d, 'title').type, `can't remove its type.`],
+		[
+			'an omitted schema.max_length',
+			(d: Snapshot) => delete fieldOf(d, 'title').schema.max_length,
+			`can't omit "schema.max_length" from its column definition.`,
+		],
+		[
+			'an omitted schema.default_value',
+			(d: Snapshot) => delete fieldOf(d, 'title').schema.default_value,
+			`can't omit "schema.default_value" from its column definition.`,
+		],
+		[
+			'an omitted schema.is_nullable',
+			(d: Snapshot) => delete fieldOf(d, 'title').schema.is_nullable,
+			`can't omit "schema.is_nullable" from its column definition.`,
+		],
+	])('refuses a kept field with %s', (_case, edit, message) => {
+		expect(applying(edit)).toThrow(`Field "articles.title" ${message}`);
+	});
+
+	it('refuses a column added to a kept field', () => {
+		expect(applying((d) => (fieldOf(d, 'comments').schema = { name: 'comments', table: 'articles' }))).toThrow(
+			`Field "articles.comments" can't add a column to an existing field.`
+		);
+	});
+
+	it.each([
+		[
+			'an omitted schema',
+			(d: Snapshot) => delete relationOf(d, 'author').schema,
+			`can't remove its foreign key and remain as a relation.`,
+		],
+		['an omitted meta', (d: Snapshot) => delete relationOf(d, 'author').meta, `can't remove its relation metadata.`],
+		[
+			'related_collection alone changed',
+			(d: Snapshot) => (relationOf(d, 'author').related_collection = 'editors'),
+			`can't change its related collection.`,
+		],
+		[
+			'meta.one_collection alone changed',
+			(d: Snapshot) => (relationOf(d, 'author').meta.one_collection = 'editors'),
+			`can't change its related collection.`,
+		],
+		[
+			'schema.foreign_key_table alone changed',
+			(d: Snapshot) => (relationOf(d, 'author').schema.foreign_key_table = 'editors'),
+			`can't change its related collection.`,
+		],
+		[
+			'schema.foreign_key_column alone changed',
+			(d: Snapshot) => (relationOf(d, 'author').schema.foreign_key_column = 'uuid'),
+			`can't change its related collection.`,
+		],
+		[
+			'meta.many_field alone changed',
+			(d: Snapshot) => (relationOf(d, 'author').meta.many_field = 'editor'),
+			`can't change the field it belongs to.`,
+		],
+	])('refuses a kept relation with %s', (_case, edit, message) => {
+		expect(applying(edit)).toThrow(`Relation "articles.author" ${message}`);
+	});
+
+	it('refuses a related collection set on a relation that had none', () => {
+		expect(applying((d) => (relationOf(d, 'item').related_collection = 'authors'))).toThrow(
+			`Relation "articles.item" can't change its related collection.`
+		);
+	});
+
+	it('accepts gained relation metadata that names the current connection, and refuses one that names another', () => {
+		expect(applying((d) => (relationOf(d, 'editor').meta = relationMeta('editor', 'editors')))).not.toThrow();
+
+		expect(applying((d) => (relationOf(d, 'editor').meta = relationMeta('editor', 'authors')))).toThrow(
+			`Relation "articles.editor" can't change its related collection.`
+		);
+	});
+
+	it.each([
+		['a changed meta.sort_field', (d: Snapshot) => (relationOf(d, 'author').meta.sort_field = 'position')],
+		['a changed schema.on_delete', (d: Snapshot) => (relationOf(d, 'author').schema.on_delete = 'CASCADE')],
+		['an omitted meta.sort_field', (d: Snapshot) => delete relationOf(d, 'author').meta.sort_field],
+		['an omitted schema.on_delete', (d: Snapshot) => delete relationOf(d, 'author').schema.on_delete],
+		['an omitted relation meta that is null', (d: Snapshot) => delete relationOf(d, 'editor').meta],
+		['an omitted field meta.note', (d: Snapshot) => delete fieldOf(d, 'title').meta.note],
+		['an omitted field meta that is null', (d: Snapshot) => delete fieldOf(d, 'legacy').meta],
+	])('accepts %s', (_case, edit) => {
+		expect(applying(edit)).not.toThrow();
+	});
+
+	it('keeps a field whose null meta is omitted, so its collection still takes a new relation', () => {
+		const newRelation = {
+			collection: 'authors',
+			field: 'favorite',
+			related_collection: 'articles',
+			meta: relationMeta('favorite', 'articles', { many_collection: 'authors' }),
+			schema: null,
+		};
+
+		const accepted = applying((d) => {
+			delete fieldOf(d, 'id').meta;
+			d.relations.push(newRelation as any);
+		});
+
+		expect(accepted).not.toThrow();
 	});
 });

@@ -7,6 +7,7 @@ import type { Collection, Snapshot, SnapshotDiff, SnapshotField, SnapshotRelatio
 import { DiffKind } from '../types/index.js';
 import { isNestedMetaUpdate } from './is-nested-meta-update.js';
 import { collectionCreateOrder, collectionDeleteOrder } from './schema-collection-order.js';
+import { schemaDiffOperation } from './schema-diff-operation.js';
 import {
 	assertAliasTypeUnchanged,
 	assertCollectionAbsent,
@@ -16,7 +17,10 @@ import {
 	assertCollectionNameAllowed,
 	assertCollectionPresent,
 	assertFieldAbsent,
+	assertFieldAttributesKept,
 	assertFieldTypeIsSupported,
+	assertRelationAttributesKept,
+	assertRelationConnectionKept,
 	assertRelationCreatable,
 	assertRelationModifiable,
 } from './schema-diff-validators.js';
@@ -198,7 +202,9 @@ export function assertSchemaDiffApplicable(
 	for (const { collection, field, diff } of snapshotDiff.fields) {
 		if (createdCollections.has(collection)) continue;
 
-		if (diff[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff[0])) {
+		const operation = schemaDiffOperation(diff);
+
+		if (operation === 'create') {
 			const frozen = fieldPhase.collections[collection];
 			if (!frozen) continue;
 
@@ -216,7 +222,9 @@ export function assertSchemaDiffApplicable(
 			fieldRows.add(`${collection}.${field}`);
 		}
 
-		if (isFieldUpdate(diff)) {
+		if (operation === 'update') {
+			assertFieldAttributesKept(collection, field, diff);
+
 			const frozen = fieldPhase.collections[collection];
 
 			const current = currentSnapshot.fields.find(
@@ -224,7 +232,7 @@ export function assertSchemaDiffApplicable(
 			);
 
 			if (frozen && current) {
-				const incoming = rebuildField(current, diff);
+				const incoming = rebuildFromDiff(current, diff);
 				assertAliasTypeUnchanged(incoming.type, frozen.fields[field]?.type);
 
 				if (incoming.schema && incoming.type !== 'alias' && incoming.type !== 'unknown') {
@@ -241,7 +249,7 @@ export function assertSchemaDiffApplicable(
 			}
 		}
 
-		if (diff[0]?.kind === DiffKind.DELETE && !isNestedMetaUpdate(diff[0])) {
+		if (operation === 'delete') {
 			projectFieldDelete(collection, field);
 			deletedFields.add(`${collection}.${field}`);
 		}
@@ -252,20 +260,30 @@ export function assertSchemaDiffApplicable(
 	for (const { collection, field, diff } of snapshotDiff.relations) {
 		if (deletedFields.has(`${collection}.${field}`)) continue;
 
-		if (diff[0]?.kind === DiffKind.NEW) {
+		const operation = schemaDiffOperation(diff);
+
+		if (operation === 'create') {
 			const incoming = { ...(diff[0] as DiffNew<SnapshotRelation>).rhs, collection, field } as Relation;
 			assertRelationCreatable(incoming, relationPhase);
 		}
 
-		if (diff[0]?.kind === DiffKind.EDIT || diff[0]?.kind === DiffKind.ARRAY) {
+		if (operation === 'update') {
 			const current = currentSnapshot.relations.find(
 				(relation) => relation.collection === collection && relation.field === field
 			);
 
 			if (current) assertRelationModifiable(collection, field, relationPhase);
+
+			assertRelationAttributesKept(collection, field, diff);
+
+			if (current) {
+				const related = current.related_collection;
+				const relatedPrimary = related ? relationPhase.collections[related]?.primary : undefined;
+				assertRelationConnectionKept(current, rebuildFromDiff(current, diff), relatedPrimary);
+			}
 		}
 
-		if (diff[0]?.kind === DiffKind.DELETE) {
+		if (operation === 'delete') {
 			assertRelationModifiable(collection, field, relationPhase);
 		}
 	}
@@ -281,11 +299,7 @@ function dropIneligibleCollections(overview: SchemaOverview): void {
 	}
 }
 
-function isFieldUpdate(diff: Diff<SnapshotField | undefined>[]): boolean {
-	return diff[0]?.kind === DiffKind.EDIT || diff[0]?.kind === DiffKind.ARRAY || isNestedMetaUpdate(diff[0]);
-}
-
-function rebuildField(current: SnapshotField, diff: Diff<SnapshotField | undefined>[]): SnapshotField {
+function rebuildFromDiff<T>(current: T, diff: Diff<T | undefined>[]): T {
 	return diff.reduce((accumulator, change) => {
 		deepDiff.applyChange(accumulator, undefined, change);
 		return accumulator;

@@ -167,7 +167,7 @@ describe('writeConfigDirectory', () => {
 
 		const config = makeConfig({
 			manifest: { version: 3, resources: ['schema'] },
-			schema: [articles as ConfigSchemaCollection, { collection: 'Mixed Case', fields: [], relations: [] }],
+			schema: [articles as ConfigSchemaCollection, { collection: 'Mixed Case', meta: null, fields: [], relations: [] }],
 		});
 
 		await writeConfigDirectory(config, tmpDir);
@@ -799,7 +799,7 @@ describe('writeConfigDirectory schema filename contract', () => {
 		const collections = ['articles', 'Blog Posts', '---', 'con'];
 
 		await writeConfigDirectory(
-			schemaConfig(collections.map((collection) => ({ collection, fields: [], relations: [] }))),
+			schemaConfig(collections.map((collection) => ({ collection, meta: null, fields: [], relations: [] }))),
 			tmpDir
 		);
 
@@ -814,35 +814,41 @@ describe('writeConfigDirectory schema filename contract', () => {
 		expect(readBack.schema.map((record) => record.collection).sort()).toEqual([...collections].sort());
 	});
 
-	it('removes a removed collection, a stale rename, and a stale slug-and-hash file, keeping a malformed and an unowned file byte-for-byte', async () => {
+	it('removes a removed collection, a stale rename, and a stale slug-and-hash file, keeping malformed and unowned files byte-for-byte', async () => {
 		const schemaDir = path.join(tmpDir, 'schema');
 		await fs.mkdir(schemaDir, { recursive: true });
 
 		const brokenBytes = dumpYaml({ fields: [], relations: [] });
-		const unownedBytes = dumpYaml({ collection: 'Whatever', fields: [], relations: [] });
+		const metalessBytes = dumpYaml({ collection: 'legacy', fields: [], relations: [] });
+		const unownedBytes = dumpYaml({ collection: 'Whatever', meta: null, fields: [], relations: [] });
 
 		await fs.writeFile(
 			path.join(schemaDir, 'removed.yaml'),
-			dumpYaml({ collection: 'removed', fields: [], relations: [] })
+			dumpYaml({ collection: 'removed', meta: null, fields: [], relations: [] })
 		);
 
 		await fs.writeFile(
 			path.join(schemaDir, 'posts.yaml'),
-			dumpYaml({ collection: 'articles', fields: [], relations: [] })
+			dumpYaml({ collection: 'articles', meta: null, fields: [], relations: [] })
 		);
 
 		await fs.writeFile(
 			path.join(schemaDir, 'old-collection-deadbeef.yaml'),
-			dumpYaml({ collection: 'Old Collection', fields: [], relations: [] })
+			dumpYaml({ collection: 'Old Collection', meta: null, fields: [], relations: [] })
 		);
 
 		await fs.writeFile(path.join(schemaDir, 'broken.yaml'), brokenBytes);
+		await fs.writeFile(path.join(schemaDir, 'legacy.yaml'), metalessBytes);
 		await fs.writeFile(path.join(schemaDir, 'UPPER.yaml'), unownedBytes);
 
-		await writeConfigDirectory(schemaConfig([{ collection: 'articles', fields: [], relations: [] }]), tmpDir);
+		await writeConfigDirectory(
+			schemaConfig([{ collection: 'articles', meta: null, fields: [], relations: [] }]),
+			tmpDir
+		);
 
-		expect((await fs.readdir(schemaDir)).sort()).toEqual(['UPPER.yaml', 'articles.yaml', 'broken.yaml']);
+		expect((await fs.readdir(schemaDir)).sort()).toEqual(['UPPER.yaml', 'articles.yaml', 'broken.yaml', 'legacy.yaml']);
 		expect(await fs.readFile(path.join(schemaDir, 'broken.yaml'), 'utf8')).toBe(brokenBytes);
+		expect(await fs.readFile(path.join(schemaDir, 'legacy.yaml'), 'utf8')).toBe(metalessBytes);
 		expect(await fs.readFile(path.join(schemaDir, 'UPPER.yaml'), 'utf8')).toBe(unownedBytes);
 		expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('does not read as a schema record'));
 		expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('not a name this config engine generates'));

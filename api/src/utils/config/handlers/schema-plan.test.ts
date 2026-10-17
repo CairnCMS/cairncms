@@ -352,7 +352,7 @@ describe('schema validateDesired', () => {
 		return schemaDescriptor.handler.validateDesired(documents as never, documents as never, {} as never);
 	}
 
-	it('admits a well-formed tree, a metadata-only group, and system fields', () => {
+	it('admits a well-formed tree, a metadata-only group, a table without a collection record, and system fields', () => {
 		const group: ConfigSchemaCollection = {
 			collection: 'people',
 			meta: collectionMeta('people'),
@@ -363,10 +363,25 @@ describe('schema validateDesired', () => {
 		const documents = [
 			record('articles', { fields: [makeField('articles', 'title')] }),
 			group,
+			record('labels', { meta: null, fields: [makeField('labels', 'code')] }),
 			systemRecord('directus_users', [makeField('directus_users', 'nickname')]),
 		];
 
 		expect(validate(documents)).toEqual([]);
+	});
+
+	it.each([
+		['only fields and relations', { collection: 'articles', fields: [makeField('articles', 'title')], relations: [] }],
+		['a schema without meta', { collection: 'articles', schema: { name: 'articles' }, fields: [], relations: [] }],
+	])('rejects a collection that declares %s', (_label, document) => {
+		const failures = validate([document as unknown as ConfigSchemaCollection]);
+
+		expect(failures).toEqual([
+			expect.objectContaining({
+				code: 'CONFIG_INVALID',
+				message: 'Schema collection "articles" must declare "meta", which can be null.',
+			}),
+		]);
 	});
 
 	it('rejects a duplicate collection identity', () => {
@@ -411,6 +426,20 @@ describe('schema validateDesired', () => {
 		const broken = record('directus_users', { fields: [makeField('directus_users', 'nickname')] });
 		const failures = validate([broken]);
 		expect(failures).toContainEqual(expect.objectContaining({ code: 'CONFIG_INVALID' }));
+	});
+
+	it.each([
+		['meta', { meta: null }],
+		['schema', { schema: { name: 'directus_users' } }],
+	])('rejects a system collection declaring only %s', (_label, definition) => {
+		const broken = { ...systemRecord('directus_users', [makeField('directus_users', 'nickname')]), ...definition };
+
+		expect(validate([broken as ConfigSchemaCollection])).toEqual([
+			expect.objectContaining({
+				code: 'CONFIG_INVALID',
+				message: 'System collection "directus_users" must declare only fields, not a collection definition.',
+			}),
+		]);
 	});
 
 	it('accepts field types beyond the knex column set', () => {

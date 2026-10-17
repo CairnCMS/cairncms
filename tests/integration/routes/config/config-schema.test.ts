@@ -70,6 +70,10 @@ async function dropCollection(api: Api, collection: string): Promise<void> {
 	await api.database('directus_permissions').where({ collection }).delete();
 }
 
+async function clearCache(api: Api): Promise<void> {
+	await setupRequest(api.url).post('/utils/cache/clear').auth(api.adminToken, { type: 'bearer' }).expect(200);
+}
+
 async function captureState(api: Api, collections: string[], role?: string): Promise<Document> {
 	const db = api.database;
 	const tables: Record<string, unknown> = {};
@@ -338,6 +342,101 @@ describe('config apply previews a version 3 schema tree', () => {
 			expect(await captureState(api, [created])).toEqual(before);
 		} finally {
 			await dropCollection(api, created);
+		}
+	});
+
+	test('snapshots a folder to a file without a schema, and plans the tree without schema changes', async ({ api }) => {
+		const folder = `preview_folder_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+
+		try {
+			await setupRequest(api.url)
+				.post('/collections')
+				.auth(api.adminToken, { type: 'bearer' })
+				.send({ collection: folder, meta: {}, schema: null })
+				.expect(200);
+
+			await snapshotTree(api, ['schema']);
+
+			const file = await readTreeFile('schema', folder);
+
+			expect(file['meta']).toMatchObject({ collection: folder });
+			expect(file).not.toHaveProperty('schema');
+
+			const http = await applyConfig(api, await snapshot(api, 3, ['schema']), { dryRun: true });
+
+			expect(http.statusCode).toBe(200);
+			expect(changesOf(http.body.data, ['collections', 'fields', 'relations'])).toEqual([]);
+
+			const cli = await api.cli(['config', 'apply', fixtureRoot, '--dry-run', '--format', 'json']);
+
+			expect(JSON.parse(cli.stdout)).toEqual(http.body.data);
+		} finally {
+			await dropCollection(api, folder);
+		}
+	});
+
+	test('refuses a collection file without meta, and plans no schema changes once its null meta is restored', async ({
+		api,
+	}) => {
+		const table = `preview_unconfigured_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+		const refusal = `Schema collection "${table}" must declare "meta", which can be null.`;
+
+		try {
+			await api.database.schema.createTable(table, (builder) => {
+				builder.increments('id');
+				builder.string('title');
+			});
+
+			await api.database(table).insert({ title: 'kept' });
+			await clearCache(api);
+
+			await snapshotTree(api, ['schema']);
+
+			const file = await readTreeFile('schema', table);
+			expect(file['meta']).toBeNull();
+			delete file['meta'];
+			await writeTreeFile('schema', table, file);
+
+			const desired = await snapshot(api, 3, ['schema']);
+			const record = (desired['schema'] as Document[]).find((entry) => entry['collection'] === table)!;
+			delete record['meta'];
+
+			const before = await captureState(api, [table]);
+			const rows = await api.database(table).select('id', 'title');
+
+			expect(before['tables']).toEqual({ [table]: expect.any(Object) });
+			expect(before['collections']).toEqual([]);
+			expect(rows).toEqual([{ id: 1, title: 'kept' }]);
+
+			const http = await applyConfig(api, desired, { dryRun: true });
+
+			expect(http.statusCode).toBe(400);
+			expect(http.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+			expect(http.body.errors[0].message).toContain(refusal);
+
+			const cli = await api.cli(['config', 'apply', fixtureRoot, '--dry-run', '--format', 'json']);
+
+			expect(cli.status).toBe(2);
+			expect(cli.stdout + cli.stderr).toContain(refusal);
+
+			expect(await captureState(api, [table])).toEqual(before);
+			expect(await api.database(table).select('id', 'title')).toEqual(rows);
+
+			record['meta'] = null;
+			file['meta'] = null;
+			await writeTreeFile('schema', table, file);
+
+			const restored = await applyConfig(api, desired, { dryRun: true });
+
+			expect(restored.statusCode).toBe(200);
+			expect(changesOf(restored.body.data, ['collections', 'fields', 'relations'])).toEqual([]);
+
+			const restoredCli = await api.cli(['config', 'apply', fixtureRoot, '--dry-run', '--format', 'json']);
+
+			expect(JSON.parse(restoredCli.stdout)).toEqual(restored.body.data);
+		} finally {
+			await api.database.schema.dropTableIfExists(table);
+			await clearCache(api);
 		}
 	});
 

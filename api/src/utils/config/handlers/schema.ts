@@ -391,15 +391,25 @@ function groupSnapshotCollections(snapshot: PortableSnapshot): ConfigSchemaColle
 			continue;
 		}
 
-		records.push({ collection: name, meta: collection.meta, schema: collection.schema, ...membersOf(name) });
+		records.push({
+			collection: name,
+			meta: collection.meta,
+			...(collection.schema !== undefined && { schema: collection.schema }),
+			...membersOf(name),
+		});
 	}
 
-	// A system collection with only operator-added fields never reaches the snapshot's collections.
+	// A system collection with only operator-added fields never reaches the snapshot's collections, and neither
+	// does the owner of a relation whose table and collection record are both gone.
 	for (const owner of [...fieldsByCollection.keys(), ...relationsByCollection.keys()]) {
 		if (emitted.has(owner)) continue;
 		emitted.add(owner);
 
-		records.push({ collection: owner, ...membersOf(owner) });
+		if (owner.startsWith('directus_')) {
+			records.push({ collection: owner, ...membersOf(owner) });
+		} else {
+			records.push({ collection: owner, meta: null, ...membersOf(owner) });
+		}
 	}
 
 	records.sort((a, b) => compareCodeUnits(a.collection, b.collection));
@@ -705,6 +715,10 @@ function schemaRecordProblems(document: ConfigSchemaCollection): ConfigFailure[]
 
 	if (collection.startsWith('directus_') && (Object.hasOwn(document, 'meta') || Object.hasOwn(document, 'schema'))) {
 		problems.push(invalid(`System collection "${label}" must declare only fields, not a collection definition.`));
+	}
+
+	if (!collection.startsWith('directus_') && !Object.hasOwn(document, 'meta')) {
+		problems.push(invalid(`Schema collection "${label}" must declare "meta", which can be null.`));
 	}
 
 	problems.push(...ownedElementProblems(document.fields, 'field', collection, label));

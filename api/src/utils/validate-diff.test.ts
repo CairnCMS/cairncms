@@ -202,6 +202,61 @@ describe('distinguishes nested metadata changes from whole-entity operations', (
 	});
 });
 
+describe('checks only a whole-entity entry as a create or delete', () => {
+	const applying = (part: Record<string, unknown>): any => ({
+		hash: 'abc',
+		diff: { collections: [], fields: [], relations: [], ...part },
+	});
+
+	const empty = { collections: [], fields: [], relations: [] } as unknown as Snapshot;
+
+	const existing = {
+		collections: [{ collection: 'a' }],
+		fields: [{ collection: 'a', field: 'f' }],
+		relations: [{ collection: 'a', field: 'r', related_collection: 'b' }],
+	} as unknown as Snapshot;
+
+	test.each([
+		['a removed column', { kind: 'D', path: ['schema'], lhs: { name: 'f' } }],
+		['an omitted column property', { kind: 'D', path: ['schema', 'max_length'], lhs: 255 }],
+		['removed metadata', { kind: 'D', path: ['meta'], lhs: null }],
+	])('does not check a field diff starting with %s as a delete', (_label, change) => {
+		const diff = applying({ fields: [{ collection: 'a', field: 'f', diff: [change] }] });
+
+		expect(validateApplyDiff(diff, empty)).toBe(true);
+	});
+
+	test('does not check a field diff that adds a column as a create', () => {
+		const change = { kind: 'N', path: ['schema'], rhs: { name: 'f' } };
+		const diff = applying({ fields: [{ collection: 'a', field: 'f', diff: [change] }] });
+
+		expect(validateApplyDiff(diff, existing)).toBe(true);
+	});
+
+	test.each([
+		['a removed foreign key', { kind: 'D', path: ['schema'], lhs: { table: 'a', column: 'r' } }],
+		['an omitted metadata property', { kind: 'D', path: ['meta', 'sort_field'], lhs: 'sort' }],
+	])('does not check a relation diff starting with %s as a delete', (_label, change) => {
+		const diff = applying({ relations: [{ collection: 'a', field: 'r', related_collection: 'b', diff: [change] }] });
+
+		expect(validateApplyDiff(diff, empty)).toBe(true);
+	});
+
+	test('does not check a relation diff that adds a foreign key as a create', () => {
+		const change = { kind: 'N', path: ['schema'], rhs: { table: 'a', column: 'r' } };
+		const diff = applying({ relations: [{ collection: 'a', field: 'r', related_collection: 'b', diff: [change] }] });
+
+		expect(validateApplyDiff(diff, existing)).toBe(true);
+	});
+
+	test('does not check a collection diff that removes its table as a delete', () => {
+		const change = { kind: 'D', path: ['schema'], lhs: { name: 'a' } };
+		const diff = applying({ collections: [{ collection: 'a', diff: [change] }] });
+
+		expect(validateApplyDiff(diff, empty)).toBe(true);
+	});
+});
+
 test('should not throw error for diffs with varying types of lhs/rhs', () => {
 	const diff: any = {
 		hash: 'abc',

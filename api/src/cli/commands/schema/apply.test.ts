@@ -5,6 +5,7 @@ import logger from '../../../logger.js';
 import { applyDiff } from '../../../utils/apply-diff.js';
 import { toKeyFormSnapshot } from '../../../utils/folder-references.js';
 import { getSnapshot } from '../../../utils/get-snapshot.js';
+import { getTargetSnapshotDiff } from '../../../utils/get-target-snapshot-diff.js';
 import { getVersionedHash } from '../../../utils/get-versioned-hash.js';
 import { SchemaApplyFailedException } from '../../../exceptions/schema-apply-failed.js';
 import { apply } from './apply.js';
@@ -105,11 +106,99 @@ describe('schema apply presentation', () => {
 		expect(logger.info).toHaveBeenCalledWith(expectedPlan());
 	});
 
+	it('renders field and relation diffs that start with a removed attribute as updates listing their changes', async () => {
+		vi.mocked(getTargetSnapshotDiff).mockResolvedValueOnce({
+			collections: [],
+			fields: [
+				{
+					collection: 'articles',
+					field: 'title',
+					diff: [
+						{ kind: 'D', path: ['schema', 'max_length'], lhs: 1000 },
+						{ kind: 'E', path: ['meta', 'note'], lhs: null, rhs: 'Headline' },
+					],
+				},
+				{ collection: 'articles', field: 'body', diff: [{ kind: 'D', path: ['schema'], lhs: { name: 'body' } }] },
+			],
+			relations: [
+				{
+					collection: 'articles',
+					field: 'author',
+					related_collection: 'authors',
+					diff: [
+						{ kind: 'D', path: ['meta', 'sort_field'], lhs: 'position' },
+						{ kind: 'E', path: ['schema', 'on_delete'], lhs: 'SET NULL', rhs: 'CASCADE' },
+					],
+				},
+			],
+		} as any);
+
+		await expect(apply('snapshot.json', { yes: false, dryRun: true })).rejects.toThrow();
+
+		const inner =
+			'\n\n' +
+			chalk.black.underline.bold('Fields:') +
+			`\n  - ${chalk.blue('Update')} articles.title` +
+			'\n    - Remove max_length' +
+			'\n    - Set note to Headline' +
+			`\n  - ${chalk.blue('Update')} articles.body` +
+			'\n    - Remove schema' +
+			'\n\n' +
+			chalk.black.underline.bold('Relations:') +
+			`\n  - ${chalk.blue('Update')} articles.author-> authors` +
+			'\n    - Remove sort_field' +
+			'\n    - Set on_delete to CASCADE';
+
+		expect(logger.info).toHaveBeenCalledWith('The following changes will be applied:\n\n' + chalk.black(inner));
+	});
+
 	it('appends the shared confirmation prompt to the plan when confirming', async () => {
 		await expect(apply('snapshot.json', { yes: false, dryRun: false })).rejects.toThrow();
 
 		const call = vi.mocked(inquirer.prompt).mock.calls[0]![0] as unknown as Array<{ message: string }>;
 		expect(call[0]!.message).toBe(expectedPlan() + '\n\nWould you like to continue?');
+	});
+
+	it('replaces control characters from the snapshot in the dry run and the confirmation prompt', async () => {
+		const escape = String.fromCharCode(27);
+		const bell = String.fromCharCode(7);
+
+		const hostile = {
+			collections: [],
+			fields: [],
+			relations: [
+				{
+					collection: 'articles',
+					field: `author${bell}`,
+					related_collection: 'authors',
+					diff: [
+						{ kind: 'D', path: ['meta', 'junction_field'], lhs: 'item' },
+						{ kind: 'E', path: ['meta', `sort${bell}`], lhs: null, rhs: `rank${escape}[31m\n  - Delete articles` },
+					],
+				},
+			],
+		};
+
+		vi.mocked(getTargetSnapshotDiff)
+			.mockResolvedValueOnce(hostile as any)
+			.mockResolvedValueOnce(hostile as any);
+
+		await expect(apply('snapshot.json', { yes: false, dryRun: true })).rejects.toThrow();
+		await expect(apply('snapshot.json', { yes: false, dryRun: false })).rejects.toThrow();
+
+		const inner =
+			'\n\n' +
+			chalk.black.underline.bold('Relations:') +
+			`\n  - ${chalk.blue('Update')} articles.author?-> authors` +
+			'\n    - Remove junction_field' +
+			'\n    - Set sort? to rank?[31m?  - Delete articles';
+
+		const plan = 'The following changes will be applied:\n\n' + chalk.black(inner);
+
+		expect(logger.info).toHaveBeenCalledWith(plan);
+
+		const call = vi.mocked(inquirer.prompt).mock.calls[0]![0] as unknown as Array<{ message: string }>;
+		expect(call[0]!.message).toBe(plan + '\n\nWould you like to continue?');
 	});
 });
 
