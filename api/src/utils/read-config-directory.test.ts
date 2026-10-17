@@ -664,7 +664,7 @@ describe('readConfigDirectory schema loading', () => {
 			schema: { name: 'articles' },
 		});
 
-		await writeSchemaFile('posts.yaml', { collection: 'posts', fields: [], relations: [] });
+		await writeSchemaFile('posts.yaml', { collection: 'posts', fields: [], relations: [], meta: null });
 
 		const config = await readConfigDirectory(tmpDir);
 
@@ -673,6 +673,43 @@ describe('readConfigDirectory schema loading', () => {
 		const articles = config.schema.find((doc) => doc.collection === 'articles')!;
 		expect(articles.fields).toEqual([titleField]);
 		expect(articles.meta).toEqual({ note: null });
+	});
+
+	it('loads a table without a collection record and a folder without a table', async () => {
+		await writeSchemaManifest();
+
+		await writeSchemaFile('labels.yaml', {
+			collection: 'labels',
+			fields: [],
+			relations: [],
+			meta: null,
+			schema: { name: 'labels' },
+		});
+
+		await writeSchemaFile('library.yaml', { collection: 'library', fields: [], relations: [], meta: { note: null } });
+
+		const config = await readConfigDirectory(tmpDir);
+
+		const labels = config.schema.find((doc) => doc.collection === 'labels')!;
+		expect(labels.meta).toBeNull();
+		expect(labels.schema).toEqual({ name: 'labels' });
+
+		const library = config.schema.find((doc) => doc.collection === 'library')!;
+		expect(library.meta).toEqual({ note: null });
+		expect(library).not.toHaveProperty('schema');
+	});
+
+	it('refuses a collection file that does not declare meta, naming the file', async () => {
+		await writeSchemaManifest();
+		await writeSchemaFile('articles.yaml', { collection: 'articles', fields: [titleField], relations: [] });
+
+		const error = await captureRejection(() => readConfigDirectory(tmpDir));
+
+		expect(error).toBeInstanceOf(ConfigInvalidException);
+
+		expect(error.message).toContain(
+			'Schema file "articles.yaml": Schema collection "articles" must declare "meta", which can be null.'
+		);
 	});
 
 	it('loads operator-added fields for a system collection without a definition', async () => {
@@ -700,8 +737,8 @@ describe('readConfigDirectory schema loading', () => {
 
 	it('skips an unowned schema filename', async () => {
 		await writeSchemaManifest();
-		await writeSchemaFile('articles.yaml', { collection: 'articles', fields: [], relations: [] });
-		await writeSchemaRaw('README.yaml', toYaml({ collection: 'articles', fields: [], relations: [] }));
+		await writeSchemaFile('articles.yaml', { collection: 'articles', meta: null, fields: [], relations: [] });
+		await writeSchemaRaw('README.yaml', toYaml({ collection: 'articles', meta: null, fields: [], relations: [] }));
 
 		const config = await readConfigDirectory(tmpDir);
 
@@ -768,7 +805,7 @@ describe('readConfigDirectory schema loading', () => {
 
 	it('accepts an owned file whose name does not match its collection', async () => {
 		await writeSchemaManifest();
-		await writeSchemaFile('posts.yaml', { collection: 'articles', fields: [], relations: [] });
+		await writeSchemaFile('posts.yaml', { collection: 'articles', meta: null, fields: [], relations: [] });
 
 		const config = await readConfigDirectory(tmpDir);
 
@@ -777,8 +814,8 @@ describe('readConfigDirectory schema loading', () => {
 
 	it('refuses two files declaring the same collection', async () => {
 		await writeSchemaManifest();
-		await writeSchemaFile('articles.yaml', { collection: 'articles', fields: [], relations: [] });
-		await writeSchemaFile('posts.yaml', { collection: 'articles', fields: [], relations: [] });
+		await writeSchemaFile('articles.yaml', { collection: 'articles', meta: null, fields: [], relations: [] });
+		await writeSchemaFile('posts.yaml', { collection: 'articles', meta: null, fields: [], relations: [] });
 
 		const error = await captureRejection(() => readConfigDirectory(tmpDir));
 

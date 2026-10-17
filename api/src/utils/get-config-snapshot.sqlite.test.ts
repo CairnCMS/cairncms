@@ -8,7 +8,8 @@ import type { ConfigSchemaCollection } from '../types/config.js';
 import { readConfigDirectory } from './read-config-directory.js';
 import { readCurrentConfig } from './get-config-snapshot.js';
 import { version } from './package.js';
-import { validateConfigManifest } from './validate-desired-config.js';
+import { serializeToWire } from './config/wire.js';
+import { validateConfigManifest, validateDesiredConfig } from './validate-desired-config.js';
 import { writeConfigDirectory } from './write-config-directory.js';
 
 vi.mock('../database/index', () => ({
@@ -354,5 +355,67 @@ describe('readCurrentConfig schema on a real SQLite database', () => {
 		} finally {
 			await fs.rm(dir, { recursive: true, force: true });
 		}
+	});
+
+	async function writeAndReadBack(): Promise<ConfigSchemaCollection[]> {
+		const { config } = await readCurrentConfig({ database: db, schema, resources: ['schema'], manifestVersion: 3 });
+
+		const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cairncms-schema-roundtrip-'));
+
+		try {
+			await writeConfigDirectory(config, dir);
+			const readBack = await readConfigDirectory(dir);
+
+			expect(readBack.schema).toEqual(config.schema);
+
+			expect(
+				validateDesiredConfig(serializeToWire(readBack, readBack.manifest.version), {
+					label: 'snapshot',
+					references: 'server-snapshot',
+				})
+			).toEqual([]);
+
+			return readBack.schema;
+		} finally {
+			await fs.rm(dir, { recursive: true, force: true });
+		}
+	}
+
+	it('writes a folder without a schema, and the tree reads back and validates', async () => {
+		await db('directus_collections').insert({
+			collection: 'library',
+			hidden: false,
+			singleton: false,
+			group: null,
+			accountability: 'all',
+		});
+
+		const readBack = await writeAndReadBack();
+
+		expect(readBack.map((record) => record.collection)).toEqual([
+			'articles',
+			'directus_users',
+			'library',
+			'native_labels',
+		]);
+
+		const library = readBack.find((record) => record.collection === 'library')!;
+		expect(library.meta).toMatchObject({ collection: 'library' });
+		expect(library).not.toHaveProperty('schema');
+	});
+
+	it('writes the owner of a relation whose table is gone with null meta, and the tree reads back and validates', async () => {
+		await db('directus_relations').insert({
+			many_collection: 'retired_items',
+			many_field: 'article',
+			one_collection: 'articles',
+		});
+
+		const readBack = await writeAndReadBack();
+
+		const retired = readBack.find((record) => record.collection === 'retired_items')!;
+		expect(retired.meta).toBeNull();
+		expect(retired).not.toHaveProperty('schema');
+		expect(retired.relations.map((relation) => relation.field)).toEqual(['article']);
 	});
 });
