@@ -1,6 +1,7 @@
 import type { SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import type { CairnConfig, ConfigKind, ConfigPlan, ConfigPlanEnrichment, SettingsRetarget } from '../types/config.js';
+import { projectCollections } from './config/projected-collections.js';
 import { getDescriptor, listConfigKinds } from './config/registry.js';
 
 type EnrichOptions = {
@@ -31,6 +32,7 @@ export async function enrichConfigPlan(
 	const context = {
 		database: options.database,
 		schema: options.schema,
+		collections: projectCollections(options.schema.collections, plan.schema),
 		settingsRetarget: settingsRetargetOf(plan.settings.update),
 	};
 

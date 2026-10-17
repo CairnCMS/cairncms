@@ -1,6 +1,9 @@
 import type { Accountability, PermissionsAction } from '@cairncms/types';
+import type { Table } from '@cairncms/schema';
 import type { ManifestVersion } from '../utils/config-contract.js';
 import type { ConfigKindTypeMap } from '../utils/config/registry.js';
+import type { CollectionMeta } from './collection.js';
+import type { SnapshotField, SnapshotRelation } from './snapshot.js';
 
 export const CONFIG_KINDS = [
 	'roles',
@@ -9,6 +12,7 @@ export const CONFIG_KINDS = [
 	'settings',
 	'extension-settings',
 	'translations',
+	'schema',
 ] as const;
 export type ConfigKind = (typeof CONFIG_KINDS)[number];
 
@@ -73,9 +77,36 @@ export interface ConfigTranslationsAuthored {
 	translations?: Record<string, string>;
 }
 
+/**
+ * Relations belong to the collection that owns their foreign key.
+ * System-collection documents omit the collection definition and contain only operator-added fields.
+ */
+export interface ConfigSchemaCollection {
+	collection: string;
+	meta?: CollectionMeta | null;
+	schema?: Table | null;
+	fields: SnapshotField[];
+	relations: SnapshotRelation[];
+}
+
+export type SchemaIdentity = { collection: string };
+
+export type SchemaValues = Record<string, unknown>;
+
+export type SchemaAttributeChange = FieldChange<unknown> & { beforePresent?: boolean; afterPresent?: boolean };
+
+export type SchemaFieldChanges = Record<string, SchemaAttributeChange>;
+
+/** The release and database vendor a schema snapshot was taken from. */
+export interface ConfigManifestSchemaProvenance {
+	release: string;
+	vendor: string;
+}
+
 export interface ConfigManifest {
 	version: ManifestVersion;
 	resources: ConfigKind[];
+	schema?: ConfigManifestSchemaProvenance;
 }
 
 export interface CairnConfig {
@@ -86,6 +117,7 @@ export interface CairnConfig {
 	settings: ConfigSettings[];
 	'extension-settings': ConfigExtensionSettingsAuthored[];
 	translations: ConfigTranslationsAuthored[];
+	schema: ConfigSchemaCollection[];
 }
 
 export type RoleIdentity = { key: string };
@@ -232,8 +264,27 @@ export interface ConfigPlan {
 		update: Array<{ identity: TranslationsIdentity; changes: TranslationsFieldChanges }>;
 		delete: Array<{ identity: TranslationsIdentity }>;
 	};
+	schema: {
+		create: SchemaChangeEntry[];
+		update: SchemaChangeEntry[];
+		delete: SchemaChangeEntry[];
+	};
 	protections: ConfigProtection[];
 }
+
+export type SchemaCollectionIdentity = { collection: string };
+export type SchemaFieldIdentity = { collection: string; field: string };
+export type SchemaRelationIdentity = { collection: string; field: string };
+
+export type SchemaChangeEntry =
+	| { changeKind: 'collections'; identity: SchemaCollectionIdentity; changes: SchemaFieldChanges }
+	| { changeKind: 'fields'; identity: SchemaFieldIdentity; changes: SchemaFieldChanges }
+	| {
+			changeKind: 'relations';
+			identity: SchemaRelationIdentity;
+			relatedCollection: string | null;
+			changes: SchemaFieldChanges;
+	  };
 
 export type PermissionIdentity = { role: string; collection: string; action: PermissionsAction };
 
@@ -286,10 +337,37 @@ export type ConfigPlanChange =
 	| { kind: 'extension-settings'; operation: 'delete'; identity: ExtensionSettingsIdentity; impact: [] }
 	| { kind: 'translations'; operation: 'create'; identity: TranslationsIdentity; values: TranslationsValues }
 	| { kind: 'translations'; operation: 'update'; identity: TranslationsIdentity; fields: TranslationsFieldChanges }
-	| { kind: 'translations'; operation: 'delete'; identity: TranslationsIdentity; impact: [] };
+	| { kind: 'translations'; operation: 'delete'; identity: TranslationsIdentity; impact: [] }
+	| { kind: 'collections'; operation: 'create'; identity: SchemaCollectionIdentity; values: SchemaValues }
+	| { kind: 'collections'; operation: 'update'; identity: SchemaCollectionIdentity; fields: SchemaFieldChanges }
+	| { kind: 'collections'; operation: 'delete'; identity: SchemaCollectionIdentity; impact: [] }
+	| { kind: 'fields'; operation: 'create'; identity: SchemaFieldIdentity; values: SchemaValues }
+	| { kind: 'fields'; operation: 'update'; identity: SchemaFieldIdentity; fields: SchemaFieldChanges }
+	| { kind: 'fields'; operation: 'delete'; identity: SchemaFieldIdentity; impact: [] }
+	| {
+			kind: 'relations';
+			operation: 'create';
+			identity: SchemaRelationIdentity;
+			relatedCollection: string | null;
+			values: SchemaValues;
+	  }
+	| {
+			kind: 'relations';
+			operation: 'update';
+			identity: SchemaRelationIdentity;
+			relatedCollection: string | null;
+			fields: SchemaFieldChanges;
+	  }
+	| {
+			kind: 'relations';
+			operation: 'delete';
+			identity: SchemaRelationIdentity;
+			relatedCollection: string | null;
+			impact: [];
+	  };
 
 export type SerializedConfigPlan = {
-	planVersion: 2;
+	planVersion: 2 | 3;
 	manifestVersion: number;
 	changes: ConfigPlanChange[];
 	summary: { create: number; update: number; delete: number };

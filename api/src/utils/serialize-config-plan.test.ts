@@ -16,6 +16,7 @@ import { CONFIG_REGISTRY } from './config/registry.js';
 function emptyPlan(): ConfigPlan {
 	return {
 		managedResources: [],
+		schema: { create: [], update: [], delete: [] },
 		roles: { create: [], update: [], delete: [] },
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
@@ -479,5 +480,115 @@ describe('serializeConfigPlan', () => {
 		} finally {
 			CONFIG_REGISTRY.roles = real;
 		}
+	});
+});
+
+describe('serializeConfigPlan schema changes', () => {
+	it('serializes a schema-managing plan at planVersion 3 with collection, field, and relation change detail', () => {
+		const plan = emptyPlan();
+		plan.managedResources = ['schema'];
+
+		plan.schema = {
+			create: [
+				{
+					changeKind: 'collections',
+					identity: { collection: 'articles' },
+					changes: { note: { before: null, after: 'Articles' } },
+				},
+				{
+					changeKind: 'fields',
+					identity: { collection: 'articles', field: 'title' },
+					changes: { type: { before: null, after: 'string' } },
+				},
+				{
+					changeKind: 'relations',
+					identity: { collection: 'articles', field: 'author' },
+					relatedCollection: 'directus_users',
+					changes: { one_field: { before: null, after: 'articles' } },
+				},
+			],
+			update: [
+				{
+					changeKind: 'fields',
+					identity: { collection: 'articles', field: 'body' },
+					changes: { max_length: { before: 255, after: 512 } },
+				},
+			],
+			delete: [{ changeKind: 'collections', identity: { collection: 'legacy' }, changes: {} }],
+		};
+
+		const result = serializeConfigPlan(plan, { enrichment: emptyEnrichment(), manifestVersion: 3 });
+
+		expect(result.planVersion).toBe(3);
+
+		const expectedChanges = [
+			{
+				kind: 'collections',
+				operation: 'create',
+				identity: { collection: 'articles' },
+				values: { note: 'Articles' },
+			},
+			{ kind: 'collections', operation: 'delete', identity: { collection: 'legacy' }, impact: [] },
+			{
+				kind: 'fields',
+				operation: 'create',
+				identity: { collection: 'articles', field: 'title' },
+				values: { type: 'string' },
+			},
+			{
+				kind: 'fields',
+				operation: 'update',
+				identity: { collection: 'articles', field: 'body' },
+				fields: { max_length: { before: 255, after: 512 } },
+			},
+			{
+				kind: 'relations',
+				operation: 'create',
+				identity: { collection: 'articles', field: 'author' },
+				relatedCollection: 'directus_users',
+				values: { one_field: 'articles' },
+			},
+		];
+
+		expect(result.changes).toEqual(expectedChanges);
+
+		expect(JSON.parse(JSON.stringify(result.changes))).toEqual(expectedChanges);
+
+		expect(result.summary).toEqual({ create: 3, update: 1, delete: 1 });
+	});
+
+	it('keeps planVersion 2 and emits no schema changes without a managed schema', () => {
+		const plan = emptyPlan();
+		plan.managedResources = ['roles'];
+
+		const result = serializeConfigPlan(plan, { enrichment: emptyEnrichment(), manifestVersion: 2 });
+
+		expect(result.planVersion).toBe(2);
+		expect(result.changes).toEqual([]);
+	});
+
+	it('orders schema changes by code units, not locale', () => {
+		const plan = emptyPlan();
+		plan.managedResources = ['schema'];
+
+		// Precomposed and decomposed forms compare equal under locale collation; code-unit order is deterministic.
+		const precomposed = 'Á';
+		const decomposed = 'Á';
+
+		plan.schema = {
+			create: [
+				{ changeKind: 'collections', identity: { collection: precomposed }, changes: {} },
+				{ changeKind: 'collections', identity: { collection: decomposed }, changes: {} },
+			],
+			update: [],
+			delete: [],
+		};
+
+		const result = serializeConfigPlan(plan, { enrichment: emptyEnrichment(), manifestVersion: 3 });
+
+		expect(result.changes.map((change) => (change.kind === 'collections' ? change.identity.collection : ''))).toEqual([
+			decomposed,
+			precomposed,
+		]);
 	});
 });

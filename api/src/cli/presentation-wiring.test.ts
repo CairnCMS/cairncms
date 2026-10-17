@@ -52,9 +52,15 @@ vi.mock('../logger.js', () => ({ default: { info: vi.fn(), warn: vi.fn(), error:
 
 vi.mock('../utils/get-snapshot.js', () => ({ getSnapshot: vi.fn(async () => ({})) }));
 
-vi.mock('../utils/get-snapshot-diff.js', () => ({ getSnapshotDiff: vi.fn(() => FIXTURE_DIFF) }));
+vi.mock('../utils/get-target-snapshot-diff.js', () => ({ getTargetSnapshotDiff: vi.fn(async () => FIXTURE_DIFF) }));
 
-vi.mock('../utils/apply-snapshot.js', () => ({ applySnapshot: vi.fn(async () => undefined) }));
+vi.mock('../utils/folder-references.js', () => ({
+	toKeyFormSnapshot: vi.fn(async (snapshot: unknown) => ({ snapshot, folderIdByKey: new Map(), unresolved: [] })),
+}));
+
+vi.mock('../utils/package.js', () => ({ version: '1.0.0' }));
+
+vi.mock('../utils/apply-diff.js', () => ({ applyDiff: vi.fn(async () => undefined) }));
 
 vi.mock('inquirer', () => ({ default: { prompt: vi.fn(async () => ({ proceed: false })) } }));
 
@@ -206,6 +212,7 @@ describe('config apply sources the confirmation token from the presentation prim
 
 		vi.mocked(computeConfigPlan).mockReturnValue({
 			managedResources: ['roles'],
+			schema: { create: [], update: [], delete: [] },
 			roles: {
 				create: [
 					{

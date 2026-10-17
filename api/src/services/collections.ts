@@ -1,7 +1,7 @@
 import type { SchemaInspector, Table } from '@cairncms/schema';
 import { createInspector } from '@cairncms/schema';
 import type { Accountability, FieldMeta, RawField, SchemaOverview } from '@cairncms/types';
-import { addFieldFlag } from '@cairncms/utils';
+import { addFieldFlag, toArray } from '@cairncms/utils';
 import type Keyv from 'keyv';
 import type { Knex } from 'knex';
 import { chunk, omit } from 'lodash-es';
@@ -26,6 +26,11 @@ import type {
 	MutationOptions,
 } from '../types/index.js';
 import { getSchema } from '../utils/get-schema.js';
+import {
+	assertCollectionAbsent,
+	assertCollectionNameAllowed,
+	assertCollectionPresent,
+} from '../utils/schema-diff-validators.js';
 import { shouldClearCache } from '../utils/should-clear-cache.js';
 
 export type RawCollection = {
@@ -64,11 +69,7 @@ export class CollectionsService {
 			throw new ForbiddenException();
 		}
 
-		if (!payload.collection) throw new InvalidPayloadException(`"collection" is required`);
-
-		if (payload.collection.startsWith('directus_')) {
-			throw new InvalidPayloadException(`Collections can't start with "directus_"`);
-		}
+		assertCollectionNameAllowed(payload.collection);
 
 		const nestedActionEvents: ActionEventParams[] = [];
 
@@ -79,9 +80,7 @@ export class CollectionsService {
 				...Object.keys(this.schema.collections),
 			];
 
-			if (existingCollections.includes(payload.collection)) {
-				throw new InvalidPayloadException(`Collection "${payload.collection}" already exists.`);
-			}
+			assertCollectionAbsent(payload.collection, new Set(existingCollections));
 
 			// Create the collection/fields in a transaction so it'll be reverted in case of errors or
 			// permission problems. This might not work reliably in MySQL, as it doesn't support DDL in
@@ -553,11 +552,9 @@ export class CollectionsService {
 		try {
 			const collections = await this.readByQuery();
 
-			const collectionToBeDeleted = collections.find((collection) => collection.collection === collectionKey);
+			assertCollectionPresent(collectionKey, new Set(collections.map((collection) => collection.collection)));
 
-			if (!!collectionToBeDeleted === false) {
-				throw new ForbiddenException();
-			}
+			const collectionToBeDeleted = collections.find((collection) => collection.collection === collectionKey);
 
 			await this.knex.transaction(async (trx) => {
 				if (collectionToBeDeleted!.schema) {
@@ -648,8 +645,14 @@ export class CollectionsService {
 					});
 
 					for (const relation of a2oRelationsThatIncludeThisCollection) {
-						const newAllowedCollections = relation
-							.meta!.one_allowed_collections!.filter((collection) => collectionKey !== collection)
+						// The schema's list predates earlier deletes in the same transaction, so narrow the stored one.
+						const stored = await trx('directus_relations')
+							.select('one_allowed_collections')
+							.where({ id: relation.meta!.id })
+							.first();
+
+						const newAllowedCollections = toArray<string>(stored?.one_allowed_collections ?? '')
+							.filter((collection) => collection !== '' && collection !== collectionKey)
 							.join(',');
 
 						await trx('directus_relations')

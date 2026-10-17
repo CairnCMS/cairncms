@@ -1,21 +1,55 @@
-type: object
-properties:
-  version:
-    type: integer
-    example: 1
-  directus:
-    type: string
-  vendor:
-    type: string
-  collections:
-    type: array
-    items:
-      $ref: '../openapi.yaml#/components/schemas/Collections'
-  fields:
-    type: array
-    items:
-      $ref: '../openapi.yaml#/components/schemas/Fields'
-  relations:
-    type: array
-    items:
-      $ref: '../openapi.yaml#/components/schemas/Relations'
+oneOf:
+  - type: object
+    additionalProperties: false
+    required:
+      - version
+      - directus
+    properties:
+      version:
+        type: integer
+        enum: [1]
+        example: 1
+      directus:
+        type: string
+        description: The CairnCMS release that produced a version 1 snapshot.
+      vendor:
+        type: string
+      collections:
+        type: array
+        items:
+          $ref: '../openapi.yaml#/components/schemas/Collections'
+      fields:
+        type: array
+        items:
+          $ref: '../openapi.yaml#/components/schemas/Fields'
+      relations:
+        type: array
+        items:
+          $ref: '../openapi.yaml#/components/schemas/Relations'
+  - type: object
+    additionalProperties: false
+    required:
+      - version
+      - release
+    properties:
+      version:
+        type: integer
+        enum: [2]
+        example: 2
+      release:
+        type: string
+        description: The CairnCMS release that produced a version 2 snapshot.
+      vendor:
+        type: string
+      collections:
+        type: array
+        items:
+          $ref: '../openapi.yaml#/components/schemas/Collections'
+      fields:
+        type: array
+        items:
+          $ref: '../openapi.yaml#/components/schemas/Fields'
+      relations:
+        type: array
+        items:
+          $ref: '../openapi.yaml#/components/schemas/Relations'

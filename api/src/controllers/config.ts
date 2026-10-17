@@ -119,7 +119,7 @@ router.post(
 					? desiredExtensionSubjects(document['extension-settings'])
 					: undefined;
 
-				const currentCollections = extensionSettingsManaged ? new Set(Object.keys(schema.collections)) : undefined;
+				const currentCollections = extensionSettingsManaged ? schema.collections : undefined;
 
 				const {
 					config: current,
@@ -127,6 +127,7 @@ router.post(
 					currentFolderKeys,
 					currentFolderParents,
 					stateToken,
+					schemaStoredFields,
 				} = await readCurrentConfig({
 					database,
 					schema,
@@ -143,17 +144,19 @@ router.post(
 					currentFolderParents,
 					...(extensionDeclarations !== undefined && { extensionDeclarations }),
 					...(currentCollections !== undefined && { currentCollections }),
+					...(schemaStoredFields !== undefined && {
+						currentSchema: { records: current.schema, storedFields: schemaStoredFields },
+					}),
 				});
 
 				if (failures.length > 0) throw failures.map(toConfigException);
 
 				const config = normalizeToInternal(manifest, document);
 
-				const plan = computeConfigPlan(
-					current,
-					config,
-					extensionDeclarations !== undefined ? { extensionDeclarations } : undefined
-				);
+				const plan = computeConfigPlan(current, config, {
+					...(extensionDeclarations !== undefined && { extensionDeclarations }),
+					...(schemaStoredFields !== undefined && { currentSchemaStoredFields: schemaStoredFields }),
+				});
 
 				run.planned(planSummary(plan));
 

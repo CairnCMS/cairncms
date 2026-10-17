@@ -106,6 +106,8 @@ export interface ConfigResourceDescriptor<K extends ConfigKindTypes> {
 		reservedFilenameMessage?(filename: string): string;
 		/** Identifies owned filename stems for nestedMap and keyedMap layouts. */
 		ownsFilenameStem?(stem: string): boolean;
+		/** Whether a non-kept owned file is a removable generated record, for a kind whose identity is its content, not its filename. */
+		removesUnkeptFile?(declared: unknown, filename: string): boolean;
 	};
 	documentIdentityFields: ConfigFieldDescriptor[];
 	recordFields: ConfigFieldDescriptor[];
@@ -183,6 +185,8 @@ export interface PlanContext<K extends ConfigKindTypes> {
 export interface EnrichContext {
 	database: Knex;
 	schema: SchemaOverview;
+	/** The collections the runtime schema holds once the plan's schema changes apply. */
+	collections: ReadonlySet<string>;
 	/** The default-folder retarget the plan performs, so the folders deletion preview can drop a blocker the same apply clears. */
 	settingsRetarget?: SettingsRetarget;
 }

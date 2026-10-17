@@ -98,7 +98,7 @@ Three endpoints snapshot, diff, and apply the entire data model across deploymen
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/schema/snapshot` | Return the current schema as a snapshot. |
+| `GET` | `/schema/snapshot` | Return the current schema as a snapshot, in format version 1 unless `?version=2` is passed. The default becomes version 2 in a later release (see [Schema as code](/docs/manage/schema-as-code/)). Pass `version` explicitly to pin the format. |
 | `POST` | `/schema/diff` | Compute the diff between a submitted snapshot and the current database state. |
 | `POST` | `/schema/apply` | Apply a previously-computed diff to the current database. |
 

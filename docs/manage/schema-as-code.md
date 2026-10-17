@@ -30,7 +30,7 @@ Use schema-as-code for the structural side of the model. Use database backups (c
 
 ## The snapshot file
 
-The file's top-level shape:
+The file's top-level shape. Version 1:
 
 ```yaml
 version: 1
@@ -41,7 +41,22 @@ fields: [...]
 relations: [...]
 ```
 
-`version` is the snapshot format version; CairnCMS currently emits `1`. `directus` is the platform version that produced the snapshot. `vendor` is the normalized database vendor name — one of `postgres`, `mysql`, `sqlite`, `cockroachdb`, `oracle`, `mssql`, or `redshift`. These three fields turn into a portability check at apply time. See [Cross-environment caveats](#cross-environment-caveats) below.
+Version 2:
+
+```yaml
+version: 2
+release: 1.7.0
+vendor: postgres
+collections: [...]
+fields: [...]
+relations: [...]
+```
+
+`version` is the snapshot format version, `1` or `2`. The two differ in two ways. Version 1 records a field's upload folder as the folder's database ID, which only means something on the instance that produced the file. Version 2 records the folder's key, so the snapshot applies to another instance that has a folder with the same key (see [Upload folders](#upload-folders) below). Version 2 also records the producing release under `release`, where version 1 uses `directus`.
+
+Version 1 is the default today, but that is deprecated: new snapshots will default to version 2 in a later release. See [Choosing the version](#choosing-the-version) for how to adopt version 2 now and what the default change means.
+
+The producing release (`directus` in version 1, `release` in version 2) and `vendor` describe the environment the snapshot came from. The supported vendor values are `postgres`, `mysql`, and `sqlite`. A MariaDB instance reports `mysql`, since it uses the same database client. These fields turn into a portability check at apply time. See [Cross-environment caveats](#cross-environment-caveats) below.
 
 The bulk of the file is the three sorted arrays of collections, fields, and relations. Sorting is deterministic so snapshots produced from equivalent schemas diff cleanly in source control.
 
@@ -73,6 +88,22 @@ cairncms schema snapshot --yes > "./snapshots/$(date +%F).yaml"
 
 YAML is the right default for files committed to source control: human-readable, diffs cleanly, comments allowed in the format. JSON is useful when a downstream tool requires it.
 
+### Choosing the version
+
+Taking a snapshot into an existing file keeps that file's `version`. A new file, or output to stdout, uses version 1. To move a file to version 2, change its `version` to `2` and take the snapshot again into the same file. The re-snapshot replaces the file's contents, including swapping the `directus` header for `release`:
+
+```bash
+cairncms schema snapshot --yes ./schema.yaml
+```
+
+The new snapshot writes folder keys in place of folder IDs. Commit the result, and apply version 2 files with CairnCMS 1.7.0 or later. Older versions refuse a version 2 file over HTTP, and an older CLI writes the folder keys where folder IDs belong, which breaks those fields.
+
+If the existing file cannot be read, or its `version` is missing or unsupported, the command stops without overwriting it.
+
+:::caution[Deprecated]
+Version 1 as the default for new snapshots is deprecated. New snapshot files, output to stdout, and `GET /schema/snapshot` without `version` will use version 2 in 1.8.0 or later. Files you re-snapshot keep their version, and `GET /schema/snapshot?version=1` keeps returning version 1. The 1.7.0 and later SDK pins `schemaSnapshot()` to version 1, so it is unaffected. SDK versions before 1.7.0 send no version and will receive version 2 after the switch. Upgrade the SDK, or request `?version=1` through `customEndpoint`, to keep the version 1 format.
+:::
+
 ## Applying a snapshot
 
 Apply a snapshot file to the current database:
@@ -83,11 +114,11 @@ cairncms schema apply ./schema.yaml
 
 The command:
 
-1. Loads the snapshot file (YAML or JSON, detected from the extension).
-2. Reads the current schema from the database and computes a structural diff against the snapshot.
+1. Loads the snapshot file (YAML or JSON, detected from the extension) and checks its `version`. A missing or unsupported version stops the command.
+2. Reads the current schema from the database and computes a structural diff against the snapshot. For a version 2 file, every upload folder key in the file must match a folder on this instance, or the command stops before changing anything.
 3. If the diff is empty, exits with `No changes to apply.`
 4. If the diff has changes, prints them grouped by collections, fields, and relations, with creates in green, updates in blue, and deletes in red.
-5. Prompts for confirmation before applying. Apply only proceeds on `y`.
+5. Prompts for confirmation before applying. Apply only proceeds on `y`. After you confirm, the command reads the schema again. If it changed while the prompt was open, the command stops without changing anything, so you can run it again and review the new changes.
 
 Two flags adjust the flow:
 
@@ -115,23 +146,41 @@ For larger teams, prefer running `cairncms schema apply --dry-run` in CI on ever
 
 For pipelines that cannot shell into a container, the same workflow is exposed as three HTTP endpoints. All require an admin token.
 
-- **`GET /schema/snapshot`** — returns the current snapshot as JSON. Equivalent to `cairncms schema snapshot --format json` to stdout.
+- **`GET /schema/snapshot`** — returns the current snapshot as JSON, in version 1 unless you pass `?version=2`. Equivalent to `cairncms schema snapshot --format json` to stdout.
 - **`POST /schema/diff`** — accepts a snapshot (JSON in the body, or YAML/JSON as multipart form upload), returns `{ hash, diff }`. The hash is a fingerprint of the current database snapshot at the moment the diff was computed.
 - **`POST /schema/apply`** — accepts the `{ hash, diff }` payload from the diff endpoint (JSON in the body, or YAML/JSON as multipart form upload) and applies the diff. The hash is re-checked against the current state. If the database has changed since the diff was produced, the apply is rejected.
 
 The two-step diff/apply flow is the safety net for HTTP. Between the moment you compute the diff and the moment you apply it, another admin or an automated process might have changed the schema. The hash check catches that and forces a re-diff.
 
-The HTTP `/schema/diff` endpoint also validates that the snapshot's `directus` version and `vendor` fields match the running instance. The check can be bypassed by passing `?force` on the request, but the CLI does not enforce this validation at all.
+The HTTP `/schema/diff` endpoint also validates that the snapshot's producing release and `vendor` match the running instance. The check can be bypassed by passing `?force` on the request, and the CLI does not run it at all. Both the endpoint and the CLI refuse a snapshot whose `version` they do not support, or whose header is malformed for its version (a version 1 file without `directus`, a version 2 file without `release`), and `force` does not change that.
 
 ## Cross-environment caveats
 
-The fields stamped into the snapshot (`directus`, `vendor`) describe the environment the snapshot was produced from. Carrying a snapshot to an environment that differs along either axis is a known sharp edge:
+The producing release and `vendor` stamped into the snapshot describe the environment it was produced from. Carrying a snapshot to an environment that differs along either axis is a known sharp edge:
 
 - **Different platform version.** The HTTP `/schema/diff` endpoint refuses snapshots from a different platform version unless `force` is set. The CLI does not check; it will run the diff and apply against whatever version is running. Treat platform-version mismatches as a hint to upgrade or downgrade first, not a routine `--force` flag.
 - **Different database vendor.** The same restriction. Some snapshots happen to apply cleanly across Postgres, MySQL, and SQLite; others do not, because column types, default expressions, and index behavior differ at the SQL level. Snapshot portability across vendors is not a guaranteed property of the format.
 - **Drift between dev and prod.** A snapshot produced from a dev instance that has been edited interactively in prod will diff against the prod state. Decide before applying whether the prod-side edits should be preserved (re-snapshot from prod and merge) or overwritten (apply the dev snapshot as-is).
 
 The conservative posture: keep environments aligned on platform version and database vendor, and let `apply` reconcile structural drift in one direction (file → database).
+
+### Upload folders
+
+Several interfaces store the folder that uploads go into: `file`, `file-image`, `files`, `input-rich-text-html`, and `input-rich-text-md`. That includes these interfaces inside a repeater (`list`) field, and folder overrides in a field's conditions. A version 2 snapshot records each of these folders by its key, and applying the snapshot writes this instance's own folder ID for that key.
+
+- **The folder must exist on the target first.** Every key in a version 2 snapshot must match a folder on the instance you apply it to. Otherwise the apply stops before changing anything:
+
+  ```text
+  Folder reference "article_images" could not be resolved. Referenced by: articles.hero_image.meta.options.folder
+  ```
+
+- **Finding a folder's key.** Keys come from the folder's name when it is created, and do not change when it is renamed or moved. List them with `GET /folders?fields=id,name,key`. [Config as code](/docs/manage/config-as-code/) carries folders and their keys between instances.
+- **A folder that no longer exists.** Deleting a folder in the app leaves fields that pointed to it unchanged, and their uploads fail. A version 2 snapshot stops at such a field and names it, so you can select another folder for it. A version 1 snapshot writes the field as it is. Applying a version 2 snapshot that sets a key on that field repairs it.
+- **Folder IDs in a version 2 file.** A version 2 snapshot that holds a folder ID where a key belongs is refused.
+- **Extension interfaces.** Options of interfaces added by extensions are copied as they are, folder IDs included, in both versions.
+- **Folders changed during an apply.** Folder references are checked when the apply starts. A folder another admin moves or deletes while the apply runs is not tracked, and the apply can write a field's previous folder back. Coordinate folder changes with your deployments.
+
+Standalone `schema apply` requires the referenced folders to already exist on the target. Create them with [config as code](/docs/manage/config-as-code/) first. A unified `config apply` that creates missing folders and applies schema and configuration in one coordinated run is planned.
 
 ## What schema-as-code does not cover
 

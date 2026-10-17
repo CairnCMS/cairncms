@@ -114,7 +114,9 @@ describe('folders handler against a real SQLite database', () => {
 
 		await db.schema.createTable('directus_fields', (table) => {
 			table.increments('id');
+			table.string('interface');
 			table.text('options');
+			table.text('conditions');
 		});
 	});
 

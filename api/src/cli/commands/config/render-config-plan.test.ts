@@ -489,3 +489,92 @@ describe('renderResultSummary', () => {
 		);
 	});
 });
+
+describe('renderConfigPlan schema changes', () => {
+	it('renders collections, fields, and relations sections', () => {
+		const output = renderConfigPlan(
+			plan({
+				changes: [
+					{ kind: 'collections', operation: 'create', identity: { collection: 'articles' }, values: {} },
+					{ kind: 'collections', operation: 'delete', identity: { collection: 'legacy' }, impact: [] },
+					{
+						kind: 'fields',
+						operation: 'update',
+						identity: { collection: 'articles', field: 'title' },
+						fields: { max_length: { before: 255, after: 512 } },
+					},
+					{
+						kind: 'relations',
+						operation: 'create',
+						identity: { collection: 'articles', field: 'author' },
+						relatedCollection: 'authors',
+						values: {},
+					},
+				],
+				summary: { create: 2, update: 1, delete: 1 },
+			})
+		);
+
+		expect(output).toContain(heading('Collections'));
+		expect(output).toContain(`${createVerb()} articles`);
+		expect(output).toContain(`${deleteVerb()} legacy`);
+		expect(output).toContain(heading('Fields'));
+		expect(output).toContain(`${updateVerb()} articles / title`);
+		expect(output).toContain('Set max_length to 512');
+		expect(output).toContain(heading('Relations'));
+		expect(output).toContain(`${createVerb()} articles / author -> authors`);
+	});
+
+	it('sanitizes control characters in schema attribute names and relation targets', () => {
+		const bel = String.fromCharCode(7);
+
+		const output = renderConfigPlan(
+			plan({
+				changes: [
+					{
+						kind: 'fields',
+						operation: 'update',
+						identity: { collection: 'articles', field: 'title' },
+						fields: { [`max${bel}length`]: { before: 255, after: 512 } },
+					},
+					{
+						kind: 'relations',
+						operation: 'create',
+						identity: { collection: 'articles', field: 'author' },
+						relatedCollection: `direc${bel}users`,
+						values: {},
+					},
+				],
+				summary: { create: 1, update: 1, delete: 0 },
+			})
+		);
+
+		expect(output).toContain('    - Set max?length to 512');
+		expect(output).toContain(`${createVerb()} articles / author -> direc?users`);
+		expect(output).not.toContain(bel);
+	});
+
+	it('renders added and removed schema attributes distinctly from an edit', () => {
+		const output = renderConfigPlan(
+			plan({
+				changes: [
+					{
+						kind: 'fields',
+						operation: 'update',
+						identity: { collection: 'articles', field: 'title' },
+						fields: {
+							schema: { before: null, after: { name: 'title' }, beforePresent: false },
+							meta: { before: { note: 'legacy' }, after: null, afterPresent: false },
+							type: { before: 'string', after: 'text' },
+						},
+					},
+				],
+				summary: { create: 0, update: 1, delete: 0 },
+			})
+		);
+
+		expect(output).toContain('    - Add schema as');
+		expect(output).toContain('    - Remove meta');
+		expect(output).toContain('    - Set type to text');
+	});
+});

@@ -5,6 +5,7 @@ import { isPlanEmpty, planDeletions, planHasDeletions, planSummary } from './pla
 function emptyPlan(): ConfigPlan {
 	return {
 		managedResources: [],
+		schema: { create: [], update: [], delete: [] },
 		roles: { create: [], update: [], delete: [] },
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },

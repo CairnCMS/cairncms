@@ -128,6 +128,7 @@ const actionEvent = (event: string, meta: Record<string, unknown>): ActionEventP
 function emptyPlan(): ConfigPlan {
 	return {
 		managedResources: ['permissions', 'roles'],
+		schema: { create: [], update: [], delete: [] },
 		roles: { create: [], update: [], delete: [] },
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
@@ -840,6 +841,7 @@ describe('applyConfigPlan:engine schedule', () => {
 			settings: { updated: [] },
 			'extension-settings': { created: 0, updated: 0, deleted: 0 },
 			translations: { created: 0, updated: 0, deleted: 0 },
+			schema: { created: 0, updated: 0, deleted: 0 },
 		});
 	});
 });
@@ -1098,6 +1100,7 @@ describe('applyConfigPlan:role-state refresh', () => {
 			settings: { updated: [] },
 			'extension-settings': { created: 0, updated: 0, deleted: 0 },
 			translations: { created: 0, updated: 0, deleted: 0 },
+			schema: { created: 0, updated: 0, deleted: 0 },
 		});
 	});
 });
@@ -1343,6 +1346,7 @@ describe('applyConfigPlan:result assembly and boundaries', () => {
 			settings: { updated: [] },
 			'extension-settings': { created: 0, updated: 0, deleted: 0 },
 			translations: { created: 0, updated: 0, deleted: 0 },
+			schema: { created: 0, updated: 0, deleted: 0 },
 		});
 
 		expect(vi.mocked(getDatabase)).not.toHaveBeenCalled();
@@ -1376,6 +1380,7 @@ describe('applyConfigPlan:result assembly and boundaries', () => {
 			settings: { updated: [] },
 			'extension-settings': { created: 0, updated: 0, deleted: 0 },
 			translations: { created: 0, updated: 0, deleted: 0 },
+			schema: { created: 0, updated: 0, deleted: 0 },
 		});
 	});
 
@@ -1458,6 +1463,7 @@ describe('applyConfigPlan:registry routing', () => {
 				settings: { updated: [] },
 				'extension-settings': { created: 0, updated: 0, deleted: 0 },
 				translations: { created: 0, updated: 0, deleted: 0 },
+				schema: { created: 0, updated: 0, deleted: 0 },
 			});
 
 			expect(rolesService.createOne).not.toHaveBeenCalled();

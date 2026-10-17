@@ -63,6 +63,7 @@ async function getBaseline(api: Api): Promise<ConfigSnapshot> {
 	if (!baselineCache[api.directory]) {
 		const response = await request(api.url)
 			.get('/config/snapshot')
+			.query({ manifest_version: '2' })
 			.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
 
 		expect(response.statusCode).toBe(200);
@@ -93,6 +94,7 @@ async function resetToBaseline(api: Api): Promise<void> {
 async function adminSnapshot(api: Api): Promise<ConfigSnapshot> {
 	const response = await request(api.url)
 		.get('/config/snapshot')
+		.query({ manifest_version: '2' })
 		.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
 
 	expect(response.statusCode).toBe(200);
@@ -159,7 +161,7 @@ describe('Config-as-Code API', () => {
 				expect(response.body.data).toHaveProperty('manifest');
 				expect(response.body.data).toHaveProperty('roles');
 				expect(response.body.data).toHaveProperty('permissions');
-				expect(response.body.data.manifest.version).toBe(2);
+				expect(response.body.data.manifest.version).toBe(3);
 				expect(Array.isArray(response.body.data.roles)).toBe(true);
 				expect(Array.isArray(response.body.data.permissions)).toBe(true);
 			});
@@ -176,7 +178,7 @@ describe('Config-as-Code API', () => {
 				expect(response.headers['content-type']).toContain('text/yaml');
 
 				const parsed = loadYaml(response.text) as ConfigSnapshot;
-				expect(parsed.manifest.version).toBe(2);
+				expect(parsed.manifest.version).toBe(3);
 				expect(Array.isArray(parsed.roles)).toBe(true);
 				expect(Array.isArray(parsed.permissions)).toBe(true);
 			});
@@ -213,7 +215,7 @@ describe('Config-as-Code API', () => {
 			test('REST', async ({ api }) => {
 				const response = await request(api.url)
 					.get('/config/snapshot')
-					.query({ manifest_version: '3' })
+					.query({ manifest_version: '4' })
 					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
 
 				expect(response.statusCode).toBe(400);
@@ -266,6 +268,19 @@ describe('Config-as-Code API', () => {
 
 				expect(response.statusCode).toBe(200);
 				expect(response.body.data.manifest.version).toBe(2);
+			});
+		});
+
+		describe('accepts an explicit v3 manifest version', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.get('/config/snapshot')
+					.query({ manifest_version: '3' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.manifest.version).toBe(3);
+				expect(response.body.data.manifest.resources).toContain('schema');
 			});
 		});
 
@@ -780,7 +795,10 @@ describe('Config-as-Code API', () => {
 			}
 
 			async function snapshotAs(api: Api, token: string): Promise<ConfigSnapshot> {
-				const response = await request(api.url).get('/config/snapshot').set('Authorization', `Bearer ${token}`);
+				const response = await request(api.url)
+					.get('/config/snapshot')
+					.query({ manifest_version: '2' })
+					.set('Authorization', `Bearer ${token}`);
 
 				expect(response.statusCode).toBe(200);
 				return response.body.data as ConfigSnapshot;
@@ -1519,6 +1537,164 @@ describe('Config-as-Code folders lifecycle', () => {
 		reportOutcome(testError, failures);
 	});
 
+	describe.each([
+		{
+			placement: 'repeater',
+			field: (folderId: string) => ({
+				field: 'items',
+				type: 'json',
+				meta: {
+					interface: 'list',
+					options: {
+						fields: [
+							{
+								field: 'body',
+								name: 'body',
+								type: 'text',
+								meta: { field: 'body', type: 'text', interface: 'input-rich-text-md', options: { folder: folderId } },
+							},
+						],
+					},
+				},
+				schema: {},
+			}),
+		},
+		{
+			placement: 'condition',
+			field: (folderId: string) => ({
+				field: 'attachment',
+				type: 'uuid',
+				meta: {
+					interface: 'file',
+					options: null,
+					conditions: [{ name: 'locked', rule: {}, options: { folder: folderId } }],
+				},
+				schema: {},
+			}),
+		},
+		{
+			placement: 'subfield_condition',
+			field: (folderId: string) => ({
+				field: 'items',
+				type: 'json',
+				meta: {
+					interface: 'list',
+					options: {
+						fields: [
+							{
+								field: 'body',
+								name: 'body',
+								type: 'text',
+								meta: {
+									field: 'body',
+									type: 'text',
+									interface: 'input-rich-text-md',
+									conditions: [{ name: 'locked', rule: {}, options: { folder: folderId } }],
+								},
+							},
+						],
+					},
+				},
+				schema: {},
+			}),
+		},
+		{
+			placement: 'partial_override',
+			field: (folderId: string) => ({
+				field: 'items',
+				type: 'json',
+				meta: {
+					interface: 'list',
+					options: {
+						fields: [
+							{
+								field: 'body',
+								name: 'body',
+								type: 'text',
+								meta: { field: 'body', type: 'text', interface: 'input-rich-text-html' },
+							},
+						],
+					},
+					conditions: [
+						{ name: 'locked', rule: {}, options: { fields: [{ meta: { options: { folder: folderId } } }] } },
+					],
+				},
+				schema: {},
+			}),
+		},
+	])('a folder referenced from a $placement', ({ placement, field }) => {
+		test('blocks its config deletion', async ({ api }) => {
+			const token = `Bearer ${common.USER.ADMIN!.TOKEN}`;
+			const folderKey = `nested_${run}_${placement}`;
+			const collectionName = `nested_${run}_${placement}`;
+			const failures: string[] = [];
+			let testError: unknown;
+
+			try {
+				const createCollection = await request(api.url)
+					.post('/collections')
+					.set('Authorization', token)
+					.send({
+						collection: collectionName,
+						meta: {},
+						schema: {},
+						fields: [
+							{
+								field: 'id',
+								type: 'integer',
+								meta: { hidden: true, interface: 'input', readonly: true },
+								schema: { is_primary_key: true, has_auto_increment: true },
+							},
+						],
+					});
+
+				expect(createCollection.statusCode).toBe(200);
+
+				const created = await applyConfig(
+					api,
+					managedWithFolders(await getBaseline(api), [{ key: folderKey, name: 'Nested Folder', parent: null }]),
+					{ destructive: true }
+				);
+
+				expect(created.statusCode).toBe(200);
+
+				const createField = await request(api.url)
+					.post(`/fields/${collectionName}`)
+					.set('Authorization', token)
+					.send(field(await folderIdByKey(api, folderKey)));
+
+				expect(createField.statusCode).toBe(200);
+
+				const withoutFolder = JSON.parse(JSON.stringify(await adminSnapshot(api))) as ConfigSnapshot;
+				withoutFolder.folders = (withoutFolder.folders ?? []).filter((folder) => folder.key !== folderKey);
+
+				const dryRun = await applyConfig(api, withoutFolder, { destructive: true, dryRun: true });
+				expect(dryRun.statusCode).toBe(200);
+
+				const change = (dryRun.body.data.changes as Array<Record<string, any>>).find(
+					(entry) => entry.kind === 'folders' && entry.operation === 'delete' && entry.identity.key === folderKey
+				);
+
+				expect(change?.impact).toEqual([{ blockedBy: 'options.folder' }]);
+
+				const apply = await applyConfig(api, withoutFolder, { destructive: true });
+				expect(apply.statusCode).toBe(400);
+				expect(apply.body.errors[0].extensions.code).toBe('CONFIG_FOLDER_IN_USE');
+				expect(apply.body.errors[0].extensions.key).toBe(folderKey);
+
+				expect(foldersByKey(await adminSnapshot(api)).has(folderKey)).toBe(true);
+			} catch (error) {
+				testError = error;
+			} finally {
+				await attemptCleanup(failures, `collection ${collectionName}`, () => deleteCollection(api, collectionName));
+				await attemptCleanup(failures, `folder ${folderKey}`, () => deleteFolderByKey(api, folderKey));
+				await attemptCleanup(failures, 'resetToBaseline', () => resetToBaseline(api));
+			}
+
+			reportOutcome(testError, failures);
+		});
+	});
+
 	describeForVendors(
 		'server database collation',
 		['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'],
@@ -1613,6 +1789,7 @@ describe('Config-as-Code managed scope', () => {
 	async function currentSnapshot(api: Api): Promise<ConfigSnapshot> {
 		const response = await request(api.url)
 			.get('/config/snapshot')
+			.query({ manifest_version: '2' })
 			.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
 
 		expect(response.statusCode).toBe(200);
@@ -1987,6 +2164,7 @@ describe('cairncms config snapshot preserves managed scope', () => {
 				'folders',
 				'permissions',
 				'roles',
+				'schema',
 				'settings',
 				'translations',
 			]);
@@ -2146,6 +2324,14 @@ describe('Config-as-Code deletion impact', () => {
 			const bookmark = 'Probe Bookmark';
 
 			const baseline = await getBaseline(api);
+
+			await fs.writeFile(
+				path.join(fixtureRoot, 'cairncms-config.yaml'),
+				dumpYaml({
+					version: 2,
+					resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+				})
+			);
 
 			const snapshot = await api.cli(['config', 'snapshot', fixtureRoot, '--yes']);
 
@@ -2363,6 +2549,7 @@ describe('Config-as-Code audit and events', () => {
 					settings: { updated: [] },
 					'extension-settings': { created: 0, updated: 0, deleted: 0 },
 					translations: { created: 0, updated: 0, deleted: 0 },
+					schema: { created: 0, updated: 0, deleted: 0 },
 				});
 
 				const role = await db('directus_roles').where({ key: roleKey }).first();
@@ -2397,6 +2584,7 @@ describe('Config-as-Code audit and events', () => {
 					settings: { updated: [] },
 					'extension-settings': { created: 0, updated: 0, deleted: 0 },
 					translations: { created: 0, updated: 0, deleted: 0 },
+					schema: { created: 0, updated: 0, deleted: 0 },
 				});
 
 				await expectAudited(db, 'directus_roles', role.id, 'update', admin.id, true);
@@ -2435,6 +2623,14 @@ describe('Config-as-Code audit and events', () => {
 			const rand = randomUUID().replace(/-/g, '').slice(0, 8);
 			const roleKey = `audit_probe_cli_${suffix}_${rand}`;
 			const ids = newIds();
+
+			await fs.writeFile(
+				path.join(fixtureRoot, 'cairncms-config.yaml'),
+				dumpYaml({
+					version: 2,
+					resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+				})
+			);
 
 			const snapshot = await api.cli(['config', 'snapshot', fixtureRoot, '--yes']);
 
@@ -2543,6 +2739,7 @@ describe('Config-as-Code audit and events', () => {
 					settings: { updated: [] },
 					'extension-settings': { created: 0, updated: 0, deleted: 0 },
 					translations: { created: 0, updated: 0, deleted: 0 },
+					schema: { created: 0, updated: 0, deleted: 0 },
 				});
 
 				const role = await db('directus_roles').where({ key: roleKey }).first();
@@ -2581,6 +2778,7 @@ describe('Config-as-Code audit and events', () => {
 					settings: { updated: [] },
 					'extension-settings': { created: 0, updated: 0, deleted: 0 },
 					translations: { created: 0, updated: 0, deleted: 0 },
+					schema: { created: 0, updated: 0, deleted: 0 },
 				});
 
 				expect(await db('directus_roles').where({ id: role.id }).first()).toBeUndefined();
@@ -2679,6 +2877,7 @@ describe('Config-as-Code audit and events', () => {
 					settings: { updated: [] },
 					'extension-settings': { created: 0, updated: 0, deleted: 0 },
 					translations: { created: 0, updated: 0, deleted: 0 },
+					schema: { created: 0, updated: 0, deleted: 0 },
 				});
 
 				const after = await adminSnapshot(api);
@@ -2820,6 +3019,14 @@ describe('cairncms config apply exit codes and machine output', () => {
 	}
 
 	async function snapshotBaseline(api: Api): Promise<void> {
+		await fs.writeFile(
+			path.join(fixtureRoot, 'cairncms-config.yaml'),
+			dumpYaml({
+				version: 2,
+				resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+			})
+		);
+
 		const result = await api.cli(['config', 'snapshot', fixtureRoot, '--yes']);
 
 		expect(result.status).toBe(0);

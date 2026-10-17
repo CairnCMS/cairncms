@@ -30,6 +30,7 @@ function config(translations: ConfigTranslationsAuthored[]): CairnConfig {
 		settings: [],
 		'extension-settings': [],
 		translations,
+		schema: [],
 	};
 }
 
