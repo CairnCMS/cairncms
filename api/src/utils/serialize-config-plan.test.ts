@@ -48,6 +48,10 @@ function warning(role: string, collection: string, action: PermissionsAction = '
 	};
 }
 
+function tableDrop(collection: string): ConfigPlanWarning {
+	return { code: 'UNCONFIGURED_TABLE_DROP', kind: 'collections', collection, message: 'drop' };
+}
+
 function zeroImpact(): RoleDeletionImpactEntry[] {
 	return [
 		{ kind: 'presets', count: 0, bookmarks: [] },
@@ -387,10 +391,38 @@ describe('serializeConfigPlan', () => {
 			serializeConfigPlan(emptyPlan(), {
 				enrichment: { roleDeletionImpact: new Map(), folderDeletionImpact: new Map(), warnings },
 				manifestVersion: 1,
-			}).warnings.map((entry) => entry.identity.role);
+			}).warnings.map((entry) => {
+				if (entry.code !== 'COLLECTION_MISSING') throw new Error(`expected COLLECTION_MISSING, got ${entry.code}`);
+				return entry.identity.role;
+			});
 
 		expect(withOrder([warning('editor', 'a'), warning('author', 'b')])).toEqual(['author', 'editor']);
 		expect(withOrder([warning('author', 'b'), warning('editor', 'a')])).toEqual(['author', 'editor']);
+	});
+
+	it('sorts a mixed warning list by code then payload without assuming an identity', () => {
+		const result = serializeConfigPlan(emptyPlan(), {
+			enrichment: {
+				roleDeletionImpact: new Map(),
+				folderDeletionImpact: new Map(),
+				warnings: [tableDrop('zebra'), warning('editor', 'a'), tableDrop('apple'), warning('author', 'b')],
+			},
+			manifestVersion: 1,
+		}).warnings;
+
+		expect(result.map((entry) => entry.code)).toEqual([
+			'COLLECTION_MISSING',
+			'COLLECTION_MISSING',
+			'UNCONFIGURED_TABLE_DROP',
+			'UNCONFIGURED_TABLE_DROP',
+		]);
+
+		expect(result.map((entry) => ('identity' in entry ? entry.identity.role : entry.collection))).toEqual([
+			'author',
+			'editor',
+			'apple',
+			'zebra',
+		]);
 	});
 
 	it('summary counts match the changes array', () => {

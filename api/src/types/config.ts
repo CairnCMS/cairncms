@@ -277,7 +277,12 @@ export type SchemaFieldIdentity = { collection: string; field: string };
 export type SchemaRelationIdentity = { collection: string; field: string };
 
 export type SchemaChangeEntry =
-	| { changeKind: 'collections'; identity: SchemaCollectionIdentity; changes: SchemaFieldChanges }
+	| {
+			changeKind: 'collections';
+			identity: SchemaCollectionIdentity;
+			changes: SchemaFieldChanges;
+			unconfiguredTableDrop?: true;
+	  }
 	| { changeKind: 'fields'; identity: SchemaFieldIdentity; changes: SchemaFieldChanges }
 	| {
 			changeKind: 'relations';
@@ -288,12 +293,19 @@ export type SchemaChangeEntry =
 
 export type PermissionIdentity = { role: string; collection: string; action: PermissionsAction };
 
-export type ConfigPlanWarning = {
-	code: 'COLLECTION_MISSING';
-	kind: 'permissions';
-	identity: PermissionIdentity;
-	message: string;
-};
+export type ConfigPlanWarning =
+	| {
+			code: 'COLLECTION_MISSING';
+			kind: 'permissions';
+			identity: PermissionIdentity;
+			message: string;
+	  }
+	| {
+			code: 'UNCONFIGURED_TABLE_DROP';
+			kind: 'collections';
+			collection: string;
+			message: string;
+	  };
 
 export type RoleDeletionImpactEntry =
 	| { kind: 'permissions'; identity: PermissionIdentity }

@@ -8,6 +8,8 @@ import { getSnapshot } from '../../../utils/get-snapshot.js';
 import { getTargetSnapshotDiff } from '../../../utils/get-target-snapshot-diff.js';
 import { getVersionedHash } from '../../../utils/get-versioned-hash.js';
 import { SchemaApplyFailedException } from '../../../exceptions/schema-apply-failed.js';
+import { DiffKind } from '../../../types/index.js';
+import type { Collection, SnapshotDiff } from '../../../types/index.js';
 import { apply } from './apply.js';
 
 const { FIXTURE_DIFF, folderKeyById } = vi.hoisted(() => {
@@ -104,6 +106,53 @@ describe('schema apply presentation', () => {
 		await expect(apply('snapshot.json', { yes: false, dryRun: true })).rejects.toThrow();
 
 		expect(logger.info).toHaveBeenCalledWith(expectedPlan());
+	});
+
+	const UNCONFIGURED_DROP_MESSAGE =
+		'Deleting table "legacy_data" will remove its data. It has no CairnCMS collection record and may belong to another application.';
+
+	const unconfiguredDefinition = {
+		collection: 'legacy_data',
+		schema: { name: 'legacy_data' },
+		meta: null,
+	} as unknown as Collection;
+
+	const unconfiguredTableDiff: SnapshotDiff = {
+		collections: [{ collection: 'legacy_data', diff: [{ kind: DiffKind.DELETE, lhs: unconfiguredDefinition }] }],
+		fields: [],
+		relations: [],
+	};
+
+	it('warns in the dry run when a drop targets a table with no collection record', async () => {
+		vi.mocked(getTargetSnapshotDiff).mockResolvedValueOnce(unconfiguredTableDiff);
+
+		await expect(apply('snapshot.json', { yes: false, dryRun: true })).rejects.toThrow();
+
+		const message = vi.mocked(logger.info).mock.calls.at(-1)?.[0] as string;
+		expect(message).toContain('Warnings');
+		expect(message).toContain(UNCONFIGURED_DROP_MESSAGE);
+	});
+
+	it('includes the warning in the confirmation prompt when a drop targets a table with no collection record', async () => {
+		vi.mocked(getTargetSnapshotDiff).mockResolvedValueOnce(unconfiguredTableDiff);
+
+		await expect(apply('snapshot.json', { yes: false, dryRun: false })).rejects.toThrow();
+
+		const call = vi.mocked(inquirer.prompt).mock.calls[0]![0] as unknown as [{ message: string }];
+		expect(call[0]!.message).toContain(UNCONFIGURED_DROP_MESSAGE);
+	});
+
+	it('warns on its own before applying under --yes when a drop targets a table with no collection record', async () => {
+		vi.mocked(getTargetSnapshotDiff).mockResolvedValueOnce(unconfiguredTableDiff);
+
+		await expect(apply('snapshot.json', { yes: true, dryRun: false })).rejects.toThrow();
+
+		expect(logger.warn).toHaveBeenCalledWith(UNCONFIGURED_DROP_MESSAGE);
+		expect(applyDiff).toHaveBeenCalled();
+
+		const warnedAt = vi.mocked(logger.warn).mock.invocationCallOrder[0]!;
+		const appliedAt = vi.mocked(applyDiff).mock.invocationCallOrder[0]!;
+		expect(warnedAt).toBeLessThan(appliedAt);
 	});
 
 	it('renders field and relation diffs that start with a removed attribute as updates listing their changes', async () => {

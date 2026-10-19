@@ -6,11 +6,23 @@ import type { MockedFunction } from 'vitest';
 import { configFixture } from '../__utils__/config-fixtures.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
-import type { CairnConfig, ConfigKind, ConfigPermission, ConfigPermissionSet, ConfigPlan } from '../types/config.js';
+import type {
+	CairnConfig,
+	ConfigKind,
+	ConfigPermission,
+	ConfigPermissionSet,
+	ConfigPlan,
+	ConfigPlanWarning,
+} from '../types/config.js';
 import { permissionsDescriptor } from './config/handlers/permissions.js';
 import { rolesDescriptor } from './config/handlers/roles.js';
 import { CONFIG_REGISTRY } from './config/registry.js';
 import { enrichConfigPlan } from './enrich-config-plan.js';
+
+function missingCollection(warning: ConfigPlanWarning): string {
+	if (warning.code !== 'COLLECTION_MISSING') throw new Error(`expected COLLECTION_MISSING, got ${warning.code}`);
+	return warning.identity.collection;
+}
 
 const FUTURE = '2999-01-01T00:00:00.000Z';
 const PAST = '2000-01-01T00:00:00.000Z';
@@ -337,7 +349,7 @@ describe('enrichConfigPlan', () => {
 		});
 
 		expect(enrichment.warnings).toHaveLength(1);
-		expect(enrichment.warnings[0]!.identity.collection).toBe('constructor');
+		expect(missingCollection(enrichment.warnings[0]!)).toBe('constructor');
 	});
 
 	it('does not warn when the permission collection exists in the schema', async () => {
@@ -382,7 +394,7 @@ describe('enrichConfigPlan', () => {
 
 		const enrichment = await enrichConfigPlan(plan, desired, { schema: schemaWith('articles'), database: db });
 
-		expect(enrichment.warnings.map((warning) => warning.identity.collection)).toEqual(['articles']);
+		expect(enrichment.warnings.map(missingCollection)).toEqual(['articles']);
 	});
 
 	it('does not scan or warn on desired permissions when permissions are unmanaged, even if malformed', async () => {

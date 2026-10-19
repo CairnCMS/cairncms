@@ -204,9 +204,17 @@ const warning = z.union([
 		})
 		.passthrough(),
 	z
+		.object({
+			code: z.literal('UNCONFIGURED_TABLE_DROP'),
+			kind: z.literal('collections'),
+			collection: z.string(),
+			message: z.string(),
+		})
+		.passthrough(),
+	z
 		.object({ code: z.string(), message: z.string() })
 		.passthrough()
-		.refine((entry) => entry.code !== 'COLLECTION_MISSING'),
+		.refine((entry) => entry.code !== 'COLLECTION_MISSING' && entry.code !== 'UNCONFIGURED_TABLE_DROP'),
 ]);
 
 export const RemoteConfigPlan = z

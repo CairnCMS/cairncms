@@ -270,6 +270,33 @@ describe('renderConfigPlan', () => {
 		);
 	});
 
+	it('renders an unconfigured-table-drop warning message', () => {
+		const output = renderConfigPlan(
+			plan({
+				warnings: [
+					{
+						code: 'UNCONFIGURED_TABLE_DROP',
+						kind: 'collections',
+						collection: 'legacy_posts',
+						message:
+							'Deleting table "legacy_posts" will remove its data. It has no CairnCMS collection record and may belong to another application.',
+					},
+				],
+			})
+		);
+
+		expect(output).toBe(
+			[
+				planIntro,
+				'',
+				'Plan: 0 to create, 0 to update, 0 to delete.',
+				'',
+				heading('Warnings'),
+				'  - Deleting table "legacy_posts" will remove its data. It has no CairnCMS collection record and may belong to another application.',
+			].join('\n')
+		);
+	});
+
 	it('sanitizes control characters in identities, impact detail, and warnings', () => {
 		const bel = String.fromCharCode(7);
 		const tab = String.fromCharCode(9);

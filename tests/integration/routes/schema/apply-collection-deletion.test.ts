@@ -1,3 +1,5 @@
+import { rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { describe, expect } from 'vitest';
 import { apiTest as test } from '../../fixtures/environment';
 import { CreateCollection, CreateFieldM2A } from '../../fixtures/data';
@@ -71,6 +73,36 @@ describe('schema apply deletes every dropped collection', () => {
 			await expectCollectionGone(api, imported);
 		} finally {
 			await removeCollections(api, [imported]);
+		}
+	});
+
+	test('the standalone schema apply CLI warns in the dry run before dropping a table with no collection record', async ({
+		api,
+	}) => {
+		const imported = `imported_cli_${suffix()}`;
+		const file = join(api.directory, `${imported}.json`);
+
+		try {
+			await api.database.schema.createTable(imported, (table) => {
+				table.increments('id').primary();
+				table.string('title');
+			});
+
+			await clearCache(api);
+			await writeFile(file, JSON.stringify(await snapshotWithout(api, [imported])));
+
+			const result = await api.cli(['schema', 'apply', file, '--dry-run']);
+
+			expect(result.status, result.stderr).toBe(0);
+
+			expect(result.stdout + result.stderr).toContain(
+				`Deleting table "${imported}" will remove its data. It has no CairnCMS collection record and may belong to another application.`
+			);
+
+			expect(await api.database.schema.hasTable(imported)).toBe(true);
+		} finally {
+			await removeCollections(api, [imported]);
+			await rm(file, { force: true });
 		}
 	});
 
