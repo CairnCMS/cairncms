@@ -588,6 +588,7 @@ describe('config apply previews a version 3 schema tree', () => {
 
 			expect(drops).toHaveLength(1);
 			expect(drops[0]!['collection']).toBe(table);
+
 			expect(drops[0]!['message']).toBe(
 				`Deleting table "${table}" will remove its data. It has no CairnCMS collection record and may belong to another application.`
 			);

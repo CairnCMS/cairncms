@@ -94,9 +94,11 @@ describe('schema apply deletes every dropped collection', () => {
 			const result = await api.cli(['schema', 'apply', file, '--dry-run']);
 
 			expect(result.status, result.stderr).toBe(0);
+
 			expect(result.stdout + result.stderr).toContain(
 				`Deleting table "${imported}" will remove its data. It has no CairnCMS collection record and may belong to another application.`
 			);
+
 			expect(await api.database.schema.hasTable(imported)).toBe(true);
 		} finally {
 			await removeCollections(api, [imported]);
