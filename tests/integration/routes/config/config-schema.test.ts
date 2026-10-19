@@ -560,6 +560,45 @@ describe('config apply previews a version 3 schema tree', () => {
 		}
 	});
 
+	test('warns before a planned drop of a table with no collection record', async ({ api }) => {
+		const table = `legacy_drop_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+
+		try {
+			await api.database.schema.createTable(table, (builder) => {
+				builder.increments('id');
+				builder.string('title');
+			});
+
+			await api.database(table).insert({ title: 'kept' });
+			await clearCache(api);
+
+			const desired = await snapshot(api, 3, ['schema']);
+			const record = (desired['schema'] as Document[]).find((entry) => entry['collection'] === table);
+			expect(record!['meta']).toBeNull();
+
+			desired['schema'] = (desired['schema'] as Document[]).filter((entry) => entry['collection'] !== table);
+
+			const http = await applyConfig(api, desired, { dryRun: true });
+
+			expect(http.statusCode).toBe(200);
+
+			const drops = (http.body.data['warnings'] as Document[]).filter(
+				(warning) => warning['code'] === 'UNCONFIGURED_TABLE_DROP'
+			);
+
+			expect(drops).toHaveLength(1);
+			expect(drops[0]!['collection']).toBe(table);
+			expect(drops[0]!['message']).toBe(
+				`Deleting table "${table}" will remove its data. It has no CairnCMS collection record and may belong to another application.`
+			);
+
+			expect(await api.database(table).select('id', 'title')).toEqual([{ id: 1, title: 'kept' }]);
+		} finally {
+			await api.database.schema.dropTableIfExists(table);
+			await clearCache(api);
+		}
+	});
+
 	for (const version of [1, 2]) {
 		test(`plans a version ${version} tree as planVersion 2 without schema changes`, async ({ api }) => {
 			const current = await snapshot(api, version);

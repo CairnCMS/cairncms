@@ -33,6 +33,7 @@ import { reconcileDesiredSchema } from '../../reconcile-desired-schema.js';
 import { replaceControlCharacters, safeLogFragment } from '../../safe-log-fragment.js';
 import { sanitizeCollection, sanitizeField, sanitizeRelation } from '../../sanitize-schema.js';
 import { collectionEntitySchema, fieldEntitySchema, relationEntitySchema } from '../../snapshot-entity-schemas.js';
+import { isUnconfiguredTableDrop } from '../../unconfigured-table-drop.js';
 import { compareCodeUnits } from '../canonical-encode.js';
 import { identityConflict, invalid } from '../failures.js';
 import type {
@@ -549,6 +550,7 @@ function translateSnapshotDiff(
 			changeKind: 'collections',
 			identity: { collection },
 			changes: attributeChanges(sanitizeCollection(before), sanitizeCollection(after), attributes),
+			...(after === undefined && isUnconfiguredTableDrop(before) ? { unconfiguredTableDrop: true as const } : {}),
 		});
 	}
 

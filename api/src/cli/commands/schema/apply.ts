@@ -8,7 +8,7 @@ import path from 'path';
 import getDatabase, { isInstalled, validateDatabaseConnection } from '../../../database/index.js';
 import logger from '../../../logger.js';
 import { confirmPrompt, createVerb, deleteVerb, heading, planIntro, updateVerb } from '../../presentation.js';
-import type { Snapshot } from '../../../types/index.js';
+import type { Collection, Snapshot } from '../../../types/index.js';
 import { DiffKind } from '../../../types/index.js';
 import { isEntityDelete } from '../../../utils/is-entity-delete.js';
 import { isNestedMetaUpdate } from '../../../utils/is-nested-meta-update.js';
@@ -19,6 +19,7 @@ import { getSnapshot } from '../../../utils/get-snapshot.js';
 import { getTargetSnapshotDiff } from '../../../utils/get-target-snapshot-diff.js';
 import { getVersionedHash } from '../../../utils/get-versioned-hash.js';
 import { replaceControlCharacters } from '../../../utils/safe-log-fragment.js';
+import { isUnconfiguredTableDrop, unconfiguredTableDropMessage } from '../../../utils/unconfigured-table-drop.js';
 
 export async function apply(snapshotPath: string, options?: { yes: boolean; dryRun: boolean }): Promise<void> {
 	const filename = path.resolve(process.cwd(), snapshotPath);
@@ -65,6 +66,10 @@ export async function apply(snapshotPath: string, options?: { yes: boolean; dryR
 
 		const dryRun = options?.dryRun === true;
 		const promptForChanges = !dryRun && options?.yes !== true;
+
+		const tableDropWarnings = snapshotDiff.collections
+			.filter(({ diff }) => isEntityDelete(diff[0]) && isUnconfiguredTableDrop((diff[0] as { lhs?: Collection }).lhs))
+			.map(({ collection }) => unconfiguredTableDropMessage(collection));
 
 		if (dryRun || promptForChanges) {
 			let message = '';
@@ -120,6 +125,11 @@ export async function apply(snapshotPath: string, options?: { yes: boolean; dryR
 				}
 			}
 
+			if (tableDropWarnings.length > 0) {
+				message += '\n\n' + heading('Warnings');
+				for (const warning of tableDropWarnings) message += `\n  - ${warning}`;
+			}
+
 			message = planIntro + '\n\n' + chalk.black(message);
 
 			if (dryRun) {
@@ -138,6 +148,10 @@ export async function apply(snapshotPath: string, options?: { yes: boolean; dryR
 			if (proceed === false) {
 				process.exit(0);
 			}
+		}
+
+		if (!dryRun && !promptForChanges && tableDropWarnings.length > 0) {
+			for (const warning of tableDropWarnings) logger.warn(warning);
 		}
 
 		await applyDiff(snapshotDiff, { database, expectedHash: getVersionedHash(currentKeyForm.snapshot) });

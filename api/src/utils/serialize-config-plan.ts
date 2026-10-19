@@ -97,6 +97,19 @@ function compareChanges(a: ConfigPlanChange, b: ConfigPlanChange): number {
 	return getDescriptor(a.kind).compareIdentity(a.identity as never, b.identity as never);
 }
 
+const WARNING_CODE_RANK = { COLLECTION_MISSING: 0, UNCONFIGURED_TABLE_DROP: 1 } as const;
+
 function compareWarnings(a: ConfigPlanWarning, b: ConfigPlanWarning): number {
-	return comparePermissionIdentity(a.identity, b.identity);
+	const byCode = WARNING_CODE_RANK[a.code] - WARNING_CODE_RANK[b.code];
+	if (byCode !== 0) return byCode;
+
+	if (a.code === 'COLLECTION_MISSING' && b.code === 'COLLECTION_MISSING') {
+		return comparePermissionIdentity(a.identity, b.identity);
+	}
+
+	if (a.code === 'UNCONFIGURED_TABLE_DROP' && b.code === 'UNCONFIGURED_TABLE_DROP') {
+		return compareCodeUnits(a.collection, b.collection);
+	}
+
+	return 0;
 }
