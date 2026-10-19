@@ -466,6 +466,7 @@ When editing the files or an HTTP snapshot:
 - **Folder parents use keys.** Set `parent` to another folder's key from the same config to place the folder under it. Set it to `null` to move the folder to the top level. Omitting `parent` preserves the folder's current parent, and a new folder with no `parent` is created at the top level. Include `key` and `name` in every folder document.
 - **Omitted settings fields remain unchanged in the target database.** `project_name` and `default_language` cannot be `null`.
 - **Set the default storage folder by key.** Use a folder key for `storage_default_folder`, or `null` to clear the default. If `folders` is listed in `resources`, include the folder in the config. Otherwise, it must already exist in the target database.
+- For a collection, field, or relation's `meta` and `schema`, see [Omitted properties](/docs/manage/schema-as-code/#omitted-properties).
 
 To rename or move a folder, edit its `name` or `parent` and keep its `key`. Generated snapshots include all supported fields.
 
