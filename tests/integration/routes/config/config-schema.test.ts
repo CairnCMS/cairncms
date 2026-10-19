@@ -309,6 +309,126 @@ describe('config apply previews a version 3 schema tree', () => {
 		}
 	});
 
+	test('plans no schema change when a field document omits an inner property', async ({ api }) => {
+		const suffix = randomUUID().replace(/-/g, '').slice(0, 12);
+		const notes = `preview_notes_${suffix}`;
+
+		try {
+			await createCollection(api, notes, []);
+
+			await setupRequest(api.url)
+				.post(`/fields/${notes}`)
+				.auth(api.adminToken, { type: 'bearer' })
+				.send({
+					field: 'title',
+					type: 'string',
+					meta: { note: 'Headline' },
+					schema: { max_length: 400, default_value: 'draft' },
+				})
+				.expect(200);
+
+			await snapshotTree(api, ['schema']);
+
+			const desired = await snapshot(api, 3, ['schema']);
+			const record = (desired['schema'] as Document[]).find((entry) => entry['collection'] === notes)!;
+			const title = (record['fields'] as Document[]).find((field) => field['field'] === 'title')!;
+			delete title['meta']['note'];
+			delete title['schema']['max_length'];
+
+			const before = await captureState(api, [notes]);
+			const http = await applyConfig(api, desired, { dryRun: true });
+
+			expect(http.statusCode).toBe(200);
+			expect(await captureState(api, [notes])).toEqual(before);
+
+			const plan = http.body.data as Document;
+
+			const schemaChanges = changesOf(plan, ['collections', 'fields', 'relations']).filter(
+				(change) => change.identity['collection'] === notes
+			);
+
+			expect(schemaChanges).toEqual([]);
+		} finally {
+			await dropCollection(api, notes);
+		}
+	});
+
+	test('plans no schema change when a field document omits its interface but keeps its folder reference', async ({
+		api,
+	}) => {
+		const suffix = randomUUID().replace(/-/g, '').slice(0, 12);
+		const media = `preview_media_${suffix}`;
+		const folderId = randomUUID();
+		const folderKey = `img_${suffix}`;
+
+		try {
+			await api.database('directus_folders').insert({ id: folderId, name: 'Images', key: folderKey });
+			await createCollection(api, media, []);
+
+			await setupRequest(api.url)
+				.post(`/fields/${media}`)
+				.auth(api.adminToken, { type: 'bearer' })
+				.send({ field: 'cover', type: 'uuid', meta: { interface: 'file', options: { folder: folderId } }, schema: {} })
+				.expect(200);
+
+			const desired = await snapshot(api, 3, ['schema']);
+			const record = (desired['schema'] as Document[]).find((entry) => entry['collection'] === media)!;
+			const cover = (record['fields'] as Document[]).find((field) => field['field'] === 'cover')!;
+			delete cover['meta']['interface'];
+
+			const before = await captureState(api, [media]);
+			const http = await applyConfig(api, desired, { dryRun: true });
+
+			expect(http.statusCode).toBe(200);
+			expect(await captureState(api, [media])).toEqual(before);
+
+			const plan = http.body.data as Document;
+
+			const schemaChanges = changesOf(plan, ['collections', 'fields', 'relations']).filter(
+				(change) => change.identity['collection'] === media
+			);
+
+			expect(schemaChanges).toEqual([]);
+		} finally {
+			await dropCollection(api, media);
+			await api.database('directus_folders').where({ id: folderId }).delete();
+		}
+	});
+
+	test('refuses a field document that crosses the folder boundary while omitting its options', async ({ api }) => {
+		const suffix = randomUUID().replace(/-/g, '').slice(0, 12);
+		const media = `preview_media_${suffix}`;
+		const folderId = randomUUID();
+		const folderKey = `img_${suffix}`;
+
+		try {
+			await api.database('directus_folders').insert({ id: folderId, name: 'Images', key: folderKey });
+			await createCollection(api, media, []);
+
+			await setupRequest(api.url)
+				.post(`/fields/${media}`)
+				.auth(api.adminToken, { type: 'bearer' })
+				.send({ field: 'cover', type: 'uuid', meta: { interface: 'file', options: { folder: folderId } }, schema: {} })
+				.expect(200);
+
+			const desired = await snapshot(api, 3, ['schema']);
+			const record = (desired['schema'] as Document[]).find((entry) => entry['collection'] === media)!;
+			const cover = (record['fields'] as Document[]).find((field) => field['field'] === 'cover')!;
+			cover['meta']['interface'] = 'custom-widget';
+			delete cover['meta']['options'];
+
+			const before = await captureState(api, [media]);
+			const http = await applyConfig(api, desired, { dryRun: true });
+
+			expect(http.statusCode).not.toBe(200);
+			expect(JSON.stringify(http.body)).toContain('Restate');
+			expect(await captureState(api, [media])).toEqual(before);
+		} finally {
+			await dropCollection(api, media);
+			await api.database('directus_folders').where({ id: folderId }).delete();
+		}
+	});
+
 	test('refuses a mutating apply with schema changes and writes nothing, over HTTP and the CLI', async ({ api }) => {
 		const suffix = randomUUID().replace(/-/g, '').slice(0, 12);
 		const created = `preview_refused_${suffix}`;

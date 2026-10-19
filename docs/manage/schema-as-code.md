@@ -129,6 +129,16 @@ The two are mutually exclusive in practice: `--dry-run` always exits without app
 
 Applying a snapshot can drop columns when fields are removed and drop tables when collections are removed. The platform does not preserve content from a dropped column. Treat `--dry-run` as a required step before running `--yes` against a non-disposable database.
 
+## Omitted properties
+
+Start from a generated snapshot and keep every collection, field, and relation that should remain. Leaving one out requests its deletion.
+
+Within an existing `meta` or `schema` object, omitted direct properties retain the target's current values. Keep the enclosing objects as captured. To clear a property, state its new value explicitly, such as `note: null`.
+
+Nested values are replaced, not merged. For example, when supplying `meta.options`, include all options you want to keep.
+
+If an interface change affects an [upload-folder reference](#upload-folders), restate the `options` or `conditions` containing it.
+
 ## Source control workflow
 
 The intended pattern for a multi-environment project:

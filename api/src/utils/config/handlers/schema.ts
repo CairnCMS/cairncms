@@ -29,6 +29,7 @@ import { getPortableSnapshot } from '../../get-portable-snapshot.js';
 import { getSnapshot } from '../../get-snapshot.js';
 import { getSnapshotDiff } from '../../get-snapshot-diff.js';
 import { version as currentRelease } from '../../package.js';
+import { reconcileDesiredSchema } from '../../reconcile-desired-schema.js';
 import { replaceControlCharacters, safeLogFragment } from '../../safe-log-fragment.js';
 import { sanitizeCollection, sanitizeField, sanitizeRelation } from '../../sanitize-schema.js';
 import { collectionEntitySchema, fieldEntitySchema, relationEntitySchema } from '../../snapshot-entity-schemas.js';
@@ -384,8 +385,7 @@ function groupSnapshotCollections(snapshot: PortableSnapshot): ConfigSchemaColle
 		const name = collection.collection;
 		emitted.add(name);
 
-		// A system collection is operator-managed through its fields alone. Its definition belongs to the
-		// platform, so it is emitted without meta or schema even when the snapshot carries an override.
+		// System collection definitions belong to the platform, even when metadata overrides exist.
 		if (name.startsWith('directus_')) {
 			records.push({ collection: name, ...membersOf(name) });
 			continue;
@@ -399,8 +399,7 @@ function groupSnapshotCollections(snapshot: PortableSnapshot): ConfigSchemaColle
 		});
 	}
 
-	// A system collection with only operator-added fields never reaches the snapshot's collections, and neither
-	// does the owner of a relation whose table and collection record are both gone.
+	// Operator-added system fields and orphaned relations can have owners absent from snapshot.collections.
 	for (const owner of [...fieldsByCollection.keys(), ...relationsByCollection.keys()]) {
 		if (emitted.has(owner)) continue;
 		emitted.add(owner);
@@ -611,20 +610,25 @@ export function computeSchemaPlan(
 	const current = unfoldToSnapshot(currentRecords);
 	const desired = unfoldToSnapshot(desiredRecords);
 
-	const currentSnapshot: Snapshot = {
+	const currentKeyForm: Snapshot = {
 		version: 1,
 		directus: currentRelease,
 		collections: current.collections,
-		fields: alignToDesiredReferences(current.fields, storedFields, desired.fields),
+		fields: current.fields,
 		relations: current.relations,
 	};
 
-	const desiredSnapshot: PortableSnapshot = {
+	const desiredSnapshot: PortableSnapshot = reconcileDesiredSchema(currentKeyForm, {
 		version: 2,
 		release: currentRelease,
 		collections: desired.collections,
 		fields: desired.fields,
 		relations: desired.relations,
+	});
+
+	const currentSnapshot: Snapshot = {
+		...currentKeyForm,
+		fields: alignToDesiredReferences(current.fields, storedFields, desiredSnapshot.fields),
 	};
 
 	return translateSnapshotDiff(getSnapshotDiff(currentSnapshot, desiredSnapshot), currentSnapshot, desiredSnapshot);

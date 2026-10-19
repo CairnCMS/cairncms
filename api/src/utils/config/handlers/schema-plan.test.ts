@@ -347,6 +347,173 @@ describe('computeSchemaPlan attribute presence', () => {
 	});
 });
 
+describe('computeSchemaPlan omitted-property contract', () => {
+	it('plans no change when a partial field omits a meta and a column property', () => {
+		const current = [
+			record('articles', {
+				fields: [
+					fieldObject({
+						collection: 'articles',
+						field: 'title',
+						type: 'string',
+						meta: { note: 'keep' },
+						schema: { name: 'title', data_type: 'varchar', max_length: 1000 },
+					}),
+				],
+			}),
+		];
+
+		const desired = [
+			record('articles', {
+				fields: [
+					fieldObject({
+						collection: 'articles',
+						field: 'title',
+						type: 'string',
+						meta: {},
+						schema: { name: 'title', data_type: 'varchar' },
+					}),
+				],
+			}),
+		];
+
+		expect(plan(current, desired)).toEqual({ create: [], update: [], delete: [] });
+	});
+
+	it('plans only the explicit change when a property is restated and another omitted', () => {
+		const current = [
+			record('articles', {
+				fields: [
+					fieldObject({
+						collection: 'articles',
+						field: 'title',
+						type: 'string',
+						meta: { note: 'old' },
+						schema: { name: 'title', data_type: 'varchar', max_length: 1000 },
+					}),
+				],
+			}),
+		];
+
+		const desired = [
+			record('articles', {
+				fields: [
+					fieldObject({
+						collection: 'articles',
+						field: 'title',
+						type: 'string',
+						meta: { note: 'new' },
+						schema: { name: 'title', data_type: 'varchar' },
+					}),
+				],
+			}),
+		];
+
+		const update = plan(current, desired).update.find((entry) => entry.changeKind === 'fields');
+
+		expect(Object.keys(update!.changes)).toEqual(['meta']);
+		expect(update!.changes['meta']).toEqual({ before: { note: 'old' }, after: { note: 'new' } });
+	});
+
+	it('refuses a boundary-crossing interface change that omits options on the config path', () => {
+		const current = [
+			record('media', {
+				fields: [
+					fieldObject({
+						collection: 'media',
+						field: 'cover',
+						type: 'uuid',
+						meta: { interface: 'file', options: { folder: 'images' } },
+						schema: { name: 'cover' },
+					}),
+				],
+			}),
+		];
+
+		const desired = [
+			record('media', {
+				fields: [
+					fieldObject({
+						collection: 'media',
+						field: 'cover',
+						type: 'uuid',
+						meta: { interface: 'custom-widget' },
+						schema: { name: 'cover' },
+					}),
+				],
+			}),
+		];
+
+		expect(() => plan(current, desired)).toThrow(/Restate "meta.options"/);
+	});
+
+	it('refuses entering the registry while omitting options on the config path', () => {
+		const current = [
+			record('media', {
+				fields: [
+					fieldObject({
+						collection: 'media',
+						field: 'cover',
+						type: 'uuid',
+						meta: { interface: 'custom-widget', options: { folder: 'folder-key' } },
+						schema: { name: 'cover' },
+					}),
+				],
+			}),
+		];
+
+		const desired = [
+			record('media', {
+				fields: [
+					fieldObject({
+						collection: 'media',
+						field: 'cover',
+						type: 'uuid',
+						meta: { interface: 'file' },
+						schema: { name: 'cover' },
+					}),
+				],
+			}),
+		];
+
+		expect(() => plan(current, desired)).toThrow(/Restate "meta.options"/);
+	});
+
+	it('plans no change when a field omits its interface but keeps its folder reference', () => {
+		const current = fieldObject({
+			collection: 'media',
+			field: 'cover',
+			type: 'uuid',
+			meta: { interface: 'file', options: { folder: 'folder-key' } },
+			schema: { name: 'cover' },
+		});
+
+		const stored = fieldObject({
+			collection: 'media',
+			field: 'cover',
+			type: 'uuid',
+			meta: { interface: 'file', options: { folder: 'folder-id' } },
+			schema: { name: 'cover' },
+		});
+
+		const desired = fieldObject({
+			collection: 'media',
+			field: 'cover',
+			type: 'uuid',
+			meta: { options: { folder: 'folder-key' } },
+			schema: { name: 'cover' },
+		});
+
+		const result = computeSchemaPlan(
+			[record('media', { fields: [current] })],
+			[record('media', { fields: [desired] })],
+			[stored]
+		);
+
+		expect(result.update.find((entry) => entry.changeKind === 'fields')).toBeUndefined();
+	});
+});
+
 describe('schema validateDesired', () => {
 	function validate(documents: ConfigSchemaCollection[]) {
 		return schemaDescriptor.handler.validateDesired(documents as never, documents as never, {} as never);
