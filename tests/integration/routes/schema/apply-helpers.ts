@@ -60,6 +60,34 @@ export async function diffThenApply(api: Api, desired: Snapshot) {
 		.set('Content-type', 'application/json');
 }
 
+export async function schemaDiffStatus(api: Api, desired: Snapshot): Promise<number> {
+	const diff = await setupRequest(api.url)
+		.post('/schema/diff')
+		.auth(api.adminToken, { type: 'bearer' })
+		.send(desired)
+		.set('Content-type', 'application/json');
+
+	return diff.statusCode;
+}
+
+export async function applyIfChanged(api: Api, desired: Snapshot) {
+	const diff = await setupRequest(api.url)
+		.post('/schema/diff')
+		.auth(api.adminToken, { type: 'bearer' })
+		.send(desired)
+		.set('Content-type', 'application/json');
+
+	if (diff.statusCode === 204) return diff;
+
+	expect(diff.statusCode).toBe(200);
+
+	return request(api.url)
+		.post('/schema/apply')
+		.auth(api.adminToken, { type: 'bearer' })
+		.send(diff.body.data)
+		.set('Content-type', 'application/json');
+}
+
 export async function expectCollectionGone(api: Api, collection: string): Promise<void> {
 	expect(await api.database.schema.hasTable(collection)).toBe(false);
 	expect(await api.database('directus_collections').where({ collection })).toEqual([]);

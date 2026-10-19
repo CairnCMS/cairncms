@@ -1,11 +1,29 @@
+import type { DeepPartial } from '@cairncms/types';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { Snapshot, SnapshotField } from '../types/index.js';
+import type { PortableSnapshot, Snapshot, SnapshotField } from '../types/index.js';
 import { getSnapshotDiff } from './get-snapshot-diff.js';
 import { getTargetSnapshotDiff } from './get-target-snapshot-diff.js';
 
 const IMAGES = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
 const OTHER = 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb';
+
+function fieldOf(
+	meta: DeepPartial<SnapshotField['meta']>,
+	name = 'image',
+	type: SnapshotField['type'] = 'uuid'
+): SnapshotField {
+	const draft: DeepPartial<SnapshotField> = { collection: 'articles', field: name, type, schema: null, meta };
+	return draft as SnapshotField;
+}
+
+function portable(fields: SnapshotField[]): PortableSnapshot {
+	return { version: 2, release: '1.0.0', collections: [], fields, relations: [] };
+}
+
+function currentOf(fields: SnapshotField[]): Snapshot {
+	return { version: 1, directus: '1.0.0', collections: [], fields, relations: [] };
+}
 
 function uploads(folder: string, version = 1): Snapshot {
 	const field = {
@@ -74,5 +92,47 @@ describe('getTargetSnapshotDiff on a real SQLite database', () => {
 		const diff = await getTargetSnapshotDiff(uploads('images', 2), { current: uploads(OTHER), database });
 
 		expect(diff.fields[0]!.diff[0]).toMatchObject({ kind: 'E', rhs: 'images' });
+	});
+
+	it('keeps an omitted interface aligned to its folder key with no change', async () => {
+		const desired = portable([fieldOf({ options: { folder: 'images' } })]);
+
+		const diff = await getTargetSnapshotDiff(desired, { current: uploads(IMAGES), database });
+
+		expect(diff).toEqual({ collections: [], fields: [], relations: [] });
+	});
+
+	it('refuses leaving the registry while omitting its folder options', async () => {
+		const desired = portable([fieldOf({ interface: 'custom-widget' })]);
+
+		await expect(getTargetSnapshotDiff(desired, { current: uploads(IMAGES), database })).rejects.toThrow(
+			'Restate "meta.options"'
+		);
+	});
+
+	it('refuses entering the registry while omitting its folder options', async () => {
+		const current = currentOf([fieldOf({ interface: 'custom-widget', options: { folder: IMAGES } })]);
+		const desired = portable([fieldOf({ interface: 'file' })]);
+
+		await expect(getTargetSnapshotDiff(desired, { current, database })).rejects.toThrow('Restate "meta.options"');
+	});
+
+	it('refuses a repeater whose inherited nested folder reference changes interpretation', async () => {
+		const current = currentOf([
+			fieldOf(
+				{
+					interface: 'list',
+					options: {
+						fields: [{ field: 'body', meta: { interface: 'input-rich-text-md', options: { folder: IMAGES } } }],
+					},
+				},
+				'blocks',
+				'json'
+			),
+		]);
+
+		const desired = portable([fieldOf({ interface: 'file' }, 'blocks', 'json')]);
+
+		await expect(getTargetSnapshotDiff(desired, { current, database })).rejects.toThrow('Restate "meta.options"');
 	});
 });

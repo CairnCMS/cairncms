@@ -8,6 +8,7 @@ import {
 	diffThenApply,
 	expectCollectionGone,
 	removeCollections,
+	schemaDiffStatus,
 	snapshotWithout,
 	suffix,
 	type Snapshot,
@@ -118,16 +119,6 @@ describe('schema apply refuses an attribute change it cannot perform on a kept f
 			`Field "{articles}.title" can't remove its type.`,
 		],
 		[
-			'an omitted schema.max_length',
-			(desired, { articles }) => delete fieldEntry(desired, articles, 'title')['schema']['max_length'],
-			`Field "{articles}.title" can't omit "schema.max_length" from its column definition.`,
-		],
-		[
-			'an omitted schema.default_value',
-			(desired, { articles }) => delete fieldEntry(desired, articles, 'title')['schema']['default_value'],
-			`Field "{articles}.title" can't omit "schema.default_value" from its column definition.`,
-		],
-		[
 			'omitted relation metadata',
 			(desired, { articles }) => delete relationEntry(desired, articles, 'author')['meta'],
 			`Relation "{articles}.author" can't remove its relation metadata.`,
@@ -224,9 +215,7 @@ describe('schema apply keeps a field or relation whose diff only removes part of
 			const desired = await snapshotWithout(api, []);
 			delete relationEntry(desired, scenario.articles, 'author')['meta']['sort_field'];
 
-			const apply = await diffThenApply(api, desired);
-
-			expect(apply.statusCode).toBe(204);
+			expect(await schemaDiffStatus(api, desired)).toBe(204);
 
 			expect(
 				await api.database('directus_relations').where({ many_collection: scenario.articles, many_field: 'author' })
@@ -252,13 +241,31 @@ describe('schema apply keeps a field or relation whose diff only removes part of
 			const desired = await snapshotWithout(api, []);
 			delete fieldEntry(desired, scenario.articles, 'title')['meta']['note'];
 
-			const apply = await diffThenApply(api, desired);
-
-			expect(apply.statusCode).toBe(204);
+			expect(await schemaDiffStatus(api, desired)).toBe(204);
 
 			expect(await api.database('directus_fields').where({ collection: scenario.articles, field: 'title' })).toEqual([
 				expect.objectContaining({ note: 'Headline' }),
 			]);
+		} finally {
+			await removeCollections(api, scenario.all);
+		}
+	});
+
+	test('keeps a column length and default the snapshot omits', async ({ api }) => {
+		const scenario = scenarioNames();
+
+		try {
+			await createScenario(api, scenario);
+
+			const desired = await snapshotWithout(api, []);
+			const title = fieldEntry(desired, scenario.articles, 'title');
+			delete title['schema']['max_length'];
+			delete title['schema']['default_value'];
+
+			const before = await captureState(api, scenario.articles);
+
+			expect(await schemaDiffStatus(api, desired)).toBe(204);
+			expect(await captureState(api, scenario.articles)).toEqual(before);
 		} finally {
 			await removeCollections(api, scenario.all);
 		}
