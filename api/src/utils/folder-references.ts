@@ -111,6 +111,18 @@ export function isFolderKey(value: unknown): value is string {
 	return typeof value === 'string' && value !== '' && normalizeConfigKey(value) === value;
 }
 
+export function referencedFolderKeys(fields: readonly SnapshotField[]): Set<string> {
+	const keys = new Set<string>();
+
+	for (const field of fields) {
+		for (const { value } of fieldReferences(field)) {
+			if (isFolderKey(value)) keys.add(value);
+		}
+	}
+
+	return keys;
+}
+
 export async function readFolderKeys(database: Knex): Promise<FolderKeys> {
 	const rows = await database.select('id', 'key').from('directus_folders');
 
