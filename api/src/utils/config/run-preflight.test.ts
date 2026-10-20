@@ -1,11 +1,13 @@
+import type { DeepPartial } from '@cairncms/types';
 import { describe, expect, it } from 'vitest';
 import { ConfigInvalidException } from '../../exceptions/config-invalid.js';
 import { ConfigProtectedRecordException } from '../../exceptions/config-protected-record.js';
 import { ConfigSchemaSourceException } from '../../exceptions/config-schema-source.js';
 import { DestructiveChangesRequiredException } from '../../exceptions/destructive-changes-required.js';
 import type { ConfigKind, ConfigManifest, ConfigPlan, SchemaChangeEntry } from '../../types/config.js';
+import type { SnapshotField } from '../../types/index.js';
 import { listConfigKinds } from './registry.js';
-import { assertRunAllowed } from './run-preflight.js';
+import { assertMutationAuthorized, assertRunValid } from './run-preflight.js';
 
 const currentRelease = '1.7.0';
 const currentVendor = 'postgres';
@@ -24,58 +26,113 @@ function manifestFor(resources: ConfigKind[], schema?: { release: string; vendor
 	return { version: 3, resources, schema: schema ?? { release: currentRelease, vendor: currentVendor } };
 }
 
-type Overrides = Partial<Parameters<typeof assertRunAllowed>[0]>;
+function field(name: string, meta: DeepPartial<SnapshotField['meta']>): SnapshotField {
+	const draft: DeepPartial<SnapshotField> = { collection: 'articles', field: name, type: 'uuid', schema: null, meta };
+	return draft as SnapshotField;
+}
 
-function run(overrides: Overrides = {}): void {
-	const manifest = overrides.manifest ?? manifestFor(['folders']);
+function fileField(folder: unknown, name = 'cover'): SnapshotField {
+	return field(name, { interface: 'file', options: { folder } });
+}
 
-	assertRunAllowed({
-		plan: plan(manifest.resources),
-		dryRun: false,
-		destructive: false,
+type ValidityOverrides = Partial<Parameters<typeof assertRunValid>[0]>;
+
+function validity(overrides: ValidityOverrides = {}): void {
+	assertRunValid({
+		manifest: overrides.manifest ?? manifestFor(['schema', 'folders']),
 		forceSchema: false,
 		currentRelease,
 		currentVendor,
-		referencedFolderKeys: new Set(),
-		declaredFolderKeys: new Set(),
-		currentFolderKeys: new Set(),
+		schemaFields: [],
+		availableFolderKeys: new Map<string, string>(),
 		...overrides,
-		manifest,
 	});
 }
 
-const folderDeletion = plan(['folders'], { folders: { create: [], update: [], delete: ['uploads'] } });
+describe('assertRunValid', () => {
+	it('passes a clean run', () => {
+		expect(() => validity()).not.toThrow();
+	});
 
-const schemaDrop: SchemaChangeEntry = {
-	changeKind: 'collections',
-	identity: { collection: 'legacy_posts' },
-	changes: {},
-};
+	it('refuses a source mismatch, and the override permits it', () => {
+		const manifest = manifestFor(['schema'], { release: '1.6.0', vendor: currentVendor });
+		expect(() => validity({ manifest })).toThrow(ConfigSchemaSourceException);
+		expect(() => validity({ manifest, forceSchema: true })).not.toThrow();
+	});
 
-const schemaDeletion = plan(['schema'], { schema: { create: [], update: [], delete: [schemaDrop] } });
+	it('refuses a managed-schema run with no recorded provenance', () => {
+		expect(() => validity({ manifest: { version: 3, resources: ['schema'] } })).toThrow(ConfigSchemaSourceException);
+	});
 
-const adminProtection = plan(['roles'], {
-	protections: [{ code: 'ADMIN_CONTINUITY_REQUIRED', message: 'Keep an admin role.', contributors: [] }],
+	it('refuses an unmet folder reference and names the folder', () => {
+		expect(() => validity({ schemaFields: [fileField('ghost')] })).toThrow(ConfigInvalidException);
+		expect(() => validity({ schemaFields: [fileField('ghost')] })).toThrow(/ghost/);
+	});
+
+	it('refuses a folder reference whose value is not a folder key', () => {
+		expect(() => validity({ schemaFields: [fileField(123)] })).toThrow(ConfigInvalidException);
+	});
+
+	it('sanitizes control characters from the reference refusal message', () => {
+		const bel = String.fromCharCode(7);
+		let message: string | undefined;
+
+		try {
+			validity({ schemaFields: [fileField(123, `cover${bel}`)] });
+		} catch (error) {
+			message = (error as Error).message;
+		}
+
+		expect(message).toContain('not a folder key');
+		expect(Array.from(message ?? '').some((char) => char.charCodeAt(0) < 0x20)).toBe(false);
+	});
+
+	it('passes references to folders present on the target or declared and preparable', () => {
+		expect(() =>
+			validity({
+				schemaFields: [fileField('present', 'cover_a'), fileField('declared', 'cover_b')],
+				availableFolderKeys: new Map([
+					['present', 'folder-id'],
+					['declared', 'declared'],
+				]),
+			})
+		).not.toThrow();
+	});
 });
 
-describe('assertRunAllowed', () => {
-	it('passes a clean mutating run', () => {
-		expect(() => run()).not.toThrow();
+describe('assertMutationAuthorized', () => {
+	const folderDeletion = plan(['folders'], { folders: { create: [], update: [], delete: ['uploads'] } });
+
+	const schemaDrop: SchemaChangeEntry = {
+		changeKind: 'collections',
+		identity: { collection: 'legacy_posts' },
+		changes: {},
+	};
+
+	const schemaDeletion = plan(['schema'], { schema: { create: [], update: [], delete: [schemaDrop] } });
+
+	const adminProtection = plan(['roles'], {
+		protections: [{ code: 'ADMIN_CONTINUITY_REQUIRED', message: 'Keep an admin role.', contributors: [] }],
 	});
 
-	it('refuses a folder deletion without destructive on a mutating run', () => {
-		expect(() => run({ plan: folderDeletion })).toThrow(DestructiveChangesRequiredException);
+	it('passes a clean plan', () => {
+		expect(() => assertMutationAuthorized(plan(['roles']), false)).not.toThrow();
 	});
 
-	it('previews a deletion plan in a dry run', () => {
-		expect(() => run({ plan: folderDeletion, dryRun: true })).not.toThrow();
+	it('refuses a protected plan', () => {
+		expect(() => assertMutationAuthorized(adminProtection, false)).toThrow(ConfigProtectedRecordException);
+	});
+
+	it('refuses a deletion plan without destructive, and allows it with destructive', () => {
+		expect(() => assertMutationAuthorized(folderDeletion, false)).toThrow(DestructiveChangesRequiredException);
+		expect(() => assertMutationAuthorized(folderDeletion, true)).not.toThrow();
 	});
 
 	it('reports a schema collection deletion rather than throwing an unsupported planning error', () => {
 		let thrown: unknown;
 
 		try {
-			run({ plan: schemaDeletion, manifest: manifestFor(['schema']) });
+			assertMutationAuthorized(schemaDeletion, false);
 		} catch (error) {
 			thrown = error;
 		}
@@ -85,45 +142,5 @@ describe('assertRunAllowed', () => {
 		expect((thrown as DestructiveChangesRequiredException).extensions).toMatchObject({
 			deletions: [{ kind: 'schema', identity: { collection: 'legacy_posts' } }],
 		});
-	});
-
-	it('refuses a protected plan on a mutating run', () => {
-		expect(() => run({ plan: adminProtection, manifest: manifestFor(['roles']) })).toThrow(
-			ConfigProtectedRecordException
-		);
-	});
-
-	it('previews a protected plan in a dry run', () => {
-		expect(() => run({ plan: adminProtection, manifest: manifestFor(['roles']), dryRun: true })).not.toThrow();
-	});
-
-	it('refuses an unmet folder reference and names the folder, on a mutating run and in a dry run', () => {
-		const manifest = manifestFor(['schema', 'folders']);
-		const referencedFolderKeys = new Set(['ghost']);
-		expect(() => run({ manifest, referencedFolderKeys })).toThrow(ConfigInvalidException);
-		expect(() => run({ manifest, referencedFolderKeys })).toThrow(/ghost/);
-		expect(() => run({ manifest, referencedFolderKeys, dryRun: true })).toThrow(ConfigInvalidException);
-	});
-
-	it('passes a referenced folder that is present on the target or declared in the tree', () => {
-		expect(() =>
-			run({
-				manifest: manifestFor(['schema', 'folders']),
-				referencedFolderKeys: new Set(['present', 'declared']),
-				currentFolderKeys: new Set(['present']),
-				declaredFolderKeys: new Set(['declared']),
-			})
-		).not.toThrow();
-	});
-
-	it('refuses a source mismatch on a mutating run and in a dry run', () => {
-		const manifest = manifestFor(['schema'], { release: '1.6.0', vendor: currentVendor });
-		expect(() => run({ manifest })).toThrow(ConfigSchemaSourceException);
-		expect(() => run({ manifest, dryRun: true })).toThrow(ConfigSchemaSourceException);
-	});
-
-	it('lets the schema override pass a source mismatch', () => {
-		const manifest = manifestFor(['schema'], { release: '1.6.0', vendor: 'mysql' });
-		expect(() => run({ manifest, forceSchema: true })).not.toThrow();
 	});
 });

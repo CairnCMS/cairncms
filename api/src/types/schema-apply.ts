@@ -1,6 +1,10 @@
-export type SchemaOperation = 'create' | 'update' | 'delete';
+export const SCHEMA_OPERATIONS = ['create', 'update', 'delete'] as const;
 
-export type SchemaChangeOutcome = 'applied' | 'reverted' | 'unknown' | 'not_applicable';
+export type SchemaOperation = (typeof SCHEMA_OPERATIONS)[number];
+
+export const SCHEMA_CHANGE_OUTCOMES = ['applied', 'reverted', 'unknown', 'not_applicable'] as const;
+
+export type SchemaChangeOutcome = (typeof SCHEMA_CHANGE_OUTCOMES)[number];
 
 export type SchemaPersistedCollection = {
 	collection: string;

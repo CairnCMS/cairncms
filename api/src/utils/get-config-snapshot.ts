@@ -36,6 +36,7 @@ export type CurrentConfigRead = {
 	currentFolderParents: ReadonlyMap<string, string | null>;
 	stateToken: ConfigStateToken;
 	schemaStoredFields?: SnapshotField[];
+	schemaKeyFormHash?: string;
 };
 
 export type CurrentConfigOptions = {
@@ -107,6 +108,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 	const documentsByKind = new Map<ConfigKind, unknown[]>();
 	const projectionInputs: Array<{ kind: ConfigKind; mode: ConfigReadMode; result: unknown }> = [];
 	let schemaStoredFields: SnapshotField[] | undefined;
+	let schemaKeyFormHash: string | undefined;
 
 	for (const { kind, mode } of closure) {
 		const descriptor = getDescriptor(kind);
@@ -129,7 +131,10 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		projectionInputs.push({ kind, mode, result });
 
 		if (kind === 'schema') {
-			schemaStoredFields = (result.dependencyState as { storedFields: SnapshotField[] } | undefined)?.storedFields;
+			const schemaState = result.dependencyState as { storedFields: SnapshotField[]; keyFormHash: string } | undefined;
+
+			schemaStoredFields = schemaState?.storedFields;
+			schemaKeyFormHash = schemaState?.keyFormHash;
 		}
 
 		if (!managed.has(kind)) continue;
@@ -232,6 +237,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		currentFolderParents,
 		stateToken,
 		...(schemaStoredFields !== undefined && { schemaStoredFields }),
+		...(schemaKeyFormHash !== undefined && { schemaKeyFormHash }),
 	};
 }
 

@@ -1,11 +1,14 @@
 import { BaseException } from '@cairncms/exceptions';
 
-export type SchemaPostCommitPhase =
-	| 'cache'
-	| 'actions'
-	| 'cache_and_actions'
-	| 'foreign_keys'
-	| 'foreign_keys_and_cache';
+export const SCHEMA_POST_COMMIT_PHASES = [
+	'cache',
+	'actions',
+	'cache_and_actions',
+	'foreign_keys',
+	'foreign_keys_and_cache',
+] as const;
+
+export type SchemaPostCommitPhase = (typeof SCHEMA_POST_COMMIT_PHASES)[number];
 
 const MESSAGES: Record<SchemaPostCommitPhase, string> = {
 	cache: 'The schema change was committed, but cache invalidation failed afterward.',

@@ -429,7 +429,7 @@ describe('config apply previews a version 3 schema tree', () => {
 		}
 	});
 
-	test('refuses a mutating apply with schema changes and writes nothing, over HTTP and the CLI', async ({ api }) => {
+	test('refuses a mutating schema apply over HTTP, but applies it through the local CLI', async ({ api }) => {
 		const suffix = randomUUID().replace(/-/g, '').slice(0, 12);
 		const created = `preview_refused_${suffix}`;
 
@@ -458,8 +458,8 @@ describe('config apply previews a version 3 schema tree', () => {
 
 			const cli = await api.cli(['config', 'apply', fixtureRoot, '--yes']);
 
-			expect(cli.status).toBe(3);
-			expect(await captureState(api, [created])).toEqual(before);
+			expect(cli.status).toBe(0);
+			expect((await captureState(api, [created])).tables[created]).not.toBeNull();
 		} finally {
 			await dropCollection(api, created);
 		}
