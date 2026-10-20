@@ -600,15 +600,10 @@ function translateSnapshotDiff(
 	return plan;
 }
 
-export function computeSchemaPlan(
+export function reconcileDesiredSchemaSnapshot(
 	currentRecords: ConfigSchemaCollection[],
-	desiredRecords: ConfigSchemaCollection[],
-	storedFields: SnapshotField[] | undefined
-): KindPlan<SchemaKindTypes> {
-	if (storedFields === undefined) {
-		throw new Error('Schema planning requires the retained current schema fields.');
-	}
-
+	desiredRecords: ConfigSchemaCollection[]
+): { current: Snapshot; desired: PortableSnapshot } {
 	const current = unfoldToSnapshot(currentRecords);
 	const desired = unfoldToSnapshot(desiredRecords);
 
@@ -628,9 +623,26 @@ export function computeSchemaPlan(
 		relations: desired.relations,
 	});
 
+	return { current: currentKeyForm, desired: desiredSnapshot };
+}
+
+export function computeSchemaPlan(
+	currentRecords: ConfigSchemaCollection[],
+	desiredRecords: ConfigSchemaCollection[],
+	storedFields: SnapshotField[] | undefined
+): KindPlan<SchemaKindTypes> {
+	if (storedFields === undefined) {
+		throw new Error('Schema planning requires the retained current schema fields.');
+	}
+
+	const { current: currentKeyForm, desired: desiredSnapshot } = reconcileDesiredSchemaSnapshot(
+		currentRecords,
+		desiredRecords
+	);
+
 	const currentSnapshot: Snapshot = {
 		...currentKeyForm,
-		fields: alignToDesiredReferences(current.fields, storedFields, desiredSnapshot.fields),
+		fields: alignToDesiredReferences(currentKeyForm.fields, storedFields, desiredSnapshot.fields),
 	};
 
 	return translateSnapshotDiff(getSnapshotDiff(currentSnapshot, desiredSnapshot), currentSnapshot, desiredSnapshot);
