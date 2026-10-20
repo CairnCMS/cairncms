@@ -9,6 +9,7 @@ export * from './config-placeholder-unresolved.js';
 export * from './config-post-commit-failed.js';
 export * from './config-protected-record.js';
 export * from './config-read-failed.js';
+export * from './config-schema-source.js';
 export * from './config-state-changed.js';
 export * from './config-unsupported-version.js';
 export * from './content-too-large.js';

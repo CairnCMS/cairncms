@@ -52,6 +52,7 @@ const EXPECTED_RESULT: Record<string, string> = {
 	CONFIG_IDENTITY_CONFLICT: 'invalid',
 	CONFIG_PROTECTED_RECORD: 'refused',
 	CONFIG_FOLDER_IN_USE: 'refused',
+	CONFIG_SCHEMA_SOURCE: 'refused',
 	DESTRUCTIVE_CHANGES_REQUIRED: 'refused',
 	CONFIG_STATE_CHANGED: 'state_changed',
 	CONFIG_POST_COMMIT_FAILED: 'post_apply_failed',

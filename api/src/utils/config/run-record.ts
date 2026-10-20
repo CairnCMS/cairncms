@@ -23,6 +23,7 @@ const RUN_RECORD_ERROR_CODE_LIST = [
 	'CONFIG_PLACEHOLDER_UNRESOLVED',
 	'CONFIG_PROTECTED_RECORD',
 	'CONFIG_FOLDER_IN_USE',
+	'CONFIG_SCHEMA_SOURCE',
 	'DESTRUCTIVE_CHANGES_REQUIRED',
 	'CONFIG_STATE_CHANGED',
 	'CONFIG_READ_FAILED',
@@ -156,6 +157,7 @@ export function classifyConfigError(err: unknown): {
 			return { result: 'invalid', errorCode };
 		case 'CONFIG_PROTECTED_RECORD':
 		case 'CONFIG_FOLDER_IN_USE':
+		case 'CONFIG_SCHEMA_SOURCE':
 		case 'DESTRUCTIVE_CHANGES_REQUIRED':
 			return { result: 'refused', errorCode };
 		case 'CONFIG_STATE_CHANGED':

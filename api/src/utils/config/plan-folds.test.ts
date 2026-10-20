@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ConfigFolder, ConfigPermission, ConfigPlan, ConfigRole } from '../../types/config.js';
+import type { ConfigFolder, ConfigPermission, ConfigPlan, ConfigRole, SchemaChangeEntry } from '../../types/config.js';
 import { isPlanEmpty, planDeletions, planHasDeletions, planSummary } from './plan-folds.js';
 
 function emptyPlan(): ConfigPlan {
@@ -85,15 +85,23 @@ describe('plan folds', () => {
 	});
 
 	it('projects each deletion to its identity, in kind order', () => {
+		const schemaDrop: SchemaChangeEntry = {
+			changeKind: 'collections',
+			identity: { collection: 'legacy_posts' },
+			changes: {},
+		};
+
 		const plan = emptyPlan();
 		plan.roles.delete.push('old');
 		plan.permissions.delete.push({ roleKey: 'editor', collection: 'articles', action: 'read' });
 		plan.folders.delete.push('archive');
+		plan.schema.delete.push(schemaDrop);
 
 		expect(planDeletions(plan)).toEqual([
 			{ kind: 'roles', identity: { key: 'old' } },
 			{ kind: 'permissions', identity: { role: 'editor', collection: 'articles', action: 'read' } },
 			{ kind: 'folders', identity: { key: 'archive' } },
+			{ kind: 'schema', identity: { collection: 'legacy_posts' } },
 		]);
 	});
 });
