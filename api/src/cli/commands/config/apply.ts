@@ -1,12 +1,3 @@
-import { BaseException } from '@cairncms/exceptions';
-import {
-	CONFIG_POST_COMMIT_PHASES,
-	type ConfigPostCommitPhase,
-} from '../../../exceptions/config-post-commit-failed.js';
-import {
-	SCHEMA_POST_COMMIT_PHASES,
-	type SchemaPostCommitPhase,
-} from '../../../exceptions/schema-post-commit-failed.js';
 import inquirer from 'inquirer';
 import type { Knex } from 'knex';
 import getDatabase, { getDatabaseClient, hasDatabaseConnection, isInstalled } from '../../../database/index.js';
@@ -25,10 +16,7 @@ import {
 	withConfigRun,
 	type ConfigRun,
 	type ConfigRunFinished,
-	type ConfigRunStepFailure,
 	type ConfigRunSteps,
-	type ConfigStepFailureDetail,
-	type ConfigStepStatus,
 } from '../../../utils/config/run-record.js';
 import { enrichConfigPlan } from '../../../utils/enrich-config-plan.js';
 import { CONFIG_APPLY_ORIGIN } from '../../../utils/config-contract.js';
@@ -41,29 +29,22 @@ import { serializeConfigPlan } from '../../../utils/serialize-config-plan.js';
 import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
 import { serializeToWire } from '../../../utils/config/wire.js';
 import { applyFolderPreparation } from '../../../utils/apply-folder-preparation.js';
-import { applyDiff } from '../../../utils/apply-diff.js';
-import { computeSchemaDiff, reconcileDesiredSchemaSnapshot } from '../../../utils/config/handlers/schema.js';
+import { reconcileDesiredSchemaSnapshot } from '../../../utils/config/handlers/schema.js';
 import { buildFolderPreparationPlan } from '../../../utils/folder-preparation.js';
 import { readFolderKeys, referencedFolderKeys } from '../../../utils/folder-references.js';
 import { assertMutationAuthorized, assertRunValid } from '../../../utils/config/run-preflight.js';
+import {
+	applyConfigurationStep,
+	applySchemaStep,
+	failureStatus,
+	stepFailure,
+} from '../../../utils/config/apply-steps.js';
 import { version as currentRelease } from '../../../utils/package.js';
 import type { SchemaOverview } from '@cairncms/types';
-import {
-	SCHEMA_CHANGE_OUTCOMES,
-	SCHEMA_OPERATIONS,
-	type SchemaChangeOutcome,
-	type SchemaOperation,
-	type SchemaPersistedCollection,
-	type SchemaPersistedField,
-	type SchemaPersistedRelation,
-	type SchemaPersistedState,
-	type SnapshotField,
-} from '../../../types/index.js';
+import type { SnapshotField } from '../../../types/index.js';
 import type {
-	ApplyResult,
 	CairnConfig,
 	ConfigApplySecurityContext,
-	ConfigKind,
 	ConfigPlan,
 	SerializedConfigPlan,
 } from '../../../types/config.js';
@@ -346,10 +327,15 @@ async function runLocalEngine(
 
 		if (sliceHasChanges(plan.schema)) {
 			currentStep = 'schema';
-			const { diff } = computeSchemaDiff(current.schema, desired.schema, schemaStoredFields);
-			// The hash comes from the same read the diff is computed against, so applyDiff's recheck refuses a
-			// schema edit committed between that read and its transaction.
-			await applyDiff(diff, { database, expectedHash: schemaKeyFormHash ?? '' });
+
+			await applySchemaStep({
+				currentSchema: current.schema,
+				desiredSchema: desired.schema,
+				schemaStoredFields,
+				expectedHash: schemaKeyFormHash ?? '',
+				database,
+			});
+
 			steps.schema = 'committed';
 			committedStep = true;
 		} else {
@@ -385,173 +371,8 @@ async function runLocalEngine(
 	}
 }
 
-/** Maps a failed step's error to its persisted-state status, so the run outcome says what the target holds. */
-export function failureStatus(err: unknown): ConfigStepStatus {
-	const thrown = Array.isArray(err) ? err[0] : err;
-	const code = thrown instanceof BaseException ? thrown.code : undefined;
-
-	if (code === 'SCHEMA_POST_COMMIT_FAILED' || code === 'CONFIG_POST_COMMIT_FAILED') return 'committed';
-
-	if (code === 'SCHEMA_APPLY_FAILED') {
-		return thrown instanceof BaseException && thrown.extensions['persisted'] === 'unknown' ? 'unknown' : 'failed';
-	}
-
-	if (code === 'CONFIG_APPLY_FAILED' || code === 'SCHEMA_STATE_CHANGED' || code === 'CONFIG_STATE_CHANGED') {
-		return 'rolled_back';
-	}
-
-	return 'failed';
-}
-
-const POST_COMMIT_PHASES = new Set<string>([...SCHEMA_POST_COMMIT_PHASES, ...CONFIG_POST_COMMIT_PHASES]);
-const SCHEMA_OPERATION_SET = new Set<string>(SCHEMA_OPERATIONS);
-const SCHEMA_OUTCOME_SET = new Set<string>(SCHEMA_CHANGE_OUTCOMES);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null;
-}
-
-function outcomeOf(value: unknown): SchemaChangeOutcome {
-	return typeof value === 'string' && SCHEMA_OUTCOME_SET.has(value) ? (value as SchemaChangeOutcome) : 'unknown';
-}
-
-/** Rebuilds a persisted-state entry from its known fields only, dropping an entry whose identity or operation is unsound. */
-function projectEntries<Entry>(
-	value: unknown,
-	project: (entry: Record<string, unknown>) => Entry | undefined
-): Entry[] {
-	if (!Array.isArray(value)) return [];
-
-	const projected: Entry[] = [];
-
-	for (const entry of value) {
-		if (!isRecord(entry)) continue;
-		if (typeof entry['operation'] !== 'string' || !SCHEMA_OPERATION_SET.has(entry['operation'])) continue;
-
-		const result = project(entry);
-		if (result !== undefined) projected.push(result);
-	}
-
-	return projected;
-}
-
-/** Projects the reported persisted state to its declared shape, so an unrecognized or malformed value cannot be logged. */
-function projectPersistedState(value: unknown): SchemaPersistedState | 'unknown' {
-	if (!isRecord(value)) return 'unknown';
-
-	return {
-		collections: projectEntries<SchemaPersistedCollection>(value['collections'], (entry) =>
-			typeof entry['collection'] === 'string'
-				? {
-						collection: entry['collection'],
-						operation: entry['operation'] as SchemaOperation,
-						table: outcomeOf(entry['table']),
-						metadata: outcomeOf(entry['metadata']),
-				  }
-				: undefined
-		),
-		fields: projectEntries<SchemaPersistedField>(value['fields'], (entry) =>
-			typeof entry['collection'] === 'string' && typeof entry['field'] === 'string'
-				? {
-						collection: entry['collection'],
-						field: entry['field'],
-						operation: entry['operation'] as SchemaOperation,
-						column: outcomeOf(entry['column']),
-						metadata: outcomeOf(entry['metadata']),
-				  }
-				: undefined
-		),
-		relations: projectEntries<SchemaPersistedRelation>(value['relations'], (entry) =>
-			typeof entry['collection'] === 'string' && typeof entry['field'] === 'string'
-				? {
-						collection: entry['collection'],
-						field: entry['field'],
-						operation: entry['operation'] as SchemaOperation,
-						foreignKey: 'unknown',
-						metadata: outcomeOf(entry['metadata']),
-				  }
-				: undefined
-		),
-	};
-}
-
-/**
- * Extracts only the persisted-state and maintenance-phase fields of the exceptions that carry them, validating each
- * against its declared shape so the run record never relays an unrelated, malformed, or unsanitized error payload.
- */
-export function failureDetail(err: unknown): ConfigStepFailureDetail | undefined {
-	const thrown = Array.isArray(err) ? err[0] : err;
-
-	if (!(thrown instanceof BaseException)) return undefined;
-
-	if (thrown.code === 'SCHEMA_APPLY_FAILED') {
-		const persisted = thrown.extensions['persisted'];
-
-		return {
-			persisted: persisted === 'unknown' ? 'unknown' : projectPersistedState(persisted),
-			...(thrown.extensions['foreignKeysRestored'] === false && { foreignKeysRestored: false }),
-		};
-	}
-
-	if (thrown.code === 'SCHEMA_POST_COMMIT_FAILED' || thrown.code === 'CONFIG_POST_COMMIT_FAILED') {
-		const phase = thrown.extensions['phase'];
-
-		if (typeof phase === 'string' && POST_COMMIT_PHASES.has(phase)) {
-			return { phase: phase as SchemaPostCommitPhase | ConfigPostCommitPhase };
-		}
-	}
-
-	return undefined;
-}
-
-function stepFailure(step: keyof ConfigRunSteps, err: unknown): ConfigRunStepFailure {
-	const detail = failureDetail(err);
-
-	return detail !== undefined ? { step, detail } : { step };
-}
-
 function sliceHasChanges(slice: { create: unknown[]; update: unknown[]; delete: unknown[] }): boolean {
 	return slice.create.length > 0 || slice.update.length > 0 || slice.delete.length > 0;
-}
-
-async function applyConfigurationStep(
-	desired: CairnConfig,
-	configResources: ConfigKind[],
-	database: Knex,
-	destructive: boolean,
-	context: ConfigApplySecurityContext
-): Promise<ApplyResult | undefined> {
-	const extensionSettingsManaged = configResources.includes('extension-settings');
-	const schema = extensionSettingsManaged ? await getSchema({ database, bypassCache: true }) : undefined;
-	const extensionDeclarations = extensionSettingsManaged ? await buildExtensionDeclarationSnapshot() : undefined;
-
-	const extensionSettingsSubjects = extensionSettingsManaged
-		? desiredExtensionSubjects(desired['extension-settings'])
-		: undefined;
-
-	const { config: current, stateToken } = await readCurrentConfig({
-		database,
-		...(schema !== undefined && { schema }),
-		resources: configResources,
-		...(extensionSettingsSubjects !== undefined && { extensionSettingsSubjects }),
-		...(extensionDeclarations !== undefined && { extensionDeclarations }),
-	});
-
-	const configDesired: CairnConfig = { ...desired, manifest: { ...desired.manifest, resources: configResources } };
-
-	const plan = computeConfigPlan(current, configDesired, {
-		...(extensionDeclarations !== undefined && { extensionDeclarations }),
-	});
-
-	if (isPlanEmpty(plan)) return undefined;
-
-	return applyConfigPlan(plan, {
-		database,
-		destructive,
-		context,
-		expectedStateToken: stateToken,
-		...(extensionDeclarations !== undefined && { extensionDeclarations }),
-	});
 }
 
 async function configApplyRemote(
