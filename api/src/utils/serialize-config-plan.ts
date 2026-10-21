@@ -22,7 +22,11 @@ function rankOf(kind: ConfigKind): number {
 
 export function serializeConfigPlan(
 	plan: ConfigPlan,
-	options: { enrichment: ConfigPlanEnrichment; manifestVersion: number }
+	options: {
+		enrichment: ConfigPlanEnrichment;
+		manifestVersion: number;
+		preparationFolderKeys?: ReadonlySet<string>;
+	}
 ): SerializedConfigPlan {
 	const changes: ConfigPlanChange[] = [];
 
@@ -38,6 +42,17 @@ export function serializeConfigPlan(
 		delete: changes.filter((change) => change.operation === 'delete').length,
 	};
 
+	const createdFolderKeys = new Set<string>();
+
+	for (const change of changes) {
+		if (change.kind === 'folders' && change.operation === 'create') createdFolderKeys.add(change.identity.key);
+	}
+
+	const preparation =
+		options.preparationFolderKeys === undefined
+			? undefined
+			: [...options.preparationFolderKeys].filter((key) => createdFolderKeys.has(key)).sort(compareCodeUnits);
+
 	const warnings = [...options.enrichment.warnings].sort(compareWarnings);
 
 	return {
@@ -45,6 +60,7 @@ export function serializeConfigPlan(
 		manifestVersion: options.manifestVersion,
 		changes,
 		summary,
+		...(preparation !== undefined && preparation.length > 0 && { preparation }),
 		warnings,
 		protections: plan.protections,
 	};

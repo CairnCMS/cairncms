@@ -383,6 +383,8 @@ export type SerializedConfigPlan = {
 	manifestVersion: number;
 	changes: ConfigPlanChange[];
 	summary: { create: number; update: number; delete: number };
+	/** Keys of the folders the preparation step creates before the schema step, a subset of the folder creations. */
+	preparation?: string[];
 	warnings: ConfigPlanWarning[];
 	protections: ConfigProtection[];
 };

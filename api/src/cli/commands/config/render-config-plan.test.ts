@@ -8,6 +8,7 @@ import {
 	renderNoChanges,
 	renderProtections,
 	renderResultSummary,
+	renderStepOutcome,
 } from './render-config-plan.js';
 
 function roleValues(over: Partial<RoleValues> = {}): RoleValues {
@@ -603,5 +604,51 @@ describe('renderConfigPlan schema changes', () => {
 		expect(output).toContain('    - Add schema as');
 		expect(output).toContain('    - Remove meta');
 		expect(output).toContain('    - Set type to text');
+	});
+});
+
+describe('renderConfigPlan folder preparation', () => {
+	it('groups a prepared folder under its own step and lists it once', () => {
+		const output = renderConfigPlan(
+			plan({
+				changes: [
+					{
+						kind: 'folders',
+						operation: 'create',
+						identity: { key: 'uploads' },
+						values: { name: 'uploads', parent: null },
+					},
+					{ kind: 'folders', operation: 'create', identity: { key: 'media' }, values: { name: 'media', parent: null } },
+				],
+				summary: { create: 2, update: 0, delete: 0 },
+				preparation: ['uploads'],
+			})
+		);
+
+		expect(output).toContain(heading('Folder preparation'));
+		expect(output).toContain(heading('Folders'));
+		expect(output).toContain('Plan: 2 to create, 0 to update, 0 to delete.');
+
+		expect(output.split('uploads').length - 1).toBe(1);
+		expect(output.indexOf('uploads')).toBeLessThan(output.indexOf(heading('Folders')));
+		expect(output.indexOf('media')).toBeGreaterThan(output.indexOf(heading('Folders')));
+	});
+});
+
+describe('renderStepOutcome', () => {
+	it('labels each step by its status', () => {
+		const output = renderStepOutcome({ folders: 'committed', schema: 'skipped', configuration: 'committed' });
+
+		expect(output).toContain(heading('Steps'));
+		expect(output).toContain('Folder preparation: applied');
+		expect(output).toContain('Schema: no changes');
+		expect(output).toContain('Configuration: applied');
+	});
+
+	it('labels a failed step and a step that did not run', () => {
+		const output = renderStepOutcome({ folders: 'committed', schema: 'failed', configuration: 'not_run' });
+
+		expect(output).toContain('Schema: failed');
+		expect(output).toContain('Configuration: not run');
 	});
 });

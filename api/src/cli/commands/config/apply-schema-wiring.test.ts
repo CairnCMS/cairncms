@@ -20,6 +20,7 @@ vi.mock('../../../database/index.js', () => ({
 	default: vi.fn(() => ({ destroy: vi.fn() })),
 	isInstalled: vi.fn(async () => true),
 	hasDatabaseConnection: vi.fn(async () => true),
+	getDatabaseClient: () => 'postgres',
 }));
 
 vi.mock('../../../logger.js', () => ({ default: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
@@ -32,6 +33,14 @@ vi.mock('../../../utils/read-config-directory.js', () => ({
 vi.mock('../../../utils/get-config-snapshot.js', () => ({ readCurrentConfig: vi.fn() }));
 
 vi.mock('../../../utils/get-schema.js', () => ({ getSchema: vi.fn(async () => ({ collections: {} })) }));
+
+vi.mock('../../../utils/folder-references.js', async (importOriginal) => ({
+	...(await importOriginal<typeof import('../../../utils/folder-references.js')>()),
+	readFolderKeys: vi.fn(async () => ({
+		folderIdByKey: new Map<string, string>(),
+		folderKeyById: new Map<string, string>(),
+	})),
+}));
 
 vi.mock('../../../extensions.js', () => ({
 	getExtensionManager: () => ({
@@ -48,13 +57,14 @@ vi.mock('../../../extensions.js', () => ({
 
 import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
 import { readConfigDirectory } from '../../../utils/read-config-directory.js';
+import { version } from '../../../utils/package.js';
 import { configApply } from './apply.js';
 
 const STORED_MARKER = 'PRIVATE_STORED_MARKER';
 
 function desired(): CairnConfig {
 	return {
-		manifest: { version: 3, resources: ['schema'] },
+		manifest: { version: 3, resources: ['schema'], schema: { release: version, vendor: 'postgres' } },
 		roles: [],
 		permissions: [],
 		folders: [],
@@ -152,7 +162,11 @@ describe('configApply schema wiring', () => {
 	it('admits a collection-scoped extension setting for a collection the schema plan creates', async () => {
 		const tree = desired();
 
-		tree.manifest = { version: 3, resources: ['extension-settings', 'schema'] };
+		tree.manifest = {
+			version: 3,
+			resources: ['extension-settings', 'schema'],
+			schema: { release: version, vendor: 'postgres' },
+		};
 
 		tree.schema[0]!.fields.push({
 			collection: 'articles',

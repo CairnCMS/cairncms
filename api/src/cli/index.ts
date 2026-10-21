@@ -137,6 +137,7 @@ export async function createCli(): Promise<Command> {
 		.option('-y, --yes', 'Skip confirmation prompt')
 		.option('--dry-run', 'Print planned changes without applying', false)
 		.option('--destructive', 'Delete roles/permissions in DB but not in config', false)
+		.option('--force-schema', 'Apply schema with a different or unspecified source version or database vendor', false)
 		.option('--url <url>', 'Apply to a remote CairnCMS server at this absolute http(s) URL')
 		.option('--token-stdin', 'Read the remote admin token from stdin', false)
 		.addOption(

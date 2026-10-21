@@ -52,13 +52,16 @@ const EXPECTED_RESULT: Record<string, string> = {
 	CONFIG_IDENTITY_CONFLICT: 'invalid',
 	CONFIG_PROTECTED_RECORD: 'refused',
 	CONFIG_FOLDER_IN_USE: 'refused',
+	CONFIG_SCHEMA_SOURCE: 'refused',
 	DESTRUCTIVE_CHANGES_REQUIRED: 'refused',
 	CONFIG_STATE_CHANGED: 'state_changed',
 	CONFIG_POST_COMMIT_FAILED: 'post_apply_failed',
+	SCHEMA_STATE_CHANGED: 'state_changed',
+	SCHEMA_POST_COMMIT_FAILED: 'post_apply_failed',
 };
 
 const CONFIG_EXCEPTION_CLASS =
-	/^(Config\w+|DestructiveChangesRequired|AdminMutationUnverifiedTransaction|ConcurrencyConflict)Exception$/;
+	/^(Config\w+|Schema\w+|DestructiveChangesRequired|AdminMutationUnverifiedTransaction|ConcurrencyConflict)Exception$/;
 
 function hasControlCharacter(text: string): boolean {
 	return Array.from(text).some((char) => {

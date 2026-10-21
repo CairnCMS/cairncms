@@ -20,7 +20,7 @@ import { getSchema } from '../../../utils/get-schema.js';
 import { readConfigDirectory } from '../../../utils/read-config-directory.js';
 import { serializeConfigPlan } from '../../../utils/serialize-config-plan.js';
 import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
-import { applyConfigPlan, planHasDeletions } from '../../../utils/apply-config-plan.js';
+import { applyConfigPlan } from '../../../utils/apply-config-plan.js';
 import { configApply } from './apply.js';
 
 const { envOverrides } = vi.hoisted(() => ({ envOverrides: { LOG_STYLE: 'pretty' } as Record<string, unknown> }));
@@ -79,7 +79,6 @@ vi.mock('../../../utils/serialize-config-plan.js', () => ({ serializeConfigPlan:
 
 vi.mock('../../../utils/apply-config-plan.js', () => ({
 	applyConfigPlan: vi.fn(),
-	planHasDeletions: vi.fn(() => false),
 }));
 
 vi.mock('inquirer', () => ({ default: { prompt: vi.fn(async () => ({ proceed: false })) } }));
@@ -160,7 +159,6 @@ const MISSING_COLLECTION_PERMISSION: ConfigPermission = {
 
 beforeEach(() => {
 	vi.mocked(validateDesiredConfig).mockReturnValue([]);
-	vi.mocked(planHasDeletions).mockReturnValue(false);
 	vi.mocked(logger.info).mockReset();
 });
 
@@ -676,7 +674,10 @@ describe('configApply run record', () => {
 	});
 
 	it('records refused with DESTRUCTIVE_CHANGES_REQUIRED for deletions without the destructive flag', async () => {
-		vi.mocked(planHasDeletions).mockReturnValue(true);
+		vi.mocked(computeConfigPlan).mockReturnValue({
+			...CREATE_PLAN,
+			roles: { create: [], update: [], delete: ['editor'] },
+		});
 
 		await run();
 

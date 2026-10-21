@@ -24,10 +24,11 @@ import type {
 	SnapshotRelation,
 } from '../../../types/index.js';
 import { CONFIG_FILENAME_STEM_MAX_LENGTH } from '../../config-contract.js';
-import { alignToDesiredReferences } from '../../folder-references.js';
+import { alignToDesiredReferences, toKeyFormSnapshot } from '../../folder-references.js';
 import { getPortableSnapshot } from '../../get-portable-snapshot.js';
 import { getSnapshot } from '../../get-snapshot.js';
 import { getSnapshotDiff } from '../../get-snapshot-diff.js';
+import { getVersionedHash } from '../../get-versioned-hash.js';
 import { version as currentRelease } from '../../package.js';
 import { reconcileDesiredSchema } from '../../reconcile-desired-schema.js';
 import { replaceControlCharacters, safeLogFragment } from '../../safe-log-fragment.js';
@@ -62,7 +63,7 @@ export interface SchemaKindTypes {
 	Update: SchemaChangeEntry;
 	Delete: SchemaChangeEntry;
 	Changes: SchemaFieldChanges;
-	ReadDependencyState: { storedFields: SnapshotField[] };
+	ReadDependencyState: { storedFields: SnapshotField[]; keyFormHash: string };
 	ApplyDependencyState: undefined;
 	ReadDependencies: NoConfigDependencies;
 	PlanDependencies: NoConfigDependencies;
@@ -421,11 +422,12 @@ async function readCurrent(context: ReadContext<SchemaKindTypes>): Promise<ReadC
 	const snapshot = await getSnapshot({ database: context.database, schema: context.schema });
 	const portable = await getPortableSnapshot(snapshot, { database: context.database });
 	const records = groupSnapshotCollections(portable);
+	const keyForm = await toKeyFormSnapshot(snapshot, { database: context.database });
 
 	return {
 		records,
 		documentIdentities: records.map((record) => ({ collection: record.collection })),
-		dependencyState: { storedFields: snapshot.fields },
+		dependencyState: { storedFields: snapshot.fields, keyFormHash: getVersionedHash(keyForm.snapshot) },
 	};
 }
 
@@ -626,11 +628,11 @@ export function reconcileDesiredSchemaSnapshot(
 	return { current: currentKeyForm, desired: desiredSnapshot };
 }
 
-export function computeSchemaPlan(
+export function computeSchemaDiff(
 	currentRecords: ConfigSchemaCollection[],
 	desiredRecords: ConfigSchemaCollection[],
 	storedFields: SnapshotField[] | undefined
-): KindPlan<SchemaKindTypes> {
+): { diff: SnapshotDiff; currentSnapshot: Snapshot; desiredSnapshot: PortableSnapshot } {
 	if (storedFields === undefined) {
 		throw new Error('Schema planning requires the retained current schema fields.');
 	}
@@ -645,7 +647,17 @@ export function computeSchemaPlan(
 		fields: alignToDesiredReferences(currentKeyForm.fields, storedFields, desiredSnapshot.fields),
 	};
 
-	return translateSnapshotDiff(getSnapshotDiff(currentSnapshot, desiredSnapshot), currentSnapshot, desiredSnapshot);
+	return { diff: getSnapshotDiff(currentSnapshot, desiredSnapshot), currentSnapshot, desiredSnapshot };
+}
+
+export function computeSchemaPlan(
+	currentRecords: ConfigSchemaCollection[],
+	desiredRecords: ConfigSchemaCollection[],
+	storedFields: SnapshotField[] | undefined
+): KindPlan<SchemaKindTypes> {
+	const { diff, currentSnapshot, desiredSnapshot } = computeSchemaDiff(currentRecords, desiredRecords, storedFields);
+
+	return translateSnapshotDiff(diff, currentSnapshot, desiredSnapshot);
 }
 
 function collectJoiFailures(failures: ConfigFailure[], result: Joi.ValidationResult, label: string): void {
@@ -788,7 +800,7 @@ export const schemaDescriptor: ConfigResourceDescriptor<SchemaKindTypes> = {
 	identityOf: (record) => ({ collection: record.collection }),
 	identityKey: (identity) => JSON.stringify([identity.collection]),
 	compareIdentity: (a, b) => compareCodeUnits(a.collection, b.collection),
-	identityOfDelete: () => unsupported('planning'),
+	identityOfDelete: (entry) => ({ collection: entry.identity.collection }),
 	canonicalizeValues: () => unsupported('planning'),
 	toCreateEntry: () => unsupported('planning'),
 	toUpdateEntry: () => unsupported('planning'),

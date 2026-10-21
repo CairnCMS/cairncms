@@ -391,14 +391,18 @@ describe('schema descriptor registration', () => {
 		).toBeLessThan(0);
 	});
 
-	it('admits validation and neutral enrichment while the generic plan hooks and apply stay guarded', async () => {
+	it('admits validation, deletion identity, and neutral enrichment while the generic plan hooks and apply stay guarded', async () => {
 		expect(() => descriptor.canonicalizeValues({ collection: 'articles', fields: [], relations: [] })).toThrow(
 			'Schema planning is not supported'
 		);
 
-		expect(() => descriptor.identityOfDelete({ collection: 'articles' } as never)).toThrow(
-			'Schema planning is not supported'
-		);
+		expect(
+			descriptor.identityOfDelete({
+				changeKind: 'collections',
+				identity: { collection: 'articles' },
+				changes: {},
+			} as never)
+		).toEqual({ collection: 'articles' });
 
 		expect(descriptor.handler.validateDesired([], [], {} as never)).toEqual([]);
 

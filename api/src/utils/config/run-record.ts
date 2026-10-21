@@ -2,8 +2,11 @@ import { BaseException } from '@cairncms/exceptions';
 import type { Accountability } from '@cairncms/types';
 import { performance } from 'node:perf_hooks';
 import env from '../../env.js';
+import type { ConfigPostCommitPhase } from '../../exceptions/config-post-commit-failed.js';
+import type { SchemaPostCommitPhase } from '../../exceptions/schema-post-commit-failed.js';
 import logger from '../../logger.js';
 import { CONFIG_KINDS, type ConfigKind } from '../../types/config.js';
+import type { SchemaPersistedState } from '../../types/index.js';
 import { CONFIG_APPLY_ORIGIN } from '../config-contract.js';
 import { isValidUuid } from '../is-valid-uuid.js';
 import { safeLogFragment } from '../safe-log-fragment.js';
@@ -23,6 +26,7 @@ const RUN_RECORD_ERROR_CODE_LIST = [
 	'CONFIG_PLACEHOLDER_UNRESOLVED',
 	'CONFIG_PROTECTED_RECORD',
 	'CONFIG_FOLDER_IN_USE',
+	'CONFIG_SCHEMA_SOURCE',
 	'DESTRUCTIVE_CHANGES_REQUIRED',
 	'CONFIG_STATE_CHANGED',
 	'CONFIG_READ_FAILED',
@@ -31,6 +35,9 @@ const RUN_RECORD_ERROR_CODE_LIST = [
 	'CONFIG_APPLY_SCOPE_MISMATCH',
 	'ADMIN_MUTATION_UNVERIFIED_TRANSACTION',
 	'CONCURRENCY_CONFLICT',
+	'SCHEMA_STATE_CHANGED',
+	'SCHEMA_APPLY_FAILED',
+	'SCHEMA_POST_COMMIT_FAILED',
 ] as const;
 
 export const RUN_RECORD_ERROR_CODES: ReadonlySet<string> = new Set(RUN_RECORD_ERROR_CODE_LIST);
@@ -58,9 +65,24 @@ export type ConfigRunCaller =
 
 export type ConfigRunChanges = { create: number; update: number; delete: number };
 
+export type ConfigStepStatus = 'not_run' | 'skipped' | 'committed' | 'rolled_back' | 'failed' | 'unknown';
+
+export type ConfigRunSteps = { folders: ConfigStepStatus; schema: ConfigStepStatus; configuration: ConfigStepStatus };
+
+export type ConfigStepFailureDetail =
+	| { persisted: SchemaPersistedState | 'unknown'; foreignKeysRestored?: false }
+	| { phase: SchemaPostCommitPhase | ConfigPostCommitPhase };
+
+export type ConfigRunStepFailure = { step: keyof ConfigRunSteps; detail?: ConfigStepFailureDetail };
+
 export type ConfigRunFinished =
-	| { result: ConfigRunSuccessResult }
-	| { result: ConfigRunFailureResult; errorCode: ConfigRunErrorCode };
+	| { result: ConfigRunSuccessResult; steps?: ConfigRunSteps }
+	| {
+			result: ConfigRunFailureResult;
+			errorCode: ConfigRunErrorCode;
+			steps?: ConfigRunSteps;
+			failure?: ConfigRunStepFailure;
+	  };
 
 export type ConfigRunRecord = {
 	event: typeof CONFIG_RUN_EVENT;
@@ -75,6 +97,8 @@ export type ConfigRunRecord = {
 	changes?: ConfigRunChanges;
 	result: ConfigRunResult;
 	errorCode?: ConfigRunErrorCode;
+	steps?: ConfigRunSteps;
+	failure?: ConfigRunStepFailure;
 	durationMs: number;
 };
 
@@ -156,11 +180,14 @@ export function classifyConfigError(err: unknown): {
 			return { result: 'invalid', errorCode };
 		case 'CONFIG_PROTECTED_RECORD':
 		case 'CONFIG_FOLDER_IN_USE':
+		case 'CONFIG_SCHEMA_SOURCE':
 		case 'DESTRUCTIVE_CHANGES_REQUIRED':
 			return { result: 'refused', errorCode };
 		case 'CONFIG_STATE_CHANGED':
+		case 'SCHEMA_STATE_CHANGED':
 			return { result: 'state_changed', errorCode };
 		case 'CONFIG_POST_COMMIT_FAILED':
+		case 'SCHEMA_POST_COMMIT_FAILED':
 			return { result: 'post_apply_failed', errorCode };
 		default:
 			return { result: 'failed', errorCode };
@@ -211,6 +238,8 @@ export async function withConfigRun<T extends ConfigRunFinished>(
 			...(changes !== undefined ? { changes } : {}),
 			result: finished.result,
 			...('errorCode' in finished ? { errorCode: normalizeErrorCode(finished.errorCode) } : {}),
+			...(finished.steps !== undefined ? { steps: finished.steps } : {}),
+			...('failure' in finished && finished.failure !== undefined ? { failure: finished.failure } : {}),
 			durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
 		};
 
