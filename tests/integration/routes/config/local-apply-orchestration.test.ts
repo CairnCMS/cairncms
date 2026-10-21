@@ -83,8 +83,16 @@ describe('local config apply orchestration', () => {
 			await admin(api, request(api.url).delete(`/folders/${referencedId}`)).expect(204);
 			await api.database('directus_folders').where({ key: unreferenced }).delete();
 
+			const dryRun = await api.cli(['config', 'apply', dir, '--dry-run']);
+			expect(dryRun.status).toBe(1);
+
+			const dryOutput = `${dryRun.stdout}\n${dryRun.stderr}`;
+			expect(dryOutput).toContain('Folder preparation');
+			expect(dryOutput).toContain(referenced);
+
 			const apply = await api.cli(['config', 'apply', dir, '--yes']);
 			expect(apply.status, apply.stderr).toBe(0);
+			expect(`${apply.stdout}\n${apply.stderr}`).toContain('Folder preparation: applied');
 
 			const folder = await api.database('directus_folders').where({ key: referenced }).first();
 			expect(folder).toBeDefined();
@@ -177,6 +185,10 @@ describe('local config apply orchestration', () => {
 
 			const output = `${apply.stdout}\n${apply.stderr}`;
 			expect(output).toContain("can't remove its column and remain as a field");
+
+			expect(output).toContain('Folder preparation: applied');
+			expect(output).toContain('Schema: failed');
+			expect(output).toContain('Configuration: not run');
 
 			const record = findRunRecord(output);
 			expect(record).toBeDefined();

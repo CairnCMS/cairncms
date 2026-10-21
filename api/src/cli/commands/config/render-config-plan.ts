@@ -1,5 +1,6 @@
 import type { ConfigKind } from '../../../types/config.js';
 import { listConfigKinds } from '../../../utils/config/registry.js';
+import type { ConfigRunSteps, ConfigStepStatus } from '../../../utils/config/run-record.js';
 import { replaceControlCharacters } from '../../../utils/safe-log-fragment.js';
 import { createVerb, deleteVerb, heading, planIntro, updateVerb } from '../../presentation.js';
 
@@ -107,6 +108,7 @@ export type RenderableChange =
 export type RenderablePlan = {
 	changes: RenderableChange[];
 	summary: { create: number; update: number; delete: number };
+	preparation?: string[];
 	protections: Array<{ message: string; contributors: Array<{ operation: string; identity: RoleIdentityView }> }>;
 	warnings: Array<{ message: string }>;
 };
@@ -191,6 +193,24 @@ export function renderResultSummary(result: RenderableResult): string {
 	return `Config applied: ${parts.join(', ')}`;
 }
 
+const STEP_OUTCOME_LABEL: Record<ConfigStepStatus, string> = {
+	not_run: 'not run',
+	skipped: 'no changes',
+	committed: 'applied',
+	rolled_back: 'rolled back',
+	failed: 'failed',
+	unknown: 'unknown',
+};
+
+export function renderStepOutcome(steps: ConfigRunSteps): string {
+	return [
+		heading('Steps'),
+		`  - Folder preparation: ${STEP_OUTCOME_LABEL[steps.folders]}`,
+		`  - Schema: ${STEP_OUTCOME_LABEL[steps.schema]}`,
+		`  - Configuration: ${STEP_OUTCOME_LABEL[steps.configuration]}`,
+	].join('\n');
+}
+
 function kindHeading(kind: RenderableChange['kind']): string {
 	switch (kind) {
 		case 'roles':
@@ -219,11 +239,26 @@ function kindHeading(kind: RenderableChange['kind']): string {
 	}
 }
 
+function isPreparationChange(change: RenderableChange, prepared: ReadonlySet<string>): boolean {
+	return change.kind === 'folders' && change.operation === 'create' && prepared.has(change.identity.key);
+}
+
 export function renderConfigPlan(serialized: RenderablePlan): string {
 	const lines: string[] = [planIntro];
+	const prepared = new Set(serialized.preparation ?? []);
+
+	const preparationChanges = serialized.changes.filter((change) => isPreparationChange(change, prepared));
+
+	if (preparationChanges.length > 0) {
+		lines.push('', heading('Folder preparation'));
+		for (const change of preparationChanges) lines.push(...renderChange(change));
+	}
+
 	let currentKind: RenderableChange['kind'] | null = null;
 
 	for (const change of serialized.changes) {
+		if (isPreparationChange(change, prepared)) continue;
+
 		if (change.kind !== currentKind) {
 			currentKind = change.kind;
 			lines.push('', heading(kindHeading(change.kind)));

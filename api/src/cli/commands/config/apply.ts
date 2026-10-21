@@ -43,7 +43,8 @@ import { serializeToWire } from '../../../utils/config/wire.js';
 import { applyFolderPreparation } from '../../../utils/apply-folder-preparation.js';
 import { applyDiff } from '../../../utils/apply-diff.js';
 import { computeSchemaDiff, reconcileDesiredSchemaSnapshot } from '../../../utils/config/handlers/schema.js';
-import { readFolderKeys } from '../../../utils/folder-references.js';
+import { buildFolderPreparationPlan } from '../../../utils/folder-preparation.js';
+import { readFolderKeys, referencedFolderKeys } from '../../../utils/folder-references.js';
 import { assertMutationAuthorized, assertRunValid } from '../../../utils/config/run-preflight.js';
 import { version as currentRelease } from '../../../utils/package.js';
 import type { SchemaOverview } from '@cairncms/types';
@@ -77,18 +78,23 @@ import {
 } from './remote-client.js';
 import { resolveRemoteToken } from './remote-token.js';
 import { readFileSync } from 'node:fs';
-import { renderConfigPlan, renderNoChanges, renderResultSummary } from './render-config-plan.js';
+import { renderConfigPlan, renderNoChanges, renderResultSummary, renderStepOutcome } from './render-config-plan.js';
 
 async function serializePlan(
 	plan: ConfigPlan,
 	desired: CairnConfig,
 	database: Knex,
-	schema?: SchemaOverview
+	schema: SchemaOverview | undefined,
+	preparationFolderKeys?: ReadonlySet<string>
 ): Promise<SerializedConfigPlan> {
 	const resolvedSchema = schema ?? (await getSchema({ database, bypassCache: true }));
 	const enrichment = await enrichConfigPlan(plan, desired, { schema: resolvedSchema, database });
 
-	return serializeConfigPlan(plan, { enrichment, manifestVersion: desired.manifest.version });
+	return serializeConfigPlan(plan, {
+		enrichment,
+		manifestVersion: desired.manifest.version,
+		...(preparationFolderKeys !== undefined && { preparationFolderKeys }),
+	});
 }
 
 export async function configApply(
@@ -252,6 +258,7 @@ async function runLocalEngine(
 
 		let schemaFields: SnapshotField[] = [];
 		let availableFolderKeys = new Map<string, string>();
+		let preparationFolderKeys: ReadonlySet<string> | undefined;
 
 		if (schemaManaged) {
 			schemaFields = reconcileDesiredSchemaSnapshot(current.schema, desired.schema).desired.fields;
@@ -262,6 +269,14 @@ async function runLocalEngine(
 			for (const folder of desired.folders) {
 				if (!availableFolderKeys.has(folder.key)) availableFolderKeys.set(folder.key, folder.key);
 			}
+
+			const prepPlan = buildFolderPreparationPlan({
+				referencedKeys: referencedFolderKeys(schemaFields),
+				declaredFolders: desired.folders,
+				currentFolderKeys: new Set(folderIdByKey.keys()),
+			});
+
+			preparationFolderKeys = new Set(prepPlan.folders.create.map((folder) => folder.key));
 		}
 
 		assertRunValid({
@@ -276,13 +291,16 @@ async function runLocalEngine(
 		const empty = isPlanEmpty(plan);
 
 		if (format === 'json') {
-			process.stdout.write(JSON.stringify(await serializePlan(plan, desired, database, schema)) + '\n');
+			process.stdout.write(
+				JSON.stringify(await serializePlan(plan, desired, database, schema, preparationFolderKeys)) + '\n'
+			);
+
 			return { result: empty ? 'no_changes' : 'planned', exitCode: empty ? 0 : 1 };
 		}
 
 		if (empty) {
 			if (desired.manifest.resources.includes('permissions')) {
-				logger.info(renderNoChanges(await serializePlan(plan, desired, database, schema)));
+				logger.info(renderNoChanges(await serializePlan(plan, desired, database, schema, preparationFolderKeys)));
 			} else {
 				logger.info(renderNoChanges());
 			}
@@ -290,7 +308,7 @@ async function runLocalEngine(
 			return { result: 'no_changes', exitCode: 0 };
 		}
 
-		logger.info(renderConfigPlan(await serializePlan(plan, desired, database, schema)));
+		logger.info(renderConfigPlan(await serializePlan(plan, desired, database, schema, preparationFolderKeys)));
 
 		if (dryRun) return { result: 'planned', exitCode: 1 };
 
@@ -324,11 +342,7 @@ async function runLocalEngine(
 		currentStep = 'folders';
 		const created = await applyFolderPreparation(desired, current.schema, { context, database });
 		steps.folders = created.length > 0 ? 'committed' : 'skipped';
-
-		if (created.length > 0) {
-			committedStep = true;
-			logger.info(`Prepared ${created.length} folder(s): ${created.join(', ')}`);
-		}
+		if (created.length > 0) committedStep = true;
 
 		if (sliceHasChanges(plan.schema)) {
 			currentStep = 'schema';
@@ -338,7 +352,6 @@ async function runLocalEngine(
 			await applyDiff(diff, { database, expectedHash: schemaKeyFormHash ?? '' });
 			steps.schema = 'committed';
 			committedStep = true;
-			logger.info('Applied the schema step.');
 		} else {
 			steps.schema = 'skipped';
 		}
@@ -358,6 +371,7 @@ async function runLocalEngine(
 			steps.configuration = 'skipped';
 		}
 
+		logger.info(renderStepOutcome(steps));
 		return { result: 'applied', exitCode: 0, steps };
 	} catch (err) {
 		logger.error(err);
@@ -366,6 +380,7 @@ async function runLocalEngine(
 		if (currentStep === undefined) return { ...classifyConfigError(err), exitCode };
 
 		steps[currentStep] = failureStatus(err);
+		logger.info(renderStepOutcome(steps));
 		return { ...classifyConfigError(err), exitCode, steps, failure: stepFailure(currentStep, err) };
 	}
 }

@@ -2,6 +2,7 @@ import type { PermissionsAction } from '@cairncms/types';
 import { describe, expect, it } from 'vitest';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import type {
+	ConfigFolder,
 	ConfigPermission,
 	ConfigPlan,
 	ConfigPlanChange,
@@ -622,5 +623,49 @@ describe('serializeConfigPlan schema changes', () => {
 			decomposed,
 			precomposed,
 		]);
+	});
+});
+
+describe('serializeConfigPlan preparation', () => {
+	function folder(key: string): ConfigFolder {
+		return { key, name: key, parent: null };
+	}
+
+	it('reports the prepared folder keys, sorted and limited to the plan folder creations', () => {
+		const plan = emptyPlan();
+		plan.managedResources = ['schema', 'folders'];
+		plan.folders.create = [folder('beta'), folder('alpha')];
+
+		const result = serializeConfigPlan(plan, {
+			enrichment: emptyEnrichment(),
+			manifestVersion: 3,
+			preparationFolderKeys: new Set(['beta', 'ghost', 'alpha']),
+		});
+
+		expect(result.preparation).toEqual(['alpha', 'beta']);
+	});
+
+	it('omits preparation when no prepared keys are supplied', () => {
+		const plan = emptyPlan();
+		plan.managedResources = ['folders'];
+		plan.folders.create = [folder('alpha')];
+
+		const result = serializeConfigPlan(plan, { enrichment: emptyEnrichment(), manifestVersion: 2 });
+
+		expect(result.preparation).toBeUndefined();
+	});
+
+	it('omits preparation when none of the prepared keys are folder creations', () => {
+		const plan = emptyPlan();
+		plan.managedResources = ['schema', 'folders'];
+		plan.folders.create = [folder('alpha')];
+
+		const result = serializeConfigPlan(plan, {
+			enrichment: emptyEnrichment(),
+			manifestVersion: 3,
+			preparationFolderKeys: new Set(['ghost']),
+		});
+
+		expect(result.preparation).toBeUndefined();
 	});
 });
