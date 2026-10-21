@@ -1,6 +1,6 @@
 {
 	"name": "@cairncms/schema",
-	"version": "1.6.1",
+	"version": "1.6.2",
 	"description": "Utility for extracting information about existing DB schema",
 	"type": "module",
 	"keywords": [

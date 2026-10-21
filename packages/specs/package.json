@@ -1,6 +1,6 @@
 {
 	"name": "@cairncms/specs",
-	"version": "1.6.1",
+	"version": "1.6.2",
 	"description": "OpenAPI Specification of the CairnCMS API",
 	"homepage": "https://cairncms.dev",
 	"type": "module",
