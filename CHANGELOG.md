@@ -2,6 +2,12 @@
 
 All notable changes to CairnCMS are documented in this file. Releases are listed in reverse chronological order. Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2]
+
+### Fixes & Improvements
+
+- Updated the Docker image to Node 22.23.4 and refreshed its Alpine CA bundle. The image no longer trusts certificates issued under the compromised eMudhra intermediate CAs. Pull the new image and recreate containers. Installs that run CairnCMS on their own Node should update to Node 22.23.4 or later on 22.x, 24.22.1 or later on 24.x, or 26.12.1 or later on 26.x. (#302)
+
 ## [1.6.1]
 
 ### Fixes & Improvements
