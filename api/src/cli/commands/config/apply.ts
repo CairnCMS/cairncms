@@ -29,19 +29,16 @@ import { serializeConfigPlan } from '../../../utils/serialize-config-plan.js';
 import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
 import { serializeToWire } from '../../../utils/config/wire.js';
 import { applyFolderPreparation } from '../../../utils/apply-folder-preparation.js';
-import { reconcileDesiredSchemaSnapshot } from '../../../utils/config/handlers/schema.js';
-import { buildFolderPreparationPlan } from '../../../utils/folder-preparation.js';
-import { readFolderKeys, referencedFolderKeys } from '../../../utils/folder-references.js';
 import { assertMutationAuthorized, assertRunValid } from '../../../utils/config/run-preflight.js';
 import {
 	applyConfigurationStep,
 	applySchemaStep,
+	computeWholeRunInputs,
 	failureStatus,
 	stepFailure,
 } from '../../../utils/config/apply-steps.js';
 import { version as currentRelease } from '../../../utils/package.js';
 import type { SchemaOverview } from '@cairncms/types';
-import type { SnapshotField } from '../../../types/index.js';
 import type {
 	CairnConfig,
 	ConfigApplySecurityContext,
@@ -237,28 +234,11 @@ async function runLocalEngine(
 
 		const schemaManaged = desired.manifest.resources.includes('schema');
 
-		let schemaFields: SnapshotField[] = [];
-		let availableFolderKeys = new Map<string, string>();
-		let preparationFolderKeys: ReadonlySet<string> | undefined;
-
-		if (schemaManaged) {
-			schemaFields = reconcileDesiredSchemaSnapshot(current.schema, desired.schema).desired.fields;
-
-			const { folderIdByKey } = await readFolderKeys(database);
-			availableFolderKeys = new Map(folderIdByKey);
-
-			for (const folder of desired.folders) {
-				if (!availableFolderKeys.has(folder.key)) availableFolderKeys.set(folder.key, folder.key);
-			}
-
-			const prepPlan = buildFolderPreparationPlan({
-				referencedKeys: referencedFolderKeys(schemaFields),
-				declaredFolders: desired.folders,
-				currentFolderKeys: new Set(folderIdByKey.keys()),
-			});
-
-			preparationFolderKeys = new Set(prepPlan.folders.create.map((folder) => folder.key));
-		}
+		const { schemaFields, availableFolderKeys, preparationFolderKeys } = await computeWholeRunInputs(
+			desired,
+			current.schema,
+			database
+		);
 
 		assertRunValid({
 			manifest: desired.manifest,

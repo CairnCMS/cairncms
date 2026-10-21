@@ -15,8 +15,15 @@ import { configFixture } from '../../__utils__/config-fixtures.js';
 import { applyConfigPlan } from '../apply-config-plan.js';
 import { applyDiff } from '../apply-diff.js';
 import { computeConfigPlan } from '../compute-config-plan.js';
+import { readFolderKeys } from '../folder-references.js';
 import { readCurrentConfig } from '../get-config-snapshot.js';
-import { applyConfigurationStep, applySchemaStep, failureDetail, failureStatus } from './apply-steps.js';
+import {
+	applyConfigurationStep,
+	applySchemaStep,
+	computeWholeRunInputs,
+	failureDetail,
+	failureStatus,
+} from './apply-steps.js';
 import { computeSchemaDiff } from './handlers/schema.js';
 
 vi.mock('../apply-diff.js', () => ({ applyDiff: vi.fn() }));
@@ -24,6 +31,11 @@ vi.mock('../get-config-snapshot.js', () => ({ readCurrentConfig: vi.fn() }));
 vi.mock('../compute-config-plan.js', () => ({ computeConfigPlan: vi.fn() }));
 vi.mock('../apply-config-plan.js', () => ({ applyConfigPlan: vi.fn() }));
 vi.mock('../get-schema.js', () => ({ getSchema: vi.fn(async () => ({ collections: {} })) }));
+
+vi.mock('../folder-references.js', async (importOriginal) => ({
+	...(await importOriginal<typeof import('../folder-references.js')>()),
+	readFolderKeys: vi.fn(),
+}));
 
 // Keep the real isPlanEmpty, so the plan fixtures decide the branch. Preserve each handler module's real exports so the
 // registry isPlanEmpty walks still builds, overriding only the function this suite drives.
@@ -48,6 +60,72 @@ const persisted: SchemaPersistedState = { collections: [], fields: [], relations
 
 afterEach(() => {
 	vi.clearAllMocks();
+});
+
+describe('computeWholeRunInputs', () => {
+	it('returns empty inputs and reads no folders for a configuration-only tree', async () => {
+		const desired = configFixture({ manifest: { version: 3, resources: ['roles'] } });
+
+		const result = await computeWholeRunInputs(desired, [], {} as Knex);
+
+		expect(result).toEqual({ schemaFields: [], availableFolderKeys: new Map(), preparationFolderKeys: new Set() });
+		expect(vi.mocked(readFolderKeys)).not.toHaveBeenCalled();
+	});
+
+	it('reconciles the captured interface so a referenced declared folder is prepared', async () => {
+		vi.mocked(readFolderKeys).mockResolvedValue({
+			folderIdByKey: new Map([['existing', 'id-1']]),
+			folderKeyById: new Map([['id-1', 'existing']]),
+		});
+
+		const collection = (field: SnapshotField): ConfigSchemaCollection => ({
+			collection: 'articles',
+			meta: {} as Exclude<ConfigSchemaCollection['meta'], undefined>,
+			schema: { name: 'articles' } as Exclude<ConfigSchemaCollection['schema'], undefined>,
+			fields: [field],
+			relations: [],
+		});
+
+		// The target's cover field is an upload interface; the desired tree omits the interface but moves the folder
+		// reference to a newly declared folder, so only reconciliation against the captured schema reveals the reference.
+		const currentSchema = [
+			collection({
+				collection: 'articles',
+				field: 'cover',
+				type: 'uuid',
+				meta: { interface: 'file', options: { folder: 'existing' } },
+				schema: { name: 'cover' },
+			} as unknown as SnapshotField),
+		];
+
+		const desired = configFixture({
+			manifest: { version: 3, resources: ['schema', 'folders'] },
+			folders: [{ key: 'gallery', name: 'Gallery' }],
+			schema: [
+				collection({
+					collection: 'articles',
+					field: 'cover',
+					type: 'uuid',
+					meta: { options: { folder: 'gallery' } },
+					schema: { name: 'cover' },
+				} as unknown as SnapshotField),
+			],
+		});
+
+		const result = await computeWholeRunInputs(desired, currentSchema, {} as Knex);
+
+		const cover = result.schemaFields.find((field) => field.field === 'cover');
+		expect((cover?.meta as { interface?: string } | null)?.interface).toBe('file');
+
+		expect(result.availableFolderKeys).toEqual(
+			new Map([
+				['existing', 'id-1'],
+				['gallery', 'gallery'],
+			])
+		);
+
+		expect(result.preparationFolderKeys).toEqual(new Set(['gallery']));
+	});
 });
 
 describe('applySchemaStep', () => {

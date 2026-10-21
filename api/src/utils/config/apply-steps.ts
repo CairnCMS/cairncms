@@ -23,12 +23,52 @@ import {
 import { applyConfigPlan } from '../apply-config-plan.js';
 import { applyDiff } from '../apply-diff.js';
 import { computeConfigPlan } from '../compute-config-plan.js';
+import { buildFolderPreparationPlan } from '../folder-preparation.js';
+import { readFolderKeys, referencedFolderKeys } from '../folder-references.js';
 import { readCurrentConfig } from '../get-config-snapshot.js';
 import { getSchema } from '../get-schema.js';
 import { buildExtensionDeclarationSnapshot, desiredExtensionSubjects } from './handlers/extension-settings.js';
-import { computeSchemaDiff } from './handlers/schema.js';
+import { computeSchemaDiff, reconcileDesiredSchemaSnapshot } from './handlers/schema.js';
 import { isPlanEmpty } from './plan-folds.js';
 import type { ConfigRunStepFailure, ConfigRunSteps, ConfigStepFailureDetail, ConfigStepStatus } from './run-record.js';
+
+export type WholeRunInputs = {
+	schemaFields: SnapshotField[];
+	availableFolderKeys: Map<string, string>;
+	preparationFolderKeys: Set<string>;
+};
+
+/** Expects the captured current schema and the normalized desired tree. */
+export async function computeWholeRunInputs(
+	desired: CairnConfig,
+	currentSchema: ConfigSchemaCollection[],
+	database: Knex
+): Promise<WholeRunInputs> {
+	if (!desired.manifest.resources.includes('schema')) {
+		return { schemaFields: [], availableFolderKeys: new Map(), preparationFolderKeys: new Set() };
+	}
+
+	const schemaFields = reconcileDesiredSchemaSnapshot(currentSchema, desired.schema).desired.fields;
+
+	const { folderIdByKey } = await readFolderKeys(database);
+	const availableFolderKeys = new Map(folderIdByKey);
+
+	for (const folder of desired.folders) {
+		if (!availableFolderKeys.has(folder.key)) availableFolderKeys.set(folder.key, folder.key);
+	}
+
+	const prepPlan = buildFolderPreparationPlan({
+		referencedKeys: referencedFolderKeys(schemaFields),
+		declaredFolders: desired.folders,
+		currentFolderKeys: new Set(folderIdByKey.keys()),
+	});
+
+	return {
+		schemaFields,
+		availableFolderKeys,
+		preparationFolderKeys: new Set(prepPlan.folders.create.map((f) => f.key)),
+	};
+}
 
 export async function applySchemaStep(options: {
 	currentSchema: ConfigSchemaCollection[];
