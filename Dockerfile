@@ -32,6 +32,8 @@ RUN : \
 
 FROM node:22-alpine AS runtime
 
+RUN apk --no-cache upgrade ca-certificates-bundle
+
 USER node
 
 WORKDIR /cairncms
