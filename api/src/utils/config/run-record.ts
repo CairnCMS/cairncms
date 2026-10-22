@@ -118,6 +118,8 @@ export type ConfigRunStart = {
 
 export type ConfigRun = {
 	planned(summary: ConfigRunChanges): void;
+	/** Records the approved per-step outcome for the run record, from the caller's own computed values. */
+	outcome(steps: ConfigRunSteps, failure?: ConfigRunStepFailure): void;
 };
 
 export function systemCaller(): ConfigRunCaller {
@@ -206,16 +208,38 @@ export function emitConfigRunRecord(record: ConfigRunRecord): void {
 	}
 }
 
+/**
+ * Attaches an approved per-step outcome to a thrown error for transport. The error keeps its type, code, status, and
+ * detail and reaches the error middleware unchanged, which surfaces the outcome to the admin caller for an ordinary
+ * error as well as a BaseException. The record is written separately through run.outcome, never read back from here.
+ */
+export function attachRunOutcome(error: unknown, steps: ConfigRunSteps, failure?: ConfigRunStepFailure): unknown {
+	const thrown = Array.isArray(error) ? error[0] : error;
+
+	if (typeof thrown === 'object' && thrown !== null) {
+		const target = thrown as { extensions?: Record<string, unknown> };
+		target.extensions = { ...target.extensions, steps, ...(failure !== undefined && { failure }) };
+	}
+
+	return error;
+}
+
 export async function withConfigRun<T extends ConfigRunFinished>(
 	start: ConfigRunStart,
 	body: (run: ConfigRun) => Promise<T>
 ): Promise<T> {
 	const startedAt = performance.now();
 	let changes: ConfigRunChanges | undefined;
+	let recordedSteps: ConfigRunSteps | undefined;
+	let recordedFailure: ConfigRunStepFailure | undefined;
 
 	const run: ConfigRun = {
 		planned(summary) {
 			changes = { create: summary.create, update: summary.update, delete: summary.delete };
+		},
+		outcome(steps, failure) {
+			recordedSteps = steps;
+			recordedFailure = failure;
 		},
 	};
 
@@ -224,6 +248,9 @@ export async function withConfigRun<T extends ConfigRunFinished>(
 
 		const runId = normalizeRunId(start.runId);
 		const userAgent = userAgentFrom(start.userAgent);
+
+		const steps = recordedSteps ?? finished.steps;
+		const failure = recordedFailure ?? ('failure' in finished ? finished.failure : undefined);
 
 		const record: ConfigRunRecord = {
 			event: CONFIG_RUN_EVENT,
@@ -238,8 +265,8 @@ export async function withConfigRun<T extends ConfigRunFinished>(
 			...(changes !== undefined ? { changes } : {}),
 			result: finished.result,
 			...('errorCode' in finished ? { errorCode: normalizeErrorCode(finished.errorCode) } : {}),
-			...(finished.steps !== undefined ? { steps: finished.steps } : {}),
-			...('failure' in finished && finished.failure !== undefined ? { failure: finished.failure } : {}),
+			...(steps !== undefined ? { steps } : {}),
+			...(failure !== undefined ? { failure } : {}),
 			durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
 		};
 

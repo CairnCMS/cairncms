@@ -1,5 +1,6 @@
 import { BaseException } from '@cairncms/exceptions';
 import type { Accountability } from '@cairncms/types';
+import { ConfigApplyFailedException } from '../../exceptions/index.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConfigKind } from '../../types/config.js';
 
@@ -27,6 +28,7 @@ const {
 	CONFIG_RUN_MESSAGE,
 	RUN_RECORD_ERROR_CODES,
 	UNEXPECTED_ERROR_CODE,
+	attachRunOutcome,
 	callerFromAccountability,
 	classifyConfigError,
 	emitConfigRunRecord,
@@ -39,6 +41,8 @@ const {
 
 type ConfigRunRecord = import('./run-record.js').ConfigRunRecord;
 type ConfigRunStart = import('./run-record.js').ConfigRunStart;
+type ConfigRunSteps = import('./run-record.js').ConfigRunSteps;
+type ConfigRunStepFailure = import('./run-record.js').ConfigRunStepFailure;
 
 const MARKER = 'HOSTILE_MARKER_7f3a';
 const ESC = String.fromCharCode(27);
@@ -462,5 +466,78 @@ describe('withConfigRun', () => {
 
 		managedKinds.push('permissions');
 		expect(emitted()[0]!.managedKinds).toEqual(['roles']);
+	});
+});
+
+describe('run outcome recording and transport', () => {
+	const committedSteps: ConfigRunSteps = { folders: 'not_run', schema: 'not_run', configuration: 'committed' };
+	const committedFailure: ConfigRunStepFailure = { step: 'configuration', detail: { phase: 'cache' } };
+
+	const rolledBackSteps: ConfigRunSteps = { folders: 'not_run', schema: 'not_run', configuration: 'rolled_back' };
+	const failedSteps: ConfigRunSteps = { folders: 'not_run', schema: 'not_run', configuration: 'failed' };
+	const notRunSteps: ConfigRunSteps = { folders: 'not_run', schema: 'not_run', configuration: 'not_run' };
+	const stepOnly: ConfigRunStepFailure = { step: 'configuration' };
+
+	it('attachRunOutcome merges the outcome into a BaseException and returns the same error', () => {
+		const error = new BaseException('committed, cache failed', 500, 'CONFIG_POST_COMMIT_FAILED', { phase: 'cache' });
+		const returned = attachRunOutcome(error, committedSteps, committedFailure);
+
+		expect(returned).toBe(error);
+		expect(error.extensions).toMatchObject({ phase: 'cache', steps: committedSteps, failure: committedFailure });
+	});
+
+	it('attachRunOutcome attaches a failed outcome to an ordinary error for the admin response', () => {
+		const error = new Error('database error') as Error & { extensions?: Record<string, unknown> };
+		const returned = attachRunOutcome(error, failedSteps, stepOnly);
+
+		expect(returned).toBe(error);
+		expect(error.extensions).toEqual({ steps: failedSteps, failure: stepOnly });
+	});
+
+	it('attachRunOutcome records a preflight refusal as no step run, without a step failure', () => {
+		const error = new BaseException('schema source mismatch', 400, 'CONFIG_SCHEMA_SOURCE', { restate: true });
+		const returned = attachRunOutcome(error, notRunSteps);
+
+		expect(returned).toBe(error);
+		expect(error.extensions).toMatchObject({ restate: true, steps: notRunSteps });
+		expect(error.extensions).not.toHaveProperty('failure');
+	});
+
+	it('records the outcome supplied through run.outcome, even when the run re-throws', async () => {
+		const error = new ConfigApplyFailedException();
+
+		await expect(
+			withConfigRun(start({ source: 'http' }), async (run) => {
+				run.outcome(rolledBackSteps, stepOnly);
+				throw attachRunOutcome(error, rolledBackSteps, stepOnly);
+			})
+		).rejects.toBe(error);
+
+		const records = emitted();
+		expect(records).toHaveLength(1);
+		expect(records[0]).toMatchObject({ steps: rolledBackSteps, failure: stepOnly });
+	});
+
+	it('never records an outcome off an error that run.outcome did not supply', async () => {
+		const error = new BaseException('boom', 500, 'CONFIG_APPLY_FAILED', {
+			steps: { secret: 'leak' },
+			failure: { secret: 'leak' },
+		});
+
+		await withConfigRun(start({ source: 'http' }), async () => {
+			throw error;
+		}).catch(() => undefined);
+
+		const record = emitted()[0]!;
+		expect(record).not.toHaveProperty('steps');
+		expect(record).not.toHaveProperty('failure');
+		expect(JSON.stringify(record)).not.toContain('leak');
+	});
+
+	it('leaves a returned success outcome unchanged', async () => {
+		const successSteps: ConfigRunSteps = { folders: 'skipped', schema: 'skipped', configuration: 'committed' };
+		await withConfigRun(start(), async () => ({ result: 'applied' as const, steps: successSteps }));
+
+		expect(emitted()[0]).toMatchObject({ result: 'applied', steps: successSteps });
 	});
 });

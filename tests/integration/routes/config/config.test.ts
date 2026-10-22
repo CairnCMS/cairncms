@@ -874,10 +874,11 @@ describe('Config-as-Code API', () => {
 						expect(response.statusCode).toBe(400);
 
 						const extensions = response.body.errors[0].extensions;
-						expect(Object.keys(extensions).sort()).toEqual(['code', 'contributors', 'protection']);
+						expect(Object.keys(extensions).sort()).toEqual(['code', 'contributors', 'protection', 'steps']);
 						expect(extensions.code).toBe('CONFIG_PROTECTED_RECORD');
 						expect(extensions.protection).toEqual({ code: 'ADMIN_CONTINUITY_REQUIRED' });
 						expect(extensions.contributors).toEqual([deleteContributor(adminKey)]);
+						expect(extensions.steps).toEqual({ folders: 'not_run', schema: 'not_run', configuration: 'not_run' });
 
 						expect(await adminSnapshot(api)).toEqual(before);
 

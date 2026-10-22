@@ -429,7 +429,9 @@ describe('config apply previews a version 3 schema tree', () => {
 		}
 	});
 
-	test('refuses a mutating schema apply over HTTP, but applies it through the local CLI', async ({ api }) => {
+	test('applies schema through one request over HTTP, and the local CLI apply of the same tree is then a no-op', async ({
+		api,
+	}) => {
 		const suffix = randomUUID().replace(/-/g, '').slice(0, 12);
 		const created = `preview_refused_${suffix}`;
 
@@ -452,14 +454,18 @@ describe('config apply previews a version 3 schema tree', () => {
 
 			const http = await applyConfig(api, desired);
 
-			expect(http.statusCode).toBe(500);
-			expect(http.body.errors[0].extensions.code).toBe('CONFIG_APPLY_FAILED');
-			expect(await captureState(api, [created])).toEqual(before);
+			expect(http.statusCode).toBe(200);
+			expect(http.body.meta.result).toBe('applied');
+			expect(http.body.meta.steps).toEqual({ folders: 'skipped', schema: 'committed', configuration: 'skipped' });
+
+			const afterHttp = await captureState(api, [created]);
+			expect(afterHttp.tables[created]).not.toBeNull();
+			expect(afterHttp).not.toEqual(before);
 
 			const cli = await api.cli(['config', 'apply', fixtureRoot, '--yes']);
 
 			expect(cli.status).toBe(0);
-			expect((await captureState(api, [created])).tables[created]).not.toBeNull();
+			expect(await captureState(api, [created])).toEqual(afterHttp);
 		} finally {
 			await dropCollection(api, created);
 		}
