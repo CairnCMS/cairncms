@@ -1,9 +1,10 @@
 import { expect } from 'vitest';
 import type { Api } from '../../fixtures/environment';
 import { CreateCollection, CreateField, CreateItem } from '../../fixtures/seeded';
+import { vendorsWith } from '../../harness/database-vendors.mjs';
 
 export const collection = 'test_items_geometry_bbox_filter';
-export const geometryVendors = ['postgres13', 'postgres10'];
+export const geometryVendors = vendorsWith('postgis');
 
 export const seedDBStructure = async (api: Api) => {
 	const created = await CreateCollection(api, { collection, primaryKeyType: 'integer' });

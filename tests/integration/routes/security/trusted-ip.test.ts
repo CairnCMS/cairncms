@@ -60,7 +60,7 @@ const test = createIdentityTest().extend<{ clientsState: Prerequisite<Clients>; 
 
 describeForVendors(
 	'trusted client-IP resolution',
-	['postgres13', 'postgres10', 'mysql84', 'mysql5', 'maria114'],
+	['postgres', 'mysql', 'maria'],
 	'The shared-database proxy and limiter scenario has not been validated on SQLite.',
 	() => {
 		test('an untrusted instance shares one bucket, so a rotating X-Forwarded-For cannot evade the limit', async ({

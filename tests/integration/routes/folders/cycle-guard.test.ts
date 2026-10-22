@@ -183,7 +183,7 @@ describe('folder parent-cycle guard and config deletion guard', () => {
 
 	describeForVendors(
 		'server database identifiers',
-		['postgres13', 'postgres10', 'mysql84', 'mysql5', 'maria114'],
+		['postgres', 'mysql', 'maria'],
 		'Mixed-case parent identifiers are tested on server-database collations; SQLite is not validated.',
 		() => {
 			test('allows a valid move to a mixed-case parent id', async ({ api }) => {

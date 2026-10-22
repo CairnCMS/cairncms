@@ -21,7 +21,7 @@ const test = createRedisTest('redis60', { extensions: ['cairncms-extension-sched
 
 describeForVendors(
 	'Schedule coordination',
-	['postgres13', 'postgres10', 'mysql84', 'mysql5', 'maria114'],
+	['postgres', 'mysql', 'maria'],
 	'Multi-instance coordination needs a server database that several CairnCMS processes can share.',
 	() => {
 		test('Redis 6.0 disables scheduling while the messenger and API stay up', async ({ api, vendor, redis }) => {

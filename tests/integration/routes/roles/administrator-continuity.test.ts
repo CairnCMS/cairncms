@@ -32,7 +32,7 @@ describe('Roles administrator continuity', () => {
 	describe('two concurrent server-vendor administrator demotions resolve to one success and one conflict', () => {
 		describeForVendors(
 			'concurrent server transactions',
-			['postgres13', 'postgres10', 'mysql84', 'mysql5', 'maria114'],
+			['postgres', 'mysql', 'maria'],
 			'This administrator-demotion race exercises concurrent server transactions; SQLite is not validated.',
 			() => {
 				test('REST', async ({ api }) => {

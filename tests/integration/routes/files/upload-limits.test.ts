@@ -19,7 +19,7 @@ const test = createApiTest({ env: { FILES_MAX_UPLOAD_SIZE: '1mb', FILES_MIME_TYP
 describe('/files upload limits and permission gate', () => {
 	describeForVendors(
 		'size and MIME allow-list enforcement',
-		['postgres13', 'postgres10', 'mysql84', 'mysql5', 'maria114'],
+		['postgres', 'mysql', 'maria'],
 		'This configured file API scenario has not been validated on SQLite.',
 		() => {
 			test('rejects an oversized upload with 413 and leaves no orphan row', async ({ api }) => {
