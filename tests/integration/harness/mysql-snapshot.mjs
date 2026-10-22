@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { runSnapshotTool } from './snapshot-tools.mjs';
+import { familyOf, vendorsOf } from './database-vendors.mjs';
 
-export const snapshotVendors = Object.freeze(['mysql84', 'mysql5', 'maria114']);
+export const snapshotVendors = Object.freeze([...vendorsOf('mysql'), ...vendorsOf('maria')]);
 
 const definitions = [
 	[
@@ -146,9 +147,12 @@ export async function snapshotInventory(
 	database,
 	name,
 	signal,
-	{ vendor = 'mysql84', deadline = performance.now() + 90_000 } = {}
+	{ vendor, deadline = performance.now() + 90_000 } = {}
 ) {
+	assert(vendor, 'Snapshot inventory requires a vendor');
 	assert(snapshotVendors.includes(vendor), 'Unsupported snapshot vendor');
+	const maria = familyOf(vendor) === 'maria';
+	const modern = familyOf(vendor) === 'mysql' && vendor !== 'mysql5';
 
 	const query = async (builder) => {
 		signal?.throwIfAborted();
@@ -165,20 +169,20 @@ export async function snapshotInventory(
 	/** @type {{schema: Record<string, Record<string, unknown>[]>, rows: Record<string, Record<string, unknown>[]>}} */
 	const result = { schema: {}, rows: {} };
 	// MySQL caches these statistics; restoration checks require the current auto-increment values.
-	if (vendor === 'mysql84') await query(database.raw('SET SESSION information_schema_stats_expiry=0'));
+	if (modern) await query(database.raw('SET SESSION information_schema_stats_expiry=0'));
 
 	for (const [table, scope, original] of definitions) {
 		// MySQL 5.7 has no enforced checks; the pinned engines expose different index metadata.
 		if (vendor === 'mysql5' && table === 'check_constraints') continue;
 		let fields = original;
 
-		if (vendor !== 'mysql84' && table === 'statistics') {
+		if (!modern && table === 'statistics') {
 			fields = fields.filter((field) => !['IS_VISIBLE', 'EXPRESSION'].includes(field));
-			if (vendor === 'maria114') fields = [...fields, 'IGNORED'];
+			if (maria) fields = [...fields, 'IGNORED'];
 		}
 
-		if (vendor !== 'mysql84' && table === 'table_constraints') fields = fields.filter((field) => field !== 'ENFORCED');
-		if (vendor === 'maria114' && table === 'check_constraints') fields = [...fields, 'TABLE_NAME', 'LEVEL'];
+		if (!modern && table === 'table_constraints') fields = fields.filter((field) => field !== 'ENFORCED');
+		if (maria && table === 'check_constraints') fields = [...fields, 'TABLE_NAME', 'LEVEL'];
 
 		const rows = await query(
 			database(`information_schema.${table}`)
@@ -195,26 +199,19 @@ export async function snapshotInventory(
 	return result;
 }
 
-export async function snapshotCommand({
-	vendor = 'mysql84',
-	container,
-	database,
-	password,
-	operation,
-	input,
-	signal,
-	record,
-}) {
+export async function snapshotCommand({ vendor, container, database, password, operation, input, signal, record }) {
+	assert(vendor, 'Snapshot command requires a vendor');
 	assert(snapshotVendors.includes(vendor), 'Unsupported snapshot vendor');
 	signal.throwIfAborted();
+	const maria = familyOf(vendor) === 'maria';
 
 	const command =
 		operation === 'export'
 			? [
-					vendor === 'maria114' ? 'mariadb-dump' : 'mysqldump',
+					maria ? 'mariadb-dump' : 'mysqldump',
 					'--user=root',
 					'--single-transaction',
-					...(vendor === 'maria114' ? [] : ['--set-gtid-purged=OFF']),
+					...(maria ? [] : ['--set-gtid-purged=OFF']),
 					'--no-tablespaces',
 					'--skip-comments',
 					'--skip-dump-date',
@@ -225,7 +222,7 @@ export async function snapshotCommand({
 					'--default-character-set=utf8mb4',
 					database,
 			  ]
-			: [vendor === 'maria114' ? 'mariadb' : 'mysql', '--user=root', '--default-character-set=utf8mb4', database];
+			: [maria ? 'mariadb' : 'mysql', '--user=root', '--default-character-set=utf8mb4', database];
 
 	return runSnapshotTool({
 		args: ['exec', ...(operation === 'import' ? ['-i'] : []), '--env', `MYSQL_PWD=${password}`, container, ...command],

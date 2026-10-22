@@ -12,6 +12,7 @@ import {
 } from './pristine.mjs';
 import { snapshotHash } from './snapshot.mjs';
 import { runtimeConfigurations } from './controls/runtime-configurations.mjs';
+import { vendors } from './database-vendors.mjs';
 
 test('every eligible runtime setting belongs to a justified equivalence configuration', () => {
 	const covered = Object.values(runtimeConfigurations).flatMap((configuration) => {
@@ -26,8 +27,7 @@ test('every eligible runtime setting belongs to a justified equivalence configur
 
 test('restoration excludes other vendors and bootstrap-dependent environments', () => {
 	const runtime = { vendor: 'mysql84', pristine: { directory: '/owned' } };
-	for (const vendor of ['mysql84', 'mysql5', 'maria114', 'postgres13', 'postgres10', 'sqlite3'])
-		assert.equal(canRestore({ ...runtime, vendor }, {}), true);
+	for (const vendor of vendors) assert.equal(canRestore({ ...runtime, vendor }, {}), true);
 	assert.equal(canRestore(runtime, { hooks: true }), true);
 
 	assert.equal(
