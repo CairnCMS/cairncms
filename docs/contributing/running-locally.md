@@ -11,7 +11,7 @@ This page is for contributors who want to run CairnCMS from the source tree, mod
 
 - **Node.js 22 LTS** or newer. The platform targets Node 22 and runs CI against it.
 - **pnpm 10+**. The repo pins `pnpm@10.13.1` as its `packageManager`. Use corepack (`corepack enable`) to pick up the pinned version automatically.
-- **Docker and Docker Compose**, for the database and supporting services. The root `docker-compose.yml` provides every supported database vendor on local ports.
+- **Docker and Docker Compose**, for the database and supporting services. The root `docker-compose.yml` provides the supported server vendors on local ports, each on its newest and oldest supported line.
 - **Git**, with a configured user and email. Commits must be signed off (`git commit -s`) per the [Developer Certificate of Origin](https://developercertificate.org/).
 
 A few hundred MB of free RAM and disk space are also needed during dependency install and build.
@@ -36,7 +36,7 @@ This compiles every workspace member except `docs/` in dependency order. Subsequ
 
 ## Choose a database
 
-The platform supports SQLite, PostgreSQL, MySQL, MariaDB, and others. For local development, two paths:
+The platform supports SQLite, PostgreSQL, MySQL, and MariaDB. For local development, two paths:
 
 ### SQLite (simplest)
 
@@ -44,21 +44,29 @@ No services to start. Set `DB_CLIENT=sqlite3` in your `.env` (covered below) and
 
 ### A server vendor through Docker Compose
 
-The root `docker-compose.yml` brings up every supported vendor on local ports. Start whichever you need:
+The root `docker-compose.yml` brings up the supported server vendors on local ports. Start whichever you need:
 
 ```bash
-# Postgres on port 5100
+# PostgreSQL 18 with PostGIS 3.6 on port 5100
 docker compose up -d postgres
 
-# MySQL 8 on port 5101
+# MySQL 8.4 on port 5101
 docker compose up -d mysql
 
-# MariaDB on port 5102
+# MariaDB 12.3 on port 5102
 docker compose up -d maria
 ```
 
-The compose file's header comment lists the full port and credential matrix. The exposed ports are in the `5xxx` range.
+The file also offers the other end of each supported line: PostgreSQL 15 without PostGIS (`postgres15`, port 5111), MySQL 9.7 (`mysql97`, port 5108), and MariaDB 10.11 (`maria1011`, port 5112). The compose file's header comment lists the full port and credential matrix. The exposed ports are in the `5xxx` range.
 API integration tests provision separate containers with dynamically assigned ports.
+
+When a service's major version changes in the compose file, its old data directory stays in an anonymous volume that the new image cannot open. Before the first start on the new version, stop and remove the affected containers with their volumes. This deletes their local development data:
+
+```bash
+docker compose rm --stop --volumes postgres mysql maria
+```
+
+Dump anything you want to keep first, for example `docker compose exec postgres pg_dumpall -U postgres > backup.sql` or `docker compose exec mysql mysqldump -uroot -psecret --all-databases > backup.sql`, and restore it after the new engine's first start. Containers left over from service names that no longer exist in the file (`mysql5`, `postgres10`) are orphans that still hold ports 5108 and 5111 while they run. List them with `docker ps -a --filter name=mysql5 --filter name=postgres10`, stop them with `docker container stop`, then remove them and their volumes with `docker container rm --volumes`. Do not use `docker compose down -v` for this, because it removes every volume in the project, including Redis and the storage emulators.
 
 The compose also defines `s3proxy`, an S3-compatible server on port `5106` (key `cairncms`, secret `miniosecret`), for exercising the S3 storage driver locally. Start it, then create a bucket with the AWS CLI (S3Proxy has no web console):
 
