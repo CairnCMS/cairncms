@@ -14,6 +14,7 @@ import {
 import { respond } from '../middleware/respond.js';
 import asyncHandler from '../utils/async-handler.js';
 import { applyConfigPlan } from '../utils/apply-config-plan.js';
+import { applyFolderPreparation } from '../utils/apply-folder-preparation.js';
 import { boundedBodyParser } from '../utils/bounded-body-parser.js';
 import { computeConfigPlan } from '../utils/compute-config-plan.js';
 import {
@@ -100,7 +101,7 @@ router.post(
 		const destructive = parseApplyFlag(req.query, 'destructive');
 		const forceSchema = parseApplyFlag(req.query, 'force_schema');
 
-		assertApplyStep(req.query);
+		const step = parseApplyStep(req.query);
 
 		const manifest = validateConfigManifest(document['manifest'], BODY_LABEL);
 
@@ -177,7 +178,7 @@ router.post(
 				const context: ConfigApplySecurityContext = { mode: 'request', accountability };
 				const steps: ConfigRunSteps = { folders: 'not_run', schema: 'not_run', configuration: 'not_run' };
 
-				let configStepStarted = false;
+				let currentStep: keyof ConfigRunSteps | undefined;
 
 				try {
 					const { schemaFields, availableFolderKeys, preparationFolderKeys } = await computeWholeRunInputs(
@@ -213,6 +214,19 @@ router.post(
 
 					assertMutationAuthorized(plan, destructive);
 
+					if (step === 'folders') {
+						currentStep = 'folders';
+						const created = await applyFolderPreparation(config, current.schema, { context, database });
+						const prepared = created.length > 0;
+						steps.folders = prepared ? 'committed' : 'skipped';
+						run.outcome(steps);
+
+						const outcome = prepared ? ('applied' as const) : ('no_changes' as const);
+						res.locals['payload'] = { data: { created }, meta: { plan: serialized, result: outcome, steps } };
+
+						return { result: outcome };
+					}
+
 					let result;
 
 					if (schemaManaged) {
@@ -233,10 +247,10 @@ router.post(
 
 						if (configFailures.length > 0) throw configFailures.map(toConfigException);
 
-						configStepStarted = true;
+						currentStep = 'configuration';
 						result = await applyConfigurationStep(config, configResources, database, destructive, context);
 					} else {
-						configStepStarted = true;
+						currentStep = 'configuration';
 
 						result = await applyConfigPlan(plan, {
 							database,
@@ -257,9 +271,9 @@ router.post(
 
 					return { result: outcome };
 				} catch (err) {
-					if (configStepStarted) {
-						steps.configuration = failureStatus(err);
-						const failure = stepFailure('configuration', err);
+					if (currentStep !== undefined) {
+						steps[currentStep] = failureStatus(err);
+						const failure = stepFailure(currentStep, err);
 						run.outcome(steps, failure);
 
 						throw attachRunOutcome(err, steps, failure);
@@ -289,10 +303,13 @@ function parseApplyFlag(query: Record<string, unknown>, name: 'dry_run' | 'destr
 	throw new ConfigInvalidException(`The "${name}" query parameter must be exactly "true" or "false" when present.`);
 }
 
-function assertApplyStep(query: Record<string, unknown>): void {
-	if (query['step'] !== undefined) {
-		throw new ConfigInvalidException('The "step" query parameter is not a supported value.');
-	}
+function parseApplyStep(query: Record<string, unknown>): 'folders' | 'configuration' {
+	const value = query['step'];
+
+	if (value === undefined) return 'configuration';
+	if (value === 'folders') return 'folders';
+
+	throw new ConfigInvalidException('The "step" query parameter is not a supported value.');
 }
 
 function parseSnapshotScope(query: Record<string, unknown>): ConfigManifest {

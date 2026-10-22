@@ -224,6 +224,21 @@ async function resetExtensionSettings(api: Api, subject: string): Promise<void> 
 	await api.database('cairncms_extension_settings').where({ extension: subject }).delete();
 }
 
+type FolderFixture = { key: string; name: string; parent?: string };
+
+function folder(key: string, parent?: string): FolderFixture {
+	return parent === undefined ? { key, name: key } : { key, name: key, parent };
+}
+
+async function folderByKey(api: Api, key: string): Promise<{ id: string; parent: string | null } | undefined> {
+	return api.database('directus_folders').where({ key }).first();
+}
+
+async function deleteFolders(api: Api, keys: string[]): Promise<void> {
+	await api.database('directus_folders').whereIn('key', keys).whereNotNull('parent').delete();
+	await api.database('directus_folders').whereIn('key', keys).delete();
+}
+
 test('refuses a schema tree over HTTP that records no provenance, on dry-run and apply', async ({ api }) => {
 	const created = `prov_missing_${suffix()}`;
 	const roleKey = `prov_role_${suffix()}`;
@@ -411,7 +426,7 @@ test('allows a permission for a collection the configuration step cannot see', a
 test('refuses an unrecognized step, a repeated step, and a non-boolean force_schema', async ({ api }) => {
 	const desired = await snapshot(api, ['roles']);
 
-	const unknownStep = await applyConfig(api, desired, { step: 'folders' });
+	const unknownStep = await applyConfig(api, desired, { step: 'bogus' });
 	expect(unknownStep.statusCode).toBe(400);
 	expect(errorCode(unknownStep)).toBe('CONFIG_INVALID');
 
@@ -422,4 +437,114 @@ test('refuses an unrecognized step, a repeated step, and a non-boolean force_sch
 	const badForce = await applyConfig(api, desired, { forceSchema: 'maybe' });
 	expect(badForce.statusCode).toBe(400);
 	expect(errorCode(badForce)).toBe('CONFIG_INVALID');
+});
+
+test('step=folders creates the referenced folders and their ancestors and nothing else', async ({ api }) => {
+	const s = suffix();
+	const collection = `fold_ok_${s}`;
+	const parentKey = `parent_${s}`;
+	const galleryKey = `gallery_${s}`;
+	const orphanKey = `orphan_${s}`;
+	const roleKey = `fold_role_${s}`;
+	const committed = { folders: 'committed', schema: 'not_run', configuration: 'not_run' };
+
+	try {
+		const desired = await snapshot(api, ['schema', 'folders', 'roles']);
+		desired['schema'].push(collectionWithFolderField(collection, galleryKey));
+		desired['folders'].push(folder(parentKey), folder(galleryKey, parentKey), folder(orphanKey));
+		// An unreferenced declared folder and a pending role prove the step touches only the referenced folders.
+		desired['roles'].push(appRole(roleKey));
+
+		const applied = await applyConfig(api, desired, { step: 'folders' });
+		expect(applied.statusCode).toBe(200);
+		expect(applied.body.meta.result).toBe('applied');
+		expect(applied.body.meta.steps).toEqual(committed);
+		expect(applied.body.data.created).toEqual(expect.arrayContaining([parentKey, galleryKey]));
+		expect(applied.body.data.created).not.toContain(orphanKey);
+
+		const parent = await folderByKey(api, parentKey);
+		const gallery = await folderByKey(api, galleryKey);
+		expect(parent).toBeDefined();
+		expect(gallery?.parent).toBe(parent!.id);
+		expect(await folderByKey(api, orphanKey)).toBeUndefined();
+		expect(await roleExists(api, roleKey)).toBe(false);
+		expect(await tableExists(api, collection)).toBe(false);
+
+		const records = await recordsFor(api, applied.headers['x-config-run-id']);
+		expect(records).toHaveLength(1);
+		expect(records[0]!['result']).toBe('applied');
+		expect(records[0]!['steps']).toEqual(committed);
+	} finally {
+		await deleteFolders(api, [galleryKey, orphanKey, parentKey]);
+		await deleteRoleByKey(api, roleKey);
+		await dropCollection(api, collection);
+	}
+});
+
+test('step=folders reports skipped when there is nothing to prepare', async ({ api }) => {
+	const desired = await snapshot(api, ['schema', 'folders']);
+
+	const applied = await applyConfig(api, desired, { step: 'folders' });
+	expect(applied.statusCode).toBe(200);
+	expect(applied.body.meta.result).toBe('no_changes');
+	expect(applied.body.meta.steps).toEqual({ folders: 'skipped', schema: 'not_run', configuration: 'not_run' });
+	expect(applied.body.data.created).toEqual([]);
+});
+
+test('step=folders dry-run writes no folder', async ({ api }) => {
+	const s = suffix();
+	const galleryKey = `gallery_${s}`;
+
+	try {
+		const desired = await snapshot(api, ['schema', 'folders']);
+		desired['schema'].push(collectionWithFolderField(`fold_dry_${s}`, galleryKey));
+		desired['folders'].push(folder(galleryKey));
+
+		const dry = await applyConfig(api, desired, { step: 'folders', dryRun: true });
+		expect(dry.statusCode).toBe(200);
+		expect(await folderByKey(api, galleryKey)).toBeUndefined();
+	} finally {
+		await deleteFolders(api, [galleryKey]);
+	}
+});
+
+test('step=folders refuses a destructive combined plan before creating any folder', async ({ api }) => {
+	const s = suffix();
+	const galleryKey = `gallery_${s}`;
+	const doomedKey = `doomed_${s}`;
+
+	try {
+		await api.database('directus_folders').insert({ id: randomUUID(), name: doomedKey, key: doomedKey });
+
+		const desired = await snapshot(api, ['schema', 'folders']);
+		desired['schema'].push(collectionWithFolderField(`fold_dx_${s}`, galleryKey));
+		desired['folders'] = desired['folders'].filter((f: FolderFixture) => f.key !== doomedKey);
+		desired['folders'].push(folder(galleryKey));
+
+		const applied = await applyConfig(api, desired, { step: 'folders' });
+		expect(applied.statusCode).toBe(400);
+		expect(errorCode(applied)).toBe('DESTRUCTIVE_CHANGES_REQUIRED');
+		expect(await folderByKey(api, galleryKey)).toBeUndefined();
+	} finally {
+		await deleteFolders(api, [galleryKey, doomedKey]);
+	}
+});
+
+test('step=folders refuses a protected combined plan before creating any folder', async ({ api }) => {
+	const s = suffix();
+	const galleryKey = `gallery_${s}`;
+
+	try {
+		const desired = await snapshot(api, ['schema', 'folders', 'roles']);
+		desired['schema'].push(collectionWithFolderField(`fold_px_${s}`, galleryKey));
+		desired['folders'].push(folder(galleryKey));
+		desired['roles'] = desired['roles'].filter((entry: RoleFixture) => !entry.admin_access);
+
+		const applied = await applyConfig(api, desired, { step: 'folders', destructive: true });
+		expect(applied.statusCode).toBe(400);
+		expect(errorCode(applied)).toBe('CONFIG_PROTECTED_RECORD');
+		expect(await folderByKey(api, galleryKey)).toBeUndefined();
+	} finally {
+		await deleteFolders(api, [galleryKey]);
+	}
 });

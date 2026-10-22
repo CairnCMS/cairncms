@@ -58,12 +58,15 @@ vi.mock('../utils/get-config-snapshot.js', () => ({ readCurrentConfig: vi.fn() }
 
 vi.mock('../utils/apply-config-plan.js', () => ({ applyConfigPlan: vi.fn() }));
 
+vi.mock('../utils/apply-folder-preparation.js', () => ({ applyFolderPreparation: vi.fn() }));
+
 vi.mock('../middleware/respond.js', () => ({
 	respond: (_req: unknown, res: { json: (body: unknown) => void; locals: Record<string, unknown> }) =>
 		res.json(res.locals['payload']),
 }));
 
 import errorHandler from '../middleware/error-handler.js';
+import { applyFolderPreparation } from '../utils/apply-folder-preparation.js';
 import { readCurrentConfig } from '../utils/get-config-snapshot.js';
 import { version } from '../utils/package.js';
 import configController from './config.js';
@@ -204,5 +207,20 @@ describe('POST /config/apply schema wiring', () => {
 
 		expect(response.status).toBe(500);
 		expect(response.body.errors[0].extensions.code).toBe('INTERNAL_SERVER_ERROR');
+	});
+
+	it('names the folders step in the run outcome when folder preparation fails', async () => {
+		vi.mocked(applyFolderPreparation).mockRejectedValue(new Error('folder preparation failed'));
+
+		const response = await request(makeApp())
+			.post('/config/apply?step=folders')
+			.set('User-Agent', 'cairncms-cli/1.6.0')
+			.send(articlesBody({ field: 'title', type: 'string', meta: {}, schema: { name: 'title' } }));
+
+		expect(response.status).toBe(500);
+
+		const extensions = response.body.errors[0].extensions;
+		expect(extensions.steps).toEqual({ folders: 'failed', schema: 'not_run', configuration: 'not_run' });
+		expect(extensions.failure).toEqual({ step: 'folders' });
 	});
 });
