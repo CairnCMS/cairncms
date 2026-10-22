@@ -283,7 +283,15 @@ describe('POST /config/apply run record', () => {
 		const res = await apply({ destructive: true });
 
 		expect(res.status).toBe(200);
-		expect(res.body).toEqual({ data: APPLY_RESULT, meta: { plan: SERIALIZED } });
+
+		expect(res.body).toEqual({
+			data: APPLY_RESULT,
+			meta: {
+				plan: SERIALIZED,
+				result: 'applied',
+				steps: { folders: 'not_run', schema: 'not_run', configuration: 'committed' },
+			},
+		});
 
 		const record = expectOneRecord({
 			result: 'applied',
@@ -456,7 +464,15 @@ describe('POST /config/apply run record', () => {
 		const res = await apply();
 
 		expect(res.status).toBe(200);
-		expect(res.body).toEqual({ data: APPLY_RESULT, meta: { plan: SERIALIZED } });
+
+		expect(res.body).toEqual({
+			data: APPLY_RESULT,
+			meta: {
+				plan: SERIALIZED,
+				result: 'applied',
+				steps: { folders: 'not_run', schema: 'not_run', configuration: 'committed' },
+			},
+		});
 	});
 });
 

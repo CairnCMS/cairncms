@@ -25,7 +25,19 @@ vi.mock('../logger.js', () => {
 	return { default: sink };
 });
 
-vi.mock('../database/index.js', () => ({ default: vi.fn(() => ({})) }));
+vi.mock('../database/index.js', () => ({ default: vi.fn(() => ({})), getDatabaseClient: vi.fn(() => 'postgres') }));
+
+vi.mock('../utils/folder-references.js', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('../utils/folder-references.js')>();
+
+	return {
+		...actual,
+		readFolderKeys: vi.fn(async () => ({
+			folderIdByKey: new Map<string, string>(),
+			folderKeyById: new Map<string, string>(),
+		})),
+	};
+});
 
 vi.mock('../extensions.js', () => ({
 	getExtensionManager: () => ({
@@ -53,6 +65,7 @@ vi.mock('../middleware/respond.js', () => ({
 
 import errorHandler from '../middleware/error-handler.js';
 import { readCurrentConfig } from '../utils/get-config-snapshot.js';
+import { version } from '../utils/package.js';
 import configController from './config.js';
 
 const STORED_MARKER = 'PRIVATE_STORED_MARKER';
@@ -77,7 +90,7 @@ function storedFields(): SnapshotField[] {
 
 function articlesBody(field: Record<string, unknown>) {
 	return {
-		manifest: { version: 3, resources: ['schema'] },
+		manifest: { version: 3, resources: ['schema'], schema: { release: version, vendor: 'postgres' } },
 		roles: [],
 		permissions: [],
 		folders: [],
@@ -160,7 +173,11 @@ describe('POST /config/apply schema wiring', () => {
 	it('admits a collection-scoped extension setting for a collection the schema plan creates', async () => {
 		const body = {
 			...articlesBody({ field: 'id', type: 'integer', meta: {}, schema: { name: 'id', is_primary_key: true } }),
-			manifest: { version: 3, resources: ['extension-settings', 'schema'] },
+			manifest: {
+				version: 3,
+				resources: ['extension-settings', 'schema'],
+				schema: { release: version, vendor: 'postgres' },
+			},
 			'extension-settings': [
 				{ subject: '@cairncms/extension-widget', global: {}, collections: { articles: { label: 'x' } } },
 			],

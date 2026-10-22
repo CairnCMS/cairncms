@@ -2,7 +2,7 @@ import { BaseException } from '@cairncms/exceptions';
 import express, { type RequestHandler } from 'express';
 import { isPlainObject } from 'lodash-es';
 import { randomUUID } from 'node:crypto';
-import getDatabase from '../database/index.js';
+import getDatabase, { getDatabaseClient } from '../database/index.js';
 import env from '../env.js';
 import {
 	ConfigIdentityConflictException,
@@ -26,10 +26,20 @@ import { kindsForVersion } from '../utils/config/registry.js';
 import { normalizeToInternal, serializeToWire } from '../utils/config/wire.js';
 import {
 	CONFIG_RUN_ID_HEADER,
+	attachRunOutcome,
 	callerFromAccountability,
 	userAgentFrom,
 	withConfigRun,
+	type ConfigRunSteps,
 } from '../utils/config/run-record.js';
+import {
+	applyConfigurationStep,
+	computeWholeRunInputs,
+	failureStatus,
+	stepFailure,
+} from '../utils/config/apply-steps.js';
+import { assertMutationAuthorized, assertRunValid } from '../utils/config/run-preflight.js';
+import { version as currentRelease } from '../utils/package.js';
 import {
 	buildExtensionDeclarationSnapshot,
 	desiredExtensionSubjects,
@@ -41,7 +51,7 @@ import { getSchema } from '../utils/get-schema.js';
 import { assertConfigValueSafe, parseConfigYaml } from '../utils/parse-config-document.js';
 import { safeLogFragment } from '../utils/safe-log-fragment.js';
 import { validateConfigManifest, validateDesiredConfig } from '../utils/validate-desired-config.js';
-import type { ConfigFailure, ConfigManifest } from '../types/config.js';
+import type { ConfigApplySecurityContext, ConfigFailure, ConfigManifest } from '../types/config.js';
 
 const router = express.Router();
 
@@ -88,6 +98,9 @@ router.post(
 
 		const dryRun = parseApplyFlag(req.query, 'dry_run');
 		const destructive = parseApplyFlag(req.query, 'destructive');
+		const forceSchema = parseApplyFlag(req.query, 'force_schema');
+
+		assertApplyStep(req.query);
 
 		const manifest = validateConfigManifest(document['manifest'], BODY_LABEL);
 
@@ -160,28 +173,102 @@ router.post(
 
 				run.planned(planSummary(plan));
 
-				const enrichment = await enrichConfigPlan(plan, config, { schema, database });
-				const serialized = serializeConfigPlan(plan, { enrichment, manifestVersion: manifest.version });
-				const empty = isPlanEmpty(plan);
+				const schemaManaged = manifest.resources.includes('schema');
+				const context: ConfigApplySecurityContext = { mode: 'request', accountability };
+				const steps: ConfigRunSteps = { folders: 'not_run', schema: 'not_run', configuration: 'not_run' };
 
-				if (dryRun) {
-					res.locals['payload'] = { data: serialized };
+				let configStepStarted = false;
 
-					return { result: empty ? ('no_changes' as const) : ('planned' as const) };
+				try {
+					const { schemaFields, availableFolderKeys, preparationFolderKeys } = await computeWholeRunInputs(
+						config,
+						current.schema,
+						database
+					);
+
+					assertRunValid({
+						manifest,
+						forceSchema,
+						currentRelease,
+						currentVendor: schemaManaged ? getDatabaseClient(database) : '',
+						schemaFields,
+						availableFolderKeys,
+					});
+
+					const enrichment = await enrichConfigPlan(plan, config, { schema, database });
+
+					const serialized = serializeConfigPlan(plan, {
+						enrichment,
+						manifestVersion: manifest.version,
+						...(preparationFolderKeys.size > 0 && { preparationFolderKeys }),
+					});
+
+					const empty = isPlanEmpty(plan);
+
+					if (dryRun) {
+						res.locals['payload'] = { data: serialized };
+
+						return { result: empty ? ('no_changes' as const) : ('planned' as const) };
+					}
+
+					assertMutationAuthorized(plan, destructive);
+
+					let result;
+
+					if (schemaManaged) {
+						const configResources = manifest.resources.filter((kind) => kind !== 'schema');
+
+						const configFailures = validateDesiredConfig(
+							{ ...document, manifest: { version: manifest.version, resources: configResources } },
+							{
+								label: BODY_LABEL,
+								references: 'current-state',
+								currentRoleKeys,
+								currentFolderKeys,
+								currentFolderParents,
+								...(extensionDeclarations !== undefined && { extensionDeclarations }),
+								currentCollections: schema.collections,
+							}
+						);
+
+						if (configFailures.length > 0) throw configFailures.map(toConfigException);
+
+						configStepStarted = true;
+						result = await applyConfigurationStep(config, configResources, database, destructive, context);
+					} else {
+						configStepStarted = true;
+
+						result = await applyConfigPlan(plan, {
+							database,
+							schema,
+							destructive,
+							context,
+							expectedStateToken: stateToken,
+							...(extensionDeclarations !== undefined && { extensionDeclarations }),
+						});
+					}
+
+					const committed = schemaManaged ? result !== undefined : !empty;
+					steps.configuration = committed ? 'committed' : 'skipped';
+					run.outcome(steps);
+
+					const outcome = committed ? ('applied' as const) : ('no_changes' as const);
+					res.locals['payload'] = { data: result, meta: { plan: serialized, result: outcome, steps } };
+
+					return { result: outcome };
+				} catch (err) {
+					if (configStepStarted) {
+						steps.configuration = failureStatus(err);
+						const failure = stepFailure('configuration', err);
+						run.outcome(steps, failure);
+
+						throw attachRunOutcome(err, steps, failure);
+					}
+
+					run.outcome(steps);
+
+					throw attachRunOutcome(err, steps);
 				}
-
-				const result = await applyConfigPlan(plan, {
-					database,
-					schema,
-					destructive,
-					context: { mode: 'request', accountability },
-					expectedStateToken: stateToken,
-					...(extensionDeclarations !== undefined && { extensionDeclarations }),
-				});
-
-				res.locals['payload'] = { data: result, meta: { plan: serialized } };
-
-				return { result: empty ? ('no_changes' as const) : ('applied' as const) };
 			}
 		);
 
@@ -192,7 +279,7 @@ router.post(
 
 const BODY_LABEL = 'request body';
 
-function parseApplyFlag(query: Record<string, unknown>, name: 'dry_run' | 'destructive'): boolean {
+function parseApplyFlag(query: Record<string, unknown>, name: 'dry_run' | 'destructive' | 'force_schema'): boolean {
 	const value = query[name];
 
 	if (value === undefined) return false;
@@ -200,6 +287,12 @@ function parseApplyFlag(query: Record<string, unknown>, name: 'dry_run' | 'destr
 	if (value === 'false') return false;
 
 	throw new ConfigInvalidException(`The "${name}" query parameter must be exactly "true" or "false" when present.`);
+}
+
+function assertApplyStep(query: Record<string, unknown>): void {
+	if (query['step'] !== undefined) {
+		throw new ConfigInvalidException('The "step" query parameter is not a supported value.');
+	}
 }
 
 function parseSnapshotScope(query: Record<string, unknown>): ConfigManifest {

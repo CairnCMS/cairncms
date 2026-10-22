@@ -213,12 +213,12 @@ export function emitConfigRunRecord(record: ConfigRunRecord): void {
  * detail and reaches the error middleware unchanged, which surfaces the outcome to the admin caller for an ordinary
  * error as well as a BaseException. The record is written separately through run.outcome, never read back from here.
  */
-export function attachRunOutcome(error: unknown, steps: ConfigRunSteps, failure: ConfigRunStepFailure): unknown {
+export function attachRunOutcome(error: unknown, steps: ConfigRunSteps, failure?: ConfigRunStepFailure): unknown {
 	const thrown = Array.isArray(error) ? error[0] : error;
 
 	if (typeof thrown === 'object' && thrown !== null) {
 		const target = thrown as { extensions?: Record<string, unknown> };
-		target.extensions = { ...target.extensions, steps, failure };
+		target.extensions = { ...target.extensions, steps, ...(failure !== undefined && { failure }) };
 	}
 
 	return error;

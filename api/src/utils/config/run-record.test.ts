@@ -475,6 +475,7 @@ describe('run outcome recording and transport', () => {
 
 	const rolledBackSteps: ConfigRunSteps = { folders: 'not_run', schema: 'not_run', configuration: 'rolled_back' };
 	const failedSteps: ConfigRunSteps = { folders: 'not_run', schema: 'not_run', configuration: 'failed' };
+	const notRunSteps: ConfigRunSteps = { folders: 'not_run', schema: 'not_run', configuration: 'not_run' };
 	const stepOnly: ConfigRunStepFailure = { step: 'configuration' };
 
 	it('attachRunOutcome merges the outcome into a BaseException and returns the same error', () => {
@@ -491,6 +492,15 @@ describe('run outcome recording and transport', () => {
 
 		expect(returned).toBe(error);
 		expect(error.extensions).toEqual({ steps: failedSteps, failure: stepOnly });
+	});
+
+	it('attachRunOutcome records a preflight refusal as no step run, without a step failure', () => {
+		const error = new BaseException('schema source mismatch', 400, 'CONFIG_SCHEMA_SOURCE', { restate: true });
+		const returned = attachRunOutcome(error, notRunSteps);
+
+		expect(returned).toBe(error);
+		expect(error.extensions).toMatchObject({ restate: true, steps: notRunSteps });
+		expect(error.extensions).not.toHaveProperty('failure');
 	});
 
 	it('records the outcome supplied through run.outcome, even when the run re-throws', async () => {
