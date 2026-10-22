@@ -119,7 +119,6 @@ test('runs the schema step events with no caller accountability', async ({ api }
 
 		const applied = await request(api.url)
 			.post('/config/apply')
-			.query({ step: 'schema' })
 			.set('Authorization', `Bearer ${api.adminToken}`)
 			.set('Content-Type', 'application/json')
 			.send(desired);

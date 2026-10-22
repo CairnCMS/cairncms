@@ -53,7 +53,7 @@ import { getSchema } from '../utils/get-schema.js';
 import { assertConfigValueSafe, parseConfigYaml } from '../utils/parse-config-document.js';
 import { safeLogFragment } from '../utils/safe-log-fragment.js';
 import { validateConfigManifest, validateDesiredConfig } from '../utils/validate-desired-config.js';
-import type { ConfigApplySecurityContext, ConfigFailure, ConfigManifest } from '../types/config.js';
+import type { ApplyResult, ConfigApplySecurityContext, ConfigFailure, ConfigManifest } from '../types/config.js';
 
 const router = express.Router();
 
@@ -101,8 +101,6 @@ router.post(
 		const dryRun = parseApplyFlag(req.query, 'dry_run');
 		const destructive = parseApplyFlag(req.query, 'destructive');
 		const forceSchema = parseApplyFlag(req.query, 'force_schema');
-
-		const step = parseApplyStep(req.query);
 
 		const manifest = validateConfigManifest(document['manifest'], BODY_LABEL);
 
@@ -216,72 +214,10 @@ router.post(
 
 					assertMutationAuthorized(plan, destructive);
 
-					if (step === 'folders') {
-						currentStep = 'folders';
-						const created = await applyFolderPreparation(config, current.schema, { context, database });
-						const prepared = created.length > 0;
-						steps.folders = prepared ? 'committed' : 'skipped';
-						run.outcome(steps);
-
-						const outcome = prepared ? ('applied' as const) : ('no_changes' as const);
-						res.locals['payload'] = { data: { created }, meta: { plan: serialized, result: outcome, steps } };
-
-						return { result: outcome };
-					}
-
-					if (step === 'schema') {
-						const changed = sliceHasChanges(plan.schema);
-
-						if (changed) {
-							currentStep = 'schema';
-
-							await applySchemaStep({
-								currentSchema: current.schema,
-								desiredSchema: config.schema,
-								schemaStoredFields,
-								expectedHash: schemaKeyFormHash ?? '',
-								database,
-							});
-
-							steps.schema = 'committed';
-						} else {
-							steps.schema = 'skipped';
-						}
-
-						run.outcome(steps);
-
-						const outcome = changed ? ('applied' as const) : ('no_changes' as const);
-						res.locals['payload'] = { data: null, meta: { plan: serialized, result: outcome, steps } };
-
-						return { result: outcome };
-					}
-
-					let result;
-
-					if (schemaManaged) {
-						const configResources = manifest.resources.filter((kind) => kind !== 'schema');
-
-						const configFailures = validateDesiredConfig(
-							{ ...document, manifest: { version: manifest.version, resources: configResources } },
-							{
-								label: BODY_LABEL,
-								references: 'current-state',
-								currentRoleKeys,
-								currentFolderKeys,
-								currentFolderParents,
-								...(extensionDeclarations !== undefined && { extensionDeclarations }),
-								currentCollections: schema.collections,
-							}
-						);
-
-						if (configFailures.length > 0) throw configFailures.map(toConfigException);
-
-						currentStep = 'configuration';
-						result = await applyConfigurationStep(config, configResources, database, destructive, context);
-					} else {
+					if (!schemaManaged) {
 						currentStep = 'configuration';
 
-						result = await applyConfigPlan(plan, {
+						const result = await applyConfigPlan(plan, {
 							database,
 							schema,
 							destructive,
@@ -289,12 +225,50 @@ router.post(
 							expectedStateToken: stateToken,
 							...(extensionDeclarations !== undefined && { extensionDeclarations }),
 						});
+
+						steps.configuration = empty ? 'skipped' : 'committed';
+						run.outcome(steps);
+
+						const outcome = empty ? ('no_changes' as const) : ('applied' as const);
+						res.locals['payload'] = { data: result, meta: { plan: serialized, result: outcome, steps } };
+
+						return { result: outcome };
 					}
 
-					const committed = schemaManaged ? result !== undefined : !empty;
-					steps.configuration = committed ? 'committed' : 'skipped';
+					currentStep = 'folders';
+					const created = await applyFolderPreparation(config, current.schema, { context, database });
+					steps.folders = created.length > 0 ? 'committed' : 'skipped';
+
+					if (sliceHasChanges(plan.schema)) {
+						currentStep = 'schema';
+
+						await applySchemaStep({
+							currentSchema: current.schema,
+							desiredSchema: config.schema,
+							schemaStoredFields,
+							expectedHash: schemaKeyFormHash ?? '',
+							database,
+						});
+
+						steps.schema = 'committed';
+					} else {
+						steps.schema = 'skipped';
+					}
+
+					const configResources = manifest.resources.filter((kind) => kind !== 'schema');
+					let result: ApplyResult | null = null;
+
+					if (configResources.length > 0) {
+						currentStep = 'configuration';
+						result = (await applyConfigurationStep(config, configResources, database, destructive, context)) ?? null;
+						steps.configuration = result !== null ? 'committed' : 'skipped';
+					} else {
+						steps.configuration = 'skipped';
+					}
+
 					run.outcome(steps);
 
+					const committed = Object.values(steps).includes('committed');
 					const outcome = committed ? ('applied' as const) : ('no_changes' as const);
 					res.locals['payload'] = { data: result, meta: { plan: serialized, result: outcome, steps } };
 
@@ -330,16 +304,6 @@ function parseApplyFlag(query: Record<string, unknown>, name: 'dry_run' | 'destr
 	if (value === 'false') return false;
 
 	throw new ConfigInvalidException(`The "${name}" query parameter must be exactly "true" or "false" when present.`);
-}
-
-function parseApplyStep(query: Record<string, unknown>): 'folders' | 'schema' | 'configuration' {
-	const value = query['step'];
-
-	if (value === undefined) return 'configuration';
-	if (value === 'folders') return 'folders';
-	if (value === 'schema') return 'schema';
-
-	throw new ConfigInvalidException('The "step" query parameter is not a supported value.');
 }
 
 function parseSnapshotScope(query: Record<string, unknown>): ConfigManifest {

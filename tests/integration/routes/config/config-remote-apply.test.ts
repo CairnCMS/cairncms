@@ -40,7 +40,6 @@ type ApplyOptions = {
 	dryRun?: boolean;
 	destructive?: boolean;
 	forceSchema?: string;
-	step?: string | string[];
 };
 
 function applyConfig(api: Api, desired: Document, options: ApplyOptions = {}) {
@@ -53,7 +52,6 @@ function applyConfig(api: Api, desired: Document, options: ApplyOptions = {}) {
 	if (options.dryRun) query['dry_run'] = 'true';
 	if (options.destructive) query['destructive'] = 'true';
 	if (options.forceSchema !== undefined) query['force_schema'] = options.forceSchema;
-	if (options.step !== undefined) query['step'] = options.step;
 	if (Object.keys(query).length > 0) req.query(query);
 
 	return req.send(desired);
@@ -291,20 +289,22 @@ test('rejects a malformed provenance block even when the schema override is pass
 	expect(errorCode(applied)).toBe('CONFIG_INVALID');
 });
 
-test('the schema override waives the provenance check and the configuration step applies no schema', async ({
-	api,
-}) => {
+test('the schema override waives the provenance check and the schema applies', async ({ api }) => {
 	const created = `prov_override_${suffix()}`;
-	const desired = await snapshot(api, ['schema']);
-	desired['schema'].push(newCollection(created));
-	desired['manifest']['schema'] = { release: '0.0.0-not-this-instance', vendor: 'wrong-vendor' };
 
-	const applied = await applyConfig(api, desired, { forceSchema: 'true' });
-	expect(applied.statusCode).toBe(200);
-	expect(applied.body.meta.result).toBe('no_changes');
-	expect(applied.body.meta.steps).toEqual({ folders: 'not_run', schema: 'not_run', configuration: 'skipped' });
+	try {
+		const desired = await snapshot(api, ['schema']);
+		desired['schema'].push(newCollection(created));
+		desired['manifest']['schema'] = { release: '0.0.0-not-this-instance', vendor: 'wrong-vendor' };
 
-	expect(await tableExists(api, created)).toBe(false);
+		const applied = await applyConfig(api, desired, { forceSchema: 'true' });
+		expect(applied.statusCode).toBe(200);
+		expect(applied.body.meta.result).toBe('applied');
+		expect(applied.body.meta.steps).toEqual({ folders: 'skipped', schema: 'committed', configuration: 'skipped' });
+		expect(await tableExists(api, created)).toBe(true);
+	} finally {
+		await dropCollection(api, created);
+	}
 });
 
 test('refuses a schema folder reference absent from the target and the managed folders', async ({ api }) => {
@@ -334,7 +334,7 @@ test('refuses a schema folder reference absent from the target and the managed f
 test('applies a non-schema kind over HTTP after the CLI has created the schema', async ({ api }) => {
 	const created = `after_schema_${suffix()}`;
 	const roleKey = `role_${suffix()}`;
-	const committed = { folders: 'not_run', schema: 'not_run', configuration: 'committed' };
+	const committed = { folders: 'skipped', schema: 'skipped', configuration: 'committed' };
 
 	try {
 		const fixtureRoot = await fs.mkdtemp(path.join(api.directory, 'remote-apply-'));
@@ -349,7 +349,6 @@ test('applies a non-schema kind over HTTP after the CLI has created the schema',
 		const desired = await snapshot(api, ['schema', 'roles', 'extension-settings']);
 		desired['roles'].push(appRole(roleKey));
 
-		// The collection-scoped setting for the now-existing collection is the success control for the out-of-order refusal.
 		desired['extension-settings'] = [
 			...desired['extension-settings'].filter((entry: Document) => entry.subject !== EXT_SUBJECT),
 			collectionPreviewSetting(created),
@@ -374,25 +373,61 @@ test('applies a non-schema kind over HTTP after the CLI has created the schema',
 	}
 });
 
-test('refuses a collection-scoped extension setting for a collection the configuration step cannot see', async ({
+test('applies a collection-scoped extension setting for a collection the schema step creates, in one request', async ({
 	api,
 }) => {
-	const created = `ext_oos_${suffix()}`;
+	const created = `ext_same_${suffix()}`;
 	const roleKey = `ext_role_${suffix()}`;
+	const committed = { folders: 'skipped', schema: 'committed', configuration: 'committed' };
+
+	try {
+		const desired = await snapshot(api, ['schema', 'extension-settings', 'roles']);
+		desired['schema'].push(newCollection(created));
+		desired['roles'].push(appRole(roleKey));
+
+		desired['extension-settings'] = [
+			...desired['extension-settings'].filter((entry: Document) => entry.subject !== EXT_SUBJECT),
+			collectionPreviewSetting(created),
+		];
+
+		const applied = await applyConfig(api, desired);
+		expect(applied.statusCode).toBe(200);
+		expect(applied.body.meta.result).toBe('applied');
+		expect(applied.body.meta.steps).toEqual(committed);
+
+		expect(await tableExists(api, created)).toBe(true);
+		expect(await roleExists(api, roleKey)).toBe(true);
+		expect(await collectionSettingExists(api, EXT_SUBJECT, created, 'preview_url')).toBe(true);
+
+		const records = await recordsFor(api, applied.headers['x-config-run-id']);
+		expect(records).toHaveLength(1);
+		expect(records[0]!['result']).toBe('applied');
+		expect(records[0]!['steps']).toEqual(committed);
+	} finally {
+		await resetExtensionSettings(api, EXT_SUBJECT);
+		await deleteRoleByKey(api, roleKey);
+		await dropCollection(api, created);
+	}
+});
+
+test('refuses a collection-scoped extension setting for a collection neither current nor planned, before any write', async ({
+	api,
+}) => {
+	const ghost = `ext_ghost_${suffix()}`;
+	const roleKey = `ext_ghost_role_${suffix()}`;
 	const desired = await snapshot(api, ['schema', 'extension-settings', 'roles']);
-	desired['schema'].push(newCollection(created));
 	desired['roles'].push(appRole(roleKey));
 
 	desired['extension-settings'] = [
 		...desired['extension-settings'].filter((entry: Document) => entry.subject !== EXT_SUBJECT),
-		collectionPreviewSetting(created),
+		collectionPreviewSetting(ghost),
 	];
 
 	try {
-		const applied = await applyConfig(api, desired, { forceSchema: 'true' });
+		const applied = await applyConfig(api, desired);
 		expect(applied.statusCode).toBe(400);
 		expect(errorCode(applied)).toBe('CONFIG_INVALID');
-		expect(applied.body.errors[0].message).toContain(created);
+		expect(applied.body.errors[0].message).toContain(ghost);
 		expect(await roleExists(api, roleKey)).toBe(false);
 	} finally {
 		await resetExtensionSettings(api, EXT_SUBJECT);
@@ -400,8 +435,8 @@ test('refuses a collection-scoped extension setting for a collection the configu
 	}
 });
 
-test('allows a permission for a collection the configuration step cannot see', async ({ api }) => {
-	const created = `perm_oos_${suffix()}`;
+test('applies a permission alongside the collection it names, in one request', async ({ api }) => {
+	const created = `perm_same_${suffix()}`;
 	const roleKey = `perm_role_${suffix()}`;
 
 	try {
@@ -410,106 +445,104 @@ test('allows a permission for a collection the configuration step cannot see', a
 		desired['roles'].push(appRole(roleKey));
 		desired['permissions'].push(readPermissionSet(roleKey, created));
 
-		const applied = await applyConfig(api, desired, { forceSchema: 'true' });
+		const applied = await applyConfig(api, desired);
 		expect(applied.statusCode).toBe(200);
 		expect(applied.body.meta.result).toBe('applied');
+		expect(applied.body.meta.steps).toEqual({ folders: 'skipped', schema: 'committed', configuration: 'committed' });
 
 		expect(await roleExists(api, roleKey)).toBe(true);
 		expect(await permissionExists(api, created)).toBe(true);
-		expect(await tableExists(api, created)).toBe(false);
+		expect(await tableExists(api, created)).toBe(true);
 	} finally {
 		await deleteRoleByKey(api, roleKey);
 		await dropCollection(api, created);
 	}
 });
 
-test('refuses an unrecognized step, a repeated step, and a non-boolean force_schema', async ({ api }) => {
+test('refuses a non-boolean force_schema', async ({ api }) => {
 	const desired = await snapshot(api, ['roles']);
-
-	const unknownStep = await applyConfig(api, desired, { step: 'bogus' });
-	expect(unknownStep.statusCode).toBe(400);
-	expect(errorCode(unknownStep)).toBe('CONFIG_INVALID');
-
-	const repeatedStep = await applyConfig(api, desired, { step: ['folders', 'schema'] });
-	expect(repeatedStep.statusCode).toBe(400);
-	expect(errorCode(repeatedStep)).toBe('CONFIG_INVALID');
 
 	const badForce = await applyConfig(api, desired, { forceSchema: 'maybe' });
 	expect(badForce.statusCode).toBe(400);
 	expect(errorCode(badForce)).toBe('CONFIG_INVALID');
 });
 
-test('step=folders creates the referenced folders and their ancestors and nothing else', async ({ api }) => {
+test('one request prepares the referenced folders, applies the schema, and reconciles the configuration', async ({
+	api,
+}) => {
 	const s = suffix();
-	const collection = `fold_ok_${s}`;
+	const collection = `whole_${s}`;
 	const parentKey = `parent_${s}`;
 	const galleryKey = `gallery_${s}`;
 	const orphanKey = `orphan_${s}`;
-	const roleKey = `fold_role_${s}`;
-	const committed = { folders: 'committed', schema: 'not_run', configuration: 'not_run' };
+	const roleKey = `whole_role_${s}`;
+	const committed = { folders: 'committed', schema: 'committed', configuration: 'committed' };
 
 	try {
 		const desired = await snapshot(api, ['schema', 'folders', 'roles']);
 		desired['schema'].push(collectionWithFolderField(collection, galleryKey));
 		desired['folders'].push(folder(parentKey), folder(galleryKey, parentKey), folder(orphanKey));
-		// An unreferenced declared folder and a pending role prove the step touches only the referenced folders.
 		desired['roles'].push(appRole(roleKey));
 
-		const applied = await applyConfig(api, desired, { step: 'folders' });
+		const applied = await applyConfig(api, desired);
 		expect(applied.statusCode).toBe(200);
 		expect(applied.body.meta.result).toBe('applied');
 		expect(applied.body.meta.steps).toEqual(committed);
-		expect(applied.body.data.created).toEqual(expect.arrayContaining([parentKey, galleryKey]));
-		expect(applied.body.data.created).not.toContain(orphanKey);
+		expect(applied.body.data).not.toBeNull();
 
 		const parent = await folderByKey(api, parentKey);
 		const gallery = await folderByKey(api, galleryKey);
 		expect(parent).toBeDefined();
 		expect(gallery?.parent).toBe(parent!.id);
-		expect(await folderByKey(api, orphanKey)).toBeUndefined();
-		expect(await roleExists(api, roleKey)).toBe(false);
-		expect(await tableExists(api, collection)).toBe(false);
+		expect(await folderByKey(api, orphanKey)).toBeDefined();
+		expect(await roleExists(api, roleKey)).toBe(true);
+		expect(await tableExists(api, collection)).toBe(true);
+		expect(await api.database.schema.hasColumn(collection, 'cover')).toBe(true);
 
 		const records = await recordsFor(api, applied.headers['x-config-run-id']);
 		expect(records).toHaveLength(1);
 		expect(records[0]!['result']).toBe('applied');
 		expect(records[0]!['steps']).toEqual(committed);
 	} finally {
+		await dropCollection(api, collection);
 		await deleteFolders(api, [galleryKey, orphanKey, parentKey]);
 		await deleteRoleByKey(api, roleKey);
-		await dropCollection(api, collection);
 	}
 });
 
-test('step=folders reports skipped when there is nothing to prepare', async ({ api }) => {
+test('reports every step skipped when the tree already matches the target', async ({ api }) => {
 	const desired = await snapshot(api, ['schema', 'folders']);
 
-	const applied = await applyConfig(api, desired, { step: 'folders' });
+	const applied = await applyConfig(api, desired);
 	expect(applied.statusCode).toBe(200);
+	expect(applied.body.data).toBeNull();
 	expect(applied.body.meta.result).toBe('no_changes');
-	expect(applied.body.meta.steps).toEqual({ folders: 'skipped', schema: 'not_run', configuration: 'not_run' });
-	expect(applied.body.data.created).toEqual([]);
+	expect(applied.body.meta.steps).toEqual({ folders: 'skipped', schema: 'skipped', configuration: 'skipped' });
 });
 
-test('step=folders dry-run writes no folder', async ({ api }) => {
+test('dry-run previews the whole run and writes nothing', async ({ api }) => {
 	const s = suffix();
+	const collection = `dry_${s}`;
 	const galleryKey = `gallery_${s}`;
 
 	try {
 		const desired = await snapshot(api, ['schema', 'folders']);
-		desired['schema'].push(collectionWithFolderField(`fold_dry_${s}`, galleryKey));
+		desired['schema'].push(collectionWithFolderField(collection, galleryKey));
 		desired['folders'].push(folder(galleryKey));
 
-		const dry = await applyConfig(api, desired, { step: 'folders', dryRun: true });
+		const dry = await applyConfig(api, desired, { dryRun: true });
 		expect(dry.statusCode).toBe(200);
 		expect(await folderByKey(api, galleryKey)).toBeUndefined();
+		expect(await tableExists(api, collection)).toBe(false);
 	} finally {
 		await deleteFolders(api, [galleryKey]);
+		await dropCollection(api, collection);
 	}
 });
 
-test('step=folders refuses a destructive combined plan before creating any folder', async ({ api }) => {
+test('refuses a destructive combined plan before any write', async ({ api }) => {
 	const s = suffix();
+	const collection = `dx_${s}`;
 	const galleryKey = `gallery_${s}`;
 	const doomedKey = `doomed_${s}`;
 
@@ -517,107 +550,35 @@ test('step=folders refuses a destructive combined plan before creating any folde
 		await api.database('directus_folders').insert({ id: randomUUID(), name: doomedKey, key: doomedKey });
 
 		const desired = await snapshot(api, ['schema', 'folders']);
-		desired['schema'].push(collectionWithFolderField(`fold_dx_${s}`, galleryKey));
+		desired['schema'].push(collectionWithFolderField(collection, galleryKey));
 		desired['folders'] = desired['folders'].filter((f: FolderFixture) => f.key !== doomedKey);
 		desired['folders'].push(folder(galleryKey));
 
-		const applied = await applyConfig(api, desired, { step: 'folders' });
+		const applied = await applyConfig(api, desired);
 		expect(applied.statusCode).toBe(400);
 		expect(errorCode(applied)).toBe('DESTRUCTIVE_CHANGES_REQUIRED');
+		expect(applied.body.errors[0].extensions.steps).toEqual(NOT_RUN);
 		expect(await folderByKey(api, galleryKey)).toBeUndefined();
+		expect(await tableExists(api, collection)).toBe(false);
 	} finally {
 		await deleteFolders(api, [galleryKey, doomedKey]);
+		await dropCollection(api, collection);
 	}
 });
 
-test('step=folders refuses a protected combined plan before creating any folder', async ({ api }) => {
-	const s = suffix();
-	const galleryKey = `gallery_${s}`;
-
-	try {
-		const desired = await snapshot(api, ['schema', 'folders', 'roles']);
-		desired['schema'].push(collectionWithFolderField(`fold_px_${s}`, galleryKey));
-		desired['folders'].push(folder(galleryKey));
-		desired['roles'] = desired['roles'].filter((entry: RoleFixture) => !entry.admin_access);
-
-		const applied = await applyConfig(api, desired, { step: 'folders', destructive: true });
-		expect(applied.statusCode).toBe(400);
-		expect(errorCode(applied)).toBe('CONFIG_PROTECTED_RECORD');
-		expect(await folderByKey(api, galleryKey)).toBeUndefined();
-	} finally {
-		await deleteFolders(api, [galleryKey]);
-	}
-});
-
-test('step=schema applies the schema and reports it committed, leaving the configuration untouched', async ({
-	api,
-}) => {
-	const created = `schema_ok_${suffix()}`;
-	const roleKey = `schema_role_${suffix()}`;
-	const committed = { folders: 'not_run', schema: 'committed', configuration: 'not_run' };
-
-	try {
-		const desired = await snapshot(api, ['schema', 'roles']);
-		desired['schema'].push(newCollection(created));
-		desired['roles'].push(appRole(roleKey));
-
-		const applied = await applyConfig(api, desired, { step: 'schema' });
-		expect(applied.statusCode).toBe(200);
-		expect(applied.body.data).toBeNull();
-		expect(applied.body.meta.result).toBe('applied');
-		expect(applied.body.meta.steps).toEqual(committed);
-
-		expect(await tableExists(api, created)).toBe(true);
-		expect(await roleExists(api, roleKey)).toBe(false);
-
-		const records = await recordsFor(api, applied.headers['x-config-run-id']);
-		expect(records).toHaveLength(1);
-		expect(records[0]!['result']).toBe('applied');
-		expect(records[0]!['steps']).toEqual(committed);
-	} finally {
-		await deleteRoleByKey(api, roleKey);
-		await dropCollection(api, created);
-	}
-});
-
-test('step=schema reports skipped when the schema already matches the target', async ({ api }) => {
-	const desired = await snapshot(api, ['schema']);
-
-	const applied = await applyConfig(api, desired, { step: 'schema' });
-	expect(applied.statusCode).toBe(200);
-	expect(applied.body.data).toBeNull();
-	expect(applied.body.meta.result).toBe('no_changes');
-	expect(applied.body.meta.steps).toEqual({ folders: 'not_run', schema: 'skipped', configuration: 'not_run' });
-});
-
-test('step=schema dry-run creates no collection', async ({ api }) => {
-	const created = `schema_dry_${suffix()}`;
-
-	try {
-		const desired = await snapshot(api, ['schema']);
-		desired['schema'].push(newCollection(created));
-
-		const dry = await applyConfig(api, desired, { step: 'schema', dryRun: true });
-		expect(dry.statusCode).toBe(200);
-		expect(await tableExists(api, created)).toBe(false);
-	} finally {
-		await dropCollection(api, created);
-	}
-});
-
-test('step=schema refuses a destructive combined plan before dropping anything', async ({ api }) => {
+test('refuses a destructive schema deletion before dropping anything', async ({ api }) => {
 	const doomed = `schema_dx_${suffix()}`;
 
 	try {
 		const seed = await snapshot(api, ['schema']);
 		seed['schema'].push(newCollection(doomed));
-		expect((await applyConfig(api, seed, { step: 'schema' })).statusCode).toBe(200);
+		expect((await applyConfig(api, seed)).statusCode).toBe(200);
 		expect(await tableExists(api, doomed)).toBe(true);
 
 		const desired = await snapshot(api, ['schema']);
 		desired['schema'] = desired['schema'].filter((entry: { collection: string }) => entry.collection !== doomed);
 
-		const applied = await applyConfig(api, desired, { step: 'schema' });
+		const applied = await applyConfig(api, desired);
 		expect(applied.statusCode).toBe(400);
 		expect(errorCode(applied)).toBe('DESTRUCTIVE_CHANGES_REQUIRED');
 		expect(await tableExists(api, doomed)).toBe(true);
@@ -626,35 +587,37 @@ test('step=schema refuses a destructive combined plan before dropping anything',
 	}
 });
 
-test('step=schema refuses a protected combined plan before any write', async ({ api }) => {
-	const created = `schema_px_${suffix()}`;
+test('refuses a protected combined plan before any write', async ({ api }) => {
+	const s = suffix();
+	const collection = `px_${s}`;
+	const galleryKey = `gallery_${s}`;
 
 	try {
-		const desired = await snapshot(api, ['schema', 'roles']);
-		desired['schema'].push(newCollection(created));
+		const desired = await snapshot(api, ['schema', 'folders', 'roles']);
+		desired['schema'].push(collectionWithFolderField(collection, galleryKey));
+		desired['folders'].push(folder(galleryKey));
 		desired['roles'] = desired['roles'].filter((entry: RoleFixture) => !entry.admin_access);
 
-		const applied = await applyConfig(api, desired, { step: 'schema', destructive: true });
+		const applied = await applyConfig(api, desired, { destructive: true });
 		expect(applied.statusCode).toBe(400);
 		expect(errorCode(applied)).toBe('CONFIG_PROTECTED_RECORD');
-		expect(await tableExists(api, created)).toBe(false);
+		expect(applied.body.errors[0].extensions.steps).toEqual(NOT_RUN);
+		expect(await folderByKey(api, galleryKey)).toBeUndefined();
+		expect(await tableExists(api, collection)).toBe(false);
 	} finally {
-		await dropCollection(api, created);
+		await deleteFolders(api, [galleryKey]);
+		await dropCollection(api, collection);
 	}
 });
 
-test('step=schema refuses a non-admin caller', async ({ api }) => {
+test('refuses a non-admin caller before any write', async ({ api }) => {
 	const created = `schema_403_${suffix()}`;
 
 	try {
 		const desired = await snapshot(api, ['schema']);
 		desired['schema'].push(newCollection(created));
 
-		const response = await request(api.url)
-			.post('/config/apply')
-			.query({ step: 'schema' })
-			.set('Content-Type', 'application/json')
-			.send(desired);
+		const response = await request(api.url).post('/config/apply').set('Content-Type', 'application/json').send(desired);
 
 		expect(response.statusCode).toBe(403);
 		expect(await tableExists(api, created)).toBe(false);
@@ -665,7 +628,7 @@ test('step=schema refuses a non-admin caller', async ({ api }) => {
 
 const PARTIAL_PERSISTENCE_VENDORS = ['mysql', 'mysql5', 'maria'];
 
-test('step=schema surfaces a data-definition failure as a schema step failure in the response and the record', async ({
+test('surfaces a data-definition failure as a schema step failure in the response and the record', async ({
 	api,
 	vendor,
 }) => {
@@ -686,7 +649,7 @@ test('step=schema surfaces a data-definition failure as a schema step failure in
 		});
 
 		seed['schema'].push(keepSeed, newCollection(fresh));
-		expect((await applyConfig(api, seed, { step: 'schema' })).statusCode).toBe(200);
+		expect((await applyConfig(api, seed)).statusCode).toBe(200);
 
 		await api.database(keep).insert({ label: 'seed' });
 		await dropCollection(api, fresh);
@@ -707,12 +670,12 @@ test('step=schema surfaces a data-definition failure as a schema step failure in
 				: { name: badField, table: keep, data_type: 'varchar', is_nullable: false, default_value: null },
 		});
 
-		const applied = await applyConfig(api, desired, { step: 'schema' });
+		const applied = await applyConfig(api, desired);
 		expect(applied.statusCode).toBe(500);
 
 		const extensions = applied.body.errors[0].extensions;
 		expect(extensions.code).toBe('SCHEMA_APPLY_FAILED');
-		expect(extensions.steps).toEqual({ folders: 'not_run', schema: 'failed', configuration: 'not_run' });
+		expect(extensions.steps).toEqual({ folders: 'skipped', schema: 'failed', configuration: 'not_run' });
 		expect(extensions.failure.step).toBe('schema');
 
 		const persisted = extensions.failure.detail.persisted;

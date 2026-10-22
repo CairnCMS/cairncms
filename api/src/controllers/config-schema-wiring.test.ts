@@ -2,7 +2,7 @@ import type { Accountability } from '@cairncms/types';
 import express from 'express';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CairnConfig } from '../types/config.js';
+import type { ApplyResult, CairnConfig, ConfigKind } from '../types/config.js';
 import type { SnapshotField } from '../types/index.js';
 
 vi.mock('../env.js', async (importOriginal) => {
@@ -70,13 +70,16 @@ vi.mock('../middleware/respond.js', () => ({
 		res.json(res.locals['payload']),
 }));
 
+import { InvalidPayloadException } from '../exceptions/index.js';
 import { SchemaApplyFailedException } from '../exceptions/schema-apply-failed.js';
 import { SchemaPostCommitFailedException } from '../exceptions/schema-post-commit-failed.js';
 import { SchemaStateChangedException } from '../exceptions/schema-state-changed.js';
 import logger from '../logger.js';
 import errorHandler from '../middleware/error-handler.js';
+import { applyConfigPlan } from '../utils/apply-config-plan.js';
 import { applyFolderPreparation } from '../utils/apply-folder-preparation.js';
 import { applySchemaStep } from '../utils/config/apply-steps.js';
+import { getDescriptor, listConfigKinds } from '../utils/config/registry.js';
 import { readCurrentConfig } from '../utils/get-config-snapshot.js';
 import { version } from '../utils/package.js';
 import configController from './config.js';
@@ -101,7 +104,7 @@ function storedFields(): SnapshotField[] {
 	];
 }
 
-function articlesBody(field: Record<string, unknown>) {
+function articlesBody(...fields: Record<string, unknown>[]) {
 	return {
 		manifest: { version: 3, resources: ['schema'], schema: { release: version, vendor: 'postgres' } },
 		roles: [],
@@ -115,10 +118,65 @@ function articlesBody(field: Record<string, unknown>) {
 				collection: 'articles',
 				meta: {},
 				schema: { name: 'articles' },
-				fields: [{ collection: 'articles', ...field }],
+				fields: fields.map((field) => ({ collection: 'articles', ...field })),
 				relations: [],
 			},
 		],
+	};
+}
+
+const EDITOR_ROLE = { key: 'editor', name: 'Editor', admin_access: false, app_access: true };
+const COVERS_FOLDER = { key: 'covers', name: 'covers', parent: null };
+
+let preparedFolderKeys: string[] = [];
+
+function prepareFolders(keys: string[]) {
+	vi.mocked(applyFolderPreparation).mockImplementation(async () => {
+		preparedFolderKeys = keys;
+		return keys;
+	});
+}
+
+function engineResult(slices: Partial<ApplyResult> = {}): ApplyResult {
+	const empty = Object.fromEntries(
+		listConfigKinds().map((kind) => [kind, getDescriptor(kind).handler.emptyResult()])
+	) as unknown as ApplyResult;
+
+	return { ...empty, ...slices };
+}
+
+const ROLE_CREATED = engineResult({ roles: { created: [EDITOR_ROLE.key], updated: [], deleted: [] } });
+const NOTHING_APPLIED = engineResult();
+
+function combinedBody() {
+	const body = articlesBody(
+		{ field: 'title', type: 'string', meta: {}, schema: { name: 'title' } },
+		{
+			field: 'cover',
+			type: 'uuid',
+			meta: { interface: 'file', options: { folder: COVERS_FOLDER.key } },
+			schema: { name: 'cover' },
+		}
+	);
+
+	return {
+		...body,
+		manifest: {
+			version: 3,
+			resources: ['folders', 'roles', 'schema'],
+			schema: { release: version, vendor: 'postgres' },
+		},
+		folders: [COVERS_FOLDER],
+		roles: [EDITOR_ROLE],
+	};
+}
+
+function rolesOnlyBody() {
+	return {
+		...articlesBody({ field: 'title', type: 'string', meta: {}, schema: { name: 'title' } }),
+		manifest: { version: 3, resources: ['roles'] },
+		roles: [],
+		schema: [],
 	};
 }
 
@@ -136,15 +194,25 @@ function makeApp() {
 	return app;
 }
 
-function readResult(withStoredFields: boolean) {
+function readResult(resources: readonly ConfigKind[], withStoredFields = true) {
+	const schemaCapture = resources.includes('schema') && withStoredFields;
+
+	const folders = preparedFolderKeys.map((key) => ({ key, name: key, parent: null }));
+
 	return {
-		config: EMPTY_CURRENT,
+		config: { ...EMPTY_CURRENT, manifest: { version: 3 as const, resources: [...resources] }, folders },
 		currentRoleKeys: new Set<string>(),
-		currentFolderKeys: new Set<string>(),
-		currentFolderParents: new Map<string, string | null>(),
-		stateToken: { resources: ['schema'], digest: 'digest' },
-		...(withStoredFields && { schemaStoredFields: storedFields(), schemaKeyFormHash: 'key-form-hash' }),
+		currentFolderKeys: new Set(preparedFolderKeys),
+		currentFolderParents: new Map<string, string | null>(preparedFolderKeys.map((key) => [key, null])),
+		stateToken: { resources: [...resources], digest: 'digest' },
+		...(schemaCapture && { schemaStoredFields: storedFields(), schemaKeyFormHash: 'key-form-hash' }),
 	};
+}
+
+function stubRead(withStoredFields = true) {
+	vi.mocked(readCurrentConfig).mockImplementation(
+		async (options) => readResult(options.resources ?? [], withStoredFields) as never
+	);
 }
 
 function runRecordsFor(runId: string): Array<Record<string, unknown>> {
@@ -161,7 +229,11 @@ function runRecordsFor(runId: string): Array<Record<string, unknown>> {
 }
 
 beforeEach(() => {
-	vi.mocked(readCurrentConfig).mockResolvedValue(readResult(true) as never);
+	preparedFolderKeys = [];
+	stubRead();
+	vi.mocked(applyFolderPreparation).mockResolvedValue([]);
+	vi.mocked(applySchemaStep).mockResolvedValue(undefined);
+	vi.mocked(applyConfigPlan).mockResolvedValue(NOTHING_APPLIED);
 });
 
 afterEach(() => {
@@ -221,7 +293,7 @@ describe('POST /config/apply schema wiring', () => {
 	});
 
 	it('fails a version 3 dry run when the private capture was not forwarded', async () => {
-		vi.mocked(readCurrentConfig).mockResolvedValue(readResult(false) as never);
+		stubRead(false);
 
 		const response = await request(makeApp())
 			.post('/config/apply?dry_run=true')
@@ -232,31 +304,47 @@ describe('POST /config/apply schema wiring', () => {
 		expect(response.body.errors[0].extensions.code).toBe('INTERNAL_SERVER_ERROR');
 	});
 
-	it('names the folders step in the run outcome when folder preparation fails', async () => {
-		vi.mocked(applyFolderPreparation).mockRejectedValue(new Error('folder preparation failed'));
+	it('applies folders, schema, and configuration in order in one request and reports every step', async () => {
+		prepareFolders([COVERS_FOLDER.key]);
+		vi.mocked(applyConfigPlan).mockResolvedValue(ROLE_CREATED);
 
 		const response = await request(makeApp())
-			.post('/config/apply?step=folders')
+			.post('/config/apply')
 			.set('User-Agent', 'cairncms-cli/1.6.0')
-			.send(articlesBody({ field: 'title', type: 'string', meta: {}, schema: { name: 'title' } }));
+			.send(combinedBody());
 
-		expect(response.status).toBe(500);
+		expect(response.status).toBe(200);
+		expect(response.body.data).toEqual(ROLE_CREATED);
+		expect(response.body.meta.result).toBe('applied');
+		expect(response.body.meta.steps).toEqual({ folders: 'committed', schema: 'committed', configuration: 'committed' });
 
-		const extensions = response.body.errors[0].extensions;
-		expect(extensions.steps).toEqual({ folders: 'failed', schema: 'not_run', configuration: 'not_run' });
-		expect(extensions.failure).toEqual({ step: 'folders' });
+		const foldersOrder = vi.mocked(applyFolderPreparation).mock.invocationCallOrder[0]!;
+		const schemaOrder = vi.mocked(applySchemaStep).mock.invocationCallOrder[0]!;
+		const configurationOrder = vi.mocked(applyConfigPlan).mock.invocationCallOrder[0]!;
+		expect(foldersOrder).toBeLessThan(schemaOrder);
+		expect(schemaOrder).toBeLessThan(configurationOrder);
+
+		const [configurationPlan] = vi.mocked(applyConfigPlan).mock.calls[0]!;
+		expect(configurationPlan.folders.create).toEqual([]);
+		expect(configurationPlan.roles.create.map((role) => role.key)).toEqual([EDITOR_ROLE.key]);
+
+		const records = runRecordsFor(response.headers['x-config-run-id']!);
+		expect(records).toHaveLength(1);
+		expect(records[0]).toMatchObject({ result: 'applied', steps: response.body.meta.steps });
 	});
 
-	it('applies the schema step over HTTP without handing the caller identity to the schema engine', async () => {
+	it('applies the schema step without handing the caller identity to the schema engine', async () => {
+		vi.mocked(applyFolderPreparation).mockResolvedValue([]);
+
 		const response = await request(makeApp())
-			.post('/config/apply?step=schema')
+			.post('/config/apply')
 			.set('User-Agent', 'cairncms-cli/1.6.0')
 			.send(articlesBody({ field: 'title', type: 'string', meta: {}, schema: { name: 'title' } }));
 
 		expect(response.status).toBe(200);
 		expect(response.body.data).toBeNull();
 		expect(response.body.meta.result).toBe('applied');
-		expect(response.body.meta.steps).toEqual({ folders: 'not_run', schema: 'committed', configuration: 'not_run' });
+		expect(response.body.meta.steps).toEqual({ folders: 'skipped', schema: 'committed', configuration: 'skipped' });
 
 		expect(applySchemaStep).toHaveBeenCalledTimes(1);
 
@@ -266,81 +354,157 @@ describe('POST /config/apply schema wiring', () => {
 		expect(handoff).not.toHaveProperty('context');
 	});
 
-	it('names the schema step rolled back when a concurrent change conflicts with the apply', async () => {
-		vi.mocked(applySchemaStep).mockRejectedValue(new SchemaStateChangedException());
-
+	it('returns the engine result unchanged for a configuration-only no-op', async () => {
 		const response = await request(makeApp())
-			.post('/config/apply?step=schema')
+			.post('/config/apply')
 			.set('User-Agent', 'cairncms-cli/1.6.0')
-			.send(articlesBody({ field: 'title', type: 'string', meta: {}, schema: { name: 'title' } }));
+			.send(rolesOnlyBody());
 
-		expect(response.status).toBe(409);
-
-		const extensions = response.body.errors[0].extensions;
-		expect(extensions.code).toBe('SCHEMA_STATE_CHANGED');
-		expect(extensions.steps).toEqual({ folders: 'not_run', schema: 'rolled_back', configuration: 'not_run' });
-		expect(extensions.failure).toEqual({ step: 'schema' });
-
-		const records = runRecordsFor(response.headers['x-config-run-id']!);
-		expect(records).toHaveLength(1);
-
-		expect(records[0]).toMatchObject({
-			result: 'state_changed',
-			errorCode: 'SCHEMA_STATE_CHANGED',
-			steps: extensions.steps,
-			failure: extensions.failure,
-		});
+		expect(response.status).toBe(200);
+		expect(response.body.data).toEqual(NOTHING_APPLIED);
+		expect(response.body.meta.result).toBe('no_changes');
+		expect(response.body.meta.steps).toEqual({ folders: 'not_run', schema: 'not_run', configuration: 'skipped' });
+		expect(applyFolderPreparation).not.toHaveBeenCalled();
+		expect(applySchemaStep).not.toHaveBeenCalled();
 	});
 
-	it('names the schema step unknown when the apply failure cannot read the persisted state', async () => {
-		vi.mocked(applySchemaStep).mockRejectedValue(new SchemaApplyFailedException('unknown'));
+	it('refuses an extension setting whose collection is neither current nor planned, before any write', async () => {
+		const body = {
+			...articlesBody({ field: 'id', type: 'integer', meta: {}, schema: { name: 'id', is_primary_key: true } }),
+			manifest: {
+				version: 3,
+				resources: ['extension-settings', 'schema'],
+				schema: { release: version, vendor: 'postgres' },
+			},
+			'extension-settings': [
+				{ subject: '@cairncms/extension-widget', global: {}, collections: { ghost_collection: { label: 'x' } } },
+			],
+		};
+
+		const response = await request(makeApp()).post('/config/apply').set('User-Agent', 'cairncms-cli/1.6.0').send(body);
+
+		expect(response.status).toBe(400);
+		expect(response.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+		expect(response.body.errors[0].message).toContain('ghost_collection');
+		expect(applyFolderPreparation).not.toHaveBeenCalled();
+		expect(applySchemaStep).not.toHaveBeenCalled();
+		expect(applyConfigPlan).not.toHaveBeenCalled();
+	});
+
+	it('names the folders step and runs nothing after it when folder preparation fails', async () => {
+		vi.mocked(applyFolderPreparation).mockRejectedValue(new Error('folder preparation failed'));
 
 		const response = await request(makeApp())
-			.post('/config/apply?step=schema')
+			.post('/config/apply')
 			.set('User-Agent', 'cairncms-cli/1.6.0')
-			.send(articlesBody({ field: 'title', type: 'string', meta: {}, schema: { name: 'title' } }));
+			.send(combinedBody());
 
 		expect(response.status).toBe(500);
 
 		const extensions = response.body.errors[0].extensions;
-		expect(extensions.code).toBe('SCHEMA_APPLY_FAILED');
-		expect(extensions.steps).toEqual({ folders: 'not_run', schema: 'unknown', configuration: 'not_run' });
-		expect(extensions.failure).toEqual({ step: 'schema', detail: { persisted: 'unknown' } });
+		expect(extensions.steps).toEqual({ folders: 'failed', schema: 'not_run', configuration: 'not_run' });
+		expect(extensions.failure).toEqual({ step: 'folders' });
+		expect(applySchemaStep).not.toHaveBeenCalled();
+		expect(applyConfigPlan).not.toHaveBeenCalled();
 
 		const records = runRecordsFor(response.headers['x-config-run-id']!);
 		expect(records).toHaveLength(1);
 
 		expect(records[0]).toMatchObject({
 			result: 'failed',
-			errorCode: 'SCHEMA_APPLY_FAILED',
+			errorCode: 'UNEXPECTED',
 			steps: extensions.steps,
 			failure: extensions.failure,
 		});
 	});
 
-	it('names the schema step committed when a post-commit maintenance phase fails', async () => {
-		vi.mocked(applySchemaStep).mockRejectedValue(new SchemaPostCommitFailedException('cache'));
+	it.each([
+		{
+			name: 'rolled back on a concurrent change',
+			thrown: () => new SchemaStateChangedException(),
+			status: 409,
+			code: 'SCHEMA_STATE_CHANGED',
+			recordCode: 'SCHEMA_STATE_CHANGED',
+			step: 'rolled_back',
+			failure: { step: 'schema' },
+			result: 'state_changed',
+		},
+		{
+			name: 'unknown when the persisted state cannot be read',
+			thrown: () => new SchemaApplyFailedException('unknown'),
+			status: 500,
+			code: 'SCHEMA_APPLY_FAILED',
+			recordCode: 'SCHEMA_APPLY_FAILED',
+			step: 'unknown',
+			failure: { step: 'schema', detail: { persisted: 'unknown' } },
+			result: 'failed',
+		},
+		{
+			name: 'committed when a post-commit maintenance phase fails',
+			thrown: () => new SchemaPostCommitFailedException('cache'),
+			status: 500,
+			code: 'SCHEMA_POST_COMMIT_FAILED',
+			recordCode: 'SCHEMA_POST_COMMIT_FAILED',
+			step: 'committed',
+			failure: { step: 'schema', detail: { phase: 'cache' } },
+			result: 'post_apply_failed',
+		},
+		{
+			name: 'failed on a schema refusal',
+			thrown: () =>
+				new InvalidPayloadException('Field "articles.title" can\'t remove its column and remain as a field.'),
+			status: 400,
+			code: 'INVALID_PAYLOAD',
+			recordCode: 'UNEXPECTED',
+			step: 'failed',
+			failure: { step: 'schema' },
+			result: 'failed',
+		},
+	])('names the schema step $name after folder preparation committed, and runs no configuration', async (c) => {
+		prepareFolders([COVERS_FOLDER.key]);
+		vi.mocked(applySchemaStep).mockRejectedValue(c.thrown());
 
 		const response = await request(makeApp())
-			.post('/config/apply?step=schema')
+			.post('/config/apply')
 			.set('User-Agent', 'cairncms-cli/1.6.0')
-			.send(articlesBody({ field: 'title', type: 'string', meta: {}, schema: { name: 'title' } }));
+			.send(combinedBody());
 
-		expect(response.status).toBe(500);
+		expect(response.status).toBe(c.status);
 
 		const extensions = response.body.errors[0].extensions;
-		expect(extensions.code).toBe('SCHEMA_POST_COMMIT_FAILED');
-		expect(extensions.steps).toEqual({ folders: 'not_run', schema: 'committed', configuration: 'not_run' });
-		expect(extensions.failure).toEqual({ step: 'schema', detail: { phase: 'cache' } });
+		expect(extensions.code).toBe(c.code);
+		expect(extensions.steps).toEqual({ folders: 'committed', schema: c.step, configuration: 'not_run' });
+		expect(extensions.failure).toEqual(c.failure);
+		expect(applyConfigPlan).not.toHaveBeenCalled();
 
 		const records = runRecordsFor(response.headers['x-config-run-id']!);
 		expect(records).toHaveLength(1);
 
 		expect(records[0]).toMatchObject({
-			result: 'post_apply_failed',
-			errorCode: 'SCHEMA_POST_COMMIT_FAILED',
+			result: c.result,
+			errorCode: c.recordCode,
 			steps: extensions.steps,
 			failure: extensions.failure,
 		});
+	});
+
+	it('names the configuration step when it fails after the schema step committed', async () => {
+		prepareFolders([COVERS_FOLDER.key]);
+		vi.mocked(applyConfigPlan).mockRejectedValue(new InvalidPayloadException('configuration failed'));
+
+		const response = await request(makeApp())
+			.post('/config/apply')
+			.set('User-Agent', 'cairncms-cli/1.6.0')
+			.send(combinedBody());
+
+		expect(response.status).toBe(400);
+
+		const extensions = response.body.errors[0].extensions;
+		expect(extensions.steps).toEqual({ folders: 'committed', schema: 'committed', configuration: 'failed' });
+		expect(extensions.failure).toEqual({ step: 'configuration' });
+
+		const records = runRecordsFor(response.headers['x-config-run-id']!);
+		expect(records).toHaveLength(1);
+		expect(records[0]).toMatchObject({ result: 'failed', steps: extensions.steps, failure: extensions.failure });
 	});
 });
