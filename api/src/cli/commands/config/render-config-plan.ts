@@ -1,3 +1,4 @@
+import { DestructiveChangesRequiredException } from '../../../exceptions/destructive-changes-required.js';
 import type { ConfigKind } from '../../../types/config.js';
 import { listConfigKinds } from '../../../utils/config/registry.js';
 import type { ConfigRunSteps, ConfigStepStatus } from '../../../utils/config/run-record.js';
@@ -336,6 +337,22 @@ export function renderDestructiveRefusal(serialized: Pick<RenderablePlan, 'summa
 	const subject = count === 1 ? 'item' : 'items';
 
 	return `Apply refused: this plan contains ${count} ${noun}.\nReview the ${subject} above and run again with --destructive.`;
+}
+
+/**
+ * The notice reports the shown preview's deletions, so it is sound only for the initial whole-run refusal. A later step
+ * re-reads and re-plans, so its refusal does not match that preview and is left to the ordinary error path.
+ */
+export function destructiveRefusalNotice(
+	err: unknown,
+	currentStep: keyof ConfigRunSteps | undefined,
+	serialized: Pick<RenderablePlan, 'summary'> | undefined
+): string | undefined {
+	if (currentStep === undefined && serialized !== undefined && err instanceof DestructiveChangesRequiredException) {
+		return renderDestructiveRefusal(serialized);
+	}
+
+	return undefined;
 }
 
 function renderChange(change: RenderableChange): string[] {

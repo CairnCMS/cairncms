@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { DestructiveChangesRequiredException } from '../../../exceptions/destructive-changes-required.js';
 import type { RoleDeletionImpactEntry, RoleValues, SerializedConfigPlan } from '../../../types/config.js';
 import { createVerb, deleteVerb, heading, planIntro, updateVerb } from '../../presentation.js';
 import {
+	destructiveRefusalNotice,
 	renderConfigPlan,
 	renderDeletions,
 	renderDestructiveRefusal,
@@ -381,6 +383,29 @@ describe('renderDestructiveRefusal', () => {
 		expect(renderDestructiveRefusal(plan({ summary: { create: 0, update: 0, delete: 3 } }))).toBe(
 			'Apply refused: this plan contains 3 deletions.\nReview the items above and run again with --destructive.'
 		);
+	});
+});
+
+describe('destructiveRefusalNotice', () => {
+	const preview = plan({ summary: { create: 0, update: 0, delete: 1 } });
+	const refusal = new DestructiveChangesRequiredException('deletions present');
+
+	it('renders the preview notice for the initial whole-run refusal', () => {
+		expect(destructiveRefusalNotice(refusal, undefined, preview)).toBe(
+			'Apply refused: this plan contains 1 deletion.\nReview the item above and run again with --destructive.'
+		);
+	});
+
+	it('defers to ordinary error reporting once a step has started', () => {
+		expect(destructiveRefusalNotice(refusal, 'configuration', preview)).toBeUndefined();
+	});
+
+	it('defers to ordinary error reporting for a non-destructive error', () => {
+		expect(destructiveRefusalNotice(new Error('boom'), undefined, preview)).toBeUndefined();
+	});
+
+	it('renders nothing without a shown preview', () => {
+		expect(destructiveRefusalNotice(refusal, undefined, undefined)).toBeUndefined();
 	});
 });
 

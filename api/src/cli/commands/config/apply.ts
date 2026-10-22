@@ -56,7 +56,13 @@ import {
 } from './remote-client.js';
 import { resolveRemoteToken } from './remote-token.js';
 import { readFileSync } from 'node:fs';
-import { renderConfigPlan, renderNoChanges, renderResultSummary, renderStepOutcome } from './render-config-plan.js';
+import {
+	destructiveRefusalNotice,
+	renderConfigPlan,
+	renderNoChanges,
+	renderResultSummary,
+	renderStepOutcome,
+} from './render-config-plan.js';
 
 async function serializePlan(
 	plan: ConfigPlan,
@@ -174,6 +180,7 @@ async function runLocalEngine(
 
 	let committedStep = false;
 	let currentStep: keyof ConfigRunSteps | undefined;
+	let serialized: SerializedConfigPlan | undefined;
 	const steps: ConfigRunSteps = { folders: 'not_run', schema: 'not_run', configuration: 'not_run' };
 
 	try {
@@ -269,7 +276,8 @@ async function runLocalEngine(
 			return { result: 'no_changes', exitCode: 0 };
 		}
 
-		logger.info(renderConfigPlan(await serializePlan(plan, desired, database, schema, preparationFolderKeys)));
+		serialized = await serializePlan(plan, desired, database, schema, preparationFolderKeys);
+		logger.info(renderConfigPlan(serialized));
 
 		if (dryRun) return { result: 'planned', exitCode: 1 };
 
@@ -340,7 +348,14 @@ async function runLocalEngine(
 		logger.info(renderStepOutcome(steps));
 		return { result: 'applied', exitCode: 0, steps };
 	} catch (err) {
-		logger.error(err);
+		const notice = destructiveRefusalNotice(err, currentStep, serialized);
+
+		if (notice !== undefined) {
+			logger.error(notice);
+		} else {
+			logger.error(err);
+		}
+
 		const exitCode = committedStep ? 3 : configFailureExitCode(err);
 
 		if (currentStep === undefined) return { ...classifyConfigError(err), exitCode };
