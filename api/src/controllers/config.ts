@@ -22,7 +22,7 @@ import {
 	SUPPORTED_MANIFEST_VERSIONS,
 	type ManifestVersion,
 } from '../utils/config-contract.js';
-import { isPlanEmpty, planSummary } from '../utils/config/plan-folds.js';
+import { isPlanEmpty, planSummary, sliceHasChanges } from '../utils/config/plan-folds.js';
 import { kindsForVersion } from '../utils/config/registry.js';
 import { normalizeToInternal, serializeToWire } from '../utils/config/wire.js';
 import {
@@ -35,6 +35,7 @@ import {
 } from '../utils/config/run-record.js';
 import {
 	applyConfigurationStep,
+	applySchemaStep,
 	computeWholeRunInputs,
 	failureStatus,
 	stepFailure,
@@ -142,6 +143,7 @@ router.post(
 					currentFolderParents,
 					stateToken,
 					schemaStoredFields,
+					schemaKeyFormHash,
 				} = await readCurrentConfig({
 					database,
 					schema,
@@ -227,6 +229,33 @@ router.post(
 						return { result: outcome };
 					}
 
+					if (step === 'schema') {
+						const changed = sliceHasChanges(plan.schema);
+
+						if (changed) {
+							currentStep = 'schema';
+
+							await applySchemaStep({
+								currentSchema: current.schema,
+								desiredSchema: config.schema,
+								schemaStoredFields,
+								expectedHash: schemaKeyFormHash ?? '',
+								database,
+							});
+
+							steps.schema = 'committed';
+						} else {
+							steps.schema = 'skipped';
+						}
+
+						run.outcome(steps);
+
+						const outcome = changed ? ('applied' as const) : ('no_changes' as const);
+						res.locals['payload'] = { data: null, meta: { plan: serialized, result: outcome, steps } };
+
+						return { result: outcome };
+					}
+
 					let result;
 
 					if (schemaManaged) {
@@ -303,11 +332,12 @@ function parseApplyFlag(query: Record<string, unknown>, name: 'dry_run' | 'destr
 	throw new ConfigInvalidException(`The "${name}" query parameter must be exactly "true" or "false" when present.`);
 }
 
-function parseApplyStep(query: Record<string, unknown>): 'folders' | 'configuration' {
+function parseApplyStep(query: Record<string, unknown>): 'folders' | 'schema' | 'configuration' {
 	const value = query['step'];
 
 	if (value === undefined) return 'configuration';
 	if (value === 'folders') return 'folders';
+	if (value === 'schema') return 'schema';
 
 	throw new ConfigInvalidException('The "step" query parameter is not a supported value.');
 }

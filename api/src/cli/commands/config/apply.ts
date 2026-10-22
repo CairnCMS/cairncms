@@ -9,7 +9,7 @@ import {
 	buildExtensionDeclarationSnapshot,
 	desiredExtensionSubjects,
 } from '../../../utils/config/handlers/extension-settings.js';
-import { isPlanEmpty, planSummary } from '../../../utils/config/plan-folds.js';
+import { isPlanEmpty, planSummary, sliceHasChanges } from '../../../utils/config/plan-folds.js';
 import {
 	classifyConfigError,
 	systemCaller,
@@ -364,10 +364,6 @@ async function runLocalEngine(
 		logger.info(renderStepOutcome(steps));
 		return { ...classifyConfigError(err), exitCode, steps, failure: stepFailure(currentStep, err) };
 	}
-}
-
-function sliceHasChanges(slice: { create: unknown[]; update: unknown[]; delete: unknown[] }): boolean {
-	return slice.create.length > 0 || slice.update.length > 0 || slice.delete.length > 0;
 }
 
 async function configApplyRemote(

@@ -60,13 +60,23 @@ vi.mock('../utils/apply-config-plan.js', () => ({ applyConfigPlan: vi.fn() }));
 
 vi.mock('../utils/apply-folder-preparation.js', () => ({ applyFolderPreparation: vi.fn() }));
 
+vi.mock('../utils/config/apply-steps.js', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('../utils/config/apply-steps.js')>();
+	return { ...actual, applySchemaStep: vi.fn() };
+});
+
 vi.mock('../middleware/respond.js', () => ({
 	respond: (_req: unknown, res: { json: (body: unknown) => void; locals: Record<string, unknown> }) =>
 		res.json(res.locals['payload']),
 }));
 
+import { SchemaApplyFailedException } from '../exceptions/schema-apply-failed.js';
+import { SchemaPostCommitFailedException } from '../exceptions/schema-post-commit-failed.js';
+import { SchemaStateChangedException } from '../exceptions/schema-state-changed.js';
+import logger from '../logger.js';
 import errorHandler from '../middleware/error-handler.js';
 import { applyFolderPreparation } from '../utils/apply-folder-preparation.js';
+import { applySchemaStep } from '../utils/config/apply-steps.js';
 import { readCurrentConfig } from '../utils/get-config-snapshot.js';
 import { version } from '../utils/package.js';
 import configController from './config.js';
@@ -133,8 +143,21 @@ function readResult(withStoredFields: boolean) {
 		currentFolderKeys: new Set<string>(),
 		currentFolderParents: new Map<string, string | null>(),
 		stateToken: { resources: ['schema'], digest: 'digest' },
-		...(withStoredFields && { schemaStoredFields: storedFields() }),
+		...(withStoredFields && { schemaStoredFields: storedFields(), schemaKeyFormHash: 'key-form-hash' }),
 	};
+}
+
+function runRecordsFor(runId: string): Array<Record<string, unknown>> {
+	return vi
+		.mocked(logger.info)
+		.mock.calls.map((call): unknown => call[0])
+		.filter(
+			(record): record is Record<string, unknown> =>
+				typeof record === 'object' &&
+				record !== null &&
+				(record as Record<string, unknown>)['event'] === 'config.run.finished' &&
+				(record as Record<string, unknown>)['runId'] === runId
+		);
 }
 
 beforeEach(() => {
@@ -222,5 +245,102 @@ describe('POST /config/apply schema wiring', () => {
 		const extensions = response.body.errors[0].extensions;
 		expect(extensions.steps).toEqual({ folders: 'failed', schema: 'not_run', configuration: 'not_run' });
 		expect(extensions.failure).toEqual({ step: 'folders' });
+	});
+
+	it('applies the schema step over HTTP without handing the caller identity to the schema engine', async () => {
+		const response = await request(makeApp())
+			.post('/config/apply?step=schema')
+			.set('User-Agent', 'cairncms-cli/1.6.0')
+			.send(articlesBody({ field: 'title', type: 'string', meta: {}, schema: { name: 'title' } }));
+
+		expect(response.status).toBe(200);
+		expect(response.body.data).toBeNull();
+		expect(response.body.meta.result).toBe('applied');
+		expect(response.body.meta.steps).toEqual({ folders: 'not_run', schema: 'committed', configuration: 'not_run' });
+
+		expect(applySchemaStep).toHaveBeenCalledTimes(1);
+
+		const handoff = vi.mocked(applySchemaStep).mock.calls[0]![0];
+		expect(handoff.expectedHash).toBe('key-form-hash');
+		expect(handoff).not.toHaveProperty('accountability');
+		expect(handoff).not.toHaveProperty('context');
+	});
+
+	it('names the schema step rolled back when a concurrent change conflicts with the apply', async () => {
+		vi.mocked(applySchemaStep).mockRejectedValue(new SchemaStateChangedException());
+
+		const response = await request(makeApp())
+			.post('/config/apply?step=schema')
+			.set('User-Agent', 'cairncms-cli/1.6.0')
+			.send(articlesBody({ field: 'title', type: 'string', meta: {}, schema: { name: 'title' } }));
+
+		expect(response.status).toBe(409);
+
+		const extensions = response.body.errors[0].extensions;
+		expect(extensions.code).toBe('SCHEMA_STATE_CHANGED');
+		expect(extensions.steps).toEqual({ folders: 'not_run', schema: 'rolled_back', configuration: 'not_run' });
+		expect(extensions.failure).toEqual({ step: 'schema' });
+
+		const records = runRecordsFor(response.headers['x-config-run-id']!);
+		expect(records).toHaveLength(1);
+
+		expect(records[0]).toMatchObject({
+			result: 'state_changed',
+			errorCode: 'SCHEMA_STATE_CHANGED',
+			steps: extensions.steps,
+			failure: extensions.failure,
+		});
+	});
+
+	it('names the schema step unknown when the apply failure cannot read the persisted state', async () => {
+		vi.mocked(applySchemaStep).mockRejectedValue(new SchemaApplyFailedException('unknown'));
+
+		const response = await request(makeApp())
+			.post('/config/apply?step=schema')
+			.set('User-Agent', 'cairncms-cli/1.6.0')
+			.send(articlesBody({ field: 'title', type: 'string', meta: {}, schema: { name: 'title' } }));
+
+		expect(response.status).toBe(500);
+
+		const extensions = response.body.errors[0].extensions;
+		expect(extensions.code).toBe('SCHEMA_APPLY_FAILED');
+		expect(extensions.steps).toEqual({ folders: 'not_run', schema: 'unknown', configuration: 'not_run' });
+		expect(extensions.failure).toEqual({ step: 'schema', detail: { persisted: 'unknown' } });
+
+		const records = runRecordsFor(response.headers['x-config-run-id']!);
+		expect(records).toHaveLength(1);
+
+		expect(records[0]).toMatchObject({
+			result: 'failed',
+			errorCode: 'SCHEMA_APPLY_FAILED',
+			steps: extensions.steps,
+			failure: extensions.failure,
+		});
+	});
+
+	it('names the schema step committed when a post-commit maintenance phase fails', async () => {
+		vi.mocked(applySchemaStep).mockRejectedValue(new SchemaPostCommitFailedException('cache'));
+
+		const response = await request(makeApp())
+			.post('/config/apply?step=schema')
+			.set('User-Agent', 'cairncms-cli/1.6.0')
+			.send(articlesBody({ field: 'title', type: 'string', meta: {}, schema: { name: 'title' } }));
+
+		expect(response.status).toBe(500);
+
+		const extensions = response.body.errors[0].extensions;
+		expect(extensions.code).toBe('SCHEMA_POST_COMMIT_FAILED');
+		expect(extensions.steps).toEqual({ folders: 'not_run', schema: 'committed', configuration: 'not_run' });
+		expect(extensions.failure).toEqual({ step: 'schema', detail: { phase: 'cache' } });
+
+		const records = runRecordsFor(response.headers['x-config-run-id']!);
+		expect(records).toHaveLength(1);
+
+		expect(records[0]).toMatchObject({
+			result: 'post_apply_failed',
+			errorCode: 'SCHEMA_POST_COMMIT_FAILED',
+			steps: extensions.steps,
+			failure: extensions.failure,
+		});
 	});
 });

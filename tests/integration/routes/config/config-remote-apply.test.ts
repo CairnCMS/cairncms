@@ -548,3 +548,197 @@ test('step=folders refuses a protected combined plan before creating any folder'
 		await deleteFolders(api, [galleryKey]);
 	}
 });
+
+test('step=schema applies the schema and reports it committed, leaving the configuration untouched', async ({
+	api,
+}) => {
+	const created = `schema_ok_${suffix()}`;
+	const roleKey = `schema_role_${suffix()}`;
+	const committed = { folders: 'not_run', schema: 'committed', configuration: 'not_run' };
+
+	try {
+		const desired = await snapshot(api, ['schema', 'roles']);
+		desired['schema'].push(newCollection(created));
+		desired['roles'].push(appRole(roleKey));
+
+		const applied = await applyConfig(api, desired, { step: 'schema' });
+		expect(applied.statusCode).toBe(200);
+		expect(applied.body.data).toBeNull();
+		expect(applied.body.meta.result).toBe('applied');
+		expect(applied.body.meta.steps).toEqual(committed);
+
+		expect(await tableExists(api, created)).toBe(true);
+		expect(await roleExists(api, roleKey)).toBe(false);
+
+		const records = await recordsFor(api, applied.headers['x-config-run-id']);
+		expect(records).toHaveLength(1);
+		expect(records[0]!['result']).toBe('applied');
+		expect(records[0]!['steps']).toEqual(committed);
+	} finally {
+		await deleteRoleByKey(api, roleKey);
+		await dropCollection(api, created);
+	}
+});
+
+test('step=schema reports skipped when the schema already matches the target', async ({ api }) => {
+	const desired = await snapshot(api, ['schema']);
+
+	const applied = await applyConfig(api, desired, { step: 'schema' });
+	expect(applied.statusCode).toBe(200);
+	expect(applied.body.data).toBeNull();
+	expect(applied.body.meta.result).toBe('no_changes');
+	expect(applied.body.meta.steps).toEqual({ folders: 'not_run', schema: 'skipped', configuration: 'not_run' });
+});
+
+test('step=schema dry-run creates no collection', async ({ api }) => {
+	const created = `schema_dry_${suffix()}`;
+
+	try {
+		const desired = await snapshot(api, ['schema']);
+		desired['schema'].push(newCollection(created));
+
+		const dry = await applyConfig(api, desired, { step: 'schema', dryRun: true });
+		expect(dry.statusCode).toBe(200);
+		expect(await tableExists(api, created)).toBe(false);
+	} finally {
+		await dropCollection(api, created);
+	}
+});
+
+test('step=schema refuses a destructive combined plan before dropping anything', async ({ api }) => {
+	const doomed = `schema_dx_${suffix()}`;
+
+	try {
+		const seed = await snapshot(api, ['schema']);
+		seed['schema'].push(newCollection(doomed));
+		expect((await applyConfig(api, seed, { step: 'schema' })).statusCode).toBe(200);
+		expect(await tableExists(api, doomed)).toBe(true);
+
+		const desired = await snapshot(api, ['schema']);
+		desired['schema'] = desired['schema'].filter((entry: { collection: string }) => entry.collection !== doomed);
+
+		const applied = await applyConfig(api, desired, { step: 'schema' });
+		expect(applied.statusCode).toBe(400);
+		expect(errorCode(applied)).toBe('DESTRUCTIVE_CHANGES_REQUIRED');
+		expect(await tableExists(api, doomed)).toBe(true);
+	} finally {
+		await dropCollection(api, doomed);
+	}
+});
+
+test('step=schema refuses a protected combined plan before any write', async ({ api }) => {
+	const created = `schema_px_${suffix()}`;
+
+	try {
+		const desired = await snapshot(api, ['schema', 'roles']);
+		desired['schema'].push(newCollection(created));
+		desired['roles'] = desired['roles'].filter((entry: RoleFixture) => !entry.admin_access);
+
+		const applied = await applyConfig(api, desired, { step: 'schema', destructive: true });
+		expect(applied.statusCode).toBe(400);
+		expect(errorCode(applied)).toBe('CONFIG_PROTECTED_RECORD');
+		expect(await tableExists(api, created)).toBe(false);
+	} finally {
+		await dropCollection(api, created);
+	}
+});
+
+test('step=schema refuses a non-admin caller', async ({ api }) => {
+	const created = `schema_403_${suffix()}`;
+
+	try {
+		const desired = await snapshot(api, ['schema']);
+		desired['schema'].push(newCollection(created));
+
+		const response = await request(api.url)
+			.post('/config/apply')
+			.query({ step: 'schema' })
+			.set('Content-Type', 'application/json')
+			.send(desired);
+
+		expect(response.statusCode).toBe(403);
+		expect(await tableExists(api, created)).toBe(false);
+	} finally {
+		await dropCollection(api, created);
+	}
+});
+
+const PARTIAL_PERSISTENCE_VENDORS = ['mysql', 'mysql5', 'maria'];
+
+test('step=schema surfaces a data-definition failure as a schema step failure in the response and the record', async ({
+	api,
+	vendor,
+}) => {
+	const keep = `schema_fail_keep_${suffix()}`;
+	const fresh = `schema_fail_new_${suffix()}`;
+	const partial = PARTIAL_PERSISTENCE_VENDORS.includes(vendor);
+
+	try {
+		const seed = await snapshot(api, ['schema']);
+		const keepSeed = newCollection(keep);
+
+		keepSeed.fields.push({
+			collection: keep,
+			field: 'label',
+			type: 'string',
+			meta: null,
+			schema: { name: 'label', table: keep, data_type: 'varchar' },
+		});
+
+		seed['schema'].push(keepSeed, newCollection(fresh));
+		expect((await applyConfig(api, seed, { step: 'schema' })).statusCode).toBe(200);
+
+		await api.database(keep).insert({ label: 'seed' });
+		await dropCollection(api, fresh);
+
+		const desired = await snapshot(api, ['schema']);
+		desired['schema'].push(newCollection(fresh));
+		const keepEntry = desired['schema'].find((entry: { collection: string }) => entry.collection === keep);
+
+		const badField = partial ? 'f'.repeat(65) : 'required_no_default';
+
+		keepEntry.fields.push({
+			collection: keep,
+			field: badField,
+			type: 'string',
+			meta: null,
+			schema: partial
+				? { name: badField, table: keep, data_type: 'varchar' }
+				: { name: badField, table: keep, data_type: 'varchar', is_nullable: false, default_value: null },
+		});
+
+		const applied = await applyConfig(api, desired, { step: 'schema' });
+		expect(applied.statusCode).toBe(500);
+
+		const extensions = applied.body.errors[0].extensions;
+		expect(extensions.code).toBe('SCHEMA_APPLY_FAILED');
+		expect(extensions.steps).toEqual({ folders: 'not_run', schema: 'failed', configuration: 'not_run' });
+		expect(extensions.failure.step).toBe('schema');
+
+		const persisted = extensions.failure.detail.persisted;
+		expect(persisted).toHaveProperty('collections');
+
+		const freshEntry = (persisted.collections as Array<{ collection: string; operation: string; table: string }>).find(
+			(entry) => entry.collection === fresh
+		);
+
+		expect(freshEntry).toBeDefined();
+		expect(freshEntry!.operation).toBe('create');
+
+		const records = await recordsFor(api, applied.headers['x-config-run-id']);
+		expect(records).toHaveLength(1);
+		expect(records[0]!['steps']).toEqual(extensions.steps);
+		expect(records[0]!['failure']).toEqual(extensions.failure);
+
+		if (partial) {
+			expect(freshEntry!.table).toBe('applied');
+			expect(await tableExists(api, fresh)).toBe(true);
+		} else {
+			expect(freshEntry!.table).toBe('reverted');
+			expect(await tableExists(api, fresh)).toBe(false);
+		}
+	} finally {
+		await dropCollection(api, fresh);
+		await dropCollection(api, keep);
+	}
+});
