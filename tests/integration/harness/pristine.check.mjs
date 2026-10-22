@@ -19,10 +19,10 @@ const present = (path) =>
 		}
 	);
 
-const vendor = process.env.TEST_DB ?? 'mysql';
+const vendor = process.env.TEST_DB ?? 'mysql84';
 
 assert(
-	['mysql', 'mysql5', 'maria', 'postgres', 'postgres10', 'sqlite3'].includes(vendor),
+	['mysql84', 'mysql5', 'maria114', 'postgres13', 'postgres10', 'sqlite3'].includes(vendor),
 	'Choose a snapshot-capable vendor'
 );
 
@@ -197,7 +197,7 @@ for (const mode of modes)
 							'--env',
 							'MYSQL_PWD=integration',
 							engine.id,
-							vendor === 'maria' ? 'mariadb' : 'mysql',
+							vendor === 'maria114' ? 'mariadb' : 'mysql',
 							'--user=root',
 							'-N',
 							'-B',

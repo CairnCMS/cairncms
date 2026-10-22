@@ -1,9 +1,9 @@
 // Pin engine versions and SQL settings so tag updates cannot silently change test behavior.
 export const databaseVendors = {
-	sqlite3: { client: 'sqlite3' },
-	postgres: {
+	sqlite3: { client: 'sqlite3', version: 'SQLite' },
+	postgres13: {
 		client: 'pg',
-		version: 'PostGIS 13 / 3.4',
+		version: 'PostgreSQL 13 / PostGIS 3.4',
 		image: 'postgis/postgis@sha256:3ce9b8f4d0711d33cc5fa5e6c00dcb7965fa41467f78c0f3bc7fc7bc2357d85b',
 		port: 5432,
 		user: 'integration',
@@ -13,7 +13,7 @@ export const databaseVendors = {
 	},
 	postgres10: {
 		client: 'pg',
-		version: 'PostGIS 10 / 3.2',
+		version: 'PostgreSQL 10 / PostGIS 3.2',
 		image: 'postgis/postgis@sha256:7e3e68a36d53bc87e0dc33dca14b437b81f71670358c427f996b1e113b786ed6',
 		port: 5432,
 		user: 'integration',
@@ -21,9 +21,9 @@ export const databaseVendors = {
 		environment: { POSTGRES_PASSWORD: 'integration', POSTGRES_USER: 'integration', POSTGRES_DB: 'postgres' },
 		health: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U integration -d postgres'],
 	},
-	mysql: {
+	mysql84: {
 		client: 'mysql2',
-		version: 'MySQL 8',
+		version: 'MySQL 8.4',
 		image: 'mysql@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb',
 		port: 3306,
 		user: 'root',
@@ -34,7 +34,7 @@ export const databaseVendors = {
 	},
 	mysql5: {
 		client: 'mysql2',
-		version: 'MySQL 5',
+		version: 'MySQL 5.7',
 		image: 'mysql@sha256:4bc6bc963e6d8443453676cae56536f4b8156d78bae03c0145cbe47c2aad73bb',
 		port: 3306,
 		user: 'root',
@@ -43,7 +43,7 @@ export const databaseVendors = {
 		command: ['--character-set-server=utf8mb4', '--collation-server=utf8mb4_unicode_ci'],
 		health: ['CMD-SHELL', 'mysqladmin ping --host=127.0.0.1 --user=root --password=integration --silent'],
 	},
-	maria: {
+	maria114: {
 		client: 'mysql2',
 		version: 'MariaDB 11.4',
 		image: 'mariadb@sha256:67873d30a17f6a9c331f06363b2fa15f38abca415529966d67c84f87f82439fe',

@@ -12,8 +12,8 @@ initializeFixtures();
 const adminToken = common.USER.ADMIN.TOKEN;
 const appToken = common.USER.APP_ACCESS.TOKEN;
 
-const CASE_INSENSITIVE = ['mysql', 'mysql5', 'maria'];
-const CASE_SENSITIVE = ['postgres', 'postgres10', 'sqlite3'];
+const CASE_INSENSITIVE = ['mysql84', 'mysql5', 'maria114'];
+const CASE_SENSITIVE = ['postgres13', 'postgres10', 'sqlite3'];
 
 async function cleanup(api: Api, keys: string[]) {
 	const url = api.url;

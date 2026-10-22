@@ -54,7 +54,7 @@ if (ci && !args.values.vendor && !process.env.TEST_DB) {
 	process.exit(2);
 }
 
-const vendor = args.values.vendor ?? process.env.TEST_DB ?? 'postgres';
+const vendor = args.values.vendor ?? process.env.TEST_DB ?? 'postgres13';
 const vendors = vendor === 'all' ? supportedVendors : vendor.split(',');
 
 if (!vendors.length || vendors.some((v) => !supportedVendors.includes(v)) || new Set(vendors).size !== vendors.length) {

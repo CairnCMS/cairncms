@@ -51,7 +51,7 @@ initializeFixtures();
 
 describeForVendors(
 	'Schema Caching Tests',
-	['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'],
+	['postgres13', 'postgres10', 'mysql84', 'mysql5', 'maria114'],
 	'Schema propagation between server processes has not been validated on SQLite.',
 	() => {
 		const newCollectionName = 'schema-caching-test';

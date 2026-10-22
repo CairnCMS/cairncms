@@ -97,7 +97,7 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 							case 'sqlite3':
 								expect(gqlResponse.body.data[localCollectionArtists].length).toEqual(0);
 								break;
-							case 'postgres':
+							case 'postgres13':
 							case 'postgres10':
 							case 'mssql':
 							case 'cockroachdb':

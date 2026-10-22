@@ -10,9 +10,9 @@ import { readVendorResult } from './results.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 for (const [vendor, mode, expectedPassed, expectedExcluded, expectedCode] of [
 	['sqlite3', '', 1, 2, 0],
-	['postgres', '', 3, 0, 0],
+	['postgres13', '', 3, 0, 0],
 	['sqlite3', 'all-excluded', 0, 2, 0],
-	['postgres', 'unapproved', 0, 0, 1],
+	['postgres13', 'unapproved', 0, 0, 1],
 ])
 	test(`native applicability ${vendor}/${mode || 'mixed'}`, { timeout: 30_000 }, async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'cairn-applicability-'));

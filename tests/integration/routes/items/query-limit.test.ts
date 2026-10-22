@@ -194,7 +194,7 @@ const test = createScenarioTest({
 describe('/items QUERY_LIMIT_MAX enforcement', () => {
 	describeForVendors(
 		`caps reads at a configured maximum of ${maxLimit}`,
-		['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'],
+		['postgres13', 'postgres10', 'mysql84', 'mysql5', 'maria114'],
 		'Query-limit configurations have not been validated on SQLite.',
 		() => {
 			test('caps an unlimited top-level read at the maximum', async ({ api }) => {

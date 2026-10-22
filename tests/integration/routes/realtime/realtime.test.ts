@@ -351,7 +351,7 @@ async function resolveUserId(url: string, email: string): Promise<string> {
 
 describeForVendors(
 	'WebSocket realtime',
-	['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'],
+	['postgres13', 'postgres10', 'mysql84', 'mysql5', 'maria114'],
 	'Cross-instance realtime coverage is not validated on SQLite.',
 	() => {
 		describe('Subscriptions deliver across instances on both transports', () => {

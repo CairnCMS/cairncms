@@ -208,7 +208,7 @@ test('an API exit without another request cannot produce a green file', { timeou
 
 test(
 	'loss of the shared engine stops its vendor with an infrastructure failure',
-	{ timeout: 120_000, skip: vendor !== 'postgres' },
+	{ timeout: 120_000, skip: vendor !== 'postgres13' },
 	async () => {
 		const output = await exercise(
 			'cancel.case.ts',

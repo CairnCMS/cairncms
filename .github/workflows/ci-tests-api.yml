@@ -61,7 +61,7 @@ jobs:
         id: lifecycle
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         env:
-          TEST_DB: postgres
+          TEST_DB: postgres13
         run:
           env -u GITHUB_STEP_SUMMARY pnpm --filter tests-integration test:lifecycle 2>&1 | tee
           tests/integration/.artifacts/lifecycle.log
@@ -104,10 +104,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - vendor: mysql
-            label: MySQL
-          - vendor: postgres
-            label: PostgreSQL
+          - vendor: mysql84
+            label: MySQL 8.4
+          - vendor: postgres13
+            label: PostgreSQL 13 / PostGIS 3.4
           - vendor: sqlite3
             label: SQLite
     steps:
@@ -163,16 +163,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - vendor: postgres
-            label: PostgreSQL
+          - vendor: postgres13
+            label: PostgreSQL 13 / PostGIS 3.4
           - vendor: postgres10
-            label: PostgreSQL 10
-          - vendor: mysql
-            label: MySQL 8
+            label: PostgreSQL 10 / PostGIS 3.2
+          - vendor: mysql84
+            label: MySQL 8.4
           - vendor: mysql5
-            label: MySQL 5
-          - vendor: maria
-            label: MariaDB
+            label: MySQL 5.7
+          - vendor: maria114
+            label: MariaDB 11.4
           - vendor: sqlite3
             label: SQLite
     steps:

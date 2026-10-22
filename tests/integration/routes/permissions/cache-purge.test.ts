@@ -72,7 +72,7 @@ const test = createApiTest({
 
 describeForVendors(
 	'Permissions cache purging',
-	['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'],
+	['postgres13', 'postgres10', 'mysql84', 'mysql5', 'maria114'],
 	'This cache scenario has not been validated on SQLite.',
 	() => {
 		async function primeCache(api: Api) {

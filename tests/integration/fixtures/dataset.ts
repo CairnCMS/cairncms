@@ -63,7 +63,7 @@ export const createDatasetTest = (options: DatasetOptions) =>
 							const jsonColumns = new Set(
 								Object.entries(columns)
 									.filter(
-										([, info]) => vendor !== 'sqlite3' && vendor !== 'maria' && ['json', 'jsonb'].includes(info.type)
+										([, info]) => vendor !== 'sqlite3' && vendor !== 'maria114' && ['json', 'jsonb'].includes(info.type)
 									)
 									.map(([name]) => name)
 							);

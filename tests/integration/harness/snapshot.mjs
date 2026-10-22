@@ -3,7 +3,7 @@ import * as postgres from './postgres-snapshot.mjs';
 import * as sqlite from './sqlite-snapshot.mjs';
 
 export { snapshotHash } from './snapshot-tools.mjs';
-export const snapshotVendors = Object.freeze([...mysql.snapshotVendors, 'postgres', 'postgres10', 'sqlite3']);
+export const snapshotVendors = Object.freeze([...mysql.snapshotVendors, 'postgres13', 'postgres10', 'sqlite3']);
 
 const adapter = (vendor) => {
 	if (vendor === 'sqlite3') return sqlite;
@@ -12,4 +12,4 @@ const adapter = (vendor) => {
 
 export const snapshotCommand = (options) => adapter(options.vendor).snapshotCommand(options);
 export const snapshotInventory = (database, name, signal, options = {}) =>
-	adapter(options.vendor ?? 'mysql').snapshotInventory(database, name, signal, options);
+	adapter(options.vendor ?? 'mysql84').snapshotInventory(database, name, signal, options);

@@ -19,7 +19,7 @@ for (const mode of ['only', 'retry', 'repeats', 'fails', 'concurrent']) {
 				...process.env,
 				CONTROL_OPTION: mode,
 				INTEGRATION_OPTIONS: JSON.stringify({
-					vendor: 'postgres',
+					vendor: 'postgres13',
 					directory,
 					filters: ['forbidden-options.case.ts'],
 					collectAll: true,
@@ -50,7 +50,7 @@ for (const mode of ['only', 'retry', 'repeats', 'fails', 'concurrent']) {
 			assert.doesNotMatch(output, /FORBIDDEN_OPTION_BODY_EXECUTED|Starting owned|database starting/);
 
 			assert(
-				!(await readdir(join(directory, 'postgres'))).some(
+				!(await readdir(join(directory, 'postgres13'))).some(
 					(name) => name.endsWith('.owner.json') || name === 'container.json'
 				)
 			);

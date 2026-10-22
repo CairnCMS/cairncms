@@ -58,8 +58,8 @@ for (const [name, vendor, count] of [
 	['cli', 'sqlite3', 3],
 	['origin', 'sqlite3', 2],
 	['multiple-api', 'sqlite3', 1],
-	['destructive', 'postgres', 1],
-	['timezone', 'mysql', 1],
+	['destructive', 'postgres13', 1],
+	['timezone', 'mysql84', 1],
 ])
 	test(`owned ${name} fixture (${vendor})`, { timeout: 180000 }, async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'cairn-owned-fixture-'));
