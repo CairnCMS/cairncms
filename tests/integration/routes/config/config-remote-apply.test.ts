@@ -479,16 +479,24 @@ test('one request prepares the referenced folders, applies the schema, and recon
 	const committed = { folders: 'committed', schema: 'committed', configuration: 'committed' };
 
 	try {
-		const desired = await snapshot(api, ['schema', 'folders', 'roles']);
+		const desired = await snapshot(api, ['schema', 'folders', 'roles', 'extension-settings']);
 		desired['schema'].push(collectionWithFolderField(collection, galleryKey));
 		desired['folders'].push(folder(parentKey), folder(galleryKey, parentKey), folder(orphanKey));
 		desired['roles'].push(appRole(roleKey));
+
+		desired['extension-settings'] = [
+			...desired['extension-settings'].filter((entry: Document) => entry.subject !== EXT_SUBJECT),
+			collectionPreviewSetting(collection),
+		];
 
 		const applied = await applyConfig(api, desired);
 		expect(applied.statusCode).toBe(200);
 		expect(applied.body.meta.result).toBe('applied');
 		expect(applied.body.meta.steps).toEqual(committed);
-		expect(applied.body.data).not.toBeNull();
+		expect(applied.body.data.roles.created).toEqual([roleKey]);
+		expect(applied.body.data).toHaveProperty('folders');
+		expect(applied.body.data).toHaveProperty('extension-settings');
+		expect(await collectionSettingExists(api, EXT_SUBJECT, collection, 'preview_url')).toBe(true);
 
 		const parent = await folderByKey(api, parentKey);
 		const gallery = await folderByKey(api, galleryKey);
@@ -504,6 +512,7 @@ test('one request prepares the referenced folders, applies the schema, and recon
 		expect(records[0]!['result']).toBe('applied');
 		expect(records[0]!['steps']).toEqual(committed);
 	} finally {
+		await resetExtensionSettings(api, EXT_SUBJECT);
 		await dropCollection(api, collection);
 		await deleteFolders(api, [galleryKey, orphanKey, parentKey]);
 		await deleteRoleByKey(api, roleKey);
@@ -518,6 +527,48 @@ test('reports every step skipped when the tree already matches the target', asyn
 	expect(applied.body.data).toBeNull();
 	expect(applied.body.meta.result).toBe('no_changes');
 	expect(applied.body.meta.steps).toEqual({ folders: 'skipped', schema: 'skipped', configuration: 'skipped' });
+});
+
+test('a schema-only tree applies the schema and returns no configuration result', async ({ api }) => {
+	const created = `schema_only_${suffix()}`;
+
+	try {
+		const desired = await snapshot(api, ['schema']);
+		desired['schema'].push(newCollection(created));
+
+		const applied = await applyConfig(api, desired);
+		expect(applied.statusCode).toBe(200);
+		expect(applied.body.data).toBeNull();
+		expect(applied.body.meta.result).toBe('applied');
+		expect(applied.body.meta.steps).toEqual({ folders: 'skipped', schema: 'committed', configuration: 'skipped' });
+		expect(await tableExists(api, created)).toBe(true);
+	} finally {
+		await dropCollection(api, created);
+	}
+});
+
+test('a configuration-only tree returns the engine result, on an apply and on a no-op', async ({ api }) => {
+	const roleKey = `config_only_${suffix()}`;
+
+	try {
+		const desired = await snapshot(api, ['roles']);
+		desired['roles'].push(appRole(roleKey));
+
+		const applied = await applyConfig(api, desired);
+		expect(applied.statusCode).toBe(200);
+		expect(applied.body.meta.result).toBe('applied');
+		expect(applied.body.meta.steps).toEqual({ folders: 'not_run', schema: 'not_run', configuration: 'committed' });
+		expect(applied.body.data.roles.created).toEqual([roleKey]);
+		expect(await roleExists(api, roleKey)).toBe(true);
+
+		const again = await applyConfig(api, desired);
+		expect(again.statusCode).toBe(200);
+		expect(again.body.meta.result).toBe('no_changes');
+		expect(again.body.meta.steps).toEqual({ folders: 'not_run', schema: 'not_run', configuration: 'skipped' });
+		expect(again.body.data.roles).toEqual({ created: [], updated: [], deleted: [] });
+	} finally {
+		await deleteRoleByKey(api, roleKey);
+	}
 });
 
 test('dry-run previews the whole run and writes nothing', async ({ api }) => {
@@ -628,16 +679,17 @@ test('refuses a non-admin caller before any write', async ({ api }) => {
 
 const PARTIAL_PERSISTENCE_VENDORS = ['mysql', 'mysql5', 'maria'];
 
-test('surfaces a data-definition failure as a schema step failure in the response and the record', async ({
+test('surfaces a data-definition failure after folder preparation committed, in the response and the record', async ({
 	api,
 	vendor,
 }) => {
 	const keep = `schema_fail_keep_${suffix()}`;
 	const fresh = `schema_fail_new_${suffix()}`;
+	const galleryKey = `schema_fail_gallery_${suffix()}`;
 	const partial = PARTIAL_PERSISTENCE_VENDORS.includes(vendor);
 
 	try {
-		const seed = await snapshot(api, ['schema']);
+		const seed = await snapshot(api, ['schema', 'folders']);
 		const keepSeed = newCollection(keep);
 
 		keepSeed.fields.push({
@@ -654,8 +706,9 @@ test('surfaces a data-definition failure as a schema step failure in the respons
 		await api.database(keep).insert({ label: 'seed' });
 		await dropCollection(api, fresh);
 
-		const desired = await snapshot(api, ['schema']);
-		desired['schema'].push(newCollection(fresh));
+		const desired = await snapshot(api, ['schema', 'folders']);
+		desired['schema'].push(collectionWithFolderField(fresh, galleryKey));
+		desired['folders'].push(folder(galleryKey));
 		const keepEntry = desired['schema'].find((entry: { collection: string }) => entry.collection === keep);
 
 		const badField = partial ? 'f'.repeat(65) : 'required_no_default';
@@ -675,7 +728,7 @@ test('surfaces a data-definition failure as a schema step failure in the respons
 
 		const extensions = applied.body.errors[0].extensions;
 		expect(extensions.code).toBe('SCHEMA_APPLY_FAILED');
-		expect(extensions.steps).toEqual({ folders: 'skipped', schema: 'failed', configuration: 'not_run' });
+		expect(extensions.steps).toEqual({ folders: 'committed', schema: 'failed', configuration: 'not_run' });
 		expect(extensions.failure.step).toBe('schema');
 
 		const persisted = extensions.failure.detail.persisted;
@@ -693,6 +746,10 @@ test('surfaces a data-definition failure as a schema step failure in the respons
 		expect(records[0]!['steps']).toEqual(extensions.steps);
 		expect(records[0]!['failure']).toEqual(extensions.failure);
 
+		const gallery = await folderByKey(api, galleryKey);
+		expect(gallery).toBeDefined();
+		expect(await api.database('directus_files').where({ folder: gallery!.id }).first()).toBeUndefined();
+
 		if (partial) {
 			expect(freshEntry!.table).toBe('applied');
 			expect(await tableExists(api, fresh)).toBe(true);
@@ -702,6 +759,7 @@ test('surfaces a data-definition failure as a schema step failure in the respons
 		}
 	} finally {
 		await dropCollection(api, fresh);
+		await deleteFolders(api, [galleryKey]);
 		await dropCollection(api, keep);
 	}
 });
