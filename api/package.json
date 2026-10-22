@@ -51,6 +51,7 @@
 		"cli": "NODE_ENV=development SERVE_APP=false NODE_OPTIONS=--no-node-snapshot tsx src/cli/run.ts",
 		"dev": "NODE_ENV=development SERVE_APP=false NODE_OPTIONS=--no-node-snapshot tsx watch --clear-screen=false src/start.ts",
 		"test": "vitest --watch=false",
+		"typecheck:tests": "tsc --noEmit -p tsconfig.json",
 		"test:stress": "NODE_OPTIONS='--no-node-snapshot --expose-gc' tsx src/extensions/confined/stress/run.ts"
 	},
 	"dependencies": {
@@ -110,7 +111,7 @@
 		"inquirer": "9.1.5",
 		"ioredis": "5.3.2",
 		"ipaddr.js": "1.9.1",
-		"isolated-vm": "5.0.3",
+		"isolated-vm": "6.2.0",
 		"joi": "17.13.8",
 		"js-yaml": "4.3.2",
 		"js2xmlparser": "5.0.0",

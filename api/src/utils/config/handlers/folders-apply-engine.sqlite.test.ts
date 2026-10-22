@@ -1,6 +1,7 @@
 import type { SchemaOverview } from '@cairncms/types';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { configFixture } from '../../../__utils__/config-fixtures.js';
 import emitter from '../../../emitter.js';
 import { ConfigApplyFailedException } from '../../../exceptions/config-apply-failed.js';
 import { ConfigFolderInUseException } from '../../../exceptions/config-folder-in-use.js';
@@ -65,7 +66,7 @@ const schema = {
 
 const securityContext: ConfigApplySecurityContext = {
 	mode: 'system',
-	reason: 'engine test apply',
+	reason: 'local config apply',
 	accountability: { user: null, role: null, admin: true, app: true, permissions: [], origin: 'config-cli' } as never,
 };
 
@@ -154,17 +155,14 @@ describe('folders through the real apply engine on SQLite', () => {
 	];
 
 	function mixedDesired(): CairnConfig {
-		return {
+		return configFixture({
 			manifest: manifestFolders(),
-			roles: [],
-			permissions: [],
-			settings: [],
 			folders: [
 				{ key: 'root', name: 'root', parent: null },
 				{ key: 'mover', name: 'mover', parent: null },
 				{ key: 'fresh', name: 'fresh', parent: 'root' },
 			],
-		};
+		});
 	}
 
 	it('rolls back every folder write when a later delete fails', async () => {
@@ -435,16 +433,13 @@ describe('folders through the real apply engine on SQLite', () => {
 
 		const { config: current, stateToken } = await snapshot();
 
-		const desired: CairnConfig = {
+		const desired: CairnConfig = configFixture({
 			manifest: manifestFolders(),
-			roles: [],
-			permissions: [],
-			settings: [],
 			folders: [
 				{ key: 'root', name: 'root', parent: null },
 				{ key: 'child', name: 'Renamed' },
 			],
-		};
+		});
 
 		const plan = computeConfigPlan(current, desired);
 		const childUpdate = plan.folders.update.find((entry) => entry.key === 'child');
@@ -472,13 +467,10 @@ describe('folders through the real apply engine on SQLite', () => {
 
 		const { config: current, stateToken } = await snapshot();
 
-		const desired: CairnConfig = {
+		const desired: CairnConfig = configFixture({
 			manifest: manifestFolders(),
-			roles: [],
-			permissions: [],
-			settings: [],
 			folders: [{ key: 'child', name: 'child' }],
-		};
+		});
 
 		const plan = computeConfigPlan(current, desired);
 
@@ -513,16 +505,13 @@ describe('folders through the real apply engine on SQLite', () => {
 
 		const { currentRoleKeys, currentFolderKeys, currentFolderParents } = await snapshot();
 
-		const desired: CairnConfig = {
+		const desired: CairnConfig = configFixture({
 			manifest: manifestFolders(),
-			roles: [],
-			permissions: [],
-			settings: [],
 			folders: [
 				{ key: 'a', name: 'a', parent: 'b' },
 				{ key: 'b', name: 'b' },
 			],
-		};
+		});
 
 		const failures = validateDesiredConfig(desired, {
 			label: 'apply',

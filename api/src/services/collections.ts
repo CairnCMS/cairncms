@@ -568,6 +568,11 @@ export class CollectionsService {
 				await trx('directus_collections').update({ group: null }).where({ group: collectionKey });
 
 				if (collectionToBeDeleted!.meta) {
+					const sharesToDelete = trx('directus_shares').select('id').where('collection', '=', collectionKey);
+
+					await trx('directus_sessions').delete().whereIn('share', sharesToDelete);
+					await trx('directus_shares').delete().where('collection', '=', collectionKey);
+
 					const collectionItemsService = new ItemsService('directus_collections', {
 						knex: trx,
 						accountability: this.accountability,

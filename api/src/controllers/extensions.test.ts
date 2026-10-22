@@ -1,3 +1,4 @@
+import type { Accountability } from '@cairncms/types';
 import express from 'express';
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
@@ -25,11 +26,12 @@ vi.mock('../middleware/respond.js', () => ({
 
 const { default: extensionsController } = await import('./extensions.js');
 
-function makeApp(accountability: { admin: boolean } | null) {
+function makeApp(accountability: Accountability | null) {
 	const app = express();
 
-	app.use((req: Record<string, unknown>, _res: unknown, next: () => void) => {
-		req['accountability'] = accountability;
+	app.use((req, _res, next) => {
+		// @ts-expect-error The route guard must also reject a null authentication context.
+		req.accountability = accountability;
 		next();
 	});
 
@@ -44,7 +46,7 @@ function makeApp(accountability: { admin: boolean } | null) {
 
 describe('GET /extensions admin guard', () => {
 	it('returns 403 for a non-admin', async () => {
-		const res = await request(makeApp({ admin: false })).get('/extensions');
+		const res = await request(makeApp({ admin: false, role: null })).get('/extensions');
 		expect(res.status).toBe(403);
 	});
 
@@ -54,7 +56,7 @@ describe('GET /extensions admin guard', () => {
 	});
 
 	it('returns the diagnostic inventory for an admin', async () => {
-		const res = await request(makeApp({ admin: true })).get('/extensions');
+		const res = await request(makeApp({ admin: true, role: null })).get('/extensions');
 
 		expect(res.status).toBe(200);
 		expect(res.body.data?.[0]?.name).toBe('demo');

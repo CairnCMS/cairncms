@@ -42,6 +42,10 @@ router.get(
 router.post(
 	'/hash/generate',
 	asyncHandler(async (req, res) => {
+		if (req.accountability?.admin !== true) {
+			throw new ForbiddenException();
+		}
+
 		if (!req.body?.string) {
 			throw new InvalidPayloadException(`"string" is required`);
 		}
@@ -55,6 +59,10 @@ router.post(
 router.post(
 	'/hash/verify',
 	asyncHandler(async (req, res) => {
+		if (req.accountability?.admin !== true) {
+			throw new ForbiddenException();
+		}
+
 		if (!req.body?.string) {
 			throw new InvalidPayloadException(`"string" is required`);
 		}

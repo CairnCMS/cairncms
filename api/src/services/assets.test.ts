@@ -1,3 +1,5 @@
+import type { Driver } from '@cairncms/storage';
+import { Readable } from 'node:stream';
 import type { Accountability, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';
@@ -11,10 +13,10 @@ const VALID_UUID = '11111111-2222-4333-8444-555555555555';
 const INVALID_UUID = 'not-a-uuid';
 const FILE_DISK_NAME = '11111111-2222-4333-8444-555555555555.jpg';
 
-const storageRead = vi.fn<[string, any?], Promise<any>>();
-const storageStat = vi.fn<[string], Promise<{ size: number }>>(async () => ({ size: 1024 }));
-const storageExists = vi.fn<[string], Promise<boolean>>(async () => true);
-const storageWrite = vi.fn<[string, any, any?], Promise<void>>(async () => undefined);
+const storageRead = vi.fn<Driver['read']>();
+const storageStat = vi.fn<Driver['stat']>(async () => ({ size: 1024, modified: new Date('2026-05-13T00:00:00.000Z') }));
+const storageExists = vi.fn<Driver['exists']>(async () => true);
+const storageWrite = vi.fn<Driver['write']>(async () => undefined);
 
 vi.mock('../storage/index.js', () => ({
 	getStorage: vi.fn(async () => ({
@@ -113,7 +115,7 @@ describe('AssetsService.statAsset (GHSA-rv78-qqrq-73m5)', () => {
 
 	beforeEach(() => {
 		storageRead.mockReset();
-		storageStat.mockReset().mockResolvedValue({ size: 1024 });
+		storageStat.mockReset().mockResolvedValue({ size: 1024, modified: new Date('2026-05-13T00:00:00.000Z') });
 		storageExists.mockReset().mockResolvedValue(true);
 		storageWrite.mockReset().mockResolvedValue(undefined);
 		checkAccessSpy.mockReset().mockResolvedValue(undefined);
@@ -131,7 +133,7 @@ describe('AssetsService.statAsset (GHSA-rv78-qqrq-73m5)', () => {
 			const result = await service.statAsset(VALID_UUID, { transformationParams: {} });
 
 			expect(result.file.id).toBe(VALID_UUID);
-			expect(result.stat).toEqual({ size: 1024 });
+			expect(result.stat).toEqual({ size: 1024, modified: new Date('2026-05-13T00:00:00.000Z') });
 			expect(storageStat).toHaveBeenCalledWith(FILE_DISK_NAME);
 			expect(storageRead).not.toHaveBeenCalled();
 		});
@@ -141,7 +143,11 @@ describe('AssetsService.statAsset (GHSA-rv78-qqrq-73m5)', () => {
 		it('returns stat from the cached variant filename, not the source filename', async () => {
 			primeKnex(tracker);
 			storageExists.mockImplementation(async (name: string) => name !== FILE_DISK_NAME || true);
-			storageStat.mockImplementation(async (name: string) => ({ size: name === FILE_DISK_NAME ? 1024 : 256 }));
+
+			storageStat.mockImplementation(async (name: string) => ({
+				size: name === FILE_DISK_NAME ? 1024 : 256,
+				modified: new Date('2026-05-13T00:00:00.000Z'),
+			}));
 
 			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
 			const result = await service.statAsset(VALID_UUID, { transformationParams: { width: 100 } });
@@ -269,13 +275,9 @@ describe('AssetsService.getAsset (regression — must still open a storage read)
 	});
 
 	beforeEach(() => {
-		storageRead.mockReset().mockResolvedValue({
-			on: vi.fn(),
-			pipe: vi.fn(),
-			destroy: vi.fn(),
-		});
+		storageRead.mockReset().mockResolvedValue(Readable.from([]));
 
-		storageStat.mockReset().mockResolvedValue({ size: 1024 });
+		storageStat.mockReset().mockResolvedValue({ size: 1024, modified: new Date('2026-05-13T00:00:00.000Z') });
 		storageExists.mockReset().mockResolvedValue(true);
 		storageWrite.mockReset().mockResolvedValue(undefined);
 		checkAccessSpy.mockReset().mockResolvedValue(undefined);
@@ -346,7 +348,7 @@ describe('AssetsService.getAsset uncached-transform pipeline (GHSA-j8xj-7jff-46m
 
 	beforeEach(() => {
 		storageRead.mockReset();
-		storageStat.mockReset().mockResolvedValue({ size: 1024 });
+		storageStat.mockReset().mockResolvedValue({ size: 1024, modified: new Date('2026-05-13T00:00:00.000Z') });
 		storageWrite.mockReset().mockResolvedValue(undefined);
 		checkAccessSpy.mockReset().mockResolvedValue(undefined);
 		storageExists.mockReset().mockImplementation(async (name: string) => name === FILE_DISK_NAME);

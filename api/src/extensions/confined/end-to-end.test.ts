@@ -1,4 +1,7 @@
 import axios from 'axios';
+import { readOnlyItemsService } from '../../__utils__/confined-items-fixtures.js';
+import type { ConfinedLogEntry } from './broker.js';
+import type { ConfinedItemsServiceFactory } from './host-items.js';
 import http from 'node:http';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { REDACT_TEXT } from '../../constants.js';
@@ -44,8 +47,8 @@ const supervisor = new ConfinedSupervisor();
 const invoke = (invocation: ConfinedInvocation, dispatcher: ConfinedHostDispatcher): Promise<ConfinedResult> =>
 	supervisor.invoke(invocation, dispatcher);
 
-let logs: { level: string; message: string }[] = [];
-const log = (entry: { level: string; message: string }) => logs.push(entry);
+let logs: ConfinedLogEntry[] = [];
+const log = (entry: ConfinedLogEntry) => logs.push(entry);
 
 beforeEach(() => {
 	logs = [];
@@ -274,10 +277,11 @@ describe('host methods through a real child and the real broker', () => {
 	it(
 		'reads items through the wired service, with the deprecated read alias equal to readMany',
 		async () => {
-			const itemsService = () => ({
-				readByQuery: async () => [{ id: 1, title: 'one' }],
-				readOne: async (key: string | number) => ({ id: key }),
-			});
+			const itemsService: ConfinedItemsServiceFactory = () =>
+				readOnlyItemsService({
+					readByQuery: async () => [{ id: 1, title: 'one' }],
+					readOne: async (key) => ({ id: key }),
+				});
 
 			// read is the deprecated alias of readMany and must return the same result.
 			// The broker accepts only items.readMany, so a passing read proves the alias
@@ -318,30 +322,30 @@ describe('host methods through a real child and the real broker', () => {
 		async () => {
 			const seen: Array<{ method: string; args: unknown[] }> = [];
 
-			const itemsService = () => ({
+			const itemsService: ConfinedItemsServiceFactory = () => ({
 				readByQuery: async () => [],
 				readOne: async () => null,
-				createOne: async (payload: unknown) => {
+				createOne: async (payload) => {
 					seen.push({ method: 'createOne', args: [payload] });
 					return 'c1';
 				},
-				createMany: async (payloads: unknown) => {
+				createMany: async (payloads) => {
 					seen.push({ method: 'createMany', args: [payloads] });
 					return ['c1', 'c2'];
 				},
-				updateOne: async (key: unknown, payload: unknown) => {
+				updateOne: async (key, payload) => {
 					seen.push({ method: 'updateOne', args: [key, payload] });
 					return key;
 				},
-				updateMany: async (keys: unknown, payload: unknown) => {
+				updateMany: async (keys, payload) => {
 					seen.push({ method: 'updateMany', args: [keys, payload] });
 					return keys;
 				},
-				deleteOne: async (key: unknown) => {
+				deleteOne: async (key) => {
 					seen.push({ method: 'deleteOne', args: [key] });
 					return key;
 				},
-				deleteMany: async (keys: unknown) => {
+				deleteMany: async (keys) => {
 					seen.push({ method: 'deleteMany', args: [keys] });
 					return keys;
 				},

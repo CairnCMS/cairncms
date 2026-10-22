@@ -9,8 +9,6 @@ import { initializeFixtures } from '../../harness/fixture-setup.mjs';
 
 initializeFixtures();
 
-const TEST_TIMEOUT = 300000;
-
 const adminAuth = (req: Test) => req.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`);
 
 async function deleteCollection(api: Api, collection: string) {
@@ -20,62 +18,58 @@ async function deleteCollection(api: Api, collection: string) {
 
 describe('Schema apply: new relations', () => {
 	describe('creates a relation whose identifiers appear only on the diff entry', () => {
-		test(
-			'REST',
-			async ({ api, vendor }) => {
-				const authors = `test_apply_rel_authors_${vendor}`;
-				const articles = `test_apply_rel_articles_${vendor}`;
+		test('REST', async ({ api, vendor }) => {
+			const authors = `test_apply_rel_authors_${vendor}`;
+			const articles = `test_apply_rel_articles_${vendor}`;
 
+			await deleteCollection(api, articles);
+			await deleteCollection(api, authors);
+
+			try {
+				await CreateCollection(api, { collection: authors });
+				await CreateCollection(api, { collection: articles });
+				await CreateField(api, { collection: articles, field: 'author', type: 'integer' });
+
+				const snapshotRes = await adminAuth(request(api.url).get('/schema/snapshot'));
+				expect(snapshotRes.statusCode).toBe(200);
+
+				snapshotRes.body.data.relations.push({
+					collection: articles,
+					field: 'author',
+					related_collection: authors,
+					meta: {},
+					schema: { on_delete: 'SET NULL' },
+				});
+
+				const diffRes = await adminAuth(
+					request(api.url).post('/schema/diff').send(snapshotRes.body.data).set('Content-type', 'application/json')
+				);
+
+				expect(diffRes.statusCode).toBe(200);
+
+				const entry = diffRes.body.data.diff.relations.find(
+					(relation: any) => relation.collection === articles && relation.field === 'author'
+				);
+
+				expect(entry?.diff?.[0]?.kind).toBe('N');
+
+				delete entry.diff[0].rhs.collection;
+				delete entry.diff[0].rhs.field;
+
+				const applyRes = await adminAuth(
+					request(api.url).post('/schema/apply').send(diffRes.body.data).set('Content-type', 'application/json')
+				);
+
+				expect(applyRes.statusCode).toBe(204);
+
+				const relationRes = await adminAuth(request(api.url).get(`/relations/${articles}/author`));
+				expect(relationRes.statusCode).toBe(200);
+				expect(relationRes.body.data.related_collection).toBe(authors);
+				expect(relationRes.body.data.schema?.foreign_key_table).toBe(authors);
+			} finally {
 				await deleteCollection(api, articles);
 				await deleteCollection(api, authors);
-
-				try {
-					await CreateCollection(api, { collection: authors });
-					await CreateCollection(api, { collection: articles });
-					await CreateField(api, { collection: articles, field: 'author', type: 'integer' });
-
-					const snapshotRes = await adminAuth(request(api.url).get('/schema/snapshot'));
-					expect(snapshotRes.statusCode).toBe(200);
-
-					snapshotRes.body.data.relations.push({
-						collection: articles,
-						field: 'author',
-						related_collection: authors,
-						meta: {},
-						schema: { on_delete: 'SET NULL' },
-					});
-
-					const diffRes = await adminAuth(
-						request(api.url).post('/schema/diff').send(snapshotRes.body.data).set('Content-type', 'application/json')
-					);
-
-					expect(diffRes.statusCode).toBe(200);
-
-					const entry = diffRes.body.data.diff.relations.find(
-						(relation: any) => relation.collection === articles && relation.field === 'author'
-					);
-
-					expect(entry?.diff?.[0]?.kind).toBe('N');
-
-					delete entry.diff[0].rhs.collection;
-					delete entry.diff[0].rhs.field;
-
-					const applyRes = await adminAuth(
-						request(api.url).post('/schema/apply').send(diffRes.body.data).set('Content-type', 'application/json')
-					);
-
-					expect(applyRes.statusCode).toBe(204);
-
-					const relationRes = await adminAuth(request(api.url).get(`/relations/${articles}/author`));
-					expect(relationRes.statusCode).toBe(200);
-					expect(relationRes.body.data.related_collection).toBe(authors);
-					expect(relationRes.body.data.schema?.foreign_key_table).toBe(authors);
-				} finally {
-					await deleteCollection(api, articles);
-					await deleteCollection(api, authors);
-				}
-			},
-			TEST_TIMEOUT
-		);
+			}
+		});
 	});
 });

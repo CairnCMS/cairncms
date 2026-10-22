@@ -916,7 +916,11 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 			const mutationGuard = getMutationGuard(opts);
 			if (mutationGuard) await mutationGuard.beforeDelete?.(keys, trx);
 
-			await trx(this.collection).whereIn(primaryKeyField, keys).delete();
+			try {
+				await trx(this.collection).whereIn(primaryKeyField, keys).delete();
+			} catch (err: any) {
+				throw await translateDatabaseError(err, 'delete');
+			}
 
 			if (this.accountability && this.schema.collections[this.collection]!.accountability !== null) {
 				const activityService = new ActivityService({

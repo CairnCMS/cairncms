@@ -208,10 +208,12 @@ describe('RolesService.upsertMany on a real single-connection SQLite database', 
 	});
 
 	describe('rolls back the whole batch when a roles.create filter grows a later key past the limit', () => {
-		const grow = (payload: Record<string, unknown>): Record<string, unknown> =>
-			typeof payload['key'] === 'string' && (payload['key'] as string).startsWith('lengthen_')
+		const grow = (payload: unknown) => {
+			if (typeof payload !== 'object' || payload === null) throw new Error('Expected a role payload');
+			return 'key' in payload && typeof payload.key === 'string' && payload.key.startsWith('lengthen_')
 				? { ...payload, key: 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1) }
 				: payload;
+		};
 
 		beforeEach(() => emitter.onFilter('roles.create', grow));
 		afterEach(() => emitter.offFilter('roles.create', grow));
@@ -220,6 +222,7 @@ describe('RolesService.upsertMany on a real single-connection SQLite database', 
 			const error = await run().catch((err) => err);
 
 			expect(error).toBeInstanceOf(InvalidPayloadException);
+			if (!(error instanceof InvalidPayloadException)) throw error;
 			expect(error.message).toContain(String(CONFIG_FILENAME_STEM_MAX_LENGTH));
 
 			expect(await db('directus_roles').where({ key: 'reviewers' }).first()).toBeUndefined();

@@ -1,14 +1,18 @@
 post:
-  summary: Hash a string
-  description: Generate a hash for a given string.
+  summary: Verify a hash
+  description: >-
+    Verify a string against an Argon2 hash. This endpoint is only available to admin users. Deprecated and planned
+    for removal in 1.8.0 or later. Hash and verify values in your own application with an Argon2 package, such as
+    `argon2` for Node.js, instead of calling this endpoint.
   operationId: hash-verify
+  deprecated: true
   requestBody:
     content:
       application/json:
         schema:
           properties:
             string:
-              description: String to hash.
+              description: String to verify.
               type: string
             hash:
               description: Hash you want to verify against.
@@ -25,5 +29,7 @@ post:
                 example: true
             type: object
       description: Successful request
+    '403':
+      $ref: '../../openapi.yaml#/components/responses/UnauthorizedError'
   tags:
     - Utilities

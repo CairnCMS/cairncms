@@ -447,7 +447,10 @@ describe('the confined hook binding', () => {
 		// gated, items is read-only), so its dispatch is proven here: the manifest
 		// action event, emitted through the real platform emitter, drives the confined
 		// runner, and a failure logs a sanitized warning without blocking the action.
-		const invoke = vi.fn(async () => ({ ok: false, error: { code: 'timeout', message: 'the event hook failed' } }));
+		const invoke = vi.fn<import('./supervisor.js').ConfinedSupervisor['invoke']>(async () => ({
+			ok: false,
+			error: { code: 'timeout', message: 'the event hook failed' },
+		}));
 
 		confinedRuntime.resolve = async () => ({
 			ok: true,
@@ -486,7 +489,7 @@ describe('the confined hook binding', () => {
 
 		expect(invoke).toHaveBeenCalledTimes(1);
 
-		const invocation = invoke.mock.calls[0]![0] as { activation: string; input: unknown };
+		const invocation = invoke.mock.calls[0]![0];
 		expect(invocation.activation).toBe('event-action');
 
 		expect(invocation.input).toEqual({

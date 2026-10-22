@@ -2,13 +2,14 @@ import { ContainsNullValuesException } from '../contains-null-values.js';
 import { InvalidForeignKeyException } from '../invalid-foreign-key.js';
 import { NotNullViolationException } from '../not-null-violation.js';
 import { RecordNotUniqueException } from '../record-not-unique.js';
+import { RecordStillReferencedException } from '../record-still-referenced.js';
 import type { SQLiteError } from './types.js';
 
 // NOTE:
 // - Sqlite doesn't have varchar with length support, so no ValueTooLongException
 // - Sqlite doesn't have a max range for numbers, so no ValueOutOfRangeException
 
-export function extractError(error: SQLiteError): SQLiteError | Error {
+export function extractError(error: SQLiteError, action?: 'delete'): SQLiteError | Error {
 	if (error.message.includes('SQLITE_CONSTRAINT: NOT NULL')) {
 		return notNullConstraint(error);
 	}
@@ -26,6 +27,10 @@ export function extractError(error: SQLiteError): SQLiteError | Error {
 	}
 
 	if (error.message.includes('SQLITE_CONSTRAINT: FOREIGN KEY')) {
+		if (action === 'delete') {
+			return new RecordStillReferencedException();
+		}
+
 		/**
 		 * NOTE:
 		 * SQLite doesn't return any useful information in it's foreign key constraint failed error, so

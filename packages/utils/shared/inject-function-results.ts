@@ -1,7 +1,7 @@
 import { cloneDeep, get, isPlainObject, set } from 'lodash-es';
-import { REGEX_BETWEEN_PARENS } from '@cairncms/constants';
 import type { FieldFunction, Filter } from '@cairncms/types';
 import { functions } from './functions.js';
+import { getBetweenParens } from './get-between-parens.js';
 
 /**
  * Inject function output fields into a given payload for accurate validation
@@ -34,7 +34,7 @@ export function injectFunctionResults(payload: Record<string, any>, filter: Filt
 
 			if (key.includes('(') && key.includes(')')) {
 				const functionName = key.split('(')[0] as FieldFunction;
-				const fieldKey = key.match(REGEX_BETWEEN_PARENS)?.[1];
+				const fieldKey = getBetweenParens(key);
 				if (!fieldKey || !functionName) continue;
 				const currentValuePath = parentPath ? parentPath + '.' + fieldKey : fieldKey;
 				const currentValue = get(newInput, currentValuePath);

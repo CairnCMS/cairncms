@@ -120,7 +120,7 @@ describe('buildConfinedSettingsAccess', () => {
 		const envelope = await encryptSecret('sk_live_123');
 		const a = access([{ key: 'api_key', value: envelope }]);
 
-		factoryEnv.SECRETS_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString('base64');
+		factoryEnv['SECRETS_ENCRYPTION_KEY'] = Buffer.alloc(32, 9).toString('base64');
 
 		expect(await a.resolveExtensionSecret(binding('api_key'), live())).toBeNull();
 	});

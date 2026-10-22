@@ -1,9 +1,10 @@
 get:
   summary: Deprecated Permissions Route
   description: >-
-    This route is deprecated and returns `204 No Content`. Use `GET /permissions/me/{collection}/{key}`
-    to check permissions for an item. Use `GET /permissions/me/{collection}` to check permissions for a
-    singleton.
+    This route is deprecated because it returns `204 No Content` without any permission data. Remove calls to this empty
+    endpoint. For item permission checks, use `GET /permissions/me/{collection}/{key}`, or `GET
+    /permissions/me/{collection}` for singletons. Removal is planned for 1.8.0 or later, no sooner than 30 calendar days
+    after 1.7.0 is published.
   operationId: getMyPermissions
   deprecated: true
   responses:

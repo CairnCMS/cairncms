@@ -7,7 +7,11 @@ function makeSource(total: number): Readable {
 
 	return new Readable({
 		read() {
-			if (sent >= total) return this.push(null);
+			if (sent >= total) {
+				this.push(null);
+				return;
+			}
+
 			const n = Math.min(4, total - sent);
 			sent += n;
 			this.push(Buffer.alloc(n, 0x61));

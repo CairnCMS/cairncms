@@ -715,7 +715,7 @@ describe('gateConfinedExtension', () => {
 	it('probes an endpoint under the json-endpoint activation and an operation under flow-operation', async () => {
 		const activations: unknown[] = [];
 
-		const probe = async (invocation: { activation?: string }) => {
+		const probe: NonNullable<import('./load-gate.js').ConfinedLoadGateDeps['probe']> = async (invocation) => {
 			activations.push(invocation.activation);
 			return { loadable: true };
 		};
