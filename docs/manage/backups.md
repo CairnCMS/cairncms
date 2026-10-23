@@ -120,12 +120,11 @@ These belong in a secret store with its own backup story (Vault, AWS Secrets Man
 
 ## Schema-as-code and config-as-code
 
-Two CairnCMS CLI workflows produce versioned, human-readable artifacts of structural state:
+Use `cairncms config snapshot ./config` to capture your data model, access rules and settings in reviewable YAML files. Apply the reviewed tree with `cairncms config apply ./config`. See [Config-as-code](/docs/manage/config-as-code/) for managed scope, previews and deployment instructions.
 
-- **`cairncms schema snapshot`** — captures collections, fields, and relations to a YAML or JSON file. Reapply with `cairncms schema apply`. See [Schema as code](/docs/manage/schema-as-code/).
-- **`cairncms config snapshot`** — captures roles and permissions to a YAML directory. Reapply with `cairncms config apply`. See [Config as code](/docs/manage/config-as-code/).
+These files complement database backups. They do not contain collection items, user accounts, uploaded file data, activity history or sessions. Use them for environment promotion and change review. For disaster recovery, restore the database and file-storage backups.
 
-These complement database backups; they do not replace them. Schema-as-code captures structure but no content, users, activity history, or sessions. Use them for environment promotion (dev → staging → production), change review in pull requests, and as a structural baseline that you can replay against an empty database. For disaster recovery, the database dump is still the source of truth.
+The separate [standalone schema commands](/docs/manage/schema-as-code/) remain supported but are deprecated in 1.7.0.
 
 ## What does not need a backup
 
@@ -154,4 +153,4 @@ For deployments with stricter availability requirements, run the drill in CI on 
 
 - [Configuration](/docs/manage/configuration/) covers the environment variables that determine where state lives: `STORAGE_LOCATIONS`, `DB_*`, `EXTENSIONS_PATH`.
 - [Migration between instances](/docs/manage/migration-between-instances/) covers moving state between deployments.
-- [Schema as code](/docs/manage/schema-as-code/) and [Config as code](/docs/manage/config-as-code/) cover the versioned-artifact workflows for structural state.
+- [Config-as-code](/docs/manage/config-as-code/) covers versioned files for your data model, access rules and settings.

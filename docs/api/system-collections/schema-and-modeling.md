@@ -46,7 +46,7 @@ A row in `directus_fields` describes one field on one collection. Each row carri
 | `GET` | `/fields` | List every field on every collection. |
 | `GET` | `/fields/<collection>` | List every field on one collection. |
 | `GET` | `/fields/<collection>/<field>` | Read a single field. |
-| `POST` | `/fields/<collection>` | Create a single field on a collection. The request body is one field record. Creating a non-alias field also adds the underlying SQL column. There is no batch-create shape; create multiple fields with sequential calls or through `POST /schema/apply`. |
+| `POST` | `/fields/<collection>` | Create a single field on a collection. The request body is one field record. Creating a non-alias field also adds the underlying SQL column. There is no batch-create shape. Use sequential calls or a complete desired tree through `POST /config/apply`. |
 | `PATCH` | `/fields/<collection>` | Update many fields on a collection. Body is an array of records, each with a `field` key. |
 | `PATCH` | `/fields/<collection>/<field>` | Update a single field. |
 | `DELETE` | `/fields/<collection>/<field>` | Delete a single field. Drops the underlying SQL column. |
@@ -80,7 +80,7 @@ A row in `directus_relations` describes one foreign-key relationship between two
 | `PATCH` | `/relations/<collection>/<field>` | Update a single relation. |
 | `DELETE` | `/relations/<collection>/<field>` | Delete a single relation. |
 
-There is no batch shape on `/relations` for any verb; every mutation is single-row. Bulk schema changes go through `POST /schema/apply` instead.
+There is no batch shape on `/relations` for any verb. Every mutation is single-row. For deployment, use [config-as-code](/docs/manage/config-as-code/http-api/).
 
 ### Relation record fields
 
@@ -93,6 +93,10 @@ There is no batch shape on `/relations` for any verb; every mutation is single-r
 For many-to-any relations, `related_collection` is null and `meta.one_collection_field` names the field on `collection` that holds the discriminator value naming the actual related collection per row.
 
 ## Schema-as-code endpoints
+
+:::note[Schema diff and apply are deprecated]
+The POST diff/apply endpoints are deprecated in 1.7.0. Use [Config-as-code](/docs/manage/config-as-code/) for new deployment workflows. `GET /schema/snapshot` remains supported. See the [standalone reference](/docs/manage/schema-as-code/) for the deprecation scope and removal notice.
+:::
 
 Three endpoints snapshot, diff, and apply the entire data model across deployments:
 

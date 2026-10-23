@@ -10,7 +10,7 @@ CairnCMS ships with a fixed set of tables that the platform manages directly. Th
 
 ## What is a system collection
 
-A system collection is any table whose name starts with `directus_`. The full set is fixed: you cannot create or rename one through schema-as-code, and they are filtered out of `cairncms schema snapshot`. Each one has a defined shape that the platform depends on, and the API exposes them through dedicated top-level paths rather than `/items/<collection>` (which is reserved for user-defined collections).
+A system collection is any table whose name starts with `directus_`. The platform owns their definitions. Config-as-code does not create or rename them, but it can capture and apply operator-added fields and relations on them. See [Schema coverage](/docs/manage/config-as-code/resources/schema/#what-is-covered). The API exposes system collections through dedicated top-level paths rather than `/items/<collection>`, which is reserved for user-defined collections.
 
 The full set:
 
