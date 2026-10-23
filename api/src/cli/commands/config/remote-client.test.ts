@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CairnConfig } from '../../../types/config.js';
-import { deleteVerb } from '../../presentation.js';
+import { deleteVerb, updateVerb } from '../../presentation.js';
 import { parseOperatorRemoteTarget } from './operator-remote-target.js';
 import {
 	applyRemote,
@@ -965,6 +965,339 @@ describe('applyRemote', () => {
 		expect(error.message).not.toContain(BEL);
 		expect(error.message).toContain('Deletes admin_[redacted]');
 		expect(error.message).toContain(`${deleteVerb()} editor / [redacted] / read`);
+	});
+});
+
+describe('applyRemote failure outcome', () => {
+	const SCHEMA_TREE: CairnConfig = { ...BODY, manifest: { version: 3, resources: ['roles', 'folders', 'schema'] } };
+	const NOT_RUN = { folders: 'not_run', schema: 'not_run', configuration: 'not_run' };
+	const FAILED_SCHEMA = { folders: 'skipped', schema: 'failed', configuration: 'not_run' };
+	const NOTE = 're-snapshot to verify the current state';
+	const ESC = String.fromCharCode(27);
+
+	function failing(
+		status: number,
+		extensions: Record<string, unknown>,
+		options: { body?: CairnConfig; dryRun?: boolean; message?: string } = {}
+	): Promise<RemoteClientError> {
+		const { remote } = session(() => ({
+			status,
+			data: { errors: [{ message: options.message ?? 'The run failed.', extensions }] },
+		}));
+
+		return caught(() =>
+			applyRemote(remote, options.body ?? SCHEMA_TREE, { dryRun: options.dryRun ?? false, destructive: false })
+		);
+	}
+
+	function persistedField(operation: string, column: string, metadata: string, field = 'title') {
+		return {
+			collections: [],
+			fields: [{ collection: 'articles', field, operation, column, metadata }],
+			relations: [],
+		};
+	}
+
+	it('exits 2 without the instruction or steps for a refusal before any step ran', async () => {
+		const error = await failing(400, { code: 'CONFIG_SCHEMA_SOURCE', steps: NOT_RUN });
+
+		expect(error.exitCode).toBe(2);
+		expect(error.message).toBe('The server rejected the request (400): The run failed.');
+	});
+
+	it('exits 2 without the instruction for a schema-managed refusal that carries no steps', async () => {
+		const error = await failing(400, { code: 'CONFIG_INVALID' });
+
+		expect(error.exitCode).toBe(2);
+		expect(error.message).not.toContain(NOTE);
+	});
+
+	it('exits 3 and renders the steps for a refusal after folder preparation committed', async () => {
+		const error = await failing(400, {
+			code: 'INVALID_PAYLOAD',
+			steps: { folders: 'committed', schema: 'failed', configuration: 'not_run' },
+			failure: { step: 'schema' },
+		});
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('Folder preparation: applied');
+		expect(error.message).toContain('Schema: failed');
+		expect(error.message).toContain('Configuration: not run');
+		expect(error.message).toContain('Step: Schema');
+		expect(error.message).not.toContain(NOTE);
+	});
+
+	it.each([
+		['after folder preparation committed', 3, 'committed'],
+		['with nothing committed', 2, 'skipped'],
+	])('maps a concurrent schema change %s to exit %d without the instruction', async (_label, exitCode, folders) => {
+		const error = await failing(409, {
+			code: 'SCHEMA_STATE_CHANGED',
+			steps: { folders, schema: 'rolled_back', configuration: 'not_run' },
+			failure: { step: 'schema' },
+		});
+
+		expect(error.exitCode).toBe(exitCode);
+		expect(error.message).toContain('Schema: rolled back');
+		expect(error.message).not.toContain(NOTE);
+	});
+
+	it('exits 3 with the instruction when the schema step persistence is unknown', async () => {
+		const error = await failing(500, {
+			code: 'SCHEMA_APPLY_FAILED',
+			steps: { folders: 'skipped', schema: 'unknown', configuration: 'not_run' },
+			failure: { step: 'schema', detail: { persisted: 'unknown' } },
+		});
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('Persisted changes: unknown');
+		expect(error.message).toContain(NOTE);
+	});
+
+	it('exits 3 with the instruction when a failed schema step reports an update, whose facets are unknown', async () => {
+		const error = await failing(500, {
+			code: 'SCHEMA_APPLY_FAILED',
+			steps: { folders: 'skipped', schema: 'failed', configuration: 'not_run' },
+			failure: { step: 'schema', detail: { persisted: persistedField('update', 'unknown', 'unknown') } },
+		});
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain(`${updateVerb()} field articles / title: column unknown, metadata unknown`);
+		expect(error.message).toContain(NOTE);
+	});
+
+	it('exits 3 without the instruction when a failed schema step reports every facet', async () => {
+		const error = await failing(500, {
+			code: 'SCHEMA_APPLY_FAILED',
+			steps: { folders: 'skipped', schema: 'failed', configuration: 'not_run' },
+			failure: {
+				step: 'schema',
+				detail: { persisted: persistedField('create', 'reverted', 'not_applicable'), foreignKeysRestored: false },
+			},
+		});
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('column reverted, metadata not applicable');
+		expect(error.message).toContain('Foreign key enforcement was not restored.');
+		expect(error.message).not.toContain(NOTE);
+	});
+
+	it('exits 3 with the instruction when a 4xx failure reports an unknown facet', async () => {
+		const error = await failing(400, {
+			code: 'SCHEMA_APPLY_FAILED',
+			steps: { ...FAILED_SCHEMA },
+			failure: { step: 'schema', detail: { persisted: persistedField('update', 'unknown', 'unknown') } },
+		});
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain(NOTE);
+	});
+
+	it('exits 2 without the instruction for a 4xx refusal inside a step that wrote nothing', async () => {
+		const error = await failing(400, {
+			code: 'INVALID_PAYLOAD',
+			steps: { ...FAILED_SCHEMA },
+			failure: { step: 'schema' },
+		});
+
+		expect(error.exitCode).toBe(2);
+		expect(error.message).not.toContain(NOTE);
+	});
+
+	it('exits 3 when a 4xx failure reports an applied facet', async () => {
+		const error = await failing(400, {
+			code: 'SCHEMA_APPLY_FAILED',
+			steps: { folders: 'skipped', schema: 'failed', configuration: 'not_run' },
+			failure: { step: 'schema', detail: { persisted: persistedField('create', 'applied', 'reverted') } },
+		});
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).not.toContain(NOTE);
+	});
+
+	it('exits 3 with the phase and without the instruction when a step committed before maintenance failed', async () => {
+		const error = await failing(500, {
+			code: 'SCHEMA_POST_COMMIT_FAILED',
+			steps: { folders: 'skipped', schema: 'committed', configuration: 'not_run' },
+			failure: { step: 'schema', detail: { phase: 'foreign_keys' } },
+		});
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('Schema: applied');
+		expect(error.message).toContain('Failed after commit, during: foreign_keys');
+		expect(error.message).not.toContain(NOTE);
+	});
+
+	it('keeps the instruction for a server error whose failed step carries no persisted detail', async () => {
+		const error = await failing(500, {
+			code: 'INTERNAL_SERVER_ERROR',
+			steps: { folders: 'skipped', schema: 'skipped', configuration: 'failed' },
+			failure: { step: 'configuration' },
+		});
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('Configuration: failed');
+
+		expect(error.message).toContain(
+			'\nThe server may have already applied the change; re-snapshot to verify the current state.'
+		);
+	});
+
+	it('derives the exit code from the steps for a configuration-only tree without rendering them', async () => {
+		const error = await failing(
+			500,
+			{
+				code: 'CONFIG_POST_COMMIT_FAILED',
+				steps: { folders: 'not_run', schema: 'not_run', configuration: 'committed' },
+				failure: { step: 'configuration', detail: { phase: 'cache' } },
+			},
+			{ body: BODY }
+		);
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toBe('The server rejected the request (500): The run failed.');
+	});
+
+	it('never adds the instruction to a dry-run failure', async () => {
+		const error = await failing(
+			500,
+			{ code: 'INTERNAL_SERVER_ERROR', steps: { ...NOT_RUN, schema: 'unknown' } },
+			{ dryRun: true }
+		);
+
+		expect(error.message).not.toContain(NOTE);
+	});
+
+	it.each([
+		['an unknown status', { steps: { ...NOT_RUN, schema: 'paused' } }],
+		['a missing step', { steps: { folders: 'not_run', schema: 'not_run' } }],
+		['a failed step without its failure', { steps: { ...NOT_RUN, schema: 'failed' } }],
+		['a failure naming a step that did not run', { steps: NOT_RUN, failure: { step: 'schema' } }],
+		[
+			'a post-commit phase on a failed step',
+			{ steps: { ...FAILED_SCHEMA }, failure: { step: 'schema', detail: { phase: 'cache' } } },
+		],
+		[
+			'unknown persistence on a failed step',
+			{ steps: { ...FAILED_SCHEMA }, failure: { step: 'schema', detail: { persisted: 'unknown' } } },
+		],
+		[
+			'a persisted entry with an unknown outcome value',
+			{
+				steps: { ...FAILED_SCHEMA },
+				failure: { step: 'schema', detail: { persisted: persistedField('create', 'partial', 'applied') } },
+			},
+		],
+		[
+			'two unsettled steps',
+			{ steps: { folders: 'failed', schema: 'rolled_back', configuration: 'not_run' }, failure: { step: 'schema' } },
+		],
+		[
+			'a later step that also failed',
+			{
+				steps: { folders: 'skipped', schema: 'failed', configuration: 'failed' },
+				failure: { step: 'schema', detail: { persisted: persistedField('create', 'reverted', 'reverted') } },
+			},
+		],
+		[
+			'a later step that ran after the failure',
+			{ steps: { folders: 'committed', schema: 'failed', configuration: 'skipped' }, failure: { step: 'schema' } },
+		],
+		['an earlier step that never ran', { steps: { ...NOT_RUN, schema: 'failed' }, failure: { step: 'schema' } }],
+		['a step that ran without a failure', { steps: { ...NOT_RUN, folders: 'committed' } }],
+	])('treats %s as an unverifiable outcome at exit 3 with the instruction', async (_label, extensions) => {
+		const error = await failing(400, { code: 'SCHEMA_APPLY_FAILED', ...extensions });
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('The server reported a step outcome that could not be verified.');
+		expect(error.message).toContain(NOTE);
+	});
+
+	it.each([
+		['a failure outside the configuration step', { ...NOT_RUN, schema: 'failed' }, 'schema'],
+		['a folder step it never runs', { ...NOT_RUN, folders: 'skipped', configuration: 'failed' }, 'configuration'],
+	])('treats a configuration-only failure with %s as unverifiable', async (_label, steps, step) => {
+		const error = await failing(500, { code: 'INTERNAL_SERVER_ERROR', steps, failure: { step } }, { body: BODY });
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('could not be verified');
+		expect(error.message).toContain(NOTE);
+	});
+
+	it('rejects a persisted detail that also carries a phase, without printing the phase', async () => {
+		const error = await failing(500, {
+			code: 'SCHEMA_POST_COMMIT_FAILED',
+			steps: { folders: 'skipped', schema: 'committed', configuration: 'not_run' },
+			failure: {
+				step: 'schema',
+				detail: { persisted: persistedField('create', 'reverted', 'reverted'), phase: `${TOKEN}${BEL}${ESC}[31m` },
+			},
+		});
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('could not be verified');
+		expect(error.message).not.toContain(TOKEN);
+		expect(error.message).not.toContain(BEL);
+		expect(error.message).not.toContain(ESC);
+	});
+
+	it.each([
+		['persisted state', { phase: 'cache', persisted: 123 }],
+		['a foreign-key flag', { phase: 'cache', foreignKeysRestored: false }],
+	])('rejects a phase detail that also carries %s as unverifiable rather than failing', async (_label, detail) => {
+		const error = await failing(500, {
+			code: 'SCHEMA_POST_COMMIT_FAILED',
+			steps: { folders: 'skipped', schema: 'committed', configuration: 'not_run' },
+			failure: { step: 'schema', detail },
+		});
+
+		expect(error).toBeInstanceOf(RemoteClientError);
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('could not be verified');
+	});
+
+	it('redacts the token and neutralizes control characters in persisted entries', async () => {
+		const error = await failing(500, {
+			code: 'SCHEMA_APPLY_FAILED',
+			steps: { ...FAILED_SCHEMA },
+			failure: {
+				step: 'schema',
+				detail: { persisted: persistedField('create', 'reverted', 'reverted', `x_${TOKEN}${BEL}`) },
+			},
+		});
+
+		expect(error.message).toContain('articles / x_[redacted]');
+		expect(error.message).not.toContain(TOKEN);
+		expect(error.message).not.toContain(BEL);
+	});
+
+	it('renders schema and configuration deletions together, one line per collection', async () => {
+		const error = await failing(400, {
+			code: 'DESTRUCTIVE_CHANGES_REQUIRED',
+			steps: NOT_RUN,
+			deletions: [
+				{ kind: 'roles', identity: { key: 'legacy' } },
+				{ kind: 'schema', identity: { collection: 'articles' } },
+				{ kind: 'schema', identity: { collection: 'articles' } },
+				{ kind: 'schema', identity: { collection: 'pages' } },
+			],
+		});
+
+		expect(error.exitCode).toBe(2);
+
+		expect(error.message).toBe(
+			`The server rejected the request (400): The run failed.\n    - ${deleteVerb()} legacy\n    - ${deleteVerb()} schema in articles (2 changes)\n    - ${deleteVerb()} schema in pages`
+		);
+	});
+
+	it('redacts the token from a schema deletion', async () => {
+		const error = await failing(400, {
+			code: 'DESTRUCTIVE_CHANGES_REQUIRED',
+			deletions: [{ kind: 'schema', identity: { collection: `c_${TOKEN}` } }],
+		});
+
+		expect(error.message).toContain(`${deleteVerb()} schema in c_[redacted]`);
+		expect(error.message).not.toContain(TOKEN);
 	});
 });
 

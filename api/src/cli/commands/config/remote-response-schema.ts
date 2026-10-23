@@ -1,5 +1,8 @@
 import { isPlainObject } from 'lodash-es';
 import { z } from 'zod';
+import { CONFIG_POST_COMMIT_PHASES } from '../../../exceptions/config-post-commit-failed.js';
+import { SCHEMA_POST_COMMIT_PHASES } from '../../../exceptions/schema-post-commit-failed.js';
+import { SCHEMA_CHANGE_OUTCOMES, SCHEMA_OPERATIONS } from '../../../types/schema-apply.js';
 import { SUPPORTED_ACTIONS } from '../../../utils/config-contract.js';
 
 const count = z.number().int().nonnegative();
@@ -332,11 +335,69 @@ export const RemoteConfigPlan = z
 	.passthrough();
 
 const stepStatus = z.enum(['not_run', 'skipped', 'committed', 'rolled_back', 'failed', 'unknown']);
+const runSteps = z.object({ folders: stepStatus, schema: stepStatus, configuration: stepStatus }).passthrough();
 
-export const RemoteRunOutcome = z
+export const RemoteRunOutcome = z.object({ result: z.enum(['applied', 'no_changes']), steps: runSteps }).passthrough();
+
+const schemaOperation = z.enum(SCHEMA_OPERATIONS);
+const changeOutcome = z.enum(SCHEMA_CHANGE_OUTCOMES);
+
+const persistedState = z
 	.object({
-		result: z.enum(['applied', 'no_changes']),
-		steps: z.object({ folders: stepStatus, schema: stepStatus, configuration: stepStatus }).passthrough(),
+		collections: z.array(
+			z
+				.object({ collection: z.string(), operation: schemaOperation, table: changeOutcome, metadata: changeOutcome })
+				.passthrough()
+		),
+		fields: z.array(
+			z
+				.object({
+					collection: z.string(),
+					field: z.string(),
+					operation: schemaOperation,
+					column: changeOutcome,
+					metadata: changeOutcome,
+				})
+				.passthrough()
+		),
+		relations: z.array(
+			z
+				.object({
+					collection: z.string(),
+					field: z.string(),
+					operation: schemaOperation,
+					foreignKey: z.literal('unknown'),
+					metadata: changeOutcome,
+				})
+				.passthrough()
+		),
+	})
+	.passthrough();
+
+const persistedDetail = z
+	.object({
+		persisted: z.union([z.literal('unknown'), persistedState]),
+		foreignKeysRestored: z.literal(false).optional(),
+	})
+	.passthrough()
+	.refine((detail) => !Object.hasOwn(detail, 'phase'));
+
+const phaseDetail = z
+	.object({ phase: z.union([z.enum(SCHEMA_POST_COMMIT_PHASES), z.enum(CONFIG_POST_COMMIT_PHASES)]) })
+	.passthrough()
+	.refine((detail) => !Object.hasOwn(detail, 'persisted') && !Object.hasOwn(detail, 'foreignKeysRestored'));
+
+export type RemotePhaseDetail = z.infer<typeof phaseDetail>;
+
+const failureDetail = z.union([persistedDetail, phaseDetail]);
+
+export const RemoteRunFailure = z
+	.object({
+		steps: runSteps,
+		failure: z
+			.object({ step: z.enum(['folders', 'schema', 'configuration']), detail: failureDetail.optional() })
+			.passthrough()
+			.optional(),
 	})
 	.passthrough();
 
@@ -361,6 +422,7 @@ const deletion = z.union([
 	z.object({ kind: z.literal('folders'), identity: folderIdentity }).passthrough(),
 	z.object({ kind: z.literal('extension-settings'), identity: extensionSettingsIdentity }).passthrough(),
 	z.object({ kind: z.literal('translations'), identity: translationsIdentity }).passthrough(),
+	z.object({ kind: z.literal('schema'), identity: schemaCollectionIdentity }).passthrough(),
 ]);
 
 export const RemoteErrorEnvelope = z.object({ errors: z.array(z.unknown()) }).passthrough();
@@ -377,3 +439,5 @@ export type RemoteWirePlan = z.infer<typeof RemoteConfigPlan>;
 export type RemoteWireResult = z.infer<typeof RemoteApplyResult>;
 
 export type RemoteWireOutcome = z.infer<typeof RemoteRunOutcome>;
+
+export type RemoteWireFailure = z.infer<typeof RemoteRunFailure>;

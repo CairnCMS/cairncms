@@ -4,7 +4,12 @@ import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
 import { ConfigUnsupportedVersionException } from '../../../exceptions/config-unsupported-version.js';
 import type { CairnConfig, ConfigKind } from '../../../types/config.js';
 import { serializeToWire } from '../../../utils/config/wire.js';
-import { CONFIG_RUN_ID_HEADER, type ConfigRunSteps } from '../../../utils/config/run-record.js';
+import {
+	CONFIG_RUN_ID_HEADER,
+	type ConfigRunStepFailure,
+	type ConfigRunSteps,
+	type ConfigStepStatus,
+} from '../../../utils/config/run-record.js';
 import { listConfigKinds } from '../../../utils/config/registry.js';
 import { isValidUuid } from '../../../utils/is-valid-uuid.js';
 import { replaceControlCharacters, safeLogFragment } from '../../../utils/safe-log-fragment.js';
@@ -16,12 +21,21 @@ import {
 	RemoteErrorEntry,
 	RemoteErrorEnvelope,
 	RemoteErrorExtensions,
+	RemoteRunFailure,
 	RemoteRunOutcome,
+	type RemotePhaseDetail,
+	type RemoteWireFailure,
 	type RemoteWireOutcome,
 	type RemoteWirePlan,
 	type RemoteWireResult,
 } from './remote-response-schema.js';
-import { renderDeletions, renderProtectionContributors, type RenderableDeletion } from './render-config-plan.js';
+import {
+	renderDeletions,
+	renderProtectionContributors,
+	renderStepFailure,
+	renderStepOutcome,
+	type RenderableDeletion,
+} from './render-config-plan.js';
 
 export const REMOTE_CONFIG_MIN_VERSION = '1.6.0';
 
@@ -74,11 +88,189 @@ function attachRunId(err: unknown, runId: string | undefined, note = ''): unknow
 	return new RemoteClientError(`${err.message}${note}`, err.exitCode, runId);
 }
 
+type RunFailure =
+	| { kind: 'absent' }
+	| { kind: 'malformed' }
+	| { kind: 'reported'; steps: ConfigRunSteps; failure?: ConfigRunStepFailure };
+
+const UNSETTLED_STATUSES: ReadonlySet<ConfigStepStatus> = new Set(['failed', 'rolled_back', 'unknown']);
+
+const STEP_ORDER: ReadonlyArray<keyof ConfigRunSteps> = ['folders', 'schema', 'configuration'];
+
+type WireFailureDetail = NonNullable<NonNullable<RemoteWireFailure['failure']>['detail']>;
+
+function isPhaseDetail(detail: WireFailureDetail): detail is RemotePhaseDetail {
+	return Object.hasOwn(detail, 'phase');
+}
+
+function projectedFailure(parsed: NonNullable<RemoteWireFailure['failure']>): ConfigRunStepFailure {
+	const detail = parsed.detail;
+	if (detail === undefined) return { step: parsed.step };
+	if (isPhaseDetail(detail)) return { step: parsed.step, detail: { phase: detail.phase } };
+
+	const foreignKeys = detail.foreignKeysRestored === false ? { foreignKeysRestored: false as const } : {};
+
+	if (detail.persisted === 'unknown') return { step: parsed.step, detail: { persisted: 'unknown', ...foreignKeys } };
+
+	const { collections, fields, relations } = detail.persisted;
+
+	return {
+		step: parsed.step,
+		detail: {
+			persisted: {
+				collections: collections.map(({ collection, operation, table, metadata }) => ({
+					collection,
+					operation,
+					table,
+					metadata,
+				})),
+				fields: fields.map(({ collection, field, operation, column, metadata }) => ({
+					collection,
+					field,
+					operation,
+					column,
+					metadata,
+				})),
+				relations: relations.map(({ collection, field, operation, foreignKey, metadata }) => ({
+					collection,
+					field,
+					operation,
+					foreignKey,
+					metadata,
+				})),
+			},
+			...foreignKeys,
+		},
+	};
+}
+
+/**
+ * The server runs the steps in order and stops at the first failure: a configuration-only run fails only in its
+ * configuration step, steps before the failing one settled as skipped or committed, and later steps never ran.
+ */
+function sequenceHolds(
+	steps: ConfigRunSteps,
+	failure: ConfigRunStepFailure | undefined,
+	schemaManaged: boolean
+): boolean {
+	if (failure === undefined) return STEP_ORDER.every((step) => steps[step] === 'not_run');
+
+	const status = steps[failure.step];
+	if (!UNSETTLED_STATUSES.has(status) && status !== 'committed') return false;
+
+	const index = STEP_ORDER.indexOf(failure.step);
+
+	return STEP_ORDER.every((step, position) => {
+		if (position > index) return steps[step] === 'not_run';
+		if (position === index) return true;
+		return schemaManaged ? steps[step] === 'skipped' || steps[step] === 'committed' : steps[step] === 'not_run';
+	});
+}
+
+function detailMatchesStatus(failure: ConfigRunStepFailure, steps: ConfigRunSteps): boolean {
+	const status = steps[failure.step];
+	const detail = failure.detail;
+
+	if (detail === undefined) return true;
+	if ('phase' in detail) return status === 'committed';
+	return status === (detail.persisted === 'unknown' ? 'unknown' : 'failed');
+}
+
+/** The server attaches `steps`, and `failure` once a step has started, to the first error of a failed run. */
+function runFailureOf(data: unknown, schemaManaged: boolean): RunFailure {
+	const envelope = RemoteErrorEnvelope.safeParse(data);
+	if (!envelope.success) return { kind: 'absent' };
+
+	const first = envelope.data.errors[0];
+	const extensions = isPlainObject(first) ? (first as Record<string, unknown>)['extensions'] : undefined;
+	if (!isPlainObject(extensions)) return { kind: 'absent' };
+
+	const fields = extensions as Record<string, unknown>;
+	if (fields['steps'] === undefined && fields['failure'] === undefined) return { kind: 'absent' };
+
+	const parsed = RemoteRunFailure.safeParse({ steps: fields['steps'], failure: fields['failure'] });
+	if (!parsed.success) return { kind: 'malformed' };
+
+	const { folders, schema, configuration } = parsed.data.steps;
+	const steps: ConfigRunSteps = { folders, schema, configuration };
+	const failure = parsed.data.failure === undefined ? undefined : projectedFailure(parsed.data.failure);
+
+	if (!sequenceHolds(steps, failure, schemaManaged)) return { kind: 'malformed' };
+	if (failure === undefined) return { kind: 'reported', steps };
+	if (!schemaManaged && failure.step !== 'configuration') return { kind: 'malformed' };
+
+	return detailMatchesStatus(failure, steps) ? { kind: 'reported', steps, failure } : { kind: 'malformed' };
+}
+
+function persistedFacets(failure: ConfigRunStepFailure | undefined): string[] {
+	const detail = failure?.detail;
+	if (detail === undefined || !('persisted' in detail) || detail.persisted === 'unknown') return [];
+
+	const { collections, fields, relations } = detail.persisted;
+
+	return [
+		...collections.flatMap((entry) => [entry.table, entry.metadata]),
+		...fields.flatMap((entry) => [entry.column, entry.metadata]),
+		...relations.flatMap((entry) => [entry.foreignKey, entry.metadata]),
+	];
+}
+
+/**
+ * A failed step without persisted detail on a server error leaves its writes unaccounted for, so it is treated as
+ * uncertain even though the server labels it failed.
+ */
+function failureOutcome(
+	run: Extract<RunFailure, { kind: 'reported' }>,
+	refusal: boolean
+): { changed: boolean; uncertain: boolean } {
+	const statuses = [run.steps.folders, run.steps.schema, run.steps.configuration];
+	const facets = persistedFacets(run.failure);
+	const detail = run.failure?.detail;
+	const persistedUnknown = detail !== undefined && 'persisted' in detail && detail.persisted === 'unknown';
+	const failedStep = run.failure === undefined ? undefined : run.steps[run.failure.step];
+
+	return {
+		changed: statuses.some((status) => status === 'committed' || status === 'unknown') || facets.includes('applied'),
+		uncertain:
+			statuses.includes('unknown') ||
+			persistedUnknown ||
+			facets.includes('unknown') ||
+			(!refusal && failedStep === 'failed' && !(detail !== undefined && 'persisted' in detail)),
+	};
+}
+
+function redactedFailure(failure: ConfigRunStepFailure, token: string): ConfigRunStepFailure {
+	const detail = failure.detail;
+	if (detail === undefined || !('persisted' in detail) || detail.persisted === 'unknown') return failure;
+
+	const { collections, fields, relations } = detail.persisted;
+
+	return {
+		step: failure.step,
+		detail: {
+			...detail,
+			persisted: {
+				collections: collections.map((entry) => ({ ...entry, collection: redactToken(entry.collection, token) })),
+				fields: fields.map((entry) => ({
+					...entry,
+					collection: redactToken(entry.collection, token),
+					field: redactToken(entry.field, token),
+				})),
+				relations: relations.map((entry) => ({
+					...entry,
+					collection: redactToken(entry.collection, token),
+					field: redactToken(entry.field, token),
+				})),
+			},
+		},
+	};
+}
+
 async function request(
 	session: RemoteSession,
 	method: Method,
 	endpoint: string,
-	options: { query?: Record<string, string>; body?: unknown; mutating?: boolean } = {}
+	options: { query?: Record<string, string>; body?: unknown; mutating?: boolean; schemaManaged?: boolean } = {}
 ): Promise<Envelope> {
 	const url = resolveEndpoint(session.target, endpoint);
 	const outcome = options.mutating ? UNKNOWN_OUTCOME_NOTE : '';
@@ -105,14 +297,41 @@ async function request(
 	const runId = runIdFrom(response.headers);
 
 	if (response.status < 200 || response.status >= 300) {
-		const preCommitRefusal = response.status >= 400 && response.status < 500;
+		const refusal = response.status >= 400 && response.status < 500;
 		const label = response.status >= 400 ? 'rejected the request' : 'returned an unexpected redirect';
+		const run = runFailureOf(response.data, options.schemaManaged === true);
+		let exitCode: 2 | 3;
+		let uncertain: boolean;
+		let detail = '';
+
+		if (run.kind === 'absent') {
+			exitCode = refusal ? 2 : 3;
+			uncertain = !refusal;
+		} else if (run.kind === 'malformed') {
+			exitCode = 3;
+			uncertain = true;
+			detail = '\nThe server reported a step outcome that could not be verified.';
+		} else {
+			const reported = failureOutcome(run, refusal);
+			exitCode = reported.changed || reported.uncertain || !refusal ? 3 : 2;
+			uncertain = reported.uncertain;
+
+			const started = [run.steps.folders, run.steps.schema, run.steps.configuration].some(
+				(status) => status !== 'not_run'
+			);
+
+			if (options.schemaManaged && started) {
+				detail = `\n${renderStepOutcome(run.steps)}`;
+				if (run.failure !== undefined) detail += `\n${renderStepFailure(redactedFailure(run.failure, session.token))}`;
+			}
+		}
+
+		let note = '';
+		if (options.mutating && uncertain) note = detail === '' ? outcome : `\n${outcome.trimStart()}`;
 
 		throw new RemoteClientError(
-			`The server ${label} (${response.status}): ${serverErrorMessage(response.data, session.token)}${
-				preCommitRefusal ? '' : outcome
-			}`,
-			preCommitRefusal ? 2 : 3,
+			`The server ${label} (${response.status}): ${serverErrorMessage(response.data, session.token)}${detail}${note}`,
+			exitCode,
 			runId
 		);
 	}
@@ -219,6 +438,7 @@ export async function applyRemote(
 		query,
 		body: serializeToWire(body, body.manifest.version),
 		mutating: !options.dryRun,
+		schemaManaged: managesSchema(body),
 	});
 
 	if (options.dryRun) {
@@ -605,6 +825,10 @@ function redactedDeletion(deletion: RenderableDeletion, token: string): Renderab
 		const { language, key } = deletion.identity;
 
 		return { kind: 'translations', identity: { language: redactToken(language, token), key: redactToken(key, token) } };
+	}
+
+	if (deletion.kind === 'schema') {
+		return { kind: 'schema', identity: { collection: redactToken(deletion.identity.collection, token) } };
 	}
 
 	const unhandled: never = deletion;

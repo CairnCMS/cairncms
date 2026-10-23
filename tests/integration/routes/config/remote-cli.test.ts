@@ -1,8 +1,8 @@
 import { setupRequest } from '../../fixtures/request';
-import { expect } from 'vitest';
+import { expect, vi } from 'vitest';
 import type { Test } from 'supertest';
 import type { Api } from '../../fixtures/environment';
-import { identityTest as test } from '../../fixtures/identities';
+import { createIdentityTest } from '../../fixtures/identities';
 import { describeForVendors } from '../../fixtures/applicability';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'crypto';
@@ -16,6 +16,8 @@ import { sortBy } from 'lodash';
 import * as common from '../../fixtures/data';
 import { CreateCollection, CreateField } from '../../fixtures/schema';
 import { initializeFixtures } from '../../harness/fixture-setup.mjs';
+
+const test = createIdentityTest({ env: { LOG_LEVEL: 'info', LOG_STYLE: 'raw' } });
 
 initializeFixtures();
 
@@ -89,11 +91,13 @@ function generateCert(dir: string): { certPath: string; keyPath: string } {
 	return { certPath, keyPath };
 }
 
+type HeldApply = { remaining: number; ms: number; runIds: string[] };
+
 function startProxy(
 	cert: Buffer,
 	key: Buffer,
 	upstream: string,
-	options: { version?: string; applies?: string[] } = {}
+	options: { version?: string; applies?: string[]; hold?: HeldApply } = {}
 ): Promise<https.Server> {
 	const target = new URL(upstream);
 	const version = options.version ?? MIN_VERSION;
@@ -121,6 +125,26 @@ function startProxy(
 						const payload = rewriteUpstreamPayload(req, status, Buffer.concat(responseChunks), version);
 						const responseHeaders = { ...upstreamRes.headers };
 						delete responseHeaders['content-length'];
+
+						const url = req.url ?? '';
+
+						const mutatingApply =
+							req.method === 'POST' && url.split('?')[0] === '/config/apply' && !url.includes('dry_run');
+
+						const hold = options.hold;
+
+						if (mutatingApply && hold !== undefined && hold.remaining > 0) {
+							hold.remaining -= 1;
+							hold.runIds.push(String(upstreamRes.headers['x-config-run-id']));
+
+							setTimeout(() => {
+								if (res.destroyed) return;
+								res.writeHead(status, responseHeaders);
+								res.end(payload);
+							}, hold.ms).unref();
+
+							return;
+						}
 
 						res.writeHead(status, responseHeaders);
 						res.end(payload);
@@ -168,7 +192,7 @@ async function findRole(api: Api, roleKey: string): Promise<{ id: string; name: 
 
 type Document = Record<string, any>;
 
-type RemoteHarness = { url: string; env: Record<string, string>; dir: string; applies: string[] };
+type RemoteHarness = { url: string; env: Record<string, string>; dir: string; applies: string[]; hold: HeldApply };
 
 async function withRemote(
 	api: Api,
@@ -178,13 +202,14 @@ async function withRemote(
 ): Promise<void> {
 	const dir = await fs.mkdtemp(path.join(api.directory, 'cairncms-remote-'));
 	const applies: string[] = [];
+	const hold: HeldApply = { remaining: 0, ms: 0, runIds: [] };
 	let proxy: https.Server | undefined;
 	let caseError: unknown;
 
 	try {
 		const { certPath, keyPath } = generateCert(dir);
 		const [cert, key] = await Promise.all([fs.readFile(certPath), fs.readFile(keyPath)]);
-		proxy = await startProxy(cert, key, api.url, { version, applies });
+		proxy = await startProxy(cert, key, api.url, { version, applies, hold });
 
 		await run({
 			url: `https://127.0.0.1:${(proxy.address() as AddressInfo).port}`,
@@ -196,6 +221,7 @@ async function withRemote(
 			},
 			dir,
 			applies,
+			hold,
 		});
 	} catch (error) {
 		caseError = error;
@@ -292,6 +318,26 @@ async function deleteFolders(api: Api, keys: string[]): Promise<void> {
 async function deleteRole(api: Api, key: string): Promise<void> {
 	const found = await findRole(api, key);
 	if (found) await adminAuth(setupRequest(api.url).delete(`/roles/${found.id}`));
+}
+
+async function runRecord(api: Api, runId: string): Promise<Document> {
+	return vi.waitFor(
+		async () => {
+			for (const line of (await api.readLogs()).split('\n')) {
+				if (!line.trim().startsWith('{')) continue;
+
+				try {
+					const parsed = JSON.parse(line);
+					if (parsed?.event === 'config.run.finished' && parsed?.runId === runId) return parsed as Document;
+				} catch {
+					continue;
+				}
+			}
+
+			throw new Error(`no run record for ${runId} yet`);
+		},
+		{ timeout: 10_000, interval: 100 }
+	);
 }
 
 async function clearCache(api: Api): Promise<void> {
@@ -715,28 +761,72 @@ describeForVendors(
 			);
 		});
 
-		test('refuses a schema-managed tree that drops a collection or removes every administrator role', async ({
+		test('refuses a schema-managed tree that drops a collection and a role, or removes every administrator role', async ({
 			api,
 		}) => {
-			const collection = `remote_refusal_${suffix()}`;
+			const id = suffix();
+			const collection = `remote_refusal_${id}`;
+			const trimmed = `remote_trimmed_${id}`;
+			const roleKey = `remote_refusal_role_${id}`;
 
 			await withRemote(
 				api,
 				SCHEMA_VERSION,
 				async (remote) => {
 					await CreateCollection(api, { collection });
+					await CreateField(api, { collection, field: 'title', type: 'string' });
+					await CreateCollection(api, { collection: trimmed });
+					await CreateField(api, { collection: trimmed, field: 'extra_a', type: 'string' });
+					await CreateField(api, { collection: trimmed, field: 'extra_b', type: 'string' });
+
+					await adminAuth(setupRequest(api.url).post('/roles'))
+						.send({ key: roleKey, name: roleKey, admin_access: false, app_access: false })
+						.expect(200);
+
 					const tree = await captureTree(api, remote);
 
 					const schemaFile = await schemaFileOf(tree, collection);
-					const kept = await fs.readFile(schemaFile, 'utf8');
-					await fs.unlink(schemaFile);
+					const trimmedFile = await schemaFileOf(tree, trimmed);
+
+					const roleFile = (await treeDocuments(tree, 'roles')).find(
+						({ document }) => document['key'] === roleKey
+					)!.file;
+
+					const [keptSchema, keptTrimmed, keptRole] = await Promise.all([
+						fs.readFile(schemaFile, 'utf8'),
+						fs.readFile(trimmedFile, 'utf8'),
+						fs.readFile(roleFile, 'utf8'),
+					]);
+
+					const trimmedDocument = loadYaml(keptTrimmed) as Document;
+
+					trimmedDocument['fields'] = (trimmedDocument['fields'] as Document[]).filter(
+						(field) => !['extra_a', 'extra_b'].includes(field['field'])
+					);
+
+					await Promise.all([
+						fs.unlink(schemaFile),
+						fs.unlink(roleFile),
+						fs.writeFile(trimmedFile, dumpYaml(trimmedDocument)),
+					]);
 
 					const destructive = await remoteCli(api, remote, ['config', 'apply', tree, '--yes']);
+					const refusal = loggedMessages(destructive.output);
 					expect(destructive.status, destructive.output).toBe(2);
-					expect(destructive.output).toContain('rejected the request (400)');
+					expect(refusal).toContain('rejected the request (400)');
+					expect(refusal).toContain(`Delete ${roleKey}\n`);
+					expect(refusal).toContain(`Delete schema in ${collection}\n`);
+					expect(refusal).toContain(`Delete schema in ${trimmed} (2 changes)`);
+					expect(refusal).not.toContain('re-snapshot');
 					expect(await api.database.schema.hasTable(collection)).toBe(true);
+					expect(await api.database.schema.hasColumn(trimmed, 'extra_a')).toBe(true);
+					expect(await findRole(api, roleKey)).toBeDefined();
 
-					await fs.writeFile(schemaFile, kept);
+					await Promise.all([
+						fs.writeFile(schemaFile, keptSchema),
+						fs.writeFile(trimmedFile, keptTrimmed),
+						fs.writeFile(roleFile, keptRole),
+					]);
 
 					const administrators = (await treeDocuments(tree, 'roles')).filter(
 						({ document }) => document['admin_access']
@@ -756,6 +846,108 @@ describeForVendors(
 					}
 
 					expect(await api.database.schema.hasTable(collection)).toBe(true);
+				},
+				async () => {
+					await dropCollection(api, collection);
+					await dropCollection(api, trimmed);
+					await deleteRole(api, roleKey);
+				}
+			);
+		});
+
+		test('reports folder preparation committed before a refused schema step, without the re-snapshot instruction', async ({
+			api,
+		}) => {
+			const id = suffix();
+			const collection = `remote_stop_${id}`;
+			const folderKey = `remote_stop_folder_${id}`;
+
+			await withRemote(
+				api,
+				SCHEMA_VERSION,
+				async (remote) => {
+					await CreateCollection(api, { collection });
+					const folderId = await createFolder(api, folderKey);
+
+					await CreateField(api, {
+						collection,
+						field: 'cover',
+						type: 'uuid',
+						meta: { interface: 'file', options: { folder: folderId } },
+					});
+
+					await CreateField(api, { collection, field: 'title', type: 'string' });
+
+					const tree = await captureTree(api, remote);
+
+					await adminAuth(setupRequest(api.url).delete(`/fields/${collection}/cover`)).expect(204);
+					await deleteFolders(api, [folderKey]);
+
+					const schemaFile = await schemaFileOf(tree, collection);
+					const document = loadYaml(await fs.readFile(schemaFile, 'utf8')) as Document;
+					delete (document['fields'] as Document[]).find((field) => field['field'] === 'title')!['schema'];
+					await fs.writeFile(schemaFile, dumpYaml(document));
+
+					const applied = await remoteCli(api, remote, ['config', 'apply', tree, '--yes']);
+					const shown = loggedMessages(applied.output);
+
+					expect(applied.status, applied.output).toBe(3);
+					expect(shown).toContain('remain as a field');
+					expect(shown).toContain('Folder preparation: applied');
+					expect(shown).toContain('Schema: failed');
+					expect(shown).toContain('Configuration: not run');
+					expect(shown).toContain('Step: Schema');
+					expect(shown).not.toContain('re-snapshot');
+
+					const prepared = await api.database('directus_folders').where({ key: folderKey }).first();
+					expect(prepared).toBeDefined();
+					expect(await api.database('directus_files').where({ folder: prepared.id }).first()).toBeUndefined();
+					expect(await api.database.schema.hasColumn(collection, 'title')).toBe(true);
+					expect(await api.database.schema.hasColumn(collection, 'cover')).toBe(false);
+				},
+				async () => {
+					await dropCollection(api, collection);
+					await deleteFolders(api, [folderKey]);
+				}
+			);
+		});
+
+		test('reports a lost apply response as an unknown outcome while the server completes the run', async ({ api }) => {
+			const collection = `remote_lost_${suffix()}`;
+
+			await withRemote(
+				api,
+				SCHEMA_VERSION,
+				async (remote) => {
+					await CreateCollection(api, { collection });
+					const tree = await captureTree(api, remote);
+					await dropCollection(api, collection);
+
+					remote.hold.remaining = 1;
+					remote.hold.ms = 15_000;
+
+					const lost = await runCli(api, ['config', 'apply', tree, '--yes', '--url', remote.url], {
+						...remote.env,
+						CAIRNCMS_REMOTE_CONFIG_TIMEOUT: '3s',
+					});
+
+					const shown = loggedMessages(`${lost.stdout ?? ''}${lost.stderr ?? ''}`);
+					expect(lost.status, shown).toBe(3);
+					expect(shown).toContain('Could not reach the server');
+					expect(shown).toContain('re-snapshot to verify the current state');
+					expect(shown).not.toContain('Schema: applied');
+
+					await vi.waitFor(() => expect(remote.hold.runIds).toHaveLength(1), { timeout: 10_000, interval: 100 });
+					const record = await runRecord(api, remote.hold.runIds[0]!);
+
+					expect(record['result']).toBe('applied');
+					expect(record['steps']).toEqual({ folders: 'skipped', schema: 'committed', configuration: 'skipped' });
+					expect(record['userAgent']).toMatch(/^cairncms-cli\//);
+					expect(await api.database.schema.hasTable(collection)).toBe(true);
+
+					const check = await remoteCli(api, remote, ['config', 'apply', tree, '--dry-run']);
+					expect(check.status, check.output).toBe(0);
+					expect(check.output).toContain('No changes to apply.');
 				},
 				() => dropCollection(api, collection)
 			);
