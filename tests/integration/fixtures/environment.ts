@@ -313,17 +313,10 @@ export async function withEnvironment(
 			});
 
 			const create = async () => {
+				let statement = 'CREATE DATABASE ?? CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
 				// The PostGIS images' template contains the same extensions as their initial database.
-				await admin!
-					.raw(
-						postgres
-							? postgis
-								? 'CREATE DATABASE ?? TEMPLATE template_postgis'
-								: 'CREATE DATABASE ??'
-							: 'CREATE DATABASE ?? CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci',
-						[id]
-					)
-					.timeout(10_000);
+				if (postgres) statement = postgis ? 'CREATE DATABASE ?? TEMPLATE template_postgis' : 'CREATE DATABASE ??';
+				await admin!.raw(statement, [id]).timeout(10_000);
 			};
 
 			// Record the target before provisioning; cancellation can interrupt database creation.
