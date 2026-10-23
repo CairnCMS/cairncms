@@ -11,8 +11,9 @@ import http from 'node:http';
 import https from 'node:https';
 import type { AddressInfo } from 'node:net';
 import path from 'path';
-import { dump as dumpYaml } from 'js-yaml';
+import { dump as dumpYaml, load as loadYaml } from 'js-yaml';
 import * as common from '../../fixtures/data';
+import { CreateCollection, CreateField } from '../../fixtures/schema';
 import { initializeFixtures } from '../../harness/fixture-setup.mjs';
 
 initializeFixtures();
@@ -309,6 +310,87 @@ describeForVendors(
 				reportCleanupFailures(failures, caseError);
 			}
 		}, 120000);
+
+		test('captures a schema-managed tree with its provenance, which a local dry run then finds unchanged', async ({
+			api,
+		}) => {
+			let caseError: unknown;
+			let caseDir: string | undefined;
+			let caseProxy: https.Server | undefined;
+			const collection = `remote_capture_${randomUUID().replace(/-/g, '').slice(0, 8)}`;
+
+			try {
+				caseDir = await fs.mkdtemp(path.join(api.directory, 'cairncms-remote-capture-'));
+				const { certPath, keyPath } = generateCert(caseDir);
+				const [cert, key] = await Promise.all([fs.readFile(certPath), fs.readFile(keyPath)]);
+
+				caseProxy = await startProxy(cert, key, api.url);
+				const url = `https://127.0.0.1:${(caseProxy.address() as AddressInfo).port}`;
+
+				const env = {
+					CAIRNCMS_TOKEN: common.USER.ADMIN!.TOKEN,
+					LOG_LEVEL: 'info',
+					LOG_STYLE: 'raw',
+					NODE_EXTRA_CA_CERTS: certPath,
+				};
+
+				await CreateCollection(api, { collection });
+				await CreateField(api, { collection, field: 'title', type: 'string' });
+
+				const treeDir = path.join(caseDir, 'tree');
+				await fs.mkdir(treeDir, { recursive: true });
+
+				const capture = await runCli(api, ['config', 'snapshot', treeDir, '--url', url, '--yes'], env);
+				expect(capture.status, capture.stderr).toBe(0);
+
+				const manifest = loadYaml(await fs.readFile(path.join(treeDir, 'cairncms-config.yaml'), 'utf8')) as Record<
+					string,
+					any
+				>;
+
+				expect(manifest['version']).toBe(3);
+				expect(manifest['resources']).toContain('schema');
+				expect(manifest['schema']).toEqual({ release: expect.any(String), vendor: 'postgres' });
+
+				const schemaDir = path.join(treeDir, 'schema');
+
+				const documents = await Promise.all(
+					(
+						await fs.readdir(schemaDir)
+					).map(async (name) => loadYaml(await fs.readFile(path.join(schemaDir, name), 'utf8')) as Record<string, any>)
+				);
+
+				const captured = documents.find((document) => document['collection'] === collection);
+				expect(captured).toBeDefined();
+				expect(captured!['fields'].map((field: { field: string }) => field.field)).toContain('title');
+
+				const dryRun = await runCli(api, ['config', 'apply', treeDir, '--dry-run'], {
+					LOG_LEVEL: 'info',
+					LOG_STYLE: 'raw',
+				});
+
+				expect(dryRun.status, dryRun.stderr).toBe(0);
+				expect(dryRun.stdout + dryRun.stderr).toContain('No changes to apply.');
+			} catch (error) {
+				caseError = error;
+				throw error;
+			} finally {
+				caseProxy?.closeAllConnections();
+
+				const results = await Promise.allSettled([
+					adminAuth(setupRequest(api.url).delete(`/collections/${collection}`)),
+					new Promise<void>((resolve, reject) => {
+						if (!caseProxy) return resolve();
+						caseProxy.close((err) => (err ? reject(err) : resolve()));
+					}),
+					caseDir ? fs.rm(caseDir, { recursive: true, force: true }) : Promise.resolve(),
+				]);
+
+				const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+
+				reportCleanupFailures(failures, caseError);
+			}
+		});
 	}
 );
 

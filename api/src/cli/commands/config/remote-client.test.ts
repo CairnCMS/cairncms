@@ -1033,6 +1033,70 @@ describe('fetchRemoteSnapshot', () => {
 		});
 	});
 
+	const SCHEMA_SCOPE = { manifestVersion: 3, resources: ['schema'] as const };
+	const SCHEMA_MANIFEST = { version: 3, resources: ['schema'], schema: { release: '1.7.0', vendor: 'postgres' } };
+	const ARTICLES = { collection: 'articles', meta: {}, schema: { name: 'articles' }, fields: [], relations: [] };
+
+	function schemaSnapshot(manifest: unknown, schema: unknown[]) {
+		return {
+			manifest,
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [],
+			translations: [],
+			schema,
+		};
+	}
+
+	it('returns a schema-managing snapshot with its schema records and provenance', async () => {
+		const { remote } = session(() => ({ status: 200, data: { data: schemaSnapshot(SCHEMA_MANIFEST, [ARTICLES]) } }));
+
+		await expect(fetchRemoteSnapshot(remote, SCHEMA_SCOPE)).resolves.toEqual({
+			manifest: SCHEMA_MANIFEST,
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [],
+			'extension-settings': [],
+			translations: [],
+			schema: [ARTICLES],
+		});
+	});
+
+	it('rejects a schema-managing snapshot that records no schema provenance at exit 3', async () => {
+		const { remote } = session(() => ({
+			status: 200,
+			data: { data: schemaSnapshot({ version: 3, resources: ['schema'] }, [ARTICLES]) },
+		}));
+
+		const error = await caught(() => fetchRemoteSnapshot(remote, SCHEMA_SCOPE));
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('must record its schema provenance');
+	});
+
+	it('rejects a snapshot whose schema records are malformed at exit 3', async () => {
+		const malformedField = {
+			collection: 'articles',
+			field: 'title',
+			type: 'not-a-type',
+			meta: {},
+			schema: { name: 'title' },
+		};
+
+		const { remote } = session(() => ({
+			status: 200,
+			data: { data: schemaSnapshot(SCHEMA_MANIFEST, [{ ...ARTICLES, fields: [malformedField] }]) },
+		}));
+
+		const error = await caught(() => fetchRemoteSnapshot(remote, SCHEMA_SCOPE));
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('malformed snapshot response');
+	});
+
 	it('names the failing field in a refused snapshot', async () => {
 		const { remote } = session(() => ({
 			status: 200,
