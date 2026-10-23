@@ -51,6 +51,7 @@ import { createOperatorRemoteTransport } from './operator-remote-transport.js';
 import {
 	applyRemote,
 	assertServerSupportsRemoteConfig,
+	assertServerSupportsRemoteSchema,
 	fetchServerVersion,
 	type RemoteSession,
 } from './remote-client.js';
@@ -62,6 +63,7 @@ import {
 	renderNoChanges,
 	renderResultSummary,
 	renderStepOutcome,
+	renderWarnings,
 } from './render-config-plan.js';
 
 async function serializePlan(
@@ -104,7 +106,7 @@ export async function configApply(
 	}
 
 	if (options?.url !== undefined) {
-		return configApplyRemote(configPath, options.url, { dryRun, destructive, format, options });
+		return configApplyRemote(configPath, options.url, { dryRun, destructive, forceSchema, format, options });
 	}
 
 	const database = getDatabase();
@@ -369,9 +371,15 @@ async function runLocalEngine(
 async function configApplyRemote(
 	configPath: string,
 	url: string,
-	ctx: { dryRun: boolean; destructive: boolean; format: string; options: { yes?: boolean; tokenStdin?: boolean } }
+	ctx: {
+		dryRun: boolean;
+		destructive: boolean;
+		forceSchema: boolean;
+		format: string;
+		options: { yes?: boolean; tokenStdin?: boolean };
+	}
 ): Promise<void> {
-	const { dryRun, destructive, format } = ctx;
+	const { dryRun, destructive, forceSchema, format } = ctx;
 
 	if (!dryRun && ctx.options.yes !== true) {
 		logger.error(
@@ -398,12 +406,16 @@ async function configApplyRemote(
 		const transport = await createOperatorRemoteTransport();
 		const session: RemoteSession = { transport, target, token };
 
-		assertServerSupportsRemoteConfig(await fetchServerVersion(session), session.token);
+		const serverVersion = await fetchServerVersion(session);
+		assertServerSupportsRemoteConfig(serverVersion, session.token);
 
 		const desired = await readConfigDirectory(configPath, { notice: (message) => logger.warn(message) });
+		const schemaManaged = desired.manifest.resources.includes('schema');
+
+		if (schemaManaged) assertServerSupportsRemoteSchema(serverVersion, session.token);
 
 		if (dryRun) {
-			const { plan, runId } = await applyRemote(session, desired, { dryRun: true, destructive });
+			const { plan, runId } = await applyRemote(session, desired, { dryRun: true, destructive, forceSchema });
 			const clean = plan.changes.length === 0 && plan.protections.length === 0;
 
 			if (format === 'json') {
@@ -418,13 +430,25 @@ async function configApplyRemote(
 			process.exit(clean ? 0 : 1);
 		}
 
-		const { plan, result, runId } = await applyRemote(session, desired, { dryRun: false, destructive });
+		const { plan, result, steps, runId } = await applyRemote(session, desired, {
+			dryRun: false,
+			destructive,
+			forceSchema,
+		});
 
-		if (plan.changes.length === 0) {
+		const committed =
+			steps === undefined
+				? plan.changes.length > 0
+				: [steps.folders, steps.schema, steps.configuration].includes('committed');
+
+		if (plan.changes.length === 0 && !committed) {
 			logger.info(renderNoChanges(plan));
 		} else {
-			logger.info(renderConfigPlan(plan));
-			logger.info(renderResultSummary(result));
+			if (plan.changes.length > 0) logger.info(renderConfigPlan(plan));
+			else if (plan.warnings.length > 0) logger.info(renderWarnings(plan));
+
+			if (result !== null) logger.info(renderResultSummary(result));
+			if (schemaManaged && steps !== undefined) logger.info(renderStepOutcome(steps));
 		}
 
 		printRemoteRun(runId);

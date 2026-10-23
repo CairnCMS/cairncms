@@ -24,6 +24,33 @@ const fieldChange = z.custom<{ before: unknown; after: unknown }>(
 
 const fieldChanges = z.record(fieldChange);
 
+function isOptionalBoolean(value: unknown): boolean {
+	return value === undefined || typeof value === 'boolean';
+}
+
+const schemaAttributeChange = z.custom<{
+	before: unknown;
+	after: unknown;
+	beforePresent?: boolean;
+	afterPresent?: boolean;
+}>((value) => {
+	if (!isPlainObject(value)) return false;
+	const change = value as Record<string, unknown>;
+
+	return (
+		'before' in change &&
+		'after' in change &&
+		isOptionalBoolean(change['beforePresent']) &&
+		isOptionalBoolean(change['afterPresent'])
+	);
+});
+
+const schemaAttributeChanges = z.record(schemaAttributeChange);
+const schemaValues = z.record(z.unknown());
+const schemaCollectionIdentity = z.object({ collection: z.string() }).passthrough();
+const schemaFieldIdentity = z.object({ collection: z.string(), field: z.string() }).passthrough();
+const relatedCollection = z.string().nullable();
+
 const roleValues = z
 	.object({
 		name: z.string(),
@@ -184,6 +211,81 @@ export const RemoteConfigPlanChange = z.union([
 			impact: emptyImpact,
 		})
 		.passthrough(),
+	z
+		.object({
+			kind: z.literal('collections'),
+			operation: z.literal('create'),
+			identity: schemaCollectionIdentity,
+			values: schemaValues,
+		})
+		.passthrough(),
+	z
+		.object({
+			kind: z.literal('collections'),
+			operation: z.literal('update'),
+			identity: schemaCollectionIdentity,
+			fields: schemaAttributeChanges,
+		})
+		.passthrough(),
+	z
+		.object({
+			kind: z.literal('collections'),
+			operation: z.literal('delete'),
+			identity: schemaCollectionIdentity,
+			impact: emptyImpact,
+		})
+		.passthrough(),
+	z
+		.object({
+			kind: z.literal('fields'),
+			operation: z.literal('create'),
+			identity: schemaFieldIdentity,
+			values: schemaValues,
+		})
+		.passthrough(),
+	z
+		.object({
+			kind: z.literal('fields'),
+			operation: z.literal('update'),
+			identity: schemaFieldIdentity,
+			fields: schemaAttributeChanges,
+		})
+		.passthrough(),
+	z
+		.object({
+			kind: z.literal('fields'),
+			operation: z.literal('delete'),
+			identity: schemaFieldIdentity,
+			impact: emptyImpact,
+		})
+		.passthrough(),
+	z
+		.object({
+			kind: z.literal('relations'),
+			operation: z.literal('create'),
+			identity: schemaFieldIdentity,
+			relatedCollection,
+			values: schemaValues,
+		})
+		.passthrough(),
+	z
+		.object({
+			kind: z.literal('relations'),
+			operation: z.literal('update'),
+			identity: schemaFieldIdentity,
+			relatedCollection,
+			fields: schemaAttributeChanges,
+		})
+		.passthrough(),
+	z
+		.object({
+			kind: z.literal('relations'),
+			operation: z.literal('delete'),
+			identity: schemaFieldIdentity,
+			relatedCollection,
+			impact: emptyImpact,
+		})
+		.passthrough(),
 ]);
 
 const contributor = z
@@ -219,12 +321,22 @@ const warning = z.union([
 
 export const RemoteConfigPlan = z
 	.object({
-		planVersion: z.literal(2),
+		planVersion: z.union([z.literal(2), z.literal(3)]),
 		manifestVersion: z.number(),
 		summary: z.object({ create: count, update: count, delete: count }).passthrough(),
 		changes: z.array(RemoteConfigPlanChange),
+		preparation: z.array(z.string()).optional(),
 		protections: z.array(protection),
 		warnings: z.array(warning),
+	})
+	.passthrough();
+
+const stepStatus = z.enum(['not_run', 'skipped', 'committed', 'rolled_back', 'failed', 'unknown']);
+
+export const RemoteRunOutcome = z
+	.object({
+		result: z.enum(['applied', 'no_changes']),
+		steps: z.object({ folders: stepStatus, schema: stepStatus, configuration: stepStatus }).passthrough(),
 	})
 	.passthrough();
 
@@ -263,3 +375,5 @@ export const RemoteErrorExtensions = z.union([
 export type RemoteWirePlan = z.infer<typeof RemoteConfigPlan>;
 
 export type RemoteWireResult = z.infer<typeof RemoteApplyResult>;
+
+export type RemoteWireOutcome = z.infer<typeof RemoteRunOutcome>;

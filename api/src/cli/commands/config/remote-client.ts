@@ -4,7 +4,7 @@ import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
 import { ConfigUnsupportedVersionException } from '../../../exceptions/config-unsupported-version.js';
 import type { CairnConfig, ConfigKind } from '../../../types/config.js';
 import { serializeToWire } from '../../../utils/config/wire.js';
-import { CONFIG_RUN_ID_HEADER } from '../../../utils/config/run-record.js';
+import { CONFIG_RUN_ID_HEADER, type ConfigRunSteps } from '../../../utils/config/run-record.js';
 import { listConfigKinds } from '../../../utils/config/registry.js';
 import { isValidUuid } from '../../../utils/is-valid-uuid.js';
 import { replaceControlCharacters, safeLogFragment } from '../../../utils/safe-log-fragment.js';
@@ -16,6 +16,8 @@ import {
 	RemoteErrorEntry,
 	RemoteErrorEnvelope,
 	RemoteErrorExtensions,
+	RemoteRunOutcome,
+	type RemoteWireOutcome,
 	type RemoteWirePlan,
 	type RemoteWireResult,
 } from './remote-response-schema.js';
@@ -23,7 +25,9 @@ import { renderDeletions, renderProtectionContributors, type RenderableDeletion 
 
 export const REMOTE_CONFIG_MIN_VERSION = '1.6.0';
 
-const PLAN_VERSION = 2;
+const REMOTE_SCHEMA_MIN_VERSION = '1.7.0';
+
+const SCHEMA_CHANGE_KINDS: ReadonlySet<string> = new Set(['collections', 'fields', 'relations']);
 
 const SNAPSHOT_LABEL = 'the snapshot response';
 
@@ -136,20 +140,25 @@ export async function fetchServerVersion(session: RemoteSession): Promise<string
 }
 
 export function assertServerSupportsRemoteConfig(version: string, token: string): void {
+	assertServerVersion(version, token, REMOTE_CONFIG_MIN_VERSION, 'remote config');
+}
+
+export function assertServerSupportsRemoteSchema(version: string, token: string): void {
+	assertServerVersion(version, token, REMOTE_SCHEMA_MIN_VERSION, 'a remote apply of a tree that manages schema');
+}
+
+function assertServerVersion(version: string, token: string, floor: string, subject: string): void {
 	const shown = sanitize(version, token);
 	let ok: boolean;
 
 	try {
-		ok = meetsMinVersion(version, REMOTE_CONFIG_MIN_VERSION);
+		ok = meetsMinVersion(version, floor);
 	} catch {
 		throw new RemoteClientError(`The server reported an unrecognized version "${shown}".`, 3);
 	}
 
 	if (!ok) {
-		throw new RemoteClientError(
-			`The server is version ${shown}; remote config requires ${REMOTE_CONFIG_MIN_VERSION} or newer.`,
-			2
-		);
+		throw new RemoteClientError(`The server is version ${shown}; ${subject} requires ${floor} or newer.`, 2);
 	}
 }
 
@@ -168,31 +177,43 @@ export async function fetchRemoteSnapshot(
 
 export type RemotePlanOutcome = { plan: RemoteWirePlan; runId?: string };
 
-export type RemoteApplyOutcome = { plan: RemoteWirePlan; result: RemoteWireResult; runId?: string };
+/**
+ * `result` is `null` when a schema-managed run's configuration step did not commit. `steps` is absent only for a
+ * configuration-only tree answered by a server that predates the step outcome.
+ */
+export type RemoteApplyOutcome = {
+	plan: RemoteWirePlan;
+	result: RemoteWireResult | null;
+	steps?: ConfigRunSteps;
+	runId?: string;
+};
+
+type ApplyOptions = { destructive: boolean; forceSchema?: boolean };
 
 export async function applyRemote(
 	session: RemoteSession,
 	body: CairnConfig,
-	options: { dryRun: true; destructive: boolean }
+	options: ApplyOptions & { dryRun: true }
 ): Promise<RemotePlanOutcome>;
 export async function applyRemote(
 	session: RemoteSession,
 	body: CairnConfig,
-	options: { dryRun: false; destructive: boolean }
+	options: ApplyOptions & { dryRun: false }
 ): Promise<RemoteApplyOutcome>;
 export async function applyRemote(
 	session: RemoteSession,
 	body: CairnConfig,
-	options: { dryRun: boolean; destructive: boolean }
+	options: ApplyOptions & { dryRun: boolean }
 ): Promise<RemotePlanOutcome | RemoteApplyOutcome>;
 export async function applyRemote(
 	session: RemoteSession,
 	body: CairnConfig,
-	options: { dryRun: boolean; destructive: boolean }
+	options: ApplyOptions & { dryRun: boolean }
 ): Promise<RemotePlanOutcome | RemoteApplyOutcome> {
 	const query: Record<string, string> = {};
 	if (options.dryRun) query['dry_run'] = 'true';
 	if (options.destructive) query['destructive'] = 'true';
+	if (options.forceSchema) query['force_schema'] = 'true';
 
 	const { data, meta, runId } = await request(session, 'POST', 'config/apply', {
 		query,
@@ -213,21 +234,97 @@ export async function applyRemote(
 	}
 
 	try {
-		const result = validatedResult(data);
-		const plan = validatedPlan(isPlainObject(meta) ? (meta as Record<string, unknown>)['plan'] : undefined, body);
-		assertResultMatchesPlan(plan, result);
+		const fields = isPlainObject(meta) ? (meta as Record<string, unknown>) : {};
+		const schemaManaged = managesSchema(body);
+		const outcome = validatedOutcome(fields, schemaManaged);
+		const result = validatedApplyData(data, outcome, schemaManaged);
+		const plan = validatedPlan(fields['plan'], body);
+		assertNoProtections(plan);
+		if (outcome !== undefined) assertStepsMatchPlan(plan, outcome.steps, body);
+		if (result !== null) assertResultWithinManifest(result, body);
+		if (!schemaManaged && result !== null) assertResultMatchesPlan(plan, result);
 
-		return withRunId({ plan, result }, runId);
+		return withRunId({ plan, result, ...(outcome !== undefined && { steps: outcome.steps }) }, runId);
 	} catch (err) {
 		throw attachRunId(err, runId, UNKNOWN_OUTCOME_NOTE);
 	}
 }
 
+function managesSchema(config: CairnConfig): boolean {
+	return config.manifest.resources.includes('schema');
+}
+
+function validatedOutcome(meta: Record<string, unknown>, schemaManaged: boolean): RemoteWireOutcome | undefined {
+	if (meta['result'] === undefined && meta['steps'] === undefined) {
+		if (schemaManaged) throw malformed('apply', 'a schema-managed apply must report its step outcome');
+		return undefined;
+	}
+
+	const parsed = RemoteRunOutcome.safeParse({ result: meta['result'], steps: meta['steps'] });
+	if (!parsed.success) throw malformed('apply outcome');
+
+	const { result, steps } = parsed.data;
+	const committed = [steps.folders, steps.schema, steps.configuration].includes('committed');
+
+	if ((result === 'applied') !== committed) {
+		throw new RemoteClientError('The server reported an apply outcome that does not match its steps.', 3);
+	}
+
+	return parsed.data;
+}
+
+/** Folder preparation and the configuration step re-read the target, so only the schema step is bound to the preview. */
+function assertStepsMatchPlan(plan: RemoteWirePlan, steps: ConfigRunSteps, submitted: CairnConfig): void {
+	const schemaChanges = plan.changes.some((change) => SCHEMA_CHANGE_KINDS.has(change.kind));
+	const ran = (status: string) => status === 'committed' || status === 'skipped';
+	let consistent: boolean;
+
+	if (managesSchema(submitted)) {
+		const resources = submitted.manifest.resources;
+		const configurationManaged = resources.some((kind) => kind !== 'schema');
+
+		consistent =
+			ran(steps.folders) &&
+			(resources.includes('folders') || steps.folders === 'skipped') &&
+			steps.schema === (schemaChanges ? 'committed' : 'skipped') &&
+			ran(steps.configuration) &&
+			(configurationManaged || steps.configuration === 'skipped');
+	} else {
+		consistent =
+			steps.folders === 'not_run' &&
+			steps.schema === 'not_run' &&
+			steps.configuration === (plan.changes.length > 0 ? 'committed' : 'skipped');
+	}
+
+	if (!consistent) throw new RemoteClientError('The server reported step outcomes that do not match its plan.', 3);
+}
+
+function validatedApplyData(
+	data: unknown,
+	outcome: RemoteWireOutcome | undefined,
+	schemaManaged: boolean
+): RemoteWireResult | null {
+	if (schemaManaged && outcome?.steps.configuration !== 'committed') {
+		if (data !== null) {
+			throw new RemoteClientError(
+				'The server reported a configuration result for a configuration step that did not commit.',
+				3
+			);
+		}
+
+		return null;
+	}
+
+	return validatedResult(data);
+}
+
 function validatedPlan(plan: unknown, submitted: CairnConfig): RemoteWirePlan {
+	const schemaManaged = managesSchema(submitted);
+
 	if (isPlainObject(plan)) {
 		const declared = (plan as Record<string, unknown>)['planVersion'];
 
-		if (declared !== undefined && declared !== PLAN_VERSION) {
+		if (declared !== undefined && declared !== (schemaManaged ? 3 : 2)) {
 			throw new RemoteClientError('The server returned an unsupported plan version.', 3);
 		}
 	}
@@ -238,7 +335,10 @@ function validatedPlan(plan: unknown, submitted: CairnConfig): RemoteWirePlan {
 	const wire = parsed.data;
 	const managed = new Set<string>(submitted.manifest.resources);
 
-	if (wire.manifestVersion !== submitted.manifest.version || wire.changes.some((change) => !managed.has(change.kind))) {
+	if (
+		wire.manifestVersion !== submitted.manifest.version ||
+		wire.changes.some((change) => !managed.has(SCHEMA_CHANGE_KINDS.has(change.kind) ? 'schema' : change.kind))
+	) {
 		throw new RemoteClientError('The server returned a plan for a different manifest than the one submitted.', 3);
 	}
 
@@ -252,7 +352,27 @@ function validatedPlan(plan: unknown, submitted: CairnConfig): RemoteWirePlan {
 		throw new RemoteClientError('The server returned a plan whose summary does not match its changes.', 3);
 	}
 
+	assertPreparationInPlan(wire, schemaManaged);
+
 	return wire;
+}
+
+function assertPreparationInPlan(wire: RemoteWirePlan, schemaManaged: boolean): void {
+	if (wire.preparation === undefined) return;
+
+	const created = new Set<string>();
+
+	for (const change of wire.changes) {
+		if (change.kind === 'folders' && change.operation === 'create') created.add(change.identity.key);
+	}
+
+	if (
+		!schemaManaged ||
+		new Set(wire.preparation).size !== wire.preparation.length ||
+		wire.preparation.some((key) => !created.has(key))
+	) {
+		throw malformed('plan', 'folder preparation must name folders the plan creates');
+	}
 }
 
 function validatedResult(result: unknown): RemoteWireResult {
@@ -316,14 +436,30 @@ function resultCardinality(kind: ConfigKind, result: RemoteWireResult): Record<'
 	}
 }
 
-function assertResultMatchesPlan(plan: RemoteWirePlan, result: RemoteWireResult): void {
+function assertNoProtections(plan: RemoteWirePlan): void {
 	if (plan.protections.length > 0) {
 		throw new RemoteClientError(
 			'The server reported a successful apply but its plan still lists protected changes.',
 			3
 		);
 	}
+}
 
+function assertResultWithinManifest(result: RemoteWireResult, submitted: CairnConfig): void {
+	const managed = new Set<ConfigKind>(submitted.manifest.resources);
+
+	for (const kind of listConfigKinds()) {
+		if (managed.has(kind)) continue;
+
+		const counted = resultCardinality(kind, result);
+
+		if (counted.create !== 0 || counted.update !== 0 || counted.delete !== 0) {
+			throw new RemoteClientError('The server reported a result for a kind the submitted manifest does not manage.', 3);
+		}
+	}
+}
+
+function assertResultMatchesPlan(plan: RemoteWirePlan, result: RemoteWireResult): void {
 	for (const kind of listConfigKinds()) {
 		const planned = countOperations(plan.changes, kind);
 		const actual = resultCardinality(kind, result);

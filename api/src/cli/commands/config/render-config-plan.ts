@@ -109,7 +109,7 @@ export type RenderableChange =
 export type RenderablePlan = {
 	changes: RenderableChange[];
 	summary: { create: number; update: number; delete: number };
-	preparation?: string[];
+	preparation?: string[] | undefined;
 	protections: Array<{ message: string; contributors: Array<{ operation: string; identity: RoleIdentityView }> }>;
 	warnings: Array<{ message: string }>;
 };

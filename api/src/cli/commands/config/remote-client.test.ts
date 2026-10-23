@@ -5,6 +5,7 @@ import { parseOperatorRemoteTarget } from './operator-remote-target.js';
 import {
 	applyRemote,
 	assertServerSupportsRemoteConfig,
+	assertServerSupportsRemoteSchema,
 	fetchRemoteSnapshot,
 	fetchServerVersion,
 	RemoteClientError,
@@ -213,6 +214,24 @@ describe('assertServerSupportsRemoteConfig', () => {
 
 		expect(error.message).not.toContain(TOKEN);
 		expect(error.message).not.toContain(BEL);
+	});
+});
+
+describe('assertServerSupportsRemoteSchema', () => {
+	it.each(['1.7.0', '1.7.1', '2.0.0'])('accepts %s', (version) => {
+		expect(() => assertServerSupportsRemoteSchema(version, TOKEN)).not.toThrow();
+	});
+
+	it.each(['1.6.0', '1.6.9', '1.7.0-beta.1'])('refuses %s at exit 2, naming the floor', (version) => {
+		const error = assertThrow(() => assertServerSupportsRemoteSchema(version, TOKEN));
+
+		expect(error.exitCode).toBe(2);
+		expect(error.message).toContain(`The server is version ${version}`);
+		expect(error.message).toContain('requires 1.7.0 or newer');
+	});
+
+	it('refuses an unrecognized version at exit 3', () => {
+		expect(assertThrow(() => assertServerSupportsRemoteSchema('main', TOKEN)).exitCode).toBe(3);
 	});
 });
 
@@ -946,6 +965,444 @@ describe('applyRemote', () => {
 		expect(error.message).not.toContain(BEL);
 		expect(error.message).toContain('Deletes admin_[redacted]');
 		expect(error.message).toContain(`${deleteVerb()} editor / [redacted] / read`);
+	});
+});
+
+describe('applyRemote against a schema-managed tree', () => {
+	const SCHEMA_BODY: CairnConfig = {
+		manifest: { version: 3, resources: ['roles', 'folders', 'schema'] },
+		roles: [],
+		permissions: [],
+		folders: [],
+		settings: [],
+		'extension-settings': [],
+		translations: [],
+		schema: [],
+	};
+
+	const V3_ROLES_BODY: CairnConfig = { ...SCHEMA_BODY, manifest: { version: 3, resources: ['roles', 'folders'] } };
+
+	const SCHEMA_CHANGES = [
+		{ kind: 'collections', operation: 'create', identity: { collection: 'articles' }, values: { meta: {} } },
+		{
+			kind: 'collections',
+			operation: 'update',
+			identity: { collection: 'pages' },
+			fields: { note: { before: null, after: 'x', beforePresent: false } },
+		},
+		{ kind: 'collections', operation: 'delete', identity: { collection: 'legacy' }, impact: [] },
+		{ kind: 'fields', operation: 'create', identity: { collection: 'articles', field: 'cover' }, values: {} },
+		{
+			kind: 'fields',
+			operation: 'update',
+			identity: { collection: 'pages', field: 'title' },
+			fields: { note: { before: 'x', after: null, afterPresent: false } },
+		},
+		{ kind: 'fields', operation: 'delete', identity: { collection: 'pages', field: 'old' }, impact: [] },
+		{
+			kind: 'relations',
+			operation: 'create',
+			identity: { collection: 'articles', field: 'cover' },
+			relatedCollection: 'cairncms_files',
+			values: {},
+		},
+		{
+			kind: 'relations',
+			operation: 'update',
+			identity: { collection: 'pages', field: 'author' },
+			relatedCollection: null,
+			fields: { on_delete: { before: 'SET NULL', after: 'CASCADE' } },
+		},
+		{
+			kind: 'relations',
+			operation: 'delete',
+			identity: { collection: 'pages', field: 'old' },
+			relatedCollection: 'users',
+			impact: [],
+		},
+	];
+
+	const FOLDER_CREATE = (key: string) => ({
+		kind: 'folders',
+		operation: 'create',
+		identity: { key },
+		values: { name: key, parent: null },
+	});
+
+	function v3Plan(changes: unknown[], extra: Record<string, unknown> = {}) {
+		const count = (operation: string) => changes.filter((change) => (change as any).operation === operation).length;
+
+		return {
+			planVersion: 3,
+			manifestVersion: 3,
+			changes,
+			summary: { create: count('create'), update: count('update'), delete: count('delete') },
+			protections: [],
+			warnings: [],
+			...extra,
+		};
+	}
+
+	function mutating(data: unknown, meta: unknown, body: CairnConfig = SCHEMA_BODY) {
+		const { remote, requests } = session(() => ({ status: 200, data: { data, meta } }));
+		return { requests, run: () => applyRemote(remote, body, { dryRun: false, destructive: false }) };
+	}
+
+	function previewWith(plan: unknown, body: CairnConfig = SCHEMA_BODY) {
+		const { remote } = session(() => ({ status: 200, data: { data: plan } }));
+		return applyRemote(remote, body, { dryRun: true, destructive: false });
+	}
+
+	const SCHEMA_ONLY = { folders: 'skipped', schema: 'committed', configuration: 'skipped' } as const;
+	const EVERY_STEP = { folders: 'committed', schema: 'committed', configuration: 'committed' } as const;
+	const CONFIGURATION_ONLY = { folders: 'skipped', schema: 'skipped', configuration: 'committed' } as const;
+	const NOTHING = { folders: 'skipped', schema: 'skipped', configuration: 'skipped' } as const;
+	const ROLE_RESULT = { ...OK_RESULT, roles: { ...OK_RESULT.roles, created: ['editor'] } };
+
+	it('accepts a version 3 plan carrying every schema change shape', async () => {
+		const plan = v3Plan(SCHEMA_CHANGES);
+
+		await expect(previewWith(plan)).resolves.toEqual({ plan });
+	});
+
+	it('refuses a version 2 plan for a schema-managed tree and a version 3 plan for a configuration-only one', async () => {
+		const forSchema = await caught(() => previewWith({ ...v3Plan([]), planVersion: 2 }));
+		const forConfiguration = await caught(() => previewWith(v3Plan([]), V3_ROLES_BODY));
+
+		for (const error of [forSchema, forConfiguration]) {
+			expect(error.exitCode).toBe(3);
+			expect(error.message).toBe('The server returned an unsupported plan version.');
+		}
+	});
+
+	it('refuses a schema change for a tree that does not manage schema', async () => {
+		const plan = { ...v3Plan(SCHEMA_CHANGES.slice(0, 1)), planVersion: 2 };
+
+		const error = await caught(() => previewWith(plan, V3_ROLES_BODY));
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toBe('The server returned a plan for a different manifest than the one submitted.');
+	});
+
+	it.each([
+		['a relation without its related collection', { ...SCHEMA_CHANGES[6], relatedCollection: undefined }],
+		['a field identity without its field', { ...SCHEMA_CHANGES[3], identity: { collection: 'articles' } }],
+		[
+			'an attribute change whose presence flag is not a boolean',
+			{ ...SCHEMA_CHANGES[1], fields: { note: { before: null, after: 'x', beforePresent: 'no' } } },
+		],
+		['a collection deletion carrying impact', { ...SCHEMA_CHANGES[2], impact: [{ kind: 'shares' }] }],
+	])('refuses %s at exit 3', async (_label, change) => {
+		const error = await caught(() => previewWith(v3Plan([change])));
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('malformed plan response');
+	});
+
+	it('accepts folder preparation naming folders the plan creates', async () => {
+		const plan = v3Plan([FOLDER_CREATE('covers'), FOLDER_CREATE('extra')], { preparation: ['covers'] });
+
+		await expect(previewWith(plan)).resolves.toEqual({ plan });
+	});
+
+	it.each([
+		['a non-array', 42],
+		['a non-string key', [7]],
+		['a key the plan does not create', ['ghost']],
+		['a repeated key', ['covers', 'covers']],
+	])('refuses folder preparation that is %s at exit 3', async (_label, preparation) => {
+		const error = await caught(() => previewWith(v3Plan([FOLDER_CREATE('covers')], { preparation })));
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('malformed plan response');
+	});
+
+	it('refuses folder preparation on a configuration-only plan', async () => {
+		const plan = { ...v3Plan([FOLDER_CREATE('covers')], { preparation: ['covers'] }), planVersion: 2 };
+
+		const error = await caught(() => previewWith(plan, V3_ROLES_BODY));
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('folder preparation must name folders the plan creates');
+	});
+
+	it('forwards --force-schema as force_schema=true', async () => {
+		const { remote, requests } = session(() => ({ status: 200, data: { data: v3Plan([]) } }));
+
+		await applyRemote(remote, SCHEMA_BODY, { dryRun: true, destructive: false, forceSchema: true });
+
+		expect(requests[0].params).toEqual({ dry_run: 'true', force_schema: 'true' });
+	});
+
+	it('returns a null result and the steps when the configuration step did not commit', async () => {
+		const plan = v3Plan([SCHEMA_CHANGES[0]]);
+		const { run } = mutating(null, { plan, result: 'applied', steps: SCHEMA_ONLY });
+
+		await expect(run()).resolves.toEqual({ plan, result: null, steps: SCHEMA_ONLY });
+	});
+
+	it('accepts a no-op with every step skipped and no result', async () => {
+		const plan = v3Plan([]);
+		const { run } = mutating(null, { plan, result: 'no_changes', steps: NOTHING });
+
+		await expect(run()).resolves.toEqual({ plan, result: null, steps: NOTHING });
+	});
+
+	it('accepts a three-step apply with prepared folders and a configuration result', async () => {
+		const plan = v3Plan([FOLDER_CREATE('covers'), FOLDER_CREATE('extra'), ROLE_CREATE, SCHEMA_CHANGES[3]], {
+			preparation: ['covers'],
+		});
+
+		const result = { ...ROLE_RESULT, folders: { ...OK_RESULT.folders, created: ['extra'] } };
+		const { run } = mutating(result, { plan, result: 'applied', steps: EVERY_STEP });
+
+		await expect(run()).resolves.toEqual({ plan, result, steps: EVERY_STEP });
+	});
+
+	describe('when folder preparation or the configuration step reads a target that changed after the preview', () => {
+		it('accepts folder preparation that found its folder already created, and nothing left to configure', async () => {
+			const plan = v3Plan([FOLDER_CREATE('covers'), SCHEMA_CHANGES[3]], { preparation: ['covers'] });
+			const { run } = mutating(null, { plan, result: 'applied', steps: SCHEMA_ONLY });
+
+			await expect(run()).resolves.toEqual({ plan, result: null, steps: SCHEMA_ONLY });
+		});
+
+		it('accepts folder preparation that recreated a folder the preview found present', async () => {
+			const plan = v3Plan([SCHEMA_CHANGES[3]]);
+			const steps = { ...SCHEMA_ONLY, folders: 'committed' };
+			const { run } = mutating(null, { plan, result: 'applied', steps });
+
+			await expect(run()).resolves.toEqual({ plan, result: null, steps });
+		});
+
+		it('accepts a configuration step whose fresh plan had nothing left to apply', async () => {
+			const plan = v3Plan([SCHEMA_CHANGES[0], ROLE_CREATE]);
+			const { run } = mutating(null, { plan, result: 'applied', steps: SCHEMA_ONLY });
+
+			await expect(run()).resolves.toEqual({ plan, result: null, steps: SCHEMA_ONLY });
+		});
+
+		it('accepts a configuration result that differs from the preview', async () => {
+			const plan = v3Plan([SCHEMA_CHANGES[0], ROLE_CREATE]);
+			const result = { ...OK_RESULT, roles: { ...OK_RESULT.roles, created: ['editor', 'restored'] } };
+			const steps = { ...SCHEMA_ONLY, configuration: 'committed' };
+			const { run } = mutating(result, { plan, result: 'applied', steps });
+
+			await expect(run()).resolves.toEqual({ plan, result, steps });
+		});
+	});
+
+	it('refuses a null result when the configuration step committed', async () => {
+		const plan = v3Plan([ROLE_CREATE]);
+		const { run } = mutating(null, { plan, result: 'applied', steps: CONFIGURATION_ONLY });
+
+		const error = await caught(run);
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('malformed result response');
+		expect(error.message).toContain('re-snapshot to verify the current state');
+	});
+
+	it('refuses a configuration result beside a configuration step that did not commit', async () => {
+		const plan = v3Plan([SCHEMA_CHANGES[0]]);
+		const { run } = mutating(OK_RESULT, { plan, result: 'applied', steps: SCHEMA_ONLY });
+
+		const error = await caught(run);
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('a configuration result for a configuration step that did not commit');
+	});
+
+	it('refuses a schema-managed success that omits the step outcome, as a server before it would send', async () => {
+		const { run } = mutating(null, { plan: v3Plan([SCHEMA_CHANGES[0]]) });
+
+		const error = await caught(run);
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('a schema-managed apply must report its step outcome');
+		expect(error.message).toContain('re-snapshot to verify the current state');
+	});
+
+	it.each([
+		['an unknown status', { ...SCHEMA_ONLY, schema: 'paused' }, 'applied', 'malformed apply outcome response'],
+		['a missing step', { folders: 'skipped', schema: 'committed' }, 'applied', 'malformed apply outcome response'],
+		['no_changes beside a committed step', SCHEMA_ONLY, 'no_changes', 'does not match its steps'],
+		['applied with nothing committed', NOTHING, 'applied', 'does not match its steps'],
+	])('refuses a success reporting %s at exit 3', async (_label, steps, result, message) => {
+		const { run } = mutating(null, { plan: v3Plan([SCHEMA_CHANGES[0]]), result, steps });
+
+		const error = await caught(run);
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain(message);
+	});
+
+	it.each([
+		['a pending collection with the schema step skipped', [SCHEMA_CHANGES[0]], NOTHING, 'no_changes', null],
+		['a schema step that failed', [SCHEMA_CHANGES[0]], { ...NOTHING, schema: 'failed' }, 'no_changes', null],
+		[
+			'a schema step whose outcome is unknown',
+			[SCHEMA_CHANGES[0]],
+			{ ...NOTHING, schema: 'unknown' },
+			'no_changes',
+			null,
+		],
+		['a schema step committed with no schema changes', [ROLE_CREATE], EVERY_STEP, 'applied', ROLE_RESULT],
+		['a folder step that never ran', [SCHEMA_CHANGES[0]], { ...SCHEMA_ONLY, folders: 'not_run' }, 'applied', null],
+		[
+			'a configuration step that rolled back',
+			[SCHEMA_CHANGES[0]],
+			{ ...SCHEMA_ONLY, configuration: 'rolled_back' },
+			'applied',
+			null,
+		],
+	])('refuses a success reporting %s at exit 3', async (_label, changes, steps, result, data) => {
+		const { run } = mutating(data, { plan: v3Plan(changes), result, steps });
+
+		const error = await caught(run);
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('The server reported step outcomes that do not match its plan.');
+		expect(error.message).toContain('re-snapshot to verify the current state');
+	});
+
+	it('refuses a configuration step committed for a tree that manages no configuration', async () => {
+		const schemaOnlyBody: CairnConfig = { ...SCHEMA_BODY, manifest: { version: 3, resources: ['schema'] } };
+
+		const { remote } = session(() => ({
+			status: 200,
+			data: {
+				data: OK_RESULT,
+				meta: {
+					plan: v3Plan([SCHEMA_CHANGES[0]]),
+					result: 'applied',
+					steps: { ...SCHEMA_ONLY, configuration: 'committed' },
+				},
+			},
+		}));
+
+		const error = await caught(() => applyRemote(remote, schemaOnlyBody, { dryRun: false, destructive: false }));
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('step outcomes that do not match its plan');
+	});
+
+	it('refuses folder preparation committed for a tree that does not manage folders', async () => {
+		const schemaOnlyBody: CairnConfig = { ...SCHEMA_BODY, manifest: { version: 3, resources: ['schema'] } };
+		const steps = { ...SCHEMA_ONLY, folders: 'committed' };
+		const { run } = mutating(null, { plan: v3Plan([SCHEMA_CHANGES[3]]), result: 'applied', steps }, schemaOnlyBody);
+
+		const error = await caught(run);
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('step outcomes that do not match its plan');
+	});
+
+	it('refuses a configuration result for a kind the tree does not manage', async () => {
+		const foldersBody: CairnConfig = { ...SCHEMA_BODY, manifest: { version: 3, resources: ['folders', 'schema'] } };
+		const result = { ...OK_RESULT, roles: { ...OK_RESULT.roles, created: ['unmanaged-role'] } };
+		const steps = { ...SCHEMA_ONLY, configuration: 'committed' };
+		const { run } = mutating(result, { plan: v3Plan([SCHEMA_CHANGES[0]]), result: 'applied', steps }, foldersBody);
+
+		const error = await caught(run);
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('a result for a kind the submitted manifest does not manage');
+		expect(error.message).toContain('re-snapshot to verify the current state');
+	});
+
+	it('still refuses a success whose plan lists protections when the result is null', async () => {
+		const plan = v3Plan([SCHEMA_CHANGES[0]], { protections: DEEP_PLAN.protections });
+		const { run } = mutating(null, { plan, result: 'applied', steps: SCHEMA_ONLY });
+
+		const error = await caught(run);
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('still lists protected changes');
+	});
+});
+
+describe('applyRemote outcome for a configuration-only tree', () => {
+	it('accepts a no-op that carries the step outcome beside an empty result', async () => {
+		const steps = { folders: 'not_run', schema: 'not_run', configuration: 'skipped' };
+
+		const { remote } = session(() => ({
+			status: 200,
+			data: { data: OK_RESULT, meta: { plan: OK_PLAN, result: 'no_changes', steps } },
+		}));
+
+		await expect(applyRemote(remote, BODY, { dryRun: false, destructive: false })).resolves.toEqual({
+			plan: OK_PLAN,
+			result: OK_RESULT,
+			steps,
+		});
+	});
+
+	it('accepts an apply that carries the step outcome beside the engine result', async () => {
+		const plan = { ...OK_PLAN, changes: [ROLE_CREATE], summary: { create: 1, update: 0, delete: 0 } };
+		const result = { ...OK_RESULT, roles: { ...OK_RESULT.roles, created: ['editor'] } };
+		const steps = { folders: 'not_run', schema: 'not_run', configuration: 'committed' };
+
+		const { remote } = session(() => ({
+			status: 200,
+			data: { data: result, meta: { plan, result: 'applied', steps } },
+		}));
+
+		await expect(applyRemote(remote, BODY, { dryRun: false, destructive: false })).resolves.toEqual({
+			plan,
+			result,
+			steps,
+		});
+	});
+
+	it.each([
+		[
+			'a created role with the configuration step skipped',
+			{ folders: 'not_run', schema: 'not_run', configuration: 'skipped' },
+			'no_changes',
+		],
+		[
+			'a folder or schema step it never runs',
+			{ folders: 'skipped', schema: 'skipped', configuration: 'committed' },
+			'applied',
+		],
+	])('refuses a configuration-only success reporting %s at exit 3', async (_label, steps, outcome) => {
+		const plan = { ...OK_PLAN, changes: [ROLE_CREATE], summary: { create: 1, update: 0, delete: 0 } };
+		const result = { ...OK_RESULT, roles: { ...OK_RESULT.roles, created: ['editor'] } };
+
+		const { remote } = session(() => ({
+			status: 200,
+			data: { data: result, meta: { plan, result: outcome, steps } },
+		}));
+
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }));
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('The server reported step outcomes that do not match its plan.');
+	});
+
+	it('refuses a null result for a configuration-only tree', async () => {
+		const steps = { folders: 'not_run', schema: 'not_run', configuration: 'skipped' };
+
+		const { remote } = session(() => ({
+			status: 200,
+			data: { data: null, meta: { plan: OK_PLAN, result: 'no_changes', steps } },
+		}));
+
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }));
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('malformed result response');
+	});
+
+	it('refuses steps reported without the run result', async () => {
+		const steps = { folders: 'not_run', schema: 'not_run', configuration: 'skipped' };
+		const { remote } = session(() => ({ status: 200, data: { data: OK_RESULT, meta: { plan: OK_PLAN, steps } } }));
+
+		const error = await caught(() => applyRemote(remote, BODY, { dryRun: false, destructive: false }));
+
+		expect(error.exitCode).toBe(3);
+		expect(error.message).toContain('malformed apply outcome response');
 	});
 });
 
