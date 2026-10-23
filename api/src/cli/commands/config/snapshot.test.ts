@@ -333,69 +333,96 @@ describe('configSnapshot manifest version preservation', () => {
 			expect(await writtenVersion()).toBe(expected);
 		});
 
-		it('refuses a remote schema-managing capture before writing', async () => {
-			respondWith({
-				manifest: {
-					version: 3,
-					resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations', 'schema'],
-					schema: { release: '1.6.0', vendor: 'postgres' },
-				},
+		const SCHEMA_MANAGED_MANIFEST = {
+			version: 3,
+			resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations', 'schema'],
+			schema: { release: '1.7.0', vendor: 'postgres' },
+		};
+
+		const ARTICLES = { collection: 'articles', meta: {}, schema: { name: 'articles' }, fields: [], relations: [] };
+
+		function schemaManagedSnapshot(collections: unknown[], manifest: unknown = SCHEMA_MANAGED_MANIFEST) {
+			return {
+				manifest,
 				roles: [],
 				permissions: [],
 				folders: [],
 				settings: [SETTINGS_DOC],
 				'extension-settings': [],
 				translations: [],
-				schema: [{ collection: 'articles', meta: {}, schema: { name: 'articles' }, fields: [], relations: [] }],
-			});
+				schema: collections,
+			};
+		}
+
+		it('captures a remote schema-managing snapshot with its provenance and a file per collection', async () => {
+			respondWith(schemaManagedSnapshot([ARTICLES]));
+
+			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
+
+			expect(vi.mocked(process.exit).mock.calls).toEqual([[0]]);
+
+			const manifest = loadYaml(await fs.readFile(path.join(tmpDir, 'cairncms-config.yaml'), 'utf8'));
+			expect(manifest).toEqual(SCHEMA_MANAGED_MANIFEST);
+
+			const written = loadYaml(await fs.readFile(path.join(tmpDir, 'schema', 'articles.yaml'), 'utf8'));
+			expect(written).toMatchObject({ collection: 'articles' });
+		});
+
+		it('refuses a malformed schema-managing snapshot and leaves an existing destination unchanged', async () => {
+			await fs.writeFile(path.join(tmpDir, 'cairncms-config.yaml'), dumpYaml(SCHEMA_MANAGED_MANIFEST));
+			const before = await captureTree(tmpDir);
+
+			const malformedField = {
+				collection: 'articles',
+				field: 'title',
+				type: 'not-a-type',
+				meta: {},
+				schema: { name: 'title' },
+			};
+
+			respondWith(schemaManagedSnapshot([{ ...ARTICLES, fields: [malformedField] }]));
+
+			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
+
+			expect(vi.mocked(process.exit).mock.calls).toEqual([[3]]);
+			expect(vi.mocked(logger.error)).toHaveBeenCalledWith(expect.stringContaining('malformed snapshot response'));
+			expect(await captureTree(tmpDir)).toEqual(before);
+		});
+
+		it('writes a collection whose name is unsafe as a filename to a derived name inside the schema directory', async () => {
+			const hostile = '../../escape';
+			const captureDir = path.join(tmpDir, 'capture');
+			await fs.mkdir(captureDir);
+
+			respondWith(schemaManagedSnapshot([{ ...ARTICLES, collection: hostile, schema: { name: hostile } }]));
+
+			await configSnapshot(captureDir, { yes: true, url: 'https://cms.example' });
+
+			expect(vi.mocked(process.exit).mock.calls).toEqual([[0]]);
+
+			const schemaFiles = await fs.readdir(path.join(captureDir, 'schema'));
+			expect(schemaFiles).toHaveLength(1);
+			expect(schemaFiles[0]).toMatch(/^escape-[0-9a-f]+\.yaml$/);
+
+			const written = loadYaml(await fs.readFile(path.join(captureDir, 'schema', schemaFiles[0]!), 'utf8'));
+			expect(written).toMatchObject({ collection: hostile });
+
+			expect(path.resolve(captureDir, 'schema', `${hostile}.yaml`)).toBe(path.join(tmpDir, 'escape.yaml'));
+			expect(await fs.readdir(tmpDir)).toEqual(['capture']);
+		});
+
+		it('refuses a schema-managing snapshot that records no schema provenance and writes nothing', async () => {
+			respondWith(schemaManagedSnapshot([ARTICLES], without(SCHEMA_MANAGED_MANIFEST, 'schema')));
 
 			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
 
 			expect(vi.mocked(process.exit).mock.calls).toEqual([[3]]);
 
 			expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
-				expect.stringContaining('schema-managing snapshots is not yet supported')
+				expect.stringContaining('must record its schema provenance')
 			);
 
 			expect(await fs.readdir(tmpDir)).toEqual([]);
-		});
-
-		it('leaves an existing destination unchanged when it refuses a schema-managing capture', async () => {
-			await fs.writeFile(
-				path.join(tmpDir, 'cairncms-config.yaml'),
-				dumpYaml({
-					version: 3,
-					resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations', 'schema'],
-					schema: { release: '1.6.0', vendor: 'postgres' },
-				})
-			);
-
-			const before = await captureTree(tmpDir);
-
-			respondWith({
-				manifest: {
-					version: 3,
-					resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations', 'schema'],
-					schema: { release: '1.6.0', vendor: 'postgres' },
-				},
-				roles: [],
-				permissions: [],
-				folders: [],
-				settings: [SETTINGS_DOC],
-				'extension-settings': [],
-				translations: [],
-				schema: [{ collection: 'articles', meta: {}, schema: { name: 'articles' }, fields: [], relations: [] }],
-			});
-
-			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
-
-			expect(vi.mocked(process.exit).mock.calls).toEqual([[3]]);
-
-			expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
-				expect.stringContaining('schema-managing snapshots is not yet supported')
-			);
-
-			expect(await captureTree(tmpDir)).toEqual(before);
 		});
 
 		it('still captures a v3 snapshot that does not manage schema', async () => {

@@ -1,7 +1,8 @@
 import { DestructiveChangesRequiredException } from '../../../exceptions/destructive-changes-required.js';
 import type { ConfigKind } from '../../../types/config.js';
 import { listConfigKinds } from '../../../utils/config/registry.js';
-import type { ConfigRunSteps, ConfigStepStatus } from '../../../utils/config/run-record.js';
+import type { SchemaChangeOutcome, SchemaOperation } from '../../../types/schema-apply.js';
+import type { ConfigRunStepFailure, ConfigRunSteps, ConfigStepStatus } from '../../../utils/config/run-record.js';
 import { replaceControlCharacters } from '../../../utils/safe-log-fragment.js';
 import { createVerb, deleteVerb, heading, planIntro, updateVerb } from '../../presentation.js';
 
@@ -109,7 +110,7 @@ export type RenderableChange =
 export type RenderablePlan = {
 	changes: RenderableChange[];
 	summary: { create: number; update: number; delete: number };
-	preparation?: string[];
+	preparation?: string[] | undefined;
 	protections: Array<{ message: string; contributors: Array<{ operation: string; identity: RoleIdentityView }> }>;
 	warnings: Array<{ message: string }>;
 };
@@ -206,9 +207,9 @@ const STEP_OUTCOME_LABEL: Record<ConfigStepStatus, string> = {
 export function renderStepOutcome(steps: ConfigRunSteps): string {
 	return [
 		heading('Steps'),
-		`  - Folder preparation: ${STEP_OUTCOME_LABEL[steps.folders]}`,
-		`  - Schema: ${STEP_OUTCOME_LABEL[steps.schema]}`,
-		`  - Configuration: ${STEP_OUTCOME_LABEL[steps.configuration]}`,
+		`  - ${STEP_LABEL.folders}: ${STEP_OUTCOME_LABEL[steps.folders]}`,
+		`  - ${STEP_LABEL.schema}: ${STEP_OUTCOME_LABEL[steps.schema]}`,
+		`  - ${STEP_LABEL.configuration}: ${STEP_OUTCOME_LABEL[steps.configuration]}`,
 	].join('\n');
 }
 
@@ -313,10 +314,108 @@ export type RenderableDeletion =
 	| { kind: 'permissions'; identity: PermissionIdentityView }
 	| { kind: 'folders'; identity: FolderIdentityView }
 	| { kind: 'extension-settings'; identity: ExtensionSettingIdentityView }
-	| { kind: 'translations'; identity: TranslationIdentityView };
+	| { kind: 'translations'; identity: TranslationIdentityView }
+	| { kind: 'schema'; identity: SchemaCollectionIdentityView };
 
+/** A schema deletion names only its collection, whether it drops the collection, a field, or a relation. */
 export function renderDeletions(deletions: RenderableDeletion[]): string[] {
-	return deletions.map((deletion) => `    - ${deleteVerb()} ${renderIdentity(deletion)}`);
+	const schemaCounts = new Map<string, number>();
+
+	for (const deletion of deletions) {
+		if (deletion.kind === 'schema') {
+			schemaCounts.set(deletion.identity.collection, (schemaCounts.get(deletion.identity.collection) ?? 0) + 1);
+		}
+	}
+
+	const lines: string[] = [];
+
+	for (const deletion of deletions) {
+		if (deletion.kind !== 'schema') {
+			lines.push(`    - ${deleteVerb()} ${renderIdentity(deletion)}`);
+			continue;
+		}
+
+		const count = schemaCounts.get(deletion.identity.collection);
+		if (count === undefined) continue;
+
+		schemaCounts.delete(deletion.identity.collection);
+		const tally = count > 1 ? ` (${count} changes)` : '';
+		lines.push(`    - ${deleteVerb()} schema in ${replaceControlCharacters(deletion.identity.collection)}${tally}`);
+	}
+
+	return lines;
+}
+
+const STEP_LABEL: Record<keyof ConfigRunSteps, string> = {
+	folders: 'Folder preparation',
+	schema: 'Schema',
+	configuration: 'Configuration',
+};
+
+const PERSISTED_OUTCOME_LABEL: Record<SchemaChangeOutcome, string> = {
+	applied: 'applied',
+	reverted: 'reverted',
+	unknown: 'unknown',
+	not_applicable: 'not applicable',
+};
+
+function operationVerb(operation: SchemaOperation): string {
+	if (operation === 'create') return createVerb();
+	if (operation === 'update') return updateVerb();
+	return deleteVerb();
+}
+
+export function renderStepFailure(failure: ConfigRunStepFailure): string {
+	const lines = [heading('Failure'), `  - Step: ${STEP_LABEL[failure.step]}`];
+	const detail = failure.detail;
+
+	if (detail !== undefined && 'phase' in detail) {
+		lines.push(`  - Failed after commit, during: ${detail.phase}`);
+	}
+
+	if (detail !== undefined && 'persisted' in detail) {
+		const persisted = detail.persisted;
+
+		if (persisted === 'unknown') {
+			lines.push('  - Persisted changes: unknown');
+		} else if (persisted.collections.length + persisted.fields.length + persisted.relations.length === 0) {
+			lines.push('  - Persisted changes: none');
+		} else {
+			lines.push('  - Persisted changes:');
+
+			for (const entry of persisted.collections) {
+				lines.push(
+					`    - ${operationVerb(entry.operation)} collection ${replaceControlCharacters(entry.collection)}: table ${
+						PERSISTED_OUTCOME_LABEL[entry.table]
+					}, metadata ${PERSISTED_OUTCOME_LABEL[entry.metadata]}`
+				);
+			}
+
+			for (const entry of persisted.fields) {
+				lines.push(
+					`    - ${operationVerb(entry.operation)} field ${replaceControlCharacters(
+						entry.collection
+					)} / ${replaceControlCharacters(entry.field)}: column ${PERSISTED_OUTCOME_LABEL[entry.column]}, metadata ${
+						PERSISTED_OUTCOME_LABEL[entry.metadata]
+					}`
+				);
+			}
+
+			for (const entry of persisted.relations) {
+				lines.push(
+					`    - ${operationVerb(entry.operation)} relation ${replaceControlCharacters(
+						entry.collection
+					)} / ${replaceControlCharacters(entry.field)}: foreign key ${
+						PERSISTED_OUTCOME_LABEL[entry.foreignKey]
+					}, metadata ${PERSISTED_OUTCOME_LABEL[entry.metadata]}`
+				);
+			}
+		}
+
+		if (detail.foreignKeysRestored === false) lines.push('  - Foreign key enforcement was not restored.');
+	}
+
+	return lines.join('\n');
 }
 
 export function renderWarnings(serialized: Pick<RenderablePlan, 'warnings'>): string {
@@ -414,7 +513,7 @@ function renderIdentity(change: RenderableChange | RenderableDeletion): string {
 		return `${replaceControlCharacters(language)} / ${replaceControlCharacters(key)}`;
 	}
 
-	if (change.kind === 'collections') {
+	if (change.kind === 'collections' || change.kind === 'schema') {
 		return replaceControlCharacters(change.identity.collection);
 	}
 
