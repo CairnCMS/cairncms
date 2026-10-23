@@ -5,10 +5,10 @@ import { join } from 'node:path';
 import { controlCheckout, startControl, assertReleased } from './control-process.mjs';
 
 for (const [ci, vendors, expected] of [
-	[false, 'postgres13', 0],
-	[true, 'postgres13', 1],
+	[false, 'postgres18', 0],
+	[true, 'postgres18', 1],
 	[true, 'sqlite3', 0],
-	[true, 'sqlite3,postgres13', 1],
+	[true, 'sqlite3,postgres18', 1],
 ])
 	test(`${ci ? 'CI' : 'local'} execution accounts for ${vendors}`, { timeout: 60000 }, async () => {
 		const checkout = await controlCheckout(['harness/controls/ci-execution.case.ts']);
@@ -23,7 +23,7 @@ for (const [ci, vendors, expected] of [
 			const directory = run.output().match(/^Integration results: (.+)$/m)?.[1];
 			const summary = JSON.parse(await readFile(join(directory, 'summary.json'), 'utf8'));
 			assert.equal(summary.exitCode, expected);
-			if (ci && vendors.includes('postgres13')) assert.match(run.output(), /CI requires a nonzero runnable selection/);
+			if (ci && vendors.includes('postgres18')) assert.match(run.output(), /CI requires a nonzero runnable selection/);
 			if (!ci) assert.match(run.output(), /NOT APPLICABLE/);
 			if (vendors.includes('sqlite3')) assert.equal(summary.results[0].passed, 1);
 

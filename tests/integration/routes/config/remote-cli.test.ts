@@ -157,7 +157,7 @@ async function findRole(api: Api, roleKey: string): Promise<{ id: string; name: 
 
 describeForVendors(
 	'Config-as-Code remote CLI',
-	['postgres13'],
+	['postgres18'],
 	'Remote CLI certificate and response validation use PostgreSQL.',
 	() => {
 		let workDir: string | undefined;

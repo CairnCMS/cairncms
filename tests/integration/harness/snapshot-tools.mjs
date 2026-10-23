@@ -6,7 +6,7 @@ export const snapshotHash = (value) =>
 		.update(Buffer.isBuffer(value) ? value : JSON.stringify(value))
 		.digest('hex');
 
-export async function runSnapshotTool({ args, operation, input, signal, record }) {
+export async function runSnapshotTool({ args, operation, input, signal, record, stderr = () => {} }) {
 	signal.throwIfAborted();
 	const child = spawn('docker', args, { stdio: ['pipe', 'pipe', 'pipe'], signal });
 
@@ -14,7 +14,12 @@ export async function runSnapshotTool({ args, operation, input, signal, record }
 	let failure;
 	const errors = [];
 	let force;
-	child.stderr.on('data', (chunk) => errors.push(chunk));
+
+	child.stderr.on('data', (chunk) => {
+		errors.push(chunk);
+		stderr(chunk);
+	});
+
 	child.stdout.on('data', (chunk) => chunks.push(chunk));
 	child.stdin.on('error', () => {});
 

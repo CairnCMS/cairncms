@@ -144,7 +144,7 @@ async function findRole(api: Api, roleKey: string): Promise<{ id: string } | und
 
 describeForVendors(
 	'Config-as-Code run record',
-	['postgres13'],
+	['postgres18'],
 	'Config run-record logging is validated against PostgreSQL.',
 	() => {
 		let serverLogs = '';

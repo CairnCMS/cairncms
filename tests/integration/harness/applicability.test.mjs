@@ -10,10 +10,11 @@ import { readVendorResult } from './results.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 for (const [file, vendor, mode, expectedPassed, expectedExcluded, expectedCode] of [
 	['applicability.case.ts', 'sqlite3', '', 1, 2, 0],
-	['applicability.case.ts', 'postgres13', '', 3, 0, 0],
+	['applicability.case.ts', 'postgres18', '', 3, 0, 0],
 	['applicability.case.ts', 'sqlite3', 'all-excluded', 0, 2, 0],
-	['applicability.case.ts', 'postgres13', 'unapproved', 0, 0, 1],
-	['applicability-family.case.ts', 'postgres13', '', 1, 0, 0],
+	['applicability.case.ts', 'postgres18', 'unapproved', 0, 0, 1],
+	['applicability-family.case.ts', 'postgres18', '', 1, 0, 0],
+	['applicability-family.case.ts', 'postgres15', '', 1, 0, 0],
 	['applicability-family.case.ts', 'postgres10', '', 1, 0, 0],
 	['applicability-family.case.ts', 'mysql84', '', 0, 1, 0],
 ])

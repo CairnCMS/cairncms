@@ -11,7 +11,7 @@ if (process.env.CONTROL_APPLICABILITY !== 'all-excluded')
 
 describeForVendors(
 	'existing server-vendor case',
-	['postgres13'],
+	['postgres18'],
 	'Control: this scenario applies only to PostgreSQL',
 	() => {
 		test('first preserved case', () => {

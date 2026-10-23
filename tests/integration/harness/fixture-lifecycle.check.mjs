@@ -58,7 +58,7 @@ for (const [name, vendor, count] of [
 	['cli', 'sqlite3', 3],
 	['origin', 'sqlite3', 2],
 	['multiple-api', 'sqlite3', 1],
-	['destructive', 'postgres13', 1],
+	['destructive', 'postgres18', 1],
 	['timezone', 'mysql84', 1],
 ])
 	test(`owned ${name} fixture (${vendor})`, { timeout: 180000 }, async () => {
