@@ -1,12 +1,12 @@
 # API integration tests
 
 These tests exercise the compiled API with a fresh database and API process for each test file. You can run a single
-case, a suite, or all suites across six database vendors.
+case, a suite, or all suites across nine engine lines from four database vendors.
 
 ## Run tests
 
-Use Node.js 22 and the repository's pinned pnpm version. PostgreSQL is the default and requires a running Docker daemon
-and the Docker CLI. The harness starts and stops its own containers.
+Use Node.js 22 and the repository's pinned pnpm version. PostgreSQL 18 is the default and requires a running Docker
+daemon and the Docker CLI. The harness starts and stops its own containers.
 
 Run these commands from the repository root:
 
@@ -34,8 +34,25 @@ pnpm test:integration --vendor sqlite3 routes/items/no-relation.test.ts
 pnpm test:integration --vendor all --collect-all
 ```
 
-Available vendors are `postgres`, `postgres10`, `mysql`, `mysql5`, `maria`, and `sqlite3`. You can also select one with
-`TEST_DB`. SQLite suites that use Redis, SAML, or S3 still need Docker.
+Each `--vendor` value selects one engine line, called a lane. Each vendor has a lane for its oldest and newest supported
+line. `postgres10` and `mysql5` also cover the remaining compatibility code for older engines. Supported lines between
+the oldest and newest, such as PostgreSQL 16 and 17, have no lane of their own. They rely on the dialect SQL being the
+same across those lines, so a defect specific to one of them can pass these tests.
+
+| Lane         | Engine                                |
+| ------------ | ------------------------------------- |
+| `sqlite3`    | SQLite                                |
+| `postgres18` | PostgreSQL 18 / PostGIS 3.6 (default) |
+| `postgres15` | PostgreSQL 15                         |
+| `postgres10` | PostgreSQL 10 / PostGIS 3.2           |
+| `mysql97`    | MySQL 9.7                             |
+| `mysql84`    | MySQL 8.4                             |
+| `mysql5`     | MySQL 5.7                             |
+| `maria123`   | MariaDB 12.3                          |
+| `maria1011`  | MariaDB 10.11                         |
+
+Select several lanes with a comma-separated list, or select one with `TEST_DB`. `sqlite3` runs without Docker, but
+SQLite suites that use Redis, SAML, or S3 still need it.
 
 Local runs stop on the first failure by default. Add `--collect-all` to continue, `--workers 2` to run ordinary files in
 parallel, or `--verbose` to show individual results. Load suites run exclusively within an invocation. CI runs full

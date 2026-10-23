@@ -9,7 +9,7 @@ This page is for contributors who want to run CairnCMS from the source tree, mod
 
 ## Prerequisites
 
-- **Node.js 22 LTS** or newer. The platform targets Node 22 and runs CI against it.
+- **Node.js 22 LTS** or newer. The platform targets Node 22.
 - **pnpm 10+**. The repo pins `pnpm@10.13.1` as its `packageManager`. Use corepack (`corepack enable`) to pick up the pinned version automatically.
 - **Docker and Docker Compose**, for the database and supporting services. The root `docker-compose.yml` provides the supported server vendors on local ports, each on its newest and oldest supported line.
 - **Git**, with a configured user and email. Commits must be signed off (`git commit -s`) per the [Developer Certificate of Origin](https://developercertificate.org/).
@@ -179,7 +179,7 @@ Run tests and lint independently:
   pnpm --filter @cairncms/api typecheck:tests
   ```
 
-  CI runs this check before the unit tests. Rebuild changed workspace dependencies before checking locally.
+  Rebuild changed workspace dependencies before checking locally.
 
 - **API integration tests**:
 
@@ -196,8 +196,8 @@ Run tests and lint independently:
   # Run an ordinary SQLite suite without Docker
   pnpm test:integration --vendor sqlite3 routes/items/no-relation.test.ts
 
-  # Run the full PostgreSQL suite and collect all failures
-  pnpm test:integration --vendor postgres --collect-all
+  # Run the full PostgreSQL 18 suite and collect all failures
+  pnpm test:integration --vendor postgres18 --collect-all
   ```
 
   Each file gets a fresh database and API process. Keep Docker running for server databases and suites that use Redis,
@@ -207,8 +207,9 @@ Run tests and lint independently:
   Repeat `pnpm test:integration:prepare` after changing application source, dependencies, or build configuration. The
   runner rejects stale builds. Test-only and documentation edits can reuse the build.
 
-  Available vendors are `postgres`, `postgres10`, `mysql`, `mysql5`, `maria`, and `sqlite3`. Use `--vendor all` for all
-  six. CI runs the complete matrix on `develop` pushes. See the
+  Each `--vendor` value selects one engine line, called a lane: `sqlite3`, `postgres18` (the default), `postgres15`,
+  `postgres10`, `mysql97`, `mysql84`, `mysql5`, `maria123`, and `maria1011`. Use `--vendor all` for every lane.
+  See the
   [integration README](https://github.com/CairnCMS/cairncms/blob/develop/tests/integration/README.md) for adding suites
   and reading results.
 

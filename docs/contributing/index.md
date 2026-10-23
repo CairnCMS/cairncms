@@ -46,21 +46,21 @@ If a contribution adapts code from a compatible open-source project, preserve an
 
 ## Before you submit a PR
 
-A short checklist that runs faster locally than in CI:
+Run these checks locally before submitting:
 
 1. **Run `pnpm test`** — the unit-test suite. Required to pass before review.
 2. **Run `pnpm lint`** — the ESLint pass across the workspace. Auto-fix common issues with `pnpm lint --fix`.
 3. **Run the relevant API integration suites** if your changes touch query semantics, schema operations, or auth. You
-   can select a file or a named case. CI runs all six database vendors after changes merge into `develop`.
+   can select a file or a named case.
 
    ```bash
    pnpm test:integration:prepare
    pnpm test:integration routes/auth/login.test.ts
    ```
 
-   PostgreSQL is the default. Keep Docker running. The harness provisions and cleans up its own databases and services.
-   Repeat preparation after changing application source, dependencies, or build configuration. The runner rejects stale
-   builds. Test-only edits can reuse the build.
+   PostgreSQL 18 is the default. Keep Docker running. The harness provisions and cleans up its own databases and
+   services. Repeat preparation after changing application source, dependencies, or build configuration. The runner
+   rejects stale builds. Test-only edits can reuse the build.
 
    For changes that affect SQL generation, select the relevant vendor with `--vendor`. See
    [Running locally / Tests](/docs/contributing/running-locally/#tests) for commands and vendor choices.
