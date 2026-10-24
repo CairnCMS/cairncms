@@ -444,37 +444,92 @@ describe('Integration Tests', () => {
 							    "type": "object",
 							  },
 							  "Schema": {
-							    "properties": {
-							      "collections": {
-							        "items": {
-							          "$ref": "#/components/schemas/Collections",
+							    "oneOf": [
+							      {
+							        "additionalProperties": false,
+							        "properties": {
+							          "collections": {
+							            "items": {
+							              "$ref": "#/components/schemas/Collections",
+							            },
+							            "type": "array",
+							          },
+							          "directus": {
+							            "description": "The CairnCMS release that produced a version 1 snapshot.",
+							            "type": "string",
+							          },
+							          "fields": {
+							            "items": {
+							              "$ref": "#/components/schemas/Fields",
+							            },
+							            "type": "array",
+							          },
+							          "relations": {
+							            "items": {
+							              "$ref": "#/components/schemas/Relations",
+							            },
+							            "type": "array",
+							          },
+							          "vendor": {
+							            "type": "string",
+							          },
+							          "version": {
+							            "enum": [
+							              1,
+							            ],
+							            "example": 1,
+							            "type": "integer",
+							          },
 							        },
-							        "type": "array",
+							        "required": [
+							          "version",
+							          "directus",
+							        ],
+							        "type": "object",
 							      },
-							      "directus": {
-							        "type": "string",
-							      },
-							      "fields": {
-							        "items": {
-							          "$ref": "#/components/schemas/Fields",
+							      {
+							        "additionalProperties": false,
+							        "properties": {
+							          "collections": {
+							            "items": {
+							              "$ref": "#/components/schemas/Collections",
+							            },
+							            "type": "array",
+							          },
+							          "fields": {
+							            "items": {
+							              "$ref": "#/components/schemas/Fields",
+							            },
+							            "type": "array",
+							          },
+							          "relations": {
+							            "items": {
+							              "$ref": "#/components/schemas/Relations",
+							            },
+							            "type": "array",
+							          },
+							          "release": {
+							            "description": "The CairnCMS release that produced a version 2 snapshot.",
+							            "type": "string",
+							          },
+							          "vendor": {
+							            "type": "string",
+							          },
+							          "version": {
+							            "enum": [
+							              2,
+							            ],
+							            "example": 2,
+							            "type": "integer",
+							          },
 							        },
-							        "type": "array",
+							        "required": [
+							          "version",
+							          "release",
+							        ],
+							        "type": "object",
 							      },
-							      "relations": {
-							        "items": {
-							          "$ref": "#/components/schemas/Relations",
-							        },
-							        "type": "array",
-							      },
-							      "vendor": {
-							        "type": "string",
-							      },
-							      "version": {
-							        "example": 1,
-							        "type": "integer",
-							      },
-							    },
-							    "type": "object",
+							    ],
 							  },
 							  "x-metadata": {
 							    "properties": {

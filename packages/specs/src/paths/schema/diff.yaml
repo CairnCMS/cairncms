@@ -2,7 +2,11 @@ post:
   summary: Retrieve Schema Difference
   description:
     Compare the current instance's schema against the schema snapshot in JSON request body or a JSON/YAML file and
-    retrieve the difference. This endpoint is only available to admin users.
+    retrieve the difference. This endpoint is only available to admin users. Deprecated in 1.7.0. Use
+    POST /config/apply?dry_run=true with a complete config-as-code document instead. See
+    https://cairncms.dev/docs/manage/config-as-code/migration/ for adoption and
+    https://cairncms.dev/docs/manage/schema-as-code/ for removal timing.
+  deprecated: true
   operationId: schemaDiff
   parameters:
     - name: force
@@ -16,10 +20,7 @@ post:
     content:
       application/json:
         schema:
-          type: object
-          properties:
-            data:
-              $ref: '../../openapi.yaml#/components/schemas/Schema'
+          $ref: '../../openapi.yaml#/components/schemas/Schema'
       multipart/form-data:
         schema:
           type: object

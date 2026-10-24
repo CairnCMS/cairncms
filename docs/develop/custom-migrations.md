@@ -17,7 +17,7 @@ Reach for a custom migration when:
 - You need to backfill or rewrite data in a way that ships alongside code.
 - You want CairnCMS to track whether the change has run, so it does not run again on the next deploy.
 
-Stay with normal CairnCMS schema tools (Settings > Data Model, schema-as-code apply) when:
+Stay with normal CairnCMS schema tools (Settings > Data Model, config-as-code apply) when:
 
 - The change is just a collection or field addition. Those are tracked in CairnCMS's schema model and can be exported as schema snapshots.
 - The change should be applied per environment by an operator, not automatically on deploy.
@@ -142,11 +142,11 @@ After dropping the file in place, run `cairncms database migrate:latest` (locall
 ## Cautions
 
 - **Custom migrations run with full database privileges.** They are not scoped by any role or permission system. Anything the connected DB user can do, a custom migration can do. Review them like infrastructure code.
-- **Schema changes outside CairnCMS's model can drift from the schema snapshots.** If you migrate a column directly that is part of a CairnCMS collection, the next snapshot/apply cycle may not know about it. Prefer schema-as-code for changes inside the collection model.
+- **Keep your deployment files aligned with the database.** After changing a column through a custom migration, review the next config-as-code snapshot and preview. Prefer config-as-code for changes inside the collection model.
 - **Down migrations are best-effort.** Rolling back is helpful during development; in production, rolling forward (with a new migration that fixes the previous one) is usually safer than rolling backward.
 
 ## Where to go next
 
 - [Configuration](/docs/manage/configuration/) covers `EXTENSIONS_PATH` and other operator-side settings.
-- [Schema as code](/docs/manage/schema-as-code/) covers the snapshot/apply workflow for changes inside CairnCMS's collection model.
+- [Config-as-code](/docs/manage/config-as-code/) covers the snapshot/apply workflow for your data model, access rules and settings.
 - [Email templates](/docs/develop/email-templates/) is the other convention-based developer customization path documented here.

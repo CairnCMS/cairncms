@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG_KINDS, type ConfigPermission, type ConfigRole } from '../../types/config.js';
-import { CONFIG_REGISTRY, forKind, getDescriptor, listConfigKinds } from './registry.js';
+import { CONFIG_REGISTRY, forKind, getDescriptor, kindsForVersion, listConfigKinds } from './registry.js';
 
 describe('config registry', () => {
 	it('covers exactly CONFIG_KINDS', () => {
@@ -17,6 +17,27 @@ describe('config registry', () => {
 	it('forKind resolves the descriptor for its kind', () => {
 		expect(forKind('roles', (descriptor) => descriptor.kind)).toBe('roles');
 		expect(forKind('permissions', (descriptor) => descriptor.kind)).toBe('permissions');
+	});
+});
+
+describe('kindsForVersion gate', () => {
+	it('admits roles and permissions at version 1', () => {
+		expect(kindsForVersion(1).sort()).toEqual(['permissions', 'roles']);
+	});
+
+	it('adds the version 2 kinds without schema', () => {
+		expect(kindsForVersion(2)).not.toContain('schema');
+
+		expect(kindsForVersion(2).sort()).toEqual(
+			['extension-settings', 'folders', 'permissions', 'roles', 'settings', 'translations'].sort()
+		);
+	});
+
+	it('admits schema only at version 3', () => {
+		expect(kindsForVersion(1)).not.toContain('schema');
+		expect(kindsForVersion(2)).not.toContain('schema');
+		expect(kindsForVersion(3)).toContain('schema');
+		expect(kindsForVersion(3).sort()).toEqual([...CONFIG_KINDS].sort());
 	});
 });
 

@@ -202,7 +202,9 @@ const articles = await client.request(readItems('articles', {
 
 The `Schema` type maps collection names to their record types. The SDK uses it to validate collection names at compile time and to derive return shapes from the `fields` option, including dotted paths for relations. When `fields` includes a relation path, the corresponding nested type appears in the result.
 
-For projects with many collections, generating the schema from the live API is common: run `cairncms schema snapshot` and convert the YAML to TypeScript interfaces, or write a generator that introspects `/schema/snapshot` on a build step. The SDK ships no generator of its own.
+For projects with many collections, a build-time generator can read `GET /schema/snapshot` through the SDK's `schemaSnapshot()` helper and produce TypeScript interfaces. Both remain supported. The SDK ships no generator of its own.
+
+For deployment, use [Config-as-code](/docs/manage/config-as-code/). Use `customEndpoint` or direct HTTP with the [config-as-code endpoints](/docs/manage/config-as-code/http-api/).
 
 When `Schema` is omitted, the client falls back to `any` for collection records. The runtime behavior is identical; only the editor-time type checking changes.
 

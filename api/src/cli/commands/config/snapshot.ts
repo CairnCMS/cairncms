@@ -26,7 +26,8 @@ function snapshotSummary(config: CairnConfig, where: string): string {
 		`Snapshot: ${config.roles.length} role(s), ${config.permissions.length} permission set(s), ` +
 		`${config.folders.length} folder(s), ${config.settings.length} setting(s), ` +
 		`${config['extension-settings'].length} extension-settings subject file(s), ` +
-		`${config.translations.length} translation language file(s) written to ${where}`
+		`${config.translations.length} translation language file(s), ` +
+		`${config.schema.length} schema collection(s) written to ${where}`
 	);
 }
 

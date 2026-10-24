@@ -8,6 +8,7 @@ export function configFixture(overrides: Partial<CairnConfig> & Pick<CairnConfig
 		settings: [],
 		'extension-settings': [],
 		translations: [],
+		schema: [],
 		...overrides,
 	};
 }

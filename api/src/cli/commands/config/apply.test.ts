@@ -20,7 +20,7 @@ import { getSchema } from '../../../utils/get-schema.js';
 import { readConfigDirectory } from '../../../utils/read-config-directory.js';
 import { serializeConfigPlan } from '../../../utils/serialize-config-plan.js';
 import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
-import { applyConfigPlan, planHasDeletions } from '../../../utils/apply-config-plan.js';
+import { applyConfigPlan } from '../../../utils/apply-config-plan.js';
 import { configApply } from './apply.js';
 
 const { envOverrides } = vi.hoisted(() => ({ envOverrides: { LOG_STYLE: 'pretty' } as Record<string, unknown> }));
@@ -79,13 +79,13 @@ vi.mock('../../../utils/serialize-config-plan.js', () => ({ serializeConfigPlan:
 
 vi.mock('../../../utils/apply-config-plan.js', () => ({
 	applyConfigPlan: vi.fn(),
-	planHasDeletions: vi.fn(() => false),
 }));
 
 vi.mock('inquirer', () => ({ default: { prompt: vi.fn(async () => ({ proceed: false })) } }));
 
 const EMPTY_PLAN: ConfigPlan = {
 	managedResources: ['permissions'],
+	schema: { create: [], update: [], delete: [] },
 	roles: { create: [], update: [], delete: [] },
 	permissions: { create: [], update: [], delete: [] },
 	folders: { create: [], update: [], delete: [] },
@@ -99,6 +99,7 @@ const STATE_TOKEN: ConfigStateToken = { resources: ['roles'], digest: 'cli-diges
 
 const CREATE_PLAN: ConfigPlan = {
 	managedResources: ['roles'],
+	schema: { create: [], update: [], delete: [] },
 	roles: {
 		create: [
 			{
@@ -158,7 +159,6 @@ const MISSING_COLLECTION_PERMISSION: ConfigPermission = {
 
 beforeEach(() => {
 	vi.mocked(validateDesiredConfig).mockReturnValue([]);
-	vi.mocked(planHasDeletions).mockReturnValue(false);
 	vi.mocked(logger.info).mockReset();
 });
 
@@ -285,6 +285,7 @@ describe('configApply empty plan with unmanaged permissions', () => {
 describe('configApply protected plan', () => {
 	const PROTECTED_PLAN: ConfigPlan = {
 		managedResources: ['roles'],
+		schema: { create: [], update: [], delete: [] },
 		roles: { create: [], update: [], delete: ['administrator'] },
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
@@ -433,12 +434,14 @@ describe('configApply state token forwarding', () => {
 			settings: [{ storage_default_folder: 'uploads' }],
 			'extension-settings': [],
 			translations: [],
+			schema: [],
 		};
 
 		const settingsStateToken: ConfigStateToken = { resources: ['settings'], digest: 'settings-digest' };
 
 		const settingsPlan: ConfigPlan = {
 			managedResources: ['settings'],
+			schema: { create: [], update: [], delete: [] },
 			roles: { create: [], update: [], delete: [] },
 			permissions: { create: [], update: [], delete: [] },
 			folders: { create: [], update: [], delete: [] },
@@ -522,6 +525,7 @@ describe('configApply run record', () => {
 
 	const PROTECTED_PLAN: ConfigPlan = {
 		managedResources: ['roles'],
+		schema: { create: [], update: [], delete: [] },
 		roles: { create: [], update: [], delete: ['administrator'] },
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
@@ -670,7 +674,10 @@ describe('configApply run record', () => {
 	});
 
 	it('records refused with DESTRUCTIVE_CHANGES_REQUIRED for deletions without the destructive flag', async () => {
-		vi.mocked(planHasDeletions).mockReturnValue(true);
+		vi.mocked(computeConfigPlan).mockReturnValue({
+			...CREATE_PLAN,
+			roles: { create: [], update: [], delete: ['editor'] },
+		});
 
 		await run();
 
@@ -936,6 +943,7 @@ describe('configApply forwards current folder state to validation', () => {
 			settings: [],
 			'extension-settings': [],
 			translations: [],
+			schema: [],
 		};
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(desired);
@@ -986,6 +994,7 @@ describe('configApply extension-settings forwarding (CLI)', () => {
 			settings: [],
 			'extension-settings': [{ subject: '@cairncms/extension-widget', global: { color: 'blue' }, collections: {} }],
 			translations: [],
+			schema: [],
 		};
 
 		vi.mocked(readConfigDirectory).mockResolvedValue(desired);
@@ -1001,6 +1010,7 @@ describe('configApply extension-settings forwarding (CLI)', () => {
 		const plan: ConfigPlan = {
 			...EMPTY_PLAN,
 			managedResources: ['extension-settings'],
+			schema: { create: [], update: [], delete: [] },
 			'extension-settings': {
 				create: [
 					{

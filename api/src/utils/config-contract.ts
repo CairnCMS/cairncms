@@ -1,10 +1,10 @@
 import type { PermissionsAction } from '@cairncms/types';
 
-export const SUPPORTED_MANIFEST_VERSIONS = [1, 2] as const;
+export const SUPPORTED_MANIFEST_VERSIONS = [1, 2, 3] as const;
 
 export type ManifestVersion = (typeof SUPPORTED_MANIFEST_VERSIONS)[number];
 
-export const LATEST_MANIFEST_VERSION: ManifestVersion = 2;
+export const LATEST_MANIFEST_VERSION: ManifestVersion = 3;
 
 /** The `Record` check makes a new `PermissionsAction` member a compile-time error here. */
 export const SUPPORTED_ACTIONS: ReadonlySet<string> = new Set(

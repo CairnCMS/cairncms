@@ -1,21 +1,22 @@
 import inquirer from 'inquirer';
 import type { Knex } from 'knex';
-import getDatabase, { hasDatabaseConnection, isInstalled } from '../../../database/index.js';
+import getDatabase, { getDatabaseClient, hasDatabaseConnection, isInstalled } from '../../../database/index.js';
 import logger from '../../../logger.js';
 import { configFailureExitCode } from './exit-code.js';
-import { applyConfigPlan, planHasDeletions } from '../../../utils/apply-config-plan.js';
+import { applyConfigPlan } from '../../../utils/apply-config-plan.js';
 import { computeConfigPlan } from '../../../utils/compute-config-plan.js';
 import {
 	buildExtensionDeclarationSnapshot,
 	desiredExtensionSubjects,
 } from '../../../utils/config/handlers/extension-settings.js';
-import { isPlanEmpty, planSummary } from '../../../utils/config/plan-folds.js';
+import { isPlanEmpty, planSummary, sliceHasChanges } from '../../../utils/config/plan-folds.js';
 import {
 	classifyConfigError,
 	systemCaller,
 	withConfigRun,
 	type ConfigRun,
 	type ConfigRunFinished,
+	type ConfigRunSteps,
 } from '../../../utils/config/run-record.js';
 import { enrichConfigPlan } from '../../../utils/enrich-config-plan.js';
 import { CONFIG_APPLY_ORIGIN } from '../../../utils/config-contract.js';
@@ -27,44 +28,76 @@ import { readConfigDirectory } from '../../../utils/read-config-directory.js';
 import { serializeConfigPlan } from '../../../utils/serialize-config-plan.js';
 import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
 import { serializeToWire } from '../../../utils/config/wire.js';
+import { applyFolderPreparation } from '../../../utils/apply-folder-preparation.js';
+import { assertMutationAuthorized, assertRunValid } from '../../../utils/config/run-preflight.js';
+import {
+	applyConfigurationStep,
+	applySchemaStep,
+	computeWholeRunInputs,
+	failureStatus,
+	stepFailure,
+} from '../../../utils/config/apply-steps.js';
+import { version as currentRelease } from '../../../utils/package.js';
 import type { SchemaOverview } from '@cairncms/types';
-import type { CairnConfig, ConfigPlan, SerializedConfigPlan } from '../../../types/config.js';
+import type {
+	CairnConfig,
+	ConfigApplySecurityContext,
+	ConfigPlan,
+	SerializedConfigPlan,
+} from '../../../types/config.js';
 import { confirmPrompt } from '../../presentation.js';
 import { isHttpTarget, parseOperatorRemoteTarget } from './operator-remote-target.js';
 import { createOperatorRemoteTransport } from './operator-remote-transport.js';
 import {
 	applyRemote,
 	assertServerSupportsRemoteConfig,
+	assertServerSupportsRemoteSchema,
 	fetchServerVersion,
 	type RemoteSession,
 } from './remote-client.js';
 import { resolveRemoteToken } from './remote-token.js';
 import { readFileSync } from 'node:fs';
 import {
+	destructiveRefusalNotice,
 	renderConfigPlan,
-	renderDestructiveRefusal,
 	renderNoChanges,
 	renderResultSummary,
+	renderStepOutcome,
+	renderWarnings,
 } from './render-config-plan.js';
 
 async function serializePlan(
 	plan: ConfigPlan,
 	desired: CairnConfig,
 	database: Knex,
-	schema?: SchemaOverview
+	schema: SchemaOverview | undefined,
+	preparationFolderKeys?: ReadonlySet<string>
 ): Promise<SerializedConfigPlan> {
 	const resolvedSchema = schema ?? (await getSchema({ database, bypassCache: true }));
 	const enrichment = await enrichConfigPlan(plan, desired, { schema: resolvedSchema, database });
 
-	return serializeConfigPlan(plan, { enrichment, manifestVersion: desired.manifest.version });
+	return serializeConfigPlan(plan, {
+		enrichment,
+		manifestVersion: desired.manifest.version,
+		...(preparationFolderKeys !== undefined && { preparationFolderKeys }),
+	});
 }
 
 export async function configApply(
 	configPath: string,
-	options?: { yes: boolean; dryRun: boolean; destructive: boolean; format: string; url?: string; tokenStdin?: boolean }
+	options?: {
+		yes: boolean;
+		dryRun: boolean;
+		destructive: boolean;
+		forceSchema?: boolean;
+		format: string;
+		url?: string;
+		tokenStdin?: boolean;
+	}
 ): Promise<void> {
 	const dryRun = options?.dryRun === true;
 	const destructive = options?.destructive === true;
+	const forceSchema = options?.forceSchema === true;
 	const format = options?.format ?? 'human';
 
 	if (format === 'json' && !dryRun) {
@@ -73,7 +106,7 @@ export async function configApply(
 	}
 
 	if (options?.url !== undefined) {
-		return configApplyRemote(configPath, options.url, { dryRun, destructive, format, options });
+		return configApplyRemote(configPath, options.url, { dryRun, destructive, forceSchema, format, options });
 	}
 
 	const database = getDatabase();
@@ -93,6 +126,7 @@ export async function configApply(
 	const { exitCode } = await runLocalApply(configPath, database, {
 		dryRun,
 		destructive,
+		forceSchema,
 		format,
 		yes: options?.yes === true,
 	});
@@ -103,7 +137,7 @@ export async function configApply(
 
 type ExitCode = 0 | 1 | 2 | 3;
 
-type LocalApplyOptions = { dryRun: boolean; destructive: boolean; format: string; yes: boolean };
+type LocalApplyOptions = { dryRun: boolean; destructive: boolean; forceSchema: boolean; format: string; yes: boolean };
 
 type LocalApplyOutcome = ConfigRunFinished & { exitCode: ExitCode };
 
@@ -144,7 +178,12 @@ async function runLocalEngine(
 	opts: LocalApplyOptions,
 	run: ConfigRun
 ): Promise<LocalApplyOutcome> {
-	const { dryRun, destructive, format, yes } = opts;
+	const { dryRun, destructive, forceSchema, format, yes } = opts;
+
+	let committedStep = false;
+	let currentStep: keyof ConfigRunSteps | undefined;
+	let serialized: SerializedConfigPlan | undefined;
+	const steps: ConfigRunSteps = { folders: 'not_run', schema: 'not_run', configuration: 'not_run' };
 
 	try {
 		const extensionSettingsManaged = desired.manifest.resources.includes('extension-settings');
@@ -152,7 +191,7 @@ async function runLocalEngine(
 
 		const extensionDeclarations = extensionSettingsManaged ? await buildExtensionDeclarationSnapshot() : undefined;
 
-		const currentCollections = schema !== undefined ? new Set(Object.keys(schema.collections)) : undefined;
+		const currentCollections = schema?.collections;
 
 		const extensionSettingsSubjects = extensionSettingsManaged
 			? desiredExtensionSubjects(desired['extension-settings'])
@@ -164,6 +203,8 @@ async function runLocalEngine(
 			currentFolderKeys,
 			currentFolderParents,
 			stateToken,
+			schemaStoredFields,
+			schemaKeyFormHash,
 		} = await readCurrentConfig({
 			database,
 			...(schema !== undefined && { schema }),
@@ -180,6 +221,9 @@ async function runLocalEngine(
 			currentFolderParents,
 			...(extensionDeclarations !== undefined && { extensionDeclarations }),
 			...(currentCollections !== undefined && { currentCollections }),
+			...(schemaStoredFields !== undefined && {
+				currentSchema: { records: current.schema, storedFields: schemaStoredFields },
+			}),
 		});
 
 		if (documentErrors.length > 0) {
@@ -190,24 +234,43 @@ async function runLocalEngine(
 			return { result: 'invalid', errorCode: documentErrors[0]!.code, exitCode: 2 };
 		}
 
-		const plan = computeConfigPlan(
-			current,
-			desired,
-			extensionDeclarations !== undefined ? { extensionDeclarations } : undefined
-		);
-
-		const empty = isPlanEmpty(plan);
+		const plan = computeConfigPlan(current, desired, {
+			...(extensionDeclarations !== undefined && { extensionDeclarations }),
+			...(schemaStoredFields !== undefined && { currentSchemaStoredFields: schemaStoredFields }),
+		});
 
 		run.planned(planSummary(plan));
 
+		const schemaManaged = desired.manifest.resources.includes('schema');
+
+		const { schemaFields, availableFolderKeys, preparationFolderKeys } = await computeWholeRunInputs(
+			desired,
+			current.schema,
+			database
+		);
+
+		assertRunValid({
+			manifest: desired.manifest,
+			forceSchema,
+			currentRelease,
+			currentVendor: schemaManaged ? getDatabaseClient(database) : '',
+			schemaFields,
+			availableFolderKeys,
+		});
+
+		const empty = isPlanEmpty(plan);
+
 		if (format === 'json') {
-			process.stdout.write(JSON.stringify(await serializePlan(plan, desired, database, schema)) + '\n');
+			process.stdout.write(
+				JSON.stringify(await serializePlan(plan, desired, database, schema, preparationFolderKeys)) + '\n'
+			);
+
 			return { result: empty ? 'no_changes' : 'planned', exitCode: empty ? 0 : 1 };
 		}
 
 		if (empty) {
 			if (desired.manifest.resources.includes('permissions')) {
-				logger.info(renderNoChanges(await serializePlan(plan, desired, database, schema)));
+				logger.info(renderNoChanges(await serializePlan(plan, desired, database, schema, preparationFolderKeys)));
 			} else {
 				logger.info(renderNoChanges());
 			}
@@ -215,65 +278,108 @@ async function runLocalEngine(
 			return { result: 'no_changes', exitCode: 0 };
 		}
 
-		const serialized = await serializePlan(plan, desired, database, schema);
-
-		if (dryRun) {
-			logger.info(renderConfigPlan(serialized));
-			return { result: 'planned', exitCode: 1 };
-		}
-
-		if (plan.protections.length > 0) {
-			logger.info(renderConfigPlan(serialized));
-			return { result: 'refused', errorCode: 'CONFIG_PROTECTED_RECORD', exitCode: 2 };
-		}
-
-		if (!destructive && planHasDeletions(plan)) {
-			logger.info(renderConfigPlan(serialized));
-			logger.error(renderDestructiveRefusal(serialized));
-			return { result: 'refused', errorCode: 'DESTRUCTIVE_CHANGES_REQUIRED', exitCode: 2 };
-		}
-
+		serialized = await serializePlan(plan, desired, database, schema, preparationFolderKeys);
 		logger.info(renderConfigPlan(serialized));
 
+		if (dryRun) return { result: 'planned', exitCode: 1 };
+
+		assertMutationAuthorized(plan, destructive);
+
 		if (!yes) {
-			const { proceed } = await inquirer.prompt([
-				{
-					type: 'confirm',
-					name: 'proceed',
-					message: confirmPrompt,
-				},
-			]);
+			const { proceed } = await inquirer.prompt([{ type: 'confirm', name: 'proceed', message: confirmPrompt }]);
 
 			if (proceed === false) return { result: 'discarded', exitCode: 0 };
 		}
 
-		const result = await applyConfigPlan(plan, {
-			database,
-			destructive,
-			context: {
-				mode: 'system',
-				reason: 'local config apply',
-				accountability: { ...getSystemAccountability(), origin: CONFIG_APPLY_ORIGIN },
-			},
-			expectedStateToken: stateToken,
-			...(extensionDeclarations !== undefined && { extensionDeclarations }),
-		});
+		const context: ConfigApplySecurityContext = {
+			mode: 'system',
+			reason: 'local config apply',
+			accountability: { ...getSystemAccountability(), origin: CONFIG_APPLY_ORIGIN },
+		};
 
-		logger.info(renderResultSummary(result));
+		if (!schemaManaged) {
+			const result = await applyConfigPlan(plan, {
+				database,
+				destructive,
+				context,
+				expectedStateToken: stateToken,
+				...(extensionDeclarations !== undefined && { extensionDeclarations }),
+			});
 
-		return { result: 'applied', exitCode: 0 };
+			logger.info(renderResultSummary(result));
+			return { result: 'applied', exitCode: 0 };
+		}
+
+		currentStep = 'folders';
+		const created = await applyFolderPreparation(desired, current.schema, { context, database });
+		steps.folders = created.length > 0 ? 'committed' : 'skipped';
+		if (created.length > 0) committedStep = true;
+
+		if (sliceHasChanges(plan.schema)) {
+			currentStep = 'schema';
+
+			await applySchemaStep({
+				currentSchema: current.schema,
+				desiredSchema: desired.schema,
+				schemaStoredFields,
+				expectedHash: schemaKeyFormHash ?? '',
+				database,
+			});
+
+			steps.schema = 'committed';
+			committedStep = true;
+		} else {
+			steps.schema = 'skipped';
+		}
+
+		const configResources = desired.manifest.resources.filter((kind) => kind !== 'schema');
+
+		if (configResources.length > 0) {
+			currentStep = 'configuration';
+			const result = await applyConfigurationStep(desired, configResources, database, destructive, context);
+			steps.configuration = result !== undefined ? 'committed' : 'skipped';
+
+			if (result !== undefined) {
+				committedStep = true;
+				logger.info(renderResultSummary(result));
+			}
+		} else {
+			steps.configuration = 'skipped';
+		}
+
+		logger.info(renderStepOutcome(steps));
+		return { result: 'applied', exitCode: 0, steps };
 	} catch (err) {
-		logger.error(err);
-		return { ...classifyConfigError(err), exitCode: configFailureExitCode(err) };
+		const notice = destructiveRefusalNotice(err, currentStep, serialized);
+
+		if (notice !== undefined) {
+			logger.error(notice);
+		} else {
+			logger.error(err);
+		}
+
+		const exitCode = committedStep ? 3 : configFailureExitCode(err);
+
+		if (currentStep === undefined) return { ...classifyConfigError(err), exitCode };
+
+		steps[currentStep] = failureStatus(err);
+		logger.info(renderStepOutcome(steps));
+		return { ...classifyConfigError(err), exitCode, steps, failure: stepFailure(currentStep, err) };
 	}
 }
 
 async function configApplyRemote(
 	configPath: string,
 	url: string,
-	ctx: { dryRun: boolean; destructive: boolean; format: string; options: { yes?: boolean; tokenStdin?: boolean } }
+	ctx: {
+		dryRun: boolean;
+		destructive: boolean;
+		forceSchema: boolean;
+		format: string;
+		options: { yes?: boolean; tokenStdin?: boolean };
+	}
 ): Promise<void> {
-	const { dryRun, destructive, format } = ctx;
+	const { dryRun, destructive, forceSchema, format } = ctx;
 
 	if (!dryRun && ctx.options.yes !== true) {
 		logger.error(
@@ -300,12 +406,16 @@ async function configApplyRemote(
 		const transport = await createOperatorRemoteTransport();
 		const session: RemoteSession = { transport, target, token };
 
-		assertServerSupportsRemoteConfig(await fetchServerVersion(session), session.token);
+		const serverVersion = await fetchServerVersion(session);
+		assertServerSupportsRemoteConfig(serverVersion, session.token);
 
 		const desired = await readConfigDirectory(configPath, { notice: (message) => logger.warn(message) });
+		const schemaManaged = desired.manifest.resources.includes('schema');
+
+		if (schemaManaged) assertServerSupportsRemoteSchema(serverVersion, session.token);
 
 		if (dryRun) {
-			const { plan, runId } = await applyRemote(session, desired, { dryRun: true, destructive });
+			const { plan, runId } = await applyRemote(session, desired, { dryRun: true, destructive, forceSchema });
 			const clean = plan.changes.length === 0 && plan.protections.length === 0;
 
 			if (format === 'json') {
@@ -320,13 +430,25 @@ async function configApplyRemote(
 			process.exit(clean ? 0 : 1);
 		}
 
-		const { plan, result, runId } = await applyRemote(session, desired, { dryRun: false, destructive });
+		const { plan, result, steps, runId } = await applyRemote(session, desired, {
+			dryRun: false,
+			destructive,
+			forceSchema,
+		});
 
-		if (plan.changes.length === 0) {
+		const committed =
+			steps === undefined
+				? plan.changes.length > 0
+				: [steps.folders, steps.schema, steps.configuration].includes('committed');
+
+		if (plan.changes.length === 0 && !committed) {
 			logger.info(renderNoChanges(plan));
 		} else {
-			logger.info(renderConfigPlan(plan));
-			logger.info(renderResultSummary(result));
+			if (plan.changes.length > 0) logger.info(renderConfigPlan(plan));
+			else if (plan.warnings.length > 0) logger.info(renderWarnings(plan));
+
+			if (result !== null) logger.info(renderResultSummary(result));
+			if (schemaManaged && steps !== undefined) logger.info(renderStepOutcome(steps));
 		}
 
 		printRemoteRun(runId);

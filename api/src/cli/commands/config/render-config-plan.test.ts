@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import { DestructiveChangesRequiredException } from '../../../exceptions/destructive-changes-required.js';
 import type { RoleDeletionImpactEntry, RoleValues, SerializedConfigPlan } from '../../../types/config.js';
 import { createVerb, deleteVerb, heading, planIntro, updateVerb } from '../../presentation.js';
 import {
+	destructiveRefusalNotice,
 	renderConfigPlan,
 	renderDeletions,
 	renderDestructiveRefusal,
 	renderNoChanges,
 	renderProtections,
 	renderResultSummary,
+	renderStepOutcome,
 } from './render-config-plan.js';
 
 function roleValues(over: Partial<RoleValues> = {}): RoleValues {
@@ -270,6 +273,33 @@ describe('renderConfigPlan', () => {
 		);
 	});
 
+	it('renders an unconfigured-table-drop warning message', () => {
+		const output = renderConfigPlan(
+			plan({
+				warnings: [
+					{
+						code: 'UNCONFIGURED_TABLE_DROP',
+						kind: 'collections',
+						collection: 'legacy_posts',
+						message:
+							'Deleting table "legacy_posts" will remove its data. It has no CairnCMS collection record and may belong to another application.',
+					},
+				],
+			})
+		);
+
+		expect(output).toBe(
+			[
+				planIntro,
+				'',
+				'Plan: 0 to create, 0 to update, 0 to delete.',
+				'',
+				heading('Warnings'),
+				'  - Deleting table "legacy_posts" will remove its data. It has no CairnCMS collection record and may belong to another application.',
+			].join('\n')
+		);
+	});
+
 	it('sanitizes control characters in identities, impact detail, and warnings', () => {
 		const bel = String.fromCharCode(7);
 		const tab = String.fromCharCode(9);
@@ -353,6 +383,29 @@ describe('renderDestructiveRefusal', () => {
 		expect(renderDestructiveRefusal(plan({ summary: { create: 0, update: 0, delete: 3 } }))).toBe(
 			'Apply refused: this plan contains 3 deletions.\nReview the items above and run again with --destructive.'
 		);
+	});
+});
+
+describe('destructiveRefusalNotice', () => {
+	const preview = plan({ summary: { create: 0, update: 0, delete: 1 } });
+	const refusal = new DestructiveChangesRequiredException('deletions present');
+
+	it('renders the preview notice for the initial whole-run refusal', () => {
+		expect(destructiveRefusalNotice(refusal, undefined, preview)).toBe(
+			'Apply refused: this plan contains 1 deletion.\nReview the item above and run again with --destructive.'
+		);
+	});
+
+	it('defers to ordinary error reporting once a step has started', () => {
+		expect(destructiveRefusalNotice(refusal, 'configuration', preview)).toBeUndefined();
+	});
+
+	it('defers to ordinary error reporting for a non-destructive error', () => {
+		expect(destructiveRefusalNotice(new Error('boom'), undefined, preview)).toBeUndefined();
+	});
+
+	it('renders nothing without a shown preview', () => {
+		expect(destructiveRefusalNotice(refusal, undefined, undefined)).toBeUndefined();
 	});
 });
 
@@ -487,5 +540,140 @@ describe('renderResultSummary', () => {
 		expect(summary).toBe(
 			'Config applied: 2 role(s) created, 1 role(s) updated, 3 permission(s) created, 1 permission(s) deleted, 1 folder(s) created, 1 setting(s) updated, 2 extension setting(s) created, 1 extension setting(s) deleted, 1 translation(s) created'
 		);
+	});
+});
+
+describe('renderConfigPlan schema changes', () => {
+	it('renders collections, fields, and relations sections', () => {
+		const output = renderConfigPlan(
+			plan({
+				changes: [
+					{ kind: 'collections', operation: 'create', identity: { collection: 'articles' }, values: {} },
+					{ kind: 'collections', operation: 'delete', identity: { collection: 'legacy' }, impact: [] },
+					{
+						kind: 'fields',
+						operation: 'update',
+						identity: { collection: 'articles', field: 'title' },
+						fields: { max_length: { before: 255, after: 512 } },
+					},
+					{
+						kind: 'relations',
+						operation: 'create',
+						identity: { collection: 'articles', field: 'author' },
+						relatedCollection: 'authors',
+						values: {},
+					},
+				],
+				summary: { create: 2, update: 1, delete: 1 },
+			})
+		);
+
+		expect(output).toContain(heading('Collections'));
+		expect(output).toContain(`${createVerb()} articles`);
+		expect(output).toContain(`${deleteVerb()} legacy`);
+		expect(output).toContain(heading('Fields'));
+		expect(output).toContain(`${updateVerb()} articles / title`);
+		expect(output).toContain('Set max_length to 512');
+		expect(output).toContain(heading('Relations'));
+		expect(output).toContain(`${createVerb()} articles / author -> authors`);
+	});
+
+	it('sanitizes control characters in schema attribute names and relation targets', () => {
+		const bel = String.fromCharCode(7);
+
+		const output = renderConfigPlan(
+			plan({
+				changes: [
+					{
+						kind: 'fields',
+						operation: 'update',
+						identity: { collection: 'articles', field: 'title' },
+						fields: { [`max${bel}length`]: { before: 255, after: 512 } },
+					},
+					{
+						kind: 'relations',
+						operation: 'create',
+						identity: { collection: 'articles', field: 'author' },
+						relatedCollection: `direc${bel}users`,
+						values: {},
+					},
+				],
+				summary: { create: 1, update: 1, delete: 0 },
+			})
+		);
+
+		expect(output).toContain('    - Set max?length to 512');
+		expect(output).toContain(`${createVerb()} articles / author -> direc?users`);
+		expect(output).not.toContain(bel);
+	});
+
+	it('renders added and removed schema attributes distinctly from an edit', () => {
+		const output = renderConfigPlan(
+			plan({
+				changes: [
+					{
+						kind: 'fields',
+						operation: 'update',
+						identity: { collection: 'articles', field: 'title' },
+						fields: {
+							schema: { before: null, after: { name: 'title' }, beforePresent: false },
+							meta: { before: { note: 'legacy' }, after: null, afterPresent: false },
+							type: { before: 'string', after: 'text' },
+						},
+					},
+				],
+				summary: { create: 0, update: 1, delete: 0 },
+			})
+		);
+
+		expect(output).toContain('    - Add schema as');
+		expect(output).toContain('    - Remove meta');
+		expect(output).toContain('    - Set type to text');
+	});
+});
+
+describe('renderConfigPlan folder preparation', () => {
+	it('groups a prepared folder under its own step and lists it once', () => {
+		const output = renderConfigPlan(
+			plan({
+				changes: [
+					{
+						kind: 'folders',
+						operation: 'create',
+						identity: { key: 'uploads' },
+						values: { name: 'uploads', parent: null },
+					},
+					{ kind: 'folders', operation: 'create', identity: { key: 'media' }, values: { name: 'media', parent: null } },
+				],
+				summary: { create: 2, update: 0, delete: 0 },
+				preparation: ['uploads'],
+			})
+		);
+
+		expect(output).toContain(heading('Folder preparation'));
+		expect(output).toContain(heading('Folders'));
+		expect(output).toContain('Plan: 2 to create, 0 to update, 0 to delete.');
+
+		expect(output.split('uploads').length - 1).toBe(1);
+		expect(output.indexOf('uploads')).toBeLessThan(output.indexOf(heading('Folders')));
+		expect(output.indexOf('media')).toBeGreaterThan(output.indexOf(heading('Folders')));
+	});
+});
+
+describe('renderStepOutcome', () => {
+	it('labels each step by its status', () => {
+		const output = renderStepOutcome({ folders: 'committed', schema: 'skipped', configuration: 'committed' });
+
+		expect(output).toContain(heading('Steps'));
+		expect(output).toContain('Folder preparation: applied');
+		expect(output).toContain('Schema: no changes');
+		expect(output).toContain('Configuration: applied');
+	});
+
+	it('labels a failed step and a step that did not run', () => {
+		const output = renderStepOutcome({ folders: 'committed', schema: 'failed', configuration: 'not_run' });
+
+		expect(output).toContain('Schema: failed');
+		expect(output).toContain('Configuration: not run');
 	});
 });

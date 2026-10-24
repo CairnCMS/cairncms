@@ -47,3 +47,17 @@ describe('createCli extension initialization gate', () => {
 		expect(initialize).not.toHaveBeenCalled();
 	});
 });
+
+describe('config command help', () => {
+	it('describes unified snapshots and deletion authorization', async () => {
+		argv('config', '--help');
+		const program = await createCli();
+		const config = program.commands.find((command) => command.name() === 'config')!;
+		const snapshot = config.commands.find((command) => command.name() === 'snapshot')!;
+		const apply = config.commands.find((command) => command.name() === 'apply')!;
+
+		expect(snapshot.helpInformation()).toContain('Snapshot managed resources to a config-as-code directory');
+		expect(apply.helpInformation()).toContain('Apply a config-as-code directory to this CairnCMS instance');
+		expect(apply.helpInformation()).toContain('Authorize planned deletions from managed resources');
+	});
+});
