@@ -138,7 +138,7 @@ describe('config apply surface parity between one HTTP request and the CLI', () 
 		}
 	});
 
-	test('a schema-step failure after folder preparation reports the folder committed and leaves it empty', async ({
+	test('refuses a schema change the target cannot take before preparing folders, in a dry run and an apply', async ({
 		api,
 	}) => {
 		const id = suffix();
@@ -157,11 +157,10 @@ describe('config apply surface parity between one HTTP request and the CLI', () 
 			});
 
 			await CreateField(api, { collection, field: 'title', type: 'string' });
+			await api.database(collection).insert({ title: 'kept' });
 
 			const desired = await snapshotConfig(api, ['schema', 'folders']);
 
-			// Remove the folder-referencing field and its folder so folder preparation recreates the folder, and omit the
-			// kept field's schema so the schema step refuses to drop its column.
 			await admin(api, request(api.url).delete(`/fields/${collection}/cover`)).expect(204);
 			await admin(api, request(api.url).delete(`/folders/${referencedId}`)).expect(204);
 
@@ -169,23 +168,23 @@ describe('config apply surface parity between one HTTP request and the CLI', () 
 			const title = (target['fields'] as Document[]).find((entry) => entry['field'] === 'title')!;
 			delete title['schema'];
 
-			const applied = await applyTree(api, desired);
-			expect(applied.statusCode).toBe(400);
+			const dryRun = await admin(api, request(api.url).post('/config/apply').query({ dry_run: 'true' }))
+				.set('Content-Type', 'application/json')
+				.send(desired);
 
-			expect(applied.body.errors[0].extensions.steps).toEqual({
-				folders: 'committed',
-				schema: 'failed',
-				configuration: 'not_run',
-			});
+			for (const response of [dryRun, await applyTree(api, desired)]) {
+				expect(response.statusCode).toBe(400);
 
-			expect(applied.body.errors[0].extensions.failure.step).toBe('schema');
-			expect(applied.body.errors[0].message).toContain('remain as a field');
+				const [error] = response.body.errors;
+				expect(error.extensions.code).toBe('CONFIG_INVALID');
+				expect(error.message).toContain('remain as a field');
+				expect(error.extensions.steps).toEqual({ folders: 'not_run', schema: 'not_run', configuration: 'not_run' });
+				expect(error.extensions).not.toHaveProperty('failure');
+			}
 
-			const created = await folderByKey(api, referenced);
-			expect(created).toBeDefined();
-			expect(await api.database('directus_files').where({ folder: created!.id }).first()).toBeUndefined();
-			expect(await api.database.schema.hasColumn(collection, 'title')).toBe(true);
+			expect(await folderByKey(api, referenced)).toBeUndefined();
 			expect(await api.database.schema.hasColumn(collection, 'cover')).toBe(false);
+			expect(await api.database(collection).select('title')).toEqual([{ title: 'kept' }]);
 		} finally {
 			await reset(api, collection, [referenced]);
 		}

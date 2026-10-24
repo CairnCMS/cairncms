@@ -205,6 +205,7 @@ async function runLocalEngine(
 			stateToken,
 			schemaStoredFields,
 			schemaKeyFormHash,
+			schemaCapture,
 		} = await readCurrentConfig({
 			database,
 			...(schema !== undefined && { schema }),
@@ -243,11 +244,13 @@ async function runLocalEngine(
 
 		const schemaManaged = desired.manifest.resources.includes('schema');
 
-		const { schemaFields, availableFolderKeys, preparationFolderKeys } = await computeWholeRunInputs(
-			desired,
-			current.schema,
-			database
-		);
+		const { schemaFields, availableFolderKeys, preparationFolderKeys, schemaApplicability } =
+			await computeWholeRunInputs(
+				desired,
+				current.schema,
+				{ storedFields: schemaStoredFields, capture: schemaCapture },
+				database
+			);
 
 		assertRunValid({
 			manifest: desired.manifest,
@@ -256,6 +259,7 @@ async function runLocalEngine(
 			currentVendor: schemaManaged ? getDatabaseClient(database) : '',
 			schemaFields,
 			availableFolderKeys,
+			schemaApplicability,
 		});
 
 		const empty = isPlanEmpty(plan);
@@ -318,13 +322,7 @@ async function runLocalEngine(
 		if (sliceHasChanges(plan.schema)) {
 			currentStep = 'schema';
 
-			await applySchemaStep({
-				currentSchema: current.schema,
-				desiredSchema: desired.schema,
-				schemaStoredFields,
-				expectedHash: schemaKeyFormHash ?? '',
-				database,
-			});
+			await applySchemaStep({ diff: schemaApplicability!.diff, expectedHash: schemaKeyFormHash ?? '', database });
 
 			steps.schema = 'committed';
 			committedStep = true;

@@ -5,8 +5,10 @@ import { DestructiveChangesRequiredException } from '../../exceptions/destructiv
 import { InvalidPayloadException } from '../../exceptions/invalid-payload.js';
 import type { ConfigManifest, ConfigPlan } from '../../types/config.js';
 import type { SnapshotField } from '../../types/index.js';
+import { assertSchemaDiffApplicable } from '../assert-schema-diff-applicable.js';
 import { validateFolderReferences } from '../folder-references.js';
 import { replaceControlCharacters } from '../safe-log-fragment.js';
+import type { SchemaApplicability } from './apply-steps.js';
 import { planDeletions, planHasDeletions } from './plan-folds.js';
 import { schemaProvenanceRefusal } from './schema-provenance.js';
 
@@ -19,11 +21,14 @@ type RunValidityInput = {
 	schemaFields: SnapshotField[];
 	/** Every folder key the schema may resolve to: present on the target, or declared and preparable. */
 	availableFolderKeys: ReadonlyMap<string, string>;
+	/** The executable schema diff with the read it was computed from, absent when schema is unmanaged. */
+	schemaApplicability?: SchemaApplicability | undefined;
 };
 
 /**
  * Validates the whole run before the first write and before the no-change return: the schema source version and
- * vendor, and every folder reference. Refuses a dry run too, on a validated and normalized configuration.
+ * vendor, every folder reference, and whether the schema changes apply to the state they were planned from. Refuses a
+ * dry run too, on a validated and normalized configuration.
  */
 export function assertRunValid(input: RunValidityInput): void {
 	const sourceRefusal = schemaProvenanceRefusal(input.manifest, {
@@ -34,10 +39,19 @@ export function assertRunValid(input: RunValidityInput): void {
 
 	if (sourceRefusal !== undefined) throw new ConfigSchemaSourceException(sourceRefusal);
 
+	refuseAsConfigInvalid(() => validateFolderReferences(input.schemaFields, input.availableFolderKeys));
+
+	if (input.schemaApplicability !== undefined) {
+		const { diff, snapshot, overview } = input.schemaApplicability;
+		refuseAsConfigInvalid(() => assertSchemaDiffApplicable(diff, snapshot, overview));
+	}
+}
+
+function refuseAsConfigInvalid(check: () => void): void {
 	try {
-		validateFolderReferences(input.schemaFields, input.availableFolderKeys);
+		check();
 	} catch (error) {
-		// The validator's message carries operator-supplied field names, so sanitize it at this config boundary.
+		// The validators' messages carry operator-supplied names, so sanitize them at this config boundary.
 		if (error instanceof InvalidPayloadException) {
 			throw new ConfigInvalidException(replaceControlCharacters(error.message));
 		}

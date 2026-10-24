@@ -15,7 +15,7 @@ import {
 	type ConfigStateToken,
 	type ConfigTranslations,
 } from '../types/config.js';
-import type { SnapshotField } from '../types/index.js';
+import type { Snapshot, SnapshotField } from '../types/index.js';
 import { LATEST_MANIFEST_VERSION, type ManifestVersion } from './config-contract.js';
 import { computeConfigStateDigest, toStateDigestEntry, type StateDigestEntry } from './config/config-state-digest.js';
 import { makeDependencyAccessor } from './config/dependency-context.js';
@@ -37,7 +37,11 @@ export type CurrentConfigRead = {
 	stateToken: ConfigStateToken;
 	schemaStoredFields?: SnapshotField[];
 	schemaKeyFormHash?: string;
+	schemaCapture?: ConfigSchemaCapture;
 };
+
+/** The stored schema and overview one read planned from, for checking that its changes apply to the same state. */
+export type ConfigSchemaCapture = { snapshot: Snapshot; overview: SchemaOverview };
 
 export type CurrentConfigOptions = {
 	database?: Knex;
@@ -109,6 +113,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 	const projectionInputs: Array<{ kind: ConfigKind; mode: ConfigReadMode; result: unknown }> = [];
 	let schemaStoredFields: SnapshotField[] | undefined;
 	let schemaKeyFormHash: string | undefined;
+	let schemaCapture: ConfigSchemaCapture | undefined;
 
 	for (const { kind, mode } of closure) {
 		const descriptor = getDescriptor(kind);
@@ -131,10 +136,13 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		projectionInputs.push({ kind, mode, result });
 
 		if (kind === 'schema') {
-			const schemaState = result.dependencyState as { storedFields: SnapshotField[]; keyFormHash: string } | undefined;
+			const schemaState = result.dependencyState as
+				| { storedFields: SnapshotField[]; keyFormHash: string; capture: ConfigSchemaCapture }
+				| undefined;
 
 			schemaStoredFields = schemaState?.storedFields;
 			schemaKeyFormHash = schemaState?.keyFormHash;
+			schemaCapture = schemaState?.capture;
 		}
 
 		if (!managed.has(kind)) continue;
@@ -238,6 +246,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		stateToken,
 		...(schemaStoredFields !== undefined && { schemaStoredFields }),
 		...(schemaKeyFormHash !== undefined && { schemaKeyFormHash }),
+		...(schemaCapture !== undefined && { schemaCapture }),
 	};
 }
 

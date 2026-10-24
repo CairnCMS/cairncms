@@ -259,6 +259,15 @@ describe('readCurrentConfig schema on a real SQLite database', () => {
 		return stateToken.digest;
 	}
 
+	it('forwards the stored snapshot and overview of the same read privately, outside the config', async () => {
+		const read = await readCurrentConfig({ database: db, schema, resources: ['schema'], manifestVersion: 3 });
+
+		expect(read.schemaCapture?.overview).toBe(schema);
+		expect(read.schemaCapture?.snapshot.fields).toBe(read.schemaStoredFields);
+		expect(read.schemaCapture?.snapshot.collections.map((entry) => entry.collection)).toContain('articles');
+		expect(Object.keys(read.config)).not.toContain('schemaCapture');
+	});
+
 	it('captures configured, unconfigured, and system collections from the real services', async () => {
 		const result = await readSchema();
 

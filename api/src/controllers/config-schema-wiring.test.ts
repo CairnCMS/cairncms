@@ -2,7 +2,8 @@ import type { Accountability } from '@cairncms/types';
 import express from 'express';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ApplyResult, CairnConfig, ConfigKind } from '../types/config.js';
+import { schemaReadFixture } from '../__utils__/config-fixtures.js';
+import type { ApplyResult, CairnConfig, ConfigKind, ConfigSchemaCollection } from '../types/config.js';
 import type { SnapshotField } from '../types/index.js';
 
 vi.mock('../env.js', async (importOriginal) => {
@@ -195,7 +196,9 @@ function makeApp() {
 }
 
 function readResult(resources: readonly ConfigKind[], withStoredFields = true) {
-	const schemaCapture = resources.includes('schema') && withStoredFields;
+	const schemaRead = resources.includes('schema') && withStoredFields;
+	const stored = storedFields();
+	const { capture } = schemaReadFixture([]);
 
 	const folders = preparedFolderKeys.map((key) => ({ key, name: key, parent: null }));
 
@@ -205,7 +208,11 @@ function readResult(resources: readonly ConfigKind[], withStoredFields = true) {
 		currentFolderKeys: new Set(preparedFolderKeys),
 		currentFolderParents: new Map<string, string | null>(preparedFolderKeys.map((key) => [key, null])),
 		stateToken: { resources: [...resources], digest: 'digest' },
-		...(schemaCapture && { schemaStoredFields: storedFields(), schemaKeyFormHash: 'key-form-hash' }),
+		...(schemaRead && {
+			schemaStoredFields: stored,
+			schemaKeyFormHash: 'key-form-hash',
+			schemaCapture: { ...capture, snapshot: { ...capture.snapshot, fields: stored } },
+		}),
 	};
 }
 
@@ -350,8 +357,57 @@ describe('POST /config/apply schema wiring', () => {
 
 		const handoff = vi.mocked(applySchemaStep).mock.calls[0]![0];
 		expect(handoff.expectedHash).toBe('key-form-hash');
+		expect(handoff.diff.collections.map((entry) => entry.collection)).toEqual(['articles']);
 		expect(handoff).not.toHaveProperty('accountability');
 		expect(handoff).not.toHaveProperty('context');
+	});
+
+	it('refuses a schema change the read cannot take before preparing folders, in a dry run and an apply', async () => {
+		const id = { field: 'id', type: 'integer', meta: {}, schema: { name: 'id', is_primary_key: true } };
+		const title = { field: 'title', type: 'string', meta: {}, schema: { name: 'title' } };
+
+		const read = schemaReadFixture([
+			{
+				collection: 'articles',
+				meta: {} as Exclude<ConfigSchemaCollection['meta'], undefined>,
+				schema: { name: 'articles' } as Exclude<ConfigSchemaCollection['schema'], undefined>,
+				fields: [id, title].map((field) => ({ collection: 'articles', ...field } as unknown as SnapshotField)),
+				relations: [],
+			},
+		]);
+
+		vi.mocked(readCurrentConfig).mockImplementation(async (options) => ({
+			...readResult(options.resources ?? []),
+			config: {
+				...EMPTY_CURRENT,
+				manifest: { version: 3, resources: [...(options.resources ?? [])] },
+				schema: read.records,
+			},
+			schemaStoredFields: read.storedFields,
+			schemaCapture: read.capture,
+		}));
+
+		for (const path of ['/config/apply?dry_run=true', '/config/apply']) {
+			const response = await request(makeApp())
+				.post(path)
+				.set('User-Agent', 'cairncms-cli/1.6.0')
+				.send(articlesBody(id, { field: 'title', type: 'string', meta: {} }));
+
+			expect(response.status).toBe(400);
+
+			const [error] = response.body.errors;
+			expect(error.extensions.code).toBe('CONFIG_INVALID');
+			expect(error.message).toContain(`can't remove its column and remain as a field.`);
+			expect(error.extensions.steps).toEqual({ folders: 'not_run', schema: 'not_run', configuration: 'not_run' });
+			expect(error.extensions).not.toHaveProperty('failure');
+
+			const records = runRecordsFor(response.headers['x-config-run-id']!);
+			expect(records).toHaveLength(1);
+			expect(records[0]).toMatchObject({ result: 'invalid', errorCode: 'CONFIG_INVALID' });
+		}
+
+		expect(applyFolderPreparation).not.toHaveBeenCalled();
+		expect(applySchemaStep).not.toHaveBeenCalled();
 	});
 
 	it('returns the engine result unchanged for a configuration-only no-op', async () => {

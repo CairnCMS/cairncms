@@ -1,11 +1,11 @@
-import type { DeepPartial } from '@cairncms/types';
+import type { DeepPartial, SchemaOverview } from '@cairncms/types';
 import { describe, expect, it } from 'vitest';
 import { ConfigInvalidException } from '../../exceptions/config-invalid.js';
 import { ConfigProtectedRecordException } from '../../exceptions/config-protected-record.js';
 import { ConfigSchemaSourceException } from '../../exceptions/config-schema-source.js';
 import { DestructiveChangesRequiredException } from '../../exceptions/destructive-changes-required.js';
 import type { ConfigKind, ConfigManifest, ConfigPlan, SchemaChangeEntry } from '../../types/config.js';
-import type { SnapshotField } from '../../types/index.js';
+import type { Snapshot, SnapshotDiff, SnapshotField } from '../../types/index.js';
 import { listConfigKinds } from './registry.js';
 import { assertMutationAuthorized, assertRunValid } from './run-preflight.js';
 
@@ -97,6 +97,77 @@ describe('assertRunValid', () => {
 				]),
 			})
 		).not.toThrow();
+	});
+
+	describe('schema applicability', () => {
+		function readFor(name: string) {
+			const snapshot = {
+				version: 1,
+				directus: currentRelease,
+				collections: [{ collection: 'articles', meta: {}, schema: { name: 'articles' } }],
+				fields: [
+					{ collection: 'articles', field: 'id', type: 'integer', meta: {}, schema: { name: 'id' } },
+					{ collection: 'articles', field: name, type: 'string', meta: {}, schema: { name } },
+				],
+				relations: [],
+			} as unknown as Snapshot;
+
+			const overview = {
+				collections: {
+					articles: {
+						collection: 'articles',
+						primary: 'id',
+						fields: { id: { field: 'id', type: 'integer' }, [name]: { field: name, type: 'string' } },
+					},
+				},
+				relations: [],
+			} as unknown as SchemaOverview;
+
+			return { snapshot, overview };
+		}
+
+		function droppingColumnOf(name: string): SnapshotDiff {
+			return {
+				collections: [],
+				fields: [
+					{ collection: 'articles', field: name, diff: [{ kind: 'D', path: ['schema'], lhs: { name } }] as any },
+				],
+				relations: [],
+			};
+		}
+
+		it('refuses a change that cannot apply to the read it was planned from, as CONFIG_INVALID', () => {
+			const schemaApplicability = { ...readFor('title'), diff: droppingColumnOf('title') };
+
+			expect(() => validity({ schemaApplicability })).toThrow(ConfigInvalidException);
+			expect(() => validity({ schemaApplicability })).toThrow(`can't remove its column and remain as a field.`);
+		});
+
+		it('passes a change that applies', () => {
+			const diff: SnapshotDiff = { collections: [], fields: [], relations: [] };
+			expect(() => validity({ schemaApplicability: { ...readFor('title'), diff } })).not.toThrow();
+		});
+
+		it('sanitizes control characters from the applicability refusal message', () => {
+			const name = `title${String.fromCharCode(7)}`;
+			let message: string | undefined;
+
+			try {
+				validity({ schemaApplicability: { ...readFor(name), diff: droppingColumnOf(name) } });
+			} catch (error) {
+				message = (error as Error).message;
+			}
+
+			expect(message).toContain(`can't remove its column`);
+			expect(Array.from(message ?? '').some((char) => char.charCodeAt(0) < 0x20)).toBe(false);
+		});
+
+		it('reports a source mismatch before an inapplicable change', () => {
+			const manifest = manifestFor(['schema'], { release: '1.6.0', vendor: currentVendor });
+			const schemaApplicability = { ...readFor('title'), diff: droppingColumnOf('title') };
+
+			expect(() => validity({ manifest, schemaApplicability })).toThrow(ConfigSchemaSourceException);
+		});
 	});
 });
 

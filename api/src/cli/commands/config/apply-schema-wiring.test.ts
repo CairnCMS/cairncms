@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { schemaReadFixture } from '../../../__utils__/config-fixtures.js';
 import type { CairnConfig, ConfigSchemaCollection } from '../../../types/config.js';
 import type { SnapshotField } from '../../../types/index.js';
 
@@ -32,6 +33,8 @@ vi.mock('../../../utils/read-config-directory.js', () => ({
 
 vi.mock('../../../utils/get-config-snapshot.js', () => ({ readCurrentConfig: vi.fn() }));
 
+vi.mock('../../../utils/apply-folder-preparation.js', () => ({ applyFolderPreparation: vi.fn() }));
+
 vi.mock('../../../utils/get-schema.js', () => ({ getSchema: vi.fn(async () => ({ collections: {} })) }));
 
 vi.mock('../../../utils/folder-references.js', async (importOriginal) => ({
@@ -55,7 +58,9 @@ vi.mock('../../../extensions.js', () => ({
 	}),
 }));
 
-import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
+import logger from '../../../logger.js';
+import { applyFolderPreparation } from '../../../utils/apply-folder-preparation.js';
+import { readCurrentConfig, type CurrentConfigRead } from '../../../utils/get-config-snapshot.js';
 import { readConfigDirectory } from '../../../utils/read-config-directory.js';
 import { version } from '../../../utils/package.js';
 import { configApply } from './apply.js';
@@ -91,7 +96,7 @@ function desired(): CairnConfig {
 	};
 }
 
-function currentRead(withStoredFields: boolean) {
+function currentRead(withStoredFields: boolean): CurrentConfigRead {
 	return {
 		config: {
 			manifest: { version: 3, resources: ['schema'] },
@@ -107,11 +112,41 @@ function currentRead(withStoredFields: boolean) {
 		currentFolderKeys: new Set<string>(),
 		currentFolderParents: new Map<string, string | null>(),
 		stateToken: { resources: ['schema'], digest: 'digest' },
-		...(withStoredFields && {
-			schemaStoredFields: [
-				{ collection: STORED_MARKER, field: 'secret', type: 'string', meta: {}, schema: { name: 'secret' } } as never,
-			],
-		}),
+		...(withStoredFields && storedRead()),
+	};
+}
+
+function storedRead() {
+	const stored = [
+		{ collection: STORED_MARKER, field: 'secret', type: 'string', meta: {}, schema: { name: 'secret' } } as never,
+	];
+
+	const { capture } = schemaReadFixture([]);
+
+	return {
+		schemaStoredFields: stored,
+		schemaCapture: { ...capture, snapshot: { ...capture.snapshot, fields: stored } },
+	};
+}
+
+const ID_FIELD = {
+	collection: 'articles',
+	field: 'id',
+	type: 'integer',
+	meta: {},
+	schema: { name: 'id', is_primary_key: true },
+} as unknown as SnapshotField;
+
+function readWithTitle() {
+	const record = desired().schema[0]!;
+	const read = schemaReadFixture([{ ...record, fields: [ID_FIELD, ...record.fields] }]);
+	const base = currentRead(false);
+
+	return {
+		...base,
+		config: { ...base.config, schema: read.records },
+		schemaStoredFields: read.storedFields,
+		schemaCapture: read.capture,
 	};
 }
 
@@ -196,5 +231,29 @@ describe('configApply schema wiring', () => {
 		await configApply('./config', { format: 'json', dryRun: true, destructive: false, yes: true });
 
 		expect(exitCode).toBe(3);
+	});
+
+	it.each([
+		['a JSON dry run', { format: 'json', dryRun: true }],
+		['a human dry run', { format: 'human', dryRun: true }],
+		['an apply', { format: 'human', dryRun: false }],
+	])('refuses a schema change the read cannot take in %s, before preparing folders', async (_label, options) => {
+		vi.mocked(readCurrentConfig).mockResolvedValue(readWithTitle());
+
+		const tree = desired();
+		const title = { ...tree.schema[0]!.fields[0]! } as Partial<SnapshotField>;
+		delete title.schema;
+		tree.schema[0]!.fields = [ID_FIELD, title as SnapshotField];
+		vi.mocked(readConfigDirectory).mockResolvedValue(tree);
+
+		await configApply('./config', { destructive: false, yes: true, ...options });
+
+		expect(exitCode).toBe(2);
+		expect(writes.join('')).toBe('');
+		expect(applyFolderPreparation).not.toHaveBeenCalled();
+
+		expect(vi.mocked(logger.error).mock.calls.flat().map(String).join('\n')).toContain(
+			`can't remove its column and remain as a field.`
+		);
 	});
 });

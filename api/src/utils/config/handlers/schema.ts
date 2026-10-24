@@ -26,6 +26,7 @@ import type {
 } from '../../../types/index.js';
 import { CONFIG_FILENAME_STEM_MAX_LENGTH } from '../../config-contract.js';
 import { alignToDesiredReferences, toKeyFormSnapshot } from '../../folder-references.js';
+import type { ConfigSchemaCapture } from '../../get-config-snapshot.js';
 import { getPortableSnapshot } from '../../get-portable-snapshot.js';
 import { getSnapshot } from '../../get-snapshot.js';
 import { getSnapshotDiff } from '../../get-snapshot-diff.js';
@@ -64,7 +65,7 @@ export interface SchemaKindTypes {
 	Update: SchemaChangeEntry;
 	Delete: SchemaChangeEntry;
 	Changes: SchemaFieldChanges;
-	ReadDependencyState: { storedFields: SnapshotField[]; keyFormHash: string };
+	ReadDependencyState: { storedFields: SnapshotField[]; keyFormHash: string; capture: ConfigSchemaCapture };
 	ApplyDependencyState: undefined;
 	ReadDependencies: NoConfigDependencies;
 	PlanDependencies: NoConfigDependencies;
@@ -428,7 +429,11 @@ async function readCurrent(context: ReadContext<SchemaKindTypes>): Promise<ReadC
 	return {
 		records,
 		documentIdentities: records.map((record) => ({ collection: record.collection })),
-		dependencyState: { storedFields: snapshot.fields, keyFormHash: getVersionedHash(keyForm.snapshot) },
+		dependencyState: {
+			storedFields: snapshot.fields,
+			keyFormHash: getVersionedHash(keyForm.snapshot),
+			capture: { snapshot, overview: context.schema },
+		},
 	};
 }
 

@@ -14,6 +14,8 @@ initializeFixtures();
 
 type Document = Record<string, any>;
 
+const PARTIAL_PERSISTENCE_VENDORS = ['mysql', 'mysql5', 'maria'];
+
 function admin(api: Api, req: Test): Test {
 	return req.set('Authorization', `Bearer ${api.adminToken}`);
 }
@@ -140,63 +142,134 @@ describe('local config apply orchestration', () => {
 		}
 	});
 
-	test('stops at a refused schema step after folder preparation commits, leaving configuration unapplied', async ({
+	type StopNames = { collection: string; referenced: string; pending: string };
+
+	function stopNames(): StopNames {
+		const id = randomUUID().replace(/-/g, '').slice(0, 8);
+		return { collection: `orch_stop_${id}`, referenced: `orch_stop_ref_${id}`, pending: `orch_stop_pending_${id}` };
+	}
+
+	/**
+	 * Captures a collection whose cover field references one folder, then removes that field and both folders from the
+	 * target, so an apply of the captured tree prepares one folder and leaves the other to the configuration step.
+	 */
+	async function stopScenario(api: Api, dir: string, { collection, referenced, pending }: StopNames): Promise<void> {
+		await CreateCollection(api, { collection });
+		const referencedId = await createFolder(api, referenced);
+		await createFolder(api, pending);
+
+		await CreateField(api, {
+			collection,
+			field: 'cover',
+			type: 'uuid',
+			meta: { interface: 'file', options: { folder: referencedId } },
+		});
+
+		await CreateField(api, { collection, field: 'title', type: 'string' });
+		await api.database(collection).insert({ title: 'kept' });
+
+		const snapshot = await api.cli(['config', 'snapshot', dir, '--yes']);
+		expect(snapshot.status, snapshot.stderr).toBe(0);
+
+		await admin(api, request(api.url).delete(`/fields/${collection}/cover`)).expect(204);
+		await admin(api, request(api.url).delete(`/folders/${referencedId}`)).expect(204);
+		await api.database('directus_folders').where({ key: pending }).delete();
+	}
+
+	async function removeStopScenario(api: Api, { collection, referenced, pending }: StopNames): Promise<void> {
+		await admin(api, request(api.url).delete(`/collections/${collection}`));
+		await api.database('directus_folders').whereIn('key', [referenced, pending]).delete();
+	}
+
+	test('refuses a schema change the target cannot take before preparing folders, and writes nothing', async ({
 		api,
 	}) => {
-		const id = randomUUID().replace(/-/g, '').slice(0, 8);
-		const collection = `orch_stop_${id}`;
-		const referenced = `orch_stop_ref_${id}`;
-		const pending = `orch_stop_pending_${id}`;
-		const dir = await fs.mkdtemp(path.join(api.directory, 'config-apply-stop-'));
+		const dir = await fs.mkdtemp(path.join(api.directory, 'config-apply-refuse-'));
+		const names = stopNames();
+		const { collection } = names;
 
 		try {
-			await CreateCollection(api, { collection });
-			const referencedId = await createFolder(api, referenced);
-			await createFolder(api, pending);
-
-			await CreateField(api, {
-				collection,
-				field: 'cover',
-				type: 'uuid',
-				meta: { interface: 'file', options: { folder: referencedId } },
-			});
-
-			await CreateField(api, { collection, field: 'title', type: 'string' });
-
-			const snapshot = await api.cli(['config', 'snapshot', dir, '--yes']);
-			expect(snapshot.status, snapshot.stderr).toBe(0);
-
-			// Delete the folder-referencing field before its folder so no reference dangles. Keep title as a physical
-			// field whose schema the tree then omits, and drop both folders so one is prepared and one is left to config.
-			await admin(api, request(api.url).delete(`/fields/${collection}/cover`)).expect(204);
-			await admin(api, request(api.url).delete(`/folders/${referencedId}`)).expect(204);
-			await api.database('directus_folders').where({ key: pending }).delete();
+			await stopScenario(api, dir, names);
 
 			const document = await readSchemaFile(dir, collection);
 			const fields = document['fields'] as Array<Record<string, unknown>>;
 			delete fields.find((entry) => entry['field'] === 'title')!['schema'];
 			await writeSchemaFile(dir, collection, document);
 
-			const apply = await api.cli(['config', 'apply', dir, '--yes'], { env: { LOG_LEVEL: 'info', LOG_STYLE: 'raw' } });
-			expect(apply.status).toBe(3);
+			for (const flags of [['--dry-run'], ['--dry-run', '--format', 'json']]) {
+				const dryRun = await api.cli(['config', 'apply', dir, ...flags]);
+				expect(dryRun.status, dryRun.stderr).toBe(2);
+				expect(`${dryRun.stdout}\n${dryRun.stderr}`).toContain("can't remove its column and remain as a field");
+			}
 
-			expect(await api.database('directus_folders').where({ key: referenced }).first()).toBeDefined();
-			expect(await api.database('directus_folders').where({ key: pending }).first()).toBeUndefined();
+			const apply = await api.cli(['config', 'apply', dir, '--yes'], { env: { LOG_LEVEL: 'info', LOG_STYLE: 'raw' } });
+			expect(apply.status).toBe(2);
+
+			expect(
+				await api.database('directus_folders').whereIn('key', [names.referenced, names.pending]).first()
+			).toBeUndefined();
+
+			expect(await api.database.schema.hasColumn(collection, 'cover')).toBe(false);
+			expect(await api.database(collection).select('title')).toEqual([{ title: 'kept' }]);
 
 			const output = `${apply.stdout}\n${apply.stderr}`;
 			expect(output).toContain("can't remove its column and remain as a field");
+			expect(output).not.toContain('Folder preparation:');
 
+			const record = findRunRecord(output);
+			expect(record).toMatchObject({ result: 'invalid', errorCode: 'CONFIG_INVALID' });
+			expect(record).not.toHaveProperty('failure');
+		} finally {
+			await removeStopScenario(api, names);
+		}
+	});
+
+	test('stops at a schema step the database refuses after folder preparation commits, leaving configuration unapplied', async ({
+		api,
+		vendor,
+	}) => {
+		const dir = await fs.mkdtemp(path.join(api.directory, 'config-apply-stop-'));
+		const names = stopNames();
+		const { collection } = names;
+
+		try {
+			await stopScenario(api, dir, names);
+
+			const partial = PARTIAL_PERSISTENCE_VENDORS.includes(vendor);
+			const bad = partial ? 'f'.repeat(65) : 'required_no_default';
+
+			const document = await readSchemaFile(dir, collection);
+
+			(document['fields'] as Document[]).push({
+				collection,
+				field: bad,
+				type: 'string',
+				meta: null,
+				schema: partial
+					? { name: bad, table: collection, data_type: 'varchar' }
+					: { name: bad, table: collection, data_type: 'varchar', is_nullable: false, default_value: null },
+			});
+
+			await writeSchemaFile(dir, collection, document);
+
+			const apply = await api.cli(['config', 'apply', dir, '--yes'], { env: { LOG_LEVEL: 'info', LOG_STYLE: 'raw' } });
+			expect(apply.status).toBe(3);
+
+			expect(await api.database('directus_folders').where({ key: names.referenced }).first()).toBeDefined();
+			expect(await api.database('directus_folders').where({ key: names.pending }).first()).toBeUndefined();
+
+			const output = `${apply.stdout}\n${apply.stderr}`;
 			expect(output).toContain('Folder preparation: applied');
 			expect(output).toContain('Schema: failed');
 			expect(output).toContain('Configuration: not run');
 
 			const record = findRunRecord(output);
 			expect(record).toBeDefined();
+			expect(record!['errorCode']).toBe('SCHEMA_APPLY_FAILED');
 			expect(record!['steps']).toEqual({ folders: 'committed', schema: 'failed', configuration: 'not_run' });
 			expect(record!['failure']).toMatchObject({ step: 'schema' });
 		} finally {
-			await admin(api, request(api.url).delete(`/collections/${collection}`));
-			await api.database('directus_folders').whereIn('key', [referenced, pending]).delete();
+			await removeStopScenario(api, names);
 		}
 	});
 });

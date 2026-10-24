@@ -18,6 +18,7 @@ import {
 	type SchemaPersistedField,
 	type SchemaPersistedRelation,
 	type SchemaPersistedState,
+	type SnapshotDiff,
 	type SnapshotField,
 } from '../../types/index.js';
 import { applyConfigPlan } from '../apply-config-plan.js';
@@ -25,30 +26,45 @@ import { applyDiff } from '../apply-diff.js';
 import { computeConfigPlan } from '../compute-config-plan.js';
 import { buildFolderPreparationPlan } from '../folder-preparation.js';
 import { readFolderKeys, referencedFolderKeys } from '../folder-references.js';
-import { readCurrentConfig } from '../get-config-snapshot.js';
+import { readCurrentConfig, type ConfigSchemaCapture } from '../get-config-snapshot.js';
 import { getSchema } from '../get-schema.js';
 import { buildExtensionDeclarationSnapshot, desiredExtensionSubjects } from './handlers/extension-settings.js';
-import { computeSchemaDiff, reconcileDesiredSchemaSnapshot } from './handlers/schema.js';
+import { computeSchemaDiff } from './handlers/schema.js';
 import { isPlanEmpty } from './plan-folds.js';
 import type { ConfigRunStepFailure, ConfigRunSteps, ConfigStepFailureDetail, ConfigStepStatus } from './run-record.js';
+
+export type SchemaApplicability = ConfigSchemaCapture & { diff: SnapshotDiff };
 
 export type WholeRunInputs = {
 	schemaFields: SnapshotField[];
 	availableFolderKeys: Map<string, string>;
 	preparationFolderKeys: Set<string>;
+	/** The executable schema diff with the read it was computed from, absent when schema is unmanaged. */
+	schemaApplicability: SchemaApplicability | undefined;
 };
 
-/** Expects the captured current schema and the normalized desired tree. */
+/** Expects the normalized desired tree and the current schema, with its stored fields and capture, from one read. */
 export async function computeWholeRunInputs(
 	desired: CairnConfig,
 	currentSchema: ConfigSchemaCollection[],
+	schemaRead: { storedFields: SnapshotField[] | undefined; capture: ConfigSchemaCapture | undefined },
 	database: Knex
 ): Promise<WholeRunInputs> {
 	if (!desired.manifest.resources.includes('schema')) {
-		return { schemaFields: [], availableFolderKeys: new Map(), preparationFolderKeys: new Set() };
+		return {
+			schemaFields: [],
+			availableFolderKeys: new Map(),
+			preparationFolderKeys: new Set(),
+			schemaApplicability: undefined,
+		};
 	}
 
-	const schemaFields = reconcileDesiredSchemaSnapshot(currentSchema, desired.schema).desired.fields;
+	if (schemaRead.capture === undefined) {
+		throw new Error('Schema validation requires the retained current schema read.');
+	}
+
+	const { diff, desiredSnapshot } = computeSchemaDiff(currentSchema, desired.schema, schemaRead.storedFields);
+	const schemaFields = desiredSnapshot.fields;
 
 	const { folderIdByKey } = await readFolderKeys(database);
 	const availableFolderKeys = new Map(folderIdByKey);
@@ -67,20 +83,18 @@ export async function computeWholeRunInputs(
 		schemaFields,
 		availableFolderKeys,
 		preparationFolderKeys: new Set(prepPlan.folders.create.map((f) => f.key)),
+		schemaApplicability: { ...schemaRead.capture, diff },
 	};
 }
 
 export async function applySchemaStep(options: {
-	currentSchema: ConfigSchemaCollection[];
-	desiredSchema: ConfigSchemaCollection[];
-	schemaStoredFields: SnapshotField[] | undefined;
+	diff: SnapshotDiff;
 	expectedHash: string;
 	database: Knex;
 }): Promise<void> {
-	const { diff } = computeSchemaDiff(options.currentSchema, options.desiredSchema, options.schemaStoredFields);
 	// The hash comes from the same read the diff is computed against, so applyDiff's recheck refuses a schema edit
 	// committed between that read and its transaction.
-	await applyDiff(diff, { database: options.database, expectedHash: options.expectedHash });
+	await applyDiff(options.diff, { database: options.database, expectedHash: options.expectedHash });
 }
 
 /** Reads the target again, because the preceding schema step can change it, before planning the non-schema kinds. */

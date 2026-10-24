@@ -11,7 +11,7 @@ import type {
 	SchemaPersistedState,
 	SnapshotField,
 } from '../../types/index.js';
-import { configFixture } from '../../__utils__/config-fixtures.js';
+import { configFixture, schemaReadFixture } from '../../__utils__/config-fixtures.js';
 import { applyConfigPlan } from '../apply-config-plan.js';
 import { applyDiff } from '../apply-diff.js';
 import { computeConfigPlan } from '../compute-config-plan.js';
@@ -66,23 +66,56 @@ describe('computeWholeRunInputs', () => {
 	it('returns empty inputs and reads no folders for a configuration-only tree', async () => {
 		const desired = configFixture({ manifest: { version: 3, resources: ['roles'] } });
 
-		const result = await computeWholeRunInputs(desired, [], {} as Knex);
+		const result = await computeWholeRunInputs(
+			desired,
+			[],
+			{ storedFields: undefined, capture: undefined },
+			{} as Knex
+		);
 
-		expect(result).toEqual({ schemaFields: [], availableFolderKeys: new Map(), preparationFolderKeys: new Set() });
+		expect(result).toEqual({
+			schemaFields: [],
+			availableFolderKeys: new Map(),
+			preparationFolderKeys: new Set(),
+			schemaApplicability: undefined,
+		});
+
 		expect(vi.mocked(readFolderKeys)).not.toHaveBeenCalled();
+		expect(vi.mocked(computeSchemaDiff)).not.toHaveBeenCalled();
+	});
+
+	it('refuses to plan a schema-managed tree without the retained read', async () => {
+		const desired = configFixture({ manifest: { version: 3, resources: ['schema'] } });
+
+		await expect(
+			computeWholeRunInputs(desired, [], { storedFields: [], capture: undefined }, {} as Knex)
+		).rejects.toThrow('Schema validation requires the retained current schema read.');
+
+		expect(vi.mocked(computeSchemaDiff)).not.toHaveBeenCalled();
 	});
 
 	it('reconciles the captured interface so a referenced declared folder is prepared', async () => {
+		const actual = await vi.importActual<typeof import('./handlers/schema.js')>('./handlers/schema.js');
+		vi.mocked(computeSchemaDiff).mockImplementation(actual.computeSchemaDiff);
+
 		vi.mocked(readFolderKeys).mockResolvedValue({
 			folderIdByKey: new Map([['existing', 'id-1']]),
 			folderKeyById: new Map([['id-1', 'existing']]),
 		});
 
+		const id = {
+			collection: 'articles',
+			field: 'id',
+			type: 'integer',
+			meta: {},
+			schema: { name: 'id', is_primary_key: true },
+		} as unknown as SnapshotField;
+
 		const collection = (field: SnapshotField): ConfigSchemaCollection => ({
 			collection: 'articles',
 			meta: {} as Exclude<ConfigSchemaCollection['meta'], undefined>,
 			schema: { name: 'articles' } as Exclude<ConfigSchemaCollection['schema'], undefined>,
-			fields: [field],
+			fields: [id, field],
 			relations: [],
 		});
 
@@ -112,7 +145,15 @@ describe('computeWholeRunInputs', () => {
 			],
 		});
 
-		const result = await computeWholeRunInputs(desired, currentSchema, {} as Knex);
+		const { storedFields, capture } = schemaReadFixture(currentSchema);
+		const result = await computeWholeRunInputs(desired, currentSchema, { storedFields, capture }, {} as Knex);
+
+		expect(vi.mocked(computeSchemaDiff)).toHaveBeenCalledWith(currentSchema, desired.schema, storedFields);
+
+		expect(result.schemaApplicability).toEqual({
+			...capture,
+			diff: vi.mocked(computeSchemaDiff).mock.results[0]!.value.diff,
+		});
 
 		const cover = result.schemaFields.find((field) => field.field === 'cover');
 		expect((cover?.meta as { interface?: string } | null)?.interface).toBe('file');
@@ -129,51 +170,14 @@ describe('computeWholeRunInputs', () => {
 });
 
 describe('applySchemaStep', () => {
-	it('passes the schema inputs to the planner and feeds applyDiff the diff and captured hash', async () => {
-		const currentSchema: ConfigSchemaCollection[] = [
-			{
-				collection: 'before',
-				meta: {} as Exclude<ConfigSchemaCollection['meta'], undefined>,
-				schema: { name: 'before' } as Exclude<ConfigSchemaCollection['schema'], undefined>,
-				fields: [],
-				relations: [],
-			},
-		];
-
-		const desiredSchema: ConfigSchemaCollection[] = [
-			{
-				collection: 'after',
-				meta: {} as Exclude<ConfigSchemaCollection['meta'], undefined>,
-				schema: { name: 'after' } as Exclude<ConfigSchemaCollection['schema'], undefined>,
-				fields: [],
-				relations: [],
-			},
-		];
-
-		const schemaStoredFields: SnapshotField[] = [
-			{
-				collection: 'before',
-				field: 'id',
-				type: 'integer',
-				meta: {},
-				schema: { name: 'id' },
-			} as unknown as SnapshotField,
-		];
-
+	it('feeds applyDiff the preflight-validated diff and captured hash without planning again', async () => {
 		const diff = { collections: [], fields: [], relations: [] };
-		vi.mocked(computeSchemaDiff).mockReturnValue({ diff } as never);
 		const database = {} as Knex;
 
-		await applySchemaStep({
-			currentSchema,
-			desiredSchema,
-			schemaStoredFields,
-			expectedHash: 'captured-hash',
-			database,
-		});
+		await applySchemaStep({ diff, expectedHash: 'captured-hash', database });
 
-		expect(vi.mocked(computeSchemaDiff)).toHaveBeenCalledWith(currentSchema, desiredSchema, schemaStoredFields);
 		expect(vi.mocked(applyDiff)).toHaveBeenCalledWith(diff, { database, expectedHash: 'captured-hash' });
+		expect(vi.mocked(computeSchemaDiff)).not.toHaveBeenCalled();
 	});
 });
 

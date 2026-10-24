@@ -142,6 +142,7 @@ router.post(
 					stateToken,
 					schemaStoredFields,
 					schemaKeyFormHash,
+					schemaCapture,
 				} = await readCurrentConfig({
 					database,
 					schema,
@@ -181,11 +182,13 @@ router.post(
 				let currentStep: keyof ConfigRunSteps | undefined;
 
 				try {
-					const { schemaFields, availableFolderKeys, preparationFolderKeys } = await computeWholeRunInputs(
-						config,
-						current.schema,
-						database
-					);
+					const { schemaFields, availableFolderKeys, preparationFolderKeys, schemaApplicability } =
+						await computeWholeRunInputs(
+							config,
+							current.schema,
+							{ storedFields: schemaStoredFields, capture: schemaCapture },
+							database
+						);
 
 					assertRunValid({
 						manifest,
@@ -194,6 +197,7 @@ router.post(
 						currentVendor: schemaManaged ? getDatabaseClient(database) : '',
 						schemaFields,
 						availableFolderKeys,
+						schemaApplicability,
 					});
 
 					const enrichment = await enrichConfigPlan(plan, config, { schema, database });
@@ -243,9 +247,7 @@ router.post(
 						currentStep = 'schema';
 
 						await applySchemaStep({
-							currentSchema: current.schema,
-							desiredSchema: config.schema,
-							schemaStoredFields,
+							diff: schemaApplicability!.diff,
 							expectedHash: schemaKeyFormHash ?? '',
 							database,
 						});

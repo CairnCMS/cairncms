@@ -855,7 +855,80 @@ describeForVendors(
 			);
 		});
 
-		test('reports folder preparation committed before a refused schema step, without the re-snapshot instruction', async ({
+		/**
+		 * Captures a collection whose cover field references a folder, then removes that field and the folder from the
+		 * target, so an apply of the captured tree prepares the folder before its schema step.
+		 */
+		async function stopScenario(api: Api, remote: RemoteHarness, collection: string, folderKey: string) {
+			await CreateCollection(api, { collection });
+			const folderId = await createFolder(api, folderKey);
+
+			await CreateField(api, {
+				collection,
+				field: 'cover',
+				type: 'uuid',
+				meta: { interface: 'file', options: { folder: folderId } },
+			});
+
+			await CreateField(api, { collection, field: 'title', type: 'string' });
+			await api.database(collection).insert({ title: 'kept' });
+
+			const tree = await captureTree(api, remote);
+
+			await adminAuth(setupRequest(api.url).delete(`/fields/${collection}/cover`)).expect(204);
+			await deleteFolders(api, [folderKey]);
+
+			const schemaFile = await schemaFileOf(tree, collection);
+			const document = loadYaml(await fs.readFile(schemaFile, 'utf8')) as Document;
+
+			return {
+				tree,
+				fields: document['fields'] as Document[],
+				save: () => fs.writeFile(schemaFile, dumpYaml(document)),
+			};
+		}
+
+		test('refuses a schema change the target cannot take before preparing folders, writing nothing', async ({
+			api,
+		}) => {
+			const id = suffix();
+			const collection = `remote_refuse_${id}`;
+			const folderKey = `remote_refuse_folder_${id}`;
+
+			await withRemote(
+				api,
+				SCHEMA_VERSION,
+				async (remote) => {
+					const { tree, fields, save } = await stopScenario(api, remote, collection, folderKey);
+					delete fields.find((field) => field['field'] === 'title')!['schema'];
+					await save();
+
+					for (const flags of [['--dry-run'], ['--dry-run', '--format', 'json']]) {
+						const dryRun = await remoteCli(api, remote, ['config', 'apply', tree, ...flags]);
+						expect(dryRun.status, dryRun.output).toBe(2);
+						expect(loggedMessages(dryRun.output)).toContain('remain as a field');
+					}
+
+					const applied = await remoteCli(api, remote, ['config', 'apply', tree, '--yes']);
+					const shown = loggedMessages(applied.output);
+
+					expect(applied.status, applied.output).toBe(2);
+					expect(shown).toContain('remain as a field');
+					expect(shown).not.toContain('Folder preparation:');
+					expect(shown).not.toContain('re-snapshot');
+
+					expect(await api.database('directus_folders').where({ key: folderKey }).first()).toBeUndefined();
+					expect(await api.database.schema.hasColumn(collection, 'cover')).toBe(false);
+					expect(await api.database(collection).select('title')).toEqual([{ title: 'kept' }]);
+				},
+				async () => {
+					await dropCollection(api, collection);
+					await deleteFolders(api, [folderKey]);
+				}
+			);
+		});
+
+		test('reports folder preparation committed before a schema step the database refuses, and its unverified field metadata', async ({
 			api,
 		}) => {
 			const id = suffix();
@@ -866,44 +939,38 @@ describeForVendors(
 				api,
 				SCHEMA_VERSION,
 				async (remote) => {
-					await CreateCollection(api, { collection });
-					const folderId = await createFolder(api, folderKey);
+					const { tree, fields, save } = await stopScenario(api, remote, collection, folderKey);
 
-					await CreateField(api, {
+					fields.push({
 						collection,
-						field: 'cover',
-						type: 'uuid',
-						meta: { interface: 'file', options: { folder: folderId } },
+						field: 'required_no_default',
+						type: 'string',
+						meta: null,
+						schema: {
+							name: 'required_no_default',
+							table: collection,
+							data_type: 'varchar',
+							is_nullable: false,
+							default_value: null,
+						},
 					});
 
-					await CreateField(api, { collection, field: 'title', type: 'string' });
-
-					const tree = await captureTree(api, remote);
-
-					await adminAuth(setupRequest(api.url).delete(`/fields/${collection}/cover`)).expect(204);
-					await deleteFolders(api, [folderKey]);
-
-					const schemaFile = await schemaFileOf(tree, collection);
-					const document = loadYaml(await fs.readFile(schemaFile, 'utf8')) as Document;
-					delete (document['fields'] as Document[]).find((field) => field['field'] === 'title')!['schema'];
-					await fs.writeFile(schemaFile, dumpYaml(document));
+					await save();
 
 					const applied = await remoteCli(api, remote, ['config', 'apply', tree, '--yes']);
 					const shown = loggedMessages(applied.output);
 
 					expect(applied.status, applied.output).toBe(3);
-					expect(shown).toContain('remain as a field');
 					expect(shown).toContain('Folder preparation: applied');
 					expect(shown).toContain('Schema: failed');
 					expect(shown).toContain('Configuration: not run');
 					expect(shown).toContain('Step: Schema');
-					expect(shown).not.toContain('re-snapshot');
+					expect(shown).toContain('re-snapshot');
 
 					const prepared = await api.database('directus_folders').where({ key: folderKey }).first();
 					expect(prepared).toBeDefined();
 					expect(await api.database('directus_files').where({ folder: prepared.id }).first()).toBeUndefined();
-					expect(await api.database.schema.hasColumn(collection, 'title')).toBe(true);
-					expect(await api.database.schema.hasColumn(collection, 'cover')).toBe(false);
+					expect(await api.database(collection).select('title')).toEqual([{ title: 'kept' }]);
 				},
 				async () => {
 					await dropCollection(api, collection);
