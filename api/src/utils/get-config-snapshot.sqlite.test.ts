@@ -4,6 +4,7 @@ import knex, { type Knex } from 'knex';
 import os from 'os';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import type { ConfigSchemaCollection } from '../types/config.js';
 import { readConfigDirectory } from './read-config-directory.js';
 import { readCurrentConfig } from './get-config-snapshot.js';
@@ -319,11 +320,13 @@ describe('readCurrentConfig schema on a real SQLite database', () => {
 		expect(hero.meta?.options?.['folder']).toBe('media');
 	});
 
-	it('refuses a field whose folder reference cannot be resolved', async () => {
+	it('reports a field whose folder reference cannot be resolved as a read failure', async () => {
 		await db('directus_folders').where({ id: FOLDER_ID }).del();
 
+		await expect(readSchema()).rejects.toThrow(ConfigReadFailedException);
+
 		await expect(readSchema()).rejects.toThrow(
-			`Field "articles.hero" references folder "${FOLDER_ID}" at meta.options.folder, which does not exist. Select another folder for this field and take the snapshot again.`
+			`Field "articles.hero" references folder "${FOLDER_ID}" at meta.options.folder, which does not exist on the target. Select an existing folder for the field on the target, or clear its folder setting, then retry.`
 		);
 	});
 

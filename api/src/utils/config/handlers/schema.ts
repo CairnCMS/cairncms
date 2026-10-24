@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { isInternalTable } from '../../../database/internal-tables.js';
 import env from '../../../env.js';
 import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
+import { ConfigReadFailedException } from '../../../exceptions/config-read-failed.js';
 import { InvalidPayloadException } from '../../../exceptions/invalid-payload.js';
 import type {
 	ConfigFailure,
@@ -27,7 +28,7 @@ import type {
 import { CONFIG_FILENAME_STEM_MAX_LENGTH } from '../../config-contract.js';
 import { alignToDesiredReferences, toKeyFormSnapshot } from '../../folder-references.js';
 import type { ConfigSchemaCapture } from '../../get-config-snapshot.js';
-import { getPortableSnapshot } from '../../get-portable-snapshot.js';
+import { portableFromKeyForm } from '../../get-portable-snapshot.js';
 import { getSnapshot } from '../../get-snapshot.js';
 import { getSnapshotDiff } from '../../get-snapshot-diff.js';
 import { getVersionedHash } from '../../get-versioned-hash.js';
@@ -422,9 +423,20 @@ function groupSnapshotCollections(snapshot: PortableSnapshot): ConfigSchemaColle
 
 async function readCurrent(context: ReadContext<SchemaKindTypes>): Promise<ReadCurrentResult<SchemaKindTypes>> {
 	const snapshot = await getSnapshot({ database: context.database, schema: context.schema });
-	const portable = await getPortableSnapshot(snapshot, { database: context.database });
-	const records = groupSnapshotCollections(portable);
 	const keyForm = await toKeyFormSnapshot(snapshot, { database: context.database });
+	const [reference] = keyForm.unresolved;
+
+	if (reference) {
+		throw new ConfigReadFailedException(
+			`Field "${safeLogFragment(reference.field)}" references folder ${safeLogFragment(
+				JSON.stringify(reference.value)
+			)} at ${
+				reference.path
+			}, which does not exist on the target. Select an existing folder for the field on the target, or clear its folder setting, then retry.`
+		);
+	}
+
+	const records = groupSnapshotCollections(portableFromKeyForm(keyForm.snapshot));
 
 	return {
 		records,

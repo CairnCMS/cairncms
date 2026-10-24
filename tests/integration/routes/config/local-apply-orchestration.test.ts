@@ -272,4 +272,60 @@ describe('local config apply orchestration', () => {
 			await removeStopScenario(api, names);
 		}
 	});
+
+	async function readTree(dir: string): Promise<Record<string, string>> {
+		const files: Record<string, string> = {};
+
+		for (const entry of await fs.readdir(dir, { recursive: true, withFileTypes: true })) {
+			if (!entry.isFile()) continue;
+			const file = path.join(entry.parentPath, entry.name);
+			files[path.relative(dir, file)] = await fs.readFile(file, 'utf8');
+		}
+
+		return files;
+	}
+
+	test('reports a stored field whose upload folder was deleted as a read failure, writing nothing', async ({ api }) => {
+		const id = randomUUID().replace(/-/g, '').slice(0, 8);
+		const collection = `orch_read_${id}`;
+		const folderKey = `orch_read_folder_${id}`;
+		const dir = await fs.mkdtemp(path.join(api.directory, 'config-read-failed-'));
+
+		try {
+			await CreateCollection(api, { collection });
+			const folderId = await createFolder(api, folderKey);
+
+			await CreateField(api, {
+				collection,
+				field: 'cover',
+				type: 'uuid',
+				meta: { interface: 'file', options: { folder: folderId } },
+			});
+
+			const snapshot = await api.cli(['config', 'snapshot', dir, '--yes']);
+			expect(snapshot.status, snapshot.stderr).toBe(0);
+
+			const captured = await readTree(dir);
+			await admin(api, request(api.url).delete(`/folders/${folderId}`)).expect(204);
+
+			const recapture = await api.cli(['config', 'snapshot', dir, '--yes']);
+			expect(recapture.status).toBe(3);
+			expect(`${recapture.stdout}\n${recapture.stderr}`).toContain(`Field "${collection}.cover" references folder`);
+			expect(await readTree(dir)).toEqual(captured);
+
+			const apply = await api.cli(['config', 'apply', dir, '--yes'], { env: { LOG_LEVEL: 'info', LOG_STYLE: 'raw' } });
+			expect(apply.status).toBe(3);
+
+			const output = `${apply.stdout}\n${apply.stderr}`;
+			expect(output).toContain('Select an existing folder for the field on the target');
+			expect(await api.database('directus_folders').where({ key: folderKey }).first()).toBeUndefined();
+
+			const record = findRunRecord(output);
+			expect(record).toMatchObject({ result: 'failed', errorCode: 'CONFIG_READ_FAILED' });
+			expect(record).not.toHaveProperty('steps');
+		} finally {
+			await admin(api, request(api.url).delete(`/collections/${collection}`));
+			await api.database('directus_folders').where({ key: folderKey }).delete();
+		}
+	});
 });

@@ -763,3 +763,54 @@ test('surfaces a data-definition failure after folder preparation committed, in 
 		await dropCollection(api, keep);
 	}
 });
+
+test('reports a stored field whose upload folder was deleted as a read failure, before any write', async ({ api }) => {
+	const collection = `read_fail_${suffix()}`;
+	const folderKey = `read_fail_folder_${suffix()}`;
+	const role = `read_fail_role_${suffix()}`;
+
+	try {
+		const seed = await snapshot(api, ['schema', 'folders']);
+		seed['schema'].push(collectionWithFolderField(collection, folderKey));
+		seed['folders'].push(folder(folderKey));
+		expect((await applyConfig(api, seed)).statusCode).toBe(200);
+
+		const desired = await snapshot(api, ['schema', 'roles']);
+		desired['roles'].push(appRole(role));
+
+		const stored = await folderByKey(api, folderKey);
+
+		await setupRequest(api.url).delete(`/folders/${stored!.id}`).auth(api.adminToken, { type: 'bearer' }).expect(204);
+
+		const read = await request(api.url)
+			.get('/config/snapshot')
+			.query({ manifest_version: '3', resources: 'schema' })
+			.set('Authorization', `Bearer ${api.adminToken}`);
+
+		expect(read.statusCode).toBe(500);
+		expect(errorCode(read)).toBe('CONFIG_READ_FAILED');
+		expect(read.body.errors[0].message).toContain(`Field "${collection}.cover" references folder`);
+		expect(read.body.errors[0].message).toContain('Select an existing folder for the field on the target');
+
+		for (const dryRun of [true, false]) {
+			const applied = await applyConfig(api, desired, { dryRun });
+
+			expect(applied.statusCode).toBe(500);
+			expect(errorCode(applied)).toBe('CONFIG_READ_FAILED');
+			expect(applied.body.errors[0].extensions).not.toHaveProperty('steps');
+
+			const records = await recordsFor(api, applied.headers['x-config-run-id']);
+			expect(records).toHaveLength(1);
+			expect(records[0]).toMatchObject({ result: 'failed', errorCode: 'CONFIG_READ_FAILED' });
+		}
+
+		expect(await roleExists(api, role)).toBe(false);
+
+		const configurationOnly = await snapshot(api, ['roles']);
+		expect((await applyConfig(api, configurationOnly, { dryRun: true })).statusCode).toBe(200);
+	} finally {
+		await dropCollection(api, collection);
+		await deleteFolders(api, [folderKey]);
+		await deleteRoleByKey(api, role);
+	}
+});

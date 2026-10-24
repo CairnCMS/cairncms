@@ -15,6 +15,10 @@ export async function getPortableSnapshot(snapshot: Snapshot, options: { databas
 		);
 	}
 
+	return portableFromKeyForm(keyForm);
+}
+
+export function portableFromKeyForm(keyForm: Snapshot): PortableSnapshot {
 	const { directus, ...rest } = keyForm;
 
 	return { ...rest, version: 2, release: directus };
