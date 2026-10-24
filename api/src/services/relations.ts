@@ -359,12 +359,23 @@ export class RelationsService {
 				const existingConstraints = await this.schemaInspector.foreignKeys();
 				const constraintNames = existingConstraints.map((key) => key.constraint_name);
 
+				const unnamedConstraint = existingConstraints.some(
+					(key) =>
+						key.constraint_name === null &&
+						key.table === existingRelation.collection &&
+						key.column === existingRelation.field
+				);
+
 				if (
 					existingRelation.schema?.constraint_name &&
 					constraintNames.includes(existingRelation.schema.constraint_name)
 				) {
 					await trx.schema.alterTable(existingRelation.collection, (table) => {
 						table.dropForeign(existingRelation.field, existingRelation.schema!.constraint_name!);
+					});
+				} else if (unnamedConstraint) {
+					await trx.schema.alterTable(existingRelation.collection, (table) => {
+						table.dropForeign(existingRelation.field);
 					});
 				}
 
