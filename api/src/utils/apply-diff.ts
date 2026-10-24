@@ -32,6 +32,7 @@ import type {
 } from '../types/index.js';
 import { DiffKind } from '../types/index.js';
 import { assertSchemaDiffApplicable } from './assert-schema-diff-applicable.js';
+import { isConsumedRelationDelete } from './consumed-relation-delete.js';
 import { readFolderKeys, toFolderIds, toKeyFormSnapshot } from './folder-references.js';
 import { getSchema } from './get-schema.js';
 import { getSnapshot } from './get-snapshot.js';
@@ -46,6 +47,7 @@ import {
 } from './read-schema-observed-state.js';
 import { collectionCreateOrder, collectionDeleteOrder } from './schema-collection-order.js';
 import { schemaDiffOperation } from './schema-diff-operation.js';
+import { schemaEntityKey } from './schema-entity-key.js';
 
 type FieldWrites = Map<string, Map<string, SnapshotField>>;
 
@@ -216,6 +218,7 @@ export async function applyDiff(
 				const fieldWrite = (collection: string, field: string) => fieldWrites.get(collection)?.get(field);
 
 				const collectionsService = new CollectionsService({ knex: trx, schema });
+				const consumedRelations = new Set<string>();
 
 				const createCollection = async (collection: string, created: Collection) => {
 					// We'll nest the to-be-created fields in the same collection creation, to prevent
@@ -276,6 +279,8 @@ export async function applyDiff(
 
 								throw err;
 							}
+
+							consumedRelations.add(schemaEntityKey(relation.collection, relation.field));
 						}
 
 						// clean up deleted relations from existing schema
@@ -386,6 +391,8 @@ export async function applyDiff(
 				});
 
 				for (const { collection, field, diff } of snapshotDiff.relations) {
+					if (isConsumedRelationDelete({ collection, field, diff }, consumedRelations)) continue;
+
 					const structure = {};
 
 					for (const diffEdit of diff) {

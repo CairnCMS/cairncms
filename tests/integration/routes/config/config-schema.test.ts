@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import { dump as dumpYaml, load as loadYaml } from 'js-yaml';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect } from 'vitest';
+import { CreateFieldM2O } from '../../fixtures/data';
 import { apiTest as test, type Api } from '../../fixtures/environment';
 import request, { setupRequest } from '../../fixtures/request';
 import { initializeFixtures } from '../../harness/fixture-setup.mjs';
@@ -24,13 +25,14 @@ async function snapshot(api: Api, version: number, resources?: string[]): Promis
 	return response.body.data;
 }
 
-function applyConfig(api: Api, desired: Document, options: { dryRun?: boolean } = {}) {
+function applyConfig(api: Api, desired: Document, options: { dryRun?: boolean; destructive?: boolean } = {}) {
 	const req = request(api.url)
 		.post('/config/apply')
 		.set('Authorization', `Bearer ${api.adminToken}`)
 		.set('Content-Type', 'application/json');
 
 	if (options.dryRun) req.query({ dry_run: 'true' });
+	if (options.destructive) req.query({ destructive: 'true' });
 
 	return req.send(desired);
 }
@@ -468,6 +470,48 @@ describe('config apply previews a version 3 schema tree', () => {
 			expect(await captureState(api, [created])).toEqual(afterHttp);
 		} finally {
 			await dropCollection(api, created);
+		}
+	});
+
+	test('applies a dropped collection that a kept field references, keeping the column and its values', async ({
+		api,
+	}) => {
+		const suffix = randomUUID().replace(/-/g, '').slice(0, 12);
+		const authors = `preview_authors_${suffix}`;
+		const articles = `preview_articles_${suffix}`;
+
+		try {
+			await createCollection(api, authors, []);
+			await createCollection(api, articles, []);
+			await CreateFieldM2O(api, { collection: articles, field: 'author', otherCollection: authors });
+			await api.database(authors).insert({ id: 7 });
+			await api.database(articles).insert({ id: 1, author: 7 });
+
+			const desired = await snapshot(api, 3, ['schema']);
+			desired['schema'] = (desired['schema'] as Document[]).filter((record) => record['collection'] !== authors);
+
+			const record = (desired['schema'] as Document[]).find((entry) => entry['collection'] === articles)!;
+			record['relations'] = [];
+
+			const author = (record['fields'] as Document[]).find((field) => field['field'] === 'author')!;
+			author['schema']['foreign_key_table'] = null;
+			author['schema']['foreign_key_column'] = null;
+
+			const http = await applyConfig(api, desired, { destructive: true });
+
+			expect(http.statusCode).toBe(200);
+			expect(http.body.meta.steps).toEqual({ folders: 'skipped', schema: 'committed', configuration: 'skipped' });
+			expect(await api.database.schema.hasTable(authors)).toBe(false);
+			expect(await api.database('directus_relations').where({ many_collection: articles })).toEqual([]);
+			expect(await api.database(articles).select('author')).toEqual([{ author: 7 }]);
+
+			const preview = await applyConfig(api, desired, { dryRun: true });
+
+			expect(preview.statusCode).toBe(200);
+			expect(changesOf(preview.body.data, ['collections', 'fields', 'relations'])).toEqual([]);
+		} finally {
+			await dropCollection(api, articles);
+			await dropCollection(api, authors);
 		}
 	});
 

@@ -5,6 +5,7 @@ import { cloneDeep } from 'lodash-es';
 import { ALIAS_TYPES } from '../constants.js';
 import type { Collection, Snapshot, SnapshotDiff, SnapshotField, SnapshotRelation } from '../types/index.js';
 import { DiffKind } from '../types/index.js';
+import { isConsumedRelationDelete } from './consumed-relation-delete.js';
 import { isNestedMetaUpdate } from './is-nested-meta-update.js';
 import { collectionCreateOrder, collectionDeleteOrder } from './schema-collection-order.js';
 import { schemaDiffOperation } from './schema-diff-operation.js';
@@ -47,6 +48,7 @@ export function assertSchemaDiffApplicable(
 	const fieldRows = new Map<string, Set<string>>();
 	const createdCollections = new Set<string>();
 	const deletedFields = new Set<string>();
+	const consumedRelations = new Set<string>();
 
 	const addFieldRow = (collection: string, field: string): void => {
 		const fields = fieldRows.get(collection) ?? new Set<string>();
@@ -134,6 +136,7 @@ export function assertSchemaDiffApplicable(
 
 		for (const relation of touching) {
 			assertRelationModifiable(relation.collection, relation.field, work);
+			consumedRelations.add(schemaEntityKey(relation.collection, relation.field));
 		}
 
 		work.relations = work.relations.filter(
@@ -265,6 +268,7 @@ export function assertSchemaDiffApplicable(
 
 	for (const { collection, field, diff } of snapshotDiff.relations) {
 		if (deletedFields.has(schemaEntityKey(collection, field))) continue;
+		if (isConsumedRelationDelete({ collection, field, diff }, consumedRelations)) continue;
 
 		const operation = schemaDiffOperation(diff);
 

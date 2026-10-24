@@ -1096,3 +1096,165 @@ describe('assertSchemaDiffApplicable keeps names that contain dots apart', () =>
 		);
 	});
 });
+
+describe('assertSchemaDiffApplicable on a dropped collection that a kept field references', () => {
+	const keyField = (owner: string, name: string, related: string | null = null) => ({
+		collection: owner,
+		field: name,
+		type: 'integer',
+		meta: null,
+		schema: {
+			name,
+			table: owner,
+			data_type: 'integer',
+			is_primary_key: related === null && name === 'id',
+			foreign_key_table: related,
+			foreign_key_column: related === null ? null : 'id',
+		},
+	});
+
+	const reference = (owner: string, name: string, related: string) => ({
+		collection: owner,
+		field: name,
+		related_collection: related,
+		meta: null,
+		schema: { table: owner, column: name, foreign_key_table: related, foreign_key_column: 'id' },
+	});
+
+	const before = (owners: Record<string, Record<string, string | null>>, relations: unknown[]): Snapshot =>
+		snapshot({
+			collections: Object.keys(owners).map((name) => collection(name, { name })),
+			fields: Object.entries(owners).flatMap(([owner, fields]) =>
+				Object.entries(fields).map(([name, related]) => keyField(owner, name, related))
+			),
+			relations,
+		} as unknown as Partial<Snapshot>);
+
+	const overviewOf = (owners: Record<string, Record<string, string | null>>, relations: unknown[]) =>
+		schemaOverview(
+			Object.entries(owners).map(([owner, fields]) =>
+				collectionOverview(owner, 'id', Object.fromEntries(Object.keys(fields).map((name) => [name, 'integer'])))
+			),
+			relations
+		);
+
+	const owners = {
+		articles: { id: null, author: 'authors', editor: 'editors' },
+		authors: { id: null },
+		editors: { id: null },
+	};
+
+	const relations = [reference('articles', 'author', 'authors'), reference('articles', 'editor', 'editors')];
+
+	const fieldOf = (target: Snapshot, owner: string, name: string) =>
+		target.fields.find((entry) => entry.collection === owner && entry.field === name)! as any;
+
+	const relationOf = (target: Snapshot, owner: string, name: string) =>
+		target.relations.find((entry) => entry.collection === owner && entry.field === name)! as any;
+
+	function dropCollections(target: Snapshot, dropped: string[]): void {
+		target.collections = target.collections.filter((entry) => !dropped.includes(entry.collection));
+		target.fields = target.fields.filter((entry) => !dropped.includes(entry.collection));
+
+		target.relations = target.relations.filter(
+			(entry) => !dropped.includes(entry.collection) && !dropped.includes(entry.related_collection ?? '')
+		);
+	}
+
+	function clearReference(target: Snapshot, owner: string, name: string): void {
+		fieldOf(target, owner, name).schema.foreign_key_table = null;
+		fieldOf(target, owner, name).schema.foreign_key_column = null;
+	}
+
+	function applying(edit: (desired: Snapshot) => void, overview = overviewOf(owners, relations)): () => void {
+		const current = before(owners, relations);
+		const desired = cloneDeep(current);
+		edit(desired);
+
+		return () => assertSchemaDiffApplicable(getSnapshotDiff(current, desired), current, overview);
+	}
+
+	it('accepts dropping the referenced collection while keeping the field, as captured from the end state', () => {
+		const accepted = applying((desired) => {
+			dropCollections(desired, ['authors']);
+			clearReference(desired, 'articles', 'author');
+		});
+
+		expect(accepted).not.toThrow();
+	});
+
+	it('accepts the same drop when the kept field still names the dropped collection', () => {
+		expect(applying((desired) => dropCollections(desired, ['authors']))).not.toThrow();
+	});
+
+	it('accepts dropping the referenced collection together with the field', () => {
+		const accepted = applying((desired) => {
+			dropCollections(desired, ['authors']);
+			desired.fields = desired.fields.filter((entry) => entry.field !== 'author');
+		});
+
+		expect(accepted).not.toThrow();
+	});
+
+	it('accepts dropping the referencing and the referenced collection together', () => {
+		expect(applying((desired) => dropCollections(desired, ['articles', 'authors']))).not.toThrow();
+	});
+
+	it('refuses retargeting the relation of a dropped collection to another collection', () => {
+		const refused = applying((desired) => {
+			desired.collections = desired.collections.filter((entry) => entry.collection !== 'authors');
+			desired.fields = desired.fields.filter((entry) => entry.collection !== 'authors');
+			relationOf(desired, 'articles', 'author').related_collection = 'editors';
+			relationOf(desired, 'articles', 'author').schema.foreign_key_table = 'editors';
+			fieldOf(desired, 'articles', 'author').schema.foreign_key_table = 'editors';
+		});
+
+		expect(refused).toThrow(`Field "author" in collection "articles" doesn't have a relationship.`);
+	});
+
+	it('still validates removing an unrelated relation in the same apply', () => {
+		const dropWithEditor = (desired: Snapshot) => {
+			dropCollections(desired, ['authors']);
+			clearReference(desired, 'articles', 'author');
+			clearReference(desired, 'articles', 'editor');
+			desired.relations = desired.relations.filter((entry) => entry.field !== 'editor');
+		};
+
+		expect(applying(dropWithEditor)).not.toThrow();
+
+		expect(applying(dropWithEditor, overviewOf(owners, [reference('articles', 'author', 'authors')]))).toThrow(
+			`Field "editor" in collection "articles" doesn't have a relationship.`
+		);
+	});
+
+	it('keeps a consumed relation apart from another whose names join to the same string', () => {
+		const dotted = {
+			'a.b': { id: null, c: 'x' },
+			a: { id: null, 'b.c': 'y' },
+			x: { id: null },
+			y: { id: null },
+		};
+
+		const dottedRelations = [reference('a.b', 'c', 'x'), reference('a', 'b.c', 'y')];
+
+		const dropX = (desired: Snapshot) => {
+			dropCollections(desired, ['x']);
+			clearReference(desired, 'a.b', 'c');
+			clearReference(desired, 'a', 'b.c');
+			desired.relations = desired.relations.filter((entry) => entry.collection !== 'a');
+		};
+
+		const run = (overview: SchemaOverview) => () => {
+			const current = before(dotted, dottedRelations);
+			const desired = cloneDeep(current);
+			dropX(desired);
+			assertSchemaDiffApplicable(getSnapshotDiff(current, desired), current, overview);
+		};
+
+		expect(run(overviewOf(dotted, dottedRelations))).not.toThrow();
+
+		expect(run(overviewOf(dotted, [reference('a.b', 'c', 'x')]))).toThrow(
+			`Field "b.c" in collection "a" doesn't have a relationship.`
+		);
+	});
+});

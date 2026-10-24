@@ -1,8 +1,8 @@
 import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect } from 'vitest';
-import { apiTest as test } from '../../fixtures/environment';
-import { CreateCollection, CreateFieldM2A } from '../../fixtures/data';
+import { apiTest as test, type Api } from '../../fixtures/environment';
+import { CreateCollection, CreateFieldM2A, CreateFieldM2O } from '../../fixtures/data';
 import { setupRequest } from '../../fixtures/request';
 import { initializeFixtures } from '../../harness/fixture-setup.mjs';
 import {
@@ -11,8 +11,10 @@ import {
 	diffThenApply,
 	expectCollectionGone,
 	removeCollections,
+	schemaDiffStatus,
 	snapshotWithout,
 	suffix,
+	type Snapshot,
 } from './apply-helpers';
 
 initializeFixtures();
@@ -256,6 +258,137 @@ describe('schema apply refuses removing the table or metadata of a kept collecti
 			expect(await api.database.schema.hasColumn(unconfigured, 'subtitle')).toBe(true);
 		} finally {
 			await removeCollections(api, [unconfigured]);
+		}
+	});
+});
+
+describe('schema apply drops a collection that a kept field references', () => {
+	type Names = { articles: string; authors: string; editors: string };
+
+	function namesFor(): Names {
+		const id = suffix();
+		return { articles: `articles_${id}`, authors: `authors_${id}`, editors: `editors_${id}` };
+	}
+
+	async function seed(api: Api, names: Names): Promise<void> {
+		await CreateCollection(api, { collection: names.authors });
+		await CreateCollection(api, { collection: names.editors });
+		await CreateCollection(api, { collection: names.articles });
+		await CreateFieldM2O(api, { collection: names.articles, field: 'author', otherCollection: names.authors });
+		await CreateFieldM2O(api, { collection: names.articles, field: 'editor', otherCollection: names.editors });
+
+		await api.database(names.authors).insert({ id: 7 });
+		await api.database(names.editors).insert({ id: 3 });
+		await api.database(names.articles).insert({ id: 1, author: 7, editor: 3 });
+	}
+
+	function clearReference(desired: Snapshot, collection: string, field: string): void {
+		const entry = desired.fields.find(
+			(candidate) => candidate.collection === collection && candidate['field'] === field
+		)!;
+
+		const schema = entry['schema'] as Record<string, unknown>;
+		schema['foreign_key_table'] = null;
+		schema['foreign_key_column'] = null;
+	}
+
+	async function referencedTable(api: Api, collection: string, field: string): Promise<unknown> {
+		const response = await setupRequest(api.url)
+			.get(`/fields/${collection}/${field}`)
+			.auth(api.adminToken, { type: 'bearer' })
+			.expect(200);
+
+		return response.body.data.schema?.foreign_key_table ?? null;
+	}
+
+	async function relationFields(api: Api, collection: string): Promise<string[]> {
+		const rows = await api.database('directus_relations').where({ many_collection: collection });
+		return rows.map((row) => row.many_field).sort();
+	}
+
+	test('keeps the field, its column and its values, and the next diff is empty', async ({ api }) => {
+		const names = namesFor();
+
+		try {
+			await seed(api, names);
+
+			const desired = await snapshotWithout(api, [names.authors]);
+			clearReference(desired, names.articles, 'author');
+
+			const apply = await diffThenApply(api, desired);
+
+			expect(apply.statusCode).toBe(204);
+			await expectCollectionGone(api, names.authors);
+			expect(await relationFields(api, names.articles)).toEqual(['editor']);
+			expect(await referencedTable(api, names.articles, 'author')).toBeNull();
+			expect(await referencedTable(api, names.articles, 'editor')).toBe(names.editors);
+			expect(await api.database(names.articles).select('author', 'editor')).toEqual([{ author: 7, editor: 3 }]);
+			expect(await schemaDiffStatus(api, desired)).toBe(204);
+
+			await setupRequest(api.url)
+				.post(`/items/${names.articles}`)
+				.auth(api.adminToken, { type: 'bearer' })
+				.send({ id: 2, author: 8, editor: 3 })
+				.expect(200);
+		} finally {
+			await removeCollections(api, [names.articles, names.authors, names.editors]);
+		}
+	});
+
+	test('keeps the column when the kept field still names the dropped collection', async ({ api }) => {
+		const names = namesFor();
+
+		try {
+			await seed(api, names);
+
+			const apply = await diffThenApply(api, await snapshotWithout(api, [names.authors]));
+
+			expect(apply.statusCode).toBe(204);
+			await expectCollectionGone(api, names.authors);
+			expect(await relationFields(api, names.articles)).toEqual(['editor']);
+			expect(await api.database(names.articles).select('author')).toEqual([{ author: 7 }]);
+		} finally {
+			await removeCollections(api, [names.articles, names.authors, names.editors]);
+		}
+	});
+
+	test('drops the field too when the desired schema omits it', async ({ api }) => {
+		const names = namesFor();
+
+		try {
+			await seed(api, names);
+
+			const desired = await snapshotWithout(api, [names.authors]);
+
+			desired.fields = desired.fields.filter(
+				(entry) => !(entry.collection === names.articles && entry['field'] === 'author')
+			);
+
+			const apply = await diffThenApply(api, desired);
+
+			expect(apply.statusCode).toBe(204);
+			await expectCollectionGone(api, names.authors);
+			expect(await api.database.schema.hasColumn(names.articles, 'author')).toBe(false);
+			expect(await relationFields(api, names.articles)).toEqual(['editor']);
+		} finally {
+			await removeCollections(api, [names.articles, names.authors, names.editors]);
+		}
+	});
+
+	test('drops the referencing and the referenced collection together', async ({ api }) => {
+		const names = namesFor();
+
+		try {
+			await seed(api, names);
+
+			const apply = await diffThenApply(api, await snapshotWithout(api, [names.articles, names.authors]));
+
+			expect(apply.statusCode).toBe(204);
+			await expectCollectionGone(api, names.articles);
+			await expectCollectionGone(api, names.authors);
+			expect(await api.database.schema.hasTable(names.editors)).toBe(true);
+		} finally {
+			await removeCollections(api, [names.articles, names.authors, names.editors]);
 		}
 	});
 });
