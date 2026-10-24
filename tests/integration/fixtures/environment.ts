@@ -17,6 +17,7 @@ import { waitChild } from '../harness/wait-child.mjs';
 import { dropDatabase } from './drop-database.mjs';
 import { initializeDatabase } from '../harness/pristine.mjs';
 import { removeMarkedDirectory } from '../harness/owned-directory.mjs';
+import { familyOf, hasCapability } from '../harness/database-vendors.mjs';
 
 type Runtime = {
 	vendor: string;
@@ -292,7 +293,8 @@ export async function withEnvironment(
 				},
 			});
 		} else {
-			const postgres = runtime.vendor.startsWith('postgres');
+			const postgres = familyOf(runtime.vendor) === 'postgres';
+			const postgis = hasCapability(runtime.vendor, 'postgis');
 			const client = postgres ? 'pg' : 'mysql2';
 
 			const connectionOptions = postgres
@@ -311,15 +313,10 @@ export async function withEnvironment(
 			});
 
 			const create = async () => {
-				// The image's template contains the same PostGIS extensions as its initial database.
-				await admin!
-					.raw(
-						postgres
-							? 'CREATE DATABASE ?? TEMPLATE template_postgis'
-							: 'CREATE DATABASE ?? CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci',
-						[id]
-					)
-					.timeout(10_000);
+				let statement = 'CREATE DATABASE ?? CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
+				// The PostGIS images' template contains the same extensions as their initial database.
+				if (postgres) statement = postgis ? 'CREATE DATABASE ?? TEMPLATE template_postgis' : 'CREATE DATABASE ??';
+				await admin!.raw(statement, [id]).timeout(10_000);
 			};
 
 			// Record the target before provisioning; cancellation can interrupt database creation.

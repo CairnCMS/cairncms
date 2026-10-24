@@ -61,7 +61,7 @@ jobs:
         id: lifecycle
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         env:
-          TEST_DB: postgres
+          TEST_DB: postgres18
         run:
           env -u GITHUB_STEP_SUMMARY pnpm --filter tests-integration test:lifecycle 2>&1 | tee
           tests/integration/.artifacts/lifecycle.log
@@ -104,10 +104,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - vendor: mysql
-            label: MySQL
-          - vendor: postgres
-            label: PostgreSQL
+          - vendor: postgres18
+            label: PostgreSQL 18 / PostGIS 3.6
+          - vendor: mysql84
+            label: MySQL 8.4
+          - vendor: maria123
+            label: MariaDB 12.3
           - vendor: sqlite3
             label: SQLite
     steps:
@@ -163,18 +165,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - vendor: postgres
-            label: PostgreSQL
-          - vendor: postgres10
-            label: PostgreSQL 10
-          - vendor: mysql
-            label: MySQL 8
-          - vendor: mysql5
-            label: MySQL 5
-          - vendor: maria
-            label: MariaDB
           - vendor: sqlite3
             label: SQLite
+          - vendor: postgres18
+            label: PostgreSQL 18 / PostGIS 3.6
+          - vendor: postgres15
+            label: PostgreSQL 15
+          - vendor: postgres10
+            label: PostgreSQL 10 / PostGIS 3.2
+          - vendor: mysql97
+            label: MySQL 9.7
+          - vendor: mysql84
+            label: MySQL 8.4
+          - vendor: mysql5
+            label: MySQL 5.7
+          - vendor: maria123
+            label: MariaDB 12.3
+          - vendor: maria1011
+            label: MariaDB 10.11
     steps:
       - uses: actions/checkout@v4
         with:
@@ -216,7 +224,7 @@ jobs:
     needs: [validation, restoration, test]
     if: always()
     steps:
-      - name: Require validation, restoration and all six vendors
+      - name: Require validation, restoration and every vendor
         env:
           VALIDATION_RESULT: ${{ needs.validation.result }}
           RESTORATION_RESULT: ${{ needs.restoration.result }}

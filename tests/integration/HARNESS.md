@@ -91,6 +91,15 @@ preserves setup failures and lets all owned resources finish cleanup before tear
 Use `describeForVendors(name, supportedVendors, reason, body)` beside the affected cases. State the vendor constraint or
 coverage limitation in the reason. A bare `.skip` or dynamic skip fails result accounting.
 
+`supportedVendors` accepts family names, lane keys, or both. The families are `postgres`, `mysql`, `maria`, and
+`sqlite`. A family name expands to every lane of that family, so a suite picks up a new lane without edits. Prefer
+family names. Name a lane key only when the suite needs exactly one engine line, and say why in the reason. For an
+engine feature that only some lanes have, select by capability: `vendorsWith('postgis')` returns the lanes whose image
+includes PostGIS.
+
+Inside a test, branch on the family rather than the lane key. [database-vendors.mjs](harness/database-vendors.mjs)
+exports `familyOf(vendor)`, `isMysqlFamily(vendor)` for MySQL or MariaDB, and `hasCapability(vendor, capability)`.
+
 ### Companion processes and commands
 
 The [Api type](fixtures/environment.ts) exposes owned process helpers:
@@ -138,6 +147,16 @@ Use real REST/GraphQL requests when testing transport behavior.
 Testcontainers starts one database engine per vendor invocation using pinned image digests and ephemeral ports. Every
 file receives its own database, API process, and storage/extensions directories. SQLite uses a unique file with foreign
 keys enabled. Server vendors require the Docker CLI to address the same daemon as Testcontainers.
+
+Once the engine is healthy, the harness reads its version with the engine's own client inside the container and records
+it in `container.json`. SQLite records the version bundled with the driver in `engine.json`. The run summary lists each
+lane's engine. The probe has a 30-second deadline and ends on cancellation. A probe that fails, times out, or is
+cancelled fails the lane and removes the container.
+
+PostgreSQL lanes with the `postgis` capability create each test database from the image's PostGIS template. Other
+PostgreSQL lanes use a plain database. On MySQL and MariaDB lanes, restoration compares an information schema inventory
+that adjusts for the engine. A new MySQL lane uses the MySQL 8 inventory, and a new MariaDB lane uses the MariaDB
+inventory. MySQL 5.7 is the one exception, because it has no enforced check constraints.
 
 Eligible files restore a pristine initialized database to reduce startup time. PostgreSQL clones a connection-disabled
 template, MySQL and MariaDB use their engine's dump/import tools, and SQLite copies a closed database file. The template
@@ -192,20 +211,53 @@ pnpm --filter tests-integration test:harness
 
 # Requires preparation and Docker. Checks crashes, cancellation, and owned processes.
 TEST_DB=sqlite3 pnpm --filter tests-integration test:lifecycle
-TEST_DB=postgres pnpm --filter tests-integration test:lifecycle
+TEST_DB=postgres18 pnpm --filter tests-integration test:lifecycle
 
-# Requires Docker. Checks Redis, SAML, and S3 cleanup under failure and cancellation.
+# Requires Docker. Checks Redis, SAML, S3, and database cleanup under failure and cancellation, and the engine probe.
 pnpm --filter tests-integration test:services
 
 # Requires preparation and Docker. Set TEST_DB to the engine under test.
-TEST_DB=postgres pnpm --filter tests-integration test:restoration
+TEST_DB=postgres18 pnpm --filter tests-integration test:restoration
 ```
 
 Deliberately failing controls under `harness/controls` are excluded from ordinary discovery. Reporting checks verify
 that earlier errors remain visible through a pipe while a later case runs. Lifecycle checks verify failure status,
-exited children, and removal of owned temporary data. PostgreSQL lifecycle checks also cover shared-engine loss.
+exited children, and removal of owned temporary data. On any server lane they also cover the engine probe's deadline and
+cancellation. On `postgres18` they also cover shared-engine loss.
 
 Restoration controls exercise real capture/import, concurrent isolation, corruption rejection, configuration and custom
 migration fallback, bootstrap equivalence, crashes, and cancellation. Run them for each supported engine when changing
 bootstrap behavior, supported runtime settings, or engine image pins. Set `INTEGRATION_CONTROL_OUTPUT` to retain control
 reports. Raw templates are always removed during cleanup.
+
+## Refresh engine pins
+
+Each lane pins its image by digest in [database-vendors.mjs](harness/database-vendors.mjs), so a tag that moves upstream
+cannot change what the tests run. Refresh a pin when one of these happens:
+
+- Vendor maintenance ends for the oldest line in a family. Move that family's oldest lane up to the next supported line.
+- A new PostgreSQL major reaches general availability, or MySQL or MariaDB ships a new long-term support line. Move that
+  family's newest lane up to it. MySQL Innovation releases, MariaDB short-term and rolling releases, and betas or
+  release candidates of any engine do not get lanes.
+- Patch releases accumulate on a pinned line. Refresh the digest and keep the lane.
+
+To change a pin:
+
+1. Resolve the multi-architecture index digest with `docker buildx imagetools inspect <image>:<tag>` and pin the image
+   as `<image>@sha256:<digest>`.
+2. Name a new lane after its family and line, such as `postgres18`, `mysql97`, or `maria1011`. Set its `version` label
+   to the engine and line, and add the PostGIS line for PostGIS images, such as `PostgreSQL 18 / PostGIS 3.6`. Declare
+   the `postgis` capability only when the image includes PostGIS.
+3. Update both matrices in `.github/workflows/ci-tests-api.yml`. The test matrix lists every lane in definition order.
+   The restoration matrix runs one lane per family, and `ci-workflow.test.mjs` names those four keys, so update the test
+   too when a family's restoration lane changes. Both matrices use each lane's `version` as its label, and
+   `ci-workflow.test.mjs` fails until they match.
+4. When the newest PostgreSQL key changes, rename every site that names it. Five suites and the applicability control
+   run on that single lane: `routes/config/config-settings.test.ts`, `routes/config/config-translations.test.ts`,
+   `routes/config/remote-cli.test.ts`, `routes/config/config-extension-settings.test.ts`,
+   `logger/config-run-record.test.ts`, and `harness/controls/applicability.case.ts`. The default in `run.mjs`, the
+   workflow's validation `TEST_DB`, and several harness checks name it too. Search for the old key across
+   `tests/integration`, `.github/workflows`, and `docs` to find them all.
+5. Update the lane lists in the [README](README.md) and the contributing docs.
+6. Run the restoration controls for every changed pin and a few suites on each changed lane. Confirm that the engine
+   each lane records matches the release you expected.

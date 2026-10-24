@@ -4,6 +4,7 @@ import * as common from '../../fixtures/identities';
 import { itemsTest as it, collectionArtists, seedHookEvents } from '../../fixtures/items';
 import { v4 as uuid } from 'uuid';
 import { initializeFixtures } from '../../harness/fixture-setup.mjs';
+import { familyOf } from '../../harness/database-vendors.mjs';
 
 initializeFixtures();
 
@@ -93,12 +94,11 @@ describe.each(common.PRIMARY_KEY_TYPES)('/items', (pkType) => {
 
 						expect(gqlResponse.statusCode).toBe(200);
 
-						switch (vendor) {
-							case 'sqlite3':
+						switch (familyOf(vendor)) {
+							case 'sqlite':
 								expect(gqlResponse.body.data[localCollectionArtists].length).toEqual(0);
 								break;
 							case 'postgres':
-							case 'postgres10':
 							case 'mssql':
 							case 'cockroachdb':
 								if (pkType === 'string') {
