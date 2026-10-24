@@ -397,39 +397,49 @@ describe('config apply previews a version 3 schema tree', () => {
 		}
 	});
 
-	test('refuses a field document that crosses the folder boundary while omitting its options', async ({ api }) => {
-		const suffix = randomUUID().replace(/-/g, '').slice(0, 12);
-		const media = `preview_media_${suffix}`;
-		const folderId = randomUUID();
-		const folderKey = `img_${suffix}`;
+	for (const scope of [['schema'], ['schema', 'extension-settings']]) {
+		test(`refuses a field document that crosses the folder boundary while omitting its options, managing ${scope.join(
+			' and '
+		)}`, async ({ api }) => {
+			const suffix = randomUUID().replace(/-/g, '').slice(0, 12);
+			const media = `preview_media_${suffix}`;
+			const folderId = randomUUID();
+			const folderKey = `img_${suffix}`;
 
-		try {
-			await api.database('directus_folders').insert({ id: folderId, name: 'Images', key: folderKey });
-			await createCollection(api, media, []);
+			try {
+				await api.database('directus_folders').insert({ id: folderId, name: 'Images', key: folderKey });
+				await createCollection(api, media, []);
 
-			await setupRequest(api.url)
-				.post(`/fields/${media}`)
-				.auth(api.adminToken, { type: 'bearer' })
-				.send({ field: 'cover', type: 'uuid', meta: { interface: 'file', options: { folder: folderId } }, schema: {} })
-				.expect(200);
+				await setupRequest(api.url)
+					.post(`/fields/${media}`)
+					.auth(api.adminToken, { type: 'bearer' })
+					.send({
+						field: 'cover',
+						type: 'uuid',
+						meta: { interface: 'file', options: { folder: folderId } },
+						schema: {},
+					})
+					.expect(200);
 
-			const desired = await snapshot(api, 3, ['schema']);
-			const record = (desired['schema'] as Document[]).find((entry) => entry['collection'] === media)!;
-			const cover = (record['fields'] as Document[]).find((field) => field['field'] === 'cover')!;
-			cover['meta']['interface'] = 'custom-widget';
-			delete cover['meta']['options'];
+				const desired = await snapshot(api, 3, scope);
+				const record = (desired['schema'] as Document[]).find((entry) => entry['collection'] === media)!;
+				const cover = (record['fields'] as Document[]).find((field) => field['field'] === 'cover')!;
+				cover['meta']['interface'] = 'custom-widget';
+				delete cover['meta']['options'];
 
-			const before = await captureState(api, [media]);
-			const http = await applyConfig(api, desired, { dryRun: true });
+				const before = await captureState(api, [media]);
+				const http = await applyConfig(api, desired, { dryRun: true });
 
-			expect(http.statusCode).not.toBe(200);
-			expect(JSON.stringify(http.body)).toContain('Restate');
-			expect(await captureState(api, [media])).toEqual(before);
-		} finally {
-			await dropCollection(api, media);
-			await api.database('directus_folders').where({ id: folderId }).delete();
-		}
-	});
+				expect(http.statusCode).toBe(400);
+				expect(http.body.errors[0].extensions.code).toBe('CONFIG_INVALID');
+				expect(http.body.errors[0].message).toContain('Restate "meta.options"');
+				expect(await captureState(api, [media])).toEqual(before);
+			} finally {
+				await dropCollection(api, media);
+				await api.database('directus_folders').where({ id: folderId }).delete();
+			}
+		});
+	}
 
 	test('applies schema through one request over HTTP, and the local CLI apply of the same tree is then a no-op', async ({
 		api,

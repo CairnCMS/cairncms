@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
 import type { CollectionMeta } from '../../../types/collection.js';
 import type { ConfigSchemaCollection } from '../../../types/config.js';
 import type { SnapshotField, SnapshotRelation } from '../../../types/index.js';
@@ -444,6 +445,7 @@ describe('computeSchemaPlan omitted-property contract', () => {
 			}),
 		];
 
+		expect(() => plan(current, desired)).toThrow(ConfigInvalidException);
 		expect(() => plan(current, desired)).toThrow(/Restate "meta.options"/);
 	});
 
@@ -476,6 +478,7 @@ describe('computeSchemaPlan omitted-property contract', () => {
 			}),
 		];
 
+		expect(() => plan(current, desired)).toThrow(ConfigInvalidException);
 		expect(() => plan(current, desired)).toThrow(/Restate "meta.options"/);
 	});
 

@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { isInternalTable } from '../../../database/internal-tables.js';
 import env from '../../../env.js';
 import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
+import { InvalidPayloadException } from '../../../exceptions/invalid-payload.js';
 import type {
 	ConfigFailure,
 	ConfigPlanChange,
@@ -617,13 +618,23 @@ export function reconcileDesiredSchemaSnapshot(
 		relations: current.relations,
 	};
 
-	const desiredSnapshot: PortableSnapshot = reconcileDesiredSchema(currentKeyForm, {
-		version: 2,
-		release: currentRelease,
-		collections: desired.collections,
-		fields: desired.fields,
-		relations: desired.relations,
-	});
+	let desiredSnapshot: PortableSnapshot;
+
+	try {
+		desiredSnapshot = reconcileDesiredSchema(currentKeyForm, {
+			version: 2,
+			release: currentRelease,
+			collections: desired.collections,
+			fields: desired.fields,
+			relations: desired.relations,
+		});
+	} catch (error) {
+		if (error instanceof InvalidPayloadException) {
+			throw new ConfigInvalidException(replaceControlCharacters(error.message));
+		}
+
+		throw error;
+	}
 
 	return { current: currentKeyForm, desired: desiredSnapshot };
 }
