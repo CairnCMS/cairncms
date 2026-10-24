@@ -9,14 +9,14 @@ import {
 
 type StubState = {
 	tables?: string[];
-	columns?: string[];
+	columns?: Array<[string, string]>;
 	rows?: Record<string, Record<string, string>[]>;
 	throwOnTable?: string;
 };
 
 function stubDatabase(state: StubState): Knex {
 	const tables = new Set(state.tables ?? []);
-	const columns = new Set(state.columns ?? []);
+	const columns = state.columns ?? [];
 	const rows = state.rows ?? {};
 
 	const database = ((table: string) => ({
@@ -31,7 +31,8 @@ function stubDatabase(state: StubState): Knex {
 			if (state.throwOnTable === table) throw new Error('inspection unavailable');
 			return tables.has(table);
 		},
-		hasColumn: async (table: string, column: string) => columns.has(`${table}.${column}`),
+		hasColumn: async (table: string, column: string) =>
+			columns.some(([owner, name]) => owner === table && name === column),
 	};
 
 	return database;
@@ -44,7 +45,7 @@ describe('readSchemaObservedState', () => {
 		const observed = await readSchemaObservedState(
 			stubDatabase({
 				tables: ['articles'],
-				columns: ['articles.title'],
+				columns: [['articles', 'title']],
 				rows: {
 					directus_collections: [{ collection: 'articles' }],
 					directus_fields: [{ collection: 'articles', field: 'title' }],
@@ -95,7 +96,7 @@ describe('readSchemaObservedState', () => {
 
 	it('reports a database-only field metadata as not_applicable while its surviving column is reverted', async () => {
 		const observed = await readSchemaObservedState(
-			stubDatabase({ tables: ['articles'], columns: ['articles.legacy'] }),
+			stubDatabase({ tables: ['articles'], columns: [['articles', 'legacy']] }),
 			{
 				...empty,
 				fields: [{ collection: 'articles', field: 'legacy', operation: 'delete', column: 'yes', metadata: 'no' }],
@@ -107,7 +108,7 @@ describe('readSchemaObservedState', () => {
 
 	it('keeps an uncertain metadata facet unknown', async () => {
 		const observed = await readSchemaObservedState(
-			stubDatabase({ tables: ['articles'], columns: ['articles.stamp'] }),
+			stubDatabase({ tables: ['articles'], columns: [['articles', 'stamp']] }),
 			{
 				...empty,
 				fields: [{ collection: 'articles', field: 'stamp', operation: 'create', column: 'yes', metadata: 'unknown' }],
@@ -176,6 +177,30 @@ describe('readSchemaObservedState', () => {
 
 		expect(observed.collections[0]).toMatchObject({ table: 'unknown', metadata: 'unknown' });
 		expect(observed.fields[0]).toMatchObject({ column: 'unknown', metadata: 'unknown' });
+	});
+
+	it('reports fields a / b.c and a.b / c separately, so a persisted deletion is not hidden', async () => {
+		const observed = await readSchemaObservedState(
+			stubDatabase({
+				tables: ['a', 'a.b'],
+				columns: [['a', 'b.c']],
+				rows: { directus_fields: [{ collection: 'a', field: 'b.c' }] },
+			}),
+			{
+				...empty,
+				fields: [
+					{ collection: 'a', field: 'b.c', operation: 'delete', column: 'yes', metadata: 'yes' },
+					{ collection: 'a.b', field: 'c', operation: 'delete', column: 'yes', metadata: 'yes' },
+				],
+			}
+		);
+
+		expect(observed.fields).toEqual([
+			{ collection: 'a', field: 'b.c', operation: 'delete', column: 'reverted', metadata: 'reverted' },
+			{ collection: 'a.b', field: 'c', operation: 'delete', column: 'applied', metadata: 'applied' },
+		]);
+
+		expect(schemaStateVerifiedReverted(observed)).toBe(false);
 	});
 
 	it('propagates a read failure so the caller can report an unknown outcome', async () => {

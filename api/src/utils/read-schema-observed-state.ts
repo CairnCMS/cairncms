@@ -1,5 +1,6 @@
 import type { Knex } from 'knex';
 import type { SchemaChangeOutcome, SchemaOperation, SchemaPersistedState } from '../types/index.js';
+import { schemaEntityKey } from './schema-entity-key.js';
 
 export type FacetApplicability = 'yes' | 'no' | 'unknown';
 
@@ -142,7 +143,7 @@ function uniqueByField<T extends { collection: string; field: string }>(entries:
 	const result: T[] = [];
 
 	for (const entry of entries) {
-		const key = `${entry.collection}.${entry.field}`;
+		const key = schemaEntityKey(entry.collection, entry.field);
 		if (seen.has(key)) continue;
 		seen.add(key);
 		result.push(entry);

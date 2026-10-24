@@ -1037,3 +1037,62 @@ describe('assertSchemaDiffApplicable on attribute changes to kept fields and rel
 		expect(accepted).not.toThrow();
 	});
 });
+
+describe('assertSchemaDiffApplicable keeps names that contain dots apart', () => {
+	const current = (extraFields: unknown[] = []) =>
+		snapshot({
+			collections: [collection('a'), collection('a.b')] as any,
+			fields: [
+				field('a', 'id', 'integer'),
+				field('a', 'b.c', 'integer'),
+				field('a.b', 'id', 'integer'),
+				...extraFields,
+			] as any,
+		});
+
+	const overview = () =>
+		schemaOverview([
+			collectionOverview('a', 'id', { id: 'integer', 'b.c': 'integer' }),
+			collectionOverview('a.b', 'id', { id: 'integer', c: 'integer' }),
+		]);
+
+	it('still validates a relation change on a.b / c when field a / b.c is deleted', () => {
+		const diff = emptyDiff();
+		diff.fields = [{ collection: 'a', field: 'b.c', diff: deleteDiff(field('a', 'b.c', 'integer')) }];
+
+		diff.relations = [
+			{ collection: 'a.b', field: 'c', related_collection: 'a', diff: deleteDiff(relation('a.b', 'c', 'a')) },
+		];
+
+		expect(() => assertSchemaDiffApplicable(diff, current([field('a.b', 'c', 'integer')]), overview())).toThrow(
+			'Field "c" in collection "a.b" doesn\'t have a relationship.'
+		);
+	});
+
+	it('accepts creating field c on collection a.b when only field b.c exists on collection a', () => {
+		const diff = emptyDiff();
+		diff.fields = [{ collection: 'a.b', field: 'c', diff: newDiff(field('a.b', 'c', 'integer')) }];
+
+		const schema = schemaOverview([
+			collectionOverview('a', 'id', { id: 'integer', 'b.c': 'integer' }),
+			collectionOverview('a.b', 'id', { id: 'integer' }),
+		]);
+
+		expect(() => assertSchemaDiffApplicable(diff, current(), schema)).not.toThrow();
+	});
+
+	it('still refuses re-creating a metadata-only field on collection a.b when collection a is dropped', () => {
+		const diff = emptyDiff();
+		diff.collections = [{ collection: 'a', diff: deleteDiff(collection('a')) }];
+		diff.fields = [{ collection: 'a.b', field: 'x', diff: newDiff(field('a.b', 'x', 'string')) }];
+
+		const schema = schemaOverview([
+			collectionOverview('a', 'id', { id: 'integer', 'b.c': 'integer' }),
+			collectionOverview('a.b', 'id', { id: 'integer' }),
+		]);
+
+		expect(() => assertSchemaDiffApplicable(diff, current([field('a.b', 'x', 'string', null)]), schema)).toThrow(
+			'Field "x" already exists in collection "a.b"'
+		);
+	});
+});

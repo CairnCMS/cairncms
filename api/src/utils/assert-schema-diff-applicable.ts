@@ -8,6 +8,7 @@ import { DiffKind } from '../types/index.js';
 import { isNestedMetaUpdate } from './is-nested-meta-update.js';
 import { collectionCreateOrder, collectionDeleteOrder } from './schema-collection-order.js';
 import { schemaDiffOperation } from './schema-diff-operation.js';
+import { schemaEntityKey } from './schema-entity-key.js';
 import {
 	assertAliasTypeUnchanged,
 	assertCollectionAbsent,
@@ -43,9 +44,17 @@ export function assertSchemaDiffApplicable(
 ): void {
 	const work = cloneDeep(schema);
 	const reservedNames = new Set(currentSnapshot.collections.map((collection) => collection.collection));
-	const fieldRows = new Set(currentSnapshot.fields.map((field) => `${field.collection}.${field.field}`));
+	const fieldRows = new Map<string, Set<string>>();
 	const createdCollections = new Set<string>();
 	const deletedFields = new Set<string>();
+
+	const addFieldRow = (collection: string, field: string): void => {
+		const fields = fieldRows.get(collection) ?? new Set<string>();
+		fields.add(field);
+		fieldRows.set(collection, fields);
+	};
+
+	for (const field of currentSnapshot.fields) addFieldRow(field.collection, field.field);
 
 	const createdDefinitions = new Map<string, Collection>();
 
@@ -100,7 +109,7 @@ export function assertSchemaDiffApplicable(
 
 				if (isRuntimeVisible(field)) fields[field.field] = toFieldOverview(field);
 				if (writesPrimaryKey(field.type, field.schema)) primary = field.field;
-				fieldRows.add(`${collection}.${field.field}`);
+				addFieldRow(collection, field.field);
 			}
 
 			work.collections[collection] = {
@@ -135,10 +144,7 @@ export function assertSchemaDiffApplicable(
 
 		reservedNames.delete(collection);
 		delete work.collections[collection];
-
-		for (const key of fieldRows) {
-			if (key.startsWith(`${collection}.`)) fieldRows.delete(key);
-		}
+		fieldRows.delete(collection);
 	};
 
 	for (const collection of collectionCreateOrder(snapshotDiff)) {
@@ -178,7 +184,7 @@ export function assertSchemaDiffApplicable(
 					relation.meta.one_field !== field
 				) {
 					delete relationPhase.collections[relation.related_collection]?.fields[relation.meta.one_field];
-					fieldRows.delete(`${relation.related_collection}.${relation.meta.one_field}`);
+					fieldRows.get(relation.related_collection)?.delete(relation.meta.one_field);
 				}
 			} else {
 				const kept = relationPhase.relations.find(
@@ -196,7 +202,7 @@ export function assertSchemaDiffApplicable(
 			if (target.primary === field) target.primary = '';
 		}
 
-		fieldRows.delete(`${collection}.${field}`);
+		fieldRows.get(collection)?.delete(field);
 	};
 
 	for (const { collection, field, diff } of snapshotDiff.fields) {
@@ -209,7 +215,7 @@ export function assertSchemaDiffApplicable(
 			if (!frozen) continue;
 
 			const incoming = (diff[0] as DiffNew<SnapshotField>).rhs;
-			const exists = field in frozen.fields || fieldRows.has(`${collection}.${field}`);
+			const exists = field in frozen.fields || (fieldRows.get(collection)?.has(field) ?? false);
 			assertFieldAbsent(collection, field, exists);
 
 			if (incoming.type && ALIAS_TYPES.includes(incoming.type) === false) {
@@ -219,7 +225,7 @@ export function assertSchemaDiffApplicable(
 			const target = relationPhase.collections[collection]!;
 			if (isRuntimeVisible(incoming)) target.fields[field] = toFieldOverview(incoming);
 			if (writesPrimaryKey(incoming.type, incoming.schema)) target.primary = field;
-			fieldRows.add(`${collection}.${field}`);
+			addFieldRow(collection, field);
 		}
 
 		if (operation === 'update') {
@@ -251,14 +257,14 @@ export function assertSchemaDiffApplicable(
 
 		if (operation === 'delete') {
 			projectFieldDelete(collection, field);
-			deletedFields.add(`${collection}.${field}`);
+			deletedFields.add(schemaEntityKey(collection, field));
 		}
 	}
 
 	dropIneligibleCollections(relationPhase);
 
 	for (const { collection, field, diff } of snapshotDiff.relations) {
-		if (deletedFields.has(`${collection}.${field}`)) continue;
+		if (deletedFields.has(schemaEntityKey(collection, field))) continue;
 
 		const operation = schemaDiffOperation(diff);
 
