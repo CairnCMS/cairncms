@@ -43,8 +43,10 @@ export async function snapshotInventory(
 	database,
 	_name,
 	signal,
-	{ vendor = 'postgres', deadline = performance.now() + 90_000 } = {}
+	{ vendor, deadline = performance.now() + 90_000 } = {}
 ) {
+	assert(vendor, 'Snapshot inventory requires a vendor');
+
 	const query = async (builder) => {
 		signal?.throwIfAborted();
 		const remaining = deadline - performance.now();

@@ -1,6 +1,7 @@
 import { v5 as uuid } from 'uuid';
 import * as seedrandom from 'seedrandom';
 import { PrimaryKeyType } from './identities';
+import { isMysqlFamily } from '../harness/database-vendors.mjs';
 
 const SEED_UUID_NAMESPACE = 'e81a0012-568b-415c-96fa-66508f594067';
 const FIVE_YEARS_IN_MILLISECONDS = 5 * 365 * 24 * 60 * 60 * 1000;
@@ -384,7 +385,7 @@ function generateTimestamp(options: OptionsSeedGenerateTimestamp) {
 	}
 
 	if (options.isDefaultValue && options.vendor) {
-		if (['mysql', 'mysql5', 'maria'].includes(options.vendor)) {
+		if (isMysqlFamily(options.vendor)) {
 			for (let index = 0; index < values.length; index++) {
 				values[index] = new Date(values[index]).toISOString().replace(/([^T]+)T([^.]+).*/g, '$1 $2');
 			}

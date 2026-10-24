@@ -12,6 +12,7 @@ import {
 } from './pristine.mjs';
 import { snapshotHash } from './snapshot.mjs';
 import { runtimeConfigurations } from './controls/runtime-configurations.mjs';
+import { vendors } from './database-vendors.mjs';
 
 test('every eligible runtime setting belongs to a justified equivalence configuration', () => {
 	const covered = Object.values(runtimeConfigurations).flatMap((configuration) => {
@@ -25,9 +26,8 @@ test('every eligible runtime setting belongs to a justified equivalence configur
 });
 
 test('restoration excludes other vendors and bootstrap-dependent environments', () => {
-	const runtime = { vendor: 'mysql', pristine: { directory: '/owned' } };
-	for (const vendor of ['mysql', 'mysql5', 'maria', 'postgres', 'postgres10', 'sqlite3'])
-		assert.equal(canRestore({ ...runtime, vendor }, {}), true);
+	const runtime = { vendor: 'mysql84', pristine: { directory: '/owned' } };
+	for (const vendor of vendors) assert.equal(canRestore({ ...runtime, vendor }, {}), true);
 	assert.equal(canRestore(runtime, { hooks: true }), true);
 
 	assert.equal(
@@ -54,7 +54,7 @@ test('restoration excludes other vendors and bootstrap-dependent environments', 
 	])
 		assert.equal(canRestore(runtime, options), false);
 	for (const vendor of ['unknown']) assert.equal(canRestore({ ...runtime, vendor }, {}), false);
-	assert.equal(canRestore({ vendor: 'mysql' }, {}), false);
+	assert.equal(canRestore({ vendor: 'mysql84' }, {}), false);
 });
 
 for (const mode of ['owned', 'empty-unmarked', 'nonempty-unmarked', 'wrong-marker', 'symlink', 'different-report']) {
@@ -153,7 +153,7 @@ for (const field of ['buildHash', 'recipeHash', 'dumpHash', 'snapshotHash']) {
 
 		await assert.rejects(
 			initializeDatabase({
-				runtime: { vendor: 'mysql', directory: reports, pristine },
+				runtime: { vendor: 'mysql84', directory: reports, pristine },
 				id: 'unused',
 				env: { EXTENSIONS_PATH: extensions },
 				database: {},

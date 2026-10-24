@@ -7,13 +7,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout } from 'node:timers/promises';
+import { databaseVendors } from './database-vendors.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const vendor = process.env.TEST_DB || 'sqlite3';
 
 async function exercise(name, intervene, expected, options = {}) {
 	const directory = await mkdtemp(join(tmpdir(), 'cairn-lifecycle-'));
-	const { env = {}, ...runnerOptions } = options;
+	const { env = {}, inspect, ...runnerOptions } = options;
 
 	const child = spawn(process.execPath, ['harness/vendor.mjs'], {
 		cwd: root,
@@ -88,6 +89,7 @@ async function exercise(name, intervene, expected, options = {}) {
 			for (const pid of owner.children ?? []) assert.throws(() => process.kill(pid, 0), /ESRCH/);
 		}
 
+		await inspect?.(join(directory, vendor));
 		return output;
 	} finally {
 		child.kill('SIGKILL');
@@ -206,9 +208,78 @@ test('an API exit without another request cannot produce a green file', { timeou
 	assert.match(output, /api-entry.mjs exited SIGKILL/);
 });
 
+const probeEvents = async (reports) =>
+	(await readFile(join(reports, 'provisioning.jsonl'), 'utf8').catch(() => ''))
+		.split('\n')
+		.filter(Boolean)
+		.map((line) => JSON.parse(line))
+		.filter((event) => event.operation === 'engine-version');
+
+async function assertProbeReleased(reports) {
+	const { id } = JSON.parse(await readFile(join(reports, 'container.json'), 'utf8'));
+	await assert.rejects(promisify(execFile)('docker', ['inspect', id]), /no such object/i);
+	const events = await probeEvents(reports);
+
+	assert.deepEqual(
+		events.map((event) => [event.type, event.container]),
+		[
+			['tool-started', id],
+			['tool-closed', id],
+		]
+	);
+
+	assert(events.every((event) => !('id' in event)));
+	assert.throws(() => process.kill(events[0].pid, 0), /ESRCH/);
+}
+
+const stalledProbe = ['sh', '-c', 'sleep 60'];
+
+test(
+	'an engine probe past its deadline fails the vendor and releases the engine',
+	{ timeout: 120_000, skip: !databaseVendors[vendor]?.image },
+	async () => {
+		const output = await exercise(
+			'cancel.case.ts',
+			async ({ poll, directory }) => {
+				await poll(async () => (await probeEvents(join(directory, vendor))).length > 0);
+			},
+			1,
+			{ engineProbe: { command: stalledProbe, deadline: 2_000 }, inspect: assertProbeReleased }
+		);
+
+		assert.match(output, /Engine version probe exceeded its deadline/);
+		assert.doesNotMatch(output, /EXECUTION_READY/);
+	}
+);
+
+test(
+	'cancelling during the engine probe ends it and releases the engine',
+	{ timeout: 120_000, skip: !databaseVendors[vendor]?.image },
+	async () => {
+		const output = await exercise(
+			'cancel.case.ts',
+			async ({ child, poll, directory }) => {
+				await poll(async () => (await probeEvents(join(directory, vendor))).length > 0);
+				child.send({ type: 'cancel', signal: 'SIGINT' });
+			},
+			130,
+			{
+				engineProbe: { command: stalledProbe, deadline: 60_000 },
+				inspect: async (reports) => {
+					assert.equal(await readFile(join(reports, 'cancelled'), 'utf8'), 'SIGINT');
+					await assertProbeReleased(reports);
+				},
+			}
+		);
+
+		assert.match(output, /Engine version probe was cancelled: .*cancelled=true/);
+		assert.doesNotMatch(output, /EXECUTION_READY/);
+	}
+);
+
 test(
 	'loss of the shared engine stops its vendor with an infrastructure failure',
-	{ timeout: 120_000, skip: vendor !== 'postgres' },
+	{ timeout: 120_000, skip: vendor !== 'postgres18' },
 	async () => {
 		const output = await exercise(
 			'cancel.case.ts',

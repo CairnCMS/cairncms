@@ -6,14 +6,15 @@ import * as common from '../../fixtures/identities';
 
 import request from '../../fixtures/request';
 import { initializeFixtures } from '../../harness/fixture-setup.mjs';
+import { vendorsOf } from '../../harness/database-vendors.mjs';
 
 initializeFixtures();
 
 const adminToken = common.USER.ADMIN.TOKEN;
 const appToken = common.USER.APP_ACCESS.TOKEN;
 
-const CASE_INSENSITIVE = ['mysql', 'mysql5', 'maria'];
-const CASE_SENSITIVE = ['postgres', 'postgres10', 'sqlite3'];
+const CASE_INSENSITIVE = [...vendorsOf('mysql'), ...vendorsOf('maria')];
+const CASE_SENSITIVE = [...vendorsOf('postgres'), ...vendorsOf('sqlite')];
 
 async function cleanup(api: Api, keys: string[]) {
 	const url = api.url;

@@ -12,7 +12,7 @@ const test = createRedisTest('redis6', { extensions: ['cairncms-extension-schedu
 
 describeForVendors(
 	'Schedule coordination',
-	['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'],
+	['postgres', 'mysql', 'maria'],
 	'Multi-instance coordination needs a server database that several CairnCMS processes can share.',
 	() => {
 		test('Redis 6.2 admits once per occurrence cluster-wide and fails over to a standby', async ({

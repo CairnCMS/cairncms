@@ -4,19 +4,27 @@
 # ONLY FOR DEBUGGING. THIS IS NOT INTENDED FOR PRODUCTION USE.
 #
 # Ports:
-#   Postgres:        5100
-#   MySQL (8):       5101
-#   MariaDB:         5102
+#   Postgres (18):   5100
+#   MySQL (8.4):     5101
+#   MariaDB (12.3):  5102
 #   MS SQL:          5103
 #   Oracle:          5104
 #   Redis:           5105
 #   S3Proxy (S3):    5106
 #   Azure            5107
-#   MySQL (5.7):     5108
+#   MySQL (9.7):     5108
 #   Memcached:       5109
 #   Keycloak:        5110
-#   Postgres (10):   5111
+#   Postgres (15):   5111
+#   MariaDB (10.11): 5112
 #   CockroachDB:     5113
+#
+# Replacing a database service's major version leaves its old data directory in an anonymous volume that the
+# new image cannot open. Before the first start on a new version, stop and remove the affected containers with
+# their volumes, which deletes their local development data:
+#   docker compose rm --stop --volumes postgres mysql maria
+# Dump anything you want to keep first (pg_dumpall or mysqldump through docker compose exec). Avoid
+# docker compose down -v for this: it removes every volume in the project, including Redis and the storage emulators.
 #
 # Credentials:
 #   Postgres:
@@ -68,7 +76,8 @@
 version: '3.1'
 services:
   postgres:
-    image: postgis/postgis:13-3.1-alpine
+    image: postgis/postgis:18-3.6-alpine
+    platform: linux/amd64
     environment:
       POSTGRES_PASSWORD: secret
       POSTGRES_DB: cairncms
@@ -76,8 +85,7 @@ services:
       - 5100:5432
 
   mysql:
-    image: mysql:8
-    command: --default-authentication-plugin=mysql_native_password
+    image: mysql:8.4
     environment:
       MYSQL_ROOT_PASSWORD: secret
       MYSQL_DATABASE: cairncms
@@ -87,7 +95,7 @@ services:
       - SYS_NICE
 
   maria:
-    image: mariadb:10.7
+    image: mariadb:12.3
     environment:
       MYSQL_ROOT_PASSWORD: secret
       MYSQL_DATABASE: cairncms
@@ -134,13 +142,15 @@ services:
     ports:
       - 5107:10000
 
-  mysql5:
-    image: mysql:5
+  mysql97:
+    image: mysql:9.7
     environment:
       MYSQL_ROOT_PASSWORD: secret
       MYSQL_DATABASE: cairncms
     ports:
       - 5108:3306
+    cap_add:
+      - SYS_NICE
 
   memcached:
     image: memcached:latest
@@ -157,13 +167,21 @@ services:
     ports:
       - 5110:8080
 
-  postgres10:
-    image: postgis/postgis:10-3.1-alpine
+  postgres15:
+    image: postgres:15-alpine
     environment:
       POSTGRES_PASSWORD: secret
       POSTGRES_DB: cairncms
     ports:
       - 5111:5432
+
+  maria1011:
+    image: mariadb:10.11
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: cairncms
+    ports:
+      - 5112:3306
 
   cockroachdb:
     image: cockroachdb/cockroach:latest-v21.1

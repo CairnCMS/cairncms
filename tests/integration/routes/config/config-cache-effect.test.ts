@@ -38,7 +38,7 @@ type ConfigSnapshot = {
 
 describeForVendors(
 	'Config apply forced cache invalidation',
-	['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'],
+	['postgres', 'mysql', 'maria'],
 	'This cache-enabled config scenario has not been validated on SQLite.',
 	() => {
 		async function appAccessRoleKey(api: Api): Promise<string> {

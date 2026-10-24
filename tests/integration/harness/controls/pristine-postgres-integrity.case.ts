@@ -5,10 +5,11 @@ import knex from 'knex';
 import { withEnvironment } from '../../fixtures/environment';
 import { initializeFixtures } from '../fixture-setup.mjs';
 import { ensureTemplate } from './pristine-support';
+import { hasCapability } from '../database-vendors.mjs';
 
 initializeFixtures();
 
-test('template refuses connections while independent clones retain PostGIS and sequences', async ({ signal }) => {
+test('template refuses connections while independent clones retain extensions and sequences', async ({ signal }) => {
 	const runtime = inject('integration');
 	await ensureTemplate(runtime, signal);
 	const { template } = JSON.parse(await readFile(join(runtime.pristine!.directory, 'pristine.snapshot'), 'utf8'));
@@ -29,9 +30,10 @@ test('template refuses connections while independent clones retain PostGIS and s
 		runtime,
 		false,
 		async (api) => {
-			expect((await api.database.raw('SELECT ST_AsText(ST_Point(1, 2)) AS point')).rows).toEqual([
-				{ point: 'POINT(1 2)' },
-			]);
+			if (hasCapability(runtime.vendor, 'postgis'))
+				expect((await api.database.raw('SELECT ST_AsText(ST_Point(1, 2)) AS point')).rows).toEqual([
+					{ point: 'POINT(1 2)' },
+				]);
 
 			const result = await api
 				.database('directus_activity')

@@ -20,7 +20,7 @@ const test = createImportTest(path.join(...assetsDirectory, 'layers.png'));
 describe('/files upload limits and permission gate', () => {
 	describeForVendors(
 		'URL replacement permission gate',
-		['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'],
+		['postgres', 'mysql', 'maria'],
 		'This configured file API scenario has not been validated on SQLite.',
 		() => {
 			const layersFilePath = path.join(...assetsDirectory, 'layers.png');
