@@ -149,7 +149,7 @@ describe('Schema apply: nested collection meta diffs', () => {
 		});
 	});
 
-	describe('a top-level meta delete is safe (collection and rows survive)', () => {
+	describe('a top-level meta delete converges and keeps the current value', () => {
 		test('REST', async ({ api, vendor }) => {
 			const collection = `test_apply_nm_note_${vendor}`;
 			await deleteCollection(api, collection);
@@ -157,19 +157,22 @@ describe('Schema apply: nested collection meta diffs', () => {
 			try {
 				await seedCollection(api, collection, baseMeta());
 
-				const result = await snapshotEditApply(api, (snapshot) => {
-					const target = findCollection(snapshot, collection);
-					delete target.meta.note;
-				});
+				const snapshotRes = await adminAuth(request(api.url).get('/schema/snapshot'));
+				expect(snapshotRes.statusCode).toBe(200);
 
-				const entry = collectionDiffEntry(result.diff, collection);
-				expect(entry?.kind).toBe('D');
-				expect(entry?.path).toEqual(['meta', 'note']);
+				const edited = cloneDeep(snapshotRes.body.data);
+				delete findCollection(edited, collection).meta.note;
 
-				// A top-level meta delete is a partial update that does not converge, so this asserts
-				// data safety only, not that note was removed.
-				expect(result.applyStatus).toBe(204);
+				const diffRes = await adminAuth(
+					request(api.url).post('/schema/diff').send(edited).set('Content-type', 'application/json')
+				);
+
+				expect(diffRes.statusCode).toBe(204);
+
 				expect(await getRowTitles(api, collection)).toEqual(['first', 'second']);
+
+				const meta = await getCollectionMeta(api, collection);
+				expect(meta.note).toBe('original note');
 			} finally {
 				await deleteCollection(api, collection);
 			}

@@ -1,5 +1,6 @@
 import { parseJSON } from '@cairncms/utils';
 import chalk from 'chalk';
+import type { Diff } from 'deep-diff';
 import { promises as fs } from 'fs';
 import inquirer from 'inquirer';
 import { load as loadYaml } from 'js-yaml';
@@ -7,12 +8,18 @@ import path from 'path';
 import getDatabase, { isInstalled, validateDatabaseConnection } from '../../../database/index.js';
 import logger from '../../../logger.js';
 import { confirmPrompt, createVerb, deleteVerb, heading, planIntro, updateVerb } from '../../presentation.js';
-import type { Snapshot } from '../../../types/index.js';
+import type { Collection, Snapshot } from '../../../types/index.js';
 import { DiffKind } from '../../../types/index.js';
+import { isEntityDelete } from '../../../utils/is-entity-delete.js';
 import { isNestedMetaUpdate } from '../../../utils/is-nested-meta-update.js';
-import { applySnapshot } from '../../../utils/apply-snapshot.js';
-import { getSnapshotDiff } from '../../../utils/get-snapshot-diff.js';
+import { schemaDiffOperation } from '../../../utils/schema-diff-operation.js';
+import { applyDiff } from '../../../utils/apply-diff.js';
+import { toKeyFormSnapshot } from '../../../utils/folder-references.js';
 import { getSnapshot } from '../../../utils/get-snapshot.js';
+import { getTargetSnapshotDiff } from '../../../utils/get-target-snapshot-diff.js';
+import { getVersionedHash } from '../../../utils/get-versioned-hash.js';
+import { replaceControlCharacters } from '../../../utils/safe-log-fragment.js';
+import { isUnconfiguredTableDrop, unconfiguredTableDropMessage } from '../../../utils/unconfigured-table-drop.js';
 
 export async function apply(snapshotPath: string, options?: { yes: boolean; dryRun: boolean }): Promise<void> {
 	const filename = path.resolve(process.cwd(), snapshotPath);
@@ -39,7 +46,13 @@ export async function apply(snapshotPath: string, options?: { yes: boolean; dryR
 		}
 
 		const currentSnapshot = await getSnapshot({ database });
-		const snapshotDiff = getSnapshotDiff(currentSnapshot, snapshot);
+		const currentKeyForm = await toKeyFormSnapshot(currentSnapshot, { database });
+
+		const snapshotDiff = await getTargetSnapshotDiff(snapshot, {
+			current: currentSnapshot,
+			currentKeyForm,
+			database,
+		});
 
 		if (
 			snapshotDiff.collections.length === 0 &&
@@ -54,6 +67,10 @@ export async function apply(snapshotPath: string, options?: { yes: boolean; dryR
 		const dryRun = options?.dryRun === true;
 		const promptForChanges = !dryRun && options?.yes !== true;
 
+		const tableDropWarnings = snapshotDiff.collections
+			.filter(({ diff }) => isEntityDelete(diff[0]) && isUnconfiguredTableDrop((diff[0] as { lhs?: Collection }).lhs))
+			.map(({ collection }) => unconfiguredTableDropMessage(collection));
+
 		if (dryRun || promptForChanges) {
 			let message = '';
 
@@ -61,24 +78,14 @@ export async function apply(snapshotPath: string, options?: { yes: boolean; dryR
 				message += heading('Collections');
 
 				for (const { collection, diff } of snapshotDiff.collections) {
-					if (diff[0]?.kind === DiffKind.EDIT || diff[0]?.kind === DiffKind.ARRAY || isNestedMetaUpdate(diff[0])) {
-						message += `\n  - ${updateVerb()} ${collection}`;
+					const name = replaceControlCharacters(collection);
 
-						for (const change of diff) {
-							const path = change.path!.slice(1).join('.');
-
-							if (change.kind === DiffKind.EDIT) {
-								message += `\n    - Set ${path} to ${change.rhs}`;
-							} else if (change.kind === DiffKind.DELETE) {
-								message += `\n    - Remove ${path}`;
-							} else if (change.kind === DiffKind.NEW) {
-								message += `\n    - Add ${path} and set it to ${change.rhs}`;
-							}
-						}
-					} else if (diff[0]?.kind === DiffKind.DELETE) {
-						message += `\n  - ${deleteVerb()} ${collection}`;
-					} else if (diff[0]?.kind === DiffKind.NEW) {
-						message += `\n  - ${createVerb()} ${collection}`;
+					if (isEntityDelete(diff[0])) {
+						message += `\n  - ${deleteVerb()} ${name}`;
+					} else if (diff[0]?.kind === DiffKind.NEW && !isNestedMetaUpdate(diff[0])) {
+						message += `\n  - ${createVerb()} ${name}`;
+					} else {
+						message += `\n  - ${updateVerb()} ${name}` + describeChanges(diff);
 					}
 				}
 			}
@@ -87,26 +94,15 @@ export async function apply(snapshotPath: string, options?: { yes: boolean; dryR
 				message += '\n\n' + heading('Fields');
 
 				for (const { collection, field, diff } of snapshotDiff.fields) {
-					if (diff[0]?.kind === DiffKind.EDIT || isNestedMetaUpdate(diff[0]!)) {
-						message += `\n  - ${updateVerb()} ${collection}.${field}`;
+					const operation = schemaDiffOperation(diff);
+					const name = replaceControlCharacters(`${collection}.${field}`);
 
-						for (const change of diff) {
-							const path = change.path!.slice(1).join('.');
-
-							if (change.kind === DiffKind.EDIT) {
-								message += `\n    - Set ${path} to ${change.rhs}`;
-							} else if (change.kind === DiffKind.DELETE) {
-								message += `\n    - Remove ${path}`;
-							} else if (change.kind === DiffKind.NEW) {
-								message += `\n    - Add ${path} and set it to ${change.rhs}`;
-							}
-						}
-					} else if (diff[0]?.kind === DiffKind.DELETE) {
-						message += `\n  - ${deleteVerb()} ${collection}.${field}`;
-					} else if (diff[0]?.kind === DiffKind.NEW) {
-						message += `\n  - ${createVerb()} ${collection}.${field}`;
-					} else if (diff[0]?.kind === DiffKind.ARRAY) {
-						message += `\n  - ${updateVerb()} ${collection}.${field}`;
+					if (operation === 'create') {
+						message += `\n  - ${createVerb()} ${name}`;
+					} else if (operation === 'delete') {
+						message += `\n  - ${deleteVerb()} ${name}`;
+					} else {
+						message += `\n  - ${updateVerb()} ${name}` + describeChanges(diff);
 					}
 				}
 			}
@@ -115,30 +111,23 @@ export async function apply(snapshotPath: string, options?: { yes: boolean; dryR
 				message += '\n\n' + heading('Relations');
 
 				for (const { collection, field, related_collection, diff } of snapshotDiff.relations) {
-					if (diff[0]?.kind === DiffKind.EDIT) {
-						message += `\n  - ${updateVerb()} ${collection}.${field}`;
+					const operation = schemaDiffOperation(diff);
+					const target = related_collection ? `-> ${related_collection}` : '';
+					const relation = replaceControlCharacters(`${collection}.${field}${target}`);
 
-						for (const change of diff) {
-							if (change.kind === DiffKind.EDIT) {
-								const path = change.path!.slice(1).join('.');
-								message += `\n    - Set ${path} to ${change.rhs}`;
-							}
-						}
-					} else if (diff[0]?.kind === DiffKind.DELETE) {
-						message += `\n  - ${deleteVerb()} ${collection}.${field}`;
-					} else if (diff[0]?.kind === DiffKind.NEW) {
-						message += `\n  - ${createVerb()} ${collection}.${field}`;
-					} else if (diff[0]?.kind === DiffKind.ARRAY) {
-						message += `\n  - ${updateVerb()} ${collection}.${field}`;
+					if (operation === 'create') {
+						message += `\n  - ${createVerb()} ${relation}`;
+					} else if (operation === 'delete') {
+						message += `\n  - ${deleteVerb()} ${relation}`;
 					} else {
-						continue;
-					}
-
-					// Related collection doesn't exist for a2o relationship types
-					if (related_collection) {
-						message += `-> ${related_collection}`;
+						message += `\n  - ${updateVerb()} ${relation}` + describeChanges(diff);
 					}
 				}
+			}
+
+			if (tableDropWarnings.length > 0) {
+				message += '\n\n' + heading('Warnings');
+				for (const warning of tableDropWarnings) message += `\n  - ${warning}`;
 			}
 
 			message = planIntro + '\n\n' + chalk.black(message);
@@ -161,7 +150,11 @@ export async function apply(snapshotPath: string, options?: { yes: boolean; dryR
 			}
 		}
 
-		await applySnapshot(snapshot, { current: currentSnapshot, diff: snapshotDiff, database });
+		if (!dryRun && !promptForChanges && tableDropWarnings.length > 0) {
+			for (const warning of tableDropWarnings) logger.warn(warning);
+		}
+
+		await applyDiff(snapshotDiff, { database, expectedHash: getVersionedHash(currentKeyForm.snapshot) });
 
 		logger.info(`Snapshot applied successfully`);
 
@@ -172,4 +165,23 @@ export async function apply(snapshotPath: string, options?: { yes: boolean; dryR
 		database.destroy();
 		process.exit(1);
 	}
+}
+
+function describeChanges(diff: readonly Diff<unknown>[]): string {
+	let lines = '';
+
+	for (const change of diff) {
+		const segments = change.path ?? [];
+		const path = replaceControlCharacters(segments.slice(1).join('.') || segments.join('.'));
+
+		if (change.kind === DiffKind.EDIT) {
+			lines += `\n    - Set ${path} to ${replaceControlCharacters(change.rhs)}`;
+		} else if (change.kind === DiffKind.DELETE) {
+			lines += `\n    - Remove ${path}`;
+		} else if (change.kind === DiffKind.NEW) {
+			lines += `\n    - Add ${path} and set it to ${replaceControlCharacters(change.rhs)}`;
+		}
+	}
+
+	return lines;
 }

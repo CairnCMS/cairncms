@@ -1,6 +1,8 @@
 import { BaseException } from '@cairncms/exceptions';
 
-export type ConfigPostCommitPhase = 'cache' | 'actions' | 'cache_and_actions';
+export const CONFIG_POST_COMMIT_PHASES = ['cache', 'actions', 'cache_and_actions'] as const;
+
+export type ConfigPostCommitPhase = (typeof CONFIG_POST_COMMIT_PHASES)[number];
 
 const MESSAGES: Record<ConfigPostCommitPhase, string> = {
 	cache:

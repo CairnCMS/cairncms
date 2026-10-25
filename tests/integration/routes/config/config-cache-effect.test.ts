@@ -54,7 +54,10 @@ describeForVendors(
 		}
 
 		function snapshot(api: Api) {
-			return request(api.url).get('/config/snapshot').set('Authorization', `Bearer ${adminToken}`);
+			return request(api.url)
+				.get('/config/snapshot')
+				.query({ manifest_version: '2' })
+				.set('Authorization', `Bearer ${adminToken}`);
 		}
 
 		function apply(api: Api, desired: ConfigSnapshot, destructive = false) {

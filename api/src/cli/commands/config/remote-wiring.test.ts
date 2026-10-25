@@ -62,8 +62,11 @@ vi.mock('./remote-client.js', async (importOriginal) => ({
 }));
 
 import logger from '../../../logger.js';
+import type { CairnConfig, ConfigKind, ConfigRole, ConfigSchemaCollection } from '../../../types/config.js';
 import { readConfigDirectory } from '../../../utils/read-config-directory.js';
 import { configApply } from './apply.js';
+import type { RemoteApplyOutcome } from './remote-client.js';
+import type { RemoteWirePlan, RemoteWireResult } from './remote-response-schema.js';
 import { configSnapshot } from './snapshot.js';
 
 const EMPTY_PLAN = {
@@ -74,6 +77,36 @@ const EMPTY_PLAN = {
 	protections: [],
 	warnings: [],
 };
+
+const EDITOR: ConfigRole = { key: 'editor', name: 'Editor', admin_access: false, app_access: true };
+
+const ARTICLES: ConfigSchemaCollection = {
+	collection: 'articles',
+	meta: null,
+	schema: { name: 'articles' },
+	fields: [],
+	relations: [],
+};
+
+function tree(resources: ConfigKind[], records: Partial<CairnConfig> = {}): CairnConfig {
+	return {
+		manifest: {
+			version: 3,
+			resources,
+			...(resources.includes('schema') && { schema: { release: '1.7.0', vendor: 'postgres' } }),
+		},
+		roles: [],
+		permissions: [],
+		folders: [],
+		settings: [],
+		'extension-settings': [],
+		translations: [],
+		schema: [],
+		...records,
+	};
+}
+
+const SCHEMA_TREE = tree(['roles', 'schema'], { roles: [EDITOR], schema: [ARTICLES] });
 
 const PROTECTED_PLAN = {
 	...EMPTY_PLAN,
@@ -123,6 +156,24 @@ describe('remote configApply wiring', () => {
 		expect(applyRemoteMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
 			dryRun: true,
 			destructive: false,
+			forceSchema: false,
+		});
+	});
+
+	it('forwards --force-schema to the remote apply', async () => {
+		await configApply('./cfg', {
+			yes: false,
+			dryRun: true,
+			destructive: false,
+			forceSchema: true,
+			format: 'human',
+			url: 'https://cms.example',
+		}).catch(() => undefined);
+
+		expect(applyRemoteMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
+			dryRun: true,
+			destructive: false,
+			forceSchema: true,
 		});
 	});
 
@@ -423,6 +474,171 @@ describe('remote version gate as wired', () => {
 
 		expect(process.exit).toHaveBeenCalledWith(3);
 		expect(applyRemoteMock).not.toHaveBeenCalled();
+	});
+
+	it('refuses a schema-managed tree on a server below the schema floor before sending it', async () => {
+		fetchServerVersionMock.mockResolvedValue('1.6.9');
+		vi.mocked(readConfigDirectory).mockResolvedValueOnce(SCHEMA_TREE);
+
+		await configApply('./cfg', {
+			yes: false,
+			dryRun: true,
+			destructive: false,
+			format: 'human',
+			url: 'https://cms.example',
+		}).catch(() => undefined);
+
+		expect(process.exit).toHaveBeenCalledWith(2);
+		expect(vi.mocked(logger.error)).toHaveBeenCalledWith(expect.stringContaining('requires 1.7.0 or newer'));
+		expect(applyRemoteMock).not.toHaveBeenCalled();
+	});
+
+	it('still sends a configuration-only tree to a server at the config floor', async () => {
+		fetchServerVersionMock.mockResolvedValue('1.6.0');
+
+		await configApply('./cfg', {
+			yes: false,
+			dryRun: true,
+			destructive: false,
+			format: 'human',
+			url: 'https://cms.example',
+		}).catch(() => undefined);
+
+		expect(process.exit).toHaveBeenCalledWith(0);
+		expect(applyRemoteMock).toHaveBeenCalledOnce();
+	});
+});
+
+describe('remote schema-managed apply rendering', () => {
+	const ROLE_CREATE: RemoteWirePlan['changes'][number] = {
+		kind: 'roles',
+		operation: 'create',
+		identity: { key: EDITOR.key },
+		values: {
+			name: EDITOR.name,
+			icon: 'supervised_user_circle',
+			description: null,
+			admin_access: EDITOR.admin_access,
+			app_access: EDITOR.app_access,
+			enforce_tfa: false,
+			ip_access: null,
+		},
+	};
+
+	const COLLECTION_CREATE: RemoteWirePlan['changes'][number] = {
+		kind: 'collections',
+		operation: 'create',
+		identity: { collection: ARTICLES.collection },
+		values: { meta: ARTICLES.meta, schema: ARTICLES.schema },
+	};
+
+	const ROLE_RESULT: RemoteWireResult = {
+		roles: { created: [EDITOR.key], updated: [], deleted: [] },
+		permissions: { created: 0, updated: 0, deleted: 0 },
+		folders: { created: [], updated: [], deleted: [] },
+		settings: { updated: [] },
+		'extension-settings': { created: 0, updated: 0, deleted: 0 },
+		translations: { created: 0, updated: 0, deleted: 0 },
+	};
+
+	function plan(planVersion: 2 | 3, changes: RemoteWirePlan['changes']): RemoteWirePlan {
+		return {
+			planVersion,
+			manifestVersion: 3,
+			changes,
+			summary: { create: changes.length, update: 0, delete: 0 },
+			protections: [],
+			warnings: [],
+		};
+	}
+
+	function messages(): string[] {
+		return vi.mocked(logger.info).mock.calls.map((call) => String(call[0]));
+	}
+
+	async function applyTree(desired: CairnConfig, outcome: RemoteApplyOutcome): Promise<void> {
+		vi.mocked(readConfigDirectory).mockResolvedValueOnce(desired);
+		fetchServerVersionMock.mockResolvedValue('1.7.0');
+		applyRemoteMock.mockResolvedValue(outcome);
+
+		await configApply('./cfg', {
+			yes: true,
+			dryRun: false,
+			destructive: false,
+			format: 'human',
+			url: 'https://cms.example',
+		}).catch(() => undefined);
+	}
+
+	it('renders the plan, the configuration result, and then the steps, as the local CLI does', async () => {
+		await applyTree(SCHEMA_TREE, {
+			plan: plan(3, [ROLE_CREATE, COLLECTION_CREATE]),
+			result: ROLE_RESULT,
+			steps: { folders: 'skipped', schema: 'committed', configuration: 'committed' },
+		});
+
+		expect(process.exit).toHaveBeenCalledWith(0);
+
+		const shown = messages();
+		expect(shown).toHaveLength(3);
+		expect(shown[0]).toContain('articles');
+		expect(shown[1]).toBe('Config applied: 1 role(s) created');
+		expect(shown[2]).toContain('Schema: applied');
+		expect(shown[2]).toContain('Configuration: applied');
+	});
+
+	it('renders the steps without a configuration result for a schema-only run', async () => {
+		await applyTree(tree(['schema'], { schema: [ARTICLES] }), {
+			plan: plan(3, [COLLECTION_CREATE]),
+			result: null,
+			steps: { folders: 'skipped', schema: 'committed', configuration: 'skipped' },
+		});
+
+		expect(process.exit).toHaveBeenCalledWith(0);
+
+		const shown = messages();
+		expect(shown).toHaveLength(2);
+		expect(shown[1]).toContain('Configuration: no changes');
+		expect(shown.join('\n')).not.toContain('Config applied');
+	});
+
+	it('renders a configuration write the run committed after an empty preview', async () => {
+		await applyTree(SCHEMA_TREE, {
+			plan: plan(3, []),
+			result: ROLE_RESULT,
+			steps: { folders: 'skipped', schema: 'skipped', configuration: 'committed' },
+		});
+
+		expect(process.exit).toHaveBeenCalledWith(0);
+
+		const shown = messages();
+		expect(shown).toHaveLength(2);
+		expect(shown[0]).toBe('Config applied: 1 role(s) created');
+		expect(shown[1]).toContain('Configuration: applied');
+		expect(shown.join('\n')).not.toContain('No changes to apply.');
+	});
+
+	it('prints only the no-change message when an empty preview commits nothing', async () => {
+		await applyTree(SCHEMA_TREE, {
+			plan: plan(3, []),
+			result: null,
+			steps: { folders: 'skipped', schema: 'skipped', configuration: 'skipped' },
+		});
+
+		expect(process.exit).toHaveBeenCalledWith(0);
+		expect(messages()).toEqual(['No changes to apply.']);
+	});
+
+	it('does not render steps for a configuration-only tree', async () => {
+		await applyTree(tree(['roles'], { roles: [EDITOR] }), {
+			plan: plan(2, [ROLE_CREATE]),
+			result: ROLE_RESULT,
+			steps: { folders: 'not_run', schema: 'not_run', configuration: 'committed' },
+		});
+
+		expect(process.exit).toHaveBeenCalledWith(0);
+		expect(messages()).toHaveLength(2);
+		expect(messages().join('\n')).not.toContain('Steps');
 	});
 });
 

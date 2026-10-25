@@ -17,6 +17,7 @@ import { computeConfigPlan } from '../../compute-config-plan.js';
 import { readCurrentConfig } from '../../get-config-snapshot.js';
 import { readConfigDirectory } from '../../read-config-directory.js';
 import { validateDesiredConfig } from '../../validate-desired-config.js';
+import { serializeToWire } from '../wire.js';
 import { writeConfigDirectory } from '../../write-config-directory.js';
 import { translationsDescriptor } from './translations.js';
 
@@ -84,6 +85,7 @@ function desired(translations: ConfigTranslationsAuthored[]): CairnConfig {
 		settings: [],
 		'extension-settings': [],
 		translations,
+		schema: [],
 	};
 }
 
@@ -161,7 +163,7 @@ describe('translations through the real apply engine on SQLite', () => {
 	async function runValidatedApply(config: CairnConfig, options: { destructive?: boolean } = {}): Promise<void> {
 		const { config: current, currentRoleKeys, currentFolderKeys, currentFolderParents, stateToken } = await snapshot();
 
-		const failures = validateDesiredConfig(config, {
+		const failures = validateDesiredConfig(serializeToWire(config, config.manifest.version), {
 			label: 'sqlite validated apply',
 			references: 'current-state',
 			currentRoleKeys,
@@ -293,7 +295,7 @@ describe('translations through the real apply engine on SQLite', () => {
 			await writeConfigDirectory(config, dir);
 			const readBack = await readConfigDirectory(dir);
 
-			const failures = validateDesiredConfig(readBack, {
+			const failures = validateDesiredConfig(serializeToWire(readBack, readBack.manifest.version), {
 				label: 'round-trip',
 				references: 'current-state',
 				currentRoleKeys,
@@ -339,7 +341,7 @@ describe('translations through the real apply engine on SQLite', () => {
 			'{"language": "fr-FR", "translations": {"__proto__": 5}}'
 		) as ConfigTranslationsAuthored;
 
-		const document = desired([malformed]);
+		const document = serializeToWire(desired([malformed]), 2);
 
 		const authored = validateDesiredConfig(document, {
 			label: 'authored',
@@ -350,18 +352,24 @@ describe('translations through the real apply engine on SQLite', () => {
 		});
 
 		expect(authored.map((failure) => failure.code)).toContain('CONFIG_INVALID');
+		expect(authored.map((failure) => failure.message).join('\n')).toContain('must be a string value');
 
 		const portable = validateDesiredConfig(document, { label: 'snapshot', references: 'server-snapshot' });
 
 		expect(portable.map((failure) => failure.code)).toContain('CONFIG_INVALID');
+		expect(portable.map((failure) => failure.message).join('\n')).toContain('must be a string value');
 	});
 
 	it('rejects an unpaired surrogate key and value through the shared validator in both modes', () => {
-		const badKey = desired([
-			{ language: 'fr-FR', translations: JSON.parse('{"a\\ud800": "x"}') as Record<string, string> },
-		]);
+		const badKey = serializeToWire(
+			desired([{ language: 'fr-FR', translations: JSON.parse('{"a\\ud800": "x"}') as Record<string, string> }]),
+			2
+		);
 
-		const badValue = desired([{ language: 'fr-FR', translations: { k: `v${String.fromCharCode(0xdc00)}` } }]);
+		const badValue = serializeToWire(
+			desired([{ language: 'fr-FR', translations: { k: `v${String.fromCharCode(0xdc00)}` } }]),
+			2
+		);
 
 		for (const document of [badKey, badValue]) {
 			const authored = validateDesiredConfig(document, {
@@ -373,16 +381,19 @@ describe('translations through the real apply engine on SQLite', () => {
 			});
 
 			expect(authored.map((failure) => failure.code)).toContain('CONFIG_INVALID');
+			expect(authored.map((failure) => failure.message).join('\n')).toContain('not well-formed Unicode');
 
 			const portable = validateDesiredConfig(document, { label: 'snapshot', references: 'server-snapshot' });
 			expect(portable.map((failure) => failure.code)).toContain('CONFIG_INVALID');
+			expect(portable.map((failure) => failure.message).join('\n')).toContain('not well-formed Unicode');
 		}
 	});
 
 	it('accepts a 255 code point astral key through the shared validator in both modes', () => {
-		const document = desired([
-			{ language: 'fr-FR', translations: { [String.fromCodePoint(0x1f600).repeat(255)]: 'ok' } },
-		]);
+		const document = serializeToWire(
+			desired([{ language: 'fr-FR', translations: { [String.fromCodePoint(0x1f600).repeat(255)]: 'ok' } }]),
+			2
+		);
 
 		expect(
 			validateDesiredConfig(document, {
@@ -412,7 +423,7 @@ describe('translations through the real apply engine on SQLite', () => {
 
 			const readBack = await readConfigDirectory(dir);
 
-			const failures = validateDesiredConfig(readBack, {
+			const failures = validateDesiredConfig(serializeToWire(readBack, readBack.manifest.version), {
 				label: 'yaml',
 				references: 'current-state',
 				currentRoleKeys: new Set<string>(),
@@ -682,9 +693,12 @@ describe('translations through the real apply engine on SQLite', () => {
 	});
 
 	it('refuses an own __proto__ document field through the shared validator in both modes', () => {
-		const document = desired([
-			JSON.parse('{"language": "fr-FR", "translations": {}, "__proto__": {"x": "y"}}') as ConfigTranslationsAuthored,
-		]);
+		const document = serializeToWire(
+			desired([
+				JSON.parse('{"language": "fr-FR", "translations": {}, "__proto__": {"x": "y"}}') as ConfigTranslationsAuthored,
+			]),
+			2
+		);
 
 		const authored = validateDesiredConfig(document, {
 			label: 'proto',

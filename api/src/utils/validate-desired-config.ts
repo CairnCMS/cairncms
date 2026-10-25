@@ -1,3 +1,4 @@
+import type { SchemaOverview } from '@cairncms/types';
 import Joi from 'joi';
 import { isPlainObject } from 'lodash-es';
 import { ConfigInvalidException } from '../exceptions/config-invalid.js';
@@ -8,11 +9,15 @@ import {
 	type ConfigFailure,
 	type ConfigKind,
 	type ConfigManifest,
+	type ConfigSchemaCollection,
 } from '../types/config.js';
+import type { SnapshotField } from '../types/index.js';
 import type { ExtensionDeclarationSnapshot, ReferenceStateSource, ValidationContext } from './config/descriptor.js';
 import { invalid } from './config/failures.js';
 import { buildDocumentSchema, type SchemaMode } from './config/field-schema.js';
+import { computeSchemaPlan } from './config/handlers/schema.js';
 import { isPlaceholder } from './config/placeholder.js';
+import { projectCollections } from './config/projected-collections.js';
 import { getDescriptor, kindsForVersion, listConfigKinds } from './config/registry.js';
 import { SUPPORTED_MANIFEST_VERSIONS, type ManifestVersion } from './config-contract.js';
 import { replaceControlCharacters, safeLogFragment } from './safe-log-fragment.js';
@@ -39,6 +44,10 @@ const MANIFEST = Joi.object({
 		.items(Joi.string().valid(...CONFIG_KINDS))
 		.unique()
 		.required(),
+	schema: Joi.object({
+		release: Joi.string().required(),
+		vendor: Joi.string().required(),
+	}),
 });
 
 function messagesOf(error: Joi.ValidationError | undefined): string[] {
@@ -82,6 +91,12 @@ export function validateConfigManifest(value: unknown, label: string): ConfigMan
 		);
 	}
 
+	if (manifest.schema !== undefined && (manifest.version !== 3 || !manifest.resources.includes('schema'))) {
+		throw new ConfigInvalidException(
+			`Config manifest in ${where} declares schema provenance, which requires manifest version 3 managing the schema resource.`
+		);
+	}
+
 	return manifest;
 }
 
@@ -93,7 +108,9 @@ export type DesiredConfigContext = {
 	label: string;
 	/** Target-only context; omitted when validating a portable server snapshot. */
 	extensionDeclarations?: ExtensionDeclarationSnapshot;
-	currentCollections?: ReadonlySet<string>;
+	currentCollections?: SchemaOverview['collections'];
+	/** The current schema a managed desired schema is planned against. */
+	currentSchema?: { records: ConfigSchemaCollection[]; storedFields: SnapshotField[] };
 } & ReferenceStateSource;
 
 /**
@@ -215,7 +232,6 @@ export function validateDesiredConfig(document: unknown, context: DesiredConfigC
 		foldersManaged,
 		declaredFolderKeys,
 		...(context.extensionDeclarations !== undefined && { extensionDeclarations: context.extensionDeclarations }),
-		...(context.currentCollections !== undefined && { currentCollections: context.currentCollections }),
 		...referenceSource(context),
 	};
 
@@ -227,18 +243,57 @@ export function validateDesiredConfig(document: unknown, context: DesiredConfigC
 		settings: (body['settings'] ?? []) as CairnConfig['settings'],
 		'extension-settings': (body['extension-settings'] ?? []) as CairnConfig['extension-settings'],
 		translations: (body['translations'] ?? []) as CairnConfig['translations'],
+		schema: (body['schema'] ?? []) as CairnConfig['schema'],
 	}).map((problem) =>
 		invalid(`${problem}, which cannot be stored because the reader would substitute it. Send a resolved value.`)
 	);
 
+	const schemaFailures = managed.has('schema') ? validateKind('schema', body, validationContext) : [];
+
+	const collections = referencedCollections(
+		managed,
+		context,
+		body['schema'] as ConfigSchemaCollection[],
+		schemaFailures
+	);
+
+	const kindContext =
+		collections === undefined ? validationContext : { ...validationContext, currentCollections: collections };
+
 	for (const kind of listConfigKinds()) {
 		if (!managed.has(kind)) continue;
-
-		const descriptor = getDescriptor(kind);
-		const documents = body[kind];
-		const { records } = descriptor.projectDocuments(documents as never);
-		failures.push(...descriptor.handler.validateDesired(documents as never, records as never, validationContext));
+		failures.push(...(kind === 'schema' ? schemaFailures : validateKind(kind, body, kindContext)));
 	}
 
 	return failures;
+}
+
+function validateKind(kind: ConfigKind, body: Record<string, unknown>, context: ValidationContext): ConfigFailure[] {
+	const descriptor = getDescriptor(kind);
+	const documents = body[kind];
+	const { records } = descriptor.projectDocuments(documents as never);
+	return descriptor.handler.validateDesired(documents as never, records as never, context);
+}
+
+/**
+ * Collection-scoped references resolve against the collections that exist when the configuration step runs, which for a
+ * managed schema are the ones its plan leaves. A desired schema that fails validation has no plan to project from.
+ */
+function referencedCollections(
+	managed: ReadonlySet<ConfigKind>,
+	context: DesiredConfigContext,
+	desiredSchema: ConfigSchemaCollection[],
+	schemaFailures: ConfigFailure[]
+): ReadonlySet<string> | undefined {
+	if (context.currentCollections === undefined) return undefined;
+	if (!managed.has('schema')) return new Set(Object.keys(context.currentCollections));
+	if (schemaFailures.length > 0) return undefined;
+
+	const schemaPlan = computeSchemaPlan(
+		context.currentSchema?.records ?? [],
+		desiredSchema,
+		context.currentSchema?.storedFields
+	);
+
+	return projectCollections(context.currentCollections, schemaPlan);
 }

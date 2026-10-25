@@ -169,10 +169,8 @@ A confined write fires filter and action hooks exactly like a write from REST, G
 
 Activity and revisions follow the collection's accountability setting. A collection with accountability disabled records neither. An authenticated `{ accountability: 'user' }` call is attributed to the invoking user. Public and `full-access` calls record a null user, the same way a full-access flow records its writes, not the extension that performed them.
 
-::: warning A hook that writes what it subscribes to will recurse
-
+:::caution[A hook that writes what it subscribes to will recurse]
 An action hook can trigger itself by writing to a collection it watches. The per-invocation limits do not stop this event chain. Use an idempotency or termination check, or write to another collection.
-
 :::
 
 ## Capabilities

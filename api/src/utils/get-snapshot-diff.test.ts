@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Snapshot } from '../types/index.js';
+import type { Collection, Snapshot } from '../types/index.js';
 import { getSnapshotDiff } from './get-snapshot-diff.js';
 
 function snapshot(overrides: Partial<Snapshot>): Snapshot {
@@ -67,5 +67,29 @@ describe('getSnapshotDiff nested-meta suppression', () => {
 
 		expect(diff.fields.some((f) => f.collection === 'articles')).toBe(false);
 		expect(diff.relations.some((r) => r.collection === 'articles')).toBe(false);
+	});
+
+	it('keeps field and relation diffs when the collection only omits its null metadata', () => {
+		const table = { name: 'articles' } as Collection['schema'];
+		const unconfigured: Collection = { collection: 'articles', meta: null, schema: table };
+
+		const current = snapshot({
+			collections: [unconfigured],
+			fields: [titleField('old')],
+			relations: [authorRelation('a')],
+		});
+
+		const after = snapshot({
+			collections: [{ collection: 'articles', schema: table } as unknown as Collection],
+			fields: [titleField('new')],
+			relations: [authorRelation('b')],
+		});
+
+		const diff = getSnapshotDiff(current, after);
+
+		expect(diff.collections).toEqual([{ collection: 'articles', diff: [{ kind: 'D', path: ['meta'], lhs: null }] }]);
+
+		expect(diff.fields.some((f) => f.collection === 'articles' && f.field === 'title')).toBe(true);
+		expect(diff.relations.some((r) => r.collection === 'articles' && r.field === 'author')).toBe(true);
 	});
 });

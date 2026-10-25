@@ -1,3 +1,4 @@
+import type { Diff, DiffDeleted } from 'deep-diff';
 import type { Knex } from 'knex';
 import knex from 'knex';
 import { createTracker, MockClient, Tracker } from 'knex-mock-client';
@@ -10,14 +11,29 @@ import {
 	snapshotCreateCollection,
 	snapshotCreateCollectionNotNested,
 } from '../__utils__/snapshots.js';
-import { CollectionsService, FieldsService } from '../services/index.js';
-import type { Snapshot, SnapshotField } from '../types/index.js';
-import { applySnapshot } from './apply-snapshot.js';
+import { InvalidPayloadException } from '../exceptions/index.js';
+import { CollectionsService, FieldsService, RelationsService } from '../services/index.js';
+import type { CollectionMeta } from '../types/collection.js';
+import type { Collection, Snapshot, SnapshotDiff, SnapshotField } from '../types/index.js';
+import { applyDiff } from './apply-diff.js';
+import { getTargetSnapshotDiff } from './get-target-snapshot-diff.js';
+import { getSnapshot } from './get-snapshot.js';
 import * as getSchema from './get-schema.js';
+
+vi.mock('./get-snapshot.js', () => ({ getSnapshot: vi.fn() }));
+vi.mock('./get-versioned-hash.js', () => ({ getVersionedHash: () => 'HASH' }));
+
+vi.mock('../database/bound-transaction.js', () => ({
+	runInBoundSerializable: async (database: any, fn: any, flush: any) => {
+		const result = await database.transaction(fn);
+		await flush({ events: [], responseCacheDirty: false, systemCacheDirty: false });
+		return result;
+	},
+}));
 
 class Client_PG extends MockClient {}
 
-describe('applySnapshot', () => {
+describe('applyDiff via target snapshot diff', () => {
 	let db: MockedFunction<Knex>;
 	let tracker: Tracker;
 
@@ -30,6 +46,7 @@ describe('applySnapshot', () => {
 	beforeEach(() => {
 		db = vi.mocked(knex.default({ client: Client_PG }));
 		tracker = createTracker(db);
+		tracker.on.select('directus_folders').response([]);
 	});
 
 	afterEach(() => {
@@ -99,17 +116,20 @@ describe('applySnapshot', () => {
 				],
 			};
 
-			// Stop call to db later on in apply-snapshot
+			// Stop call to db later on in apply-diff
 			vi.spyOn(getSchema, 'getSchema').mockReturnValue(Promise.resolve(snapshotApplyTestSchema));
 			// We are not actually testing that createOne works, just that is is called correctly
 			const createOneCollectionSpy = vi.spyOn(CollectionsService.prototype, 'createOne').mockResolvedValue('test');
 			const createFieldSpy = vi.spyOn(FieldsService.prototype, 'createField').mockResolvedValue();
 
-			await applySnapshot(snapshotCreateCollectionNotNested, {
-				database: db,
+			vi.mocked(getSnapshot).mockResolvedValue(snapshotBeforeCreateCollection);
+
+			const diff = await getTargetSnapshotDiff(snapshotCreateCollectionNotNested, {
 				current: snapshotBeforeCreateCollection,
-				schema: snapshotApplyTestSchema,
+				database: db,
 			});
+
+			await applyDiff(diff, { database: db, expectedHash: 'HASH' });
 
 			expect(createOneCollectionSpy).toHaveBeenCalledTimes(1);
 			expect(createOneCollectionSpy).toHaveBeenCalledWith(expected, mutationOptions);
@@ -240,17 +260,20 @@ describe('applySnapshot', () => {
 				schema: { name: 'test_table_3' },
 			};
 
-			// Stop call to db later on in apply-snapshot
+			// Stop call to db later on in apply-diff
 			vi.spyOn(getSchema, 'getSchema').mockReturnValue(Promise.resolve(snapshotApplyTestSchema));
 			// We are not actually testing that createOne works, just that is is called correctly
 			const createOneCollectionSpy = vi.spyOn(CollectionsService.prototype, 'createOne').mockResolvedValue('test');
 			const createFieldSpy = vi.spyOn(FieldsService.prototype, 'createField').mockResolvedValue();
 
-			await applySnapshot(snapshotCreateCollection, {
-				database: db,
+			vi.mocked(getSnapshot).mockResolvedValue(snapshotBeforeCreateCollection);
+
+			const diff = await getTargetSnapshotDiff(snapshotCreateCollection, {
 				current: snapshotBeforeCreateCollection,
-				schema: snapshotApplyTestSchema,
+				database: db,
 			});
+
+			await applyDiff(diff, { database: db, expectedHash: 'HASH' });
 
 			expect(createOneCollectionSpy).toHaveBeenCalledTimes(2);
 			expect(createOneCollectionSpy).toHaveBeenCalledWith(expected, mutationOptions);
@@ -397,23 +420,25 @@ describe('applySnapshot', () => {
 					],
 				};
 
-				// Stop call to db later on in apply-snapshot
+				// Stop call to db later on in apply-diff
 				vi.spyOn(getSchema, 'getSchema').mockReturnValue(Promise.resolve(snapshotApplyTestSchema));
 				// We are not actually testing that createOne works, just that is is called with the right data type
 				const createOneCollectionSpy = vi.spyOn(CollectionsService.prototype, 'createOne').mockResolvedValue('test');
 				vi.spyOn(FieldsService.prototype, 'createField').mockResolvedValue();
 
-				await applySnapshot(snapshotToApply, {
-					database: db,
-					current: {
-						version: 1,
-						directus: '0.0.0',
-						collections: [],
-						fields: [],
-						relations: [],
-					},
-					schema: snapshotApplyTestSchema,
-				});
+				const current: Snapshot = {
+					version: 1,
+					directus: '0.0.0',
+					collections: [],
+					fields: [],
+					relations: [],
+				};
+
+				vi.mocked(getSnapshot).mockResolvedValue(current);
+
+				const diff = await getTargetSnapshotDiff(snapshotToApply, { current, database: db });
+
+				await applyDiff(diff, { database: db, expectedHash: 'HASH' });
 
 				expect(createOneCollectionSpy).toHaveBeenCalledOnce();
 				expect(createOneCollectionSpy).toHaveBeenCalledWith(expected, mutationOptions);
@@ -431,18 +456,241 @@ describe('applySnapshot', () => {
 				relations: [],
 			};
 
-			// Stop call to db later on in apply-snapshot
+			// Stop call to db later on in apply-diff
 			vi.spyOn(getSchema, 'getSchema').mockReturnValue(Promise.resolve(snapshotApplyTestSchema));
 			// We are not actually testing that deleteOne works, just that is is called correctly
 			const deleteOneCollectionSpy = vi.spyOn(CollectionsService.prototype, 'deleteOne').mockResolvedValue('test');
 
-			await applySnapshot(snapshotToApply, {
-				database: db,
+			vi.mocked(getSnapshot).mockResolvedValue(snapshotBeforeDeleteCollection);
+
+			const diff = await getTargetSnapshotDiff(snapshotToApply, {
 				current: snapshotBeforeDeleteCollection,
-				schema: snapshotApplyTestSchema,
+				database: db,
 			});
 
+			await applyDiff(diff, { database: db, expectedHash: 'HASH' });
+
 			expect(deleteOneCollectionSpy).toHaveBeenCalledTimes(3);
+		});
+
+		const definition = (collection: string, group: string | null, table = true): Collection => ({
+			collection,
+			meta: { collection, group } as CollectionMeta,
+			schema: table ? ({ name: collection } as Collection['schema']) : null,
+		});
+
+		const snapshotOf = (collections: Collection[]): Snapshot => ({
+			version: 1,
+			directus: '0.0.0',
+			collections,
+			fields: [],
+			relations: [],
+		});
+
+		const deletion = (lhs: Collection): DiffDeleted<Collection> => ({ kind: 'D', lhs });
+
+		it('Deletes dropped collections whose group survives or that have no metadata row, children first', async () => {
+			const imported: Collection = { ...definition('imported', null), meta: null };
+			const archive = definition('archive', 'content');
+			const entries = definition('entries', 'archive');
+
+			const diff: SnapshotDiff = {
+				collections: [
+					{ collection: 'archive', diff: [deletion(archive)] },
+					{ collection: 'entries', diff: [deletion(entries)] },
+					{ collection: 'imported', diff: [deletion(imported)] },
+				],
+				fields: [],
+				relations: [],
+			};
+
+			vi.spyOn(getSchema, 'getSchema').mockReturnValue(Promise.resolve(snapshotApplyTestSchema));
+			const deleteOneCollectionSpy = vi.spyOn(CollectionsService.prototype, 'deleteOne').mockResolvedValue('test');
+
+			vi.mocked(getSnapshot).mockResolvedValue(
+				snapshotOf([definition('content', null, false), archive, entries, imported])
+			);
+
+			await applyDiff(diff, { database: db, expectedHash: 'HASH' });
+
+			expect(deleteOneCollectionSpy.mock.calls.map(([collection]) => collection)).toEqual([
+				'entries',
+				'archive',
+				'imported',
+			]);
+		});
+
+		it.each([
+			['schema', { name: 'articles' }],
+			['meta', { collection: 'articles', group: null }],
+		])('Refuses removing only the %s of a kept collection and deletes nothing', async (attribute, lhs) => {
+			const removal: Diff<unknown> = { kind: 'D', path: [attribute], lhs };
+
+			const diff: SnapshotDiff = {
+				collections: [{ collection: 'articles', diff: [removal as Diff<Collection | undefined>] }],
+				fields: [],
+				relations: [],
+			};
+
+			vi.spyOn(getSchema, 'getSchema').mockReturnValue(Promise.resolve(snapshotApplyTestSchema));
+			const deleteOneCollectionSpy = vi.spyOn(CollectionsService.prototype, 'deleteOne').mockResolvedValue('test');
+			vi.mocked(getSnapshot).mockResolvedValue(snapshotOf([definition('articles', null)]));
+
+			await expect(applyDiff(diff, { database: db, expectedHash: 'HASH' })).rejects.toBeInstanceOf(
+				InvalidPayloadException
+			);
+
+			expect(deleteOneCollectionSpy).not.toHaveBeenCalled();
+		});
+	});
+
+	describe('Drop a collection that a kept field references', () => {
+		const keyField = (collection: string, field: string, related: string | null = null) => ({
+			collection,
+			field,
+			type: 'integer',
+			meta: null,
+			schema: {
+				name: field,
+				table: collection,
+				data_type: 'integer',
+				is_primary_key: related === null && field === 'id',
+				foreign_key_table: related,
+				foreign_key_column: related === null ? null : 'id',
+			},
+		});
+
+		const reference = (collection: string, field: string, related: string) => ({
+			collection,
+			field,
+			related_collection: related,
+			meta: null,
+			schema: { table: collection, column: field, foreign_key_table: related, foreign_key_column: 'id' },
+		});
+
+		const snapshotFor = (owners: Record<string, Record<string, string | null>>, relations: unknown[]): Snapshot =>
+			({
+				version: 1,
+				directus: '0.0.0',
+				collections: Object.keys(owners).map((collection) => ({
+					collection,
+					meta: null,
+					schema: { name: collection },
+				})),
+				fields: Object.entries(owners).flatMap(([collection, fields]) =>
+					Object.entries(fields).map(([field, related]) => keyField(collection, field, related))
+				),
+				relations,
+			} as unknown as Snapshot);
+
+		const overviewFor = (owners: Record<string, Record<string, string | null>>, relations: unknown[]) =>
+			({
+				collections: Object.fromEntries(
+					Object.entries(owners).map(([collection, fields]) => [
+						collection,
+						{
+							collection,
+							primary: 'id',
+							singleton: false,
+							sortField: null,
+							note: null,
+							accountability: 'all',
+							fields: Object.fromEntries(Object.keys(fields).map((field) => [field, { field, type: 'integer' }])),
+						},
+					])
+				),
+				relations,
+			} as unknown as Awaited<ReturnType<typeof getSchema.getSchema>>);
+
+		async function applyDropping(
+			owners: Record<string, Record<string, string | null>>,
+			relations: ReturnType<typeof reference>[],
+			dropped: string,
+			removed: { collection: string; field: string }
+		): Promise<void> {
+			const current = snapshotFor(owners, relations);
+
+			const desired: Snapshot = {
+				...current,
+				collections: current.collections.filter((entry) => entry.collection !== dropped),
+				fields: current.fields.filter((entry) => entry.collection !== dropped),
+				relations: current.relations.filter(
+					(entry) =>
+						entry.related_collection !== dropped &&
+						!(entry.collection === removed.collection && entry.field === removed.field)
+				),
+			};
+
+			vi.spyOn(getSchema, 'getSchema').mockReturnValue(Promise.resolve(overviewFor(owners, relations)));
+			vi.mocked(getSnapshot).mockResolvedValue(current);
+
+			const diff = await getTargetSnapshotDiff(desired, { current, database: db });
+			await applyDiff(diff, { database: db, expectedHash: 'HASH' });
+		}
+
+		it('deletes the dropped relation once and still deletes an unrelated one', async () => {
+			const deleteCollection = vi.spyOn(CollectionsService.prototype, 'deleteOne').mockResolvedValue('authors');
+			const deleteRelation = vi.spyOn(RelationsService.prototype, 'deleteOne').mockResolvedValue();
+
+			await applyDropping(
+				{
+					articles: { id: null, author: 'authors', editor: 'editors' },
+					authors: { id: null },
+					editors: { id: null },
+				},
+				[reference('articles', 'author', 'authors'), reference('articles', 'editor', 'editors')],
+				'authors',
+				{ collection: 'articles', field: 'editor' }
+			);
+
+			expect(deleteCollection.mock.calls.map(([collection]) => collection)).toEqual(['authors']);
+
+			expect(deleteRelation.mock.calls.map(([collection, field]) => [collection, field])).toEqual([
+				['articles', 'author'],
+				['articles', 'editor'],
+			]);
+		});
+
+		it('keeps a dropped relation apart from another whose names join to the same string', async () => {
+			vi.spyOn(CollectionsService.prototype, 'deleteOne').mockResolvedValue('x');
+			const deleteRelation = vi.spyOn(RelationsService.prototype, 'deleteOne').mockResolvedValue();
+
+			await applyDropping(
+				{
+					'a.b': { id: null, c: 'x' },
+					a: { id: null, 'b.c': 'y' },
+					x: { id: null },
+					y: { id: null },
+				},
+				[reference('a.b', 'c', 'x'), reference('a', 'b.c', 'y')],
+				'x',
+				{ collection: 'a', field: 'b.c' }
+			);
+
+			expect(deleteRelation.mock.calls.map(([collection, field]) => [collection, field])).toEqual([
+				['a.b', 'c'],
+				['a', 'b.c'],
+			]);
+		});
+
+		it('fails the run without deleting the collection when its relation cleanup fails', async () => {
+			const deleteCollection = vi.spyOn(CollectionsService.prototype, 'deleteOne').mockResolvedValue('authors');
+
+			const deleteRelation = vi
+				.spyOn(RelationsService.prototype, 'deleteOne')
+				.mockRejectedValue(new Error('relation cleanup failed'));
+
+			await expect(
+				applyDropping(
+					{ articles: { id: null, author: 'authors' }, authors: { id: null } },
+					[reference('articles', 'author', 'authors')],
+					'authors',
+					{ collection: 'articles', field: 'author' }
+				)
+			).rejects.toThrow();
+
+			expect(deleteRelation).toHaveBeenCalledTimes(1);
+			expect(deleteCollection).not.toHaveBeenCalled();
 		});
 	});
 });

@@ -1,5 +1,6 @@
 import type { Knex } from 'knex';
 import type { FolderDeletionImpactEntry, SettingsRetarget } from '../../../types/config.js';
+import { readFieldFolderReferences } from '../folder-deletion-guard.js';
 import { resolveFolderReference } from '../folder-id-lookup.js';
 
 type FolderDeletionPlan = {
@@ -10,21 +11,6 @@ type FolderDeletionPlan = {
 type Blocker = FolderDeletionImpactEntry['blockedBy'];
 
 const BLOCKER_ORDER: Blocker[] = ['files', 'folders', 'storage_default_folder', 'options.folder'];
-
-function parseOptions(value: unknown): Record<string, unknown> | undefined {
-	if (value && typeof value === 'object') return value as Record<string, unknown>;
-
-	if (typeof value === 'string') {
-		try {
-			const parsed = JSON.parse(value);
-			return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : undefined;
-		} catch {
-			return undefined;
-		}
-	}
-
-	return undefined;
-}
 
 function orderBlockers(observed: Set<Blocker>): FolderDeletionImpactEntry[] {
 	return BLOCKER_ORDER.filter((blocker) => observed.has(blocker)).map((blockedBy) => ({ blockedBy }));
@@ -80,11 +66,9 @@ export async function readFolderDeletionImpact(
 	}
 
 	const optionsFolderBlocked = new Set<string>();
-	const fields = await database.select('options').from('directus_fields').whereNotNull('options');
 
-	for (const field of fields) {
-		const folder = parseOptions(field['options'])?.['folder'];
-		const blockedKey = await resolveFolderReference(database, deletionIdToKey, folder);
+	for (const reference of await readFieldFolderReferences(database)) {
+		const blockedKey = await resolveFolderReference(database, deletionIdToKey, reference);
 		if (blockedKey !== undefined) optionsFolderBlocked.add(blockedKey);
 	}
 

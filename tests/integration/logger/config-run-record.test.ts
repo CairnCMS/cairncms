@@ -200,9 +200,22 @@ describeForVendors(
 
 				cliEnv = { CAIRNCMS_TOKEN: common.USER.ADMIN!.TOKEN, LOG_LEVEL: 'info', LOG_STYLE: 'raw' };
 
-				const snapshot = await adminAuth(setupRequest(api.url).get('/config/snapshot'));
+				const snapshot = await adminAuth(
+					setupRequest(api.url).get('/config/snapshot').query({ manifest_version: '2' })
+				);
+
 				if (snapshot.statusCode !== 200) throw new Error(`snapshot failed (${snapshot.statusCode})`);
 				baseline = snapshot.body.data;
+
+				await fs.mkdir(configDir, { recursive: true });
+
+				await fs.writeFile(
+					path.join(configDir, 'cairncms-config.yaml'),
+					dumpYaml({
+						version: 2,
+						resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+					})
+				);
 
 				const localSnapshot = await runCli(api, ['config', 'snapshot', configDir, '--yes'], cliEnv);
 				expect(localSnapshot.status).toBe(0);

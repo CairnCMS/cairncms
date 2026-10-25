@@ -1,22 +1,31 @@
+import { isPlainObject } from 'lodash-es';
 import type { Knex } from 'knex';
 import type { MutationGuard } from '../../database/mutation-guard.js';
 import { ConfigFolderInUseException } from '../../exceptions/index.js';
 import type { PrimaryKey } from '../../types/index.js';
+import { parseJsonColumn, visitFolderReferences } from '../folder-references.js';
 import { resolveFolderReference } from './folder-id-lookup.js';
 
-function parseOptions(value: unknown): Record<string, unknown> | undefined {
-	if (value && typeof value === 'object') return value as Record<string, unknown>;
+export async function readFieldFolderReferences(database: Knex): Promise<unknown[]> {
+	const fields = await database
+		.select('interface', 'options', 'conditions')
+		.from('directus_fields')
+		.where((query) => query.whereNotNull('options').orWhereNotNull('conditions'));
 
-	if (typeof value === 'string') {
-		try {
-			const parsed = JSON.parse(value);
-			return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : undefined;
-		} catch {
-			return undefined;
-		}
+	const references: unknown[] = [];
+
+	for (const field of fields) {
+		const options = parseJsonColumn(field['options']);
+
+		if (isPlainObject(options)) references.push((options as Record<string, unknown>)['folder']);
+
+		visitFolderReferences(
+			{ interface: field['interface'], options, conditions: parseJsonColumn(field['conditions']) },
+			(_path, value) => references.push(value)
+		);
 	}
 
-	return undefined;
+	return references;
 }
 
 export class FolderDeletionGuard implements MutationGuard {
@@ -53,12 +62,9 @@ export class FolderDeletionGuard implements MutationGuard {
 		}
 
 		const deletedIds = new Map<string, true>(keys.map((key) => [String(key), true]));
-		const fields = await trx.select('options').from('directus_fields').whereNotNull('options');
 
-		for (const field of fields) {
-			const folder = parseOptions(field['options'])?.['folder'];
-
-			if (await resolveFolderReference(trx, deletedIds, folder)) {
+		for (const reference of await readFieldFolderReferences(trx)) {
+			if (await resolveFolderReference(trx, deletedIds, reference)) {
 				throw new ConfigFolderInUseException('Cannot delete a folder referenced by a field interface.', {
 					blockedBy: 'options.folder',
 				});

@@ -4,6 +4,15 @@ get:
   operationId: schemaSnapshot
   parameters:
     - $ref: '../../openapi.yaml#/components/parameters/Export'
+    - name: version
+      in: query
+      description: >-
+        The snapshot format version. Version 2 records upload folders by folder key and stamps the producing release as
+        `release`. Defaults to 1. The default will change to 2 in a later release (1.8.0 or later); pass `version`
+        explicitly to pin the format.
+      schema:
+        type: integer
+        enum: [1, 2]
   responses:
     '200':
       description: Successful request

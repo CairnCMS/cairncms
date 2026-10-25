@@ -11,6 +11,7 @@ import type {
 	ConfigManifest,
 	ConfigPermissionSet,
 	ConfigRole,
+	ConfigSchemaCollection,
 	ConfigSettings,
 	ConfigTranslations,
 } from '../types/config.js';
@@ -138,6 +139,7 @@ export async function readConfigDirectory(configPath: string, options?: ConfigRe
 	const settings: ConfigSettings[] = [];
 	const extensionSettings: ConfigExtensionSettings[] = [];
 	const translations: ConfigTranslations[] = [];
+	const schema: ConfigSchemaCollection[] = [];
 
 	const sink: Record<ConfigKind, unknown[]> = {
 		roles,
@@ -146,7 +148,12 @@ export async function readConfigDirectory(configPath: string, options?: ConfigRe
 		settings,
 		'extension-settings': extensionSettings,
 		translations,
+		schema,
 	};
+
+	// The schema kind decouples the authoritative collection from the filename, so two owned files could declare the
+	// same collection.
+	const seenSchemaCollections = new Set<string>();
 
 	for (const kind of listConfigKinds()) {
 		if (!manifest.resources.includes(kind)) continue;
@@ -163,9 +170,32 @@ export async function readConfigDirectory(configPath: string, options?: ConfigRe
 
 		for (const filename of filenames) {
 			const record = await readRecord(root, kind, filename);
-			sink[kind].push(descriptor.layout.parseDocumentFile(record, filename));
+			const parsed = descriptor.layout.parseDocumentFile(record, filename);
+
+			if (kind === 'schema') {
+				const { collection } = parsed as ConfigSchemaCollection;
+
+				if (seenSchemaCollections.has(collection)) {
+					throw new ConfigInvalidException(
+						`Config schema declares collection "${safeLogFragment(collection)}" in more than one file.`
+					);
+				}
+
+				seenSchemaCollections.add(collection);
+			}
+
+			sink[kind].push(parsed);
 		}
 	}
 
-	return { manifest, roles, permissions, folders, settings, 'extension-settings': extensionSettings, translations };
+	return {
+		manifest,
+		roles,
+		permissions,
+		folders,
+		settings,
+		'extension-settings': extensionSettings,
+		translations,
+		schema,
+	};
 }
