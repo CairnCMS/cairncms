@@ -9,6 +9,7 @@ import {
 	createDocsLab,
 	docsManifest,
 	docsSnapshot,
+	DOCS_COLLECTION,
 	DOCS_FOLDER,
 	DOCS_ROLE,
 	recordDocsEvidence,
@@ -45,18 +46,41 @@ test('executes the first-apply guide in one disposable instance with an interact
 		await assertDocsLabAbsent(api);
 		const preview = await cli(['config', 'apply', directory, '--dry-run'], 1);
 		expect(preview.stdout).toContain('Folder preparation');
-		expect(preview.stdout).toContain('articles');
+		expect(preview.stdout).toContain(DOCS_COLLECTION);
 		expect(preview.stdout).toContain(DOCS_ROLE);
-		const json = await cli(['config', 'apply', directory, '--dry-run', '--format', 'json'], 1);
-		const plan = JSON.parse(json.stdout);
-		expect(plan).toMatchObject({ planVersion: 3, preparation: [DOCS_FOLDER], summary: { delete: 0 } });
 		await assertDocsLabAbsent(api);
 
 		await cli(['config', 'apply', directory], 0, 'y\n');
 		await assertDocsLabRestored(api);
 		expect(await docsSnapshot(api)).toEqual(capture);
 		expect((await cli(['config', 'apply', directory, '--dry-run'], 0)).stdout).toContain('No changes to apply.');
-		const empty = JSON.parse((await cli(['config', 'apply', directory, '--dry-run', '--format', 'json'], 0)).stdout);
+
+		await recordDocsEvidence('local-walkthrough', {
+			commands,
+			files,
+			captured: capture,
+			restored: await docsSnapshot(api),
+		});
+	} finally {
+		await removeDocsLab(api);
+	}
+});
+
+test('reports JSON plans for matching and missing guide resources without writing', async ({ api }) => {
+	await assertDocsLabAbsent(api);
+	const directory = path.join(api.directory, 'config-json-preview');
+	const snapshotArgs = ['config', 'snapshot', directory, '--yes'];
+	const previewArgs = ['config', 'apply', directory, '--dry-run', '--format', 'json'];
+
+	try {
+		await createDocsLab(api);
+		await docsManifest(directory);
+		const snapshot = await api.cli(snapshotArgs);
+		expect(snapshot.status, snapshot.stdout + snapshot.stderr).toBe(0);
+		const capture = await docsSnapshot(api);
+		const unchanged = await api.cli(previewArgs);
+		expect(unchanged.status, unchanged.stdout + unchanged.stderr).toBe(0);
+		const empty = JSON.parse(unchanged.stdout);
 
 		expect(empty).toEqual({
 			planVersion: 3,
@@ -67,13 +91,24 @@ test('executes the first-apply guide in one disposable instance with an interact
 			protections: [],
 		});
 
-		await recordDocsEvidence('local-walkthrough', {
-			commands,
-			files,
+		expect(await docsSnapshot(api)).toEqual(capture);
+		await removeDocsLab(api);
+		await assertDocsLabAbsent(api);
+		const preview = await api.cli(previewArgs);
+		expect(preview.status, preview.stdout + preview.stderr).toBe(1);
+		const plan = JSON.parse(preview.stdout);
+		expect(plan).toMatchObject({ planVersion: 3, preparation: [DOCS_FOLDER], summary: { delete: 0 } });
+		await assertDocsLabAbsent(api);
+
+		await recordDocsEvidence('local-json-previews', {
+			commands: [
+				{ args: snapshotArgs, ...snapshot },
+				{ args: previewArgs, ...unchanged },
+				{ args: previewArgs, ...preview },
+			],
 			plan,
 			empty,
 			captured: capture,
-			restored: await docsSnapshot(api),
 		});
 	} finally {
 		await removeDocsLab(api);
@@ -143,7 +178,12 @@ test('captures and applies the guide document over HTTP with the documented succ
 		});
 
 		const schemaOnly = await docsSnapshot(api, ['schema']);
-		await setupRequest(api.url).delete('/collections/articles').auth(api.adminToken, { type: 'bearer' }).expect(204);
+
+		await setupRequest(api.url)
+			.delete(`/collections/${DOCS_COLLECTION}`)
+			.auth(api.adminToken, { type: 'bearer' })
+			.expect(204);
+
 		const schemaResult = await apply(schemaOnly);
 		expect(schemaResult.data).toBeNull();
 
