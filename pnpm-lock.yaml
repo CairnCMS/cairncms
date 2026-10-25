@@ -269,7 +269,7 @@ importers:
         version: 4.5.2
       knex:
         specifier: 2.4.2
-        version: 2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.10.0)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
+        version: 2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
       ldapjs:
         specifier: 2.3.3
         version: 2.3.3
@@ -507,7 +507,7 @@ importers:
         version: 4.0.6
       knex-mock-client:
         specifier: 2.0.0
-        version: 2.0.0(knex@2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.10.0)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1)))
+        version: 2.0.0(knex@2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1)))
       supertest:
         specifier: 6.3.3
         version: 6.3.3
@@ -537,8 +537,8 @@ importers:
         specifier: 1.0.3
         version: 1.0.3
       pg:
-        specifier: 8.10.0
-        version: 8.10.0
+        specifier: 8.23.1
+        version: 8.23.1
       sqlite3:
         specifier: 5.1.6
         version: 5.1.6(encoding@0.1.13)
@@ -1074,7 +1074,7 @@ importers:
     dependencies:
       knex:
         specifier: 2.4.2
-        version: 2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.10.0)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
+        version: 2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
     devDependencies:
       typescript:
         specifier: 5.0.4
@@ -1267,7 +1267,7 @@ importers:
         version: 0.5.0
       knex:
         specifier: 2.4.2
-        version: 2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.10.0)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
+        version: 2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
       pino:
         specifier: 8.11.0
         version: 8.11.0
@@ -1374,7 +1374,7 @@ importers:
         version: 1.4.0
       knex:
         specifier: 2.4.2
-        version: 2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.10.0)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
+        version: 2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
       sqlite3:
         specifier: 5.1.6
         version: 5.1.6(encoding@0.1.13)
@@ -1440,7 +1440,7 @@ importers:
         version: 2.2.5
       knex:
         specifier: 2.4.2
-        version: 2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.10.0)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
+        version: 2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
       lodash:
         specifier: 4.18.1
         version: 4.18.1
@@ -1448,8 +1448,8 @@ importers:
         specifier: 3.24.5
         version: 3.24.5(@types/node@22.19.17)
       pg:
-        specifier: 8.10.0
-        version: 8.10.0
+        specifier: 8.23.1
+        version: 8.23.1
       seedrandom:
         specifier: 3.0.5
         version: 3.0.5
@@ -4166,10 +4166,6 @@ packages:
   buffer-image-size@0.6.4:
     resolution: {integrity: sha512-nEh+kZOPY1w+gcCMobZ6ETUp9WfibndnosbpwB1iJk/8Gt5ZF2bhS6+B6bPYz424KtwsR6Rflc3tCz1/ghX2dQ==}
     engines: {node: '>=4.0'}
-
-  buffer-writer@2.0.0:
-    resolution: {integrity: sha512-a7ZpuTZU1TRtnwyCNW3I5dc0wWNC3VR9S++Ewyk2HHZdrO3CQJqSpd+95Us590V6AL7JqUAH2IwZ/398PmNFgw==}
-    engines: {node: '>=4'}
 
   buffer@5.6.0:
     resolution: {integrity: sha512-/gDYp/UtU0eA1ys8bOs9J6a+E/KWIY+DZ+Q2WESNUA0jFRsJOc0SNUO6xJ5SGA1xueg3NL65W6s+NY5l9cunuw==}
@@ -6889,9 +6885,6 @@ packages:
   package-json-from-dist@1.0.1:
     resolution: {integrity: sha512-UEZIS3/by4OC8vL3P2dTXRETpebLI2NiI5vIrjaD/5UtrkFX/tNbwjTSRAGC/+7CAo2pIcBaRgWmcBBHcsaCIw==}
 
-  packet-reader@1.0.0:
-    resolution: {integrity: sha512-HAKu/fG3HpHFO0AA8WE8q2g+gBJaZ9MG7fcKk+IJPLTGAD6Psw4443l+9DGRbOIh3/aXr7Phy0TjilYivJo5XQ==}
-
   pako@1.0.11:
     resolution: {integrity: sha512-4hLB8Py4zZce5s4yd9XzopqwVv/yGNhV1Bl8NTmCq1763HeK2+EwVTv+leGeL13Dnh2wfbqowVPXCIO0z4taYw==}
 
@@ -6968,8 +6961,11 @@ packages:
     resolution: {integrity: sha512-mnvGdvOrIvJOBGUEdGkrVXjN8E/VkIJCkf2eS1DH2yv82ORUlLttmDt0rWY38yYZmVwciZwBUvHM20qxBZf40w==}
     hasBin: true
 
-  pg-connection-string@2.12.0:
-    resolution: {integrity: sha512-U7qg+bpswf3Cs5xLzRqbXbQl85ng0mfSV/J0nnA31MCLgvEaAo7CIhmeyrmJpOr7o+zm0rXK+hNnT5l9RHkCkQ==}
+  pg-cloudflare@1.4.1:
+    resolution: {integrity: sha512-6PQbsFWZcp9EmJEwy5cGQ2La+AMWpP46lgbb8X+U/XsHIUweYDNCpeuKck5RxL2MdVFi7krbbEi5nX4Zh7JhrQ==}
+
+  pg-connection-string@2.14.1:
+    resolution: {integrity: sha512-qR3kGNPBLpCNtz0evbKA0Y/MRFXwSSdT+pTJvYp/bXTcReZbvX1kzF0IyTc1QnxqF7AZbOeBhNL8R5mYQZV/MA==}
 
   pg-connection-string@2.5.0:
     resolution: {integrity: sha512-r5o/V/ORTA6TmUnyWZR9nCj1klXCO2CEKNRlVuJptZe85QuhFayC7WeMic7ndayT5IRIR0S0xFxFi2ousartlQ==}
@@ -6978,21 +6974,21 @@ packages:
     resolution: {integrity: sha512-WCtabS6t3c8SkpDBUlb1kjOs7l66xsGdKpIPZsg4wR+B3+u9UAum2odSsF9tnvxg80h4ZxLWMy4pRjOsFIqQpw==}
     engines: {node: '>=4.0.0'}
 
-  pg-pool@3.13.0:
-    resolution: {integrity: sha512-gB+R+Xud1gLFuRD/QgOIgGOBE2KCQPaPwkzBBGC9oG69pHTkhQeIuejVIk3/cnDyX39av2AxomQiyPT13WKHQA==}
+  pg-pool@3.14.0:
+    resolution: {integrity: sha512-gKtPkFdQPU3DksooVLi9LsjZxrsBUZIpa+7aVx+LV5pNh0KzP4Zleud2po+ConrxbuXGBJ6Hfer6hdgpIBpBaw==}
     peerDependencies:
       pg: '>=8.0'
 
-  pg-protocol@1.13.0:
-    resolution: {integrity: sha512-zzdvXfS6v89r6v7OcFCHfHlyG/wvry1ALxZo4LqgUoy7W9xhBDMaqOuMiF3qEV45VqsN6rdlcehHrfDtlCPc8w==}
+  pg-protocol@1.16.1:
+    resolution: {integrity: sha512-p9VOFMiHB/ZbJATetbg+99PxssTVSQRnyuPSQ67mN1+1KBOjZaZ83ZQzltnxPhJwSsC3nwVjJ10DVJlerbFzLg==}
 
   pg-types@2.2.0:
     resolution: {integrity: sha512-qTAAlrEsl8s4OiEQY69wDvcMIdQN6wdz5ojQiOy6YRMuynxenON0O5oCpJI6lshc6scgAY8qvJ2On/p+CXY0GA==}
     engines: {node: '>=4'}
 
-  pg@8.10.0:
-    resolution: {integrity: sha512-ke7o7qSTMb47iwzOSaZMfeR7xToFdkE71ifIipOAAaLIM0DYzfOAXlgFFmYUIE2BcJtvnVlGCID84ZzCegE8CQ==}
-    engines: {node: '>= 8.0.0'}
+  pg@8.23.1:
+    resolution: {integrity: sha512-aL96AHANtWjPLDOLqnhx+ngp9+UK7ETEU8VJrDCGvsSSi/mGLcWYsS6Herg7lmaBJe4uwrfqsa7gTEFaSizDoQ==}
+    engines: {node: '>= 16.0.0'}
     peerDependencies:
       pg-native: '>=3.0.1'
     peerDependenciesMeta:
@@ -12015,8 +12011,6 @@ snapshots:
     dependencies:
       '@types/node': 22.19.17
 
-  buffer-writer@2.0.0: {}
-
   buffer@5.6.0:
     dependencies:
       base64-js: 1.5.1
@@ -14239,12 +14233,12 @@ snapshots:
 
   kind-of@6.0.3: {}
 
-  knex-mock-client@2.0.0(knex@2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.10.0)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))):
+  knex-mock-client@2.0.0(knex@2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))):
     dependencies:
-      knex: 2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.10.0)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
+      knex: 2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
       lodash.clonedeep: 4.5.0
 
-  knex@2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.10.0)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1)):
+  knex@2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1)):
     dependencies:
       colorette: 2.0.19
       commander: 9.5.0
@@ -14262,7 +14256,7 @@ snapshots:
       tildify: 2.0.0
     optionalDependencies:
       mysql2: 3.24.5(@types/node@22.19.17)
-      pg: 8.10.0
+      pg: 8.23.1
       sqlite3: 5.1.6(encoding@0.1.13)
       tedious: 16.0.0(@azure/core-client@1.10.1)
     transitivePeerDependencies:
@@ -15051,8 +15045,6 @@ snapshots:
 
   package-json-from-dist@1.0.1: {}
 
-  packet-reader@1.0.0: {}
-
   pako@1.0.11: {}
 
   parent-module@1.0.1:
@@ -15120,17 +15112,20 @@ snapshots:
     dependencies:
       resolve-protobuf-schema: 2.1.0
 
-  pg-connection-string@2.12.0: {}
+  pg-cloudflare@1.4.1:
+    optional: true
+
+  pg-connection-string@2.14.1: {}
 
   pg-connection-string@2.5.0: {}
 
   pg-int8@1.0.1: {}
 
-  pg-pool@3.13.0(pg@8.10.0):
+  pg-pool@3.14.0(pg@8.23.1):
     dependencies:
-      pg: 8.10.0
+      pg: 8.23.1
 
-  pg-protocol@1.13.0: {}
+  pg-protocol@1.16.1: {}
 
   pg-types@2.2.0:
     dependencies:
@@ -15140,15 +15135,15 @@ snapshots:
       postgres-date: 1.0.7
       postgres-interval: 1.2.0
 
-  pg@8.10.0:
+  pg@8.23.1:
     dependencies:
-      buffer-writer: 2.0.0
-      packet-reader: 1.0.0
-      pg-connection-string: 2.12.0
-      pg-pool: 3.13.0(pg@8.10.0)
-      pg-protocol: 1.13.0
+      pg-connection-string: 2.14.1
+      pg-pool: 3.14.0(pg@8.23.1)
+      pg-protocol: 1.16.1
       pg-types: 2.2.0
       pgpass: 1.0.5
+    optionalDependencies:
+      pg-cloudflare: 1.4.1
 
   pgpass@1.0.5:
     dependencies:
