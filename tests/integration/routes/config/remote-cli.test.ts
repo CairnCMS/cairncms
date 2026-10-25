@@ -16,6 +16,17 @@ import { sortBy } from 'lodash';
 import * as common from '../../fixtures/data';
 import { CreateCollection, CreateField } from '../../fixtures/schema';
 import { initializeFixtures } from '../../harness/fixture-setup.mjs';
+import {
+	assertDocsLabAbsent,
+	assertDocsLabRestored,
+	createDocsLab,
+	docsManifest,
+	docsSnapshot,
+	DOCS_FOLDER,
+	DOCS_ROLE,
+	recordDocsEvidence,
+	removeDocsLab,
+} from '../../fixtures/config-docs';
 
 const test = createIdentityTest({ env: { LOG_LEVEL: 'info', LOG_STYLE: 'raw' } });
 
@@ -1051,6 +1062,73 @@ describeForVendors(
 				expect(configuration.output).toContain('No changes to apply.');
 				expect(remote.applies).toHaveLength(1);
 			});
+		});
+
+		test('executes the documented capture, preview and apply workflow remotely with one mutating request', async ({
+			api,
+		}) => {
+			await assertDocsLabAbsent(api);
+
+			await withRemote(
+				api,
+				SCHEMA_VERSION,
+				async (remote) => {
+					const directory = path.join(remote.dir, 'config-demo');
+					const commands: unknown[] = [];
+
+					async function cli(args: string[], status: number) {
+						const result = await remoteCli(api, remote, args);
+						commands.push({ args: [...args, '--url', remote.url], ...result });
+						expect(result.status, result.output).toBe(status);
+						return result;
+					}
+
+					await createDocsLab(api);
+					await docsManifest(directory);
+					await cli(['config', 'snapshot', directory, '--yes'], 0);
+					const capture = await docsSnapshot(api);
+					expect((await cli(['config', 'apply', directory, '--dry-run'], 0)).output).toContain('No changes to apply.');
+					await removeDocsLab(api);
+					await assertDocsLabAbsent(api);
+					expect((await cli(['config', 'apply', directory, '--dry-run'], 1)).output).toContain('Folder preparation');
+					const json = await cli(['config', 'apply', directory, '--dry-run', '--format', 'json'], 1);
+					const plan = JSON.parse(json.stdout);
+					expect(plan).toMatchObject({ planVersion: 3, preparation: [DOCS_FOLDER], summary: { delete: 0 } });
+					await assertDocsLabAbsent(api);
+					const applied = await cli(['config', 'apply', directory, '--yes'], 0);
+					expect(applied.output).toContain('Folder preparation: applied');
+					expect(applied.output).toContain('Schema: applied');
+					expect(applied.output).toContain('Configuration: applied');
+					expect(applied.output).toContain(DOCS_ROLE);
+					expect(remote.applies.filter((url) => !url.includes('dry_run=true'))).toEqual(['/config/apply']);
+					await assertDocsLabRestored(api);
+					expect(await docsSnapshot(api)).toEqual(capture);
+					expect((await cli(['config', 'apply', directory, '--dry-run'], 0)).output).toContain('No changes to apply.');
+
+					const empty = JSON.parse(
+						(await cli(['config', 'apply', directory, '--dry-run', '--format', 'json'], 0)).stdout
+					);
+
+					expect(empty).toEqual({
+						planVersion: 3,
+						manifestVersion: 3,
+						changes: [],
+						summary: { create: 0, update: 0, delete: 0 },
+						warnings: [],
+						protections: [],
+					});
+
+					await recordDocsEvidence('remote-walkthrough', {
+						advertisedVersion: SCHEMA_VERSION,
+						capturedRelease: capture.manifest.schema.release,
+						commands,
+						requests: remote.applies,
+						plan,
+						empty,
+					});
+				},
+				() => removeDocsLab(api)
+			);
 		});
 
 		test('one remote apply reaches the same schema and folders as one local apply of the same tree', async ({
