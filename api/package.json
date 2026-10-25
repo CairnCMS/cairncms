@@ -208,10 +208,10 @@
 		"@keyv/redis": "2.5.7",
 		"keyv-memcache": "1.3.3",
 		"memcached": "2.2.2",
-		"mysql2": "3.24.5",
+		"mysql2": "3.24.6",
 		"nodemailer-mailgun-transport": "2.1.5",
 		"nodemailer-sendgrid": "1.0.3",
-		"pg": "8.10.0",
+		"pg": "8.23.1",
 		"sqlite3": "5.1.6",
 		"tedious": "16.0.0"
 	},
