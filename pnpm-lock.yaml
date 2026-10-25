@@ -269,7 +269,7 @@ importers:
         version: 4.5.2
       knex:
         specifier: 2.4.2
-        version: 2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
+        version: 2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
       ldapjs:
         specifier: 2.3.3
         version: 2.3.3
@@ -507,7 +507,7 @@ importers:
         version: 4.0.6
       knex-mock-client:
         specifier: 2.0.0
-        version: 2.0.0(knex@2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1)))
+        version: 2.0.0(knex@2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1)))
       supertest:
         specifier: 6.3.3
         version: 6.3.3
@@ -528,8 +528,8 @@ importers:
         specifier: 2.2.2
         version: 2.2.2
       mysql2:
-        specifier: 3.24.5
-        version: 3.24.5(@types/node@22.19.17)
+        specifier: 3.24.6
+        version: 3.24.6(@types/node@22.19.17)
       nodemailer-mailgun-transport:
         specifier: 2.1.5
         version: 2.1.5(lodash@4.18.1)(underscore@1.13.8)
@@ -1074,7 +1074,7 @@ importers:
     dependencies:
       knex:
         specifier: 2.4.2
-        version: 2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
+        version: 2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
     devDependencies:
       typescript:
         specifier: 5.0.4
@@ -1267,7 +1267,7 @@ importers:
         version: 0.5.0
       knex:
         specifier: 2.4.2
-        version: 2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
+        version: 2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
       pino:
         specifier: 8.11.0
         version: 8.11.0
@@ -1374,7 +1374,7 @@ importers:
         version: 1.4.0
       knex:
         specifier: 2.4.2
-        version: 2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
+        version: 2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
       sqlite3:
         specifier: 5.1.6
         version: 5.1.6(encoding@0.1.13)
@@ -1440,13 +1440,13 @@ importers:
         version: 2.2.5
       knex:
         specifier: 2.4.2
-        version: 2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
+        version: 2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
       lodash:
         specifier: 4.18.1
         version: 4.18.1
       mysql2:
-        specifier: 3.24.5
-        version: 3.24.5(@types/node@22.19.17)
+        specifier: 3.24.6
+        version: 3.24.6(@types/node@22.19.17)
       pg:
         specifier: 8.23.1
         version: 8.23.1
@@ -6571,8 +6571,8 @@ packages:
     resolution: {integrity: sha512-avsJQhyd+680gKXyG/sQc0nXaC6rBkPOfyHYcFb9+hdkqQkR9bdnkJ0AMZhke0oesPqIO+mFFJ+IdBc7mst4IA==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  mysql2@3.24.5:
-    resolution: {integrity: sha512-X6Ujsr2QSkkLpkQGjxzpKRAPn9nu4axpR63ntBzquFVEvPOArgbUQ1sJjFKI7hnaYtiVZxa17Z7q18KSubW0IQ==}
+  mysql2@3.24.6:
+    resolution: {integrity: sha512-enu73KhbAua2L3dIxjc6qg6ZJ7H3pt1BImZASWNWY5xSsmJ1ZuUPULTDGXgmJbI61vb+nJAG19IZclIq19UidQ==}
     engines: {node: '>= 8.0'}
     peerDependencies:
       '@types/node': '>= 8'
@@ -14233,12 +14233,12 @@ snapshots:
 
   kind-of@6.0.3: {}
 
-  knex-mock-client@2.0.0(knex@2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))):
+  knex-mock-client@2.0.0(knex@2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))):
     dependencies:
-      knex: 2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
+      knex: 2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
       lodash.clonedeep: 4.5.0
 
-  knex@2.4.2(mysql2@3.24.5(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1)):
+  knex@2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1)):
     dependencies:
       colorette: 2.0.19
       commander: 9.5.0
@@ -14255,7 +14255,7 @@ snapshots:
       tarn: 3.0.2
       tildify: 2.0.0
     optionalDependencies:
-      mysql2: 3.24.5(@types/node@22.19.17)
+      mysql2: 3.24.6(@types/node@22.19.17)
       pg: 8.23.1
       sqlite3: 5.1.6(encoding@0.1.13)
       tedious: 16.0.0(@azure/core-client@1.10.1)
@@ -14649,7 +14649,7 @@ snapshots:
 
   mute-stream@1.0.0: {}
 
-  mysql2@3.24.5(@types/node@22.19.17):
+  mysql2@3.24.6(@types/node@22.19.17):
     dependencies:
       '@types/node': 22.19.17
       aws-ssl-profiles: 1.1.2
