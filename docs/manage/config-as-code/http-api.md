@@ -5,7 +5,7 @@ sidebar:
   order: 6
 ---
 
-The config-as-code endpoints require an authenticated administrator. Snapshot returns a document you can edit and preview. Apply accepts that whole document in one request. For directory handling, use the [CLI](/docs/manage/config-as-code/cli/).
+The config-as-code endpoints require an authenticated administrator. Capture the source instance, review and preview the returned document, then apply it to the target in one request. For directory handling, use the [CLI](/docs/manage/config-as-code/cli/).
 
 ## Retrieve a snapshot
 

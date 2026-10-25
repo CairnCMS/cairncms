@@ -1,11 +1,11 @@
 ---
 title: Translations
-description: Language files for custom translation strings, complete-set deletions, and database collation limits.
+description: Per-language files for custom translation strings, deletions, and database collation limits.
 sidebar:
   order: 6
 ---
 
-Manage custom translation strings in one file per language.
+Snapshot creates a separate file for each language, such as `translations/en-US.yaml` and `translations/fr-FR.yaml`. Each file contains that language's custom strings captured from the source instance.
 
 `translations/fr-FR.yaml`:
 
@@ -24,14 +24,14 @@ The map is flat. Dots in keys are literal characters, not nested paths. Keys may
 
 An empty or omitted `translations` map requests removal of that language's stored strings.
 
-## Complete-set management
+## Removing strings or language files
 
-When translations are managed, all language files together describe the complete desired set. Omitting a key requests deletion. Removing a language file requests deletion of all its stored custom strings. Deletions require `--destructive`.
+When `translations` is listed in the manifest, apply reads all language files in `translations/`. A key missing from its language file requests deletion of that string. A missing language file requests deletion of all custom strings for that language. These deletions require `--destructive`.
 
-An ordinary update can overwrite a translation changed on the target without destructive authorization. Fold intended target edits into the reviewed files before reapplying.
+Keep the other language files in the tree when deploying changes to one language. They do not need to be edited.
 
 ## Rename a key
 
 The database may treat keys that differ only in case or accents as the same key. On a case-insensitive target, a case-only rename in one apply returns `CONFIG_INVALID`, even with `--destructive`.
 
-Use two reviewed applies for that rename. First remove the old key from the otherwise complete desired set and apply with `--destructive`. After confirming its deletion, add the differently cased key and apply again. The translation is absent between those runs, so coordinate that interval with its consumers.
+Use two reviewed applies for that rename. First remove the old key on the source instance, capture a snapshot, and apply with `--destructive`. After confirming its deletion on the target, add the differently cased key on the source, capture again, and apply. The translation is absent between those runs, so coordinate that interval with its consumers.

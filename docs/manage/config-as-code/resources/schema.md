@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-The `schema` kind manages collections, fields, relations and their metadata. It requires manifest version 3 and writes one `.yaml` file per collection in `schema/`.
+The `schema` kind manages collections, fields, relations and their metadata. It requires manifest version 3 and writes one `.yaml` file per collection in `schema/`. Make model changes on the source instance and capture them with `cairncms config snapshot`.
 
 ## What is covered
 
@@ -29,7 +29,7 @@ Renaming a file alone does not rename a collection. Changing a collection or fie
 
 Start with a generated capture and keep every collection, field and relation that should remain. Leaving one out requests deletion.
 
-Within an existing `meta` or `schema` object, omitted direct properties retain the target's current values. For example, editing an existing field's `meta` to include only `note` preserves other direct properties. Set `note: null` explicitly to clear it.
+Within an existing `meta` or `schema` object, omitted direct properties retain the target's current values. An explicit null clears a nullable property, such as `note: null`.
 
 Keep the enclosing objects as captured. Removing a field's entire `schema` is not a way to preserve its column.
 

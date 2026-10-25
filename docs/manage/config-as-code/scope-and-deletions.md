@@ -30,7 +30,7 @@ Start from a generated snapshot and retain every record you intend to keep. All 
 
 For [extension settings](/docs/manage/config-as-code/resources/extension-settings/), removing a file preserves its subject's values. Keeping it with empty maps clears declared stored values.
 
-When editing individual fields, follow the resource's omission rules. In particular, keep schema `meta` and `schema` objects as captured. See [Schema omission rules](/docs/manage/config-as-code/resources/schema/#omitted-properties).
+Keep schema `meta` and `schema` objects as captured. If you need a [direct file edit](/docs/manage/config-as-code/resources/#when-to-edit-files), follow the resource's omission rules. See [Schema omission rules](/docs/manage/config-as-code/resources/schema/#omitted-properties).
 
 ## Authorize intended deletions
 

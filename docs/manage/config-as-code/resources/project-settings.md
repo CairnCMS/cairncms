@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-Project settings use one required document, `settings/project.yaml`. Include the fields you want to manage. Omitting an optional field leaves its target value unchanged.
+Capture project settings from the source instance into `settings/project.yaml`. This document is required when settings are managed. Omitting an optional field leaves its target value unchanged.
 
 For example:
 
@@ -31,7 +31,7 @@ With the CLI, define `CAIRNCMS_CONFIG_PROJECT_NAME` before apply. For direct HTT
 
 Only the fields listed above are supported.
 
-Set a nullable field to `null` to clear it. Arrays and their nested values are supplied as values, not patches. Start from a snapshot rather than reconstructing complex asset or module settings by hand.
+A null value clears a nullable field. Arrays and their nested values are supplied as values, not patches. Change asset presets and module settings on the source instance, then capture them.
 
 Only `project_name`, `project_descriptor`, `project_url` and `mapbox_key` accept CLI environment placeholders. The default folder does not. See [Environment placeholders](/docs/manage/config-as-code/resources/#environment-placeholders).
 

@@ -68,7 +68,7 @@ An unchanged snapshot reports `No changes to apply.` If an apply fails, follow [
 
 ## Omitted properties
 
-Retain every collection, field and relation you want to keep. Missing entries request deletion. When editing properties inside `meta` or `schema`, follow the [schema omission rules](/docs/manage/config-as-code/resources/schema/#omitted-properties).
+Capture the desired state from the source instance and retain every collection, field and relation you want to keep. Missing entries request deletion. For exceptional manual edits inside `meta` or `schema`, follow the [schema omission rules](/docs/manage/config-as-code/resources/schema/#omitted-properties).
 
 ## The HTTP API
 

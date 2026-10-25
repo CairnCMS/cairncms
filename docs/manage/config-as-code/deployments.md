@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-Capture changes from your development instance, review the files in source control, and deploy the same files to staging and production.
+Make changes on your development instance, capture a snapshot, review the files in source control, and deploy the same files to staging and production. Use [direct file edits](/docs/manage/config-as-code/resources/#when-to-edit-files) only for specific needs outside that normal workflow.
 
 ## Prepare source and target
 

@@ -21,7 +21,7 @@ Snapshot recaptures every selected kind, not just schema. Use a separate directo
 cairncms config snapshot ./config-upgrade --yes
 ```
 
-Port intended unapplied edits from the saved tree into this new capture and review them. Snapshot does not merge those edits automatically. Replace the deployment tree only after the combined result has been reviewed and tested.
+Snapshot does not merge pending edits from the saved tree. Prefer making those changes on a development instance and capturing again. If migration requires manually porting edits into the new capture, review and test the combined result before replacing the deployment tree.
 
 Preview against the target with `cairncms config apply --dry-run`. Check that the tree retains every collection and field you intend to keep.
 
@@ -51,7 +51,7 @@ If the standalone file contains pending changes, a fresh live capture will not i
 
 Version 1 standalone files carry source folder IDs. Applying one to an empty instance does not recreate those folders or translate the IDs. The isolated instance needs the corresponding source folder records, for example from an isolated backup restore, or you must repair the upload references before taking a unified capture. A dangling supported reference blocks that capture. Version 2 files instead require existing folders with the referenced keys.
 
-Otherwise port the intended changes into a generated tree and review the whole result. Do not apply an old artifact to production merely to obtain a new-format capture.
+If you cannot reconstruct a suitable source, manually porting the intended changes is a migration exception. Start from a generated tree and review and test the whole result on a disposable instance. Do not apply an old artifact to production merely to obtain a new-format capture.
 
 ## Check portability and deployment behavior
 

@@ -6,7 +6,7 @@ sidebar:
   order: 0
 ---
 
-A config-as-code directory contains a manifest and YAML files for the resources it manages. Generate a snapshot as your starting point, then edit the files you want to change.
+A config-as-code directory contains a manifest and YAML files for the resources it manages. Make changes on the source instance, capture a snapshot, review the files, and apply them to the target.
 
 ## The manifest
 
@@ -67,6 +67,12 @@ Read [Managed scope and deletions](/docs/manage/config-as-code/scope-and-deletio
 Save pending edits before snapshotting again. Snapshot replaces managed files with the source's current state and removes records no longer present there. It prompts before overwriting a non-empty directory. `--yes` skips that prompt.
 
 Symlinks must point inside the config-as-code directory. Broken or escaping links stop the command.
+
+## When to edit files
+
+Reserve hand-editing for specific needs, such as choosing manifest scope, adding environment placeholders, supplying [extension secrets](/docs/manage/config-as-code/resources/extension-settings/#secrets), and following the [migration guide](/docs/manage/config-as-code/migration/). For routine changes to schema or other managed resources, update the source instance and capture again.
+
+If a special circumstance requires editing resource files directly, follow that resource's field and omission rules. Review the full preview and test the edited tree on a disposable instance. After applying, confirm that another dry run reports no changes before deploying the files elsewhere.
 
 ## Environment placeholders
 
