@@ -54,7 +54,7 @@ System collections are exposed through `/graphql/system`, separate from the user
 
 `/graphql/system` also hosts the auth and TFA mutations (`auth_login`, `auth_refresh`, `auth_logout`, `auth_password_request`, `auth_password_reset`, `users_me_tfa_generate`, `users_me_tfa_enable`, `users_me_tfa_disable`) and a small set of operator queries (`server_info`, `server_health`, `server_ping`, `server_specs_oas`, `server_specs_graphql`). `server_specs_graphql` is gated by `GRAPHQL_INTROSPECTION`; see [GraphQL / Schema introspection](/docs/api/graphql/#schema-introspection).
 
-The full per-collection map of what is and is not exposed is in [GraphQL / What `/graphql/system` exposes](/docs/api/graphql/#what-graphql-system-exposes).
+The full per-collection map of what is and is not exposed is in [GraphQL / What `/graphql/system` exposes](/docs/api/graphql/#what-graphqlsystem-exposes).
 
 ## Query DSL
 
