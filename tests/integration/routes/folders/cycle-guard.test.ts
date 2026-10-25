@@ -265,7 +265,11 @@ describe('folder parent-cycle guard and config deletion guard', () => {
 		const { id, key } = await createFolder(api);
 		await createFile(api, id);
 
-		const snapshot = await request(api.url).get('/config/snapshot').set('Authorization', admin);
+		const snapshot = await request(api.url)
+			.get('/config/snapshot')
+			.query({ manifest_version: '2' })
+			.set('Authorization', admin);
+
 		expect(snapshot.statusCode).toBe(200);
 
 		const desired = snapshot.body.data;

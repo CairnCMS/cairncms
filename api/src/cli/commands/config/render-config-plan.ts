@@ -1,5 +1,8 @@
+import { DestructiveChangesRequiredException } from '../../../exceptions/destructive-changes-required.js';
 import type { ConfigKind } from '../../../types/config.js';
 import { listConfigKinds } from '../../../utils/config/registry.js';
+import type { SchemaChangeOutcome, SchemaOperation } from '../../../types/schema-apply.js';
+import type { ConfigRunStepFailure, ConfigRunSteps, ConfigStepStatus } from '../../../utils/config/run-record.js';
 import { replaceControlCharacters } from '../../../utils/safe-log-fragment.js';
 import { createVerb, deleteVerb, heading, planIntro, updateVerb } from '../../presentation.js';
 
@@ -17,7 +20,11 @@ type ExtensionSettingIdentityView = { subject: string; scope: string; scope_key:
 
 type TranslationIdentityView = { language: string; key: string };
 
-type FieldChangeView = { before: unknown; after: unknown };
+type SchemaCollectionIdentityView = { collection: string };
+
+type SchemaFieldIdentityView = { collection: string; field: string };
+
+type FieldChangeView = { before: unknown; after: unknown; beforePresent?: boolean; afterPresent?: boolean };
 
 export type RenderableImpactEntry =
 	| { kind: 'permissions'; identity: PermissionIdentityView }
@@ -72,12 +79,38 @@ export type RenderableChange =
 			identity: TranslationIdentityView;
 			fields: Record<string, FieldChangeView | undefined>;
 	  }
-	| { kind: 'translations'; operation: 'delete'; identity: TranslationIdentityView };
+	| { kind: 'translations'; operation: 'delete'; identity: TranslationIdentityView }
+	| { kind: 'collections'; operation: 'create'; identity: SchemaCollectionIdentityView }
+	| {
+			kind: 'collections';
+			operation: 'update';
+			identity: SchemaCollectionIdentityView;
+			fields: Record<string, FieldChangeView | undefined>;
+	  }
+	| { kind: 'collections'; operation: 'delete'; identity: SchemaCollectionIdentityView }
+	| { kind: 'fields'; operation: 'create'; identity: SchemaFieldIdentityView }
+	| {
+			kind: 'fields';
+			operation: 'update';
+			identity: SchemaFieldIdentityView;
+			fields: Record<string, FieldChangeView | undefined>;
+	  }
+	| { kind: 'fields'; operation: 'delete'; identity: SchemaFieldIdentityView }
+	| { kind: 'relations'; operation: 'create'; identity: SchemaFieldIdentityView; relatedCollection: string | null }
+	| {
+			kind: 'relations';
+			operation: 'update';
+			identity: SchemaFieldIdentityView;
+			relatedCollection: string | null;
+			fields: Record<string, FieldChangeView | undefined>;
+	  }
+	| { kind: 'relations'; operation: 'delete'; identity: SchemaFieldIdentityView; relatedCollection: string | null };
 
 /** The structural view the renderers read, satisfied by the server's serialized plan and by the remote wire plan. */
 export type RenderablePlan = {
 	changes: RenderableChange[];
 	summary: { create: number; update: number; delete: number };
+	preparation?: string[] | undefined;
 	protections: Array<{ message: string; contributors: Array<{ operation: string; identity: RoleIdentityView }> }>;
 	warnings: Array<{ message: string }>;
 };
@@ -89,9 +122,13 @@ type RenderableResultSlice = {
 	settings: { updated: unknown[] };
 	'extension-settings': { created: number; updated: number; deleted: number };
 	translations: { created: number; updated: number; deleted: number };
+	schema: { created: number; updated: number; deleted: number };
 };
 
-export type RenderableResult = { [C in ConfigKind]: RenderableResultSlice[C] };
+// Remote config results may omit the schema slice.
+export type RenderableResult = { [C in Exclude<ConfigKind, 'schema'>]: RenderableResultSlice[C] } & {
+	schema?: RenderableResultSlice['schema'];
+};
 
 function summarizeResultSlice(kind: ConfigKind, result: RenderableResult): string[] {
 	switch (kind) {
@@ -143,6 +180,9 @@ function summarizeResultSlice(kind: ConfigKind, result: RenderableResult): strin
 			return parts;
 		}
 
+		case 'schema':
+			return [];
+
 		default: {
 			const unhandled: never = kind;
 			throw new Error(`Unhandled config kind: ${JSON.stringify(unhandled)}`);
@@ -153,6 +193,24 @@ function summarizeResultSlice(kind: ConfigKind, result: RenderableResult): strin
 export function renderResultSummary(result: RenderableResult): string {
 	const parts = listConfigKinds().flatMap((kind) => summarizeResultSlice(kind, result));
 	return `Config applied: ${parts.join(', ')}`;
+}
+
+const STEP_OUTCOME_LABEL: Record<ConfigStepStatus, string> = {
+	not_run: 'not run',
+	skipped: 'no changes',
+	committed: 'applied',
+	rolled_back: 'rolled back',
+	failed: 'failed',
+	unknown: 'unknown',
+};
+
+export function renderStepOutcome(steps: ConfigRunSteps): string {
+	return [
+		heading('Steps'),
+		`  - ${STEP_LABEL.folders}: ${STEP_OUTCOME_LABEL[steps.folders]}`,
+		`  - ${STEP_LABEL.schema}: ${STEP_OUTCOME_LABEL[steps.schema]}`,
+		`  - ${STEP_LABEL.configuration}: ${STEP_OUTCOME_LABEL[steps.configuration]}`,
+	].join('\n');
 }
 
 function kindHeading(kind: RenderableChange['kind']): string {
@@ -169,6 +227,12 @@ function kindHeading(kind: RenderableChange['kind']): string {
 			return 'Extension settings';
 		case 'translations':
 			return 'Translations';
+		case 'collections':
+			return 'Collections';
+		case 'fields':
+			return 'Fields';
+		case 'relations':
+			return 'Relations';
 
 		default: {
 			const unhandled: never = kind;
@@ -177,11 +241,26 @@ function kindHeading(kind: RenderableChange['kind']): string {
 	}
 }
 
+function isPreparationChange(change: RenderableChange, prepared: ReadonlySet<string>): boolean {
+	return change.kind === 'folders' && change.operation === 'create' && prepared.has(change.identity.key);
+}
+
 export function renderConfigPlan(serialized: RenderablePlan): string {
 	const lines: string[] = [planIntro];
+	const prepared = new Set(serialized.preparation ?? []);
+
+	const preparationChanges = serialized.changes.filter((change) => isPreparationChange(change, prepared));
+
+	if (preparationChanges.length > 0) {
+		lines.push('', heading('Folder preparation'));
+		for (const change of preparationChanges) lines.push(...renderChange(change));
+	}
+
 	let currentKind: RenderableChange['kind'] | null = null;
 
 	for (const change of serialized.changes) {
+		if (isPreparationChange(change, prepared)) continue;
+
 		if (change.kind !== currentKind) {
 			currentKind = change.kind;
 			lines.push('', heading(kindHeading(change.kind)));
@@ -235,10 +314,108 @@ export type RenderableDeletion =
 	| { kind: 'permissions'; identity: PermissionIdentityView }
 	| { kind: 'folders'; identity: FolderIdentityView }
 	| { kind: 'extension-settings'; identity: ExtensionSettingIdentityView }
-	| { kind: 'translations'; identity: TranslationIdentityView };
+	| { kind: 'translations'; identity: TranslationIdentityView }
+	| { kind: 'schema'; identity: SchemaCollectionIdentityView };
 
+/** A schema deletion names only its collection, whether it drops the collection, a field, or a relation. */
 export function renderDeletions(deletions: RenderableDeletion[]): string[] {
-	return deletions.map((deletion) => `    - ${deleteVerb()} ${renderIdentity(deletion)}`);
+	const schemaCounts = new Map<string, number>();
+
+	for (const deletion of deletions) {
+		if (deletion.kind === 'schema') {
+			schemaCounts.set(deletion.identity.collection, (schemaCounts.get(deletion.identity.collection) ?? 0) + 1);
+		}
+	}
+
+	const lines: string[] = [];
+
+	for (const deletion of deletions) {
+		if (deletion.kind !== 'schema') {
+			lines.push(`    - ${deleteVerb()} ${renderIdentity(deletion)}`);
+			continue;
+		}
+
+		const count = schemaCounts.get(deletion.identity.collection);
+		if (count === undefined) continue;
+
+		schemaCounts.delete(deletion.identity.collection);
+		const tally = count > 1 ? ` (${count} changes)` : '';
+		lines.push(`    - ${deleteVerb()} schema in ${replaceControlCharacters(deletion.identity.collection)}${tally}`);
+	}
+
+	return lines;
+}
+
+const STEP_LABEL: Record<keyof ConfigRunSteps, string> = {
+	folders: 'Folder preparation',
+	schema: 'Schema',
+	configuration: 'Configuration',
+};
+
+const PERSISTED_OUTCOME_LABEL: Record<SchemaChangeOutcome, string> = {
+	applied: 'applied',
+	reverted: 'reverted',
+	unknown: 'unknown',
+	not_applicable: 'not applicable',
+};
+
+function operationVerb(operation: SchemaOperation): string {
+	if (operation === 'create') return createVerb();
+	if (operation === 'update') return updateVerb();
+	return deleteVerb();
+}
+
+export function renderStepFailure(failure: ConfigRunStepFailure): string {
+	const lines = [heading('Failure'), `  - Step: ${STEP_LABEL[failure.step]}`];
+	const detail = failure.detail;
+
+	if (detail !== undefined && 'phase' in detail) {
+		lines.push(`  - Failed after commit, during: ${detail.phase}`);
+	}
+
+	if (detail !== undefined && 'persisted' in detail) {
+		const persisted = detail.persisted;
+
+		if (persisted === 'unknown') {
+			lines.push('  - Persisted changes: unknown');
+		} else if (persisted.collections.length + persisted.fields.length + persisted.relations.length === 0) {
+			lines.push('  - Persisted changes: none');
+		} else {
+			lines.push('  - Persisted changes:');
+
+			for (const entry of persisted.collections) {
+				lines.push(
+					`    - ${operationVerb(entry.operation)} collection ${replaceControlCharacters(entry.collection)}: table ${
+						PERSISTED_OUTCOME_LABEL[entry.table]
+					}, metadata ${PERSISTED_OUTCOME_LABEL[entry.metadata]}`
+				);
+			}
+
+			for (const entry of persisted.fields) {
+				lines.push(
+					`    - ${operationVerb(entry.operation)} field ${replaceControlCharacters(
+						entry.collection
+					)} / ${replaceControlCharacters(entry.field)}: column ${PERSISTED_OUTCOME_LABEL[entry.column]}, metadata ${
+						PERSISTED_OUTCOME_LABEL[entry.metadata]
+					}`
+				);
+			}
+
+			for (const entry of persisted.relations) {
+				lines.push(
+					`    - ${operationVerb(entry.operation)} relation ${replaceControlCharacters(
+						entry.collection
+					)} / ${replaceControlCharacters(entry.field)}: foreign key ${
+						PERSISTED_OUTCOME_LABEL[entry.foreignKey]
+					}, metadata ${PERSISTED_OUTCOME_LABEL[entry.metadata]}`
+				);
+			}
+		}
+
+		if (detail.foreignKeysRestored === false) lines.push('  - Foreign key enforcement was not restored.');
+	}
+
+	return lines.join('\n');
 }
 
 export function renderWarnings(serialized: Pick<RenderablePlan, 'warnings'>): string {
@@ -261,6 +438,22 @@ export function renderDestructiveRefusal(serialized: Pick<RenderablePlan, 'summa
 	return `Apply refused: this plan contains ${count} ${noun}.\nReview the ${subject} above and run again with --destructive.`;
 }
 
+/**
+ * The notice reports the shown preview's deletions, so it is sound only for the initial whole-run refusal. A later step
+ * re-reads and re-plans, so its refusal does not match that preview and is left to the ordinary error path.
+ */
+export function destructiveRefusalNotice(
+	err: unknown,
+	currentStep: keyof ConfigRunSteps | undefined,
+	serialized: Pick<RenderablePlan, 'summary'> | undefined
+): string | undefined {
+	if (currentStep === undefined && serialized !== undefined && err instanceof DestructiveChangesRequiredException) {
+		return renderDestructiveRefusal(serialized);
+	}
+
+	return undefined;
+}
+
 function renderChange(change: RenderableChange): string[] {
 	const identity = renderIdentity(change);
 
@@ -272,7 +465,7 @@ function renderChange(change: RenderableChange): string[] {
 		const lines = [`  - ${updateVerb()} ${identity}`];
 
 		for (const [field, fieldChange] of Object.entries(change.fields)) {
-			lines.push(`    - Set ${field} to ${renderValue(fieldChange!.after)}`);
+			lines.push(`    - ${renderAttributeChange(field, fieldChange!)}`);
 		}
 
 		return lines;
@@ -320,6 +513,23 @@ function renderIdentity(change: RenderableChange | RenderableDeletion): string {
 		return `${replaceControlCharacters(language)} / ${replaceControlCharacters(key)}`;
 	}
 
+	if (change.kind === 'collections' || change.kind === 'schema') {
+		return replaceControlCharacters(change.identity.collection);
+	}
+
+	if (change.kind === 'fields') {
+		return `${replaceControlCharacters(change.identity.collection)} / ${replaceControlCharacters(
+			change.identity.field
+		)}`;
+	}
+
+	if (change.kind === 'relations') {
+		const target = change.relatedCollection ? ` -> ${replaceControlCharacters(change.relatedCollection)}` : '';
+		return `${replaceControlCharacters(change.identity.collection)} / ${replaceControlCharacters(
+			change.identity.field
+		)}${target}`;
+	}
+
 	const unhandled: never = change;
 	throw new Error(`Unhandled config kind: ${JSON.stringify(unhandled)}`);
 }
@@ -327,6 +537,15 @@ function renderIdentity(change: RenderableChange | RenderableDeletion): string {
 function renderValue(value: unknown): string {
 	if (typeof value === 'string') return displayString(value);
 	return JSON.stringify(value);
+}
+
+function renderAttributeChange(field: string, change: FieldChangeView): string {
+	const name = replaceControlCharacters(field);
+
+	if (change.beforePresent === false) return `Add ${name} as ${renderValue(change.after)}`;
+	if (change.afterPresent === false) return `Remove ${name}`;
+
+	return `Set ${name} to ${renderValue(change.after)}`;
 }
 
 function displayString(value: string): string {

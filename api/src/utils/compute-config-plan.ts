@@ -1,10 +1,13 @@
 import type { CairnConfig, ConfigKind, ConfigPlan, ConfigProtection, ProtectionContributor } from '../types/config.js';
+import type { SnapshotField } from '../types/index.js';
 import { leavesAtLeastOneAdmin } from './admin-continuity.js';
 import { makeDependencyAccessor } from './config/dependency-context.js';
 import type { ExtensionDeclarationSnapshot } from './config/descriptor.js';
 import { computeKindPlan } from './config/diff.js';
 import { dependencyClosure, dependencyOrder } from './config/graph.js';
+import { computeSchemaPlan } from './config/handlers/schema.js';
 import { getDescriptor, listConfigKinds } from './config/registry.js';
+import { projectSchemaCleanup } from './config/schema-cleanup.js';
 
 const ADMIN_CONTINUITY_MESSAGE = 'Configuration must retain at least one role with administrator access.';
 
@@ -17,7 +20,7 @@ function emptyKindPlan(): { create: never[]; update: never[]; delete: never[] } 
 export function computeConfigPlan(
 	current: CairnConfig,
 	desired: CairnConfig,
-	options?: { extensionDeclarations?: ExtensionDeclarationSnapshot }
+	options?: { extensionDeclarations?: ExtensionDeclarationSnapshot; currentSchemaStoredFields?: SnapshotField[] }
 ): ConfigPlan {
 	const managed = new Set<ConfigKind>(desired.manifest.resources);
 	const closure = dependencyOrder([...dependencyClosure([...managed], (kind) => getDescriptor(kind).dependencies)]);
@@ -25,14 +28,25 @@ export function computeConfigPlan(
 
 	const desiredSubjects = new Set((desired['extension-settings'] ?? []).map((document) => document.subject));
 
+	const schemaPlan = managed.has('schema')
+		? computeSchemaPlan(current.schema, desired.schema, options?.currentSchemaStoredFields)
+		: undefined;
+
+	const projected = schemaPlan === undefined ? current : projectSchemaCleanup(current, schemaPlan);
+
 	for (const kind of closure) {
 		if (!managed.has(kind)) {
 			published.set(kind, emptyKindPlan());
 			continue;
 		}
 
+		if (kind === 'schema') {
+			published.set(kind, schemaPlan);
+			continue;
+		}
+
 		const descriptor = getDescriptor(kind);
-		const currentRecords = descriptor.projectDocuments(current[kind] as never).records;
+		const currentRecords = descriptor.projectDocuments(projected[kind] as never).records;
 		const desiredRecords = descriptor.projectDocuments(desired[kind] as never).records;
 		const raw = computeKindPlan(descriptor as never, currentRecords as never, desiredRecords as never);
 

@@ -49,6 +49,10 @@ export function classifyConfigFilename(filename: string, kind: ConfigKind): File
 		return descriptor.layout.ownsFilenameStem?.(stem) ? 'owned' : 'unowned';
 	}
 
+	if (descriptor.layout.ownsFilenameStem !== undefined) {
+		return descriptor.layout.ownsFilenameStem(stem) ? 'owned' : 'unowned';
+	}
+
 	return classifyIdentityStem(stem, descriptor.documentIdentityFields[0]!);
 }
 

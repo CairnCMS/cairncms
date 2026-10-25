@@ -123,7 +123,7 @@ export async function createCli(): Promise<Command> {
 
 	const configSnapshotCommand = configCommand
 		.command('snapshot')
-		.description('Snapshot current roles and permissions to a config directory')
+		.description('Snapshot managed resources to a config-as-code directory')
 		.argument('<path>', 'Target directory path')
 		.option('-y, --yes', 'Skip confirmation on overwriting non-empty directory', false)
 		.option('--url <url>', 'Snapshot from a remote CairnCMS server at this absolute http(s) URL')
@@ -132,11 +132,12 @@ export async function createCli(): Promise<Command> {
 
 	const configApplyCommand = configCommand
 		.command('apply')
-		.description('Apply a config directory to this CairnCMS instance')
-		.argument('<path>', 'Config directory path')
+		.description('Apply a config-as-code directory to this CairnCMS instance')
+		.argument('<path>', 'Config-as-code directory path')
 		.option('-y, --yes', 'Skip confirmation prompt')
 		.option('--dry-run', 'Print planned changes without applying', false)
-		.option('--destructive', 'Delete roles/permissions in DB but not in config', false)
+		.option('--destructive', 'Authorize planned deletions from managed resources', false)
+		.option('--force-schema', 'Apply schema with a different or unspecified source version or database vendor', false)
 		.option('--url <url>', 'Apply to a remote CairnCMS server at this absolute http(s) URL')
 		.option('--token-stdin', 'Read the remote admin token from stdin', false)
 		.addOption(

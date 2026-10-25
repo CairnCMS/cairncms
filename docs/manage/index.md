@@ -1,6 +1,6 @@
 ---
 title: Manage
-description: Operating a CairnCMS deployment. Configuration, deployment, security hardening, backups, upgrades, and the schema-as-code and config-as-code workflows for moving state between environments.
+description: Operating a CairnCMS deployment. Configuration, deployment, security hardening, backups, upgrades, and config-as-code for promoting project changes.
 sidebar:
   label: Overview
   order: 0
@@ -17,12 +17,12 @@ For first-time installation and local exploration, see [Quickstart](/docs/gettin
 - **[Security hardening](/docs/manage/security-hardening/)** — production-safety configuration: TLS, secrets, the Public role, admin access, rate limiting, CORS, and the email-link allow lists.
 - **[Backups](/docs/manage/backups/)** — what state needs backing up, per-vendor dump and restore commands, and the restore drill.
 - **[Upgrades](/docs/manage/upgrades/)** — the version model, the standard upgrade procedure, multi-instance considerations, and rollback.
-- **[Schema as code](/docs/manage/schema-as-code/)** — capturing the data model to a versioned file and applying it across environments.
+- **[Config-as-code](/docs/manage/config-as-code/)** — capture, review and apply your data model, access rules and settings together.
+- **[Standalone schema commands](/docs/manage/schema-as-code/)** — the deprecated schema-only workflow, retained for existing deployments.
 - **[Migration between instances](/docs/manage/migration-between-instances/)** — moving a deployment from one home to another, including cross-vendor and cross-version migrations.
-- **[Config as code](/docs/manage/config-as-code/)** — the same diff/apply pattern for roles, permissions, folders, project settings, extension settings, and translations.
 
 ## Where to go after this section
 
-- [API reference](/docs/api/) — the endpoints behind the operator surfaces, including the `/schema/*` and `/config/*` endpoints used by schema-as-code and config-as-code.
+- [API reference](/docs/api/) — the endpoints behind the operator surfaces, including unified `/config/*` operations and the retained `/schema/*` endpoints.
 - [Develop](/docs/develop/) — the customization surfaces that the production instance hosts.
 - [Contributing](/docs/contributing/) — running CairnCMS from source rather than from the published image.

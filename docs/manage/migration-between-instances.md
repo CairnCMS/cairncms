@@ -14,7 +14,7 @@ This page lays out the migration shapes, the right procedure for each, and the s
 Three common shapes:
 
 1. **Full instance clone.** Move everything — schema, content, users, roles, files, secrets — to a new home. New host, managed-database provider, copy of production for offline analysis, that kind of thing. The procedure is a database dump plus a file-storage copy.
-2. **Structure promotion.** Move the data model and the role/permission setup from one environment to another, without content. Dev to staging, staging to production, branch to mainline. Schema-as-code and config-as-code handle this together.
+2. **Structure promotion.** Move the data model, access rules and settings between environments without content. Config-as-code captures and applies them together.
 3. **Content move.** Move some or all collection rows between environments where the schema already matches. Can use a database-level dump of specific tables or the HTTP API for selective transfer.
 
 The list of caveats, including cross-vendor compatibility, cross-version compatibility, and file-row consistency, apply to all three but matters most for the first.
@@ -56,25 +56,11 @@ DNS or load-balancer change to point at the new instance, with the old one kept 
 
 ## Structure promotion
 
-When you only want to move the data model and the role/permission setup use the snapshot/apply pattern. This is the right shape for dev → staging → production promotion.
+Use [Config-as-code](/docs/manage/config-as-code/) to promote the data model, access rules and settings without moving content or file bytes.
 
-The procedure pairs two existing CairnCMS workflows:
-
-```bash
-# On the source (dev)
-cairncms schema snapshot ./schema.yaml
-cairncms config snapshot ./config
-
-# Commit both to source control, open a PR, review the diffs
-
-# On the target (staging or production), after merge
-cairncms schema apply ./schema.yaml
-cairncms config apply ./config
-```
-
-The two commands run in that order: schema first (so collections, fields, and relations exist), then config (so permissions can reference the now-present collections). See [Schema as code](/docs/manage/schema-as-code/) and [Config as code](/docs/manage/config-as-code/) for the full reference on each.
-
-For environments that need automated promotion, run the same two commands as steps in the deploy pipeline. Prefer `--dry-run` against the production database in CI on every PR, so the eventual deploy diff is visible before merge.
+- [Deploying across environments](/docs/manage/config-as-code/deployments/) covers preparation, capture, review, preview and apply.
+- [Remote instances](/docs/manage/config-as-code/remote/) covers deployment without direct database access.
+- [Adopting the unified workflow](/docs/manage/config-as-code/migration/) covers existing version 1 or 2 directories and standalone schema files.
 
 ## Content move
 
@@ -107,14 +93,14 @@ The tradeoff is performance and consistency. The API enforces validation and per
 Moving from one database vendor to another (Postgres ↔ MySQL ↔ SQLite) is the hardest variant. Three layers of incompatibility:
 
 - **Column types and defaults** are not strictly portable. A Postgres `timestamp with time zone` is not a MySQL `DATETIME`; SQLite's loose typing will accept either but loses precision.
-- **The schema-as-code snapshot stamps the source vendor.** The HTTP `/schema/diff` endpoint refuses cross-vendor application unless `?force=true` is set; the CLI does not enforce this but the resulting database may have subtly wrong types.
+- **Config-as-code does not translate vendor-specific types or defaults.** See [Source release and vendor](/docs/manage/config-as-code/resources/schema/#source-release-and-vendor) for compatibility checks and overrides.
 - **A native database dump is vendor-specific.** A Postgres dump cannot be loaded into MySQL.
 
-The only reliable approach is to recreate the schema natively on the target and replay content through the HTTP API:
+Plan a vendor-specific schema and data conversion, then rehearse it on a disposable target:
 
 1. Stand up the target instance with the right vendor.
-2. Apply the schema snapshot from the source against the target. The CLI `cairncms schema apply` does not gate on the snapshot's stamped vendor, so it will run against a different-vendor target as-is. Spot-check critical fields for type drift; correct any that did not translate. (If you go through the HTTP `/schema/diff` endpoint instead, it will refuse the cross-vendor snapshot unless you pass `?force=true` — that bypass is HTTP-only.)
-3. Apply config-as-code against the target.
+2. Recreate the data model using types and defaults supported by the target vendor. Check constraints and critical fields against representative data. Do not treat an overridden apply as proof of compatibility.
+3. Apply the intended access rules and settings with config-as-code. Select the [managed resources](/docs/manage/config-as-code/scope-and-deletions/) without `schema` to leave the target's data model unchanged, then follow [Deploying across environments](/docs/manage/config-as-code/deployments/).
 4. Replay content through the HTTP API or a vendor-specific data tool that handles the type mapping.
 5. Move file bytes.
 
@@ -127,7 +113,7 @@ A migration between deployments running different CairnCMS versions is two opera
 - **Upgrade first, then move.** Upgrade the source to match the target, take a fresh dump and snapshot, then move. Lower risk, since the upgrade happens on the host that already works.
 - **Move first, then upgrade.** Clone to the new host on the source's old version, then upgrade in place. Useful when the old host is on a deprecated platform and you are also using the move to escape it.
 
-The HTTP `/schema/diff` endpoint refuses snapshots from a different platform version unless `?force=true`. The CLI does not enforce this. Treat a version mismatch as a hint to align versions first, not a routine `--force` flag.
+For config-as-code deployments between releases, see [Source release and vendor](/docs/manage/config-as-code/resources/schema/#source-release-and-vendor).
 
 For major-version moves, also see the extension-rebuild step in [Upgrades](/docs/manage/upgrades/).
 
@@ -154,9 +140,9 @@ This is database-side work, not a snapshot operation. A custom migration ([Custo
 For any non-trivial migration, the order of operations matters. The conservative sequence:
 
 1. Bring up the target's database and storage backends, empty.
-2. Restore the database dump (full clone) or apply the schema snapshot (structure promotion).
+2. Restore the database dump for a full clone. For structure promotion, initialize CairnCMS on the target and follow [Deploying across environments](/docs/manage/config-as-code/deployments/).
 3. Restore file bytes if applicable.
-4. Apply config-as-code if applicable.
+4. Review any additional configuration changes needed by the new environment.
 5. Configure secrets to match the source where required (`KEY`, `SECRET`, `STORAGE_*`).
 6. Bring up the CairnCMS process. Verify the API responds, the admin app loads, and a sample item-fetch succeeds.
 7. Validate end-to-end: log in as a known user, fetch a known asset, run a flow, check the activity log.
@@ -166,7 +152,7 @@ Stop at step 7 if anything fails to validate. The previous instance is still ser
 
 ## Where to go next
 
-- [Schema as code](/docs/manage/schema-as-code/) — the snapshot/apply mechanism for the data model.
-- [Config as code](/docs/manage/config-as-code/) — the snapshot/apply mechanism for roles, permissions, folders, project settings, extension settings, and translations.
+- [Config-as-code](/docs/manage/config-as-code/) — capture and apply the data model, access rules and settings together.
+- [Adopting the unified workflow](/docs/manage/config-as-code/migration/) — moving from existing config-as-code directories or standalone schema files.
 - [Backups](/docs/manage/backups/) — per-vendor dump and restore commands, the same machinery used for full-instance migration.
 - [Upgrades](/docs/manage/upgrades/) — the version-bump procedure that pairs with cross-version migrations.

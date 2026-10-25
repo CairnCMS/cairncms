@@ -60,6 +60,7 @@ function desired(global: Record<string, unknown>): CairnConfig {
 		settings: [],
 		'extension-settings': [{ subject: WIDGET, global: global as never, collections: {} }],
 		translations: [],
+		schema: [],
 	};
 }
 

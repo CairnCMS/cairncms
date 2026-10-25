@@ -12,6 +12,10 @@ export function isPlanEmpty(plan: ConfigPlan): boolean {
 	});
 }
 
+export function sliceHasChanges(slice: { create: unknown[]; update: unknown[]; delete: unknown[] }): boolean {
+	return slice.create.length > 0 || slice.update.length > 0 || slice.delete.length > 0;
+}
+
 export function planSummary(plan: ConfigPlan): { create: number; update: number; delete: number } {
 	const summary = { create: 0, update: 0, delete: 0 };
 

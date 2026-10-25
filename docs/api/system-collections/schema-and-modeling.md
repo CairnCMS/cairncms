@@ -46,7 +46,7 @@ A row in `directus_fields` describes one field on one collection. Each row carri
 | `GET` | `/fields` | List every field on every collection. |
 | `GET` | `/fields/<collection>` | List every field on one collection. |
 | `GET` | `/fields/<collection>/<field>` | Read a single field. |
-| `POST` | `/fields/<collection>` | Create a single field on a collection. The request body is one field record. Creating a non-alias field also adds the underlying SQL column. There is no batch-create shape; create multiple fields with sequential calls or through `POST /schema/apply`. |
+| `POST` | `/fields/<collection>` | Create a single field on a collection. The request body is one field record. Creating a non-alias field also adds the underlying SQL column. There is no batch-create shape. Use sequential calls or a complete desired tree through `POST /config/apply`. |
 | `PATCH` | `/fields/<collection>` | Update many fields on a collection. Body is an array of records, each with a `field` key. |
 | `PATCH` | `/fields/<collection>/<field>` | Update a single field. |
 | `DELETE` | `/fields/<collection>/<field>` | Delete a single field. Drops the underlying SQL column. |
@@ -80,7 +80,7 @@ A row in `directus_relations` describes one foreign-key relationship between two
 | `PATCH` | `/relations/<collection>/<field>` | Update a single relation. |
 | `DELETE` | `/relations/<collection>/<field>` | Delete a single relation. |
 
-There is no batch shape on `/relations` for any verb; every mutation is single-row. Bulk schema changes go through `POST /schema/apply` instead.
+There is no batch shape on `/relations` for any verb. Every mutation is single-row. For deployment, use [config-as-code](/docs/manage/config-as-code/http-api/).
 
 ### Relation record fields
 
@@ -94,11 +94,15 @@ For many-to-any relations, `related_collection` is null and `meta.one_collection
 
 ## Schema-as-code endpoints
 
+:::note[Schema diff and apply are deprecated]
+The POST diff/apply endpoints are deprecated in 1.7.0. Use [Config-as-code](/docs/manage/config-as-code/) for new deployment workflows. `GET /schema/snapshot` remains supported. See the [standalone reference](/docs/manage/schema-as-code/) for the deprecation scope and removal notice.
+:::
+
 Three endpoints snapshot, diff, and apply the entire data model across deployments:
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/schema/snapshot` | Return the current schema as a snapshot. |
+| `GET` | `/schema/snapshot` | Return the current schema as a snapshot, in format version 1 unless `?version=2` is passed. The default becomes version 2 in a later release (see [Schema as code](/docs/manage/schema-as-code/)). Pass `version` explicitly to pin the format. |
 | `POST` | `/schema/diff` | Compute the diff between a submitted snapshot and the current database state. |
 | `POST` | `/schema/apply` | Apply a previously-computed diff to the current database. |
 

@@ -10,7 +10,7 @@ CairnCMS ships with a fixed set of tables that the platform manages directly. Th
 
 ## What is a system collection
 
-A system collection is any table whose name starts with `directus_`. The full set is fixed: you cannot create or rename one through schema-as-code, and they are filtered out of `cairncms schema snapshot`. Each one has a defined shape that the platform depends on, and the API exposes them through dedicated top-level paths rather than `/items/<collection>` (which is reserved for user-defined collections).
+A system collection is any table whose name starts with `directus_`. The platform owns their definitions. Config-as-code does not create or rename them, but it can capture and apply operator-added fields and relations on them. See [Schema coverage](/docs/manage/config-as-code/resources/schema/#what-is-covered). The API exposes system collections through dedicated top-level paths rather than `/items/<collection>`, which is reserved for user-defined collections.
 
 The full set:
 
@@ -54,7 +54,7 @@ System collections are exposed through `/graphql/system`, separate from the user
 
 `/graphql/system` also hosts the auth and TFA mutations (`auth_login`, `auth_refresh`, `auth_logout`, `auth_password_request`, `auth_password_reset`, `users_me_tfa_generate`, `users_me_tfa_enable`, `users_me_tfa_disable`) and a small set of operator queries (`server_info`, `server_health`, `server_ping`, `server_specs_oas`, `server_specs_graphql`). `server_specs_graphql` is gated by `GRAPHQL_INTROSPECTION`; see [GraphQL / Schema introspection](/docs/api/graphql/#schema-introspection).
 
-The full per-collection map of what is and is not exposed is in [GraphQL / What `/graphql/system` exposes](/docs/api/graphql/#what-graphql-system-exposes).
+The full per-collection map of what is and is not exposed is in [GraphQL / What `/graphql/system` exposes](/docs/api/graphql/#what-graphqlsystem-exposes).
 
 ## Query DSL
 

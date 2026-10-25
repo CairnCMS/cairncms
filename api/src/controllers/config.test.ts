@@ -111,12 +111,14 @@ const CURRENT_CONFIG: CairnConfig = {
 	settings: [],
 	'extension-settings': [],
 	translations: [],
+	schema: [],
 };
 
 const ADMIN = { admin: true, app: true, user: USER, role: ROLE, ip: '10.0.0.1' };
 
 const EMPTY_PLAN: ConfigPlan = {
 	managedResources: ['roles'],
+	schema: { create: [], update: [], delete: [] },
 	roles: { create: [], update: [], delete: [] },
 	permissions: { create: [], update: [], delete: [] },
 	folders: { create: [], update: [], delete: [] },
@@ -128,6 +130,7 @@ const EMPTY_PLAN: ConfigPlan = {
 
 const CREATE_PLAN: ConfigPlan = {
 	managedResources: ['roles'],
+	schema: { create: [], update: [], delete: [] },
 	roles: {
 		create: [
 			{
@@ -280,7 +283,15 @@ describe('POST /config/apply run record', () => {
 		const res = await apply({ destructive: true });
 
 		expect(res.status).toBe(200);
-		expect(res.body).toEqual({ data: APPLY_RESULT, meta: { plan: SERIALIZED } });
+
+		expect(res.body).toEqual({
+			data: APPLY_RESULT,
+			meta: {
+				plan: SERIALIZED,
+				result: 'applied',
+				steps: { folders: 'not_run', schema: 'not_run', configuration: 'committed' },
+			},
+		});
 
 		const record = expectOneRecord({
 			result: 'applied',
@@ -438,7 +449,7 @@ describe('POST /config/apply run record', () => {
 	it('emits no record and no run id for an unsupported manifest version', async () => {
 		const res = await request(makeApp(ADMIN))
 			.post('/config/apply')
-			.send({ ...WIRE_BODY, manifest: { version: 3, resources: ['roles'] } });
+			.send({ ...WIRE_BODY, manifest: { version: 4, resources: ['roles'] } });
 
 		expect(res.status).toBe(400);
 		expect(records()).toHaveLength(0);
@@ -453,7 +464,15 @@ describe('POST /config/apply run record', () => {
 		const res = await apply();
 
 		expect(res.status).toBe(200);
-		expect(res.body).toEqual({ data: APPLY_RESULT, meta: { plan: SERIALIZED } });
+
+		expect(res.body).toEqual({
+			data: APPLY_RESULT,
+			meta: {
+				plan: SERIALIZED,
+				result: 'applied',
+				steps: { folders: 'not_run', schema: 'not_run', configuration: 'committed' },
+			},
+		});
 	});
 });
 
@@ -602,7 +621,7 @@ describe('GET /config/snapshot manifest version', () => {
 		vi.mocked(readCurrentConfig).mockImplementation(
 			async (options) =>
 				({
-					config: { manifest: { version: options.manifestVersion ?? 2, resources: [] }, roles: [], permissions: [] },
+					config: { manifest: { version: options.manifestVersion ?? 3, resources: [] }, roles: [], permissions: [] },
 					currentRoleKeys: new Set<string>(),
 					stateToken: { resources: [], digest: 'digest' },
 				} as never)
@@ -613,8 +632,8 @@ describe('GET /config/snapshot manifest version', () => {
 		const res = await request(makeApp(ADMIN)).get('/config/snapshot');
 
 		expect(res.status).toBe(200);
-		expect(readCurrentConfig).toHaveBeenCalledWith(expect.objectContaining({ manifestVersion: 2 }));
-		expect(res.body.data.manifest.version).toBe(2);
+		expect(readCurrentConfig).toHaveBeenCalledWith(expect.objectContaining({ manifestVersion: 3 }));
+		expect(res.body.data.manifest.version).toBe(3);
 	});
 
 	it('honors an explicit v1 request rather than the default', async () => {
@@ -634,7 +653,7 @@ describe('GET /config/snapshot manifest version', () => {
 	});
 
 	it('refuses an unsupported version without reading current state', async () => {
-		const res = await request(makeApp(ADMIN)).get('/config/snapshot?manifest_version=3');
+		const res = await request(makeApp(ADMIN)).get('/config/snapshot?manifest_version=4');
 
 		expect(res.status).toBe(400);
 		expect(res.body.errors[0].extensions.code).toBe('CONFIG_UNSUPPORTED_VERSION');
@@ -767,6 +786,7 @@ describe('POST /config/apply extension-settings forwarding', () => {
 			settings: [],
 			'extension-settings': [],
 			translations: [],
+			schema: [],
 		};
 
 		vi.mocked(readCurrentConfig).mockResolvedValue({
@@ -780,6 +800,7 @@ describe('POST /config/apply extension-settings forwarding', () => {
 		const plan: ConfigPlan = {
 			...EMPTY_PLAN,
 			managedResources: ['extension-settings'],
+			schema: { create: [], update: [], delete: [] },
 			'extension-settings': {
 				create: [
 					{
