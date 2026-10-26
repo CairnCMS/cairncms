@@ -5,8 +5,10 @@ sidebar:
   order: 10
 ---
 
-:::caution[Standalone workflow is being deprecated]
-Use the unified [Config-as-code](/docs/manage/config-as-code/) workflow for new deployments. `cairncms schema snapshot`, `cairncms schema apply`, `POST /schema/diff` and `POST /schema/apply` are deprecated in 1.7.0 in favor of the unified capture/apply path.
+:::caution[Standalone workflow is deprecated]
+`cairncms schema snapshot`, `cairncms schema apply`, `POST /schema/diff`, `POST /schema/apply` and the SDK's `schemaDiff` and `schemaApply` commands are deprecated in 1.7.0. Use the unified [Config-as-code](/docs/manage/config-as-code/) workflow instead.
+
+SDK callers should capture with `configSnapshot` and preview or apply that document with `configApply`. See [Config-as-code with the SDK](/docs/api/sdk/#config-as-code). `GET /schema/snapshot` and SDK `schemaSnapshot()` remain supported. See the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) for removal timing.
 :::
 
 <span id="source-control-workflow"></span>

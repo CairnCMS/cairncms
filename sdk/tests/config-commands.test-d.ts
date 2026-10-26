@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest';
-import { configApply, configSnapshot, createCairnCMS, rest } from '../src/index.js';
+import { configApply, configSnapshot, createCairnCMS, rest, schemaApply, schemaDiff } from '../src/index.js';
 import type {
 	ConfigApplyOutput,
 	ConfigDocument,
@@ -7,6 +7,8 @@ import type {
 	ConfigDocumentV2,
 	ConfigDocumentV3,
 	ConfigPlanOutput,
+	SchemaDiffOutput,
+	SchemaSnapshotV2Output,
 } from '../src/index.js';
 
 const client = createCairnCMS('http://localhost:8055').with(rest());
@@ -69,5 +71,13 @@ describe('config command types', () => {
 		configApply({} as ConfigDocumentV1);
 		configApply({} as ConfigDocumentV2);
 		configApply({} as ConfigDocument, { dryRun: true });
+	});
+
+	it('keeps the deprecated schemaDiff and schemaApply commands typed during the notice period', () => {
+		const diff = (snapshot: SchemaSnapshotV2Output) => client.request(schemaDiff(snapshot, true));
+		const apply = (output: SchemaDiffOutput) => client.request(schemaApply(output));
+
+		expectTypeOf(diff).returns.resolves.toEqualTypeOf<SchemaDiffOutput>();
+		expectTypeOf(apply).returns.resolves.toEqualTypeOf<void>();
 	});
 });
