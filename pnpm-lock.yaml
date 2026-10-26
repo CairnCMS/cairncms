@@ -1393,6 +1393,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: 3.317.0
         version: 3.317.0
+      '@cairncms/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
       '@cairncms/sdk':
         specifier: workspace:*
         version: link:../../sdk

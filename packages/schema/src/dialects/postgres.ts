@@ -353,9 +353,9 @@ export default class Postgres implements SchemaInspector {
 
 		if (Number(majorVersion) >= 12) {
 			generationSelect = `
-			CASE WHEN att.attgenerated = 's' THEN pg_get_expr(ad.adbin, ad.adrelid) ELSE null END AS generation_expression,
+			CASE WHEN att.attgenerated <> '' THEN pg_get_expr(ad.adbin, ad.adrelid) ELSE null END AS generation_expression,
 			CASE WHEN att.attgenerated = '' THEN pg_get_expr(ad.adbin, ad.adrelid) ELSE null END AS default_value,
-			att.attgenerated = 's' AS is_generated,
+			att.attgenerated <> '' AS is_generated,
 		 `;
 		}
 
