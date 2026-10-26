@@ -86,10 +86,52 @@ dependencies when `extend()` runs. Use one environment configuration per file be
 Pass the native `teardownFailures` fixture to `capturePrerequisite()` when composing a resource-owning fixture. This
 preserves setup failures and lets all owned resources finish cleanup before teardown errors are reported.
 
+### Database TLS
+
+Use [createDatabaseTlsTest()](fixtures/database-tls.ts) for tests of encrypted database connections. It requires Docker
+and `openssl` on the host. Use ordinary API fixtures for tests that do not exercise connection settings.
+
+The fixture starts a separate database service using the selected lane's pinned image. It generates a test CA and a
+certificate for the actual endpoint, requires encrypted TCP connections, and configures the compiled API to verify the
+CA and server identity. MySQL and MariaDB explicitly enable `DB_SSL__VERIFY_IDENTITY`. The API bootstraps a fresh
+database instead of restoring a pristine copy. The fixture owns the service, certificates, databases, and child
+processes.
+
+The returned test exposes `api` and `tls`. Use HTTP requests through `api.url` to prove application behavior. A query
+through `api.database` uses the harness's connection and does not prove the compiled API's TLS configuration.
+`tls.probe(profile)` runs a query through the compiled production database module in an owned child process. It returns
+the connection outcome, observed encryption, and resolved dependency versions. Rejections retain the driver's original
+error code and message. A crashed or timed-out probe throws instead of counting as an expected connection rejection.
+
+Profiles include `verified` (the default inline CA), `ca-file` (`DB_SSL__CA_FILE`), `connection-string` (PostgreSQL
+only), `wrong-ca`, and `plaintext`. Certificate paths and connection details come from the owned fixture. Free-form
+`DB_*` environment overrides remain unsupported. See [the TLS suite](routes/database/tls.test.ts) for authenticated
+relational writes, explicit vendor applicability, and an independently owned server with a mismatched certificate name.
+SQLite has no network database connection and is explicitly excluded.
+
+For a local comparison before and after a driver or Knex upgrade, rebuild each version and run the same suite:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm test:integration:prepare
+pnpm test:integration routes/database/tls.test.ts --vendor all --collect-all
+
+# Select a single connection behavior.
+pnpm test:integration routes/database/tls.test.ts --vendor mysql84 -t 'rejects an untrusted CA'
+```
+
+Keep both result directories for comparison. Each `*.probe.log` records `DATABASE_TLS_RESULT` with the API-resolved
+driver and Knex versions, plus the PostgreSQL connection-string parser resolved by Knex. The PostgreSQL URL case uses
+`sslmode=verify-full` and the owned CA in `sslrootcert`. Review API, probe, and service logs together when a case fails.
+The full-vendor workflow discovers this suite automatically.
+
 ### Vendor exclusions
 
 Use `describeForVendors(name, supportedVendors, reason, body)` beside the affected cases. State the vendor constraint or
 coverage limitation in the reason. A bare `.skip` or dynamic skip fails result accounting.
+
+Use sibling applicability groups when cases need different vendor sets. Nested applicability groups can leave a case's
+collected mode runnable inside a skipped parent, which the runner rejects.
 
 `supportedVendors` accepts family names, lane keys, or both. The families are `postgres`, `mysql`, `maria`, and
 `sqlite`. A family name expands to every lane of that family, so a suite picks up a new lane without edits. Prefer
@@ -127,17 +169,17 @@ timeout. Ordinary case-specific setup can stay in the body. Keep the operation b
 
 Only increase a timeout when measured execution on the relevant vendors shows a legitimate need. Prefer a per-case
 override as the third argument to `test(name, body, timeoutMs)`. Add a short comment explaining the expensive operation
-and the reason for the limit. Allow room for normal runtime variation. Do not copy another suite's limit or raise one
-to hide an unexplained stall.
+and the reason for the limit. Allow room for normal runtime variation. Do not copy another suite's limit or raise one to
+hide an unexplained stall.
 
 File-wide `vi.setConfig({ testTimeout, hookTimeout })` changes are supported when the need applies across the file.
 Place them before `initializeFixtures()` and explain the reason. Increase `hookTimeout` for slow automatic setup, not
 `testTimeout`. Changing either does not extend request or API-readiness deadlines.
 
-Vitest's reported case duration includes `beforeEach` and `afterEach` hooks and their fixture work. The first case
-using a file fixture can therefore report much longer than later cases. Automatic fixture setup runs under the hook
-deadline. Lazy fixtures requested by the body use the body deadline. The reported duration alone does not show that a
-body needs more time.
+Vitest's reported case duration includes `beforeEach` and `afterEach` hooks and their fixture work. The first case using
+a file fixture can therefore report much longer than later cases. Automatic fixture setup runs under the hook deadline.
+Lazy fixtures requested by the body use the body deadline. The reported duration alone does not show that a body needs
+more time.
 
 Test workers, bootstrap, and base API processes use UTC. Explicit timezone scenarios override only their owned process.
 Use real REST/GraphQL requests when testing transport behavior.
@@ -213,7 +255,7 @@ pnpm --filter tests-integration test:harness
 TEST_DB=sqlite3 pnpm --filter tests-integration test:lifecycle
 TEST_DB=postgres18 pnpm --filter tests-integration test:lifecycle
 
-# Requires Docker. Checks Redis, SAML, S3, and database cleanup under failure and cancellation, and the engine probe.
+# Requires preparation, Docker, and OpenSSL. Checks services, database TLS, cleanup, and the engine probe.
 pnpm --filter tests-integration test:services
 
 # Requires preparation and Docker. Set TEST_DB to the engine under test.

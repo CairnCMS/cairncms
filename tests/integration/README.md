@@ -93,6 +93,8 @@ setup requests so rejected or incomplete responses fail at the request boundary.
 
 Use the default timeouts. See [timeout guidance](HARNESS.md#timeouts-and-environment) before adding an override.
 
+For database connection tests, use [the TLS fixture](HARNESS.md#database-tls) to provision a verified TLS connection.
+
 Name sustained-load suites `*.load.test.ts` so they run exclusively. See the [harness reference](HARNESS.md) for custom
 fixtures, vendor exclusions, and process controls.
 
