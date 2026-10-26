@@ -1,4 +1,5 @@
 export * from './auth/index.js';
+export * from './config/index.js';
 export * from './create/index.js';
 export * from './delete/index.js';
 export * from './read/index.js';

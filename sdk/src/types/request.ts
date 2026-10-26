@@ -6,6 +6,8 @@ export interface RequestOptions {
 	params?: Record<string, any>;
 	headers?: Record<string, string>;
 	body?: string | FormData;
+	/** Returns the whole JSON response body instead of its `data` field. */
+	envelope?: true;
 	onRequest?: RequestTransformer;
 	onResponse?: ResponseTransformer;
 }

@@ -6,13 +6,16 @@ import { extractData } from './extract-data.js';
  *
  * @param url The request URL
  * @param options The request options
+ * @param fetcher The fetch implementation
+ * @param envelope Whether to return the whole JSON response body instead of its data field
  *
  * @returns The API result if successful
  */
 export const request = async <Output = any>(
 	url: string,
 	options: RequestInit,
-	fetcher: FetchInterface = globalThis.fetch
+	fetcher: FetchInterface = globalThis.fetch,
+	envelope = false
 ): Promise<Output> => {
 	options.headers =
 		typeof options.headers === 'object' && !Array.isArray(options.headers)
@@ -20,7 +23,7 @@ export const request = async <Output = any>(
 			: {};
 
 	return fetcher(url, options).then((response) => {
-		return extractData(response).catch((reason) => {
+		return extractData(response, envelope).catch((reason) => {
 			const errors = typeof reason === 'object' && 'errors' in reason ? reason.errors : reason;
 			return Promise.reject({ errors, response });
 		});
