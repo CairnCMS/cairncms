@@ -4,7 +4,7 @@ import type { RestCommand } from '../../types.js';
  * Generate a hash for a given string. This endpoint is only available to admin users.
  * @param string String to hash.
  * @returns Hashed string.
- * @deprecated Hash and verify values in your own application with an Argon2 package, such as `argon2` for Node.js. Removal is planned for 1.8.0 or later.
+ * @deprecated Hash and verify values in your own application with an Argon2 package, such as `argon2` for Node.js.
  */
 export const generateHash =
 	<Schema>(string: string): RestCommand<string, Schema> =>
@@ -19,7 +19,7 @@ export const generateHash =
  * @param string Source string.
  * @param hash Hash you want to verify against.
  * @returns Boolean.
- * @deprecated Hash and verify values in your own application with an Argon2 package, such as `argon2` for Node.js. Removal is planned for 1.8.0 or later.
+ * @deprecated Hash and verify values in your own application with an Argon2 package, such as `argon2` for Node.js.
  */
 export const verifyHash =
 	<Schema>(string: string, hash: string): RestCommand<boolean, Schema> =>

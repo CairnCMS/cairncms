@@ -2444,7 +2444,7 @@ export class GraphQLService {
 					string: new GraphQLNonNull(GraphQLString),
 				},
 				deprecationReason:
-					'Hash and verify values in your own application with an Argon2 package, such as argon2 for Node.js. Removal is planned for 1.8.0 or later.',
+					'Hash and verify values in your own application with an Argon2 package, such as argon2 for Node.js.',
 				resolve: async (_, args) => {
 					if (this.accountability?.admin !== true) {
 						throw new ForbiddenException();
@@ -2460,7 +2460,7 @@ export class GraphQLService {
 					hash: new GraphQLNonNull(GraphQLString),
 				},
 				deprecationReason:
-					'Hash and verify values in your own application with an Argon2 package, such as argon2 for Node.js. Removal is planned for 1.8.0 or later.',
+					'Hash and verify values in your own application with an Argon2 package, such as argon2 for Node.js.',
 				resolve: async (_, args) => {
 					if (this.accountability?.admin !== true) {
 						throw new ForbiddenException();

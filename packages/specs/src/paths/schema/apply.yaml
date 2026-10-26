@@ -2,10 +2,9 @@ post:
   summary: Apply Schema Difference
   description:
     Update the instance's schema by passing the diff previously retrieved via `/schema/diff` endpoint in the JSON
-    request body or a JSON/YAML file. This endpoint is only available to admin users. Deprecated in 1.7.0. Use
+    request body or a JSON/YAML file. This endpoint is only available to admin users. Deprecated. Use
     POST /config/apply with a complete config-as-code document instead. See
-    https://cairncms.dev/docs/manage/config-as-code/migration/ for adoption and
-    https://cairncms.dev/docs/manage/schema-as-code/ for removal timing.
+    https://cairncms.dev/docs/manage/config-as-code/migration/ for adoption.
   deprecated: true
   operationId: schemaApply
   requestBody:

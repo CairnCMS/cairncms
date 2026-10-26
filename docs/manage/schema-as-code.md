@@ -49,8 +49,8 @@ An existing file keeps its version. New files and stdout currently default to ve
 
 An unreadable file or missing/unsupported version stops overwrite. Version 2 requires CairnCMS 1.7.0 or later. Older HTTP servers refuse it, while an older CLI can misinterpret folder keys as IDs.
 
-:::caution[Snapshot default change]
-Version 1 as the default is separately deprecated. New files, stdout and `GET /schema/snapshot` without a version will default to version 2 in 1.8.0 or later, no sooner than 30 days after 1.7.0 is published. Re-snapshotting an existing file preserves its version, and `?version=1` stays available. SDK 1.7.0 and later pins `schemaSnapshot()` to version 1. Older SDKs omit the version and will observe the new default. Upgrade the SDK or explicitly request version 1 to preserve that response format.
+:::caution[Version 1 snapshot default is deprecated]
+Version 1 as the default for new files, stdout and `GET /schema/snapshot` without a version is deprecated in 1.7.0. A later release will default to version 2. Request a version explicitly to keep a format. Re-snapshotting an existing file preserves its version, and `?version=1` stays available. SDK 1.7.0 and later pins `schemaSnapshot()` to version 1. Older SDKs omit the version and will observe the new default. Upgrade the SDK or explicitly request version 1 to preserve that response format. See the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) for when the default changes.
 :::
 
 ## Applying a snapshot
