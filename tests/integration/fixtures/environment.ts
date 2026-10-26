@@ -18,13 +18,16 @@ import { dropDatabase } from './drop-database.mjs';
 import { initializeDatabase } from '../harness/pristine.mjs';
 import { removeMarkedDirectory } from '../harness/owned-directory.mjs';
 import { familyOf, hasCapability } from '../harness/database-vendors.mjs';
+import { tlsResourceDetails, tlsEnvironment } from '../harness/database-tls.mjs';
+import type { DatabaseTls } from './database-tls';
 
-type Runtime = {
+export type Runtime = {
 	vendor: string;
 	directory: string;
 	connection?: { host: string; port: number; user: string; password: string };
 	pristine?: { directory: string; buildHash: string };
 };
+
 declare module 'vitest' {
 	export interface ProvidedContext {
 		integration: Runtime;
@@ -63,6 +66,7 @@ export type Api = {
 };
 
 export type EnvironmentOptions = {
+	databaseTls?: DatabaseTls;
 	bootstrap?: 'fresh';
 	migrations?: string[];
 	hooks?: boolean;
@@ -97,6 +101,8 @@ export async function withEnvironment(
 	signal?: AbortSignal,
 	options: EnvironmentOptions = {}
 ) {
+	const tls = options.databaseTls ? tlsResourceDetails(options.databaseTls, runtime) : undefined;
+	if (tls) runtime = { ...runtime, connection: tls.connection, pristine: undefined };
 	const directory = await mkdtemp(join(tmpdir(), 'cairn-integration-'));
 	const id = `test_${randomUUID().replaceAll('-', '')}`;
 	const logPath = join(runtime.directory, `${id}.log`);
@@ -330,6 +336,7 @@ export async function withEnvironment(
 			env.DB_USER = runtime.connection!.user;
 			env.DB_PASSWORD = runtime.connection!.password;
 			env.DB_DATABASE = id;
+			if (tls) Object.assign(env, tlsEnvironment(tls, env));
 
 			database = knex({
 				client,

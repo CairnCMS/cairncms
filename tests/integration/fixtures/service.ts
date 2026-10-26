@@ -14,6 +14,11 @@ export type ServiceDefinition = {
 	environment?: Record<string, string>;
 	wait?: WaitStrategy;
 	startupTimeoutMs?: number;
+	command?: string[];
+	entrypoint?: string[];
+	files?: { source: string; target: string; mode?: number }[];
+	contents?: { content: string; target: string; mode?: number }[];
+	health?: ['CMD-SHELL', string] | ['CMD', ...string[]];
 };
 
 export async function withService<T>(
@@ -58,7 +63,7 @@ export async function withService<T>(
 			JSON.stringify({ serviceKey: id, run, image: definition.image, owner: process.pid, state: 'starting' }) + '\n'
 		);
 
-		container = await new RecordedContainer(definition.image, ownerPath)
+		let configured = new RecordedContainer(definition.image, ownerPath)
 			.withLabels({ 'cairncms.integration.service': id, 'cairncms.integration.run': run })
 			.withEnvironment(definition.environment ?? {})
 			.withExposedPorts(definition.port)
@@ -67,8 +72,16 @@ export async function withService<T>(
 			.withLogConsumer((logs) => {
 				stream = logs;
 				stream.pipe(log);
-			})
-			.start();
+			});
+
+		if (definition.command) configured = configured.withCommand(definition.command);
+		if (definition.entrypoint) configured = configured.withEntrypoint(definition.entrypoint);
+		if (definition.files) configured = configured.withCopyFilesToContainer(definition.files);
+		if (definition.contents) configured = configured.withCopyContentToContainer(definition.contents);
+		if (definition.health)
+			configured = configured.withHealthCheck({ test: definition.health, interval: 1000, timeout: 1000, retries: 60 });
+
+		container = await configured.start();
 
 		await writeFile(
 			ownerPath,

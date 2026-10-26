@@ -8,7 +8,7 @@
 		"test:harness": "node --test harness/*.test.mjs",
 		"typecheck": "tsc --noEmit",
 		"test:lifecycle": "node --test --test-concurrency=1 harness/lifecycle.check.mjs harness/wrapper.check.mjs harness/fixture-lifecycle.check.mjs",
-		"test:services": "node --test --test-concurrency=1 harness/service-lifecycle.check.mjs harness/container-startup.check.mjs harness/database-cleanup.check.mjs harness/engine-version.check.mjs harness/service-startup.check.mjs harness/service-fixtures.check.mjs",
+		"test:services": "node --test --test-concurrency=1 harness/service-lifecycle.check.mjs harness/container-startup.check.mjs harness/database-cleanup.check.mjs harness/engine-version.check.mjs harness/service-startup.check.mjs harness/service-fixtures.check.mjs harness/database-tls.check.mjs",
 		"test:restoration": "node --test --test-concurrency=1 harness/pristine.check.mjs"
 	},
 	"devDependencies": {
