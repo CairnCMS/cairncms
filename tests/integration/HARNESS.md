@@ -289,7 +289,8 @@ To change a pin:
    as `<image>@sha256:<digest>`.
 2. Name a new lane after its family and line, such as `postgres18`, `mysql97`, or `maria1011`. Set its `version` label
    to the engine and line, and add the PostGIS line for PostGIS images, such as `PostgreSQL 18 / PostGIS 3.6`. Declare
-   the `postgis` capability only when the image includes PostGIS.
+   each capability the engine supports: `postgis` when the image includes PostGIS, `generated-columns` for stored
+   generated columns, and `virtual-generated-columns` for virtual ones. The vendor unit test rejects any other name.
 3. Update both matrices in `.github/workflows/ci-tests-api.yml`. The test matrix lists every lane in definition order.
    The restoration matrix runs one lane per family, and `ci-workflow.test.mjs` names those four keys, so update the test
    too when a family's restoration lane changes. Both matrices use each lane's `version` as its label, and

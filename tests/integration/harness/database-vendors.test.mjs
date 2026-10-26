@@ -27,6 +27,7 @@ test('family names and vendor keys are disjoint', () => {
 		families.filter((family) => vendors.includes(family)),
 		[]
 	);
+
 	assert.deepEqual(families, ['sqlite', 'postgres', 'mysql', 'maria']);
 });
 
@@ -56,13 +57,27 @@ test('capabilities select exactly the vendors that declare them', () => {
 	assert.deepEqual(vendorsWith('unknown'), []);
 });
 
+test('every declared capability is a known name, and virtual generated columns imply stored ones', () => {
+	const known = ['postgis', 'generated-columns', 'virtual-generated-columns'];
+
+	for (const vendor of vendors) {
+		for (const capability of databaseVendors[vendor].capabilities)
+			assert(known.includes(capability), `${vendor} declares unknown capability ${capability}`);
+	}
+
+	for (const vendor of vendorsWith('virtual-generated-columns'))
+		assert(hasCapability(vendor, 'generated-columns'), `${vendor} has virtual but not stored generated columns`);
+});
+
 test('expandVendors expands families, passes keys through, de-duplicates, and rejects unknown names', () => {
 	assert.deepEqual(expandVendors(['postgres']), vendorsOf('postgres'));
+
 	assert.deepEqual(expandVendors(['postgres', 'mysql', 'maria']), [
 		...vendorsOf('postgres'),
 		...vendorsOf('mysql'),
 		...vendorsOf('maria'),
 	]);
+
 	assert.deepEqual(expandVendors(['sqlite3']), ['sqlite3']);
 	const mysql = vendorsOf('mysql');
 	assert.deepEqual(expandVendors(['mysql5', 'mysql']), ['mysql5', ...mysql.filter((vendor) => vendor !== 'mysql5')]);

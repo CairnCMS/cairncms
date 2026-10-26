@@ -31,16 +31,21 @@ const mariaFamily = {
 };
 
 export const databaseVendors = {
-	sqlite3: { client: 'sqlite3', family: 'sqlite', capabilities: [], version: 'SQLite' },
+	sqlite3: {
+		client: 'sqlite3',
+		family: 'sqlite',
+		capabilities: ['generated-columns', 'virtual-generated-columns'],
+		version: 'SQLite',
+	},
 	postgres18: {
 		...postgres,
-		capabilities: ['postgis'],
+		capabilities: ['postgis', 'generated-columns', 'virtual-generated-columns'],
 		version: 'PostgreSQL 18 / PostGIS 3.6',
 		image: 'postgis/postgis@sha256:fd143c649af607c6872a1e59ccb3e43c299f207ab975a4c286fbb204b6e6f7b7',
 	},
 	postgres15: {
 		...postgres,
-		capabilities: [],
+		capabilities: ['generated-columns'],
 		version: 'PostgreSQL 15',
 		image: 'postgres@sha256:a8e042598834300dfaa17a54f695b87b7f25d3490433bbbe2ef3bffbb9747f24',
 	},
@@ -52,31 +57,31 @@ export const databaseVendors = {
 	},
 	mysql97: {
 		...mysqlFamily,
-		capabilities: [],
+		capabilities: ['generated-columns', 'virtual-generated-columns'],
 		version: 'MySQL 9.7',
 		image: 'mysql@sha256:8fb11c38b3551e22d50adbb688f027f8ff4ea2d2445aa277c1cc97b4af85ec54',
 	},
 	mysql84: {
 		...mysqlFamily,
-		capabilities: [],
+		capabilities: ['generated-columns', 'virtual-generated-columns'],
 		version: 'MySQL 8.4',
 		image: 'mysql@sha256:76f0358884cb92d9a086d24e5671c38048d3fef40f2588703d73eb55392d6b69',
 	},
 	mysql5: {
 		...mysqlFamily,
-		capabilities: [],
+		capabilities: ['generated-columns', 'virtual-generated-columns'],
 		version: 'MySQL 5.7',
 		image: 'mysql@sha256:4bc6bc963e6d8443453676cae56536f4b8156d78bae03c0145cbe47c2aad73bb',
 	},
 	maria123: {
 		...mariaFamily,
-		capabilities: [],
+		capabilities: ['generated-columns', 'virtual-generated-columns'],
 		version: 'MariaDB 12.3',
 		image: 'mariadb@sha256:99c125f103f5d081ebbc9ffe064e63daf7f688ac33a5f7f29af2d7260a96debf',
 	},
 	maria1011: {
 		...mariaFamily,
-		capabilities: [],
+		capabilities: ['generated-columns', 'virtual-generated-columns'],
 		version: 'MariaDB 10.11',
 		image: 'mariadb@sha256:0d0945c57f75b3a3b9ebe71aedaaad005fa5305054e8fca3d2e42a8c92b43b5e',
 	},
