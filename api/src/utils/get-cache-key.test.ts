@@ -109,6 +109,21 @@ describe('get cache key', () => {
 		expect(getCacheKey(req1)).toEqual(getCacheKey(postReq1));
 		expect(getCacheKey(req2)).toEqual(getCacheKey(postReq2));
 	});
+
+	test('throws without leaking the target when it cannot be parsed', () => {
+		const target = 'http://[/items/books';
+		let error: unknown;
+
+		try {
+			getCacheKey({ originalUrl: target } as unknown as Request);
+		} catch (err) {
+			error = err;
+		}
+
+		expect(error).toBeInstanceOf(Error);
+		expect((error as Error).message).not.toContain(target);
+		expect((error as { input?: unknown }).input).toBeUndefined();
+	});
 });
 
 describe('authorization-context segmentation', () => {

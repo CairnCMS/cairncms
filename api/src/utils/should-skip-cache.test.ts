@@ -153,9 +153,21 @@ test('should not skip cache for requests coming outside of data studio', () => {
 					return undefined;
 			}
 		}),
+		originalUrl: '/items/test',
 	} as unknown as Request;
 
 	expect(shouldSkipCache(req)).toBe(false);
+});
+
+test('should skip cache for a request target that cannot be parsed', () => {
+	vi.mocked(getEnv).mockReturnValue({ PUBLIC_URL: 'http://admin.example.com', CACHE_SKIP_ALLOWED: false });
+
+	const req = {
+		get: vi.fn(() => undefined),
+		originalUrl: 'http://[/items/books',
+	} as unknown as Request;
+
+	expect(shouldSkipCache(req)).toBe(true);
 });
 
 test.each([
@@ -175,8 +187,40 @@ test.each([
 						return undefined;
 				}
 			}),
+			originalUrl: '/items/test',
 		} as unknown as Request;
 
 		expect(shouldSkipCache(req)).toBe(value);
 	}
 );
+
+test('should not throw or skip for a malformed Referer under a root-relative public URL', () => {
+	vi.mocked(getEnv).mockReturnValue({ PUBLIC_URL: '/', CACHE_SKIP_ALLOWED: false });
+
+	const req = {
+		get: vi.fn((str) => (str === 'Referer' ? 'http://[' : undefined)),
+		originalUrl: '/items/test',
+	} as unknown as Request;
+
+	expect(shouldSkipCache(req)).toBe(false);
+});
+
+test('should keep honoring Cache-Control no-store when the Referer is malformed', () => {
+	vi.mocked(getEnv).mockReturnValue({ PUBLIC_URL: '/', CACHE_SKIP_ALLOWED: true });
+
+	const req = {
+		get: vi.fn((str) => {
+			switch (str) {
+				case 'Referer':
+					return 'http://[';
+				case 'cache-control':
+					return 'no-store';
+				default:
+					return undefined;
+			}
+		}),
+		originalUrl: '/items/test',
+	} as unknown as Request;
+
+	expect(shouldSkipCache(req)).toBe(true);
+});
