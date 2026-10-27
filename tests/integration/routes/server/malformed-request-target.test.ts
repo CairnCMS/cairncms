@@ -6,11 +6,14 @@ import { TestLogger } from '../../fixtures/test-logger.mjs';
 import {
 	ERROR_SINK_ENDPOINT,
 	ERROR_SINK_FAILURE,
+	hasRequestUrl,
 	records,
 	type RawResponse,
 	sendRawTarget,
 	unexpectedWarnings,
 } from '../../fixtures/raw-request';
+
+const REDACT_TEXT = '--redact--';
 
 const test = createIdentityTest({
 	env: { LOG_STYLE: 'raw', LOG_LEVEL: 'info' },
@@ -58,6 +61,32 @@ describe('malformed request targets', () => {
 		expect(malformed.status).toBe(404);
 		expect(healthStatus).toBe(200);
 		expect(logs).not.toContain('http://[');
+		expect(unexpectedWarnings(logs)).toEqual([]);
+	});
+
+	test('a protocol-relative target with an invalid host returns 404 and redacts its logged URL', async ({ api }) => {
+		const { malformed, healthStatus, logs } = await captureMalformed(api, `//[x/items?access_token=${api.adminToken}`);
+
+		expect(malformed.status).toBe(404);
+		expect(healthStatus).toBe(200);
+		expect(hasRequestUrl(logs, REDACT_TEXT)).toBe(true);
+		expect(logs).not.toContain(api.adminToken);
+		expect(unexpectedWarnings(logs)).toEqual([]);
+	});
+
+	test('a target carrying credentials before an invalid host returns 404 without leaking them', async ({ api }) => {
+		const password = 's3cretpw';
+
+		const { malformed, healthStatus, logs } = await captureMalformed(
+			api,
+			`//alice:${password}@[x/items?access_token=${api.adminToken}`
+		);
+
+		expect(malformed.status).toBe(404);
+		expect(healthStatus).toBe(200);
+		expect(hasRequestUrl(logs, REDACT_TEXT)).toBe(true);
+		expect(logs).not.toContain(password);
+		expect(logs).not.toContain(api.adminToken);
 		expect(unexpectedWarnings(logs)).toEqual([]);
 	});
 });
