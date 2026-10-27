@@ -3,6 +3,15 @@ import getDatabase from '../database/index.js';
 import emitter from '../emitter.js';
 import { RouteNotFoundException } from '../exceptions/index.js';
 
+/** Pathname for the 404 diagnostic, with any credentials in a malformed authority dropped. */
+function diagnosticPath(originalUrl: string): string {
+	try {
+		return new URL(originalUrl, 'http://localhost').pathname;
+	} catch {
+		return '';
+	}
+}
+
 /**
  * Handles not found routes.
  *
@@ -31,7 +40,7 @@ const notFound: RequestHandler = async (req, res, next) => {
 			return next();
 		}
 
-		next(new RouteNotFoundException(req.path));
+		next(new RouteNotFoundException(diagnosticPath(req.originalUrl)));
 	} catch (err: any) {
 		next(err);
 	}
