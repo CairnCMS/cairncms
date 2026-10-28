@@ -11,7 +11,7 @@ A CairnCMS project.
 
 This scaffold gives you a working CairnCMS instance for local development and content modeling. **It is not a production deployment template.** Production deployments require additional decisions the scaffold does not make for you:
 
-- **Database image arch.** The default `postgis/postgis:16-3.4-alpine` image is amd64-only. For ARM cloud (Graviton, ARM Kubernetes), replace with a multi-arch alternative or use plain `postgres` if you don't need geometry features.
+- **Database image arch.** The default `postgis/postgis:18-3.6-alpine` image is amd64-only. For ARM cloud (Graviton, ARM Kubernetes), replace with a multi-arch alternative or use plain `postgres:18-alpine` if you don't need geometry features. When you switch, also remove the database service's `platform: linux/amd64` line or set it to `linux/arm64`, because the pin otherwise keeps selecting the amd64 build. PostgreSQL 18 images keep their data under `/var/lib/postgresql`, so keep the `./data/database:/var/lib/postgresql` mount when you change images.
 - **Secret management.** `cairncms/.env` ships with random secrets and is gitignored. For production, source secrets from a vault or your platform's secret store rather than a local file.
 - **`PUBLIC_URL`.** Defaults to `http://localhost:${CAIRNCMS_PORT}`. When you serve CairnCMS from a real hostname, set `PUBLIC_URL` in `cairncms/.env`.
 - **TLS, backups, monitoring, log shipping.**
