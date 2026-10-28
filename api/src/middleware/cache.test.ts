@@ -21,8 +21,9 @@ vi.mock('../env.js', () => {
 	};
 });
 
-const { getCacheKeyMock } = vi.hoisted(() => ({
+const { getCacheKeyMock, shouldSkipCacheMock } = vi.hoisted(() => ({
 	getCacheKeyMock: vi.fn((originalUrl: string) => `key:${originalUrl}`),
+	shouldSkipCacheMock: vi.fn((_req: unknown) => false),
 }));
 
 vi.mock('../utils/get-cache-key.js', () => ({
@@ -30,7 +31,7 @@ vi.mock('../utils/get-cache-key.js', () => ({
 }));
 
 vi.mock('../utils/should-skip-cache.js', () => ({
-	shouldSkipCache: () => false,
+	shouldSkipCache: (req: Request) => shouldSkipCacheMock(req),
 }));
 
 vi.mock('../logger.js', () => ({
@@ -38,6 +39,11 @@ vi.mock('../logger.js', () => ({
 }));
 
 import checkCacheMiddleware from './cache.js';
+import logger from '../logger.js';
+
+const { shouldSkipCache: realShouldSkipCache } = await vi.importActual<typeof import('../utils/should-skip-cache.js')>(
+	'../utils/should-skip-cache.js'
+);
 
 function makeReqRes(originalUrl: string, method = 'GET') {
 	const req = { method, originalUrl, path: originalUrl.split('?')[0] } as unknown as Request;
@@ -55,6 +61,8 @@ describe('cache middleware — read-path key stashing and fail-closed', () => {
 	beforeEach(() => {
 		getCacheKeyMock.mockClear();
 		getCacheValueMock.mockReset();
+		shouldSkipCacheMock.mockReset().mockReturnValue(false);
+		vi.mocked(logger.warn).mockClear();
 	});
 
 	it('stashes the computed key on res.locals for reuse on a miss', async () => {
@@ -94,6 +102,21 @@ describe('cache middleware — read-path key stashing and fail-closed', () => {
 		expect(getCacheValueMock).not.toHaveBeenCalled();
 		expect((res.locals as any).cacheKey).toBeUndefined();
 		expect(res.json).not.toHaveBeenCalled();
+		expect(next).toHaveBeenCalledOnce();
+	});
+
+	it('skips the cache for an unparseable target without computing a key or warning', async () => {
+		shouldSkipCacheMock.mockImplementation((req) => realShouldSkipCache(req as Request));
+		getCacheValueMock.mockResolvedValue({ cached: 'stale' });
+		const { req, res } = makeReqRes('http://[/items/books');
+		const next = vi.fn();
+
+		await (checkCacheMiddleware as any)(req, res, next);
+
+		expect(getCacheKeyMock).not.toHaveBeenCalled();
+		expect(getCacheValueMock).not.toHaveBeenCalled();
+		expect(logger.warn).not.toHaveBeenCalled();
+		expect((res.locals as any).cacheKey).toBeUndefined();
 		expect(next).toHaveBeenCalledOnce();
 	});
 });

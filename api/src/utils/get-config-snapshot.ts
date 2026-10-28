@@ -1,28 +1,31 @@
 import type { SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
-import getDatabase from '../database/index.js';
+import getDatabase, { getDatabaseClient } from '../database/index.js';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import {
-	CONFIG_KINDS,
 	type CairnConfig,
 	type ConfigExtensionSettings,
 	type ConfigKind,
+	type ConfigManifest,
 	type ConfigFolder,
 	type ConfigPermissionSet,
 	type ConfigRole,
+	type ConfigSchemaCollection,
 	type ConfigSettings,
 	type ConfigStateToken,
 	type ConfigTranslations,
 } from '../types/config.js';
+import type { Snapshot, SnapshotField } from '../types/index.js';
 import { LATEST_MANIFEST_VERSION, type ManifestVersion } from './config-contract.js';
 import { computeConfigStateDigest, toStateDigestEntry, type StateDigestEntry } from './config/config-state-digest.js';
 import { makeDependencyAccessor } from './config/dependency-context.js';
 import type { ConfigReadMode, ExtensionDeclarationSnapshot } from './config/descriptor.js';
 import type { FoldersKindTypes } from './config/handlers/folders.js';
 import type { RolesKindTypes } from './config/handlers/roles.js';
-import { getDescriptor } from './config/registry.js';
+import { getDescriptor, kindsForVersion } from './config/registry.js';
 import { resolveReadClosure } from './config/scope.js';
 import { getSchema } from './get-schema.js';
+import { version } from './package.js';
 import { safeLogFragment } from './safe-log-fragment.js';
 import { findPlaceholderSyntax, validateConfigRecord } from './validate-desired-config.js';
 
@@ -32,7 +35,13 @@ export type CurrentConfigRead = {
 	currentFolderKeys: ReadonlySet<string>;
 	currentFolderParents: ReadonlyMap<string, string | null>;
 	stateToken: ConfigStateToken;
+	schemaStoredFields?: SnapshotField[];
+	schemaKeyFormHash?: string;
+	schemaCapture?: ConfigSchemaCapture;
 };
+
+/** The stored schema and overview one read planned from, for checking that its changes apply to the same state. */
+export type ConfigSchemaCapture = { snapshot: Snapshot; overview: SchemaOverview };
 
 export type CurrentConfigOptions = {
 	database?: Knex;
@@ -69,8 +78,13 @@ function assertEmittedDocument(kind: ConfigKind, subject: string, document: unkn
 
 export async function readCurrentConfig(options: CurrentConfigOptions): Promise<CurrentConfigRead> {
 	const database = options.database ?? getDatabase();
-	const manifest = { version: options.manifestVersion ?? LATEST_MANIFEST_VERSION, resources: [...options.resources] };
 	const managed = new Set<ConfigKind>(options.resources);
+
+	const manifest: ConfigManifest = {
+		version: options.manifestVersion ?? LATEST_MANIFEST_VERSION,
+		resources: [...options.resources],
+		...(managed.has('schema') && { schema: { release: version, vendor: getDatabaseClient(database) } }),
+	};
 
 	const closure = resolveReadClosure(manifest);
 
@@ -84,6 +98,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 				settings: [],
 				'extension-settings': [],
 				translations: [],
+				schema: [],
 			},
 			currentRoleKeys: new Set(),
 			currentFolderKeys: new Set(),
@@ -96,6 +111,9 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 	const published = new Map<ConfigKind, unknown>();
 	const documentsByKind = new Map<ConfigKind, unknown[]>();
 	const projectionInputs: Array<{ kind: ConfigKind; mode: ConfigReadMode; result: unknown }> = [];
+	let schemaStoredFields: SnapshotField[] | undefined;
+	let schemaKeyFormHash: string | undefined;
+	let schemaCapture: ConfigSchemaCapture | undefined;
 
 	for (const { kind, mode } of closure) {
 		const descriptor = getDescriptor(kind);
@@ -116,6 +134,16 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		const result = await descriptor.handler.readCurrent(context as never);
 		published.set(kind, result.dependencyState);
 		projectionInputs.push({ kind, mode, result });
+
+		if (kind === 'schema') {
+			const schemaState = result.dependencyState as
+				| { storedFields: SnapshotField[]; keyFormHash: string; capture: ConfigSchemaCapture }
+				| undefined;
+
+			schemaStoredFields = schemaState?.storedFields;
+			schemaKeyFormHash = schemaState?.keyFormHash;
+			schemaCapture = schemaState?.capture;
+		}
 
 		if (!managed.has(kind)) continue;
 
@@ -138,6 +166,7 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		settings: (documentsByKind.get('settings') ?? []) as ConfigSettings[],
 		'extension-settings': (documentsByKind.get('extension-settings') ?? []) as ConfigExtensionSettings[],
 		translations: (documentsByKind.get('translations') ?? []) as ConfigTranslations[],
+		schema: (documentsByKind.get('schema') ?? []) as ConfigSchemaCollection[],
 	};
 
 	const placeholders = findPlaceholderSyntax(config);
@@ -209,11 +238,20 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 		config.folders.map((folder) => [folder.key, folder.parent ?? null])
 	);
 
-	return { config, currentRoleKeys, currentFolderKeys, currentFolderParents, stateToken };
+	return {
+		config,
+		currentRoleKeys,
+		currentFolderKeys,
+		currentFolderParents,
+		stateToken,
+		...(schemaStoredFields !== undefined && { schemaStoredFields }),
+		...(schemaKeyFormHash !== undefined && { schemaKeyFormHash }),
+		...(schemaCapture !== undefined && { schemaCapture }),
+	};
 }
 
 export async function getConfigSnapshot(options?: { database?: Knex; schema?: SchemaOverview }): Promise<CairnConfig> {
-	const { config } = await readCurrentConfig({ ...options, resources: CONFIG_KINDS });
+	const { config } = await readCurrentConfig({ ...options, resources: kindsForVersion(LATEST_MANIFEST_VERSION) });
 
 	return config;
 }

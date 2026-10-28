@@ -608,6 +608,7 @@ errors:
   VALUE_TOO_LONG: Value is too long
   VALUE_OUT_OF_RANGE: Value is out of range
   INVALID_FOREIGN_KEY: Invalid foreign key
+  RECORD_STILL_REFERENCED: Item is still referenced
   UNKNOWN: Unexpected Error
   GRAPHQL_VALIDATION_EXCEPTION: GraphQL Validation Exception
   SERVICE_UNAVAILABLE: Service Unavailable

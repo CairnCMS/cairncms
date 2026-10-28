@@ -1,6 +1,5 @@
-import { REGEX_BETWEEN_PARENS } from '@cairncms/constants';
 import type { FieldFunction, Query, SchemaOverview } from '@cairncms/types';
-import { getFunctionsForType } from '@cairncms/utils';
+import { getBetweenParens, getFunctionsForType } from '@cairncms/utils';
 import type { Knex } from 'knex';
 import { getFunctions } from '../database/helpers/index.js';
 import { InvalidQueryException } from '../exceptions/index.js';
@@ -35,18 +34,18 @@ export function getColumn(
 
 	if (column.includes('(') && column.includes(')')) {
 		const functionName = column.split('(')[0] as FieldFunction;
-		const columnName = column.match(REGEX_BETWEEN_PARENS)![1];
+		const columnName = getBetweenParens(column);
 
-		if (functionName in fn) {
+		if (columnName !== null && functionName in fn) {
 			const collectionName = options?.originalCollectionName || table;
-			const type = schema?.collections[collectionName]?.fields?.[columnName!]?.type ?? 'unknown';
+			const type = schema?.collections[collectionName]?.fields?.[columnName]?.type ?? 'unknown';
 			const allowedFunctions = getFunctionsForType(type);
 
 			if (allowedFunctions.includes(functionName) === false) {
 				throw new InvalidQueryException(`Invalid function specified "${functionName}"`);
 			}
 
-			const result = fn[functionName as keyof typeof fn](table, columnName!, {
+			const result = fn[functionName as keyof typeof fn](table, columnName, {
 				type,
 				query: options?.query,
 				originalCollectionName: options?.originalCollectionName,

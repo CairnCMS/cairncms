@@ -35,7 +35,9 @@ describe('readFolderDeletionImpact on real SQLite', () => {
 
 		await db.schema.createTable('directus_fields', (table) => {
 			table.increments('id');
+			table.string('interface');
 			table.text('options');
+			table.text('conditions');
 		});
 	});
 
@@ -95,6 +97,66 @@ describe('readFolderDeletionImpact on real SQLite', () => {
 		expect((await readFolderDeletionImpact(plan(['a']), db)).get('a')).toEqual([]);
 	});
 
+	it('reports a repeater sub-field reference stored as JSON text', async () => {
+		await seedFolders([{ id: 'id-a', key: 'a', parent: null }]);
+
+		await db('directus_fields').insert({
+			interface: 'list',
+			options: JSON.stringify({
+				fields: [{ field: 'body', meta: { interface: 'input-rich-text-html', options: { folder: 'id-a' } } }],
+			}),
+		});
+
+		expect((await readFolderDeletionImpact(plan(['a']), db)).get('a')).toEqual([{ blockedBy: 'options.folder' }]);
+	});
+
+	it('reports a condition reference on a field whose options are null', async () => {
+		await seedFolders([{ id: 'id-a', key: 'a', parent: null }]);
+
+		await db('directus_fields').insert({
+			interface: 'file-image',
+			options: null,
+			conditions: JSON.stringify([{ name: 'locked', rule: {}, options: { folder: 'id-a' } }]),
+		});
+
+		expect((await readFolderDeletionImpact(plan(['a']), db)).get('a')).toEqual([{ blockedBy: 'options.folder' }]);
+	});
+
+	it("reports a reference in a repeater sub-field's own condition", async () => {
+		await seedFolders([{ id: 'id-a', key: 'a', parent: null }]);
+
+		await db('directus_fields').insert({
+			interface: 'list',
+			options: JSON.stringify({
+				fields: [
+					{
+						field: 'body',
+						meta: {
+							interface: 'input-rich-text-md',
+							conditions: [{ name: 'locked', rule: {}, options: { folder: 'id-a' } }],
+						},
+					},
+				],
+			}),
+		});
+
+		expect((await readFolderDeletionImpact(plan(['a']), db)).get('a')).toEqual([{ blockedBy: 'options.folder' }]);
+	});
+
+	it('reports a partial repeater condition override that sets only the folder', async () => {
+		await seedFolders([{ id: 'id-a', key: 'a', parent: null }]);
+
+		await db('directus_fields').insert({
+			interface: 'list',
+			options: JSON.stringify({ fields: [{ field: 'body', meta: { interface: 'input-rich-text-html' } }] }),
+			conditions: JSON.stringify([
+				{ name: 'locked', rule: {}, options: { fields: [{ meta: { options: { folder: 'id-a' } } }] } },
+			]),
+		});
+
+		expect((await readFolderDeletionImpact(plan(['a']), db)).get('a')).toEqual([{ blockedBy: 'options.folder' }]);
+	});
+
 	it('reports nothing for a clean folder and orders multiple blockers', async () => {
 		await seedFolders([
 			{ id: 'id-a', key: 'a', parent: null },
@@ -135,7 +197,9 @@ describe('readFolderDeletionImpact mixed-case options.folder on a case-insensiti
 
 		await db.schema.createTable('directus_fields', (table) => {
 			table.increments('id');
+			table.string('interface');
 			table.text('options');
+			table.text('conditions');
 		});
 
 		await db('directus_folders').insert({ id: LOWER, key: 'target', parent: null });

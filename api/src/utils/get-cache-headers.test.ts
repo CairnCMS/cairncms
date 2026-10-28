@@ -199,6 +199,7 @@ describe('get cache headers', () => {
 			const mockRequest = {
 				headers: scenario.input.headers as any,
 				accountability: scenario.input.accountability,
+				originalUrl: '/items/test',
 				get: vi.fn().mockImplementation((header) => {
 					const matchingKey = Object.keys(scenario.input.headers as any).find((key) => key.toLowerCase() === header);
 					return matchingKey ? (scenario.input.headers as any)?.[matchingKey] : undefined;

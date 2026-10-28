@@ -182,11 +182,7 @@ The request shape is the same query options that would otherwise be query parame
 
 ## Versioning and stability
 
-CairnCMS follows semver for the platform release. The HTTP API stability commitment for `1.x`:
-
-- Endpoint URLs, request shapes, and response envelopes are stable across minor and patch versions.
-- New features add endpoints and fields; existing ones do not change shape.
-- Breaking changes happen at major version boundaries and are documented alongside the release.
+CairnCMS preserves documented API compatibility by default. Minor releases may remove deprecated features after notice, and necessary security fixes may change behavior in a patch or minor release. See [Versioning policy](/docs/manage/upgrades/#versioning-policy) for notice periods and exceptions, and read the release notes before upgrading clients or servers.
 
 The auto-generated portions of the API like `/items/<collection>` and the GraphQL schema change with your data model rather than with platform releases. A renamed field changes your project's API surface but is not a platform-API breaking change.
 

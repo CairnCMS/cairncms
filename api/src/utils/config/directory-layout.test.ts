@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ConfigReadFailedException } from '../../exceptions/config-read-failed.js';
+import { CONFIG_FILENAME_STEM_MAX_LENGTH } from '../config-contract.js';
 import type { ConfigFieldDescriptor } from './descriptor.js';
 import {
 	classifyConfigFilename,
@@ -43,6 +44,18 @@ describe('classifyConfigFilename', () => {
 		expect(classifyConfigFilename('editor.backup.yaml', 'roles')).toBe('unowned');
 		expect(classifyConfigFilename(`${'a'.repeat(256)}.yaml`, 'roles')).toBe('unowned');
 	});
+
+	it('owns a schema collection filename in either portable form', () => {
+		expect(classifyConfigFilename('articles.yaml', 'schema')).toBe('owned');
+		expect(classifyConfigFilename('my-collection-1a2b3c4d.yaml', 'schema')).toBe('owned');
+		expect(classifyConfigFilename('collection-1a2b3c4d.yaml', 'schema')).toBe('owned');
+	});
+
+	it('leaves an unrecognized schema filename unowned', () => {
+		expect(classifyConfigFilename('Articles.yaml', 'schema')).toBe('unowned');
+		expect(classifyConfigFilename('con.yaml', 'schema')).toBe('unowned');
+		expect(classifyConfigFilename('articles.yml', 'schema')).toBe('unowned');
+	});
 });
 
 describe('isOwnedConfigFilename', () => {
@@ -84,8 +97,51 @@ describe('classifyIdentityStem', () => {
 	});
 });
 
+describe('schema filename generation', () => {
+	const stemOf = (collection: string): string => getDescriptor('schema').layout.filenameOf({ collection } as never);
+	const owns = (stem: string): boolean => isOwnedConfigFilename(`${stem}.yaml`, 'schema');
+
+	it('uses the normalized key directly and the slug-and-hash form otherwise, each owned and distinct', () => {
+		expect(stemOf('collection')).toBe('collection');
+		expect(owns('collection')).toBe(true);
+
+		const mixedCase = stemOf('Collection');
+		expect(mixedCase).toMatch(/^collection-[0-9a-f]{8}$/);
+		expect(owns(mixedCase)).toBe(true);
+
+		expect(stemOf('collection')).not.toBe(stemOf('Collection'));
+	});
+
+	it('hashes a non-ASCII name under the collection prefix, distinctly per name', () => {
+		const first = stemOf('表');
+		expect(first).toMatch(/^collection-[0-9a-f]{8}$/);
+		expect(owns(first)).toBe(true);
+		expect(first).not.toBe(stemOf('错'));
+	});
+
+	it('pushes a Windows-reserved name to the hashed form it does not otherwise own', () => {
+		const reserved = stemOf('con');
+		expect(reserved).toMatch(/^con-[0-9a-f]{8}$/);
+		expect(owns(reserved)).toBe(true);
+		expect(owns('con')).toBe(false);
+
+		expect(stemOf('COM1')).toMatch(/^com1-[0-9a-f]{8}$/);
+	});
+
+	it('maps a mixed set of names to distinct, owned filenames', () => {
+		const names = ['collection', 'Collection', 'my collection', 'con', '表', '错'];
+		const stems = names.map(stemOf);
+
+		expect(new Set(stems).size).toBe(names.length);
+
+		for (const stem of stems) {
+			expect(owns(stem)).toBe(true);
+		}
+	});
+});
+
 describe('descriptor directory conformance', () => {
-	it('each kind has a single string identity field with ownership grammar and a bounded length', () => {
+	it('each kind declares coherent identity fields and filename ownership', () => {
 		for (const kind of listConfigKinds()) {
 			const descriptor = getDescriptor(kind);
 			const shape = descriptor.layout.documentShape;
@@ -100,6 +156,10 @@ describe('descriptor directory conformance', () => {
 				expect(typeof field.maxLength).toBe('number');
 				expect(field.maxLength).toBeGreaterThan(0);
 				expect(typeof descriptor.layout.ownsFilenameStem).toBe('function');
+			} else if (typeof descriptor.layout.ownsFilenameStem === 'function') {
+				expect(descriptor.documentIdentityFields).toHaveLength(1);
+				expect(descriptor.documentIdentityFields[0]!.type).toBe('string');
+				expect(descriptor.layout.ownsFilenameStem('a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1))).toBe(false);
 			} else {
 				expect(descriptor.documentIdentityFields).toHaveLength(1);
 

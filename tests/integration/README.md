@@ -74,6 +74,8 @@ Put prerequisites in fixtures or the test body. Files are isolated from each oth
 unless their fixtures reset it. Use `setupRequest` or `setupGraphQL` from [fixtures/request.ts](fixtures/request.ts) for
 setup requests so rejected or incomplete responses fail at the request boundary.
 
+Use the default timeouts. See [timeout guidance](HARNESS.md#timeouts-and-environment) before adding an override.
+
 Name sustained-load suites `*.load.test.ts` so they run exclusively. See the [harness reference](HARNESS.md) for custom
 fixtures, vendor exclusions, and process controls.
 

@@ -1,5 +1,5 @@
 import type { RestCommand } from '../../types.js';
-import type { SchemaSnapshotOutput } from './snapshot.js';
+import type { SchemaSnapshotOutput, SchemaSnapshotV2Output } from './snapshot.js';
 
 // TODO improve typing
 export type SchemaDiffOutput = {
@@ -12,9 +12,13 @@ export type SchemaDiffOutput = {
  * @param snapshot JSON object containing collections, fields, and relations to apply.
  * @param force Bypass version and database vendor restrictions.
  * @returns Returns the differences between the current instance's schema and the schema passed in the request body.
+ * @deprecated Capture schema with `configSnapshot` and preview changes with `configApply` and `dryRun: true` instead.
  */
 export const schemaDiff =
-	<Schema>(snapshot: SchemaSnapshotOutput, force = false): RestCommand<SchemaDiffOutput, Schema> =>
+	<Schema>(
+		snapshot: SchemaSnapshotOutput | SchemaSnapshotV2Output,
+		force = false
+	): RestCommand<SchemaDiffOutput, Schema> =>
 	() => ({
 		method: 'POST',
 		path: '/schema/diff',

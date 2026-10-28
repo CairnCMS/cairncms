@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
+import { configFixture } from '../__utils__/config-fixtures.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
@@ -499,7 +500,7 @@ describe('readConfigDirectory', () => {
 		);
 
 		const desired = await readConfigDirectory(tmpDir);
-		const plan = computeConfigPlan({ manifest: desired.manifest, roles: [], permissions: [] }, desired);
+		const plan = computeConfigPlan(configFixture({ manifest: desired.manifest }), desired);
 
 		const planned = plan.permissions.create.map((entry) => entry.permission.permissions);
 
@@ -620,6 +621,220 @@ describe('readConfigDirectory settings singleton cardinality', () => {
 	it('rejects a managed settings kind whose only file is not the fixed name', async () => {
 		await writeSettingsManifest();
 		await writeSettingsFile('other.yaml', { project_name: 'Live' });
+
+		const error = await captureRejection(() => readConfigDirectory(tmpDir));
+
+		expect(error).toBeInstanceOf(ConfigInvalidException);
+	});
+});
+
+describe('readConfigDirectory schema loading', () => {
+	async function writeSchemaManifest(resources: string[] = ['schema']): Promise<void> {
+		await fs.writeFile(path.join(tmpDir, 'cairncms-config.yaml'), toYaml({ version: 3, resources }));
+	}
+
+	async function writeSchemaFile(filename: string, data: unknown): Promise<void> {
+		const dir = path.join(tmpDir, 'schema');
+		await fs.mkdir(dir, { recursive: true });
+		await fs.writeFile(path.join(dir, filename), toYaml(data));
+	}
+
+	async function writeSchemaRaw(filename: string, contents: string): Promise<void> {
+		const dir = path.join(tmpDir, 'schema');
+		await fs.mkdir(dir, { recursive: true });
+		await fs.writeFile(path.join(dir, filename), contents);
+	}
+
+	const titleField = {
+		collection: 'articles',
+		field: 'title',
+		type: 'string',
+		meta: { interface: 'input' },
+		schema: { name: 'title' },
+	};
+
+	it('loads one document per collection in the snapshot shape', async () => {
+		await writeSchemaManifest();
+
+		await writeSchemaFile('articles.yaml', {
+			collection: 'articles',
+			fields: [titleField],
+			relations: [],
+			meta: { note: null },
+			schema: { name: 'articles' },
+		});
+
+		await writeSchemaFile('posts.yaml', { collection: 'posts', fields: [], relations: [], meta: null });
+
+		const config = await readConfigDirectory(tmpDir);
+
+		expect(config.schema.map((doc) => doc.collection).sort()).toEqual(['articles', 'posts']);
+
+		const articles = config.schema.find((doc) => doc.collection === 'articles')!;
+		expect(articles.fields).toEqual([titleField]);
+		expect(articles.meta).toEqual({ note: null });
+	});
+
+	it('loads a table without a collection record and a folder without a table', async () => {
+		await writeSchemaManifest();
+
+		await writeSchemaFile('labels.yaml', {
+			collection: 'labels',
+			fields: [],
+			relations: [],
+			meta: null,
+			schema: { name: 'labels' },
+		});
+
+		await writeSchemaFile('library.yaml', { collection: 'library', fields: [], relations: [], meta: { note: null } });
+
+		const config = await readConfigDirectory(tmpDir);
+
+		const labels = config.schema.find((doc) => doc.collection === 'labels')!;
+		expect(labels.meta).toBeNull();
+		expect(labels.schema).toEqual({ name: 'labels' });
+
+		const library = config.schema.find((doc) => doc.collection === 'library')!;
+		expect(library.meta).toEqual({ note: null });
+		expect(library).not.toHaveProperty('schema');
+	});
+
+	it('refuses a collection file that does not declare meta, naming the file', async () => {
+		await writeSchemaManifest();
+		await writeSchemaFile('articles.yaml', { collection: 'articles', fields: [titleField], relations: [] });
+
+		const error = await captureRejection(() => readConfigDirectory(tmpDir));
+
+		expect(error).toBeInstanceOf(ConfigInvalidException);
+
+		expect(error.message).toContain(
+			'Schema file "articles.yaml": Schema collection "articles" must declare "meta", which can be null.'
+		);
+	});
+
+	it('loads operator-added fields for a system collection without a definition', async () => {
+		await writeSchemaManifest();
+
+		await writeSchemaFile('directus_users.yaml', {
+			collection: 'directus_users',
+			fields: [{ collection: 'directus_users', field: 'nickname', type: 'string' }],
+			relations: [],
+		});
+
+		const config = await readConfigDirectory(tmpDir);
+
+		expect(config.schema).toHaveLength(1);
+		expect(config.schema[0]!.collection).toBe('directus_users');
+	});
+
+	it('treats an absent schema directory as an empty set', async () => {
+		await writeSchemaManifest();
+
+		const config = await readConfigDirectory(tmpDir);
+
+		expect(config.schema).toEqual([]);
+	});
+
+	it('skips an unowned schema filename', async () => {
+		await writeSchemaManifest();
+		await writeSchemaFile('articles.yaml', { collection: 'articles', meta: null, fields: [], relations: [] });
+		await writeSchemaRaw('README.yaml', toYaml({ collection: 'articles', meta: null, fields: [], relations: [] }));
+
+		const config = await readConfigDirectory(tmpDir);
+
+		expect(config.schema.map((doc) => doc.collection)).toEqual(['articles']);
+	});
+
+	const refusals: Array<[string, string, Record<string, unknown>]> = [
+		['a missing collection', 'articles.yaml', { fields: [], relations: [] }],
+		['a non-string collection', 'articles.yaml', { collection: 7, fields: [], relations: [] }],
+		['a non-array fields', 'articles.yaml', { collection: 'articles', fields: {}, relations: [] }],
+		['a non-array relations', 'articles.yaml', { collection: 'articles', fields: [], relations: {} }],
+		['a non-mapping field element', 'articles.yaml', { collection: 'articles', fields: ['title'], relations: [] }],
+		[
+			'a field owned by another collection',
+			'articles.yaml',
+			{ collection: 'articles', fields: [{ collection: 'posts', field: 'title' }], relations: [] },
+		],
+		[
+			'a relation owned by another collection',
+			'articles.yaml',
+			{ collection: 'articles', fields: [], relations: [{ collection: 'posts', field: 'author' }] },
+		],
+		['an unknown top-level field', 'articles.yaml', { collection: 'articles', fields: [], relations: [], note: 'x' }],
+		[
+			'a field with a non-string collection',
+			'articles.yaml',
+			{ collection: 'articles', fields: [{ collection: { toString: null }, field: 'x' }], relations: [] },
+		],
+		[
+			'a relation with a non-string collection',
+			'articles.yaml',
+			{ collection: 'articles', fields: [], relations: [{ collection: { toString: null }, field: 'x' }] },
+		],
+		[
+			'an internal table',
+			'cairncms_extension_settings.yaml',
+			{ collection: 'cairncms_extension_settings', fields: [], relations: [] },
+		],
+	];
+
+	it.each(refusals)('refuses %s as CONFIG_INVALID', async (_label, filename, data) => {
+		await writeSchemaManifest();
+		await writeSchemaFile(filename, data);
+
+		const error = await captureRejection(() => readConfigDirectory(tmpDir));
+
+		expect(error).toBeInstanceOf(ConfigInvalidException);
+	});
+
+	it('refuses a collection definition on a system-collection file', async () => {
+		await writeSchemaManifest();
+
+		await writeSchemaFile('directus_users.yaml', {
+			collection: 'directus_users',
+			fields: [],
+			relations: [],
+			meta: { note: null },
+		});
+
+		const error = await captureRejection(() => readConfigDirectory(tmpDir));
+
+		expect(error).toBeInstanceOf(ConfigInvalidException);
+	});
+
+	it('accepts an owned file whose name does not match its collection', async () => {
+		await writeSchemaManifest();
+		await writeSchemaFile('posts.yaml', { collection: 'articles', meta: null, fields: [], relations: [] });
+
+		const config = await readConfigDirectory(tmpDir);
+
+		expect(config.schema.map((doc) => doc.collection)).toEqual(['articles']);
+	});
+
+	it('refuses two files declaring the same collection', async () => {
+		await writeSchemaManifest();
+		await writeSchemaFile('articles.yaml', { collection: 'articles', meta: null, fields: [], relations: [] });
+		await writeSchemaFile('posts.yaml', { collection: 'articles', meta: null, fields: [], relations: [] });
+
+		const error = await captureRejection(() => readConfigDirectory(tmpDir));
+
+		expect(error).toBeInstanceOf(ConfigInvalidException);
+		expect(error.message).toContain('more than one file');
+	});
+
+	it('refuses a non-mapping schema document', async () => {
+		await writeSchemaManifest();
+		await writeSchemaRaw('articles.yaml', toYaml(['articles']));
+
+		const error = await captureRejection(() => readConfigDirectory(tmpDir));
+
+		expect(error).toBeInstanceOf(ConfigInvalidException);
+	});
+
+	it('refuses a malformed schema file', async () => {
+		await writeSchemaManifest();
+		await writeSchemaRaw('articles.yaml', 'collection: [unterminated');
 
 		const error = await captureRejection(() => readConfigDirectory(tmpDir));
 

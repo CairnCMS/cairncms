@@ -2,9 +2,17 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import logger from '../../../logger.js';
+import { applyDiff } from '../../../utils/apply-diff.js';
+import { toKeyFormSnapshot } from '../../../utils/folder-references.js';
+import { getSnapshot } from '../../../utils/get-snapshot.js';
+import { getTargetSnapshotDiff } from '../../../utils/get-target-snapshot-diff.js';
+import { getVersionedHash } from '../../../utils/get-versioned-hash.js';
+import { SchemaApplyFailedException } from '../../../exceptions/schema-apply-failed.js';
+import { DiffKind } from '../../../types/index.js';
+import type { Collection, SnapshotDiff } from '../../../types/index.js';
 import { apply } from './apply.js';
 
-const { FIXTURE_DIFF } = vi.hoisted(() => {
+const { FIXTURE_DIFF, folderKeyById } = vi.hoisted(() => {
 	const kind = { NEW: 'N', DELETE: 'D', EDIT: 'E' };
 
 	return {
@@ -22,6 +30,7 @@ const { FIXTURE_DIFF } = vi.hoisted(() => {
 			],
 			relations: [],
 		},
+		folderKeyById: new Map<string, string>(),
 	};
 });
 
@@ -35,13 +44,32 @@ vi.mock('../../../logger.js', () => ({ default: { info: vi.fn(), warn: vi.fn(), 
 
 vi.mock('../../../utils/get-snapshot.js', () => ({ getSnapshot: vi.fn(async () => ({})) }));
 
-vi.mock('../../../utils/get-snapshot-diff.js', () => ({ getSnapshotDiff: vi.fn(() => FIXTURE_DIFF) }));
+vi.mock('../../../utils/get-target-snapshot-diff.js', () => ({
+	getTargetSnapshotDiff: vi.fn(async () => FIXTURE_DIFF),
+}));
 
-vi.mock('../../../utils/apply-snapshot.js', () => ({ applySnapshot: vi.fn(async () => undefined) }));
+vi.mock('../../../utils/folder-references.js', () => ({
+	toKeyFormSnapshot: vi.fn(async (snapshot: any) => ({
+		snapshot: {
+			...snapshot,
+			fields: (snapshot.fields ?? []).map((field: any) => ({
+				...field,
+				meta: { ...field.meta, options: { folder: folderKeyById.get(field.meta.options.folder) } },
+			})),
+		},
+		folderIdByKey: new Map(),
+		unresolved: [],
+	})),
+}));
+
+vi.mock('../../../utils/apply-diff.js', () => ({ applyDiff: vi.fn(async () => undefined) }));
 
 vi.mock('inquirer', () => ({ default: { prompt: vi.fn(async () => ({ proceed: false })) } }));
 
-vi.mock('fs', () => ({ promises: { readFile: vi.fn(async () => '{}') } }));
+vi.mock('fs', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('fs')>();
+	return { ...actual, promises: { ...actual.promises, readFile: vi.fn(async () => '{}') } };
+});
 
 function expectedPlan(): string {
 	const inner =
@@ -80,10 +108,213 @@ describe('schema apply presentation', () => {
 		expect(logger.info).toHaveBeenCalledWith(expectedPlan());
 	});
 
+	const UNCONFIGURED_DROP_MESSAGE =
+		'Deleting table "legacy_data" will remove its data. It has no CairnCMS collection record and may belong to another application.';
+
+	const unconfiguredDefinition = {
+		collection: 'legacy_data',
+		schema: { name: 'legacy_data' },
+		meta: null,
+	} as unknown as Collection;
+
+	const unconfiguredTableDiff: SnapshotDiff = {
+		collections: [{ collection: 'legacy_data', diff: [{ kind: DiffKind.DELETE, lhs: unconfiguredDefinition }] }],
+		fields: [],
+		relations: [],
+	};
+
+	it('warns in the dry run when a drop targets a table with no collection record', async () => {
+		vi.mocked(getTargetSnapshotDiff).mockResolvedValueOnce(unconfiguredTableDiff);
+
+		await expect(apply('snapshot.json', { yes: false, dryRun: true })).rejects.toThrow();
+
+		const message = vi.mocked(logger.info).mock.calls.at(-1)?.[0] as string;
+		expect(message).toContain('Warnings');
+		expect(message).toContain(UNCONFIGURED_DROP_MESSAGE);
+	});
+
+	it('includes the warning in the confirmation prompt when a drop targets a table with no collection record', async () => {
+		vi.mocked(getTargetSnapshotDiff).mockResolvedValueOnce(unconfiguredTableDiff);
+
+		await expect(apply('snapshot.json', { yes: false, dryRun: false })).rejects.toThrow();
+
+		const call = vi.mocked(inquirer.prompt).mock.calls[0]![0] as unknown as [{ message: string }];
+		expect(call[0]!.message).toContain(UNCONFIGURED_DROP_MESSAGE);
+	});
+
+	it('warns on its own before applying under --yes when a drop targets a table with no collection record', async () => {
+		vi.mocked(getTargetSnapshotDiff).mockResolvedValueOnce(unconfiguredTableDiff);
+
+		await expect(apply('snapshot.json', { yes: true, dryRun: false })).rejects.toThrow();
+
+		expect(logger.warn).toHaveBeenCalledWith(UNCONFIGURED_DROP_MESSAGE);
+		expect(applyDiff).toHaveBeenCalled();
+
+		const warnedAt = vi.mocked(logger.warn).mock.invocationCallOrder[0]!;
+		const appliedAt = vi.mocked(applyDiff).mock.invocationCallOrder[0]!;
+		expect(warnedAt).toBeLessThan(appliedAt);
+	});
+
+	it('renders field and relation diffs that start with a removed attribute as updates listing their changes', async () => {
+		vi.mocked(getTargetSnapshotDiff).mockResolvedValueOnce({
+			collections: [],
+			fields: [
+				{
+					collection: 'articles',
+					field: 'title',
+					diff: [
+						{ kind: 'D', path: ['schema', 'max_length'], lhs: 1000 },
+						{ kind: 'E', path: ['meta', 'note'], lhs: null, rhs: 'Headline' },
+					],
+				},
+				{ collection: 'articles', field: 'body', diff: [{ kind: 'D', path: ['schema'], lhs: { name: 'body' } }] },
+			],
+			relations: [
+				{
+					collection: 'articles',
+					field: 'author',
+					related_collection: 'authors',
+					diff: [
+						{ kind: 'D', path: ['meta', 'sort_field'], lhs: 'position' },
+						{ kind: 'E', path: ['schema', 'on_delete'], lhs: 'SET NULL', rhs: 'CASCADE' },
+					],
+				},
+			],
+		} as any);
+
+		await expect(apply('snapshot.json', { yes: false, dryRun: true })).rejects.toThrow();
+
+		const inner =
+			'\n\n' +
+			chalk.black.underline.bold('Fields:') +
+			`\n  - ${chalk.blue('Update')} articles.title` +
+			'\n    - Remove max_length' +
+			'\n    - Set note to Headline' +
+			`\n  - ${chalk.blue('Update')} articles.body` +
+			'\n    - Remove schema' +
+			'\n\n' +
+			chalk.black.underline.bold('Relations:') +
+			`\n  - ${chalk.blue('Update')} articles.author-> authors` +
+			'\n    - Remove sort_field' +
+			'\n    - Set on_delete to CASCADE';
+
+		expect(logger.info).toHaveBeenCalledWith('The following changes will be applied:\n\n' + chalk.black(inner));
+	});
+
 	it('appends the shared confirmation prompt to the plan when confirming', async () => {
 		await expect(apply('snapshot.json', { yes: false, dryRun: false })).rejects.toThrow();
 
 		const call = vi.mocked(inquirer.prompt).mock.calls[0]![0] as unknown as Array<{ message: string }>;
 		expect(call[0]!.message).toBe(expectedPlan() + '\n\nWould you like to continue?');
+	});
+
+	it('replaces control characters from the snapshot in the dry run and the confirmation prompt', async () => {
+		const escape = String.fromCharCode(27);
+		const bell = String.fromCharCode(7);
+
+		const hostile = {
+			collections: [],
+			fields: [],
+			relations: [
+				{
+					collection: 'articles',
+					field: `author${bell}`,
+					related_collection: 'authors',
+					diff: [
+						{ kind: 'D', path: ['meta', 'junction_field'], lhs: 'item' },
+						{ kind: 'E', path: ['meta', `sort${bell}`], lhs: null, rhs: `rank${escape}[31m\n  - Delete articles` },
+					],
+				},
+			],
+		};
+
+		vi.mocked(getTargetSnapshotDiff)
+			.mockResolvedValueOnce(hostile as any)
+			.mockResolvedValueOnce(hostile as any);
+
+		await expect(apply('snapshot.json', { yes: false, dryRun: true })).rejects.toThrow();
+		await expect(apply('snapshot.json', { yes: false, dryRun: false })).rejects.toThrow();
+
+		const inner =
+			'\n\n' +
+			chalk.black.underline.bold('Relations:') +
+			`\n  - ${chalk.blue('Update')} articles.author?-> authors` +
+			'\n    - Remove junction_field' +
+			'\n    - Set sort? to rank?[31m?  - Delete articles';
+
+		const plan = 'The following changes will be applied:\n\n' + chalk.black(inner);
+
+		expect(logger.info).toHaveBeenCalledWith(plan);
+
+		const call = vi.mocked(inquirer.prompt).mock.calls[0]![0] as unknown as Array<{ message: string }>;
+		expect(call[0]!.message).toBe(plan + '\n\nWould you like to continue?');
+	});
+});
+
+describe('schema apply after its confirmation prompt', () => {
+	const FOLDER_A = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+
+	function stored(folder: string, note: string | null = null) {
+		return {
+			version: 1,
+			directus: '1.0.0',
+			collections: [],
+			fields: [{ collection: 'articles', field: 'image', meta: { interface: 'file', note, options: { folder } } }],
+			relations: [],
+		} as any;
+	}
+
+	beforeEach(() => {
+		vi.spyOn(process, 'exit').mockImplementation((code) => {
+			throw new Error(`exit:${code}`);
+		});
+
+		folderKeyById.clear();
+		folderKeyById.set(FOLDER_A, 'images');
+		vi.mocked(inquirer.prompt).mockResolvedValue({ proceed: true });
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+		vi.clearAllMocks();
+	});
+
+	it('applies the computed diff after confirmation', async () => {
+		vi.mocked(getSnapshot).mockResolvedValue(stored(FOLDER_A));
+
+		await expect(apply('snapshot.json', { yes: false, dryRun: false })).rejects.toThrow();
+
+		expect(vi.mocked(applyDiff).mock.calls[0]![0]).toBe(FIXTURE_DIFF);
+	});
+
+	it('reads the schema once and applies with --yes', async () => {
+		vi.mocked(getSnapshot).mockResolvedValue(stored(FOLDER_A));
+
+		await expect(apply('snapshot.json', { yes: true, dryRun: false })).rejects.toThrow();
+
+		expect(getSnapshot).toHaveBeenCalledOnce();
+		expect(vi.mocked(applyDiff).mock.calls[0]![0]).toBe(FIXTURE_DIFF);
+	});
+
+	it('forwards the planning hash to the apply engine across confirmation', async () => {
+		vi.mocked(getSnapshot).mockResolvedValue(stored(FOLDER_A));
+
+		await expect(apply('snapshot.json', { yes: false, dryRun: false })).rejects.toThrow();
+
+		const keyForm = await vi.mocked(toKeyFormSnapshot).mock.results[0]!.value;
+		const [, options] = vi.mocked(applyDiff).mock.calls[0]!;
+		expect(options.expectedHash).toBe(getVersionedHash(keyForm.snapshot));
+	});
+
+	it('surfaces the failure diagnostic, exits unsuccessfully, and prints no success when the apply fails', async () => {
+		vi.mocked(getSnapshot).mockResolvedValue(stored(FOLDER_A));
+
+		const carrier = new SchemaApplyFailedException('unknown', { cause: new Error('mid-apply failure') });
+		vi.mocked(applyDiff).mockRejectedValueOnce(carrier);
+
+		await expect(apply('snapshot.json', { yes: true, dryRun: false })).rejects.toThrow('exit:1');
+
+		expect(logger.error).toHaveBeenCalledWith(carrier);
+		expect(logger.info).not.toHaveBeenCalledWith('Snapshot applied successfully');
 	});
 });

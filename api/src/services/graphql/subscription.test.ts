@@ -94,7 +94,7 @@ vi.mock('../../websocket/utils/removal.js', async (importOriginal) => {
 });
 
 vi.mock('../../websocket/utils/items.js', () => ({
-	getEventPayload: async (service: unknown, subscription: any, accountability: any, _schema: unknown, event: any) => {
+	getEventPayload: async (_service: unknown, subscription: any, accountability: any, _schema: unknown, event: any) => {
 		getEventPayloadCalls++;
 		readFields = subscription.query.fields;
 		readDeep = subscription.query.deep;
@@ -1246,7 +1246,7 @@ describe('GraphQL subscription delivery', () => {
 		readAccountability = null;
 		harness.messenger.publish('websocket.event', { action: 'create', collection: 'articles', key: 'private-1' });
 		await settleUntil(() => readAccountability !== null);
-		expect(readAccountability?.user).toBe(null);
+		expect(readAccountability).toMatchObject({ user: null });
 		expect(nextFrames(connection.frames)).toHaveLength(1);
 
 		harness.messenger.publish('websocket.event', { action: 'create', collection: 'articles', key: 'public-1' });

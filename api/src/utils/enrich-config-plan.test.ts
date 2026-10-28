@@ -3,13 +3,26 @@ import type { Knex } from 'knex';
 import knex from 'knex';
 import { createTracker, MockClient, type Tracker } from 'knex-mock-client';
 import type { MockedFunction } from 'vitest';
+import { configFixture } from '../__utils__/config-fixtures.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
-import type { CairnConfig, ConfigKind, ConfigPermission, ConfigPermissionSet, ConfigPlan } from '../types/config.js';
+import type {
+	CairnConfig,
+	ConfigKind,
+	ConfigPermission,
+	ConfigPermissionSet,
+	ConfigPlan,
+	ConfigPlanWarning,
+} from '../types/config.js';
 import { permissionsDescriptor } from './config/handlers/permissions.js';
 import { rolesDescriptor } from './config/handlers/roles.js';
 import { CONFIG_REGISTRY } from './config/registry.js';
 import { enrichConfigPlan } from './enrich-config-plan.js';
+
+function missingCollection(warning: ConfigPlanWarning): string {
+	if (warning.code !== 'COLLECTION_MISSING') throw new Error(`expected COLLECTION_MISSING, got ${warning.code}`);
+	return warning.identity.collection;
+}
 
 const FUTURE = '2999-01-01T00:00:00.000Z';
 const PAST = '2000-01-01T00:00:00.000Z';
@@ -17,6 +30,7 @@ const PAST = '2000-01-01T00:00:00.000Z';
 function planDeletingRoles(...keys: string[]): ConfigPlan {
 	return {
 		managedResources: [],
+		schema: { create: [], update: [], delete: [] },
 		roles: { create: [], update: [], delete: keys },
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
@@ -36,6 +50,7 @@ function makeConfig(resources: ConfigKind[], permissions: ConfigPermissionSet[] 
 		settings: [],
 		'extension-settings': [],
 		translations: [],
+		schema: [],
 	};
 }
 
@@ -334,7 +349,7 @@ describe('enrichConfigPlan', () => {
 		});
 
 		expect(enrichment.warnings).toHaveLength(1);
-		expect(enrichment.warnings[0]!.identity.collection).toBe('constructor');
+		expect(missingCollection(enrichment.warnings[0]!)).toBe('constructor');
 	});
 
 	it('does not warn when the permission collection exists in the schema', async () => {
@@ -348,10 +363,43 @@ describe('enrichConfigPlan', () => {
 		expect(enrichment.warnings).toEqual([]);
 	});
 
+	it('reads permission collections from the schema the plan leaves, not the live schema', async () => {
+		const plan: ConfigPlan = {
+			...planDeletingRoles(),
+			schema: {
+				create: [
+					{
+						changeKind: 'collections',
+						identity: { collection: 'pages' },
+						changes: { schema: { before: null, after: { name: 'pages' }, beforePresent: false } },
+					},
+					{
+						changeKind: 'fields',
+						identity: { collection: 'pages', field: 'id' },
+						changes: {
+							type: { before: null, after: 'integer', beforePresent: false },
+							schema: { before: null, after: { is_primary_key: true }, beforePresent: false },
+						},
+					},
+				],
+				update: [],
+				delete: [{ changeKind: 'collections', identity: { collection: 'articles' }, changes: {} }],
+			},
+		};
+
+		const desired = makeConfig(
+			['roles', 'permissions'],
+			[{ role: 'editor', permissions: [perm('articles', 'read'), perm('pages', 'read')] }]
+		);
+
+		const enrichment = await enrichConfigPlan(plan, desired, { schema: schemaWith('articles'), database: db });
+
+		expect(enrichment.warnings.map(missingCollection)).toEqual(['articles']);
+	});
+
 	it('does not scan or warn on desired permissions when permissions are unmanaged, even if malformed', async () => {
-		const desired: CairnConfig = {
+		const desired: CairnConfig = configFixture({
 			manifest: { version: 1, resources: ['roles'] },
-			roles: [],
 			permissions: [
 				{
 					role: 'x',
@@ -367,7 +415,7 @@ describe('enrichConfigPlan', () => {
 					],
 				},
 			],
-		};
+		});
 
 		const enrichment = await enrichConfigPlan(planDeletingRoles(), desired, {
 			schema: schemaWith('articles'),
@@ -419,10 +467,12 @@ describe('enrichConfigPlan', () => {
 			settings: [],
 			'extension-settings': [],
 			translations: [],
+			schema: [],
 		};
 
 		const plan: ConfigPlan = {
 			managedResources: ['roles'],
+			schema: { create: [], update: [], delete: [] },
 			roles: { create: [], update: [], delete: [] },
 			permissions: { create: [{ roleKey: 'x', permission: perm('articles') }], update: [], delete: [] },
 			folders: { create: [], update: [], delete: [] },

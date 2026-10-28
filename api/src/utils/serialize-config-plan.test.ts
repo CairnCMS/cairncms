@@ -2,6 +2,7 @@ import type { PermissionsAction } from '@cairncms/types';
 import { describe, expect, it } from 'vitest';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import type {
+	ConfigFolder,
 	ConfigPermission,
 	ConfigPlan,
 	ConfigPlanChange,
@@ -16,6 +17,7 @@ import { CONFIG_REGISTRY } from './config/registry.js';
 function emptyPlan(): ConfigPlan {
 	return {
 		managedResources: [],
+		schema: { create: [], update: [], delete: [] },
 		roles: { create: [], update: [], delete: [] },
 		permissions: { create: [], update: [], delete: [] },
 		folders: { create: [], update: [], delete: [] },
@@ -47,6 +49,10 @@ function warning(role: string, collection: string, action: PermissionsAction = '
 	};
 }
 
+function tableDrop(collection: string): ConfigPlanWarning {
+	return { code: 'UNCONFIGURED_TABLE_DROP', kind: 'collections', collection, message: 'drop' };
+}
+
 function zeroImpact(): RoleDeletionImpactEntry[] {
 	return [
 		{ kind: 'presets', count: 0, bookmarks: [] },
@@ -58,7 +64,12 @@ function zeroImpact(): RoleDeletionImpactEntry[] {
 function labelOf(change: ConfigPlanChange): string {
 	if (change.kind === 'roles') return `roles/${change.operation}/${change.identity.key}`;
 	if (change.kind === 'folders') return `folders/${change.operation}/${change.identity.key}`;
-	return `permissions/${change.operation}/${change.identity.role}:${change.identity.collection}:${change.identity.action}`;
+
+	if (change.kind === 'permissions') {
+		return `permissions/${change.operation}/${change.identity.role}:${change.identity.collection}:${change.identity.action}`;
+	}
+
+	throw new Error(`Unexpected config kind: ${change.kind}`);
 }
 
 describe('serializeConfigPlan', () => {
@@ -381,10 +392,38 @@ describe('serializeConfigPlan', () => {
 			serializeConfigPlan(emptyPlan(), {
 				enrichment: { roleDeletionImpact: new Map(), folderDeletionImpact: new Map(), warnings },
 				manifestVersion: 1,
-			}).warnings.map((entry) => entry.identity.role);
+			}).warnings.map((entry) => {
+				if (entry.code !== 'COLLECTION_MISSING') throw new Error(`expected COLLECTION_MISSING, got ${entry.code}`);
+				return entry.identity.role;
+			});
 
 		expect(withOrder([warning('editor', 'a'), warning('author', 'b')])).toEqual(['author', 'editor']);
 		expect(withOrder([warning('author', 'b'), warning('editor', 'a')])).toEqual(['author', 'editor']);
+	});
+
+	it('sorts a mixed warning list by code then payload without assuming an identity', () => {
+		const result = serializeConfigPlan(emptyPlan(), {
+			enrichment: {
+				roleDeletionImpact: new Map(),
+				folderDeletionImpact: new Map(),
+				warnings: [tableDrop('zebra'), warning('editor', 'a'), tableDrop('apple'), warning('author', 'b')],
+			},
+			manifestVersion: 1,
+		}).warnings;
+
+		expect(result.map((entry) => entry.code)).toEqual([
+			'COLLECTION_MISSING',
+			'COLLECTION_MISSING',
+			'UNCONFIGURED_TABLE_DROP',
+			'UNCONFIGURED_TABLE_DROP',
+		]);
+
+		expect(result.map((entry) => ('identity' in entry ? entry.identity.role : entry.collection))).toEqual([
+			'author',
+			'editor',
+			'apple',
+			'zebra',
+		]);
 	});
 
 	it('summary counts match the changes array', () => {
@@ -474,5 +513,159 @@ describe('serializeConfigPlan', () => {
 		} finally {
 			CONFIG_REGISTRY.roles = real;
 		}
+	});
+});
+
+describe('serializeConfigPlan schema changes', () => {
+	it('serializes a schema-managing plan at planVersion 3 with collection, field, and relation change detail', () => {
+		const plan = emptyPlan();
+		plan.managedResources = ['schema'];
+
+		plan.schema = {
+			create: [
+				{
+					changeKind: 'collections',
+					identity: { collection: 'articles' },
+					changes: { note: { before: null, after: 'Articles' } },
+				},
+				{
+					changeKind: 'fields',
+					identity: { collection: 'articles', field: 'title' },
+					changes: { type: { before: null, after: 'string' } },
+				},
+				{
+					changeKind: 'relations',
+					identity: { collection: 'articles', field: 'author' },
+					relatedCollection: 'directus_users',
+					changes: { one_field: { before: null, after: 'articles' } },
+				},
+			],
+			update: [
+				{
+					changeKind: 'fields',
+					identity: { collection: 'articles', field: 'body' },
+					changes: { max_length: { before: 255, after: 512 } },
+				},
+			],
+			delete: [{ changeKind: 'collections', identity: { collection: 'legacy' }, changes: {} }],
+		};
+
+		const result = serializeConfigPlan(plan, { enrichment: emptyEnrichment(), manifestVersion: 3 });
+
+		expect(result.planVersion).toBe(3);
+
+		const expectedChanges = [
+			{
+				kind: 'collections',
+				operation: 'create',
+				identity: { collection: 'articles' },
+				values: { note: 'Articles' },
+			},
+			{ kind: 'collections', operation: 'delete', identity: { collection: 'legacy' }, impact: [] },
+			{
+				kind: 'fields',
+				operation: 'create',
+				identity: { collection: 'articles', field: 'title' },
+				values: { type: 'string' },
+			},
+			{
+				kind: 'fields',
+				operation: 'update',
+				identity: { collection: 'articles', field: 'body' },
+				fields: { max_length: { before: 255, after: 512 } },
+			},
+			{
+				kind: 'relations',
+				operation: 'create',
+				identity: { collection: 'articles', field: 'author' },
+				relatedCollection: 'directus_users',
+				values: { one_field: 'articles' },
+			},
+		];
+
+		expect(result.changes).toEqual(expectedChanges);
+
+		expect(JSON.parse(JSON.stringify(result.changes))).toEqual(expectedChanges);
+
+		expect(result.summary).toEqual({ create: 3, update: 1, delete: 1 });
+	});
+
+	it('keeps planVersion 2 and emits no schema changes without a managed schema', () => {
+		const plan = emptyPlan();
+		plan.managedResources = ['roles'];
+
+		const result = serializeConfigPlan(plan, { enrichment: emptyEnrichment(), manifestVersion: 2 });
+
+		expect(result.planVersion).toBe(2);
+		expect(result.changes).toEqual([]);
+	});
+
+	it('orders schema changes by code units, not locale', () => {
+		const plan = emptyPlan();
+		plan.managedResources = ['schema'];
+
+		// Precomposed and decomposed forms compare equal under locale collation; code-unit order is deterministic.
+		const precomposed = 'Á';
+		const decomposed = 'Á';
+
+		plan.schema = {
+			create: [
+				{ changeKind: 'collections', identity: { collection: precomposed }, changes: {} },
+				{ changeKind: 'collections', identity: { collection: decomposed }, changes: {} },
+			],
+			update: [],
+			delete: [],
+		};
+
+		const result = serializeConfigPlan(plan, { enrichment: emptyEnrichment(), manifestVersion: 3 });
+
+		expect(result.changes.map((change) => (change.kind === 'collections' ? change.identity.collection : ''))).toEqual([
+			decomposed,
+			precomposed,
+		]);
+	});
+});
+
+describe('serializeConfigPlan preparation', () => {
+	function folder(key: string): ConfigFolder {
+		return { key, name: key, parent: null };
+	}
+
+	it('reports the prepared folder keys, sorted and limited to the plan folder creations', () => {
+		const plan = emptyPlan();
+		plan.managedResources = ['schema', 'folders'];
+		plan.folders.create = [folder('beta'), folder('alpha')];
+
+		const result = serializeConfigPlan(plan, {
+			enrichment: emptyEnrichment(),
+			manifestVersion: 3,
+			preparationFolderKeys: new Set(['beta', 'ghost', 'alpha']),
+		});
+
+		expect(result.preparation).toEqual(['alpha', 'beta']);
+	});
+
+	it('omits preparation when no prepared keys are supplied', () => {
+		const plan = emptyPlan();
+		plan.managedResources = ['folders'];
+		plan.folders.create = [folder('alpha')];
+
+		const result = serializeConfigPlan(plan, { enrichment: emptyEnrichment(), manifestVersion: 2 });
+
+		expect(result.preparation).toBeUndefined();
+	});
+
+	it('omits preparation when none of the prepared keys are folder creations', () => {
+		const plan = emptyPlan();
+		plan.managedResources = ['schema', 'folders'];
+		plan.folders.create = [folder('alpha')];
+
+		const result = serializeConfigPlan(plan, {
+			enrichment: emptyEnrichment(),
+			manifestVersion: 3,
+			preparationFolderKeys: new Set(['ghost']),
+		});
+
+		expect(result.preparation).toBeUndefined();
 	});
 });

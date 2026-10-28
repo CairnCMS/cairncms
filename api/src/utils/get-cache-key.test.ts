@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import type { SpyInstance } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
 import { getCacheKey } from './get-cache-key.js';
 import * as getGraphqlQueryUtil from './get-graphql-query-and-variables.js';
@@ -63,7 +63,7 @@ afterEach(() => {
 
 describe('get cache key', () => {
 	describe('isGraphQl', () => {
-		let getGraphqlQuerySpy: SpyInstance;
+		let getGraphqlQuerySpy: MockInstance<typeof getGraphqlQueryUtil.getGraphqlQueryAndVariables>;
 
 		beforeAll(() => {
 			getGraphqlQuerySpy = vi.spyOn(getGraphqlQueryUtil, 'getGraphqlQueryAndVariables');
@@ -108,6 +108,21 @@ describe('get cache key', () => {
 		expect(getCacheKey(postReq1)).not.toEqual(getCacheKey(postReq2));
 		expect(getCacheKey(req1)).toEqual(getCacheKey(postReq1));
 		expect(getCacheKey(req2)).toEqual(getCacheKey(postReq2));
+	});
+
+	test('throws without leaking the target when it cannot be parsed', () => {
+		const target = 'http://[/items/books';
+		let error: unknown;
+
+		try {
+			getCacheKey({ originalUrl: target } as unknown as Request);
+		} catch (err) {
+			error = err;
+		}
+
+		expect(error).toBeInstanceOf(Error);
+		expect((error as Error).message).not.toContain(target);
+		expect((error as { input?: unknown }).input).toBeUndefined();
 	});
 });
 

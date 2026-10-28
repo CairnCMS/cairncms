@@ -637,15 +637,33 @@ async function ensureActionFlow(api: Api) {
 
 async function awaitActionFlowReady(api: FlowApi, teardownFailures: unknown[]) {
 	const keys: (number | string)[] = [];
+	let lastStatus: number | undefined;
 
 	try {
 		for (let attempt = 0; attempt < 30; attempt++) {
-			const reply = await runOperation(api, 'system', {
-				action: 'createOne',
-				collection: TENANT_COLLECTION,
-				payload: { tenant_id: 'PROBE', title: 'action-flow-probe', probe_tag: 'action-flow-probe' },
-			});
+			const response = await request(api.url)
+				.post(`/flows/trigger/${api.flowIds.system}`)
+				.send({
+					action: 'createOne',
+					key: 0,
+					query: {},
+					collection: TENANT_COLLECTION,
+					payload: { tenant_id: 'PROBE', title: 'action-flow-probe', probe_tag: 'action-flow-probe' },
+				});
 
+			lastStatus = response.status;
+
+			// Reloading the action flow can temporarily unregister the existing probe webhook.
+			if (response.status === 403) {
+				await sleep(200);
+				continue;
+			}
+
+			if (response.status !== 200 || response.body === null || typeof response.body.ok !== 'boolean') {
+				throw new Error(`the action flow readiness trigger answered ${response.status} without a host reply`);
+			}
+
+			const reply: HostReply = response.body;
 			if (!reply.ok) throw new Error(`the action flow probe write failed: ${JSON.stringify(reply)}`);
 			keys.push((reply as { value: number | string }).value);
 
@@ -655,7 +673,7 @@ async function awaitActionFlowReady(api: FlowApi, teardownFailures: unknown[]) {
 			await sleep(200);
 		}
 
-		throw new Error('the action flow never registered its items.create listener');
+		throw new Error(`the action flow never became ready (last trigger status: ${lastStatus})`);
 	} finally {
 		if (keys.length > 0) {
 			try {

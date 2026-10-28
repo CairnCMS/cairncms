@@ -3,7 +3,7 @@ import { normalizeRoleKey } from '@cairncms/utils';
 import type { Knex } from 'knex';
 import knex from 'knex';
 import { createTracker, MockClient, Tracker } from 'knex-mock-client';
-import type { MockedFunction, SpyInstance } from 'vitest';
+import type { MockedFunction, MockInstance } from 'vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	ConcurrencyConflictException,
@@ -88,7 +88,7 @@ describe('Integration Tests', () => {
 	describe('Services / RolesService', () => {
 		describe('updateOne', () => {
 			let service: RolesService;
-			let superUpdateOne: SpyInstance;
+			let superUpdateOne: MockInstance<ItemsService['updateOne']>;
 			const adminRoleId = 'cbfd1e77-b883-4090-93e4-5bcbfbd48aba';
 			const userId1 = '07a5fee0-c168-49e2-8e33-4bae280e0c48';
 			const userId2 = 'abedf9a4-6956-4a9c-8904-c1aa08a68173';
@@ -182,11 +182,11 @@ describe('Integration Tests', () => {
 
 							expect(superUpdateOne).toHaveBeenCalled();
 
-							expect(superUpdateOne.mock.lastCall![2].preMutationException.message).toBe(
+							expect(superUpdateOne.mock.lastCall![2]!.preMutationException!.message).toBe(
 								`You can't remove the last admin user from the admin role.`
 							);
 
-							expect(superUpdateOne.mock.lastCall![2].preMutationException).toBeInstanceOf(
+							expect(superUpdateOne.mock.lastCall![2]!.preMutationException).toBeInstanceOf(
 								UnprocessableEntityException
 							);
 						});
@@ -264,11 +264,11 @@ describe('Integration Tests', () => {
 
 							expect(superUpdateOne).toHaveBeenCalled();
 
-							expect(superUpdateOne.mock.lastCall![2].preMutationException.message).toBe(
+							expect(superUpdateOne.mock.lastCall![2]!.preMutationException!.message).toBe(
 								`You can't remove the last admin user from the admin role.`
 							);
 
-							expect(superUpdateOne.mock.lastCall![2].preMutationException).toBeInstanceOf(
+							expect(superUpdateOne.mock.lastCall![2]!.preMutationException).toBeInstanceOf(
 								UnprocessableEntityException
 							);
 						});
@@ -382,11 +382,11 @@ describe('Integration Tests', () => {
 
 							expect(superUpdateOne).toHaveBeenCalled();
 
-							expect(superUpdateOne.mock.lastCall![2].preMutationException.message).toBe(
+							expect(superUpdateOne.mock.lastCall![2]!.preMutationException!.message).toBe(
 								`You can't remove the last admin user from the admin role.`
 							);
 
-							expect(superUpdateOne.mock.lastCall![2].preMutationException).toBeInstanceOf(
+							expect(superUpdateOne.mock.lastCall![2]!.preMutationException).toBeInstanceOf(
 								UnprocessableEntityException
 							);
 						});
@@ -439,11 +439,11 @@ describe('Integration Tests', () => {
 
 							expect(superUpdateOne).toHaveBeenCalled();
 
-							expect(superUpdateOne.mock.lastCall![2].preMutationException.message).toBe(
+							expect(superUpdateOne.mock.lastCall![2]!.preMutationException!.message).toBe(
 								`You can't remove the last admin user from the admin role.`
 							);
 
-							expect(superUpdateOne.mock.lastCall![2].preMutationException).toBeInstanceOf(
+							expect(superUpdateOne.mock.lastCall![2]!.preMutationException).toBeInstanceOf(
 								UnprocessableEntityException
 							);
 						});
@@ -508,11 +508,11 @@ describe('Integration Tests', () => {
 
 							expect(superUpdateOne).toHaveBeenCalled();
 
-							expect(superUpdateOne.mock.lastCall![2].preMutationException.message).toBe(
+							expect(superUpdateOne.mock.lastCall![2]!.preMutationException!.message).toBe(
 								`You can't remove the last admin user from the admin role.`
 							);
 
-							expect(superUpdateOne.mock.lastCall![2].preMutationException).toBeInstanceOf(
+							expect(superUpdateOne.mock.lastCall![2]!.preMutationException).toBeInstanceOf(
 								UnprocessableEntityException
 							);
 						});
@@ -561,11 +561,11 @@ describe('Integration Tests', () => {
 
 							expect(superUpdateOne).toHaveBeenCalled();
 
-							expect(superUpdateOne.mock.lastCall![2].preMutationException.message).toBe(
+							expect(superUpdateOne.mock.lastCall![2]!.preMutationException!.message).toBe(
 								`You can't remove the last admin user from the admin role.`
 							);
 
-							expect(superUpdateOne.mock.lastCall![2].preMutationException).toBeInstanceOf(
+							expect(superUpdateOne.mock.lastCall![2]!.preMutationException).toBeInstanceOf(
 								UnprocessableEntityException
 							);
 						});
@@ -630,11 +630,11 @@ describe('Integration Tests', () => {
 
 							expect(superUpdateOne).toHaveBeenCalled();
 
-							expect(superUpdateOne.mock.lastCall![2].preMutationException.message).toBe(
+							expect(superUpdateOne.mock.lastCall![2]!.preMutationException!.message).toBe(
 								`You can't remove the last admin user from the admin role.`
 							);
 
-							expect(superUpdateOne.mock.lastCall![2].preMutationException).toBeInstanceOf(
+							expect(superUpdateOne.mock.lastCall![2]!.preMutationException).toBeInstanceOf(
 								UnprocessableEntityException
 							);
 						});
@@ -709,11 +709,11 @@ describe('Integration Tests', () => {
 
 							expect(superUpdateOne).toHaveBeenCalled();
 
-							expect(superUpdateOne.mock.lastCall![2].preMutationException.message).toBe(
+							expect(superUpdateOne.mock.lastCall![2]!.preMutationException!.message).toBe(
 								`You can't remove the last admin user from the admin role.`
 							);
 
-							expect(superUpdateOne.mock.lastCall![2].preMutationException).toBeInstanceOf(
+							expect(superUpdateOne.mock.lastCall![2]!.preMutationException).toBeInstanceOf(
 								UnprocessableEntityException
 							);
 						});
@@ -790,11 +790,11 @@ describe('Integration Tests', () => {
 
 							expect(superUpdateOne).toHaveBeenCalled();
 
-							expect(superUpdateOne.mock.lastCall![2].preMutationException.message).toBe(
+							expect(superUpdateOne.mock.lastCall![2]!.preMutationException!.message).toBe(
 								`You can't remove the last admin user from the admin role.`
 							);
 
-							expect(superUpdateOne.mock.lastCall![2].preMutationException).toBeInstanceOf(
+							expect(superUpdateOne.mock.lastCall![2]!.preMutationException).toBeInstanceOf(
 								UnprocessableEntityException
 							);
 						});
@@ -806,7 +806,7 @@ describe('Integration Tests', () => {
 
 	describe('Services / Roles', () => {
 		let service: RolesService;
-		let checkForOtherAdminUsersSpy: SpyInstance;
+		let checkForOtherAdminUsersSpy: MockInstance<RolesService['checkForOtherAdminUsers']>;
 
 		beforeEach(() => {
 			service = new RolesService({
@@ -848,9 +848,8 @@ describe('Integration Tests', () => {
 			vi.spyOn(UsersService.prototype, 'deleteByQuery').mockResolvedValueOnce([]);
 
 			// "as any" is needed since this is a private method
-			checkForOtherAdminUsersSpy = vi
-				.spyOn(RolesService.prototype as any, 'checkForOtherAdminUsers')
-				.mockResolvedValueOnce(true);
+			checkForOtherAdminUsersSpy = vi.spyOn(RolesService.prototype as any, 'checkForOtherAdminUsers');
+			checkForOtherAdminUsersSpy.mockResolvedValueOnce(undefined);
 		});
 
 		afterEach(() => {
@@ -977,11 +976,11 @@ describe('Integration Tests', () => {
 				createOneSpy.mockRestore();
 
 				await expect(
-					guard!.beforeCreate!({ key: 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1) })
+					guard!.beforeCreate!({ key: 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1) }, db)
 				).rejects.toBeInstanceOf(InvalidPayloadException);
 
 				await expect(
-					guard!.beforeCreate!({ key: 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH) })
+					guard!.beforeCreate!({ key: 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH) }, db)
 				).resolves.toBeUndefined();
 			});
 
@@ -994,7 +993,7 @@ describe('Integration Tests', () => {
 				createManySpy.mockRestore();
 
 				await expect(
-					guard!.beforeCreate!({ key: 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1) })
+					guard!.beforeCreate!({ key: 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1) }, db)
 				).rejects.toBeInstanceOf(InvalidPayloadException);
 			});
 
@@ -1009,7 +1008,7 @@ describe('Integration Tests', () => {
 				expect(typeof guard!.beforeUpdate).toBe('function');
 
 				await expect(
-					guard!.beforeCreate!({ key: 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1) })
+					guard!.beforeCreate!({ key: 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1) }, db)
 				).rejects.toBeInstanceOf(InvalidPayloadException);
 			});
 
@@ -1048,7 +1047,12 @@ describe('Integration Tests', () => {
 				});
 
 				const overlong = 'a'.repeat(CONFIG_FILENAME_STEM_MAX_LENGTH + 1);
-				const grow = (payload: Record<string, unknown>) => ({ ...payload, key: overlong });
+
+				const grow = (payload: unknown) => {
+					if (typeof payload !== 'object' || payload === null) throw new Error('Expected a role payload');
+					return { ...payload, key: overlong };
+				};
+
 				emitter.onFilter('roles.create', grow);
 
 				try {

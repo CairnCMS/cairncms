@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { snapshotError } from '../utils/error-snapshot.js';
 import { AdminMutationUnverifiedTransactionException } from './admin-mutation-unverified-transaction.js';
 import { ConcurrencyConflictException } from './concurrency-conflict.js';
 import { ConfigStateChangedException } from './config-state-changed.js';
+import { SchemaApplyFailedException } from './schema-apply-failed.js';
 
 const DRIVER_LEAK = /40001|40P01|1213|1205|deadlock|serialize|SQLITE_BUSY|ER_LOCK/i;
 
@@ -40,5 +42,29 @@ describe('continuity exceptions', () => {
 		);
 
 		expect(err.message).not.toMatch(DRIVER_LEAK);
+	});
+
+	it('SchemaApplyFailedException is a 500 with a stable code and message and no driver detail', () => {
+		const err = new SchemaApplyFailedException('unknown');
+		expect(err.status).toBe(500);
+		expect(err.code).toBe('SCHEMA_APPLY_FAILED');
+
+		expect(err.message).toBe(
+			'The schema apply failed and may have left changes in place. Inspect the reported persisted state before retrying.'
+		);
+
+		expect(err.message).not.toMatch(DRIVER_LEAK);
+	});
+
+	it('SchemaApplyFailedException retains its cause for log snapshots but keeps it out of ordinary serialization', () => {
+		const cause = Object.assign(new Error('deadlock detected (1213)'), { code: 'ER_LOCK_DEADLOCK', errno: 1213 });
+		const err = new SchemaApplyFailedException('unknown', { cause });
+
+		expect(err.cause).toBe(cause);
+		expect(Object.propertyIsEnumerable.call(err, 'cause')).toBe(false);
+		expect(JSON.stringify(err)).not.toMatch(DRIVER_LEAK);
+
+		const snapshot = snapshotError(err) as { cause?: { message?: string } };
+		expect(snapshot.cause?.message).toMatch(DRIVER_LEAK);
 	});
 });

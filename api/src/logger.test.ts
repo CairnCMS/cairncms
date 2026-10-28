@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { Writable } from 'node:stream';
 import { pino } from 'pino';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -21,7 +22,7 @@ vi.doMock('./env', async () => {
 	};
 });
 
-const { httpLoggerOptions } = await import('./logger.js');
+const { httpLoggerOptions, createExpressLogger } = await import('./logger.js');
 
 const logOutput = vi.fn();
 
@@ -51,7 +52,7 @@ describe('req.query.access_token', () => {
 			},
 		});
 
-		expect(logOutput.mock.calls[0][0]).toMatchObject({
+		expect(logOutput.mock.calls[0]![0]).toMatchObject({
 			req: {
 				query: {
 					access_token: REDACT_TEXT,
@@ -71,7 +72,7 @@ describe('req.query.access_token', () => {
 			},
 		});
 
-		expect(logOutput.mock.calls[0][0]).toMatchObject({
+		expect(logOutput.mock.calls[0]![0]).toMatchObject({
 			req: {
 				query: {
 					fields: 'id,name',
@@ -92,7 +93,7 @@ describe('req.query.access_token', () => {
 			},
 		});
 
-		expect(logOutput.mock.calls[0][0]).toMatchObject({
+		expect(logOutput.mock.calls[0]![0]).toMatchObject({
 			req: {
 				query: {
 					access_token: REDACT_TEXT,
@@ -115,7 +116,7 @@ describe('req.headers.authorization', () => {
 			},
 		});
 
-		expect(logOutput.mock.calls[0][0]).toMatchObject({
+		expect(logOutput.mock.calls[0]![0]).toMatchObject({
 			req: {
 				headers: {
 					authorization: REDACT_TEXT,
@@ -137,7 +138,7 @@ describe('req.headers.cookie', () => {
 			},
 		});
 
-		expect(logOutput.mock.calls[0][0]).toMatchObject({
+		expect(logOutput.mock.calls[0]![0]).toMatchObject({
 			req: {
 				headers: {
 					cookie: REDACT_TEXT,
@@ -157,7 +158,7 @@ describe('req.headers.cookie', () => {
 			},
 		});
 
-		expect(logOutput.mock.calls[0][0]).toMatchObject({
+		expect(logOutput.mock.calls[0]![0]).toMatchObject({
 			req: {
 				headers: {
 					cookie: REDACT_TEXT,
@@ -179,7 +180,7 @@ describe('res.headers', () => {
 			},
 		});
 
-		expect(logOutput.mock.calls[0][0]).toMatchObject({
+		expect(logOutput.mock.calls[0]![0]).toMatchObject({
 			res: {
 				headers: {
 					'set-cookie': REDACT_TEXT,
@@ -204,12 +205,73 @@ describe('res.headers', () => {
 			},
 		});
 
-		expect(logOutput.mock.calls[0][0]).toMatchObject({
+		expect(logOutput.mock.calls[0]![0]).toMatchObject({
 			res: {
 				headers: {
 					'set-cookie': REDACT_TEXT,
 				},
 			},
 		});
+	});
+});
+
+describe('createExpressLogger request URL redaction', () => {
+	function logRequestUrl(originalUrl: string): { url: unknown; raw: string } {
+		const records: { raw: string }[] = [];
+
+		const capture = new Writable({
+			write(chunk, _encoding, callback) {
+				records.push({ raw: chunk.toString() });
+				callback();
+			},
+		});
+
+		const middleware = createExpressLogger(pino({ level: 'info' }, capture)) as (
+			req: unknown,
+			res: unknown,
+			next: () => void
+		) => void;
+
+		const req = { method: 'GET', originalUrl, headers: {}, socket: { remoteAddress: '127.0.0.1' } };
+		const res = Object.assign(new EventEmitter(), { statusCode: 200, getHeaders: () => ({}) });
+
+		let nextCalled = false;
+
+		middleware(req, res, () => {
+			nextCalled = true;
+		});
+
+		res.emit('finish');
+
+		expect(nextCalled).toBe(true);
+		const raw = records.map((record) => record.raw).join('');
+		return { url: JSON.parse(raw).req.url, raw };
+	}
+
+	test('replaces an unparseable URL carrying a token with the redaction marker', () => {
+		const { url, raw } = logRequestUrl('//[x/items?access_token=test-access-token-value');
+
+		expect(url).toBe(REDACT_TEXT);
+		expect(raw).not.toContain('test-access-token-value');
+	});
+
+	test('replaces an unparseable URL carrying credentials with the redaction marker', () => {
+		const { url, raw } = logRequestUrl('//alice:test-password@[x/items?access_token=test-access-token-value');
+
+		expect(url).toBe(REDACT_TEXT);
+		expect(raw).not.toContain('test-password');
+		expect(raw).not.toContain('test-access-token-value');
+	});
+
+	test('redacts the access token while keeping other query parameters on a parseable URL', () => {
+		const { url } = logRequestUrl('/items?access_token=test-access-token-value&limit=1');
+
+		expect(url).toBe(`/items?access_token=${REDACT_TEXT}&limit=1`);
+	});
+
+	test('drops userinfo from a parseable protocol-relative URL', () => {
+		const { url } = logRequestUrl('//alice:test-password@x/items');
+
+		expect(url).toBe('/items');
 	});
 });

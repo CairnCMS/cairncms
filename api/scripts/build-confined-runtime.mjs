@@ -16,7 +16,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const API_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
-/** The esbuild options for the bundle, shared with the bundle-sanity test. */
+/** @returns {import('esbuild').BuildOptions} */
 export function confinedRuntimeEsbuildOptions(apiRoot = API_ROOT) {
 	return {
 		entryPoints: [join(apiRoot, 'src/extensions/confined/child-host.ts')],

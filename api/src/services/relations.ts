@@ -11,10 +11,11 @@ import getDatabase, { getSchemaInspector } from '../database/index.js';
 import { isInternalTable } from '../database/internal-tables.js';
 import { systemRelationRows } from '../database/system-data/relations/index.js';
 import emitter from '../emitter.js';
-import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
+import { ForbiddenException } from '../exceptions/index.js';
 import type { AbstractServiceOptions, ActionEventParams, MutationOptions } from '../types/index.js';
 import { getDefaultIndexName } from '../utils/get-default-index-name.js';
 import { getSchema } from '../utils/get-schema.js';
+import { assertRelationCreatable, assertRelationModifiable } from '../utils/schema-diff-validators.js';
 import type { QueryOptions } from './items.js';
 import { ItemsService } from './items.js';
 import { PermissionsService } from './permissions.js';
@@ -147,45 +148,7 @@ export class RelationsService {
 			throw new ForbiddenException();
 		}
 
-		if (!relation.collection) {
-			throw new InvalidPayloadException('"collection" is required');
-		}
-
-		if (!relation.field) {
-			throw new InvalidPayloadException('"field" is required');
-		}
-
-		if (relation.collection in this.schema.collections === false) {
-			throw new InvalidPayloadException(`Collection "${relation.collection}" doesn't exist`);
-		}
-
-		if (relation.field in this.schema.collections[relation.collection]!.fields === false) {
-			throw new InvalidPayloadException(
-				`Field "${relation.field}" doesn't exist in collection "${relation.collection}"`
-			);
-		}
-
-		// A primary key should not be a foreign key
-		if (this.schema.collections[relation.collection]!.primary === relation.field) {
-			throw new InvalidPayloadException(
-				`Field "${relation.field}" in collection "${relation.collection}" is a primary key`
-			);
-		}
-
-		if (relation.related_collection && relation.related_collection in this.schema.collections === false) {
-			throw new InvalidPayloadException(`Collection "${relation.related_collection}" doesn't exist`);
-		}
-
-		const existingRelation = this.schema.relations.find(
-			(existingRelation) =>
-				existingRelation.collection === relation.collection && existingRelation.field === relation.field
-		);
-
-		if (existingRelation) {
-			throw new InvalidPayloadException(
-				`Field "${relation.field}" in collection "${relation.collection}" already has an associated relationship`
-			);
-		}
+		assertRelationCreatable(relation, this.schema);
 
 		const runPostColumnChange = await this.helpers.schema.preColumnChange();
 		this.helpers.schema.preRelationChange(relation);
@@ -267,21 +230,11 @@ export class RelationsService {
 			throw new ForbiddenException();
 		}
 
-		if (collection in this.schema.collections === false) {
-			throw new InvalidPayloadException(`Collection "${collection}" doesn't exist`);
-		}
-
-		if (field in this.schema.collections[collection]!.fields === false) {
-			throw new InvalidPayloadException(`Field "${field}" doesn't exist in collection "${collection}"`);
-		}
+		assertRelationModifiable(collection, field, this.schema);
 
 		const existingRelation = this.schema.relations.find(
 			(existingRelation) => existingRelation.collection === collection && existingRelation.field === field
-		);
-
-		if (!existingRelation) {
-			throw new InvalidPayloadException(`Field "${field}" in collection "${collection}" doesn't have a relationship.`);
-		}
+		)!;
 
 		let effectiveSchema: Relation['schema'];
 
@@ -392,21 +345,11 @@ export class RelationsService {
 			throw new ForbiddenException();
 		}
 
-		if (collection in this.schema.collections === false) {
-			throw new InvalidPayloadException(`Collection "${collection}" doesn't exist`);
-		}
-
-		if (field in this.schema.collections[collection]!.fields === false) {
-			throw new InvalidPayloadException(`Field "${field}" doesn't exist in collection "${collection}"`);
-		}
+		assertRelationModifiable(collection, field, this.schema);
 
 		const existingRelation = this.schema.relations.find(
 			(existingRelation) => existingRelation.collection === collection && existingRelation.field === field
-		);
-
-		if (!existingRelation) {
-			throw new InvalidPayloadException(`Field "${field}" in collection "${collection}" doesn't have a relationship.`);
-		}
+		)!;
 
 		const runPostColumnChange = await this.helpers.schema.preColumnChange();
 		const nestedActionEvents: ActionEventParams[] = [];
@@ -416,12 +359,23 @@ export class RelationsService {
 				const existingConstraints = await this.schemaInspector.foreignKeys();
 				const constraintNames = existingConstraints.map((key) => key.constraint_name);
 
+				const unnamedConstraint = existingConstraints.some(
+					(key) =>
+						key.constraint_name === null &&
+						key.table === existingRelation.collection &&
+						key.column === existingRelation.field
+				);
+
 				if (
 					existingRelation.schema?.constraint_name &&
 					constraintNames.includes(existingRelation.schema.constraint_name)
 				) {
 					await trx.schema.alterTable(existingRelation.collection, (table) => {
 						table.dropForeign(existingRelation.field, existingRelation.schema!.constraint_name!);
+					});
+				} else if (unnamedConstraint) {
+					await trx.schema.alterTable(existingRelation.collection, (table) => {
+						table.dropForeign(existingRelation.field);
 					});
 				}
 

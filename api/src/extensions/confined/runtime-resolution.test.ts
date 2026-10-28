@@ -51,7 +51,7 @@ describe('resolveConfinedRuntime', () => {
 	});
 
 	it('builds a baseline supervisor when no hardening is available in auto mode', async () => {
-		const makeSupervisor = vi.fn(() => ({} as never));
+		const makeSupervisor = vi.fn<NonNullable<ResolveConfinedRuntimeDeps['makeSupervisor']>>(() => ({} as never));
 
 		const result = await resolveConfinedRuntime(
 			deps({ detect: () => NO_CAPABILITIES, validate: async () => [], makeSupervisor })
@@ -99,7 +99,7 @@ describe('resolveConfinedRuntime', () => {
 	});
 
 	it('passes the validator the spawn spec for the resolved child', async () => {
-		const validate = vi.fn(async () => [] as HardeningLayer[]);
+		const validate = vi.fn<NonNullable<ResolveConfinedRuntimeDeps['validate']>>(async () => []);
 
 		await resolveConfinedRuntime(deps({ validate }));
 
@@ -111,7 +111,7 @@ describe('resolveConfinedRuntime', () => {
 	});
 
 	it('constructs the supervisor with the exact child the self-check validated', async () => {
-		const makeSupervisor = vi.fn(() => ({} as never));
+		const makeSupervisor = vi.fn<NonNullable<ResolveConfinedRuntimeDeps['makeSupervisor']>>(() => ({} as never));
 		const child = { path: '/runtime/child-host.mjs', execArgv: ['--x'], isBundled: true };
 
 		const result = await resolveConfinedRuntime(deps({ resolveChild: () => child, makeSupervisor }));
@@ -124,7 +124,7 @@ describe('resolveConfinedRuntime', () => {
 	});
 
 	it('claims no hardening for an unbundled child in auto mode and never runs the self-check', async () => {
-		const validate = vi.fn(async () => ['network-namespace'] as HardeningLayer[]);
+		const validate = vi.fn<NonNullable<ResolveConfinedRuntimeDeps['validate']>>(async () => ['network-namespace']);
 
 		const result = await resolveConfinedRuntime(
 			deps({

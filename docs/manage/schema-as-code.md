@@ -1,149 +1,99 @@
 ---
-title: Schema as code
-description: Capture a CairnCMS data model to a versioned file, review changes as a diff, and apply them across environments.
+title: Standalone schema commands
+description: Compatibility reference for standalone schema snapshots and the diff/apply API.
 sidebar:
-  order: 6
+  order: 10
 ---
 
-CairnCMS treats your data model as state that can be captured to a file, reviewed as a diff, and applied to another environment. The same file format works for environment promotion (dev to staging to production), peer review in pull requests, and a structural baseline you can replay against an empty database.
+:::caution[Standalone workflow is deprecated]
+`cairncms schema snapshot`, `cairncms schema apply`, `POST /schema/diff`, `POST /schema/apply` and the SDK's `schemaDiff` and `schemaApply` commands are deprecated in 1.7.0. Use the unified [Config-as-code](/docs/manage/config-as-code/) workflow instead.
 
-The two CLI commands `cairncms schema snapshot` and `cairncms schema apply` are the primary surface. An HTTP API equivalent exists for CI/CD pipelines that prefer not to shell into the container.
+SDK callers should capture with `configSnapshot` and preview or apply that document with `configApply`. See [Config-as-code with the SDK](/docs/api/sdk/#config-as-code). `GET /schema/snapshot` and SDK `schemaSnapshot()` remain supported. See the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) for removal timing.
+:::
 
-This page covers what's in a snapshot, the CLI workflow, the HTTP equivalent, and the cross-environment caveats that decide whether a snapshot is portable.
+<span id="source-control-workflow"></span>
+
+This page documents the existing standalone workflow, which captures and applies schema in one file. For adoption without losing pending changes, see [Adopting the unified workflow](/docs/manage/config-as-code/migration/).
 
 ## What a snapshot captures
 
-A schema snapshot contains:
+<span id="what-schema-as-code-does-not-cover"></span>
 
-- **Collections** — the user-defined collections in the database, with their metadata (name, icon, visibility, sort behavior, archive configuration, and so on).
-- **Fields** — every field on every user-defined collection, with type, defaults, validation, conditional logic, interface and display configuration, options, special behaviors, and translations.
-- **Relations** — the foreign-key and alias relations between collections, including junction tables for many-to-many and many-to-any setups.
-
-It does not contain:
-
-- **Content.** Items in your collections, file rows in `directus_files`, or any application data.
-- **Files on disk** or in a remote storage backend.
-- **Users, roles, and permissions.** These are handled by [config-as-code](/docs/manage/config-as-code/) which is a separate workflow with its own command.
-- **System tables and system fields.** Anything CairnCMS owns is filtered out. The snapshot describes the project schema, not the platform.
-
-Use schema-as-code for the structural side of the model. Use database backups (covered in [Backups](/docs/manage/backups/)) for content.
+Snapshots contain collections, fields and relations with their metadata, using the same [schema coverage](/docs/manage/config-as-code/resources/schema/#what-is-covered) as config-as-code. They do not transfer content, roles, permissions or project settings. Use [Backups](/docs/manage/backups/) for data and [Custom migrations](/docs/develop/custom-migrations/) for data transformations.
 
 ## The snapshot file
 
-The file's top-level shape:
+Standalone snapshots have a format `version`, a producing release, a `vendor`, and arrays named `collections`, `fields` and `relations`.
 
-```yaml
-version: 1
-directus: 1.0.0
-vendor: postgres
-collections: [...]
-fields: [...]
-relations: [...]
-```
+| Format | Release field | Supported upload references |
+| --- | --- | --- |
+| Version 1 | `directus` | Source instance's folder IDs |
+| Version 2 | `release` | Portable folder keys |
 
-`version` is the snapshot format version; CairnCMS currently emits `1`. `directus` is the platform version that produced the snapshot. `vendor` is the normalized database vendor name — one of `postgres`, `mysql`, `sqlite`, `cockroachdb`, `oracle`, `mssql`, or `redshift`. These three fields turn into a portability check at apply time. See [Cross-environment caveats](#cross-environment-caveats) below.
-
-The bulk of the file is the three sorted arrays of collections, fields, and relations. Sorting is deterministic so snapshots produced from equivalent schemas diff cleanly in source control.
+The `directus` field name is retained in version 1 for compatibility. Vendor values are `postgres`, `mysql` (also MariaDB) and `sqlite`. These version numbers are unrelated to config-as-code manifest versions.
 
 ## Generating a snapshot
 
-Write the current schema to a YAML file:
-
 ```bash
 cairncms schema snapshot ./schema.yaml
-```
-
-The CLI is interactive by default. If the target file already exists, it asks before overwriting. To run unattended (CI, scripted deploys), pass `--yes`:
-
-```bash
-cairncms schema snapshot --yes ./schema.yaml
-```
-
-YAML is the default output format. To emit JSON instead:
-
-```bash
 cairncms schema snapshot --format json ./schema.json
 ```
 
-Omit the path to write to stdout, which is convenient for piping into other tools or generating filename patterns:
+The command prompts before overwriting an existing file. `--yes` suppresses the prompt. YAML is the default regardless of the filename extension. Use `--format json` explicitly for a JSON file.
 
-```bash
-cairncms schema snapshot --yes > "./snapshots/$(date +%F).yaml"
-```
+Use an explicit output path as shown above. Without one, the snapshot goes to stdout, where startup logs can mix with it.
 
-YAML is the right default for files committed to source control: human-readable, diffs cleanly, comments allowed in the format. JSON is useful when a downstream tool requires it.
+### Choosing the version
+
+An existing file keeps its version. New files and stdout currently default to version 1. To adopt version 2, preserve pending edits, change an existing file's `version` to `2`, then capture the source again into that file. Snapshot replaces its contents, including the release field and folder references. It does not convert unapplied changes offline.
+
+An unreadable file or missing/unsupported version stops overwrite. Version 2 requires CairnCMS 1.7.0 or later. Older HTTP servers refuse it, while an older CLI can misinterpret folder keys as IDs.
+
+:::caution[Version 1 snapshot default is deprecated]
+Version 1 as the default for new files, stdout and `GET /schema/snapshot` without a version is deprecated in 1.7.0. A later release will default to version 2. Request a version explicitly to keep a format. Re-snapshotting an existing file preserves its version, and `?version=1` stays available. SDK 1.7.0 and later pins `schemaSnapshot()` to version 1. Older SDKs omit the version and will observe the new default. Upgrade the SDK or explicitly request version 1 to preserve that response format. See the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) for when the default changes.
+:::
 
 ## Applying a snapshot
 
-Apply a snapshot file to the current database:
-
 ```bash
+cairncms schema apply ./schema.yaml --dry-run
 cairncms schema apply ./schema.yaml
 ```
 
-The command:
+Review the dry run first. Interactive apply also prints the change list and asks for confirmation. `--yes` skips both that list and the prompt.
 
-1. Loads the snapshot file (YAML or JSON, detected from the extension).
-2. Reads the current schema from the database and computes a structural diff against the snapshot.
-3. If the diff is empty, exits with `No changes to apply.`
-4. If the diff has changes, prints them grouped by collections, fields, and relations, with creates in green, updates in blue, and deletes in red.
-5. Prompts for confirmation before applying. Apply only proceeds on `y`.
+Back up before applying. Standalone apply can drop tables and columns without a `--destructive` flag. There is no force flag.
 
-Two flags adjust the flow:
+Successful dry runs exit `0`, including when changes are found. Caught apply failures exit `1`. Check the output as well as the exit code because a missing-system-tables error currently exits `0`.
 
-- **`--dry-run`** — print the planned changes and exit without applying. Useful for CI checks and pre-deploy review.
-- **`--yes`** — skip the confirmation prompt and apply non-interactively.
+An unchanged snapshot reports `No changes to apply.` If an apply fails, follow [Failure recovery](/docs/manage/config-as-code/recovery/) before retrying.
 
-The two are mutually exclusive in practice: `--dry-run` always exits without applying, and `--yes` only suppresses the prompt around an apply.
+## Omitted properties
 
-Applying a snapshot can drop columns when fields are removed and drop tables when collections are removed. The platform does not preserve content from a dropped column. Treat `--dry-run` as a required step before running `--yes` against a non-disposable database.
-
-## Source control workflow
-
-The intended pattern for a multi-environment project:
-
-1. Develop the schema interactively in your dev instance (the app builder is the easiest editing surface).
-2. Run `cairncms schema snapshot ./schema.yaml` to write the result to a file in your repo.
-3. Commit the snapshot. The diff in the pull request shows the schema change. Reviewers see "added field `posts.published_at: timestamp`".
-4. Once merged, your deploy pipeline runs `cairncms schema apply --yes ./schema.yaml` against staging, then production, after the platform upgrade step.
-
-The snapshot is the source of truth that travels with the code. Direct schema edits to a non-dev environment will be detected as drift the next time `apply` runs against that environment. `apply` reconciles the database to the snapshot, not the other way around.
-
-For larger teams, prefer running `cairncms schema apply --dry-run` in CI on every PR that touches the snapshot file. The diff that prints in the CI log is the same diff the deploy will apply, so reviewers get a preview without anyone needing to run the deploy locally.
+Capture the desired state from the source instance and retain every collection, field and relation you want to keep. Missing entries request deletion. For exceptional manual edits inside `meta` or `schema`, follow the [schema omission rules](/docs/manage/config-as-code/resources/schema/#omitted-properties).
 
 ## The HTTP API
 
-For pipelines that cannot shell into a container, the same workflow is exposed as three HTTP endpoints. All require an admin token.
+All three endpoints require an administrator:
 
-- **`GET /schema/snapshot`** — returns the current snapshot as JSON. Equivalent to `cairncms schema snapshot --format json` to stdout.
-- **`POST /schema/diff`** — accepts a snapshot (JSON in the body, or YAML/JSON as multipart form upload), returns `{ hash, diff }`. The hash is a fingerprint of the current database snapshot at the moment the diff was computed.
-- **`POST /schema/apply`** — accepts the `{ hash, diff }` payload from the diff endpoint (JSON in the body, or YAML/JSON as multipart form upload) and applies the diff. The hash is re-checked against the current state. If the database has changed since the diff was produced, the apply is rejected.
+- `GET /schema/snapshot`: returns version 1 by default. `?version=2` selects portable references.
+- `POST /schema/diff`: accepts a snapshot as JSON or a YAML/JSON multipart file. With changes, it returns HTTP `200` with `{ hash, diff }` under `data`. With no changes, it returns HTTP `204` with no body. Stop there rather than sending an empty payload to apply.
+- `POST /schema/apply`: accepts the returned hash/diff payload, checks the current hash again, and applies it. It does not accept the original snapshot as that payload.
 
-The two-step diff/apply flow is the safety net for HTTP. Between the moment you compute the diff and the moment you apply it, another admin or an automated process might have changed the schema. The hash check catches that and forces a re-diff.
+<span id="cross-environment-caveats"></span>
 
-The HTTP `/schema/diff` endpoint also validates that the snapshot's `directus` version and `vendor` fields match the running instance. The check can be bypassed by passing `?force` on the request, but the CLI does not enforce this validation at all.
+The diff endpoint checks that the source release and vendor match the server. The standalone CLI does not perform this check. Keep releases and vendors aligned when using either surface.
 
-## Cross-environment caveats
+Any `force` query parameter skips the HTTP source check, including `?force=false`. Omit it entirely to keep the check enabled. Overriding it does not establish cross-version or cross-vendor compatibility.
 
-The fields stamped into the snapshot (`directus`, `vendor`) describe the environment the snapshot was produced from. Carrying a snapshot to an environment that differs along either axis is a known sharp edge:
+If the target schema changes after you obtain the diff, apply returns `409 SCHEMA_STATE_CHANGED`. Generate and review a fresh diff before applying. Do not retry the stale payload.
 
-- **Different platform version.** The HTTP `/schema/diff` endpoint refuses snapshots from a different platform version unless `force` is set. The CLI does not check; it will run the diff and apply against whatever version is running. Treat platform-version mismatches as a hint to upgrade or downgrade first, not a routine `--force` flag.
-- **Different database vendor.** The same restriction. Some snapshots happen to apply cleanly across Postgres, MySQL, and SQLite; others do not, because column types, default expressions, and index behavior differ at the SQL level. Snapshot portability across vendors is not a guaranteed property of the format.
-- **Drift between dev and prod.** A snapshot produced from a dev instance that has been edited interactively in prod will diff against the prod state. Decide before applying whether the prod-side edits should be preserved (re-snapshot from prod and merge) or overwritten (apply the dev snapshot as-is).
+## Upload folders
 
-The conservative posture: keep environments aligned on platform version and database vendor, and let `apply` reconcile structural drift in one direction (file → database).
+Version 2 resolves folder keys for the built-in upload interfaces, including nested repeaters and conditions. Every referenced folder must already exist on the target. Standalone apply does not prepare folders. Create them separately or use the unified workflow with managed folder declarations.
 
-## What schema-as-code does not cover
+<span id="where-to-go-next"></span>
 
-Two adjacent surfaces look similar from a distance and need their own workflows:
+List keys with administrator `GET /folders?fields=id,name,key`. If a version 2 capture reports a missing folder reference, repair the named field and retry. Version 1 copies source IDs without that check. See [migration guidance](/docs/manage/config-as-code/migration/#from-a-standalone-schema-file) before using a version 1 snapshot on another instance.
 
-- **Roles and permissions.** Captured by `cairncms config snapshot` and `cairncms config apply` — see [Config as code](/docs/manage/config-as-code/). The two commands are deliberately separate because the lifecycle of a permission change differs from the lifecycle of a schema change.
-- **Content and seed data.** Schema-as-code never captures application data. For seeding a fresh environment with example content, use a database dump and restore (see [Backups](/docs/manage/backups/)) or write a custom migration that inserts the seed rows ([Custom migrations](/docs/develop/custom-migrations/)).
-
-Schema-as-code is the structural baseline. Layer config-as-code on top for permissions, and a content-loading mechanism on top of that for data. Each surface has its own diffing semantics.
-
-## Where to go next
-
-- [Config as code](/docs/manage/config-as-code/) — the same diff/apply pattern for roles and permissions.
-- [Migration between instances](/docs/manage/migration-between-instances/) — covers moving a complete deployment, of which a schema snapshot is one piece.
-- [Custom migrations](/docs/develop/custom-migrations/) — the procedural alternative when a change is too imperative for a snapshot to capture cleanly (data backfills, complex transforms, conditional logic).
+Review extension interface options separately because embedded folder IDs are copied unchanged.

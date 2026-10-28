@@ -105,7 +105,7 @@ export async function createCli(): Promise<Command> {
 
 	schemaCommands
 		.command('snapshot')
-		.description('Create a new Schema Snapshot')
+		.description('Create a new Schema Snapshot. Deprecated. Use "cairncms config snapshot" instead.')
 		.option('-y, --yes', `Assume "yes" as answer to all prompts and run non-interactively`, false)
 		.addOption(new Option('--format <format>', 'JSON or YAML format').choices(['json', 'yaml']).default('yaml'))
 		.argument('[path]', 'Path to snapshot file')
@@ -113,7 +113,7 @@ export async function createCli(): Promise<Command> {
 
 	schemaCommands
 		.command('apply')
-		.description('Apply a snapshot file to the current database')
+		.description('Apply a snapshot file to the current database. Deprecated. Use "cairncms config apply" instead.')
 		.option('-y, --yes', `Assume "yes" as answer to all prompts and run non-interactively`)
 		.option('-d, --dry-run', 'Plan and log changes to be applied', false)
 		.argument('<path>', 'Path to snapshot file')
@@ -123,7 +123,7 @@ export async function createCli(): Promise<Command> {
 
 	const configSnapshotCommand = configCommand
 		.command('snapshot')
-		.description('Snapshot current roles and permissions to a config directory')
+		.description('Snapshot managed resources to a config-as-code directory')
 		.argument('<path>', 'Target directory path')
 		.option('-y, --yes', 'Skip confirmation on overwriting non-empty directory', false)
 		.option('--url <url>', 'Snapshot from a remote CairnCMS server at this absolute http(s) URL')
@@ -132,11 +132,12 @@ export async function createCli(): Promise<Command> {
 
 	const configApplyCommand = configCommand
 		.command('apply')
-		.description('Apply a config directory to this CairnCMS instance')
-		.argument('<path>', 'Config directory path')
+		.description('Apply a config-as-code directory to this CairnCMS instance')
+		.argument('<path>', 'Config-as-code directory path')
 		.option('-y, --yes', 'Skip confirmation prompt')
 		.option('--dry-run', 'Print planned changes without applying', false)
-		.option('--destructive', 'Delete roles/permissions in DB but not in config', false)
+		.option('--destructive', 'Authorize planned deletions from managed resources', false)
+		.option('--force-schema', 'Apply schema with a different or unspecified source version or database vendor', false)
 		.option('--url <url>', 'Apply to a remote CairnCMS server at this absolute http(s) URL')
 		.option('--token-stdin', 'Read the remote admin token from stdin', false)
 		.addOption(

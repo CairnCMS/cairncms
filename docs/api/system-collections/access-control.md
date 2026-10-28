@@ -145,6 +145,7 @@ A permission row is a tuple of role, collection, and action plus the rules that 
 | `PATCH` | `/permissions/<id>` | Update a single permission. |
 | `DELETE` | `/permissions` | Delete many permissions. |
 | `DELETE` | `/permissions/<id>` | Delete a single permission. |
+| `GET` | `/permissions/me` | Deprecated. Returns `204 No Content`. |
 | `GET` | `/permissions/me/<collection>/<key>` | Check the current user's permissions for one item. |
 | `GET` | `/permissions/me/<collection>` | Check the current user's permissions for a singleton. |
 
@@ -161,7 +162,13 @@ A permission row is a tuple of role, collection, and action plus the rules that 
 
 A read or write that matches no permission row for a non-admin role is denied. The `permissions`, `validation`, and `presets` filters can reference filter variables (`$NOW`, `$CURRENT_USER`, `$CURRENT_ROLE`) to scope rules per caller.
 
-Permissions on system collections work the same way as permissions on user collections, with one caveat: the platform-managed minimum permissions for app-access roles are projected at read time rather than stored as rows, so they are invisible to `/permissions` queries. See [Config as code / What a config snapshot captures](/docs/manage/config-as-code/#what-a-config-snapshot-captures) for the full picture.
+Permissions on system collections work the same way as permissions on user collections, with one caveat: the platform-managed minimum permissions for app-access roles are projected at read time rather than stored as rows, so they are invisible to `/permissions` queries. See [Roles and permissions](/docs/manage/config-as-code/resources/roles-and-permissions/#permission-documents) for their config-as-code behavior.
+
+### Deprecated legacy permissions route
+
+:::caution[Empty permissions route is deprecated]
+`GET /permissions/me` is deprecated in 1.7.0. It returns `204 No Content` without any permission data, so remove any calls to it. For item permission checks, use `GET /permissions/me/<collection>/<key>`, or `GET /permissions/me/<collection>` for singletons, as described [below](#check-permissions-for-an-item). See the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) for removal timing.
+:::
 
 ### Check permissions for an item
 
@@ -283,23 +290,16 @@ The email contains the share URL with the share's ID embedded. The invitation do
 
 ## Config-as-code endpoints
 
-Two endpoints snapshot and apply role and permission state across deployments:
+Two endpoints snapshot and apply the data model, access rules and settings across deployments:
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/config/snapshot` | Return the current roles and permissions as a `CairnConfig` payload. |
-| `POST` | `/config/apply` | Apply a `CairnConfig` payload, with optional dry-run and destructive flags. |
+| `GET` | `/config/snapshot` | Return the selected resource kinds as a config-as-code document. |
+| `POST` | `/config/apply` | Preview or apply the whole config-as-code document in one request. |
 
-These admin-only endpoints back remote CLI mode and custom HTTP automation. CLI users do not need to construct the requests themselves. See [Config as code](/docs/manage/config-as-code/) for the full reference.
+These admin-only endpoints support remote CLI use and HTTP automation. See the [config-as-code HTTP reference](/docs/manage/config-as-code/http-api/) for resource selection, preview options and response formats.
 
-In short:
-
-- `GET /config/snapshot` has no manifest request body. Optional `manifest_version` and comma-separated `resources` parameters select the manifest in the response. Omission means the current version and all kinds; `resources=` means an empty managed scope. The remote CLI derives these values from the local manifest automatically. Pass `?export=yaml` for a YAML attachment.
-- `POST /config/apply` takes a manifest in its JSON or YAML body, so that manifest defines managed scope. Pass `?dry_run=true` to preview without writing or `?destructive=true` to authorize deletions. Each flag must be exactly `true` or `false`, and any other value is rejected with `CONFIG_INVALID` before any state is read. A dry run returns the plan as `data`; a mutating apply returns the result as `data` and the plan under `meta.plan`.
-
-There is no `/config/diff` endpoint. The apply endpoint computes the plan internally on every call.
-
-The `cairncms` CLI can call these endpoints on a remote instance with `cairncms config apply --url` and `cairncms config snapshot --url`, authenticating with an administrator token. See [Config as code / Applying to a remote instance](/docs/manage/config-as-code/#applying-to-a-remote-instance).
+The `cairncms` CLI can call these endpoints on a remote instance with `cairncms config apply --url` and `cairncms config snapshot --url`, authenticating with an administrator token. See [Remote instances](/docs/manage/config-as-code/remote/).
 
 ## GraphQL
 
@@ -327,5 +327,5 @@ Granting non-admin write access to `directus_permissions` is a privilege escalat
 - [Authentication](/docs/api/authentication/) — the auth, TFA, and password-reset flows that work against the user collection.
 - [Filters and queries](/docs/api/filters-and-queries/) — the filter DSL used by both request-level filters and permission rules.
 - [Permissions](/docs/guides/permissions/) — the operator-side model for designing role and permission sets.
-- [Config as code](/docs/manage/config-as-code/) — the full reference for the `/config/*` endpoints and the CLI equivalents.
+- [Config-as-code](/docs/manage/config-as-code/) — the full reference for the `/config/*` endpoints and the CLI equivalents.
 - [Users](/docs/guides/users/) — the operator-side workflows for inviting, suspending, and managing users in the admin app.

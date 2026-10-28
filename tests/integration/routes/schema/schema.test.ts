@@ -729,8 +729,8 @@ describe('Schema Snapshots', () => {
 					.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`);
 
 				// Assert
-				expect(response.statusCode).toEqual(400);
-				expect(response.text).toContain('Please generate a new diff and try again.');
+				expect(response.statusCode).toEqual(409);
+				expect(response.body.errors[0].extensions.code).toBe('SCHEMA_STATE_CHANGED');
 			}, 1200000);
 		});
 
@@ -769,8 +769,8 @@ describe('Schema Snapshots', () => {
 					.set('Authorization', `Bearer ${common.USER.ADMIN.TOKEN}`);
 
 				// Assert
-				expect(response.statusCode).toEqual(400);
-				expect(response.text).toContain('Please generate a new diff and try again.');
+				expect(response.statusCode).toEqual(409);
+				expect(response.body.errors[0].extensions.code).toBe('SCHEMA_STATE_CHANGED');
 			}, 1200000);
 		});
 	});

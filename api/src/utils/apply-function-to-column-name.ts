@@ -1,4 +1,4 @@
-import { REGEX_BETWEEN_PARENS } from '@cairncms/constants';
+import { getBetweenParens } from '@cairncms/utils';
 
 /**
  * Takes in a column name, and transforms the original name with the generated column name based on
@@ -14,7 +14,8 @@ import { REGEX_BETWEEN_PARENS } from '@cairncms/constants';
 export function applyFunctionToColumnName(column: string): string {
 	if (column.includes('(') && column.includes(')')) {
 		const functionName = column.split('(')[0];
-		const columnName = column.match(REGEX_BETWEEN_PARENS)![1];
+		const columnName = getBetweenParens(column);
+		if (columnName === null) return column;
 		return `${columnName}_${functionName}`;
 	} else {
 		return column;

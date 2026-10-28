@@ -52,7 +52,7 @@ const { safeSend } = await import('./utils/message.js');
 const { ItemsService } = await import('../services/index.js');
 const { userSchema } = await import('../__utils__/schemas.js');
 
-const db = vi.mocked(knex.default({ client: MockClient }));
+const db = knex.default({ client: MockClient });
 let tracker: Tracker;
 
 targetHolder.resolve = (collection: string, options: AbstractServiceOptions) =>

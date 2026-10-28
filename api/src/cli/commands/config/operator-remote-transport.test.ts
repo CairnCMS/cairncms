@@ -97,8 +97,8 @@ describe('operator lookup — anti-rebinding on resolved addresses', () => {
 	it('allows a hostname that resolves to loopback', async () => {
 		dnsLookupMock.mockImplementation((_h: string, _o: unknown, cb: any) => cb(null, '127.0.0.1', 4));
 
-		const result = await new Promise<{ err: Error | null; address?: string }>((resolve) =>
-			lookup('localhost', {}, (err: Error | null, address?: string) => resolve({ err, address }))
+		const result = await new Promise<{ err: Error | null; address: string | undefined }>((resolve) =>
+			lookup('localhost', {}, (err: Error | null, address: string | undefined) => resolve({ err, address }))
 		);
 
 		expect(result.err).toBeNull();

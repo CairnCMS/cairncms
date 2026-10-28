@@ -1,7 +1,9 @@
 import type { SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import type { CairnConfig, ConfigKind, ConfigPlan, ConfigPlanEnrichment, SettingsRetarget } from '../types/config.js';
+import { projectCollections } from './config/projected-collections.js';
 import { getDescriptor, listConfigKinds } from './config/registry.js';
+import { unconfiguredTableDropMessage } from './unconfigured-table-drop.js';
 
 type EnrichOptions = {
 	schema: SchemaOverview;
@@ -31,6 +33,7 @@ export async function enrichConfigPlan(
 	const context = {
 		database: options.database,
 		schema: options.schema,
+		collections: projectCollections(options.schema.collections, plan.schema),
 		settingsRetarget: settingsRetargetOf(plan.settings.update),
 	};
 
@@ -57,5 +60,18 @@ export async function enrichConfigPlan(
 		}
 	}
 
-	return Object.fromEntries(fragments) as unknown as ConfigPlanEnrichment;
+	const enrichment = Object.fromEntries(fragments) as unknown as ConfigPlanEnrichment;
+
+	for (const entry of plan.schema.delete) {
+		if (entry.changeKind === 'collections' && entry.unconfiguredTableDrop) {
+			enrichment.warnings.push({
+				code: 'UNCONFIGURED_TABLE_DROP',
+				kind: 'collections',
+				collection: entry.identity.collection,
+				message: unconfiguredTableDropMessage(entry.identity.collection),
+			});
+		}
+	}
+
+	return enrichment;
 }

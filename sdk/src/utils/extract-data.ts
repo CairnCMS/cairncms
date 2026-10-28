@@ -1,9 +1,9 @@
 import { isFetchResponse } from './is-response.js';
 
 /**
- * Tries to extract a fetch response
+ * Tries to extract a fetch response, keeping the whole JSON body when `envelope` is set
  */
-export async function extractData(response: unknown) {
+export async function extractData(response: unknown, envelope = false) {
 	if (typeof response !== 'object' || !response) return;
 
 	if (isFetchResponse(response)) {
@@ -12,7 +12,7 @@ export async function extractData(response: unknown) {
 		if (type?.startsWith('application/json') || type?.startsWith('application/health+json')) {
 			const result = await response.json();
 			if (!response.ok) throw result;
-			if ('data' in result) return result.data;
+			if (!envelope && 'data' in result) return result.data;
 			return result;
 		}
 
@@ -27,5 +27,5 @@ export async function extractData(response: unknown) {
 	}
 
 	// exception for alternatives like ofetch that don't return the Response object
-	return 'data' in response ? response.data : response;
+	return !envelope && 'data' in response ? response.data : response;
 }

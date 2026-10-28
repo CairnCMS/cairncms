@@ -686,6 +686,14 @@ describeForVendors(
 				const fixture = path.join(workDir!, 'config');
 				await fs.mkdir(fixture, { recursive: true });
 
+				await fs.writeFile(
+					path.join(fixture, 'cairncms-config.yaml'),
+					dumpYaml({
+						version: 2,
+						resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+					})
+				);
+
 				const snapshot = await runCli(api, ['config', 'snapshot', fixture, '--url', proxyUrl, '--yes'], trustedEnv);
 				expect(snapshot.status).toBe(0);
 

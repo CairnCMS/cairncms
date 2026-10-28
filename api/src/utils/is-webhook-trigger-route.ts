@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import url from 'url';
+import { parseRequestTarget } from './parse-request-target.js';
 import { UUID_REGEX } from './is-valid-uuid.js';
 
 // Recognition must match Express's case-insensitive, non-strict matching of the
@@ -12,5 +12,5 @@ export function isWebhookTriggerPath(path: string | null | undefined): boolean {
 
 export function isWebhookTriggerRoute(req: Request): boolean {
 	if (!req.originalUrl) return false;
-	return isWebhookTriggerPath(url.parse(req.originalUrl).pathname);
+	return isWebhookTriggerPath(parseRequestTarget(req.originalUrl)?.pathname);
 }

@@ -193,6 +193,7 @@ describe('resolvePreset', () => {
 describe('maybeExtractFormat', () => {
 	test('get last format', () => {
 		const inputTransformations: Transformation[] = [
+			// @ts-expect-error Sharp accepts the jpg alias at runtime but declares only jpeg.
 			['toFormat', 'jpg', { quality: 80 }],
 			['toFormat', 'webp', { quality: 80 }],
 		];

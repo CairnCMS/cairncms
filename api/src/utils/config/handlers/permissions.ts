@@ -337,10 +337,10 @@ async function enrich(
 	records: FlatPermissionRecord[],
 	context: EnrichContext
 ): Promise<PermissionsKindTypes['Enrichment']> {
-	const warnings: ConfigPlanWarning[] = [];
+	const warnings: Extract<ConfigPlanWarning, { code: 'COLLECTION_MISSING' }>[] = [];
 
 	for (const record of records) {
-		if (Object.hasOwn(context.schema.collections, record.collection)) continue;
+		if (context.collections.has(record.collection)) continue;
 
 		warnings.push({
 			code: 'COLLECTION_MISSING',

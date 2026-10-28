@@ -19,19 +19,6 @@ test('should fail on invalid diff schema', () => {
 	expect(() => validateApplyDiff(diff, snapshot)).toThrowError('"hash" is required');
 });
 
-test('should fail on invalid hash', () => {
-	const diff = {
-		hash: 'abc',
-		diff: { collections: [{ collection: 'test', diff: [] }], fields: [], relations: [] },
-	} as SnapshotDiffWithHash;
-
-	const snapshot = { hash: 'xyz' } as SnapshotWithHash;
-
-	expect(() => validateApplyDiff(diff, snapshot)).toThrowError(
-		"Provided hash does not match the current instance's schema hash"
-	);
-});
-
 describe('should throw accurate error', () => {
 	const baseDiff = (partialDiff: Partial<SnapshotDiff>): SnapshotDiffWithHash => {
 		return {
@@ -135,6 +122,138 @@ describe('should throw accurate error', () => {
 		expect(() => validateApplyDiff(diff, baseSnapshot())).toThrowError(
 			'Provided diff is trying to delete relation "test.test-> relation" but it does not exist'
 		);
+	});
+});
+
+describe('distinguishes nested metadata changes from whole-entity operations', () => {
+	test('allows a nested collection-meta create on an existing collection', () => {
+		const diff: any = {
+			hash: 'abc',
+			diff: {
+				collections: [{ collection: 'a', diff: [{ kind: 'N', path: ['meta', 'icon'], rhs: 'box' }] }],
+				fields: [],
+				relations: [],
+			},
+		};
+
+		const snapshot = { collections: [{ collection: 'a' }], fields: [], relations: [] } as unknown as Snapshot;
+
+		expect(validateApplyDiff(diff, snapshot)).toBe(true);
+	});
+
+	test('allows a nested collection-meta delete on an existing collection', () => {
+		const diff: any = {
+			hash: 'abc',
+			diff: {
+				collections: [{ collection: 'a', diff: [{ kind: 'D', path: ['meta', 'note'], lhs: 'kept' }] }],
+				fields: [],
+				relations: [],
+			},
+		};
+
+		const snapshot = { collections: [{ collection: 'a' }], fields: [], relations: [] } as unknown as Snapshot;
+
+		expect(validateApplyDiff(diff, snapshot)).toBe(true);
+	});
+
+	test('allows a nested field-meta create on an existing field', () => {
+		const diff: any = {
+			hash: 'abc',
+			diff: {
+				collections: [],
+				fields: [{ collection: 'a', field: 'f', diff: [{ kind: 'N', path: ['meta', 'options'], rhs: {} }] }],
+				relations: [],
+			},
+		};
+
+		const snapshot = {
+			collections: [],
+			fields: [{ collection: 'a', field: 'f' }],
+			relations: [],
+		} as unknown as Snapshot;
+
+		expect(validateApplyDiff(diff, snapshot)).toBe(true);
+	});
+
+	test('allows a nested relation-meta create on an existing relation', () => {
+		const diff: any = {
+			hash: 'abc',
+			diff: {
+				collections: [],
+				fields: [],
+				relations: [
+					{
+						collection: 'a',
+						field: 'r',
+						related_collection: 'b',
+						diff: [{ kind: 'N', path: ['meta', 'one_field'], rhs: 'x' }],
+					},
+				],
+			},
+		};
+
+		const snapshot = {
+			collections: [],
+			fields: [],
+			relations: [{ collection: 'a', field: 'r', related_collection: 'b' }],
+		} as unknown as Snapshot;
+
+		expect(validateApplyDiff(diff, snapshot)).toBe(true);
+	});
+});
+
+describe('checks only a whole-entity entry as a create or delete', () => {
+	const applying = (part: Record<string, unknown>): any => ({
+		hash: 'abc',
+		diff: { collections: [], fields: [], relations: [], ...part },
+	});
+
+	const empty = { collections: [], fields: [], relations: [] } as unknown as Snapshot;
+
+	const existing = {
+		collections: [{ collection: 'a' }],
+		fields: [{ collection: 'a', field: 'f' }],
+		relations: [{ collection: 'a', field: 'r', related_collection: 'b' }],
+	} as unknown as Snapshot;
+
+	test.each([
+		['a removed column', { kind: 'D', path: ['schema'], lhs: { name: 'f' } }],
+		['an omitted column property', { kind: 'D', path: ['schema', 'max_length'], lhs: 255 }],
+		['removed metadata', { kind: 'D', path: ['meta'], lhs: null }],
+	])('does not check a field diff starting with %s as a delete', (_label, change) => {
+		const diff = applying({ fields: [{ collection: 'a', field: 'f', diff: [change] }] });
+
+		expect(validateApplyDiff(diff, empty)).toBe(true);
+	});
+
+	test('does not check a field diff that adds a column as a create', () => {
+		const change = { kind: 'N', path: ['schema'], rhs: { name: 'f' } };
+		const diff = applying({ fields: [{ collection: 'a', field: 'f', diff: [change] }] });
+
+		expect(validateApplyDiff(diff, existing)).toBe(true);
+	});
+
+	test.each([
+		['a removed foreign key', { kind: 'D', path: ['schema'], lhs: { table: 'a', column: 'r' } }],
+		['an omitted metadata property', { kind: 'D', path: ['meta', 'sort_field'], lhs: 'sort' }],
+	])('does not check a relation diff starting with %s as a delete', (_label, change) => {
+		const diff = applying({ relations: [{ collection: 'a', field: 'r', related_collection: 'b', diff: [change] }] });
+
+		expect(validateApplyDiff(diff, empty)).toBe(true);
+	});
+
+	test('does not check a relation diff that adds a foreign key as a create', () => {
+		const change = { kind: 'N', path: ['schema'], rhs: { table: 'a', column: 'r' } };
+		const diff = applying({ relations: [{ collection: 'a', field: 'r', related_collection: 'b', diff: [change] }] });
+
+		expect(validateApplyDiff(diff, existing)).toBe(true);
+	});
+
+	test('does not check a collection diff that removes its table as a delete', () => {
+		const change = { kind: 'D', path: ['schema'], lhs: { name: 'a' } };
+		const diff = applying({ collections: [{ collection: 'a', diff: [change] }] });
+
+		expect(validateApplyDiff(diff, empty)).toBe(true);
 	});
 });
 
@@ -255,7 +374,11 @@ test('should not throw error for diffs with varying types of lhs/rhs', () => {
 		},
 	};
 
-	const snapshot = { hash: 'abc' } as SnapshotWithHash;
+	const snapshot = {
+		collections: [],
+		fields: [{ collection: 'a', field: 'delete_field' } as SnapshotField],
+		relations: [],
+	} as unknown as Snapshot;
 
 	expect(() => validateApplyDiff(diff, snapshot)).not.toThrow();
 });
@@ -297,7 +420,7 @@ test('should not throw error for relation diff with null related_collection (app
 		},
 	};
 
-	const snapshot = { hash: 'abc' } as SnapshotWithHash;
+	const snapshot = { collections: [], fields: [], relations: [] } as unknown as Snapshot;
 
 	expect(() => validateApplyDiff(diff, snapshot)).not.toThrow();
 });

@@ -1,11 +1,15 @@
 import { getEndpoint } from '@cairncms/utils';
 import type { Request } from 'express';
-import url from 'url';
 import { getEnv } from '../env.js';
+import { parseRequestTarget } from './parse-request-target.js';
 import { Url } from './url.js';
 
 export function shouldSkipCache(req: Request): boolean {
 	const env = getEnv();
+
+	const target = parseRequestTarget(req.originalUrl);
+
+	if (target === null) return true;
 
 	const referer = req.get('Referer');
 
@@ -13,8 +17,17 @@ export function shouldSkipCache(req: Request): boolean {
 		const adminUrl = new Url(env['PUBLIC_URL']).addPath('admin');
 
 		if (adminUrl.isRootRelative()) {
-			const refererUrl = new Url(referer);
-			if (refererUrl.path.join('/').startsWith(adminUrl.path.join('/')) && checkAutoPurge()) return true;
+			let refererUrl: Url | null = null;
+
+			try {
+				refererUrl = new Url(referer);
+			} catch {
+				refererUrl = null;
+			}
+
+			if (refererUrl && refererUrl.path.join('/').startsWith(adminUrl.path.join('/')) && checkAutoPurge()) {
+				return true;
+			}
 		} else if (referer.startsWith(adminUrl.toString()) && checkAutoPurge()) {
 			return true;
 		}
@@ -27,7 +40,7 @@ export function shouldSkipCache(req: Request): boolean {
 	function checkAutoPurge() {
 		if (env['CACHE_AUTO_PURGE'] === false) return true;
 
-		const path = url.parse(req.originalUrl).pathname;
+		const path = target?.pathname;
 
 		if (!path) return false;
 

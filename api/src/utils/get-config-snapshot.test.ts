@@ -5,6 +5,7 @@ import knex from 'knex';
 import { MockClient } from 'knex-mock-client';
 import type { MockedFunction } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as databaseIndex from '../database/index.js';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import logger from '../logger.js';
 import { FoldersService } from '../services/folders.js';
@@ -17,7 +18,9 @@ import { rolesDescriptor } from './config/handlers/roles.js';
 import { CONFIG_REGISTRY } from './config/registry.js';
 import { getConfigSnapshot, readCurrentConfig } from './get-config-snapshot.js';
 import * as getSchema from './get-schema.js';
+import { version } from './package.js';
 import { validateDesiredConfig } from './validate-desired-config.js';
+import { serializeToWire } from './config/wire.js';
 
 function roleRow(overrides: Record<string, any> = {}): Record<string, any> {
 	return {
@@ -99,6 +102,14 @@ describe('getConfigSnapshot', () => {
 		vi.spyOn(getSchema, 'getSchema').mockResolvedValue(testSchema);
 		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([]);
 		vi.spyOn(TranslationsService.prototype, 'readByQuery').mockResolvedValue([]);
+		vi.spyOn(databaseIndex, 'getDatabaseClient').mockReturnValue('sqlite');
+
+		vi.spyOn(CONFIG_REGISTRY.schema.handler, 'readCurrent').mockResolvedValue({
+			records: [],
+			documentIdentities: [],
+			dependencyState: { storedFields: [] },
+		} as never);
+
 		mockSettings();
 	});
 
@@ -113,9 +124,21 @@ describe('getConfigSnapshot', () => {
 		const config = await getConfigSnapshot({ database: db });
 
 		expect(config.manifest).toEqual({
-			version: 2,
-			resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations'],
+			version: 3,
+			resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations', 'schema'],
+			schema: { release: version, vendor: 'sqlite' },
 		});
+	});
+
+	it('includes schema in the default snapshot and reaches its read', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([]);
+		vi.spyOn(PermissionsService.prototype, 'readByQuery').mockResolvedValue([]);
+
+		const config = await getConfigSnapshot({ database: db });
+
+		expect(config.manifest.resources).toContain('schema');
+		expect(config.schema).toEqual([]);
+		expect(vi.mocked(CONFIG_REGISTRY.schema.handler.readCurrent)).toHaveBeenCalled();
 	});
 
 	it('builds ConfigRole entries with v1 allowlist only', async () => {
@@ -785,6 +808,17 @@ describe('readCurrentConfig', () => {
 		expect(currentRoleKeys.has('editor')).toBe(true);
 	});
 
+	it('does not read schema for a version 2 tree that does not manage schema', async () => {
+		vi.spyOn(RolesService.prototype, 'readByQuery').mockResolvedValue([roleRow()]);
+		mockPermission();
+		const schemaRead = vi.spyOn(CONFIG_REGISTRY.schema.handler, 'readCurrent');
+
+		const read = await readCurrentConfig({ database: db, resources: ['permissions'], manifestVersion: 2 });
+
+		expect(schemaRead).not.toHaveBeenCalled();
+		expect(read.schemaStoredFields).toBeUndefined();
+	});
+
 	it('sources folder reference keys from the published folders dependency, not the empty config.folders slice', async () => {
 		const folderId = '00000000-0000-4000-8000-000000000001';
 		vi.spyOn(FoldersService.prototype, 'readByQuery').mockResolvedValue([{ id: folderId, key: 'uploads' }] as never);
@@ -842,7 +876,7 @@ describe('readCurrentConfig', () => {
 
 		expect(v1.config.manifest.version).toBe(1);
 		expect(v2.config.manifest.version).toBe(2);
-		expect(fresh.config.manifest.version).toBe(2);
+		expect(fresh.config.manifest.version).toBe(3);
 	});
 
 	it('computes the same state token digest regardless of manifest version', async () => {
@@ -970,13 +1004,14 @@ describe('readCurrentConfig', () => {
 		expect(getSchema.getSchema).not.toHaveBeenCalled();
 
 		expect(config).toEqual({
-			manifest: { version: 2, resources: [] },
+			manifest: { version: 3, resources: [] },
 			roles: [],
 			permissions: [],
 			folders: [],
 			settings: [],
 			'extension-settings': [],
 			translations: [],
+			schema: [],
 		});
 
 		expect(currentRoleKeys.size).toBe(0);
@@ -1178,7 +1213,7 @@ describe('readCurrentConfig', () => {
 		expect(config.permissions.map((set) => set.role)).toEqual(['editor', 'public']);
 
 		expect(
-			validateDesiredConfig(config, {
+			validateDesiredConfig(serializeToWire(config, config.manifest.version), {
 				label: 'snapshot',
 				references: 'current-state',
 				currentRoleKeys,

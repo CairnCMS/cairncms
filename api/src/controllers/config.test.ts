@@ -1,3 +1,4 @@
+import type { Accountability } from '@cairncms/types';
 import { BaseException } from '@cairncms/exceptions';
 import express from 'express';
 import request from 'supertest';
@@ -110,12 +111,14 @@ const CURRENT_CONFIG: CairnConfig = {
 	settings: [],
 	'extension-settings': [],
 	translations: [],
+	schema: [],
 };
 
 const ADMIN = { admin: true, app: true, user: USER, role: ROLE, ip: '10.0.0.1' };
 
 const EMPTY_PLAN: ConfigPlan = {
 	managedResources: ['roles'],
+	schema: { create: [], update: [], delete: [] },
 	roles: { create: [], update: [], delete: [] },
 	permissions: { create: [], update: [], delete: [] },
 	folders: { create: [], update: [], delete: [] },
@@ -127,6 +130,7 @@ const EMPTY_PLAN: ConfigPlan = {
 
 const CREATE_PLAN: ConfigPlan = {
 	managedResources: ['roles'],
+	schema: { create: [], update: [], delete: [] },
 	roles: {
 		create: [
 			{
@@ -134,7 +138,7 @@ const CREATE_PLAN: ConfigPlan = {
 				name: 'Editor',
 				admin_access: false,
 				app_access: true,
-				icon: null,
+				icon: 'supervised_user_circle',
 				enforce_tfa: false,
 				description: null,
 				ip_access: null,
@@ -166,13 +170,13 @@ const APPLY_RESULT = {
 	settings: { updated: [] },
 };
 
-function makeApp(accountability: Record<string, unknown> | null) {
+function makeApp(accountability: Accountability) {
 	const app = express();
 
 	app.use(express.json());
 
-	app.use((req: Record<string, unknown>, _res: unknown, next: () => void) => {
-		req['accountability'] = accountability;
+	app.use((req, _res, next) => {
+		req.accountability = accountability;
 		next();
 	});
 
@@ -187,7 +191,7 @@ function apply(
 		dryRun?: boolean;
 		destructive?: boolean;
 		userAgent?: string;
-		accountability?: Record<string, unknown> | null;
+		accountability?: Accountability;
 	} = {}
 ) {
 	const query = new URLSearchParams();
@@ -203,9 +207,9 @@ function apply(
 
 function records(): ConfigRunRecord[] {
 	return vi
-		.mocked(logger.info)
-		.mock.calls.filter((call) => (call[0] as ConfigRunRecord | undefined)?.event === CONFIG_RUN_EVENT)
-		.map((call) => call[0] as ConfigRunRecord);
+		.mocked<(record: ConfigRunRecord | string, message?: string) => void>(logger.info)
+		.mock.calls.map(([record]) => record)
+		.filter((record): record is ConfigRunRecord => typeof record !== 'string' && record?.event === CONFIG_RUN_EVENT);
 }
 
 function expectOneRecord(expected: Record<string, unknown>): ConfigRunRecord {
@@ -279,7 +283,15 @@ describe('POST /config/apply run record', () => {
 		const res = await apply({ destructive: true });
 
 		expect(res.status).toBe(200);
-		expect(res.body).toEqual({ data: APPLY_RESULT, meta: { plan: SERIALIZED } });
+
+		expect(res.body).toEqual({
+			data: APPLY_RESULT,
+			meta: {
+				plan: SERIALIZED,
+				result: 'applied',
+				steps: { folders: 'not_run', schema: 'not_run', configuration: 'committed' },
+			},
+		});
 
 		const record = expectOneRecord({
 			result: 'applied',
@@ -408,7 +420,15 @@ describe('POST /config/apply run record', () => {
 	});
 
 	it('emits no record and no run id for a non-admin', async () => {
-		const res = await apply({ accountability: { admin: false } });
+		const res = await apply({
+			accountability: {
+				admin: false,
+				app: true,
+				user: '2b3c4d5e-6f70-4a8b-9c0d-1e2f3a4b5c6d',
+				role: '3c4d5e6f-7081-4b9c-8d0e-2f3a4b5c6d7e',
+				ip: '10.0.0.2',
+			},
+		});
 
 		expect(res.status).toBe(403);
 		expect(records()).toHaveLength(0);
@@ -429,7 +449,7 @@ describe('POST /config/apply run record', () => {
 	it('emits no record and no run id for an unsupported manifest version', async () => {
 		const res = await request(makeApp(ADMIN))
 			.post('/config/apply')
-			.send({ ...WIRE_BODY, manifest: { version: 3, resources: ['roles'] } });
+			.send({ ...WIRE_BODY, manifest: { version: 4, resources: ['roles'] } });
 
 		expect(res.status).toBe(400);
 		expect(records()).toHaveLength(0);
@@ -444,7 +464,15 @@ describe('POST /config/apply run record', () => {
 		const res = await apply();
 
 		expect(res.status).toBe(200);
-		expect(res.body).toEqual({ data: APPLY_RESULT, meta: { plan: SERIALIZED } });
+
+		expect(res.body).toEqual({
+			data: APPLY_RESULT,
+			meta: {
+				plan: SERIALIZED,
+				result: 'applied',
+				steps: { folders: 'not_run', schema: 'not_run', configuration: 'committed' },
+			},
+		});
 	});
 });
 
@@ -593,7 +621,7 @@ describe('GET /config/snapshot manifest version', () => {
 		vi.mocked(readCurrentConfig).mockImplementation(
 			async (options) =>
 				({
-					config: { manifest: { version: options.manifestVersion ?? 2, resources: [] }, roles: [], permissions: [] },
+					config: { manifest: { version: options.manifestVersion ?? 3, resources: [] }, roles: [], permissions: [] },
 					currentRoleKeys: new Set<string>(),
 					stateToken: { resources: [], digest: 'digest' },
 				} as never)
@@ -604,8 +632,8 @@ describe('GET /config/snapshot manifest version', () => {
 		const res = await request(makeApp(ADMIN)).get('/config/snapshot');
 
 		expect(res.status).toBe(200);
-		expect(readCurrentConfig).toHaveBeenCalledWith(expect.objectContaining({ manifestVersion: 2 }));
-		expect(res.body.data.manifest.version).toBe(2);
+		expect(readCurrentConfig).toHaveBeenCalledWith(expect.objectContaining({ manifestVersion: 3 }));
+		expect(res.body.data.manifest.version).toBe(3);
 	});
 
 	it('honors an explicit v1 request rather than the default', async () => {
@@ -625,7 +653,7 @@ describe('GET /config/snapshot manifest version', () => {
 	});
 
 	it('refuses an unsupported version without reading current state', async () => {
-		const res = await request(makeApp(ADMIN)).get('/config/snapshot?manifest_version=3');
+		const res = await request(makeApp(ADMIN)).get('/config/snapshot?manifest_version=4');
 
 		expect(res.status).toBe(400);
 		expect(res.body.errors[0].extensions.code).toBe('CONFIG_UNSUPPORTED_VERSION');
@@ -758,6 +786,7 @@ describe('POST /config/apply extension-settings forwarding', () => {
 			settings: [],
 			'extension-settings': [],
 			translations: [],
+			schema: [],
 		};
 
 		vi.mocked(readCurrentConfig).mockResolvedValue({
@@ -771,6 +800,7 @@ describe('POST /config/apply extension-settings forwarding', () => {
 		const plan: ConfigPlan = {
 			...EMPTY_PLAN,
 			managedResources: ['extension-settings'],
+			schema: { create: [], update: [], delete: [] },
 			'extension-settings': {
 				create: [
 					{
@@ -833,8 +863,8 @@ describe('POST /config/apply with an invalid MAX_PAYLOAD_SIZE', () => {
 		const app = express();
 		app.use(express.json());
 
-		app.use((req: Record<string, unknown>, _res: unknown, next: () => void) => {
-			req['accountability'] = ADMIN;
+		app.use((req, _res, next) => {
+			req.accountability = ADMIN;
 			next();
 		});
 
