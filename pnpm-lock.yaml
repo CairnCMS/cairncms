@@ -506,8 +506,8 @@ importers:
         specifier: 4.0.6
         version: 4.0.6
       knex-mock-client:
-        specifier: 2.0.0
-        version: 2.0.0(knex@2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1)))
+        specifier: 2.0.1
+        version: 2.0.1(knex@2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1)))
       supertest:
         specifier: 6.3.3
         version: 6.3.3
@@ -6181,11 +6181,11 @@ packages:
     resolution: {integrity: sha512-dcS1ul+9tmeD95T+x28/ehLgd9mENa3LsvDTtzm3vyBEO7RPptvAD+t44WVXaUjTBRcrpFeFlC8WCruUR456hw==}
     engines: {node: '>=0.10.0'}
 
-  knex-mock-client@2.0.0:
-    resolution: {integrity: sha512-RWG7MhDbcGoFxwazydby6zh8nf0LN1R6lqHO8/+4NV+IilDVevRjb+QmdwZHJTEfP7KJitAypxc+hF2X42IeQg==}
+  knex-mock-client@2.0.1:
+    resolution: {integrity: sha512-tSNaht+aquo6SgEhwPYidfYWVS2IUbF2ZNu4Ye0mScGTmyS+ZTJzpAkogpUIDwiZbkjIg/bvsopRDM/Lbdt+Mw==}
     engines: {node: '>=12'}
     peerDependencies:
-      knex: ^2.0.0
+      knex: '>=2.0.0'
 
   knex@2.4.2:
     resolution: {integrity: sha512-tMI1M7a+xwHhPxjbl/H9K1kHX+VncEYcvCx5K00M16bWvpYPKAZd6QrCu68PtHAdIZNQPWZn0GVhqVBEthGWCg==}
@@ -14236,7 +14236,7 @@ snapshots:
 
   kind-of@6.0.3: {}
 
-  knex-mock-client@2.0.0(knex@2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))):
+  knex-mock-client@2.0.1(knex@2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))):
     dependencies:
       knex: 2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
       lodash.clonedeep: 4.5.0
