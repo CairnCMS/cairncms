@@ -4,6 +4,52 @@ All notable changes to CairnCMS are documented in this file. Releases are listed
 
 CairnCMS uses the Semantic Versioning number format (`MAJOR.MINOR.PATCH`) but does not promise strict SemVer compatibility. See the [versioning policy](https://cairncms.dev/docs/manage/upgrades/#versioning-policy) for deprecation windows and the cases where minor or patch releases can include breaking changes.
 
+## [1.7.0]
+
+### Potential Breaking Changes
+
+- Restricted and deprecated the hash utility endpoints. REST and GraphQL calls now require admin credentials. (#280)
+- Wrote per-collection schema snapshots to config trees. `GET /config/snapshot` without `manifest_version`, and CLI snapshots into a directory without a manifest, now include schema. Applying one to another instance also applies its schema, and is refused if the two instances run different releases or database vendors. Request `manifest_version=2`, or pre-create a version 2 manifest, to capture without schema. (#293)
+
+### New Features
+
+- Unified schema management with config-as-code. (#289)
+	- Added portable folder references to schema snapshots. (#288)
+	- Rechecked schema state and reported apply failures. (#290)
+	- Loaded schema files from version 3 config trees. (#291)
+	- Wrote per-collection schema snapshots to config trees. (#293)
+	- Previewed schema changes in config-as-code plans. (#294)
+	- Created missing folders referenced by a schema. (#300)
+	- Applied schema and configuration together through the local CLI. (#301)
+	- Applied schema and configuration over HTTP in one request. (#307)
+	- Captured and applied schema-managed config trees remotely. (#308)
+- Added SDK commands for config-as-code snapshot and apply. (#314)
+
+
+### Fixes & Improvements
+
+- Documented the release compatibility and deprecation policy. (#277)
+- Restricted and deprecated the hash utility endpoints. (#280)
+- Denied permissions whose dynamic variable paths no longer exist. (#281)
+- Deleted shares when their collection is dropped. (#282)
+- Restored SQLite foreign keys after a failed schema apply. (#284)
+- Returned a clear error when deleting an item that other items reference. (#285)
+- Protected folders referenced by nested fields. (#287)
+- Applied collection changes consistently in schema snapshots. (#295)
+- Prevented crafted query keys from corrupting the server process. (#296)
+- Prevented schema attribute changes from deleting fields or relations. (#297)
+- Preserved omitted meta and schema properties when applying a schema. (#298)
+- Warned before dropping a table with no collection record. (#299)
+- Bumped isolated-vm to 6.2.0. (#305)
+- Prevented malformed request URLs from crashing the API or leaking credentials. (#315)
+
+### Deprecations
+
+- Deprecated the REST and GraphQL hash utilities and SDK `generateHash` and `verifyHash` commands. Verifying a caller-supplied hash can tie up server memory and time, and applications can hash values themselves. Hash and verify values in your own application with an Argon2 package. Eligible for removal in 1.8.0 or later, no sooner than 2026-11-27. (#280)
+- Deprecated the legacy `GET /permissions/me` endpoint, which returns `204 No Content`. Remove any calls to this empty endpoint. For item permission checks, use `GET /permissions/me/{collection}/{key}`, or `GET /permissions/me/{collection}` for singletons. Eligible for removal in 1.8.0 or later, no sooner than 2026-11-27. (#286)
+- Deprecated version 1 as the default format for new schema snapshot files, stdout, and `GET /schema/snapshot` without a `version`. Version 2 records upload folders by folder key, so snapshots move between instances. Request a version explicitly to keep a format. Re-snapshotting an existing file keeps its version, and `?version=1` keeps the current format. Eligible to change to version 2 in 1.8.0 or later, no sooner than 2026-11-27. (#288)
+- Deprecated `cairncms schema snapshot`, `cairncms schema apply`, `POST /schema/diff`, `POST /schema/apply`, and SDK `schemaDiff` and `schemaApply`, which the unified config-as-code workflow replaces. Use `cairncms config snapshot` and `cairncms config apply`, the `/config/*` endpoints, or SDK `configSnapshot` and `configApply`. Follow the manual adoption guide for existing artifacts. `GET /schema/snapshot` and SDK `schemaSnapshot` remain supported. Eligible for removal in 1.8.0 or later, no sooner than 2026-11-27. (#310, #314)
+
 ## [1.6.2]
 
 ### Fixes & Improvements
