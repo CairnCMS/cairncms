@@ -5,7 +5,6 @@ import * as http from 'http';
 import * as https from 'https';
 import { once } from 'lodash-es';
 import qs from 'qs';
-import url from 'url';
 import createApp from './app.js';
 import getDatabase from './database/index.js';
 import emitter from './emitter.js';
@@ -14,6 +13,7 @@ import logger from './logger.js';
 import { getMessenger } from './messenger.js';
 import { getConfigFromEnv } from './utils/get-config-from-env.js';
 import { getSchema } from './utils/get-schema.js';
+import { parseRequestTarget } from './utils/parse-request-target.js';
 import { activateRealtime } from './websocket/controllers/index.js';
 
 export let SERVER_ONLINE = true;
@@ -74,9 +74,8 @@ export async function createServer(): Promise<http.Server> {
 			// Compatibility when supporting serving with certificates
 			const protocol = server instanceof https.Server ? 'https' : 'http';
 
-			// Rely on url.parse for path extraction
-			// Doesn't break on illegal URLs
-			const urlInfo = url.parse(req.originalUrl || req.url);
+			const rawTarget = req.originalUrl || req.url;
+			const urlInfo = parseRequestTarget(rawTarget);
 
 			const info = {
 				finished,
@@ -84,12 +83,12 @@ export async function createServer(): Promise<http.Server> {
 					aborted: req.aborted,
 					completed: req.complete,
 					method: req.method,
-					url: urlInfo.href,
-					path: urlInfo.pathname,
+					url: urlInfo ? urlInfo.href : rawTarget,
+					path: urlInfo ? urlInfo.pathname : null,
 					protocol,
 					host: req.headers.host,
 					size: metrics.in,
-					query: urlInfo.query
+					query: urlInfo?.query
 						? qs.parse(urlInfo.query, {
 								depth: Number(env['QUERYSTRING_PARSE_DEPTH']),
 								arrayLimit: Number(env['QUERYSTRING_ARRAY_LIMIT']),

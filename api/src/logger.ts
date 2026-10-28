@@ -134,7 +134,13 @@ function redactRequestSerializer(request: Request) {
 }
 
 function redactQuery(originalPath: string) {
-	const url = new URL(originalPath, 'http://example.com/');
+	let url: URL;
+
+	try {
+		url = new URL(originalPath, 'http://example.com/');
+	} catch {
+		return REDACT_TEXT;
+	}
 
 	if (url.searchParams.has('access_token')) {
 		url.searchParams.set('access_token', REDACT_TEXT);
