@@ -307,8 +307,8 @@ Returns `{ "data": "<random-string>" }`. The `length` query parameter is optiona
 
 ### `POST /utils/hash/generate` and `POST /utils/hash/verify`
 
-:::caution[Deprecated]
-These endpoints and the `utils_hash_generate` and `utils_hash_verify` GraphQL mutations are deprecated and will be removed in 1.8.0 or later. Hash and verify values in your own application with an Argon2 package, such as `argon2` for Node.js, instead of calling these endpoints.
+:::caution[Hash utilities are deprecated]
+These endpoints and the `utils_hash_generate` and `utils_hash_verify` GraphQL mutations are deprecated in 1.7.0. Hash and verify values in your own application with an Argon2 package, such as `argon2` for Node.js, instead. See the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) for removal timing.
 :::
 
 Generate and verify Argon2 hashes against arbitrary strings. Admin-only. Non-admin REST callers get `403 FORBIDDEN`, and the GraphQL mutations return a `FORBIDDEN` error.

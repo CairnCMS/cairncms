@@ -166,9 +166,9 @@ Permissions on system collections work the same way as permissions on user colle
 
 ### Deprecated legacy permissions route
 
-`GET /permissions/me` is deprecated because it returns `204 No Content` without any permission data. Remove calls to this empty endpoint. For item permission checks, use `GET /permissions/me/<collection>/<key>`, or `GET /permissions/me/<collection>` for singletons, as described [below](#check-permissions-for-an-item).
-
-Removal is planned for **1.8.0 or later**, no sooner than **30 calendar days after 1.7.0 is published**. See the [deprecation policy](/docs/manage/upgrades/#deprecation-notices).
+:::caution[Empty permissions route is deprecated]
+`GET /permissions/me` is deprecated in 1.7.0. It returns `204 No Content` without any permission data, so remove any calls to it. For item permission checks, use `GET /permissions/me/<collection>/<key>`, or `GET /permissions/me/<collection>` for singletons, as described [below](#check-permissions-for-an-item). See the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) for removal timing.
+:::
 
 ### Check permissions for an item
 

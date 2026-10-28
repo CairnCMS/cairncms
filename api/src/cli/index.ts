@@ -105,7 +105,7 @@ export async function createCli(): Promise<Command> {
 
 	schemaCommands
 		.command('snapshot')
-		.description('Create a new Schema Snapshot')
+		.description('Create a new Schema Snapshot. Deprecated. Use "cairncms config snapshot" instead.')
 		.option('-y, --yes', `Assume "yes" as answer to all prompts and run non-interactively`, false)
 		.addOption(new Option('--format <format>', 'JSON or YAML format').choices(['json', 'yaml']).default('yaml'))
 		.argument('[path]', 'Path to snapshot file')
@@ -113,7 +113,7 @@ export async function createCli(): Promise<Command> {
 
 	schemaCommands
 		.command('apply')
-		.description('Apply a snapshot file to the current database')
+		.description('Apply a snapshot file to the current database. Deprecated. Use "cairncms config apply" instead.')
 		.option('-y, --yes', `Assume "yes" as answer to all prompts and run non-interactively`)
 		.option('-d, --dry-run', 'Plan and log changes to be applied', false)
 		.argument('<path>', 'Path to snapshot file')

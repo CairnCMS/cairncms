@@ -23,7 +23,7 @@ Releases have versioned container image tags such as `cairncms/cairncms:1.2.3`. 
 
 A deprecated feature remains supported while you migrate away from it. We announce deprecations in a stable minor release. A feature can be removed in a later minor release, but no sooner than **30 calendar days after the announcing release is published**.
 
-Look for a **Deprecations** section in the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) and the corresponding [GitHub release notes](https://github.com/CairnCMS/cairncms/releases). The affected documentation also carries a notice, with SDK `@deprecated` annotations where applicable. Each notice identifies the feature, why it is being retired, the replacement or lack of one, and the earliest removal version and date.
+Look for a **Deprecations** section in the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) and the corresponding [GitHub release notes](https://github.com/CairnCMS/cairncms/releases). The affected documentation also carries a notice, with SDK `@deprecated` annotations where applicable. Documentation notices identify the feature, the release that deprecated it, and the replacement or lack of one. The changelog explains why it is deprecated and gives the earliest removal version and date.
 
 When removal ships, its **Potential Breaking Changes** entry explains who is affected, how to migrate, and which release announced the deprecation.
 

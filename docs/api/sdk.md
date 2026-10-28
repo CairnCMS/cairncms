@@ -66,11 +66,10 @@ const articles = await client.request(readItems('articles', {
 
 `rest()` adds a single method to the client: `request(command)`. The `command` argument is a value built from one of the SDK's command factories. `readItems`, `createItem`, `updateItem`, `deleteItem`, and similar functions build request descriptors that `request()` then executes. Each command corresponds to a REST endpoint and accepts the same query options as the underlying API.
 
-The full set of commands lives under `@cairncms/sdk` as named exports. They cover every system collection (users, files, roles, permissions, settings, dashboards, panels, presets, folders, flows, operations, activity, revisions, notifications, shares), the items endpoint for user collections, server info and health, schema snapshot and apply, and the utility endpoints under `/utils`. The TypeScript types for query parameters and return shapes are derived from the schema, so editors give accurate completions for fields and filters when a schema is provided (see [Schema typing](#schema-typing) below).
+The full set of commands lives under `@cairncms/sdk` as named exports. They cover every system collection (users, files, roles, permissions, settings, dashboards, panels, presets, folders, flows, operations, activity, revisions, notifications, shares), the items endpoint for user collections, server info and health, [config-as-code snapshot and apply](#config-as-code), standalone schema snapshots, and the utility endpoints under `/utils`. The TypeScript types for query parameters and return shapes are derived from the schema, so editors give accurate completions for fields and filters when a schema is provided (see [Schema typing](#schema-typing) below).
 
 A few API surfaces deliberately have no SDK command in v1:
 
-- **Config-as-code endpoints** (`/config/snapshot`, `/config/apply`). Use `customEndpoint` from [Helpers](#helpers) below, or call the endpoints directly with `fetch`.
 - **Translation strings CRUD** and the **read-only extension endpoints** (`/extensions`, inventory and the app-side loader). Use `customEndpoint`, or hit the REST endpoints directly.
 - **Content versioning**. Not implemented in v1, so there is no endpoint to call.
 
@@ -88,6 +87,57 @@ rest({
 - **`onRequest`** / **`onResponse`** — global hooks invoked once per request. Useful for adding telemetry or normalizing errors across an application.
 
 Per-request hooks are also available on individual commands via [helpers](#helpers).
+
+## Config-as-code
+
+Use `configSnapshot` and `configApply` to deploy a reviewed [config-as-code document](/docs/manage/config-as-code/) from JavaScript or TypeScript. Both commands require an authenticated administrator and CairnCMS server 1.7.0 or later. Use SDK 1.7.0 or later for these commands.
+
+Make changes on the source instance, capture its desired state, then preview it on the target. The examples below assume `source` and `target` are authenticated SDK clients with `rest()`. Keep deployment credentials in your script's secret store, not in browser code.
+
+```ts
+import { configApply, configSnapshot } from '@cairncms/sdk';
+
+const desired = await source.request(configSnapshot({
+  resources: ['schema', 'folders'],
+}));
+
+const plan = await target.request(configApply(desired, { dryRun: true }));
+console.log(plan.summary);
+```
+
+This captures schema and folders only. Choose the [managed resources](/docs/manage/config-as-code/scope-and-deletions/) before capturing. Review `plan.changes`, `plan.warnings` and `plan.protections` before applying.
+
+### Snapshot options
+
+`configSnapshot({ manifestVersion?, resources? })` returns the document directly.
+
+- `manifestVersion` selects format `1`, `2` or `3`. The default is `3`. TypeScript returns the corresponding `ConfigDocumentV1`, `ConfigDocumentV2` or `ConfigDocumentV3` when the version is known, or their `ConfigDocument` union for a runtime-selected version.
+- `resources` selects the kinds to manage. Omit it to capture all kinds supported by that manifest version. An empty array, `resources: []`, manages none.
+
+### Apply the reviewed document
+
+Back up the target and follow the [deployment guidance](/docs/manage/config-as-code/deployments/) before applying. Send the same captured document, not the dry-run plan:
+
+```ts
+const outcome = await target.request(configApply(desired));
+console.log(outcome.meta.result, outcome.meta.steps);
+```
+
+This sends one apply request. `configApply(document, options?)` accepts:
+
+- `dryRun: true` returns a `ConfigPlanOutput` without writing. Deletions can be previewed without `destructive`.
+- `destructive: true` authorizes intended deletions when applying. Leave it unset unless you have reviewed those deletions.
+- `forceSchema: true` waives the schema source release and database vendor checks, including during a dry run. It does not make an incompatible schema safe or bypass other validation.
+
+Without `dryRun`, the result is a `ConfigApplyOutput` with `{ data, meta }`. `meta.result` is `applied` or `no_changes`. `meta.steps` reports the `folders`, `schema` and `configuration` outcomes. Use these fields to determine what the request did.
+
+`data` contains the configuration step's result. It can be null even when schema changes were applied. See [success envelopes](/docs/manage/config-as-code/http-api/#success-envelopes) for the full result shape.
+
+API errors reject with `{ errors, response }`. Each error retains `extensions.code` and, when provided by the server, `extensions.steps` and `extensions.failure`. An apply can fail after making changes. Follow [Failure recovery](/docs/manage/config-as-code/recovery/) before retrying a failed request or one whose response was lost.
+
+:::caution[Schema diff and apply SDK commands are deprecated]
+`schemaDiff` and `schemaApply` are deprecated in 1.7.0. Capture schema with `configSnapshot` and preview or apply it with `configApply` instead. `schemaSnapshot()` remains supported. See the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) for removal timing.
+:::
 
 ## GraphQL
 
@@ -204,7 +254,7 @@ The `Schema` type maps collection names to their record types. The SDK uses it t
 
 For projects with many collections, a build-time generator can read `GET /schema/snapshot` through the SDK's `schemaSnapshot()` helper and produce TypeScript interfaces. Both remain supported. The SDK ships no generator of its own.
 
-For deployment, use [Config-as-code](/docs/manage/config-as-code/). Use `customEndpoint` or direct HTTP with the [config-as-code endpoints](/docs/manage/config-as-code/http-api/).
+For deployment, use the [config-as-code commands](#config-as-code), `configSnapshot` and `configApply`.
 
 When `Schema` is omitted, the client falls back to `any` for collection records. The runtime behavior is identical; only the editor-time type checking changes.
 
@@ -254,6 +304,8 @@ const result = await client.request(customEndpoint<MyResponse>({
 ```
 
 Useful for endpoints exposed by [custom extensions](/docs/develop/extensions/server-extensions/endpoints/) where a typed command does not exist.
+
+By default, the SDK returns a JSON response's `data` field. Set `envelope: true` in the `customEndpoint` options to receive the whole JSON body, including fields such as `meta`. This returns the parsed body, not a raw `Response`, and leaves error handling unchanged. Set the `MyResponse` type to match that whole body when opting in.
 
 ### `withOptions`
 

@@ -94,8 +94,8 @@ For many-to-any relations, `related_collection` is null and `meta.one_collection
 
 ## Schema-as-code endpoints
 
-:::note[Schema diff and apply are deprecated]
-The POST diff/apply endpoints are deprecated in 1.7.0. Use [Config-as-code](/docs/manage/config-as-code/) for new deployment workflows. `GET /schema/snapshot` remains supported. See the [standalone reference](/docs/manage/schema-as-code/) for the deprecation scope and removal notice.
+:::caution[Schema diff and apply are deprecated]
+`POST /schema/diff` and `POST /schema/apply` are deprecated in 1.7.0. Use `POST /config/apply` with a config-as-code document instead, as described in [Config-as-code](/docs/manage/config-as-code/). `GET /schema/snapshot` remains supported. See the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) for removal timing.
 :::
 
 Three endpoints snapshot, diff, and apply the entire data model across deployments:
