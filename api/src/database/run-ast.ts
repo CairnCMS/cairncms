@@ -8,7 +8,7 @@ import { PayloadService } from '../services/payload.js';
 import type { AST, FieldNode, FunctionFieldNode, M2ONode, NestedCollectionNode } from '../types/ast.js';
 import { applyFunctionToColumnName } from '../utils/apply-function-to-column-name.js';
 import type { ColumnSortRecord } from '../utils/apply-query.js';
-import applyQuery, { applyLimit, applySort, generateAlias } from '../utils/apply-query.js';
+import applyQuery, { applyPagination, applySort, generateAlias } from '../utils/apply-query.js';
 import { getCollectionFromAlias } from '../utils/get-collection-from-alias.js';
 import { getQueryLimitConfig } from '../utils/query-limit.js';
 import type { AliasMap } from '../utils/get-column-path.js';
@@ -378,7 +378,7 @@ async function getDBQuery(
 
 		if (hasMultiRelationalSort) {
 			wrapperQuery.where('inner.directus_row_number', '=', 1);
-			applyLimit(knex, wrapperQuery, queryCopy.limit);
+			applyPagination(knex, wrapperQuery, queryCopy);
 		}
 	}
 
