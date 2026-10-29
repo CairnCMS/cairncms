@@ -268,8 +268,8 @@ importers:
         specifier: 4.5.2
         version: 4.5.2
       knex:
-        specifier: 2.4.2
-        version: 2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
+        specifier: 3.3.0
+        version: 3.3.0(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
       ldapjs:
         specifier: 2.3.3
         version: 2.3.3
@@ -507,7 +507,7 @@ importers:
         version: 4.0.6
       knex-mock-client:
         specifier: 2.0.1
-        version: 2.0.1(knex@2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1)))
+        version: 2.0.1(knex@3.3.0(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1)))
       supertest:
         specifier: 6.3.3
         version: 6.3.3
@@ -1073,8 +1073,8 @@ importers:
   packages/schema:
     dependencies:
       knex:
-        specifier: 2.4.2
-        version: 2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
+        specifier: 3.3.0
+        version: 3.3.0(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
     devDependencies:
       typescript:
         specifier: 5.0.4
@@ -1266,8 +1266,8 @@ importers:
         specifier: 0.5.0
         version: 0.5.0
       knex:
-        specifier: 2.4.2
-        version: 2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
+        specifier: 3.3.0
+        version: 3.3.0(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
       pino:
         specifier: 8.11.0
         version: 8.11.0
@@ -1373,8 +1373,8 @@ importers:
         specifier: 1.4.0
         version: 1.4.0
       knex:
-        specifier: 2.4.2
-        version: 2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
+        specifier: 3.3.0
+        version: 3.3.0(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
       sqlite3:
         specifier: 5.1.6
         version: 5.1.6(encoding@0.1.13)
@@ -1442,8 +1442,8 @@ importers:
         specifier: 2.2.5
         version: 2.2.5
       knex:
-        specifier: 2.4.2
-        version: 2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
+        specifier: 3.3.0
+        version: 3.3.0(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
       lodash:
         specifier: 4.18.1
         version: 4.18.1
@@ -4429,10 +4429,6 @@ packages:
     resolution: {integrity: sha512-QrWXB+ZQSVPmIWIhtEO9H+gwHaMGYiF5ChvoJ+K9ZGHG/sVsa6yiesAD1GC/x46sET00Xlwo1u49RVVVzvcSkw==}
     engines: {node: '>= 10'}
 
-  commander@9.5.0:
-    resolution: {integrity: sha512-KRs7WVDKg86PWiuAqhDrAQnTXZKraVcCc6vFdL14qrZ/DcWwuRo7VoiYXalXO7S5GKpqYiVEwCbgFDfxNHKJBQ==}
-    engines: {node: ^12.20.0 || >=14}
-
   commondir@1.0.1:
     resolution: {integrity: sha512-W9pAhw0ja1Edb5GVdIF1mjZw/ASI0AlShXM83UUGe2DVr5TdAPEA1OA8m/g8zWp9x6On7gqufY+FatDbC3MDQg==}
 
@@ -6187,20 +6183,24 @@ packages:
     peerDependencies:
       knex: '>=2.0.0'
 
-  knex@2.4.2:
-    resolution: {integrity: sha512-tMI1M7a+xwHhPxjbl/H9K1kHX+VncEYcvCx5K00M16bWvpYPKAZd6QrCu68PtHAdIZNQPWZn0GVhqVBEthGWCg==}
-    engines: {node: '>=12'}
+  knex@3.3.0:
+    resolution: {integrity: sha512-LgWl031hNuLv9Lhxdd9093zULa2aNcoP04Bk29e5NidgRcEr/T0rAr2WYi4BhjTiCDoQiRU56meUE5rppLKZzQ==}
+    engines: {node: '>=16'}
     hasBin: true
     peerDependencies:
       better-sqlite3: '*'
+      mariadb: '*'
       mysql: '*'
       mysql2: '*'
       pg: '*'
       pg-native: '*'
+      pg-query-stream: ^4.14.0
       sqlite3: '*'
       tedious: '*'
     peerDependenciesMeta:
       better-sqlite3:
+        optional: true
+      mariadb:
         optional: true
       mysql:
         optional: true
@@ -6209,6 +6209,8 @@ packages:
       pg:
         optional: true
       pg-native:
+        optional: true
+      pg-query-stream:
         optional: true
       sqlite3:
         optional: true
@@ -6970,8 +6972,8 @@ packages:
   pg-connection-string@2.14.1:
     resolution: {integrity: sha512-qR3kGNPBLpCNtz0evbKA0Y/MRFXwSSdT+pTJvYp/bXTcReZbvX1kzF0IyTc1QnxqF7AZbOeBhNL8R5mYQZV/MA==}
 
-  pg-connection-string@2.5.0:
-    resolution: {integrity: sha512-r5o/V/ORTA6TmUnyWZR9nCj1klXCO2CEKNRlVuJptZe85QuhFayC7WeMic7ndayT5IRIR0S0xFxFi2ousartlQ==}
+  pg-connection-string@2.6.2:
+    resolution: {integrity: sha512-ch6OwaeaPYcova4kKZ15sbJ2hKb/VP48ZD2gE7i1J+L4MspCtBMAx8nMgz7bksc7IojCIIWuEhHibSMFH8m8oA==}
 
   pg-int8@1.0.1:
     resolution: {integrity: sha512-WCtabS6t3c8SkpDBUlb1kjOs7l66xsGdKpIPZsg4wR+B3+u9UAum2odSsF9tnvxg80h4ZxLWMy4pRjOsFIqQpw==}
@@ -8189,8 +8191,8 @@ packages:
     resolution: {integrity: sha512-MFO/QzvtAOmJbkhOaCTvbGcFN9L9b+JunIsDwaKljSOdcLMea3NJ1k9Usz/rjdfSXTq4dfzfeS7W4p4YOAAHeA==}
     engines: {node: '>=18'}
 
-  tarn@3.0.2:
-    resolution: {integrity: sha512-51LAVKUSZSVfI05vjPESNc5vwqqZpbXCsU+/+wxlOrUjk2SnFTt97v9ZgQrD4YmxYW1Px6w2KjaDitCfkvgxMQ==}
+  tarn@3.1.2:
+    resolution: {integrity: sha512-3RTvqKZcK/17jnJ8rMKFXbyNogywTs1z0gVPPwFsJGX46rkmUHOdIaSQ/aVO1rS7nH+soiXiWk7rvUXxndm8Dg==}
     engines: {node: '>=8.0.0'}
 
   tedious@16.0.0:
@@ -12288,8 +12290,6 @@ snapshots:
 
   commander@7.2.0: {}
 
-  commander@9.5.0: {}
-
   commondir@1.0.1: {}
 
   component-emitter@1.3.1: {}
@@ -14236,15 +14236,15 @@ snapshots:
 
   kind-of@6.0.3: {}
 
-  knex-mock-client@2.0.1(knex@2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))):
+  knex-mock-client@2.0.1(knex@3.3.0(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))):
     dependencies:
-      knex: 2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
+      knex: 3.3.0(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1))
       lodash.clonedeep: 4.5.0
 
-  knex@2.4.2(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1)):
+  knex@3.3.0(mysql2@3.24.6(@types/node@22.19.17))(pg@8.23.1)(sqlite3@5.1.6(encoding@0.1.13))(tedious@16.0.0(@azure/core-client@1.10.1)):
     dependencies:
       colorette: 2.0.19
-      commander: 9.5.0
+      commander: 10.0.1
       debug: 4.3.4
       escalade: 3.2.0
       esm: 3.2.25
@@ -14252,10 +14252,10 @@ snapshots:
       getopts: 2.3.0
       interpret: 2.2.0
       lodash: 4.18.1
-      pg-connection-string: 2.5.0
+      pg-connection-string: 2.6.2
       rechoir: 0.8.0
       resolve-from: 5.0.0
-      tarn: 3.0.2
+      tarn: 3.1.2
       tildify: 2.0.0
     optionalDependencies:
       mysql2: 3.24.6(@types/node@22.19.17)
@@ -15120,7 +15120,7 @@ snapshots:
 
   pg-connection-string@2.14.1: {}
 
-  pg-connection-string@2.5.0: {}
+  pg-connection-string@2.6.2: {}
 
   pg-int8@1.0.1: {}
 
@@ -16595,7 +16595,7 @@ snapshots:
       minizlib: 3.1.0
       yallist: 5.0.0
 
-  tarn@3.0.2: {}
+  tarn@3.1.2: {}
 
   tedious@16.0.0(@azure/core-client@1.10.1):
     dependencies:
