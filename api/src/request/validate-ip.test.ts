@@ -1,23 +1,15 @@
-import { randIp, randUrl } from '@ngneat/falso';
 import os from 'node:os';
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { getEnv } from '../env.js';
 import { validateIP } from './validate-ip.js';
 
 vi.mock('../env');
 vi.mock('node:os');
 
-let sample: {
-	ip: string;
-	url: string;
+const sample = {
+	ip: '198.51.100.1',
+	url: 'https://example.test',
 };
-
-beforeEach(() => {
-	sample = {
-		ip: randIp(),
-		url: randUrl(),
-	};
-});
 
 afterEach(() => {
 	vi.resetAllMocks();
@@ -30,13 +22,7 @@ test(`Does nothing if IP is valid`, async () => {
 
 test(`Throws error if passed IP is denylisted`, async () => {
 	vi.mocked(getEnv).mockReturnValue({ IMPORT_IP_DENY_LIST: [sample.ip] });
-
-	try {
-		await validateIP(sample.ip, sample.url);
-	} catch (err: any) {
-		expect(err).toBeInstanceOf(Error);
-		expect(err.message).toBe(`Requested URL "${sample.url}" resolves to a denied IP address`);
-	}
+	await expectDenied(sample.ip, sample.url);
 });
 
 test(`Checks against IPs of local networkInterfaces if IP deny list contains 0.0.0.0`, async () => {
@@ -46,7 +32,7 @@ test(`Checks against IPs of local networkInterfaces if IP deny list contains 0.0
 	expect(os.networkInterfaces).toHaveBeenCalledOnce();
 });
 
-test(`Throws error if IP address matches resolved localhost IP`, async () => {
+test(`Throws error if IP address matches a local network interface`, async () => {
 	vi.mocked(getEnv).mockReturnValue({ IMPORT_IP_DENY_LIST: ['0.0.0.0'] });
 
 	vi.mocked(os.networkInterfaces).mockReturnValue({
@@ -64,21 +50,16 @@ test(`Throws error if IP address matches resolved localhost IP`, async () => {
 		en0: [
 			{
 				address: sample.ip,
-				netmask: '255.0.0.0',
+				netmask: '255.255.255.0',
 				family: 'IPv4',
 				mac: '00:00:00:00:00:00',
-				internal: true,
-				cidr: '127.0.0.1/8',
+				internal: false,
+				cidr: `${sample.ip}/24`,
 			},
 		],
 	});
 
-	try {
-		await validateIP(sample.ip, sample.url);
-	} catch (err: any) {
-		expect(err).toBeInstanceOf(Error);
-		expect(err.message).toBe(`Requested URL "${sample.url}" resolves to a denied IP address`);
-	}
+	await expectDenied(sample.ip, sample.url);
 });
 
 const DENY_URL = 'http://attacker.example/';
