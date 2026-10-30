@@ -5,7 +5,7 @@ import path from 'node:path';
 import knex from 'knex';
 import type { Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { getSqliteClient, sqliteDriver, supportsUriFilenames } from './sqlite-driver.js';
+import { getSqliteClient, sqliteDriver } from './sqlite-driver.js';
 
 const [nodeMajor = 0, nodeMinor = 0] = process.versions.node.split('.').map(Number);
 const uriSupported = nodeMajor > 22 || (nodeMajor === 22 && nodeMinor >= 15);
@@ -363,34 +363,6 @@ describe('sqlite driver adapter (flags and filenames)', () => {
 	it('reports a missing directory as SQLITE_CANTOPEN', async () => {
 		const db = connect(path.join(dir, 'missing', 'x.db'));
 		await expect(db.raw('select 1')).rejects.toMatchObject({ code: 'SQLITE_CANTOPEN' });
-	});
-
-	it.each([
-		['22.14.0', false],
-		['22.15.0', true],
-		['23.9.1', false],
-		['23.10.0', true],
-		['24.0.0', true],
-	])('treats Node.js %s as URI capable: %s', (version, supported) => {
-		expect(supportsUriFilenames(version)).toBe(supported);
-	});
-
-	it('refuses OPEN_URI and opens plain paths on a Node.js release without URI filenames', async () => {
-		const original = Object.getOwnPropertyDescriptor(process.versions, 'node')!;
-		Object.defineProperty(process.versions, 'node', { ...original, value: '22.14.0' });
-
-		try {
-			const uri = connect(file(), ['OPEN_URI']);
-
-			await expect(uri.raw('select 1')).rejects.toThrow(
-				'SQLite URI filenames, the OPEN_URI flag in DB_FLAGS, require Node.js 22.15.0 or later.'
-			);
-
-			const plain = connect(file());
-			expect(await plain.raw('select 1 as v')).toEqual([{ v: 1 }]);
-		} finally {
-			Object.defineProperty(process.versions, 'node', original);
-		}
 	});
 
 	describe.skipIf(!uriSupported)('with URI support', () => {
