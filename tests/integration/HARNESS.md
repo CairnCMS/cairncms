@@ -191,9 +191,9 @@ file receives its own database, API process, and storage/extensions directories.
 keys enabled. Server vendors require the Docker CLI to address the same daemon as Testcontainers.
 
 Once the engine is healthy, the harness reads its version with the engine's own client inside the container and records
-it in `container.json`. SQLite records the version bundled with the driver in `engine.json`. The run summary lists each
-lane's engine. The probe has a 30-second deadline and ends on cancellation. A probe that fails, times out, or is
-cancelled fails the lane and removes the container.
+it in `container.json`. SQLite records the version bundled with the Node.js runtime in `engine.json`, so a Node.js update
+can change a lane's SQLite engine. The run summary lists each lane's engine. The probe has a 30-second deadline and ends
+on cancellation. A probe that fails, times out, or is cancelled fails the lane and removes the container.
 
 PostgreSQL lanes with the `postgis` capability create each test database from the image's PostGIS template. Other
 PostgreSQL lanes use a plain database. On MySQL and MariaDB lanes, restoration compares an information schema inventory

@@ -1,26 +1,44 @@
-import { knex, type Knex } from 'knex';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { CATEGORY_IDS, COLLECTIONS, ITEM_IDS, PUBLIC_ITEM_IDS } from './constants.js';
 
+type Row = Record<string, string | number>;
+
+function insertRows(db: DatabaseSync, table: string, rows: Row[]): void {
+	for (const row of rows) {
+		const columns = Object.keys(row);
+
+		const statement = db.prepare(
+			`insert into "${table}" (${columns.map((column) => `"${column}"`).join(', ')}) values (${columns
+				.map(() => '?')
+				.join(', ')})`
+		);
+
+		const values = Object.values(row).map(
+			(value): SQLInputValue => (typeof value === 'number' && Number.isInteger(value) ? BigInt(value) : value)
+		);
+
+		statement.run(...values);
+	}
+}
+
 /**
- * Seed fixture rows directly into the SQLite DB via knex.
- * Bypasses the API entirely — fixture data must not depend on the thing under
- * test. Runs once in globalSetup after the schema fixture has been applied.
+ * Seed fixture rows directly into the SQLite DB. This bypasses the API entirely, so fixture data
+ * does not depend on the thing under test. Runs once in globalSetup after the schema fixture has
+ * been applied.
  */
 export async function seedFixtureData(dbPath: string): Promise<void> {
-	const db: Knex = knex({
-		client: 'sqlite3',
-		connection: { filename: dbPath },
-		useNullAsDefault: true,
-	});
+	const db = new DatabaseSync(dbPath);
 
 	try {
-		await db(COLLECTIONS.categories).insert([
+		db.exec('PRAGMA busy_timeout = 1000');
+
+		insertRows(db, COLLECTIONS.categories, [
 			{ id: CATEGORY_IDS.electronics, name: 'electronics' },
 			{ id: CATEGORY_IDS.books, name: 'books' },
 			{ id: CATEGORY_IDS.garden, name: 'garden' },
 		]);
 
-		await db(COLLECTIONS.items).insert([
+		insertRows(db, COLLECTIONS.items, [
 			{ id: ITEM_IDS.laptop, name: 'laptop', value: 1200, category: CATEGORY_IDS.electronics },
 			{ id: ITEM_IDS.phone, name: 'phone', value: 800, category: CATEGORY_IDS.electronics },
 			{ id: ITEM_IDS.headphones, name: 'headphones', value: 150, category: CATEGORY_IDS.electronics },
@@ -33,11 +51,11 @@ export async function seedFixtureData(dbPath: string): Promise<void> {
 			{ id: ITEM_IDS.gloves, name: 'gloves', value: 12, category: CATEGORY_IDS.garden },
 		]);
 
-		await db(COLLECTIONS.publicItems).insert([
+		insertRows(db, COLLECTIONS.publicItems, [
 			{ id: PUBLIC_ITEM_IDS.welcome, name: 'welcome message' },
 			{ id: PUBLIC_ITEM_IDS.announcement, name: 'latest announcement' },
 		]);
 	} finally {
-		await db.destroy();
+		db.close();
 	}
 }

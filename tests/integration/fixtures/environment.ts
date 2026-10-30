@@ -19,6 +19,7 @@ import { initializeDatabase } from '../harness/pristine.mjs';
 import { removeMarkedDirectory } from '../harness/owned-directory.mjs';
 import { familyOf, hasCapability } from '../harness/database-vendors.mjs';
 import { tlsResourceDetails, tlsEnvironment } from '../harness/database-tls.mjs';
+import { sqliteClient } from '../harness/sqlite-client.mjs';
 import type { DatabaseTls } from './database-tls';
 
 export type Runtime = {
@@ -287,7 +288,7 @@ export async function withEnvironment(
 			env.DB_FILENAME = join(directory, 'database.sqlite');
 
 			database = knex({
-				client: 'sqlite3',
+				client: await sqliteClient(),
 				connection: { filename: env.DB_FILENAME },
 				useNullAsDefault: true,
 				pool: {
