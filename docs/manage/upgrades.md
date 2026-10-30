@@ -81,6 +81,10 @@ cairncms bootstrap
 
 `cairncms bootstrap` is idempotent meaning it's safe to run on every upgrade. It applies pending migrations and flushes the schema cache.
 
+### SQLite and Node.js updates
+
+SQLite databases use the SQLite engine bundled with Node.js, so updating Node.js, or pulling a new image, can update the engine. Existing database files stay readable across these updates. The [SQLite configuration notes](/docs/manage/configuration/#sqlite) list the Node.js releases CairnCMS needs and recommends.
+
 ### What bootstrap does on upgrade
 
 On a deploy that bumps the CairnCMS version:

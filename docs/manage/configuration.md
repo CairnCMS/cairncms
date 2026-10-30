@@ -93,6 +93,12 @@ CairnCMS supports SQLite, PostgreSQL, MySQL, MariaDB. The connection is configur
 - **`DB_SSL__*`** / **`DB_POOL__*`** — SSL options and connection pool tuning. Use the double-underscore syntax to express nested config (`DB_SSL__REJECT_UNAUTHORIZED=false`, `DB_POOL__MIN=2`). Any key in the `DB_*` prefix passes through to the underlying Knex connection object.
 - **`DB_EXCLUDE_TABLES`** — comma-separated table names that CairnCMS should ignore even if it can read them. Default skips Postgres geometry housekeeping (`spatial_ref_sys`) and SQL Server diagrams (`sysdiagrams`).
 
+### SQLite
+
+SQLite needs Node.js 22.13.0 or later, or 22.5.0 or later started with `--experimental-sqlite`. On an older release, CairnCMS cannot open the database and stops at startup. Run a current Node.js 22 or 24 release. The official image already does.
+
+SQLite uses a single database connection. `DB_POOL__MIN` and `DB_POOL__MAX` are limited to 1, with a warning at startup if a higher value is set. A slow query, or another program holding a lock on the database file, pauses the whole server. SQLite suits development, evaluation, and small single-instance sites. Use PostgreSQL, MySQL, or MariaDB for anything larger.
+
 ### MySQL and MariaDB charset
 
 When using MySQL or MariaDB, set the database, table, and column character set to `utf8mb4`. The default `utf8` in older MySQL versions cannot store characters that take four bytes in UTF-8 — including most CJK characters and almost all emoji.
