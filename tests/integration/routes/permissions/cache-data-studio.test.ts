@@ -141,7 +141,7 @@ const test = createApiTest({
 
 describeForVendors(
 	'Response cache for Data Studio requests',
-	['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'],
+	['postgres', 'mysql', 'maria'],
 	'This cache scenario has not been validated on SQLite.',
 	() => {
 		const studioReferer = (api: Api) => `${api.url}/admin/content`;

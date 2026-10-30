@@ -17,13 +17,17 @@ import { waitChild } from '../harness/wait-child.mjs';
 import { dropDatabase } from './drop-database.mjs';
 import { initializeDatabase } from '../harness/pristine.mjs';
 import { removeMarkedDirectory } from '../harness/owned-directory.mjs';
+import { familyOf, hasCapability } from '../harness/database-vendors.mjs';
+import { tlsResourceDetails, tlsEnvironment } from '../harness/database-tls.mjs';
+import type { DatabaseTls } from './database-tls';
 
-type Runtime = {
+export type Runtime = {
 	vendor: string;
 	directory: string;
 	connection?: { host: string; port: number; user: string; password: string };
 	pristine?: { directory: string; buildHash: string };
 };
+
 declare module 'vitest' {
 	export interface ProvidedContext {
 		integration: Runtime;
@@ -62,6 +66,7 @@ export type Api = {
 };
 
 export type EnvironmentOptions = {
+	databaseTls?: DatabaseTls;
 	bootstrap?: 'fresh';
 	migrations?: string[];
 	hooks?: boolean;
@@ -96,6 +101,8 @@ export async function withEnvironment(
 	signal?: AbortSignal,
 	options: EnvironmentOptions = {}
 ) {
+	const tls = options.databaseTls ? tlsResourceDetails(options.databaseTls, runtime) : undefined;
+	if (tls) runtime = { ...runtime, connection: tls.connection, pristine: undefined };
 	const directory = await mkdtemp(join(tmpdir(), 'cairn-integration-'));
 	const id = `test_${randomUUID().replaceAll('-', '')}`;
 	const logPath = join(runtime.directory, `${id}.log`);
@@ -292,7 +299,8 @@ export async function withEnvironment(
 				},
 			});
 		} else {
-			const postgres = runtime.vendor.startsWith('postgres');
+			const postgres = familyOf(runtime.vendor) === 'postgres';
+			const postgis = hasCapability(runtime.vendor, 'postgis');
 			const client = postgres ? 'pg' : 'mysql2';
 
 			const connectionOptions = postgres
@@ -311,15 +319,10 @@ export async function withEnvironment(
 			});
 
 			const create = async () => {
-				// The image's template contains the same PostGIS extensions as its initial database.
-				await admin!
-					.raw(
-						postgres
-							? 'CREATE DATABASE ?? TEMPLATE template_postgis'
-							: 'CREATE DATABASE ?? CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci',
-						[id]
-					)
-					.timeout(10_000);
+				let statement = 'CREATE DATABASE ?? CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci';
+				// The PostGIS images' template contains the same extensions as their initial database.
+				if (postgres) statement = postgis ? 'CREATE DATABASE ?? TEMPLATE template_postgis' : 'CREATE DATABASE ??';
+				await admin!.raw(statement, [id]).timeout(10_000);
 			};
 
 			// Record the target before provisioning; cancellation can interrupt database creation.
@@ -333,6 +336,7 @@ export async function withEnvironment(
 			env.DB_USER = runtime.connection!.user;
 			env.DB_PASSWORD = runtime.connection!.password;
 			env.DB_DATABASE = id;
+			if (tls) Object.assign(env, tlsEnvironment(tls, env));
 
 			database = knex({
 				client,

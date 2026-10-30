@@ -22,7 +22,7 @@ export async function assertNoParentCycle(
 
 	const moved = new Set<unknown>(keys.map(canonical));
 	const seen = new Set<unknown>();
-	let cursor: unknown = target;
+	let cursor: PrimaryKey | null | undefined = target;
 
 	while (cursor !== null && cursor !== undefined) {
 		const key = canonical(cursor);

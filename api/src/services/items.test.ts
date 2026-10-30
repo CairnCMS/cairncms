@@ -1797,16 +1797,45 @@ describe('Integration Tests', () => {
 			});
 
 			expect(tracker.history.select.length).toBe(1);
-			expect(tracker.history.select[0]!.bindings).toStrictEqual([100, 1, 100]);
+			expect(tracker.history.select[0]!.bindings).toStrictEqual([1, 100]);
 
 			expect(tracker.history.select[0]!.sql).toMatch(
 				new RegExp(
 					`select "${table}"."id", "${table}"."name" from "${table}" ` +
 						`inner join \\(select distinct "${table}"."id", ".{5}"."title" as "sort_.{5}", ` +
 						`row_number\\(\\) over \\(partition by "${table}"."id" order by ".{5}"."title" asc\\) as "directus_row_number" from "${table}" ` +
-						`left join "${otherTable}" as ".{5}" on "${table}"."id" = ".{5}"."uploaded_by" order by ".{5}"."title" asc limit \\?\\)` +
+						`left join "${otherTable}" as ".{5}" on "${table}"."id" = ".{5}"."uploaded_by" order by ".{5}"."title" asc\\)` +
 						` as "inner" on "${table}"."id" = "inner"."id" ` +
 						`where "inner"."directus_row_number" = \\? order by "inner"."sort_.{5}" asc limit \\?`
+				)
+			);
+		});
+
+		it.each(Object.keys(schemas))('%s paginates a nested o2m sort by item', async (schema) => {
+			const table = schemas[schema].tables[0];
+
+			tracker.on.select(table).responseOnce(rawItems);
+
+			const itemsService = new ItemsService(table, {
+				knex: db,
+				accountability: { role: 'admin', admin: true },
+				schema: schemas[schema].schema,
+			});
+
+			await itemsService.readByQuery({
+				fields: ['id', 'name'],
+				sort: ['items.title'],
+				limit: 2,
+				page: 3,
+			});
+
+			expect(tracker.history.select.length).toBe(1);
+			expect(tracker.history.select[0]!.bindings).toStrictEqual([1, 2, 4]);
+
+			expect(tracker.history.select[0]!.sql).toMatch(
+				new RegExp(
+					`order by ".{5}"."title" asc\\) as "inner" on "${table}"."id" = "inner"."id" ` +
+						`where "inner"."directus_row_number" = \\? order by "inner"."sort_.{5}" asc limit \\? offset \\?$`
 				)
 			);
 		});

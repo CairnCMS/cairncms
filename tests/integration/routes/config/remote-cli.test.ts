@@ -401,7 +401,7 @@ async function snapshotSchemaAndFolders(api: Api): Promise<Document> {
 
 describeForVendors(
 	'Config-as-Code remote CLI',
-	['postgres'],
+	['postgres18'],
 	'Remote CLI certificate and response validation use PostgreSQL.',
 	() => {
 		let workDir: string | undefined;

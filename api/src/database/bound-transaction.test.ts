@@ -6,6 +6,7 @@ import knex from 'knex';
 import type { Knex } from 'knex';
 import { afterEach, describe, expect, it } from 'vitest';
 import { isBoundSerializable, lifecycleContextFor, runInBoundSerializable } from './bound-transaction.js';
+import { sqliteAfterCreate } from './connection-hooks.js';
 
 const noopFlush = () => Promise.resolve();
 
@@ -149,6 +150,146 @@ describe('bound-transaction (sqlite adapter)', () => {
 
 		expect(isBoundSerializable(rolledBackTrx)).toBe(false);
 		expect(lifecycleContextFor(rolledBackTrx)).toBeUndefined();
+	});
+});
+
+describe('bound-transaction (sqlite table rebuild after the adapter is installed)', () => {
+	let active: Knex | undefined;
+	let statements: string[] = [];
+
+	afterEach(async () => {
+		if (active) await active.destroy();
+		active = undefined;
+	});
+
+	async function adaptedSqlite(): Promise<Knex> {
+		const db = knex.default({
+			client: 'sqlite3',
+			connection: { filename: ':memory:' },
+			useNullAsDefault: true,
+			pool: { min: 1, max: 1, afterCreate: sqliteAfterCreate },
+		});
+
+		active = db;
+
+		await db.schema.createTable('parent', (table) => {
+			table.integer('id').primary();
+			table.string('label', 10);
+		});
+
+		await db.schema.createTable('child', (table) => {
+			table.integer('id').primary();
+			table.integer('parent_id').references('parent.id');
+			table.string('note', 10);
+		});
+
+		await db('parent').insert({ id: 1, label: null });
+		await db('child').insert({ id: 1, parent_id: 1, note: null });
+
+		await runInBoundSerializable(db, () => Promise.resolve(), noopFlush);
+
+		statements = [];
+
+		db.on('query', (q: { sql: string }) => {
+			const sql = q.sql.trim();
+			if (/^(begin|savepoint)/i.test(sql)) statements.push(sql);
+		});
+
+		return db;
+	}
+
+	async function columnDefinition(db: Knex, table: string, column: string) {
+		const columns: { name: string; type: string; notnull: number }[] = await db.raw('PRAGMA table_info(??)', [table]);
+		const found = columns.find((entry) => entry.name === column);
+		return { type: found?.type, notnull: found?.notnull };
+	}
+
+	async function tableNames(db: Knex) {
+		const rows: { name: string }[] = await db.raw(`select name from sqlite_master where type = 'table' order by name`);
+		return rows.map((row) => row.name);
+	}
+
+	async function expectIntegrityKept(db: Knex) {
+		expect(await db('parent').select('id', 'label')).toEqual([{ id: 1, label: null }]);
+		expect(await db('child').select('id', 'parent_id', 'note')).toEqual([{ id: 1, parent_id: 1, note: null }]);
+
+		const pragma = await db.raw('PRAGMA foreign_keys');
+		expect(pragma[0].foreign_keys).toBe(1);
+
+		await expect(db('child').insert({ id: 2, parent_id: 99, note: 'orphan' })).rejects.toThrow(
+			/FOREIGN KEY constraint failed/
+		);
+	}
+
+	it('rebuilds a referencing table outside a transaction with a plain BEGIN', async () => {
+		const db = await adaptedSqlite();
+
+		await db.schema.alterTable('child', (table) => {
+			table.string('note', 64).nullable().alter();
+		});
+
+		expect(await columnDefinition(db, 'child', 'note')).toEqual({ type: 'varchar(64)', notnull: 0 });
+		expect(new Set(statements)).toEqual(new Set(['BEGIN;']));
+		await expectIntegrityKept(db);
+	});
+
+	it('rebuilds a referenced table outside a transaction with a plain BEGIN', async () => {
+		const db = await adaptedSqlite();
+
+		await db.schema.alterTable('parent', (table) => {
+			table.string('label', 64).nullable().alter();
+		});
+
+		expect(await columnDefinition(db, 'parent', 'label')).toEqual({ type: 'varchar(64)', notnull: 0 });
+		expect(new Set(statements)).toEqual(new Set(['BEGIN;']));
+		await expectIntegrityKept(db);
+	});
+
+	it('rebuilds a referencing table inside a bound transaction through a savepoint', async () => {
+		const db = await adaptedSqlite();
+
+		await runInBoundSerializable(
+			db,
+			async (trx) => {
+				await trx.schema.alterTable('child', (table) => {
+					table.string('note', 64).nullable().alter();
+				});
+			},
+			noopFlush
+		);
+
+		expect(await columnDefinition(db, 'child', 'note')).toEqual({ type: 'varchar(64)', notnull: 0 });
+		expect(statements.filter((sql) => /^begin/i.test(sql))).toEqual(['BEGIN IMMEDIATE;']);
+		expect(statements.some((sql) => /^savepoint/i.test(sql))).toBe(true);
+		await expectIntegrityKept(db);
+	});
+
+	it('leaves a referencing table unchanged when its rebuild fails outside a transaction', async () => {
+		const db = await adaptedSqlite();
+
+		await expect(
+			db.schema.alterTable('child', (table) => {
+				table.string('note', 10).notNullable().alter();
+			})
+		).rejects.toThrow(/NOT NULL constraint failed/);
+
+		expect(await columnDefinition(db, 'child', 'note')).toEqual({ type: 'varchar(10)', notnull: 0 });
+		expect(await tableNames(db)).toEqual(['child', 'parent']);
+		await expectIntegrityKept(db);
+	});
+
+	it('leaves a referenced table unchanged when its rebuild fails outside a transaction', async () => {
+		const db = await adaptedSqlite();
+
+		await expect(
+			db.schema.alterTable('parent', (table) => {
+				table.string('label', 10).notNullable().alter();
+			})
+		).rejects.toThrow(/NOT NULL constraint failed/);
+
+		expect(await columnDefinition(db, 'parent', 'label')).toEqual({ type: 'varchar(10)', notnull: 0 });
+		expect(await tableNames(db)).toEqual(['child', 'parent']);
+		await expectIntegrityKept(db);
 	});
 });
 

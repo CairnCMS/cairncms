@@ -7,6 +7,7 @@ import { expect, vi } from 'vitest';
 import { createApiTest, type Api } from '../../fixtures/environment';
 import request, { setupRequest } from '../../fixtures/request';
 import { initializeFixtures } from '../../harness/fixture-setup.mjs';
+import { isMysqlFamily } from '../../harness/database-vendors.mjs';
 
 const test = createApiTest({
 	env: { LOG_STYLE: 'raw', LOG_LEVEL: 'info' },
@@ -677,8 +678,6 @@ test('refuses a non-admin caller before any write', async ({ api }) => {
 	}
 });
 
-const PARTIAL_PERSISTENCE_VENDORS = ['mysql', 'mysql5', 'maria'];
-
 test('surfaces a data-definition failure after folder preparation committed, in the response and the record', async ({
 	api,
 	vendor,
@@ -686,7 +685,7 @@ test('surfaces a data-definition failure after folder preparation committed, in 
 	const keep = `schema_fail_keep_${suffix()}`;
 	const fresh = `schema_fail_new_${suffix()}`;
 	const galleryKey = `schema_fail_gallery_${suffix()}`;
-	const partial = PARTIAL_PERSISTENCE_VENDORS.includes(vendor);
+	const partial = isMysqlFamily(vendor);
 
 	try {
 		const seed = await snapshot(api, ['schema', 'folders']);

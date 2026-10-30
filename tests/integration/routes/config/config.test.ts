@@ -1393,7 +1393,7 @@ describe('Config-as-Code folders lifecycle', () => {
 
 	describeForVendors(
 		'server database collation',
-		['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'],
+		['postgres', 'mysql', 'maria'],
 		'Mixed-case folder identifier matching is tested on server-database collations; SQLite is not validated.',
 		() => {
 			test('resolves a mixed-case parent through snapshot and re-apply', async ({ api }) => {
@@ -1698,7 +1698,7 @@ describe('Config-as-Code folders lifecycle', () => {
 
 	describeForVendors(
 		'server database collation',
-		['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'],
+		['postgres', 'mysql', 'maria'],
 		'Mixed-case folder identifier matching is tested on server-database collations; SQLite is not validated.',
 		() => {
 			test('refuses a config deletion of a folder referenced by a mixed-case field option', async ({ api }) => {
