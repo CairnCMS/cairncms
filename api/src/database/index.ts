@@ -15,6 +15,7 @@ import { getConfigFromEnv } from '../utils/get-config-from-env.js';
 import { validateEnv } from '../utils/validate-env.js';
 import { cockroachAfterCreate, createMysqlAfterCreate, sqliteAfterCreate } from './connection-hooks.js';
 import { getHelpers } from './helpers/index.js';
+import { installSqliteTransaction } from './sqlite-transaction.js';
 
 let database: Knex | null = null;
 let inspector: SchemaInspector | null = null;
@@ -121,6 +122,9 @@ export default function getDatabase(): Knex {
 	}
 
 	database = knex.default(knexConfig);
+
+	if (client === 'sqlite3') installSqliteTransaction(database);
+
 	validateDatabaseCharset(database).catch((error) => logger.warn(error, `Could not validate the database charset`));
 
 	const times: Record<string, number> = {};

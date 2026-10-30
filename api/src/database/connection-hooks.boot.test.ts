@@ -25,7 +25,7 @@ describe('getDatabase sqlite connection wiring', () => {
 		vi.resetModules();
 	});
 
-	it('applies foreign_keys and busy_timeout on a real sqlite connection', async () => {
+	function mockSqliteEnv(): void {
 		vi.doMock('../env.js', async (importOriginal) => {
 			const actual = await importOriginal<typeof import('../env.js')>();
 
@@ -37,6 +37,10 @@ describe('getDatabase sqlite connection wiring', () => {
 
 			return { ...actual, default: values, getEnv: () => values };
 		});
+	}
+
+	it('applies foreign_keys and busy_timeout on a real sqlite connection', async () => {
+		mockSqliteEnv();
 
 		const { default: getDatabase } = await import('./index.js');
 		const { sqliteAfterCreate } = await import('./connection-hooks.js');
@@ -49,5 +53,31 @@ describe('getDatabase sqlite connection wiring', () => {
 
 		expect(foreignKeys[0].foreign_keys).toBe(1);
 		expect(busyTimeout[0].timeout).toBe(5000);
+	});
+
+	it('rolls back a transaction whose commit fails, from the first transaction onward', async () => {
+		mockSqliteEnv();
+
+		const { default: getDatabase } = await import('./index.js');
+		db = getDatabase();
+
+		await db.raw('create table parents (id integer primary key)');
+
+		await db.raw(
+			'create table children (id integer primary key, parent integer references parents(id) deferrable initially deferred)'
+		);
+
+		await expect(
+			db.transaction(async (trx) => {
+				await trx('children').insert({ id: 1, parent: 99 });
+			})
+		).rejects.toMatchObject({ code: 'SQLITE_CONSTRAINT' });
+
+		await db.transaction(async (trx) => {
+			await trx('parents').insert({ id: 1 });
+		});
+
+		expect(await db('children').count({ n: '*' })).toEqual([{ n: 0 }]);
+		expect(await db('parents').count({ n: '*' })).toEqual([{ n: 1 }]);
 	});
 });
