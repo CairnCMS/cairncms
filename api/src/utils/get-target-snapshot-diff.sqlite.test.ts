@@ -1,6 +1,7 @@
 import type { DeepPartial } from '@cairncms/types';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { getSqliteClient } from '../database/sqlite-driver.js';
 import type { PortableSnapshot, Snapshot, SnapshotField } from '../types/index.js';
 import { getSnapshotDiff } from './get-snapshot-diff.js';
 import { getTargetSnapshotDiff } from './get-target-snapshot-diff.js';
@@ -41,7 +42,7 @@ function uploads(folder: string, version = 1): Snapshot {
 let database: Knex;
 
 beforeEach(async () => {
-	database = knex.default({ client: 'sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true });
+	database = knex.default({ client: getSqliteClient(), connection: { filename: ':memory:' }, useNullAsDefault: true });
 
 	await database.schema.createTable('directus_folders', (table) => {
 		table.uuid('id').primary();

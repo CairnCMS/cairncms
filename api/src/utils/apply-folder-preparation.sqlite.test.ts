@@ -1,6 +1,7 @@
 import type { DeepPartial, SchemaOverview } from '@cairncms/types';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getSqliteClient } from '../database/sqlite-driver.js';
 import type {
 	CairnConfig,
 	ConfigApplySecurityContext,
@@ -136,7 +137,7 @@ describe('folder preparation through the real apply engine on SQLite', () => {
 		serial = 0;
 
 		db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			connection: { filename: ':memory:' },
 			useNullAsDefault: true,
 			pool: { min: 1, max: 1 },

@@ -2,6 +2,7 @@ import type { SchemaOverview } from '@cairncms/types';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runInBoundSerializable } from '../database/bound-transaction.js';
+import { getSqliteClient } from '../database/sqlite-driver.js';
 import emitter from '../emitter.js';
 import {
 	AdminMutationUnverifiedTransactionException,
@@ -102,7 +103,7 @@ describe('RolesService.upsertMany on a real single-connection SQLite database', 
 
 	beforeEach(async () => {
 		db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			connection: { filename: ':memory:' },
 			useNullAsDefault: true,
 			pool: { min: 1, max: 1 },

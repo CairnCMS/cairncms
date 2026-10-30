@@ -1,6 +1,7 @@
 import type { SchemaOverview } from '@cairncms/types';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getSqliteClient } from '../../../database/sqlite-driver.js';
 import { ConfigApplyFailedException } from '../../../exceptions/config-apply-failed.js';
 import { ConfigReadFailedException } from '../../../exceptions/config-read-failed.js';
 import { ConfigStateChangedException } from '../../../exceptions/config-state-changed.js';
@@ -71,7 +72,7 @@ describe('extension settings through the real apply engine on SQLite', () => {
 		managerState.owners = [WIDGET_ORDINARY];
 
 		db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			connection: { filename: ':memory:' },
 			useNullAsDefault: true,
 			pool: { min: 1, max: 1 },

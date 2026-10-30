@@ -83,6 +83,28 @@ function resolveFilename(filename: string, mode: number): string {
 }
 
 /**
+ * Earlier releases open a file: name as a literal path, so a URI would open or create a different
+ * database from the configured one.
+ */
+export function supportsUriFilenames(nodeVersion: string): boolean {
+	const [major = 0, minor = 0] = nodeVersion.split('.').map(Number);
+	if (major === 22) return minor >= 15;
+	if (major === 23) return minor >= 10;
+	return major > 23;
+}
+
+function loadNodeSqlite(): { DatabaseSync: typeof DatabaseSync } {
+	try {
+		return require('node:sqlite') as { DatabaseSync: typeof DatabaseSync };
+	} catch (error) {
+		throw new Error(
+			'SQLite requires the node:sqlite module, available in Node.js 22.13.0 or later, or 22.5.0 or later started with --experimental-sqlite. Update Node.js to a current 22 or 24 release.',
+			{ cause: error }
+		);
+	}
+}
+
+/**
  * Values bind the way the previous driver bound them, so existing files keep matching. Integers
  * within the signed 32-bit range bind as INTEGER and every other number as REAL. A bigint, symbol,
  * NaN, or invalid Date binds as NULL, a RegExp binds as its source text, and any other object
@@ -179,7 +201,13 @@ class Database {
 		try {
 			if (!isValidOpenMode(flags)) throw sqliteError('SQLITE_MISUSE', 'bad parameter or other API misuse');
 
-			const sqlite = require('node:sqlite') as { DatabaseSync: typeof DatabaseSync };
+			const sqlite = loadNodeSqlite();
+
+			if ((flags & OPEN_URI) !== 0 && !supportsUriFilenames(process.versions.node)) {
+				throw new Error(
+					'SQLite URI filenames, the OPEN_URI flag in DB_FLAGS, require Node.js 22.15.0 or later. Update Node.js to a current 22 or 24 release.'
+				);
+			}
 
 			this.connection = new sqlite.DatabaseSync(resolveFilename(filename, flags), {
 				readOnly: (flags & OPEN_READWRITE) === 0,

@@ -15,6 +15,7 @@ import { getConfigFromEnv } from '../utils/get-config-from-env.js';
 import { validateEnv } from '../utils/validate-env.js';
 import { cockroachAfterCreate, createMysqlAfterCreate, sqliteAfterCreate } from './connection-hooks.js';
 import { getHelpers } from './helpers/index.js';
+import { getSqliteClient } from './sqlite-driver.js';
 import { installSqliteTransaction } from './sqlite-transaction.js';
 
 let database: Knex | null = null;
@@ -98,8 +99,10 @@ export default function getDatabase(): Knex {
 	};
 
 	if (client === 'sqlite3') {
+		knexConfig.client = getSqliteClient();
 		knexConfig.useNullAsDefault = true;
 		poolConfig.afterCreate = sqliteAfterCreate;
+		limitSqlitePool(poolConfig);
 	}
 
 	if (client === 'cockroachdb') {
@@ -322,4 +325,17 @@ async function validateDatabaseCharset(database?: Knex): Promise<void> {
 	}
 
 	return;
+}
+
+/**
+ * The SQLite driver runs each statement synchronously, so a second connection in the same process
+ * can only wait out the busy timeout and fail.
+ */
+function limitSqlitePool(pool: Knex.PoolConfig): void {
+	if ((pool.min ?? 0) <= 1 && (pool.max ?? 1) <= 1) return;
+
+	logger.warn('SQLite uses a single database connection. DB_POOL__MIN and DB_POOL__MAX are limited to 1.');
+
+	if (pool.min !== undefined) pool.min = Math.min(pool.min, 1);
+	if (pool.max !== undefined) pool.max = Math.min(pool.max, 1);
 }

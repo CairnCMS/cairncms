@@ -4,6 +4,7 @@ import knex, { type Knex } from 'knex';
 import { Readable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sqliteAfterCreate } from '../database/connection-hooks.js';
+import { getSqliteClient } from '../database/sqlite-driver.js';
 import { installSqliteTransaction } from '../database/sqlite-transaction.js';
 import emitter from '../emitter.js';
 import { ImportService } from './import-export.js';
@@ -117,7 +118,7 @@ describe.each(Object.entries(formats))('ImportService %s import on a real SQLite
 		hooks.onDrainRegistered = undefined;
 
 		db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			connection: { filename: ':memory:' },
 			useNullAsDefault: true,
 			pool: { min: 1, max: 1, afterCreate: sqliteAfterCreate },
@@ -195,13 +196,14 @@ describe.each(Object.entries(formats))('ImportService %s import on a real SQLite
 
 		const input = source();
 		const run = format.run(service, 'parents', input);
+		const rejected = expect(run).rejects.toMatchObject({ code: 'SQLITE_CONSTRAINT' });
 
 		input.push(Buffer.from(format.encode([{ id: 1 }, { id: 1 }])));
 		await failed.promise;
 		await settle();
 		input.push(null);
 
-		await expect(run).rejects.toMatchObject({ code: 'SQLITE_CONSTRAINT' });
+		await rejected;
 
 		expect(hooks.drainRegistrations).toBe(0);
 		expect(await db('parents').pluck('id')).toEqual([]);

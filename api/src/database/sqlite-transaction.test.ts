@@ -7,6 +7,7 @@ import type { Knex } from 'knex';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runInBoundSerializable } from './bound-transaction.js';
 import { sqliteAfterCreate } from './connection-hooks.js';
+import { getSqliteClient } from './sqlite-driver.js';
 import { installSqliteTransaction } from './sqlite-transaction.js';
 
 describe('sqlite transaction (failed commit)', () => {
@@ -32,7 +33,7 @@ describe('sqlite transaction (failed commit)', () => {
 		dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cairncms-sqlite-commit-'));
 
 		const database = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			connection: { filename: path.join(dir, `commit-${randomUUID()}.db`) },
 			useNullAsDefault: true,
 			log: { warn: (message: string) => warnings.push(message) },
