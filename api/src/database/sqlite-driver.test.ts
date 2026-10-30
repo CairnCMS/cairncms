@@ -209,6 +209,29 @@ describe('sqlite driver adapter (statements)', () => {
 		expect(await db.raw('pragma foreign_keys')).toEqual([{ foreign_keys: 0 }]);
 	});
 
+	it('opens connections with the old driver default busy timeout of 1000 ms', async () => {
+		const db = connect(':memory:');
+		expect(await db.raw('pragma busy_timeout')).toEqual([{ timeout: 1000 }]);
+	});
+
+	it('waits for the busy timeout before reporting a lock held by another connection', async () => {
+		const target = file();
+		const holder = connect(target);
+		await holder.raw('create table t (id integer primary key)');
+
+		await holder.transaction(async (trx) => {
+			await trx('t').insert({ id: 1 });
+
+			const waiter = connect(target);
+			const started = performance.now();
+
+			await expect(waiter('t').insert({ id: 2 })).rejects.toMatchObject({ code: 'SQLITE_BUSY' });
+			expect(performance.now() - started).toBeGreaterThanOrEqual(900);
+		});
+
+		expect(await holder('t').pluck('id')).toEqual([1]);
+	});
+
 	it('calls back after the current tick with the statement context', async () => {
 		const order: string[] = [];
 

@@ -21,6 +21,8 @@ const OPEN_PRIVATECACHE = 0x00040000;
 const INT32_MIN = -2147483648;
 const INT32_MAX = 2147483647;
 
+const DEFAULT_BUSY_TIMEOUT_MS = 1000;
+
 const RESULT_CODES = [
 	'SQLITE_OK',
 	'SQLITE_ERROR',
@@ -215,6 +217,7 @@ class Database {
 				enableForeignKeyConstraints: false,
 			});
 
+			this.connection.exec(`PRAGMA busy_timeout = ${DEFAULT_BUSY_TIMEOUT_MS}`);
 			this.open = true;
 		} catch (error) {
 			failure = toSqliteError(error);
