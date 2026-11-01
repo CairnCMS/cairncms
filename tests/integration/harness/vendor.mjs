@@ -3,6 +3,7 @@ import { createVitest } from 'vitest/node';
 import { DefaultReporter, VerboseReporter } from 'vitest/node';
 import { Wait } from 'testcontainers';
 import { RecordedContainer } from './recorded-container.mjs';
+import { writeContainerRecord } from './container-record.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { basename } from 'node:path';
@@ -67,7 +68,7 @@ try {
 	});
 
 	for (const project of vitest.projects) {
-		const workers = project.name === 'load' ? 1 : (options.workers ?? 1);
+		const workers = project.name === 'load' ? 1 : options.workers ?? 1;
 		project.config.maxWorkers = workers;
 		project.config.fileParallelism = workers > 1;
 	}
@@ -183,17 +184,14 @@ try {
 
 			containerLog = createWriteStream(`${reports}/database.log`);
 
-			await writeFile(
-				`${reports}/container.json`,
-				JSON.stringify({
-					image: definition.image,
-					version: definition.version,
-					owner: process.pid,
-					run: basename(directory),
-					vendor,
-					state: 'starting',
-				}) + '\n'
-			);
+			await writeContainerRecord(`${reports}/container.json`, {
+				image: definition.image,
+				version: definition.version,
+				owner: process.pid,
+				run: basename(directory),
+				vendor,
+				state: 'starting',
+			});
 
 			let engine = new RecordedContainer(definition.image, `${reports}/container.json`)
 				.withLabels({ 'cairncms.integration.run': basename(directory), 'cairncms.integration.vendor': vendor })
@@ -222,10 +220,11 @@ try {
 				password: 'integration',
 			};
 
-			await writeFile(
-				`${reports}/container.json`,
-				JSON.stringify({ id: container.getId(), image: definition.image, version: definition.version }) + '\n'
-			);
+			await writeContainerRecord(`${reports}/container.json`, {
+				id: container.getId(),
+				image: definition.image,
+				version: definition.version,
+			});
 
 			const engineLost = (error) => {
 				if (stopping || infrastructureError) return;

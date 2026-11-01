@@ -2,7 +2,7 @@
 import { Wait, type StartedTestContainer, type WaitStrategy } from 'testcontainers';
 import { createWriteStream } from 'node:fs';
 import { RecordedContainer } from '../harness/recorded-container.mjs';
-import { writeFile } from 'node:fs/promises';
+import { writeContainerRecord } from '../harness/container-record.mjs';
 import { randomUUID } from 'node:crypto';
 import { join, basename, dirname } from 'node:path';
 import type { Readable } from 'node:stream';
@@ -53,10 +53,13 @@ export async function withService<T>(
 
 		const run = basename(dirname(directory));
 
-		await writeFile(
-			ownerPath,
-			JSON.stringify({ serviceKey: id, run, image: definition.image, owner: process.pid, state: 'starting' }) + '\n'
-		);
+		await writeContainerRecord(ownerPath, {
+			serviceKey: id,
+			run,
+			image: definition.image,
+			owner: process.pid,
+			state: 'starting',
+		});
 
 		container = await new RecordedContainer(definition.image, ownerPath)
 			.withLabels({ 'cairncms.integration.service': id, 'cairncms.integration.run': run })
@@ -70,17 +73,14 @@ export async function withService<T>(
 			})
 			.start();
 
-		await writeFile(
-			ownerPath,
-			JSON.stringify({
-				id: container.getId(),
-				serviceKey: id,
-				run,
-				image: definition.image,
-				owner: process.pid,
-				state: 'ready',
-			}) + '\n'
-		);
+		await writeContainerRecord(ownerPath, {
+			id: container.getId(),
+			serviceKey: id,
+			run,
+			image: definition.image,
+			owner: process.pid,
+			state: 'ready',
+		});
 
 		signal.addEventListener('abort', abort, { once: true });
 		signal.throwIfAborted();
@@ -109,10 +109,12 @@ export async function withService<T>(
 		try {
 			await stop();
 			if (container)
-				await writeFile(
-					ownerPath,
-					JSON.stringify({ id: container.getId(), serviceKey: id, image: definition.image, removed: true }) + '\n'
-				);
+				await writeContainerRecord(ownerPath, {
+					id: container.getId(),
+					serviceKey: id,
+					image: definition.image,
+					removed: true,
+				});
 		} catch (error) {
 			errors.push(error);
 		}
