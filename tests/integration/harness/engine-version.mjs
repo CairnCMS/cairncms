@@ -1,5 +1,3 @@
-import knex from 'knex';
-import { databaseVendors } from './database-vendors.mjs';
 import { runSnapshotTool } from './snapshot-tools.mjs';
 
 /** Returns the client command that prints the engine version inside a vendor's container. */
@@ -70,18 +68,14 @@ export async function recordEngine({
 	return engine;
 }
 
-/** Reads the SQLite version bundled with the driver the API uses. */
+/** Reads the SQLite version bundled with the Node.js runtime the API runs on. */
 export async function sqliteEngine() {
-	const database = knex({
-		client: databaseVendors.sqlite3.client,
-		connection: { filename: ':memory:' },
-		useNullAsDefault: true,
-	});
+	const { DatabaseSync } = await import('node:sqlite');
+	const database = new DatabaseSync(':memory:');
 
 	try {
-		const [{ version }] = await database.raw('select sqlite_version() as version');
-		return version;
+		return database.prepare('select sqlite_version() as version').get().version;
 	} finally {
-		await database.destroy();
+		database.close();
 	}
 }

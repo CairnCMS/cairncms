@@ -4,6 +4,7 @@ import knex, { type Knex } from 'knex';
 import os from 'os';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getSqliteClient } from '../database/sqlite-driver.js';
 import { ConfigReadFailedException } from '../exceptions/config-read-failed.js';
 import type { ConfigSchemaCollection } from '../types/config.js';
 import { readConfigDirectory } from './read-config-directory.js';
@@ -137,7 +138,7 @@ describe('readCurrentConfig schema on a real SQLite database', () => {
 
 	beforeEach(async () => {
 		db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			connection: { filename: ':memory:' },
 			useNullAsDefault: true,
 			pool: { min: 1, max: 1 },

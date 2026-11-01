@@ -34,7 +34,6 @@
 		"mysql2": "3.24.6",
 		"pg": "8.23.1",
 		"seedrandom": "3.0.5",
-		"sqlite3": "5.1.6",
 		"supertest": "6.3.3",
 		"testcontainers": "11.14.0",
 		"typescript": "5.0.4",

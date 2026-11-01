@@ -2,6 +2,7 @@ import knex from 'knex';
 import type { Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import logger from '../../logger.js';
+import { getSqliteClient } from '../sqlite-driver.js';
 import { down, up } from './20260814A-migrate-translation-strings.js';
 
 vi.mock('../../logger.js', () => ({
@@ -25,7 +26,7 @@ describe('20260814A-migrate-translation-strings', () => {
 
 	beforeEach(async () => {
 		db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			useNullAsDefault: true,
 			connection: ':memory:',
 			pool: { min: 1, max: 1 },

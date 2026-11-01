@@ -1,6 +1,7 @@
 import type { SchemaOverview } from '@cairncms/types';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { getSqliteClient } from '../../../database/sqlite-driver.js';
 import { FoldersService } from '../../../services/folders.js';
 import type { ConfigFolder } from '../../../types/config.js';
 import type { ApplyContext, ReadContext } from '../descriptor.js';
@@ -88,7 +89,7 @@ describe('folders handler against a real SQLite database', () => {
 		uuidByKey = new Map();
 
 		db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			connection: { filename: ':memory:' },
 			useNullAsDefault: true,
 			pool: { min: 1, max: 1 },

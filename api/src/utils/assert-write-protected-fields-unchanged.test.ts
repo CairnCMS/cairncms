@@ -1,6 +1,7 @@
 import knex from 'knex';
 import type { Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { getSqliteClient } from '../database/sqlite-driver.js';
 import { assertWriteProtectedFieldsUnchanged } from './assert-write-protected-fields-unchanged.js';
 
 describe('assertWriteProtectedFieldsUnchanged', () => {
@@ -8,7 +9,7 @@ describe('assertWriteProtectedFieldsUnchanged', () => {
 
 	beforeEach(async () => {
 		db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			useNullAsDefault: true,
 			connection: ':memory:',
 			pool: { min: 1, max: 1 },

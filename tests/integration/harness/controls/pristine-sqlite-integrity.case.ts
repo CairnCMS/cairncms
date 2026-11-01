@@ -1,7 +1,6 @@
 import { test, expect, inject } from 'vitest';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import knex from 'knex';
 import { withEnvironment } from '../../fixtures/environment';
 import { initializeFixtures } from '../fixture-setup.mjs';
 import { snapshotHash } from '../snapshot.mjs';
@@ -60,19 +59,14 @@ for (const [fault, message] of [
 			if (fault === 'corrupt-dump') await writeFile(snapshot, Buffer.concat([bytes, Buffer.from('changed')]));
 
 			if (fault.startsWith('changed-')) {
-				const source = knex({
-					client: 'sqlite3',
-					connection: { filename: snapshot },
-					useNullAsDefault: true,
-					pool: { min: 0, max: 1 },
-				});
+				const { DatabaseSync } = await import('node:sqlite');
+				const source = new DatabaseSync(snapshot);
 
 				try {
-					if (fault === 'changed-schema')
-						await source.schema.createTable('unexpected_template_table', (table) => table.integer('id'));
-					else await source('sqlite_sequence').where({ name: 'directus_activity' }).update({ seq: 900000 });
+					if (fault === 'changed-schema') source.exec('create table `unexpected_template_table` (`id` integer)');
+					else source.prepare('update `sqlite_sequence` set `seq` = 900000 where `name` = ?').run('directus_activity');
 				} finally {
-					await source.destroy();
+					source.close();
 				}
 
 				metadata.dumpHash = snapshotHash(await readFile(snapshot));

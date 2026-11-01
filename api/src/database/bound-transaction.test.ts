@@ -7,6 +7,7 @@ import type { Knex } from 'knex';
 import { afterEach, describe, expect, it } from 'vitest';
 import { isBoundSerializable, lifecycleContextFor, runInBoundSerializable } from './bound-transaction.js';
 import { sqliteAfterCreate } from './connection-hooks.js';
+import { getSqliteClient } from './sqlite-driver.js';
 
 const noopFlush = () => Promise.resolve();
 
@@ -20,7 +21,7 @@ describe('bound-transaction (sqlite adapter)', () => {
 
 	function makeSqlite(): Knex {
 		const db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			connection: { filename: ':memory:' },
 			useNullAsDefault: true,
 			pool: { min: 1, max: 1 },
@@ -164,7 +165,7 @@ describe('bound-transaction (sqlite table rebuild after the adapter is installed
 
 	async function adaptedSqlite(): Promise<Knex> {
 		const db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			connection: { filename: ':memory:' },
 			useNullAsDefault: true,
 			pool: { min: 1, max: 1, afterCreate: sqliteAfterCreate },
@@ -309,7 +310,7 @@ describe('bound-transaction (sqlite immediate-lock contention)', () => {
 
 	function fileDatabase(filename: string, busyTimeout: number): Knex {
 		return knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			connection: { filename },
 			useNullAsDefault: true,
 			pool: {

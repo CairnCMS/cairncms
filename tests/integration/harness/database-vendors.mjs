@@ -32,7 +32,6 @@ const mariaFamily = {
 
 export const databaseVendors = {
 	sqlite3: {
-		client: 'sqlite3',
 		family: 'sqlite',
 		capabilities: ['generated-columns', 'virtual-generated-columns'],
 		version: 'SQLite',
