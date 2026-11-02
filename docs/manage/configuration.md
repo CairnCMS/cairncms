@@ -124,6 +124,10 @@ Geometry fields need PostGIS 3.2 through 3.6 on a supported PostgreSQL version.
 
 MySQL dates are the end of Oracle Premier Support. A MySQL version stays supported until Oracle stops publishing community releases for it, which for earlier versions continued until Extended Support ended.
 
+:::caution[MySQL 5.7 and PostgreSQL 10 and 11 compatibility is deprecated]
+Relational-field sorting on MySQL 5.7, and field metadata, snapshots, and schema apply on PostgreSQL 10 and 11, are deprecated in 1.8.0. Upgrade to a supported version of the same database, following the vendor's upgrade guide. See the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) for removal timing.
+:::
+
 #### MariaDB
 
 | Version | Vendor maintenance ends | Status |
