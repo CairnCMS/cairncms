@@ -37,7 +37,9 @@ The release's **Potential Breaking Changes** section names affected callers and 
 
 A minor release may raise a system-library, runtime, or browser requirement when a dependency update requires it, without the normal deprecation period. These changes appear under **Potential Breaking Changes**, with instructions for meeting the new requirement.
 
-This applies only to the new requirement itself. Removing an API, configuration option, or support for a database vendor or version still requires notice unless a security exception applies. Choosing to retire a supported runtime independently of a dependency requirement also follows the notice period.
+This applies only to the new requirement itself. Removing an API, a configuration option, support for a database vendor, or compatibility with a database version still requires notice unless a security exception applies. Choosing to retire a supported runtime independently of a dependency requirement also follows the notice period.
+
+Support for a database version means CairnCMS fixes what breaks on it. A version leaving the [supported versions](/docs/manage/configuration/#supported-versions) list changes nothing on a running instance and needs no notice. Removing code that keeps an unsupported version working follows the deprecation notice period, as do other planned changes that would make a database version stop working, unless a security exception applies.
 
 ## Before you upgrade
 

@@ -85,13 +85,58 @@ Additional `LOGGER_*` variables pass through to the underlying pino logger optio
 
 ## Database
 
-CairnCMS supports SQLite, PostgreSQL, MySQL, MariaDB. The connection is configured through:
+CairnCMS supports PostgreSQL, MySQL, MariaDB, and SQLite, in the versions listed under [Supported versions](#supported-versions). The connection is configured through:
 
 - **`DB_CLIENT`** — `sqlite3` for SQLite, `pg` for PostgreSQL, `mysql` for both MySQL and MariaDB. MariaDB does not have a separate client value; it shares MySQL's underlying driver.
 - **`DB_HOST`** / **`DB_PORT`** / **`DB_DATABASE`** / **`DB_USER`** / **`DB_PASSWORD`** — connection details for server-based databases.
 - **`DB_FILENAME`** — path to the SQLite database file. SQLite-only.
 - **`DB_SSL__*`** / **`DB_POOL__*`** — SSL options and connection pool tuning. Use the double-underscore syntax to express nested config (`DB_SSL__REJECT_UNAUTHORIZED=false`, `DB_POOL__MIN=2`). Any key in the `DB_*` prefix passes through to the underlying Knex connection object.
 - **`DB_EXCLUDE_TABLES`** — comma-separated table names that CairnCMS should ignore even if it can read them. Default skips Postgres geometry housekeeping (`spatial_ref_sys`) and SQL Server diagrams (`sysdiagrams`).
+
+### Supported versions
+
+The tables below list the database versions for which CairnCMS provides compatibility fixes. Support covers PostgreSQL major releases and long-term support (LTS) releases of MySQL and MariaDB, with new versions added after testing. MySQL Innovation releases and MariaDB short-term and rolling releases are not supported.
+
+A version leaves support when its vendor stops publishing community maintenance releases, even if a hosting provider continues to maintain it through a service such as Amazon RDS Extended Support.
+
+Unsupported versions may continue to work, but CairnCMS does not commit to fixing problems specific to them. Changing a version's support status does not alter a running installation. Planned changes that break compatibility follow the [deprecation policy](/docs/manage/upgrades/#deprecation-notices).
+
+#### PostgreSQL
+
+| Version | Vendor maintenance ends | Status |
+|---|---|---|
+| 18 | 2030-11-14 | Supported |
+| 17 | 2029-11-08 | Supported |
+| 16 | 2028-11-09 | Supported |
+| 15 | 2027-11-11 | Supported |
+| 14 | 2026-11-12 | Not supported |
+| 13 and older | Ended | Not supported |
+
+Geometry fields need PostGIS 3.2 through 3.6 on a supported PostgreSQL version.
+
+#### MySQL
+
+| Version | Vendor maintenance ends | Status |
+|---|---|---|
+| 9.7 LTS | 2031-04-30 | Supported |
+| 8.4 LTS | 2029-04-30 | Supported |
+| 8.0 and older | Ended | Not supported |
+
+MySQL dates are the end of Oracle Premier Support. A MySQL version stays supported until Oracle stops publishing community releases for it, which for earlier versions continued until Extended Support ended.
+
+#### MariaDB
+
+| Version | Vendor maintenance ends | Status |
+|---|---|---|
+| 12.3 LTS | 2029-06-12 | Supported |
+| 11.8 LTS | 2028-06-04 | Supported |
+| 11.4 LTS | 2029-05-29 | Supported |
+| 10.11 LTS | 2028-02-16 | Supported |
+| 10.6 and older | Ended | Not supported |
+
+#### SQLite engine
+
+SQLite is supported on the engine bundled with any Node.js release that meets the [SQLite requirements](#sqlite).
 
 ### SQLite
 
