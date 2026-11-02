@@ -90,7 +90,7 @@ CairnCMS supports PostgreSQL, MySQL, MariaDB, and SQLite, in the versions listed
 - **`DB_CLIENT`** — `sqlite3` for SQLite, `pg` for PostgreSQL, `mysql` for both MySQL and MariaDB. MariaDB does not have a separate client value; it shares MySQL's underlying driver.
 - **`DB_HOST`** / **`DB_PORT`** / **`DB_DATABASE`** / **`DB_USER`** / **`DB_PASSWORD`** — connection details for server-based databases.
 - **`DB_FILENAME`** — path to the SQLite database file. SQLite-only.
-- **`DB_SSL__*`** / **`DB_POOL__*`** — SSL options and connection pool tuning. Use the double-underscore syntax to express nested config (`DB_SSL__REJECT_UNAUTHORIZED=false`, `DB_POOL__MIN=2`). Any key in the `DB_*` prefix passes through to the underlying Knex connection object.
+- **`DB_SSL__*`** / **`DB_POOL__*`** — SSL options and connection pool tuning. Use the double-underscore syntax to express nested config (`DB_SSL__REJECT_UNAUTHORIZED=true`, `DB_POOL__MIN=2`). Any key in the `DB_*` prefix passes through to the underlying Knex connection object.
 - **`DB_EXCLUDE_TABLES`** — comma-separated table names that CairnCMS should ignore even if it can read them. Default skips Postgres geometry housekeeping (`spatial_ref_sys`) and SQL Server diagrams (`sysdiagrams`).
 
 ### Supported versions
@@ -137,6 +137,24 @@ MySQL dates are the end of Oracle Premier Support. A MySQL version stays support
 #### SQLite engine
 
 SQLite is supported on the engine bundled with any Node.js release that meets the [SQLite requirements](#sqlite).
+
+### Database TLS
+
+For MySQL or MariaDB, set a trusted certificate authority and turn on host name checks. Use the database's DNS name, matching its server certificate:
+
+```dotenv
+DB_CLIENT=mysql
+DB_HOST=db.example.com
+DB_SSL__CA_FILE=/run/secrets/database-ca.pem
+DB_SSL__REJECT_UNAUTHORIZED=true
+DB_SSL__VERIFY_IDENTITY=true
+```
+
+The CA file must contain the trusted PEM certificate bundle and be readable by CairnCMS. Without `DB_SSL__VERIFY_IDENTITY=true`, a certificate issued for a different host name is accepted if its authority is trusted.
+
+For PostgreSQL, use `DB_CLIENT=pg` and leave out `DB_SSL__VERIFY_IDENTITY`. Its driver checks the host name whenever certificate checks are on.
+
+PostgreSQL can also take a single `DB_CONNECTION_STRING` in place of `DB_HOST`, `DB_PORT`, `DB_DATABASE`, and `DB_USER`. When it is set, CairnCMS ignores every `DB_SSL__*` setting, so put TLS options in the string, for example `?sslmode=verify-full&sslrootcert=/run/secrets/database-ca.pem`. Give an IPv6 address in `DB_HOST` instead, because a bracketed IPv6 host in the string does not connect. A `user`, `password`, or `port` query parameter takes precedence over the value in the URL.
 
 ### SQLite
 
