@@ -37,7 +37,7 @@ Common fits include headless content delivery to websites and apps, internal too
 
 ## Databases and storage
 
-CairnCMS supports PostgreSQL, MySQL, MariaDB, and SQLite. Files can be stored on local disk or external backends such as S3-compatible object storage, Google Cloud Storage, Azure Blob Storage, and Cloudinary, depending on your deployment needs.
+CairnCMS supports PostgreSQL, MySQL, MariaDB, and SQLite, in the [supported versions](/docs/manage/configuration/#supported-versions). Files can be stored on local disk or external backends such as S3-compatible object storage, Google Cloud Storage, Azure Blob Storage, and Cloudinary, depending on your deployment needs.
 
 ## Open source and control
 
