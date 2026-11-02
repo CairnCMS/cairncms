@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { resolve, join } from 'node:path';
 import { readVendorResult } from './harness/results.mjs';
@@ -54,7 +54,7 @@ if (ci && !args.values.vendor && !process.env.TEST_DB) {
 	process.exit(2);
 }
 
-const vendor = args.values.vendor ?? process.env.TEST_DB ?? 'postgres';
+const vendor = args.values.vendor ?? process.env.TEST_DB ?? 'postgres18';
 const vendors = vendor === 'all' ? supportedVendors : vendor.split(',');
 
 if (!vendors.length || vendors.some((v) => !supportedVendors.includes(v)) || new Set(vendors).size !== vendors.length) {
@@ -78,6 +78,18 @@ try {
 	console.error(`Invalid test-name pattern: ${error.message}`);
 	process.exit(2);
 }
+
+const engineOf = async (directory) => {
+	for (const name of ['engine.json', 'container.json']) {
+		const { engine } = await readFile(join(directory, name), 'utf8')
+			.then(JSON.parse)
+			.catch(() => ({}));
+
+		if (engine) return engine;
+	}
+
+	return null;
+};
 
 const collectAll = ci || !!args.values['collect-all'];
 const artifactRoot = resolve(args.values.output ?? join(root, '.artifacts'));
@@ -154,6 +166,7 @@ for (const selected of vendors) {
 	summary.push({
 		...result,
 		vendor: selected,
+		engine: await engineOf(join(directory, selected)),
 		workers,
 		durationMs: performance.now() - started,
 	});
@@ -191,6 +204,7 @@ for (const result of summary) {
 		console.log(
 			`[${result.vendor}] NOT APPLICABLE: zero runnable cases; ${result.excluded.length} declared vendor exclusions`
 		);
+	if (result.engine) console.log(`[${result.vendor}] Engine ${result.engine}`);
 	if (!args.values.list)
 		console.log(
 			`[${result.vendor}] ${result.passed} passed; ${result.failures.length} failed; ${result.blocked.length} blocked; ${result.unexpectedSkips.length} unexpected skips; ${result.notRun.length} selected but not run; ${result.excluded.length} excluded with reasons`

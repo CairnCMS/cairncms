@@ -37,7 +37,7 @@ export async function setup(): Promise<void> {
 		// Step 5: grant public read access on the public-readable collection
 		await grantPublicRead(url, token, COLLECTIONS.publicItems);
 
-		// Step 6: seed rows directly via knex (bypasses SDK-under-test)
+		// Step 6: seed rows directly into SQLite (bypasses SDK-under-test)
 		const dbPath = env['DB_FILENAME']!;
 		await seedFixtureData(dbPath);
 

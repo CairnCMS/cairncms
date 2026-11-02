@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getSqliteClient } from '../../../database/sqlite-driver.js';
 import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
 import { ConfigReadFailedException } from '../../../exceptions/config-read-failed.js';
 import { ConfigStateChangedException } from '../../../exceptions/config-state-changed.js';
@@ -102,7 +103,7 @@ describe('translations through the real apply engine on SQLite', () => {
 		counter = 0;
 
 		db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			connection: { filename: ':memory:' },
 			useNullAsDefault: true,
 			pool: { min: 1, max: 1 },
@@ -186,7 +187,7 @@ describe('translations through the real apply engine on SQLite', () => {
 
 	async function createNocaseDb(): Promise<Knex> {
 		const target = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			connection: { filename: ':memory:' },
 			useNullAsDefault: true,
 			pool: { min: 1, max: 1 },

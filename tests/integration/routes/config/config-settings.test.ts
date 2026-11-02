@@ -464,7 +464,7 @@ describe('Config-as-Code settings placeholder preservation', () => {
 
 	describeForVendors(
 		'remote CLI',
-		['postgres'],
+		['postgres18'],
 		'Remote CLI transport behavior is validated against PostgreSQL.',
 		() => {
 			function generateCert(dir: string): { certPath: string; keyPath: string } {

@@ -196,6 +196,7 @@ Imports that resolve to a denied IP fail at the outbound connection step and ret
 ## Database
 
 - **Use TLS to the database** if it travels outside your trusted network. Configure `DB_SSL__*` variables to require encryption and validate certificates.
+- **Verify the database server's identity.** For MySQL and MariaDB, configure a trusted certificate authority and set `DB_SSL__VERIFY_IDENTITY=true`. Without that setting, a certificate for a different host name can be accepted if its issuer is trusted. Keep `DB_SSL__REJECT_UNAUTHORIZED=true`. See [Database TLS](/docs/manage/configuration/#database-tls).
 - **Use a dedicated database user** with only the privileges CairnCMS needs (CREATE, ALTER, INDEX on its own tables; SELECT/INSERT/UPDATE/DELETE on data). Avoid running CairnCMS as the database superuser.
 - **For MySQL/MariaDB, set the connection charset to `utf8mb4`** to prevent silent truncation of UTF-8 characters that take more than 3 bytes (most CJK, all emoji). See [Configuration](/docs/manage/configuration/).
 

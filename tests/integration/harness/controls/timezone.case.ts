@@ -1,6 +1,7 @@
 import { expect } from 'vitest';
 import { apiTest as test } from '../../fixtures/environment';
 import { initializeFixtures } from '../fixture-setup.mjs';
+import { isMysqlFamily } from '../database-vendors.mjs';
 
 initializeFixtures();
 
@@ -8,7 +9,7 @@ test('worker SQL Date bindings and the base API share UTC', async ({ api, vendor
 	expect(process.env.TZ).toBe('UTC');
 	expect(new Date('2020-01-02T03:04:05Z').getTimezoneOffset()).toBe(0);
 
-	if (['mysql', 'mysql5', 'maria'].includes(vendor)) {
+	if (isMysqlFamily(vendor)) {
 		await api.database.schema.createTable('clock_fixture', (table) => {
 			table.dateTime('value');
 		});

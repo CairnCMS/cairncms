@@ -68,6 +68,8 @@ sqlite3 /cairncms/database/database.sqlite ".backup '/backups/cairncms-$(date +%
 
 Do not just `cp` a SQLite file that CairnCMS is actively writing to — you will get a torn-page snapshot and an unrestorable backup.
 
+While a backup copies the file, writes from CairnCMS can wait for it to finish, and each wait pauses the whole server for up to five seconds. Run backups during quiet periods.
+
 SQLite is the right choice for small single-instance deployments. If your dataset and uptime requirements have grown beyond what SQLite handles comfortably, plan a one-time migration to Postgres before you optimize the SQLite backup process.
 
 ### Encryption and offsite storage

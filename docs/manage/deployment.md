@@ -54,7 +54,7 @@ The scaffold makes choices that work locally but should be revisited for any env
 
 ### Database image architecture
 
-The scaffold's database service uses `postgis/postgis:16-3.4-alpine`, which is `linux/amd64` only. On ARM hosts (AWS Graviton, ARM-based Kubernetes nodes, Apple Silicon production), pull a multi-arch image instead. Plain `postgres:16-alpine` is multi-arch and works for any project that does not use geometry fields.
+The scaffold's database service uses `postgis/postgis:18-3.6-alpine`, which is `linux/amd64` only. On ARM hosts (AWS Graviton, ARM-based Kubernetes nodes, Apple Silicon production), pull a multi-arch image instead. Plain `postgres:18-alpine` is multi-arch and works for any project that does not use geometry fields. When you switch, also remove the database service's `platform: linux/amd64` line or set it to `linux/arm64`, because the pin otherwise keeps selecting the amd64 build. PostgreSQL 18 images keep their data under `/var/lib/postgresql`, so keep the scaffold's `./data/database:/var/lib/postgresql` mount when you change images.
 
 ### Secret management
 

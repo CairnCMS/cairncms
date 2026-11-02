@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import yaml from 'js-yaml';
-import { vendors } from './database-vendors.mjs';
+import { databaseVendors, vendors } from './database-vendors.mjs';
 
 const workflow = yaml.load(
 	await readFile(new URL('../../../.github/workflows/ci-tests-api.yml', import.meta.url), 'utf8')
@@ -28,15 +28,23 @@ test('API workflow filters documentation pushes and runs complete independent ve
 	assert.equal(workflow.env.CI, 'true');
 	assert.equal(workflow.defaults.run.shell, 'bash');
 	assert.deepEqual(workflow.permissions, { contents: 'read' });
-	assert.deepEqual(workflow.jobs.test.strategy.matrix.include.map((entry) => entry.vendor).sort(), [...vendors].sort());
+
+	assert.deepEqual(
+		workflow.jobs.test.strategy.matrix.include.map((entry) => entry.vendor),
+		vendors
+	);
+
 	assert.equal(workflow.jobs.test.strategy['fail-fast'], false);
 	assert.equal(workflow.jobs.restoration.strategy['fail-fast'], false);
 
-	assert.deepEqual(workflow.jobs.restoration.strategy.matrix.include.map((entry) => entry.vendor).sort(), [
-		'mysql',
-		'postgres',
-		'sqlite3',
-	]);
+	assert.deepEqual(
+		workflow.jobs.restoration.strategy.matrix.include.map((entry) => entry.vendor),
+		['postgres18', 'mysql84', 'maria123', 'sqlite3']
+	);
+
+	for (const job of ['restoration', 'test'])
+		for (const entry of workflow.jobs[job].strategy.matrix.include)
+			assert.equal(entry.label, databaseVendors[entry.vendor].version, `${job} label for ${entry.vendor}`);
 
 	for (const id of ['validation', 'restoration', 'test']) {
 		const job = workflow.jobs[id];
@@ -112,7 +120,7 @@ test('workflow pipelines preserve failing command status and revision checks rej
 		const env = {
 			...process.env,
 			PATH: `${join(directory, 'bin')}:${process.env.PATH}`,
-			TEST_DB: 'postgres',
+			TEST_DB: 'postgres18',
 			GITHUB_SHA: 'a'.repeat(40),
 			GITHUB_REF: 'refs/heads/develop',
 			GITHUB_REPOSITORY: 'CairnCMS/cairncms',

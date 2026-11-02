@@ -32,7 +32,7 @@
 		"@types/geojson": "7946.0.10",
 		"express": "4.22.3",
 		"geojson": "0.5.0",
-		"knex": "2.4.2",
+		"knex": "3.3.0",
 		"pino": "8.11.0",
 		"typescript": "5.0.4",
 		"vue": "3.5.43",

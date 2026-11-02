@@ -35,8 +35,6 @@
 	"devDependencies": {
 		"@types/node-fetch": "2.6.11",
 		"esbuild-plugin-replace": "1.4.0",
-		"knex": "2.4.2",
-		"sqlite3": "5.1.6",
 		"tsup": "8.5.1",
 		"typescript": "5.4.5",
 		"vitest": "4.1.11"

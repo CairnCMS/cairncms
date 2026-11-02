@@ -3,10 +3,10 @@ import type { Accountability } from '@cairncms/types';
 import type { Knex } from 'knex';
 import { clamp } from 'lodash-es';
 import { contentType } from 'mime-types';
-import type { Readable } from 'node:stream';
+import { Readable } from 'node:stream';
 import hash from 'object-hash';
 import path from 'path';
-import sharp from 'sharp';
+import sharp, { type Sharp, type SharpOptions } from 'sharp';
 import validateUUID from 'uuid-validate';
 import { SUPPORTED_IMAGE_TRANSFORM_FORMATS } from '../constants.js';
 import getDatabase from '../database/index.js';
@@ -32,6 +32,8 @@ type ResolvedAsset = {
 	transformedFilename: string | null;
 	transformedExists: boolean;
 };
+
+let activeTransforms = 0;
 
 export class AssetsService {
 	knex: Knex;
@@ -97,39 +99,54 @@ export class AssetsService {
 				);
 			}
 
-			const { queue, process } = sharp.counters();
-
-			if (queue + process > env['ASSETS_TRANSFORM_MAX_CONCURRENT']) {
+			if (activeTransforms >= env['ASSETS_TRANSFORM_MAX_CONCURRENT']) {
 				throw new ServiceUnavailableException('Server too busy', {
 					service: 'files',
 				});
 			}
 
-			const transformer = sharp({
-				limitInputPixels: Math.pow(env['ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION'], 2),
-				sequentialRead: true,
-				failOn: env['ASSETS_INVALID_IMAGE_SENSITIVITY_LEVEL'],
-			});
-
-			transformer.timeout({
-				seconds: clamp(Math.round(getMilliseconds(env['ASSETS_TRANSFORM_TIMEOUT'], 0) / 1000), 1, 3600),
-			});
-
-			if (transforms.find((transform) => transform[0] === 'rotate') === undefined) transformer.rotate();
-
-			transforms.forEach(([method, ...args]) => (transformer[method] as any).apply(transformer, args));
-
-			const readStream = await storageLocation.read(sourceFilename, range);
-
-			readStream.on('error', (e: Error) => {
-				logger.error(e, `Couldn't transform file ${file.id}`);
-			});
+			activeTransforms++;
 
 			try {
-				await storageLocation.write(transformedFilename, readStream.pipe(transformer), file.type ?? undefined);
-			} catch (err) {
-				readStream.destroy();
-				throw err;
+				const options: SharpOptions = {
+					limitInputPixels: Math.pow(env['ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION'], 2),
+					sequentialRead: true,
+					failOn: env['ASSETS_INVALID_IMAGE_SENSITIVITY_LEVEL'],
+				};
+
+				const configure = (transformer: Sharp): Sharp => {
+					transformer.timeout({
+						seconds: clamp(Math.round(getMilliseconds(env['ASSETS_TRANSFORM_TIMEOUT'], 0) / 1000), 1, 3600),
+					});
+
+					if (transforms.find((transform) => transform[0] === 'rotate') === undefined) transformer.rotate();
+
+					transforms.forEach(([method, ...args]) => (transformer[method] as any).apply(transformer, args));
+					return transformer;
+				};
+
+				// Transformation arguments are validated before the source is opened.
+				configure(sharp(options));
+
+				const readStream = await storageLocation.read(sourceFilename, range);
+
+				readStream.on('error', (e: Error) => {
+					logger.error(e, `Couldn't transform file ${file.id}`);
+				});
+
+				const chunks: Uint8Array[] = [];
+
+				for await (const chunk of readStream) chunks.push(chunk);
+
+				const output = await configure(sharp(Buffer.concat(chunks), options)).toBuffer();
+
+				await storageLocation.write(
+					transformedFilename,
+					Readable.from(output, { objectMode: false }),
+					file.type ?? undefined
+				);
+			} finally {
+				activeTransforms--;
 			}
 
 			return {
