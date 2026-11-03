@@ -181,7 +181,7 @@ test('control runs keep child reports out of job summaries while vendors publish
 
 		await writeFile(
 			join(directory, 'bin/pnpm'),
-			'#!/bin/sh\nexec env -u NODE_TEST_CONTEXT "$CONTROL_NODE" --test --test-name-pattern="piped failure is immediate; collectAll=false" "$CONTROL_ROOT/harness/reporting.test.mjs"\n',
+			'#!/bin/sh\nexec env -u NODE_TEST_CONTEXT "$CONTROL_NODE" --test --test-reporter=tap --test-name-pattern="piped failure is immediate; collectAll=false" "$CONTROL_ROOT/harness/reporting.test.mjs"\n',
 			{ mode: 0o755 }
 		);
 
