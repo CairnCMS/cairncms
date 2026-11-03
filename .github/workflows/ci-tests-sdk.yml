@@ -19,7 +19,12 @@ permissions:
 
 jobs:
   test:
+    name: Node ${{ matrix.node }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -50,6 +55,8 @@ jobs:
       - name: Prepare
         if: steps.changes.outputs.relevant == 'true'
         uses: ./.github/actions/prepare
+        with:
+          node-version: ${{ matrix.node }}
 
       - name: Run SDK integration tests
         if: steps.changes.outputs.relevant == 'true'
