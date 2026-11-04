@@ -12,5 +12,5 @@ export function isWebhookTriggerPath(path: string | null | undefined): boolean {
 
 export function isWebhookTriggerRoute(req: Request): boolean {
 	if (!req.originalUrl) return false;
-	return isWebhookTriggerPath(parseRequestTarget(req.originalUrl)?.pathname);
+	return isWebhookTriggerPath(parseRequestTarget(req)?.pathname);
 }
