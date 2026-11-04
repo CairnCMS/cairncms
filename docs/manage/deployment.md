@@ -24,6 +24,8 @@ The image is based on `node:22-alpine`, runs as the unprivileged `node` user, an
 - the built admin app, served by the API
 - a CLI bin (`cairncms`) for migrations, bootstrap, user management, and config workflows
 
+The image moves to Node.js 24 in the release that removes Node.js 22 support. Docker users receive the Node.js upgrade through the official image.
+
 By default the image expects state at three paths inside the container:
 
 - `/cairncms/database` — SQLite file location, when using SQLite
@@ -100,9 +102,13 @@ In production, these need to be backed by durable storage:
 
 ## Running without Docker
 
+:::caution[Node.js 22 is deprecated]
+Running CairnCMS on Node.js 22, or on Node.js 24 before 24.16.0, is deprecated in 1.8.0. Use Node.js 24.16.0 or later instead. See the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) for removal timing.
+:::
+
 If you prefer to run CairnCMS directly on a host:
 
-1. Install Node.js 20 (or newer) on the host.
+1. Install Node.js 24.16.0 or later on the host.
 2. Install the CairnCMS package: `npm install -g cairncms` (or use the source tree if you're building from this repo). The `cairncms` package is the one that registers the `cairncms` CLI binary.
 3. Provide the configuration through a `.env` file or environment variables (see [Configuration](/docs/manage/configuration/)).
 4. Run `cairncms bootstrap` once to install system tables and apply migrations.

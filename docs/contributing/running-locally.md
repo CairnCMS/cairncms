@@ -9,7 +9,11 @@ This page is for contributors who want to run CairnCMS from the source tree, mod
 
 ## Prerequisites
 
-- **Node.js 22 LTS** or newer. The platform targets Node 22.
+:::caution[Node.js 22 is deprecated]
+Developing CairnCMS on Node.js 22, or on Node.js 24 before 24.16.0, is deprecated in 1.8.0. Use Node.js 24.16.0 or later instead. See the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) for removal timing.
+:::
+
+- **Node.js 24.16.0** or later. CI also tests Node.js 22 until it is removed.
 - **pnpm 10+**. The repo pins `pnpm@10.13.1` as its `packageManager`. Use corepack (`corepack enable`) to pick up the pinned version automatically.
 - **Docker and Docker Compose**, for the database and supporting services. The root `docker-compose.yml` provides the supported server vendors on local ports, each on its newest and oldest supported line.
 - **Git**, with a configured user and email. Commits must be signed off (`git commit -s`) per the [Developer Certificate of Origin](https://developercertificate.org/).
@@ -272,8 +276,6 @@ pnpm --filter api run cli bootstrap
 
 ## Troubleshooting
 
-- **`pnpm install` fails on Node 24+** — the platform targets Node 22 LTS. If you must run on a newer version, expect
-  occasional dependency-version mismatches; the lockfile is pinned against Node 22.
 - **The api dev server fails to start with a database error** — the most common cause is the database not being up yet.
   `docker compose ps` shows the running services; `docker compose logs <service>` shows why something failed.
 - **The admin app loads but says "API not reachable"** — check that the api dev server is running on `8055` and that

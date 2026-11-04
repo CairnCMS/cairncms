@@ -8,7 +8,7 @@
 npm install -g cairncms
 ```
 
-Node 22 or newer is required. `pnpm` and `yarn` work too.
+`pnpm` and `yarn` work too. Use Node.js 24.16.0 or later. Node.js 22, and Node.js 24 before 24.16.0, are deprecated in 1.8.0. See the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) for removal timing.
 
 ## Quick start
 
