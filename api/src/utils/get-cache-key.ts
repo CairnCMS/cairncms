@@ -2,13 +2,15 @@ import type { Request } from 'express';
 import hash from 'object-hash';
 import { getGraphqlQueryAndVariables } from './get-graphql-query-and-variables.js';
 import { isWebhookTriggerPath } from './is-webhook-trigger-route.js';
-import { parseRequestTarget } from './parse-request-target.js';
+import { isVerbatimTarget, parseRequestTarget } from './parse-request-target.js';
 import { version } from './package.js';
 
 export function getCacheKey(req: Request): string {
-	const target = parseRequestTarget(req.originalUrl);
+	const target = parseRequestTarget(req);
 
-	if (target === null) throw new Error('Cannot compute a cache key for an unparseable request target');
+	if (target === null || !isVerbatimTarget(req)) {
+		throw new Error('Cannot compute a cache key for a request target that is unparseable or rewritten');
+	}
 
 	const path = target.pathname;
 	const isGraphQl = path?.startsWith('/graphql');

@@ -5,6 +5,7 @@ import logger from '../logger.js';
 import asyncHandler from '../utils/async-handler.js';
 import { getCacheControlHeader } from '../utils/get-cache-headers.js';
 import { getCacheKey } from '../utils/get-cache-key.js';
+import { isVerbatimTarget } from '../utils/parse-request-target.js';
 import { shouldSkipCache } from '../utils/should-skip-cache.js';
 
 const checkCacheMiddleware: RequestHandler = asyncHandler(async (req, res, next) => {
@@ -13,6 +14,13 @@ const checkCacheMiddleware: RequestHandler = asyncHandler(async (req, res, next)
 	if (req.method.toLowerCase() !== 'get' && req.originalUrl?.startsWith('/graphql') === false) return next();
 	if (env['CACHE_ENABLED'] !== true) return next();
 	if (!cache) return next();
+
+	// A rewritten target can route somewhere other than its parsed path, so it skips this read and the write in respond.
+	if (!isVerbatimTarget(req)) {
+		res.locals['cache'] = false;
+		if (env['CACHE_STATUS_HEADER']) res.setHeader(`${env['CACHE_STATUS_HEADER']}`, 'MISS');
+		return next();
+	}
 
 	// Server info must always be served fresh, never from a prior cached entry.
 	if (req.path === '/server/info') return next();

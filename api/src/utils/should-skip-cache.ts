@@ -7,7 +7,7 @@ import { Url } from './url.js';
 export function shouldSkipCache(req: Request): boolean {
 	const env = getEnv();
 
-	const target = parseRequestTarget(req.originalUrl);
+	const target = parseRequestTarget(req);
 
 	if (target === null) return true;
 
