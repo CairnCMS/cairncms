@@ -24,7 +24,12 @@ permissions:
 
 jobs:
   stress:
+    name: Node ${{ matrix.node }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
     env:
       INVOCATION_COUNT: ${{ github.event_name == 'pull_request' && '3000' || '10000' }}
     steps:
@@ -57,6 +62,8 @@ jobs:
       - name: Prepare
         if: github.event_name != 'pull_request' || steps.changes.outputs.relevant == 'true'
         uses: ./.github/actions/prepare
+        with:
+          node-version: ${{ matrix.node }}
 
       - name: Run confined runtime stress
         if: github.event_name != 'pull_request' || steps.changes.outputs.relevant == 'true'

@@ -44,6 +44,10 @@ jobs:
         uses: ./.github/actions/prepare
         with:
           build: 'false'
+      - name: Record Node runtime
+        run: |
+          printf 'node=%s\n' "$(node --version)" | tee -a tests/integration/.artifacts/workflow.txt
+          printf 'Node runtime: %s\n\n' "$(node --version)" >> "$GITHUB_STEP_SUMMARY"
       - name: Prepare API and SDK
         id: prepare
         run: pnpm test:integration:prepare 2>&1 | tee tests/integration/.artifacts/prepare.log
@@ -97,7 +101,7 @@ jobs:
           retention-days: 7
 
   restoration:
-    name: Restoration / ${{ matrix.label }}
+    name: Restoration / ${{ matrix.label }} / Node ${{ matrix.node }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -106,12 +110,22 @@ jobs:
         include:
           - vendor: postgres18
             label: PostgreSQL 18 / PostGIS 3.6
+            node: '22'
           - vendor: mysql84
             label: MySQL 8.4
+            node: '22'
           - vendor: maria123
             label: MariaDB 12.3
+            node: '22'
           - vendor: sqlite3
             label: SQLite
+            node: '22'
+          - vendor: postgres18
+            label: PostgreSQL 18 / PostGIS 3.6
+            node: '24'
+          - vendor: sqlite3
+            label: SQLite
+            node: '24'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -128,6 +142,11 @@ jobs:
         uses: ./.github/actions/prepare
         with:
           build: 'false'
+          node-version: ${{ matrix.node }}
+      - name: Record Node runtime
+        run: |
+          printf 'node=%s\n' "$(node --version)" | tee -a tests/integration/.artifacts/workflow.txt
+          printf 'Node runtime: %s\n\n' "$(node --version)" >> "$GITHUB_STEP_SUMMARY"
       - name: Prepare API and SDK
         run: pnpm test:integration:prepare 2>&1 | tee tests/integration/.artifacts/prepare.log
       - name: Verify database restoration and failure cleanup
@@ -151,14 +170,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: api-restoration-${{ matrix.vendor }}-${{ github.run_attempt }}
+          name: api-restoration-${{ matrix.vendor }}-node${{ matrix.node }}-${{ github.run_attempt }}
           path: tests/integration/.artifacts/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
 
   test:
-    name: ${{ matrix.label }}
+    name: ${{ matrix.label }} / Node ${{ matrix.node }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     strategy:
@@ -167,22 +186,37 @@ jobs:
         include:
           - vendor: sqlite3
             label: SQLite
+            node: '22'
           - vendor: postgres18
             label: PostgreSQL 18 / PostGIS 3.6
+            node: '22'
           - vendor: postgres15
             label: PostgreSQL 15
+            node: '22'
           - vendor: postgres10
             label: PostgreSQL 10 / PostGIS 3.2
+            node: '22'
           - vendor: mysql97
             label: MySQL 9.7
+            node: '22'
           - vendor: mysql84
             label: MySQL 8.4
+            node: '22'
           - vendor: mysql5
             label: MySQL 5.7
+            node: '22'
           - vendor: maria123
             label: MariaDB 12.3
+            node: '22'
           - vendor: maria1011
             label: MariaDB 10.11
+            node: '22'
+          - vendor: sqlite3
+            label: SQLite
+            node: '24'
+          - vendor: postgres18
+            label: PostgreSQL 18 / PostGIS 3.6
+            node: '24'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -199,6 +233,11 @@ jobs:
         uses: ./.github/actions/prepare
         with:
           build: 'false'
+          node-version: ${{ matrix.node }}
+      - name: Record Node runtime
+        run: |
+          printf 'node=%s\n' "$(node --version)" | tee -a tests/integration/.artifacts/workflow.txt
+          printf 'Node runtime: %s\n\n' "$(node --version)" >> "$GITHUB_STEP_SUMMARY"
       - name: Prepare API and SDK
         run: pnpm test:integration:prepare 2>&1 | tee tests/integration/.artifacts/prepare.log
       - name: Run every integration suite
@@ -211,7 +250,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: api-integration-${{ matrix.vendor }}-${{ github.run_attempt }}
+          name: api-integration-${{ matrix.vendor }}-node${{ matrix.node }}-${{ github.run_attempt }}
           path: tests/integration/.artifacts/
           include-hidden-files: true
           if-no-files-found: error
@@ -224,7 +263,7 @@ jobs:
     needs: [validation, restoration, test]
     if: always()
     steps:
-      - name: Require validation, restoration and every vendor
+      - name: Require validation, restoration and every vendor lane
         env:
           VALIDATION_RESULT: ${{ needs.validation.result }}
           RESTORATION_RESULT: ${{ needs.restoration.result }}
@@ -235,6 +274,6 @@ jobs:
           if [[ "$VALIDATION_RESULT" == success && "$RESTORATION_RESULT" == success && "$TEST_RESULT" == success ]]; then
             echo 'All API integration checks passed.'
           else
-            echo '::error::API integration requires successful validation, restoration and every vendor.'
+            echo '::error::API integration requires successful validation, restoration and every vendor lane.'
             exit 1
           fi

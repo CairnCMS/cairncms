@@ -111,7 +111,8 @@ describe('realtime delete-feed contract', () => {
 			query: { fields: ['id'] },
 		};
 
-		void client.subscribe('collection_a', createWithQuery);
+		const create = () => client.subscribe('collection_a', createWithQuery);
+		assertType<() => Promise<unknown>>(create);
 
 		const watch = (options: SubscribeOptions<TestSchema, 'collection_a'>) => client.subscribe('collection_a', options);
 		assertType<(options: SubscribeOptions<TestSchema, 'collection_a'>) => Promise<unknown>>(watch);

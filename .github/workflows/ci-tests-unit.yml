@@ -19,13 +19,20 @@ permissions:
 
 jobs:
   unit:
+    name: Node ${{ matrix.node }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Prepare
         uses: ./.github/actions/prepare
+        with:
+          node-version: ${{ matrix.node }}
 
       - name: Check API test types
         run: pnpm --filter @cairncms/api typecheck:tests

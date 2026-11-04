@@ -291,10 +291,11 @@ To change a pin:
    to the engine and line, and add the PostGIS line for PostGIS images, such as `PostgreSQL 18 / PostGIS 3.6`. Declare
    each capability the engine supports: `postgis` when the image includes PostGIS, `generated-columns` for stored
    generated columns, and `virtual-generated-columns` for virtual ones. The vendor unit test rejects any other name.
-3. Update both matrices in `.github/workflows/ci-tests-api.yml`. The test matrix lists every lane in definition order.
-   The restoration matrix runs one lane per family, and `ci-workflow.test.mjs` names those four keys, so update the test
-   too when a family's restoration lane changes. Both matrices use each lane's `version` as its label, and
-   `ci-workflow.test.mjs` fails until they match.
+3. Update both matrices in `.github/workflows/ci-tests-api.yml`. Every entry sets `node` to `'22'` or `'24'`. The test
+   matrix lists every lane in definition order on Node 22, then the Node 24 lanes. The restoration matrix runs one lane
+   per family on Node 22, then the Node 24 lanes. `ci-workflow.test.mjs` names the restoration keys and the Node 24 keys
+   of both matrices, so update the test too when one of them changes. Both matrices use each lane's `version` as its
+   label, and `ci-workflow.test.mjs` fails until they match.
 4. When the newest PostgreSQL key changes, rename every site that names it. Five suites and the applicability control
    run on that single lane: `routes/config/config-settings.test.ts`, `routes/config/config-translations.test.ts`,
    `routes/config/remote-cli.test.ts`, `routes/config/config-extension-settings.test.ts`,
