@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
-import { expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { md } from './md';
+
+afterEach(() => {
+	vi.restoreAllMocks();
+});
 
 test('renders headings without generated id attributes', () => {
 	expect(md('# Big Heading')).toBe('<h1>Big Heading</h1>\n');
@@ -34,4 +38,16 @@ test('sanitizes dangerous HTML in rendered markdown', () => {
 
 test('drops javascript URLs from links', () => {
 	expect(md('[click](javascript:alert(1))')).not.toContain('javascript:');
+});
+
+test('writes rel once per render across repeated renders', () => {
+	const setAttribute = vi.spyOn(Element.prototype, 'setAttribute');
+
+	const relWritesPerRender = Array.from({ length: 3 }, () => {
+		setAttribute.mockClear();
+		md('[link](https://example.com)', { target: '_blank' });
+		return setAttribute.mock.calls.filter(([name]) => name === 'rel').length;
+	});
+
+	expect(relWritesPerRender).toEqual([1, 1, 1]);
 });
