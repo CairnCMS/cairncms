@@ -65,12 +65,25 @@ const ADMIN_ACCOUNTABILITY = {
 	permissions: [],
 };
 
-function buildApp(accountability: Record<string, unknown> = ADMIN_ACCOUNTABILITY) {
+const EMPTY_SCHEMA = { collections: {}, relations: [] };
+
+function settingsSchema(defaults: Record<string, unknown>) {
+	const fields = Object.fromEntries(
+		Object.entries(defaults).map(([field, defaultValue]) => [field, { field, defaultValue }])
+	);
+
+	return { collections: { directus_settings: { fields } }, relations: [] };
+}
+
+function buildApp(
+	accountability: Record<string, unknown> = ADMIN_ACCOUNTABILITY,
+	schema: Record<string, unknown> = EMPTY_SCHEMA
+) {
 	const app = express();
 
 	app.use((req: Request, _res: Response, next: NextFunction) => {
 		(req as any).accountability = accountability;
-		(req as any).schema = { collections: {}, relations: [] };
+		(req as any).schema = schema;
 		next();
 	});
 
@@ -99,6 +112,8 @@ function fakeFile() {
 
 describe('GET/HEAD /assets/:pk (GHSA-rv78-qqrq-73m5)', () => {
 	beforeEach(() => {
+		savedSettings.row = { storage_asset_presets: [], storage_asset_transform: 'all' };
+
 		getAssetSpy.mockReset().mockResolvedValue({
 			stream: Readable.from(Buffer.from('test-body')),
 			file: fakeFile(),
@@ -112,6 +127,7 @@ describe('GET/HEAD /assets/:pk (GHSA-rv78-qqrq-73m5)', () => {
 	});
 
 	afterEach(() => {
+		savedSettings.row = undefined;
 		vi.clearAllMocks();
 	});
 
@@ -319,11 +335,23 @@ describe('GET /assets/:pk advanced transformations', () => {
 		expect(getAssetSpy).not.toHaveBeenCalled();
 	});
 
-	it('rejects them for an anonymous caller when no settings row exists', async () => {
-		const res = await request(buildApp(ANONYMOUS)).get(`/assets/${VALID_UUID}?${blur}`);
+	it('rejects them for an anonymous caller when no settings row exists and the schema allows all', async () => {
+		const schema = settingsSchema({ storage_asset_transform: 'all' });
+
+		const res = await request(buildApp(ANONYMOUS, schema)).get(`/assets/${VALID_UUID}?${blur}`);
 
 		expect(res.status).toBe(400);
+		expect(res.body).toEqual({ code: 'INVALID_QUERY' });
 		expect(getAssetSpy).not.toHaveBeenCalled();
+	});
+
+	it('follows the schema default for public advanced transformations when no settings row exists', async () => {
+		const schema = settingsSchema({ storage_asset_transform: 'all', storage_asset_public_transforms: true });
+
+		const res = await request(buildApp(ANONYMOUS, schema)).get(`/assets/${VALID_UUID}?${blur}`);
+
+		expect(res.status).toBe(200);
+		expect(getAssetSpy).toHaveBeenCalledTimes(1);
 	});
 
 	it.each([
@@ -365,5 +393,82 @@ describe('GET /assets/:pk advanced transformations', () => {
 		expect(res.status).toBe(400);
 		expect(res.body).toEqual({ code: 'INVALID_QUERY' });
 		expect(getAssetSpy).not.toHaveBeenCalled();
+	});
+});
+
+describe('GET /assets/:pk without a settings row', () => {
+	beforeEach(() => {
+		savedSettings.row = undefined;
+
+		getAssetSpy.mockReset().mockResolvedValue({
+			stream: Readable.from(Buffer.from('test-body')),
+			file: fakeFile(),
+			stat: { size: 9 },
+		});
+	});
+
+	afterEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it('allows transformations when the schema default is all', async () => {
+		const schema = settingsSchema({ storage_asset_transform: 'all' });
+
+		const res = await request(buildApp(ADMIN_ACCOUNTABILITY, schema)).get(`/assets/${VALID_UUID}?width=100`);
+
+		expect(res.status).toBe(200);
+		expect(getAssetSpy.mock.calls[0]![1].transformationParams.width).toBe('100');
+	});
+
+	it.each([
+		['the schema default is none', settingsSchema({ storage_asset_transform: 'none' })],
+		['the schema reports no default', settingsSchema({ storage_asset_transform: null })],
+		['the schema has no settings collection', EMPTY_SCHEMA],
+	])('disables transformations when %s', async (_label, schema) => {
+		const res = await request(buildApp(ADMIN_ACCOUNTABILITY, schema)).get(`/assets/${VALID_UUID}?width=100`);
+
+		expect(res.status).toBe(400);
+		expect(res.body).toEqual({ code: 'INVALID_QUERY' });
+		expect(getAssetSpy).not.toHaveBeenCalled();
+	});
+
+	it('still serves system keys when the schema reports no default', async () => {
+		const schema = settingsSchema({ storage_asset_transform: null });
+
+		const res = await request(buildApp(ADMIN_ACCOUNTABILITY, schema)).get(
+			`/assets/${VALID_UUID}?key=system-small-cover`
+		);
+
+		expect(res.status).toBe(200);
+		expect(getAssetSpy).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('GET /assets/:pk Kanban card size', () => {
+	beforeEach(() => {
+		getAssetSpy.mockReset().mockResolvedValue({
+			stream: Readable.from(Buffer.from('test-body')),
+			file: fakeFile(),
+			stat: { size: 9 },
+		});
+	});
+
+	afterEach(() => {
+		savedSettings.row = undefined;
+		vi.clearAllMocks();
+	});
+
+	it.each(['all', 'presets', 'none'])('resolves the built-in 250x150 cover under %s', async (mode) => {
+		savedSettings.row = { storage_asset_presets: [], storage_asset_transform: mode };
+
+		const res = await request(buildApp()).get(`/assets/${VALID_UUID}?key=system-kanban-cover`);
+
+		expect(res.status).toBe(200);
+
+		expect(getAssetSpy.mock.calls[0]![1].transformationParams).toEqual({
+			key: 'system-kanban-cover',
+			format: 'auto',
+			transforms: [['resize', { width: 250, height: 150, fit: 'cover' }]],
+		});
 	});
 });

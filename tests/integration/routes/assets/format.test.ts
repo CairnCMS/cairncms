@@ -2,6 +2,7 @@ import { describe, expect, vi } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { createStorageTest } from '../../fixtures/storage';
 import request from '../../fixtures/request';
+import { withSettings } from '../../fixtures/settings';
 import { createReadStream } from 'fs';
 import path from 'path';
 import { initializeFixtures } from '../../harness/fixture-setup.mjs';
@@ -24,21 +25,20 @@ describe('/assets', () => {
 			describe('without Accept request header', () => {
 				describe.each(storages)('Storage: %s', (storage) => {
 					test('REST', async ({ api }) => {
-						// Setup
-						const insertResponse = await request(api.url)
-							.post('/files')
-							.set('Authorization', `Bearer ${api.adminToken}`)
-							.field('storage', storage)
-							.attach('file', createReadStream(imageFileAvif));
+						await withSettings(api, { storage_asset_transform: 'all' }, async () => {
+							const insertResponse = await request(api.url)
+								.post('/files')
+								.set('Authorization', `Bearer ${api.adminToken}`)
+								.field('storage', storage)
+								.attach('file', createReadStream(imageFileAvif));
 
-						// Action
-						const response = await request(api.url)
-							.get(`/assets/${insertResponse.body.data.id}?format=auto`)
-							.set('Authorization', `Bearer ${api.adminToken}`);
+							const response = await request(api.url)
+								.get(`/assets/${insertResponse.body.data.id}?format=auto`)
+								.set('Authorization', `Bearer ${api.adminToken}`);
 
-						// Assert
-						expect(response.statusCode).toBe(200);
-						expect(response.headers['content-type']).toBe('image/png'); // Expect fallback to png for image format with transparency support
+							expect(response.statusCode).toBe(200);
+							expect(response.headers['content-type']).toBe('image/png'); // Expect fallback to png for image format with transparency support
+						});
 					});
 				});
 			});
@@ -51,22 +51,21 @@ describe('/assets', () => {
 			])('with "$requestHeaderAccept" Accept request header', ({ requestHeaderAccept, responseHeaderContentType }) => {
 				describe.each(storages)('Storage: %s', (storage) => {
 					test('REST', async ({ api }) => {
-						// Setup
-						const insertResponse = await request(api.url)
-							.post('/files')
-							.set('Authorization', `Bearer ${api.adminToken}`)
-							.field('storage', storage)
-							.attach('file', createReadStream(imageFilePng));
+						await withSettings(api, { storage_asset_transform: 'all' }, async () => {
+							const insertResponse = await request(api.url)
+								.post('/files')
+								.set('Authorization', `Bearer ${api.adminToken}`)
+								.field('storage', storage)
+								.attach('file', createReadStream(imageFilePng));
 
-						// Action
-						const response = await request(api.url)
-							.get(`/assets/${insertResponse.body.data.id}?format=auto`)
-							.set('Authorization', `Bearer ${api.adminToken}`)
-							.set('Accept', requestHeaderAccept);
+							const response = await request(api.url)
+								.get(`/assets/${insertResponse.body.data.id}?format=auto`)
+								.set('Authorization', `Bearer ${api.adminToken}`)
+								.set('Accept', requestHeaderAccept);
 
-						// Assert
-						expect(response.statusCode).toBe(200);
-						expect(response.headers['content-type']).toBe(responseHeaderContentType);
+							expect(response.statusCode).toBe(200);
+							expect(response.headers['content-type']).toBe(responseHeaderContentType);
+						});
 					});
 				});
 			});

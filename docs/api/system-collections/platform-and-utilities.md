@@ -31,7 +31,7 @@ The settings row carries dozens of fields. The notable ones:
 - **`default_language`**, **`default_appearance`**, **`default_theme_light`**, **`default_theme_dark`** — default per-user preferences for new accounts.
 - **`auth_password_policy`** — the password complexity regex.
 - **`auth_login_attempts`** — count of failed logins before lockout. Default `25`.
-- **`storage_asset_transform`**, **`storage_asset_presets`** — control which asset transformations the platform accepts. See [Files / Image transformations](/docs/api/files/#image-transformations).
+- **`storage_asset_transform`**, **`storage_asset_public_transforms`**, **`storage_asset_presets`** — control which asset transformations the platform accepts. See [Files / Image transformations](/docs/api/files/#image-transformations).
 - **`storage_default_folder`** — folder UUID that uploads default into when no folder is specified.
 - **`mapbox_key`** — token for the map layout's tile provider.
 - **`module_bar`** — array of module IDs and ordering for the admin app's module bar.

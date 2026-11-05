@@ -30,10 +30,12 @@ router.get(
 	asyncHandler(async (req, res, next) => {
 		const payloadService = new PayloadService('directus_settings', { schema: req.schema });
 
+		const settingsFields = req.schema.collections['directus_settings']?.fields;
+
 		const defaults = {
 			storage_asset_presets: [],
-			storage_asset_transform: 'all',
-			storage_asset_public_transforms: false,
+			storage_asset_transform: settingsFields?.['storage_asset_transform']?.defaultValue ?? 'none',
+			storage_asset_public_transforms: settingsFields?.['storage_asset_public_transforms']?.defaultValue ?? false,
 		};
 
 		const database = getDatabase();

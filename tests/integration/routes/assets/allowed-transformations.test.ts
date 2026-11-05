@@ -130,6 +130,22 @@ describe('/assets allowed transformations with an empty transforms list', () => 
 	});
 });
 
+describe('/assets built-in keys', () => {
+	test('serve the Kanban card and avatar sizes in every transformation mode', async ({ api }) => {
+		for (const mode of ['all', 'presets', 'none'] as const) {
+			await withTransformMode(api, mode, async (get) => {
+				const card = await get('?key=system-kanban-cover');
+				expect(card.statusCode).toBe(200);
+				expect(pngSize(card.body)).toEqual({ width: 250, height: 150 });
+
+				const avatar = await get('?key=system-small-cover');
+				expect(avatar.statusCode).toBe(200);
+				expect(pngSize(avatar.body)).toEqual({ width: 64, height: 64 });
+			});
+		}
+	});
+});
+
 const PUBLIC_TITLE = 'Public asset image';
 const BLUR = `transforms=${encodeURIComponent(JSON.stringify([['blur', 1]]))}`;
 const SOURCE_SIZE = { width: 930, height: 200 };

@@ -211,7 +211,7 @@ Image assets can be transformed on the fly through query parameters on `/assets/
 
 ### Preset keys
 
-The platform ships six built-in keys for common thumbnail sizes:
+The platform ships seven built-in keys for common thumbnail sizes:
 
 | Key | Operation |
 |---|---|
@@ -221,6 +221,9 @@ The platform ships six built-in keys for common thumbnail sizes:
 | `system-medium-contain` | width 300, scaled to fit. |
 | `system-large-cover` | 800×800, cropped to cover. |
 | `system-large-contain` | width 800, scaled to fit. |
+| `system-kanban-cover` | 250×150, cropped to cover. Used for Kanban card images. |
+
+Built-in keys work in every transformation mode.
 
 ```
 GET /assets/<id>?key=system-medium-cover
@@ -275,7 +278,7 @@ The **`storage_asset_transform`** project setting controls which transformations
 - **`presets`** — only the system keys and the configured `storage_asset_presets` keys are accepted. Arbitrary `width`, `height`, and so on are rejected.
 - Any other value — only the system keys work. Project presets and arbitrary parameters are rejected.
 
-These modes apply to every caller, including administrators.
+These modes apply to every caller, including administrators. A new installation starts with `none`, so only the system keys work until an administrator chooses another mode. Upgraded installations keep their stored setting.
 
 The **`storage_asset_public_transforms`** setting (**Allow Public Advanced Transformations** in Project Settings) lets requests without a token use `transforms`. It defaults to `false` and only applies when `storage_asset_transform` is `all`. Turning it on doesn't make private files public, because file permissions still apply.
 

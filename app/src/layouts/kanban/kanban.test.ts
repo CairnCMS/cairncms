@@ -4,6 +4,7 @@ import { defineComponent } from 'vue';
 import { createI18n } from 'vue-i18n';
 import { unexpectedError } from '@/utils/unexpected-error';
 import KanbanLayout from './kanban.vue';
+import type { User } from '@cairncms/types';
 import type { Group } from './types';
 
 vi.mock('@/utils/unexpected-error', () => ({ unexpectedError: vi.fn() }));
@@ -48,11 +49,14 @@ function makeGroup(id: string | number): Group {
 	return { id, title: `Group ${id}`, items: [], sort: 1 };
 }
 
-function mountKanban(deleteGroup: (id: string | number) => Promise<void>) {
+function mountKanban(
+	deleteGroup: (id: string | number) => Promise<void>,
+	groupedItems: Group[] = [makeGroup('group-1'), makeGroup('group-2')]
+) {
 	return shallowMount(KanbanLayout, {
 		props: {
 			collection: 'articles',
-			groupedItems: [makeGroup('group-1'), makeGroup('group-2')],
+			groupedItems,
 			isRelational: true,
 			change: vi.fn(),
 			changeGroupSort: vi.fn(),
@@ -243,5 +247,32 @@ describe('kanban delete group confirmation', () => {
 
 		pending.resolve();
 		await flushPromises();
+	});
+});
+
+describe('kanban card avatars', () => {
+	test('request the built-in small cover size', () => {
+		const group = makeGroup('group-1');
+
+		const user = {
+			id: 'user-1',
+			first_name: 'Ada',
+			last_name: 'Lovelace',
+			avatar: { id: 'avatar-file', type: 'image/png', modified_on: '2026-11-05T00:00:00.000Z' },
+		} as unknown as User;
+
+		group.items = [{ id: 1, sort: 1, item: {}, users: [user] }];
+
+		const wrapper = mountKanban(
+			vi.fn(async () => undefined),
+			[group]
+		);
+
+		const source = new URL(wrapper.find('.avatar img').attributes('src')!, 'http://localhost');
+
+		expect(source.pathname).toBe('/assets/avatar-file');
+		expect(source.searchParams.get('key')).toBe('system-small-cover');
+		expect(source.searchParams.has('width')).toBe(false);
+		expect(source.searchParams.has('height')).toBe(false);
 	});
 });

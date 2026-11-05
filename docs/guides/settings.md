@@ -52,7 +52,7 @@ Custom links can carry a name, an icon, and a URL.
 
 CairnCMS can transform images on the fly when they are requested. This section controls which transformations are allowed and which preset transformations are predefined.
 
-- **Allowed Transformations** — enable, disable, or restrict on-the-fly transformations
+- **Allowed Transformations** — enable, disable, or restrict on-the-fly transformations. New installations start with **Disable transformations**. The app's built-in thumbnail sizes work in every mode.
 - **Allow Public Advanced Transformations** — shown when all transformations are allowed. When off, which is the default, requests that use the `transforms` URL parameter need a valid user token or session. Resizing, format changes, and presets are unaffected.
 - **Default Folder** — where new files land by default when no folder is selected. File and image fields can override this per field.
 - **Transformation Presets** — named transformations that callers can request by key, instead of passing every parameter on each request
