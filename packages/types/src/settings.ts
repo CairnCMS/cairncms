@@ -45,6 +45,7 @@ export type Settings = {
 	auth_login_attempts: number;
 	auth_password_policy: string | null;
 	storage_asset_transform: string;
+	storage_asset_public_transforms: boolean;
 	storage_asset_presets: SettingsStorageAssetPreset[] | null;
 	custom_aspect_ratios: CustomAspectRatio[] | null;
 	custom_css: string | null;

@@ -8,7 +8,12 @@ import { createTracker, MockClient, Tracker } from 'knex-mock-client';
 import type { MockedFunction } from 'vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import env from '../env.js';
-import { ForbiddenException, RangeNotSatisfiableException, ServiceUnavailableException } from '../exceptions/index.js';
+import {
+	ForbiddenException,
+	IllegalAssetTransformation,
+	RangeNotSatisfiableException,
+	ServiceUnavailableException,
+} from '../exceptions/index.js';
 import { AssetsService } from './assets.js';
 
 const VALID_UUID = '11111111-2222-4333-8444-555555555555';
@@ -50,7 +55,9 @@ const { sharpInstance, sharpFactory, loggerErrorSpy } = vi.hoisted(() => {
 	instance.timeout = vi.fn(() => instance);
 	instance.rotate = vi.fn(() => instance);
 	instance.resize = vi.fn(() => instance);
+	instance.blur = vi.fn(() => instance);
 	instance.toFormat = vi.fn(() => instance);
+	instance.metadata = vi.fn();
 	instance.toBuffer = vi.fn(async () => Buffer.from('transformed'));
 	const factory: any = vi.fn(() => instance);
 	return { sharpInstance: instance, sharpFactory: factory, loggerErrorSpy: vi.fn() };
@@ -346,6 +353,12 @@ describe('AssetsService.getAsset uncached-transform pipeline (GHSA-j8xj-7jff-46m
 		return service.getAsset(VALID_UUID, { transformationParams: { width: 100 } });
 	}
 
+	function sourceHeader(width: number, height: number) {
+		return { width, height, autoOrient: { width, height } };
+	}
+
+	const maxDimension = () => Number(env['ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION']);
+
 	beforeAll(() => {
 		db = vi.mocked(knex.default({ client: MockClient }));
 		tracker = createTracker(db);
@@ -362,6 +375,8 @@ describe('AssetsService.getAsset uncached-transform pipeline (GHSA-j8xj-7jff-46m
 		sharpInstance.rotate.mockClear();
 		sharpInstance.resize.mockClear();
 		sharpInstance.toFormat.mockClear();
+		sharpInstance.blur.mockClear();
+		sharpInstance.metadata.mockReset().mockResolvedValue(sourceHeader(800, 600));
 		sharpInstance.toBuffer.mockReset().mockResolvedValue(Buffer.from('transformed'));
 		loggerErrorSpy.mockReset();
 		primeKnex(tracker);
@@ -412,6 +427,106 @@ describe('AssetsService.getAsset uncached-transform pipeline (GHSA-j8xj-7jff-46m
 		expect(storageWrite).not.toHaveBeenCalled();
 	});
 
+	describe('size limit', () => {
+		it('rejects a source whose header exceeds the limit when the stored row understates it', async () => {
+			tracker.reset();
+			primeKnex(tracker, makeFileRow({ width: 10, height: 10 }));
+			sharpInstance.metadata.mockResolvedValue(sourceHeader(maxDimension() + 1, 10));
+			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+			await expect(requestTransform(service)).rejects.toBeInstanceOf(IllegalAssetTransformation);
+
+			expect(sharpInstance.toBuffer).not.toHaveBeenCalled();
+			expect(storageWrite).not.toHaveBeenCalled();
+		});
+
+		it('computes the output from the header rather than the stored row', async () => {
+			tracker.reset();
+			primeKnex(tracker, makeFileRow({ width: 10, height: 10 }));
+			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+			await expect(
+				service.getAsset(VALID_UUID, { transformationParams: { height: maxDimension() } })
+			).rejects.toBeInstanceOf(IllegalAssetTransformation);
+
+			expect(sharpInstance.toBuffer).not.toHaveBeenCalled();
+		});
+
+		it('rejects a resize whose output would exceed the limit', async () => {
+			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+			await expect(
+				service.getAsset(VALID_UUID, { transformationParams: { width: maxDimension() + 1 } })
+			).rejects.toBeInstanceOf(IllegalAssetTransformation);
+
+			expect(sharpInstance.toBuffer).not.toHaveBeenCalled();
+			expect(storageWrite).not.toHaveBeenCalled();
+		});
+
+		it('transforms a resize at exactly the limit', async () => {
+			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+			await service.getAsset(VALID_UUID, { transformationParams: { width: maxDimension() } });
+
+			expect(sharpInstance.toBuffer).toHaveBeenCalledTimes(1);
+			expect(storageWrite).toHaveBeenCalledTimes(1);
+		});
+
+		it('transforms an inside resize at exactly the limit when the scale is inexact', async () => {
+			const configured = env['ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION'];
+			env['ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION'] = 1000;
+			sharpInstance.metadata.mockResolvedValue(sourceHeader(15, 14));
+
+			try {
+				tracker.reset();
+				primeKnex(tracker, makeFileRow({ width: 15, height: 14 }));
+				const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+				await service.getAsset(VALID_UUID, { transformationParams: { width: 1000, height: 1000, fit: 'inside' } });
+
+				expect(sharpInstance.toBuffer).toHaveBeenCalledTimes(1);
+			} finally {
+				env['ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION'] = configured;
+			}
+		});
+
+		it('reads the header without the pixel limit and transforms with it', async () => {
+			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+			await requestTransform(service);
+
+			expect(sharpFactory).toHaveBeenCalledWith(
+				Buffer.from('source'),
+				expect.objectContaining({ limitInputPixels: false })
+			);
+
+			expect(sharpFactory).toHaveBeenLastCalledWith(
+				Buffer.from('source'),
+				expect.objectContaining({ limitInputPixels: Math.pow(maxDimension(), 2) })
+			);
+		});
+
+		it('checks only the source for advanced transformations', async () => {
+			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+			await service.getAsset(VALID_UUID, {
+				transformationParams: { width: maxDimension() + 1, transforms: [['blur', 1]] },
+			});
+
+			expect(sharpInstance.toBuffer).toHaveBeenCalledTimes(1);
+		});
+
+		it('serves a cached derivative without reading the header', async () => {
+			storageExists.mockImplementation(async () => true);
+			sharpInstance.metadata.mockResolvedValue(sourceHeader(maxDimension() + 1, 10));
+			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+			await expect(requestTransform(service)).resolves.toBeDefined();
+
+			expect(sharpFactory).not.toHaveBeenCalled();
+		});
+	});
+
 	describe('admission', () => {
 		let configuredLimit: unknown;
 
@@ -454,6 +569,11 @@ describe('AssetsService.getAsset uncached-transform pipeline (GHSA-j8xj-7jff-46m
 				/bad resize args/,
 			],
 			['a source read failure', () => storageRead.mockRejectedValueOnce(new Error('source missing')), /source missing/],
+			[
+				'an oversized source header',
+				() => sharpInstance.metadata.mockResolvedValueOnce(sourceHeader(maxDimension() + 1, 10)),
+				/too large/,
+			],
 			[
 				'a source stream error',
 				() => storageRead.mockResolvedValueOnce(failingStream(new Error('stream dropped'))),

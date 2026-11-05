@@ -301,7 +301,7 @@ export default defineLayout<LayoutOptions, LayoutQuery>({
 			if (file.type.startsWith('image') === false) return;
 			if (file.type.includes('svg')) return;
 
-			const fit = crop.value ? '&width=250&height=150' : `&key=system-medium-contain`;
+			const fit = crop.value ? '&key=system-kanban-cover' : '&key=system-medium-contain';
 
 			return getRootPath() + `assets/${file.id}?modified=${file.modified_on}` + fit;
 		}

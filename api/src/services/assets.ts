@@ -138,7 +138,30 @@ export class AssetsService {
 
 				for await (const chunk of readStream) chunks.push(chunk);
 
-				const output = await configure(sharp(Buffer.concat(chunks), options)).toBuffer();
+				const source = Buffer.concat(chunks);
+				const maxDimension = Number(env['ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION']);
+
+				// Reading metadata decodes no pixels. With the pixel limit, an oversized source fails before the size check.
+				const { autoOrient } = await sharp(source, { ...options, limitInputPixels: false }).metadata();
+
+				if (
+					!autoOrient?.width ||
+					!autoOrient?.height ||
+					autoOrient.width > maxDimension ||
+					autoOrient.height > maxDimension
+				) {
+					throw new IllegalAssetTransformation(
+						`Image is too large to be transformed, or image size couldn't be determined.`
+					);
+				}
+
+				const outputSize = TransformationUtils.getOutputSizeBound(transforms, autoOrient);
+
+				if (outputSize && (outputSize.width > maxDimension || outputSize.height > maxDimension)) {
+					throw new IllegalAssetTransformation(`Transformed image would exceed the maximum dimension.`);
+				}
+
+				const output = await configure(sharp(source, options)).toBuffer();
 
 				await storageLocation.write(
 					transformedFilename,

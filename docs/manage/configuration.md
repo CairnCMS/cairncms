@@ -470,7 +470,7 @@ Asset transformation settings:
 
 - **`ASSETS_CACHE_TTL`** — how long transformed assets stay cached client-side. Default `30d`.
 - **`ASSETS_TRANSFORM_MAX_CONCURRENT`** — concurrent transformation jobs. Default `25`.
-- **`ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION`** — maximum side-length for transformed images. Default `6000`.
+- **`ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION`** — maximum side length, in pixels, of a source image that can be transformed and of a resized output. Default `6000`. See [Size limit](/docs/api/files/#size-limit).
 - **`ASSETS_TRANSFORM_MAX_OPERATIONS`** — chained operations per transform request. Default `5`.
 - **`ASSETS_TRANSFORM_TIMEOUT`** — per-job timeout. Default `7500ms`.
 - **`ASSETS_INVALID_IMAGE_SENSITIVITY_LEVEL`** — how strictly to reject corrupted images. `error`, `warning`, or `none`. Default `warning`.
