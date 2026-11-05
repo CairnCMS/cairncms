@@ -56,19 +56,20 @@ vi.mock('../middleware/extract-cookie-session.js', () => ({
 
 import assetsRouter from './assets.js';
 
-function buildApp() {
+const ADMIN_ACCOUNTABILITY = {
+	user: 'admin-uuid',
+	role: 'role-uuid',
+	admin: true,
+	app: true,
+	ip: '127.0.0.1',
+	permissions: [],
+};
+
+function buildApp(accountability: Record<string, unknown> = ADMIN_ACCOUNTABILITY) {
 	const app = express();
 
 	app.use((req: Request, _res: Response, next: NextFunction) => {
-		(req as any).accountability = {
-			user: 'admin-uuid',
-			role: 'role-uuid',
-			admin: true,
-			app: true,
-			ip: '127.0.0.1',
-			permissions: [],
-		};
-
+		(req as any).accountability = accountability;
 		(req as any).schema = { collections: {}, relations: [] };
 		next();
 	});
@@ -273,5 +274,96 @@ describe('GET /assets/:pk allowed transformations with an empty transforms list'
 		expect(res.status).toBe(200);
 		expect(getAssetSpy).toHaveBeenCalledTimes(1);
 		expect(getAssetSpy.mock.calls[0]![1].transformationParams.width).toBe('100');
+	});
+});
+
+describe('GET /assets/:pk advanced transformations', () => {
+	const thumbPreset = { key: 'thumb', width: 100, height: 100, fit: 'cover' };
+	const blur = `transforms=${encodeURIComponent(JSON.stringify([['blur', 1]]))}`;
+
+	const ANONYMOUS = { user: null, role: null, admin: false, app: false, ip: '127.0.0.1' };
+	const SHARE = { ...ANONYMOUS, role: 'share-role-uuid', share: 'share-uuid', share_scope: {} };
+	const API_USER = { user: 'user-uuid', role: 'api-role-uuid', admin: false, app: false, ip: '127.0.0.1' };
+
+	beforeEach(() => {
+		getAssetSpy.mockReset().mockResolvedValue({
+			stream: Readable.from(Buffer.from('test-body')),
+			file: fakeFile(),
+			stat: { size: 9 },
+		});
+	});
+
+	afterEach(() => {
+		savedSettings.row = undefined;
+		vi.clearAllMocks();
+	});
+
+	function useSettings(mode: string, publicTransforms: unknown) {
+		savedSettings.row = {
+			storage_asset_presets: [thumbPreset],
+			storage_asset_transform: mode,
+			storage_asset_public_transforms: publicTransforms,
+		};
+	}
+
+	it.each([
+		['an anonymous caller', ANONYMOUS],
+		['a share link', SHARE],
+	])('rejects them for %s when public advanced transformations are off', async (_label, accountability) => {
+		useSettings('all', false);
+
+		const res = await request(buildApp(accountability)).get(`/assets/${VALID_UUID}?${blur}`);
+
+		expect(res.status).toBe(400);
+		expect(res.body).toEqual({ code: 'INVALID_QUERY' });
+		expect(getAssetSpy).not.toHaveBeenCalled();
+	});
+
+	it('rejects them for an anonymous caller when no settings row exists', async () => {
+		const res = await request(buildApp(ANONYMOUS)).get(`/assets/${VALID_UUID}?${blur}`);
+
+		expect(res.status).toBe(400);
+		expect(getAssetSpy).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		['resize parameters', 'width=100'],
+		['a configured preset', 'key=thumb'],
+		['an empty transforms list', 'transforms=[]'],
+	])('lets an anonymous caller use %s when public advanced transformations are off', async (_label, query) => {
+		useSettings('all', false);
+
+		const res = await request(buildApp(ANONYMOUS)).get(`/assets/${VALID_UUID}?${query}`);
+
+		expect(res.status).toBe(200);
+		expect(getAssetSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it('allows them for a user without app access', async () => {
+		useSettings('all', false);
+
+		const res = await request(buildApp(API_USER)).get(`/assets/${VALID_UUID}?${blur}`);
+
+		expect(res.status).toBe(200);
+		expect(getAssetSpy.mock.calls[0]![1].transformationParams.transforms).toEqual([['blur', 1]]);
+	});
+
+	it('allows them for an anonymous caller when public advanced transformations are on', async () => {
+		useSettings('all', true);
+
+		const res = await request(buildApp(ANONYMOUS)).get(`/assets/${VALID_UUID}?${blur}`);
+
+		expect(res.status).toBe(200);
+		expect(getAssetSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it.each(['presets', 'none'])('rejects them for an admin under %s whatever the switch value', async (mode) => {
+		useSettings(mode, true);
+
+		const res = await request(buildApp()).get(`/assets/${VALID_UUID}?${blur}`);
+
+		expect(res.status).toBe(400);
+		expect(res.body).toEqual({ code: 'INVALID_QUERY' });
+		expect(getAssetSpy).not.toHaveBeenCalled();
 	});
 });

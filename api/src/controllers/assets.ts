@@ -29,12 +29,17 @@ router.get(
 	// Validate query params
 	asyncHandler(async (req, res, next) => {
 		const payloadService = new PayloadService('directus_settings', { schema: req.schema });
-		const defaults = { storage_asset_presets: [], storage_asset_transform: 'all' };
+
+		const defaults = {
+			storage_asset_presets: [],
+			storage_asset_transform: 'all',
+			storage_asset_public_transforms: false,
+		};
 
 		const database = getDatabase();
 
 		const savedAssetSettings = await database
-			.select('storage_asset_presets', 'storage_asset_transform')
+			.select('storage_asset_presets', 'storage_asset_transform', 'storage_asset_public_transforms')
 			.from('directus_settings')
 			.first();
 
@@ -101,6 +106,12 @@ router.get(
 		if (assetSettings.storage_asset_transform === 'all') {
 			if (transformation['key'] && allKeys.includes(transformation['key'] as string) === false) {
 				throw new InvalidQueryException(`Key "${transformation['key']}" isn't configured.`);
+			}
+
+			const advanced = Array.isArray(transformation['transforms']) && transformation['transforms'].length > 0;
+
+			if (advanced && !assetSettings.storage_asset_public_transforms && !req.accountability?.user) {
+				throw new InvalidQueryException(`Advanced transformations require authentication.`);
 			}
 
 			return next();
