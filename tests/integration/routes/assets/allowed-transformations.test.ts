@@ -7,13 +7,18 @@ import type { Api } from '../../fixtures/environment';
 import { createIdentityTest, USER } from '../../fixtures/identities';
 import request, { CreateItem, setupRequest } from '../../fixtures/request';
 import { CreateCollection, CreateFieldM2O } from '../../fixtures/schema';
+import { withSettings } from '../../fixtures/settings';
 import { initializeFixtures } from '../../harness/fixture-setup.mjs';
 
-const test = createIdentityTest();
+const MAX_DIMENSION = 1000;
+
+const test = createIdentityTest({ env: { ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION: String(MAX_DIMENSION) } });
 
 initializeFixtures();
 
 const imageFilePath = fileURLToPath(new URL('../../fixtures/assets/directus.png', import.meta.url));
+const tallImagePath = fileURLToPath(new URL('../../fixtures/assets/tall-narrow.png', import.meta.url));
+const largeImagePath = fileURLToPath(new URL('../../fixtures/assets/layers.png', import.meta.url));
 
 const thumbPreset = {
 	key: 'project-thumb',
@@ -28,6 +33,15 @@ const thumbPreset = {
 
 function pngSize(buffer: Buffer): { width: number; height: number } {
 	return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+}
+
+async function getPublicRole(api: Api) {
+	const response = await setupRequest(api.url)
+		.get('/roles')
+		.query({ filter: JSON.stringify({ key: { _eq: 'public' } }), fields: 'id' })
+		.set('Authorization', `Bearer ${api.adminToken}`);
+
+	return response.body.data[0].id as string;
 }
 
 /** Runs a case under one transformation mode against a fresh upload, then restores the settings and removes the file. */
@@ -185,12 +199,7 @@ async function withAccessFixture(
 		storage_asset_presets: before.body.data.storage_asset_presets ?? null,
 	};
 
-	const publicRole = (
-		await setupRequest(api.url)
-			.get('/roles')
-			.query({ filter: JSON.stringify({ key: { _eq: 'public' } }), fields: 'id' })
-			.set('Authorization', admin)
-	).body.data[0].id as string;
+	const publicRole = await getPublicRole(api);
 
 	const apiOnlyRole = (
 		await setupRequest(api.url)
@@ -409,5 +418,197 @@ describe('/assets advanced transformations', () => {
 				}
 			});
 		}
+	});
+});
+
+type Upload = { path: string; width?: number; height?: number; public?: boolean };
+
+/**
+ * Runs a case with the given settings against fresh uploads. An upload with `width` and `height` stores those values
+ * instead of the image's own, and a `public` upload is readable by the public role. Settings are restored, and the
+ * files and permission are removed.
+ */
+async function withUploads(
+	api: Api,
+	settings: Record<string, unknown>,
+	uploads: Upload[],
+	run: (fileIds: string[], asset: (fileId: string, query: string) => supertest.Test) => Promise<void>
+) {
+	const admin = `Bearer ${api.adminToken}`;
+	const created = { files: [] as string[], permissions: [] as string[] };
+	const cleanup: number[] = [];
+
+	await withSettings(api, settings, async () => {
+		try {
+			for (const upload of uploads) {
+				let post = setupRequest(api.url).post('/files').set('Authorization', admin).field('storage', 'local');
+
+				if (upload.width && upload.height) {
+					post = post.field('width', String(upload.width)).field('height', String(upload.height));
+				}
+
+				const response = await post.attach('file', createReadStream(upload.path));
+				created.files.push(response.body.data.id);
+			}
+
+			const publicFiles = created.files.filter((_id, index) => uploads[index]!.public);
+
+			if (publicFiles.length > 0) {
+				const permission = await setupRequest(api.url)
+					.post('/permissions')
+					.set('Authorization', admin)
+					.send({
+						role: await getPublicRole(api),
+						collection: 'directus_files',
+						action: 'read',
+						permissions: { id: { _in: publicFiles } },
+						fields: ['*'],
+					});
+
+				created.permissions.push(permission.body.data.id);
+			}
+
+			await run(created.files, (fileId, query) => request(api.url).get(`/assets/${fileId}${query}`));
+		} finally {
+			for (const id of created.permissions) {
+				cleanup.push((await request(api.url).delete(`/permissions/${id}`).set('Authorization', admin)).statusCode);
+			}
+
+			for (const id of created.files) {
+				cleanup.push((await request(api.url).delete(`/files/${id}`).set('Authorization', admin)).statusCode);
+			}
+		}
+	});
+
+	for (const status of cleanup) expect([200, 204]).toContain(status);
+}
+
+function expectTooLarge(response: supertest.Response, label: string) {
+	expect(response.statusCode, label).toBe(400);
+	expect(response.body.errors[0].extensions.code, label).toBe('ILLEGAL_ASSET_TRANSFORMATION');
+}
+
+describe('/assets output size limit', () => {
+	test('rejects resizes whose output would exceed the maximum dimension', async ({ api }) => {
+		await withUploads(api, { storage_asset_transform: 'all' }, [{ path: imageFilePath }], async ([fileId], asset) => {
+			const get = (query: string) => asset(fileId!, query).set('Authorization', `Bearer ${api.adminToken}`);
+
+			for (const query of [
+				`?width=${MAX_DIMENSION + 1}`,
+				`?height=${MAX_DIMENSION}`,
+				'?width=500&height=500&fit=outside',
+				`?width=${MAX_DIMENSION + 1}&height=10&fit=contain&withoutEnlargement=true`,
+			]) {
+				expectTooLarge(await get(query), query);
+			}
+
+			const atLimit = await get(`?width=${MAX_DIMENSION}`);
+			expect(atLimit.statusCode).toBe(200);
+			expect(pngSize(atLimit.body).width).toBe(MAX_DIMENSION);
+
+			const keptSource = await get(`?width=${MAX_DIMENSION * 2}&withoutEnlargement=true`);
+			expect(keptSource.statusCode).toBe(200);
+			expect(pngSize(keptSource.body)).toEqual(SOURCE_SIZE);
+
+			expect((await get('?format=auto')).statusCode).toBe(200);
+			expect((await get('')).statusCode).toBe(200);
+		});
+	});
+
+	test('rejects presets whose output would exceed the maximum dimension whatever their stored transforms', async ({
+		api,
+	}) => {
+		const wide = {
+			fit: 'cover',
+			width: MAX_DIMENSION + 1,
+			height: 100,
+			quality: null,
+			withoutEnlargement: null,
+			format: null,
+		};
+
+		const presets = [
+			{ key: 'wide-omitted', ...wide },
+			{ key: 'wide-null', ...wide, transforms: null },
+			{ key: 'wide-empty', ...wide, transforms: [] },
+			{
+				key: 'without-reduction',
+				...wide,
+				width: null,
+				height: null,
+				transforms: [['resize', { width: MAX_DIMENSION + 200, withoutReduction: true }]],
+			},
+			{ key: 'within-limit', ...wide, width: MAX_DIMENSION, transforms: [] },
+		];
+
+		const settings = { storage_asset_transform: 'presets', storage_asset_presets: presets };
+
+		await withUploads(api, settings, [{ path: imageFilePath }], async ([fileId], asset) => {
+			const get = (key: string) => asset(fileId!, `?key=${key}`).set('Authorization', `Bearer ${api.adminToken}`);
+
+			for (const key of ['wide-omitted', 'wide-null', 'wide-empty', 'without-reduction']) {
+				expectTooLarge(await get(key), key);
+			}
+
+			const withinLimit = await get('within-limit');
+			expect(withinLimit.statusCode).toBe(200);
+			expect(pngSize(withinLimit.body)).toEqual({ width: MAX_DIMENSION, height: 100 });
+
+			const stored = await setupRequest(api.url)
+				.get('/settings')
+				.query({ fields: 'storage_asset_presets' })
+				.set('Authorization', `Bearer ${api.adminToken}`);
+
+			expect(stored.body.data.storage_asset_presets).toEqual(presets);
+		});
+	});
+
+	test('rejects a built-in contain size whose output would exceed the maximum dimension', async ({ api }) => {
+		const uploads = [{ path: tallImagePath, public: true }];
+
+		await withUploads(api, { storage_asset_transform: 'none' }, uploads, async ([fileId], asset) => {
+			for (const key of ['system-large-contain', 'system-medium-contain']) {
+				expectTooLarge(await asset(fileId!, `?key=${key}`), key);
+			}
+
+			const small = await asset(fileId!, '?key=system-small-contain');
+			expect(small.statusCode).toBe(200);
+			expect(pngSize(small.body)).toEqual({ width: 64, height: 640 });
+
+			const card = await asset(fileId!, '?key=system-kanban-cover');
+			expect(card.statusCode).toBe(200);
+			expect(pngSize(card.body)).toEqual({ width: 250, height: 150 });
+		});
+	});
+
+	test('checks the image header rather than the stored dimensions', async ({ api }) => {
+		const uploads = [
+			{ path: imageFilePath, width: 10, height: 10 },
+			{ path: largeImagePath, width: 10, height: 10 },
+		];
+
+		await withUploads(api, { storage_asset_transform: 'all' }, uploads, async ([wideFile, largeFile], asset) => {
+			const auth = `Bearer ${api.adminToken}`;
+
+			for (const fileId of [wideFile, largeFile]) {
+				const row = await setupRequest(api.url)
+					.get(`/files/${fileId}`)
+					.query({ fields: 'width,height' })
+					.set('Authorization', auth);
+
+				expect(row.body.data).toEqual({ width: 10, height: 10 });
+			}
+
+			expectTooLarge(await asset(wideFile!, `?height=${MAX_DIMENSION}`).set('Authorization', auth), 'derived width');
+
+			const resized = await asset(wideFile!, '?width=100').set('Authorization', auth);
+			expect(resized.statusCode).toBe(200);
+			expect(pngSize(resized.body).width).toBe(100);
+
+			expectTooLarge(await asset(largeFile!, '?width=100').set('Authorization', auth), 'large source');
+
+			const original = await asset(largeFile!, '').set('Authorization', auth);
+			expect(original.statusCode).toBe(200);
+		});
 	});
 });

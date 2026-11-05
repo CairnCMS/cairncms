@@ -270,6 +270,15 @@ By default, a request that uses `transforms` needs a user token or a logged-in s
 
 Sources with an unknown or unsupported type are not transformed at all; the original file is served unmodified. Modern browsers get the efficient formats; everything else gets an image that still looks like the original. PNG output is larger than JPEG, so clients that previously received the JPEG fallback may see bigger responses. The response includes `Vary: Accept` so caches and CDNs return the right variant per client.
 
+### Size limit
+
+`ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION` (default `6000`) limits transformations, in pixels per side:
+
+- A source image larger than the limit on either side isn't transformed. The original can still be downloaded.
+- A resize whose output would be larger than the limit on either side is rejected. This covers `width` and `height`, presets, and the built-in keys, so a `contain` key can be rejected for a very tall or very wide image.
+
+Both checks use the image's own dimensions after EXIF orientation, not the stored `width` and `height`. Rejected requests return `ILLEGAL_ASSET_TRANSFORMATION`. A `transforms` list with operations beyond one resize and format conversion is checked against the source limit only.
+
 ### Project-level transform policy
 
 The **`storage_asset_transform`** project setting controls which transformations are accepted:
