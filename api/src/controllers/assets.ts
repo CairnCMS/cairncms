@@ -53,26 +53,22 @@ router.get(
 		if ('transforms' in transformation) {
 			let transforms: unknown;
 
-			// Try parse the JSON array
 			try {
 				transforms = parseJSON(transformation['transforms'] as string);
 			} catch {
 				throw new InvalidQueryException(`"transforms" Parameter needs to be a JSON array of allowed transformations.`);
 			}
 
-			// Check if it is actually an array.
 			if (!Array.isArray(transforms)) {
 				throw new InvalidQueryException(`"transforms" Parameter needs to be a JSON array of allowed transformations.`);
 			}
 
-			// Check against ASSETS_TRANSFORM_MAX_OPERATIONS
 			if (transforms.length > Number(env['ASSETS_TRANSFORM_MAX_OPERATIONS'])) {
 				throw new InvalidQueryException(
 					`"transforms" Parameter is only allowed ${env['ASSETS_TRANSFORM_MAX_OPERATIONS']} transformations.`
 				);
 			}
 
-			// Check the transformations are valid
 			transforms.forEach((transform) => {
 				const name = transform[0];
 
@@ -93,14 +89,12 @@ router.get(
 			),
 		];
 
-		// For use in the next request handler
 		res.locals['shortcuts'] = [...SYSTEM_ASSET_ALLOW_LIST, ...(assetSettings.storage_asset_presets || [])];
 		res.locals['transformation'] = transformation;
 
-		if (
-			Object.keys(transformation).length === 0 ||
-			('transforms' in transformation && transformation['transforms']!.length === 0)
-		) {
+		const keys = Object.keys(transformation);
+
+		if (keys.length === 0 || (keys.length === 1 && transformation['transforms']?.length === 0)) {
 			return next();
 		}
 

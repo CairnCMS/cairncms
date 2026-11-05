@@ -6,9 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const VALID_UUID = '11111111-2222-4333-8444-555555555555';
 
-const { getAssetSpy, statAssetSpy } = vi.hoisted(() => ({
+const { getAssetSpy, statAssetSpy, savedSettings } = vi.hoisted(() => ({
 	getAssetSpy: vi.fn(),
 	statAssetSpy: vi.fn(),
+	savedSettings: { row: undefined as Record<string, unknown> | undefined },
 }));
 
 vi.mock('../services/assets.js', () => {
@@ -28,7 +29,7 @@ vi.mock('../database/index.js', () => ({
 	default: () => ({
 		select: () => ({
 			from: () => ({
-				first: async () => undefined,
+				first: async () => savedSettings.row,
 			}),
 		}),
 	}),
@@ -73,6 +74,11 @@ function buildApp() {
 	});
 
 	app.use('/assets', assetsRouter);
+
+	app.use((err: { status?: number; code?: string }, _req: Request, res: Response, _next: NextFunction) => {
+		res.status(err.status ?? 500).json({ code: err.code });
+	});
+
 	return app;
 }
 
@@ -188,5 +194,84 @@ describe('GET/HEAD /assets/:pk (GHSA-rv78-qqrq-73m5)', () => {
 
 			expect(res.headers['vary']).toContain('Accept');
 		});
+	});
+});
+
+describe('GET /assets/:pk allowed transformations with an empty transforms list', () => {
+	const thumbPreset = { key: 'thumb', width: 100, height: 100, fit: 'cover' };
+
+	beforeEach(() => {
+		getAssetSpy.mockReset().mockResolvedValue({
+			stream: Readable.from(Buffer.from('test-body')),
+			file: fakeFile(),
+			stat: { size: 9 },
+		});
+	});
+
+	afterEach(() => {
+		savedSettings.row = undefined;
+		vi.clearAllMocks();
+	});
+
+	function useTransformMode(mode: string) {
+		savedSettings.row = { storage_asset_presets: [thumbPreset], storage_asset_transform: mode };
+	}
+
+	it.each(['presets', 'none'])('rejects width with an empty transforms list under %s', async (mode) => {
+		useTransformMode(mode);
+
+		const res = await request(buildApp()).get(`/assets/${VALID_UUID}?width=100&transforms=[]`);
+
+		expect(res.status).toBe(400);
+		expect(res.body).toEqual({ code: 'INVALID_QUERY' });
+		expect(getAssetSpy).not.toHaveBeenCalled();
+	});
+
+	it.each(['presets', 'none'])('serves the original for a bare empty transforms list under %s', async (mode) => {
+		useTransformMode(mode);
+
+		const res = await request(buildApp()).get(`/assets/${VALID_UUID}?transforms=[]`);
+
+		expect(res.status).toBe(200);
+		expect(getAssetSpy).toHaveBeenCalledTimes(1);
+
+		const { transformationParams } = getAssetSpy.mock.calls[0]![1];
+		expect(transformationParams.width).toBeUndefined();
+		expect(transformationParams.height).toBeUndefined();
+		expect(transformationParams.transforms ?? []).toEqual([]);
+	});
+
+	it('rejects width without a transforms list under presets', async () => {
+		useTransformMode('presets');
+
+		const res = await request(buildApp()).get(`/assets/${VALID_UUID}?width=100`);
+
+		expect(res.status).toBe(400);
+		expect(res.body).toEqual({ code: 'INVALID_QUERY' });
+		expect(getAssetSpy).not.toHaveBeenCalled();
+	});
+
+	it('serves a configured preset key under presets', async () => {
+		useTransformMode('presets');
+
+		const res = await request(buildApp()).get(`/assets/${VALID_UUID}?key=thumb`);
+
+		expect(res.status).toBe(200);
+
+		expect(getAssetSpy).toHaveBeenCalledWith(
+			VALID_UUID,
+			expect.objectContaining({ transformationParams: thumbPreset }),
+			undefined
+		);
+	});
+
+	it('still passes width with an empty transforms list under all', async () => {
+		useTransformMode('all');
+
+		const res = await request(buildApp()).get(`/assets/${VALID_UUID}?width=100&transforms=[]`);
+
+		expect(res.status).toBe(200);
+		expect(getAssetSpy).toHaveBeenCalledTimes(1);
+		expect(getAssetSpy.mock.calls[0]![1].transformationParams.width).toBe('100');
 	});
 });
