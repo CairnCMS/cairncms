@@ -250,8 +250,8 @@ importers:
         specifier: 6.2.0
         version: 6.2.0
       joi:
-        specifier: 17.13.8
-        version: 17.13.8
+        specifier: 17.13.9
+        version: 17.13.9
       js-yaml:
         specifier: 4.3.2
         version: 4.3.2
@@ -911,8 +911,8 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
       joi:
-        specifier: 17.13.8
-        version: 17.13.8
+        specifier: 17.13.9
+        version: 17.13.9
       typescript:
         specifier: 5.0.4
         version: 5.0.4
@@ -1324,8 +1324,8 @@ importers:
         specifier: 11.1.1
         version: 11.1.1
       joi:
-        specifier: 17.13.8
-        version: 17.13.8
+        specifier: 17.13.9
+        version: 17.13.9
       lodash-es:
         specifier: 4.18.1
         version: 4.18.1
@@ -5924,8 +5924,8 @@ packages:
   jackspeak@3.4.3:
     resolution: {integrity: sha512-OGlZQpz2yfahA/Rd1Y8Cd9SIEsqvXkLVoSw/cgwhnhFMDbsQFeZYoJJ7bIZBS9BcamUW96asq/npPWugM+RQBw==}
 
-  joi@17.13.8:
-    resolution: {integrity: sha512-iPKOGmiRw1jxf/JOPwxmCcUQAOdF359mdzYiP2DJ+TMX0YK2zjK3D+zYOaGjpumWxOFF/l2xVWjRVK5bGSLdEw==}
+  joi@17.13.9:
+    resolution: {integrity: sha512-llFCT2rVtfwgBCaIqxtjim+iHqrgss4ONiGSYiiGH9jnjWq90ppSRffqmqKvwpa8W+YfILyQV6XyGcegXX2T4g==}
 
   jose@4.15.9:
     resolution: {integrity: sha512-1vUQX+IdDMVPj4k8kOxgUqlcK518yluMuGZwqlr44FS1ppZB/5GWh4rZG89erpOBOJjU/OBsnCVFfapsRz6nEA==}
@@ -13674,7 +13674,7 @@ snapshots:
     optionalDependencies:
       '@pkgjs/parseargs': 0.11.0
 
-  joi@17.13.8:
+  joi@17.13.9:
     dependencies:
       '@hapi/hoek': 9.3.0
       '@hapi/topo': 5.1.0
