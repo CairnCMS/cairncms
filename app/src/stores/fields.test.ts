@@ -1,6 +1,6 @@
 import { createTestingPinia } from '@pinia/testing';
 import { setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { i18n } from '@/lang';
 import { Field } from '@cairncms/types';
@@ -129,5 +129,69 @@ describe('parseField action', () => {
 		fieldsStore.fields = [mockFieldWithoutTranslations].map(fieldsStore.parseField);
 		expect(fieldsStore.fields[0].name).toEqual('Name');
 		expect(i18n.global.te(`fields.${mockField.collection}.${mockField.field}`)).toBe(false);
+	});
+});
+
+describe('parseField action in a non-English locale', () => {
+	afterEach(() => {
+		i18n.global.locale.value = 'en-US';
+	});
+
+	test('uses the translation for the current locale after a language switch', () => {
+		const fieldsStore = useFieldsStore();
+
+		const title = merge({}, mockField, {
+			field: 'title',
+			meta: {
+				field: 'title',
+				translations: [
+					{ language: 'en-US', translation: 'Title en-US' },
+					{ language: 'de-DE', translation: 'Titel de-DE' },
+				],
+			},
+		});
+
+		fieldsStore.fields = [title].map(fieldsStore.parseField);
+		expect(fieldsStore.fields[0].name).toEqual('Title en-US');
+
+		i18n.global.locale.value = 'de-DE';
+		fieldsStore.translateFields();
+		expect(fieldsStore.fields[0].name).toEqual('Titel de-DE');
+	});
+
+	test('falls back to the English translation when the current locale has none', () => {
+		i18n.global.locale.value = 'de-DE';
+		const fieldsStore = useFieldsStore();
+
+		const summary = merge({}, mockField, {
+			field: 'summary',
+			meta: { field: 'summary', translations: [{ language: 'en-US', translation: 'Summary en-US' }] },
+		});
+
+		fieldsStore.fields = [summary].map(fieldsStore.parseField);
+		expect(fieldsStore.fields[0].name).toEqual('Summary en-US');
+		expect(i18n.global.te(`fields.${mockField.collection}.summary`)).toBe(true);
+	});
+
+	test('resets the name when the translations are removed', () => {
+		i18n.global.locale.value = 'de-DE';
+		const fieldsStore = useFieldsStore();
+
+		const body = merge({}, mockField, {
+			field: 'body',
+			meta: { field: 'body', translations: [{ language: 'de-DE', translation: 'Inhalt de-DE' }] },
+		});
+
+		fieldsStore.fields = [body].map(fieldsStore.parseField);
+		expect(fieldsStore.fields[0].name).toEqual('Inhalt de-DE');
+
+		const bodyWithoutTranslations = merge({}, mockField, {
+			field: 'body',
+			meta: { field: 'body', translations: null },
+		});
+
+		fieldsStore.fields = [bodyWithoutTranslations].map(fieldsStore.parseField);
+		expect(fieldsStore.fields[0].name).toEqual('Body');
+		expect(i18n.global.te(`fields.${mockField.collection}.body`)).toBe(false);
 	});
 });
