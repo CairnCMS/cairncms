@@ -20,13 +20,18 @@ function createMessage(data: unknown) {
 	return { type: 'items', collection: 'articles', action: 'create', data };
 }
 
-function countIssues(issues: ZodIssue[]): number {
-	return issues.reduce((total, issue) => {
-		const nested =
-			issue.code === 'invalid_union' ? issue.unionErrors.reduce((sum, error) => sum + countIssues(error.issues), 0) : 0;
+function countIssues(issues: readonly ZodIssue[]): number {
+	let total = 0;
 
-		return total + 1 + nested;
-	}, 0);
+	for (const issue of issues) {
+		total += 1;
+
+		if (issue.code === 'invalid_union') {
+			for (const list of issue.errors) total += countIssues(list);
+		}
+	}
+
+	return total;
 }
 
 function issueCount(message: unknown): number {
@@ -76,6 +81,25 @@ describe('WebSocketItemsMessage ids', () => {
 			const counts = [1, 10, 100].map((size) => issueCount(idsMessage(action, Array(size).fill(null))));
 			expect(new Set(counts).size).toBe(1);
 		});
+	});
+});
+
+describe('WebSocketItemsMessage numeric keys', () => {
+	it.each(KEYED_ACTIONS)('rejects an infinite entry in ids on %s and accepts a large finite one', (action) => {
+		expect(WebSocketItemsMessage.safeParse(idsMessage(action, [Infinity])).success).toBe(false);
+		expect(WebSocketItemsMessage.safeParse(idsMessage(action, [1e308])).success).toBe(true);
+	});
+
+	it('rejects an infinite id and an infinite uid', () => {
+		const read = { type: 'items', collection: 'articles', action: 'read' };
+
+		expect(WebSocketItemsMessage.safeParse({ ...read, id: Infinity }).success).toBe(false);
+		expect(WebSocketItemsMessage.safeParse({ ...read, id: 'k1', uid: Infinity }).success).toBe(false);
+	});
+
+	it('rejects an id whose JSON number overflows to Infinity', () => {
+		const message = JSON.parse('{"type":"items","collection":"articles","action":"read","id":1e400}');
+		expect(WebSocketItemsMessage.safeParse(message).success).toBe(false);
 	});
 });
 

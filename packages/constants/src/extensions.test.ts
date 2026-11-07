@@ -744,6 +744,13 @@ describe('ExtensionSettingDeclaration', () => {
 		expect(ExtensionSettingDeclaration.safeParse({ type: 'string', presentation: { label: 'X' } }).success).toBe(false);
 	});
 
+	it('accepts a presentation order up to the largest safe integer and rejects a larger one', () => {
+		const declaration = (order: number) => ({ type: 'string', presentation: { order } });
+
+		expect(ExtensionSettingDeclaration.safeParse(declaration(Number.MAX_SAFE_INTEGER)).success).toBe(true);
+		expect(ExtensionSettingDeclaration.safeParse(declaration(Number.MAX_SAFE_INTEGER + 1)).success).toBe(false);
+	});
+
 	it('accepts an allowlisted presentation interface on a collection-scoped string', () => {
 		expect(
 			ExtensionSettingDeclaration.safeParse({
