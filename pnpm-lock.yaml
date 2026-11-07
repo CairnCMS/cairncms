@@ -47,7 +47,7 @@ overrides:
   ip-address: 10.3.1
   '@tootallnate/once@1': 2.0.1
   '@tootallnate/once@2': 2.0.1
-  shell-quote@>=1.0.0 <1.10.0: 1.10.0
+  shell-quote@>=1.0.0 <1.12.0: 1.12.0
   svgo@>=2.0.0 <2.8.4: 2.8.4
 
 importers:
@@ -7586,8 +7586,8 @@ packages:
     resolution: {integrity: sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==}
     engines: {node: '>=8'}
 
-  shell-quote@1.10.0:
-    resolution: {integrity: sha512-w1aiOKwKuRgtwAReIIj89puqg+I7GvX4IbLrvmhXbzQsj1+Zwi4VO3+fa6ZF91TWSjIxoEkKnMeHcLEODK5ZXA==}
+  shell-quote@1.12.0:
+    resolution: {integrity: sha512-PcByqNyT/38F2kDNi006HAMRJaULuBzq/FOsw3qdZvX/GA9W/jamDaRskgHjubHiftXK5sIFxLNkvrXUwcof6Q==}
     engines: {node: '>= 0.4'}
 
   side-channel-list@1.0.1:
@@ -12006,7 +12006,7 @@ snapshots:
       date-fns: 2.29.3
       lodash: 4.18.1
       rxjs: 7.8.2
-      shell-quote: 1.10.0
+      shell-quote: 1.12.0
       spawn-command: 0.0.2-1
       supports-color: 8.1.1
       tree-kill: 1.2.2
@@ -15545,7 +15545,7 @@ snapshots:
 
   shebang-regex@3.0.0: {}
 
-  shell-quote@1.10.0: {}
+  shell-quote@1.12.0: {}
 
   side-channel-list@1.0.1:
     dependencies:
