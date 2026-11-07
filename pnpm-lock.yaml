@@ -618,8 +618,8 @@ importers:
         specifier: 2.2.1
         version: 2.2.1
       '@tinymce/tinymce-vue':
-        specifier: 6.1.0
-        version: 6.1.0(tinymce@7.9.3)(vue@3.5.43(typescript@5.0.4))
+        specifier: 6.3.0
+        version: 6.3.0(tinymce@7.9.3)(vue@3.5.43(typescript@5.0.4))
       '@turf/meta':
         specifier: 6.5.0
         version: 6.5.0
@@ -3334,10 +3334,10 @@ packages:
     resolution: {integrity: sha512-4BAffykYOgO+5nzBWYwE3W90sBgLJoUPRWWcL8wlyiM8IB8ipJz3UMJ9KXQd1RKQXpKp8Tutn80HZtWsu2u76w==}
     engines: {node: '>=10'}
 
-  '@tinymce/tinymce-vue@6.1.0':
-    resolution: {integrity: sha512-7JdaKMOaohuFWpjKwRmaZJbT/eNVUUYHG93R7+lUf7SUN+hSqd2spbuqZcki+tG9kaSAGd2ZmvJIsmzWDNAzpw==}
+  '@tinymce/tinymce-vue@6.3.0':
+    resolution: {integrity: sha512-DSP8Jhd3XqCCliTnusfbmz3D8GqQ4iRzkc4aadYHDcJPVjkaqopJ61McOdH82CSy599vGLkPjGzqJYWJkRMiUA==}
     peerDependencies:
-      tinymce: ^7.0.0 || ^6.0.0 || ^5.5.1
+      tinymce: ^8.0.0 || ^7.0.0 || ^6.0.0 || ^5.5.1
       vue: ^3.0.0
     peerDependenciesMeta:
       tinymce:
@@ -10794,7 +10794,7 @@ snapshots:
     dependencies:
       defer-to-connect: 2.0.1
 
-  '@tinymce/tinymce-vue@6.1.0(tinymce@7.9.3)(vue@3.5.43(typescript@5.0.4))':
+  '@tinymce/tinymce-vue@6.3.0(tinymce@7.9.3)(vue@3.5.43(typescript@5.0.4))':
     dependencies:
       vue: 3.5.43(typescript@5.0.4)
     optionalDependencies:

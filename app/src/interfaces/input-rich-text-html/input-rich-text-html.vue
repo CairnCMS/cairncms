@@ -5,7 +5,7 @@
 			v-model="internalValue"
 			:init="editorOptions"
 			:license-key="tinymceLicenseKey"
-			:disabled="disabled"
+			:readonly="disabled"
 			model-events="change keydown blur focus paste ExecCommand SetContent"
 			@focusin="setFocus(true)"
 			@focusout="setFocus(false)"
