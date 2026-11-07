@@ -117,7 +117,10 @@ export const ExtensionCapabilitiesSchema = z
 // never as a clear configured value, while an undeclared key is an ordinary JSON
 // option. Only 'reference' is defined: a host-side 'brokered' mode with no guest
 // handle has no operation consumer yet.
-export const ConfinedOptionDeliverySchema = z.record(z.object({ delivery: z.enum(['reference']) }).strict());
+export const ConfinedOptionDeliverySchema = z.record(
+	z.string(),
+	z.object({ delivery: z.enum(['reference']) }).strict()
+);
 
 // Exact platform event names a confined hook subscribes to, declared in the
 // manifest so the subscription surface is operator-reviewable without reading
@@ -620,6 +623,6 @@ export const ExtensionManifest = z.object({
 	name: z.string(),
 	version: z.string(),
 	type: z.union([z.literal('module'), z.literal('commonjs')]).optional(),
-	dependencies: z.record(z.string()).optional(),
+	dependencies: z.record(z.string(), z.string()).optional(),
 	[EXTENSION_PKG_KEY]: ExtensionOptions,
 });

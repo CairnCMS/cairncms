@@ -6,7 +6,7 @@ import { SCHEMA_CHANGE_OUTCOMES, SCHEMA_OPERATIONS } from '../../../types/schema
 import { SUPPORTED_ACTIONS } from '../../../utils/config-contract.js';
 
 const count = z.number().int().nonnegative();
-const nullableRecord = z.record(z.unknown()).nullable();
+const nullableRecord = z.record(z.string(), z.unknown()).nullable();
 const nullableStringArray = z.array(z.string()).nullable();
 const action = z.string().refine((value) => SUPPORTED_ACTIONS.has(value));
 
@@ -25,7 +25,7 @@ const fieldChange = z.custom<{ before: unknown; after: unknown }>(
 	(value) => isPlainObject(value) && 'before' in (value as object) && 'after' in (value as object)
 );
 
-const fieldChanges = z.record(fieldChange);
+const fieldChanges = z.record(z.string(), fieldChange);
 
 function isOptionalBoolean(value: unknown): boolean {
 	return value === undefined || typeof value === 'boolean';
@@ -48,8 +48,8 @@ const schemaAttributeChange = z.custom<{
 	);
 });
 
-const schemaAttributeChanges = z.record(schemaAttributeChange);
-const schemaValues = z.record(z.unknown());
+const schemaAttributeChanges = z.record(z.string(), schemaAttributeChange);
+const schemaValues = z.record(z.string(), z.unknown());
 const schemaCollectionIdentity = z.object({ collection: z.string() }).passthrough();
 const schemaFieldIdentity = z.object({ collection: z.string(), field: z.string() }).passthrough();
 const relatedCollection = z.string().nullable();
