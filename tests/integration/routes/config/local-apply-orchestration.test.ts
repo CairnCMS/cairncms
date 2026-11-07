@@ -9,12 +9,11 @@ import { apiTest as test } from '../../fixtures/environment';
 import request from '../../fixtures/request';
 import { CreateCollection, CreateField } from '../../fixtures/schema';
 import { initializeFixtures } from '../../harness/fixture-setup.mjs';
+import { isMysqlFamily } from '../../harness/database-vendors.mjs';
 
 initializeFixtures();
 
 type Document = Record<string, any>;
-
-const PARTIAL_PERSISTENCE_VENDORS = ['mysql', 'mysql5', 'maria'];
 
 function admin(api: Api, req: Test): Test {
 	return req.set('Authorization', `Bearer ${api.adminToken}`);
@@ -235,7 +234,7 @@ describe('local config apply orchestration', () => {
 		try {
 			await stopScenario(api, dir, names);
 
-			const partial = PARTIAL_PERSISTENCE_VENDORS.includes(vendor);
+			const partial = isMysqlFamily(vendor);
 			const bad = partial ? 'f'.repeat(65) : 'required_no_default';
 
 			const document = await readSchemaFile(dir, collection);

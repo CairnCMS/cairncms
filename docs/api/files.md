@@ -211,7 +211,7 @@ Image assets can be transformed on the fly through query parameters on `/assets/
 
 ### Preset keys
 
-The platform ships six built-in keys for common thumbnail sizes:
+The platform ships seven built-in keys for common thumbnail sizes:
 
 | Key | Operation |
 |---|---|
@@ -221,6 +221,9 @@ The platform ships six built-in keys for common thumbnail sizes:
 | `system-medium-contain` | width 300, scaled to fit. |
 | `system-large-cover` | 800×800, cropped to cover. |
 | `system-large-contain` | width 800, scaled to fit. |
+| `system-kanban-cover` | 250×150, cropped to cover. Used for Kanban card images. |
+
+Built-in keys work in every transformation mode.
 
 ```
 GET /assets/<id>?key=system-medium-cover
@@ -244,15 +247,17 @@ GET /assets/<id>?width=600&height=400&fit=cover&format=webp&quality=80
 - **`quality`** — output quality, 1-100. Encoder-specific; for JPEG and WebP, 80 is a reasonable default.
 - **`withoutEnlargement`** — when `true`, prevents scaling images smaller than the target dimensions up.
 
-### Multi-step transforms
+### Advanced transforms
 
-For chained operations beyond resize-and-format, the `transforms` parameter takes a JSON array of operation tuples:
+For operations beyond resize-and-format, the `transforms` parameter takes a JSON array of one or more operation tuples:
 
 ```
 GET /assets/<id>?transforms=[["resize",{"width":600,"fit":"inside"}],["blur",2],["grayscale"]]
 ```
 
 Each entry is `[<operation>, <args>?]`. The API accepts a fixed set of Sharp operations rather than arbitrary Sharp methods. Unsupported operations are rejected, and `ASSETS_TRANSFORM_MAX_OPERATIONS` limits each request to five operations by default. Project presets support additional operations. See [Transformation Presets](/docs/guides/settings/#files-and-storage).
+
+By default, a request that uses `transforms` needs a user token or a logged-in session. A static token or a token from `/auth/login` works, and app access is not required. Requests without one are rejected, unless the project allows public advanced transformations (see below). The caller still needs permission to read the file.
 
 ### Format auto-negotiation
 
@@ -265,13 +270,26 @@ Each entry is `[<operation>, <args>?]`. The API accepts a fixed set of Sharp ope
 
 Sources with an unknown or unsupported type are not transformed at all; the original file is served unmodified. Modern browsers get the efficient formats; everything else gets an image that still looks like the original. PNG output is larger than JPEG, so clients that previously received the JPEG fallback may see bigger responses. The response includes `Vary: Accept` so caches and CDNs return the right variant per client.
 
+### Size limit
+
+`ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION` (default `6000`) limits transformations, in pixels per side:
+
+- A source image larger than the limit on either side isn't transformed. The original can still be downloaded.
+- A resize whose output would be larger than the limit on either side is rejected. This covers `width` and `height`, presets, and the built-in keys, so a `contain` key can be rejected for a very tall or very wide image.
+
+Both checks use the image's own dimensions after EXIF orientation, not the stored `width` and `height`. Rejected requests return `ILLEGAL_ASSET_TRANSFORMATION`. A `transforms` list with operations beyond one resize and format conversion is checked against the source limit only.
+
 ### Project-level transform policy
 
 The **`storage_asset_transform`** project setting controls which transformations are accepted:
 
-- **`all`** — any transformation parameters are accepted.
-- **`presets`** — only the system keys and the configured `storage_asset_presets` keys are accepted; arbitrary `width`, `height`, and so on are rejected.
-- Any other value — only the system keys work; project presets and arbitrary parameters are rejected.
+- **`all`** — any transformation parameters are accepted. Requests without a user token or session can't use `transforms` unless `storage_asset_public_transforms` is `true`.
+- **`presets`** — only the system keys and the configured `storage_asset_presets` keys are accepted. Arbitrary `width`, `height`, and so on are rejected.
+- Any other value — only the system keys work. Project presets and arbitrary parameters are rejected.
+
+These modes apply to every caller, including administrators. A new installation starts with `none`, so only the system keys work until an administrator chooses another mode. Upgraded installations keep their stored setting.
+
+The **`storage_asset_public_transforms`** setting (**Allow Public Advanced Transformations** in Project Settings) lets requests without a token use `transforms`. It defaults to `false` and only applies when `storage_asset_transform` is `all`. Turning it on doesn't make private files public, because file permissions still apply.
 
 The `presets` setting is the right hardening choice for public-facing deployments where you want to bound the set of asset variants the server is willing to compute.
 

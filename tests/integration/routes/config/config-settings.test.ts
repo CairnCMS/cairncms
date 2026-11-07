@@ -413,6 +413,50 @@ describe('Config-as-Code settings file-field exclusion', () => {
 	});
 });
 
+describe('Config-as-Code settings public advanced transformations', () => {
+	test('leaves the setting unmanaged: omitted from snapshots, preserved by apply, refused in a tree', async ({
+		api,
+	}) => {
+		const rawBaseline = await rawSettings(api);
+		const fields = ['public_note', 'storage_asset_public_transforms'];
+		let testError: unknown;
+		const failures: string[] = [];
+
+		try {
+			expect(await httpSettings(api)).not.toHaveProperty('storage_asset_public_transforms');
+
+			for (const value of [true, false]) {
+				const set = await request(api.url)
+					.patch('/settings')
+					.set('Authorization', token())
+					.send({ storage_asset_public_transforms: value });
+
+				expect(set.statusCode).toBe(200);
+
+				const applied = await applyConfig(api, settingsOnly({ public_note: `Unmanaged setting ${value}` }));
+				expect(applied.statusCode).toBe(200);
+
+				const current = await rawSettings(api);
+				expect(current.public_note).toBe(`Unmanaged setting ${value}`);
+				expect(current.storage_asset_public_transforms).toBe(value);
+			}
+
+			const before = await rawSettings(api);
+			const refused = await applyConfig(api, settingsOnly({ storage_asset_public_transforms: true }));
+
+			expect(refused.statusCode).toBe(400);
+			expect(errorCodes(refused)).toContain('CONFIG_INVALID');
+			expect(JSON.stringify(refused.body)).toContain('storage_asset_public_transforms');
+			expect(await rawSettings(api)).toEqual(before);
+		} catch (error) {
+			testError = error;
+		}
+
+		await attemptCleanup(failures, 'restore settings', () => patchRestore(api, rawBaseline, fields));
+		reportOutcome(testError, failures);
+	});
+});
+
 describe('Config-as-Code settings placeholder preservation', () => {
 	const PLACEHOLDER = '{{CAIRNCMS_CONFIG_PROJECT_DESCRIPTOR}}';
 
@@ -464,7 +508,7 @@ describe('Config-as-Code settings placeholder preservation', () => {
 
 	describeForVendors(
 		'remote CLI',
-		['postgres'],
+		['postgres18'],
 		'Remote CLI transport behavior is validated against PostgreSQL.',
 		() => {
 			function generateCert(dir: string): { certPath: string; keyPath: string } {

@@ -168,6 +168,19 @@ fields:
           text: $t:fields.directus_settings.transformations_presets
     width: half
 
+  - field: storage_asset_public_transforms
+    special:
+      - cast-boolean
+    interface: boolean
+    note: $t:field_options.directus_settings.storage_asset_public_transforms_note
+    width: half
+    conditions:
+      - name: transformationsNotAll
+        rule:
+          storage_asset_transform:
+            _neq: all
+        hidden: true
+
   - field: storage_default_folder
     interface: system-folder
     width: half

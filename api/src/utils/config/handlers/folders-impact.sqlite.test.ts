@@ -1,5 +1,6 @@
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { getSqliteClient } from '../../../database/sqlite-driver.js';
 import { readFolderDeletionImpact } from './folders-impact.js';
 
 type Update = { key: string; changes: { parent?: unknown } };
@@ -15,7 +16,7 @@ describe('readFolderDeletionImpact on real SQLite', () => {
 	let db: Knex;
 
 	beforeEach(async () => {
-		db = knex.default({ client: 'sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true });
+		db = knex.default({ client: getSqliteClient(), connection: { filename: ':memory:' }, useNullAsDefault: true });
 
 		await db.schema.createTable('directus_folders', (table) => {
 			table.string('id').primary();
@@ -181,7 +182,7 @@ describe('readFolderDeletionImpact mixed-case options.folder on a case-insensiti
 	let db: Knex;
 
 	beforeEach(async () => {
-		db = knex.default({ client: 'sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true });
+		db = knex.default({ client: getSqliteClient(), connection: { filename: ':memory:' }, useNullAsDefault: true });
 
 		await db.raw('CREATE TABLE directus_folders (id TEXT PRIMARY KEY COLLATE NOCASE, key TEXT, parent TEXT)');
 

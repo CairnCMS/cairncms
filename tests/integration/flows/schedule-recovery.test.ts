@@ -26,7 +26,7 @@ const test = createRedisTest('redis7', { extensions: ['cairncms-extension-schedu
 
 describeForVendors(
 	'Schedule coordination',
-	['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'],
+	['postgres', 'mysql', 'maria'],
 	'Multi-instance coordination needs a server database that several CairnCMS processes can share.',
 	() => {
 		test('Redis 7 recovers a never-connected startup, restores subscriptions, and recovers a runtime outage', async ({

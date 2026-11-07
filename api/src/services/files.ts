@@ -12,7 +12,6 @@ import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import path from 'path';
 import sharp from 'sharp';
-import url from 'url';
 import { SUPPORTED_IMAGE_METADATA_FORMATS } from '../constants.js';
 import emitter from '../emitter.js';
 import env from '../env.js';
@@ -458,8 +457,8 @@ export class FilesService extends ItemsService {
 			let payload: Partial<File> & { storage: string };
 
 			if (primaryKey === undefined) {
-				const parsedURL = url.parse(fileResponse.request.res.responseUrl);
-				const filename = decodeURI(path.basename(parsedURL.pathname as string));
+				const parsedURL = new URL(fileResponse.request.res.responseUrl);
+				const filename = decodeURI(path.basename(parsedURL.pathname));
 
 				payload = {
 					filename_download: filename,

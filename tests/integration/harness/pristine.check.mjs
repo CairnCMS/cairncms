@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { controlCheckout, startControl, assertReleased, owners, docker, integrationRoot } from './control-process.mjs';
 import { readVendorResult } from './results.mjs';
+import { familyOf, vendors } from './database-vendors.mjs';
 
 const read = async (path) => JSON.parse(await readFile(path, 'utf8'));
 
@@ -19,12 +20,10 @@ const present = (path) =>
 		}
 	);
 
-const vendor = process.env.TEST_DB ?? 'mysql';
+const vendor = process.env.TEST_DB ?? 'mysql84';
 
-assert(
-	['mysql', 'mysql5', 'maria', 'postgres', 'postgres10', 'sqlite3'].includes(vendor),
-	'Choose a snapshot-capable vendor'
-);
+assert(vendors.includes(vendor), 'Choose a snapshot-capable vendor');
+const postgres = familyOf(vendor) === 'postgres';
 
 const modes = [
 	'runtime-cache',
@@ -56,7 +55,7 @@ for (const mode of modes)
 			mode.startsWith('runtime-') || ['integrity', 'config-first', 'config-later', 'bootstrap'].includes(mode);
 
 		let fixture = mode;
-		if (mode === 'integrity' && vendor.startsWith('postgres')) fixture = 'postgres-integrity';
+		if (mode === 'integrity' && postgres) fixture = 'postgres-integrity';
 		if (mode === 'integrity' && vendor === 'sqlite3') fixture = 'sqlite-integrity';
 		if (mode.startsWith('runtime-')) fixture = 'runtime';
 		else if (mode.startsWith('config-')) fixture = 'config';
@@ -102,7 +101,7 @@ for (const mode of modes)
 
 			if (
 				(vendor !== 'sqlite3' && ['capture-cancel', 'creator-crash'].includes(mode)) ||
-				(vendor.startsWith('postgres') && mode === 'import-cancel')
+				(postgres && mode === 'import-cancel')
 			) {
 				const bin = join(out, 'bin');
 				await mkdir(bin);
@@ -181,7 +180,7 @@ for (const mode of modes)
 
 				record.killedBootstrap = owner.children[0];
 				process.kill(record.killedBootstrap, 'SIGKILL');
-			} else if (mode === 'import-cancel' && (vendor.startsWith('postgres') || vendor === 'sqlite3')) {
+			} else if (mode === 'import-cancel' && (postgres || vendor === 'sqlite3')) {
 				await run.poll(() => present(join(out, 'import-active.json')), 150000);
 				record.importSideEffectObserved = true;
 				run.child.kill('SIGTERM');
@@ -197,7 +196,7 @@ for (const mode of modes)
 							'--env',
 							'MYSQL_PWD=integration',
 							engine.id,
-							vendor === 'maria' ? 'mariadb' : 'mysql',
+							familyOf(vendor) === 'maria' ? 'mariadb' : 'mysql',
 							'--user=root',
 							'-N',
 							'-B',
@@ -248,7 +247,7 @@ for (const mode of modes)
 					mode.startsWith('runtime-')
 						? 1
 						: {
-								integrity: vendor.startsWith('postgres') || vendor === 'sqlite3' ? 8 : 9,
+								integrity: postgres || vendor === 'sqlite3' ? 8 : 9,
 								'config-first': 1,
 								'config-later': 1,
 								bootstrap: 2,

@@ -393,7 +393,7 @@ describe('Config-as-Code translations local CLI', () => {
 
 describeForVendors(
 	'Config-as-Code translations remote CLI',
-	['postgres'],
+	['postgres18'],
 	'Remote CLI transport behavior is validated against PostgreSQL.',
 	() => {
 		function generateCert(dir: string): { certPath: string; keyPath: string } {

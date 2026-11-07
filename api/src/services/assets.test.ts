@@ -1,12 +1,19 @@
 import type { Driver } from '@cairncms/storage';
 import { Readable } from 'node:stream';
+import { buffer } from 'node:stream/consumers';
 import type { Accountability, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';
 import { createTracker, MockClient, Tracker } from 'knex-mock-client';
 import type { MockedFunction } from 'vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ForbiddenException, RangeNotSatisfiableException } from '../exceptions/index.js';
+import env from '../env.js';
+import {
+	ForbiddenException,
+	IllegalAssetTransformation,
+	RangeNotSatisfiableException,
+	ServiceUnavailableException,
+} from '../exceptions/index.js';
 import { AssetsService } from './assets.js';
 
 const VALID_UUID = '11111111-2222-4333-8444-555555555555';
@@ -48,11 +55,11 @@ const { sharpInstance, sharpFactory, loggerErrorSpy } = vi.hoisted(() => {
 	instance.timeout = vi.fn(() => instance);
 	instance.rotate = vi.fn(() => instance);
 	instance.resize = vi.fn(() => instance);
+	instance.blur = vi.fn(() => instance);
 	instance.toFormat = vi.fn(() => instance);
-	instance.on = vi.fn(() => instance);
-	instance.pipe = vi.fn(() => instance);
+	instance.metadata = vi.fn();
+	instance.toBuffer = vi.fn(async () => Buffer.from('transformed'));
 	const factory: any = vi.fn(() => instance);
-	factory.counters = vi.fn(() => ({ queue: 0, process: 0 }));
 	return { sharpInstance: instance, sharpFactory: factory, loggerErrorSpy: vi.fn() };
 });
 
@@ -324,22 +331,33 @@ describe('AssetsService.getAsset uncached-transform pipeline (GHSA-j8xj-7jff-46m
 		permissions: [],
 	};
 
-	function buildFakeReadStream() {
-		const handlers: Record<string, (...args: any[]) => void> = {};
-
-		const stream: any = {
-			on: vi.fn((event: string, handler: (...args: any[]) => void) => {
-				handlers[event] = handler;
-				return stream;
-			}),
-			pipe: vi.fn(() => stream),
-			unpipe: vi.fn(() => stream),
-			destroy: vi.fn(),
-			__fireError: (err: Error) => handlers['error']?.(err),
-		};
-
-		return stream;
+	function sourceStream(content = 'source'): Readable {
+		return Readable.from([Buffer.from(content)], { objectMode: false });
 	}
+
+	function failingStream(error: Error): Readable {
+		return new Readable({
+			read() {
+				this.destroy(error);
+			},
+		});
+	}
+
+	function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+		let resolve!: (value: T) => void;
+		const promise = new Promise<T>((done) => (resolve = done));
+		return { promise, resolve };
+	}
+
+	function requestTransform(service: AssetsService) {
+		return service.getAsset(VALID_UUID, { transformationParams: { width: 100 } });
+	}
+
+	function sourceHeader(width: number, height: number) {
+		return { width, height, autoOrient: { width, height } };
+	}
+
+	const maxDimension = () => Number(env['ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION']);
 
 	beforeAll(() => {
 		db = vi.mocked(knex.default({ client: MockClient }));
@@ -347,7 +365,7 @@ describe('AssetsService.getAsset uncached-transform pipeline (GHSA-j8xj-7jff-46m
 	});
 
 	beforeEach(() => {
-		storageRead.mockReset();
+		storageRead.mockReset().mockImplementation(async () => sourceStream());
 		storageStat.mockReset().mockResolvedValue({ size: 1024, modified: new Date('2026-05-13T00:00:00.000Z') });
 		storageWrite.mockReset().mockResolvedValue(undefined);
 		checkAccessSpy.mockReset().mockResolvedValue(undefined);
@@ -357,9 +375,11 @@ describe('AssetsService.getAsset uncached-transform pipeline (GHSA-j8xj-7jff-46m
 		sharpInstance.rotate.mockClear();
 		sharpInstance.resize.mockClear();
 		sharpInstance.toFormat.mockClear();
-		sharpInstance.on.mockClear();
-		sharpInstance.pipe.mockClear();
+		sharpInstance.blur.mockClear();
+		sharpInstance.metadata.mockReset().mockResolvedValue(sourceHeader(800, 600));
+		sharpInstance.toBuffer.mockReset().mockResolvedValue(Buffer.from('transformed'));
 		loggerErrorSpy.mockReset();
+		primeKnex(tracker);
 	});
 
 	afterEach(() => {
@@ -367,79 +387,213 @@ describe('AssetsService.getAsset uncached-transform pipeline (GHSA-j8xj-7jff-46m
 	});
 
 	it('does not open the source read stream when a transform method throws on apply', async () => {
-		primeKnex(tracker);
-
 		sharpInstance.resize.mockImplementationOnce(() => {
 			throw new Error('sharp: bad resize args');
 		});
 
 		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
 
-		await expect(service.getAsset(VALID_UUID, { transformationParams: { width: 100 } })).rejects.toThrow(
-			/bad resize args/
-		);
+		await expect(requestTransform(service)).rejects.toThrow(/bad resize args/);
 
 		expect(storageRead).not.toHaveBeenCalled();
 	});
 
-	it('destroys the source read stream and rethrows when storage.write rejects', async () => {
-		primeKnex(tracker);
-		const fakeReadStream = buildFakeReadStream();
-		storageRead.mockResolvedValue(fakeReadStream);
-		storageWrite.mockRejectedValueOnce(new Error('s3 write failed'));
+	it('transforms the whole source and writes the result (regression)', async () => {
 		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
 
-		await expect(service.getAsset(VALID_UUID, { transformationParams: { width: 100 } })).rejects.toThrow(
-			/s3 write failed/
-		);
+		await requestTransform(service);
 
-		expect(fakeReadStream.destroy).toHaveBeenCalledTimes(1);
-	});
-
-	it('opens the source read stream on a valid transform (regression)', async () => {
-		primeKnex(tracker);
-		const fakeSourceStream = buildFakeReadStream();
-		const fakeCachedStream = buildFakeReadStream();
-		storageRead.mockResolvedValueOnce(fakeSourceStream).mockResolvedValueOnce(fakeCachedStream);
-		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
-
-		await service.getAsset(VALID_UUID, { transformationParams: { width: 100 } });
-
-		expect(storageRead).toHaveBeenCalled();
 		expect(storageRead.mock.calls[0]![0]).toBe(FILE_DISK_NAME);
-		expect(fakeSourceStream.destroy).not.toHaveBeenCalled();
-		expect(storageWrite).toHaveBeenCalledTimes(1);
-	});
 
-	it('logs read-stream errors via the error handler while cleanup and rejection flow through the write catch', async () => {
-		primeKnex(tracker);
-		const fakeReadStream = buildFakeReadStream();
-		storageRead.mockResolvedValue(fakeReadStream);
-
-		let rejectWrite: (err: Error) => void = () => undefined;
-
-		storageWrite.mockImplementationOnce(
-			() =>
-				new Promise<void>((_resolve, reject) => {
-					rejectWrite = reject;
-				})
+		expect(sharpFactory).toHaveBeenLastCalledWith(
+			Buffer.from('source'),
+			expect.objectContaining({ sequentialRead: true })
 		);
 
-		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
-		const pending = service.getAsset(VALID_UUID, { transformationParams: { width: 100 } });
+		expect(sharpInstance.toBuffer).toHaveBeenCalledTimes(1);
+		expect(storageWrite).toHaveBeenCalledTimes(1);
+		expect(await buffer(storageWrite.mock.calls[0]![1])).toEqual(Buffer.from('transformed'));
+	});
 
-		while (fakeReadStream.on.mock.calls.find((c: any[]) => c[0] === 'error') === undefined) {
-			await new Promise((resolve) => setTimeout(resolve, 5));
-		}
-
+	it('logs a source stream error, rejects with it, and writes nothing', async () => {
 		const readErr = new Error('s3 stream dropped');
-		fakeReadStream.__fireError(readErr);
+		storageRead.mockReset().mockResolvedValueOnce(failingStream(readErr));
+		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+		await expect(requestTransform(service)).rejects.toThrow(/s3 stream dropped/);
 
 		expect(loggerErrorSpy).toHaveBeenCalledWith(readErr, expect.stringContaining(VALID_UUID));
+		expect(sharpInstance.toBuffer).not.toHaveBeenCalled();
+		expect(storageWrite).not.toHaveBeenCalled();
+	});
 
-		rejectWrite(new Error('pipe broken'));
+	describe('size limit', () => {
+		it('rejects a source whose header exceeds the limit when the stored row understates it', async () => {
+			tracker.reset();
+			primeKnex(tracker, makeFileRow({ width: 10, height: 10 }));
+			sharpInstance.metadata.mockResolvedValue(sourceHeader(maxDimension() + 1, 10));
+			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
 
-		await expect(pending).rejects.toThrow(/pipe broken/);
-		expect(fakeReadStream.destroy).toHaveBeenCalledTimes(1);
+			await expect(requestTransform(service)).rejects.toBeInstanceOf(IllegalAssetTransformation);
+
+			expect(sharpInstance.toBuffer).not.toHaveBeenCalled();
+			expect(storageWrite).not.toHaveBeenCalled();
+		});
+
+		it('computes the output from the header rather than the stored row', async () => {
+			tracker.reset();
+			primeKnex(tracker, makeFileRow({ width: 10, height: 10 }));
+			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+			await expect(
+				service.getAsset(VALID_UUID, { transformationParams: { height: maxDimension() } })
+			).rejects.toBeInstanceOf(IllegalAssetTransformation);
+
+			expect(sharpInstance.toBuffer).not.toHaveBeenCalled();
+		});
+
+		it('rejects a resize whose output would exceed the limit', async () => {
+			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+			await expect(
+				service.getAsset(VALID_UUID, { transformationParams: { width: maxDimension() + 1 } })
+			).rejects.toBeInstanceOf(IllegalAssetTransformation);
+
+			expect(sharpInstance.toBuffer).not.toHaveBeenCalled();
+			expect(storageWrite).not.toHaveBeenCalled();
+		});
+
+		it('transforms a resize at exactly the limit', async () => {
+			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+			await service.getAsset(VALID_UUID, { transformationParams: { width: maxDimension() } });
+
+			expect(sharpInstance.toBuffer).toHaveBeenCalledTimes(1);
+			expect(storageWrite).toHaveBeenCalledTimes(1);
+		});
+
+		it('transforms an inside resize at exactly the limit when the scale is inexact', async () => {
+			const configured = env['ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION'];
+			env['ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION'] = 1000;
+			sharpInstance.metadata.mockResolvedValue(sourceHeader(15, 14));
+
+			try {
+				tracker.reset();
+				primeKnex(tracker, makeFileRow({ width: 15, height: 14 }));
+				const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+				await service.getAsset(VALID_UUID, { transformationParams: { width: 1000, height: 1000, fit: 'inside' } });
+
+				expect(sharpInstance.toBuffer).toHaveBeenCalledTimes(1);
+			} finally {
+				env['ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION'] = configured;
+			}
+		});
+
+		it('reads the header without the pixel limit and transforms with it', async () => {
+			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+			await requestTransform(service);
+
+			expect(sharpFactory).toHaveBeenCalledWith(
+				Buffer.from('source'),
+				expect.objectContaining({ limitInputPixels: false })
+			);
+
+			expect(sharpFactory).toHaveBeenLastCalledWith(
+				Buffer.from('source'),
+				expect.objectContaining({ limitInputPixels: Math.pow(maxDimension(), 2) })
+			);
+		});
+
+		it('checks only the source for advanced transformations', async () => {
+			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+			await service.getAsset(VALID_UUID, {
+				transformationParams: { width: maxDimension() + 1, transforms: [['blur', 1]] },
+			});
+
+			expect(sharpInstance.toBuffer).toHaveBeenCalledTimes(1);
+		});
+
+		it('serves a cached derivative without reading the header', async () => {
+			storageExists.mockImplementation(async () => true);
+			sharpInstance.metadata.mockResolvedValue(sourceHeader(maxDimension() + 1, 10));
+			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+			await expect(requestTransform(service)).resolves.toBeDefined();
+
+			expect(sharpFactory).not.toHaveBeenCalled();
+		});
+	});
+
+	describe('admission', () => {
+		let configuredLimit: unknown;
+
+		beforeEach(() => {
+			configuredLimit = env['ASSETS_TRANSFORM_MAX_CONCURRENT'];
+			env['ASSETS_TRANSFORM_MAX_CONCURRENT'] = 2;
+		});
+
+		afterEach(() => {
+			env['ASSETS_TRANSFORM_MAX_CONCURRENT'] = configuredLimit;
+		});
+
+		it('admits no more transforms than the setting until one finishes', async () => {
+			const first = deferred<Buffer>();
+			const second = deferred<Buffer>();
+			sharpInstance.toBuffer.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+			const running = [requestTransform(service), requestTransform(service)];
+			await vi.waitFor(() => expect(sharpInstance.toBuffer).toHaveBeenCalledTimes(2));
+
+			await expect(requestTransform(service)).rejects.toBeInstanceOf(ServiceUnavailableException);
+
+			first.resolve(Buffer.from('a'));
+			await running[0];
+
+			await expect(requestTransform(service)).resolves.toBeDefined();
+
+			second.resolve(Buffer.from('b'));
+			await running[1];
+		});
+
+		it.each<[string, () => void, RegExp]>([
+			[
+				'a transform argument error',
+				() =>
+					sharpInstance.resize.mockImplementationOnce(() => {
+						throw new Error('bad resize args');
+					}),
+				/bad resize args/,
+			],
+			['a source read failure', () => storageRead.mockRejectedValueOnce(new Error('source missing')), /source missing/],
+			[
+				'an oversized source header',
+				() => sharpInstance.metadata.mockResolvedValueOnce(sourceHeader(maxDimension() + 1, 10)),
+				/too large/,
+			],
+			[
+				'a source stream error',
+				() => storageRead.mockResolvedValueOnce(failingStream(new Error('stream dropped'))),
+				/stream dropped/,
+			],
+			[
+				'a transform failure or timeout',
+				() => sharpInstance.toBuffer.mockRejectedValueOnce(new Error('sharp: timeout')),
+				/sharp: timeout/,
+			],
+			['a storage write failure', () => storageWrite.mockRejectedValueOnce(new Error('write failed')), /write failed/],
+		])('releases the slot after %s', async (_label, fail, message) => {
+			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+			for (let attempt = 0; attempt < 3; attempt++) {
+				fail();
+				await expect(requestTransform(service)).rejects.toThrow(message);
+			}
+
+			await expect(requestTransform(service)).resolves.toBeDefined();
+		});
 	});
 });

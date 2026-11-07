@@ -85,13 +85,86 @@ Additional `LOGGER_*` variables pass through to the underlying pino logger optio
 
 ## Database
 
-CairnCMS supports SQLite, PostgreSQL, MySQL, MariaDB. The connection is configured through:
+CairnCMS supports PostgreSQL, MySQL, MariaDB, and SQLite, in the versions listed under [Supported versions](#supported-versions). The connection is configured through:
 
 - **`DB_CLIENT`** — `sqlite3` for SQLite, `pg` for PostgreSQL, `mysql` for both MySQL and MariaDB. MariaDB does not have a separate client value; it shares MySQL's underlying driver.
 - **`DB_HOST`** / **`DB_PORT`** / **`DB_DATABASE`** / **`DB_USER`** / **`DB_PASSWORD`** — connection details for server-based databases.
 - **`DB_FILENAME`** — path to the SQLite database file. SQLite-only.
-- **`DB_SSL__*`** / **`DB_POOL__*`** — SSL options and connection pool tuning. Use the double-underscore syntax to express nested config (`DB_SSL__REJECT_UNAUTHORIZED=false`, `DB_POOL__MIN=2`). Any key in the `DB_*` prefix passes through to the underlying Knex connection object.
+- **`DB_SSL__*`** / **`DB_POOL__*`** — SSL options and connection pool tuning. Use the double-underscore syntax to express nested config (`DB_SSL__REJECT_UNAUTHORIZED=true`, `DB_POOL__MIN=2`). Any key in the `DB_*` prefix passes through to the underlying Knex connection object.
 - **`DB_EXCLUDE_TABLES`** — comma-separated table names that CairnCMS should ignore even if it can read them. Default skips Postgres geometry housekeeping (`spatial_ref_sys`) and SQL Server diagrams (`sysdiagrams`).
+
+### Supported versions
+
+The tables below list the database versions for which CairnCMS provides compatibility fixes. Support covers PostgreSQL major releases and long-term support (LTS) releases of MySQL and MariaDB, with new versions added after testing. MySQL Innovation releases and MariaDB short-term and rolling releases are not supported.
+
+A version leaves support when its vendor stops publishing community maintenance releases, even if a hosting provider continues to maintain it through a service such as Amazon RDS Extended Support.
+
+Unsupported versions may continue to work, but CairnCMS does not commit to fixing problems specific to them. Changing a version's support status does not alter a running installation. Planned changes that break compatibility follow the [deprecation policy](/docs/manage/upgrades/#deprecation-notices).
+
+#### PostgreSQL
+
+| Version | Vendor maintenance ends | Status |
+|---|---|---|
+| 18 | 2030-11-14 | Supported |
+| 17 | 2029-11-08 | Supported |
+| 16 | 2028-11-09 | Supported |
+| 15 | 2027-11-11 | Supported |
+| 14 | 2026-11-12 | Not supported |
+| 13 and older | Ended | Not supported |
+
+Geometry fields need PostGIS 3.2 through 3.6 on a supported PostgreSQL version.
+
+#### MySQL
+
+| Version | Vendor maintenance ends | Status |
+|---|---|---|
+| 9.7 LTS | 2031-04-30 | Supported |
+| 8.4 LTS | 2029-04-30 | Supported |
+| 8.0 and older | Ended | Not supported |
+
+MySQL dates are the end of Oracle Premier Support. A MySQL version stays supported until Oracle stops publishing community releases for it, which for earlier versions continued until Extended Support ended.
+
+:::caution[MySQL 5.7 and PostgreSQL 10 and 11 compatibility is deprecated]
+Relational-field sorting on MySQL 5.7, and field metadata, snapshots, and schema apply on PostgreSQL 10 and 11, are deprecated in 1.8.0. Upgrade to a supported version of the same database, following the vendor's upgrade guide. See the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) for removal timing.
+:::
+
+#### MariaDB
+
+| Version | Vendor maintenance ends | Status |
+|---|---|---|
+| 12.3 LTS | 2029-06-12 | Supported |
+| 11.8 LTS | 2028-06-04 | Supported |
+| 11.4 LTS | 2029-05-29 | Supported |
+| 10.11 LTS | 2028-02-16 | Supported |
+| 10.6 and older | Ended | Not supported |
+
+#### SQLite engine
+
+SQLite is supported on the engine bundled with any Node.js release that meets the [SQLite requirements](#sqlite).
+
+### Database TLS
+
+For MySQL or MariaDB, set a trusted certificate authority and turn on host name checks. Use the database's DNS name, matching its server certificate:
+
+```dotenv
+DB_CLIENT=mysql
+DB_HOST=db.example.com
+DB_SSL__CA_FILE=/run/secrets/database-ca.pem
+DB_SSL__REJECT_UNAUTHORIZED=true
+DB_SSL__VERIFY_IDENTITY=true
+```
+
+The CA file must contain the trusted PEM certificate bundle and be readable by CairnCMS. Without `DB_SSL__VERIFY_IDENTITY=true`, a certificate issued for a different host name is accepted if its authority is trusted.
+
+For PostgreSQL, use `DB_CLIENT=pg` and leave out `DB_SSL__VERIFY_IDENTITY`. Its driver checks the host name whenever certificate checks are on.
+
+PostgreSQL can also take a single `DB_CONNECTION_STRING` in place of `DB_HOST`, `DB_PORT`, `DB_DATABASE`, and `DB_USER`. When it is set, CairnCMS ignores every `DB_SSL__*` setting, so put TLS options in the string, for example `?sslmode=verify-full&sslrootcert=/run/secrets/database-ca.pem`. Give an IPv6 address in `DB_HOST` instead, because a bracketed IPv6 host in the string does not connect. A `user`, `password`, or `port` query parameter takes precedence over the value in the URL.
+
+### SQLite
+
+SQLite needs Node.js 22.13.0 or later, or 22.5.0 or later started with `--experimental-sqlite`. On an older release, CairnCMS cannot open the database and stops at startup. Run a current Node.js 22 or 24 release. The official image already does.
+
+SQLite uses a single database connection. `DB_POOL__MIN` and `DB_POOL__MAX` are limited to 1, with a warning at startup if a higher value is set. A slow query, or another program holding a lock on the database file, pauses the whole server. SQLite suits development, evaluation, and small single-instance sites. Use PostgreSQL, MySQL, or MariaDB for anything larger.
 
 ### MySQL and MariaDB charset
 
@@ -397,7 +470,7 @@ Asset transformation settings:
 
 - **`ASSETS_CACHE_TTL`** — how long transformed assets stay cached client-side. Default `30d`.
 - **`ASSETS_TRANSFORM_MAX_CONCURRENT`** — concurrent transformation jobs. Default `25`.
-- **`ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION`** — maximum side-length for transformed images. Default `6000`.
+- **`ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION`** — maximum side length, in pixels, of a source image that can be transformed and of a resized output. Default `6000`. See [Size limit](/docs/api/files/#size-limit).
 - **`ASSETS_TRANSFORM_MAX_OPERATIONS`** — chained operations per transform request. Default `5`.
 - **`ASSETS_TRANSFORM_TIMEOUT`** — per-job timeout. Default `7500ms`.
 - **`ASSETS_INVALID_IMAGE_SENSITIVITY_LEVEL`** — how strictly to reject corrupted images. `error`, `warning`, or `none`. Default `warning`.

@@ -75,7 +75,7 @@ export async function createServer(): Promise<http.Server> {
 			const protocol = server instanceof https.Server ? 'https' : 'http';
 
 			const rawTarget = req.originalUrl || req.url;
-			const urlInfo = parseRequestTarget(rawTarget);
+			const urlInfo = parseRequestTarget(req);
 
 			const info = {
 				finished,
@@ -88,12 +88,13 @@ export async function createServer(): Promise<http.Server> {
 					protocol,
 					host: req.headers.host,
 					size: metrics.in,
-					query: urlInfo?.query
-						? qs.parse(urlInfo.query, {
-								depth: Number(env['QUERYSTRING_PARSE_DEPTH']),
-								arrayLimit: Number(env['QUERYSTRING_ARRAY_LIMIT']),
-						  })
-						: {},
+					query:
+						typeof urlInfo?.query === 'string'
+							? qs.parse(urlInfo.query, {
+									depth: Number(env['QUERYSTRING_PARSE_DEPTH']),
+									arrayLimit: Number(env['QUERYSTRING_ARRAY_LIMIT']),
+							  })
+							: {},
 					headers: req.headers,
 				},
 				response: {

@@ -44,6 +44,24 @@ export type ConnectionParams = z.infer<typeof ConnectionParams>;
 const ZodItem = z.custom<Partial<Item>>((value) => isPlainObject(value));
 const ZodQuery = z.custom<Query>((value) => isPlainObject(value));
 
+/**
+ * Array schema that rejects at the first invalid position with a single issue. It returns a copy, so callers that
+ * mutate the parsed array do not change the original message.
+ */
+function zodArrayOf<T extends z.ZodTypeAny>(element: T) {
+	return z
+		.custom<z.infer<T>[]>((value) => {
+			if (!Array.isArray(value)) return false;
+
+			for (let index = 0; index < value.length; index++) {
+				if (!element.safeParse(value[index]).success) return false;
+			}
+
+			return true;
+		})
+		.transform((value) => [...value]);
+}
+
 const PartialItemsMessage = z.object({
 	uid: zodStringOrNumber.optional(),
 	type: z.literal('items'),
@@ -53,25 +71,25 @@ const PartialItemsMessage = z.object({
 export const WebSocketItemsMessage = z.union([
 	PartialItemsMessage.extend({
 		action: z.literal('create'),
-		data: z.union([z.array(ZodItem), ZodItem]),
+		data: z.union([zodArrayOf(ZodItem), ZodItem]),
 		query: ZodQuery.optional(),
 	}),
 	PartialItemsMessage.extend({
 		action: z.literal('read'),
-		ids: z.array(zodStringOrNumber).optional(),
+		ids: zodArrayOf(zodStringOrNumber).optional(),
 		id: zodStringOrNumber.optional(),
 		query: ZodQuery.optional(),
 	}),
 	PartialItemsMessage.extend({
 		action: z.literal('update'),
 		data: ZodItem,
-		ids: z.array(zodStringOrNumber).optional(),
+		ids: zodArrayOf(zodStringOrNumber).optional(),
 		id: zodStringOrNumber.optional(),
 		query: ZodQuery.optional(),
 	}),
 	PartialItemsMessage.extend({
 		action: z.literal('delete'),
-		ids: z.array(zodStringOrNumber).optional(),
+		ids: zodArrayOf(zodStringOrNumber).optional(),
 		id: zodStringOrNumber.optional(),
 		query: ZodQuery.optional(),
 	}),

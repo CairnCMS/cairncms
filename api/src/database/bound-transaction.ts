@@ -1,67 +1,15 @@
 import type { Knex } from 'knex';
-import { createRequire } from 'node:module';
 import type { ActionEventParams } from '../types/index.js';
 import { getDatabaseClient } from './index.js';
-
-const require = createRequire(import.meta.url);
-
-const CAIRN_IMMEDIATE = Symbol('cairnBeginImmediate');
-
-type ImmediateTransactionClass = { new (...args: unknown[]): { begin(connection: unknown): unknown } };
-
-let immediateTransactionClass: ImmediateTransactionClass | undefined;
-
-// The knex internal is required lazily and only for SQLite, so a knex layout change cannot break
-// API boot on other vendors.
-function getImmediateTransactionClass(): ImmediateTransactionClass {
-	if (immediateTransactionClass) return immediateTransactionClass;
-
-	const SqliteTransaction = require('knex/lib/dialects/sqlite3/execution/sqlite-transaction.js') as {
-		new (...args: unknown[]): {
-			query(connection: unknown, sql: string): unknown;
-			begin(connection: unknown): unknown;
-		};
-	};
-
-	immediateTransactionClass = class CairnImmediateTransaction extends SqliteTransaction {
-		private readonly cairnImmediate: boolean;
-
-		constructor(...args: unknown[]) {
-			super(...args);
-			const config = args[2] as Record<PropertyKey, unknown> | undefined;
-			this.cairnImmediate = config?.[CAIRN_IMMEDIATE] === true;
-		}
-
-		override begin(connection: unknown): unknown {
-			if (!this.cairnImmediate) return super.begin(connection);
-			return this.query(connection, 'BEGIN IMMEDIATE;');
-		}
-	};
-
-	return immediateTransactionClass;
-}
+import { CAIRN_IMMEDIATE, installSqliteTransaction } from './sqlite-transaction.js';
 
 const bound = new WeakSet<object>();
-const adapted = new WeakSet<object>();
 const contexts = new WeakMap<object, LifecycleContext>();
 
 export interface LifecycleContext {
 	events: ActionEventParams[];
 	responseCacheDirty: boolean;
 	systemCacheDirty: boolean;
-}
-
-function ensureImmediateAdapter(database: Knex): void {
-	const client = (database as unknown as { client: { transaction: (...args: unknown[]) => unknown } }).client;
-	if (adapted.has(client)) return;
-
-	const ImmediateTransaction = getImmediateTransactionClass();
-
-	client.transaction = function (this: unknown, ...args: unknown[]) {
-		return new ImmediateTransaction(this, ...args);
-	};
-
-	adapted.add(client);
 }
 
 export function isBoundSerializable(trx: unknown): boolean {
@@ -84,7 +32,7 @@ export async function runInBoundSerializable<T>(
 	let config: Knex.TransactionConfig;
 
 	if (client === 'sqlite') {
-		ensureImmediateAdapter(database);
+		installSqliteTransaction(database);
 		config = { [CAIRN_IMMEDIATE]: true } as unknown as Knex.TransactionConfig;
 	} else {
 		config = { isolationLevel: 'serializable' };

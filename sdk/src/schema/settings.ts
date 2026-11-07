@@ -17,6 +17,7 @@ export type DirectusSettings<Schema = any> = MergeCoreCollection<
 		auth_login_attempts: number;
 		auth_password_policy: string | null;
 		storage_asset_transform: 'all' | 'none' | 'presets';
+		storage_asset_public_transforms: boolean;
 		storage_asset_presets:
 			| {
 					fit: string;

@@ -8,13 +8,17 @@ import { fileURLToPath } from 'node:url';
 import { readVendorResult } from './results.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-for (const [vendor, mode, expectedPassed, expectedExcluded, expectedCode] of [
-	['sqlite3', '', 1, 2, 0],
-	['postgres', '', 3, 0, 0],
-	['sqlite3', 'all-excluded', 0, 2, 0],
-	['postgres', 'unapproved', 0, 0, 1],
+for (const [file, vendor, mode, expectedPassed, expectedExcluded, expectedCode] of [
+	['applicability.case.ts', 'sqlite3', '', 1, 2, 0],
+	['applicability.case.ts', 'postgres18', '', 3, 0, 0],
+	['applicability.case.ts', 'sqlite3', 'all-excluded', 0, 2, 0],
+	['applicability.case.ts', 'postgres18', 'unapproved', 0, 0, 1],
+	['applicability-family.case.ts', 'postgres18', '', 1, 0, 0],
+	['applicability-family.case.ts', 'postgres15', '', 1, 0, 0],
+	['applicability-family.case.ts', 'postgres10', '', 1, 0, 0],
+	['applicability-family.case.ts', 'mysql84', '', 0, 1, 0],
 ])
-	test(`native applicability ${vendor}/${mode || 'mixed'}`, { timeout: 30_000 }, async () => {
+	test(`native applicability ${file} ${vendor}/${mode || 'mixed'}`, { timeout: 30_000 }, async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'cairn-applicability-'));
 
 		const child = spawn(process.execPath, ['harness/vendor.mjs'], {
@@ -26,7 +30,7 @@ for (const [vendor, mode, expectedPassed, expectedExcluded, expectedCode] of [
 				INTEGRATION_OPTIONS: JSON.stringify({
 					vendor,
 					directory,
-					filters: ['applicability.case.ts'],
+					filters: [file],
 					collectAll: true,
 					services: false,
 					configFile: join(root, 'harness/controls.config.ts'),

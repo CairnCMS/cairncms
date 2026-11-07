@@ -39,6 +39,7 @@ vi.mock('../logger.js', () => ({
 }));
 
 import checkCacheMiddleware from './cache.js';
+import env from '../env.js';
 import logger from '../logger.js';
 
 const { shouldSkipCache: realShouldSkipCache } = await vi.importActual<typeof import('../utils/should-skip-cache.js')>(
@@ -119,4 +120,30 @@ describe('cache middleware — read-path key stashing and fail-closed', () => {
 		expect((res.locals as any).cacheKey).toBeUndefined();
 		expect(next).toHaveBeenCalledOnce();
 	});
+
+	it.each(['/users\\me#frag', '//:@h/items/books#frag', 'http://localhost/items/books'])(
+		'turns off both the read and the write for %s, whose target is rewritten while parsing',
+		async (target) => {
+			env['CACHE_STATUS_HEADER'] = 'x-cache-status';
+
+			try {
+				getCacheValueMock.mockResolvedValue({ cached: 'stale' });
+				const { req, res } = makeReqRes(target);
+				const next = vi.fn();
+
+				await (checkCacheMiddleware as any)(req, res, next);
+
+				expect(getCacheKeyMock).not.toHaveBeenCalled();
+				expect(getCacheValueMock).not.toHaveBeenCalled();
+				expect(shouldSkipCacheMock).not.toHaveBeenCalled();
+				expect(logger.warn).not.toHaveBeenCalled();
+				expect((res.locals as any).cache).toBe(false);
+				expect(res.setHeader).toHaveBeenCalledWith('x-cache-status', 'MISS');
+				expect(res.json).not.toHaveBeenCalled();
+				expect(next).toHaveBeenCalledOnce();
+			} finally {
+				env['CACHE_STATUS_HEADER'] = false;
+			}
+		}
+	);
 });

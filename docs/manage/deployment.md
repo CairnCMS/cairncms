@@ -24,6 +24,8 @@ The image is based on `node:22-alpine`, runs as the unprivileged `node` user, an
 - the built admin app, served by the API
 - a CLI bin (`cairncms`) for migrations, bootstrap, user management, and config workflows
 
+The image moves to Node.js 24 in the release that removes Node.js 22 support. Docker users receive the Node.js upgrade through the official image.
+
 By default the image expects state at three paths inside the container:
 
 - `/cairncms/database` — SQLite file location, when using SQLite
@@ -54,7 +56,7 @@ The scaffold makes choices that work locally but should be revisited for any env
 
 ### Database image architecture
 
-The scaffold's database service uses `postgis/postgis:16-3.4-alpine`, which is `linux/amd64` only. On ARM hosts (AWS Graviton, ARM-based Kubernetes nodes, Apple Silicon production), pull a multi-arch image instead. Plain `postgres:16-alpine` is multi-arch and works for any project that does not use geometry fields.
+The scaffold's database service uses `postgis/postgis:18-3.6-alpine`, which is `linux/amd64` only. On ARM hosts (AWS Graviton, ARM-based Kubernetes nodes, Apple Silicon production), pull a multi-arch image instead. Plain `postgres:18-alpine` is multi-arch and works for any project that does not use geometry fields. When you switch, also remove the database service's `platform: linux/amd64` line or set it to `linux/arm64`, because the pin otherwise keeps selecting the amd64 build. PostgreSQL 18 images keep their data under `/var/lib/postgresql`, so keep the scaffold's `./data/database:/var/lib/postgresql` mount when you change images.
 
 ### Secret management
 
@@ -100,9 +102,13 @@ In production, these need to be backed by durable storage:
 
 ## Running without Docker
 
+:::caution[Node.js 22 is deprecated]
+Running CairnCMS on Node.js 22, or on Node.js 24 before 24.16.0, is deprecated in 1.8.0. Use Node.js 24.16.0 or later instead. See the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) for removal timing.
+:::
+
 If you prefer to run CairnCMS directly on a host:
 
-1. Install Node.js 20 (or newer) on the host.
+1. Install Node.js 24.16.0 or later on the host.
 2. Install the CairnCMS package: `npm install -g cairncms` (or use the source tree if you're building from this repo). The `cairncms` package is the one that registers the `cairncms` CLI binary.
 3. Provide the configuration through a `.env` file or environment variables (see [Configuration](/docs/manage/configuration/)).
 4. Run `cairncms bootstrap` once to install system tables and apply migrations.

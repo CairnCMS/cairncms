@@ -1,6 +1,7 @@
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sqliteAfterCreate } from '../database/connection-hooks.js';
+import { getSqliteClient } from '../database/sqlite-driver.js';
 import { RelationsService } from './relations.js';
 
 vi.mock('../cache.js', () => ({
@@ -31,7 +32,7 @@ async function referencedColumns(table: string): Promise<string[]> {
 
 beforeEach(async () => {
 	database = knex.default({
-		client: 'sqlite3',
+		client: getSqliteClient(),
 		connection: { filename: ':memory:' },
 		useNullAsDefault: true,
 		pool: { min: 1, max: 1, afterCreate: sqliteAfterCreate },
