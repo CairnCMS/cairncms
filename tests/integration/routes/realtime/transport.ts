@@ -284,22 +284,24 @@ export function createWebSocketGql(host: string, config?: WebSocketOptionsGql) {
 		url: `ws://${parsedHost}/${config?.path ?? 'graphql'}${config?.queryString ? `?${config.queryString}` : ''}`,
 		on: {
 			...config?.client?.on,
-			closed: (...args: any[]) => {
-				(config?.client?.on?.closed as any)?.(...args);
+			closed: (event) => {
 				conn = null;
+				isConnReady = false;
+				config?.client?.on?.closed?.(event);
 			},
 			opened: (socket) => {
-				config?.client?.on?.opened?.(socket);
 				conn = socket as WebSocket;
+				isConnReady = false;
+				config?.client?.on?.opened?.(socket);
 
 				conn.on('message', (data) => {
 					const message: WebSocketResponse = JSON.parse(data.toString());
 					protocolFrames.push({ id: message['id'], type: message.type });
-
-					if (message.type === 'connection_ack') {
-						isConnReady = true;
-					}
 				});
+			},
+			connected: (...args) => {
+				isConnReady = true;
+				config?.client?.on?.connected?.(...args);
 			},
 		},
 	});
@@ -435,45 +437,82 @@ export function createWebSocketGql(host: string, config?: WebSocketOptionsGql) {
 		const args = options.event ? { __args: { event: new EnumType(options.event) } } : false;
 		const query = processGraphQLJson({ subscription: { [subscriptionKey]: { ...args, ...options.jsonQuery } } });
 
-		let unsubscribe: () => void;
-
-		// generateID reads this synchronously; always clear it if setup throws.
-		pendingProtocolId = options.protocolId;
+		let unsubscribe: (() => void) | undefined;
 
 		try {
-			unsubscribe = client.subscribe(
-				{ query },
-				{
-					next: (data: any) => {
-						targetMessages.push(data);
-					},
-					error: (err: unknown) => {
-						if (options.uid !== undefined) {
-							errors[String(options.uid)] = err;
-						} else {
-							errorDefault = err;
+			await new Promise<void>((resolve, reject) => {
+				// An immediate operation error can close a lazy connection before a state poll sees OPEN.
+				const connected = () => {
+					cleanup();
+					resolve();
+				};
+
+				let removeConnectedListener: (() => void) | undefined = client.on('connected', connected);
+
+				const timeout = setTimeout(() => {
+					failed(new Error('WebSocket connection acknowledgement timed out'));
+					unsubscribe?.();
+					conn?.terminate();
+				}, config?.waitTimeout ?? defaults.waitTimeout);
+
+				const cleanup = () => {
+					removeConnectedListener?.();
+					removeConnectedListener = undefined;
+					clearTimeout(timeout);
+				};
+
+				const failed = (error: unknown) => {
+					cleanup();
+					reject(error);
+				};
+
+				// generateID reads this synchronously; always clear it if setup throws.
+				pendingProtocolId = options.protocolId;
+
+				try {
+					unsubscribe = client.subscribe(
+						{ query },
+						{
+							next: (data: any) => {
+								targetMessages.push(data);
+							},
+							error: (err: unknown) => {
+								if (options.uid !== undefined) {
+									errors[String(options.uid)] = err;
+								} else {
+									errorDefault = err;
+								}
+
+								failed(err);
+							},
+							complete: () => {
+								if (options.uid !== undefined) {
+									completedFlags[String(options.uid)] = true;
+								} else {
+									completedDefault = true;
+								}
+							},
 						}
-					},
-					complete: () => {
-						if (options.uid !== undefined) {
-							completedFlags[String(options.uid)] = true;
-						} else {
-							completedDefault = true;
-						}
-					},
+					);
+
+					if (options.uid !== undefined) {
+						unsubscriptions[String(options.uid)] = unsubscribe;
+					} else {
+						unsubscriptionDefault = unsubscribe;
+					}
+
+					if (isConnReady && conn?.readyState === WebSocket.OPEN) connected();
+				} catch (error) {
+					failed(error);
+				} finally {
+					pendingProtocolId = undefined;
 				}
-			);
-		} finally {
-			pendingProtocolId = undefined;
+			});
+		} catch (error) {
+			unsubscribe?.();
+			throw error;
 		}
 
-		if (options.uid !== undefined) {
-			unsubscriptions[String(options.uid)] = unsubscribe;
-		} else {
-			unsubscriptionDefault = unsubscribe;
-		}
-
-		await waitForState(WebSocket.OPEN);
 		return subscriptionKey;
 	};
 
