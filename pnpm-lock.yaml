@@ -302,8 +302,8 @@ importers:
         specifier: 4.6.0
         version: 4.6.0
       nodemailer:
-        specifier: 10.0.15
-        version: 10.0.15
+        specifier: 10.1.7
+        version: 10.1.7
       object-hash:
         specifier: 3.0.0
         version: 3.0.0
@@ -6533,8 +6533,8 @@ packages:
   nodemailer-sendgrid@1.0.3:
     resolution: {integrity: sha512-To/veO2M4evjtv1XrY7BUgE+LDypgs/FBx4wOHb2UNTpvZhiARtvMaBI0685Yxkho0lIPJc4jS0cUE7v+XGNgg==}
 
-  nodemailer@10.0.15:
-    resolution: {integrity: sha512-EUqp5PhtcsYXs9Fq/lS7s/8zlTrnBqmzZWzFFROrNikMiz+om/YRKMwqN907t+0A1KKyT8jd39CBUbFZmaZmcA==}
+  nodemailer@10.1.7:
+    resolution: {integrity: sha512-OQa6FDln5fLttmqSbjDiRYvFDOFNrBqfiOwHPlEbURil3b+vPB1v8xpi+Sp46drzNDlsTnNsS502vthmz56r4w==}
     engines: {node: '>=20.0.0'}
 
   nodemon@2.0.22:
@@ -14350,7 +14350,7 @@ snapshots:
       - supports-color
     optional: true
 
-  nodemailer@10.0.15: {}
+  nodemailer@10.1.7: {}
 
   nodemon@2.0.22:
     dependencies:
