@@ -636,7 +636,7 @@ operators:
   nin: Er ikke en av
   null: Er null
   nnull: Er ikke null
-  contains: Inneholder
+  contains: Contains
   ncontains: Inneholder ikke
   icontains: Inneholder (ikke versalfølsom)
   starts_with: Begynner med
@@ -1021,7 +1021,7 @@ sign_out_confirm: Er du sikker på at du vil logge ut?
 something_went_wrong: Noe gikk galt.
 sort_direction: Sorteringsretning
 template: Mal
-require_value_to_be_set: Krev verdi å bli angitt ved opprettelse
+require_value_to_be_set: Krev at en verdi angis ved opprettelse
 translation: Oversettelse
 translation_placeholder: Angi en oversettelse...
 value: Verdi
@@ -1311,7 +1311,7 @@ operations:
     url: URL
     url_placeholder: https://example.com/example
     data: Data
-    header_placeholder: Autorisasjon...
+    header_placeholder: Authorization...
   sleep:
     description: Vent et gitt antall millisekunder
     milliseconds: Millisekunder
