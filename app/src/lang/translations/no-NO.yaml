@@ -636,7 +636,7 @@ operators:
   nin: Er ikke en av
   null: Er null
   nnull: Er ikke null
-  contains: Contains
+  contains: Inneholder
   ncontains: Inneholder ikke
   icontains: Inneholder (ikke versalfølsom)
   starts_with: Begynner med
@@ -928,7 +928,7 @@ field_options:
     translation: Oversettelse
     translation_placeholder: Angi en oversettelse...
     archive_divider: Arkiv
-    archive_field_placeholder: Velge et felt...
+    archive_field_placeholder: Velg et felt...
     sort_divider: Sorter
   directus_files:
     description: En valgfri beskrivelse...
@@ -1182,7 +1182,7 @@ displays:
     bold: Fet
     bold_label: Bruk fet skrift
     italic: Kursiv
-    italic_label: Bruk kursiv skriv
+    italic_label: Bruk kursiv skrift
     prefix: Prefiks
     suffix: Suffiks
     color: Farge
@@ -1210,7 +1210,7 @@ layouts:
     cards: Kort
     image_source: Bilde Kilde
     crop: Beskjær
-    contain: Inneholder
+    contain: Vis hele bildet
     title: Tittel
     subtitle: Undertittel
   tabular:
@@ -1249,7 +1249,7 @@ left: Venstre
 donut: Smultring
 panels:
   metric:
-    name: Metrisk
+    name: Nøkkeltall
     field: Felt
   time_series:
     date_field: Datofelt
