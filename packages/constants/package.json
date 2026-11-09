@@ -29,7 +29,7 @@
 	},
 	"devDependencies": {
 		"typescript": "5.0.4",
-		"vitest": "4.1.11"
+		"vitest": "4.1.12"
 	},
 	"dependencies": {
 		"zod": "4.6.7"
