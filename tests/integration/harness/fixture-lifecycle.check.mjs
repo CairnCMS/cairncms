@@ -58,6 +58,7 @@ for (const [name, vendor, count] of [
 	['cli', 'sqlite3', 3],
 	['origin', 'sqlite3', 2],
 	['multiple-api', 'sqlite3', 1],
+	['ownership-record', 'sqlite3', 1],
 	['destructive', 'postgres18', 1],
 	['timezone', 'mysql84', 1],
 ])

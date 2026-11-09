@@ -48,7 +48,7 @@
 		"@rollup/plugin-json": "6.0.0",
 		"@rollup/plugin-node-resolve": "15.0.2",
 		"@rollup/plugin-replace": "5.0.2",
-		"@rollup/plugin-terser": "0.4.1",
+		"@rollup/plugin-terser": "1.0.2",
 		"@rollup/plugin-virtual": "3.0.1",
 		"@vitejs/plugin-vue": "5.2.4",
 		"chalk": "5.2.0",
@@ -74,7 +74,7 @@
 		"vitest": "4.1.12"
 	},
 	"engines": {
-		"node": "^18.0.0 || >=20.0.0"
+		"node": ">=22.0.0"
 	},
 	"publishConfig": {
 		"access": "public"
