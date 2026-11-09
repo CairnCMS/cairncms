@@ -3,7 +3,7 @@ import { createVitest } from 'vitest/node';
 import { DefaultReporter, VerboseReporter } from 'vitest/node';
 import { Wait } from 'testcontainers';
 import { RecordedContainer } from './recorded-container.mjs';
-import { writeContainerRecord } from './container-record.mjs';
+import { writeResourceRecord } from './resource-record.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { basename } from 'node:path';
@@ -188,7 +188,7 @@ try {
 
 			containerLog = createWriteStream(`${reports}/database.log`);
 
-			await writeContainerRecord(`${reports}/container.json`, {
+			await writeResourceRecord(`${reports}/container.json`, {
 				image: definition.image,
 				version: definition.version,
 				owner: process.pid,
@@ -235,7 +235,7 @@ try {
 				password: 'integration',
 			};
 
-			await writeContainerRecord(`${reports}/container.json`, {
+			await writeResourceRecord(`${reports}/container.json`, {
 				id: container.getId(),
 				image: definition.image,
 				version: definition.version,

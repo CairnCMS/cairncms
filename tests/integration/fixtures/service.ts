@@ -2,7 +2,7 @@
 import { Wait, type StartedTestContainer, type WaitStrategy } from 'testcontainers';
 import { createWriteStream } from 'node:fs';
 import { RecordedContainer } from '../harness/recorded-container.mjs';
-import { writeContainerRecord } from '../harness/container-record.mjs';
+import { writeResourceRecord } from '../harness/resource-record.mjs';
 import { randomUUID } from 'node:crypto';
 import { join, basename, dirname } from 'node:path';
 import type { Readable } from 'node:stream';
@@ -58,7 +58,7 @@ export async function withService<T>(
 
 		const run = basename(dirname(directory));
 
-		await writeContainerRecord(ownerPath, {
+		await writeResourceRecord(ownerPath, {
 			serviceKey: id,
 			run,
 			image: definition.image,
@@ -86,7 +86,7 @@ export async function withService<T>(
 
 		container = await configured.start();
 
-		await writeContainerRecord(ownerPath, {
+		await writeResourceRecord(ownerPath, {
 			id: container.getId(),
 			serviceKey: id,
 			run,
@@ -122,7 +122,7 @@ export async function withService<T>(
 		try {
 			await stop();
 			if (container)
-				await writeContainerRecord(ownerPath, {
+				await writeResourceRecord(ownerPath, {
 					id: container.getId(),
 					serviceKey: id,
 					image: definition.image,

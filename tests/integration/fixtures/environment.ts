@@ -17,6 +17,7 @@ import { waitChild } from '../harness/wait-child.mjs';
 import { dropDatabase } from './drop-database.mjs';
 import { initializeDatabase } from '../harness/pristine.mjs';
 import { removeMarkedDirectory } from '../harness/owned-directory.mjs';
+import { writeResourceRecord } from '../harness/resource-record.mjs';
 import { familyOf, hasCapability } from '../harness/database-vendors.mjs';
 import { tlsResourceDetails, tlsEnvironment } from '../harness/database-tls.mjs';
 import { sqliteClient } from '../harness/sqlite-client.mjs';
@@ -197,10 +198,11 @@ export async function withEnvironment(
 
 		children.push(child);
 
-		const ownership =
-			JSON.stringify({ directory, database: id, owner: process.pid, children: children.map((c) => c.pid) }) + '\n';
+		const ownership = { directory, database: id, owner: process.pid, children: children.map((c) => c.pid) };
 
-		ownershipWrite = ownershipWrite.then(() => writeFile(join(runtime.directory, `${id}.owner.json`), ownership));
+		ownershipWrite = ownershipWrite.then(() =>
+			writeResourceRecord(join(runtime.directory, `${id}.owner.json`), ownership)
+		);
 
 		void ownershipWrite.catch((error) => {
 			console.error('Could not record owned processes', error);
@@ -246,10 +248,11 @@ export async function withEnvironment(
 
 		await writeFile(join(directory, '.integration-owner.json'), JSON.stringify({ id, reports: runtime.directory }));
 
-		await writeFile(
-			join(runtime.directory, `${id}.owner.json`),
-			JSON.stringify({ directory, database: id, owner: process.pid }) + '\n'
-		);
+		await writeResourceRecord(join(runtime.directory, `${id}.owner.json`), {
+			directory,
+			database: id,
+			owner: process.pid,
+		});
 
 		Object.assign(env, configured(options.env));
 

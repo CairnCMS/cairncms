@@ -1,6 +1,6 @@
 import { GenericContainer, getContainerRuntimeClient } from 'testcontainers';
 import { readFile, writeFile } from 'node:fs/promises';
-import { writeContainerRecord } from './container-record.mjs';
+import { writeResourceRecord } from './resource-record.mjs';
 
 // Testcontainers can fail before it attaches the log consumer or returns an owned
 // handle. Its creation hook records the exact ID before start/port readiness.
@@ -13,7 +13,7 @@ export class RecordedContainer extends GenericContainer {
 	async containerCreated(id) {
 		this.ownedId = id;
 		const record = JSON.parse(await readFile(this.recordPath, 'utf8'));
-		await writeContainerRecord(this.recordPath, { ...record, id });
+		await writeResourceRecord(this.recordPath, { ...record, id });
 	}
 
 	// Capture readiness errors before Testcontainers' wait helper removes the container.

@@ -4,7 +4,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { writeContainerRecord } from './container-record.mjs';
+import { writeResourceRecord } from './resource-record.mjs';
 import { owners } from './control-process.mjs';
 import { RecordedContainer } from './recorded-container.mjs';
 
@@ -43,7 +43,7 @@ for (const [mode, previous, expected] of [
 			writing =
 				mode === 'container-id'
 					? new RecordedContainer('fixture-image', path).containerCreated('container-id')
-					: writeContainerRecord(path, expected);
+					: writeResourceRecord(path, expected);
 
 			await Promise.race([paused.promise, writing.then(() => assert.fail('Write did not pause'))]);
 			assert.deepEqual(await owners(directory, '.service.json'), previous ? [previous] : []);
@@ -76,7 +76,7 @@ test('a failed record write preserves the published record and removes its parti
 		});
 
 		syncBuiltinESMExports();
-		await assert.rejects(writeContainerRecord(path, { ...starting, removed: true }), (error) => error === failure);
+		await assert.rejects(writeResourceRecord(path, { ...starting, removed: true }), (error) => error === failure);
 		assert.deepEqual(await owners(directory, '.service.json'), [starting]);
 		assert.deepEqual(await fs.readdir(directory), ['fixture.service.json']);
 	} finally {
