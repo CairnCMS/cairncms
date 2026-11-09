@@ -362,8 +362,8 @@ importers:
         specifier: 7.2.2
         version: 7.2.2
       stream-json:
-        specifier: 1.7.5
-        version: 1.7.5
+        specifier: 3.8.0
+        version: 3.8.0
       strip-bom-stream:
         specifier: 5.0.0
         version: 5.0.0
@@ -485,9 +485,6 @@ importers:
       '@types/sanitize-html':
         specifier: 2.9.0
         version: 2.9.0
-      '@types/stream-json':
-        specifier: 1.7.3
-        version: 1.7.3
       '@types/supertest':
         specifier: 2.0.12
         version: 2.0.12
@@ -3602,12 +3599,6 @@ packages:
 
   '@types/ssh2@1.15.6':
     resolution: {integrity: sha512-oGdxhBqcRTwSTKFm+9EiKzkNVYRLEFkcW44lhguvBalGJbWfGnDt/ezwSUZc+SF9m9bMc3VyklNAtp7zICjS5w==}
-
-  '@types/stream-chain@2.1.0':
-    resolution: {integrity: sha512-guDyAl6s/CAzXUOWpGK2bHvdiopLIwpGu8v10+lb9hnQOyo4oj/ZUQFOvqFjKGsE3wJP1fpIesCcMvbXuWsqOg==}
-
-  '@types/stream-json@1.7.3':
-    resolution: {integrity: sha512-Jqsyq5VPOTWorvEmzWhEWH5tJnHA+bB8vt/Zzb11vSDj8esfSHDMj2rbVjP0mfJQzl3YBJSXBBq08iiyaBK3KA==}
 
   '@types/superagent@8.1.9':
     resolution: {integrity: sha512-pTVjI73witn+9ILmoJdajHGW2jkSaOzhiFYF1Rd3EQ94kymLqB9PjD9ISg7WaALC7+dCHT0FGe9T2LktLq/3GQ==}
@@ -7798,14 +7789,14 @@ packages:
   stream-browserify@3.0.0:
     resolution: {integrity: sha512-H73RAHsVBapbim0tU2JwwOiXUj+fikfiaoYAKHF3VJfA0pe2BCzkhAHBlLG6REzE+2WNZcxOXjK7lkso+9euLA==}
 
-  stream-chain@2.2.5:
-    resolution: {integrity: sha512-1TJmBx6aSWqZ4tx7aTpBDXK0/e2hhcNSTV8+CbFJtDjbb+I1mZ8lHit0Grw9GRT+6JbIrrDd8esncgBi8aBXGA==}
+  stream-chain@4.4.1:
+    resolution: {integrity: sha512-4MWXw+Si0RW3HAYQN3MdxpgTJA6Te9StiLtdkZO248DLPsRipqBbuiQSkyYLpCDEuvqGfqb2B5dEGxiEfHYkNQ==}
 
   stream-events@1.0.5:
     resolution: {integrity: sha512-E1GUzBSgvct8Jsb3v2X15pjzN1tYebtbLaMg+eBOUOAxgbLoSbT2NS91ckc5lJD1KfLjId+jXJRgo0qnV5Nerg==}
 
-  stream-json@1.7.5:
-    resolution: {integrity: sha512-NSkoVduGakxZ8a+pTPUlcGEeAGQpWL9rKJhOFCV+J/QtdQUEU5vtBgVg6eJXn8JB8RZvpbJWZGvXkhz70MLWoA==}
+  stream-json@3.8.0:
+    resolution: {integrity: sha512-xD0bPEoPgaaEpEu2HSq1spYAs5LSJrLAlo44SHycE+aI8W0IrU2cklY7fiQKhRTVbuvxNUij06vIiz1NBT+AZA==}
 
   stream-shift@1.0.3:
     resolution: {integrity: sha512-76ORR0DO1o1hlKwTbi/DM3EXWGf3ZJYO8cXX5RJwnul2DEg2oyoZyjLNoQM8WsvZiFKCRfC1O0J7iCvie3RZmQ==}
@@ -11124,15 +11115,6 @@ snapshots:
   '@types/ssh2@1.15.6':
     dependencies:
       '@types/node': 18.19.130
-
-  '@types/stream-chain@2.1.0':
-    dependencies:
-      '@types/node': 22.19.17
-
-  '@types/stream-json@1.7.3':
-    dependencies:
-      '@types/node': 22.19.17
-      '@types/stream-chain': 2.1.0
 
   '@types/superagent@8.1.9':
     dependencies:
@@ -15816,15 +15798,15 @@ snapshots:
       inherits: 2.0.4
       readable-stream: 3.6.2
 
-  stream-chain@2.2.5: {}
+  stream-chain@4.4.1: {}
 
   stream-events@1.0.5:
     dependencies:
       stubs: 3.0.0
 
-  stream-json@1.7.5:
+  stream-json@3.8.0:
     dependencies:
-      stream-chain: 2.2.5
+      stream-chain: 4.4.1
 
   stream-shift@1.0.3: {}
 
