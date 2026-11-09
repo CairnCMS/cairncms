@@ -12,7 +12,7 @@
 		"test:restoration": "node --test --test-concurrency=1 harness/pristine.check.mjs"
 	},
 	"devDependencies": {
-		"@aws-sdk/client-s3": "3.317.0",
+		"@aws-sdk/client-s3": "3.1164.0",
 		"@cairncms/schema": "workspace:*",
 		"@cairncms/sdk": "workspace:*",
 		"@cairncms/test-utils": "workspace:*",
