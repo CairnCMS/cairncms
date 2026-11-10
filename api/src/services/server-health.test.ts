@@ -8,6 +8,7 @@ const hoisted = vi.hoisted(() => ({
 	coordinationEnabled: true,
 	coordinationStatus: 'ready' as string,
 	logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+	mailer: { verify: vi.fn() },
 }));
 
 vi.mock('../env.js', () => ({
@@ -25,7 +26,7 @@ vi.mock('../database/index.js', () => ({
 	hasDatabaseConnection: vi.fn(() => Promise.resolve(true)),
 }));
 
-vi.mock('../mailer.js', () => ({ default: vi.fn(() => ({ verify: vi.fn(() => Promise.resolve()) })) }));
+vi.mock('../mailer.js', () => ({ default: vi.fn(() => hoisted.mailer) }));
 
 vi.mock('../cache.js', () => ({ getCache: vi.fn(() => ({ cache: null })) }));
 
@@ -83,6 +84,7 @@ beforeEach(() => {
 	hoisted.coordinationEnabled = true;
 	hoisted.coordinationStatus = 'ready';
 	hoisted.logger.warn.mockClear();
+	hoisted.mailer.verify.mockReset().mockResolvedValue(true);
 });
 
 const admin = { admin: true } as Accountability;
@@ -164,6 +166,21 @@ describe('ServerService.health schedule-coordination check', () => {
 		const data = await healthFor(admin);
 
 		expect(data['checks']).not.toHaveProperty('scheduleCoordination:status');
+	});
+});
+
+describe('ServerService.health email check', () => {
+	it('checks the transport again on every health request', async () => {
+		const refused = new Error('connect ECONNREFUSED');
+		hoisted.mailer.verify.mockRejectedValueOnce(refused).mockResolvedValueOnce(true);
+
+		const down = await healthFor(admin);
+		const up = await healthFor(admin);
+
+		expect(hoisted.mailer.verify).toHaveBeenCalledTimes(2);
+		expect(down['checks']['email:connection'][0]).toMatchObject({ status: 'error', componentType: 'email' });
+		expect(down['checks']['email:connection'][0].output).toBe(refused);
+		expect(up['checks']['email:connection'][0]).toEqual({ status: 'ok', componentType: 'email' });
 	});
 });
 

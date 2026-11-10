@@ -9,6 +9,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 
 let transporter: Transporter;
+let setupVerificationStarted = false;
 
 export default function getMailer(): Transporter {
 	if (transporter) return transporter;
@@ -78,4 +79,20 @@ export default function getMailer(): Transporter {
 	}
 
 	return transporter;
+}
+
+/**
+ * Starts the EMAIL_VERIFY_SETUP connection check for the shared transporter, at most once per process.
+ */
+export function verifyMailerSetup(mailer: Transporter): void {
+	if (!env['EMAIL_VERIFY_SETUP'] || setupVerificationStarted) return;
+
+	mailer.verify((error) => {
+		if (error) {
+			logger.warn(`Email connection failed:`);
+			logger.warn(error);
+		}
+	});
+
+	setupVerificationStarted = true;
 }

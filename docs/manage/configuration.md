@@ -408,7 +408,7 @@ Realtime is a best-effort notification channel whose latency reflects the deploy
 
 - **`EMAIL_FROM`** — sender address for all transactional emails. Required for any email feature.
 - **`EMAIL_TRANSPORT`** — transport mechanism: `sendmail`, `smtp`, `mailgun`, `sendgrid`, or `ses`. Default `sendmail`.
-- **`EMAIL_VERIFY_SETUP`** — verify transport credentials at startup. Default `true`.
+- **`EMAIL_VERIFY_SETUP`** — check the mail transport connection. Default `true`.
 
 Per-transport settings live under `EMAIL_<TRANSPORT>_*`.
 
