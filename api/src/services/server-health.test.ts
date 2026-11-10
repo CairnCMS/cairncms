@@ -9,6 +9,7 @@ const hoisted = vi.hoisted(() => ({
 	coordinationStatus: 'ready' as string,
 	logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 	mailer: { verify: vi.fn() },
+	noTransport: false,
 }));
 
 vi.mock('../env.js', () => ({
@@ -26,7 +27,7 @@ vi.mock('../database/index.js', () => ({
 	hasDatabaseConnection: vi.fn(() => Promise.resolve(true)),
 }));
 
-vi.mock('../mailer.js', () => ({ default: vi.fn(() => hoisted.mailer) }));
+vi.mock('../mailer.js', () => ({ default: vi.fn(() => (hoisted.noTransport ? undefined : hoisted.mailer)) }));
 
 vi.mock('../cache.js', () => ({ getCache: vi.fn(() => ({ cache: null })) }));
 
@@ -85,6 +86,7 @@ beforeEach(() => {
 	hoisted.coordinationStatus = 'ready';
 	hoisted.logger.warn.mockClear();
 	hoisted.mailer.verify.mockReset().mockResolvedValue(true);
+	hoisted.noTransport = false;
 });
 
 const admin = { admin: true } as Accountability;
@@ -181,6 +183,15 @@ describe('ServerService.health email check', () => {
 		expect(down['checks']['email:connection'][0]).toMatchObject({ status: 'error', componentType: 'email' });
 		expect(down['checks']['email:connection'][0].output).toBe(refused);
 		expect(up['checks']['email:connection'][0]).toEqual({ status: 'ok', componentType: 'email' });
+	});
+
+	it('reports an email error when no transport is configured', async () => {
+		hoisted.noTransport = true;
+
+		const data = await healthFor(admin);
+
+		expect(data['checks']['email:connection'][0]).toMatchObject({ status: 'error', componentType: 'email' });
+		expect(data['checks']['email:connection'][0].output).toBeInstanceOf(TypeError);
 	});
 });
 

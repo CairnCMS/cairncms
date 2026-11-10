@@ -84,8 +84,8 @@ export default function getMailer(): Transporter {
 /**
  * Starts the EMAIL_VERIFY_SETUP connection check for the shared transporter, at most once per process.
  */
-export function verifyMailerSetup(mailer: Transporter): void {
-	if (!env['EMAIL_VERIFY_SETUP'] || setupVerificationStarted) return;
+export function verifyMailerSetup(mailer: Transporter | undefined): void {
+	if (!env['EMAIL_VERIFY_SETUP'] || setupVerificationStarted || !mailer) return;
 
 	mailer.verify((error) => {
 		if (error) {

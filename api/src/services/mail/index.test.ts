@@ -116,14 +116,25 @@ describe('MailService setup verification', () => {
 		expect(hoisted.transporter.verify).not.toHaveBeenCalled();
 	});
 
-	it('fails every construction when no transport is configured', async () => {
+	it('keeps services usable and fails only sending when no transport is configured', async () => {
 		hoisted.env['EMAIL_TRANSPORT'] = 'unrecognized-transport';
-		const { MailService } = await loadServices();
+		const { MailService, ActivityService } = await loadServices();
 
-		expect(() => new MailService({ schema, knex: hoisted.db })).toThrow(TypeError);
-		expect(() => new MailService({ schema, knex: hoisted.db })).toThrow(TypeError);
+		expect(() => new ActivityService({ schema, knex: hoisted.db })).not.toThrow();
+		expect(() => new ActivityService({ schema, knex: hoisted.db })).not.toThrow();
+		expect(() => new ActivityService({ schema, knex: hoisted.db })).not.toThrow();
 
-		expect(hoisted.warn).toHaveBeenCalledTimes(2);
-		expect(hoisted.warn).toHaveBeenCalledWith('Illegal transport given for email. Check the EMAIL_TRANSPORT env var.');
+		const mailService = new MailService({ schema, knex: hoisted.db });
+
+		await expect(
+			mailService.send({ to: 'recipient@example.com', subject: 'No transport', html: '<p>Body</p>' })
+		).rejects.toThrow(TypeError);
+
+		expect(hoisted.transporter.verify).not.toHaveBeenCalled();
+		expect(hoisted.warn).toHaveBeenCalledTimes(4);
+
+		for (const call of hoisted.warn.mock.calls) {
+			expect(call).toEqual(['Illegal transport given for email. Check the EMAIL_TRANSPORT env var.']);
+		}
 	});
 });
