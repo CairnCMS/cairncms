@@ -874,7 +874,7 @@ export class PayloadService {
 					}
 				}
 
-				if (alterations.delete) {
+				if (alterations.delete && alterations.delete.length > 0) {
 					const query: Query = {
 						filter: {
 							_and: [

@@ -1,4 +1,4 @@
-import type { SchemaOverview } from '@cairncms/types';
+import type { Accountability, Query, SchemaOverview } from '@cairncms/types';
 import { normalizeRoleKey } from '@cairncms/utils';
 import type { Knex } from 'knex';
 import knex from 'knex';
@@ -11,7 +11,7 @@ import {
 	InvalidPayloadException,
 	UnprocessableEntityException,
 } from '../exceptions/index.js';
-import type { MutationOptions } from '../types/index.js';
+import type { MutationOptions, PrimaryKey } from '../types/index.js';
 import { getDatabaseClient } from '../database/index.js';
 import { getMutationGuard } from '../database/mutation-guard.js';
 import { CONFIG_FILENAME_STEM_MAX_LENGTH } from '../utils/config-contract.js';
@@ -842,11 +842,6 @@ describe('Integration Tests', () => {
 				},
 			});
 
-			vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValueOnce([]);
-			vi.spyOn(PresetsService.prototype, 'deleteByQuery').mockResolvedValueOnce([]);
-			vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValueOnce([]);
-			vi.spyOn(UsersService.prototype, 'deleteByQuery').mockResolvedValueOnce([]);
-
 			// "as any" is needed since this is a private method
 			checkForOtherAdminUsersSpy = vi.spyOn(RolesService.prototype as any, 'checkForOtherAdminUsers');
 			checkForOtherAdminUsersSpy.mockResolvedValueOnce(undefined);
@@ -1333,12 +1328,24 @@ describe('Integration Tests', () => {
 			relations: [],
 		} as SchemaOverview;
 
-		const roleFilter = { filter: { role: { _in: [1] } } };
+		const dependantLookup = { filter: { role: { _in: [1] } }, limit: -1 };
 
 		let service: RolesService;
+		let dependants: Record<string, PrimaryKey[]>;
+		let lookups: { collection: string; accountability: Accountability | null; query: Query }[];
 
 		beforeEach(() => {
 			service = new RolesService({ knex: db, schema: rolesSchema });
+			dependants = {};
+			lookups = [];
+
+			vi.spyOn(ItemsService.prototype, 'getKeysByQuery').mockImplementation(async function (
+				this: ItemsService,
+				query: Query
+			) {
+				lookups.push({ collection: this.collection, accountability: this.accountability, query });
+				return dependants[this.collection] ?? [];
+			});
 		});
 
 		afterEach(() => {
@@ -1360,9 +1367,10 @@ describe('Integration Tests', () => {
 		describe('deleteMany', () => {
 			it('forwards options through the cascade, forcing bypassLimits only on the dependent mutations', async () => {
 				adminSnapshotRows = [{ id: 1 }, { id: 2 }];
-				const permissions = vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
-				const presets = vi.spyOn(PresetsService.prototype, 'deleteByQuery').mockResolvedValue([]);
-				const users = vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValue([]);
+				dependants = { directus_permissions: [10], directus_presets: [20], directus_users: ['u1'] };
+				const permissions = vi.spyOn(PermissionsService.prototype, 'deleteMany').mockResolvedValue([10]);
+				const presets = vi.spyOn(PresetsService.prototype, 'deleteMany').mockResolvedValue([20]);
+				const users = vi.spyOn(UsersService.prototype, 'updateMany').mockResolvedValue(['u1']);
 				const roleDeletion = vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
 
 				await service.deleteMany([1], buildOptions());
@@ -1374,13 +1382,70 @@ describe('Integration Tests', () => {
 				});
 
 				expect(permissions).toHaveBeenCalledTimes(1);
-				expect(permissions).toHaveBeenCalledWith(roleFilter, dependent);
+				expect(permissions).toHaveBeenCalledWith([10], dependent);
 				expect(presets).toHaveBeenCalledTimes(1);
-				expect(presets).toHaveBeenCalledWith(roleFilter, dependent);
+				expect(presets).toHaveBeenCalledWith([20], dependent);
 				expect(users).toHaveBeenCalledTimes(1);
-				expect(users).toHaveBeenCalledWith(roleFilter, { status: 'suspended', role: null }, dependent);
+				expect(users).toHaveBeenCalledWith(['u1'], { status: 'suspended', role: null }, dependent);
 				expect(roleDeletion).toHaveBeenCalledTimes(1);
 				expect(roleDeletion.mock.calls[0]![1]!.bypassLimits).toBe(false);
+			});
+
+			it('finds every dependant without the caller accountability and mutates them with it', async () => {
+				adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+				dependants = { directus_permissions: [10], directus_presets: [20], directus_users: ['u1'] };
+				const caller = { admin: false, app: true, role: 'r', user: 'u', permissions: [] } as Accountability;
+				const mutatedBy: Record<string, Accountability | null> = {};
+
+				vi.spyOn(AuthorizationService.prototype, 'checkAccess').mockResolvedValue(undefined);
+
+				vi.spyOn(PermissionsService.prototype, 'deleteMany').mockImplementation(async function (
+					this: PermissionsService
+				) {
+					mutatedBy['permissions'] = this.accountability;
+					return [10];
+				});
+
+				vi.spyOn(PresetsService.prototype, 'deleteMany').mockImplementation(async function (this: PresetsService) {
+					mutatedBy['presets'] = this.accountability;
+					return [20];
+				});
+
+				vi.spyOn(UsersService.prototype, 'updateMany').mockImplementation(async function (this: UsersService) {
+					mutatedBy['users'] = this.accountability;
+					return ['u1'];
+				});
+
+				vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
+
+				await new RolesService({ knex: db, schema: rolesSchema, accountability: caller }).deleteMany(
+					[1],
+					buildOptions()
+				);
+
+				expect(lookups).toEqual([
+					{ collection: 'directus_permissions', accountability: null, query: dependantLookup },
+					{ collection: 'directus_presets', accountability: null, query: dependantLookup },
+					{ collection: 'directus_users', accountability: null, query: dependantLookup },
+				]);
+
+				expect(mutatedBy).toEqual({ permissions: caller, presets: caller, users: caller });
+			});
+
+			it('skips a dependant mutation when the role has no such dependants', async () => {
+				adminSnapshotRows = [{ id: 1 }, { id: 2 }];
+				const permissions = vi.spyOn(PermissionsService.prototype, 'deleteMany');
+				const presets = vi.spyOn(PresetsService.prototype, 'deleteMany');
+				const users = vi.spyOn(UsersService.prototype, 'updateMany');
+				const roleDeletion = vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
+
+				await expect(service.deleteMany([1], buildOptions())).resolves.toEqual([1]);
+
+				expect(lookups).toHaveLength(3);
+				expect(permissions).not.toHaveBeenCalled();
+				expect(presets).not.toHaveBeenCalled();
+				expect(users).not.toHaveBeenCalled();
+				expect(roleDeletion).toHaveBeenCalledWith([1], expect.anything());
 			});
 		});
 
@@ -1398,19 +1463,26 @@ describe('Integration Tests', () => {
 
 		describe('deleteByQuery', () => {
 			it('forwards resolved keys and options through the role-deletion cascade', async () => {
-				vi.spyOn(ItemsService.prototype, 'getKeysByQuery').mockResolvedValueOnce([1]);
 				adminSnapshotRows = [{ id: 1 }, { id: 2 }];
-				const permissions = vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
-				const presets = vi.spyOn(PresetsService.prototype, 'deleteByQuery').mockResolvedValue([]);
-				const users = vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValue([]);
+
+				dependants = {
+					directus_roles: [1],
+					directus_permissions: [10],
+					directus_presets: [20],
+					directus_users: ['u1'],
+				};
+
+				const permissions = vi.spyOn(PermissionsService.prototype, 'deleteMany').mockResolvedValue([10]);
+				const presets = vi.spyOn(PresetsService.prototype, 'deleteMany').mockResolvedValue([20]);
+				const users = vi.spyOn(UsersService.prototype, 'updateMany').mockResolvedValue(['u1']);
 				const roleDeletion = vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
 
 				await service.deleteByQuery({ filter: { name: { _eq: 'obsolete' } } }, buildOptions());
 
 				const dependent = expect.objectContaining({ bypassLimits: true });
-				expect(permissions).toHaveBeenCalledWith(roleFilter, dependent);
-				expect(presets).toHaveBeenCalledWith(roleFilter, dependent);
-				expect(users).toHaveBeenCalledWith(roleFilter, { status: 'suspended', role: null }, dependent);
+				expect(permissions).toHaveBeenCalledWith([10], dependent);
+				expect(presets).toHaveBeenCalledWith([20], dependent);
+				expect(users).toHaveBeenCalledWith(['u1'], { status: 'suspended', role: null }, dependent);
 				expect(roleDeletion).toHaveBeenCalledWith([1], expect.objectContaining({ bypassLimits: false }));
 			});
 		});
@@ -1418,24 +1490,16 @@ describe('Integration Tests', () => {
 		describe('last-administrator guard', () => {
 			it('rejects deleting the last administrator role before entering the cascade', async () => {
 				adminSnapshotRows = [{ id: 1 }];
-				const permissions = vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
-				const presets = vi.spyOn(PresetsService.prototype, 'deleteByQuery').mockResolvedValue([]);
-				const users = vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValue([]);
 				const roleDeletion = vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
 
 				await expect(service.deleteMany([1], buildOptions())).rejects.toBeInstanceOf(UnprocessableEntityException);
 
-				expect(permissions).not.toHaveBeenCalled();
-				expect(presets).not.toHaveBeenCalled();
-				expect(users).not.toHaveBeenCalled();
+				expect(lookups).toEqual([]);
 				expect(roleDeletion).not.toHaveBeenCalled();
 			});
 
 			it('allows deleting an administrator role while another remains', async () => {
 				adminSnapshotRows = [{ id: 1 }, { id: 2 }];
-				vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
-				vi.spyOn(PresetsService.prototype, 'deleteByQuery').mockResolvedValue([]);
-				vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValue([]);
 				vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
 
 				await expect(service.deleteMany([1], buildOptions())).resolves.toEqual([1]);
@@ -1463,14 +1527,13 @@ describe('Integration Tests', () => {
 					.spyOn(AuthorizationService.prototype, 'checkAccess')
 					.mockRejectedValue(new ForbiddenException());
 
-				const permissions = vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
 				const roleDeletion = vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
 
 				await expect(unauthorizedService().deleteMany([1], buildOptions())).rejects.toBeInstanceOf(ForbiddenException);
 
 				expect(checkAccess).toHaveBeenCalledWith('delete', 'directus_roles', [1]);
 				expect(tracker.history.select.some((query) => /admin_access/.test(query.sql))).toBe(false);
-				expect(permissions).not.toHaveBeenCalled();
+				expect(lookups).toEqual([]);
 				expect(roleDeletion).not.toHaveBeenCalled();
 			});
 
@@ -1493,9 +1556,6 @@ describe('Integration Tests', () => {
 			it('lets an authorized caller reach the continuity check', async () => {
 				adminSnapshotRows = [{ id: 1 }];
 				vi.spyOn(AuthorizationService.prototype, 'checkAccess').mockResolvedValue(undefined);
-				vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
-				vi.spyOn(PresetsService.prototype, 'deleteByQuery').mockResolvedValue([]);
-				vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValue([]);
 				vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
 
 				await expect(unauthorizedService().deleteMany([1], buildOptions())).rejects.toBeInstanceOf(
@@ -1506,9 +1566,6 @@ describe('Integration Tests', () => {
 			it('skips the authorization check for a service without accountability', async () => {
 				adminSnapshotRows = [{ id: 1 }, { id: 2 }];
 				const checkAccess = vi.spyOn(AuthorizationService.prototype, 'checkAccess');
-				vi.spyOn(PermissionsService.prototype, 'deleteByQuery').mockResolvedValue([]);
-				vi.spyOn(PresetsService.prototype, 'deleteByQuery').mockResolvedValue([]);
-				vi.spyOn(UsersService.prototype, 'updateByQuery').mockResolvedValue([]);
 				vi.spyOn(ItemsService.prototype, 'deleteMany').mockResolvedValue([1]);
 
 				await expect(service.deleteMany([1], buildOptions())).resolves.toEqual([1]);
