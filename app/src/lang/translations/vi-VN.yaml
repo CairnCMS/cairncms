@@ -98,6 +98,7 @@ logoutReason:
   SESSION_EXPIRED: Phiên làm việc đã Hết hạn
 public_label: Công khai
 public_description: Kiểm soát dữ liệu API nào có thể truy cập mà không cần đăng nhập.
+admin_description: Chức vụ quản trị bắt đầu và không bị giới hạn truy cập App/API.
 not_allowed: Không Cho Phép
 archive: Lưu trữ
 archive_confirm: Bạn có chắc chắn muốn lưu trữ mục này không?
@@ -178,6 +179,7 @@ exposure: Độ phơi sáng
 shutter: Màn trập
 iso: ISO
 focal_length: Tiêu cự
+schema_setup_key: Tên cột cơ sở dữ liệu và khóa API của trường này
 create_field: Tạo thêm trường
 creating_new_field: 'Trường Mới ({collection})'
 field_in_collection: '{field} ({collection})'
@@ -245,6 +247,8 @@ o2m_relationship: Quan hệ Một - Nhiều
 m2m_relationship: Quan hệ Nhiều - Nhiều
 m2a_relationship: Quan hệ Nhiều - Bất Kỳ
 invalid_item: Mục Không hợp lệ
+dialog: Hộp thoại
+confirmation_description: Mô tả xác nhận
 next: Tiếp theo
 field_name: Tên Trường
 translations: Các Bản Dịch
@@ -267,6 +271,7 @@ dismiss: Bỏ qua
 raw_editor_placeholder: "{'{'}{'{'}$trigger.payload.example{'}'}{'}'}"
 raw_value: Dữ liệu thực tế
 copy_raw_value_success: Đã sao chép
+copy_raw_value_fail: Sao chép không thành công
 paste_raw_value: Dán dữ liệu thô
 paste_raw_value_success: Dán
 paste_raw_value_fail: Dán thất bại
