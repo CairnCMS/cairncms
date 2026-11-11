@@ -184,7 +184,7 @@ function parseAvatar(file: Record<string, any>) {
 	if (file.type.startsWith('image') === false) return;
 	if (file.type.includes('svg')) return;
 
-	return getRootPath() + `assets/${file.id}?modified=${file.modified_on}&width=48&height=48`;
+	return getRootPath() + `assets/${file.id}?modified=${file.modified_on}&key=system-small-cover`;
 }
 
 function cancelChanges() {

@@ -34,6 +34,11 @@ export const SYSTEM_ASSET_ALLOW_LIST: TransformationParams[] = [
 		format: 'auto',
 		transforms: [['resize', { width: 800, fit: 'contain' }]],
 	},
+	{
+		key: 'system-kanban-cover',
+		format: 'auto',
+		transforms: [['resize', { width: 250, height: 150, fit: 'cover' }]],
+	},
 ];
 
 export const ASSET_TRANSFORM_QUERY_KEYS: Array<keyof TransformationParams> = [

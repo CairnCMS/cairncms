@@ -29,12 +29,19 @@ router.get(
 	// Validate query params
 	asyncHandler(async (req, res, next) => {
 		const payloadService = new PayloadService('directus_settings', { schema: req.schema });
-		const defaults = { storage_asset_presets: [], storage_asset_transform: 'all' };
+
+		const settingsFields = req.schema.collections['directus_settings']?.fields;
+
+		const defaults = {
+			storage_asset_presets: [],
+			storage_asset_transform: settingsFields?.['storage_asset_transform']?.defaultValue ?? 'none',
+			storage_asset_public_transforms: settingsFields?.['storage_asset_public_transforms']?.defaultValue ?? false,
+		};
 
 		const database = getDatabase();
 
 		const savedAssetSettings = await database
-			.select('storage_asset_presets', 'storage_asset_transform')
+			.select('storage_asset_presets', 'storage_asset_transform', 'storage_asset_public_transforms')
 			.from('directus_settings')
 			.first();
 
@@ -53,26 +60,22 @@ router.get(
 		if ('transforms' in transformation) {
 			let transforms: unknown;
 
-			// Try parse the JSON array
 			try {
 				transforms = parseJSON(transformation['transforms'] as string);
 			} catch {
 				throw new InvalidQueryException(`"transforms" Parameter needs to be a JSON array of allowed transformations.`);
 			}
 
-			// Check if it is actually an array.
 			if (!Array.isArray(transforms)) {
 				throw new InvalidQueryException(`"transforms" Parameter needs to be a JSON array of allowed transformations.`);
 			}
 
-			// Check against ASSETS_TRANSFORM_MAX_OPERATIONS
 			if (transforms.length > Number(env['ASSETS_TRANSFORM_MAX_OPERATIONS'])) {
 				throw new InvalidQueryException(
 					`"transforms" Parameter is only allowed ${env['ASSETS_TRANSFORM_MAX_OPERATIONS']} transformations.`
 				);
 			}
 
-			// Check the transformations are valid
 			transforms.forEach((transform) => {
 				const name = transform[0];
 
@@ -93,20 +96,24 @@ router.get(
 			),
 		];
 
-		// For use in the next request handler
 		res.locals['shortcuts'] = [...SYSTEM_ASSET_ALLOW_LIST, ...(assetSettings.storage_asset_presets || [])];
 		res.locals['transformation'] = transformation;
 
-		if (
-			Object.keys(transformation).length === 0 ||
-			('transforms' in transformation && transformation['transforms']!.length === 0)
-		) {
+		const keys = Object.keys(transformation);
+
+		if (keys.length === 0 || (keys.length === 1 && transformation['transforms']?.length === 0)) {
 			return next();
 		}
 
 		if (assetSettings.storage_asset_transform === 'all') {
 			if (transformation['key'] && allKeys.includes(transformation['key'] as string) === false) {
 				throw new InvalidQueryException(`Key "${transformation['key']}" isn't configured.`);
+			}
+
+			const advanced = Array.isArray(transformation['transforms']) && transformation['transforms'].length > 0;
+
+			if (advanced && !assetSettings.storage_asset_public_transforms && !req.accountability?.user) {
+				throw new InvalidQueryException(`Advanced transformations require authentication.`);
 			}
 
 			return next();
@@ -216,30 +223,35 @@ router.get(
 
 		const { stream, file, stat } = await service.getAsset(id, { transformationParams, acceptFormat }, range);
 
-		const filename = req.params['filename'] ?? file.filename_download;
-		res.attachment(filename);
-		res.setHeader('Content-Type', file.type);
-		res.setHeader('Accept-Ranges', 'bytes');
-		res.setHeader('Cache-Control', getCacheControlHeader(req, getMilliseconds(env['ASSETS_CACHE_TTL']), false, true));
-		res.setHeader('Vary', vary.join(', '));
+		try {
+			const filename = req.params['filename'] ?? file.filename_download;
+			res.attachment(filename);
+			res.setHeader('Content-Type', file.type);
+			res.setHeader('Accept-Ranges', 'bytes');
+			res.setHeader('Cache-Control', getCacheControlHeader(req, getMilliseconds(env['ASSETS_CACHE_TTL']), false, true));
+			res.setHeader('Vary', vary.join(', '));
 
-		const unixTime = Date.parse(file.modified_on);
+			const unixTime = Date.parse(file.modified_on);
 
-		if (!Number.isNaN(unixTime)) {
-			const lastModifiedDate = new Date(unixTime);
-			res.setHeader('Last-Modified', lastModifiedDate.toUTCString());
-		}
+			if (!Number.isNaN(unixTime)) {
+				const lastModifiedDate = new Date(unixTime);
+				res.setHeader('Last-Modified', lastModifiedDate.toUTCString());
+			}
 
-		if (range) {
-			res.setHeader('Content-Range', `bytes ${range.start}-${range.end || stat.size - 1}/${stat.size}`);
-			res.status(206);
-			res.setHeader('Content-Length', (range.end ? range.end + 1 : stat.size) - (range.start || 0));
-		} else {
-			res.setHeader('Content-Length', stat.size);
-		}
+			if (range) {
+				res.setHeader('Content-Range', `bytes ${range.start}-${range.end || stat.size - 1}/${stat.size}`);
+				res.status(206);
+				res.setHeader('Content-Length', (range.end ? range.end + 1 : stat.size) - (range.start || 0));
+			} else {
+				res.setHeader('Content-Length', stat.size);
+			}
 
-		if ('download' in req.query === false) {
-			res.setHeader('Content-Disposition', contentDisposition(filename, { type: 'inline' }));
+			if ('download' in req.query === false) {
+				res.setHeader('Content-Disposition', contentDisposition(filename, { type: 'inline' }));
+			}
+		} catch (error) {
+			stream.destroy();
+			throw error;
 		}
 
 		let isDataSent = false;
@@ -271,6 +283,8 @@ router.get(
 						},
 					],
 				});
+			} else {
+				res.destroy();
 			}
 		});
 

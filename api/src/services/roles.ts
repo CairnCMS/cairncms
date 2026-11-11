@@ -279,6 +279,14 @@ export class RolesService extends ItemsService {
 		return new Set(rows.map((row: { id: PrimaryKey }) => row.id));
 	}
 
+	/** Role cleanup must reach every dependant row, so this lookup ignores the caller's read scope and the query limit. */
+	private readDependantKeys(trx: Knex, collection: string, roles: PrimaryKey[]): Promise<PrimaryKey[]> {
+		return new ItemsService(collection, { knex: trx, schema: this.schema }).getKeysByQuery({
+			filter: { role: { _in: roles } },
+			limit: -1,
+		});
+	}
+
 	private async withBoundContext<T>(
 		opts: MutationOptions,
 		clearSystemCacheOnFlush: boolean,
@@ -498,30 +506,30 @@ export class RolesService extends ItemsService {
 				schema: this.schema,
 			});
 
-			await permissionsService.deleteByQuery(
-				{
-					filter: { role: { _in: keys } },
-				},
-				{ ...mutationOpts, bypassLimits: true }
-			);
+			const permissionKeys = await this.readDependantKeys(trx, 'directus_permissions', keys);
 
-			await presetsService.deleteByQuery(
-				{
-					filter: { role: { _in: keys } },
-				},
-				{ ...mutationOpts, bypassLimits: true }
-			);
+			if (permissionKeys.length) {
+				await permissionsService.deleteMany(permissionKeys, { ...mutationOpts, bypassLimits: true });
+			}
 
-			await usersService.updateByQuery(
-				{
-					filter: { role: { _in: keys } },
-				},
-				{
-					status: 'suspended',
-					role: null,
-				},
-				{ ...mutationOpts, bypassLimits: true }
-			);
+			const presetKeys = await this.readDependantKeys(trx, 'directus_presets', keys);
+
+			if (presetKeys.length) {
+				await presetsService.deleteMany(presetKeys, { ...mutationOpts, bypassLimits: true });
+			}
+
+			const userKeys = await this.readDependantKeys(trx, 'directus_users', keys);
+
+			if (userKeys.length) {
+				await usersService.updateMany(
+					userKeys,
+					{
+						status: 'suspended',
+						role: null,
+					},
+					{ ...mutationOpts, bypassLimits: true }
+				);
+			}
 
 			await this.itemsServiceOn(trx).deleteMany(keys, mutationOpts);
 

@@ -11,6 +11,7 @@ import { getMilliseconds } from './utils/get-milliseconds.js';
 import { validateEnv } from './utils/validate-env.js';
 
 import { createRequire } from 'node:module';
+import { deserialize, serialize } from 'node:v8';
 
 const require = createRequire(import.meta.url);
 
@@ -64,7 +65,16 @@ export function getCache(): {
 	}
 
 	if (localSchemaCache === null) {
-		localSchemaCache = getKeyvInstance('memory', getMilliseconds(env['CACHE_SYSTEM_TTL']), '_schema');
+		const { serialize: encode, deserialize: decode } = new Keyv().opts;
+
+		localSchemaCache = new Keyv({
+			...getConfig('memory', getMilliseconds(env['CACHE_SYSTEM_TTL']), '_schema'),
+			// Preserve Keyv's JSON-buffer normalization before encoding the snapshot.
+			// Keyv only deserializes strings, so store the V8 buffer as base64.
+			serialize: (value) => serialize(decode!(encode!(value))).toString('base64'),
+			deserialize: (value) => deserialize(Buffer.from(value, 'base64')),
+		});
+
 		localSchemaCache.on('error', (err) => logger.warn(err, `[schema-cache] ${err}`));
 	}
 

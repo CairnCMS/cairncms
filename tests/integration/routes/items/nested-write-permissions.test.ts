@@ -473,6 +473,29 @@ const test = apiTest.extend<{ schemaState: Prerequisite<void>; scenario: Scenari
 });
 
 describe('Nested write selector and link separation', () => {
+	test('refuses a full-list o2m child update (object-array) from a caller that cannot read the children', async ({
+		api,
+		scenario,
+	}) => {
+		const { metadataParent, metadataChild } = scenario;
+
+		const before = await childRevisionCount(api, metadataChild);
+
+		const response = await request(api.url)
+			.patch(`/items/${parentCollection}/${metadataParent}`)
+			.send({ children: [{ id: metadataChild, name: 'Renamed child' }] })
+			.set('Authorization', `Bearer ${metaToken}`);
+
+		expect(response.statusCode).toBe(403);
+		expect(response.body.errors[0].extensions.code).toBe('FORBIDDEN');
+
+		expect(await childRevisionCount(api, metadataChild)).toBe(before);
+
+		const row = await childRow(api, metadataChild);
+		expect(row.name).toBe('Original child');
+		expect(row.parent_id).toBe(metadataParent);
+	});
+
 	test('updates a linked o2m child (object-array) under a grant excluding the reverse field', async ({
 		api,
 		scenario,
@@ -482,7 +505,7 @@ describe('Nested write selector and link separation', () => {
 		const response = await request(api.url)
 			.patch(`/items/${parentCollection}/${metadataParent}`)
 			.send({ children: [{ id: metadataChild, name: 'Renamed child' }] })
-			.set('Authorization', `Bearer ${metaToken}`);
+			.set('Authorization', `Bearer ${childUpdateExcludedReadAllowedToken}`);
 
 		expect(response.statusCode).toBe(200);
 
@@ -513,7 +536,10 @@ describe('Nested write selector and link separation', () => {
 		expect(row.parent_id).toBe(reparentParent);
 	});
 
-	test('treats a key-only already-linked child as a no-op with no new revision', async ({ api, scenario }) => {
+	test('refuses a key-only full-list resend from a caller that cannot read the children, with no new revision', async ({
+		api,
+		scenario,
+	}) => {
 		const { noopParent, noopChild } = scenario;
 
 		const before = await childRevisionCount(api, noopChild);
@@ -523,7 +549,8 @@ describe('Nested write selector and link separation', () => {
 			.send({ children: [{ id: noopChild }] })
 			.set('Authorization', `Bearer ${metaToken}`);
 
-		expect(response.statusCode).toBe(200);
+		expect(response.statusCode).toBe(403);
+		expect(response.body.errors[0].extensions.code).toBe('FORBIDDEN');
 
 		const after = await childRevisionCount(api, noopChild);
 		expect(after).toBe(before);

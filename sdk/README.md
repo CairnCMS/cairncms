@@ -53,7 +53,7 @@ Full reference: [`docs/reference/sdk.md`](https://github.com/CairnCMS/cairncms/b
 
 ## Requirements
 
-- Node.js 20.0.0 or newer
+- Node.js 22.0.0 or newer
 - Browsers with native `fetch` and `URL` (all modern evergreen browsers)
 
 ## License

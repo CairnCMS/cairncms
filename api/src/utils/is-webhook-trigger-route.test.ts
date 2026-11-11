@@ -24,6 +24,10 @@ describe('isWebhookTriggerRoute', () => {
 		expect(isWebhookTriggerRoute({ originalUrl: `/flows/trigger/${UUID}` } as Request)).toBe(true);
 	});
 
+	test('is false for a backslash alias, which the router does not route to the trigger', () => {
+		expect(isWebhookTriggerRoute({ originalUrl: `/flows/trigger\\${UUID}` } as Request)).toBe(false);
+	});
+
 	test('is false for a request target that cannot be parsed', () => {
 		expect(isWebhookTriggerRoute({ originalUrl: `http://[/flows/trigger/${UUID}` } as Request)).toBe(false);
 	});

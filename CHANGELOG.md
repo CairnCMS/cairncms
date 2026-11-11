@@ -4,6 +4,46 @@ All notable changes to CairnCMS are documented in this file. Releases are listed
 
 CairnCMS uses the Semantic Versioning number format (`MAJOR.MINOR.PATCH`) but does not promise strict SemVer compatibility. See the [versioning policy](https://cairncms.dev/docs/manage/upgrades/#versioning-policy) for deprecation windows and the cases where minor or patch releases can include breaking changes.
 
+## [1.8.0]
+
+### Potential Breaking Changes
+
+- Ran SQLite on Node's built-in driver. SQLite deployments now require Node.js 22.13.0 or later. Host installs on an older release must update Node.js before upgrading. The official image already meets this. (#321)
+- Capped image resize output and restricted public advanced transformations. Under "Allow all transformations", authenticate `transforms` requests or enable Allow Public Advanced Transformations in Project Settings. Raise `ASSETS_TRANSFORM_IMAGE_MAX_DIMENSION` for oversized sources or resize outputs, including thumbnails. New installations default to disabled transformations, configurable in Project Settings. (#327)
+
+### New Features
+
+- Added Albanian as a UI language. (#356)
+- Managed public advanced transformations with config-as-code. (#358)
+
+### Fixes & Improvements
+
+- Defined database version support and refreshed compatibility coverage. (#304)
+	- Repaired and refreshed the development database services. (#303)
+	- Refreshed the integration test matrix to supported database lines. (#309)
+	- Updated PostgreSQL and MySQL database drivers. (#311)
+	- Added integration coverage for database TLS connections. (#312)
+	- Recognized PostgreSQL 18 virtual generated columns. (#313)
+	- Scaffolded new projects on PostgreSQL 18 with PostGIS 3.6. (#318)
+	- Upgraded Knex to 3.3.0 and fixed relational sort pagination. (#319)
+	- Ran SQLite on Node's built-in driver. (#321)
+	- Published database support guidance. (#322)
+- Aligned request URL parsing with the router. (#325)
+- Capped image resize output and restricted public advanced transformations. (#327)
+- Bumped vue-i18n to 11.4.18 and rendered the date picker label as text. (#329)
+- Stopped WebSocket item validation at the first invalid element. (#333)
+- Sped up schema cache reads. (#334)
+- Corrected SDK Node.js requirements and updated the minifier. (#348)
+- Avoided repeated mail setup checks. (#354)
+- Enforced read permissions when selecting records for update or delete. (#355)
+- Reused S3 connections and cleaned up failed asset responses. (#357)
+- Updated dependencies. (`sharp` #320, `dompurify` #326, `happy-dom` #328, `joi` #330, `undici` #331, `source-map-js` #332, `zod` #335, `tinymce` #336, `follow-redirects` #337, `node-forge` #338, `vite` #339, `shell-quote` #340, `body-parser` #341, `decode-uri-component` #342, `nodemailer` #343, `sanitize-html` #344, `fast-uri` #345, `stream-json` #346, `postcss-selector-parser` #347, `vitest` #349, `@aws-sdk/client-s3` #350, `@aws-sdk/lib-storage` #350, `@aws-sdk/client-sesv2` #350, `colord` #351, `qs` #352, `tsup` #353)
+
+### Deprecations
+
+- Deprecated relational-field sorting on MySQL 5.7, and field metadata, snapshots, and schema apply on PostgreSQL 10 and 11, versions their vendors no longer maintain. Upgrade to a supported version of the same database, following the vendor's upgrade guide. Eligible for removal in 1.9.0 or later, no sooner than 2026-12-11. (#322)
+- Deprecated running CairnCMS on Node.js 22 and on Node.js 24 releases before 24.16.0. Node.js 22 reaches end of life on 2027-04-30. Use Node.js 24.16.0 or later. The official image moves to Node.js 24 when support is removed. Eligible for removal in 1.9.0 or later, no sooner than 2026-12-11. (#324)
+
 ## [1.7.0]
 
 ### Potential Breaking Changes

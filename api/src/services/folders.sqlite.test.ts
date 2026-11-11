@@ -1,6 +1,7 @@
 import type { SchemaOverview } from '@cairncms/types';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getSqliteClient } from '../database/sqlite-driver.js';
 import { InvalidPayloadException } from '../exceptions/index.js';
 import { CONFIG_FILENAME_STEM_MAX_LENGTH } from '../utils/config-contract.js';
 import { ItemsService } from './index.js';
@@ -55,7 +56,7 @@ describe('directus_folders key enforcement on a real SQLite database', () => {
 
 	beforeEach(async () => {
 		db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			connection: { filename: ':memory:' },
 			useNullAsDefault: true,
 			pool: { min: 1, max: 1 },
@@ -151,7 +152,7 @@ describe('directus_folders parent-cycle guard on a real SQLite database', () => 
 
 	beforeEach(async () => {
 		db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			connection: { filename: ':memory:' },
 			useNullAsDefault: true,
 			pool: { min: 1, max: 1 },

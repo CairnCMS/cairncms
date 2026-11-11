@@ -30,12 +30,12 @@
 		"@cairncms/storage": "workspace:*",
 		"@cairncms/utils": "workspace:*",
 		"p-queue": "7.3.4",
-		"undici": "6.28.1"
+		"undici": "6.29.1"
 	},
 	"devDependencies": {
 		"@ngneat/falso": "6.4.0",
-		"@vitest/coverage-v8": "4.1.11",
+		"@vitest/coverage-v8": "4.1.12",
 		"typescript": "5.0.4",
-		"vitest": "4.1.11"
+		"vitest": "4.1.12"
 	}
 }

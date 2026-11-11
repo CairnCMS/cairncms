@@ -1,5 +1,6 @@
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { getSqliteClient } from '../../database/sqlite-driver.js';
 import { isFolderId, resolveFolderReference } from './folder-id-lookup.js';
 
 const LOWER = 'aabbccdd-eeff-4a1b-8c2d-3e4f5a6b7c8d';
@@ -27,7 +28,7 @@ describe('resolveFolderReference on a case-sensitive column', () => {
 	let db: Knex;
 
 	beforeEach(async () => {
-		db = knex.default({ client: 'sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true });
+		db = knex.default({ client: getSqliteClient(), connection: { filename: ':memory:' }, useNullAsDefault: true });
 
 		await db.schema.createTable('directus_folders', (table) => {
 			table.string('id').primary();
@@ -68,7 +69,7 @@ describe('resolveFolderReference on a case-insensitive column', () => {
 	let db: Knex;
 
 	beforeEach(async () => {
-		db = knex.default({ client: 'sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true });
+		db = knex.default({ client: getSqliteClient(), connection: { filename: ':memory:' }, useNullAsDefault: true });
 		await db.raw('CREATE TABLE directus_folders (id TEXT PRIMARY KEY COLLATE NOCASE, name TEXT)');
 		await db('directus_folders').insert({ id: LOWER, name: 'alpha' });
 	});
@@ -87,7 +88,7 @@ describe('resolveFolderReference with no folders table', () => {
 	let db: Knex;
 
 	beforeEach(() => {
-		db = knex.default({ client: 'sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true });
+		db = knex.default({ client: getSqliteClient(), connection: { filename: ':memory:' }, useNullAsDefault: true });
 	});
 
 	afterEach(async () => {

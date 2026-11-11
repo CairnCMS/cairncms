@@ -137,9 +137,10 @@ describe('sharp transform compatibility', () => {
 		rmSync(operandDir, { recursive: true, force: true });
 	});
 
-	test('bundles exactly libvips 8.18.6 with patched libheif 1.23.2', () => {
-		expect(sharp.versions.vips).toBe('8.18.6');
-		expect(sharp.versions.heif).toBe('1.23.2');
+	test('bundles exactly libvips 8.18.7 with patched libheif 1.23.5 and librsvg 2.63.2', () => {
+		expect(sharp.versions.vips).toBe('8.18.7');
+		expect(sharp.versions.heif).toBe('1.23.5');
+		expect(sharp.versions.rsvg).toBe(backend === 'native' ? '2.63.2' : undefined);
 	});
 
 	test(`runs on the ${backend} backend`, () => {

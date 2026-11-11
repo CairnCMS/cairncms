@@ -3,6 +3,7 @@ import { createVitest } from 'vitest/node';
 import { DefaultReporter, VerboseReporter } from 'vitest/node';
 import { Wait } from 'testcontainers';
 import { RecordedContainer } from './recorded-container.mjs';
+import { writeResourceRecord } from './resource-record.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { basename } from 'node:path';
@@ -10,11 +11,13 @@ import { createWriteStream, writeFileSync } from 'node:fs';
 import { LiveFailures } from './reporter.mjs';
 import { validateSelection, accountExecution } from './results.mjs';
 import { verifyPreparation } from './freshness.mjs';
-import { databaseVendors } from './database-vendors.mjs';
+import { databaseVendors, familyOf } from './database-vendors.mjs';
 import { exclusionReason } from './applicability.mjs';
 import { nativeTestName } from './test-names.mjs';
 import { snapshotVendors } from './snapshot.mjs';
 import { createPristineStore, removePristineStore } from './pristine.mjs';
+import { createRecorder } from './provisioning.mjs';
+import { probeSignal, recordEngine, sqliteEngine } from './engine-version.mjs';
 
 const options = JSON.parse(process.env.INTEGRATION_OPTIONS);
 const { vendor, directory, collectAll, filters, pattern } = options;
@@ -30,6 +33,7 @@ let containerStream;
 let cancelled = false;
 let cancellationCode;
 let completed = false;
+const cancellation = new AbortController();
 
 // The public wrapper owns OS signals. Sending SIGINT directly to Vitest invokes its
 // immediate CLI exit listener, bypassing fixture teardown; IPC uses its graceful public API.
@@ -38,6 +42,7 @@ const cancel = (signal) => {
 	writeFileSync(`${reports}/cancelled`, signal);
 	cancellationCode = signal === 'SIGINT' ? 130 : 143;
 	process.exitCode = cancellationCode;
+	cancellation.abort();
 	void vitest?.cancelCurrentRun('keyboard-input');
 };
 
@@ -67,7 +72,7 @@ try {
 	});
 
 	for (const project of vitest.projects) {
-		const workers = project.name === 'load' ? 1 : (options.workers ?? 1);
+		const workers = project.name === 'load' ? 1 : options.workers ?? 1;
 		project.config.maxWorkers = workers;
 		project.config.fileParallelism = workers > 1;
 	}
@@ -183,17 +188,14 @@ try {
 
 			containerLog = createWriteStream(`${reports}/database.log`);
 
-			await writeFile(
-				`${reports}/container.json`,
-				JSON.stringify({
-					image: definition.image,
-					version: definition.version,
-					owner: process.pid,
-					run: basename(directory),
-					vendor,
-					state: 'starting',
-				}) + '\n'
-			);
+			await writeResourceRecord(`${reports}/container.json`, {
+				image: definition.image,
+				version: definition.version,
+				owner: process.pid,
+				run: basename(directory),
+				vendor,
+				state: 'starting',
+			});
 
 			let engine = new RecordedContainer(definition.image, `${reports}/container.json`)
 				.withLabels({ 'cairncms.integration.run': basename(directory), 'cairncms.integration.vendor': vendor })
@@ -215,6 +217,17 @@ try {
 			if (definition.command) engine = engine.withCommand(definition.command);
 			container = await engine.start();
 
+			const version = await recordEngine({
+				id: container.getId(),
+				definition,
+				command: options.engineProbe?.command,
+				signal: probeSignal(cancellation.signal, options.engineProbe?.deadline),
+				record: createRecorder(reports, { container: container.getId() }),
+				stderr: (chunk) => containerLog.write(chunk),
+			});
+
+			console.log(`[${vendor}] Engine ${version}`);
+
 			connection = {
 				host: container.getHost(),
 				port: container.getMappedPort(definition.port),
@@ -222,10 +235,12 @@ try {
 				password: 'integration',
 			};
 
-			await writeFile(
-				`${reports}/container.json`,
-				JSON.stringify({ id: container.getId(), image: definition.image, version: definition.version }) + '\n'
-			);
+			await writeResourceRecord(`${reports}/container.json`, {
+				id: container.getId(),
+				image: definition.image,
+				version: definition.version,
+				engine: version,
+			});
 
 			const engineLost = (error) => {
 				if (stopping || infrastructureError) return;
@@ -241,6 +256,12 @@ try {
 
 			containerStream.once('end', () => engineLost());
 			containerStream.once('error', engineLost);
+		}
+
+		if (familyOf(vendor) === 'sqlite' && needsServices) {
+			const version = await sqliteEngine();
+			console.log(`[${vendor}] Engine SQLite ${version}`);
+			await writeFile(`${reports}/engine.json`, JSON.stringify({ engine: version }) + '\n');
 		}
 
 		if (cancelled) throw new Error('Cancelled during provisioning');

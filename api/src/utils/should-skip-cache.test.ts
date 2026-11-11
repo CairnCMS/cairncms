@@ -141,6 +141,29 @@ test('should not skip cache for a collection that shares a prefix with an ignore
 	expect(shouldSkipCache(req)).toBe(false);
 });
 
+test('should read the auto-purge path as the router does, so a backslash alias matches no ignored collection', () => {
+	vi.mocked(getEnv).mockReturnValue({
+		PUBLIC_URL: 'http://admin.example.com',
+		CACHE_SKIP_ALLOWED: false,
+		CACHE_AUTO_PURGE: true,
+		CACHE_AUTO_PURGE_IGNORE_LIST: ['articles'],
+	});
+
+	const req = {
+		get: vi.fn((str) => {
+			switch (str) {
+				case 'Referer':
+					return 'http://admin.example.com/admin/content/articles/1';
+				default:
+					return undefined;
+			}
+		}),
+		originalUrl: '/items\\articles\\1',
+	} as unknown as Request;
+
+	expect(shouldSkipCache(req)).toBe(false);
+});
+
 test('should not skip cache for requests coming outside of data studio', () => {
 	vi.mocked(getEnv).mockReturnValue({ PUBLIC_URL: 'http://admin.example.com', CACHE_SKIP_ALLOWED: false });
 

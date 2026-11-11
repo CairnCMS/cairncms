@@ -111,6 +111,7 @@ archive_confirm_count: >-
   Nenhum Item Selecionado | Você tem certeza que deseja arquivar este item? | Você tem certeza que deseja arquivar estes {count} itens?
 reset_system_permissions_to: 'Redefinir Permissões do Sistema Para:'
 reset_system_permissions_copy: Esta ação irá sobrescrever quaisquer permissões personalizadas que você possa ter aplicado às coleções do sistema. Você tem certeza?
+the_following_are_minimum_permissions: As seguintes permissões mínimas são aplicadas automaticamente quando o "App Access" está ativado. Você pode conceder permissões adicionais, se necessário, mas não pode reduzir as permissões abaixo desse nível.
 app_access_minimum: Acesso Mínimo ao App
 recommended_defaults: Padrões Recomendados
 unarchive: Desarquivar
@@ -161,6 +162,7 @@ permissions_for_role: 'Itens que o Cargo {role} pode {action}.'
 fields_for_role: 'Campos que o Cargo {role} pode {action}.'
 validation_for_role: 'As regras de {action} do campo que o Cargo {role} deve obedecer.'
 presets_for_role: 'Valores padrões de campo para o Cargo {role}.'
+presets_field_warning: 'As predefinições relacionais para o campo "{field}" devem ser configuradas com a sintaxe "detalhada".'
 presentation_and_aliases: Apresentação & Pseudônimos
 revision_post_create: Aqui está como este ítem ficou quando foi criado.
 revision_post_update: Aqui está como este item ficou após a atualização.
@@ -224,6 +226,7 @@ float: Ponto Flutuante
 integer: Inteiro
 json: JSON
 xml: XML
+yaml: YAML
 string: String
 text: Texto
 time: Hora
@@ -274,6 +277,8 @@ o2m_relationship: Relacionamento Um-pra-Muitos
 m2m_relationship: Relacionamento Muitos-pra-Muitos
 m2a_relationship: Relacionamento Muitos-pra-Qualquer
 invalid_item: Item inválido
+require_confirmation: Requer confirmação
+dialog: Diálogo
 modal: Modal
 next: Próximo
 field_name: Nome do campo
@@ -1848,30 +1853,77 @@ panels:
     name: Gráfico de barras
     horizontal: Horizontal
     select_collection: Você deve selecionar uma coleção.
+  relational-variable:
+    multiple: Múltiplo
+    multiple-label: Selecionar Múltiplos Itens
 triggers:
+  common:
+    response_body_all: Todos os Dados
   webhook:
     method: Método
 operations:
   item-create:
+    name: Criar Dados
+    description: Criar itens no banco de dados
     payload: Payload
+    emit_events: Emitir eventos
+  item-delete:
+    name: Excluir Dados
+    description: Apagar itens no banco de dados
+    emit_events: Emitir eventos
+    key: IDs
+  item-read:
+    key: IDs
+    emit_events: Emitir eventos
   item-update:
+    emit_events: Emitir eventos
+    key: IDs
     payload: Payload
   log:
+    description: Emita algo para o console
     message: Mensagem
+    message_placeholder: Digite uma mensagem a ser exibida no console...
   mail:
+    name: Enviar E-mail
+    description: Enviar um e-mail para uma ou mais pessoas
+    to: Para
+    to_placeholder: Adicione endereços de e-mail e pressione Enter...
+    body: Corpo
     template: Template
     data: Dados
   notification:
+    name: Enviar notificação
+    description: Enviar uma notificação no aplicativo para um ou mais usuários
     recipient: Usuário
+    recipient_placeholder: Digite um UUID...
+    recipient_note: Adicione o UUID do usuário e pressione Enter...
     message: Mensagem
   request:
+    name: Webhook / Request URL
+    description: "Faça uma solicitação para uma URL"
     url: URL
+    url_placeholder: https://example.com/example
     method: Método
     data: Dados
+    headers: Cabeçalhos
     header: Cabeçalho
+  sleep:
+    name: Suspender
+    description: Aguardar um determinado número de milissegundos
+    milliseconds: Milissegundos
+  transform:
+    name: Transformar carga útil
+    description: Altere a carga JSON do Flow
   trigger:
     name: Ativar Fluxo
     description: Passar estes dados para outro fluxo
     flows: Fluxos
     flow: Fluxo
     data: Dados
+    iteration_mode: Modo de Iteração
+    iteration_mode_note: Modo de iteração sobre matrizes.
+    serial: Serial
+    parallel: Paralela
+    batch: Lote
+    batch_size: Tamanho do lote
+    cache: Cache

@@ -50,6 +50,7 @@ const COMPLETE_ROW: Record<string, unknown> = {
 	auth_password_policy: null,
 	auth_login_attempts: 25,
 	storage_asset_transform: 'all',
+	storage_asset_public_transforms: false,
 	storage_asset_presets: null,
 	basemaps: null,
 	custom_aspect_ratios: null,
@@ -69,6 +70,7 @@ const COMPLETE_RECORD: ConfigSettings = {
 	auth_password_policy: null,
 	auth_login_attempts: 25,
 	storage_asset_transform: 'all',
+	storage_asset_public_transforms: false,
 	storage_asset_presets: null,
 	basemaps: null,
 	custom_aspect_ratios: null,
@@ -194,6 +196,7 @@ describe('settings readCurrent', () => {
 			default_language: 'en-US',
 			auth_login_attempts: 25,
 			storage_asset_transform: 'all',
+			storage_asset_public_transforms: false,
 		});
 
 		const result = await settingsDescriptor.handler.readCurrent(readContext());
@@ -202,11 +205,23 @@ describe('settings readCurrent', () => {
 	});
 
 	it('reads an existing row into a complete record', async () => {
-		mockRead(row({ auth_login_attempts: 3, module_bar: [{ id: 'nav' }], custom_css: '' }));
+		mockRead(
+			row({
+				auth_login_attempts: 3,
+				module_bar: [{ id: 'nav' }],
+				custom_css: '',
+				storage_asset_public_transforms: true,
+			})
+		);
 
 		const result = await settingsDescriptor.handler.readCurrent(readContext());
 
-		expect(result.records[0]).toMatchObject({ auth_login_attempts: 3, module_bar: [{ id: 'nav' }], custom_css: '' });
+		expect(result.records[0]).toMatchObject({
+			auth_login_attempts: 3,
+			module_bar: [{ id: 'nav' }],
+			custom_css: '',
+			storage_asset_public_transforms: true,
+		});
 	});
 
 	it('fails closed when an existing row is missing a managed column', async () => {
@@ -434,6 +449,27 @@ describe('settings field validation through the shared record schema', () => {
 
 	it('rejects an unknown top-level field', () => {
 		rejects({ unknown_setting: true });
+	});
+
+	it('accepts a boolean for storage_asset_public_transforms and rejects null or a string', () => {
+		accepts({ storage_asset_public_transforms: true });
+		accepts({ storage_asset_public_transforms: false });
+		rejects({ storage_asset_public_transforms: null });
+		rejects({ storage_asset_public_transforms: 'true' });
+	});
+
+	it('refuses storage_asset_public_transforms below manifest version 4 and requires it in a version 4 snapshot', () => {
+		const versionThree = without(COMPLETE_RECORD as Record<string, unknown>, 'storage_asset_public_transforms');
+
+		expect(validateConfigRecord('settings', { storage_asset_public_transforms: true }, 'authored', 3)).toEqual([
+			'"storage_asset_public_transforms" is not allowed',
+		]);
+
+		expect(validateConfigRecord('settings', versionThree, 'snapshot', 3)).toEqual([]);
+
+		expect(validateConfigRecord('settings', versionThree, 'snapshot', 4)).toEqual([
+			'"storage_asset_public_transforms" is required',
+		]);
 	});
 });
 

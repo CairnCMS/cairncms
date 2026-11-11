@@ -6,9 +6,8 @@ import * as getGraphqlQueryUtil from './get-graphql-query-and-variables.js';
 
 vi.mock('./package.js', () => ({ version: '1.2.3' }));
 
-const baseUrl = 'http://localhost';
-const restUrl = `${baseUrl}/items/example`;
-const graphQlUrl = `${baseUrl}/graphql`;
+const restUrl = '/items/example';
+const graphQlUrl = '/graphql';
 const accountability = { user: '00000000-0000-0000-0000-000000000000' };
 const method = 'GET';
 
@@ -72,13 +71,13 @@ describe('get cache key', () => {
 		test.each(['/items/test', '/items/graphql', '/collections/test', '/collections/graphql'])(
 			'path "%s" should not be interpreted as a graphql query',
 			(path) => {
-				getCacheKey({ originalUrl: `${baseUrl}${path}` } as Request);
+				getCacheKey({ originalUrl: path } as Request);
 				expect(getGraphqlQuerySpy).not.toHaveBeenCalled();
 			}
 		);
 
 		test.each(['/graphql', '/graphql/system'])('path "%s" should be interpreted as a graphql query', (path) => {
-			getCacheKey({ originalUrl: `${baseUrl}${path}` } as Request);
+			getCacheKey({ originalUrl: path } as Request);
 			expect(getGraphqlQuerySpy).toHaveBeenCalledOnce();
 		});
 	});
@@ -124,6 +123,32 @@ describe('get cache key', () => {
 		expect((error as Error).message).not.toContain(target);
 		expect((error as { input?: unknown }).input).toBeUndefined();
 	});
+
+	test.each(['http://localhost/items/books', '/users\\me#frag', '//:@h/items/books#frag'])(
+		'throws without leaking the target when %s is rewritten while parsing',
+		(target) => {
+			let error: unknown;
+
+			try {
+				getCacheKey({ originalUrl: target, sanitizedQuery: {} } as unknown as Request);
+			} catch (err) {
+				error = err;
+			}
+
+			expect(error).toBeInstanceOf(Error);
+			expect((error as Error).message).not.toContain(target);
+		}
+	);
+
+	test.each(['/items\\books', '//alice:secret@host/items/books'])(
+		'%s does not share a key with the path it resembles',
+		(alias) => {
+			const key = (originalUrl: string) =>
+				getCacheKey({ method, originalUrl, accountability, sanitizedQuery: {} } as unknown as Request);
+
+			expect(key(alias)).not.toEqual(key('/items/books'));
+		}
+	);
 });
 
 describe('authorization-context segmentation', () => {
@@ -192,7 +217,7 @@ describe('authorization-context segmentation', () => {
 
 describe('webhook request-context segmentation', () => {
 	const uuid = '11111111-1111-1111-1111-111111111111';
-	const webhookUrl = `${baseUrl}/flows/trigger/${uuid}`;
+	const webhookUrl = `/flows/trigger/${uuid}`;
 
 	const webhookReq = (overrides: Record<string, any>): Request =>
 		({ method, originalUrl: webhookUrl, sanitizedQuery: {}, ...overrides } as unknown as Request);
@@ -222,7 +247,7 @@ describe('webhook request-context segmentation', () => {
 	});
 
 	test('a mixed-case trigger path is recognized and enriched', () => {
-		const upperUrl = `${baseUrl}/FLOWS/TRIGGER/${uuid}`;
+		const upperUrl = `/FLOWS/TRIGGER/${uuid}`;
 
 		const upper = (headers: Record<string, string>): Request =>
 			({ method, originalUrl: upperUrl, sanitizedQuery: {}, headers } as unknown as Request);
@@ -233,7 +258,7 @@ describe('webhook request-context segmentation', () => {
 	});
 
 	test('a trailing-slash trigger path is recognized and enriched', () => {
-		const slashUrl = `${baseUrl}/flows/trigger/${uuid}/`;
+		const slashUrl = `/flows/trigger/${uuid}/`;
 
 		const slash = (headers: Record<string, string>): Request =>
 			({ method, originalUrl: slashUrl, sanitizedQuery: {}, headers } as unknown as Request);

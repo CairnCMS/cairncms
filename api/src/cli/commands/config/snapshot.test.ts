@@ -25,6 +25,7 @@ import logger from '../../../logger.js';
 import { configSnapshot } from './snapshot.js';
 import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
 import { CONFIG_REGISTRY } from '../../../utils/config/registry.js';
+import { LATEST_MANIFEST_VERSION } from '../../../utils/config-contract.js';
 
 const TOKEN = 'sentinel-token';
 
@@ -61,6 +62,8 @@ const SETTINGS_DOC = {
 	mapbox_key: null,
 	storage_default_folder: null,
 };
+
+const SETTINGS_DOC_V4 = { ...SETTINGS_DOC, storage_asset_public_transforms: false };
 
 function without(obj: Record<string, unknown>, key: string): Record<string, unknown> {
 	const copy = { ...obj };
@@ -308,6 +311,7 @@ describe('configSnapshot manifest version preservation', () => {
 		it.each([
 			['an existing v1 directory', 1, 1],
 			['an existing v2 directory', 2, 2],
+			['an existing v3 directory', 3, 3],
 		])('sends and writes the expected version for %s', async (_label, seeded, expected) => {
 			await seedManifest(seeded);
 
@@ -316,6 +320,7 @@ describe('configSnapshot manifest version preservation', () => {
 				roles: [],
 				permissions: [],
 				...(expected >= 2 ? { folders: [], settings: [], 'extension-settings': [], translations: [] } : {}),
+				...(expected >= 3 ? { schema: [] } : {}),
 			});
 
 			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
@@ -333,8 +338,84 @@ describe('configSnapshot manifest version preservation', () => {
 			expect(await writtenVersion()).toBe(expected);
 		});
 
+		it('refuses a version 4 capture from a server without version 4 and leaves the tree unchanged', async () => {
+			await seedManifest(4);
+			const before = await captureTree(tmpDir);
+
+			transportRequestMock.mockImplementation(async (config: { url: string }) => {
+				const { pathname } = new URL(config.url);
+
+				if (pathname.endsWith('/server/info')) {
+					return { status: 200, headers: {}, data: { data: { cairncms: { version: '1.7.0' } } } };
+				}
+
+				if (pathname.endsWith('/config/snapshot')) {
+					return {
+						status: 400,
+						headers: {},
+						data: {
+							errors: [
+								{
+									message: 'Requested manifest version 4 is not supported. This engine supports versions 1, 2, 3.',
+									extensions: { code: 'CONFIG_UNSUPPORTED_VERSION' },
+								},
+							],
+						},
+					};
+				}
+
+				throw new Error(`unexpected request to ${pathname}`);
+			});
+
+			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
+
+			expect(vi.mocked(process.exit).mock.calls).toEqual([[2]]);
+			expect(vi.mocked(logger.error)).toHaveBeenCalledWith(expect.stringContaining('version 4 is not supported'));
+			expect(await captureTree(tmpDir)).toEqual(before);
+		});
+
+		it('refuses a version 4 snapshot from a newer server carrying a field this CLI does not know', async () => {
+			await fs.writeFile(path.join(tmpDir, 'cairncms-config.yaml'), dumpYaml({ version: 4, resources: ['settings'] }));
+			const before = await captureTree(tmpDir);
+
+			transportRequestMock.mockImplementation(async (config: { url: string }) => {
+				const { pathname } = new URL(config.url);
+
+				if (pathname.endsWith('/server/info')) {
+					return { status: 200, headers: {}, data: { data: { cairncms: { version: '1.9.0' } } } };
+				}
+
+				if (pathname.endsWith('/config/snapshot')) {
+					return {
+						status: 200,
+						headers: {},
+						data: {
+							data: {
+								manifest: { version: 4, resources: ['settings'] },
+								roles: [],
+								permissions: [],
+								folders: [],
+								settings: [{ ...SETTINGS_DOC_V4, future_setting: true }],
+								'extension-settings': [],
+								translations: [],
+								schema: [],
+							},
+						},
+					};
+				}
+
+				throw new Error(`unexpected request to ${pathname}`);
+			});
+
+			await configSnapshot(tmpDir, { yes: true, url: 'https://cms.example' });
+
+			expect(vi.mocked(process.exit).mock.calls).toEqual([[3]]);
+			expect(vi.mocked(logger.error)).toHaveBeenCalledWith(expect.stringContaining('future_setting'));
+			expect(await captureTree(tmpDir)).toEqual(before);
+		});
+
 		const SCHEMA_MANAGED_MANIFEST = {
-			version: 3,
+			version: LATEST_MANIFEST_VERSION,
 			resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations', 'schema'],
 			schema: { release: '1.7.0', vendor: 'postgres' },
 		};
@@ -347,7 +428,7 @@ describe('configSnapshot manifest version preservation', () => {
 				roles: [],
 				permissions: [],
 				folders: [],
-				settings: [SETTINGS_DOC],
+				settings: [SETTINGS_DOC_V4],
 				'extension-settings': [],
 				translations: [],
 				schema: collections,
@@ -474,7 +555,8 @@ describe('configSnapshot manifest version preservation', () => {
 		it.each([
 			['an existing v1 directory', 1, 1],
 			['an existing v2 directory', 2, 2],
-			['a fresh directory', undefined, 3],
+			['an existing v3 directory', 3, 3],
+			['a fresh directory', undefined, LATEST_MANIFEST_VERSION],
 		])('writes the expected version for %s', async (_label, seeded, expected) => {
 			if (seeded !== undefined) await seedManifest(seeded);
 

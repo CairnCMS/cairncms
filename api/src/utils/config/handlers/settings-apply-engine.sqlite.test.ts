@@ -2,10 +2,12 @@ import type { SchemaOverview } from '@cairncms/types';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { configFixture } from '../../../__utils__/config-fixtures.js';
+import { getSqliteClient } from '../../../database/sqlite-driver.js';
 import emitter from '../../../emitter.js';
 import { ConfigApplyFailedException } from '../../../exceptions/config-apply-failed.js';
 import { ConfigFolderInUseException } from '../../../exceptions/config-folder-in-use.js';
 import { ConfigReadFailedException } from '../../../exceptions/config-read-failed.js';
+import { ConfigStateChangedException } from '../../../exceptions/config-state-changed.js';
 import { SettingsService } from '../../../services/settings.js';
 import type {
 	CairnConfig,
@@ -69,6 +71,11 @@ const schema = {
 				auth_password_policy: field('auth_password_policy', 'string'),
 				auth_login_attempts: field('auth_login_attempts', 'integer', { defaultValue: 25 }),
 				storage_asset_transform: field('storage_asset_transform', 'string', { defaultValue: 'all' }),
+				storage_asset_public_transforms: field('storage_asset_public_transforms', 'boolean', {
+					nullable: false,
+					defaultValue: false,
+					special: ['cast-boolean'],
+				}),
 				storage_asset_presets: field('storage_asset_presets', 'json', { special: ['cast-json'] }),
 				basemaps: field('basemaps', 'json', { special: ['cast-json'] }),
 				custom_aspect_ratios: field('custom_aspect_ratios', 'json', { special: ['cast-json'] }),
@@ -106,7 +113,7 @@ describe('settings through the real apply engine on SQLite', () => {
 
 	beforeEach(async () => {
 		db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			connection: { filename: ':memory:' },
 			useNullAsDefault: true,
 			pool: { min: 1, max: 1 },
@@ -126,6 +133,7 @@ describe('settings through the real apply engine on SQLite', () => {
 			table.string('auth_password_policy', 100);
 			table.integer('auth_login_attempts').defaultTo(25);
 			table.string('storage_asset_transform', 7).defaultTo('all');
+			table.boolean('storage_asset_public_transforms').notNullable().defaultTo(false);
 			table.json('storage_asset_presets');
 			table.json('basemaps');
 			table.json('custom_aspect_ratios');
@@ -200,6 +208,7 @@ describe('settings through the real apply engine on SQLite', () => {
 			auth_password_policy: null,
 			auth_login_attempts: 3,
 			storage_asset_transform: 'all',
+			storage_asset_public_transforms: false,
 			storage_asset_presets: null,
 			basemaps: null,
 			custom_aspect_ratios: null,
@@ -264,6 +273,35 @@ describe('settings through the real apply engine on SQLite', () => {
 		});
 
 		expect(result.settings).toEqual({ updated: [] });
+	});
+
+	it('refuses a version 3 apply when storage_asset_public_transforms changes after the read, before writing', async () => {
+		await db('directus_settings').insert({ project_name: 'CairnCMS' });
+
+		const { config: current, stateToken } = await readCurrentConfig({
+			database: db,
+			schema,
+			resources: ['settings'],
+			manifestVersion: 3,
+		});
+
+		expect(current.settings[0]).not.toHaveProperty('storage_asset_public_transforms');
+
+		const plan = computeConfigPlan(
+			current,
+			configFixture({ manifest: { version: 3, resources: ['settings'] }, settings: [{ project_name: 'Renamed' }] })
+		);
+
+		await db('directus_settings').update({ storage_asset_public_transforms: true });
+
+		await expect(
+			applyConfigPlan(plan, { database: db, schema, context: securityContext, expectedStateToken: stateToken })
+		).rejects.toBeInstanceOf(ConfigStateChangedException);
+
+		const row = await currentRow();
+
+		expect(row!['project_name']).toBe('CairnCMS');
+		expect(Boolean(row!['storage_asset_public_transforms'])).toBe(true);
 	});
 
 	it('rolls back the real insert and leaves the table empty when a later step throws', async () => {

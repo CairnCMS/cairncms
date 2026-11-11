@@ -1,6 +1,7 @@
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sqliteAfterCreate } from '../database/connection-hooks.js';
+import { getSqliteClient } from '../database/sqlite-driver.js';
 import type { Snapshot, SnapshotDiff } from '../types/index.js';
 import { DiffKind } from '../types/index.js';
 import { applyDiff } from './apply-diff.js';
@@ -48,7 +49,7 @@ beforeEach(async () => {
 	vi.mocked(getSnapshot).mockResolvedValue(currentSnapshot);
 
 	database = knex.default({
-		client: 'sqlite3',
+		client: getSqliteClient(),
 		connection: { filename: ':memory:' },
 		useNullAsDefault: true,
 		pool: { min: 1, max: 1, afterCreate: sqliteAfterCreate },

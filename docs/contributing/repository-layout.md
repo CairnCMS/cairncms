@@ -98,12 +98,6 @@ End-to-end tests that exercise a running CairnCMS instance against real database
   Select a suite with `pnpm test:integration routes/auth/login.test.ts` after running `pnpm test:integration:prepare`.
 - **`tests/shared/`** — request helpers used by the integration suites.
 
-The `CI / Tests / API Integration` workflow in `.github/workflows/ci-tests-api.yml` runs every suite on all six vendors
-(`sqlite3`, `postgres`, `postgres10`, `mysql`, `mysql5`, `maria`) on `develop` pushes. It also supports manual runs.
-Pull requests into `develop` run basic checks, while the complete integration matrix tests the assembled branch after
-merge. Locally, select the suites and vendors affected by your change. See
-[Running locally / Tests](/docs/contributing/running-locally/#tests) for commands.
-
 ## Documentation
 
 Two trees:

@@ -126,6 +126,16 @@ describe('respond middleware — cache key stashing and fail-closed', () => {
 		expect(setCacheValueMock).not.toHaveBeenCalled();
 		expect(headers['cache-control']).toBe('no-cache');
 	});
+
+	it('writes nothing for a rewritten target whose caching the cache middleware turned off', async () => {
+		const { req, res, headers } = makeReqRes('//:@h/items/books#frag');
+		(res.locals as any).cache = false;
+		await (respond as any)(req, res, vi.fn());
+
+		expect(getCacheKeyMock).not.toHaveBeenCalled();
+		expect(setCacheValueMock).not.toHaveBeenCalled();
+		expect(headers['cache-control']).toBe('no-cache');
+	});
 });
 
 describe('respond middleware — webhook responses are not externally cacheable', () => {

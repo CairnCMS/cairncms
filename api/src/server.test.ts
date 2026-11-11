@@ -180,4 +180,12 @@ describe('response diagnostics', () => {
 		expect(request.path).toBe('/items/books');
 		expect(request.query).toEqual({ limit: '1' });
 	});
+
+	it('emits the path the router reads for a backslash target, without rewriting it', async () => {
+		const request = await fireResponse('/items\\books');
+
+		expect(request.url).toBe('/items\\books');
+		expect(request.path).toBe('/items\\books');
+		expect(request.query).toEqual({});
+	});
 });

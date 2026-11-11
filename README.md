@@ -15,7 +15,7 @@ CairnCMS is a GPLv3, self-hosted workspace for SQL-backed applications. It combi
 
 - **Open by design** — GPLv3 licensed, self-hosted, and built for teams that want to run their own infrastructure.
 - **SQL-first** — works with standard SQL tables you control.
-- **Multi-database support** — supports PostgreSQL, MySQL, SQLite, and MariaDB.
+- **Multi-database support** — supports PostgreSQL, MySQL, MariaDB, and SQLite ([supported versions](https://cairncms.dev/docs/manage/configuration/#supported-versions)).
 - **Generated APIs** — exposes REST and GraphQL APIs for your collections.
 - **Permission-scoped workspace** — gives each role the right interface for managing content, data, files, dashboards, and workflows.
 - **Automation built in** — create workflows from data events, webhooks, schedules, and manual triggers.

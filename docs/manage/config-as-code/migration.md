@@ -14,7 +14,7 @@ Snapshot recaptures every selected kind, not just schema. Use a separate directo
 1. Preserve the current tree and any unapplied edits in source control or a separate copy.
 2. Choose a source instance running CairnCMS 1.7.0 or later, with the same release and database vendor as the intended target.
 3. Create a separate `config-upgrade` directory. Copy only the existing `cairncms-config.yaml` manifest into it. Leave the original tree untouched.
-4. In the copied manifest, change `version` to `3` and add `schema` to the intended resource list. Do not automatically enable every kind.
+4. In the copied manifest, change `version` to `3` or a later version the target supports, and add `schema` to the intended resource list. Do not automatically enable every kind.
 5. Capture the source into `config-upgrade`, then review all files and the recorded schema release/vendor.
 
 ```bash

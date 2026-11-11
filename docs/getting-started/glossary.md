@@ -47,7 +47,7 @@ A dashboard is a saved workspace in the Insights module that groups one or more 
 
 ## Database Abstraction
 
-CairnCMS works across multiple SQL vendors by translating its internal model into vendor-specific database behavior. This abstraction layer is what lets the platform support PostgreSQL, MySQL, MariaDB, and SQLite without exposing every database-specific difference to the rest of the system.
+CairnCMS works across multiple SQL vendors by translating its internal model into vendor-specific database behavior. This abstraction layer is what lets the platform support PostgreSQL, MySQL, MariaDB, and SQLite without exposing every database-specific difference to the rest of the system. [Supported versions](/docs/manage/configuration/#supported-versions) lists the versions of each.
 
 ## Display
 

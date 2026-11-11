@@ -37,7 +37,10 @@ describe('/assets', () => {
 					const run = (async () => {
 						try {
 							for (let count = 0; count < spawnCountTarget; count++) {
-								const load = api.startNode(autocannon, ['--json', '-c', '100', url], { timeoutMs: 600_000 });
+								const load = api.startNode(autocannon, ['--json', '--debug', '-c', '100', '--workers', '2', url], {
+									timeoutMs: 600_000,
+								});
+
 								load.child.stdin!.end();
 								const result = await load.result;
 								outcomes.push(result);

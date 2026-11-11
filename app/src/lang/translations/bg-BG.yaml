@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: Идентификатор
 avatar: Аватар
 application: Приложение
@@ -76,14 +75,6 @@ create_role: Създаване на роля
 create_user: Създаване на потребител
 message: Съобщение
 delete_panel: Изтриване на панела
-create_translation_string: Създаване на нов превод на низ
-no_translation_string: Няма преводи на низове
-no_translation_string_copy: Все още няма низове за превод.
-translation_string_key_placeholder: Ключ на низа за превод...
-translation_string_translations_placeholder: Добавяне на нов превод
-edit_translation_string: Редакция на превода на низа
-delete_translation_string_copy: >-
-  Сигурни ли сте, че искате да изтриете превода на низа „{key}“? Действието не може да бъде отменено.
 invite_users: Покана до потребители
 invite: Поканване
 email_already_invited: Вече е изпратена покана в пощата на „{email}“
@@ -114,13 +105,6 @@ public_label: Публичен
 public_description: Контрол на позволенията към API-то, без нужда от оторизиране.
 admin_description: Първоначална администраторска роля с неограничен достъп до API и приложението.
 not_allowed: Не е позволено
-directus_version: Версия на CairnCMS
-node_version: Версия на Node
-node_uptime: Време от старт на Node
-os_type: Тип на ОС
-os_version: Версия на ОС
-os_uptime: Време от старт на ОС
-os_totalmem: Памет на ОС
 archive: Архивиране
 archive_confirm: Сигурни ли сте, че искате да архивирате записа?
 archive_confirm_count: >-
@@ -456,11 +440,9 @@ open_file_in_tab: Отваряне в нов таб
 start_export: Започване на експорта
 not_available_for_local_downloads: Не е налично за локално изтегляне
 exporting_all_items_in_collection: Експортиране на всичките {total} записи от {collection}.
-exporting_limited_items_in_collection: Експортиране на {limit} от {total} записи от {collection}.
+exporting_limited_items_in_collection: 'Експортиране на {limit} от {total} записи от {collection}.'
 exporting_no_items_to_export: Няма записи за експортиране. Променете следните настройки.
 exporting_download_hint: Веднъж приключил, {format}-ът ще бъде изтеглен автоматично на вашето устройство.
-exporting_batch_hint: Експортирането ще бъде извършено на части, след приключването, {format}-ът ще бъде запазен във файловата библиотека.
-exporting_batch_hint_forced: Поради наличието на големия брой записи, експортирането ще бъде извършено на части, при приключването, {format}-ът ще бъде запазен във файловата библиотека.
 collection_key: Ключ на колекция
 name: Име
 primary_key_field: Поле за първичния ключ
@@ -485,7 +467,6 @@ enable_select_button: Показване на бутон за избор
 allow_duplicates: Позволяване на дублирането
 comments: Коментари
 no_comments: Все още няма коментари
-click_to_expand: Натиснете за разширяване
 select_item: Избор на запис
 no_items: Няма записи
 search_items: Търсене в записите...
@@ -939,7 +920,6 @@ settings_permissions: Роли и позволения
 settings_project: Настройки на проекта
 settings_flows: Автоматизирани процеси
 settings_presets: Заготовки и отметки
-settings_translation_strings: Преводи на низове
 one_or_more_options_are_missing: Липсват една или повече настройки
 scope: Обхват
 actions: Действия
@@ -987,7 +967,6 @@ page_help_settings_presets_item: >-
   **Детайли за заготовка** — Формуляр за управление на отметките и заготовките от изгледи по подразбиране отнасящи се за колекциите.
 page_help_settings_flows_collection: '**Преглед на автоматизираните процеси** — Показват се всички налични автоматизирани процеси в проекта.'
 page_help_settings_flows_item: '**Детайлен изглед на автоматизиран процес** — Работен плот за управление на един или множество операции.'
-page_help_settings_translation_strings_collection: '**Преглед на преводите на низовете** — Показват се всички преводни низове в проекта.'
 page_help_users_collection: '**Потребители** — Показват се всички потребители в системата на проекта.'
 page_help_users_item: >-
   **Детайли за потребител** — Управление на информацията на вашия потребителския профил, или детайлен преглед на друг потребител.
@@ -1642,7 +1621,6 @@ interfaces:
     input-translated-string: Преведени низове
     description: Избор или добавяне на превод на низ
     search_placeholder: Търсене...
-    new_translation_string: Нов превод на низ
   boolean:
     toggle: Превключвател
     description: Превключване между активно и неактивно състояние

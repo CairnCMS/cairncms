@@ -399,6 +399,35 @@ describe('handleItems payload and query shape', () => {
 		expect(error.code).toBe('INVALID_PAYLOAD');
 		expect(service.updateOne).not.toHaveBeenCalled();
 	});
+
+	it('rejects a read with many invalid ids before resolving the target', async () => {
+		const error = await reject(
+			{ type: 'items', action: 'read', collection: 'articles', ids: Array(1000).fill(null), uid: 10 },
+			ctx('articles')
+		);
+
+		expect(error.code).toBe('INVALID_PAYLOAD');
+		expect(error.uid).toBe(10);
+		expect(resolveTarget).not.toHaveBeenCalled();
+		expect(service.readMany).not.toHaveBeenCalled();
+	});
+
+	it('leaves the message ids in their original order when updateMany sorts its keys', async () => {
+		service.updateMany.mockImplementation(async (keys: string[]) => keys.sort());
+
+		const message = {
+			type: 'items',
+			action: 'update',
+			collection: 'articles',
+			ids: ['k2', 'k1'],
+			data: { title: 'x' },
+		};
+
+		await run(message, ctx('articles'));
+
+		expect(service.updateMany).toHaveBeenCalled();
+		expect(message.ids).toEqual(['k2', 'k1']);
+	});
 });
 
 describe('handleItems read-back permission suppression', () => {

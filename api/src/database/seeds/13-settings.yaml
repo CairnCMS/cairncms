@@ -42,7 +42,7 @@ columns:
   storage_asset_transform:
     type: string # One of: 'all', 'none', 'presets'
     length: 7
-    default: all
+    default: none
   storage_asset_presets:
     type: json
   custom_css:

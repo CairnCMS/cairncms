@@ -55,13 +55,13 @@ test(
 					file.endsWith('prepared.json') ? '{' : Buffer.concat([previous ?? Buffer.from(''), Buffer.from('\n')])
 				);
 
-				await run(['--vendor', 'postgres'], 1, /pnpm test:integration:prepare/);
+				await run(['--vendor', 'postgres18'], 1, /pnpm test:integration:prepare/);
 				if (previous) await writeFile(target, previous);
 				else await rm(target);
 			}
 
 			await rm(join(checkout.directory, 'tests/integration/.artifacts/prepared.json'));
-			await run(['--vendor', 'postgres'], 1, /Missing or invalid preparation record/);
+			await run(['--vendor', 'postgres18'], 1, /Missing or invalid preparation record/);
 			await run(['--vendor', 'sqlite3', '--list'], 0, /LISTED/);
 			await recordBuildWorkspace(checkout.directory);
 			await writeFile(join(checkout.directory, 'api/src/server.test.ts'), 'test-only edit');

@@ -161,7 +161,7 @@ describe('Config-as-Code API', () => {
 				expect(response.body.data).toHaveProperty('manifest');
 				expect(response.body.data).toHaveProperty('roles');
 				expect(response.body.data).toHaveProperty('permissions');
-				expect(response.body.data.manifest.version).toBe(3);
+				expect(response.body.data.manifest.version).toBe(4);
 				expect(Array.isArray(response.body.data.roles)).toBe(true);
 				expect(Array.isArray(response.body.data.permissions)).toBe(true);
 			});
@@ -178,7 +178,7 @@ describe('Config-as-Code API', () => {
 				expect(response.headers['content-type']).toContain('text/yaml');
 
 				const parsed = loadYaml(response.text) as ConfigSnapshot;
-				expect(parsed.manifest.version).toBe(3);
+				expect(parsed.manifest.version).toBe(4);
 				expect(Array.isArray(parsed.roles)).toBe(true);
 				expect(Array.isArray(parsed.permissions)).toBe(true);
 			});
@@ -211,11 +211,24 @@ describe('Config-as-Code API', () => {
 			});
 		});
 
-		describe('rejects an unsupported manifest version', () => {
+		describe('honors an explicit version 4 request', () => {
 			test('REST', async ({ api }) => {
 				const response = await request(api.url)
 					.get('/config/snapshot')
 					.query({ manifest_version: '4' })
+					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
+
+				expect(response.statusCode).toBe(200);
+				expect(response.body.data.manifest.version).toBe(4);
+				expect(response.body.data.manifest.resources).toContain('schema');
+			});
+		});
+
+		describe('rejects an unsupported manifest version', () => {
+			test('REST', async ({ api }) => {
+				const response = await request(api.url)
+					.get('/config/snapshot')
+					.query({ manifest_version: '5' })
 					.set('Authorization', `Bearer ${common.USER.ADMIN!.TOKEN}`);
 
 				expect(response.statusCode).toBe(400);
@@ -1393,7 +1406,7 @@ describe('Config-as-Code folders lifecycle', () => {
 
 	describeForVendors(
 		'server database collation',
-		['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'],
+		['postgres', 'mysql', 'maria'],
 		'Mixed-case folder identifier matching is tested on server-database collations; SQLite is not validated.',
 		() => {
 			test('resolves a mixed-case parent through snapshot and re-apply', async ({ api }) => {
@@ -1698,7 +1711,7 @@ describe('Config-as-Code folders lifecycle', () => {
 
 	describeForVendors(
 		'server database collation',
-		['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'],
+		['postgres', 'mysql', 'maria'],
 		'Mixed-case folder identifier matching is tested on server-database collations; SQLite is not validated.',
 		() => {
 			test('refuses a config deletion of a folder referenced by a mixed-case field option', async ({ api }) => {

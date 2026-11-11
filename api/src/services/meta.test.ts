@@ -1,6 +1,7 @@
 import type { Accountability, Permission, SchemaOverview } from '@cairncms/types';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getSqliteClient } from '../database/sqlite-driver.js';
 import { InvalidQueryException } from '../exceptions/invalid-query.js';
 import { MetaService } from './meta.js';
 
@@ -80,7 +81,7 @@ describe('MetaService.filterCount — search scoped by read permissions (GHSA-7w
 
 	beforeEach(async () => {
 		db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			useNullAsDefault: true,
 			connection: ':memory:',
 			pool: { min: 1, max: 1 },
@@ -166,7 +167,7 @@ describe('MetaService counts with a permission filter through a removed relation
 
 	beforeEach(async () => {
 		db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			useNullAsDefault: true,
 			connection: ':memory:',
 			pool: { min: 1, max: 1 },

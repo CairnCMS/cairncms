@@ -1214,6 +1214,7 @@ fields:
     storage_default_folder: Default Folder
     storage_asset_presets: Transformation Presets
     storage_asset_transform: Allowed Transformations
+    storage_asset_public_transforms: Allow Public Advanced Transformations
     overrides: App Overrides
     custom_css: Custom CSS
     module_bar: Module Bar
@@ -1253,6 +1254,7 @@ field_options:
     project_name_placeholder: My project...
     project_color_note: Login & Logo Background
     project_logo_note: White 40x40 SVG/PNG
+    storage_asset_public_transforms_note: When off, advanced transformations require a valid user token or session. Other transformations follow the file's permissions as usual.
     public_note_placeholder: A short, public message that supports markdown formatting...
     security_divider_title: Security
     auth_password_policy:

@@ -3,6 +3,7 @@ import type { Filter, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';
 import { MockClient } from 'knex-mock-client';
+import { omit } from 'lodash-es';
 import type { MockedFunction } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as databaseIndex from '../database/index.js';
@@ -13,7 +14,7 @@ import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
 import { SettingsService } from '../services/settings.js';
 import { TranslationsService } from '../services/translations.js';
-import { CONFIG_FILENAME_STEM_MAX_LENGTH } from './config-contract.js';
+import { CONFIG_FILENAME_STEM_MAX_LENGTH, LATEST_MANIFEST_VERSION } from './config-contract.js';
 import { rolesDescriptor } from './config/handlers/roles.js';
 import { CONFIG_REGISTRY } from './config/registry.js';
 import { getConfigSnapshot, readCurrentConfig } from './get-config-snapshot.js';
@@ -71,6 +72,7 @@ function settingsRow(overrides: Record<string, any> = {}): Record<string, any> {
 		auth_password_policy: null,
 		auth_login_attempts: 25,
 		storage_asset_transform: 'all',
+		storage_asset_public_transforms: false,
 		storage_asset_presets: null,
 		basemaps: null,
 		custom_aspect_ratios: null,
@@ -124,7 +126,7 @@ describe('getConfigSnapshot', () => {
 		const config = await getConfigSnapshot({ database: db });
 
 		expect(config.manifest).toEqual({
-			version: 3,
+			version: LATEST_MANIFEST_VERSION,
 			resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations', 'schema'],
 			schema: { release: version, vendor: 'sqlite' },
 		});
@@ -876,7 +878,7 @@ describe('readCurrentConfig', () => {
 
 		expect(v1.config.manifest.version).toBe(1);
 		expect(v2.config.manifest.version).toBe(2);
-		expect(fresh.config.manifest.version).toBe(3);
+		expect(fresh.config.manifest.version).toBe(LATEST_MANIFEST_VERSION);
 	});
 
 	it('computes the same state token digest regardless of manifest version', async () => {
@@ -887,6 +889,36 @@ describe('readCurrentConfig', () => {
 		const v2 = await readCurrentConfig({ database: db, resources: ['roles'], manifestVersion: 2 });
 
 		expect(v2.stateToken.digest).toBe(v1.stateToken.digest);
+	});
+
+	it('exports storage_asset_public_transforms only from version 4, with the same digest at every version', async () => {
+		mockSettings({ storage_asset_public_transforms: true });
+
+		const reads = await Promise.all(
+			([2, 3, 4] as const).map((manifestVersion) =>
+				readCurrentConfig({ database: db, resources: ['settings'], manifestVersion })
+			)
+		);
+
+		const [v2, v3, v4] = reads;
+
+		expect(v2!.config.settings[0]).not.toHaveProperty('storage_asset_public_transforms');
+		expect(v3!.config.settings[0]).not.toHaveProperty('storage_asset_public_transforms');
+		expect(v4!.config.settings[0]!.storage_asset_public_transforms).toBe(true);
+		expect(v3!.config.settings[0]).toEqual(omit(v4!.config.settings[0]!, 'storage_asset_public_transforms'));
+		expect(v2!.stateToken.digest).toBe(v4!.stateToken.digest);
+		expect(v3!.stateToken.digest).toBe(v4!.stateToken.digest);
+	});
+
+	it('changes a version 3 read digest when only storage_asset_public_transforms changes', async () => {
+		mockSettings({ storage_asset_public_transforms: false });
+		const before = await readCurrentConfig({ database: db, resources: ['settings'], manifestVersion: 3 });
+
+		mockSettings({ storage_asset_public_transforms: true });
+		const after = await readCurrentConfig({ database: db, resources: ['settings'], manifestVersion: 3 });
+
+		expect(after.config.settings).toEqual(before.config.settings);
+		expect(after.stateToken.digest).not.toBe(before.stateToken.digest);
 	});
 
 	it('changes the state token digest when a managed role value changes', async () => {
@@ -1004,7 +1036,7 @@ describe('readCurrentConfig', () => {
 		expect(getSchema.getSchema).not.toHaveBeenCalled();
 
 		expect(config).toEqual({
-			manifest: { version: 3, resources: [] },
+			manifest: { version: LATEST_MANIFEST_VERSION, resources: [] },
 			roles: [],
 			permissions: [],
 			folders: [],

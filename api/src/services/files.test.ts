@@ -837,6 +837,18 @@ describe('Integration Tests', () => {
 				expect(response.data.destroyed).toBe(true);
 			});
 
+			it.each([
+				['https://example.com/import/photo.png', 'photo.png'],
+				['https://example.com/import/my%20photo.png', 'my photo.png'],
+			])('derives the filename of a new import from the response URL %s', async (responseUrl, filename) => {
+				mockAxiosGet.mockResolvedValue(axiosResponse('image/png', responseUrl));
+				const uploadSpy = vi.spyOn(FilesService.prototype, 'uploadOne').mockResolvedValue('new-key' as never);
+
+				await service({ admin: true }).importOne('https://example.com/x.png', {});
+
+				expect((uploadSpy.mock.calls[0]![1] as Record<string, unknown>)['filename_download']).toBe(filename);
+			});
+
 			function abortedSource() {
 				return new Readable({
 					read() {

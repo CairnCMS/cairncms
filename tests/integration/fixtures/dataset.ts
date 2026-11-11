@@ -3,6 +3,7 @@ import { createIdentityTest } from './identities';
 import type { Api } from './environment';
 import { capturePrerequisite, requirePrerequisite, type Prerequisite } from './prerequisite';
 import type { CachedTestsSchema, TestsSchemaVendorValues } from '../query/filter';
+import { familyOf } from '../harness/database-vendors.mjs';
 
 type Snapshot = { table: string; rows: Record<string, any>[]; jsonColumns: Set<string> }[];
 type Dataset = { values: TestsSchemaVendorValues; snapshot: Snapshot };
@@ -63,7 +64,10 @@ export const createDatasetTest = (options: DatasetOptions) =>
 							const jsonColumns = new Set(
 								Object.entries(columns)
 									.filter(
-										([, info]) => vendor !== 'sqlite3' && vendor !== 'maria' && ['json', 'jsonb'].includes(info.type)
+										([, info]) =>
+											familyOf(vendor) !== 'sqlite' &&
+											familyOf(vendor) !== 'maria' &&
+											['json', 'jsonb'].includes(info.type)
 									)
 									.map(([name]) => name)
 							);
