@@ -78,10 +78,12 @@ export class AssetsService {
 
 		if (transformedFilename) {
 			if (transformedExists) {
+				const stat = await storageLocation.stat(transformedFilename);
+
 				return {
 					stream: await storageLocation.read(transformedFilename, range),
 					file,
-					stat: await storageLocation.stat(transformedFilename),
+					stat,
 				};
 			}
 
@@ -172,15 +174,17 @@ export class AssetsService {
 				activeTransforms--;
 			}
 
+			const stat = await storageLocation.stat(transformedFilename);
+
 			return {
 				stream: await storageLocation.read(transformedFilename, range),
-				stat: await storageLocation.stat(transformedFilename),
+				stat,
 				file,
 			};
 		}
 
-		const readStream = await storageLocation.read(sourceFilename, range);
 		const stat = await storageLocation.stat(sourceFilename);
+		const readStream = await storageLocation.read(sourceFilename, range);
 		return { stream: readStream, file, stat };
 	}
 
