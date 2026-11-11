@@ -1,4 +1,3 @@
----
 avatar: Avatar
 default_provider: Privzeto
 method: Metoda
@@ -59,13 +58,6 @@ logoutReason:
 public_label: Javno
 public_description: Nadzoruje, kateri podatki API so na voljo brez avtentikacije.
 not_allowed: Ni dovoljeno
-directus_version: CairnCMS verzija
-node_version: Node verzija
-node_uptime: Node deluje
-os_type: OS vrsta
-os_version: OS verzija
-os_uptime: OS deluje
-os_totalmem: OS spomin
 archive: Arhiviraj
 archive_confirm: Ste prepričani, da želite arhivirati ta zapis?
 archive_confirm_count: >-
@@ -335,7 +327,6 @@ selecting_items: Izbiranje zapisov
 enable_select_button: Omogoči gumb za izbor
 comments: Komentarji
 no_comments: Trenutno še ni komentarjev
-click_to_expand: Pritisni za razširitev
 select_item: Izberi zapis
 no_items: Ni zapisov
 search_items: Iskanje zapisov ...
