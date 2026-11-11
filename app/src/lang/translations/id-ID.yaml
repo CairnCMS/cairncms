@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: Pengenal
 avatar: Avatar
 application: Aplikasi
@@ -76,14 +75,6 @@ create_role: Buat Peran
 create_user: Buat User
 message: Pesan
 delete_panel: Hapus Panel
-create_translation_string: Buat Terjemahan
-no_translation_string: Tidak ditemukan terjemahan
-no_translation_string_copy: Belum ada terjemahan tersedia.
-translation_string_key_placeholder: Kunci string terjemahan...
-translation_string_translations_placeholder: Tambahkan terjemahan baru
-edit_translation_string: Sunting Terjemahan
-delete_translation_string_copy: >-
-  Apakah Anda yakin ingin menghapus bidang terjemahan "{key}" ini? Tindakan ini tidak dapat dikembalikan.
 invite_users: Undang Pengguna Lain
 invite: Undang
 email_already_invited: Email "{email}" sudah diundang
@@ -114,13 +105,6 @@ public_label: Publik
 public_description: Kendalikan data API yang tersedia tanpa autentikasi.
 admin_description: Peran administratif awal tanpa batasan akses aplikasi/API.
 not_allowed: Tidak Diizinkan
-directus_version: Versi CairnCMS
-node_version: Versi Node
-node_uptime: Waktu Jalan Node
-os_type: Tipe OS
-os_version: Versi OS
-os_uptime: Waktu Jalan OS
-os_totalmem: Memori OS
 archive: Arsip
 archive_confirm: Apakah Anda yakin ingin mengarsipkan item ini?
 archive_confirm_count: >-
@@ -456,11 +440,9 @@ open_file_in_tab: Buka file di tab baru
 start_export: Mulai Ekspor
 not_available_for_local_downloads: Tidak tersedia untuk unduhan lokal
 exporting_all_items_in_collection: Ekspor semua {total} item dalam {collection}.
-exporting_limited_items_in_collection: Ekspor {limit} dari {total} keseluruhan item dalam {collection}.
+exporting_limited_items_in_collection: 'Ekspor {limit} dari {total} keseluruhan item dalam {collection}.'
 exporting_no_items_to_export: Tidak ada item untuk dieskpor. Atur proses ekspor melalui konfigurasi dibawah.
 exporting_download_hint: Setelah selesai, {format} berkas ini akan secara otomatis terunduh ke perangkat anda.
-exporting_batch_hint: Proses ekspor ini akan dilakukan melalui proses batch, dan ketika sudah selesai, {format} berkas ini akan disimpan kedalam Pustaka Berkas.
-exporting_batch_hint_forced: Dikarenakan jumlah item yang sangat banyak, maka proses ekspor ini harus dilakukan melalui proses batch, dan ketika sudah selesai, {format} berkas ini akan tersimpan kedalam Pustaka Berkas.
 collection_key: Kunci Koleksi
 name: Nama
 primary_key_field: Kolom Primary Key
@@ -485,7 +467,6 @@ enable_select_button: Aktifkan Tombol Pemilihan
 allow_duplicates: Izinkan Duplikasi
 comments: Komentar
 no_comments: Belum Ada Komentar
-click_to_expand: Tekan Untuk Memperluas
 select_item: Pilih Item
 no_items: Tidak Ada Item
 search_items: Cari item...
@@ -939,7 +920,6 @@ settings_permissions: Peran dan Izin
 settings_project: Pengaturan Proyek
 settings_flows: Kumpulan Alur
 settings_presets: Preset & Markah
-settings_translation_strings: Terjemahan
 one_or_more_options_are_missing: Satu atau lebih opsi hilang
 scope: Lingkup
 actions: Aksi
