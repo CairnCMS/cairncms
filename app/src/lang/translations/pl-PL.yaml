@@ -75,6 +75,10 @@ create_role: Stwórz rolę
 create_user: Utwórz użytkownika
 message: Wiadomość
 delete_panel: Usuń panel
+create_custom_translation: Utwórz własne tłumaczenie
+edit_custom_translation: Edytuj własne tłumaczenie
+no_custom_translations: Brak niestandardowych tłumaczeń
+no_custom_translations_copy: Nie ma jeszcze niestandardowych tłumaczeń.
 invite_users: Zaproś użytkowników
 invite: Zaproś
 email_already_invited: E-mail "{email}" został już zaproszony
@@ -162,6 +166,7 @@ permissions_for_role: 'Przedmioty roli {role} mogą {action}.'
 fields_for_role: 'Pola roli {role} mogą {action}.'
 validation_for_role: 'Pole {action} zasad roli {role} musi być przestrzegane.'
 presets_for_role: 'Wartość domyślna dla roli {role}.'
+presets_field_warning: 'Presety relacji dla pola "{field}" powinny być skonfigurowane ze składnią "detailed".'
 presentation_and_aliases: Prezentacja i aliasy
 revision_post_create: Oto jak wyglądał ten przedmiot podczas jego tworzenia.
 revision_post_update: Oto jak wyglądał ten element po aktualizacji.
@@ -217,6 +222,7 @@ bigInteger: Duża liczba całkowita
 boolean: Wartość logiczna
 date: Data
 date_range: Zakres dat
+translation_key_placeholder: Wprowadź klucz...
 datetime: Data i godzina
 dateTime: Data i godzina
 precision: Dokładność
@@ -429,6 +435,7 @@ checksum: Suma kontrolna
 owner: Właściciel
 edited_by: Edytowane przez
 folder: Folder
+folders: Foldery
 zoom: Powiększ
 download: Pobierz
 open: Otwórz
@@ -475,6 +482,8 @@ enable_select_button: Włącz przycisk wyboru
 allow_duplicates: Zezwalaj na duplikaty
 comments: Komentarze
 no_comments: Brak komentarzy
+expand: Rozwiń
+collapse: Zwiń
 select_item: Wybierz element
 no_items: Brak elementów
 search_items: Szukaj elementów...
@@ -599,6 +608,7 @@ errors:
   RANGE_NOT_SATISFIABLE: Błędny zakres
   METHOD_NOT_ALLOWED: Metoda niedozwolona
   REQUESTS_EXCEEDED: Osiągnięto limit żądań
+  CONTENT_TOO_LARGE: Przedłożony element/plik jest zbyt duży
 security: Bezpieczeństwo
 value_hashed: Wartość bezpiecznie zakodowana
 bookmark_name: Nazwa zakładki...
@@ -937,6 +947,7 @@ settings_permissions: Role i uprawnienia
 settings_project: Ustawienia projektu
 settings_flows: Przepływy
 settings_presets: Szablony i zakładki
+settings_translations: Własne tłumaczenia
 one_or_more_options_are_missing: Brakuje jednej lub więcej opcji
 scope: Zakres
 actions: Akcje
@@ -984,6 +995,8 @@ page_help_settings_presets_item: >-
   **Ustawienia szczegółów** — Formularz do zarządzania zakładkami i domyślnymi ustawieniami kolekcji.
 page_help_settings_flows_collection: '**Przeglądaj Przepływy ** — Listy wszystkich Przepływów w ramach projektu.'
 page_help_settings_flows_item: '**Szczegóły przepływu** — Obszar roboczy do zarządzania jedną lub większą liczbą operacji.'
+page_help_settings_translations_collection: '**Przeglądaj niestandardowe tłumaczenia** — wyświetla wszystkie niestandardowe tłumaczenia w ramach projektu.'
+page_help_settings_translations_item: '**Niestandardowe Tłumaczenia** — Formularz do przeglądania i zarządzania tym elementem.'
 page_help_users_collection: '**Katalog Użytkowników** — Lista wszystkich użytkowników systemu w tym projekcie.'
 page_help_users_item: >-
   **Szczegóły użytkownika** — Zarządzaj informacjami o koncie lub zobacz szczegóły innych użytkowników.
@@ -1026,6 +1039,7 @@ directus_collection:
   directus_settings: Opcje konfiguracji projektu
   directus_shares: Śledzenie elementów współdzielonych na zewnątrz
   directus_users: Użytkownicy systemu dla platformy
+  directus_translations: Własne tłumaczenia
 fields:
   directus_activity:
     item: Klucz główny produktu
@@ -1583,6 +1597,7 @@ interfaces:
     notice: Informacja
     description: Wyświetl krótką informacje
     text: Wprowadź zawartość informacji...
+    no_text: Brak skonfigurowanego tekstu...
   list-o2m:
     one-to-many: Jeden do wielu
     description: Wybierz wiele powiązanych elementów
@@ -1644,6 +1659,7 @@ interfaces:
     input-translated-string: Przetłumaczone ciągi
     description: Wybierz lub dodaj tłumaczenia
     search_placeholder: Szukaj...
+    new_custom_translation: Nowe niestandardowe tłumaczenie
   boolean:
     toggle: Przełącz
     description: Przełącz między włącz/wyłącz
