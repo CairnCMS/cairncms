@@ -161,6 +161,7 @@ permissions_for_role: 'Éléments que le rôle {role} peut {action}.'
 fields_for_role: 'Champs dont l''action « {action} » peut être effectué par le rôle {role} .'
 validation_for_role: 'Règles pour {action} le champ que le rôle {role} doit suivre.'
 presets_for_role: 'Valeur par défaut du champ pour le rôle {role}.'
+presets_field_warning: 'Les préréglages relationnels pour le champ "{field}" doivent être configurés avec la syntaxe "détaillée".'
 presentation_and_aliases: Présentation & Alias
 revision_post_create: Voici à quoi ressemblait cet article lors de sa création.
 revision_post_update: Voici à quoi ressemblait cet élément après la mise à jour.
@@ -505,6 +506,7 @@ create_collection: Créer une collection
 no_collections_copy_admin: Vous n'avez pas encore de collection. Cliquez sur le bouton ci-dessous pour commencer.
 no_collections_copy: Vous n'avez pas encore de Collections. Veuillez contacter votre administrateur système.
 relationship_not_setup: La relation n'a pas été configurée correctement
+no_singleton_relations: Les relations avec les Singletons ne sont pas prises en charge
 display_template_not_setup: L'option d'affichage du modèle est mal configurée
 collection_field_not_setup: L'option de champ de collection est mal configurée
 select_a_collection: Sélectionner une collection
@@ -642,6 +644,7 @@ one_filtered_item: '1 élément filtré'
 delete_collection_are_you_sure: >-
   Êtes-vous sûr de vouloir supprimer la collection "{collection}" ? Cette action supprimera la collection et tous les éléments qu'elle contient. Cette action est irréversible.
 delete_folder_are_you_sure: Êtes-vous sûr de vouloir supprimer le dossier "{folder}" ? Les dossiers imbriqués et les collections seront déplacés à la racine.
+delete_collection_peer_dependencies: Les champs suivants seront également supprimés, car ils sont liés à la collection actuelle.
 collections_shown: Collections affichées
 visible_collections: Collections visibles
 hidden_collections: Collections masquées
@@ -1111,6 +1114,7 @@ fields:
     png: PNG
     webP: WebP
     tiff: Tiff
+    avif: AVIF
     mapping: Cartographie
     basemaps: Cartes de base
     basemaps_raster: Raster
@@ -2083,3 +2087,4 @@ operations:
     parallel: En parallèle
     batch: Par lots
     batch_size: Taille de chaque lot
+    cache: Cache

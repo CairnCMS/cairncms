@@ -75,6 +75,9 @@ create_role: ایجاد نقش
 create_user: ایجاد کاربر
 message: پیام
 delete_panel: حذف پنل
+create_custom_translation: ایجاد ترجمه جدید
+no_custom_translations: بدون ترجمه سفارشی
+no_custom_translations_copy: هنوز هیچ ترجمه سفارشی وجود ندارد.
 invite_users: دعوت کاربران
 invite: دعوت
 email_already_invited: قبلاً برای ایمیل {email}، دعوت نامه ارسال شده است
@@ -216,6 +219,7 @@ bigInteger: عدد صحیح بزرگ
 boolean: بولین
 date: تاریخ
 date_range: بازه تاریخ
+translation_key_placeholder: یک کلید وارد کنید...
 datetime: تاریخ و ساعت
 dateTime: تاریخ و ساعت
 precision: دقت
@@ -427,6 +431,7 @@ checksum: Checksum
 owner: مالک
 edited_by: ویرایش شده توسط
 folder: پوشه
+folders: پوشه‌ها
 zoom: بزرگنمايی
 download: دانلود
 open: باز
@@ -471,6 +476,8 @@ enable_select_button: فعالسازی دکمه انتخاب
 allow_duplicates: اجازه تکرار
 comments: دیدگاهها
 no_comments: هنوز دیدگاهی ارسال نشده
+expand: گسترش
+collapse: جمع کردن
 select_item: انتخاب آیتم
 no_items: آیتمی وجود ندارد
 search_items: جستجوی آیتمها...
@@ -594,6 +601,7 @@ errors:
   RANGE_NOT_SATISFIABLE: محدوده نامعتبر است
   METHOD_NOT_ALLOWED: روش مجاز نمی باشد
   REQUESTS_EXCEEDED: به محدودیت درخواست رسیده است
+  CONTENT_TOO_LARGE: آیتم/فایل بیشتر از حد مجاز است
 security: امنیت
 value_hashed: این مقدار به طور امن، هش شده است
 bookmark_name: نام نشانک...
@@ -1020,6 +1028,7 @@ directus_collection:
   directus_settings: گزینه های پیکربندی پروژه
   directus_shares: موارد به اشتراک گذاشته شده خارجی را ردیابی می کند
   directus_users: کاربران سیستمی برای پلتفرم
+  directus_translations: ترجمه های سفارشی
 fields:
   directus_activity:
     item: کلید اصلی آیتم
@@ -1515,6 +1524,7 @@ interfaces:
     zoom: بزرگنمايی
   presentation-notice:
     notice: اطلاعیه
+    no_text: هیچ متنی پیکربندی نشده است...
   list-o2m:
     one-to-many: یک به چند
     description: انتخاب چندین آیتم مرتبط
@@ -1814,3 +1824,4 @@ operations:
     flows: اتوماسیون‌ها
     flow: اتوماسیون
     data: داده Data
+    cache: Cache

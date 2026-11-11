@@ -64,6 +64,7 @@ show_archived_items: הצג פריטי ארכיון
 show_all_items: הצג את כל הפריטים
 edited: ערך נערך
 required: שדה חובה
+required_for_app_access: נדרש עבור גישה לאפליקציה
 requires_value: דורש ערך
 create_preset: יצירת הגדרה מראש
 create_role: צור תפקיד
