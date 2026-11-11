@@ -343,7 +343,7 @@ revision_delta_reverted: U rikthye
 revision_delta_update_message: Kjo fushë është përditësuar por vlera e saj është e fshehur për arsye sigurie.
 revision_delta_other: Rishikim
 revision_delta_by: '{date} nga {user}'
-presentation_text_values_cannot_be_reimported: 'Përdor tekst prezantimi, vlerat nuk mund të rimportohen.'
+presentation_text_values_cannot_be_reimported: "Përdor tekst prezantimi, vlerat nuk mund të rimportohen."
 download_page_as_csv: 'Shkarko Faqen si CSV'''
 private_user: Përdorues Privat
 creation_preview: Parapamje e Krijimit
@@ -2077,7 +2077,7 @@ operations:
     message: Mesazh
   request:
     name: Webhook / Kërkesë URL
-    description: 'Bëj një kërkesë në një URL'
+    description: "Bëj një kërkesë në një URL"
     url: URL
     url_placeholder: https://example.com/example
     method: Metoda
