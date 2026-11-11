@@ -1,6 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computeConfigPlan } from './compute-config-plan.js';
+import type { ConfigFieldDescriptor } from './config/descriptor.js';
 import { CONFIG_REGISTRY } from './config/registry.js';
+import { composeValues } from './config/values.js';
 import { rolesDescriptor } from './config/handlers/roles.js';
 import { enrichConfigPlan } from './enrich-config-plan.js';
 import { serializeConfigPlan } from './serialize-config-plan.js';
@@ -901,5 +903,52 @@ describe('computeConfigPlan schema cleanup projection', () => {
 
 		expect(plan.schema).toEqual({ create: [], update: [], delete: [] });
 		expect(plan.permissions.delete.map((entry) => entry.collection)).toEqual(['legacy']);
+	});
+});
+
+describe('computeConfigPlan field manifest versions', () => {
+	const real = CONFIG_REGISTRY.settings;
+	const base = real.recordFields.find((field) => field.name === 'public_note')!;
+
+	const gated: ConfigFieldDescriptor = {
+		...base,
+		name: 'gated_note',
+		omissionPreservesCurrent: false,
+		formatVersion: 4,
+	};
+
+	const fields = [...real.recordFields, gated];
+	const order = [...real.valueFieldOrder, gated.name];
+
+	beforeEach(() => {
+		CONFIG_REGISTRY.settings = {
+			...real,
+			recordFields: fields,
+			valueFieldOrder: order,
+			canonicalizeValues: (record) => composeValues(fields, order, record as never) as never,
+		};
+	});
+
+	afterEach(() => {
+		CONFIG_REGISTRY.settings = real;
+	});
+
+	const current = makeConfig({
+		manifest: { version: 4, resources: ['settings'] },
+		settings: [{ project_name: 'Source', gated_note: 'kept' } as never],
+	});
+
+	function desiredAt(version: 3 | 4): CairnConfig {
+		return makeConfig({ manifest: { version, resources: ['settings'] }, settings: [{ project_name: 'Source' }] });
+	}
+
+	it('plans no change to a field newer than the desired version, although its omission would clear it', () => {
+		expect(computeConfigPlan(current, desiredAt(3)).settings.update).toEqual([]);
+	});
+
+	it('applies the field omission rule from the field version', () => {
+		expect(computeConfigPlan(current, desiredAt(4)).settings.update).toEqual([
+			{ changes: { gated_note: { before: 'kept', after: undefined } } },
+		]);
 	});
 });

@@ -18,24 +18,41 @@ import { buildDocumentSchema, type SchemaMode } from './config/field-schema.js';
 import { computeSchemaPlan } from './config/handlers/schema.js';
 import { isPlaceholder } from './config/placeholder.js';
 import { projectCollections } from './config/projected-collections.js';
-import { getDescriptor, kindsForVersion, listConfigKinds } from './config/registry.js';
-import { SUPPORTED_MANIFEST_VERSIONS, type ManifestVersion } from './config-contract.js';
+import {
+	descriptorAtVersion,
+	fieldsAboveVersion,
+	getDescriptor,
+	kindsForVersion,
+	listConfigKinds,
+} from './config/registry.js';
+import { LATEST_MANIFEST_VERSION, SUPPORTED_MANIFEST_VERSIONS, type ManifestVersion } from './config-contract.js';
 import { replaceControlCharacters, safeLogFragment } from './safe-log-fragment.js';
 
 /** Callers keep the input object, so coercing "false" would validate while the planner sees a truthy string. */
 const VALIDATE_OPTIONS = { convert: false, abortEarly: false } as const;
 
-export function buildRecordSchemas(mode: SchemaMode = 'authored'): Record<ConfigKind, Joi.ObjectSchema> {
+export function buildRecordSchemas(
+	mode: SchemaMode = 'authored',
+	version: ManifestVersion = LATEST_MANIFEST_VERSION
+): Record<ConfigKind, Joi.ObjectSchema> {
 	return Object.fromEntries(
-		listConfigKinds().map((kind) => [kind, buildDocumentSchema(getDescriptor(kind), mode)])
+		listConfigKinds().map((kind) => [
+			kind,
+			buildDocumentSchema(descriptorAtVersion(getDescriptor(kind), version), mode),
+		])
 	) as Record<ConfigKind, Joi.ObjectSchema>;
 }
 
-const RECORD_SCHEMA: Record<ConfigKind, Joi.ObjectSchema> = buildRecordSchemas('authored');
-const SNAPSHOT_RECORD_SCHEMA: Record<ConfigKind, Joi.ObjectSchema> = buildRecordSchemas('snapshot');
+const SCHEMA_MODES: readonly SchemaMode[] = ['authored', 'snapshot'];
 
-function recordSchemas(mode: SchemaMode): Record<ConfigKind, Joi.ObjectSchema> {
-	return mode === 'snapshot' ? SNAPSHOT_RECORD_SCHEMA : RECORD_SCHEMA;
+const RECORD_SCHEMAS = new Map<string, Record<ConfigKind, Joi.ObjectSchema>>(
+	SUPPORTED_MANIFEST_VERSIONS.flatMap((version) =>
+		SCHEMA_MODES.map((mode) => [`${mode}:${version}`, buildRecordSchemas(mode, version)] as const)
+	)
+);
+
+function recordSchemas(mode: SchemaMode, version: ManifestVersion): Record<ConfigKind, Joi.ObjectSchema> {
+	return RECORD_SCHEMAS.get(`${mode}:${version}`)!;
 }
 
 const MANIFEST = Joi.object({
@@ -91,17 +108,22 @@ export function validateConfigManifest(value: unknown, label: string): ConfigMan
 		);
 	}
 
-	if (manifest.schema !== undefined && (manifest.version !== 3 || !manifest.resources.includes('schema'))) {
+	if (manifest.schema !== undefined && !manifest.resources.includes('schema')) {
 		throw new ConfigInvalidException(
-			`Config manifest in ${where} declares schema provenance, which requires manifest version 3 managing the schema resource.`
+			`Config manifest in ${where} declares schema provenance, which requires manifest version 3 or later managing the schema resource.`
 		);
 	}
 
 	return manifest;
 }
 
-export function validateConfigRecord(kind: ConfigKind, record: unknown, mode: SchemaMode = 'authored'): string[] {
-	return messagesOf(recordSchemas(mode)[kind].validate(record, VALIDATE_OPTIONS).error);
+export function validateConfigRecord(
+	kind: ConfigKind,
+	record: unknown,
+	mode: SchemaMode = 'authored',
+	version: ManifestVersion = LATEST_MANIFEST_VERSION
+): string[] {
+	return messagesOf(recordSchemas(mode, version)[kind].validate(record, VALIDATE_OPTIONS).error);
 }
 
 export type DesiredConfigContext = {
@@ -163,7 +185,7 @@ function envelopeSchema(
 	version: ManifestVersion,
 	mode: SchemaMode
 ): Joi.ObjectSchema {
-	const schemas = recordSchemas(mode);
+	const schemas = recordSchemas(mode, version);
 
 	const kinds = Object.fromEntries(
 		kindsForVersion(version).map((kind) => [
@@ -173,6 +195,31 @@ function envelopeSchema(
 	);
 
 	return Joi.object({ manifest: Joi.any(), ...kinds });
+}
+
+function assertFieldsAdmitted(body: Record<string, unknown>, manifest: ConfigManifest, label: string): void {
+	const premature: string[] = [];
+
+	for (const kind of manifest.resources) {
+		const documents = body[kind];
+		if (!Array.isArray(documents)) continue;
+
+		const descriptor = getDescriptor(kind);
+
+		for (const field of fieldsAboveVersion(descriptor, manifest.version)) {
+			if (documents.some((document) => isPlainObject(document) && Object.hasOwn(document, field.name))) {
+				premature.push(`${kind} field ${field.name} (version ${field.formatVersion ?? descriptor.formatVersion})`);
+			}
+		}
+	}
+
+	if (premature.length > 0) {
+		throw new ConfigUnsupportedVersionException(
+			`Config document in ${safeLogFragment(label)} declares version ${manifest.version} but sets ${premature.join(
+				', '
+			)}, which require a newer manifest version.`
+		);
+	}
 }
 
 function referenceSource(context: DesiredConfigContext): ReferenceStateSource {
@@ -205,6 +252,8 @@ export function validateDesiredConfig(document: unknown, context: DesiredConfigC
 	const manifest = validateConfigManifest(body['manifest'], context.label);
 	const managed = new Set<ConfigKind>(manifest.resources);
 	const mode: SchemaMode = context.references === 'server-snapshot' ? 'snapshot' : 'authored';
+
+	assertFieldsAdmitted(body, manifest, context.label);
 
 	const fieldErrors = messagesOf(
 		envelopeSchema(managed, manifest.version, mode).validate(body, VALIDATE_OPTIONS).error

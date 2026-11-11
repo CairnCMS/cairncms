@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG_KINDS, type ConfigPermission, type ConfigRole } from '../../types/config.js';
-import { CONFIG_REGISTRY, forKind, getDescriptor, kindsForVersion, listConfigKinds } from './registry.js';
+import type { ConfigFieldDescriptor } from './descriptor.js';
+import {
+	CONFIG_REGISTRY,
+	descriptorAtVersion,
+	documentAtVersion,
+	fieldsAboveVersion,
+	forKind,
+	getDescriptor,
+	kindsForVersion,
+	listConfigKinds,
+} from './registry.js';
 
 describe('config registry', () => {
 	it('covers exactly CONFIG_KINDS', () => {
@@ -38,6 +48,55 @@ describe('kindsForVersion gate', () => {
 		expect(kindsForVersion(2)).not.toContain('schema');
 		expect(kindsForVersion(3)).toContain('schema');
 		expect(kindsForVersion(3).sort()).toEqual([...CONFIG_KINDS].sort());
+	});
+
+	it('admits the same kinds at version 4 as at version 3', () => {
+		expect(kindsForVersion(4)).toEqual(kindsForVersion(3));
+	});
+});
+
+describe('field manifest versions', () => {
+	const settings = getDescriptor('settings');
+	const gated: ConfigFieldDescriptor = { ...settings.recordFields[0]!, name: 'gated_field', formatVersion: 4 };
+
+	const versioned = {
+		...settings,
+		recordFields: [...settings.recordFields, gated],
+		valueFieldOrder: [...settings.valueFieldOrder, 'gated_field'],
+	};
+
+	it('places a field without its own version at its kind version', () => {
+		expect(fieldsAboveVersion(settings, 2)).toEqual([]);
+
+		expect(fieldsAboveVersion({ ...settings, formatVersion: 3 }, 2).map((field) => field.name)).toEqual(
+			settings.recordFields.map((field) => field.name)
+		);
+	});
+
+	it('excludes a field below its own version and admits it from that version', () => {
+		expect(fieldsAboveVersion(versioned, 3)).toEqual([gated]);
+		expect(fieldsAboveVersion(versioned, 4)).toEqual([]);
+	});
+
+	it('restricts the record fields and value order, leaving the source descriptor unchanged', () => {
+		const atThree = descriptorAtVersion(versioned, 3);
+
+		expect(atThree.recordFields.map((field) => field.name)).not.toContain('gated_field');
+		expect(atThree.valueFieldOrder).not.toContain('gated_field');
+		expect(atThree.valueFieldOrder).toEqual(settings.valueFieldOrder);
+		expect(versioned.recordFields).toContain(gated);
+		expect(descriptorAtVersion(versioned, 4)).toBe(versioned);
+		expect(descriptorAtVersion(settings, 2)).toBe(settings);
+	});
+
+	it('removes excluded fields from a copy of the document without mutating the original', () => {
+		const document = { project_name: 'Source', gated_field: 'kept' };
+		const atThree = documentAtVersion(versioned, document, 3);
+
+		expect(atThree).toEqual({ project_name: 'Source' });
+		expect(atThree).not.toBe(document);
+		expect(document).toEqual({ project_name: 'Source', gated_field: 'kept' });
+		expect(documentAtVersion(versioned, document, 4)).toBe(document);
 	});
 });
 

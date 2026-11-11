@@ -569,7 +569,7 @@ describeForVendors(
 					const tree = await captureTree(api, remote);
 					const manifest = loadYaml(await fs.readFile(path.join(tree, 'cairncms-config.yaml'), 'utf8')) as Document;
 
-					expect(manifest['version']).toBe(3);
+					expect(manifest['version']).toBe(4);
 					expect(manifest['resources']).toContain('schema');
 					expect(manifest['schema']).toEqual({ release: expect.any(String), vendor: 'postgres' });
 

@@ -13,7 +13,7 @@ import { PermissionsService } from '../services/permissions.js';
 import { RolesService } from '../services/roles.js';
 import { SettingsService } from '../services/settings.js';
 import { TranslationsService } from '../services/translations.js';
-import { CONFIG_FILENAME_STEM_MAX_LENGTH } from './config-contract.js';
+import { CONFIG_FILENAME_STEM_MAX_LENGTH, LATEST_MANIFEST_VERSION } from './config-contract.js';
 import { rolesDescriptor } from './config/handlers/roles.js';
 import { CONFIG_REGISTRY } from './config/registry.js';
 import { getConfigSnapshot, readCurrentConfig } from './get-config-snapshot.js';
@@ -124,7 +124,7 @@ describe('getConfigSnapshot', () => {
 		const config = await getConfigSnapshot({ database: db });
 
 		expect(config.manifest).toEqual({
-			version: 3,
+			version: LATEST_MANIFEST_VERSION,
 			resources: ['roles', 'permissions', 'folders', 'settings', 'extension-settings', 'translations', 'schema'],
 			schema: { release: version, vendor: 'sqlite' },
 		});
@@ -876,7 +876,7 @@ describe('readCurrentConfig', () => {
 
 		expect(v1.config.manifest.version).toBe(1);
 		expect(v2.config.manifest.version).toBe(2);
-		expect(fresh.config.manifest.version).toBe(3);
+		expect(fresh.config.manifest.version).toBe(LATEST_MANIFEST_VERSION);
 	});
 
 	it('computes the same state token digest regardless of manifest version', async () => {
@@ -1004,7 +1004,7 @@ describe('readCurrentConfig', () => {
 		expect(getSchema.getSchema).not.toHaveBeenCalled();
 
 		expect(config).toEqual({
-			manifest: { version: 3, resources: [] },
+			manifest: { version: LATEST_MANIFEST_VERSION, resources: [] },
 			roles: [],
 			permissions: [],
 			folders: [],

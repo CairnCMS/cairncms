@@ -14,7 +14,7 @@ import {
 	orderedRecords,
 } from './config/directory-layout.js';
 import { PLACEHOLDER_NAMESPACE, placeholderVarName } from './config/placeholder.js';
-import { getDescriptor } from './config/registry.js';
+import { descriptorAtVersion, getDescriptor } from './config/registry.js';
 import {
 	assertContained,
 	classifyConfigEntry,
@@ -30,7 +30,12 @@ const MANIFEST_FILENAME = 'cairncms-config.yaml';
 
 const YAML_SUFFIX = '.yaml';
 
-type PendingDocument = { label: string; target: string; document: unknown; kind?: ConfigKind };
+type PendingDocument = {
+	label: string;
+	target: string;
+	document: unknown;
+	descriptor?: ConfigResourceDescriptor<ConfigKindTypes>;
+};
 
 function dumpYaml(data: unknown): string {
 	return toYaml(data, { indent: 2, sortKeys: true, lineWidth: -1, noRefs: true });
@@ -61,7 +66,11 @@ function buildDocuments(config: CairnConfig, root: string): { pending: PendingDo
 	for (const kind of CONFIG_KINDS) {
 		if (!managed.has(kind)) continue;
 
-		const descriptor = getDescriptor(kind) as ConfigResourceDescriptor<ConfigKindTypes>;
+		const descriptor = descriptorAtVersion(
+			getDescriptor(kind) as ConfigResourceDescriptor<ConfigKindTypes>,
+			config.manifest.version
+		);
+
 		const documents = orderedNormalizedDocuments(descriptor, config[kind]);
 		const shape = descriptor.layout.documentShape;
 
@@ -106,7 +115,7 @@ function buildDocuments(config: CairnConfig, root: string): { pending: PendingDo
 
 			keep.add(label);
 			subjects.set(label, subject.value);
-			pending.push({ label, target, document, kind });
+			pending.push({ label, target, document, descriptor });
 		}
 	}
 
@@ -160,9 +169,8 @@ async function readExistingDeclaration(
 }
 
 async function restoreDeclaredPlaceholders(root: string, pending: PendingDocument): Promise<void> {
-	if (pending.kind === undefined) return;
-
-	const descriptor = getDescriptor(pending.kind) as ConfigResourceDescriptor<ConfigKindTypes>;
+	const { descriptor } = pending;
+	if (descriptor === undefined) return;
 
 	const placeholderFields = [...descriptor.documentIdentityFields, ...descriptor.recordFields].filter(
 		(field) => field.acceptsPlaceholder

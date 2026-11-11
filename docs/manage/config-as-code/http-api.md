@@ -15,7 +15,7 @@ GET /config/snapshot?export=yaml
 GET /config/snapshot?manifest_version=3&resources=folders,schema
 ```
 
-The default is manifest version 3 and all kinds supported by that version. `resources` is a comma-separated list. `resources=` selects none. Unsupported versions/kinds, malformed resource lists and repeated scope parameters are refused.
+Without `manifest_version`, the snapshot uses the server's latest [manifest version](/docs/manage/config-as-code/resources/#the-manifest) and all kinds supported by that version. To capture for an older target, request a version that target supports. `resources` is a comma-separated list.
 
 JSON returns the document under `data`. `export=yaml` returns a YAML attachment. Send the document itself to apply, not the snapshot's outer `{ data: ... }` envelope.
 

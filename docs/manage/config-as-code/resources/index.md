@@ -24,13 +24,20 @@ schema:
 
 Use the release and vendor recorded by your source, not these illustrative values. The `schema` header records where the schema was captured. It is allowed only when schema is managed. Apply checks it against the target. See [Schema](/docs/manage/config-as-code/resources/schema/).
 
-| Manifest version | Available kinds |
-| --- | --- |
-| 1 | `roles`, `permissions` |
-| 2 | Version 1 kinds plus `folders`, `settings`, `extension-settings`, `translations` |
-| 3 | Version 2 kinds plus `schema` |
+| Manifest version | Contents | Minimum release |
+| --- | --- | --- |
+| 1 | `roles`, `permissions` | 1.0.0 |
+| 2 | Version 1 kinds plus `folders`, `settings`, `extension-settings`, `translations` | 1.6.0 |
+| 3 | Version 2 kinds plus `schema` | 1.7.0 |
+| 4 | Version 3 kinds | 1.8.0 |
 
-A new directory defaults to version 3 and all seven kinds. Re-snapshotting an existing directory preserves its version and resource list. Pre-create a manifest to select a narrower scope. `resources: []` is an explicitly empty scope.
+A new directory uses the latest manifest version and all seven kinds. Re-snapshotting an existing directory preserves its version and resource list. Pre-create a manifest to select a narrower scope or an earlier version. `resources: []` is an explicitly empty scope.
+
+A release refuses a manifest version newer than it supports. To use a tree with an older target, pre-create its manifest with a version that target supports.
+
+A request that names no version gets the latest manifest version. Optional fields whose omission preserves the target's value can be added without changing the manifest version. New resource kinds, incompatible structural changes, and fields that cannot preserve omission behavior require a new version. A version that changes existing structure becomes the default only after a compatibility notice.
+
+Capture with a CLI at least as new as the source server. An older CLI refuses a snapshot that contains a field it doesn't know. An older target refuses a tree that sets a field it doesn't support, so upgrade the target before applying a tree captured on a newer release.
 
 Manifest versions are separate from the [JSON plan version](/docs/manage/config-as-code/output/) and [standalone schema snapshot version](/docs/manage/schema-as-code/).
 
