@@ -1,4 +1,3 @@
----
 avatar: Nuotrauka
 edit_field: Redaguoti lauką
 location: Vietovė
@@ -48,13 +47,6 @@ logoutReason:
   SESSION_EXPIRED: Sesijos laikas baigėsi
 public_description: Nustato kokie API duomenys yra prieinami neprisijungus.
 not_allowed: Neleidžiama
-directus_version: CairnCMS versija
-node_version: Serverio versija
-node_uptime: Serverio veikimo laikas
-os_type: OS tipas
-os_version: OS versija
-os_uptime: OS veikimo laikas
-os_totalmem: OS atmintis
 archive: Archyvuoti
 archive_confirm: Ar tikrai norite archyvuoti šį elementą?
 archive_confirm_count: >-
@@ -308,7 +300,6 @@ save_as_copy: Išsaugoti kaip kopiją
 add_existing: Pridėti esamą
 comments: Komentarai
 no_comments: Dar nėra komentarų
-click_to_expand: Išskleiskite
 select_item: Pasirinkti elementą
 no_items: Nėra elementų
 search_items: Ieškoti elementų...
