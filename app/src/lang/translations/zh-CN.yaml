@@ -75,6 +75,10 @@ create_role: 创建角色
 create_user: 创建用户
 message: 消息
 delete_panel: 删除面板
+create_custom_translation: 建立自定义翻译
+edit_custom_translation: 编辑自定义翻译
+no_custom_translations: 没有自定义翻译
+no_custom_translations_copy: 尚无自定义翻译。
 invite_users: 邀请用户
 invite: 邀请
 email_already_invited: 电子邮件 "{email}" 已被邀请
@@ -111,6 +115,7 @@ archive_confirm_count: >-
   没有选定条目 | 你确定要存档这个条目吗？| 你确定你想要存档这些 {count} 个条目吗？
 reset_system_permissions_to: '重置系统权限：'
 reset_system_permissions_copy: 此操作将覆盖您可能应用到系统模型中的自定义权限。确定吗？
+the_following_are_minimum_permissions: 当启用“应用访问”时，以下最低权限将自动应用。 您可以在需要时授予额外的权限，但是您不能将权限降低到这个级别以下。
 app_access_minimum: 最小权限
 recommended_defaults: 推荐设置
 unarchive: 取消存档
@@ -161,6 +166,7 @@ permissions_for_role: '{role} 角色能够 {action}。'
 fields_for_role: '{role} 角色能够 {action} 字段。'
 validation_for_role: '{role} 角色必须遵守字段的 {action} 规则。'
 presets_for_role: '{role} 角色的默认值。'
+presets_field_warning: '字段“{field}”的关系预设应使用“详细”语法配置。'
 presentation_and_aliases: 别名
 revision_post_create: 这是新建条目后看起来的样子。
 revision_post_update: 这是更新后该条目的外观。
@@ -427,6 +433,7 @@ checksum: 校验和
 owner: 所有者
 edited_by: 编辑者
 folder: 文件夹
+folders: 文件夹
 zoom: 缩放
 download: 下载
 open: 打开
@@ -473,6 +480,8 @@ enable_select_button: 启用选择按钮
 allow_duplicates: 允许重复项
 comments: 注释
 no_comments: 暂无注释
+expand: 展开
+collapse: 收起
 select_item: 选择条目
 no_items: 无条目
 search_items: 搜索条目...
@@ -596,6 +605,7 @@ errors:
   RANGE_NOT_SATISFIABLE: 无效的范围
   METHOD_NOT_ALLOWED: 不被允许的方法
   REQUESTS_EXCEEDED: 已达到请求数量限制
+  CONTENT_TOO_LARGE: 提交的项目/文件太大了
 security: 安全
 value_hashed: 哈希值
 bookmark_name: 书签名称
@@ -933,6 +943,7 @@ settings_permissions: 角色与权限
 settings_project: 项目设置
 settings_flows: 流程
 settings_presets: 预设&书签
+settings_translations: 自定义翻译
 one_or_more_options_are_missing: 缺少一个或多个选项
 scope: 范围
 actions: 操作
@@ -980,6 +991,8 @@ page_help_settings_presets_item: >-
   **预设详细信息** - 管理书签和默认模型预设的表单。
 page_help_settings_flows_collection: '**Browse Webhooks** - 列出项目内的所有流。'
 page_help_settings_flows_item: '**流程详情** - 管理一个或多个操作面板的工作空间。'
+page_help_settings_translations_collection: '**浏览自定义翻译** - 列出项目中的所有自定义翻译。'
+page_help_settings_translations_item: '**自定义翻译详细信息** - 用于查看和管理此项目的表单。'
 page_help_users_collection: '**用户目录** - 列出此项目中的所有系统用户。'
 page_help_users_item: >-
   **用户详细信息** - 管理您的帐户信息，或查看其他用户的详细信息。
@@ -1022,6 +1035,7 @@ directus_collection:
   directus_settings: 项目配置
   directus_shares: 跟踪外部共享条目
   directus_users: 平台系统用户
+  directus_translations: 自定义翻译
 fields:
   directus_activity:
     item: 条目主键
@@ -1110,6 +1124,7 @@ fields:
     png: PNG
     webP: WebP
     tiff: Tiff
+    avif: AVIF
     mapping: 映射
     basemaps: 底图
     basemaps_raster: 栅格化
@@ -1578,6 +1593,7 @@ interfaces:
     notice: 提示
     description: 显示一个快捷提示
     text: 在此输入通知内容...
+    no_text: 没有配置文本...
   list-o2m:
     one-to-many: 一对多
     description: 选择多个相关项目
@@ -1639,6 +1655,7 @@ interfaces:
     input-translated-string: 已翻译的字符串
     description: 选择或添加翻译字符串
     search_placeholder: 搜索...
+    new_custom_translation: 新建自定义翻译
   boolean:
     toggle: 切换
     description: 开启或关闭
@@ -2082,3 +2099,4 @@ operations:
     parallel: 并行
     batch: 批处理
     batch_size: 批量大小
+    cache: 缓存
