@@ -19,6 +19,8 @@ import { Upload } from '@aws-sdk/lib-storage';
 import type { Driver, Range } from '@cairncms/storage';
 import { normalizePath } from '@cairncms/utils';
 import { isReadableStream } from '@cairncms/utils/node';
+import { Agent as HttpAgent } from 'node:http';
+import { Agent as HttpsAgent } from 'node:https';
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 
@@ -46,7 +48,19 @@ export class DriverS3 implements Driver {
 	}
 
 	private getClient() {
-		const s3ClientConfig: S3ClientConfig = {};
+		const connectionTimeout = 5000;
+		const socketTimeout = 120000;
+		const maxSockets = 500;
+		const keepAlive = true;
+
+		const s3ClientConfig: S3ClientConfig = {
+			requestHandler: {
+				connectionTimeout,
+				socketTimeout,
+				httpAgent: new HttpAgent({ maxSockets, keepAlive }),
+				httpsAgent: new HttpsAgent({ maxSockets, keepAlive }),
+			},
+		};
 
 		if ((this.config.key && !this.config.secret) || (this.config.secret && !this.config.key)) {
 			throw new Error('Both `key` and `secret` are required when defined');
@@ -86,13 +100,6 @@ export class DriverS3 implements Driver {
 	}
 
 	async read(filepath: string, range?: Range): Promise<Readable> {
-		/*
-		 * AWS' client default socket reusing and keepalive can cause performance issues when using it
-		 * very often in rapid succession. For reads, where it's more likely to hit this limitation,
-		 * we'll use a new non-shared S3 client to get around this.
-		 */
-		const client = this.getClient();
-
 		const commandInput: GetObjectCommandInput = {
 			Key: this.fullPath(filepath),
 			Bucket: this.config.bucket,
@@ -102,13 +109,11 @@ export class DriverS3 implements Driver {
 			commandInput.Range = `bytes=${range.start ?? ''}-${range.end ?? ''}`;
 		}
 
-		const { Body: stream } = await client.send(new GetObjectCommand(commandInput));
+		const { Body: stream } = await this.client.send(new GetObjectCommand(commandInput));
 
 		if (!stream || !isReadableStream(stream)) {
 			throw new Error(`No stream returned for file "${filepath}"`);
 		}
-
-		stream.on('finished', () => client.destroy());
 
 		return stream as Readable;
 	}

@@ -315,6 +315,62 @@ describe('AssetsService.getAsset (regression — must still open a storage read)
 		const readPaths = storageRead.mock.calls.map((call) => call[0]);
 		expect(readPaths.some((name) => name.startsWith('11111111-2222-4333-8444-555555555555__'))).toBe(true);
 	});
+
+	it('fetches the source metadata before opening its stream', async () => {
+		primeKnex(tracker);
+		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+		await service.getAsset(VALID_UUID, { transformationParams: {} });
+
+		expect(storageStat).toHaveBeenCalledWith(FILE_DISK_NAME);
+		expect(storageStat.mock.invocationCallOrder[0]!).toBeLessThan(storageRead.mock.invocationCallOrder[0]!);
+	});
+
+	it('fetches the cached variant metadata before opening its stream', async () => {
+		primeKnex(tracker);
+		storageExists.mockImplementation(async () => true);
+		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+		await service.getAsset(VALID_UUID, { transformationParams: { width: 100 } });
+
+		const variant = storageRead.mock.calls[0]![0];
+		expect(variant.startsWith('11111111-2222-4333-8444-555555555555__')).toBe(true);
+		expect(storageStat).toHaveBeenCalledWith(variant);
+		expect(storageStat.mock.invocationCallOrder[0]!).toBeLessThan(storageRead.mock.invocationCallOrder[0]!);
+	});
+
+	it('opens no stream when the metadata lookup fails', async () => {
+		primeKnex(tracker);
+		const statError = new Error('metadata unavailable');
+		storageStat.mockRejectedValueOnce(statError);
+		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+		await expect(service.getAsset(VALID_UUID, { transformationParams: {} })).rejects.toBe(statError);
+
+		expect(storageRead).not.toHaveBeenCalled();
+	});
+
+	it('rejects with the read error when the object disappears after its metadata lookup', async () => {
+		primeKnex(tracker);
+		const readError = new Error('object not found');
+		storageRead.mockRejectedValueOnce(readError);
+		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+		await expect(service.getAsset(VALID_UUID, { transformationParams: {} })).rejects.toBe(readError);
+
+		expect(storageStat).toHaveBeenCalledTimes(1);
+	});
+
+	it('returns the metadata observed before the stream was opened', async () => {
+		primeKnex(tracker);
+		const observed = { size: 2048, modified: new Date('2026-11-10T00:00:00.000Z') };
+		storageStat.mockResolvedValueOnce(observed);
+		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+		const result = await service.getAsset(VALID_UUID, { transformationParams: {} });
+
+		expect(result.stat).toBe(observed);
+	});
 });
 
 describe('AssetsService.getAsset uncached-transform pipeline (GHSA-j8xj-7jff-46mx)', () => {
@@ -413,6 +469,18 @@ describe('AssetsService.getAsset uncached-transform pipeline (GHSA-j8xj-7jff-46m
 		expect(sharpInstance.toBuffer).toHaveBeenCalledTimes(1);
 		expect(storageWrite).toHaveBeenCalledTimes(1);
 		expect(await buffer(storageWrite.mock.calls[0]![1])).toEqual(Buffer.from('transformed'));
+	});
+
+	it('fetches the generated variant metadata before opening its stream', async () => {
+		const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
+
+		await requestTransform(service);
+
+		const variant = storageWrite.mock.calls[0]![0];
+		const variantRead = storageRead.mock.calls.findIndex((call) => call[0] === variant);
+		expect(variantRead).toBeGreaterThan(0);
+		expect(storageStat).toHaveBeenCalledWith(variant);
+		expect(storageStat.mock.invocationCallOrder[0]!).toBeLessThan(storageRead.mock.invocationCallOrder[variantRead]!);
 	});
 
 	it('logs a source stream error, rejects with it, and writes nothing', async () => {

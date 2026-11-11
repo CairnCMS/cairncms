@@ -13,17 +13,19 @@ import { isReadableStream } from '@cairncms/utils/node';
 import {
 	randAlphaNumeric,
 	randBoolean,
+	randGitBranch as randBucket,
 	randDirectoryPath,
 	randDomainName,
 	randFilePath,
 	randFileType,
-	randGitBranch as randBucket,
-	randGitShortSha as randUnique,
 	randNumber,
 	randPastDate,
 	randText,
+	randGitShortSha as randUnique,
 	randWord,
 } from '@ngneat/falso';
+import { Agent as HttpAgent } from 'node:http';
+import { Agent as HttpsAgent } from 'node:https';
 import { join } from 'node:path';
 import { PassThrough, Readable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -163,6 +165,13 @@ describe('#constructor', () => {
 describe('#getClient', () => {
 	// The constructor calls getClient(), so we don't have to call it separately
 
+	const expectedRequestHandler = {
+		connectionTimeout: 5000,
+		socketTimeout: 120000,
+		httpAgent: expect.any(HttpAgent),
+		httpsAgent: expect.any(HttpsAgent),
+	};
+
 	test('Throws error if key defined but secret missing', () => {
 		try {
 			new DriverS3({ key: 'key', bucket: 'bucket' });
@@ -184,7 +193,7 @@ describe('#getClient', () => {
 	test('Creates S3Client without key / secret (based on machine config)', () => {
 		const driver = new DriverS3({ bucket: 'bucket' });
 
-		expect(S3Client).toHaveBeenCalledWith({});
+		expect(S3Client).toHaveBeenCalledWith({ requestHandler: expectedRequestHandler });
 
 		expect(driver['client']).toBeInstanceOf(S3Client);
 	});
@@ -195,6 +204,7 @@ describe('#getClient', () => {
 				accessKeyId: sample.config.key,
 				secretAccessKey: sample.config.secret,
 			},
+			requestHandler: expectedRequestHandler,
 		});
 
 		expect(driver['client']).toBeInstanceOf(S3Client);
@@ -221,6 +231,7 @@ describe('#getClient', () => {
 				accessKeyId: sample.config.key,
 				secretAccessKey: sample.config.secret,
 			},
+			requestHandler: expectedRequestHandler,
 		});
 	});
 
@@ -245,6 +256,7 @@ describe('#getClient', () => {
 				accessKeyId: sample.config.key,
 				secretAccessKey: sample.config.secret,
 			},
+			requestHandler: expectedRequestHandler,
 		});
 	});
 
@@ -262,6 +274,7 @@ describe('#getClient', () => {
 				accessKeyId: sample.config.key,
 				secretAccessKey: sample.config.secret,
 			},
+			requestHandler: expectedRequestHandler,
 		});
 	});
 
@@ -279,7 +292,18 @@ describe('#getClient', () => {
 				accessKeyId: sample.config.key,
 				secretAccessKey: sample.config.secret,
 			},
+			requestHandler: expectedRequestHandler,
 		});
+	});
+
+	test('Pools connections through keep-alive agents capped at 500 sockets', () => {
+		const [config] = vi.mocked(S3Client).mock.calls[0]!;
+		const { httpAgent, httpsAgent } = config!.requestHandler as { httpAgent: HttpAgent; httpsAgent: HttpsAgent };
+
+		for (const agent of [httpAgent, httpsAgent]) {
+			expect(agent.maxSockets).toBe(500);
+			expect(agent.keepAlive).toBe(true);
+		}
 	});
 });
 
@@ -309,6 +333,13 @@ describe('#read', () => {
 		driver['getClient'] = vi.fn().mockReturnValue(driver['client']);
 		vi.mocked(driver['client'].send).mockReturnValue({ Body: new Readable() } as unknown as void);
 		vi.mocked(isReadableStream).mockReturnValue(true);
+	});
+
+	test('Sends through the shared client without creating another', async () => {
+		await driver.read(sample.path.input);
+
+		expect(driver['getClient']).not.toHaveBeenCalled();
+		expect(driver['client'].send).toHaveBeenCalledOnce();
 	});
 
 	test('Uses fullPath key / bucket in command input', async () => {

@@ -203,6 +203,8 @@ STORAGE_S3_REGION="us-east-1"
 STORAGE_S3_ENDPOINT="https://s3.amazonaws.com"
 ```
 
+S3 connections are reused, with a 5-second connection timeout and a 120-second inactivity timeout.
+
 For Google Cloud Storage:
 
 ```bash
