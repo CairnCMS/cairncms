@@ -27,16 +27,15 @@
 		"access": "public"
 	},
 	"dependencies": {
-		"@aws-sdk/abort-controller": "3.310.0",
-		"@aws-sdk/client-s3": "3.317.0",
-		"@aws-sdk/lib-storage": "3.317.0",
+		"@aws-sdk/client-s3": "3.1164.0",
+		"@aws-sdk/lib-storage": "3.1164.0",
 		"@cairncms/storage": "workspace:*",
 		"@cairncms/utils": "workspace:*"
 	},
 	"devDependencies": {
 		"@ngneat/falso": "6.4.0",
-		"@vitest/coverage-v8": "4.1.11",
+		"@vitest/coverage-v8": "4.1.12",
 		"typescript": "5.0.4",
-		"vitest": "4.1.11"
+		"vitest": "4.1.12"
 	}
 }

@@ -111,8 +111,11 @@ This captures schema and folders only. Choose the [managed resources](/docs/mana
 
 `configSnapshot({ manifestVersion?, resources? })` returns the document directly.
 
-- `manifestVersion` selects format `1`, `2` or `3`. The default is `3`. TypeScript returns the corresponding `ConfigDocumentV1`, `ConfigDocumentV2` or `ConfigDocumentV3` when the version is known, or their `ConfigDocument` union for a runtime-selected version.
+- `manifestVersion` selects the [manifest version](/docs/manage/config-as-code/resources/#the-manifest). Omit it to get the server's latest version, typed as `ConfigDocumentLatest`. That type covers version 3 and later. It passes through arrays for resource kinds added after your SDK release, without typing them.
+- A literal `1`, `2` or `3` returns `ConfigDocumentV1`, `ConfigDocumentV2` or `ConfigDocumentV3`. Any other version, or one selected at runtime, returns a union that includes older formats. Check for an array, such as `'schema' in document`, before using one an older version lacks.
 - `resources` selects the kinds to manage. Omit it to capture all kinds supported by that manifest version. An empty array, `resources: []`, manages none.
+
+SDK 1.7.0 types an unversioned snapshot as `ConfigDocumentV3`, even when the server's latest version is newer. Upgrade the SDK to type it as `ConfigDocumentLatest`.
 
 ### Apply the reviewed document
 

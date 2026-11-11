@@ -22,6 +22,7 @@ const testPrefix = 'temp-scaffold-confined';
 const sdkRoot = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const serverApiRoot = dirname(require.resolve('@cairncms/extensions-server-api/package.json'));
+const tscPath = require.resolve('typescript/bin/tsc');
 
 /**
  * In this monorepo the author package resolves through a workspace-member
@@ -49,6 +50,17 @@ async function stageRegistryStyleDependency(dir: string): Promise<void> {
 	const link = resolve(dir, 'node_modules', '@cairncms', 'extensions-server-api');
 	await fse.remove(link);
 	await fse.ensureSymlink(store, link, 'dir');
+}
+
+async function stageTypeScriptDependencies(dir: string): Promise<void> {
+	await stageRegistryStyleDependency(dir);
+
+	// The workspace skips self-linking the SDK into a package nested inside it.
+	await fse.ensureSymlink(sdkRoot, resolve(dir, 'node_modules', '@cairncms', 'extensions-sdk'), 'dir');
+
+	// Concurrent scaffold installs rewrite the workspace's executable launchers.
+	// Own this launcher so the generated typecheck script can always find the pinned compiler.
+	await fse.ensureSymlink(tscPath, resolve(dir, 'node_modules', '.bin', 'tsc'), 'file');
 }
 
 afterAll(async () => {
@@ -88,11 +100,7 @@ test.each(['javascript', 'typescript'])(
 		}
 
 		if (language === 'typescript') {
-			await stageRegistryStyleDependency(dir);
-
-			// The workspace skips self-linking the SDK into a package nested inside
-			// it, so the SDK types are staged the way typescript-types.test.ts does.
-			await fse.ensureSymlink(sdkRoot, resolve(dir, 'node_modules', '@cairncms', 'extensions-sdk'), 'dir');
+			await stageTypeScriptDependencies(dir);
 		}
 
 		await execa('node', ['../cli.js', 'build'], { cwd: dir });
@@ -132,11 +140,7 @@ test.each(['javascript', 'typescript'])(
 		expect(source).not.toContain('__extension_name__');
 
 		if (language === 'typescript') {
-			await stageRegistryStyleDependency(dir);
-
-			// The workspace skips self-linking the SDK into a package nested inside
-			// it, so the SDK types are staged the way typescript-types.test.ts does.
-			await fse.ensureSymlink(sdkRoot, resolve(dir, 'node_modules', '@cairncms', 'extensions-sdk'), 'dir');
+			await stageTypeScriptDependencies(dir);
 		}
 
 		await execa('node', ['../cli.js', 'build'], { cwd: dir });
@@ -176,11 +180,7 @@ test.each(['javascript', 'typescript'])(
 		expect(source).not.toContain('__extension_name__');
 
 		if (language === 'typescript') {
-			await stageRegistryStyleDependency(dir);
-
-			// The workspace skips self-linking the SDK into a package nested inside
-			// it, so the SDK types are staged the way typescript-types.test.ts does.
-			await fse.ensureSymlink(sdkRoot, resolve(dir, 'node_modules', '@cairncms', 'extensions-sdk'), 'dir');
+			await stageTypeScriptDependencies(dir);
 		}
 
 		await execa('node', ['../cli.js', 'build'], { cwd: dir });

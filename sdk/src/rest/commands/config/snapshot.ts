@@ -33,8 +33,21 @@ export type ConfigDocumentV3 = {
 	schema: Record<string, any>[];
 };
 
-/** A config-as-code document. It has one array for every resource kind its manifest version supports. */
+/** A version 1, 2 or 3 config-as-code document. It has one array for every resource kind its manifest version supports. */
 export type ConfigDocument = ConfigDocumentV1 | ConfigDocumentV2 | ConfigDocumentV3;
+
+/** A config-as-code document at manifest version 3 or later. Arrays for resource kinds this SDK release doesn't know are kept as untyped properties. */
+export type ConfigDocumentLatest = {
+	manifest: { version: number; resources: string[]; schema?: { release: string; vendor: string } };
+	roles: Record<string, any>[];
+	permissions: Record<string, any>[];
+	folders: Record<string, any>[];
+	settings: Record<string, any>[];
+	'extension-settings': Record<string, any>[];
+	translations: Record<string, any>[];
+	schema: Record<string, any>[];
+	[kind: string]: unknown;
+};
 
 export type ConfigSnapshotOptions = {
 	manifestVersion?: 1 | 2 | 3;
@@ -62,23 +75,48 @@ export function configSnapshot<Schema>(options: {
 }): RestCommand<ConfigDocumentV2, Schema>;
 
 /**
- * Retrieve the current configuration as a version 3 config document, the server default. This endpoint is only available to admin users.
+ * Retrieve the current configuration as a version 3 config document. This endpoint is only available to admin users.
  * @param options The resources to manage, all version 3 kinds by default. An empty list manages none.
  * @returns Returns the version 3 config document.
  */
-export function configSnapshot<Schema>(options?: {
-	manifestVersion?: 3;
+export function configSnapshot<Schema>(options: {
+	manifestVersion: 3;
 	resources?: ConfigKindV3[];
 }): RestCommand<ConfigDocumentV3, Schema>;
 
 /**
- * Retrieve the current configuration as a config document. This endpoint is only available to admin users.
- * @param options The manifest version, 3 by default, and the resources to manage, all of that version's kinds by default.
+ * Retrieve the current configuration as a version 1, 2 or 3 config document. This endpoint is only available to admin users.
+ * @param options The manifest version and the resources to manage, all of that version's kinds by default.
  * @returns Returns the config document for the requested manifest version.
  */
-export function configSnapshot<Schema>(options?: ConfigSnapshotOptions): RestCommand<ConfigDocument, Schema>;
+export function configSnapshot<Schema>(options: {
+	manifestVersion: 1 | 2 | 3;
+	resources?: ConfigKindV3[];
+}): RestCommand<ConfigDocument, Schema>;
 
-export function configSnapshot<Schema>(options: ConfigSnapshotOptions = {}): RestCommand<ConfigDocument, Schema> {
+/**
+ * Retrieve the current configuration at the server's latest manifest version. This endpoint is only available to admin users.
+ * @param options The resources to manage, all of the latest version's kinds by default. An empty list manages none.
+ * @returns Returns the config document at the server's latest manifest version.
+ */
+export function configSnapshot<Schema>(options?: {
+	manifestVersion?: undefined;
+	resources?: string[];
+}): RestCommand<ConfigDocumentLatest, Schema>;
+
+/**
+ * Retrieve the current configuration as a config document. This endpoint is only available to admin users.
+ * @param options The manifest version, the server's latest by default, and the resources to manage, all of that version's kinds by default.
+ * @returns Returns the config document for the requested manifest version.
+ */
+export function configSnapshot<Schema>(options?: {
+	manifestVersion?: number;
+	resources?: string[];
+}): RestCommand<ConfigDocument | ConfigDocumentLatest, Schema>;
+
+export function configSnapshot<Schema>(
+	options: { manifestVersion?: number | undefined; resources?: string[] } = {}
+): RestCommand<ConfigDocument | ConfigDocumentLatest, Schema> {
 	return () => {
 		const params: Record<string, string> = {};
 

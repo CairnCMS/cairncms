@@ -1,6 +1,7 @@
 import { EXTENSION_LANGUAGES, EXTENSION_PKG_KEY, JAVASCRIPT_FILE_EXTS } from '@cairncms/constants';
 import { execa } from 'execa';
 import fse from 'fs-extra';
+import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, expect, test } from 'vitest';
@@ -503,3 +504,114 @@ test('builds a bundle with an item-view entry into a loadable app bundle under t
 	expect(mod['item-views']).toHaveLength(1);
 	expect(mod['item-views'][0].id).toBe('iv');
 }, 30_000);
+
+const minifiedEndpointSource = [
+	`class SlugRegistry {`,
+	`	#seen = new Map();`,
+	``,
+	`	claim(base) {`,
+	`		const count = this.#seen.get(base) ?? 0;`,
+	`		this.#seen.set(base, count + 1);`,
+	'		return count === 0 ? base : `${base}-${count + 1}`;',
+	`	}`,
+	`}`,
+	``,
+	`function* pairs(list) {`,
+	`	for (let index = 0; index < list.length; index += 2) {`,
+	`		yield list.slice(index, index + 2);`,
+	`	}`,
+	`}`,
+	``,
+	`async function collectSlugs(titles) {`,
+	`	const registry = new SlugRegistry();`,
+	`	const distinctiveLocalSlugAccumulator = [];`,
+	``,
+	`	for await (const title of titles) {`,
+	`		distinctiveLocalSlugAccumulator.push(registry.claim(title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')));`,
+	`	}`,
+	``,
+	`	return distinctiveLocalSlugAccumulator;`,
+	`}`,
+	``,
+	`export default (router) => {`,
+	`	router.get('/', async (_req, res) => {`,
+	`		const slugs = await collectSlugs(['Hello World', 'hello world', ' Second Post ']);`,
+	`		res.json({ slugs, pairs: [...pairs(slugs)].map((pair) => pair.length) });`,
+	`	});`,
+	`};`,
+	``,
+].join('\n');
+
+type EndpointRegistration = (router: Record<string, unknown>) => void;
+
+type MinifiedFormatCase = {
+	label: string;
+	setupManifest?: (manifest: Record<string, any>) => void;
+	load: (builtFile: string) => Promise<EndpointRegistration>;
+};
+
+test.each<MinifiedFormatCase>([
+	{
+		label: 'ESM',
+		load: async (builtFile) => (await import(pathToFileURL(builtFile).href)).default,
+	},
+	{
+		label: 'CommonJS',
+		setupManifest: (manifest) => {
+			delete manifest['type'];
+		},
+		load: async (builtFile) => createRequire(import.meta.url)(builtFile),
+	},
+])(
+	'default minified $label endpoint build registers its route and returns the computed response',
+	async ({ setupManifest, load }) => {
+		const ext = uniquePath('ext-minified');
+		await create('endpoint', ext, { language: 'javascript' });
+
+		if (setupManifest) {
+			const manifestPath = resolve(ext, 'package.json');
+			const manifest = await fse.readJson(manifestPath);
+			setupManifest(manifest);
+			await fse.writeJson(manifestPath, manifest, { spaces: '\t' });
+		}
+
+		await fse.outputFile(resolve(ext, 'src', 'index.js'), minifiedEndpointSource);
+
+		await execa('node', ['../cli.js', 'build'], { cwd: ext });
+
+		const builtFile = resolve(ext, 'dist', 'index.js');
+		expect(await fse.readFile(builtFile, 'utf-8')).not.toContain('distinctiveLocalSlugAccumulator');
+
+		const register = await load(builtFile);
+		expect(typeof register).toBe('function');
+
+		const routes: { method: string; path: string; handler: (req: unknown, res: unknown) => unknown }[] = [];
+
+		const router = Object.fromEntries(
+			['get', 'post', 'put', 'patch', 'delete'].map((method) => [
+				method,
+				(path: string, handler: (req: unknown, res: unknown) => unknown) => {
+					routes.push({ method, path, handler });
+				},
+			])
+		);
+
+		register(router);
+
+		expect(routes.map(({ method, path }) => `${method} ${path}`)).toEqual(['get /']);
+
+		let body: unknown;
+
+		await routes[0]!.handler(
+			{},
+			{
+				json: (value: unknown) => {
+					body = value;
+				},
+			}
+		);
+
+		expect(body).toEqual({ slugs: ['hello-world', 'hello-world-2', 'second-post'], pairs: [2, 1] });
+	},
+	30_000
+);

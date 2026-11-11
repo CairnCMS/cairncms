@@ -22,7 +22,7 @@ import { makeDependencyAccessor } from './config/dependency-context.js';
 import type { ConfigReadMode, ExtensionDeclarationSnapshot } from './config/descriptor.js';
 import type { FoldersKindTypes } from './config/handlers/folders.js';
 import type { RolesKindTypes } from './config/handlers/roles.js';
-import { getDescriptor, kindsForVersion } from './config/registry.js';
+import { documentAtVersion, getDescriptor, kindsForVersion } from './config/registry.js';
 import { resolveReadClosure } from './config/scope.js';
 import { getSchema } from './get-schema.js';
 import { version } from './package.js';
@@ -64,8 +64,8 @@ function readSubjectOf<Identity>(
 }
 
 /** A composed document that cannot be represented in the config format is a current-state failure, not caller input. */
-function assertEmittedDocument(kind: ConfigKind, subject: string, document: unknown): void {
-	const problems = validateConfigRecord(kind, document, 'snapshot');
+function assertEmittedDocument(kind: ConfigKind, subject: string, document: unknown, version: ManifestVersion): void {
+	const problems = validateConfigRecord(kind, document, 'snapshot', version);
 
 	if (problems.length > 0) {
 		throw new ConfigReadFailedException(
@@ -147,12 +147,14 @@ export async function readCurrentConfig(options: CurrentConfigOptions): Promise<
 
 		if (!managed.has(kind)) continue;
 
-		const documents = descriptor.composeDocuments(result.records as never, result.documentIdentities as never);
+		const documents = descriptor
+			.composeDocuments(result.records as never, result.documentIdentities as never)
+			.map((document) => documentAtVersion(descriptor, document, manifest.version));
 
 		for (const document of documents) {
 			const identity = descriptor.layout.documentIdentityOf(document as never);
 			const subjectOf = descriptor.emittedDocumentSubject as (identity: unknown) => { label: string; value: string };
-			assertEmittedDocument(kind, readSubjectOf(subjectOf, identity), document);
+			assertEmittedDocument(kind, readSubjectOf(subjectOf, identity), document, manifest.version);
 		}
 
 		documentsByKind.set(kind, documents as unknown[]);

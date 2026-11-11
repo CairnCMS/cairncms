@@ -166,7 +166,9 @@ Content-Type: application/json
 }
 ```
 
-Applies the patch to every item that matches the query's filter. Use carefully because there is no preview step, and the update affects exactly the rows the filter selects, including ones added since you last read the collection. Pair with a `dry_run`-style read against the same filter when the change is significant.
+Updates the items selected by the query. Only items your role can read are eligible. Your role needs read access to the primary key and any filter or sort fields, plus update permission on every selected item. To update items without read access, [specify their primary keys](#update-by-primary-key-list).
+
+Before a bulk update, use `GET` with the same query to review the items it selects.
 
 ### Update batch
 
@@ -219,7 +221,9 @@ Content-Type: application/json
 { "query": { "filter": { "status": { "_eq": "draft" } } } }
 ```
 
-Same warning as update-by-query: filter-based deletes affect every row the filter currently matches, with no preview. For destructive operations against meaningful data, run the equivalent `GET` with the same filter first to confirm the result set.
+Query-based deletes have the same [read-permission requirements as query-based updates](#update-by-query) and require delete permission on every selected item. To delete items without read access, pass their primary keys.
+
+Review the matching items with `GET` before deleting them.
 
 ## Singletons
 
@@ -266,7 +270,7 @@ To clear the relation, pass `null`.
 
 ### One-to-many and many-to-many
 
-These accept either of two shapes. The simpler form is an array containing primary keys (to assign existing items) or objects (to create new items inline):
+Use an array to specify the related items to keep, create, or update:
 
 ```json
 {
@@ -278,7 +282,9 @@ These accept either of two shapes. The simpler form is an array containing prima
 }
 ```
 
-Items omitted from the array are removed from the relationship. For collections where the related items have many fields and you want explicit control over the change set, use the detailed form instead:
+Items omitted from the array are removed from the relationship only if your role can read them. Related items outside your read permissions stay linked.
+
+Use the detailed form to change individual related items without replacing the list:
 
 ```json
 {
@@ -290,7 +296,9 @@ Items omitted from the array are removed from the relationship. For collections 
 }
 ```
 
-The detailed form is also clearer in version control when these payloads are committed as fixtures. The diffs read as intent rather than as full-array replacement.
+To remove related items, your role needs read access to their primary key and the field linking them to the parent. It also needs update permission to unlink an item, or delete permission if removal deletes it. For many-to-many relationships, these permissions apply to the junction collection that stores the links.
+
+Array-form saves require this read access, even when you only update the listed items. Without it, use the detailed form's `create` and `update` operations, and omit `delete` or leave it empty.
 
 ### Many-to-any
 

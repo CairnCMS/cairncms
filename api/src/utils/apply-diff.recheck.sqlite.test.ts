@@ -1,5 +1,6 @@
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getSqliteClient } from '../database/sqlite-driver.js';
 import { SchemaStateChangedException } from '../exceptions/schema-state-changed.js';
 import type { Snapshot, SnapshotDiff, SnapshotField } from '../types/index.js';
 import { applyDiff } from './apply-diff.js';
@@ -70,7 +71,7 @@ beforeEach(async () => {
 	vi.clearAllMocks();
 
 	database = knex.default({
-		client: 'sqlite3',
+		client: getSqliteClient(),
 		connection: { filename: ':memory:' },
 		useNullAsDefault: true,
 		pool: { min: 1, max: 1 },

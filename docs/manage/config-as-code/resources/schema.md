@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-The `schema` kind manages collections, fields, relations and their metadata. It requires manifest version 3 and writes one `.yaml` file per collection in `schema/`. Make model changes on the source instance and capture them with `cairncms config snapshot`.
+The `schema` kind manages collections, fields, relations and their metadata. It requires manifest version 3 or later and writes one `.yaml` file per collection in `schema/`. Make model changes on the source instance and capture them with `cairncms config snapshot`.
 
 ## What is covered
 

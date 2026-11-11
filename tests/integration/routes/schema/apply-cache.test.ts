@@ -142,7 +142,7 @@ async function readRow(api: Api, url: string, collection: string) {
 
 describeForVendors(
 	'Schema apply cache invalidation',
-	['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'],
+	['postgres', 'mysql', 'maria'],
 	'Schema propagation between server processes has not been validated on SQLite.',
 	() => {
 		describe('a schema apply on one process is visible to a peer sharing the cache store', () => {

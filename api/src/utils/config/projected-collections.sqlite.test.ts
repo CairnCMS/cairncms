@@ -1,6 +1,7 @@
 import { createInspector } from '@cairncms/schema';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getSqliteClient } from '../../database/sqlite-driver.js';
 import { CollectionsService } from '../../services/collections.js';
 import type { ConfigSchemaCollection } from '../../types/config.js';
 import type { SnapshotField } from '../../types/index.js';
@@ -31,7 +32,7 @@ describe('projectCollections against the collection writer on SQLite', () => {
 	let db: Knex;
 
 	beforeEach(async () => {
-		db = knex.default({ client: 'sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true });
+		db = knex.default({ client: getSqliteClient(), connection: { filename: ':memory:' }, useNullAsDefault: true });
 
 		await db.schema.createTable('directus_collections', (table) => {
 			table.string('collection').primary();

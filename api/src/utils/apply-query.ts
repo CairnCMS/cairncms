@@ -47,14 +47,9 @@ export default function applyQuery(
 	let hasJoins = false;
 	let hasMultiRelationalFilter = false;
 
-	applyLimit(knex, dbQuery, query.limit);
-
-	if (query.offset) {
-		applyOffset(knex, dbQuery, query.offset);
-	}
-
-	if (query.page && query.limit && query.limit !== -1) {
-		applyOffset(knex, dbQuery, query.limit * (query.page - 1));
+	// A multi-relational sort's inner query has one row per related row, so the caller paginates its wrapper instead
+	if (!options?.hasMultiRelationalSort) {
+		applyPagination(knex, dbQuery, query);
 	}
 
 	if (query.sort && !options?.isInnerQuery && !options?.hasMultiRelationalSort) {
@@ -392,6 +387,21 @@ export function applyLimit(knex: Knex, rootQuery: Knex.QueryBuilder, limit: any)
 export function applyOffset(knex: Knex, rootQuery: Knex.QueryBuilder, offset: any) {
 	if (typeof offset === 'number') {
 		getHelpers(knex).schema.applyOffset(rootQuery, offset);
+	}
+}
+
+/**
+ * Apply a query's limit, offset, and page to a query builder.
+ */
+export function applyPagination(knex: Knex, rootQuery: Knex.QueryBuilder, query: Query) {
+	applyLimit(knex, rootQuery, query.limit);
+
+	if (query.offset) {
+		applyOffset(knex, rootQuery, query.offset);
+	}
+
+	if (query.page && query.limit && query.limit !== -1) {
+		applyOffset(knex, rootQuery, query.limit * (query.page - 1));
 	}
 }
 

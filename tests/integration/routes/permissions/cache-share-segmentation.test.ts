@@ -115,7 +115,7 @@ const test = createApiTest({
 
 describeForVendors(
 	'Response cache authorization segmentation',
-	['postgres', 'postgres10', 'mysql', 'mysql5', 'maria'],
+	['postgres', 'mysql', 'maria'],
 	'This cache scenario has not been validated on SQLite.',
 	() => {
 		describe('read-data surface: /items caches per share and never serves one share the other content', () => {

@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getSqliteClient } from './sqlite-driver.js';
 
 const SQLITE_INTERNAL = 'knex/lib/dialects/sqlite3/execution/sqlite-transaction.js';
 const realRequire = createRequire(import.meta.url);
@@ -66,7 +67,7 @@ describe('bound-transaction boot isolation', () => {
 		getClient.mockReturnValue('sqlite');
 
 		const db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			connection: { filename: ':memory:' },
 			useNullAsDefault: true,
 			pool: { min: 1, max: 1 },

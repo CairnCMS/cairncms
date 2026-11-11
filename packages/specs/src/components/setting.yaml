@@ -60,6 +60,12 @@ properties:
       - presets
     example: 'all'
     nullable: true
+  storage_asset_public_transforms:
+    description:
+      When transformations are all allowed, whether requests without a user token or session may use the `transforms`
+      parameter.
+    type: boolean
+    example: false
   storage_asset_presets:
     description: Array of allowed
     type: array

@@ -1,6 +1,7 @@
 import knex from 'knex';
 import type { Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { getSqliteClient } from '../sqlite-driver.js';
 import { down, up } from './20260909A-add-folder-key.js';
 
 const MAX = 246;
@@ -20,7 +21,7 @@ describe('20260909A-add-folder-key', () => {
 
 	beforeEach(async () => {
 		db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			useNullAsDefault: true,
 			connection: ':memory:',
 			pool: { min: 1, max: 1 },
@@ -147,7 +148,7 @@ describe('20260909A-add-folder-key foreign-key preservation', () => {
 
 	beforeEach(async () => {
 		db = knex.default({
-			client: 'sqlite3',
+			client: getSqliteClient(),
 			useNullAsDefault: true,
 			connection: ':memory:',
 			pool: { min: 1, max: 1 },

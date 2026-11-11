@@ -31,3 +31,23 @@ describe('RemoteConfigPlanChange folder deletion impact', () => {
 		expect(RemoteConfigPlanChange.safeParse(folderDelete({ blockedBy: 'files' })).success).toBe(false);
 	});
 });
+
+describe('RemoteConfigPlanChange extension setting creation', () => {
+	function settingCreate(values: unknown): unknown {
+		return {
+			kind: 'extension-settings',
+			operation: 'create',
+			identity: { subject: 'cairncms-extension-demo', scope: 'global', scope_key: '', key: 'api_key' },
+			values,
+		};
+	}
+
+	it('accepts a create whose values carry the setting value', () => {
+		expect(RemoteConfigPlanChange.safeParse(settingCreate({ value: 'x' })).success).toBe(true);
+		expect(RemoteConfigPlanChange.safeParse(settingCreate({ value: null })).success).toBe(true);
+	});
+
+	it('rejects a create whose values omit the setting value', () => {
+		expect(RemoteConfigPlanChange.safeParse(settingCreate({})).success).toBe(false);
+	});
+});

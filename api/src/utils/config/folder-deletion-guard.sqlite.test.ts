@@ -1,5 +1,6 @@
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { getSqliteClient } from '../../database/sqlite-driver.js';
 import { ConfigFolderInUseException } from '../../exceptions/index.js';
 import { FolderDeletionGuard } from './folder-deletion-guard.js';
 
@@ -12,7 +13,7 @@ describe('FolderDeletionGuard on a real SQLite database', () => {
 	const guard = new FolderDeletionGuard();
 
 	beforeEach(async () => {
-		db = knex.default({ client: 'sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true });
+		db = knex.default({ client: getSqliteClient(), connection: { filename: ':memory:' }, useNullAsDefault: true });
 
 		await db.schema.createTable('directus_folders', (table) => {
 			table.uuid('id').primary();
@@ -181,7 +182,7 @@ describe('FolderDeletionGuard mixed-case reference on a case-insensitive id colu
 	const guard = new FolderDeletionGuard();
 
 	beforeEach(async () => {
-		db = knex.default({ client: 'sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true });
+		db = knex.default({ client: getSqliteClient(), connection: { filename: ':memory:' }, useNullAsDefault: true });
 
 		await db.raw('CREATE TABLE directus_folders (id TEXT PRIMARY KEY COLLATE NOCASE, name TEXT, parent TEXT)');
 

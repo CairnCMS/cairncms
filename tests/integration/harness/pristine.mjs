@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { access, appendFile, lstat, mkdir, readFile, readdir, rename, rmdir, writeFile } from 'node:fs/promises';
+import { access, lstat, mkdir, readFile, readdir, rename, rmdir, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { snapshotCommand, snapshotHash, snapshotInventory, snapshotVendors } from './snapshot.mjs';
 import { removeMarkedDirectory } from './owned-directory.mjs';
+import { createRecorder } from './provisioning.mjs';
 
 const read = async (path) => {
 	const text = await readFile(path, 'utf8');
@@ -113,12 +114,7 @@ export async function initializeDatabase({ runtime, id, env, database, bootstrap
 	const cancellation = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(90_000)]);
 	const started = performance.now();
 
-	const record = (type, detail = {}) =>
-		appendFile(
-			join(runtime.directory, 'provisioning.jsonl'),
-			JSON.stringify({ type, id, worker: process.pid, monotonicNs: process.hrtime.bigint().toString(), ...detail }) +
-				'\n'
-		);
+	const record = createRecorder(runtime.directory, { id });
 
 	let operation = 'bootstrap';
 	let complete = false;

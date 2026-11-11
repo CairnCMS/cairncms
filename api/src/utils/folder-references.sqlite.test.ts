@@ -1,5 +1,6 @@
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { getSqliteClient } from '../database/sqlite-driver.js';
 import type { Snapshot, SnapshotField } from '../types/index.js';
 import { isFolderKey, toFolderIds, toKeyFormSnapshot, validateFolderReferences } from './folder-references.js';
 import { getVersionedHash } from './get-versioned-hash.js';
@@ -89,7 +90,7 @@ describe('toKeyFormSnapshot on a real SQLite database', () => {
 	let db: Knex;
 
 	beforeEach(async () => {
-		db = knex.default({ client: 'sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true });
+		db = knex.default({ client: getSqliteClient(), connection: { filename: ':memory:' }, useNullAsDefault: true });
 		await db.raw('CREATE TABLE directus_folders (id TEXT PRIMARY KEY COLLATE NOCASE, key TEXT, name TEXT)');
 
 		await db('directus_folders').insert([

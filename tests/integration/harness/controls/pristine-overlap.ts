@@ -5,6 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { once } from 'node:events';
 import { createApiTest, withEnvironment } from '../../fixtures/environment';
 import { snapshotHash } from '../snapshot.mjs';
+import { isMysqlFamily } from '../database-vendors.mjs';
 import { initializeFixtures } from '../fixture-setup.mjs';
 
 export function register(side: 'a' | 'b') {
@@ -53,7 +54,7 @@ export function register(side: 'a' | 'b') {
 			expect(peer[key]).not.toBe(identity(api)[key]);
 		if (['execution-cancel', 'worker-crash', 'vendor-crash'].includes(mode)) await until('release', signal);
 
-		if (mode === 'import-cancel' && ['mysql', 'mysql5', 'maria'].includes(inject('integration').vendor)) {
+		if (mode === 'import-cancel' && isMysqlFamily(inject('integration').vendor)) {
 			if (side === 'a') {
 				const cache = inject('integration').pristine!.directory;
 				const metadata = JSON.parse(await readFile(join(cache, 'ready.json'), 'utf8'));

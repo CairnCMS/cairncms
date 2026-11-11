@@ -12,6 +12,8 @@ export class SchemaHelperMySQL extends SchemaHelper {
 		orderByFields: Knex.Raw[]
 	): Knex.QueryBuilder {
 		if (getDatabaseVersion()?.startsWith('5.7')) {
+			// The session-variable rank restarts whenever the key changes, so each item's rows must be adjacent
+			dbQuery.clear('order');
 			dbQuery.orderByRaw(`?? asc, ${orderByString}`, [`${table}.${primaryKey}`, ...orderByFields]);
 
 			dbQuery = knex

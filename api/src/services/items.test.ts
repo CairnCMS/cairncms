@@ -4,6 +4,7 @@ import type {
 	CollectionsOverview,
 	FilterHandler,
 	NestedDeepQuery,
+	Query,
 	Relation,
 } from '@cairncms/types';
 import type { Knex } from 'knex';
@@ -1018,7 +1019,7 @@ describe('Integration Tests', () => {
 		const item = { id: '6107c897-9182-40f7-b22e-4f044d1258d2', name: 'Item name', items: [] };
 
 		it.each(Object.keys(schemas))(
-			'%s updates relational field in one item without read permissions',
+			'%s refuses to clear a relational field in one item without read permissions',
 			async (schema) => {
 				const childTable = schemas[schema].tables[1];
 
@@ -1087,43 +1088,21 @@ describe('Integration Tests', () => {
 					schema: schemas[schema].schema,
 				});
 
-				const response = await itemsService.updateOne(
-					item.id,
-					{
-						items: [],
-					},
-					{ emitEvents: false }
+				await expect(
+					itemsService.updateOne(
+						item.id,
+						{
+							items: [],
+						},
+						{ emitEvents: false }
+					)
+				).rejects.toBeInstanceOf(ForbiddenException);
+
+				expect(tracker.history.select.some((query) => query.sql.startsWith(`select "${childTable}"."id" from`))).toBe(
+					false
 				);
 
-				expect(tracker.history.select.length).toBe(4);
-				expect(tracker.history.select[0]!.bindings).toStrictEqual([item.id, 1]);
-
-				expect(tracker.history.select[0]!.sql).toBe(
-					`select "${table}"."id", "${table}"."name" from "${table}" where (("${table}"."id" in (?))) order by "${table}"."id" asc limit ?`
-				);
-
-				expect(tracker.history.select[1]!.bindings).toStrictEqual([item.id, 25000]);
-
-				expect(tracker.history.select[1]!.sql).toBe(
-					`select "${childTable}"."uploaded_by", "${childTable}"."id" from "${childTable}" where "${childTable}"."uploaded_by" in (?) order by "${childTable}"."id" asc limit ?`
-				);
-
-				expect(tracker.history.select[2]!.bindings).toStrictEqual([item.id, 1, 100]);
-
-				expect(tracker.history.select[2]!.sql).toBe(
-					`select "${childTable}"."id" from "${childTable}" where ("${childTable}"."uploaded_by" = ? and 1 = ?) order by "${childTable}"."id" asc limit ?`
-				);
-
-				expect(tracker.history.select[3]!.bindings).toStrictEqual([childItem.id, 1]);
-
-				expect(tracker.history.select[3]!.sql).toBe(
-					`select "${childTable}"."id", "${childTable}"."title", "${childTable}"."uploaded_by" from "${childTable}" where (("${childTable}"."id" in (?))) order by "${childTable}"."id" asc limit ?`
-				);
-
-				expect(tracker.history.update[0]!.bindings).toStrictEqual([null, childItem.id]);
-				expect(tracker.history.update[0]!.sql).toBe(`update "${childTable}" set "uploaded_by" = ? where "id" in (?)`);
-
-				expect(response).toStrictEqual(item.id);
+				expect(tracker.history.update).toHaveLength(0);
 			}
 		);
 	});
@@ -1797,16 +1776,45 @@ describe('Integration Tests', () => {
 			});
 
 			expect(tracker.history.select.length).toBe(1);
-			expect(tracker.history.select[0]!.bindings).toStrictEqual([100, 1, 100]);
+			expect(tracker.history.select[0]!.bindings).toStrictEqual([1, 100]);
 
 			expect(tracker.history.select[0]!.sql).toMatch(
 				new RegExp(
 					`select "${table}"."id", "${table}"."name" from "${table}" ` +
 						`inner join \\(select distinct "${table}"."id", ".{5}"."title" as "sort_.{5}", ` +
 						`row_number\\(\\) over \\(partition by "${table}"."id" order by ".{5}"."title" asc\\) as "directus_row_number" from "${table}" ` +
-						`left join "${otherTable}" as ".{5}" on "${table}"."id" = ".{5}"."uploaded_by" order by ".{5}"."title" asc limit \\?\\)` +
+						`left join "${otherTable}" as ".{5}" on "${table}"."id" = ".{5}"."uploaded_by" order by ".{5}"."title" asc\\)` +
 						` as "inner" on "${table}"."id" = "inner"."id" ` +
 						`where "inner"."directus_row_number" = \\? order by "inner"."sort_.{5}" asc limit \\?`
+				)
+			);
+		});
+
+		it.each(Object.keys(schemas))('%s paginates a nested o2m sort by item', async (schema) => {
+			const table = schemas[schema].tables[0];
+
+			tracker.on.select(table).responseOnce(rawItems);
+
+			const itemsService = new ItemsService(table, {
+				knex: db,
+				accountability: { role: 'admin', admin: true },
+				schema: schemas[schema].schema,
+			});
+
+			await itemsService.readByQuery({
+				fields: ['id', 'name'],
+				sort: ['items.title'],
+				limit: 2,
+				page: 3,
+			});
+
+			expect(tracker.history.select.length).toBe(1);
+			expect(tracker.history.select[0]!.bindings).toStrictEqual([1, 2, 4]);
+
+			expect(tracker.history.select[0]!.sql).toMatch(
+				new RegExp(
+					`order by ".{5}"."title" asc\\) as "inner" on "${table}"."id" = "inner"."id" ` +
+						`where "inner"."directus_row_number" = \\? order by "inner"."sort_.{5}" asc limit \\? offset \\?$`
 				)
 			);
 		});
@@ -2007,6 +2015,64 @@ describe('Integration Tests', () => {
 				emitter.offFilter(`${table}.items.read`, readFilter);
 				emitter.offAction(`${table}.items.read`, readAction);
 			}
+		});
+	});
+
+	describe('getKeysByQuery', () => {
+		const restricted = { role: 'editor', user: 'editor-user', admin: false, app: true, permissions: [] };
+		const anonymous = { role: null, user: null, admin: false, app: false, permissions: [] };
+
+		it.each<[string, Accountability | null]>([
+			['a restricted caller', restricted],
+			['the public role', anonymous],
+			['an explicitly trusted caller', null],
+		])('reads the keys through a child service carrying the context of %s', async (_label, accountability) => {
+			const table = schemas['user'].tables[0];
+
+			const service = new ItemsService(table, {
+				knex: db,
+				accountability,
+				schema: schemas['user'].schema,
+			});
+
+			const query: Query = {
+				filter: { name: { _eq: 'Ada' } },
+				fields: ['*'],
+				alias: { id: 'name' },
+				sort: ['name'],
+				limit: 5,
+			};
+
+			const original = cloneDeep(query);
+			const captured: { child?: ItemsService; query?: Query } = {};
+
+			const readByQuery = vi
+				.spyOn(ItemsService.prototype, 'readByQuery')
+				.mockImplementation(async function (this: ItemsService, readQuery: Query) {
+					captured.child = this;
+					captured.query = readQuery;
+					return [{ id: 1 }, { id: 2 }];
+				});
+
+			try {
+				await expect(service.getKeysByQuery(query)).resolves.toEqual([1, 2]);
+			} finally {
+				readByQuery.mockRestore();
+			}
+
+			expect(captured.child).not.toBe(service);
+			expect(captured.child!.accountability).toBe(accountability);
+			expect(captured.child!.knex).toBe(db);
+			expect(captured.child!.schema).toBe(schemas['user'].schema);
+
+			expect(captured.query).toStrictEqual({
+				filter: { name: { _eq: 'Ada' } },
+				fields: ['id'],
+				sort: ['name'],
+				limit: 5,
+			});
+
+			expect(query).toEqual(original);
 		});
 	});
 

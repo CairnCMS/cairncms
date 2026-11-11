@@ -11,7 +11,7 @@ import { transform } from 'lodash-es';
 import { createReadStream } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
 import type { Readable } from 'node:stream';
-import StreamArray from 'stream-json/streamers/StreamArray.js';
+import streamArray from 'stream-json/streamers/stream-array.js';
 import stripBomStream from 'strip-bom-stream';
 import { file as createTmpFile } from 'tmp-promise';
 import getDatabase from '../database/index.js';
@@ -72,11 +72,11 @@ export class ImportService {
 		}
 	}
 
-	importJSON(collection: string, stream: Readable): Promise<void> {
-		const extractJSON = StreamArray.withParser();
+	async importJSON(collection: string, stream: Readable): Promise<void> {
+		const extractJSON = streamArray.withParserAsStream();
 		const nestedActionEvents: ActionEventParams[] = [];
 
-		return this.knex.transaction((trx) => {
+		await this.knex.transaction((trx) => {
 			const service = new ItemsService(collection, {
 				knex: trx,
 				schema: this.schema,
@@ -88,40 +88,53 @@ export class ImportService {
 			});
 
 			return new Promise<void>((resolve, reject) => {
+				let settled = false;
+
+				const fail = (error: unknown) => {
+					if (settled) return;
+					settled = true;
+					saveQueue.kill();
+					destroyStream(stream);
+					destroyStream(extractJSON);
+					reject(error);
+				};
+
+				const finish = () => {
+					if (settled) return;
+					settled = true;
+					resolve();
+				};
+
 				stream.pipe(extractJSON);
 
 				extractJSON.on('data', ({ value }: Record<string, any>) => {
-					saveQueue.push(value);
+					if (!settled) saveQueue.push(value);
 				});
 
 				extractJSON.on('error', (err: any) => {
-					destroyStream(stream);
-					destroyStream(extractJSON);
-
-					reject(new InvalidPayloadException(err.message));
+					fail(new InvalidPayloadException(err.message));
 				});
 
 				saveQueue.error((err) => {
-					reject(err);
+					fail(err);
 				});
 
 				extractJSON.on('end', () => {
-					saveQueue.drain(() => {
-						for (const nestedActionEvent of nestedActionEvents) {
-							emitter.emitAction(nestedActionEvent.event, nestedActionEvent.meta, nestedActionEvent.context);
-						}
-
-						return resolve();
-					});
+					if (saveQueue.idle()) finish();
+					else saveQueue.drain(finish);
 				});
 			});
 		});
+
+		for (const nestedActionEvent of nestedActionEvents) {
+			emitter.emitAction(nestedActionEvent.event, nestedActionEvent.meta, nestedActionEvent.context);
+		}
 	}
 
-	importCSV(collection: string, stream: Readable): Promise<void> {
+	async importCSV(collection: string, stream: Readable): Promise<void> {
 		const nestedActionEvents: ActionEventParams[] = [];
 
-		return this.knex.transaction((trx) => {
+		await this.knex.transaction((trx) => {
 			const service = new ItemsService(collection, {
 				knex: trx,
 				schema: this.schema,
@@ -133,10 +146,28 @@ export class ImportService {
 			});
 
 			return new Promise<void>((resolve, reject) => {
+				let settled = false;
+
+				const fail = (error: unknown) => {
+					if (settled) return;
+					settled = true;
+					saveQueue.kill();
+					destroyStream(stream);
+					reject(error);
+				};
+
+				const finish = () => {
+					if (settled) return;
+					settled = true;
+					resolve();
+				};
+
 				stream
 					.pipe(stripBomStream())
 					.pipe(csv())
 					.on('data', (value: Record<string, string>) => {
+						if (settled) return;
+
 						const obj = transform(value, (result: Record<string, string>, value, key) => {
 							if (value.length === 0) {
 								delete result[key];
@@ -158,24 +189,22 @@ export class ImportService {
 						saveQueue.push(obj);
 					})
 					.on('error', (err: any) => {
-						destroyStream(stream);
-						reject(new InvalidPayloadException(err.message));
+						fail(new InvalidPayloadException(err.message));
 					})
 					.on('end', () => {
-						saveQueue.drain(() => {
-							for (const nestedActionEvent of nestedActionEvents) {
-								emitter.emitAction(nestedActionEvent.event, nestedActionEvent.meta, nestedActionEvent.context);
-							}
-
-							return resolve();
-						});
+						if (saveQueue.idle()) finish();
+						else saveQueue.drain(finish);
 					});
 
 				saveQueue.error((err) => {
-					reject(err);
+					fail(err);
 				});
 			});
 		});
+
+		for (const nestedActionEvent of nestedActionEvents) {
+			emitter.emitAction(nestedActionEvent.event, nestedActionEvent.meta, nestedActionEvent.context);
+		}
 	}
 }
 

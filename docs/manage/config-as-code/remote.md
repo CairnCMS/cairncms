@@ -36,9 +36,11 @@ Local and private-network targets are supported. If the connection is blocked, c
 
 ## Server versions
 
-Use a server running CairnCMS 1.7.0 or later for trees that manage schema. Trees without schema support servers from 1.6.0.
+Remote config needs a server running CairnCMS 1.6.0 or later. The server must also support the tree's [manifest version](/docs/manage/config-as-code/resources/#the-manifest). Trees that manage schema need 1.7.0 or later.
 
-For capture from a 1.6 server, pre-create a version 1 or 2 manifest with supported resources. A new empty directory requests version 3, which that server cannot export.
+A new empty directory requests the latest manifest version. For capture from an older server, pre-create a manifest with a version that server supports and with supported resources. For example, use version 3 for a 1.7 server, or version 1 or 2 for a 1.6 server.
+
+Capture with a CLI at least as new as the source server. An older CLI refuses a snapshot that contains a field it doesn't know. An older target refuses a tree that sets a field it doesn't support, so upgrade the target before applying a tree captured on a newer release.
 
 `--force-schema` does not bypass the minimum server version. Its separate [source compatibility check](/docs/manage/config-as-code/resources/schema/#source-release-and-vendor) compares the captured schema with the target.
 

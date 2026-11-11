@@ -26,8 +26,11 @@ With the CLI, define `CAIRNCMS_CONFIG_PROJECT_NAME` before apply. For direct HTT
 | `auth_password_policy`, `mapbox_key` | String or null |
 | `auth_login_attempts` | Non-negative integer or null |
 | `storage_asset_transform` | `all`, `none`, `presets`, or null |
+| `storage_asset_public_transforms` | Boolean. Cannot be null. Requires manifest version 4 |
 | `module_bar`, `storage_asset_presets`, `basemaps`, `custom_aspect_ratios` | Array of objects or null |
 | `storage_default_folder` | Folder key or null |
+
+A tree at manifest version 2 or 3 can't set `storage_asset_public_transforms` and leaves its current value unchanged. See [manifest versions](/docs/manage/config-as-code/resources/#the-manifest).
 
 Only the fields listed above are supported.
 

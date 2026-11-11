@@ -13,10 +13,14 @@ This guide is for local development. It is not a production deployment guide.
 
 ## Requirements
 
+:::caution[Node.js 22 is deprecated]
+Running the CairnCMS CLI on Node.js 22, or on Node.js 24 before 24.16.0, is deprecated in 1.8.0. Use Node.js 24.16.0 or later instead. See the [changelog](https://github.com/CairnCMS/cairncms/blob/main/CHANGELOG.md) for removal timing.
+:::
+
 Before you start, make sure you have:
 
 - Docker with Compose v2
-- Node 22 or newer if you want to use the generated `npm start`, `npm stop`, and `npm logs` shortcuts
+- Node.js 24.16.0 or later, to run `npx cairncms init`. The generated `npm start`, `npm stop`, and `npm logs` shortcuts also run through npm.
 
 ## Create a local project
 

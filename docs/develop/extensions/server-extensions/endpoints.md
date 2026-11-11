@@ -24,7 +24,7 @@ export default (router) => {
 };
 ```
 
-When you use the function form, the extension's package name becomes the mount path. A package named `cairncms-extension-greet` mounts at `/greet`.
+When you use the function form, the extension's full package name becomes the mount path. A package named `cairncms-extension-greet` mounts at `/cairncms-extension-greet`. To choose a shorter path, use the object form.
 
 ### Object form
 

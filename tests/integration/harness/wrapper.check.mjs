@@ -67,7 +67,7 @@ for (const collectAll of [false, true])
 	test(`public command ${collectAll ? 'continues' : 'stops'} after a failed vendor`, { timeout: 120000 }, async () => {
 		const checkout = await controlCheckout(['harness/controls/wrapper.case.ts']);
 
-		const run = startControl(['run.mjs', '--vendor', 'sqlite3,postgres', ...(collectAll ? ['--collect-all'] : [])], {
+		const run = startControl(['run.mjs', '--vendor', 'sqlite3,postgres18', ...(collectAll ? ['--collect-all'] : [])], {
 			cwd: checkout.root,
 		});
 
@@ -78,15 +78,15 @@ for (const collectAll of [false, true])
 
 			assert.deepEqual(
 				summary.results.map((result) => result.vendor),
-				collectAll ? ['sqlite3', 'postgres'] : ['sqlite3']
+				collectAll ? ['sqlite3', 'postgres18'] : ['sqlite3']
 			);
 
 			assert.equal(summary.exitCode, 1);
 			assert.match(run.output(), /WRAPPER_BODY_sqlite3/);
 			if (collectAll) {
-				assert.match(run.output(), /WRAPPER_BODY_postgres/);
+				assert.match(run.output(), /WRAPPER_BODY_postgres18/);
 				assert.equal(summary.results[1].passed, 1);
-			} else assert.doesNotMatch(run.output(), /WRAPPER_BODY_postgres|Starting owned/);
+			} else assert.doesNotMatch(run.output(), /WRAPPER_BODY_postgres18|Starting owned/);
 			for (const result of summary.results) await assertReleased(join(directory, result.vendor));
 		} finally {
 			await run.stop();
@@ -151,11 +151,11 @@ test('public command propagates API teardown errors', { timeout: 120000 }, async
 
 test('concurrent PostgreSQL commands own independent containers and resources', { timeout: 180000 }, async () => {
 	const checkout = await controlCheckout(['harness/controls/cancel.case.ts']);
-	const runs = [0, 1].map(() => startControl(['run.mjs', '--vendor', 'postgres'], { cwd: checkout.root }));
+	const runs = [0, 1].map(() => startControl(['run.mjs', '--vendor', 'postgres18'], { cwd: checkout.root }));
 
 	try {
 		await Promise.all(runs.map((run) => run.poll(() => run.output().includes('EXECUTION_READY'))));
-		const directories = runs.map((run) => join(run.output().match(/^Integration results: (.+)$/m)[1], 'postgres'));
+		const directories = runs.map((run) => join(run.output().match(/^Integration results: (.+)$/m)[1], 'postgres18'));
 
 		const records = await Promise.all(
 			directories.map((directory) => readFile(join(directory, 'container.json'), 'utf8').then(JSON.parse))

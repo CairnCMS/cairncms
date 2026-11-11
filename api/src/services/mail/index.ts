@@ -7,8 +7,7 @@ import path from 'path';
 import getDatabase from '../../database/index.js';
 import env from '../../env.js';
 import { InvalidPayloadException } from '../../exceptions/index.js';
-import logger from '../../logger.js';
-import getMailer from '../../mailer.js';
+import getMailer, { verifyMailerSetup } from '../../mailer.js';
 import type { AbstractServiceOptions } from '../../types/index.js';
 import { Url } from '../../utils/url.js';
 import { fileURLToPath } from 'url';
@@ -38,15 +37,7 @@ export class MailService {
 		this.accountability = opts.accountability || null;
 		this.knex = opts?.knex || getDatabase();
 		this.mailer = getMailer();
-
-		if (env['EMAIL_VERIFY_SETUP']) {
-			this.mailer.verify((error) => {
-				if (error) {
-					logger.warn(`Email connection failed:`);
-					logger.warn(error);
-				}
-			});
-		}
+		verifyMailerSetup(this.mailer);
 	}
 
 	async send(options: EmailOptions): Promise<unknown> {

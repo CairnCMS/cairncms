@@ -18,5 +18,4 @@ onlyBuiltDependencies:
   - isolated-vm
   - sharp
   - snappy
-  - sqlite3
   - vue-demi

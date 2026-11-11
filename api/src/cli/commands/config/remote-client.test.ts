@@ -1855,6 +1855,26 @@ describe('fetchRemoteSnapshot', () => {
 		});
 	});
 
+	it('returns a version 4 schema-managing snapshot with its provenance', async () => {
+		const manifest = { ...SCHEMA_MANIFEST, version: 4 };
+		const { remote } = session(() => ({ status: 200, data: { data: schemaSnapshot(manifest, [ARTICLES]) } }));
+
+		await expect(fetchRemoteSnapshot(remote, { ...SCHEMA_SCOPE, manifestVersion: 4 })).resolves.toMatchObject({
+			manifest,
+			schema: [ARTICLES],
+		});
+	});
+
+	it('rejects a version 3 snapshot returned for a version 4 request at exit 3', async () => {
+		const { remote } = session(() => ({ status: 200, data: { data: schemaSnapshot(SCHEMA_MANIFEST, [ARTICLES]) } }));
+
+		const error = await caught(() => fetchRemoteSnapshot(remote, { ...SCHEMA_SCOPE, manifestVersion: 4 }));
+
+		expect(error).toBeInstanceOf(RemoteClientError);
+		expect((error as RemoteClientError).exitCode).toBe(3);
+		expect((error as RemoteClientError).message).toContain('manifest version');
+	});
+
 	it('rejects a schema-managing snapshot that records no schema provenance at exit 3', async () => {
 		const { remote } = session(() => ({
 			status: 200,

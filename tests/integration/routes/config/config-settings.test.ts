@@ -26,6 +26,7 @@ type ConfigSnapshot = {
 	settings?: Settings[];
 	'extension-settings'?: Settings[];
 	translations?: Settings[];
+	schema?: Array<Record<string, any>>;
 };
 
 const MIN_VERSION = '1.6.0';
@@ -35,8 +36,11 @@ function token(): string {
 	return `Bearer ${common.USER.ADMIN!.TOKEN}`;
 }
 
-async function httpSnapshot(api: Api): Promise<ConfigSnapshot> {
-	const response = await request(api.url).get('/config/snapshot').set('Authorization', token());
+async function httpSnapshot(api: Api, manifestVersion?: number): Promise<ConfigSnapshot> {
+	const req = request(api.url).get('/config/snapshot').set('Authorization', token());
+	if (manifestVersion !== undefined) req.query({ manifest_version: String(manifestVersion) });
+
+	const response = await req;
 	expect(response.statusCode).toBe(200);
 	return response.body.data as ConfigSnapshot;
 }
@@ -57,15 +61,16 @@ function applyConfig(api: Api, desired: unknown, options: { destructive?: boolea
 	return req.send(desired as object);
 }
 
-function settingsOnly(settings: Settings): ConfigSnapshot {
+function settingsOnly(settings: Settings, version = 2): ConfigSnapshot {
 	return {
-		manifest: { version: 2, resources: ['settings'] },
+		manifest: { version, resources: ['settings'] },
 		roles: [],
 		permissions: [],
 		folders: [],
 		settings: [settings],
 		'extension-settings': [],
 		translations: [],
+		...(version >= 3 && { schema: [] }),
 	};
 }
 
@@ -413,6 +418,110 @@ describe('Config-as-Code settings file-field exclusion', () => {
 	});
 });
 
+describe('Config-as-Code settings public advanced transformations', () => {
+	async function setPublicTransforms(api: Api, value: boolean): Promise<void> {
+		const set = await request(api.url)
+			.patch('/settings')
+			.set('Authorization', token())
+			.send({ storage_asset_public_transforms: value });
+
+		expect(set.statusCode).toBe(200);
+	}
+
+	test('leaves the setting unchanged from version 2 and 3 trees, whose snapshots omit it', async ({ api }) => {
+		const rawBaseline = await rawSettings(api);
+		const fields = ['public_note', 'storage_asset_public_transforms'];
+		let testError: unknown;
+		const failures: string[] = [];
+
+		try {
+			for (const value of [true, false]) {
+				await setPublicTransforms(api, value);
+
+				for (const version of [2, 3]) {
+					const note = `Version ${version} tree over ${value}`;
+					const applied = await applyConfig(api, settingsOnly({ public_note: note }, version));
+					expect(applied.statusCode).toBe(200);
+
+					const current = await rawSettings(api);
+					expect(current.public_note).toBe(note);
+					expect(current.storage_asset_public_transforms).toBe(value);
+
+					const snapshot = await httpSnapshot(api, version);
+					expect(snapshot.manifest.version).toBe(version);
+					expect(snapshot.settings![0]).not.toHaveProperty('storage_asset_public_transforms');
+				}
+			}
+		} catch (error) {
+			testError = error;
+		}
+
+		await attemptCleanup(failures, 'restore settings', () => patchRestore(api, rawBaseline, fields));
+		reportOutcome(testError, failures);
+	});
+
+	test('manages the setting from version 4 through snapshot, dry run and apply', async ({ api }) => {
+		const rawBaseline = await rawSettings(api);
+		const fields = ['storage_asset_public_transforms'];
+		let testError: unknown;
+		const failures: string[] = [];
+
+		try {
+			await setPublicTransforms(api, false);
+
+			const unversioned = await httpSnapshot(api);
+			expect(unversioned.manifest.version).toBe(4);
+			expect(unversioned.settings![0]!.storage_asset_public_transforms).toBe(false);
+
+			const enable = settingsOnly({ storage_asset_public_transforms: true }, 4);
+			const preview = await applyConfig(api, enable, { dryRun: true });
+
+			expect(preview.statusCode).toBe(200);
+
+			expect(preview.body.data.changes).toContainEqual(
+				expect.objectContaining({
+					kind: 'settings',
+					operation: 'update',
+					fields: { storage_asset_public_transforms: { before: false, after: true } },
+				})
+			);
+
+			expect((await rawSettings(api)).storage_asset_public_transforms).toBe(false);
+
+			const enabled = await applyConfig(api, enable);
+			expect(enabled.statusCode).toBe(200);
+			expect((await rawSettings(api)).storage_asset_public_transforms).toBe(true);
+			expect((await httpSnapshot(api, 4)).settings![0]!.storage_asset_public_transforms).toBe(true);
+
+			const disabled = await applyConfig(api, settingsOnly({ storage_asset_public_transforms: false }, 4));
+			expect(disabled.statusCode).toBe(200);
+			expect((await rawSettings(api)).storage_asset_public_transforms).toBe(false);
+		} catch (error) {
+			testError = error;
+		}
+
+		await attemptCleanup(failures, 'restore settings', () => patchRestore(api, rawBaseline, fields));
+		reportOutcome(testError, failures);
+	});
+
+	test('refuses a version 2 or 3 tree that sets the setting, naming the field and version 4', async ({ api }) => {
+		const before = await rawSettings(api);
+
+		for (const version of [2, 3]) {
+			const refused = await applyConfig(api, settingsOnly({ storage_asset_public_transforms: true }, version));
+
+			expect(refused.statusCode).toBe(400);
+			expect(errorCodes(refused)).toContain('CONFIG_UNSUPPORTED_VERSION');
+
+			expect(JSON.stringify(refused.body)).toContain(
+				`declares version ${version} but sets settings field storage_asset_public_transforms (version 4)`
+			);
+		}
+
+		expect(await rawSettings(api)).toEqual(before);
+	});
+});
+
 describe('Config-as-Code settings placeholder preservation', () => {
 	const PLACEHOLDER = '{{CAIRNCMS_CONFIG_PROJECT_DESCRIPTOR}}';
 
@@ -464,7 +573,7 @@ describe('Config-as-Code settings placeholder preservation', () => {
 
 	describeForVendors(
 		'remote CLI',
-		['postgres'],
+		['postgres18'],
 		'Remote CLI transport behavior is validated against PostgreSQL.',
 		() => {
 			function generateCert(dir: string): { certPath: string; keyPath: string } {
