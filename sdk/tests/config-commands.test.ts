@@ -13,13 +13,14 @@ const v3: ConfigDocumentV3 = {
 	schema: [],
 };
 
-function capturingClient() {
+function capturingClient(...bodies: unknown[]) {
 	const calls: { url: string; init: RequestInit }[] = [];
 
 	const fetch = async (url: string, init: RequestInit) => {
+		const body = bodies[calls.length] ?? { data: {} };
 		calls.push({ url, init });
 
-		return new Response(JSON.stringify({ data: {} }), {
+		return new Response(JSON.stringify(body), {
 			status: 200,
 			headers: { 'Content-Type': 'application/json' },
 		});
@@ -51,6 +52,67 @@ describe('config command request construction', () => {
 		await client.request(configSnapshot({ resources: [] }));
 
 		expect(new URL(calls[0]!.url).search).toBe('?resources=');
+	});
+
+	it('sends a manifest version or resource name this SDK release does not know as given', () => {
+		expect(configSnapshot({ manifestVersion: 7, resources: ['roles', 'flows'] })().params).toEqual({
+			manifest_version: '7',
+			resources: 'roles,flows',
+		});
+
+		expect(configSnapshot({ resources: ['flows'] })().params).toEqual({ resources: 'flows' });
+	});
+
+	it('passes a future kind and a future record field from a snapshot through configApply unchanged', async () => {
+		const future = {
+			manifest: { version: 5, resources: ['settings', 'flows'] },
+			roles: [],
+			permissions: [],
+			folders: [],
+			settings: [
+				{
+					project_name: 'CairnCMS',
+					project_descriptor: null,
+					project_url: null,
+					default_language: 'en-US',
+					project_color: null,
+					public_note: null,
+					custom_css: null,
+					module_bar: null,
+					auth_password_policy: null,
+					auth_login_attempts: 25,
+					storage_asset_transform: 'all',
+					storage_asset_presets: null,
+					basemaps: null,
+					custom_aspect_ratios: null,
+					mapbox_key: null,
+					storage_default_folder: null,
+					future_setting: true,
+				},
+			],
+			'extension-settings': [],
+			translations: [],
+			schema: [],
+			flows: [{ name: 'Nightly export' }],
+		};
+
+		const plan = {
+			planVersion: 2,
+			manifestVersion: 5,
+			changes: [],
+			summary: { create: 0, update: 0, delete: 0 },
+			warnings: [],
+			protections: [],
+		};
+
+		const { calls, client } = capturingClient({ data: future }, { data: plan });
+		const captured = await client.request(configSnapshot());
+		const previewed = await client.request(configApply(captured, { dryRun: true }));
+
+		expect(captured).toEqual(future);
+		expect(previewed).toEqual(plan);
+		expect(calls[1]!.init.method).toBe('POST');
+		expect(JSON.parse(calls[1]!.init.body as string)).toEqual(future);
 	});
 
 	it('sends configApply as a JSON body with no flags and keeps the whole response', () => {

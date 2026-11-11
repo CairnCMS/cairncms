@@ -8,7 +8,7 @@ import {
 	deleteCollection,
 	readCollections,
 	rest,
-	type ConfigDocumentV3,
+	type ConfigDocumentLatest,
 } from '../../src/index.js';
 import { ENV_KEYS } from './helpers/constants.js';
 
@@ -29,8 +29,8 @@ function adminClient() {
 }
 
 let admin: ReturnType<typeof adminClient>;
-let schemaWithoutProbe: ConfigDocumentV3;
-let schemaWithProbe: ConfigDocumentV3;
+let schemaWithoutProbe: ConfigDocumentLatest;
+let schemaWithProbe: ConfigDocumentLatest;
 
 async function probeExists(): Promise<boolean> {
 	const collections = await admin.request(readCollections());
@@ -84,6 +84,17 @@ describe('configSnapshot', () => {
 		expect(latest.manifest.version).toBe(4);
 		expect(Object.keys(latest).sort()).toEqual([...V3_KEYS].sort());
 		expect(none.manifest.resources).toEqual([]);
+	});
+
+	it('leaves an unsupported manifest version for the server to refuse', async () => {
+		const rejection = await admin.request(configSnapshot({ manifestVersion: 99 })).then(
+			() => {
+				throw new Error('Expected the snapshot to be refused');
+			},
+			(error: RequestRejection) => error
+		);
+
+		expect(rejection.errors[0]!.extensions['code']).toBe('CONFIG_UNSUPPORTED_VERSION');
 	});
 });
 
