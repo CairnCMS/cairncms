@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import express from 'express';
-import { Readable } from 'node:stream';
+import { PassThrough, Readable } from 'node:stream';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -211,6 +211,92 @@ describe('GET/HEAD /assets/:pk (GHSA-rv78-qqrq-73m5)', () => {
 
 			expect(res.headers['vary']).toContain('Accept');
 		});
+	});
+});
+
+describe('GET /assets/:pk stream ownership', () => {
+	beforeEach(() => {
+		savedSettings.row = { storage_asset_presets: [], storage_asset_transform: 'all' };
+	});
+
+	afterEach(() => {
+		savedSettings.row = undefined;
+		vi.clearAllMocks();
+	});
+
+	it('destroys the asset stream when the response headers cannot be set', async () => {
+		const stream = new PassThrough();
+
+		getAssetSpy.mockReset().mockResolvedValue({
+			stream,
+			file: { ...fakeFile(), type: 'image/png\u0001' },
+			stat: { size: 9 },
+		});
+
+		const res = await request(buildApp()).get(`/assets/${VALID_UUID}`);
+
+		expect(res.status).toBe(500);
+		expect(stream.destroyed).toBe(true);
+	});
+
+	it('ends the response when the asset stream fails after data was sent', async () => {
+		let reads = 0;
+
+		const stream = new Readable({
+			read() {
+				reads++;
+
+				if (reads === 1) {
+					this.push(Buffer.from('partial'));
+				} else {
+					setImmediate(() => this.destroy(new Error('storage connection lost')));
+				}
+			},
+		});
+
+		getAssetSpy.mockReset().mockResolvedValue({ stream, file: fakeFile(), stat: { size: 1024 } });
+
+		const outcome = await request(buildApp())
+			.get(`/assets/${VALID_UUID}`)
+			.timeout(2000)
+			.then(
+				() => 'completed',
+				(error) => {
+					if (error.timeout) return 'timed out';
+					if (error.code === 'ECONNRESET' && error.message === 'aborted') return 'aborted';
+					return `failed: ${error.name}: ${error.message}`;
+				}
+			);
+
+		expect(outcome).toBe('aborted');
+	});
+
+	it('returns the structured error when the asset stream fails before any data', async () => {
+		const stream = new Readable({
+			read() {
+				this.destroy(new Error('storage read failed'));
+			},
+		});
+
+		getAssetSpy.mockReset().mockResolvedValue({ stream, file: fakeFile(), stat: { size: 9 } });
+
+		const res = await request(buildApp()).get(`/assets/${VALID_UUID}`);
+
+		expect(res.status).toBe(500);
+		expect(res.body.errors[0].extensions.code).toBe('INTERNAL_SERVER_ERROR');
+	});
+
+	it('serves the asset body on success', async () => {
+		getAssetSpy.mockReset().mockResolvedValue({
+			stream: Readable.from(Buffer.from('test-body')),
+			file: { ...fakeFile(), type: 'text/plain' },
+			stat: { size: 9 },
+		});
+
+		const res = await request(buildApp()).get(`/assets/${VALID_UUID}`);
+
+		expect(res.status).toBe(200);
+		expect(res.text).toBe('test-body');
 	});
 });
 

@@ -223,30 +223,35 @@ router.get(
 
 		const { stream, file, stat } = await service.getAsset(id, { transformationParams, acceptFormat }, range);
 
-		const filename = req.params['filename'] ?? file.filename_download;
-		res.attachment(filename);
-		res.setHeader('Content-Type', file.type);
-		res.setHeader('Accept-Ranges', 'bytes');
-		res.setHeader('Cache-Control', getCacheControlHeader(req, getMilliseconds(env['ASSETS_CACHE_TTL']), false, true));
-		res.setHeader('Vary', vary.join(', '));
+		try {
+			const filename = req.params['filename'] ?? file.filename_download;
+			res.attachment(filename);
+			res.setHeader('Content-Type', file.type);
+			res.setHeader('Accept-Ranges', 'bytes');
+			res.setHeader('Cache-Control', getCacheControlHeader(req, getMilliseconds(env['ASSETS_CACHE_TTL']), false, true));
+			res.setHeader('Vary', vary.join(', '));
 
-		const unixTime = Date.parse(file.modified_on);
+			const unixTime = Date.parse(file.modified_on);
 
-		if (!Number.isNaN(unixTime)) {
-			const lastModifiedDate = new Date(unixTime);
-			res.setHeader('Last-Modified', lastModifiedDate.toUTCString());
-		}
+			if (!Number.isNaN(unixTime)) {
+				const lastModifiedDate = new Date(unixTime);
+				res.setHeader('Last-Modified', lastModifiedDate.toUTCString());
+			}
 
-		if (range) {
-			res.setHeader('Content-Range', `bytes ${range.start}-${range.end || stat.size - 1}/${stat.size}`);
-			res.status(206);
-			res.setHeader('Content-Length', (range.end ? range.end + 1 : stat.size) - (range.start || 0));
-		} else {
-			res.setHeader('Content-Length', stat.size);
-		}
+			if (range) {
+				res.setHeader('Content-Range', `bytes ${range.start}-${range.end || stat.size - 1}/${stat.size}`);
+				res.status(206);
+				res.setHeader('Content-Length', (range.end ? range.end + 1 : stat.size) - (range.start || 0));
+			} else {
+				res.setHeader('Content-Length', stat.size);
+			}
 
-		if ('download' in req.query === false) {
-			res.setHeader('Content-Disposition', contentDisposition(filename, { type: 'inline' }));
+			if ('download' in req.query === false) {
+				res.setHeader('Content-Disposition', contentDisposition(filename, { type: 'inline' }));
+			}
+		} catch (error) {
+			stream.destroy();
+			throw error;
 		}
 
 		let isDataSent = false;
@@ -278,6 +283,8 @@ router.get(
 						},
 					],
 				});
+			} else {
+				res.destroy();
 			}
 		});
 
