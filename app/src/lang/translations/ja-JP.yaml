@@ -587,8 +587,15 @@ displays:
     text: テキスト
   icon:
     icon: アイコン
+  image:
+    image: 画像
   labels:
+    labels: ラベル
     choices_value_placeholder: 値を入力...
+    choices_text_placeholder: テキストを入力…
+  mime-type:
+    mime-type: MIMEタイプ
+    description: ファイルのMIME-Typeを表示
   user:
     user: ユーザー
     avatar: プロフィール画像
@@ -606,6 +613,27 @@ layouts:
     comfortable: 広め
     compact: コンパクト
     cozy: 普通
+  calendar:
+    calendar: カレンダー
+    start_date_field: 開始日時
+    end_date_field: 終了日時
+    optional: オプション
+    first_day: 週の初日
+  map:
+    map: マップ
+    layers: レイヤー
+    cluster_options: クラスタリングオプション
+    find_location: 場所を検索...
+    no_compatible_fields: 互換性あるフィールドがありません
+  kanban:
+    name: かんばん
+    group_title: グループタイトル
+    group_title_placeholder: グループタイトルのフィールド...
+    title: カードタイトル
+    text: カードのテキスト
+    date: カードの日付
+    tags: カードのタグ
+    user: カードのユーザー
 both: 両方
 operations:
   log:
