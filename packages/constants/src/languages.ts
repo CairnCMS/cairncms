@@ -1,6 +1,7 @@
 /** Supported UI locales, ordered by language name rather than code. */
 export const AVAILABLE_LANGUAGES: Record<string, string> = {
 	'af-ZA': 'Afrikaans (South Africa)',
+	'sq-AL': 'Albanian (Albania)',
 	'ar-SA': 'Arabic (Saudi Arabia)',
 	'bn-IN': 'Bengali (India)',
 	'bs-BA': 'Bosnian (Bosnia and Herzegovina)',
