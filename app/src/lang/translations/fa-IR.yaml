@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: شناسه
 avatar: آواتار
 application: برنامه
@@ -76,14 +75,9 @@ create_role: ایجاد نقش
 create_user: ایجاد کاربر
 message: پیام
 delete_panel: حذف پنل
-create_translation_string: ایجاد رشته ترجمه
-no_translation_string: ویرایش رشته ترجمه
-no_translation_string_copy: هنوز هیچ رشته ترجمه ای وجود ندارد.
-translation_string_key_placeholder: کلید شته ترجمه...
-translation_string_translations_placeholder: اضافه کردن ترجمه جدید
-edit_translation_string: ویرایش متن ترجمه
-delete_translation_string_copy: >-
-  آیا مطمئنید که می خواهید رشته ترجمه "{key}" را حذف کنید؟ این عمل قابل لغو نیست.
+create_custom_translation: ایجاد ترجمه جدید
+no_custom_translations: بدون ترجمه سفارشی
+no_custom_translations_copy: هنوز هیچ ترجمه سفارشی وجود ندارد.
 invite_users: دعوت کاربران
 invite: دعوت
 email_already_invited: قبلاً برای ایمیل {email}، دعوت نامه ارسال شده است
@@ -114,13 +108,6 @@ public_label: در دسترس عموم
 public_description: اینکه کدام داده مربوط به API، بدون احراز هویت، قابل دسترسی باشد را کنترل میکند.
 admin_description: نقش مدیریتی اولیه با سطح دسترسی بدون محدودیت به برنامه و API
 not_allowed: مجاز نیست
-directus_version: نسخه دایرکتوس
-node_version: نسخه node
-node_uptime: مدت زمان اجرای node تاکنون
-os_type: نوع سیستم عامل
-os_version: نسخه سیستم عامل
-os_uptime: زمان به کار سیستم عامل
-os_totalmem: حافظه سیستم عامل
 archive: بایگانی
 archive_confirm: از بایگانی شدن این مورد مطمئنید؟
 archive_confirm_count: >-
@@ -232,6 +219,7 @@ bigInteger: عدد صحیح بزرگ
 boolean: بولین
 date: تاریخ
 date_range: بازه تاریخ
+translation_key_placeholder: یک کلید وارد کنید...
 datetime: تاریخ و ساعت
 dateTime: تاریخ و ساعت
 precision: دقت
@@ -443,6 +431,7 @@ checksum: Checksum
 owner: مالک
 edited_by: ویرایش شده توسط
 folder: پوشه
+folders: پوشه‌ها
 zoom: بزرگنمايی
 download: دانلود
 open: باز
@@ -463,8 +452,6 @@ start_export: شروع برون بری
 not_available_for_local_downloads: برای دانلودهای محلی در دسترس نیست
 exporting_no_items_to_export: موردی برای برون بری وجود ندارد پیکربندی برون بری را در زیر تنظیم کنید.
 exporting_download_hint: پس از تکمیل، این فایل {format} به طور خودکار در دستگاه شما دانلود می شود.
-exporting_batch_hint: این برون بری به صورت دسته‌ای پردازش می‌شود و پس از تکمیل، فایل {format} در کتابخانه فایل ذخیره می‌شود.
-exporting_batch_hint_forced: به دلیل تعداد زیاد موارد، این برون بری باید به صورت دسته‌ای پردازش شود و پس از تکمیل، فایل {format} در کتابخانه فایل ذخیره می‌شود.
 collection_key: کلید اصلی مجموعه
 name: نام
 primary_key_field: فیلد کلید اصلی
@@ -489,7 +476,8 @@ enable_select_button: فعالسازی دکمه انتخاب
 allow_duplicates: اجازه تکرار
 comments: دیدگاهها
 no_comments: هنوز دیدگاهی ارسال نشده
-click_to_expand: برای بازکردن، کلیک کنید
+expand: گسترش
+collapse: جمع کردن
 select_item: انتخاب آیتم
 no_items: آیتمی وجود ندارد
 search_items: جستجوی آیتمها...
@@ -613,6 +601,7 @@ errors:
   RANGE_NOT_SATISFIABLE: محدوده نامعتبر است
   METHOD_NOT_ALLOWED: روش مجاز نمی باشد
   REQUESTS_EXCEEDED: به محدودیت درخواست رسیده است
+  CONTENT_TOO_LARGE: آیتم/فایل بیشتر از حد مجاز است
 security: امنیت
 value_hashed: این مقدار به طور امن، هش شده است
 bookmark_name: نام نشانک...
@@ -950,7 +939,6 @@ settings_permissions: نقش ها و اجازه ها
 settings_project: تنظیمات پروژه
 settings_flows: اتوماسیون
 settings_presets: الگوها و نشانک ها
-settings_translation_strings: رشته های ترجمه
 one_or_more_options_are_missing: یک یا چند مورد از تنظیمات، وجود ندارد
 scope: محدوده در دسترس
 actions: فعالیت ها
@@ -998,7 +986,6 @@ page_help_settings_presets_item: >-
   **جزئیات از پیش تعیین شده** - فرمی برای مدیریت بوکمارک ها و از پیش تنظیم های مجموعه پیش فرض.
 page_help_settings_flows_collection: '**مرور Flows** - همه Flows های داخل پروژه را فهرست می کند.'
 page_help_settings_flows_item: '**جزئیات Flow ** - فضای کاری برای مدیریت یک یا چند عملیات.'
-page_help_settings_translation_strings_collection: '**مرور رشته‌های ترجمه** - همه رشته‌های ترجمه را در پروژه فهرست می‌کند.'
 page_help_users_collection: '**دایرکتوری کاربر** - لیست تمامی کاربران سیستم در این پروژه.'
 page_help_users_item: >-
   **جزئیات کاربر** — اطلاعات حساب خود را مدیریت کنید یا جزئیات سایر کاربران را مشاهده کنید.
@@ -1041,6 +1028,7 @@ directus_collection:
   directus_settings: گزینه های پیکربندی پروژه
   directus_shares: موارد به اشتراک گذاشته شده خارجی را ردیابی می کند
   directus_users: کاربران سیستمی برای پلتفرم
+  directus_translations: ترجمه های سفارشی
 fields:
   directus_activity:
     item: کلید اصلی آیتم
@@ -1536,6 +1524,7 @@ interfaces:
     zoom: بزرگنمايی
   presentation-notice:
     notice: اطلاعیه
+    no_text: هیچ متنی پیکربندی نشده است...
   list-o2m:
     one-to-many: یک به چند
     description: انتخاب چندین آیتم مرتبط
@@ -1835,3 +1824,4 @@ operations:
     flows: اتوماسیون‌ها
     flow: اتوماسیون
     data: داده Data
+    cache: Cache
