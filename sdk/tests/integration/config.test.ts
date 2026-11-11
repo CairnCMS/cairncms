@@ -8,7 +8,7 @@ import {
 	deleteCollection,
 	readCollections,
 	rest,
-	type ConfigDocumentV3,
+	type ConfigDocumentLatest,
 } from '../../src/index.js';
 import { ENV_KEYS } from './helpers/constants.js';
 
@@ -29,8 +29,8 @@ function adminClient() {
 }
 
 let admin: ReturnType<typeof adminClient>;
-let schemaWithoutProbe: ConfigDocumentV3;
-let schemaWithProbe: ConfigDocumentV3;
+let schemaWithoutProbe: ConfigDocumentLatest;
+let schemaWithProbe: ConfigDocumentLatest;
 
 async function probeExists(): Promise<boolean> {
 	const collections = await admin.request(readCollections());
@@ -77,13 +77,24 @@ describe('configSnapshot', () => {
 		expect(Object.keys(document).sort()).toEqual([...keys].sort());
 	});
 
-	it('captures version 3 by default and manages no kinds for an empty resources list', async () => {
+	it("captures the server's latest version by default and manages no kinds for an empty resources list", async () => {
 		const latest = await admin.request(configSnapshot());
 		const none = await admin.request(configSnapshot({ resources: [] }));
 
-		expect(latest.manifest.version).toBe(3);
+		expect(latest.manifest.version).toBe(4);
 		expect(Object.keys(latest).sort()).toEqual([...V3_KEYS].sort());
 		expect(none.manifest.resources).toEqual([]);
+	});
+
+	it('leaves an unsupported manifest version for the server to refuse', async () => {
+		const rejection = await admin.request(configSnapshot({ manifestVersion: 99 })).then(
+			() => {
+				throw new Error('Expected the snapshot to be refused');
+			},
+			(error: RequestRejection) => error
+		);
+
+		expect(rejection.errors[0]!.extensions['code']).toBe('CONFIG_UNSUPPORTED_VERSION');
 	});
 });
 
@@ -93,7 +104,7 @@ describe('configApply', () => {
 
 		const plan = await admin.request(configApply(schemaWithProbe, { dryRun: true }));
 
-		expect(plan).toMatchObject({ planVersion: 3, manifestVersion: 3 });
+		expect(plan).toMatchObject({ planVersion: 3, manifestVersion: 4 });
 		expect(plan.changes).toContainEqual(probeCreate);
 		expect(await probeExists()).toBe(false);
 	});

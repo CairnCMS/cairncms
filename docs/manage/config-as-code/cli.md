@@ -13,7 +13,7 @@ Use the config-as-code CLI with a directory of YAML files. Local mode uses the C
 cairncms config snapshot <path> [--yes] [--url <url>] [--token-stdin]
 ```
 
-`path` is required. A new directory captures manifest version 3 and all supported kinds. An existing manifest preserves its version and resource list. To select resources, pre-create the [manifest](/docs/manage/config-as-code/resources/#the-manifest).
+`path` is required. A new directory captures the latest [manifest version](/docs/manage/config-as-code/resources/#the-manifest) and all supported kinds. An existing manifest preserves its version and resource list. To select resources, pre-create the [manifest](/docs/manage/config-as-code/resources/#the-manifest).
 
 The CLI prompts before overwriting a non-empty directory. `--yes` skips that prompt. With `--token-stdin`, a non-empty remote destination also requires `--yes`.
 

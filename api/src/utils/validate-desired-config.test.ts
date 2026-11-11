@@ -100,7 +100,7 @@ describe('validateConfigManifest', () => {
 	});
 
 	it('raises the unsupported-version code for a newer version', () => {
-		expect(() => validateConfigManifest({ version: 4, resources: [] }, 'test')).toThrow(
+		expect(() => validateConfigManifest({ version: 5, resources: [] }, 'test')).toThrow(
 			ConfigUnsupportedVersionException
 		);
 	});

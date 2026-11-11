@@ -1,5 +1,5 @@
 import type { RestCommand } from '../../types.js';
-import type { ConfigDocument } from './snapshot.js';
+import type { ConfigDocument, ConfigDocumentLatest } from './snapshot.js';
 
 export type ConfigApplyOptions = {
 	dryRun?: boolean;
@@ -42,7 +42,7 @@ export type ConfigApplyOutput = {
  * @returns Returns the plan of intended changes.
  */
 export function configApply<Schema>(
-	document: ConfigDocument,
+	document: ConfigDocument | ConfigDocumentLatest,
 	options: ConfigApplyOptions & { dryRun: true }
 ): RestCommand<ConfigPlanOutput, Schema>;
 
@@ -53,7 +53,7 @@ export function configApply<Schema>(
  * @returns Returns the configuration step's result in `data`, null when a schema-managed run skipped that step, and the plan, overall result and step states in `meta`. Use `meta.result` and `meta.steps` to determine what was applied.
  */
 export function configApply<Schema>(
-	document: ConfigDocument,
+	document: ConfigDocument | ConfigDocumentLatest,
 	options?: ConfigApplyOptions & { dryRun?: false }
 ): RestCommand<ConfigApplyOutput, Schema>;
 
@@ -64,12 +64,12 @@ export function configApply<Schema>(
  * @returns Returns the plan for a dry run, or the apply outcome otherwise.
  */
 export function configApply<Schema>(
-	document: ConfigDocument,
+	document: ConfigDocument | ConfigDocumentLatest,
 	options?: ConfigApplyOptions
 ): RestCommand<ConfigPlanOutput | ConfigApplyOutput, Schema>;
 
 export function configApply<Schema>(
-	document: ConfigDocument,
+	document: ConfigDocument | ConfigDocumentLatest,
 	options: ConfigApplyOptions = {}
 ): RestCommand<ConfigPlanOutput | ConfigApplyOutput, Schema> {
 	return () => {

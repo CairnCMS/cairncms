@@ -14,6 +14,7 @@ import { CONFIG_REGISTRY } from './config/registry.js';
 import logger from '../logger.js';
 import type { DeepPartial } from '@cairncms/types';
 import type { CairnConfig, ConfigSchemaCollection, ConfigSettings } from '../types/config.js';
+import type { ConfigFieldDescriptor } from './config/descriptor.js';
 
 vi.mock('../logger.js', () => ({
 	default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
@@ -1180,5 +1181,47 @@ describe('writeConfigDirectory extension-settings preservation source', () => {
 		const out = await readYaml(path.join(tmpDir, 'extension-settings', FILE));
 		expect(out.global.url).toBe('{{CAIRNCMS_CONFIG_WIDGET_URL}}');
 		expect(out.global.color).toBe('blue');
+	});
+});
+
+describe('writeConfigDirectory field manifest versions', () => {
+	const real = CONFIG_REGISTRY.settings;
+	const base = real.recordFields.find((field) => field.name === 'project_url')!;
+	const gated: ConfigFieldDescriptor = { ...base, name: 'gated_url', formatVersion: 4 };
+	const PLACEHOLDER = '{{CAIRNCMS_CONFIG_GATED_URL}}';
+
+	beforeEach(() => {
+		CONFIG_REGISTRY.settings = {
+			...real,
+			recordFields: [...real.recordFields, gated],
+			valueFieldOrder: [...real.valueFieldOrder, gated.name],
+		};
+	});
+
+	afterEach(() => {
+		CONFIG_REGISTRY.settings = real;
+	});
+
+	function settingsAt(version: 3 | 4, extra: Record<string, unknown> = {}): CairnConfig {
+		return makeConfig({
+			manifest: { version, resources: ['settings'] },
+			settings: [{ ...settings(), ...extra } as ConfigSettings],
+		});
+	}
+
+	it('does not restore a placeholder for a field newer than the tree version', async () => {
+		await writeExisting('settings', 'project.yaml', { gated_url: PLACEHOLDER });
+
+		await writeConfigDirectory(settingsAt(3), tmpDir);
+
+		expect(await readYaml(path.join(tmpDir, 'settings', 'project.yaml'))).not.toHaveProperty('gated_url');
+	});
+
+	it('restores the placeholder from the field version', async () => {
+		await writeExisting('settings', 'project.yaml', { gated_url: PLACEHOLDER });
+
+		await writeConfigDirectory(settingsAt(4, { gated_url: 'https://resolved.example' }), tmpDir);
+
+		expect((await readYaml(path.join(tmpDir, 'settings', 'project.yaml'))).gated_url).toBe(PLACEHOLDER);
 	});
 });

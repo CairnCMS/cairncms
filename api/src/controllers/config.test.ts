@@ -4,6 +4,7 @@ import express from 'express';
 import request from 'supertest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CairnConfig, ConfigPlan, SerializedConfigPlan } from '../types/config.js';
+import { LATEST_MANIFEST_VERSION } from '../utils/config-contract.js';
 
 const { envOverrides } = vi.hoisted(() => ({ envOverrides: { LOG_STYLE: 'pretty' } as Record<string, unknown> }));
 
@@ -449,7 +450,7 @@ describe('POST /config/apply run record', () => {
 	it('emits no record and no run id for an unsupported manifest version', async () => {
 		const res = await request(makeApp(ADMIN))
 			.post('/config/apply')
-			.send({ ...WIRE_BODY, manifest: { version: 4, resources: ['roles'] } });
+			.send({ ...WIRE_BODY, manifest: { version: 5, resources: ['roles'] } });
 
 		expect(res.status).toBe(400);
 		expect(records()).toHaveLength(0);
@@ -632,8 +633,20 @@ describe('GET /config/snapshot manifest version', () => {
 		const res = await request(makeApp(ADMIN)).get('/config/snapshot');
 
 		expect(res.status).toBe(200);
-		expect(readCurrentConfig).toHaveBeenCalledWith(expect.objectContaining({ manifestVersion: 3 }));
-		expect(res.body.data.manifest.version).toBe(3);
+
+		expect(readCurrentConfig).toHaveBeenCalledWith(
+			expect.objectContaining({ manifestVersion: LATEST_MANIFEST_VERSION })
+		);
+
+		expect(res.body.data.manifest.version).toBe(LATEST_MANIFEST_VERSION);
+	});
+
+	it('honors an explicit v4 request', async () => {
+		const res = await request(makeApp(ADMIN)).get('/config/snapshot?manifest_version=4');
+
+		expect(res.status).toBe(200);
+		expect(readCurrentConfig).toHaveBeenCalledWith(expect.objectContaining({ manifestVersion: 4 }));
+		expect(res.body.data.manifest.version).toBe(4);
 	});
 
 	it('honors an explicit v1 request rather than the default', async () => {
@@ -653,7 +666,7 @@ describe('GET /config/snapshot manifest version', () => {
 	});
 
 	it('refuses an unsupported version without reading current state', async () => {
-		const res = await request(makeApp(ADMIN)).get('/config/snapshot?manifest_version=4');
+		const res = await request(makeApp(ADMIN)).get('/config/snapshot?manifest_version=5');
 
 		expect(res.status).toBe(400);
 		expect(res.body.errors[0].extensions.code).toBe('CONFIG_UNSUPPORTED_VERSION');

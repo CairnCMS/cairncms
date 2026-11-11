@@ -14,6 +14,7 @@ import {
 	RemoteConfigPlanChange,
 	RemoteErrorExtensions,
 } from '../../cli/commands/config/remote-response-schema.js';
+import { LATEST_MANIFEST_VERSION } from '../config-contract.js';
 import { buildRecordSchemas, validateConfigRecord } from '../validate-desired-config.js';
 import { computeKindPlan, diffRecordValues } from './diff.js';
 import type { ConfigKindTypes, ConfigResourceDescriptor, KindPlan } from './descriptor.js';
@@ -537,6 +538,63 @@ describe('config kind wiring conformance', () => {
 	});
 });
 
+/** Field versions are projected only on singleton documents, whose record fields are top-level. */
+function fieldVersionProblems(descriptor: ConfigResourceDescriptor<ConfigKindTypes>): string[] {
+	const problems: string[] = [];
+	const shape = descriptor.layout.documentShape;
+	const singleton = typeof shape === 'object' && 'singleton' in shape;
+
+	for (const field of descriptor.documentIdentityFields) {
+		if (field.formatVersion !== undefined)
+			problems.push(`${descriptor.kind} identity field ${field.name} has a version`);
+	}
+
+	for (const field of descriptor.recordFields) {
+		if (field.formatVersion === undefined) continue;
+
+		if (!singleton) problems.push(`${descriptor.kind} field ${field.name} has a version on a non-singleton kind`);
+
+		if (field.formatVersion < descriptor.formatVersion) {
+			problems.push(`${descriptor.kind} field ${field.name} predates its kind`);
+		}
+
+		if (field.formatVersion > LATEST_MANIFEST_VERSION) {
+			problems.push(`${descriptor.kind} field ${field.name} needs an unsupported version`);
+		}
+	}
+
+	return problems;
+}
+
+describe('field manifest version conformance', () => {
+	it.each(listConfigKinds())('%s declares field versions only where they are projected', (kind) => {
+		expect(fieldVersionProblems(getDescriptor(kind) as unknown as ConfigResourceDescriptor<ConfigKindTypes>)).toEqual(
+			[]
+		);
+	});
+
+	it('flags a field version on a flat kind, an identity field, and a version outside the supported range', () => {
+		const roles = getDescriptor('roles') as unknown as ConfigResourceDescriptor<ConfigKindTypes>;
+		const [identity, ...rest] = roles.recordFields;
+
+		const flat = { ...roles, recordFields: [{ ...identity!, formatVersion: 4 }, ...rest] };
+		expect(fieldVersionProblems(flat)).toEqual([`roles field ${identity!.name} has a version on a non-singleton kind`]);
+
+		const settings = getDescriptor('settings') as unknown as ConfigResourceDescriptor<ConfigKindTypes>;
+		const [first, ...others] = settings.recordFields;
+		const early = { ...settings, recordFields: [{ ...first!, formatVersion: 1 }, ...others] };
+		const late = { ...settings, recordFields: [{ ...first!, formatVersion: LATEST_MANIFEST_VERSION + 1 }, ...others] };
+		const keyed = { ...roles, documentIdentityFields: [{ ...roles.documentIdentityFields[0]!, formatVersion: 1 }] };
+
+		expect(fieldVersionProblems(early)).toEqual([`settings field ${first!.name} predates its kind`]);
+		expect(fieldVersionProblems(late)).toEqual([`settings field ${first!.name} needs an unsupported version`]);
+
+		expect(fieldVersionProblems(keyed)).toEqual([
+			`roles identity field ${roles.documentIdentityFields[0]!.name} has a version`,
+		]);
+	});
+});
+
 describe('cross-kind omission contract', () => {
 	// Independently authored, not read from the descriptor, so a requiredness or omission change must update it.
 	const OPTIONAL_FIELDS: Record<ConfigKind, string[]> = {
@@ -558,6 +616,7 @@ describe('cross-kind omission contract', () => {
 			'project_url',
 			'public_note',
 			'storage_asset_presets',
+			'storage_asset_public_transforms',
 			'storage_asset_transform',
 			'storage_default_folder',
 		],

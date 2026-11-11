@@ -59,6 +59,7 @@ export interface ConfigSettings {
 	auth_password_policy?: string | null;
 	auth_login_attempts?: number | null;
 	storage_asset_transform?: string | null;
+	storage_asset_public_transforms?: boolean;
 	storage_asset_presets?: unknown[] | null;
 	basemaps?: unknown[] | null;
 	custom_aspect_ratios?: unknown[] | null;
@@ -145,6 +146,7 @@ export type SettingsValues = {
 	auth_password_policy: string | null;
 	auth_login_attempts: number | null;
 	storage_asset_transform: string | null;
+	storage_asset_public_transforms: boolean;
 	storage_asset_presets: unknown[] | null;
 	basemaps: unknown[] | null;
 	custom_aspect_ratios: unknown[] | null;

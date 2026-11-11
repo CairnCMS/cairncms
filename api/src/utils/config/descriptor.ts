@@ -50,6 +50,8 @@ export interface ConfigFieldDescriptor {
 	omissionPreservesCurrent: boolean;
 	/** A record field that is part of the record's identity (e.g. a permission's collection/action), excluded from canonical values. */
 	identityComponent?: boolean;
+	/** The manifest version that introduced the field. Absent means the kind's own version. Only singleton kinds may set it. */
+	formatVersion?: number;
 }
 
 export type ConfigDocumentShape =

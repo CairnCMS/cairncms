@@ -6,7 +6,7 @@ import type { ExtensionDeclarationSnapshot } from './config/descriptor.js';
 import { computeKindPlan } from './config/diff.js';
 import { dependencyClosure, dependencyOrder } from './config/graph.js';
 import { computeSchemaPlan } from './config/handlers/schema.js';
-import { getDescriptor, listConfigKinds } from './config/registry.js';
+import { descriptorAtVersion, getDescriptor, listConfigKinds } from './config/registry.js';
 import { projectSchemaCleanup } from './config/schema-cleanup.js';
 
 const ADMIN_CONTINUITY_MESSAGE = 'Configuration must retain at least one role with administrator access.';
@@ -48,7 +48,8 @@ export function computeConfigPlan(
 		const descriptor = getDescriptor(kind);
 		const currentRecords = descriptor.projectDocuments(projected[kind] as never).records;
 		const desiredRecords = descriptor.projectDocuments(desired[kind] as never).records;
-		const raw = computeKindPlan(descriptor as never, currentRecords as never, desiredRecords as never);
+		const managedFields = descriptorAtVersion(descriptor, desired.manifest.version);
+		const raw = computeKindPlan(managedFields as never, currentRecords as never, desiredRecords as never);
 
 		const context = {
 			dependency: makeDependencyAccessor(descriptor.dependencies, published),
