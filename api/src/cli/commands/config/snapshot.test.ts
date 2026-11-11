@@ -63,6 +63,8 @@ const SETTINGS_DOC = {
 	storage_default_folder: null,
 };
 
+const SETTINGS_DOC_V4 = { ...SETTINGS_DOC, storage_asset_public_transforms: false };
+
 function without(obj: Record<string, unknown>, key: string): Record<string, unknown> {
 	const copy = { ...obj };
 	delete copy[key];
@@ -393,7 +395,7 @@ describe('configSnapshot manifest version preservation', () => {
 								roles: [],
 								permissions: [],
 								folders: [],
-								settings: [{ ...SETTINGS_DOC, future_setting: true }],
+								settings: [{ ...SETTINGS_DOC_V4, future_setting: true }],
 								'extension-settings': [],
 								translations: [],
 								schema: [],
@@ -426,7 +428,7 @@ describe('configSnapshot manifest version preservation', () => {
 				roles: [],
 				permissions: [],
 				folders: [],
-				settings: [SETTINGS_DOC],
+				settings: [SETTINGS_DOC_V4],
 				'extension-settings': [],
 				translations: [],
 				schema: collections,

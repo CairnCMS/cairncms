@@ -576,6 +576,9 @@ describeForVendors(
 					const captured = loadYaml(await fs.readFile(await schemaFileOf(tree, collection), 'utf8')) as Document;
 					expect(captured['fields'].map((field: { field: string }) => field.field)).toContain('title');
 
+					const settings = loadYaml(await fs.readFile(path.join(tree, 'settings', 'project.yaml'), 'utf8')) as Document;
+					expect(typeof settings['storage_asset_public_transforms']).toBe('boolean');
+
 					const local = await runCli(api, ['config', 'apply', tree, '--dry-run'], {
 						LOG_LEVEL: 'info',
 						LOG_STYLE: 'raw',

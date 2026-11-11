@@ -82,6 +82,7 @@ describe('config command request construction', () => {
 					auth_password_policy: null,
 					auth_login_attempts: 25,
 					storage_asset_transform: 'all',
+					storage_asset_public_transforms: false,
 					storage_asset_presets: null,
 					basemaps: null,
 					custom_aspect_ratios: null,

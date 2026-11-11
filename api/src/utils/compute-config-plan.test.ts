@@ -952,3 +952,27 @@ describe('computeConfigPlan field manifest versions', () => {
 		]);
 	});
 });
+
+describe('computeConfigPlan storage_asset_public_transforms version gate', () => {
+	const current = makeConfig({
+		manifest: { version: 4, resources: ['settings'] },
+		settings: [{ project_name: 'Source', storage_asset_public_transforms: true }],
+	});
+
+	function desiredAt(version: 3 | 4): CairnConfig {
+		return makeConfig({
+			manifest: { version, resources: ['settings'] },
+			settings: [{ project_name: 'Source', storage_asset_public_transforms: false }],
+		});
+	}
+
+	it('plans no change to the setting from a version 3 document, even one that sets a different value', () => {
+		expect(computeConfigPlan(current, desiredAt(3)).settings.update).toEqual([]);
+	});
+
+	it('plans the setting from a version 4 document', () => {
+		expect(computeConfigPlan(current, desiredAt(4)).settings.update).toEqual([
+			{ changes: { storage_asset_public_transforms: { before: true, after: false } } },
+		]);
+	});
+});

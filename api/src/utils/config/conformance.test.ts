@@ -616,6 +616,7 @@ describe('cross-kind omission contract', () => {
 			'project_url',
 			'public_note',
 			'storage_asset_presets',
+			'storage_asset_public_transforms',
 			'storage_asset_transform',
 			'storage_default_folder',
 		],

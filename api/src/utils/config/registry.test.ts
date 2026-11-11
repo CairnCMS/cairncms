@@ -56,21 +56,19 @@ describe('kindsForVersion gate', () => {
 });
 
 describe('field manifest versions', () => {
-	const settings = getDescriptor('settings');
-	const gated: ConfigFieldDescriptor = { ...settings.recordFields[0]!, name: 'gated_field', formatVersion: 4 };
+	const plain: ConfigFieldDescriptor = { ...getDescriptor('settings').recordFields[0]!, name: 'plain_field' };
+	const gated: ConfigFieldDescriptor = { ...plain, name: 'gated_field', formatVersion: 4 };
+	const unversioned = { formatVersion: 2, recordFields: [plain], valueFieldOrder: ['plain_field'] };
 
 	const versioned = {
-		...settings,
-		recordFields: [...settings.recordFields, gated],
-		valueFieldOrder: [...settings.valueFieldOrder, 'gated_field'],
+		formatVersion: 2,
+		recordFields: [plain, gated],
+		valueFieldOrder: ['plain_field', 'gated_field'],
 	};
 
 	it('places a field without its own version at its kind version', () => {
-		expect(fieldsAboveVersion(settings, 2)).toEqual([]);
-
-		expect(fieldsAboveVersion({ ...settings, formatVersion: 3 }, 2).map((field) => field.name)).toEqual(
-			settings.recordFields.map((field) => field.name)
-		);
+		expect(fieldsAboveVersion(unversioned, 2)).toEqual([]);
+		expect(fieldsAboveVersion({ ...unversioned, formatVersion: 3 }, 2)).toEqual([plain]);
 	});
 
 	it('excludes a field below its own version and admits it from that version', () => {
@@ -81,12 +79,19 @@ describe('field manifest versions', () => {
 	it('restricts the record fields and value order, leaving the source descriptor unchanged', () => {
 		const atThree = descriptorAtVersion(versioned, 3);
 
-		expect(atThree.recordFields.map((field) => field.name)).not.toContain('gated_field');
-		expect(atThree.valueFieldOrder).not.toContain('gated_field');
-		expect(atThree.valueFieldOrder).toEqual(settings.valueFieldOrder);
-		expect(versioned.recordFields).toContain(gated);
+		expect(atThree.recordFields).toEqual([plain]);
+		expect(atThree.valueFieldOrder).toEqual(['plain_field']);
+		expect(versioned.recordFields).toEqual([plain, gated]);
+		expect(versioned.valueFieldOrder).toEqual(['plain_field', 'gated_field']);
 		expect(descriptorAtVersion(versioned, 4)).toBe(versioned);
-		expect(descriptorAtVersion(settings, 2)).toBe(settings);
+		expect(descriptorAtVersion(unversioned, 2)).toBe(unversioned);
+	});
+
+	it('introduces storage_asset_public_transforms at version 4 as the only settings field above version 3', () => {
+		const settings = getDescriptor('settings');
+
+		expect(fieldsAboveVersion(settings, 3).map((field) => field.name)).toEqual(['storage_asset_public_transforms']);
+		expect(fieldsAboveVersion(settings, 4)).toEqual([]);
 	});
 
 	it('removes excluded fields from a copy of the document without mutating the original', () => {

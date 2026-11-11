@@ -29,7 +29,7 @@ Use the release and vendor recorded by your source, not these illustrative value
 | 1 | `roles`, `permissions` | 1.0.0 |
 | 2 | Version 1 kinds plus `folders`, `settings`, `extension-settings`, `translations` | 1.6.0 |
 | 3 | Version 2 kinds plus `schema` | 1.7.0 |
-| 4 | Version 3 kinds | 1.8.0 |
+| 4 | Version 3 kinds, plus newer [project settings](/docs/manage/config-as-code/resources/project-settings/) fields | 1.8.0 |
 
 A new directory uses the latest manifest version and all seven kinds. Re-snapshotting an existing directory preserves its version and resource list. Pre-create a manifest to select a narrower scope or an earlier version. `resources: []` is an explicitly empty scope.
 
