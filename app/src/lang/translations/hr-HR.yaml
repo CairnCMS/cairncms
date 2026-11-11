@@ -1,21 +1,20 @@
----
 ## Be aware:
-#Due to the way this is imported, JavaScript reserved words, including "delete", "private",
-#"void", etc are stripped out.
-#Illegal words:
-#'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
-#'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
-#'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
-#'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
-#'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
-#'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
-#'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
-#'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
-#'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
-#'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
-#'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
-#'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
-#'Proxy', 'Intl'
+#  Due to the way this is imported, JavaScript reserved words, including "delete", "private",
+# "void", etc are stripped out.
+# Illegal words:
+# 'break', 'case', 'class', 'catch', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+# 'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+# 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void',
+# 'while', 'with', 'yield', 'enum', 'await', 'implements', 'package', 'protected', 'static',
+# 'interface', 'private', 'public', 'arguments', 'Infinity', 'NaN', 'undefined', 'null', 'true',
+# 'false', 'eval', 'uneval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'decodeURI',
+# 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape', 'unescape', 'Object',
+# 'Function', 'Boolean', 'Symbol', 'Error', 'EvalError', 'InternalError', 'RangeError',
+# 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', 'Number', 'Math', 'Date', 'String',
+# 'RegExp', 'Array', 'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+# 'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'Map', 'Set', 'WeakMap', 'WeakSet',
+# 'SIMD', 'ArrayBuffer', 'DataView', 'JSON', 'Promise', 'Generator', 'GeneratorFunction', 'Reflect',
+# 'Proxy', 'Intl'
 identifier: Identifikator
 avatar: Avatar
 application: Aplikacija
@@ -76,14 +75,6 @@ create_role: Stvori novu ulogu
 create_user: Dodaj korisnika
 message: Poruka
 delete_panel: Ukloni ploču
-create_translation_string: Dodaj prijevodni niz
-no_translation_string: Nema prijevodnih nizova
-no_translation_string_copy: Još nema prijevodnih nizova.
-translation_string_key_placeholder: Ključ niza prijevoda...
-translation_string_translations_placeholder: Dodaj novi prijevod
-edit_translation_string: Uredi prijevodni niz
-delete_translation_string_copy: >-
-  Jeste li sigurni da želite izbrisati prijevodni niz "{key}"? Ova se radnja ne može poništiti.
 invite_users: Pozovite korisnike
 invite: Pozovi
 email_already_invited: Adresa e-pošte "{email}" već pozvana
@@ -114,13 +105,6 @@ public_label: Javno
 public_description: Određuje koji su API podaci dostupni bez provjere autentičnosti.
 admin_description: Početna administrativna uloga s neograničenim pristupom aplikaciji/API-ju.
 not_allowed: Nije dopušteno
-directus_version: CairnCMS verzija
-node_version: Node verzija
-node_uptime: Node vrijeme rada
-os_type: Vrsta OS-a
-os_version: OS verzija
-os_uptime: OS vrijeme rada
-os_totalmem: OS memorija
 archive: Arhiva
 archive_confirm: Jeste li sigurni da želite arhivirati ovu stavku?
 archive_confirm_count: >-
@@ -454,11 +438,9 @@ open_file_in_tab: Otvori datoteku u novoj kartici
 start_export: Pokreni izvoz
 not_available_for_local_downloads: Nije dostupno za lokalna preuzimanja
 exporting_all_items_in_collection: Izvoz svih {total} stavki unutar {collection}.
-exporting_limited_items_in_collection: Izvoz {limit} od {total} stavki unutar {collection}.
+exporting_limited_items_in_collection: 'Izvoz {limit} od {total} stavki unutar {collection}.'
 exporting_no_items_to_export: Nema stavki za izvoz. Podesite konfiguraciju izvoza u nastavku.
 exporting_download_hint: Nakon dovršetka, {format} tip datoteke automatski će se preuzeti na vaš uređaj.
-exporting_batch_hint: Ovaj će se izvoz obraditi u serijama, a nakon dovršetka, {format} datoteka bit će spremljena u biblioteku datoteka.
-exporting_batch_hint_forced: Zbog velikog broja stavki, ovaj izvoz se mora obraditi u serijama, a nakon dovršetka, {format} datoteka bit će spremljena u biblioteku datoteka.
 collection_key: Ključ zbirke
 name: Naziv
 primary_key_field: Polje primarnog ključa
@@ -483,7 +465,6 @@ enable_select_button: Omogući gumb za odabir
 allow_duplicates: Dopusti duplikate
 comments: Komentari
 no_comments: Još nema komentara
-click_to_expand: Klikni za proširenje
 select_item: Odaberi stavku
 no_items: Nema stavki
 search_items: Pretraži stavke...
@@ -932,7 +913,6 @@ settings_permissions: Uloge i dopuštenja
 settings_project: Postavke projekta
 settings_flows: Tokovi
 settings_presets: Zadane postavke i oznake
-settings_translation_strings: Prijevodni nizovi
 one_or_more_options_are_missing: Nedostaje jedna ili više opcija
 scope: Opseg
 actions: Radnje
@@ -980,7 +960,6 @@ page_help_settings_presets_item: >-
   **Unaprijed postavljene pojedinosti** — Obrazac za upravljanje oznakama i zadanim postavkama zbirke.
 page_help_settings_flows_collection: '**Pregledaj tokove** — Popisuje sve tokove unutar projekta.'
 page_help_settings_flows_item: '**Detalji toka** — Radni prostor za upravljanje jednom ili više operacija.'
-page_help_settings_translation_strings_collection: '**Pregledaj nizove prijevoda** — Navodi sve prijevodne nizove unutar projekta.'
 page_help_users_collection: '**Korisnički imenik** — Prikazuje sve korisnike sustava unutar ovog projekta.'
 page_help_users_item: >-
   **Pojedinosti o korisniku** — Upravljajte podacima o svom računu ili pregledajte pojedinosti drugih korisnika.
@@ -1635,7 +1614,6 @@ interfaces:
     input-translated-string: Prevedeni nizovi
     description: Odaberi ili dodaj prijevodni niz
     search_placeholder: Traži...
-    new_translation_string: Novi prijevodni niz
   boolean:
     toggle: Uključi/isključi
     description: Prebacivanje između uključivanja i isključivanja
