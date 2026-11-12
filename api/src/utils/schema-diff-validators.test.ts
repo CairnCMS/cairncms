@@ -1,3 +1,4 @@
+import { TYPES } from '@cairncms/constants';
 import type { Relation, SchemaOverview } from '@cairncms/types';
 import type { Diff } from 'deep-diff';
 import { cloneDeep, set, unset } from 'lodash-es';
@@ -382,6 +383,19 @@ describe('assertFieldTypeIsSupported', () => {
 	it('accepts a geometry type', () => {
 		expect(() => assertFieldTypeIsSupported({ type: 'geometry.Point' } as never)).not.toThrow();
 	});
+
+	it('accepts every declared type', () => {
+		for (const type of TYPES) {
+			expect(() => assertFieldTypeIsSupported({ type } as never)).not.toThrow();
+		}
+	});
+
+	it.each(['geometry.NotAType', 'geometry.point', 'geometry.', 'geometry.Point.extra'])(
+		'refuses the undeclared geometry type %s',
+		(type) => {
+			expect(() => assertFieldTypeIsSupported({ type } as never)).toThrow(`Illegal type passed: "${type}"`);
+		}
+	);
 
 	it('accepts a known knex type', () => {
 		expect(() => assertFieldTypeIsSupported({ type: 'boolean' } as never)).not.toThrow();
