@@ -30,6 +30,7 @@ import {
 	assertCollectionAbsent,
 	assertCollectionNameAllowed,
 	assertCollectionPresent,
+	assertFieldTypeIsSupported,
 } from '../utils/schema-diff-validators.js';
 import { shouldClearCache } from '../utils/should-clear-cache.js';
 
@@ -61,6 +62,12 @@ export class CollectionsService {
 		this.systemCache = systemCache;
 	}
 
+	private assertFieldTypesSupported(payload: RawCollection): void {
+		for (const field of payload.fields ?? []) {
+			if (field.type && ALIAS_TYPES.includes(field.type) === false) assertFieldTypeIsSupported(field);
+		}
+	}
+
 	/**
 	 * Create a single new collection
 	 */
@@ -70,6 +77,7 @@ export class CollectionsService {
 		}
 
 		assertCollectionNameAllowed(payload.collection);
+		this.assertFieldTypesSupported(payload);
 
 		const nestedActionEvents: ActionEventParams[] = [];
 
@@ -199,6 +207,12 @@ export class CollectionsService {
 	 * Create multiple new collections
 	 */
 	async createMany(payloads: RawCollection[], opts?: MutationOptions): Promise<string[]> {
+		if (this.accountability && this.accountability.admin !== true) {
+			throw new ForbiddenException();
+		}
+
+		for (const payload of payloads) this.assertFieldTypesSupported(payload);
+
 		const nestedActionEvents: ActionEventParams[] = [];
 
 		try {

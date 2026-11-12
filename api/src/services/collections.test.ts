@@ -81,6 +81,39 @@ describe('CollectionsService schema-apply refusals', () => {
 		expect(writes).toEqual([]);
 	});
 
+	it('createMany refuses a non-admin before checking field types or starting a transaction', async () => {
+		const transaction = vi.spyOn(db, 'transaction');
+
+		const nonAdmin = new CollectionsService({
+			knex: db,
+			schema: { collections: {}, relations: [] } as any,
+			accountability: { role: 'editor', admin: false } as any,
+		});
+
+		await expect(
+			nonAdmin.createMany([
+				{ collection: 'articles', schema: {}, fields: [{ field: 'location', type: 'geometry.Point.extra' }] },
+			] as any)
+		).rejects.toBeInstanceOf(ForbiddenException);
+
+		expect(transaction).not.toHaveBeenCalled();
+		expect(tracker.history.all).toEqual([]);
+	});
+
+	it('createMany refuses an undeclared field type in any payload before starting a transaction', async () => {
+		const transaction = vi.spyOn(db, 'transaction');
+
+		await expect(
+			service({ collections: {}, relations: [] }).createMany([
+				{ collection: 'articles', schema: {} },
+				{ collection: 'places', schema: {}, fields: [{ field: 'location', type: 'geometry.Point.extra' }] },
+			] as any)
+		).rejects.toThrow('Illegal type passed: "geometry.Point.extra"');
+
+		expect(transaction).not.toHaveBeenCalled();
+		expect(writes).toEqual([]);
+	});
+
 	it('deleteOne refuses a collection that does not exist before any write', async () => {
 		mockInspector.tableInfo.mockResolvedValue([]);
 		vi.spyOn(ItemsService.prototype, 'readByQuery').mockResolvedValue([] as any);
