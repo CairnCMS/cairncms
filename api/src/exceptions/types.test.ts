@@ -1,5 +1,7 @@
 import { BaseException } from '@cairncms/exceptions';
-import { describe, expectTypeOf, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import { RecordNotUniqueException } from './database/record-not-unique.js';
+import { MethodNotAllowedException } from './method-not-allowed.js';
 
 describe('BaseException details typing', () => {
 	it('keeps free-form details optional, without inferring a type from passed details', () => {
@@ -33,5 +35,46 @@ describe('BaseException details typing', () => {
 	it('rejects a primitive details type', () => {
 		// @ts-expect-error details must be an object type
 		new BaseException<boolean>('m', 400, 'X', false);
+	});
+});
+
+describe('RecordNotUniqueException details typing', () => {
+	it('stores details that may be absent', () => {
+		const error: unknown = new RecordNotUniqueException('email');
+
+		if (!(error instanceof RecordNotUniqueException)) throw error;
+
+		expectTypeOf(error.extensions.collection).toEqualTypeOf<string | undefined>();
+		expectTypeOf(error.extensions.field).toEqualTypeOf<string | null | undefined>();
+
+		// @ts-expect-error collection is absent when no details were passed
+		const collection: string = error.extensions['collection'];
+
+		expect(collection).toBeUndefined();
+	});
+
+	it('requires the complete shape when details are passed', () => {
+		// @ts-expect-error details without a collection are incomplete
+		new RecordNotUniqueException('email', { field: 'email' });
+	});
+});
+
+describe('MethodNotAllowedException details typing', () => {
+	it('types the allowed methods', () => {
+		const error: unknown = new MethodNotAllowedException(undefined, { allow: ['GET'] });
+
+		if (!(error instanceof MethodNotAllowedException)) throw error;
+
+		expectTypeOf(error.extensions.allow).toEqualTypeOf<string[]>();
+
+		// @ts-expect-error allow lists method names, not a number
+		const allow: number = error.extensions['allow'];
+
+		expect(allow).toEqual(['GET']);
+	});
+
+	it('rejects allowed methods that are not a string array', () => {
+		// @ts-expect-error allow must be a string array
+		new MethodNotAllowedException('m', { allow: 1 });
 	});
 });
