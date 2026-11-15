@@ -295,6 +295,8 @@ export const driverErrorFixtures: DriverErrorFixture[] = [
 			sqlMessage: "Duplicate entry 'duplicate@example.com' for key 'probe_unique_email_unique'",
 			sql: "insert into `probe_unique` (`email`) values ('duplicate@example.com')",
 		},
+		// This message form names the index but not the table. The translator splits the index name at its first
+		// underscore, so `probe_unique_email_unique` reads as collection `probe` and field `unique_email`.
 		expected: {
 			type: 'RecordNotUniqueException',
 			message: 'Field "unique_email" has to be unique.',
