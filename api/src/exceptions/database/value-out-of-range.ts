@@ -6,7 +6,7 @@ type Exceptions = {
 	invalid?: string;
 };
 
-export class ValueOutOfRangeException extends BaseException {
+export class ValueOutOfRangeException extends BaseException<Partial<Exceptions>> {
 	constructor(field: string | null, exceptions?: Exceptions) {
 		if (field) {
 			super(`Numeric value in field "${field ?? ''}" is out of range.`, 400, 'VALUE_OUT_OF_RANGE', exceptions);
