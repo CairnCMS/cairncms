@@ -1,7 +1,7 @@
 import { BaseException } from '@cairncms/exceptions';
 import type { Range } from '@cairncms/storage';
 
-export class RangeNotSatisfiableException extends BaseException<Record<string, never>> {
+export class RangeNotSatisfiableException extends BaseException<Record<string, unknown>> {
 	constructor(range?: Range) {
 		const rangeString =
 			range && (range?.start !== undefined || range?.end !== undefined)

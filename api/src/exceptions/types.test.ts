@@ -89,15 +89,15 @@ describe('MethodNotAllowedException details typing', () => {
 });
 
 describe('ForbiddenException details typing', () => {
-	it('has no details to read', () => {
+	it('starts without details and leaves metadata added later unknown', () => {
 		const error = new ForbiddenException();
 
-		expectTypeOf(error.extensions['anything']).toEqualTypeOf<undefined>();
+		expectTypeOf(error.extensions['code']).toEqualTypeOf<unknown>();
 
-		// @ts-expect-error a forbidden error carries no details
-		const detail: string = error.extensions['anything'];
+		// @ts-expect-error metadata added after construction must be narrowed before use
+		const code: string = error.extensions['code'];
 
-		expect(detail).toBeUndefined();
+		expect(code).toBeUndefined();
 	});
 });
 
