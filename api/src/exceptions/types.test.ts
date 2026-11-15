@@ -1,5 +1,6 @@
 import { BaseException, FailedValidationException } from '@cairncms/exceptions';
 import { validatePayload } from '@cairncms/utils';
+import Joi from 'joi';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { SchemaPersistedState } from '../types/index.js';
 import { ConfigFolderInUseException, type FolderBlocker } from './config-folder-in-use.js';
@@ -112,6 +113,25 @@ describe('FailedValidationException details typing', () => {
 		const valid: string | number | (string | number)[] | undefined = error.extensions.valid;
 
 		expect(valid).toBe(true);
+	});
+
+	it('keeps the first path component, which can be a number or absent', () => {
+		const fromArray = new FailedValidationException(Joi.array().items(Joi.string()).validate([123]).error!.details[0]!);
+
+		const fromObject = new FailedValidationException(
+			Joi.object({ name: Joi.string() }).validate({ name: 123 }).error!.details[0]!
+		);
+
+		const fromRoot = new FailedValidationException(Joi.string().validate(123).error!.details[0]!);
+
+		expectTypeOf(fromArray.extensions.field).toEqualTypeOf<string | number | undefined>();
+		expect(fromObject.extensions.field).toBe('name');
+		expect(fromRoot.extensions).toStrictEqual({ field: undefined });
+
+		// @ts-expect-error an array item's path starts with its index
+		const field: string | undefined = fromArray.extensions.field;
+
+		expect(field).toBe(0);
 	});
 });
 

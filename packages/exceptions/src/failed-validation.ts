@@ -3,7 +3,7 @@ import type { ValidationErrorItem } from 'joi';
 import { BaseException } from './base.js';
 
 type FailedValidationExtensions = {
-	field: string;
+	field: ValidationErrorItem['path'][number] | undefined;
 	type: FilterOperator | 'required' | 'regex';
 	valid?: unknown;
 	invalid?: unknown;
@@ -13,7 +13,7 @@ type FailedValidationExtensions = {
 export class FailedValidationException extends BaseException<Partial<FailedValidationExtensions>> {
 	constructor(error: ValidationErrorItem) {
 		const extensions: Partial<FailedValidationExtensions> = {
-			field: error.path[0] as string,
+			field: error.path[0],
 		};
 
 		const joiType = error.type;
