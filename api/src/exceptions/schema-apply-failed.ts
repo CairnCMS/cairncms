@@ -6,7 +6,12 @@ export type SchemaApplyFailedOptions = {
 	foreignKeysRestored?: boolean;
 };
 
-export class SchemaApplyFailedException extends BaseException {
+type Extensions = {
+	persisted: SchemaPersistedState | 'unknown';
+	foreignKeysRestored?: false;
+};
+
+export class SchemaApplyFailedException extends BaseException<Extensions> {
 	constructor(persisted: SchemaPersistedState | 'unknown', options?: SchemaApplyFailedOptions) {
 		const foreignKeysOff = options?.foreignKeysRestored === false;
 

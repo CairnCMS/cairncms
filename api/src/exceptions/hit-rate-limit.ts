@@ -5,7 +5,7 @@ type Extensions = {
 	reset: Date;
 };
 
-export class HitRateLimitException extends BaseException {
+export class HitRateLimitException extends BaseException<Extensions> {
 	constructor(message: string, extensions: Extensions) {
 		super(message, 429, 'REQUESTS_EXCEEDED', extensions);
 	}

@@ -1,0 +1,53 @@
+import * as sharedExceptions from '@cairncms/exceptions';
+import * as exceptions from '../exceptions/index.js';
+
+/** The sorted runtime keys of the `exceptions` member that hook, endpoint, and operation contexts receive. */
+export const exceptionsContextKeys = [
+	'AdminMutationUnverifiedTransactionException',
+	'BaseException',
+	'CONFIG_POST_COMMIT_PHASES',
+	'ConcurrencyConflictException',
+	'ConfigApplyFailedException',
+	'ConfigApplyScopeMismatchException',
+	'ConfigFolderInUseException',
+	'ConfigIdentityConflictException',
+	'ConfigInvalidException',
+	'ConfigPlaceholderUnresolvedException',
+	'ConfigPostCommitFailedException',
+	'ConfigProtectedRecordException',
+	'ConfigReadFailedException',
+	'ConfigSchemaSourceException',
+	'ConfigStateChangedException',
+	'ConfigUnsupportedVersionException',
+	'ContentTooLargeException',
+	'DestructiveChangesRequiredException',
+	'FailedValidationException',
+	'ForbiddenException',
+	'GraphQLValidationException',
+	'HitRateLimitException',
+	'IllegalAssetTransformation',
+	'InvalidConfigException',
+	'InvalidCredentialsException',
+	'InvalidIPException',
+	'InvalidOTPException',
+	'InvalidPayloadException',
+	'InvalidProviderException',
+	'InvalidQueryException',
+	'InvalidTokenException',
+	'MethodNotAllowedException',
+	'RangeNotSatisfiableException',
+	'RouteNotFoundException',
+	'SCHEMA_POST_COMMIT_PHASES',
+	'SchemaApplyFailedException',
+	'SchemaPostCommitFailedException',
+	'SchemaStateChangedException',
+	'ServiceUnavailableException',
+	'TokenExpiredException',
+	'UnexpectedResponseException',
+	'UnprocessableEntityException',
+	'UnsupportedMediaTypeException',
+	'UserSuspendedException',
+];
+
+/** The module export each `exceptions` context key must be the identical value of. */
+export const exceptionsContextExports: Record<string, unknown> = { ...exceptions, ...sharedExceptions };

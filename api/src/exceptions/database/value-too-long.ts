@@ -5,7 +5,7 @@ type Extensions = {
 	field: string | null;
 };
 
-export class ValueTooLongException extends BaseException {
+export class ValueTooLongException extends BaseException<Partial<Extensions>> {
 	constructor(field: string | null, extensions?: Extensions) {
 		if (field) {
 			super(`Value for field "${field}" is too long.`, 400, 'VALUE_TOO_LONG', extensions);

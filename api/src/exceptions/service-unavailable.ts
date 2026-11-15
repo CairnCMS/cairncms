@@ -5,7 +5,7 @@ type Extensions = {
 	[key: string]: any;
 };
 
-export class ServiceUnavailableException extends BaseException {
+export class ServiceUnavailableException extends BaseException<Extensions> {
 	constructor(message: string, extensions: Extensions) {
 		super(message, 503, 'SERVICE_UNAVAILABLE', extensions);
 	}

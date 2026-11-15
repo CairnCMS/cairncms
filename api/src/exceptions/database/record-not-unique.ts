@@ -6,7 +6,7 @@ type Extensions = {
 	invalid?: string | undefined;
 };
 
-export class RecordNotUniqueException extends BaseException {
+export class RecordNotUniqueException extends BaseException<Partial<Extensions>> {
 	constructor(field: string | null, extensions?: Extensions) {
 		if (field) {
 			super(`Field "${field}" has to be unique.`, 400, 'RECORD_NOT_UNIQUE', extensions);

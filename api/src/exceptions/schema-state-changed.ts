@@ -1,6 +1,6 @@
 import { BaseException } from '@cairncms/exceptions';
 
-export class SchemaStateChangedException extends BaseException {
+export class SchemaStateChangedException extends BaseException<Record<string, unknown>> {
 	constructor(extensions?: Record<string, unknown>) {
 		super(
 			'The schema apply conflicted with a concurrent change and was rolled back. Recompute the diff and re-apply.',
