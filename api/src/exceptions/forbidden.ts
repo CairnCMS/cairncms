@@ -2,7 +2,7 @@ import * as exceptions from '@cairncms/exceptions';
 
 const { BaseException } = exceptions;
 
-export class ForbiddenException extends BaseException {
+export class ForbiddenException extends BaseException<Record<string, never>> {
 	constructor() {
 		super(`You don't have permission to access this.`, 403, 'FORBIDDEN');
 

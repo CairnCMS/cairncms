@@ -1,6 +1,6 @@
 import { BaseException } from '@cairncms/exceptions';
 
-export class InvalidProviderException extends BaseException {
+export class InvalidProviderException extends BaseException<Record<string, never>> {
 	constructor(message = 'Invalid provider.') {
 		super(message, 403, 'INVALID_PROVIDER');
 	}

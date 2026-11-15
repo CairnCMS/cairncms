@@ -1,6 +1,6 @@
 import { BaseException } from '@cairncms/exceptions';
 
-export class InvalidPayloadException extends BaseException {
+export class InvalidPayloadException extends BaseException<Record<string, unknown>> {
 	constructor(message: string, extensions?: Record<string, unknown>) {
 		super(message, 400, 'INVALID_PAYLOAD', extensions);
 	}

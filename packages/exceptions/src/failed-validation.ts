@@ -5,12 +5,12 @@ import { BaseException } from './base.js';
 type FailedValidationExtensions = {
 	field: string;
 	type: FilterOperator | 'required' | 'regex';
-	valid?: number | string | (number | string)[];
-	invalid?: number | string | (number | string)[];
+	valid?: unknown;
+	invalid?: unknown;
 	substring?: string;
 };
 
-export class FailedValidationException extends BaseException {
+export class FailedValidationException extends BaseException<Partial<FailedValidationExtensions>> {
 	constructor(error: ValidationErrorItem) {
 		const extensions: Partial<FailedValidationExtensions> = {
 			field: error.path[0] as string,

@@ -1,6 +1,8 @@
-import { BaseException } from '@cairncms/exceptions';
+import { BaseException, FailedValidationException } from '@cairncms/exceptions';
+import { validatePayload } from '@cairncms/utils';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { RecordNotUniqueException } from './database/record-not-unique.js';
+import { ForbiddenException } from './forbidden.js';
 import { MethodNotAllowedException } from './method-not-allowed.js';
 
 describe('BaseException details typing', () => {
@@ -76,5 +78,33 @@ describe('MethodNotAllowedException details typing', () => {
 	it('rejects allowed methods that are not a string array', () => {
 		// @ts-expect-error allow must be a string array
 		new MethodNotAllowedException('m', { allow: 1 });
+	});
+});
+
+describe('ForbiddenException details typing', () => {
+	it('has no details to read', () => {
+		const error = new ForbiddenException();
+
+		expectTypeOf(error.extensions['anything']).toEqualTypeOf<undefined>();
+
+		// @ts-expect-error a forbidden error carries no details
+		const detail: string = error.extensions['anything'];
+
+		expect(detail).toBeUndefined();
+	});
+});
+
+describe('FailedValidationException details typing', () => {
+	it('leaves compared values unknown, so callers narrow them before use', () => {
+		const item = validatePayload({ published: { _eq: true } }, { published: false })[0]!.details[0]!;
+		const error = new FailedValidationException(item);
+
+		expectTypeOf(error.extensions.valid).toEqualTypeOf<unknown>();
+		expectTypeOf(error.extensions.invalid).toEqualTypeOf<unknown>();
+
+		// @ts-expect-error a compared value can be of any type, such as a boolean
+		const valid: string | number | (string | number)[] | undefined = error.extensions.valid;
+
+		expect(valid).toBe(true);
 	});
 });
