@@ -510,7 +510,7 @@ async function applyDeletes(
 			await foldersService.deleteOne(id, guardedOptions);
 		} catch (error) {
 			if (error instanceof ConfigFolderInUseException) {
-				const blockedBy = (error.extensions as { blockedBy?: unknown }).blockedBy;
+				const blockedBy = error.extensions.blockedBy;
 
 				throw new ConfigFolderInUseException(
 					`Cannot delete folder "${safeLogFragment(key)}" because it is still in use.`,

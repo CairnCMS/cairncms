@@ -1,9 +1,15 @@
 import { BaseException, FailedValidationException } from '@cairncms/exceptions';
 import { validatePayload } from '@cairncms/utils';
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import type { SchemaPersistedState } from '../types/index.js';
+import { ConfigFolderInUseException, type FolderBlocker } from './config-folder-in-use.js';
+import { ConfigPostCommitFailedException } from './config-post-commit-failed.js';
+import { ConfigProtectedRecordException } from './config-protected-record.js';
 import { RecordNotUniqueException } from './database/record-not-unique.js';
+import { DestructiveChangesRequiredException } from './destructive-changes-required.js';
 import { ForbiddenException } from './forbidden.js';
 import { MethodNotAllowedException } from './method-not-allowed.js';
+import { SchemaApplyFailedException } from './schema-apply-failed.js';
 
 describe('BaseException details typing', () => {
 	it('keeps free-form details optional, without inferring a type from passed details', () => {
@@ -106,5 +112,46 @@ describe('FailedValidationException details typing', () => {
 		const valid: string | number | (string | number)[] | undefined = error.extensions.valid;
 
 		expect(valid).toBe(true);
+	});
+});
+
+describe('config and schema exception details typing', () => {
+	it('types the persisted state of a failed schema apply', () => {
+		const error: unknown = new SchemaApplyFailedException('unknown');
+
+		if (!(error instanceof SchemaApplyFailedException)) throw error;
+
+		expectTypeOf(error.extensions.persisted).toEqualTypeOf<SchemaPersistedState | 'unknown'>();
+	});
+
+	it('types the blocker of a folder still in use', () => {
+		const error: unknown = new ConfigFolderInUseException('m', { blockedBy: 'files' });
+
+		if (!(error instanceof ConfigFolderInUseException)) throw error;
+
+		expectTypeOf(error.extensions.blockedBy).toEqualTypeOf<FolderBlocker | undefined>();
+	});
+
+	it('rejects a folder blocker that the deletion guard never reports', () => {
+		// @ts-expect-error the blocker must be a known folder reference
+		new ConfigFolderInUseException('m', { blockedBy: 'unknown-blocker' });
+	});
+
+	it('rejects deletions that are not plan deletions', () => {
+		// @ts-expect-error deletions must be a list of plan deletions
+		new DestructiveChangesRequiredException('m', { deletions: 'x' });
+	});
+
+	it('rejects a protection contributor that is not a role change', () => {
+		new ConfigProtectedRecordException('m', {
+			protection: { code: 'ADMIN_CONTINUITY_REQUIRED' },
+			// @ts-expect-error contributors must be role changes with an operation and identity
+			contributors: [{ kind: 'users' }],
+		});
+	});
+
+	it('rejects an unknown post-commit phase', () => {
+		// @ts-expect-error the phase must be a config post-commit phase
+		new ConfigPostCommitFailedException('bogus');
 	});
 });

@@ -13,7 +13,12 @@ const MESSAGES: Record<ConfigPostCommitPhase, string> = {
 		'The configuration was committed, but post-commit steps failed afterward. Clear the cache with POST /utils/cache/clear to recover, and note that some hooks or flows bound to post-commit events may not have run.',
 };
 
-export class ConfigPostCommitFailedException extends BaseException {
+type Extensions = {
+	committed: true;
+	phase: ConfigPostCommitPhase;
+};
+
+export class ConfigPostCommitFailedException extends BaseException<Extensions> {
 	constructor(phase: ConfigPostCommitPhase) {
 		super(MESSAGES[phase], 500, 'CONFIG_POST_COMMIT_FAILED', {
 			committed: true,

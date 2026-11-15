@@ -1,6 +1,6 @@
 import { BaseException } from '@cairncms/exceptions';
 
-export class ConcurrencyConflictException extends BaseException {
+export class ConcurrencyConflictException extends BaseException<Record<string, unknown>> {
 	constructor(extensions?: Record<string, unknown>) {
 		super(
 			'The record was modified concurrently and the change was not applied. Reread the current state and retry.',

@@ -1,6 +1,6 @@
 import { BaseException } from '@cairncms/exceptions';
 
-export class AdminMutationUnverifiedTransactionException extends BaseException {
+export class AdminMutationUnverifiedTransactionException extends BaseException<Record<string, never>> {
 	constructor() {
 		super(
 			'An administrator-affecting role change was refused because it ran inside a transaction whose isolation could not be verified.',
