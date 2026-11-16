@@ -1,3 +1,4 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import type { Accountability } from '@cairncms/types';
 import express from 'express';
 import request from 'supertest';
@@ -71,7 +72,6 @@ vi.mock('../middleware/respond.js', () => ({
 		res.json(res.locals['payload']),
 }));
 
-import { InvalidPayloadException } from '../exceptions/index.js';
 import { SchemaApplyFailedException } from '../exceptions/schema-apply-failed.js';
 import { SchemaPostCommitFailedException } from '../exceptions/schema-post-commit-failed.js';
 import { SchemaStateChangedException } from '../exceptions/schema-state-changed.js';

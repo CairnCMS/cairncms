@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@cairncms/exceptions';
 import knex from 'knex';
 import { createTracker, MockClient, type Tracker } from 'knex-mock-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,7 +16,6 @@ vi.mock('@cairncms/schema', async (importOriginal) => ({
 	createInspector: () => mockInspector,
 }));
 
-import { ForbiddenException } from '../exceptions/index.js';
 import { CollectionsService } from '../services/collections.js';
 import { ExportService, ImportService } from '../services/import-export.js';
 import { ItemsService } from '../services/items.js';

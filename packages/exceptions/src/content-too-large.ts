@@ -1,4 +1,4 @@
-import { BaseException } from '@cairncms/exceptions';
+import { BaseException } from './base.js';
 
 export class ContentTooLargeException extends BaseException<Record<string, unknown>> {
 	constructor(message: string) {

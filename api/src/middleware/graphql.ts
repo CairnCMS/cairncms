@@ -1,8 +1,8 @@
+import { InvalidPayloadException, InvalidQueryException, MethodNotAllowedException } from '@cairncms/exceptions';
 import { parseJSON } from '@cairncms/utils';
 import type { RequestHandler } from 'express';
 import type { DocumentNode } from 'graphql';
 import { getOperationAST } from 'graphql';
-import { InvalidPayloadException, InvalidQueryException, MethodNotAllowedException } from '../exceptions/index.js';
 import { parseGraphQLQuery } from '../services/graphql/query-gate.js';
 import type { GraphQLParams } from '../types/index.js';
 import asyncHandler from '../utils/async-handler.js';

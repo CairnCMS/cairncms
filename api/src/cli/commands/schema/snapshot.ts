@@ -1,10 +1,10 @@
 import getDatabase from '../../../database/index.js';
-import { InvalidPayloadException } from '../../../exceptions/index.js';
 import logger from '../../../logger.js';
 import { getPortableSnapshot } from '../../../utils/get-portable-snapshot.js';
 import { getSnapshot } from '../../../utils/get-snapshot.js';
 import { DEFAULT_SNAPSHOT_VERSION, type SnapshotVersion } from '../../../utils/schema-contract.js';
 import { validateSnapshotVersion } from '../../../utils/validate-snapshot.js';
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import { parseJSON } from '@cairncms/utils';
 import { promises as fs } from 'fs';
 import path from 'path';

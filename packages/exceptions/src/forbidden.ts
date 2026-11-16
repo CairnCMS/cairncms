@@ -1,6 +1,4 @@
-import * as exceptions from '@cairncms/exceptions';
-
-const { BaseException } = exceptions;
+import { BaseException } from './base.js';
 
 export class ForbiddenException extends BaseException<Record<string, unknown>> {
 	constructor() {

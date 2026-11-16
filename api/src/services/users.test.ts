@@ -1,3 +1,4 @@
+import { ForbiddenException, InvalidPayloadException } from '@cairncms/exceptions';
 import type { SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';
@@ -5,7 +6,6 @@ import { createTracker, MockClient, Tracker } from 'knex-mock-client';
 import type { MockedFunction, MockInstance } from 'vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RecordNotUniqueException } from '../exceptions/database/record-not-unique.js';
-import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
 import jwt from 'jsonwebtoken';
 import { ItemsService, MailService, UsersService } from './index.js';
 

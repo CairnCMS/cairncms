@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, test, vi } from 'vitest';
-import { BaseException } from '@cairncms/exceptions';
+import { BaseException, ForbiddenException } from '@cairncms/exceptions';
 import { REDACT_TEXT } from './constants.js';
-import * as exceptions from './exceptions/index.js';
 import { buildRevisionData, getFlowManager, type Step } from './flows.js';
 import conditionOp from './operations/condition/index.js';
 import logOp from './operations/log/index.js';
@@ -674,19 +673,19 @@ describe('manual flow authorization', () => {
 		it('rejects anonymous caller (accountability.user is null)', async () => {
 			await expect(
 				manager._runManualFlow(buildFlow(), buildData(), buildContext(anonAccountability))
-			).rejects.toBeInstanceOf(exceptions.ForbiddenException);
+			).rejects.toBeInstanceOf(ForbiddenException);
 
 			expect(executeFlowSpy).not.toHaveBeenCalled();
 		});
 
 		it('rejects when checkAccess on target items fails (keys path)', async () => {
 			checkAccessSpy.mockImplementation(async (_action: any, collection: any) => {
-				if (collection === TARGET_COLLECTION) throw new exceptions.ForbiddenException();
+				if (collection === TARGET_COLLECTION) throw new ForbiddenException();
 			});
 
 			await expect(
 				manager._runManualFlow(buildFlow(), buildData(), buildContext(nonAdminWithItemRead))
-			).rejects.toBeInstanceOf(exceptions.ForbiddenException);
+			).rejects.toBeInstanceOf(ForbiddenException);
 
 			expect(executeFlowSpy).not.toHaveBeenCalled();
 		});
@@ -705,7 +704,7 @@ describe('manual flow authorization', () => {
 			};
 
 			await expect(manager._runManualFlow(flow, data, buildContext(nonAdminNoCollectionRead))).rejects.toBeInstanceOf(
-				exceptions.ForbiddenException
+				ForbiddenException
 			);
 
 			expect(executeFlowSpy).not.toHaveBeenCalled();
@@ -716,7 +715,7 @@ describe('manual flow authorization', () => {
 			const data = buildData({ collection: TARGET_COLLECTION });
 
 			await expect(manager._runManualFlow(flow, data, buildContext(adminAccountability))).rejects.toBeInstanceOf(
-				exceptions.ForbiddenException
+				ForbiddenException
 			);
 
 			expect(executeFlowSpy).not.toHaveBeenCalled();
@@ -757,7 +756,7 @@ describe('manual flow authorization', () => {
 			const flow = buildFlow({ options: { collections: ['other-collection'] } });
 
 			await expect(manager._runManualFlow(flow, buildData(), buildContext(adminAccountability))).rejects.toBeInstanceOf(
-				exceptions.ForbiddenException
+				ForbiddenException
 			);
 
 			expect(executeFlowSpy).not.toHaveBeenCalled();

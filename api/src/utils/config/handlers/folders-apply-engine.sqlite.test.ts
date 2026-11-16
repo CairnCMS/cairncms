@@ -1,3 +1,4 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import type { SchemaOverview } from '@cairncms/types';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
@@ -7,7 +8,6 @@ import emitter from '../../../emitter.js';
 import { ConfigApplyFailedException } from '../../../exceptions/config-apply-failed.js';
 import { ConfigFolderInUseException } from '../../../exceptions/config-folder-in-use.js';
 import { ConfigStateChangedException } from '../../../exceptions/config-state-changed.js';
-import { InvalidPayloadException } from '../../../exceptions/index.js';
 import { FoldersService } from '../../../services/folders.js';
 import type { CairnConfig, ConfigApplySecurityContext, ConfigPlanChange } from '../../../types/config.js';
 import { applyConfigPlan } from '../../apply-config-plan.js';

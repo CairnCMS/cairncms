@@ -1,4 +1,5 @@
 import { PUBLIC_ROLE_ID } from '@cairncms/constants';
+import { InvalidQueryException } from '@cairncms/exceptions';
 import type { Accountability, Permission, SchemaOverview } from '@cairncms/types';
 import { deepMap, parseFilter, parseJSON, parsePreset } from '@cairncms/utils';
 import { cloneDeep } from 'lodash-es';
@@ -7,7 +8,6 @@ import { getCache, getCacheValue, getSystemCache, setCacheValue, setSystemCache 
 import getDatabase from '../database/index.js';
 import { appAccessMinimalPermissions } from '../database/system-data/app-access-permissions/index.js';
 import env from '../env.js';
-import { InvalidQueryException } from '../exceptions/invalid-query.js';
 import logger from '../logger.js';
 import { RolesService } from '../services/roles.js';
 import { UsersService } from '../services/users.js';

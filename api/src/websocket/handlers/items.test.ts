@@ -1,7 +1,6 @@
-import { BaseException } from '@cairncms/exceptions';
+import { BaseException, ForbiddenException } from '@cairncms/exceptions';
 import type { SchemaOverview } from '@cairncms/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ForbiddenException } from '../../exceptions/index.js';
 import type { RequestAccountability } from '../../utils/get-anonymous-accountability.js';
 import type { CommandContext } from '../controllers/base.js';
 import { WebSocketException } from '../exceptions.js';

@@ -1,6 +1,6 @@
+import { ForbiddenException, RouteNotFoundException } from '@cairncms/exceptions';
 import { Router } from 'express';
 import env from '../env.js';
-import { ForbiddenException, RouteNotFoundException } from '../exceptions/index.js';
 import { getExtensionManager } from '../extensions.js';
 import { respond } from '../middleware/respond.js';
 import asyncHandler from '../utils/async-handler.js';

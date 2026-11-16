@@ -1,6 +1,6 @@
+import { ServiceUnavailableException } from '@cairncms/exceptions';
 import type { ActionHandler } from '@cairncms/types';
 import emitter from '../emitter.js';
-import { ServiceUnavailableException } from '../exceptions/index.js';
 import type { SocketClient } from '../websocket/controllers/base.js';
 import { getActiveRealtime, type RealtimeControllerAccess } from '../websocket/controllers/active.js';
 import type { WebSocketMessage } from '../websocket/messages.js';

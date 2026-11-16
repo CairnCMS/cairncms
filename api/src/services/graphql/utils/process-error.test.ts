@@ -28,7 +28,7 @@ const { logRedactedError: logSpy } = (await import('../../../utils/error-log.js'
 	logRedactedError: ReturnType<typeof vi.fn>;
 };
 
-const { InvalidPayloadException } = await import('../../../exceptions/index.js');
+const { InvalidPayloadException } = await import('@cairncms/exceptions');
 const { REDACT_TEXT } = await import('../../../constants.js');
 
 const SECRET = 'super-secret-token-value-1234567890';

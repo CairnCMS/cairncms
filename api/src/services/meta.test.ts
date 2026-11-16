@@ -1,8 +1,8 @@
+import { InvalidQueryException } from '@cairncms/exceptions';
 import type { Accountability, Permission, SchemaOverview } from '@cairncms/types';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getSqliteClient } from '../database/sqlite-driver.js';
-import { InvalidQueryException } from '../exceptions/invalid-query.js';
 import { MetaService } from './meta.js';
 
 vi.mock('../database/index', () => ({

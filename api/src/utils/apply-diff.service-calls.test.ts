@@ -1,3 +1,4 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import type { Diff, DiffDeleted } from 'deep-diff';
 import type { Knex } from 'knex';
 import knex from 'knex';
@@ -11,7 +12,6 @@ import {
 	snapshotCreateCollection,
 	snapshotCreateCollectionNotNested,
 } from '../__utils__/snapshots.js';
-import { InvalidPayloadException } from '../exceptions/index.js';
 import { CollectionsService, FieldsService, RelationsService } from '../services/index.js';
 import type { CollectionMeta } from '../types/collection.js';
 import type { Collection, Snapshot, SnapshotDiff, SnapshotField } from '../types/index.js';

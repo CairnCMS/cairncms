@@ -2,13 +2,13 @@ import type { CompleteMessage, ConnectionInitMessage, ErrorMessage } from 'graph
 import { CloseCode, makeServer, type Context, type Server, type SubscribeMessage } from 'graphql-ws';
 import { getOperationAST, GraphQLError, type ExecutionArgs, type ExecutionResult } from 'graphql';
 import type { Buffer } from 'node:buffer';
-import { BaseException } from '@cairncms/exceptions';
 import {
+	BaseException,
 	ForbiddenException,
-	GraphQLValidationException,
 	InvalidPayloadException,
 	ServiceUnavailableException,
-} from '../../exceptions/index.js';
+} from '@cairncms/exceptions';
+import { GraphQLValidationException } from '../../exceptions/index.js';
 import { GraphQLService } from '../../services/graphql/index.js';
 import { parseGraphQLQuery, validateGraphQLDocument } from '../../services/graphql/query-gate.js';
 import {

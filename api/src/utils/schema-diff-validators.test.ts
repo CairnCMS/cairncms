@@ -1,9 +1,9 @@
 import { TYPES } from '@cairncms/constants';
+import { ForbiddenException } from '@cairncms/exceptions';
 import type { Relation, SchemaOverview } from '@cairncms/types';
 import type { Diff } from 'deep-diff';
 import { cloneDeep, set, unset } from 'lodash-es';
 import { describe, expect, it } from 'vitest';
-import { ForbiddenException } from '../exceptions/index.js';
 import {
 	assertAliasTypeUnchanged,
 	assertCollectionAbsent,

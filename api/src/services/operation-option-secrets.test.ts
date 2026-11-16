@@ -1,3 +1,4 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import knex from 'knex';
 import { createTracker, MockClient, type Tracker } from 'knex-mock-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -17,7 +18,6 @@ vi.mock('../env.js', async (importOriginal) => {
 	};
 });
 
-import { InvalidPayloadException } from '../exceptions/index.js';
 import { decryptSecret, encryptSecret, hasSecretMarker, SECRET_MASK } from '../utils/encrypt-secret.js';
 import {
 	clearOperationOptionSecrets,

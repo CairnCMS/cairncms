@@ -1,11 +1,10 @@
-import { BaseException } from '@cairncms/exceptions';
+import { BaseException, MethodNotAllowedException } from '@cairncms/exceptions';
 import { toArray } from '@cairncms/utils';
 import type { ErrorRequestHandler, Request, Response } from 'express';
 import { isPlainObject } from 'lodash-es';
 import getDatabase from '../database/index.js';
 import emitter from '../emitter.js';
 import env from '../env.js';
-import { MethodNotAllowedException } from '../exceptions/index.js';
 import { collectRequestSecrets } from '../utils/collect-request-secrets.js';
 import { logRedactedError } from '../utils/error-log.js';
 import { snapshotError, toPlainData } from '../utils/error-snapshot.js';

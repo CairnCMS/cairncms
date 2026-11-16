@@ -1,4 +1,9 @@
-import { BaseException, FailedValidationException } from '@cairncms/exceptions';
+import {
+	BaseException,
+	FailedValidationException,
+	ForbiddenException,
+	MethodNotAllowedException,
+} from '@cairncms/exceptions';
 import type { FilterOperator } from '@cairncms/types';
 import { validatePayload } from '@cairncms/utils';
 import Joi from 'joi';
@@ -9,8 +14,6 @@ import { ConfigPostCommitFailedException } from './config-post-commit-failed.js'
 import { ConfigProtectedRecordException } from './config-protected-record.js';
 import { RecordNotUniqueException } from './database/record-not-unique.js';
 import { DestructiveChangesRequiredException } from './destructive-changes-required.js';
-import { ForbiddenException } from './forbidden.js';
-import { MethodNotAllowedException } from './method-not-allowed.js';
 import { SchemaApplyFailedException } from './schema-apply-failed.js';
 
 describe('BaseException details typing', () => {

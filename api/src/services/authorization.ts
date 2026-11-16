@@ -1,4 +1,4 @@
-import { FailedValidationException } from '@cairncms/exceptions';
+import { FailedValidationException, ForbiddenException } from '@cairncms/exceptions';
 import type {
 	Accountability,
 	Aggregate,
@@ -13,7 +13,6 @@ import type { Knex } from 'knex';
 import { cloneDeep, flatten, isArray, isNil, merge, reduce, uniq, uniqWith } from 'lodash-es';
 import { GENERATE_SPECIAL } from '../constants.js';
 import getDatabase from '../database/index.js';
-import { ForbiddenException } from '../exceptions/index.js';
 import type {
 	AbstractServiceOptions,
 	AST,

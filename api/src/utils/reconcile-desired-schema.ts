@@ -1,5 +1,5 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import { cloneDeep, isPlainObject } from 'lodash-es';
-import { InvalidPayloadException } from '../exceptions/index.js';
 import type { Collection, PortableSnapshot, Snapshot, SnapshotField, SnapshotRelation } from '../types/index.js';
 import { visitFolderReferences, type FolderReferenceMeta } from './folder-references.js';
 import { safeLogFragment } from './safe-log-fragment.js';

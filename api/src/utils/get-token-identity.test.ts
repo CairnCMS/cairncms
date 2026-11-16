@@ -1,7 +1,7 @@
+import { InvalidCredentialsException } from '@cairncms/exceptions';
 import jwt from 'jsonwebtoken';
 import type { Knex } from 'knex';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { InvalidCredentialsException } from '../exceptions/invalid-credentials.js';
 import { getTokenIdentity } from './get-token-identity.js';
 
 vi.mock('../env', () => {

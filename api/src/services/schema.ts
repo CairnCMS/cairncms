@@ -1,7 +1,7 @@
+import { ForbiddenException } from '@cairncms/exceptions';
 import type { Accountability } from '@cairncms/types';
 import type { Knex } from 'knex';
 import getDatabase from '../database/index.js';
-import { ForbiddenException } from '../exceptions/index.js';
 import type {
 	AbstractServiceOptions,
 	PortableSnapshot,

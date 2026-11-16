@@ -1,3 +1,4 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import type { Accountability, SchemaOverview } from '@cairncms/types';
 import fse from 'fs-extra';
 import type { Knex } from 'knex';
@@ -6,7 +7,6 @@ import type { SendMailOptions, Transporter } from 'nodemailer';
 import path from 'path';
 import getDatabase from '../../database/index.js';
 import env from '../../env.js';
-import { InvalidPayloadException } from '../../exceptions/index.js';
 import getMailer, { verifyMailerSetup } from '../../mailer.js';
 import type { AbstractServiceOptions } from '../../types/index.js';
 import { Url } from '../../utils/url.js';

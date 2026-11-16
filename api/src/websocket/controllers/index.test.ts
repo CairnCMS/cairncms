@@ -92,7 +92,7 @@ vi.mock('../../logger.js', () => ({ default: { error: vi.fn(), warn: vi.fn(), de
 const { activateRealtime } = await import('./index.js');
 const { getActiveRealtime } = await import('./active.js');
 const { WebSocketService } = await import('../../services/websocket.js');
-const { ServiceUnavailableException } = await import('../../exceptions/index.js');
+const { ServiceUnavailableException } = await import('@cairncms/exceptions');
 const logger = (await import('../../logger.js')).default;
 
 const SHARED = {

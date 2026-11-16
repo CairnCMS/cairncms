@@ -1,5 +1,6 @@
 import { Action, FUNCTIONS } from '@cairncms/constants';
 import type { BaseException } from '@cairncms/exceptions';
+import { ForbiddenException, InvalidPayloadException } from '@cairncms/exceptions';
 import type { Accountability, Aggregate, Filter, PrimaryKey, Query, SchemaOverview } from '@cairncms/types';
 import { parseFilterFunctionPath } from '@cairncms/utils';
 import type {
@@ -44,7 +45,7 @@ import { clearSystemCache, getCache } from '../../cache.js';
 import { DEFAULT_AUTH_PROVIDER, GENERATE_SPECIAL } from '../../constants.js';
 import getDatabase from '../../database/index.js';
 import env from '../../env.js';
-import { ForbiddenException, GraphQLValidationException, InvalidPayloadException } from '../../exceptions/index.js';
+import { GraphQLValidationException } from '../../exceptions/index.js';
 import { getExtensionManager } from '../../extensions.js';
 import type { AbstractServiceOptions, GraphQLParams, Item } from '../../types/index.js';
 import { generateHash } from '../../utils/generate-hash.js';

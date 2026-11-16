@@ -1,4 +1,4 @@
-import { BaseException } from '@cairncms/exceptions';
+import { BaseException } from './base.js';
 
 type Extensions = {
 	service: string;

@@ -1,7 +1,7 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import type { NextFunction, Request, Response } from 'express';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { getEnv } from '../env.js';
-import { InvalidPayloadException } from '../exceptions/index.js';
 import { parseGraphQL } from './graphql.js';
 
 function requestFor(query: string) {

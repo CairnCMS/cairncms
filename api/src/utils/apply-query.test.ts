@@ -1,7 +1,7 @@
+import { InvalidQueryException } from '@cairncms/exceptions';
 import type { Accountability, Aggregate, Permission, Query, SchemaOverview } from '@cairncms/types';
 import knex from 'knex';
 import { describe, expect, it } from 'vitest';
-import { InvalidQueryException } from '../exceptions/invalid-query.js';
 import applyQuery, { applyFilter, applySearch, applySort, validateGroupOperands } from './apply-query.js';
 
 const PUBLIC_ROLE_ID = '00000000-0000-0000-0000-000000000000';

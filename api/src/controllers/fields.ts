@@ -1,9 +1,9 @@
 import { TYPES } from '@cairncms/constants';
+import { ForbiddenException, InvalidPayloadException } from '@cairncms/exceptions';
 import type { Field, Type } from '@cairncms/types';
 import { Router } from 'express';
 import Joi from 'joi';
 import { ALIAS_TYPES } from '../constants.js';
-import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
 import validateCollection from '../middleware/collection-exists.js';
 import { respond } from '../middleware/respond.js';
 import useCollection from '../middleware/use-collection.js';
