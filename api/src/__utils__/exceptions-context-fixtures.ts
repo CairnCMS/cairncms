@@ -5,7 +5,6 @@ import * as exceptions from '../exceptions/index.js';
 export const exceptionsContextKeys = [
 	'AdminMutationUnverifiedTransactionException',
 	'BaseException',
-	'CONFIG_POST_COMMIT_PHASES',
 	'ConcurrencyConflictException',
 	'ConfigApplyFailedException',
 	'ConfigApplyScopeMismatchException',
@@ -37,7 +36,6 @@ export const exceptionsContextKeys = [
 	'MethodNotAllowedException',
 	'RangeNotSatisfiableException',
 	'RouteNotFoundException',
-	'SCHEMA_POST_COMMIT_PHASES',
 	'SchemaApplyFailedException',
 	'SchemaPostCommitFailedException',
 	'SchemaStateChangedException',

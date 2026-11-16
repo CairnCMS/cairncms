@@ -1,5 +1,6 @@
 export * from './base.js';
 export * from './content-too-large.js';
+export * from './extension-exceptions.js';
 export * from './failed-validation.js';
 export * from './forbidden.js';
 export * from './hit-rate-limit.js';

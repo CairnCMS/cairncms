@@ -1,4 +1,3 @@
-import * as sharedExceptions from '@cairncms/exceptions';
 import type {
 	Accountability,
 	ActionHandler,
@@ -17,7 +16,7 @@ import { scheduleSynchronizedJob } from './utils/schedule.js';
 import getDatabase from './database/index.js';
 import emitter from './emitter.js';
 import env from './env.js';
-import * as exceptions from './exceptions/index.js';
+import { createExtensionExceptions } from './extensions/exceptions-context.js';
 import { EMPTY_EXTENSION_SETTINGS_READER } from './extensions/extension-settings-reader.js';
 import { BaseException, ForbiddenException } from '@cairncms/exceptions';
 import logger from './logger.js';
@@ -661,7 +660,7 @@ class FlowManager {
 		try {
 			const handlerContext = {
 				services,
-				exceptions: { ...exceptions, ...sharedExceptions },
+				exceptions: createExtensionExceptions(),
 				env,
 				database: getDatabase(),
 				logger,

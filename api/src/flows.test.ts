@@ -857,51 +857,46 @@ describe('flow operation exceptions context', () => {
 	it.each([
 		['an untrusted', false],
 		['a trusted', true],
-	])(
-		'gives %s operation the exception classes and phase lists of the API and the shared package',
-		async (_label, trusted) => {
-			const manager = getFlowManager();
+	])('gives %s operation the exception classes of the API and the shared package', async (_label, trusted) => {
+		const manager = getFlowManager();
 
-			let captured: any;
+		let captured: any;
 
-			manager.addOperation(
-				'test-exceptions-context',
-				(_options, operationContext) => {
-					captured = operationContext;
-					return null;
+		manager.addOperation(
+			'test-exceptions-context',
+			(_options, operationContext) => {
+				captured = operationContext;
+				return null;
+			},
+			trusted
+		);
+
+		await (manager as any).executeFlow(
+			{
+				id: 'flow-exceptions',
+				name: 'flow-exceptions',
+				status: 'active',
+				trigger: 'webhook',
+				accountability: null,
+				options: { method: 'POST', return: '$last', async: false },
+				operation: {
+					id: 'op-1',
+					key: 'capture',
+					type: 'test-exceptions-context',
+					options: {},
+					resolve: null,
+					reject: null,
 				},
-				trusted
-			);
+			},
+			triggerData,
+			context
+		);
 
-			await (manager as any).executeFlow(
-				{
-					id: 'flow-exceptions',
-					name: 'flow-exceptions',
-					status: 'active',
-					trigger: 'webhook',
-					accountability: null,
-					options: { method: 'POST', return: '$last', async: false },
-					operation: {
-						id: 'op-1',
-						key: 'capture',
-						type: 'test-exceptions-context',
-						options: {},
-						resolve: null,
-						reject: null,
-					},
-				},
-				triggerData,
-				context
-			);
+		const replaced = exceptionsContextKeys.filter((key) => captured.exceptions[key] !== exceptionsContextExports[key]);
 
-			const replaced = exceptionsContextKeys.filter(
-				(key) => captured.exceptions[key] !== exceptionsContextExports[key]
-			);
-
-			expect(Object.keys(captured.exceptions).sort()).toEqual(exceptionsContextKeys);
-			expect(replaced).toEqual([]);
-		}
-	);
+		expect(Object.keys(captured.exceptions).sort()).toEqual(exceptionsContextKeys);
+		expect(replaced).toEqual([]);
+	});
 });
 
 describe('confined operation binding', () => {
