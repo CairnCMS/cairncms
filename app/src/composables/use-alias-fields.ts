@@ -113,9 +113,17 @@ export function useAliasFields(
 
 		if (!aliasInfo || !aliasInfo.aliased) return get(item, key);
 
-		if (key.includes('.') === false) return get(item, aliasInfo.fieldAlias);
+		const aliasedPath =
+			key.includes('.') === false
+				? aliasInfo.fieldAlias
+				: `${aliasInfo.fieldAlias}.${key.split('.').slice(1).join('.')}`;
 
-		return get(item, `${aliasInfo.fieldAlias}.${key.split('.').slice(1).join('.')}`);
+		const aliasedValue = get(item, aliasedPath);
+
+		if (aliasedValue !== undefined) return aliasedValue;
+
+		// Fall back to the un-aliased item when the data wasn't fetched under an alias
+		return get(item, key);
 	}
 
 	return { aliasedFields, aliasQuery, aliasedKeys, getFromAliasedItem };
