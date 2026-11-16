@@ -3,6 +3,7 @@ import {
 	FailedValidationException,
 	ForbiddenException,
 	MethodNotAllowedException,
+	ServiceUnavailableException,
 } from '@cairncms/exceptions';
 import type { FilterOperator } from '@cairncms/types';
 import { validatePayload } from '@cairncms/utils';
@@ -190,5 +191,19 @@ describe('config and schema exception details typing', () => {
 	it('rejects an unknown post-commit phase', () => {
 		// @ts-expect-error the phase must be a config post-commit phase
 		new ConfigPostCommitFailedException('bogus');
+	});
+});
+
+describe('ServiceUnavailableException details typing', () => {
+	it('can be raised with only a message', () => {
+		const error = new ServiceUnavailableException('The upstream service is unavailable.');
+
+		expectTypeOf(error.extensions.service).toEqualTypeOf<string | undefined>();
+		expect(error.extensions).toStrictEqual({});
+	});
+
+	it('rejects a message that is not a string', () => {
+		// @ts-expect-error the message must be a string
+		new ServiceUnavailableException(1);
 	});
 });
