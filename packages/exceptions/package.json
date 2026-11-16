@@ -28,10 +28,8 @@
 		"access": "public"
 	},
 	"devDependencies": {
-		"@cairncms/types": "workspace:*",
 		"@ngneat/falso": "6.4.0",
 		"@vitest/coverage-v8": "4.1.12",
-		"joi": "17.13.9",
 		"typescript": "5.0.4",
 		"vitest": "4.1.12"
 	}

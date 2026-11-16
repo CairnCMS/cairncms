@@ -1,10 +1,33 @@
-import type { FilterOperator } from '@cairncms/types';
-import type { ValidationErrorItem } from 'joi';
 import { BaseException } from './base.js';
+
+type ValidationErrorItem = {
+	message: string;
+	path: (string | number)[];
+	type: string;
+	context?: { value?: unknown; [key: string]: any } | undefined;
+};
+
+type FailedValidationType =
+	| 'eq'
+	| 'neq'
+	| 'in'
+	| 'nin'
+	| 'null'
+	| 'nnull'
+	| 'empty'
+	| 'nempty'
+	| 'gt'
+	| 'gte'
+	| 'lt'
+	| 'lte'
+	| 'contains'
+	| 'ncontains'
+	| 'required'
+	| 'regex';
 
 type FailedValidationExtensions = {
 	field: ValidationErrorItem['path'][number] | undefined;
-	type: FilterOperator | 'required' | 'regex';
+	type: FailedValidationType;
 	valid?: unknown;
 	invalid?: unknown;
 	substring?: string;

@@ -1,4 +1,5 @@
 import { BaseException, FailedValidationException } from '@cairncms/exceptions';
+import type { FilterOperator } from '@cairncms/types';
 import { validatePayload } from '@cairncms/utils';
 import Joi from 'joi';
 import { describe, expect, expectTypeOf, it } from 'vitest';
@@ -113,6 +114,19 @@ describe('FailedValidationException details typing', () => {
 		const valid: string | number | (string | number)[] | undefined = error.extensions.valid;
 
 		expect(valid).toBe(true);
+	});
+
+	it('types the rule as one the constructor produces, which readers can still treat as a filter operator', () => {
+		const item = validatePayload({ published: { _eq: true } }, { published: false })[0]!.details[0]!;
+		const error = new FailedValidationException(item);
+
+		expectTypeOf(error.extensions.type).toMatchTypeOf<FilterOperator | 'required' | 'regex' | undefined>();
+
+		// @ts-expect-error the constructor never produces a between rule
+		const rule: typeof error.extensions.type = 'between';
+
+		expect(error.extensions.type).toBe('eq');
+		expect(rule).toBe('between');
 	});
 
 	it('keeps the first path component, which can be a number or absent', () => {
