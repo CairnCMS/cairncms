@@ -1,4 +1,5 @@
 import { extensionExceptions } from '@cairncms/exceptions';
+import type { ExtensionExceptions } from '@cairncms/types';
 import {
 	AdminMutationUnverifiedTransactionException,
 	ConcurrencyConflictException,
@@ -64,6 +65,6 @@ const apiExceptions = {
 };
 
 /** Returns the exception classes that an extension or operation receives in its context, as a new object on each call. */
-export function createExtensionExceptions() {
-	return { ...extensionExceptions, ...apiExceptions };
+export function createExtensionExceptions(): ExtensionExceptions {
+	return { ...extensionExceptions, ...apiExceptions } satisfies ExtensionExceptions;
 }
