@@ -151,7 +151,7 @@ The result of the handler is what gets appended to the [data chain](/docs/guides
 Each operation in a flow has two outgoing connectors: **success** and **failure**. The handler controls which one runs next:
 
 - **Complete without throwing** to take the success path. Whatever the handler returns is appended to the data chain under the operation's key. A `void` or `undefined` return still resolves successfully and is stored as `null` on the data chain.
-- **Throw an error** to take the failure path. The thrown value is appended to the data chain.
+- **Throw an error** to take the failure path. The thrown value is appended to the data chain. [Errors](/docs/develop/extensions/server-extensions/errors/) covers what is recorded and how to define your own error.
 
 ```js
 import { defineOperationApi } from '@cairncms/extensions-sdk';
@@ -169,7 +169,7 @@ export default defineOperationApi({
     const tenant = await tenants.readOne(tenantId);
 
     if (tenant.usage >= tenant.quota) {
-      throw new ForbiddenException(`Tenant ${tenantId} is over quota.`);
+      throw new ForbiddenException();
     }
 
     return { remaining: tenant.quota - tenant.usage };

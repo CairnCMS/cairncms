@@ -75,7 +75,7 @@ The router is mounted at the app root underneath the API's main middleware stack
 The second argument is a context object with everything an endpoint typically needs:
 
 - **`services`** — all built-in services (`ItemsService`, `FilesService`, `UsersService`, `MailService`, and so on). Use these for any data work you want to respect permissions and validation.
-- **`exceptions`** — the platform's exception classes. Throw these to surface proper HTTP error responses; pass to `next(err)` from inside async route handlers.
+- **`exceptions`** — the platform's exception classes. Pass one to `next(err)` from inside async route handlers to return a proper HTTP error response. See [Errors](/docs/develop/extensions/server-extensions/errors/).
 - **`database`** — a [Knex](https://knexjs.org/) instance connected to the configured database. Use this only when a service does not cover what you need.
 - **`getSchema`** — async function that returns the current schema overview. Used when constructing a service outside a request context.
 - **`env`** — the parsed environment variables.
@@ -84,7 +84,7 @@ The second argument is a context object with everything an endpoint typically ne
 - **`extensionSettings`** — a read-only accessor for the settings this extension declares in its manifest, bound to its own package. See [Extension settings](/docs/develop/extensions/settings/).
 
 ```js
-export default (router, { services, exceptions }) => {
+export default (router, { services, exceptions, logger }) => {
   const { ItemsService } = services;
   const { ServiceUnavailableException } = exceptions;
 
@@ -102,8 +102,9 @@ export default (router, { services, exceptions }) => {
       });
 
       res.json(results);
-    } catch (error) {
-      next(new ServiceUnavailableException(error.message));
+    } catch {
+      logger.warn('The popular recipes query failed.');
+      next(new ServiceUnavailableException('Popular recipes are unavailable.', { service: 'recipes' }));
     }
   });
 };
@@ -136,13 +137,7 @@ This is equivalent to running as an admin. Reserve it for trusted endpoints; nev
 
 ## Errors
 
-The platform's exception classes turn into proper HTTP status codes when passed to `next()`:
-
-- `InvalidPayloadException` → 400
-- `ForbiddenException` → 403
-- `RouteNotFoundException` → 404
-- `MethodNotAllowedException` → 405
-- `ServiceUnavailableException` → 503
+The platform's exception classes turn into proper HTTP status codes when passed to `next()`. [Errors](/docs/develop/extensions/server-extensions/errors/) lists the common exceptions with their status codes and arguments, and shows how to define your own.
 
 ```js
 const { InvalidPayloadException } = exceptions;
@@ -168,7 +163,7 @@ import { defineEndpoint } from '@cairncms/extensions-sdk';
 
 export default defineEndpoint({
   id: 'article-stats',
-  handler: (router, { services, exceptions }) => {
+  handler: (router, { services, exceptions, logger }) => {
     const { ItemsService } = services;
     const { ServiceUnavailableException } = exceptions;
 
@@ -186,8 +181,9 @@ export default defineEndpoint({
         });
 
         res.json(results);
-      } catch (error) {
-        next(new ServiceUnavailableException(error.message));
+      } catch {
+        logger.warn('The article stats query failed.');
+        next(new ServiceUnavailableException('Article stats are unavailable.', { service: 'article-stats' }));
       }
     });
   },
