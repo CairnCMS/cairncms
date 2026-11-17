@@ -1,8 +1,11 @@
 import { BaseException, ForbiddenException } from '@cairncms/exceptions';
 import type { ApiExtensionContext } from '@cairncms/types';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { exceptionsContextKeys } from '../__utils__/exceptions-context-fixtures.js';
+import { exceptionsContextExports, exceptionsContextKeys } from '../__utils__/exceptions-context-fixtures.js';
 import { createExtensionExceptions } from './exceptions-context.js';
+
+const isExceptionClass = (value: unknown) =>
+	value === BaseException || (typeof value === 'function' && value.prototype instanceof BaseException);
 
 describe('createExtensionExceptions', () => {
 	it('returns a new object on each call, so one extension changing its copy affects no other', () => {
@@ -14,15 +17,16 @@ describe('createExtensionExceptions', () => {
 		expect(createExtensionExceptions().ForbiddenException).toBe(ForbiddenException);
 	});
 
-	it('contains exactly the exception classes and nothing else', () => {
+	it('contains exactly the exported exception classes and nothing else', () => {
 		const context: Record<string, unknown> = createExtensionExceptions();
+		const notClasses = Object.keys(context).filter((key) => !isExceptionClass(context[key]));
 
-		const notClasses = Object.keys(context).filter((key) => {
-			const value = context[key];
-			return !(value === BaseException || (typeof value === 'function' && value.prototype instanceof BaseException));
-		});
+		const exportedClasses = Object.keys(exceptionsContextExports).filter((key) =>
+			isExceptionClass(exceptionsContextExports[key])
+		);
 
 		expect(Object.keys(context).sort()).toEqual(exceptionsContextKeys);
+		expect(Object.keys(context).sort()).toEqual(exportedClasses.sort());
 		expect(notClasses).toEqual([]);
 	});
 });
