@@ -3,13 +3,15 @@ CairnCMS shared exceptions
 This package (`@cairncms/exceptions`) is distributed under the GNU General Public
 License, version 3 only. See LICENSE for the full text.
 
-Two of its files are derived from the Directus exceptions package
+Three of its files are derived from the Directus exceptions package
 (https://github.com/directus/directus/tree/v10.0.0/packages/exceptions),
 originally published as `@directus/exceptions` under the MIT License:
 
 - src/base.ts, built as dist/base.js and dist/base.d.ts
 - src/failed-validation.ts, built as dist/failed-validation.js and
   dist/failed-validation.d.ts
+- src/joi-to-error-extensions.ts, built as dist/joi-to-error-extensions.js and
+  dist/joi-to-error-extensions.d.ts
 
 Those files remain available under the MIT License below. Subsequent
 modifications are attributed to the CairnCMS project and listed in the

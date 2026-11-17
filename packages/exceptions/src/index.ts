@@ -7,6 +7,7 @@ export * from './hit-rate-limit.js';
 export * from './invalid-credentials.js';
 export * from './invalid-payload.js';
 export * from './invalid-query.js';
+export * from './joi-to-error-extensions.js';
 export * from './method-not-allowed.js';
 export * from './route-not-found.js';
 export * from './service-unavailable.js';

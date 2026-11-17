@@ -8,4 +8,4 @@ For CairnCMS itself, see the [main repository](https://github.com/CairnCMS/cairn
 
 ## License
 
-GPL-3.0-only. See [`LICENSE`](./LICENSE) and [`NOTICE`](./NOTICE). Two files derive from the MIT-licensed Directus exceptions package, and `NOTICE` keeps their MIT copyright and permission notice.
+GPL-3.0-only. See [`LICENSE`](./LICENSE) and [`NOTICE`](./NOTICE). Three files derive from the MIT-licensed Directus exceptions package, and `NOTICE` keeps their MIT copyright and permission notice.

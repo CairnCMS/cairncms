@@ -2,8 +2,10 @@ import {
 	BaseException,
 	FailedValidationException,
 	ForbiddenException,
+	joiValidationErrorItemToErrorExtensions,
 	MethodNotAllowedException,
 	ServiceUnavailableException,
+	type FailedValidationType,
 } from '@cairncms/exceptions';
 import type { FilterOperator } from '@cairncms/types';
 import { validatePayload } from '@cairncms/utils';
@@ -150,6 +152,19 @@ describe('FailedValidationException details typing', () => {
 		const field: string | undefined = fromArray.extensions.field;
 
 		expect(field).toBe(0);
+	});
+
+	it('types the rule as possibly absent and the field as possibly undefined in converted details', () => {
+		const unclassified = joiValidationErrorItemToErrorExtensions(
+			validatePayload({ title: { _starts_with: 'a' } }, { title: 42 })[0]!.details[0]!
+		);
+
+		const root = joiValidationErrorItemToErrorExtensions(Joi.string().validate(123).error!.details[0]!);
+
+		expectTypeOf(unclassified.type).toEqualTypeOf<FailedValidationType | undefined>();
+		expectTypeOf(root.field).toEqualTypeOf<string | number | undefined>();
+		expect(unclassified).toStrictEqual({ field: 'title' });
+		expect(root).toStrictEqual({ field: undefined });
 	});
 });
 
