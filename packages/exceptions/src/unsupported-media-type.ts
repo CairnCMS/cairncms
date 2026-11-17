@@ -1,4 +1,4 @@
-import { BaseException } from '@cairncms/exceptions';
+import { BaseException } from './base.js';
 
 export class UnsupportedMediaTypeException extends BaseException<Record<string, unknown>> {
 	constructor(message: string, extensions?: Record<string, unknown>) {

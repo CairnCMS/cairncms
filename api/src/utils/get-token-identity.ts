@@ -1,7 +1,7 @@
+import { InvalidCredentialsException } from '@cairncms/exceptions';
 import type { ShareScope } from '@cairncms/types';
 import type { Knex } from 'knex';
 import { getEnv } from '../env.js';
-import { InvalidCredentialsException } from '../exceptions/index.js';
 import isCairnJWT from './is-cairncms-jwt.js';
 import { verifyAccessJWT } from './jwt.js';
 

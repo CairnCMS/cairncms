@@ -118,7 +118,8 @@ The handler runs each time a flow reaches the operation. It receives:
 
 - **`options`** — the operation's configured options, with any data chain variables already interpolated. If the editor configured `to: '{{ $trigger.payload.email }}'`, the handler receives the resolved email address, not the template string.
 - **`context`** — an object that combines the standard API extension context with two additions specific to operations:
-  - `services`, `exceptions`, `database`, `env`, `logger`, `getSchema`, `extensionSettings` — same as endpoint and hook contexts
+  - `services`, `exceptions`, `env`, `logger`, `getSchema`, `extensionSettings` — same as endpoint and hook contexts
+  - **`database`** — the operation's database connection. It can be an open transaction, as in a blocking filter flow, where it is the transaction of the event that triggered the flow. Pass it as `knex` when you construct a service, so the service uses the same connection.
   - **`data`** — the entire flow data chain, with every prior operation's output keyed by operation key
   - **`accountability`** — the accountability object derived from the flow's trigger (the originating user, role, IP, and so on)
 
@@ -133,11 +134,12 @@ export default defineOperationApi({
     const { ItemsService } = services;
     const articles = new ItemsService('articles', {
       schema: await getSchema({ database }),
+      knex: database,
       accountability,
     });
 
     return articles.readByQuery({
-      aggregate: { count: '*' },
+      aggregate: { count: ['*'] },
       filter: { status: { _eq: options.status } },
     });
   },
@@ -151,7 +153,7 @@ The result of the handler is what gets appended to the [data chain](/docs/guides
 Each operation in a flow has two outgoing connectors: **success** and **failure**. The handler controls which one runs next:
 
 - **Complete without throwing** to take the success path. Whatever the handler returns is appended to the data chain under the operation's key. A `void` or `undefined` return still resolves successfully and is stored as `null` on the data chain.
-- **Throw an error** to take the failure path. The thrown value is appended to the data chain.
+- **Throw an error** to take the failure path. The thrown value is appended to the data chain. [Errors](/docs/develop/extensions/server-extensions/errors/) covers what is recorded and how to define your own error.
 
 ```js
 import { defineOperationApi } from '@cairncms/extensions-sdk';
@@ -164,12 +166,13 @@ export default defineOperationApi({
 
     const tenants = new ItemsService('tenants', {
       schema: await getSchema({ database }),
+      knex: database,
       accountability,
     });
     const tenant = await tenants.readOne(tenantId);
 
     if (tenant.usage >= tenant.quota) {
-      throw new ForbiddenException(`Tenant ${tenantId} is over quota.`);
+      throw new ForbiddenException();
     }
 
     return { remaining: tenant.quota - tenant.usage };

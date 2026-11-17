@@ -453,7 +453,7 @@ describe('full-authority extension settings threading', () => {
 describe('full-authority extension exceptions context', () => {
 	const SUBJECT = 'cairncms-extension-exceptions';
 
-	it('gives a hook the exception classes and phase lists of the API and the shared package', () => {
+	it('gives a hook the exception classes of the API and the shared package', () => {
 		const instance = new ExtensionManager();
 
 		let captured: any;
@@ -468,7 +468,7 @@ describe('full-authority extension exceptions context', () => {
 		expect(replaced).toEqual([]);
 	});
 
-	it('gives an endpoint the exception classes and phase lists of the API and the shared package', () => {
+	it('gives an endpoint the exception classes of the API and the shared package', () => {
 		const instance = new ExtensionManager();
 
 		let captured: any;

@@ -1,10 +1,10 @@
+import { InvalidCredentialsException } from '@cairncms/exceptions';
 import type { SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';
 import { createTracker, MockClient, Tracker } from 'knex-mock-client';
 import type { MockedFunction } from 'vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { InvalidCredentialsException } from '../exceptions/index.js';
 import { AuthenticationService } from './authentication.js';
 import { SettingsService } from './settings.js';
 

@@ -31,7 +31,7 @@ const { logRedactedError: logSpy } = (await import('../utils/error-log.js')) as 
 	logRedactedError: ReturnType<typeof vi.fn>;
 };
 
-const { InvalidPayloadException, MethodNotAllowedException } = await import('../exceptions/index.js');
+const { InvalidPayloadException, MethodNotAllowedException } = await import('@cairncms/exceptions');
 const { default: emitter } = await import('../emitter.js');
 const { REDACT_TEXT } = await import('../constants.js');
 

@@ -1,3 +1,4 @@
+import { ForbiddenException, InvalidPayloadException } from '@cairncms/exceptions';
 import type { SchemaInspector, Table } from '@cairncms/schema';
 import { createInspector } from '@cairncms/schema';
 import type { Accountability, FieldMeta, RawField, SchemaOverview } from '@cairncms/types';
@@ -14,7 +15,6 @@ import { isInternalTable } from '../database/internal-tables.js';
 import { systemCollectionRows } from '../database/system-data/collections/index.js';
 import emitter from '../emitter.js';
 import env from '../env.js';
-import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
 import { deleteSettingsByCollection } from '../services/extension-settings-store.js';
 import { FieldsService } from '../services/fields.js';
 import { ItemsService } from '../services/items.js';

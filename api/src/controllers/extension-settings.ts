@@ -1,6 +1,6 @@
+import { ForbiddenException, InvalidCredentialsException, InvalidPayloadException } from '@cairncms/exceptions';
 import express from 'express';
 import Joi from 'joi';
-import { ForbiddenException, InvalidCredentialsException, InvalidPayloadException } from '../exceptions/index.js';
 import { getExtensionManager } from '../extensions.js';
 import { respond } from '../middleware/respond.js';
 import { ExtensionSettingsService } from '../services/extension-settings.js';

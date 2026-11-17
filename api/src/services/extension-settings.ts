@@ -1,9 +1,10 @@
+import { ForbiddenException, InvalidPayloadException } from '@cairncms/exceptions';
 import type { Accountability, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import { v4 as uuid } from 'uuid';
 import getDatabase from '../database/index.js';
 import env from '../env.js';
-import { ForbiddenException, InvalidConfigException, InvalidPayloadException } from '../exceptions/index.js';
+import { InvalidConfigException } from '../exceptions/index.js';
 import { getExtensionManager } from '../extensions.js';
 import logger from '../logger.js';
 import type { AbstractServiceOptions } from '../types/index.js';

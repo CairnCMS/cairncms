@@ -1,5 +1,4 @@
-import { FailedValidationException } from '@cairncms/exceptions';
-import { ForbiddenException } from '../exceptions/index.js';
+import { FailedValidationException, ForbiddenException } from '@cairncms/exceptions';
 import type { Accountability, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';

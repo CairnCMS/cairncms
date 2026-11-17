@@ -1,8 +1,8 @@
+import { InvalidQueryException } from '@cairncms/exceptions';
 import type { FieldFunction, Query, SchemaOverview } from '@cairncms/types';
 import { getBetweenParens, getFunctionsForType } from '@cairncms/utils';
 import type { Knex } from 'knex';
 import { getFunctions } from '../database/helpers/index.js';
-import { InvalidQueryException } from '../exceptions/index.js';
 import { applyFunctionToColumnName } from './apply-function-to-column-name.js';
 
 type GetColumnOptions = {

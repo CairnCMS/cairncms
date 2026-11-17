@@ -1,4 +1,11 @@
-import { BaseException, FailedValidationException } from '@cairncms/exceptions';
+import {
+	BaseException,
+	FailedValidationException,
+	ForbiddenException,
+	MethodNotAllowedException,
+	ServiceUnavailableException,
+} from '@cairncms/exceptions';
+import type { FilterOperator } from '@cairncms/types';
 import { validatePayload } from '@cairncms/utils';
 import Joi from 'joi';
 import { describe, expect, expectTypeOf, it } from 'vitest';
@@ -8,8 +15,6 @@ import { ConfigPostCommitFailedException } from './config-post-commit-failed.js'
 import { ConfigProtectedRecordException } from './config-protected-record.js';
 import { RecordNotUniqueException } from './database/record-not-unique.js';
 import { DestructiveChangesRequiredException } from './destructive-changes-required.js';
-import { ForbiddenException } from './forbidden.js';
-import { MethodNotAllowedException } from './method-not-allowed.js';
 import { SchemaApplyFailedException } from './schema-apply-failed.js';
 
 describe('BaseException details typing', () => {
@@ -115,6 +120,19 @@ describe('FailedValidationException details typing', () => {
 		expect(valid).toBe(true);
 	});
 
+	it('types the rule as one the constructor produces, which readers can still treat as a filter operator', () => {
+		const item = validatePayload({ published: { _eq: true } }, { published: false })[0]!.details[0]!;
+		const error = new FailedValidationException(item);
+
+		expectTypeOf(error.extensions.type).toMatchTypeOf<FilterOperator | 'required' | 'regex' | undefined>();
+
+		// @ts-expect-error the constructor never produces a between rule
+		const rule: typeof error.extensions.type = 'between';
+
+		expect(error.extensions.type).toBe('eq');
+		expect(rule).toBe('between');
+	});
+
 	it('keeps the first path component, which can be a number or absent', () => {
 		const fromArray = new FailedValidationException(Joi.array().items(Joi.string()).validate([123]).error!.details[0]!);
 
@@ -173,5 +191,19 @@ describe('config and schema exception details typing', () => {
 	it('rejects an unknown post-commit phase', () => {
 		// @ts-expect-error the phase must be a config post-commit phase
 		new ConfigPostCommitFailedException('bogus');
+	});
+});
+
+describe('ServiceUnavailableException details typing', () => {
+	it('can be raised with only a message', () => {
+		const error = new ServiceUnavailableException('The upstream service is unavailable.');
+
+		expectTypeOf(error.extensions.service).toEqualTypeOf<string | undefined>();
+		expect(error.extensions).toStrictEqual({});
+	});
+
+	it('rejects a message that is not a string', () => {
+		// @ts-expect-error the message must be a string
+		new ServiceUnavailableException(1);
 	});
 });

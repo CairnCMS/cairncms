@@ -1,8 +1,8 @@
 import { TYPES } from '@cairncms/constants';
+import { ForbiddenException, InvalidPayloadException } from '@cairncms/exceptions';
 import type { Field, RawField, Relation, SchemaOverview } from '@cairncms/types';
 import type { Diff } from 'deep-diff';
 import { get } from 'lodash-es';
-import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
 import { DiffKind } from '../types/index.js';
 
 /**

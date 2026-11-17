@@ -1,7 +1,7 @@
+import { ForbiddenException, InvalidCredentialsException, InvalidPayloadException } from '@cairncms/exceptions';
 import argon2 from 'argon2';
 import jwt from 'jsonwebtoken';
 import env from '../env.js';
-import { ForbiddenException, InvalidCredentialsException, InvalidPayloadException } from '../exceptions/index.js';
 import type {
 	AbstractServiceOptions,
 	CairnTokenPayload,

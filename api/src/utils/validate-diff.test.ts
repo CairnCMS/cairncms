@@ -1,3 +1,4 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import { describe, expect, test } from 'vitest';
 import type { Collection } from '../types/collection.js';
 import type {
@@ -9,7 +10,6 @@ import type {
 	SnapshotWithHash,
 } from '../types/snapshot.js';
 import { DiffKind } from '../types/snapshot.js';
-import { InvalidPayloadException } from '../exceptions/invalid-payload.js';
 import { validateApplyDiff } from './validate-diff.js';
 
 test('should fail on invalid diff schema', () => {

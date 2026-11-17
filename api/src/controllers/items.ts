@@ -1,6 +1,6 @@
+import { ForbiddenException, RouteNotFoundException } from '@cairncms/exceptions';
 import express from 'express';
 import { isInternalTable } from '../database/internal-tables.js';
-import { ForbiddenException, RouteNotFoundException } from '../exceptions/index.js';
 import collectionExists from '../middleware/collection-exists.js';
 import { respond } from '../middleware/respond.js';
 import { validateBatch } from '../middleware/validate-batch.js';

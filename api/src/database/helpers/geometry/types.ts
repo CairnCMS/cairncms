@@ -1,9 +1,9 @@
 import { GEOMETRY_TYPES } from '@cairncms/constants';
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import type { Field, RawField } from '@cairncms/types';
 import type { Knex } from 'knex';
 import type { GeoJSONGeometry } from 'wellknown';
 import { stringify as geojsonToWKT } from 'wellknown';
-import { InvalidPayloadException } from '../../../exceptions/index.js';
 import { DatabaseHelper } from '../types.js';
 
 export abstract class GeometryHelper extends DatabaseHelper {

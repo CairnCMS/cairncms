@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@cairncms/exceptions';
 import type { ForeignKey, SchemaInspector } from '@cairncms/schema';
 import { createInspector } from '@cairncms/schema';
 import type { Accountability, Query, Relation, RelationMeta, SchemaOverview } from '@cairncms/types';
@@ -11,7 +12,6 @@ import getDatabase, { getSchemaInspector } from '../database/index.js';
 import { isInternalTable } from '../database/internal-tables.js';
 import { systemRelationRows } from '../database/system-data/relations/index.js';
 import emitter from '../emitter.js';
-import { ForbiddenException } from '../exceptions/index.js';
 import type { AbstractServiceOptions, ActionEventParams, MutationOptions } from '../types/index.js';
 import { getDefaultIndexName } from '../utils/get-default-index-name.js';
 import { getSchema } from '../utils/get-schema.js';

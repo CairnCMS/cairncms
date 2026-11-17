@@ -1,6 +1,6 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import type { Knex } from 'knex';
 import { describe, expect, it, vi } from 'vitest';
-import { InvalidPayloadException } from '../../../exceptions/index.js';
 import { mysql, postgres, sqlite } from './index.js';
 
 const subtypes = ['Point', 'LineString', 'Polygon', 'MultiPoint', 'MultiLineString', 'MultiPolygon'];

@@ -1,3 +1,4 @@
+import { InvalidQueryException } from '@cairncms/exceptions';
 import type {
 	Accountability,
 	Aggregate,
@@ -15,7 +16,6 @@ import type { Knex } from 'knex';
 import { clone, isPlainObject } from 'lodash-es';
 import validate from 'uuid-validate';
 import { getHelpers } from '../database/helpers/index.js';
-import { InvalidQueryException } from '../exceptions/invalid-query.js';
 import type { AliasMap } from './get-column-path.js';
 import { getColumnPath } from './get-column-path.js';
 import { getColumn } from './get-column.js';
