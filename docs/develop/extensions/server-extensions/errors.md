@@ -94,6 +94,7 @@ export default defineOperationApi({
 
     const tenants = new ItemsService('tenants', {
       schema: await getSchema({ database }),
+      knex: database,
       accountability,
     });
     const tenant = await tenants.readOne(tenantId, { fields: ['usage', 'quota'] });
@@ -109,7 +110,7 @@ export default defineOperationApi({
 
 When the tenant reaches its quota, the operation throws `QuotaExceededException` with the `QUOTA_EXCEEDED` code and a `quota` detail.
 
-REST and GraphQL clients can receive the message and details. The [realtime item protocol](/docs/api/realtime/item-protocol/) returns the code with a fixed message and no details. [GraphQL over WebSocket](/docs/api/realtime/graphql/) follows GraphQL error formatting.
+When an endpoint or a filter hook raises the error, REST and GraphQL clients can receive its message and details. The [realtime item protocol](/docs/api/realtime/item-protocol/) returns the code with a fixed message and no details. [GraphQL over WebSocket](/docs/api/realtime/graphql/) follows GraphQL error formatting.
 
 In TypeScript, add a type parameter to check the details. Replace the class inside the handler above with:
 

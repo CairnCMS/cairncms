@@ -175,8 +175,8 @@ export default defineEndpoint({
         });
 
         const results = await articles.readByQuery({
-          aggregate: { count: '*' },
-          groupBy: ['author'],
+          aggregate: { count: ['*'] },
+          group: ['author'],
           filter: { status: { _eq: 'published' } },
         });
 
