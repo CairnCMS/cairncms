@@ -35,6 +35,7 @@ const { t } = useI18n();
 const collectionsStore = useCollectionsStore();
 
 const collections = computed(() => {
+	// Folders only organize collections and have no database table (schema is null)
 	let collections = collectionsStore.collections.filter(
 		(collection) => collection.collection.startsWith('directus_') || collection.schema
 	);
