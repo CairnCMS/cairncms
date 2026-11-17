@@ -106,16 +106,24 @@ export function useAliasFields(
 	 * Returns the value of the given key from the given item, taking into account aliased fields
 	 * @param item The item to get the value from
 	 * @param key The key to get the value for without any alias
-	 * @returns The value of the given key from the given item
+	 * @returns The value of the given key from the given item. If the aliased value is not present, falls back to reading the key directly from the item.
 	 */
 	function getFromAliasedItem<K, T extends Record<string, K>>(item: T, key: string): K | undefined {
 		const aliasInfo = Object.values(aliasedFields.value).find((field) => field.key === key);
 
 		if (!aliasInfo || !aliasInfo.aliased) return get(item, key);
 
-		if (key.includes('.') === false) return get(item, aliasInfo.fieldAlias);
+		const aliasedPath =
+			key.includes('.') === false
+				? aliasInfo.fieldAlias
+				: `${aliasInfo.fieldAlias}.${key.split('.').slice(1).join('.')}`;
 
-		return get(item, `${aliasInfo.fieldAlias}.${key.split('.').slice(1).join('.')}`);
+		const aliasedValue = get(item, aliasedPath);
+
+		if (aliasedValue !== undefined) return aliasedValue;
+
+		// Fall back to the un-aliased item when the data wasn't fetched under an alias
+		return get(item, key);
 	}
 
 	return { aliasedFields, aliasQuery, aliasedKeys, getFromAliasedItem };

@@ -128,4 +128,29 @@ describe('useAliasFields', () => {
 			alt: 'Example',
 		});
 	});
+
+	test('falls back to the un-aliased item when multiple fields share the same relation', () => {
+		const fields = ['author.first_name', 'author.last_name'];
+
+		const wrapper = mount(TestComponent, {
+			props: {
+				fields,
+				collection: 'events',
+			},
+		});
+
+		// Both fields share the `author` relation, so they get aliased
+		expect(wrapper.vm.aliasedKeys).toHaveLength(2);
+
+		// Item returned without aliases, e.g. by the calendar layout
+		const item = {
+			author: {
+				first_name: 'Ada',
+				last_name: 'Lovelace',
+			},
+		};
+
+		expect(wrapper.vm.getFromAliasedItem(item, 'author.first_name')).toEqual('Ada');
+		expect(wrapper.vm.getFromAliasedItem(item, 'author.last_name')).toEqual('Lovelace');
+	});
 });
