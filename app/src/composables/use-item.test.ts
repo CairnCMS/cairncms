@@ -10,10 +10,15 @@ import { computed, ref } from 'vue';
 import { useFieldsStore } from '@/stores/fields';
 import { useRelationsStore } from '@/stores/relations';
 import { fld, rel } from '@/__utils__/field-relation-fixtures';
+import { unexpectedError } from '@/utils/unexpected-error';
 import { useItem } from './use-item';
 
 vi.mock('@/utils/notify', () => ({
 	notify: vi.fn(),
+}));
+
+vi.mock('@/utils/unexpected-error', () => ({
+	unexpectedError: vi.fn(),
 }));
 
 vi.mock('@/api', () => {
@@ -582,5 +587,40 @@ describe('Strips unbound parent links on save', () => {
 
 		const body = apiPatchSpy.mock.lastCall![1] as any;
 		expect(body.sections.create[0]).toEqual({ title: 'Intro' });
+	});
+});
+
+describe('Save error handling', () => {
+	const articlesPrimaryKeyField = fld('articles', 'id', true);
+
+	const articlesCollection = {
+		collection: 'articles',
+		name: 'articles',
+		meta: { archive_field: null, singleton: false },
+		schema: {},
+	} as AppCollection;
+
+	test('keeps validation errors from the API response and reports the others', async () => {
+		useFieldsStore().fields = [articlesPrimaryKeyField, fld('articles', 'title')];
+		mockUseCollection(articlesCollection, articlesPrimaryKeyField);
+		vi.mocked(unexpectedError).mockClear();
+		vi.spyOn(api, 'get').mockResolvedValue({ data: { data: {} } });
+
+		const failure = {
+			message: 'Validation failed for field "title". Value has to be the required value.',
+			extensions: { code: 'FAILED_VALIDATION', field: 'title', type: 'eq' },
+		};
+
+		const forbidden = { message: `You don't have permission to access this.`, extensions: { code: 'FORBIDDEN' } };
+		const error = { response: { data: { errors: [failure, forbidden] } } };
+		vi.spyOn(api, 'post').mockRejectedValue(error);
+
+		const { save, edits, validationErrors } = useItem(ref('articles'), ref('+'));
+		edits.value = { title: 'x' };
+
+		await expect(save()).rejects.toBe(error);
+		expect(validationErrors.value).toEqual([failure.extensions]);
+		expect(vi.mocked(unexpectedError)).toHaveBeenCalledTimes(1);
+		expect(vi.mocked(unexpectedError).mock.calls[0]![0]).toBe(forbidden);
 	});
 });
