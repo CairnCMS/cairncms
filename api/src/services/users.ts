@@ -103,9 +103,6 @@ export class UsersService extends ItemsService {
 					message: `Provided password doesn't match password policy`,
 					path: ['password'],
 					type: 'custom.pattern.base',
-					context: {
-						value: password,
-					},
 				});
 			}
 		}

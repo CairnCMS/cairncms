@@ -1,4 +1,4 @@
-import { ForbiddenException, InvalidPayloadException } from '@cairncms/exceptions';
+import { FailedValidationException, ForbiddenException, InvalidPayloadException } from '@cairncms/exceptions';
 import type { SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';
@@ -8,6 +8,20 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { RecordNotUniqueException } from '../exceptions/database/record-not-unique.js';
 import jwt from 'jsonwebtoken';
 import { ItemsService, MailService, UsersService } from './index.js';
+import { SettingsService } from './settings.js';
+
+vi.mock('@cairncms/exceptions', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('@cairncms/exceptions')>();
+
+	return {
+		...actual,
+		FailedValidationException: vi.fn(function (
+			item: ConstructorParameters<typeof actual.FailedValidationException>[0]
+		) {
+			return new actual.FailedValidationException(item);
+		}),
+	};
+});
 
 const originalInviteUrl = (UsersService.prototype as any).inviteUrl;
 
@@ -1069,6 +1083,39 @@ describe('Integration Tests', () => {
 					});
 				});
 			});
+		});
+	});
+
+	describe('password policy', () => {
+		const password = 'short-policy-password-marker';
+
+		beforeEach(() => {
+			vi.restoreAllMocks();
+		});
+
+		afterEach(() => {
+			vi.restoreAllMocks();
+		});
+
+		it('rejects a password that fails the policy without passing or returning the password', async () => {
+			vi.spyOn(SettingsService.prototype, 'readSingleton').mockResolvedValue({ auth_password_policy: '/^.{64,}$/' });
+			vi.mocked(FailedValidationException).mockClear();
+			const service = new UsersService({ knex: db, schema: testSchema });
+
+			const error = await (service as any).checkPasswordPolicy([password]).catch((thrown: unknown) => thrown);
+
+			expect(error.code).toBe('FAILED_VALIDATION');
+			expect(error.message).toBe(`Validation failed for field "password". Value doesn't have the correct format.`);
+			expect(error.extensions).toStrictEqual({ field: 'password', type: 'regex' });
+			expect(JSON.stringify({ message: error.message, extensions: error.extensions })).not.toContain(password);
+			expect(JSON.stringify(vi.mocked(FailedValidationException).mock.calls.at(-1)![0])).not.toContain(password);
+		});
+
+		it('accepts a password that meets the policy', async () => {
+			vi.spyOn(SettingsService.prototype, 'readSingleton').mockResolvedValue({ auth_password_policy: '/^.{8,}$/' });
+			const service = new UsersService({ knex: db, schema: testSchema });
+
+			await expect((service as any).checkPasswordPolicy([password])).resolves.toBeUndefined();
 		});
 	});
 });
