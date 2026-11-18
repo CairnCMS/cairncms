@@ -109,17 +109,14 @@ describe('ForbiddenException details typing', () => {
 });
 
 describe('FailedValidationException details typing', () => {
-	it('leaves compared values unknown, so callers narrow them before use', () => {
+	it('carries no compared or submitted value in its details', () => {
 		const item = validatePayload({ published: { _eq: true } }, { published: false })[0]!.details[0]!;
 		const error = new FailedValidationException(item);
 
-		expectTypeOf(error.extensions.valid).toEqualTypeOf<unknown>();
-		expectTypeOf(error.extensions.invalid).toEqualTypeOf<unknown>();
-
-		// @ts-expect-error a compared value can be of any type, such as a boolean
-		const valid: string | number | (string | number)[] | undefined = error.extensions.valid;
-
-		expect(valid).toBe(true);
+		expectTypeOf(error.extensions).not.toHaveProperty('valid');
+		expectTypeOf(error.extensions).not.toHaveProperty('invalid');
+		expectTypeOf(error.extensions).not.toHaveProperty('substring');
+		expect(error.extensions).toStrictEqual({ field: 'published', type: 'eq' });
 	});
 
 	it('types the rule as one the constructor produces, which readers can still treat as a client filter operator', () => {

@@ -19,133 +19,163 @@ async function convertBatch(body: Record<string, unknown>): Promise<FailedValida
 	return next.mock.calls[0]![0];
 }
 
+function expectNoMarker(error: FailedValidationException) {
+	const serialized = JSON.stringify({ message: error.message, extensions: error.extensions });
+
+	expect(serialized).not.toContain(OPERAND);
+	expect(serialized).not.toContain(SUBMITTED);
+}
+
+const field = (sentence: string) => `Validation failed for field "f". ${sentence}`;
+
 const cases: [string, Record<string, unknown>, Record<string, unknown>, string, Record<string, unknown>][] = [
 	[
 		'_eq',
 		{ f: { _eq: OPERAND } },
 		{ f: SUBMITTED },
-		'"f" must be [OPERAND_MARKER]',
-		{ field: 'f', type: 'eq', valid: OPERAND },
+		field('Value has to be the required value.'),
+		{ field: 'f', type: 'eq' },
 	],
 	[
 		'numeric _eq',
 		{ f: { _eq: '42' } },
 		{ f: 'x' },
-		'"f" must be one of [42, 42]',
-		{ field: 'f', type: 'in', valid: ['42', 42] },
+		field('Value has to be one of the allowed values.'),
+		{ field: 'f', type: 'in' },
 	],
 	[
 		'_in',
 		{ f: { _in: [OPERAND, 'b'] } },
 		{ f: SUBMITTED },
-		'"f" must be one of [OPERAND_MARKER, b]',
-		{ field: 'f', type: 'in', valid: [OPERAND, 'b'] },
+		field('Value has to be one of the allowed values.'),
+		{ field: 'f', type: 'in' },
 	],
-	['_null', { f: { _null: true } }, { f: SUBMITTED }, '"f" must be [null]', { field: 'f', type: 'null' }],
-	['_empty', { f: { _empty: true } }, { f: SUBMITTED }, '"f" must be []', { field: 'f', type: 'empty' }],
+	[
+		'empty _in',
+		{ f: { _in: [] } },
+		{ f: SUBMITTED },
+		field('Value has to be the required value.'),
+		{ field: 'f', type: 'eq' },
+	],
+	['_null', { f: { _null: true } }, { f: SUBMITTED }, field('Value has to be null.'), { field: 'f', type: 'null' }],
+	['_empty', { f: { _empty: true } }, { f: SUBMITTED }, field('Value has to be empty.'), { field: 'f', type: 'empty' }],
 	[
 		'_neq',
 		{ f: { _neq: OPERAND } },
 		{ f: OPERAND },
-		'"f" contains an invalid value',
-		{ field: 'f', type: 'neq', invalid: OPERAND },
+		field(`Value can't be the excluded value.`),
+		{ field: 'f', type: 'neq' },
 	],
 	[
 		'_nin',
 		{ f: { _nin: [SUBMITTED, OPERAND] } },
 		{ f: SUBMITTED },
-		'"f" contains an invalid value',
-		{ field: 'f', type: 'nin', invalid: [SUBMITTED, OPERAND] },
+		field(`Value can't be one of the excluded values.`),
+		{ field: 'f', type: 'nin' },
 	],
-	['_nnull', { f: { _nnull: true } }, { f: null }, '"f" contains an invalid value', { field: 'f', type: 'nnull' }],
-	['_nempty', { f: { _nempty: true } }, { f: '' }, '"f" contains an invalid value', { field: 'f', type: 'nempty' }],
-	['_gt', { f: { _gt: 100 } }, { f: 5 }, '"f" must be greater than 100', { field: 'f', type: 'gt', valid: 100 }],
+	['_nnull', { f: { _nnull: true } }, { f: null }, field(`Value can't be null.`), { field: 'f', type: 'nnull' }],
+	['_nempty', { f: { _nempty: true } }, { f: '' }, field(`Value can't be empty.`), { field: 'f', type: 'nempty' }],
+	[
+		'_gt',
+		{ f: { _gt: 100 } },
+		{ f: 5 },
+		field('Value has to be greater than the minimum.'),
+		{ field: 'f', type: 'gt' },
+	],
 	[
 		'_gte',
 		{ f: { _gte: 100 } },
 		{ f: 5 },
-		'"f" must be greater than or equal to 100',
-		{ field: 'f', type: 'gte', valid: 100 },
+		field('Value has to be greater than or equal to the minimum.'),
+		{ field: 'f', type: 'gte' },
 	],
-	['_lt', { f: { _lt: 1 } }, { f: 5 }, '"f" must be less than 1', { field: 'f', type: 'lt', valid: 1 }],
-	['_lte', { f: { _lte: 1 } }, { f: 5 }, '"f" must be less than or equal to 1', { field: 'f', type: 'lte', valid: 1 }],
+	['_lt', { f: { _lt: 1 } }, { f: 5 }, field('Value has to be less than the maximum.'), { field: 'f', type: 'lt' }],
+	[
+		'_lte',
+		{ f: { _lte: 1 } },
+		{ f: 5 },
+		field('Value has to be less than or equal to the maximum.'),
+		{ field: 'f', type: 'lte' },
+	],
 	[
 		'_contains',
 		{ f: { _contains: OPERAND } },
 		{ f: SUBMITTED },
-		'"f" must contain [OPERAND_MARKER]',
-		{ field: 'f', type: 'contains', substring: OPERAND },
+		field('Value has to contain the required text.'),
+		{ field: 'f', type: 'contains' },
 	],
 	[
 		'_icontains',
 		{ f: { _icontains: OPERAND } },
 		{ f: SUBMITTED },
-		'"f" must contain [OPERAND_MARKER]',
-		{ field: 'f', type: 'contains', substring: OPERAND },
+		field('Value has to contain the required text.'),
+		{ field: 'f', type: 'contains' },
 	],
 	[
 		'_ncontains',
 		{ f: { _ncontains: OPERAND } },
 		{ f: `${SUBMITTED}${OPERAND}` },
-		`"f" can't contain [OPERAND_MARKER]`,
-		{ field: 'f', type: 'ncontains', substring: OPERAND },
+		field(`Value can't contain the excluded text.`),
+		{ field: 'f', type: 'ncontains' },
 	],
-	['_submitted', { f: { _submitted: true } }, {}, '"f" is required', { field: 'f', type: 'required' }],
+	['_submitted', { f: { _submitted: true } }, {}, field('Value is required.'), { field: 'f', type: 'required' }],
 	[
 		'_regex',
 		{ f: { _regex: OPERAND } },
 		{ f: SUBMITTED },
-		'"f" with value "SUBMITTED_MARKER" fails to match the required pattern: /OPERAND_MARKER/',
-		{ field: 'f', type: 'regex', invalid: SUBMITTED },
+		field(`Value doesn't have the correct format.`),
+		{ field: 'f', type: 'regex' },
 	],
 	[
 		'_starts_with',
 		{ f: { _starts_with: OPERAND } },
 		{ f: SUBMITTED },
-		'"f" with value "SUBMITTED_MARKER" fails to match the starts_with pattern',
+		field('Value has to start with the required text.'),
 		{ field: 'f', type: 'starts_with' },
 	],
 	[
 		'_ends_with',
 		{ f: { _ends_with: OPERAND } },
 		{ f: SUBMITTED },
-		'"f" with value "SUBMITTED_MARKER" fails to match the ends_with pattern',
+		field('Value has to end with the required text.'),
 		{ field: 'f', type: 'ends_with' },
 	],
 	[
 		'_nstarts_with',
 		{ f: { _nstarts_with: OPERAND } },
 		{ f: `${OPERAND}${SUBMITTED}` },
-		'"f" with value "OPERAND_MARKERSUBMITTED_MARKER" matches the inverted nstarts_with pattern',
+		field(`Value can't start with the excluded text.`),
 		{ field: 'f', type: 'nstarts_with' },
 	],
 	[
 		'_nends_with',
 		{ f: { _nends_with: OPERAND } },
 		{ f: `${SUBMITTED}${OPERAND}` },
-		'"f" with value "SUBMITTED_MARKEROPERAND_MARKER" matches the inverted nends_with pattern',
+		field(`Value can't end with the excluded text.`),
 		{ field: 'f', type: 'nends_with' },
 	],
-	['_starts_with on a number', { f: { _starts_with: OPERAND } }, { f: 42 }, '"f" must be a string', { field: 'f' }],
+	[
+		'_starts_with on a number',
+		{ f: { _starts_with: OPERAND } },
+		{ f: 42 },
+		'Validation failed for field "f".',
+		{ field: 'f' },
+	],
 ];
 
 describe('FailedValidationException conversion', () => {
-	it.each(cases)('converts a failed %s rule', (_rule, filter, payload, message, extensions) => {
-		const error = convert(filter, payload);
+	it.each(cases)(
+		'converts a failed %s rule without its operand or the submitted value',
+		(_rule, filter, payload, message, extensions) => {
+			const error = convert(filter, payload);
 
-		expect(error.message).toBe(message);
-		expect(error.extensions).toStrictEqual(extensions);
-	});
+			expect(error.message).toBe(message);
+			expect(error.extensions).toStrictEqual(extensions);
+			expectNoMarker(error);
+		}
+	);
 
-	it('converts a failed empty _in rule to eq with an internal symbol', () => {
-		const error = convert({ f: { _in: [] } }, { f: SUBMITTED });
-
-		expect(error.message).toBe('"f" must be [Symbol(cairncms-empty-in)]');
-		expect(error.extensions.type).toBe('eq');
-		expect(typeof error.extensions.valid).toBe('symbol');
-	});
-
-	it('converts the password-policy item', () => {
+	it('converts the password-policy item without the password', () => {
 		const error = new FailedValidationException({
 			message: `Provided password doesn't match password policy`,
 			path: ['password'],
@@ -153,15 +183,16 @@ describe('FailedValidationException conversion', () => {
 			context: { value: SUBMITTED },
 		});
 
-		expect(error.message).toBe(`Provided password doesn't match password policy`);
-		expect(error.extensions).toStrictEqual({ field: 'password', type: 'regex', invalid: SUBMITTED });
+		expect(error.message).toBe(`Validation failed for field "password". Value doesn't have the correct format.`);
+		expect(error.extensions).toStrictEqual({ field: 'password', type: 'regex' });
+		expectNoMarker(error);
 	});
 
 	it('converts a batch body with neither keys nor a query', async () => {
 		const error = await convertBatch({});
 
 		expect(error).toBeInstanceOf(FailedValidationException);
-		expect(error.message).toBe('"value" must contain at least one of [query, keys]');
+		expect(error.message).toBe('Validation failed.');
 		expect(error.extensions).toStrictEqual({ field: undefined });
 	});
 
@@ -169,7 +200,8 @@ describe('FailedValidationException conversion', () => {
 		const error = await convertBatch({ keys: [{ id: SUBMITTED }] });
 
 		expect(error).toBeInstanceOf(FailedValidationException);
-		expect(error.message).toBe('"keys[0]" must be one of [string, number]');
+		expect(error.message).toBe('Validation failed for field "keys".');
 		expect(error.extensions).toStrictEqual({ field: 'keys' });
+		expectNoMarker(error);
 	});
 });

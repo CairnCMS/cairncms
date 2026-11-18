@@ -35,12 +35,12 @@ function isPatternRuleName(name: unknown): name is PatternRuleName {
 export type FailedValidationExtensions = {
 	field: ValidationErrorItem['path'][number] | undefined;
 	type?: FailedValidationType;
-	valid?: unknown;
-	invalid?: unknown;
-	substring?: string;
 };
 
-/** Converts a Joi validation error item into the details of a failed validation, leaving `type` unset when the item matches no known rule. */
+/**
+ * Converts a Joi validation error item into the details of a failed validation. The details carry no compared or
+ * submitted value, and leave `type` unset when the item matches no known rule.
+ */
 export function joiValidationErrorItemToErrorExtensions(item: ValidationErrorItem): FailedValidationExtensions {
 	const extensions: FailedValidationExtensions = {
 		field: item.path[0],
@@ -51,7 +51,6 @@ export function joiValidationErrorItemToErrorExtensions(item: ValidationErrorIte
 	if (joiType.endsWith('only')) {
 		if (item.context?.['valids'].length > 1) {
 			extensions.type = 'in';
-			extensions.valid = item.context?.['valids'];
 		} else {
 			const valid = item.context?.['valids'][0];
 
@@ -61,7 +60,6 @@ export function joiValidationErrorItemToErrorExtensions(item: ValidationErrorIte
 				extensions.type = 'empty';
 			} else {
 				extensions.type = 'eq';
-				extensions.valid = item.context?.['valids'][0];
 			}
 		}
 	}
@@ -69,7 +67,6 @@ export function joiValidationErrorItemToErrorExtensions(item: ValidationErrorIte
 	if (joiType.endsWith('invalid')) {
 		if (item.context?.['invalids'].length > 1) {
 			extensions.type = 'nin';
-			extensions.invalid = item.context?.['invalids'];
 		} else {
 			const invalid = item.context?.['invalids'][0];
 
@@ -79,49 +76,18 @@ export function joiValidationErrorItemToErrorExtensions(item: ValidationErrorIte
 				extensions.type = 'nempty';
 			} else {
 				extensions.type = 'neq';
-				extensions.invalid = invalid;
 			}
 		}
 	}
 
-	if (joiType.endsWith('greater')) {
-		extensions.type = 'gt';
-		extensions.valid = item.context?.['limit'];
-	}
-
-	if (joiType.endsWith('min')) {
-		extensions.type = 'gte';
-		extensions.valid = item.context?.['limit'];
-	}
-
-	if (joiType.endsWith('less')) {
-		extensions.type = 'lt';
-		extensions.valid = item.context?.['limit'];
-	}
-
-	if (joiType.endsWith('max')) {
-		extensions.type = 'lte';
-		extensions.valid = item.context?.['limit'];
-	}
-
-	if (joiType.endsWith('contains')) {
-		extensions.type = 'contains';
-		extensions.substring = item.context?.['substring'];
-	}
-
-	if (joiType.endsWith('ncontains')) {
-		extensions.type = 'ncontains';
-		extensions.substring = item.context?.['substring'];
-	}
-
-	if (joiType.endsWith('required')) {
-		extensions.type = 'required';
-	}
-
-	if (joiType.endsWith('.pattern.base')) {
-		extensions.type = 'regex';
-		extensions.invalid = item.context?.value;
-	}
+	if (joiType.endsWith('greater')) extensions.type = 'gt';
+	if (joiType.endsWith('min')) extensions.type = 'gte';
+	if (joiType.endsWith('less')) extensions.type = 'lt';
+	if (joiType.endsWith('max')) extensions.type = 'lte';
+	if (joiType.endsWith('contains')) extensions.type = 'contains';
+	if (joiType.endsWith('ncontains')) extensions.type = 'ncontains';
+	if (joiType.endsWith('required')) extensions.type = 'required';
+	if (joiType.endsWith('.pattern.base')) extensions.type = 'regex';
 
 	if (joiType.endsWith('.pattern.name') || joiType.endsWith('.pattern.invert.name')) {
 		const name = item.context?.['name'];

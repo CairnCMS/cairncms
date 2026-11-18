@@ -14,7 +14,20 @@ describe('joiValidationErrorItemToErrorExtensions', () => {
 		const error = new FailedValidationException(item);
 
 		expect(error.extensions).toStrictEqual(joiValidationErrorItemToErrorExtensions(item));
-		expect(error.message).toBe(item.message);
+	});
+
+	it.each([
+		[
+			{ message: '"title" must be [a]', path: ['title'], type: 'any.only', context: { valids: ['a'] } },
+			'Validation failed for field "title". Value has to be the required value.',
+		],
+		[
+			{ message: '"title" must be a string', path: ['title'], type: 'string.base' },
+			'Validation failed for field "title".',
+		],
+		[{ message: '"value" is required', path: [], type: 'any.required' }, 'Validation failed. Value is required.'],
+	])('builds a fixed message from the field and the rule type, not from the Joi message', (item, message) => {
+		expect(new FailedValidationException(item as ValidationErrorItem).message).toBe(message);
 	});
 
 	it('leaves the type unset for an item that matches no known rule', () => {
