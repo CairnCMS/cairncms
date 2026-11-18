@@ -1,5 +1,5 @@
 import { useRelationsStore } from '@/stores/relations';
-import { FailedValidationException } from '@cairncms/exceptions';
+import { joiValidationErrorItemToErrorExtensions } from '@cairncms/exceptions';
 import { Field, LogicalFilterAND } from '@cairncms/types';
 import { validatePayload } from '@cairncms/utils';
 import { cloneDeep, flatten, isEmpty, isNil } from 'lodash';
@@ -43,7 +43,7 @@ export function validateItem(item: Record<string, any>, fields: Field[], isNew: 
 
 	return flatten(
 		validatePayload(validationRules, updatedItem).map((error) =>
-			error.details.map((details) => new FailedValidationException(details).extensions)
+			error.details.map((details) => joiValidationErrorItemToErrorExtensions(details))
 		)
 	).map((error) => {
 		const errorField = fields.find((field) => field.field === error.field);

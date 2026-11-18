@@ -1,8 +1,36 @@
 import type { FieldFilter } from '@cairncms/types';
-import { escapeRegExp } from 'lodash-es';
+import type { AnySchema, Description } from 'joi';
+import { escapeRegExp, omit } from 'lodash-es';
 import { describe, expect, it } from 'vitest';
 import type { JoiOptions, StringSchema } from './generate-joi.js';
 import { Joi, generateJoi } from './generate-joi.js';
+
+/** Describes a schema without the error callbacks that record a rule's operator. */
+function describeRules(schema: AnySchema): Description {
+	const strip = (description: Description) => {
+		const flags = description['flags'] as Record<string, unknown> | undefined;
+
+		if (flags && typeof flags['error'] === 'function') {
+			delete flags['error'];
+			if (Object.keys(flags).length === 0) delete description['flags'];
+		}
+
+		for (const child of Object.values((description['keys'] ?? {}) as Record<string, Description>)) strip(child);
+	};
+
+	const description = schema.describe();
+	strip(description);
+	return description;
+}
+
+function outcome(schema: AnySchema, payload: Record<string, unknown>) {
+	const { value, error } = schema.validate(payload, { abortEarly: false });
+
+	return {
+		value,
+		details: error?.details.map((detail) => ({ ...detail, context: omit(detail.context, 'validationOperator') })),
+	};
+}
 
 describe(`generateJoi`, () => {
 	const date = new Date(1632431505992);
@@ -35,7 +63,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema with an option of "requireAll" true`, () => {
@@ -48,7 +76,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter, mockOptions).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter, mockOptions))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _eq match`, () => {
@@ -60,7 +88,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for a _neq match`, () => {
@@ -72,7 +100,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an integer _eq match`, () => {
@@ -84,7 +112,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an integer _neq match`, () => {
@@ -96,7 +124,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for a float _eq match`, () => {
@@ -108,7 +136,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for a float _neq match`, () => {
@@ -120,7 +148,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for a null _eq match`, () => {
@@ -132,7 +160,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for a null _neq match`, () => {
@@ -144,7 +172,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an empty string _eq match`, () => {
@@ -156,7 +184,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an empty string _neq match`, () => {
@@ -168,7 +196,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for a true _eq match`, () => {
@@ -180,7 +208,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for a true _neq match`, () => {
@@ -192,7 +220,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for a false _eq match`, () => {
@@ -204,7 +232,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for a false _neq match`, () => {
@@ -216,7 +244,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _ncontains contain match`, () => {
@@ -228,7 +256,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _ncontains with null value`, () => {
@@ -240,7 +268,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _contains contain match`, () => {
@@ -252,7 +280,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _contains with null value`, () => {
@@ -264,7 +292,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _icontains contain match`, () => {
@@ -276,7 +304,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _icontains with null value`, () => {
@@ -288,7 +316,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns a value if the substring is included in the value`, () => {
@@ -328,7 +356,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for a _starts_with with null value`, () => {
@@ -340,7 +368,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for a _nstarts_with with match`, () => {
@@ -348,14 +376,14 @@ describe(`generateJoi`, () => {
 
 		const mockSchema = Joi.object({
 			field: Joi.string().pattern(new RegExp(`^${escapeRegExp('field')}.*`), {
-				name: 'starts_with',
+				name: 'nstarts_with',
 				invert: true,
 			}),
 		})
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for a _nstarts_with with null value`, () => {
@@ -367,7 +395,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an ends_with match`, () => {
@@ -381,7 +409,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an ends_with with null value`, () => {
@@ -393,7 +421,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for a doesnt _nends_with match`, () => {
@@ -401,14 +429,14 @@ describe(`generateJoi`, () => {
 
 		const mockSchema = Joi.object({
 			field: Joi.string().pattern(new RegExp(`.*field$`), {
-				name: 'ends_with',
+				name: 'nends_with',
 				invert: true,
 			}),
 		})
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for a doesnt _nends_with with null value`, () => {
@@ -420,7 +448,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _in match`, () => {
@@ -432,7 +460,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _in number array match`, () => {
@@ -444,7 +472,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _in a string array match`, () => {
@@ -456,7 +484,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for a _nin match`, () => {
@@ -468,7 +496,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _nin number array match`, () => {
@@ -480,7 +508,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _nin a string array match`, () => {
@@ -492,7 +520,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _gt number match`, () => {
@@ -504,7 +532,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _gt date match`, () => {
@@ -516,7 +544,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _gt string match`, () => {
@@ -528,7 +556,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _gte number match`, () => {
@@ -540,7 +568,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _gte date match`, () => {
@@ -552,7 +580,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _gte string match`, () => {
@@ -564,7 +592,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _lt number match`, () => {
@@ -576,7 +604,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _lt date match`, () => {
@@ -588,7 +616,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _lt string match`, () => {
@@ -600,7 +628,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _lte number match`, () => {
@@ -612,7 +640,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _lte date match`, () => {
@@ -624,7 +652,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _lte string match`, () => {
@@ -636,7 +664,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _null match`, () => {
@@ -648,7 +676,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _nnull match`, () => {
@@ -660,7 +688,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _empty match`, () => {
@@ -672,7 +700,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _nempty match`, () => {
@@ -684,7 +712,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _between number match`, () => {
@@ -696,7 +724,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _between float match`, () => {
@@ -708,7 +736,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _between date match`, () => {
@@ -720,7 +748,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _nbetween number match`, () => {
@@ -732,7 +760,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _nbetween float match`, () => {
@@ -744,7 +772,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _nbetween date match`, () => {
@@ -756,7 +784,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _submitted match`, () => {
@@ -768,7 +796,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _regex match when wrapped`, () => {
@@ -780,7 +808,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _regex match when unwrapped`, () => {
@@ -792,7 +820,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	it(`returns the correct schema for an _regex match with null value`, () => {
@@ -804,7 +832,7 @@ describe(`generateJoi`, () => {
 			.unknown()
 			.describe();
 
-		expect(generateJoi(mockFieldFilter).describe()).toStrictEqual(mockSchema);
+		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
 	});
 
 	describe(`_in / _nin with empty arrays (GHSA-hxgm-ghmv-xjjm)`, () => {
@@ -848,6 +876,90 @@ describe(`generateJoi`, () => {
 			const schema = generateJoi({ field: { _nin: ['blocked'] } } as unknown as FieldFilter);
 			expect(schema.validate({ field: 'allowed' }).error).toBeUndefined();
 			expect(schema.validate({ field: 'blocked' }).error).toBeDefined();
+		});
+	});
+
+	describe(`validation operator tags`, () => {
+		it.each([
+			['_eq', { _eq: 'word' }, 'other', 'any.only'],
+			['_neq', { _neq: 'word' }, 'word', 'any.invalid'],
+			['_in', { _in: ['a'] }, 'other', 'any.only'],
+			['_in', { _in: [] }, 'other', 'any.only'],
+			['_nin', { _nin: ['a'] }, 'a', 'any.invalid'],
+			['_null', { _null: true }, 'x', 'any.only'],
+			['_nnull', { _nnull: true }, null, 'any.invalid'],
+			['_empty', { _empty: true }, 'x', 'any.only'],
+			['_nempty', { _nempty: true }, '', 'any.invalid'],
+		])(`records %s on the errors it reports`, (operator, rule, input, type) => {
+			const { error } = generateJoi({ field: rule } as unknown as FieldFilter).validate({ field: input });
+
+			expect(error?.details).toHaveLength(1);
+			expect(error?.details[0]?.type).toBe(type);
+			expect(error?.details[0]?.context?.['validationOperator']).toBe(operator);
+		});
+
+		const references: [string, Record<string, unknown>, AnySchema][] = [
+			['_eq a word', { _eq: 'word' }, Joi.any().equal('word')],
+			['_eq a numeric string', { _eq: '4821' }, Joi.any().equal('4821', 4821)],
+			['_eq null', { _eq: null }, Joi.any().equal(null)],
+			['_eq an empty string', { _eq: '' }, Joi.any().equal('')],
+			['_neq a word', { _neq: 'word' }, Joi.any().not('word')],
+			['_neq a numeric string', { _neq: '4821' }, Joi.any().not('4821', 4821)],
+			['_in one value', { _in: ['a'] }, Joi.any().equal('a')],
+			['_in two values', { _in: ['a', 'b'] }, Joi.any().equal('a', 'b')],
+			['_in null', { _in: [null] }, Joi.any().equal(null)],
+			['_nin one value', { _nin: ['a'] }, Joi.any().not('a')],
+			['_nin two values', { _nin: ['a', 'b'] }, Joi.any().not('a', 'b')],
+			['_nin no values', { _nin: [] }, Joi.any()],
+			['_null', { _null: true }, Joi.any().valid(null)],
+			['_nnull', { _nnull: true }, Joi.any().invalid(null)],
+			['_empty', { _empty: true }, Joi.any().valid('')],
+			['_nempty', { _nempty: true }, Joi.any().invalid('')],
+		];
+
+		const payloads = [{}, ...['word', '4821', 4821, null, '', 'a', 'b', true].map((field) => ({ field }))];
+
+		it.each(references)(`keeps the outcome of %s unchanged`, (_label, rule, reference) => {
+			const filter = { field: rule } as unknown as FieldFilter;
+
+			for (const payload of payloads) {
+				expect(outcome(generateJoi(filter), payload)).toStrictEqual(
+					outcome(Joi.object({ field: reference }).unknown(), payload)
+				);
+
+				expect(outcome(generateJoi(filter, { requireAll: true }), payload)).toStrictEqual(
+					outcome(Joi.object({ field: reference.required() }).unknown(), payload)
+				);
+			}
+		});
+
+		it(`keeps the tag on a nested field`, () => {
+			const filter = { field: { nested: { _eq: 'a' } } } as unknown as FieldFilter;
+			const { error } = generateJoi(filter).validate({ field: { nested: 'b' } });
+
+			expect(error?.details[0]?.path).toEqual(['field', 'nested']);
+			expect(error?.details[0]?.context?.['validationOperator']).toBe('_eq');
+		});
+
+		it(`reports a missing value as required under requireAll`, () => {
+			const { error } = generateJoi({ field: { _eq: 'a' } } as FieldFilter, { requireAll: true }).validate({});
+
+			expect(error?.details[0]?.type).toBe('any.required');
+		});
+
+		it.each([
+			['_gt', { _gt: 5 }, 1],
+			['_contains', { _contains: 'a' }, 'b'],
+			['_starts_with', { _starts_with: 'a' }, 'b'],
+			['_starts_with with no operand', { _starts_with: null }, 'b'],
+			['_regex', { _regex: '^a' }, 'b'],
+			['_submitted', { _submitted: true }, undefined],
+		])(`leaves %s untagged`, (_label, rule, input) => {
+			const payload = input === undefined ? {} : { field: input };
+			const { error } = generateJoi({ field: rule } as unknown as FieldFilter).validate(payload);
+
+			expect(error?.details).toHaveLength(1);
+			expect(error?.details[0]?.context).not.toHaveProperty('validationOperator');
 		});
 	});
 });

@@ -46,6 +46,7 @@
 </template>
 
 <script setup lang="ts">
+import { validationErrorMessage } from '@/utils/validation-error-message';
 import formatTitle from '@cairncms/format-title';
 import { Field, ValidationError } from '@cairncms/types';
 import { isEqual } from 'lodash';
@@ -98,16 +99,7 @@ const validationMessages = computed(() => {
 	const errors = props.validationErrors.reduce((acc, validationError) => {
 		if (fields.includes(validationError.field) === false) return acc;
 
-		if (validationError.code === 'RECORD_NOT_UNIQUE') {
-			acc.push(`${formatTitle(validationError.field)} ${t('validationError.unique').toLowerCase()}`);
-		} else {
-			acc.push(
-				`${formatTitle(validationError.field)} ${t(
-					`validationError.${validationError.type}`,
-					validationError
-				).toLowerCase()}`
-			);
-		}
+		acc.push(`${formatTitle(validationError.field)} ${validationErrorMessage(validationError).toLowerCase()}`);
 
 		return acc;
 	}, [] as string[]);

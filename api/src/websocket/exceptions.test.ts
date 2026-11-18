@@ -1,4 +1,4 @@
-import { BaseException } from '@cairncms/exceptions';
+import { BaseException, FailedValidationException, ForbiddenException } from '@cairncms/exceptions';
 import { describe, expect, it, vi } from 'vitest';
 import { ZodError } from 'zod';
 import logger from '../logger.js';
@@ -74,5 +74,27 @@ describe('toWebSocketException', () => {
 
 	it('gives FORBIDDEN a fixed message', () => {
 		expect(new WebSocketException('items', 'FORBIDDEN').message).toBe('You do not have permission to access this.');
+	});
+
+	it('maps a list of validation errors to FAILED_VALIDATION with a fixed message and no details', () => {
+		const errors = [
+			new FailedValidationException({ message: 'm', path: ['title'], type: 'any.required' }),
+			new FailedValidationException({ message: 'm', path: ['status'], type: 'any.only', context: { valids: ['a'] } }),
+		];
+
+		expect(JSON.parse(toWebSocketException(errors, 'items', 3).toMessage())).toEqual({
+			type: 'items',
+			status: 'error',
+			uid: 3,
+			error: { code: 'FAILED_VALIDATION', message: 'The payload failed validation.' },
+		});
+	});
+
+	it.each([
+		['an empty list', []],
+		['a list with mixed codes', [new ForbiddenException(), new BaseException('m', 400, 'FAILED_VALIDATION')]],
+		['a list holding a non-exception', [new BaseException('m', 400, 'FAILED_VALIDATION'), new Error('raw')]],
+	])('maps %s to INTERNAL_ERROR', (_label, errors) => {
+		expect(toWebSocketException(errors, 'items').code).toBe('INTERNAL_ERROR');
 	});
 });

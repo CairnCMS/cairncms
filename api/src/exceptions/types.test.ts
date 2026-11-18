@@ -2,10 +2,12 @@ import {
 	BaseException,
 	FailedValidationException,
 	ForbiddenException,
+	joiValidationErrorItemToErrorExtensions,
 	MethodNotAllowedException,
 	ServiceUnavailableException,
+	type FailedValidationType,
 } from '@cairncms/exceptions';
-import type { FilterOperator } from '@cairncms/types';
+import type { ClientFilterOperator } from '@cairncms/types';
 import { validatePayload } from '@cairncms/utils';
 import Joi from 'joi';
 import { describe, expect, expectTypeOf, it } from 'vitest';
@@ -107,24 +109,21 @@ describe('ForbiddenException details typing', () => {
 });
 
 describe('FailedValidationException details typing', () => {
-	it('leaves compared values unknown, so callers narrow them before use', () => {
+	it('carries no compared or submitted value in its details', () => {
 		const item = validatePayload({ published: { _eq: true } }, { published: false })[0]!.details[0]!;
 		const error = new FailedValidationException(item);
 
-		expectTypeOf(error.extensions.valid).toEqualTypeOf<unknown>();
-		expectTypeOf(error.extensions.invalid).toEqualTypeOf<unknown>();
-
-		// @ts-expect-error a compared value can be of any type, such as a boolean
-		const valid: string | number | (string | number)[] | undefined = error.extensions.valid;
-
-		expect(valid).toBe(true);
+		expectTypeOf(error.extensions).not.toHaveProperty('valid');
+		expectTypeOf(error.extensions).not.toHaveProperty('invalid');
+		expectTypeOf(error.extensions).not.toHaveProperty('substring');
+		expect(error.extensions).toStrictEqual({ field: 'published', type: 'eq' });
 	});
 
-	it('types the rule as one the constructor produces, which readers can still treat as a filter operator', () => {
+	it('types the rule as one the constructor produces, which readers can still treat as a client filter operator', () => {
 		const item = validatePayload({ published: { _eq: true } }, { published: false })[0]!.details[0]!;
 		const error = new FailedValidationException(item);
 
-		expectTypeOf(error.extensions.type).toMatchTypeOf<FilterOperator | 'required' | 'regex' | undefined>();
+		expectTypeOf(error.extensions.type).toMatchTypeOf<ClientFilterOperator | 'required' | undefined>();
 
 		// @ts-expect-error the constructor never produces a between rule
 		const rule: typeof error.extensions.type = 'between';
@@ -150,6 +149,19 @@ describe('FailedValidationException details typing', () => {
 		const field: string | undefined = fromArray.extensions.field;
 
 		expect(field).toBe(0);
+	});
+
+	it('types the rule as possibly absent and the field as possibly undefined in converted details', () => {
+		const unclassified = joiValidationErrorItemToErrorExtensions(
+			validatePayload({ title: { _starts_with: 'a' } }, { title: 42 })[0]!.details[0]!
+		);
+
+		const root = joiValidationErrorItemToErrorExtensions(Joi.string().validate(123).error!.details[0]!);
+
+		expectTypeOf(unclassified.type).toEqualTypeOf<FailedValidationType | undefined>();
+		expectTypeOf(root.field).toEqualTypeOf<string | number | undefined>();
+		expect(unclassified).toStrictEqual({ field: 'title' });
+		expect(root).toStrictEqual({ field: undefined });
 	});
 });
 
