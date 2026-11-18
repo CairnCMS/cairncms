@@ -21,9 +21,15 @@ const PREFIX = 'PREFIX_MARKER_e2b4';
 const SUBMITTED_TITLE = 'SUBMITTED_TITLE_8a6f';
 const POLICY_PASSWORD = 'POLICY_PASSWORD_4d2c';
 const LOG_BARRIER = 'realtime_log_barrier_0b7e';
+const NUMERIC_SECRET = '73915482';
 
 const MEMBER_A = 'ValidationDetailMemberA';
 const MEMBER_B = 'ValidationDetailMemberB';
+const MEMBER_NUMERIC = 'ValidationDetailMemberNumeric';
+const MEMBER_NULL = 'ValidationDetailMemberNull';
+const MEMBER_EMPTY = 'ValidationDetailMemberEmpty';
+
+const REQUIRED_VALUE_MESSAGE = 'Validation failed for field "code". Value has to be the required value.';
 
 type Scenario = { secretFor: Record<string, string> };
 
@@ -50,6 +56,18 @@ async function logsThroughLine(api: Api, offset: number, parts: string[]) {
 		.toBe(true);
 
 	return window();
+}
+
+async function validationLogEntries(api: Api, offset: number) {
+	const logs = await logsThroughLine(api, offset, ['"type":"FailedValidationException"']);
+
+	return logs
+		.split('\n')
+		.filter((line) => line.includes('"type":"FailedValidationException"'))
+		.map((line) => {
+			const { message, extensions } = JSON.parse(line).err;
+			return { message, extensions };
+		});
 }
 
 function graphqlValidationLine(mutation: string, field: string) {
@@ -115,6 +133,24 @@ const test = createIdentityTest({
 					const tenantA = await CreateItem(api, { collection: TENANTS, item: { name: 'A', secret_code: SECRET_A } });
 					const tenantB = await CreateItem(api, { collection: TENANTS, item: { name: 'B', secret_code: SECRET_B } });
 
+					const tenantNumeric = await CreateItem(api, {
+						collection: TENANTS,
+						item: { name: 'Numeric', secret_code: NUMERIC_SECRET },
+					});
+
+					const tenantNull = await CreateItem(api, { collection: TENANTS, item: { name: 'Null', secret_code: null } });
+					const tenantEmpty = await CreateItem(api, { collection: TENANTS, item: { name: 'Empty', secret_code: '' } });
+
+					const stored = await api.database(TENANTS).select('name', 'secret_code').orderBy('name');
+
+					expect(stored).toEqual([
+						{ name: 'A', secret_code: SECRET_A },
+						{ name: 'B', secret_code: SECRET_B },
+						{ name: 'Empty', secret_code: '' },
+						{ name: 'Null', secret_code: null },
+						{ name: 'Numeric', secret_code: NUMERIC_SECRET },
+					]);
+
 					const role = await CreateRole(api, {
 						name: 'validation_detail_member',
 						appAccessEnabled: false,
@@ -145,6 +181,9 @@ const test = createIdentityTest({
 					for (const [token, tenant] of [
 						[MEMBER_A, tenantA.id],
 						[MEMBER_B, tenantB.id],
+						[MEMBER_NUMERIC, tenantNumeric.id],
+						[MEMBER_NULL, tenantNull.id],
+						[MEMBER_EMPTY, tenantEmpty.id],
 					] as const) {
 						await asAdmin('post', '/users', {
 							email: `${token.toLowerCase()}@example.com`,
@@ -214,6 +253,31 @@ describe('Validation errors from a permission rule with hidden operands', () => 
 			await expectNoRecord(api, body.marker);
 		}
 	});
+
+	for (const [label, token] of [
+		['a word', MEMBER_A],
+		['a numeric string', MEMBER_NUMERIC],
+		['null', MEMBER_NULL],
+		['empty', MEMBER_EMPTY],
+	] as const) {
+		test(`report the same required-value error when the hidden value is ${label}`, async ({ api }) => {
+			const body = payload({ code: 'wrong-guess' });
+			const offset = (await api.readLogs()).length;
+			const response = await createAs(api, token, body);
+
+			expect(response.status).toBe(400);
+
+			expect(response.body.errors).toEqual([
+				{ message: REQUIRED_VALUE_MESSAGE, extensions: { code: 'FAILED_VALIDATION', field: 'code', type: 'eq' } },
+			]);
+
+			expect(await validationLogEntries(api, offset)).toEqual([
+				{ message: REQUIRED_VALUE_MESSAGE, extensions: { field: 'code', type: 'eq' } },
+			]);
+
+			await expectNoRecord(api, body.marker);
+		});
+	}
 
 	test('reject a status from the literal list without naming the other tenant', async ({ api }) => {
 		const body = payload({ status: TRIGGER });
