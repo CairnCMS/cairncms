@@ -7,6 +7,7 @@ export type WebSocketErrorCode =
 	| 'AUTH_FAILED'
 	| 'TOKEN_EXPIRED'
 	| 'INVALID_PAYLOAD'
+	| 'FAILED_VALIDATION'
 	| 'FORBIDDEN'
 	| 'REQUESTS_EXCEEDED'
 	| 'UNSUPPORTED_MESSAGE_TYPE'
@@ -19,6 +20,7 @@ const ERROR_MESSAGES: Record<WebSocketErrorCode, string> = {
 	AUTH_FAILED: 'Authentication failed.',
 	TOKEN_EXPIRED: 'Token expired.',
 	INVALID_PAYLOAD: 'Invalid message.',
+	FAILED_VALIDATION: 'The payload failed validation.',
 	FORBIDDEN: 'You do not have permission to access this.',
 	REQUESTS_EXCEEDED: 'Too many requests.',
 	UNSUPPORTED_MESSAGE_TYPE: 'Unsupported message type.',
@@ -36,6 +38,15 @@ const LOG_UNHANDLED = 'WEBSOCKET_UNHANDLED_EXCEPTION';
 
 function messageForCode(code: string): string {
 	return (ERROR_MESSAGES as Record<string, string>)[code] ?? GENERIC_MESSAGE;
+}
+
+/** Returns the code shared by every exception in a list, or null for an empty list or one with mixed codes or non-exceptions. */
+function sharedCode(errors: unknown[]): string | null {
+	const [first] = errors;
+
+	if (!(first instanceof BaseException) || !CODE_PATTERN.test(first.code)) return null;
+
+	return errors.every((error) => error instanceof BaseException && error.code === first.code) ? first.code : null;
 }
 
 export class WebSocketException extends Error {
@@ -75,6 +86,11 @@ export function toWebSocketException(error: unknown, type: string, uid?: string 
 
 	if (error instanceof BaseException && CODE_PATTERN.test(error.code)) {
 		return new WebSocketException(type, error.code, uid);
+	}
+
+	if (Array.isArray(error)) {
+		const code = sharedCode(error);
+		if (code !== null) return new WebSocketException(type, code, uid);
 	}
 
 	logger.debug(LOG_UNHANDLED);
