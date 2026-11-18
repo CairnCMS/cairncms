@@ -348,7 +348,7 @@ describe(`generateJoi`, () => {
 
 		const mockSchema = Joi.object({
 			field: Joi.string().pattern(new RegExp(`^${escapeRegExp('field')}.*`), {
-				name: 'starts_with',
+				name: 'nstarts_with',
 				invert: true,
 			}),
 		})
@@ -401,7 +401,7 @@ describe(`generateJoi`, () => {
 
 		const mockSchema = Joi.object({
 			field: Joi.string().pattern(new RegExp(`.*field$`), {
-				name: 'ends_with',
+				name: 'nends_with',
 				invert: true,
 			}),
 		})

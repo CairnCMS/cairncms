@@ -28,6 +28,33 @@ describe('joiValidationErrorItemToErrorExtensions', () => {
 		expect('type' in extensions).toBe(false);
 	});
 
+	it.each([
+		['string.pattern.name', 'starts_with'],
+		['string.pattern.invert.name', 'nstarts_with'],
+		['string.pattern.name', 'ends_with'],
+		['string.pattern.invert.name', 'nends_with'],
+	])('takes the type of a %s item from its allowed name %s, without the operand', (type, name) => {
+		const extensions = joiValidationErrorItemToErrorExtensions({
+			message: `"title" with value "x" fails to match the ${name} pattern`,
+			path: ['title'],
+			type,
+			context: { name, regex: /^secret.*/, value: 'x' },
+		});
+
+		expect(extensions).toStrictEqual({ field: 'title', type: name });
+	});
+
+	it('leaves a pattern item with an unknown name unclassified', () => {
+		const extensions = joiValidationErrorItemToErrorExtensions({
+			message: '"title" with value "x" fails to match the custom_rule pattern',
+			path: ['title'],
+			type: 'string.pattern.name',
+			context: { name: 'custom_rule', regex: /^secret.*/, value: 'x' },
+		});
+
+		expect(extensions).toStrictEqual({ field: 'title' });
+	});
+
 	it('leaves the field undefined for a root-level item', () => {
 		const extensions = joiValidationErrorItemToErrorExtensions({
 			message: '"value" must contain at least one of [query, keys]',

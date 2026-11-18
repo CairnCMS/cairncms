@@ -7,7 +7,7 @@ import {
 	ServiceUnavailableException,
 	type FailedValidationType,
 } from '@cairncms/exceptions';
-import type { FilterOperator } from '@cairncms/types';
+import type { ClientFilterOperator } from '@cairncms/types';
 import { validatePayload } from '@cairncms/utils';
 import Joi from 'joi';
 import { describe, expect, expectTypeOf, it } from 'vitest';
@@ -122,11 +122,11 @@ describe('FailedValidationException details typing', () => {
 		expect(valid).toBe(true);
 	});
 
-	it('types the rule as one the constructor produces, which readers can still treat as a filter operator', () => {
+	it('types the rule as one the constructor produces, which readers can still treat as a client filter operator', () => {
 		const item = validatePayload({ published: { _eq: true } }, { published: false })[0]!.details[0]!;
 		const error = new FailedValidationException(item);
 
-		expectTypeOf(error.extensions.type).toMatchTypeOf<FilterOperator | 'required' | 'regex' | undefined>();
+		expectTypeOf(error.extensions.type).toMatchTypeOf<ClientFilterOperator | 'required' | undefined>();
 
 		// @ts-expect-error the constructor never produces a between rule
 		const rule: typeof error.extensions.type = 'between';

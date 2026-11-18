@@ -21,7 +21,16 @@ export type FailedValidationType =
 	| 'contains'
 	| 'ncontains'
 	| 'required'
-	| 'regex';
+	| 'regex'
+	| PatternRuleName;
+
+const PATTERN_RULE_NAMES = ['starts_with', 'nstarts_with', 'ends_with', 'nends_with'] as const;
+
+type PatternRuleName = (typeof PATTERN_RULE_NAMES)[number];
+
+function isPatternRuleName(name: unknown): name is PatternRuleName {
+	return (PATTERN_RULE_NAMES as readonly unknown[]).includes(name);
+}
 
 export type FailedValidationExtensions = {
 	field: ValidationErrorItem['path'][number] | undefined;
@@ -112,6 +121,11 @@ export function joiValidationErrorItemToErrorExtensions(item: ValidationErrorIte
 	if (joiType.endsWith('.pattern.base')) {
 		extensions.type = 'regex';
 		extensions.invalid = item.context?.value;
+	}
+
+	if (joiType.endsWith('.pattern.name') || joiType.endsWith('.pattern.invert.name')) {
+		const name = item.context?.['name'];
+		if (isPatternRuleName(name)) extensions.type = name;
 	}
 
 	return extensions;
