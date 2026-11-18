@@ -3,8 +3,18 @@ import { FailedValidationException } from './failed-validation.js';
 import { joiValidationErrorItemToErrorExtensions, type ValidationErrorItem } from './joi-to-error-extensions.js';
 
 const items: ValidationErrorItem[] = [
-	{ message: '"title" must be [a]', path: ['title'], type: 'any.only', context: { valids: ['a'], value: 'b' } },
-	{ message: '"title" contains an invalid value', path: ['title'], type: 'any.invalid', context: { invalids: [null] } },
+	{
+		message: '"title" must be [a]',
+		path: ['title'],
+		type: 'any.only',
+		context: { valids: ['a'], value: 'b', validationOperator: '_eq' },
+	},
+	{
+		message: '"title" contains an invalid value',
+		path: ['title'],
+		type: 'any.invalid',
+		context: { invalids: [null], validationOperator: '_nnull' },
+	},
 	{ message: '"title" is required', path: ['title'], type: 'any.required', context: {} },
 	{ message: '"title" must be a string', path: ['title'], type: 'string.base', context: { value: 42 } },
 ];
@@ -18,7 +28,12 @@ describe('joiValidationErrorItemToErrorExtensions', () => {
 
 	it.each([
 		[
-			{ message: '"title" must be [a]', path: ['title'], type: 'any.only', context: { valids: ['a'] } },
+			{
+				message: '"title" must be [a]',
+				path: ['title'],
+				type: 'any.only',
+				context: { valids: ['a'], validationOperator: '_eq' },
+			},
 			'Validation failed for field "title". Value has to be the required value.',
 		],
 		[
@@ -66,6 +81,61 @@ describe('joiValidationErrorItemToErrorExtensions', () => {
 		});
 
 		expect(extensions).toStrictEqual({ field: 'title' });
+	});
+
+	const unreadable = () => {
+		throw new Error('the compared values were read');
+	};
+
+	it.each([
+		['any.only', '_eq', 'eq'],
+		['any.only', '_in', 'in'],
+		['any.only', '_null', 'null'],
+		['any.only', '_empty', 'empty'],
+		['any.invalid', '_neq', 'neq'],
+		['any.invalid', '_nin', 'nin'],
+		['any.invalid', '_nnull', 'nnull'],
+		['any.invalid', '_nempty', 'nempty'],
+	])('takes the type of a %s item from its %s operator without reading the compared values', (type, operator, rule) => {
+		const context = { validationOperator: operator };
+		Object.defineProperty(context, 'valids', { get: unreadable });
+		Object.defineProperty(context, 'invalids', { get: unreadable });
+
+		const extensions = joiValidationErrorItemToErrorExtensions({ message: 'm', path: ['title'], type, context });
+
+		expect(extensions).toStrictEqual({ field: 'title', type: rule });
+	});
+
+	it.each([
+		['any.only', undefined],
+		['any.invalid', undefined],
+		['any.only', '_neq'],
+		['any.invalid', '_eq'],
+		['any.only', '_gt'],
+		['any.only', 'eq'],
+		['any.only', 'constructor'],
+		['any.invalid', '__proto__'],
+		['any.only', 42],
+	])('leaves a %s item with operator %s unclassified', (type, operator) => {
+		const extensions = joiValidationErrorItemToErrorExtensions({
+			message: 'm',
+			path: ['title'],
+			type,
+			context: { valids: [null], invalids: [''], validationOperator: operator },
+		});
+
+		expect(extensions).toStrictEqual({ field: 'title' });
+	});
+
+	it('reports a required item as required whatever operator its schema recorded', () => {
+		const extensions = joiValidationErrorItemToErrorExtensions({
+			message: '"title" is required',
+			path: ['title'],
+			type: 'any.required',
+			context: { validationOperator: '_eq' },
+		});
+
+		expect(extensions).toStrictEqual({ field: 'title', type: 'required' });
 	});
 
 	it('leaves the field undefined for a root-level item', () => {

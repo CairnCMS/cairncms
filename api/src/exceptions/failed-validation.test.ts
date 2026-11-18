@@ -1,6 +1,6 @@
 import { FailedValidationException } from '@cairncms/exceptions';
 import type { Filter } from '@cairncms/types';
-import { validatePayload } from '@cairncms/utils';
+import { parseFilter, validatePayload } from '@cairncms/utils';
 import type { Request, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
 import { validateBatch } from '../middleware/validate-batch.js';
@@ -40,8 +40,8 @@ const cases: [string, Record<string, unknown>, Record<string, unknown>, string, 
 		'numeric _eq',
 		{ f: { _eq: '42' } },
 		{ f: 'x' },
-		field('Value has to be one of the allowed values.'),
-		{ field: 'f', type: 'in' },
+		field('Value has to be the required value.'),
+		{ field: 'f', type: 'eq' },
 	],
 	[
 		'_in',
@@ -54,8 +54,8 @@ const cases: [string, Record<string, unknown>, Record<string, unknown>, string, 
 		'empty _in',
 		{ f: { _in: [] } },
 		{ f: SUBMITTED },
-		field('Value has to be the required value.'),
-		{ field: 'f', type: 'eq' },
+		field('Value has to be one of the allowed values.'),
+		{ field: 'f', type: 'in' },
 	],
 	['_null', { f: { _null: true } }, { f: SUBMITTED }, field('Value has to be null.'), { field: 'f', type: 'null' }],
 	['_empty', { f: { _empty: true } }, { f: SUBMITTED }, field('Value has to be empty.'), { field: 'f', type: 'empty' }],
@@ -172,6 +172,59 @@ describe('FailedValidationException conversion', () => {
 			expect(error.message).toBe(message);
 			expect(error.extensions).toStrictEqual(extensions);
 			expectNoMarker(error);
+		}
+	);
+
+	it.each([
+		['_eq', [OPERAND, '4821', null, '', true], (operand: unknown) => ({ _eq: operand }), () => SUBMITTED, 'eq'],
+		[
+			'_neq',
+			[OPERAND, '4821', null, '', true],
+			(operand: unknown) => ({ _neq: operand }),
+			(operand: unknown) => operand,
+			'neq',
+		],
+		[
+			'_in',
+			[[OPERAND], [OPERAND, 'b'], [null], [''], ['4821'], []],
+			(operand: unknown) => ({ _in: operand }),
+			() => SUBMITTED,
+			'in',
+		],
+		[
+			'_nin',
+			[[OPERAND], [OPERAND, 'b'], [null], [''], ['4821']],
+			(operand: unknown) => ({ _nin: operand }),
+			(operand: unknown) => (operand as unknown[])[0],
+			'nin',
+		],
+	])('reports a failed %s rule the same way whatever its operand', (_rule, operands, rule, submitted, type) => {
+		for (const operand of operands) {
+			const error = convert({ f: rule(operand) }, { f: submitted(operand) });
+
+			const sentence = {
+				eq: 'Value has to be the required value.',
+				neq: `Value can't be the excluded value.`,
+				in: 'Value has to be one of the allowed values.',
+				nin: `Value can't be one of the excluded values.`,
+			}[type];
+
+			expect(error.message, JSON.stringify(operand)).toBe(field(sentence!));
+			expect(error.extensions, JSON.stringify(operand)).toStrictEqual({ field: 'f', type });
+		}
+	});
+
+	it.each([OPERAND, '4821', null, ''])(
+		'reports a failed dynamic _eq rule as eq when the current user value is %j',
+		(secret) => {
+			const context = { $CURRENT_USER: { tenant: { secret_code: secret } } } as any;
+			const filter = parseFilter({ code: { _eq: '$CURRENT_USER.tenant.secret_code' } } as Filter, null, context);
+
+			const item = validatePayload(filter!, { code: SUBMITTED })[0]!.details[0]!;
+			const error = new FailedValidationException(item);
+
+			expect(error.message).toBe('Validation failed for field "code". Value has to be the required value.');
+			expect(error.extensions).toStrictEqual({ field: 'code', type: 'eq' });
 		}
 	);
 

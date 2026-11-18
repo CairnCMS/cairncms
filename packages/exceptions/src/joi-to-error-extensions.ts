@@ -2,7 +2,7 @@ export type ValidationErrorItem = {
 	message: string;
 	path: (string | number)[];
 	type: string;
-	context?: { value?: unknown; [key: string]: any } | undefined;
+	context?: { value?: unknown; validationOperator?: unknown; [key: string]: any } | undefined;
 };
 
 export type FailedValidationType =
@@ -32,6 +32,20 @@ function isPatternRuleName(name: unknown): name is PatternRuleName {
 	return (PATTERN_RULE_NAMES as readonly unknown[]).includes(name);
 }
 
+const ONLY_OPERATOR_TYPES = new Map<unknown, FailedValidationType>([
+	['_eq', 'eq'],
+	['_in', 'in'],
+	['_null', 'null'],
+	['_empty', 'empty'],
+]);
+
+const INVALID_OPERATOR_TYPES = new Map<unknown, FailedValidationType>([
+	['_neq', 'neq'],
+	['_nin', 'nin'],
+	['_nnull', 'nnull'],
+	['_nempty', 'nempty'],
+]);
+
 export type FailedValidationExtensions = {
 	field: ValidationErrorItem['path'][number] | undefined;
 	type?: FailedValidationType;
@@ -39,7 +53,8 @@ export type FailedValidationExtensions = {
 
 /**
  * Converts a Joi validation error item into the details of a failed validation. The details carry no compared or
- * submitted value, and leave `type` unset when the item matches no known rule.
+ * submitted value, and leave `type` unset when the item matches no known rule. Equality, membership, null, and empty
+ * failures take their `type` from the `validationOperator` the schema recorded, never from the compared values.
  */
 export function joiValidationErrorItemToErrorExtensions(item: ValidationErrorItem): FailedValidationExtensions {
 	const extensions: FailedValidationExtensions = {
@@ -47,37 +62,16 @@ export function joiValidationErrorItemToErrorExtensions(item: ValidationErrorIte
 	};
 
 	const joiType = item.type;
+	const operator = item.context?.validationOperator;
 
 	if (joiType.endsWith('only')) {
-		if (item.context?.['valids'].length > 1) {
-			extensions.type = 'in';
-		} else {
-			const valid = item.context?.['valids'][0];
-
-			if (valid === null) {
-				extensions.type = 'null';
-			} else if (valid === '') {
-				extensions.type = 'empty';
-			} else {
-				extensions.type = 'eq';
-			}
-		}
+		const type = ONLY_OPERATOR_TYPES.get(operator);
+		if (type) extensions.type = type;
 	}
 
 	if (joiType.endsWith('invalid')) {
-		if (item.context?.['invalids'].length > 1) {
-			extensions.type = 'nin';
-		} else {
-			const invalid = item.context?.['invalids'][0];
-
-			if (invalid === null) {
-				extensions.type = 'nnull';
-			} else if (invalid === '') {
-				extensions.type = 'nempty';
-			} else {
-				extensions.type = 'neq';
-			}
-		}
+		const type = INVALID_OPERATOR_TYPES.get(operator);
+		if (type) extensions.type = type;
 	}
 
 	if (joiType.endsWith('greater')) extensions.type = 'gt';
