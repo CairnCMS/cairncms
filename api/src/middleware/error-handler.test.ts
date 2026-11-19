@@ -290,3 +290,61 @@ describe('error-handler redaction', () => {
 		expect(res.headers['Allow']).toBeUndefined();
 	});
 });
+
+describe('error-handler incomplete inspection', () => {
+	function deepDetails(secret: string) {
+		let deep: Record<string, unknown> = { password: secret };
+		for (let level = 0; level < 70; level++) deep = { next: deep };
+		return deep;
+	}
+
+	function sensitiveBackReference(secret: string) {
+		const details: Record<string, unknown> = { value: secret };
+		details['credentials'] = details;
+		return details;
+	}
+
+	test.each([
+		['details too deep to inspect', deepDetails],
+		['a back-reference beneath a sensitive key', sensitiveBackReference],
+	])('sends the fallback for an error with %s, logging only the marker', async (_label, details) => {
+		const res = await runHandler(new InvalidPayloadException(`Rejected ${SECRET}`, { detail: details(SECRET) }));
+
+		expect(res.statusCode).toBe(500);
+		expect(res.body).toEqual(FALLBACK);
+		expect(loggedPayloads.map((payload) => payload.err.type)).toEqual(['ErrorHandlerFailure']);
+		expect(JSON.stringify(loggedPayloads)).not.toContain(SECRET);
+	});
+
+	test.each([
+		['details too deep to inspect', deepDetails],
+		['a back-reference beneath a sensitive key', sensitiveBackReference],
+	])(
+		'sends the fallback when request.error output has %s, after logging the original error',
+		async (_label, details) => {
+			onRequestError(() => [{ message: `Rejected ${SECRET}`, extensions: { detail: details(SECRET) } }]);
+
+			const res = await runHandler(new InvalidPayloadException('Rejected'));
+
+			expect(res.statusCode).toBe(500);
+			expect(res.body).toEqual(FALLBACK);
+
+			expect(loggedPayloads.map((payload) => payload.err.type)).toEqual([
+				'InvalidPayloadException',
+				'ErrorHandlerFailure',
+			]);
+
+			expect(JSON.stringify(loggedPayloads)).not.toContain(SECRET);
+		}
+	);
+
+	test('keeps the normal response for a cycle outside sensitive keys', async () => {
+		const details: Record<string, unknown> = { label: 'kept' };
+		details['self'] = details;
+
+		const res = await runHandler(new InvalidPayloadException('Rejected', { detail: details }));
+
+		expect(res.statusCode).toBe(400);
+		expect(res.body.errors[0].extensions.detail).toEqual({ label: 'kept', self: '[Circular]' });
+	});
+});

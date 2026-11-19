@@ -380,3 +380,165 @@ describe('nested GraphQL error layers', () => {
 		expectFallback(formatGraphqlErrors([new GraphQLError('outer', { originalError: inner })], undefined, ADMIN));
 	});
 });
+
+describe('errors that cannot be inspected completely', () => {
+	const FALLBACK = { message: 'An unexpected error occurred.', extensions: { code: 'INTERNAL_SERVER_ERROR' } };
+
+	function located(details: Record<string, unknown>): GraphQLError {
+		return new GraphQLError('wrapper', { originalError: new InvalidPayloadException(`Rejected ${SECRET}`, details) });
+	}
+
+	function isolated(details: Record<string, unknown>): GraphQLError {
+		const exception = new InvalidPayloadException(`Rejected ${SECRET}`, details);
+		return new GraphQLError('wrapper', { originalError: exception, extensions: {} });
+	}
+
+	function selfJson(fields: Record<string, unknown>) {
+		return Object.assign(
+			{
+				toJSON() {
+					return this;
+				},
+			},
+			fields
+		);
+	}
+
+	let deep: Record<string, unknown> = { password: SECRET };
+	for (let level = 0; level < 70; level++) deep = { next: deep };
+
+	const details: Record<string, unknown> = { value: SECRET };
+	details['credentials'] = details;
+
+	test.each([
+		['details too deep to inspect', { detail: deep }],
+		['a back-reference beneath a sensitive key', { detail: details }],
+	])('sends the fallback for an error with %s, logging only the marker', (_label, extensions) => {
+		expect(formatGraphqlErrors([located(extensions)], undefined, ADMIN)).toEqual([FALLBACK]);
+		expect(loggedPayloads.map((payload) => payload.err.type)).toEqual(['GraphQLErrorFormattingFailure']);
+		expect(JSON.stringify(loggedPayloads)).not.toContain(SECRET);
+	});
+
+	test.each([
+		['beneath a sensitive key', { credentials: selfJson({ value: SECRET }) }],
+		['outside sensitive keys, with its own password field', { detail: selfJson({ password: SECRET }) }],
+	])('captures the fields of a self-returning toJSON %s and redacts its secret', (_label, extensions) => {
+		const [formatted] = formatGraphqlErrors([located(extensions)], undefined, NON_ADMIN);
+
+		expect(formatted!.message).toBe(`Rejected ${REDACT_TEXT}`);
+		expect(formatted!.extensions?.['code']).toBe('INVALID_PAYLOAD');
+		expect(JSON.stringify(formatted)).not.toContain(SECRET);
+		expect(JSON.stringify(loggedPayloads)).not.toContain(SECRET);
+	});
+
+	function selfReturningGetter(
+		fields: Record<string, unknown>,
+		onSecondRead: (target: Record<string, unknown>) => void
+	) {
+		let reads = 0;
+		const target: Record<string, unknown> = { ...fields };
+
+		Object.defineProperty(target, 'toJSON', {
+			enumerable: true,
+			get() {
+				reads++;
+				if (reads > 1) onSecondRead(target);
+
+				return function (this: unknown) {
+					return this;
+				};
+			},
+		});
+
+		return { target, reads: () => reads };
+	}
+
+	test('reads a self-returning toJSON getter once, so it cannot hide a secret by changing on a second read', () => {
+		const { target, reads } = selfReturningGetter({ password: SECRET }, (self) => delete self['password']);
+		const [formatted] = formatGraphqlErrors([isolated({ detail: target })], undefined, NON_ADMIN);
+
+		expect(reads()).toBe(1);
+		expect(formatted!.message).toBe(`Rejected ${REDACT_TEXT}`);
+		expect(JSON.stringify(formatted)).not.toContain(SECRET);
+		expect(JSON.stringify(loggedPayloads)).not.toContain(SECRET);
+	});
+
+	test('redacts the secret when the wrapper shares those details, as graphql-js wrappers do', () => {
+		const { target } = selfReturningGetter({ password: SECRET }, (self) => delete self['password']);
+		const [formatted] = formatGraphqlErrors([located({ detail: target })], undefined, NON_ADMIN);
+
+		expect(formatted!.message).toBe(`Rejected ${REDACT_TEXT}`);
+		expect(JSON.stringify(formatted)).not.toContain(SECRET);
+		expect(JSON.stringify(loggedPayloads)).not.toContain(SECRET);
+	});
+
+	test('redacts a secret that a nested toJSON deletes from its sibling during materialization', () => {
+		const details: Record<string, unknown> = {
+			nested: {
+				toJSON() {
+					delete details['password'];
+					return {};
+				},
+			},
+			password: SECRET,
+		};
+
+		const [formatted] = formatGraphqlErrors([isolated({ detail: details })], undefined, NON_ADMIN);
+
+		expect(formatted!.message).toBe(`Rejected ${REDACT_TEXT}`);
+		expect(JSON.stringify(formatted)).not.toContain(SECRET);
+		expect(JSON.stringify(loggedPayloads)).not.toContain(SECRET);
+	});
+
+	function hiddenByIterator(items: unknown[]): unknown[] {
+		items[Symbol.iterator] = function* () {
+			yield {};
+		};
+
+		return items;
+	}
+
+	test('redacts a secret in an array item that a custom iterator would hide', () => {
+		const details = { values: hiddenByIterator([{ password: SECRET }]) };
+		const [formatted] = formatGraphqlErrors([isolated(details)], undefined, NON_ADMIN);
+
+		expect(formatted!.message).toBe(`Rejected ${REDACT_TEXT}`);
+		expect(JSON.stringify(formatted)).not.toContain(SECRET);
+		expect(JSON.stringify(loggedPayloads)).not.toContain(SECRET);
+	});
+
+	test('redacts a secret in an aggregate error that a custom iterator would hide', () => {
+		const aggregate = new AggregateError([], `Rejected ${SECRET}`);
+		aggregate.errors = hiddenByIterator([{ password: SECRET }]);
+
+		const [formatted] = formatGraphqlErrors(
+			[new GraphQLError('wrapper', { originalError: aggregate, path: ['field'] })],
+			undefined,
+			ADMIN
+		);
+
+		expect(formatted!.extensions).toEqual({ code: 'INTERNAL_SERVER_ERROR' });
+		expect(JSON.stringify(formatted)).not.toContain(SECRET);
+		expect(JSON.stringify(loggedPayloads)).not.toContain(SECRET);
+	});
+
+	test('keeps the normal output for a self-returning toJSON getter that would throw on a second read', () => {
+		const { target, reads } = selfReturningGetter({ label: 'kept' }, () => {
+			throw new Error('second read');
+		});
+
+		const [formatted] = formatGraphqlErrors([isolated({ detail: target })], undefined, NON_ADMIN);
+
+		expect(reads()).toBe(1);
+		expect(formatted!.extensions).toEqual({ code: 'INVALID_PAYLOAD', detail: { label: 'kept' } });
+	});
+
+	test('keeps the normal output for a cycle outside sensitive keys', () => {
+		const cyclic: Record<string, unknown> = { label: 'kept' };
+		cyclic['self'] = cyclic;
+
+		const [formatted] = formatGraphqlErrors([located({ detail: cyclic })], undefined, NON_ADMIN);
+
+		expect(formatted!.extensions).toEqual({ code: 'INVALID_PAYLOAD', detail: { label: 'kept', self: '[Circular]' } });
+	});
+});

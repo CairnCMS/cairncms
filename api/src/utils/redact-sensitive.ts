@@ -32,7 +32,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return proto === Object.prototype || proto === null;
 }
 
-function isSensitiveKey(key: string, extraKeys: ReadonlySet<string> | undefined): boolean {
+/** Reports whether a key marks everything beneath it as sensitive, ignoring case. */
+export function isSensitiveKey(key: string, extraKeys?: ReadonlySet<string>): boolean {
 	const lowered = key.toLowerCase();
 	return SENSITIVE_KEYS.has(lowered) || (extraKeys !== undefined && extraKeys.has(lowered));
 }
