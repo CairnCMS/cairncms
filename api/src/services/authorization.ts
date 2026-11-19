@@ -10,7 +10,7 @@ import type {
 } from '@cairncms/types';
 import { validatePayload } from '@cairncms/utils';
 import type { Knex } from 'knex';
-import { cloneDeep, flatten, isArray, isNil, merge, reduce, uniq, uniqWith } from 'lodash-es';
+import { cloneDeep, flatten, isArray, isEqual, isNil, merge, reduce, uniq, uniqWith } from 'lodash-es';
 import { GENERATE_SPECIAL } from '../constants.js';
 import getDatabase from '../database/index.js';
 import type {
@@ -632,10 +632,15 @@ export class AuthorizationService {
 
 		const validationErrors: FailedValidationException[] = [];
 
+		// Each validation error comes from one authored rule, so identical public errors within it, such as
+		// a range that fails both bounds, collapse to one.
 		validationErrors.push(
 			...flatten(
 				validatePayload(permission.validation!, payloadWithPresets).map((error) =>
-					error.details.map((details) => new FailedValidationException(details))
+					uniqWith(
+						error.details.map((details) => new FailedValidationException(details)),
+						(a, b) => isEqual(a.extensions, b.extensions)
+					)
 				)
 			)
 		);

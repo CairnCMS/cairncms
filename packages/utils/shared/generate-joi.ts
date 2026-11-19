@@ -69,7 +69,30 @@ const defaults: JoiOptions = {
 
 const EMPTY_IN_SENTINEL = Symbol('cairncms-empty-in');
 
-const TAGGED_OPERATORS: readonly string[] = ['_eq', '_neq', '_in', '_nin', '_null', '_nnull', '_empty', '_nempty'];
+const TAGGED_OPERATORS: readonly string[] = [
+	'_eq',
+	'_neq',
+	'_in',
+	'_nin',
+	'_null',
+	'_nnull',
+	'_empty',
+	'_nempty',
+	'_contains',
+	'_icontains',
+	'_ncontains',
+	'_starts_with',
+	'_nstarts_with',
+	'_ends_with',
+	'_nends_with',
+	'_regex',
+	'_gt',
+	'_gte',
+	'_lt',
+	'_lte',
+	'_between',
+	'_nbetween',
+];
 
 /** Adds the filter operator to every error the schema reports, as `validationOperator` in the error context. */
 function withValidationOperator(schema: AnySchema, operator: string): AnySchema {

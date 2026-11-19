@@ -890,6 +890,24 @@ describe(`generateJoi`, () => {
 			['_nnull', { _nnull: true }, null, 'any.invalid'],
 			['_empty', { _empty: true }, 'x', 'any.only'],
 			['_nempty', { _nempty: true }, '', 'any.invalid'],
+			['_contains', { _contains: 'a' }, 'b', 'string.contains'],
+			['_contains', { _contains: null }, 'b', 'any.only'],
+			['_icontains', { _icontains: 'a' }, 42, 'string.base'],
+			['_ncontains', { _ncontains: 'a' }, 'a', 'string.ncontains'],
+			['_starts_with', { _starts_with: 'a' }, 'b', 'string.pattern.name'],
+			['_starts_with', { _starts_with: null }, 'b', 'any.only'],
+			['_nstarts_with', { _nstarts_with: 'a' }, 'a', 'string.pattern.invert.name'],
+			['_ends_with', { _ends_with: 'a' }, 42, 'string.base'],
+			['_nends_with', { _nends_with: 42 }, 'a', 'any.only'],
+			['_regex', { _regex: '^a' }, 'b', 'string.pattern.base'],
+			['_regex', { _regex: null }, 'b', 'any.only'],
+			['_gt', { _gt: 5 }, 1, 'number.greater'],
+			['_gt', { _gt: 5 }, 'x', 'number.base'],
+			['_gte', { _gte: '2026-01-01' }, '2020-01-01', 'date.min'],
+			['_lt', { _lt: '2026-01-01' }, 'x', 'date.base'],
+			['_lte', { _lte: 5 }, 7, 'number.max'],
+			['_between', { _between: [10, 20] }, 7, 'number.min'],
+			['_nbetween', { _nbetween: [10, 20] }, 25, 'number.less'],
 		])(`records %s on the errors it reports`, (operator, rule, input, type) => {
 			const { error } = generateJoi({ field: rule } as unknown as FieldFilter).validate({ field: input });
 
@@ -915,9 +933,40 @@ describe(`generateJoi`, () => {
 			['_nnull', { _nnull: true }, Joi.any().invalid(null)],
 			['_empty', { _empty: true }, Joi.any().valid('')],
 			['_nempty', { _nempty: true }, Joi.any().invalid('')],
+			['_contains a word', { _contains: 'a' }, (Joi.string() as StringSchema).contains('a')],
+			['_contains null', { _contains: null }, Joi.any().equal(true)],
+			['_icontains a word', { _icontains: 'a' }, (Joi.string() as StringSchema).contains('a')],
+			['_ncontains a word', { _ncontains: 'a' }, (Joi.string() as StringSchema).ncontains('a')],
+			['_ncontains a number', { _ncontains: 42 }, Joi.any().equal(true)],
+			['_starts_with a word', { _starts_with: 'a' }, Joi.string().pattern(/^a.*/, { name: 'starts_with' })],
+			['_starts_with null', { _starts_with: null }, Joi.any().equal(true)],
+			[
+				'_nstarts_with a word',
+				{ _nstarts_with: 'a' },
+				Joi.string().pattern(/^a.*/, { name: 'nstarts_with', invert: true }),
+			],
+			['_ends_with a word', { _ends_with: 'a' }, Joi.string().pattern(/.*a$/, { name: 'ends_with' })],
+			['_nends_with a word', { _nends_with: 'a' }, Joi.string().pattern(/.*a$/, { name: 'nends_with', invert: true })],
+			['_regex a pattern', { _regex: '^a' }, Joi.string().regex(/^a/)],
+			['_regex a number', { _regex: 42 }, Joi.string().regex(/42/)],
+			['_regex null', { _regex: null }, Joi.any().equal(true)],
+			['_gt a number', { _gt: 5 }, Joi.number().greater(5)],
+			['_gt a date', { _gt: '2026-01-01' }, Joi.date().greater('2026-01-01')],
+			['_gt null', { _gt: null }, Joi.number().greater(0)],
+			['_gte a number', { _gte: 5 }, Joi.number().min(5)],
+			['_lt a date', { _lt: '2026-01-01' }, Joi.date().less('2026-01-01')],
+			['_lte a number', { _lte: 5 }, Joi.number().max(5)],
+			['_between numbers', { _between: [1, 5] }, Joi.number().min(1).max(5)],
+			['_between dates', { _between: ['2026-01-01', '2027-01-01'] }, Joi.date().min('2026-01-01').max('2027-01-01')],
+			['_nbetween numbers', { _nbetween: [1, 5] }, Joi.number().less(1).greater(5)],
 		];
 
-		const payloads = [{}, ...['word', '4821', 4821, null, '', 'a', 'b', true].map((field) => ({ field }))];
+		const payloads = [
+			{},
+			...['word', '4821', 4821, null, '', 'a', 'b', true, 3, 42, '42', 'abc', '2026-06-01', 1e300].map((field) => ({
+				field,
+			})),
+		];
 
 		it.each(references)(`keeps the outcome of %s unchanged`, (_label, rule, reference) => {
 			const filter = { field: rule } as unknown as FieldFilter;
@@ -947,16 +996,8 @@ describe(`generateJoi`, () => {
 			expect(error?.details[0]?.type).toBe('any.required');
 		});
 
-		it.each([
-			['_gt', { _gt: 5 }, 1],
-			['_contains', { _contains: 'a' }, 'b'],
-			['_starts_with', { _starts_with: 'a' }, 'b'],
-			['_starts_with with no operand', { _starts_with: null }, 'b'],
-			['_regex', { _regex: '^a' }, 'b'],
-			['_submitted', { _submitted: true }, undefined],
-		])(`leaves %s untagged`, (_label, rule, input) => {
-			const payload = input === undefined ? {} : { field: input };
-			const { error } = generateJoi({ field: rule } as unknown as FieldFilter).validate(payload);
+		it(`leaves _submitted untagged`, () => {
+			const { error } = generateJoi({ field: { _submitted: true } } as unknown as FieldFilter).validate({});
 
 			expect(error?.details).toHaveLength(1);
 			expect(error?.details[0]?.context).not.toHaveProperty('validationOperator');
