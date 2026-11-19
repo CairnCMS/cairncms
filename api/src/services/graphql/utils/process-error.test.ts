@@ -1,14 +1,25 @@
-import type { Accountability } from '@cairncms/types';
-import { GraphQLError } from 'graphql';
+import type { Accountability, SchemaOverview } from '@cairncms/types';
+import { GraphQLError, GraphQLObjectType, GraphQLSchema, GraphQLString, parse } from 'graphql';
 import { afterEach, describe, expect, test, vi } from 'vitest';
+import type { GraphQLParams } from '../../../types/index.js';
 
 const loggedPayloads: Array<{ level: string; err: any; msg: string | undefined }> = [];
 
 vi.doMock('../../../env', () => {
-	const MOCK_ENV = { NODE_ENV: 'test', LOG_LEVEL: 'info', LOG_STYLE: 'raw' };
+	const MOCK_ENV = {
+		NODE_ENV: 'test',
+		LOG_LEVEL: 'info',
+		LOG_STYLE: 'raw',
+		SECRET: 'x',
+		EXTENSIONS_PATH: '/tmp',
+		EMAIL_TEMPLATES_PATH: '/tmp',
+		STORAGE_LOCATIONS: 'local',
+	};
 
 	return { default: MOCK_ENV, getEnv: () => MOCK_ENV };
 });
+
+vi.doMock('../../../database/index', () => ({ default: () => ({}) }));
 
 vi.doMock('../../../utils/error-log', async (importOriginal) => {
 	const actual = (await importOriginal()) as typeof import('../../../utils/error-log.js');
@@ -30,6 +41,7 @@ const { logRedactedError: logSpy } = (await import('../../../utils/error-log.js'
 
 const { InvalidPayloadException } = await import('@cairncms/exceptions');
 const { REDACT_TEXT } = await import('../../../constants.js');
+const { GraphQLService } = await import('../index.js');
 
 const SECRET = 'super-secret-token-value-1234567890';
 const ADMIN: Accountability = { role: null, admin: true };
@@ -152,5 +164,97 @@ describe('formatGraphqlErrors', () => {
 			expect.objectContaining({ type: 'GraphQLErrorFormattingFailure' }),
 			expect.any(Set)
 		);
+	});
+});
+
+describe('GraphQL errors as executed', () => {
+	const schemaOverview: SchemaOverview = { collections: {}, relations: [] };
+
+	async function executeMutation(field: string, accountability: Accountability) {
+		const service = new GraphQLService({ accountability, schema: schemaOverview, scope: 'items' });
+
+		const mutation = new GraphQLObjectType({
+			name: 'Mutation',
+			fields: {
+				returned: {
+					type: GraphQLString,
+					resolve: () => service.formatError(new InvalidPayloadException('Returned failure.')),
+				},
+				thrown: {
+					type: GraphQLString,
+					resolve: () => {
+						throw service.formatError(new InvalidPayloadException('Thrown failure.'));
+					},
+				},
+				returnedArray: {
+					type: GraphQLString,
+					resolve: () =>
+						service.formatError([
+							new InvalidPayloadException('First failure.'),
+							new InvalidPayloadException('Second failure.'),
+						]),
+				},
+				direct: {
+					type: GraphQLString,
+					resolve: () => {
+						throw new InvalidPayloadException('Direct failure.');
+					},
+				},
+			},
+		});
+
+		vi.spyOn(service, 'getSchema').mockReturnValue(
+			new GraphQLSchema({
+				query: new GraphQLObjectType({ name: 'Query', fields: { ping: { type: GraphQLString } } }),
+				mutation,
+			})
+		);
+
+		const params: GraphQLParams = {
+			query: null,
+			variables: {},
+			operationName: null,
+			document: parse(`mutation { ${field} }`),
+			contextValue: {},
+		};
+
+		const result = await service.execute(params);
+		return { errors: result.errors, levels: loggedPayloads.map((payload) => payload.level) };
+	}
+
+	test.each([
+		['returned', 'Returned failure.'],
+		['thrown', 'Thrown failure.'],
+		['returnedArray', 'First failure.'],
+	])('reports a formatError error from a %s mutation as an internal error', async (field, message) => {
+		const admin = await executeMutation(field, ADMIN);
+
+		expect(admin.errors).toEqual([
+			{
+				message,
+				extensions: { code: 'INTERNAL_SERVER_ERROR' },
+				locations: [{ line: 1, column: 12 }],
+				path: [field],
+			},
+		]);
+
+		expect(admin.levels).toEqual(['error']);
+		loggedPayloads.length = 0;
+
+		const member = await executeMutation(field, NON_ADMIN);
+
+		expect(member.errors).toEqual([
+			{ message: 'An unexpected error occurred.', extensions: { code: 'INTERNAL_SERVER_ERROR' } },
+		]);
+	});
+
+	test('reports a directly thrown exception with its code and without path or locations', async () => {
+		for (const accountability of [ADMIN, NON_ADMIN]) {
+			const { errors, levels } = await executeMutation('direct', accountability);
+
+			expect(errors).toEqual([{ message: 'Direct failure.', extensions: { code: 'INVALID_PAYLOAD' } }]);
+			expect(levels).toEqual(['debug']);
+			loggedPayloads.length = 0;
+		}
 	});
 });
