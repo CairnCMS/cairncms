@@ -88,6 +88,7 @@ import { validateGraphQLDocument } from './query-gate.js';
 import { authenticationAccountabilityFromRequest } from './request-accountability.js';
 import { createSubscriptionGenerator } from './subscription.js';
 import { addPathToValidationError } from './utils/add-path-to-validation-error.js';
+import { formatGraphQLErrorDetails } from './utils/format-graphql-error-details.js';
 import formatGraphqlErrors from './utils/process-error.js';
 
 /**
@@ -306,7 +307,7 @@ export class GraphQLService {
 		);
 
 		if (validationErrors.length > 0) {
-			throw new GraphQLValidationException({ graphqlErrors: validationErrors });
+			throw new GraphQLValidationException({ graphqlErrors: formatGraphQLErrorDetails(validationErrors) });
 		}
 
 		let result: ExecutionResult;
