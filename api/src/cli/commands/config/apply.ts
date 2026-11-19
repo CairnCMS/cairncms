@@ -302,6 +302,8 @@ async function runLocalEngine(
 		};
 
 		if (!schemaManaged) {
+			currentStep = 'configuration';
+
 			const result = await applyConfigPlan(plan, {
 				database,
 				destructive,
@@ -310,8 +312,9 @@ async function runLocalEngine(
 				...(extensionDeclarations !== undefined && { extensionDeclarations }),
 			});
 
+			steps.configuration = 'committed';
 			logger.info(renderResultSummary(result));
-			return { result: 'applied', exitCode: 0 };
+			return { result: 'applied', exitCode: 0, steps };
 		}
 
 		currentStep = 'folders';
@@ -361,7 +364,7 @@ async function runLocalEngine(
 		if (currentStep === undefined) return { ...classifyConfigError(err), exitCode };
 
 		steps[currentStep] = failureStatus(err);
-		logger.info(renderStepOutcome(steps));
+		if (desired.manifest.resources.includes('schema')) logger.info(renderStepOutcome(steps));
 		return { ...classifyConfigError(err), exitCode, steps, failure: stepFailure(currentStep, err) };
 	}
 }

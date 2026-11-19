@@ -3,7 +3,11 @@ import inquirer from 'inquirer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { configFixture } from '../../../__utils__/config-fixtures.js';
 import getDatabase, { hasDatabaseConnection, isInstalled } from '../../../database/index.js';
-import { ConfigPostCommitFailedException, ConfigStateChangedException } from '../../../exceptions/index.js';
+import {
+	ConfigApplyFailedException,
+	ConfigPostCommitFailedException,
+	ConfigStateChangedException,
+} from '../../../exceptions/index.js';
 import logger from '../../../logger.js';
 import type {
 	CairnConfig,
@@ -22,6 +26,7 @@ import { serializeConfigPlan } from '../../../utils/serialize-config-plan.js';
 import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
 import { applyConfigPlan } from '../../../utils/apply-config-plan.js';
 import { configApply } from './apply.js';
+import { renderStepOutcome } from './render-config-plan.js';
 
 const { envOverrides } = vi.hoisted(() => ({ envOverrides: { LOG_STYLE: 'pretty' } as Record<string, unknown> }));
 
@@ -681,7 +686,14 @@ describe('configApply run record', () => {
 
 		await run();
 
-		expectOneRecord({ result: 'refused', errorCode: 'DESTRUCTIVE_CHANGES_REQUIRED', destructive: false });
+		const record = expectOneRecord({
+			result: 'refused',
+			errorCode: 'DESTRUCTIVE_CHANGES_REQUIRED',
+			destructive: false,
+		});
+
+		expect(record).not.toHaveProperty('steps');
+		expect(logger.error).toHaveBeenCalledWith(expect.stringMatching(/^Apply refused: /));
 		expect(applyConfigPlan).not.toHaveBeenCalled();
 		expect(process.exit).toHaveBeenCalledWith(2);
 	});
@@ -702,8 +714,14 @@ describe('configApply run record', () => {
 	it('records applied after a successful apply', async () => {
 		await run();
 
-		const record = expectOneRecord({ result: 'applied', changes: { create: 1, update: 0, delete: 0 } });
+		const record = expectOneRecord({
+			result: 'applied',
+			changes: { create: 1, update: 0, delete: 0 },
+			steps: { folders: 'not_run', schema: 'not_run', configuration: 'committed' },
+		});
+
 		expect(record).not.toHaveProperty('errorCode');
+		expect(record).not.toHaveProperty('failure');
 		expect(process.exit).toHaveBeenCalledWith(0);
 	});
 
@@ -712,7 +730,13 @@ describe('configApply run record', () => {
 
 		await run();
 
-		expectOneRecord({ result: 'state_changed', errorCode: 'CONFIG_STATE_CHANGED' });
+		expectOneRecord({
+			result: 'state_changed',
+			errorCode: 'CONFIG_STATE_CHANGED',
+			steps: { folders: 'not_run', schema: 'not_run', configuration: 'rolled_back' },
+			failure: { step: 'configuration' },
+		});
+
 		expect(process.exit).toHaveBeenCalledWith(2);
 	});
 
@@ -721,7 +745,31 @@ describe('configApply run record', () => {
 
 		await run();
 
-		expectOneRecord({ result: 'post_apply_failed', errorCode: 'CONFIG_POST_COMMIT_FAILED' });
+		const steps = { folders: 'not_run', schema: 'not_run', configuration: 'committed' } as const;
+
+		expectOneRecord({
+			result: 'post_apply_failed',
+			errorCode: 'CONFIG_POST_COMMIT_FAILED',
+			steps,
+			failure: { step: 'configuration', detail: { phase: 'cache' } },
+		});
+
+		expect(presentation()).not.toContain(renderStepOutcome(steps));
+		expect(process.exit).toHaveBeenCalledWith(3);
+	});
+
+	it('records a rolled-back configuration step at exit 3 when the configuration apply failed', async () => {
+		vi.mocked(applyConfigPlan).mockRejectedValue(new ConfigApplyFailedException());
+
+		await run();
+
+		expectOneRecord({
+			result: 'failed',
+			errorCode: 'CONFIG_APPLY_FAILED',
+			steps: { folders: 'not_run', schema: 'not_run', configuration: 'rolled_back' },
+			failure: { step: 'configuration' },
+		});
+
 		expect(process.exit).toHaveBeenCalledWith(3);
 	});
 
