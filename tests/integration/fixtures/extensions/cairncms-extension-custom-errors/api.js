@@ -29,10 +29,14 @@ export default {
 			config: ({ filter }, { exceptions }) => {
 				const QuotaExceededException = createQuotaExceededException(exceptions);
 
-				filter('custom_error_records.items.create', (payload) => {
+				const rejectOverQuota = (payload) => {
 					if (payload?.title === 'over quota') throw new QuotaExceededException('The quota is used up.', { limit: 5 });
 					return payload;
-				});
+				};
+
+				filter('custom_error_records.items.create', rejectOverQuota);
+				filter('custom_error_settings.items.create', rejectOverQuota);
+				filter('custom_error_settings.items.update', rejectOverQuota);
 			},
 		},
 	],

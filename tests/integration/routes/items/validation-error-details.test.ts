@@ -367,7 +367,12 @@ describe('Validation errors from a permission rule with hidden operands', () => 
 			});
 
 		expect(response.body.errors).toEqual([
-			{ message: 'An unexpected error occurred.', extensions: { code: 'INTERNAL_SERVER_ERROR' } },
+			{
+				message: REQUIRED_VALUE_MESSAGE,
+				extensions: { code: 'FAILED_VALIDATION', field: 'code', type: 'eq' },
+				locations: [{ line: 1, column: 12 }],
+				path: [`create_${RECORDS}_item`],
+			},
 		]);
 
 		const logs = await logsThroughLine(api, offset, graphqlValidationLine(`create_${RECORDS}_item`, 'code'));
@@ -433,7 +438,15 @@ describe('Validation errors from the password policy', () => {
 					query: `mutation { create_users_item(data: { email: "policy-graphql@example.com", password: "${POLICY_PASSWORD}" }) { id } }`,
 				});
 
-			expect(response.body.errors?.[0]?.path).toEqual(['create_users_item']);
+			expect(response.body.errors).toEqual([
+				{
+					message: `Validation failed for field "password". Value doesn't have the correct format.`,
+					extensions: { code: 'FAILED_VALIDATION', field: 'password', type: 'regex' },
+					locations: [{ line: 1, column: 12 }],
+					path: ['create_users_item'],
+				},
+			]);
+
 			expect(JSON.stringify(response.body)).not.toContain(POLICY_PASSWORD);
 
 			const logs = await logsThroughLine(api, offset, graphqlValidationLine('create_users_item', 'password'));
