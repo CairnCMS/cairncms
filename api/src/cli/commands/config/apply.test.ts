@@ -758,6 +758,26 @@ describe('configApply run record', () => {
 		expect(process.exit).toHaveBeenCalledWith(3);
 	});
 
+	const persistedWith = (outcome: string) => ({
+		collections: [],
+		fields: [{ collection: 'articles', field: 'title', operation: 'create', column: outcome, metadata: outcome }],
+		relations: [],
+	});
+
+	it.each([
+		['an unknown persisted state', 'SCHEMA_APPLY_FAILED', { persisted: 'unknown' }, 3],
+		['a committed maintenance failure', 'CONFIG_POST_COMMIT_FAILED', { phase: 'cache' }, 3],
+		['an applied persisted change', 'SCHEMA_APPLY_FAILED', { persisted: persistedWith('applied') }, 3],
+		['an unknown persisted change', 'SCHEMA_APPLY_FAILED', { persisted: persistedWith('unknown') }, 3],
+		['only reverted persisted changes', 'SCHEMA_APPLY_FAILED', { persisted: persistedWith('reverted') }, 2],
+	])('applies the shared exit rule to a 400 error carrying %s', async (_label, code, details, exitCode) => {
+		vi.mocked(applyConfigPlan).mockRejectedValue(new BaseException('extension failure', 400, code, details));
+
+		await run();
+
+		expect(process.exit).toHaveBeenCalledWith(exitCode);
+	});
+
 	it('records a rolled-back configuration step at exit 3 when the configuration apply failed', async () => {
 		vi.mocked(applyConfigPlan).mockRejectedValue(new ConfigApplyFailedException());
 

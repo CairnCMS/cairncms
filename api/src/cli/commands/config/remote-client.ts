@@ -14,6 +14,7 @@ import { listConfigKinds } from '../../../utils/config/registry.js';
 import { isValidUuid } from '../../../utils/is-valid-uuid.js';
 import { replaceControlCharacters, safeLogFragment } from '../../../utils/safe-log-fragment.js';
 import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
+import { failureExitCode, failureOutcome } from './failure-outcome.js';
 import { resolveEndpoint, type OperatorRemoteTarget } from './operator-remote-target.js';
 import {
 	RemoteApplyResult,
@@ -202,43 +203,6 @@ function runFailureOf(data: unknown, schemaManaged: boolean): RunFailure {
 	return detailMatchesStatus(failure, steps) ? { kind: 'reported', steps, failure } : { kind: 'malformed' };
 }
 
-function persistedFacets(failure: ConfigRunStepFailure | undefined): string[] {
-	const detail = failure?.detail;
-	if (detail === undefined || !('persisted' in detail) || detail.persisted === 'unknown') return [];
-
-	const { collections, fields, relations } = detail.persisted;
-
-	return [
-		...collections.flatMap((entry) => [entry.table, entry.metadata]),
-		...fields.flatMap((entry) => [entry.column, entry.metadata]),
-		...relations.flatMap((entry) => [entry.foreignKey, entry.metadata]),
-	];
-}
-
-/**
- * A failed step without persisted detail on a server error leaves its writes unaccounted for, so it is treated as
- * uncertain even though the server labels it failed.
- */
-function failureOutcome(
-	run: Extract<RunFailure, { kind: 'reported' }>,
-	refusal: boolean
-): { changed: boolean; uncertain: boolean } {
-	const statuses = [run.steps.folders, run.steps.schema, run.steps.configuration];
-	const facets = persistedFacets(run.failure);
-	const detail = run.failure?.detail;
-	const persistedUnknown = detail !== undefined && 'persisted' in detail && detail.persisted === 'unknown';
-	const failedStep = run.failure === undefined ? undefined : run.steps[run.failure.step];
-
-	return {
-		changed: statuses.some((status) => status === 'committed' || status === 'unknown') || facets.includes('applied'),
-		uncertain:
-			statuses.includes('unknown') ||
-			persistedUnknown ||
-			facets.includes('unknown') ||
-			(!refusal && failedStep === 'failed' && !(detail !== undefined && 'persisted' in detail)),
-	};
-}
-
 function redactedFailure(failure: ConfigRunStepFailure, token: string): ConfigRunStepFailure {
 	const detail = failure.detail;
 	if (detail === undefined || !('persisted' in detail) || detail.persisted === 'unknown') return failure;
@@ -312,9 +276,8 @@ async function request(
 			uncertain = true;
 			detail = '\nThe server reported a step outcome that could not be verified.';
 		} else {
-			const reported = failureOutcome(run, refusal);
-			exitCode = reported.changed || reported.uncertain || !refusal ? 3 : 2;
-			uncertain = reported.uncertain;
+			exitCode = failureExitCode(run.steps, run.failure, refusal);
+			uncertain = failureOutcome(run.steps, run.failure, refusal).uncertain;
 
 			const started = [run.steps.folders, run.steps.schema, run.steps.configuration].some(
 				(status) => status !== 'not_run'

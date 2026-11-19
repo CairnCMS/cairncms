@@ -3,6 +3,7 @@ import type { Knex } from 'knex';
 import getDatabase, { getDatabaseClient, hasDatabaseConnection, isInstalled } from '../../../database/index.js';
 import logger from '../../../logger.js';
 import { configFailureExitCode } from './exit-code.js';
+import { failureExitCode } from './failure-outcome.js';
 import { applyConfigPlan } from '../../../utils/apply-config-plan.js';
 import { computeConfigPlan } from '../../../utils/compute-config-plan.js';
 import {
@@ -180,7 +181,6 @@ async function runLocalEngine(
 ): Promise<LocalApplyOutcome> {
 	const { dryRun, destructive, forceSchema, format, yes } = opts;
 
-	let committedStep = false;
 	let currentStep: keyof ConfigRunSteps | undefined;
 	let serialized: SerializedConfigPlan | undefined;
 	const steps: ConfigRunSteps = { folders: 'not_run', schema: 'not_run', configuration: 'not_run' };
@@ -320,7 +320,6 @@ async function runLocalEngine(
 		currentStep = 'folders';
 		const created = await applyFolderPreparation(desired, current.schema, { context, database });
 		steps.folders = created.length > 0 ? 'committed' : 'skipped';
-		if (created.length > 0) committedStep = true;
 
 		if (sliceHasChanges(plan.schema)) {
 			currentStep = 'schema';
@@ -328,7 +327,6 @@ async function runLocalEngine(
 			await applySchemaStep({ diff: schemaApplicability!.diff, expectedHash: schemaKeyFormHash ?? '', database });
 
 			steps.schema = 'committed';
-			committedStep = true;
 		} else {
 			steps.schema = 'skipped';
 		}
@@ -341,7 +339,6 @@ async function runLocalEngine(
 			steps.configuration = result !== undefined ? 'committed' : 'skipped';
 
 			if (result !== undefined) {
-				committedStep = true;
 				logger.info(renderResultSummary(result));
 			}
 		} else {
@@ -359,13 +356,14 @@ async function runLocalEngine(
 			logger.error(err);
 		}
 
-		const exitCode = committedStep ? 3 : configFailureExitCode(err);
-
-		if (currentStep === undefined) return { ...classifyConfigError(err), exitCode };
+		if (currentStep === undefined) return { ...classifyConfigError(err), exitCode: configFailureExitCode(err) };
 
 		steps[currentStep] = failureStatus(err);
+		const failure = stepFailure(currentStep, err);
+		const exitCode = failureExitCode(steps, failure, configFailureExitCode(err) === 2);
+
 		if (desired.manifest.resources.includes('schema')) logger.info(renderStepOutcome(steps));
-		return { ...classifyConfigError(err), exitCode, steps, failure: stepFailure(currentStep, err) };
+		return { ...classifyConfigError(err), exitCode, steps, failure };
 	}
 }
 

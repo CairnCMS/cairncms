@@ -13,7 +13,10 @@ import {
 import type { CairnConfig } from '../../../types/config.js';
 import type { SchemaPersistedState } from '../../../types/index.js';
 import { failureStatus, stepFailure } from '../../../utils/config/apply-steps.js';
+import type { ConfigRunSteps } from '../../../utils/config/run-record.js';
 import { deleteVerb, updateVerb } from '../../presentation.js';
+import { configFailureExitCode } from './exit-code.js';
+import { failureExitCode } from './failure-outcome.js';
 import { parseOperatorRemoteTarget } from './operator-remote-target.js';
 import {
 	applyRemote,
@@ -1358,10 +1361,10 @@ describe('applyRemote failure outcome', () => {
 	];
 
 	function serverResponse(thrown: unknown, step: 'schema' | 'configuration') {
-		const steps =
+		const steps: ConfigRunSteps =
 			step === 'schema'
 				? { folders: 'skipped', schema: failureStatus(thrown), configuration: 'not_run' }
-				: { ...NOT_RUN, configuration: failureStatus(thrown) };
+				: { folders: 'not_run', schema: 'not_run', configuration: failureStatus(thrown) };
 
 		const base = thrown instanceof BaseException ? thrown : undefined;
 
@@ -1376,20 +1379,28 @@ describe('applyRemote failure outcome', () => {
 		};
 	}
 
-	it.each(PROJECTED_FAILURES)('accepts the server projection of %s in the schema step', async (_label, thrown) => {
-		const { status, extensions } = serverResponse(thrown, 'schema');
-		const error = await failing(status, extensions);
-
-		expect(error.message).not.toContain('could not be verified');
-	});
+	const localExitCode = (thrown: unknown, extensions: ReturnType<typeof serverResponse>['extensions']) =>
+		failureExitCode(extensions.steps, extensions.failure, configFailureExitCode(thrown) === 2);
 
 	it.each(PROJECTED_FAILURES)(
-		'accepts the server projection of %s in a configuration-only step',
+		'accepts the server projection of %s in the schema step, at the local exit code',
+		async (_label, thrown) => {
+			const { status, extensions } = serverResponse(thrown, 'schema');
+			const error = await failing(status, extensions);
+
+			expect(error.message).not.toContain('could not be verified');
+			expect(error.exitCode).toBe(localExitCode(thrown, extensions));
+		}
+	);
+
+	it.each(PROJECTED_FAILURES)(
+		'accepts the server projection of %s in a configuration-only step, at the local exit code',
 		async (_label, thrown) => {
 			const { status, extensions } = serverResponse(thrown, 'configuration');
 			const error = await failing(status, extensions, { body: BODY });
 
 			expect(error.message).not.toContain('could not be verified');
+			expect(error.exitCode).toBe(localExitCode(thrown, extensions));
 		}
 	);
 });
