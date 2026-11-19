@@ -1,4 +1,4 @@
-const MAX_SNAPSHOT_DEPTH = 64;
+export const MAX_SNAPSHOT_DEPTH = 64;
 
 const STANDARD_ERROR_FIELDS = ['message', 'stack', 'cause', 'errors'] as const;
 

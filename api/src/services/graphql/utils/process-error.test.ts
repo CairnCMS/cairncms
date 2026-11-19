@@ -42,6 +42,7 @@ const { logRedactedError: logSpy } = (await import('../../../utils/error-log.js'
 const { InvalidPayloadException } = await import('@cairncms/exceptions');
 const { REDACT_TEXT } = await import('../../../constants.js');
 const { GraphQLService } = await import('../index.js');
+const { MAX_SNAPSHOT_DEPTH } = await import('../../../utils/error-snapshot.js');
 
 const SECRET = 'super-secret-token-value-1234567890';
 const ADMIN: Accountability = { role: null, admin: true };
@@ -67,7 +68,7 @@ describe('formatGraphqlErrors', () => {
 		expect(formatted!.extensions?.['access_token']).toBe(REDACT_TEXT);
 	});
 
-	test('admin sees a redacted internal error with path, non-admin sees the generic error', () => {
+	test('admin sees a redacted internal error, non-admin sees the generic error, both with the path', () => {
 		const error = new GraphQLError(`failed for ${SECRET}`, { path: ['col'] });
 
 		const [adminFormatted] = formatGraphqlErrors([error], { password: SECRET }, ADMIN);
@@ -78,6 +79,7 @@ describe('formatGraphqlErrors', () => {
 		const [userFormatted] = formatGraphqlErrors([error], { password: SECRET }, null);
 		expect(userFormatted!.message).toBe('An unexpected error occurred.');
 		expect(userFormatted!.extensions).toEqual({ code: 'INTERNAL_SERVER_ERROR' });
+		expect(userFormatted!.path).toEqual(['col']);
 	});
 
 	test('redacts a variable secret echoed into the response and the log projection', () => {
@@ -226,35 +228,155 @@ describe('GraphQL errors as executed', () => {
 		['returned', 'Returned failure.'],
 		['thrown', 'Thrown failure.'],
 		['returnedArray', 'First failure.'],
-	])('reports a formatError error from a %s mutation as an internal error', async (field, message) => {
-		const admin = await executeMutation(field, ADMIN);
+	])(
+		'reports a formatError error from a %s mutation with the exception code and its location',
+		async (field, message) => {
+			for (const accountability of [ADMIN, NON_ADMIN]) {
+				const { errors, levels } = await executeMutation(field, accountability);
 
-		expect(admin.errors).toEqual([
-			{
-				message,
-				extensions: { code: 'INTERNAL_SERVER_ERROR' },
-				locations: [{ line: 1, column: 12 }],
-				path: [field],
-			},
-		]);
+				expect(errors).toEqual([
+					{
+						message,
+						extensions: { code: 'INVALID_PAYLOAD' },
+						locations: [{ line: 1, column: 12 }],
+						path: [field],
+					},
+				]);
 
-		expect(admin.levels).toEqual(['error']);
-		loggedPayloads.length = 0;
+				expect(levels).toEqual(['debug']);
+				loggedPayloads.length = 0;
+			}
+		}
+	);
 
-		const member = await executeMutation(field, NON_ADMIN);
-
-		expect(member.errors).toEqual([
-			{ message: 'An unexpected error occurred.', extensions: { code: 'INTERNAL_SERVER_ERROR' } },
-		]);
-	});
-
-	test('reports a directly thrown exception with its code and without path or locations', async () => {
+	test('reports a directly thrown exception with its code and its location', async () => {
 		for (const accountability of [ADMIN, NON_ADMIN]) {
 			const { errors, levels } = await executeMutation('direct', accountability);
 
-			expect(errors).toEqual([{ message: 'Direct failure.', extensions: { code: 'INVALID_PAYLOAD' } }]);
+			expect(errors).toEqual([
+				{
+					message: 'Direct failure.',
+					extensions: { code: 'INVALID_PAYLOAD' },
+					locations: [{ line: 1, column: 12 }],
+					path: ['direct'],
+				},
+			]);
+
 			expect(levels).toEqual(['debug']);
 			loggedPayloads.length = 0;
 		}
+	});
+});
+
+describe('nested GraphQL error layers', () => {
+	const FALLBACK = { message: 'An unexpected error occurred.', extensions: { code: 'INTERNAL_SERVER_ERROR' } };
+
+	function wrap(inner: unknown, depth: number): GraphQLError {
+		let error = new GraphQLError('layer', { originalError: inner as Error });
+		for (let layer = 1; layer < depth; layer++) error = new GraphQLError('layer', { originalError: error });
+		return error;
+	}
+
+	function expectFallback(formatted: unknown) {
+		expect(formatted).toEqual([FALLBACK]);
+		expect(loggedPayloads).toHaveLength(1);
+		expect(loggedPayloads[0]!.err.type).toBe('GraphQLErrorFormattingFailure');
+	}
+
+	test('collects a secret marked only on an intermediate wrapper', () => {
+		const exception = new InvalidPayloadException(`failed ${SECRET}`);
+		const marked = new GraphQLError('marked', { originalError: exception, extensions: { password: SECRET } });
+		const middle = new GraphQLError('middle', { originalError: marked, extensions: {} });
+		const error = new GraphQLError('outer', { originalError: middle, extensions: {} });
+
+		for (const accountability of [ADMIN, NON_ADMIN]) {
+			const [formatted] = formatGraphqlErrors([error], undefined, accountability);
+
+			expect(formatted!.message).toBe(`failed ${REDACT_TEXT}`);
+			expect(formatted!.extensions?.['code']).toBe('INVALID_PAYLOAD');
+		}
+
+		expect(JSON.stringify(loggedPayloads)).not.toContain(SECRET);
+	});
+
+	test('reads each layer originalError exactly once', () => {
+		const exception = new InvalidPayloadException('inner failure');
+		const inner = new GraphQLError('inner');
+		const outer = new GraphQLError('outer');
+		const reads = { outer: 0, inner: 0 };
+
+		Object.defineProperty(inner, 'originalError', {
+			configurable: true,
+			get() {
+				reads.inner++;
+				return exception;
+			},
+		});
+
+		Object.defineProperty(outer, 'originalError', {
+			configurable: true,
+			get() {
+				reads.outer++;
+				return inner;
+			},
+		});
+
+		const [formatted] = formatGraphqlErrors([outer], undefined, NON_ADMIN);
+
+		expect(reads).toEqual({ outer: 1, inner: 1 });
+		expect(formatted).toEqual({ message: 'inner failure', extensions: { code: 'INVALID_PAYLOAD' } });
+	});
+
+	test('keeps a wrapped value that is not an exception internal', () => {
+		const error = wrap(new Error(`raw ${SECRET}`), 2);
+
+		expect(formatGraphqlErrors([error], undefined, NON_ADMIN)).toEqual([FALLBACK]);
+		expect(formatGraphqlErrors([error], undefined, ADMIN)[0]!.extensions).toEqual({ code: 'INTERNAL_SERVER_ERROR' });
+	});
+
+	test('follows a chain up to the snapshot depth', () => {
+		const [formatted] = formatGraphqlErrors(
+			[wrap(new InvalidPayloadException('deep'), MAX_SNAPSHOT_DEPTH)],
+			undefined,
+			NON_ADMIN
+		);
+
+		expect(formatted).toEqual({ message: 'deep', extensions: { code: 'INVALID_PAYLOAD' } });
+	});
+
+	test('falls back when the chain is longer than the snapshot depth', () => {
+		expectFallback(
+			formatGraphqlErrors([wrap(new InvalidPayloadException('too deep'), MAX_SNAPSHOT_DEPTH + 1)], undefined, ADMIN)
+		);
+	});
+
+	test('keeps the fallback free of location fields', () => {
+		const error = new GraphQLError('outer', {
+			path: ['field'],
+			originalError: wrap(new Error('x'), MAX_SNAPSHOT_DEPTH),
+		});
+
+		expectFallback(formatGraphqlErrors([error], undefined, NON_ADMIN));
+	});
+
+	test('falls back when a layer repeats', () => {
+		const first = new GraphQLError('first');
+		const second = new GraphQLError('second', { originalError: first });
+		Object.defineProperty(first, 'originalError', { configurable: true, value: second });
+
+		expectFallback(formatGraphqlErrors([first], undefined, ADMIN));
+	});
+
+	test('falls back when a layer originalError cannot be read', () => {
+		const inner = new GraphQLError('inner');
+
+		Object.defineProperty(inner, 'originalError', {
+			configurable: true,
+			get() {
+				throw new Error('hostile accessor');
+			},
+		});
+
+		expectFallback(formatGraphqlErrors([new GraphQLError('outer', { originalError: inner })], undefined, ADMIN));
 	});
 });
