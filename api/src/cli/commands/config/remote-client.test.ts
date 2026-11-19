@@ -1,5 +1,18 @@
+import { BaseException } from '@cairncms/exceptions';
 import { describe, expect, it } from 'vitest';
+import {
+	CONFIG_POST_COMMIT_PHASES,
+	ConfigApplyFailedException,
+	ConfigPostCommitFailedException,
+	ConfigStateChangedException,
+	SCHEMA_POST_COMMIT_PHASES,
+	SchemaApplyFailedException,
+	SchemaPostCommitFailedException,
+	SchemaStateChangedException,
+} from '../../../exceptions/index.js';
 import type { CairnConfig } from '../../../types/config.js';
+import type { SchemaPersistedState } from '../../../types/index.js';
+import { failureStatus, stepFailure } from '../../../utils/config/apply-steps.js';
 import { deleteVerb, updateVerb } from '../../presentation.js';
 import { parseOperatorRemoteTarget } from './operator-remote-target.js';
 import {
@@ -1299,6 +1312,86 @@ describe('applyRemote failure outcome', () => {
 		expect(error.message).toContain(`${deleteVerb()} schema in c_[redacted]`);
 		expect(error.message).not.toContain(TOKEN);
 	});
+
+	const PROJECTED_FAILURES: [string, unknown][] = [
+		[
+			'a schema apply failure with reverted changes',
+			new SchemaApplyFailedException(persistedField('create', 'reverted', 'reverted') as SchemaPersistedState),
+		],
+		['a schema apply failure with an unknown persisted state', new SchemaApplyFailedException('unknown')],
+		[
+			'a schema apply failure that left foreign keys off',
+			new SchemaApplyFailedException(persistedField('create', 'applied', 'applied') as SchemaPersistedState, {
+				foreignKeysRestored: false,
+			}),
+		],
+		...SCHEMA_POST_COMMIT_PHASES.map((phase): [string, unknown] => [
+			`a schema post-commit failure in ${phase}`,
+			new SchemaPostCommitFailedException(phase),
+		]),
+		...CONFIG_POST_COMMIT_PHASES.map((phase): [string, unknown] => [
+			`a configuration post-commit failure in ${phase}`,
+			new ConfigPostCommitFailedException(phase),
+		]),
+		['a rolled-back configuration apply', new ConfigApplyFailedException()],
+		['a configuration state change', new ConfigStateChangedException()],
+		['a schema state change', new SchemaStateChangedException()],
+		['an untyped error', new Error('boom')],
+		['an unrecognized persisted value', new BaseException('x', 500, 'SCHEMA_APPLY_FAILED', { persisted: 'bogus' })],
+		['a null persisted value', new BaseException('x', 500, 'SCHEMA_APPLY_FAILED', { persisted: null })],
+		['a persisted array', new BaseException('x', 500, 'SCHEMA_APPLY_FAILED', { persisted: [] })],
+		['an unrecognized maintenance phase', new BaseException('x', 500, 'SCHEMA_POST_COMMIT_FAILED', { phase: 'bogus' })],
+		[
+			'a refusal with applied changes',
+			new BaseException('x', 400, 'SCHEMA_APPLY_FAILED', { persisted: persistedField('create', 'applied', 'applied') }),
+		],
+		[
+			'a refusal with an unknown change',
+			new BaseException('x', 400, 'SCHEMA_APPLY_FAILED', { persisted: persistedField('create', 'unknown', 'unknown') }),
+		],
+		[
+			'a refusal with reverted changes',
+			new BaseException('x', 400, 'SCHEMA_APPLY_FAILED', {
+				persisted: persistedField('create', 'reverted', 'reverted'),
+			}),
+		],
+	];
+
+	function serverResponse(thrown: unknown, step: 'schema' | 'configuration') {
+		const steps =
+			step === 'schema'
+				? { folders: 'skipped', schema: failureStatus(thrown), configuration: 'not_run' }
+				: { ...NOT_RUN, configuration: failureStatus(thrown) };
+
+		const base = thrown instanceof BaseException ? thrown : undefined;
+
+		return {
+			status: base?.status ?? 500,
+			extensions: {
+				code: base?.code ?? 'INTERNAL_SERVER_ERROR',
+				...base?.extensions,
+				steps,
+				failure: stepFailure(step, thrown),
+			},
+		};
+	}
+
+	it.each(PROJECTED_FAILURES)('accepts the server projection of %s in the schema step', async (_label, thrown) => {
+		const { status, extensions } = serverResponse(thrown, 'schema');
+		const error = await failing(status, extensions);
+
+		expect(error.message).not.toContain('could not be verified');
+	});
+
+	it.each(PROJECTED_FAILURES)(
+		'accepts the server projection of %s in a configuration-only step',
+		async (_label, thrown) => {
+			const { status, extensions } = serverResponse(thrown, 'configuration');
+			const error = await failing(status, extensions, { body: BODY });
+
+			expect(error.message).not.toContain('could not be verified');
+		}
+	);
 });
 
 describe('applyRemote against a schema-managed tree', () => {
