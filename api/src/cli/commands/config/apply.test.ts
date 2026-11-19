@@ -1,28 +1,35 @@
 import { BaseException } from '@cairncms/exceptions';
 import inquirer from 'inquirer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { configFixture } from '../../../__utils__/config-fixtures.js';
+import { configFixture, schemaReadFixture } from '../../../__utils__/config-fixtures.js';
 import getDatabase, { hasDatabaseConnection, isInstalled } from '../../../database/index.js';
 import {
 	ConfigApplyFailedException,
 	ConfigPostCommitFailedException,
 	ConfigStateChangedException,
+	SchemaStateChangedException,
 } from '../../../exceptions/index.js';
 import logger from '../../../logger.js';
 import type {
 	CairnConfig,
+	ConfigKind,
 	ConfigPermission,
 	ConfigPlan,
+	ConfigSchemaCollection,
 	ConfigStateToken,
 	SerializedConfigPlan,
 } from '../../../types/config.js';
+import type { SnapshotField } from '../../../types/index.js';
+import { applyDiff } from '../../../utils/apply-diff.js';
+import { applyFolderPreparation } from '../../../utils/apply-folder-preparation.js';
 import { computeConfigPlan } from '../../../utils/compute-config-plan.js';
-import { CONFIG_RUN_EVENT, type ConfigRunRecord } from '../../../utils/config/run-record.js';
+import { CONFIG_RUN_EVENT, type ConfigRunRecord, type ConfigRunSteps } from '../../../utils/config/run-record.js';
 import { enrichConfigPlan } from '../../../utils/enrich-config-plan.js';
 import { readCurrentConfig } from '../../../utils/get-config-snapshot.js';
 import { getSchema } from '../../../utils/get-schema.js';
 import { readConfigDirectory } from '../../../utils/read-config-directory.js';
 import { serializeConfigPlan } from '../../../utils/serialize-config-plan.js';
+import { version } from '../../../utils/package.js';
 import { validateDesiredConfig } from '../../../utils/validate-desired-config.js';
 import { applyConfigPlan } from '../../../utils/apply-config-plan.js';
 import { configApply } from './apply.js';
@@ -46,6 +53,7 @@ vi.mock('../../../database/index.js', () => ({
 	default: vi.fn(() => ({ destroy: vi.fn() })),
 	isInstalled: vi.fn(async () => true),
 	hasDatabaseConnection: vi.fn(async () => true),
+	getDatabaseClient: () => 'postgres',
 }));
 
 vi.mock('../../../logger.js', () => ({ default: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
@@ -56,6 +64,21 @@ vi.mock('../../../utils/read-config-directory.js', () => ({
 }));
 
 vi.mock('../../../utils/get-config-snapshot.js', () => ({ readCurrentConfig: vi.fn() }));
+
+vi.mock('../../../utils/folder-references.js', async (importOriginal) => ({
+	...(await importOriginal<typeof import('../../../utils/folder-references.js')>()),
+	readFolderKeys: vi.fn(async () => ({
+		folderIdByKey: new Map<string, string>(),
+		folderKeyById: new Map<string, string>(),
+	})),
+}));
+
+vi.mock('../../../utils/apply-folder-preparation.js', () => ({ applyFolderPreparation: vi.fn() }));
+
+vi.mock('../../../utils/apply-diff.js', async (importOriginal) => ({
+	...(await importOriginal<typeof import('../../../utils/apply-diff.js')>()),
+	applyDiff: vi.fn(),
+}));
 
 vi.mock('../../../utils/validate-desired-config.js', () => ({ validateDesiredConfig: vi.fn(() => []) }));
 
@@ -877,6 +900,153 @@ describe('configApply run record', () => {
 
 		expect(process.exit).toHaveBeenCalledTimes(1);
 		expect(process.exit).toHaveBeenCalledWith(0);
+	});
+
+	describe('for a schema-managed tree', () => {
+		const ID = {
+			collection: 'articles',
+			field: 'id',
+			type: 'integer',
+			meta: {},
+			schema: { name: 'id', is_primary_key: true },
+		} as unknown as SnapshotField;
+
+		const TITLE = {
+			collection: 'articles',
+			field: 'title',
+			type: 'string',
+			meta: {},
+			schema: { name: 'title' },
+		} as unknown as SnapshotField;
+
+		const COVER = {
+			collection: 'articles',
+			field: 'cover',
+			type: 'uuid',
+			meta: { interface: 'file', options: { folder: 'gallery' } },
+			schema: { name: 'cover' },
+		} as unknown as SnapshotField;
+
+		const EDITOR = { key: 'editor', name: 'Editor', admin_access: false, app_access: true };
+
+		function articles(...fields: SnapshotField[]): ConfigSchemaCollection {
+			return {
+				collection: 'articles',
+				meta: {} as Exclude<ConfigSchemaCollection['meta'], undefined>,
+				schema: { name: 'articles' } as Exclude<ConfigSchemaCollection['schema'], undefined>,
+				fields: [ID, ...fields],
+				relations: [],
+			};
+		}
+
+		function arrange(resources: ConfigKind[], overrides: Partial<CairnConfig>): void {
+			const desired = configFixture({
+				manifest: { version: 3, resources, schema: { release: version, vendor: 'postgres' } },
+				...overrides,
+			});
+
+			const read = schemaReadFixture([articles()]);
+
+			vi.mocked(readConfigDirectory).mockResolvedValue(desired);
+
+			vi.mocked(readCurrentConfig).mockResolvedValue({
+				config: configFixture({ manifest: { version: 3, resources }, schema: read.records }),
+				currentRoleKeys: new Set<string>(),
+				currentFolderKeys: new Set<string>(),
+				currentFolderParents: new Map<string, string | null>(),
+				stateToken: { resources, digest: 'schema-digest' },
+				schemaStoredFields: read.storedFields,
+				schemaCapture: read.capture,
+			});
+		}
+
+		function expectStateChanged(steps: ConfigRunSteps, step: keyof ConfigRunSteps, errorCode: string): void {
+			const emitted = records();
+
+			expect(emitted).toHaveLength(1);
+			expect(emitted[0]).toMatchObject({ manifestVersion: 3, result: 'state_changed', errorCode });
+			expect(emitted[0]!.steps).toEqual(steps);
+			expect(emitted[0]!.failure).toEqual({ step });
+		}
+
+		beforeEach(async () => {
+			const actual = await vi.importActual<typeof import('../../../utils/compute-config-plan.js')>(
+				'../../../utils/compute-config-plan.js'
+			);
+
+			vi.mocked(computeConfigPlan).mockImplementation(actual.computeConfigPlan);
+			vi.mocked(applyFolderPreparation).mockResolvedValue([]);
+			vi.mocked(applyDiff).mockResolvedValue(undefined);
+		});
+
+		it('exits 3 when the schema step refuses after folder preparation committed', async () => {
+			arrange(['schema', 'folders'], { folders: [{ key: 'gallery', name: 'Gallery' }], schema: [articles(COVER)] });
+			vi.mocked(applyFolderPreparation).mockResolvedValue(['gallery']);
+			vi.mocked(applyDiff).mockRejectedValue(new SchemaStateChangedException());
+
+			await run();
+
+			expect(vi.mocked(serializeConfigPlan).mock.calls[0]![1]).toMatchObject({
+				preparationFolderKeys: new Set(['gallery']),
+			});
+
+			expectStateChanged(
+				{ folders: 'committed', schema: 'rolled_back', configuration: 'not_run' },
+				'schema',
+				'SCHEMA_STATE_CHANGED'
+			);
+
+			expect(process.exit).toHaveBeenCalledWith(3);
+		});
+
+		it('exits 2 when the schema step refuses with nothing committed before it', async () => {
+			arrange(['schema'], { schema: [articles(TITLE)] });
+			vi.mocked(applyDiff).mockRejectedValue(new SchemaStateChangedException());
+
+			await run();
+
+			expectStateChanged(
+				{ folders: 'skipped', schema: 'rolled_back', configuration: 'not_run' },
+				'schema',
+				'SCHEMA_STATE_CHANGED'
+			);
+
+			expect(process.exit).toHaveBeenCalledWith(2);
+		});
+
+		it('exits 3 when the configuration step refuses after the schema step committed', async () => {
+			arrange(['roles', 'schema'], { roles: [EDITOR], schema: [articles(TITLE)] });
+			vi.mocked(applyConfigPlan).mockRejectedValue(new ConfigStateChangedException());
+
+			await run();
+
+			expect(applyDiff).toHaveBeenCalledTimes(1);
+
+			expectStateChanged(
+				{ folders: 'skipped', schema: 'committed', configuration: 'rolled_back' },
+				'configuration',
+				'CONFIG_STATE_CHANGED'
+			);
+
+			expect(process.exit).toHaveBeenCalledWith(3);
+		});
+
+		it('exits 2 when the configuration step refuses with nothing committed before it', async () => {
+			arrange(['roles', 'schema'], { roles: [EDITOR], schema: [articles()] });
+			vi.mocked(applyConfigPlan).mockRejectedValue(new ConfigStateChangedException());
+
+			await run();
+
+			expect(applyDiff).not.toHaveBeenCalled();
+
+			expectStateChanged(
+				{ folders: 'skipped', schema: 'skipped', configuration: 'rolled_back' },
+				'configuration',
+				'CONFIG_STATE_CHANGED'
+			);
+
+			expect(process.exit).toHaveBeenCalledWith(2);
+		});
 	});
 });
 
