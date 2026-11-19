@@ -153,7 +153,7 @@ describe('FailedValidationException details typing', () => {
 
 	it('types the rule as possibly absent and the field as possibly undefined in converted details', () => {
 		const unclassified = joiValidationErrorItemToErrorExtensions(
-			validatePayload({ title: { _starts_with: 'a' } }, { title: 42 })[0]!.details[0]!
+			validatePayload({ title: { _between: [1, 5] } }, { title: 42 })[0]!.details[0]!
 		);
 
 		const root = joiValidationErrorItemToErrorExtensions(Joi.string().validate(123).error!.details[0]!);

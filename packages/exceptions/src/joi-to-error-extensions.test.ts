@@ -111,7 +111,6 @@ describe('joiValidationErrorItemToErrorExtensions', () => {
 		['any.invalid', undefined],
 		['any.only', '_neq'],
 		['any.invalid', '_eq'],
-		['any.only', '_gt'],
 		['any.only', 'eq'],
 		['any.only', 'constructor'],
 		['any.invalid', '__proto__'],
@@ -127,15 +126,92 @@ describe('joiValidationErrorItemToErrorExtensions', () => {
 		expect(extensions).toStrictEqual({ field: 'title' });
 	});
 
-	it('reports a required item as required whatever operator its schema recorded', () => {
+	it.each(['_eq', '_contains', '_gt', '_between'])(
+		'reports a required item as required when its schema recorded %s',
+		(operator) => {
+			const extensions = joiValidationErrorItemToErrorExtensions({
+				message: '"title" is required',
+				path: ['title'],
+				type: 'any.required',
+				context: { validationOperator: operator },
+			});
+
+			expect(extensions).toStrictEqual({ field: 'title', type: 'required' });
+		}
+	);
+
+	const unreadableContext = (operator: string) => {
+		const context = { validationOperator: operator };
+
+		for (const key of ['valids', 'invalids', 'value', 'limit', 'substring', 'regex', 'name']) {
+			Object.defineProperty(context, key, { get: unreadable });
+		}
+
+		return context;
+	};
+
+	it.each([
+		['string.contains', '_contains', 'contains'],
+		['any.only', '_contains', 'contains'],
+		['string.base', '_icontains', 'contains'],
+		['string.ncontains', '_ncontains', 'ncontains'],
+		['any.only', '_ncontains', 'ncontains'],
+		['string.pattern.name', '_starts_with', 'starts_with'],
+		['string.base', '_starts_with', 'starts_with'],
+		['any.only', '_nstarts_with', 'nstarts_with'],
+		['string.pattern.name', '_ends_with', 'ends_with'],
+		['string.pattern.invert.name', '_nends_with', 'nends_with'],
+		['string.pattern.base', '_regex', 'regex'],
+		['any.only', '_regex', 'regex'],
+		['number.greater', '_gt', 'gt'],
+		['date.greater', '_gt', 'gt'],
+		['number.base', '_gt', 'gt'],
+		['any.only', '_gt', 'gt'],
+		['date.base', '_gte', 'gte'],
+		['number.unsafe', '_lt', 'lt'],
+		['date.max', '_lte', 'lte'],
+	])(
+		'takes the type of a %s item from its authored %s rule without reading the compared values',
+		(type, operator, rule) => {
+			const extensions = joiValidationErrorItemToErrorExtensions({
+				message: 'm',
+				path: ['title'],
+				type,
+				context: unreadableContext(operator),
+			});
+
+			expect(extensions).toStrictEqual({ field: 'title', type: rule });
+		}
+	);
+
+	it.each([
+		['number.min', '_between'],
+		['number.max', '_between'],
+		['date.min', '_between'],
+		['number.base', '_between'],
+		['number.less', '_nbetween'],
+		['date.greater', '_nbetween'],
+	])('leaves a %s item from a %s range unclassified', (type, operator) => {
+		const item = { message: 'm', path: ['title'], type, context: unreadableContext(operator) };
+
+		expect(joiValidationErrorItemToErrorExtensions(item)).toStrictEqual({ field: 'title' });
+		expect(new FailedValidationException(item).message).toBe('Validation failed for field "title".');
+	});
+
+	it.each([
+		['number.greater', undefined, 'gt'],
+		['number.min', undefined, 'gte'],
+		['string.pattern.base', undefined, 'regex'],
+		['number.greater', 'constructor', 'gt'],
+	])('classifies a %s item with operator %s by its Joi type', (type, operator, rule) => {
 		const extensions = joiValidationErrorItemToErrorExtensions({
-			message: '"title" is required',
+			message: 'm',
 			path: ['title'],
-			type: 'any.required',
-			context: { validationOperator: '_eq' },
+			type,
+			context: { validationOperator: operator },
 		});
 
-		expect(extensions).toStrictEqual({ field: 'title', type: 'required' });
+		expect(extensions).toStrictEqual({ field: 'title', type: rule });
 	});
 
 	it('leaves the field undefined for a root-level item', () => {

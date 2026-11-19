@@ -1,13 +1,14 @@
 import { describe, expect } from 'vitest';
 import { createIdentityTest, USER } from '../../fixtures/identities';
 import { capturePrerequisite, requirePrerequisite, type Prerequisite } from '../../fixtures/prerequisite';
-import request, { setupRequest } from '../../fixtures/request';
+import request, { requestGraphQL, setupRequest } from '../../fixtures/request';
 import { initializeFixtures } from '../../harness/fixture-setup.mjs';
 import { createWebSocketConn } from '../realtime/transport';
 
 initializeFixtures();
 
 const COLLECTION = 'custom_error_records';
+const SETTINGS = 'custom_error_settings';
 const EXTENSION = 'cairncms-extension-custom-errors';
 const ADMIN = `Bearer ${USER.ADMIN!.TOKEN}`;
 
@@ -66,10 +67,42 @@ const test = createIdentityTest({
 					if (typeof role !== 'string') throw new Error('Missing the role for the user without administrator access');
 
 					await setupRequest(api.url)
-						.post('/permissions')
+						.post('/collections')
 						.set('Authorization', ADMIN)
-						.send({ role, collection: COLLECTION, action: 'create', fields: ['title'], permissions: {} })
+						.send({
+							collection: SETTINGS,
+							meta: { singleton: true },
+							schema: {},
+							fields: [
+								{
+									field: 'id',
+									type: 'integer',
+									meta: { hidden: true, interface: 'input', readonly: true },
+									schema: { is_primary_key: true, has_auto_increment: true },
+								},
+								{ field: 'title', type: 'string', meta: {}, schema: {} },
+							],
+						})
 						.expect(200);
+
+					await setupRequest(api.url)
+						.patch(`/items/${SETTINGS}`)
+						.set('Authorization', ADMIN)
+						.send({ title: 'within quota' })
+						.expect(200);
+
+					for (const permission of [
+						{ collection: COLLECTION, action: 'create', fields: ['title'], permissions: {} },
+						{ collection: COLLECTION, action: 'read', fields: ['id', 'title'], permissions: {} },
+						{ collection: SETTINGS, action: 'read', fields: ['id', 'title'], permissions: {} },
+						{ collection: SETTINGS, action: 'update', fields: ['title'], permissions: {} },
+					]) {
+						await setupRequest(api.url)
+							.post('/permissions')
+							.set('Authorization', ADMIN)
+							.send({ role, ...permission })
+							.expect(200);
+					}
 
 					await ready();
 				},
@@ -119,6 +152,32 @@ describe('Custom exceptions raised by a full-authority extension', () => {
 		expect(allowed.status).toBe(200);
 		expect(await api.database(COLLECTION).where({ title: 'over quota' }).select('id')).toEqual([]);
 	});
+
+	for (const [label, field, collection] of [
+		['item create', `create_${COLLECTION}_item`, COLLECTION],
+		['singleton update', `update_${SETTINGS}`, SETTINGS],
+	] as const) {
+		test(`a GraphQL ${label} returns the custom code, message, details, and location`, async ({ api }) => {
+			for (const [identity, token] of IDENTITIES) {
+				const response = await requestGraphQL(api.url, false, token, {
+					mutation: { [field]: { __args: { data: { title: 'over quota' } }, id: true } },
+				});
+
+				expect(response.status, identity).toBe(200);
+
+				expect(response.body.errors, identity).toEqual([
+					{
+						message: 'The quota is used up.',
+						extensions: { code: 'QUOTA_EXCEEDED', limit: 5 },
+						locations: [{ line: 1, column: 12 }],
+						path: [field],
+					},
+				]);
+			}
+
+			expect(await api.database(collection).where({ title: 'over quota' }).select('id')).toEqual([]);
+		});
+	}
 
 	test('the realtime item protocol returns the custom code with its fixed message and no details', async ({ api }) => {
 		for (const [label, token] of IDENTITIES) {

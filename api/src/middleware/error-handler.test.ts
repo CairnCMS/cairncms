@@ -183,6 +183,33 @@ describe('error-handler redaction', () => {
 		expect(combined).not.toContain(SECRET);
 	});
 
+	test.each([
+		['root', (details: Record<string, unknown>) => details],
+		['nested', (details: Record<string, unknown>) => ({ detail: details })],
+	])('redacts a secret beneath an own __proto__ key in %s details', async (_label, place) => {
+		const details = JSON.parse(`{"__proto__":{"password":"${SECRET}"},"echo":"${SECRET}"}`);
+		const res = await runHandler(new InvalidPayloadException(`bad ${SECRET}`, place(details)));
+
+		expect(res.statusCode).toBe(400);
+		expect(res.body.errors[0].message).toBe(`bad ${REDACT_TEXT}`);
+		expect(JSON.stringify(res.body)).not.toContain(SECRET);
+		expect(JSON.stringify(loggedPayloads)).not.toContain(SECRET);
+	});
+
+	test('redacts a secret beneath an own __proto__ key in the request.error filter output', async () => {
+		onRequestError(() => [
+			JSON.parse(`{"message":"leaked ${SECRET}","extensions":{"code":"X","__proto__":{"password":"${SECRET}"}}}`),
+		]);
+
+		const res = await runHandler(new InvalidPayloadException('bad'));
+
+		expect(res.body.errors[0].message).toBe(`leaked ${REDACT_TEXT}`);
+
+		expect(Object.getOwnPropertyDescriptor(res.body.errors[0].extensions, '__proto__')?.value).toEqual({
+			password: REDACT_TEXT,
+		});
+	});
+
 	test('scrubs the bare request token from the response', async () => {
 		const res = await runHandler(new InvalidPayloadException(`token was ${SECRET}`), makeReq({ token: SECRET }));
 
@@ -288,5 +315,63 @@ describe('error-handler redaction', () => {
 
 		expect(res.statusCode).toBe(500);
 		expect(res.headers['Allow']).toBeUndefined();
+	});
+});
+
+describe('error-handler incomplete inspection', () => {
+	function deepDetails(secret: string) {
+		let deep: Record<string, unknown> = { password: secret };
+		for (let level = 0; level < 70; level++) deep = { next: deep };
+		return deep;
+	}
+
+	function sensitiveBackReference(secret: string) {
+		const details: Record<string, unknown> = { value: secret };
+		details['credentials'] = details;
+		return details;
+	}
+
+	test.each([
+		['details too deep to inspect', deepDetails],
+		['a back-reference beneath a sensitive key', sensitiveBackReference],
+	])('sends the fallback for an error with %s, logging only the marker', async (_label, details) => {
+		const res = await runHandler(new InvalidPayloadException(`Rejected ${SECRET}`, { detail: details(SECRET) }));
+
+		expect(res.statusCode).toBe(500);
+		expect(res.body).toEqual(FALLBACK);
+		expect(loggedPayloads.map((payload) => payload.err.type)).toEqual(['ErrorHandlerFailure']);
+		expect(JSON.stringify(loggedPayloads)).not.toContain(SECRET);
+	});
+
+	test.each([
+		['details too deep to inspect', deepDetails],
+		['a back-reference beneath a sensitive key', sensitiveBackReference],
+	])(
+		'sends the fallback when request.error output has %s, after logging the original error',
+		async (_label, details) => {
+			onRequestError(() => [{ message: `Rejected ${SECRET}`, extensions: { detail: details(SECRET) } }]);
+
+			const res = await runHandler(new InvalidPayloadException('Rejected'));
+
+			expect(res.statusCode).toBe(500);
+			expect(res.body).toEqual(FALLBACK);
+
+			expect(loggedPayloads.map((payload) => payload.err.type)).toEqual([
+				'InvalidPayloadException',
+				'ErrorHandlerFailure',
+			]);
+
+			expect(JSON.stringify(loggedPayloads)).not.toContain(SECRET);
+		}
+	);
+
+	test('keeps the normal response for a cycle outside sensitive keys', async () => {
+		const details: Record<string, unknown> = { label: 'kept' };
+		details['self'] = details;
+
+		const res = await runHandler(new InvalidPayloadException('Rejected', { detail: details }));
+
+		expect(res.statusCode).toBe(400);
+		expect(res.body.errors[0].extensions.detail).toEqual({ label: 'kept', self: '[Circular]' });
 	});
 });

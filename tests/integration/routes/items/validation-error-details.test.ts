@@ -58,9 +58,7 @@ async function logsThroughLine(api: Api, offset: number, parts: string[]) {
 	return window();
 }
 
-async function validationLogEntries(api: Api, offset: number) {
-	const logs = await logsThroughLine(api, offset, ['"type":"FailedValidationException"']);
-
+function failedValidationEntries(logs: string) {
 	return logs
 		.split('\n')
 		.filter((line) => line.includes('"type":"FailedValidationException"'))
@@ -68,6 +66,15 @@ async function validationLogEntries(api: Api, offset: number) {
 			const { message, extensions } = JSON.parse(line).err;
 			return { message, extensions };
 		});
+}
+
+async function validationLogEntries(api: Api, offset: number) {
+	return failedValidationEntries(await logsThroughLine(api, offset, ['"type":"FailedValidationException"']));
+}
+
+async function allValidationLogEntries(api: Api, offset: number) {
+	await request(api.url).get(`/${LOG_BARRIER}`).expect(404);
+	return failedValidationEntries(await logsThroughLine(api, offset, ['ROUTE_NOT_FOUND', LOG_BARRIER]));
 }
 
 function graphqlValidationLine(mutation: string, field: string) {
@@ -104,6 +111,9 @@ const test = createIdentityTest({
 						fields: [
 							{ field: 'name', type: 'string' },
 							{ field: 'secret_code', type: 'string' },
+							{ field: 'threshold', type: 'string' },
+							{ field: 'low', type: 'integer' },
+							{ field: 'high', type: 'integer' },
 						],
 					});
 
@@ -113,6 +123,9 @@ const test = createIdentityTest({
 							{ field: 'code', type: 'string' },
 							{ field: 'status', type: 'string' },
 							{ field: 'marker', type: 'string' },
+							{ field: 'label', type: 'string' },
+							{ field: 'due', type: 'string' },
+							{ field: 'score', type: 'integer' },
 							{
 								field: 'title',
 								type: 'string',
@@ -130,16 +143,28 @@ const test = createIdentityTest({
 
 					await CreateFieldM2O(api, { collection: 'directus_users', field: 'tenant', otherCollection: TENANTS });
 
-					const tenantA = await CreateItem(api, { collection: TENANTS, item: { name: 'A', secret_code: SECRET_A } });
-					const tenantB = await CreateItem(api, { collection: TENANTS, item: { name: 'B', secret_code: SECRET_B } });
+					const tenant = (item: Record<string, unknown>) => CreateItem(api, { collection: TENANTS, item });
 
-					const tenantNumeric = await CreateItem(api, {
-						collection: TENANTS,
-						item: { name: 'Numeric', secret_code: NUMERIC_SECRET },
+					const tenantA = await tenant({ name: 'A', secret_code: SECRET_A, threshold: '5', low: 10, high: 20 });
+
+					const tenantB = await tenant({
+						name: 'B',
+						secret_code: SECRET_B,
+						threshold: '2026-01-01',
+						low: 10,
+						high: 5,
 					});
 
-					const tenantNull = await CreateItem(api, { collection: TENANTS, item: { name: 'Null', secret_code: null } });
-					const tenantEmpty = await CreateItem(api, { collection: TENANTS, item: { name: 'Empty', secret_code: '' } });
+					const tenantNumeric = await tenant({
+						name: 'Numeric',
+						secret_code: NUMERIC_SECRET,
+						threshold: '2000-01-01',
+						low: 0,
+						high: 10,
+					});
+
+					const tenantNull = await tenant({ name: 'Null', secret_code: null, threshold: null, low: null, high: null });
+					const tenantEmpty = await tenant({ name: 'Empty', secret_code: '', threshold: '', low: 0, high: 5 });
 
 					const stored = await api.database(TENANTS).select('name', 'secret_code').orderBy('name');
 
@@ -149,6 +174,16 @@ const test = createIdentityTest({
 						{ name: 'Empty', secret_code: '' },
 						{ name: 'Null', secret_code: null },
 						{ name: 'Numeric', secret_code: NUMERIC_SECRET },
+					]);
+
+					const operands = await api.database(TENANTS).select('name', 'threshold', 'low', 'high').orderBy('name');
+
+					expect(operands).toEqual([
+						{ name: 'A', threshold: '5', low: 10, high: 20 },
+						{ name: 'B', threshold: '2026-01-01', low: 10, high: 5 },
+						{ name: 'Empty', threshold: '', low: 0, high: 5 },
+						{ name: 'Null', threshold: null, low: null, high: null },
+						{ name: 'Numeric', threshold: '2000-01-01', low: 0, high: 10 },
 					]);
 
 					const role = await CreateRole(api, {
@@ -166,6 +201,9 @@ const test = createIdentityTest({
 							_and: [
 								{ code: { _eq: '$CURRENT_USER.tenant.secret_code' } },
 								{ status: { _nin: [TRIGGER, TENANT_B_MARKER] } },
+								{ label: { _starts_with: '$CURRENT_USER.tenant.secret_code' } },
+								{ due: { _gt: '$CURRENT_USER.tenant.threshold' } },
+								{ score: { _between: ['$CURRENT_USER.tenant.low', '$CURRENT_USER.tenant.high'] } },
 							],
 						},
 					});
@@ -367,7 +405,12 @@ describe('Validation errors from a permission rule with hidden operands', () => 
 			});
 
 		expect(response.body.errors).toEqual([
-			{ message: 'An unexpected error occurred.', extensions: { code: 'INTERNAL_SERVER_ERROR' } },
+			{
+				message: REQUIRED_VALUE_MESSAGE,
+				extensions: { code: 'FAILED_VALIDATION', field: 'code', type: 'eq' },
+				locations: [{ line: 1, column: 12 }],
+				path: [`create_${RECORDS}_item`],
+			},
 		]);
 
 		const logs = await logsThroughLine(api, offset, graphqlValidationLine(`create_${RECORDS}_item`, 'code'));
@@ -379,6 +422,87 @@ describe('Validation errors from a permission rule with hidden operands', () => 
 
 		await expectNoRecord(api, body.marker);
 	});
+});
+
+const CODE_FOR: Record<string, string | null> = {
+	[MEMBER_A]: SECRET_A,
+	[MEMBER_B]: SECRET_B,
+	[MEMBER_NUMERIC]: NUMERIC_SECRET,
+	[MEMBER_NULL]: null,
+	[MEMBER_EMPTY]: '',
+};
+
+const RULE_CASES = [
+	{
+		rule: 'text',
+		field: 'label',
+		submitted: 'zzz',
+		message: 'Validation failed for field "label". Value has to start with the required text.',
+		type: 'starts_with',
+		rejectedBy: [
+			['a word', MEMBER_A],
+			['a numeric string', MEMBER_NUMERIC],
+			['null', MEMBER_NULL],
+		],
+		acceptedBy: ['an empty prefix', MEMBER_EMPTY],
+	},
+	{
+		rule: 'comparison',
+		field: 'due',
+		submitted: '2020-01-01',
+		message: 'Validation failed for field "due". Value has to be greater than the minimum.',
+		type: 'gt',
+		rejectedBy: [
+			['a number', MEMBER_A],
+			['a later date', MEMBER_B],
+			['null', MEMBER_NULL],
+			['empty', MEMBER_EMPTY],
+		],
+		acceptedBy: ['an earlier date', MEMBER_NUMERIC],
+	},
+	{
+		rule: 'range',
+		field: 'score',
+		submitted: 7,
+		message: 'Validation failed for field "score".',
+		type: undefined,
+		rejectedBy: [
+			['bounds above the value', MEMBER_A],
+			['inverted bounds', MEMBER_B],
+			['bounds below the value', MEMBER_EMPTY],
+			['null bounds', MEMBER_NULL],
+		],
+		acceptedBy: ['bounds around the value', MEMBER_NUMERIC],
+	},
+] as const;
+
+describe('Validation errors from text, comparison, and range rules with hidden operands', () => {
+	for (const { rule, field, submitted, message, type, rejectedBy, acceptedBy } of RULE_CASES) {
+		const extensions = type ? { field, type } : { field };
+
+		for (const [label, token] of rejectedBy) {
+			test(`report one ${rule} error for the same value when the hidden operand is ${label}`, async ({ api }) => {
+				const body = payload({ code: CODE_FOR[token], [field]: submitted });
+				const offset = (await api.readLogs()).length;
+				const response = await createAs(api, token, body);
+
+				expect(response.status).toBe(400);
+				expect(response.body.errors).toEqual([{ message, extensions: { code: 'FAILED_VALIDATION', ...extensions } }]);
+				expect(await allValidationLogEntries(api, offset)).toEqual([{ message, extensions }]);
+				await expectNoRecord(api, body.marker);
+			});
+		}
+
+		const [label, token] = acceptedBy;
+
+		test(`accept the same ${rule} value when the hidden operand is ${label}`, async ({ api }) => {
+			const body = payload({ code: CODE_FOR[token], [field]: submitted });
+			const response = await createAs(api, token, body);
+
+			expect([200, 204]).toContain(response.status);
+			expect(await api.database(RECORDS).where({ marker: body.marker }).select('id')).toHaveLength(1);
+		});
+	}
 });
 
 async function withPasswordPolicy(api: Api, run: () => Promise<void>) {
@@ -433,7 +557,15 @@ describe('Validation errors from the password policy', () => {
 					query: `mutation { create_users_item(data: { email: "policy-graphql@example.com", password: "${POLICY_PASSWORD}" }) { id } }`,
 				});
 
-			expect(response.body.errors?.[0]?.path).toEqual(['create_users_item']);
+			expect(response.body.errors).toEqual([
+				{
+					message: `Validation failed for field "password". Value doesn't have the correct format.`,
+					extensions: { code: 'FAILED_VALIDATION', field: 'password', type: 'regex' },
+					locations: [{ line: 1, column: 12 }],
+					path: ['create_users_item'],
+				},
+			]);
+
 			expect(JSON.stringify(response.body)).not.toContain(POLICY_PASSWORD);
 
 			const logs = await logsThroughLine(api, offset, graphqlValidationLine('create_users_item', 'password'));

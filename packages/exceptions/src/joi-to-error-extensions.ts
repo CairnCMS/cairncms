@@ -46,6 +46,23 @@ const INVALID_OPERATOR_TYPES = new Map<unknown, FailedValidationType>([
 	['_nempty', 'nempty'],
 ]);
 
+const AUTHORED_OPERATOR_TYPES = new Map<unknown, FailedValidationType>([
+	['_contains', 'contains'],
+	['_icontains', 'contains'],
+	['_ncontains', 'ncontains'],
+	['_starts_with', 'starts_with'],
+	['_nstarts_with', 'nstarts_with'],
+	['_ends_with', 'ends_with'],
+	['_nends_with', 'nends_with'],
+	['_regex', 'regex'],
+	['_gt', 'gt'],
+	['_gte', 'gte'],
+	['_lt', 'lt'],
+	['_lte', 'lte'],
+]);
+
+const RANGE_OPERATORS = new Set<unknown>(['_between', '_nbetween']);
+
 export type FailedValidationExtensions = {
 	field: ValidationErrorItem['path'][number] | undefined;
 	type?: FailedValidationType;
@@ -54,7 +71,9 @@ export type FailedValidationExtensions = {
 /**
  * Converts a Joi validation error item into the details of a failed validation. The details carry no compared or
  * submitted value, and leave `type` unset when the item matches no known rule. Equality, membership, null, and empty
- * failures take their `type` from the `validationOperator` the schema recorded, never from the compared values.
+ * failures take their `type` from the `validationOperator` the schema recorded, never from the compared values. Every
+ * other failure of a text or comparison rule takes the rule's own type, and a range failure takes none, so the
+ * details do not depend on the compared value's kind. A missing required value is reported as required.
  */
 export function joiValidationErrorItemToErrorExtensions(item: ValidationErrorItem): FailedValidationExtensions {
 	const extensions: FailedValidationExtensions = {
@@ -63,6 +82,20 @@ export function joiValidationErrorItemToErrorExtensions(item: ValidationErrorIte
 
 	const joiType = item.type;
 	const operator = item.context?.validationOperator;
+
+	if (joiType.endsWith('required')) {
+		extensions.type = 'required';
+		return extensions;
+	}
+
+	if (RANGE_OPERATORS.has(operator)) return extensions;
+
+	const authoredType = AUTHORED_OPERATOR_TYPES.get(operator);
+
+	if (authoredType) {
+		extensions.type = authoredType;
+		return extensions;
+	}
 
 	if (joiType.endsWith('only')) {
 		const type = ONLY_OPERATOR_TYPES.get(operator);
@@ -80,7 +113,6 @@ export function joiValidationErrorItemToErrorExtensions(item: ValidationErrorIte
 	if (joiType.endsWith('max')) extensions.type = 'lte';
 	if (joiType.endsWith('contains')) extensions.type = 'contains';
 	if (joiType.endsWith('ncontains')) extensions.type = 'ncontains';
-	if (joiType.endsWith('required')) extensions.type = 'required';
 	if (joiType.endsWith('.pattern.base')) extensions.type = 'regex';
 
 	if (joiType.endsWith('.pattern.name') || joiType.endsWith('.pattern.invert.name')) {

@@ -158,10 +158,39 @@ const cases: [string, Record<string, unknown>, Record<string, unknown>, string, 
 		'_starts_with on a number',
 		{ f: { _starts_with: OPERAND } },
 		{ f: 42 },
-		'Validation failed for field "f".',
-		{ field: 'f' },
+		field('Value has to start with the required text.'),
+		{ field: 'f', type: 'starts_with' },
 	],
+	['_between', { f: { _between: [10, 20] } }, { f: 5 }, 'Validation failed for field "f".', { field: 'f' }],
+	['_nbetween', { f: { _nbetween: [20, 10] } }, { f: 25 }, 'Validation failed for field "f".', { field: 'f' }],
 ];
+
+function convertDynamic(rule: string, operand: unknown, payload: Record<string, unknown>) {
+	const context = { $CURRENT_USER: { tenant: { value: operand } } } as any;
+	const filter = parseFilter({ f: { [rule]: '$CURRENT_USER.tenant.value' } } as Filter, null, context);
+
+	return validatePayload(filter!, payload).flatMap((error) =>
+		error.details.map((item) => {
+			const exception = new FailedValidationException(item);
+			return { message: exception.message, extensions: exception.extensions };
+		})
+	);
+}
+
+const TEXT_OPERANDS = ['abc', null, 42, ''];
+const TEXT_SUBMISSIONS = ['zzz', 'abc', 42, true];
+const COMPARISON_OPERANDS = [5, '7', '2026-01-01', '2000-01-01', null];
+const COMPARISON_SUBMISSIONS = [7, '2020-01-01', 'zzz', 1e300];
+
+const RANGE_OPERANDS = [
+	[10, 20],
+	[0, 5],
+	[10, 5],
+	['2026-01-01', '2027-01-01'],
+	['2000-01-01', '2001-01-01'],
+];
+
+const RANGE_SUBMISSIONS = [7, '2020-01-01', 'zzz'];
 
 describe('FailedValidationException conversion', () => {
 	it.each(cases)(
@@ -227,6 +256,59 @@ describe('FailedValidationException conversion', () => {
 			expect(error.extensions).toStrictEqual({ field: 'code', type: 'eq' });
 		}
 	);
+
+	it.each([
+		['_contains', TEXT_OPERANDS, TEXT_SUBMISSIONS, 'contains', 'Value has to contain the required text.'],
+		['_icontains', TEXT_OPERANDS, TEXT_SUBMISSIONS, 'contains', 'Value has to contain the required text.'],
+		['_ncontains', TEXT_OPERANDS, TEXT_SUBMISSIONS, 'ncontains', `Value can't contain the excluded text.`],
+		['_starts_with', TEXT_OPERANDS, TEXT_SUBMISSIONS, 'starts_with', 'Value has to start with the required text.'],
+		['_nstarts_with', TEXT_OPERANDS, TEXT_SUBMISSIONS, 'nstarts_with', `Value can't start with the excluded text.`],
+		['_ends_with', TEXT_OPERANDS, TEXT_SUBMISSIONS, 'ends_with', 'Value has to end with the required text.'],
+		['_nends_with', TEXT_OPERANDS, TEXT_SUBMISSIONS, 'nends_with', `Value can't end with the excluded text.`],
+		['_regex', TEXT_OPERANDS, TEXT_SUBMISSIONS, 'regex', `Value doesn't have the correct format.`],
+		['_gt', COMPARISON_OPERANDS, COMPARISON_SUBMISSIONS, 'gt', 'Value has to be greater than the minimum.'],
+		[
+			'_gte',
+			COMPARISON_OPERANDS,
+			COMPARISON_SUBMISSIONS,
+			'gte',
+			'Value has to be greater than or equal to the minimum.',
+		],
+		['_lt', COMPARISON_OPERANDS, COMPARISON_SUBMISSIONS, 'lt', 'Value has to be less than the maximum.'],
+		['_lte', COMPARISON_OPERANDS, COMPARISON_SUBMISSIONS, 'lte', 'Value has to be less than or equal to the maximum.'],
+		['_between', RANGE_OPERANDS, RANGE_SUBMISSIONS, undefined, undefined],
+		['_nbetween', RANGE_OPERANDS, RANGE_SUBMISSIONS, undefined, undefined],
+	])(
+		'reports every rejection of a dynamic %s rule the same way whatever its operand',
+		(rule, operands, submissions, type, sentence) => {
+			const expected = {
+				message: sentence ? field(sentence) : 'Validation failed for field "f".',
+				extensions: type ? { field: 'f', type } : { field: 'f' },
+			};
+
+			let rejections = 0;
+
+			for (const submitted of submissions) {
+				for (const operand of operands) {
+					for (const diagnostic of convertDynamic(rule, operand, { f: submitted })) {
+						expect(diagnostic, JSON.stringify({ operand, submitted })).toStrictEqual(expected);
+						rejections++;
+					}
+				}
+			}
+
+			expect(rejections).toBeGreaterThan(operands.length);
+		}
+	);
+
+	it.each([
+		['_contains', 'abc', 'abcd'],
+		['_starts_with', '', 'zzz'],
+		['_gt', 5, 7],
+		['_between', [0, 10], 7],
+	])('keeps a dynamic %s rule that the value satisfies passing', (rule, operand, submitted) => {
+		expect(convertDynamic(rule, operand, { f: submitted })).toEqual([]);
+	});
 
 	it('converts the password-policy item without the password', () => {
 		const error = new FailedValidationException({
