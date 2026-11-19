@@ -1,5 +1,14 @@
 import type { Accountability, SchemaOverview } from '@cairncms/types';
-import { GraphQLError, GraphQLObjectType, GraphQLSchema, GraphQLString, parse } from 'graphql';
+import {
+	GraphQLError,
+	GraphQLInt,
+	GraphQLList,
+	GraphQLNonNull,
+	GraphQLObjectType,
+	GraphQLSchema,
+	GraphQLString,
+	parse,
+} from 'graphql';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { GraphQLParams } from '../../../types/index.js';
 
@@ -39,7 +48,7 @@ const { logRedactedError: logSpy } = (await import('../../../utils/error-log.js'
 	logRedactedError: ReturnType<typeof vi.fn>;
 };
 
-const { InvalidPayloadException } = await import('@cairncms/exceptions');
+const { InvalidCredentialsException, InvalidPayloadException } = await import('@cairncms/exceptions');
 const { REDACT_TEXT } = await import('../../../constants.js');
 const { GraphQLService } = await import('../index.js');
 const { MAX_SNAPSHOT_DEPTH } = await import('../../../utils/error-snapshot.js');
@@ -286,6 +295,146 @@ describe('GraphQL errors as executed', () => {
 			expect(levels).toEqual(['debug']);
 			loggedPayloads.length = 0;
 		}
+	});
+});
+
+describe('GraphQL error locations after redaction', () => {
+	const schemaOverview: SchemaOverview = { collections: {}, relations: [] };
+	const LOGIN = 'mutation ($password: String) { auth_login(email: "a@example.com", password: $password) }';
+
+	const ALIASED_LOGIN =
+		'mutation ($password: String) { signin: auth_login(email: "a@example.com", password: $password) }';
+
+	async function executeOperation(source: string, variables: Record<string, unknown>) {
+		const service = new GraphQLService({ accountability: NON_ADMIN, schema: schemaOverview, scope: 'items' });
+
+		const record = new GraphQLObjectType({
+			name: 'Record',
+			fields: {
+				title: {
+					type: GraphQLString,
+					resolve: () => {
+						throw service.formatError(new InvalidPayloadException('Title failure.'));
+					},
+				},
+				required: { type: new GraphQLNonNull(GraphQLString), resolve: () => null },
+			},
+		});
+
+		vi.spyOn(service, 'getSchema').mockReturnValue(
+			new GraphQLSchema({
+				query: new GraphQLObjectType({
+					name: 'Query',
+					fields: {
+						records: { type: new GraphQLList(record), resolve: () => [{}, {}, {}] },
+						holder: { type: record, resolve: () => ({}) },
+						count: { type: GraphQLString, args: { limit: { type: GraphQLInt } }, resolve: () => 'ok' },
+					},
+				}),
+				mutation: new GraphQLObjectType({
+					name: 'Mutation',
+					fields: {
+						auth_login: {
+							type: GraphQLString,
+							args: { email: { type: GraphQLString }, password: { type: GraphQLString } },
+							resolve: () => {
+								throw new InvalidCredentialsException();
+							},
+						},
+					},
+				}),
+			})
+		);
+
+		const params: GraphQLParams = {
+			query: null,
+			variables,
+			operationName: null,
+			document: parse(source),
+			contextValue: {},
+		};
+
+		return (await service.execute(params)).errors;
+	}
+
+	test.each([
+		['the line', LOGIN, 'auth_login', '1'],
+		['the column', LOGIN, 'auth_login', String(LOGIN.indexOf('auth_login') + 1)],
+		['part of the field name', LOGIN, 'auth_login', 'login'],
+		['the alias', ALIASED_LOGIN, 'signin', 'signin'],
+	])('keeps a login error location when the password matches %s', async (_label, source, responseKey, password) => {
+		const errors = await executeOperation(source, { password });
+
+		expect(errors).toEqual([
+			{
+				message: 'Invalid user credentials.',
+				extensions: { code: 'INVALID_CREDENTIALS' },
+				locations: [{ line: 1, column: source.indexOf(responseKey) + 1 }],
+				path: [responseKey],
+			},
+		]);
+	});
+
+	test.each([
+		[
+			'list indexes',
+			'{ records { title } }',
+			{ password: 1 },
+			[
+				['records', 0, 'title'],
+				['records', 1, 'title'],
+				['records', 2, 'title'],
+			],
+		],
+		[
+			'a field reached through a fragment',
+			'{ records { ...F } } fragment F on Record { title }',
+			{ password: 'title' },
+			[
+				['records', 0, 'title'],
+				['records', 1, 'title'],
+				['records', 2, 'title'],
+			],
+		],
+		['null propagation', '{ holder { required } }', { password: 'holder' }, [['holder', 'required']]],
+		[
+			'a variable coercion failure',
+			'query ($password: Int) { count(limit: $password) }',
+			{ password: '8' },
+			[undefined],
+		],
+	])('keeps the metadata of %s that matches a sensitive variable', async (_label, source, variables, paths) => {
+		const metadata = (errors: Awaited<ReturnType<typeof executeOperation>>) =>
+			errors!.map(({ locations, path }) => ({ locations, path }));
+
+		const matching = metadata(await executeOperation(source, variables));
+		const control = metadata(await executeOperation(source, { password: 'unrelated-value' }));
+
+		expect(matching).toEqual(control);
+		expect(matching.map(({ path }) => path)).toEqual(paths);
+	});
+
+	test('keeps the variable coercion location', async () => {
+		const errors = await executeOperation('query ($password: Int) { count(limit: $password) }', { password: '8' });
+
+		expect(errors![0]!.locations).toEqual([{ line: 1, column: 8 }]);
+	});
+
+	test('still redacts the metadata in the log copy', async () => {
+		await executeOperation(LOGIN, { password: 'login' });
+
+		expect(loggedPayloads[0]!.err['path']).toEqual([`auth_${REDACT_TEXT}`]);
+	});
+
+	test('still redacts path and locations keys inside exception details', () => {
+		const inner = new InvalidPayloadException('Rejected.', { path: ['col', SECRET], locations: [{ line: 7 }] });
+		const error = new GraphQLError('wrapper', { originalError: inner, extensions: {}, path: ['col'] });
+
+		const [formatted] = formatGraphqlErrors([error], { password: SECRET, access_token: 7 }, NON_ADMIN);
+
+		expect(formatted!.path).toEqual(['col']);
+		expect(formatted!.extensions?.['path']).toEqual(['col', REDACT_TEXT]);
+		expect(formatted!.extensions?.['locations']).toEqual([{ line: REDACT_TEXT }]);
 	});
 });
 

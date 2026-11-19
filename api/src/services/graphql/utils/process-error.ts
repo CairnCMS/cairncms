@@ -89,12 +89,14 @@ function processError(
 ): GraphQLFormattedError {
 	logRedactedError(isBaseException ? 'debug' : 'error', snapshot, sensitiveValues);
 
-	const formatted = withLocation(
+	const formatted = redactSensitive(
 		isBaseException && innermost ? baseExceptionError(innermost) : internalError(snapshot, accountability),
-		snapshot
+		sensitiveValues
 	);
 
-	return redactSensitive(formatted, sensitiveValues) as unknown as GraphQLFormattedError;
+	// Attached after redaction, so a sensitive value that matches the caller's own field names or
+	// positions cannot alter them.
+	return withLocation(formatted, snapshot) as unknown as GraphQLFormattedError;
 }
 
 /** Redacts a GraphQL result's errors over one sensitive set for the whole result, or returns a single generic error if formatting fails. */
