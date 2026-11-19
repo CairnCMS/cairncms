@@ -133,3 +133,35 @@ describe('GraphQL auth errors match REST', () => {
 		expect(graphqlResponse.body).toEqual({ data: { auth_password_request: true } });
 	});
 });
+
+const UNKNOWN_EMAIL = 'nobody-here@example.com';
+const LOGIN = `mutation ($password: String!) { auth_login(email: "${UNKNOWN_EMAIL}", password: $password) { access_token } }`;
+
+const ALIASED_LOGIN = `mutation ($password: String!) { signin: auth_login(email: "${UNKNOWN_EMAIL}", password: $password) { access_token } }`;
+
+describe('GraphQL login error locations', () => {
+	for (const [label, query, responseKey, password] of [
+		['the line', LOGIN, 'auth_login', '1'],
+		['the column', LOGIN, 'auth_login', String(LOGIN.indexOf('auth_login') + 1)],
+		['part of the field name', LOGIN, 'auth_login', 'login'],
+		['the alias', ALIASED_LOGIN, 'signin', 'signin'],
+	] as const) {
+		test(`keep the location of a failed login when the password matches ${label}`, async ({ api }) => {
+			const restResponse = await post(api, '/auth/login', { email: UNKNOWN_EMAIL, password });
+
+			expect(restResponse.status).toBe(401);
+			expect(restResponse.body.errors).toHaveLength(1);
+
+			const [restError] = restResponse.body.errors;
+			expect(restError.extensions).toEqual({ code: 'INVALID_CREDENTIALS' });
+
+			const graphqlResponse = await post(api, '/graphql/system', { query, variables: { password } });
+
+			expect(graphqlResponse.status).toBe(200);
+
+			expect(graphqlResponse.body.errors).toEqual([
+				{ ...restError, locations: [{ line: 1, column: query.indexOf(responseKey) + 1 }], path: [responseKey] },
+			]);
+		});
+	}
+});
