@@ -10,24 +10,29 @@ import { redactSensitive } from './redact-sensitive.js';
 export function buildLogProjection(snapshot: Record<string, unknown>): Record<string, unknown> {
 	const serialized = stdSerializers.err(snapshot as unknown as Error) as unknown as Record<string, unknown>;
 
-	const projection: Record<string, unknown> = {};
+	// pino returns a snapshot without a string message unchanged, so its own keys can include
+	// __proto__. Object.fromEntries keeps that key as data instead of invoking the prototype setter.
+	const projection = new Map<string, unknown>();
 
 	for (const [key, val] of Object.entries(serialized)) {
 		if (key === 'cause' || key === 'originalError' || key === 'aggregateErrors') continue;
-		projection[key] = val;
+		projection.set(key, val);
 	}
 
-	if ('type' in snapshot) projection['type'] = snapshot['type'];
+	if ('type' in snapshot) projection.set('type', snapshot['type']);
 
 	const aggregateErrors = snapshot['aggregateErrors'];
 
 	if (Array.isArray(aggregateErrors)) {
-		projection['aggregateErrors'] = aggregateErrors.map((sub) =>
-			sub !== null && typeof sub === 'object' ? buildLogProjection(sub as Record<string, unknown>) : sub
+		projection.set(
+			'aggregateErrors',
+			aggregateErrors.map((sub) =>
+				sub !== null && typeof sub === 'object' ? buildLogProjection(sub as Record<string, unknown>) : sub
+			)
 		);
 	}
 
-	return projection;
+	return Object.fromEntries(projection);
 }
 
 /**

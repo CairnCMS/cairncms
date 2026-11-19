@@ -183,6 +183,33 @@ describe('error-handler redaction', () => {
 		expect(combined).not.toContain(SECRET);
 	});
 
+	test.each([
+		['root', (details: Record<string, unknown>) => details],
+		['nested', (details: Record<string, unknown>) => ({ detail: details })],
+	])('redacts a secret beneath an own __proto__ key in %s details', async (_label, place) => {
+		const details = JSON.parse(`{"__proto__":{"password":"${SECRET}"},"echo":"${SECRET}"}`);
+		const res = await runHandler(new InvalidPayloadException(`bad ${SECRET}`, place(details)));
+
+		expect(res.statusCode).toBe(400);
+		expect(res.body.errors[0].message).toBe(`bad ${REDACT_TEXT}`);
+		expect(JSON.stringify(res.body)).not.toContain(SECRET);
+		expect(JSON.stringify(loggedPayloads)).not.toContain(SECRET);
+	});
+
+	test('redacts a secret beneath an own __proto__ key in the request.error filter output', async () => {
+		onRequestError(() => [
+			JSON.parse(`{"message":"leaked ${SECRET}","extensions":{"code":"X","__proto__":{"password":"${SECRET}"}}}`),
+		]);
+
+		const res = await runHandler(new InvalidPayloadException('bad'));
+
+		expect(res.body.errors[0].message).toBe(`leaked ${REDACT_TEXT}`);
+
+		expect(Object.getOwnPropertyDescriptor(res.body.errors[0].extensions, '__proto__')?.value).toEqual({
+			password: REDACT_TEXT,
+		});
+	});
+
 	test('scrubs the bare request token from the response', async () => {
 		const res = await runHandler(new InvalidPayloadException(`token was ${SECRET}`), makeReq({ token: SECRET }));
 

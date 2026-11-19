@@ -104,6 +104,27 @@ describe('formatGraphqlErrors', () => {
 		expect(loggedPayloads[0]!.err['message']).toBe(`context ${REDACT_TEXT}`);
 	});
 
+	test('redacts a secret beneath an own __proto__ key in exception details for a non-admin', () => {
+		const details = JSON.parse(`{"__proto__":{"password":"${SECRET}"},"echo":"${SECRET}"}`);
+		const inner = new InvalidPayloadException(`bad ${SECRET}`, details);
+
+		const [formatted] = formatGraphqlErrors(
+			[new GraphQLError('wrapper', { originalError: inner, extensions: {} })],
+			undefined,
+			NON_ADMIN
+		);
+
+		expect(formatted!.message).toBe(`bad ${REDACT_TEXT}`);
+		expect(formatted!.extensions?.['echo']).toBe(REDACT_TEXT);
+
+		expect(Object.getOwnPropertyDescriptor(formatted!.extensions, '__proto__')?.value).toEqual({
+			password: REDACT_TEXT,
+		});
+
+		expect(JSON.stringify(formatted)).not.toContain(SECRET);
+		expect(JSON.stringify(loggedPayloads)).not.toContain(SECRET);
+	});
+
 	test('logs each unexpected error at error level', () => {
 		formatGraphqlErrors([new GraphQLError('a'), new GraphQLError('b')], undefined, null);
 
@@ -472,7 +493,7 @@ describe('errors that cannot be inspected completely', () => {
 		expect(JSON.stringify(loggedPayloads)).not.toContain(SECRET);
 	});
 
-	test('redacts a secret that a nested toJSON deletes from its sibling during materialization', () => {
+	test('redacts a secret in a sibling field that a nested toJSON deletes during materialization', () => {
 		const details: Record<string, unknown> = {
 			nested: {
 				toJSON() {

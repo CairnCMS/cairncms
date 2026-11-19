@@ -49,33 +49,39 @@ function snapshotErrorObject(error: object, walk: Walk): Record<string, unknown>
 			if (val !== undefined) fields.set(key, val);
 		}
 
-		const result: Record<string, unknown> = {};
+		// Object.fromEntries defines own data properties, so an own __proto__ key stays data
+		// instead of invoking the prototype setter.
+		const result = new Map<string, unknown>();
 
 		const errorConstructor = fields.has('constructor')
 			? fields.get('constructor')
 			: (error as { constructor?: unknown }).constructor;
 
 		if (typeof errorConstructor === 'function') {
-			result['type'] = errorConstructor.name;
+			result.set('type', errorConstructor.name);
 		} else if (fields.has('name')) {
-			result['type'] = fields.get('name');
+			result.set('type', fields.get('name'));
 		} else {
-			result['type'] = (error as { name?: string }).name;
+			result.set('type', (error as { name?: string }).name);
 		}
 
 		for (const [key, val] of fields) {
 			if (key === 'errors' && Array.isArray(val)) {
-				result['aggregateErrors'] = readItems(val).map((item) => toPlain(item, child(walk, 'aggregateErrors')));
+				result.set(
+					'aggregateErrors',
+					readItems(val).map((item) => toPlain(item, child(walk, 'aggregateErrors')))
+				);
+
 				continue;
 			}
 
-			if (key in result) continue;
+			if (result.has(key)) continue;
 
 			const plain = toPlain(val, child(walk, key));
-			if (plain !== undefined) result[key] = plain;
+			if (plain !== undefined) result.set(key, plain);
 		}
 
-		return result;
+		return Object.fromEntries(result);
 	} finally {
 		walk.seen.delete(error);
 	}
@@ -116,8 +122,9 @@ function toPlain(value: unknown, walk: Walk, fromToJSON = false): unknown {
 			if (serialized !== object) return toPlain(serialized, child(walk), true);
 		}
 
-		// Read every value before materializing any, so a nested toJSON or getter cannot change a
-		// sibling before it is captured.
+		// Read every value before materializing any, so a nested toJSON or getter cannot replace a
+		// sibling before it is read. An object-valued sibling is read as a reference, so its
+		// contents can still change before it is materialized.
 		if (Array.isArray(object)) {
 			return readItems(object).map((item) => {
 				const plain = toPlain(item, child(walk));
@@ -130,14 +137,15 @@ function toPlain(value: unknown, walk: Walk, fromToJSON = false): unknown {
 			(key) => [key, !fromToJSON && key === 'toJSON' ? toJSON : (object as Record<string, unknown>)[key]] as const
 		);
 
-		const result: Record<string, unknown> = {};
+		// Object.fromEntries keeps an own __proto__ key as data.
+		const result = new Map<string, unknown>();
 
 		for (const [key, val] of entries) {
 			const plain = toPlain(val, child(walk, key));
-			if (plain !== undefined) result[key] = plain;
+			if (plain !== undefined) result.set(key, plain);
 		}
 
-		return result;
+		return Object.fromEntries(result);
 	} finally {
 		walk.seen.delete(object);
 	}

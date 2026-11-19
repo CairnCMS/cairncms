@@ -1,5 +1,13 @@
+import { ServiceUnavailableException } from '@cairncms/exceptions';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { generators, Issuer } from 'openid-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { REDACT_TEXT } from '../../constants.js';
 import emitter from '../../emitter.js';
+import { redactLogPayload } from '../../utils/error-log.js';
+import { snapshotError } from '../../utils/error-snapshot.js';
+import { collectSensitiveValuesExhaustive } from '../../utils/redact-sensitive.js';
 import { OAuth2AuthDriver } from './oauth2.js';
 
 vi.mock('../../emitter.js', () => ({
@@ -82,5 +90,60 @@ describe('OAuth2 auth driver auth_data persistence', () => {
 		await driver.getUserID(payload);
 
 		expect(updateOne).toHaveBeenCalledWith('user-1', { auth_data: 'hook-modified' });
+	});
+});
+
+describe('OAuth2 auth driver provider error details', () => {
+	const SECRET = 'provider-secret-value-1234567890';
+
+	async function rejectWithProviderError(description: string): Promise<unknown> {
+		const server: Server = createServer((_req, res) => {
+			res.writeHead(500, { 'content-type': 'application/json' });
+			res.end(`{"error":"server_error","error_description":${description}}`);
+		});
+
+		await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+		try {
+			const { port } = server.address() as AddressInfo;
+			const { driver } = createDriver(undefined);
+
+			const issuer = new Issuer({
+				issuer: 'test',
+				authorization_endpoint: `http://127.0.0.1:${port}/authorize`,
+				token_endpoint: `http://127.0.0.1:${port}/token`,
+				userinfo_endpoint: `http://127.0.0.1:${port}/userinfo`,
+			});
+
+			driver.client = new issuer.Client({
+				client_id: 'client',
+				client_secret: 'client-secret',
+				redirect_uris: [driver.redirectUrl],
+				response_types: ['code'],
+			});
+
+			const codeVerifier = generators.codeVerifier();
+
+			return await driver
+				.getUserID({ code: 'CODE', codeVerifier, state: generators.codeChallenge(codeVerifier) })
+				.catch((error: unknown) => error);
+		} finally {
+			await new Promise<void>((resolve) => server.close(() => resolve()));
+		}
+	}
+
+	it.each([
+		['without', `{"password":"${SECRET}","echo":"${SECRET}"}`],
+		['with', `{"__proto__":{"label":"ordinary"},"password":"${SECRET}","echo":"${SECRET}"}`],
+	])('redacts a provider error description %s an own __proto__ key in the log payload', async (_label, description) => {
+		const error = await rejectWithProviderError(description);
+
+		expect(error).toBeInstanceOf(ServiceUnavailableException);
+
+		const snapshot = snapshotError(error);
+		const payload = redactLogPayload(snapshot, collectSensitiveValuesExhaustive(snapshot));
+
+		expect(JSON.stringify(payload)).not.toContain(SECRET);
+		expect((payload.err['extensions'] as any).message.echo).toBe(REDACT_TEXT);
 	});
 });

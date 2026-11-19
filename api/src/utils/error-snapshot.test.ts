@@ -156,7 +156,7 @@ describe('snapshotError', () => {
 		expect(snap.extensions.detail).toEqual({ password: 'kept-secret' });
 	});
 
-	test('captures every field before a nested toJSON can change a sibling', () => {
+	test('reads every field before a nested toJSON can replace a sibling', () => {
 		const details: Record<string, unknown> = {
 			nested: {
 				toJSON() {
@@ -171,7 +171,7 @@ describe('snapshotError', () => {
 		expect(snap.extensions.details).toEqual({ nested: {}, password: 'kept-secret' });
 	});
 
-	test('captures every array item before a nested toJSON can change a later one', () => {
+	test('reads every array item before a nested toJSON can replace a later one', () => {
 		const list: unknown[] = [];
 
 		list.push({
@@ -186,7 +186,7 @@ describe('snapshotError', () => {
 		expect(toPlainData({ list })).toEqual({ list: [{}, 'kept'] });
 	});
 
-	test('captures every aggregate error before a nested toJSON can change a later one', () => {
+	test('reads every aggregate error before a nested toJSON can replace a later one', () => {
 		const aggregate = new AggregateError([], 'many');
 
 		aggregate.errors = [
@@ -311,6 +311,44 @@ describe('snapshotError', () => {
 		expect(reads).toBe(1);
 	});
 
+	test('keeps an own __proto__ key in details as data without changing any prototype', () => {
+		const details = JSON.parse('{"__proto__":{"password":"kept-secret"},"label":"x"}');
+		const snap = snapshotError(Object.assign(new Error('boom'), { extensions: details })) as any;
+
+		expect(Object.getPrototypeOf(snap.extensions)).toBe(Object.prototype);
+		expect(Object.keys(snap.extensions)).toEqual(['__proto__', 'label']);
+		expect(Object.getOwnPropertyDescriptor(snap.extensions, '__proto__')?.value).toEqual({ password: 'kept-secret' });
+		expect(Object.getPrototypeOf(details)).toBe(Object.prototype);
+		expect(Object.keys(details)).toEqual(['__proto__', 'label']);
+		expect('password' in {}).toBe(false);
+	});
+
+	test('keeps an own __proto__ property of an error as data', () => {
+		const error = new Error('boom');
+
+		Object.defineProperty(error, '__proto__', {
+			value: { password: 'kept-secret' },
+			enumerable: true,
+			configurable: true,
+		});
+
+		const snap = snapshotError(error);
+
+		expect(Object.getPrototypeOf(snap)).toBe(Object.prototype);
+		expect(snap['type']).toBe('Error');
+		expect(Object.getOwnPropertyDescriptor(snap, '__proto__')?.value).toEqual({ password: 'kept-secret' });
+	});
+
+	test('keeps own error properties named like inherited members', () => {
+		const error = Object.assign(new Error('boom'), { constructor: 'custom', toString: 'shown', valueOf: 'kept' });
+		const snap = snapshotError(error);
+
+		expect(snap['type']).toBe('Error');
+		expect(Object.getOwnPropertyDescriptor(snap, 'constructor')?.value).toBe('custom');
+		expect(Object.getOwnPropertyDescriptor(snap, 'toString')?.value).toBe('shown');
+		expect(Object.getOwnPropertyDescriptor(snap, 'valueOf')?.value).toBe('kept');
+	});
+
 	test('wraps a non-object thrown value', () => {
 		expect(snapshotError('boom string')).toEqual({ type: 'string', message: 'boom string' });
 		expect(snapshotError(42)).toEqual({ type: 'number', message: '42' });
@@ -334,6 +372,15 @@ describe('toPlainData', () => {
 		expect(reads).toBe(1);
 		source.nested.keep = 'mutated';
 		expect(plain.nested.keep).toBe('x');
+	});
+
+	test('keeps a nested own __proto__ key as data', () => {
+		const source = JSON.parse('{"errors":[{"extensions":{"__proto__":{"password":"kept-secret"}}}]}');
+		const plain = toPlainData(source) as any;
+		const extensions = plain.errors[0].extensions;
+
+		expect(Object.getPrototypeOf(extensions)).toBe(Object.prototype);
+		expect(Object.getOwnPropertyDescriptor(extensions, '__proto__')?.value).toEqual({ password: 'kept-secret' });
 	});
 
 	test('materializes an array of response-shaped objects unchanged', () => {
