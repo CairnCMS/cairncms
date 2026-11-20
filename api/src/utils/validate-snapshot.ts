@@ -1,7 +1,7 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import Joi from 'joi';
 import { isPlainObject } from 'lodash-es';
 import { getDatabaseClient } from '../database/index.js';
-import { InvalidPayloadException } from '../exceptions/invalid-payload.js';
 import type { PortableSnapshot, Snapshot } from '../types/index.js';
 import { DatabaseClients } from '../types/index.js';
 import { version as currentRelease } from './package.js';

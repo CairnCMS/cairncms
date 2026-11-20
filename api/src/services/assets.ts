@@ -1,3 +1,4 @@
+import { ForbiddenException, ServiceUnavailableException } from '@cairncms/exceptions';
 import type { Range, Stat } from '@cairncms/storage';
 import type { Accountability } from '@cairncms/types';
 import type { Knex } from 'knex';
@@ -11,10 +12,8 @@ import validateUUID from 'uuid-validate';
 import { SUPPORTED_IMAGE_TRANSFORM_FORMATS } from '../constants.js';
 import getDatabase from '../database/index.js';
 import env from '../env.js';
-import { ForbiddenException } from '../exceptions/forbidden.js';
 import { IllegalAssetTransformation } from '../exceptions/illegal-asset-transformation.js';
 import { RangeNotSatisfiableException } from '../exceptions/range-not-satisfiable.js';
-import { ServiceUnavailableException } from '../exceptions/service-unavailable.js';
 import logger from '../logger.js';
 import { getStorage } from '../storage/index.js';
 import type { AbstractServiceOptions, File, Transformation, TransformationSet } from '../types/index.js';

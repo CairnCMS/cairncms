@@ -1,5 +1,5 @@
+import { InvalidQueryException } from '@cairncms/exceptions';
 import type { Relation, SchemaOverview } from '@cairncms/types';
-import { InvalidQueryException } from '../exceptions/index.js';
 import { getRelationInfo } from './get-relation-info.js';
 
 export type AliasMap = { [key: string]: { alias: string; collection: string } };

@@ -1,6 +1,6 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import type { Knex } from 'knex';
 import { WRITE_PROTECTED_FIELDS } from '../constants.js';
-import { InvalidPayloadException } from '../exceptions/index.js';
 import type { PrimaryKey } from '../types/index.js';
 
 export async function assertWriteProtectedFieldsUnchanged(

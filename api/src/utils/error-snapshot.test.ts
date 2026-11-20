@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { snapshotError, toPlainData } from './error-snapshot.js';
+import { MAX_SNAPSHOT_DEPTH, snapshotError, toPlainData } from './error-snapshot.js';
 
 describe('snapshotError', () => {
 	test('captures a native error type, message, and stack', () => {
@@ -112,29 +112,170 @@ describe('snapshotError', () => {
 		expect(snap.extensions.self).toBe('[Circular]');
 	});
 
-	test('caps depth on deeply nested structures without throwing', () => {
+	test('throws on content deeper than the snapshot depth', () => {
 		let deep: Record<string, unknown> = { v: 'bottom' };
 		for (let i = 0; i < 200; i++) deep = { next: deep };
 		const error = Object.assign(new Error('boom'), { extensions: deep });
-		expect(() => snapshotError(error)).not.toThrow();
-		expect(JSON.stringify(snapshotError(error))).toContain('[Max depth exceeded]');
+		expect(() => snapshotError(error)).toThrow('could not be inspected completely');
+		expect(() => toPlainData(deep)).toThrow('could not be inspected completely');
 	});
 
-	test('guards a self-returning toJSON with a [Circular] marker instead of overflowing the stack', () => {
-		const evil: { toJSON: () => unknown } = { toJSON: () => evil };
+	test('materializes content within the snapshot depth', () => {
+		let deep: Record<string, unknown> = { v: 'bottom' };
+		for (let i = 0; i < MAX_SNAPSHOT_DEPTH - 2; i++) deep = { next: deep };
+		const error = Object.assign(new Error('boom'), { extensions: deep });
+		expect(JSON.stringify(snapshotError(error))).toContain('bottom');
+	});
+
+	test('walks a self-returning toJSON through its own fields, as JSON.stringify does', () => {
+		const evil: { toJSON: () => unknown; label: string } = { toJSON: () => evil, label: 'kept' };
 		const error = Object.assign(new Error('boom'), { extensions: { evil } });
-		expect(() => snapshotError(error)).not.toThrow();
-		expect((snapshotError(error) as any).extensions.evil).toBe('[Circular]');
+		expect((snapshotError(error) as any).extensions.evil).toEqual({ label: 'kept' });
+		expect(JSON.parse(JSON.stringify(evil))).toEqual({ label: 'kept' });
 	});
 
-	test('caps a toJSON chain of fresh objects instead of overflowing the stack', () => {
+	test('reads a self-returning toJSON getter once and keeps the fields it could hide', () => {
+		let reads = 0;
+		const detail: Record<string, unknown> = { password: 'kept-secret' };
+
+		Object.defineProperty(detail, 'toJSON', {
+			enumerable: true,
+			get() {
+				reads++;
+				if (reads > 1) delete detail['password'];
+
+				return function (this: unknown) {
+					return this;
+				};
+			},
+		});
+
+		const snap = snapshotError(Object.assign(new Error('boom'), { extensions: { detail } })) as any;
+
+		expect(reads).toBe(1);
+		expect(snap.extensions.detail).toEqual({ password: 'kept-secret' });
+	});
+
+	test('reads every field before a nested toJSON can replace a sibling', () => {
+		const details: Record<string, unknown> = {
+			nested: {
+				toJSON() {
+					delete details['password'];
+					return {};
+				},
+			},
+			password: 'kept-secret',
+		};
+
+		const snap = snapshotError(Object.assign(new Error('boom'), { extensions: { details } })) as any;
+		expect(snap.extensions.details).toEqual({ nested: {}, password: 'kept-secret' });
+	});
+
+	test('reads every array item before a nested toJSON can replace a later one', () => {
+		const list: unknown[] = [];
+
+		list.push({
+			toJSON() {
+				list[1] = 'changed';
+				return {};
+			},
+		});
+
+		list.push('kept');
+
+		expect(toPlainData({ list })).toEqual({ list: [{}, 'kept'] });
+	});
+
+	test('reads every aggregate error before a nested toJSON can replace a later one', () => {
+		const aggregate = new AggregateError([], 'many');
+
+		aggregate.errors = [
+			{
+				toJSON() {
+					aggregate.errors[1] = 'changed';
+					return {};
+				},
+			},
+			'kept',
+		];
+
+		expect((snapshotError(aggregate) as any).aggregateErrors).toEqual([{}, 'kept']);
+	});
+
+	test('reads array items by index, not through a custom iterator', () => {
+		const values: unknown[] = [{ password: 'kept' }];
+
+		values[Symbol.iterator] = function* () {
+			yield {};
+		};
+
+		expect(toPlainData({ values })).toEqual({ values: [{ password: 'kept' }] });
+		expect(JSON.parse(JSON.stringify({ values }))).toEqual({ values: [{ password: 'kept' }] });
+	});
+
+	test('reads aggregate errors by index, not through a custom iterator', () => {
+		const aggregate = new AggregateError([], 'many');
+		const errors: unknown[] = [{ password: 'kept' }];
+
+		errors[Symbol.iterator] = function* () {
+			yield {};
+		};
+
+		aggregate.errors = errors;
+
+		expect((snapshotError(aggregate) as any).aggregateErrors).toEqual([{ password: 'kept' }]);
+	});
+
+	test('keeps array holes as null, as JSON does', () => {
+		const values: unknown[] = [];
+		values[0] = 1;
+		values[2] = 3;
+
+		expect(toPlainData({ values })).toEqual({ values: [1, null, 3] });
+		expect(JSON.parse(JSON.stringify({ values }))).toEqual({ values: [1, null, 3] });
+	});
+
+	test('calls toJSON once per position and never on its result, as JSON.stringify does', () => {
 		const chain = (n: number): { toJSON: () => unknown } => ({
 			toJSON: () => (n <= 0 ? { done: true } : chain(n - 1)),
 		});
 
 		const error = Object.assign(new Error('boom'), { extensions: { chain: chain(500) } });
-		expect(() => snapshotError(error)).not.toThrow();
-		expect(JSON.stringify(snapshotError(error))).toContain('[Max depth exceeded]');
+		expect((snapshotError(error) as any).extensions.chain).toEqual({});
+		expect(JSON.parse(JSON.stringify(chain(500)))).toEqual({});
+	});
+
+	test('calls toJSON on the values inside a toJSON result', () => {
+		const date = new Date('2026-01-02T03:04:05.000Z');
+		const wrapper = { toJSON: () => ({ when: date }) };
+		expect(toPlainData({ wrapper })).toEqual({ wrapper: { when: '2026-01-02T03:04:05.000Z' } });
+	});
+
+	test('throws on a back-reference beneath a sensitive key', () => {
+		const details: Record<string, unknown> = { value: 'shown' };
+		details['credentials'] = details;
+		const error = Object.assign(new Error('boom'), { extensions: { details } });
+		expect(() => snapshotError(error)).toThrow('could not be inspected completely');
+	});
+
+	test('throws on a self-returning toJSON beneath a sensitive key', () => {
+		const evil: { toJSON: () => unknown } = { toJSON: () => evil };
+		evil.toJSON = () => ({ self: evil });
+		const error = Object.assign(new Error('boom'), { extensions: { credentials: evil } });
+		expect(() => snapshotError(error)).toThrow('could not be inspected completely');
+	});
+
+	test('keeps the cycle marker for a back-reference outside sensitive keys', () => {
+		const ext: Record<string, unknown> = { password: 'collected' };
+		ext['self'] = ext;
+		const snap = snapshotError(Object.assign(new Error('boom'), { extensions: ext })) as any;
+		expect(snap.extensions).toEqual({ password: 'collected', self: '[Circular]' });
+	});
+
+	test('throws on a back-reference to an error beneath a sensitive key', () => {
+		const error: Error & { extensions?: unknown } = new Error('boom');
+		error.extensions = { token: { owner: error } };
+		expect(() => snapshotError(error)).toThrow('could not be inspected completely');
 	});
 
 	test('reads an accessor-backed toJSON exactly once', () => {
@@ -170,6 +311,44 @@ describe('snapshotError', () => {
 		expect(reads).toBe(1);
 	});
 
+	test('keeps an own __proto__ key in details as data without changing any prototype', () => {
+		const details = JSON.parse('{"__proto__":{"password":"kept-secret"},"label":"x"}');
+		const snap = snapshotError(Object.assign(new Error('boom'), { extensions: details })) as any;
+
+		expect(Object.getPrototypeOf(snap.extensions)).toBe(Object.prototype);
+		expect(Object.keys(snap.extensions)).toEqual(['__proto__', 'label']);
+		expect(Object.getOwnPropertyDescriptor(snap.extensions, '__proto__')?.value).toEqual({ password: 'kept-secret' });
+		expect(Object.getPrototypeOf(details)).toBe(Object.prototype);
+		expect(Object.keys(details)).toEqual(['__proto__', 'label']);
+		expect('password' in {}).toBe(false);
+	});
+
+	test('keeps an own __proto__ property of an error as data', () => {
+		const error = new Error('boom');
+
+		Object.defineProperty(error, '__proto__', {
+			value: { password: 'kept-secret' },
+			enumerable: true,
+			configurable: true,
+		});
+
+		const snap = snapshotError(error);
+
+		expect(Object.getPrototypeOf(snap)).toBe(Object.prototype);
+		expect(snap['type']).toBe('Error');
+		expect(Object.getOwnPropertyDescriptor(snap, '__proto__')?.value).toEqual({ password: 'kept-secret' });
+	});
+
+	test('keeps own error properties named like inherited members', () => {
+		const error = Object.assign(new Error('boom'), { constructor: 'custom', toString: 'shown', valueOf: 'kept' });
+		const snap = snapshotError(error);
+
+		expect(snap['type']).toBe('Error');
+		expect(Object.getOwnPropertyDescriptor(snap, 'constructor')?.value).toBe('custom');
+		expect(Object.getOwnPropertyDescriptor(snap, 'toString')?.value).toBe('shown');
+		expect(Object.getOwnPropertyDescriptor(snap, 'valueOf')?.value).toBe('kept');
+	});
+
 	test('wraps a non-object thrown value', () => {
 		expect(snapshotError('boom string')).toEqual({ type: 'string', message: 'boom string' });
 		expect(snapshotError(42)).toEqual({ type: 'number', message: '42' });
@@ -193,6 +372,15 @@ describe('toPlainData', () => {
 		expect(reads).toBe(1);
 		source.nested.keep = 'mutated';
 		expect(plain.nested.keep).toBe('x');
+	});
+
+	test('keeps a nested own __proto__ key as data', () => {
+		const source = JSON.parse('{"errors":[{"extensions":{"__proto__":{"password":"kept-secret"}}}]}');
+		const plain = toPlainData(source) as any;
+		const extensions = plain.errors[0].extensions;
+
+		expect(Object.getPrototypeOf(extensions)).toBe(Object.prototype);
+		expect(Object.getOwnPropertyDescriptor(extensions, '__proto__')?.value).toEqual({ password: 'kept-secret' });
 	});
 
 	test('materializes an array of response-shaped objects unchanged', () => {

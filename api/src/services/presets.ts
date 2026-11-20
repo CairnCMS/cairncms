@@ -1,4 +1,4 @@
-import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
+import { ForbiddenException, InvalidPayloadException } from '@cairncms/exceptions';
 import type { AbstractServiceOptions, Item, MutationOptions, PrimaryKey } from '../types/index.js';
 import { ItemsService } from './items.js';
 

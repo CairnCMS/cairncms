@@ -73,11 +73,11 @@
 <script setup lang="ts">
 import { useClipboard } from '@/composables/use-clipboard';
 import { formatFieldFunction } from '@/utils/format-field-function';
+import { validationErrorMessage } from '@/utils/validation-error-message';
 import { ValidationError } from '@cairncms/types';
 import { parseJSON } from '@cairncms/utils';
 import { isEqual } from 'lodash';
 import { computed, ref, watch } from 'vue';
-import { useI18n } from 'vue-i18n';
 import FormFieldInterface from './form-field-interface.vue';
 import FormFieldLabel from './form-field-label.vue';
 import FormFieldMenu from './form-field-menu.vue';
@@ -119,8 +119,6 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits(['toggle-batch', 'toggle-raw', 'unset', 'update:modelValue', 'setFieldValue']);
 
-const { t } = useI18n();
-
 const isDisabled = computed(() => {
 	if (props.disabled) return true;
 	if (props.field?.meta?.readonly === true) return true;
@@ -135,11 +133,7 @@ const { showRaw, copyRaw, pasteRaw, onRawValueSubmit } = useRaw();
 const validationMessage = computed(() => {
 	if (!props.validationError) return null;
 
-	if (props.validationError.code === 'RECORD_NOT_UNIQUE') {
-		return t('validationError.unique');
-	} else {
-		return t(`validationError.${props.validationError.type}`, props.validationError);
-	}
+	return validationErrorMessage(props.validationError);
 });
 
 const validationPrefix = computed(() => {

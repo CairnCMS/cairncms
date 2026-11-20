@@ -1,10 +1,10 @@
+import { ForbiddenException } from '@cairncms/exceptions';
 import type { Diff } from 'deep-diff';
 import knex from 'knex';
 import type { Knex } from 'knex';
 import { createTracker, MockClient, Tracker } from 'knex-mock-client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SchemaService } from './schema.js';
-import { ForbiddenException } from '../exceptions/forbidden.js';
 import type { Collection } from '../types/collection.js';
 import type { PortableSnapshot, Snapshot, SnapshotDiffWithHash } from '../types/snapshot.js';
 import { applyDiff } from '../utils/apply-diff.js';

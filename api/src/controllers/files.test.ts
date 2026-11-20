@@ -1,9 +1,9 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import type { Request, Response } from 'express';
 import FormData from 'form-data';
 import { PassThrough } from 'stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import env from '../env.js';
-import { InvalidPayloadException } from '../exceptions/invalid-payload.js';
 import { FilesService } from '../services/files.js';
 import { multipartHandler } from './files.js';
 

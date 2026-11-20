@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import { merge } from 'lodash';
 import { createI18n } from 'vue-i18n';
 import { AVAILABLE_LANGUAGES } from '@cairncms/constants';
+import { VALUE_FREE_TYPES } from '@/utils/validation-error-message';
 
 const locales = Object.keys(AVAILABLE_LANGUAGES).sort();
 const consoleErrorSpy = vi.spyOn(console, 'error');
@@ -44,5 +45,13 @@ describe.each(locales)('Locale %s', async (locale) => {
 	test.each(translationKeys)('%s', (key) => {
 		i18n.global.t(key);
 		expect(consoleErrorSpy).not.toBeCalled();
+	});
+
+	test('has no placeholder in a validation message the app can select', () => {
+		const valueFreeKeys = new Set([...VALUE_FREE_TYPES, 'unique'].map((type) => `validationError.${type}`));
+
+		const selectable = translationKeys.filter((key) => valueFreeKeys.has(key) || key.startsWith('validation_failure.'));
+
+		for (const key of selectable) expect(messages[key], key).not.toContain('{');
 	});
 });

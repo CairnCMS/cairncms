@@ -1,3 +1,4 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import type { SchemaOverview } from '@cairncms/types';
 import { promises as fs } from 'fs';
 import os from 'os';
@@ -9,7 +10,6 @@ import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
 import { ConfigReadFailedException } from '../../../exceptions/config-read-failed.js';
 import { ConfigStateChangedException } from '../../../exceptions/config-state-changed.js';
 import { DestructiveChangesRequiredException } from '../../../exceptions/destructive-changes-required.js';
-import { InvalidPayloadException } from '../../../exceptions/index.js';
 import { RecordNotUniqueException } from '../../../exceptions/database/record-not-unique.js';
 import { TranslationsService } from '../../../services/translations.js';
 import type { CairnConfig, ConfigApplySecurityContext, ConfigTranslationsAuthored } from '../../../types/config.js';

@@ -1,8 +1,8 @@
+import { ForbiddenException, InvalidCredentialsException, InvalidPayloadException } from '@cairncms/exceptions';
 import type { SchemaOverview } from '@cairncms/types';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { clearSystemCache } from '../cache.js';
 import { systemSchema } from '../__utils__/schemas.js';
-import { ForbiddenException, InvalidCredentialsException, InvalidPayloadException } from '../exceptions/index.js';
 import { ItemsService } from './items.js';
 import { PermissionsService } from './permissions.js';
 

@@ -1,3 +1,4 @@
+import { InvalidCredentialsException } from '@cairncms/exceptions';
 import type { Accountability, SchemaOverview } from '@cairncms/types';
 import { Action } from '@cairncms/constants';
 import jwt from 'jsonwebtoken';
@@ -9,7 +10,7 @@ import { DEFAULT_AUTH_PROVIDER } from '../constants.js';
 import getDatabase from '../database/index.js';
 import emitter from '../emitter.js';
 import env from '../env.js';
-import { InvalidCredentialsException, InvalidOTPException } from '../exceptions/index.js';
+import { InvalidOTPException } from '../exceptions/index.js';
 import { createRateLimiter } from '../rate-limiter.js';
 import type { AbstractServiceOptions, CairnTokenPayload, LoginResult, Session, User } from '../types/index.js';
 import { getMilliseconds } from '../utils/get-milliseconds.js';

@@ -1,3 +1,4 @@
+import { ForbiddenException, InvalidPayloadException } from '@cairncms/exceptions';
 import knex from 'knex';
 import { createTracker, MockClient, type Tracker } from 'knex-mock-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -26,7 +27,7 @@ vi.mock('./extension-settings-store.js', () => ({
 	readCollectionSettings: store.readCollectionSettings,
 }));
 
-import { ForbiddenException, InvalidConfigException, InvalidPayloadException } from '../exceptions/index.js';
+import { InvalidConfigException } from '../exceptions/index.js';
 import { encryptSecret, SECRET_MASK } from '../utils/encrypt-secret.js';
 import { ExtensionSettingsService, type ConfigSettingWrite } from './extension-settings.js';
 

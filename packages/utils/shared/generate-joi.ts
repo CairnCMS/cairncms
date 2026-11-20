@@ -69,6 +69,39 @@ const defaults: JoiOptions = {
 
 const EMPTY_IN_SENTINEL = Symbol('cairncms-empty-in');
 
+const TAGGED_OPERATORS: readonly string[] = [
+	'_eq',
+	'_neq',
+	'_in',
+	'_nin',
+	'_null',
+	'_nnull',
+	'_empty',
+	'_nempty',
+	'_contains',
+	'_icontains',
+	'_ncontains',
+	'_starts_with',
+	'_nstarts_with',
+	'_ends_with',
+	'_nends_with',
+	'_regex',
+	'_gt',
+	'_gte',
+	'_lt',
+	'_lte',
+	'_between',
+	'_nbetween',
+];
+
+/** Adds the filter operator to every error the schema reports, as `validationOperator` in the error context. */
+function withValidationOperator(schema: AnySchema, operator: string): AnySchema {
+	return schema.error((errors) => {
+		for (const error of errors) error.local.validationOperator = operator;
+		return errors;
+	});
+}
+
 /**
  * Generate a Joi schema from a filter object.
  *
@@ -172,7 +205,7 @@ export function generateJoi(filter: FieldFilter | null, options?: JoiOptions): A
 				schema[key] = Joi.any().equal(true);
 			} else {
 				schema[key] = getStringSchema().pattern(new RegExp(`^${escapeRegExp(compareValue)}.*`), {
-					name: 'starts_with',
+					name: 'nstarts_with',
 					invert: true,
 				});
 			}
@@ -193,7 +226,7 @@ export function generateJoi(filter: FieldFilter | null, options?: JoiOptions): A
 				schema[key] = Joi.any().equal(true);
 			} else {
 				schema[key] = getStringSchema().pattern(new RegExp(`.*${escapeRegExp(compareValue)}$`), {
-					name: 'ends_with',
+					name: 'nends_with',
 					invert: true,
 				});
 			}
@@ -306,6 +339,12 @@ export function generateJoi(filter: FieldFilter | null, options?: JoiOptions): A
 
 				schema[key] = getStringSchema().regex(new RegExp(wrapped ? (compareValue as any).slice(1, -1) : compareValue));
 			}
+		}
+
+		const operatorSchema = schema[key];
+
+		if (operator !== undefined && operatorSchema && TAGGED_OPERATORS.includes(operator)) {
+			schema[key] = withValidationOperator(operatorSchema, operator);
 		}
 	}
 

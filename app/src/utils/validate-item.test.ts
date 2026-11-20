@@ -60,7 +60,7 @@ beforeEach(() => {
 });
 
 test('Required fields', () => {
-	let result = validateItem(
+	const result = validateItem(
 		{
 			id: 1,
 			name: 'test',
@@ -72,8 +72,10 @@ test('Required fields', () => {
 	);
 
 	expect(result.length).toEqual(0);
+});
 
-	result = validateItem(
+test('Reports an emptied required relational field as nnull', () => {
+	const result = validateItem(
 		{
 			id: 1,
 			name: 'test',
@@ -84,5 +86,5 @@ test('Required fields', () => {
 		true
 	);
 
-	expect(result.length).toEqual(1);
+	expect(result).toEqual([{ field: 'role', type: 'nnull', hidden: undefined, group: undefined }]);
 });

@@ -1,4 +1,3 @@
-import * as sharedExceptions from '@cairncms/exceptions';
 import type {
 	Accountability,
 	ActionHandler,
@@ -17,9 +16,9 @@ import { scheduleSynchronizedJob } from './utils/schedule.js';
 import getDatabase from './database/index.js';
 import emitter from './emitter.js';
 import env from './env.js';
-import * as exceptions from './exceptions/index.js';
+import { createExtensionExceptions } from './extensions/exceptions-context.js';
 import { EMPTY_EXTENSION_SETTINGS_READER } from './extensions/extension-settings-reader.js';
-import { BaseException } from '@cairncms/exceptions';
+import { BaseException, ForbiddenException } from '@cairncms/exceptions';
 import logger from './logger.js';
 import { getMessenger } from './messenger.js';
 import { ActivityService } from './services/activity.js';
@@ -267,7 +266,7 @@ class FlowManager {
 	): Promise<{ result: unknown; cacheEnabled: boolean }> {
 		if (!(id in this.webhookFlowHandlers)) {
 			logger.warn(`Couldn't find webhook or manual triggered flow with id "${id}"`);
-			throw new exceptions.ForbiddenException();
+			throw new ForbiddenException();
 		}
 
 		const handler = this.webhookFlowHandlers[id];
@@ -458,7 +457,7 @@ class FlowManager {
 		const schema = context['schema'] as SchemaOverview;
 
 		if (!accountability || !accountability.user) {
-			throw new exceptions.ForbiddenException();
+			throw new ForbiddenException();
 		}
 
 		const enabledCollections = (flow.options?.['collections'] as string[] | undefined) ?? [];
@@ -468,17 +467,17 @@ class FlowManager {
 
 		if (!targetCollection) {
 			logger.warn(`Manual trigger requires "collection" to be specified in the payload`);
-			throw new exceptions.ForbiddenException();
+			throw new ForbiddenException();
 		}
 
 		if (enabledCollections.length === 0) {
 			logger.warn(`There is no collections configured for this manual trigger`);
-			throw new exceptions.ForbiddenException();
+			throw new ForbiddenException();
 		}
 
 		if (!enabledCollections.includes(targetCollection)) {
 			logger.warn(`Specified collection must be one of: ${enabledCollections.join(', ')}.`);
-			throw new exceptions.ForbiddenException();
+			throw new ForbiddenException();
 		}
 
 		const authorizationService = new AuthorizationService({ accountability, knex: getDatabase(), schema });
@@ -491,10 +490,10 @@ class FlowManager {
 					(perm) => perm.collection === targetCollection && perm.action === 'read'
 				);
 
-				if (!hasCollectionRead) throw new exceptions.ForbiddenException();
+				if (!hasCollectionRead) throw new ForbiddenException();
 			}
 		} else {
-			throw new exceptions.ForbiddenException();
+			throw new ForbiddenException();
 		}
 
 		if (flow.options['async']) {
@@ -661,7 +660,7 @@ class FlowManager {
 		try {
 			const handlerContext = {
 				services,
-				exceptions: { ...exceptions, ...sharedExceptions },
+				exceptions: createExtensionExceptions(),
 				env,
 				database: getDatabase(),
 				logger,

@@ -1,0 +1,7 @@
+import { BaseException } from './base.js';
+
+export class ContentTooLargeException extends BaseException<Record<string, unknown>> {
+	constructor(message: string) {
+		super(message, 413, 'CONTENT_TOO_LARGE');
+	}
+}

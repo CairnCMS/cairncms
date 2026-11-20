@@ -1,6 +1,6 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import type { Knex } from 'knex';
 import { normalizeConfigKey } from '@cairncms/utils';
-import { InvalidPayloadException } from '../../exceptions/index.js';
 import { CONFIG_FILENAME_STEM_MAX_LENGTH } from '../config-contract.js';
 import { generateBoundedKey } from './generate-bounded-key.js';
 

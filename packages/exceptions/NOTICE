@@ -1,0 +1,51 @@
+CairnCMS shared exceptions
+
+This package (`@cairncms/exceptions`) is distributed under the GNU General Public
+License, version 3 only. See LICENSE for the full text.
+
+Three of its files are derived from two Directus packages, both published
+under the MIT License:
+
+- the Directus exceptions package
+  (https://github.com/directus/directus/tree/v10.0.0/packages/exceptions),
+  originally published as `@directus/exceptions`
+- the Directus validation package
+  (https://github.com/directus/directus/tree/ca3e7f521f8d6e4b302262431c70026ca9271c06/packages/validation
+  and
+  https://github.com/directus/directus/tree/0fac13ab53625acc975301f611b1779461706123/packages/validation),
+  originally published as `@directus/validation`
+
+The derived files are:
+
+- src/base.ts, built as dist/base.js and dist/base.d.ts, from the exceptions
+  package
+- src/failed-validation.ts, built as dist/failed-validation.js and
+  dist/failed-validation.d.ts, from the exceptions package and the validation
+  package's message builder
+- src/joi-to-error-extensions.ts, built as dist/joi-to-error-extensions.js and
+  dist/joi-to-error-extensions.d.ts, from the exceptions package and the
+  validation package's converter
+
+Those files remain available under the MIT License below. Subsequent
+modifications are attributed to the CairnCMS project and listed in the
+project's git history.
+
+--------------------------------------------------------------------------------
+
+MIT License
+
+Copyright 2023 Monospace, Inc.
+Copyright 2026 CairnCMS contributors (modifications)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit
+persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the
+Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

@@ -1,4 +1,4 @@
-import { ForbiddenException } from '../../exceptions/index.js';
+import { ForbiddenException } from '@cairncms/exceptions';
 import { MetaService } from '../../services/index.js';
 import { sanitizeQuery } from '../../utils/sanitize-query.js';
 import { validateQuery } from '../../utils/validate-query.js';

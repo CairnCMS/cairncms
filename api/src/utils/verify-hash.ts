@@ -1,5 +1,5 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import argon2 from 'argon2';
-import { InvalidPayloadException } from '../exceptions/index.js';
 
 export async function verifyHash(hash: string, stringToVerify: string): Promise<boolean> {
 	try {

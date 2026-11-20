@@ -89,6 +89,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 import { ExtensionManager } from '../extensions.js';
 import { getFlowManager } from '../flows.js';
+import { exceptionsContextExports, exceptionsContextKeys } from '../__utils__/exceptions-context-fixtures.js';
 import {
 	bundleExtension,
 	cleanupExtensionFixtures,
@@ -446,5 +447,43 @@ describe('full-authority extension settings threading', () => {
 
 		const operationContext = (globalThis as any).__faBundleOperationContext;
 		expect(await operationContext.extensionSettings.get('billing_key')).toBe('bundle-secret');
+	});
+});
+
+describe('full-authority extension exceptions context', () => {
+	const SUBJECT = 'cairncms-extension-exceptions';
+
+	it('gives a hook the exception classes of the API and the shared package', () => {
+		const instance = new ExtensionManager();
+
+		let captured: any;
+
+		(instance as any).registerHook((_register: any, context: any) => {
+			captured = context;
+		}, SUBJECT);
+
+		const replaced = exceptionsContextKeys.filter((key) => captured.exceptions[key] !== exceptionsContextExports[key]);
+
+		expect(Object.keys(captured.exceptions).sort()).toEqual(exceptionsContextKeys);
+		expect(replaced).toEqual([]);
+	});
+
+	it('gives an endpoint the exception classes of the API and the shared package', () => {
+		const instance = new ExtensionManager();
+
+		let captured: any;
+
+		(instance as any).registerEndpoint(
+			(_router: any, context: any) => {
+				captured = context;
+			},
+			'exceptions-endpoint',
+			SUBJECT
+		);
+
+		const replaced = exceptionsContextKeys.filter((key) => captured.exceptions[key] !== exceptionsContextExports[key]);
+
+		expect(Object.keys(captured.exceptions).sort()).toEqual(exceptionsContextKeys);
+		expect(replaced).toEqual([]);
 	});
 });

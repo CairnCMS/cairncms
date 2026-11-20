@@ -1,7 +1,7 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getSqliteClient } from '../database/sqlite-driver.js';
-import { InvalidPayloadException } from '../exceptions/index.js';
 import { assertNoParentCycle } from './assert-no-parent-cycle.js';
 
 describe('assertNoParentCycle on a real SQLite database', () => {

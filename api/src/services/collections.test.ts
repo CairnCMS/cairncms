@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@cairncms/exceptions';
 import knex from 'knex';
 import { createTracker, MockClient, type Tracker } from 'knex-mock-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -21,7 +22,6 @@ vi.mock('../../src/database/index', () => ({
 	getDatabaseClient: vi.fn().mockReturnValue('postgres'),
 }));
 
-import { ForbiddenException } from '../exceptions/index.js';
 import { CollectionsService } from './collections.js';
 import { ItemsService } from './items.js';
 

@@ -1,7 +1,7 @@
+import { ForbiddenException, InvalidCredentialsException, InvalidPayloadException } from '@cairncms/exceptions';
 import type { Role } from '@cairncms/types';
 import express from 'express';
 import Joi from 'joi';
-import { ForbiddenException, InvalidCredentialsException, InvalidPayloadException } from '../exceptions/index.js';
 import { respond } from '../middleware/respond.js';
 import useCollection from '../middleware/use-collection.js';
 import { validateBatch } from '../middleware/validate-batch.js';

@@ -1,8 +1,8 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import type { SchemaOverview } from '@cairncms/types';
 import knex, { type Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getSqliteClient } from '../database/sqlite-driver.js';
-import { InvalidPayloadException } from '../exceptions/index.js';
 import { CONFIG_FILENAME_STEM_MAX_LENGTH } from '../utils/config-contract.js';
 import { ItemsService } from './index.js';
 
