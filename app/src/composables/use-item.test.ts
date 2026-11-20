@@ -10,6 +10,7 @@ import { computed, ref } from 'vue';
 import { useFieldsStore } from '@/stores/fields';
 import { useRelationsStore } from '@/stores/relations';
 import { fld, rel } from '@/__utils__/field-relation-fixtures';
+import { notify } from '@/utils/notify';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { useItem } from './use-item';
 
@@ -27,6 +28,7 @@ vi.mock('@/api', () => {
 			get: vi.fn(),
 			post: vi.fn(),
 			patch: vi.fn(),
+			delete: vi.fn(),
 		},
 	};
 });
@@ -622,5 +624,98 @@ describe('Save error handling', () => {
 		expect(validationErrors.value).toEqual([failure.extensions]);
 		expect(vi.mocked(unexpectedError)).toHaveBeenCalledTimes(1);
 		expect(vi.mocked(unexpectedError).mock.calls[0]![0]).toBe(forbidden);
+	});
+});
+
+describe('Primary keys containing commas', () => {
+	const generatedKeyField = fld('depots', 'id', true);
+
+	const depotsPrimaryKeyField: Field = {
+		...generatedKeyField,
+		type: 'string',
+		schema: {
+			...generatedKeyField.schema!,
+			data_type: 'character varying',
+			max_length: 255,
+			has_auto_increment: false,
+		},
+	};
+
+	const depotsCollection = {
+		collection: 'depots',
+		name: 'depots',
+		meta: { archive_field: 'status', archive_value: 'archived', unarchive_value: 'draft', singleton: false },
+		schema: {},
+	} as AppCollection;
+
+	function depot(key: string) {
+		return { id: key, name: 'Depot', status: 'published' };
+	}
+
+	beforeEach(() => {
+		useFieldsStore().fields = [depotsPrimaryKeyField, fld('depots', 'name'), fld('depots', 'status')];
+		mockUseCollection(depotsCollection, depotsPrimaryKeyField);
+	});
+
+	test.each([
+		['north,warehouse', 'north%2Cwarehouse'],
+		['south', 'south'],
+	])('loads the single item for key %s', async (key, encoded) => {
+		vi.spyOn(api, 'get').mockResolvedValue({ data: { data: depot(key) } });
+
+		const { item, error } = useItem(ref('depots'), ref(key));
+		await flushPromises();
+
+		expect(vi.mocked(api.get).mock.lastCall![0]).toBe(`/items/depots/${encoded}`);
+		expect(error.value).toBeNull();
+		expect(item.value).toEqual(depot(key));
+	});
+
+	test.each(['north,warehouse', 'south'])('saves key %s with the single-item message', async (key) => {
+		vi.spyOn(api, 'get').mockResolvedValue({ data: { data: depot(key) } });
+		vi.spyOn(api, 'patch').mockResolvedValue({ data: { data: { ...depot(key), name: 'Renamed' } } });
+
+		const { save, edits, item } = useItem(ref('depots'), ref(key));
+		await flushPromises();
+
+		edits.value = { name: 'Renamed' };
+		await save();
+
+		expect(vi.mocked(notify)).toHaveBeenCalledWith({ title: 'Item Updated' });
+		expect(item.value).toEqual({ ...depot(key), name: 'Renamed' });
+	});
+
+	test.each([
+		['north,warehouse', 'north%2Cwarehouse'],
+		['south', 'south'],
+	])('archives key %s with the single-item message', async (key, encoded) => {
+		vi.spyOn(api, 'get').mockResolvedValue({ data: { data: depot(key) } });
+		vi.spyOn(api, 'patch').mockResolvedValue({ data: { data: null } });
+
+		const { archive, item } = useItem(ref('depots'), ref(key));
+		await flushPromises();
+
+		await archive();
+
+		expect(vi.mocked(api.patch)).toHaveBeenCalledWith(`/items/depots/${encoded}`, { status: 'archived' });
+		expect(vi.mocked(notify)).toHaveBeenCalledWith({ title: 'Item Deleted' });
+		expect(item.value).toEqual({ ...depot(key), status: 'archived' });
+	});
+
+	test.each([
+		['north,warehouse', 'north%2Cwarehouse'],
+		['south', 'south'],
+	])('deletes key %s with the single-item message', async (key, encoded) => {
+		vi.spyOn(api, 'get').mockResolvedValue({ data: { data: depot(key) } });
+		vi.spyOn(api, 'delete').mockResolvedValue({ data: null });
+
+		const { remove, item } = useItem(ref('depots'), ref(key));
+		await flushPromises();
+
+		await remove();
+
+		expect(vi.mocked(api.delete)).toHaveBeenCalledWith(`/items/depots/${encoded}`);
+		expect(vi.mocked(notify)).toHaveBeenCalledWith({ title: 'Item Deleted' });
+		expect(item.value).toBeNull();
 	});
 });

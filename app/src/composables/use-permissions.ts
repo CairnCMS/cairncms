@@ -22,7 +22,6 @@ type ItemContext = {
 	loading: Ref<boolean>;
 	error: Ref<unknown>;
 	isNewOrEmptySingleton: Ref<boolean>;
-	isBatch: Ref<boolean>;
 };
 
 export function usePermissions(
@@ -59,7 +58,6 @@ export function usePermissions(
 
 	const capabilityReady = computed(() => {
 		if (loadCurrent.value === false) return false;
-		if (context.isBatch.value === true) return false;
 		if (isEmptySingleton.value === true) return false;
 		if (loadedKey.value === null) return false;
 
@@ -70,14 +68,6 @@ export function usePermissions(
 		if (requested === null) return false;
 
 		return String(loadedKey.value) === String(requested);
-	});
-
-	const localReady = computed(() => {
-		if (loadCurrent.value === false) return false;
-		if (isEmptySingleton.value === true) return false;
-		if (context.isBatch.value === true) return true;
-
-		return capabilityReady.value;
 	});
 
 	const needsServerCheck = computed(
@@ -119,34 +109,18 @@ export function usePermissions(
 		return !!fields && fields.length > 0;
 	}
 
-	const deleteAllowed = computed(() => {
-		if (context.isBatch.value === true) {
-			if (localReady.value === false) return false;
-			return permissionsStore.hasPermission(collection.value, 'delete');
-		}
-
-		return itemActionAllowed(
-			collection.value,
-			'delete',
-			itemPermissions.value,
-			localReady.value,
-			capabilityReady.value
-		);
-	});
+	const deleteAllowed = computed(() =>
+		itemActionAllowed(collection.value, 'delete', itemPermissions.value, capabilityReady.value, capabilityReady.value)
+	);
 
 	const updateAllowed = computed(() => {
 		if (isEmptySingleton.value) return createAllowed.value;
-
-		if (context.isBatch.value === true) {
-			if (localReady.value === false) return false;
-			return permissionsStore.hasPermission(collection.value, 'update');
-		}
 
 		const allowed = itemActionAllowed(
 			collection.value,
 			'update',
 			itemPermissions.value,
-			localReady.value,
+			capabilityReady.value,
 			capabilityReady.value
 		);
 
@@ -159,21 +133,17 @@ export function usePermissions(
 	});
 
 	const shareAllowed = computed(() =>
-		itemActionAllowed(collection.value, 'share', itemPermissions.value, localReady.value, capabilityReady.value)
+		itemActionAllowed(collection.value, 'share', itemPermissions.value, capabilityReady.value, capabilityReady.value)
 	);
 
 	const archiveAllowed = computed(() => {
 		const archiveField = collectionInfo.value?.meta?.archive_field;
 		if (!archiveField) return false;
-		if (localReady.value === false) return false;
+		if (capabilityReady.value === false) return false;
 		if (isAdmin.value) return true;
 
 		const permission = permissionsStore.getPermissionsForUser(collection.value, 'update');
 		if (!permission) return false;
-
-		if (context.isBatch.value === true) {
-			return fieldEditable(permission.fields, archiveField);
-		}
 
 		if (isUnconditional(permission)) {
 			return fieldEditable(permission.fields, archiveField);
