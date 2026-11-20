@@ -89,8 +89,6 @@ suffix: Akhiran
 reset_bookmark: Tetapkan semula penanda buku
 update_bookmark: Padam Penanda Buku
 delete_bookmark: Padam Penanda Buku
-validationError:
-  eq: Nilai mesti {valid}
 create_field: Cipta Medan
 hidden_on_detail: Tersembunyi di Butiran
 text: Teks
