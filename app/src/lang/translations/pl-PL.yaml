@@ -123,16 +123,6 @@ unarchive_confirm: Jesteś pewien, że chcesz przywrócić ten element?
 nested_files_folders_will_be_moved: Zagnieżdżone pliki i foldery zostaną przeniesione o jeden poziom.
 validation_errors_notice: 'Następujące pola mają nieprawidłowe wartości:'
 validationError:
-  eq: Wartość musi być {valid}
-  neq: Wartość nie może być {invalid}
-  in: Wartość musi być jednym z {valid}
-  nin: Wartość nie może być jednym z {invalid}
-  contains: Wartość musi zawierać {substring}
-  ncontains: Wartość nie może zawierać {substring}
-  gt: Wartość musi być większa niż {valid}
-  gte: Wartość musi być większa lub równa {valid}
-  lt: Wartość musi być mniejsza niż {valid}
-  lte: Wartość musi być mniejsza lub równa {valid}
   empty: Wartość musi być pusta
   nempty: Wartość nie może być pusta
   null: Wartość musi być pusta
