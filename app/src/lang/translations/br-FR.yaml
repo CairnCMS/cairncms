@@ -60,16 +60,6 @@ unarchive: Adsevel
 unarchive_confirm: Sur oc'h e fell deoc'h adsevel an elfenn-mañ ?
 nested_files_folders_will_be_moved: Dalc'had an teuliad a vo dilec'hiet en teuliad tad.
 validationError:
-  eq: An talvoud a zle bezañ {valid}
-  neq: Arabat e vije {invalid} an talvoud
-  in: An talvoud a zle bezañ unan eus ar re-se {valid}
-  nin: Arabat e vije an talvoud unan eus ar re-se {invalid}
-  contains: An talvoud a zle bezañ {substring} ennañ
-  ncontains: Arabat e vije {substring} en talvoud
-  gt: An talvoud a zle bezañ uheloc'h eget {valid}
-  gte: An talvoud a zle bezañ uheloc'h pe kevatal da {valid}
-  lt: An talvoud a zle bezañ izeloc'h eget {valid}
-  lte: An talvoud a zle bezañ izeloc'h pe kevatal da {valid}
   empty: An talvoud a zle bezañ goullo
   nempty: Arabat e vije goullo an talvoud
   null: An talvoud a zle bezañ null
