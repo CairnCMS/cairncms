@@ -119,16 +119,6 @@ unarchive_confirm: هل أنت متأكد من أنك تريد إلغاء أرش
 nested_files_folders_will_be_moved: سيتم نقل الملفات والمجلدات الداخلية إلى درجة إلى الأعلى.
 validation_errors_notice: 'الحقول التالية تحمل قيم غير صالحة:'
 validationError:
-  eq: القيمة يجب أن تكون {valid}
-  neq: لا يمكن أن تكون القيمة {invalid}
-  in: يجب أن تكون القيمة واحدة من {valid}
-  nin: لا يمكن أن تكون القيمة واحدة من {invalid}
-  contains: يجب أن تحتوي القيمة على {substring}
-  ncontains: يجب أن لا تحتوي القيمة على {substring}
-  gt: يجب أن تكون القيمة أكبر من {valid}
-  gte: يجب أن تكون القيمة أكبر من أو تساوي {valid}
-  lt: يجب أن تكون القيمة أقل من {valid}
-  lte: يجب أن تكون القيمة أكبر من أو تساوي {valid}
   empty: يجب أن تكون القيمة فارغة
   nempty: لا يمكن أن تكون القيمة فارغة
   null: القيمة يجب أن تكون
