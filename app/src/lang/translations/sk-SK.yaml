@@ -118,16 +118,6 @@ unarchive_confirm: Naozaj chcete odarchivovať túto položku?
 nested_files_folders_will_be_moved: Vnorené súbory a priečinky sa presunú o jednu úroveň vyššie.
 validation_errors_notice: 'Nasledujúce polia majú neplatné hodnoty:'
 validationError:
-  eq: Hodnota musí byť {valid}
-  neq: Hodnota nemôže byť {invalid}
-  in: Hodnota musí byť jedna z {valid}
-  nin: Hodnota nemôže byť jedna z {invalid}
-  contains: Hodnota musí obsahovať {substring}
-  ncontains: Hodnota nemôže obsahovať {substring}
-  gt: Hodnota musí byť väčšia ako {valid}
-  gte: Hodnota musí byť väčšia alebo rovná {valid}
-  lt: Hodnota musí byť menšia ako {valid}
-  lte: Hodnota musí byť menšia alebo rovná {valid}
   empty: Hodnota musí byť prázdna
   nempty: Hodnota nemôže byť prázdna
   null: Hodnota musí byť null
