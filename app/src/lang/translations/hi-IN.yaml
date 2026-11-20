@@ -118,16 +118,6 @@ unarchive_confirm: क्या आप वाकई इस आइटम को �
 nested_files_folders_will_be_moved: नेस्टेड फ़ाइलें और फ़ोल्डर एक स्तर ऊपर ले जाया जाएगा
 validation_errors_notice: 'निम्न फ़ील्ड में अमान्य मान हैं:'
 validationError:
-  eq: मान {valid} होना चाहिए
-  neq: मान {invalid} नहीं हो सकता
-  in: मान {valid} में से एक होना चाहिए
-  nin: मान {invalid} में से एक नहीं हो सकता
-  contains: मान में {substring} शामिल होना चाहिए
-  ncontains: मान में {substring} नहीं हो सकता
-  gt: मान {valid} से ज़्यादा होना चाहिए
-  gte: मान {valid} से बड़ा या उसके बराबर होना चाहिए
-  lt: मान {valid} से कम होना चाहिए
-  lte: मान {valid} से कम या उसके बराबर होना चाहिए
   empty: मान खाली होना चाहिए
   nempty: मान खाली नहीं हो सकता
   null: मान null होना चाहिए
