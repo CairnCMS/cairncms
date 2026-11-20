@@ -118,16 +118,6 @@ unarchive: Dearhiviraj
 unarchive_confirm: Ste prepričani, da želite dearhivirati ta zapis?
 nested_files_folders_will_be_moved: Vsebovane datoteke in mape bodo prestavljene en nivo višje.
 validationError:
-  eq: Vrednost mora biti {valid}
-  neq: Vrednost ne more biti {invalid}
-  in: Vrednost mora biti iz {valid}
-  nin: Vrednost ne sme biti nekaj od {invalid}
-  contains: Vrednost mora vsebovati {substring}
-  ncontains: Vrednost ne sme vsebovati {substring}
-  gt: Vrednost mora biti večja od {valid}
-  gte: Vrednost mora biti večja ali enaka {valid}
-  lt: Vrednost mora biti manjša od {valid}
-  lte: Vrednost mora biti manjša ali enaka {valid}
   empty: Vrednost mora biti prazna
   nempty: Vrednost ne sme biti prazna
   null: Vrednost mora biti nična
