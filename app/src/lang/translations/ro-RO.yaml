@@ -118,16 +118,6 @@ unarchive_confirm: Sigur doriți să dezarhivați acest element?
 nested_files_folders_will_be_moved: Fișierele și dosarele conținute vor fi mutate cu un nivel în sus.
 validation_errors_notice: 'Următoarele câmpuri au valori invalide:'
 validationError:
-  eq: Valoarea trebuie să fie {valid}
-  neq: Valoarea nu poate fi {invalid}
-  in: Valoarea trebuie să fie una dintre {valid}
-  nin: Valoarea nu poate fi una dintre {invalid}
-  contains: Valoarea trebuie să conțină {substring}
-  ncontains: Valoarea nu poate conține {substring}
-  gt: Valoarea trebuie să fie mai mare de {valid}
-  gte: Valoarea trebuie să fie mai mare sau egală cu {valid}
-  lt: Valoarea trebuie să fie mai mică de {valid}
-  lte: Valoarea trebuie să fie mai mică sau egală cu {valid}
   empty: Valoarea trebuie să fie goală
   nempty: Valoarea nu poate fi goală
   null: Valoarea trebuie să fie nulă
