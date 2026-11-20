@@ -262,3 +262,63 @@ describe('non-object filter inputs', () => {
 		expect(parseFilter(true as any, null)).toStrictEqual({ _eq: true });
 	});
 });
+
+describe('spatial operands', () => {
+	const point = { type: 'Point', coordinates: [4.9, 52.37] };
+	const operators = ['_intersects', '_nintersects', '_intersects_bbox', '_nintersects_bbox'];
+
+	it.each(operators)('parses a GeoJSON string for %s', (operator) => {
+		const filter = { location: { [operator]: JSON.stringify(point) } } as Filter;
+
+		expect(parseFilter(filter, null)).toStrictEqual({ location: { [operator]: point } });
+	});
+
+	it.each(operators)('keeps a GeoJSON object for %s', (operator) => {
+		const filter = { location: { [operator]: point } } as Filter;
+
+		expect(parseFilter(filter, null)).toStrictEqual({ location: { [operator]: point } });
+	});
+
+	it.each(['{"type":', '', '"null"', ' null ', '5', '[0, 0]', '"$CURRENT_USER.region"'])(
+		'keeps %j unchanged because it does not decode to an object',
+		(operand) => {
+			const filter = { location: { _intersects: operand } } as Filter;
+
+			expect(parseFilter(filter, null)).toStrictEqual({ location: { _intersects: operand } });
+		}
+	);
+
+	it('resolves a $CURRENT_USER geometry from the filter context', () => {
+		const region = {
+			type: 'Polygon',
+			coordinates: [
+				[
+					[0, 0],
+					[1, 0],
+					[1, 1],
+					[0, 1],
+					[0, 0],
+				],
+			],
+		};
+
+		const filter = { location: { _intersects: '$CURRENT_USER.region' } } as Filter;
+		const context = { $CURRENT_USER: { region } as any };
+
+		expect(parseFilter(filter, { role: 'role', user: 'user' }, context)).toStrictEqual({
+			location: { _intersects: region },
+		});
+	});
+
+	it('resolves $CURRENT_USER alone to the user', () => {
+		const filter = { owner_area: { _intersects: '$CURRENT_USER' } } as Filter;
+
+		expect(parseFilter(filter, { role: 'role', user: 'user' })).toStrictEqual({ owner_area: { _intersects: 'user' } });
+	});
+
+	it('keeps a JSON string on a non-spatial operator', () => {
+		const filter = { name: { _eq: JSON.stringify(point) } } as Filter;
+
+		expect(parseFilter(filter, null)).toStrictEqual({ name: { _eq: JSON.stringify(point) } });
+	});
+});
