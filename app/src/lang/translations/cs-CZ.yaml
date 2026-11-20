@@ -118,16 +118,6 @@ unarchive_confirm: Skutečně chcete tuto položku obnovit z archivu?
 nested_files_folders_will_be_moved: Vnořené soubory a složky budou přesunuty o úroveň výše.
 validation_errors_notice: 'Následující pole mají neplatné hodnoty:'
 validationError:
-  eq: Hodnota musí být {valid}
-  neq: Hodnota nemůže být {invalid}
-  in: Hodnota musí být jedna z {valid}
-  nin: Hodnota nemůže být jedna z {invalid}
-  contains: Hodnota musí obsahovat {substring}
-  ncontains: Hodnota nesmí obsahovat {substring}
-  gt: Hodnota musí být větší než {valid}
-  gte: Hodnota musí být větší nebo rovna {valid}
-  lt: Hodnota musí být menší než {valid}
-  lte: Hodnota musí být menší nebo rovna {valid}
   empty: Hodnota musí být prázdná
   nempty: Hodnota nesmí být prázdná
   null: Hodnota musí být null
