@@ -118,16 +118,6 @@ unarchive_confirm: Segur que vols desarxivar aquest element?
 nested_files_folders_will_be_moved: Els fitxers i carpetes anidats es mouran un nivell amunt.
 validation_errors_notice: 'Els següents camps tenen valors invàlids:'
 validationError:
-  eq: El valor ha de ser {valid}
-  neq: El valor no pot ser {invalid}
-  in: El valor ha de ser un dels {valid}
-  nin: El valor no pot ser un de {invalid}
-  contains: El valor ha de contenir {substring}
-  ncontains: El valor no pot contenir {substring}
-  gt: El valor ha de ser major que {valid}
-  gte: El valor ha de ser major o igual a {valid}
-  lt: El valor ha de ser menor que {valid}
-  lte: El valor ha de ser menor o igual a {valid}
   empty: El valor ha de ser buit
   nempty: El valor no pot ser buit
   null: El valor ha de ser null
