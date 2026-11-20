@@ -118,16 +118,6 @@ unarchive_confirm: Are you sure you want to unarchive this item?
 nested_files_folders_will_be_moved: Nested files and folders will be moved one level up.
 validation_errors_notice: 'The following fields have invalid values:'
 validationError:
-  eq: Value has to be {valid}
-  neq: Value can't be {invalid}
-  in: Value has to be one of {valid}
-  nin: Value can't be one of {invalid}
-  contains: Value has to contain {substring}
-  ncontains: Value can't contain {substring}
-  gt: Value has to be greater than {valid}
-  gte: Value has to be greater than or equal to {valid}
-  lt: Value has to be less than {valid}
-  lte: Value has to be less than or equal to {valid}
   empty: Value has to be empty
   nempty: Value can't be empty
   null: Value has to be null
