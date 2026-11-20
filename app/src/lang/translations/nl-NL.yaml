@@ -118,16 +118,6 @@ unarchive_confirm: Weet je zeker dat je dit item wilt terugzetten?
 nested_files_folders_will_be_moved: Bestanden en mappen in deze map zullen een map omhoog worden geplaatst.
 validation_errors_notice: 'De volgende velden hebben ongeldige waarden:'
 validationError:
-  eq: Waarde moet {valid} zijn
-  neq: Waarde kan niet {invalid} zijn
-  in: 'Waar moet een van de volgende zijn: {valid}'
-  nin: 'Waarde kan niet een van de volgende zijn: {invalid}'
-  contains: Waarde moet "{substring}" bevatten
-  ncontains: Waarde kan niet "{substring}" bevatten
-  gt: Waarde moet meer zijn dan {valid}
-  gte: Waarde moet meer zijn dan of gelijk zijn aan {valid}
-  lt: Waarde moet minder zijn dan {valid}
-  lte: Waarde moet minder zijn dan of gelijk zijn aan {valid}
   empty: Waarde moet leeg zijn
   nempty: Waarde kan niet leeg zijn
   null: Waarde moet "null" zijn
