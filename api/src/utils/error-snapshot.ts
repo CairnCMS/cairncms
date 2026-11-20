@@ -1,11 +1,38 @@
-const MAX_SNAPSHOT_DEPTH = 64;
+import { isSensitiveKey } from './redact-sensitive.js';
+
+export const MAX_SNAPSHOT_DEPTH = 64;
 
 const STANDARD_ERROR_FIELDS = ['message', 'stack', 'cause', 'errors'] as const;
 
-function snapshotErrorObject(error: object, seen: WeakSet<object>, depth: number): Record<string, unknown> {
-	if (depth > MAX_SNAPSHOT_DEPTH) return { type: '[Max depth exceeded]' };
-	if (seen.has(error)) return { type: '[Circular]' };
-	seen.add(error);
+const INCOMPLETE_SNAPSHOT = 'The error could not be inspected completely.';
+
+type Walk = { seen: WeakSet<object>; depth: number; sensitive: boolean };
+
+function child({ seen, depth, sensitive }: Walk, key?: string): Walk {
+	return { seen, depth: depth + 1, sensitive: sensitive || (key !== undefined && isSensitiveKey(key)) };
+}
+
+// The sensitive-value collector inherits sensitivity per path, so a back-reference beneath a
+// sensitive key would hide its target's fields from it.
+function guard(object: object, walk: Walk): void {
+	if (walk.depth > MAX_SNAPSHOT_DEPTH) throw new Error(INCOMPLETE_SNAPSHOT);
+	if (walk.seen.has(object) && walk.sensitive) throw new Error(INCOMPLETE_SNAPSHOT);
+}
+
+/** Copies an array's indexed values as JSON reads them, without invoking its iterator. */
+function readItems(array: readonly unknown[]): unknown[] {
+	const length = array.length;
+	const items = new Array<unknown>(length);
+
+	for (let index = 0; index < length; index++) items[index] = array[index];
+
+	return items;
+}
+
+function snapshotErrorObject(error: object, walk: Walk): Record<string, unknown> {
+	guard(error, walk);
+	if (walk.seen.has(error)) return { type: '[Circular]' };
+	walk.seen.add(error);
 
 	try {
 		// Object.keys (not Object.entries) so the skipped originalError accessor is never invoked.
@@ -22,39 +49,45 @@ function snapshotErrorObject(error: object, seen: WeakSet<object>, depth: number
 			if (val !== undefined) fields.set(key, val);
 		}
 
-		const result: Record<string, unknown> = {};
+		// Object.fromEntries defines own data properties, so an own __proto__ key stays data
+		// instead of invoking the prototype setter.
+		const result = new Map<string, unknown>();
 
 		const errorConstructor = fields.has('constructor')
 			? fields.get('constructor')
 			: (error as { constructor?: unknown }).constructor;
 
 		if (typeof errorConstructor === 'function') {
-			result['type'] = errorConstructor.name;
+			result.set('type', errorConstructor.name);
 		} else if (fields.has('name')) {
-			result['type'] = fields.get('name');
+			result.set('type', fields.get('name'));
 		} else {
-			result['type'] = (error as { name?: string }).name;
+			result.set('type', (error as { name?: string }).name);
 		}
 
 		for (const [key, val] of fields) {
 			if (key === 'errors' && Array.isArray(val)) {
-				result['aggregateErrors'] = val.map((item) => toPlain(item, seen, depth + 1));
+				result.set(
+					'aggregateErrors',
+					readItems(val).map((item) => toPlain(item, child(walk, 'aggregateErrors')))
+				);
+
 				continue;
 			}
 
-			if (key in result) continue;
+			if (result.has(key)) continue;
 
-			const plain = toPlain(val, seen, depth + 1);
-			if (plain !== undefined) result[key] = plain;
+			const plain = toPlain(val, child(walk, key));
+			if (plain !== undefined) result.set(key, plain);
 		}
 
-		return result;
+		return Object.fromEntries(result);
 	} finally {
-		seen.delete(error);
+		walk.seen.delete(error);
 	}
 }
 
-function toPlain(value: unknown, seen: WeakSet<object>, depth: number): unknown {
+function toPlain(value: unknown, walk: Walk, fromToJSON = false): unknown {
 	if (value === null) return null;
 
 	switch (typeof value) {
@@ -73,47 +106,64 @@ function toPlain(value: unknown, seen: WeakSet<object>, depth: number): unknown 
 
 	const object = value as object;
 
-	if (object instanceof Error) return snapshotErrorObject(object, seen, depth);
-	if (depth > MAX_SNAPSHOT_DEPTH) return '[Max depth exceeded]';
-	if (seen.has(object)) return '[Circular]';
+	if (object instanceof Error) return snapshotErrorObject(object, walk);
+	guard(object, walk);
+	if (walk.seen.has(object)) return '[Circular]';
 
-	seen.add(object);
+	walk.seen.add(object);
 
 	try {
-		const toJSON = (object as { toJSON?: unknown }).toJSON;
+		// As JSON.stringify does, call toJSON once per position and never on its own result, so a
+		// toJSON that returns its object is walked through that object's own fields.
+		const toJSON = fromToJSON ? undefined : (object as { toJSON?: unknown }).toJSON;
 
 		if (typeof toJSON === 'function') {
-			return toPlain((toJSON as (this: unknown) => unknown).call(object), seen, depth + 1);
+			const serialized: unknown = (toJSON as (this: unknown) => unknown).call(object);
+			if (serialized !== object) return toPlain(serialized, child(walk), true);
 		}
 
+		// Read every value before materializing any, so a nested toJSON or getter cannot replace a
+		// sibling before it is read. An object-valued sibling is read as a reference, so its
+		// contents can still change before it is materialized.
 		if (Array.isArray(object)) {
-			return object.map((item) => {
-				const plain = toPlain(item, seen, depth + 1);
+			return readItems(object).map((item) => {
+				const plain = toPlain(item, child(walk));
 				return plain === undefined ? null : plain;
 			});
 		}
 
-		const result: Record<string, unknown> = {};
+		// Reuse the toJSON read above, so a getter is read once per position.
+		const entries = Object.keys(object).map(
+			(key) => [key, !fromToJSON && key === 'toJSON' ? toJSON : (object as Record<string, unknown>)[key]] as const
+		);
 
-		for (const [key, val] of Object.entries(object)) {
-			const plain = toPlain(val, seen, depth + 1);
-			if (plain !== undefined) result[key] = plain;
+		// Object.fromEntries keeps an own __proto__ key as data.
+		const result = new Map<string, unknown>();
+
+		for (const [key, val] of entries) {
+			const plain = toPlain(val, child(walk, key));
+			if (plain !== undefined) result.set(key, plain);
 		}
 
-		return result;
+		return Object.fromEntries(result);
 	} finally {
-		seen.delete(object);
+		walk.seen.delete(object);
 	}
+}
+
+function start(): Walk {
+	return { seen: new WeakSet<object>(), depth: 0, sensitive: false };
 }
 
 /**
  * Reads an error once into a fresh plain-data snapshot: the pino-style type, the standard
  * fields, every enumerable own property, and the cause and aggregate-error chains. Getters are
  * resolved, values are materialized to JSON-compatible plain data, and cycles are guarded, so
- * the result shares no reference with the raw error.
+ * the result shares no reference with the raw error. Throws when the error cannot be inspected
+ * completely: content deeper than `MAX_SNAPSHOT_DEPTH`, or a back-reference beneath a sensitive key.
  */
 export function snapshotError(error: unknown): Record<string, unknown> {
-	const plain = toPlain(error, new WeakSet<object>(), 0);
+	const plain = toPlain(error, start());
 
 	if (plain !== null && typeof plain === 'object' && !Array.isArray(plain)) {
 		return plain as Record<string, unknown>;
@@ -122,7 +172,10 @@ export function snapshotError(error: unknown): Record<string, unknown> {
 	return { type: typeof error, message: typeof plain === 'string' ? plain : String(error) };
 }
 
-/** Materializes an arbitrary value into JSON-compatible plain data, resolving getters and guarding cycles. */
+/**
+ * Materializes an arbitrary value into JSON-compatible plain data, resolving getters and guarding
+ * cycles. Throws in the same cases as `snapshotError`.
+ */
 export function toPlainData(value: unknown): unknown {
-	return toPlain(value, new WeakSet<object>(), 0);
+	return toPlain(value, start());
 }

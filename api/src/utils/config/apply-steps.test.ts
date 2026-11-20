@@ -279,6 +279,27 @@ describe('failureStatus', () => {
 		expect(failureStatus(new Coded('SCHEMA_APPLY_FAILED', { persisted: 'unknown' }))).toBe('unknown');
 	});
 
+	it.each([
+		['a string', 'bogus'],
+		['a number', 42],
+		['null', null],
+		['a boolean', true],
+		['an empty array', []],
+		['an array of entries', [{ collection: 'articles', operation: 'create' }]],
+	])('reports a schema apply failure whose persisted value is %s as unknown, matching its detail', (_label, value) => {
+		const error = new Coded('SCHEMA_APPLY_FAILED', { persisted: value });
+
+		expect(failureStatus(error)).toBe('unknown');
+		expect(failureDetail(error)).toEqual({ persisted: 'unknown' });
+	});
+
+	it('keeps a post-commit failure committed when its maintenance phase is not recognized', () => {
+		const error = new Coded('CONFIG_POST_COMMIT_FAILED', { phase: 'bogus' });
+
+		expect(failureStatus(error)).toBe('committed');
+		expect(failureDetail(error)).toBeUndefined();
+	});
+
 	it('reports a rolled-back transaction as rolled_back on either engine', () => {
 		expect(failureStatus(new Coded('CONFIG_APPLY_FAILED'))).toBe('rolled_back');
 		expect(failureStatus(new Coded('SCHEMA_STATE_CHANGED'))).toBe('rolled_back');

@@ -177,7 +177,7 @@ Empty strings are ignored with a warning logged.
 The context object passed as the second argument to the registration function has everything a hook typically needs:
 
 - **`services`** — all built-in services (`ItemsService`, `MailService`, `UsersService`, and so on)
-- **`exceptions`** — the platform's exception classes
+- **`exceptions`** — the platform's exception classes. See [Errors](/docs/develop/extensions/server-extensions/errors/)
 - **`database`** — a Knex instance connected to the configured database
 - **`getSchema`** — async function that returns the current schema overview
 - **`env`** — parsed environment variables

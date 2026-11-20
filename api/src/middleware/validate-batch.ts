@@ -1,6 +1,5 @@
-import { FailedValidationException } from '@cairncms/exceptions';
+import { FailedValidationException, InvalidPayloadException } from '@cairncms/exceptions';
 import Joi from 'joi';
-import { InvalidPayloadException } from '../exceptions/index.js';
 import asyncHandler from '../utils/async-handler.js';
 import { sanitizeQuery } from '../utils/sanitize-query.js';
 import { validateQuery } from '../utils/validate-query.js';

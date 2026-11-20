@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest';
 import { REDACT_TEXT } from '../constants.js';
 import { buildLogProjection, createErrorSinkLogger, redactLogPayload } from './error-log.js';
 import { snapshotError } from './error-snapshot.js';
+import { collectSensitiveValuesExhaustive } from './redact-sensitive.js';
 
 function firstLine(lines: string[]): any {
 	return JSON.parse(lines[0]!);
@@ -67,6 +68,15 @@ describe('buildLogProjection', () => {
 		expect('cause' in projection.aggregateErrors[0]).toBe(false);
 	});
 
+	test('keeps an own __proto__ key as data when pino passes a message-less snapshot through', () => {
+		const snapshot = JSON.parse('{"type":"Object","code":"X","__proto__":{"label":"kept"}}');
+		const projection = buildLogProjection(snapshot);
+
+		expect(Object.getPrototypeOf(projection)).toBe(Object.prototype);
+		expect(Object.keys(projection)).toEqual(['type', 'code', '__proto__']);
+		expect(Object.getOwnPropertyDescriptor(projection, '__proto__')?.value).toEqual({ label: 'kept' });
+	});
+
 	test('matches pino output for a real error with a cause', () => {
 		class InvalidPayloadException extends Error {
 			status = 400;
@@ -128,6 +138,29 @@ describe('redactLogPayload', () => {
 		expect(err['message']).toBe(`outer failed: inner failed for ${REDACT_TEXT}`);
 		expect(err['stack']).toContain('caused by:');
 		expect(err['stack']).not.toContain(secret);
+	});
+
+	test('keeps a nested own __proto__ key as redacted data in the projection', () => {
+		const secret = 'proto-secret-abcdef';
+		const details = JSON.parse(`{"__proto__":{"password":"${secret}"},"echo":"${secret}"}`);
+		const snapshot = snapshotError(Object.assign(new Error(`failed for ${secret}`), { extensions: details }));
+
+		const { err, msg } = redactLogPayload(snapshot, collectSensitiveValuesExhaustive(snapshot));
+		const extensions = err['extensions'] as Record<string, unknown>;
+
+		expect(JSON.stringify({ err, msg })).not.toContain(secret);
+		expect(Object.getPrototypeOf(extensions)).toBe(Object.prototype);
+		expect(Object.getOwnPropertyDescriptor(extensions, '__proto__')?.value).toEqual({ password: REDACT_TEXT });
+		expect(extensions['echo']).toBe(REDACT_TEXT);
+	});
+
+	test('drops a top-level own __proto__ key without changing the projection prototype', () => {
+		const snapshot = JSON.parse('{"type":"Error","message":"boom","stack":"stack","__proto__":{"label":"x"}}');
+		const { err } = redactLogPayload(snapshot, new Set());
+
+		expect(Object.getPrototypeOf(err)).toBe(Object.prototype);
+		expect(Object.hasOwn(err, '__proto__')).toBe(false);
+		expect(err['message']).toBe('boom');
 	});
 });
 

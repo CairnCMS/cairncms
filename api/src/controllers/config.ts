@@ -1,4 +1,4 @@
-import { BaseException } from '@cairncms/exceptions';
+import { BaseException, ForbiddenException, UnsupportedMediaTypeException } from '@cairncms/exceptions';
 import express, { type RequestHandler } from 'express';
 import { isPlainObject } from 'lodash-es';
 import { randomUUID } from 'node:crypto';
@@ -8,8 +8,6 @@ import {
 	ConfigIdentityConflictException,
 	ConfigInvalidException,
 	ConfigUnsupportedVersionException,
-	ForbiddenException,
-	UnsupportedMediaTypeException,
 } from '../exceptions/index.js';
 import { respond } from '../middleware/respond.js';
 import asyncHandler from '../utils/async-handler.js';

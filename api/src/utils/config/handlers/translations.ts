@@ -1,6 +1,6 @@
 import { isAvailableLanguage } from '@cairncms/constants';
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
-import { InvalidPayloadException } from '../../../exceptions/index.js';
 import { RecordNotUniqueException } from '../../../exceptions/database/record-not-unique.js';
 import type { TranslationsService } from '../../../services/translations.js';
 import type {

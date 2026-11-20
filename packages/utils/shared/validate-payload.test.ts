@@ -87,4 +87,18 @@ describe('validatePayload', () => {
 		expect(errors).toHaveLength(1);
 		expect(errors[0]!.message).toBe(`"field" is required`);
 	});
+
+	it.each(['_and', '_or'])('keeps each rule operator on the errors of an %s group', (group) => {
+		const mockFilter = { [group]: [{ a: { _eq: 'x' } }, { b: { _nin: ['y'] } }] } as Filter;
+		const mockPayload = { a: 'other', b: 'y' };
+
+		const operators = validatePayload(mockFilter, mockPayload).flatMap((error) =>
+			error.details.map((detail) => [detail.path, detail.context?.['validationOperator']])
+		);
+
+		expect(operators).toEqual([
+			[['a'], '_eq'],
+			[['b'], '_nin'],
+		]);
+	});
 });

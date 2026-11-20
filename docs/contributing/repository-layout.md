@@ -76,7 +76,7 @@ The internal shared packages. None of these are application code; they are the l
 
 - **`@cairncms/types`** — TypeScript type definitions used by every workspace member. Anything that travels between api, app, and sdk has a type defined here.
 - **`@cairncms/constants`** — shared constants (extension types, geometry formats, default values, the public role sentinel).
-- **`@cairncms/exceptions`** — the exception classes the API throws. Imported by api/src and re-exported from `api/src/exceptions/`.
+- **`@cairncms/exceptions`** — the shared exception classes, including the common ones that server extensions receive in their `exceptions` context. Imported by the api and app. Exceptions specific to one part of the API stay in `api/src/exceptions/`.
 - **`@cairncms/utils`** — string and JSON helpers shared across packages. Includes the array helper, the JSON parser with date revival, and the `readableStreamToString` utility used by the multipart handler.
 - **`@cairncms/format-title`** — the title-case formatter applied to default file titles, collection names, and field names.
 - **`@cairncms/composables`** — shared Vue composables that were extracted from the app for reuse in extensions.

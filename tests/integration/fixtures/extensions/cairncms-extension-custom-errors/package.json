@@ -1,0 +1,26 @@
+{
+	"name": "cairncms-extension-custom-errors",
+	"version": "1.0.0",
+	"type": "module",
+	"private": true,
+	"cairncms:extension": {
+		"type": "bundle",
+		"path": {
+			"app": "app.js",
+			"api": "api.js"
+		},
+		"entries": [
+			{
+				"type": "endpoint",
+				"name": "custom-errors",
+				"source": "src/endpoint.js"
+			},
+			{
+				"type": "hook",
+				"name": "custom-errors-hook",
+				"source": "src/hook.js"
+			}
+		],
+		"host": "^1.0.0"
+	}
+}

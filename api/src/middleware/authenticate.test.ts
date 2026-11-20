@@ -1,3 +1,4 @@
+import { InvalidCredentialsException } from '@cairncms/exceptions';
 import type { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import type { Knex } from 'knex';
@@ -6,7 +7,6 @@ import '../../src/types/express.d.ts';
 import getDatabase from '../database/index.js';
 import emitter from '../emitter.js';
 import env from '../env.js';
-import { InvalidCredentialsException } from '../exceptions/invalid-credentials.js';
 import { handler } from './authenticate.js';
 
 vi.mock('../../src/database');

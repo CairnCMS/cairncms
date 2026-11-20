@@ -1,7 +1,7 @@
+import { ForbiddenException } from '@cairncms/exceptions';
 import type { Accountability, SchemaOverview } from '@cairncms/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import env from '../../env.js';
-import { ForbiddenException } from '../../exceptions/index.js';
 import { GraphQLService } from './index.js';
 
 vi.mock('../../database/index.js', () => ({

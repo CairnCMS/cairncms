@@ -1,15 +1,19 @@
 import { PUBLIC_ROLE_ID } from '@cairncms/constants';
-import { FailedValidationException } from '@cairncms/exceptions';
+import {
+	FailedValidationException,
+	ForbiddenException,
+	InvalidPayloadException,
+	UnprocessableEntityException,
+} from '@cairncms/exceptions';
 import type { Query } from '@cairncms/types';
 import { getSimpleHash, toArray } from '@cairncms/utils';
 import jwt from 'jsonwebtoken';
-import { cloneDeep, isEmpty } from 'lodash-es';
+import { isEmpty } from 'lodash-es';
 import { performance } from 'perf_hooks';
 import getDatabase from '../database/index.js';
 import env from '../env.js';
 import logger from '../logger.js';
 import { RecordNotUniqueException } from '../exceptions/database/record-not-unique.js';
-import { ForbiddenException, InvalidPayloadException, UnprocessableEntityException } from '../exceptions/index.js';
 import type { AbstractServiceOptions, Item, MutationOptions, PrimaryKey } from '../types/index.js';
 import isUrlAllowed from '../utils/is-url-allowed.js';
 import { stall } from '../utils/stall.js';
@@ -99,9 +103,6 @@ export class UsersService extends ItemsService {
 					message: `Provided password doesn't match password policy`,
 					path: ['password'],
 					type: 'custom.pattern.base',
-					context: {
-						value: password,
-					},
 				});
 			}
 		}
@@ -344,25 +345,6 @@ export class UsersService extends ItemsService {
 
 		await super.deleteMany(keys, opts);
 		return keys;
-	}
-
-	override async deleteByQuery(query: Query, opts?: MutationOptions): Promise<PrimaryKey[]> {
-		const primaryKeyField = this.schema.collections[this.collection]!.primary;
-		const readQuery = cloneDeep(query);
-		readQuery.fields = [primaryKeyField];
-
-		// Not authenticated:
-		const itemsService = new ItemsService(this.collection, {
-			knex: this.knex,
-			schema: this.schema,
-		});
-
-		const itemsToDelete = await itemsService.readByQuery(readQuery);
-		const keys: PrimaryKey[] = itemsToDelete.map((item: Item) => item[primaryKeyField]);
-
-		if (keys.length === 0) return [];
-
-		return await this.deleteMany(keys, opts);
 	}
 
 	async inviteUser(email: string | string[], role: string, url: string | null, subject?: string | null): Promise<void> {

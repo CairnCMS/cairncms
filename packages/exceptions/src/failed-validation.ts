@@ -1,107 +1,42 @@
-import type { FilterOperator } from '@cairncms/types';
-import type { ValidationErrorItem } from 'joi';
 import { BaseException } from './base.js';
+import {
+	joiValidationErrorItemToErrorExtensions,
+	type FailedValidationExtensions,
+	type FailedValidationType,
+	type ValidationErrorItem,
+} from './joi-to-error-extensions.js';
 
-type FailedValidationExtensions = {
-	field: string;
-	type: FilterOperator | 'required' | 'regex';
-	valid?: number | string | (number | string)[];
-	invalid?: number | string | (number | string)[];
-	substring?: string;
+const RULE_SENTENCES: Record<FailedValidationType, string> = {
+	eq: 'Value has to be the required value.',
+	neq: `Value can't be the excluded value.`,
+	in: 'Value has to be one of the allowed values.',
+	nin: `Value can't be one of the excluded values.`,
+	null: 'Value has to be null.',
+	nnull: `Value can't be null.`,
+	empty: 'Value has to be empty.',
+	nempty: `Value can't be empty.`,
+	gt: 'Value has to be greater than the minimum.',
+	gte: 'Value has to be greater than or equal to the minimum.',
+	lt: 'Value has to be less than the maximum.',
+	lte: 'Value has to be less than or equal to the maximum.',
+	contains: 'Value has to contain the required text.',
+	ncontains: `Value can't contain the excluded text.`,
+	required: 'Value is required.',
+	regex: `Value doesn't have the correct format.`,
+	starts_with: 'Value has to start with the required text.',
+	nstarts_with: `Value can't start with the excluded text.`,
+	ends_with: 'Value has to end with the required text.',
+	nends_with: `Value can't end with the excluded text.`,
 };
 
-export class FailedValidationException extends BaseException {
+function failedValidationMessage({ field, type }: FailedValidationExtensions): string {
+	const prefix = field === undefined ? 'Validation failed.' : `Validation failed for field "${field}".`;
+	return type ? `${prefix} ${RULE_SENTENCES[type]}` : prefix;
+}
+
+export class FailedValidationException extends BaseException<FailedValidationExtensions> {
 	constructor(error: ValidationErrorItem) {
-		const extensions: Partial<FailedValidationExtensions> = {
-			field: error.path[0] as string,
-		};
-
-		const joiType = error.type;
-
-		// eq | in | null | empty
-		if (joiType.endsWith('only')) {
-			if (error.context?.['valids'].length > 1) {
-				extensions.type = 'in';
-				extensions.valid = error.context?.['valids'];
-			} else {
-				const valid = error.context?.['valids'][0];
-
-				if (valid === null) {
-					extensions.type = 'null';
-				} else if (valid === '') {
-					extensions.type = 'empty';
-				} else {
-					extensions.type = 'eq';
-					extensions.valid = error.context?.['valids'][0];
-				}
-			}
-		}
-
-		// neq | nin | nnull | nempty
-		if (joiType.endsWith('invalid')) {
-			if (error.context?.['invalids'].length > 1) {
-				extensions.type = 'nin';
-				extensions.invalid = error.context?.['invalids'];
-			} else {
-				const invalid = error.context?.['invalids'][0];
-
-				if (invalid === null) {
-					extensions.type = 'nnull';
-				} else if (invalid === '') {
-					extensions.type = 'nempty';
-				} else {
-					extensions.type = 'neq';
-					extensions.invalid = invalid;
-				}
-			}
-		}
-
-		// gt
-		if (joiType.endsWith('greater')) {
-			extensions.type = 'gt';
-			extensions.valid = error.context?.['limit'];
-		}
-
-		// gte
-		if (joiType.endsWith('min')) {
-			extensions.type = 'gte';
-			extensions.valid = error.context?.['limit'];
-		}
-
-		// lt
-		if (joiType.endsWith('less')) {
-			extensions.type = 'lt';
-			extensions.valid = error.context?.['limit'];
-		}
-
-		// lte
-		if (joiType.endsWith('max')) {
-			extensions.type = 'lte';
-			extensions.valid = error.context?.['limit'];
-		}
-
-		// contains
-		if (joiType.endsWith('contains')) {
-			extensions.type = 'contains';
-			extensions.substring = error.context?.['substring'];
-		}
-
-		// ncontains
-		if (joiType.endsWith('ncontains')) {
-			extensions.type = 'ncontains';
-			extensions.substring = error.context?.['substring'];
-		}
-
-		// required
-		if (joiType.endsWith('required')) {
-			extensions.type = 'required';
-		}
-
-		if (joiType.endsWith('.pattern.base')) {
-			extensions.type = 'regex';
-			extensions.invalid = error.context?.value;
-		}
-
-		super(error.message, 400, 'FAILED_VALIDATION', extensions);
+		const extensions = joiValidationErrorItemToErrorExtensions(error);
+		super(failedValidationMessage(extensions), 400, 'FAILED_VALIDATION', extensions);
 	}
 }

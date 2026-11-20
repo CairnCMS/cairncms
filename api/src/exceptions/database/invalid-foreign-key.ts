@@ -6,7 +6,7 @@ type Extensions = {
 	invalid?: string;
 };
 
-export class InvalidForeignKeyException extends BaseException {
+export class InvalidForeignKeyException extends BaseException<Partial<Extensions>> {
 	constructor(field: string | null, extensions?: Extensions) {
 		if (field) {
 			super(`Invalid foreign key in field "${field}".`, 400, 'INVALID_FOREIGN_KEY', extensions);

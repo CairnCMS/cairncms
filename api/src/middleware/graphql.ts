@@ -1,9 +1,10 @@
+import { InvalidPayloadException, InvalidQueryException, MethodNotAllowedException } from '@cairncms/exceptions';
 import { parseJSON } from '@cairncms/utils';
 import type { RequestHandler } from 'express';
 import type { DocumentNode } from 'graphql';
-import { getOperationAST } from 'graphql';
-import { InvalidPayloadException, InvalidQueryException, MethodNotAllowedException } from '../exceptions/index.js';
+import { GraphQLError, getOperationAST } from 'graphql';
 import { parseGraphQLQuery } from '../services/graphql/query-gate.js';
+import { formatGraphQLErrorDetails } from '../services/graphql/utils/format-graphql-error-details.js';
 import type { GraphQLParams } from '../types/index.js';
 import asyncHandler from '../utils/async-handler.js';
 
@@ -37,15 +38,17 @@ export const parseGraphQL: RequestHandler = asyncHandler(async (req, res, next) 
 		operationName = req.body.operationName || null;
 	}
 
-	if (query === null) {
+	if (typeof query !== 'string') {
 		throw new InvalidPayloadException('Must provide query string.');
 	}
 
 	try {
 		document = parseGraphQLQuery(query);
-	} catch (err: any) {
+	} catch (err: unknown) {
+		if (!(err instanceof GraphQLError)) throw new InvalidPayloadException(`GraphQL schema validation error.`);
+
 		throw new InvalidPayloadException(`GraphQL schema validation error.`, {
-			graphqlErrors: [err],
+			graphqlErrors: formatGraphQLErrorDetails([err]),
 		});
 	}
 

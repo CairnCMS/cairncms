@@ -32,7 +32,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return proto === Object.prototype || proto === null;
 }
 
-function isSensitiveKey(key: string, extraKeys: ReadonlySet<string> | undefined): boolean {
+/** Reports whether a key marks everything beneath it as sensitive, ignoring case. */
+export function isSensitiveKey(key: string, extraKeys?: ReadonlySet<string>): boolean {
 	const lowered = key.toLowerCase();
 	return SENSITIVE_KEYS.has(lowered) || (extraKeys !== undefined && extraKeys.has(lowered));
 }
@@ -152,19 +153,21 @@ function normalize(
 			return value.map((item) => normalize(item, sensitiveValues, path, extraKeys));
 		}
 
-		const result: Record<string, unknown> = {};
+		// Object.fromEntries defines own data properties, so an own __proto__ key stays data
+		// instead of invoking the prototype setter.
+		const result = new Map<string, unknown>();
 
 		for (const [key, val] of Object.entries(value)) {
 			if (isSensitiveKey(key, extraKeys)) {
 				// The key check runs on the original value, so the collapse decision
 				// can see whether the marker would contain it.
-				result[key] = typeof val === 'string' ? redactionFallback([val]) : REDACT_TEXT;
+				result.set(key, typeof val === 'string' ? redactionFallback([val]) : REDACT_TEXT);
 			} else {
-				result[key] = normalize(val, sensitiveValues, path, extraKeys);
+				result.set(key, normalize(val, sensitiveValues, path, extraKeys));
 			}
 		}
 
-		return result;
+		return Object.fromEntries(result);
 	} finally {
 		path.delete(value);
 	}

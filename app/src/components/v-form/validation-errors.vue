@@ -20,24 +20,9 @@
 					<span>:&nbsp;</span>
 					<template v-if="validationError.customValidationMessage">
 						{{ validationError.customValidationMessage }}
-						<v-icon
-							v-tooltip="
-								validationError.code === 'RECORD_NOT_UNIQUE'
-									? t('validationError.unique', validationError)
-									: t(`validationError.${validationError.type}`, validationError)
-							"
-							small
-							name="help"
-						/>
+						<v-icon v-tooltip="validationErrorMessage(validationError)" small name="help" />
 					</template>
-					<template v-else>
-						<template v-if="validationError.code === 'RECORD_NOT_UNIQUE'">
-							{{ t('validationError.unique', validationError) }}
-						</template>
-						<template v-else>
-							{{ t(`validationError.${validationError.type}`, validationError) }}
-						</template>
-					</template>
+					<template v-else>{{ validationErrorMessage(validationError) }}</template>
 				</li>
 			</ul>
 		</div>
@@ -50,6 +35,7 @@ import { computed } from 'vue';
 import { ValidationError, Field } from '@cairncms/types';
 import { formatFieldFunction } from '@/utils/format-field-function';
 import { extractFieldFromFunction } from '@/utils/extract-field-from-function';
+import { validationErrorMessage } from '@/utils/validation-error-message';
 
 interface Props {
 	validationErrors: ValidationError[];

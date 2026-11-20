@@ -1,6 +1,5 @@
-import { FailedValidationException } from '@cairncms/exceptions';
-import { ForbiddenException } from '../exceptions/index.js';
-import type { Accountability, SchemaOverview } from '@cairncms/types';
+import { FailedValidationException, ForbiddenException } from '@cairncms/exceptions';
+import type { Accountability, Filter, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';
 import { createTracker, MockClient } from 'knex-mock-client';
@@ -140,6 +139,78 @@ describe('AuthorizationService.validatePayload — _in filter with empty array (
 		});
 
 		expect(result).toStrictEqual({ role: 'some-allowed-role-uuid' });
+	});
+});
+
+describe('AuthorizationService.validatePayload range rules', () => {
+	let db: MockedFunction<Knex>;
+
+	beforeAll(() => {
+		db = vi.mocked(knex.default({ client: MockClient }));
+		createTracker(db);
+	});
+
+	function validate(validation: Record<string, unknown>, role: unknown): unknown[] {
+		const accountability: Accountability = {
+			role: 'editor-role-uuid',
+			user: 'user-uuid',
+			admin: false,
+			app: true,
+			permissions: [
+				{
+					id: 1,
+					role: 'editor-role-uuid',
+					collection: 'directus_users',
+					action: 'update',
+					permissions: {},
+					validation: validation as Filter,
+					presets: {},
+					fields: ['*'],
+				},
+			],
+		};
+
+		const service = new AuthorizationService({ knex: db, schema: testSchema, accountability });
+
+		try {
+			service.validatePayload('update', 'directus_users', { role });
+			return [];
+		} catch (error) {
+			return error as unknown[];
+		}
+	}
+
+	const GENERIC = { message: 'Validation failed for field "role".', extensions: { field: 'role' } };
+
+	it.each([
+		['_between', [10, 20]],
+		['_between', [0, 5]],
+		['_between', [10, 5]],
+		['_nbetween', [10, 20]],
+		['_nbetween', [0, 10]],
+	])('reports one generic error when %s %j rejects 7', (operator, bounds) => {
+		const errors = validate({ role: { [operator]: bounds } }, 7);
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0]).toBeInstanceOf(FailedValidationException);
+		expect(errors[0]).toMatchObject(GENERIC);
+	});
+
+	it('reports two errors for two separately authored ranges on the same field', () => {
+		const errors = validate({ _and: [{ role: { _between: [10, 20] } }, { role: { _between: [0, 5] } }] }, 7);
+
+		expect(errors).toHaveLength(2);
+		for (const error of errors) expect(error).toMatchObject(GENERIC);
+	});
+
+	it.each([
+		[[10, 20], 5, false],
+		[[10, 20], 15, false],
+		[[10, 20], 25, false],
+		[[20, 10], 15, true],
+		[[20, 10], 5, false],
+	])('keeps the outcome of _nbetween %j for %d', (bounds, role, passes) => {
+		expect(validate({ role: { _nbetween: bounds } }, role).length === 0).toBe(passes);
 	});
 });
 

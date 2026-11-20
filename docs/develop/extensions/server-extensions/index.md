@@ -40,5 +40,6 @@ Reach for full authority when the sandbox cannot host the work: a native module,
 
 - [Sandbox](/docs/develop/extensions/server-extensions/sandbox/) is the confined runtime reference.
 - [Internal services](/docs/develop/extensions/server-extensions/services/) is the full-authority services reference.
+- [Errors](/docs/develop/extensions/server-extensions/errors/) covers raising errors from full-authority extensions and defining your own.
 - The type pages above cover each server type's API, both full-authority and confined.
 - [Creating extensions](/docs/develop/extensions/creating-extensions/) covers the toolchain: scaffold, build, install, hot reload, debug, publish.

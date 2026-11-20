@@ -1,7 +1,7 @@
+import { InvalidQueryException } from '@cairncms/exceptions';
 import type { SchemaOverview } from '@cairncms/types';
 import knex from 'knex';
 import { describe, expect, it } from 'vitest';
-import { InvalidQueryException } from '../exceptions/index.js';
 import { getColumn } from './get-column.js';
 
 const schema = {

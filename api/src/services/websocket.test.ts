@@ -8,7 +8,7 @@ vi.mock('../websocket/controllers/active.js', () => ({ getActiveRealtime }));
 vi.mock('../emitter.js', () => ({ default: { onAction, offAction } }));
 
 const { WebSocketService } = await import('./websocket.js');
-const { ServiceUnavailableException } = await import('../exceptions/index.js');
+const { ServiceUnavailableException } = await import('@cairncms/exceptions');
 
 function restAccess() {
 	return { broadcast: vi.fn(), clients: vi.fn(() => new Set([{ uid: 'a' }])) };

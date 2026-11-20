@@ -383,6 +383,22 @@ describe('pass-through and immutability', () => {
 		const result = redactKeysOnly([1, 'a', { x: 2 }]);
 		expect(result).toEqual([1, 'a', { x: 2 }]);
 	});
+
+	test('keeps an own __proto__ key as data and redacts beneath it', () => {
+		const input = JSON.parse(`{"__proto__":{"password":"${TOKEN}","note":"saw ${TOKEN}"},"echo":"${TOKEN}"}`);
+		const result = redactSensitive(input, collectSensitiveValuesExhaustive(input)) as Record<string, unknown>;
+
+		expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+		expect(Object.keys(result)).toEqual(['__proto__', 'echo']);
+
+		expect(Object.getOwnPropertyDescriptor(result, '__proto__')?.value).toEqual({
+			password: REDACT_TEXT,
+			note: `saw ${REDACT_TEXT}`,
+		});
+
+		expect(result['echo']).toBe(REDACT_TEXT);
+		expect(Object.keys(input)).toEqual(['__proto__', 'echo']);
+	});
 });
 
 describe('caller-declared sensitive keys', () => {

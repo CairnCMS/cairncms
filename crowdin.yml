@@ -1,3 +1,5 @@
+commit_message: 'Signed-off-by: cairncms-dev <hello@cairncms.dev>'
+append_commit_message: true
 files:
   - source: /app/src/lang/translations/en-US.yaml
     translation: /app/src/lang/translations/%locale%.yaml

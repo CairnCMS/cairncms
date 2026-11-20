@@ -138,6 +138,9 @@ test('refuses a referenced delete through GraphQL', async ({ api, vendor }) => {
 		});
 
 		expect(res.body.errors[0].message).toBe(`Item can't be deleted because other items still reference it.`);
+		expect(res.body.errors[0].extensions.code).toBe('RECORD_STILL_REFERENCED');
+		expect(res.body.errors[0].path).toEqual([`delete_${pair.authors}_item`]);
+		expect(res.body.errors[0].locations).toEqual([{ line: 1, column: 12 }]);
 		expect(await rows(api, pair.authors)).toEqual(authorsBefore);
 		expect(await rows(api, pair.articles)).toEqual(articlesBefore);
 	} finally {

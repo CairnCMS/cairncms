@@ -1,7 +1,7 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import type { Knex } from 'knex';
 import { authenticator } from 'otplib';
 import getDatabase from '../database/index.js';
-import { InvalidPayloadException } from '../exceptions/index.js';
 import type { AbstractServiceOptions, PrimaryKey } from '../types/index.js';
 import { ItemsService } from './items.js';
 

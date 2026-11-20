@@ -1,6 +1,6 @@
 import { BaseException } from '@cairncms/exceptions';
 
-export class InvalidConfigException extends BaseException {
+export class InvalidConfigException extends BaseException<Record<string, unknown>> {
 	constructor(message = 'Invalid config', extensions?: Record<string, any>) {
 		super(message, 503, 'INVALID_CONFIG', extensions);
 	}

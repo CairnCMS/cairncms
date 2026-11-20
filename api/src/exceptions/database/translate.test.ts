@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getDatabaseClient } from '../../database/index.js';
+import { driverErrorFixtures } from './__fixtures__/driver-errors.js';
 import { translateDatabaseError } from './translate.js';
 
 vi.mock('../../database/index', () => ({
@@ -83,5 +84,26 @@ describe('translateDatabaseError', () => {
 		const result = await translateDatabaseError(foreignKeyErrors['mysql']!());
 
 		expect(result.code).toBe('INVALID_FOREIGN_KEY');
+	});
+});
+
+describe('translateDatabaseError on captured driver errors', () => {
+	afterEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it.each(
+		driverErrorFixtures.map(
+			(fixture) => [`${fixture.client} ${fixture.scenario} from ${fixture.vendors.join(', ')}`, fixture] as const
+		)
+	)('translates the %s error to its exception, message, and details', async (_label, fixture) => {
+		vi.mocked(getDatabaseClient).mockReturnValue(fixture.client);
+		const { message, ...fields } = fixture.error;
+
+		const result = await translateDatabaseError(Object.assign(new Error(message), fields) as any, fixture.action);
+
+		expect(result.constructor.name).toBe(fixture.expected.type);
+		expect(result.message).toBe(fixture.expected.message);
+		expect(result.extensions).toStrictEqual(fixture.expected.extensions);
 	});
 });

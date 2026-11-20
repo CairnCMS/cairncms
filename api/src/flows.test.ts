@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, test, vi } from 'vitest';
-import { BaseException } from '@cairncms/exceptions';
+import { BaseException, ForbiddenException } from '@cairncms/exceptions';
 import { REDACT_TEXT } from './constants.js';
-import * as exceptions from './exceptions/index.js';
 import { buildRevisionData, getFlowManager, type Step } from './flows.js';
 import conditionOp from './operations/condition/index.js';
 import logOp from './operations/log/index.js';
 import execOp from './operations/exec/index.js';
 import getDatabase from './database/index.js';
+import { exceptionsContextExports, exceptionsContextKeys } from './__utils__/exceptions-context-fixtures.js';
 
 const { checkAccessSpy, revisionsCreateSpy, encryptionKey, logSpy, envOverrides } = vi.hoisted(() => ({
 	checkAccessSpy: vi.fn(),
@@ -673,19 +673,19 @@ describe('manual flow authorization', () => {
 		it('rejects anonymous caller (accountability.user is null)', async () => {
 			await expect(
 				manager._runManualFlow(buildFlow(), buildData(), buildContext(anonAccountability))
-			).rejects.toBeInstanceOf(exceptions.ForbiddenException);
+			).rejects.toBeInstanceOf(ForbiddenException);
 
 			expect(executeFlowSpy).not.toHaveBeenCalled();
 		});
 
 		it('rejects when checkAccess on target items fails (keys path)', async () => {
 			checkAccessSpy.mockImplementation(async (_action: any, collection: any) => {
-				if (collection === TARGET_COLLECTION) throw new exceptions.ForbiddenException();
+				if (collection === TARGET_COLLECTION) throw new ForbiddenException();
 			});
 
 			await expect(
 				manager._runManualFlow(buildFlow(), buildData(), buildContext(nonAdminWithItemRead))
-			).rejects.toBeInstanceOf(exceptions.ForbiddenException);
+			).rejects.toBeInstanceOf(ForbiddenException);
 
 			expect(executeFlowSpy).not.toHaveBeenCalled();
 		});
@@ -704,7 +704,7 @@ describe('manual flow authorization', () => {
 			};
 
 			await expect(manager._runManualFlow(flow, data, buildContext(nonAdminNoCollectionRead))).rejects.toBeInstanceOf(
-				exceptions.ForbiddenException
+				ForbiddenException
 			);
 
 			expect(executeFlowSpy).not.toHaveBeenCalled();
@@ -715,7 +715,7 @@ describe('manual flow authorization', () => {
 			const data = buildData({ collection: TARGET_COLLECTION });
 
 			await expect(manager._runManualFlow(flow, data, buildContext(adminAccountability))).rejects.toBeInstanceOf(
-				exceptions.ForbiddenException
+				ForbiddenException
 			);
 
 			expect(executeFlowSpy).not.toHaveBeenCalled();
@@ -756,7 +756,7 @@ describe('manual flow authorization', () => {
 			const flow = buildFlow({ options: { collections: ['other-collection'] } });
 
 			await expect(manager._runManualFlow(flow, buildData(), buildContext(adminAccountability))).rejects.toBeInstanceOf(
-				exceptions.ForbiddenException
+				ForbiddenException
 			);
 
 			expect(executeFlowSpy).not.toHaveBeenCalled();
@@ -847,6 +847,55 @@ describe('flow operation errors expose a curated reject payload', () => {
 		expect(serialized).not.toContain(secret);
 		expect(serialized).not.toContain('stack');
 		expect(serialized).not.toContain('cause');
+	});
+});
+
+describe('flow operation exceptions context', () => {
+	const triggerData = { path: '/flows/trigger/exceptions', method: 'POST', headers: {}, query: {}, body: {} };
+	const context = { accountability: null, database: {} as any, schema: { collections: {}, relations: [] } as any };
+
+	it.each([
+		['an untrusted', false],
+		['a trusted', true],
+	])('gives %s operation the exception classes of the API and the shared package', async (_label, trusted) => {
+		const manager = getFlowManager();
+
+		let captured: any;
+
+		manager.addOperation(
+			'test-exceptions-context',
+			(_options, operationContext) => {
+				captured = operationContext;
+				return null;
+			},
+			trusted
+		);
+
+		await (manager as any).executeFlow(
+			{
+				id: 'flow-exceptions',
+				name: 'flow-exceptions',
+				status: 'active',
+				trigger: 'webhook',
+				accountability: null,
+				options: { method: 'POST', return: '$last', async: false },
+				operation: {
+					id: 'op-1',
+					key: 'capture',
+					type: 'test-exceptions-context',
+					options: {},
+					resolve: null,
+					reject: null,
+				},
+			},
+			triggerData,
+			context
+		);
+
+		const replaced = exceptionsContextKeys.filter((key) => captured.exceptions[key] !== exceptionsContextExports[key]);
+
+		expect(Object.keys(captured.exceptions).sort()).toEqual(exceptionsContextKeys);
+		expect(replaced).toEqual([]);
 	});
 });
 

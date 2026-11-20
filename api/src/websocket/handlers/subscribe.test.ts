@@ -1,6 +1,6 @@
+import { ForbiddenException } from '@cairncms/exceptions';
 import type { SchemaOverview } from '@cairncms/types';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { ForbiddenException } from '../../exceptions/index.js';
 import type { CommandContext, SocketClient } from '../controllers/base.js';
 import { WebSocketException } from '../exceptions.js';
 import type { WebSocketMessage } from '../messages.js';

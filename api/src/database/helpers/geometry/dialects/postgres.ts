@@ -10,8 +10,7 @@ export class GeometryHelperPostgres extends GeometryHelper {
 	}
 
 	override createColumn(table: Knex.CreateTableBuilder, field: RawField | Field) {
-		const type = field.type.split('.')[1] ?? 'geometry';
-		return table.specificType(field.field, `geometry(${type}, 4326)`);
+		return table.specificType(field.field, `geometry(${this.geometrySubtype(field) ?? 'geometry'}, 4326)`);
 	}
 
 	override _intersects_bbox(key: string, geojson: GeoJSONGeometry): Knex.Raw {

@@ -146,7 +146,7 @@ export function failureStatus(err: unknown): ConfigStepStatus {
 	if (code === 'SCHEMA_POST_COMMIT_FAILED' || code === 'CONFIG_POST_COMMIT_FAILED') return 'committed';
 
 	if (code === 'SCHEMA_APPLY_FAILED') {
-		return thrown instanceof BaseException && thrown.extensions['persisted'] === 'unknown' ? 'unknown' : 'failed';
+		return thrown instanceof BaseException && schemaPersisted(thrown) === 'unknown' ? 'unknown' : 'failed';
 	}
 
 	if (code === 'CONFIG_APPLY_FAILED' || code === 'SCHEMA_STATE_CHANGED' || code === 'CONFIG_STATE_CHANGED') {
@@ -190,7 +190,7 @@ function projectEntries<Entry>(
 
 /** Projects the reported persisted state to its declared shape, so an unrecognized or malformed value cannot be logged. */
 function projectPersistedState(value: unknown): SchemaPersistedState | 'unknown' {
-	if (!isRecord(value)) return 'unknown';
+	if (!isRecord(value) || Array.isArray(value)) return 'unknown';
 
 	return {
 		collections: projectEntries<SchemaPersistedCollection>(value['collections'], (entry) =>
@@ -228,6 +228,13 @@ function projectPersistedState(value: unknown): SchemaPersistedState | 'unknown'
 	};
 }
 
+/** The projected persisted state of a schema apply failure, which decides both its step status and its detail. */
+function schemaPersisted(thrown: BaseException): SchemaPersistedState | 'unknown' {
+	const persisted = thrown.extensions['persisted'];
+
+	return persisted === 'unknown' ? 'unknown' : projectPersistedState(persisted);
+}
+
 /**
  * Extracts only the persisted-state and maintenance-phase fields of the exceptions that carry them, validating each
  * against its declared shape so the run record never relays an unrelated, malformed, or unsanitized error payload.
@@ -238,10 +245,8 @@ export function failureDetail(err: unknown): ConfigStepFailureDetail | undefined
 	if (!(thrown instanceof BaseException)) return undefined;
 
 	if (thrown.code === 'SCHEMA_APPLY_FAILED') {
-		const persisted = thrown.extensions['persisted'];
-
 		return {
-			persisted: persisted === 'unknown' ? 'unknown' : projectPersistedState(persisted),
+			persisted: schemaPersisted(thrown),
 			...(thrown.extensions['foreignKeysRestored'] === false && { foreignKeysRestored: false }),
 		};
 	}

@@ -1,5 +1,5 @@
+import { UnprocessableEntityException } from '@cairncms/exceptions';
 import type { Knex } from 'knex';
-import { UnprocessableEntityException } from '../exceptions/index.js';
 import type { PortableSnapshot, Snapshot } from '../types/index.js';
 import { toKeyFormSnapshot } from './folder-references.js';
 

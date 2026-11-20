@@ -1,3 +1,4 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import type { Accountability } from '@cairncms/types';
 import { Router } from 'express';
 import {
@@ -9,7 +10,6 @@ import {
 } from '../auth/drivers/index.js';
 import { COOKIE_OPTIONS, DEFAULT_AUTH_PROVIDER } from '../constants.js';
 import env from '../env.js';
-import { InvalidPayloadException } from '../exceptions/index.js';
 import logger from '../logger.js';
 import { respond } from '../middleware/respond.js';
 import { AuthenticationService } from '../services/authentication.js';

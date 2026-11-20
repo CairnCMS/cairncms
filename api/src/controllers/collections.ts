@@ -1,5 +1,5 @@
+import { ForbiddenException } from '@cairncms/exceptions';
 import { Router } from 'express';
-import { ForbiddenException } from '../exceptions/index.js';
 import { respond } from '../middleware/respond.js';
 import { validateBatch } from '../middleware/validate-batch.js';
 import { CollectionsService } from '../services/collections.js';
