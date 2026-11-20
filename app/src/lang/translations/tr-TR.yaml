@@ -118,16 +118,6 @@ unarchive_confirm: Bu öğeyi arşivden çıkarmak istediğinizden emin misiniz?
 nested_files_folders_will_be_moved: İç içe geçmiş dosyalar ve klasörler bir seviye yukarı taşınacaktır.
 validation_errors_notice: 'Aşağıdaki alanlarda geçersiz değerler var:'
 validationError:
-  eq: Değer {valid} olmalıdır
-  neq: Değer {invalid} olamaz
-  in: Değer, {valid} değerlerinden biri olmalıdır
-  nin: Değer, {invalid} değerlerinden biri olamaz
-  contains: Değer, {substring} içermelidir
-  ncontains: Değer, {substring} içeremez
-  gt: Değer, {valid} değerinden büyük olmalıdır
-  gte: Değer, {valid} değerinden büyük veya eşit olmalıdır
-  lt: Değer, {valid} değerinden küçük olmalıdır
-  lte: Değer, {valid} değerinden küçük veya eşit olmalıdır
   empty: Değer boş olmalıdır
   nempty: Değer boş olamaz
   null: Değer null olmalıdır
