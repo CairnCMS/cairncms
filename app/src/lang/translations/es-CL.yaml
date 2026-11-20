@@ -118,16 +118,6 @@ unarchive_confirm: '¿Está seguro que desea desarchivar este elemento?'
 nested_files_folders_will_be_moved: Los archivos anidados y las carpetas se moverán un nivel superior.
 validation_errors_notice: 'Los siguientes campos tienen valores no válidos:'
 validationError:
-  eq: El valor tiene que ser {valid}
-  neq: El valor no puede ser {invalid}
-  in: 'El valor tiene que ser uno de estos: {valid}'
-  nin: 'El valor no puede ser uno de estos: {invalid}'
-  contains: El valor tiene que contener {substring}
-  ncontains: El valor no puede contener {substring}
-  gt: El valor tiene que ser mayor a {valid}
-  gte: El valor tiene que ser mayor o igual a {valid}
-  lt: El valor tiene que ser menor a {valid}
-  lte: El valor tiene que ser menor o igual a {valid}
   empty: El valor tiene que estar vacío
   nempty: El valor no puede estar vacío
   null: El valor tiene que ser nulo

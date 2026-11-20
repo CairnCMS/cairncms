@@ -111,16 +111,6 @@ unarchive: ยกเลิกการเก็บ
 unarchive_confirm: คุณแน่ใจที่จะเลิกจัดเก็บไอเท็มนี้?
 nested_files_folders_will_be_moved: ไฟล์และโฟลเดอร์ที่อยู่ข้างในจะถูกเอาออกมาข้างนอกอีกขั้น
 validationError:
-  eq: ค่าต้องเท่ากับ {valid}
-  neq: ค่าต้องไม่เท่ากับ {invalid}
-  in: ต้องเป็นค่าที่อยู่ใน {valid}
-  nin: ต้องเป็นค่าที่ไม่อยู่ใน {invalid}
-  contains: ค่าต้องมี {substring} อยู่ในนั้น
-  ncontains: ค่าต้องไม่มี {substring} อยู่ในนั้น
-  gt: ค่าต้องมากกว่า {valid}
-  gte: ค่าต้องมากกว่าหรือเท่ากับ {valid}
-  lt: ค่าต้องน้อยกว่า {valid}
-  lte: ค่าต้องน้อยกว่าหรือเท่ากับ {valid}
   empty: ต้องเป็นค่าว่าง
   nempty: ต้องไม่เป็นค่าว่าง
   null: ต้องเป็นค่า null

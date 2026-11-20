@@ -59,16 +59,6 @@ unarchive: Išarchyvuoti
 unarchive_confirm: Ar tikrai norite išarchyvuoti šį elementą?
 nested_files_folders_will_be_moved: Kelių lygių failai ir aplankai bus perkelti vienu lygiu aukštyn.
 validationError:
-  eq: Reikšmė turi būti {valid}
-  neq: Reikšmė negali būti {invalid}
-  in: Reikšmė turi būti viena iš {valid}
-  nin: Reikšmė negali būti tarp {invalid}
-  contains: Reikšmę turi sudaryti {substring}
-  ncontains: Reikšmės negali sudaryti {substring}
-  gt: Reikšmė turi būti didesnė už {valid}
-  gte: Reikšmė turi būti didesnę už arba lygi {valid}
-  lt: Reikšmė turi būti mažesnė už {valid}
-  lte: Reikšmė turi būti mažesnė už arba lygi {valid}
   empty: Reikšmė privalo būti tuščia
   nempty: Reikšmė negali būti tuščia
   null: Reikšmė turi būti null

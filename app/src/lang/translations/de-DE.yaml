@@ -122,16 +122,6 @@ unarchive_confirm: Möchten Sie dieses Element wirklich aus dem Archiv zurückho
 nested_files_folders_will_be_moved: Verschachtelte Dateien und Ordner werden eine Ebene nach oben verschoben.
 validation_errors_notice: 'Die folgenden Felder sind ungültig:'
 validationError:
-  eq: Der Wert muss {valid} sein
-  neq: Der Wert kann nicht {invalid} sein
-  in: 'Gültige Werte sind: {valid}'
-  nin: Wert darf nicht einer von {invalid} sein
-  contains: Der Wert muss {substring} enthalten
-  ncontains: Der Wert darf {substring} nicht enthalten
-  gt: Der Wert muss größer sein als {valid}
-  gte: Der Wert muss größer oder gleich {valid} sein
-  lt: Der Wert muss kleiner als {valid} sein
-  lte: Der Wert muss kleiner oder gleich {valid} sein
   empty: Der Wert muss leer sein
   nempty: Der Wert darf nicht leer sein
   null: Der Wert muss leer sein

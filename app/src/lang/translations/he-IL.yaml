@@ -84,9 +84,6 @@ rename_folder: שינוי שם תיקיה
 delete_folder: מחק תיקייה
 not_allowed: לא מורשה
 validationError:
-  eq: הערך צריך להיות {valid}
-  neq: הערך אינו יכול להיות {invalid}
-  in: הערך צריך להיות אחד מ- {valid}
   nempty: הערך אינו יכול להיות ריק
   null: הערך צריך להיות null
   nnull: הערך צריך להיות לא null

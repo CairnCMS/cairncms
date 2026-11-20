@@ -97,9 +97,6 @@ archive_confirm: この項目をアーカイブしてよろしいですか？
 recommended_defaults: 推奨されるデフォルト値
 unarchive: アーカイブから戻す
 validationError:
-  eq: 値は {valid} でなければなりません
-  neq: 値は {invalid} にすることはできません
-  in: 値は {valid} のいずれかでなければなりません
   required: 必須項目です
   unique: 他と重複しない値である必要があります
 no_access: アクセスなし

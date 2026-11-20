@@ -118,16 +118,6 @@ unarchive_confirm: Êtes-vous sûr de vouloir restaurer cet élément ?
 nested_files_folders_will_be_moved: Le contenu du dossier sera déplacé vers le dossier parent.
 validation_errors_notice: 'Les champs suivants contiennent des valeurs invalides:'
 validationError:
-  eq: La valeur doit être {valid}
-  neq: La valeur ne peut pas être {invalid}
-  in: La valeur doit être l'une de celles-ci {valid}
-  nin: La valeur ne peut pas être une de celles-ci {invalid}
-  contains: La valeur doit contenir {substring}
-  ncontains: La valeur ne peut pas contenir {substring}
-  gt: La valeur doit être supérieure à {valid}
-  gte: La valeur doit être supérieure ou égale à {valid}
-  lt: La valeur doit être inférieure à {valid}
-  lte: La valeur doit être inférieure ou égale à {valid}
   empty: La valeur doit être vide
   nempty: La valeur ne peut pas être vide
   null: La valeur doit être nulle

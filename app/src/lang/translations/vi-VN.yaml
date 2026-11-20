@@ -113,16 +113,6 @@ unarchive_confirm: Bạn có chắc chắn muốn mở lưu trữ mục này kh�
 nested_files_folders_will_be_moved: Các files và thư mục sẽ được di chuyển lên thư mục trên.
 validation_errors_notice: 'Các trường sau đây có giá trị không hợp lệ:'
 validationError:
-  eq: Dữ liệu phải là {valid}
-  neq: Dữ liệu không thể là {invalid}
-  in: Dữ liệu phải là một trong số {valid}
-  nin: Dữ liệu không thể là một trong số {invalid}
-  contains: Dữ liệu phải chứa {substring}
-  ncontains: Dữ liệu không thể chứa {substring}
-  gt: Giá trị phải lớn hơn {valid}
-  gte: Giá trị phải lớn hơn hoặc bằng {valid}
-  lt: Giá trị phải nhỏ hơn {valid}
-  lte: Giá trị phải nhỏ hơn hoặc bằng {valid}
   empty: Dữ liệu phải để trống
   nempty: Dữ liệu không thể để trống
   null: Dữ liệu phải để rỗng

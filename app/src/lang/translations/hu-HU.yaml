@@ -118,16 +118,6 @@ unarchive_confirm: Biztosan vissza akarod vonni ennek az elemnek az archiválás
 nested_files_folders_will_be_moved: Egymás alatti fájlok és könyvtárak egy szinttel feljebb kerülnek.
 validation_errors_notice: 'A következő mezők értéke érvénytelen:'
 validationError:
-  eq: Az érték {valid} kell legyen
-  neq: Az érték nem lehet {invalid}
-  in: 'Lehetséges értékek: {valid}'
-  nin: 'Nem felvehető értékek: {invalid}'
-  contains: Az {substring} része kell legyen az értéknek
-  ncontains: A {substring} nem lehet része az értéknek
-  gt: Az értéknek nagyobbnak kell lennie, mint {valid}
-  gte: Az értéknek nagyobbnak vagy egyenlőnek kell lennie, mint {valid}
-  lt: Az értéknek kevesebbnek kell lennie, mint {valid}
-  lte: Az értéknek kevesebbnek vagy egyenlőnek kell lennie, mint {valid}
   empty: Üres értéknek kell lennie
   nempty: Nem lehet üres érték
   null: null kell legyen

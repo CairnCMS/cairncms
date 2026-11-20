@@ -123,16 +123,6 @@ unarchive_confirm: A jeni të sigurtë që doni të çarkivoni këtë artikull?
 nested_files_folders_will_be_moved: Skedarët dhe dosjet e brendshme do të lëvizin një nivel lart.
 validation_errors_notice: 'Fushat e mëposhtme kanë vlera të pavlefshme:'
 validationError:
-  eq: Vlera duhet të jetë {valid}
-  neq: Vlera nuk mund të jetë {invalid}
-  in: Vlera duhet të jetë një nga {valid}
-  nin: Vlera nuk mund të jetë një nga {invalid}
-  contains: Vlera duhet të përmbajë {substring}
-  ncontains: Vlera nuk mund të përmbajë {substring}
-  gt: Vlera duhet të jetë më e madhe se {valid}
-  gte: Vlera duhet të jetë më e madhe ose e barabartë me {valid}
-  lt: Vlera duhet të jetë më e vogël se {valid}
-  lte: Vlera duhet të jetë më e vogël ose e barabartë me {valid}
   empty: Vlera duhet të jetë bosh
   nempty: Vlera nuk mund të jetë bosh
   null: Vlera duhet të jetë null

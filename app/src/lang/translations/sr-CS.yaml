@@ -116,16 +116,6 @@ unarchive: Vrati iz arhive
 unarchive_confirm: Da li ste sigurni da želite da vratite iz arhive ovu stavku?
 nested_files_folders_will_be_moved: Ugnježđeni fajlovi i fascikle će biti pomjereni na jedan nivo iznad.
 validationError:
-  eq: Vrijednost treba biti {valid}
-  neq: Vrijednost ne može biti {invalid}
-  in: Vrijednost mora da bude jedna od {valid}
-  nin: Vrijednost ne može biti nijedna od {invalid}
-  contains: Vrijednost mora da sadrži {substring}
-  ncontains: Vrijednost ne može da sadrži {substring}
-  gt: Vrijednost mora da bude veća od {valid}
-  gte: Vrijednost mora da bude veća ili jednaka {valid}
-  lt: Vrijednost mora da bude manja od {valid}
-  lte: Vrijednost mora da bude manja ili jednaka {valid}
   empty: Vrijednost mora biti prazna
   nempty: Vrijednost ne može biti prazna
   null: Vrijednost mora biti null

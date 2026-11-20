@@ -116,16 +116,6 @@ unarchive_confirm: Jeste li sigurni da želite poništiti arhiviranje ove stavke
 nested_files_folders_will_be_moved: Ugniježđene fajlovi i folderi biće premješteni za jedan nivo gore.
 validation_errors_notice: 'Sljedeća polja imaju nevažeće vrijednosti:'
 validationError:
-  eq: Vrijednost mora biti {valid}
-  neq: Vrijednost ne može biti {invalid}
-  in: Vrijednost mora biti jedna od {valid}
-  nin: Vrijednost ne može biti jedna od {invalid}
-  contains: Vrijednost mora sadržavati {substring}
-  ncontains: Vrijednost ne može sadržavati {substring}
-  gt: Vrijednost mora biti veća od {valid}
-  gte: Vrijednost mora biti veća ili jednaka {valid}
-  lt: Vrijednost mora biti manja od {valid}
-  lte: Vrijednost mora biti manja ili jednaka {valid}
   empty: Vrijednost mora biti prazna
   nempty: Vrijednost ne smije biti prazna
   null: Vrijednost mora biti null

@@ -98,16 +98,6 @@ unarchive: Malarĥivi
 unarchive_confirm: Ĉu vi certas, ke vi volas malarĥivi la eron?
 validation_errors_notice: 'La sekvaj kampoj havas nevalidajn valorojn:'
 validationError:
-  eq: Valoro devas esti {valid}
-  neq: Valoro ne povas esti {invalid}
-  in: Valoro devas esti unu el {valid}
-  nin: Valoro ne povas esti unu el {invalid}
-  contains: Valoro devas enhavi {substring}
-  ncontains: Valoro ne povas enhavi {substring}
-  gt: Valoro devas esti pli granda ol {valid}
-  gte: Valoro devas esti pli granda ol aŭ egala al {valid}
-  lt: Valoro devas esti malpli granda ol {valid}
-  lte: Valoro devas esti malpli granda ol aŭ egala al {valid}
   empty: Valoro devas esti malplena
   nempty: Valoro ne povas esti malplena
   null: Valoro devas esti NULL

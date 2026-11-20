@@ -122,16 +122,6 @@ unarchive_confirm: Sei sicuro*a di voler ripristinare questo elemento?
 nested_files_folders_will_be_moved: I file e le cartelle annidate verranno spostate di un livello in su.
 validation_errors_notice: 'I seguenti campi contengono valori non validi:'
 validationError:
-  eq: Il valore deve essere {valid}
-  neq: Il valore non può essere {invalid}
-  in: Il valore deve essere uno di {valid}
-  nin: Il valore non può essere uno di {invalid}
-  contains: Il valore deve contenere {substring}
-  ncontains: Il valore non può contenere {substring}
-  gt: Il valore deve essere maggiore di {valid}
-  gte: Il valore deve essere maggiore o uguale di {valid}
-  lt: Il valore deve essere inferiore a {valid}
-  lte: Il valore deve essere minore o uguale a {valid}
   empty: Il valore deve essere vuoto
   nempty: Il valore non può essere vuoto
   null: Il valore deve essere nullo
