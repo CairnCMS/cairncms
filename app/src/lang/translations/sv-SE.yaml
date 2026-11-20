@@ -118,16 +118,6 @@ unarchive_confirm: Är du säker på att du vill ångra arkivering av detta obje
 nested_files_folders_will_be_moved: Nästlade filer och mappar kommer flyttas upp en nivå.
 validation_errors_notice: 'Följande fält har ogiltiga värden:'
 validationError:
-  eq: Värdet måste vara {valid}
-  neq: Värdet kan inte vara {invalid}
-  in: Värdet måste vara en av {valid}
-  nin: Värdet kan inte vara en av {invalid}
-  contains: Värdet måste innehålla {substring}
-  ncontains: Värdet får inte innehålla {substring}
-  gt: Värdet måste vara större än {valid}
-  gte: Värdet måste vara större än eller lika med {valid}
-  lt: Värdet måste vara mindre än {valid}
-  lte: Värdet måste vara mindre än eller lika med {valid}
   empty: Värdet måste vara tomt
   nempty: Värdet kan inte vara tomt
   null: Värdet måste vara null
