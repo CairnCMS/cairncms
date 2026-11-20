@@ -93,7 +93,6 @@ describe('usePermissions item actions', () => {
 		error?: unknown;
 		isNew?: boolean;
 		isNewOrEmptySingleton?: boolean;
-		isBatch?: boolean;
 		archiveField?: string;
 		singleton?: boolean;
 	}) {
@@ -106,7 +105,6 @@ describe('usePermissions item actions', () => {
 			loading: ref(options.loading ?? false),
 			error: ref(options.error ?? null),
 			isNewOrEmptySingleton: ref(options.isNewOrEmptySingleton ?? false),
-			isBatch: ref(options.isBatch ?? false),
 		});
 	}
 
@@ -327,7 +325,6 @@ describe('usePermissions item actions', () => {
 			loading,
 			error,
 			isNewOrEmptySingleton: ref(false),
-			isBatch: ref(false),
 		});
 
 		await flushPromises();
@@ -357,7 +354,6 @@ describe('usePermissions item actions', () => {
 			loading,
 			error,
 			isNewOrEmptySingleton: ref(false),
-			isBatch: ref(false),
 		});
 
 		await flushPromises();
@@ -457,101 +453,23 @@ describe('usePermissions item actions', () => {
 		expect((startDate?.meta as any)?.readonly).toBe(true);
 	});
 
-	test('resolves batch actions locally for an admin without a capability request', async () => {
-		const { updateAllowed, deleteAllowed, saveAllowed } = setup({
-			admin: true,
-			item: {},
-			requestedKey: '1,2,3',
-			isBatch: true,
-		});
+	test('requests item capabilities for a loaded item whose key contains a comma', async () => {
+		me.response = { update: { access: true, fields: ['*'] }, delete: { access: false }, share: { access: false } };
 
-		await flushPromises();
-
-		expect(updateAllowed.value).toBe(true);
-		expect(deleteAllowed.value).toBe(true);
-		expect(saveAllowed.value).toBe(true);
-		expect(me.paths).toEqual([]);
-	});
-
-	test('allows a batch through an unconditional permission without a capability request', async () => {
-		const { updateAllowed } = setup({
-			admin: false,
-			permissions: [updatePermission(null, ['*'])],
-			item: {},
-			requestedKey: '1,2',
-			isBatch: true,
-		});
-
-		await flushPromises();
-
-		expect(updateAllowed.value).toBe(true);
-		expect(me.paths).toEqual([]);
-	});
-
-	test('allows a batch through a conditional permission without a capability request', async () => {
 		const { updateAllowed, deleteAllowed } = setup({
 			admin: false,
 			permissions: [
 				updatePermission({ status: { _eq: 'x' } }, ['*']),
 				{ collection: 'test', action: 'delete', role: 'role-1', permissions: { status: { _eq: 'x' } }, fields: null },
 			],
-			item: {},
-			requestedKey: '1,2',
-			isBatch: true,
+			item: { id: 'north,warehouse' },
+			requestedKey: 'north,warehouse',
 		});
 
 		await flushPromises();
 
+		expect(me.paths).toEqual(['/permissions/me/test/north%2Cwarehouse']);
 		expect(updateAllowed.value).toBe(true);
-		expect(deleteAllowed.value).toBe(true);
-		expect(me.paths).toEqual([]);
-	});
-
-	test('keeps a batch unavailable without a matching permission', async () => {
-		const { updateAllowed, deleteAllowed } = setup({
-			admin: false,
-			permissions: [],
-			item: {},
-			requestedKey: '1,2',
-			isBatch: true,
-		});
-
-		await flushPromises();
-
-		expect(updateAllowed.value).toBe(false);
 		expect(deleteAllowed.value).toBe(false);
-		expect(me.paths).toEqual([]);
-	});
-
-	test('allows batch archive when the archive field is editable under a conditional permission', async () => {
-		const { archiveAllowed } = setup({
-			admin: false,
-			permissions: [updatePermission({ status: { _eq: 'x' } }, ['status'])],
-			item: {},
-			requestedKey: '1,2',
-			isBatch: true,
-			archiveField: 'status',
-		});
-
-		await flushPromises();
-
-		expect(archiveAllowed.value).toBe(true);
-		expect(me.paths).toEqual([]);
-	});
-
-	test('denies batch archive when the archive field is not editable', async () => {
-		const { archiveAllowed } = setup({
-			admin: false,
-			permissions: [updatePermission({ status: { _eq: 'x' } }, ['name'])],
-			item: {},
-			requestedKey: '1,2',
-			isBatch: true,
-			archiveField: 'status',
-		});
-
-		await flushPromises();
-
-		expect(archiveAllowed.value).toBe(false);
-		expect(me.paths).toEqual([]);
 	});
 });

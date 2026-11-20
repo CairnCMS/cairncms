@@ -278,7 +278,7 @@ const { createAllowed, deleteAllowed, saveAllowed, updateAllowed, fields, revisi
 	ref('directus_files'),
 	item,
 	isNew,
-	{ primaryKey, loading, error, isNewOrEmptySingleton, isBatch }
+	{ primaryKey, loading, error, isNewOrEmptySingleton }
 );
 
 const fieldsFiltered = computed(() => {
