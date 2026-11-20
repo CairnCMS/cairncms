@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { createI18n } from 'vue-i18n';
 import Operation from './components/operation.vue';
+import FlowDrawer from './flow-drawer.vue';
 import FlowItem from './flow.vue';
 
 const shortcuts = new Map<string, () => void>();
@@ -243,5 +244,60 @@ describe('Flow editor save payload', () => {
 		expect(body.status).toBe('inactive');
 		expect(body.operation).toBeNull();
 		expect(body.operations.delete).toEqual(['op-1']);
+	});
+});
+
+describe('Flow editor save shortcut', () => {
+	async function mountWithStagedChange() {
+		const mounted = mountFlow();
+		await flushPromises();
+
+		triggerPanel(mounted.wrapper).vm.$emit('flow-status', 'inactive');
+		await flushPromises();
+
+		return mounted;
+	}
+
+	async function pressSave() {
+		shortcuts.get('meta+s')!();
+		await flushPromises();
+	}
+
+	test('saves when no drawer is open', async () => {
+		await mountWithStagedChange();
+
+		await pressSave();
+
+		expect(vi.mocked(api.patch)).toHaveBeenCalledTimes(1);
+		expect(patchBody().status).toBe('inactive');
+	});
+
+	test.each([
+		['an existing operation', 'op-1'],
+		['a new operation', '+'],
+	])('does not save while the drawer for %s is open', async (_label, operationId) => {
+		const { wrapper } = await mountWithStagedChange();
+
+		await wrapper.setProps({ operationId });
+		await pressSave();
+
+		expect(vi.mocked(api.patch)).not.toHaveBeenCalled();
+	});
+
+	test('does not save while the trigger drawer is open, and saves after it closes', async () => {
+		const { wrapper } = await mountWithStagedChange();
+
+		triggerPanel(wrapper).vm.$emit('edit', triggerPanel(wrapper).props('panel'));
+		await flushPromises();
+		await pressSave();
+
+		expect(vi.mocked(api.patch)).not.toHaveBeenCalled();
+
+		wrapper.findComponent(FlowDrawer).vm.$emit('cancel');
+		await flushPromises();
+		await pressSave();
+
+		expect(vi.mocked(api.patch)).toHaveBeenCalledTimes(1);
+		expect(patchBody().status).toBe('inactive');
 	});
 });

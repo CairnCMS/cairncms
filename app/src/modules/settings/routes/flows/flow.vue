@@ -218,6 +218,8 @@ const props = defineProps<{
 const saving = ref(false);
 
 useShortcut('meta+s', () => {
+	if (props.operationId !== undefined || triggerDetailOpen.value) return;
+
 	saveChanges();
 });
 
