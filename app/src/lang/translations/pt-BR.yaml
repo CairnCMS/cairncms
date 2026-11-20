@@ -119,16 +119,6 @@ unarchive_confirm: Você tem certeza que deseja desarquivar este item?
 nested_files_folders_will_be_moved: Arquivos e pastas aninhadas serão movidos um nível acima.
 validation_errors_notice: 'Os seguintes campos têm valores inválidos:'
 validationError:
-  eq: O valor tem de ser {valid}
-  neq: O valor não pode ser {invalid}
-  in: O valor tem de ser um de {valid}
-  nin: O valor não pode ser um de {invalid}
-  contains: O valor precisa conter {substring}
-  ncontains: O valor não pode conter {substring}
-  gt: O valor tem de ser maior que {valid}
-  gte: O valor tem de ser maior ou igual a {valid}
-  lt: O valor tem de ser menor que {valid}
-  lte: O valor tem de ser menor ou igual a {valid}
   empty: O valor tem de ser vazio
   nempty: O valor não pode estar vazio
   null: O valor precisa ser nulo
