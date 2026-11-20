@@ -226,17 +226,12 @@ useShortcut('meta+s', () => {
 const flowsStore = useFlowsStore();
 const stagedFlow = ref<Partial<FlowRaw>>({});
 
-const flow = computed<FlowRaw | undefined>({
-	get() {
-		const existing = flowsStore.flows.find((flow) => flow.id === props.primaryKey);
+const flow = computed<FlowRaw | undefined>(() => {
+	const existing = flowsStore.flows.find((flow) => flow.id === props.primaryKey);
 
-		if (!existing) return undefined;
+	if (!existing) return undefined;
 
-		return merge({}, existing, pick(stagedFlow.value, ['status', 'operation', 'operations']));
-	},
-	set(newFlow) {
-		stagedFlow.value = newFlow ?? {};
-	},
+	return merge({}, existing, pick(stagedFlow.value, ['status', 'operation', 'operations']));
 });
 
 const loading = ref(false);
@@ -532,7 +527,7 @@ async function deletePanel(id: string) {
 	}
 
 	if (flow.value.operation === id) {
-		stagedFlow.value = { operation: null };
+		stagedFlow.value = { ...stagedFlow.value, operation: null };
 	} else {
 		const parent = parentPanels.value[id];
 
@@ -617,7 +612,7 @@ function arrowStop() {
 		const currentlyConnected = parentPanels.value[nearPanel];
 
 		if (currentlyConnected.id === '$trigger') {
-			flow.value = merge({}, flow.value, { operation: null });
+			stagedFlow.value = { ...stagedFlow.value, operation: null };
 		} else {
 			stageOperationEdits({
 				edits: {
@@ -629,7 +624,7 @@ function arrowStop() {
 	}
 
 	if (arrowInfo.value.id === '$trigger') {
-		flow.value = merge({}, flow.value, { operation: nearPanel ?? null });
+		stagedFlow.value = { ...stagedFlow.value, operation: nearPanel ?? null };
 	} else {
 		stageOperationEdits({
 			edits: {

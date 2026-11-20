@@ -195,3 +195,53 @@ describe('Flow editor settings', () => {
 		expect(patchBody().operation).toBeNull();
 	});
 });
+
+describe('Flow editor save payload', () => {
+	test('saves only editor changes after settings are saved in the drawer', async () => {
+		const { wrapper, flowsStore } = mountFlow();
+		await flushPromises();
+
+		triggerPanel(wrapper).vm.$emit('arrow-move', { id: '$trigger', type: 'resolve', pos: new Vector2(10000, 10000) });
+		triggerPanel(wrapper).vm.$emit('arrow-stop');
+
+		flowsStore.flows = [
+			storedFlow({ name: 'Nightly import', options: { method: 'POST' }, accountability: 'activity' }),
+		];
+
+		await flushPromises();
+
+		shortcuts.get('meta+s')!();
+		await flushPromises();
+
+		const body = patchBody();
+
+		expect(body.operation).toBeNull();
+		expect(body.operations).toBeDefined();
+		expect(body).not.toHaveProperty('name');
+		expect(body).not.toHaveProperty('options');
+		expect(body).not.toHaveProperty('accountability');
+	});
+
+	test('keeps a staged status when the first operation is deleted', async () => {
+		const { wrapper } = mountFlow();
+		await flushPromises();
+
+		triggerPanel(wrapper).vm.$emit('flow-status', 'inactive');
+
+		wrapper
+			.findAllComponents(Operation)
+			.find((panel) => panel.props('panel').id === 'op-1')!
+			.vm.$emit('delete', 'op-1');
+
+		await flushPromises();
+
+		shortcuts.get('meta+s')!();
+		await flushPromises();
+
+		const body = patchBody();
+
+		expect(body.status).toBe('inactive');
+		expect(body.operation).toBeNull();
+		expect(body.operations.delete).toEqual(['op-1']);
+	});
+});
