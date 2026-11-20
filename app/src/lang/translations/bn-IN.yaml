@@ -113,9 +113,6 @@ app_access_minimum: ন্যূনতম অ্যাপ অ্যাক্স�
 recommended_defaults: প্রস্তাবিত ডিফল্ট
 unarchive: আর্কাইভ মুক্ত করুন
 unarchive_confirm: আপনি কি নিশ্চিত যে আপনি এই আইটেমটি সংরক্ষণাগার থেকে বের করতে চান?
-validationError:
-  eq: মান {valid} হতে হবে
-  neq: মান {invalid} হতে পারে না
 text: পাঠ্য
 time: সময়
 timestamp: টাইমস্ট্যাম্প
