@@ -118,16 +118,6 @@ unarchive_confirm: 您確定要解除封存這個項目嗎？
 nested_files_folders_will_be_moved: 巢狀的檔案與資料夾將會被上移一層
 validation_errors_notice: '以下欄位含有無效內容:'
 validationError:
-  eq: 值必須為 {valid}
-  neq: 值不能為 {invalid}
-  in: 值必須為 {valid} 之一
-  nin: 值不能為 {invalid} 之一
-  contains: 值必須包含 {substring}
-  ncontains: 值不能包含 {substring}
-  gt: 值必須大於 {valid}
-  gte: 值必須大於等於 {valid}
-  lt: 值必須小於 {valid}
-  lte: 值必須小於等於 {valid}
   empty: 值必須為空
   nempty: 值不能為空
   null: 值必須為null
