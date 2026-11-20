@@ -118,16 +118,6 @@ unarchive_confirm: ئایا دڵنیای دەتەوێت ئەم مادەیە ئە
 nested_files_folders_will_be_moved: پەڕگە و دۆسیە بەناویەکداچوەکان یەک ئاست دەبرێنە سەرەوە.
 validation_errors_notice: 'ئەم خانانە بەهای نادروستیان هەیە:'
 validationError:
-  eq: بەها پێویستە {valid}
-  neq: بەها نابێت {invalid}
-  in: بەها پێویستە یەکێک بێت لە {valid}
-  nin: بەها نابێت یەکێک بێت لە {invalid}
-  contains: بەها پێویستە {substring} لەخۆ بگرێت
-  ncontains: بەها نابێت {substring} لەخۆ بگرێت
-  gt: بەها پێویستە گەورەتر بێت لە {valid}
-  gte: بەها پێویستە گەورەتر یان یەکسان بێت لەگەڵ {valid}
-  lt: بەها پێویستە کەمتربێت لە {valid}
-  lte: بەها پێویستە کەمتر یان یەکسان بێت لەگەڵ {valid}
   empty: بەها پێویستە بەتاڵ بێت
   nempty: بەها نابێت بەتاڵ بێت
   null: بەها پێویستە پوچ بێت
