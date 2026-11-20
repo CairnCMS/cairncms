@@ -117,16 +117,6 @@ unarchive_confirm: Oletko varma, että haluat palauttaa tämän kohteen?
 nested_files_folders_will_be_moved: Sisäkkäisiä tiedostoja ja kansioita siirretään yksi taso ylöspäin.
 validation_errors_notice: 'Seuraavilla kentillä on virheellisiä arvoja:'
 validationError:
-  eq: Arvon on oltava {valid}
-  neq: Arvo ei voi olla {invalid}
-  in: Arvon on oltava yksi näistä {valid}
-  nin: Arvo ei voi olla {invalid}
-  contains: Arvon on sisällettävä {substring}
-  ncontains: Arvo ei voi sisältää {substring}
-  gt: Arvon on oltava suurempi kuin {valid}
-  gte: Arvon on oltava yhtä suuri tai suurempi kuin {valid}
-  lt: Arvon on oltava pienempi kuin {valid}
-  lte: Arvon on oltava yhtä suuri tai suurempi kuin {valid}
   empty: Arvon on oltava tyhjä
   nempty: Arvo ei voi olla tyhjä
   null: Arvon on oltava null
