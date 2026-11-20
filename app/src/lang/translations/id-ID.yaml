@@ -119,16 +119,6 @@ unarchive_confirm: Apakah Anda yakin ingin membatalkan arsip dari item ini?
 nested_files_folders_will_be_moved: Berkas dan folder yang disarang akan dipindahkan satu tingkat keatas.
 validation_errors_notice: 'Bidang berikut memiliki nilai-nilai yang tidak sah:'
 validationError:
-  eq: Nilai harus {valid}
-  neq: Nilai tidak boleh {invalid}
-  in: Nilai harus salah satu dari {valid}
-  nin: Nilai tidal boleh salah satu dari {invalid}
-  contains: Nilai harus memiliki {substring}
-  ncontains: Nilai tidak boleh memiliki {substring}
-  gt: Nilai harus lebih besar dari {valid}
-  gte: Nilai harus lebih besar atau sama dengan {valid}
-  lt: Nilai harus kurang dari {valid}
-  lte: Nilai harus kurang dari ataus sama dengan {valid}
   empty: Nilai harus kosong
   nempty: Nilai tidak boleh kosong
   null: Nilai harus kosong
