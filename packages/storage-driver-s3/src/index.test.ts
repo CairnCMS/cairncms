@@ -354,7 +354,7 @@ describe('#read', () => {
 	});
 
 	test('Optionally allows setting start range offset', async () => {
-		await driver.read(sample.path.input, { start: sample.range.start });
+		await driver.read(sample.path.input, { start: sample.range.start, end: undefined });
 
 		expect(GetObjectCommand).toHaveBeenCalledWith({
 			Key: sample.path.inputFull,
@@ -364,7 +364,7 @@ describe('#read', () => {
 	});
 
 	test('Optionally allows setting end range offset', async () => {
-		await driver.read(sample.path.input, { end: sample.range.end });
+		await driver.read(sample.path.input, { start: undefined, end: sample.range.end });
 
 		expect(GetObjectCommand).toHaveBeenCalledWith({
 			Key: sample.path.inputFull,

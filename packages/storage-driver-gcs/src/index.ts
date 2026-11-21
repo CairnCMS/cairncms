@@ -1,6 +1,6 @@
 import type { Driver, Range } from '@cairncms/storage';
 import { normalizePath } from '@cairncms/utils';
-import type { Bucket, GetFilesOptions } from '@google-cloud/storage';
+import type { Bucket, CreateReadStreamOptions, GetFilesOptions } from '@google-cloud/storage';
 import { Storage } from '@google-cloud/storage';
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
@@ -34,7 +34,10 @@ export class DriverGCS implements Driver {
 	}
 
 	async read(filepath: string, range?: Range) {
-		return this.file(this.fullPath(filepath)).createReadStream(range);
+		const options: CreateReadStreamOptions = {};
+		if (range?.start !== undefined) options.start = range.start;
+		if (range?.end !== undefined) options.end = range.end;
+		return this.file(this.fullPath(filepath)).createReadStream(options);
 	}
 
 	async write(filepath: string, content: Readable) {
