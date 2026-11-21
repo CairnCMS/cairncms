@@ -156,3 +156,33 @@ describe('boolean and geometry flag validation', async () => {
 		expect(() => validateQuery({ filter: { location: { _intersects: '' } } } as any)).toThrowError('valid GeoJSON');
 	});
 });
+
+describe('spatial operand strings', async () => {
+	const validateQuery = await getValidateQuery();
+	const { parseFilter } = await import('@cairncms/utils');
+
+	const box = JSON.stringify({
+		type: 'Polygon',
+		coordinates: [
+			[
+				[0, 0],
+				[1, 0],
+				[1, 1],
+				[0, 1],
+				[0, 0],
+			],
+		],
+	});
+
+	test('accepts a GeoJSON string once the filter is parsed', () => {
+		const filter = parseFilter({ location: { _intersects_bbox: box } }, null);
+
+		expect(() => validateQuery({ filter } as Query)).not.toThrowError();
+	});
+
+	test.each(['{"type":', '"null"', ' null '])('still rejects %j once the filter is parsed', (operand) => {
+		const filter = parseFilter({ location: { _intersects: operand } }, null);
+
+		expect(() => validateQuery({ filter } as Query)).toThrowError('valid GeoJSON');
+	});
+});
