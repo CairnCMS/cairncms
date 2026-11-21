@@ -240,13 +240,13 @@ describe('#read', () => {
 	});
 
 	test('Calls download with offset if start range is provided', async () => {
-		await driver.read(sample.path.input, { start: sample.range.start });
+		await driver.read(sample.path.input, { start: sample.range.start, end: undefined });
 
 		expect(mockDownload).toHaveBeenCalledWith(sample.range.start, undefined);
 	});
 
 	test('Calls download with count if end range is provided', async () => {
-		await driver.read(sample.path.input, { end: sample.range.end });
+		await driver.read(sample.path.input, { start: undefined, end: sample.range.end });
 
 		expect(mockDownload).toHaveBeenCalledWith(undefined, sample.range.end);
 	});

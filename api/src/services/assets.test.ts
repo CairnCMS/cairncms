@@ -249,9 +249,9 @@ describe('AssetsService.statAsset (GHSA-rv78-qqrq-73m5)', () => {
 			primeKnex(tracker);
 			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
 
-			await expect(service.statAsset(VALID_UUID, { transformationParams: {} }, {})).rejects.toBeInstanceOf(
-				RangeNotSatisfiableException
-			);
+			await expect(
+				service.statAsset(VALID_UUID, { transformationParams: {} }, { start: undefined, end: undefined })
+			).rejects.toBeInstanceOf(RangeNotSatisfiableException);
 
 			expect(storageRead).not.toHaveBeenCalled();
 		});
