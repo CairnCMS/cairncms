@@ -145,13 +145,13 @@ describe('#read', () => {
 	});
 
 	test('Calls createReadStream with optional start range', async () => {
-		await driver.read(sample.path.input, { start: sample.range.start });
+		await driver.read(sample.path.input, { start: sample.range.start, end: undefined });
 
 		expect(createReadStream).toHaveBeenCalledWith(sample.path.inputFull, { start: sample.range.start });
 	});
 
 	test('Calls createReadStream with optional end range', async () => {
-		await driver.read(sample.path.input, { end: sample.range.end });
+		await driver.read(sample.path.input, { start: undefined, end: sample.range.end });
 
 		expect(createReadStream).toHaveBeenCalledWith(sample.path.inputFull, { end: sample.range.end });
 	});
