@@ -1,0 +1,146 @@
+[
+	{
+		"id": "bf8b59a6-b3b8-4296-b479-87c1360f64c8",
+		"name": "Response last",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false,
+			"return": "$last"
+		},
+		"operation": "6fdf7891-173f-4d4f-aafb-023b14506aed",
+		"operations": [
+			{
+				"id": "6fdf7891-173f-4d4f-aafb-023b14506aed",
+				"name": null,
+				"key": "first",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"a": 1
+					}
+				},
+				"resolve": "099acd2b-0fd0-4eb5-be95-e2c10dcfee44",
+				"reject": null
+			},
+			{
+				"id": "099acd2b-0fd0-4eb5-be95-e2c10dcfee44",
+				"name": null,
+				"key": "second",
+				"type": "transform",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"b": 2
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "561f9c4f-ea41-46f7-b549-84a3ba6cd11c",
+		"name": "Response all",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false,
+			"return": "$all"
+		},
+		"operation": "9969807f-8e94-48b0-80d3-dffa83fffa7b",
+		"operations": [
+			{
+				"id": "9969807f-8e94-48b0-80d3-dffa83fffa7b",
+				"name": null,
+				"key": "first",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"a": 1
+					}
+				},
+				"resolve": "7321d40a-790a-4ee0-b6af-e04492a8a11e",
+				"reject": null
+			},
+			{
+				"id": "7321d40a-790a-4ee0-b6af-e04492a8a11e",
+				"name": null,
+				"key": "second",
+				"type": "transform",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"b": 2
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "f26c5beb-fc1e-4422-a8dd-55f33a052786",
+		"name": "Response step",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false,
+			"return": "first"
+		},
+		"operation": "88259c0d-c7e7-4225-9330-1d9f3a78fc93",
+		"operations": [
+			{
+				"id": "88259c0d-c7e7-4225-9330-1d9f3a78fc93",
+				"name": null,
+				"key": "first",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"a": 1
+					}
+				},
+				"resolve": "56b4a56c-03a2-4d80-999d-f3aa597ec95b",
+				"reject": null
+			},
+			{
+				"id": "56b4a56c-03a2-4d80-999d-f3aa597ec95b",
+				"name": null,
+				"key": "second",
+				"type": "transform",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"b": 2
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	}
+]

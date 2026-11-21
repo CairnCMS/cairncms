@@ -1,0 +1,185 @@
+[
+	{
+		"id": "62aebd20-5d74-41ed-ba61-36bd7c0b63cc",
+		"name": "Outcome success",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "241a57df-145e-481d-a0e9-83a170fa0dad",
+		"operations": [
+			{
+				"id": "241a57df-145e-481d-a0e9-83a170fa0dad",
+				"name": null,
+				"key": "done",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"done": true
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "664b5641-952a-4676-8027-4c4902bbf269",
+		"name": "Outcome condition false",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "88a9f357-d938-4d69-bcd9-5f0a5e56e435",
+		"operations": [
+			{
+				"id": "88a9f357-d938-4d69-bcd9-5f0a5e56e435",
+				"name": null,
+				"key": "gate",
+				"type": "condition",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"filter": {
+						"$trigger": {
+							"query": {
+								"pass": {
+									"_eq": "never"
+								}
+							}
+						}
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "cdaec9c9-7036-40f0-8a29-20d6847204e5",
+		"name": "Outcome condition error",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "2f394f97-e8a6-4d20-a30c-530543e0a920",
+		"operations": [
+			{
+				"id": "2f394f97-e8a6-4d20-a30c-530543e0a920",
+				"name": null,
+				"key": "gate",
+				"type": "condition",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"filter": {
+						"$trigger": {
+							"query": {
+								"pass": {
+									"_regex": "["
+								}
+							}
+						}
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "b561bf3e-0f14-4235-a281-c19a7538995e",
+		"name": "Outcome failure path",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "a0a6c18f-3f9d-4d1c-860d-f7097e98fde4",
+		"operations": [
+			{
+				"id": "a0a6c18f-3f9d-4d1c-860d-f7097e98fde4",
+				"name": null,
+				"key": "broken",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": "not json"
+				},
+				"resolve": null,
+				"reject": "fd98cce3-ba06-4f46-86c3-409c63aa36be"
+			},
+			{
+				"id": "fd98cce3-ba06-4f46-86c3-409c63aa36be",
+				"name": null,
+				"key": "recover",
+				"type": "transform",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"recovered": true
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "9fca1ab3-45bf-40da-9d11-4c1de1872743",
+		"name": "Outcome step failed",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "af316f18-e20b-4a44-96ed-b03b6da62b4b",
+		"operations": [
+			{
+				"id": "af316f18-e20b-4a44-96ed-b03b6da62b4b",
+				"name": null,
+				"key": "broken",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": "not json"
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	}
+]
