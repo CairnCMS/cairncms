@@ -1,0 +1,47 @@
+{
+	"id": "481a3055-2c18-4b2e-9dd5-7bc1fcb8350b",
+	"name": "Graph unconnected",
+	"icon": null,
+	"color": null,
+	"description": null,
+	"status": "active",
+	"trigger": "webhook",
+	"accountability": "all",
+	"options": {
+		"method": "GET",
+		"cacheEnabled": false
+	},
+	"operation": "adb96e3b-2d08-4324-915d-1049b3fb4d9a",
+	"operations": [
+		{
+			"id": "adb96e3b-2d08-4324-915d-1049b3fb4d9a",
+			"name": null,
+			"key": "answer",
+			"type": "transform",
+			"position_x": 19,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"answered": true
+				}
+			},
+			"resolve": null,
+			"reject": null
+		},
+		{
+			"id": "d4150483-7330-4f85-a183-1567bec9925d",
+			"name": null,
+			"key": "orphan",
+			"type": "transform",
+			"position_x": 19,
+			"position_y": 37,
+			"options": {
+				"json": {
+					"orphan": true
+				}
+			},
+			"resolve": null,
+			"reject": null
+		}
+	]
+}

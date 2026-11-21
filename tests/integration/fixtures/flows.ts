@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 import type { Fixtures } from '@vitest/runner';
-import type { FlowRaw, OperationRaw } from '@cairncms/types';
+import type { FlowRaw, OperationRaw, TriggerType } from '@cairncms/types';
 import type { Knex } from 'knex';
 import { randomUUID } from 'node:crypto';
 import type { Response } from 'supertest';
@@ -14,6 +14,38 @@ export type OperationDefinition = Omit<OperationRaw, 'flow' | 'date_created' | '
 export type FlowDefinition = Omit<FlowRaw, 'operations' | 'date_created' | 'user_created'> & {
 	operations: OperationDefinition[];
 };
+
+/** A flow as a JSON import types it: the literal unions widen to strings, and every other field stays checked. */
+export type FlowJson = Omit<FlowDefinition, 'status' | 'trigger' | 'accountability'> & {
+	status: string;
+	trigger: string | null;
+	accountability: string | null;
+};
+
+const STATUSES: readonly FlowRaw['status'][] = ['active', 'inactive'];
+const TRIGGERS: readonly TriggerType[] = ['event', 'schedule', 'operation', 'webhook', 'manual'];
+const ACCOUNTABILITIES: readonly NonNullable<FlowRaw['accountability']>[] = ['all', 'activity'];
+
+function isOneOf<T extends string>(values: readonly T[], value: unknown): value is T {
+	return (values as readonly unknown[]).includes(value);
+}
+
+/** Narrows imported JSON definitions to `FlowDefinition` before anything is installed, and returns a fresh copy. */
+export function defineFlows(source: string, json: FlowJson | FlowJson[]): FlowDefinition[] {
+	return (Array.isArray(json) ? json : [json]).map((flow) => {
+		const { status, trigger, accountability } = flow;
+
+		const invalid = (field: string, value: unknown) =>
+			new Error(`${source}: flow ${flow.id} has an invalid ${field}: ${JSON.stringify(value)}`);
+
+		if (!isOneOf(STATUSES, status)) throw invalid('status', status);
+		if (trigger !== null && !isOneOf(TRIGGERS, trigger)) throw invalid('trigger', trigger);
+		if (accountability !== null && !isOneOf(ACCOUNTABILITIES, accountability))
+			throw invalid('accountability', accountability);
+
+		return structuredClone({ ...flow, status, trigger, accountability });
+	});
+}
 
 export type FlowFixture = {
 	/** Highest activity id when the case began. Only run records above it belong to the case. */

@@ -1,0 +1,767 @@
+{
+	"id": "ad430dfa-72bb-46f0-b9b7-499d67936ff3",
+	"name": "Graph chain",
+	"icon": null,
+	"color": null,
+	"description": null,
+	"status": "active",
+	"trigger": "webhook",
+	"accountability": "all",
+	"options": {
+		"method": "GET",
+		"cacheEnabled": false
+	},
+	"operation": "2580d393-3c52-4e82-8e41-60fbef1d9d53",
+	"operations": [
+		{
+			"id": "2580d393-3c52-4e82-8e41-60fbef1d9d53",
+			"name": null,
+			"key": "step_01",
+			"type": "transform",
+			"position_x": 19,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $trigger.query.value }}"
+				}
+			},
+			"resolve": "5ac56513-48d2-46e6-9b79-a1ab762287b8",
+			"reject": null
+		},
+		{
+			"id": "5ac56513-48d2-46e6-9b79-a1ab762287b8",
+			"name": null,
+			"key": "step_02",
+			"type": "transform",
+			"position_x": 37,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "dcd27476-a4ef-4c95-8952-469c6a470bb5",
+			"reject": null
+		},
+		{
+			"id": "dcd27476-a4ef-4c95-8952-469c6a470bb5",
+			"name": null,
+			"key": "step_03",
+			"type": "transform",
+			"position_x": 55,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "103a9192-ff99-4633-9e3a-1bf00ce815b7",
+			"reject": null
+		},
+		{
+			"id": "103a9192-ff99-4633-9e3a-1bf00ce815b7",
+			"name": null,
+			"key": "step_04",
+			"type": "transform",
+			"position_x": 73,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "6d8cac65-df28-48bb-b418-06e713017f46",
+			"reject": null
+		},
+		{
+			"id": "6d8cac65-df28-48bb-b418-06e713017f46",
+			"name": null,
+			"key": "step_05",
+			"type": "transform",
+			"position_x": 91,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "f2bad71c-d82c-4731-b609-ed12c3027ab5",
+			"reject": null
+		},
+		{
+			"id": "f2bad71c-d82c-4731-b609-ed12c3027ab5",
+			"name": null,
+			"key": "step_06",
+			"type": "transform",
+			"position_x": 109,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "add44c54-4543-4692-89f0-969aaec8c4a2",
+			"reject": null
+		},
+		{
+			"id": "add44c54-4543-4692-89f0-969aaec8c4a2",
+			"name": null,
+			"key": "step_07",
+			"type": "transform",
+			"position_x": 127,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "da028dfe-53ca-48f4-b9fe-03bd007b6237",
+			"reject": null
+		},
+		{
+			"id": "da028dfe-53ca-48f4-b9fe-03bd007b6237",
+			"name": null,
+			"key": "step_08",
+			"type": "transform",
+			"position_x": 145,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "c20afc44-3d89-4b3e-acb4-4fba1f877d69",
+			"reject": null
+		},
+		{
+			"id": "c20afc44-3d89-4b3e-acb4-4fba1f877d69",
+			"name": null,
+			"key": "step_09",
+			"type": "transform",
+			"position_x": 163,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "b8ffd34a-5e99-499e-b0eb-8aa52ab3ea50",
+			"reject": null
+		},
+		{
+			"id": "b8ffd34a-5e99-499e-b0eb-8aa52ab3ea50",
+			"name": null,
+			"key": "step_10",
+			"type": "transform",
+			"position_x": 181,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "b3c910a5-a00f-40a7-b0cd-cdbc3dcf4e43",
+			"reject": null
+		},
+		{
+			"id": "b3c910a5-a00f-40a7-b0cd-cdbc3dcf4e43",
+			"name": null,
+			"key": "step_11",
+			"type": "transform",
+			"position_x": 199,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "e4b5b44c-7b20-432f-b698-e9982c13ac18",
+			"reject": null
+		},
+		{
+			"id": "e4b5b44c-7b20-432f-b698-e9982c13ac18",
+			"name": null,
+			"key": "step_12",
+			"type": "transform",
+			"position_x": 217,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "382028a9-a4e6-49ac-9e91-7c1c34bfe30c",
+			"reject": null
+		},
+		{
+			"id": "382028a9-a4e6-49ac-9e91-7c1c34bfe30c",
+			"name": null,
+			"key": "step_13",
+			"type": "transform",
+			"position_x": 235,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "d84e8b0e-5304-4ad3-8064-ef89b6d13665",
+			"reject": null
+		},
+		{
+			"id": "d84e8b0e-5304-4ad3-8064-ef89b6d13665",
+			"name": null,
+			"key": "step_14",
+			"type": "transform",
+			"position_x": 253,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "2b23cd85-5609-4ed9-95d5-755b87c0f437",
+			"reject": null
+		},
+		{
+			"id": "2b23cd85-5609-4ed9-95d5-755b87c0f437",
+			"name": null,
+			"key": "step_15",
+			"type": "transform",
+			"position_x": 271,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "2d8ff151-7e0a-4ec2-95e8-1ed977e79cac",
+			"reject": null
+		},
+		{
+			"id": "2d8ff151-7e0a-4ec2-95e8-1ed977e79cac",
+			"name": null,
+			"key": "step_16",
+			"type": "transform",
+			"position_x": 289,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "cce93374-402c-4d9a-bf7d-d626521a1ed0",
+			"reject": null
+		},
+		{
+			"id": "cce93374-402c-4d9a-bf7d-d626521a1ed0",
+			"name": null,
+			"key": "step_17",
+			"type": "transform",
+			"position_x": 307,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "aabc3e7c-f9bf-437f-a1c1-ab1567251eb7",
+			"reject": null
+		},
+		{
+			"id": "aabc3e7c-f9bf-437f-a1c1-ab1567251eb7",
+			"name": null,
+			"key": "step_18",
+			"type": "transform",
+			"position_x": 325,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "afa1f8ec-fd9a-44ea-baf2-7de5abd2dd95",
+			"reject": null
+		},
+		{
+			"id": "afa1f8ec-fd9a-44ea-baf2-7de5abd2dd95",
+			"name": null,
+			"key": "step_19",
+			"type": "transform",
+			"position_x": 343,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "09fa0d0b-f401-43de-86e4-6eff68d0f0f2",
+			"reject": null
+		},
+		{
+			"id": "09fa0d0b-f401-43de-86e4-6eff68d0f0f2",
+			"name": null,
+			"key": "step_20",
+			"type": "transform",
+			"position_x": 361,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "8ce0ebc3-2713-4225-b845-b237f93d5329",
+			"reject": null
+		},
+		{
+			"id": "8ce0ebc3-2713-4225-b845-b237f93d5329",
+			"name": null,
+			"key": "step_21",
+			"type": "transform",
+			"position_x": 379,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "e7361b2b-f40f-410d-a778-b03475ea13a0",
+			"reject": null
+		},
+		{
+			"id": "e7361b2b-f40f-410d-a778-b03475ea13a0",
+			"name": null,
+			"key": "step_22",
+			"type": "transform",
+			"position_x": 397,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "b19d7c81-1b72-448a-9c62-53f205298191",
+			"reject": null
+		},
+		{
+			"id": "b19d7c81-1b72-448a-9c62-53f205298191",
+			"name": null,
+			"key": "step_23",
+			"type": "transform",
+			"position_x": 415,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "3887704b-0453-45a7-b33f-1a4960bdc437",
+			"reject": null
+		},
+		{
+			"id": "3887704b-0453-45a7-b33f-1a4960bdc437",
+			"name": null,
+			"key": "step_24",
+			"type": "transform",
+			"position_x": 433,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "0b0ffdb2-d729-48b8-8de5-c8510b4ebb3e",
+			"reject": null
+		},
+		{
+			"id": "0b0ffdb2-d729-48b8-8de5-c8510b4ebb3e",
+			"name": null,
+			"key": "step_25",
+			"type": "transform",
+			"position_x": 451,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "8199ca9b-754a-4e13-ad29-082af8cd5000",
+			"reject": null
+		},
+		{
+			"id": "8199ca9b-754a-4e13-ad29-082af8cd5000",
+			"name": null,
+			"key": "step_26",
+			"type": "transform",
+			"position_x": 469,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "d89b273f-e4ef-418a-b733-c9b54f2bbfc6",
+			"reject": null
+		},
+		{
+			"id": "d89b273f-e4ef-418a-b733-c9b54f2bbfc6",
+			"name": null,
+			"key": "step_27",
+			"type": "transform",
+			"position_x": 487,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "dcec4146-68ff-425a-9274-df6b0efe91ca",
+			"reject": null
+		},
+		{
+			"id": "dcec4146-68ff-425a-9274-df6b0efe91ca",
+			"name": null,
+			"key": "step_28",
+			"type": "transform",
+			"position_x": 505,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "7258f75d-6ed1-42fa-a7b0-f07e88e00be8",
+			"reject": null
+		},
+		{
+			"id": "7258f75d-6ed1-42fa-a7b0-f07e88e00be8",
+			"name": null,
+			"key": "step_29",
+			"type": "transform",
+			"position_x": 523,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "01befc5c-4463-4652-8ef1-d1bb6181702e",
+			"reject": null
+		},
+		{
+			"id": "01befc5c-4463-4652-8ef1-d1bb6181702e",
+			"name": null,
+			"key": "step_30",
+			"type": "transform",
+			"position_x": 541,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "89f761f1-fdff-4100-8f4b-434c26ce174b",
+			"reject": null
+		},
+		{
+			"id": "89f761f1-fdff-4100-8f4b-434c26ce174b",
+			"name": null,
+			"key": "step_31",
+			"type": "transform",
+			"position_x": 559,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "59d04b11-a2c4-4891-9896-242b72eac9f7",
+			"reject": null
+		},
+		{
+			"id": "59d04b11-a2c4-4891-9896-242b72eac9f7",
+			"name": null,
+			"key": "step_32",
+			"type": "transform",
+			"position_x": 577,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "ebdbfbfb-dddd-4c46-b17b-f696b66f4434",
+			"reject": null
+		},
+		{
+			"id": "ebdbfbfb-dddd-4c46-b17b-f696b66f4434",
+			"name": null,
+			"key": "step_33",
+			"type": "transform",
+			"position_x": 595,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "139c1ed1-b289-432b-af8a-6db6659e9e45",
+			"reject": null
+		},
+		{
+			"id": "139c1ed1-b289-432b-af8a-6db6659e9e45",
+			"name": null,
+			"key": "step_34",
+			"type": "transform",
+			"position_x": 613,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "fecc2ac2-b039-4f1d-a3c7-2846db0da56b",
+			"reject": null
+		},
+		{
+			"id": "fecc2ac2-b039-4f1d-a3c7-2846db0da56b",
+			"name": null,
+			"key": "step_35",
+			"type": "transform",
+			"position_x": 631,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "1538cbff-174f-403b-a009-dbcd6deabd2a",
+			"reject": null
+		},
+		{
+			"id": "1538cbff-174f-403b-a009-dbcd6deabd2a",
+			"name": null,
+			"key": "step_36",
+			"type": "transform",
+			"position_x": 649,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "25db570a-38ce-4347-adec-e67b645ba8bd",
+			"reject": null
+		},
+		{
+			"id": "25db570a-38ce-4347-adec-e67b645ba8bd",
+			"name": null,
+			"key": "step_37",
+			"type": "transform",
+			"position_x": 667,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "b3793ac4-f023-4d57-a5be-03efb47ddb0a",
+			"reject": null
+		},
+		{
+			"id": "b3793ac4-f023-4d57-a5be-03efb47ddb0a",
+			"name": null,
+			"key": "step_38",
+			"type": "transform",
+			"position_x": 685,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "f612b106-9adf-4964-b143-f875b40f4e7d",
+			"reject": null
+		},
+		{
+			"id": "f612b106-9adf-4964-b143-f875b40f4e7d",
+			"name": null,
+			"key": "step_39",
+			"type": "transform",
+			"position_x": 703,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "6be2c8ed-8b10-417a-b72e-4905152636a5",
+			"reject": null
+		},
+		{
+			"id": "6be2c8ed-8b10-417a-b72e-4905152636a5",
+			"name": null,
+			"key": "step_40",
+			"type": "transform",
+			"position_x": 721,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "12a96801-486f-4155-9f6b-d9450f866481",
+			"reject": null
+		},
+		{
+			"id": "12a96801-486f-4155-9f6b-d9450f866481",
+			"name": null,
+			"key": "step_41",
+			"type": "transform",
+			"position_x": 739,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "4eccce91-85e0-4104-9641-db516853a898",
+			"reject": null
+		},
+		{
+			"id": "4eccce91-85e0-4104-9641-db516853a898",
+			"name": null,
+			"key": "step_42",
+			"type": "transform",
+			"position_x": 757,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "50eac380-1494-4c45-9d91-5abed824fbfe",
+			"reject": null
+		},
+		{
+			"id": "50eac380-1494-4c45-9d91-5abed824fbfe",
+			"name": null,
+			"key": "step_43",
+			"type": "transform",
+			"position_x": 775,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "ce46f8f2-8dee-4c09-a845-e97fec109897",
+			"reject": null
+		},
+		{
+			"id": "ce46f8f2-8dee-4c09-a845-e97fec109897",
+			"name": null,
+			"key": "step_44",
+			"type": "transform",
+			"position_x": 793,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "d7f3a5bb-6aa1-42d9-bf9f-bfc3a5d80ecb",
+			"reject": null
+		},
+		{
+			"id": "d7f3a5bb-6aa1-42d9-bf9f-bfc3a5d80ecb",
+			"name": null,
+			"key": "step_45",
+			"type": "transform",
+			"position_x": 811,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "726eff0a-7020-4491-bbde-23f516503f83",
+			"reject": null
+		},
+		{
+			"id": "726eff0a-7020-4491-bbde-23f516503f83",
+			"name": null,
+			"key": "step_46",
+			"type": "transform",
+			"position_x": 829,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "c03c71c9-621a-4b97-931f-54c80fc1348c",
+			"reject": null
+		},
+		{
+			"id": "c03c71c9-621a-4b97-931f-54c80fc1348c",
+			"name": null,
+			"key": "step_47",
+			"type": "transform",
+			"position_x": 847,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "8bf99553-0117-4b07-8324-6903ecd652a9",
+			"reject": null
+		},
+		{
+			"id": "8bf99553-0117-4b07-8324-6903ecd652a9",
+			"name": null,
+			"key": "step_48",
+			"type": "transform",
+			"position_x": 865,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "12c944b6-3bd1-452f-81aa-de1ac8889700",
+			"reject": null
+		},
+		{
+			"id": "12c944b6-3bd1-452f-81aa-de1ac8889700",
+			"name": null,
+			"key": "step_49",
+			"type": "transform",
+			"position_x": 883,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": "2bda5551-3c21-408c-89cb-6895b710d13d",
+			"reject": null
+		},
+		{
+			"id": "2bda5551-3c21-408c-89cb-6895b710d13d",
+			"name": null,
+			"key": "step_50",
+			"type": "transform",
+			"position_x": 901,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"value": "{{ $last.value }}"
+				}
+			},
+			"resolve": null,
+			"reject": null
+		}
+	]
+}
