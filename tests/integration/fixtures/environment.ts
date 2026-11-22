@@ -1,4 +1,4 @@
-/* eslint-disable no-console, no-empty-pattern */
+/* eslint-disable no-console */
 import { test, inject } from 'vitest';
 import type { Fixtures } from '@vitest/runner';
 import { spawn, type ChildProcess } from 'node:child_process';

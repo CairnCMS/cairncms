@@ -55,7 +55,6 @@ vi.mock('@/api', () => ({
 
 vi.mock('@/router', () => ({ router: { push: vi.fn() } }));
 
-// eslint-disable-next-line vue/one-component-per-file
 const VInput = defineComponent({
 	name: 'VInput',
 	props: { modelValue: { type: String, default: null }, disabled: { type: Boolean, default: false } },
@@ -64,7 +63,6 @@ const VInput = defineComponent({
 		'<input :disabled="disabled" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
 });
 
-// eslint-disable-next-line vue/one-component-per-file
 const VButton = defineComponent({
 	name: 'VButton',
 	props: { disabled: { type: Boolean, default: false } },

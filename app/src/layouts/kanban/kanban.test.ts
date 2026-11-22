@@ -11,8 +11,6 @@ vi.mock('@/utils/unexpected-error', () => ({ unexpectedError: vi.fn() }));
 
 const i18n = createI18n({ legacy: false });
 
-/* eslint-disable vue/one-component-per-file */
-
 const dialogPassthrough = defineComponent({
 	name: 'VDialog',
 	props: { modelValue: { type: Boolean, default: false } },

@@ -18,7 +18,6 @@ vi.mock('@/api', () => ({
 
 enableAutoUnmount(afterEach);
 
-// eslint-disable-next-line vue/one-component-per-file
 const DrawerItemStub = defineComponent({
 	name: 'DrawerItemStub',
 	props: {
@@ -31,7 +30,6 @@ const DrawerItemStub = defineComponent({
 	template: '<div class="drawer-item-stub" />',
 });
 
-// eslint-disable-next-line vue/one-component-per-file
 const VListItem = defineComponent({
 	name: 'VListItem',
 	props: { clickable: { type: Boolean, default: false } },

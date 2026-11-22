@@ -1,4 +1,4 @@
-/* eslint-disable no-console, no-empty-pattern */
+/* eslint-disable no-console */
 import { test as base } from 'vitest';
 import { createServer } from 'node:http';
 import { once } from 'node:events';

@@ -21,7 +21,6 @@ import ExtensionOptions from './extension-options.vue';
 
 const i18n = createI18n({ legacy: false });
 
-// eslint-disable-next-line vue/one-component-per-file
 const VForm = defineComponent({
 	name: 'VForm',
 	props: { disabled: { type: Boolean, default: false }, fields: { type: Array, default: () => [] } },
@@ -29,7 +28,6 @@ const VForm = defineComponent({
 	template: '<div class="v-form-stub" />',
 });
 
-// eslint-disable-next-line vue/one-component-per-file
 const CustomOptions = defineComponent({
 	name: 'PanelOptionsMetric',
 	props: { value: { type: Object, default: () => ({}) }, disabled: { type: Boolean, default: false } },

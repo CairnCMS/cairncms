@@ -146,7 +146,6 @@ const relations = [
 	},
 ];
 
-// eslint-disable-next-line vue/one-component-per-file
 const VForm = defineComponent({
 	name: 'VForm',
 	props: {
@@ -161,7 +160,6 @@ const VForm = defineComponent({
 	template: '<div class="v-form-stub" />',
 });
 
-// eslint-disable-next-line vue/one-component-per-file
 const VButton = defineComponent({
 	name: 'VButton',
 	props: { disabled: { type: Boolean, default: false } },

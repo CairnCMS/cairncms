@@ -1,4 +1,4 @@
-/* eslint-disable no-console, no-empty-pattern */
+/* eslint-disable no-console */
 import { test, expect } from 'vitest';
 import { capturePrerequisite, requirePrerequisite, type Prerequisite } from '../../fixtures/prerequisite';
 import { initializeFixtures } from '../fixture-setup.mjs';

@@ -24,7 +24,6 @@ async function mountRevisions(max: number | undefined) {
 		useServerStore().info.queryLimit = { default: 100, max };
 	}
 
-	// eslint-disable-next-line vue/one-component-per-file
 	const TestComponent = defineComponent({
 		setup: () => useRevisions(ref('articles'), ref('1')),
 		render: () => h('div'),
@@ -123,7 +122,6 @@ describe('useRevisions created revision across identity changes', () => {
 		const primaryKey = ref('1');
 		let composable!: ReturnType<typeof useRevisions>;
 
-		// eslint-disable-next-line vue/one-component-per-file
 		const TestComponent = defineComponent({
 			setup: () => {
 				composable = useRevisions(ref('articles'), primaryKey);
