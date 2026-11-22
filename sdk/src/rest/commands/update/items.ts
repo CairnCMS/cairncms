@@ -29,7 +29,7 @@ export const updateItems =
 		query?: TQuery
 	): RestCommand<UpdateItemOutput<Schema, Collection, TQuery>[], Schema> =>
 	() => {
-		let payload: Record<string, any> = {};
+		let payload: Record<string, any>;
 		throwIfEmpty(String(collection), 'Collection cannot be empty');
 		throwIfCoreCollection(collection, 'Cannot use updateItems for core collections');
 

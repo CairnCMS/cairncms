@@ -19,7 +19,7 @@ export const deleteItems =
 		keysOrQuery: string[] | number[] | TQuery
 	): RestCommand<void, Schema> =>
 	() => {
-		let payload: Record<string, any> = {};
+		let payload: Record<string, any>;
 
 		throwIfEmpty(String(collection), 'Collection cannot be empty');
 		throwIfCoreCollection(collection, 'Cannot use deleteItems for core collections');

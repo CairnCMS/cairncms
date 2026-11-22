@@ -13,9 +13,9 @@ export const parseGraphQL: RequestHandler = asyncHandler(async (req, res, next) 
 		throw new MethodNotAllowedException('GraphQL only supports GET and POST requests.', { allow: ['GET', 'POST'] });
 	}
 
-	let query: string | null = null;
-	let variables: Record<string, unknown> | null = null;
-	let operationName: string | null = null;
+	let query: string | null;
+	let variables: Record<string, unknown> | null;
+	let operationName: string | null;
 	let document: DocumentNode;
 
 	if (req.method === 'GET') {

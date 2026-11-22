@@ -27,7 +27,7 @@ describe('malformed request target diagnostics at debug level', () => {
 			completeWhen: (logs: string) => hasNotFoundRecord(logs),
 		});
 
-		let logs = '';
+		let logs: string;
 
 		try {
 			const malformed = await sendRawTarget(api.backendUrl, `///alice:${password}@[x/items`);

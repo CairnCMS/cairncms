@@ -132,8 +132,6 @@ const typescriptRules = {
 	'@typescript-eslint/ban-ts-comment': 'off',
 	'@typescript-eslint/no-explicit-any': 'off',
 	'@typescript-eslint/no-require-imports': 'off',
-	// Off for TypeScript and Vue until their existing findings are fixed.
-	'no-useless-assignment': 'off',
 	'@typescript-eslint/adjacent-overload-signatures': 'error',
 	'@typescript-eslint/no-empty-function': 'error',
 	'@typescript-eslint/no-empty-object-type': ['error', { allowInterfaces: 'never', allowObjectTypes: 'always' }],

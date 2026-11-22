@@ -17,7 +17,7 @@ export function shouldSkipCache(req: Request): boolean {
 		const adminUrl = new Url(env['PUBLIC_URL']).addPath('admin');
 
 		if (adminUrl.isRootRelative()) {
-			let refererUrl: Url | null = null;
+			let refererUrl: Url | null;
 
 			try {
 				refererUrl = new Url(referer);

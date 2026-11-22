@@ -263,7 +263,7 @@ export function scheduleHelpers(api: Api) {
 
 	async function pollForbidden(vendor: string, env: Env, collection: string, timeoutMs: number): Promise<number> {
 		const deadline = Date.now() + timeoutMs;
-		let last = 0;
+		let last: number;
 
 		for (;;) {
 			const response = await collectionStatus(vendor, env, collection);
