@@ -30,6 +30,7 @@ export type RunView = {
 	outputs: ReadonlyMap<string, unknown>;
 	trigger: unknown;
 	last: unknown;
+	accountability: unknown;
 	outcome: RunOutcome;
 	reason: RunReason | null;
 };
@@ -137,7 +138,7 @@ async function toRunView(database: Knex, run: FinishedRun): Promise<RunView> {
 		if (!RESERVED_KEYS.has(key) && !keys.has(key))
 			throw unrecognized(`its data chain holds ${key}, which no recorded step wrote`);
 
-	for (const key of ['$trigger', '$last', ...keys])
+	for (const key of ['$trigger', '$last', '$accountability', ...keys])
 		if (!stored.includes(key)) throw unrecognized(`its data chain has no ${key} entry`);
 
 	const { outcome, reason } = await classifyRun(database, run, steps);
@@ -150,6 +151,7 @@ async function toRunView(database: Knex, run: FinishedRun): Promise<RunView> {
 		outputs: new Map(Object.entries(run.data).filter(([key]) => keys.has(key))),
 		trigger: run.data['$trigger'],
 		last: run.data['$last'],
+		accountability: run.data['$accountability'],
 		outcome,
 		reason,
 	};
