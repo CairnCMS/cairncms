@@ -181,7 +181,7 @@ module.exports = defineConfig([
 	{
 		files: ['**/*.vue'],
 		languageOptions: { parser: vueParser, parserOptions: { parser: tsParser } },
-		rules: { 'prefer-const': 'off' },
+		rules: { 'prefer-const': 'error' },
 	},
 	{
 		// Test modules define stub components next to the component under test.
