@@ -175,6 +175,19 @@ if (mode === 'clean') {
 			return;
 		}
 
+		if (mode === 'duplicate-revision') {
+			await flows.install([asyncFlow(0)]);
+			expect((await request(api.url).get(`/flows/trigger/${ASYNC_FLOW}`)).status).toBeLessThan(300);
+			flows.started(ASYNC_FLOW);
+			const [run] = await flows.finished(ASYNC_FLOW);
+			const duplicate = await api.database('directus_revisions').where('id', run!.revision).first();
+			delete duplicate.id;
+			await api.database('directus_revisions').insert(duplicate);
+			flows.started(ASYNC_FLOW);
+			await takeSnapshot(api.database, ASYNC_FLOW);
+			return;
+		}
+
 		if (mode === 'reinstall-unfinished') {
 			await flows.install([asyncFlow(60000)]);
 			expect((await request(api.url).get(`/flows/trigger/${ASYNC_FLOW}`)).status).toBeLessThan(300);

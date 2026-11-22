@@ -62,6 +62,7 @@ for (const [mode, failure] of [
 	['failure', /CONTROL_FLOW_ASSERTION/],
 	['cleanup-error', /has an unrecognized shape: its data is not JSON/],
 	['reinstall-unfinished', /installing flows failed: .*cannot be replaced yet/],
+	['duplicate-revision', /reading run records failed: .*has more than one detail record/],
 ])
 	test(`flow fixture cleanup ${mode}`, { timeout: 180000 }, async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'cairn-flow-cleanup-'));

@@ -62,6 +62,19 @@ export async function readFinishedRuns(
 		.orderBy('directus_activity.id')
 		.select('directus_activity.id as activity', 'directus_revisions.id as revision', 'directus_revisions.data');
 
+	const activities = new Set<number>();
+
+	for (const row of rows) {
+		const activity = Number(row.activity);
+
+		if (activities.has(activity))
+			throw new Error(
+				`Run activity ${activity} of flow ${flowId} has an unrecognized shape: it has more than one detail record`
+			);
+
+		activities.add(activity);
+	}
+
 	return rows.map((row) => toFinishedRun(flowId, row));
 }
 

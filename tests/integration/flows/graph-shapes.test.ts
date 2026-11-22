@@ -130,10 +130,7 @@ test('changing presentation fields does not change results', async ({ api, flows
 	]);
 });
 
-test('every trigger type runs after one readiness wait, and again after a definition change', async ({
-	api,
-	flows,
-}) => {
+test('installed flows pick up a definition change after one reload', async ({ api, flows }) => {
 	const collection = 'test_flow_graph_events';
 	await CreateCollection(api, { collection });
 	await CreateField(api, { collection, field: 'name', type: 'string' });
