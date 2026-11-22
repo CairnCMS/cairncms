@@ -34,3 +34,11 @@ declare module 'frappe-charts/src/js/charts/AxisChart' {
 }
 
 declare module '@cairncms-extensions' {}
+
+declare module 'codemirror/mode/*' {}
+
+declare module '@mapbox/mapbox-gl-draw-static-mode' {
+	import type MapboxDraw from '@mapbox/mapbox-gl-draw';
+	const StaticMode: MapboxDraw.DrawCustomMode;
+	export default StaticMode;
+}

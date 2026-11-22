@@ -1,5 +1,4 @@
-// @ts-nocheck
-export default function importCodemirrorMode(mode: string): Promise<void> {
+export default function importCodemirrorMode(mode: string): Promise<unknown> {
 	switch (mode) {
 		case 'apl':
 			return import('codemirror/mode/apl/apl.js');
