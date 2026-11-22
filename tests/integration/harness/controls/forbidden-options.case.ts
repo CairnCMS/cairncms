@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+/* eslint-disable no-console -- A console marker lets the harness check which test bodies run. */
 import { test } from 'vitest';
 import { initializeFixtures } from '../fixture-setup.mjs';
 

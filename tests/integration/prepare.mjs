@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+/* eslint-disable no-console -- This integration runner reports progress and failures to the terminal. */
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile, rm, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';

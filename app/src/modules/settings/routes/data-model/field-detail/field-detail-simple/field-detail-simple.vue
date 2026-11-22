@@ -13,7 +13,7 @@
 				>
 					<div class="preview">
 						<template v-if="inter.preview">
-							<!-- eslint-disable-next-line vue/no-v-html -->
+							<!-- eslint-disable-next-line vue/no-v-html -- Interface definitions can supply inline SVG previews instead of image URLs. -->
 							<span v-if="isSVG(inter.preview)" class="svg" v-html="inter.preview" />
 							<img v-else :src="inter.preview" alt="" />
 						</template>

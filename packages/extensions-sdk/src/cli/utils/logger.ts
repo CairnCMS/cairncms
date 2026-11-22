@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+/* eslint-disable no-console -- This module implements the extension CLI terminal logger. */
 
 import readline from 'readline';
 import chalk from 'chalk';

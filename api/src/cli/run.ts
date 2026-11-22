@@ -12,7 +12,7 @@ createCli()
 			process.exit(err.exitCode === 0 ? 0 : 2);
 		}
 
-		// eslint-disable-next-line no-console
+		// eslint-disable-next-line no-console -- The CLI reports command failures to the terminal before exiting.
 		console.error(err);
 		process.exit(requestedCommand === 'config' ? 3 : 1);
 	});

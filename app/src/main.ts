@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+/* eslint-disable no-console -- Application startup owns browser diagnostics, timing, and the Vue error handler. */
 
 import { getVueComponentName } from '@/utils/get-vue-component-name';
 import { createPinia } from 'pinia';

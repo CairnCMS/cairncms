@@ -16,7 +16,7 @@ export async function refreshCurrentLanguage(fallback = 'en-US') {
 
 		await fieldsStore.hydrate();
 	} catch {
-		// eslint-disable-next-line no-console
+		// eslint-disable-next-line no-console -- Report a failed translation refresh in the browser.
 		console.error('Failed loading translations');
 	}
 }

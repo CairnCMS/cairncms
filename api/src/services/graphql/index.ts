@@ -345,7 +345,7 @@ export class GraphQLService {
 			throw new ForbiddenException();
 		}
 
-		// eslint-disable-next-line @typescript-eslint/no-this-alias
+		// eslint-disable-next-line @typescript-eslint/no-this-alias -- Nested resolver functions capture this service instance through self.
 		const self = this;
 
 		const schemaComposer = new SchemaComposer<GraphQLParams['contextValue']>();
