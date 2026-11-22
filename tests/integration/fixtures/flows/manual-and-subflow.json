@@ -1,0 +1,536 @@
+[
+	{
+		"id": "32c69426-1b1a-4cab-90ef-87d4e365d2cf",
+		"name": "Manual selected",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "manual",
+		"accountability": "all",
+		"options": {
+			"collections": ["test_flow_manual_selected"],
+			"requireSelection": true,
+			"location": "item",
+			"async": false
+		},
+		"operation": "017c60a7-e0cc-40c2-80ae-c25f627fb589",
+		"operations": [
+			{
+				"id": "017c60a7-e0cc-40c2-80ae-c25f627fb589",
+				"name": null,
+				"key": "ran",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"ran": true
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "ba216620-9ed5-4f8f-9b19-8f8bfb93166f",
+		"name": "Manual refusals",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "manual",
+		"accountability": "all",
+		"options": {
+			"collections": ["test_flow_manual_refusals"],
+			"requireSelection": true,
+			"location": "item",
+			"async": false
+		},
+		"operation": "ff85c635-4e13-4e86-9e9e-aef80bd129ec",
+		"operations": [
+			{
+				"id": "ff85c635-4e13-4e86-9e9e-aef80bd129ec",
+				"name": null,
+				"key": "ran",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"ran": true
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "f17e9461-5096-4cc1-bc5c-e73cc2cbe346",
+		"name": "Manual Mary action",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "manual",
+		"accountability": "all",
+		"options": {
+			"collections": ["test_flow_manual_appointments"],
+			"requireSelection": true,
+			"location": "item",
+			"async": false
+		},
+		"operation": "eec682b8-6263-442d-bafc-a6c459c4f514",
+		"operations": [
+			{
+				"id": "eec682b8-6263-442d-bafc-a6c459c4f514",
+				"name": null,
+				"key": "update",
+				"type": "item-update",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_manual_customers",
+					"key": "{{ $trigger.body.customer }}",
+					"payload": {
+						"marker": "{{ $trigger.body.marker }}"
+					},
+					"permissions": "$full",
+					"emitEvents": false
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "88ecc8b8-bc05-413b-b70c-436360755c6d",
+		"name": "Manual supervisor action",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "manual",
+		"accountability": "all",
+		"options": {
+			"collections": ["test_flow_manual_appointments"],
+			"requireSelection": true,
+			"location": "item",
+			"async": false
+		},
+		"operation": "bc13a39f-2249-481e-b839-daa7cdcb7a68",
+		"operations": [
+			{
+				"id": "bc13a39f-2249-481e-b839-daa7cdcb7a68",
+				"name": null,
+				"key": "update",
+				"type": "item-update",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_manual_customers",
+					"key": "{{ $trigger.body.customer }}",
+					"payload": {
+						"marker": "{{ $trigger.body.marker }}"
+					},
+					"permissions": "$full",
+					"emitEvents": false
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "12850c37-f6b4-40ab-968f-acb16dcec3ea",
+		"name": "Manual selected result",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "manual",
+		"accountability": "all",
+		"options": {
+			"collections": ["test_flow_manual_requests"],
+			"requireSelection": true,
+			"location": "item",
+			"async": false
+		},
+		"operation": "e0114154-41a5-472e-932f-a7df3698775c",
+		"operations": [
+			{
+				"id": "e0114154-41a5-472e-932f-a7df3698775c",
+				"name": null,
+				"key": "read",
+				"type": "item-read",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_manual_secrets",
+					"key": "{{ $trigger.body.secret }}",
+					"permissions": "$full",
+					"emitEvents": false
+				},
+				"resolve": "aac7d3d4-7ba6-468d-8ca9-e3bcd67d28ee",
+				"reject": null
+			},
+			{
+				"id": "aac7d3d4-7ba6-468d-8ca9-e3bcd67d28ee",
+				"name": null,
+				"key": "select",
+				"type": "transform",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"title": "{{ read.title }}"
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "2725ce2d-91d4-43e1-a85a-9489d9c7ecd9",
+		"name": "Manual collection",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "manual",
+		"accountability": "all",
+		"options": {
+			"collections": ["test_flow_manual_collection"],
+			"requireSelection": false,
+			"location": "collection",
+			"async": false
+		},
+		"operation": "1429aeda-0a30-4643-b56e-04b597f73798",
+		"operations": [
+			{
+				"id": "1429aeda-0a30-4643-b56e-04b597f73798",
+				"name": null,
+				"key": "ran",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"ran": true
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "66896cfc-9887-4125-acf3-19883f4f07f4",
+		"name": "Subflow parent",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "25348721-442a-40b1-ae25-3224f3600273",
+		"operations": [
+			{
+				"id": "25348721-442a-40b1-ae25-3224f3600273",
+				"name": null,
+				"key": "call",
+				"type": "trigger",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"flow": "1b04429c-2907-4478-9eb5-94c3d1faca96",
+					"payload": {
+						"value": "{{ $trigger.query.value }}"
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "1b04429c-2907-4478-9eb5-94c3d1faca96",
+		"name": "Subflow child",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "operation",
+		"accountability": "all",
+		"options": {
+			"return": "$last"
+		},
+		"operation": "6803156c-c5a2-4bc6-9935-ecc946a3fe7f",
+		"operations": [
+			{
+				"id": "6803156c-c5a2-4bc6-9935-ecc946a3fe7f",
+				"name": null,
+				"key": "echo",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"received": "{{ $trigger.value }}"
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "7ea67a82-9efe-4db5-b8fe-740d093731d6",
+		"name": "Subflow serial",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "44ed9c46-4a2f-49b5-9367-c1edd2bc5b48",
+		"operations": [
+			{
+				"id": "44ed9c46-4a2f-49b5-9367-c1edd2bc5b48",
+				"name": null,
+				"key": "call",
+				"type": "trigger",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"flow": "4ba7e945-c22f-4c8a-b79f-daaddb7292f8",
+					"payload": [
+						{
+							"value": "a",
+							"delay": 60
+						},
+						{
+							"value": "b",
+							"delay": 30
+						},
+						{
+							"value": "c",
+							"delay": 0
+						}
+					],
+					"iterationMode": "serial"
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "880e4933-a0b5-4f83-b1f4-473ac0c27d47",
+		"name": "Subflow batch",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "5249621e-fb51-43a1-8ce7-395a8076e262",
+		"operations": [
+			{
+				"id": "5249621e-fb51-43a1-8ce7-395a8076e262",
+				"name": null,
+				"key": "call",
+				"type": "trigger",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"flow": "4ba7e945-c22f-4c8a-b79f-daaddb7292f8",
+					"payload": [
+						{
+							"value": "a",
+							"delay": 60
+						},
+						{
+							"value": "b",
+							"delay": 30
+						},
+						{
+							"value": "c",
+							"delay": 0
+						}
+					],
+					"iterationMode": "batch",
+					"batchSize": 2
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "077e067a-b503-42bf-8717-6de32e8f0123",
+		"name": "Subflow parallel",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "af9e3802-65ab-4b9a-b99f-9933536533db",
+		"operations": [
+			{
+				"id": "af9e3802-65ab-4b9a-b99f-9933536533db",
+				"name": null,
+				"key": "call",
+				"type": "trigger",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"flow": "4ba7e945-c22f-4c8a-b79f-daaddb7292f8",
+					"payload": [
+						{
+							"value": "a",
+							"delay": 60
+						},
+						{
+							"value": "b",
+							"delay": 30
+						},
+						{
+							"value": "c",
+							"delay": 0
+						}
+					],
+					"iterationMode": "parallel"
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "4ba7e945-c22f-4c8a-b79f-daaddb7292f8",
+		"name": "Subflow iterate child",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "operation",
+		"accountability": "all",
+		"options": {
+			"return": "$last"
+		},
+		"operation": "720355ef-7136-41af-87c7-45318942bf7c",
+		"operations": [
+			{
+				"id": "720355ef-7136-41af-87c7-45318942bf7c",
+				"name": null,
+				"key": "wait",
+				"type": "sleep",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"milliseconds": "{{ $trigger.delay }}"
+				},
+				"resolve": "a6d60f6a-39fe-44f9-9148-2059ef8b6bac",
+				"reject": null
+			},
+			{
+				"id": "a6d60f6a-39fe-44f9-9148-2059ef8b6bac",
+				"name": null,
+				"key": "echo",
+				"type": "transform",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"received": "{{ $trigger.value }}"
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "a9c75bfe-1fc2-4d64-9aaa-5bd41e316d73",
+		"name": "Subflow identity parent",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "34c37ac2-5ed2-4929-911c-135a1977862a",
+		"operations": [
+			{
+				"id": "34c37ac2-5ed2-4929-911c-135a1977862a",
+				"name": null,
+				"key": "call",
+				"type": "trigger",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"flow": "a84e5964-b0a2-49cf-9e35-26a3b6f36da9",
+					"payload": {}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "a84e5964-b0a2-49cf-9e35-26a3b6f36da9",
+		"name": "Subflow identity child",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "operation",
+		"accountability": "all",
+		"options": {
+			"return": "$last"
+		},
+		"operation": "fee2a00a-e7bf-4a8a-af33-ade98da659b5",
+		"operations": [
+			{
+				"id": "fee2a00a-e7bf-4a8a-af33-ade98da659b5",
+				"name": null,
+				"key": "read",
+				"type": "item-read",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_subflow_identity",
+					"permissions": "$trigger",
+					"emitEvents": false
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	}
+]
