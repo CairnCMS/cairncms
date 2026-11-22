@@ -4,12 +4,13 @@
 	"scripts": {
 		"build": "pnpm --recursive --filter '!docs' run build",
 		"format": "prettier --write \"**/*.{md,y?(a)ml,json}\"",
-		"lint": "eslint . --max-warnings 0",
+		"lint": "eslint . --no-inline-config --config eslint.protected.config.js --max-warnings 0 && eslint . --max-warnings 0",
 		"test": "pnpm --recursive --filter '!tests-integration' test",
 		"test:integration": "pnpm --filter tests-integration test",
 		"test:integration:prepare": "pnpm --filter tests-integration prepare:api"
 	},
 	"devDependencies": {
+		"@eslint-community/eslint-plugin-eslint-comments": "4.8.1",
 		"@eslint/compat": "2.1.1",
 		"@eslint/js": "10.0.1",
 		"@typescript-eslint/eslint-plugin": "8.73.0",
