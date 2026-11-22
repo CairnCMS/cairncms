@@ -117,6 +117,7 @@ module.exports = function registerHooks({ filter, action }, { exceptions }) {
 	action('users.update', async (data, { database }) => {
 		for (const id of data.keys || []) {
 			const user = await database('directus_users').select('email').where({ id }).first();
+
 			if (user && typeof user.email === 'string' && user.email.startsWith('audit_probe')) {
 				await mark(database, `users.update/${id}`);
 			}

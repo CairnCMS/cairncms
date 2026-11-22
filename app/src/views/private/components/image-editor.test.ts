@@ -101,7 +101,6 @@ function deferred<T>() {
 	return { promise, resolve, reject };
 }
 
-// eslint-disable-next-line vue/one-component-per-file
 const VButton = defineComponent({
 	name: 'VButton',
 	props: { disabled: { type: Boolean, default: false }, loading: { type: Boolean, default: false } },

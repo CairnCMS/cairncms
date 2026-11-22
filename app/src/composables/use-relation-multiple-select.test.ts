@@ -84,7 +84,6 @@ const relationO2M: RelationO2M = {
 	type: 'o2m',
 };
 
-// eslint-disable-next-line vue/one-component-per-file
 const TestComponent = defineComponent({
 	props: ['value', 'relation', 'id'], // eslint-disable-line vue/require-prop-types
 	setup(props) {
