@@ -33,7 +33,7 @@ interface Props {
 	refresh: () => void;
 	collection: string;
 	primaryKey: string | number;
-	userPreviews: Record<string, any>;
+	userPreviews?: Record<string, any>;
 }
 
 const props = withDefaults(defineProps<Props>(), {

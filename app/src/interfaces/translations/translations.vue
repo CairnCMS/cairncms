@@ -93,7 +93,7 @@ const props = withDefaults(
 		languageDirectionField?: string | null;
 		defaultLanguage?: string | null;
 		userLanguage?: boolean;
-		value: (number | string | Record<string, any>)[] | Record<string, any>;
+		value?: (number | string | Record<string, any>)[] | Record<string, any>;
 		autofocus?: boolean;
 		disabled?: boolean;
 	}>(),

@@ -50,7 +50,7 @@ import { Header, Item } from './types';
 interface Props {
 	headers: Header[];
 	item: Item;
-	showSelect: ShowSelect;
+	showSelect?: ShowSelect;
 	showManualSort?: boolean;
 	isSelected?: boolean;
 	subdued?: boolean;

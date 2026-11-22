@@ -176,7 +176,6 @@ module.exports = defineConfig([
 			'vue/jsx-uses-vars': 'error',
 			'vue/multi-word-component-names': 'off',
 			'vue/require-default-prop': 'off',
-			'vue/no-required-prop-with-default': 'off',
 		},
 	},
 	{

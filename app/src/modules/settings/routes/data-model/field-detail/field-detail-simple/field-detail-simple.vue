@@ -50,7 +50,7 @@ import { useExtensions } from '@/extensions';
 const props = withDefaults(
 	defineProps<{
 		collection: Collection;
-		search: string | null;
+		search?: string | null;
 	}>(),
 	{
 		search: null,
