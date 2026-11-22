@@ -1,11 +1,45 @@
 import type { FieldFilter } from '@cairncms/types';
-import type { AnySchema, StringSchema as BaseStringSchema, DateSchema, NumberSchema } from 'joi';
+import type {
+	AnySchema,
+	StringSchema as BaseStringSchema,
+	DateSchema,
+	ExtensionRule,
+	NumberSchema,
+	SchemaInternals,
+} from 'joi';
 import BaseJoi from 'joi';
 import { escapeRegExp, merge } from 'lodash-es';
 
 export interface StringSchema extends BaseStringSchema {
 	contains(substring: string): this;
 	ncontains(substring: string): this;
+	istartsWith(prefix: string): this;
+	nistartsWith(prefix: string): this;
+	iendsWith(suffix: string): this;
+	niendsWith(suffix: string): this;
+}
+
+/** Builds a string rule that reports `string.<name>`, without the rule's text, when `matches` rejects the value. */
+function textRule(
+	name: string,
+	matches: (value: string, text: string) => boolean
+): ExtensionRule & ThisType<SchemaInternals> {
+	return {
+		args: [
+			{
+				name: 'text',
+				ref: true,
+				assert: (val) => typeof val === 'string',
+				message: 'must be a string',
+			},
+		],
+		method(text) {
+			return this.$_addRule({ name, args: { text } });
+		},
+		validate(value, helpers, { text }) {
+			return matches(value, text) ? value : helpers.error(`string.${name}`);
+		},
+	};
 }
 
 export const Joi: typeof BaseJoi = BaseJoi.extend({
@@ -14,6 +48,10 @@ export const Joi: typeof BaseJoi = BaseJoi.extend({
 	messages: {
 		'string.contains': '{{#label}} must contain [{{#substring}}]',
 		'string.ncontains': "{{#label}} can't contain [{{#substring}}]",
+		'string.istartsWith': '{{#label}} must start with the required text',
+		'string.nistartsWith': "{{#label}} can't start with the excluded text",
+		'string.iendsWith': '{{#label}} must end with the required text',
+		'string.niendsWith': "{{#label}} can't end with the excluded text",
 	},
 	rules: {
 		contains: {
@@ -56,6 +94,10 @@ export const Joi: typeof BaseJoi = BaseJoi.extend({
 				return value;
 			},
 		},
+		istartsWith: textRule('istartsWith', (value, text) => value.toLowerCase().startsWith(text.toLowerCase())),
+		nistartsWith: textRule('nistartsWith', (value, text) => !value.toLowerCase().startsWith(text.toLowerCase())),
+		iendsWith: textRule('iendsWith', (value, text) => value.toLowerCase().endsWith(text.toLowerCase())),
+		niendsWith: textRule('niendsWith', (value, text) => !value.toLowerCase().endsWith(text.toLowerCase())),
 	},
 });
 
@@ -67,7 +109,7 @@ const defaults: JoiOptions = {
 	requireAll: false,
 };
 
-const EMPTY_IN_SENTINEL = Symbol('cairncms-empty-in');
+const NO_MATCH_SENTINEL = Symbol('cairncms-no-match');
 
 const TAGGED_OPERATORS: readonly string[] = [
 	'_eq',
@@ -83,8 +125,12 @@ const TAGGED_OPERATORS: readonly string[] = [
 	'_ncontains',
 	'_starts_with',
 	'_nstarts_with',
+	'_istarts_with',
+	'_nistarts_with',
 	'_ends_with',
 	'_nends_with',
+	'_iends_with',
+	'_niends_with',
 	'_regex',
 	'_gt',
 	'_gte',
@@ -211,6 +257,22 @@ export function generateJoi(filter: FieldFilter | null, options?: JoiOptions): A
 			}
 		}
 
+		if (operator === '_istarts_with') {
+			if (typeof compareValue !== 'string') {
+				schema[key] = Joi.any().valid(NO_MATCH_SENTINEL);
+			} else {
+				schema[key] = getStringSchema().istartsWith(compareValue);
+			}
+		}
+
+		if (operator === '_nistarts_with') {
+			if (typeof compareValue !== 'string') {
+				schema[key] = Joi.any().valid(NO_MATCH_SENTINEL);
+			} else {
+				schema[key] = getStringSchema().nistartsWith(compareValue);
+			}
+		}
+
 		if (operator === '_ends_with') {
 			if (compareValue === null || compareValue === undefined || typeof compareValue !== 'string') {
 				schema[key] = Joi.any().equal(true);
@@ -232,9 +294,25 @@ export function generateJoi(filter: FieldFilter | null, options?: JoiOptions): A
 			}
 		}
 
+		if (operator === '_iends_with') {
+			if (typeof compareValue !== 'string') {
+				schema[key] = Joi.any().valid(NO_MATCH_SENTINEL);
+			} else {
+				schema[key] = getStringSchema().iendsWith(compareValue);
+			}
+		}
+
+		if (operator === '_niends_with') {
+			if (typeof compareValue !== 'string') {
+				schema[key] = Joi.any().valid(NO_MATCH_SENTINEL);
+			} else {
+				schema[key] = getStringSchema().niendsWith(compareValue);
+			}
+		}
+
 		if (operator === '_in') {
 			if (Array.isArray(compareValue) && compareValue.length === 0) {
-				schema[key] = Joi.any().valid(EMPTY_IN_SENTINEL);
+				schema[key] = Joi.any().valid(NO_MATCH_SENTINEL);
 			} else {
 				schema[key] = getAnySchema().equal(...(compareValue as (string | number)[]));
 			}

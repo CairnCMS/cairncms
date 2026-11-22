@@ -27,6 +27,10 @@ const RULE_SENTENCES: Record<FailedValidationType, string> = {
 	nstarts_with: `Value can't start with the excluded text.`,
 	ends_with: 'Value has to end with the required text.',
 	nends_with: `Value can't end with the excluded text.`,
+	istarts_with: 'Value has to start with the required text.',
+	nistarts_with: `Value can't start with the excluded text.`,
+	iends_with: 'Value has to end with the required text.',
+	niends_with: `Value can't end with the excluded text.`,
 };
 
 function failedValidationMessage({ field, type }: FailedValidationExtensions): string {

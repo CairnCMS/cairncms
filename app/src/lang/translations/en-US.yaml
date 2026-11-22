@@ -150,6 +150,10 @@ validation_failure:
   nstarts_with: Value can't start with the excluded text
   ends_with: Value has to end with the required text
   nends_with: Value can't end with the excluded text
+  istarts_with: Value has to start with the required text
+  nistarts_with: Value can't start with the excluded text
+  iends_with: Value has to end with the required text
+  niends_with: Value can't end with the excluded text
 all_access: All Access
 no_access: No Access
 use_custom: Use Custom

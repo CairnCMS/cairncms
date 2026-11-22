@@ -20,6 +20,10 @@ export type FailedValidationType =
 	| 'lte'
 	| 'contains'
 	| 'ncontains'
+	| 'istarts_with'
+	| 'nistarts_with'
+	| 'iends_with'
+	| 'niends_with'
 	| 'required'
 	| 'regex'
 	| PatternRuleName;
@@ -52,8 +56,12 @@ const AUTHORED_OPERATOR_TYPES = new Map<unknown, FailedValidationType>([
 	['_ncontains', 'ncontains'],
 	['_starts_with', 'starts_with'],
 	['_nstarts_with', 'nstarts_with'],
+	['_istarts_with', 'istarts_with'],
+	['_nistarts_with', 'nistarts_with'],
 	['_ends_with', 'ends_with'],
 	['_nends_with', 'nends_with'],
+	['_iends_with', 'iends_with'],
+	['_niends_with', 'niends_with'],
 	['_regex', 'regex'],
 	['_gt', 'gt'],
 	['_gte', 'gte'],
