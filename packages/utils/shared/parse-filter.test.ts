@@ -322,3 +322,42 @@ describe('spatial operands', () => {
 		expect(parseFilter(filter, null)).toStrictEqual({ name: { _eq: JSON.stringify(point) } });
 	});
 });
+
+describe('case-insensitive text operands', () => {
+	const operators = ['_icontains', '_istarts_with', '_nistarts_with', '_iends_with', '_niends_with'];
+
+	it.each(operators)('keeps literal text that would otherwise become a boolean or null for %s', (operator) => {
+		for (const operand of ['true', 'false', 'null', 'NULL']) {
+			const filter = { code: { [operator]: operand } } as Filter;
+
+			expect(parseFilter(filter, null)).toStrictEqual({ code: { [operator]: operand } });
+		}
+	});
+
+	it.each(operators)('resolves a dynamic variable for %s', (operator) => {
+		const filter = { code: { [operator]: '$CURRENT_USER.prefix' } } as Filter;
+		const context = { $CURRENT_USER: { prefix: 'tenant-a' } as any };
+
+		expect(parseFilter(filter, { role: 'role', user: 'user' }, context)).toStrictEqual({
+			code: { [operator]: 'tenant-a' },
+		});
+
+		expect(parseFilter(filter, { role: 'role', user: 'user' }, { $CURRENT_USER: {} as any })).toStrictEqual({
+			code: { [operator]: null },
+		});
+	});
+
+	it.each(operators)('keeps a boolean or null operand for %s as it is', (operator) => {
+		for (const operand of [true, false, null]) {
+			const filter = { code: { [operator]: operand } } as Filter;
+
+			expect(parseFilter(filter, null)).toStrictEqual({ code: { [operator]: operand } });
+		}
+	});
+
+	it.each(['_eq', '_contains', '_starts_with'])('still converts literal text for %s', (operator) => {
+		const filter = { code: { [operator]: 'true' } } as Filter;
+
+		expect(parseFilter(filter, null)).toStrictEqual({ code: { [operator]: true } });
+	});
+});

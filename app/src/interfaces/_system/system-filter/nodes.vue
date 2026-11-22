@@ -31,6 +31,7 @@
 								:include-relations="includeRelations"
 								:relational-field-selectable="relationalFieldSelectable"
 								:allow-select-all="false"
+								:is-field-disabled="(node: FieldNode) => isComparatorRuledOut(node.key, index)"
 								@add="updateField(index, $event[0])"
 							/>
 						</v-menu>
@@ -89,6 +90,7 @@
 						:collection="collection"
 						:depth="depth + 1"
 						:inline="inline"
+						:include-validation="includeValidation"
 						@change="$emit('change')"
 						@remove-node="$emit('remove-node', [`${index}.${filterInfo[index].name}`, ...$event])"
 						@update:filter="replaceNode(index, { [filterInfo[index].name]: $event })"
@@ -100,11 +102,13 @@
 </template>
 
 <script setup lang="ts">
+import type { FieldNode } from '@/composables/use-field-tree';
 import { useFieldsStore } from '@/stores/fields';
 import { useRelationsStore } from '@/stores/relations';
 import { extractFieldFromFunction } from '@/utils/extract-field-from-function';
 import { useSync } from '@cairncms/composables';
 import {
+	ClientFilterOperator,
 	FieldFilter,
 	FieldFilterOperator,
 	FieldFunction,
@@ -311,6 +315,7 @@ function updateField(index: number, newField: string) {
 	const newFieldInfo = fieldsStore.getField(props.collection, newField);
 
 	if (nodeInfo.isField === false) return;
+	if (isComparatorRuledOut(newField, index)) return;
 
 	const valuePath = nodeInfo.field + '.' + nodeInfo.comparator;
 	let value = get(nodeInfo.node, valuePath);
@@ -334,30 +339,50 @@ function replaceNode(index: number, newFilter: Filter) {
 	});
 }
 
-function getCompareOptions(name: string) {
-	let type: Type;
-
+/** Returns the field type and, for a filter, the column type that decide which comparators a field offers. */
+function getComparisonTypes(name: string): { type: Type; dbType: string | undefined } {
 	if (name.includes('(') && name.includes(')')) {
 		const functionName = name.split('(')[0] as FieldFunction;
-		type = getOutputTypeForFunction(functionName);
-	} else {
-		const fieldInfo = fieldsStore.getField(props.collection, name);
-		type = fieldInfo?.type || 'unknown';
+		return { type: getOutputTypeForFunction(functionName), dbType: undefined };
+	}
 
-		// Alias uses the foreign key type
-		if (type === 'alias') {
-			const relations = relationsStore.getRelationsForField(props.collection, name);
+	let fieldInfo = fieldsStore.getField(props.collection, name);
+	let type: Type = fieldInfo?.type || 'unknown';
 
-			if (relations[0]) {
-				type = fieldsStore.getField(relations[0].collection, relations[0].field)?.type || 'unknown';
-			}
+	// Alias uses the foreign key type
+	if (type === 'alias') {
+		const relations = relationsStore.getRelationsForField(props.collection, name);
+
+		if (relations[0]) {
+			fieldInfo = fieldsStore.getField(relations[0].collection, relations[0].field);
+			type = fieldInfo?.type || 'unknown';
 		}
 	}
 
-	return getFilterOperatorsForType(type, { includeValidation: props.includeValidation }).map((type) => ({
+	return { type, dbType: props.includeValidation ? undefined : fieldInfo?.schema?.data_type };
+}
+
+function getCompareOptions(name: string) {
+	const { type, dbType } = getComparisonTypes(name);
+
+	return getFilterOperatorsForType(type, { includeValidation: props.includeValidation, dbType }).map((type) => ({
 		text: t(`operators.${type}`),
 		value: `_${type}`,
 	}));
+}
+
+/** Whether a field's column type rules out the comparator of the node at `index`, which its field type allows. */
+function isComparatorRuledOut(name: string, index: number): boolean {
+	const nodeInfo = filterInfo.value[index];
+	if (nodeInfo?.isField !== true) return false;
+
+	const { type, dbType } = getComparisonTypes(name);
+	const operator = nodeInfo.comparator.slice(1) as ClientFilterOperator;
+
+	return (
+		getFilterOperatorsForType(type).includes(operator) &&
+		!getFilterOperatorsForType(type, { dbType }).includes(operator)
+	);
 }
 
 function isExistingField(node: Record<string, any>): boolean {

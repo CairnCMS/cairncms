@@ -45,6 +45,7 @@ interface Props {
 	collection: string;
 	field?: string;
 	disabledFields?: string[];
+	isFieldDisabled?: (field: FieldNode) => boolean;
 	includeFunctions?: boolean;
 	includeRelations?: boolean;
 	relationalFieldSelectable?: boolean;
@@ -54,6 +55,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
 	field: undefined,
 	disabledFields: () => [],
+	isFieldDisabled: undefined,
 	includeFunctions: false,
 	includeRelations: true,
 	relationalFieldSelectable: true,
@@ -92,7 +94,7 @@ const treeList = computed(() => {
 	): (typeof treeListOriginal.value)[number] & { disabled: boolean } {
 		let disabled = field.group || false;
 
-		if (props.disabledFields?.includes(field.key)) disabled = true;
+		if (props.disabledFields?.includes(field.key) || props.isFieldDisabled?.(field)) disabled = true;
 
 		return {
 			...field,

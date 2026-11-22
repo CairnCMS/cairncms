@@ -513,6 +513,114 @@ describe('applyFilter — unknown field validation', () => {
 	});
 });
 
+describe('applyFilter case-insensitive starts and ends operators', () => {
+	const OPERATORS = ['_istarts_with', '_nistarts_with', '_iends_with', '_niends_with'];
+
+	function makeSchemaWithNotes(column?: { type: string; dbType: string | null }): SchemaOverview {
+		const schema = makeRelationalSchema() as any;
+
+		schema.collections.users.fields.notes = { ...makeField('notes'), type: 'alias', dbType: null };
+		schema.relations[0].meta = { one_field: 'notes' };
+
+		if (column) schema.collections.notes.fields.code = { ...makeField('code'), ...column };
+
+		return schema as SchemaOverview;
+	}
+
+	function compile(
+		filter: Record<string, any>,
+		collection = 'notes',
+		column?: { type: string; dbType: string | null }
+	) {
+		const knexInstance = knex.default({ client: 'sqlite3', useNullAsDefault: true });
+		const dbQuery = knexInstance.from(collection).select('*');
+		return applyFilter(knexInstance, makeSchemaWithNotes(column), dbQuery, filter, collection, {}).query.toSQL();
+	}
+
+	function rejection(
+		filter: Record<string, any>,
+		collection = 'notes',
+		column?: { type: string; dbType: string | null }
+	) {
+		try {
+			compile(filter, collection, column);
+		} catch (error) {
+			return error;
+		}
+
+		return undefined;
+	}
+
+	it.each([
+		['binary', 'blob'],
+		['binary', 'mediumblob'],
+		['binary', 'varbinary'],
+		['string', 'interval'],
+		['string', '_varchar'],
+		['csv', '_varchar'],
+		['string', null],
+	])('rejects the operators on a %s field stored as %s', (type, dbType) => {
+		for (const operator of OPERATORS) {
+			const error = rejection({ code: { [operator]: 'abc' } }, 'notes', { type, dbType });
+
+			expect(error, operator).toBeInstanceOf(InvalidQueryException);
+			expect((error as Error).message).toBe(`The "${operator}" filter operator requires a text column`);
+		}
+	});
+
+	it.each([
+		['string', 'varchar(255)'],
+		['string', 'character varying'],
+		['string', 'CHAR'],
+		['string', 'bpchar'],
+		['text', 'text'],
+		['text', 'longtext'],
+		['text', 'citext'],
+		['csv', 'text'],
+	])('accepts the operators on a %s field stored as %s', (type, dbType) => {
+		for (const operator of OPERATORS) {
+			expect(rejection({ code: { [operator]: 'abc' } }, 'notes', { type, dbType }), operator).toBeUndefined();
+		}
+	});
+
+	it.each(OPERATORS)('rejects every operand of %s that is not a non-empty string', (operator) => {
+		for (const operand of [null, 42, true, new Date(0), '', ['a']]) {
+			const error = rejection({ title: { [operator]: operand } });
+
+			expect(error, JSON.stringify(operand)).toBeInstanceOf(InvalidQueryException);
+			expect((error as Error).message).toBe(`The filter value for "${operator}" has to be a non-empty string`);
+		}
+	});
+
+	it.each(OPERATORS)('rejects an unusable %s operand inside _and, _some, and _none', (operator) => {
+		const rule = { title: { [operator]: null } };
+		const message = `The filter value for "${operator}" has to be a non-empty string`;
+
+		for (const [filter, collection] of [
+			[{ _and: [rule] }, 'notes'],
+			[{ notes: { _some: rule } }, 'users'],
+			[{ notes: { _none: rule } }, 'users'],
+		] as const) {
+			const error = rejection(filter, collection);
+
+			expect(error, JSON.stringify(filter)).toBeInstanceOf(InvalidQueryException);
+			expect((error as Error).message).toBe(message);
+		}
+	});
+
+	it.each([
+		['_istarts_with', 'like', 'team!_a!!50!%%'],
+		['_nistarts_with', 'not like', 'team!_a!!50!%%'],
+		['_iends_with', 'like', '%team!_a!!50!%'],
+		['_niends_with', 'not like', '%team!_a!!50!%'],
+	])('matches a %s operand as lowercased literal text', (operator, comparison, pattern) => {
+		const { sql, bindings } = compile({ title: { [operator]: 'Team_A!50%' } });
+
+		expect(sql.toLowerCase()).toContain(`lower(\`notes\`.\`title\`) ${comparison} ? escape '!'`);
+		expect(bindings).toEqual([pattern]);
+	});
+});
+
 describe('applySort — nested relational sort validation', () => {
 	function callApplySort(sort: string[]) {
 		const dbQuery = makeBuilder();

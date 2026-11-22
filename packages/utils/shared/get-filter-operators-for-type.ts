@@ -2,13 +2,43 @@ import type { ClientFilterOperator, Type } from '@cairncms/types';
 
 type GetFilterOperationsForTypeOptions = {
 	includeValidation?: boolean;
+	/** The column's database type. When given, operators that need a character column are left out for any other column. */
+	dbType?: string | null;
 };
+
+const CHARACTER_DB_TYPES = new Set([
+	'char',
+	'character',
+	'bpchar',
+	'nchar',
+	'varchar',
+	'character varying',
+	'nvarchar',
+	'longvarchar',
+	'varchar2',
+	'text',
+	'tinytext',
+	'mediumtext',
+	'longtext',
+	'ntext',
+	'clob',
+	'citext',
+	'string',
+]);
+
+/** Whether a column's database type holds character data, which `LOWER()` lowercases as text. */
+function isCharacterDbType(dbType: string | null): boolean {
+	return dbType !== null && CHARACTER_DB_TYPES.has(dbType.toLowerCase().split('(')[0]!);
+}
 
 export function getFilterOperatorsForType(
 	type: Type,
 	opts?: GetFilterOperationsForTypeOptions
 ): ClientFilterOperator[] {
 	const validationOnlyStringFilterOperators: ClientFilterOperator[] = opts?.includeValidation ? ['regex'] : [];
+	const characterColumn = opts?.dbType === undefined || isCharacterDbType(opts.dbType);
+	const prefixOperators: ClientFilterOperator[] = characterColumn ? ['istarts_with', 'nistarts_with'] : [];
+	const suffixOperators: ClientFilterOperator[] = characterColumn ? ['iends_with', 'niends_with'] : [];
 
 	if (type.startsWith('geometry')) {
 		return ['eq', 'neq', 'null', 'nnull', 'intersects', 'nintersects', 'intersects_bbox', 'nintersects_bbox'];
@@ -26,8 +56,10 @@ export function getFilterOperatorsForType(
 				'icontains',
 				'starts_with',
 				'nstarts_with',
+				...prefixOperators,
 				'ends_with',
 				'nends_with',
+				...suffixOperators,
 				'eq',
 				'neq',
 				'empty',

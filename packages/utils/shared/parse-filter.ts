@@ -31,6 +31,8 @@ export function parseFilter(
 const logicalFilterOperators = ['_and', '_or'];
 const bypassOperators = ['_none', '_some'];
 
+const literalTextOperators = ['_icontains', '_istarts_with', '_nistarts_with', '_iends_with', '_niends_with'];
+
 function shiftLogicalOperatorsUp(filter: any): any {
 	if (!isObjectLike(filter)) return filter;
 	const key = Object.keys(filter)[0];
@@ -106,6 +108,8 @@ function parseFilterEntry(
 		return { [key]: toArray(value).flatMap((value) => parseFilterValue(value, accountability, context)) } as Filter;
 	} else if (['_intersects', '_nintersects', '_intersects_bbox', '_nintersects_bbox'].includes(String(key))) {
 		return { [key]: parseFilterValue(parseGeoJSONString(value), accountability, context) };
+	} else if (literalTextOperators.includes(String(key))) {
+		return { [key]: isDynamicVariable(value) ? parseDynamicVariable(value, accountability, context) : value };
 	} else if (String(key).startsWith('_') && !bypassOperators.includes(key)) {
 		return { [key]: parseFilterValue(value, accountability, context) };
 	} else if (String(key).startsWith('item__') && isObjectLike(value)) {

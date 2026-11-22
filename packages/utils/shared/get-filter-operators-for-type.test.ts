@@ -89,8 +89,12 @@ describe('', () => {
 			'icontains',
 			'starts_with',
 			'nstarts_with',
+			'istarts_with',
+			'nistarts_with',
 			'ends_with',
 			'nends_with',
+			'iends_with',
+			'niends_with',
 			'eq',
 			'neq',
 			'empty',
@@ -159,5 +163,38 @@ describe('', () => {
 			'nin',
 			'regex',
 		]);
+	});
+});
+
+describe('case-insensitive starts and ends operators by column type', () => {
+	const operators = ['istarts_with', 'nistarts_with', 'iends_with', 'niends_with'];
+
+	it.each([
+		['binary', 'blob'],
+		['binary', 'varbinary'],
+		['string', 'interval'],
+		['string', '_varchar'],
+		['csv', '_varchar'],
+		['string', null],
+	] as const)('leaves them out for a %s field stored as %s', (type, dbType) => {
+		const offered = getFilterOperatorsForType(type, { dbType });
+
+		expect(offered.filter((operator) => operators.includes(operator))).toEqual([]);
+		expect(offered).toContain('starts_with');
+	});
+
+	it.each([
+		['string', 'varchar(255)'],
+		['string', 'character varying'],
+		['string', 'CHAR'],
+		['text', 'longtext'],
+		['text', 'citext'],
+		['csv', 'text'],
+	] as const)('offers them for a %s field stored as %s', (type, dbType) => {
+		expect(getFilterOperatorsForType(type, { dbType })).toEqual(getFilterOperatorsForType(type));
+	});
+
+	it('offers them when the column type is not given', () => {
+		expect(getFilterOperatorsForType('binary')).toEqual(expect.arrayContaining(operators));
 	});
 });

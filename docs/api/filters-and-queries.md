@@ -180,7 +180,7 @@ Filter variables are particularly useful in role permissions, where the same rul
 | `_intersects_bbox` | Geometry intersects a bounding box. |
 | `_nintersects_bbox` | Geometry does not intersect a bounding box. |
 
-Operators that take no value (`_null`, `_nnull`, `_empty`, `_nempty`) accept `true` to apply the rule and `false` to apply its inverse. The case-insensitive variants are useful for fields that store user-supplied text without consistent casing (email addresses, search terms, tags).
+Operators that take no value (`_null`, `_nnull`, `_empty`, `_nempty`) accept `true` to apply the rule and `false` to apply its inverse. The case-insensitive variants are useful for fields that store user-supplied text without consistent casing (email addresses, search terms, tags). They compare lowercased text. Filters lowercase in the database and validation rules lowercase in CairnCMS, so the two can disagree for some non-ASCII characters.
 
 `_in` and `_nin` with an empty array preserve their mathematical meaning: `_in: []` matches no rows (the value is in an empty set, which is impossible), while `_nin: []` matches every row (the value is not in an empty set, which is trivially true). Permission rules expressed with these operators behave the same way; an `_in: []` permission filter denies all matches, and a `_nin: []` permission filter denies nothing.
 

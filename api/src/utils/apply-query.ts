@@ -27,6 +27,8 @@ import { customAlphabet } from 'nanoid/non-secure';
 
 export const generateAlias = customAlphabet('abcdefghijklmnopqrstuvwxyz', 5);
 
+const LITERAL_PATTERN_OPERATORS = new Set(['_istarts_with', '_nistarts_with', '_iends_with', '_niends_with']);
+
 /**
  * Apply the Query to a given Knex query builder instance
  */
@@ -562,23 +564,23 @@ export function applyFilter(
 
 				if (!columnPath) continue;
 
-				const { type, special } = validateFilterField(
+				const { type, special, dbType } = validateFilterField(
 					schema.collections[targetCollection]!.fields,
 					stripFunction(filterPath[filterPath.length - 1]!),
 					targetCollection
 				)!;
 
-				validateFilterOperator(type, filterOperator, special);
+				validateFilterOperator(type, filterOperator, special, dbType);
 
 				applyFilterToQuery(columnPath, filterOperator, filterValue, logical, targetCollection);
 			} else {
-				const { type, special } = validateFilterField(
+				const { type, special, dbType } = validateFilterField(
 					schema.collections[collection]!.fields,
 					stripFunction(filterPath[0]!),
 					collection
 				)!;
 
-				validateFilterOperator(type, filterOperator, special);
+				validateFilterOperator(type, filterOperator, special, dbType);
 
 				applyFilterToQuery(`${collection}.${filterPath[0]}`, filterOperator, filterValue, logical);
 			}
@@ -592,7 +594,7 @@ export function applyFilter(
 			return fields[key];
 		}
 
-		function validateFilterOperator(type: Type, filterOperator: string, special: string[]) {
+		function validateFilterOperator(type: Type, filterOperator: string, special: string[], dbType: string | null) {
 			if (filterOperator.startsWith('_')) {
 				filterOperator = filterOperator.slice(1);
 			}
@@ -601,6 +603,10 @@ export function applyFilter(
 				throw new InvalidQueryException(
 					`"${type}" field type does not contain the "_${filterOperator}" filter operator`
 				);
+			}
+
+			if (!getFilterOperatorsForType(type, { dbType }).includes(filterOperator as ClientFilterOperator)) {
+				throw new InvalidQueryException(`The "_${filterOperator}" filter operator requires a text column`);
 			}
 
 			if (
@@ -695,6 +701,10 @@ export function applyFilter(
 				}
 			}
 
+			if (LITERAL_PATTERN_OPERATORS.has(operator) && (typeof compareValue !== 'string' || compareValue === '')) {
+				throw new InvalidQueryException(`The filter value for "${operator}" has to be a non-empty string`);
+			}
+
 			if (operator === '_eq') {
 				dbQuery[logical].where(selectionRaw, '=', compareValue);
 			}
@@ -736,11 +746,17 @@ export function applyFilter(
 			}
 
 			if (operator === '_istarts_with') {
-				dbQuery[logical].whereRaw(`LOWER(??) LIKE ?`, [selectionRaw, `${compareValue.toLowerCase()}%`]);
+				dbQuery[logical].whereRaw(`LOWER(??) LIKE ? ESCAPE '!'`, [
+					selectionRaw,
+					`${escapeLikeOperand(compareValue.toLowerCase())}%`,
+				]);
 			}
 
 			if (operator === '_nistarts_with') {
-				dbQuery[logical].whereRaw(`LOWER(??) NOT LIKE ?`, [selectionRaw, `${compareValue.toLowerCase()}%`]);
+				dbQuery[logical].whereRaw(`LOWER(??) NOT LIKE ? ESCAPE '!'`, [
+					selectionRaw,
+					`${escapeLikeOperand(compareValue.toLowerCase())}%`,
+				]);
 			}
 
 			if (operator === '_ends_with') {
@@ -752,11 +768,17 @@ export function applyFilter(
 			}
 
 			if (operator === '_iends_with') {
-				dbQuery[logical].whereRaw(`LOWER(??) LIKE ?`, [selectionRaw, `%${compareValue.toLowerCase()}`]);
+				dbQuery[logical].whereRaw(`LOWER(??) LIKE ? ESCAPE '!'`, [
+					selectionRaw,
+					`%${escapeLikeOperand(compareValue.toLowerCase())}`,
+				]);
 			}
 
 			if (operator === '_niends_with') {
-				dbQuery[logical].whereRaw(`LOWER(??) NOT LIKE ?`, [selectionRaw, `%${compareValue.toLowerCase()}`]);
+				dbQuery[logical].whereRaw(`LOWER(??) NOT LIKE ? ESCAPE '!'`, [
+					selectionRaw,
+					`%${escapeLikeOperand(compareValue.toLowerCase())}`,
+				]);
 			}
 
 			if (operator === '_gt') {
@@ -1009,4 +1031,9 @@ function getOperation(key: string, value: Record<string, any>): { operator: stri
 	}
 
 	return getOperation(Object.keys(value)[0]!, Object.values(value)[0]);
+}
+
+/** Escapes `!`, `%`, and `_` with `!`, so a pattern matched with `ESCAPE '!'` treats the operand as literal text. */
+function escapeLikeOperand(operand: string): string {
+	return operand.replace(/[!%_]/g, '!$&');
 }

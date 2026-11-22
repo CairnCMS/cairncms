@@ -85,6 +85,18 @@ describe('panels/pie-chart/checkMatchingConditionalFill', () => {
 			).toBe(false);
 		});
 
+		it.each([
+			['nstarts_with', 'elect', 'books', 'electronics'],
+			['istarts_with', 'ELECT', 'Electronics', 'books'],
+			['nistarts_with', 'ELECT', 'books', 'Electronics'],
+			['nends_with', 'nics', 'books', 'electronics'],
+			['iends_with', 'NICS', 'ElectroNics', 'books'],
+			['niends_with', 'NICS', 'books', 'ElectroNics'],
+		] as const)('Matches %s against %j', (operator, value, matching, other) => {
+			expect(checkMatchingConditionalFill(matching, { ...baseFormat, operator, value }, false)).toBe(true);
+			expect(checkMatchingConditionalFill(other, { ...baseFormat, operator, value }, false)).toBe(false);
+		});
+
 		it('Falls back to false for the default case when an unknown operator slips through', () => {
 			expect(
 				checkMatchingConditionalFill('foo', { ...baseFormat, operator: 'unknown' as never, value: 'bar' }, false)
