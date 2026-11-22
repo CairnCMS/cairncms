@@ -34,7 +34,7 @@ type Link = {
 };
 
 type Props = {
-	links: Link[];
+	links?: Link[];
 	collection: string;
 	primaryKey: string;
 };

@@ -135,7 +135,7 @@ const props = withDefaults(
 		dateField?: string | null;
 		tagsField?: string | null;
 		userField?: string | null;
-		showUngrouped: boolean;
+		showUngrouped?: boolean;
 	}>(),
 	{
 		groupTitleFields: () => [],

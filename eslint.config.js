@@ -132,11 +132,6 @@ const typescriptRules = {
 	'@typescript-eslint/ban-ts-comment': 'off',
 	'@typescript-eslint/no-explicit-any': 'off',
 	'@typescript-eslint/no-require-imports': 'off',
-	// Off for TypeScript and Vue until their existing findings are fixed.
-	'no-constant-binary-expression': 'off',
-	'no-unassigned-vars': 'off',
-	'no-useless-assignment': 'off',
-	'@typescript-eslint/no-unused-expressions': 'off',
 	'@typescript-eslint/adjacent-overload-signatures': 'error',
 	'@typescript-eslint/no-empty-function': 'error',
 	'@typescript-eslint/no-empty-object-type': ['error', { allowInterfaces: 'never', allowObjectTypes: 'always' }],
@@ -181,13 +176,12 @@ module.exports = defineConfig([
 			'vue/jsx-uses-vars': 'error',
 			'vue/multi-word-component-names': 'off',
 			'vue/require-default-prop': 'off',
-			'vue/no-required-prop-with-default': 'off',
 		},
 	},
 	{
 		files: ['**/*.vue'],
 		languageOptions: { parser: vueParser, parserOptions: { parser: tsParser } },
-		rules: { 'prefer-const': 'off' },
+		rules: { 'prefer-const': 'error' },
 	},
 	{
 		// Test modules define stub components next to the component under test.

@@ -13,7 +13,7 @@ import { computed } from 'vue';
 
 const props = withDefaults(
 	defineProps<{
-		value: boolean;
+		value?: boolean;
 		labelOn?: string | null;
 		labelOff?: string | null;
 		iconOn?: string | null;

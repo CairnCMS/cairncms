@@ -40,9 +40,9 @@ import type { FormField } from './types';
 
 interface Props {
 	field: FormField;
-	showModal: boolean;
-	disabled: boolean;
-	currentValue: unknown;
+	showModal?: boolean;
+	disabled?: boolean;
+	currentValue?: unknown;
 }
 
 const props = withDefaults(defineProps<Props>(), {

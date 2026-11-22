@@ -256,7 +256,7 @@ const columnStyle = computed<{ header: string; rows: string }>(() => {
 			.map((header) => {
 				return header.width ? useVal ?? `${header.width}px` : '160px';
 			})
-			.reduce((acc, val) => (acc += ' ' + val), '');
+			.reduce((acc, val) => acc + ' ' + val, '');
 
 		if (props.showSelect !== 'none') gridTemplateColumns = '36px ' + gridTemplateColumns;
 		if (props.showManualSort) gridTemplateColumns = '36px ' + gridTemplateColumns;

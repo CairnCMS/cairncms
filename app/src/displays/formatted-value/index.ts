@@ -16,13 +16,7 @@ export default defineDisplay({
 		const prefix = options.prefix ?? '';
 		const suffix = options.suffix ?? '';
 
-		let sanitizedValue = String(value);
-
-		// Strip out all HTML tags
-		sanitizedValue = dompurify.sanitize(value, { ALLOWED_TAGS: [] });
-
-		// Decode any HTML encoded characters (like &copy;)
-		sanitizedValue = decode(sanitizedValue);
+		const sanitizedValue = decode(dompurify.sanitize(value, { ALLOWED_TAGS: [] }));
 
 		const formattedValue = options.format ? formatTitle(sanitizedValue) : sanitizedValue;
 

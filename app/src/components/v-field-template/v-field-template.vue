@@ -241,10 +241,10 @@ function getInputValue() {
 		const el = node as HTMLElement;
 		const tag = el.tagName;
 
-		if (tag && tag.toLowerCase() === 'button') return (acc += `{{${el.dataset.field}}}`);
-		else if ('textContent' in el) return (acc += el.textContent);
+		if (tag && tag.toLowerCase() === 'button') return acc + `{{${el.dataset.field}}}`;
+		else if ('textContent' in el) return acc + el.textContent;
 
-		return (acc += '');
+		return acc;
 	}, '');
 
 	if (props.nullable === true && value === '') {
