@@ -14,6 +14,8 @@ export interface StringSchema extends BaseStringSchema {
 	contains(substring: string): this;
 	ncontains(substring: string): this;
 	icontains(substring: string): this;
+	endsWith(suffix: string): this;
+	nendsWith(suffix: string): this;
 	istartsWith(prefix: string): this;
 	nistartsWith(prefix: string): this;
 	iendsWith(suffix: string): this;
@@ -50,6 +52,8 @@ export const Joi: typeof BaseJoi = BaseJoi.extend({
 		'string.contains': '{{#label}} must contain [{{#substring}}]',
 		'string.ncontains': "{{#label}} can't contain [{{#substring}}]",
 		'string.icontains': '{{#label}} must contain the required text',
+		'string.endsWith': '{{#label}} must end with the required text',
+		'string.nendsWith': "{{#label}} can't end with the excluded text",
 		'string.istartsWith': '{{#label}} must start with the required text',
 		'string.nistartsWith': "{{#label}} can't start with the excluded text",
 		'string.iendsWith': '{{#label}} must end with the required text',
@@ -97,6 +101,8 @@ export const Joi: typeof BaseJoi = BaseJoi.extend({
 			},
 		},
 		icontains: textRule('icontains', (value, text) => value.toLowerCase().includes(text.toLowerCase())),
+		endsWith: textRule('endsWith', (value, text) => value.endsWith(text)),
+		nendsWith: textRule('nendsWith', (value, text) => !value.endsWith(text)),
 		istartsWith: textRule('istartsWith', (value, text) => value.toLowerCase().startsWith(text.toLowerCase())),
 		nistartsWith: textRule('nistartsWith', (value, text) => !value.toLowerCase().startsWith(text.toLowerCase())),
 		iendsWith: textRule('iendsWith', (value, text) => value.toLowerCase().endsWith(text.toLowerCase())),
@@ -280,9 +286,7 @@ export function generateJoi(filter: FieldFilter | null, options?: JoiOptions): A
 			if (compareValue === null || compareValue === undefined || typeof compareValue !== 'string') {
 				schema[key] = Joi.any().equal(true);
 			} else {
-				schema[key] = getStringSchema().pattern(new RegExp(`.*${escapeRegExp(compareValue)}$`), {
-					name: 'ends_with',
-				});
+				schema[key] = getStringSchema().endsWith(compareValue);
 			}
 		}
 
@@ -290,10 +294,7 @@ export function generateJoi(filter: FieldFilter | null, options?: JoiOptions): A
 			if (compareValue === null || compareValue === undefined || typeof compareValue !== 'string') {
 				schema[key] = Joi.any().equal(true);
 			} else {
-				schema[key] = getStringSchema().pattern(new RegExp(`.*${escapeRegExp(compareValue)}$`), {
-					name: 'nends_with',
-					invert: true,
-				});
+				schema[key] = getStringSchema().nendsWith(compareValue);
 			}
 		}
 

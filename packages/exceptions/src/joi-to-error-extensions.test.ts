@@ -163,6 +163,8 @@ describe('joiValidationErrorItemToErrorExtensions', () => {
 		['any.only', '_nstarts_with', 'nstarts_with'],
 		['string.pattern.name', '_ends_with', 'ends_with'],
 		['string.pattern.invert.name', '_nends_with', 'nends_with'],
+		['string.endsWith', '_ends_with', 'ends_with'],
+		['string.nendsWith', '_nends_with', 'nends_with'],
 		['string.istartsWith', '_istarts_with', 'istarts_with'],
 		['string.base', '_istarts_with', 'istarts_with'],
 		['string.nistartsWith', '_nistarts_with', 'nistarts_with'],

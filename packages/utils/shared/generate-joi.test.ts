@@ -390,9 +390,7 @@ describe(`generateJoi`, () => {
 		const mockFieldFilter = { field: { _ends_with: 'field' } } as FieldFilter;
 
 		const mockSchema = Joi.object({
-			field: Joi.string().pattern(new RegExp(`.*field$`), {
-				name: 'ends_with',
-			}),
+			field: (Joi.string() as StringSchema).endsWith('field'),
 		})
 			.unknown()
 			.describe();
@@ -416,10 +414,7 @@ describe(`generateJoi`, () => {
 		const mockFieldFilter = { field: { _nends_with: 'field' } } as FieldFilter;
 
 		const mockSchema = Joi.object({
-			field: Joi.string().pattern(new RegExp(`.*field$`), {
-				name: 'nends_with',
-				invert: true,
-			}),
+			field: (Joi.string() as StringSchema).nendsWith('field'),
 		})
 			.unknown()
 			.describe();
@@ -973,21 +968,57 @@ describe(`generateJoi`, () => {
 				expect(generateJoi(filter, { requireAll: true }).validate({}).error?.details[0]?.type).toBe('any.required');
 			}
 		});
+	});
 
+	describe(`suffix rules`, () => {
 		it.each([
-			['_icontains', 'zzz'],
-			['_istarts_with', 'zzz'],
-			['_nistarts_with', 'operand_markerzzz'],
-			['_iends_with', 'zzz'],
-			['_niends_with', 'zzzoperand_marker'],
-		])(`%s reports a failure without the rule's text`, (operator, field) => {
-			const filter = { field: { [operator]: 'OPERAND_MARKER' } } as unknown as FieldFilter;
-			const detail = generateJoi(filter).validate({ field }).error?.details[0];
-			const contextKeys = Object.keys(detail?.context ?? {}).sort();
+			['_ends_with', false],
+			['_nends_with', true],
+		])(`%s accepts exactly the values its former pattern accepted`, (operator, invert) => {
+			const suffixes = ['a', 'ab', 'A', '.*', '$', '\n', 'a\nb', ''];
+			const values = ['', 'a', 'ba', 'ab', 'xab', 'xAB', 'a\nb', 'ab\n', 'x.*', '$', 'line\nab', 'zzz'];
 
-			expect(detail?.message).not.toContain('OPERAND_MARKER');
-			expect(contextKeys).toEqual(['key', 'label', 'validationOperator', 'value']);
+			for (const suffix of suffixes) {
+				const filter = { field: { [operator]: suffix } } as unknown as FieldFilter;
+				const name = operator.slice(1);
+				const pattern = Joi.string().pattern(new RegExp(`.*${escapeRegExp(suffix)}$`), { name, invert });
+
+				for (const field of values) {
+					const passes = generateJoi(filter).validate({ field }).error === undefined;
+
+					expect(passes, JSON.stringify({ suffix, field })).toBe(pattern.validate(field).error === undefined);
+				}
+			}
 		});
+
+		it.each(['_ends_with', '_nends_with', '_iends_with', '_niends_with'])(
+			`%s checks a 50,000 character value in under 250 ms`,
+			(operator) => {
+				const schema = generateJoi({ field: { [operator]: 'b' } } as unknown as FieldFilter);
+				const started = performance.now();
+
+				schema.validate({ field: 'a'.repeat(50_000) });
+
+				expect(performance.now() - started).toBeLessThan(250);
+			}
+		);
+	});
+
+	it.each([
+		['_icontains', 'zzz'],
+		['_ends_with', 'zzz'],
+		['_nends_with', 'zzzOPERAND_MARKER'],
+		['_istarts_with', 'zzz'],
+		['_nistarts_with', 'operand_markerzzz'],
+		['_iends_with', 'zzz'],
+		['_niends_with', 'zzzoperand_marker'],
+	])(`reports a failed %s rule without the rule's text`, (operator, field) => {
+		const filter = { field: { [operator]: 'OPERAND_MARKER' } } as unknown as FieldFilter;
+		const detail = generateJoi(filter).validate({ field }).error?.details[0];
+		const contextKeys = Object.keys(detail?.context ?? {}).sort();
+
+		expect(detail?.message).not.toContain('OPERAND_MARKER');
+		expect(contextKeys).toEqual(['key', 'label', 'validationOperator', 'value']);
 	});
 
 	describe(`validation operator tags`, () => {
@@ -1011,6 +1042,8 @@ describe(`generateJoi`, () => {
 			['_starts_with', { _starts_with: null }, 'b', 'any.only'],
 			['_nstarts_with', { _nstarts_with: 'a' }, 'a', 'string.pattern.invert.name'],
 			['_ends_with', { _ends_with: 'a' }, 42, 'string.base'],
+			['_ends_with', { _ends_with: 'a' }, 'b', 'string.endsWith'],
+			['_nends_with', { _nends_with: 'a' }, 'ba', 'string.nendsWith'],
 			['_nends_with', { _nends_with: 42 }, 'a', 'any.only'],
 			['_istarts_with', { _istarts_with: 'a' }, 'b', 'string.istartsWith'],
 			['_istarts_with', { _istarts_with: null }, 'b', 'any.only'],
@@ -1065,8 +1098,8 @@ describe(`generateJoi`, () => {
 				{ _nstarts_with: 'a' },
 				Joi.string().pattern(/^a.*/, { name: 'nstarts_with', invert: true }),
 			],
-			['_ends_with a word', { _ends_with: 'a' }, Joi.string().pattern(/.*a$/, { name: 'ends_with' })],
-			['_nends_with a word', { _nends_with: 'a' }, Joi.string().pattern(/.*a$/, { name: 'nends_with', invert: true })],
+			['_ends_with a word', { _ends_with: 'a' }, (Joi.string() as StringSchema).endsWith('a')],
+			['_nends_with a word', { _nends_with: 'a' }, (Joi.string() as StringSchema).nendsWith('a')],
 			['_regex a pattern', { _regex: '^a' }, Joi.string().regex(/^a/)],
 			['_regex a number', { _regex: 42 }, Joi.string().regex(/42/)],
 			['_regex null', { _regex: null }, Joi.any().equal(true)],
