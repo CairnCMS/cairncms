@@ -16,7 +16,7 @@ vi.mock('@/utils/adjust-fields-for-displays', () => {
 });
 
 const TestComponent = defineComponent({
-	props: ['fields', 'collection'], // eslint-disable-line  vue/require-prop-types
+	props: ['fields', 'collection'], // eslint-disable-line  vue/require-prop-types -- The fixture passes props through to the composable under test.
 	setup(props) {
 		return useAliasFields(props.fields, props.collection);
 	},

@@ -85,14 +85,14 @@ const relationO2M: RelationO2M = {
 };
 
 const TestComponent = defineComponent({
-	props: ['value', 'relation', 'id'], // eslint-disable-line vue/require-prop-types
+	props: ['value', 'relation', 'id'], // eslint-disable-line vue/require-prop-types -- The fixture passes props through to the composable under test.
 	setup(props) {
 		const valueRef = ref(props.value);
 		const { relation, id } = toRefs(props);
 
 		const query = computed<RelationQueryMultiple>(() => ({ limit: 15, page: 1, fields: ['id', 'name'] }));
 
-		// eslint-disable-next-line vue/no-dupe-keys
+		// eslint-disable-next-line vue/no-dupe-keys -- The fixture exposes controlled setup refs under the same prop names.
 		return { value: valueRef, ...useRelationMultiple(valueRef, query, relation, id) };
 	},
 	render: () => h('div'),

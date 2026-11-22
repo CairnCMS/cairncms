@@ -258,7 +258,7 @@ function addNew() {
 		emitValue([...internalValue.value, newDefaults]);
 	} else {
 		if (internalValue.value != null) {
-			// eslint-disable-next-line no-console
+			// eslint-disable-next-line no-console -- Report a stored repeater value that is not an array.
 			console.warn(
 				'The repeater interface expects an array as value, but the given value is no array. Overriding given value.'
 			);

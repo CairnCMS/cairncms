@@ -13,7 +13,7 @@ export function unexpectedError(error: Error | RequestError | APIError): void {
 		(error as APIError)?.extensions?.code ||
 		'UNKNOWN';
 
-	// eslint-disable-next-line no-console
+	// eslint-disable-next-line no-console -- Report the original error alongside the user-facing notification.
 	console.warn(error);
 
 	store.add({

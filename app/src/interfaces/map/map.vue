@@ -92,7 +92,6 @@ import { computed, onMounted, onUnmounted, ref, toRefs, watch } from 'vue';
 import { TranslateResult, useI18n } from 'vue-i18n';
 import { getMapStyle } from './style';
 
-// @ts-ignore
 import StaticMode from '@mapbox/mapbox-gl-draw-static-mode';
 
 // mapbox-gl-draw detects the map canvas and builds its controls using mapbox-gl class names; align them with the classes maplibre renders.

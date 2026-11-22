@@ -225,6 +225,13 @@ Run tests and lint independently:
 
   Runs ESLint across the workspace. Auto-fixable issues can be addressed with `pnpm lint --fix`.
 
+  A comment that turns off a lint rule must name the rule and give a reason after `--`, for example
+  `// eslint-disable-next-line no-console -- The CLI prints to the terminal.`
+
+  `@ts-ignore` and `@ts-nocheck` are not allowed. Fix the type error instead. Where an error is intended, such as in a
+  type test, use `@ts-expect-error` with a reason. It hides any error on the next line, and TypeScript reports it as
+  unused once that line has none.
+
 ## Common workflows
 
 ### Working on the API

@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+/* eslint-disable no-console -- This integration runner reports progress and failures to the terminal. */
 import { createVitest } from 'vitest/node';
 import { DefaultReporter, VerboseReporter } from 'vitest/node';
 import { Wait } from 'testcontainers';

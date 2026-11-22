@@ -57,7 +57,6 @@ enableAutoUnmount(afterEach);
 
 const i18n = createI18n({ legacy: false });
 
-// eslint-disable-next-line vue/one-component-per-file
 const ShareItem = defineComponent({
 	name: 'ShareItem',
 	props: { share: { type: Object, default: () => ({}) } },
@@ -65,7 +64,6 @@ const ShareItem = defineComponent({
 	template: '<div class="share-item-stub" />',
 });
 
-// eslint-disable-next-line vue/one-component-per-file
 const VButton = defineComponent({
 	name: 'VButton',
 	emits: ['click'],

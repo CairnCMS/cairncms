@@ -190,8 +190,15 @@ module.exports = defineConfig([
 		rules: { 'prefer-const': 'off' },
 	},
 	{
+		// Test modules define stub components next to the component under test.
+		files: ['app/src/**/*.test.ts'],
+		rules: { 'vue/one-component-per-file': 'off' },
+	},
+	{
 		files: ['tests/integration/**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx,vue}'],
 		languageOptions: { globals: globals.es2021 },
+		// Vitest fixtures with no dependencies still take an empty object pattern as their first parameter.
+		rules: { 'no-empty-pattern': ['error', { allowObjectPatternsAsParameters: true }] },
 	},
 	{ files: ['**/*.{cjs,cts}'], languageOptions: { sourceType: 'commonjs' } },
 	{

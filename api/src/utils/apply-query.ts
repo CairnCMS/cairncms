@@ -22,7 +22,6 @@ import { getColumn } from './get-column.js';
 import { getRelationInfo } from './get-relation-info.js';
 import { stripFunction } from './strip-function.js';
 
-// @ts-ignore
 import { customAlphabet } from 'nanoid/non-secure';
 
 export const generateAlias = customAlphabet('abcdefghijklmnopqrstuvwxyz', 5);

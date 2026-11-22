@@ -78,7 +78,7 @@ const fetchResultsRaw = async (value: string | null) => {
 		const resultsArray = props.resultsPath ? get(result.data, props.resultsPath) : result.data;
 
 		if (Array.isArray(resultsArray) === false) {
-			// eslint-disable-next-line no-console
+			// eslint-disable-next-line no-console -- Report an autocomplete response that does not contain the expected array.
 			console.warn(`Expected results type of array, "${typeof resultsArray}" received`);
 			return;
 		}
@@ -93,7 +93,7 @@ const fetchResultsRaw = async (value: string | null) => {
 			}
 		});
 	} catch (err: any) {
-		// eslint-disable-next-line no-console
+		// eslint-disable-next-line no-console -- Report autocomplete request failures in the browser.
 		console.warn(err);
 	}
 };

@@ -356,7 +356,7 @@ describe('Integration Tests', () => {
 				storageStat.mockReset().mockResolvedValue({ size: 42 });
 
 				storageList.mockReset().mockReturnValue({
-					// eslint-disable-next-line require-yield
+					// eslint-disable-next-line require-yield -- This storage fixture models an empty async iterator.
 					async *[Symbol.asyncIterator]() {
 						return;
 					},

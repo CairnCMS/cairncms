@@ -128,7 +128,6 @@ vi.mock('@/views/private/components/drawer-files.vue', () => ({
 	default: { name: 'DrawerFilesStub', template: '<div />' },
 }));
 
-// eslint-disable-next-line vue/one-component-per-file
 const Draggable = defineComponent({
 	name: 'DraggableStub',
 	props: { modelValue: { type: Array as () => any[], default: () => [] } },
@@ -136,7 +135,6 @@ const Draggable = defineComponent({
 		'<div><template v-for="(element, i) in modelValue" :key="i"><slot name="item" :element="element" /></template></div>',
 });
 
-// eslint-disable-next-line vue/one-component-per-file
 const VListItem = defineComponent({
 	name: 'VListItem',
 	props: { disabled: { type: Boolean, default: false } },

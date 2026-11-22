@@ -39,21 +39,18 @@ enableAutoUnmount(afterEach);
 
 const i18n = createI18n({ legacy: false, missingWarn: false, fallbackWarn: false });
 
-// eslint-disable-next-line vue/one-component-per-file
 const PrivateView = defineComponent({
 	name: 'PrivateView',
 	props: { title: { type: String, default: '' } },
 	template: '<div><h1 class="title">{{ title }}</h1><slot name="actions" /><slot /></div>',
 });
 
-// eslint-disable-next-line vue/one-component-per-file
 const VWorkspace = defineComponent({
 	name: 'VWorkspace',
 	props: { tiles: { type: Array, default: () => [] } },
 	template: '<div><template v-for="tile in tiles" :key="tile.id"><slot name="tile" :tile="tile" /></template></div>',
 });
 
-// eslint-disable-next-line vue/one-component-per-file
 const RouterViewStub = defineComponent({
 	name: 'RouterViewStub',
 	emits: ['save', 'cancel'],

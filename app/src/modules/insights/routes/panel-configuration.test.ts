@@ -92,7 +92,6 @@ function deferred<T>() {
 	return { promise, resolve, reject };
 }
 
-// eslint-disable-next-line vue/one-component-per-file
 const VButton = defineComponent({
 	name: 'VButton',
 	props: { disabled: { type: Boolean, default: false } },
@@ -100,7 +99,6 @@ const VButton = defineComponent({
 	template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
 
-// eslint-disable-next-line vue/one-component-per-file
 const Field = defineComponent({
 	name: 'FieldStub',
 	props: { disabled: { type: Boolean, default: false }, placeholder: { type: String, default: '' } },

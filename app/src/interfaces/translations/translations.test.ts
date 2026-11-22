@@ -156,7 +156,6 @@ function grant(action: Permission['action'], fields: string[] | null): Permissio
 	};
 }
 
-// eslint-disable-next-line vue/one-component-per-file
 const LanguageSelect = defineComponent({
 	name: 'LanguageSelect',
 	props: {
@@ -168,7 +167,6 @@ const LanguageSelect = defineComponent({
 	template: '<div class="language-select"><slot name="append" /></div>',
 });
 
-// eslint-disable-next-line vue/one-component-per-file
 const VForm = defineComponent({
 	name: 'VForm',
 	props: {

@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+/* eslint-disable no-console -- A console marker lets the harness check which test bodies run. */
 import { expect } from 'vitest';
 import { createApiTest } from '../../fixtures/environment';
 import { capturePrerequisite, requirePrerequisite, type Prerequisite } from '../../fixtures/prerequisite';

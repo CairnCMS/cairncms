@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+/* eslint-disable no-console -- Report owned service startup and unexpected exits to the test runner terminal. */
 import { Wait, type StartedTestContainer, type WaitStrategy } from 'testcontainers';
 import { createWriteStream } from 'node:fs';
 import { RecordedContainer } from '../harness/recorded-container.mjs';

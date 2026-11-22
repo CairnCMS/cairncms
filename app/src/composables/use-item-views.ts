@@ -84,7 +84,7 @@ export function useItemViews(options: {
 			try {
 				callback(savedItem);
 			} catch (error) {
-				// eslint-disable-next-line no-console
+				// eslint-disable-next-line no-console -- Report a failing onSaved extension callback in the browser.
 				console.warn('Item view onSaved callback failed', error);
 			}
 		}
@@ -196,7 +196,7 @@ export function useItemViews(options: {
 			if (!config.placements?.splitPane?.component) {
 				if (!warnedInvalid.has(key)) {
 					warnedInvalid.add(key);
-					// eslint-disable-next-line no-console
+					// eslint-disable-next-line no-console -- Report unsupported view placement once for extension debugging.
 					console.warn(`Item view "${config.id}" declares no supported placement`);
 				}
 

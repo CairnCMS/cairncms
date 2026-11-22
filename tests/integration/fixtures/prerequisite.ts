@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+/* eslint-disable no-console -- Report fixture teardown failures to the test runner terminal. */
 import type { TestContext } from 'vitest';
 
 declare module 'vitest' {
