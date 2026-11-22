@@ -133,7 +133,6 @@ const typescriptRules = {
 	'@typescript-eslint/no-explicit-any': 'off',
 	'@typescript-eslint/no-require-imports': 'off',
 	// Off for TypeScript and Vue until their existing findings are fixed.
-	'no-unassigned-vars': 'off',
 	'no-useless-assignment': 'off',
 	'@typescript-eslint/no-unused-expressions': 'off',
 	'@typescript-eslint/adjacent-overload-signatures': 'error',
