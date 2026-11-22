@@ -84,6 +84,7 @@ describe('extension settings drawer', () => {
 
 		expect(fields.map((field) => field.field)).toEqual(['base_url', 'retries', 'verbose', 'api_key']);
 		expect(fields.map((field) => field.meta.width)).toEqual(['full', 'half', 'half', 'full']);
+
 		expect(fields.map((field) => field.meta.interface)).toEqual([
 			'input',
 			'input',
@@ -216,7 +217,10 @@ describe('extension settings drawer', () => {
 	it('renders the reason only, with no form and no save, for an unavailable owner', async () => {
 		const wrapper = mountDrawer({
 			status: 'unavailable',
-			reason: { code: 'SETTINGS_SUBJECT_DUPLICATE', detail: 'the settings subject "x" is declared by more than one extension' },
+			reason: {
+				code: 'SETTINGS_SUBJECT_DUPLICATE',
+				detail: 'the settings subject "x" is declared by more than one extension',
+			},
 		});
 
 		await flushPromises();
@@ -228,9 +232,9 @@ describe('extension settings drawer', () => {
 
 		const notice = wrapper.find('.v-notice[data-type="warning"]');
 		expect(notice.text()).toContain('Extension settings are unavailable.');
+
 		expect(notice.find('code.diagnostic-detail').text()).toContain(
 			'SETTINGS_SUBJECT_DUPLICATE: the settings subject "x" is declared by more than one extension'
 		);
 	});
-
 });

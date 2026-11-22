@@ -95,7 +95,6 @@ vi.mock('@/views/private/components/search-input.vue', () => ({
 	default: { name: 'SearchInputStub', template: '<div />' },
 }));
 
-// eslint-disable-next-line vue/one-component-per-file
 const VTable = defineComponent({
 	name: 'VTable',
 	props: {
