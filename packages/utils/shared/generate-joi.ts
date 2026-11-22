@@ -13,6 +13,7 @@ import { escapeRegExp, merge } from 'lodash-es';
 export interface StringSchema extends BaseStringSchema {
 	contains(substring: string): this;
 	ncontains(substring: string): this;
+	icontains(substring: string): this;
 	istartsWith(prefix: string): this;
 	nistartsWith(prefix: string): this;
 	iendsWith(suffix: string): this;
@@ -48,6 +49,7 @@ export const Joi: typeof BaseJoi = BaseJoi.extend({
 	messages: {
 		'string.contains': '{{#label}} must contain [{{#substring}}]',
 		'string.ncontains': "{{#label}} can't contain [{{#substring}}]",
+		'string.icontains': '{{#label}} must contain the required text',
 		'string.istartsWith': '{{#label}} must start with the required text',
 		'string.nistartsWith': "{{#label}} can't start with the excluded text",
 		'string.iendsWith': '{{#label}} must end with the required text',
@@ -94,6 +96,7 @@ export const Joi: typeof BaseJoi = BaseJoi.extend({
 				return value;
 			},
 		},
+		icontains: textRule('icontains', (value, text) => value.toLowerCase().includes(text.toLowerCase())),
 		istartsWith: textRule('istartsWith', (value, text) => value.toLowerCase().startsWith(text.toLowerCase())),
 		nistartsWith: textRule('nistartsWith', (value, text) => !value.toLowerCase().startsWith(text.toLowerCase())),
 		iendsWith: textRule('iendsWith', (value, text) => value.toLowerCase().endsWith(text.toLowerCase())),
@@ -221,10 +224,10 @@ export function generateJoi(filter: FieldFilter | null, options?: JoiOptions): A
 		}
 
 		if (operator === '_icontains') {
-			if (compareValue === null || compareValue === undefined || typeof compareValue !== 'string') {
-				schema[key] = Joi.any().equal(true);
+			if (typeof compareValue !== 'string') {
+				schema[key] = Joi.any().valid(NO_MATCH_SENTINEL);
 			} else {
-				schema[key] = getStringSchema().contains(compareValue);
+				schema[key] = getStringSchema().icontains(compareValue);
 			}
 		}
 

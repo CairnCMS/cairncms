@@ -154,6 +154,8 @@ describe('joiValidationErrorItemToErrorExtensions', () => {
 		['string.contains', '_contains', 'contains'],
 		['any.only', '_contains', 'contains'],
 		['string.base', '_icontains', 'contains'],
+		['string.icontains', '_icontains', 'contains'],
+		['any.only', '_icontains', 'contains'],
 		['string.ncontains', '_ncontains', 'ncontains'],
 		['any.only', '_ncontains', 'ncontains'],
 		['string.pattern.name', '_starts_with', 'starts_with'],

@@ -299,19 +299,7 @@ describe(`generateJoi`, () => {
 		const mockFieldFilter = { field: { _icontains: 'field' } } as FieldFilter;
 
 		const mockSchema = Joi.object({
-			field: (Joi.string() as StringSchema).contains('field'),
-		})
-			.unknown()
-			.describe();
-
-		expect(describeRules(generateJoi(mockFieldFilter))).toStrictEqual(mockSchema);
-	});
-
-	it(`returns the correct schema for an _icontains with null value`, () => {
-		const mockFieldFilter = { field: { _icontains: null } } as FieldFilter;
-
-		const mockSchema = Joi.object({
-			field: Joi.any().equal(true),
+			field: (Joi.string() as StringSchema).icontains('field'),
 		})
 			.unknown()
 			.describe();
@@ -896,13 +884,17 @@ describe(`generateJoi`, () => {
 		});
 	});
 
-	describe(`case-insensitive starts and ends rules`, () => {
-		const OPERATORS = ['_istarts_with', '_nistarts_with', '_iends_with', '_niends_with'];
+	describe(`case-insensitive text rules`, () => {
+		const OPERATORS = ['_icontains', '_istarts_with', '_nistarts_with', '_iends_with', '_niends_with'];
 
 		const passes = (rule: Record<string, unknown>, field: unknown) =>
 			generateJoi({ field: rule } as unknown as FieldFilter).validate({ field }).error === undefined;
 
 		it.each([
+			['_icontains', 'abc', 'xabcx', true],
+			['_icontains', 'abc', 'xABCx', true],
+			['_icontains', 'AbC', 'zzaBczz', true],
+			['_icontains', 'abc', 'xabx', false],
 			['_istarts_with', 'abc', 'abcdef', true],
 			['_istarts_with', 'abc', 'ABCdef', true],
 			['_istarts_with', 'AbC', 'aBcdef', true],
@@ -934,6 +926,16 @@ describe(`generateJoi`, () => {
 		});
 
 		it.each([
+			['a.c', 'xA.Cx', 'xabcx'],
+			['50%', 'x50%x', 'x500x'],
+			['team_a', 'xTEAM_Ax', 'xteamXax'],
+		])(`_icontains matches %j literally`, (operand, literal, other) => {
+			expect(passes({ _icontains: operand }, literal)).toBe(true);
+			expect(passes({ _icontains: operand }, other)).toBe(false);
+		});
+
+		it.each([
+			['_icontains', 'i', `x${String.fromCodePoint(0x130)}x`, true],
 			['_istarts_with', 'i', `${String.fromCodePoint(0x130)}stanbul`, true],
 			['_istarts_with', String.fromCodePoint(0xdf), String.fromCodePoint(0x1e9e), true],
 			['_istarts_with', 'ss', String.fromCodePoint(0xdf), false],
@@ -942,7 +944,8 @@ describe(`generateJoi`, () => {
 			expect(passes({ [operator]: operand }, field)).toBe(expected);
 		});
 
-		it(`treats an empty operand as a prefix and suffix of every text`, () => {
+		it(`treats an empty operand as part of every text`, () => {
+			expect(passes({ _icontains: '' }, 'abc')).toBe(true);
 			expect(passes({ _istarts_with: '' }, 'abc')).toBe(true);
 			expect(passes({ _iends_with: '' }, 'abc')).toBe(true);
 			expect(passes({ _nistarts_with: '' }, 'abc')).toBe(false);
@@ -972,6 +975,7 @@ describe(`generateJoi`, () => {
 		});
 
 		it.each([
+			['_icontains', 'zzz'],
 			['_istarts_with', 'zzz'],
 			['_nistarts_with', 'operand_markerzzz'],
 			['_iends_with', 'zzz'],
@@ -1000,6 +1004,8 @@ describe(`generateJoi`, () => {
 			['_contains', { _contains: 'a' }, 'b', 'string.contains'],
 			['_contains', { _contains: null }, 'b', 'any.only'],
 			['_icontains', { _icontains: 'a' }, 42, 'string.base'],
+			['_icontains', { _icontains: 'a' }, 'b', 'string.icontains'],
+			['_icontains', { _icontains: null }, 'b', 'any.only'],
 			['_ncontains', { _ncontains: 'a' }, 'a', 'string.ncontains'],
 			['_starts_with', { _starts_with: 'a' }, 'b', 'string.pattern.name'],
 			['_starts_with', { _starts_with: null }, 'b', 'any.only'],
@@ -1049,7 +1055,7 @@ describe(`generateJoi`, () => {
 			['_nempty', { _nempty: true }, Joi.any().invalid('')],
 			['_contains a word', { _contains: 'a' }, (Joi.string() as StringSchema).contains('a')],
 			['_contains null', { _contains: null }, Joi.any().equal(true)],
-			['_icontains a word', { _icontains: 'a' }, (Joi.string() as StringSchema).contains('a')],
+			['_icontains a word', { _icontains: 'a' }, (Joi.string() as StringSchema).icontains('a')],
 			['_ncontains a word', { _ncontains: 'a' }, (Joi.string() as StringSchema).ncontains('a')],
 			['_ncontains a number', { _ncontains: 42 }, Joi.any().equal(true)],
 			['_starts_with a word', { _starts_with: 'a' }, Joi.string().pattern(/^a.*/, { name: 'starts_with' })],

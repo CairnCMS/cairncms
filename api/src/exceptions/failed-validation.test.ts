@@ -335,6 +335,7 @@ describe('FailedValidationException conversion', () => {
 
 	it.each([
 		['_contains', 'abc', 'abcd'],
+		['_icontains', 'ABC', 'xabcx'],
 		['_starts_with', '', 'zzz'],
 		['_istarts_with', 'ABC', 'abcd'],
 		['_niends_with', 'abc', 'abcd'],
