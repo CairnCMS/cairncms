@@ -58,11 +58,21 @@ test('the authorization header is not stored', async ({ api, flows }) => {
 
 	const runs = await readFinishedRuns(api.database, flow.id, { after: flows.baseline });
 	expect(runs).toHaveLength(1);
-	const trigger = runs[0]!.data['$trigger'] as { headers?: Record<string, unknown> } | undefined;
+	const stored = runs[0]!;
+	const trigger = stored.data['$trigger'] as { headers?: Record<string, unknown> } | undefined;
+	const storedHeader = trigger?.headers?.['authorization'];
+	const first = stored.steps.find((step) => (step as { key?: unknown }).key === 'first');
+
+	const echoes = [
+		(first as { options?: { json?: { echo?: unknown } } } | undefined)?.options?.json?.echo,
+		(stored.data['first'] as { echo?: unknown } | undefined)?.echo,
+	];
 
 	// Compared as booleans so that a failing assertion cannot print the token.
-	expect(trigger?.headers?.['authorization'] !== header).toBe(true);
-	expect(JSON.stringify(runs[0]).includes(api.adminToken)).toBe(false);
+	expect(typeof storedHeader === 'string').toBe(true);
+	expect(storedHeader !== header).toBe(true);
+	expect(echoes.map((echo) => echo === storedHeader)).toEqual([true, true]);
+	expect(JSON.stringify(stored).includes(api.adminToken)).toBe(false);
 });
 
 test('a run that ends on success is completed', async ({ api, flows }) => {

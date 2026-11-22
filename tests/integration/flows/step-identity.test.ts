@@ -44,6 +44,13 @@ async function grantRead(api: Api, role: string, collection: string, filter: Rec
 		.send({ role, collection, action: 'read', fields: ['*'], permissions: filter });
 }
 
+async function grantUpdate(api: Api, role: string, collection: string) {
+	await setupRequest(api.url)
+		.post('/permissions')
+		.set('Authorization', `Bearer ${api.adminToken}`)
+		.send({ role, collection, action: 'update', fields: ['*'], permissions: {} });
+}
+
 async function identity(api: Api, key: string): Promise<{ id: string; role: string; token: string }> {
 	const row = await api.database('directus_users').where('email', USER[key]!.EMAIL).first('id', 'role');
 	return { id: row.id, role: row.role, token: USER[key]!.TOKEN };
@@ -77,6 +84,12 @@ test('From Trigger refuses a write the caller may not make', async ({ api, flows
 	const run = await newestRun(flows, flow);
 	expect(run).toMatchObject({ outcome: 'failed', reason: 'STEP_FAILED' });
 	expect(run.last).toMatchObject({ code: 'FORBIDDEN' });
+
+	await grantUpdate(api, caller.role, 'test_flow_identity_refuse');
+	await call(api, flow, caller.token, { id: row!.id });
+
+	expect(await storedRows(api, 'test_flow_identity_refuse')).toEqual([{ ...row, name: 'changed' }]);
+	expect(await newestRun(flows, flow)).toMatchObject({ outcome: 'completed', reason: null });
 });
 
 test('Full Access performs the write for the same caller', async ({ api, flows }) => {

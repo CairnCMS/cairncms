@@ -15,7 +15,7 @@
 	"operations": [
 		{
 			"id": "3cd4a4a0-958f-45ac-a4ab-fe87e1edf703",
-			"name": null,
+			"name": "Route check",
 			"key": "gate",
 			"type": "condition",
 			"position_x": 19,
@@ -36,7 +36,7 @@
 		},
 		{
 			"id": "85880027-7840-474f-ae06-139bdc8146ae",
-			"name": null,
+			"name": "Success branch",
 			"key": "success_branch",
 			"type": "transform",
 			"position_x": 37,
@@ -51,7 +51,7 @@
 		},
 		{
 			"id": "ef6fd03d-46e5-44e4-a6e5-a577a6248181",
-			"name": null,
+			"name": "Failure check",
 			"key": "failure_branch",
 			"type": "condition",
 			"position_x": 37,
@@ -72,7 +72,7 @@
 		},
 		{
 			"id": "9d1b4b26-7acb-47f2-82ed-99e08687f3a1",
-			"name": null,
+			"name": "Shared result",
 			"key": "shared",
 			"type": "transform",
 			"position_x": 55,

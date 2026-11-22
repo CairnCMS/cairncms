@@ -100,23 +100,34 @@ test('a stored step that no path reaches never runs', async ({ api, flows }) => 
 	expect(stepsOf(runs[0])).toEqual([{ key: 'answer', path: 'success' }]);
 });
 
-test('moving steps does not change results', async ({ api, flows }) => {
+test('changing presentation fields does not change results', async ({ api, flows }) => {
 	const rejoin = single(defineFlows('rejoin.json', rejoinJson));
+	rejoin.options = { ...rejoin.options, return: 'shared' };
 	await flows.install([rejoin]);
 	const before = await runRejoin(api, flows, rejoin);
 
-	const moved = single(defineFlows('rejoin.json', rejoinJson));
+	const changed = single(defineFlows('rejoin.json', rejoinJson));
+	changed.options = { ...changed.options, return: 'shared' };
+	changed.name = 'Renamed rejoin';
+	changed.description = 'Changed presentation';
+	changed.icon = 'route';
+	changed.color = '#6644FF';
 
-	for (const operation of moved.operations) {
+	for (const operation of changed.operations) {
 		operation.position_x += 200;
 		operation.position_y += 100;
+		operation.name = `Renamed ${operation.name}`;
 	}
 
-	await flows.install([moved]);
-	const after = await runRejoin(api, flows, moved);
+	await flows.install([changed]);
+	const after = await runRejoin(api, flows, changed);
 
 	expect(after).toEqual(before);
-	expect(before.map((result) => result.status)).toEqual([200, 200]);
+
+	expect(before.map((result) => [result.status, result.body])).toEqual([
+		[200, { shared: true }],
+		[200, { shared: true }],
+	]);
 });
 
 test('every trigger type runs after one readiness wait, and again after a definition change', async ({

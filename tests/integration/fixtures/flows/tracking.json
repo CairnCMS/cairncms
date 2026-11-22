@@ -23,7 +23,8 @@
 				"position_y": 1,
 				"options": {
 					"json": {
-						"first": true
+						"first": true,
+						"echo": "{{ $trigger.headers.authorization }}"
 					}
 				},
 				"resolve": "0a434c7f-bf01-40b3-a05d-976d3061eb2e",

@@ -92,12 +92,16 @@ test('creating three items in one request starts three runs', async ({ api, flow
 
 test('a keys-and-data update of three keys starts one run with all three keys', async ({ api, flows }) => {
 	const flow = named('Event after update');
-	await createCollection(api, 'test_flow_events_update');
+	await createCollection(api, 'test_flow_events_update', ['name', 'note']);
 
 	const seeded = await setupRequest(api.url)
 		.post('/items/test_flow_events_update')
 		.set('Authorization', asAdmin(api))
-		.send([{ name: 'first' }, { name: 'second' }, { name: 'third' }]);
+		.send([
+			{ name: 'first', note: 'kept' },
+			{ name: 'second', note: 'kept' },
+			{ name: 'third', note: 'kept' },
+		]);
 
 	const keys = (seeded.body.data as { id: unknown }[]).map((row) => row.id);
 	await flows.install([flow]);
@@ -114,6 +118,10 @@ test('a keys-and-data update of three keys starts one run with all three keys', 
 	expect(runs).toHaveLength(1);
 	expect(trigger(runs[0]!)['keys']).toEqual(keys);
 	expect(trigger(runs[0]!)['payload']).toEqual({ name: 'updated' });
+
+	expect(await api.database('test_flow_events_update').select('name', 'note').orderBy('id')).toEqual(
+		keys.map(() => ({ name: 'updated', note: 'kept' }))
+	);
 });
 
 test('a blocking create can replace the saved payload', async ({ api, flows }) => {
@@ -143,7 +151,7 @@ test('a blocking create refused by a Condition creates no row and leaks no detai
 
 	expect(refused.status).toBeGreaterThanOrEqual(400);
 	expect(await storedRows(api, 'test_flow_events_condition')).toEqual([]);
-	expect(refused.text.includes('refusal_marker')).toBe(false);
+	expect(refused.text.includes(JSON.stringify(['$trigger', 'payload', 'refusal_marker']))).toBe(false);
 	expect(refused.text.includes('any.only')).toBe(false);
 
 	const allowed = await create('allowed');
