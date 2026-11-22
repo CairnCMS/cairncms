@@ -61,6 +61,7 @@ for (const [mode, failure] of [
 	['truthy-async', /finished 0 of 1 declared runs/],
 	['failure', /CONTROL_FLOW_ASSERTION/],
 	['cleanup-error', /has an unrecognized shape: its data is not JSON/],
+	['reinstall-unfinished', /installing flows failed: .*cannot be replaced yet/],
 ])
 	test(`flow fixture cleanup ${mode}`, { timeout: 180000 }, async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'cairn-flow-cleanup-'));
@@ -92,6 +93,7 @@ for (const [mode, failure] of [
 				assert.match(run.output(), /Flow fixture stopped the API/);
 				assert.doesNotMatch(run.output(), /^CONTROL_FLOW_DEPENDENT_BODY$/m);
 				assert.match(run.output(), /^CONTROL_FLOW_ROWS_UNCHANGED=true$/m);
+				if (mode === 'reinstall-unfinished') assert.doesNotMatch(run.output(), /finished \d+ of \d+ declared runs/);
 			} else {
 				assert.equal(result.passed, 2, JSON.stringify(result));
 				assert.match(run.output(), /^CONTROL_FLOW_DEPENDENT_BODY$/m);

@@ -12,10 +12,27 @@ export const RUN_REASONS = [
 	'STEP_UNAVAILABLE',
 ] as const;
 
+export const STEP_PATHS = ['success', 'failure', 'unavailable'] as const;
+
 export type RunStatus = (typeof RUN_STATUSES)[number];
 export type RunOutcome = (typeof RUN_OUTCOMES)[number];
 export type RunReason = (typeof RUN_REASONS)[number];
 export type RunClassification = { outcome: RunOutcome; reason: RunReason | null };
+export type StepPath = (typeof STEP_PATHS)[number];
+export type RunStep = { key: string; path: StepPath };
+
+/** A finished run as the suites check it, independent of how the run record is stored. */
+export type RunView = {
+	flow: string;
+	activity: number;
+	revision: number;
+	steps: RunStep[];
+	outputs: ReadonlyMap<string, unknown>;
+	trigger: unknown;
+	last: unknown;
+	outcome: RunOutcome;
+	reason: RunReason | null;
+};
 
 export type FinishedRun = {
 	flow: string;
@@ -26,8 +43,12 @@ export type FinishedRun = {
 };
 
 type RunRow = { activity: number | string; revision: number | string; data: unknown };
+type StoredStatus = 'resolve' | 'reject' | 'unknown';
+type StoredStep = { operation: unknown; key: string; status: StoredStatus; options: unknown };
 
 const AMBIGUOUS_STEP_MESSAGE = 'the operation could not be resolved';
+const RESERVED_KEYS: ReadonlySet<string> = new Set(['$trigger', '$accountability', '$last', '$env']);
+const PATHS: Record<StoredStatus, StepPath> = { resolve: 'success', reject: 'failure', unknown: 'unavailable' };
 
 /** Reads the finished runs of a flow whose activity rows are above `after`, oldest first. */
 export async function readFinishedRuns(
@@ -41,6 +62,33 @@ export async function readFinishedRuns(
 		.select('directus_activity.id as activity', 'directus_revisions.id as revision', 'directus_revisions.data');
 
 	return rows.map((row) => toFinishedRun(flowId, row));
+}
+
+/**
+ * Reads the finished runs of a flow above `after` as views, oldest first. Each run is classified against the flow's
+ * current rows, so `after` must exclude runs of any earlier definition.
+ */
+export async function readRuns(
+	database: Knex,
+	flowId: string,
+	{ after = 0 }: { after?: number } = {}
+): Promise<RunView[]> {
+	const views: RunView[] = [];
+	for (const run of await readFinishedRuns(database, flowId, { after })) views.push(await toRunView(database, run));
+	return views;
+}
+
+/** Returns the output of the one step with this key that ran, and throws when none or several did. */
+export function stepOutput(run: RunView, key: string): unknown {
+	const count = run.steps.filter((step) => step.key === key).length;
+	if (count === 0) throw new Error(`Run record ${run.revision} of flow ${run.flow} has no step with key ${key}`);
+
+	if (count > 1)
+		throw new Error(
+			`Run record ${run.revision} of flow ${run.flow} has ${count} steps with key ${key}, so its output is ambiguous`
+		);
+
+	return run.outputs.get(key);
 }
 
 /** Counts a flow's run activity rows above `after`, and how many of them have a detail record. */
@@ -69,21 +117,55 @@ export async function readActivityBaseline(database: Knex): Promise<number> {
 	return Number(row?.id ?? 0);
 }
 
+/** Validates a stored run's steps and data chain, classifies it, and builds its view. */
+async function toRunView(database: Knex, run: FinishedRun): Promise<RunView> {
+	const unrecognized = (reason: string) =>
+		new Error(`Run record ${run.revision} of flow ${run.flow} cannot be read: ${reason}`);
+
+	const steps: StoredStep[] = run.steps.map((step, index) => {
+		if (!isRecord(step)) throw unrecognized(`step ${index} is not an object`);
+		const { operation, key, status, options } = step;
+		if (typeof key !== 'string') throw unrecognized(`step ${index} has no key`);
+		if (!isStoredStatus(status)) throw unrecognized(`step ${index} has status ${JSON.stringify(status)}`);
+		return { operation, key, status, options };
+	});
+
+	const keys = new Set(steps.map((step) => step.key));
+	const stored = Object.keys(run.data);
+
+	for (const key of stored)
+		if (!RESERVED_KEYS.has(key) && !keys.has(key))
+			throw unrecognized(`its data chain holds ${key}, which no recorded step wrote`);
+
+	for (const key of ['$trigger', '$last', ...keys])
+		if (!stored.includes(key)) throw unrecognized(`its data chain has no ${key} entry`);
+
+	const { outcome, reason } = await classifyRun(database, run, steps);
+
+	return {
+		flow: run.flow,
+		activity: run.activity,
+		revision: run.revision,
+		steps: steps.map(({ key, status }) => ({ key, path: PATHS[status] })),
+		outputs: new Map(Object.entries(run.data).filter(([key]) => keys.has(key))),
+		trigger: run.data['$trigger'],
+		last: run.data['$last'],
+		outcome,
+		reason,
+	};
+}
+
 /**
- * Classifies a fixture run into an outcome and reason from its stored record. The record holds each step's identity
- * and status, but not the flow's trigger or the step's type, so those come from the current rows. Those rows describe
- * the run only until the case reinstalls or cleans up the flow, so classify before either.
+ * Classifies a run into an outcome and reason. The stored record holds each step's identity and status, but not the
+ * flow's trigger or the step's type, so those come from the current rows.
  */
-export async function readRunOutcome(database: Knex, run: FinishedRun): Promise<RunClassification> {
+async function classifyRun(database: Knex, run: FinishedRun, steps: StoredStep[]): Promise<RunClassification> {
 	const unrecognized = (reason: string) =>
 		new Error(`Run record ${run.revision} of flow ${run.flow} cannot be classified: ${reason}`);
 
-	const last = run.steps.at(-1);
-	if (!isRecord(last)) throw unrecognized('it has no steps');
+	const last = steps.at(-1);
+	if (!last) return { outcome: 'completed', reason: null };
 	const { operation, status, options } = last;
-
-	if (status !== 'resolve' && status !== 'reject' && status !== 'unknown')
-		throw unrecognized(`its last step has status ${JSON.stringify(status)}`);
 
 	if (typeof operation !== 'string') throw unrecognized('its last step has no identity');
 
@@ -156,6 +238,10 @@ function decodeJson(value: unknown, invalid: () => Error): unknown {
 	} catch {
 		throw invalid();
 	}
+}
+
+function isStoredStatus(value: unknown): value is StoredStatus {
+	return value === 'resolve' || value === 'reject' || value === 'unknown';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

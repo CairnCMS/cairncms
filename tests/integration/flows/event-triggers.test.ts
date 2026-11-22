@@ -1,7 +1,7 @@
 import { expect } from 'vitest';
 import eventsJson from '../fixtures/flows/events.json';
 import type { Api } from '../fixtures/environment';
-import { readFinishedRuns, readRunOutcome, type FinishedRun } from '../fixtures/flow-outcomes';
+import { stepOutput, type RunView } from '../fixtures/flow-outcomes';
 import { defineFlows, flowFixtures, type FlowDefinition } from '../fixtures/flows';
 import { createIdentityTest, USER } from '../fixtures/identities';
 import request, { setupRequest } from '../fixtures/request';
@@ -30,7 +30,7 @@ async function createCollection(api: Api, collection: string, fields: string[] =
 const storedRows = (api: Api, collection: string): Promise<Record<string, unknown>[]> =>
 	api.database(collection).select('id', 'name').orderBy('id');
 
-const trigger = (run: FinishedRun) => run.data['$trigger'] as Record<string, unknown>;
+const trigger = (run: RunView) => run.trigger as Record<string, unknown>;
 
 /** Polls the file API's log for a marker, because a line can reach the file after the response that caused it. */
 async function logContains(api: Api, marker: string): Promise<boolean> {
@@ -63,7 +63,7 @@ test('an after-event flow receives the submitted fields and key, and sees the sa
 
 	expect(trigger(run!)['payload']).toEqual({ name: 'saved' });
 	expect(trigger(run!)['key']).toBe(id);
-	expect(run!.data['read']).toMatchObject({ id, name: 'saved' });
+	expect(stepOutput(run!, 'read')).toMatchObject({ id, name: 'saved' });
 });
 
 test('creating three items in one request starts three runs', async ({ api, flows }) => {
@@ -205,7 +205,7 @@ test('a blocking update refused by a Run Script throw leaves the row unchanged',
 	expect(refused.status).toBeGreaterThanOrEqual(400);
 	expect(await storedRows(api, 'test_flow_events_script')).toEqual([{ id, name: 'original' }]);
 	expect(await logContains(api, 'flow-event-script-reached-throw')).toBe(true);
-	const runs = await readFinishedRuns(api.database, flow.id, { after: flows.baseline });
+	const runs = await flows.runs(flow.id);
 	expect(runs).toHaveLength(1);
-	expect(await readRunOutcome(api.database, runs[0]!)).toEqual({ outcome: 'refused', reason: 'STEP_FAILED' });
+	expect(runs[0]).toMatchObject({ outcome: 'refused', reason: 'STEP_FAILED' });
 });

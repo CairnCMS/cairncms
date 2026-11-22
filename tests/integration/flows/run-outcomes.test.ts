@@ -3,8 +3,8 @@ import outcomesJson from '../fixtures/flows/outcomes.json';
 import responsesJson from '../fixtures/flows/responses.json';
 import trackingJson from '../fixtures/flows/tracking.json';
 import type { Api } from '../fixtures/environment';
-import { countRunRecords, readFinishedRuns, readRunOutcome, type FinishedRun } from '../fixtures/flow-outcomes';
-import { defineFlows, flowTest as test, type FlowDefinition } from '../fixtures/flows';
+import { countRunRecords, readFinishedRuns, stepOutput, type RunView } from '../fixtures/flow-outcomes';
+import { defineFlows, flowTest as test, type FlowDefinition, type FlowFixture } from '../fixtures/flows';
 import request from '../fixtures/request';
 import { initializeFixtures } from '../harness/fixture-setup.mjs';
 
@@ -16,18 +16,10 @@ function named(definitions: FlowDefinition[], name: string): FlowDefinition {
 	return flow;
 }
 
-/** The key and status of each step a run recorded, in the order the steps ran. */
-function stepSequence(run: FinishedRun): { key: unknown; status: unknown }[] {
-	return run.steps.map((step) => {
-		const { key, status } = step as { key?: unknown; status?: unknown };
-		return { key, status };
-	});
-}
-
 /** Runs one outcome fixture and returns its single finished run. */
-async function runOnce(api: Api, flow: FlowDefinition, after: number): Promise<FinishedRun> {
+async function runOnce(api: Api, flows: FlowFixture, flow: FlowDefinition): Promise<RunView> {
 	await request(api.url).get(`/flows/trigger/${flow.id}`);
-	const runs = await readFinishedRuns(api.database, flow.id, { after });
+	const runs = await flows.runs(flow.id);
 	expect(runs).toHaveLength(1);
 	return runs[0]!;
 }
@@ -48,11 +40,11 @@ test('tracking settings decide what is recorded', async ({ api, flows }) => {
 	expect(await counts('Tracking activity')).toEqual({ activity: 1, detail: 0 });
 	expect(await counts('Tracking none')).toEqual({ activity: 0, detail: 0 });
 
-	const [run] = await readFinishedRuns(api.database, named(definitions, 'Tracking all').id, { after: flows.baseline });
+	const [run] = await flows.runs(named(definitions, 'Tracking all').id);
 
-	expect(stepSequence(run!)).toEqual([
-		{ key: 'first', status: 'resolve' },
-		{ key: 'second', status: 'resolve' },
+	expect(run!.steps).toEqual([
+		{ key: 'first', path: 'success' },
+		{ key: 'second', path: 'success' },
 	]);
 });
 
@@ -76,44 +68,44 @@ test('the authorization header is not stored', async ({ api, flows }) => {
 test('a run that ends on success is completed', async ({ api, flows }) => {
 	const flow = named(defineFlows('outcomes.json', outcomesJson), 'Outcome success');
 	await flows.install([flow]);
-	const run = await runOnce(api, flow, flows.baseline);
-	expect(await readRunOutcome(api.database, run)).toEqual({ outcome: 'completed', reason: null });
+	const run = await runOnce(api, flows, flow);
+	expect(run).toMatchObject({ outcome: 'completed', reason: null });
 });
 
 test('a false Condition with no next step is completed', async ({ api, flows }) => {
 	const flow = named(defineFlows('outcomes.json', outcomesJson), 'Outcome condition false');
 	await flows.install([flow]);
-	const run = await runOnce(api, flow, flows.baseline);
-	expect(await readRunOutcome(api.database, run)).toEqual({ outcome: 'completed', reason: 'CONDITION_FALSE' });
+	const run = await runOnce(api, flows, flow);
+	expect(run).toMatchObject({ outcome: 'completed', reason: 'CONDITION_FALSE' });
 });
 
 test('a Condition whose rule cannot be evaluated has failed', async ({ api, flows }) => {
 	const flow = named(defineFlows('outcomes.json', outcomesJson), 'Outcome condition error');
 	await flows.install([flow]);
-	const run = await runOnce(api, flow, flows.baseline);
-	expect(await readRunOutcome(api.database, run)).toEqual({ outcome: 'failed', reason: 'CONDITION_ERROR' });
+	const run = await runOnce(api, flows, flow);
+	expect(run).toMatchObject({ outcome: 'failed', reason: 'CONDITION_ERROR' });
 });
 
 test('a failure whose failure path is followed is completed', async ({ api, flows }) => {
 	const flow = named(defineFlows('outcomes.json', outcomesJson), 'Outcome failure path');
 	await flows.install([flow]);
-	const run = await runOnce(api, flow, flows.baseline);
+	const run = await runOnce(api, flows, flow);
 
-	expect(await readRunOutcome(api.database, run)).toEqual({ outcome: 'completed', reason: null });
+	expect(run).toMatchObject({ outcome: 'completed', reason: null });
 
-	expect(stepSequence(run)).toEqual([
-		{ key: 'broken', status: 'reject' },
-		{ key: 'recover', status: 'resolve' },
+	expect(run.steps).toEqual([
+		{ key: 'broken', path: 'failure' },
+		{ key: 'recover', path: 'success' },
 	]);
 
-	expect(run.data['broken']).toEqual({ message: expect.any(String) });
+	expect(stepOutput(run, 'broken')).toEqual({ message: expect.any(String) });
 });
 
 test('a failure with no failure path has failed', async ({ api, flows }) => {
 	const flow = named(defineFlows('outcomes.json', outcomesJson), 'Outcome step failed');
 	await flows.install([flow]);
-	const run = await runOnce(api, flow, flows.baseline);
-	expect(await readRunOutcome(api.database, run)).toEqual({ outcome: 'failed', reason: 'STEP_FAILED' });
+	const run = await runOnce(api, flows, flow);
+	expect(run).toMatchObject({ outcome: 'failed', reason: 'STEP_FAILED' });
 });
 
 test('the response setting selects the result', async ({ api, flows }) => {

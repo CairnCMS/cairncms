@@ -1,8 +1,8 @@
 import { expect } from 'vitest';
 import identityJson from '../fixtures/flows/identity.json';
 import type { Api } from '../fixtures/environment';
-import { readFinishedRuns, readRunOutcome, type FinishedRun } from '../fixtures/flow-outcomes';
-import { defineFlows, flowFixtures, type FlowDefinition } from '../fixtures/flows';
+import { stepOutput, type RunView } from '../fixtures/flow-outcomes';
+import { defineFlows, flowFixtures, type FlowDefinition, type FlowFixture } from '../fixtures/flows';
 import { createIdentityTest, USER } from '../fixtures/identities';
 import request, { setupRequest } from '../fixtures/request';
 import { CreateCollection } from '../fixtures/schema';
@@ -58,8 +58,8 @@ function call(api: Api, flow: FlowDefinition, token: string | null, query: Recor
 	return token === null ? pending : pending.set('Authorization', `Bearer ${token}`);
 }
 
-async function newestRun(api: Api, flow: FlowDefinition, after: number): Promise<FinishedRun> {
-	const run = (await readFinishedRuns(api.database, flow.id, { after })).at(-1);
+async function newestRun(flows: FlowFixture, flow: FlowDefinition): Promise<RunView> {
+	const run = (await flows.runs(flow.id)).at(-1);
 	if (!run) throw new Error(`Flow ${flow.name} has no finished run`);
 	return run;
 }
@@ -74,9 +74,9 @@ test('From Trigger refuses a write the caller may not make', async ({ api, flows
 	await call(api, flow, caller.token, { id: row!.id });
 
 	expect(await storedRows(api, 'test_flow_identity_refuse')).toEqual([row]);
-	const run = await newestRun(api, flow, flows.baseline);
-	expect(await readRunOutcome(api.database, run)).toEqual({ outcome: 'failed', reason: 'STEP_FAILED' });
-	expect(run.data['$last']).toMatchObject({ code: 'FORBIDDEN' });
+	const run = await newestRun(flows, flow);
+	expect(run).toMatchObject({ outcome: 'failed', reason: 'STEP_FAILED' });
+	expect(run.last).toMatchObject({ code: 'FORBIDDEN' });
 });
 
 test('Full Access performs the write for the same caller', async ({ api, flows }) => {
@@ -111,7 +111,7 @@ test('a specific role reaches only its own rows', async ({ api, flows }) => {
 	const response = await call(api, flow, api.adminToken);
 
 	expect([response.status, response.body]).toEqual([200, allowed]);
-	expect((await newestRun(api, flow, flows.baseline)).data['read']).toEqual(allowed);
+	expect(stepOutput(await newestRun(flows, flow), 'read')).toEqual(allowed);
 });
 
 test('Public Role uses public access, and so does an anonymous From Trigger caller', async ({ api, flows }) => {
@@ -130,11 +130,11 @@ test('Public Role uses public access, and so does an anonymous From Trigger call
 
 	const fromAdmin = await call(api, asPublic, api.adminToken);
 	expect([fromAdmin.status, fromAdmin.body]).toEqual([200, allowed]);
-	expect((await newestRun(api, asPublic, flows.baseline)).data['read']).toEqual(allowed);
+	expect(stepOutput(await newestRun(flows, asPublic), 'read')).toEqual(allowed);
 
 	const fromAnonymous = await call(api, asTrigger, null);
 	expect([fromAnonymous.status, fromAnonymous.body]).toEqual([200, allowed]);
-	expect((await newestRun(api, asTrigger, flows.baseline)).data['read']).toEqual(allowed);
+	expect(stepOutput(await newestRun(flows, asTrigger), 'read')).toEqual(allowed);
 });
 
 test('two callers of one From Trigger flow each reach only their own rows', async ({ api, flows }) => {
@@ -159,7 +159,7 @@ test('two callers of one From Trigger flow each reach only their own rows', asyn
 		const response = await call(api, flow, caller.token);
 
 		expect([response.status, response.body]).toEqual([200, own]);
-		expect((await newestRun(api, flow, flows.baseline)).data['read']).toEqual(own);
+		expect(stepOutput(await newestRun(flows, flow), 'read')).toEqual(own);
 	}
 });
 
@@ -179,9 +179,9 @@ test('one flow can mix identities, and Full Access ends with its step', async ({
 	const response = await call(api, flow, caller.token, { other: theirs!.id });
 
 	expect([response.status, response.body]).toEqual([200, [mine]]);
-	const run = await newestRun(api, flow, flows.baseline);
-	expect(run.data['read']).toEqual([mine]);
-	expect(run.data['read_after']).toEqual([mine]);
+	const run = await newestRun(flows, flow);
+	expect(stepOutput(run, 'read')).toEqual([mine]);
+	expect(stepOutput(run, 'read_after')).toEqual([mine]);
 
 	expect(await storedRows(api, 'test_flow_identity_mixed')).toEqual([
 		mine,

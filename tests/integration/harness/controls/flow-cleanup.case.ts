@@ -116,7 +116,7 @@ if (mode === 'clean') {
 
 		const runs = await flows.finished(ASYNC_FLOW);
 		expect(runs).toHaveLength(1);
-		expect(runs[0]!.data).toMatchObject({ $trigger: { query: { marker: 'A' } } });
+		expect(runs[0]!.trigger).toMatchObject({ query: { marker: 'A' } });
 	});
 
 	test('second case counts only its own runs', async ({ api, flows }) => {
@@ -138,7 +138,7 @@ if (mode === 'clean') {
 		const runs = await flows.finished(ASYNC_FLOW);
 		expect(runs).toHaveLength(1);
 		expect(runs[0]!.activity).toBeGreaterThan(flows.baseline);
-		expect(runs[0]!.data).toMatchObject({ $trigger: { query: { marker: 'B' } } });
+		expect(runs[0]!.trigger).toMatchObject({ query: { marker: 'B' } });
 	});
 } else {
 	test('first case leaves the registry uncertain', async ({ api, flows }) => {
@@ -172,6 +172,15 @@ if (mode === 'clean') {
 			const [run] = await flows.finished(ASYNC_FLOW);
 			await api.database('directus_revisions').where('id', run!.revision).update({ data: 'not json' });
 			await takeSnapshot(api.database, ASYNC_FLOW);
+			return;
+		}
+
+		if (mode === 'reinstall-unfinished') {
+			await flows.install([asyncFlow(60000)]);
+			expect((await request(api.url).get(`/flows/trigger/${ASYNC_FLOW}`)).status).toBeLessThan(300);
+			flows.started(ASYNC_FLOW);
+			await takeSnapshot(api.database, ASYNC_FLOW);
+			await expect(flows.install([asyncFlow(30000)])).rejects.toThrow(/cannot be replaced yet/);
 			return;
 		}
 

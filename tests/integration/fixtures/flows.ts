@@ -5,7 +5,7 @@ import type { Knex } from 'knex';
 import { randomUUID } from 'node:crypto';
 import type { Response } from 'supertest';
 import { createApiTest, type Api } from './environment';
-import { readActivityBaseline, readFinishedRuns, type FinishedRun } from './flow-outcomes';
+import { readActivityBaseline, readFinishedRuns, readRuns, type RunView } from './flow-outcomes';
 import request, { setupRequest } from './request';
 import { sleep } from '../utils/sleep';
 
@@ -50,12 +50,20 @@ export function defineFlows(source: string, json: FlowJson | FlowJson[]): FlowDe
 export type FlowFixture = {
 	/** Highest activity id when the case began. Only run records above it belong to the case. */
 	readonly baseline: number;
-	/** Stores the definitions, then waits until the API has loaded them. */
+	/**
+	 * Stores the definitions, then waits until the API has loaded them. Refuses to replace a background flow until
+	 * every run the case declared for it has finished.
+	 */
 	install: (definitions: FlowDefinition[]) => Promise<void>;
 	/** Records that the case started background runs of an installed flow. */
 	started: (flowId: string, count?: number) => void;
-	/** Waits until every declared run of a background flow has its final record, and returns those runs. */
-	finished: (flowId: string) => Promise<FinishedRun[]>;
+	/** Reads the finished runs of a flow since the case last installed it. */
+	runs: (flowId: string) => Promise<RunView[]>;
+	/**
+	 * Waits until every run the case declared for a background flow has its final record, then returns the runs since
+	 * the case last installed the flow.
+	 */
+	finished: (flowId: string) => Promise<RunView[]>;
 };
 
 export const SENTINEL_FLOW = '6f1d3c2a-8b4e-4f7a-9c1d-2e5b8a7f0c31';
@@ -224,6 +232,7 @@ export const flowFixtures: Fixtures<{ flows: FlowFixture }, { api: Api; availabl
 		const installed = new Set<string>();
 		const background = new Set<string>();
 		const declared = new Map<string, number>();
+		const installedAfter = new Map<string, number>();
 		let uncertain: string | undefined;
 		let stopped: Error | undefined;
 
@@ -236,6 +245,24 @@ export const flowFixtures: Fixtures<{ flows: FlowFixture }, { api: Api; availabl
 
 		const baseline = await readActivityBaseline(api.database);
 
+		/** Refuses to replace a background flow while a run the case declared for it may still record. */
+		async function assertReplaceable(flowId: string): Promise<void> {
+			if (!background.has(flowId)) return;
+			const expected = declared.get(flowId) ?? 0;
+			const finished = (await readFinishedRuns(api.database, flowId, { after: baseline })).length;
+
+			if (finished !== expected)
+				throw new Error(
+					`Flow ${flowId} cannot be replaced yet: ${finished} of its ${expected} declared runs have finished`
+				);
+		}
+
+		async function readInstalledRuns(flowId: string): Promise<RunView[]> {
+			const after = installedAfter.get(flowId);
+			if (after === undefined) throw new Error(`Flow ${flowId} was not installed by this case`);
+			return readRuns(api.database, flowId, { after });
+		}
+
 		const fixture: FlowFixture = {
 			baseline,
 			async install(definitions) {
@@ -243,6 +270,9 @@ export const flowFixtures: Fixtures<{ flows: FlowFixture }, { api: Api; availabl
 				for (const flow of definitions) validate(flow);
 
 				try {
+					for (const flow of definitions) await assertReplaceable(flow.id);
+					const after = await readActivityBaseline(api.database);
+
 					await api.database.transaction(async (trx) => {
 						await removeFlows(
 							trx,
@@ -254,6 +284,7 @@ export const flowFixtures: Fixtures<{ flows: FlowFixture }, { api: Api; availabl
 
 					for (const flow of definitions) {
 						installed.add(flow.id);
+						installedAfter.set(flow.id, after);
 						if (runsInBackground(flow)) background.add(flow.id);
 					}
 
@@ -267,21 +298,22 @@ export const flowFixtures: Fixtures<{ flows: FlowFixture }, { api: Api; availabl
 				if (!background.has(flowId)) throw new Error(`Flow ${flowId} is not an installed background flow`);
 				declared.set(flowId, (declared.get(flowId) ?? 0) + count);
 			},
+			runs: readInstalledRuns,
 			async finished(flowId) {
 				const expected = declared.get(flowId) ?? 0;
 				if (expected === 0) throw new Error(`No runs of flow ${flowId} were declared as started`);
 				const deadline = performance.now() + FINISHED_DEADLINE_MS;
 
 				for (;;) {
-					const runs = await readFinishedRuns(api.database, flowId, { after: baseline });
+					const finished = (await readFinishedRuns(api.database, flowId, { after: baseline })).length;
 
-					if (runs.length > expected)
-						throw new Error(`Flow ${flowId} finished ${runs.length} runs, but the case declared ${expected}`);
+					if (finished > expected)
+						throw new Error(`Flow ${flowId} finished ${finished} runs, but the case declared ${expected}`);
 
-					if (runs.length === expected) return runs;
+					if (finished === expected) return readInstalledRuns(flowId);
 
 					if (performance.now() >= deadline)
-						throw new Error(`Flow ${flowId} finished ${runs.length} of ${expected} declared runs`);
+						throw new Error(`Flow ${flowId} finished ${finished} of ${expected} declared runs`);
 
 					await sleep(POLL_INTERVAL_MS);
 				}
