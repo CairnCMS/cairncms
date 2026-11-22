@@ -179,7 +179,7 @@ function useUpload() {
 					},
 				});
 
-				uploadedFiles && emit('input', uploadedFiles);
+				if (uploadedFiles) emit('input', uploadedFiles);
 			} else {
 				const uploadedFile = await uploadFile(Array.from(files)[0], {
 					onProgressChange: (percentage) => {
@@ -193,7 +193,7 @@ function useUpload() {
 					},
 				});
 
-				uploadedFile && emit('input', uploadedFile);
+				if (uploadedFile) emit('input', uploadedFile);
 			}
 		} catch (err: any) {
 			unexpectedError(err);
