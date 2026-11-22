@@ -36,7 +36,7 @@ const nodeHttpSafeNames = ['STATUS_CODES', 'METHODS', 'validateHeaderName', 'val
 /** Builds the outbound HTTP rules without the given clients, allowing the given extra values from http and https. */
 function outboundRules(clients = [], names = {}) {
 	const restricted = [...httpClients, ...nodeHttpModules].filter((name) => !clients.includes(name));
-	const moduleNames = restricted.map((name) => name.replace(/[./]/g, '\\$&')).join('|');
+	const moduleNames = restricted.map((name) => name.replace(/[.*+?^$(){}|[\]\\/]/g, '\\$&')).join('|');
 	const modulePattern = `/^(${moduleNames})(\\/.*)?$/`;
 
 	return {
