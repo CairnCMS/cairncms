@@ -1,0 +1,493 @@
+[
+	{
+		"id": "11b0c1cb-be8d-4ff4-9af8-e76ebfe11bd3",
+		"name": "Options key shapes",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "6caf0b5e-b916-45ab-a8e5-16e8b6b45eaa",
+		"operations": [
+			{
+				"id": "6caf0b5e-b916-45ab-a8e5-16e8b6b45eaa",
+				"name": null,
+				"key": "as_list",
+				"type": "item-read",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_options_keys",
+					"permissions": "$full",
+					"emitEvents": false,
+					"key": ["1", "3"]
+				},
+				"resolve": "54622800-46fd-48fa-870e-31c58358b639",
+				"reject": null
+			},
+			{
+				"id": "54622800-46fd-48fa-870e-31c58358b639",
+				"name": null,
+				"key": "as_text",
+				"type": "item-read",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_options_keys",
+					"permissions": "$full",
+					"emitEvents": false,
+					"key": "1,3"
+				},
+				"resolve": "193d1ca3-e41d-4e2e-a608-52f8b49df503",
+				"reject": null
+			},
+			{
+				"id": "193d1ca3-e41d-4e2e-a608-52f8b49df503",
+				"name": null,
+				"key": "as_single",
+				"type": "item-read",
+				"position_x": 55,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_options_keys",
+					"permissions": "$full",
+					"emitEvents": false,
+					"key": "3"
+				},
+				"resolve": "fed1fc36-16aa-4c2b-b363-6b592ca62cd9",
+				"reject": null
+			},
+			{
+				"id": "fed1fc36-16aa-4c2b-b363-6b592ca62cd9",
+				"name": null,
+				"key": "as_one_item_list",
+				"type": "item-read",
+				"position_x": 73,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_options_keys",
+					"permissions": "$full",
+					"emitEvents": false,
+					"key": ["3"]
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "67b4e4d3-55fd-4db3-b65b-827ba73726e2",
+		"name": "Options references",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "a8cda338-0bf6-486f-8473-9e6d4f9f04e6",
+		"operations": [
+			{
+				"id": "a8cda338-0bf6-486f-8473-9e6d4f9f04e6",
+				"name": null,
+				"key": "source",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"count": 3,
+						"nested": {
+							"a": 1
+						}
+					}
+				},
+				"resolve": "3248a63b-f73d-47f9-a07d-f344717fec94",
+				"reject": null
+			},
+			{
+				"id": "3248a63b-f73d-47f9-a07d-f344717fec94",
+				"name": null,
+				"key": "whole",
+				"type": "transform",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"json": "{{ source.nested }}"
+				},
+				"resolve": "de01c618-80fc-4c28-b37a-26a59aa69044",
+				"reject": null
+			},
+			{
+				"id": "de01c618-80fc-4c28-b37a-26a59aa69044",
+				"name": null,
+				"key": "render",
+				"type": "transform",
+				"position_x": 55,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"whole_number": "{{ source.count }}",
+						"whole_object": "{{ source.nested }}",
+						"embedded_number": "count {{ source.count }}",
+						"embedded_object": "nested {{ source.nested }}"
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "dff8477d-45cc-4270-a50a-44bf07d37e7a",
+		"name": "Options Studio shape",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "f6f6135a-73a9-4f4c-b603-d325d642423e",
+		"operations": [
+			{
+				"id": "f6f6135a-73a9-4f4c-b603-d325d642423e",
+				"name": "Load the record",
+				"key": "load",
+				"type": "item-read",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_options_studio",
+					"key": ["{{ $trigger.query.id }}"]
+				},
+				"resolve": "fe92f7de-e125-49cf-8ece-04337a677fae",
+				"reject": null
+			},
+			{
+				"id": "fe92f7de-e125-49cf-8ece-04337a677fae",
+				"name": "Save the change",
+				"key": "save",
+				"type": "item-update",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_options_studio",
+					"key": ["{{ load.id }}"],
+					"payload": {
+						"name": "studio-saved"
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "92f8deac-9aa0-4b9a-b24f-e05a7445764d",
+		"name": "Options Studio witness",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "filter",
+			"scope": ["items.update"],
+			"collections": ["test_flow_options_studio"]
+		},
+		"operation": "511167c1-2e8d-4933-ac88-2a49f26cffcc",
+		"operations": [
+			{
+				"id": "511167c1-2e8d-4933-ac88-2a49f26cffcc",
+				"name": null,
+				"key": "witness",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"witnessed": true
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "9030143c-25e5-4953-aee4-57d81574369f",
+		"name": "Options missing or hidden",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "32e2469d-931d-4427-9aa7-c81c9f265d3b",
+		"operations": [
+			{
+				"id": "32e2469d-931d-4427-9aa7-c81c9f265d3b",
+				"name": null,
+				"key": "read",
+				"type": "item-read",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_options_hidden",
+					"key": "{{ $trigger.query.id }}",
+					"permissions": "$trigger",
+					"emitEvents": false
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "4dfb5cbd-c492-4674-858a-07e5b1fe79b2",
+		"name": "Options dynamic collection",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "dff0884c-a738-4185-a726-f77fe8e62cc7",
+		"operations": [
+			{
+				"id": "dff0884c-a738-4185-a726-f77fe8e62cc7",
+				"name": null,
+				"key": "read",
+				"type": "item-read",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "{{ $trigger.query.collection }}",
+					"permissions": "$full",
+					"emitEvents": false,
+					"query": {
+						"fields": ["name"]
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "00f65dc2-37e7-4d03-8c62-413c89462991",
+		"name": "Options script",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "464fdeb4-7101-4242-9235-ec78f5c6ba0b",
+		"operations": [
+			{
+				"id": "464fdeb4-7101-4242-9235-ec78f5c6ba0b",
+				"name": null,
+				"key": "script",
+				"type": "exec",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"code": "module.exports = async function (data) {\n\tconst read = (get) => {\n\t\ttry {\n\t\t\treturn get();\n\t\t} catch {\n\t\t\treturn undefined;\n\t\t}\n\t};\n\n\tconsole.log(`${data.$trigger.headers.authorization} flow-console-complete-${data.$trigger.query.nonce}`);\n\n\treturn {\n\t\tdoubled: Number(data.$trigger.query.n) * 2,\n\t\tsees_secret: read(() => process.env.SECRET) !== undefined || read(() => data.$env.SECRET) !== undefined,\n\t};\n};"
+				},
+				"resolve": "a97bfb01-def3-4f1b-9fac-506b6802ae0d",
+				"reject": null
+			},
+			{
+				"id": "a97bfb01-def3-4f1b-9fac-506b6802ae0d",
+				"name": null,
+				"key": "after",
+				"type": "transform",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"doubled": "{{ script.doubled }}"
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "4475857f-ad88-48a4-9907-9fc9f2c3985c",
+		"name": "Options script failure",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "c1e37b9e-55bb-4bd5-b076-d851bbeebdf9",
+		"operations": [
+			{
+				"id": "c1e37b9e-55bb-4bd5-b076-d851bbeebdf9",
+				"name": null,
+				"key": "throw",
+				"type": "exec",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"code": "module.exports = async function () {\n\tconsole.log('flow-options-script-reached-throw');\n\tthrow new Error('flow-options-script-failed');\n};"
+				},
+				"resolve": null,
+				"reject": "76c7903a-9c46-444c-ade5-8d152aaf273e"
+			},
+			{
+				"id": "76c7903a-9c46-444c-ade5-8d152aaf273e",
+				"name": null,
+				"key": "recover",
+				"type": "transform",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"recovered": true
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "e53c88a5-f242-4515-a286-9f5ddaf14c05",
+		"name": "Options extension",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "69659f91-f50c-4324-98d3-ff4250905535",
+		"operations": [
+			{
+				"id": "69659f91-f50c-4324-98d3-ff4250905535",
+				"name": null,
+				"key": "seed",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"synthetic": "{{ $trigger.query.marker }}"
+					}
+				},
+				"resolve": "1e6c1a54-8872-4efb-9839-f6776f65dd0b",
+				"reject": null
+			},
+			{
+				"id": "1e6c1a54-8872-4efb-9839-f6776f65dd0b",
+				"name": null,
+				"key": "probe",
+				"type": "flow-probe",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"greeting": "hello {{ $trigger.query.name }}"
+				},
+				"resolve": "1938bcd9-f2e3-4ff9-9ccd-e73861a0bddc",
+				"reject": null
+			},
+			{
+				"id": "1938bcd9-f2e3-4ff9-9ccd-e73861a0bddc",
+				"name": null,
+				"key": "after",
+				"type": "transform",
+				"position_x": 55,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"echoed": "{{ probe.options.greeting }}"
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "62acd2c9-139e-4ac1-9b6f-b6bf8426555b",
+		"name": "Options extension failure",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "47234bb3-e60e-4d9e-ab52-f9ce2efe4a73",
+		"operations": [
+			{
+				"id": "47234bb3-e60e-4d9e-ab52-f9ce2efe4a73",
+				"name": null,
+				"key": "probe",
+				"type": "flow-probe",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"fail": true
+				},
+				"resolve": null,
+				"reject": "76698523-e39a-4452-9fda-87cd972d0511"
+			},
+			{
+				"id": "76698523-e39a-4452-9fda-87cd972d0511",
+				"name": null,
+				"key": "recover",
+				"type": "transform",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"recovered": true
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	}
+]

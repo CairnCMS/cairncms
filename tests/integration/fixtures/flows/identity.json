@@ -1,0 +1,292 @@
+[
+	{
+		"id": "edcf5441-bf16-4637-809f-ed64ff54be88",
+		"name": "Identity update trigger",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "9a83be39-1dbb-41f4-8566-bfbd1f1ee9c6",
+		"operations": [
+			{
+				"id": "9a83be39-1dbb-41f4-8566-bfbd1f1ee9c6",
+				"name": null,
+				"key": "update",
+				"type": "item-update",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_identity_refuse",
+					"key": "{{ $trigger.query.id }}",
+					"payload": {
+						"name": "changed"
+					},
+					"permissions": "$trigger",
+					"emitEvents": false
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "d010f6e1-80f7-451c-9e68-b901a54494f7",
+		"name": "Identity update full",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "730fd0a8-a143-4390-a241-697cb045710c",
+		"operations": [
+			{
+				"id": "730fd0a8-a143-4390-a241-697cb045710c",
+				"name": null,
+				"key": "update",
+				"type": "item-update",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_identity_full",
+					"key": "{{ $trigger.query.id }}",
+					"payload": {
+						"name": "changed"
+					},
+					"permissions": "$full",
+					"emitEvents": false
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "c397623c-e40a-438a-bcf9-fff96fd3036b",
+		"name": "Identity read role",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "86fc3589-cfb2-435e-8772-ce08bf032c0f",
+		"operations": [
+			{
+				"id": "86fc3589-cfb2-435e-8772-ce08bf032c0f",
+				"name": null,
+				"key": "read",
+				"type": "item-read",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_identity_role",
+					"query": {
+						"sort": ["id"],
+						"fields": ["id", "name", "owner"]
+					},
+					"permissions": "ROLE_FROM_CASE",
+					"emitEvents": false
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "2d1dbb3e-39ed-4473-a39b-31db44b5cd2f",
+		"name": "Identity read public",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "92a07aa4-6eab-45e7-955e-a2b7f4c1b0a5",
+		"operations": [
+			{
+				"id": "92a07aa4-6eab-45e7-955e-a2b7f4c1b0a5",
+				"name": null,
+				"key": "read",
+				"type": "item-read",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_identity_public",
+					"query": {
+						"sort": ["id"],
+						"fields": ["id", "name", "owner"]
+					},
+					"permissions": "$public",
+					"emitEvents": false
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "8648373e-18b5-48ef-bcaa-5afab19e9f26",
+		"name": "Identity read trigger",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "5d50f159-2951-4882-90f0-a48bc882573b",
+		"operations": [
+			{
+				"id": "5d50f159-2951-4882-90f0-a48bc882573b",
+				"name": null,
+				"key": "read",
+				"type": "item-read",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_identity_public",
+					"query": {
+						"sort": ["id"],
+						"fields": ["id", "name", "owner"]
+					},
+					"permissions": "$trigger",
+					"emitEvents": false
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "d6c20517-9388-4c2b-b135-ce28d135fd0c",
+		"name": "Identity read own",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "f861d460-b2b5-4892-b6d9-240bd3b4b95f",
+		"operations": [
+			{
+				"id": "f861d460-b2b5-4892-b6d9-240bd3b4b95f",
+				"name": null,
+				"key": "read",
+				"type": "item-read",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_identity_own",
+					"query": {
+						"sort": ["id"],
+						"fields": ["id", "name", "owner"]
+					},
+					"permissions": "$trigger",
+					"emitEvents": false
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "2b72c719-58a1-4600-813f-8bc2fc7d7aac",
+		"name": "Identity mixed",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "b65aca57-4e56-42d9-8239-04e4afadd70f",
+		"operations": [
+			{
+				"id": "b65aca57-4e56-42d9-8239-04e4afadd70f",
+				"name": null,
+				"key": "read",
+				"type": "item-read",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_identity_mixed",
+					"query": {
+						"sort": ["id"],
+						"fields": ["id", "name", "owner"]
+					},
+					"permissions": "$trigger",
+					"emitEvents": false
+				},
+				"resolve": "fc23fdfc-ea19-4075-8c59-0f10a5406825",
+				"reject": null
+			},
+			{
+				"id": "fc23fdfc-ea19-4075-8c59-0f10a5406825",
+				"name": null,
+				"key": "update",
+				"type": "item-update",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_identity_mixed",
+					"key": "{{ $trigger.query.other }}",
+					"payload": {
+						"name": "updated by full access"
+					},
+					"permissions": "$full",
+					"emitEvents": false
+				},
+				"resolve": "c5d8c178-5f84-49b5-8da8-d3898141e826",
+				"reject": null
+			},
+			{
+				"id": "c5d8c178-5f84-49b5-8da8-d3898141e826",
+				"name": null,
+				"key": "read_after",
+				"type": "item-read",
+				"position_x": 55,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_identity_mixed",
+					"query": {
+						"sort": ["id"],
+						"fields": ["id", "name", "owner"]
+					},
+					"permissions": "$trigger",
+					"emitEvents": false
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	}
+]

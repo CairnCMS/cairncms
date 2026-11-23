@@ -1,0 +1,89 @@
+{
+	"id": "487003d0-40cb-420c-8f88-768cbae30e14",
+	"name": "Graph rejoin",
+	"icon": null,
+	"color": null,
+	"description": null,
+	"status": "active",
+	"trigger": "webhook",
+	"accountability": "all",
+	"options": {
+		"method": "GET",
+		"cacheEnabled": false
+	},
+	"operation": "3cd4a4a0-958f-45ac-a4ab-fe87e1edf703",
+	"operations": [
+		{
+			"id": "3cd4a4a0-958f-45ac-a4ab-fe87e1edf703",
+			"name": "Route check",
+			"key": "gate",
+			"type": "condition",
+			"position_x": 19,
+			"position_y": 1,
+			"options": {
+				"filter": {
+					"$trigger": {
+						"query": {
+							"route": {
+								"_eq": "success"
+							}
+						}
+					}
+				}
+			},
+			"resolve": "85880027-7840-474f-ae06-139bdc8146ae",
+			"reject": "ef6fd03d-46e5-44e4-a6e5-a577a6248181"
+		},
+		{
+			"id": "85880027-7840-474f-ae06-139bdc8146ae",
+			"name": "Success branch",
+			"key": "success_branch",
+			"type": "transform",
+			"position_x": 37,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"branch": "success"
+				}
+			},
+			"resolve": "9d1b4b26-7acb-47f2-82ed-99e08687f3a1",
+			"reject": null
+		},
+		{
+			"id": "ef6fd03d-46e5-44e4-a6e5-a577a6248181",
+			"name": "Failure check",
+			"key": "failure_branch",
+			"type": "condition",
+			"position_x": 37,
+			"position_y": 19,
+			"options": {
+				"filter": {
+					"$trigger": {
+						"query": {
+							"route": {
+								"_eq": "never"
+							}
+						}
+					}
+				}
+			},
+			"resolve": null,
+			"reject": "9d1b4b26-7acb-47f2-82ed-99e08687f3a1"
+		},
+		{
+			"id": "9d1b4b26-7acb-47f2-82ed-99e08687f3a1",
+			"name": "Shared result",
+			"key": "shared",
+			"type": "transform",
+			"position_x": 55,
+			"position_y": 1,
+			"options": {
+				"json": {
+					"shared": true
+				}
+			},
+			"resolve": null,
+			"reject": null
+		}
+	]
+}

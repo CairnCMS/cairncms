@@ -1,0 +1,593 @@
+[
+	{
+		"id": "7808c458-6c34-4314-9c3e-6603de5948ce",
+		"name": "Event list update",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "action",
+			"scope": ["items.update"],
+			"collections": ["test_flow_events_list"]
+		},
+		"operation": "04dfcae1-c577-4fcf-a9dd-da706671e72e",
+		"operations": [
+			{
+				"id": "04dfcae1-c577-4fcf-a9dd-da706671e72e",
+				"name": null,
+				"key": "seen",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"seen": true
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "16c31b7e-ff8b-4d6d-8ed7-85ff6e15b972",
+		"name": "Event rollback",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "filter",
+			"scope": ["items.create"],
+			"collections": ["test_flow_events_rollback"]
+		},
+		"operation": "c6101c2a-1aef-48d0-adc8-593c68eaef30",
+		"operations": [
+			{
+				"id": "c6101c2a-1aef-48d0-adc8-593c68eaef30",
+				"name": null,
+				"key": "create",
+				"type": "item-create",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_events_rollback_side",
+					"payload": {
+						"name": "{{ $trigger.payload.name }}"
+					},
+					"permissions": "$full",
+					"emitEvents": false
+				},
+				"resolve": "69a02b1c-d72e-43a6-bf9f-2df230b6093a",
+				"reject": null
+			},
+			{
+				"id": "69a02b1c-d72e-43a6-bf9f-2df230b6093a",
+				"name": null,
+				"key": "receipt",
+				"type": "log",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"message": "flow-event-rollback-created {{ $trigger.payload.name }} {{ create }}"
+				},
+				"resolve": "2dcafb6b-6674-4c28-9bbe-d5b2ee33b416",
+				"reject": null
+			},
+			{
+				"id": "2dcafb6b-6674-4c28-9bbe-d5b2ee33b416",
+				"name": null,
+				"key": "gate",
+				"type": "condition",
+				"position_x": 55,
+				"position_y": 1,
+				"options": {
+					"filter": {
+						"$trigger": {
+							"payload": {
+								"name": {
+									"_eq": "allowed"
+								}
+							}
+						}
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "2dc6381c-05df-440f-a034-daccfd6b95c8",
+		"name": "Event batch rollback",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "filter",
+			"scope": ["items.create"],
+			"collections": ["test_flow_events_batch_rollback"]
+		},
+		"operation": "5a860ef9-8897-46a6-b21d-ce4b043179d1",
+		"operations": [
+			{
+				"id": "5a860ef9-8897-46a6-b21d-ce4b043179d1",
+				"name": null,
+				"key": "read",
+				"type": "item-read",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_events_batch_rollback",
+					"query": {
+						"fields": ["name"]
+					},
+					"permissions": "$full",
+					"emitEvents": false
+				},
+				"resolve": "7bd82d92-8374-4597-8085-da9f163e9773",
+				"reject": null
+			},
+			{
+				"id": "7bd82d92-8374-4597-8085-da9f163e9773",
+				"name": null,
+				"key": "receipt",
+				"type": "log",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"message": "flow-event-batch-read {{ $trigger.payload.name }} {{ read }}"
+				},
+				"resolve": "0d23adc3-e481-40f1-bd4b-d1f40a37d85d",
+				"reject": null
+			},
+			{
+				"id": "0d23adc3-e481-40f1-bd4b-d1f40a37d85d",
+				"name": null,
+				"key": "gate",
+				"type": "condition",
+				"position_x": 55,
+				"position_y": 1,
+				"options": {
+					"filter": {
+						"$trigger": {
+							"payload": {
+								"name": {
+									"_neq": "second"
+								}
+							}
+						}
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "08b2d1ef-f6ea-4a32-bf7e-1569a969adee",
+		"name": "Event replaced fields",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "filter",
+			"scope": ["items.create"],
+			"collections": ["test_flow_events_fields"],
+			"return": "$last"
+		},
+		"operation": "4289f9a6-977e-4331-bdc4-0d1155620956",
+		"operations": [
+			{
+				"id": "4289f9a6-977e-4331-bdc4-0d1155620956",
+				"name": null,
+				"key": "replace",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"name": "{{ $trigger.payload.name }}",
+						"secret": "injected"
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "c142231a-ddeb-4a71-b081-07ba95c97461",
+		"name": "Event Mary trigger",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "action",
+			"scope": ["items.update"],
+			"collections": ["test_flow_events_appointments"]
+		},
+		"operation": "e0b6ab2b-bef5-4cad-b41e-d07378b8bfaa",
+		"operations": [
+			{
+				"id": "e0b6ab2b-bef5-4cad-b41e-d07378b8bfaa",
+				"name": null,
+				"key": "read",
+				"type": "item-read",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_events_appointments",
+					"key": "{{ $trigger.keys }}",
+					"permissions": "$full",
+					"emitEvents": false
+				},
+				"resolve": "fc3c489c-1042-4d30-bb13-6b0223210f73",
+				"reject": null
+			},
+			{
+				"id": "fc3c489c-1042-4d30-bb13-6b0223210f73",
+				"name": null,
+				"key": "update",
+				"type": "item-update",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_events_customers",
+					"key": "{{ read.customer }}",
+					"payload": {
+						"next_appointment": "{{ read.starts_at }}"
+					},
+					"permissions": "$trigger",
+					"emitEvents": false
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "319ed1e2-4a1f-4bb3-b9c2-ef52303dc5dc",
+		"name": "Event Mary full",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "action",
+			"scope": ["items.update"],
+			"collections": ["test_flow_events_appointments"]
+		},
+		"operation": "b8a74b26-a297-4a28-bd14-837386265a1f",
+		"operations": [
+			{
+				"id": "b8a74b26-a297-4a28-bd14-837386265a1f",
+				"name": null,
+				"key": "read",
+				"type": "item-read",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_events_appointments",
+					"key": "{{ $trigger.keys }}",
+					"permissions": "$full",
+					"emitEvents": false
+				},
+				"resolve": "549e3f14-5d4c-499b-8cb8-48c412d4d286",
+				"reject": null
+			},
+			{
+				"id": "549e3f14-5d4c-499b-8cb8-48c412d4d286",
+				"name": null,
+				"key": "update",
+				"type": "item-update",
+				"position_x": 37,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_events_customers",
+					"key": "{{ read.customer }}",
+					"payload": {
+						"next_appointment": "{{ read.starts_at }}"
+					},
+					"permissions": "$full",
+					"emitEvents": false
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "bac1ce48-6c93-4a74-b3f4-4fcc866e98fd",
+		"name": "Event deactivate filter",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "filter",
+			"scope": ["items.create"],
+			"collections": ["test_flow_events_deactivate"]
+		},
+		"operation": "c08c04aa-3453-41b1-8c3a-0d086f6ddacb",
+		"operations": [
+			{
+				"id": "c08c04aa-3453-41b1-8c3a-0d086f6ddacb",
+				"name": null,
+				"key": "gate",
+				"type": "condition",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"filter": {
+						"$trigger": {
+							"payload": {
+								"name": {
+									"_neq": "denied"
+								}
+							}
+						}
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "b1f637ac-46bb-4ad9-8b53-d89535cb84af",
+		"name": "Event deactivate webhook",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "c6242f67-e47c-4704-8544-18d7ac58fde0",
+		"operations": [
+			{
+				"id": "c6242f67-e47c-4704-8544-18d7ac58fde0",
+				"name": null,
+				"key": "answer",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"active": true
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "078a0c25-e44d-4cd1-8d9f-9f7bc2fddb79",
+		"name": "Event delete filter",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "filter",
+			"scope": ["items.delete"],
+			"collections": ["test_flow_events_delete"]
+		},
+		"operation": "42a47fc5-e2e4-41d0-ad9f-181f928689ea",
+		"operations": [
+			{
+				"id": "42a47fc5-e2e4-41d0-ad9f-181f928689ea",
+				"name": null,
+				"key": "gate",
+				"type": "condition",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"filter": {
+						"$trigger": {
+							"collection": {
+								"_eq": "never"
+							}
+						}
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "d2d3daa6-1ece-4bff-8e14-b6f91f03912e",
+		"name": "Event delete action",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "action",
+			"scope": ["items.delete"],
+			"collections": ["test_flow_events_delete"]
+		},
+		"operation": "aaa88fbd-8062-43ec-944f-c7abd0f018f0",
+		"operations": [
+			{
+				"id": "aaa88fbd-8062-43ec-944f-c7abd0f018f0",
+				"name": null,
+				"key": "seen",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"deleted": true
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "15f9bc2a-72b5-4ba1-bc88-32d335ba64c2",
+		"name": "Event emit on",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "254932ee-8308-46e3-b13a-96edea7f1d9c",
+		"operations": [
+			{
+				"id": "254932ee-8308-46e3-b13a-96edea7f1d9c",
+				"name": null,
+				"key": "create",
+				"type": "item-create",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_events_emitted",
+					"payload": {
+						"name": "on"
+					},
+					"permissions": "$full",
+					"emitEvents": true
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "4b8b49cf-1f71-4942-b5b6-406231f3e7fb",
+		"name": "Event emit off",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "webhook",
+		"accountability": "all",
+		"options": {
+			"method": "GET",
+			"cacheEnabled": false
+		},
+		"operation": "4cbf23aa-e682-472e-ab1a-ba7404e7dbee",
+		"operations": [
+			{
+				"id": "4cbf23aa-e682-472e-ab1a-ba7404e7dbee",
+				"name": null,
+				"key": "create",
+				"type": "item-create",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"collection": "test_flow_events_emitted",
+					"payload": {
+						"name": "off"
+					},
+					"permissions": "$full",
+					"emitEvents": false
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "f548bbfa-e65c-4985-a312-bc7fafc4a116",
+		"name": "Event emitted action",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "action",
+			"scope": ["items.create"],
+			"collections": ["test_flow_events_emitted"]
+		},
+		"operation": "714ff298-09d3-4b04-a60f-faee28b9b36c",
+		"operations": [
+			{
+				"id": "714ff298-09d3-4b04-a60f-faee28b9b36c",
+				"name": null,
+				"key": "seen",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"seen": true
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	},
+	{
+		"id": "c6cdedef-b51e-48bf-a91f-6abaa629cfad",
+		"name": "Event emitted witness",
+		"icon": null,
+		"color": null,
+		"description": null,
+		"status": "active",
+		"trigger": "event",
+		"accountability": "all",
+		"options": {
+			"type": "filter",
+			"scope": ["items.create"],
+			"collections": ["test_flow_events_emitted"]
+		},
+		"operation": "2c3f93ed-748c-42c3-b217-94c195aca8d3",
+		"operations": [
+			{
+				"id": "2c3f93ed-748c-42c3-b217-94c195aca8d3",
+				"name": null,
+				"key": "witness",
+				"type": "transform",
+				"position_x": 19,
+				"position_y": 1,
+				"options": {
+					"json": {
+						"witnessed": true
+					}
+				},
+				"resolve": null,
+				"reject": null
+			}
+		]
+	}
+]
