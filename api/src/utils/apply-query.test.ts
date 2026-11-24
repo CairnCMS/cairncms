@@ -606,11 +606,15 @@ describe('applyFilter case-insensitive starts and ends operators', () => {
 		}
 	});
 
+	const bytes = 'CAST(LOWER(`notes`.`title`) AS BLOB)';
+	const prefix = `COALESCE(substr(${bytes}, 1, length(CAST(LOWER(?) AS BLOB))), ${bytes})`;
+	const suffix = `COALESCE(substr(${bytes}, -length(CAST(LOWER(?) AS BLOB))), ${bytes})`;
+
 	it.each([
-		['_istarts_with', 'substr(CAST(LOWER(`notes`.`title`) AS BLOB), 1, length(CAST(LOWER(?) AS BLOB))) ='],
-		['_nistarts_with', 'substr(CAST(LOWER(`notes`.`title`) AS BLOB), 1, length(CAST(LOWER(?) AS BLOB))) <>'],
-		['_iends_with', 'substr(CAST(LOWER(`notes`.`title`) AS BLOB), -length(CAST(LOWER(?) AS BLOB))) ='],
-		['_niends_with', 'substr(CAST(LOWER(`notes`.`title`) AS BLOB), -length(CAST(LOWER(?) AS BLOB))) <>'],
+		['_istarts_with', `${prefix} =`],
+		['_nistarts_with', `${prefix} <>`],
+		['_iends_with', `${suffix} =`],
+		['_niends_with', `${suffix} <>`],
 	])('compares a %s operand with the database lowercasing both sides', (operator, comparison) => {
 		const { sql, bindings } = compile({ title: { [operator]: 'Team_A!50%' } });
 

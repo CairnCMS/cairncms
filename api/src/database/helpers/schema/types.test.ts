@@ -53,13 +53,15 @@ describe('case-insensitive prefix and suffix comparisons', () => {
 	it.each(COMPARISONS)('compare lowercased bytes on SQLite when the column %s the operand', (_label, comparison) => {
 		const helper = new sqlite(knex.default({ client: 'sqlite3', useNullAsDefault: true }));
 
+		const bytes = 'CAST(LOWER(`notes`.`title`) AS BLOB)';
+
 		const slice =
 			comparison.position === 'start'
-				? 'substr(CAST(LOWER(`notes`.`title`) AS BLOB), 1, length(CAST(LOWER(?) AS BLOB)))'
-				: 'substr(CAST(LOWER(`notes`.`title`) AS BLOB), -length(CAST(LOWER(?) AS BLOB)))';
+				? `substr(${bytes}, 1, length(CAST(LOWER(?) AS BLOB)))`
+				: `substr(${bytes}, -length(CAST(LOWER(?) AS BLOB)))`;
 
 		expect(compile(helper, comparison)).toEqual({
-			sql: `${slice} ${comparison.negate ? '<>' : '='} CAST(LOWER(?) AS BLOB)`,
+			sql: `COALESCE(${slice}, ${bytes}) ${comparison.negate ? '<>' : '='} CAST(LOWER(?) AS BLOB)`,
 			bindings: [OPERAND, OPERAND],
 		});
 	});
