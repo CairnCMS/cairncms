@@ -347,6 +347,21 @@ describe('case-insensitive text operands', () => {
 		});
 	});
 
+	it.each(['_istarts_with', '_nistarts_with', '_iends_with', '_niends_with'])(
+		'resolves a dynamic variable that yields no value to null for %s',
+		(operator) => {
+			const filter = { code: { [operator]: '$NOW(not a duration)' } } as Filter;
+
+			expect(parseFilter(filter, null)).toStrictEqual({ code: { [operator]: null } });
+		}
+	);
+
+	it.each(operators)('keeps an operand that was left out as undefined for %s', (operator) => {
+		const filter = { code: { [operator]: undefined } } as Filter;
+
+		expect(parseFilter(filter, null)).toStrictEqual({ code: { [operator]: undefined } });
+	});
+
 	it.each(operators)('keeps a boolean or null operand for %s as it is', (operator) => {
 		for (const operand of [true, false, null]) {
 			const filter = { code: { [operator]: operand } } as Filter;
