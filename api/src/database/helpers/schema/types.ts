@@ -9,12 +9,10 @@ export type Options = { nullable?: boolean; default?: any; length?: number };
 
 export type AffixComparison = { position: 'start' | 'end'; negate: boolean };
 
-/** Escapes `!`, `%`, and `_` with `!` so the operand matches literally in a `LIKE ... ESCAPE '!'` pattern. */
 export function escapeLikeLiteral(operand: string): string {
 	return operand.replace(/[!%_]/g, '!$&');
 }
 
-/** Anchors the escaped operand at the start or end of a `LIKE ... ESCAPE '!'` pattern. */
 export function literalAffixPattern(operand: string, position: AffixComparison['position']): string {
 	const literal = escapeLikeLiteral(operand);
 	return position === 'start' ? `${literal}%` : `%${literal}`;
@@ -133,7 +131,6 @@ export abstract class SchemaHelper extends DatabaseHelper {
 		return 'CAST(?? AS CHAR(255))';
 	}
 
-	/** Compares a text column with a literal prefix or suffix, lowercasing both sides in the database. */
 	caseInsensitiveAffix(column: Knex.Raw | string, operand: string, comparison: AffixComparison): Knex.Raw {
 		return this.knex.raw(`LOWER(??) ${comparison.negate ? 'NOT LIKE' : 'LIKE'} LOWER(?) ESCAPE '!'`, [
 			column,

@@ -22,7 +22,6 @@ export interface StringSchema extends BaseStringSchema {
 	niendsWith(suffix: string): this;
 }
 
-/** Builds a string rule that reports `string.<name>`, without the rule's text, when `matches` rejects the value. */
 function textRule(
 	name: string,
 	matches: (value: string, text: string) => boolean
@@ -40,6 +39,7 @@ function textRule(
 			return this.$_addRule({ name, args: { text } });
 		},
 		validate(value, helpers, { text }) {
+			// The rule text can contain private permission data.
 			return matches(value, text) ? value : helpers.error(`string.${name}`);
 		},
 	};
@@ -149,7 +149,6 @@ const TAGGED_OPERATORS: readonly string[] = [
 	'_nbetween',
 ];
 
-/** Adds the filter operator to every error the schema reports, as `validationOperator` in the error context. */
 function withValidationOperator(schema: AnySchema, operator: string): AnySchema {
 	return schema.error((errors) => {
 		for (const error of errors) error.local.validationOperator = operator;
@@ -157,14 +156,7 @@ function withValidationOperator(schema: AnySchema, operator: string): AnySchema 
 	});
 }
 
-/**
- * Generate a Joi schema from a filter object.
- *
- * @param {FieldFilter} filter - Field filter object. Note: does not support _and/_or filters.
- * @param {JoiOptions} [options] - Options for the schema generation.
- * @returns {AnySchema} Joi schema.
- */
-
+/** Callers handle _and and _or groups and pass one field rule at a time. */
 export function generateJoi(filter: FieldFilter | null, options?: JoiOptions): AnySchema {
 	filter = filter || {};
 

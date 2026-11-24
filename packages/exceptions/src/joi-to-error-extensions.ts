@@ -76,13 +76,7 @@ export type FailedValidationExtensions = {
 	type?: FailedValidationType;
 };
 
-/**
- * Converts a Joi validation error item into the details of a failed validation. The details carry no compared or
- * submitted value, and leave `type` unset when the item matches no known rule. Equality, membership, null, and empty
- * failures take their `type` from the `validationOperator` the schema recorded, never from the compared values. Every
- * other failure of a text or comparison rule takes the rule's own type, and a range failure takes none, so the
- * details do not depend on the compared value's kind. A missing required value is reported as required.
- */
+/** Classify failures from rule metadata without reading or exposing the submitted value or rule operand. */
 export function joiValidationErrorItemToErrorExtensions(item: ValidationErrorItem): FailedValidationExtensions {
 	const extensions: FailedValidationExtensions = {
 		field: item.path[0],

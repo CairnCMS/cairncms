@@ -628,13 +628,9 @@ export function applyFilter(
 		) {
 			const [table, column] = key.split('.');
 
-			// Is processed through Knex.Raw, so should be safe to string-inject into these where queries
+			// Knex accepts raw column expressions here despite its column-name types.
 			const selectionRaw = getColumn(knex, table!, column!, false, schema, { originalCollectionName }) as any;
 
-			// Knex supports "raw" in the columnName parameter but doesn't type it as such;
-			// the `as any` cast above is required until upstream knex types are fixed.
-
-			// These operators don't rely on a value, and can thus be used without one (eg `?filter[field][_null]`)
 			if ((operator === '_null' && compareValue !== false) || (operator === '_nnull' && compareValue === false)) {
 				dbQuery[logical].whereNull(selectionRaw);
 			}
@@ -655,19 +651,12 @@ export function applyFilter(
 				});
 			}
 
-			// The following fields however, require a value to be run. If no value is passed, we
-			// ignore them. This allows easier use in GraphQL, where you wouldn't be able to
-			// conditionally build out your filter structure (#4471)
 			if (compareValue === undefined) return;
 
 			if (Array.isArray(compareValue)) {
-				// Tip: when using a `[Type]` type in GraphQL, but don't provide the variable, it'll be
-				// reported as [undefined].
-				// We need to remove any undefined values, as they are useless
 				compareValue = compareValue.filter((val) => val !== undefined);
 			}
 
-			// Cast filter value (compareValue) based on function used
 			if (column!.includes('(') && column!.includes(')')) {
 				const functionName = column!.split('(')[0] as FieldFunction;
 				const type = getOutputTypeForFunction(functionName);
@@ -677,7 +666,6 @@ export function applyFilter(
 				}
 			}
 
-			// Cast filter value (compareValue) based on type of field being filtered against
 			const [collection, field] = key.split('.');
 			const mappedCollection = (originalCollectionName || collection)!;
 

@@ -168,9 +168,6 @@ function setUpChart() {
 		dataLabels: {
 			enabled: props.showDataLabel,
 			formatter: formatNumericValue,
-			// style: {
-			// 	colors: ['var(--foreground-normal-alt'],
-			// },
 		},
 		tooltip: {
 			marker: {

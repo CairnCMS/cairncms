@@ -2,7 +2,6 @@ import type { ClientFilterOperator, Type } from '@cairncms/types';
 
 type GetFilterOperationsForTypeOptions = {
 	includeValidation?: boolean;
-	/** The column's database type. When given, operators that need a character column are left out for any other column. */
 	dbType?: string | null;
 };
 
@@ -26,7 +25,6 @@ const CHARACTER_DB_TYPES = new Set([
 	'string',
 ]);
 
-/** Whether a column's database type holds character data, which `LOWER()` lowercases as text. */
 function isCharacterDbType(dbType: string | null): boolean {
 	return dbType !== null && CHARACTER_DB_TYPES.has(dbType.toLowerCase().split('(')[0]!);
 }
@@ -45,7 +43,6 @@ export function getFilterOperatorsForType(
 	}
 
 	switch (type) {
-		// Text
 		case 'binary':
 		case 'string':
 		case 'text':
@@ -70,28 +67,22 @@ export function getFilterOperatorsForType(
 				'nin',
 				...validationOnlyStringFilterOperators,
 			];
-		// Hash
 		case 'hash':
 			return ['empty', 'nempty', 'null', 'nnull'];
-		// JSON
-		// UUID
 		case 'uuid':
 			return ['eq', 'neq', 'null', 'nnull', 'in', 'nin'];
 		case 'json':
 			return ['null', 'nnull'];
 
-		// Boolean
 		case 'boolean':
 			return ['eq', 'neq', 'null', 'nnull'];
 
-		// Numbers
 		case 'bigInteger':
 		case 'integer':
 		case 'decimal':
 		case 'float':
 			return ['eq', 'neq', 'lt', 'lte', 'gt', 'gte', 'between', 'nbetween', 'null', 'nnull', 'in', 'nin'];
 
-		// Datetime
 		case 'dateTime':
 		case 'date':
 		case 'time':

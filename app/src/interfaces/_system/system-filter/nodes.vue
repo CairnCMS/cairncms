@@ -339,7 +339,6 @@ function replaceNode(index: number, newFilter: Filter) {
 	});
 }
 
-/** Returns the field type and, for a filter, the column type that decide which comparators a field offers. */
 function getComparisonTypes(name: string): { type: Type; dbType: string | undefined } {
 	if (name.includes('(') && name.includes(')')) {
 		const functionName = name.split('(')[0] as FieldFunction;
@@ -349,7 +348,6 @@ function getComparisonTypes(name: string): { type: Type; dbType: string | undefi
 	let fieldInfo = fieldsStore.getField(props.collection, name);
 	let type: Type = fieldInfo?.type || 'unknown';
 
-	// Alias uses the foreign key type
 	if (type === 'alias') {
 		const relations = relationsStore.getRelationsForField(props.collection, name);
 
@@ -371,7 +369,6 @@ function getCompareOptions(name: string) {
 	}));
 }
 
-/** Whether a field's column type rules out the comparator of the node at `index`, which its field type allows. */
 function isComparatorRuledOut(name: string, index: number): boolean {
 	const nodeInfo = filterInfo.value[index];
 	if (nodeInfo?.isField !== true) return false;

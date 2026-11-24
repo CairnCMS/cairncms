@@ -1,10 +1,3 @@
-/**
- * @NOTE This is copied from @cairncms/utils. Once the tests are ESM too, this needs to be removed
- * in favor of using @cairncms/utils
- *
- * @TODO
- */
-
 import type { ClientFilterOperator, Type } from '@cairncms/types';
 
 type GetFilterOperationsForTypeOptions = {
@@ -18,7 +11,6 @@ export function getFilterOperatorsForType(
 	const validationOnlyStringFilterOperators: ClientFilterOperator[] = opts?.includeValidation ? ['regex'] : [];
 
 	switch (type) {
-		// Text
 		case 'binary':
 		case 'string':
 		case 'text':
@@ -45,28 +37,22 @@ export function getFilterOperatorsForType(
 				'nin',
 				...validationOnlyStringFilterOperators,
 			];
-		// Hash
 		case 'hash':
 			return ['empty', 'nempty', 'null', 'nnull'];
-		// JSON
-		// UUID
 		case 'uuid':
 			return ['eq', 'neq', 'null', 'nnull', 'in', 'nin'];
 		case 'json':
 			return ['null', 'nnull'];
 
-		// Boolean
 		case 'boolean':
 			return ['eq', 'neq', 'null', 'nnull'];
 
-		// Numbers
 		case 'bigInteger':
 		case 'integer':
 		case 'decimal':
 		case 'float':
 			return ['eq', 'neq', 'lt', 'lte', 'gt', 'gte', 'between', 'nbetween', 'null', 'nnull', 'in', 'nin'];
 
-		// Datetime
 		case 'dateTime':
 		case 'date':
 		case 'time':
