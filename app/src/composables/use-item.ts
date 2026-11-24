@@ -4,19 +4,19 @@ import { i18n } from '@/lang';
 import { useFieldsStore } from '@/stores/fields';
 import { useRelationsStore } from '@/stores/relations';
 import { APIError } from '@/types/error';
+import { getDefaultValuesFromFields } from '@/utils/get-default-values-from-fields';
 import { notify } from '@/utils/notify';
 import { stripUnboundParentLinks } from '@/utils/strip-unbound-parent-links';
 import { translate } from '@/utils/translate-object-values';
 import { unexpectedError } from '@/utils/unexpected-error';
 import { validateItem } from '@/utils/validate-item';
 import { useCollection } from '@cairncms/composables';
+import { Field, Query, Relation } from '@cairncms/types';
 import { getEndpoint } from '@cairncms/utils';
 import { AxiosResponse } from 'axios';
 import { mergeWith } from 'lodash';
-import { computed, ComputedRef, isRef, Ref, ref, unref, watch } from 'vue';
+import { ComputedRef, Ref, computed, isRef, ref, unref, watch } from 'vue';
 import { useFieldPermissions } from './use-field-permissions';
-import { Field, Query, Relation } from '@cairncms/types';
-import { getDefaultValuesFromFields } from '@/utils/get-default-values-from-fields';
 
 type UsableItem = {
 	edits: Ref<Record<string, any>>;
@@ -35,7 +35,6 @@ type UsableItem = {
 	isArchived: ComputedRef<boolean | null>;
 	archiving: Ref<boolean>;
 	saveAsCopy: () => Promise<any>;
-	isBatch: ComputedRef<boolean>;
 	getItem: () => Promise<void>;
 	validationErrors: Ref<any[]>;
 };
@@ -56,7 +55,6 @@ export function useItem(
 	const edits = ref<Record<string, any>>({});
 	const hasEdits = computed(() => Object.keys(edits.value).length > 0);
 	const isNew = computed(() => primaryKey.value === '+');
-	const isBatch = computed(() => typeof primaryKey.value === 'string' && primaryKey.value.includes(','));
 	const isSingle = computed(() => !!collectionInfo.value?.meta?.singleton);
 
 	const isEmptySingleton = computed(() => {
@@ -113,7 +111,6 @@ export function useItem(
 		isArchived,
 		archiving,
 		saveAsCopy,
-		isBatch,
 		getItem,
 		validationErrors,
 	};
@@ -166,7 +163,7 @@ export function useItem(
 				);
 
 				notify({
-					title: i18n.global.t('item_create_success', isBatch.value ? 2 : 1),
+					title: i18n.global.t('item_create_success', 1),
 				});
 			} else {
 				response = await api.patch(
@@ -175,7 +172,7 @@ export function useItem(
 				);
 
 				notify({
-					title: i18n.global.t('item_update_success', isBatch.value ? 2 : 1),
+					title: i18n.global.t('item_update_success', 1),
 				});
 			}
 
@@ -442,9 +439,7 @@ export function useItem(
 
 			notify({
 				title:
-					value === archiveValue
-						? i18n.global.t('item_delete_success', isBatch.value ? 2 : 1)
-						: i18n.global.t('item_update_success', isBatch.value ? 2 : 1),
+					value === archiveValue ? i18n.global.t('item_delete_success', 1) : i18n.global.t('item_update_success', 1),
 			});
 		} catch (err: any) {
 			unexpectedError(err);
@@ -463,7 +458,7 @@ export function useItem(
 			item.value = null;
 
 			notify({
-				title: i18n.global.t('item_delete_success', isBatch.value ? 2 : 1),
+				title: i18n.global.t('item_delete_success', 1),
 			});
 		} catch (err: any) {
 			unexpectedError(err);
@@ -494,20 +489,6 @@ export function useItem(
 			response.data.data = translate(response.data.data);
 		}
 
-		if (isBatch.value === false) {
-			item.value = response.data.data;
-		} else {
-			const valuesThatAreEqual = { ...response.data.data[0] };
-
-			response.data.data.forEach((existingItem: any) => {
-				for (const [key, value] of Object.entries(existingItem)) {
-					if (valuesThatAreEqual[key] !== value) {
-						delete valuesThatAreEqual[key];
-					}
-				}
-			});
-
-			item.value = valuesThatAreEqual;
-		}
+		item.value = response.data.data;
 	}
 }

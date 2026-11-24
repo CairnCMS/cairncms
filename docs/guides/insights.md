@@ -106,7 +106,7 @@ A bar or column chart of an aggregate value across groups.
 - **Color** - default bar color
 - **Show Axis Labels** - which axis labels to display
 - **Show Data Label** - render the aggregate value on each bar
-- **Conditional Fill** - recolor bars based on a per-axis operator and value. Available X-axis operators depend on the X-axis field type. Nonnumeric X-axis fields expose `=`, `!=`, `contains`, `ncontains`, `starts_with`, `ends_with`. Numeric X-axis fields expose `=`, `!=`, `>`, `>=`, `<`, `<=`. Y-axis comparisons always use `=`, `!=`, `>`, `>=`, `<`, `<=`
+- **Conditional Fill** - recolor bars based on a per-axis operator and value. Available X-axis operators depend on the X-axis field type. Nonnumeric X-axis fields expose `=`, `!=`, `contains`, `ncontains`, `starts_with`, `nstarts_with`, `istarts_with`, `nistarts_with`, `ends_with`, `nends_with`, `iends_with`, `niends_with`. The `i` operators ignore case. Numeric X-axis fields expose `=`, `!=`, `>`, `>=`, `<`, `<=`. Y-axis comparisons always use `=`, `!=`, `>`, `>=`, `<`, `<=`
 - **Filter** - restricts which items are considered
 
 ### Line Chart
@@ -136,7 +136,7 @@ A pie or donut chart showing the distribution of an aggregate across the distinc
 - **Legend** - none, right, or bottom
 - **Value Decimals** - number of decimals on the rendered values
 - **Color** - the base color. The panel derives a monochromatic palette from this color by walking the LAB lightness axis, so each slice gets a distinct variant
-- **Conditional Fill** - recolor slices based on an operator and value. Available operators depend on the selected field type. Numeric fields expose `=`, `!=`, `>`, `>=`, `<`, `<=`. String fields expose `=`, `!=`, `contains`, `ncontains`, `starts_with`, `ends_with`. String comparisons match against the underlying group label, not the aggregate count
+- **Conditional Fill** - recolor slices based on an operator and value. Available operators depend on the selected field type. Numeric fields expose `=`, `!=`, `>`, `>=`, `<`, `<=`. String fields expose `=`, `!=`, `contains`, `ncontains`, `starts_with`, `nstarts_with`, `istarts_with`, `nistarts_with`, `ends_with`, `nends_with`, `iends_with`, `niends_with`. The `i` operators ignore case. String comparisons match against the underlying group label, not the aggregate count
 - **Filter** - restricts which items are considered
 
 ### Meter

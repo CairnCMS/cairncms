@@ -306,7 +306,7 @@ functions:
 date-fns_date: PPP
 date-fns_time: 'hh:mm:ss'
 date-fns_time_no_seconds: 'hh:mm'
-date-fns_date_short: 'd. M. YY'
+date-fns_date_short: 'd. M. yy'
 date-fns_time_short: 'hh:mm'
 date-fns_date_short_no_year: MMM d
 month: Mesec

@@ -249,6 +249,8 @@ describeForVendors(
 					dumpYaml({ key: roleKey, name: 'Run Record Test', admin_access: false, app_access: false })
 				);
 
+				const configurationCommitted = { folders: 'not_run', schema: 'not_run', configuration: 'committed' };
+
 				const localApply = await runCli(api, ['config', 'apply', configDir, '--yes'], cliEnv);
 				expect(localApply.status).toBe(0);
 				const localApplyRecords = parseRecords(localApply.stdout);
@@ -259,9 +261,11 @@ describeForVendors(
 					dryRun: false,
 					result: 'applied',
 					changes: { create: 1, update: 0, delete: 0 },
+					steps: configurationCommitted,
 				});
 
 				expect(localApplyRecords[0]).not.toHaveProperty('runId');
+				expect(localApplyRecords[0]).not.toHaveProperty('failure');
 				expect(await findRole(api, roleKey)).toBeDefined();
 
 				const httpDryRun = await apply(api, baseline, { dry_run: 'true' }).set('Origin', 'https://app.example');
@@ -332,6 +336,7 @@ describeForVendors(
 					destructive: true,
 					result: 'applied',
 					changes: { create: 0, update: 0, delete: 1 },
+					steps: configurationCommitted,
 				});
 
 				expect(await findRole(api, roleKey)).toBeUndefined();

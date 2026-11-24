@@ -1,11 +1,48 @@
 import type { FieldFilter } from '@cairncms/types';
-import type { AnySchema, StringSchema as BaseStringSchema, DateSchema, NumberSchema } from 'joi';
+import type {
+	AnySchema,
+	StringSchema as BaseStringSchema,
+	DateSchema,
+	ExtensionRule,
+	NumberSchema,
+	SchemaInternals,
+} from 'joi';
 import BaseJoi from 'joi';
 import { escapeRegExp, merge } from 'lodash-es';
 
 export interface StringSchema extends BaseStringSchema {
 	contains(substring: string): this;
 	ncontains(substring: string): this;
+	icontains(substring: string): this;
+	endsWith(suffix: string): this;
+	nendsWith(suffix: string): this;
+	istartsWith(prefix: string): this;
+	nistartsWith(prefix: string): this;
+	iendsWith(suffix: string): this;
+	niendsWith(suffix: string): this;
+}
+
+function textRule(
+	name: string,
+	matches: (value: string, text: string) => boolean
+): ExtensionRule & ThisType<SchemaInternals> {
+	return {
+		args: [
+			{
+				name: 'text',
+				ref: true,
+				assert: (val) => typeof val === 'string',
+				message: 'must be a string',
+			},
+		],
+		method(text) {
+			return this.$_addRule({ name, args: { text } });
+		},
+		validate(value, helpers, { text }) {
+			// The rule text can contain private permission data.
+			return matches(value, text) ? value : helpers.error(`string.${name}`);
+		},
+	};
 }
 
 export const Joi: typeof BaseJoi = BaseJoi.extend({
@@ -14,6 +51,13 @@ export const Joi: typeof BaseJoi = BaseJoi.extend({
 	messages: {
 		'string.contains': '{{#label}} must contain [{{#substring}}]',
 		'string.ncontains': "{{#label}} can't contain [{{#substring}}]",
+		'string.icontains': '{{#label}} must contain the required text',
+		'string.endsWith': '{{#label}} must end with the required text',
+		'string.nendsWith': "{{#label}} can't end with the excluded text",
+		'string.istartsWith': '{{#label}} must start with the required text',
+		'string.nistartsWith': "{{#label}} can't start with the excluded text",
+		'string.iendsWith': '{{#label}} must end with the required text',
+		'string.niendsWith': "{{#label}} can't end with the excluded text",
 	},
 	rules: {
 		contains: {
@@ -56,6 +100,13 @@ export const Joi: typeof BaseJoi = BaseJoi.extend({
 				return value;
 			},
 		},
+		icontains: textRule('icontains', (value, text) => value.toLowerCase().includes(text.toLowerCase())),
+		endsWith: textRule('endsWith', (value, text) => value.endsWith(text)),
+		nendsWith: textRule('nendsWith', (value, text) => !value.endsWith(text)),
+		istartsWith: textRule('istartsWith', (value, text) => value.toLowerCase().startsWith(text.toLowerCase())),
+		nistartsWith: textRule('nistartsWith', (value, text) => !value.toLowerCase().startsWith(text.toLowerCase())),
+		iendsWith: textRule('iendsWith', (value, text) => value.toLowerCase().endsWith(text.toLowerCase())),
+		niendsWith: textRule('niendsWith', (value, text) => !value.toLowerCase().endsWith(text.toLowerCase())),
 	},
 });
 
@@ -67,16 +118,45 @@ const defaults: JoiOptions = {
 	requireAll: false,
 };
 
-const EMPTY_IN_SENTINEL = Symbol('cairncms-empty-in');
+const NO_MATCH_SENTINEL = Symbol('cairncms-no-match');
 
-/**
- * Generate a Joi schema from a filter object.
- *
- * @param {FieldFilter} filter - Field filter object. Note: does not support _and/_or filters.
- * @param {JoiOptions} [options] - Options for the schema generation.
- * @returns {AnySchema} Joi schema.
- */
+const TAGGED_OPERATORS: readonly string[] = [
+	'_eq',
+	'_neq',
+	'_in',
+	'_nin',
+	'_null',
+	'_nnull',
+	'_empty',
+	'_nempty',
+	'_contains',
+	'_icontains',
+	'_ncontains',
+	'_starts_with',
+	'_nstarts_with',
+	'_istarts_with',
+	'_nistarts_with',
+	'_ends_with',
+	'_nends_with',
+	'_iends_with',
+	'_niends_with',
+	'_regex',
+	'_gt',
+	'_gte',
+	'_lt',
+	'_lte',
+	'_between',
+	'_nbetween',
+];
 
+function withValidationOperator(schema: AnySchema, operator: string): AnySchema {
+	return schema.error((errors) => {
+		for (const error of errors) error.local.validationOperator = operator;
+		return errors;
+	});
+}
+
+/** Callers handle _and and _or groups and pass one field rule at a time. */
 export function generateJoi(filter: FieldFilter | null, options?: JoiOptions): AnySchema {
 	filter = filter || {};
 
@@ -142,10 +222,10 @@ export function generateJoi(filter: FieldFilter | null, options?: JoiOptions): A
 		}
 
 		if (operator === '_icontains') {
-			if (compareValue === null || compareValue === undefined || typeof compareValue !== 'string') {
-				schema[key] = Joi.any().equal(true);
+			if (typeof compareValue !== 'string') {
+				schema[key] = Joi.any().valid(NO_MATCH_SENTINEL);
 			} else {
-				schema[key] = getStringSchema().contains(compareValue);
+				schema[key] = getStringSchema().icontains(compareValue);
 			}
 		}
 
@@ -172,9 +252,25 @@ export function generateJoi(filter: FieldFilter | null, options?: JoiOptions): A
 				schema[key] = Joi.any().equal(true);
 			} else {
 				schema[key] = getStringSchema().pattern(new RegExp(`^${escapeRegExp(compareValue)}.*`), {
-					name: 'starts_with',
+					name: 'nstarts_with',
 					invert: true,
 				});
+			}
+		}
+
+		if (operator === '_istarts_with') {
+			if (typeof compareValue !== 'string') {
+				schema[key] = Joi.any().valid(NO_MATCH_SENTINEL);
+			} else {
+				schema[key] = getStringSchema().istartsWith(compareValue);
+			}
+		}
+
+		if (operator === '_nistarts_with') {
+			if (typeof compareValue !== 'string') {
+				schema[key] = Joi.any().valid(NO_MATCH_SENTINEL);
+			} else {
+				schema[key] = getStringSchema().nistartsWith(compareValue);
 			}
 		}
 
@@ -182,9 +278,7 @@ export function generateJoi(filter: FieldFilter | null, options?: JoiOptions): A
 			if (compareValue === null || compareValue === undefined || typeof compareValue !== 'string') {
 				schema[key] = Joi.any().equal(true);
 			} else {
-				schema[key] = getStringSchema().pattern(new RegExp(`.*${escapeRegExp(compareValue)}$`), {
-					name: 'ends_with',
-				});
+				schema[key] = getStringSchema().endsWith(compareValue);
 			}
 		}
 
@@ -192,16 +286,29 @@ export function generateJoi(filter: FieldFilter | null, options?: JoiOptions): A
 			if (compareValue === null || compareValue === undefined || typeof compareValue !== 'string') {
 				schema[key] = Joi.any().equal(true);
 			} else {
-				schema[key] = getStringSchema().pattern(new RegExp(`.*${escapeRegExp(compareValue)}$`), {
-					name: 'ends_with',
-					invert: true,
-				});
+				schema[key] = getStringSchema().nendsWith(compareValue);
+			}
+		}
+
+		if (operator === '_iends_with') {
+			if (typeof compareValue !== 'string') {
+				schema[key] = Joi.any().valid(NO_MATCH_SENTINEL);
+			} else {
+				schema[key] = getStringSchema().iendsWith(compareValue);
+			}
+		}
+
+		if (operator === '_niends_with') {
+			if (typeof compareValue !== 'string') {
+				schema[key] = Joi.any().valid(NO_MATCH_SENTINEL);
+			} else {
+				schema[key] = getStringSchema().niendsWith(compareValue);
 			}
 		}
 
 		if (operator === '_in') {
 			if (Array.isArray(compareValue) && compareValue.length === 0) {
-				schema[key] = Joi.any().valid(EMPTY_IN_SENTINEL);
+				schema[key] = Joi.any().valid(NO_MATCH_SENTINEL);
 			} else {
 				schema[key] = getAnySchema().equal(...(compareValue as (string | number)[]));
 			}
@@ -306,6 +413,12 @@ export function generateJoi(filter: FieldFilter | null, options?: JoiOptions): A
 
 				schema[key] = getStringSchema().regex(new RegExp(wrapped ? (compareValue as any).slice(1, -1) : compareValue));
 			}
+		}
+
+		const operatorSchema = schema[key];
+
+		if (operator !== undefined && operatorSchema && TAGGED_OPERATORS.includes(operator)) {
+			schema[key] = withValidationOperator(operatorSchema, operator);
 		}
 	}
 

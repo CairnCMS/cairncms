@@ -9,10 +9,10 @@ import type {
 	FilterHandler,
 } from '@cairncms/types';
 import { RESERVED_EVENT_NAMESPACE_ERROR, hasSafeEventSegments, isReservedEventNamespace } from '@cairncms/constants';
+import { ForbiddenException, InvalidCredentialsException, InvalidPayloadException } from '@cairncms/exceptions';
 import express, { type Router } from 'express';
 import getDatabase from '../../database/index.js';
 import emitter from '../../emitter.js';
-import * as exceptions from '../../exceptions/index.js';
 import { getFlowManager, type ConfinedOperationDescriptor } from '../../flows.js';
 import logger from '../../logger.js';
 import { getAxios } from '../../request/index.js';
@@ -607,13 +607,13 @@ export class ConfinedRegistrar {
 
 				switch (result.failure) {
 					case 'unauthenticated':
-						next(new exceptions.InvalidCredentialsException());
+						next(new InvalidCredentialsException());
 						return;
 					case 'denied':
-						next(new exceptions.ForbiddenException());
+						next(new ForbiddenException());
 						return;
 					case 'invalid-request':
-						next(new exceptions.InvalidPayloadException('the request is not a valid json endpoint request'));
+						next(new InvalidPayloadException('the request is not a valid json endpoint request'));
 						return;
 					default:
 						next(new Error('the confined endpoint failed'));

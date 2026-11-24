@@ -40,7 +40,6 @@ vi.mock('@/composables/use-item', async () => {
 			save: holders.itemSave,
 			remove: vi.fn(),
 			deleting: ref(false),
-			isBatch: ref(false),
 		}),
 	};
 });

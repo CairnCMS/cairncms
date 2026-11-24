@@ -17,6 +17,7 @@ import type {
 	NESTED_EXTENSION_TYPES,
 	SplitEntrypoint,
 } from '@cairncms/constants';
+import type { BaseException, extensionExceptions } from '@cairncms/exceptions';
 import type { Knex } from 'knex';
 import type { Logger } from 'pino';
 import type { z } from 'zod';
@@ -107,9 +108,47 @@ export type ExtensionSettingsReader = {
 	get(key: string, options?: { scope: 'collection'; collection: string }): Promise<unknown>;
 };
 
+type ApiExceptionConstructor = new (...args: any[]) => BaseException;
+
+/**
+ * The exception classes an extension or operation receives as `exceptions`. The common classes are typed exactly. The
+ * other classes are typed only as constructors, so their arguments and details are not checked.
+ */
+export type ExtensionExceptions = typeof extensionExceptions & {
+	AdminMutationUnverifiedTransactionException: ApiExceptionConstructor;
+	ConcurrencyConflictException: ApiExceptionConstructor;
+	ConfigApplyFailedException: ApiExceptionConstructor;
+	ConfigApplyScopeMismatchException: ApiExceptionConstructor;
+	ConfigFolderInUseException: ApiExceptionConstructor;
+	ConfigIdentityConflictException: ApiExceptionConstructor;
+	ConfigInvalidException: ApiExceptionConstructor;
+	ConfigPlaceholderUnresolvedException: ApiExceptionConstructor;
+	ConfigPostCommitFailedException: ApiExceptionConstructor;
+	ConfigProtectedRecordException: ApiExceptionConstructor;
+	ConfigReadFailedException: ApiExceptionConstructor;
+	ConfigSchemaSourceException: ApiExceptionConstructor;
+	ConfigStateChangedException: ApiExceptionConstructor;
+	ConfigUnsupportedVersionException: ApiExceptionConstructor;
+	DestructiveChangesRequiredException: ApiExceptionConstructor;
+	GraphQLValidationException: ApiExceptionConstructor;
+	IllegalAssetTransformation: ApiExceptionConstructor;
+	InvalidConfigException: ApiExceptionConstructor;
+	InvalidIPException: ApiExceptionConstructor;
+	InvalidOTPException: ApiExceptionConstructor;
+	InvalidProviderException: ApiExceptionConstructor;
+	InvalidTokenException: ApiExceptionConstructor;
+	RangeNotSatisfiableException: ApiExceptionConstructor;
+	SchemaApplyFailedException: ApiExceptionConstructor;
+	SchemaPostCommitFailedException: ApiExceptionConstructor;
+	SchemaStateChangedException: ApiExceptionConstructor;
+	TokenExpiredException: ApiExceptionConstructor;
+	UnexpectedResponseException: ApiExceptionConstructor;
+	UserSuspendedException: ApiExceptionConstructor;
+};
+
 export type ApiExtensionContext = {
 	services: any;
-	exceptions: any;
+	exceptions: ExtensionExceptions;
 	database: Knex;
 	env: Record<string, any>;
 	logger: Logger;

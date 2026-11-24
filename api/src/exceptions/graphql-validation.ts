@@ -1,6 +1,6 @@
 import * as sharedExceptions from '@cairncms/exceptions';
 
-export class GraphQLValidationException extends sharedExceptions.BaseException {
+export class GraphQLValidationException extends sharedExceptions.BaseException<Record<string, unknown>> {
 	constructor(extensions: Record<string, any>) {
 		super('GraphQL validation error.', 400, 'GRAPHQL_VALIDATION_EXCEPTION', extensions);
 	}

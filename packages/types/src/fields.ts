@@ -1,6 +1,7 @@
 import type { Column } from '@cairncms/schema';
 import type { FUNCTIONS, GEOMETRY_FORMATS, GEOMETRY_TYPES, LOCAL_TYPES, TYPES } from '@cairncms/constants';
-import type { Filter, FilterOperator } from './filter.js';
+import type { FailedValidationExtensions } from '@cairncms/exceptions';
+import type { Filter } from './filter.js';
 import type { DeepPartial } from './misc.js';
 
 type Translations = {
@@ -60,14 +61,11 @@ export type RawField = DeepPartial<Field> & { field: string; type: Type };
 
 export type ValidationError = {
 	code: string;
-	collection: string;
+	collection?: string;
 	field: string;
-	type: FilterOperator;
+	type?: FailedValidationExtensions['type'];
 	hidden?: boolean;
 	group: string | null;
-	valid?: number | string | (number | string)[];
-	invalid?: number | string | (number | string)[];
-	substring?: string;
 };
 
 export type Condition = {

@@ -1,3 +1,4 @@
+import { InvalidQueryException } from '@cairncms/exceptions';
 import type { Range } from '@cairncms/storage';
 import { parseJSON } from '@cairncms/utils';
 import contentDisposition from 'content-disposition';
@@ -6,7 +7,7 @@ import { merge, pick } from 'lodash-es';
 import { ASSET_TRANSFORM_QUERY_KEYS, SYSTEM_ASSET_ALLOW_LIST } from '../constants.js';
 import getDatabase from '../database/index.js';
 import env from '../env.js';
-import { InvalidQueryException, RangeNotSatisfiableException } from '../exceptions/index.js';
+import { RangeNotSatisfiableException } from '../exceptions/index.js';
 import logger from '../logger.js';
 import extractCookieSession from '../middleware/extract-cookie-session.js';
 import useCollection from '../middleware/use-collection.js';
@@ -177,7 +178,10 @@ router.get(
 			const rangeParts = /bytes=([0-9]*)-([0-9]*)/.exec(req.headers.range);
 
 			if (rangeParts && rangeParts.length > 1) {
-				range = {};
+				range = {
+					start: undefined,
+					end: undefined,
+				};
 
 				if (rangeParts[1]) {
 					range.start = Number(rangeParts[1]);

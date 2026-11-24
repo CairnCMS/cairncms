@@ -1,6 +1,6 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import type { Knex } from 'knex';
 import { PARENT_CYCLE_GUARDED_COLLECTIONS } from '../constants.js';
-import { InvalidPayloadException } from '../exceptions/index.js';
 import type { PrimaryKey } from '../types/index.js';
 
 function canonical(value: unknown): unknown {

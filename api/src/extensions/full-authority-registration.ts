@@ -1,4 +1,3 @@
-import * as sharedExceptions from '@cairncms/exceptions';
 import type {
 	ActionHandler,
 	ApiExtensionContext,
@@ -17,12 +16,12 @@ import getDatabase from '../database/index.js';
 import type { Emitter } from '../emitter.js';
 import emitter from '../emitter.js';
 import env from '../env.js';
-import * as exceptions from '../exceptions/index.js';
 import { getFlowManager } from '../flows.js';
 import logger from '../logger.js';
 import * as services from '../services/index.js';
 import type { EventHandler } from '../types/index.js';
 import { getSchema } from '../utils/get-schema.js';
+import { createExtensionExceptions } from './exceptions-context.js';
 
 // The manager owns the mutable registration state and injects it here per call. This module
 // creates none of it, so registration side effects stay visible in the coordinator.
@@ -43,7 +42,7 @@ function buildContext(
 ): ApiExtensionContext & { emitter: Emitter } {
 	return {
 		services,
-		exceptions: { ...exceptions, ...sharedExceptions },
+		exceptions: createExtensionExceptions(),
 		env,
 		database: getDatabase(),
 		emitter: deps.apiEmitter,

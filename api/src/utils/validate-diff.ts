@@ -1,5 +1,5 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import Joi from 'joi';
-import { InvalidPayloadException } from '../exceptions/invalid-payload.js';
 import type { Snapshot, SnapshotDiffWithHash } from '../types/snapshot.js';
 import { DiffKind } from '../types/snapshot.js';
 import { isEntityDelete } from './is-entity-delete.js';

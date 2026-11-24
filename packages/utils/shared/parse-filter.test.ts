@@ -262,3 +262,117 @@ describe('non-object filter inputs', () => {
 		expect(parseFilter(true as any, null)).toStrictEqual({ _eq: true });
 	});
 });
+
+describe('spatial operands', () => {
+	const point = { type: 'Point', coordinates: [4.9, 52.37] };
+	const operators = ['_intersects', '_nintersects', '_intersects_bbox', '_nintersects_bbox'];
+
+	it.each(operators)('parses a GeoJSON string for %s', (operator) => {
+		const filter = { location: { [operator]: JSON.stringify(point) } } as Filter;
+
+		expect(parseFilter(filter, null)).toStrictEqual({ location: { [operator]: point } });
+	});
+
+	it.each(operators)('keeps a GeoJSON object for %s', (operator) => {
+		const filter = { location: { [operator]: point } } as Filter;
+
+		expect(parseFilter(filter, null)).toStrictEqual({ location: { [operator]: point } });
+	});
+
+	it.each(['{"type":', '', '"null"', ' null ', '5', '[0, 0]', '"$CURRENT_USER.region"'])(
+		'keeps %j unchanged because it does not decode to an object',
+		(operand) => {
+			const filter = { location: { _intersects: operand } } as Filter;
+
+			expect(parseFilter(filter, null)).toStrictEqual({ location: { _intersects: operand } });
+		}
+	);
+
+	it('resolves a $CURRENT_USER geometry from the filter context', () => {
+		const region = {
+			type: 'Polygon',
+			coordinates: [
+				[
+					[0, 0],
+					[1, 0],
+					[1, 1],
+					[0, 1],
+					[0, 0],
+				],
+			],
+		};
+
+		const filter = { location: { _intersects: '$CURRENT_USER.region' } } as Filter;
+		const context = { $CURRENT_USER: { region } as any };
+
+		expect(parseFilter(filter, { role: 'role', user: 'user' }, context)).toStrictEqual({
+			location: { _intersects: region },
+		});
+	});
+
+	it('resolves $CURRENT_USER alone to the user', () => {
+		const filter = { owner_area: { _intersects: '$CURRENT_USER' } } as Filter;
+
+		expect(parseFilter(filter, { role: 'role', user: 'user' })).toStrictEqual({ owner_area: { _intersects: 'user' } });
+	});
+
+	it('keeps a JSON string on a non-spatial operator', () => {
+		const filter = { name: { _eq: JSON.stringify(point) } } as Filter;
+
+		expect(parseFilter(filter, null)).toStrictEqual({ name: { _eq: JSON.stringify(point) } });
+	});
+});
+
+describe('case-insensitive text operands', () => {
+	const operators = ['_icontains', '_istarts_with', '_nistarts_with', '_iends_with', '_niends_with'];
+
+	it.each(operators)('keeps literal text that would otherwise become a boolean or null for %s', (operator) => {
+		for (const operand of ['true', 'false', 'null', 'NULL']) {
+			const filter = { code: { [operator]: operand } } as Filter;
+
+			expect(parseFilter(filter, null)).toStrictEqual({ code: { [operator]: operand } });
+		}
+	});
+
+	it.each(operators)('resolves a dynamic variable for %s', (operator) => {
+		const filter = { code: { [operator]: '$CURRENT_USER.prefix' } } as Filter;
+		const context = { $CURRENT_USER: { prefix: 'tenant-a' } as any };
+
+		expect(parseFilter(filter, { role: 'role', user: 'user' }, context)).toStrictEqual({
+			code: { [operator]: 'tenant-a' },
+		});
+
+		expect(parseFilter(filter, { role: 'role', user: 'user' }, { $CURRENT_USER: {} as any })).toStrictEqual({
+			code: { [operator]: null },
+		});
+	});
+
+	it.each(['_istarts_with', '_nistarts_with', '_iends_with', '_niends_with'])(
+		'resolves a dynamic variable that yields no value to null for %s',
+		(operator) => {
+			const filter = { code: { [operator]: '$NOW(not a duration)' } } as Filter;
+
+			expect(parseFilter(filter, null)).toStrictEqual({ code: { [operator]: null } });
+		}
+	);
+
+	it.each(operators)('keeps an operand that was left out as undefined for %s', (operator) => {
+		const filter = { code: { [operator]: undefined } } as Filter;
+
+		expect(parseFilter(filter, null)).toStrictEqual({ code: { [operator]: undefined } });
+	});
+
+	it.each(operators)('keeps a boolean or null operand for %s as it is', (operator) => {
+		for (const operand of [true, false, null]) {
+			const filter = { code: { [operator]: operand } } as Filter;
+
+			expect(parseFilter(filter, null)).toStrictEqual({ code: { [operator]: operand } });
+		}
+	});
+
+	it.each(['_eq', '_contains', '_starts_with'])('converts the text true to a boolean for %s', (operator) => {
+		const filter = { code: { [operator]: 'true' } } as Filter;
+
+		expect(parseFilter(filter, null)).toStrictEqual({ code: { [operator]: true } });
+	});
+});

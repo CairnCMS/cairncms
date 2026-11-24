@@ -80,4 +80,34 @@ describe('Services / GraphQL / execute suggestion suppression', () => {
 		expect(messages).toContain('Did you mean');
 		expect(messages).toContain('headline');
 	});
+
+	it('sends each validation error in the formatted shape, keeping its path and leaving out the stack', async () => {
+		MOCK_ENV['GRAPHQL_INTROSPECTION'] = false;
+
+		const query = '{ query_abcd1234: headlin }';
+
+		const service = new GraphQLService({
+			accountability: null,
+			schema: { collections: {}, relations: [] },
+			scope: 'items',
+		});
+
+		vi.spyOn(service, 'getSchema').mockReturnValue(minimalSchema);
+
+		const error = await service
+			.execute({ query, variables: null, operationName: null, document: parse(query), contextValue: {} })
+			.catch((caught: unknown) => caught);
+
+		expect(error).toBeInstanceOf(GraphQLValidationException);
+
+		expect((error as InstanceType<typeof GraphQLValidationException>).extensions).toEqual({
+			graphqlErrors: [
+				{
+					message: 'Cannot query field "headlin" on type "Query".',
+					locations: [{ line: 1, column: 3 }],
+					path: ['query_abcd1234'],
+				},
+			],
+		});
+	});
 });

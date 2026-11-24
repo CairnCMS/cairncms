@@ -1,9 +1,9 @@
+import { ForbiddenException } from '@cairncms/exceptions';
 import type { Accountability } from '@cairncms/types';
 import { Action } from '@cairncms/constants';
 import { uniq } from 'lodash-es';
 import validateUUID from 'uuid-validate';
 import env from '../env.js';
-import { ForbiddenException } from '../exceptions/forbidden.js';
 import logger from '../logger.js';
 import type { AbstractServiceOptions, Item, MutationOptions, PrimaryKey } from '../types/index.js';
 import { getPermissions } from '../utils/get-permissions.js';

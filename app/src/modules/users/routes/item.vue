@@ -144,7 +144,6 @@
 				:fields="formFields"
 				:loading="loading"
 				:initial-values="item"
-				:batch-mode="isBatch"
 				:primary-key="primaryKey"
 				:validation-errors="validationErrors"
 			/>
@@ -166,17 +165,13 @@
 		<template #sidebar>
 			<user-info-sidebar-detail :is-new="isNew" :user="item" />
 			<revisions-drawer-detail
-				v-if="isBatch === false && isNew === false && revisionsAllowed"
+				v-if="isNew === false && revisionsAllowed"
 				ref="revisionsDrawerDetail"
 				collection="directus_users"
 				:primary-key="primaryKey"
 				@revert="revert"
 			/>
-			<comments-sidebar-detail
-				v-if="isBatch === false && isNew === false"
-				collection="directus_users"
-				:primary-key="primaryKey"
-			/>
+			<comments-sidebar-detail v-if="isNew === false" collection="directus_users" :primary-key="primaryKey" />
 		</template>
 	</private-view>
 </template>
@@ -241,7 +236,6 @@ const {
 	remove,
 	deleting,
 	saveAsCopy,
-	isBatch,
 	archive,
 	archiving,
 	isArchived,
@@ -278,7 +272,7 @@ const title = computed(() => {
 const { loading: previewLoading, avatarSrc, roleName } = useUserPreview();
 
 const { createAllowed, deleteAllowed, archiveAllowed, saveAllowed, updateAllowed, revisionsAllowed, fields } =
-	usePermissions(ref('directus_users'), item, isNew, { primaryKey, loading, error, isNewOrEmptySingleton, isBatch });
+	usePermissions(ref('directus_users'), item, isNew, { primaryKey, loading, error, isNewOrEmptySingleton });
 
 // These fields will be shown in the sidebar instead
 const fieldsDenyList = ['id', 'last_page', 'created_on', 'created_by', 'modified_by', 'modified_on', 'last_access'];

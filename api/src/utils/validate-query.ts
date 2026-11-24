@@ -1,9 +1,9 @@
+import { InvalidQueryException } from '@cairncms/exceptions';
 import type { Query } from '@cairncms/types';
 import Joi from 'joi';
 import { isPlainObject, uniq } from 'lodash-es';
 import { stringify } from 'wellknown';
 import env from '../env.js';
-import { InvalidQueryException } from '../exceptions/invalid-query.js';
 import { calculateFieldDepth } from './calculate-field-depth.js';
 import { getQueryLimitConfig, hasFiniteMax } from './query-limit.js';
 
@@ -115,8 +115,12 @@ function validateFilter(filter: Query['filter']) {
 				case '_ncontains':
 				case '_starts_with':
 				case '_nstarts_with':
+				case '_istarts_with':
+				case '_nistarts_with':
 				case '_ends_with':
 				case '_nends_with':
+				case '_iends_with':
+				case '_niends_with':
 				case '_gt':
 				case '_gte':
 				case '_lt':

@@ -1,3 +1,4 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import { normalizeConfigKey, toArray } from '@cairncms/utils';
 import Joi from 'joi';
 import { isEqual, isPlainObject } from 'lodash-es';
@@ -6,7 +7,6 @@ import { isInternalTable } from '../../../database/internal-tables.js';
 import env from '../../../env.js';
 import { ConfigInvalidException } from '../../../exceptions/config-invalid.js';
 import { ConfigReadFailedException } from '../../../exceptions/config-read-failed.js';
-import { InvalidPayloadException } from '../../../exceptions/invalid-payload.js';
 import type {
 	ConfigFailure,
 	ConfigPlanChange,

@@ -1,8 +1,8 @@
-import { KNEX_TYPES } from '@cairncms/constants';
+import { TYPES } from '@cairncms/constants';
+import { ForbiddenException, InvalidPayloadException } from '@cairncms/exceptions';
 import type { Field, RawField, Relation, SchemaOverview } from '@cairncms/types';
 import type { Diff } from 'deep-diff';
 import { get } from 'lodash-es';
-import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
 import { DiffKind } from '../types/index.js';
 
 /**
@@ -228,19 +228,7 @@ export function assertFieldTypeIsSupported(field: Pick<RawField | Field, 'type' 
 	if (type === 'alias' || type === 'unknown') return;
 	if (field.schema?.has_auto_increment) return;
 
-	if (
-		type === 'string' ||
-		type === 'csv' ||
-		type === 'hash' ||
-		type === 'dateTime' ||
-		type === 'timestamp' ||
-		type === 'float' ||
-		type === 'decimal' ||
-		type.startsWith('geometry') ||
-		KNEX_TYPES.includes(type as (typeof KNEX_TYPES)[number])
-	) {
-		return;
-	}
+	if (TYPES.includes(type as (typeof TYPES)[number])) return;
 
 	throw new InvalidPayloadException(`Illegal type passed: "${type}"`);
 }

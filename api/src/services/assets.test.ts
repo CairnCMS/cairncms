@@ -1,3 +1,4 @@
+import { ForbiddenException, ServiceUnavailableException } from '@cairncms/exceptions';
 import type { Driver } from '@cairncms/storage';
 import { Readable } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
@@ -8,12 +9,7 @@ import { createTracker, MockClient, Tracker } from 'knex-mock-client';
 import type { MockedFunction } from 'vitest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import env from '../env.js';
-import {
-	ForbiddenException,
-	IllegalAssetTransformation,
-	RangeNotSatisfiableException,
-	ServiceUnavailableException,
-} from '../exceptions/index.js';
+import { IllegalAssetTransformation, RangeNotSatisfiableException } from '../exceptions/index.js';
 import { AssetsService } from './assets.js';
 
 const VALID_UUID = '11111111-2222-4333-8444-555555555555';
@@ -253,9 +249,9 @@ describe('AssetsService.statAsset (GHSA-rv78-qqrq-73m5)', () => {
 			primeKnex(tracker);
 			const service = new AssetsService({ knex: db, accountability: adminAccountability, schema });
 
-			await expect(service.statAsset(VALID_UUID, { transformationParams: {} }, {})).rejects.toBeInstanceOf(
-				RangeNotSatisfiableException
-			);
+			await expect(
+				service.statAsset(VALID_UUID, { transformationParams: {} }, { start: undefined, end: undefined })
+			).rejects.toBeInstanceOf(RangeNotSatisfiableException);
 
 			expect(storageRead).not.toHaveBeenCalled();
 		});

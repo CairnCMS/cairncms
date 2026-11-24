@@ -1,3 +1,5 @@
+import { GEOMETRY_TYPES } from '@cairncms/constants';
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import type { Field, RawField } from '@cairncms/types';
 import type { Knex } from 'knex';
 import type { GeoJSONGeometry } from 'wellknown';
@@ -17,9 +19,17 @@ export abstract class GeometryHelper extends DatabaseHelper {
 		return expression.wrap('NOT ', '');
 	}
 
+	protected geometrySubtype(field: RawField | Field): (typeof GEOMETRY_TYPES)[number] | undefined {
+		if (field.type === 'geometry') return undefined;
+
+		const subtype = GEOMETRY_TYPES.find((name) => field.type === `geometry.${name}`);
+		if (!subtype) throw new InvalidPayloadException(`Illegal type passed: "${field.type}"`);
+
+		return subtype;
+	}
+
 	createColumn(table: Knex.CreateTableBuilder, field: RawField | Field) {
-		const type = field.type.split('.')[1] ?? 'geometry';
-		return table.specificType(field.field, type);
+		return table.specificType(field.field, this.geometrySubtype(field) ?? 'geometry');
 	}
 
 	asText(table: string, column: string): Knex.Raw {

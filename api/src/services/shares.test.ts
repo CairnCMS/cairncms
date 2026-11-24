@@ -1,10 +1,10 @@
+import { ForbiddenException, InvalidPayloadException } from '@cairncms/exceptions';
 import type { Accountability, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import knex from 'knex';
 import { MockClient, Tracker, createTracker } from 'knex-mock-client';
 import type { MockedFunction } from 'vitest';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
 import { AuthorizationService } from './authorization.js';
 import { ItemsService } from './items.js';
 import { SharesService } from './shares.js';

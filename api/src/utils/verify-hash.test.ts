@@ -1,6 +1,6 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import argon2 from 'argon2';
 import { describe, expect, it } from 'vitest';
-import { InvalidPayloadException } from '../exceptions/index.js';
 import { verifyHash } from './verify-hash.js';
 
 describe('verifyHash', () => {

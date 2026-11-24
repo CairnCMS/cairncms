@@ -2,11 +2,11 @@
  * Generate an AST based on a given collection and query
  */
 
+import { InvalidQueryException } from '@cairncms/exceptions';
 import type { Accountability, PermissionsAction, Query, SchemaOverview } from '@cairncms/types';
 import { getBetweenParens } from '@cairncms/utils';
 import type { Knex } from 'knex';
 import { cloneDeep, isEmpty, mapKeys, omitBy, uniq } from 'lodash-es';
-import { InvalidQueryException } from '../exceptions/invalid-query.js';
 import type { AST, FieldNode, FunctionFieldNode, NestedCollectionNode } from '../types/index.js';
 import { getRelationType } from '../utils/get-relation-type.js';
 

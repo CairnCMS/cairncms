@@ -1,3 +1,4 @@
+import type { Filter } from '@cairncms/types';
 import { describe, expect, test } from 'vitest';
 
 import config from './index.js';
@@ -129,6 +130,31 @@ describe('Operations / Condition', () => {
 			expect(err).toHaveLength(1);
 			expect(err[0]!.path).toEqual(['some_field']);
 			expect(err[0]!.type).toBe('string.pattern.base');
+		}
+	});
+
+	test.each([
+		['_contains', 'abc', 'xyz', 'string.contains'],
+		['_icontains', 'abc', 'xyz', 'string.contains'],
+		['_icontains', null, 'xyz', 'any.only'],
+		['_starts_with', 'abc', 'xyz', 'string.pattern.name'],
+		['_nstarts_with', 'abc', 'abcd', 'string.pattern.invert.name'],
+		['_ends_with', 'abc', 'xyz', 'string.pattern.name'],
+		['_ends_with', 'abc', 42, 'string.base'],
+		['_nends_with', 'abc', 'dabc', 'string.pattern.invert.name'],
+		['_istarts_with', 'abc', 'xyz', 'string.pattern.name'],
+		['_nistarts_with', 'abc', 'ABCd', 'string.pattern.invert.name'],
+		['_iends_with', 'abc', 'xyz', 'string.pattern.name'],
+		['_niends_with', 'abc', 'dABC', 'string.pattern.invert.name'],
+	])('reports a failed %s rule with operand %j against %j as %s', (operator, operand, value, type) => {
+		const filter = { field: { [operator]: operand } } as Filter;
+
+		expect.assertions(1);
+
+		try {
+			config.handler({ filter }, { data: { field: value } } as any);
+		} catch (err: any) {
+			expect(err).toStrictEqual([{ path: ['field'], type }]);
 		}
 	});
 });

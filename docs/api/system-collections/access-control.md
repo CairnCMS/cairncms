@@ -160,7 +160,7 @@ A permission row is a tuple of role, collection, and action plus the rules that 
 - **`presets`** — default values automatically merged into create payloads.
 - **`fields`** — array of field names the role is allowed to see (on read) or modify (on create/update). The wildcard `*` allows all fields.
 
-A read or write that matches no permission row for a non-admin role is denied. The `permissions`, `validation`, and `presets` filters can reference filter variables (`$NOW`, `$CURRENT_USER`, `$CURRENT_ROLE`) to scope rules per caller.
+A read or write that matches no permission row for a non-admin role is denied. The `permissions`, `validation`, and `presets` filters can reference filter variables (`$NOW`, `$CURRENT_USER`, `$CURRENT_ROLE`) to scope rules per caller. If a permission's `$CURRENT_USER` or `$CURRENT_ROLE` path no longer exists, for example because a field or relation was deleted, CairnCMS ignores that permission and logs a warning. A request that no other permission allows is then denied.
 
 Permissions on system collections work the same way as permissions on user collections, with one caveat: the platform-managed minimum permissions for app-access roles are projected at read time rather than stored as rows, so they are invisible to `/permissions` queries. See [Roles and permissions](/docs/manage/config-as-code/resources/roles-and-permissions/#permission-documents) for their config-as-code behavior.
 

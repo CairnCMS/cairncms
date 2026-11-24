@@ -18,6 +18,7 @@ const childCollection = `test_mqe_child_${runId}`;
 
 const tenantReaderToken = `MqeTenantReader_${runId}`;
 const userEditorToken = `MqeUserEditor_${runId}`;
+const userDeleterToken = `MqeUserDeleter_${runId}`;
 const childWriteOnlyToken = `MqeChildWriteOnly_${runId}`;
 const childPartialReadToken = `MqeChildPartialRead_${runId}`;
 const childReaderToken = `MqeChildReader_${runId}`;
@@ -85,6 +86,32 @@ async function createUser(api: Api, email: string, title: string) {
 	return response.body.data.id as string;
 }
 
+type DisposableUser = { id: string; email: string; notification: number };
+
+async function createSender(
+	api: Api,
+	email: string,
+	title: string,
+	recipient: string,
+	register: Register
+): Promise<DisposableUser> {
+	const id = await createUser(api, email, title);
+
+	register(async () => {
+		await request(api.url).delete(`/users/${id}`).set('Authorization', `Bearer ${api.adminToken}`);
+	});
+
+	const subject = `Sent by ${id}`;
+	await api.database('directus_notifications').insert({ recipient, sender: id, subject, timestamp: new Date() });
+
+	register(async () => {
+		await api.database('directus_notifications').where({ subject }).delete();
+	});
+
+	const notification = await api.database('directus_notifications').where({ subject }).first('id');
+	return { id, email, notification: notification.id };
+}
+
 type Fixture = { tenantReaderRole: string };
 
 type Scenario = {
@@ -92,7 +119,7 @@ type Scenario = {
 	parent: number;
 	soloParent: number;
 	children: Record<'visible' | 'hidden' | 'solo', number>;
-	users: Record<'visible' | 'hidden', { id: string; email: string }>;
+	users: Record<'visible' | 'hidden' | 'outsider', DisposableUser>;
 };
 
 async function readRow(api: Api, collection: string, id: number | string, fields = '*') {
@@ -179,6 +206,11 @@ const test = createApiTest({
 							email: { _ends_with: userDomain },
 						});
 
+						await grant(api, userEditor, 'directus_users', 'delete', ['*'], { email: { _ends_with: userDomain } });
+
+						const userDeleter = await createRoleUser(api, `MQE User Deleter ${runId}`, userDeleterToken, track);
+						await grant(api, userDeleter, 'directus_users', 'delete', ['*'], { email: { _ends_with: userDomain } });
+
 						const childWriteOnly = await createRoleUser(
 							api,
 							`MQE Child Write Only ${runId}`,
@@ -227,44 +259,52 @@ const test = createApiTest({
 		async ({ api, fixture, teardownFailures }, use) => {
 			void fixture;
 
-			for (const table of [itemsCollection, childCollection, parentCollection]) {
-				await api.database(table).delete();
-			}
-
-			const item = (label: string, secret: string, tenant: string) =>
-				createItem(api, itemsCollection, { label, secret, tenant });
-
-			const parent = await createItem(api, parentCollection, { name: 'Parent' });
-			const soloParent = await createItem(api, parentCollection, { name: 'Solo parent' });
-			const marker = randomUUID().slice(0, 8);
-			const visibleEmail = `${visibleUserMarker}-${marker}${userDomain}`;
-			const hiddenEmail = `mqe-hidden-${marker}${userDomain}`;
-
-			const scenario: Scenario = {
-				items: {
-					a1: await item('A one', 'alpha', 'A'),
-					a2: await item('A two', 'beta', 'A'),
-					b1: await item('B one', 'alpha', 'B'),
-				},
-				parent,
-				soloParent,
-				children: {
-					visible: await createItem(api, childCollection, { name: 'Visible child', parent_id: parent }),
-					hidden: await createItem(api, childCollection, { name: 'Hidden child', parent_id: parent }),
-					solo: await createItem(api, childCollection, { name: 'Solo child', parent_id: soloParent }),
-				},
-				users: {
-					visible: { id: await createUser(api, visibleEmail, 'Visible title'), email: visibleEmail },
-					hidden: { id: await createUser(api, hiddenEmail, 'Hidden title'), email: hiddenEmail },
-				},
-			};
+			const cleanups: Array<() => Promise<void>> = [];
+			const track: Register = (fn) => cleanups.push(fn);
 
 			try {
+				for (const table of [itemsCollection, childCollection, parentCollection]) {
+					await api.database(table).delete();
+				}
+
+				const item = (label: string, secret: string, tenant: string) =>
+					createItem(api, itemsCollection, { label, secret, tenant });
+
+				const parent = await createItem(api, parentCollection, { name: 'Parent' });
+				const soloParent = await createItem(api, parentCollection, { name: 'Solo parent' });
+				const marker = randomUUID().slice(0, 8);
+				const visibleEmail = `${visibleUserMarker}-${marker}${userDomain}`;
+				const hiddenEmail = `mqe-hidden-${marker}${userDomain}`;
+				const outsiderEmail = `${visibleUserMarker}-${marker}@mqe-outside-${runId}.test`;
+
+				const me = await setupRequest(api.url).get('/users/me').set('Authorization', `Bearer ${api.adminToken}`);
+				const recipient = me.body.data.id as string;
+
+				const scenario: Scenario = {
+					items: {
+						a1: await item('A one', 'alpha', 'A'),
+						a2: await item('A two', 'beta', 'A'),
+						b1: await item('B one', 'alpha', 'B'),
+					},
+					parent,
+					soloParent,
+					children: {
+						visible: await createItem(api, childCollection, { name: 'Visible child', parent_id: parent }),
+						hidden: await createItem(api, childCollection, { name: 'Hidden child', parent_id: parent }),
+						solo: await createItem(api, childCollection, { name: 'Solo child', parent_id: soloParent }),
+					},
+					users: {
+						visible: await createSender(api, visibleEmail, 'Visible title', recipient, track),
+						hidden: await createSender(api, hiddenEmail, 'Hidden title', recipient, track),
+						outsider: await createSender(api, outsiderEmail, 'Outsider title', recipient, track),
+					},
+				};
+
 				await use(scenario);
 			} finally {
-				for (const user of Object.values(scenario.users)) {
+				for (const cleanup of cleanups.reverse()) {
 					try {
-						await request(api.url).delete(`/users/${user.id}`).set('Authorization', `Bearer ${api.adminToken}`);
+						await cleanup();
 					} catch (error) {
 						teardownFailures.push(error);
 					}
@@ -364,6 +404,100 @@ describe('User query updates select only readable users', () => {
 		expect(response.statusCode).toBe(200);
 		expect(response.body.data.map((row: any) => row.id)).toEqual([scenario.users.visible.id]);
 		expect(await firstName(api, scenario.users.visible.id)).toBe('Edited');
+	});
+});
+
+const deleteUsers = (api: Api, token: string, body: Record<string, any>) =>
+	request(api.url).delete('/users').send(body).set('Authorization', `Bearer ${token}`);
+
+const userExists = async (api: Api, id: string) =>
+	(await api.database('directus_users').where({ id }).first('id')) !== undefined;
+
+const senderOf = async (api: Api, notification: number) =>
+	(await api.database('directus_notifications').where({ id: notification }).first('sender'))?.sender;
+
+async function expectUntouched(api: Api, user: DisposableUser) {
+	expect(await userExists(api, user.id)).toBe(true);
+	expect(await senderOf(api, user.notification)).toBe(user.id);
+}
+
+describe('User query deletes select only readable users', () => {
+	test('refuses a delete whose filter reads a user field the role cannot read', async ({ api, scenario }) => {
+		const response = await deleteUsers(api, userEditorToken, {
+			query: { filter: { title: { _eq: 'Visible title' } } },
+		});
+
+		expect(response.statusCode).toBe(403);
+		expect(response.body.errors[0].extensions.code).toBe('FORBIDDEN');
+		await expectUntouched(api, scenario.users.visible);
+	});
+
+	test('does not delete a deletable user outside the read scope', async ({ api, scenario }) => {
+		const response = await deleteUsers(api, userEditorToken, {
+			query: { filter: { email: { _eq: scenario.users.hidden.email } } },
+		});
+
+		expect(response.statusCode).toBe(204);
+		await expectUntouched(api, scenario.users.hidden);
+	});
+
+	test('deletes the selected user when an alias points the key at another user', async ({ api, scenario }) => {
+		const { visible, hidden } = scenario.users;
+		await api.database('directus_users').where({ id: visible.id }).update({ first_name: hidden.id });
+
+		const response = await deleteUsers(api, userEditorToken, {
+			query: { filter: { email: { _eq: visible.email } }, alias: { id: 'first_name' } },
+		});
+
+		expect(response.statusCode).toBe(204);
+		expect(await userExists(api, visible.id)).toBe(false);
+		await expectUntouched(api, hidden);
+	});
+
+	test('refuses a query delete from a role that can delete but not read users', async ({ api, scenario }) => {
+		const response = await deleteUsers(api, userDeleterToken, {
+			query: { filter: { email: { _eq: scenario.users.visible.email } } },
+		});
+
+		expect(response.statusCode).toBe(403);
+		expect(response.body.errors[0].extensions.code).toBe('FORBIDDEN');
+		await expectUntouched(api, scenario.users.visible);
+	});
+
+	test('deletes a readable user it may delete', async ({ api, scenario }) => {
+		const response = await deleteUsers(api, userEditorToken, {
+			query: { filter: { email: { _eq: scenario.users.visible.email } } },
+		});
+
+		expect(response.statusCode).toBe(204);
+		expect(await userExists(api, scenario.users.visible.id)).toBe(false);
+	});
+
+	test('deletes by key for a role that can delete but not read users', async ({ api, scenario }) => {
+		const { visible, hidden } = scenario.users;
+
+		const byKeys = await deleteUsers(api, userDeleterToken, { keys: [visible.id] });
+		expect(byKeys.statusCode).toBe(204);
+		expect(await userExists(api, visible.id)).toBe(false);
+
+		const byId = await request(api.url)
+			.delete(`/users/${hidden.id}`)
+			.set('Authorization', `Bearer ${userDeleterToken}`);
+
+		expect(byId.statusCode).toBe(204);
+		expect(await userExists(api, hidden.id)).toBe(false);
+	});
+
+	test('refuses a selection that includes a readable user it may not delete', async ({ api, scenario }) => {
+		const { visible, outsider } = scenario.users;
+
+		const response = await deleteUsers(api, userEditorToken, {
+			query: { filter: { email: { _in: [visible.email, outsider.email] } } },
+		});
+
+		expect(response.statusCode).toBe(403);
+		expect(await userExists(api, visible.id)).toBe(true);
+		expect(await userExists(api, outsider.id)).toBe(true);
 	});
 });
 

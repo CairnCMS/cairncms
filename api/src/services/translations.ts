@@ -1,7 +1,7 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import type { Item, PrimaryKey } from '@cairncms/types';
 import getDatabase from '../database/index.js';
 import { ItemsService } from './items.js';
-import { InvalidPayloadException } from '../exceptions/index.js';
 import type { AbstractServiceOptions } from '../types/services.js';
 import type { MutationOptions } from '../types/items.js';
 

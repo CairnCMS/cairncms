@@ -20,7 +20,12 @@ const MESSAGES: Record<SchemaPostCommitPhase, string> = {
 		'The schema change was committed, but foreign key restoration and cache invalidation failed afterward.',
 };
 
-export class SchemaPostCommitFailedException extends BaseException {
+type Extensions = {
+	committed: true;
+	phase: SchemaPostCommitPhase;
+};
+
+export class SchemaPostCommitFailedException extends BaseException<Extensions> {
 	constructor(phase: SchemaPostCommitPhase) {
 		super(MESSAGES[phase], 500, 'SCHEMA_POST_COMMIT_FAILED', {
 			committed: true,

@@ -1,6 +1,6 @@
+import { ForbiddenException, InvalidPayloadException } from '@cairncms/exceptions';
 import express from 'express';
 import Joi from 'joi';
-import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
 import validateCollection from '../middleware/collection-exists.js';
 import { respond } from '../middleware/respond.js';
 import useCollection from '../middleware/use-collection.js';

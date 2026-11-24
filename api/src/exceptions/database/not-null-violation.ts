@@ -5,7 +5,7 @@ type Exceptions = {
 	field: string;
 };
 
-export class NotNullViolationException extends BaseException {
+export class NotNullViolationException extends BaseException<Partial<Exceptions>> {
 	constructor(field: string, exceptions?: Exceptions) {
 		super(`Value for field "${field}" can't be null.`, 400, 'NOT_NULL_VIOLATION', exceptions);
 	}

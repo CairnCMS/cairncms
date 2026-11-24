@@ -1,7 +1,7 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import { normalizeConfigKey } from '@cairncms/utils';
 import type { Knex } from 'knex';
 import { cloneDeep, get, isPlainObject, merge, set } from 'lodash-es';
-import { InvalidPayloadException } from '../exceptions/index.js';
 import type { Snapshot, SnapshotField } from '../types/index.js';
 import { resolveFolderReference } from './config/folder-id-lookup.js';
 

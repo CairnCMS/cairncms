@@ -45,7 +45,6 @@ vi.mock('@/composables/use-item', () => ({
 		remove: vi.fn(),
 		deleting: ref(false),
 		saveAsCopy: vi.fn(),
-		isBatch: ref(false),
 		refresh: vi.fn(),
 		validationErrors: ref([]),
 	}),

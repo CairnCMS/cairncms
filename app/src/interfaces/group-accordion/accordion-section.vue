@@ -34,6 +34,7 @@
 </template>
 
 <script setup lang="ts">
+import { validationErrorMessage } from '@/utils/validation-error-message';
 import { Field, ValidationError } from '@cairncms/types';
 import { isNil, merge } from 'lodash';
 import { computed } from 'vue';
@@ -90,11 +91,7 @@ const validationMessage = computed(() => {
 	const validationError = props.validationErrors.find((error) => error.field === props.field.field);
 	if (validationError === undefined) return;
 
-	if (validationError.code === 'RECORD_NOT_UNIQUE') {
-		return t('validationError.unique');
-	} else {
-		return t(`validationError.${validationError.type}`, validationError);
-	}
+	return validationErrorMessage(validationError);
 });
 
 function handleModifier(event: MouseEvent, toggle: () => void) {

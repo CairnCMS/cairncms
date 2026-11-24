@@ -1,4 +1,4 @@
-import { BaseException } from '@cairncms/exceptions';
+import { BaseException, InvalidCredentialsException, ServiceUnavailableException } from '@cairncms/exceptions';
 import type { Accountability } from '@cairncms/types';
 import { parseJSON } from '@cairncms/utils';
 import express, { Router } from 'express';
@@ -11,13 +11,7 @@ import getDatabase from '../../database/index.js';
 import emitter from '../../emitter.js';
 import env from '../../env.js';
 import { RecordNotUniqueException } from '../../exceptions/database/record-not-unique.js';
-import {
-	InvalidConfigException,
-	InvalidCredentialsException,
-	InvalidProviderException,
-	InvalidTokenException,
-	ServiceUnavailableException,
-} from '../../exceptions/index.js';
+import { InvalidConfigException, InvalidProviderException, InvalidTokenException } from '../../exceptions/index.js';
 import logger from '../../logger.js';
 import { respond } from '../../middleware/respond.js';
 import { AuthenticationService } from '../../services/authentication.js';

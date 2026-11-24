@@ -5,6 +5,7 @@ import { deepMap } from './deep-map.js';
 import { getBetweenParens } from './get-between-parens.js';
 import { get } from './get-with-arrays.js';
 import { isDynamicVariable } from './is-dynamic-variable.js';
+import { parseJSON } from './parse-json.js';
 import { toArray } from './to-array.js';
 
 type ParseFilterContext = {
@@ -29,6 +30,10 @@ export function parseFilter(
 
 const logicalFilterOperators = ['_and', '_or'];
 const bypassOperators = ['_none', '_some'];
+
+const literalTextOperators = ['_icontains', '_istarts_with', '_nistarts_with', '_iends_with', '_niends_with'];
+
+const requiredOperandOperators = ['_istarts_with', '_nistarts_with', '_iends_with', '_niends_with'];
 
 function shiftLogicalOperatorsUp(filter: any): any {
 	if (!isObjectLike(filter)) return filter;
@@ -103,12 +108,30 @@ function parseFilterEntry(
 		return { [key]: value.map((filter: Filter) => parseFilterRecursive(filter, accountability, context)) };
 	} else if (['_in', '_nin', '_between', '_nbetween'].includes(String(key))) {
 		return { [key]: toArray(value).flatMap((value) => parseFilterValue(value, accountability, context)) } as Filter;
+	} else if (['_intersects', '_nintersects', '_intersects_bbox', '_nintersects_bbox'].includes(String(key))) {
+		return { [key]: parseFilterValue(parseGeoJSONString(value), accountability, context) };
+	} else if (literalTextOperators.includes(String(key))) {
+		if (!isDynamicVariable(value)) return { [key]: value };
+
+		const resolved = parseDynamicVariable(value, accountability, context);
+		return { [key]: resolved === undefined && requiredOperandOperators.includes(String(key)) ? null : resolved };
 	} else if (String(key).startsWith('_') && !bypassOperators.includes(key)) {
 		return { [key]: parseFilterValue(value, accountability, context) };
 	} else if (String(key).startsWith('item__') && isObjectLike(value)) {
 		return { [`item:${String(key).split('item__')[1]}`]: parseFilter(value, accountability, context) } as Filter;
 	} else {
 		return { [key]: parseFilterRecursive(value, accountability, context) } as Filter;
+	}
+}
+
+function parseGeoJSONString(value: unknown) {
+	if (typeof value !== 'string') return value;
+
+	try {
+		const parsed = parseJSON(value);
+		return isObjectLike(parsed) && !Array.isArray(parsed) ? parsed : value;
+	} catch {
+		return value;
 	}
 }
 

@@ -1,7 +1,7 @@
+import { RouteNotFoundException } from '@cairncms/exceptions';
 import type { RequestHandler } from 'express';
 import getDatabase from '../database/index.js';
 import emitter from '../emitter.js';
-import { RouteNotFoundException } from '../exceptions/index.js';
 
 /** Pathname for the 404 diagnostic, with any credentials in a malformed authority dropped. */
 function diagnosticPath(originalUrl: string): string {

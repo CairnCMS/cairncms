@@ -1,8 +1,8 @@
+import { InvalidQueryException } from '@cairncms/exceptions';
 import type { Accountability, Aggregate, Filter, Query } from '@cairncms/types';
 import { parseFilter, parseJSON } from '@cairncms/utils';
 import { flatten, get, isPlainObject, merge } from 'lodash-es';
 import { getEnv } from '../env.js';
-import { InvalidQueryException } from '../exceptions/invalid-query.js';
 import logger from '../logger.js';
 import { Meta } from '../types/index.js';
 import { getQueryLimitConfig, hasFiniteMax } from './query-limit.js';

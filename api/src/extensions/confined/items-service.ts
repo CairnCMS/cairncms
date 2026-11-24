@@ -1,8 +1,8 @@
+import { ForbiddenException } from '@cairncms/exceptions';
 import type { Accountability, Query, SchemaOverview } from '@cairncms/types';
 import type { Knex } from 'knex';
 import getDatabase from '../../database/index.js';
 import { isInternalTable } from '../../database/internal-tables.js';
-import { ForbiddenException } from '../../exceptions/index.js';
 import { ItemsService, type MutationTracker } from '../../services/items.js';
 import type { Item, MutationOptions, PrimaryKey } from '../../types/items.js';
 import { getSchema } from '../../utils/get-schema.js';

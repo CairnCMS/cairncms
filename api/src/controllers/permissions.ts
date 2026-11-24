@@ -1,5 +1,5 @@
+import { ForbiddenException, InvalidCredentialsException } from '@cairncms/exceptions';
 import express from 'express';
-import { ForbiddenException, InvalidCredentialsException } from '../exceptions/index.js';
 import { respond } from '../middleware/respond.js';
 import useCollection from '../middleware/use-collection.js';
 import { validateBatch } from '../middleware/validate-batch.js';

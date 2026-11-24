@@ -196,18 +196,34 @@ describe('#read', () => {
 
 		expect(stream).toBe(sample.stream);
 		expect(mockFile.createReadStream).toHaveBeenCalledOnce();
-		expect(mockFile.createReadStream).toHaveBeenCalledWith(undefined);
+		expect(mockFile.createReadStream).toHaveBeenCalledWith({});
+		expect(mockFile.createReadStream.mock.lastCall?.[0]).toStrictEqual({});
 	});
 
 	test('Passes optional range to createReadStream', async () => {
-		await driver.read('/path/to/file', { start: sample.range.start });
-		expect(mockFile.createReadStream).toHaveBeenCalledWith({ start: sample.range.start });
+		await driver.read('/path/to/file', { start: sample.range.start, end: undefined });
+		expect(mockFile.createReadStream).toHaveBeenCalledWith({ start: sample.range.start, end: undefined });
 
 		await driver.read('/path/to/file', sample.range);
 		expect(mockFile.createReadStream).toHaveBeenCalledWith(sample.range);
 
-		await driver.read('/path/to/file', { end: sample.range.end });
-		expect(mockFile.createReadStream).toHaveBeenCalledWith({ end: sample.range.end });
+		await driver.read('/path/to/file', { start: undefined, end: sample.range.end });
+		expect(mockFile.createReadStream).toHaveBeenCalledWith({ start: undefined, end: sample.range.end });
+	});
+
+	test.each([
+		[
+			{ start: 0, end: 0 },
+			{ start: 0, end: 0 },
+		],
+		[{ start: undefined, end: 0 }, { end: 0 }],
+		[{ start: 0, end: undefined }, { start: 0 }],
+		[{ start: 5, end: undefined }, { start: 5 }],
+		[{ start: undefined, end: 5 }, { end: 5 }],
+	])('passes only the defined bounds of %o', async (range, options) => {
+		await driver.read('/path/to/file', range);
+
+		expect(mockFile.createReadStream.mock.lastCall?.[0]).toStrictEqual(options);
 	});
 });
 

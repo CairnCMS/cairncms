@@ -1,8 +1,8 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import { ConfigInvalidException } from '../../exceptions/config-invalid.js';
 import { ConfigProtectedRecordException } from '../../exceptions/config-protected-record.js';
 import { ConfigSchemaSourceException } from '../../exceptions/config-schema-source.js';
 import { DestructiveChangesRequiredException } from '../../exceptions/destructive-changes-required.js';
-import { InvalidPayloadException } from '../../exceptions/invalid-payload.js';
 import type { ConfigManifest, ConfigPlan } from '../../types/config.js';
 import type { SnapshotField } from '../../types/index.js';
 import { assertSchemaDiffApplicable } from '../assert-schema-diff-applicable.js';

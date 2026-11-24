@@ -1,3 +1,4 @@
+import { ForbiddenException, InvalidPayloadException } from '@cairncms/exceptions';
 import type { SchemaInspector, Table } from '@cairncms/schema';
 import { createInspector } from '@cairncms/schema';
 import type { Accountability, FieldMeta, RawField, SchemaOverview } from '@cairncms/types';
@@ -14,7 +15,6 @@ import { isInternalTable } from '../database/internal-tables.js';
 import { systemCollectionRows } from '../database/system-data/collections/index.js';
 import emitter from '../emitter.js';
 import env from '../env.js';
-import { ForbiddenException, InvalidPayloadException } from '../exceptions/index.js';
 import { deleteSettingsByCollection } from '../services/extension-settings-store.js';
 import { FieldsService } from '../services/fields.js';
 import { ItemsService } from '../services/items.js';
@@ -30,6 +30,7 @@ import {
 	assertCollectionAbsent,
 	assertCollectionNameAllowed,
 	assertCollectionPresent,
+	assertFieldTypeIsSupported,
 } from '../utils/schema-diff-validators.js';
 import { shouldClearCache } from '../utils/should-clear-cache.js';
 
@@ -61,6 +62,12 @@ export class CollectionsService {
 		this.systemCache = systemCache;
 	}
 
+	private assertFieldTypesSupported(payload: RawCollection): void {
+		for (const field of payload.fields ?? []) {
+			if (field.type && ALIAS_TYPES.includes(field.type) === false) assertFieldTypeIsSupported(field);
+		}
+	}
+
 	/**
 	 * Create a single new collection
 	 */
@@ -70,6 +77,7 @@ export class CollectionsService {
 		}
 
 		assertCollectionNameAllowed(payload.collection);
+		this.assertFieldTypesSupported(payload);
 
 		const nestedActionEvents: ActionEventParams[] = [];
 
@@ -199,6 +207,12 @@ export class CollectionsService {
 	 * Create multiple new collections
 	 */
 	async createMany(payloads: RawCollection[], opts?: MutationOptions): Promise<string[]> {
+		if (this.accountability && this.accountability.admin !== true) {
+			throw new ForbiddenException();
+		}
+
+		for (const payload of payloads) this.assertFieldTypesSupported(payload);
+
 		const nestedActionEvents: ActionEventParams[] = [];
 
 		try {

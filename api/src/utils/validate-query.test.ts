@@ -156,3 +156,45 @@ describe('boolean and geometry flag validation', async () => {
 		expect(() => validateQuery({ filter: { location: { _intersects: '' } } } as any)).toThrowError('valid GeoJSON');
 	});
 });
+
+describe('case-insensitive starts and ends operands', async () => {
+	const validateQuery = await getValidateQuery();
+
+	test.each(['_istarts_with', '_nistarts_with', '_iends_with', '_niends_with'])('checks the %s operand', (operator) => {
+		const query = (operand: unknown) => ({ filter: { title: { [operator]: operand } } } as any);
+
+		expect(() => validateQuery(query('abc'))).not.toThrowError();
+		expect(() => validateQuery(query(''))).toThrowError(`You can't filter for an empty string`);
+		expect(() => validateQuery(query({ a: 1 }))).toThrowError('has to be a string, number, or boolean');
+	});
+});
+
+describe('spatial operand strings', async () => {
+	const validateQuery = await getValidateQuery();
+	const { parseFilter } = await import('@cairncms/utils');
+
+	const box = JSON.stringify({
+		type: 'Polygon',
+		coordinates: [
+			[
+				[0, 0],
+				[1, 0],
+				[1, 1],
+				[0, 1],
+				[0, 0],
+			],
+		],
+	});
+
+	test('accepts a GeoJSON string once the filter is parsed', () => {
+		const filter = parseFilter({ location: { _intersects_bbox: box } }, null);
+
+		expect(() => validateQuery({ filter } as Query)).not.toThrowError();
+	});
+
+	test.each(['{"type":', '"null"', ' null '])('still rejects %j once the filter is parsed', (operand) => {
+		const filter = parseFilter({ location: { _intersects: operand } }, null);
+
+		expect(() => validateQuery({ filter } as Query)).toThrowError('valid GeoJSON');
+	});
+});

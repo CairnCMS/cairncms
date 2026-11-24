@@ -1,5 +1,5 @@
+import { InvalidPayloadException } from '@cairncms/exceptions';
 import type { Knex } from 'knex';
-import { InvalidPayloadException } from '../exceptions/index.js';
 import { decryptSecret, encryptSecret, hasSecretMarker, SECRET_MASK } from '../utils/encrypt-secret.js';
 
 const TABLE = 'directus_operations';

@@ -1,10 +1,7 @@
+import { ServiceUnavailableException } from '@cairncms/exceptions';
 import jwt from 'jsonwebtoken';
 import { expect, test, vi } from 'vitest';
-import {
-	InvalidTokenException,
-	ServiceUnavailableException,
-	TokenExpiredException,
-} from '../../src/exceptions/index.js';
+import { InvalidTokenException, TokenExpiredException } from '../../src/exceptions/index.js';
 import type { CairnTokenPayload } from '../../src/types/index.js';
 import { verifyAccessJWT, verifyJWT } from '../../src/utils/jwt.js';
 
