@@ -1,8 +1,33 @@
 import type { Knex } from 'knex';
 import { getDatabaseVersion } from '../../../../database/index.js';
-import { SchemaHelper } from '../types.js';
+import { SchemaHelper, escapeLikeLiteral, literalAffixPattern, type AffixComparison } from '../types.js';
 
 export class SchemaHelperMySQL extends SchemaHelper {
+	/**
+	 * Lowercases both sides under the column's collation. Concatenating an empty slice of the column gives the operand
+	 * that collation, which can lowercase a letter differently from the connection's. A suffix is compared with the
+	 * column's trailing characters because the Unicode collations of MySQL 5.7 never match a pattern in which `%`
+	 * directly precedes an escaped `!`.
+	 */
+	override caseInsensitiveAffix(column: Knex.Raw | string, operand: string, comparison: AffixComparison): Knex.Raw {
+		const like = comparison.negate ? 'NOT LIKE' : 'LIKE';
+
+		if (comparison.position === 'start') {
+			return this.knex.raw(`LOWER(??) ${like} LOWER(CONCAT(?, LEFT(??, 0))) ESCAPE '!'`, [
+				column,
+				literalAffixPattern(operand, 'start'),
+				column,
+			]);
+		}
+
+		return this.knex.raw(`LOWER(RIGHT(??, CHAR_LENGTH(?))) ${like} LOWER(CONCAT(?, LEFT(??, 0))) ESCAPE '!'`, [
+			column,
+			operand,
+			escapeLikeLiteral(operand),
+			column,
+		]);
+	}
+
 	override applyMultiRelationalSort(
 		knex: Knex,
 		dbQuery: Knex.QueryBuilder,

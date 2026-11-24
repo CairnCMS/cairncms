@@ -609,15 +609,15 @@ describe('applyFilter case-insensitive starts and ends operators', () => {
 	});
 
 	it.each([
-		['_istarts_with', 'like', 'team!_a!!50!%%'],
-		['_nistarts_with', 'not like', 'team!_a!!50!%%'],
-		['_iends_with', 'like', '%team!_a!!50!%'],
-		['_niends_with', 'not like', '%team!_a!!50!%'],
-	])('matches a %s operand as lowercased literal text', (operator, comparison, pattern) => {
+		['_istarts_with', 'substr(CAST(LOWER(`notes`.`title`) AS BLOB), 1, length(CAST(LOWER(?) AS BLOB))) ='],
+		['_nistarts_with', 'substr(CAST(LOWER(`notes`.`title`) AS BLOB), 1, length(CAST(LOWER(?) AS BLOB))) <>'],
+		['_iends_with', 'substr(CAST(LOWER(`notes`.`title`) AS BLOB), -length(CAST(LOWER(?) AS BLOB))) ='],
+		['_niends_with', 'substr(CAST(LOWER(`notes`.`title`) AS BLOB), -length(CAST(LOWER(?) AS BLOB))) <>'],
+	])('compares a %s operand with the database lowercasing both sides', (operator, comparison) => {
 		const { sql, bindings } = compile({ title: { [operator]: 'Team_A!50%' } });
 
-		expect(sql.toLowerCase()).toContain(`lower(\`notes\`.\`title\`) ${comparison} ? escape '!'`);
-		expect(bindings).toEqual([pattern]);
+		expect(sql).toContain(`${comparison} CAST(LOWER(?) AS BLOB)`);
+		expect(bindings).toEqual(['Team_A!50%', 'Team_A!50%']);
 	});
 });
 

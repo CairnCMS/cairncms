@@ -746,17 +746,15 @@ export function applyFilter(
 			}
 
 			if (operator === '_istarts_with') {
-				dbQuery[logical].whereRaw(`LOWER(??) LIKE ? ESCAPE '!'`, [
-					selectionRaw,
-					`${escapeLikeOperand(compareValue.toLowerCase())}%`,
-				]);
+				dbQuery[logical].whereRaw(
+					helpers.schema.caseInsensitiveAffix(selectionRaw, compareValue, { position: 'start', negate: false })
+				);
 			}
 
 			if (operator === '_nistarts_with') {
-				dbQuery[logical].whereRaw(`LOWER(??) NOT LIKE ? ESCAPE '!'`, [
-					selectionRaw,
-					`${escapeLikeOperand(compareValue.toLowerCase())}%`,
-				]);
+				dbQuery[logical].whereRaw(
+					helpers.schema.caseInsensitiveAffix(selectionRaw, compareValue, { position: 'start', negate: true })
+				);
 			}
 
 			if (operator === '_ends_with') {
@@ -768,17 +766,15 @@ export function applyFilter(
 			}
 
 			if (operator === '_iends_with') {
-				dbQuery[logical].whereRaw(`LOWER(??) LIKE ? ESCAPE '!'`, [
-					selectionRaw,
-					`%${escapeLikeOperand(compareValue.toLowerCase())}`,
-				]);
+				dbQuery[logical].whereRaw(
+					helpers.schema.caseInsensitiveAffix(selectionRaw, compareValue, { position: 'end', negate: false })
+				);
 			}
 
 			if (operator === '_niends_with') {
-				dbQuery[logical].whereRaw(`LOWER(??) NOT LIKE ? ESCAPE '!'`, [
-					selectionRaw,
-					`%${escapeLikeOperand(compareValue.toLowerCase())}`,
-				]);
+				dbQuery[logical].whereRaw(
+					helpers.schema.caseInsensitiveAffix(selectionRaw, compareValue, { position: 'end', negate: true })
+				);
 			}
 
 			if (operator === '_gt') {
@@ -1031,9 +1027,4 @@ function getOperation(key: string, value: Record<string, any>): { operator: stri
 	}
 
 	return getOperation(Object.keys(value)[0]!, Object.values(value)[0]);
-}
-
-/** Escapes `!`, `%`, and `_` with `!`, so a pattern matched with `ESCAPE '!'` treats the operand as literal text. */
-function escapeLikeOperand(operand: string): string {
-	return operand.replace(/[!%_]/g, '!$&');
 }
