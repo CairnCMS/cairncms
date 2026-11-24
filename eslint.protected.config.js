@@ -33,11 +33,19 @@ const nodeHttpModules = ['http', 'node:http', 'https', 'node:https'];
 // The only values from Node's http and https modules that any file may import, because none sends a request.
 const nodeHttpSafeNames = ['STATUS_CODES', 'METHODS', 'validateHeaderName', 'validateHeaderValue'];
 
-/** Builds the outbound HTTP rules without the given clients, allowing the given extra values from http and https. */
-function outboundRules(clients = [], names = {}) {
+/**
+ * Builds the boundary rules for an API block: every HTTP client except `clients`, and every http and https value
+ * except `names`. All API blocks use this one helper, because a later block replaces a rule's options.
+ */
+function apiBoundaryRules({ clients = [], names = {} } = {}) {
 	const restricted = [...httpClients, ...nodeHttpModules].filter((name) => !clients.includes(name));
 	const moduleNames = restricted.map((name) => name.replace(/[.*+?^$(){}|[\]\\/]/g, '\\$&')).join('|');
 	const modulePattern = `/^(${moduleNames})(\\/.*)?$/`;
+
+	const syntax = [
+		{ selector: `CallExpression[callee.name='require'][arguments.0.value=${modulePattern}]`, message: outboundMessage },
+		{ selector: `ImportExpression[source.value=${modulePattern}]`, message: outboundMessage },
+	];
 
 	return {
 		'@typescript-eslint/no-restricted-imports': [
@@ -55,14 +63,7 @@ function outboundRules(clients = [], names = {}) {
 				patterns: [{ regex: `^(${moduleNames})/`, message: outboundMessage, allowTypeImports: true }],
 			},
 		],
-		'no-restricted-syntax': [
-			'error',
-			{
-				selector: `CallExpression[callee.name='require'][arguments.0.value=${modulePattern}]`,
-				message: outboundMessage,
-			},
-			{ selector: `ImportExpression[source.value=${modulePattern}]`, message: outboundMessage },
-		],
+		'no-restricted-syntax': ['error', ...syntax],
 		'no-restricted-globals': clients.includes('fetch') ? 'off' : ['error', { name: 'fetch', message: outboundMessage }],
 		'no-restricted-properties': clients.includes('fetch')
 			? 'off'
@@ -111,41 +112,43 @@ module.exports = defineConfig([
 	{
 		files: ['api/src/**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}'],
 		ignores: ['api/src/**/*.test.ts', 'api/src/**/__fixtures__/**', 'api/src/**/__mocks__/**', 'api/src/__utils__/**'],
-		rules: outboundRules(),
+		rules: apiBoundaryRules(),
 	},
 	{
 		// The shared validated client.
 		files: ['api/src/request/index.ts'],
-		rules: outboundRules(['axios']),
+		rules: apiBoundaryRules({ clients: ['axios'] }),
 	},
 	{
 		// The validating agents the shared client connects through.
 		files: ['api/src/request/agent-with-ip-validation.ts'],
-		rules: outboundRules([], { 'node:http': ['Agent'], 'node:https': ['Agent'] }),
+		rules: apiBoundaryRules({ names: { 'node:http': ['Agent'], 'node:https': ['Agent'] } }),
 	},
 	{
 		// The inbound HTTP and HTTPS server.
 		files: ['api/src/server.ts'],
-		rules: outboundRules([], { http: ['createServer'], https: ['Server'] }),
+		rules: apiBoundaryRules({ names: { http: ['createServer'], https: ['Server'] } }),
 	},
 	{
 		// The remote config client, built on the validating agents with the operator target check.
 		files: ['api/src/cli/commands/config/operator-remote-transport.ts'],
-		rules: outboundRules(['axios']),
+		rules: apiBoundaryRules({ clients: ['axios'] }),
 	},
 	{
 		// Trusted/system: the CLI bootstrap health check on a fixed localhost URL.
 		files: ['api/src/cli/commands/init/index.ts'],
-		rules: outboundRules(['fetch']),
+		rules: apiBoundaryRules({ clients: ['fetch'] }),
 	},
 	{
 		// Trusted/system: mail delivery to the provider endpoint from operator configuration or the provider default.
 		files: ['api/src/mailer.ts'],
-		rules: outboundRules(['@aws-sdk/client-sesv2', 'nodemailer-mailgun-transport', 'nodemailer-sendgrid']),
+		rules: apiBoundaryRules({
+			clients: ['@aws-sdk/client-sesv2', 'nodemailer-mailgun-transport', 'nodemailer-sendgrid'],
+		}),
 	},
 	{
 		// Trusted/system: requests to the identity provider the operator configured.
 		files: ['api/src/auth/drivers/oauth2.ts', 'api/src/auth/drivers/openid.ts'],
-		rules: outboundRules(['openid-client']),
+		rules: apiBoundaryRules({ clients: ['openid-client'] }),
 	},
 ]);
