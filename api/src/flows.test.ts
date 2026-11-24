@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, test, vi } from 'vitest';
 import { BaseException, ForbiddenException } from '@cairncms/exceptions';
+import { applyOptionsData } from '@cairncms/utils';
 import { REDACT_TEXT } from './constants.js';
 import { buildRevisionData, getFlowManager, type Step } from './flows.js';
 import conditionOp from './operations/condition/index.js';
@@ -61,6 +62,11 @@ vi.mock('./services/revisions.js', () => {
 	const RevisionsService = vi.fn();
 	RevisionsService.prototype.createOne = revisionsCreateSpy;
 	return { RevisionsService };
+});
+
+vi.mock('@cairncms/utils', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('@cairncms/utils')>();
+	return { ...actual, applyOptionsData: vi.fn(actual.applyOptionsData) };
 });
 
 const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.HEADER_PAYLOAD_LONG_ENOUGH_TO_BE_REAL_TOKEN';
@@ -1592,4 +1598,184 @@ describe('executeFlow — blocking filter rejection delivers a controlled client
 		expect(revision.data.data['$last']).toEqual(curated);
 		expect(revision.data.data['step']).toEqual(curated);
 	});
+});
+
+describe('data operations read their stored targets before interpolation', () => {
+	const flowContext = {
+		accountability: { user: 'u-1', role: 'r-1', admin: true, ip: '127.0.0.1' },
+		database: {} as any,
+		schema: { collections: {}, relations: [] } as any,
+	};
+
+	beforeEach(() => {
+		getFlowManager().clearOperations();
+		getFlowManager().clearConfinedOperations();
+		vi.mocked(applyOptionsData).mockClear();
+	});
+
+	function flowWith(type: string, options: Record<string, unknown>) {
+		return {
+			id: 'targets-flow',
+			name: 'targets-flow',
+			status: 'active',
+			trigger: 'webhook',
+			accountability: null,
+			options: { method: 'POST', return: '$last', async: false },
+			operation: {
+				id: 'op-1',
+				key: 'target',
+				type,
+				options,
+				resolve: null,
+				reject: { id: 'op-2', key: 'after', type: 'capture', options: {}, resolve: null, reject: null },
+			},
+		};
+	}
+
+	function registerCapture() {
+		const captured: { last: unknown; reached: boolean } = { last: undefined, reached: false };
+
+		getFlowManager().addOperation('capture', ((_options: unknown, context: Record<string, any>) => {
+			captured.reached = true;
+			captured.last = context['data']['$last'];
+			return null;
+		}) as any);
+
+		return captured;
+	}
+
+	test.each(['item-read', 'item-update', 'item-delete'])(
+		'a trusted %s step receives how its key and query were saved',
+		async (type) => {
+			let received: unknown;
+
+			getFlowManager().addOperation(
+				type,
+				((_options: unknown, context: Record<string, unknown>) => {
+					received = context['storedTargets'];
+					return null;
+				}) as any,
+				true
+			);
+
+			await (getFlowManager() as any).executeFlow(
+				flowWith(type, { collection: 'orders', key: ['{{ $trigger.body.id }}'] }),
+				{ body: { id: 5 } },
+				flowContext
+			);
+
+			expect(received).toEqual({ key: 'configured', query: 'none' });
+		}
+	);
+
+	test('a flow-level value cannot shadow the stored targets', async () => {
+		let received: unknown;
+
+		getFlowManager().addOperation(
+			'item-update',
+			((_options: unknown, context: Record<string, unknown>) => {
+				received = context['storedTargets'];
+				return null;
+			}) as any,
+			true
+		);
+
+		await (getFlowManager() as any).executeFlow(
+			flowWith('item-update', { collection: 'orders', key: [5] }),
+			{},
+			{ ...flowContext, storedTargets: { key: 'none', query: 'none' } }
+		);
+
+		expect(received).toEqual({ key: 'configured', query: 'none' });
+	});
+
+	test('an untrusted handler registered under a data operation type does not receive them', async () => {
+		let context: Record<string, unknown> | undefined;
+
+		getFlowManager().addOperation('item-update', ((_options: unknown, received: Record<string, unknown>) => {
+			context = received;
+			return null;
+		}) as any);
+
+		await (getFlowManager() as any).executeFlow(
+			flowWith('item-update', { collection: 'orders', key: [5] }),
+			{},
+			flowContext
+		);
+
+		expect(context).toBeDefined();
+		expect(context).not.toHaveProperty('storedTargets');
+	});
+
+	test.each(['item-update', 'item-delete'])(
+		'an %s step saved with both a key and a query fails before interpolation',
+		async (type) => {
+			const handler = vi.fn();
+			getFlowManager().addOperation(type, handler as any, true);
+			const captured = registerCapture();
+
+			const options = {
+				collection: 'orders',
+				key: ['{{ $trigger.body.ids }}'],
+				query: { filter: { paid: { _eq: true } } },
+			};
+
+			await (getFlowManager() as any).executeFlow(flowWith(type, options), { body: { ids: [] } }, flowContext);
+
+			expect(handler).not.toHaveBeenCalled();
+			expect(vi.mocked(applyOptionsData).mock.calls.some(([stepOptions]) => stepOptions === options)).toBe(false);
+			expect(captured.reached).toBe(true);
+			expect(captured.last).toMatchObject({ code: 'INVALID_CONFIG', status: 503 });
+		}
+	);
+
+	test.each(['item-read', 'item-update', 'item-delete'])(
+		'an %s step with a malformed saved key fails before interpolation',
+		async (type) => {
+			const handler = vi.fn();
+			getFlowManager().addOperation(type, handler as any, true);
+			const captured = registerCapture();
+			const options = { collection: 'orders', key: { id: 5 } };
+
+			await (getFlowManager() as any).executeFlow(flowWith(type, options), {}, flowContext);
+
+			expect(handler).not.toHaveBeenCalled();
+			expect(vi.mocked(applyOptionsData).mock.calls.some(([stepOptions]) => stepOptions === options)).toBe(false);
+			expect(captured.last).toMatchObject({ code: 'INVALID_CONFIG' });
+		}
+	);
+
+	test('a Read Data step saved with both a key and a query reaches its handler', async () => {
+		const handler = vi.fn(() => null);
+		getFlowManager().addOperation('item-read', handler as any, true);
+
+		await (getFlowManager() as any).executeFlow(
+			flowWith('item-read', { collection: 'orders', key: [5], query: { fields: ['name'] } }),
+			{},
+			flowContext
+		);
+
+		expect(handler).toHaveBeenCalledOnce();
+
+		expect((handler.mock.calls[0] as unknown[])[1]).toMatchObject({
+			storedTargets: { key: 'configured', query: 'configured' },
+		});
+	});
+
+	test.each(['item-read', 'item-update', 'item-delete'])(
+		'an %s step stored without options reaches its handler with empty options',
+		async (type) => {
+			const handler = vi.fn(() => null);
+			getFlowManager().addOperation(type, handler as any, true);
+
+			await (getFlowManager() as any).executeFlow(flowWith(type, null as any), {}, flowContext);
+
+			expect(handler).toHaveBeenCalledOnce();
+			expect((handler.mock.calls[0] as unknown[])[0]).toEqual({});
+
+			expect((handler.mock.calls[0] as unknown[])[1]).toMatchObject({
+				storedTargets: { key: 'none', query: 'none' },
+			});
+		}
+	);
 });
