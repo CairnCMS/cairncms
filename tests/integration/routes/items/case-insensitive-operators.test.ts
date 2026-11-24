@@ -35,12 +35,13 @@ const ACCENT_EXCLUDER = 'CaseInsensitiveAccentExcluder';
 const UNRESOLVED_DIRECT = 'CaseInsensitiveUnresolvedDirect';
 const UNRESOLVED_NEGATED = 'CaseInsensitiveUnresolvedNegated';
 const UNRESOLVED_RELATIONAL = 'CaseInsensitiveUnresolvedRelational';
+const NONE_EXCLUDER = 'CaseInsensitiveNoneExcluder';
 
 const OPERATORS = ['_istarts_with', '_nistarts_with', '_iends_with', '_niends_with'];
 
 const ROWS: Record<string, string[]> = {
 	tenant: ['Tenant-A-1', 'tenant-a-2', 'TENANT-B-1', 'tenant-b-2'],
-	wildcard: ['team_a1', 'teamXa1', '1team_a', '1teamXa', '50%off', '500off', 'a!b1', 'a!!b1'],
+	wildcard: ['team_a1', 'teamXa1', '1team_a', '1teamXa', '50%off', '500off', 'a!b1', 'a!!b1', 'aXb1'],
 	literal: ['true-blue', 'TRUE-red', 'untrue', 'null-row', 'NULL-ROW'],
 	turkish: ['Istanbul-1', 'istanbul-2', 'Xstanbul-1'],
 	fixed: ['ABC', 'abd', 'XYC'],
@@ -56,10 +57,18 @@ const NUL_ROWS: [string, string | null][] = [
 	['n6', null],
 ];
 
+const BLANK_ROWS: [string, string | null][] = [
+	['text', 'Ab1'],
+	['other', 'xy'],
+	['empty', ''],
+	['null', null],
+];
+
 const PARENT_ROWS: [string, string[]][] = [
 	['mixed', ['Tenant-A-1', 'other-1']],
 	['b', ['tenant-b-2']],
-	['empty', []],
+	['empty-text', ['']],
+	['childless', []],
 ];
 
 const VALIDATION = [
@@ -191,6 +200,22 @@ const test = createIdentityTest().extend<{ scenarioState: Prerequisite<void>; sc
 						for (const code of codes) await CreateItem(api, { collection: CODES, item: { code, kind } });
 					}
 
+					for (const [label, code] of BLANK_ROWS) {
+						await CreateItem(api, { collection: CODES, item: { code, kind: 'blank', label } });
+					}
+
+					const blanks = await api
+						.database(CODES)
+						.where({ kind: 'blank' })
+						.whereIn('label', ['empty', 'null'])
+						.orderBy('label')
+						.select('label', 'code');
+
+					expect(blanks).toEqual([
+						{ label: 'empty', code: '' },
+						{ label: 'null', code: null },
+					]);
+
 					const copyCode = (column: string, kind: string) =>
 						api
 							.database(CODES)
@@ -251,6 +276,7 @@ const test = createIdentityTest().extend<{ scenarioState: Prerequisite<void>; sc
 					const unresolvedDirect = await role('case_insensitive_unresolved_direct');
 					const unresolvedNegated = await role('case_insensitive_unresolved_negated');
 					const unresolvedRelational = await role('case_insensitive_unresolved_relational');
+					const noneExcluder = await role('case_insensitive_none_excluder');
 
 					for (const [readRole, collection, permissions] of [
 						[accentExcluder, CODES, { _and: [{ kind: { _eq: 'accent' } }, { code: { _nistarts_with: ECOLE } }] }],
@@ -261,6 +287,7 @@ const test = createIdentityTest().extend<{ scenarioState: Prerequisite<void>; sc
 							{ _and: [{ kind: { _eq: 'tenant' } }, { code: { _nistarts_with: UNRESOLVED } }] },
 						],
 						[unresolvedRelational, PARENTS, { children: { _none: { code: { _istarts_with: UNRESOLVED } } } }],
+						[noneExcluder, PARENTS, { children: { _none: { code: { _nistarts_with: 'tenant' } } } }],
 					] as const) {
 						await asAdmin('post', '/permissions', {
 							role: readRole,
@@ -345,6 +372,7 @@ const test = createIdentityTest().extend<{ scenarioState: Prerequisite<void>; sc
 						[UNRESOLVED_DIRECT, unresolvedDirect, null],
 						[UNRESOLVED_NEGATED, unresolvedNegated, null],
 						[UNRESOLVED_RELATIONAL, unresolvedRelational, null],
+						[NONE_EXCLUDER, noneExcluder, null],
 					] as const) {
 						await asAdmin('post', '/users', {
 							email: `${token.toLowerCase()}@example.com`,
@@ -441,14 +469,14 @@ const QUERIES: [string, string, Record<string, unknown>, string[]][] = [
 		'_nistarts_with',
 		'wildcard',
 		{ _nistarts_with: 'team_a' },
-		['1team_a', '1teamXa', '500off', '50%off', 'teamXa1', 'a!b1', 'a!!b1'],
+		['1team_a', '1teamXa', '500off', '50%off', 'teamXa1', 'a!b1', 'a!!b1', 'aXb1'],
 	],
 	['_iends_with', 'wildcard', { _iends_with: 'TEAM_A' }, ['1team_a']],
 	[
 		'_niends_with',
 		'wildcard',
 		{ _niends_with: 'team_a' },
-		['1teamXa', '500off', '50%off', 'teamXa1', 'team_a1', 'a!b1', 'a!!b1'],
+		['1teamXa', '500off', '50%off', 'teamXa1', 'team_a1', 'a!b1', 'a!!b1', 'aXb1'],
 	],
 	['_istarts_with', 'wildcard', { _istarts_with: '50%' }, ['50%off']],
 	['_istarts_with', 'wildcard', { _istarts_with: 'A!B' }, ['a!b1']],
@@ -631,8 +659,9 @@ describe('Case-insensitive starts and ends operators in stored read rules', () =
 describe('Case-insensitive starts and ends operators across a relation', () => {
 	for (const [label, filter, expected] of [
 		['_some with _istarts_with', { _some: { code: { _istarts_with: 'TENANT-A' } } }, ['mixed']],
-		['_none with _istarts_with', { _none: { code: { _istarts_with: 'TENANT-A' } } }, ['b', 'empty']],
-		['_some with _nistarts_with', { _some: { code: { _nistarts_with: 'tenant-a' } } }, ['b', 'mixed']],
+		['_none with _istarts_with', { _none: { code: { _istarts_with: 'TENANT-A' } } }, ['b', 'childless', 'empty-text']],
+		['_some with _nistarts_with', { _some: { code: { _nistarts_with: 'tenant-a' } } }, ['b', 'empty-text', 'mixed']],
+		['_none with _niends_with', { _none: { code: { _niends_with: '-2' } } }, ['b', 'childless']],
 		['_some with _iends_with', { _some: { code: { _iends_with: '-2' } } }, ['b']],
 	] as const) {
 		test(`return exactly the parents matching ${label}`, async ({ api }) => {
@@ -643,6 +672,51 @@ describe('Case-insensitive starts and ends operators across a relation', () => {
 
 			expect(response.statusCode).toBe(200);
 			expect(response.body.data.map((item: { name: string }) => item.name).sort()).toEqual(sorted([...expected]));
+		});
+	}
+
+	test('hide a parent whose empty child fails a stored _none rule, over REST and GraphQL', async ({ api }) => {
+		const rest = await request(api.url)
+			.get(`/items/${PARENTS}`)
+			.query({ fields: 'name' })
+			.set('Authorization', `Bearer ${NONE_EXCLUDER}`);
+
+		expect(rest.statusCode).toBe(200);
+		expect(rest.body.data.map((item: { name: string }) => item.name).sort()).toEqual(['b', 'childless']);
+
+		const graphql = await requestGraphQL(api.url, false, NONE_EXCLUDER, { query: { [PARENTS]: { name: true } } });
+
+		expect(graphql.statusCode).toBe(200);
+		expect(graphql.body.data[PARENTS].map((item: { name: string }) => item.name).sort()).toEqual(['b', 'childless']);
+	});
+});
+
+describe('Case-insensitive operators on empty text', () => {
+	for (const [operator, operand, expected] of [
+		['_istarts_with', 'A', ['text']],
+		['_nistarts_with', 'A', ['empty', 'other']],
+		['_iends_with', 'B1', ['text']],
+		['_niends_with', 'B1', ['empty', 'other']],
+	] as const) {
+		const filter = { _and: [{ kind: { _eq: 'blank' } }, { code: { [operator]: operand } }] };
+
+		test(`${operator} ${JSON.stringify(operand)} keeps empty text apart from null, over REST`, async ({ api }) => {
+			const response = await request(api.url)
+				.get(`/items/${CODES}`)
+				.query({ fields: 'label', filter: JSON.stringify(filter) })
+				.set('Authorization', ADMIN);
+
+			expect(response.statusCode).toBe(200);
+			expect(response.body.data.map((item: { label: string }) => item.label).sort()).toEqual([...expected]);
+		});
+
+		test(`${operator} ${JSON.stringify(operand)} keeps empty text apart from null, over GraphQL`, async ({ api }) => {
+			const response = await requestGraphQL(api.url, false, USER.ADMIN!.TOKEN, {
+				query: { [CODES]: { __args: { filter, limit: -1 }, label: true } },
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.body.data[CODES].map((item: { label: string }) => item.label).sort()).toEqual([...expected]);
 		});
 	}
 });
