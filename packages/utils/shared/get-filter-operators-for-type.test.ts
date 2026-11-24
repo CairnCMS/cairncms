@@ -173,8 +173,8 @@ describe('case-insensitive starts and ends operators by column type', () => {
 		['binary', 'blob'],
 		['binary', 'varbinary'],
 		['string', 'interval'],
-		['string', '_varchar'],
-		['csv', '_varchar'],
+		['csv', 'ARRAY'],
+		['csv', 'character varying[]'],
 		['string', null],
 	] as const)('leaves them out for a %s field stored as %s', (type, dbType) => {
 		const offered = getFilterOperatorsForType(type, { dbType });

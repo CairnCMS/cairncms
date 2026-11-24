@@ -974,7 +974,7 @@ describe(`generateJoi`, () => {
 		it.each([
 			['_ends_with', false],
 			['_nends_with', true],
-		])(`%s accepts exactly the values its former pattern accepted`, (operator, invert) => {
+		])(`%s matches a literal suffix at the end of the value`, (operator, invert) => {
 			const suffixes = ['a', 'ab', 'A', '.*', '$', '\n', 'a\nb', ''];
 			const values = ['', 'a', 'ba', 'ab', 'xab', 'xAB', 'a\nb', 'ab\n', 'x.*', '$', 'line\nab', 'zzz'];
 

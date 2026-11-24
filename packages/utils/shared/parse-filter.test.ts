@@ -370,7 +370,7 @@ describe('case-insensitive text operands', () => {
 		}
 	});
 
-	it.each(['_eq', '_contains', '_starts_with'])('still converts literal text for %s', (operator) => {
+	it.each(['_eq', '_contains', '_starts_with'])('converts the text true to a boolean for %s', (operator) => {
 		const filter = { code: { [operator]: 'true' } } as Filter;
 
 		expect(parseFilter(filter, null)).toStrictEqual({ code: { [operator]: true } });

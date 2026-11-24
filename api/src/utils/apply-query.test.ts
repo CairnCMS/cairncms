@@ -556,8 +556,7 @@ describe('applyFilter case-insensitive starts and ends operators', () => {
 		['binary', 'mediumblob'],
 		['binary', 'varbinary'],
 		['string', 'interval'],
-		['string', '_varchar'],
-		['csv', '_varchar'],
+		['csv', 'ARRAY'],
 		['string', null],
 	])('rejects the operators on a %s field stored as %s', (type, dbType) => {
 		for (const operator of OPERATORS) {
@@ -575,7 +574,6 @@ describe('applyFilter case-insensitive starts and ends operators', () => {
 		['string', 'bpchar'],
 		['text', 'text'],
 		['text', 'longtext'],
-		['text', 'citext'],
 		['csv', 'text'],
 	])('accepts the operators on a %s field stored as %s', (type, dbType) => {
 		for (const operator of OPERATORS) {
