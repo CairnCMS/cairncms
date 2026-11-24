@@ -163,19 +163,21 @@ describe('changing the field of a rule', () => {
 		expect(changeField(wrapper, to)).toBeUndefined();
 	});
 
+	it('keeps the comparator and value of a code rule changed to the title field of the same type', () => {
+		const wrapper = mountNodes([{ code: { _istarts_with: 'abc' } }]);
+
+		expect(changeField(wrapper, 'title')).toEqual([{ title: { _istarts_with: 'abc' } }]);
+	});
+
 	it.each([
-		['code', { _istarts_with: 'abc' }, 'title', { title: { _istarts_with: 'abc' } }],
 		['owner.code', { _istarts_with: 'abc' }, 'title', { title: { _contains: null } }],
 		['rank', { _eq: 5 }, 'code', { code: { _contains: null } }],
 		['code', { _contains: 'abc' }, 'data', { data: { _contains: null } }],
-	])(
-		'changes a %s rule %j to the %s field, keeping a comparator the same field type allows',
-		(from, rule, to, expected) => {
-			const wrapper = mountNodes([{ [from.split('.')[0]!]: fieldRule(from, rule) }]);
+	])('resets the comparator and value of a %s rule %j changed to the %s field', (from, rule, to, expected) => {
+		const wrapper = mountNodes([{ [from.split('.')[0]!]: fieldRule(from, rule) }]);
 
-			expect(changeField(wrapper, to)).toEqual([expected]);
-		}
-	);
+		expect(changeField(wrapper, to)).toEqual([expected]);
+	});
 });
 
 describe('the field picker of a rule', () => {
